@@ -1264,3 +1264,113 @@ def test_parameter_gates_of_an_h200_weight_is_its_range_in_constant_memory():
         tracemalloc.stop()
     assert gates == range(5, 5 + n) and rows == n // 1024
     assert peak < 1 << 16, peak
+
+
+#: A `--registered` file's ports of `W`, of 16-bit words, and of `T`, a bit row of 32-bit words, each at its own root.
+PORT_W = {"value": "W", "root": "a1" * 64, "leaves": 4, "words": 6, "domain": "d1" * 64, "reads": [0, None]}
+PORT_T = {"value": "T", "root": "b2" * 64, "leaves": 2, "words": 3, G.WIDTH_KEY: 32, "domain": "d2" * 64,
+          G.SCHEMA_KEY: G.SCHEMA_V2, "reads": [None, 1]}
+
+
+def _entry(p: dict) -> dict:
+    """The record's entry for port `p`'s value, as R7 writes it: `word_bits` only when not 16, no row format."""
+    e = {"value": p["value"], "root": p["root"], "leaves": p["leaves"], "words": p.get("words"), "domain": p["domain"]}
+    return e | ({G.WIDTH_KEY: p[G.WIDTH_KEY]} if p.get(G.WIDTH_KEY, G.WORD_BITS) != G.WORD_BITS else {})
+
+
+def test_v2_refuses_a_port_name_twice():
+    """`ports_twice` (`Flock.Registered.dupName?`): the first name a later port repeats, which v2 refuses."""
+    assert G.ports_twice(["w", "t", "a0"]) is None
+    assert G.ports_twice(["w", "t", "w", "t"]) == "w"
+    assert G.ports_twice(["a0", "t", "t"]) == "t"
+
+
+def test_v2_refuses_two_ports_of_one_root_registering_it_differently():
+    """`root_clash` (`Flock.Registered.rootClash`): ports of one value at its root registering it alike stand, as an
+    array's ports `name[i]` do, whatever they read and however they name the defaults; one root at another leaf count,
+    words, word bits, domain, row format or value is two ports v2 refuses, a row's opening finding its port by root; a
+    port at another root clashes with none."""
+    alike = {**PORT_W, "reads": [None, 1], G.WIDTH_KEY: 16, G.SCHEMA_KEY: G.SCHEMA}
+    assert G.root_clash([("a0", PORT_W), ("a1", alike), ("t", PORT_T)]) is None
+    for k, v in (("leaves", 5), ("words", 7), (G.WIDTH_KEY, 32), ("domain", "e3" * 64), (G.SCHEMA_KEY, G.SCHEMA_SEG),
+                 ("value", "U")):
+        assert G.root_clash([("t", PORT_T), ("a0", PORT_W), ("a1", {**PORT_W, k: v})]) == ("a0", "a1"), k
+    assert G.root_clash([("a0", {k: v for k, v in PORT_W.items() if k != "words"}), ("a1", PORT_W)]) == ("a0", "a1")
+    assert G.root_clash([("a0", PORT_W), ("a1", {**PORT_W, "leaves": 5, "root": "c4" * 64})]) is None
+
+
+def test_v2_holds_each_port_to_the_records_entry_for_its_value():
+    """`entry_clash` (`SampledProofs.Registered.entryClash`): a port agrees with the record's entry for its value in root,
+    leaf count, words, word bits (16 where the entry leaves them out) and domain, and its row format is the one the
+    verifier counts the value's rows in (`row_schemas`, else `row/v1`); v2 refuses the first port that doesn't, at the
+    first field it differs in. A value's last entry is the one read, and a port of a value the record has no entry for
+    is held by nothing here."""
+    schemas, ports = {"T": G.SCHEMA_V2}, [("w", PORT_W), ("t", PORT_T)]
+    rec = {"registered": [_entry(PORT_W), _entry(PORT_T)]}
+    assert G.WIDTH_KEY not in _entry(PORT_W) and G.entry_clash(ports, rec, schemas) is None
+    for k, v in (("root", "c4" * 64), ("leaves", 5), ("leaves", True), ("words", 7), (G.WIDTH_KEY, 32),
+                 ("domain", "e3" * 64)):
+        assert G.entry_clash(ports, {"registered": [{**_entry(PORT_W), k: v}, _entry(PORT_T)]}, schemas) == ("w", k), k
+    assert G.entry_clash(ports, {"registered": [{**_entry(PORT_W), G.WIDTH_KEY: 16}, _entry(PORT_T)]}, schemas) is None
+    assert G.entry_clash(ports, {"registered": [_entry(PORT_W), {**_entry(PORT_T), G.WIDTH_KEY: 16}]},
+                         schemas) == ("t", G.WIDTH_KEY)
+    assert G.entry_clash(ports, rec, {}) == ("t", G.SCHEMA_KEY)
+    assert G.entry_clash(ports, rec, {**schemas, "W": G.SCHEMA_SEG}) == ("w", G.SCHEMA_KEY)
+    changed = {**_entry(PORT_W), "leaves": 5}
+    assert G.entry_clash(ports, {"registered": [changed, *rec["registered"]]}, schemas) is None
+    assert G.entry_clash(ports, {"registered": [*rec["registered"], changed]}, schemas) == ("w", "leaves")
+    assert G.entry_clash([*ports, ("u", {**PORT_W, "value": "U", "leaves": 9})], rec, schemas) is None
+    assert all(G.entry_clash(ports, r, schemas) is None for r in ({}, None, {"registered": None}, {"registered": [5]}))
+
+
+#: A writer `W/c0`'s output row `o0` and a reader `R/c0`'s input row `x` as the record registers them, their domains.
+DOM_O0, DOM_X = "d1" * 64, "e1" * 64
+
+
+def _roots(o0: str, x: str, *more: dict) -> dict:
+    return {"roots": [{"port": "W/c0/o0", "root": o0, "domain": DOM_O0}, {"port": "R/c0/x", "root": x, "domain": DOM_X},
+                      *more]}
+
+
+def _header(port: str, root: str, dom: str) -> dict:
+    return {"frame_v3": {"roots": {port: root}, "domain_ids": {port: dom}}}
+
+
+def test_v2_holds_a_members_statement_to_the_registrations_roots():
+    """`statement_clash` (`SampledProofs.Registered.statementClash`, `OneStageZk.heldChecks`): every port of a member's
+    statement that no registered port names has, in its public header, the record's root and domain for
+    ``<member>/<port>`` (`roots_of`). The two negatives: the writer whose record's ``W/c0/o0`` changed while its files
+    stayed is refused, naming ``o0``; the altered reader, its altered rows' root in its public file, is refused naming
+    ``x``, and with the record remade to that root it passes this check (the wired reads' to refuse). Another domain, a
+    header naming no root for the port, and a member by a name the record doesn't use (``m1``) are refused; a
+    registered port is held by its entry instead (`entry_clash`)."""
+    a, b, c, f = ("a1" * 64, "b2" * 64, "c3" * 64, "f4" * 64)
+    clash = G.statement_clash
+    assert clash(G.roots_of(_roots(a, b)), "W/c0", (), _header("o0", a, DOM_O0), ["o0"]) is None
+    assert clash(G.roots_of(_roots(c, b)), "W/c0", (), _header("o0", a, DOM_O0), ["o0"]) == ("o0", True)
+    assert clash(G.roots_of(_roots(a, b)), "R/c0", (), _header("x", f, DOM_X), ["x"]) == ("x", True)
+    assert clash(G.roots_of(_roots(a, f)), "R/c0", (), _header("x", f, DOM_X), ["x"]) is None
+    assert clash(G.roots_of(_roots(a, b)), "R/c0", (), _header("x", b, DOM_O0), ["x"]) == ("x", True)
+    assert clash(G.roots_of(_roots(a, b)), "R/c0", (), _header("y", b, DOM_X), ["x"]) == ("x", True)
+    assert clash(G.roots_of(_roots(a, b)), "m1", (), _header("x", b, DOM_X), ["x"]) == ("x", False)
+    assert clash(G.roots_of(_roots(a, b)), "m1", ["x"], _header("x", f, DOM_X), ["x"]) is None
+    assert clash(G.roots_of(_roots(a, b)), "R/c0", (), _header("x", b, DOM_X), ["x", "w"]) == ("w", False)
+    for header in (None, {}, {"frame_v3": None}, {"frame_v3": {"roots": {"x": b}}}, _header("x", b.upper(), DOM_X)):
+        assert clash(G.roots_of(_roots(a, b)), "R/c0", (), header, ["x"]) == ("x", True), header
+
+
+def test_roots_of_reads_each_ports_last_entry():
+    """`roots_of` (`SampledProofs.Registered.rootsOf`): a port's last entry is its root and domain, as bytes; one whose
+    root or domain isn't lowercase hex leaves the port none, and an entry naming no port, or a record with no list of
+    roots, gives none."""
+    a, b = "a1" * 64, "b2" * 64
+    assert G.roots_of(_roots(a, b)) == {"W/c0/o0": (bytes.fromhex(a), bytes.fromhex(DOM_O0)),
+                                        "R/c0/x": (bytes.fromhex(b), bytes.fromhex(DOM_X))}
+    again = {"port": "R/c0/x", "root": a, "domain": DOM_X}
+    assert G.roots_of(_roots(a, b, again))["R/c0/x"] == (bytes.fromhex(a), bytes.fromhex(DOM_X))
+    for bad in ("AB", "a", "zz", 5, None):
+        assert "R/c0/x" not in G.roots_of(_roots(a, b, again | {"root": bad})), bad
+        assert "R/c0/x" not in G.roots_of(_roots(a, b, again | {"domain": bad})), bad
+    assert G.roots_of(_roots(a, b, {"port": 5, "root": a, "domain": a}, 7)).keys() == {"W/c0/o0", "R/c0/x"}
+    assert G.roots_of({"roots": [{"port": "p", "root": "", "domain": ""}]}) == {"p": (b"", b"")}
+    assert all(G.roots_of(r) == {} for r in ({}, None, [], {"roots": None}, {"roots": {}}))

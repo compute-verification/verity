@@ -1107,10 +1107,11 @@ def _once(paths: Sequence[Path]) -> list[Path]:
 
 def v2_members(members: Sequence[tuple[str, int, int, int, Any]], wires: dict | None = None) -> dict:
     """The per-member form's parameters (`OneStageZk.Form`) for the window's members ``(key, base, n, g, own)``: each
-    member, named by its key (the registration's ``<key>/<port>``, where a wired read finds its writer's root), its units
-    ``[base, base + n)``, its circuit's ``g`` units a proof block (META ``vus_per_block``, whose link points the
-    registration checks) and its statement's ``own`` inputs, its circuit digest, registered file and registered circuit
-    record; and with ``wires``, the window's wiring (`interface.wiring`), all fixed before the draw."""
+    member, named by its key (the registration's ``<key>/<port>``, where a wired read finds its writer's root, and whose
+    root and domain its statement's public file must name for each port it doesn't register: `Registered.statementHeld`),
+    its units ``[base, base + n)``, its circuit's ``g`` units a proof block (META ``vus_per_block``, whose link points
+    the registration checks) and its statement's ``own`` inputs, its circuit digest, registered file and registered
+    circuit record; and with ``wires``, the window's wiring (`interface.wiring`), all fixed before the draw."""
     return {"members": {key: {**own, "units": [[base, base + n]], "vus_per_block": g} for key, base, n, g, own in members},
             **({"wires": wires} if wires is not None else {})}
 

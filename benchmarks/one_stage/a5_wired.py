@@ -17,7 +17,8 @@ the audit's draw's, `a5.drawn_by`) by
   flipped), its header's ``x`` root and the commitment's ``<reader>/x`` root the altered rows', the evidence naming that
   file: the reader's session refused by its wired reads;
 * ``writer``: the commitment's ``<writer>/o0`` root another, the files as they were: the writer's session refused by
-  the statement's root check (`HELD`), the reader's by its wired reads.
+  the statement's root check (`HELD`, `Registered.statementHeld` in each per-member session's setup), the reader's by
+  its wired reads.
 
 The window as a whole stays refused by v2's check until a sample over several members' statements is in the lock
 (`OneStageZk.MULTI_REFUSED`); these are the sessions' verdicts it reads. The run exits 0 only when the audit is accepted
@@ -63,8 +64,9 @@ WID, RID = descriptor_id(WRITER), descriptor_id(READER)
 OF = {"stand-in": "benchmarks/one_stage/a5_wired.py", "writer": WID, "reader": RID, "units": UNITS}
 #: a reader's refusal by its wired reads: its row doesn't open its writer's root (`RegWired.check`)
 OPENS = "does not open"
-#: a writer's refusal by the statement's root check, its public file's ``o0`` root not the commitment's: any reason
-HELD = ""
+#: a writer's refusal by the statement's root check, its public file's ``o0`` root not the commitment's
+#: (`Registered.statementHeld`)
+HELD = "the statement's port o0 has another frame-v3-sha512 root or domain in the public file than the registration's"
 
 
 def circuit() -> IF.Circuit:
