@@ -277,10 +277,6 @@
    "owner": "@network-accounting",
    "digest": "034e585f8cf7bd0bc270f3d5d2e503ebd70488b8c972161b8a70c22e12caf7e7"
   },
-  "Properties.NetworkScan.StmtFlattens": {
-   "owner": "@network-accounting",
-   "digest": "d9457f2011bf51bdb5935b85ce9a848b489c67ef0a02ca412731b2f15d24255a"
-  },
   "Properties.Pouw.Period.DrawIsCoin": {
    "owner": "@compute-accounting",
    "digest": "97c67360debeffd27250e2548d90facc3c355d2356b29afa2b66cb04d9aead7b"
@@ -599,14 +595,6 @@
   },
   "Properties.Remote.SecurityProofs.acceptComplies": {
    "nontrivial": "Properties.Remote.SecurityProofs.acceptComplies_nontrivial"
-  },
-  "Properties.NetworkScan.scanFits": {
-   "honest": ["Properties.NetworkScan.scan_honest"],
-   "nontrivial": "Properties.NetworkScan.scanFits_nontrivial"
-  },
-  "Properties.NetworkScan.scanScopeAcc": {
-   "honest": ["Properties.NetworkScan.scan_honest"],
-   "nontrivial": "Properties.NetworkScan.scanScopeAcc_nontrivial"
   },
   "Properties.RemoteAudit.codeLayoutTiles": {
    "honest": ["Properties.RemoteAudit.codeLayoutTiles_honest"],
@@ -974,9 +962,18 @@
    "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.NetworkCertifier": {
-   "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "Properties.Identity", "Lms.Sign"],
+   "imports": [
+    "NetworkCheck.Check",
+    "NetworkCheck.LinkWindow",
+    "Properties.Identity",
+    "Lms.Sign",
+    "NetworkCheck.Circuit",
+    "Definitions.NetworkCertifier.SampledCharge",
+    "Properties.NetworkScan",
+    "Properties.NetworkPeriod"
+   ],
    "except": [],
-   "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
+   "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), and a compute audit's wired rows against the circuit record's check, the sampled charge's free inputs (`NetTiming.freeInputs`), the scan's Bits layout (`Properties.NetworkScan`) and the period check's properties (`Properties.NetworkPeriod`), never a proof"
   },
   "Properties.Evaluate": {
    "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
@@ -1147,9 +1144,14 @@
    "why": "the served protocol's onsite freed compute is stated over its remote work guarantee (`Properties.Pouw.ServedWork`) and the accelerator model's period and freed compute (`Definitions.Pouw.Dither`), never a proof"
   },
   "Properties.NetworkScan": {
-   "imports": ["NetworkCheck.Period", "Definitions.NetworkCertifier.SampledAudit", "Properties.NetworkScan"],
+   "imports": [
+    "NetworkCheck.Period",
+    "Definitions.NetworkCertifier.SampledAudit",
+    "Properties.NetworkScan",
+    "SampledProofs.Bits"
+   ],
    "except": [],
-   "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.BoundaryGates.Fits`) and its own flattening and named deployment premises (`Properties.NetworkScan.Flattens`, `Properties.NetworkScan.Assumptions`), never a proof"
+   "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder, Bits' layout of a circuit file (`SampledProofs.Bits`), the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.BoundaryGates.Fits`) and its own flattening and named deployment premise (`Properties.NetworkScan.Flattens`, `Properties.NetworkScan.Assumptions`), never a proof"
   },
   "Properties.Pous.Wipe": {
    "imports": ["Definitions.Accounting.Wipe", "MemoryChallenger.WipeProtocol"],
@@ -3091,54 +3093,6 @@
    "signature": ["Properties.NetworkRecords.noGridMeans : Properties.NetworkRecords.NoGridMeans"],
    "assumptions": [],
    "type_hash": "9e643a105f5704513bd184fa62a05149067300421a23658f5650e0bfc18672ee"
-  },
-  "Properties.NetworkScan.scanFits": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.NetworkScan.scanFits : Properties.NetworkScan.ScanFits"],
-   "assumptions": [],
-   "type_hash": "3bc0c8f7cfb2d13135dd40e28b4c705bdbbc93fe4b623452ba8387bbcb3288b2"
-  },
-  "Properties.NetworkScan.scanFits_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "Properties.NetworkScan.scanFits_nontrivial :",
-    "  Exists fun P =>",
-    "    Exists fun C => Exists fun s => Exists fun x => Not ((Properties.NetworkScan.scanLayout P s).Fits C s.window)"
-   ],
-   "assumptions": [],
-   "type_hash": "5ccf17198263d54efef5b88be06b842fdd34a72d3020af7d5c990eeea5ace2f0"
-  },
-  "Properties.NetworkScan.scanScopeAcc": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.NetworkScan.scanScopeAcc : Properties.NetworkScan.ScanScopeAcc"],
-   "assumptions": [],
-   "type_hash": "d70f95c8f051885651c1b727c6f333e519052fb99bdaf4abc4858f12e4d32ab2"
-  },
-  "Properties.NetworkScan.scanScopeAcc_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "Properties.NetworkScan.scanScopeAcc_nontrivial :",
-    "  Exists fun s =>",
-    "    Exists fun j =>",
-    "      Exists fun c =>",
-    "        Exists fun x =>",
-    "          Exists fun D =>",
-    "            Exists fun x =>",
-    "              Exists fun x_1 =>",
-    "                Exists fun x_2 => Not (NetTiming.ScopeAcc D (Properties.NetworkScan.layOf s) (fun x => s.window) x)"
-   ],
-   "assumptions": [],
-   "type_hash": "3d7060b0892062946aea734c751a50d1285d7cdd497598e2d886ae04edf3d590"
-  },
-  "Properties.NetworkScan.scan_honest": {
-   "owner": "@network-accounting",
-   "signature": [
-    "Properties.NetworkScan.scan_honest :",
-    "  And (Eq (Flock.canon Lean.Json.null) (Except.ok \"null\"))",
-    "    (Properties.NetworkScan.Flattens Flock.Program.instInhabitedProg.default { gates := List.nil, outs := List.nil })"
-   ],
-   "assumptions": [],
-   "type_hash": "0c362245031511320743c959fb43f44ed992217b2dee837436de85f0257b643c"
   },
   "Properties.Period.monitoringPeriodIsSpec": {
    "owner": "@network-accounting",
@@ -6011,14 +5965,6 @@
      }
     ]
    },
-   "Properties.NetworkScan.scanFits": {
-    "function": ["NetworkCheck.Period.scanOf", "Flock.canon", "Flock.Program.decode"],
-    "outcome": "accept"
-   },
-   "Properties.NetworkScan.scanScopeAcc": {
-    "function": ["NetworkCheck.Period.scanOf", "Flock.canon"],
-    "outcome": "accept"
-   },
    "Pouw.SecurityProofs.Lead.Commit.leafFirstBlock": {
     "function": "PouwCommit.Domain.mk?",
     "outcome": "accept"
@@ -6189,7 +6135,11 @@
    "Properties.NetworkPeriod.rowsStateAnchored_honest": "completeness: RowsStateAnchored's honest lemma: the period check accepts a rows-form period of no phase, and a phase whose tied audit's circuit record reads row b of the scan's state at unit l·2 + b from base 0 is anchored",
    "Properties.NetworkPeriod.rowsStateAnchored_nontrivial": "lemma: RowsStateAnchored's nontrivial lemma: RowsStateAnchoredAt fails at a rows-form period of one phase whose tied audit's circuit record reads the scan's state from base 3, past its slots' anchors, which a verifier that accepts everything accepts",
    "Properties.NetworkPeriod.rowsStateHeld_honest": "completeness: RowsStateHeld's honest lemma: the period check accepts a rows-form period of no phase, and an audit whose SCAN_STATE is its one phase's scan's state, at its root and domain, is held there and charged its stateFree",
-   "Properties.NetworkPeriod.rowsStateHeld_nontrivial": "lemma: RowsStateHeld's nontrivial lemma: RowsStateHeldAt fails at a rows-form period of one phase whose tied audit's SCAN_STATE is at another root than its scan's state, under a public charging that audit its stateFree, 4 of its 9 free inputs, which a verifier that accepts everything could publish"
+   "Properties.NetworkPeriod.rowsStateHeld_nontrivial": "lemma: RowsStateHeld's nontrivial lemma: RowsStateHeldAt fails at a rows-form period of one phase whose tied audit's SCAN_STATE is at another root than its scan's state, under a public charging that audit its stateFree, 4 of its 9 free inputs, which a verifier that accepts everything could publish",
+   "Properties.NetworkScan.ScanFits": "unstated: an accepted scan's layout, at Bits' positions (inBit, outBit, wiresOf), fits its audit's members' joint program; an open statement, whose proof gets a guarantee entry",
+   "Properties.NetworkScan.ScanScopeAcc": "unstated: an accepted scan's statements, each its audit's members' joint program, are in the sampled audit's scope at the scan's Bits layout; an open statement, whose proof gets a guarantee entry",
+   "Properties.NetworkCertifier.CircuitCounts": "unstated: an accepted circuit record's free count bounds its audit's members' joint program's free inputs outside its registered rows, at Bits' wires; an open statement, whose proof gets a guarantee entry",
+   "Properties.NetworkCertifier.WiredScopeAcc": "unstated: Bits' wires, run backward, fit a statement whose circuit is its audit's members' joint program; an open statement, whose proof gets a guarantee entry"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -9376,7 +9326,7 @@
     "Claims.Flock.Stmt": "2c4346d8df20d7feb229714fe99da0c1190d561939f9bbf4af4b394199739701",
     "Claims.Flock.Wit": "f38698de65e7092c5615c7fa9743feb28c33f1447dc2e754e3f25c499b1097b7"
    },
-   "guarantees": ["Properties.NetworkScan.scanScopeAcc", "Properties.NetworkScan.scanScopeAcc_nontrivial"]
+   "guarantees": []
   },
   "Definitions.Claims.Sampling": {
    "digest": "abc3a025438583e8a49877b73044b7b43197401561ebd8249a999899bcf0e475",
@@ -9443,11 +9393,6 @@
     "Claims.Sampling.window": "d11d808843864bb4dc6ce0ebb8a26c85eb2d72bf5f633396f7e6f269d091137d"
    },
    "guarantees": [
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
-    "Properties.NetworkScan.scan_honest",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses"
    ]
@@ -9519,8 +9464,6 @@
     "FlockSoundness.Audit.xorSum": "c627186d879d69d17638b56c9e47172a64d74159228eebeebe6104754ad393a8"
    },
    "guarantees": [
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -9875,8 +9818,6 @@
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial",
     "Pous.Period.SecurityProofs.periodHeldSha512",
     "Pous.Period.SecurityProofs.periodHeldSha512At",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
@@ -9923,8 +9864,6 @@
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_honest",
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
@@ -10876,12 +10815,7 @@
     "NetTiming.ScopeAcc": "c7fd760721042dfff5fa8908b38893d3749f30682f2cda072d1b29a9550d03f5",
     "NetTiming.slotGates": "18b5cf00d01de76454aa5c83b4f78ecbfb92810ca9b0389aa74215a1d9372e0d"
    },
-   "guarantees": [
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial"
-   ]
+   "guarantees": []
   },
   "Definitions.NetworkCertifier.Schedule": {
    "digest": "f111025e1c4fd3b54ab0b3e233cd45ec6207e10ef6e40d1058c19954dc177694",
@@ -12018,11 +11952,6 @@
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
     "Properties.NetworkRecords.noGridMeans",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
-    "Properties.NetworkScan.scan_honest",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -12221,10 +12150,6 @@
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
     "Properties.NetworkRecords.noGridMeans",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
-    "Properties.NetworkScan.scan_honest",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -13226,9 +13151,6 @@
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
     "Properties.NetworkRecords.noGridMeans",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -13806,9 +13728,6 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -14599,11 +14518,6 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
-    "Properties.NetworkScan.scan_honest",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -15414,11 +15328,6 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
-    "Properties.NetworkScan.scan_honest",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -17092,8 +17001,6 @@
     "NciCheck.Properties.SecurityProofs.DescWitnesses",
     "NciCheck.Properties.SecurityProofs.ProtocolAccepts",
     "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanScopeAcc",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial",
@@ -17876,10 +17783,6 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -21079,12 +20982,7 @@
     "Properties.NetworkScan.layOf": "5394737e0797755936169638c28c5a322d5fea963856a47cae16609f69372396",
     "Properties.NetworkScan.scanLayout": "e20dc682d93b04e93b017c91e7b177e5f44822a56f35c62b63432b9e76b975f0"
    },
-   "guarantees": [
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scanScopeAcc_nontrivial"
-   ]
+   "guarantees": []
   },
   "Properties.NetworkScan.Assumptions": {
    "digest": "13f4ca49a49330ea32355b29e579be06559dbbe3a14fec783f751ef7489163f9",
@@ -21092,19 +20990,14 @@
     "Properties.NetworkScan.ScopeMatches": "034e585f8cf7bd0bc270f3d5d2e503ebd70488b8c972161b8a70c22e12caf7e7",
     "Properties.NetworkScan.StmtFlattens": "d9457f2011bf51bdb5935b85ce9a848b489c67ef0a02ca412731b2f15d24255a"
    },
-   "guarantees": ["Properties.NetworkScan.scanScopeAcc"]
+   "guarantees": []
   },
   "Properties.NetworkScan.Flattens": {
    "digest": "3f5949648ef80db4b0a7f77b4162c0e1ca3dbf3ed95de83770191adb9f069e12",
    "definitions": {
     "Properties.NetworkScan.Flattens": "958b48d427a4799a495e8498981cebdafaf311689c3fefb050bf30006a382055"
    },
-   "guarantees": [
-    "Properties.NetworkScan.scanFits",
-    "Properties.NetworkScan.scanFits_nontrivial",
-    "Properties.NetworkScan.scanScopeAcc",
-    "Properties.NetworkScan.scan_honest"
-   ]
+   "guarantees": []
   },
   "Properties.Pous": {
    "digest": "2b441606eaf35a16f58580f22b4c696d510069ff5f239ad65067aa5a5e26caf3",

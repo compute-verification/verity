@@ -4,36 +4,28 @@ import Properties.NetworkScan
 import Properties.NetworkPeriod
 
 /-!
-# A compute audit's wired rows: what `NetworkCheck.Circuit.check`'s acceptance gives the sampled audit
+# A compute audit's wired rows: what its acceptance gives the sampled audit
 
 A compute audit's Program is a population of template instances whose inputs are all input gates, and its circuit
 record (`NetworkCheck.Circuit.Stated`) states the dataflow between them, its wires, and the rows its registered reads
 fill. The sampled audit reads the wires through its layout (`NetTiming.BoundaryGates.wires`): each wired input gate
 reads its writer's value, so it is no free input, and the record's count (`Counts.free`) leaves it out.
 
-**The circuit** (`copied`) is the Program flattened (`Flattens`) with one copy gate a leaf of its root's return, in
-return order, which it returns. The root returns every template node's outputs whole and in order
-(`NetworkCheck.Circuit.returnsAll`), so the copies are each unit's committed output rows, computed in that unit, and a
-wired gate's writer is the copy of its writer's output leaf, whatever that leaf's gate is (a computed gate, a constant,
-or an input the template passes through).
+**The circuit** is the audit's members' joint program (`Properties.NetworkScan.jointOf`), at the templates' circuit
+files `fs`, each laid out by Bits as its template (`FilesOf`), and the members `ms` over them (`MembersOf`): every unit's
+gates, returning every unit's output copy bits. **The wires** are Bits' (`SampledProofs.Bits.wiresOf`): each source
+bit to the first claims position at its commitment position, compared at the partition's VUs, the writer's output bit
+where a unit writes it and else the first copy. `WiresBackward` says each runs to an earlier position, what the period
+check's check across an audit's members is to give from their descriptions, never walking the wires.
 
-**The wires as gates** (`rowGates`): wire `w`'s reader index `i` is reader unit `u` and row `j` (`Wire.readerAt`), and
-writer unit `v` (`Wire.writerAt`). The row is its writer's output field (`fieldOf`, from leaf `off`) bit for bit
-(`leavesOk`), in the reader port's leaves of width `a` and the field's of width `b`, so it is `R` leaves, the field's
-bits over `a`. Leaf `ℓ` of the row is leaf `u · Lₚ + j · R + ℓ` of the root input node the reader's template node reads
-as its port (`inputArg`, `Lₚ` the port's leaves), resolved from the root (`Properties.NetworkScan.gateAt`); its writer
-is the copy of the writer's template node's output leaf holding the leaf's first bit, row bit `ℓ · a`: leaf
-`v · L + off + ⌊ℓ · a / b⌋` (`L` the Definition's output leaves). A gate is a leaf of any width, as the Program's layout
-has it (`Flattens`), so at `a = b` this is leaf for leaf, and where one side is a Boolean-profile port's bits, a word
-gate is wired to the gate of its first bit, and a bit gate to its word's. The registered rows (`regGates`) are the
-reader rows of the registered reads of a held parameter and of the table reads and openings of a table over one, the
-rows `countsOf` counts as `registered`, leaf for leaf.
+**The registered rows** (`regGates`) are the reader rows of the registered reads of a held parameter and of the table
+reads and openings of a table over one, the rows `countsOf` counts as `registered`, bit for bit: bit `β` of a template's
+port at its instance `u` (`portGates`) is its port word's bit (`wordBit`), at the instance's unit and copy of its member
+(`instPos`, `SampledProofs.Bits.inBit`).
 
-* `CircuitWiresFit`: an accepted record's wires fit the circuit of its decoded Program (`BoundaryGates.WiresFit`) over
-  any horizon with no ingress: each wired gate an input, each writer returned, and a rank falling along every wire.
 * `CircuitCounts`: an accepted record's `free` is at least the circuit's free inputs outside its registered rows.
-* `WiredScopeAcc`: `CircuitWiresFit` at the statements of a deployment whose statements are their descriptors' circuits
-  (`StmtFlattensCopied`): the wires part of `NetTiming.ScopeAcc`'s `Fits`.
+* `WiredScopeAcc`: at a deployment's statement whose circuit is the members' joint program, a layout whose wires are
+  Bits' and with no ingress fits the wiring (`BoundaryGates.WiresFit`): the wires part of `NetTiming.ScopeAcc`'s `Fits`.
 * `Properties.NetworkPeriod.RowsWiresChecked`: the period check (`NetworkCheck.Period`) charges each audit the free
   inputs it counted off its registered Program, and with a circuit record those `Circuit.countsOf` counted on the record
   `Circuit.checked` read, at its pins' parameters and at those and the scan's state (`stateFree`), the record its
@@ -43,12 +35,12 @@ rows `countsOf` counts as `registered`, leaf for leaf.
 
 `NetTiming.Guarantees.PeriodLeakAccepted` takes each statement's layout and registered inputs (`reg`) as parameters and
 counts `#(freeInputs \ reg)`. These compose with it at the record a statement's registration binds by digest
-(`window.circuit`) and its pins' held parameters `held`: layouts whose wires are `rowGates P r`, and
-`reg := regGates P r held`, so `CircuitCounts` bounds that count by the record's `free`, and the registration's openings
-(`RegOpens`) are owed at exactly `regGates P r held`.
+(`window.circuit`) and its pins' held parameters `held`: layouts whose wires are `wiresOf ms` and
+`reg := regGates P fs ms r held`, so `CircuitCounts` bounds that count by the record's `free`, and the registration's
+openings (`RegOpens`) are owed at exactly `regGates P fs ms r held`.
 
-Each of `CircuitWiresFit` and `CircuitCounts` says its conclusion (`…At`) of every record `check` accepts, and so is its
-property of any circuit check `chk` (`…Of`), which the nontrivial lemmas state false at `acceptAllCircuit`, a check that
+`CircuitCounts` says its conclusion (`CircuitCountsAt`) of every record `check` accepts, and so is its property of any
+circuit check `chk` (`CircuitCountsOf`), which the nontrivial lemma states false at `acceptAllCircuit`, a check that
 accepts every record; `RowsWiresChecked` and `RowsHeld` likewise of the period's decoder and check, false at
 `acceptAllParams` and `acceptAllRows`, which decode every parameters to one audit's period and accept every period.
 `Proofs.Properties.NetworkCertifier` proves them.
@@ -58,158 +50,99 @@ namespace Properties.NetworkCertifier
 
 open Lean (Json)
 open Flock.Program (Prog Ty)
-open NetworkCheck.Circuit (Stated Counts Wire nodeOf fieldOf widthOf templateDef recordOf heldOf)
-open Properties.NetworkScan (gateAt Flattens)
-
-/-- The leaves of the root's return before template node `k`'s: the root returns each template node's outputs whole and
-in order (`returnsAll`), so member `u`'s output leaf `x` of template node `k` is return leaf `retStart P k + u · L + x`,
-`L` its Definition's output leaves. -/
-def retStart (P : Prog) (k : ℕ) : ℕ :=
-  (((NetworkCheck.Period.templateNodes P).takeWhile (· != k)).map fun k' =>
-    ((P.defs[P.root]!).body.nodes[k']!).n * (templateDef P k').outLeaves).sum
-
-/-- **The circuit of `P` at its flattening `C`**: `C`'s gates, then one gate a leaf of `P`'s root's return, in return
-order, reading that leaf's gate (`.and [g]`, whose value is `g`'s), and returning those copies. Return leaf `j`'s copy is
-gate `C.gates.length + j`. -/
-def copied (P : Prog) (C : Claims.Sampling.Prog) : Claims.Sampling.Prog :=
-  let ret := (P.defs[P.root]!).body.ret
-  ⟨C.gates ++ (List.range ret.count).map (fun j => .and [gateAt P P.rootScope (ret.get j)]),
-    (List.range ret.count).map (C.gates.length + ·)⟩
-
-/-- **The deployment's statements are their descriptors' circuits**: every statement `D` parses has a descriptor C-Flock
-decodes (`Flock.Program.decode`), and its circuit is that Program's flattening with its returned leaves copied
-(`copied`). `Properties.NetworkScan.StmtFlattens` with the copies: the deployed parser's premise for compute audits
-whose units are wired. -/
-def StmtFlattensCopied {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T) : Prop :=
-  ∀ x s, D.parse x = some s → ∃ P C, Flock.Program.decode ⟨s.desc.toArray⟩ = .ok P ∧ Flattens P C ∧ s.prog = copied P C
+open NetworkCheck.Period (templateNodes bitsOf)
+open NetworkCheck.Circuit (Stated Counts nodeOf templateDef recordOf heldOf)
+open SampledProofs.Bits (Members inBit wiresOf)
+open Properties.NetworkScan (Flattens jointOf FilesOf MembersOf instPos wordBit)
 
 /-- Template node `k`'s parameter `port`: its index and type. -/
 def portParam (P : Prog) (k : ℕ) (port : String) : Option (ℕ × Ty) :=
   ((templateDef P k).params.toList.zipIdx.find? (·.1.1 == port)).map fun ((_, t), i) => (i, t)
 
-/-- Template `tid`'s port `port`'s leaves; 0 where it has none. -/
-def portLeaves (P : Prog) (r : Stated) (tid port : String) : ℕ :=
+/-- Template `tid`'s port `port`'s bits; 0 where it has none. -/
+def portWidth (P : Prog) (r : Stated) (tid port : String) : ℕ :=
   match nodeOf P r tid with
-  | some k => ((portParam P k port).map (·.2.leaves)).getD 0
+  | some k => ((portParam P k port).map (bitsOf ·.2)).getD 0
   | none => 0
 
-/-- **The gates of template `tid`'s port `port` at unit `u`**, its leaves `a … a + n − 1`: leaves `u · Lₚ + a …` of the
-root input node its template node reads as `port` (`inputArg`; `argsOk` maps member `u` to leaves `[u · Lₚ, (u + 1) · Lₚ)`,
-`Lₚ` the port's leaves), each resolved from the root. None where the port is no input node's. -/
-def portGates (P : Prog) (r : Stated) (tid port : String) (u a n : ℕ) : List ℕ :=
+/-- **The claims positions of bits `a … a + n − 1` of template `tid`'s port `port` at its instance `u`**, in the
+members' joint program: each bit's port word and bit (`wordBit`, over the template's parameters) at the instance's
+unit and copy (`instPos`, `SampledProofs.Bits.inBit`). None where the record names no template node `tid` or it has no
+parameter `port`. -/
+def portGates (P : Prog) (fs : List Flock.Circuit) (ms : Members) (r : Stated) (tid port : String) (u a n : ℕ) :
+    List ℕ :=
   match nodeOf P r tid with
   | none => []
-  | some k => match portParam P k port with
-    | none => []
-    | some (i, t) => match (((P.defs[P.root]!).body.nodes[k]!).args[i]?).bind (NetworkCheck.Period.inputArg P) with
-      | none => []
-      | some q => (List.range n).map fun ℓ => gateAt P P.rootScope ⟨false, q, u * t.leaves + a + ℓ⟩
-
-/-- **Wire `w`'s gates**, reader and writer, bit for bit as `leavesOk` reads a wire: the reader's port has leaves of
-width `a` and the writer's output field `w.out` (`fieldOf`, from leaf `off`) leaves of width `b`, so a reader row is
-`R = bits / a` leaves, `bits` the field's. For each reader index `i` (`Wire.readerAt`: unit `u`, row `j`) and leaf
-`ℓ < R` of the row, leaf `j · R + ℓ` of the reader's port at unit `u` (`portGates`), and the copy (`copied`) of the
-writer leaf holding its first bit, row bit `ℓ · a`: return leaf `retStart + v · L + off + ⌊ℓ · a / b⌋`, the writer's
-template node's output leaf at unit `v` (`Wire.writerAt`), `L` its output leaves. At `a = b` it is leaf for leaf. -/
-def wireGates (P : Prog) (r : Stated) (w : Wire) : List (ℕ × ℕ) :=
-  match nodeOf P r w.writer with
-  | none => []
-  | some kw => match fieldOf (templateDef P kw).ret w.out with
-    | none => []
-    | some (t, off, _) =>
-      let a := (((nodeOf P r w.reader).bind (portParam P · w.port)).bind (widthOf ·.2)).getD 1
-      let b := (widthOf t).getD 1
-      let n := NetworkCheck.Period.bitsOf t / a
-      (List.range w.units).flatMap fun i =>
-        (portGates P r w.reader w.port (w.readerAt i).1 ((w.readerAt i).2 * n) n).zip
-          ((List.range n).map fun ℓ => (P.defs[P.root]!).gates + retStart P kw +
-            (w.writerAt i).toNat * (templateDef P kw).outLeaves + off + ℓ * a / b)
-
-/-- **The record's wires as gates** of the circuit (`copied`): each gate a wire's reader leaf resolves to
-(`wireGates`) ↦ its writer's copy, the first wire's that covers it; none at a gate no wire covers. -/
-def rowGates (P : Prog) (r : Stated) (g : ℕ) : Option ℕ :=
-  ((r.wiring.wires.flatMap (wireGates P r)).find? (·.1 == g)).map (·.2)
+  | some k => match portParam P k port, (templateNodes P).findIdx? (· == k) with
+    | some (π, _), some i =>
+      let ps := (templateDef P k).params.toList.map (·.2)
+      (List.range n).map fun β =>
+        instPos P fs ms i u fun c m v q => inBit c m v q (wordBit ps π (a + β)).1 (wordBit ps π (a + β)).2
+    | _, _ => []
 
 /-- **The registered rows' gates** at the held parameters `held` (`heldOf`): each registered read of a held parameter's
-reader rows (its pattern's reader indices, `Wire.readerAt`, each row its port's leaves over its cut), and each port of
+reader rows (its pattern's reader indices, `Wire.readerAt`, each row its port's bits over its cut), and each port of
 each table read and opening of a table over a held parameter, whole, at each of its units: the rows `countsOf` counts as
-`registered`. -/
-def regGates (P : Prog) (r : Stated) (held : List String) : Finset ℕ :=
+`registered`, bit for bit. -/
+def regGates (P : Prog) (fs : List Flock.Circuit) (ms : Members) (r : Stated) (held : List String) : Finset ℕ :=
   let reg := r.registered
   let pinned := (reg.tables.filter (held.contains ·.param)).map (·.name)
   let whole := fun (tid p : String) (start n : ℕ) =>
-    (List.range n).flatMap fun v => portGates P r tid p (start + v) 0 (portLeaves P r tid p)
+    (List.range n).flatMap fun v => portGates P fs ms r tid p (start + v) 0 (portWidth P r tid p)
   ((reg.reads.filter (held.contains ·.param)).flatMap (fun x =>
-      let row := portLeaves P r x.pat.reader x.pat.port / r.wiring.cutsOf x.pat.reader x.pat.port
+      let row := portWidth P r x.pat.reader x.pat.port / r.wiring.cutsOf x.pat.reader x.pat.port
       (List.range x.pat.units).flatMap fun i =>
-        portGates P r x.pat.reader x.pat.port (x.pat.readerAt i).1 ((x.pat.readerAt i).2 * row) row) ++
+        portGates P fs ms r x.pat.reader x.pat.port (x.pat.readerAt i).1 ((x.pat.readerAt i).2 * row) row) ++
     (reg.roots.filter (pinned.contains ·.table)).flatMap (fun x => whole x.reader x.port x.start x.units) ++
     (reg.openings.filter (pinned.contains ·.table)).flatMap (fun o =>
       o.ports.flatMap fun p => whole o.reader p o.start o.units)).toFinset
 
-/-- What `CircuitWiresFit` says of a record its check accepted against the Program `P`: wherever `P` is what C-Flock
-decodes from `bytes`, at the record `recordOf` reads and every flattening `C` of `P`, a layout whose wires are the
-record's (`rowGates`) and with no ingress before `k` fits the circuit's wiring (`copied`, `BoundaryGates.WiresFit`). -/
-def CircuitWiresFitAt (P : Prog) (record : Json) : Prop :=
-  ∀ (bytes : ByteArray) (r : Stated) (C : Claims.Sampling.Prog) {L S : ℕ} (lay : NetTiming.BoundaryGates L S) (k : ℕ),
-    Flock.Program.decode bytes = .ok P → recordOf P record = .ok r → Flattens P C → lay.wires = rowGates P r →
-    (∀ t < k, lay.ingress t = []) → lay.WiresFit (copied P C) k
-
-/-- `CircuitWiresFit` of the circuit check `chk`: `CircuitWiresFitAt` of every record `chk` accepts. -/
-def CircuitWiresFitOf (chk : Prog → Json → Json → Json → Except String Counts) : Prop :=
-  ∀ (P : Prog) (record order pins : Json) (c : Counts), chk P record order pins = .ok c → CircuitWiresFitAt P record
-
-/-- **An accepted record's wires fit its Program's circuit.** If `NetworkCheck.Circuit.check` accepts the record `record`
-with the order `order` against the Program `P` C-Flock decodes, then at every flattening `C` of `P`, a layout whose
-wires are the record's (`rowGates`) and with no ingress before `k` fits `copied P C` over `k` (`WiresFit`): each wired
-gate is an input and no ingress gate, its writer is a copy the circuit returns, and some rank falls along every wire, a
-wired gate ranking above every wired gate its writer depends on. -/
-def CircuitWiresFit : Prop :=
-  ∀ (P : Prog) (record order pins : Json) (c : Counts),
-    NetworkCheck.Circuit.check P record order pins = .ok c → CircuitWiresFitAt P record
+/-- **Bits' wires run backward** at the members `ms`: each wired source bit's writer is an earlier claims position. The
+period check's check across an audit's members is to give it, from their descriptions, never walking the wires. -/
+def WiresBackward (ms : Members) : Prop := ∀ x w, wiresOf ms x = some w → w < x
 
 /-- What `CircuitCounts` says of a record its check accepted against `P` with the count `c`: wherever `P` is what
-C-Flock decodes from `bytes`, at the record `recordOf` reads, the held parameters `heldOf` reads off `pins` and every
-flattening `C` of `P`, at a layout whose wires are the record's (`rowGates`) and with no ingress before `k`, the
-circuit's free inputs outside the registered rows (`regGates`) number at most `c.free`. -/
+C-Flock decodes from `bytes`, at the record `recordOf` reads, the held parameters `heldOf` reads off `pins`, `P`'s
+templates' circuit files `fs` (`FilesOf`) and its audit's members `ms` over them (`MembersOf`), at a layout whose wires
+are Bits' (`wiresOf`) and with no ingress before `k`, the members' joint program's free inputs outside the registered
+rows (`regGates`) number at most `c.free`. -/
 def CircuitCountsAt (P : Prog) (record pins : Json) (c : Counts) : Prop :=
-  ∀ (bytes : ByteArray) (r : Stated) (held : List String) (C : Claims.Sampling.Prog) {L S : ℕ}
+  ∀ (bytes : ByteArray) (r : Stated) (held : List String) (fs : List Flock.Circuit) (ms : Members) {L S : ℕ}
     (lay : NetTiming.BoundaryGates L S) (k : ℕ),
-    Flock.Program.decode bytes = .ok P → recordOf P record = .ok r → heldOf pins = .ok held → Flattens P C →
-    lay.wires = rowGates P r → (∀ t < k, lay.ingress t = []) →
-    (NetTiming.freeInputs (copied P C) lay k \ regGates P r held).card ≤ c.free
+    Flock.Program.decode bytes = .ok P → recordOf P record = .ok r → heldOf pins = .ok held → FilesOf P fs →
+    MembersOf P fs ms → lay.wires = wiresOf ms → (∀ t < k, lay.ingress t = []) →
+    (NetTiming.freeInputs (jointOf ms) lay k \ regGates P fs ms r held).card ≤ c.free
 
 /-- `CircuitCounts` of the circuit check `chk`: `CircuitCountsAt` of every record `chk` accepts, at its count. -/
 def CircuitCountsOf (chk : Prog → Json → Json → Json → Except String Counts) : Prop :=
   ∀ (P : Prog) (record order pins : Json) (c : Counts), chk P record order pins = .ok c → CircuitCountsAt P record pins c
 
 /-- **An accepted record's free count bounds its circuit's free inputs.** If `NetworkCheck.Circuit.check` accepts the
-record `record` against the Program `P` C-Flock decodes, with the pins `pins` and the count `c`, then at every flattening
-`C` of `P` and every layout whose wires are the record's (`rowGates`) with no ingress before `k`, the free inputs of
-`copied P C` (`NetTiming.freeInputs`: its input gates, neither ingress nor wired) outside the rows the record's reads of
-held parameters fill (`regGates`) number at most `c.free`, the bits of the input rows no wire or registered read fills:
-each such gate is a leaf of such a row, of at least one bit. -/
+record `record` against the Program `P` C-Flock decodes, with the pins `pins` and the count `c`, then at `P`'s
+templates' circuit files (`FilesOf`) and its audit's members over them (`MembersOf`), and every layout whose wires are
+Bits' (`wiresOf`) with no ingress before `k`, the free inputs of the members' joint program (`NetTiming.freeInputs`: its
+input gates, neither ingress nor wired) outside the rows the record's reads of held parameters fill (`regGates`)
+number at most `c.free`, the bits of the input rows no wire or registered read fills. -/
 def CircuitCounts : Prop :=
   ∀ (P : Prog) (record order pins : Json) (c : Counts),
     NetworkCheck.Circuit.check P record order pins = .ok c → CircuitCountsAt P record pins c
 
-/-- **An accepted record's wires fit at a deployment's statements.** If `NetworkCheck.Circuit.check` accepts the record
-`record` against the Program `P` C-Flock decodes from `bytes`, then at every deployment `D` whose statements are their
-descriptors' circuits (`StmtFlattensCopied`), every statement `D` parses from `x`, whose descriptor is `bytes`, whose
-layout's wires are the record's (`rowGates`) and with no ingress before its horizon, has its layout's wiring fit its
-circuit (`WiresFit`): the wires part of `NetTiming.ScopeAcc`'s `Fits`, `ScanScopeAcc`'s carry for the wires. -/
+/-- **Bits' wires fit at a deployment's statements.** If C-Flock decodes the Program `P` from `bytes`, `fs` are its
+templates' circuit files (`FilesOf`) and `ms` its audit's members over them (`MembersOf`), and Bits' wires run backward
+(`WiresBackward`), then at every deployment `D`, every statement `D` parses from `x` whose descriptor is `bytes` and
+whose circuit is the members' joint program (`Flattens`), at a layout whose wires are Bits' (`wiresOf`) and with no
+ingress before its horizon, has its layout's wiring fit its circuit (`WiresFit`): the wires part of
+`NetTiming.ScopeAcc`'s `Fits`, `ScanScopeAcc`'s carry for the wires. -/
 def WiredScopeAcc : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog) (record order pins : Json) (c : Counts) (r : Stated),
-    Flock.Program.decode bytes = .ok P → NetworkCheck.Circuit.check P record order pins = .ok c →
-    recordOf P record = .ok r →
+  ∀ (bytes : ByteArray) (P : Prog) (fs : List Flock.Circuit) (ms : Members),
+    Flock.Program.decode bytes = .ok P → FilesOf P fs → MembersOf P fs ms → WiresBackward ms →
     ∀ {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T) (x : Claims.Msg) {L S : ℕ}
       (lay : Claims.Sampling.AuditStatement → NetTiming.BoundaryGates L S) (k : Claims.Sampling.AuditStatement → ℕ),
-      StmtFlattensCopied D →
-      ∀ st, D.parse x = some st → (⟨st.desc.toArray⟩ : ByteArray) = bytes → (lay st).wires = rowGates P r →
-        (∀ t < k st, (lay st).ingress t = []) → (lay st).WiresFit st.prog (k st)
+      ∀ st, D.parse x = some st → (⟨st.desc.toArray⟩ : ByteArray) = bytes → Flattens ms st.prog →
+        (lay st).wires = wiresOf ms → (∀ t < k st, (lay st).ingress t = []) → (lay st).WiresFit st.prog (k st)
 
-/-- A circuit check that accepts every record, counting nothing free: what `CircuitWiresFitOf` and `CircuitCountsOf`
-must fail at for `CircuitWiresFit` and `CircuitCounts` (each its `…Of` at `check`) to say something. -/
+/-- A circuit check that accepts every record, counting nothing free: what `CircuitCountsOf` must fail at for
+`CircuitCounts` (its `…Of` at `check`) to say something. -/
 def acceptAllCircuit (_ : Prog) (_ _ _ : Json) : Except String Counts := .ok ⟨0, 0, 0, 0⟩
 
 end Properties.NetworkCertifier
