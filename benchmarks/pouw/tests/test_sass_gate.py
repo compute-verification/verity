@@ -414,12 +414,14 @@ def test_an_sm90a_build_without_flags_passes_under_its_own_entry_and_no_other(pi
 
 def test_the_shipped_sm90a_entry_exempts_only_the_bodies_its_numeric_run_tested():
     """The shipped entry is found for an sm_90a build of its ptxas and exempts the seeds and the bodies ieee_pin.cu's builds
-    pinned: sqrt_k's sqrt calls reach the body units_sqrt tests, and rho_k's a __cuda_sm20_sqrt_rn_f32_slowpath that ptxas
-    specialized otherwise, which no numeric run tested, so they stay refused, and so does every refused kernel but
-    __expf's, whose one flagged instruction is a bare MUFU.EX2 between IEEE FMULs, which the entry excepts."""
+    pinned, hash_decode.cuh's two div bodies (norm_two's and norm_one's) for its numerator 8192 alone: sqrt_k's sqrt calls
+    reach the body units_sqrt tests, and rho_k's a __cuda_sm20_sqrt_rn_f32_slowpath that ptxas specialized otherwise,
+    which no numeric run tested, so they stay refused, and so does every refused kernel but __expf's, whose one flagged
+    instruction is a bare MUFU.EX2 between IEEE FMULs, which the entry excepts."""
     entry = SG.load_pins()["toolkits"]["13.0.1-sm_90a"]
     assert entry["args"] == ["-arch sm_90a -m 64", "-arch sm_90a -m 64 -fmad false"]
-    assert entry["numeric"]["run"] == "r20261026-085046-75c4"
+    assert entry["numeric"]["run"]
+    assert entry["numerators"] == dict.fromkeys(["0506fcf4d209d4af", "d72da770af0af38d"], ["0x46000000"])
     v = verdict("plain90")
     assert v["toolkit"] == "13.0.1-sm_90a" and v["unpinned"] is None and v["covered"]["int-seed"] == 12
     assert [c.split(" ")[0] for c in v["unmatched_calls"]] == ["rho_k"] and v["covered"]["sqrt-fast-path"] == 3
