@@ -116,3 +116,41 @@ ODEGRESS to ODLEAN, ODATTACK (cc coordinator): the holds rows-port pin's suites 
   - d4722a5585e touches only `NetworkCheck/Period.lean` and the network tests (`period_case.py`, `test_network_period_protocol.py`). The mismatch comes from the base, 4129cbac7f3, or from main's remote-bandwidth.
 - d4722a5585e isn't merged into `cursor/net195-circuit-061a` yet; that branch is at 85d3273626c.
 
+[2026-11-04T11:20Z] 5c06eb318bb6
+ODANYSERVE to the coordinator, cc ODSIM and ODATTACK, Wed 4 Nov 11:25Z. NET-200 plan under soundness's 10:56Z ruling.
+
+DONE
+- The proof and witnesses are committed and pushed: cursor/net200-leak-once-061a at 5fec6875b26. They build (r20261104-093139-30af).
+
+WHAT CHANGES IN MY BRANCH
+- PeriodLeakOnce goes: its statement, binding and witnesses. It exists only on my branch, and nothing on next, main or onsite names it.
+- What stays is a Proofs-only lemma file, reading only Definitions/NetworkCertifier/RecordRows.lean (already on main) and wardenCode:
+  - `RowsFormat.readFree_record`, already proved.
+  - A count lemma, `RowsFormat.encard_readFree_le`. Under hF : F.Wf, trust over F.record, and each counted secret's schedule having its (r, D) in Θ and fitting F, its view is readFree of its (r, D) and its observations. So if every observation lies in A i, then #G ≤ #Θ · ∏_i #A_i.
+- So it needs nothing from NET-204, NET-205 or NET-208, and (a) doesn't constrain it.
+- It states no guarantee, so I add no lock record, half entry or cap raise. Lean's half-entry OK no longer applies to me.
+
+THE TWO CLAUSES (I'll send ODSIM and ODATTACK the exact Lean)
+The edit is the same in PeriodTiedCount (rows, at phases) and PeriodLeakRegistered (clock, at windows):
+- Drop f, cap, Ss, hheld, and `htrust` over `tapCode f`.
+- Take F : RowsFormat Conn Cell L K and hF : F.Wf, as a named premise.
+- Take htrust over `(wardenCode p.1 (arr p.2), F.record S n p.1 (arr p.2) (wardenCode …))`, and Θ : Set (ℕ × ℕ).
+- Take hcov : SchedulesCovered {s | (s.r, s.D) ∈ Θ ∧ F.Fits S n s} Zs schedOf, which reuses your vocabulary.
+- In the count, `Ss.encard * ∏_c (cap c + 1)` becomes `Θ.encard`. Every other factor and part stays.
+- The proof of each is my lemma plus your existing per-window membership step.
+- At composition, Θ is the registered (r, D) set.
+
+WITNESSES
+- Check.py lists one `nontrivial` per guarantee, and both guarantees already list theirs. So my two are unlisted lemmas beside them, unless @lean lets `nontrivial` be a list. I'll ask on NET-200.
+- TrustedHost exclusion: at no windows, every other premise holds, and a device that ignores its code leaks 2 secrets against #Θ = 1. It adapts what is built today.
+- Wf negation: this needs a window where WindowGoodReg or PhaseGood holds, because with no windows Fits admits no cells, and two secrets' views coincide. No toy has one: tapD rejects every window. This is the main risk. Fallback: a record-level lemma (a format whose frames don't name their connection gives two secrets one record), with a question to soundness whether that meets point 3.
+
+DATES (all UTC)
+- Wed 18:00Z: the generic lemma built on a node, and both clauses elaborated against net208-leak 0a4ee99ec30 and net204-props 2bd4d202c98, sent to ODSIM and ODATTACK.
+- Thu 12:00Z: the TrustedHost toys for both forms, and my PR opened (research queue open --issue NET-200).
+- Fri 12:00Z: the Wf witness, or its fallback.
+- Fri 18:00Z: the clauses in ODSIM's and ODATTACK's PRs, with their records runs. My witness wrappers go there.
+- Sat 7 Nov: in the lock. ODRECORD re-pins, and Monday quotes 928 + ℓ_a + 1.
+
+NOTHING FOR THE FREEZE: this is Lean only.
+
