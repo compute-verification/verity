@@ -29,6 +29,7 @@ H1 = Path(__file__).resolve().parents[1] / "h1_prove"
 sys.path.insert(0, str(H1))
 import h1unit as U  # noqa: E402
 
+from verity.core.protocols.pouw import core_check as CC  # noqa: E402
 from verity.core.protocols.pouw import salt as PS  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
 from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
@@ -730,8 +731,9 @@ def test_the_seeds_derive_from_the_window_salt():
 
 
 def test_the_public_and_ok_rows_are_their_parameters_bits():
-    """The public row is the salt's, position's and roots' leaves in order; the ok row is the one word 1, under a salt
-    anyone derives from the window and the position."""
+    """The public row is the salt's, position's and roots' leaves in order; the ok row is the one word 1; each under a salt
+    anyone derives from the window and the position, core's (`core_check.public_row_salt`, `ok_salt`), which credit and
+    its Lean derive."""
     salt, roots = bytes(range(64)), (bytes(64 * [7]), bytes(range(64, 128)))
     w = U.pub_words(salt, 0x0123456789, roots)
     bits = np.unpackbits(w.astype("<u2").view(np.uint8), bitorder="little")
@@ -739,6 +741,7 @@ def test_the_public_and_ok_rows_are_their_parameters_bits():
         SD.leaves(roots[1], True)
     assert U.OK.tolist() == [1] and len(U.ok_salt("w", 3)) == U.SALT_BYTES
     assert len({U.ok_salt("w", 3), U.ok_salt("w", 4), U.ok_salt("v", 3), U.pub_salt("w", 3)}) == 4
+    assert (U.pub_salt("w", 3), U.ok_salt("w", 3)) == (CC.public_row_salt("w", 3), CC.ok_salt("w", 3))
 
 
 def test_the_window_open_root_is_pouws_of_the_weights_and_a_stand_in_request_table():

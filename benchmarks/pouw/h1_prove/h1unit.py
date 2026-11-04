@@ -91,7 +91,6 @@ PUB_BITS = CC.PUBLIC_ROW_BITS
 STAND_IN_REVEAL_TAG = b"verity/pouw/h1-prove/stand-in-reveal/v0\0"
 STREAM = hashlib.sha512(b"verity/pouw/h1-prove/stand-in-stream/v0").digest()
 PROVER = PS.prover_id(b"verity/pouw/h1-prove/stand-in-prover-key/v0")
-PUB_SALT_TAG = b"verity/pouw/h1-prove/pub-row-salt/v0\0"
 OK_SALT_TAG = CC.OK_SALT_TAG
 WINDOW_TAG = "verity/pouw/h1-prove/window/v0"
 A_TABLES_TAG = b"verity/pouw/h1-prove/a-tables/v0\0"
@@ -168,8 +167,9 @@ def unit_salt(reveal: bytes, window: int, stream: bytes = STREAM, prover: bytes 
 
 
 def pub_salt(window: str, position: int) -> bytes:
-    """The public row's hm96 salt, which anyone derives from the window and the unit's position."""
-    return hashlib.shake_256(PUB_SALT_TAG + window.encode() + b"\0" + int(position).to_bytes(8, "big")).digest(SALT_BYTES)
+    """The public row's hm96 salt, which anyone derives from the window and the unit's position:
+    `core_check.public_row_salt`, which credit registers served public rows under (`h1window.public_table`)."""
+    return CC.public_row_salt(window, int(position))
 
 
 def ok_salt(window: str, position: int) -> bytes:
