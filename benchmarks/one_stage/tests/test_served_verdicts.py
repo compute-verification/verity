@@ -2541,7 +2541,7 @@ def test_a_deferral_with_the_split_certifier_behind_its_front_leaves_the_chain_a
         (d / f).parent.mkdir(parents=True, exist_ok=True)
         (d / f).write_text(f)
     period = ('echo period-check >> "$ORDER"; test -s "$4/period.json" || exit 1; '
-              'echo \'{"evidence": "beef"}\' > "$3/case.json"; '
+              'echo \'{"commitment": "7b7d", "evidence": "7b7d", "params": {}}\' > "$3/case.json"; '
               'echo \'{"protocol": "verity/certifier/v9", "verdict": "accept"}\' > "$3/answer.json"; echo checked')
     run = _deferred(tmp_path, PRODUCT=product, CERTIFIER_FRONT="front", CERTIFIER_CHAIN_CMD=CHAIN,
                     CERTIFIER_PERIOD_CMD=period)
