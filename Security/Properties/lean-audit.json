@@ -33,6 +33,7 @@
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt",
+  "Properties.SampledProofs.Covered",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.Wipe",
@@ -862,7 +863,7 @@
   },
   "Properties.SampledProofs": {
    "imports": ["SampledProofs"],
-   "except": ["Properties.SampledProofs.Draw"],
+   "except": ["Properties.SampledProofs.Draw", "Properties.SampledProofs.Covered"],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.CertifierNetwork": {
@@ -905,6 +906,11 @@
    "imports": ["Definitions.Claims", "SampledProofs"],
    "except": [],
    "why": "what the draw misses is stated against `Select.select`'s slots (`SampledProofs.Slots`) and the claims' miss probability `P_a` (`Definitions.Claims`), never a proof"
+  },
+  "Properties.SampledProofs.Covered": {
+   "imports": ["SampledProofs", "Properties.SampledProofs"],
+   "except": [],
+   "why": "R7's coverage is stated against one-stage v2's check (`SampledProofs.OneStageZk.checkBlobsAt`) and R7 as `Properties.SampledProofs` states it, on Lean core: nothing of Mathlib or of `security`, never a proof"
   },
   "Properties.Accounting.Compose": {
    "imports": ["Definitions.Accounting", "SampledProofs", "Properties.SampledProofs.Draw"],
