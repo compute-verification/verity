@@ -148,7 +148,7 @@ theorem ligeritoWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes
     oodIntroWith_sim S hh, queryLevelWith_sim S hh]
 
 theorem verifyRepWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')
-    (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (i r : Nat) (bytes : ByteArray) :
+    (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord) (i r : Nat) (bytes : ByteArray) :
     S.R (verifyRepWith hs spec st sch sess i r bytes) (verifyRepWith hs' spec st sch sess i r bytes) := by
   unfold verifyRepWith
   sim_walk [bindAndZerocheckWith_sim S hh, lincheckWith_sim S hh, ringSwitchWith_sim S hh, ligeritoWith_sim S hh]

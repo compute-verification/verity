@@ -107,7 +107,7 @@ theorem rs_rows_size {inn : RecCoins.Inner} {sh : _root_.Flock.Shape} {extras : 
 /-- **Check 5's rows at a dense statement's part are `portWordsOf nv` words**: check 5 loaded the part's inner session
 and registered its rows at the part's shape (`residualsShape_of_check`), plain at a dense statement (`staged_plain`), so
 group `jj`'s `vs` has the part's `nv` elements (`part_nv`). -/
-theorem resRows_dense {b : Brings} {s : ℕ} {x xO : Msg} {cs : ℕ → Coin} {st0 : Claims.Recursion.Stmt}
+theorem resRows_dense {b : Brings} {s : ℕ} {x xO : Msg} {cs : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : RecDeploy.parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form)
     (hsh : showsPart recRead b s x xO cs) {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (hsu : setupO xO = some (i, spec, sts)) (h0 : 0 < sts.size)
@@ -366,6 +366,7 @@ theorem resSite_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit
     rw [← e]
     exact hz
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht' hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   obtain ⟨-, hts⟩ := tablesOf_of_parse hx
   obtain ⟨spec0, hset⟩ := Flock.Readable.setup_of_tablesOf hts
   unfold Flock.Readable.Read.setup at hset
@@ -427,7 +428,7 @@ labels (`hidx`), at instance `o + g < 2`. Also the block facts `resPieces_comput
 `(jj, o, g, 0)`. -/
 theorem resTie_dense {b : Brings} {IV : Claims.Verifier Coin}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
-    {w : Claims.Flock.Wit} {cs : ℕ → Coin} {Bk : Msg → ℕ} {st0 : Claims.Recursion.Stmt}
+    {w : Claims.Flock.Wit} {cs : ℕ → Coin} {Bk : Msg → ℕ} {st0 : Claims.Recursion.CompiledStatement}
     (hst : RecDeploy.parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form)
     (hB : RestRead.kI x ≤ Bk (xIOf x))
     (hT : ∀ e ∈ (DeployedR.layR elem).calls x s w, FlockDeploy.sha512 e.1 = e.2)

@@ -1,13 +1,13 @@
-# θ for the H200 SXM 141 GB (ACCEL CALIB, CMP-115; note:compute-research/20261026T0140Z-draft-accel-calib): every rate,
-# capacity and clock the accelerator model reads, each with its vendor document first (`sheet`, `grade`, `source`), then
-# the census or a measured run (`measured`, `runs`), or the run that would measure it (`gap`). A rate is a SM-clock's
-# (MACs, results or bytes a SM-clock); `clock` names the clock its per-second figure is at, and `figure` is the number the
-# document prints there (dense), which 2 · sheet · SMs · clock reproduces (`machine-model theta --check`). `machine-model
-# theta` derives d, the exchange rate, B_RF and r_H against r_min from it; `machine-model render theta` tabulates it.
+# θ for the H200 SXM 141 GB (ACCEL CALIB): every rate, capacity and clock the accelerator model reads, each with its
+# vendor document first (`sheet`, `grade`, `source`), then the census or a measured run (`measured`, `runs`), or the run
+# that would measure it (`gap`). A rate is a SM-clock's (MACs, results or bytes a SM-clock); `clock` names the clock its
+# per-second figure is at, and `figure` is the number the document prints there (dense), which 2 · sheet · SMs · clock
+# reproduces (`machine-model theta --check`). `machine-model theta` derives d, the exchange rate, B_RF and r_H against
+# r_min from it; `machine-model render theta` tabulates it.
 gpu = "H200 SXM 141 GB (sm_90a)"
 sms = 132
 sms_source = "H100 whitepaper V1.04, Table 3, H100 SXM5: 'SMs 132'; the H200 data sheet states none (its peaks are H100 SXM5's); the device reports 132 (sheet.toml)"
-# Duo (provisional), LI (provisional), and RT-HOPPER's measured LI loop that folds its own wgmma accumulators.
+# Duo (provisional), LI (provisional), and the measured LI loop that folds its own wgmma accumulators.
 honest = ["dc90-l32", "dc90-li-l32", "dc90-licpw-redux-l32"]
 documents = [
   "DS: NVIDIA H200 data sheet (nvidia.com/en-us/data-center/h200), Technical Specifications, H200 SXM column; footnote 1 'Preliminary specifications', footnote 2 'With sparsity'",
@@ -20,13 +20,13 @@ documents = [
 mhz = 1980
 grade = "whitepaper (H100 SXM5)"
 source = "WP Table 3: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980 MHz'; the DS states no clock"
-measured = "the driver's maximum on vy-dc-h200 is 1980 MHz (note:20261017T0452Z-draft-eps1-dc); under a saturated wgmma the event clock is 1518-1797 MHz while NVML reads 1905-1965 (RT-H200-EMP, r20261019-053910-d2c9)"
+measured = "the driver's maximum on vy-dc-h200 is 1980 MHz; under a saturated wgmma the event clock is 1518-1797 MHz while NVML reads 1905-1965 (RT-H200-EMP)"
 
 [clocks.tensor]
 mhz = 1830
 grade = "whitepaper (H100 SXM5)"
 source = "WP Table 3: 'GPU Boost Clock for FP8, FP16, BF16, TF32 Tensor Core Ops: 1830 MHz': the clock every DS tensor TOPS figure is at"
-measured = "the best dense s8 loop does 1942.7 TOPS, 1.8% under the DS's 1979 (r20261019-053910-d2c9): 4095.6 MACs a SM-clock at about 1797 MHz"
+measured = "the best dense s8 loop does 1942.7 TOPS, 1.8% under the DS's 1979: 4095.6 MACs a SM-clock at about 1797 MHz"
 measured_mhz = 1797
 
 # ---- tensor cores: dense MACs a SM-clock, by format and shape -------------------------------------------------------------
@@ -201,7 +201,7 @@ figure = 67
 grade = "data sheet"
 source = "DS 'FP64 Tensor Core 67 TFLOPS' (no sparsity footnote), at the 1980 MHz FP64 tensor clock (WP Table 3: 66.9)"
 measured = 128
-runs = "DMMA.16x8x16 128, DMMA.8x8x4 64 MACs a SM-clock alone (RT-ISA-1, r20261019-085210-4776, note:20261019T0520Z-draft-rt-isa)"
+runs = "DMMA.16x8x16 128, DMMA.8x8x4 64 MACs a SM-clock alone (RT-ISA-1, r20261019-085210-4776)"
 
 [[rate]]
 key = "tensor.b1.k256"
@@ -448,7 +448,7 @@ what = "L2 read bandwidth, whole GPU"
 unit = "B/s"
 grade = "none"
 source = "neither the DS nor the WP states an L2 bandwidth (table.toml: the H200's L2 is unmeasured)"
-gap = "the H200 memory probe (smem.write's), at the sm_120 L2 probe's patterns (l2_g256cg_line, r20261017-065855-c8a9)"
+gap = "the H200 memory probe (smem.write's), at the sm_120 L2 probe's patterns (l2_g256cg_line)"
 
 [[rate]]
 key = "hbm"
@@ -458,7 +458,7 @@ sheet = 4.8e12
 grade = "data sheet"
 source = "DS 'GPU Memory Bandwidth 4.8TB/s'"
 measured = 4.26e12
-runs = "a streaming 16-B load stand-in for a decode step: 24.1 GB in 5.65 ms (r20261018-085249-443d, note:hash/20261018T0632Z-draft-intpipe §6a); a calibrated stand-in, not a peak probe"
+runs = "a streaming 16-B load stand-in for a decode step: 24.1 GB in 5.65 ms (r20261018-085249-443d); a calibrated stand-in, not a peak probe"
 
 # ---- capacities --------------------------------------------------------------------------------------------------------
 
@@ -511,7 +511,7 @@ format = "s8/u8"
 native = "wgmma m64nNk32 (IGMMA), mma.sync m16n8k32, m16n8k16, m8n8k16 (IMMA)"
 exact = "s8·s8 into s32, exact (wraps mod 2^32 without .satfinite)"
 isa = "PTX §9.7.15.5 (wgmma .s8/.u8: k32 only), §9.7.14.5"
-measured = "exactness pinned on the H200: wgmma m64n64k32, m64n128k32 and m64n256k32 .s8 against HOPPER_SM90_S8_K32, 8 forms each, 0 mismatches over about 10.3-10.6 M elements a form, extreme and clamp tiles included (r20261026-010336-7755; registry entries in PR #4512, HASH-18); mma.sync m16n8k32 .s8 pinned by DPRE (HASH-8). That run times nothing: the shapes' rates are the census's (tensor.s8.k32 N256 4095.6, N128 4095.4, N64 4095.0; tensor.s8.k32.n32 2729.9; tensor.s8.k32.sync 2687.1; tensor.s8.k16 1995.7)"
+measured = "exactness pinned on the H200: wgmma m64n64k32, m64n128k32 and m64n256k32 .s8 against HOPPER_SM90_S8_K32, 8 forms each, 0 mismatches over about 10.3-10.6 M elements a form, extreme and clamp tiles included (registry entries in); mma.sync m16n8k32 .s8 pinned by DPRE. That run times nothing: the shapes' rates are the census's (tensor.s8.k32 N256 4095.6, N128 4095.4, N64 4095.0; tensor.s8.k32.n32 2729.9; tensor.s8.k32.sync 2687.1; tensor.s8.k16 1995.7)"
 
 [[path]]
 format = "e4m3/e5m2"
@@ -555,7 +555,7 @@ native = "none on sm_90"
 exact = "–"
 isa = "PTX §9.7.14.5 kind::f8f6f4 and kind::mxf4nvf4 are sm_100a/sm_120a"
 
-# ---- FP8 atom semantics (PEARLC-MODEL, CMP-119) -----------------------------------------------------------------------------
+# ---- FP8 atom semantics --------------------------------------------------------------------------------------------
 
 [[fp8]]
 form = "wgmma m64nNk32 .f32.e4m3.e4m3 (QGMMA), and .e5m2"
@@ -565,7 +565,7 @@ alignment = "every term, the accumulator included, rescaled to a 14-bit signific
 accumulation = "the aligned terms summed exactly, the sum normalized to 14 bits by truncation, then to FP32 by truncation (no rounding): the FP32 accumulator keeps 14 significand bits a step, which is the 'FP8 accumulation precision loss' DeepSeek-V3 reports"
 promotion = "none in silicon. Software promotes: a fresh accumulator from +0 every N_C = 128 products (4 wgmma k32 steps), added to an FP32 total on the CUDA cores by one round-to-nearest-even FADD (DeepSeek-V3 technical report, arXiv:2412.19437, §3.3.2; Pearl's H100 replay, `pearl_kw.py` Device h100, windowed, W = 13)"
 rate = "4095.6 MACs/SM/clk at N ≥ 64 (tensor.e4m3.k32); N < 64 unmeasured for FP8 (s8: N32 2729.9, N16 1637.9, N8 909.9)"
-source = "verity.ml.circuits.silicon models.HOPPER_E4M3_K32 (Hawkeye: groups (32,), width 14, floor -139) and total_fp8.HOPPER_E4M3_WGMMA_K32, pinned on an H100 80GB HBM3 by lane QZ, 2026-09-08: 35,289 tiles × 3, 144,543,744 words, 0 mismatches, groups (32,) and width 14 unique among 3,060 candidates; E5M2 the same pipeline (HOPPER_E5M2_K32, r20260922-183837-940b, 25,554,432 elements, 0 mismatches). NVIDIA documents state none of this"
+source = "verity.ml.circuits.silicon models.HOPPER_E4M3_K32 (Hawkeye: groups (32,), width 14, floor -139) and total_fp8.HOPPER_E4M3_WGMMA_K32, pinned on an H100 80GB HBM3: 35,289 tiles × 3, 144,543,744 words, 0 mismatches, groups (32,) and width 14 unique among 3,060 candidates; E5M2 the same pipeline (HOPPER_E5M2_K32, 25,554,432 elements, 0 mismatches). NVIDIA documents state none of this"
 
 [[fp8]]
 form = "mma.sync m16n8k32 .f32.e4m3.e4m3 (emulated on sm_90)"
@@ -575,7 +575,7 @@ alignment = "26-bit truncating adder a group (floor -133), as HMMA.16816.F32"
 accumulation = "ptxas: two HMMA from +0 over the k halves, then FADDs (round-to-nearest-even) into the accumulator; Triton's MMAv2 lowering instead chains the accumulator through both HMMA (HOPPER_E4M3_MMAV2_K32: groups (16, 16), width 26, k order MMAV2_E4M3_K_ORDER)"
 promotion = "the FADDs are FP32 adds on the FMA pipe, so the accumulator is not truncated to 14 bits"
 rate = "1343.8 MACs/SM/clk (tensor.e4m3.k32.sync: half HMMA.16816's instruction rate), plus 4 FADD a mma.sync"
-source = "total_fp8.HOPPER_E4M3_MMAV2_K32's docstring: ptxas's lowering measured on the H100 (r20260922-184111-671e, r20260922-184835-4b95, 25,040,128 words each, 0 mismatches); the chained form on the H200 in vLLM's fused_moe_kernel (r20261017-125608-3071, 638,976 words, 0 mismatches)"
+source = "total_fp8.HOPPER_E4M3_MMAV2_K32's docstring: ptxas's lowering measured on the H100 (25,040,128 words each, 0 mismatches); the chained form on the H200 in vLLM's fused_moe_kernel (638,976 words, 0 mismatches)"
 
 # ---- B_RF: the units that write registers (section 4(g)) --------------------------------------------------------------------
 # `rate` names the rate whose sheet and measured values set the class's instructions a SM-clock (that rate over `per`,
@@ -694,14 +694,14 @@ pipe = "fma"
 [[joint]]
 name = "JI90_0"
 other = 0.981
-source = "census JI90_0: IGMMA.64x256x32 62.741 + every other warp instruction 0.981 SMSP-cycles (the DC census runs, r20261021-070616-d06c r20261021-074303-da7f r20261021-161119-62ac)"
+source = "census JI90_0: IGMMA.64x256x32 62.741 + every other warp instruction 0.981 SMSP-cycles (the DC census runs)"
 
-# ---- the units RT-UNITS lists (CMP-139) outside the rates above: their rates, then a verdict a unit ---------------------
+# ---- the units outside the rates above: their rates, then a verdict a unit ----------------------------------
 # A reduction unit is an adding route d reads, at an upper bound where no run has timed it. Every 32-bit add it makes
 # moves a word through a shared-memory or L1 port (CPG 'Shared Memory': 32 banks, each 32 bits a clock), so 32 a
 # SM-clock bounds each. Every add moves more than one word (a read-modify-write, and a bulk reduction's source read),
 # so the true rate is lower: 32 over-allows the route, the safe side, and costs γ and ε at most what these routes
-# lower d by (RT-UNITS U12). Only TMA's bulk reduction takes no lane: one instruction moves a whole bulk.
+# lower d by. Only TMA's bulk reduction takes no lane: one instruction moves a whole bulk.
 
 [[rate]]
 key = "tensor.s8.sp"
@@ -794,9 +794,9 @@ what = "SHA-512 compressions of a variable message (one 128-B block each), commi
 unit = "compressions/SM/clk"
 sheet = 0.018824
 grade = "Programming Guide (alu.lop3's 64 lanes over commit_gpu's 3,400 ALU instructions a compression)"
-source = "CPG Table 7, CC 9.0: 64 lanes a SM-clock for 32-bit shifts, logic and adds; commit_gpu's SASS a block on sm_90 (the chained-compression loop): 3,608 instructions, 3,400 on the ALU pipe (SHF 1,728, LOP3 912, IADD3(.X) 760), about 152 IMAD (r20261018-062010-1c6b, note:hash/20261018T0632Z-draft-intpipe §1)"
+source = "CPG Table 7, CC 9.0: 64 lanes a SM-clock for 32-bit shifts, logic and adds; commit_gpu's SASS a block on sm_90 (the chained-compression loop): 3,608 instructions, 3,400 on the ALU pipe (SHF 1,728, LOP3 912, IADD3(.X) 760), about 152 IMAD"
 measured = 0.018327
-runs = "4.79 G compressions/s raw (r20261017-234343-61c6, note:circuits-rows-sha512-floor; 4.787 in r20261018-062010-1c6b, 97% of the sheet) over 132 SMs at the 1,980 MHz fmax, the lowest per-clock reading"
+runs = "4.79 G compressions/s raw (r20261017-234343-61c6; 4.787 in r20261018-062010-1c6b, 97% of the sheet) over 132 SMs at the 1,980 MHz fmax, the lowest per-clock reading"
 
 [[rate]]
 key = "sha512.leaf"
@@ -804,7 +804,7 @@ what = "SHA-512 compressions of the noise kernel's leaf block, whose message is 
 unit = "compressions/SM/clk"
 sheet = 0.022559
 grade = "Programming Guide (alu.lop3's 64 lanes over that kernel's 2,837 ALU instructions a compression)"
-source = "CPG Table 7, CC 9.0: 64 lanes a SM-clock for 32-bit shifts, logic and adds; SASS of the H200 noise kernel: 2,967 instructions a compression, 2,837 on the ALU pipe (SHF 1,427, LOP3 756, IADD3 654; r20261019-045723-c859, note:hash/20261019T0427Z-draft-dither-hb); a constant word is cheaper for honest and for any other kernel alike (RT-UNITS U10)"
+source = "CPG Table 7, CC 9.0: 64 lanes a SM-clock for 32-bit shifts, logic and adds; SASS of the H200 noise kernel: 2,967 instructions a compression, 2,837 on the ALU pipe (SHF 1,427, LOP3 756, IADD3 654); a constant word is cheaper for honest and for any other kernel alike (RT-UNITS U10)"
 gap = "the noise kernel's leaf compressions timed alone on the H200 (GPU queue)"
 
 [[rate]]
@@ -852,7 +852,7 @@ what = "host cores a GPU on the node we run"
 value = 8
 unit = "cores/GPU"
 grade = "measured (the VM's CPU count)"
-source = "vy-dc-h200-2: a Xeon 8468 VM, 8 cores / 16 threads, one H200 (r20261026-000854-1494, note:memory-accounting/20261025T2333Z-report-pous-remote-fb)"
+source = "vy-dc-h200-2: a Xeon 8468 VM, 8 cores / 16 threads, one H200"
 
 [[unit]]
 key = "tensor"
@@ -1001,7 +1001,7 @@ rates = ["host.link", "sha512", "host.sha512", "host.int8", "host.dram"]
 bound = 0.00382614
 against = "sha512"
 why = "the host computes every compression of data it holds, so for any host the words' bytes bound it: the no-fold receipt's v1 packs 32 four-byte words into a 1024-bit hiding leaf block under a binary tree, κ = 2 compressions a 128 B of words, so host.link's 64e9 B/s carry 1e9 compressions' worth a second, 1e9 / (132 SMs · 1,980 MHz, sha512's measured clock) = 0.00382614 a SM-clock; the share of device time it frees is that over the card's hashing rate whatever L is (the link runs through the tensor time too), up to hashing's own share. Our node binds first at its cores: 8 a GPU at host.sha512's 2.934e7 = 2.35e8 a second, 8.98e-4 a SM-clock, 4.90% of the measured sha512. Its AMX: 8 cores at host.int8 = 3.11e13 exact s8 MACs a second, 3.15% of the DS's 1,979 TOPS dense (9.89e14 MACs). NVLink peers are cards the audit counts"
-gap = "the prover chooses the host (P9), so a bound tighter than the link's needs the node's inventory from someone other than the prover, a claim for Daniel; κ of the receipt PROTO-DESIGN freezes (v2's 8-block leaves and 16-ary tree: about 1.1); sha512_mb, an AMX loop and a pinned device-to-host copy on the node (the H200 census batch, rule G)"
+gap = "the prover chooses the host (P9), so a bound tighter than the link's needs the node's inventory from someone other than the prover, an open claim; κ of the receipt PROTO-DESIGN freezes (v2's 8-block leaves and 16-ary tree: about 1.1); sha512_mb, an AMX loop and a pinned device-to-host copy on the node (the H200 census batch, rule G)"
 
 # The built kernel's SASS a compression, for SHA-512's ceiling on the card's pipes (`sha_ceiling`): `alu` on the ALU
 # pipe, `imad` on the IMAD pipe, `other` elsewhere; `rotates` rotations or shifts (two SHF each) and `adds` 2-input
@@ -1014,7 +1014,7 @@ rotates = 864
 adds = 152
 add_form = "IADD3 + IMAD.X"
 overlap = "θ's joint rows: IADD3 and IMAD issue together under JI90_0 (d 21.6 measured); the moves untimed on the H200"
-source = "commit_gpu's default build on sm_90 (r20261018-062010-1c6b, note:hash/20261018T0632Z-draft-intpipe §1; RT-UNITS' reading, note:compute-research/20261026T0320Z-draft-accel-rt-units 'SHA-512 schedules'): 3,608 instructions, SHF 1,728 (864 rotations and shifts), LOP3 912, IADD3(.X) 760, 152 IMAD.X (the carry halves of 152 2-input adds), 56 other"
+source = "commit_gpu's default build on sm_90 (RT-UNITS' reading, 'SHA-512 schedules'): 3,608 instructions, SHF 1,728 (864 rotations and shifts), LOP3 912, IADD3(.X) 760, 152 IMAD.X (the carry halves of 152 2-input adds), 56 other"
 
 [[public]]
 impl = "hashcat 6.2.6-850 sha512crypt (mode 1800, 5,000 rounds, each one compression of a block holding the last round's 64-B digest)"

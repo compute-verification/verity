@@ -142,7 +142,7 @@ def test_with_pous_on_the_selector_refuses_an_option_that_keeps_a_weight_copy(mo
 
 def test_a_tiny_int8_model_is_held_as_p2_and_served_bit_exact(toy):
     """W is the int8 weights in the store's layout (each from a block, zero past it); C* = P2-Enc(W, salt) under the salt
-    drawn from the auditor's source after the commitment; every use decodes the layer's weight from C*, so the outputs are
+    sampled from the auditor's source after the commitment; every use decodes the layer's weight from C*, so the outputs are
     the plaintext's to the bit, and closing restores W decoded from C*."""
     before, served = hooks.live(), toy.outputs()
     comp = PO.install(toy, _ctx(ENTRY))
@@ -278,7 +278,7 @@ def test_a_dropped_block_rejects(toy, tmp_path):
         def lost(blocks):
             return lambda i: asked.append(i) or (bytes(q.block_bytes) if i == dropped else opt.answer(i))
         got = opt.audit(NODE, COINS, log=ts.session_log(tmp_path), prover=lost, **run)
-        assert dropped in asked and got.verdict == "reject" and got.answer["reason"] and got.s_bits == 0
+        assert dropped in asked and got.verdict == "reject" and got.answer["reason"] and got.public("s_bits") == 0
 
         held = opt.store.held()
         short = [list(seg) for seg in period.setup_inputs(held.setup_case)[2]]

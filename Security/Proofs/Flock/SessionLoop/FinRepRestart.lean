@@ -93,8 +93,8 @@ theorem finRepRestart (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flo
     simp only [viewPoints, Array.size_map, Array.size_range]
     exact Nat.mul_comm _ _
   rw [hkr, hk2, hsch] at hgo
-  exact Masked.fwRestart_at x hx w t (finCoins x ops) (refK x) s0 spec hsx j r (vs x w ν (finCoins x ops))
-    (_root_.Flock.Firewall.Finish.claimsOf q.xs) hxsz hxs tb.st hst tb.tPad _ tb.g hg tb.cm0.toC
+  exact Masked.fwRestart_at x hx w t (finCoins x ops) (refK x) s0 spec hsx j r
+    (vs x w ν (finCoins x ops) (finS.seenOf x t)) (_root_.Flock.Firewall.Finish.claimsOf q.xs) hxsz hxs tb.st hst tb.tPad _ tb.g hg tb.cm0.toC
     (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic'.toC q.vals tb.extra tb.lanePad hext _ hl hgo
 
 end Loop

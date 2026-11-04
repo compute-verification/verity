@@ -15,14 +15,13 @@ N = 6
 
 
 def _units(*draws):
-    """A sampler that draws `draws[i]` at its i-th call: each round its own proof blocks."""
+    """A sampler that samples `draws[i]` at its i-th call: each round its own proof blocks."""
     it = iter(draws)
     return lambda law, n: next(it)
 
 
 def _stream(rounds=2, budget=4, clock=None, sampler=None, spec=None) -> S.Stream:
-    return S.Stream(spec or _spec(), PAIR, budget=budget, delta=DELTA, challenger="challenger-test",
-                    coins=lambda n: b"\x07" * n, clock=clock or Clock(),
+    return S.Stream(spec or _spec(), PAIR, budget=budget, delta=DELTA, challenger="challenger-test", clock=clock or Clock(),
                     sampler=sampler or _units([0, 1], [2, 3], [4, 5], [0, 5], [1, 2]), rounds=rounds)
 
 
@@ -114,7 +113,7 @@ def test_a_session_opened_before_the_last_rounds_coin_is_refused():
 
 
 def test_a_session_past_the_first_rounds_deadline_is_a_reject():
-    """The session's deadline is its first round's: a proof 61 s after round 0's draw is `late` for both rounds, though
+    """The session's deadline is its first round's: a proof 61 s after round 0's sample is `late` for both rounds, though
     it is 21 s after round 1's; one delivered by round 0's deadline is accepted."""
     for deliver_at, symbols in ((59.5, ("accept", "accept")), (61.0, ("late", "late"))):
         clock = Clock()
@@ -180,7 +179,7 @@ def test_a_stream_of_rounds_states_them_and_runs_one_round_as_before():
     for rounds in (0, 5, 2.0, True):
         with pytest.raises(ValueError, match="rounds"):
             _stream(rounds=rounds)
-    one = S.Stream(_spec(), PAIR, budget=4, delta=DELTA, challenger="challenger-test")
+    one = S.Stream(_spec(), PAIR, budget=4, delta=DELTA, challenger="challenger-test", sampler=_units())
     assert one.digest == S._sha512({"format": S.STREAM, "spec": _spec().digest(), "budget": 4, "delta": DELTA,
                                     "challenger": "challenger-test"})
     assert _stream(rounds=1).digest == one.digest != _stream(rounds=2).digest

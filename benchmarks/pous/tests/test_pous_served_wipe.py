@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -70,13 +71,14 @@ def node(tmp_path) -> dict[str, str]:
     return env | {"FAKE_BIN": str(bin_), "WIPE_DEMO": str(shim), "WIPE_READS": str(W.READS), "WIPE_NODE": "vy-dc-h200",
                   "WIPE_COMMAND": f"ssh -i {key} -o BatchMode=yes research@10.96.0.36",
                   "FAKE_SMI_LOG": str(tmp_path / "smi.log"), "FAKE_SMI_APPS": "", "FAKE_SMI_USED": "0",
-                  "FAKE_LEASE_LOG": str(tmp_path / "lease.log")}
+                  "FAKE_LEASE_LOG": str(tmp_path / "lease.log"), "PY": sys.executable}
 
 
 def _wipe(env: dict[str, str], d: Path, *args: str) -> subprocess.CompletedProcess:
+    """served_wipe.sh SERVE_DIR 3 d, the serve dir ``serve-run`` beside ``d``."""
     d.parent.mkdir(parents=True, exist_ok=True)
-    return subprocess.run(["bash", "-c", LAUNCH, "_", str(WRAPPER), "/srv/serve-run", "3", str(d), *args], env=env,
-                          capture_output=True, text=True, cwd=d.parent)
+    return subprocess.run(["bash", "-c", LAUNCH, "_", str(WRAPPER), str(d.parent / "serve-run"), "3", str(d), *args],
+                          env=env, capture_output=True, text=True, cwd=d.parent)
 
 
 def _is_core_answer(a: dict) -> None:
@@ -103,7 +105,8 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     """In the serve's lease, before its engine loads: the card checked idle, the wipe of it, and DIR/answer.json the
     accepted core answer of verity/wipe/v0 that the case decides, the challenger the one WIPE_COMMAND starts on
     vy-auditor-2 (trusted-host's premise held), the window's serve dir and the card in served.json, and the
-    piece's last line its `WIPE` headline."""
+    piece's last line its `WIPE` headline. The case, which holds the signed session, is the serve dir's, private, with the
+    composite's piece beside it (served_case.py's `CASE` line before the headline), and DIR keeps none of it."""
     d = tmp_path / "pieces" / "wipe"
     r = _wipe(node | {"GPU_LEASE_UUID": f"{CARD},GPU-other"}, d, "--no-lean")
     assert r.returncode == 0, r.stdout + r.stderr
@@ -117,12 +120,19 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     placement = answer["profile"]["placement"]
     assert placement["trusted-host"] == "holds: the memory challenger ran on vy-auditor-2, not the prover's vy-dc-h200"
     profile = {k: v for k, v in answer["profile"].items() if k != "placement"}
-    assert _decided(json.loads((d / "wipe.case.json").read_text())) == answer | {"profile": profile}
+    private = tmp_path / "pieces" / "serve-run" / "private" / "wipe"
+    case = json.loads((private / "wipe.case.json").read_text())
+    assert _decided(case) == answer | {"profile": profile} and not (d / "wipe.case.json").exists()
+    assert json.loads((private / "case.json").read_text()) == case
+    assert json.loads((private / "answer.json").read_text()) == answer | {"profile": profile}
+    assert {f: stat.S_IMODE((private / f).stat().st_mode) for f in ("case.json", "answer.json", "wipe.case.json")} == {
+        "case.json": 0o600, "answer.json": 0o600, "wipe.case.json": 0o600} and stat.S_IMODE(private.stat().st_mode) == 0o700
+    assert case["evidence"][:64] not in "".join(p.read_text() for p in d.iterdir() if p.is_file())
     party = json.loads((d / "party.json").read_text())
     assert party == {"host": "vy-auditor-2", "command": shlex.split(node["WIPE_COMMAND"]),
                      "address": ["10.96.0.36", 47611]}
     assert json.loads((d / "served.json").read_text()) == {
-        "serve_dir": "/srv/serve-run", "window": "3", "server": "vy-dc-h200", "card": CARD,
+        "serve_dir": str(tmp_path / "pieces" / "serve-run"), "window": "3", "server": "vy-dc-h200", "card": CARD,
         "run": node.get("RESEARCH_RUN_ID"), "lease": "the serve's: its engine loads on this card after the wipe"}
     summary = json.loads((d / "summary.json").read_text())
     assert summary["verdict"] == "accept" and summary["judge"] == "python" and summary["k"] == W.READS
@@ -131,7 +141,8 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     assert demo["argv"] == ["--node", "vy-dc-h200", "--challenger", "vy-auditor-2", "--challenger-address",
                             "10.96.0.36:47611", "--challenger-command", node["WIPE_COMMAND"], "--reads", str(W.READS),
                             "--no-lean"]
-    last = r.stdout.strip().splitlines()[-1]
+    *_, built, last = r.stdout.strip().splitlines()
+    assert json.loads(built.removeprefix("CASE ")) == {"piece": str(private), "protocol": W.PROTOCOL, "verdict": "accept"}
     assert last.startswith("WIPE {")
     headline = json.loads(last.removeprefix("WIPE "))
     assert headline | {"fill_GBps": None, "t0": None, "t1": None} == {

@@ -18,7 +18,7 @@ deployed last message those rows are the rounds' openings (`openPieces`), so the
   `fast100`'s schedule (`topSize_cap`), which `capFirst` reads.
 
 `capEntry_up` is `CapEntryR` above level 0 at every reading of the deployed last message where the last step reads it.
-`sideCapUp_of` gives `SideCapUp` at SHA-512, `layR elem` and the bound record at `finalR` from RESTREAD's `ReadsAt` and
+`sideCapUp_of` gives `SideCapUp` at SHA-512, `layR elem` and the bound record at `finalR` from `ReadsAt` and
 the opened position's range (`PosCapUp`), and `sideCapR_deployed` puts it with level 0 (`sideCapR_of`).
 -/
 
@@ -375,7 +375,7 @@ theorem topSize_cap {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array RecVS
     (hrs : repSched r.shape = some rs) {g n : ℕ} (hn : (RecVStar.topSizes rs)[g]? = some n) :
     ∃ s : _root_.Flock.Schedule, _root_.Flock.fast100 r.shape.m = some s ∧ n = 2 ^ (s.levels[g + 1]!).cap := by
   obtain ⟨vs, hvs, -⟩ := readX_statements hr
-  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, N, hK, hT, rfl⟩ := FlockC3.Reps.list_ok hvs
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, Lk, N, hK, hT, -, rfl⟩ := FlockC3.Reps.list_ok hvs
   have hsz := topsListed_size hT hrs
   obtain ⟨hg', -⟩ := List.getElem?_eq_some_iff.1 hn
   have hg : g < K.size := by rw [hsz]; exact hg'
@@ -597,7 +597,7 @@ def PosCapUp (H : Msg → Msg) (pieces : Msg → List OpenPiece) (posAt : Msg �
 
 /-- **The reader above level 0 at the deployed layout and last message**: at SHA-512, `layR elem` and the bound
 record at `finalR` with rows joined by `joinR`, a piece of level `ℓ ≥ 1` has its cap entry at a later cap's `top` row
-(`capEntry_up`): the parts' acceptance gives each part a circuit, and RESTREAD's `ReadsAt` that the last step reads
+(`capEntry_up`): the parts' acceptance gives each part a circuit, and `ReadsAt` that the last step reads
 the opened messages, at the calls `layR` records (`allCalls_layAt_layR`). -/
 theorem sideCapUp_of (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
@@ -637,7 +637,7 @@ theorem sideCapUp_of (elem : (r : XR) → List (Fin r.w.parts.length × List (Ms
   exact capEntry_up elem rd posAt hDx hl hl0 htab hrep hpos hcirc hfin ⟨fl, by simpa using hfl⟩
 
 /-- **The reader at the deployed layout and last message** (`SideCapR`), at SHA-512: level 0 from its position range
-(`sideCapR_of`), the levels above from theirs and RESTREAD's `ReadsAt` (`sideCapUp_of`). -/
+(`sideCapR_of`), the levels above from theirs and `ReadsAt` (`sideCapUp_of`). -/
 theorem sideCapR_deployed (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out) (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128))

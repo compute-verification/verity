@@ -286,20 +286,30 @@ def write_store(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, extra_n
     """The bundle's store and weights, written into its partial dir (the rest follows at `seal`).  `extras`: `weights_extra`'s
     answer, read before (default: read here, with `extra_names`).  ``digests`` receives the sha256 of the store's step files as they
     were written (by their path in the bundle)."""
+    p, doc = write_store_files(out, pair, com, rc, extra_names=extra_names, digests=digests, touched=touched, extras=extras, rank=rank)
+    SD.write_doc(p / "store", doc, com._layouts)
+    return p
+
+
+def write_store_files(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, extra_names: set[str] | None = None,
+                      digests: dict[str, str] | None = None, touched: SD.Touched | None = None,
+                      extras: tuple[dict[str, Any], list[tuple[int, str, Any]]] | None = None,
+                      rank: int | None = None) -> tuple[Path, dict[str, Any]]:
+    """`write_store` but for the store's ``store.json``: the partial dir and the document `store_dump.write_doc` writes there."""
     p = partial(out, pair, rank=rank)
     if p.exists():
         shutil.rmtree(p)
     dumped: dict[str, str] = {}
-    SD.dump(com, rc, p / "store", digests=dumped, touched=touched)
+    doc = SD.dump_files(com, rc, p / "store", digests=dumped, touched=touched)
     if digests is not None:
         digests.update({f"store/{k}": v for k, v in dumped.items()})
     tree, extra = extras if extras is not None else weights_extra(com, rc, extra_names)
     (p / "weights" / "extra").mkdir(parents=True, exist_ok=True)
     for i, _name, raw in extra:
         (p / "weights" / "extra" / f"{i}.bin").write_bytes(raw)
-    doc = tree | {"extra": {name: i for i, name, _raw in extra}}
-    (p / "weights" / "tree.json").write_text(json.dumps(doc, separators=(",", ":")) + "\n")
-    return p
+    wdoc = tree | {"extra": {name: i for i, name, _raw in extra}}
+    (p / "weights" / "tree.json").write_text(json.dumps(wdoc, separators=(",", ":")) + "\n")
+    return p, doc
 
 
 def _sha256(p: Path) -> str:

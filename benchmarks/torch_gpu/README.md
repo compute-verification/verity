@@ -29,7 +29,7 @@ Each GPU script's header gives its command and the hardware it needs: CUDA's nvc
   `bw.sh` the receipts to their fixture.
 - `s8_dec_linear/`: P2's decode kernel (`p2stage.cu`) and the exact INT8 linear over its output. `h200.sh` holds the
   decode byte for byte, and the GEMM bit for bit to its twin, on an H200.
-- `units/`: the frozen decoder's non-matmul proof blocks, each word for word its CPU twin. `session.sh` sweeps their
+- `units/`: the H200 example's non-matmul proof blocks, each word for word its CPU twin. `session.sh` sweeps their
   helpers over every operand word and holds each kernel's words to its twin's, on an H200 or an RTX PRO 6000.
 - `attn_bf16/`: attention's QK^T and PV, a fast path and a reference path, each word `GemmCoordinate_v2`'s. `run.sh`
   runs every case under poison in each tiling of both paths, on an H200.
