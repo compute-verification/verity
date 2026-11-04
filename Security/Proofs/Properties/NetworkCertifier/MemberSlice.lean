@@ -18,6 +18,8 @@ wire between two members of one template needs.
   leaf, so the members' slices of such a node are disjoint gates;
 * `lands_member`: an out leaf of a member of a batch resolves into `InM` at that member;
 * `act_node`, `act_not_input`: a member's activation lies in its node's gates, so no input node's gate is in it;
+* `inM_input`, `memberIdx_inj`: an input node's gate is in `InM` at a member only as that member's own leaf of it, and
+  on an argument mapped over its first axis no leaf is two members';
 * `InM`, `closure_member`, `depends_member`: at a batch whose every argument is one input node's leaves
   (`NetworkCheck.Period.inputArg`), the gates of member `m`'s activation and those its own references resolve to hold
   what they read in a flattening (`Properties.NetworkScan.Flattens`), so whatever such a gate depends on is among them;
@@ -99,6 +101,20 @@ theorem get_upIdx {nd : Node} (h : nd.form = .prim ∨ nd.form = .call) (m i j :
 theorem memberIdx_slice {a : Arg} {d L : ℕ} (hd : a.dims = some (d, L)) {m j : ℕ} (hj : j < L) :
     Resolve.memberIdx a m j = m * L + j := by
   simp only [Resolve.memberIdx, hd, Nat.div_eq_of_lt hj, Nat.mod_eq_of_lt hj, Nat.zero_mul, Nat.zero_add]
+
+/-- **Members' slices are disjoint**: on an argument mapped over its first axis, leaf `j < L` of member `m` and leaf
+`j' < L` of member `m'` are one leaf of it only if `m = m'` and `j = j'`. -/
+theorem memberIdx_inj {a : Arg} {d L : ℕ} (hd : a.dims = some (d, L)) {m j m' j' : ℕ} (hj : j < L) (hj' : j' < L)
+    (h : Resolve.memberIdx a m j = Resolve.memberIdx a m' j') : m = m' ∧ j = j' := by
+  rw [memberIdx_slice hd hj, memberIdx_slice hd hj'] at h
+  have hL : 0 < L := by omega
+  have h1 : (m * L + j) / L = m := by
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ hL, Nat.div_eq_of_lt hj, Nat.zero_add]
+  have h2 : (m' * L + j') / L = m' := by
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ hL, Nat.div_eq_of_lt hj', Nat.zero_add]
+  have hm : m = m' := by rw [← h1, ← h2, h]
+  subst hm
+  exact ⟨rfl, Nat.add_left_cancel h⟩
 
 /-- **Leaf `t` of a batch input node `q` is its gate `offsets[q] + t`**, its primitive returning one leaf. -/
 theorem input_gate (P : Prog) {q t : ℕ} (hq1 : (P.defs[((P.defs[P.root]!).body.nodes[q]!).fn]!).outLeaves = 1)
@@ -413,6 +429,49 @@ theorem act_not_input {k m q x : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.siz
     simp only [NciCheck.Desc.isInputNode, Bool.and_eq_true] at hin; exact hin.1
   rw [hcomp] at hprim
   cases hprim
+
+/-- **An input node's gate is in `InM` only as the member's own leaf of it.** A gate `x` of a root input node `q` of
+form batch is in `InM` at member `m` of a root batch `k` of a composite, every argument of which is one input node's
+leaves, only as leaf `memberIdx m j` of `q`, through an argument of `k` reading `q` and a leaf `j` of its parameter. -/
+theorem inM_input {bytes : ByteArray} (hdec : decode bytes = .ok P) {k m q x : ℕ}
+    (hk : k < (P.defs[P.root]!).body.nodes.size) (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members)
+    (hcomp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
+    (hbatch : ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
+    (hargs : ∀ b ∈ ((P.defs[P.root]!).body.nodes[k]!).args, (inputArg P b).isSome = true)
+    (hq : q < (P.defs[P.root]!).body.nodes.size)
+    (hin : NciCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[q]!) = true)
+    (hqb : ((P.defs[P.root]!).body.nodes[q]!).form = .batch)
+    (hxq : (P.defs[P.root]!).body.offsets[q]! ≤ x ∧ x < (P.defs[P.root]!).body.offsets[q + 1]!)
+    (h : InM P k m x) :
+    ∃ i j, i < (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).body.params.size ∧
+      j < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).body.params[i]!).2.leaves ∧
+      inputArg P (((P.defs[P.root]!).body.nodes[k]!).args[i]!) = some q ∧
+      x = (P.defs[P.root]!).body.offsets[q]! + Resolve.memberIdx (((P.defs[P.root]!).body.nodes[k]!).args[i]!) m j := by
+  rcases h with ⟨hx1, hx2⟩ | ⟨i, j, hi, hj, hres⟩
+  · exact (act_not_input P hroot hL hk hm hcomp hq hin hx1 hx2 hxq).elim
+  · have hBr : Resolve.BodyOk P P.root := hB P.rootScope (good_root P)
+    obtain ⟨-, -, hup, -, -⟩ := hBr.1 k hk
+    have hu := hup i hi j hj m hm
+    simp only [hbatch] at hu
+    have ht : upIdx ((P.defs[P.root]!).body.nodes[k]!) m i j <
+        (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.count := by
+      rw [upIdx_batch hbatch]; exact hu
+    have hia := arg_lt ht
+    have hmem : ((P.defs[P.root]!).body.nodes[k]!).args[i]! ∈ ((P.defs[P.root]!).body.nodes[k]!).args := by
+      rw [getElem!_pos ((P.defs[P.root]!).body.nodes[k]!).args i hia]; exact Array.getElem_mem hia
+    obtain ⟨q', hq'⟩ := Option.isSome_iff_exists.1 (hargs _ hmem)
+    have hx' := arg_lands P hroot hB hL hk hq' ht _ x hres
+    obtain ⟨-, hq'K, -⟩ := inputArg_some hq'
+    have hmono := Resolve.offsets_mono P P.root (hL _ hroot.1) hroot.2
+    have hqq : q' = q :=
+      DescAgree.node_unique _ _ (fun k' hk' => hmono k' (k' + 1) (by omega) (by omega)) hq'K hq hx' hxq
+    rw [hqq] at hq'
+    have hprim : (P.defs[((P.defs[P.root]!).body.nodes[q]!).fn]!).prim = true := by
+      simp only [NciCheck.Desc.isInputNode, Bool.and_eq_true] at hin; exact hin.1
+    have hfn := (hBr.1 q hq).1
+    have hq1 := (BodiesOk.decoded bytes P hdec _ hfn).1 hprim
+    refine ⟨i, j, hi, hj, hq', ?_⟩
+    rw [arg_gate P hq' hq1 hqb hres, upIdx_batch hbatch]
 
 /-- **What a gate of `InM` depends on is in `InM`.** -/
 theorem depends_member {bytes : ByteArray} (hdec : decode bytes = .ok P) (hov : P.orderViolation = none)
