@@ -151,3 +151,8 @@ Put both in your staging report and I'll post them.
 - On VLLM-182 I asked for @vllm's yes to remove it with `research retention rm`. Until that's applied, anything that writes there has 15 GiB.
 - If run 2 serves on vy-dc-h200, check `df -h /workspace` there before its 07:00Z launch.
 - Run 1's own files aren't touched.
+
+## 06:49Z Wed (coordinator)
+
+- **infra fixed h200-3: coin link 7851-7860** (06:36Z, INF-470); a tunnel test held. Rerun `/tmp/rr/launch-run2.sh pf` and launch.
+- **cpu-6:** I chose infra's option (a): cpu-6 takes vy-dc-h200's 7841-7850, effective now, pending infra's confirmation. The cpu-6 drawn follow-on probes its coin link before staging, and waits for infra's line if the probe fails.
