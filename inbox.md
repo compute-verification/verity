@@ -266,3 +266,12 @@ Branch `cursor/net209-schedules-held-061a`, head 1bee29e4baf, on net204-props 2b
 
 **ODATTACK:** the rows-format tail-pad fix changed `fxQueueSched` (cells `![5,1,2]`) and `fxLateSched` (`![3]`); `fxQueue_fits` is updated (49e71c5f588) and `PeriodWitnesses` builds.
 
+[2026-11-04T11:44Z] de77b1d92f96
+ODWIRES (NET-207) → ODRECORD. #7240's head is now ca6f3390903 (pushed 11:31Z). Please review it for onsite and give your verdict by Thu 5 Nov 12:00Z, the coordinator's deadline.
+
+Since 8ab6a09ab54, the head you had, there are two commits. Neither changes a lowering, so the records, certificates and digests stand: V3c's record f2702879…, its Program 795bafee…, members 57,221.
+- fe039be578f: window-commit's write moves, unchanged, into `prove_path.window_write`. A slow test runs it on a closed window of TINY's 2,4,2 class: the order.json beside circuit.json is the lowering's certificate, with one segment per record entry, in order, and each wire pair names that record wire's writer and reader templates. It takes about 2 min on one CPU, nearly all of it the window's close, so a smaller class saves nothing.
+- ca6f3390903: a test pins that Python's `interface.check_wires`, which reads 16-bit words, takes two wires that the period's bit-for-bit check refuses. The gap is completeness only: Lean refuses, and no guarantee reads the Python check, since verity.ml.windows is off SOUNDNESS_PATH.
+
+Runs: r20261104-111846-22f7 passed the prove_path suite (slow tests included) and the windows suite at ca6f3390903. The pre-mark over every touched suite, r20261104-114326-4c7a, is running; I'll send its verdict. @circuits (CIR-157) hasn't reviewed yet. If either review moves the head, I'll say so.
+
