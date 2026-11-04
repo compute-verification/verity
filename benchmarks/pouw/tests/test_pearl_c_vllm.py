@@ -3330,6 +3330,112 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
     assert run.end()["schedule"] == "deferred-a"
 
 
+def test_the_served_whole_capture_launches_each_calls_a_tree_as_one_cta_on_the_tree_stream(sm90_run, monkeypatch):
+    """Inside a whole capture under the served arm's options (``whole_defer``, ``whole_defer_a``, ``whole_fork_stats``,
+    ``whole_tree_sm``) each decode call of m = 32 splits A's commitment: pd_commit in mode 1 (``rows_a``, a CTA a real row)
+    on the capturing stream, then A's tree in a launch of its own, pd_tree's one CTA, the tree stream's only launch, over the
+    same tree, both at PD_WHOLE's shared memory; the forward's last call joins the tree stream.  Under ``whole_pd_shared`` too
+    the capture's key says so and every launch is the same but pd_commit's and pd_tree's shared memory, half an SM's, and
+    the pipelines are left without it.  Without ``whole_defer_a`` the graphs made split aren't replayed, and graphs made
+    unsplit launch pd_commit in mode 0 alone.  The graphs are made as `_replay` makes them, a stand-in in the scatter's place
+    (a Triton launch)."""
+    G = PPD.graphs
+    make, kernel, weights, _ = sm90_run
+    run = make(schedule="serial")
+    run.graphs, run.order = True, {w: i for i, w in enumerate(weights)}
+    run.key_slots = torch.zeros((len(weights), G.SLOT_BYTES), dtype=torch.uint8)
+    for x in ("whole_defer", "whole_defer_a", "whole_fork_stats", "whole_tree_sm"):
+        setattr(run, x, True)
+    log, launched = [], []
+
+    class Lane:
+        def __init__(self, name, raw):
+            self.name, self.cuda_stream = name, raw
+
+        def wait_stream(self, other):
+            log.append(f"{self.name} waits for {other.name}")
+
+        def wait_event(self, event):
+            log.append(f"{self.name} waits for {event.at}'s mark")
+
+    class Mark:
+        def record(self, stream):
+            self.at = stream.name
+
+    class On:
+        def __init__(self, s):
+            self.s = s
+
+        def __enter__(self):
+            self.held, current[0] = current[0], self.s
+
+        def __exit__(self, *exc):
+            current[0] = self.held
+
+    current, made = [Lane("main", 0)], iter((Lane("side", 20), Lane("tree", 30), Lane("stats", 40)))
+    monkeypatch.setattr(torch.cuda, "current_stream", lambda device=None: current[0])
+    monkeypatch.setattr(torch.cuda, "Stream", lambda device=None: next(made))
+    monkeypatch.setattr(torch.cuda, "stream", On)
+    monkeypatch.setattr(torch.cuda, "Event", Mark)
+    monkeypatch.setattr(G, "_capturing", lambda: True)
+    record = kernel.dev.launch
+
+    def launch(name, grid, block, smem=0, p=(), i=(), stream=None):
+        if not name.endswith("_smem"):                     # the GEMMs' probes, at their first use alone
+            launched.append((name, grid, block, smem, kernel.dev.stream if stream is None else stream, tuple(p), tuple(i)))
+        record(name, grid, block, smem, p, i, stream)
+    monkeypatch.setattr(kernel.dev, "launch", launch)
+    shapes = {w: run._shape(32, run.weights[w].n, 1024) for w in weights}
+    xs = {w: torch.randn(32, 1024).to(torch.bfloat16) for w in weights}
+
+    def graphs():
+        run._graphs.clear()
+        for w, sh in shapes.items():
+            pipe = run._pipe(w, sh)[0]
+            g = G._Graph(torch.zeros((sh.mp, sh.n), dtype=torch.bfloat16), torch.zeros(run.nb * 8, dtype=torch.uint8), "graph")
+            g.steps = [*run._call_steps(pipe), lambda: log.append(f"scatter on {current[0].name}")]
+            g.cuts, g.tree_at, g.stats_at = run._call_cuts(pipe), run._call_tree(pipe), run._call_stats(pipe)
+            run._graphs[run._graph_key(w, sh, 32)[0]] = g
+
+    def forward():
+        launched.clear()
+        log.clear()
+        run.whole_capture_begin(run.whole_key(False))
+        for w in weights:
+            run.gemm(w, xs[w], weights[w], None)
+        assert [c.w for c in run.whole_capture_end()] == list(weights)
+        return list(launched)
+
+    def pd(got):
+        return [x for x in got if x[0].startswith(("pd_commit_", "pd_tree_"))]
+
+    graphs()
+    split = forward()
+    pipes = [run._pipe(w, sh)[0] for w, sh in shapes.items()]
+    assert all(p.split_a and p.pd_a == 851 for p in pipes) and "pd_shared" not in run.whole_key(False)
+    whole, half = 232448, (232448 - R90.CTA_RESERVED_SMEM) // 2
+    assert [x[:5] + x[6:] for x in pd(split)] == [x for _ in weights for x in (
+        ("pd_commit_851", 32, 128, whole, 0, (32, 1024, 1, 64)), ("pd_tree_851", 1, 128, whole, 30, (32, 0, 0, 64)))]
+    assert all(c[5][2] == t[5][2] == p.b["tree_a"] for c, t, p in zip(pd(split)[::2], pd(split)[1::2], pipes, strict=True))
+    assert {x[0] for x in split if x[4] == 30} == {"pd_tree_851"} and log.count("tree waits for main") == len(weights)
+    assert log[-2:] == ["main waits for side", "main waits for tree"]
+
+    run.whole_pd_shared = True
+    assert "pd_shared" in run.whole_key(False)
+    shared = forward()
+    assert [x[3] for x in pd(shared)] == [half] * 2 * len(weights) and not any(p.pd_shared for p in pipes)
+    assert [x[:3] + x[4:] for x in shared] == [x[:3] + x[4:] for x in split]
+    assert [x for x in shared if x not in pd(shared)] == [x for x in split if x not in pd(split)]
+
+    run.whole_pd_shared = run.whole_defer_a = run.whole_tree_sm = False
+    with pytest.raises(RuntimeError, match="no graph yet"):
+        forward()
+    run.whole_capture_end()
+    graphs()
+    unsplit = pd(forward())
+    assert [(x[0], x[4], x[6][2], x[3]) for x in unsplit] == [("pd_commit_851", 0, 0, whole)] * len(weights)
+
+
 def test_deferred_a_runs_sm120s_split_on_the_lanes(device_run, tmp_path):
     """sm_120's pipeline splits A's commitment as sm_90a's does (`run.Pipeline`'s ``split_a``), so under ``deferred-a`` a
     decode call's main lane (handle 2) runs pd_commit in mode 1 and a side lane pd_tree, both on pd_commit's variant (851,
