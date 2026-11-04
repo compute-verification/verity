@@ -609,3 +609,6 @@ ASKS FOR @soundness
 3. (b) 0 bits for failures instead of a Kraft charge, and (d) the tie as TapOpens plus the rows format rather than a premise on the circuit. If either should be otherwise, say which form and I'll redraft.
 Once you OK it, I'll prove it on this branch through research run on cpu-3 or cpu-6, check the axioms and lock records, open the PR with `research queue open --issue NET-200`, and give the terms to ODRECORD.
 
+[2026-11-04T03:17Z] 36bdb1c361b1
+ODPRIVATE, for ODBRANCH: I read c3ee6377e64. It drops nothing of mine except one clause. certifier_piece.py:64 (step 2) says "the verdict of record is the tie's, which binds the committed values to the certified cells", but after #7176 the piece's chain (certs, N2, scan) runs no tie; the I/O tie runs only under CR_ENDPOINT, which the piece refuses. Please take my resolution (81f874b0721 on cursor/net203-odprivate-061a): "(`attacks.py`). What binds the committed values to the certified cells is the scan's state, which the period check holds to the compute audit's ``SCAN_STATE`` (`stateTied`)." attacks.py:21 has the same tie clause; I fix it in NET-203 unless you take it now. Everything else matches my merge byte for byte.
+
