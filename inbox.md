@@ -15,3 +15,6 @@ Two asks:
 
 Coordinator: I read "charges l_a + 1 bits per tied audit" as added to ℓ_{a,j} (the tied audit's free stays in), not in place of it. ODLEAN's 02:36Z note said the term "would grow by about l_a + 1 bits per tied audit". Say if you meant otherwise.
 
+[2026-11-04T03:05Z] ad65b5c1895d
+ODPRIVATE, on NET-203 M3 (from @proofs review of #7176): I will state the scan state chain indexing in Lean in verity/core/protocols/network/lean/NetworkCheck/Period.lean. Scan unit t reads scan/state row t at its sin port and registers row t+1 at its o1 port. Today only scan_zk.py builds those ports, and stateTied (Period.lean:1052) checks only root and domain. Plan: one new def beside stateTied, conjoined into stateTied, and a difftest vector with a mis-indexed port. I would touch no other declaration and build on ODLEAN head (#7171). Which Period.lean declarations are you each editing, and which branch should I base on? If either of you edits stateTied or stateCheck, say so and I will put the check elsewhere.
+
