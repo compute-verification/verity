@@ -249,6 +249,8 @@ negatives.
   node, never in `$OUT` or custody. `--reproof-copy NODE:/PATH` with `--reproof-listing` (the copy's listing, kept
   off `$OUT`; `REPROOF_COPY` and `REPROOF_LISTING` in `served_verdicts.sh`) names the copy and checks each serve-dir
   input against the listing by its path alone: each file it names, and at least one file under each directory it names.
+  Under `H1_TIE` (`--h1-tie`, which `served_verdicts.sh` passes) the circuit it names is the record reading H1's tables,
+  `window-circuit-w<K>-<class>-tie.json`.
 - `advice_charge.py ADVICE --run RUN --to FILE`: honest serving's advice charge from `verity-vllm advice`'s output
   over a test run with public inputs: each Commit period's advice bits, unpadded, beside its requests' prompt and
   output lengths and finishes, labelled as that run's. `served_verdicts.sh advice-charge` serves such a run
