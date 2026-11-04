@@ -21,7 +21,9 @@ and every layout of the server's sessions that makes up the outer phase's rounds
 
 The sessions are those of Flock's masked deployment (`FlockDeploy.deployZk rel`), whose parser reads no recursive
 statement (`RecDeploy.RecRaw.encode`'s format is not `FlockDeploy.Raw`'s): at a layout of V\* statements
-(`RecDeploy.deployRec`'s) no session witness is in the relation, and the release refuses there.
+(`RecDeploy.deployRec`'s) no session witness is in the relation, and the release refuses there. Z1-F at `deployRec`'s
+V\* sessions is the same server at the recursive outer record (`Flock.Guarantees.GenericRecursiveZKAtRecServer`,
+`Proofs.Flock.RecGeneric.ZKAtRec`).
 
 Statements only: definitions, no proofs.
 -/

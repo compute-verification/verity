@@ -30,7 +30,7 @@ public import Proofs.Flock.RecGeneric.ZKHides
 public import Proofs.Flock.RecGeneric.ZKCost
 public import Proofs.Flock.RecGeneric.ZKSessionsProof
 public import Proofs.Flock.RecGeneric.ZKAtFlockProof
-public import Proofs.Flock.RecGeneric.ZKServerRec
+public import Proofs.Flock.RecGeneric.ZKAtRecProof
 
 /-! The recursion as a compiler, generic in the outer argument and the server, over inner protocols with repetition
 extractors: its statements (`Proofs.Flock.RecGeneric.Statement`), the Flock instance's
@@ -66,6 +66,8 @@ draws its statement's coins is such a session system within its own error (Z1-L,
 ZK server as each session the release is zero knowledge per outcome within the sessions' summed server errors (Z1-F:
 `Proofs.Flock.RecGeneric.ZKAtFlock`, proved in `Proofs.Flock.RecGeneric.ZKAtFlockProof`). The same server is zero
 knowledge per outcome at the recursive outer record, whose statements are the V\* sessions'
-(`Proofs.Flock.RecGeneric.ZKServerRec`). -/
+(`Proofs.Flock.RecGeneric.ZKServerRec`), so with it as each of `deployRec`'s V\* sessions the release is zero knowledge
+per outcome too (Z1-F at `deployRec`: `Proofs.Flock.RecGeneric.ZKAtRec`, proved in
+`Proofs.Flock.RecGeneric.ZKAtRecProof`). -/
 
 @[expose] public section
