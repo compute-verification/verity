@@ -25,6 +25,7 @@ WORDS = 'scope = "prose"\n\n[words]\n"zorble" = "quux"\n\n[rewrite]\nexclude = [
 PATHS = ('[roots]\nold = {}\nnew = {}\n\n[paths]\n"alpha/" = "beta/"\n\n[modules]\n"alpha" = "beta"\n\n'
          '[rewrite]\nexclude = ["tools/move/**", "tools/verity/**"]\n')
 TREE = {
+    ".gitignore": "__pycache__/\n",  # as the tree's: the scripts import pins.py from the root they run at
     "notes.md": "A zorble is `zorble`.\n",
     "a.py": '"""Each zorble."""\nZORBLE = "zorble"\n',
     "alpha/__init__.py": "",
