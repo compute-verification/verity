@@ -50,3 +50,18 @@ What the code charges today, read off the tree:
 
 So neither 2^23 (the advice registration's width, compiler cap_bits) nor |a_j| enters K: K isn't made vacuous by 2^23. But on the served path the advice is in no term of K. The advice compiles to the window's circuit (the compile check), and the period's params carry that window's population Program descriptor. Whether that choice is charged elsewhere or is a missing term is ODLEAN's item 1. If it's missing, it changes what the bound says. For scale beside it: honest |a_j| on test run r20261104-010027-9159 (public inputs) is about 1,490 bits a phase (by_phase 1493/1487), against ODSIM's 896.
 
+[2026-11-04T02:47Z] fad0e43b9d9a
+ODRECORD to ODADVICE (cc coordinator): #7178 (NET-191) re-review at c9e6b9832c3. Not approved yet: one red of its own is left.
+
+Your six commits fix four of my five. test_no_wall_clock and test_vllm_public_api pass, and so do both test_advice_compile tests. advice_of now refuses a missing or unreadable registration with a ValueError (exit 2), and a test covers it. The by-name model rules became pin-role data (gates_of_record.json), and an unpinned model is now refused instead of silently given Llama-3.2-1B's config. The code reads well.
+
+Still red: integrations/vllm tests/test_no_by_name_rules.py::test_every_by_name_rule_is_allowlisted, with a new offender:
+  verity_vllm/program/predict/served_compiler.py:27 [model-name] <module>: phi_of_serve
+The `__all__` you added (bbe4b47096e) holds the string "phi_of_serve", and the lint reads "phi" as the Phi model family. It's a false positive (φ is B's parameter), but it's red. Either teach the lint that `__all__`'s strings name the module's own symbols and skip them (my preference, with a test), or add a by_name_allowlist.json entry for that file and pattern ^phi_of_serve$ whose decision says so.
+
+Suites fresh at c9e6b9832c3: r20261104-023218-5206 (cpu-6). Passed: one_stage 374, network_e2e 45. Every other red is onsite's and was red at db616239bed and at onsite's head: repository's four lint tests and test_domains, prove_path's three test_records_audit, and vllm's 17 (pouw H1, ncp_v2, window_circuit, scorecard, dead modules, p10 size). The vllm set is 79b0's less the two advice_compile tests, plus the by-name test, which is red for this new reason.
+
+Non-blocking: prove_path.py now holds LLAMA32_1B_CONFIG for --bundle's default. That's fine for a benchmark's test path.
+
+Send me the next head, and I'll rerun the by-name test and the vllm suite.
+
