@@ -204,7 +204,8 @@ negatives.
   (PoUS's `served_case.sh`), then gets remote's and onsite's Lean verdicts on the run's cases (soundness's composite
   reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`, and a tree without those two scripts skips the step.
 - `onsite_record.py OUT [--advice-charge FILE]`: the onsite demo's record of a served run (`record/onsite.json`), which
-  `served_verdicts.sh` writes after its composite step when the network certifier's piece ran. It holds every verdict
+  `served_verdicts.sh` writes after its composite step when the network certifier is in the run: its piece
+  (`CERTIFIER_CMD`, or the split's `CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`) or its front (`CERTIFIER_FRONT`). It holds every verdict
   the run of record needs (sampled proofs, PoUW, inference-only, remote, the network certifier, onsite), each missing
   with its why where the run has no answer. Beside them are the network certifier's bound term by term in the notation
   table's symbols, with its overcount, the seconds it covers, the connections it counts and δ_net term by term with

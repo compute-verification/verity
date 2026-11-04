@@ -213,6 +213,8 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
     if sum(t["bits"] for t in terms) != K:
         raise ValueError(f"K is {K}, and its terms sum to {sum(t['bits'] for t in terms)}")
     m = len(public["scans"])
+    if m == 0:
+        raise ValueError("the rows form's public has no scan: a period of no execution phase, which bounds nothing")
     if "windows" in public and int(public["windows"]) != m:
         raise ValueError(f"{m} scans for the period's {public['windows']} execution phases")
     sources = [EPS, *ERRORS.values()]

@@ -165,17 +165,21 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
         "share": 9088 / K, "lean": "scans[i].free"}
 
 
-def test_w63k4_at_a_4_s_tick_charges_768_bits_a_link_window_for_its_128_connections_whatever_the_traffic(tmp_path):
+def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever_the_traffic(tmp_path):
     """Three execution phases of w63k4's schedule at a 4 s tick: its 4 lanes over T = 32 buckets carry at most 128
     connections a phase, each capped at 5 egress cells, so k_sched and k_fail charge 128 · ⌈log2 6⌉ = 384 bits a phase
-    each, the period's check's terms however few connections were served."""
+    each, the period's check's terms however few connections were served; with the jitter T_j log2 d_jit = 32 at
+    d_jit = 2, a phase's terms but ℓ_{a,j} and k_{skip,j} are 800 bits."""
     sys.path.insert(0, str(HERE.parent.parent / "network_traces"))
     import scan_zk as SZ
     schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
-    public = dict(PUBLIC, K=3 * (768 + 9088 + 63), cells=3 * 384, schedules=3 * 384, windows=3, scans=[SCAN] * 3)
+    scan = dict(SCAN, jitter=schedule["window"])
+    public = dict(PUBLIC, K=3 * (768 + 9088 + 32), cells=3 * 384, schedules=3 * 384, windows=3, scans=[scan] * 3)
     rec = OR.record(accepted(tmp_path, public, windows=3, schedule=schedule))
     b = rec["bound"]
     assert [t["bits"] for t in b["terms"] if t.get("phase") is None] == [1152, 1152]
+    jitter = [t["bits"] for t in b["terms"] if t["symbol"] == "T_j \\log_2 d_{jit}"]
+    assert jitter == [32] * 3 and (1152 + 1152) // 3 + jitter[0] == 800
     assert [t.get("times") for t in b["delta_net"]["terms"]] == [None, 3, 3, 3]
     assert rec["periods"]["run"]["delta_net"] == OR.delta_net(Fraction(1, 2 ** 20), 3)
     assert b["connections"] == {"count": 3 * 128, "from": OR.CONNECTIONS}
@@ -293,6 +297,7 @@ def test_the_published_form_which_drops_windows_gives_the_same_record(tmp_path):
     (dict(PUBLIC, scans=[{k: v for k, v in SCAN.items() if k != "faulty_entries"}]),
      "the rows form's public lacks a term: KeyError: 'faulty_entries'"),
     (dict(PUBLIC, windows=2), "1 scans for the period's 2 execution phases"),
+    (dict(PUBLIC, K=756 + 756, scans=[], windows=0), "the rows form's public has no scan"),
 ])
 def test_a_public_that_isnt_the_rows_forms_sum_is_the_bounds_error(tmp_path, public, why):
     rec = OR.record(accepted(tmp_path, public))
