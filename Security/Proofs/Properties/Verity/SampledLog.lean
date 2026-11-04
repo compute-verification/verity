@@ -189,7 +189,7 @@ def readLog (label : String) (after : ByteArray) (records : List Json) (ξ : Byt
 def recordOn (bs : _root_.Core.Blobs) (r : _root_.SampledProofs.OneStageZk.RunFiles) : Option Json := do
   let b ← (bs.get r.record s!"session {r.name}'s record").toOption
   let t ← String.fromUTF8? b
-  pure ((Json.parse t).toOption.getD Json.null)
+  pure ((Flock.JsonParse.parse t).toOption.getD Json.null)
 
 /-- The records of the sessions v2's evidence `e` names, on the blobs `bs`, as `SampledProofs.OneStageZk.treesHeld`
 reads them (`recordOn`). -/

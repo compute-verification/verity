@@ -396,11 +396,12 @@ theorem get_ok {bs : Core.Blobs} {d w : String} {b : ByteArray} (w' : String) (h
   exact e.symm
 
 /-- **Each record v2's evidence names holds to the trees where `treesHeld` accepts**: the record a session's blob
-parses to, as `Verity.Sampled.recordsOf` reads it, is one `sessionTreeReason` accepts against them. -/
+parses to through `Flock.JsonParse.parse`, as `Verity.Sampled.recordsOf` reads it, is one `sessionTreeReason` accepts
+against them. -/
 theorem records_held {ts : Array LoggedTree} {e : SampledProofs.OneStageZk.Evidence} {bs : Core.Blobs}
     (h : SampledProofs.OneStageZk.treesHeld ts e bs = .ok ()) {r} (hr : r ∈ e.sessions) {b : ByteArray}
     {str : String} {rec : Json} (hb : (bs.get r.record "record").toOption = some b)
-    (hs : String.fromUTF8? b = some str) (hp : (Json.parse str).toOption = some rec) :
+    (hs : String.fromUTF8? b = some str) (hp : (Flock.JsonParse.parse str).toOption = some rec) :
     sessionTreeReason ts rec = none := by
   unfold SampledProofs.OneStageZk.treesHeld at h
   dsimp only at h
@@ -408,7 +409,7 @@ theorem records_held {ts : Array LoggedTree} {e : SampledProofs.OneStageZk.Evide
   rw [← Array.forIn_toList] at hn
   have hI := forIn_inv (I := fun pre (named : Array (String × Json)) => ∀ r ∈ pre, ∀ b str,
       (bs.get r.record "record").toOption = some b → String.fromUTF8? b = some str →
-      (r.name, (Json.parse str).toOption.getD .null) ∈ named) ?_ e.sessions.toList [] #[] named (by simp) hn
+      (r.name, (Flock.JsonParse.parse str).toOption.getD .null) ∈ named) ?_ e.sessions.toList [] #[] named (by simp) hn
   · have hsess : sessionsTreeReason ts named = none := by
       split at hrest
       case h_1 => cases hrest
