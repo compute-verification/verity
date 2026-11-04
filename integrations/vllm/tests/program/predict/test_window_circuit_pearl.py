@@ -335,6 +335,41 @@ def test_a_cut_linear_served_under_other_statics_is_taken_as_served(low, filled)
         WR.Slot(low.fn, CLASS, s0.row, weights, WR.Served(rows, *_read(store)))
 
 
+def test_a_cut_linear_prefill_prunes_is_read_at_every_prompt_position(low, filled):
+    """Prefill prunes the last layer from its query on at the prompt rows before the last, but the engine computes it there,
+    the record binds it a row a prompt position and Pearl+ commits each call's y at them all: a cut linear there, which the
+    circuit never computes, is read from those rows (off the GEMM's value, a slot of the cut circuit takes it as served),
+    where the uncut circuit computes it and the other pruned nodes stay computed. Bound at its last row alone, it is
+    refused by name."""
+    weights, _v, slots, _rows = filled
+    s0, nodes, lp = slots[0], low.fn.body.nodes, slots[0].row[1]
+    K = len(nodes) // (max(WR.positions(low.fn)) + 1)
+    query = [k for k in range(K) if nodes[k].fn.name == "RoPE"][-2]
+    pruned = tuple(k for k in range(query, K - 3) if nodes[k].fn.name != "RoPE" or k == query)
+    cut = [k for k in pruned if k in low.cut]
+    assert [nodes[k].fn.name for k in cut] == ["Gemm"] * 3
+    rows, store = _served(low, s0, T=1, also=pruned, whole=pruned)
+    got = WR.Slot(low.fn, CLASS, s0.row, weights, WR.Served(rows, *_read(store)), cut=low.cut)
+    assert got.source == [WR.COMPUTED if p < lp - 1 and (k in pruned and k not in cut or k >= K - 3) else WR.SERVED
+                          for p in range(5) for k in range(K)]
+    assert all(np.array_equal(a, b) for x, y in zip(got.values, s0.values) for a, b in zip(x, y))
+
+    o, N = cut[0], WR._fields(nodes[cut[0]].fn)[0].leaves
+    y = store[(0, f"op{o}", "out")]
+    off = {**store, (0, f"op{o}", "out"): np.concatenate([y[:N] ^ np.uint16(1), y[N:]])}
+    taken = WR.Slot(low.fn, CLASS, s0.row, weights, WR.Served(rows, *_read(off)), cut=low.cut)
+    assert taken.source[o] == WR.SERVED and np.array_equal(taken.values[o][0], s0.values[o][0] ^ np.uint16(1))
+    computed = WR.Slot(low.fn, CLASS, s0.row, weights, WR.Served(rows, *_read(off)))
+    assert computed.source[o] == WR.COMPUTED and np.array_equal(computed.values[o][0], s0.values[o][0])
+
+    rows, store = _served(low, s0, T=1, also=pruned)
+    with pytest.raises(ValueError, match=rf"op{o}: a node the circuit never computes, pruned at the prompt rows before the "
+                                         rf"last, its members bound at its last one alone, not a row a prompt position "
+                                         rf"\({lp}\)"):
+        WR.Slot(low.fn, CLASS, s0.row, weights, WR.Served(rows, *_read(store)), cut=low.cut)
+    WR.Slot(low.fn, CLASS, s0.row, weights, WR.Served(rows, *_read(store)))
+
+
 @pytest.mark.slow
 def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low, filled):
     """Recorded into a `Window` with Pearl+'s values registered (`Rows.value`'s rows under the committer's key, FP32 words

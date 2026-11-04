@@ -6,9 +6,17 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
                          [--output-tokens 16] [--max-num-batched-tokens N] [--no-retain [--seeded]]
   served_passes.py same A.json B.json --out same.json
   served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J] [--device DEBIT_CUBIN [--device-check N]]
+  served_passes.py volunteer-needed [--over-cap reject|uncredited] [--verdict run|pass]
   served_passes.py retain --passes DIR [--volunteer volunteer.json] [--drop ROUND ...] [--window-record W]
   served_passes.py verify --passes DIR [--manifest M ...] [--tie W] --out verify.json [--answer answer.json]
                           [--draws 459] [--delta 1/100] [--jobs J] [--fast] [--coin-record R]
+  served_passes.py lean --passes DIR --verify verify.json --exe pouw-pearlplus --out pearlplus-lean.json [--check C]
+                        [--timeout S]
+  served_passes.py arm --out config.json [--spec SPEC] [--arm ARM]
+
+``arm`` writes the spec's Pearl-C arm's pouw settings (`pearl_c_arm`, each ``"$NAME"`` read from the environment the
+spec's setup exports) as serve-openai's ``--protocols-config`` takes them for the same arm (`serve_pearl.config_of`): the
+keys of `serve_pearl.CONFIG` alone, the server drawing each window's coins and naming its transcript dir itself.
 
 ``serve`` builds the spec's preset with its Pearl-C arm (`pearl_c_arm`: ``--arm``, else the spec's one; `verity_bench`'s
 ``engine_args`` and ``protocols_config``, whose in-process challenger is the epoch's coins) and the pouw setting
@@ -17,7 +25,7 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
 salt coin is a live session's on the auditor host instead (`bench_arm.live_coins`: a salt-only session reserved under
 ``PEARLC_CHALLENGER_LANE`` before the engine starts, which the install opens on its salt epoch's root and closes at
 ``close``), and ``DIR/coins.json`` is that session's commitment, written once the install has opened it; the document's
-``coins`` says which (`served_step.coins_of`: the source, the session without its secret, and how it closed).  A warm-up
+``coins`` says which (`pearl_c.window.coins_of`: the source, the session without its secret, and how it closed).  A warm-up
 ``generate`` of one short request takes the first calls' one-time
 costs (the screen's Triton build); then one timed ``generate`` call serves R requests of P seeded random prompt tokens and
 O output tokens each (greedy, EOS ignored): vLLM's scheduler steps the engine, and nothing but the option ends a pass.  It
@@ -50,6 +58,13 @@ pass ends (``done`` once all have), with the node it ran on and, on the device, 
 replayed (``device``), prints one line and exits 0 only when no pass has a tile left over a cap; it refuses a serve that
 retained none, and any once the verifier's coin is drawn (``DIR/coin.json``).
 
+``volunteer-needed`` prints ``yes`` and the over-cap rule (`over_cap_rule`) where the verdict a pipeline calls (``run``,
+the default: ``verify``'s, `verify_run.verify_passes`; ``pass``: `verify_run.verify`, a pass at a time) rejects a run on
+a drawn tile with a credited row or tile over its debit cap under ``--over-cap`` (default: the verdict's own rule), and
+``no`` and the rule where it credits such a row nothing instead.  The pipelines (`served_pearlplus.sh`,
+`pearl_c_sm90/h200.sh`) ask it before they serve: they run ``volunteer`` exactly when it says ``yes``, and refuse to skip
+it then.
+
 ``retain`` is the prover's last step before the coin: it writes ``DIR/retention.json``, the rounds (places among
 ``served.json``'s passes with calls) the verdict is to read, dropping each ``--drop`` round and, with ``--volunteer``, each
 pass that step didn't finish or left over a cap.  A dropped pass credits nothing and its MACs stay in what the run
@@ -77,22 +92,38 @@ call made and no ``--manifest`` names others, the credit over those retained alo
 (default ``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints one line
 and exits 0 only on accept.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
 PouwCheck).
+
+``lean`` is the Lean verdict of record on the run `verify` judged (`PouwCheck.PearlPlus`, ``--exe`` its ``pouw-pearlplus``):
+the passes ``verify --out``'s document (``--verify``) names, read as `verify` reads them and held to the names and SHA-256s
+that document gives them, the epoch's ``DIR/coins.json``, that document's draws, and the verifier's coin record it wrote
+(``DIR/coin.json``), which pins the Lean's source to the Python's (`lean_argv`, the one place the Lean's command line is
+written). It holds the Lean's printout to the Python's verdict on every field both give (`LEAN_HELD`: the verdict, its
+reason and refusal, the run's commitment and source, each opened tile's verdict, and an accepted run's work), and to the
+same W where the Lean names one. Where they agree it writes the Lean's answer to ``--out`` (`lean_answer`: the
+printout with W at ``tie``), the file `served_verdicts.pearlplus_of_record` reads; where they don't, or the Lean doesn't
+answer within ``--timeout`` seconds, it writes none and removes any there. Either way both verdicts, the Lean's command
+line and the executable's SHA-256 go to ``--check`` (default `LEAN_CHECK` beside ``--out``). Prints one line and exits
+0 on a written accept, 1 on a written reject and 2 when it wrote no answer.
 """
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
+import inspect
 import itertools
 import json
 import math
 import os
 import socket
+import subprocess
 import sys
 import time
 from fractions import Fraction
 from pathlib import Path
 
 from verity_config.settings import of
+from verity_vllm.protocols.pouw.pearl_c.window import KEEP, SERVED_SCHEMA, coins_of, served_passes as passes_of
 
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
@@ -103,17 +134,26 @@ ARM_PREFIX = "pouw:pearl-c-"
 SCHEMA = "verity-pouw/pearl-plus-served-verify/v1"
 #: t = 459 accepted draws leave ε ≈ 1% of the tickets' weight on wrong tiles at δ = 1/100 (`verify_run.epsilon`)
 DRAWS = 459
-KEEP = ("units", "base", "tiles", "screened_rows", "failing_rows", "unsure_rows", "excluded_rows", "transcript_root",
-        "activation_roots", "schedule", "manifest")
 #: what `volunteer` keeps of each pass's `volunteer_pass.volunteer` (``device`` on the device alone)
 VOLUNTEER_KEEP = ("manifest", "ok", "line", "tiles", "over", "voluntary_a", "voluntary_b", "left", "records_root",
                   "credit_kept", "device")
 #: what `volunteer`'s document sums of its passes' ``device``
 DEVICE_SUMS = ("replayed", "bad_tiles", "form_s", "device_s", "replay_s")
+#: Pearl+'s rules for a drawn tile with a credited row or tile over its debit cap (``verify --over-cap``, `verify_run`'s
+#: ``over_cap``): the verdict rejects the run, or credits the row nothing; ``volunteer`` is the prover's under the first
+OVER_CAP = ("reject", "uncredited")
 #: why `verify` and `volunteer` refuse a serve run with ``--no-retain``
 UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so there is nothing to replay")
 #: the verifier's record of its coin (`verify_run.verify_passes`' ``record``) and the prover's retention, in DIR
 COIN, RETENTION = "coin.json", "retention.json"
+#: the fields of the Lean `PouwCheck.PearlPlus` printout `lean` holds to the Python's verdict, as its difftest does
+#: (`benchmarks/pouw/pearlplus_lean`'s ``answer``)
+LEAN_HELD = ("verdict", "reason", "refused", "commitment", "source", "verdicts", "work")
+#: `lean`'s record of both verdicts, beside its answer
+LEAN_CHECK = "pearlplus-lean-check.json"
+LEAN_SCHEMA = "verity-pouw/pearl-plus-lean-check/v1"
+#: why the step refuses where the two verdicts disagree
+LEAN_DISAGREES = "the Lean verdict and the Python's disagree, so no Lean answer is written"
 #: why `retain` and `volunteer` refuse once the verifier's coin is drawn
 DRAWN = "the verifier's coin is drawn (DIR/coin.json), so the passes and their records are fixed"
 #: why ``retain --window-record`` drops a warm-up pass (`pearl_c.window`)
@@ -129,13 +169,6 @@ def prompts(vocab: int, requests: int, tokens: int) -> list[list[int]]:
     """`requests` prompts of `tokens` token ids each, seeded by their index (the harness's `_requests` form)."""
     seed = int.from_bytes(hashlib.sha256(b"served-passes").digest()[:8], "big")
     return [[3 + (seed + i * 1_000_003 + j * 97_409) % (vocab - 4) for j in range(tokens)] for i in range(requests)]
-
-
-def macs(manifest: str | None) -> int | None:
-    """A retained pass's linear MACs, its calls' real rows × n × k from its manifest; None without one."""
-    if not manifest:
-        return None
-    return sum(u["real_rows"] * u["n"] * u["k"] for u in json.loads(Path(manifest).read_text())["matmuls"])
 
 
 def pearl_c_arm(spec, name: str | None = None):
@@ -198,7 +231,6 @@ def serve(args: argparse.Namespace) -> int:
         config["pouw"]["transcript_dir"] = str(passes)
     sys.path.insert(0, str(HERE))
     import bench_arm as BA
-    import served_step as SS
 
     config["pouw"], reserved = BA.live_coins(config["pouw"], settings.PEARLC_CHALLENGER_GATE, settings.PEARLC_CHALLENGER_PEER,
                                              settings.PEARLC_BENCH_EPOCH, settings.PEARLC_CHALLENGER_LANE)
@@ -238,11 +270,10 @@ def serve(args: argparse.Namespace) -> int:
     llm.close()
     close = time.perf_counter() - t0 - wall
     caps = {"tiles": run.capacity, "units": PPD.CALL_CAPACITY, "screened_rows": len(run.flag_buf)}
-    got = [{"pass": i, "timed": i >= warm, **{k: p.get(k) for k in KEEP if k in p}, "macs": macs(p.get("manifest"))}
-           for i, p in enumerate(run.details["passes"])]
+    got = passes_of(run.details["passes"], warm)
     held = [p for p in got if p["units"]]
     over = [p["pass"] for p in got if any((p.get(k) or 0) > cap for k, cap in caps.items())]
-    doc = {"schema": "verity-pouw/pearl-c-served-passes/v1", "spec": str(args.spec), "arm": arm.id, "run": settings.RESEARCH_RUN_ID,
+    doc = {"schema": SERVED_SCHEMA, "spec": str(args.spec), "arm": arm.id, "run": settings.RESEARCH_RUN_ID,
            "engine": {k: v for k, v in engine.items() if isinstance(v, (int, float, str, bool))}, "retained": args.retain,
            "seeded": args.seeded, "requests": args.requests, "prompt_tokens": args.prompt_tokens, "output_tokens": args.output_tokens,
            "served_tokens": sum(len(o.outputs[0].token_ids) for o in outs), "generate_s": wall, "engine_steps": len(walls),
@@ -250,7 +281,7 @@ def serve(args: argparse.Namespace) -> int:
            "max_step_tokens": run.details.get("max_step_tokens"), "caps": caps, "passes": got, "passes_with_calls": len(held),
            "over_caps": over,
            "ok": sum(p["timed"] for p in held) >= 3 and not over and (not args.retain or all(p.get("manifest") for p in held))}
-    doc["coins"] = {**SS.coins_of(option, reserved), **({"source": "seeded"} if args.seeded else {})}
+    doc["coins"] = {**coins_of(option, reserved), **({"source": "seeded"} if args.seeded else {})}
     for path in (Path(args.out), passes / "served.json"):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(doc, indent=1) + "\n")
@@ -394,6 +425,35 @@ def volunteer(args: argparse.Namespace) -> int:
     return 0 if doc["ok"] else 1
 
 
+def over_cap_rule(verdict, rule: str | None = None) -> str:
+    """The rule `verdict` (`verify_run.verify_passes` or `verify_run.verify`) takes on a drawn tile with a credited row or
+    tile over its debit cap, given ``over_cap=rule`` where `rule` isn't None: its ``over_cap`` default, or ``reject``
+    where it takes no ``over_cap``, a verdict without it having that one rule."""
+    took = inspect.signature(verdict).parameters.get("over_cap")
+    if took is None:
+        if rule is not None:
+            raise ValueError(f"verify_run.{verdict.__name__} takes no over_cap (its one rule is reject), so no --over-cap")
+        return OVER_CAP[0]
+    rule = took.default if rule is None else rule
+    if rule not in OVER_CAP:
+        raise ValueError(f"verify_run.{verdict.__name__}'s over-cap rule {rule!r} is none of {', '.join(OVER_CAP)}")
+    return rule
+
+
+def volunteer_needed(args: argparse.Namespace) -> int:
+    sys.path.insert(0, str(HERE))
+    import verify_run as VR
+
+    verdict = VR.verify_passes if args.verdict == "run" else VR.verify
+    try:
+        rule = over_cap_rule(verdict, args.over_cap)
+    except ValueError as e:
+        print(f"volunteer-needed FAIL: {e}", file=sys.stderr, flush=True)
+        return 2
+    print("yes" if rule == OVER_CAP[0] else "no", rule, flush=True)
+    return 0
+
+
 def retain(args: argparse.Namespace) -> int:
     passes = Path(args.passes)
     served = json.loads((passes / "served.json").read_text())
@@ -479,6 +539,113 @@ def verify(args: argparse.Namespace) -> int:
     return 0 if doc["answer"]["verdict"] == "accept" else 1
 
 
+def arm(args: argparse.Namespace) -> int:
+    from verity_bench.vllm import arms as A
+    from verity_bench.vllm import presets as P
+    from verity_vllm.pipeline import serve_pearl as SPL
+
+    picked = pearl_c_arm(P.resolve_spec(args.spec), args.arm)
+    if tuple(picked.protocols) != (SPL.ENTRY,):
+        raise SystemExit(f"served_passes.py arm: serve-openai serves {SPL.ENTRY} alone; {picked.id} is {list(picked.protocols)}")
+    # read with no protocol enabled, so no in-process challenger draws coins the server draws per window itself
+    pouw = A.protocols_config(dataclasses.replace(picked, protocols=()), os.environ).get("pouw", {})
+    doc = SPL.config_of(json.dumps({"pouw": {k: v for k, v in pouw.items() if k in SPL.CONFIG}}))
+    Path(args.out).write_text(json.dumps(doc, indent=1) + "\n")
+    print(f"arm {picked.id}: --protocols-config {args.out}, pouw {sorted(doc['pouw'])}", flush=True)
+    return 0
+
+
+def lean_argv(exe: Path, coins: Path, draws: int, record: Path, manifests: list[Path], tie: Path | None) -> list[str]:
+    """``pouw-pearlplus``'s command line on the run's retained passes (`manifests`, in order), the epoch's coin commitment,
+    the draws and the verifier's coin record, which pins the Lean's source to the one the Python drew (PR #7221's
+    ``--coins COINS --draws T --record RECORD MANIFEST...``). W (`tie`) is not passed: #7221's executable takes none yet."""
+    return [str(exe), "--coins", str(coins), "--draws", str(draws), "--record", str(record), *map(str, manifests)]
+
+
+def lean_answer(got: dict) -> dict:
+    """The Lean's printout as `served_verdicts.pearlplus_of_record` reads it: as printed, with the W it held the passes to
+    at ``tie`` (``{"record": digest(W), ...}``), from its ``tie`` or its ``public.tie``, else None."""
+    tie = got.get("tie") or (got.get("public") or {}).get("tie")
+    return {**got, "tie": {"record": tie} if isinstance(tie, str) else tie}
+
+
+def python_answer(doc: dict) -> dict:
+    """`verify`'s document in the Lean's terms (`LEAN_HELD`)."""
+    a = doc["answer"]
+    return {"verdict": a["verdict"], "reason": a["reason"], "refused": doc.get("refused"),
+            "commitment": doc.get("commitment"), "source": doc.get("source"), "verdicts": doc.get("verdicts", []),
+            "work": (a.get("public") or {}).get("work")}
+
+
+def lean(args: argparse.Namespace) -> int:
+    sys.path.insert(0, str(HERE))
+    import verify_run as VR
+
+    passes, out, exe = Path(args.passes), Path(args.out), Path(args.exe)
+    check = Path(args.check) if args.check else out.with_name(LEAN_CHECK)
+    out.unlink(missing_ok=True)
+    doc = json.loads(Path(args.verify).read_text())
+    rec = {"schema": LEAN_SCHEMA, "verify": str(args.verify), "exe": str(exe), "exe_sha256": None, "argv": None, "rc": None,
+           "stderr": None, "lean": None, "python": python_answer(doc), "differ": None, "answer": None, "reason": None}
+
+    def done(reason: str | None, rc: int) -> int:
+        rec["reason"] = reason
+        check.parent.mkdir(parents=True, exist_ok=True)
+        check.write_text(json.dumps(rec, indent=1) + "\n")
+        if reason is None:
+            print(f"lean {rec['lean']['verdict'].upper()} {VR.PROTOCOL}: the Lean PouwCheck.PearlPlus verdict is the "
+                  f"Python's on {', '.join(LEAN_HELD)}; run {str(rec['lean']['commitment'])[:16]}, W "
+                  f"{str((rec['answer']['tie'] or {}).get('record'))[:16]} -> {out.name}", flush=True)
+        else:
+            print(f"lean REFUSED: {reason}; both verdicts in {check.name}", flush=True)
+        return rc
+
+    record = Path(doc["coin_record"]) if doc.get("coin_record") else None
+    if record is None or not record.is_file():
+        return done("the Python verdict recorded no coin (verify's coin record), so nothing pins the Lean's source", 2)
+    served = json.loads((passes / "served.json").read_text()) if (passes / "served.json").exists() else None
+    try:
+        paths = retention(passes, served)[0] if served is not None else manifests(passes)[0]
+        named = [VR.read(p)[2] for p in paths]
+    except (KeyError, OSError, TypeError, ValueError) as e:
+        return done(f"the retained passes can't be read: {type(e).__name__}: {e}", 2)
+    if named != doc.get("passes"):
+        return done("the retained passes are not the ones the Python verdict read, by name and SHA-256", 2)
+    if not exe.is_file():
+        return done(f"no Lean executable at {exe}", 2)
+    rec["exe_sha256"] = hashlib.sha256(exe.read_bytes()).hexdigest()
+    rec["argv"] = lean_argv(exe, passes / "coins.json", doc["draws"], record, paths,
+                            Path(doc["tie_record"]) if doc.get("tie_record") else None)
+    try:
+        p = subprocess.run(rec["argv"], capture_output=True, text=True, timeout=args.timeout, check=False)
+    except subprocess.TimeoutExpired:
+        return done(f"the Lean gave no verdict within {args.timeout} s", 2)
+    rec["rc"], rec["stderr"] = p.returncode, p.stderr[-2000:] or None
+    said = p.stdout.strip().splitlines()
+    try:
+        got = json.loads(said[-1]) if said else None
+    except ValueError as e:
+        rec["unparsed"] = f"the Lean's last line isn't JSON: {e}"
+        got = None
+    if not isinstance(got, dict) or p.returncode != (got.get("verdict") != "accept"):
+        return done(f"the Lean exited {p.returncode} without a verdict: {(p.stdout + p.stderr).strip()[-400:]}", 2)
+    rec["lean"] = got
+    answer, want = lean_answer(got), rec["python"]
+    differ = [k for k in LEAN_HELD if got.get(k) != want[k]]
+    if got.get("drawn") not in (None, doc["draws"]):
+        differ.append("drawn")
+    tie = answer["tie"]
+    if tie is not None and (not isinstance(tie, dict) or tie.get("record") != (doc.get("tie") or {}).get("record")):
+        differ.append("tie")
+    rec["differ"] = differ
+    if differ:
+        return done(f"{LEAN_DISAGREES}: they differ in {', '.join(differ)}", 2)
+    rec["answer"] = answer
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(answer, indent=1) + "\n")
+    return done(None, 0 if got["verdict"] == "accept" else 1)
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -505,6 +672,10 @@ def main(argv: list[str] | None = None) -> int:
     o.add_argument("--device", help="pearl_c_sm90's debit_sm90.cubin: the words' counts on this node's H100 or H200")
     o.add_argument("--device-check", type=int, metavar="N",
                    help="with --device, replay every Nth tile on the CPU too (default volunteer_pass.CROSS_CHECK)")
+    n = sub.add_parser("volunteer-needed")
+    n.add_argument("--over-cap", choices=OVER_CAP, help="the rule verify is to take (default: the verdict's own)")
+    n.add_argument("--verdict", choices=("run", "pass"), default="run",
+                   help="run: verify's (verify_run.verify_passes); pass: verify_run.verify's, a pass at a time")
     r = sub.add_parser("retain")
     r.add_argument("--passes", required=True)
     r.add_argument("--volunteer", help="volunteer's document: drop each pass it didn't finish or left over a cap")
@@ -528,8 +699,20 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--cross-check", type=int, default=256)
     v.add_argument("--coin-record", help=f"the verifier's coin record (default: DIR/{COIN} where served.json names the "
                    "passes, none with --manifest)")
+    a = sub.add_parser("arm")
+    a.add_argument("--spec", type=Path, default=SPEC)
+    a.add_argument("--arm", help=f"the spec's {ARM_PREFIX}* arm (default: its one)")
+    a.add_argument("--out", required=True)
+    n = sub.add_parser("lean")
+    n.add_argument("--passes", required=True)
+    n.add_argument("--verify", required=True, help="verify's --out document")
+    n.add_argument("--exe", required=True, help="PouwCheck.PearlPlus's pouw-pearlplus, built")
+    n.add_argument("--out", required=True, help="where the Lean's answer goes where it agrees with the Python's")
+    n.add_argument("--check", help=f"where both verdicts go (default: {LEAN_CHECK} beside --out)")
+    n.add_argument("--timeout", type=float, default=3600, help="seconds the Lean has to answer (default 3,600)")
     args = p.parse_args(argv)
-    return {"serve": serve, "same": same, "volunteer": volunteer, "retain": retain, "verify": verify}[args.cmd](args)
+    return {"serve": serve, "same": same, "volunteer": volunteer, "volunteer-needed": volunteer_needed, "retain": retain,
+            "verify": verify, "lean": lean, "arm": arm}[args.cmd](args)
 
 
 if __name__ == "__main__":

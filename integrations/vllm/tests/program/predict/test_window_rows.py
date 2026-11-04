@@ -443,6 +443,46 @@ def test_a_pruned_node_committed_at_every_prompt_position_is_read_at_the_last(wi
         WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, *_read(two)))
 
 
+def test_a_narrowed_linears_rows_are_its_node_read_whole_at_every_prompt_position(window):
+    """The registered compiler narrows the last layer's fused qkv on the prompt rows before the last to its keys' and
+    values' columns (`program.prune.narrowed`), which the manifest spells ``out@<width>`` beside the last row's whole
+    ``out``, its one row there: both are the node's prefill, read a row a prompt position from the whole rows the record
+    binds under ``out``, since the engine computes every one. Bound at the last row only, the node is refused by name, and
+    a narrowed op with no whole row beside it is refused as an op of neither a row a prompt position nor the last one."""
+    low, _f, _t, weights, slots = window
+    s0, K, nodes = slots[0], NODES, low.fn.body.nodes
+    query = [j for j in range(K) if nodes[j].fn.name == "RoPE"][-2]
+    k, lp, op = query - 1, s0.row[1], f"op{query - 1}"
+    N = WR._fields(nodes[k].fn)[0].leaves
+    w = N - nodes[query].fn.bindings["NHEADS"] * nodes[query].fn.bindings["D"]
+    rows, store = _served(low, s0, T=1)
+    m, _n, dt = next(d for d in rows if d["op_path"] == op)["members"][0]
+
+    def spelt(d):
+        if (d["op_path"], d["step"]) != (op, 0):
+            return d
+        return {**d, "row": 0} if d["row"] == lp - 1 else {**d, "members": [(f"{m}@{w}", w, dt)]}
+
+    program = [spelt(d) for d in rows]
+    assert sorted(d["row"] for d in program if (d["op_path"], d["step"], d["members"][0][0]) == (op, 0, f"{m}@{w}")) \
+        == list(range(lp - 1))
+    record = {**store, (0, op, f"{m}@{w}"): store[(0, op, m)].reshape(lp, N)[:, N - w:].ravel()}
+    served = WR.Served(program, *_read(record))
+    assert len(served.prefill) == K and [(d["row"], d["members"][0][0]) for d in served.prefill[k]] == [(p, m) for p in range(lp)]
+    got = WR.Slot(low.fn, CLASS, SLOTS[0], weights, served)
+    assert got.source == [WR.COMPUTED if p < lp - 1 and j >= K - PRUNED else WR.SERVED for p in range(lp + 1) for j in range(K)]
+    assert all(np.array_equal(a, b) for x, y in zip(got.values, s0.values) for a, b in zip(x, y))
+
+    last = {**record, (0, op, m): store[(0, op, m)][(lp - 1) * N:]}
+    with pytest.raises(ValueError, match=rf"{op}: a narrowed linear's node, read whole at every prompt position, its widest "
+                                         rf"members bound at \[1.0\] rows, not a row a prompt position \({lp}\)"):
+        WR.Served(program, *_read(last))
+    alone = [d for d in program if (d["op_path"], d["step"], d["members"][0][0]) != (op, 0, m)]
+    with pytest.raises(ValueError, match=rf"{op}: prefill rows \[{', '.join(map(str, range(lp - 1)))}\], not one a prompt "
+                                         r"position nor the last one's"):
+        WR.Served(alone, *_read(record))
+
+
 def test_a_call_boundary_is_matched_at_its_site_whatever_its_fx_node_counts_to(window):
     """A call boundary's op path names its fx node, which counts on over the request's steps (the served int8 linears'
     ``…/row_quant`` to ``…/row_quant_63`` at the prefill, ``…/row_quant_64`` on at the first decode step): a decode step's
