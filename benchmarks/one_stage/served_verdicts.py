@@ -112,9 +112,9 @@ open Pearl-C period, the window's registration chained after Pearl+'s window rec
 
 ``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
 ``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
-as `served_integrity.answer` reads it, Pearl+'s window tie from ``--window-tie DIR``'s ``summary.json`` and
-``windows/rank0/registration.json`` where it is given (the window tied to W), else from there too; each other
-subprotocol's from ``--pieces/<component>/answer.json`` (`piece_row`), else a ``missing`` row naming why. Each answer is about the server
+as `served_integrity.answer` reads it (Pearl+'s window tie from the same files under ``--window-tie DIR`` where it
+is given, the window tied to W); each other subprotocol's from
+``--pieces/<component>/answer.json`` (`piece_row`), else a ``missing`` row naming why. Each answer is about the server
 `piece_server` names: sampled proofs' the record's node, a piece's the one its ``served.json`` names, else the node it ran
 on, and the wipe's the one its ``served.json`` names. They go into the window report (``verdicts.json``, `row_of`'s rows,
 with each one's server) and from it the block record (``block-record.json``, `block_record.from_period`, held by
