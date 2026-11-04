@@ -206,6 +206,7 @@ PENDING: dict[str, str] = {
     "verity/ml/flock/README.md": "a PR on next rewrites the lines beside its unit classes; the rename follows it",
     "tools/verity/check/README.md": "moves to the infra repository with the check's tooling; renamed there",
     "benchmarks/README.md": "queued PRs on next add rows that name C-Flock, beside lines the rename touches; it follows them",
+    "benchmarks/unit_block/README.md": "a queued PR on next adds it, naming C-Flock; the rename follows it",
 }
 
 
