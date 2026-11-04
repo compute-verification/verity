@@ -97,12 +97,12 @@ theorem LigHyp.ofLanes {coin : ℕ → ℕ → _root_.Flock.F128} {n p0 : ℕ} {
   have hE : _root_.Flock.Zk.EXTRA_LANES = 4 := rfl
   have hB : (Array.range tPad).map (fun i =>
       (List.range (2 ^ (sch.levels.getD 0 default).lanes)).foldl
-        (fun acc l => acc + ((eqTableK ((Array.range sch.k0).map (chS coin p0)))[l]!).smul (lanePad' l i))
+        (fun acc l => acc + ((_root_.Flock.eqTableK ((Array.range sch.k0).map (chS coin p0)))[l]!).smul (lanePad' l i))
         ((rhoS coin p0 sch.k0).1.smul (lanePad' (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep) i) +
           (rhoS coin p0 sch.k0).2.smul (lanePad' (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep + 1) i))) =
       (Array.range tPad).map (fun i =>
       (List.range (2 ^ (sch.levels.getD 0 default).lanes)).foldl
-        (fun acc l => acc + ((eqTableK ((Array.range sch.k0).map (chS coin p0)))[l]!).smul (lanePad l i))
+        (fun acc l => acc + ((_root_.Flock.eqTableK ((Array.range sch.k0).map (chS coin p0)))[l]!).smul (lanePad l i))
         ((rhoS coin p0 sch.k0).1.smul (lanePad (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep) i) +
           (rhoS coin p0 sch.k0).2.smul (lanePad (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep + 1) i))) := by
     refine Array.map_congr_left fun i hi => ?_
