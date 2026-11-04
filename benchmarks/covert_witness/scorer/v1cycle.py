@@ -33,7 +33,8 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    since algorithm-policy carries gain, gain_target and start_effective_gates (FB_RETIRED; 05:22Z, 07:48Z), so a
    refresh whose algorithm-policy isn't PUT PUTs no frontier either. A refused PUT is reported, not fatal. te_core's
    five old panels stay in the re-score's directory, unpublished (23:56Z).
-5. Publishes the tables and frontier-branches (uncut, its console cut and PNG) to the evidence store, copies the cut to
+5. Deletes the measured ledger, which the next refresh builds afresh, and publishes the tables (the re-score's files
+   linked into its tree) and frontier-branches (uncut, its console cut and PNG) to the evidence store, copies the cut to
    PANELS_DIR, deletes its re-score and publish directories once both are in the store, and posts one DIGEST line with the art ids, and the builder's coverage table (gain size by decade of
    rho) as one more when algorithm-policy writes one; an S whose rho is Slowdown's bound carries loose-end-attention
    (01:22Z: A1 charges no read of earlier tokens' keys and values).
@@ -928,6 +929,11 @@ def frame(p: dict) -> list[dict]:
     return [{c: r[i] for c, i in ix.items()} for r in p["rows"]]
 
 
+def link(src: Path, dst: Path) -> None:
+    dst.unlink(missing_ok=True)
+    os.link(src, dst)
+
+
 def put_data(tree: Path, kind: str, meta: dict) -> str:
     # the store's local index is SQLite, which another writer on this VM holds for a while ("database is locked",
     # the 17:00Z refresh's publish); the same tree puts to the same id, so a retry is safe
@@ -1047,6 +1053,10 @@ def main() -> int:
             variants[name] = rescore(rs / name, args.gates, None, root, extra)
         except SystemExit as e:
             variants[name] = str(e)[:300]
+    # every refresh builds the measured ledger afresh and nothing after the re-scores reads it: its 4.7 GB go before
+    # the tables' put, which needs the tree's size free in the store (this VM's disk is shared)
+    if root is not None:
+        shutil.rmtree(root, ignore_errors=True)
     what = "final table" if final else "refresh"
     fr = json.loads((rs / "frontier.json").read_text())
     # each row carries its checkpoint's trace: 1.5 GB at 00:30Z, which parsed whole took the refresh past this VM's
@@ -1103,16 +1113,18 @@ def main() -> int:
     trees = {k: out / "publish" / k for k in ("tables", "fb")}
     for t in trees.values():
         t.mkdir(parents=True, exist_ok=True)
+    # the re-score's files are linked, not copied (two formalism.jsonl of 2.1 GB each): nothing writes them after the
+    # re-scores, and both directories go once the trees are in the store
     for name in ("frontier.md", "frontier.json", "formalism.jsonl", "rescore.log", "compare.md", "compare.json"):
         if (rs / name).exists():
-            shutil.copyfile(rs / name, trees["tables"] / name)
+            link(rs / name, trees["tables"] / name)
     if traced and (trace40.cache() / "traced.json").exists():
         shutil.copyfile(trace40.cache() / "traced.json", trees["tables"] / "trace40-traced.json")
     for v in variants:
         for name in ("frontier.md", "frontier.json", "rescore.log", "formalism.jsonl"):
             if (rs / v / name).exists():
                 (trees["tables"] / v).mkdir(exist_ok=True)
-                shutil.copyfile(rs / v / name, trees["tables"] / v / name)
+                link(rs / v / name, trees["tables"] / v / name)
     for name in ("algorithm-policy", FIT):
         if (out / name).is_dir():
             shutil.copytree(out / name, trees["tables"] / name, dirs_exist_ok=True)
