@@ -2,6 +2,7 @@ import Proofs.Pouw.PearlPlus.Atom
 import Proofs.Pouw.PearlPlus.Noise
 import Proofs.Pouw.PearlPlus.Words
 import Proofs.Pouw.PearlPlus.Rules
+import Proofs.Pouw.PearlPlus.Keys
 import Proofs.Pouw.PearlPlus.Rho
 import Proofs.Pouw.PearlPlus.Assembly
 
@@ -14,6 +15,7 @@ premise `TTOutTilePearlCH100Rev1` reads. Four parts:
 
 * (a) `Atom`: the evaluator's FP8 atom is the Definitions' step.
 * (b) `Noise` and `Words`: -h3's noise is `NoiseSha512`'s, and a tile's checked words are the reference values.
-* (c) `Rules`: the per-row rules are `RowOK`, and a word's debit replay is the game's.
+* (c) `Rules` and `Keys`: the per-row rules are `RowOK`, and a word's debit replay is the game's (`Keys`: the replay's
+  keys, bisection and carried add).
 * (d) `Assembly`: a passed tile whose openings are its unit's commitment has good words, or SHA-512 collides.
 -/
