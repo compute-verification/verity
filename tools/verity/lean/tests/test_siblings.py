@@ -73,7 +73,9 @@ def test_modules_sit_under_src_dir_and_a_plain_sibling_makes_the_stub_plain(tmp_
     built(pkg, "Proofs.Core.Old")
     p = S.plan(pkg, "Core.lean")
     assert p == S.Plan("Proofs.Core", False, ["Proofs.Core.Old"], [])
-    assert S.lean_args(pkg, p, tmp_path / "w")[:3] == ["-R", "..", "-o"]
+    work = (pkg / S.COPIES / "w").resolve()
+    assert S.lean_args(pkg, p, work) == ["-R", ".lake/axiom-probe/w", "-o", str(work / "Proofs" / "Core.olean")]
+    assert S.source(p, work) == work / "Proofs" / "Core.lean", "the probed copy, which -R names Proofs.Core"
     assert S.plan(outer, "Defs/X.lean") == S.Plan("Defs.X", True, [], [])
     assert "not a module of its package" in S.plan(outer, "Proofs/Core.lean")
 
@@ -110,8 +112,9 @@ def test_try_with_siblings_fails_a_module_that_redeclares_a_name_another_built_m
     out = capsys.readouterr().out
     assert "import P.C failed, environment already contains 'Q.bar' from P.D" in out, out
     assert "siblings: P.D and P.C both declare 'Q.bar'" in out and "rename one" in out, out
-    assert not any((pkg / S.COPIES).iterdir()), "the scratch build is removed"
+    assert not list((pkg / S.COPIES).glob("siblings-*")), "the scratch build is removed"
     write(pkg, {"P/D.lean": dup.replace("def bar", "def baz")})
     assert cli.main(["lean", "try", str(pkg / "P" / "D.lean"), "--siblings"]) == 0
     out = capsys.readouterr().out
     assert "siblings: no built module of its package that doesn't import P.D declares a name it does (4 imported" in out, out
+    assert out.splitlines()[-1].startswith("verity lean try: P/D.lean: axiom probe:"), "the probe's line stays last"

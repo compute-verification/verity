@@ -1,7 +1,8 @@
 """The sibling check that `verity lean try --siblings` runs once FILE elaborates. Two modules of one package can each
 elaborate and declare the same name, and only an import of both refuses it (`environment already contains 'N' from M`):
-the package's root does, an hour into a records run. So `try` compiles FILE as it elaborates it (`lean -R SRC -o`, into a
-scratch directory under `.lake/axiom-probe/`), then elaborates a stub there that imports that build of FILE and every
+the package's root does, an hour into a records run. So `try` compiles FILE's probed copy as it elaborates it, the copy
+at its module's path in a scratch directory under `.lake/axiom-probe/` (`lean -R SCRATCH -o`, `source`), then elaborates
+a stub there that imports that build of FILE and every
 module of FILE's package that is built and imports FILE neither directly nor through others. Lean refuses a duplicate
 name as it imports, before it elaborates anything, and its refusal names both modules.
 
@@ -149,13 +150,18 @@ def scratch(pkg: Path) -> Iterator[Path]:
         shutil.rmtree(d, ignore_errors=True)
 
 
+def source(p: Plan, work: Path) -> Path:
+    """Where in ``work`` FILE's elaborated copy goes (the axiom probe's, `axiom_probe.probe`): at its module's path, so
+    that `lean_args`' root gives it FILE's module name."""
+    return work.joinpath(*p.module.split(".")).with_suffix(".lean")
+
+
 def lean_args(pkg: Path, p: Plan, work: Path) -> list[str]:
-    """The arguments that make FILE's elaboration (`lake env lean ARGS FILE`, in ``pkg``) also write its build into
-    ``work``, under its own module name."""
-    src, _ = source_dir(pkg)
-    olean = work.joinpath(*p.module.split(".")).with_suffix(".olean")
+    """The arguments that make the elaboration of FILE's copy at `source` (`lake env lean ARGS COPY`, in ``pkg``) also
+    write its build into ``work``, under FILE's module name."""
+    olean = source(p, work).with_suffix(".olean")
     olean.parent.mkdir(parents=True, exist_ok=True)
-    return ["-R", os.path.relpath(src, pkg.resolve()), "-o", str(olean)]
+    return ["-R", os.path.relpath(work, pkg.resolve()), "-o", str(olean)]
 
 
 def stub(p: Plan, work: Path) -> list[str]:
