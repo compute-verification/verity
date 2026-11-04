@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.LigeritoLevels
 
 /-!
-# Out-of-domain binding (PROTOCOL.md §13.3 step 6)
+# Out-of-domain binding (`Flock.Ligerito` step 6)
 
 After a level's folds, the prover commits the next level's split table and answers two
 out-of-domain samples: the table's multilinear extension at two uniform points of `F^μ`

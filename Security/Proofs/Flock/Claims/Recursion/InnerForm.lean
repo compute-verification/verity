@@ -93,15 +93,19 @@ theorem checkShape_files {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
   obtain ⟨spec, st, hf, e1, e2, e3, e4, -, hform⟩ := checkShape_spec h
   exact ⟨spec, st, hf, e1, e2, e3, e4, hform⟩
 
-/-- **The inner statement's shared-row tables are within the cap**: where `RecSetup.checkShape` passes on the inner
-statement's files, each shared-row table of the statement they set up holds at most `RecBudget.MAX_INNER_ROWS` rows. -/
+/-- **The inner statement's public file is within the cap**: where `RecSetup.checkShape` passes on the inner
+statement's files, the statement they set up has at most `RecBudget.MAX_INNER_ROWS` instances, and each of its
+shared-row tables at most that many rows. -/
 theorem checkShape_rows {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
     (h : RecSetup.checkShape (some i) (some (.files f)) = .ok u) :
-    ∃ spec st, f.stmt "the inner session" = .ok (spec, st) ∧
+    ∃ spec st, f.stmt "the inner session" = .ok (spec, st) ∧ st.pub.n ≤ RecBudget.MAX_INNER_ROWS ∧
       ∀ t, st.pub.tables = some t → ∀ r ∈ t.counts, r ≤ RecBudget.MAX_INNER_ROWS := by
   obtain ⟨spec, st, hf, -, -, -, -, hr, -⟩ := checkShape_spec h
-  refine ⟨spec, st, hf, fun t ht r hrt => ?_⟩
   unfold RecBudget.innerRows at hr
+  by_cases hn : RecBudget.MAX_INNER_ROWS < st.pub.n
+  · simp [hn, throw, throwThe, MonadExceptOf.throw] at hr
+  rw [if_neg hn] at hr
+  refine ⟨spec, st, hf, Nat.le_of_not_lt hn, fun t ht r hrt => ?_⟩
   rw [ht] at hr
   by_cases ha : (t.counts.any (RecBudget.MAX_INNER_ROWS < ·)) = true
   · simp [ha, throw, throwThe, MonadExceptOf.throw] at hr

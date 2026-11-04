@@ -10,6 +10,7 @@ import Proofs.Flock.EndToEnd.Blocks
 import Proofs.Flock.EndToEnd.Carry
 import Proofs.Flock.EndToEnd.Joint
 import Proofs.Flock.EndToEnd.Joint.MT.Bound
+import Proofs.Flock.EndToEnd.Joint.V5.Bound
 import Proofs.Flock.EndToEndRegistered
 import Proofs.Flock.EndToEndRegisteredRows
 import Proofs.Flock.SoundAtBridge
@@ -25,6 +26,7 @@ import Proofs.Flock.VBridge
 import Proofs.Flock.Sampled
 import Proofs.Flock.Claims
 import Proofs.Flock.SamplingClaims
+import Proofs.Flock.SamplingGeneric
 import Proofs.Flock.Bridge
 import Proofs.Flock.Bridge.Transports
 import Proofs.Flock.Bridge.TransportsRefs

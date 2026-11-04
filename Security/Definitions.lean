@@ -1,10 +1,12 @@
 import Definitions.Core
 import Definitions.Core.Accel
 import Definitions.Core.Assumptions.Accel
+import Definitions.Core.Assumptions.DeviceFigures
 import Definitions.Core.Blocks
 import Definitions.Core.DeviceFigures
 import Definitions.Core.Site
 import Definitions.Core.Period
+import Definitions.Core.Structure
 import Definitions.Nci
 import Definitions.Nci.Support
 import Definitions.Nci.Reads
@@ -35,6 +37,7 @@ import Definitions.Claims.IndexedTapes
 import Definitions.Claims.Recursion
 import Definitions.Claims.RecursionLin
 import Definitions.Claims.Sampling
+import Definitions.Claims.SamplingGeneric
 import Definitions.Hash
 import Definitions.Flock
 

@@ -168,8 +168,8 @@ def checkForm (form : Option RecCoins.InnerForm) (st : Stmt) : V Unit := do
 /-- **The verifier's inner shape is the inner statement's**: where it holds the inner statement's files, the `m`,
 `k_log`, regions and claims of its inner shape (`--rec-inner`) are the ones the inner statement sets up at from them
 (`RecCoins.Files.stmt`; claims two and the session's points per region, as `RecVStar.innerOf` writes them), so the V*
-list and the rep schedule the shape fixes are the inner session's; its public file's shared-row tables are within
-`RecBudget.innerRows`; and the inner statement is set up as its files set it up (`checkForm`). -/
+list and the rep schedule the shape fixes are the inner session's; its public file's instances and shared-row tables are
+within `RecBudget.innerRows`; and the inner statement is set up as its files set it up (`checkForm`). -/
 def checkShape (inner : Option RecVStar.Inner) (src : Option RecCoins.Source) : V Unit := do
   let (some i, some (.files f)) := (inner, src) | return
   let (spec, st) ← f.stmt "the inner session"

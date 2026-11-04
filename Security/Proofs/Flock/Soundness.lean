@@ -64,6 +64,7 @@ import Proofs.Flock.Soundness.ExtractAcc
 import Proofs.Flock.Soundness.SessionAcc
 import Proofs.Flock.Soundness.SessionBatchAcc
 import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game.Tape
 import Proofs.Flock.Soundness.ExtractWait
 import Proofs.Flock.Soundness.LinkFinder
 import Proofs.Flock.Soundness.LinkCarry

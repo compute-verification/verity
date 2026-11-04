@@ -105,10 +105,10 @@ hashes part of the tree is caught where the check selects a cell outside that pa
 `pub w` is the pinned public implementation's priced cost of block `w`'s commitment at the period's dual prices, at
 every instance of `Reg w`.
 Under the random oracle it is the realization of `ShaRealize`: each oracle query costs at least the public
-implementation's, so the honest prover meets it with shortfall 0. The card model's θ floors (on `Open.sync`, `b1` and
-`madHi`) are what keep the model from hashing faster than the card. The premise is meant for models whose programs
-reach the oracle only through their calls (`Accel.OracleCalls` at the round's table): where a program reads the table
-as data it is false, and the headline says nothing. -/
+implementation's, so the honest prover meets it with shortfall 0. The card model has no hash op: its programs hash
+only through their priced calls, which is what keeps it from hashing faster than the card. The premise is meant for
+models whose programs reach the oracle only through their calls (`Accel.OracleCalls` at the round's table): where a
+program reads the table as data it is false, and the headline says nothing. -/
 def SAKSha (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (μ : G.Res → ℝ) (pub η : Fin k → ℝ)
     (κdeg : ℕ → ℝ) (κsha : Prover G P k → ℝ) : Prop :=
   G.G1 → G.G2 → G.G3 → G.P1 → G.P2 → ∀ (A : Prover G P k) (B : ℕ) (Adv : Type),

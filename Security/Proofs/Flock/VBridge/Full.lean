@@ -6,7 +6,7 @@ import Flock.Registered
 
 `VFull` asks that each wire V* reads a stage from be a wire of a unit session `j`'s law draws. V*'s laws are the full
 draw (`VLaw.live`), so that is every unit (`vFull_of_whole`). The verifier's U4 (`Flock.Registered.checkFull`,
-PROTOCOL.md §16.10) refuses a drawn statement unless every unit its own registered reads name for a round's commitment
+`Flock.HmRow`) refuses a drawn statement unless every unit its own registered reads name for a round's commitment
 (`rec-c<i>`, `rec-top-L<l>`, R's `rec-opening-c<i>` and `rec-top-stacked-L<l>`, the sparse phase's messages) is drawn
 in full; under a stratified draw that is the stratum holding it.
 

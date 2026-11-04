@@ -3751,10 +3751,11 @@ class Driver:
 
     def _clean_merge(self, tip: str, head: str) -> tuple[str | None, str]:
         """(the tree of ``head`` merged onto ``tip``, "") when it merges as `Queue._merge` merges, with ``tip``'s merge drivers
-        and a merge whose every conflict is in a pin kept, each pin rebuilt from the merged tree (`repinned`), and the merged
-        tree's Lean on the Lean module system once the tree has it (`ported`), else (None, why).  A git without
+        and a merge whose every conflict is in a pin or in Lean one side deletes that the other only ported kept, each pin
+        rebuilt from the merged tree (`repinned`) and each such file deleted (`port_deletions`), and the merged tree's Lean
+        on the Lean module system once the tree has it (`ported`), else (None, why).  A git without
         `--attr-source` merges without the drivers, which conflicts more."""
-        from .queue import ported, repinned
+        from .queue import port_deletions, ported, repinned
 
         args = ("merge-tree", "--write-tree", "--name-only", "--no-messages", tip, head)
         r = _git(self.repo, f"--attr-source={tip}", *args, check=False)
@@ -3762,8 +3763,9 @@ class Driver:
             r = _git(self.repo, *args, check=False)
         if r.returncode == 1:
             files = list(dict.fromkeys(r.stdout.splitlines()[1:]))
-            if not (tree := repinned(self.repo, r.stdout.split()[0], tip, head, files)):
-                return None, f"conflict in {', '.join(files) or 'a file'}"
+            tree, rest = port_deletions(self.repo, r.stdout.split()[0], tip, head, files)
+            if rest and not (tree := repinned(self.repo, tree, tip, head, rest)):
+                return None, f"conflict in {', '.join(rest) or 'a file'}"
         elif r.returncode:
             return None, f"doesn't merge: {(r.stderr or r.stdout).strip()[-200:]}"
         else:

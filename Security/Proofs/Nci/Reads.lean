@@ -4,18 +4,19 @@ import Definitions.Nci.Guarantees.Reads
 /-!
 # Updated matrix multiplications are throttled, in reads form
 
-The proof of `UpdatedMatMul` (`Throttling.lean`) before it divides by `α`: the same per-IU counts (`card_products_le`,
-`iu_reads`), the same charge for split entries (`sum_card_outputsOther_le`) and the same total (`sum_card_products`),
-with the IUs' total reads in place of `α size(D)`. A compliant division at `(Γ, α)` reads at most `α size(D)` in total
-and each of its IUs at most `K = αΓ`, which gives back `F · 2G ≤ size(D)` through `F = f(K) / (2α)` (`F_eq_readFactor`,
-`updatedMatMul_of_reads`).
+The proof of `UpdatedMatMul` (`Throttling.lean`) before it divides by the rate `α`: the same per-block counts
+(`card_products_le`, `iu_reads`), the same charge for split entries (`sum_card_outputsOther_le`) and the same total
+(`sum_card_products`), with the inference blocks' total fresh input in place of `α size(D)`. A division that complies at
+`c` gates per inference block and the rate `α` reads at most `α size(D)` in total and each of its inference blocks at
+most `k = α c`, which gives back `F · 2G ≤ size(D)` through `F = f(k) / (2α)` (`F_eq_readFactor`,
+`updatedMatMul_rate_of_reads`), and at `α = k / c` the policy's form (`updatedMatMul_of_reads`).
 -/
 
 namespace Nci.SecurityProofs
 
 open Verity Finset
 
-/-- **NCI's factor is the read factor over `2α`**: `F = f(K) / (2α)`. -/
+/-- **The policy's factor is the read factor over `2α`**: `F = f(K) / (2α)`. -/
 theorem F_eq_readFactor (α K b_w b_a d : ℝ) : F α K b_w b_a d = readFactor K b_w b_a d / (2 * α) := by
   unfold F readFactor
   rw [one_div_mul_eq_div]
@@ -100,9 +101,15 @@ theorem UpdatedMatMulReads : Guarantees.UpdatedMatMulReads := by
   rw [le_div_iff₀ hGr] at hsup
   linarith
 
-/-- The reads form gives back `UpdatedMatMul`: a division that witnesses compliance at `(Γ, α)` has IUs of at most `Γ`
-gates, each reading at most `K = αΓ`, and reads at most `α size(D)` in total. -/
-theorem updatedMatMul_of_reads (h : Guarantees.UpdatedMatMulReads) : Guarantees.UpdatedMatMul := by
+/-- The reads form gives back `UpdatedMatMul_rate`: a division that witnesses compliance at `c = Γ` gates per inference
+block and the rate `α` has inference blocks of at most `Γ` gates, each reading at most `k = αΓ`, and reads at most
+`α size(D)` in total. -/
+theorem updatedMatMul_rate_of_reads (h : Guarantees.UpdatedMatMulReads) :
+    ∀ (Γ : ℕ) (α b_w b_a : ℝ) (D : RegisteredCircuit) (c : Chain D.D) (d : ℕ),
+      0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, d ≤ c.d ℓ) → CompliesRate Γ α D →
+      Assumptions.ActivationsIncompressible D c Γ (α * Γ) b_w b_a →
+      Assumptions.PartialSumsIncompressible D c Γ (α * Γ) b_w b_a →
+        F α (α * Γ) b_w b_a d * (2 * c.G) ≤ D.D.size D.D.computed := by
   intro Γ α b_w b_a D c d hα hw ha hd ⟨n, P, hP⟩ hA hPS
   have hcap : ∀ u, D.D.size (P.gates u) ≤ Γ ∧ (novelReads D (P.gates u) : ℝ) ≤ α * Γ := fun u =>
     ⟨(hP u).1, (hP u).2.trans (mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα.le)⟩
@@ -119,5 +126,12 @@ theorem updatedMatMul_of_reads (h : Guarantees.UpdatedMatMulReads) : Guarantees.
         field_simp
     _ ≤ α * D.D.size D.D.computed / α := div_le_div_of_nonneg_right hr hα.le
     _ = D.D.size D.D.computed := by field_simp
+
+/-- The reads form gives back `UpdatedMatMul` at `(c, k)`: `updatedMatMul_rate_of_reads` at the rate `k / c`. -/
+theorem updatedMatMul_of_reads (h : Guarantees.UpdatedMatMulReads) : Guarantees.UpdatedMatMul := by
+  intro c k b_w b_a D ch d hc hk hw ha hd hD hA hP
+  have h' := updatedMatMul_rate_of_reads h c (k / c) b_w b_a D ch d (div_pos (Nat.cast_pos.2 hk) (Nat.cast_pos.2 hc))
+    hw ha hd (compliesRate_of_complies hD) (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc])
+  rwa [rate_mul _ hc] at h'
 
 end Nci.SecurityProofs

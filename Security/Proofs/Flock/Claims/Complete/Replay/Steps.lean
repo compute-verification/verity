@@ -4,7 +4,7 @@ import Proofs.Flock.VBridge.Algebra.ZerocheckConverse
 /-!
 # Replaying the honest rep, one step at a time
 
-The verifier replays a rep from the session record's rounds (`bindAndZerocheckWith`, …, PROTOCOL.md §6–§14); the honest
+The verifier replays a rep from the session record's rounds (`bindAndZerocheckWith`, …, `Flock.Transcript`, `Flock.Draw`, `Flock.Proof`, `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`); the honest
 prover (`repP` in the pure session `PS`, `sessionS`) wrote those rounds. Both absorb with the same actions, so their
 pending bytes agree; where the prover sends the framed bytes as a round and records it (`squeezeP`), the verifier reads
 that round back and compares its retained bytes exactly (`squeezeWith`), which calls no hash.

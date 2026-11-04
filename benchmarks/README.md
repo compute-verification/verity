@@ -23,6 +23,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | --- | --- | --- |
 | `harness/` | `verity-bench`: specs, recorded runs, sweeps and results for an arm against stock vLLM, and the served table of each protocol's overhead | maintained |
 | `specs/` | the harness's specs and sweeps, one TOML file each | maintained |
+| `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
 | `g2/` | the served Commit's overhead curve over stock, rendered from the evidence store; it measures nothing itself | maintained |
 | `vllm_encoded/` | Llama-3.1-8B in vLLM with its weights and KV cache held as codec words and receipted by PoUB, as `verity-bench` arms beside the plain stack | maintained |
@@ -44,6 +45,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `tc_probe_fp4/` | the FP4 path on Blackwell: its conversions bit for bit, and cheaper multipliers (sparse, Strassen, lookup tables) priced against dense NVFP4 | maintained |
 | `native_peak/` | a card's measured dense-GEMM throughput for one datatype (`native-peak/v1`) | maintained |
 | `int8_class_rate/` | the H200's sustained int8 rate per operand class at the declared clock, alone and beside SHA-512 at a ratio of compressions a T MAC (timings only) | maintained |
+| `tensor_duty/` | the falsification test of the H200 card's tensor clock: dense tensor MACs a second over the host's wall clock by tensor duty cycle, operand class and fill, at maximum power, against 132 x 4096 x `clock.tensor` (timings only) | maintained |
 
 ## Proving and recursion
 
@@ -100,6 +102,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `ppl/` | the perplexity an intervention on a served model's matmuls or attention costs, against bf16 and plain int8 | maintained |
+| `f32_exhaustive/` | a correctly rounded reference primitive (`F32LogRn_v1`, `F32ExpRn_v1`) against MPFR on all 2^32 binary32 words | maintained |
 | `numerical/` | the bench spine (`verity_numerical.bench`) that C-Flock and `circuit-check` import, and the per-unit-type cost inventory; the archived proof systems' tables are in the evidence store | frozen |
 
 ## Census data

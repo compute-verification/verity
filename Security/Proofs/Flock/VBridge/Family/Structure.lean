@@ -415,8 +415,8 @@ def toF128 (a : 𝔽) : F128 := a
 
 /-- **The verifier's setup of a statement realizes its model statement** (`Setup.ofCircuit`, `Verify.lean:29-32`): its
 `m` and `k_log` are the statement's, its fold realizes `stmtOf`'s (`ofCircuit_fold`), and at every pair of link points
-the arrays holding them give extra claims (`extraClaims_exists`) that realize the model's (`ofCircuit_extra`), §5 and
-§16.2. The schedule is `fast100`'s at `m` (whose range gives `14 ≤ m`) and the scheme the statement's. -/
+the arrays holding them give extra claims (`extraClaims_exists`) that realize the model's (`ofCircuit_extra`; `Flock.Record`,
+`Flock.Statement`'s regions). The schedule is `fast100`'s at `m` (whose range gives `14 ≤ m`) and the scheme the statement's. -/
 theorem setupRealizes_ofCircuit (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st) {sch : Flock.Schedule}
     (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (hf : Flock.fast100 st.m = some sch)
     (hb : RegionBytes st) :
@@ -489,7 +489,7 @@ theorem nOpen_pos : 0 < F.nOpen := by
 **The circuit of a level's statement names its unit as the statement**, `RecOpen.unitName LANES H`: `circuitFile`
 writes the unit of `recOpenUnit LANES H` under `Stmt.name` (`Stage.lean:44`, `Compose.lean:217,233`) and `HmRow.parse`
 reads it as the circuit's unit (`hfile`); established by the emit/parse round trip of `circuitFile`, as `HUnitName`
-for the parts (the lane that proves `hfile`). -/
+for the parts. -/
 def HOpenName : Prop :=
   ∀ (j : Fin F.stmts.size) ℓ LANES H m, F.stmts[j] = .recOpen ℓ LANES H m →
     (F.Vs j).c.unit.name = Flock.RecOpen.unitName LANES H
@@ -512,7 +512,7 @@ theorem hOpenUnits_of (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenN
 
 /-- Obligation: discharged by the verifier's check 6, whose pass is `ps.size =
 gs.size`.
-**The verifier's part-count check passes** (the verifier's gap; lane hv's check): at the inner shape `vsh` (the `m`,
+**The verifier's part-count check passes** (the verifier's gap): at the inner shape `vsh` (the `m`,
 `k_log` and claims of the parts' unit names, `RecResiduals.params`), the verifier evaluates V*'s parts,
 `VStar.parts (VStar.Algebra.spec vsh)` (`Parts.lean:54-105`), and its own, `groups (structureOf sh) (portSizes sh)`
 (`partsOf`, `RecResiduals.lean:119-139`), and refuses when they number differently. Both are the same first-fit packing,

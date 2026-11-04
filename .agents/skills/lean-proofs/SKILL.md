@@ -148,7 +148,7 @@ repository.
   one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails` are;
   failing either, it says nothing. `check.py` holds them to it (`witnesses`): both lemmas build their instance, taking
   only listed assumptions; an exclusion's nontrivial lemma is a circuit where the other premises hold and one named
-  premise and the bound fail.
+  premise and the bound fail, or, for an exclusion that takes no premise, a circuit where a tighter bound fails.
 - A property's premises are assumptions about the world the function can't see; what the code can see, it checks. A
   condition picking out what the conclusion talks about goes inside the conclusion. Completeness theorems are not claims:
   they live in `Proofs/` with one concrete instance where the honest case holds.
@@ -159,3 +159,7 @@ repository.
 - What a physical region reads is not a premise: it follows from the actual circuit's regions and causality
   (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per
   server-window is stated on `Accounting.Placed` with `WindowsAt`.
+- Verifier code compares `Json` by a match the kernel reduces, never by `BEq Json`'s `==`, a `partial def` no proof can
+  read. A string is compared by `SampledProofs.jsonStrIs`, which `Properties.Pouw.LiveSalt.jsonStrIs_eq` reads back.
+  Replacing such an `==` or a partial reading with a total one that means the same (it refuses on every parse failure
+  and never defaults) changes no claim: the lane makes the change and tells the code's owner.

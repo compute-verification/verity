@@ -3,7 +3,7 @@ import Proofs.Flock.Claims.Complete.Replay.RingSwitch
 /-!
 # Ligerito replays the honest prover's rounds
 
-PROTOCOL.md §13–§14 at the honest run: the verifier's Ligerito (`ligeritoWith`) on the rounds the session recorded.
+`Flock.Ligerito`, `Flock.Merkle` at the honest run: the verifier's Ligerito (`ligeritoWith`) on the rounds the session recorded.
 -/
 
 namespace FlockComplete.Replay

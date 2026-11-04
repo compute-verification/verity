@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.Refine.Lincheck
 
 /-!
-# Ring switching and batching refine the model's opening (PROTOCOL.md §12)
+# Ring switching and batching refine the model's opening (`Flock.Opening`)
 
 `opening_refines`: if the executable's `ringSwitch` succeeds on claims that are the model's (`ClaimRel`), the model's
 `opening`, played with the proof's ring switches (`opMsgs`) and the coins of the rounds consumed, returns `some op`,
@@ -46,7 +46,7 @@ theorem bit_testBit (a : F128) (u : ℕ) (hu : u < 128) : a.bit u = (w128 a.lo a
   · exact uint_bit a.lo u h
   · exact uint_bit a.hi (u - 64) (by omega)
 
-/-- **Bits are the packing basis's coordinates** (§12.1): `unpack` reads bit `u` of the word. -/
+/-- **Bits are the packing basis's coordinates** (`Flock.Opening`): `unpack` reads bit `u` of the word. -/
 theorem unpack_fOf (a : F128) (u : Fin 128) : unpack (fOf a) u = if a.bit u.val then 1 else 0 := by
   show (F128.poly a).coeff u = _
   rw [F128.poly, coeff_natPoly, ← bit_testBit a u u.isLt]
@@ -56,7 +56,7 @@ theorem sum_unpack (f : Fin 128 → 𝔽) (i : Fin 128) : unpack (∑ v, f v) i 
   have := map_sum FlockLevel3.unpackHom f Finset.univ
   exact congrFun this i |>.trans (Finset.sum_apply i Finset.univ fun v => FlockLevel3.unpackHom (f v))
 
-/-- **`pack` is the sum of the monomials `x^v` of the set bits** (§12.1). -/
+/-- **`pack` is the sum of the monomials `x^v` of the set bits** (`Flock.Opening`). -/
 theorem pack_eq_sum (b : Fin 128 → ZMod 2) :
     pack b = ∑ v : Fin 128, if b v = 1 then fOf (F128.monomial v) else 0 := by
   have h : unpack (∑ v : Fin 128, if b v = 1 then fOf (F128.monomial v) else 0) = b := by
@@ -72,7 +72,7 @@ theorem pack_eq_sum (b : Fin 128 → ZMod 2) :
   rw [h] at e
   exact e
 
-/-- The executable's bit transpose (§12.3): bit `v` of `t[u]` is bit `u` of `s[v]`. -/
+/-- The executable's bit transpose (`Flock.Opening`): bit `v` of `t[u]` is bit `u` of `s[v]`. -/
 def tOf (s : Array F128) : Array F128 :=
   (Array.range 128).map fun u =>
     (Array.range 128).foldl (fun acc v => if s[v]!.bit u = true then acc + F128.monomial v else acc) 0
@@ -111,7 +111,7 @@ theorem eqTable_vecOf (r : Array F128) (n : ℕ) (hn : r.size = n) (b : ℕ) (hb
   rw [eqTable_eqAt r b hb]
   rfl
 
-/-- **The recombined value** (§12.3): `β = Σ_u eq(r'', u)·t[u]` is the model's `recombine`. -/
+/-- **The recombined value** (`Flock.Opening`): `β = Σ_u eq(r'', u)·t[u]` is the model's `recombine`. -/
 theorem recombine_eq (s rpp : Array F128) (hrpp : rpp.size = 7) :
     fOf (dot (eqTable rpp) (tOf s)) = Model.recombine execArith (vecOf 128 s) (vecOf 7 rpp) := by
   rw [fOf_dot _ _ 128 (by rw [eqTable_size, hrpp]; rfl)]
@@ -122,7 +122,7 @@ theorem recombine_eq (s rpp : Array F128) (hrpp : rpp.size = 7) :
 
 /-! ## The per-claim check (O4) -/
 
-/-- The executable's weights of a claim on the 128 packed positions (§12.1). -/
+/-- The executable's weights of a claim on the 128 packed positions (`Flock.Opening`). -/
 def wOf (c : Flock.Claim) : Array F128 :=
   Array.map (fun v => c.skip[v % 64]! * if (v / 64 == 1) = true then c.x[0]! else (1 : F128) + c.x[0]!)
     (Array.range 128)
@@ -234,7 +234,7 @@ theorem getD_zipIdx_map {α β : Type} (l : List α) (f : α × ℕ → β) (k :
     ((l.zipIdx 0).map f).getD k d = f (l[k], k) := by
   rw [List.getD_eq_getElem _ _ (by simpa using hk), List.getElem_map, List.getElem_zipIdx, Nat.zero_add]
 
-/-- **Ring switching and batching refine the model's opening** (PROTOCOL.md §12). If the executable's `ringSwitch`
+/-- **Ring switching and batching refine the model's opening** (`Flock.Opening`). If the executable's `ringSwitch`
 succeeds from `t` to `t'` on claims that are the model's `cs'`, the model's opening of `cs'`, played with the proof's
 ring switches and the coins of the rounds consumed, returns the executable's batched value and basis. -/
 theorem opening_refines (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) (cs' : List (Model.Claim 𝔽 m))
