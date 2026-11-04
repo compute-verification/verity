@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishSwVals
-import Proofs.Flock.Claims.ZK.FinishInnerAt
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwVals
+public import Proofs.Flock.Claims.ZK.FinishInnerAt
 
 /-!
 # The switched source's cut at its inner proof's first round, from the firewall's rep
@@ -12,6 +14,8 @@ anything past its first round.
 
 * **`swSrcE_repCut_fc_v`**: `repCut_fw_inner_at` at the switched source at `v`.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

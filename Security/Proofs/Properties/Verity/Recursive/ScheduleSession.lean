@@ -1,5 +1,7 @@
-import Proofs.Properties.Verity.Recursive.ScheduleInner
-import Proofs.Flock.Claims.Recursion.RecRecord
+module
+
+public import Proofs.Properties.Verity.Recursive.ScheduleInner
+public import Proofs.Flock.Claims.Recursion.RecRecord
 
 /-!
 # The recursive verifier's schedule: one V* session
@@ -19,6 +21,8 @@ acceptance (`sessOut … .acc`: `.acc` at the last session, else `.msg []`), and
 to session `s + 1` (`session_end`). The session's earlier rounds are answered by their coins (`session_mid`), so the
 coins its view shows are the run's own, but for the last one, which no decision reads (`nextO_last_coin`).
 -/
+
+@[expose] public section
 
 namespace Verity.Recursive.Schedule
 

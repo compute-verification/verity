@@ -1,4 +1,6 @@
-import Proofs.Flock.SessionLoop.Statement
+module
+
+public import Proofs.Flock.SessionLoop.Statement
 
 /-!
 # The session loop's own rounds of the inner proof
@@ -25,6 +27,8 @@ proves `LoopInnerRound0` at it, at every finish:
 * `Flock.SecurityProofs.LoopInnerRound0Own : Flock.Guarantees.LoopInnerRound0Own`: `LoopInnerRound0` holds at
   `withInner`, at every `fin`, `final_c'` the first word past the label frame and its header of the finish's round 0.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

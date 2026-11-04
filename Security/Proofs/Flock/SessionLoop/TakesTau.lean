@@ -1,4 +1,6 @@
-import Proofs.Flock.SessionLoop.TakenVals
+module
+
+public import Proofs.Flock.SessionLoop.TakenVals
 
 /-!
 # The worker's `τ` commitment
@@ -13,6 +15,8 @@ leaf of the worker's view's `τ` under the rep's salt (`Masked.swSrcE_tauCom`).
 rounds, because `valsDev` sets round 2's commitment to `vs`'s (`Loop.setTau`); at the honest values at the session loop
 among them (`Loop.takesTau_honestVals_ofLoopLink`), beside `TakesVals` and `TakesFinalC` at the same worker.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

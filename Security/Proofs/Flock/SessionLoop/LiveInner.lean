@@ -1,5 +1,7 @@
-import Proofs.Flock.SessionLoop.TakenVals
-import Proofs.Flock.SessionLoop.Inner
+module
+
+public import Proofs.Flock.SessionLoop.TakenVals
+public import Proofs.Flock.SessionLoop.Inner
 
 /-!
 # The session loop's frame past the inner proof's label
@@ -28,6 +30,8 @@ no word of the round and releases it as it came:
   rounds (`Loop.InnerAt`) `withInner`'s session loop releases the inner proof's round `Loop.innerOf` schedules, as it
   came, after a live run's device round.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

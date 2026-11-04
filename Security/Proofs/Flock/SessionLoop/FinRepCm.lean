@@ -1,7 +1,9 @@
-import Proofs.Flock.SessionLoop.FinRep
-import Proofs.Flock.SessionLoop.FinCommits
-import Proofs.Flock.SessionLoop.Tables
-import Proofs.Flock.Claims.ZK.FinishLevel0
+module
+
+public import Proofs.Flock.SessionLoop.FinRep
+public import Proofs.Flock.SessionLoop.FinCommits
+public import Proofs.Flock.SessionLoop.Tables
+public import Proofs.Flock.Claims.ZK.FinishLevel0
 
 /-!
 # Level 0's commitment from the views is the loop's table's
@@ -19,6 +21,8 @@ loop's `Level0` by `Finish.commitOf`), as `Loop.repCut_eraseZ` asks of the two c
   of `Masked.linkIn` at level 0 of table `j`'s `--zk` schedule.
 * **`Loop.cms_cm0`**: so the views' commitment and the table's have one cap and one tree.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

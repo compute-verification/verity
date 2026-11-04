@@ -1,6 +1,8 @@
-import Proofs.Flock.SessionLoop.FinHmkCut
-import Proofs.Flock.Claims.ZK.RepRet
-import Proofs.Flock.Claims.ZK.FrameUnrefused
+module
+
+public import Proofs.Flock.SessionLoop.FinHmkCut
+public import Proofs.Flock.Claims.ZK.RepRet
+public import Proofs.Flock.Claims.ZK.FrameUnrefused
 
 /-!
 # The cut session in a rep's PIOP, on the opened coins alone
@@ -19,6 +21,8 @@ each earlier rep's `β` round is before the next rep's first, so where the coins
   history holds from a rep's first round up to its rank check's: `N` can be rep `2j + r`'s first round, and in its PIOP
   the history's length.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
