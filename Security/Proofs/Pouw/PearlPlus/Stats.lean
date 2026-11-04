@@ -5,9 +5,9 @@ import Proofs.Pouw.PearlPlus.Rho
 # Pearl+'s bridge, part (b), the row statistics: `s5_stats` is `pc8`'s
 
 `Words.s5Stats` folds a row's `max(m, w & 0x7FFFFFFF)`, runs the FMA partials of `x²` over every 8th word into 32
-accumulators and their butterfly, and forms `ρ = √(sum / n)`, `α = 448 / max(s + 4ρ, 2⁻³²)` and `β = ρ·α·2^(−19/2)`.
-`statsAreTheRow` says these are `pc8`'s `rowRho`, `alpha8` and `beta8` on core's primitives at the row's values
-re-encoded.
+accumulators and their butterfly, and forms `ρ = √(sum / n)`, `α = 448 / max(s + 4ρ, 2⁻³²)` and
+`β = ρ·α·2^(−19/2)`. `statsAreTheRow` says these are `pc8`'s `rowRho`, `alpha8` and `beta8` on core's primitives at
+the row's values re-encoded.
 
 Each step is the row's primitive on the same words: the add where its sum is finite (`fp32AddIsTheSpec`, the check's
 `finite` guarding every sum), the root where ρ is finite (`sqrtIsTheSpec`, `statsRhoIsFinite`), and core's multiply,
@@ -210,9 +210,10 @@ theorem max_fold (x : Array ℕ) (hx : 0 < x.size) :
 /-! ### The check's loops -/
 
 /-- A `for` loop over a list that returns `.ok` keeps an invariant its body keeps. -/
-theorem forIn_inv {α γ : Type} (P : ℕ → γ → Prop) {body : α → γ → Except String (ForInStep γ)} (l : List α) :
-    ∀ (i : ℕ) {x y : γ}, P i x →
-      (∀ j (hj : j < l.length) z r, P (i + j) z → body l[j] z = .ok r → ∃ z', r = .yield z' ∧ P (i + j + 1) z') →
+theorem forIn_inv {α γ : Type} (P : ℕ → γ → Prop) {body : α → γ → Except String (ForInStep γ)}
+    (l : List α) : ∀ (i : ℕ) {x y : γ}, P i x →
+      (∀ j (hj : j < l.length) z r, P (i + j) z → body l[j] z = .ok r →
+        ∃ z', r = .yield z' ∧ P (i + j + 1) z') →
       forIn l x body = .ok y → P (i + l.length) y := by
   induction l with
   | nil =>
@@ -256,9 +257,10 @@ theorem fma_step {x : Array ℕ} {j : ℕ} {p : Array ℕ} {v : ℕ} (hp : FmaIn
     have hc : (if j < 32 then 0 else fmaAcc coreOps .id (fun l => x[l]!) (j - 32)) = p[j % 32]! := by
       rw [hpe]
       by_cases h32 : j < 32
-      · rw [if_pos h32, if_neg (show ¬ j % 32 < j by omega)]
-      · rw [if_neg h32, if_pos (show j % 32 < j by omega), show accLast j (j % 32) = j - 32 by unfold accLast; omega]
-    rw [if_pos (show j % 32 < j + 1 by omega), show accLast (j + 1) (j % 32) = j by unfold accLast; omega,
+      · rw [ite_eq_left h32, ite_eq_right (show ¬ j % 32 < j by omega)]
+      · rw [ite_eq_right h32, ite_eq_left (show j % 32 < j by omega),
+          show accLast j (j % 32) = j - 32 by unfold accLast; omega]
+    rw [ite_eq_left (show j % 32 < j + 1 by omega), show accLast (j + 1) (j % 32) = j by unfold accLast; omega,
       fmaAcc.eq_1]
     simp only [Wire.eval]
     rw [hc, eval_fma, Nat.mod_eq_of_lt (show Verity.Fp32.f32FmaV2 x[8 * j]! x[8 * j]! p[j % 32]! < 2 ^ 32 by
@@ -268,11 +270,14 @@ theorem fma_step {x : Array ℕ} {j : ℕ} {p : Array ℕ} {v : ℕ} (hp : FmaIn
     refine ⟨?_, hplt⟩
     rw [hpe]
     by_cases hlt : i < j
-    · rw [if_pos hlt, if_pos (show i < j + 1 by omega), show accLast (j + 1) i = accLast j i by unfold accLast; omega]
-    · rw [if_neg hlt, if_neg (show ¬ i < j + 1 by omega)]
-theorem fma_loop {x : Array ℕ} {n : ℕ} {body : ℕ → Array ℕ → Except String (ForInStep (Array ℕ))} {p : Array ℕ}
-    (hbody : ∀ i r y, body i r = .ok y →
-      ∃ v, Words.finite (Verity.Fp32.f32FmaV2 x[8 * i]! x[8 * i]! r[i % 32]!) = .ok v ∧ y = .yield (r.set! (i % 32) v))
+    · rw [ite_eq_left hlt, ite_eq_left (show i < j + 1 by omega),
+        show accLast (j + 1) i = accLast j i by unfold accLast; omega]
+    · rw [ite_eq_right hlt, ite_eq_right (show ¬ i < j + 1 by omega)]
+
+theorem fma_loop {x : Array ℕ} {n : ℕ} {body : ℕ → Array ℕ → Except String (ForInStep (Array ℕ))}
+    {p : Array ℕ} (hbody : ∀ i r y, body i r = .ok y →
+      ∃ v, Words.finite (Verity.Fp32.f32FmaV2 x[8 * i]! x[8 * i]! r[i % 32]!) = .ok v ∧
+        y = .yield (r.set! (i % 32) v))
     (h : forIn [:n] (Array.replicate 32 0) body = .ok p) : FmaInv (fun l => x[l]!) n p := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h
   have := forIn_inv (FmaInv (fun l => x[l]!)) _ 0 (fmaInv_zero _) (fun j hj z r hz hr => by
@@ -327,8 +332,8 @@ theorem bfly_step {n : ℕ} {F : ℕ → ℕ} {j o : ℕ} (hj : j < 5) (ho : o =
   · simp only [hin, ↓reduceIte, show ¬ i + o < n by omega] at h ⊢
     rw [(finite_ok h).1, add00]
 
-theorem bfly_loop {n : ℕ} {F : ℕ → ℕ} {body : ℕ → Array ℕ → Except String (ForInStep (Array ℕ))} {p q : Array ℕ}
-    (hbody : ∀ o r y, body o r = .ok y →
+theorem bfly_loop {n : ℕ} {F : ℕ → ℕ} {body : ℕ → Array ℕ → Except String (ForInStep (Array ℕ))}
+    {p q : Array ℕ} (hbody : ∀ o r y, body o r = .ok y →
       ∃ r', (Array.range 32).mapM (fun j => Words.finite (Verity.Fp32.f32AddV2 r[j]! r[j ^^^ o]!)) = .ok r' ∧
         y = .yield r')
     (h0 : BflyInv n F 0 p) (h : forIn [16, 8, 4, 2, 1] p body = .ok q) : BflyInv n F 5 q := by
@@ -382,7 +387,7 @@ theorem stats_V {x : Array ℕ} {s ρw αw βw : ℕ} (hk0 : 0 < x.size) (hk8 : 
       exact ⟨r', by rwa [eAdd] at hm, (pure_ok hy).symm⟩)
       ⟨hF.1, fun i hi => (hF.2 i hi).2, fun i hi => (hF.2 i hi).1⟩ hp2
   have hp0 : p2[0]! = sumSq coreOps .id (fun l => x[l]!) (x.size / 8) := by
-    rw [hB.2.2 0 (by norm_num), if_pos hn0]; rfl
+    rw [hB.2.2 0 (by norm_num), ite_eq_left hn0]; rfl
   have hp031 : p2[0]! < 2 ^ 31 := hB.2.1 0 (by norm_num)
   have hofs := ofInt_eq hn0 hn24
   have hq31 : Verity.Fp32.f32DivV2 p2[0]! (Words.ofInt ↑(x.size / 8)) < 2 ^ 31 :=
@@ -418,8 +423,8 @@ theorem stats_V {x : Array ℕ} {s ρw αw βw : ℕ} (hk0 : 0 < x.size) (hk8 : 
     have hc := CoreOps.wordQ_lt_iff (show 0x2F800000 < 2 ^ 31 by norm_num) ht31 hFl hxt
     rw [Nat.max_def]
     by_cases hlt : 0x2F800000 < t
-    · rw [if_pos (Or.inr ⟨xt, hxt, hc.2 hlt⟩), if_neg (show ¬ t ≤ 0x2F800000 by omega)]
-    · rw [if_pos (show t ≤ 0x2F800000 by omega), if_neg]
+    · rw [ite_eq_left (Or.inr ⟨xt, hxt, hc.2 hlt⟩), ite_eq_right (show ¬ t ≤ 0x2F800000 by omega)]
+    · rw [ite_eq_left (show t ≤ 0x2F800000 by omega), ite_eq_right]
       rintro (h | ⟨x', hx', hlt'⟩)
       · exact hne h
       · rw [hxt] at hx'
