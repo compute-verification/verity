@@ -12,9 +12,10 @@ Sampled proofs (`verity/sampled-proofs/v1`) is a subprotocol of both composite p
 `verity/core/protocols/remote/`) composes it with PoUW's period (`verity/pouw/period/v1`) and the inference-only
 policy, and onsite (`verity/core/protocols/onsite/`) with the other subprotocols. Each composite's verifier runs
 `VStar.Recursive.Sampled`'s Lean check in the form its params name: one-stage v2 (`verity/sampled-proofs/one-stage/v2`,
-the audit on the proofs) or the recursive audit (`verity/sampled-proofs/recursive/v1`). One-stage v1, whose verdicts
-are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form naming no `proofs`). The composite accepts only
-when every component accepts.
+the audit on the proofs) or the recursive audit (`verity/sampled-proofs/recursive/v1`, V*'s compiled check, which ends in
+the one-stage audit's live check on its verdict of record). One-stage v1, whose verdicts are the evidence's, is refused
+by name (`V1_REFUSED`: a one-stage form whose params or evidence name no `proofs`). The composite accepts only when
+every component accepts.
 
 ## Guarantee and assumptions
 
@@ -142,8 +143,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   the session's record to the coin trees the signed release log shows the challenger sampled and opened
   (`SampledProofs/ChallengerTrees.lean`, `challenger.sessions_tree_reason`): its `coin_tree` the one tree logged, its
   link points and round coins that tree's openings after its link's roots and each round's message. Then it runs
-  `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds
-  `proved_units` to what the session proved, and hands its verdict to v1's `checkAt` at those coins.
+  `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, accepts
+  the session only if the public file's units are the population in order (`FilePart.check`), binds `proved_units` to
+  what the session proved, and hands its verdict to v1's `checkAt` at those coins.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
   to `verify`'s. Onsite and remote read v2 as `VStar.Recursive.Sampled`'s one-stage form, and refuse v1.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
@@ -291,8 +293,9 @@ It then writes a receipt (`receipt`, `verity/registration-receipt/v1`), and only
 file to the record (`matches_public`), which `FailClosed.flock_verify_public_ties` ties to the proved rows. The Lean
 verifier runs the same check (`SampledProofs.Registration.check`), and `Properties.SampledProofs.R1` to `R7`
 state what it accepts. `verity/core/service/sampled_proofs/tests/test_difftest.py` holds the Python to the Lean. The
-challenger's `service.Registration` is a record it accepted, with its receipt and its position in the stream. The
-format, each check's codes and the window domains (`window_domain`) are in `one_stage.registration`'s docstring.
+challenger's `service.WindowCommitmentRecord` is a record it admitted, with its receipt and its position in the
+stream. The format, each check's codes and the window domains (`window_domain`) are in `one_stage.registration`'s
+docstring.
 
 Pinned by `tests/test_one_stage.py`, and the window domain also by `integrations/vllm/tests/commit/test_serving_rows.py`.
 
@@ -354,11 +357,10 @@ digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`.
   rule (`partition.digest`).
 
 The Lean verifier's executable reads the same object (`Flock/HmRow.lean`, `Flock/TemplateQuery.lean`), but no theorem
-states it. Pinned by core's `verity/ml/circuits/tests/partition_vectors.json` and `template_instance_vectors.json`,
-which `tests/test_one_stage.py` replays (`test_the_partition_is_cores_on_the_pinned_q_word_vector`,
-`test_the_partition_is_cores_on_the_pinned_template_vectors`, `test_the_partition_refuses_what_core_refuses`,
-`test_a_malformed_query_has_no_units_and_no_digest`, `test_a_program_that_is_not_topological_has_no_units`,
-`test_a_pre_canonical_object_keeps_its_digest`).
+states it. The guarantees read the circuit file's partition, `Flock.Bridge.partOf`; that the deployed record's is it
+is `RelDeployTarget`'s hypothesis, discharged once the layout is built from `FilePart.ofCircuit`. Pinned by
+core's `verity/ml/circuits/tests/partition_vectors.json` and `template_instance_vectors.json`, which
+`tests/test_one_stage.py` replays, with the object's refusals and digest.
 
 ### Sampling designs as text and as registered
 

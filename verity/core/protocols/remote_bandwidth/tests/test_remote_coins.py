@@ -228,7 +228,7 @@ def test_the_session_the_ledger_opens_for_its_window_is_trusted(store, tmp_path,
 OFF_MAIN = ("session s-r ran commit {}, which the host's pins log records but which is not on main's first-parent line "
             "in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit merged into main is in "
             "main's history but no tree main's check ran on; repin the challenger host to a commit on main's "
-            "first-parent line (vy-challenger-pin) and rerun the window there")
+            "first-parent line (with its pin command) and rerun the window there")
 
 
 @pytest.mark.parametrize("case", ["no-pins", "unsealed", "unlogged", "branch", "no-main", "stale-main"])
@@ -267,7 +267,7 @@ def test_a_session_is_trusted_only_from_a_logged_pin_on_mains_first_parent_line(
                         "window on a host whose gate seals its pins log in each open"),
            "unlogged": (f"session s-r ran commit {MAIN[1]}, which the host's pins log doesn't record as a commit of "
                         "main's history: repin the challenger host to a commit origin/main contains "
-                        "(vy-challenger-pin) and rerun the window there"),
+                        "(with its pin command) and rerun the window there"),
            "branch": OFF_MAIN.format(BRANCH), "stale-main": OFF_MAIN.format(PIN)}[case]
     for period in (None, "p-1"):
         assert s.trusted_reason(service.directory, [ledger.path], key(), pins, main, verify, period) == (
