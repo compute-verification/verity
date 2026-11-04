@@ -315,6 +315,7 @@ DEFENCES = {
         0.02, "margin", exact=True),
     "4, 70B's four exact, gate/up deflated by 32 where that clears": operating(0.02, "margin", exact=True,
                                                                                deflate=True),
+    "4, 70B's four exact, down_proj in K chunks of 7,168": operating(0.02, "margin", down="chunks", exact=True),
     "2 and 4, 70B's four exact: clip up to 10% where it clears, else at a margin": operating(0.1, "margin",
                                                                                            exact=True),
     "2 and 4, 70B's four exact: clip up to 5% where it clears, else at a margin": operating(0.05, "margin",
