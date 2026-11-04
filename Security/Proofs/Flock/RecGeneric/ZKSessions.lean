@@ -32,6 +32,12 @@ the session simulator's calls, so it is counted where the session simulator is.
 `GenericRecursiveSessionsZK` and `GenericRecursiveSessionsZKCost` are Z1 and Z1-cost at the release of a first part
 (`FirstPart`) and these sessions (`ZkRelease.ofSessions`).
 
+A proof system's simulator, Flock's server's among them, draws coins of a type its statement fixes, which a session
+statement's commitments may change. `ZkSess.ofZKOut` is its session system at finite sets `Xs x` of the session statements
+each compiled statement admits: the session simulator under `x` draws one of the system's tapes for each statement in
+`Xs x` and runs the system's simulator on its own statement's. `GenericSessionsOfZKOut` (Z1-L): that is zero knowledge
+per outcome within the system's own error, and `GenericSessionsOfZKOutCost` (Z1-L-cost) counted at the system's calls.
+
 Statements only: definitions, no proofs.
 -/
 
@@ -103,6 +109,25 @@ instance coinsFin (S : ZkSess) (x : Msg) : ∀ m, Fintype (S.coins x m)
 instance coinsNe (S : ZkSess) (x : Msg) : ∀ m, Nonempty (S.coins x m)
   | 0 => inferInstanceAs (Nonempty Unit)
   | m + 1 => letI := coinsNe S x m; inferInstanceAs (Nonempty (S.CS x × S.coins x m))
+
+/-- **The session system of a zero-knowledge system whose simulator's coins are its statement's**, at the finite sets
+`Xs x` of session statements each compiled statement admits: the session relation under `x` is `R` at the statements in
+`Xs x`; the session simulator's coins under `x` are one tape of `S` for each statement in `Xs x`, and at a session
+statement in `Xs x` it runs `S` on that statement's tape (elsewhere it sends nothing, and no witness is in the
+relation there). -/
+def ofZKOut {W : Type} (R : Rel W) (k : Msg → ℕ) (N Ω : Type) [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω]
+    (P : W → Prover (N × Ω)) {St : Type} (out : Msg → List (Msg × Out) → St) (S : SimOut St)
+    (Xs : Msg → Finset Msg) : ZkSess where
+  WS := W
+  RS x xs w := xs ∈ Xs x ∧ R xs w
+  kS := k
+  NS _ := N
+  ΩS _ := Ω
+  PS w _ := P w
+  StS := St
+  outS := out
+  CS x := (v : Xs x) → S.C v
+  progS x xs o c := if h : xs ∈ Xs x then S.prog xs o (c ⟨xs, h⟩) else .ret []
 
 end ZkSess
 
@@ -296,5 +321,27 @@ def GenericRecursiveSessionsZKCost : Prop :=
     ZKMal.SimCostLe H ((ZkRelease.ofSessions F L).sim.given none) (fun x => F.nh x * (cF x + 1) + L.ko x) ∧
       ∀ o, ZKMal.SimCostLe H ((ZkRelease.ofSessions F L).sim.given (some o))
         (fun x => F.nh x * (cF x + 1) + L.n x * cS x)
+
+/-- **Z1-L: a zero-knowledge system is a session system at no cost in error.** Where a prover on a tape `N × Ω` is zero
+knowledge per outcome within `ε` at a simulator whose coins are its statement's, its session system at any finite sets
+`Xs` of session statements (`ZkSess.ofZKOut`) is zero knowledge per outcome within the same `ε`: one tape for each
+statement in `Xs x`, of which the session reads its own statement's, is that statement's tape. -/
+def GenericSessionsOfZKOut : Prop :=
+  ∀ (H : Msg → Msg) {W : Type} (R : Rel W) (k : Msg → ℕ) (N Ω : Type) [Fintype N] [Nonempty N] [Fintype Ω]
+    [Nonempty Ω] (P : W → Prover (N × Ω)) {St : Type} (out : Msg → List (Msg × Out) → St) (S : SimOut St)
+    (Xs : Msg → Finset Msg) (ε : Msg → W → (Θ : Type) → VStar Θ → Θ → St → ℝ),
+    ZKOut (fun _ => N) (fun _ => Ω) H k (fun w _ => P w) R out S ε →
+      (ZkSess.ofZKOut R k N Ω P out S Xs).ZK H fun _ => ε
+
+/-- **Z1-L-cost: its session simulator is counted where the system's is.** Where the system's simulator makes at most
+`c_S(x)` calls at every statement in `Xs x`, outcome and coin, against every verifier, so does the session simulator
+under `x`, at every session statement. -/
+def GenericSessionsOfZKOutCost : Prop :=
+  ∀ (H : Msg → Msg) {W : Type} (R : Rel W) (k : Msg → ℕ) (N Ω : Type) [Fintype N] [Nonempty N] [Fintype Ω]
+    [Nonempty Ω] (P : W → Prover (N × Ω)) {St : Type} (out : Msg → List (Msg × Out) → St) (S : SimOut St)
+    (Xs : Msg → Finset Msg) (cS : Msg → ℕ),
+    (∀ x, ∀ xs ∈ Xs x, ∀ o (c : S.C xs) ask, ((S.prog xs o c).eval H ask).2 ≤ cS x) →
+      ∀ x xs o (c : (ZkSess.ofZKOut R k N Ω P out S Xs).CS x) ask,
+        (((ZkSess.ofZKOut R k N Ω P out S Xs).progS x xs o c).eval H ask).2 ≤ cS x
 
 end Flock.Guarantees

@@ -37,6 +37,8 @@ composition, which bounds the inner stage's failure where every outer extraction
 (`Proofs.Flock.RecGeneric.ZKProof`), the hm96 leaves' hiding (Z2, `Proofs.Flock.RecGeneric.ZKHides`), and the
 compiled simulator's calls (Z1-cost, `Proofs.Flock.RecGeneric.ZKCost`). An outer phase of zero-knowledge sessions in
 turn is zero knowledge per outcome, within the exact sum of the sessions' errors and counted where the session simulator
-is (Z1-S and Z1-S-cost: `Proofs.Flock.RecGeneric.ZKSessions`, proved in `Proofs.Flock.RecGeneric.ZKSessionsProof`). -/
+is (Z1-S and Z1-S-cost: `Proofs.Flock.RecGeneric.ZKSessions`, proved in `Proofs.Flock.RecGeneric.ZKSessionsProof`),
+and so is the release of a first part and those sessions (Z1 at `ZkRelease.ofSessions`). A proof system whose simulator
+draws its statement's coins is such a session system within its own error (Z1-L, `ZkSess.ofZKOut`). -/
 
 @[expose] public section

@@ -19,7 +19,8 @@ the messages so far, swaps its real run for its simulator's at its error. The er
 
 `Flock.SecurityProofs.GenericSessionsZK` is Z1-S and `Flock.SecurityProofs.GenericSessionsZKCost` Z1-S-cost; Z1 and
 Z1-cost at a release whose outer phase is the sessions follow (`Flock.SecurityProofs.GenericRecursiveSessionsZK`,
-`Flock.SecurityProofs.GenericRecursiveSessionsZKCost`).
+`Flock.SecurityProofs.GenericRecursiveSessionsZKCost`). Z1-L (`Flock.SecurityProofs.GenericSessionsOfZKOut`) is exact:
+uniform tapes for every statement in `Xs x`, read at one statement, are a uniform tape of that statement (`Pr_pi_eval`).
 -/
 
 @[expose] public section
@@ -41,6 +42,10 @@ theorem Ex_Pr_comm {α β : Type} [Fintype α] [Fintype β] (q : α → β → P
         (ZKMal.Pr_prod_left (fun p : α × β => q p.1 p.2)).symm
     _ = Pr (fun p : β × α => q p.2 p.1) := (ZKMal.Pr_equiv (Equiv.prodComm β α) (fun p : α × β => q p.1 p.2)).symm
     _ = Ex (fun b => Pr fun a => q a b) := ZKMal.Pr_prod_left (fun p : β × α => q p.2 p.1)
+
+theorem Pr_pi_eval {ι : Type} [Fintype ι] [DecidableEq ι] {β : ι → Type} [∀ i, Fintype (β i)]
+    [∀ i, Nonempty (β i)] (i : ι) (p : β i → Prop) : Pr (fun c : (j : ι) → β j => p (c i)) = Pr p :=
+  (ZKMal.Pr_equiv (Equiv.piSplitAt i β) fun s => p s.1).trans (Pr_fst p)
 
 /-- `V*`'s answers at `x_O` after the prover messages `pre`. -/
 def askAfter (H : Msg → Msg) {Θ : Type} (Vs : VStar Θ) (xO : Msg) (θ : Θ) (pre : List Msg) : List Msg → Out :=
@@ -365,3 +370,25 @@ theorem Flock.SecurityProofs.GenericRecursiveSessionsZKCost : Flock.Guarantees.G
   fun H _ Lv S L F cF cS hF hc =>
     Flock.SecurityProofs.GenericRecursiveZKCost H Lv (ZkRelease.ofSessions F L) cF (fun x => L.n x * cS x) hF
       (Flock.SecurityProofs.GenericSessionsZKCost H S L cS hc)
+
+open Claims Claims.RecGeneric in
+/-- **Z1-L** (`Flock.Guarantees.GenericSessionsOfZKOut`): at a session statement in `Xs x`, the session simulator's
+outcome on the tapes of every statement in `Xs x` is the system's on that statement's tape (`Pr_pi_eval`). -/
+theorem Flock.SecurityProofs.GenericSessionsOfZKOut : Flock.Guarantees.GenericSessionsOfZKOut := by
+  intro H W R k N Ω _ _ _ _ P St out S Xs ε hZ x xs w hw Θ Vs θ hk o Ev
+  obtain ⟨hx, hR⟩ := hw
+  refine le_trans (hZ xs w hR Θ Vs θ hk o Ev) (le_of_eq ?_)
+  congr 1
+  refine (Pr_pi_eval (β := fun v : Xs x => S.C v) ⟨xs, hx⟩ fun c => Ev ((S.given o).out H Vs θ xs c)).symm.trans
+    (Pr_congr fun c => ?_)
+  simp only [Simulator.out, SimOut.given, ZkSess.simAt, ZkSess.ofZKOut, dite_eq_left hx]
+
+open Claims Claims.RecGeneric in
+/-- **Z1-L-cost** (`Flock.Guarantees.GenericSessionsOfZKOutCost`). -/
+theorem Flock.SecurityProofs.GenericSessionsOfZKOutCost : Flock.Guarantees.GenericSessionsOfZKOutCost := by
+  intro H W R k N Ω _ _ _ _ P St out S Xs cS hc x xs o c ask
+  by_cases hx : xs ∈ Xs x
+  · simp only [ZkSess.ofZKOut, dite_eq_left hx]
+    exact hc x xs hx o _ ask
+  · simp only [ZkSess.ofZKOut, dite_eq_right hx]
+    exact Nat.zero_le _
