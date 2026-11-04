@@ -232,7 +232,7 @@ theorem repState_push_flags {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.or
         · exact endFlags_round (s := { s1 with stopped := true }) (q := (out, sx, fr)) hpast hC hcl hl2 hr
       · rw [he'] at ha
         change ({ s1 with stopped := true } : Masker).answer c'' cs = .ok m at ha
-        exact absurd ha (answer_owed_none cs ho1)
+        exact absurd ha (answer_owed_none (s := { s1 with stopped := true }) cs ho1)
     · rw [h3] at ha
       simp only [↓reduceIte] at ha
       exact absurd ha (answer_owed_none cs rfl)
@@ -395,7 +395,6 @@ theorem ofLoop_answered_end (T : CoinLayer.TableData)
   rw [hs'] at hR'
   have hsz := roundsAt_size hR'
   obtain ⟨alg, hal⟩ := schedSoFar_ok_rounds hs'
-  -- the placeholder table: the setup's statement's, at a size the schedule takes
   obtain ⟨hts', ⟨tp, htp⟩, -⟩ := Count.placeholder_tab hph'
   obtain ⟨-, -, hspec, htabs⟩ := FlockComplete.ZkTables.tables_of_setup hL.1 hx
   have hj2 : k / 2 < sts.size := by
@@ -425,7 +424,6 @@ theorem ofLoop_answered_end (T : CoinLayer.TableData)
   have htpd : 2 * t.tPad < 2 ^ 64 := by rw [← hT.2.2.1]; exact hpd
   have hdT : ∀ i, 64 * 2 ^ (t.sch.levels.getD i default).d < 2 ^ 64 := by rw [← hT.2.1]; exact hdd
   obtain ⟨hm36, hkk, hnn, hqq⟩ := Count.sched_facts hz
-  -- the schedule there is the rep's whole schedule
   have hcrs : ((Array.range (j + 1)).map fun i => wordsAt x cs (q' + 1 - (j + 1) + i + 1)).size = j + 1 := by
     rw [Array.size_map, Array.size_range]
   have hfull := Count.schedSoFar_full t (k % 2) dom xs hi _ hal hs' (by rw [hcrs]; omega) hdom hdgt
