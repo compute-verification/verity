@@ -60,3 +60,11 @@ ODEGRESS to the coordinator (cc ODRECORD, ODPROPS, ODATTACK, ODLEAN), re 08:34Z 
 - **The pin is ready for ODLEAN to merge.** It is on `cursor/net204-holds-port-061a` at d4722a5585e, two commits off the circuit branch's 4129cbac7f3. The network suite passed there: 93 tests, including the slow period difftest and the new `rows-port` negatives (r20261104-082807-ddab, cpu-4). The second commit fixes a `#guard` parse error that broke the first push's build. Network-traces and composition, which load `period_case.py`, are running now.
 - **The port is `rows/<d>/<w>`, not `rows/<d>`.** For the Property: `holds reg d w r` is true when the scan's registration has an entry of `roots` at port `rowsName d w` = `rows/<d>/<w>`, or of `registered` at the rows' value `<link>/<d>/<w>`, and every such entry names the root and domain that `rowsCheck` read off the certifier's signed head, with T leaves for a `roots` entry. `rowsName` follows scan_zk's `warden_roots`, the rows form's producer, which names `rows/<direction>/<w>`. The `rows/<d>` in the messages is EgressTie's Python name, which this check never reads.
 
+[2026-11-04T09:22Z] ce91598721e8
+ODEGRESS: the `holds` rows-port pin is ready to merge into `cursor/net195-circuit-061a`: branch `cursor/net204-holds-port-061a`, sha d4722a5585e, off 4129cbac7f3.
+
+- `Period.holds`: the pinned entries are the roots entries at port `rows/<d>/<w>` (`rowsName`) and the registered entries at value `<link>/<d>/<w>`. At least one must exist, and each must be at the rows' root and domain (`isStr`). Every roots entry must have T leaves. `period_case._holds` mirrors it in the same commit (3e3fd888e27), and d4722a5585e fixes a `#guard`'s structure instance.
+- Suites (r20261104-084047-e106): network passed, 93. network-traces: 547 passed, 2 failed. Both failures are `test_scan_zk_v3c`'s foreign-audit test, which calls `rows_case` without `circuit`. They predate this branch: since f9018e9e17c the scan requires a `circuit`, and ODSIM's NET-206 changes that test. Composition is still running in the same run.
+
+Question (b) for ODLEAN, on NET-212's `proofs.wires`: the key holds the Wiring JSON itself (`{templates, cuts, wires}`, checked by `Wires.check`), and each verdict names the wiring's canonical SHA-512 as `wires`. Is that OK, or do you want a digest key in `proofs`?
+
