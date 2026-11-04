@@ -53,6 +53,12 @@
 #      before the replay, leaves the passes the moment it is drawn (`served_verdicts.py coin`: PIECE_DIR/coin.json, put
 #      in the evidence store, preserved where the node holds a store key and else in the node's own store under the same
 #      id, its answer in PIECE_DIR/coin-put.json, which names the run's Attempt carrying out/'s copy as its custody);
+#   4b. once verify wrote its document, `served_passes.py lean` takes the Lean verdict of record, PouwCheck.PearlPlus's
+#      pouw-pearlplus (PEARLPLUS_LEAN_EXE, else built here as served_pouw.sh builds pouw-period, its log
+#      pouw-pearlplus-build.log; one that doesn't build answers nothing), on the same passes, epoch coins, draws and coin
+#      record, within PEARLPLUS_LEAN_TIMEOUT seconds (default 3,600), and writes its answer to PIECE_DIR/pearlplus-lean.json,
+#      the file `served_verdicts.pearlplus_of_record` reads, only where it is the Python verdict's; both verdicts, its
+#      command line and the executable's SHA-256 go to PIECE_DIR/pearlplus-lean-check.json either way;
 #   5. `served_verdicts.py pearlplus` writes the piece (PIECE_DIR/development.json): its verdict, with each pass's salt
 #      held to the serve's live session (`pearlplus_coins`: the session fetched through PEARLC_CHALLENGER_GATE, under
 #      H1_KEY_SHA512 and MAIN_FILE's line; with in-process coins it claims no verdict) and an accept to the published
@@ -243,6 +249,21 @@ if [ -s "$Q/served.json" ]; then
   wait "$V"
   rc=$?
   say "verdict: served_passes.py verify exit $rc after $(took "$t"): $(tail -1 "$Q/verify.log" | cut -c1-400)"
+fi
+
+if [ -s "$P/verify.json" ]; then
+  t=$(date +%s)
+  LX=${PEARLPLUS_LEAN_EXE:-}
+  if [ -z "$LX" ]; then
+    LX=$TREE/verity/core/protocols/pouw/lean/pearlplus/.lake/build/bin/pouw-pearlplus
+    (cd verity/core/protocols/pouw/lean/pearlplus && lake build pouw-pearlplus) > "$Q/pouw-pearlplus-build.log" 2>&1 || {
+      say "lean: pouw-pearlplus doesn't build (its log in the serve dir's private/pearlplus), so no Lean answer is written"
+      LX=; }
+  fi
+  [ -n "$LX" ] && [ -x "$LX" ] || LX=
+  "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py lean --passes "$Q/passes" --verify "$P/verify.json" \
+    --exe "${LX:-none}" --out "$P/pearlplus-lean.json" --timeout "${PEARLPLUS_LEAN_TIMEOUT:-3600}" > "$Q/lean.log" 2>&1
+  say "lean: served_passes.py lean exit $? after $(took "$t"): $(tail -1 "$Q/lean.log" | cut -c1-400)"
 fi
 
 UN=()
