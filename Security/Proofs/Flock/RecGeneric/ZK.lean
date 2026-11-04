@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims.ZKOut
+public import Definitions.Claims.Recursion
 public import Proofs.Flock.Recursive.Statements
 
 /-!
