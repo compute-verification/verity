@@ -17,6 +17,7 @@ public import Proofs.Flock.RecGeneric.OuterProof
 public import Proofs.Flock.RecGeneric.ZKProof
 public import Proofs.Flock.RecGeneric.ZKHides
 public import Proofs.Flock.RecGeneric.ZKCost
+public import Proofs.Flock.RecGeneric.ZKSessionsProof
 
 /-! The recursion as a compiler, generic in the outer argument and the server, over inner protocols with repetition
 extractors: its statements (`Proofs.Flock.RecGeneric.Statement`), the Flock instance's
@@ -34,6 +35,8 @@ composition, which bounds the inner stage's failure where every outer extraction
 `E_O`'s knowledge soundness from the outer argument's (O1), and L2 from L1 and O1
 (`Proofs.Flock.RecGeneric.OuterProof`). Zero knowledge (Z1) from the outer phase's and the leaves' hiding
 (`Proofs.Flock.RecGeneric.ZKProof`), the hm96 leaves' hiding (Z2, `Proofs.Flock.RecGeneric.ZKHides`), and the
-compiled simulator's calls (Z1-cost, `Proofs.Flock.RecGeneric.ZKCost`). -/
+compiled simulator's calls (Z1-cost, `Proofs.Flock.RecGeneric.ZKCost`). An outer phase of zero-knowledge sessions in
+turn is zero knowledge per outcome, within the exact sum of the sessions' errors and counted where the session simulator
+is (Z1-S and Z1-S-cost: `Proofs.Flock.RecGeneric.ZKSessions`, proved in `Proofs.Flock.RecGeneric.ZKSessionsProof`). -/
 
 @[expose] public section
