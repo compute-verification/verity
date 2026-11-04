@@ -271,23 +271,26 @@ theorem valOver_unit : ∀ g, Good g → ∀ v u, P.blocks[v]? = some u → v �
   rw [hb] at hc
   exact Option.some.inj hc
 
-/-- **At a returned gate, `C` run with the faulty proof blocks' gates held has the trace's value.** -/
-theorem valOver_out {g : ℕ} (hout : g ∈ C.outs) (hgd : Good g) :
+/-- **At a returned gate or an input, `C` run with the faulty proof blocks' gates held has the trace's value**: either
+is committed at its proof block's boundary. -/
+theorem valOver_out {g : ℕ} (hout : g ∈ C.outs ∨ C.gates[g]? = some .input) (hgd : Good g) :
     valOver C inp (heldAdv C P F ref) g = traceVal C ref g := by
+  have hbd : ∀ u, C.Boundary u g = true := fun u =>
+    hout.elim (boundary_of_out (u := u)) (boundary_of_input (u := u))
   by_cases hfg : FaultyGate C P F g
   · exact valOver_held (heldAdv_of hfg)
   have hfree := heldAdv_of_not (ref := ref) hfg
-  have hglt : g < C.gates.length := hT.2 g hout
+  have hglt : g < C.gates.length := hout.elim (hT.2 g) fun h => (List.getElem?_eq_some_iff.1 h).1
   by_cases hconst : ∃ b, C.gates[g]? = some (.const b)
   · obtain ⟨b, hb⟩ := hconst
     rw [valOver_const hfree hb, traceVal, read_const hb]
     rfl
   push Not at hconst
   obtain ⟨v, u, hu, hg⟩ := exists_of_mem_gates (hP.2.2.1 g hglt hconst)
-  have hv : v ∉ F := fun hv => hfg ⟨v, hv, u, hu, hg, boundary_of_out hout⟩
-  obtain ⟨b, hb, hrun⟩ := (hι v u hu hv g hg).2 (boundary_of_out hout)
+  have hv : v ∉ F := fun hv => hfg ⟨v, hv, u, hu, hg, hbd u⟩
+  obtain ⟨b, hb, hrun⟩ := (hι v u hu hv g hg).2 (hbd u)
   rw [valOver_unit hT hP ι hι Good hgood hinp g hgd v u hu hv hg, hrun, traceVal, read_of_not_const hconst,
-    ← ref_of_boundary (u := u) (ref := ref) (ι := ι v) (boundary_of_out hout), hb]
+    ← ref_of_boundary (u := u) (ref := ref) (ι := ι v) (hbd u), hb]
 
 end Run
 
@@ -296,8 +299,8 @@ end Run
 /-- **A wired gate outside the incorrect proof blocks reads the trace's value** once the wires are resolved in more
 rounds than the wired gates ranked below it, at inputs that read the trace at every unwired input that is `Good`, where
 a wired gate's writer depends only on gates `Good` as the wired gate is: its wire is right, so the trace holds there the
-value its writer is read at, and the writer, a returned gate (a constant, an input or a computed gate), has the trace's
-value (`valOver_out`) on inputs that do, the wired ones among them ranked lower. -/
+value its writer is read at, and the writer, a returned gate (a constant, an input or a computed gate) or an input, has
+the trace's value (`valOver_out`) on inputs that do, the wired ones among them ranked lower. -/
 theorem resolveWires_eq {L S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGates L S} {k : ℕ}
     {ref : ℕ → Option Bool} {F : Finset ℕ} (hT : C.Topological) (hP : P.Partitions C) (ι : ℕ → ℕ → Bool)
     (hι : ∀ v u, P.blocks[v]? = some u → v ∉ F → C.Correct (C.refIn u ref (ι v)) u) (hwf : lay.WiresFit C k)
@@ -474,7 +477,7 @@ theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGate
   have heq : ∀ σ, ∀ g ∈ slotGates (lay.egress t ℓ σ),
       valOver C (resolveWires C lay.wires (lay.inputOf k (ingressUpTo op o t) (traceVal C ref)) (heldAdv C P F ref)
         C.gates.length) (heldAdv C P F ref) g = traceVal C ref g :=
-    fun σ g hg => valOver_out hT hP ι hι Good hgood hinp (hout t ht ℓ σ g hg).1
+    fun σ g hg => valOver_out hT hP ι hι Good hgood hinp (Or.inl (hout t ht ℓ σ g hg).1)
       fun t' h1 h2 i hi => hcaus t ht t' h2 h1 ℓ σ g hg i hi
   funext σ
   show rowOf (traceVal C ref) (lay.egress t ℓ) σ =

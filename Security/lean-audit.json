@@ -1512,15 +1512,19 @@
   },
   "NetTiming.BoundaryGates.Fits": {
    "owner": "@network-accounting",
-   "digest": "ebd05c19dd122a05cfe405333069c75efe8856277437c8e6766d9f1f6f2c233b"
+   "digest": "9c3804d342282e4cb7c0e4657540d573ee43c40e686709ff8e0fc22c9bfc5b10"
   },
   "NetTiming.Guarantees.SampledAuditAccepted": {
    "owner": "@proofs",
-   "digest": "559db99f683821879b48c8850d8fd77e243272bdbda83d3aaa8a7cdc7a38f2af"
+   "digest": "6e868bb5841a24871d90f8a4202ce0cfa0f370fab1b79b8969c5bd4643547ad8"
   },
   "NetTiming.JitterBounded": {
    "owner": "@network-accounting",
    "digest": "06b2728bc7d299f10f72698ed3900a75c420de7dccc468770103d11dba1ce7be"
+  },
+  "NetTiming.KSWired": {
+   "owner": "@network-accounting",
+   "digest": "faec94427efb4527a40af1f088a2434f24086958c4d250a8a8a860e214498bca"
   },
   "NetTiming.Packed": {
    "owner": "@network-accounting",
@@ -3093,17 +3097,17 @@
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "type_hash": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048",
    "missing": "honest",
-   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest) concludes KSWired at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness"
+   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest) concludes KSWired at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness; at a wired layout NetTiming.ksWired_deployed concludes KSWired at the deployed record from SessionKS, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope and WiredReads, likewise no named assumptions"
   },
   "NetTiming.SecurityProofs.SampledLeakAccepted": {
    "type_hash": "43970f90d531d3e7171623b15c9ce94eef5f67c55a52c6b00059cca4d554f37d",
    "missing": "honest",
-   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledLeakAccepted_honest) concludes KSWired, the decoder's radius and a charge at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness"
+   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledLeakAccepted_honest) concludes KSWired, the decoder's radius and a charge at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness; at a wired layout NetTiming.ksWired_deployed concludes KSWired at the deployed record from SessionKS, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope and WiredReads, likewise no named assumptions"
   },
   "NetTiming.SecurityProofs.SampledLeakRegistered": {
    "type_hash": "0eeee44bc28dd8a98e2c2545e9f4418b9741a630c9cfd62f72773757c1f9e3b3",
    "missing": "honest",
-   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledLeakRegistered_honest) concludes KSWired, binding, the decoder's radius and a charge at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness"
+   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledLeakRegistered_honest) concludes KSWired, binding, the decoder's radius and a charge at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness; at a wired layout NetTiming.ksWired_deployed concludes KSWired at the deployed record from SessionKS, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope and WiredReads, likewise no named assumptions"
   },
   "Pous.SecurityProofs.BandPubMeets14": "cc0a571f0b841ecb8d43acbf6b871e6cc71d9c7f83d30199fc0e717b117175f9",
   "Pous.SecurityProofs.BandPubMeets14Global": "c6339d61d58538bdee3dfd430d8eb58fb714ba7c635b54a1300d7d20ff438066",
@@ -3822,7 +3826,32 @@
    "type_hash": "1b06e5b9248f87e6c3d039952f2d3714aaf582ec0416f49a1e2e70576d177d8c"
   },
   "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial :",
+    "  Not",
+    "    (Accounting.SecurityProofs.Bridge.CommWitness.acceptAll.Sound { ε := 0, W := 0, S := 0, Q := 0, K := 0 }",
+    "      (fun x => 1) Accounting.Audit.network",
+    "      (instHMul.hMul (Nat.cast 1)",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd (1 / 8)",
+    "              (instHAdd.hAdd (instHSub.hSub (Claims.Sampling.κ (NetTiming.Witness.tapD Unit) (1 / 8) List.nil) (1 / 8))",
+    "                (instHMul.hMul (Claims.Sampling.γ (NetTiming.Witness.tapD Unit) List.nil)",
+    "                    (Claims.PrB FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V Claims.Witness.silentP",
+    "                      List.nil)).sqrt))",
+    "            (Claims.Finder.Pr FlockDeploy.sha512",
+    "              (Claims.Sampling.Bext FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
+    "                (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil) Unit",
+    "                Claims.Witness.silentP List.nil)))",
+    "          (Claims.Finder.Pr FlockDeploy.sha512",
+    "            (NetTiming.Btap FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
+    "              (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil)",
+    "              (NetTiming.Witness.tapD Unit).commit (NetTiming.Witness.tapD Unit).parse",
+    "              (fun x => NetTiming.Witness.tapOps) Unit Claims.Witness.silentP List.nil)))))"
+   ],
+   "assumptions": [],
+   "type_hash": "b1d4faea477aa160f4c1d24e9af5c9db1f932475a07ea338b3035182a937c85a"
   },
   "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": {
    "owner": "@lean",
@@ -10407,13 +10436,67 @@
    "type_hash": "8641b997c6ff27c256f4d0aa65fa66524438710f5d00cb88e2301262f03c3df0"
   },
   "NetTiming.Witness.SampledAuditAccepted_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.SampledAuditAccepted_nontrivial :",
+    "  Not",
+    "    (NetTiming.KSAccepted FlockDeploy.sha512 (Claims.Witness.Sampling.sksD Unit) 1 1 1",
+    "      (fun x => NetTiming.Witness.trivLay) fun x => 0)"
+   ],
+   "assumptions": [],
+   "type_hash": "a57e5723649a908e66233a9e66734334daf8f7a7ee99de1b4e6d4cdfc087a677"
   },
   "NetTiming.Witness.SampledLeakAccepted_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.SampledLeakAccepted_nontrivial :",
+    "  Not",
+    "    (Claims.Sampling.KSLinOn FlockDeploy.sha512 (NetTiming.Witness.leakD Unit).V",
+    "      (NetTiming.ScopeAcc (NetTiming.Witness.leakD Unit) (fun x => NetTiming.Witness.notLay) fun x => 1)",
+    "      (NetTiming.RLeak FlockDeploy.sha512 (NetTiming.Witness.leakD Unit).commit (NetTiming.Witness.leakD Unit).parse",
+    "        (NetTiming.Witness.leakD Unit).partition 1 1 1 (fun x => NetTiming.Witness.notLay) (fun x => 1) 0",
+    "        (fun s => NetTiming.AsReg s.prog NetTiming.Witness.notLay 1 Finset.instEmptyCollection.emptyCollection) 1)",
+    "      (Claims.Sampling.E (NetTiming.Witness.leakD Unit) fun x => List.cons Unit.unit List.nil)",
+    "      (Claims.Sampling.κ (NetTiming.Witness.leakD Unit) 0) (Claims.Sampling.γ (NetTiming.Witness.leakD Unit))",
+    "      (fun x => 1)",
+    "      (Claims.Sampling.Bext FlockDeploy.sha512 (NetTiming.Witness.leakD Unit).V",
+    "        (Claims.Sampling.E (NetTiming.Witness.leakD Unit) fun x => List.cons Unit.unit List.nil)))"
+   ],
+   "assumptions": [],
+   "type_hash": "23dcd6347e2bca02e68996ed17ab1476dcadd4a8194378e1f873c884207e353c"
   },
   "NetTiming.Witness.SampledLeakRegistered_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.SampledLeakRegistered_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      (Claims.PrBad FlockDeploy.sha512 (NetTiming.Witness.leakD Unit).V",
+    "        (NetTiming.RLeak FlockDeploy.sha512 (NetTiming.Witness.leakD Unit).commit (NetTiming.Witness.leakD Unit).parse",
+    "          (NetTiming.Witness.leakD Unit).partition 1 1 1 (fun x => NetTiming.Witness.notLay) (fun x => 1) 0",
+    "          (fun s x =>",
+    "            NetTiming.AsReg s.prog NetTiming.Witness.notLay 1 Finset.instEmptyCollection.emptyCollection",
+    "              (NetTiming.regVal List.nil))",
+    "          1)",
+    "        (Claims.Sampling.E (NetTiming.Witness.leakD Unit) fun x => List.cons Unit.unit List.nil) List.nil",
+    "        Claims.Witness.silentP)",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd (Claims.Sampling.κ (NetTiming.Witness.leakD Unit) 0 List.nil)",
+    "            (instHMul.hMul (Claims.Sampling.γ (NetTiming.Witness.leakD Unit) List.nil)",
+    "                (Claims.PrB FlockDeploy.sha512 (NetTiming.Witness.leakD Unit).V Claims.Witness.silentP List.nil)).sqrt)",
+    "          (Claims.Finder.Pr FlockDeploy.sha512",
+    "            (Claims.Sampling.Bext FlockDeploy.sha512 (NetTiming.Witness.leakD Unit).V",
+    "              (Claims.Sampling.E (NetTiming.Witness.leakD Unit) fun x => List.cons Unit.unit List.nil) Unit",
+    "              Claims.Witness.silentP List.nil)))",
+    "        (Claims.Finder.Pr FlockDeploy.sha512",
+    "          (NetTiming.Breg FlockDeploy.sha512 (NetTiming.Witness.leakD Unit).V",
+    "            (Claims.Sampling.E (NetTiming.Witness.leakD Unit) fun x => List.cons Unit.unit List.nil)",
+    "            (NetTiming.Witness.leakD Unit).commit (NetTiming.Witness.leakD Unit).parse (fun x => List.nil) Unit",
+    "            Claims.Witness.silentP List.nil))))"
+   ],
+   "assumptions": [],
+   "type_hash": "590dd116ed33026f6398002afe53b1ec7b6a065b1f043100099e17dfe2192344"
   },
   "Pous.Claims.StreamedWipeMeetsDisk_fails": {
    "owner": "@memory-accounting",
@@ -18360,6 +18443,7 @@
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
     "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.CapacityOfStateBound",
@@ -19191,9 +19275,9 @@
    "guarantees": ["Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod"]
   },
   "Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted": {
-   "digest": "13a874f8562f2b307da0368f6cac274ba1ce6262024bc259174bb430d47de48f",
+   "digest": "03bde9402743326494dd598348cea7351235874d64114c749e9db83fe953d74f",
    "definitions": {
-    "Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted": "4686e01329e29e2a152b22e2d59df351c0c86912b55ed4526612fe4ffa934901"
+    "Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted": "c72512e4e1428f029bde203f5c27e7496fd25f6895ef4f5fd076f7cc1bb00359"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted"]
   },
@@ -20184,6 +20268,7 @@
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
     "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.CapacityOfStateBound",
@@ -20307,6 +20392,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
@@ -22304,6 +22390,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "Claims.Flock.Bits_fails",
     "Claims.Flock.Complete_fails",
     "Claims.Flock.Complete_meets_plain",
@@ -22388,6 +22475,9 @@
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledAuditAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakRegistered_nontrivial",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -22920,6 +23010,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "Claims.Sampling.Binding_fails",
     "Claims.Sampling.Binding_meets",
     "Claims.Sampling.Binding_meets_one",
@@ -22954,7 +23045,10 @@
     "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
     "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PooledLeakAccepted_nontrivial"
+    "NetTiming.Witness.PooledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledAuditAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakRegistered_nontrivial"
    ]
   },
   "Definitions.Core.Accel.Card": {
@@ -23365,6 +23459,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
@@ -23491,6 +23586,9 @@
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledAuditAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakRegistered_nontrivial",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep",
@@ -23565,6 +23663,7 @@
     "Accounting.SecurityProofs.B4Covered",
     "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.Composition",
@@ -23740,6 +23839,9 @@
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledAuditAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakRegistered_nontrivial",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
@@ -24397,7 +24499,6 @@
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
     "Flock.SecurityProofs.PublicAudit",
-    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -24442,7 +24543,6 @@
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
     "Flock.SecurityProofs.PublicAudit",
-    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -24507,7 +24607,6 @@
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
     "Flock.SecurityProofs.PublicAudit",
-    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -24575,7 +24674,6 @@
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
     "Flock.SecurityProofs.PublicAudit",
-    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -24773,6 +24871,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.Compose.BindingOfECR",
@@ -24924,6 +25023,9 @@
     "NetTiming.SecurityProofs.SampledLeakRegistered",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledAuditAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakRegistered_nontrivial",
     "Pouw.Salt.keyed_leaf_binds",
     "Pouw.Salt.keyed_leaf_hides",
     "Pouw.SecurityProofs.Lead.Compose.G",
@@ -25084,6 +25186,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "Accounting.SecurityProofs.Compose.BindingOfECR",
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
     "Accounting.SecurityProofs.JointHorizonLive",
@@ -25197,6 +25300,9 @@
     "NetTiming.SecurityProofs.SampledLeakRegistered",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledAuditAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakRegistered_nontrivial",
     "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver",
@@ -25284,6 +25390,7 @@
     "Accounting.SecurityProofs.Actual.WindowsAt",
     "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
@@ -25511,7 +25618,6 @@
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
     "Flock.SecurityProofs.PublicAudit",
-    "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.SampledKSLivePub",
@@ -29474,7 +29580,10 @@
     "NetTiming.Witness.Ingress_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_honest",
-    "NetTiming.Witness.PooledLeakAccepted_nontrivial"
+    "NetTiming.Witness.PooledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledAuditAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakRegistered_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.Guarantees": {
@@ -29521,9 +29630,9 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "576d98dd5cc44148562b5beaef2aa889046022c345435a31dc9ce41cf98d86e2",
+   "digest": "9cff97a17371047ba75c80fada5e40a02e220e2eadf463a114114b64e33d0947",
    "definitions": {
-    "NetTiming.Guarantees.PeriodLeakAccepted": "0db3f3a734d201ea45375c21d5f216e32657736e057303e8cb3291e0732a3531"
+    "NetTiming.Guarantees.PeriodLeakAccepted": "ca8bc795f7f5b3c906c2e56e4b9a5c38a5f7422e5cc1275ce7d87715ff61ee8b"
    },
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
@@ -29542,9 +29651,9 @@
    "guarantees": ["NetTiming.SecurityProofs.PooledLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledAudit": {
-   "digest": "9bf7ce07b96742c403ad37249e469662f024c6fda2176bd94f867a7a0f12c07d",
+   "digest": "8155753df2f0a4430542e3657304c7ab66756a05ba45449ecc948c766ec1cb8b",
    "definitions": {
-    "NetTiming.Guarantees.SampledAuditAccepted": "559db99f683821879b48c8850d8fd77e243272bdbda83d3aaa8a7cdc7a38f2af"
+    "NetTiming.Guarantees.SampledAuditAccepted": "6e868bb5841a24871d90f8a4202ce0cfa0f370fab1b79b8969c5bd4643547ad8"
    },
    "guarantees": [
     "NetTiming.SecurityProofs.SampledAuditAccepted",
@@ -29553,11 +29662,11 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledCharge": {
-   "digest": "c343b6c4858a01b7d15add0575f0f6c17f0d6ccb304092a3af852617156dbc32",
+   "digest": "dbc54837529d87d029a6f49d23fbdf7e5890eb655c7952c3c78c1b744ebaeb4e",
    "definitions": {
     "NetTiming.Guarantees.EncardAccSeqsSampledLe": "6a0c10f472ffc975c011a4bf4ddadd694e54802b89ca8085dc019ac9fe3ea567",
-    "NetTiming.Guarantees.SampledLeakAccepted": "24f0129e771739e616882539563c17f2e758415b4eff9cbd1eb4c3f371fc06e7",
-    "NetTiming.Guarantees.SampledLeakRegistered": "03e4e97e0f5a04afca5d02ab39464e584162e80a6273f36d67172aeedabf9578"
+    "NetTiming.Guarantees.SampledLeakAccepted": "20ee8bb8251fdc5e42a87a2f08812c7d6b70baaf6f420cb7e92e962fd09635f1",
+    "NetTiming.Guarantees.SampledLeakRegistered": "2c10270c99d7f951476d68c7081395737380df3c655f837ab95f6fbb1a40cee0"
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
@@ -29677,33 +29786,47 @@
     "NetTiming.Witness.Ingress_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_honest",
-    "NetTiming.Witness.PooledLeakAccepted_nontrivial"
+    "NetTiming.Witness.PooledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledAuditAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakRegistered_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.SampledAudit": {
-   "digest": "ca9c01f5daae04fac7d34e97274f18819049ab47c5a7cd21364cd7153ca0fc4b",
+   "digest": "7f7383c27d4cbd78c309ad868722e289daa48853bd9d6111f1a5d4624e66d5a6",
    "definitions": {
-    "NetTiming.BoundaryGates": "fa62e710a7aac7d4f76bb7c7c2a4400f4d483ad59c9d5d7adf193c0ece654d55",
-    "NetTiming.BoundaryGates.Fits": "ebd05c19dd122a05cfe405333069c75efe8856277437c8e6766d9f1f6f2c233b",
+    "NetTiming.BoundaryGates": "d3e54616f8da666218af8aa727cc81d6b675fb41bea0a8cf49691b641f30c7a3",
+    "NetTiming.BoundaryGates.Fits": "9c3804d342282e4cb7c0e4657540d573ee43c40e686709ff8e0fc22c9bfc5b10",
+    "NetTiming.BoundaryGates.WiresFit": "1a68f098d00a6394e19993ba15c372ee0a5bf17f53d8b532e9743ae7e418485b",
     "NetTiming.BoundaryGates.egress": "7b6781ceed9e705bdcd2f73da44515d154ded194be9ce8c07e8a80adaca1765c",
     "NetTiming.BoundaryGates.ingress": "0cd000b86e85138614ec3ab7313538273046b378ee4a37b1718995198a41da24",
     "NetTiming.BoundaryGates.inputOf": "56718453a93fa605c2dfec40d77e72bc9d41ad7311cb582ae189bc9d296dc316",
+    "NetTiming.BoundaryGates.wires": "ec18eaece927d5f4897fdbb09627b8ec350567de081d9e7f260fd3b2ed89f21e",
     "NetTiming.Carries": "1f721f69fa556e5acbabaa7893cf83989744086cb9b463ef1843cae613640a75",
     "NetTiming.Covered": "ccee422986c657af27297ae2bc6396a375226194e77cac80a7e44f9a70e4814c",
     "NetTiming.Depends": "f211d957c793800d99efe76d3fbd2afc44b357018a916000b6358941e750ac83",
+    "NetTiming.DependsWired": "968b74120864ef6de7ebe2dba81192beef61215a9a0fb361c0642ef7f7476bbc",
     "NetTiming.FaultyGate": "bbc940eb0195b83903ed55053117b14b34c4ced8f375905ce44f5cb54f4afdc3",
     "NetTiming.KSAccepted": "f632a6201349aced4bbba77f283dd73b64c818f5afdd10c7ce2f109584ad58da",
-    "NetTiming.RAcc": "ef24da1ebc3faf8fea32104989f6292e5a5c5264021902e0873103b280b95545",
+    "NetTiming.KSWired": "faec94427efb4527a40af1f088a2434f24086958c4d250a8a8a860e214498bca",
+    "NetTiming.RAcc": "bf37f96e6bbf5111d2f78c55d24344c4a96e2b19832f9ae27e5212386a971476",
+    "NetTiming.RWired": "f5220812020ea152ee9fff31e6e39d1123b187898d3dc08abfba05a776f4ba03",
     "NetTiming.ScopeAcc": "c7fd760721042dfff5fa8908b38893d3749f30682f2cda072d1b29a9550d03f5",
+    "NetTiming.WireRight": "ce787205ada5f5978ade9c5c32c1e83fa957792b7cf5541b76b490ccef13d222",
+    "NetTiming.WireWrong": "5d0ee730d327f97853b224386dc060eb5b5ee0574bcb21c2a840b3a8e873f990",
+    "NetTiming.WiresAcyclic": "d122d0fc7f6b27fce9c33e2f68a116089b4b2a26ce6a9fe431fb103ae7864869",
     "NetTiming.allSlots": "1eb924389e5ffa3b1cce62cd754f9ed3b413f91286b038c394ab98209c426b56",
     "NetTiming.allSlotsFrom": "e9f843f09815a0f9027e7fd2a939b5ce9801351103e731aff9367f6e3b5375be",
     "NetTiming.allSlotsFrom._sparseCasesOn_1": "bcca8d9b059205db51b931ee670d3133083fe08379abd3f4d078670d8448fc4f",
     "NetTiming.allSlotsFrom._sparseCasesOn_4": "5f47fc59eca3ea87c24247696303acec324803ca0c91cf3d5386cded3c7bf333",
-    "NetTiming.circuitProgram": "c67c2fc131c1cd5281d8b34e298a5aed7a19c57560a2352edc7de61c5e378874",
+    "NetTiming.circuitProgram": "e8312d84efbd5953e100bc47806ce3a01b5e0001cf7fde35d1a951b63e89204f",
+    "NetTiming.incorrect": "744c3c44218e4a44fac5088a647848442dee89806553eba3338602d44bf51e34",
+    "NetTiming.resolveWires": "6b86117c67e16244194e054636f6d2518a612d869212806cc04d4eabbd2c932c",
     "NetTiming.rowOf": "72d1f1c69f134fc7b821df7d86191b279fdf73d5d412f7a072cd9dd5af40da0d",
     "NetTiming.slotGates": "18b5cf00d01de76454aa5c83b4f78ecbfb92810ca9b0389aa74215a1d9372e0d",
     "NetTiming.traceVal": "a0ec132a217fc9cd0dd90cf6b0494a435a3dac6a2b70c8f77ac23113a49c2f81",
-    "NetTiming.valOver": "e98e961a4e7a5d8dcb2b280a5cdc18ca8c87a546301aa91defbf4300ba44d7f2"
+    "NetTiming.valOver": "e98e961a4e7a5d8dcb2b280a5cdc18ca8c87a546301aa91defbf4300ba44d7f2",
+    "NetTiming.wireWrong": "d0c79c814490d49cc9955da14fc8d070f0d8027437f21dce7bd548992b358344"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
@@ -29716,11 +29839,14 @@
     "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
     "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PooledLeakAccepted_nontrivial"
+    "NetTiming.Witness.PooledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledAuditAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakRegistered_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.SampledCharge": {
-   "digest": "9cc562fd05c1b89f7ac7cd7690de4175bd592b1f820be5ba1b302ed0f2d9cae7",
+   "digest": "2ec6991ba94838bd73b48f8cface33b4ff5180731071e5e26376f3bc5be76996",
    "definitions": {
     "NetTiming.AccSeqsSampled": "ad626b8423fb6d1b02f0a19e7b7bf3cc40e451d1d1fb01e9ceeedd2c65e09e80",
     "NetTiming.AcceptedFaulty": "ebfd078ac94cee1cb354ad8287355b63d6744527774706f89341de50c27c2798",
@@ -29728,7 +29854,7 @@
     "NetTiming.RLeak": "962130822d4deb3d4ac96574835a2a69a5ba3f6c63a719008a6bc92a3423ab13",
     "NetTiming.faultyBits": "11626696611eb91d66ee3f2a5c453e27db0facb8f80ee3d83b1c5f75a1a1dc27",
     "NetTiming.faultySets": "cf08892338b4055889a2cb6fd6b503d7977e9a006937f0e3c224517ffef076ba",
-    "NetTiming.freeInputs": "62e0ab9f2ca47b3d0b1c71f23e09e6ad8eb94741bd83a58b57de638b1ac62bdb"
+    "NetTiming.freeInputs": "a6b5c7df10de373cbb94dfa26ab6249d8d550eb38116ad5c392eceacc24784bc"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
@@ -29740,7 +29866,9 @@
     "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
     "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
-    "NetTiming.Witness.PooledLeakAccepted_nontrivial"
+    "NetTiming.Witness.PooledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakRegistered_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.SampledReg": {
@@ -29751,7 +29879,7 @@
     "NetTiming.regLog": "38c80d57935e3a410a11a2af5106dab9e862563e242ba814155e49214562a7c8",
     "NetTiming.regVal": "aa7243eafeed844f556710542e32c50bc76f877e77932e1700755dc310ee4873"
    },
-   "guarantees": ["NetTiming.SecurityProofs.SampledLeakRegistered"]
+   "guarantees": ["NetTiming.SecurityProofs.SampledLeakRegistered", "NetTiming.Witness.SampledLeakRegistered_nontrivial"]
   },
   "Definitions.NetworkCertifier.Schedule": {
    "digest": "f111025e1c4fd3b54ab0b3e233cd45ec6207e10ef6e40d1058c19954dc177694",
@@ -29800,6 +29928,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
    ]
@@ -31965,6 +32094,7 @@
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
     "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.CapacityOfStateBound",
@@ -39604,10 +39734,22 @@
    ]
   },
   "Flock.FV3": {
-   "digest": "94d12094326c6037e76b3aefc2a53a5a121bbaaae6269a0516a93dc97ef7d897",
+   "digest": "c1fd5d88ee683a6f9f65d36d19dba509a01473d32e3001d09895b39700978e62",
    "definitions": {
+    "Flock.FV3.Domain.climb": "99fcc386553517f89ea585cbe1cc9a8cee9e5fb19434a237ebb775106fb7ddeb",
+    "Flock.FV3.Domain.count": "00669812938e079ede9a7f6b3b9b14592e8fb0f67ce48711b87bef352ea79042",
+    "Flock.FV3.Domain.emptyRoot": "425cd197b05f5e48d715b28d544bac3e501e329debca58dea7169404493d775a",
+    "Flock.FV3.Domain.leaf": "fd8ff419c4f1c4b1e068239aabe7b98afbe568eef31144c501a12d81f27f9701",
+    "Flock.FV3.Domain.levels": "5bfab251a2a33a8481316c39a170361702127d84a3e2399b341afcb5d94f9ffd",
+    "Flock.FV3.Domain.node": "e8f4cf0542a2f4dc4321fb5aaf576640e0c3efab9129fd2266d7922aa7a240c3",
+    "Flock.FV3.Domain.pad": "9d44af71884f37c849c22724fe66af4da40f22eac80fcae49d8ca19e29139f48",
+    "Flock.FV3.Domain.root": "f90c58b7ee255b2124723e8121c06a08c4fa871093ed9df8d4ccfa93b4ecdc9b",
+    "Flock.FV3.Domain.start": "690b3c8c8cbd58c869736902c0081bdc21ef24e5ab5194be41de7a655d9d3333",
+    "Flock.FV3.Domain.verifyOpening": "3f2d192672170e31c74412b452cd6a0551687e18e36d729de0684b517ae09c75",
     "Flock.FV3.FRAME": "7a59c990468cab7e2b8010a7dcb24e3ed28bce0494751048f05c32a61f8a71e8",
-    "Flock.FV3.Scheme.climbL.match_1": "3bd9f3ee75df457f7808fb1d07c1fc59d37403d9015fc3f8526634968d5b5823",
+    "Flock.FV3.Scheme.bytes": "487644863c8e6d3a60aa01fb248012cf91c276a9266ac24884974305df1c4f9b",
+    "Flock.FV3.Scheme.climbL": "6ff4a7ee77835ac6473c730a0f047dc4e6e78563e67c08ad8071f04798ba0517",
+    "Flock.FV3.Scheme.node": "87ffb1b5f55b1abd9fb17713ac7c8edfe21d77ecee4d230b37e3922e996dae1a",
     "Flock.FV3.Sha512.climb": "82e880dc4e387b8b852b7a8cdf13d276f74247c5052cb84227aa87b42eecc823",
     "Flock.FV3.Sha512.climbL": "c86d47654ff71acb0a5784241b7d31c41ccbf72b7ec22ecf1aedbc7ecfc73eab",
     "Flock.FV3.Sha512.leafAs": "b0f201a7ace51ea5c4e9c2cf9b4abd20feb7efe774025a43fca5d29e44e3730c",
@@ -40112,6 +40254,7 @@
     "_private.Flock.Hash.0.Flock.Blake3.startFlag": "435cb12e6860f6429d63097421d3f08869df366a9bbdd32007c8ce3327a5beac"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
@@ -40233,6 +40376,9 @@
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledAuditAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakRegistered_nontrivial",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51086,6 +51232,7 @@
     "FlockDeploy.verdictM": "5af11661290b0177c2fcc5c757a851272bac491ea2412b2f3bad4b435102016c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Flock.decoder_meets_plain",
@@ -51124,6 +51271,9 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveKSDeployed",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledAuditAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakRegistered_nontrivial",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51312,6 +51462,7 @@
     "Claims.toMsg": "2fba46147492829fb1c20b7e8449bd43c4ee43875156e3d8cce7997f479d0638"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Flock.decoder_meets_plain",
@@ -51350,6 +51501,9 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveKSDeployed",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledAuditAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakRegistered_nontrivial",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -54057,7 +54211,8 @@
     "Claims.Witness.Recursion.KS_fails",
     "Claims.Witness.Recursion.ZKPriv_fails",
     "Claims.Witness.Recursion.ZKStop_fails",
-    "Claims.Witness.Recursion.ZK_fails"
+    "Claims.Witness.Recursion.ZK_fails",
+    "NetTiming.Witness.SampledAuditAccepted_nontrivial"
    ]
   },
   "Proofs.Flock.Claims.Witnesses.Recursion": {
@@ -54126,6 +54281,17 @@
    },
    "guarantees": ["Claims.Witness.Recursion.Complete_meets", "Claims.Witness.Recursion.Nontrivial_meets"]
   },
+  "Proofs.Flock.Claims.Witnesses.Sampling": {
+   "digest": "c22907767f7e060f2cae842c054967512be93af0927d16ba9c0779650c4b51ff",
+   "definitions": {
+    "Claims.Witness.Sampling.rejCm": "e66ac4a58a8d92c33a00de9599be1295dfe567b2de42eb54b561cc49b12f3370",
+    "Claims.Witness.Sampling.sksD": "0048df583a81266be096e930e8a447e9a7b7e2aaddadb4da8895af43b90f49be",
+    "Claims.Witness.Sampling.toyPart": "7497eaa324030418361914930e871aec6045305dc456582ac14396d36870c740",
+    "Claims.Witness.Sampling.toyProg": "6409c862503069c2daab6caf4c7dbe2dfd2780cc8db6c21ddb6ea3ed56e5f04d",
+    "Claims.Witness.Sampling.toyStmt": "3ebc9349f0a6866fa4fd1c0755867784a8d6c9750d421de191f689ec0f773ad9"
+   },
+   "guarantees": ["NetTiming.Witness.SampledAuditAccepted_nontrivial"]
+  },
   "Proofs.Flock.Claims.Witnesses.Shared": {
    "digest": "43ef0326aaa8b02e727adc5cd7a68020c6e7f9e494bcd89848d5bfb7e95e490c",
    "definitions": {
@@ -54135,6 +54301,7 @@
     "Claims.Witness.silentP": "5ac892998ea3c13c4a0d7c8c40a5052aa3311a00c73ad90172be93cca6666f52"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial",
     "Claims.Witness.Recursion.BitsFlock_fails",
     "Claims.Witness.Recursion.BitsLin2_fails",
     "Claims.Witness.Recursion.BitsLin_fails",
@@ -54157,7 +54324,9 @@
     "Claims.Witness.Recursion.ZKPriv_fails",
     "Claims.Witness.Recursion.ZKStop_fails",
     "Claims.Witness.Recursion.ZK_fails",
-    "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.SampledAuditAccepted_nontrivial",
+    "NetTiming.Witness.SampledLeakRegistered_nontrivial"
    ]
   },
   "Proofs.Flock.Claims.ZK.Capacity": {
@@ -56963,7 +57132,7 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.ValueSrc": {
-   "digest": "070ccede1ae002c319ce53cadca00c5e73337e89c6fd8ee30aa6a9231c92067e",
+   "digest": "3104b8f2c08966ef65d58b5ef89762b0aba68a2cab0b760cfb2ae224e0cdd5a2",
    "definitions": {
     "FlockC3.RegLevels.leavesV": "7a24e5e65a9fd6c1b599494f00fb3525ac3a08077d8b263b8fbcde3c55ca76a5",
     "FlockC3.RegLevels.lev": "db02a00333edb36cb19d5ca175214bd41121d9338a2b4fd1253ab1a124d82e22",
@@ -56993,7 +57162,6 @@
     "FlockSoundness.Discharge.Recursion.stackedDirsRows": "d282693a0ec656780a67b4fc90ea91098e00f34bcade55e2a065b74cb87d91f5",
     "FlockSoundness.Discharge.Recursion.stackedLevels": "fde08ce1112cf6feec27c8fb7bb6a898d9f1ed5622a808548b4a4866ba7c7867",
     "FlockSoundness.Discharge.Recursion.valueAt": "55ba5cc82c1018c9d4ed8420525f34a82ba35d462b88b3298549d349ea593a5b",
-    "FlockSoundness.Discharge.Recursion.valueFinder": "fb824ae2e5ed908b6cb0aeb5a8a9978ea50555d6113ae3e4964b08027b1db088",
     "FlockSoundness.Discharge.Recursion.valuePick": "9a042064c5c639ebcd033e2a8eae7f74d899384b8c06262925478a0886ba2ec8",
     "FlockSoundness.Discharge.Recursion.valueRows": "19fda9c3aa8e159047fc47a0dbe0092a590373887674b2d1c349ecf61c12cb2d",
     "FlockSoundness.Discharge.Recursion.valueRows._sparseCasesOn_1": "b712dbd4101f4d59df52b02e31c06d46d3aacfde57bdbdc7ec147d237927fc0a",

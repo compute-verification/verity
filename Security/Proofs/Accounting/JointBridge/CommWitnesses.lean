@@ -10,7 +10,8 @@ claim fails at every coin (`CommWitness.acceptAll`): the node moved one bit thro
 claim is that it moved none (`K = 0`). The error is the one the accepting sampled verifier `tapD` gives at SHA-512 at
 one window at `δ = 1/8`, with `ε_ks`, `ε_bind` and `ε_tap` its knowledge error, extraction and collision terms at the
 statement `[]`. That error is below one (`tapD_κ_eighth`, `prB_accV`, `tapD_bext`, `tapD_btap`), while the network
-audit accepts with its claim failing with probability one (`CommOfPeriodLeakAccepted_nontrivial`).
+audit accepts with its claim failing with probability one (`CommOfPeriodLeakAccepted_nontrivial`, which states that
+some period run fails the conclusion, and takes this one).
 -/
 
 namespace Accounting.SecurityProofs.Bridge.CommWitness
@@ -38,20 +39,21 @@ open Claims Claims.Witness NetTiming NetTiming.Witness
 
 local notation "shaD" => FlockDeploy.sha512
 
-/-- **`CommOfPeriodLeakAccepted`'s conclusion fails at the network audit that accepts everything**
+/-- **`CommOfPeriodLeakAccepted`'s conclusion fails at a period run**: the network audit that accepts everything
 (`CommWitness.acceptAll`), at one window at `δ = 1/8`, with `ε_ks`, `ε_bind` and `ε_tap` the accepting sampled
 verifier `tapD`'s terms at SHA-512 at the statement `[]`: that error is below one, and the network audit accepts with
-its claim failing at every coin. -/
+its claim failing at every coin. The proof names the run: a statement in the lock reads no proof-only definition. -/
 theorem CommOfPeriodLeakAccepted_nontrivial :
-    ¬ CommWitness.acceptAll.Sound ⟨0, 0, 0, 0, 0⟩ (fun _ => 1) .network
-      (((1 : ℕ) : ℝ) * (1 / 8 +
-        (Claims.Sampling.κ (tapD Unit) (1 / 8) [] - 1 / 8 +
-          Real.sqrt (Claims.Sampling.γ (tapD Unit) [] * PrB shaD (tapD Unit).V silentP [])) +
-        (Claims.Sampling.Bext shaD (tapD Unit).V (Claims.Sampling.E (tapD Unit) fun _ => [()]) Unit silentP []).Pr
-          shaD +
-        (Btap shaD (tapD Unit).V (Claims.Sampling.E (tapD Unit) fun _ => [()]) (tapD Unit).commit (tapD Unit).parse
-          (fun _ => tapOps) Unit silentP []).Pr shaD)) := by
-  intro h
+    ∃ (d : Accounting.Device Unit) (C : Verity.Circuit) (r : Accounting.PeriodRun d Unit C fun _ : Unit => Unit),
+      ¬ r.Sound ⟨0, 0, 0, 0, 0⟩ (fun _ => 1) .network
+        (((1 : ℕ) : ℝ) * (1 / 8 +
+          (Claims.Sampling.κ (tapD Unit) (1 / 8) [] - 1 / 8 +
+            Real.sqrt (Claims.Sampling.γ (tapD Unit) [] * PrB shaD (tapD Unit).V silentP [])) +
+          (Claims.Sampling.Bext shaD (tapD Unit).V (Claims.Sampling.E (tapD Unit) fun _ => [()]) Unit silentP []).Pr
+            shaD +
+          (Btap shaD (tapD Unit).V (Claims.Sampling.E (tapD Unit) fun _ => [()]) (tapD Unit).commit (tapD Unit).parse
+            (fun _ => tapOps) Unit silentP []).Pr shaD)) := by
+  refine ⟨HonestH200.device 0, HonestH200.emptyCircuit, CommWitness.acceptAll, fun h => ?_⟩
   have h1 := h fun _ => ()
   have hev : ∀ x : Unit,
       CommWitness.acceptAll.accepts .network
