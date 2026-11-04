@@ -210,15 +210,6 @@ the dial) is retired from the console and no longer PUT; `panels` still holds th
 token are at most the greater of twice its start's (`policy.CAP_FALLBACK`) and the compute-optimal model's at its loss
 under the ladder's fit (their `--ladder-fit FILE`, `policy.ladder_fit`), and twice its start's where there is no fit or
 the fit doesn't reach its loss, so a grown model is still scored; the rest are left out as `over-cap`.
-`training/standard-workloads` is `standard_workloads`'s, PUT by `python -m te_core.standard_workloads --out DIR
---publish`: the standard covert workloads (dense, DiLoCo, RL, inference, LoRA, distillation), each a small real run from a
-registered start named in `islands/standard-workloads/rows.json`, measured by this te_core (its traced structures where
-the island traced them, from te_core 4.4 on; a generation run's rounds alone, priced as NVFP4) and priced by
-`formalism.published` under the builder's `READING`, reading A (the one bound over the kinds valid on their own, with
-its binding kind, what it rests on and its kinds, reading B's forms among their sensitivities), at the console's
-session (`policy.CONSOLE`), the one default of `rho_default` and `rho_console`, with `rho_served` at the registered
-serving block beside it, as `algorithm_policy` prices its rows, each input labelled measured or assumed and why. It is
-not scored against H.
 
 ## What the integrator calls
 
