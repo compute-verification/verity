@@ -643,9 +643,9 @@ variable {β : Type} {g' : Game β}
 /-- The rounds an opening's node flips among. -/
 abbrev Openable (o : OpeningAt g') : Type := TreeOpenable o.T.nonce o.T.spec o.T.sample o.p.1 o.p.2
 
-instance (o : OpeningAt g') : Fintype o.Openable := o.iF
+instance instFintypeOpenable (o : OpeningAt g') : Fintype o.Openable := o.iF
 
-instance (o : OpeningAt g') : Nonempty o.Openable := o.iN
+instance instNonemptyOpenable (o : OpeningAt g') : Nonempty o.Openable := o.iN
 
 /-- Two descriptions of one node flip among one type. -/
 theorem openable_eq (o o' : OpeningAt g') : o.Openable = o'.Openable := by
