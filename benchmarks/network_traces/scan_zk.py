@@ -87,7 +87,10 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   last unit's o1, S_{G·T−1}, which no state leaf holds, is a member's own rows (`Frame`), committed and never opened.
   Leaf 0 is opened by
   no unit, and the entries boundary 0's Programs write on it are read by none: bucket 0 reads the empty state, in
-  which no slot is live, so none is due. Accepted: every o0 opens to 1. The registration's roots also name, as
+  which no slot is live, so none is due. The registration's window states those reads, one run a port (``reads``,
+  `state_reads`: ``sin`` units 1 … G·T − 1 and ``o1`` units 0 … G·T − 2, each from leaf 1, as `NetworkCheck.Period`'s
+  `stateRead` holds them), and opens leaf 0 to the empty state, zero words under its salt (``empty``, `state_empty`,
+  its `stateEmpty`), public as that state is. Accepted: every o0 opens to 1. The registration's roots also name, as
   ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden port
   reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **Every port registered**: the verifier's registered reads name every port of every member's circuit, inputs and
@@ -103,8 +106,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   for every W, which `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records'
   certificates: accepted, one-stage's profile and bound at ``--delta`` (every unit drawn, the bound 0); refused, a
   reject naming the members Lean refused. Beside them, ``audits``: the block round's, the compute audit whose lanes'
-  o0 are the scan's ``prog<j>`` (its registration and answer, its Program's descriptor, its free inputs NR·nb·NE, every bit of every
-  slot entry, which the rows form's K charges to each link-window tied to it, and no steps).
+  o0 are the scan's ``prog<j>`` (its registration and answer, its Program's descriptor, and no steps): the rows form
+  counts its free inputs off that descriptor, NR·nb·NE, every bit of every slot entry, and its K charges them to each
+  link-window tied to it.
 * **A void run** (a warden run whose warden failed a connection closed, its `FAIL` in the egress row it signed, its
   reason in the ``fails`` record): the scan renders the connection's end where the warden wrote `FAIL`, and that bucket
   alone differs from the warden's row. Its block round and its honest round are proved, the honest one expected
@@ -169,7 +173,7 @@ from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
-from typing import NamedTuple, Sequence
+from typing import Mapping, NamedTuple, Sequence
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -517,6 +521,34 @@ def tree_port(kind: str, reg: ADV.Committed, reads: list[int], reads_from: int) 
 def tree_entry(kind: str, reg: ADV.Committed, positions) -> dict:
     return {"value": value(kind), "positions": [int(p) for p in positions],
             "paths": [b"".join(reg.open(p).path).hex() for p in positions]}
+
+
+def state_reads(ports: Sequence[Mapping[str, dict]]) -> dict:
+    """The scan's state reads as its registration's `window` states them (``reads``, `NetworkCheck.Period`'s
+    `stateRead`), from each member's ``--registered`` ports (`tree_port`: unit ``reads_from + i`` at leaf ``reads[i]``):
+    its ``sin`` and ``o1`` of the state's value, each one run ``{"leaf": l, "units": [lo, hi]}``, unit lo + i at leaf
+    l + i. SystemExit when a port's reads are no one run."""
+    at: dict[str, dict[int, int]] = {}
+    for ps in ports:
+        for p in ("sin", "o1"):
+            if p in ps and ps[p]["value"] == value("state"):
+                at.setdefault(p, {}).update({ps[p].get(REG.READS_FROM, 0) + i: r for i, r in enumerate(ps[p]["reads"])})
+    runs = {}
+    for p, got in sorted(at.items()):
+        lo, hi = min(got), max(got) + 1
+        if got != {u: got[lo] + u - lo for u in range(lo, hi)}:
+            raise SystemExit(f"the scan's {p} reads {got} are no one run, unit lo + i at leaf l + i, as its "
+                             "registration states them")
+        runs[p] = {"leaf": got[lo], "units": [lo, hi]}
+    return runs
+
+
+def state_empty(reg: ADV.Committed | Held) -> dict:
+    """Row 0's opening as the scan's registration's `window` gives it (``empty``, `NetworkCheck.Period`'s
+    `stateEmpty`): the empty state, its ``words`` zero u16 words, under leaf 0's salt through its path. The row is
+    public, and no unit reads leaf 0, so its salt opens no row a proof hides."""
+    o = reg.open(0)
+    return {"words": reg.n_bits // 16, "salt": o.salt.hex(), "path": b"".join(o.path).hex()}
 
 
 def tree_refusal(port: dict, reg: ADV.Committed, entry: dict, bcs: list[bytes | None],
@@ -1383,8 +1415,9 @@ def _free_port() -> int:
 def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: list[dict], trees: dict, out: Path,
           port: int, k: int | None = None, coins: SimpleNamespace | None = None) -> dict:
     """One round registered (its members' ports under their prefix, `port_prefix`, each a frame domain of a leaf an
-    instance or a shared port's table row; the scan's registrations' roots; and the warden's row registrations its
-    warden ports read, `warden_roots`, before any coin), its units drawn by the verifier's Lean (`draw --stratified k`
+    instance or a shared port's table row; the scan's registrations' roots; the warden's row registrations its
+    warden ports read, `warden_roots`; and in its window the state reads its members' registered files hold their units
+    to, `state_reads`, and row 0's opening, `state_empty`, before any coin), its units drawn by the verifier's Lean (`draw --stratified k`
     on its own coins; every unit when `k` is None) or, given the challenger's ``coins``, by the round's `service.Stream`
     on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each member's drawn units proved --zk behind the firewall and
     held by Lean with the verifier's own registered reads; then each held unit's public ``o0`` (none of the slot
@@ -1423,6 +1456,9 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
            "link": "registered: each warden row port, input or output, at the warden's signed root of its "
                    "link-window, unit base + k row k of the member's rows; the scan's state, each lane's prog<j> and "
                    "view, inputs and outputs, at the prover's registered roots (scan/*)"}
+    reads = state_reads([json.loads(Path(m["registered_file"]).read_text())["ports"] for m in members])
+    win |= ({"reads": {"scan/state": reads}} if reads else {}) | (
+        {"empty": {"scan/state": state_empty(trees["state"])}} if "state" in trees else {})
     rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, pg.program, pg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
@@ -1629,13 +1665,13 @@ def answers(at: SimpleNamespace, out: Path, res: dict, delta: Fraction, block: d
     (`window_answer`: accepted where the round's outputs all open to 1), since its registration holds each W's rows
     (`warden_roots`). A refused round's (a void run's) names the members Lean refused. With the block round's audit
     (``block``), the compute audit whose lanes' o0 are the scan's ``prog<j>`` (``audits``): its registration and
-    answer, and the terms a period's parameters give it, its Program's descriptor, its free inputs (every bit of every
-    slot entry, the stand-in's ``x``: it copies its input) and no steps."""
+    answer, and the terms a period's parameters give it, its Program's descriptor and no steps; the period counts its
+    free inputs off the descriptor (every bit of every slot entry, the stand-in's ``x``: it copies its input)."""
     reg, answer = _answer(out, "honest", res, delta, f"the scan's audit of link-windows {at.windows}")
     audits = []
     if block is not None:
         breg, banswer = _answer(out, "block", block, delta, "the block's audit")
-        audits.append({"answer": banswer, "free": entries_of(at.setup.cls, at.G, at.T) * IS.entry_bits(at.setup.cls),
+        audits.append({"answer": banswer,
                        "program": json.loads((out / PROGRAMS[BLOCK] / "program.json").read_text()),
                        "registration": breg, "steps": 0})
     doc = {"format": ANSWERS, "delta": str(delta), "registration": reg, "audits": audits,

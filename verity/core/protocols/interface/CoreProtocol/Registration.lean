@@ -444,8 +444,14 @@ private def bare : List (String → Entry) :=
   [site ⟨[sheet], locs.take 4, [{ id := "up0", ends := ("node0", outside), β := 100, latency := 1 }]⟩]
 #guard refusal .onsite bare == some (0, .site .uncertified)
 #guard refusal .remote bare == none
--- onsite: memory no challenger reaches
+-- remote with the network certifier refuses it as onsite does
+#guard refusal .remoteNetwork bare == some (0, .site .uncertified)
+#guard refusal .remoteNetwork entries == none
+#guard head .remoteNetwork (chain .remoteNetwork entries) != head .onsite (chain .onsite entries)
+#guard head .remoteNetwork (chain .remoteNetwork entries) != head .remote (chain .remote entries)
+-- onsite: memory no challenger reaches; remote with the network certifier takes it
 #guard refusal .onsite [site ⟨[sheet], locs.take 5, links.take 2⟩] == some (0, .site .challengerReach)
+#guard refusal .remoteNetwork [site ⟨[sheet], locs.take 5, links.take 2⟩] == none
 -- a sheet with no data sheet, a device's memory over its sheet's, a certifier without its key
 #guard refusal .remote (stating { sheet with figures := { sheet.figures with sku := "sim-b" } }) ==
   some (0, .site .sheetDigest)

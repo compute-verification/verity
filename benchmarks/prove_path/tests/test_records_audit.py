@@ -784,6 +784,24 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     assert "records_audit.py period: " in capsys.readouterr().err and not (tmp_path / "q.json").exists()
 
 
+def test_a_window_with_its_wires_order_gives_the_period_its_circuit_record_order_and_held_pins(tmp_path):
+    """`period` on a window with its wires' order (``order.json`` beside ``circuit.json``): the audit as without it, and
+    the circuit record, the order as written and the verifier's pins that the registration records as their parameters'
+    registered roots (`interface.held_params`), on which the period check counts its free inputs
+    (`NetworkCheck.Circuit.check`), but the scan state's: the period refuses its pin, so its reads count free there."""
+    got = _registered(tmp_path / "w", name=RA.TIED, own=True)
+    audit = _audited(got.dir, tmp_path / "a")
+    rec, doc = (json.loads((got.dir / f).read_text()) for f in ("registration.json", "circuit.json"))
+    root = IF.registered_roots(rec["window"])[RA.TIED]
+    bare = RA.period(got.dir, audit, {RA.TIED: root})
+    assert not {"circuit", "order", "pins"} & set(bare)
+    order = {"format": "verity/wire-order/v1", "segments": [{"template": TID, "at": 0, "radix": [8], "c": 0, "r": [0]}],
+             "wires": []}
+    (got.dir / "order.json").write_text(json.dumps(order))
+    assert IF.held_params({RA.TIED: root.upper()}, IF.registered_roots(rec["window"])) == {RA.TIED}
+    assert RA.period(got.dir, audit, {RA.TIED: root.upper()}) == {**bare, "circuit": doc, "order": order, "pins": {}}
+
+
 #: a `ScanSlots_v2` of two lanes on a 40-word state row (`test_io_shell`'s)
 SLOTS = {"NS": 40, "NP": 4, "IDB": 17, "K0": 2, "K": 3,
          "OCC": (3, 300), "LP": (40, 340), "MAX": (80, 380), "IDS": (120, 420)}

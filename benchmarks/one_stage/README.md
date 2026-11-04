@@ -92,7 +92,10 @@ negatives.
   run, credits nothing). `PRODUCT=remote` composes sampled proofs and PoUW alone: the onsite pieces are dropped, not run
   and not composed, and the preflight refuses any onsite piece's command. `CERTIFIER_FRONT` is not a piece but how the
   requests are served, so a remote run may set it (with `LOAD=front`) to serve through the network certifier in front
-  of its endpoint, its verdicts unchanged. An accept's clause says when its weights were held and their share of the checkpoint, where its
+  of its endpoint, its verdicts unchanged. `PRODUCT=remote-network` composes sampled proofs, PoUW and the network
+  certifier, dropping the wipe, PoUS and the bandwidth audit as remote does, and its composites are remote's and
+  `verity/remote-network/v0`'s, which refuses a network certifier's period whose compute audits are not all on the run's
+  registration record (its `egress` tie). An accept's clause says when its weights were held and their share of the checkpoint, where its
   profile says so (PoUS's), and each δ of the block record's at which its quantity is not established. With the
   certifier's piece split in two (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), V3c's step also runs the chain after
   its window commit, beside its audit (within `CERTIFIER_TIMEOUT`, default 4h), and the period check on its
@@ -206,7 +209,7 @@ negatives.
   token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
   the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
 - `served_composite.sh`: `served_verdicts.sh`'s step after its record. It writes PoUS's and the wipe's composite cases
-  (PoUS's `served_case.sh`), then gets remote's and onsite's Lean verdicts on the run's cases (soundness's composite
+  (PoUS's `served_case.sh`), then gets remote's, remote-network's and onsite's Lean verdicts on the run's cases (soundness's composite
   reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`, and a tree without those two scripts skips the step.
 - `onsite_record.py OUT [--advice-charge FILE]`: the onsite demo's record of a served run (`record/onsite.json`), which
   `served_verdicts.sh` writes after its composite step when the network certifier is in the run: its piece

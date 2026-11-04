@@ -36,11 +36,11 @@ file's descriptor is `tmpl c`, read at the statement circuit `HmOut.unrolled c`.
 - `TableCRZAt` (`cr/sha-512`; the statement reads it through its abbreviation `TableCRZ`) and `LinkCRZC`
   (`ecr/sha-512`): SHA-512's collision resistance, for the collision finders the proof builds from the prover.
 
-At remote, in the one-stage form, v2's verdicts are its own run of `flock-verify verify --zk` on the sessions' files,
-which come in as blobs (under "Where things are"), so remote accepts there only where that run accepts. No Lean
-statement yet carries a composite's acceptance to `SampledKSLiveV3`'s event. Onsite's component is still one-stage v1,
-which takes the sessions' verdicts as evidence: the verifier's run of `flock-verify --zk` produces them, and the link
-from onsite's acceptance to that run comes when onsite reads v2.
+At remote, with or without the network certifier, in the one-stage form, v2's verdicts are its own run of
+`flock-verify verify --zk` on the sessions' files, which come in as blobs (under "Where things are"), so remote accepts
+there only where that run accepts. No Lean statement yet carries a composite's acceptance to `SampledKSLiveV3`'s event.
+Onsite's component is still one-stage v1, which takes the sessions' verdicts as evidence: the verifier's run of
+`flock-verify --zk` produces them, and the link from onsite's acceptance to that run comes when onsite reads v2.
 
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
 before any coin. In the remote protocol the coins come from the auditor's challenger (or, until proofs retires it, the

@@ -12,7 +12,8 @@ A composite's acceptance is its acceptance as a `same` composition and every com
 its ties and `acceptSame`). So the event `Verity.SoundnessOf` bounds at a composite lies inside the union of its
 subprotocols' events, each at most its target's error at the strategy: the union bound over the composite's
 subprotocols in one game (`soundness_at_of_targets`). `soundness_of_subprotocols` is it at onsite's seven, and
-`remote_soundness_of_subprotocols` at remote's three, which are a subset of onsite's.
+`remote_soundness_of_subprotocols` at remote's three, which are a subset of onsite's; at remote with the network
+certifier it is `soundness_at_of_targets` itself, over remote's three and the network certifier.
 
 Beside it, the two checks every guarantee carries, for any names `V`: `soundness_honest_of`, at the honest deployment
 (the deployment's honest prover at registered files, each subprotocol's honest lemma `Vocab.HonestHolds`) every target's
@@ -41,7 +42,7 @@ open scoped ENNReal
 theorem component_mem {k : Verity.Registration.Composite} {a : Subprotocol} {P : BlobProtocol}
     (h : component k a = some P) : P ∈ componentsOf k := by
   cases k <;> cases a <;> simp [component] at h <;> subst h <;>
-    simp [componentsOf, Onsite.components, Remote.components]
+    simp [componentsOf, Onsite.components, Remote.components, RemoteNetwork.components]
 
 /-- **Each composite's verifier of record is the one the composites' table lists for it**, with its subprotocols'
 ids. -/
@@ -50,10 +51,12 @@ theorem verifier_mem (k : Verity.Registration.Composite) :
   cases k
   · exact List.mem_cons.2 (Or.inl rfl)
   · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))
+  · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))))
 
 /-- **What a composite's verifier of record accepts, it accepted as a `same` composition**: an accepted composition of
-its components whose record subprotocols committed to one record, at onsite PoUS and PoUB-P2 on one store, and at
-remote every window of PoUW's period on the policy's record. -/
+its components whose record subprotocols committed to one record, at onsite PoUS and PoUB-P2 on one store, at
+remote and remote with the network certifier every window of PoUW's period on the policy's record, and at remote with
+the network certifier every compute audit of the network certifier's period on it too. -/
 theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) : SameAccepts k s := by
   cases k
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
@@ -66,6 +69,12 @@ theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts
       Properties.Composition.answerAccepts (Remote.protocol.on s.blobs) s.params s.commitment s.evidence h
     obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied [Remote.windows] ev
       (Composition.checkSame "verity/remote/v0" Remote.tied (s.components .remote) ps c ev) pub prof hch
+    exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
+      Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
+  · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
+      Properties.Composition.answerAccepts (RemoteNetwork.protocol.on s.blobs) s.params s.commitment s.evidence h
+    obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied RemoteNetwork.ties ev
+      (Composition.checkSame "verity/remote-network/v0" Remote.tied (s.components .remoteNetwork) ps c ev) pub prof hch
     exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
       Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
 
@@ -371,14 +380,17 @@ theorem nontrivial_at (k : Verity.Registration.Composite) (hk : Subprotocol.pouw
 end Idle
 
 /-- **`SoundnessOf`'s honest lemma**: its hypotheses hold at the idle deployment's compiled composites, every
-subprotocol meeting its target at onsite and at remote. -/
+subprotocol meeting its target at onsite, at remote and at remote with the network certifier. -/
 theorem soundness_at_of_targets_honest :
     Idle.unbounded.Target .onsite .sampled ∧ Idle.unbounded.Target .onsite .pouw ∧
       Idle.unbounded.Target .onsite .inferenceOnly ∧ Idle.unbounded.Target .onsite .pous ∧
       Idle.unbounded.Target .onsite .poub ∧ Idle.unbounded.Target .onsite .network ∧
       Idle.unbounded.Target .onsite .wipe ∧ Idle.unbounded.Target .remote .sampled ∧
-      Idle.unbounded.Target .remote .pouw ∧ Idle.unbounded.Target .remote .inferenceOnly :=
+      Idle.unbounded.Target .remote .pouw ∧ Idle.unbounded.Target .remote .inferenceOnly ∧
+      Idle.unbounded.Target .remoteNetwork .sampled ∧ Idle.unbounded.Target .remoteNetwork .pouw ∧
+      Idle.unbounded.Target .remoteNetwork .inferenceOnly ∧ Idle.unbounded.Target .remoteNetwork .network :=
   ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
+    Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
     Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
     Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
 
