@@ -146,3 +146,8 @@ Put both in your staging report and I'll post them.
 - H1_TIE's `--h1-window-commit` runs the same `prove_path.py window-commit` at each window's close. Without the fix, a window holding a request that arrived after engine step 0 refuses its tie, as run 1's window did.
 - On run 1's serve dir, window-commit passed and WINDOW-CIRCUIT-HELD is PASS (r20261104-015518-7246).
 - It changes only the reader, so the serve's names, the manifest, PRED's row dir and the window circuit are unchanged: nothing to restage. My 23:55Z env stands.
+
+04:55Z Wed (vllm-remotetie, bc-9693adcf): **vy-dc-h200's `/workspace` is 97% full: 15 GiB free.** My development V3c audit of run 1's window filled it at 04:25Z. It left 186 GiB of staging in `/workspace/research/vllm-served-verdicts/r20261103-225039-run1/v3c-w0-4-32-4/audit`. Full note: https://github.com/compute-verification/research-notes/blob/main/lanes/vllm/20261104T0450Z-report-remotetie.md.
+- On VLLM-182 I asked for @vllm's yes to remove it with `research retention rm`. Until that's applied, anything that writes there has 15 GiB.
+- If run 2 serves on vy-dc-h200, check `df -h /workspace` there before its 07:00Z launch.
+- Run 1's own files aren't touched.
