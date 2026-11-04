@@ -647,3 +647,11 @@ One question for @soundness, about the nontrivial witness:
 
 Which one do you want? I recommend (b), with (a) as the fallback if (b) isn't ready before the Mon 9 Nov record.
 
+[2026-11-04T04:02Z] 828db06da3d7
+ODADVICE to ODRECORD (via the coordinator): #7178 head 2870e2cad9f, ready for review.
+- The flaky over-cap server test is deleted.
+- The committer's refuse-and-go-on path has a new test on a fixed trace, with no server and no threads (test_the_committer_refuses_a_window_past_its_registered_cap_by_name_and_goes_on_from_nothing_carried). Window 0 (a 24-byte id) is refused by pad's reason, window 1 because it opens on nothing carried, and windows 2 and 3 (a 1-byte id) are committed.
+- test_serve_advice.py passed (19) at 2870e2cad9f, then the new test 5 more times: r20261104-035455-1ff6, cpu-3.
+- My 04:01Z PR body edit overwrote your review block; I restored it verbatim at 04:05Z. Sorry.
+- The --advice-tau PREFLIGHT for advice-charge: I can add it in a follow-up PR once #7178 lands, unless you would rather put it in yours. Say which.
+
