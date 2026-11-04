@@ -881,9 +881,9 @@
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Pouw.PearlPlus": {
-   "imports": ["PouwPearlPlus", "Definitions.Pouw.PearlC.Unscale", "Definitions.Core.Fp32"],
+   "imports": ["PouwPearlPlus", "Definitions.Pouw.PearlC.Unscale", "Definitions.Core.Fp32", "Properties.Pouw.Commit"],
    "except": [],
-   "why": "the properties are stated against Pearl+'s verdict's own functions (`pouw_pearlplus`), on Lean core, and the served y against its Definition (`Pouw.PearlC.unscale`, on `security`'s FP32 words, which import nothing): nothing of Mathlib"
+   "why": "the properties are stated against Pearl+'s verdict's own functions (`pouw_pearlplus`), on Lean core, the trees' messages against the commitments' (`Properties.Pouw.Commit.pathFrames`), and the served y against its Definition (`Pouw.PearlC.unscale`, on `security`'s FP32 words, which import nothing): nothing of Mathlib"
   },
   "Properties.Pouw.Commit": {
    "imports": ["PouwCommit"],
