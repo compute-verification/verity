@@ -18,13 +18,10 @@ release ended, at the model's error: the outcome is each verdict and where the r
   at the pair, at the same error.
 * `prCoin_le_of_Pr`, `perOutcome_of_zkOut`: `ZKOut` at one statement, witness and verifier is `PerOutcome` over the
   protocol's randomness, its error read in `ℝ≥0∞`.
-* `relay_perOutcome`: where the relay's model frames are the model's release encoded by a public `enc`, and the auditor
-  answers each coin request with coins, the relay's release is per outcome at the model's outcome and `relayEnd`, one
-  of the schedule's `(tmplOf s).length + 1` cuts. Its simulator is the model's, encoded and woven with the setup's
-  control frames; its error is the model's. `PerOutcome.le_card` then costs `|St| · ((tmplOf s).length + 1)` outcomes.
-* `relay_perOutcome_slots`: without the auditor's premise, the same at the slots the release reached (`relaySlots`, cut
-  at `relayCut`). A coin request the auditor answered without coins comes again as often as the worker sends it, so
-  this outcome counts the worker's repeats and has no bound but the number of requests.
+* `relay_perOutcome`: where the relay's model frames are the model's release encoded by a public `enc`, the relay's
+  release is per outcome at the model's outcome and `relayEnd`, one of the schedule's `(tmplOf s).length + 1` cuts, at
+  any worker and any auditor. Its simulator is the model's, encoded and woven with the setup's control frames; its
+  error is the model's. `PerOutcome.le_card` then costs `|St| · ((tmplOf s).length + 1)` outcomes.
 * `relay_zkOut`: `relay_perOutcome` at a model that is `ZKOut`.
 * `relay_preFinish`: at the deferred release, where the relay's model frames are its messages each encoded by a public
   `e`, the relay's release before the `Finish` is the unswitched prover's run (`LeanRelease.release_preFinish_runStar`),
@@ -97,39 +94,21 @@ open scoped ENNReal
 worker's and the auditor's answers at the setup `s`. Where the model's frames it releases are the model's release
 `mrel ω`, encoded by `enc`, and the model's release is simulated per outcome, the relay's release is simulated per
 outcome at the model's outcome and where the release ended (`relayEnd`), by the model's simulator encoded and woven
-with the setup's control frames over the schedule's cut, at the model's error. -/
+with the setup's control frames over the schedule's cut, at the model's error, at any worker and any auditor. -/
 theorem relay_perOutcome {Ω St Ωs M : Type} [Fintype Ω] [Fintype Ωs] (hold : Bool) (s : V (SessionSpec × Array Stmt))
     (ins : Ω → List (ByteArray × Env)) {mout : Ω → St} {mrel : Ω → M} {S : St → Ωs → M} {ε : St → ℝ≥0∞}
     (enc : M → List (List ByteArray)) (h : PerOutcome mout mrel S ε) (hs : ∀ ω, ∀ p ∈ ins ω, p.2.setup = s)
-    (hb : ∀ ω, ∀ p ∈ ins ω, ∀ why, (p.2.barrier (some why)).isSome) (hc : ∀ ω, CoinReqsAnswered (ins ω))
+    (hb : ∀ ω, ∀ p ∈ ins ω, ∀ why, (p.2.barrier (some why)).isSome)
     (hfr : ∀ ω, relayFrames hold (ins ω) = enc (mrel ω)) :
     PerOutcome (fun ω => (mout ω, relayEnd hold s (ins ω))) (fun ω => out hold {} {} (ins ω))
       (fun o σ => weave (ctlOf s) ((tmplOf s).take o.2) (enc (S o.1 σ))) (fun o => ε o.1) := by
   have key : (fun ω => out hold {} {} (ins ω)) =
       fun ω => weave (ctlOf s) ((tmplOf s).take (relayEnd hold s (ins ω))) (enc (mrel ω)) := by
     funext ω
-    obtain ⟨hle, hout⟩ := relay_release_cut hold s (ins ω) (hs ω) (hb ω) (hc ω)
+    obtain ⟨hle, hout⟩ := relay_release_cut hold s (ins ω) (hs ω) (hb ω)
     rw [hout, relayEnd_val hle, hfr ω]
   rw [key]
   exact h.refine (fun ω => relayEnd hold s (ins ω)) fun c m => weave (ctlOf s) ((tmplOf s).take c) (enc m)
-
-/-- **The deployed relay's release, per outcome, at any auditor**: as `relay_perOutcome`, at the slots the release
-reached up to where it ended, a coin slot the auditor answered without coins coming again as often as the worker sends
-its request. -/
-theorem relay_perOutcome_slots {Ω St Ωs M : Type} [Fintype Ω] [Fintype Ωs] (hold : Bool)
-    (s : V (SessionSpec × Array Stmt)) (ins : Ω → List (ByteArray × Env)) {mout : Ω → St} {mrel : Ω → M}
-    {S : St → Ωs → M} {ε : St → ℝ≥0∞} (enc : M → List (List ByteArray)) (h : PerOutcome mout mrel S ε)
-    (hs : ∀ ω, ∀ p ∈ ins ω, p.2.setup = s) (hb : ∀ ω, ∀ p ∈ ins ω, ∀ why, (p.2.barrier (some why)).isSome)
-    (hfr : ∀ ω, relayFrames hold (ins ω) = enc (mrel ω)) :
-    PerOutcome (fun ω => (mout ω, (relaySlots hold (ins ω)).take (relayCut hold (ins ω))))
-      (fun ω => out hold {} {} (ins ω)) (fun o σ => weave (ctlOf s) o.2 (enc (S o.1 σ))) (fun o => ε o.1) := by
-  have key : (fun ω => out hold {} {} (ins ω)) =
-      fun ω => weave (ctlOf s) ((relaySlots hold (ins ω)).take (relayCut hold (ins ω))) (enc (mrel ω)) := by
-    funext ω
-    rw [(relay_release hold s (ins ω) (hs ω) (hb ω)).2.2.2, hfr ω]
-  rw [key]
-  exact h.refine (fun ω => (relaySlots hold (ins ω)).take (relayCut hold (ins ω)))
-    fun ks m => weave (ctlOf s) ks (enc m)
 
 /-- **The deployed relay's release, read through `ZKOut`**: where the model is zero knowledge per outcome (`ZKOut`) and
 the relay's model frames at each of the model's runs against `V*` are its transcript encoded by `enc`, the relay's
@@ -142,13 +121,13 @@ theorem relay_zkOut {W St : Type} {N Ω : Msg → Type} [∀ x, Fintype (N x)] [
     (hR : R x w) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = k x) (hold : Bool)
     (s : V (SessionSpec × Array Stmt)) (ins : N x × Ω x → List (ByteArray × Env))
     (enc : List (Msg × Out) → List (List ByteArray)) (hs : ∀ ω, ∀ p ∈ ins ω, p.2.setup = s)
-    (hb : ∀ ω, ∀ p ∈ ins ω, ∀ why, (p.2.barrier (some why)).isSome) (hc : ∀ ω, CoinReqsAnswered (ins ω))
+    (hb : ∀ ω, ∀ p ∈ ins ω, ∀ why, (p.2.barrier (some why)).isSome)
     (hfr : ∀ ω, relayFrames hold (ins ω) = enc (runStar H (P w x) Vs x ω θ).msgs) :
     PerOutcome (fun ω => (mout x (runStar H (P w x) Vs x ω θ).msgs, relayEnd hold s (ins ω)))
       (fun ω => out hold {} {} (ins ω))
       (fun o (c : S.C x) => weave (ctlOf s) ((tmplOf s).take o.2) (enc ((S.given o.1).out H Vs θ x c)))
       (fun o => ENNReal.ofReal (ε x w Θ Vs θ o.1)) :=
-  relay_perOutcome hold s ins enc (perOutcome_of_zkOut h hR Vs θ hk) hs hb hc hfr
+  relay_perOutcome hold s ins enc (perOutcome_of_zkOut h hR Vs θ hk) hs hb hfr
 
 /-- **Before the `Finish` the deployed relay's release is the unswitched prover's**: at the deferred release against
 `V*` (`LeanRelease.release_preFinish_runStar`'s premises), where the relay's model frames are the deferred release's
@@ -163,12 +142,11 @@ theorem relay_preFinish {Θ : Type} (S : RefSession) (Rf : (x : Msg) → (Fin (r
     (hk : Vs.k x = n x) (ω : (S.refP.Nonce × S.refP.Rand) × L.toSrv.Chk) (hold : Bool)
     (s : V (SessionSpec × Array Stmt)) (ins : List (ByteArray × Env)) (e : Msg × Out → List ByteArray)
     (hs : ∀ p ∈ ins, p.2.setup = s) (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome)
-    (hc : CoinReqsAnswered ins)
     (hfr : relayFrames hold ins = (runStar H (L.toSrv.proverD L.fillOf n wk w) Vs x ω θ).msgs.map e) :
     out hold {} {} ins = weave (ctlOf s) ((tmplOf s).take (relayCut hold ins))
       (((runStar H (((S.withStops Rf L.stop).unP vs).prover w) Vs x ω.1 θ).msgs.take (n x - 1)).map e ++
         ((runStar H (L.toSrv.proverD L.fillOf n wk w) Vs x ω θ).msgs.drop (n x - 1)).map e) := by
-  rw [(relay_release_cut hold s ins hs hb hc).2, hfr,
+  rw [(relay_release_cut hold s ins hs hb).2, hfr,
     ← L.release_preFinish_runStar S Rf vs H n wk x w hn hlast hR hC hH hLk hE hEf Vs θ hk ω, ← List.map_append,
     List.take_append_drop]
 
@@ -187,12 +165,12 @@ theorem relay_stop {Θ : Type} (S : RefSession) (Rf : (x : Msg) → (Fin (refK x
       (histOf ((runStar H (((S.withStops Rf L.stop).unP vs).prover w) Vs x ω.1 θ).msgs.take (n x - 1))) = false)
     (hold : Bool) (s : V (SessionSpec × Array Stmt)) (ins : List (ByteArray × Env))
     (enc : List (Msg × Out) → List (List ByteArray)) (hs : ∀ p ∈ ins, p.2.setup = s)
-    (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome) (hc : CoinReqsAnswered ins)
+    (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome)
     (hfr : relayFrames hold ins = enc (runStar H (L.toSrv.proverD L.fillOf n wk w) Vs x ω θ).msgs) :
     out hold {} {} ins = weave (ctlOf s) ((tmplOf s).take (relayCut hold ins))
       (enc (cutT (fun as => ((Vs.next x as θ).eval H).1) L.stop (n x - 1) (n x)
         (runStar H (((S.withStops Rf L.stop).unP vs).prover w) Vs x ω.1 θ).msgs)) := by
-  rw [(relay_release_cut hold s ins hs hb hc).2, hfr,
+  rw [(relay_release_cut hold s ins hs hb).2, hfr,
     L.release_stop_runStar S Rf vs H n wk x w hn hlast hR hC hH hLk hE hEf Vs θ hk ω hd]
 
 end Claims.ZKServer.Relay
