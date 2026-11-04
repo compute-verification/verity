@@ -182,8 +182,8 @@ class WrongOpening(FT.RecordingCoins):
     """A challenger that sends its link points with a salt that opens no commitment of its to them: a wrong one when it
     committed to its coins, a stray one when they are live."""
 
-    def _draw(self, stream, k, n):
-        coins = super()._draw(stream, k, n)
+    def _draw(self, stream, k, n, after):
+        coins = super()._draw(stream, k, n, after)
         if (stream, k) == (RL.LINK_COINS, 0):
             self.openings[(stream, k)] = bytes(FT.INST.salt_bytes)
         return coins
@@ -192,8 +192,8 @@ class WrongOpening(FT.RecordingCoins):
 class NoOpening(FT.RecordingCoins):
     """A challenger that sends round 1 of rep 0's coins without the salt that opens its commitment to them."""
 
-    def _draw(self, stream, k, n):
-        coins = super()._draw(stream, k, n)
+    def _draw(self, stream, k, n, after):
+        coins = super()._draw(stream, k, n, after)
         if (stream, k) == (STREAMS[0], 1):
             del self.openings[(stream, k)]
         return coins

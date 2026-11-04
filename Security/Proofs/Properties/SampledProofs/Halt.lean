@@ -1,6 +1,6 @@
 import Properties.SampledProofs.Halt
 
-/-! # Proofs of the proof service's halt (`Properties.SampledProofs.Halt`)
+/-! # Proofs of the proof system's halt (`Properties.SampledProofs.Halt`)
 
 Each op's step is evaluated once, as a lemma over its state monad (`Halt.step_halt`, `Halt.attached_run`,
 `Halt.failures_run`, `Halt.attach_run`, `Halt.register_run`): its guards are matched or tested one at a time, and the

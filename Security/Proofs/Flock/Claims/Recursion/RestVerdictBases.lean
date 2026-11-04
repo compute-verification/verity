@@ -28,7 +28,7 @@ opened proofs' lengths are the prover's (`rd` reads them from the last message, 
 pieces), so no statement fact gives them. `decR` fixes both where it takes the statement for the last message's and
 refuses proofs that are not shaped. `DrawTied` is a statement fact: the session's `unitDraw` is the statement's draw.
 At several tables the setup sets it to the draw; at one table it is read back from the public file's parsed header,
-which only `JsonSpec.parse_wf` (a field of a named premise) makes a well-formed tree.
+which the parser makes a well-formed tree (`FlockComplete.JsonRT.parse_wf`).
 -/
 
 namespace RecDeploy
