@@ -128,12 +128,12 @@ theorem segRow_data {p : Port} (h : SegRow p) {b t : ℕ} (hb : b < 2 * p.words)
   dsimp only at hsucc
   have hk2 : segComp p b < firstOf (HmRow.segShape p.bits).1 (b / 1024 + 1) := by
     unfold segComp; rw [hsucc]; omega
-  have hle := firstOf_mono' (segs := (HmRow.segShape p.bits).1) (Nat.succ_le_of_lt hj)
+  have hle := firstOf_mono' (segs := (HmRow.segShape p.bits).1) (show b / 1024 + 1 ≤ _ from hj)
   refine ⟨by rw [hn]; omega, ?_⟩
   rw [msgBit_seg hs hjS (by unfold segComp; omega) hk2, Any.blockBit_wordBit (Nat.mod_lt _ (by omega)) ht, hget]
   unfold segVal
   dsimp only
-  rw [if_pos (by unfold segComp; omega)]
+  rw [ite_eq_left (by unfold segComp; omega)]
   congr 1
   unfold segComp HmRow.ROW_SEG_BITS
   omega
