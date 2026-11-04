@@ -116,7 +116,10 @@ with each one's server) and from it the block record (``block-record.json``, `bl
 an answer that names no server isn't carried. An accepted answer whose outputs are not its leg's certificate
 (`block_record.leg`) is its subprotocol's error. `block_record` carries only an accepted subprotocol's certificate, so
 where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written; it is
-``accept`` only when every subprotocol accepted here.
+``accept`` only when every subprotocol accepted here. PoUW's accepted development piece is its verdict of record where
+`pouw_of_record` holds it to the challenger's pin (``--key-sha512``, served_verdicts.sh's H1_KEY_SHA512), the lane's
+own gate key (``--lane``, its H1_LANE, default vllm), its period's open and the Lean answer on the period's case; else its row stays
+missing, naming the condition it fails.
 Those are the subprotocols of ``--product`` (default onsite; `block_record.PRODUCTS`): each one the
 product drops is ``dropped`` in the report (`dropped_row`, whatever its piece left), not run and composed into no
 verdict, so remote's verdict is ``accept`` when sampled proofs and PoUW accepted here, whatever the onsite pieces.
@@ -272,6 +275,8 @@ WITNESS_NAMES = {"inst*.bin": "a prover's instance file (its rows)", "*-private.
                  "*.npz": "a value array", "*.pt": "a tensor", "*.safetensors": "a checkpoint's weights"}
 #: a development piece's verdict in the ``RECORD`` line, in place of its row's ``missing``
 DEV_VERDICT = "development run, credits nothing"
+#: core's Lean answer on PoUW's period case under the serve dir (`served_pouw.sh`'s ``pouw_piece.py period``)
+POUW_PERIOD_ANSWER = "private/pouw/period/answer.json"
 #: H1's record of a window (`pouw_h1.CALLS_FILE`) under the serve dir
 H1_CALLS = "h1/w{k}/pouw-h1-calls.json"
 #: serve-openai's declared window Program's meta under the serve dir (`pouw_h1.PROGRAM_META`)
@@ -574,7 +579,8 @@ def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | Non
             rc = subprocess.run(["timeout", "-k", "1m", limit, "bash", "-c", cmd, "_", str(serve_dir), str(window),
                                  str(d)], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, env=env, check=False).returncode
         (d / RAN).write_text(json.dumps({"server": node, "rc": rc, "limit": limit}, sort_keys=True) + "\n")
-        label, (row, _) = name.upper(), piece(key, out)
+        label, (row, _) = name.upper(), piece(key, out, serve_dir=serve_dir, key_sha512=env.get("H1_KEY_SHA512"),
+                                              lane=env.get("H1_LANE") or "vllm")
         if "development" in row:
             got[comp], label = {**development_line(row["development"]), "rc": rc}, f"{label} (development run, credits nothing)"
         else:
@@ -1195,21 +1201,133 @@ def _json(path: Path) -> Any:
     return json.loads(path.read_text()) if path.exists() else None
 
 
-def piece(key: str, pieces_dir: Path, run: str | None = None) -> tuple[dict[str, Any], tuple[str | None, str]]:
-    """A subprotocol's `piece_row` and `piece_server`; a piece that left a file that isn't JSON is its ``error``, about no
-    server."""
+def piece(key: str, pieces_dir: Path, run: str | None = None, **of_record: Any
+          ) -> tuple[dict[str, Any], tuple[str | None, str]]:
+    """A subprotocol's `piece_row` (`of_record`: its ``serve_dir``, ``key_sha512`` and ``lane``) and `piece_server`; a
+    piece that left a file that isn't JSON is its ``error``, about no server."""
     try:
-        return piece_row(key, pieces_dir, run), piece_server(key, pieces_dir)
+        return piece_row(key, pieces_dir, run, **of_record), piece_server(key, pieces_dir)
     except ValueError as e:
         return ({"verdict": "error", "owner": PIECES.get(key, WIPE)[2],
                  "reason": f"its piece left a file that isn't JSON: {type(e).__name__}: {e}"[:2000]}, (None, "real"))
 
 
-def piece_row(key: str, pieces_dir: Path, run: str | None = None) -> dict[str, Any]:
-    """A subprotocol's runner row from its piece's answer; a development piece's is ``missing`` with its document when it
-    accepts or claims no verdict (`UNCLAIMED`; it credits nothing, for the document's ``why``, else `DEV_WHY`), else
-    ``reject``; a piece that ran (`RAN`) and wrote neither is its ``error``, unless it
-    refused to run (`REFUSED`); otherwise ``missing``, naming why."""
+def _ledger_period(lines: Sequence[str], session: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """The reserve of `session` in the auditor's ledger `lines` and the ``period-open`` body of its prover's period it
+    joined (`challenger.verify_periods`' rule: the prover's period open at the reserve), each None where there is none."""
+    current: dict[str, dict[str, Any]] = {}
+    for x in lines:
+        e = json.loads(x)
+        b = e.get("body") or {}
+        if e.get("kind") == "period-open":
+            current[b.get("lane")] = b
+        elif e.get("kind") == "period-close":
+            current.pop(b.get("lane"), None)
+        elif e.get("kind") == "reserve" and e.get("session") == session:
+            return e, current.get(b.get("for") or b.get("by"))
+    return None, None
+
+
+def pouw_of_record(doc: Mapping[str, Any], piece_dir: Path, serve_dir: Path | None, key: str | None,
+                   lane: str | None) -> tuple[dict[str, Any] | None, str | None]:
+    """Whether PoUW's accepted development piece `doc` (`pouw`'s, in `piece_dir`) is a verdict of record: core's answer
+    and None when it is, else None and the first condition it fails. It is one when the challenger check accepted the
+    window's coins as the auditor host's challenger's under `key`, the pin the compose holds them to (the piece's
+    ``check/pouw_h1_challenger.json``); the window's session was reserved under lane `lane`'s own gate key (its reserve
+    in the piece's ``ledger.jsonl`` by the lane, not for it); core's credit accepted the window with credited calls;
+    the window is in that lane's period whose open commits its draw K, rows and weights (`credit.committed_k`,
+    ``committed_rows``, ``committed_weights``); and core's Lean answer on the period's case (`POUW_PERIOD_ANSWER`
+    under `serve_dir`) accepts that window alone, with those calls and an ε. The answer's work is that answer's
+    credited work less its ε share, its units the credited calls, at the answer's δ; its profile carries credit's
+    summary and the Lean answer whole. Nothing here decides anew: each condition reads what credit and the Lean
+    answered."""
+    from verity.core.protocols.pouw import credit as CR
+    from verity.core.protocols.pouw import period_check as PC
+
+    if doc.get("coin_source") != LIVE_SOURCE:
+        return None, f"its coins are {doc.get('coin_source')!r}'s, not the auditor host's challenger's"
+    check, credit = doc.get("check") or {}, doc.get("credit") or {}
+    if not (check.get("ok") is True and check.get("reason") is None and check.get("manifest") is None):
+        why = check.get("reason") or check.get("manifest") or "it did not accept (its check/pouw_h1_challenger.json)"
+        return None, f"the challenger check refused the window: {why}"
+    refused = credit.get("window") or credit.get("manifest")
+    if refused is not None:
+        refused = f"({refused[0]}) {refused[1]}" if isinstance(refused, list) and len(refused) == 2 else str(refused)
+        return None, f"core's credit refuses the window {refused}"
+    calls = credit.get("credit")
+    if not (isinstance(calls, list) and calls):
+        return None, "core's credit accepted the window with no credited calls, so it credits nothing"
+    unmet = [f"{p}: {v.get('why')}" for p in PREMISES if not (v := doc.get(p) or {}).get("met")]
+    if unmet:
+        return None, f"the window doesn't meet {unmet[0]}"
+    if not key:
+        return None, "the compose holds the coins to no key pin (--key-sha512, H1_KEY_SHA512)"
+    try:
+        got = json.loads((piece_dir / "check" / "pouw_h1_challenger.json").read_text())
+        lines = [x for x in (piece_dir / "ledger.jsonl").read_text().splitlines() if x.strip()]
+    except (OSError, ValueError) as e:
+        return None, f"the piece's challenger check or ledger can't be read ({type(e).__name__}: {e})"
+    if not (got.get("pinned_public_sha512") == key == (got.get("key") or {}).get("public_sha512")):
+        return None, (f"the challenger check pinned key {str(got.get('pinned_public_sha512'))[:16]}..., not the "
+                      f"compose's pin {key[:16]}...")
+    session = (doc.get("session") or {}).get("session")
+    try:
+        reserve, period = _ledger_period(lines, str(session))
+    except (ValueError, AttributeError) as e:
+        return None, f"the piece's ledger can't be read ({type(e).__name__}: {e})"
+    if reserve is None:
+        return None, f"the piece's ledger holds no reserve of the window's session {session}"
+    rb = reserve.get("body") or {}
+    if rb.get("for") is not None:
+        return None, (f"the window's session was reserved by {rb.get('by')} for lane {rb['for']}, not under the lane's "
+                      "own gate key")
+    if not lane or rb.get("by") != lane:
+        return None, f"the window's session was reserved under lane {rb.get('by')}'s gate key, not lane {lane}'s own"
+    if period is None:
+        return None, f"the window's session joined no period of lane {lane}"
+    name = period.get("period")
+    if (want := (doc.get("credit_inputs") or {}).get("--period")) not in (None, name):
+        return None, f"the window's session joined period {name}, not the period credit read ({want})"
+    for committed in (CR.committed_k, CR.committed_rows, CR.committed_weights):
+        _v, why = committed(lines, name)
+        if why is not None:
+            return None, f"period {name}'s open doesn't commit what credit needs: ({why[0]}) {why[1]}"
+    if serve_dir is None or not (serve_dir / POUW_PERIOD_ANSWER).is_file():
+        return None, f"no Lean answer on the period's case ({POUW_PERIOD_ANSWER} under the serve dir)"
+    try:
+        lean = check_answer(json.loads((serve_dir / POUW_PERIOD_ANSWER).read_text()))
+    except ValueError as e:
+        return None, f"the period's Lean answer is not a core answer ({e})"
+    if lean["protocol"] != PC.ID:
+        return None, f"the period's Lean answer is {lean['protocol']}'s, not {PC.ID}'s"
+    if lean["verdict"] != "accept":
+        return None, f"the period's Lean answer is {lean['verdict']}: {lean['reason']}"
+    pub, prof = lean["public"] or {}, lean["profile"] or {}
+    if prof.get("period") != name or pub.get("windows") != [calls]:
+        return None, (f"the period's Lean answer is period {prof.get('period')}'s with credited calls "
+                      f"{pub.get('windows')}, not period {name}'s window alone with credit's")
+    work, eps = (pub.get("work") or [None])[0], (pub.get("eps") or [None])[0]
+    if not (type(work) is int and work > 0 and isinstance(eps, str)):
+        return None, f"the period's Lean answer credits work {work!r} at ε {eps!r}: no work with an ε <= 1"
+    net = int(work * (1 - Fraction(eps)))
+    if net <= 0:
+        return None, f"the period's Lean answer credits work {work} at ε {eps}: none net of its ε share"
+    return {"protocol": lean["protocol"], "verdict": "accept", "reason": None, "commitment": lean["commitment"],
+            "public": {"work": {"credited": net, "credited_tiles": len(calls), "work": work, "eps": eps,
+                                "k": pub.get("k")}},
+            "profile": {"delta": pub.get("delta"), "period": name, "lane": lane, "key_sha512": key,
+                        "credit": {k: credit.get(k) for k in ("k", "drawn", "eps")},
+                        "lean_answers": doc.get("lean_answers"), "lean": lean}}, None
+
+
+def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, serve_dir: Path | None = None,
+              key_sha512: str | None = None, lane: str | None = None) -> dict[str, Any]:
+    """A subprotocol's runner row from its piece's answer; PoUW's accepted development piece is its verdict of record
+    where `pouw_of_record` says so (`serve_dir`, `key_sha512` and `lane` what it reads), its row core's answer's with its
+    document as ``piece``; else a development piece's is ``missing`` with its document when it accepts or claims no
+    verdict (`UNCLAIMED`; it credits nothing, for the document's ``why``, else `DEV_VERDICT` and the condition of
+    record it fails), else ``reject``; a piece that ran (`RAN`) and wrote neither is its ``error``, unless it refused to
+    run (`REFUSED`); otherwise ``missing``, naming why."""
     _name, comp, owner, what = PIECES.get(key, WIPE)
     d = pieces_dir / comp
     f, dev, ran = d / "answer.json", d / DEVELOPMENT, _json(d / RAN)
@@ -1217,6 +1335,11 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None) -> dict[str, A
         doc = _json(dev)
         if not isinstance(doc, dict):
             return {"verdict": "error", "owner": owner, "reason": f"its piece's {DEVELOPMENT} is not a JSON object"}
+        if key == "work" and doc.get("piece") is None and doc.get("verdict") == "accept":
+            answer, failed = pouw_of_record(doc, d, serve_dir, key_sha512, lane)
+            if answer is not None:
+                return {**row_of(owner, answer, d, run), "piece": doc}
+            return {"verdict": "missing", "owner": owner, "why": f"{DEV_VERDICT}: {failed}"[:2000], "development": doc}
         if doc.get("verdict") in ("accept", UNCLAIMED):
             own = doc.get("why") or DEV_WHY
             refused = (doc.get("credit") or {}).get("window")
@@ -1487,6 +1610,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--sampled-lean", action="store_true",
                    help="sampled proofs' row from this host's run of its Lean on the case's proofs (lean_sampled_row)")
     r.add_argument("--sampled-exe", help="vstar-recursive, with --sampled-lean (default: built here)")
+    r.add_argument("--key-sha512",
+                   help="the challenger key's pin PoUW's coins are held to for a verdict of record (H1_KEY_SHA512)")
+    r.add_argument("--lane", default="vllm",
+                   help="the lane whose own gate key PoUW's window must be reserved under for a verdict of record "
+                        "(H1_LANE)")
     sub.add_parser("witness")
     for q in (p, r):
         q.add_argument("--node", default=socket.gethostname())
@@ -1625,7 +1753,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")
     keys = [*PIECES, "wipe"]
-    got = {k: piece(k, a.pieces, run) for k in keys}
+    got = {k: piece(k, a.pieces, run, serve_dir=a.serve_run, key_sha512=a.key_sha512, lane=a.lane) for k in keys}
     if a.sampled_exe is not None and not a.sampled_lean:
         ap.error("--sampled-exe is sampled proofs' Lean, which only --sampled-lean runs")
     integrity = (lean_sampled_row(a.sampled_proofs, a.serve_run / "private" / "scratch", a.sampled_exe, run)
