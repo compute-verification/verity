@@ -697,7 +697,8 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     assert RA.main([*base, "--out", str(tmp_path / "day"), "--tie", str(named), "--tie-prefix", "h1/", "--day", "0",
                     "--day-log", str(tmp_path / "log.json")]) == 1
     assert seen["declared"] == {"day": 0, "declarations": [day[0].declared()]}
-    assert json.loads((tmp_path / "day" / "summary.json").read_text())["day"] == {"day": 0, "declared": [got.rec["program"]]}
+    assert json.loads((tmp_path / "day" / "summary.json").read_text())["day"] == {
+        "day": 0, "declared": [got.rec["program"]], "source": RA.DAY_SOURCES["development"]}
 
 
 def test_a_declared_day_holds_the_registrations_program_to_the_days_one_declaration(written, tmp_path):
@@ -751,6 +752,40 @@ def test_a_declared_day_holds_the_tied_ws_naming_to_a_declaration_of_that_day_in
             RA.declared_day(3, str(log), None, bad)
     with pytest.raises(ValueError, match="names day 3's declaration, and the audit has no --day"):
         RA.declared_day(None, None, None, w(day=3, declaration=d3))
+
+
+def test_the_device_day_is_the_challengers_signed_one_and_holds_ws_naming_to_its_entry(monkeypatch):
+    """``--day-ledger`` (`device_day`): the day and declarations come from the challenger's ``declared_day`` over its
+    signed ledger, never from --day, in R2's shape whatever else the device's entry carries; W's naming is held to the
+    Declaration rebuilt from the device's entry of the day (no ``previous``), so a digest chained in the prover's own
+    log, or another day's, is refused. A tree whose challenger has no ``declared_day`` refuses rather than fall back."""
+    from verity.core.protocols import registration as G
+    from verity.core.protocols.sampled_proofs import challenger as Ch
+
+    day, program, seen = 20396, "5d" * 64, []
+
+    def declared_day(lines: list[bytes], window: dict, key: object, verify: object) -> dict[str, object]:
+        seen.append((lines, window, key))
+        return {"day": day, "declarations": [{"by": "vllm", "blocks": ["t"], "day": day, "declared_utc": "2025-11-04T00:01:00Z",
+                                              "pinned": "ab", "program": program},
+                                             {"by": "vllm", "blocks": [], "day": day + 1, "declared_utc": "x", "pinned": "ab",
+                                              "program": "6e" * 64}]}
+    monkeypatch.delattr(Ch, "declared_day", raising=False)
+    with pytest.raises(ValueError, match="has no declared_day"):
+        RA.device_day([b"{}"], "ab" * 64, None, lambda m, s: True)
+    monkeypatch.setattr(Ch, "declared_day", declared_day, raising=False)
+    mine = G.Declaration(day, program, ("t",)).digest()
+    chained = G.chain("remote", [G.Declaration(day, program, ("t",))])[-1].digest()
+
+    def w(d: int, digest: str) -> dict[str, object]:
+        return {"window": {"day": d, "declaration": digest}}
+    got = RA.device_day([b"{}"], "ab" * 64, "key", lambda m, s: True, w(day, mine))
+    assert got == {"day": day, "declarations": [{"blocks": ["t"], "day": day, "program": program},
+                                                {"blocks": [], "day": day + 1, "program": "6e" * 64}]}
+    assert seen[-1] == ([b"{}"], {"root": "ab" * 64}, "key")
+    for bad in (w(day, chained), w(day + 1, G.Declaration(day + 1, "6e" * 64).digest()), {"window": {}}):
+        with pytest.raises(ValueError, match=f"not one of day {day}'s in the challenger's ledger"):
+            RA.device_day([b"{}"], "ab" * 64, "key", lambda m, s: True, bad)
 
 
 def _audited(window: Path, out: Path, registration: dict | None = None, accepted: bool = True) -> Path:
