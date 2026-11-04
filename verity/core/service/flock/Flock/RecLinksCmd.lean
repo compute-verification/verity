@@ -1,5 +1,4 @@
 import Lean.Data.Json
-import Flock.JsonParse
 import Flock.RecLinks
 
 /-!
@@ -50,7 +49,7 @@ def cmd (args : List String) : IO UInt32 := do
   let [path] := args | IO.eprintln "usage: flock-rec-links VECTORS"; return 2
   let text ← IO.FS.readFile path
   let out : Except String (Array String) := do
-    let j ← JsonParse.parse text
+    let j ← Json.parse text
     if (j.getObjValAs? String "format").toOption != some VECTORS_FORMAT then throw s!"not a {VECTORS_FORMAT} file"
     (← j.getObjValAs? (Array Json) "cases").mapM verdict
   match out with

@@ -1,3 +1,3 @@
-import CoreComposites
+import CoreProduct
 
-def main (args : List String) : IO UInt32 := Core.Composites.main args
+def main (args : List String) : IO UInt32 := Core.Product.main args

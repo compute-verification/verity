@@ -78,19 +78,15 @@ environment extension loaded, so none of the package's code runs), and replays t
     trees        (`trees`: which module prefixes are the definitions, properties and proofs trees, its own and those of
                  the packages it requires by path) a guarantee's statement reads a definition of a module of the proofs
                  tree, or an audited module of the definitions or properties tree imports one, unless a prefix of `trees`'
-                 `except` lists the read module or the importing one with a reason (an entry that excepts nothing fails);
-                 the record follows a statement through an excepted module's definitions as through `meaning`'s
-                 (`record_scope`), so the definitions it reads there, a premise among them, are in `reads`
+                 `except` lists the read module or the importing one with a reason (an entry that excepts nothing fails)
     proved_in    (a spec package whose guarantees another package proves) a package `proved_in` names does not require this
                  one by path, holds guarantees in its own policy, shares a module root with a package it requires, or
                  imports modules of its own outside its roots; or a guarantee is proved by none of this package and those, or
                  by two
     replay       the kernel rejects a declaration of an audited module when `Replay.lean` sends them all to it again, on
                  one import of what they import from outside, one declaration per task on Lean's threads
-                 (`LEAN_NUM_THREADS`, by default the CPUs the audit may use), one of a module under the module system
-                 that it stops on (its recursion) again on its imports' public parts, as `lean` checked it: a
-                 declaration that skipped the kernel shows no axiom, and only this catches it (the `kernel` control);
-                 or the axioms found by walking the replayed
+                 (`LEAN_NUM_THREADS`, by default the CPUs the audit may use): a declaration that skipped the kernel shows
+                 no axiom, and only this catches it (the `kernel` control); or the axioms found by walking the replayed
                  environment differ from those the `.olean` files recorded; a replay killed by a signal is reported as a
                  kill. With `--replay-cache DIR`, a module that passed the replay with the same `.olean` files, every
                  module it imports transitively included, on the same toolchain and `Replay.lean` (`replay_keys`) joins it
@@ -1006,23 +1002,9 @@ def facts_program(pkg: Path) -> str:
     return str(program)
 
 
-def record_scope(policy: dict) -> list[str]:
-    """The module prefixes a guarantee's record follows its statement through (`Facts.lean`'s `recorded`): `meaning`, and
-    each prefix of `trees`' `except`.  An excepted module holds definitions a statement reads from the proofs tree (a `def G :
-    Prop` and its premises, until they move into the definitions tree), and the trees check passes them; outside `meaning`
-    the walk would stop at the first, its record holding only that name, so a premise added or dropped there would change
-    no record."""
-    meaning = policy.get("meaning", policy.get("roots", []))
-    trees = policy.get("trees")
-    excepted = trees.get("except") if isinstance(trees, dict) else None
-    extra = [p for p in excepted if isinstance(p, str) and p] if isinstance(excepted, dict) else []
-    return list(dict.fromkeys([*meaning, *sorted(extra)]))
-
-
 def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None = None) -> dict:
     """Run `Facts.lean` on the package (its `.olean` files as data: no initializer, attribute handler or other package code
-    runs): the facts document it writes, each guarantee's `reads` walked through `record_scope`.  A guarantee whose type is
-    a definition under `meaning`, applied under binders, gets
+    runs): the facts document it writes.  A guarantee whose type is a definition under `meaning`, applied under binders, gets
     `lift`: that definition (`head`), its module, and the SHA-256 of its type with the definition unfolded once
     (`unfolded_sha256`, `Facts.lean`'s `liftOf`).  With ``moved`` ({old name: new name}), each guarantee and read definition
     also gets `moved`: its name before the move (`as`) and the SHA-256 of its text under the old names, and a guarantee with a
@@ -1034,7 +1016,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     config = work / "facts-config.json"
     premises = (policy.get("shape") or {}).get("premises")
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                                  "recorded": record_scope(policy), "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
+                                  "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
                                   "spec": spec_of(policy),
                                   "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
                                   "assumptions": sorted(a for a in policy.get("assumptions", {}) if isinstance(a, str)),
@@ -1643,12 +1625,7 @@ def witness_scope(name: str, policy: dict, pin: dict) -> tuple[str, str] | None:
     (a bound on a hash, a count, a device), where neither form means anything."""
     if fns := accepted(policy, name):
         return "acceptance", f"a property of {' or '.join(fns)} accepting"
-    # what a statement reads only through `trees`' `except` (`record_scope`: the reads outside `meaning_reads`) is
-    # recorded, but brings no guarantee into scope: `unwitnessed` only shrinks, and the statements still in the proofs
-    # tree carry no witnesses
-    inner = None if pin.get("meaning_reads") is None else set(pin["meaning_reads"])
-    reads = sorted((r for r in pin.get("reads") or [] if inner is None or r.get("name") in inner),
-                   key=lambda r: r.get("name", ""))
+    reads = sorted(pin.get("reads") or [], key=lambda r: r.get("name", ""))
     for r in reads:
         m = r.get("module") or ""
         if SCOPE_COMPONENT in m.split("."):
@@ -2072,8 +2049,7 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
                                  f"{'; '.join(f'({b})' for b in new)}: an inline hypothesis, neither a named assumption "
                                  f"the lock lists, another listed guarantee's statement nor a plain range (`0 < x`, "
                                  f"`0 ≤ x`, `x ≤ 1`, `x ≤ y`, `∀ i, 0 ≤ f i`, over bound variables and numerals); "
-                                 f"{INLINE_FIX}; or, where a merge or an older tree's `--update` dropped an entry the "
-                                 f"lock had for it, put that entry back as the earlier lock has it"))
+                                 f"{INLINE_FIX}"))
     return fails, dict(sorted(kept.items())), offenders
 
 
@@ -2816,7 +2792,7 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         qwork = work / f"proved-in-{re.sub(r'[^A-Za-z0-9]+', '_', entry)}"
         qwork.mkdir(parents=True, exist_ok=True)
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                          "trees": policy.get("trees", {}), "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {}),
+                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {}),
                           "assumptions": policy.get("assumptions", {}), "shape": policy.get("shape", {})}, qwork, moved)
         lib = (q / ".lake" / "build" / "lib" / "lean").resolve()
         loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in (Path(o).resolve() for o in qf["oleans"])
@@ -3101,7 +3077,7 @@ def writable(pkg: Path) -> list[Path]:
 
 def stage_build(mk, pkg: Path, roots: list[str], dest: Path) -> tuple[dict[tuple[str, str], str], dict]:
     """A Lake cache directory at ``dest`` for ``pkg``'s build (and its ``roots``, `lake build +R`): each module of it that
-    the node's artifact cache (`ARTIFACTS`) indexes under its key, its artifacts checked (``mk``: `module_keys`,
+    the node's artifact cache (`ARTIFACTS`) indexes under its sha256 key, its artifacts checked (``mk``: `module_keys`,
     `stage`). Each build step reads it with `LAKE_CACHE_DIR` and `LAKE_ARTIFACT_CACHE` unset, under which Lake reads a
     package's cache and never writes it, and inside the sandbox, where `ARTIFACTS` is read-only. The staged directories of
     processes that are gone go first. Returns (the modules staged, as `stage` gives them, the report's `staged`: how many
@@ -3813,8 +3789,7 @@ def main(argv: list[str]) -> int:
                     "same .olean files, its imports' included, on the same toolchain (`replay_keys`), and store each one "
                     "checked here")
     ap.add_argument("--artifacts", type=Path, metavar="DIR", help="the node's Lake artifact cache (`lean_audit.LakeArtifacts`): "
-                    "each build restores the modules it indexes under their keys (`module_keys.py`), and never writes it "
-                    "(`stage_build`)")
+                    "each build restores the modules it indexes under their sha256 keys, and never writes it (`stage_build`)")
     ap.add_argument("--closure", action="store_true", help="the replay also checks every module of the import closure, the "
                     "toolchain's, Mathlib's and ArkLib's included, that has not passed it under its key (with --replay-cache, "
                     "a warm run checks only what changed; `replay_step`)")

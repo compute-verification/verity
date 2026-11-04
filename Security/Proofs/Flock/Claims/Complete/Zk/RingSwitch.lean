@@ -378,12 +378,12 @@ def RsExtrasZk : Prop :=
 variable {H rel}
 
 /-- **The masked ring switch replays** (`RingSwitchZk`) at every honest masked run, given the extra claims' algebra. -/
-theorem ringSwitchZk_goal (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)
+theorem ringSwitchZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hP : JsonRT.ProverOkZk H rel) (hR : JsonRT.RepShapedZk H rel) (hX : RsExtrasZk H rel) : RingSwitchZk H rel := by
   intro o i hi r hr
-  have hRp := replay_goal h64 hS hP hR o i hi r hr
+  have hRp := replay_goal S h64 hS hP hR o i hi r hr
   obtain ⟨st, v, cm, e, streams, htabs, hsch, hss, hbytes, hstream, hext, h25, hrep⟩ :=
-    JsonRT.RunZk.walk h64 hS hP hR o
+    JsonRT.RunZk.walk S h64 hS hP hR o
   have hi₀ := hi
   rw [htabs] at hi₀
   obtain rfl : i = 0 := by simpa using hi₀

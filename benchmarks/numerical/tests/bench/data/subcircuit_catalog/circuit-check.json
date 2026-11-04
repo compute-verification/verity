@@ -17,8 +17,8 @@
   "dead_ids": 131072
  },
  "summary": {
-  "failures": 0,
-  "failure_names": [],
+  "new_failures": [],
+  "known_failures": [],
   "warnings": {}
  },
  "targets": [

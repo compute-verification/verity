@@ -16,7 +16,7 @@ injective (`decode_injective`).
 
 The verifier's own parsers then run on those bytes, as `Main.verifyCmd` runs them (`Raw.ins`): `Tags.byName?` on the
 statement id (a statement of `Tags.all`, else a templated one), the refusals of a plain-leaf statement under `--zk` and of `--zk` with `--coins`, the coins (`--zk`'s keyed coin tree,
-else `--coins`), `Flock.JsonParse.parse` then, for the draw, `norm` (as `Main.recordDraw` rebuilds the record's), and
+else `--coins`), `Json.parse` then, for the draw, `norm` (as `Main.recordDraw` rebuilds the record's), and
 `Draw.workTableOfJson`, `Draw.closureMapOfJson` and `Registered.ofJson` on the files.
 The result is C's `Readable.Read` (`readOf`), so the claims' parser is C's `parseOf` (`parse`: `Read.parse`,
 `Stmt.setupTables` and under `--zk` every table's `Zk.shapeOk`, read as `Claims.Flock.Stmt` by `toReadable`), and the
@@ -169,11 +169,11 @@ theorem decode_injective {x y : Claims.Msg} {w : Raw} (hx : decode x = some w) (
 
 /-! ## The verifier's parsers -/
 
-/-- A file read as JSON, as `verifyCmd`'s inputs read one: UTF-8, then `Flock.JsonParse.parse`. -/
+/-- A file read as JSON, as `verifyCmd`'s inputs read one: UTF-8, then `Json.parse`. -/
 def jsonOf (what : String) (b : ByteArray) : Except String Json :=
   match String.fromUTF8? b with
   | none => .error s!"{what}: not UTF-8"
-  | some t => (Flock.JsonParse.parse t).mapError fun e => s!"{what}: not JSON: {e}"
+  | some t => (Json.parse t).mapError fun e => s!"{what}: not JSON: {e}"
 
 /-- What the setup reads of a parsed statement: the tags `--statement` names (`stmtTags`, before `--coins`), the
 verifier's own registered reads, and C's `Readable.Read`. -/

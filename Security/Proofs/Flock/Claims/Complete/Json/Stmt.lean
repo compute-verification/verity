@@ -3,7 +3,6 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
 import Proofs.Flock.Soundness.Discharge.Exec.Setup
-import Proofs.Flock.Claims.Complete.Json.Parse
 
 /-!
 # What the record needs of the statement, from its setup
@@ -256,7 +255,7 @@ theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables 
 /-! ## The public header's draw -/
 
 set_option maxHeartbeats 4000000 in
-/-- The public file's header is a rebuilt object (`Flock.norm` of what `JsonParse.parse` read). -/
+/-- The public file's header is a rebuilt object (`Flock.norm` of what `Json.parse` read). -/
 theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Public}
     (h : HmRow.loadPublic tags c f = .ok pop) : (∃ j, pop.header = Flock.norm j) ∧ ∃ m, pop.header = .obj m := by
   unfold HmRow.loadPublic at h

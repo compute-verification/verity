@@ -1,24 +1,23 @@
 /-
-A key named twice in one JSON object. `JsonParse.parse` keeps one value per key, so a verifier input naming a key twice
+A key named twice in one JSON object. `Lean.Json.parse` keeps one value per key, so a verifier input naming a key twice
 (a `--registered` file's port, or a port's key) would read as naming it once; `FlockVerify.registeredInput` refuses
-such a file by `dupKey`, on the text `JsonParse.parse` accepted.
+such a file by `dupKey`, on the text `Json.parse` accepted.
 -/
 import Lean.Data.Json
-import Flock.JsonParse
 
 namespace Flock.JsonKeys
 
 /-- The innermost object's keys, after a key string at bytes `[s, e)` of `b` (its quotes included), with the key added:
-`none` when that object names it already. The key is compared as `JsonParse.parse` decodes it, escapes and all. -/
+`none` when that object names it already. The key is compared as `Json.parse` decodes it, escapes and all. -/
 def addKey (keys : Array String) (b : ByteArray) (s e : Nat) : Option (Array String) :=
   let raw := String.fromUTF8? (b.extract s e) |>.getD ""
-  let k := match JsonParse.parse raw with
+  let k := match Lean.Json.parse raw with
     | .ok (.str k) => k
     | _ => raw
   if keys.contains k then none else some (keys.push k)
 
 /-- The first key (as written, quotes included) that one object of the JSON text `t` names twice. Every key of every
-object is read, a string being a key right after its object's `{` or a `,` in it; `t` is a text `JsonParse.parse` accepts. -/
+object is read, a string being a key right after its object's `{` or a `,` in it; `t` is a text `Json.parse` accepts. -/
 def dupKey (t : String) : Option String := Id.run do
   let b := t.toUTF8
   -- one frame per open object (its keys so far) or array (`none`)

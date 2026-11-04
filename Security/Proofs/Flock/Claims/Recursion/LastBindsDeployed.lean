@@ -31,7 +31,7 @@ only if it is `Flock.Wire.proofFile` of what it decodes to, so there are no such
 deployed bound record holds at SHA-512 with no premise (`RecDeploy.lastBindsEC_deployed_sha512_closed`,
 `LastBindsClosed`).
 
-**Where the record's text stands.** The verifier reads the record's text through `Flock.JsonParse.parse`, and S0 accepts one text
+**Where the record's text stands.** The verifier reads the record's text through `Json.parse`, and S0 accepts one text
 per parse (`LastGap.checks_record_eq`), so of two records that parse alike at most one is accepted: the trailing-space
 pair that refuted (P4) as first stated before S0 is refused (`LastGap.check_space`). Two records that
 parse differently can still give the same accepted decision, with calls that are the same set but not the same list:

@@ -434,7 +434,7 @@ theorem capRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
 
 theorem link_of_input {wr : RecRaw} {src : Option RecCoins.Source} {t : ByteArray} {tt record : String} {tr : Json}
     {lk : RecVStar.InnerLink} {o : Option RecVStar.InnerLink} (ht : wr.transcript = some t)
-    (hrec : src.map (·.record) = some record) (htx : String.fromUTF8? t = some tt) (hp : Flock.JsonParse.parse tt = .ok tr)
+    (hrec : src.map (·.record) = some record) (htx : String.fromUTF8? t = some tt) (hp : Json.parse tt = .ok tr)
     (hlk : RecVStar.innerLink tr record = .ok lk) (h : linkInputOf wr src = .ok o) : o = some lk := by
   have htt : textOf "rec inner transcript" t = .ok tt := by rw [textOf, htx]
   have e : linkInputOf wr src = .ok (some lk) := by

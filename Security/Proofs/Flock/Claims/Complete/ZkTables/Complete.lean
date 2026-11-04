@@ -165,45 +165,45 @@ any number of tables: from `complete_zk`'s premises, which give every check at o
 table, and at several tables the statement's and the prover's pieces' (`StmtOkJ`, `ProverRunsJ`), the record's checks
 (`RecordJ`) and the rep's checks (`OpenJ`). -/
 theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
+    (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel)
     (hPRJ : ProverRunsJ H rel) (hRec : RecordJ H rel) (hOp : OpenJ H rel) (hMR : MaskRank.MaskRankBound)
     (hMF : MaskFree rel) : Claims.Flock.Complete H (deployZk rel) := by
   have hP : JsonRT.ProverOkZk H rel := JsonRT.proverOkZk h64 (JsonRT.repRoundsZk_goal H rel)
-  have hD : FlockComplete.RepDecodesZk H rel := JsonRT.repDecodesZk_goal h64 hS hP hR
-  have hRp : FlockComplete.Replay H rel := replay_goal h64 hS hP hR
-  have hSR : FlockComplete.SessionRunsZk H rel := JsonRT.sessionRunsZk_goal hS hPR
+  have hD : FlockComplete.RepDecodesZk H rel := JsonRT.repDecodesZk_goal S h64 hS hP hR
+  have hRp : FlockComplete.Replay H rel := replay_goal S h64 hS hP hR
+  have hSR : FlockComplete.SessionRunsZk H rel := JsonRT.sessionRunsZk_goal S hS hPR
   have rec1 : ∀ o : Run H rel, (h1 : o.sts.size = 1) → RecordAt H rel o := fun o h1 =>
     { finalFits := by
-        obtain ⟨-, -, -, -, -, -, hsz, hb, -⟩ := JsonRT.RunZk.rep h64 hS hP hR (o.toZk h1)
+        obtain ⟨-, -, -, -, -, -, hsz, hb, -⟩ := JsonRT.RunZk.rep S h64 hS hP hR (o.toZk h1)
         exact ⟨o.recordFits, by change o.proofs.size = 2 at hsz; omega, hb⟩
-      draw := JsonRT.drawMatchesZk_goal h64 hS hP (o.toZk h1)
-      liveReads := JsonRT.liveReadsZk_goal h64 hS hP (o.toZk h1)
-      canonical := JsonRT.canonicalZk_goal h64 hS hP (o.toZk h1)
-      rootB := JsonRT.custodyRootBZk_goal h64 hS hP (o.toZk h1)
-      publicsLink := JsonRT.custodyPublicsZk_goal h64 hS hP (o.toZk h1)
-      points := JsonRT.custodyPointsZk_goal h64 hS hP (o.toZk h1)
-      count := JsonRT.custodyCountZk_goal h64 hS hP (o.toZk h1)
-      rounds := JsonRT.custodyRoundsZk_goal h64 hS hP (o.toZk h1)
-      decodes := JsonRT.decodesZk_goal h64 hS hP (o.toZk h1)
-      publics := JsonRT.publicsZk_goal h64 hS hP (o.toZk h1)
-      proofList := JsonRT.proofListZk_goal h64 hS hP (o.toZk h1)
-      proofDigests := JsonRT.proofDigestsZk_goal h64 hS hP (o.toZk h1)
-      repStream := JsonRT.repStreamZk_goal h64 hS hP (o.toZk h1)
-      repExtras := JsonRT.repExtrasZk_goal h64 hS hP (o.toZk h1)
-      repDecodes := JsonRT.repDecodesZk_goal h64 hS hP hR (o.toZk h1)
-      repParams := JsonRT.repParamsZk_goal h64 hS hP hR (o.toZk h1)
-      padsRoot := JsonRT.padsRoot_goal h64 hS hP hR (o.toZk h1)
-      capCommitted := JsonRT.capCommittedZk_goal h64 hS hP hR (o.toZk h1) }
+      draw := JsonRT.drawMatchesZk_goal S h64 hS hP (o.toZk h1)
+      liveReads := JsonRT.liveReadsZk_goal S h64 hS hP (o.toZk h1)
+      canonical := JsonRT.canonicalZk_goal S h64 hS hP (o.toZk h1)
+      rootB := JsonRT.custodyRootBZk_goal S h64 hS hP (o.toZk h1)
+      publicsLink := JsonRT.custodyPublicsZk_goal S h64 hS hP (o.toZk h1)
+      points := JsonRT.custodyPointsZk_goal S h64 hS hP (o.toZk h1)
+      count := JsonRT.custodyCountZk_goal S h64 hS hP (o.toZk h1)
+      rounds := JsonRT.custodyRoundsZk_goal S h64 hS hP (o.toZk h1)
+      decodes := JsonRT.decodesZk_goal S h64 hS hP (o.toZk h1)
+      publics := JsonRT.publicsZk_goal S h64 hS hP (o.toZk h1)
+      proofList := JsonRT.proofListZk_goal S h64 hS hP (o.toZk h1)
+      proofDigests := JsonRT.proofDigestsZk_goal S h64 hS hP (o.toZk h1)
+      repStream := JsonRT.repStreamZk_goal S h64 hS hP (o.toZk h1)
+      repExtras := JsonRT.repExtrasZk_goal S h64 hS hP (o.toZk h1)
+      repDecodes := JsonRT.repDecodesZk_goal S h64 hS hP hR (o.toZk h1)
+      repParams := JsonRT.repParamsZk_goal S h64 hS hP hR (o.toZk h1)
+      padsRoot := JsonRT.padsRoot_goal S h64 hS hP hR (o.toZk h1)
+      capCommitted := JsonRT.capCommittedZk_goal S h64 hS hP hR (o.toZk h1) }
   have open1 : ∀ o : Run H rel, (h1 : o.sts.size = 1) → OpenAt H rel o := fun o h1 =>
     { replay := hRp (o.toZk h1)
       ringSwitch := hRS (o.toZk h1)
       ligerito := hLg (o.toZk h1)
       lanes := laneConstraints_goal hLg hD (o.toZk h1)
       inner := hIn (o.toZk h1)
-      consumed := consumedZk_goal h64 hS hP hRp hRS hLg hIn (o.toZk h1) }
-  refine complete_of_at H rel h64 (fun c => (c.one_or_several).elim (fun h1 => ?_) (sessionRunsJ_goal hSJ hPRJ c))
+      consumed := consumedZk_goal S h64 hS hP hRp hRS hLg hIn (o.toZk h1) }
+  refine complete_of_at H rel h64 (fun c => (c.one_or_several).elim (fun h1 => ?_) (sessionRunsJ_goal S hSJ hPRJ c))
     (fun o => (o.one_or_several).elim (rec1 o) (hRec o)) (fun o => (o.one_or_several).elim (open1 o) (hOp o)) hMR hMF
   obtain ⟨record, proofs, bodies, hran⟩ := hSR (c.toZk h1)
   exact ⟨record, proofs, bodies, (sessionS_one h1 c.w c.ω).trans hran⟩

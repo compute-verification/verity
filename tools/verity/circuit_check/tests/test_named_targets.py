@@ -37,6 +37,7 @@ def runs(monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "update_pins", lambda rep: {})
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "check"))
     monkeypatch.setattr(cli, "cores", lambda root=Path("/"): 6)
+    monkeypatch.setattr("circuit_check.known.stale", lambda failures: [])
     return got, traced
 
 

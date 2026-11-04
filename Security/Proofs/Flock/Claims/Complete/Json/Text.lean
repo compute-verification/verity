@@ -1,17 +1,16 @@
 import Flock.RecordText
 import Std.Data.TreeMap.Raw.Lemmas
-import Proofs.Flock.Claims.Complete.Json.Value
+import Definitions.Claims.Json
 import Proofs.Flock.Claims.Complete.Prover.Print
-import Proofs.Flock.Claims.Complete.Json.RoundTrip
 
 /-!
 # The honest record is in its canonical text (S0)
 
 S0 (`Flock.RecordText.check`) accepts a record that is `printT` of what it parses to. The honest prover prints its
 record with `printJ`, which is `printT` (`printJ_eq`), and alike values print alike (`printJ_same`: an object's fields
-print in its tree's order, which for a well-formed tree is its keys' sorted order, `Std.TreeMap.Raw.ordered_keys`). The
-verifier's parser reads a printable value's text back as an alike value (`FlockComplete.JsonRT.parse_print`), so S0
-accepts the honest record (`check_printJ`), with no assumption.
+print in its tree's order, which for a well-formed tree is its keys' sorted order, `Std.TreeMap.Raw.ordered_keys`). So
+under `JsonSpec`, whose `parse_print` reads a printable value's text back as an alike value, S0 accepts the honest
+record (`check_printJ`). No assumption beyond `JsonSpec`.
 -/
 
 namespace FlockComplete
@@ -149,8 +148,9 @@ theorem printJ_same {a b : Json} (h : Claims.Json.Same a b) : printJ a = printJ 
     exact key _ _ (List.getElem_mem h1) (List.getElem_mem h2) hfst
 
 /-- **S0 accepts the honest record**: the text `printJ` prints of a printable value. -/
-theorem check_printJ {j : Json} (hg : Claims.Json.Good j) : Flock.RecordText.check (printJ j) = .ok () := by
-  obtain ⟨j', hp, hs⟩ := FlockComplete.JsonRT.parse_print j hg
+theorem check_printJ {canon : Json → Except String String} (S : Claims.JsonSpec printJ canon) {j : Json}
+    (hg : Claims.Json.Good j) : Flock.RecordText.check (printJ j) = .ok () := by
+  obtain ⟨j', hp, hs⟩ := S.parse_print j hg
   exact Flock.RecordText.check_of hp (by rw [← printJ_eq, printJ_same hs])
 
 end FlockComplete

@@ -115,7 +115,7 @@ structure Live where
 
 /-- The record's live session, read with no hash (`Record.decodeWith`'s fields, without its digests). -/
 def liveOf (spec : SessionSpec) (record : String) : V Live := do
-  let j ← match Flock.JsonParse.parse record with
+  let j ← match Json.parse record with
     | .ok j => pure j
     | .error e => throw s!"record: not JSON: {e}"
   let l ← Record.fld j "link"

@@ -368,9 +368,9 @@ theorem shapeRest (H : Claims.Msg → Claims.Msg) : ShapeRest H := by
 
 /-- **Masked completeness from level 0**: `complete_jsonT` from level 0's four premises (`Level0`) and the mask-rank
 bound; `RepShapedT` beyond level 0's shape (`shapeRest`) and `ProverRunsT` beyond level 0 (`runsRest`) hold. -/
-theorem complete_jsonT_of_level0 (H : Claims.Msg → Claims.Msg) 
+theorem complete_jsonT_of_level0 (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
     (h0 : Level0.ProverRuns) (h1 : Level0.ProverShape) (h2 : Level0.Lanes) (h3 : Level0.Verifier)
     (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk Readable.relation) :=
-  complete_jsonT_of_parts H h0 h1 h2 h3 (shapeRest H) (runsRest H) hMR
+  complete_jsonT_of_parts H S h0 h1 h2 h3 (shapeRest H) (runsRest H) hMR
 
 end FlockComplete.ZkTables

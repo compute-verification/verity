@@ -7,7 +7,7 @@ import Std.Data.TreeMap.Raw.Lemmas
 Lean's `==` on `Json` is a `partial def` (opaque to proofs), so a check by it establishes nothing. `JsonEquiv` compares
 objects as the service's draw equality does (Python's dict equality: the same keys with equivalent values, whatever
 their order) and arrays elementwise in order (`jsonEquiv_obj_iff`, on objects whose trees are well formed, as
-`Flock.JsonParse.parse` builds them; `jsonEquiv_arr_iff`), recursively; scalars are equal as values (a number as its mantissa and
+`Json.parse` builds them; `jsonEquiv_arr_iff`), recursively; scalars are equal as values (a number as its mantissa and
 exponent, as `canon` reads the integers it accepts). It is equality of forms (`jsonForm`: an object as its fields in
 the order of its tree, key order in a well-formed one), so `drawEq`, `JsonEquiv` on optional values, decides it
 (`drawEq_iff`).

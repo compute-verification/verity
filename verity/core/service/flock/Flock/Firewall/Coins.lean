@@ -20,7 +20,6 @@ is checked, so no coin after a refused opening is handed on.
 -/
 import Flock.CoinTree
 import Flock.Hm96
-import Flock.JsonParse
 
 namespace Flock.Firewall.Coins
 
@@ -129,7 +128,7 @@ structure Hello where
 /-- **The session's `Hello`**, as the prover sent it: its nonce (`coins.nonce`, 64 lowercase hex digits, `coin_tree::hello_nonce`),
 the tree it names (`CoinTree.ofHello`) and its link points. -/
 def Hello.parse (h : String) : Except String Hello := do
-  let j ← (JsonParse.parse h).mapError (s!"{STOP}Hello is not JSON: {·}")
+  let j ← (Json.parse h).mapError (s!"{STOP}Hello is not JSON: {·}")
   let some n := (j.getObjVal? "coins").toOption.bind (·.getObjValAs? String "nonce" |>.toOption)
     | throw s!"{STOP}Hello carries no coin-tree nonce (coins.nonce)"
   if !CoinTree.isHex 64 n then throw s!"{STOP}Hello's coin-tree nonce is not 64 lowercase hex digits"

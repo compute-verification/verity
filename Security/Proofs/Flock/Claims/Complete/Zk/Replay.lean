@@ -71,10 +71,10 @@ theorem repPZk_replay (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The masked replay passes** from the rep's recorded rounds: the goal `Replay`. -/
-theorem replay_goal (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)
+theorem replay_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hP : JsonRT.ProverOkZk H rel) (hR : JsonRT.RepShapedZk H rel) : Replay H rel := by
   intro o i hi r hr
-  obtain ⟨st, v, cm, e, streams, htabs, hsch, hss, hbytes, hstream, -, -, hrep⟩ := JsonRT.RunZk.walk h64 hS hP hR o
+  obtain ⟨st, v, cm, e, streams, htabs, hsch, hss, hbytes, hstream, -, -, hrep⟩ := JsonRT.RunZk.walk S h64 hS hP hR o
   rw [htabs] at hi
   obtain rfl : i = 0 := by simpa using hi
   obtain ⟨p, ic, l, t', l', prior, ws, -, hzp, hst', hrun⟩ := hrep r hr

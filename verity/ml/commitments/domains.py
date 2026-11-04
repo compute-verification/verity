@@ -389,8 +389,9 @@ NETWORK_CERTIFICATE = "verity/network-certificate/v4"
 NETWORK_RECORDS = "verity/network-records/v3"
 PERIOD_CIRCUIT = "verity/window-circuit/v1"
 
-# Not yet read from here: composition (onsite, remote)
+# Not yet read from here: composition (onsite, remote, product)
 ONSITE_PROTOCOL = "verity/onsite/v0"
+PRODUCT_PROTOCOL = "verity/product/v0"
 REMOTE_PROTOCOL = "verity/remote/v0"
 
 # Not yet read from here: served periods (`verity.ml.windows`, the bytes say window)

@@ -36,7 +36,7 @@ def metaLeaf (bytes : ByteArray) : Option String := do
   let text ← String.fromUTF8? bytes
   let lines0 := (text.splitOn "\n").toArray
   let lines := if lines0.back? == some "" then lines0.pop else lines0
-  let mj ← (Flock.JsonParse.parse (((lines.getD 1 "").trimAsciiEnd.toString).drop 5).toString).toOption
+  let mj ← (Json.parse (((lines.getD 1 "").trimAsciiEnd.toString).drop 5).toString).toOption
   let ls ← (mj.getObjVal? "leaf_scheme").toOption
   (ls.getObjVal? "id" >>= Json.getStr?).toOption
 
@@ -61,7 +61,7 @@ theorem str_ok {j : Json} {k ctx s : String} (h : J.str j k ctx = .ok s) : (j.ge
 
 theorem metaLeaf_of {bytes : ByteArray} {text : String} {mj ls : Json} {ctx₁ ctx₂ s : String}
     (ht : String.fromUTF8? bytes = some text)
-    (hj : Flock.JsonParse.parse
+    (hj : Json.parse
       (((if ((text.splitOn "\n").toArray).back? == some "" then ((text.splitOn "\n").toArray).pop
           else (text.splitOn "\n").toArray).getD 1 "").trimAsciiEnd.toString.drop 5).toString = .ok mj)
     (hl : J.get mj "leaf_scheme" ctx₁ = .ok ls) (hs : J.str ls "id" ctx₂ = .ok s) : metaLeaf bytes = some s := by
