@@ -17911,8 +17911,7 @@
    "digest": "95e5ba7cf9502a59823597ea469397355e0be722060604c818461808639a3e8e",
    "definitions": {
     "Verity.Assumptions.DeviceWithinRegisteredFigures": "e083b5535a6d2136d0c688b1d62f6a038456b92fc48609c1a1e6ed2157d4301c"
-   },
-   "guarantees": ["Verity.SecurityProofs.CapacityWithinEstimate"]
+   }
   },
   "Definitions.Core.DeviceFigures": {
    "digest": "a816e1beec2d56e2de32419d2f474dd9833135d1dcaacbf2b97c5febe94324e3",
@@ -17936,15 +17935,13 @@
     "Verity.OperandClass.uniformU4": "5c57d663d92adabb3ae94a09f12662503be4b1af086708cc22dd90758258ebc1",
     "Verity.OperandClass.zero": "fa8184d9fccd6741ab95294c43bda2707e7952f427b2fb2319b6ea22fef40ccc",
     "Verity.WithinTolerance": "fff5cf264015c437f51408465ddffce73b2dcc9fccdf1fb3f4e3584d0fae0794"
-   },
-   "guarantees": ["Verity.SecurityProofs.CapacityWithinEstimate"]
+   }
   },
   "Definitions.Core.Guarantees.DeviceFigures": {
    "digest": "ff21d9752621598edd23682de7eb2f187c86c749b5216b790d339328ef798143",
    "definitions": {
     "Verity.Guarantees.CapacityWithinEstimate": "a15b51a66aa2902094984e4c0f87215b72a03fb31f88cf2daa1e707c180aa987"
-   },
-   "guarantees": ["Verity.SecurityProofs.CapacityWithinEstimate"]
+   }
   }
  },
  "dependencies": {
