@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims.SamplingGeneric
+public import Proofs.Flock.Claims.ERepCost
 public import Proofs.Flock.SamplingGeneric.Fails
 public import Proofs.Flock.SamplingGeneric.Split
 public import Proofs.Flock.SamplingGeneric.Assemble
@@ -22,8 +23,10 @@ The compiled extractor's failure event, its probability and `Compiled.KS` from t
 
 `Arg.ofFlock` is Flock's `E^rep` at a decoder with Flock's errors, so its knowledge soundness is `Flock.KS`'s
 (`flockArgKS`, by unfolding: its coins, extractor, `κ` and `γ` are `Flock.E`'s, `Flock.κ`'s and `Flock.γ`'s), and its
-rounds are its shape's (`arg_ofFlock_wf`). So the compiler's knowledge soundness gives Flock's (`flockKS_of_compilerKS`);
-it is two steps (`SamplingGeneric/Split.lean`: `KSOf`, `SessionKSOf`, composed by `compilerKS_of`), the second proved
+rounds are its shape's (`arg_ofFlock_wf`). Its shape carries `N₀`, so its reruns are `E^rep`'s at the shape: at most
+`1 + m′·K`, and `1 + m′·k` in expectation (`ofFlock_reruns`). So the compiler's knowledge soundness gives Flock's
+(`flockKS_of_compilerKS`); it is two steps (`SamplingGeneric/Split.lean`: `KSOf`, `SessionKSOf`, composed by
+`compilerKS_of`), the second proved
 from the session transfer and the session's fork (`SamplingGeneric/Session.lean`: `sessionKSOf`), the first from
 `KSOf`'s deterministic half, a failed extraction giving the failure event or a `Bext` collision (`split`,
 `SamplingGeneric/Assemble.lean`: `ksOf`). So **`CompilerKS` is proved** (`compilerKS`), and with it Flock's instance
@@ -61,6 +64,14 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 omit [Inhabited Coin] [DecidableEq Col] in
 theorem arg_ofFlock_wf (D : Claims.Flock.Deploy Coin Col T) (decode : List (ℕ × Col) → List T) :
     (Arg.ofFlock D decode).WF := fun _ => rfl
+
+omit [DecidableEq Col] in
+/-- **`E^rep`'s reruns at its shape**: at most `1 + m′·K` on every coin, and `1 + m′·k` in expectation, with
+`k = ⌈4·N₀/e⌉` read from the shape (`ERep_cost`). -/
+theorem ofFlock_reruns (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T) (decode : List (ℕ × Col) → List T) :
+    (Arg.ofFlock D decode).RerunsLe H (fun s => 1 + s.1 * s.2.1) ∧
+      (Arg.ofFlock D decode).RerunsExpLe H (fun s => 1 + s.1 * ⌈4 * s.2.2.2 / Real.exp 1⌉₊) :=
+  Claims.ERep_cost H D.V D.waits D.k D.cap _ _ _
 
 theorem flockArgKS : FlockArgKS (Coin := Coin) (Col := Col) (T := T) := by
   intro H D _ decode hKS hdec

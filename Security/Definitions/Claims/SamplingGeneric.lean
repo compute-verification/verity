@@ -63,8 +63,8 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    session witnesses are in `A`'s relation, and the reference prover sends the composed prover's messages.
 7. **The compiler's statements** (`CompilerKS`, `CompilerKSReg`, `CompilerKSCount`, `CompilerBits`,
    `CompilerEfficient`, `CompilerZK`): each claim of every compiled verifier that meets the contract, from `Arg`'s.
-8. **Flock** (`Arg.ofFlock`): Flock's `E^rep` at a decoder, its shape the numbers its coins read, its errors Flock's;
-   `FlockArgKS` says
+8. **Flock** (`Arg.ofFlock`): Flock's `E^rep` at a decoder, its shape the numbers it reads (its coins' and `N₀`), its
+   errors Flock's; `FlockArgKS` says
    that `Flock.KS` is its `Arg.KS`, so `FlockKS` and `FlockKSReg` are `CompilerKS` and `CompilerKSReg` at Flock. They
    read `Flock.KS` and the contract as hypotheses, at a record, not at a deployed verifier's code.
 
@@ -723,17 +723,18 @@ section Flock
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-- **Flock as a proof system for proof blocks**, at a decoder: `E^rep` (`Flock.E`), its shape the numbers its coins
-read (waits `m′`, truncation `K`, rounds), and its errors Flock's (`Flock.κ`, `Flock.γ`). -/
+/-- **Flock as a proof system for proof blocks**, at a decoder: `E^rep` (`Flock.E`), its shape the numbers it reads
+(waits `m′`, truncation `K`, rounds, and `N₀`, which fixes each wait's `k` and so its expected reruns), and its errors
+Flock's (`Flock.κ`, `Flock.γ`). -/
 noncomputable def Arg.ofFlock (D : Claims.Flock.Deploy Coin Col T) (decode : List (ℕ × Col) → List T) :
     Arg Coin where
-  Sh := ℕ × ℕ × ℕ
-  shape x := (D.waits x, D.cap x, D.V.k x)
+  Sh := ℕ × ℕ × ℕ × ℝ
+  shape x := (D.waits x, D.cap x, D.V.k x, D.N₀ x)
   V := D.V
-  rounds s := s.2.2
+  rounds s := s.2.2.1
   W := Claims.Flock.Wit
   R := Claims.Flock.R D.parse
-  EC s := Fin s.1 → Fin s.2.1 → Fin s.2.2 → Coin
+  EC s := Fin s.1 → Fin s.2.1 → Fin s.2.2.1 → Coin
   ext x r c := (Claims.Flock.E D decode).ext x r c
   κ := Claims.Flock.κ D
   γ := Claims.Flock.γ D
