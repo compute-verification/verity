@@ -287,12 +287,10 @@ def kinds(one: dict, void: bool = False) -> str:
 
 
 def voided(m: formalism.Measured, one: dict) -> bool:
-    """Whether a row's published ρ at `CONSOLE` (`one`) reads a void fresh-products term (`VOID`): reading A where Fit
-    fails, the term 0 where te_core.io_bound's proved Λ is void, which `formalism.fresh_products` measures."""
-    if one["reading"] != "A" or one["binding_kind"] == "fit" or one["terms"].get("fresh_products") != 0:
-        return False
-    _, why, got = formalism.fresh_products(m, *CONSOLE)
-    return why is None and (got.get("io_bound") or {}).get("proved", {}).get("lam", 0.0) is None
+    """Whether a row's published ρ at `CONSOLE` (`one`) reads a void fresh-products term (`VOID`): never, since the
+    products term is the theorem of record's (`formalism.he_products`), which every row reads as max(1, ρ_HE) with
+    its premises; the old figure's void Λ is only its sensitivity fresh_old."""
+    return False
 
 
 def runs_of(st: frontier_fit.Start) -> dict[str, list[dict]]:
