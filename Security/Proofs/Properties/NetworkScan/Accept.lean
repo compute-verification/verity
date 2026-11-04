@@ -8,7 +8,8 @@ import Proofs.Properties.Nci.BodiesOk
 `NetTiming.BoundaryGates.Fits`'s first two parts rest on (`Accepted`): the description's layout and walk checks, the
 egress template's node (a batch of `T`, returning a u16 and the row, every leaf its own, all `T` instances' leaves
 returned by the root in one run), each step's ingress bucket (`Ingress`: a batch member, its first parameter the row,
-its first argument one input node's leaves), and the Program topological (`Prog.orderViolation`), which part (3) reads.
+its first argument one input node's leaves), and the Program topological (`Prog.orderViolation`) with two templates,
+or three where the window has a later step, which part (3) reads.
 -/
 
 namespace Properties.NetworkScan.Fits
@@ -51,6 +52,7 @@ structure Accepted (P : Prog) (s : Schedule) : Prop where
     s.window * (callee P (egressNode P)).outLeaves ≤ c
   ingress : ∀ t < s.window, Ingress P s (bucket P t)
   topo : P.orderViolation = none
+  shape : (∃ a e, templateNodes P = [a, e] ∧ s.window ≤ 1) ∨ ∃ a b e, templateNodes P = [a, b, e]
 
 theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {y : β} (h : (x >>= f) = .ok y) :
     ∃ a, x = .ok a ∧ f a = .ok y := by
@@ -191,7 +193,14 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
     have := congrArg Array.size hn1
     rw [Array.size_map] at this
     rw [this]; simp [firstParams]
-  refine ⟨⟨h9.1.1, h9.1.2, h9.2⟩, hemem, ⟨form_batch hxeb, hxen⟩, BodiesOk.ty_beq h7, h11, hret, ?_, h15⟩
+  have hshape : (∃ a e, templateNodes P = [a, e] ∧ s.window ≤ 1) ∨ ∃ a b e, templateNodes P = [a, b, e] := by
+    rcases hpick with ⟨a, e, hts, -, rfl⟩ | ⟨a, b, e, hts, -, -⟩
+    · refine .inl ⟨a, e, hts, ?_⟩
+      try dsimp only at hln
+      simp only [Option.some.injEq] at hln
+      omega
+    · exact .inr ⟨a, b, e, hts⟩
+  refine ⟨⟨h9.1.1, h9.1.2, h9.2⟩, hemem, ⟨form_batch hxeb, hxen⟩, BodiesOk.ty_beq h7, h11, hret, ?_, h15, hshape⟩
   rcases hpick with ⟨a, e, hts, hfa, rfl⟩ | ⟨a, b, e, hts, hfa, rfl⟩
   · simp only [Prod.mk.injEq] at hfa
     obtain ⟨rfl, rfl⟩ := hfa

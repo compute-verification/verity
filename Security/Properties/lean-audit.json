@@ -6581,9 +6581,9 @@
    "Properties.NetworkPeriod.rowsStateAnchored_nontrivial": "lemma: RowsStateAnchored's nontrivial lemma: RowsStateAnchoredAt fails at a rows-form period of one phase whose tied audit's circuit record reads the scan's state from base 3, past its slots' anchors, which a verifier that accepts everything accepts",
    "Properties.NetworkPeriod.rowsStateHeld_honest": "completeness: RowsStateHeld's honest lemma: the period check accepts a rows-form period of no phase, and an audit whose SCAN_STATE is its one phase's scan's state, at its root and domain, is held there and charged its stateFree",
    "Properties.NetworkPeriod.rowsStateHeld_nontrivial": "lemma: RowsStateHeld's nontrivial lemma: RowsStateHeldAt fails at a rows-form period of one phase whose tied audit's SCAN_STATE is at another root than its scan's state, under a public charging that audit its stateFree, 4 of its 9 free inputs, which a verifier that accepts everything could publish",
-   "Properties.NetworkScan.ScanFits": "unstated: an accepted scan's layout, at Bits' positions (inBit, outBit, wiresOf), fits its audit's members' joint program; an open statement, whose proof gets a guarantee entry",
-   "Properties.NetworkScan.ScanScopeAcc": "unstated: an accepted scan's statements, each its audit's members' joint program, are in the sampled audit's scope at the scan's Bits layout; an open statement, whose proof gets a guarantee entry",
-   "Properties.NetworkCertifier.CircuitCounts": "unstated: an accepted circuit record's free count bounds its audit's members' joint program's free inputs outside its registered rows, at Bits' wires; an open statement, whose proof gets a guarantee entry"
+   "Properties.NetworkScan.ScanFits": "unstated: an accepted scan's layout, at Bits' positions (inBit, outBit) and with no wires, fits its audit's members' joint program at circuit files that read their row parameters (RowsRead); an open statement, whose proof gets a guarantee entry",
+   "Properties.NetworkScan.ScanScopeAcc": "unstated: an accepted scan's statements, each its audit's members' joint program at circuit files that read their row parameters (RowsRead), are in the sampled audit's scope at the scan's Bits layout; an open statement, whose proof gets a guarantee entry",
+   "Properties.NetworkCertifier.CircuitCounts": "unstated: an accepted circuit record's free count bounds its audit's members' joint program's free inputs outside its registered rows, at the record's wires (recordWires) and at circuit files whose units read no input padding (PaddingUnread, a premise of its own); an open statement, whose proof gets a guarantee entry"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -14920,7 +14920,7 @@
    ]
   },
   "Flock.Program": {
-   "digest": "5bc3eaea89ed1a7f648e0f193427792963de95df278460836b7bd89b5f5a2d9c",
+   "digest": "7f8c9f02da64e22122028c5e771c4bb85255588db592f6c2296c1d731286809a",
    "definitions": {
     "Flock.Program.Arg": "ec25eed79967a37f47bfab16d75800bb417f725b6060db8885c981bbfb54549d",
     "Flock.Program.Arg.dims": "27996c560a07b5131152e1e961d1ebeae325f7e0e78513b43fe9eb8f0763bb7a",
@@ -15104,8 +15104,6 @@
     "Flock.Program.instInhabitedNode.default": "90087c8548b74aedf2903e98c3d1613b89f1e12e6201d305de1d50467b4e65d8",
     "Flock.Program.instInhabitedPart": "0b7ca048ca1aa72dc8591d2540283ba3927be44e28d1d27d57a7199c92760f07",
     "Flock.Program.instInhabitedPart.default": "b1a4359667fb3f89ac4a78a72bdd01cc8816e7529044348e2d4d048bb0c1accb",
-    "Flock.Program.instInhabitedProg": "5bfd48881a5f8b8cf826da3e1e1138cf3dcd7a1cb9d42e44cbe7265599be3858",
-    "Flock.Program.instInhabitedProg.default": "572d7263a581c92159f3557a5928253fb7a31760c7b3bd707f3b3dc2c469072b",
     "Flock.Program.instInhabitedRef": "875b5fccdcb52dedacbffaab09e93430a18280cd3a79a8456ec68defb16f9f2c",
     "Flock.Program.instInhabitedRef.default": "eef78b2bcb99eb1ec96b276c3c1aa42a2b3b8434101edd5718bf58c7199aac74",
     "Flock.Program.instInhabitedScope": "01a5117ab24799884790559edd75d8852bd4922fa90ebf6855609f15bb347e34",

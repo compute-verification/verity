@@ -18,7 +18,11 @@ What the scan's and the wired rows' proofs read about Bits' key program lowered 
   (`mem_outs_jointOf_iff`);
 * reads: a key program's row reads the constants and its own unit's gates (`row_unit`, through `wireOf`), so a lowered
   gate reads the constants and its own unit's positions (`reads_unit`), and in the members' program a gate that depends
-  on a unit's position is that unit's (`depends_unit`).
+  on a unit's position is that unit's (`depends_unit`); the members' program reads only its own positions
+  (`reads_lt_length`), so a position past it has no dependents but itself (`eq_of_depends_of_le`);
+* ports: an input bit's gate is one of its unit's source gates and an output copy bit one of its unit's rows
+  (`inGate_unit`, `outGate_unit`), so their positions are the unit's (`inBit_unitPos`, `outBit_unitPos`), and the
+  members' outputs are positions of their program (`lt_length_of_mem_outs`).
 -/
 
 open SampledProofs.Bits
@@ -706,5 +710,86 @@ theorem depends_unit {ms : Members} {m u z y : ℕ} (hd : NetTiming.Depends (joi
     · rw [hG] at hbc'; simp at hbc'
     · rw [hG] at hbc'
       exact reads_jointUnit hG (by simpa using hbc') ih
+
+/-- **The members' program reads only its own positions.** -/
+theorem reads_lt_length {ms : Members} {y z : ℕ} {G : Claims.Sampling.BGate}
+    (h : (jointOf ms).gates[y]? = some G) (hz : z ∈ G.reads) : z < (jointOf ms).gates.length := by
+  have hy : y < (jointOf ms).gates.length := by
+    by_contra hc
+    have hle : (jointOf ms).gates.length ≤ y := by omega
+    rw [List.getElem?_eq_none hle] at h; cases h
+  obtain ⟨m, hm, x, hx, rfl⟩ := exists_member hy
+  rw [getElem?_jointOf ms hm hx, Option.map_eq_some_iff] at h
+  obtain ⟨G', hG', rfl⟩ := h
+  rw [bgateAt_reads, List.mem_map] at hz
+  obtain ⟨z', hz', rfl⟩ := hz
+  have hz'l : z' < (memberProg (ms.getD m default)).1.length := by
+    rcases reads_unit _ _ (consts (ms.getD m default).1 (ms.getD m default).2.size) hG' hz' with h1 | ⟨u', -, hzu'⟩
+    · have hl := two_le_length (ms.getD m default).1 (ms.getD m default).2.size
+        (consts (ms.getD m default).1 (ms.getD m default).2.size)
+      show z' < (prog (keyProg (ms.getD m default).1 (ms.getD m default).2.size)
+        (consts (ms.getD m default).1 (ms.getD m default).2.size)).1.length
+      omega
+    · exact unitPos_lt_member hzu'
+  have := base_mono ms (show m + 1 ≤ ms.length from hm) (Nat.le_refl _)
+  rw [base_succ ms hm] at this
+  rw [length_jointOf]; omega
+
+/-- **Nothing depends on a position past the members' program** but itself. -/
+theorem eq_of_depends_of_le {ms : Members} {z y : ℕ} (hd : NetTiming.Depends (jointOf ms) z y)
+    (hz : (jointOf ms).gates.length ≤ z) : y = z := by
+  unfold NetTiming.Depends at hd
+  induction hd with
+  | refl => rfl
+  | @tail b c _ hbc ih =>
+    have hbc' : b ∈ (((jointOf ms).gates[c]?).map Claims.Sampling.BGate.reads).getD [] := hbc
+    rcases hG : (jointOf ms).gates[c]? with _ | G
+    · rw [hG] at hbc'; simp at hbc'
+    · rw [hG] at hbc'
+      have := reads_lt_length hG (by simpa using hbc')
+      omega
+
+/-! ## The ports' positions -/
+
+/-- **An input bit's gate is its unit's**: one of its source gates. -/
+theorem inGate_unit {c : Flock.Circuit} {n u k p t g : ℕ} (h : inGate c n u k p t = some g) : UnitGate c n u g := by
+  unfold inGate at h
+  dsimp only at h
+  split at h
+  · rename_i hc
+    simp only [Bool.and_eq_true, decide_eq_true_eq, and_assoc] at hc
+    obtain ⟨b, hb, rfl⟩ := Option.map_eq_some_iff.1 h
+    have := keyIdx_lt hb
+    exact ⟨hc.1, .inl ⟨by unfold srcs; omega, by unfold srcs; omega⟩⟩
+  · cases h
+
+theorem inBit_unitPos {c : Flock.Circuit} {n u k p t x : ℕ} (h : inBit c n u k p t = some x) : UnitPos c n u x := by
+  simp only [inBit, Option.map_eq_some_iff] at h
+  obtain ⟨g, hg, rfl⟩ := h
+  exact unitPos_posOf (inGate_unit hg)
+
+/-- **An output copy bit is its unit's**: one of its rows. -/
+theorem outGate_unit {c : Flock.Circuit} {n u k j t g : ℕ} (h : outGate c n u k j t = some g) :
+    UnitGate c n u g := by
+  obtain ⟨hu, hk, -, -, h1, h2, rfl⟩ := outGate_some h
+  have hNC : ((Rows.ofNet c.unit).stack c.upv).nComp = c.upv * ((Rows.ofNet c.unit).nComp + 1) := rfl
+  have h3 : k * ((Rows.ofNet c.unit).nComp + 1) + (1 + (outCol c j t - (Rows.ofNet c.unit).nIn)) <
+      ((Rows.ofNet c.unit).stack c.upv).nComp := by
+    have := mul_add_le (B := (Rows.ofNet c.unit).nComp + 1) (i := (Rows.ofNet c.unit).nComp + 1) hk (Nat.le_refl _)
+    rw [hNC]; omega
+  refine ⟨hu, .inr ⟨?_, ?_⟩⟩ <;> rw [keyProg_inputs, keyProg_perUnit] <;> unfold rowGate srcs <;> omega
+
+theorem outBit_unitPos {c : Flock.Circuit} {n u k j t x : ℕ} (h : outBit c n u k j t = some x) : UnitPos c n u x := by
+  simp only [outBit, Option.map_eq_some_iff] at h
+  obtain ⟨g, hg, rfl⟩ := h
+  exact unitPos_posOf (outGate_unit hg)
+
+/-- **The members' outputs are their positions.** -/
+theorem lt_length_of_mem_outs {ms : Members} {y : ℕ} (h : y ∈ (jointOf ms).outs) : y < (jointOf ms).gates.length := by
+  obtain ⟨m, hm, u, k, j, t, x, hx, rfl⟩ := (mem_outs_jointOf_iff ms y).1 h
+  have hxl := unitPos_lt_member (outBit_unitPos hx)
+  have := base_mono ms (show m + 1 ≤ ms.length from hm) (Nat.le_refl _)
+  rw [base_succ ms hm] at this
+  rw [length_jointOf]; omega
 
 end Properties.NetworkScan.Lowered
