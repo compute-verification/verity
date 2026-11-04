@@ -1,5 +1,7 @@
-import Proofs.Core.Game.Basic
-import Proofs.Core.Game.Rewinding
+module
+
+public import Proofs.Core.Game.Basic
+public import Proofs.Core.Game.Rewinding
 
 /-!
 # Expectations against a strategy, and the rewinding lemma for any run distribution
@@ -16,6 +18,8 @@ The proof is `Rewinding`'s counting argument with weights: at each position, a r
 off-plurality mass `b_p`, so the conflict mass at `p` is at least `b_p²`; and Cauchy–Schwarz over
 positions.
 -/
+
+@[expose] public section
 
 namespace Verity
 

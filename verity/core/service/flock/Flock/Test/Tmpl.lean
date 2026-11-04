@@ -8,7 +8,12 @@ copies, a callee that is not an earlier definition, segments that don't cover th
 caller's references, a column written twice, a root with inputs, a copy reading a later column, a Definition of `2^64`
 columns.
 -/
-import Flock.Tmpl
+module
+
+public import Flock.Tmpl
+meta import Flock.Tmpl
+
+@[expose] public section
 
 namespace Flock.Test.Tmpl
 

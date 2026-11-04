@@ -1,4 +1,6 @@
-import Proofs.Pouw.Prob
+module
+
+public import Proofs.Pouw.Prob
 
 /-!
 # Truncation: a sure-cost guarantee over a class closed under budget-abort is per-run
@@ -9,6 +11,8 @@ adversary within `b` that is accepted wherever `a` is accepted at cost at most `
 cost below `c` with probability at most `ε`: the coins are finite, so the costs below `c` have a largest, `b < c`, and
 the adversary truncated at `b` is accepted on every such run.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

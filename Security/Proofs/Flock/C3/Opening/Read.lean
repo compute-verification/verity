@@ -1,8 +1,10 @@
-import Proofs.Flock.C3.Opening.Algebra
-import Proofs.Flock.C3.Compose.Honest
-import Proofs.Flock.Soundness.OpeningPhase
-import Proofs.Flock.VBridge.Algebra.RingSwitch
-import Flock.RecOpening
+module
+
+public import Proofs.Flock.C3.Opening.Algebra
+public import Proofs.Flock.C3.Compose.Honest
+public import Proofs.Flock.Soundness.OpeningPhase
+public import Proofs.Flock.VBridge.Algebra.RingSwitch
+public import Flock.RecOpening
 
 /-!
 # n4 from its read fact: R's opening on the opening's prover messages
@@ -23,6 +25,8 @@ whose run is `decodeRun` of that tape, so neither reads the decoder `dec`.
 * `checks_of_run`, `packed_check`: zero ring-switch residuals of `RecOpening.run` are the verifier's value checks
   (`ringSwitch_checks`), which are the model's on claims that are the model's (`packedWeight_eq`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Opening
 

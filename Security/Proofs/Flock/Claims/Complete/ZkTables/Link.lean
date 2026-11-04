@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Scope
-import Proofs.Flock.Claims.Complete.Zk.Link
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Scope
+public import Proofs.Flock.Claims.Complete.Zk.Link
 
 /-!
 # The first masked send is the link message, at several tables
@@ -11,6 +13,8 @@ import Proofs.Flock.Claims.Complete.Zk.Link
 * `linkFirst_goal` (`LinkFirstZk`), for a SHA-512 of 64-byte outputs: at most `Tags.MAX_TABLES` caps, each table's at
   most `2^56` digests of 64 bytes (every table commits with `hm96-sha512/v1`, at its `--zk` schedule).
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 

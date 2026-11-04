@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.OuterKS
+module
+
+public import Proofs.Flock.Claims.Recursion.OuterKS
 
 /-!
 # The inner stage: its code facts and binding
@@ -28,6 +30,8 @@ code fact here where `InnerKS` fails (`innerKS_gap`).
   `Be`'s (`forkColl_of_opening`). So the inner rounds' differing openings cost at most `k(x)·Pr[Be]`
   (`sum_opensDiffer_le`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainLive
+module
+
+public import Proofs.Flock.Claims.KS.PlainLive
 
 /-!
 # The plain simulator's schedule at `VK keep`
@@ -9,6 +11,8 @@ import Proofs.Flock.Claims.KS.PlainLive
 * `PlainSchedAlignK`, `plainSlotAlign_of_schedK`: `PlainSlotAlignK` holds where the simulated strategy leads.
 * `leadsAfter_plainSimAtK`, `plainSchedAlignK`: it leads at every statement.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

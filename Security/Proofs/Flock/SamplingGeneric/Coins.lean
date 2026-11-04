@@ -1,4 +1,6 @@
-import Definitions.Claims.SamplingGeneric
+module
+
+public import Definitions.Claims.SamplingGeneric
 
 /-!
 # A session's coins in a compiled run
@@ -10,6 +12,8 @@ import Definitions.Claims.SamplingGeneric
 * `card_eq_of_strictMono`, `coinsOf_eq_of_strictMono`: an order embedding of `A`'s rounds onto the session's (the one
   `Claims.Sampling`'s `SessionRuns` gives) makes them as many, and is `emb`, so its coins are `coinsOf`'s.
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric.Compiled
 

@@ -1,6 +1,8 @@
-import Definitions.Pouw.Assumptions.Dimension.Pipe
-import Definitions.Pouw.Assumptions.Dimension.RouteU
-import Definitions.Pouw.Assumptions.Dimension.RouteUPipeAssumptions
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Pipe
+public import Definitions.Pouw.Assumptions.Dimension.RouteU
+public import Definitions.Pouw.Assumptions.Dimension.RouteUPipeAssumptions
 
 /-!
 # `A1_cost` in the closed scalar pipe on route U (trusted statements)
@@ -13,6 +15,8 @@ Theorem 1 holds for every family that differs from the checked words by elements
 `A1_cost_quad_U β 2 0` holds (`A1CostQuadUHolds`), and with it Theorem D for the quadratic closed pipe at `c_s = 8`
 (`AlgBoundQuad8U`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

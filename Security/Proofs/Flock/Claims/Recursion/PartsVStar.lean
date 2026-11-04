@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VStarLinks
-import Proofs.Flock.Claims.Recursion.DeployMargin
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarLinks
+public import Proofs.Flock.Claims.Recursion.DeployMargin
 
 /-!
 # `readX` holds each part's circuit to V\*'s, as each part's session does
@@ -18,6 +20,8 @@ and the session's `--circuit` file as `--rec-part s` under `--rec-bindings`.
 * `readX_partVStar`: what `readX` read of each part, for the proofs that read the parts' ports.
 * `readX_partNamed`: each part's circuit's part, unit name and META holo are V\*'s statement's of its index.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

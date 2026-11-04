@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
-import Proofs.Flock.Soundness.Discharge.Exec.Tables
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
+public import Proofs.Flock.Soundness.Discharge.Exec.Tables
 
 /-!
 # flock-verify `--zk` accepts, table by table and rep by rep
@@ -9,6 +11,8 @@ import Proofs.Flock.Soundness.Discharge.Exec.Tables
 * `zk_verifyRep_ok : ZkRepOk`: one rep's checks: its stream and proof file, the PCS parameters, the pads' root, the
   transcript program `repProg` on the stream's rounds consuming all of them, and the cap `root_B`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

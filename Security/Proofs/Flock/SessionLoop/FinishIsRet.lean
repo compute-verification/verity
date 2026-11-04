@@ -1,5 +1,7 @@
-import Proofs.Flock.SessionLoop.FinishIsOf
-import Proofs.Flock.SessionLoop.FinRepLanesFw
+module
+
+public import Proofs.Flock.SessionLoop.FinishIsOf
+public import Proofs.Flock.SessionLoop.FinRepLanesFw
 
 /-!
 # `FinishIs` with the clear values and level 0 read off the returns
@@ -10,6 +12,8 @@ proof's level 0 is the clear values plus the request's pads (`Loop.finRepLanes_r
 
 **`Loop.finishIs_of_ret`**: `FinishIs` from the ring switch's target, the restart and level 0's openings alone.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

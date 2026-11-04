@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.ExeLayout
+module
+
+public import Proofs.Flock.Claims.ZK.ExeLayout
 
 /-!
 # A prover of levels ≥ 1 reading salts by level and position
@@ -13,6 +15,8 @@ masked prover reads them by level and position (`ligeritoPZk`'s `salt l q`, `1 �
 * `saltBlob`, `blobSalt`, `PcExe`: the salts as one string, 192 bytes each in `hiIdx` order, and back; the prover sending
   that string, so a rep's levels ≥ 1 value carries its salts.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

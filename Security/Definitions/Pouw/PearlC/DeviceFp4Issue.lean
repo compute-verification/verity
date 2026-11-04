@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.DeviceFp4
+module
+
+public import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
 # Pearl-C4's prices on sm_120 at the issue-bound FP32 price (definitions only, staged)
@@ -16,6 +18,8 @@ computes γ at the issue-bound 8.00 (`Prices.sm120`'s FADD), at the prices this 
   - the cast, the FMUL plus the E2M1 cvt's F2FP alone, `2·8.00 + 2·8.0 = 32`;
 * `qa = 18`: the noisy amax (one FMNMX, `2·8.00`) and ρ's squared accumulate on every 8th element (`2·8.00/8`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

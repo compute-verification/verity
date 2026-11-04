@@ -1,5 +1,7 @@
-import Difftest
-import SampledProofs.Pieces
+module
+
+public import Difftest
+public import SampledProofs.Pieces
 
 /-!
 # `sampled-proofs-verifier`: the verifier of record, and the challenger's coins
@@ -11,6 +13,8 @@ The verifier's functions (`Pieces.verifier`) behind `Difftest.respond`'s line pr
 operating system itself. The verifier reads no coins from here: its draws read the challenger's coins from its log
 (`Run.coinsHold`).
 -/
+
+@[expose] public section
 
 namespace SampledProofs.VerifierMain
 

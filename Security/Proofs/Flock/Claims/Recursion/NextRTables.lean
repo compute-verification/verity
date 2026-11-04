@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.NextRCoins
-import Proofs.Flock.Claims.Complete.ZkTables.Scope
+module
+
+public import Proofs.Flock.Claims.Recursion.NextRCoins
+public import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
 /-!
 # Every table `verify --plain-tables` admits is `TableOk`
@@ -19,6 +21,8 @@ as `verifyCmd` calls it under the flag, then `sizesOk` on the tables' `m`).
 * `sessionRun_decides_tables`: `sessionRun_decides_coins` with `PlainTablesOk` in place of the per-table premise, and
   coins numbering the deployed verifier's `(V false).k x` (`hlen_of_k`) in place of the count premise.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

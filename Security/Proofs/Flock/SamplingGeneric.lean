@@ -1,11 +1,13 @@
-import Definitions.Claims.SamplingGeneric
-import Proofs.Flock.SamplingGeneric.Fails
-import Proofs.Flock.SamplingGeneric.Split
-import Proofs.Flock.SamplingGeneric.Assemble
-import Proofs.Flock.SamplingGeneric.Coins
-import Proofs.Flock.SamplingGeneric.Session
-import Proofs.Flock.SamplingGeneric.Count
-import Proofs.Flock.SamplingGeneric.Reg
+module
+
+public import Definitions.Claims.SamplingGeneric
+public import Proofs.Flock.SamplingGeneric.Fails
+public import Proofs.Flock.SamplingGeneric.Split
+public import Proofs.Flock.SamplingGeneric.Assemble
+public import Proofs.Flock.SamplingGeneric.Coins
+public import Proofs.Flock.SamplingGeneric.Session
+public import Proofs.Flock.SamplingGeneric.Count
+public import Proofs.Flock.SamplingGeneric.Reg
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -26,6 +28,8 @@ against the incorrect set of the plurality trace the prover's tape fixes, follow
 rewinding lemma (`SamplingGeneric/Reg.lean`: `compilerKSReg_of`), so **`CompilerKSReg` is proved** (`compilerKSReg`),
 and with it Flock's (`flockKSReg`).
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

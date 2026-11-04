@@ -1,7 +1,9 @@
-import Proofs.Flock.Recursive.Raw
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Recursive.Written
-import Proofs.Flock.Soundness.Discharge.FailClosed.One
+module
+
+public import Proofs.Flock.Recursive.Raw
+public import Proofs.Flock.Recursive.VStarCheck
+public import Proofs.Flock.Recursive.Written
+public import Proofs.Flock.Soundness.Discharge.FailClosed.One
 
 /-!
 # Recursion: where V*'s statement enters a session (gap 8)
@@ -25,6 +27,8 @@ equation:
   empty when every session accepts as V*'s statement of its index; elsewhere the raw recursive audit's event is no
   likelier than the typed sessions' (`zsOf`) at the transported strategy (`recT`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

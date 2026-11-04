@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BoundAccepts
-import Proofs.Flock.Claims.Recursion.BoundForks
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundAccepts
+public import Proofs.Flock.Claims.Recursion.BoundForks
 
 /-!
 # The normalized record and the readers' played rounds (option (d))
@@ -15,6 +17,8 @@ Pieces of `KSBoundDeployed`'s route from the bridge (`RecDeploy.ksBoundRoute_of_
 * The readers' rounds before the last are the run's, off a collision (`RecDeploy.readersRun_played`, from
   `ReadersRunPlayed`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

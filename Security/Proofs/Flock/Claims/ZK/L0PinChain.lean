@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.L0PinLive
-import Proofs.Flock.Claims.ZK.FrameState
+module
+
+public import Proofs.Flock.Claims.ZK.L0PinLive
+public import Proofs.Flock.Claims.ZK.FrameState
 
 /-!
 # A live history's level-0 messages are its bodies at the frame's pads
@@ -14,6 +16,8 @@ its count, a live history's messages are the binding and the bodies at the rep's
 * **`LeanRelease.l0_chain`**: the binding's message is the binding, and body `i`'s is the body at the draws' pads,
   tagged `0`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
