@@ -29,8 +29,8 @@
    "why": "300 runs of the relay form, of one to four slots, one to three lanes, queues of one to eight, one to three windows of six to sixteen buckets and caps of one to forty cells, on connections arriving in bursts, each answered by its server whole, in chunks, late, without an end or past the cap, on which Relay.run decides what the checkout's warden.Warden does, driven tick by tick on a virtual clock: each connection refused, cut queued, or admitted at its tick with its lane's cells (its END or FAIL with them, capped at egress_cells or cut at the run's end), each lane's END-or-FAIL index from a run of its own with no cap and no cut, the parameters parsed by NetworkCheck.Period.scheduleOf",
    "args": ["{relay/instances.jsonl}", "{relay/python.jsonl}", "300"],
    "data": {
-    "relay/instances.jsonl": "",
-    "relay/python.jsonl": ""
+    "relay/instances.jsonl": "d33051ed17b19a405fe9ce875683bf84a8c638e95b7208407f9e6b3b484d7278",
+    "relay/python.jsonl": "6dd8a207ec7a7dc51886234788ecbee97c0a862eaf1b41b70cbd86feab566e57"
    },
    "generate": ["python3", "scripts/relay_vectors.py", "{repo}", "--out", "{out}"]
   }
@@ -83,6 +83,6 @@
   }
  },
  "dependencies": {
-  "toolchain": "6d6f776e4a6341daa012eb51f6163196e40831264f9cc57f1bb7eef603181228"
+  "toolchain": "4a2dc4a0b7b2988277d3431c2c4e93367dd76b9129e5f3d1cbab4a3edd056e8f"
  }
 }
