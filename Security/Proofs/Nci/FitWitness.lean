@@ -29,10 +29,7 @@ abbrev circuit : Circuit where
   op_congr _ _ _ _ := rfl
   outputs := {3, 4}
 
-abbrev decl : Declaration where
-  D := circuit
-  θ := ∅
-  θ_input := by decide +kernel
+abbrev decl : RegisteredCircuit := .ofCircuit circuit ∅ (by decide +kernel)
 
 /-- One thread, of the activation 2; the counted multiplications 3 and 4 each use a weight once. -/
 abbrev threading : Threading decl where
