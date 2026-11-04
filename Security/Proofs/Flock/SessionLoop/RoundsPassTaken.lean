@@ -13,6 +13,8 @@ premise; each phase of a rep's rounds meets it in a file of its own (`RoundsPass
 * `LeanRelease.SchedTaken`: the frame answered the history's coins at a state outside the inner proof, and takes the
   scheduled round there, at a rep not stopped, as frames (`Sched.MidAll`) and the squeeze of the round's coins.
   `LeanRelease.roundOk_of_schedTaken`: it gives `roundOk` at `valsDev` wherever `cross` passes the device round.
+  `LeanRelease.RoundTaken`: the same of given round bytes, which `LeanRelease.schedTaken_of` turns into `SchedTaken`
+  at the scheduled round.
 * `LeanRelease.answered_of_unrefused`: where the frame takes the coins after a history it answered them.
 * `midAll_of_plain`, `ne_inner_of_isLabel`: frames inside a phase, and labels other than the inner proof's, are none
   the inner proof's label. `order_lt_of_alike`: alike configurations pad the same positions.
@@ -74,6 +76,23 @@ def SchedTaken (L : LeanRelease Flock.Wit Loop.Tp) (x : Msg) (w : Flock.Wit) (ρ
     L.coins x g.length < 2 ^ 64 ∧
     roundFree (L.cfg x ρ g) { m with stopped := false }
       (ByteArray.mk (encs fs ++ (Frame.sq k (L.coins x g.length)).enc).toArray) (L.coins x g.length) = .ok (o, t, fr)
+
+/-- **The frame takes round bytes `B` from state `m` after a history**: `B` is frames none the inner proof's label and a
+squeeze of the round's coins that `roundFree` takes from `m`, at a rep not stopped. -/
+def RoundTaken {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (g : List (Msg × Msg)) (m : Masker) (B : Msg) :
+    Prop :=
+  ∃ (fs : List Frame) (k : UInt8) (o : ByteArray) (t : Masker) (fr : Array ℕ),
+    B = encs fs ++ (Frame.sq k (L.coins x g.length)).enc ∧
+    Sched.MidAll fs ∧ (k = 2 ∨ (k = 1 ∧ L.coins x g.length = 1)) ∧ ¬ (L.coins x g.length = 0 ∧ k = 2) ∧
+    L.coins x g.length < 2 ^ 64 ∧
+    roundFree (L.cfg x ρ g) { m with stopped := false } (ByteArray.mk B.toArray) (L.coins x g.length) = .ok (o, t, fr)
+
+theorem schedTaken_of {L : LeanRelease Flock.Wit Loop.Tp} {x : Msg} {w : Flock.Wit} {ρ : Loop.Tp}
+    {g : List (Msg × Msg)} {m : Masker} (hA : L.answered x ρ g = .ok m) (hin : m.inner = none)
+    (h : L.RoundTaken x ρ g m (L.scheduled x w ρ g (computedOf (L.computed x w ρ g)))) : L.SchedTaken x w ρ g := by
+  obtain ⟨fs, k, o, t, fr, hB, hM, hk, h0, hn, hr⟩ := h
+  rw [hB] at hr
+  exact ⟨m, fs, k, o, t, fr, hA, hin, hB, hM, hk, h0, hn, hr⟩
 
 /-- **Where the frame takes the scheduled round, the frame round passes the frame's checks at `valsDev`**, wherever
 `cross` passes its device round: `roundOk_valsDev`. -/
