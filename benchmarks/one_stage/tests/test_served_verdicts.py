@@ -2568,8 +2568,8 @@ def test_a_deferral_with_the_split_certifier_behind_its_front_leaves_the_chain_a
     assert (record[record.index("--pieces") + 1], record[record.index("--product") + 1]) == (
         str(pieces.parent), product)
     assert (pieces.parent / "pouw" / "answer.json").read_text() == (dd / "pieces" / "pouw" / "answer.json").read_text()
-    assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == [
-        f"composite/{x}/composite.json" for x in products]
+    assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == sorted(
+        f"composite/{x}/composite.json" for x in products)
     handed = {x: json.loads((d / "private" / "composite" / x / "private" / "argv.json").read_text()) for x in products}
     assert handed == ({"remote": [], "remote-network": [str(pieces)]} if product == "remote-network" else {"remote": []})
     assert ("COMPOSITE: composed on cpu-6, not the served node vy-dc-h200: from a prover-side copy of its serve dir's "
