@@ -19,8 +19,10 @@ whose draw file round keeps the run's draw file (`drawOk`) and whose session the
 
 What the record takes beside v2's acceptance:
 * `Names`: v2 reads `A`'s files and `o`'s objects;
-* `Shows`: the run's session is the evidence's, past the draw file round;
-* `LiveCoins`: live-verifier at the session, as at the recursive session (`Verity.Recursive.LiveCoins`);
+* `Shows`: the evidence's session record draws the run's draw file, and past the draw file round the run's session is
+  the evidence's;
+* `LiveCoins`: live-verifier at the draw (v2's coins are the draw rounds' coins' first bytes) and at the session, as at
+  the recursive session (`Verity.Recursive.LiveCoins`);
 * `Fits`: the session's statement fits its 8-byte length words. v2 refuses no file by its size, so its acceptance
   doesn't give this;
 * `drawOk` at the run's draw file: its units are the coins' draw and its session has the statement's numbers.
@@ -39,7 +41,7 @@ private theorem ok_bind' {ε α β : Type} {x : Except ε α} {f : α → Except
   exact hf
 
 /-- A blob's bytes don't depend on the name a refusal would give it. -/
-private theorem get_what {bs : Core.Blobs} {d w w' : String} {b : ByteArray} (h : bs.get d w = .ok b) :
+theorem get_what {bs : Core.Blobs} {d w w' : String} {b : ByteArray} (h : bs.get d w = .ok b) :
     bs.get d w' = .ok b := by
   unfold Core.Blobs.get at h ⊢
   obtain ⟨a, hd, h⟩ := bind_ok h
@@ -94,28 +96,32 @@ structure Names (A : Live) (o : Own) (p : _root_.SampledProofs.OneStageZk.Params
   registered : o.registered.mapM (FlockDeploy.jsonOf "registered reads") = .ok p.own.registered
   tags : Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT = some A.I.tags
 
-/-- **The blobs show the run's session.** Where the run goes past the draw file round, at each session `s` the
-evidence names: the session's first message reads as the link message, and its last `f` as the prover's last, at the
-session's statement at the run's draw file; `s`'s record is `f`'s, and its draw the draw file's, as the session's
-statement reads it (`FlockDeploy.jsonOf`, `Flock.norm`); and `s` names each rep stream's file of the session's setup,
-the proof file `f` carries in its place. -/
+/-- **The blobs show the run's session.** Where the run reaches the draw file round, at each session `s` the evidence
+names, `s`'s record is on the blobs and its draw is the run's draw file, as the session's statement reads it
+(`FlockDeploy.jsonOf`, `Flock.norm`). Where the run goes past that round, at each such `s`: the session's first message
+reads as the link message, and its last `f` as the prover's last, at the session's statement at the run's draw file;
+`s`'s record is `f`'s; and `s` names each rep stream's file of the session's setup, the proof file `f` carries in its
+place. -/
 def Shows (A : Live) (o : Own) (ev : _root_.SampledProofs.OneStageZk.Evidence) (bs : Core.Blobs) (v : Seen) : Prop :=
-  DRAW_ROUNDS + 1 < v.msgs.length → ∀ s ∈ ev.sessions,
+  (DRAW_ROUNDS < v.msgs.length → ∀ s ∈ ev.sessions, ∃ rec : String,
+    bs.get s.record "a session's record" = .ok rec.toUTF8 ∧
+    ∃ J, FlockDeploy.jsonOf "draw" ⟨(drawOf v).toArray⟩ = .ok J ∧ Flock.Witness.recordDraw rec = some (Flock.norm J)) ∧
+  (DRAW_ROUNDS + 1 < v.msgs.length → ∀ s ∈ ev.sessions,
     (∃ m link, v.msgs[DRAW_ROUNDS + 1]? = some m ∧ FlockDeploy.linkOf m.1 = some link) ∧
     ∃ f, v.msgs.getLast?.bind (fun m => FlockDeploy.finalOf m.1) = some f ∧ f.stmt = sessStmt A o (drawOf v) ∧
       bs.get s.record "a session's record" = .ok f.record.toUTF8 ∧
-      (∃ J, FlockDeploy.jsonOf "draw" ⟨(drawOf v).toArray⟩ = .ok J ∧
-        Flock.Witness.recordDraw f.record = some (Flock.norm J)) ∧
       ∀ si spec sts, FlockDeploy.setupOf true (sessStmt A o (drawOf v)) = some (si, spec, sts) →
         f.proofs.size = spec.repStreams.size ∧ ∀ k (hk : k < spec.repStreams.size), ∃ d,
           (s.reps.find? (·.1 == s!"{spec.repStreams[k].2.2.replace "/" "."}.bin")).map (·.2) = some d ∧
-          ∃ hk' : k < f.proofs.size, bs.get d "session files" = .ok f.proofs[k]
+          ∃ hk' : k < f.proofs.size, bs.get d "session files" = .ok f.proofs[k])
 
-/-- **live-verifier** at the session: wherever flock-verify `--zk` decides on the run's session (its messages after the
-draw file round, at the coins `cs` after it), the live session the record shows is the session's link message, first
-coin and round messages with their coins (`FlockDeploy.custody`), as at the recursive session
-(`Verity.Recursive.LiveCoins`). -/
-def LiveCoins (A : Live) (o : Own) (v : Seen) (cs : List Coin) : Prop :=
+/-- **live-verifier** at the draw and at the session. At the draw: the bytes `ξ` v2 draws from, the challenger's coins,
+are the first bytes of the draw rounds' coins (`drawBytes`). At the session: wherever flock-verify `--zk` decides on the
+run's session (its messages after the draw file round, at the coins `cs` after it), the live session the record shows is
+the session's link message, first coin and round messages with their coins (`FlockDeploy.custody`), as at the recursive
+session (`Verity.Recursive.LiveCoins`). -/
+def LiveCoins (A : Live) (o : Own) (ξ : ByteArray) (v : Seen) (cs : List Coin) : Prop :=
+  (∃ t, drawBytes (cs.take DRAW_ROUNDS) = ξ ++ t) ∧
   ∀ si spec sts link c₁ mids f,
     FlockDeploy.act true (sessStmt A o (drawOf v)) ((v.msgs.map Prod.fst).drop (DRAW_ROUNDS + 1))
         (cs.drop (DRAW_ROUNDS + 1)) = .decide si spec sts link c₁ mids f →
@@ -178,29 +184,33 @@ theorem run_acc_out {i : ℕ} {a : Msg} (h : (run H P (V A o) (xOf A o) ω r).ms
   exact Verity.Recursive.Schedule.stepWith_acc_out H P (xOf A o) ω (vnAt A o r) ((V A o).k (xOf A o)) i [] []
     ⟨[], [], [], .rej⟩ a (by simpa using h)
 
-/-- **The run goes past the draw file round** where that round keeps the run's draw file: the draw rounds answer their
-coins and the draw file round answers `[]`. -/
-theorem reach (hpass : drawOk A o (drawOf (run H P (V A o) (xOf A o) ω r).seen) (coinsAt r)) :
-    DRAW_ROUNDS + 1 < (run H P (V A o) (xOf A o) ω r).msgs.length := by
+/-- **The run reaches the draw file round**: the draw rounds answer their coins, so the prover sends a draw file. -/
+theorem reach_draw : DRAW_ROUNDS < (run H P (V A o) (xOf A o) ω r).msgs.length := by
   have hk := k_gt (A := A) (o := o)
   have hpos : 0 < (run H P (V A o) (xOf A o) ω r).msgs.length := by
     rw [run_eq_stepWith]
     obtain ⟨g, hg⟩ : ∃ g, (V A o).k (xOf A o) = g + 1 := ⟨(V A o).k (xOf A o) - 1, by omega⟩
     rw [hg]
     exact RecDeploy.stepWith_length_succ H P (xOf A o) ω (vnAt A o r) g [] [] ⟨[], [], [], .rej⟩
-  have h64 : DRAW_ROUNDS < (run H P (V A o) (xOf A o) ω r).msgs.length := by
-    by_contra hle
-    obtain ⟨a, b, hab, hb⟩ := run_answer H P ω r
-      (i := (run H P (V A o) (xOf A o) ω r).msgs.length - 1) (by omega)
-    have hlen : ((((run H P (V A o) (xOf A o) ω r).msgs.take
-        ((run H P (V A o) (xOf A o) ω r).msgs.length - 1 + 1)).map Prod.fst)).length ≤ DRAW_ROUNDS := by
-      simp only [List.length_map, List.length_take]
-      omega
-    unfold nextAt at hb
-    rw [ite_eq_left hlen] at hb
-    simp only [Claims.OC.eval] at hb
-    rw [hb] at hab
-    rcases run_full H P ω r hab with h' | h' <;> omega
+  by_contra hle
+  obtain ⟨a, b, hab, hb⟩ := run_answer H P ω r
+    (i := (run H P (V A o) (xOf A o) ω r).msgs.length - 1) (by omega)
+  have hlen : ((((run H P (V A o) (xOf A o) ω r).msgs.take
+      ((run H P (V A o) (xOf A o) ω r).msgs.length - 1 + 1)).map Prod.fst)).length ≤ DRAW_ROUNDS := by
+    simp only [List.length_map, List.length_take]
+    omega
+  unfold nextAt at hb
+  rw [ite_eq_left hlen] at hb
+  simp only [Claims.OC.eval] at hb
+  rw [hb] at hab
+  rcases run_full H P ω r hab with h' | h' <;> omega
+
+/-- **The run goes past the draw file round** where that round keeps the run's draw file: the draw rounds answer their
+coins and the draw file round answers `[]`. -/
+theorem reach (hpass : drawOk A o (drawOf (run H P (V A o) (xOf A o) ω r).seen) (coinsAt r)) :
+    DRAW_ROUNDS + 1 < (run H P (V A o) (xOf A o) ω r).msgs.length := by
+  have hk := k_gt (A := A) (o := o)
+  have h64 := reach_draw H P ω r
   obtain ⟨a, b, hab, hb⟩ := run_answer H P ω r (i := DRAW_ROUNDS) h64
   have hl : (((run H P (V A o) (xOf A o) ω r).msgs.take (DRAW_ROUNDS + 1)).map Prod.fst).length =
       DRAW_ROUNDS + 1 := by
@@ -421,6 +431,48 @@ theorem setupOf_sess {d : Msg} (hfits : Fits A o d) {si : Ins} {spec : Flock.Ses
     FlockDeploy.setupOf true (sessStmt A o d) = some (si, spec, sts) :=
   setupOf_raw hfits rfl hins hsu
 
+/-- **flock-verify reads the session's statement as `baseRaw` with the draw file**: where the session's statement at the
+draw file `d` fits its length words, what flock-verify `--zk` reads of it (`FlockDeploy.readOf`) is what
+`FlockDeploy.Raw.ins` reads of `baseRaw A o` with the draw `d`. -/
+theorem readOf_sess {d : Msg} (hfits : Fits A o d) {r : Flock.Readable.Read}
+    (h : FlockDeploy.readOf true (sessStmt A o d) = some r) :
+    ∃ si, ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins = .ok si ∧ si.read = r := by
+  unfold FlockDeploy.readOf FlockDeploy.insOf sessStmt at h
+  rw [Verity.Recursive.Part.decode_encode_fits hfits] at h
+  obtain ⟨s, hs, rfl⟩ := Option.map_eq_some_iff.1 h
+  obtain ⟨w, hw, hs⟩ := Option.bind_eq_some_iff.1 hs
+  obtain rfl := Option.some.inj hw
+  split_ifs at hs with hz
+  · cases hs
+  change ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins.toOption = some s at hs
+  cases hi : ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins with
+  | error e => rw [hi] at hs; cases hs
+  | ok s' =>
+    rw [hi] at hs
+    cases hs
+    exact ⟨s', rfl, rfl⟩
+
+/-- **flock-verify reads the session's statement as v2's inputs**: where the session's statement at the draw file `d`
+fits its length words and flock-verify `--zk` reads it as `r`, `r` is `ins_sess`'s reading: v2's inputs at `A`
+(`SessionMatch`), its draw the draw file's JSON. -/
+theorem read_sess (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false)
+    {rd : _root_.SampledProofs.OneStageZk.Reads}
+    (hrd : _root_.SampledProofs.OneStageZk.readsOf p.own.registered = .ok rd) {d : Msg} (hfits : Fits A o d)
+    {r : Flock.Readable.Read} (h : FlockDeploy.readOf true (sessStmt A o d) = some r) :
+    ∃ si J, si.read = r ∧ SessionMatch si (inputsAt A p bs) rd ∧
+      FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J ∧ r.draw = some (Flock.norm J) := by
+  obtain ⟨si, hsi, rfl⟩ := readOf_sess hfits h
+  obtain ⟨draw, hdm, -⟩ := FlockDeploy.Raw.ins_draw hsi
+  change (some (⟨d.toArray⟩ : ByteArray)).mapM (FlockDeploy.jsonOf "draw") = .ok draw at hdm
+  rw [Option.mapM_some] at hdm
+  cases hJ : FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ with
+  | error e => rw [hJ] at hdm; cases hdm
+  | ok J =>
+    obtain ⟨si', hsi', hm, hdr⟩ := ins_sess hn hpl hrd hJ
+    rw [hsi] at hsi'
+    obtain rfl := Except.ok.inj hsi'
+    exact ⟨si, J, rfl, hm, rfl, hdr⟩
+
 end Ins
 
 /-- **flock-verify decides on a session** whose statement sets up, whose last message reads as the prover's last and
@@ -500,7 +552,7 @@ theorem acc_of_pass (A : Live) (o : Own) {p : _root_.SampledProofs.OneStageZk.Pa
     (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof) (hn : Names A o p bs)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin ((V A o).k (xOf A o)) → Coin)
     (hshow : Shows A o ev bs (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen)
-    (hlive : LiveCoins A o (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen
+    (hlive : LiveCoins A o ξ (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen
       ((List.range (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.length).map (coinSeq r)))
     (hfits : Fits A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen))
     (hpass : drawOk A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen) (coinsAt r)) :
@@ -510,17 +562,22 @@ theorem acc_of_pass (A : Live) (o : Own) {p : _root_.SampledProofs.OneStageZk.Pa
   have hsm : (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen.msgs =
       (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs := by
     simp only [Trace.seen]
-  obtain ⟨⟨m, link, hm1, hlink⟩, f, hfin, hstmt, hrecB, ⟨J, hJ, hrJ⟩, hfiles⟩ :=
-    hshow (by rw [hsm]; exact hreach) s (by rw [hs]; exact Array.mem_singleton_self s)
+  have hmem : s ∈ ev.sessions := by rw [hs]; exact Array.mem_singleton_self s
+  obtain ⟨⟨m, link, hm1, hlink⟩, f, hfin, hstmt, hrecB, hfiles⟩ := hshow.2 (by rw [hsm]; exact hreach) s hmem
+  obtain ⟨rec, hrecD, J, hJ, hrJ⟩ := hshow.1 (by rw [hsm]; omega) s hmem
   rw [hsm] at hm1 hfin
+  have hrec' : rec = record := by
+    have h2 := congrArg String.fromUTF8?
+      (Except.ok.inj ((get_what (w' := s!"session {s.name}'s record") hrecD).symm.trans hB))
+    rw [FlockComplete.fromUTF8?_toUTF8, hu] at h2
+    exact Option.some.inj h2
   have hrec : f.record = record := by
-    have hB' := (get_what (w' := s!"session {s.name}'s record") hrecB).symm.trans hB
-    obtain rfl : f.record.toUTF8 = B := Except.ok.inj hB'
-    rw [FlockComplete.fromUTF8?_toUTF8] at hu
-    exact Option.some.inj hu
+    have h2 := congrArg String.fromUTF8? (Except.ok.inj (hrecB.symm.trans hrecD))
+    rw [FlockComplete.fromUTF8?_toUTF8, FlockComplete.fromUTF8?_toUTF8] at h2
+    exact (Option.some.inj h2).trans hrec'
   obtain ⟨si, hins, hm, hsd⟩ := ins_sess hn hpl hrd hJ
   have hdraw : si.read.draw = Flock.Witness.recordDraw record := by
-    rw [hsd, ← hrec, hrJ]
+    rw [hsd, ← hrec', hrJ]
   obtain ⟨spec, tabs, pj, oj, hst⟩ := setupAt_of_verdictOf hv
   obtain ⟨sts, hsu, -⟩ := setup_of_setupAt hm hdraw hst
   have hso := setupOf_sess hfits hins hsu
@@ -548,7 +605,7 @@ theorem acc_of_pass (A : Live) (o : Own) {p : _root_.SampledProofs.OneStageZk.Pa
     · rw [List.getElem_map, hm1']
       exact hlink
   have hdec := decide_of_verdictOf hv hact hm hdraw hstmt hrec hfl
-    (hlive si spec sts link c₁ mids f hact)
+    (hlive.2 si spec sts link c₁ mids f hact)
   have hdraw0 : drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen =
       ((run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.map Prod.fst).getD DRAW_ROUNDS [] := by
     unfold drawOf
