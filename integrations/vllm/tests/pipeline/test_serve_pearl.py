@@ -276,10 +276,33 @@ def test_serve_openai_refuses_what_the_pearl_arm_cant_serve_before_the_model_loa
     assert so.engine_options(opts)["dtype"] == "bfloat16" and "quantization" not in so.engine_options(opts)
     assert "it needs --precision bfloat16, not verity_int8" in refusal(*arm[:2], *arm[4:])
     assert "--commit, --scheme rows-sha512 and the row's --required-manifest" in refusal(*arm, "--no-commit")
-    assert "--challenger-gate, --challenger-peer: PoUW H1's, not Pearl+'s" in refusal(
-        *arm, "--challenger-gate", "g", "--challenger-peer", "p")
+    assert refusal(*arm, "--challenger-gate", "g", "--challenger-peer", "p", "--challenger-lane", "l") is None
+    assert "--challenger-gate and --challenger-peer go together" in refusal(*arm, "--challenger-gate", "g")
+    assert "--h1-receipts: PoUW H1's, not Pearl+'s" in refusal(*arm, "--challenger-gate", "g", "--challenger-peer", "p",
+                                                                "--h1-receipts")
     assert "not Pearl+'s to give" in refusal(*arm[:4], "--protocols-config", json.dumps({"pouw": {"transcript_dir": "/t"}}))
     assert "are not Pearl+'s (pouw)" in refusal(*arm[:4], "--protocols-config", json.dumps({"pous": {}}))
     after = cli.parse("serve-openai", [*base, *arm, "--release-after", SPL.DRAWER], environ={})
     assert SPL.refusal(after).startswith(f"--release-after {SPL.DRAWER} waits for PoUW H1's draw")
     assert SPL.refusal(cli.parse("serve-openai", base, environ={})) is None
+
+
+def test_each_windows_salt_is_a_gate_session_of_the_lanes_period_under_the_gate_flags(tmp_path, monkeypatch):
+    """With --challenger-gate and --challenger-peer the arm's coins are window k's salt-only session (`GateSessions.salt`)
+    at the gate's command as this peer, joining --challenger-lane's period (vllm by default); without them, in-process."""
+    from verity_vllm.pipeline import serve_h1_gate as SG
+
+    asked = []
+    monkeypatch.setattr(SG.GateSessions, "salt", lambda self, window, lane: asked.append(
+        (self.gate.command, self.peer, self.steps, window, lane)) or {"session": {"session": f"s{window}"}})
+    man = predicted.row(tmp_path)
+    base = ["--model", "m", "--revision", "r", "--required-manifest", str(man), "--protocols", SPL.ENTRY,
+            "--precision", "bfloat16", "--protocols-config", json.dumps(CONFIG), "--window-steps", "2"]
+    assert SPL.coins_of(cli.parse("serve-openai", base, environ={})) is None
+    gated = [*base, "--challenger-gate", "ssh gate", "--challenger-peer", "vy-dc-h200-3"]
+    coins = SPL.coins_of(cli.parse("serve-openai", gated, environ={}))
+    assert coins(0) == {"session": {"session": "s0"}} and coins(1)["session"]["session"] == "s1"
+    SPL.coins_of(cli.parse("serve-openai", [*gated, "--challenger-lane", "pp"], environ={}))(3)
+    gate = ["ssh", "gate"]
+    assert asked == [(gate, "vy-dc-h200-3", 2, 0, "vllm"), (gate, "vy-dc-h200-3", 2, 1, "vllm"),
+                     (gate, "vy-dc-h200-3", 2, 3, "pp")]

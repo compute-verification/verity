@@ -13,10 +13,13 @@ product, one Pearl+ epoch a Commit window, under the server's own Commit, whose 
   before the window's install, retained in ``pearl/w<k>/pass-NNNNN/`` (owner-only: its manifest keeps the salt key).
   So the window's passes are its Commit's steps in order, round s is its step s, call c of a round its c-th linear (for
   the 1B, layer by layer qkv, o, gate_up and down), and no warm-up pass is in the epoch.
-* **Coins.** ``coins(k)`` gives the pouw settings window k's salt coin comes from. By default it is an in-process
-  challenger of epoch k over the Lean verifier of record's entropy (`verity.core.protocols.pouw.coins.Challenger`,
-  `verifier.coins`), which credits nothing; a live salt-only gate session's (``challenger``, ``session``, ``gate``:
-  `pouw_h1_window.salt_session`) is the caller's to give.
+* **Coins.** ``coins(k)`` gives the pouw settings window k's salt coin comes from. With ``--challenger-gate`` and
+  ``--challenger-peer`` (`coins_of`) it is a live salt-only session reserved at the window's open under the lane's gate
+  key, joining ``--challenger-lane``'s open Pearl-C period, and opened by the install on its salt epoch's root
+  (`serve_h1_gate.GateSessions.salt`, `pouw_h1_window.salt_session`). The period is the caller's to open before the
+  serve and close after it, before the verifier's draw. Without a gate it is an in-process challenger of epoch k over
+  the Lean verifier of record's entropy (`verity.core.protocols.pouw.coins.Challenger`, `verifier.coins`), which credits
+  nothing.
 * **Its close**, on the engine loop: the hooks off, the option closed (the last pass's files waited for,
   `PearlCDeviceRun.finish`), then ``pearl/w<k>/coins.json``, the epoch's coin commitment (`verify_run.epoch_coins`), and
   ``served.json`` (`pearl_c.window.SERVED_SCHEMA`): the window's passes with calls, each timed, with its manifest's path,
@@ -52,6 +55,8 @@ CONFIG = ("device", "kernel", "cubin", "schedule")
 DIR = "pearl"
 #: the subprotocol whose draw serve-openai's draw-gated release waits for (`serve_h1.DRAWER`), which Pearl+ never puts
 DRAWER = "pouw"
+#: the gate options (`serve_h1.GateOptions`) Pearl+ takes: each window's salt session's gate, peer and lane (`arm_of`)
+GATE = ("challenger_gate", "challenger_peer", "challenger_lane")
 
 
 def config_of(value: str | None) -> dict[str, Any]:
@@ -99,9 +104,13 @@ def refusal(opts: Any) -> str | None:
     if DRAWER in (p.strip() for p in after.split(",")):
         return (f"--release-after {DRAWER} waits for PoUW H1's draw of each window, and Pearl+ puts none: its verifier's "
                 "coin is drawn after its window record W (served_passes.py verify)")
-    if h1 := [f"--{f.name.replace('_', '-')}" for f in dataclasses.fields(opts.gate) if getattr(opts.gate, f.name)]:
-        return (f"{', '.join(h1)}: PoUW H1's, not Pearl+'s, whose salt coin comes from the arm's coins (serve_pearl), "
-                "in-process here")
+    if h1 := [f"--{f.name.replace('_', '-')}" for f in dataclasses.fields(opts.gate)
+              if f.name not in GATE and getattr(opts.gate, f.name)]:
+        return (f"{', '.join(h1)}: PoUW H1's, not Pearl+'s, whose salt coin comes from each window's salt session "
+                "(--challenger-gate) or in-process")
+    if bool(opts.gate.challenger_gate) != bool(opts.gate.challenger_peer):
+        return ("--challenger-gate and --challenger-peer go together: the gate's command and this machine's name in the "
+                "auditor host's peers, where its challenger reaches the server (ssh -R)")
     if opts.precision != PRECISION:
         return (f"--protocols {ENTRY} serves the BF16 checkpoint's linears as Pearl+'s FP8 product: it needs --precision "
                 f"{PRECISION}, not {opts.precision}")
@@ -268,18 +277,31 @@ class PearlWindows:
                 "calls": sum(o["calls"] for o in ok)}
 
 
+def coins_of(opts: Any) -> Callable[[int], Mapping[str, Any]] | None:
+    """Each window's coin settings from ``--challenger-gate``, ``--challenger-peer`` and ``--challenger-lane``: window k's
+    salt-only session reserved at its open in the lane's open Pearl-C period (`serve_h1_gate.GateSessions.salt`), which
+    its install opens on its salt epoch's root; None without a gate (in-process)."""
+    if not opts.gate.challenger_gate:
+        return None
+    from verity_vllm.pipeline import commit_coins as CC
+    from verity_vllm.pipeline.serve_h1_gate import GateSessions
+
+    sessions = GateSessions(CC.ChallengerGate(opts.gate.challenger_gate), opts.gate.challenger_peer, opts.window_steps)
+    return lambda window: sessions.salt(window, opts.gate.challenger_lane)
+
+
 def arm_of(opts: Any, llm: Any, com: Any, out: Path) -> PearlWindows | None:
     """The server's arm under ``--protocols`` `ENTRY` over the served ``llm``, its model runner and its committer ``com``
-    (None without), its coins in-process, made ready (`PearlWindows.ready`)."""
+    (None without), its coins each window's salt session (`coins_of`) or in-process, made ready (`PearlWindows.ready`)."""
     from verity_vllm.engine.handle import model_runner
 
     if opts.protocols != ENTRY:
         return None
     arm = PearlWindows(llm.model, model_runner(llm.vllm), com, out=out, config=config_of(opts.protocols_config),
-                       run_id=opts.run_id)
+                       run_id=opts.run_id, coins=coins_of(opts))
     arm.ready()
     return arm
 
 
-__all__ = ["CONFIG", "DIR", "DRAWER", "ENTRY", "PRECISION", "SCHEME", "PearlWindows", "arm_of", "config_of", "context",
-           "in_process", "refusal"]
+__all__ = ["CONFIG", "DIR", "DRAWER", "ENTRY", "GATE", "PRECISION", "SCHEME", "PearlWindows", "arm_of", "coins_of",
+           "config_of", "context", "in_process", "refusal"]

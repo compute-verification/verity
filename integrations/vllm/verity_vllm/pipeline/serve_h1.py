@@ -136,6 +136,9 @@ class GateOptions:
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME",
                                          help="with --challenger-gate: this machine's name in the auditor host's peers, where its "
                                               "challenger reaches the server (ssh -R)")
+    challenger_lane: str = option("--challenger-lane", default="vllm", metavar="LANE",
+                                  help="with --challenger-gate under Pearl+ (serve_pearl): the lane the gate key is "
+                                       "registered for, whose open Pearl-C period each window's salt session joins")
     h1_prover: str | None = option("--h1-prover", default=None, metavar="DIR",
                                    help="with --protocols: keep each H1 window's prover state (its salt key and each call's "
                                         "rows, pouw_h1_prover) and its live@<s> rows (pouw_h1_live.dump) in DIR/w<k>/, "
