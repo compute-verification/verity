@@ -48,7 +48,8 @@ counts `#(freeInputs \ reg)`. These compose with it at the record a statement's 
 
 Each of `CircuitWiresFit` and `CircuitCounts` says its conclusion (`…At`) of every record `check` accepts, and so is its
 property of any circuit check `chk` (`…Of`), which the nontrivial lemmas state false at `acceptAllCircuit`, a check that
-accepts every record; `RowsWiresChecked` and `RowsHeld` likewise of the period's decoder and check.
+accepts every record; `RowsWiresChecked` and `RowsHeld` likewise of the period's decoder and check, false at
+`acceptAllParams` and `acceptAllRows`, which decode every parameters to one audit's period and accept every period.
 `Proofs.Properties.NetworkCertifier` proves them.
 -/
 
@@ -285,5 +286,20 @@ on the strength of that `held`. -/
 def RowsHeld : Prop :=
   ∀ (j : Json) (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     paramsOf j = .ok p → check p c e = .accept pub prof → RowsHeldAt j p c pub
+
+/-- The rows-form period of one compute audit (`slotAudit`) and no link-window. -/
+def slotPeriod : Params :=
+  ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none, .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+
+/-- A parameters' decoder that decodes everything to `slotPeriod`: with `acceptAllRows`, what `RowsWiresCheckedOf`
+and `RowsHeldOf` must fail at for `RowsWiresChecked` and `RowsHeld` (each its `…Of` at `paramsOf` and `check`) to
+say something. -/
+def acceptAllParams (_ : Json) : Except String Params := .ok slotPeriod
+
+/-- A compute audit's registration with a circuit record: it names the Program `x`, and its window binds the record
+`d` and registers the root `r` for the parameter `k`. -/
+def recordReg : Json :=
+  Json.mkObj [("program", "x"), ("window", Json.mkObj [("circuit", "d"),
+    ("registered_roots", Json.mkObj [("k", "r")])])]
 
 end Properties.NetworkPeriod

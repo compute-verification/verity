@@ -12,6 +12,11 @@ records, no pin the scan's state. `paramsOf_audits`: the parameters' audits are 
 `auditOf`. On acceptance no audit has a finding (`check_audits`), so each audit's check passed (`auditCheck_ok`): its
 registration names that SHA-512, binds the record by its digest and records each pin as its parameter's registered
 root. `rowsHeld` adds the rows form's `held` (`publicJson_held`) and `rowsCircuitHeld`.
+
+The honest lemmas show the check accepting a rows-form period and an audit's registration passing each registration
+step; no audit `paramsOf` accepts is exhibited, since `Flock.Program.decode` reads `Lean.Json.parse`, a `partial def`
+the kernel can't unfold. The nontrivial lemmas: a verifier that decodes every parameters to one audit's period
+(`acceptAllParams`) and accepts every period (`acceptAllRows`) accepts one whose audit's registration names no Program.
 -/
 
 namespace Properties.NetworkPeriod
@@ -270,6 +275,46 @@ theorem rowsHeld : RowsHeld := by
   intro j p c e pub prof hp h s sd scan hform
   exact ⟨publicJson_held (check_rows hform h), rfl, rowsCircuitHeld p c e pub prof h,
     rowsWiresChecked j p c e pub prof hp h⟩
+
+/-! ## Witnesses -/
+
+/-- `slotPeriod` under a registration that names no Program fails `RowsWiresCheckedAt`, whatever its parameters. -/
+theorem slotPeriod_unnamed (j : Json) : ¬ RowsWiresCheckedAt j slotPeriod ⟨#[.null], #[], .empty⟩ := by
+  intro h
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, hreg, -⟩ := h 0 slotAudit .null rfl rfl
+  cases hreg
+
+/-- **`RowsWiresChecked`'s honest lemma**: the check accepts a rows-form period of no audit, and a circuit-record
+audit's registration that names its Program, binds its record and registers its pin's root passes each registration
+step of the audit check (`auditCheck`). `paramsOf`'s acceptance of an audit is not exhibited: it decodes the audit's
+Program with `Flock.Program.decode`, which reads `Lean.Json.parse`, a `partial def` the kernel can't unfold. -/
+theorem rowsWiresChecked_honest :
+    check ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
+        ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ =
+      .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] #[] 1 0 #[]) { link := "", windows := 0 } ∧
+    isStr (recordReg.getObjValD "program") "x" = true ∧
+    isStr ((recordReg.getObjValD "window").getObjValD "circuit") "d" = true ∧ pinHeld recordReg ("k", "r") = true :=
+  ⟨rowsCircuitHeld_honest.1, by decide +kernel, by decide +kernel, by decide +kernel⟩
+
+/-- **`RowsWiresChecked`'s nontrivial lemma**: a verifier that decodes every parameters to `slotPeriod` and accepts
+every period accepts one whose audit's registration names no Program, where `RowsWiresCheckedAt` fails. -/
+theorem rowsWiresChecked_nontrivial : ¬ RowsWiresCheckedOf acceptAllParams acceptAllRows := fun h =>
+  slotPeriod_unnamed .null (h .null slotPeriod ⟨#[.null], #[], .empty⟩ ⟨#[], #[]⟩ _ _ rfl rfl)
+
+/-- **`RowsHeld`'s honest lemma**: the check accepts a rows-form period of no audit, and its public's `held` names the
+checks `heldNames` names. `paramsOf`'s acceptance of an audit is not exhibited, as in `rowsWiresChecked_honest`. -/
+theorem rowsHeld_honest :
+    check ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
+        ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ =
+      .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] #[] 1 0 #[]) { link := "", windows := 0 } ∧
+    (publicJson (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] #[] 1 0 #[])).getObjValD "held" = Lean.toJson heldNames :=
+  ⟨rowsCircuitHeld_honest.1, publicJson_held rfl⟩
+
+/-- **`RowsHeld`'s nontrivial lemma**: a verifier that decodes every parameters to `slotPeriod`, a rows-form period,
+and accepts every period accepts one whose audit's registration names no Program, where `RowsHeldAt`'s `free` fails. -/
+theorem rowsHeld_nontrivial : ¬ RowsHeldOf acceptAllParams acceptAllRows := fun h =>
+  slotPeriod_unnamed .null (h .null slotPeriod ⟨#[.null], #[], .empty⟩ ⟨#[], #[]⟩ _ _ rfl rfl slotSchedule .empty
+    ⟨0, 0, 0, 0, 0⟩ rfl).2.2.2
 
 set_option pp.deepTerms true in
 set_option pp.maxSteps 1000000 in
