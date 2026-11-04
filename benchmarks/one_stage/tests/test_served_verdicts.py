@@ -236,17 +236,6 @@ def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_
     assert S.main(["sampled-line", str(tmp_path / "log")]) == 1
 
 
-def test_publish_names_on_stderr_each_file_it_leaves_unscanned_because_it_isnt_text(tmp_path, capsys):
-    """A file that isn't UTF-8 text stays in out/ byte for byte, unscanned, and `publish` says so on stderr, with why."""
-    out, private = tmp_path / "out", tmp_path / "private"
-    (out / "serve").mkdir(parents=True)
-    (out / "serve" / "program.json.gz").write_bytes(gzip.compress(b'{"rows": 512}'))
-    assert S.publish(out, private) == []
-    assert gzip.decompress((out / "serve" / "program.json.gz").read_bytes()) == b'{"rows": 512}'
-    assert capsys.readouterr().err == ("PUBLISH: serve/program.json.gz stays as it is, unscanned: not UTF-8 text "
-                                       "(invalid start byte at byte 1)\n")
-
-
 def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
     """The CERTIFIER-FRONT line carries `FRONT_PUBLIC` of the front's session and none of its prompts, request, kept
     fetch, gate or verdict's cells; a refused front's line names no reason, and a missing session says so."""
@@ -383,6 +372,17 @@ def _accepted() -> dict:
 
 def _rows(integrity: dict, pieces: Path) -> dict:
     return {"integrity": integrity, **{k: S.piece_row(k, pieces) for k in S.PIECES}, "wipe": S.piece_row("wipe", pieces)}
+
+
+def test_publish_names_on_stderr_each_file_it_leaves_unscanned_because_it_isnt_text(tmp_path, capsys):
+    """A file that isn't UTF-8 text stays in out/ byte for byte, unscanned, and `publish` says so on stderr, with why."""
+    out, private = tmp_path / "out", tmp_path / "private"
+    (out / "serve").mkdir(parents=True)
+    (out / "serve" / "program.json.gz").write_bytes(gzip.compress(b'{"rows": 512}'))
+    assert S.publish(out, private) == []
+    assert gzip.decompress((out / "serve" / "program.json.gz").read_bytes()) == b'{"rows": 512}'
+    assert capsys.readouterr().err == ("PUBLISH: serve/program.json.gz stays as it is, unscanned: not UTF-8 text "
+                                       "(invalid start byte at byte 1)\n")
 
 
 def test_sampled_proofs_alone_composes_to_a_pending_block_record(tmp_path):
