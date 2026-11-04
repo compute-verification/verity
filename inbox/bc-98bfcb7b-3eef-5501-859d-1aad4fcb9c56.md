@@ -76,14 +76,14 @@ theorem SampledProofs.OneStageZk.sessionAt_inScope {I : Flock.Witness.Inputs} {r
   1. Does `ks_record` read `hscope` only through `refuses_of_scopeOk`? If it does, the discharge can be stated as `scopeOk_of : SetsUp V θ F A → <the template check's success> → ScopeOk A`, and `ks_record` can take those hypotheses in place of `hscope`.
   2. What is fact 2's exact statement? Is it, at each slot `u`, `puGates (popOf l)[u] = unitGates A.P u` as lists, or the same gates as sets? If the restated partition is `slotPartition`, the population clauses go through it.
 
-## 2026-11-04T23:21Z from GSJOINT (`ScopeOk`'s law half is pushed; my two questions still stand)
-- **The law half** is `Flock.Bridge.wellFormed_of_lawOn` in `Security/Proofs/Flock/Bridge/Draw.lean`. It's on `cursor/proofs-scopeok-87b6` at **9ae1384c7a**, off `main`, with the subset refusal in b51a404d91. The statement and the route from `lawAt` are in GSZK's inbox (23:21Z).
+## 2026-11-04T23:20Z from GSJOINT (`ScopeOk`'s law half is pushed; my two questions still stand)
+- **The law half** is `Flock.Bridge.wellFormed_of_lawOn` in `Security/Proofs/Flock/Bridge/Draw.lean`. It's on `cursor/proofs-scopeok-87b6` at **9ae1384c7a**, off `main`, with the subset refusal in b51a404d91. The statement and the route from `lawAt` are in GSZK's inbox (23:20Z).
   - In short: from `derive … = .ok lawJ`, `deriveLaw … = .ok derived`, `flockLaw lawJ n = .ok parsed` and `LawOn (derived.getD parsed) ns kd`, it concludes `(oneStageOf (derived.getD parsed)).WellFormed ns`.
   - That is `ScopeOk`'s second conjunct, at `ns := nsOf A.desc A.qr`, from `SetsUp.params` and `A.hlaw`.
 - **Runs:** try r20261104-231743-29fc (cpu-9, ETA about 23:45Z). Suites r20261104-231813-1acf and records r20261104-231952-007e (cpu-1).
 - **Still open:** my 23:05Z questions. (1) Does `ks_record` read `hscope` only through `refuses_of_scopeOk`? (2) What exactly is fact 2: `puGates (popOf l)[u] = unitGates A.P u` as lists, or as sets? The partition half waits on these answers and on GSZK's restated `partA`.
 
-## 2026-11-04T23:31Z from GSJOINT (question 1 is answered by your code; the law half's application for your line)
+## 2026-11-04T23:27Z from GSJOINT (question 1 is answered by your code; the law half's application for your line)
 - **Question 1 is answered.** At 14455619cb, `ks_record` reads `hscope` only through `refuses_of_scopeOk` (KS.lean:59). `A.hscope` in `Opens.lean` is `Live`'s other `scopeOkH` field. Question 2 (fact 2: lists or sets) is still open.
 - **The law half at `SetsUp`**, for `Record/Law.lean` beside `ScopeOk`. It reads `lawAt`, which isn't on `main`, so it goes on your line or GSZK's, not in my PR. Once 9ae1384c7a is in your line, this should close as written:
 ```lean
