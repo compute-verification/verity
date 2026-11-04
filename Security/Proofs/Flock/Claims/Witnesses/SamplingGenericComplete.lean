@@ -92,7 +92,10 @@ and the errors are `0`. -/
 theorem twoL_completeSessions (H : Msg → Msg) :
     (twoL Coin).CompleteSessions H (fun _ => silentP) (fun _ => True) (fun _ => 0) (fun _ => 2) where
   honest := by
-    intro x w _ _ ω r u hu
+    intro x w _ _ ω
+    change Unit at ω
+    cases ω
+    intro r u hu
     have hu2 : u < 2 := by
       change u ∈ [0, 1] at hu
       simp at hu
@@ -101,17 +104,20 @@ theorem twoL_completeSessions (H : Msg → Msg) :
     · show 1 = (if h : u < 2 then ({⟨u, h⟩} : Finset (Fin 2)) else ∅).card
       simp [hu2]
     · have h1 : (run H silentP (twoA Coin).V [] () ((twoL Coin).coinsOf x u [] r')).seen =
-          ⟨[(twoMsg H silentP x ω u, sesOut [twoMsg H silentP x ω u])], sesOut [twoMsg H silentP x ω u]⟩ :=
-        (twoA_run H silentP x ω u [] _).1
-      change twoSession u (run H silentP (twoL Coin).V x ω r').seen =
+          ⟨[(twoMsg H silentP x () u, sesOut [twoMsg H silentP x () u])], sesOut [twoMsg H silentP x () u]⟩ :=
+        (twoA_run H silentP x () u [] _).1
+      change twoSession u (run H silentP (twoL Coin).V x () r').seen =
         some ([], (run H silentP (twoA Coin).V [] () ((twoL Coin).coinsOf x u [] r')).seen)
       rw [twoL_run, h1]
       interval_cases u <;> rfl
   accepts := by
-    intro x w _ _ ω r _
-    have h0 : twoMsg H silentP x ω 0 = [] := rfl
-    have h1 : twoMsg H silentP x ω 1 = [] := rfl
-    change (run H silentP (twoL Coin).V x ω r).seen.out = .acc
+    intro x w _ _ ω
+    change Unit at ω
+    cases ω
+    intro r _
+    have h0 : twoMsg H silentP x () 0 = [] := rfl
+    have h1 : twoMsg H silentP x () 1 = [] := rfl
+    change (run H silentP (twoL Coin).V x () r).seen.out = .acc
     rw [twoL_run, h0, h1]
     simp [twoOut]
   among := by
