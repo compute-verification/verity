@@ -516,30 +516,56 @@ def test_at_one_step_a_window_the_least_cap_of_the_servers_limits_commits_every_
     assert all(x["advice"]["bits"] == cap for x in records(tmp_path, SA.LINES) if not x.get("empty"))
 
 
-LONG = [_body(i, 24, 4, f"user-{i:019d}") for i in range(4)]  # GROUP under ids of 24 bytes, the served id bound
+LENGTH = {"reason": "length", "stop_reason": None}
 
 
-def test_a_window_past_its_registered_cap_is_refused_by_name_and_the_committer_goes_on(tmp_path):
-    """Under a cap a byte short of a window admitting one request of a 24-byte id and nothing else, every window of a group
-    of such requests is refused however their arrivals fall into windows: the first by `pad`'s reason, each after it
-    because the one before it is refused, so it opens on nothing carried. The committer goes on: once the group is served,
-    every window of a request with a 1-byte id is committed, and every closed window is settled, with no error."""
-    alone = WA.total_bits(WA.Advice((WA.RequestAdvice(LONG[0]["user"], 24, 4, "length"),),
-                                    (WA.StepAdvice((WA.Row(0, "prefill", 0, 24),)),), (0,)))
+def _one_after_another(out: Path, users: list[str]) -> tuple[list[dict], list[dict], list[dict]]:
+    """A served trace at one step a Commit window, written to ``out`` with its Commit record: each user's request in turn, its
+    prompt of 24 ids in one window's step and its decode, which finishes it by length, in the next. -> the trace's records,
+    the requests' Commit records and the windows' lines."""
+    recs, reqs, lines = [{"kind": "header", "schema": ST.SCHEMA, "config": {}}], [], []
+    for i, user in enumerate(users):
+        rid = f"r{i}"
+        recs.append({"kind": "arrive", "request": rid, "before_step": 2 * i, "prompt_len": 24})
+        for w, (start, n, fin) in enumerate(((0, 24, {}), (24, 1, {rid: LENGTH})), 2 * i):
+            recs += [{"kind": "window", "window": w, "event": "open", "before_step": w},
+                     {"kind": "step", "step": w, "T": n, "order": "runner", "rows": [[rid, start, n]], "new": [] if start else [rid],
+                      "resumed": [], "cache_hit": {}, "preempted": [], "emitted": {rid: 1}, "finished": fin},
+                     {"kind": "window", "window": w, "event": "close", "before_step": w + 1}]
+            lines.append({"window": w, "run_id": "t", "run_root": f"{w:02x}" * 32})
+        reqs.append({"request": rid, "user": user, "prompt_ids": list(range(i, i + 24)), "output_ids": [7, 8], "finish": LENGTH})
+    (out / ST.SERVED).write_text("".join(json.dumps(r) + "\n" for r in recs))
+    (out / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in reqs))
+    return recs, reqs, lines
+
+
+def test_the_committer_refuses_a_window_past_its_registered_cap_by_name_and_goes_on_from_nothing_carried(tmp_path):
+    """On a fixed trace (`_one_after_another`) under a cap a byte short of the window admitting a request of a 24-byte id, the
+    served id bound: that window is refused by `pad`'s reason, and the next, its decode, because the one before it is refused,
+    so it opens on nothing carried. The committer goes on: both windows of the next request, of a 1-byte id, are committed
+    at ℓ_a, the second carrying it from the first, and every window has its line."""
+    alone = WA.total_bits(WA.Advice((WA.RequestAdvice("u" * 24, 24, 2, "length"),), (WA.StepAdvice((WA.Row(0, "prefill", 0, 24),)),),
+                                    (0,)))
     cap = AW.least_cap(alone) - 8
-    with Server(tmp_path, window_steps=1, advice=True, compiler=ADV.registered_compiler("test-compiler", "ab" * 64, cap)) as s:
-        serve_concurrently(s, LONG)
-        serve_concurrently(s, [_body(9, 24, 4, "u")])
-    summary, index = s.advice_summary, json.loads((tmp_path / "advice" / "windows.json").read_text())
-    refused, committed = summary["refused"], summary["committed"]
-    assert summary["error"] is None and summary["waiting"] == [] and refused and committed, summary
-    assert max(refused) < min(committed), (refused, committed)
-    assert "over the registered cap" in index["refused"][str(refused[0])]
-    assert all(f"window {was} before it is refused, so it opens on nothing carried" in index["refused"][str(w)]
-               for was, w in zip(refused, refused[1:]))
-    lines = {x["window"]: x for x in records(tmp_path, SA.LINES)}
-    assert {w for w, x in lines.items() if x.get("refused")} == set(summary["refused"])
-    assert set(lines) == set(summary["committed"]) | set(summary["refused"]) | set(summary["empty"])
+    recs, reqs, lines = _one_after_another(tmp_path, ["u" * 24, "v"])
+    sa = SA.ServedAdvice(tmp_path, SimpleNamespace(records=recs), wall=lambda: 0.0)
+    sa.compiler = ADV.registered_compiler("test-compiler", "ab" * 64, cap)
+    for line in lines:
+        sa.closed(line)
+    for r in reqs:
+        sa.recorded(r)
+    sa._poll(final=False)
+    assert sa.summary() == {"committed": [2, 3], "empty": [], "refused": [0, 1], "waiting": [], "error": None, "passed": True}
+    assert json.loads((tmp_path / "advice" / "windows.json").read_text())["refused"] == {
+        "0": f"the advice is {cap} bits, over the registered cap ℓ = {cap} bits less its 8-bit end mark",
+        "1": "step 0: request r0 is first scheduled at position 24, not at its cache hit 0 (window 0 before it is refused, so it "
+             "opens on nothing carried)"}
+    assert [(x["window"], x.get("refused"), x.get("advice", {}).get("bits")) for x in records(tmp_path, SA.LINES)] == [
+        (0, True, None), (1, True, None), (2, None, cap), (3, None, cap)]
+    first, second = (WA.decode(sa.compiler.unpad((tmp_path / "advice" / f"w{w}" / "private" / "advice.bin").read_bytes()))
+                     for w in (2, 3))
+    WA.follows(first, second)
+    assert [q.id for q in first.requests] == ["v"] and len(second.carried) == 1
 
 
 def test_a_window_is_committed_once_whole_and_waits_on_a_record_or_a_step_still_to_come(tmp_path):
