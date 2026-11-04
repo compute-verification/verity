@@ -170,8 +170,9 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 * in the rows form, link-window `w`'s tied compute audits run the class circuit (`held`): each audit its scan's `prog`
   is an output of (`tiedAudits`) has a registration naming the parameters' `circuit` as its Program. A window circuit's
   own digest binds its window's run, so it is another each window; its Program is the class's, one for the period, and
-  is what the audit's free inputs are read off. So no link-window's tied audit runs a Program the prover chose for that
-  window, and the free inputs its term counts are the class circuit's (`Properties.NetworkPeriod.RowsCircuitHeld`).
+  is what the audit's free inputs are read off. So no link-window's tied audit is registered under a Program the prover
+  chose for that window (`Properties.NetworkPeriod.RowsCircuitHeld`), and, since the audit check holds the registered
+  Program to the descriptor whose input gates its term counts (`auditCheck`), those are the class circuit's.
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `PeriodLeakAccepted`'s factor:
 
@@ -1214,8 +1215,8 @@ def runsCircuit (circuit : Option String) (reg : Json) : Bool := match circuit, 
   | _, _ => false
 
 /-- The class circuit is held at a link-window: each audit its scan's `prog` is an output of (`tiedAudits`) runs it
-(`runsCircuit`), so the link-window's tied audit runs the one window circuit the class registers, and the free inputs
-its term counts are that circuit's Program's. -/
+(`runsCircuit`), so the link-window's tied audit runs the one window circuit the class registers, and, with the audit
+check holding its registration to its descriptor (`auditCheck`), the free inputs its term counts are that Program's. -/
 def held (circuit : Option String) (audits : Array Json) (reg : Json) : Bool :=
   (tiedAudits audits reg).all fun i => (audits[i]?.map (runsCircuit circuit)).getD false
 

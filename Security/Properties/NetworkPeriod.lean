@@ -38,11 +38,13 @@ its property of any period check at `check` (`RowsProgWiredOf`, `RowsStateTiedOf
 false at `acceptAllRows`, a check that accepts every period. Each guarantee writes its acceptance of `check` out rather
 than being its `…Of check`: the shape rule reads the acceptance off the statement's own binders.
 
-The free inputs a tied audit's term counts are those of the Program it runs. `RowsCircuitHeld` says the check accepts no
-link-window whose tied audit runs a Program other than the class circuit, the parameters' `circuit`: the one Program the
-workload's class registers, fixed for the period, so the prover chooses no link-window's circuit. Its witnesses are an
-empty rows-form period `check` accepts, beside a tied audit that runs the class circuit, and an explicit period whose
-tied audit runs another (`RowsCircuitHeldAt` false), which a check that accepts everything accepts.
+`RowsCircuitHeld` says the check accepts no link-window whose tied audit's registration names a Program other than the
+class circuit, the parameters' `circuit`: the one Program the workload's class registers, fixed for the period, so the
+prover chooses no link-window's circuit. It states the registrations alone: that the descriptor whose input gates a
+tied audit's term counts is the Program its registration names is the audit check's (`auditCheck`), which compares
+them as `Json` (`==`, which no proof unfolds) and no property states. Its witnesses are an empty rows-form period
+`check` accepts, beside a tied audit registered under the class circuit, and an explicit period whose tied audit is
+registered under another (`RowsCircuitHeldAt` false), which a check that accepts everything accepts.
 -/
 
 namespace Properties.NetworkPeriod
@@ -121,7 +123,7 @@ def RowsStateTied : Prop :=
     check p c e = .accept pub prof → RowsStateTiedAt p c
 
 /-- What `RowsCircuitHeld` says of a period its check accepted: in the rows form, each link-window's tied compute audits
-run the parameters' class circuit (`held`). -/
+are registered under the parameters' class circuit (`held`). -/
 def RowsCircuitHeldAt (p : Params) (c : Commitment) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → held p.circuit c.audits reg = true
@@ -130,8 +132,8 @@ def RowsCircuitHeldAt (p : Params) (c : Commitment) : Prop :=
 check accepts a period in the rows form, every audit a link-window's scan's `prog` is an output of (`tiedAudits`) has a
 registration whose `program` is the parameters' `circuit`, the SHA-512 of the Program of the one window circuit the
 workload's class registers (`held`). A window circuit's own digest binds its window's run; its Program is one for the
-period, so no link-window's tied audit runs a Program the prover chose for that window, and the free inputs its term
-counts are the class circuit's. -/
+period, so no link-window's tied audit is registered under a Program the prover chose for that window. That its term
+counts the free inputs of that Program's descriptor is the audit check's (`auditCheck`), not stated here. -/
 def RowsCircuitHeld : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsCircuitHeldAt p c
