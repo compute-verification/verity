@@ -72,6 +72,7 @@ import json
 import math
 import random
 import re
+from collections.abc import Callable
 from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
@@ -435,24 +436,29 @@ def _axis_dims(t, ax: int) -> tuple[int, int] | None:
     return (t[1], leaves_of(t[2])) if ax == 0 else _axis_dims(t[2], ax - 1)
 
 
-def _member_ref(x: dict, o: int, m: int, k: int, j: dict) -> tuple[str, int, int] | None:
-    """`Arg.memberRef`: member `m`'s leaf `k` of node `x`'s argument `o`, with the dims the decoder gives a batch
-    argument from its axis; None past the argument's references."""
+def _member_refs(x: dict, o: int, j: dict) -> Callable[[int, int], tuple[str, int, int] | None]:
+    """`Arg.memberRef` of node `x`'s argument `o`: member `m`'s leaf `k`, with the dims the decoder gives a batch
+    argument from its axis; None past the argument's references. They are expanded once (`_refs`), as the decoded
+    argument holds its `Seq`, and every member and leaf read through the function indexes them."""
     a, nodes = x["args"][o], j["definitions"][j["root"]]["body"]["nodes"]
     ax = (x.get("axes") or [None] * len(x["args"]))[o]
     t = j["types"][a["type"]] if isinstance(a["type"], int) else a["type"]
     dims = _axis_dims(t, ax) if ax is not None else None
     refs = _refs(a, nodes)
-    i = k if dims is None else (k // dims[1] * dims[0] + m) * dims[1] + k % dims[1]
-    return refs[i] if i < len(refs) else None
+
+    def ref(m: int, k: int) -> tuple[str, int, int] | None:
+        i = k if dims is None else (k // dims[1] * dims[0] + m) * dims[1] + k % dims[1]
+        return refs[i] if i < len(refs) else None
+    return ref
 
 
 def _reads_entries(x: dict, o: int, t0: int, every: int, E: int, ks: list[int], j: dict) -> bool:
     """`readsEntries`: for each lane `i` and member `m` (bucket `t0 + m`), argument `o + i` is row
     `⌊(t0 + m) / every⌋` of input node `ks[i]`, lane `i`'s slot entries, `E` leaves a row, leaf by leaf."""
-    return all(o + i < len(x["args"]) and all(
-        _member_ref(x, o + i, m, ell, j) == ("n", k, (t0 + m) // every * E + ell)
-        for m in range(x["n"]) for ell in range(E)) for i, k in enumerate(ks))
+    def reads(i: int, k: int) -> bool:
+        ref = _member_refs(x, o + i, j)
+        return all(ref(m, ell) == ("n", k, (t0 + m) // every * E + ell) for m in range(x["n"]) for ell in range(E))
+    return all(o + i < len(x["args"]) and reads(i, k) for i, k in enumerate(ks))
 
 
 #: `Flock.Steps.FUEL`: the most steps `Prog.gate`'s walk to an operand takes
@@ -646,7 +652,7 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     if any(_input_arg(a, nodes, j) in rows for a in xe["args"]):
         raise D.Reject("scan: an egress template's argument is an ingress row's input node, so an egress gate would "
                        "depend on the ingress (NetTiming.BoundaryGates.Fits)")
-    r0 = [_member_ref(xf, 1 + i, 0, 0, j) for i in range(L)]
+    r0 = [_member_refs(xf, 1 + i, j)(0, 0) for i in range(L)]
     pks = [r[1] for r in r0 if r is not None]
     if (len(pks) != L or any(r[0] == "p" for r in r0) or len(set(pks)) != L
             or any(k in rows or not (k < len(nodes) and _is_input(nodes[k], j)) for k in pks)):
