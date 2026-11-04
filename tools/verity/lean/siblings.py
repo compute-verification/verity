@@ -12,10 +12,9 @@ else a plain file. A package's modules are its `[[lean_lib]]`s' files (the libra
 newer than its source and than the sources of the package's modules it imports, directly or through others (an import
 from another package is taken as built). One that isn't is listed as unchecked.
 
-It is opt-in because of what it costs. On Security/Proofs' warm tree on vy-nebius-cpu-1 (4 Nov), the stub imported 3243
-modules in 18 s at a peak of 8.7 GB, and a duplicate of `Pouw.PearlC.ex_mono` failed in 13 s at 7.5 GB. A try on an agent
-VM has about a minute and 1 GB, so there the check runs only with `--siblings`, and on Security it belongs on a node
-(`--on`). Records runs still catch what it isn't asked for. Stdlib only: the CLI's local `verity lean try` and
+It is opt-in because of what it costs: on Security/Proofs' warm tree its stub imports some 3,200 modules in under 20 s
+at a peak near 8 GB, past the 1 GB a try on an agent VM has. So it runs only with `--siblings`, on Security on a node
+(`--on`), and records runs still catch what it isn't asked for. Stdlib only: the CLI's local `verity lean try` and
 `lean_changed.py --try` both load it."""
 from __future__ import annotations
 
