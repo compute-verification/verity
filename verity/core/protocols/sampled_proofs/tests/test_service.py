@@ -686,50 +686,39 @@ def _refused(call) -> tuple[str, ...]:
 
 WORK = {PAIR.id: 10}
 STRATUM = S.Public(f"population:{PAIR.id}", "structure", "the work law's one stratum")
-#: The challenger's closure map: each proof block is proved with the next.
+#: A closure map: each proof block is proved with the next.
 NEXT = {u: [(u + 1) % 6] for u in range(6)}
 
 
-def test_a_work_draw_carries_its_closure_and_the_proof_proves_it():
-    stream = _stream(_spec(S.Law("work:2"), public=(*STEP0, STRATUM)))
-    reg = stream.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6), work_table=WORK)
-    draw = stream.select(reg, closure=NEXT)
-    assert draw.draw["closure"] == T.closure_of(NEXT, draw.units) and draw.draw["closure"]
-    assert D.check_draw(draw.draw, reg.record, draw.law).ok
-    assert draw.proved == sorted({*draw.units, *((u + 1) % 6 for u in draw.units)})
-    stream.deliver(draw, [SESSION])
-    out = stream.outcome(draw, _lean(), {}, proved_units=draw.units)
-    assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["proved"]
-    stream = _stream(_spec(S.Law("work:2"), public=(*STEP0, STRATUM)))
-    draw = stream.select(stream.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6),
-                                         work_table=WORK), closure=NEXT)
-    stream.deliver(draw, [SESSION])
-    out = stream.outcome(draw, _lean(), {})
-    assert out.accepted and stream.records[0]["audit"]["proved_units"] == draw.proved
-
-
-def test_a_closure_widens_a_work_draw_only_and_stays_in_range():
+def test_a_closure_map_is_refused_before_any_coin_is_read():
+    """A closure map widens a work sample to a set whose size varies with the sample, which the sampled audit's soundness
+    statement doesn't cover: `select` refuses any, empty or not, under any sampling design (`closure`), before any coin
+    is read, so the sample drawn after the refusals is the one a fresh stream on the same challenger draws, and it is
+    accepted."""
     stream = _stream()
     reg = stream.register(_record(), _ports(6))
     assert _refused(lambda: stream.select(reg, closure=NEXT)) == ("closure",)
-    reads: list[int] = []
-    stream = _stream(_spec(S.Law("work:2"), public=(*STEP0, STRATUM)), coins=lambda n: reads.append(n) or b"\x07" * n)
+    work = _spec(S.Law("work:2"), public=(*STEP0, STRATUM))
+    stream = _stream(work)
     reg = stream.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6), work_table=WORK)
-    for bad in ({u: [6] for u in range(6)}, {6: [0]}, {u: [-1] for u in range(6)}, {u: ["1"] for u in range(6)},
-                [[1]] * 6):
+    for bad in (NEXT, {}, {u: [6] for u in range(6)}, {6: [0]}, [[1]] * 6):
         assert _refused(lambda: stream.select(reg, closure=bad)) == ("closure",)
-    assert reads == []
-    assert "closure" not in stream.select(reg, closure={}).draw and reads
+    draw = stream.select(reg)
+    fresh = _stream(work)
+    assert draw.draw == fresh.select(fresh.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6),
+                                                    work_table=WORK)).draw
+    assert "closure" not in draw.draw and draw.proved == draw.units
+    stream.deliver(draw, [SESSION])
+    assert stream.outcome(draw, _lean(), {}).accepted
 
 
 @pytest.mark.parametrize("text", ["subset:2", "bernoulli:3/3", "stratified:2", "work:2"])
 def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
     """The sample is Lean's `drawWith` on the coins (`coins.draw_first`), so `flock-verify draw` on the same bytes
-    draws the same proof blocks; a work sample's closure is the same too."""
+    draws the same proof blocks."""
     table = WORK if text.startswith("work") else None
-    closure = NEXT if table else None
     for seed in range(8):
         stream = _stream(_spec(S.Law(text), public=(*STEP0, STRATUM)), coins=random.Random(seed).randbytes)
         reg = stream.register(_record(law=D.parse_law(text), work_table=table), _ports(6), work_table=table)
-        draw = stream.select(reg, closure=closure)
-        assert dict(draw.draw) == T.draw_first(T.OwnRandomness(random.Random(seed).randbytes), draw.law, 6, closure)
+        draw = stream.select(reg)
+        assert dict(draw.draw) == T.draw_first(T.OwnRandomness(random.Random(seed).randbytes), draw.law, 6)

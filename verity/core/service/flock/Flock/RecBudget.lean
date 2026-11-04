@@ -9,10 +9,12 @@ holds its `2 q` openings (`q < 256`, `fast100`), a later level's RecCap both rep
 `2^cap ≤ 128`, a part its two reps; a part registers its row ports (at most `RecResiduals.MAX_REGIONS = 64`) with `v` and
 `out`; and the deepest registered tree is `rec-acc`'s, the chain of every opening of both reps and R's, fewer than `2^12`
 rows. It also refuses an inner shape at which V\*'s list (`RecVStar.statements`) holds more than `MAX_STATEMENTS`
-statements (`statements`), so the recursion's V\* parts, one a statement, are at most that many; a deployed shape's list
-holds about ten (`fast100`'s levels, the algebra's parts, then RecCap). And it refuses one at which the list records more
-than `MAX_RECORDED` hm96 calls (`recorded`): the calls the V\* parts' witnesses record (two an hm96 slot, the salt's and
-the row's, at each registered row a part's layout reads), counted off each statement's description (`recordedAt`), a bound
+statements (`statements`), so the recursion's V\* parts, one a statement, are at most that many: the parts the
+recursion's soundness bound is proved at (its extractor's reruns and `κ`). A plain list holds each `fast100` level's
+RecOpen and RecCap and the algebra's parts, at most `16` at every `m ≤ 35` of at most three regions; candidate 3's adds
+RecSparse, R's levels and R's opening, `15` at `m ≤ 27`. And it refuses one at which the list records more than
+`MAX_RECORDED` hm96 calls (`recorded`): the calls the V\* parts' witnesses record (two an hm96 slot, the salt's and the
+row's, at each registered row a part's layout reads), counted off each statement's description (`recordedAt`), a bound
 the recursion's call bound `w` is proved at. `verity_flock.rec_budget` is the stager's mirror.
 
 The inner statement's setup hashes every row of its public file (two SHA-512 inputs a row, then the row tree), and a
@@ -36,7 +38,7 @@ def MAX_PORTS : Nat := 4096
 /-- The deepest registered tree a V\* session reads: `log2ceil leaves` levels. -/
 def MAX_DEPTH : Nat := 64
 /-- The most statements V\*'s list holds at the verifier's inner shape: the recursion's V\* parts. -/
-def MAX_STATEMENTS : Nat := 4096
+def MAX_STATEMENTS : Nat := 16
 /-- The most rows a shared-row table of the inner statement's public file holds. -/
 def MAX_INNER_ROWS : Nat := 268435456
 
@@ -68,7 +70,8 @@ def table (inner : Option RecVStar.Inner) (sts : Array Stmt) : V Unit :=
 /-- **V\*'s list of `n` statements is within the cap.** -/
 def count (n : Nat) : V Unit :=
   if MAX_STATEMENTS < n then
-    throw s!"refused: V*'s list at the verifier's inner shape holds {n} statements, more than {MAX_STATEMENTS}: {tail}"
+    throw (s!"refused: V*'s list at the verifier's inner shape holds {n} statements, more than {MAX_STATEMENTS}: " ++
+      s!"the recursion's soundness bound covers at most {MAX_STATEMENTS} V* parts")
   else pure ()
 
 /-- The most hm96 calls V\*'s list records at the verifier's inner shape (`recordedCalls`): `2^32`. -/

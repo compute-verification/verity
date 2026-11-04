@@ -2,12 +2,12 @@
 `RecBudget` under F1's inner shape: a registration of `MAX_PORTS` ports of trees `MAX_DEPTH` deep, and a table of
 `MAX_INSTANCES` instances, pass, as does a level's registration (`rec-acc` of 2048 rows, its tops, its `2 q` openings'
 coefficients); one port more, one leaf past `2^MAX_DEPTH`, or one instance more is refused, each by its own message.
-V\*'s list of `MAX_STATEMENTS` statements passes and one more is refused (`count`); a shape `RecVStar.statements` refuses
-(claims not two and two per region) is left to the checks that run it. Without an inner shape nothing is refused. A list
-recording `MAX_RECORDED` hm96 calls passes and one more is refused (`recorded`); a level's statement records two calls at
-each of its openings' `out`, `coef` and `dirs` and four at each `rec-acc` row its units read, R's level's at `out` and
-`rec-acc` alone (none of `rec-acc` without R's shape), a RecCap four at each node, RecSparse two at each of its ports' two
-rows, and the link table's part none (`recordedAt`).
+V\*'s list of `MAX_STATEMENTS = 16` statements passes and one more is refused (`count`), naming the soundness bound's
+cap; a shape `RecVStar.statements` refuses (claims not two and two per region) is left to the checks that run it.
+Without an inner shape nothing is refused. A list recording `MAX_RECORDED` hm96 calls passes and one more is refused
+(`recorded`); a level's statement records two calls at each of its openings' `out`, `coef` and `dirs` and four at each
+`rec-acc` row its units read, R's level's at `out` and `rec-acc` alone (none of `rec-acc` without R's shape), a RecCap
+four at each node, RecSparse two at each of its ports' two rows, and the link table's part none (`recordedAt`).
 -/
 module
 
@@ -56,10 +56,15 @@ def whyC (n : Nat) : Option String :=
   | .ok () => none
   | .error e => some e
 
+#guard MAX_STATEMENTS == 16
 #guard whyC 10 == none
-#guard whyC MAX_STATEMENTS == none
-#guard whyC (MAX_STATEMENTS + 1) ==
-  some "refused: V*'s list at the verifier's inner shape holds 4097 statements, more than 4096: the recursion's call bound covers no more"
+#guard whyC 16 == none
+#guard whyC 17 ==
+  some ("refused: V*'s list at the verifier's inner shape holds 17 statements, more than 16: the recursion's soundness " ++
+    "bound covers at most 16 V* parts")
+#guard whyC 4096 ==
+  some ("refused: V*'s list at the verifier's inner shape holds 4096 statements, more than 16: the recursion's soundness " ++
+    "bound covers at most 16 V* parts")
 #guard (statements none).toOption == some ()
 #guard (statements (some { inner with claims := 9 })).toOption == some ()
 

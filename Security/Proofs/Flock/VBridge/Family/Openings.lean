@@ -7,9 +7,9 @@ public import Proofs.Flock.VBridge.Family.Rep
 
 `vbridge_of_reps` asks every opening's unit for `OpensAt`, whose input facts are `RegBit`: each input column a
 registered read whose registrant value is the opening's. V*'s openings read two private rows, the opened row and its
-siblings `aux`, under fresh salts (`rec_outer.stage`, rec_outer.py:8-10, 239-242: only `out`, `acc`, `coef`, `dirs` and
-`acc_out` are registered, `row` only with `link_rows`), so `OpensAt`'s `aux` conjunct fails at V*'s registration
-whenever a level climbs (`H ≥ 1`). This file reads the openings from the layers themselves instead.
+siblings `aux`, which the prover registers itself in `R₂` (`rec_outer.stage`: `rec-rows-L<level>` and
+`rec-aux-L<level>`) and no history fixes, so `OpensAt`'s `aux` conjunct is not given at V*'s registration whenever a
+level climbs (`H ≥ 1`). This file reads the openings from the layers themselves instead.
 
 * `OpensAtL`: copy `j` of unit `u` in the layer `bits`, a unit the verifier parsed as `rec-open/l<LANES>-h<H>`
   carrying 1 on its constant, holds the row `r`, `acc`'s first two elements `a` and the coefficients `cf` on its input
