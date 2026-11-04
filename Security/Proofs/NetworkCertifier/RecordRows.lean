@@ -7,15 +7,17 @@ import Definitions.NetworkCertifier.RecordRows
 of the cells the network certifier's code sends are those cells (`RowsFormat.read_record`), so the rows format is a
 `TapRecord` (`RowsFormat.tapRecord`). A lane of `k` cells has cell `j` in bucket `t j` (`wardenLane_fst`); among the
 cells before `j`, those in `j`'s bucket number `j mod r` (`countP_range_div`), so `j` is the `(j mod r)`-th of its
-bucket's (`getElem?_filter_countP_take`); a row's frames are its connections' in turn, so a connection's are its own
-(`filterMap_bucketFrames`), and the record's slots hold a row's frames in order when the row fits (`frames_record`).
+bucket's (`getElem?_filter_countP_take`), ahead of the padding after the lane's last cell; a row's frames are its
+connections' in turn, so a connection's are its own (`filterMap_bucketFrames`), and the record's slots hold a row's
+frames in order when the row fits (`frames_record`).
 
 The `#guard`s hold the rows format to the Python network certifier's egress records (the test harness of
 `verity/core/protocols/certifier/tests/test_network_certifier_warden.py`, `params`: B = 64, r = 2, D = 3, two lanes,
 T = 24): three connections on two lanes, the third admitted when the second's END frees its lane (`fxQueue`, the
 traffic of `test_network_certifier_warden_rows.py`); a byte late at its cell (`fxLate`); and a server past
-`egress_cells` (`fxLimit`). Each frame is its ordinal, kind and payload in hex; a lane's arrivals are its DATA cells'
-and its END's payloads (`true` for the END), every cell in time except a failed lane's next one.
+`egress_cells` (`fxLimit`). Each frame is its ordinal, kind and payload in hex; a lane's `cells` are the cells it sends,
+its END or its FAIL the last, and its arrivals are its DATA cells' and its END's payloads (`true` for the END), every
+cell in time except a failed lane's last.
 -/
 
 namespace NetTiming
@@ -124,16 +126,20 @@ theorem lanesOfRows_bucketFrames [DecidableEq κ] {conns : List κ} (hnd : conns
     funext i
     simp [WardenSchedule.bucket]
   rw [hcount] at key
-  rw [List.getElem?_map, key]
+  have hlt : j % s.r < (((wardenCode s a c).filter fun x => x.1 == s.bucket c j).map Prod.snd).length := by
+    rw [List.length_map]
+    exact (List.getElem?_eq_some_iff.1 key).1
+  rw [List.getElem?_append_left hlt, List.getElem?_map, key]
   exact Prod.ext (hfst j h2).symm rfl
 
 /-- A row of the code's cells holds each connection's load in the bucket. -/
 theorem length_bucketFrames (conns : List κ) (s : WardenSchedule κ) (a : κ → Arrivals Cell) (b : ℕ) :
     (bucketFrames conns s (wardenCode s a) b).length = (conns.map fun c => laneLoad s c b).sum := by
-  simp only [bucketFrames, List.length_flatMap, List.length_map, laneFrames, List.length_append, laneLoad]
+  simp only [bucketFrames, List.length_flatMap, List.length_map, laneFrames, List.length_append, laneLoad,
+    List.length_replicate]
   congr 1
   refine List.map_congr_left fun c _ => ?_
-  congr 1
+  congr 2
   · split_ifs <;> simp
   · rw [← List.countP_eq_length_filter, ← List.countP_eq_length_filter,
       show (fun x : ℕ × CellView Cell => x.1 == b) = (· == b) ∘ Prod.fst from rfl, ← List.countP_map,
@@ -234,7 +240,7 @@ def fixtureAgrees {n : ℕ} (s : WardenSchedule (Fin n)) (arr : Fin n → Arriva
 
 /-- `fxQueue`: 3 connections; the Python network certifier's egress record, buckets 0 … 9 (every later bucket empty). -/
 def fxQueueSched : WardenSchedule (Fin 3) :=
-  { r := 2, D := 3, adm := ![1, 2, 6], cells := ![6, 2, 2] }
+  { r := 2, D := 3, adm := ![1, 2, 6], cells := ![5, 1, 2] }
 
 /-- `fxQueue`'s arrivals. -/
 def fxQueueArr : Fin 3 → Arrivals (Bool × String) := ![
@@ -259,7 +265,7 @@ def fxQueueRows : List (List (ℕ × String × String)) := [
 
 /-- `fxLate`: 1 connections; the Python network certifier's egress record, buckets 0 … 5 (every later bucket empty). -/
 def fxLateSched : WardenSchedule (Fin 1) :=
-  { r := 2, D := 3, adm := ![1], cells := ![4] }
+  { r := 2, D := 3, adm := ![1], cells := ![3] }
 
 /-- `fxLate`'s arrivals. -/
 def fxLateArr : Fin 1 → Arrivals (Bool × String) := ![

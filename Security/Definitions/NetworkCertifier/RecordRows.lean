@@ -8,17 +8,18 @@ Definitions only. The record the deployed network certifier writes, as a `TapRec
 (`Definitions.NetworkCertifier.Tap`): the egress record of `verity/core/protocols/certifier/warden.py`, whose rows
 `verity/core/protocols/certifier/warden_rows.py` commits. Bucket `b`'s row holds the frames of every connection live in
 it, connection by connection in ordinal order (`conns`), each frame naming its connection (`bucketFrames`): `r` padding
-frames a bucket from the connection's admission to `adm c + D`, then its lane's cells in their bucket, in order. The
-frames fill the row's first slots, each encoded as a `List Bool` (`enc`), and a slot no connection holds is empty
-(`none`: the Python record's `None`, `B` zero bytes in its rows). Window `i` of the monitoring period's `n` windows of
-`T` buckets is buckets `i·T … i·T + T − 1`, on one egress link (`link`); a bucket's jitter class and statuses are the
-network certifier's, from anything it saw.
+frames a bucket from the connection's admission to `adm c + D`, then its lane's cells in their bucket, in order, and
+in the bucket of its last cell, padding to `r` frames (`tailPads`). The frames fill the row's first slots, each encoded
+as a `List Bool` (`enc`), and a slot no connection holds is empty (`none`: the Python record's `None`, `B` zero bytes in
+its rows). Window `i` of the monitoring period's `n` windows of `T` buckets is buckets `i·T … i·T + T − 1`, on one
+egress link (`link`); a bucket's jitter class and statuses are the network certifier's, from anything it saw.
 
 Read back (`lanesOfRows`), connection `c`'s cell `j`, for `j < cells c`, is the `(j mod r)`-th of its frames in bucket
-`adm c + D + ⌊j/r⌋`: `cells c` is the lane's length through its last bucket. A schedule fits the format
-(`RowsFormat.Fits`) when its lanes' cells fall in the monitoring period's buckets and no bucket holds more than `S`
-frames, which the network certifier's admission keeps (at most `lanes` connections a bucket, `r` frames each, and
-`S = lanes·r`).
+`adm c + D + ⌊j/r⌋`: `cells c` is the number of cells its lane sends, its `END` or its `FAIL` the last, and the padding
+after that cell in its bucket is the format's, not the lane's, so `_egress`'s limit holds `cells c` to `egress_cells`. A
+schedule fits the format (`RowsFormat.Fits`) when its lanes' cells fall in the monitoring period's buckets and no
+bucket holds more than `S` frames, which the network certifier's admission keeps (at most `lanes` connections a bucket,
+`r` frames each, and `S = lanes·r`).
 
 **What the Python records add.** A connection the network certifier fails for its client's sake (a malformed cell, or
 ingress past its bound) fails at once, before `adm c + D` too; `wardenLane` fails a lane only at a late cell or a late
@@ -30,11 +31,17 @@ namespace NetTiming
 
 variable {κ Cell : Type}
 
+/-- The padding after connection `c`'s last cell in bucket `b`: in the bucket of its lane's last cell, the slots of the
+bucket's `r` after it; none in any other bucket, or for a lane of no cells. -/
+def tailPads (s : WardenSchedule κ) (c : κ) (b : ℕ) : ℕ :=
+  if 0 < s.cells c ∧ b = s.bucket c (s.cells c - 1) then s.r - 1 - (s.cells c - 1) % s.r else 0
+
 /-- The frames connection `c` sends in bucket `b`, as its record holds them: `r` padding frames in each bucket from its
-admission to `adm c + D`, then the cells `v c` of its lane in bucket `b`, in order. -/
+admission to `adm c + D`, then the cells `v c` of its lane in bucket `b`, in order, then the padding after its last
+cell (`tailPads`). -/
 def laneFrames (s : WardenSchedule κ) (v : κ → List (ℕ × CellView Cell)) (c : κ) (b : ℕ) : List (CellView Cell) :=
   (if s.adm c ≤ b ∧ b < s.adm c + s.D then List.replicate s.r .pad else []) ++
-    ((v c).filter fun x => x.1 == b).map Prod.snd
+    ((v c).filter fun x => x.1 == b).map Prod.snd ++ List.replicate (tailPads s c b) .pad
 
 /-- **Bucket `b`'s row of frames**: each connection's frames in the bucket (`laneFrames`), connection by connection in
 the order `conns` (the ordinals), each frame naming its connection. -/
@@ -52,7 +59,7 @@ def lanesOfRows [DecidableEq κ] (s : WardenSchedule κ) (rows : ℕ → List (�
 /-- The number of frames connection `c` sends in bucket `b` on schedule `s`, whatever its cells hold. -/
 def laneLoad (s : WardenSchedule κ) (c : κ) (b : ℕ) : ℕ :=
   (if s.adm c ≤ b ∧ b < s.adm c + s.D then s.r else 0) +
-    ((List.range (s.cells c)).filter fun j => s.bucket c j == b).length
+    ((List.range (s.cells c)).filter fun j => s.bucket c j == b).length + tailPads s c b
 
 /-- **The rows format**: the connections in ordinal order (`conns`), a frame's encoding (`enc`) and its decoding
 (`dec`), the egress link the rows are on (`link`), the buckets a window (`T`), and each bucket's jitter class and
