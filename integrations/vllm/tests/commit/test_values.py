@@ -1,7 +1,9 @@
 """`verity_vllm.commit.values` against the ZK server's value service, `core-firewall values` (``FC_CORE_FIREWALL``), run as a process
 of its own on a state directory and a key file in a temporary directory that no verity_vllm code here opens:
 
-* a session commits once and registers once, in the epoch that opened it, on the ZK server's record;
+* a stack commits and registers in turn, one session an epoch, each record counting one session: a second commit before the
+  register is refused by the service, and by this side before it is sent, which an in-process stand-in for the service at the
+  socket shows whatever the callers do (no service needed);
 * a window's served rows, under ``FC_FIREWALL_VALUES``, commit through the service at the window's close, a session a window,
   each registered in turn: the record's root, domain, leaf count and schema are its registration's table, the verifier's own
   ``--registered`` port over the record (`served_rows.reads_port`) reads that table, every leaf's ``b ‖ c`` opens to the published
@@ -19,10 +21,14 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import io
 import json
 import os
 import re
+import struct
 import subprocess
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -98,26 +104,160 @@ def _no_salts(root: Path) -> None:
     assert not [p for p in root.rglob("*") if p.suffix == ".salts" or p.name == "salts"]
 
 
+@pytest.fixture(autouse=True)
+def _one_stack(monkeypatch):
+    monkeypatch.setattr(V, "_pending", None)
+
+
+TABLE = V.Table(hashlib.sha512(b"values/domain").digest(), V.SCHEMAS[1], b"".join(hashlib.sha512(bytes([i])).digest() for i in range(3)))
+
+
 @needs_service
-def test_a_session_commits_once_and_registers_once_in_its_epoch(service):
-    t = V.Table(hashlib.sha512(b"values/domain").digest(), V.SCHEMAS[1], b"".join(hashlib.sha512(bytes([i])).digest() for i in range(3)))
+def test_a_stack_commits_and_registers_in_turn_one_session_an_epoch(service):
+    t = TABLE
     a, b = V.Session(), V.Session()
     with pytest.raises(V.Refused, match="commit first"):
         a.register()
-    (ca,), (cb,) = a.commit([t]), b.commit([t])
-    assert ca.session != cb.session and ca.root != cb.root and ca.n == 3 and len(ca.path(2)) == 2
+    (ca,) = a.commit([t])
+    assert V.pending() is a and ca.n == 3 and len(ca.path(2)) == 2
     with pytest.raises(V.Refused, match="commits once"):
         a.commit([t])
-    rb = b.register()
-    assert (rb.number, rb.sessions, rb.refs) == (0, 2, (cb.ref(),))
-    assert [(e["n"], e["record"]) for e in service.events("register")] == [(0, rb.record.hex())]
+    with pytest.raises(V.Refused, match="not yet registered: a stack commits once per registration"):
+        b.commit([t])
+    with pytest.raises(V.Refused, match="the current epoch's session is not yet registered"):
+        V.Session()._request(f"commit 1 {t.domain.hex()} {t.n} {t.schema}", [t.digests], V._line)   # past this side's guard
+    ra = a.register()
+    assert V.pending() is None and (ra.number, ra.sessions, ra.refs) == (0, 1, (ca.ref(),))
     with pytest.raises(V.Refused, match="registers once"):
-        b.register()
-    with pytest.raises(V.Refused, match="is none the current epoch opened"):
         a.register()
+    (cb,) = b.commit([t])
+    assert cb.session != ca.session and cb.root != ca.root
+    rb = b.register()
+    assert (rb.number, rb.sessions, rb.refs) == (1, 1, (cb.ref(),))
+    assert [(e["n"], e["record"]) for e in service.events("register")] == [(0, ra.record.hex()), (1, rb.record.hex())]
     assert V.Committed.of(cb.ref(), cb.bcs) == cb
     with pytest.raises(V.Refused, match="not the root"):
         V.Committed.of(cb.ref(), ca.bcs)
+
+
+class Wire:
+    """The value service of record at the socket, in process: each request's first word kept (``lines``), one session an epoch,
+    and every commit that arrives while the epoch's session is unregistered counted (``overlaps``). ``refuse`` answers the next
+    commit ``err``, opening nothing; ``cut`` ends the next commit's answer after its session line."""
+
+    def __init__(self) -> None:
+        self.lines: list[str] = []
+        self.open: tuple[bytes, list[bytes]] | None = None
+        self.number = self.overlaps = 0
+        self.refuse = self.cut = False
+
+    def connect(self, _address):
+        return _Conn(self)
+
+    def answer(self, req: bytes) -> bytes:
+        head, _, body = req.partition(b"\n")
+        words = head.decode().split()
+        self.lines.append(words[0])
+        if words[0] == "register":
+            if self.open is None or self.open[0].hex() != words[1]:
+                return b"err the session is none the current epoch opened\n"
+            (s, refs), self.open = self.open, None
+            record = struct.pack(">QQI", self.number, 1, len(refs)) + b"".join(refs) + hashlib.sha512(b"tag" + s).digest()
+            self.number += 1
+            return f"ok 1 {len(record)}\n".encode() + record
+        if self.open is not None:
+            self.overlaps += 1
+            return b"err the current epoch's session is not yet registered\n"
+        if self.refuse:
+            self.refuse = False
+            return b"err a commit body of the wrong length\n"
+        s = hashlib.sha512(b"session %d" % len(self.lines)).digest()
+        out, refs, at = [f"ok {s.hex()}\n".encode()], [], 0
+        for j, (d, n, schema) in enumerate(zip(words[2::3], words[3::3], words[4::3])):
+            n, d = int(n), bytes.fromhex(d)
+            bcs = [hashlib.sha512(s + body[at + 64 * i:at + 64 * (i + 1)]).digest() * 2 for i in range(n)]
+            at += 64 * n
+            root, tag = V.tree(d, schema, bcs)[-1][0], hashlib.sha512(b"tag" + s + bytes([j])).digest()
+            refs.append(V.Committed(s, j, d, schema, n, root, tag).ref())
+            out.append(f"ok {root.hex()} {tag.hex()} {n}\n".encode() + b"".join(bcs))
+        self.open = (s, refs)
+        if self.cut:
+            self.cut = False
+            return out[0]
+        return b"".join(out)
+
+
+class _Conn:
+    def __init__(self, wire: Wire) -> None:
+        self.wire, self.req, self.ans = wire, bytearray(), b""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def sendall(self, b: bytes) -> None:
+        self.req += b
+
+    def shutdown(self, _how) -> None:
+        self.ans = self.wire.answer(bytes(self.req))
+
+    def makefile(self, _mode):
+        return io.BytesIO(self.ans)
+
+
+def test_the_client_never_sends_a_second_commit_before_the_register(monkeypatch):
+    """Whatever the callers do (another session, the same one again, eight threads at once, a commit the service refused or
+    one cut short), what reaches the service is commit, register, commit, register: a second commit before the register is
+    refused here and never sent, and a failed commit is never retried."""
+    wire = Wire()
+    monkeypatch.setattr(V.socket, "create_connection", wire.connect)
+    monkeypatch.setenv(V.ENV, "127.0.0.1:1")
+    a = V.Session()
+    a.commit([TABLE])
+    for again in (V.Session(), V.Session(), a):
+        with pytest.raises(V.Refused, match="not yet registered|commits once"):
+            again.commit([TABLE])
+    assert a.register().sessions == 1 and V.pending() is None
+
+    racers, gate = [V.Session() for _ in range(8)], threading.Barrier(8)
+
+    def race(s):
+        gate.wait()
+        try:
+            s.commit([TABLE])
+        except V.Refused as e:
+            return str(e)
+        return None
+    with ThreadPoolExecutor(8) as pool:
+        why = list(pool.map(race, racers))
+    (won,) = [s for s, w in zip(racers, why) if w is None]
+    assert all("not yet registered" in w for w in why if w is not None) and V.pending() is won
+    won.register()
+
+    wire.refuse = True
+    refused = V.Session()
+    with pytest.raises(V.Refused, match="the value service refused: a commit body"):
+        refused.commit([TABLE])
+    assert V.pending() is None
+    with pytest.raises(V.Refused, match="commits once: a failed commit is its caller's failure"):
+        refused.commit([TABLE])
+    nxt = V.Session()
+    nxt.commit([TABLE])
+    nxt.register()
+
+    wire.cut = True
+    cut = V.Session()
+    with pytest.raises(V.Refused, match="ended"):
+        cut.commit([TABLE])
+    assert V.pending() is cut and cut.id is None
+    with pytest.raises(V.Refused, match="not yet registered"):
+        V.Session().commit([TABLE])
+    with pytest.raises(V.Refused, match="commit first"):
+        cut.register()
+    assert wire.lines == ["commit", "register", "commit", "register", "commit", "commit", "register", "commit"]
+    assert wire.overlaps == 0 and wire.number == 3
 
 
 @needs_service

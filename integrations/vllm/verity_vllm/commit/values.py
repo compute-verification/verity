@@ -6,15 +6,18 @@ salt, reads the server's key, or runs the service.
 * `address`: the service's ``HOST:PORT`` (``FC_FIREWALL_VALUES``), or None: unset, every call site commits as it did before, under
   salts of its own.
 * `Session`: one commit session, a window's or a registration's: one `Session.commit` of every table (`Table`: domain id, schema and
-  the rows' digests, table-major in one request), then one `Session.register`. A session commits once and registers once, and only
-  in the epoch that opened it; a retry is a new session, which the epoch's count ``m`` charges as a grinding choice, so a caller
-  opens exactly the sessions its schedule names and never resumes one.
+  the rows' digests, table-major in one request), then one `Session.register`. A stack commits once per registration: the service
+  opens one session an epoch and refuses a commit while that session is not yet registered, so every record's ``m`` is 1. This
+  process holds at most one session committed and not registered (`pending`), and refuses a second commit before its register
+  here, before anything is sent. A session commits once, whatever the outcome: a failed commit is its caller's visible failure,
+  and nothing retries it. One the service refused outright (``err``, nothing opened) or never received whole leaves nothing
+  pending; one cut short after that leaves its session pending, so this process commits nothing more.
 * `Committed`: a table as the service committed it: its session, index, domain id, leaf count, schema, root and tag (`ref`, the
   269-byte table ref) and every leaf's ``b ‖ c``, the tree's levels rebuilt here from them (leaf ``row_leaf(D, i, tree_leaf(K, bc),
   schema)``, frame-v3-sha512) and refused unless their root is the service's: verity_vllm never registers a root of its own.
   `Committed.of` reads one back from its ref and ``b ‖ c`` (a window's, on a sample).
 * `Registration`: what the service appended to the ZK server's record for the session: its number ``n``, the epoch's session count
-  ``m``, the table refs and the record itself (whose tag only the server can check).
+  ``m`` (1; a record counting more is refused), the table refs and the record itself (whose tag only the server can check).
 * `refs_file`: what `flock-circuit --zk --salt-refs` reads on a sample: the table refs of the tables a statement reads, then one row
   ref per salt of its inputs file, in that file's order (`instance_rows`, `table_rows`).
 * `refuse_own`: a call site that still draws its own salts refuses under ``FC_FIREWALL_VALUES``, naming what it waits on.
@@ -26,6 +29,7 @@ import os
 import re
 import socket
 import struct
+import threading
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -46,11 +50,25 @@ HEAD = 20
 _INST = hm96.SHA512
 _CHUNK = 1 << 20
 _HEX = re.compile(r"[0-9a-f]*")
+_LOCK = threading.Lock()
+_pending: Session | None = None
 
 
 def address() -> str | None:
     """The value service's ``HOST:PORT`` from ``FC_FIREWALL_VALUES``, or None when it is unset."""
     return settings.get(ENV) or None
+
+
+def pending() -> Session | None:
+    """The session this process committed and has not registered, or None: while there is one, no other commits."""
+    return _pending
+
+
+def _release(s: Session) -> None:
+    global _pending
+    with _LOCK:
+        if _pending is s:
+            _pending = None
 
 
 def refuse_own(site: str, why: str) -> None:
@@ -157,9 +175,8 @@ def _held(c: Committed, bcs: Sequence[bytes], what: str) -> Committed:
 
 @dataclass(frozen=True)
 class Registration:
-    """The session's registration on the ZK server's record: its number, the count of sessions its epoch opened (public: the
-    stack's choice among them is a term of the guarantee), its table refs and the record ``be64 n ‖ be64 m ‖ be32 T ‖ refs ‖
-    tag``."""
+    """The session's registration on the ZK server's record: its number, the count of sessions its epoch opened (public, and 1:
+    the stack chooses no session), its table refs and the record ``be64 n ‖ be64 m ‖ be32 T ‖ refs ‖ tag``."""
 
     number: int
     sessions: int
@@ -178,7 +195,10 @@ def _split(host_port: str) -> tuple[str, int]:
 
 
 def _line(f: BinaryIO) -> str:
-    raw = f.readline()
+    return _said(f.readline())
+
+
+def _said(raw: bytes) -> str:
     if not raw.endswith(b"\n"):
         raise Refused(f"the value service's answer ended inside a line ({raw[:80]!r})")
     text = raw[:-1].decode()
@@ -203,7 +223,8 @@ def _hex(word: str, n: int, what: str) -> bytes:
 
 
 class Session:
-    """One commit session of the value service at ``address`` (default `address()`): `commit` once, then `register` once."""
+    """One commit session of the value service at ``address`` (default `address()`): `commit` once, then `register` once; while
+    it is committed and not registered, no other session of this process commits."""
 
     def __init__(self, at: str | None = None) -> None:
         at = at or address()
@@ -213,14 +234,24 @@ class Session:
         self.id: bytes | None = None
         self.tables: tuple[Committed, ...] = ()
         self.registration: Registration | None = None
+        self.tried = False
+        self._sent, self._head = False, ""             # the last request: held whole by the service; its answer's first word
+
+    def _first(self, f: BinaryIO) -> str:
+        raw = f.readline()
+        if raw.endswith(b"\n") and raw.startswith((b"ok ", b"err ")):
+            self._head = raw.split(b" ", 1)[0].decode()
+        return _said(raw)
 
     def _request(self, line: str, body: Iterable[bytes], read: Callable[[BinaryIO], object]) -> object:
         """One request on a connection of its own: the line and body sent whole, the write side shut, the answer read to EOF."""
+        self._sent, self._head = False, ""
         with socket.create_connection(self.address) as s:
             s.sendall(line.encode() + b"\n")
             for chunk in body:
                 s.sendall(chunk)
             s.shutdown(socket.SHUT_WR)
+            self._sent = True
             with s.makefile("rb") as f:
                 out = read(f)
                 if rest := f.read(1):
@@ -230,17 +261,25 @@ class Session:
     def commit(self, tables: Sequence[Table], sink: Callable[[Committed], None] | None = None) -> tuple[Committed, ...]:
         """Every table of the session in one ``commit`` request: each table's `Committed`, its tree rebuilt from the service's
         ``b ‖ c`` and refused unless its root is the service's. ``sink``: each table handed over as it is read and kept here without
-        its ``b ‖ c`` and levels, so a registration of many tables holds one at a time."""
-        if self.id is not None:
-            raise Refused("a commit session commits once: a retry is a new session, which the epoch's count charges")
+        its ``b ‖ c`` and levels, so a registration of many tables holds one at a time. Refused before anything is sent for a
+        session that tried a commit before, and while another session of this process is committed and not registered."""
+        global _pending
         if not tables:
             raise ValueError("a commit takes at least one table")
         for t in tables:
             t.check()
+        with _LOCK:
+            if self.tried:
+                raise Refused("a commit session commits once: a failed commit is its caller's failure, and nothing retries it")
+            if _pending is not None:
+                raise Refused("a session of this process is committed and not yet registered: a stack commits once per "
+                              "registration (commit, register, commit, …), and the value service refuses a second commit before "
+                              "the register")
+            self.tried, _pending = True, self
         line = f"commit {len(tables)}" + "".join(f" {t.domain.hex()} {t.n} {t.schema}" for t in tables)
 
         def read(f: BinaryIO) -> tuple[bytes, list[Committed]]:
-            s = _hex(_line(f), DIGEST, "session")
+            s = _hex(self._first(f), DIGEST, "session")
             got = []
             for j, t in enumerate(tables):
                 words = _line(f).split()
@@ -256,7 +295,13 @@ class Session:
                 got.append(c)
             return s, got
 
-        s, got = self._request(line, (b for t in tables for b in t.chunks()), read)
+        done = False
+        try:
+            s, got = self._request(line, (b for t in tables for b in t.chunks()), read)
+            done = True
+        finally:
+            if not done and (not self._sent or self._head == "err"):
+                _release(self)                          # the service opened no session for it
         self.id, self.tables = s, tuple(got)
         return self.tables
 
@@ -274,17 +319,24 @@ class Session:
             raise Refused("a session registers once")
 
         def read(f: BinaryIO) -> tuple[int, bytes]:
-            words = _line(f).split()
+            words = self._first(f).split()
             if len(words) != 2 or not all(w.isdigit() for w in words):
                 raise Refused(f"the value service answered {' '.join(words)[:80]!r} to register, not its session count and length")
             return int(words[0]), _exact(f, int(words[1]))
 
-        m, record = self._request(f"register {self.id.hex()}", (), read)
+        try:
+            m, record = self._request(f"register {self.id.hex()}", (), read)
+        finally:
+            if self._head:
+                _release(self)                          # answered: the epoch is closed, or holds no session of this one's
         refs = tuple(c.ref() for c in self.tables)
         n, m2, T = struct.unpack(">QQI", record[:HEAD]) if len(record) >= HEAD else (None, None, None)
         if (len(record) != HEAD + REF * len(refs) + DIGEST or (m2, T) != (m, len(refs))
                 or record[HEAD:HEAD + REF * len(refs)] != b"".join(refs)):
             raise Refused("the registration record is not this session's: its session count or table refs differ")
+        if m != 1:
+            raise Refused(f"the registration counts {m} sessions in its epoch: a stack commits once per registration, and the "
+                          "value service of record opens one session an epoch")
         self.registration = Registration(n, m, refs, record)
         return self.registration
 
@@ -326,5 +378,5 @@ def refs_file(tables: Sequence[Committed], rows: Sequence[tuple[int, int]]) -> b
             + b"".join(struct.pack(">IQ", t, i) for t, i in rows))
 
 
-__all__ = ["ENV", "SCHEMAS", "Committed", "Refused", "Registration", "Session", "Table", "address", "instance_rows", "refs_file",
-           "refuse_own", "stored", "table_rows", "tree"]
+__all__ = ["ENV", "SCHEMAS", "Committed", "Refused", "Registration", "Session", "Table", "address", "instance_rows", "pending",
+           "refs_file", "refuse_own", "stored", "table_rows", "tree"]
