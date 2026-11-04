@@ -159,11 +159,11 @@ theorem dupName?_none {ps : List Port} (h : dupName? ps = none) :
       have hne : ∀ x ∈ ps, x.name ≠ p.name := fun x hx he =>
         hany (List.any_eq_true.mpr ⟨x, hx, by simp [he]⟩)
       intro q hq q' hq' hn
-      rcases List.mem_cons.mp hq with rfl | hq <;> rcases List.mem_cons.mp hq' with rfl | hq'
-      · rfl
-      · exact absurd hn (hne _ hq')
-      · exact absurd hn.symm (hne _ hq)
-      · exact ih h q hq q' hq' hn
+      rcases List.mem_cons.mp hq with hq0 | hq1 <;> rcases List.mem_cons.mp hq' with hq0' | hq1'
+      · exact hq0'.trans hq0.symm
+      · exact absurd (hn.trans (congrArg (·.name) hq0)) (hne _ hq1')
+      · exact absurd (hn.symm.trans (congrArg (·.name) hq0')) (hne _ hq1)
+      · exact ih h q hq1 q' hq1' hn
 
 /-- **The verifier's registered reads**: a `FORMAT` (or `FORMAT_V0`) file's ports (`portsOf`), each name naming one port
 (`ofJson_names`). A verdict reports a port by its name (`finding`) and every check of a statement's reads finds a port by
