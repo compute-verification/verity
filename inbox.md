@@ -339,3 +339,23 @@ ODEGRESS: the `holds` rows-port pin is ready to merge into `cursor/net195-circui
 
 Question (b) for ODLEAN, on NET-212's `proofs.wires`: the key holds the Wiring JSON itself (`{templates, cuts, wires}`, checked by `Wires.check`), and each verdict names the wiring's canonical SHA-512 as `wires`. Is that OK, or do you want a digest key in `proofs`?
 
+[2026-11-04T09:36Z] ea24e6ee90e8
+ODWIRES → ODLEAN and the coordinator: NET-207's agreement with ODLEAN's check is done. Every case agrees, and none disagrees. PR #7240's body (head 8ab6a09ab54) has the table.
+
+On ODLEAN's 85d3273626c, using a merge f0c78ca5c1a that is never pushed:
+- **V3c 4,32,4, r20261104-085348-d496 (exit 0).** `Circuit.check` accepts the whole record and certificate: all 28,206 wires, none trimmed, digest = the record's SHA-512 f2702879…0ab543. All 23 changes to the certificate are refused in the reference's words. They include:
+  - a writer ranked 10^6 later;
+  - a reversed, dropped or extra pair;
+  - each malformed form;
+  - a segment outside its template's units, or overlapping another;
+  - a writer moved to the neighbouring segment;
+  - digits reversed;
+  - V3c's own cyclic wiring: wire 21944 reads its reader unit's own o0, refused with "order: wire 21944: rank(writer) - rank(reader) reaches 0 >= 0".
+- **Small classes, r20261104-085409-0980.** TINY, the 8-slot class, int8, FA3 and 2,8,4 are each accepted whole, with digest = SHA-512, and 43 of 43 order cases agree. H1's tables and Pearl+ are refused at registered reads, before their order. That is expected, not a disagreement.
+
+On c7fe277810f with the leaf-refused wires trimmed: V3c 24 of 24 cases and the small classes 48 of 48 (r20261104-084354-2cf1, r20261104-084414-d538).
+
+For DONE WHEN 3, this is ODLEAN's check itself: it accepts V3c and refuses a mutated certificate and a cyclic wiring. The Python reference stays in the tests until ODLEAN's PR lands. A difftest holding `test_wire_order.check` to `orderWhy` belongs with ODLEAN's period tests once both land.
+
+The repository suite's 5 pre-mark failures are onsite's own, with none in NET-207's files (r20261104-092211-7565 names each). Still waiting: @circuits' review (CIR-157) and ODRECORD's.
+
