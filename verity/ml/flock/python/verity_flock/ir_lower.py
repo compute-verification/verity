@@ -1,4 +1,4 @@
-"""C-Flock's generic IR lowering: an IR Definition becomes a Flock binary circuit by composing :mod:`fp` pieces.
+"""Flock's generic IR lowering: an IR Definition becomes a Flock binary circuit by composing :mod:`fp` pieces.
 
 :func:`lower` walks the Definition's gates in canonical order, as ``verity.ml.circuits.evaluate`` does, and maps each primitive to
 its piece in :data:`PIECES` (a primitive without one is an error naming it). Constant gates, and gates whose operands are
@@ -17,7 +17,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache, partial, reduce
-from typing import Callable, Collection, Sequence
+from typing import Callable, Collection, Iterator, Sequence
 
 import numpy as np
 
@@ -32,8 +32,9 @@ from .gf2 import Circuit, L, const_bits
 
 FORMAT = "flock-ir-unit/v2"
 WORD = 128
-#: the netlist's rows per joined piece, and the characters a digest encodes at a time
-NETLIST_ROWS = 1 << 16
+#: the netlist's rows per piece (what a caller that writes it as it renders it holds at a time; one row can be past 100 KB),
+#: and the characters a digest encodes at a time
+NETLIST_ROWS = 1 << 10
 HASH_CHUNK = 1 << 24
 NAN_TORCH = 0x7FC0
 NAN_F2FP = 0x7FFF
@@ -172,7 +173,7 @@ PIECES = _Pieces(PIECES)
 
 
 class NoPiece(NotImplementedError):
-    """An IR primitive that C-Flock's lowering has no piece for."""
+    """An IR primitive that Flock's lowering has no piece for."""
 
 
 # --- the walk ----------------------------------------------------------------------------------------------------------
@@ -312,6 +313,66 @@ def lower(C: Circuit, target, inputs: Sequence[list]) -> list[list]:
     wires = dict(zip(call.args, inputs))
     lower_gates(C, call, wires)
     return [wires[r] for r in call.returns]
+
+
+_PIECE_ANDS: dict[str, int] = {}
+
+
+def _piece_ands(prim) -> int:
+    """The ANDs of ``prim``'s piece on free operands (none for a primitive C-Flock has no piece for, which no unit holding it
+    lowers past), each primitive id lowered once. A piece that lowers only on a constant operand (a rotation by a constant
+    count, which is wiring) can't be lowered on free ones, and states its ANDs as its ``ands`` attribute instead."""
+    if prim.id not in _PIECE_ANDS:
+        import inspect
+
+        from verity.ml.circuits.evaluation.reference import signature_of
+
+        ands = 0
+        if prim.id in PIECES and (stated := getattr(inspect.unwrap(PIECES[prim.id]), "ands", None)) is not None:
+            ands = stated
+        elif prim.id in PIECES:
+            C = Circuit()
+            params, _ = signature_of(prim)
+            outs = lower(C, prim, [C.input(f"in{j}", w) for j, w in enumerate(w for pt in params for w in pt.leaf_widths())])
+            C.output("out", [b for w in outs for b in w])
+            ands = C.counts()["ands"]
+        _PIECE_ANDS[prim.id] = ands
+    return _PIECE_ANDS[prim.id]
+
+
+def definition_ands(target) -> int:
+    """``target``'s ANDs read off its Definition, never lowered: each specialized Definition's body counted once and multiplied
+    through its calls, batch members and scan iterations; an n-input And n - 1 (core's Boolean work, Lean's
+    ``Circuit.andSize``), an Xor, a Not, a constant and an input none, any other primitive its piece's ANDs on free operands.
+    `lower` builds about this many: fewer where an AND folds to a constant or nothing reads it, more by a Boolean builder's
+    commits. Seconds where `lower` takes the unrolled unit (a 32 × 32 H1 tile at K = 2048: 613M And gates)."""
+    import re
+
+    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.ml.circuits.evaluation.reference import resolve
+
+    memo: dict[int, int] = {}
+
+    def prim_ands(p) -> int:
+        fam = getattr(p, "family", None)
+        if fam in ("Input", "Const") or not p.params:
+            return 0
+        if (m := re.fullmatch(r"And([0-9]+)_v1", p.id)) is not None:
+            return int(m[1]) - 1
+        if p.id == "Not_v1" or re.fullmatch(r"Xor[0-9]+_v1", p.id):
+            return 0
+        return _piece_ands(p)
+
+    def ands(fn) -> int:
+        if isinstance(fn, PrimitiveDefinition):
+            return prim_ands(fn)
+        if id(fn) not in memo:
+            body = getattr(fn, "body", None)
+            memo[id(fn)] = 0 if body is None else sum((nd.n if nd.form in ("batch", "scan") else 1) * ands(nd.fn)
+                                                      for nd in body.nodes)
+        return memo[id(fn)]
+
+    return ands(resolve(target))
 
 
 @dataclass(frozen=True)
@@ -582,7 +643,7 @@ def _leaf_width(target, pos: int) -> int:
 # --- the unit netlist ------------------------------------------------------------------------------------------------------
 
 @dataclass
-class Layout:
+class LoweredUnit:
     """A unit circuit laid out as one Flock block type (C = I; row i is ``(A_i . z)(B_i . z) = z_i``). Input and output ports
     come in groups; each group's bits are consecutive in its own aligned power-of-two range of 128-bit words."""
 
@@ -660,7 +721,7 @@ def _groups(names: Sequence[str], split: Sequence[int] | None) -> list[list[str]
 
 
 def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_split: Sequence[int] | None = None,
-           out_split: Sequence[int] | None = None) -> Layout:
+           out_split: Sequence[int] | None = None) -> LoweredUnit:
     """``flock-ir-unit/v2``: the input port groups first (``in_split``: the port indices where a new group starts), each
     group's bits consecutive in a power-of-two number of 128-bit words aligned to that size, unused bits forced zero; the
     live ANDs and table reads in creation order (a read ``C.lookup`` as its plain rows, :class:`_Read`); one row
@@ -774,7 +835,7 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
     for v in ands:
         a, b = C.data[v]
         rows_a[col[v]], rows_b[col[v]] = and_row(a), and_row(b)
-    lay = Layout(rows_a, rows_b, const, in_groups, out_groups, {})
+    lay = LoweredUnit(rows_a, rows_b, const, in_groups, out_groups, {})
     read_rows = sum(r.rows for r in reads.values())
     lay.counts = {"ands": len(ands) + read_rows, "asserts": len(C.asserts), "rows": len(rows_a), "in_words": lay.in_words, "out_words": lay.out_words,
                   "nnz_a": sum(map(len, rows_a)), "nnz_b": sum(map(len, rows_b)), "reads": len(reads), "read_rows": read_rows,
@@ -881,23 +942,29 @@ class _Read:
         assert at[0] == self.at + self.rows
 
 
-def netlist(lay: Layout, name: str, cut: dict | None = None, leaves: dict | None = None) -> str:
-    """The layout as ``flock-ir-unit/v2`` text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
+def netlist(lay: LoweredUnit, name: str, cut: dict | None = None, leaves: dict | None = None) -> str:
+    """The layout as ``flock-ir-unit/v2`` text (:func:`netlist_pieces`), joined once: a GLM-5.3 norm unit's is 8.6 GB."""
+    return "".join(netlist_pieces(lay, name, cut, leaves))
+
+
+def netlist_pieces(lay: LoweredUnit, name: str, cut: dict | None = None, leaves: dict | None = None) -> Iterator[str]:
+    """:func:`netlist`'s text a piece at a time (its header line, its rows :data:`NETLIST_ROWS` lines at a time, its pins),
+    for a caller that writes or hashes it as it is rendered (`circuit.compose_to`): one piece is alive at a time.
+
+    The text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
     n_out_groups (col words n bits..)..``, then one line per row ``|A| A.. |B| B..``, then ``LEAVES <canonical JSON>``
     (:attr:`Lowering.leaves`) and, for a cut lowering, ``CUT <canonical JSON>`` (:attr:`Lowering.cut`): the netlist's sha256
-    pins the units' leaf maps (red-team-flock-2 IR6) and the cut structure (IR4)."""
+    pins the units' leaf maps and the cut structure."""
     head = [FORMAT, name, lay.useful, lay.const]
     for groups in (lay.in_groups, lay.out_groups):
         head.append(len(groups))
         for c, words, bits in groups:
             head += [c, words, len(bits), *bits]
-    # rows go in pieces of NETLIST_ROWS lines, and the text is joined once: a GLM-5.3 norm unit's is 8.6 GB
-    out = [" ".join(map(str, head)) + "\n"]
+    yield " ".join(map(str, head)) + "\n"
     for k in range(0, lay.useful, NETLIST_ROWS):
-        out.append("\n".join([" ".join(map(str, [len(a), *_cols_of(a), len(b), *_cols_of(b)]))
-                              for a, b in zip(lay.rows_a[k:k + NETLIST_ROWS], lay.rows_b[k:k + NETLIST_ROWS])]) + "\n")
-    out.append(netlist_pins(cut, leaves))
-    return "".join(out)
+        yield "\n".join([" ".join(map(str, [len(a), *_cols_of(a), len(b), *_cols_of(b)]))
+                         for a, b in zip(lay.rows_a[k:k + NETLIST_ROWS], lay.rows_b[k:k + NETLIST_ROWS])]) + "\n"
+    yield netlist_pins(cut, leaves)
 
 
 def netlist_pins(cut: dict | None, leaves: dict | None) -> str:
@@ -957,7 +1024,7 @@ def unslice_words(sliced: Sequence[int], T: int) -> np.ndarray:
     return out
 
 
-def evaluate_layout(lay: Layout, ports: Sequence[Sequence[int]], T: int, flip: tuple[int, int] | None = None):
+def evaluate_layout(lay: LoweredUnit, ports: Sequence[Sequence[int]], T: int, flip: tuple[int, int] | None = None):
     """Run the laid-out rows bit-sliced over T lanes: ``ports[j]`` is input port j's words, one per lane. Returns
     ``(output words per port (lane-major arrays), per-lane mask of lanes whose every row is satisfied)``. ``flip = (row,
     lane)`` flips that committed bit after witness generation (a negative: a cheating prover's witness)."""
@@ -998,7 +1065,7 @@ class Lowering:
     definition: object
     units: Units
     circuit: Circuit
-    layout: Layout
+    layout: LoweredUnit
 
     @property
     def domain(self) -> str:
@@ -1049,7 +1116,12 @@ class Lowering:
     def sha256_of(self, expanded: str) -> str:
         """:attr:`sha256` from ``expanded``, the unit's ``netlist(layout, name)`` (:attr:`text` without its LEAVES and CUT
         lines), for a caller that renders it anyway (`circuit.compose`'s unit section): the netlist is rendered once."""
-        h = _sha256(expanded)
+        return self.sha256_after(_sha256(expanded))
+
+    def sha256_after(self, h: hashlib._Hash) -> str:
+        """:attr:`sha256` from ``h``, SHA-256 so far of the unit's ``netlist(layout, name)``, for a caller that hashes it as it
+        writes it (`circuit.compose_to`); ``h`` is left as it was."""
+        h = h.copy()
         h.update(netlist_pins(self.cut, self.leaves).encode())
         return h.hexdigest()
 
@@ -1223,7 +1295,7 @@ def write_instances(low: Lowering, flat_in: np.ndarray, flat_out: np.ndarray, pa
 
 def check_staged(low: Lowering, input_set, path) -> list[str]:
     """What differs between the instance file at ``path`` and the verifier's own staging of the same range of ``input_set``
-    (empty: byte-identical). A verifier proves against a file it staged itself, never a producer's (red-team-flock-2 IR2)."""
+    (empty: byte-identical). A verifier proves against a file it staged itself, never a producer's."""
     import tempfile
     from pathlib import Path
 

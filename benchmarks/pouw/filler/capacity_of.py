@@ -1,12 +1,12 @@
-"""The certified share σ of a GPU's capacity, from a scored filler run's measured entries (FILLER, decision 77).
+"""The certified share σ of a GPU's capacity, from a scored filler run's measured entries.
 
 Each entry of a run's score.json is one served step beside its filler: the step's time, the served and filler MACs in
 it, and the SM clock. Their certified load, pooled over the step and the GPU's 4 × SMs SMSPs (a receipt attests no
-placement), is read by machine_model's `capacity` (note:20261017T0652Z-draft-filler §3): filler MMAs with their fold's
-lane instructions, lane-chain steps if the filler ran any, and served MMAs, at f_max (decision 74) and at the run clock.
+placement), is read by machine_model's `capacity`: filler MMAs with their fold's
+lane instructions, lane-chain steps if the filler ran any, and served MMAs, at f_max and at the run clock.
 
 With --lfill it reads dcap's lfill lines instead (capfill_fold_probe.sh): each one's window beside the pump alone and
-beside the pump and the lane filler (lines from a -DPF_LANE build, retired after r20261017-072934-dd50, carry its lane
+beside the pump and the lane filler (lines from a -DPF_LANE build, now retired, carry its lane
 instructions a pump MMA as pf_lane). With --dfill, dcap's dfill lines (capfill_co_probe.sh): the step beside the pump on a
 split, or co-scheduled on every SM. With --fstep, dcap's fstep lines (capfill_fstep_probe.sh): the step through flin
 beside the pump, co-scheduled on every SM.
@@ -28,7 +28,7 @@ sys.path.insert(0, str(HERE.parent / "machine_model"))
 from verity_machine_model import capacity as C  # noqa: E402
 from verity_machine_model import eps as E  # noqa: E402
 
-F_MAX_MHZ = 2430.0  # sm_120's maximum SM clock, the credit's (decision 74)
+F_MAX_MHZ = 2430.0  # sm_120's maximum SM clock, the credit's
 SMS = 188
 MACS_A_MMA = 4096
 
@@ -45,9 +45,9 @@ def load(serving_macs: float, filler_macs: float, ms: float, mhz: float, sms: in
     return w
 
 
-def sigma(pi, entry: dict, mhz: float | None = None, **kw) -> C.Window:
+def sigma(pi, entry: dict, mhz: float | None = None, **kw) -> C.Cell:
     w = load(entry["serving_macs"], entry["filler_macs"], entry["t1_ms"], mhz or entry["mhz"], **kw)
-    return C.window(pi, [(1.0, w)])
+    return C.cell(pi, [(1.0, w)])
 
 
 def lfill_load(rec: dict, arm: str, mhz: float, fold: str = "duo", served_fold: str = "none") -> C.Work:
@@ -74,8 +74,8 @@ def lfill_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none
             if arm not in r:
                 continue
             a = r[arm]
-            run = C.window(pi, [(1.0, lfill_load(r, arm, a["mhz"], fold, served_fold))])
-            top = C.window(pi, [(1.0, lfill_load(r, arm, F_MAX_MHZ, fold, served_fold))])
+            run = C.cell(pi, [(1.0, lfill_load(r, arm, a["mhz"], fold, served_fold))])
+            top = C.cell(pi, [(1.0, lfill_load(r, arm, F_MAX_MHZ, fold, served_fold))])
             rows.append({"B": r["B"], "L": r["L"], "fill_sms": r["fill_sms"], "pf_lane": r.get("pf_lane", 0), "blk": r["blk"],
                          "T": r["T"], "CH": r["CH"], "arm": arm, "slowdown": a["slowdown"], "mhz": a["mhz"],
                          "watt": a.get("watt"), "sigma": top.sigma(), "sigma_run_clock": run.sigma(),
@@ -97,7 +97,7 @@ def dfill_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none
             cyc = 4 * sms * mhz * 1e6
             w = C.tensor_filler(r["window"]["fill_mac_per_s"] / MACS_A_MMA / cyc * C.TENSOR_CYCLES, fold)
             w = w + C.served(r["step_macs"] / (a["ms"] * 1e-3) / MACS_A_MMA / cyc * C.TENSOR_CYCLES, served_fold)
-            return C.window(pi, [(1.0, w)])
+            return C.cell(pi, [(1.0, w)])
 
         top = at(F_MAX_MHZ)
         rows.append({"B": r["B"], "L": r["L"], "place": r["place"], "build": r.get("build"), "NC": r["NC"], "S": r["S"],
@@ -120,7 +120,7 @@ def fstep_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none
             k = r["mhz"] / mhz
             fill = (r["pump"]["share"] + r["fill_share_lin"] + r["fill_share_att"]) * k
             srv = r["step_share_fused"] * k
-            return C.window(pi, [(1.0, C.tensor_filler(fill, rf) + C.served(srv, served_fold))])
+            return C.cell(pi, [(1.0, C.tensor_filler(fill, rf) + C.served(srv, served_fold))])
 
         top = at(F_MAX_MHZ)
         rows.append({"B": r["B"], "L": r["L"], "place": r.get("place", "split"), "build": r.get("build"), "M": r["M"],

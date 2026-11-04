@@ -103,9 +103,10 @@ def declarations_from_attention_impls(impls: Mapping[str, Mapping[str, Any]]) ->
 
 
 def attention_impls_of_record(program_dir: str | None = None, programs_root: str | None = None) -> tuple[dict | None, str | None]:
-    """The Build record's `attention_impls_observed` for a Commit: `<program_dir>/result.json` (B=1) or the first `build_request*/result.json`
-    under `programs_root` that carries it (B>=2: every component Program of a workload is the same model; the record is per layer, not per shape).
-    -> (impls, path) or (None, None).  json only (no torch)."""
+    """The Build record's `attention_impls_observed` (a trace's) or `attention_impls_declared` (predict's, `program.predict.naming`) for
+    a Commit: `<program_dir>/result.json` (B=1) or the first `build_request*/result.json` under `programs_root` that carries it (B>=2:
+    every component Program of a workload is the same model; the record is per layer, not per shape).  -> (impls, path) or (None,
+    None).  json only (no torch)."""
     cands: list[str] = []
     if program_dir:
         cands.append(os.path.join(str(program_dir), "result.json"))
@@ -117,7 +118,7 @@ def attention_impls_of_record(program_dir: str | None = None, programs_root: str
                 res = json.load(f)
         except (OSError, ValueError):
             continue
-        obs = res.get("attention_impls_observed") if isinstance(res, dict) else None
+        obs = (res.get("attention_impls_observed") or res.get("attention_impls_declared")) if isinstance(res, dict) else None
         if isinstance(obs, dict) and obs:
             return obs, p
     return None, None

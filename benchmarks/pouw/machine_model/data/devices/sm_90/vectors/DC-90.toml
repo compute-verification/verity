@@ -1,8 +1,8 @@
-# Π on the H200: every row of EPS1 DC's census (rows.csv). No price LP is solved on it, so it credits nothing.
+# Π on the H200: every row of the measured census (rows.csv). No price LP is solved on it, so it credits nothing.
 name = "DC-90"
 epoch = "DC-90"
 summary = "the H200 (sm_90) census: the pipes, the tensor pipe of every wgmma and mma.sync form, and IGMMA.64x256x32's joint issue and pipe rows (JI90, JPA90, JPI90, JPSHFL90), the uniform pipe (UP), the TMA bulk-async facet (TMAB, HBM-bound, no tensor issue) and the L2 atomic facet (AT90: REDG, a warp's lanes into one word)"
-note = "note:20261017T0452Z-draft-eps1-dc (r20261017-060118-0230 r20261017-060725-d7ca r20261017-065542-af0a r20261017-065542-af19; the uniform datapath r20261017-095350-02ff; its issue price r20261017-113541-675b)"
+note = "the uniform datapath; its issue price"
 rows = ["issue", "M", "A", "I", "SHFL", "JI90_0", "JI90_1", "JI90_2", "JPI90_0", "JPI90_1", "JPA90_0", "JPA90_1",
         "JPSHFL90_0", "UP", "TMAB", "AT90"]
 credits = []

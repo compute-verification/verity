@@ -8,7 +8,8 @@ import Proofs.Flock.Claims.Recursion.LamDeployed
 (`Claims.Recursion.setupCalls`). At `deployedB b` those are `deployedSetup`'s at each of the `nS x` statements, so `v`
 is at most `nS x · c` when each statement's `deployedSetup` has at most `c` inputs (`setupCalls_deployedB_le`). At
 `nS x ≤ 2^16` and `c ≤ 2^39`, `v ≤ 2^55` (`setupCalls_deployedB_le_pow`) meets `lamLin2_deployed_ge_dep`'s `hV`, so
-`λ₂ ≥ 100` at `deployedB b` (`lamLin2_deployedB_ge`). Only the statements a run stages need the count
+`λ₂ ≥ 100` at `deployedB b` (`lamLin2_deployedB_ge`; `λ₂ ≥ 135.7`, `lamLin2_deployedB_ge_tight` in
+`LamDeployedTight.lean`). Only the statements a run stages need the count
 (`setupCalls_deployedB_le_at`). At one statement, `deployedSetup` is check 5's evaluations and the registered reads'
 (`deployedSetup_length`), and the latter are at most `|sts| · |own| · N · D` (`regIns_length_le`): one opening per
 instance, port and table, each of `2 + log2ceil leaves` inputs (`opensInputs_length`).
@@ -61,7 +62,7 @@ theorem climbInputs_length (dom : ByteArray) :
 theorem opensInputs_length (reg : _root_.Flock.Registered.Port) (bc : ByteArray) (pos : ℕ) (path : ByteArray) :
     (_root_.Flock.Registered.opensInputs reg bc pos path).length = 2 + _root_.Flock.log2ceil reg.leaves := by
   simp only [_root_.Flock.Registered.opensInputs, _root_.Flock.Registered.leafInputs, List.length_cons,
-    climbInputs_length, _root_.Flock.Registered.sibs, List.length_map, List.length_range]
+    climbInputs_length, _root_.Flock.FV3.Sha512.sibs, List.length_map, List.length_range]
   omega
 
 /-- A port lists at most one opening per instance. -/

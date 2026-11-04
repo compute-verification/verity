@@ -1,6 +1,6 @@
-"""FACET-BREAK: a measured program's load on every facet of Π, the facets it beats, and the refit a beaten facet needs.
+"""facet_break: a measured program's load on every facet of Π, the facets it beats, and the refit a beaten facet needs.
 
-The standing adversary for the sm_120 data sheet (note:20261017T0524Z-draft-eps1-facet-break). A facet is a row of the
+The standing adversary for the sm_120 data sheet. A facet is a row of the
 machine model (`../machine_model/data/`): row r holds Σ_k c_kr·x_k SMSP-cycles for a program that issues x_k warp
 instructions of census class k a SMSP-cycle, and the facet is the ceiling a_r·x ≤ 1. A program's **load** on r is
 Σ_k c_kr·x_k (dimensionless): a measured program with load > 1 beats the facet, since the rows fitted from rates carry the
@@ -110,7 +110,7 @@ UNIFORM = re.compile(r"U[A-Z].*|LDCU|R2UR|S2UR|CS2UR|VOTEU")
 UR_PAIR = re.compile(r"\.(64|WIDE)\b")
 #: the bulk-copy and TMA units' shared-memory instructions (`cp.async.bulk`, `cp.reduce.async.bulk`, their `.tensor`
 #: forms): one costs its shared-memory bytes on DS_smem (A5b), which its opcode doesn't show, so `bulk_counts` classes
-#: it by its bytes and `class_of` takes it ahead of the uniform rule that would call it UNI (RT4-SHEET-6): unclassed,
+#: it by its bytes and `class_of` takes it ahead of the uniform rule that would call it UNI: unclassed,
 #: but for a bulk reduction (`BULK_RED`)
 BULK = re.compile(r"UBLK(CP|RED)|UTMA(LDG|STG|REDG)")
 #: a bulk reduction (UBLKRED) by its opcode alone is TMAred512, the census's class for one of 512 B: its issue slot and
@@ -281,7 +281,7 @@ def program(row: dict, c, cycle_u: float, generic: bool = False, l2: float | Non
             "full": "x_issue" in row}
 
 
-#: tensor_kinds (EPS1 TENSOR M1, `cursor/eps1-tensor-ea24`): each form name's census kind, and each mode's lane op split
+#: tensor_kinds: each form name's census kind, and each mode's lane op split
 #: over census classes (spec/mixu: IADD3 and FFMA alternating; *_iadd3: IADD3 alone)
 TK_KIND = {"imma_s8_m16n8k32": "IMMA16832", "imma_u8s8_m16n8k32": "IMMA16832", "imma_s8_m16n8k32_sat": "IMMA16832",
            "imma_s8_m16n8k16": "IMMA16816", "imma_s8_m8n8k16": "IMMA8816", "imma_sp_s8_m16n8k64": "IMMASP16864",

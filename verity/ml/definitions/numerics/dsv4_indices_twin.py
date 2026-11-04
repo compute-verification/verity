@@ -64,7 +64,7 @@ def _batch(topk, pos, mb, n, gs, *, TOPK, RATIO, WINDOW, WIDTH):
 
 def positions(rng, n: int, TOPK: int, RATIO: int, WINDOW: int) -> np.ndarray:
     """n positions: each a special (around 0, the window, a ratio boundary, the top-k's end, the int32 ends, where the window
-    leaves the row) or a draw below TOPK * RATIO * 2, as int32 words."""
+    leaves the row) or a sample below TOPK * RATIO * 2, as int32 words."""
     b = int(rng.integers(1, TOPK + 1)) * RATIO
     special = [-2, -1, 0, 1, WINDOW - 2, WINDOW - 1, WINDOW, b - 2, b - 1, b, TOPK * RATIO - 1, TOPK * RATIO, I32_MAX - 1,
                I32_MAX, I32_MIN, I32_MIN + WINDOW - 2, I32_MIN + WINDOW - 1, I32_MIN + WINDOW, I32_MIN + 2 * WINDOW]

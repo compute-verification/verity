@@ -69,7 +69,7 @@ Binding is taken in its fork form at `δ_fork` (`BindingForkAt`, with no advanta
 (`BindingOfFork`), so the budget asks `δ_fork ≤ (2^-41/48,000)²` a round; no ε moves.
 
 The unfolded branch binds on sm_120's sheet (`5.860%`); on sm_120's measured vector the folded branch binds (`0.591%`).
-The proof service's pieces are named premises: binding's fork form (`BindingForkAt`), proof soundness (`ProofSoundAt`,
+The proof system's pieces are named premises: binding's fork form (`BindingForkAt`), proof soundness (`ProofSoundAt`,
 which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (`ProofsPin`, which
 no Lean checks of the served relations: `PouwSegCheck_v2` lacks it, PIN's checks recompute every word they absorb),
 beside `RightFixed`. `ProofLayer.Of` and `ReceiptGame.Pinned` stay hypotheses over `Definitions/`.

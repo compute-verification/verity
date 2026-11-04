@@ -1,4 +1,4 @@
-"""The difftest of the NCI policy's Lean check against its Python reference: the Python half.
+"""The difftest of the inference-only policy's Lean check against its Python reference: the Python half.
 
 `verity/core/protocols/network/nci/lean/scripts/difftest_vectors.py` writes 4,000 random declarations with divisions,
 335 whose references name leaves of other widths than their types give them (`E_REINTERPRET`) or are their well-typed

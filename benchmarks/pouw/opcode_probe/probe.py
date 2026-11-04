@@ -7,7 +7,7 @@ gate's regression test: it must be refused, by that check. `run` gates first and
 the one declared; then it times the passed probes interleaved (gpu_kit/bench.cuh, after each sink's poisoned pass and
 its no-write control) and writes, under --out:
 
-- `census.csv`: in RS-W′'s census schema (rows.py), a line for each (kind, row) a timed probe prices, the fastest of
+- `census.csv`: in the machine model's census schema (rows.py), a line for each (kind, row) a timed probe prices, the fastest of
   its probes (the class costs what its cheapest form does), its `runs` the run id;
 - `rows.jsonl`: one line a timed probe: class, rate, MACs a word, run id, SASS hash, its census line, clocks and tags;
 - `gate.json`, the verdicts, and `times.jsonl`, the binary's own lines (every block's cycles, every rep).

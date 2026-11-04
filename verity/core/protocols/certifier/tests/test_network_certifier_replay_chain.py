@@ -1,7 +1,7 @@
 """The replay's state chain (`replay_chain`): the rows' layout and their refusals, sync and with async scheduling (AS)
 and the walk entries (EW), each shape's state and arrivals `ReplayStep_v1`'s fields and bits, `ReplayAdvance`,
 `ReplayLoad` and `ReplayClose` against `advance`, `load` and `close` on random and edge cases, the front's log shifter
-against slicing, the window's produced values opened at every unit's read, the carry and the empty start
+against slicing, the window's produced values opened at every proof block's read, the carry and the empty start
 (`check_chain`), a two-window session through all three parts, decisions a window leaves unread carried to the next and
 refused only at the session's end, and the cost `size` reports."""
 from __future__ import annotations
@@ -47,8 +47,8 @@ def _rand_arrivals(rng, S, n):
     return tuple(_entry(rng, S, "q", RC.arrival_names(S)) for _ in range(n))
 
 
-def _rand_window(rng: random.Random, S) -> RC.Window:
-    return RC.Window(_rand_arrivals(rng, S, rng.randint(0, S.Q)), tuple(rng.randint(0, 1) for _ in range(rng.randint(0, S.D))))
+def _rand_window(rng: random.Random, S) -> RC.QueueRow:
+    return RC.QueueRow(_rand_arrivals(rng, S, rng.randint(0, S.Q)), tuple(rng.randint(0, 1) for _ in range(rng.randint(0, S.D))))
 
 
 def _flip(bits, rng) -> list[int]:
@@ -132,7 +132,7 @@ def test_round_trip(S):
     at = RC._bits_of(fs[:[n for n, _c, _w in fs].index("free")])
     assert empty[at:at + RC.widths(S).BW] == tuple((S.NB - 1) >> j & 1 for j in range(RC.widths(S).BW))
     assert sum(empty) == bin(S.NB - 1).count("1")
-    assert not any(RC.encode_window(RC.Window(), S))
+    assert not any(RC.encode_window(RC.QueueRow(), S))
     for _ in range(200):
         r, w = _rand_row(rng, S), _rand_window(rng, S)
         bits, wbits = RC.encode(r, S), RC.encode_window(w, S)
@@ -155,7 +155,7 @@ def _bits_with(S, encoded, fs, name, element, value):
 def test_decode_refuses():
     S = SMALL
     r = RC.Row(((1, 5, 3, 1, 6), (2, 4, 2, 0, 4)), ((3, 7, 2, 0),), 11, 1, 2, 2)
-    w = RC.Window(((4, 3, 3), (5, 2, 1)), (1, 0, 1))
+    w = RC.QueueRow(((4, 3, 3), (5, 2, 1)), (1, 0, 1))
     rb, wb = RC.encode(r, S), RC.encode_window(w, S)
     fs, wfs = RC.row_fields(S), RC.window_fields(S)
     bad = {
@@ -178,7 +178,7 @@ def test_decode_refuses():
         "a gap in the queue": _bits_with(S, wb, wfs, "q_valid", 0, 0),
         "an empty queue slot with a bit set": _bits_with(S, wb, wfs, "q_O", 4, 1),
         "a decision past left": _bits_with(S, wb, wfs, "dec", 3, 1),
-        "left past D": _bits_with(S, RC.encode_window(RC.Window(), S), wfs, "left", 0, 7),
+        "left past D": _bits_with(S, RC.encode_window(RC.QueueRow(), S), wfs, "left", 0, 7),
         "nonzero padding": list(wb[:-1]) + [1],
         "a short row": list(wb[:-16]),
     }
@@ -191,7 +191,7 @@ def test_decode_refuses():
     for name, element in (("run_fin", 1), ("wait_cap", 0), ("run_pfx", 2)):
         with pytest.raises(RC.MalformedRow, match="empty slot"):
             RC.decode(_bits_with(A, ab, afs, name, element, 1), A)
-    awb = RC.encode_window(RC.Window(((4, 3, 3, 1),), ()), A)
+    awb = RC.encode_window(RC.QueueRow(((4, 3, 3, 1),), ()), A)
     with pytest.raises(RC.MalformedRow, match="empty slot"):
         RC.decode_window(_bits_with(A, awb, RC.window_fields(A), "q_cap", 1, 1), A)
 
@@ -202,7 +202,7 @@ def test_encode_refuses():
               RC.Row(running=((16, 0, 0, 0, 0),))):
         with pytest.raises(RC.MalformedRow):
             RC.encode(r, S)
-    for w in (RC.Window(queue=((0, 0, 0),) * 6), RC.Window(decisions=(1,) * 7), RC.Window(decisions=(2,))):
+    for w in (RC.QueueRow(queue=((0, 0, 0),) * 6), RC.QueueRow(decisions=(1,) * 7), RC.QueueRow(decisions=(2,))):
         with pytest.raises(RC.MalformedRow):
             RC.encode_window(w, S)
     with pytest.raises(RC.MalformedRow):
@@ -215,12 +215,12 @@ def test_encode_refuses():
     with pytest.raises(RC.MalformedRow, match="an entry is"):
         RC.encode(RC.Row(running=((0, 0, 0, 0, 0, 1, 0, 0),)), S)
     with pytest.raises(RC.MalformedRow, match="an entry is"):
-        RC.encode_window(RC.Window(queue=((0, 0, 0),)), A)
+        RC.encode_window(RC.QueueRow(queue=((0, 0, 0),)), A)
     with pytest.raises(RC.MalformedRow):
         RC.front_bits(A, ((0, 0, 0, 2),))
     with pytest.raises(RC.MalformedRow):
-        RC.load_arguments(A, RC.Row(), RC.Window(), [(1, 1, 1)], (), 0, 0, RC.encode(RC.Row(), A),
-                          RC.encode_window(RC.Window(), A))
+        RC.load_arguments(A, RC.Row(), RC.QueueRow(), [(1, 1, 1)], (), 0, 0, RC.encode(RC.Row(), A),
+                          RC.encode_window(RC.QueueRow(), A))
 
 
 def test_the_shape():
@@ -235,12 +235,12 @@ def test_the_async_fields_ride_the_chain():
     writes the window's arrivals' caps into the window row's `q_cap` behind the queue's, the step's arrivals carry their
     caps from the window row, and the step's next state (`fin`, `cap`, `pfx`) is the next row's."""
     S = ASYNC
-    last = RC.Window(((3, 1, 1, 0), (4, 3, 3, 1)), (1,))
+    last = RC.QueueRow(((3, 1, 1, 0), (4, 3, 3, 1)), (1,))
     prev = RC.Row(((1, 5, 3, 1, 6, 1, 0, 7),), ((2, 4, 2, 0, 1),), 11, 1, 1, 0)
     got = RC.load(S, prev, last, [(5, 2, 1, 1)], (0, 1), 2)
-    assert got == (RC.Row(prev.running, prev.waiting, 11, 0, 0, 2), RC.Window(((4, 3, 3, 1), (5, 2, 1, 1)), (0, 1)))
+    assert got == (RC.Row(prev.running, prev.waiting, 11, 0, 0, 2), RC.QueueRow(((4, 3, 3, 1), (5, 2, 1, 1)), (0, 1)))
     nxt, win = RC.encode(got[0], S), RC.encode_window(got[1], S)
-    capless = RC.encode_window(RC.Window(((4, 3, 3, 1), (5, 2, 1, 0)), (0, 1)), S)
+    capless = RC.encode_window(RC.QueueRow(((4, 3, 3, 1), (5, 2, 1, 0)), (0, 1)), S)
     assert RC.evaluate_load(S, [RC.load_arguments(S, prev, last, [(5, 2, 1, 1)], (0, 1), 2, 2, nxt, w)
                                 for w in (win, capless)]) == [1, 0]
     cur, win = got
@@ -314,7 +314,7 @@ def test_advance_circuit_is_its_specification(S):
 
 def test_advance_refuses():
     S = SMALL
-    win = RC.Window(((4, 3, 3), (5, 2, 1)), (1, 0, 1))
+    win = RC.QueueRow(((4, 3, 3), (5, 2, 1)), (1, 0, 1))
     cur = RC.Row(((1, 5, 3, 1, 6),), (), 11, 0, 0, 2)
     stepped = RC.Row(((1, 5, 3, 2, 7),), (), 10)
     arr, bits = RC.front(S, win, cur)
@@ -344,7 +344,7 @@ def test_advance_refuses():
             (int(accepts), int(c.steps > 0))], why
     assert RC.advance(S, win, idle, False, stepped, (), (0, 0, 0), 3, 3) == idle
     N = NARROW
-    wide = RC.Window(tuple((k, 1, 1) for k in range(6)), (1,))
+    wide = RC.QueueRow(tuple((k, 1, 1) for k in range(6)), (1,))
     full = RC.Row((), (), 5, 0, 0, 1)
     a, b = RC.front(N, wide, full)
     assert len(a) == N.A
@@ -397,15 +397,15 @@ def test_load_circuit_is_its_specification(S):
 
 def test_load_refuses():
     S = SMALL
-    last = RC.Window(((3, 1, 1), (4, 3, 3), (5, 2, 1)), (1, 1))
+    last = RC.QueueRow(((3, 1, 1), (4, 3, 3), (5, 2, 1)), (1, 1))
     prev = RC.Row(((1, 5, 3, 1, 6),), (), 11, 1, 2, 0)
     arr = [(6, 3, 2), (7, 1, 1)]
     ok = RC.load(S, prev, last, arr, (1, 0), 2)
-    assert ok == (RC.Row(prev.running, (), 11, 0, 0, 2), RC.Window(((4, 3, 3), (5, 2, 1), (6, 3, 2), (7, 1, 1)), (1, 0)))
+    assert ok == (RC.Row(prev.running, (), 11, 0, 0, 2), RC.QueueRow(((4, 3, 3), (5, 2, 1), (6, 3, 2), (7, 1, 1)), (1, 0)))
     P2 = RC.Shape(**{**S.statics(), "P": 2})
     carried = RC.Row(prev.running, (), 11, 1, 1, 0)
-    assert RC.load(S, carried, last, arr, (1, 0), 2) == (ok[0], RC.Window(ok[1].queue, (1, 1, 0))), "the unread carried"
-    assert RC.load(S, prev, last, arr, (1,), 0) == (RC.Row(prev.running, (), 11, 0, 0, 0), RC.Window(ok[1].queue, (1,))), (
+    assert RC.load(S, carried, last, arr, (1, 0), 2) == (ok[0], RC.QueueRow(ok[1].queue, (1, 1, 0))), "the unread carried"
+    assert RC.load(S, prev, last, arr, (1,), 0) == (RC.Row(prev.running, (), 11, 0, 0, 0), RC.QueueRow(ok[1].queue, (1,))), (
         "decisions in a window with no step, for the next to read")
     refused = {
         "the last window left a step": (S, RC.Row(prev.running, (), 11, 1, 2, 1), last, arr, (1, 0), 2),
@@ -441,13 +441,13 @@ def test_load_refuses_a_carry_it_cant_hold():
     carried and the window's decisions past D (2 + 5 of 6: the row cut to D, ``left`` 7), and a last window read past
     its decisions (``dh`` 5 of 2, which wraps the carried count to 5 and writes the window's decision at 5)."""
     S = SMALL
-    last = RC.Window(((3, 1, 1),), (1, 1))
+    last = RC.QueueRow(((3, 1, 1),), (1, 1))
     over, past = RC.Row((), (), 11, 0, 0, 0), RC.Row((), (), 11, 0, 5, 0)
     five = (1, 0, 1, 1, 0)
     assert RC.load(S, over, last, (), five, 2) is None and RC.load(S, past, last, (), (1,), 1) is None
     wfs = RC.window_fields(S)
-    cut = _bits_with(S, RC.encode_window(RC.Window(((3, 1, 1),), ((1, 1) + five)[:S.D]), S), wfs, "left", 0, 7)
-    wrapped = RC.encode_window(RC.Window(((3, 1, 1),), (0, 0, 0, 0, 0, 1)), S)
+    cut = _bits_with(S, RC.encode_window(RC.QueueRow(((3, 1, 1),), ((1, 1) + five)[:S.D]), S), wfs, "left", 0, 7)
+    wrapped = RC.encode_window(RC.QueueRow(((3, 1, 1),), (0, 0, 0, 0, 0, 1)), S)
     cases = [RC.load_arguments(S, over, last, (), five, len(five), 2, RC.encode(RC.Row((), (), 11, 0, 0, 2), S), cut),
              RC.load_arguments(S, past, last, (), (1,), 1, 1, RC.encode(RC.Row((), (), 11, 0, 0, 1), S), wrapped)]
     assert RC.evaluate_load(S, cases) == [0, 0]
@@ -477,7 +477,7 @@ def test_a_window_leaves_decisions_to_the_next_and_the_session_reads_them_all():
     decisions after the unread ones, each part's circuit accepts what its specification does, and `ReplayClose`
     accepts the session; ended after window 0 or 1, with decisions unread, it is refused."""
     S = SMALL
-    cur, last, ends = RC.empty(S), RC.Window(), []
+    cur, last, ends = RC.empty(S), RC.QueueRow(), []
     for decisions, reads in (((1, 0, 1), [1]), ((), [1]), ((0,), [2])):
         loaded = RC.load(S, cur, last, (), decisions, len(reads))
         assert loaded is not None
@@ -504,7 +504,7 @@ def test_a_window_leaves_decisions_to_the_next_and_the_session_reads_them_all():
 def _session(S, rng):
     """A two-window session of rows through `load` and `advance`, with made-up step outputs: each window's state rows,
     its window row and its units."""
-    windows, cur, last, rid = [], RC.empty(S), RC.Window(), 0
+    windows, cur, last, rid = [], RC.empty(S), RC.QueueRow(), 0
     for w in range(2):
         n = S.P if w == 0 else 1
         arrivals = [(rid + k, 3 + k, 2) + ((k,) if S.AS else ()) for k in range(2)]
@@ -585,7 +585,7 @@ def test_check_chain_refuses():
     assert RC.check_chain([(s0, w0[:1]), (s1, w1)], PROGRAM, S).startswith("C-rows")
     fresh = list(_fresh(S, RC.VALUE, [RC.encode(r, S) for r in rows0]).bcs)
     assert RC.check_chain([(fresh, w0), (s1, w1)], PROGRAM, S).startswith("C-first"), "the empty state under a fresh salt"
-    wfresh = list(_fresh(S, RC.WINDOW, [RC.encode_window(RC.Window(), S), RC.encode_window(win0, S)]).bcs)
+    wfresh = list(_fresh(S, RC.WINDOW, [RC.encode_window(RC.QueueRow(), S), RC.encode_window(win0, S)]).bcs)
     assert RC.check_chain([(s0, wfresh), (s1, w1)], PROGRAM, S).startswith("C-first"), "the empty window under a fresh salt"
     assert RC.check_chain([(s0, w0), (s1, w1)], "another-program", S).startswith("C-first"), "another program's public salts"
     other = list(_fresh(S, RC.VALUE, [RC.encode(r, S) for r in rows1]).bcs)

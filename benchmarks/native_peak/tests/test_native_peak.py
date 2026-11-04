@@ -27,7 +27,7 @@ def test_declaration_is_registered_and_keys_what_is_measured():
     t = tools_registry.load("native_peak", REPO)
     assert t.name == "native_peak" and t.spec == "benchmarks.native_peak.tool:NATIVE_PEAK" and "hw.family" in t.key_conditions
     assert "native-peak/v1" in t.produces
-    argv = ["/workspace/venv312/bin/python", "benchmarks/native_peak/measure.py", "--dtype", "bf16", "--sizes", "16384,8192", "--out", "/run/dir", "--device", "cuda:0"]
+    argv = [sys.executable, "benchmarks/native_peak/measure.py", "--dtype", "bf16", "--sizes", "16384,8192", "--out", "/run/dir", "--device", "cuda:0"]
     params, key = t.resolve_params(argv, REPO)
     assert key == {"dtype": "bf16", "sizes": "8192,16384", "warmup": 3, "reps": 5, "sustain_s": 2.0}
     assert params["out"] == "/run/dir" and "out" not in key and "device" not in key
@@ -48,6 +48,8 @@ def test_spec_table_and_size_parsing():
     assert m.spec_peak("NVIDIA H100 80GB HBM3", "e4m3")[0] == 1978.9e12
     assert m.spec_peak("NVIDIA H100 80GB HBM3", "nvfp4")[0] is None
     assert m.spec_peak("NVIDIA H100 PCIe", "bf16")[0] == 756.0e12
+    assert all(m.spec_peak("NVIDIA H200", d)[0] == m.spec_peak("NVIDIA H100 80GB HBM3", d)[0] for d in m.DTYPES)
+    assert m.spec_peak("NVIDIA H200 NVL", "bf16") == (None, None)  # its peaks are lower than the H200 SXM's
     assert m.spec_peak("NVIDIA A10G", "bf16") == (None, None)
     # RTX 5090: the whitepaper's dense FP4-with-FP32-accumulate figure, not the sparse headline 3352
     assert m.spec_peak("NVIDIA GeForce RTX 5090", "nvfp4")[0] == 1676.0e12 and m.spec_peak("NVIDIA GeForce RTX 5090", "e4m3")[0] == 419.0e12
@@ -86,6 +88,7 @@ def test_result_document_is_a_valid_envelope_with_headline_fields(tmp_path):
     assert doc["sass"] == "not captured" and doc["clocks_mhz"] == 2520.0 and doc["power_w"] == 430.0 and "8192^3" in doc["sizes"]
     assert doc["method"].startswith("cublas dense gemm 8192^3, median of 5")
     assert doc["validation"]["status"] == "passed" and {x["name"] for x in doc["measurements"]} >= {"flop_per_second", "fraction_of_spec", "gemm_8192_seconds"}
+    assert doc["validation"]["detail"] == "8192^3 max_rel_err 1.25e-03 (tol 2e-02) ok"
     json.dumps(doc)   # serialisable as written
     skipped = m.build_result("r20260922-000000-abcd", "e4m3", {"device": "NVIDIA A100-SXM4-80GB"}, [], {"sass": "not captured"}, {"n_samples": 0},
                              "FP8 tensor cores need sm_89+", 1.0, [])
@@ -107,7 +110,7 @@ def test_nvfp4_instruction_result_document(tmp_path):
            "seconds_min": 1.0, "seconds_max": 1.0, "flop_per_second": flop, "sustain": {"seconds": 2.0, "iterations": 2, "flop_per_second": flop},
            "smi_window": {"t0": 0, "t1": 1},
            "check": {"ok": True, "finite": True, "deterministic": True, "sass_mma_count": 32, "expected_mma_count": 32, "sass_body_copies": 1, "opcodes": sass["opcodes"],
-                     "tolerance": 0.0, "max_rel_err": 0.0}, "kernels": ["nvfp4_peak_kernel"], "sass": sass, "peak_device_bytes": 1 << 20,
+                     "tolerance": None, "max_rel_err": None}, "kernels": ["nvfp4_peak_kernel"], "sass": sass, "peak_device_bytes": 1 << 20,
            "smi": {"n_samples": 20, "clocks_sm_mhz": {"median": 2400.0, "min": 2300.0, "max": 2400.0, "n": 20}, "clocks_mem_mhz": None,
                    "power_w": {"median": 500.0, "min": 400.0, "max": 575.0, "n": 20}, "temperature_c": None, "throttle_reasons": []}}
     gemm = {"attempted": True, "n": 8192, "supported": False, "reason": "torch has no float4_e2m1fn_x2", "flop_per_second": None}
@@ -119,6 +122,7 @@ def test_nvfp4_instruction_result_document(tmp_path):
     assert abs(doc["fraction_of_spec"] - flop / 1676.0e12) < 1e-12 and doc["sass"] == sass["sass"] and doc["gemm_attempt"] is gemm
     assert doc["method"].startswith("instruction microbenchmark: mma.sync") and "mma_m16n8k64_x100000" in doc["sizes"]
     assert doc["validation"]["status"] == "passed" and "sass 32/32" in doc["validation"]["detail"]
+    assert doc["validation"]["detail"].startswith(m.NO_REFERENCE) and doc["sizes"]["mma_m16n8k64_x100000"]["max_rel_err"] is None
     assert {x["name"] for x in doc["measurements"]} >= {"flop_per_second", "fraction_of_spec", "mma_m16n8k64_x100000_seconds"}
     json.dumps(doc)
 

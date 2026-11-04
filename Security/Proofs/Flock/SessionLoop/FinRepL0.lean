@@ -474,7 +474,7 @@ theorem finSrc_l0 (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce)
     (finSrc vs x w ν t ops i).row0 = (Masked.srcV x (finCoins x ops) w t i).row0 ∧
       (finSrc vs x w ν t ops i).salt0 = (Masked.srcV x (finCoins x ops) w t i).salt0 := by
   obtain ⟨h1, h2, h3⟩ := ZkView.Coined.swExe_l0 ((finS.C x ⟨i, hi⟩).T (finS.cz x (finCoins x ops) ⟨i, hi⟩))
-    (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
+    (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) (finS.seenOf x t) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
     (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).2
   exact Masked.tabSrcView_l0 Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops))
     (finS.swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t)

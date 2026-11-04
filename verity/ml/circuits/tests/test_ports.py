@@ -16,7 +16,7 @@ from verity.ml.circuits.evaluation.reference import evaluate, standalone_call
 from verity.ml.circuits.ports import In, Leaves, Out, PortError, Ports
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, PartLog, Strided, array_of, concat, tuple_of
-from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Value
 
 V8, V16, V32 = Value(8), Value(16), Value(32)
 
@@ -404,7 +404,7 @@ def test_malformed_interval_declarations():
     with pytest.raises(PortError, match="E_PORT_DECL.*no interval of a Value<8>"):
         primitive("PortsTestBadIv", 1, (("x", V8),), V8, ports=Ports(ret=Out(interval=(-200, 0))))(lambda x: x)
     with pytest.raises(PortError, match="E_PORT_DECL.*one width"):
-        P.bind_ports("T", (("r", Record(("a", V8), ("b", V16))),), V8, Ports(params={"r": In(bound=(0, 1))}))
+        P.bind_ports("T", (("r", RecordType(("a", V8), ("b", V16))),), V8, Ports(params={"r": In(bound=(0, 1))}))
     with pytest.raises(PortError, match="E_PORT_DECL.*lo <= hi"):
         In(bound=(3, 2))
     with pytest.raises(PortError, match="E_PORT_DECL.*has no parameter"):
@@ -487,7 +487,7 @@ def test_a_harness_evaluates_a_definition_with_coin_and_static_ports():
 # --- model weights ------------------------------------------------------------------------------------------------------------
 
 def _weighted(name: str) -> CompositeDefinition:
-    return comp(name, [("prompt", V16), ("weights", Record(("w", Array(2, V16)), ("b", V32))), ("eps", V16)], V16,
+    return comp(name, [("prompt", V16), ("weights", RecordType(("w", Array(2, V16)), ("b", V32))), ("eps", V16)], V16,
                 lambda B, S, prompt, weights, eps: B.call(Add16, B.call(Add16, prompt, weights.field("w")[0]), eps))
 
 
@@ -716,7 +716,7 @@ def test_a_word_read_at_its_own_width_builds():
         (TupleT(V8, V32), lambda B, x, r: tuple_of(r[0][1], r[1][0])),
         (Array(n, V32), lambda B, x, r: Coll(Array(n, V32), Strided("n", 0, 0, 1, 2, 0, n))),
         (Array(n, V8), lambda B, x, r: Coll(Array(n, V8), Strided("n", 0, 1, 1, 2, 0, n))),
-        (Array(n, Record(("a", V32), ("b", V8))), lambda B, x, r: Coll(Array(n, Record(("a", V32), ("b", V8))), r.refs)),
+        (Array(n, RecordType(("a", V32), ("b", V8))), lambda B, x, r: Coll(Array(n, RecordType(("a", V32), ("b", V8))), r.refs)),
     ]
     for i, (ret, view) in enumerate(ok):
         roundtrip(Program(case(f"PortsTestWidthOk{i}", ret, view)))
@@ -1042,7 +1042,7 @@ def test_the_decoder_refuses_non_canonical_ports():
 
 
 def test_leaves_and_field_trees_bind_to_the_same_runs():
-    t = Record(("lo", Array(2, V16)), ("hi", Array(2, V16)))
+    t = RecordType(("lo", Array(2, V16)), ("hi", Array(2, V16)))
     by_field = P.bind_ports("T", (("r", t),), V16, Ports(params={"r": {"lo": In(bound=(0, 9)), "hi": In(bound=(0, 9))}}))
     by_tuple = P.bind_ports("T", (("r", t),), V16, Ports(params={"r": (In(bound=(0, 9)), In(bound=(0, 9)))}))
     by_leaves = P.bind_ports("T", (("r", t),), V16, Ports(params={"r": Leaves(((0, 4, In(bound=(0, 9))),))}))

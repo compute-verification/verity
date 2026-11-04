@@ -1,7 +1,7 @@
-"""`verity.settings`, the distribution's settings registry: every variable declared once (a type, a role, a doc), read at the
-read, an undeclared ``VERITY_ML_*`` variable refused by name, a ``debug`` setting refused on a run of record, and the run's
-record of the value settings.  And the circuits area, on the soundness path, reads the environment through it alone: its
-direct reads are held at today's count, none."""
+"""`verity.settings`, the settings machinery (`Registry`) and the distribution's own registry: every variable declared once (a
+type, a role, a doc), read at the read, an undeclared ``VERITY_ML_*`` variable refused by name, a ``debug`` setting refused on
+a run of record, and the run's record of the value settings.  And the circuits area, on the soundness path, reads the
+environment through it alone: its direct reads are held at today's count, none."""
 from __future__ import annotations
 
 import ast
@@ -21,7 +21,7 @@ OS_ENV = frozenset({"environ", "environb", "getenv", "getenvb"})
 
 
 def test_every_setting_has_a_type_a_role_and_a_doc() -> None:
-    for name, s in S.SETTINGS.items():
+    for name, s in S.REGISTRY.settings.items():
         assert s.name == name and callable(s.type) and s.role in S.ROLES and s.doc.strip(), s
 
 
@@ -36,9 +36,10 @@ def test_the_registry_imports_the_standard_library_alone() -> None:
 def test_declaring_a_setting_twice_or_with_an_unknown_role_fails() -> None:
     s = S.Setting("VERITY_ML_TEST_X", S.flag, False, S.WHERE, "a test's")
     with pytest.raises(ValueError, match="declared twice"):
-        S._declare(s, s)
+        S.Registry(S.__file__, ("VERITY_ML_",), s, s, schema=S.RECORD_SCHEMA)
     with pytest.raises(ValueError, match="role 'telemetry'"):
-        S._declare(S.Setting("VERITY_ML_TEST_X", S.flag, False, "telemetry", "a test's"))
+        S.Registry(S.__file__, ("VERITY_ML_",), S.Setting("VERITY_ML_TEST_X", S.flag, False, "telemetry", "a test's"),
+                   schema=S.RECORD_SCHEMA)
 
 
 def test_flag_reads_both_spellings_and_refuses_the_rest() -> None:
@@ -68,14 +69,15 @@ def test_a_read_parses_the_environment_at_the_read(monkeypatch: pytest.MonkeyPat
 def test_an_unknown_prefixed_variable_is_refused_by_name(monkeypatch: pytest.MonkeyPatch) -> None:
     """A misspelt setting fails the run that carries it, at its first read, instead of running with the default."""
     typo = {"VERITY_ML_BOOLEAN_EXHAUSTVE": "1", "VERITY_ML_BOOLEAN_EXHAUSTIVE": "0", "VERITY_SLOW": "1", "PATH": "/bin"}
-    assert S.unknown(typo) == ["VERITY_ML_BOOLEAN_EXHAUSTVE"]
-    with pytest.raises(S.UnknownSetting, match="unknown setting VERITY_ML_BOOLEAN_EXHAUSTVE: verity/settings.py declares no"):
-        S.validate_environ(typo)
+    assert S.REGISTRY.unknown(typo) == ["VERITY_ML_BOOLEAN_EXHAUSTVE"]
+    with pytest.raises(S.UnknownSetting, match=r"unknown setting VERITY_ML_BOOLEAN_EXHAUSTVE: nothing in the tree reads it.*"
+                                               r"verity/settings\.py"):
+        S.REGISTRY.validate_environ(typo)
     with pytest.raises(S.UnknownSetting):
         S.get("VERITY_ML_BOOLEAN_EXHAUSTIVE", typo)
     with pytest.raises(S.UnknownSetting):
         S.record(typo)
-    S.validate_environ({"VERITY_SLOW": "1", "VERITY_ML_BOOLEAN_EXHAUSTIVE": "1"})
+    S.REGISTRY.validate_environ({"VERITY_SLOW": "1", "VERITY_ML_BOOLEAN_EXHAUSTIVE": "1"})
     monkeypatch.setenv("VERITY_ML_BOOLEAN_EXHAUSTVE", "1")
     with pytest.raises(S.UnknownSetting, match="VERITY_ML_BOOLEAN_EXHAUSTVE"):
         _ = S.VERITY_ML_BOOLEAN_EXHAUSTIVE
@@ -83,21 +85,23 @@ def test_an_unknown_prefixed_variable_is_refused_by_name(monkeypatch: pytest.Mon
 
 def _synthetic(monkeypatch: pytest.MonkeyPatch) -> None:
     """A registry with one setting of each role, and two credentials: today's declares a ``where`` setting alone."""
-    monkeypatch.setattr(S, "SETTINGS", S._declare(
+    monkeypatch.setattr(S, "REGISTRY", S.Registry(
+        S.__file__, ("VERITY_ML_",),
         S.Setting("VERITY_ML_TEST_WIDTH", int, 32, S.VALUE, "a test's value"),
         S.Setting("VERITY_ML_TEST_SEED", str, "", S.VALUE, "a test's credential, by declaration", secret=True),
         S.Setting("VERITY_ML_TEST_API_KEY", str, "", S.VALUE, "a test's credential, by name"),
         S.Setting("VERITY_ML_TEST_SLOW", S.flag, False, S.WHERE, "a test's telemetry"),
-        S.Setting("VERITY_ML_TEST_DUMP", str, "", S.DEBUG, "a test's diagnostic")))
+        S.Setting("VERITY_ML_TEST_DUMP", str, "", S.DEBUG, "a test's diagnostic"),
+        schema=S.RECORD_SCHEMA))
 
 
 def test_a_debug_setting_is_refused_on_a_run_of_record(monkeypatch: pytest.MonkeyPatch) -> None:
     _synthetic(monkeypatch)
     env = {"VERITY_ML_TEST_DUMP": "/tmp/dump", "VERITY_ML_TEST_WIDTH": "8"}
-    S.validate_environ(env)
-    with pytest.raises(S.DebugOnRecord, match="debug setting VERITY_ML_TEST_DUMP on a run of record"):
-        S.validate_environ(env, of_record=True)
-    S.validate_environ({**env, "VERITY_ML_TEST_DUMP": ""}, of_record=True)
+    S.REGISTRY.validate_environ(env)
+    with pytest.raises(S.DebugOnRecord, match="VERITY_ML_TEST_DUMP: debug setting, refused on a run of record"):
+        S.REGISTRY.of_record(env)
+    S.REGISTRY.of_record({**env, "VERITY_ML_TEST_DUMP": ""})
 
 
 def test_the_record_carries_the_value_settings_in_force_and_names_a_credential(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -138,10 +142,11 @@ def test_the_area_reads_the_environment_through_the_registry_alone() -> None:
 def test_every_name_the_area_reads_is_declared() -> None:
     """Each ``VERITY_ML_*`` name the area spells (a read, a skip reason, a docstring) and each ``settings.NAME`` it reads."""
     spelt, read = set(), set()
+    declared = S.REGISTRY.settings
     for rel, text in _area():
         spelt |= set(TOKEN.findall(text))
         if "settings" in text:
             read |= {n.attr for n in ast.walk(ast.parse(text, filename=rel)) if isinstance(n, ast.Attribute)
                      and isinstance(n.value, ast.Name) and n.value.id in ("settings", "S") and n.attr.isupper()
-                     and n.attr.startswith(S.PREFIXES)}
-    assert read and not (spelt | read) - set(S.SETTINGS), sorted((spelt | read) - set(S.SETTINGS))
+                     and n.attr.startswith(S.REGISTRY.prefixes)}
+    assert read and not (spelt | read) - set(declared), sorted((spelt | read) - set(declared))

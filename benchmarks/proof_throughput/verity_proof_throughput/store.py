@@ -1,7 +1,7 @@
 """The evidence store from inside a recorded run: its custody key, handed to the store CLI's environment only.
 
 A run launched with ``research run --on`` carries no store credentials; its custody dir (``<root>/requests/<run id>/custody/``,
-beside ``<root>/runs/<run id>/``) holds a delete-free key while it runs. As C-Flock's ``verifier/ci.py`` and
+beside ``<root>/runs/<run id>/``) holds a delete-free key while it runs. As Flock's ``verifier/ci.py`` and
 ``tools/verity/check/check.py`` do, the key goes into the ``research data`` subprocess's environment and nowhere else.
 """
 from __future__ import annotations

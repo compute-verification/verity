@@ -244,7 +244,7 @@ def helloJson (spec : Flock.SessionSpec) (nonce : String) : Flock.V String :=
   match spec.coinTree with
   | none => pure spec.hello
   | some _ => do
-    let some own := (Json.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
+    let some own := (Flock.JsonParse.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
     let coins := (own.getObjVal? "coins").toOption.getD Json.null
     Flock.canon (own.setObjVal! "coins" (coins.setObjVal! "nonce" (Json.str nonce)))
 

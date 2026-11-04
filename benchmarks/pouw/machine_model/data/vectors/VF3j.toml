@@ -1,8 +1,7 @@
-# VF3j: The strict VF3i with its untimed assumptions timed: a SHFL row, the TEX cap, TMA size classes and gather4 classes (RS-W′ round 9); the adopted vector.
+# VF3j: The strict VF3i with its untimed assumptions timed: a SHFL row, the TEX cap, TMA size classes and gather4 classes; the adopted vector.
 name = "VF3j"
 epoch = "VF3j"
-summary = "The strict VF3i with its untimed assumptions timed: a SHFL row, the TEX cap, TMA size classes and gather4 classes (RS-W′ round 9); the adopted vector."
-note = "note:20261016T1640Z-draft-rs-vf3j-strict-closure"
+summary = "The strict VF3i with its untimed assumptions timed: a SHFL row, the TEX cap, TMA size classes and gather4 classes; the adopted vector."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
@@ -37,9 +36,8 @@ credits = [
     ["UTMA48K", 393216], ["UTMA64K", 524288], ["UTMABIG", 811008], ["G4_256", 8192], ["G4_1K", 32768],
 ]
 
-[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.0634
-tau_600w = 0.0495
 uf_low = 1.0938
 margin = 1.935
 

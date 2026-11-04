@@ -590,8 +590,15 @@ def certified_blocks(blocks: int, epsilon: Fraction = EPSILON) -> int:
     return math.ceil((1 - Fraction(epsilon)) * blocks)
 
 
+def sampling_error(blocks: int, samples: int, epsilon: Fraction = EPSILON) -> float:
+    """`((k − 1)/N)^s`, the sampling term of the error: the chance that `s` uniform openings all land on correct blocks
+    while fewer than `k` of the `N` are correct."""
+    k = certified_blocks(blocks, epsilon)
+    return math.exp(samples * math.log((k - 1) / blocks)) if k > 1 else 0.0
+
+
 def samples_for(blocks: int, error_log2: int, epsilon: Fraction = EPSILON) -> int:
-    """The fewest `s` with `((k − 1)/N)^s ≤ 2^error_log2`, the sampling term of the error."""
+    """The fewest `s` with `((k − 1)/N)^s ≤ 2^error_log2` (`sampling_error`)."""
     k = certified_blocks(blocks, epsilon)
     return math.ceil(error_log2 * math.log(2) / math.log((k - 1) / blocks))
 
@@ -630,6 +637,6 @@ def bound(params: Params, blocks: int, block_bytes: int, *, chip_bytes: int, sid
     lam = queries_log2 * k + slack_log2
     side = math.ceil(side_bytes_per_s * params.limit_ns / 1e9)
     ingress_bits = k * 8 * block_bytes - 8 * chip_bytes - 8 * side - lam
-    error_samples = math.exp(params.samples * math.log((k - 1) / blocks)) if k > 1 else 0.0
-    return Bound(blocks, k, block_bytes, chip_bytes, side, lam, max(0, ingress_bits // 8), error_samples,
+    return Bound(blocks, k, block_bytes, chip_bytes, side, lam, max(0, ingress_bits // 8),
+                 sampling_error(blocks, params.samples, epsilon),
                  float(params.samples * tag.guess(block_bytes)), queries_log2 * k - lam)

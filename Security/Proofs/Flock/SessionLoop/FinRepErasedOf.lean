@@ -88,8 +88,8 @@ theorem finRepErased_step (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_
     {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Chk} {m₀ ρ₀ : Msg}
     {ops : List (Msg × Msg)} (hF : FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops)
     (hrows : ∀ j : Fin (Masked.jOf x), ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt
-      (finS.wt x w j, vs x w ν (finCoins x ops) j)
-      (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1.2.1)
+      (finS.wt x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j)
+      (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1)
     {s0 : _} {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
     {schs : Array (_root_.Flock.Schedule × ℕ)}
     (hs : (FlockComplete.schedsPZk (FlockDeploy.tabsOf (Masked.stsOf x)) : V _) = .ok schs)
@@ -114,7 +114,7 @@ theorem finRepErased_step (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_
         (_root_.Flock.Firewall.Finish.padsOf q.draws) (_root_.Flock.Firewall.Finish.saltAt q.draws.salts) :
         V _root_.Flock.Firewall.Finish.InnerCommit) = .ok ic')
     (hmk : ∀ i < (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).zp 64,
-      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k / 2)).rep (k % 2)).masked i =
+      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2)).masked i =
         q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]!)
     {p : _root_.Flock.Zk.ZkProof} {tr : _root_.Flock.Transcript}
     (hrun : (((_root_.Flock.Firewall.Finish.repFwC
@@ -177,13 +177,13 @@ theorem finRepErased_step (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_
         (((_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[k' / 2]!.m
           (FlockDeploy.tabsOf (Masked.stsOf x))[k' / 2]!.kLog schs[k' / 2]!.1.k0).len +
           _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
-        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k' / 2)).rep (k' % 2))).go l =
+        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k' / 2)).rep (k' % 2))).go l =
           (.ok icX, l)) →
       ∀ l : Array Msg, l.size = Masked.repBase x k' →
       ∃ p tr l', ((FlockComplete.repCut (FlockComplete.asksCut (Masked.ligCoin (finCoins x ops)) (refK x)) Masked.hsE
           (FlockDeploy.tabsOf (Masked.stsOf x))[k' / 2]! schs[k' / 2]!.1 (k' % 2)
           (spec.domain spec.tables[k' / 2]! (k' % 2)).toUTF8 cmsC[k' / 2]! extras' icX
-          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k' / 2)).rep (k' % 2))
+          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k' / 2)).rep (k' % 2))
           (Masked.priorE (finCoins x ops) (k' / 2) (k' % 2))
           (FlockComplete.MaskRank.masksOf (Masked.stsOf x))[k' / 2]!).run
           (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k' / 2]! (k' % 2)).toUTF8)).go l =
@@ -236,13 +236,13 @@ theorem finRepErased_of (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.F
     (hc : finS.SwCausal vs)
     (hRows : ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops →
       ∀ j : Fin (Masked.jOf x), ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt
-        (finS.wt x w j, vs x w ν (finCoins x ops) j)
-        (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1.2.1)
+        (finS.wt x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j)
+        (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1)
     (hMk : ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops →
       ∀ s0 spec, FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x) →
       ∀ k < 2 * spec.tables.size, ∀ tb hi q f, RepAt L₀.draws src x w (ν, t) ((m₀, ρ₀) :: ops) spec k tb hi q f →
       ∀ i < (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).zp 64,
-        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k / 2)).rep (k % 2)).masked i =
+        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2)).masked i =
           q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]!) :
     FinRepErased vs L₀ src (realOf src) wk x w := by
   intro ν t κ m₀ ρ₀ ops hF s0 spec hsx schs hs cms hcms

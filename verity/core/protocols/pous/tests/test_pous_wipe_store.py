@@ -22,7 +22,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from pous_fakes import Clock
 import pous_test_signer as ts
+from verity.core.deploy.stream import Side
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_party as WP
@@ -31,17 +33,6 @@ from verity.core.protocols.pous import wipe_store as WS
 
 KEY = bytes(range(32))
 SMALL = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu", 64 * sw.LABEL_BYTES),))
-
-
-class Clock:
-    """Each reading 7 ns after the last."""
-
-    def __init__(self) -> None:
-        self.now = 0
-
-    def __call__(self) -> int:
-        self.now += 7
-        return self.now
 
 
 def test_the_gate_writes_each_power_of_two_boundary() -> None:
@@ -54,7 +45,7 @@ def test_the_gate_writes_each_power_of_two_boundary() -> None:
 
 
 def test_the_store_keeps_the_fill_and_answers_from_it() -> None:
-    p = WS.StoreProver(SMALL, WS.HostMemory(), staging=1000, clock=Clock())
+    p = WS.StoreProver(SMALL, WS.HostMemory(), staging=1000, clock=Clock(step=7))
     assert p.gate() == {"labels": 3, "highest": 63, "passed": True}
     p.receive(0, sw.labels(KEY, 0, 40))
     p.receive(40, sw.labels(KEY, 40, 24))
@@ -89,13 +80,13 @@ class Wrapping(WS.HostMemory):
 
 
 def test_a_store_whose_addresses_wrap_is_refused_at_the_gate() -> None:
-    p = WS.StoreProver(W.params_for(2), Wrapping(), clock=Clock())
+    p = WS.StoreProver(W.params_for(2), Wrapping(), clock=Clock(step=7))
     with pytest.raises(RuntimeError, match=r"doesn't keep labels \[0, "):
         p.gate()
 
 
 def test_the_cheat_keeps_prior_content_in_place_of_the_first_labels() -> None:
-    p = WS.StoreProver(SMALL, WS.HostMemory(), staging=1000, clock=Clock(), foreign=40)
+    p = WS.StoreProver(SMALL, WS.HostMemory(), staging=1000, clock=Clock(step=7), foreign=40)
     p.receive(0, sw.labels(KEY, 0, 64))
     kept = p.answer(range(64))
     assert all(kept[64 * i:64 * (i + 1)] != sw.label(KEY, i) for i in range(40))
@@ -112,9 +103,9 @@ def test_a_store_keeping_prior_content_past_the_threshold_is_rejected() -> None:
     params = W.params_for()
     n, threshold = W.foreign_labels("fM", params), W.certify(params, 0)["foreign_bits"]
     assert (n - 1) * sw.LABEL_BITS <= threshold < n * sw.LABEL_BITS
-    store = WS.StoreProver(params, WS.HostMemory(), clock=Clock(), foreign=n)
+    store = WS.StoreProver(params, WS.HostMemory(), clock=Clock(step=7), foreign=n)
     w = W.run("n0", params, signer=ts.TestSigner(b"store cheat", 2), log=ts.session_log(), schemes=ts.SCHEMES,
-              protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(), coin_secret=b"coins", egress_bits=0,
+              protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(step=7), coin_secret=b"coins", egress_bits=0,
               prover=lambda _: store)
     store.close()
     assert w.verdict == "reject" and w.report["ended"] == sw.WRONG and "wrong answers" in w.answer["reason"]
@@ -241,8 +232,8 @@ def test_the_leg_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvm
                                                     "wipe": {"store": "cuda", "segments": 1}}))
     device = tmp_path / "device"
     device.mkdir()
-    side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
+    side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     record = json.loads((out / "wipe.json").read_text())
@@ -276,8 +267,8 @@ def test_the_leg_on_a_disk_and_a_gpu_declares_the_gpus_driver_reserve(tmp_path, 
         "disk": {"paths": [str(target)], "bytes": 1 << 25, "reserve_bytes": 0, "direct": None}}}))
     device = tmp_path / "device"
     device.mkdir()
-    side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
+    side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
@@ -305,9 +296,9 @@ def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_strea
                                                     "wipe": {"store": "host", "segments": 1, "streamer": "native"}}))
     device = tmp_path / "device"
     device.mkdir()
-    side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device),
-                                str(wipe_streamer.path)))
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
+    side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device),
+                            str(wipe_streamer.path)))
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
@@ -332,9 +323,9 @@ def test_the_cheats_leg_rejects_under_a_simulated_placement(tmp_path, monkeypatc
                                                              "placement": "simulated", "egress_bits": 0}}))
     device = tmp_path / "device"
     device.mkdir()
-    side = WP.Party("n0", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    side = Side("n0", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
     extras = []
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): extras.append(extra) or side))
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): extras.append(extra) or side)
     out = tmp_path / "out"
     assert W.main(["--period", str(period), "--out", str(out), "--node", "n0", "--expect", "reject"]) == 0
     assert extras == [("--egress-bits", "0")], "the local challenger signs the period's egress count"
@@ -354,7 +345,7 @@ def test_a_disk_keeps_the_fill_in_a_file_of_its_own_and_answers_from_it(tmp_path
     holds the fill, and close removes it."""
     disk = WS.Disk([tmp_path], reserve_bytes=0, direct=None)
     params = sw.WipeParams(256, W.READS, 1, 1_000, (("disk", disk.total),))
-    p = WS.StoreProver(params, disk, staging=2 * WS.BLOCK, clock=Clock())
+    p = WS.StoreProver(params, disk, staging=2 * WS.BLOCK, clock=Clock(step=7))
     [fill] = _fills(tmp_path)
     assert fill.stat().st_size == 256 * sw.LABEL_BYTES
     assert p.gate() == {"labels": 3, "highest": 255, "passed": True}
@@ -413,10 +404,10 @@ def test_one_session_over_a_disk_and_host_memory(tmp_path, foreign: int) -> None
     assert joint.tier == "disk+host-dram"
     assert joint.declared() == (("disk", joint.parts[0][0].total), ("host-dram", 256 * sw.LABEL_BYTES))
     params = sw.WipeParams(512, W.READS, 1, W.LIMIT_NS, joint.declared())
-    store = WS.StoreProver(params, joint, staging=4 * WS.BLOCK, clock=Clock(), foreign=foreign)
+    store = WS.StoreProver(params, joint, staging=4 * WS.BLOCK, clock=Clock(step=7), foreign=foreign)
     store.gate()
     w = W.run("n0", params, signer=ts.TestSigner(b"disk %d" % foreign, 2), log=ts.session_log(), schemes=ts.SCHEMES,
-              protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(), secret=KEY, session_id=bytes(32),
+              protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(step=7), secret=KEY, session_id=bytes(32),
               coin_secret=b"coins", egress_bits=0, prover=lambda _: store)
     [fill] = _fills(tmp_path)
     on_disk, key = fill.read_bytes(), sw.wipe_key(KEY, b"n0", bytes(32))
@@ -445,8 +436,8 @@ def test_the_leg_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None:
                                                  "direct": None}}}))
     device = tmp_path / "device"
     device.mkdir()
-    side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
+    side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
@@ -474,8 +465,8 @@ def test_the_leg_on_a_disk_and_the_whole_dram(tmp_path, monkeypatch) -> None:
         "dram": {"bytes": 1 << 25, "reserve_bytes": 0}}}))
     device = tmp_path / "device"
     device.mkdir()
-    side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
+    side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
