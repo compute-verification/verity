@@ -88,7 +88,8 @@ def test_an_agreeing_lean_verdict_is_written_where_the_compose_reads_it_with_bot
     exe = stub(tmp_path, got, 0)
     rc, answer, check = lean(tmp_path, verify, d, exe)
     passes = [Path(p["manifest"]) for p in json.loads((d / "served.json").read_text())["passes"]]
-    argv = [str(exe), "--coins", str(d / "coins.json"), "--draws", "3", "--record", str(d / SP.COIN), *map(str, passes)]
+    argv = [str(exe), "--coins", str(d / "coins.json"), "--draws", "3", "--record", str(d / SP.COIN), "--over-cap",
+            doc["over_cap"], "--test-instance", *map(str, passes)]
     assert rc == 0 and answer == {**got, "tie": None}
     assert (tmp_path / "argv").read_text().splitlines() == argv[1:] and check["argv"] == argv
     assert (check["reason"], check["differ"], check["lean"], check["python"]) == (None, [], got, SP.python_answer(doc))
@@ -133,7 +134,8 @@ def test_the_lean_verdicts_w_is_the_answers_tie_and_must_be_the_pythons(run, tmp
 
 def test_the_lean_is_given_w_and_on_live_coins_is_asked_for_a_verdict_of_record(run, tmp_path):
     """The W ``verify --tie`` named goes to the Lean as ``--tie W``, and a run on a live session's coins (``coins.json`` of
-    `window.LIVE_SCHEME`) adds ``--of-record``; both before the passes, which stay last."""
+    `window.LIVE_SCHEME`) adds ``--of-record``; both after the over-cap rule and test instance and before the passes,
+    which stay last."""
     import shutil
     from verity.core.protocols.pouw import window as Wd
     from verity.core.protocols.sampled_proofs import challenger as Ch
@@ -144,14 +146,16 @@ def test_the_lean_is_given_w_and_on_live_coins_is_asked_for_a_verdict_of_record(
     exe = stub(tmp_path, printout(doc, tie={"record": W, "tables": 8}), 0)
     passes = [str(Path(p["manifest"])) for p in json.loads((d / "served.json").read_text())["passes"]]
     rc, _answer, check = lean(tmp_path, v, d, exe)
-    head = [str(exe), "--coins", str(d / "coins.json"), "--draws", "3", "--record", str(d / SP.COIN)]
+    head = [str(exe), "--coins", str(d / "coins.json"), "--draws", "3", "--record", str(d / SP.COIN), "--over-cap",
+            doc["over_cap"], "--test-instance"]
     assert rc == 0 and check["argv"] == [*head, "--tie", str(wfile), *passes]
     (live := tmp_path / "live").mkdir()
     shutil.copytree(d, live, dirs_exist_ok=True)
     coins = Ch.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, lambda n: b"\x01" * n).commitment
     (live / "coins.json").write_text(json.dumps(coins.to_json()))
     rc, _answer, check = lean(tmp_path, v, live, exe)
-    head = [str(exe), "--coins", str(live / "coins.json"), "--draws", "3", "--record", str(d / SP.COIN)]
+    head = [str(exe), "--coins", str(live / "coins.json"), "--draws", "3", "--record", str(d / SP.COIN), "--over-cap",
+            doc["over_cap"], "--test-instance"]
     assert check["argv"] == [*head, "--tie", str(wfile), "--of-record", *passes]
 
 
