@@ -83,6 +83,11 @@ theorem treeLines_set_bump : ∀ {ts : List OpenTree} {i : ℕ} {T : OpenTree}, 
     simp only [treeLines, List.set_cons_succ, List.map_cons, List.sum_cons] at ih ⊢
     omega
 
+/-- A log's coin-tree lines: its first release's, then the rest's. -/
+theorem logTreeLines_cons (r : Release) (log : List Release) :
+    logTreeLines (r :: log) = frameLines r.frame + logTreeLines log := by
+  simp only [logTreeLines, List.map_cons, List.sum_cons]
+
 /-- **The device's releases write at most the coin-tree lines its log has left**: every run of `releases k fs ts`
 writes at most `maxTreeLines - treeLines ts` coin-tree lines, and each of its releases samples at most `maxTreeCoins`
 leaves a line it writes. -/
@@ -94,6 +99,8 @@ theorem releases_lines_le : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List
     cases h
     simp [logTreeLines]
   | k + 1, fs, ts, log, h => by
+    -- a coin's release holds `List.ofFn` of 512 bits, which `simp` unrolls past `maxRecDepth`: read each release's
+    -- frame by `rw` and `show`, never by `simp` over the release
     obtain ⟨m, hm⟩ := h
     rcases m with _ | ⟨_ | _ | _, b⟩
     · cases hm
@@ -110,10 +117,13 @@ theorem releases_lines_le : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List
         obtain ⟨log', h', hret⟩ := Game.reaches_bind hx
         cases hret
         obtain ⟨h1, h2⟩ := releases_lines_le k fs' ts log' h'
-        refine ⟨by simpa [logTreeLines, frameLines] using h1, fun r hr => ?_⟩
-        rcases List.mem_cons.1 hr with rfl | hr
-        · simp [frameLeaves, frameLines]
-        · exact h2 r hr
+        refine ⟨?_, fun r hr => ?_⟩
+        · rw [logTreeLines_cons]
+          show 0 + logTreeLines log' ≤ _
+          omega
+        · rcases List.mem_cons.1 hr with rfl | hr
+          · exact Nat.zero_le _
+          · exact h2 r hr
     · rename_i spec
       simp only at hm
       split at hm
@@ -125,10 +135,11 @@ theorem releases_lines_le : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List
         obtain ⟨h1, h2⟩ := releases_lines_le k fs _ log' h'
         rw [treeLines_append_hello] at h1
         refine ⟨?_, fun r hr => ?_⟩
-        · simp only [logTreeLines, List.map_cons, List.sum_cons, frameLines] at h1 ⊢
+        · rw [logTreeLines_cons]
+          show 1 + logTreeLines log' ≤ _
           omega
         · rcases List.mem_cons.1 hr with rfl | hr
-          · simpa [frameLeaves, frameLines] using treeLeaves_le hc2
+          · exact Nat.le_trans (treeLeaves_le hc2) (Nat.le_of_eq (Nat.mul_one _).symm)
           · exact h2 r hr
       · cases hm
         simp [logTreeLines]
@@ -143,17 +154,17 @@ theorem releases_lines_le : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List
           split at hm
           · cases hm
             simp [logTreeLines]
-          · rename_i s' _ _
-            obtain ⟨d, hd⟩ := hm
+          · obtain ⟨d, hd⟩ := hm
             obtain ⟨log', h', hret⟩ := Game.reaches_bind hd
             cases hret
             obtain ⟨h1, h2⟩ := releases_lines_le k fs _ log' h'
             rw [treeLines_set_bump hT] at h1
             refine ⟨?_, fun r hr => ?_⟩
-            · simp only [logTreeLines, List.map_cons, List.sum_cons, frameLines] at h1 ⊢
+            · rw [logTreeLines_cons]
+              show 1 + logTreeLines log' ≤ _
               omega
             · rcases List.mem_cons.1 hr with rfl | hr
-              · simp [frameLeaves, frameLines]
+              · exact Nat.zero_le _
               · exact h2 r hr
       · cases hm
         simp [logTreeLines]
