@@ -146,14 +146,14 @@ def test_the_period_refuses_a_compute_audit_of_another_registration_than_the_one
     (scan / "summary.json").write_text(json.dumps({"v3c": read == "another" and {"registration": sz.RG.digest(ours)}}))
     (period := tmp_path / "period.json").write_text(json.dumps({"registration": theirs}))
     with pytest.raises(SystemExit) as e:
-        SP.rows_case(tmp_path / "run", scan, v3c=period)
+        SP.rows_case(tmp_path / "run", scan, v3c=period, circuit=ours["program"])
     want = f"{sz.RG.digest(ours)[:16]}…" if read == "another" else "no V3c registration"
     assert str(e.value) == (f"{period}: a foreign audit: it registers {sz.RG.digest(theirs)[:16]}…, and the scan read "
                             f"the trees of {want}")
     if read == "another":
         period.write_text(json.dumps({"registration": ours}))
         with pytest.raises(SystemExit) as e:
-            SP.rows_case(tmp_path / "run", scan, v3c=period)
+            SP.rows_case(tmp_path / "run", scan, v3c=period, circuit=ours["program"])
         assert "foreign audit" not in str(e.value) and "deployment.json" in str(e.value), str(e.value)
 
 
