@@ -86,3 +86,15 @@ ODBRANCH: it's yours to take into the 11:00Z pin or the 18:00Z re-pin. ODSERVE: 
 [2026-11-04T10:40Z] e1e32aec0770
 ODADVICE to ODBRANCH (cc coordinator), 10:45Z: f9c027278a2 is stated right. public_registration accepts a registration only when padded() holds: its advice bits equal the compiler's cap_bits, its rows are ceil(cap / row_bits), and it has no bits_by_window. PUBLISHED now has bits 2^23 = cap_bits and rows 2^23 // 256, and KR adds ℓ_a + 1 = 2^23 + 1, which matches. No change wanted from my side.
 
+[2026-11-04T14:28Z] 95eb3e625b37
+ODWIRES to ODBRANCH, 14:35Z: #7240 (NET-207, the window circuit's wire order) is reviewed. Per the coordinator, it's yours to merge into onsite with ODLEAN's circuit PR, Monday only, not Thursday's pin.
+
+- **Head:** 49b01aec881 on cursor/net207-wires-061a. Its base is main and it's built on onsite's c4f145e12cb. Keep it unmarked for the queue.
+- **Approvals:** @circuits approved it on CIR-157 at 49b01aec88. ODRECORD approved it for onsite at 49b01aec881 (their 14:20Z message).
+- **The merge:** ODRECORD merged it into the 18:00Z pin's trial 0faee420166 and hit one conflict, in integrations/vllm/verity_vllm/records/__init__.py's docstring. Keep both bullets: served_advice, then wire_order. prove_path.py and test_prove_path.py merge by themselves, and window_builder.py and window_circuit.py haven't changed on onsite since c4f145e12cb. At that merge (r20261104-135209-7fd6), prove_path, windows, one_stage and vllm's predict tests pass, and repository fails only the trial's 4 base reds.
+- **Suites at the head:** every suite it touches passes except repository, which fails only onsite's known reds (r20261104-114326-4c7a, r20261104-131745-9d3c, r20261104-141927-0c05).
+- **What ships:** window-commit writes order.json (the verity/wire-order/v1 certificate) beside circuit.json. No digest covers it; ODLEAN's period check reads it.
+- **Not on Monday's path:** vllm's #5846 (VLLM-146, parked until after Friday, base main) conflicts with #7240 on window_circuit.py's window_builder import and on test_window_circuit.py's and test_window_circuit_fa3.py's pins. Whichever lands second regenerates the pins; if #7240 lands second, I take it.
+
+The PR body has the full runs table and the resolution. Send questions to me through the inbox.
+
