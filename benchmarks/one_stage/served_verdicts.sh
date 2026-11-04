@@ -227,9 +227,10 @@
 # environment that sets one of its settings to another value is refused) holds the copy to its sums, runs at the served
 # node's tree (another only with FOLLOW_ANY_TREE=1, which its WINDOW-CIRCUIT line names, since it reads that tree's
 # window-circuit record), needs no row dir, vLLM venv, card or gpu-lease, runs the split certifier's chain and period
-# check after V3c's audit (their answer and case in its own $OUT/pieces/certifier), and after them REPROOF_CMD where
-# it is set (`bash -c CMD _ D K VW` in TREE, its log the serve dir's private/reproof.log and its last line the REPROOF
-# line: a command that copies the serve dir's re-proof inputs off the node and writes REPROOF_LISTING, and fails the
+# check after V3c's audit (their answer and case in its own $OUT/pieces/certifier), then removes the window's circuit
+# files, which nothing after reads but the composite a v2 case's (`drop_circuits`, its V3C-CIRCUITS line), then runs
+# REPROOF_CMD where it is set (`bash -c CMD _ D K VW` in TREE, its log the serve dir's private/reproof.log and its last
+# line the REPROOF line: a command that copies the serve dir's re-proof inputs off the node and writes REPROOF_LISTING, and fails the
 # follow-on where it fails; it runs whatever V3c's audit gave, a failed audit's inputs kept as well), composes the
 # final record (`record --node` the served node, so its composed_on names the
 # host it composed on, served_node false, and that it read a prover-side copy; its pieces the served node's, but for the
@@ -935,7 +936,7 @@ pp_coins() {  # sampled proofs' coins, V3c's audit's, as a COINS line names them
 }
 follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: the copy held to the served node's sums, then
   # step 6's audit, REPROOF_CMD, the final record, the composite and the onsite record, here rather than on the served node
-  local rc vrc rec comp=0 rp=0 TPY=$TREE/.venv/bin/python pieces=$DEFER_DIR/pieces p
+  local rc vrc rec comp=0 rp=0 dc=0 TPY=$TREE/.venv/bin/python pieces=$DEFER_DIR/pieces p
   (cd "$D" && sha256sum --check --strict --quiet private/deferred/inputs.sha256) > "$DEFER_DIR/check.log" 2>&1
   rc=$?
   say "FOLLOW-ON on $(hostname -s), $NODE_MEM_GB GB: $DEFERRED_WHAT, which the served node $SERVED_NODE deferred, from its serve" \
@@ -953,6 +954,7 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   say "COINS sampled proofs: $(pp_coins "$(hostname -s), the follow-on's node, where it runs V3c's audit"); the other" \
       "protocols' as the served node's COINS line names them"
   v3c_commit && v3c_proved; vrc=$?
+  drop_circuits || dc=1
   if [ -n "${REPROOF_CMD:-}" ]; then
     (umask 077; cd "$TREE" && bash -c "$REPROOF_CMD" _ "$D" "$K" "$VW" > "$D/private/reproof.log" 2>&1)
     rp=$?
@@ -971,9 +973,44 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
     --node "$SERVED_NODE" 2>&1 | publish_lines
   rec=${PIPESTATUS[0]}
   [ -z "${COMPOSITE-1}" ] || TPY=$TPY SERVED_NODE=$SERVED_NODE bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+  drop_circuits all || dc=1
   [ -z "${ONSITE:-}" ] || onsite_record
   echo "---- verdicts"; cat "$OUT/verdicts.txt"
-  [ "$vrc" = 0 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && [ "$rp" = 0 ]
+  [ "$vrc" = 0 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && [ "$rp" = 0 ] && [ "$dc" = 0 ]
+}
+# A follow-on's window's circuit files, each composed C-Flock circuit under V3c's dir (the audit's at each template's
+# first member and linked at each drawn member of it, the warm's compose cache, and where the period writes them its
+# copies under circuits/), recomposable from the public registration and the templates, the audit's window/summary.json
+# naming each by the SHA-512 its sessions were held to: removed once the period check has read them, before the re-proof
+# copy (whose inputs name the circuit by that pin alone) and the node's next window; with $1 all, also a file the audit's
+# v2 case names (window/case-v2.json's blobs), which the composite reads first.
+drop_circuits() {
+  local said
+  said=$("$SAY_PY" - "$VW" "${1:-}" <<'EOF'
+import json, os, sys
+from pathlib import Path
+vw, keep = Path(sys.argv[1]), set()
+if sys.argv[2] != "all" and (v2 := vw / "audit" / "window" / "case-v2.json").is_file():
+    keep = {os.path.realpath(b) for b in json.loads(v2.read_text())["blobs"]}
+gone = held = freed = 0
+for dp, _, fs in os.walk(vw):
+    for f in fs:
+        p = Path(dp, f)
+        if (f != "circuit.txt" and Path(dp) != vw / "circuits") or p.is_symlink() or not p.is_file():
+            continue
+        if os.path.realpath(p) in keep:
+            held += 1
+            continue
+        st = p.stat()
+        p.unlink()
+        gone, freed = gone + 1, freed + (st.st_size if st.st_nlink == 1 else 0)
+if gone or held:
+    print(f"{gone} file{'s' * (gone != 1)}, {freed} bytes freed" + (f"; {held} the v2 case names, after the composite" if held else ""))
+EOF
+)
+  local rc=$?
+  [ "$rc" = 0 ] || { say "V3C-CIRCUITS: not removed (exit $rc)"; return 1; }
+  [ -z "$said" ] || say "V3C-CIRCUITS removed, the window's circuit files, recomposable and named by their pins: $said"
 }
 onsite_record() {  # the onsite record ($OUT/record/onsite.json, the header's), which gates nothing
   "$TPY" benchmarks/one_stage/onsite_record.py "$OUT" --window-steps "$WINDOW_STEPS" --max-tokens "$MAX_TOKENS" \
