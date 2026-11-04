@@ -1526,6 +1526,10 @@
    "owner": "@training",
    "digest": "4f85d64a194b810cb5e0d4253454e15bcc8437807c363b74a688b7b9933a4d50"
   },
+  "Nci.Products.Standard.UnsplitCells": {
+   "owner": "@training",
+   "digest": "7c4355bcbe9d544699a54a1761224a02b5685c9eee088a7707ab0986d41cefe3"
+  },
   "Nci.Products.Standard.Wiring": {
    "owner": "@training",
    "digest": "ba5f96822f00db1e211abc917b926cc22d5bc87d53600f1adf3540a6e25c419d"
@@ -2265,10 +2269,6 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
-  },
-  "Nci.Products.Standard.UnsplitCells": {
-   "owner": "@training",
-   "digest": "7c4355bcbe9d544699a54a1761224a02b5685c9eee088a7707ab0986d41cefe3"
   }
  },
  "meaning": [
