@@ -230,8 +230,9 @@ theorem gammaSampledDrawTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype 
 theorem gammaSampledDrawTolThreshold_of_tol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop}
     {Wd : Layout → ℕ → Decl → ℚ} {γ : ℝ} {η : ℕ → ℕ → ℝ} (h : GγSampledDrawTol CM P TR D Wd γ η) :
-    GγSampledDrawTolThreshold CM P TR D Wd γ η := fun U hU T hT q hq A hA dec t εs hεs =>
-  h U hU T hT q hq A hA dec t _ _ (missBound_strict t εs hεs)
+    GγSampledDrawTolThreshold CM P TR D Wd γ η := by
+  intro U hU T hT q hq A hA dec t εs hεs
+  exact h U hU T hT q hq A hA dec t (fun x => if x = 0 then εs else 1) ((1 - εs) ^ t) (missBound_strict t εs hεs)
 
 /-- **The audit drawn as the run draws that accepts only checked tiles is the tolerant one's strict case**:
 `GγSampledDrawTolThreshold` gives `GγSampledDraw`, since a draw every sample of which lands on an accepted good tile or
