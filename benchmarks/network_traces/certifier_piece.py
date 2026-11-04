@@ -82,7 +82,9 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
 * **chain** and **period** are the piece split in two around V3c (`served_verdicts.sh`'s ``CERTIFIER_CHAIN_CMD`` and
   ``CERTIFIER_PERIOD_CMD``, each run as ``bash -c CMD _ D K DIR V3C``, e.g. ``CERTIFIER_CHAIN_CMD='python
   benchmarks/network_traces/certifier_piece.py chain "$@"'``), so the period's compute audit is V3c's audit of the
-  served window itself. **chain** runs steps 1 to 4 once V3c's window is committed, its scan on V3c's trees
+  served window itself, on the run's registration record, which remote with the network certifier's egress tie
+  requires of every compute audit (`Core.RemoteNetwork.egress`); the whole piece's are its scan's own registrations, so
+  ``served_verdicts.sh`` takes only the split at ``PRODUCT=remote-network``. **chain** runs steps 1 to 4 once V3c's window is committed, its scan on V3c's trees
   (``scan_zk.py --class CLASS --v3c V3C/window`` in CR_SCAN_ARGS: the window's committed scan state and slot entries):
   a reject is DIR/answer.json as the piece's, an accept DIR/`CHAINED`. **period** runs once V3c's audit wrote
   V3C/period.json: steps 1, 2 and 4 again on the chain's kept report (no chain runs), then step 5 on the rows case whose
