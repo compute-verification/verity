@@ -525,10 +525,8 @@ theorem blindRun_obs (z : ℕ) (i : Fin 1) : (blindRun () (oneSched, z)).2 i = [
   exact obs_eq_obs1 (fun ℓ σ => by
     fin_cases ℓ
     fin_cases σ
-    first
-      | rfl
-      | simp [blindRun, RowsFormat.record, blindRows, bucketFrames, laneFrames, oneSched, cellArr, wardenCode,
-          wardenLane, WardenSchedule.bucket, streamCell, rowOf]) rfl fun _ => rfl
+    simp [blindRows, bucketFrames, laneFrames, oneSched, cellArr, wardenCode, wardenLane, WardenSchedule.bucket,
+      streamCell]) rfl fun _ => rfl
 
 /-- **`frameTops` registers only what the circuit accepts at `goodReg`**: a sequence the network certifier registers
 at `frameTops` is accepted with the empty faulty set and the input `false`, whose negation `true` holds the frame. -/
