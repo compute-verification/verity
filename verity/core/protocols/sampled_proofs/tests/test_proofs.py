@@ -19,8 +19,9 @@ Without registered reads (``registered`` None), `verify` refuses a program with 
 ``registered``, which the prover writes, names them. The fixture's program binds ``cs`` as a run input, so that refusal
 doesn't apply to it.
 
-`printed` prints Lean's own `printT` vectors as Lean does, and `fits_why` and `draw_fits_why` refuse a length at their
-limit and not below it (fast tests; the sampled-proofs service's difftest holds them to Lean's `fits` piece)."""
+`printed` prints Lean's own `printT` vectors as Lean does, `fits_why` and `draw_fits_why` refuse a length at their
+limit and not below it, and `units_exactly` holds a public file's units to a registration's population in order (fast
+tests; the sampled-proofs service's difftest holds them to Lean's `fits` and `public_units` pieces)."""
 from __future__ import annotations
 
 import hashlib
@@ -167,6 +168,12 @@ def test_fits_why_names_the_first_field_past_the_limit_and_the_draw_its_own():
     assert PF.fits_why(PF.WORD, b"x", b"y", [("t", b"z")], b"p", {}, []) is None
     assert PF.draw_fits_why(7, {"a": 1}) == "the draw" and PF.draw_fits_why(8, {"a": 1}) is None
     assert PF.draw_fits_why(0, None) is None
+
+
+def test_units_exactly_holds_a_public_files_units_to_the_population_in_order():
+    assert PF.units_exactly([[0, 3]], [0, 1, 2]) and PF.units_exactly([[0, 0]], [])
+    assert not any(PF.units_exactly([[0, 3]], i) for i in ([0, 2, 1], [0, 1], [0, 1, 2, 3], [1, 2, 3], [0, 0, 1, 2]))
+    assert PF.units_exactly([[5, 7], [2, 4]], [2, 3, 5, 6]) and not PF.units_exactly([[5, 7], [2, 4]], [5, 6, 2, 3])
 
 
 @pytest.fixture(scope="module")

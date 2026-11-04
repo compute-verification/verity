@@ -276,6 +276,13 @@ def proved_units(public: Path, session: Path) -> tuple[int, ...]:
     return tuple(sorted(indices[i] for i in drawn))
 
 
+def units_exactly(units: Sequence[Sequence[int]], indices: Sequence[int]) -> bool:
+    """Whether a public file's ``units.indices`` are exactly the units of the ``[lo, hi)`` ranges `units`, ascending, so
+    slot ``i`` of its table is the ``i``-th of them (`PublicUnits.exactly`): ``[[0, n]]`` is a registration's population
+    in order, which v2 holds the parameters' public file to (`OneStageZk.unitsHeld`)."""
+    return list(indices) == [u for lo, hi in sorted(map(tuple, units)) for u in range(lo, hi)]
+
+
 def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
            registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
     """Each of `proof`'s sessions verified by C-Flock's Lean verifier against the verifier's own `program` (its
@@ -416,7 +423,8 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
     parameters naming none. The evidence names one session (v2 refuses none or several), whose record must be on the one
     coin tree that release log shows the challenger sampled and opened (`challenger.sessions_tree_reason`), the
     program's proof blocks must be `record`'s population in order (`partition.in_order`), and the public file's header
-    must be `record`'s (`registration.matches_public`), before the session is verified."""
+    must be `record`'s (`registration.matches_public`), its ``units.indices`` exactly the population's units in order
+    (`units_exactly` at ``[[0, population]]``), before the session is verified."""
     pr, blobs = evidence_v2(proof, evidence["sessions"])
     p2 = {**params, "proofs": {"circuit": circuit_sha512, "public": public_sha512, "registered": registered}}
     e2 = {k: v for k, v in evidence.items() if k != "verdicts"} | {"proofs": pr}
@@ -434,5 +442,5 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
 
 __all__ = ["EXE", "FITS", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "WORD", "Finding",
            "LeanError", "Proof", "check_v2", "draw_fits_why", "evidence_v2", "executable", "file_sha512", "fits_why",
-           "ks_form_why", "printed", "printed_size", "proved_units", "reads_registered", "v2_executable", "verdicts_v2",
-           "verify"]
+           "ks_form_why", "printed", "printed_size", "proved_units", "reads_registered", "units_exactly",
+           "v2_executable", "verdicts_v2", "verify"]

@@ -11,6 +11,7 @@ import SampledProofs.PyJson
 import SampledProofs.Record
 import SampledProofs.OneStage
 import SampledProofs.OneStageZk
+import SampledProofs.PublicUnits
 import SampledProofs.Rate
 import SampledProofs.HiddenDraw
 import SampledProofs.Select

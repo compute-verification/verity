@@ -23,6 +23,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`Slots.select`);
 * `fits`: what of v2's inputs and of a session's draw a session's statement would hold at a given number of bytes or
   more (`OneStageZk.fitsWhy`, `OneStageZk.drawFitsWhy`), which v2 refuses at `2^64`;
+* `public_units`: whether a public file's `units.indices` are exactly given units, ascending (`PublicUnits.exactly`),
+  which v2 holds the parameters' public file to at the registration's population (`OneStageZk.unitsHeld`);
 * `bound`: the exact bounds on wrong units at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
@@ -83,6 +85,7 @@ import SampledProofs.HiddenDraw
 import SampledProofs.PartitionRef
 import SampledProofs.WiresDrawn
 import SampledProofs.OneStageZk
+import SampledProofs.PublicUnits
 
 namespace SampledProofs.Pieces
 
@@ -604,7 +607,7 @@ def table : List (String × (Json → V Json)) :=
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
    ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
    ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check),
-   ("fits", fits),
+   ("fits", fits), ("public_units", PublicUnits.piece),
    ("challenger_commitment", Challenger.commitmentPiece),
    ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),
    ("challenger_order", Challenger.orderPiece), ("challenger_key", Challenger.keyPiece),

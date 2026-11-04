@@ -26,6 +26,8 @@ draw, `Units.unitsAt` reads them (`unitsAt_of_checkBlobsAt`).
 The population `n` is the public file's (`population_of_checkBlobsAt`): v2 holds the registration to the public file
 (`publicHeld`), whose last check is the registration's `population` against the header's `instances`
 (`population_of_matchesPublic`), and the file's load keeps `instances` as its count of instances (`instances_of_loadPublic`).
+Its units are that population's in order (`units_of_checkBlobsAt`): v2 holds the `units.indices` of the header the load
+keeps to `0, …, n − 1`, ascending (`unitsHeld`).
 -/
 
 open Lean (Json)
@@ -267,6 +269,7 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
   have hsz : e.sessions.size = 1 := by
     unfold OneStageZk.oneSession at h1
     by_contra hne
@@ -453,5 +456,41 @@ theorem population_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitm
     try rfl
   rw [hi, eq_of_nat? hn] at hj
   rw [hn, eq_of_jeq hj]
+
+/-- **v2 holds the public file's units to the record's population, in order.** Where v2 accepts at the coins `ξ`, at
+the parameters' public file on the blobs (`pubB`) and any load of it (`P`), the record names a population `n` and the
+`units.indices` of the header the load keeps are exactly `0, …, n − 1`, ascending (`PublicUnits.exactly #[(0, n)]`). -/
+theorem units_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
+    {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
+    (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) {pubB : ByteArray}
+    (hpB : bs.get p.own.pub "public file" = .ok pubB) {tags : Flock.Tags} {cc : Flock.Circuit}
+    {pi : Flock.HmIn.Ports} {P : Flock.Public} (hl : Flock.HmIn.loadPublic tags cc pi pubB = .ok P) :
+    ∃ n is, nat? (getD c.record "population") = some n ∧ PublicUnits.indicesOf P.header = .ok is ∧
+      PublicUnits.exactly #[(0, n)] is = true := by
+  unfold OneStageZk.checkBlobsAt at h
+  dsimp only at h
+  split at h
+  case h_1 => cases h
+  rename_i R hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨pB, hpB', hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨_, hu, -⟩ := bind_ok hR
+  obtain rfl : pB = pubB := Except.ok.inj (hpB'.symm.trans hpB)
+  unfold OneStageZk.unitsHeld at hu
+  obtain ⟨hd, hhd, hu⟩ := bind_ok hu
+  rw [Units.headerOf_loadPublic hl] at hhd
+  obtain rfl := Except.ok.inj hhd
+  obtain ⟨is, his, hu⟩ := bind_ok hu
+  try dsimp only at hu
+  split at hu
+  · cases hu
+  · rename_i n hn
+    split at hu
+    · exact ⟨n, is, hn, his, by assumption⟩
+    · cases hu
 
 end Properties.SampledProofs.Credited

@@ -288,6 +288,7 @@ theorem verdict_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt 
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
   have hsz : ev.sessions.size = 1 := by
     unfold _root_.SampledProofs.OneStageZk.oneSession at h1
     by_contra hne
