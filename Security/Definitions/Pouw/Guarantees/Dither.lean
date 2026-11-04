@@ -8,7 +8,7 @@ import Definitions.Pouw.Assumptions.ShaRealize
 The ACCEL program's headline, on the accelerator model of `Definitions.Pouw.Dither`.
 
 * `WorkSound`: under the accelerator model's device premises (G1, G2, G3, P1, P2) and exactly the program's trust
-  base, each a named premise (SAK(matmul), SHA-512's speed, the price of an exchanged bit, the proof service's
+  base, each a named premise (SAK(matmul), SHA-512's speed, the price of an exchanged bit, the proof system's
   soundness, the network certifier's count, and commit-and-open's extraction), for every prover that runs the period
   one sampling block at a time, each in its commit, challenge and response phases, its operands committed before its
   coins (`Prover`),

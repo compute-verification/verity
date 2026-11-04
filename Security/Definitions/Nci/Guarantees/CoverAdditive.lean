@@ -35,7 +35,7 @@ over training's (`1` for equal formats, `0.42` for FP8 serving with BF16 trainin
 training); counting the backward products into activations doubles `α₀`. The count is stated multiplied out, so it says
 something when `k = 0`; in the slowdown form a division by zero is zero. -/
 def CoveringBoundAdditive : Prop :=
-  ∀ (d : Declaration) (B : Nci.Covering.MulBlocks d) (s k D : ℕ) (cw ca : ℝ) (n : ℕ)
+  ∀ (d : RegisteredCircuit) (B : Nci.Covering.MulBlocks d) (s k D : ℕ) (cw ca : ℝ) (n : ℕ)
     (I : Fin n → Nci.Covering.Subcircuit d.D),
     (k : ℝ) < cw * D → 0 < ca → Assumptions.ConditionalParameterHardAt d B s cw → Nci.Covering.Covers d s k I →
       ((Nci.Assumptions.chainedBlocksAt d B D ca).card : ℝ) ≤ n * (k / cw * (k / ca) / 4 + k) ∧

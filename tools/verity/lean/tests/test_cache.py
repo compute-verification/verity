@@ -610,14 +610,16 @@ def test_prune_keeps_the_newest_commits_and_what_they_name(s3, tmp_path):
 # ---------------------------------------------------------------- integration never reads it
 
 def test_the_audit_runs_lake_with_the_cache_off():
+    """Lake finds a module in a cache by its 64-bit input hash alone, so no Lake the audit runs reads the node's artifact
+    cache: with `--artifacts`, only the build steps read a directory staged for them (`check.stage_build`)."""
     spec = importlib.util.spec_from_file_location("lean_audit_env", HERE.parent / "check.py")
     A = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(A)
     e = A.lake_env()
     assert (e["LAKE_ARTIFACT_CACHE"], e["LEAN_CACHE"]) == ("false", "off")
-    A.ARTIFACTS = Path("/node/lean-artifacts")                       # check's audit: the node's own, read and never written
+    A.ARTIFACTS = Path("/node/lean-artifacts")
     e = A.lake_env()
-    assert "LAKE_ARTIFACT_CACHE" not in e and (e["LAKE_CACHE_DIR"], e["LEAN_CACHE"]) == ("/node/lean-artifacts", "off")
+    assert (e["LAKE_ARTIFACT_CACHE"], e["LEAN_CACHE"]) == ("false", "off") and e.get("LAKE_CACHE_DIR") != str(A.ARTIFACTS)
 
 
 # ---------------------------------------------------------------- through Lake
@@ -646,18 +648,34 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
         return subprocess.run(LC.in_sandbox(pkg, ["lake", "build"]), cwd=pkg, check=True, capture_output=True,
                               env=LC.lake_env())
     build()
+    mods = ["Control", "Control.Assumptions", "Control.Defs", "Control.Thms"]
+
+    def staged(at: Path) -> dict:
+        """`lake build` as the audit runs it with the node's cache at ``at``, reading a cache staged for it (Lake restores
+        a module only from there); what was staged."""
+        monkeypatch.setattr(LC, "ARTIFACTS", at)
+        cache = at / LA.MK.STAGE / "test"
+        got, said = LC.stage_build(LA.MK, pkg, ["Control"], cache)
+        assert said == {"modules": len(got), "keyed": len(mods)}
+        subprocess.run(LC.in_sandbox(pkg, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"]),
+                       cwd=pkg, check=True, capture_output=True, env=LC.lake_env())
+        assert LA.MK.misrestored(got, pkg) == []
+        shutil.rmtree(cache)
+        return got
+
     arts = LA.LakeArtifacts(store)
-    assert arts.put({pkg}) > 0
+    assert arts.put({pkg: {"sandbox": True}}) == len(mods)
     lib = pkg / ".lake" / "build" / "lib" / "lean"
     was = {f: f.read_bytes() for f in lib.rglob("*.olean")}
     thms = pkg / "Control" / "Thms.lean"
     text = thms.read_text()
     thms.write_text(text + "\ntheorem another_tree : True := trivial\n")
-    build()                                                           # without the cache: compiled
+    got = staged(store)                                               # Thms and Control have other keys: compiled
+    assert sorted(got.values()) == ["Control.Assumptions", "Control.Defs"]
     assert (lib / "Control" / "Thms.olean").read_bytes() != was[lib / "Control" / "Thms.olean"]
+    assert not json.loads((lib / "Control" / "Thms.trace").read_text()).get("synthetic")
     thms.write_text(text)
-    monkeypatch.setattr(LC, "ARTIFACTS", store)
-    build()
+    assert sorted(staged(store).values()) == mods
     for f, b in was.items():
         assert f.read_bytes() == b
     trace = json.loads((lib / "Control" / "Thms.trace").read_text())
@@ -668,8 +686,7 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
     h = hashlib.sha256(dest.read_bytes()).hexdigest()
     assert LA.LakeArtifacts(other).take({LA.SHARED + h: dest.as_uri()}, lambda s: None) == len(arts.added)
     shutil.rmtree(pkg / ".lake")
-    monkeypatch.setattr(LC, "ARTIFACTS", other)
-    build()
+    assert sorted(staged(other).values()) == mods
     for f, b in was.items():
         assert f.read_bytes() == b
     assert all(json.loads(t.read_text())["synthetic"] for t in lib.rglob("*.trace"))

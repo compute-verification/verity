@@ -85,7 +85,10 @@ class CircuitType:
                 "outputs": [form(f) for f in self.outputs]}
 
     def canonical(self) -> bytes:
-        return canonical_json(self.content())
+        # JSON writes a tuple as the list `content` spells it as, so the fields go in as they are: the same bytes, without a
+        # list per form of a flat type's millions of items
+        return canonical_json({"format": FORMAT, "label": self.label, "in": self.ins, "out": self.outs, "calls": self.calls,
+                               "tables": self.tables, "items": self.items, "outputs": self.outputs})
 
     def digest(self) -> str:
         return hashlib.sha512(FORMAT.encode() + b"\0" + self.canonical()).hexdigest()
@@ -142,7 +145,8 @@ def validate(t: CircuitType, callee: Callable[[str], CircuitType]) -> None:
 
     def check_form(f, n):
         ws, c = f
-        if c not in (0, 1) or list(ws) != sorted(set(ws)) or any(not 0 <= w < n for w in ws):
+        # ascending, so in range when its first and last wires are
+        if c not in (0, 1) or list(ws) != sorted(set(ws)) or (ws and not (0 <= ws[0] and ws[-1] < n)):
             bad(f"a form is not [ascending distinct earlier wires, 0 or 1]: {[list(ws), c]}")
 
     n, first_call, first_table, spans = t.in_bits, [], [], []
@@ -184,9 +188,10 @@ def validate(t: CircuitType, callee: Callable[[str], CircuitType]) -> None:
         check_form(f, n)
     used = {w for f in t.outputs for w in f[0]}
     for lo, width, it in reversed(spans):
-        if not any(w in used for w in range(lo, lo + width)):
+        if used.isdisjoint(range(lo, lo + width)):
             bad(f"a dead item at wire {lo}: nothing it makes is read")
-        used.update(w for f in _item_forms(it) for w in f[0])
+        for f in _item_forms(it):
+            used.update(f[0])
 
 
 def evaluate(types: Mapping[str, CircuitType], digest: str, inputs: Sequence[int], T: int,
@@ -260,7 +265,7 @@ def from_gf2(C, inputs: Sequence[L], outputs: Sequence[L], ins: Sequence[tuple[i
             raise InvalidType(f"a {kind} bit: types have no hints")
 
     def form(f):
-        return (tuple(sorted(wire[v] for v in f.s)), f.c)
+        return (tuple(sorted(map(wire.__getitem__, f.s))), f.c)
 
     n, items, table_list, done = len(inputs), [], [], set()
     for v in sorted(live):
