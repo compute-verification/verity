@@ -169,16 +169,16 @@ def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypat
     (`PC.UNSTATES`): a `SCAN_STATE` that skips or alters one of the scan's transitions (the scan's state entry, or the
     audit's, at another root or domain), no state entry on either side or the scan's under another name, the state of
     an audit the scan's `prog` isn't wired to, a root that is no string, and a second state entry at another root on
-    either side; and a mirror that skips the tie accepts what Lean refuses."""
-    unstate = PC.UNSTATES
-    for u in unstate:
+    either side; and a mirror that skips the tie accepts what Lean refuses, on the audit's side (the scan's own state
+    entry broken also leaves its row 0's opening under no root it states, which the mirror then refuses)."""
+    for u in PC.UNSTATES:
         monkeypatch.setattr(PC, "UNSTATES", (u,))
         for n in range(3):
             case = build("rows-state-untied", n, small=n % 2 == 0)
             assert PC.UNSTATED in reference(case)["reason"], (u, n, reference(case))
             verdict, out = D.replay(PORT, case, server)
             assert verdict == REJECT and PC.UNSTATED in json.loads(out)["reason"], (u, n, out)
-    monkeypatch.setattr(PC, "UNSTATES", unstate)
+    monkeypatch.setattr(PC, "UNSTATES", ("audit", "audit-root", "audit-extra"))
     monkeypatch.setattr(PC, "_state_tied", lambda p, audits, reg: True)
     for n in range(2):
         refused_by_lean_alone(build("rows-state-untied", n, small=True), server, PC.UNSTATED)
