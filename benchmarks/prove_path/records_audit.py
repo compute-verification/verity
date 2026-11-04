@@ -89,8 +89,9 @@ registration (``--window``'s ``registration.json``), the population Program's de
 terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's own
 values pinned, its untied ones free) but for the scan's state (`TIED`): the period refuses an audit whose state isn't
 the scan's state tree (``stateTied``), so its reads count registered. Refused where the window commits no scan state.
-``circuits`` names, for each template in the order the population's units take them, the C-Flock circuit file the auditor
-composed from its public Definition, by its SHA-512, the pin every session of the template was held to
+``circuits`` names, for each root template node of the Program in its root body's order (`root_templates`, the period
+check's ``templateNodes``: a template the root calls twice is named twice), the C-Flock circuit file the auditor composed
+from its template's public Definition, by its SHA-512, the pin every session of the template was held to
 (`period_circuits`): no registration field binds that file, so the period carries it beside the Program, the auditor's
 input as the Program is. ``--circuits DIR`` gets each file as ``<sha512>.txt``. Refused where a template's file is missing
 or hashes to another than its pin.
@@ -680,12 +681,22 @@ def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[
 TIED = SCAN_STATE
 
 
-def period_circuits(audit: Path) -> list[tuple[str, str, Path]]:
-    """Each template of the audit's Program with the C-Flock circuit file the auditor composed for it from its public
-    Definition (a5's ``window/m<k>/circuit.txt``, k the template's first member) and that file's SHA-512, the pin a5 held
-    every session of the template's members to (its summary's ``circuits.<template>.pin``): ``(template, sha512, file)``
-    in the order the population's units take the templates. ValueError where the audit lists no members, a template has no
-    composed file, or its file hashes to another than its pin."""
+def root_templates(program: Mapping[str, Any]) -> list[str]:
+    """The Program descriptor's root template nodes in its root body's order, each by its callee's Definition key: the
+    nodes that call a composite, so a template the root calls twice is listed twice (the period check's
+    ``templateNodes``)."""
+    defs, callees = program["definitions"], program.get("callees")
+    key = (lambda f: callees[f]) if callees is not None else (lambda f: f)
+    return [k for x in defs[program["root"]]["body"]["nodes"] if defs[k := key(x["fn"])]["form"] != "primitive"]
+
+
+def period_circuits(audit: Path, program: Mapping[str, Any]) -> list[tuple[str, str, Path]]:
+    """For each root template node of the audit's Program descriptor `program` (`root_templates`, in its root body's
+    order, a template twice where the root calls it twice), its template with the C-Flock circuit file the auditor
+    composed for it from its public Definition (a5's ``window/m<k>/circuit.txt``, k the template's first member) and that
+    file's SHA-512, the pin a5 held every session of the template's members to (its summary's
+    ``circuits.<template>.pin``): ``(template, sha512, file)``. ValueError where the audit lists no members, a root
+    template has no composed file, or a file hashes to another than its pin."""
     try:
         s = json.loads((audit / "window" / "summary.json").read_text())
     except OSError:
@@ -695,23 +706,27 @@ def period_circuits(audit: Path) -> list[tuple[str, str, Path]]:
         first.setdefault(m["template"], m["k"])
     if not first:
         raise ValueError(f"the audit under {audit} lists no members, so no circuit of its Program's templates")
-    out = []
-    for t, k in first.items():
-        f, pin = audit / "window" / f"m{k}" / "circuit.txt", ((s.get("circuits") or {}).get(t) or {}).get("pin")
-        if pin is None or not f.is_file():
+    composed: dict[str, tuple[str, Path]] = {}
+    for t in root_templates(program):
+        if t in composed:
+            continue
+        k = first.get(t)
+        f = audit / "window" / f"m{k}" / "circuit.txt"
+        pin = ((s.get("circuits") or {}).get(t) or {}).get("pin")
+        if k is None or pin is None or not f.is_file():
             raise ValueError(f"the audit composed no circuit for template {t}")
         with open(f, "rb") as h:
             if hashlib.file_digest(h, "sha512").hexdigest() != pin:
                 raise ValueError(f"{f} isn't the circuit template {t}'s sessions were held to: it hashes to another than "
                                  "its pin")
-        out.append((t, pin, f))
-    return out
+        composed[t] = (pin, f)
+    return [(t, *composed[t]) for t in root_templates(program)]
 
 
 def period(window: Path, audit: Path, pins: Mapping[str, str], circuits: Path | None = None) -> dict[str, Any]:
     """The window's audit as one compute audit of the network certifier's period (module docstring's ``period``):
-    ``{answer, circuits, free, program, registration, steps}``, ``circuits`` each template's ``{template, sha512}``
-    (`period_circuits`), each file copied into ``circuits`` as ``<sha512>.txt`` where given. ``pins`` are the verifier's
+    ``{answer, circuits, free, program, registration, steps}``, ``circuits`` each root template node's ``{template,
+    sha512}`` (`period_circuits`), each file copied into ``circuits`` as ``<sha512>.txt`` where given. ``pins`` are the verifier's
     (`pins_of`). ValueError where the circuit isn't the one the registration binds, the window commits no `TIED` value its
     circuit reads, the audit wrote no Program or another than the registration names, a template's circuit file is missing
     or not its pin, or its answer commits to another registration; RuntimeError where the audit opened the advice
@@ -734,7 +749,7 @@ def period(window: Path, audit: Path, pins: Mapping[str, str], circuits: Path | 
         raise ValueError(f"the audit under {audit} wrote no Program: it stopped before staging its members") from None
     if program_digest(program) != rec.get("program"):
         raise ValueError(f"the audit's Program ({program_digest(program)[:16]}…) isn't the one the registration names")
-    composed = period_circuits(audit)
+    composed = period_circuits(audit, program)
     answer = SI.answer(audit, rec)
     if answer["commitment"] != R.digest(rec):
         raise ValueError("the audit's answer commits to another registration than the window's")
