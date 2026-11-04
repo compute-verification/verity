@@ -40,14 +40,18 @@ def OpensCommitted (p : Pass) (tid : ℕ) (o : TileOpening) (U : Workload) (u : 
     ∀ i ∈ rows, ∀ j ∈ cols, c.ticket i j < 2 ^ 32 ∧ c.useful i j < 2 ^ 32
 
 /-- **(d) A passed tile's words are good**: a tile of pass `p` that is audit tile `g` of `U`, under the semantics' salt
-and weight root, whose openings are its unit's commitment `c`, and that `checkTile` passes on its weight's noise, has
-every word of its credited rows at the reference values, or SHA-512 collides. -/
+and weight root, whose weight rows all pass the rules (`TileGood`'s second conjunct), whose openings are its unit's
+commitment `c`, and that `checkTile` passes on its weight's noise, has every word of its credited rows at the reference
+values, or SHA-512 collides. -/
 def TilePassGivesTheWords : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (H : Q → R) (s : S) (p : Pass) (tid : ℕ)
     (o : TileOpening) (U : Workload) (g : ℕ) (c : Commit),
     TileOf p tid U g → bytesNat p.salt = saltOf s →
     bytesNat ((p.weightRoots.lookup (U.layout.wid ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) =
       rootOf (U.layout.wid ((auditTiling 64 64 U.layout).unit g)) →
+    (∀ j ∈ (auditTiling 64 64 U.layout).cols g,
+      (protocolH3 saltOf rootOf ρ : Protocol Q R S).weightOK (U.layout.shape ((auditTiling 64 64 U.layout).unit g))
+        (U.weight (U.layout.wid ((auditTiling 64 64 U.layout).unit g))) j) →
     OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c →
     checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = none →
       TileWordsGood (protocolH3 saltOf rootOf ρ) (tilesH3 saltOf rootOf ρ) U H s g c ∨

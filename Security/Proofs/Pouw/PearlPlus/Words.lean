@@ -52,9 +52,9 @@ def StatsAreTheRow : Prop :=
         βw = RowCircuit.beta8 RowCircuit.coreOps (RowCircuit.encRow k (rowVals k x)) k
 
 /-- **(b) A tile's words are the semantics'**: for a unit `u` of `U` with salt and weight root the semantics' bytes, a
-tile's rows and columns in the unit, opened rows that are the commitment's activation rows and the weight's rows, and
-the check's noise, operands and checked words values (no rejection): each word of a row that passes the rules has the
-reference ticket and useful values. -/
+tile's rows and columns in the unit, every weight row of its columns passing the rules (as `TileGood` asks), opened rows
+that are the commitment's activation rows and the weight's rows, and the check's noise, operands and checked words
+values (no rejection): each word of a row that passes the rules has the reference ticket and useful values. -/
 def WordsAreTheSemantics : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
     (act : Codes) (salt rootB : ByteArray) (wn : Words.FixedNoise) (rows cols : List ℕ) (ops : Words.Ops)
@@ -63,6 +63,8 @@ def WordsAreTheSemantics : Prop :=
     (∀ i ∈ rows, i < (U.layout.shape u).m) → (∀ j ∈ cols, j < (U.layout.shape u).n) →
     (∀ i ∈ rows, ∀ l < (U.layout.shape u).k, act i l < 2 ^ 32) →
     (∀ j ∈ cols, ∀ l < (U.layout.shape u).k, U.weight (U.layout.wid u) j l < 2 ^ 32) →
+    (∀ j ∈ cols, (semH3 saltOf rootOf : PearlCSem Q R S).RowOK (U.layout.shape u).n (U.layout.shape u).k
+      (U.weight (U.layout.wid u)) j) →
     Words.fixedNoise salt rootB (U.layout.shape u).k = .ok wn →
     Words.encode salt rootB wn u (U.layout.shape u).k rows (rows.map (rowBytesOf act (U.layout.shape u).k)) cols
       (cols.map (rowBytesOf (U.weight (U.layout.wid u)) (U.layout.shape u).k)) = .ok ops →
