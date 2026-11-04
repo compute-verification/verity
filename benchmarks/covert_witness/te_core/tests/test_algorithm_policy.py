@@ -543,31 +543,25 @@ def test_the_kinds_cell_names_a_best_subset_only_where_a_row_carries_one():
         "dropped_macs_share": pytest.approx(sub["dropped_macs_share"], rel=10 ** -AP.DIGITS)}
 
 
-def test_a_products_term_is_measured_where_the_old_figure_is_void_and_voided_finds_no_void_0():
+def test_a_products_term_is_measured_where_the_old_figure_is_void():
     """te_core 4.10 left the fresh-products term unmeasured where io_bound's proved Λ is void (K = 64 at the
     console's k); from 4.13 the term is the theorem of record's, which takes no whole-making, so it is measured
-    there, the same as where Λ is proved (K = 512), and only the sensitivity fresh_old is None. `voided` finds no
-    void 0 in either, nor in an unmeasured term or reading B's ρ; a cell marked void names no premises."""
+    there, the same as where Λ is proved (K = 512), and only the sensitivity fresh_old is None."""
     m = info()["starts"][0].rows[0]["measured"]
-    void, whole = made_whole(m, 64), made_whole(m, 512)
-    one, kept = formalism.published(void, reading="A"), formalism.published(whole, reading="A")
+    short, whole = made_whole(m, 64), made_whole(m, 512)
+    one, kept = formalism.published(short, reading="A"), formalism.published(whole, reading="A")
     assert one["terms"]["fresh_products"] == pytest.approx(kept["terms"]["fresh_products"], rel=1e-12)
     assert kept["terms"]["fresh_products"] > 0 and one["void"] is None
     assert one["sensitivities"]["fresh_old"] is None and kept["sensitivities"]["fresh_old"] > 0
-    for x in (void, whole, m):
-        assert not AP.voided(x, formalism.published(x, reading="A")) and not AP.voided(x, formalism.published(x))
-    assert not AP.voided(void, one | {"binding_kind": "fit"})
-    got = json.loads(AP.kinds(one, void=True))
-    assert got["void"] == AP.VOIDED and "rests_on" not in got
-    assert got["bound"]["fresh_products"] == pytest.approx(one["terms"]["fresh_products"], rel=10 ** -AP.DIGITS)
+    got = json.loads(AP.kinds(one))
+    assert "void" not in got and got["rests_on"] == {"fresh_products": formalism.RESTS_ON_CELL["fresh_products"]}
 
 
-def test_a_void_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_never_the_least_s(tmp_path, monkeypatch):
-    """A row whose ρ reads a void fresh-products term has basis_default `void` whatever it publishes: no decade holds
-    it, the cut picks the void rows among themselves alone, and the figure draws each with a cross, never the least S.
-    The adapters' traces (lora's and the dominated ones') make operands whole from K = 64 chains, and a stand-in
-    `published` measures their token kind at 0.9, so ρ is 1, binding none, which would put lora's at the least S at
-    gain 1.1."""
+def test_a_products_term_at_its_floor_is_a_result_and_rests_on_names_the_traced_op_graph(monkeypatch):
+    """No row is void: a products term of 0 is the theorem of record's floor, so the row reads max(1, ρ_HE) = 1,
+    binding none, in the first decade, and its rests_on opens with `TRACED`, as a binding products term's does; a row
+    the products term doesn't price keeps its own. The adapters' traces (lora's and the dominated ones') make operands
+    whole from K = 64 chains, and a stand-in `published` floors their term."""
     real = formalism.published
 
     def published(m, c=None, k=None, reading=None):
@@ -575,51 +569,26 @@ def test_a_void_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_never_
         if m.products is None:
             return one
         a = real(m, c, k, "A")
-        return a | {"rho": 1.0, "binding_kind": "none", "rests_on": formalism.RESTS_ON_CELL["none"],
-                    "terms": a["terms"] | {"token": 0.9, "decoding": 0.9}}
+        return a | {"rho": 1.0, "binding_kind": "none", "rests_on": formalism.RESTS_ON_CELL["none"], "partial": False,
+                    "why": None, "terms": a["terms"] | {"fresh_products": 0.0, "token": 0.9, "decoding": 0.9}}
 
     monkeypatch.setattr(formalism, "published", published)
-    # te_core 4.10 measures no void 0 (the term is unmeasured), so the void rows are stood in
-    monkeypatch.setattr(AP, "voided", lambda m, one: m.delta_bits == 8e6)
     got = info(runs=RUNS + DOMINATED)
     for st in got["starts"]:
         for r in st.rows:
             if r["measured"].delta_bits == 8e6:
                 r["measured"] = made_whole(r["measured"], 64)
-    p = AP.build(got, "test")
-    ds = plots.frame(p)
-    void = [d["record"].startswith("lora") for d in ds]
-    assert any(void) and all((d["basis_default"], d["rho_default"], d["binding_kind"]) == (AP.VOID, 1.0, "none")
-                             and json.loads(d["kinds"])["void"] == AP.VOIDED for d, x in zip(ds, void) if x)
-    assert all(d["basis_default"] != AP.VOID for d, x in zip(ds, void) if not x)
-    cov = AP.coverage(p)
-    assert sum(c["rows"] for c in cov) == len(ds) - sum(void) == len(ds) - AP.unmeasured_rows(p, AP.VOID)
-    assert not any((c.get("record") or "").startswith("lora") for c in cov)
-    rest = p | {"rows": [r for r, x in zip(p["rows"], void) if not x]}
-    rec, g = AP.COLUMNS.index("record"), AP.COLUMNS.index("gain_target")
-    for tier in AP.TIERS:
-        kept, alone = ({(r[rec], r[g]) for r in AP.kept(q["rows"], tier, {c["row"] for c in AP.coverage(q)
-                                                                            if c["row"] is not None})} for q in (p, rest))
-        assert {x for x in kept if not x[0].startswith("lora")} == alone
-        assert (("lora@1", 1.1) in kept) == (tier != "coverage")
-    fits = {"v3": None, "v2.3-pilot": LAW}
-    assert ("2 rows read a void fresh-products term (basis_default void: 0 from a void Lambda, no result, so rho is "
-            "only a lower bound), in no decade.") in AP.coverage_md(cov, fits, "T", void=2)
-    assert AP.board_line(cov, fits, "T", None, void=1).endswith(" 1 row reads a void fresh-products term (0, no "
-                                                                "result), in no decade.")
-    assert "(1, 1)" not in AP.summary(p, got)
-    calls, real_plot = [], AP.plt.Axes.plot
-
-    def plot(ax, *a, **k):
-        calls.append((a[:2], k))
-        return real_plot(ax, *a, **k)
-
-    monkeypatch.setattr(AP.plt.Axes, "plot", plot)
-    AP.figure(p, tmp_path)
-    marked = {(d["p"], d["rho_default"]) for d, x in zip(ds, void) if x and d["p"] is not None}
-    assert marked and marked <= {xy for xy, k in calls if k.get("marker") == AP.LOWER[AP.VOID]}
-    rings = {xy for xy, k in calls if k.get("mec") == "red"}
-    assert rings and not rings & {(d["p"], d["rho_default"]) for d, x in zip(ds, void) if x and d["reached"] == "yes"}
+    ds = plots.frame(AP.build(got, "test"))
+    floor = [d for d in ds if d["record"].startswith("lora")]
+    assert floor and all((d["basis_default"], d["rho_default"], AP.decade(d["rho_default"], d["basis_default"]))
+                         == ("none", 1.0, 0) and "void" not in json.loads(d["kinds"]) for d in floor)
+    assert all(d["rests_on"] == f"{AP.TRACED}; {formalism.RESTS_ON_CELL['none']}" for d in floor)
+    assert all(not (d["rests_on"] or "").startswith(AP.TRACED) for d in ds
+               if d["binding_kind"] not in ("fresh_products", "none"))
+    he = {"binding_kind": "fresh_products", "rests_on": "theorem of record", "products_rests_on": "theorem of record"}
+    assert AP.rests_on(he) == f"{AP.TRACED}; theorem of record"
+    assert AP.rests_on(he | {"binding_kind": "token", "rests_on": "assumption A1"}) == "assumption A1"
+    assert AP.rests_on(he | {"binding_kind": "none", "products_rests_on": None}) == "theorem of record"
 
 
 def test_the_output_leads_with_the_coverage_table(tmp_path, monkeypatch, capsys):
@@ -733,30 +702,28 @@ def served_as(p: dict, version: str | None, rows: list | None = None, source: st
     return p | {"rows": [r[:te] + [version] + r[te + 1:] for r in rows]}
 
 
-def test_a_version_switch_never_empties_a_populated_panel():
-    """A data's served rows stay where they are at a newer te_core, or at an older one with a run there this build has
-    no row for (coordinator 07:58Z); the same te_core's are replaced, and an older one's where this build has every
-    run, though its coverage fills fewer cells (every rho 1 here; coordinator 11:51Z).
-    A data with no served rows takes this build's. A panel from before the te_core cell is at the version its source
-    names."""
+def test_a_newer_te_cores_rows_stay_and_an_older_ones_are_always_replaced():
+    """A data's served rows stay where they are at a newer te_core; the same te_core's are replaced, and every older
+    one's, even where this build has no row for a run they have or fills fewer cells (every rho 1 here), since no
+    number is compared with one an older bound priced. A data with no served rows takes this build's. A panel from
+    before the te_core cell is at the version its source names."""
     p = AP.build(info(runs=RUNS + DOMINATED), "test")
     mine = tuple(map(int, AP.VERSION.split(".")))
     newer, older = f"{mine[0] + 1}.0", f"{mine[0] - 1}.9"
     one = [r for r in p["rows"] if r[AP.COLUMNS.index("record")] == "never@1"][:1]
-    assert one and AP.runs(p, "v2.3-pilot") > AP.runs({"columns": AP.COLUMNS, "rows": one}, "v2.3-pilot") == {"never"}
     sparse = p | {"rows": one}
     rho = AP.COLUMNS.index("rho_default")
     flat = p | {"rows": [r[:rho] + [1.0] + r[rho + 1:] for r in p["rows"]]}
     cells = [sum(c["state"] != "empty" for c in AP.coverage(q) if c["data"] == "v2.3-pilot") for q in (flat, p)]
-    assert cells[0] < cells[1] and AP.kept_data(flat, served_as(p, older)) == []
+    assert one and cells[0] < cells[1] and AP.kept_data(flat, served_as(p, older)) == []
     assert AP.kept_data(p, None) == AP.kept_data(p, served_as(p, AP.VERSION)) == []
     assert AP.kept_data(sparse, served_as(p, AP.VERSION)) == []
     assert AP.kept_data(p, served_as(sparse, newer)) == ["v2.3-pilot"]
-    assert AP.kept_data(sparse, served_as(p, older)) == ["v2.3-pilot"]
+    assert AP.kept_data(sparse, served_as(p, older)) == []
     assert AP.kept_data(p, served_as(sparse, older)) == AP.kept_data(p, served_as(p, older)) == []
     legacy = served_as(p, None, source=f"python -m te_core.algorithm_policy (te_core {older}; pin x)")
     assert AP.version_of(legacy, "v2.3-pilot") == tuple(map(int, older.split("."))) and not AP.version_of(legacy, "v3")
-    assert AP.kept_data(sparse, legacy) == ["v2.3-pilot"]
+    assert AP.kept_data(sparse, legacy) == []
     fp = {"id": FF.PANEL, "columns": ["row", "data", "E_bpb"], "rows": [["fit", "v3", 1.0], ["fit", "v2.3-pilot", 0.9]]}
     fit = fp | {"rows": [["fit", "v2.3-pilot", 0.8]]}
     served = {AP.PANEL: served_as(sparse, newer), FF.PANEL: fit}

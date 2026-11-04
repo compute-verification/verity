@@ -138,14 +138,15 @@ OPS = ("counted (trace): the traced step's GEMMs with their dims and operand cla
 #: outputs' term is 2/3 of the MACs' (ρ 10^6); and at the console's k, a forward product at β 16 beside a backward one
 #: whose operand an adapter of rank 16 reaches, at β_eff 3.2 (K* 32), which binds
 HAND = (("a forward and a backward product, k 49,152", 1e12, 49_152.0, 1e15,
-         [{"beta": [16.0, 16.0], "width": [16.0, 16.0], "b_y": 16.0, "forward": True, "macs": 2.21184e14,
-           "wires": 2.21184e14 / 48},
-          {"beta": [16.0, 16.0], "width": [16.0, 16.0], "b_y": 16.0, "forward": False, "macs": 2.21184e14,
-           "wires": 2.21184e14 / 48}]),
+         [{"beta": [16.0, 16.0], "width": [16.0, 16.0], "weight": [True, True], "b_y": 16.0, "forward": True,
+           "macs": 2.21184e14, "wires": 2.21184e14 / 48},
+          {"beta": [16.0, 16.0], "width": [16.0, 16.0], "weight": [True, True], "b_y": 16.0, "forward": False,
+           "macs": 2.21184e14, "wires": 2.21184e14 / 48}]),
         ("a forward product beside one an adapter's rank-16 output reaches, the console's k", 1e12, 65_536.0, 1e15,
-         [{"beta": [16.0, 16.0], "width": [16.0, 16.0], "b_y": 16.0, "forward": True, "macs": 5.89824e14,
-           "wires": 5.89824e14 / 48},
-          {"beta": [16.0, 3.2], "width": [16.0, 16.0], "b_y": 16.0, "forward": False, "macs": 1e17, "wires": 1e12}]))
+         [{"beta": [16.0, 16.0], "width": [16.0, 16.0], "weight": [True, True], "b_y": 16.0, "forward": True,
+           "macs": 5.89824e14, "wires": 5.89824e14 / 48},
+          {"beta": [16.0, 3.2], "width": [16.0, 16.0], "weight": [True, True], "b_y": 16.0, "forward": False,
+           "macs": 1e17, "wires": 1e12}]))
 #: (input tokens, output tokens): the console's session, the workload note's tighter and looser ones, a prefill alone
 #: and the least session
 SESSIONS = ((4096, 1024), (2048, 3072), (16384, 1024), (1024, 0), (1, 1))
@@ -209,11 +210,13 @@ def battery(program: str) -> tuple[float, dict]:
 
 def products(base: formalism.Measured) -> dict:
     """The products term's vectors: `HAND`'s M through `formalism.he_figure`, and each traced step's products as
-    `Measured.products` on `base` with one part of |C| gates (the term reads only M and |C|) through
-    `formalism.he_products` at the console's (c, k), with the M it read."""
+    `Measured.products` on `base` with one part of |C| gates and no update code (the term reads M, |C| and the code,
+    whose bits a trained weight cap a weight's β) through `formalism.he_products` at the console's (c, k), with the M
+    it read. `dial` and `grid` take the traced steps the same way."""
     sets = [(name, c, k, C, {"k": k, "groups": groups, "r_step": None,
                              "candidates_macs": sum(g["macs"] for g in groups), "self_macs": 0.0,
-                             "gathered_macs": 0.0}, None) for name, c, k, C, groups in HAND]
+                             "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None,
+                             "trained_weights": None}, None) for name, c, k, C, groups in HAND]
     rows = json.loads((FIXTURES / DENSE_45M).read_text())
     sets.append(("the 45M start's dense step", *policy.CONSOLE, rows["gates"], None, formalism.products_of_trace(rows)))
     name, (fixture, _) = list(GRID_STEPS.items())[1]
@@ -228,18 +231,21 @@ def products(base: formalism.Measured) -> dict:
             got, why = formalism.he_figure(he, c, C), None
         else:
             m = replace(base, parts=(formalism.Part(gates=C, tokens=1.0, token_gates=C, affected_gates=C),),
-                        products=p)
+                        products=p, delta_bits=None)
             _, why, got = formalism.he_products(m, c, k)
             he = formalism.classified_at(p, k)["he"]
         out.append({"name": name, "inputs": {"c": c, "k": k, "C_gates": C, "he": he}, "term": got.get("rho"),
                     "why": why, "rests_on": formalism.he_rests_on(got)}
-                   | {x: got.get(x) for x in ("beta", "b_y", "F", "alpha", "N", "O", "macs_share", "below_width",
-                                              "r_step")})
-    return {"rule": "for each t among the groups' least β (above 0): M_t the groups whose every β ≥ t, N and O their "
-                    "MACs and output wires, b_y their least output width, F = 2/sqrt(3) where a group isn't a forward "
-                    "product, else 1, alpha = F/2 sqrt(k^3/(t^2 b_y)); term = max(0, max over t of (c/C_gates) (N/(k "
-                    "+ alpha) - F (k/2) sqrt(O N)/t/(k + alpha)^1.5)), and its beta, b_y, F, alpha, N and O are the "
-                    "best t's; rho floors it at 1",
+                   | {x: got.get(x) for x in ("subset", "subsets", "beta_w", "beta_x", "beta", "b_y", "F", "alpha",
+                                              "N", "O", "K_thr", "beta_k", "macs_share", "below_width", "r_step")})
+    return {"rule": "each operand charged its beta, an activation's (a weight is an operand no token indexes) at most "
+                    "beta(k) at k; for each subset (all of M; M less its groups of contraction K below K_thr = (F "
+                    "k/2)^2 b_y/(beta_w beta_x (k + alpha)) at M's best; the weight gradients alone, F = 1) and each P "
+                    "among its groups' products of their two beta (above 0): M_P its groups whose product >= P, N and "
+                    "O their MACs and output wires, b_y their least output width, F = 2/sqrt(3) where a group isn't a "
+                    "forward product, else 1, alpha = F/2 sqrt(k^3/(P b_y)); term = max(0, max over subsets and P of "
+                    "(c/C_gates) (N/(k + alpha) - F (k/2) sqrt(O N/P)/(k + alpha)^1.5)), and its subset, beta_w and "
+                    "beta_x (the binding group's two beta), b_y, F, alpha, N and O are the best's; rho floors it at 1",
             "rests_on": formalism.RESTS_ON["fresh_products"], "vectors": out}
 
 
@@ -289,7 +295,7 @@ def dial(ms: dict[str, formalism.Measured]) -> dict:
     C = rows["gates"]
     one = (formalism.Part(gates=C, tokens=1.0, token_gates=C, affected_gates=C),)
     sets = [(name, m) for name, m in ms.items()]
-    sets.append(("the 45M start's dense step", replace(ms["dense"], parts=one,
+    sets.append(("the 45M start's dense step", replace(ms["dense"], parts=one, delta_bits=None,
                                                        products=formalism.products_of_trace(rows))))
     out = []
     for name, m in sets:
@@ -345,7 +351,7 @@ def grid(base: formalism.Measured) -> dict:
         rows = json.loads((GRID_FIXTURES / fixture).read_text())
         C = rows["gates"]
         m = replace(base, parts=(formalism.Part(gates=C, tokens=1.0, token_gates=C, affected_gates=C),),
-                    products=formalism.products_of_trace(rows))
+                    products=formalism.products_of_trace(rows), delta_bits=None)
         cells = [cell(m, c, k) for k in grid_k() for c in dict.fromkeys((policy.CONSOLE[0], own[k]))]
         out.append({"name": name, "C_gates": C, "fresh_per_c": formalism.fresh_per_c(m), "cells": cells})
     return {"rule": f"{PER_C_RULE}; at each k of the console's grid (a session's input ids at 16 bits) and the serving "

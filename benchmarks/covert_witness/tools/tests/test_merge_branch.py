@@ -1,5 +1,6 @@
 """merge_branch on a toy remote: an island's branch merges while it leaves te_core alone and is refused once it touches
-it; the toolsmith's VERSION merges with te_core exactly theirs, a te_core conflict included, is refused when it moves
+it, unless the coordinator rules it merges ahead of a VERSION, and then only onto the te_core it was built on; the
+toolsmith's VERSION merges with te_core exactly theirs, a te_core conflict included, is refused when it moves
 products.CAPTURE or a version gate, and needs the coordinator's ruling when it changes the capture's code; --check
 changes nothing."""
 from __future__ import annotations
@@ -77,8 +78,32 @@ def test_an_island_that_changes_te_core_is_refused(work: Path, capsys: pytest.Ca
     head = git(work, "rev-parse", "HEAD")
     assert M.main([ISLAND, "--check"]) == 1 and M.main([ISLAND]) == 1
     err = capsys.readouterr().err
-    assert "changes te_core (frontier_fit.py)" in err and M.TOOLSMITH in err
+    assert "changes te_core (frontier_fit.py)" in err and M.TOOLSMITH in err and "--te-core-ruled" in err
     assert git(work, "rev-parse", "HEAD") == head and not git(work, "status", "--porcelain")
+
+
+def test_a_ruled_te_core_change_merges_onto_the_te_core_it_was_built_on(work: Path) -> None:
+    sha = write(work, {f"{M.TE_CORE}/frontier_fit.py": "fit = 2\n", "islands.txt": "x\n"}, "labels", ISLAND)
+    write(work, {"benchmarks/covert_witness/islands/integrator/BOARD.md": "10:00Z integrator [TOOL] hi\n"}, "board")
+    assert M.main([ISLAND, "-m", "labels", "--te-core-ruled", "the coordinator: plot 2"]) == 0
+    assert git(work, "log", "-1", "--format=%s").strip() == (
+        f"Merge {ISLAND} at {sha[:10]} (labels; its te_core change ruled: the coordinator: plot 2)")
+    assert te_core(work, "HEAD") == te_core(work, sha) and (work / "islands.txt").exists()
+    assert not git(work, "status", "--porcelain")
+
+
+def test_a_ruled_te_core_change_is_refused_on_a_moved_te_core_or_a_moved_gate(work: Path,
+                                                                            capsys: pytest.CaptureFixture[str]) -> None:
+    write(work, {f"{M.TE_CORE}/frontier_fit.py": "fit = 2\n"}, "labels", ISLAND)
+    write(work, {FORMALISM: 'ELEMENTWISE_FROM = "4.12.13"\n'}, "a gate", "cursor/te-gamma-4207")
+    write(work, {f"{M.TE_CORE}/priced.py": "p\n"}, "a te_core edit on the lane")
+    head = git(work, "rev-parse", "HEAD")
+    assert M.main([ISLAND, "--te-core-ruled", "the coordinator"]) == 1
+    assert "has moved since their merge base" in capsys.readouterr().err and git(work, "rev-parse", "HEAD") == head
+    git(work, "reset", "-q", "--hard", "HEAD~1")
+    assert M.main(["cursor/te-gamma-4207", "--te-core-ruled", "the coordinator"]) == 1
+    assert 'ELEMENTWISE_FROM "4.12.9" -> "4.12.13"' in capsys.readouterr().err
+    assert not git(work, "status", "--porcelain")
 
 
 def test_the_toolsmiths_version_merges_with_te_core_theirs(work: Path) -> None:
