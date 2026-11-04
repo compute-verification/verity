@@ -61,8 +61,8 @@ from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
                                                             link_points as LP, partition as P, produced as PD,
                                                             proofs as PF, registered as G, registration as R)
-from verity.core.protocols.sampled_proofs.challenger import (COIN_BYTES, NO_TREE, SHARED_TREE, UNUSED_TREE,
-                                                             ChallengerKey, CoinError)
+from verity.core.protocols.sampled_proofs.challenger import (COIN_BYTES, NO_TREE, SAMPLE_LINK_FIRST, SHARED_TREE,
+                                                             UNUSED_TREE, ChallengerKey, CoinError, sample_link_first)
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_coins, draw_first, law_problem
 from verity.core.protocols.sampled_proofs.coins import ran_out as draw_ran_out
 from verity.ml.circuits import codec, partition_object as PO
@@ -71,7 +71,7 @@ from verity.ml.circuits.program import Program, input_id, is_input
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, RecordType, Tuple, Value
 
-from test_challenger_difftest import DRAW_MUTATIONS, Drawn, _flip, _mutated, lms_verify
+from test_challenger_difftest import DRAW_MUTATIONS, ORDERS, Drawn, _flip, _mutated, lms_verify
 
 PACKAGE = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -2052,11 +2052,12 @@ def decode_params_v2(j) -> dict:
     return p
 
 
-def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: int = 1) -> tuple[Drawn, dict, dict]:
+def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: int = 1,
+                     order: str = "honest") -> tuple[Drawn, dict, dict]:
     """A draw under `law` from the coins of a challenger session its ledger opens withheld, released after `rec`'s
     digest and read as `draw_first` reads them, the session's challenger sampling and opening `trees` coin trees too
-    (`TreeSession`): the session, the draw, and the evidence's `coins` (the session's record without the key, which the
-    verifier's parameters name)."""
+    (`TreeSession`), its log in `order` (`ORDERS`): the session, the draw, and the evidence's `coins` (the session's
+    record without the key, which the verifier's parameters name)."""
     mine = DR.derive(s.program, s.query, law, None)
 
     def reads(coins) -> bytes:
@@ -2068,7 +2069,7 @@ def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: 
             return b
         draw_first(OwnRandomness(source), mine, s.population)
         return bytes(got)
-    d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads, trees=trees)
+    d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads, trees=trees, order=order)
     at = [0]
 
     def source(k: int) -> bytes:
@@ -2078,12 +2079,12 @@ def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: 
     return d, draw_first(OwnRandomness(source), mine, s.population), coins
 
 
-def _challenger_audit(server, rng: random.Random, s: Setup, law: dict, rec: dict,
-                      trees: int) -> tuple[Drawn, dict, dict, dict]:
+def _challenger_audit(server, rng: random.Random, s: Setup, law: dict, rec: dict, trees: int,
+                      order: str = "honest") -> tuple[Drawn, dict, dict, dict]:
     """An audit v1 accepts on the verdict its evidence hands in and the coins of a challenger sampling `trees` coin
-    trees (`_challenger_draw`): the challenger's session, v1's evidence, that evidence without its verdicts, and v1's
-    parameters naming the challenger, v2's without its `proofs`."""
-    ch, d, coins = _challenger_draw(rng, s, law, rec, trees)
+    trees, its log in `order` (`_challenger_draw`): the challenger's session, v1's evidence, that evidence without its
+    verdicts, and v1's parameters naming the challenger, v2's without its `proofs`."""
+    ch, d, coins = _challenger_draw(rng, s, law, rec, trees, order)
     proved = DR.proved(d)
     evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
                 "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
@@ -2150,6 +2151,32 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         "reject", "evidence: proofs: the sessions are not the evidence's sessions, in order")
     got = run(base | {"proofs": proofs([])}, p={k: v for k, v in p2.items() if k != "proofs"})
     assert got[0] == "reject" and got[1].startswith("params: the parameters name no proofs"), got
+
+
+def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
+    """v2 holds its challenger session's release log to the sample, then the link, then the other rounds
+    (`OneStageZk.orderHeld`, `Challenger.sampleLinkFirst`) before any session's record is read. Of three audits v1
+    accepts, their coin trees all as the challenger logged them: the honest log goes on to its session's verdict; one
+    releasing a coin of the sample after a tree's link is opened (`sample-late`), and one whose first round opened is
+    of another stream than the link's (`link-late`), are refused (`SAMPLE_LINK_FIRST`). The Python twin
+    (`challenger.sample_link_first`) agrees; `test_challenger_difftest.py` holds it to Lean's piece."""
+    s = SETUPS[3]
+    law = {"k": 2, "law": "subset"}
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF)
+    circuit, public = b"not a circuit file", b"not a public file"
+    for order in ORDERS:
+        ch, _, base, p = _challenger_audit(server, random.Random(f"v2-order-{order}"), s, law, rec, 1, order)
+        record = D.canonical(ch.trees[0].record).encode()
+        proofs = {"public": _sha(public), "sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}
+        case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
+                "evidence": _hex(base | {"proofs": proofs, "sessions": ["s"]}),
+                "params": p | {"proofs": {"circuit": _sha(circuit), "registered": None}}}
+        out = server_v2.exchange(_json(case))
+        want = ("verdict flock-verify/s did not accept" if order == "honest"
+                else f"proofs: coins: {SAMPLE_LINK_FIRST}")
+        assert (out["verdict"], out["reason"]) == ("reject", want), order
+        assert sample_link_first("draw", bytes.fromhex(R.digest(rec)), ch.s.lines[1:]) == (order == "honest"), order
 
 
 #: `OneStageZk.membersHeld`'s reason for a statement of other than exactly one session.
