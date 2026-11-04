@@ -25,6 +25,8 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
   and `dump` writes it back.
 * `source_identity` -- the source-identity record's schema id (`research-infra/source-identity/v1`) and nothing else: the
   runner's telemetry embeds the record and no stage reads it back.
+* `pearl_c_served` -- a Pearl-C served run's schema id (`verity-pouw/pearl-c-served-passes/v1`, ``served.json``) and nothing
+  else: ``served_passes.py retain`` reads it, and no stage of the integration does.
 * `inference_blocks` -- the inference-block table's public statement (`verity-vllm/inference-blocks/v1`): its budgets, padded
   counts and hiding root, as B emits it beside the window circuit (`program.predict.inference_blocks.commit`); its `of` refuses an
   unknown field and `dump` writes it.

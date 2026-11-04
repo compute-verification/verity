@@ -40,7 +40,11 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-SCHEME = "pearl-c-h100-v1-h3"
+from verity.core.protocols.pouw.schemes.pearl_c import PearlC
+from verity.core.protocols.pouw.schemes.pearl_c_device import H100
+
+#: pearl_c_sm90's scheme, which the arm serves on an H100 or H200 (`pearl_c.SCHEMES`)
+SCHEME = PearlC(forming="v1", device=H100, hashing="h3").name
 ENTRY = f"pouw:{SCHEME}"
 #: the precision the arm serves at: the BF16 checkpoint's own weights, which Pearl+ reads unquantized
 PRECISION = "bfloat16"
