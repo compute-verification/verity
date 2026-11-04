@@ -262,16 +262,17 @@ section Instance
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-- The proof block at slot `j.2.2` of the inner run `j.2.1` of the outer run `j.1`, at the waits' coins: none where
-the slot is empty or its block is not below `n_PU`. -/
+/-- The proof block at slot `p` of the inner run `l` of the outer run `j`, at the waits' coins: none where the slot is
+empty or its block is not below `n_PU`. Curried, so that `slotUnit_eq`'s hypotheses index the wait lists at the same
+terms as the definition (an index reached through a tuple's projections sends the kernel into the wait lists). -/
 def slotUnit (H : Msg → Msg) (D : Claims.Sampling.Deploy Coin Col T) (x : Msg)
     (run' : (Fin (D.V.k x) → Coin) → Trace) (c₁ : Fin (D.cap x) → Fin (D.V.k x) → Coin)
-    (c₂ : Fin (D.k x) → Fin (D.cap x) → Fin (D.V.k x) → Coin)
-    (j : Fin (D.k x) × Fin (D.k x) × Fin (Claims.Sampling.nPU D x)) : Option (Fin (Claims.Sampling.nPU D x)) :=
-  (((waitAccC (D.k x) ((List.finRange (D.cap x)).map c₁) []).eval H run').1[j.1.val]?).bind fun o =>
-    (((waitAccC (D.k x) ((List.finRange (D.cap x)).map fun l => forkOn (D.stage2 x) o.1 (c₂ j.1 l)) []).eval H
-        run').1[j.2.1.val]?).bind fun i =>
-      ((D.checked x i.1)[j.2.2.val]?).bind fun u =>
+    (c₂ : Fin (D.k x) → Fin (D.cap x) → Fin (D.V.k x) → Coin) (j l : Fin (D.k x))
+    (p : Fin (Claims.Sampling.nPU D x)) : Option (Fin (Claims.Sampling.nPU D x)) :=
+  (((waitAccC (D.k x) ((List.finRange (D.cap x)).map c₁) []).eval H run').1[j.val]?).bind fun o =>
+    (((waitAccC (D.k x) ((List.finRange (D.cap x)).map fun c => forkOn (D.stage2 x) o.1 (c₂ j c)) []).eval H
+        run').1[l.val]?).bind fun i =>
+      ((D.checked x i.1)[p.val]?).bind fun u =>
         if hu : u < Claims.Sampling.nPU D x then some ⟨u, hu⟩ else none
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
@@ -283,8 +284,8 @@ theorem slotUnit_eq {H : Msg → Msg} {D : Claims.Sampling.Deploy Coin Col T} {x
     (hl : ((waitAccC (D.k x) ((List.finRange (D.cap x)).map fun c => forkOn (D.stage2 x) o.1 (c₂ j c)) []).eval H
       run').1[l.val]? = some i)
     (hp : (D.checked x i.1)[p.val]? = some u) (hu : u < Claims.Sampling.nPU D x) :
-    slotUnit H D x run' c₁ c₂ (j, l, p) = some ⟨u, hu⟩ := by
-  simp only [slotUnit, hj, Option.bind_some, hl, hp, dite_eq_left hu]
+    slotUnit H D x run' c₁ c₂ j l p = some ⟨u, hu⟩ := by
+  rw [slotUnit, hj, Option.bind_some, hl, Option.bind_some, hp, Option.bind_some, dite_eq_left hu]
 
 /-- Both extractors' common skeleton: the two waits, a run's extractions `ex` at each accepted inner run, and the
 assembly. -/
@@ -571,12 +572,13 @@ theorem Ex_ext_eq (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.Sampl
   refine (Claims.Ex_prod _).trans (Eq.trans ?_ (Claims.Ex_prod _).symm)
   refine congrArg Ex (funext fun c₂ => ?_)
   refine (Ex_couple (fun v : Fin (Claims.Sampling.nPU D x) => D.rounds x v)
-    (slotUnit H D x (run H P D.V x ω) c₁ c₂) _).trans ?_
+    (fun j => slotUnit H D x (run H P D.V x ω) c₁ c₂ j.1 j.2.1 j.2.2) _).trans ?_
   refine Eq.trans ?_ (Claims.Sampling.Ex_fst
     (β := Fin (D.k x) × Fin (D.k x) × Fin (Claims.Sampling.nPU D x) → D.UnitCoins x) _)
   refine congrArg Ex (funext fun p => ?_)
   have h := E_agree (decode := decode) hruns hnum hrefuse hopens x P ω r₀ c₁ c₂
-    (slotUnit H D x (run H P D.V x ω) c₁ c₂) (fun _ _ _ _ _ _ hj hl hp hu => slotUnit_eq hj hl hp hu) p.1 p.2
+    (fun j => slotUnit H D x (run H P D.V x ω) c₁ c₂ j.1 j.2.1 j.2.2)
+    (fun j _ l _ p _ hj hl hp hu => slotUnit_eq (j := j) (l := l) (p := p) hj hl hp hu) p.1 p.2
   exact congrArg₂ G h.eval h.log
 
 omit [DecidableEq Col] in
