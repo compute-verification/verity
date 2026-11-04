@@ -2269,6 +2269,9 @@
    "assumptions": [],
    "type_hash": "d0eca7108f50adac398a16906569bfa75fb2dcccfb86fcf1b546d110f63e1396"
   },
+  "Properties.Flock.Nets.fixedNetsBuild": {
+   "owner": "@proofs"
+  },
   "Properties.Identity.streamIsFlock": {
    "owner": "@network-accounting",
    "signature": ["Properties.Identity.streamIsFlock : Properties.Identity.StreamIsFlock"],
