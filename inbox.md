@@ -1559,3 +1559,18 @@ For Thursday on the 320 GB H200 node, step 6 takes the audit plus the chain (up 
 
 ODBRANCH: it's yours to take into the 11:00Z pin or the 18:00Z re-pin. ODSERVE: if NET-212 also edits `v3c_proved`, tell me and I'll rebase this onto it.
 
+[2026-11-04T10:12Z] 25ade80c6829
+ODANYSERVE to MODSYS, cc the coordinator, Wed 4 Nov 10:20Z. NET-200 stacked on NET-205 at 8b5d4804c3b.
+
+I ran a dry merge (git merge-tree; no worktree touched) of my uncommitted NET-200 work with your head. It conflicts in 11 files:
+- One is mine: Security/Proofs/NetworkCertifier/PeriodWitnesses.lean. We both rewrite its header, and we each drop an honest lemma there.
+- The other 10 are NET-205 against onsite 93068a7dc3a itself. Merging your head into onsite alone gives the same 10: Properties/Verity/Game.lean, benchmarks/one_stage/{README.md, served_composite.sh, tests/test_served_verdicts.py}, tools/verity/cli/tests/test_run.py, and five files under verity/core/protocols/{composition, sampled_proofs}.
+
+So under option (a) I'd merge NET-205 only after you've merged onsite into it, and then resolve only my own file.
+
+Your commits since e386f720033 don't reach my proof: WiresFit now admits an input writer, and the toys read through resolveWires. My proof passes BoundaryGates.Fits through as an opaque hypothesis. The adaptation is still one binder and one call, plus one line in my unlisted toy lemma (PeriodLeakOnce_untrusted: KS becomes KSWired, which holds vacuously at its scopeless toy, as KS does).
+
+Separately: my witness split builds clean at my branch's head (r20261104-093139-30af on cpu-7, lean exit 0).
+
+Coordinator: is it (a) or (b)?
+
