@@ -23,19 +23,20 @@ Flock's `E^rep` replaced by `A`'s extractor.
   (`place_of_not_mem`).
 * `session_transfer`: **the session transfer**. At coins `R0` that sample `u`, over fresh coins on the session's rounds
   and `A`'s extractor's coins, the run accepts while the block's extraction fails (not `Found`) with probability at
-  most `κ_A + √(γ_A·Pr[B_sess])` at the block's shape, with `B_sess` the session's prover's `B` against `A`'s
+  most `κ_A + √(γ_A·Pr[B_sess])` at the session's statement, with `B_sess` the session's prover's `B` against `A`'s
   verifier: `A.KS` at `P'`.
 * `session_fork`, `session_fork_div`: **the session's fork**. `k_A·Pr[B_sess]` is at most the sum over the compiled
   verifier's rounds of its fork's collision probability with the coins off the session fixed: a session round is a
   compiled round through `emb`, and `P'`'s SHA-512 calls are among the compiled verifier's. So
   `Pr[B_sess] ≤ (k_V/k_A)·Pr[B]` at the coins off the session, `Pr[B]` there the compiled verifier's `B` at its round
   guess (`forkCollAt`), which averages to `PrB` (`Ex_forkCollAt`).
-* `fiber_bound`: the two at the largest of `A`'s errors over the proof blocks' shapes, `κ_s + √(k_V·γ_s·Pr[B])`, since
-  `γ_A/k_A ≤ γ_s` at the block's shape (`Arg.WF`).
-* `sessionKS_of`, `sessionKSOf`: **`SessionKS`**, at the block a selection picks among the sampled ones, over the
-  second stage, `κ_s + √(k_V·γ_s·β(ω, r))` with `β` averaging at most `Pr[B]`: the picked block's coins are one
-  coordinate of the blocks' (`Pr_pi_eval_dep`), and resampling its session's rounds keeps the pick (`fixed`,
-  `Ex_resample`).
+* `fiber_bound`: the two at the largest of the proof blocks' error bounds, `κ_s + √(k_V·γ_s·Pr[B])`, since `A`'s
+  errors at the session are within the block's bounds (`runs`), so `κ_A ≤ κ_s` and `γ_A/k_A ≤ γ_s`, `k_A` the rounds
+  of the block's shape (`Arg.WF`).
+* `sessionKS_of`, `sessionKSOf`: **`SessionKS`**, at the slot a selection picks among the sample's, over the second
+  stage, `κ_s + √(k_V·γ_s·β(ω, r))` with `β` averaging at most `Pr[B]`: the coins the picked slot gives its block are
+  one coordinate of the slots' and then of the blocks' (`Pr_pi_eval_dep`), and resampling the block's session's rounds
+  keeps the pick (`fixed`, `Ex_resample`).
 -/
 
 @[expose] public section
@@ -166,7 +167,7 @@ theorem coinsOf_forkOn (L : Compiled Coin A) {x : Msg} {u : ℕ} {xS : Msg} (hca
 
 /-- **The session transfer**: at coins `R0` that sample `u`, with `runs`'s session statement `xS` and prover `P'`, over
 fresh coins on the session's rounds and `A`'s extractor's coins, the run accepts while the block's extraction fails
-(not `Found`) with probability at most `κ_A + √(γ_A·Pr[B_sess])` at the block's shape: the run accepts exactly when
+(not `Found`) with probability at most `κ_A + √(γ_A·Pr[B_sess])` at the session's statement: the run accepts exactly when
 `P'`'s does on the session's coins, its extraction succeeds where `A`'s extractor against `P'` does (`found_of`), and
 the session's coins and the cast extractor's coins are uniform (`Pr_restrict_shape`), so this is `A.KS` at `P'`. -/
 theorem session_transfer {H : Msg → Msg} (hKS : A.KS H) (L : Compiled Coin A) (x : Msg) {Ω : Type} (P : Prover Ω)
@@ -180,7 +181,7 @@ theorem session_transfer {H : Msg → Msg} (hKS : A.KS H) (L : Compiled Coin A) 
     Pr (fun s : (Fin (L.V.k x) → Coin) × A.EC (L.sh x u) =>
         (run H P L.V x ω (forkOn (L.rounds x u) R0 s.1)).out = .acc ∧
           ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.rounds x u) R0 s.1) s.2) ≤
-      A.κ (L.sh x u) + Real.sqrt (A.γ (L.sh x u) * PrB H A.V P' xS) := by
+      A.κ xS + Real.sqrt (A.γ xS * PrB H A.V P' xS) := by
   have hag0 : ∀ σ : Fin (L.V.k x) → Coin, ∀ t ∉ L.rounds x u, forkOn (L.rounds x u) R0 σ t = R0 t :=
     fun σ t ht => by simp [forkOn, ht]
   let Q : (Fin (A.V.k xS) → Coin) → A.EC (A.shape xS) → Prop := fun ρ c =>
@@ -202,8 +203,7 @@ theorem session_transfer {H : Msg → Msg} (hKS : A.KS H) (L : Compiled Coin A) 
     _ = PrBad H A.V A.R A.E xS P' := by
         unfold PrBad
         exact (Pr_unit _).symm
-    _ ≤ A.κ (A.shape xS) + Real.sqrt (A.γ (A.shape xS) * PrB H A.V P' xS) := hKS xS Unit P'
-    _ = A.κ (L.sh x u) + Real.sqrt (A.γ (L.sh x u) * PrB H A.V P' xS) := by rw [hshape]
+    _ ≤ A.κ xS + Real.sqrt (A.γ xS * PrB H A.V P' xS) := hKS xS Unit P'
 
 /-- **The session's fork**: `k_A·Pr[B_sess]`, the session's prover's `B` against `A`'s verifier, is at most the sum over
 the compiled verifier's rounds of its fork's collision probability, the coins off the session's rounds those of `R0`: a
@@ -290,8 +290,9 @@ theorem session_fork_div (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω :
       (le_of_eq (by rw [h0, div_zero, zero_mul]))
 
 /-- **At one sampled proof block's session, the others' coins fixed**: the session transfer and the session's fork at
-`runs`'s session, with `A`'s errors at the block's shape at most the largest over the proof blocks' shapes: `κ_A ≤ κ_s`,
-and `γ_A·Pr[B_sess] ≤ γ_s·k_A·Pr[B_sess] ≤ k_V·γ_s·Pr[B]`, `k_A` the shape's rounds (`Arg.WF`). -/
+`runs`'s session, with `A`'s errors there within the block's bounds (`runs`), so at most the largest of the proof
+blocks' bounds: `κ_A ≤ κb ≤ κ_s`, and `γ_A·Pr[B_sess] ≤ γ_s·k_A·Pr[B_sess] ≤ k_V·γ_s·Pr[B]`, `k_A` the rounds of the
+block's shape (`Arg.WF`). -/
 theorem fiber_bound {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compiled Coin A} (hS : L.Sessions H) (x : Msg)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (R0 : Fin (L.V.k x) → Coin) (u : Fin (L.nPU x))
     (hu : u.val ∈ L.checked x R0) :
@@ -300,10 +301,10 @@ theorem fiber_bound {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compiled 
           ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.rounds x u) R0 s.1) s.2) ≤
       L.κs x + Real.sqrt ((L.V.k x : ℝ) * L.γs x *
         Ex fun σ => forkCollAt H L.V P x ω (forkOn (L.rounds x u) R0 σ)) := by
-  obtain ⟨xS, P', hshape, hcard, hacc, hview⟩ := hS.runs x Ω P ω R0 u hu
+  obtain ⟨xS, P', hshape, hκb, hγb, hcard, hacc, hview⟩ := hS.runs x Ω P ω R0 u hu
   have hT := L.session_transfer hKS x P ω R0 u xS P' hshape hcard hacc fun r' h => (hview r' h).1
   have hF := L.session_fork H x P ω R0 u xS P' hcard fun r' h => (hview r' h).2
-  have hκ := L.κ_le_κs x u.isLt
+  have hκ := hκb.trans (L.κ_le_κs x u.isLt)
   have hkS : A.V.k xS = A.rounds (L.sh x u) := (hWF xS).trans (congrArg A.rounds hshape)
   have hkle : A.V.k xS ≤ L.V.k x := by
     simpa using Fintype.card_le_of_injective _ (L.emb x u xS hcard).injective
@@ -313,7 +314,7 @@ theorem fiber_bound {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compiled 
   have hEx : (Ex fun σ => forkCollAt H L.V P x ω (forkOn (L.rounds x u) R0 σ)) =
       (Ex fun σ => ∑ j, Pr fun R2 => forkColl H L.V P x ω j (forkOn (L.rounds x u) R0 σ) R2) / L.V.k x := by
     simp only [forkCollAt, Ex_div]
-  have hγ : A.γ (L.sh x u) * PrB H A.V P' xS ≤
+  have hγ : A.γ xS * PrB H A.V P' xS ≤
       (L.V.k x : ℝ) * L.γs x * Ex fun σ => forkCollAt H L.V P x ω (forkOn (L.rounds x u) R0 σ) := by
     rw [hEx]
     by_cases hk : 0 < A.V.k xS
@@ -321,12 +322,13 @@ theorem fiber_bound {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compiled 
       have hkV0 : (L.V.k x : ℝ) ≠ 0 := by
         have := lt_of_lt_of_le hk hkle
         positivity
-      have hg : A.γ (L.sh x u) / A.V.k xS ≤ L.γs x := by
+      have hg : A.γ xS / A.V.k xS ≤ L.γs x := by
+        refine (div_le_div_of_nonneg_right hγb (Nat.cast_nonneg _)).trans ?_
         rw [hkS]
         exact L.γ_le_γs x u.isLt
       have hP := PrB_nonneg H A.V P' xS
-      calc A.γ (L.sh x u) * PrB H A.V P' xS
-          = A.γ (L.sh x u) / A.V.k xS * (A.V.k xS * PrB H A.V P' xS) := by
+      calc A.γ xS * PrB H A.V P' xS
+          = A.γ xS / A.V.k xS * (A.V.k xS * PrB H A.V P' xS) := by
             rw [← mul_assoc, div_mul_cancel₀ _ hkS0]
         _ ≤ L.γs x * (A.V.k xS * PrB H A.V P' xS) :=
             mul_le_mul_of_nonneg_right hg (mul_nonneg (Nat.cast_nonneg _) hP)
@@ -339,90 +341,103 @@ theorem fiber_bound {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compiled 
       exact mul_nonneg (mul_nonneg (Nat.cast_nonneg _) hγs0) (div_nonneg hY (Nat.cast_nonneg _))
   exact hT.trans (add_le_add hκ (Real.sqrt_le_sqrt hγ))
 
-/-! ## The selected block's session, resampled -/
+/-! ## The selected slot's session, resampled -/
 
-/-- The proof block a selection picks among those sampled at `R`, when it is sampled. -/
-def selUnit (L : Compiled Coin A) (x : Msg) (sel : List ℕ → Option (Fin (L.nPU x))) (R : Fin (L.V.k x) → Coin) :
-    Option (Fin (L.nPU x)) :=
-  (sel (L.checked x R)).bind fun u => if u.val ∈ L.checked x R then some u else none
+/-- The slot a selection picks among the sample's at `R`, with the proof block there, when it holds one below
+`n_PU`. -/
+def selSlot (L : Compiled Coin A) (x : Msg) (sel : List ℕ → Option (Fin (L.nPU x))) (R : Fin (L.V.k x) → Coin) :
+    Option (Fin (L.nPU x) × Fin (L.nPU x)) :=
+  (sel (L.checked x R)).bind fun i =>
+    ((L.checked x R)[i.val]?).bind fun u => if hu : u < L.nPU x then some (i, ⟨u, hu⟩) else none
 
-/-- Its session's rounds, none when no block is picked. -/
+/-- Its block's session's rounds, none when no slot is picked. -/
 def selRounds (L : Compiled Coin A) (x : Msg) (sel : List ℕ → Option (Fin (L.nPU x))) (R : Fin (L.V.k x) → Coin) :
     Finset (Fin (L.V.k x)) :=
-  match L.selUnit x sel R with
-  | some u => L.rounds x u
+  match L.selSlot x sel R with
+  | some iu => L.rounds x iu.2
   | none => ∅
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem selUnit_eq_some {L : Compiled Coin A} {x : Msg} {sel : List ℕ → Option (Fin (L.nPU x))}
-    {R : Fin (L.V.k x) → Coin} {u : Fin (L.nPU x)} :
-    L.selUnit x sel R = some u ↔ sel (L.checked x R) = some u ∧ u.val ∈ L.checked x R := by
-  unfold selUnit
+theorem selSlot_eq_some {L : Compiled Coin A} {x : Msg} {sel : List ℕ → Option (Fin (L.nPU x))}
+    {R : Fin (L.V.k x) → Coin} {i u : Fin (L.nPU x)} :
+    L.selSlot x sel R = some (i, u) ↔ sel (L.checked x R) = some i ∧ (L.checked x R)[i.val]? = some u.val := by
+  unfold selSlot
   rw [Option.bind_eq_some_iff]
   constructor
-  · rintro ⟨v, hv, h⟩
-    by_cases hm : v.val ∈ L.checked x R
-    · rw [ite_eq_left hm, Option.some.injEq] at h
-      subst h
-      exact ⟨hv, hm⟩
-    · rw [ite_eq_right hm] at h
+  · rintro ⟨j, hj, h⟩
+    rw [Option.bind_eq_some_iff] at h
+    obtain ⟨v, hv, h⟩ := h
+    by_cases hlt : v < L.nPU x
+    · rw [dite_eq_left hlt, Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨hj, hv⟩
+    · rw [dite_eq_right hlt] at h
       cases h
   · rintro ⟨hs, hm⟩
-    exact ⟨u, hs, ite_eq_left hm⟩
+    refine ⟨i, hs, ?_⟩
+    rw [hm, Option.bind_some, dite_eq_left u.isLt]
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem mem_of_selSlot {L : Compiled Coin A} {x : Msg} {sel : List ℕ → Option (Fin (L.nPU x))}
+    {R : Fin (L.V.k x) → Coin} {i u : Fin (L.nPU x)} (h : L.selSlot x sel R = some (i, u)) :
+    u.val ∈ L.checked x R :=
+  List.mem_of_getElem? (selSlot_eq_some.1 h).2
 
 omit [Nonempty Coin] in
-theorem selUnit_forkOn {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {x : Msg}
-    {sel : List ℕ → Option (Fin (L.nPU x))} {R : Fin (L.V.k x) → Coin} {u : Fin (L.nPU x)}
-    (h : L.selUnit x sel R = some u) (σ : Fin (L.V.k x) → Coin) :
-    L.selUnit x sel (forkOn (L.rounds x u) R σ) = some u := by
-  obtain ⟨hs, hm⟩ := selUnit_eq_some.1 h
-  rw [selUnit_eq_some, (hS.fixed x R u hm).2 σ]
+theorem selSlot_forkOn {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {x : Msg}
+    {sel : List ℕ → Option (Fin (L.nPU x))} {R : Fin (L.V.k x) → Coin} {i u : Fin (L.nPU x)}
+    (h : L.selSlot x sel R = some (i, u)) (σ : Fin (L.V.k x) → Coin) :
+    L.selSlot x sel (forkOn (L.rounds x u) R σ) = some (i, u) := by
+  obtain ⟨hs, hm⟩ := selSlot_eq_some.1 h
+  rw [selSlot_eq_some, (hS.fixed x R u (mem_of_selSlot h)).2 σ]
   exact ⟨hs, hm⟩
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem selRounds_some {L : Compiled Coin A} {x : Msg} {sel : List ℕ → Option (Fin (L.nPU x))}
-    {R : Fin (L.V.k x) → Coin} {u : Fin (L.nPU x)} (h : L.selUnit x sel R = some u) :
+    {R : Fin (L.V.k x) → Coin} {i u : Fin (L.nPU x)} (h : L.selSlot x sel R = some (i, u)) :
     L.selRounds x sel R = L.rounds x u := by
   unfold selRounds
   rw [h]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem selRounds_none {L : Compiled Coin A} {x : Msg} {sel : List ℕ → Option (Fin (L.nPU x))}
-    {R : Fin (L.V.k x) → Coin} (h : L.selUnit x sel R = none) : L.selRounds x sel R = ∅ := by
+    {R : Fin (L.V.k x) → Coin} (h : L.selSlot x sel R = none) : L.selRounds x sel R = ∅ := by
   unfold selRounds
   rw [h]
 
 omit [Nonempty Coin] in
-/-- Resampling the picked block's session's rounds keeps them (`fixed`). -/
+/-- Resampling the picked slot's block's session's rounds keeps them (`fixed`). -/
 theorem selRounds_resample {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {x : Msg}
     (sel : List ℕ → Option (Fin (L.nPU x))) (r d σ : Fin (L.V.k x) → Coin) :
     L.selRounds x sel (forkOn (L.stage2 x) r (forkOn (L.selRounds x sel (forkOn (L.stage2 x) r d)) d σ)) =
       L.selRounds x sel (forkOn (L.stage2 x) r d) := by
-  cases h : L.selUnit x sel (forkOn (L.stage2 x) r d) with
+  cases h : L.selSlot x sel (forkOn (L.stage2 x) r d) with
   | none => rw [selRounds_none h, forkOn_empty, selRounds_none h]
-  | some u =>
-    rw [selRounds_some h, forkOn_sub (hS.fixed x _ u (selUnit_eq_some.1 h).2).1]
-    exact selRounds_some (selUnit_forkOn hS h σ)
+  | some iu =>
+    obtain ⟨i, u⟩ := iu
+    rw [selRounds_some h, forkOn_sub (hS.fixed x _ u (mem_of_selSlot h)).1]
+    exact selRounds_some (selSlot_forkOn hS h σ)
 
-/-- The probability over the blocks' coins that the run at `R` accepts and the block a selection picks fails. -/
+/-- The probability over the slots' coins that the run at `R` accepts and the block at the slot a selection picks fails
+at the slot's coins. -/
 noncomputable def selMiss (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (sel : List ℕ → Option (Fin (L.nPU x))) (R : Fin (L.V.k x) → Coin) : ℝ :=
-  Pr fun c : L.BlockEC x => (run H P L.V x ω R).out = .acc ∧
-    ∃ u, L.selUnit x sel R = some u ∧ ¬ L.Found H x (run H P L.V x ω) u R (c u)
+  Pr fun c : L.SlotEC x => (run H P L.V x ω R).out = .acc ∧
+    ∃ i u, L.selSlot x sel R = some (i, u) ∧ ¬ L.Found H x (run H P L.V x ω) u R (c i u)
 
 omit [Fintype Coin] [Nonempty Coin] in
 theorem selMiss_none (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (sel : List ℕ → Option (Fin (L.nPU x))) {R : Fin (L.V.k x) → Coin} (h : L.selUnit x sel R = none) :
+    (sel : List ℕ → Option (Fin (L.nPU x))) {R : Fin (L.V.k x) → Coin} (h : L.selSlot x sel R = none) :
     L.selMiss H P x ω sel R = 0 := by
   unfold selMiss
   rw [h]
-  exact (Pr_congr fun _ => ⟨fun ⟨_, _, hu, _⟩ => Option.some_ne_none _ hu.symm, False.elim⟩).trans Pr_false
+  exact (Pr_congr fun _ => ⟨fun ⟨_, _, _, hu, _⟩ => Option.some_ne_none _ hu.symm, False.elim⟩).trans Pr_false
 
-/-- **At the picked block's session's coins**, the others fixed: its coins are one coordinate of the blocks'
-(`Pr_pi_eval_dep`), and `fiber_bound`. -/
+/-- **At the picked slot's block's session's coins**, the others fixed: the coins the slot gives its block are one
+coordinate of the slots' and then of the blocks' (`Pr_pi_eval_dep`), and `fiber_bound`. -/
 theorem selMiss_fiber {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compiled Coin A} (hS : L.Sessions H)
     (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (sel : List ℕ → Option (Fin (L.nPU x)))
-    {R0 : Fin (L.V.k x) → Coin} {u : Fin (L.nPU x)} (h : L.selUnit x sel R0 = some u) :
+    {R0 : Fin (L.V.k x) → Coin} {i u : Fin (L.nPU x)} (h : L.selSlot x sel R0 = some (i, u)) :
     (Ex fun σ => L.selMiss H P x ω sel (forkOn (L.rounds x u) R0 σ)) ≤
       L.κs x + Real.sqrt ((L.V.k x : ℝ) * L.γs x *
         Ex fun σ => forkCollAt H L.V P x ω (forkOn (L.rounds x u) R0 σ)) := by
@@ -430,19 +445,21 @@ theorem selMiss_fiber {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compile
       Pr fun c : A.EC (L.sh x u) => (run H P L.V x ω (forkOn (L.rounds x u) R0 σ)).out = .acc ∧
         ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.rounds x u) R0 σ) c := by
     intro σ
+    let Q : A.EC (L.sh x u) → Prop := fun c => (run H P L.V x ω (forkOn (L.rounds x u) R0 σ)).out = .acc ∧
+      ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.rounds x u) R0 σ) c
     unfold selMiss
-    rw [selUnit_forkOn hS h σ]
-    refine (Pr_congr fun c => ⟨fun ⟨ha, u', hu', hw⟩ => ?_, fun ⟨ha, hw⟩ => ⟨ha, u, rfl, hw⟩⟩).trans
-      (Pr_pi_eval_dep (E := fun v : Fin (L.nPU x) => A.EC (L.sh x v)) u fun c =>
-        (run H P L.V x ω (forkOn (L.rounds x u) R0 σ)).out = .acc ∧
-          ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.rounds x u) R0 σ) c)
-    obtain rfl := Option.some.inj hu'
+    rw [selSlot_forkOn hS h σ]
+    refine (Pr_congr fun c => ⟨fun ⟨ha, i', u', hiu, hw⟩ => ?_, fun ⟨ha, hw⟩ => ⟨ha, i, u, rfl, hw⟩⟩).trans
+      ((Pr_pi_eval_dep (E := fun _ : Fin (L.nPU x) => L.BlockEC x) i fun b : L.BlockEC x => Q (b u)).trans
+        (Pr_pi_eval_dep (E := fun v : Fin (L.nPU x) => A.EC (L.sh x v)) u Q))
+    rw [Option.some.injEq, Prod.mk.injEq] at hiu
+    obtain ⟨rfl, rfl⟩ := hiu
     exact ⟨ha, hw⟩
   simp only [e]
   rw [← Pr_prod_eq_Ex (fun s : (Fin (L.V.k x) → Coin) × A.EC (L.sh x u) =>
     (run H P L.V x ω (forkOn (L.rounds x u) R0 s.1)).out = .acc ∧
       ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.rounds x u) R0 s.1) s.2)]
-  exact fiber_bound hWF hKS hS x P ω R0 u (selUnit_eq_some.1 h).2
+  exact fiber_bound hWF hKS hS x P ω R0 u (mem_of_selSlot h)
 
 /-- At second-stage coins `d`, resampling the picked block's session's rounds: `selMiss_fiber`, or `0` when none is
 picked. -/
@@ -453,21 +470,22 @@ theorem resample_bound {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compil
         (forkOn (L.stage2 x) r (forkOn (L.selRounds x sel (forkOn (L.stage2 x) r d)) d σ))) ≤
       L.κs x + Real.sqrt ((L.V.k x : ℝ) * L.γs x * Ex fun σ => forkCollAt H L.V P x ω
         (forkOn (L.stage2 x) r (forkOn (L.selRounds x sel (forkOn (L.stage2 x) r d)) d σ))) := by
-  cases h : L.selUnit x sel (forkOn (L.stage2 x) r d) with
+  cases h : L.selSlot x sel (forkOn (L.stage2 x) r d) with
   | none =>
     rw [selRounds_none h]
     simp only [forkOn_empty]
     rw [selMiss_none H L P x ω sel h, Ex_const (α := Fin (L.V.k x) → Coin) (0 : ℝ)]
     exact add_nonneg (L.κs_nonneg x) (Real.sqrt_nonneg _)
-  | some u =>
+  | some iu =>
+    obtain ⟨i, u⟩ := iu
     rw [selRounds_some h]
-    simp only [forkOn_sub (hS.fixed x _ u (selUnit_eq_some.1 h).2).1]
+    simp only [forkOn_sub (hS.fixed x _ u (mem_of_selSlot h)).1]
     exact selMiss_fiber hWF hKS hS x P ω sel h
 
 /-- **`SessionKS` from `A`'s knowledge soundness**, its rounds and the contract: `β(ω, r)` is `B`'s collision
 probability averaged over the second stage, which averages to `Pr[B]` (`Ex_forkCollAt`); at `(ω, r)`, resampling the
-picked block's session's rounds (`Ex_resample`, `selRounds_resample`) gives `resample_bound` at each second-stage `d`,
-averaged by Jensen's inequality (`Ex_sqrt_le`). -/
+picked slot's block's session's rounds (`Ex_resample`, `selRounds_resample`) gives `resample_bound` at each
+second-stage `d`, averaged by Jensen's inequality (`Ex_sqrt_le`). -/
 theorem sessionKS_of {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compiled Coin A} (hS : L.Sessions H) :
     L.SessionKS H := by
   intro x Ω _ _ P
@@ -483,14 +501,14 @@ theorem sessionKS_of {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compiled
   have hres' := Ex_resample (fun d => L.selRounds x sel (forkOn (L.stage2 x) r d)) (selRounds_resample hS sel r)
     fun d => L.selMiss H P x ω sel (forkOn (L.stage2 x) r d)
   beta_reduce at hres hres'
-  have step1 : Pr (fun p : (Fin (L.V.k x) → Coin) × L.BlockEC x =>
+  have step1 : Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
       (run H P L.V x ω (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-        ∃ u, sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some u ∧
-          u.val ∈ L.checked x (forkOn (L.stage2 x) r p.1) ∧
-            ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.stage2 x) r p.1) (p.2 u)) ≤
+        ∃ i, sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
+          ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
+            ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.stage2 x) r p.1) (p.2 i u)) ≤
       Ex fun d => L.selMiss H P x ω sel (forkOn (L.stage2 x) r d) := by
     rw [Pr_prod_eq_Ex]
-    exact Ex_mono fun d => Pr_mono fun c ⟨ha, u, hs, hm, hn⟩ => ⟨ha, u, selUnit_eq_some.2 ⟨hs, hm⟩, hn⟩
+    exact Ex_mono fun d => Pr_mono fun c ⟨ha, i, hs, u, hm, hn⟩ => ⟨ha, i, u, selSlot_eq_some.2 ⟨hs, hm⟩, hn⟩
   calc _ ≤ Ex fun d => L.selMiss H P x ω sel (forkOn (L.stage2 x) r d) := step1
     _ = Ex fun d => Ex fun σ => L.selMiss H P x ω sel
           (forkOn (L.stage2 x) r (forkOn (L.selRounds x sel (forkOn (L.stage2 x) r d)) d σ)) := hres'.symm
