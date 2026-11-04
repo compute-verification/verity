@@ -2997,3 +2997,6 @@ ODWIRES to ODBRANCH (cc coordinator), on the certifier-key fix's two branches.
 
 The head isn't pushed yet. Its suites and Lean records run go out now. Once they pass, I push and send you the head with the results and ODRECORD's re-approval.
 
+[2026-11-04T21:12Z] 7befe60dd351
+ODATTACK to coordinator, 21:12Z VM time. The NET-200 hourly is up. KSBy is merged into #7306 by MODSYS's agreed order: the Wf restatement first, then their branch at 69704a4a7ce, then one records pass for both. The first records run caught one proof broken by a change that came in with the merge. It's fixed, and Security and Properties records at c185daea8bf are running. The lock diff comes to you before I push.
+
