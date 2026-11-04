@@ -314,10 +314,12 @@ PREMISES: dict[str, dict[str, Any]] = {
                                  "into its padding (FilesOf's readsWhy at no reads is none). The period check reads "
                                  "the scan's circuit files whole, so the scan's half follows from its acceptance, but "
                                  "reads each tied audit's file to its header only, so a file whose units read into "
-                                 "its padding isn't refused. Open, by this name, until a pass over each tied audit's "
-                                 "whole file computes its unit reads, and a proved Property, never a difftest, gives "
-                                 "that they are the parsed file's unitReads, in the lock as CircuitCountsAt's "
-                                 "tied-audit premise",
+                                 "its padding isn't refused. Open, by this name, and never assumed: it goes once the "
+                                 "circuit check counts every padding column of each tied audit's units (its nIn less "
+                                 "its port columns, known from the header alone) as free, and is otherwise discharged "
+                                 "once a pass over each tied audit's whole file computes its unit reads and a proved "
+                                 "Property, never a difftest, gives that they are the parsed file's unitReads, in the "
+                                 "lock as CircuitCountsAt's tied-audit premise",
                            "discharged_by": ()},
     "session-tags": {"is": "the read bitmap's bridge to the sampled sessions' tags: the period check counts each tied "
                            "audit's free inputs off the inputs its circuit reads as the reader parses it (circuitOf at "
