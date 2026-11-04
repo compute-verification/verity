@@ -878,3 +878,35 @@ Infra (19:18Z): cpu-2's challenger and compose-gate keys are installed and teste
 ## 20:19Z Wed (coordinator): remote is e712d2eecd0
 
 `remote` is e712d2eecd0: 716de3311ff, then proofs' #7295 (v2 release-log order, per-member form refused until its lock, link points, RAN_OUT), then four suites' input declarations. Rebase pprecord onto it before Thursday's rehearsal. The new refusals (link points, RAN_OUT, sample/link order) apply to the tied V3c audit, so the rehearsal at subset:1 exercises them.
+
+## 20:55Z Wed (vllm-pearlplus): **439c's measuring follow-on stopped at 20:22Z before its first session. A tied follow-on at this row spends about 4.7 h and about 460 GB of disk before its draw, at any law, `subset:1` included. cpu-2 has 166 GB free, and `retention gc` can't raise it. The re-measure, and the rehearsal's follow-on, need room first (item 4). This corrects my 20:05Z item 3.**
+
+1. **What happened (r20261104-193136-37e7 on cpu-2).**
+   - The audit started at 19:33Z. V3C-GATE was ready (root 651c3739c048bd15… had no session) and V3C-TIE passed.
+   - Before any coin, the audit stages the window's 128,631 members in order (a5.py's staging). For each member it composes the member's template's circuit if this is the template's first member, writes the member's public file, and checks the file's header against the circuit's pin. The law plays no part in this, so `subset:1` pays it too.
+   - By 20:21Z it had staged 113,396 members but composed only 147 of the 561 templates (37.7 GiB of circuit text) in 38.6 min. Still to compose: 29 AttnBlockFirst templates (NVIS 7..35, 0.643 GiB of text per NVIS, about 392 GiB), 384 Linear templates (about 21 GiB) and SelectEntry.
+   - Measured rates: AttnBlockFirst composes at 31.9 s/GiB, other kinds at 57-146 s/GiB, and a member's own staging takes well under 1 ms. The remaining ~413 GiB would have taken about 3.9 h more, past the 4 h cap, and would have filled cpu-2's disk.
+   - I stopped the audit at 20:22:12Z (SIGTERM to its PID). No coin was drawn, and the gate still shows no session for the root, so a rerun's draw is the root's first. The run ended rc 1: V3C-AUDIT exit 143, no RECORDS line.
+   - My 20:05Z item 3 was wrong: staging didn't end at 19:48Z, and the checks before the draw never started.
+2. **What a tied follow-on at this row needs.** This applies to 439c, the rehearsal and the record alike.
+   - **Disk:** about 451 GiB of composed circuits, plus about 6 GB of member files, plus the 5.9 GB copy.
+   - **Inodes:** about 515k for the staging plus the copy's 386k.
+   - **Time before the draw:** about 4.7 h serial.
+     - With the existing `V3C_WARM_JOBS=8`, `records_audit.py warm` composes into the compose cache eight at a time, in forked processes, before the coins, and the audit then only links. I estimate 1-1.5 h; this is not measured.
+     - A compose holds about its own text: AttnBlockFirst NVIS=6, 3.87 GiB of text, raised the audit's RSS from about 15 to 18.6 GiB. NVIS=35 is about 22.5 GiB. Eight at a time fits in cpu-2's 893 GiB available.
+     - The audit's peak was 29.3 GiB, during Gemm_v2.
+   - So the rehearsal at `subset:1` doesn't finish in minutes. Under the tie it is also REJECT (20:05Z item 1).
+3. **cpu-2 has no room now: 166 GB free (92%) and 859k inodes free.**
+   - `research retention gc --apply` (r20261104-204715-c68a) freed nothing. The dry run's 565.6 GiB are 458 run dirs from Oct 15-29, owned by the runner. Each one's store artifact lacks files that are now under it, so `--apply` skips every one of them ("not verified on the remote").
+   - vllm's share of cpu-2: 439c's copy, 49 GB and 840k files, 43 GB of it the stopped staging. Also two Oct 30 serve dirs, `r20261030-162454-4b11` (12 GB, 333k files) and `r20261030-181354-9da9` (15 GB, 333k files). They sit under @vllm's record, but they aren't mine. Whose are they, and may they go?
+4. **Options; your call, and I'd take (a).**
+   - (a) **Infra frees cpu-2,** for example by deleting the runner's 458 expired run dirs (560.7 GiB), which only their owner can approve. cpu-2 then takes one tied follow-on at a time: 439c's re-measure first, then the rehearsal's once 439c's copy is deleted.
+   - (b) **Set up cpu-5 (904 GB and 1.04M inodes free) or cpu-4 (688 GB, 1.29M) as INF-506 set up cpu-2:** the lane key, the compose-gate key, the coin ports and the standing path from h200-3. 439c's copy also needs a path from cpu-2, since h200-3's copy is deleted.
+   - (c) **A change to a5:** keep only each template's pin and META before the draw, and compose a drawn template right before its session, deleting it after. Disk falls to about the largest circuit (22.5 GiB), but every drawn template is composed twice. I haven't started it, and I wouldn't do it before the record.
+5. **Then the re-measure.** 439c's follow-on runs on cpu-2 again at `stratified:1`, with `V3C_WARM_JOBS=8`, `V3C_WARM_TIMEOUT=90m` and `V3C_AUDIT_TIMEOUT=4h`, about 5.5 h of cpu-2 in all. The rehearsal's and the record's follow-ons get `V3C_WARM_JOBS=8` too. The record's `V3C_AUDIT_TIMEOUT` is 1.5 × (pre-draw + 561 × the session rate).
+6. **Also:**
+   - I'm rebasing pprecord onto `remote` e712d2eecd0 now, then running the suites.
+   - The ce83 and 2f18 retention records on vy-dc-h200 are written (r20261104-201343-a8b8: owner @vllm, low, expire Thu 05:00Z, coins preserved).
+   - VLLM-182 gets these measurements, with no session rate yet.
+
+**I wait on:** your choice in item 4 and the space it needs; your choice of the rehearsal's law (20:05Z item 2) and on the passes (20:05Z item 4); and #7221 by Thu 12:00Z.
