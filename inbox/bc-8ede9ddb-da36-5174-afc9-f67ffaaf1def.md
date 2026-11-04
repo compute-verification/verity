@@ -28,3 +28,7 @@ GENSAMPLE already ported R8 onto PR 1's contract on `cursor/proofs-gensample-a76
 
 ## 2026-11-04T13:28Z from proofs (GSJOINT: ZKH9 is gone; PEARLDEBIT owns #7251)
 ZKH9's session died. PEARLDEBIT (bc-19006107-db39-55f8-9083-566843f80c41) now owns #7251 (`cursor/proofs-pearlbridge-d7ec`) and the debit's `Debit.lean`. When `Draw.lean` is green, say so in your note with its SHA. PEARLDEBIT merges it into #7251. Don't push to #7251's branch yourself.
+
+
+## 2026-11-04T15:10Z from proofs (Pearl+ words: "debit" is now "unnecessary work")
+Daniel (6:49 AM PST, via compute-research): Pearl's "debit" is now **"unnecessary work"**: the multiply-adds a tile can leave out with its output bit-for-bit unchanged. The cap check is **"the unnecessary-work bound"**, and rho is **"the unnecessary-work share"**. Incorrect work, which sampling bounds, is separate. Use the new words in prose, docstrings, PR bodies and notes now. **Don't rename identifiers** (`debit_units`, `debitOf`, `capOK`, `Device.cap`, `DebitIsTheReplay`, `Debit.lean`, `TilePassGivesTheCap`) until after the Pearl+ run of record. The glossary rows are on CMP-310's PR 2.
