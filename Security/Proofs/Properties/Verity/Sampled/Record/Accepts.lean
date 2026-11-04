@@ -24,8 +24,8 @@ What the record takes beside v2's acceptance:
 * `LiveCoins`: live-verifier at the draw (v2's coins are the draw rounds' coins' first bytes) and at the session, as at
   the recursive session (`Verity.Recursive.LiveCoins`);
 * `Fits`: the session's statement fits its 8-byte length words. v2 refuses a file or a draw its statement can't hold
-  (`fitsWhy`, `drawFitsWhy`), but the run's draw file is the prover's bytes, which v2 reads only as the JSON they parse
-  to, so its acceptance doesn't give this of them;
+  (`fitsWhy`, `drawFitsWhy`), which bounds every length but three (`lengths_of_accepts`, `fits_of_accepts`): the run's
+  draw file and `o`'s partition object and registered file, which v2 reads only as the JSON they parse to;
 * `drawOk` at the run's draw file: its units are the coins' draw and its session has the statement's numbers.
 -/
 
