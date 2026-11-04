@@ -19,6 +19,7 @@ from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import CLASS, GRAIN, SPLIT, SPLIT_GRAIN, state_row
 from tests.program.predict.test_window_circuit_fa3 import H200
 from tests.program.predict.test_window_circuit import SLOTS as SLOTS_CLASS
+from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
@@ -469,6 +470,71 @@ def test_a_call_boundary_is_matched_at_its_site_whatever_its_fx_node_counts_to(w
     assert all(np.array_equal(x, y) for u, w in zip(got.values, s0.values) for x, y in zip(u, w))
     with pytest.raises(ValueError, match=r"step 1: none of the prefill's op \('m/row_quant_1', .*\) \(1 ops\)"):
         WR.Served([d for d in rows if d["op_path"] != "m/row_quant_3"], *_read(store))
+
+
+class _Index:
+    """A `ProgramIndex` of served rows (`_served`'s): each row's spec, and the rest as its ``describe`` gives it."""
+
+    def __init__(self, rows) -> None:
+        self.served = rows
+        self.rows = [{"i": i, "spec": d["spec"]} for i, d in enumerate(rows)]
+
+    def describe(self, r):
+        return {k: v for k, v in self.served[r["i"]].items() if k != "spec"}
+
+
+def _record(store, rid: str, arrive: int, spell) -> CommittedStore:
+    """``store``'s values (`_served`'s) as a record's `CommittedStore`: request ``rid``'s at engine step ``arrive`` plus its
+    step, bound under op path ``spell(op, engine step)``."""
+    entries, blobs = [], {}
+    for (step, op, m), a in store.items():
+        e = arrive + step
+        name = f"{spell(op, e)}/{m}"
+        entries.append({"name": name, "element_offset": 0, "encoding": {"dtype": a.dtype.name},
+                        "identity": {"request_id": rid, "step": e, "op_path": spell(op, e), "output_member": m,
+                                     "element_range": [0, a.size]}})
+        blobs[(e, name)] = a.tobytes()
+    return CommittedStore({"entries": entries}, lambda step, name, lo, hi: blobs[(step, name)][lo:hi])
+
+
+def test_a_later_arrivals_call_boundary_is_read_under_the_fx_node_the_record_binds_it_under(window):
+    """The serve commits a batch's call boundary under one fx node, counted over its earliest arrival's steps (the served
+    int8 linears' ``…/row_quant_64`` at engine step 1 for every request then in the batch), so a request that arrived later
+    has its Program's call boundary at another count: it is read under the record's one op path of its module and op for
+    the request at that engine step. Where its module calls its op twice at a step, or the record binds the request under
+    none there, its read is refused by name."""
+    low, _f, _t, weights, slots = window
+    s0 = slots[0]
+    rows, store = _served(low, s0, T=1)
+    by: dict[tuple, list[int]] = {}
+    for d in rows:
+        by.setdefault(tuple(m[0] for m in d["members"]), []).append(int(d["op_path"][2:]))
+    members, (a, b) = next((ms, sorted(set(v))[:2]) for ms, v in by.items() if len(set(v)) > 1)
+
+    def spelling(module):
+        def spell(op: str, step: int) -> str:
+            k = int(op[2:])
+            n = 2 * step + (k == b)
+            return op if k not in (a, b) else f"{module(k)}/row_quant" + (f"_{n}" if n else "")
+        return spell
+
+    def served(spell, record):
+        program = [{**d, "op_path": spell(d["op_path"], d["step"])} for d in rows]
+        return WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served.of_record(_Index(program), record, "late", 1))
+
+    apart = spelling(lambda k: f"m{k}")
+    record = _record(store, "late", 1, apart)
+    assert record.ops("late", 1)[f"m{a}/row_quant_2"] == set(members)
+    assert not record.has("late", 1, f"m{a}/row_quant", members[0])
+    got = served(apart, record)
+    assert all(np.array_equal(x, y) for u, w in zip(got.values, s0.values) for x, y in zip(u, w))
+
+    one = spelling(lambda k: "m")
+    with pytest.raises(ValueError, match=r"position 0's node \d+: no committed identity for \(late, step 1, m/row_quant/"):
+        served(one, _record(store, "late", 1, one))
+    none = _record({key: v for key, v in store.items() if key[:2] != (0, f"op{b}")}, "late", 1, apart)
+    with pytest.raises(ValueError, match=rf"no committed identity for \(late, step 1, m{b}/row_quant_1/"):
+        served(apart, none)
 
 
 def test_a_node_served_under_other_statics_is_held_to_its_class_nodes_value(window):
