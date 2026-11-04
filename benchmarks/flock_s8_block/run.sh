@@ -114,14 +114,15 @@ stamp() { while IFS= read -r l; do printf '%s\t%s\n' "$(date +%s.%N)" "$l"; done
 # DRAM-active shares (fields 1002, 1004, 1005), stamped
 gpu_sample() {
   rm -f $1/stop
-  local P2=; command -v dcgmi > /dev/null && { dcgmi dmon -e 1002,1004,1005 -d 200 2>&1 | stamp > $1/dcgm.tsv & P2=$!; }
+  local P2=; command -v dcgmi > /dev/null && { dcgmi dmon -e 1002,1004,1005 -d 200 > >(stamp > $1/dcgm.tsv) 2>&1 & P2=$!; }
   while [ ! -e $1/stop ]; do
     printf '%s\t%s, %s\n' "$(date +%s.%N)" "$(nvidia-smi --query-gpu=utilization.gpu,memory.used,clocks.sm,power.draw \
       --format=csv,noheader,nounits -i ${GPU_LEASE_UUID:-0} 2>&1)" \
       "$(awk -v c=",$PCPU," '$1 ~ /^cpu[0-9]/ && index(c, "," substr($1, 4) ",") {b += $2 + $3 + $4 + $7 + $8 + $9} END {print b}' /proc/stat)"
     sleep 0.2
   done > $1/smi.tsv
-  [ -n "$P2" ] && { kill $P2 2>/dev/null; wait $P2 2>/dev/null; }   # dcgmi ends on its next write's SIGPIPE
+  # dcgmi itself (P2): it outlives a closed pipe, and may outlive a SIGTERM
+  [ -n "$P2" ] && { kill $P2 2>/dev/null; timeout 5 tail --pid=$P2 -f /dev/null; kill -9 $P2 2>/dev/null; wait $P2 2>/dev/null; }
 }
 # session SPEC MODE: a verifier process and WARM + RUNS prover sessions against it, into $O/MODE/NAME; MODE gpu or cpu, and
 # with "plain" in it (gpu-plain, cpu-plain) without --zk. 0 once the verifier recorded NS sessions and accepted each: the
