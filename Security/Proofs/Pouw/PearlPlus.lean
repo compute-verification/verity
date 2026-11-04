@@ -6,6 +6,7 @@ import Proofs.Pouw.PearlPlus.Keys
 import Proofs.Pouw.PearlPlus.Rho
 import Proofs.Pouw.PearlPlus.Stats
 import Proofs.Pouw.PearlPlus.Peel
+import Proofs.Pouw.PearlPlus.Semantics
 import Proofs.Pouw.PearlPlus.Assembly
 
 /-!
