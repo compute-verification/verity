@@ -27,13 +27,15 @@ from test_queue import World, _git
 from test_queue_drive import Harness, _failed_run, _killed_run, _live_run, _steps_run, _tip
 
 EVERY = {s: "passed" for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL}
-#: a ci.toml with a job for each after-landing step, circuit-check off the merge gate as in the tree
-CI_TOML = 'schema = "ci/v0"\n' + "".join(f'[[job]]\nname = "{s}"\nowner = "ci"\ngroup = 1\n'
-                                         + ('gate = false\n' if s == "circuit-check" else "") for s in AFTER_LANDING)
+#: a ci.toml with a job for each after-landing step, and drive's policy taking circuit-check off the merge gate as in the tree
+CI_TOML = 'schema = "ci/v0"\n' + "".join(f'[[job]]\nname = "{s}"\nowner = "ci"\ngroup = 1\n' for s in AFTER_LANDING)
+POLICY_TOML = 'schema = "policy/v0"\noff_gate = ["circuit-check"]\n'
+#: the files `_move_main` writes for a tree declaring `CI_TOML` under `POLICY_TOML`
+GATED_TREE = {"tools/verity/check/ci.toml": CI_TOML, "tools/verity/check/policy.toml": POLICY_TOML}
 
 
 def test_the_after_landing_run_runs_circuit_check_which_is_off_the_merge_gate():
-    """circuit-check is off the merge gate (ci.toml's `gate = false`): no recorded check runs it, so the after-landing run must,
+    """circuit-check is off the merge gate (policy.toml's `off_gate`): no recorded check runs it, so the after-landing run must,
     and must pass it to verify `main` (it is no step the run may skip by name)."""
     from research.drive import CHECK_STEPS
 
@@ -48,14 +50,17 @@ def world(tmp_path):
 
 def test_main_waits_for_the_steps_on_the_gate_of_the_commits_own_ci_toml(world, monkeypatch):
     """`_promote` waits at a commit for every after-landing step but those a run skips by name and the jobs that commit's own
-    ci.toml takes off the merge gate (circuit-check); for every such step when that ci.toml can't be read."""
+    drive policy takes off the merge gate (circuit-check); for every such step when its ci.toml or policy can't be read."""
     h = Review(world, monkeypatch)
     every = [s for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL]
     assert h.d._gating(_main(world)) == every
-    _move_main(world, {"tools/verity/check/ci.toml": CI_TOML})
+    _move_main(world, GATED_TREE)
     h.q.fetch()
     assert h.d._gating(_main(world)) == [s for s in every if s != "circuit-check"]
-    _move_main(world, {"tools/verity/check/ci.toml": "not toml ["})
+    _move_main(world, {"tools/verity/check/policy.toml": "not toml ["})
+    h.q.fetch()
+    assert h.d._gating(_main(world)) == every
+    _move_main(world, {"tools/verity/check/policy.toml": POLICY_TOML, "tools/verity/check/ci.toml": "not toml ["})
     h.q.fetch()
     assert h.d._gating(_main(world)) == every
 
@@ -1633,6 +1638,100 @@ def test_a_red_ratchet_gate_names_the_merge_it_fails_as_the_culprit(world, monke
     assert f"step ratchet-gate is red on `main` {tip[:12]}" in ring and f"`#2 ({merge2[:12]}): failed: grows {p01}" in ring, ring
     assert "Culprit: #2 (the ratchet gate fails its merge), of the 3 landing(s)" in ring, ring
     assert h.postland()["red"]["step ratchet-gate"]["culprit"][:1] == [2]
+
+
+def test_ratchet_gate_judges_above_the_last_tip_its_gate_passed_at_while_verified_stays_below(world, monkeypatch, tmp_path):
+    """While another step stays red, `verified` doesn't move, and a ratchet-gate based there re-judged every landing since in
+    each run, the run's long pole.  Its base is the tip of the last run whose ratchet-gate passed (`train.sh --ratchet-base`),
+    and the run's `--base` stays the last verified commit."""
+    _owning(world, {"lane-2": [], "pkg-owner": ["pkg/"]})
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"pkg/tests/test_x.py": "def test_y():\n    assert False\n"}))
+    for n in (1, 2):
+        h.review(n)
+    assert h.tick().startswith("landed #2"), world.logs
+    t1, verified = _main(world), h.postland()["verified"]
+    ((_, _, kw),) = h.posted
+    assert kw["base"] == verified != t1 and "ratchet_base" not in kw                     # none judged: the verified commit
+    h.run_state["r-post-0"] = ("done", 1, None)
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2",
+                              steps='{"step": "lean-suites", "status": "failed"}\n{"step": "ratchet-gate", "status": "passed"}\n')]
+    h.tick()
+    pl = h.postland()
+    assert pl["verified"] == verified and pl["red"]["suite pkg"]["culprit"][0] == 2, world.logs
+    assert pl["ratchet_judged"] == {"tip": t1, "base": verified, "failed": []}
+    world.gh.put(3, world.change({"b.txt": "3\n"}))
+    h.review(3)
+    assert h.tick().startswith("landed #3"), world.logs
+    t2, _, kw = h.posted[-1]
+    assert t2 == _main(world) != t1 and kw["base"] == verified == h.postland()["verified"] and kw["ratchet_base"] == t1
+    assert [m.pr for m in h.d.landed_since(kw["ratchet_base"], t2)] == [3]                # #1 and #2 aren't judged again
+    assert any(f"; ratchet-gate judges those above {t1[:12]}" in line for line in world.logs), world.logs
+
+
+def test_after_a_red_ratchet_gate_whose_culprit_was_reverted_the_gate_judges_above_that_runs_tip(world, monkeypatch, tmp_path):
+    """A ratchet-gate that failed naming the merge it fails is a verdict too: once drive reverted that culprit, the next run's
+    gate judges above the red run's tip, where the revert lies, so the revert is judged; `verified` stays below."""
+    from research.drive import FIX_WINDOW_S
+
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"c.py": "C = 1\n"}))
+    world.gh.put(3, world.change({"b.txt": "3\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    assert h.tick().startswith("landed #3")
+    tip, verified = _main(world), h.postland()["verified"]
+    merge2 = _git(world.origin, "rev-parse", "main^1")
+    assert _subject(world, merge2).startswith("Queue: #2")
+    run = _steps_run(tmp_path, "r-post-0", {s: "passed" for s in EVERY if s != "ratchet-gate"})
+    with open(run / "steps.jsonl", "a") as f:
+        f.write(json.dumps({"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}) + "\n")
+    (run / "ratchet-gate.log").write_text(f"  #2 ({merge2[:12]}): failed: grows p01.json 2 -> 3 entries\n")
+    h.run_state["r-post-0"] = ("done", 1, None)
+    h.evidence = [run]
+    h.tick()
+    pl = h.postland()
+    assert pl["red"]["step ratchet-gate"]["culprit"][:1] == [2] and pl["verified"] == verified, world.logs
+    assert pl["ratchet_judged"] == {"tip": tip, "base": verified, "failed": [merge2]}
+    h.clock += FIX_WINDOW_S + 1
+    h.tick()
+    revert = _main(world)
+    assert _git(world.origin, "rev-parse", f"{revert}^") == tip
+    assert f"This reverts commit {merge2}" in _git(world.origin, "log", "-1", "--format=%B", revert)
+    got, _, kw = h.posted[-1]
+    assert got == revert and kw["base"] == verified == h.postland()["verified"] and kw["ratchet_base"] == tip, world.logs
+    assert _git(world.origin, "rev-list", f"{kw['ratchet_base']}..{revert}") == revert   # the revert lies above the base
+
+
+def test_ratchet_gates_base_falls_back_to_verified_unless_the_judged_tip_lies_on_the_tips_history(world, monkeypatch):
+    """`_ratchet_base`: the judged tip only strictly below the tip and at or above the verified commit; while a change its gate
+    failed stands (no revert at or below the tip), the base that gate judged above; else the verified commit: none judged, or a
+    revert or reset that left the judged tip off the tip's history."""
+    h = Review(world, monkeypatch)
+    m0 = _main(world)
+    a = world.change({"rb-a.txt": "a\n"}, base=m0)
+    b = world.change({"rb-b.txt": "b\n"}, base=a)
+    c = world.change({"rb-c.txt": "c\n"}, base=b)
+    off = world.change({"rb-o.txt": "o\n"}, base=m0)
+    _git(world.dev, "checkout", "-q", "--detach", c)
+    _git(world.dev, "revert", "--no-edit", b)
+    rev = _git(world.dev, "rev-parse", "HEAD")
+    _git(world.dev, "push", "-q", "origin", f"{rev}:refs/dev/{rev}")
+    _git(h.d.repo, "fetch", "-q", "origin", *(f"refs/dev/{x}" for x in (a, b, c, off, rev)))
+
+    def base(judged: dict | None, tip: str, below: str = m0) -> str | None:
+        return h.d._ratchet_base({"ratchet_judged": judged} if judged else {}, tip, below)
+
+    assert base(None, c) == m0                                                            # none judged
+    assert base({"tip": b, "base": m0, "failed": []}, c) == b                              # passed at b
+    assert base({"tip": off, "base": m0, "failed": []}, c) == m0                           # off the tip's history
+    assert base({"tip": c, "base": m0, "failed": []}, c) == m0                             # the tip itself: nothing to judge
+    assert base({"tip": a, "base": m0, "failed": []}, c, below=b) == b                     # below the verified commit
+    assert base({"tip": c, "base": a, "failed": [b]}, rev) == c                            # its failure reverted at or below
+    assert base({"tip": b, "base": a, "failed": [b]}, c) == a                              # b stands: where that gate began
+    assert base({"tip": b, "base": off, "failed": [b]}, c) == m0                           # ... unless that is off the history
 
 
 @pytest.mark.parametrize("fix", ["names-the-culprit", "fixes-suite", "touches-the-failure", "new-head"])
