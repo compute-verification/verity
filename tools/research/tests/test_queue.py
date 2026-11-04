@@ -26,7 +26,7 @@ import research.queue as Q
 from research.cli import _custody_ttl_problem, main as research_main
 from research.pods.nebius import slot_only
 from research.queue import (DRIVE_FLAGS, PR, PREFLIGHT_BUDGET_S, SHADOW_BRANCH, Queue, QueueError, Rules, conflicting_files,
-                            credential_args, label_target)
+                            credential_args, deleted_names, label_target)
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
 from research.store.model import Label
@@ -693,40 +693,67 @@ def test_a_rebuild_that_changes_a_file_a_members_change_touches_preflights_that_
     assert world.logs[-1].endswith("preflights' verdicts reused for 1"), world.logs[-1]
 
 
-def test_a_pass_stands_across_no_base_that_changes_what_the_checks_run_or_deletes_a_path_nor_for_a_change_that_deletes_one(world):
-    """What `Preflight.onto` can't judge from the change's own files: a base that changed what its checks run (a test of
-    `PREFLIGHT_RULES`), one that deleted a path the change may name, and a change that deletes a path the base may name.  Each
-    preflights again."""
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
+def test_a_pass_stands_across_no_base_that_deletes_a_path_its_change_names_nor_for_a_change_that_deletes_one(world):
+    """What `Preflight.onto` can't judge from the change's own files: a change that deletes a path the base may name, and a base
+    that deleted a path a file the change writes names (`Queue._names_deleted`).  Each preflights again.  A member keeps its pass
+    across a base that changed what the checks run (a test of `PREFLIGHT_RULES`), and across a deletion no file of its change
+    names."""
+    world.gh.put(1, world.change({"a.txt": "names c.txt\n"}))
     world.gh.put(2, world.change({"b.txt": None}))
+    world.gh.put(3, world.change({"d.txt": "3\n"}))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({})
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and sorted(n for n, _ in calls) == [1, 2, 3]
+    _move_main(world, RELOCKED)
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and [n for n, _ in calls[3:]] == [2], world.logs
+    _move_main(world, {"tests/test_pins.py": "def test_no_pin_is_stale():\n    pass\n"})
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and [n for n, _ in calls[4:]] == [2], world.logs
+    _move_main(world, {"c.txt": None})
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and sorted(n for n, _ in calls[5:]) == [1, 2], world.logs
+
+
+def test_a_pr_entering_next_is_preflighted_under_checks_that_changed_since_its_pass(world):
+    """Only a member keeps its pass across a change to what the checks run: a PR out of `next` (here unmarked, then marked again
+    at the same head) whose newest pass is onto a base from before such a change is preflighted again as it enters."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, two := world.change({"d.txt": "2\n"}))
     q = world.queue()
     q.preflight, calls = _sync_preflight({})
     assert [m.pr for m in q.sync()[0]] == [1, 2] and sorted(n for n, _ in calls) == [1, 2]
-    _move_main(world, RELOCKED)
+    world.gh.ready.discard((2, two))
+    assert [m.pr for m in q.sync()[0]] == [1] and len(calls) == 2, world.logs
+    _move_main(world, {"tests/test_doc_paths.py": "def test_every_doc_path_exists():\n    pass\n"})
+    world.gh.ready.add((2, two))
     assert [m.pr for m in q.sync()[0]] == [1, 2] and [n for n, _ in calls[2:]] == [2], world.logs
-    _move_main(world, {"tests/test_pins.py": "def test_no_pin_is_stale():\n    pass\n"})
-    assert [m.pr for m in q.sync()[0]] == [1, 2] and sorted(n for n, _ in calls[3:]) == [1, 2], world.logs
-    _move_main(world, {"c.txt": None})
-    assert [m.pr for m in q.sync()[0]] == [1, 2] and sorted(n for n, _ in calls[5:]) == [1, 2], world.logs
+
+
+def test_a_deleted_path_is_named_by_its_file_name_and_by_its_directory_and_stem_as_a_path_and_a_module():
+    """`deleted_names`: the forms `Queue._names_deleted` looks for in the files a change writes."""
+    assert deleted_names("tools/verity/circuit_check/known.py") == {"known.py", "circuit_check/known", "circuit_check.known"}
+    assert deleted_names("Security/Proofs/Flock/Claims/Recursion/KappaEpsTight.lean") == {
+        "KappaEpsTight.lean", "Recursion/KappaEpsTight", "Recursion.KappaEpsTight"}
+    assert deleted_names("tools/verity/foo/__init__.py") == {"foo/", "verity/foo", "verity.foo"}
+    assert deleted_names("README.md") == {"README.md"}
 
 
 def test_a_pass_stands_from_the_base_the_member_had_on_next_though_the_saved_state_sorts_its_records_by_hash(world):
     """The state is saved with its keys sorted, so a head's preflight records come back in the order of their bases' hashes, not
-    of time.  Here the newest by position is of the first base, below a change to what the checks run.  The pass onto the base
-    the member had on `next` is read first (`Queue._next_base`), and a later move of `main` that changes nothing the checks
-    run keeps it."""
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    of time.  Here the newest by position is of the first base, above which `main` deleted a path the change names.  The pass
+    onto the base the member had on `next` is read first (`Queue._next_base`), and a later move of `main` that deletes nothing
+    keeps it."""
+    world.gh.put(1, world.change({"a.txt": "names c.txt\n"}))
     q = world.queue()
     q.preflight, calls = _sync_preflight({})
     assert [m.pr for m in q.sync()[0]] == [1] and len(calls) == 1
     first = _git(world.origin, "rev-parse", "main^{tree}")
+    _move_main(world, {"c.txt": None})
     for i in range(64):                                     # a base whose tree sorts below the first one's
-        moved = _move_main(world, {"tests/test_pins.py": f"# {i}\n"})
+        moved = _move_main(world, {"pad.txt": f"# {i}\n"})
         if _git(world.origin, "rev-parse", f"{moved}^{{tree}}") < first:
             break
     assert _git(world.origin, "rev-parse", "main^{tree}") < first
     assert [m.pr for m in q.sync()[0]] == [1] and len(calls) == 2, world.logs
-    _move_main(world, {"c.txt": "moved\n"})
+    _move_main(world, {"d.txt": "moved\n"})
     assert [m.pr for m in q.sync()[0]] == [1] and len(calls) == 2, world.logs
     assert world.logs[-1].endswith("preflights' verdicts reused for 1"), world.logs[-1]
 
