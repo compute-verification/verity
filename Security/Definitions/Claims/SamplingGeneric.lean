@@ -146,18 +146,6 @@ def E (A : Arg Coin) : Extractor Coin A.W A.V where
 /-- **The proof system is knowledge sound** at its errors: `Claims.KS` of its extractor. -/
 def KS (H : Msg → Msg) (A : Arg Coin) : Prop := Claims.KS H A.V A.R A.E A.κ A.γ
 
-/-- **Strict reruns**: at most `ρ` of the statement's shape, on every prover, tape and coin. -/
-def RerunsLe (H : Msg → Msg) (A : Arg Coin) (ρ : A.Sh → ℕ) : Prop :=
-  ExtractRunsLe H A.E fun x => ρ (A.shape x)
-
-/-- **Expected reruns**: at most `e` of the statement's shape, at every prover and tape. -/
-def RerunsExpLe (H : Msg → Msg) (A : Arg Coin) (e : A.Sh → ℝ) : Prop :=
-  ExtractRunsExpLe H A.E fun x => e (A.shape x)
-
-/-- **Its own SHA-512 calls**, not its reruns': at most `h` of the statement's shape, on every prover, tape and coin. -/
-def OwnLe (H : Msg → Msg) (A : Arg Coin) (h : A.Sh → ℕ) : Prop :=
-  ExtractOwnLe H A.E fun x => h (A.shape x)
-
 end Arg
 
 /-! ### Zero knowledge with a public outcome (`Claims.ZKOut`) -/

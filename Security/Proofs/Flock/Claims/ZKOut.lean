@@ -44,19 +44,8 @@ theorem pr_prod_eq_sum {St C : Type} [Fintype St] [Nonempty St] [Fintype C] (q :
   rw [h, Fintype.card_prod, Nat.cast_sum, Nat.cast_mul, ← Finset.sum_div, ← mul_div_assoc,
     mul_div_mul_left _ _ ha]
 
-/-- **The leak form, from the per-outcome form**: over finitely many outcomes, on every event the honest transcript's
-probability is at most the number of outcomes times the simulator's that draws the outcome uniformly, plus the sum of
-the outcomes' errors. A lemma of every `ZKOut`, not a claim of a deployment, so it is stated here rather than in
-`Definitions.Claims.ZKOut`. -/
-theorem zkOutLeak {W St : Type} [Fintype St] [Nonempty St] (N Ω : Msg → Type) [∀ x, Fintype (N x)]
-    [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)] [∀ x, Nonempty (Ω x)] (H : Msg → Msg) (k : Msg → ℕ)
-    (P : W → (x : Msg) → Prover (N x × Ω x)) (R : Rel W) (out : Msg → List (Msg × Out) → St) (S : SimOut St)
-    (ε : (x : Msg) → W → (Θ : Type) → VStar Θ → Θ → St → ℝ) (h : ZKOut N Ω H k P R out S ε) :
-    ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ (Ev : List (Msg × Out) → Prop),
-      Pr (fun ω : N x × Ω x => Ev (runStar H (P w x) Vs x ω θ).msgs) ≤
-        (Fintype.card St : ℝ) * Pr (fun p : St × S.C x => Ev ((S.given p.1).out H Vs θ x p.2)) +
-          ∑ o, ε x w Θ Vs θ o := by
-  intro x w hR Θ Vs θ hk Ev
+theorem zkOutLeak : ZKOutLeak := by
+  intro W St _ _ N Ω _ _ _ _ H k P R out S ε h x w hR Θ Vs θ hk Ev
   rw [pr_eq_sum_fiber (fun ω => out x (runStar H (P w x) Vs x ω θ).msgs),
     pr_prod_eq_sum (fun o c => Ev ((S.given o).out H Vs θ x c)), ← Finset.sum_add_distrib]
   exact Finset.sum_le_sum fun o _ => h x w hR Θ Vs θ hk o Ev
