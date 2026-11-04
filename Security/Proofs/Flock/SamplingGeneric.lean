@@ -3,6 +3,7 @@ module
 public import Definitions.Claims.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Split
 public import Proofs.Flock.SamplingGeneric.Assemble
+public import Proofs.Flock.SamplingGeneric.Efficient
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -12,7 +13,8 @@ public import Proofs.Flock.SamplingGeneric.Assemble
 rounds are its shape's (`arg_ofFlock_wf`). So the compiler's knowledge soundness gives Flock's (`flockKS_of_compilerKS`);
 it is two steps (`SamplingGeneric/Split.lean`: `KSOf`, `SessionKSOf`, composed by `compilerKS_of`). `KSOf`'s
 deterministic half, a failed extraction giving the failure event or a `Bext` collision, is `split`
-(`SamplingGeneric/Assemble.lean`).
+(`SamplingGeneric/Assemble.lean`). `CompilerEfficient` as stated is false (`Counter.not_compilerEfficient`,
+`SamplingGeneric/Efficient.lean`).
 -/
 
 @[expose] public section
