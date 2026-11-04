@@ -38,15 +38,16 @@ echo '{"ok": true}' > "$RESEARCH_RUN_DIR/k/harness_gate.json"
 PEARLC_KERNEL=pearl_c_sm90 PEARLC_CUBIN=$RESEARCH_RUN_DIR/k/pearl_c_sm90.cubin
 '''
 SERVED = ["volunteer-needed", "pearl_c_sm90.sh", "serve"]
+CHECKED = ["verify", "lean"]
 
 
 @pytest.mark.parametrize("needed, volunteer, steps", [
-    ("yes reject", None, [*SERVED, "debit.py", "volunteer --device", "retain --volunteer", "verify", "pearlplus --volunteer"]),
-    ("yes reject", "cpu", [*SERVED, "volunteer", "retain --volunteer", "verify", "pearlplus --volunteer"]),
+    ("yes reject", None, [*SERVED, "debit.py", "volunteer --device", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
+    ("yes reject", "cpu", [*SERVED, "volunteer", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
     ("yes reject", "", ["volunteer-needed"]),
-    ("no uncredited", None, [*SERVED, "verify", "pearlplus"]),
-    ("no uncredited", "", [*SERVED, "verify", "pearlplus"]),
-    ("no uncredited", "1", [*SERVED, "debit.py", "volunteer --device", "retain --volunteer", "verify", "pearlplus --volunteer"]),
+    ("no uncredited", None, [*SERVED, *CHECKED, "pearlplus"]),
+    ("no uncredited", "", [*SERVED, *CHECKED, "pearlplus"]),
+    ("no uncredited", "1", [*SERVED, "debit.py", "volunteer --device", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
     ("", None, ["volunteer-needed"]),
 ])
 def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_skipped_then(tmp_path, needed, volunteer, steps):
