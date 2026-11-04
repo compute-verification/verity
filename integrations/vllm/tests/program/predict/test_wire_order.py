@@ -146,6 +146,36 @@ def check(record, order) -> list[int]:
     return out
 
 
+def _units(w) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Wire ``w`` unrolled: each wired row's reader unit, its row of the reader's port, and its writer unit."""
+    c0, C = w.get("cut", [0, 1])
+    i = np.arange(math.prod(w["radix"]), dtype=np.int64)
+    src, j = np.full(i.shape, w["base"], dtype=np.int64), i.copy()
+    for r, s in zip(reversed(w["radix"]), reversed(w["step"])):
+        src, j = src + j % r * s, j // r
+    return w["at"] + i // C, c0 + i % C, src
+
+
+def unrolled(record, order) -> list[int]:
+    """Each of ``record``'s wires' greatest rank(writer) - rank(reader) under ``order`` taken unit by unit, as `check`'s
+    closed form must give it: every unit ranked ``c + Σ_q r[q]·digit_q`` in the segment holding it, and each wired row's
+    reader unit and writer unit read off the wire (`_units`), each in some segment. ``order`` is one `check` has taken."""
+    ranks = {t: np.zeros(n, dtype=np.int64) for t, n in record["templates"]}
+    held = {t: np.zeros(n, dtype=bool) for t, n in record["templates"]}
+    for g in order["segments"]:
+        n = math.prod(g["radix"])
+        i, r = np.arange(n, dtype=np.int64), np.full(n, g["c"], dtype=np.int64)
+        for R, x in zip(reversed(g["radix"]), reversed(g["r"])):
+            r, i = r + i % R * x, i // R
+        ranks[g["template"]][g["at"]: g["at"] + n], held[g["template"]][g["at"]: g["at"] + n] = r, True
+    out = []
+    for k, w in enumerate(record["wires"]):
+        unit, _, src = _units(w)
+        assert held[w["writer"]][src].all() and held[w["reader"]][unit].all(), f"wire {k}: a unit in no segment"
+        out.append(int((ranks[w["writer"]][src] - ranks[w["reader"]][unit]).max()))
+    return out
+
+
 DECLARED = ("templates", "cuts", "registered", "ingress")
 
 
@@ -156,13 +186,9 @@ def _function(desc) -> tuple[str, int]:
     outs = sorted({(w["writer"], w["out"]) for w in desc["wires"]})
     pi, oi, cols = {p: k for k, p in enumerate(ports)}, {o: k for k, o in enumerate(outs)}, []
     for w in desc["wires"]:
-        c0, C = w.get("cut", [0, 1])
-        i = np.arange(math.prod(w["radix"]), dtype=np.int64)
-        src, j = np.full(i.shape, w["base"], dtype=np.int64), i.copy()
-        for r, s in zip(reversed(w["radix"]), reversed(w["step"])):
-            src, j = src + j % r * s, j // r
-        cols.append(np.stack([np.full(i.shape, pi[(w["reader"], w["port"])]), w["at"] + i // C, c0 + i % C,
-                              np.full(i.shape, oi[(w["writer"], w["out"])]), src], axis=1))
+        unit, row, src = _units(w)
+        cols.append(np.stack([np.full(unit.shape, pi[(w["reader"], w["port"])]), unit, row,
+                              np.full(unit.shape, oi[(w["writer"], w["out"])]), src], axis=1))
     rows = np.concatenate(cols)
     rows = rows[np.lexsort((rows[:, 2], rows[:, 1], rows[:, 0]))]
     assert not (np.diff(rows[:, :3], axis=0) == 0).all(axis=1).any(), "a reader row wired twice"
@@ -188,6 +214,18 @@ def test_each_classs_certificate_orders_its_wires_on_its_entries_its_function_un
         {"template": e.template, "at": e.at, "radix": list(e.radix)} for e in low.circuit.blocks.inference]
     assert len(check(desc, json.loads(json.dumps(low.order)))) == len(desc["wires"])
     assert _function(desc) == (digest, rows)
+
+
+@pytest.mark.parametrize("name", list(FUNCTIONS))
+def test_unit_by_unit_each_writer_ranks_below_its_reader_so_a_pass_through_chain_ends(name):
+    """Each class's certificate taken unit by unit (`unrolled`) ranks every wired row's writer unit below its reader unit,
+    each wire's greatest difference the closed form's. Every edge between two units is a record wire, and a pass-through
+    writer's output is a port of its own unit, so a chain through pass-through writers falls in rank at each wire it
+    crosses: it never returns to a unit, and it ends."""
+    low, desc = _lowered(name)
+    order = json.loads(json.dumps(low.order))
+    reach = check(desc, order)
+    assert unrolled(desc, order) == reach and max(reach) < 0
 
 
 def test_a_wire_read_one_writer_unit_on_is_another_function():
@@ -255,9 +293,10 @@ A, B = ("A", 0, [8], 0, [1]), ("B", 0, [8], 1, [1])
 
 def test_a_toy_certificate_is_taken_at_the_tightest_ranks():
     """B's unit u ranked 1 + u after A's unit u ranked u reaches -1; with the cut digit, B's unit u reads A's 2u + 1, so B's
-    ranks 2 + 2u reach -1 and 1 + 2u reaches 0, refused."""
-    assert check(TOY, _order(A, B)) == [-1]
-    assert check(CUT, _order(A, ("B", 0, [4], 2, [2]))) == [-1]
+    ranks 2 + 2u reach -1 and 1 + 2u reaches 0, refused. Unit by unit (`unrolled`), the same."""
+    assert check(TOY, _order(A, B)) == unrolled(TOY, _order(A, B)) == [-1]
+    assert check(CUT, _order(A, ("B", 0, [4], 2, [2]))) == unrolled(CUT, _order(A, ("B", 0, [4], 2, [2]))) == [-1]
+    assert unrolled(CUT, _order(A, ("B", 0, [4], 1, [2]))) == [0]
     with pytest.raises(Refused, match=re.escape("wire 0: rank(writer) - rank(reader) reaches 0 >= 0")):
         check(CUT, _order(A, ("B", 0, [4], 1, [2])))
 

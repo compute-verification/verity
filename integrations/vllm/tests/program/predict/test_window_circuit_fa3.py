@@ -143,19 +143,20 @@ def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
     composer takes (`interface.check_proof_block`, which the lowering runs): at 4 outputs a collector's rows and an entry's
     are under 112 bytes, so each is its position's combine's (`SelectCollect_v1`, the last's `SelectEntry_v1`), which reads
     its group units' bests and indices as rows of 334 and 668 bytes. Its heads are `Attention_v20`'s Calls (no whole `AttentionHead_v4`, no guarded full
-    block). Its wire-order certificate is taken by the period check's closed form (`test_wire_order.check`), and its function
-    (`test_wire_order._function`: its templates, cuts and registered reads, and every wired row's writer row) is the one
-    `LLAMA_1B_FUNCTION` pins. Its numbers (units, templates, registered reads, the heads' census, the most rows and k_log of
-    a proof block, its wires and entries, the certificate's greatest rank and tightest reach, peak RSS) are printed as a
-    JSON line."""
+    block). Its wire-order certificate is taken by the period check's closed form (`test_wire_order.check`), unit by unit the
+    same (`test_wire_order.unrolled`), and its function (`test_wire_order._function`: its templates, cuts and registered
+    reads, and every wired row's writer row) is the one `LLAMA_1B_FUNCTION` pins. Its numbers (units, templates, registered
+    reads, the heads' census, the most rows and k_log of a proof block, its wires and entries, the certificate's greatest
+    rank and tightest reach, peak RSS) are printed as a JSON line."""
     # test_wire_order imports this module
-    from tests.program.predict.test_wire_order import _function, check
+    from tests.program.predict.test_wire_order import _function, check, unrolled
 
     config = {**json.loads(LLAMA_1B.read_text()), "quantization_config": dict(INT8_EXACT_QUANT)}
     reg, cls = _registered({**H200, "int8_exact": "linears"}, config), WindowClass(4, 32, 4)
     low = lower(reg, cls)
-    circuit, desc = low.circuit, json.loads(json.dumps(low.circuit.description()))
-    reach = check(desc, json.loads(json.dumps(low.order)))
+    circuit, desc, order = low.circuit, json.loads(json.dumps(low.circuit.description())), json.loads(json.dumps(low.order))
+    reach = check(desc, order)
+    assert unrolled(desc, order) == reach
     heads, n = Counter(), {_label(fn): k for fn, k in circuit.templates}
     for fn, k in circuit.templates:
         if fn.id.startswith(("Attention", "AttnBlock", "AttnHeadEnd")):
