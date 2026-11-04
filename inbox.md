@@ -2286,3 +2286,26 @@ NET-212's M5 rework is up at 38c40e8d05b (`cursor/net212-reader-wires-061a`), po
 - Left: these are the sessions' verdicts only. The window's full v2 check still refuses at `treesHeld` and at MULTI_REFUSED, and `v2_case.py`'s served cases name no challenger.
 - NET-209: the records check at 4655eda20f3 is still running on cpu-12. I'll report its result to you and ODRECORD.
 
+[2026-11-04T14:29Z] cd27d64b826b
+ODWIRES to the coordinator, 14:40Z: #7240 is approved and handed off, so I'm stopping as you asked.
+
+- **PR:** https://github.com/compute-verification/verity/pull/7240. The head is 49b01aec881 on cursor/net207-wires-061a, pushed, with base main, built on onsite's c4f145e12cb, and unmarked.
+- **Reviews:** @circuits approved it on CIR-157 at 49b01aec88. ODRECORD approved it for onsite at 49b01aec881 (14:20Z). Merging into the 18:00Z pin's trial has one docstring conflict, in records/__init__.py, resolved by keeping served_advice and then wire_order.
+- **Handoff:** ODBRANCH has the head, that resolution and the runs, to merge into onsite with ODLEAN's circuit PR, Monday only. ODRECORD has the rerun's verdict.
+- **The pre-mark is complete.** r20261104-114326-4c7a finished 45 of 51 suites at ca6f3390903 before its timeout. r20261104-131745-9d3c (--timeout 10800) ran the six cut suites, plus repository, network-traces and prove_path with its slow tests. r20261104-141927-0c05 ran verity-graph, the fourth suite 49b01aec881 touches. Every touched suite passes at the head except repository, which fails only onsite's known 5, none in this PR's files.
+- **What ships:** the verity/wire-order/v1 certificate, as order.json beside circuit.json. It has one segment per inference entry, ranked c + Σ r·digit, and every wire's writer ranks at least 1 below its reader.
+- **V3c 4,32,4 counts and digests:**
+  - Wires go from 6,508 to 28,206, over the same 252 pairs and 12,668,152 wired rows. There are 2,862 entries and 57,221 members.
+  - The record's SHA-512 is f2702879…0ab543 and the certificate's is 3c34adc9…48ae69. The Program digest 795bafee… and the function digest 5bbca919… are unchanged.
+- **Lean and circuit-check:**
+  - Lean's period check (85d3273626c) accepts V3c's whole record with 23/23 cases agreeing (r20261104-085348-d496), and the small classes with 43/43 (r20261104-085409-0980).
+  - circuit-check on the 63 templates found 0 new failures and left 2 unchecked (r20261104-084611-2f90).
+- **#5846:** I told vllm on VLLM-146. The conflict is one import line (drop inference, add group_keys) plus the pins in test_window_circuit.py and test_window_circuit_fa3.py, which whichever lands second regenerates; I take it if #7240 lands second. The tool says a worker's comment rings no one, so please ring @vllm if they should see it before they pick VLLM-146 up after Friday.
+- **Open, not mine now:**
+  - The certificate is checked only once ODLEAN's PR lands.
+  - NET-208's banding is dropped for Monday, and ODLEAN has been told.
+  - ODRECORD adds order.json to #7262 after #7240 lands on onsite.
+- **Rules:** none of the tmux sessions on the VM are mine, nothing went to /dev/shm, and the only local job over 400 MB was a git merge-tree (417 MB at most).
+
+Ready for the next piece.
+
