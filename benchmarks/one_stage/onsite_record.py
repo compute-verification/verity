@@ -502,10 +502,15 @@ def charged(b: Mapping[str, Any]) -> dict[str, Any]:
             "lean": "scans[j].free"}
 
 
-def advice_cap(reg: Mapping[str, Any]) -> int:
-    """ℓ_a (`CAP`) of the run's published advice registration: its compiler's cap_bits. ValueError where its advice's
-    length isn't padded to it."""
-    cap, bits = int(reg["compiler"]["cap_bits"]), int(reg["binding"]["advice"]["bits"])
+def advice_cap(reg: Any) -> int:
+    """ℓ_a (`CAP`) of the run's published advice registration: its compiler's cap_bits, a whole number of at least 1
+    bits. ValueError, by name, where it states none (an ℓ_a of 0 would charge a tied audit's advice nothing) or its
+    advice's length isn't padded to it."""
+    cap = ((reg.get("compiler") if isinstance(reg, Mapping) else None) or {}).get("cap_bits")
+    if not isinstance(cap, int) or isinstance(cap, bool) or cap < 1:
+        raise ValueError(f"its compiler states no cap_bits of at least 1 bit ({cap!r}), the ℓ_a the figure of record "
+                         "charges each tied audit while a check or a premise is open, so it charges none rather than 0")
+    bits = reg["binding"]["advice"]["bits"]
     if bits != cap:
         raise ValueError(f"its advice's length {bits} isn't padded to its compiler's cap {cap}")
     return cap
@@ -522,19 +527,19 @@ def caps(case: Mapping[str, Any], cap: int) -> list[int]:
     return [cap] * len(audits)
 
 
-def premises(locks: Sequence[Path]) -> dict[str, Any]:
+def premises(locks: Sequence[Path], root: Path = ROOT) -> dict[str, Any]:
     """The tight K's premises as ``locks`` record their discharges (`DISCHARGE`): each of `PREMISES` with the theorems
     no lock lists (``missing``) and the named assumptions of those one does that don't stand (``assumes``), each
     guarantee of `RESTS_ON` with its named assumptions, and ``open``: each premise not discharged, then each assumption
     of `RESTS_ON` neither standing nor a premise's, and each of its guarantees no lock lists. A lock that can't be read
-    lists nothing, and ``unread`` names it, by its path in the tree where it is one, with why."""
+    lists nothing, and ``unread`` names it, by its path under ``root`` (the tree) where it is one, with why."""
     listed: dict[str, Any] = {}
     unread: list[str] = []
     for lock in locks:
         try:
             listed |= json.loads(lock.read_text())["guarantees"]
         except (OSError, ValueError, KeyError, TypeError) as e:
-            name = lock.relative_to(ROOT) if lock.is_relative_to(ROOT) else lock
+            name = lock.relative_to(root) if lock.is_relative_to(root) else lock
             unread.append(f"{name}: {type(e).__name__}: {e.strerror if isinstance(e, OSError) else e}")
     found, open_ = {}, []
     for name, p in PREMISES.items():

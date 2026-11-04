@@ -334,17 +334,17 @@ def test_a_lock_that_cant_be_read_lists_nothing_and_is_named_so_every_premise_it
     in the tree and with why, and reads the other lock, so only the premise whose discharge that lock alone would list
     is open and the figure of record charges the cap, never a crash."""
     write_lock(lock, {"Properties.NetworkCertifier.circuitCounts": None})
-    if text is None:
-        props = OR.ROOT / "Security" / "Properties" / "absent-lean-audit.json"
-        name = "Security/Properties/absent-lean-audit.json"
-    else:
-        props = name = tmp_path / "lean-audit.json"
+    props = tmp_path / "tree" / "Security" / "Properties" / "lean-audit.json"
+    props.parent.mkdir(parents=True)
+    if text is not None:
         props.write_text(text)
     monkeypatch.setattr(OR, "LOCKS", (lock, props))
     of = held_both(tmp_path / "out")["bound"]["of_record"]
     assert (of["open"], of["K"]) == (["free-count"], KR)
     (why,) = of["premises"]["unread"]
-    assert why.startswith(f"{name}: {error}: ") and (text is not None or str(OR.ROOT) not in why)
+    assert why.startswith(f"{props}: {error}: ")
+    (why,) = OR.premises((lock, props), root=tmp_path / "tree")["unread"]
+    assert why.startswith(f"Security/Properties/lean-audit.json: {error}: ") and str(tmp_path) not in why
 
 
 def test_an_assumption_a_premise_stands_for_is_open_only_while_that_premise_is(tmp_path, lock, monkeypatch):
@@ -385,8 +385,8 @@ def test_an_audit_whose_registration_binds_an_advice_or_a_compiler_leaves_no_fig
 
 def test_a_run_that_published_no_advice_registration_or_one_unpadded_has_no_figure_of_record(tmp_path):
     """ℓ_a is the cap of the run's published advice registration (`REGISTRATION`), never 0 for want of one: with none
-    the figure of record is missing, and one whose advice isn't padded to its compiler's cap, or that names no
-    compiler, is its error. The tight K stays the bound's."""
+    the figure of record is missing, and one whose advice isn't padded to its compiler's cap is its error. The tight K
+    stays the bound's."""
     rec = OR.record(accepted(tmp_path / "none", registration=None))
     assert rec["bound"]["of_record"] == rec["advice_charge"]["cap"] == {"missing": OR.NO_REGISTRATION}
     assert rec["periods"] == {"missing": f"no figure of record: {OR.NO_REGISTRATION}"} and rec["bound"]["K"] == K
@@ -394,9 +394,24 @@ def test_a_run_that_published_no_advice_registration_or_one_unpadded_has_no_figu
     rec = OR.record(accepted(tmp_path / "unpadded", registration=unpadded))
     assert rec["bound"]["of_record"] == {
         "error": f"{OR.REGISTRATION}: ValueError: its advice's length 392 isn't padded to its compiler's cap {2 ** 23}"}
-    no_compiler = {k: v for k, v in PUBLISHED.items() if k != "compiler"}
-    rec = OR.record(accepted(tmp_path / "bare", registration=no_compiler))
-    assert rec["advice_charge"]["cap"] == {"error": f"{OR.REGISTRATION}: KeyError: 'compiler'"}
+
+
+@pytest.mark.parametrize("registration, cap", [
+    ({k: v for k, v in PUBLISHED.items() if k != "compiler"}, None), ({**PUBLISHED, "compiler": {"name": "c"}}, None),
+    ({**PUBLISHED, "compiler": {"cap_bits": 0}}, 0), ({**PUBLISHED, "compiler": {"cap_bits": -8}}, -8),
+    ({**PUBLISHED, "compiler": {"cap_bits": True}}, True), ({**PUBLISHED, "compiler": {"cap_bits": "8388608"}}, "8388608"),
+    ({**PUBLISHED, "compiler": {"cap_bits": 8.0}}, 8.0), ([PUBLISHED], None)])
+def test_a_published_advice_registration_stating_no_cap_of_at_least_1_bit_refuses_the_figure_of_record_by_name(
+        tmp_path, registration, cap):
+    """No compiler, or a compiler whose cap_bits is missing, 0, negative, or not a whole number, would charge each tied
+    audit's advice 0 bits while a check or a premise is open: the record refuses the figure of record by name, never
+    charging 0, whatever the order its pieces land in. The tight K stays the bound's, its cells beside no figure."""
+    rec = OR.record(accepted(tmp_path, registration=registration))
+    why = (f"{OR.REGISTRATION}: ValueError: its compiler states no cap_bits of at least 1 bit ({cap!r}), the ℓ_a the "
+           "figure of record charges each tied audit while a check or a premise is open, so it charges none rather "
+           "than 0")
+    assert rec["bound"]["of_record"] == rec["advice_charge"]["cap"] == {"error": why}
+    assert rec["periods"] == {"missing": f"no figure of record: {why}"} and rec["bound"]["K"] == K
 
 
 def test_a_commitment_the_record_cant_read_leaves_no_figure_of_record_and_no_periods(tmp_path):
