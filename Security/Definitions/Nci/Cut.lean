@@ -30,7 +30,8 @@ runs from the inputs towards the outputs. The input gates outside `θ` are the u
 nothing ties `c` to the blocks, and it holds for every `c`. `OnePremise` bounds `Π(k)` and `α` under (H), one premise
 on cuts, and `SharedArrays` and `SharedArraysClique` bound `Π(k)` when the matmuls share arrays, each array at its own
 cost a value: a layer's forward, `dX` and `dW` products, and in general. `HE` is the theorem of record: `Bound` and its
-slowdown under (H) and (E), a floor on what a set of gates exports; `HEShared` is its form with shared arrays.
+slowdown under (H) and (E), a floor on what a set of gates exports; `HEShared` is its form with shared arrays, no
+`ω + 1` of them pairwise read together, for an `ω` its caller supplies.
 
 A word is a set of gates, so a value and each of its casts are distinct words. The premises count values: `val` names
 the value each word carries, the casts of one value carrying one, and is one-to-one on each matmul's `w`-words and on
@@ -222,6 +223,10 @@ def SharedArraysClique : Prop :=
 /-- The theorem of record's `α`: `½ √(k³ / (q b))`, at `q = β_w β_x` and (E)'s floor `b`. -/
 noncomputable def alphaHE (k : ℕ) (q b : ℝ) : ℝ := √(k ^ 3 / (q * b)) / 2
 
+/-- `F = √(2 (1 - 1/ω))`, what shared arrays with no `ω + 1` of them pairwise read together put on both terms of
+`HEShared`: `1` at `ω = 2`, `2/√3` at `ω = 3`. -/
+noncomputable def shareF (ω : ℕ) : ℝ := √(2 * (1 - 1 / ω))
+
 /-- **The theorem of record.** `val` names the value each word carries, one-to-one on each matmul's `w`-words and on
 its `x`-words. (H): no two matmuls share both a `w`- and an `x`-value, and every `S` with `κ(S) ≤ k` has
 `β_w |val(S ∩ W)| + β_x |val(S ∩ X)| ≤ κ(S)`. (E) at `b > 0`: every set `B` of computed gates has
@@ -243,15 +248,16 @@ def HE : Prop :=
           k / 2 * √(W.O * W.N / (βw * βx)) / (k + alphaHE k (βw * βx) b) ^ (3 / 2 : ℝ)) ≤
         m * c / d.D.size d.D.computed
 
-/-- **The theorem of record with shared arrays.** The arrays, costs and values of `SharedArraysClique` at `ω = 3`: no
-four arrays pairwise read together by a matmul, as with every layer's forward, `dX` and `dW` products on its weights,
-activations and output gradients, however many layers share an array. With (E) at `b`, both terms of `HE` grow by
-`F = 2/√3`, with `q` for `β_w β_x`: `N ≤ m (k + F α) + F (k/2) √(m O / q)` with `α = ½ √(k³ / (q b))`, and the
-slowdown likewise. -/
+/-- **The theorem of record with shared arrays.** The arrays, costs and values of `SharedArraysClique`, no `ω + 1`
+arrays pairwise read together by a matmul, as when the arrays fall into `ω` classes and no matmul reads two of one
+class: `ω = 3` with every layer's forward, `dX` and `dW` products on its weights, activations and output gradients,
+however many layers share an array, and `ω = 2` with products of at most two of those three kinds. With (E) at `b`,
+both terms of `HE` grow by `F = √(2 (1 - 1/ω))` (`shareF`), with `q` for `β_w β_x`:
+`N ≤ m (k + F α) + F (k/2) √(m O / q)` with `α = ½ √(k³ / (q b))`, and the slowdown likewise. -/
 def HEShared : Prop :=
   ∀ (ι ρ V : Type) [Fintype ι] [DecidableEq ι] [Fintype ρ] [DecidableEq V] (d : Declaration) (W : Work d.D ι)
-    (val : Finset (Fin d.D.N) → V) (k m c : ℕ) (P : Partition d.D m) (G : SimpleGraph ρ)
-    (A : ρ → Finset (Finset (Fin d.D.N))) (e : ι → ρ × ρ) (β : ρ → ℝ) (q b : ℝ), G.CliqueFree 4 →
+    (val : Finset (Fin d.D.N) → V) (k m c ω : ℕ) (P : Partition d.D m) (G : SimpleGraph ρ)
+    (A : ρ → Finset (Finset (Fin d.D.N))) (e : ι → ρ × ρ) (β : ρ → ℝ) (q b : ℝ), 0 < ω → G.CliqueFree (ω + 1) →
     (∀ a, G.Adj (e a).1 (e a).2) → (∀ a a', s((e a).1, (e a).2) = s((e a').1, (e a').2) → a = a') →
     (∀ a, W.wWords a ⊆ A (e a).1 ∧ W.xWords a ⊆ A (e a).2) →
     (∀ a, Set.InjOn val (W.wWords a) ∧ Set.InjOn val (W.xWords a)) →
@@ -259,9 +265,9 @@ def HEShared : Prop :=
     (∀ S, kappaWords d S ≤ k → ∑ r, β r * ((S ∩ A r).image val).card ≤ kappaWords d S) →
     (∀ B ⊆ d.D.computed, b * (W.clear B).card ≤ kappa d.D B ((W.clear B).biUnion W.y)) →
     (∀ u, (d.D.into (P.gates u) \ d.θ).card ≤ k) →
-      (W.N : ℝ) ≤ m * (k + 2 / √3 * alphaHE k q b) + 2 / √3 * (k / 2 * √(m * W.O / q)) ∧
-      (c / d.D.size d.D.computed : ℝ) * (W.N / (k + 2 / √3 * alphaHE k q b) -
-          2 / √3 * (k / 2 * √(W.O * W.N / q)) / (k + 2 / √3 * alphaHE k q b) ^ (3 / 2 : ℝ)) ≤
+      (W.N : ℝ) ≤ m * (k + shareF ω * alphaHE k q b) + shareF ω * (k / 2 * √(m * W.O / q)) ∧
+      (c / d.D.size d.D.computed : ℝ) * (W.N / (k + shareF ω * alphaHE k q b) -
+          shareF ω * (k / 2 * √(W.O * W.N / q)) / (k + shareF ω * alphaHE k q b) ^ (3 / 2 : ℝ)) ≤
         m * c / d.D.size d.D.computed
 
 end Nci.Cut

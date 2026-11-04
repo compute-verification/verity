@@ -787,6 +787,8 @@ theorem sqrt_scaled {s X : ℝ} (hs : 0 ≤ s) : √(s ^ 2 * X) = s * √X := by
 theorem alphaHE_nonneg (k : ℕ) (q b : ℝ) : 0 ≤ alphaHE k q b :=
   div_nonneg (Real.sqrt_nonneg _) zero_le_two
 
+theorem shareF_nonneg (ω : ℕ) : 0 ≤ shareF ω := Real.sqrt_nonneg _
+
 theorem he : HE := by
   intro ι V _ _ _ d W val k m c P βw βx b hw hx hb hval hshare hH hE hk
   obtain ⟨hpi, -⟩ := onePremise ι V d W val k βw βx hw hx hval hshare hH
@@ -803,31 +805,30 @@ theorem he : HE := by
   exact ⟨hN, hs⟩
 
 theorem heShared : HEShared := by
-  intro ι ρ V _ _ _ _ d W val k m c P G A e β q b hG hadj hinj hsub hval hβ hq hqe hb hH hE hk
-  have h3 : (0 : ℝ) ≤ 3 := by norm_num
-  have hpi : (piMax d W k : ℝ) ≤ k ^ 2 / (3 * q) :=
-    (sharedArraysClique ι ρ V d W val k 3 G A e β q (by norm_num) hG hadj hinj hsub hval hβ hq hqe hH).trans_eq
-      (by push_cast; ring)
-  have hα : alpha d W k ≤ 2 / √3 * alphaHE k q b := by
+  intro ι ρ V _ _ _ _ d W val k m c ω P G A e β q b hω hG hadj hinj hsub hval hβ hq hqe hb hH hE hk
+  have hω' : 1 ≤ ω := hω
+  have hω1 : (1 : ℝ) ≤ ω := Nat.one_le_cast.2 hω'
+  have hF : (0 : ℝ) ≤ 2 * (1 - 1 / ω) := by
+    have h1 : (0 : ℝ) ≤ 1 - 1 / ω := by
+      rw [sub_nonneg, div_le_iff₀ (by linarith : (0 : ℝ) < ω)]
+      linarith
+    linarith
+  have hpi := sharedArraysClique ι ρ V d W val k ω G A e β q hω hG hadj hinj hsub hval hβ hq hqe hH
+  have hα : alpha d W k ≤ shareF ω * alphaHE k q b := by
     refine (alpha_le_of_exports W hb hE hpi).trans_eq ?_
-    rw [show (k : ℝ) * (k ^ 2 / (3 * q)) / b = k ^ 3 / (q * b) / 3 by ring, Real.sqrt_div' _ h3, alphaHE]
-    ring
-  have hp : (0 : ℝ) ≤ k ^ 2 / (3 * q) := div_nonneg (sq_nonneg _) (mul_pos three_pos hq).le
-  have hF : (0 : ℝ) ≤ 2 / √3 := div_nonneg zero_le_two (Real.sqrt_nonneg _)
+    rw [show (k : ℝ) * (2 * (1 - 1 / ω) * (k ^ 2 / (4 * q))) / b = 2 * (1 - 1 / ω) * (k ^ 3 / (q * b) / 2 ^ 2) by
+      ring, Real.sqrt_mul hF, Real.sqrt_div' _ (sq_nonneg (2 : ℝ)), Real.sqrt_sq zero_le_two, shareF, alphaHE]
+  have hp : (0 : ℝ) ≤ 2 * (1 - 1 / ω) * (k ^ 2 / (4 * q)) :=
+    mul_nonneg hF (div_nonneg (sq_nonneg _) (mul_pos four_pos hq).le)
+  have hk2 : (0 : ℝ) ≤ k / 2 := div_nonneg (Nat.cast_nonneg k) zero_le_two
   have hN := bound_of_le hk hα hpi
   have hs := slowdown_of_bound (Nat.cast_nonneg m) (add_nonneg (Nat.cast_nonneg k)
-    (mul_nonneg hF (alphaHE_nonneg k q b))) hp (Nat.cast_nonneg W.O) (Nat.cast_nonneg c)
+    (mul_nonneg (shareF_nonneg ω) (alphaHE_nonneg k q b))) hp (Nat.cast_nonneg W.O) (Nat.cast_nonneg c)
     (Nat.cast_nonneg (d.D.size d.D.computed)) hN
-  have e1 : √((k : ℝ) ^ 2 / (3 * q) * m * W.O) = 2 / √3 * (k / 2 * √(m * W.O / q)) := by
-    rw [show (k : ℝ) ^ 2 / (3 * q) * m * W.O = k ^ 2 * (m * W.O / q / 3) by ring, sqrt_scaled (Nat.cast_nonneg k),
-      Real.sqrt_div' _ h3]
-    ring
-  have e2 : √((k : ℝ) ^ 2 / (3 * q) * W.O * W.N) = 2 / √3 * (k / 2 * √(W.O * W.N / q)) := by
-    rw [show (k : ℝ) ^ 2 / (3 * q) * W.O * W.N = k ^ 2 * (W.O * W.N / q / 3) by ring,
-      sqrt_scaled (Nat.cast_nonneg k), Real.sqrt_div' _ h3]
-    ring
-  rw [e1] at hN
-  rw [e2] at hs
+  rw [show (2 : ℝ) * (1 - 1 / ω) * (k ^ 2 / (4 * q)) * m * W.O = 2 * (1 - 1 / ω) * ((k / 2) ^ 2 * (m * W.O / q)) by
+    ring, Real.sqrt_mul hF, sqrt_scaled hk2, ← shareF] at hN
+  rw [show (2 : ℝ) * (1 - 1 / ω) * (k ^ 2 / (4 * q)) * W.O * W.N =
+    2 * (1 - 1 / ω) * ((k / 2) ^ 2 * (W.O * W.N / q)) by ring, Real.sqrt_mul hF, sqrt_scaled hk2, ← shareF] at hs
   exact ⟨hN, hs⟩
 
 end Nci.SecurityProofs.Cut
