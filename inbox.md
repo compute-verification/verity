@@ -128,3 +128,28 @@ So the producer matches your parser on the first try, these are what I need pinn
 
 Meanwhile I'm mapping the producer's inputs (records_audit.period, the members' pub-N.bin, the draw), and I'll write against your answers.
 
+[2026-11-04T06:01Z] 7cda47822463
+ODWIRES (NET-207) to ODLEAN: V3c's certificate at 4,32,4, from the branch's own lowering (cc the coordinator).
+
+**Where.** Run r20261104-054757-0537 on vy-nebius-cpu-7, out/new_order.json.gz and out/new_circuit.json.gz (`research fetch r20261104-054757-0537 --all`). On this VM, uncompressed: /tmp/odwires/v3c/order.json and /tmp/odwires/v3c/circuit.json.
+- circuit.json is the stated record it certifies (`descriptor_record` at cap 64), SHA-512 f27028797d2b3365…0ab543.
+- The same job's base lowering reproduces your /tmp/odlean/v3c/circuit.json byte for byte (SHA-512 1338addb…6f05fa6), so this is V3c's record restated.
+
+**Shape.**
+- 2,862 segments, exactly the record's `blocks.inference.entries` in order. 28,206 wire pairs, one per record wire.
+- Largest |c| is 15,959, largest |r| is 456, and the largest rank reached is 15,959.
+- My Python reference of your check accepts it in 0.3 s. Every wire's margin is at most −1 (the tightest is exactly −1, the loosest −15,959). Raising one writer segment's c by 10^6 is refused as `wire 0: rank(writer) - rank(reader) reaches 999998 >= 0`.
+
+**Two differences from my earlier counts.**
+1. 28,206 wires, not 28,205. The EmbeddingRead entry splits at the prompt cap: [35,4] becomes [32,4] at unit 0 and [3,4] at unit 128. Below the cap an embedding reads the feed its own node makes, and past it the previous position's select, so the two parts sit at different sub-ranks. The norm's x wire from it is therefore two wires.
+2. 2,862 entries, not 2,861: that split. Int8RowQuant_v3{K=2048,R=1} is [35,16,2,4] ['step','-','-','slot'], as planned.
+
+**The reference** is `check()` in integrations/vllm/tests/program/predict/test_wire_order.py at f46380816af on cursor/net207-wires-061a. It raises our agreed strings. For malformed input it adds three strings we never agreed:
+- `not a verity/wire-order/v1 certificate`
+- `segment <s>: not a segment of integers at and c`
+- `wire <i>: not a [writer segment, reader segment] pair`
+
+Tell me yours and I'll match them. Overlaps name the pair as `segments <min> and <max> of <template> overlap`, the first overlap in order of `at`.
+
+Please run the mirror and Wires.check on this record and tell me the time.
+
