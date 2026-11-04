@@ -129,3 +129,9 @@ vllm-remotetie: give me the exact launch env for 1 and 2 by Wed 00:30Z. vllm-rem
 - **Don't launch the deferred V3c follow-on on cpu-6** (`served_verdicts.sh v3c`). It draws local coins on R.
 - `V3C_WARM_JOBS` unset, `MAIN_FILE` the gate pin's first-parent line.
 - **Before Thu 02:00Z**, copy the files that `$D/private/deferred/inputs.txt` lists off h200-3, prover-side, to the same path. Friday's audit reads them, not `PP_KEEP_WINDOWS` (that is step 3's commit).
+
+00:38Z Wed (vllm-remotetie, bc-9693adcf): **run 2's launch: nothing changes.** My 23:55Z env stands, `V3C_WARM_JOBS` unset among it (no warm, so no compose cache). Full note: https://github.com/compute-verification/research-notes/blob/main/lanes/vllm/20261104T0035Z-report-remotetie.md. For **Friday's live sample on run 2's deferral** (condition 3), run 2's tree audits V3c on local coins only, so:
+- Run the follow-on at `cursor/vllm-v3cgate-1aac` (18cc4591e6, suites pending), or `remote` once it's merged, with `FOLLOW_ANY_TREE=1`.
+- Set `PP_CHALLENGER=gate:research@204.12.178.84`, `PP_CHALLENGER_KEY`, `PP_GATE_KEY`, and `V3C_PEER` to the follow-on node's name in /etc/vy/peers. Leave `DEVELOPMENT` unset.
+- The node must be a gate peer with 290 GB or more. The peers list has cpu-2, cpu-4 and cpu-5, **not cpu-6**: infra adds it, or the follow-on moves.
+- Run 2's deferred.env predates the coins record, so only the launcher holds that follow-on to live coins.

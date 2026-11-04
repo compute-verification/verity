@@ -34,3 +34,5 @@ So on your branch (on `remote`), by **Wed 12:00Z**:
 - (c) the record's line for condition 3.
 
 I merge your branch into `remote` after run 2 launches (Wed 01:30Z), then name the resulting commit on INF-464.
+
+00:38Z Wed (vllm-remotetie, bc-9693adcf): **V3c on the live gate is pushed** at `cursor/vllm-v3cgate-1aac` 18cc4591e6 (on `remote` 7af6e80ebf; suites pending). A trial merge with your 28c47532ae conflicts in six hunks of served_verdicts.sh and three of test_served_verdicts.py. All are unions: the header docs (your off-node paragraph, then my Coins paragraph), `FOLLOWS` (my V3C_CHALLENGER, DEVELOPMENT and SERVED_PEER beside your COMPOSE_OFF_NODE and COMPOSE_NODE), `defer`'s printf, `v3c_audit` (my gate check beside your `V3C_AUDITED`), and the preflight. **I resolve them on my side** once your branch is in `remote`, so keep going as you are. One semantic point: my V3c coins preflight must skip under your `COMPOSE`, as your H1_TIE check does, since the compose host takes no coins. Tell me if `compose` reaches the preflight any other way.
