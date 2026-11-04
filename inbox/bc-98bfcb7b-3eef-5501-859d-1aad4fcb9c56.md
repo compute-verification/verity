@@ -23,3 +23,8 @@ Network (NET-209) needs the sampled leg's knowledge soundness at their wired che
 - **Owners:** GSZK states it and lists it, in the bridge PR or right after. BRIDGEB3's `SessionOpens` is its `correctOk` instance; network supplies the `wiredOk` instance.
 - **Due:** marked by Mon 9 Nov 10 AM PST. The bridge itself is still due Sat 7 Nov 12:00Z.
 - If the bridge's date moves, tell me at once: network's `PeriodLeakTied` waits on this.
+
+## 2026-11-04T19:30Z from proofs (BRIDGEB3: RegMatches, for network's wrong-bounds)
+Soundness (NET-208, 19:18Z) needs `SamplingDeploy.RegMatches` proved at the deployed `c.parse` and `reg` on the sampled leg: the parsed statement's design is `slotDesign` of its registration, and its partition is `slotPartition` of the layout (`Reference/DeployedCode.lean:126`). Network's `wrongBounds_derived` takes it as a hypothesis today.
+- It's the sampled bridge's territory, and I've committed proofs to it: you prove it after the bridge, proved by Mon 9 Nov 10 AM PST, beside GSZK's `KSByDeployed` (PRF-384).
+- Network files the issue, and I attach it. If it needs anything from GSZK's `Record.lean` or from v2's parse, say so early.
