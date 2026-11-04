@@ -2576,6 +2576,10 @@
    "Claims.SamplingGeneric.ZkCompiled.ZK": {
     "fails": "Claims.SamplingGeneric.ZkCompiled.ZK_fails",
     "meets": ["Claims.Sampling.masked_meets_zk", "Claims.Witness.SamplingGeneric.echo_meets"]
+   },
+   "Claims.SamplingGeneric.Compiled.Complete": {
+    "fails": "Claims.SamplingGeneric.Compiled.Complete_fails",
+    "meets": ["Claims.Sampling.scope_meets", "Claims.Witness.SamplingGeneric.twoComplete_meets"]
    }
   },
   "not": {
@@ -2628,6 +2632,7 @@
    "Claims.SamplingGeneric.FlockKSReg": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKSReg`)",
    "Claims.SamplingGeneric.Compiled.OpenCallsLe": "a helper the claims read: the opening checks' count, which `CompilerBits` and `CompilerEfficient` read",
    "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier",
+   "Claims.SamplingGeneric.Compiled.CompleteSessions": "a helper the claims read: the compiler's completeness contract, the code facts `CompilerComplete` takes of a compiled verifier over the proof system's honest prover",
    "Claims.Sampling.Prog.Unread": "a helper the claims read: an input no gate reads and the program doesn't return, which `Partition.Partitions` leaves out"
   },
   "generic": {
@@ -2637,7 +2642,8 @@
    "Claims.SamplingGeneric.CompilerBits": "Claims.SamplingGeneric.compilerBits",
    "Claims.SamplingGeneric.CompilerEfficient": "Claims.SamplingGeneric.compilerEfficient",
    "Claims.SamplingGeneric.CompilerZK": "Claims.SamplingGeneric.compilerZK",
-   "Claims.ZKOutLeak": "Claims.zkOutLeak"
+   "Claims.ZKOutLeak": "Claims.zkOutLeak",
+   "Claims.SamplingGeneric.CompilerComplete": "Claims.SamplingGeneric.compilerComplete"
   }
  },
  "witnesses": {
@@ -2771,6 +2777,10 @@
   "Claims.zkOutLeak": {
    "honest": ["Claims.Witness.SamplingGeneric.zkOutLeak_honest"],
    "nontrivial": "Claims.Witness.SamplingGeneric.zkOutLeak_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerComplete": {
+   "honest": ["Claims.SamplingGeneric.compilerComplete_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerComplete_nontrivial"
   }
  },
  "unwitnessed": {
@@ -13291,6 +13301,21 @@
    "signature": ["Verity.SecurityProofs.ToCircuitAnd : Verity.Guarantees.ToCircuitAnd"],
    "assumptions": [],
    "type_hash": "d7a46674efa40159e39bed4221c853818c160c91fe491f6e0746b33d2e6b02ab"
+  },
+  "Claims.SamplingGeneric.compilerComplete": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerComplete_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerComplete_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.Compiled.Complete_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.SamplingGeneric.twoComplete_meets": {
+   "owner": "@proofs"
   }
  },
  "shape": {
