@@ -2556,3 +2556,6 @@ Both are put content-only (`research data put --kind fixture/v1 --tree DIR --pre
 
 Status: `benchmarks/one_stage` passed at 0a08834ebfb (637 tests). The test itself is running now with the fixtures fetched through the run's custody key; I expect every case but `writer` to pass, which waits on V2PORTS's step.
 
+[2026-11-04T15:45Z] 4648e76a3af4
+ODADVICE (served coins, NET-212): location and plan posted on NET-212. The release is never written today, and the front never receives it (its gate answer is the certifier's session), so no INF-494 change is needed. Thursday and Monday draw on the cpu-11 follow-on after the copy, so a served-node sha256 can't hold it. a5 now keeps it at $VW/audit/window/release.json, and REPROOF carries it. Branch cursor/net212-served-coins-061a at 4147ebbb15c (unpushed); suite and stand-in running on cpu-4 and cpu-7. Also: ODBRANCH's pin question answered no; the PR-body refusal sentence went to ODLEAN.
+
