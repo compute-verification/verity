@@ -1400,6 +1400,64 @@ def test_a_windows_value_rows_and_paths_are_written_once_and_a_drawn_members_bod
         win.write(c, tmp_path / "again", {"by": "test"}, registrar=reg)
 
 
+def _opens(dom: CommitmentDomain, root: bytes, rank: int, schema: str, bc: bytes, path: bytes) -> bool:
+    """Whether the row whose ``b || c`` is ``bc`` opens ``root`` at ``rank`` through ``path``, as Flock's ``Registered.opens``."""
+    node = dom.leaf(rank, rank, schema, CS.INST.tree_leaf(CS.INST.default_key, bc))
+    if len(path) != 64 * (dom.count - 1).bit_length():
+        return False
+    for level in range(len(path) // 64):
+        sib = path[64 * level:64 * (level + 1)]
+        node = dom.node(level, rank >> 1, *((node, sib) if rank % 2 == 0 else (sib, node)))
+        rank >>= 1
+    return node == root
+
+
+def test_a_wired_members_header_opens_each_wired_row_against_its_writers_root(tmp_path):
+    """`fed_chain`'s wired members: their header's ``wired`` entry (`rows.wired_header`, Flock's ``RegWired``) gives each wired
+    row, unit by unit, the path that opens its ``b || c`` against its writer's committed output root at the writer unit's rank
+    among its member's units, and the circuit prover's files carry it (`flock_inputs.flock_input_files`); an unwired member
+    has none. A writer that is no member's unit and a writer's public file whose rows are not its stated tree are refused."""
+    circuit, w, feed_ins, feed, _ins, outs = fed_chain()
+    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    win.record(SRC, feed_ins, feed)
+    win.record(GEMM, [None, None], outs)
+    c = win.close(salt_key=bytes(32))
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "digest": staticmethod(lambda rec: "d"),
+                         "record": staticmethod(lambda *x, **k: {"leaf_layer": "l", "window": x[5]})})
+    win.write(c, tmp_path, {"by": "test"}, registrar=reg)
+    doc, ms = json.loads((tmp_path / "window.json").read_text()), win.window.members
+    wired = [k for k, m in enumerate(ms) if m.wired]
+    assert wired and all(CS.wired_header(tmp_path, doc, k) is None for k, m in enumerate(ms) if not m.wired)
+    trees = {}
+    for k in wired:
+        m, head = ms[k], CS.wired_header(tmp_path, doc, k, trees)
+        assert sorted(head) == sorted(p for p, _o, _ws in m.wired)
+        for p, o, ws in m.wired:
+            assert len(head[p]) == m.n
+            for u, g in enumerate(ws):
+                wm = max((x for x in ms if x.base <= g), key=lambda x: x.base)
+                bc = c.bc[m.port(p)][u * CS.BC_BYTES:(u + 1) * CS.BC_BYTES]
+                assert _opens(c.domains[wm.port(o)], c.roots[wm.port(o)], g - wm.base, wm.schema(o), bc, bytes.fromhex(head[p][u]))
+                assert not _opens(c.domains[wm.port(o)], c.roots[wm.port(o)], g - wm.base, wm.schema(o), bytes(CS.BC_BYTES),
+                                  bytes.fromhex(head[p][u]))
+    k, mem = wired[-1], doc["members"][wired[-1]]
+    meta = {"scheme": CS.SCHEME, "ports": [[p, n, 1] for p, n in mem["ports"]], "input_ports": mem["input_ports"],
+            "out_ports": mem["out_ports"], "row_schemas": mem.get("row_schemas"), "vus_per_block": 1, "units_per_vu": 1,
+            "subcircuit": "gemm"}
+    got = FI.flock_input_files(tmp_path, k, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "staged")
+    for f in ("pub", "inst"):
+        assert json.loads(Path(got[f]).read_bytes().split(b"\n", 1)[0])["wired"] == CS.wired_header(tmp_path, doc, k)
+    other = copy.deepcopy(doc)
+    other["members"][k]["wired"][0].update(writers=[10 ** 6] * mem["n"])
+    with pytest.raises(ValueError, match="are not units with an output"):
+        CS.wired_header(tmp_path, other, k)
+    j = next(x for x, m in enumerate(ms) if m.base <= ms[k].wired[0][2][0] < m.base + m.n)
+    pub = tmp_path / f"m{j}-public.bin"
+    pub.write_bytes(bytes(len(pub.read_bytes())))
+    with pytest.raises(ValueError, match="not the tree its frame_v3 states"):
+        CS.wired_header(tmp_path, doc, k)
+
+
 def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(tmp_path):
     """`sliced`'s position units recorded with ``x`` by reference and ``w`` in full: each cut row ``x#j`` is its slice's
     output row, committed as the full record commits it; one template's parameter is by reference for all its units or

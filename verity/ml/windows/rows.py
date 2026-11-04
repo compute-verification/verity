@@ -75,7 +75,7 @@ from verity.ml.commitments import hm96, row_table as RT
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.hm96 import batch as HB
-from verity.ml.commitments.merkle import CommitmentDomain, levels, merkle_depth
+from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree, levels, merkle_depth
 from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
                                            sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
@@ -872,6 +872,49 @@ def registered_header(win: Mapping[str, Any], k: int) -> dict[str, Any] | None:
         if missing := [x for x in e["positions"] if str(x) not in got]:
             raise ValueError(f"member {k} {p}: the window gives no path for rows {missing[:4]} of {e['value']!r}")
         out[p] = {**e, "paths": [got[str(x)] for x in e["positions"]]}
+    return out
+
+
+def _out_tree(window_dir: str | Path, win: Mapping[str, Any], j: int, out: str) -> MerkleTree:
+    """Member ``j``'s output row ``out``'s committed tree, over every unit's ``b || c`` its ``m<j>-public.bin`` holds, under the
+    domain its ``frame_v3`` binds; refused unless the domain and root are the ones ``frame_v3`` states."""
+    mem = win["members"][j]
+    names, n, fv = [p for p, _ in mem["ports"]], int(mem["n"]), mem["frame_v3"]
+    b, at = np.memmap(Path(window_dir) / f"m{j}-public.bin", dtype=np.uint8, mode="r"), names.index(out)
+    if mem.get("shared_rows"):
+        lo = BC_BYTES * sum(int(mem["shared_rows"][p]) for p in names[:at])
+        bc = b[lo:lo + n * BC_BYTES].reshape(n, BC_BYTES)
+    else:
+        bc = b[:n * len(names) * BC_BYTES].reshape(n, len(names) * BC_BYTES)[:, at * BC_BYTES:(at + 1) * BC_BYTES]
+    dom = CommitmentDomain(bytes.fromhex(fv["bindings"][out]), OWNER, RangeIndexedDomain(0, n), hash="sha512")
+    tree = MerkleTree(dom, {i: INST.tree_leaf(INST.default_key, bytes(bc[i])) for i in range(n)}, lambda _: fv["schemas"][out])
+    if dom.domain_id.hex() != fv["domain_ids"][out] or tree.commitment.root.hex() != fv["roots"][out]:
+        raise ValueError(f"member {j} {out}: its public file's rows are not the tree its frame_v3 states")
+    return tree
+
+
+def wired_header(window_dir: str | Path, win: Mapping[str, Any], k: int,
+                 trees: dict[tuple[int, str], MerkleTree] | None = None) -> dict[str, list[str]] | None:
+    """Member ``k``'s header ``wired`` entry (``{port: [path, …]}``, Flock's ``RegWired``): each wired port's rows, unit by unit
+    (a shared-row member's wired table is its units' own rows), each the path of its writer's output row to the writer's
+    committed root (`_out_tree`) at the writer unit's rank among its member's units. ``trees`` caches each writer's tree by
+    member and output."""
+    mem, trees = win["members"][k], {} if trees is None else trees
+    if not mem.get("wired"):
+        return None
+    bases, out = np.array([int(m["base"]) for m in win["members"]], dtype=np.int64), {}
+    for wire in mem["wired"]:
+        paths = [""] * len(wire["writers"])
+        for wm, mine, theirs in WI._writers(win["members"], wire["writers"], bases):
+            if wire["out"] not in {p for p, _ in wm["out_ports"]} or theirs.min() < 0 or theirs.max() >= int(wm["n"]):
+                raise ValueError(f"member {k} {wire['port']}: its writers in member {wm['k']} are not units with an output "
+                                 f"{wire['out']!r}")
+            key = (int(wm["k"]), wire["out"])
+            if key not in trees:
+                trees[key] = _out_tree(window_dir, win, *key)
+            for i, r in zip(np.flatnonzero(mine).tolist(), theirs.tolist(), strict=True):
+                paths[i] = b"".join(trees[key].open(r).path).hex()
+        out[wire["port"]] = paths
     return out
 
 
