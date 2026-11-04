@@ -7,6 +7,7 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
   served_passes.py same A.json B.json --out same.json
   served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J] [--device DEBIT_CUBIN [--device-check N]]
   served_passes.py retain --passes DIR [--volunteer volunteer.json] [--drop ROUND ...] [--window-record W]
+  served_passes.py window --serve-dir SERVE_DIR --window K --passes DIR [--requests R --prompt-tokens P ...]
   served_passes.py verify --passes DIR [--manifest M ...] [--tie W] --out verify.json [--answer answer.json]
                           [--draws 459] [--delta 1/100] [--jobs J] [--fast] [--coin-record R]
 
@@ -57,6 +58,14 @@ declared.  It refuses once the coin is drawn.  With ``--window-record W`` (a tie
 (``timed`` false), which a tied run's W doesn't list, and after ``DIR/retention.json`` writes Pearl+'s window record W
 over the rounds it retains, each under its round (`pearl_c.window.write`), for ``verify --tie W`` and the one-stage
 audit tied to it.
+
+``window`` takes the passes of a Pearl+ serve on the served engine itself (``serve-openai --protocols
+pouw:pearl-c-...``, `serve_pearl`: every engine step a pass, its window the Commit window that ran it) that Commit window
+K's steps ended, from ``SERVE_DIR/private/pearlplus-serve/served.json``, into ``DIR/served.json`` in `serve`'s form, each
+of them ``timed`` and its wall the window's (``generate_s``), with the serve's coins in ``DIR/coins.json``, so `retain
+--window-record W`, `verify --tie W` and the window's commit tied to W read the window's passes alone: round s is the
+window's s-th step. It exits non-zero unless the window ended at least three passes with calls, each retained and within
+its caps, and refuses once the verifier's coin is drawn (``DIR/coin.json``).
 
 ``verify`` is Pearl+'s PoUW verdict on the run (`verify_run.verify_passes`): the passes ``--manifest`` names (a capture's
 ``prefill/`` and ``decode/`` beside its ``coins.json``), else those with calls that ``DIR/served.json`` names, each at its
@@ -438,6 +447,39 @@ def retain(args: argparse.Namespace) -> int:
     return 0
 
 
+def window(args: argparse.Namespace) -> int:
+    from verity_vllm.pipeline.serve_pearl import PRIVATE
+
+    src = Path(args.serve_dir) / PRIVATE
+    out = Path(args.passes)
+    try:
+        doc = json.loads((src / "served.json").read_text())
+    except (OSError, ValueError) as e:
+        print(f"window FAIL: the serve's passes document {src / 'served.json'}: {type(e).__name__}: {e}", flush=True)
+        return 1
+    k = args.window
+    got = [p for p in doc.get("passes") or () if p.get("window") == k]
+    held = [p for p in got if p.get("units")]
+    if (out / COIN).exists() or not held:
+        print(f"window FAIL: {DRAWN if (out / COIN).exists() else f'window {k} ended no pass with calls'}", flush=True)
+        return 1
+    over = [p["pass"] for p in got if p["pass"] in set(doc.get("over_caps") or ())]
+    w = (doc.get("windows") or {}).get(str(k)) or {}
+    cut = {**{f: doc.get(f) for f in ("schema", "arm", "run", "retained", "pass_ends", "max_step_tokens", "caps", "coins")},
+           "served_by": doc.get("served_by"), "serve_dir": str(args.serve_dir), "window": k, "window_passes": w.get("passes"),
+           "requests": args.requests, "prompt_tokens": args.prompt_tokens, "output_tokens": args.output_tokens,
+           "engine": {"max_num_batched_tokens": args.max_num_batched_tokens}, "generate_s": w.get("wall_s"),
+           "passes": [{**p, "timed": True} for p in got], "passes_with_calls": len(held), "over_caps": over,
+           "ok": len(held) >= 3 and not over and doc.get("retained") is not False and all(p.get("manifest") for p in held)}
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "served.json").write_text(json.dumps(cut, indent=1) + "\n")
+    (out / "coins.json").write_bytes((src / "passes" / "coins.json").read_bytes())
+    print(f"window {k}: passes {got[0]['pass']}..{got[-1]['pass']} of the serve's {len(doc.get('passes') or ())}, "
+          f"{len(held)} with calls, {len(over)} over their caps, in {w.get('wall_s')} s -> {'OK' if cut['ok'] else 'FAIL'}",
+          flush=True)
+    return 0 if cut["ok"] else 1
+
+
 def verify(args: argparse.Namespace) -> int:
     sys.path.insert(0, str(HERE))
     import verify_run as VR
@@ -506,6 +548,14 @@ def main(argv: list[str] | None = None) -> int:
                    help="drop this round (its place among served.json's passes with calls), repeated")
     r.add_argument("--window-record", metavar="W", help="a tied run: drop the warm-up's rounds too and write Pearl+'s window "
                    "record W over the rounds retained, after the retention (pearl_c.window), for verify --tie W")
+    w = sub.add_parser("window")
+    w.add_argument("--serve-dir", required=True, help="serve-openai's --out, which served Pearl+ (serve_pearl)")
+    w.add_argument("--window", type=int, required=True, metavar="K", help="the Commit window whose passes to take")
+    w.add_argument("--passes", required=True, help="where the window's served.json and coins.json go, for retain and verify")
+    w.add_argument("--requests", type=int, help="the window's load, as the document records it: its requests")
+    w.add_argument("--prompt-tokens", type=int)
+    w.add_argument("--output-tokens", type=int)
+    w.add_argument("--max-num-batched-tokens", type=int)
     v = sub.add_parser("verify")
     v.add_argument("--passes", required=True)
     v.add_argument("--manifest", action="append", type=Path,
@@ -523,7 +573,8 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--coin-record", help=f"the verifier's coin record (default: DIR/{COIN} where served.json names the "
                    "passes, none with --manifest)")
     args = p.parse_args(argv)
-    return {"serve": serve, "same": same, "volunteer": volunteer, "retain": retain, "verify": verify}[args.cmd](args)
+    return {"serve": serve, "same": same, "volunteer": volunteer, "retain": retain, "window": window,
+            "verify": verify}[args.cmd](args)
 
 
 if __name__ == "__main__":

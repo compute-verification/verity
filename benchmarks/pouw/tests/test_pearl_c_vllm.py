@@ -1603,6 +1603,46 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 1 and wfile.read_text() == before
 
 
+def test_window_takes_one_commit_windows_passes_of_a_serve_openai_pearl_serve_for_the_tied_verdict(tmp_path):
+    """``served_passes.py window`` on serve-openai's Pearl+ serve (`serve_pearl`: a learn warm-up pass outside every
+    window, three passes Commit window 0's steps ended, one of window 1's) writes window 0's passes alone, each timed, its
+    wall the window's, with the serve's coins, so ``retain --window-record W`` registers rounds 0..2 (the window's steps)
+    and ``verify --tie W`` accepts on their 12 tables. A window with fewer than three passes with calls, or none, fails;
+    once the coin is drawn it refuses to cut again."""
+    from verity_vllm.pipeline.serve_pearl import PRIVATE
+
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    paths = [proved_pass(tmp_path / f"p{i}", PROMOTED[0], (2 * i, 2 * i + 1))[0] for i in range(5)]
+    serve = tmp_path / "serve"
+    (src := serve / PRIVATE / "passes").mkdir(parents=True)
+    (src / "coins.json").write_text((paths[0].parent / "coins.json").read_text())
+    windows = [None, 0, 0, 0, 1]
+    (serve / PRIVATE / "served.json").write_text(json.dumps({
+        "schema": "verity-pouw/pearl-c-served-passes/v1", "arm": "pouw:" + PROMOTED[0], "run": RUN, "retained": True,
+        "windows": {"0": {"passes": [1, 4], "wall_s": 2.5}, "1": {"passes": [4, 5], "wall_s": 0.5}},
+        "passes": [{"pass": i, "timed": k is not None, "window": k, "units": 2, "tiles": 4, "manifest": str(p)}
+                   for i, (k, p) in enumerate(zip(windows, paths))], "over_caps": []}))
+    q = tmp_path / "q"
+    assert SP.main(["window", "--serve-dir", str(serve), "--window", "0", "--passes", str(q), "--requests", "1"]) == 0
+    cut = json.loads((q / "served.json").read_text())
+    assert [(p["pass"], p["timed"]) for p in cut["passes"]] == [(1, True), (2, True), (3, True)]
+    assert (cut["generate_s"], cut["window"], cut["requests"], cut["ok"]) == (2.5, 0, 1, True)
+    assert (q / "coins.json").read_text() == (src / "coins.json").read_text()
+    wfile = tmp_path / "w.json"
+    assert SP.main(["retain", "--passes", str(q), "--window-record", str(wfile)]) == 0
+    w = json.loads(wfile.read_text())
+    assert sorted({e["value"].split("/")[1] for e in w["registered"]}) == ["0", "1", "2"]
+    rc, doc, answer = served_verify(q, tmp_path / "verify.json", "--tie", str(wfile))
+    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 12}, doc["line"]
+    assert doc["timed"]["passes"] == 3
+    assert SP.main(["window", "--serve-dir", str(serve), "--window", "1", "--passes", str(tmp_path / "q1")]) == 1
+    assert SP.main(["window", "--serve-dir", str(serve), "--window", "7", "--passes", str(tmp_path / "q7")]) == 1
+    assert not (tmp_path / "q7" / "served.json").exists()
+    before = (q / "served.json").read_text()
+    assert SP.main(["window", "--serve-dir", str(serve), "--window", "0", "--passes", str(q)]) == 1
+    assert (q / "served.json").read_text() == before
+
+
 def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_and_refuses_an_unretained_serve(tmp_path):
     """``served_passes.py volunteer``, the prover's step between the serve and the verifier's coin, runs `volunteer_pass` on
     each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
