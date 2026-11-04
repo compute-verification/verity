@@ -3350,6 +3350,12 @@
    "assumptions": [],
    "type_hash": "90efc0f384a07f296425b858eeab58b576755ec019e505e27a543b218c5533e9"
   },
+  "Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.drawIsOnItsStreams": {
+   "owner": "@proofs"
+  },
   "Properties.Pouw.PearlPlus.loadedGivesUp": {
    "owner": "@proofs",
    "signature": ["Properties.Pouw.PearlPlus.loadedGivesUp : Properties.Pouw.PearlPlus.LoadedGivesUp"],
@@ -3379,6 +3385,9 @@
    "signature": ["Properties.Pouw.PearlPlus.tileKeepsTheCap : Properties.Pouw.PearlPlus.TileKeepsTheCap"],
    "assumptions": [],
    "type_hash": "23077127b35df41a81f887f61bef24cba194bd4dc3c51edf05eeeef7cb548407"
+  },
+  "Properties.Pouw.PearlPlus.workIsTheCredit": {
+   "owner": "@proofs"
   },
   "Properties.Pouw.PearlPlus.yIsTheUnscale": {
    "owner": "@proofs",
@@ -5307,6 +5316,10 @@
      }
     ]
    },
+   "Properties.Pouw.PearlPlus.workIsTheCredit": {
+    "function": "PouwCheck.PearlPlus.check",
+    "outcome": "accept"
+   },
    "Properties.Pouw.Window.bucket8192": {
     "function": "PouwWindow.bucket",
     "outcome": "none"
@@ -6052,9 +6065,8 @@
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Pouw.PearlPlus.OpeningBinds": "unstated: two accepted openings of one position of an hm96 tree open one value, or two different messages hashed in checking them (`rowsHashed`) collide under SHA-512; proved (`Properties.Pouw.PearlPlus.openingBinds`), and listed under guarantees once it has its witnesses",
-   "Properties.Pouw.PearlPlus.WorkIsTheCredit": "unstated: the work an accepted Pearl+ run publishes is its credit at Pearl's assumption over the plan's passes at its draws and delta = 1/100, unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
-   "Properties.Pouw.PearlPlus.DrawIsOnItsStreams": "unstated: Pearl+'s run draw names, for draw j, the tile of the ticket (Pouw.Ticket, in finSigmaFinEquiv's order) its key's stream j numbers, the law Pouw.MissBound reads, unproved; PLUSCOMP's draft statement, which gets a guarantee entry once red team has read it",
-   "Properties.Pouw.PearlPlus.CoinBytesGiveUniformTickets": "unstated: t independent streams of drawBytes uniform bytes number tickets in any event no more often than t uniform tickets do, unproved; PLUSCOMP's draft statement, which gets a guarantee entry once red team has read it",
+   "Properties.Pouw.PearlPlus.drawIsOnItsStreams": "restatable: its one hypothesis, that the run's tickets hold some weight (`0 < ticketTotal (tickets passes)`), is no acceptance of `draw`, which returns or throws on every input; it states what `draw` returns wherever the tickets hold weight",
+   "Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets": "frozen (no-function): a bound on a probability over the draw's coin bytes (`Pouw.pr`), not a property of one function: it reads Pearl+'s code only through `drawBytes` and `uniformOn`, which `DrawIsOnItsStreams` ties to `draw`",
    "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": "frozen (no-function,world-unlisted): E2E-POUW's bridge (#4363, red team at 28a6d49e15), CircuitWorkPeriod at the period's proofs with the deployed check's verdict (Properties.Pouw.Period.checkedRun): a window is credited exactly when PouwCheck.protocol.check accepts it and every earlier window, so the accepted prefix and its live words are the check's (checkedLive); except with probability delta_s + n (delta_bind + delta_ks). The check is read inside the event, through the prefix, not as one acceptance hypothesis, and the event is a Pouw.RelativeSecurity.prob that shape.events does not list. Its premises off the premises list: CircuitWorkPeriod's claims; RegisteredBeforeDraw, DrawIsCoin and ServiceSound (in place of JointSound) are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): RegisteredBeforeDraw and DrawIsCoin protocol-code facts to prove (the record doesn't order registration before the draw coin, CMP-91's to fix; the check's draw is the model's), ServiceSound standard crypto (C-Flock's soundness under live coins); proved from CircuitWorkPeriod (Proofs.Pouw.Period).",
