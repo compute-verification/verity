@@ -429,6 +429,16 @@ theorem tapD_btap (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) 
     simp [tapLog, tapD, leakD, accCm, OC.eval, tapOps, findColl])]
   exact Pr_false
 
+/-- With no registration's openings, `B_reg` checks no opening. -/
+theorem tapD_breg (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (x : Msg) :
+    (Breg H (tapD Coin).V (Claims.Sampling.E (tapD Coin) decode) (tapD Coin).commit (tapD Coin).parse
+      (fun _ => []) Unit silentP x).Pr H = 0 := by
+  unfold Finder.Pr
+  rw [Pr_congr fun s => iff_false_intro (by
+    simp only [Breg, ownLog_noHash _ _ _ (noHash_E (tapD Coin) (fun _ _ _ => rfl) _ _ _ _)]
+    simp [regLog, tapD, leakD, findColl])]
+  exact Pr_false
+
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- At `δ = 1/8` the accepting verifier's knowledge error is below `1`: at `δ = 0` it is below `1/3` (`sksD_κ`), and
 `δ` adds `c²·δ ≤ 4δ`. -/
@@ -468,6 +478,31 @@ theorem tapD_bound_fails (H : Msg → Msg) :
     prBad_accV H _ _ [] silentP (tapD_noRLeakTap H _ _ [])
   have hb : PrB H (tapD Unit).V silentP [] = 0 := prB_accV H silentP []
   simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, tapD_bext, tapD_btap] at h
+  linarith [tapD_κ_eighth (Coin := Unit) []]
+
+/-- **`PeriodLeakRegistered`'s per-window bound fails at the accepting verifier** `tapD`, as `tapD_bound_fails`, with
+no input registered and a registration with no openings, which opens every registered input, so `B_reg` finds nothing
+either. -/
+theorem tapD_reg_bound_fails (H : Msg → Msg) :
+    ¬ PrBad H (tapD Unit).V
+        (RLeakTap H (tapD Unit).commit (tapD Unit).parse (tapD Unit).partition 1 1 1 (fun _ => notLay) (fun _ => 1)
+          (1 / 8) (fun s _ => AsReg s.prog notLay 1 ∅ (regVal [])) 1 (fun _ => tapOps))
+        (Claims.Sampling.E (tapD Unit) fun _ => [()]) [] silentP ≤
+      Claims.Sampling.κ (tapD Unit) (1 / 8) [] +
+          Real.sqrt (Claims.Sampling.γ (tapD Unit) [] * PrB H (tapD Unit).V silentP []) +
+        (Bext H (tapD Unit).V (Claims.Sampling.E (tapD Unit) fun _ => [()]) Unit silentP []).Pr H +
+        (Btap H (tapD Unit).V (Claims.Sampling.E (tapD Unit) fun _ => [()]) (tapD Unit).commit (tapD Unit).parse
+          (fun _ => tapOps) Unit silentP []).Pr H +
+        (Breg H (tapD Unit).V (Claims.Sampling.E (tapD Unit) fun _ => [()]) (tapD Unit).commit (tapD Unit).parse
+          (fun _ => []) Unit silentP []).Pr H := by
+  intro h
+  have hp : PrBad H (tapD Unit).V
+      (RLeakTap H (tapD Unit).commit (tapD Unit).parse (tapD Unit).partition 1 1 1 (fun _ => notLay) (fun _ => 1)
+        (1 / 8) (fun s _ => AsReg s.prog notLay 1 ∅ (regVal [])) 1 (fun _ => tapOps))
+      (Claims.Sampling.E (tapD Unit) fun _ => [()]) [] silentP = 1 :=
+    prBad_accV H _ _ [] silentP (tapD_noRLeakTap H _ _ [])
+  have hb : PrB H (tapD Unit).V silentP [] = 0 := prB_accV H silentP []
+  simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, tapD_bext, tapD_btap, tapD_breg] at h
   linarith [tapD_κ_eighth (Coin := Unit) []]
 
 /-! ## The monitoring period, pooled -/

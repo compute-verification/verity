@@ -68,6 +68,23 @@ theorem PeriodLeakAccepted_nontrivial :
           (fun _ => tapOps) Unit silentP []).Pr shaD :=
   tapD_bound_fails shaD
 
+/-- **`PeriodLeakRegistered`'s per-window bound fails at the accepting verifier** `tapD`, at SHA-512, at one step at
+`δ = 1/8` with no input registered and a registration with no openings, which opens every registered input
+(`tapD_reg_bound_fails`). -/
+theorem PeriodLeakRegistered_nontrivial :
+    ¬ PrBad shaD (tapD Unit).V
+        (RLeakTap shaD (tapD Unit).commit (tapD Unit).parse (tapD Unit).partition 1 1 1 (fun _ => notLay)
+          (fun _ => 1) (1 / 8) (fun s _ => AsReg s.prog notLay 1 ∅ (regVal [])) 1 (fun _ => tapOps))
+        (Claims.Sampling.E (tapD Unit) fun _ => [()]) [] silentP ≤
+      Claims.Sampling.κ (tapD Unit) (1 / 8) [] +
+          Real.sqrt (Claims.Sampling.γ (tapD Unit) [] * PrB shaD (tapD Unit).V silentP []) +
+        (Bext shaD (tapD Unit).V (Claims.Sampling.E (tapD Unit) fun _ => [()]) Unit silentP []).Pr shaD +
+        (Btap shaD (tapD Unit).V (Claims.Sampling.E (tapD Unit) fun _ => [()]) (tapD Unit).commit (tapD Unit).parse
+          (fun _ => tapOps) Unit silentP []).Pr shaD +
+        (Breg shaD (tapD Unit).V (Claims.Sampling.E (tapD Unit) fun _ => [()]) (tapD Unit).commit (tapD Unit).parse
+          (fun _ => []) Unit silentP []).Pr shaD :=
+  tapD_reg_bound_fails shaD
+
 /-- **`PooledLeakAccepted`'s schedule premises at the deployed instance**, its schedules the fixture `fxQueue`'s alone:
 each fits its rows format (`hfit`), and sends at most 6 cells on each connection (`hcap`). -/
 theorem PooledLeakAccepted_honest :
