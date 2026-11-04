@@ -15,7 +15,7 @@ view, distributed as the dummy's (Lemma A). `prCoin_pi_close` bounds the tuple b
 `perOutcome_of_split` makes the bytes simulated per outcome.
 
 * `Release.branch`, `Release.branch_le`: one table's branch at an outcome, bounded by its simulator.
-* `Release.release_any`, `Flock.SecurityProofs.TablesReleaseAny`: the statement `Flock.Guarantees.TablesReleaseAny`.
+* `Release.release_any`: the released bytes simulated per outcome, at any witnesses carrying the public region data.
 -/
 
 @[expose] public section
@@ -94,13 +94,3 @@ theorem release_any (T : Fin J → Table F K W Salt Seed D Hi VL) (hrank : ∀ j
 end Release
 
 end FlockSoundness.ZK
-
-namespace Flock.SecurityProofs
-
-/-- **A release of `J` tables behind the ZK server's checks, at any values** (`Flock.Guarantees.TablesReleaseAny`). -/
-theorem TablesReleaseAny : Flock.Guarantees.TablesReleaseAny := by
-  intro F K W Salt Seed D Hi VL _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ J T St out full w w₀ hsim hreg hreg₀ hgo
-  exact FlockSoundness.ZK.Release.release_any T (fun j => (hsim j).1) (fun j => (hsim j).2.1)
-    (fun j => (hsim j).2.2.1) (fun j => (hsim j).2.2.2.1) (fun j => (hsim j).2.2.2.2) out full w w₀ hreg hreg₀ hgo
-
-end Flock.SecurityProofs
