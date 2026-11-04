@@ -2210,7 +2210,7 @@ def _deferred(tmp_path: Path, **extra: str | None) -> subprocess.CompletedProces
                           env=env, check=False, capture_output=True, text=True)
 
 
-def _recorded(tmp_path: Path) -> dict[str, str]:
+def _deferral_settings(tmp_path: Path) -> dict[str, str]:
     """The settings `_deferred`'s deferral recorded for its follow-on (private/deferred/deferred.env), as bash reads them."""
     names = ("K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER "
              "DEFERRED_TREE")
@@ -2231,7 +2231,7 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     run = _deferred(tmp_path)
     assert run.returncode == 0, run.stderr
     d, dd, out = tmp_path / "serve", tmp_path / "serve" / "private" / "deferred", tmp_path / "served-out"
-    assert _recorded(tmp_path) == {
+    assert _deferral_settings(tmp_path) == {
         "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": "stratified:1", "V3C_CHALLENGER": "local",
         "DEVELOPMENT": "1", "H1_TIE": "1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
         "SERVED_PEER": "", "DEFERRED_TREE": SHA}
@@ -2343,7 +2343,7 @@ def test_a_follow_on_of_a_deferral_of_record_draws_on_the_challenger_it_recorded
     node's peer, so its follow-on draws on that challenger, whatever its own environment's PP_CHALLENGER, from its own
     node (V3C_PEER, default PP_PEER), as its COINS line says, once the gate holds no session on the window's run root."""
     rc, lines, order, _limits = _live_follow(tmp_path)
-    assert {k: v for k, v in _recorded(tmp_path).items() if k in ("V3C_CHALLENGER", "DEVELOPMENT", "SERVED_PEER")} == {
+    assert {k: v for k, v in _deferral_settings(tmp_path).items() if k in ("V3C_CHALLENGER", "DEVELOPMENT", "SERVED_PEER")} == {
         "V3C_CHALLENGER": LIVE, "DEVELOPMENT": "", "SERVED_PEER": "vy-dc-h200"}
     assert rc == 0 and order == ["gate-ledger", "gate-pins", "audit", "period", "record", "composite"], (lines, order)
     assert lines[0] == (f"COINS V3c's audit: the challenger {LIVE} (peer cpu-6), the window's run root's one session, the "
