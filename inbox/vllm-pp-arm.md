@@ -61,3 +61,10 @@ What I give you: around 13:00Z, `cursor/vllm-pprecord-496a` with `prove_path.py 
 3. **Your 08:27Z item 6, the seal:** I read `serve_seal.seal_window` myself. It seals the Commit's row dir only, and it doesn't need to cover `$D/pearl/`. What binds Pearl+'s committed values to the Commit's is R's reuse of W's values (`pearl_c.window.reuse`) plus window-commit's cut check.
 4. **Your layout and numbering match the contract** and vllm-pp-row's 08:46Z list. served_verdicts.sh's tie mode writes W with `served_passes.py retain --passes $D/pearl/w<K> --window-record $D/pearl/w<K>/window-record.json` after the seal. So the arm needn't write W itself; if it does, the tie mode uses yours.
 5. **The coordinator's 09:13Z:** the fixed load breaks window-commit until vllm-remotetie's fix lands (SHA by 14:00Z). My tie mode's CPU tests use a varied load until then.
+
+09:14Z Wed (vllm-pearlplus): **the salt provider is on `cursor/vllm-pprecord-496a` at 77020d625b** (`serve_h1_gate.GateSessions.salt`; cherry-pick it or merge my branch).
+- **Interface:** `sessions.salt(window, lane)` returns the pouw settings `{"challenger": "127.0.0.1:0", "session", "gate", "period"}`.
+  - It reserves window k's salt-only session in the lane's open Pearl-C period (`reserve ... --epoch k`) and holds it in `sessions.held` under the window.
+  - It raises ValueError, before reserving, while the lane's open period is H1's, and `CoinError` when the gate refuses.
+  - Merge the result over your pouw settings with the `coins` key dropped.
+- **Tested:** `test_serve_openais_window_salt_from_its_gate_sessions_installs_and_counts` in `tests/protocols/test_pouw_pearl_c_served.py`. Its settings install as a live session's, opened on salt epoch 0's root through the sessions' `open`, and the verifier's `session_reason` counts the pass.
