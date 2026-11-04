@@ -118,7 +118,7 @@ ROWS_REFUSALS = {
     "rows-cert-missing": ("certificates: the requests', responses' and fails' records'", "certificates"),
     "rows-past-slots": ("certifies none of a window in which it refused a connection", "refused a connection"),
     "rows-reg-key": ("not under the deployment key in the session", "doesn't verify under"),
-    "rows-answer-window": ("another window's answer", "another window's answer"),
+    "rows-answer-window": (PC.ROWS_UNHELD,) * 2,
     "rows-schedule": ("another schedule's digest than the bound one", "the registration's parameters is"),
     "rows-delta": ("is not the period's", "is not the period's"),
     "rows-units": ("not the scan's 2T", "not the scan's 2T"),
@@ -141,6 +141,33 @@ def test_the_rows_form_refuses_what_it_must(server):
             assert mirror in reference(case)["reason"], (m, n, reference(case))
             verdict, out = D.replay(PORT, case, server)
             assert verdict == REJECT and lean in json.loads(out)["reason"], (m, n, out)
+
+
+def test_a_scan_whose_rows_port_is_at_another_root_is_refused(server, monkeypatch):
+    """The scan's units read the network certifier's rows through their port, `rows/<end>/<w>` (`PC.rows_name`), so
+    the rows form refuses, in Lean and in the mirror and by name, each way the scan's registration can name the rows'
+    root and domain without holding them there (`PC.UNPORTS`): the egress rows' root and domain at `scan/view` and
+    `rows/egress/<w>` at another root, the two ends' names swapped, one end's at another window's, a `roots` entry of
+    other than T leaves, and a second entry of one end's name at another root; and a mirror that takes any entry naming
+    the rows' root and domain, as the check did before it read the port, accepts what Lean refuses."""
+    unport = PC.UNPORTS
+    for u in unport:
+        monkeypatch.setattr(PC, "UNPORTS", (u,))
+        for n in range(3):
+            case = build("rows-port", n, small=n % 2 == 0)
+            why = f"{PC.ROWS_UNHELD} rows/egress/" if u == "view" else PC.ROWS_UNHELD
+            assert why in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and why in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "UNPORTS", unport)
+
+    def anywhere(reg, d, w, doc):
+        return any(e.get("root") == doc["root"] and e.get("domain") == doc["domain"]
+                   for k in ("roots", "registered") for e in PC._entries(reg, k))
+
+    monkeypatch.setattr(PC, "_holds", anywhere)
+    for n in range(4):
+        refused_by_lean_alone(build("rows-port", n, small=n % 2 == 0), server, PC.ROWS_UNHELD)
 
 
 def test_the_rows_form_accepts_a_wired_state_tied_period(server):
