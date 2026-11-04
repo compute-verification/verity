@@ -40,6 +40,7 @@ sys.path[:0] = [str(HERE)]
 import certifier_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
 import kind_scan as KS  # noqa: E402
+from verity.core.protocols.certifier.ingress_scan import SCAN_STATE  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 
 sys.path.append(str(ROOT / "benchmarks" / "one_stage"))
@@ -56,8 +57,8 @@ SCAN_WINDOW = {"kind": "stand-in", "link": "registered: each row port at the net
 #: V3c's committed window's provenance: `prove_path.py window-commit`'s class and scan state, `rows.registration`'s kind
 #: and run root, `Window.write`'s circuit record and registered roots, `rows.write`'s index leaf and order
 V3C_WINDOW = {"kind": "served", "run": "ab" * 64, "window_circuit": {"class": [4, 32, 4, 4, 16]},
-              "activations": {"program": "window-circuit", "values": {"scan/state": {
-                  "value": "scan/state", "root": "cd" * 64, "leaves": 3, "words": 40, "domain": "ef" * 64}}},
+              "activations": {"program": "window-circuit", "values": {SCAN_STATE: {
+                  "value": SCAN_STATE, "root": "cd" * 64, "leaves": 3, "words": 40, "domain": "ef" * 64}}},
               "circuit": "01" * 64, "registered_roots": {"weights/embed@4": "02" * 64}, "index_leaf": "03" * 64,
               "order": "verity-vllm/serving-rows/order/v0"}
 PLACEMENT = {"kind": "not-placed", "parties": {"network_certifier": "gate", "prover": "node", "verifier": "node"},
@@ -267,12 +268,11 @@ def test_dirs_files_are_the_pieces():
 
 
 #: the bare ``*`` keys no source names yet, by the files' declarations, each its key path's tail to the ``*``: in DIR a
-#: committed window's registered values, the parameters' pins and the report's negatives; in V3c's audit and the
+#: committed window's registered roots, the parameters' pins and the report's negatives; in V3c's audit and the
 #: received files, their owners'. It only shrinks.
 OPEN = {
-    "DOCS": {"window.registered_roots.*", "window.activations.values.*", "audits[].pins.*", "negatives_refused.*"},
-    "V3C_DOCS": {"checks_before_draw.*", "checks.*", "wrong_units.per_template.*", "window.registered_roots.*",
-                 "window.activations.values.*"},
+    "DOCS": {"window.registered_roots.*", "audits[].pins.*", "negatives_refused.*"},
+    "V3C_DOCS": {"checks_before_draw.*", "checks.*", "wrong_units.per_template.*", "window.registered_roots.*"},
     "RECEIVED": {"registered_roots.*", "values.*", "unrooted.*", "count.*", "seconds.*"},
 }
 
@@ -374,13 +374,16 @@ def test_a_scan_rounds_members_are_of_its_link_windows_and_the_schedules_lanes(t
 
 def test_another_key_of_a_fixed_vocabulary_is_a_field_of_no_declared_kind(tmp_path, period):
     """The scan's state read under a run but ``sin`` and ``o1`` or opened under a port but ``scan/state`` (the one
-    `stateRead` and `stateEmpty` read), a profile's count drawn at a level but ``unit``, and a party the placement
-    doesn't name."""
+    `stateRead` and `stateEmpty` read), a per-window value a committed window commits but the scan's state
+    (`ingress_scan.SCAN_STATE`, the one `prove_path.py window-commit` commits), a profile's count drawn at a level but
+    ``unit``, and a party the placement doesn't name."""
     case, answer = _case(period)
     com, ev = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
     w = com["windows"][0]["window"]
     w["reads"]["scan/state"]["o2"] = w["reads"]["scan/state"]["o1"]
     w["empty"] = {"scan/view": w["empty"]["scan/state"]}
+    values = com["audits"][0]["window"]["activations"]["values"]
+    values["weights/embed@4"] = values[SCAN_STATE] | {"value": "weights/embed@4"}
     ev["windows"][0]["answer"]["profile"]["drawn"]["token"] = 1
     case = {**case, "commitment": canonical_json(com).hex(), "evidence": canonical_json(ev).hex()}
     answer = answer | {"profile": answer["profile"] | {"placement": PLACEMENT | {
@@ -390,6 +393,8 @@ def test_another_key_of_a_fixed_vocabulary_is_a_field_of_no_declared_kind(tmp_pa
         ("answer.json", "profile.placement.parties.auditor"),
         *((pre[0], f"{pre[1]}.reads.scan/state.o2.{k}") for k in ("leaf", "units[]")),
         *((pre[0], f"{pre[1]}.empty.scan/view.{k}") for k in ("words", "salt", "path")),
+        *(("case.json", f"commitment.audits[].window.activations.values.weights/embed@4.{k}")
+          for k in values[SCAN_STATE]),
         ("case.json", "evidence.windows[].answer.profile.drawn.token")}
 
 

@@ -62,6 +62,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.core import wire as W
+from verity.core.protocols.certifier.ingress_scan import SCAN_STATE
 from verity.core.protocols.certifier.scan_service import SCAN_PINS
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.ml.circuits.codec import program_digest
@@ -157,8 +158,9 @@ ENTRY = {"value": S, "root": M, "leaves": S, "words": S, "word_bits": S, "domain
 #: (`stateRead`'s runs, ``sin`` and ``o1``) and row 0's opening (`stateEmpty`: the empty state, which the protocol
 #: fixes, its width and salt structure and its path's siblings hiding commitments; no unit reads leaf 0), each under
 #: the state's port ``scan/state`` (`stateName`, the one key the verifier reads them at), or a committed window's run
-#: root, circuit record, class, per-window values, registered roots and index leaf. The window's own number is none of
-#: them, and the advice's binding (`interface.advice_binding`) is `OPENING`'s.
+#: root, circuit record, class, per-window values (the scan's state, `ingress_scan.SCAN_STATE`, `stateValue`: the one
+#: `prove_path.py window-commit` commits), registered roots and index leaf. The window's own number is none of them,
+#: and the advice's binding (`interface.advice_binding`) is `OPENING`'s.
 REGISTRATION = {
     "format": S, "protocol": S, "program": S, "query": S, "partition": S, "population": S, "scheme": S, "leaf_layer": S,
     "anchors[]": S, "previous": M,
@@ -172,7 +174,7 @@ REGISTRATION = {
     "window.empty.scan/state.words": S, "window.empty.scan/state.salt": S, "window.empty.scan/state.path": M,
     "window.run": M, "window.circuit": S, "window.order": S, "window.index_leaf": M, "window.registered_roots.*": M,
     "window.window_circuit.class[]": S, "window.activations.program": S,
-    **under("window.activations.values.*", ENTRY),
+    **under(f"window.activations.values.{SCAN_STATE}", ENTRY),
     "window.compiler.**": OPENING, "window.advice.**": OPENING,
 }
 #: a one-stage answer (`served_integrity.answer`, `Answer.toJson`): its verdict and bound the protocol's outputs, its
