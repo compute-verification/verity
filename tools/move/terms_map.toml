@@ -237,6 +237,16 @@ scope = "prose"
 
 # --- incorrect proof block, the incorrect set (was wrong, faulty or incorrect unit); the audit record's `wrong_units`
 # stays
+"a wrong unit" = "an incorrect proof block"
+"A wrong unit" = "An incorrect proof block"
+"a wrong-unit set" = "an incorrect set"
+"a wrong-unit" = "an incorrect-block"
+"a faulty unit" = "an incorrect proof block"
+"A faulty unit" = "An incorrect proof block"
+"a faulty proof block" = "an incorrect proof block"
+"A faulty proof block" = "An incorrect proof block"
+"a faulty set" = "an incorrect set"
+"A faulty set" = "An incorrect set"
 "wrong units" = "incorrect proof blocks"
 "wrong unit" = "incorrect proof block"
 "Wrong units" = "Incorrect proof blocks"
@@ -295,6 +305,8 @@ scope = "prose"
 "Post-landing run" = "After-landing run"
 
 # --- the challenger's live-coin part (was the coin server); `round_digest` strings stay ([keep])
+"live coin servers" = "live-coin parts"
+"live coin server" = "live-coin part"
 "the coin server" = "the challenger's live-coin part"
 "The coin server" = "The challenger's live-coin part"
 "coin servers" = "live-coin parts"
