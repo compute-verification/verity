@@ -35,7 +35,7 @@ theorem twoWit_val (H : Msg → Msg) {v : ℕ} (hv : v < 2) : twoWit.val H trueC
 theorem two_rhon (H : Msg → Msg) (x : Msg) :
     Claims.Sampling.Rhon H trueCm (fun _ => some twoStmt) (fun _ => some twoPart) x twoWit := by
   refine ⟨twoStmt, twoPart, rfl, rfl, Finset.eq_empty_of_forall_notMem fun v hv => ?_⟩
-  rw [Claims.Sampling.faulty, Finset.mem_filter, Finset.mem_range] at hv
+  simp only [Claims.Sampling.faulty, Finset.mem_filter, Finset.mem_range] at hv
   obtain ⟨hv2, hf⟩ := hv
   replace hv2 : v < 2 := by simpa [twoPart_blocks] using hv2
   unfold Claims.Sampling.Faulty at hf
