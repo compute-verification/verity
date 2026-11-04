@@ -1,12 +1,15 @@
-"""Plot 2's final version: training/algorithm-policy from the integrator's finals table, a row per finals point and gain
-target, on te_core.algorithm_policy's columns and cut, with its own figure (`figure`).
+"""Plot 2, training/algorithm-policy, always published as this overlay, never as the raw search table (coordinator
+18:05Z): the integrator's finals table over a refresh's search table, per (data, start, gain target) a row per finals
+point and every other reached search row, on te_core.algorithm_policy's columns and cut, with its own figure
+(`figure`). node_loop.py's `finish` PUTs each refresh's algorithm-policy through it.
 
     python plot2_final.py build --finals FINALS_JSON --policy TABLES_JSON --out DIR
     python plot2_final.py put DIR
 
 Run from benchmarks/covert_witness of te_core's checkout (node_loop's RESCORE). FINALS_JSON is
-islands/integrator/finals_table.py's out/finals-table.json, TABLES_JSON the search table it read
-(te_core.algorithm_policy's tables/algorithm-policy.json). The rules (coordinator 13:12Z, 13:36Z):
+islands/integrator/finals_table.py's out/finals-table.json, TABLES_JSON a search table (te_core.algorithm_policy's
+tables/algorithm-policy.json: the one the finals table read, or a later refresh's). The rules (coordinator 13:12Z,
+13:36Z, 18:05Z):
 
 - p is p_any: the mean |C| of the point's finished seeds reaching g over H_any's, the least mean |C| over every route;
   the record cell carries p's range over seeds and the finals table's honest-only p (p_honest, H over
@@ -17,6 +20,9 @@ islands/integrator/finals_table.py's out/finals-table.json, TABLES_JSON the sear
   split's, so a finals |C| is never divided by a search H; so is a row whose own point has no finished seed. The
   record cell says which split a row's p is and why, and final.json's split_differs lists each (start, g) where the
   finals table's split isn't the one its points give;
+- every other reached search row, a run that is no finals point there (or one with no row from the finals table at
+  that g), is its search table row, p the search split's over the search H, its record cell saying `OVERLAY`; so a
+  run that lands, traced or not, shows at the next refresh;
 - C is its reaching seeds' mean |C| and H H_any's; gain, start_loss and end_loss are their means. A point whose
   finished seeds all miss g is a "no" row at their last checkpoints' mean |C|, p = C/H_any a lower bound;
 - every ρ column is the search row's for its run and g, ρ from the search run's trace: S = p·rho_own is null where
@@ -24,8 +30,9 @@ islands/integrator/finals_table.py's out/finals-table.json, TABLES_JSON the sear
   lower bound on a partial row.
 
 `build` writes DIR/tables/ (algorithm-policy.json uncut, the finals table it read and final.json: each (data, start,
-g)'s split and why), DIR/console/algorithm-policy.json (the cut, its note naming no art) and DIR/algorithm-policy.png
-(`figure`, both axes log at the same length per decade);
+g)'s split and why and its overlay rows), DIR/console/algorithm-policy.json (the cut, its note naming no art) and
+DIR/algorithm-policy.png (`figure`, both axes log at the same length per decade); where the rows don't fit the route, the
+console's copy drops DETAIL's cells, then only overlay rows off the headline data, then other overlay rows (`cut`);
 `put` stores DIR/tables/ in the evidence store, cuts again with its art id in the note and PUTs the cut. It PUTs
 nothing where the route serves algorithm-policy rows priced by a newer te_core (te_core.algorithm_policy's
 `kept_data`). training/frontier-fit stays the search refresh's.
@@ -51,8 +58,13 @@ IX = {c: i for i, c in enumerate(ap.COLUMNS)}
 #: the ρ columns a search row carries for its trace's checkpoint, null on a row built for an untraced run
 RHO = ("rho_default", "rho_inputs", "reading", "rho_console", "binding_kind", "rests_on", "kinds", "rho_served",
        "rho_own")
-TITLE = f"Finals: algorithm vs policy, p = C/H against rho per gain target ({UNIT})"
+TITLE = f"Finals over search: algorithm vs policy, p = C/H vs rho per gain ({UNIT})"
 FINAL, SEARCH = "final", "search split"
+#: how an overlay row's record cell names its split: a search run's one seed, p over the search H
+OVERLAY = f"{SEARCH}, 1 seed"
+#: the console cells a row keeps only while every row fits the route whole (`cut`): ρ's inputs and what each kind rests
+#: on, most of a row's bytes, which the stored tables keep
+DETAIL = ("rho_inputs", "rests_on", "kinds")
 #: the finals table's p_any_basis where its p reads the final set (islands/integrator/finals_table.py's FINAL_SET)
 FINAL_SET = "final set"
 #: how a refused run's row's basis_own opens (v1cycle's REFUSED_ROWS): a row with p from its record and no ρ
@@ -97,12 +109,12 @@ def span(lo_hi: list | None) -> str:
     return f"[{lo_hi[0]:.3g}, {lo_hi[1]:.3g}]" if lo_hi and None not in lo_hi else ""
 
 
-def searched(row: list, group: list[list], why: str) -> list:
-    """A search table row as the final table's, its record cell naming the split and the honest-only p."""
+def searched(row: list, group: list[list], split: str) -> list:
+    """A search table row as the overlay's, its record cell naming the split (and why) and the honest-only p."""
     hh = min((r[IX["C_gates"]] for r in group if r[IX["reached"]] == "yes" and honest(r)), default=None)
     ph = f"p honest {row[IX['C_gates']] / hh:.3g}" if hh else "p honest: no honest route reached g"
     out = list(row)
-    out[IX["record"]] = f"{row[IX['record']]}; {SEARCH}: {why}; {ph}"
+    out[IX["record"]] = f"{row[IX['record']]}; {split}; {ph}"
     return out
 
 
@@ -130,8 +142,8 @@ def finals(row: list, fr: dict, at: dict, h_any: float) -> list:
 
 
 def build(fin: dict, search: dict) -> tuple[dict, dict]:
-    """The final table (module docstring) and final.json: each (data, start, g)'s split and why, and the rows whose ρ
-    differs from the finals table's (none when it read `search`)."""
+    """The overlay (module docstring) and final.json: each (data, start, g)'s split and why and its overlay rows, and
+    the rows whose ρ differs from the finals table's (none when it read `search`)."""
     by_run: dict[str, dict[float, list]] = {}
     groups: dict[tuple, list[list]] = {}
     for r in search["rows"]:
@@ -139,7 +151,9 @@ def build(fin: dict, search: dict) -> tuple[dict, dict]:
         groups.setdefault((r[IX["data"]], r[IX["start"]], r[IX["gain_target"]]), []).append(r)
     order = {k: i for i, k in enumerate(groups)}
     points = {p["run"]: p for p in fin["points"]}
-    rows, cells, differ, missing, split_differs = [], [], [], [], []
+    out: dict[tuple, list[list]] = {}
+    shown: set[tuple[str, float]] = set()
+    cells, differ, missing, split_differs = [], [], [], []
     for t in fin["tables"]:
         g = t["gain"]
         mine = []
@@ -174,27 +188,47 @@ def build(fin: dict, search: dict) -> tuple[dict, dict]:
                 got.append(finals(row, fr, at, h_any))
             elif g not in by_run.get(fr["run"], {}):
                 missing.append(f"{fr['run']}@{g:g}")
+                continue
             else:
-                got.append(searched(row, group, why or "this point has no finished seed"))
+                got.append(searched(row, group, f"{SEARCH}: {why or 'this point has no finished seed'}"))
+            shown.add((fr["run"], g))
         got.sort(key=lambda r: (r[IX["reached"]] != "yes", r[IX["p"]] if r[IX["reached"]] == "yes"
                                 and r[IX["p"]] is not None else -(r[IX["gain"]] or 0.0)))
-        rows += [(order.get(key, len(order)), i, r) for i, r in enumerate(got)]
+        out[key] = got
         cells.append({"data": t["data"], "start": t["start"], "label": key[1], "g": g, "split": SEARCH if why else FINAL,
                       "why": why, "finals_table_basis": basis, "search_H": hs,
                       "finals_H_any": (t.get("H_any") or {}).get("run"), "rows": len(got),
                       "search_rows": sum(SEARCH in r[IX["record"]] for r in got)})
+    at_key = {(c["data"], c["label"], c["g"]): c for c in cells}
+    names = {c["label"]: c["start"] for c in cells}
+    for key, group in groups.items():
+        other = sorted((r for r in group if r[IX["reached"]] == "yes" and (run_of(r), key[2]) not in shown),
+                       key=lambda r: (r[IX["p"]] is None, r[IX["p"]] or 0.0))
+        if not other:
+            continue
+        out.setdefault(key, []).extend(searched(r, group, OVERLAY) for r in other)
+        if key not in at_key:
+            at_key[key] = {"data": key[0], "start": names.get(key[1], key[1]), "label": key[1], "g": key[2],
+                           "split": OVERLAY,
+                           "why": "no finals point at this start and g", "finals_table_basis": None,
+                           "search_H": run_of(min(other, key=lambda r: r[IX["C_gates"]])), "finals_H_any": None,
+                           "rows": 0, "search_rows": 0}
+            cells.append(at_key[key])
+        c = at_key[key]
+        c |= {"rows": c["rows"] + len(other), "search_rows": c["search_rows"] + len(other), "overlay_rows": len(other)}
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     p = {"id": ap.PANEL, "title": TITLE, "kind": "table", "updated_at": stamp,
-         "source": (f"scorer/plot2_final.py: the finals table built {fin['built_at']} (te_core {fin['te_core']}) on the "
-                    f"search table of {search['updated_at']}; te_core {VERSION}'s cut"),
-         "note": "", "columns": ap.COLUMNS, "rows": [r for *_, r in sorted(rows, key=lambda x: x[:2])]}
+         "source": (f"scorer/plot2_final.py: the finals table built {fin['built_at']} (te_core {fin['te_core']}) over "
+                    f"the search table of {search['updated_at']}; te_core {VERSION}'s cut"),
+         "note": "", "columns": ap.COLUMNS,
+         "rows": [r for k in sorted(out, key=lambda k: order.get(k, len(order))) for r in out[k]]}
     return p | {"note": note(cells)}, {"cells": cells, "rho_differs": differ, "no_search_row": missing,
                                        "split_differs": split_differs}
 
 
-def note(cells: list[dict], art: str | None = None, tier: str | None = None) -> str:
+def note(cells: list[dict], art: str | None = None, said: str = "", brief: str = "") -> str:
     """The panel's note within the route's `console.NOTE_MAX`: the split's cells by start, else their count, and the
-    cut's words, else only that it is one; the headline's label and the art id stay whole."""
+    cut's words (`said`), else `brief`'s; the headline's label and the art id stay whole."""
     split = {}
     for c in cells:
         if c["split"] == SEARCH:
@@ -202,30 +236,55 @@ def note(cells: list[dict], art: str | None = None, tier: str | None = None) -> 
     every = {c["start"]: [f"{x['g']:g}x" for x in cells if x["start"] == c["start"]] for c in cells}
     where = "; ".join(f"{s} {'all g' if gs == every[s] else ', '.join(gs)}" for s, gs in split.items())
     count = f"{sum(c['split'] == SEARCH for c in cells)} of {len(cells)} cells"
-    cut = "" if not tier else " Cut: coverage" + ("." if tier == "coverage" else " + per start, g" + (
-        ", family" if tier == "family" else "") + ": (p, rho) front, best no.")
 
     def text(where: str, cut: str) -> str:
-        return ("Finals: a row per finals point, g. p = p_any: its reaching seeds' mean C over H, the least mean C of "
-                f"any route; honest p in record. Search split where the search H-setter has no finished seed: {where} "
-                f"(record says). rho_own from the search run's trace, the start's own session, {ap.OWN_K_LABEL}. "
-                "S = p rho_own, none where unmeasured." + cut + (f" Tables {art}." if art else ""))
-    tries = [(where, cut), (count, cut), (count, " Cut." if tier else "")]
+        return (f"Per start, g: finals points (p_any: reaching seeds' mean C over the finals' least; seeds, range in "
+                f"record) and every other reached search row ({OVERLAY}; p over the search H). Finals on the search "
+                f"split: {where}. rho_own: search trace, {ap.OWN_K_LABEL}. S = p rho_own." + (f" {cut}" if cut else "")
+                + (f" Tables {art}." if art else ""))
+    tries = [(where, said), (count, said), (count, brief)]
     return next((t for t in (text(*x) for x in tries) if len(t) <= console.NOTE_MAX), text(*tries[-1]))
 
 
+def bare(rows: list[list]) -> list[list]:
+    """Console rows without DETAIL's cells."""
+    off = {ap.CONSOLE_COLUMNS.index(c) for c in DETAIL}
+    return [[None if i in off else x for i, x in enumerate(r)] for r in rows]
+
+
 def cut(p: dict, cells: list[dict], art: str | None = None) -> dict:
-    """te_core.algorithm_policy's `cut` with this table's note: every row when it fits the route, else `kept`'s."""
-    q = ap.checked(p | {"columns": ap.CONSOLE_COLUMNS, "rows": ap.console_rows(p["rows"]), "note": note(cells, art)})
-    if len(console.body(q)) <= console.BODY_MAX:
-        return q
-    cov = {c["row"] for c in ap.coverage(p) if c["row"] is not None}
-    for tier in ap.TIERS:
-        q = ap.checked(p | {"columns": ap.CONSOLE_COLUMNS, "rows": ap.console_rows(ap.kept(p["rows"], tier, cov)),
-                            "note": note(cells, art, tier)})
-        if len(console.body(q)) <= console.BODY_MAX:
+    """The console's copy with this table's note, the first that fits the route: every row whole; every row without
+    DETAIL's cells; without them, every finals row and the headline data's overlay rows (`OVERLAY`; every move-right
+    run is on its starts) with the other data's overlay rows te_core.algorithm_policy's `kept` at the first of its tiers
+    that fits; the same on every data's overlay rows. No cut drops a finals point for a search row whose p reads
+    another H."""
+    rows, head = p["rows"], ap.headline(p)
+
+    def body(rs: list[list], slim: bool, said: str = "", brief: str = "") -> dict:
+        on = ap.console_rows(rs)
+        return ap.checked(p | {"columns": ap.CONSOLE_COLUMNS, "rows": bare(on) if slim else on,
+                               "note": note(cells, art, said, brief)})
+
+    def fits(q: dict) -> bool:
+        return len(console.body(q)) <= console.BODY_MAX
+    gone = f"Console rows lack {', '.join(DETAIL)} (in the tables)"
+    for q in (body(rows, False), body(rows, True, gone + ".", "Console rows lack some cells (tables).")):
+        if fits(q):
             return q
-    raise SystemExit(f"plot2_final: the coverage's rows alone are {len(console.body(q))} bytes, over {console.BODY_MAX}")
+    ours = [r for r in rows if OVERLAY in r[IX["record"]]]
+    for scope, whose in (([r for r in ours if r[IX["data"]] != head], f"off {head}"), (ours, "")):
+        cov = {c["row"] for c in ap.coverage(p | {"rows": scope}) if c["row"] is not None}
+        ids = {id(r) for r in scope}
+        for tier in ap.TIERS:
+            keep = {id(r) for r in ap.kept(scope, tier, cov)}
+            words = "coverage" + ("" if tier == "coverage" else " + (p, rho) front per start, g" + (
+                ", family" if tier == "family" else ""))
+            q = body([r for r in rows if id(r) not in ids or id(r) in keep], True,
+                     f"{gone}; search rows {whose + ' ' if whose else ''}cut to {words}.", "Cut (tables).")
+            if fits(q):
+                return q
+    raise SystemExit(f"plot2_final: the finals rows and the overlay's coverage are {len(console.body(q))} bytes, over "
+                     f"{console.BODY_MAX}")
 
 
 def colour_key(d: dict) -> str:
@@ -275,18 +334,33 @@ def figure(p: dict, out: Path) -> Path:
               for i, s in enumerate(starts)]
     marks += [Line2D([], [], marker="o", ls="none", color="0.3", label="filled: reached"),
               Line2D([], [], marker="o", ls="none", mfc="none", color="0.3", label="open: not reached (p a lower bound)"),
-              Line2D([], [], marker="o", ls="none", color="0.3", alpha=0.35, label=f"faded: p on the {SEARCH}"),
+              Line2D([], [], marker="o", ls="none", color="0.3", alpha=0.35,
+                     label=f"faded: p on the {SEARCH} (1 seed, the search H)"),
               Line2D([], [], marker="o", ls="none", mfc="none", mec="red", ms=9, label="least S")]
     if any(d[b] in ap.LOWER for d in drawn):
         marks.append(Line2D([], [], marker=ap.LOWER[ap.PARTIAL], ls="none", color="0.3", ms=8,
                             label="partial: rho a lower bound"))
     marks += [Line2D([], [], marker=m, ls="none", color="0.3", label=f"strip: {what}")
               for k, (m, what) in NO_RHO.items() if any(no_rho(d) == k for d in strip)]
+    def titled(g: float) -> tuple[dict | None, list[str]]:
+        """Panel g's least-S row and its title, wrapped to the panel's width."""
+        mine, bare = [d for d in drawn if d["gain_target"] == g], [d for d in strip if d["gain_target"] == g]
+        whole = [d for d in mine if d["reached"] == "yes" and d[b] not in ap.LOWER]
+        best = min(whole, key=lambda d: d["p"] * d[y]) if whole else None
+        reached = sum(d["reached"] == "yes" for d in mine + bare)
+        more = ", ".join(f"{sum(no_rho(d) == k for d in bare)} {NO_RHO[k][1]}" for k in NO_RHO
+                         if any(no_rho(d) == k for d in bare))
+        title = [f"gain {g:g}: {reached} of {len(mine) + len(bare)} rows reached",
+                 f"in the strip: {more}" if more else "no row without rho",
+                 f"least S {best['p'] * best[y]:.3g} ({best['start']}, {best['method_key']})" if best else
+                 "no least S: no reached row has a whole rho_own"]
+        return best, [x for t in title for x in textwrap.wrap(t, int(0.98 * w * 72 / (0.6 * fs)))]
+    titles = {g: titled(g) for g in ap.GAINS}
     ncol = max(1, int(width // 2.4))
     note = wrap(p["note"], 6)
     line = lambda size: 1.45 * size / 72
     tail = 0.35 + 0.45 + -(-len(marks) // ncol) * line(fs) * 1.3 + 0.15 + len(note) * line(6) + 0.1
-    top = 0.1 + len(head) * line(fs) + 0.15 + 3 * line(fs) + 0.1
+    top = 0.1 + len(head) * line(fs) + 0.15 + max(len(t) for _, t in titles.values()) * line(fs) + 0.1
     height = top + h + 0.06 + STRIP_IN + tail
     fig = plt.figure(figsize=(width, height))
     frac = lambda x, y_, w_, h_: [x / width, 1 - (y_ + h_) / height, w_ / width, h_ / height]
@@ -318,8 +392,7 @@ def figure(p: dict, out: Path) -> Path:
                     mfc=c if yes else "none", mec=c, mew=0.8, alpha=0.35 if SEARCH in d["record"] else 0.85)
             if d[b] in ap.LOWER:
                 ax.plot(d["p"], d[y], marker=ap.LOWER[d[b]], ms=9, color=c, mew=1.0)
-        whole = [d for d in mine if d["reached"] == "yes" and d[b] not in ap.LOWER]
-        best = min(whole, key=lambda d: d["p"] * d[y]) if whole else None
+        best, title = titles[g]
         if best:
             ax.plot(best["p"], best[y], "o", mfc="none", mec="red", ms=12, mew=1.2)
         bare = [d for d in strip if d["gain_target"] == g]
@@ -333,13 +406,6 @@ def figure(p: dict, out: Path) -> Path:
         sx.tick_params(labelsize=fs - 1)
         if i:
             ax.tick_params(labelleft=False)
-        reached = sum(d["reached"] == "yes" for d in mine) + sum(d["reached"] == "yes" for d in bare)
-        n = len(mine) + len(bare)
-        more = ", ".join(f"{sum(no_rho(d) == k for d in bare)} {NO_RHO[k][1]}" for k in NO_RHO
-                         if any(no_rho(d) == k for d in bare))
-        title = [f"gain {g:g}: {reached} of {n} rows reached", f"in the strip: {more}" if more else "no row without rho",
-                 f"least S {best['p'] * best[y]:.3g} ({best['start']}, {best['method_key']})" if best else
-                 "no least S: no reached row has a whole rho_own"]
         ax.set_title("\n".join(title), fontsize=fs, loc="left")
     fig.axes[0].set_ylabel("\n".join(textwrap.wrap(f"rho_own, the start's own session ({ap.OWN_K_LABEL})",
                                                     int(0.9 * h * 72 / (0.6 * fs)))), fontsize=fs)
@@ -404,7 +470,9 @@ def main(argv=None) -> int:
         png = figure(p, args.out)
         shutil.copyfile(png, tables / png.name)
         print(summary(p, info["cells"]))
-        print(f"{ap.PANEL} finals: {len(p['rows'])} rows uncut, console {len(q['rows'])} rows, "
+        print(f"{ap.PANEL} overlay: {len(p['rows'])} rows uncut "
+              f"({sum(OVERLAY in r[IX['record']] for r in p['rows'])} other reached search rows), console "
+              f"{len(q['rows'])} rows ({sum(OVERLAY in r[q['columns'].index('record')] for r in q['rows'])} of them), "
               f"{len(console.body(q))} bytes, note {len(q['note'])} characters; "
               f"{sum(c['split'] == SEARCH for c in info['cells'])} of {len(info['cells'])} cells on the search split; "
               f"rho differs from the finals table's on {len(info['rho_differs'])} rows; "
@@ -417,7 +485,8 @@ def main(argv=None) -> int:
     if keep := ap.kept_data(p, served.get(ap.PANEL)):
         print(f"not PUT: the route serves {ap.PANEL} rows on {', '.join(keep)} priced by a newer te_core than {VERSION}")
         return 1
-    art = ap.store(tables, {"what": f"{ap.PANEL} finals (scorer/plot2_final.py), uncut, and the finals table it read",
+    art = ap.store(tables, {"what": f"{ap.PANEL}'s overlay (scorer/plot2_final.py), the finals table over a search "
+                                    "table, uncut, and the finals table it read",
                             "rows": len(p["rows"]), "source": p["source"]})
     q = cut(p, cells, art)
     (args.out / "console" / f"{ap.NAME}.json").write_bytes(console.body(q))
