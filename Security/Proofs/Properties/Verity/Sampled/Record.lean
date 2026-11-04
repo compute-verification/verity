@@ -96,7 +96,7 @@ def RefOk (A : Live) (o : Own) (d : Msg) : Prop :=
   ∃ s t, ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins = .ok s ∧
     FlockDeploy.setupOf true (sessStmt A o d) = some (s, t.spec, #[t]) ∧ t.n = A.kd
 
-/-- The reference draw file: one `RefOk` holds at, where one does. -/
+/-- The reference draw file: a draw file `RefOk` holds at, where there is one. -/
 noncomputable def d₀ (A : Live) (o : Own) : Msg := Classical.epsilon (RefOk A o)
 
 /-- The session's statement at the reference draw file. -/

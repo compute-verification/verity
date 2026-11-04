@@ -1,4 +1,5 @@
 import Proofs.Properties.Verity.Sampled.Record
+import Proofs.Properties.Verity.Recursive.BaseSetup
 import Proofs.Properties.Verity.Recursive.Numbers
 import Proofs.Flock.Claims.Sampling.Select.Size
 import Proofs.Flock.Claims.Complete.ZkTables.Stmt
@@ -96,7 +97,12 @@ theorem getD_of_arr {j : Json} {k ctx : String} {a : Array Json} (h : Flock.J.ar
   have hva : v = .arr a := by
     try dsimp only at h
     unfold Flock.J.asArr at h
-    cases v <;> first | (cases h; rfl) | cases h
+    cases v <;> first
+      | (cases h; rfl)
+      | cases h
+      | (simp only [Lean.Json.getArr?, pure, Except.pure, Except.ok.injEq] at h; subst h; rfl)
+      | (simp [Lean.Json.getArr?] at h; subst h; rfl)
+      | simp [Lean.Json.getArr?, throw, throwThe, MonadExceptOf.throw] at h
   rw [← hva]
   simp only [_root_.SampledProofs.getD, _root_.SampledProofs.field?, hg, Except.toOption, Option.getD_some]
 
@@ -147,7 +153,7 @@ theorem proved_of_drawLaw {T : Flock.Tags} {J : Json} {D : Flock.Draw.UnitDraw}
       | work K ws => simp [Flock.ProvedScope.lawWhy, hl] at hw
     unfold Flock.Draw.UnitDraw.proved
     rw [hcl]
-    first | rfl | simp
+    all_goals first | rfl | simp
 
 /-! ## The session statement's one table -/
 
