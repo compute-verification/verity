@@ -382,7 +382,8 @@ theorem go_says (D : Digests) (A : Auditor) (c : Composite) :
           (Verity.Site.ofLog (log p)) (Verity.Registration.head (digests D) (composite c) (log p)) (regEntry e) := by
         rw [← hS, ← hh, ← Verity.Registration.Entry.refusal_eq_none_iff, ← hr]; rfl
       have hv' : Verity.Registration.Valid (digests D) (auditor A) (composite c) (log (p ++ [e])) := by
-        rw [log_append]; exact Verity.Registration.valid_append_singleton.mpr ⟨hv, hev⟩
+        rw [log_append]
+        exact Verity.Registration.valid_append_singleton.mpr ⟨hv, hev, by cases e; simp [regEntry]⟩
       have := ih (p ++ [e]) (S.add e.added) (D.entry e)
         (by
           rw [site_add, hS, log_append]
@@ -407,7 +408,7 @@ theorem checks : Checks := by
       have hp : Verity.Registration.Valid (digests D) (auditor A) (composite c) (log (l.take (i + 1))) :=
         Verity.Registration.Valid.of_prefix (by rw [log_take]; exact List.take_prefix _ _) hv
       rw [List.take_succ_eq_append_getElem hi, log_append] at hp
-      have he := (Verity.Registration.valid_append_singleton.mp hp).2
+      have he := (Verity.Registration.valid_append_singleton.mp hp).2.1
       rw [← Verity.Registration.Entry.refusal_eq_none_iff] at he
       rw [he] at hr
       cases hr
