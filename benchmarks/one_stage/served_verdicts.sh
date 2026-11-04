@@ -21,19 +21,19 @@
 #     so the engine's idle closes them into one window. With LOAD=fixed (default varied) they are one full window of fixed
 #     length instead (`serve_load.py --fixed SLOTS --window-steps WINDOW_STEPS`): SLOTS requests of PROMPTS tokens, each
 #     with ignore_eos and max_tokens WINDOW_STEPS, all prefilled at the window's first step and run through its last. With
-#     LOAD=front there are none: CERTIFIER_FRONT's group, sent through the warden, is the run's one load and its execution
-#     block the one the run audits (a period that admits a single block, say). A front that failed before a window
-#     closed stops the endpoint at once, with no window to seal; one that failed after (its leak guard holding a file,
-#     say) leaves its exit to the certifier's verdict, and the run goes on with the window it sealed.
+#     LOAD=front there are none: CERTIFIER_FRONT's group, sent through the network certifier, is the run's one load and
+#     its execution block the one the run audits (a period that admits a single block, say). A front that failed before a
+#     window closed stops the endpoint at once, with no window to seal; one that failed after (its leak guard holding a
+#     file, say) leaves its exit to the certifier's verdict, and the run goes on with the window it sealed.
 #     CERTIFIER_FRONT runs within CERTIFIER_FRONT_TIMEOUT (default 20m), and a flag it passes to `certifier_piece.py front`
-#     that this tree's front doesn't take, or a front whose endpoint isn't on the warden's id form (SERVE_ARGS without
-#     `--protocol ids`), is refused before the lease. The
+#     that this tree's front doesn't take, or a front whose endpoint isn't on the id form the network certifier sends
+#     (SERVE_ARGS without `--protocol ids`), is refused before the lease. The
 #     lease ends once every closed window is sealed. What names a window's requests (the serve dir's windows.jsonl,
 #     seals.jsonl, requests.jsonl and serve.json, each window's PoUW calls record, the load's records, timings file and
 #     log, and the certifier front's session, bundle and log, in the serve dir's private/, of which the CERTIFIER-FRONT
 #     line says only `served_verdicts.py front-line`'s fields) stays in the serve dir on the node; what leaves it is their
-#     aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose warden-paced load no stock
-#     control compares to) and verdict lines that name no window and count none of a window's own: no window's number, no
+#     aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose load the network certifier paces and no
+#     stock control compares to) and verdict lines that name no window and count none of a window's own: no window's number, no
 #     count of the windows closed, sealed or refused, no engine step, request count or user of one. Each line goes out
 #     through `served_verdicts.py public-lines`, in full to the serve dir's private/verdicts.txt, and once the run is
 #     done, however it ends, `served_verdicts.py publish` holds in full in the serve dir's private/out each file of $OUT
@@ -85,6 +85,9 @@
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
 #     alone, its other pieces dropped (not run, no default command, the wipe's and the certifier's included; the
 #     preflight refuses any onsite command set), its record composing their verdicts alone and its composite remote's.
+#     CERTIFIER_FRONT is remote's too: the network certifier in front of the endpoint is how its requests are served, not
+#     a piece, so its session stays in the serve dir's private/ and its exit is the CERTIFIER-FRONT line's, which remote's
+#     record doesn't read.
 #  6. V3c, sampled proofs' audit of record, run before step 4 (V3C_CLASS set empty is refused): it proves the window
 #     circuit's own units at V3C_CLASS (default 4,32,4,
 #     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
@@ -210,7 +213,7 @@ case ${LOAD:=varied} in varied | fixed | front) ;; *) say "PREFLIGHT: LOAD is va
 case $PRODUCT in
   onsite) ;;
   remote)
-    for v in WIPE_CMD POUS_CMD BANDWIDTH_CMD CERTIFIER_CMD CERTIFIER_CHAIN_CMD CERTIFIER_PERIOD_CMD CERTIFIER_FRONT; do
+    for v in WIPE_CMD POUS_CMD BANDWIDTH_CMD CERTIFIER_CMD CERTIFIER_CHAIN_CMD CERTIFIER_PERIOD_CMD; do
       [ -z "${!v:-}" ] || { say "PREFLIGHT: PRODUCT=remote runs no onsite piece, and $v is set: unset it"; exit 3; }
     done ;;
   *) say "PREFLIGHT: PRODUCT is onsite or remote, not $PRODUCT"; exit 3 ;;
@@ -401,7 +404,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$D/serve.log" | cut -c1-300)"
   weights
   [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period served "$D" 2>&1 | tail -1)"
-  if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier's warden in front of the endpoint, before the requests
+  if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier in front of the endpoint, before the requests
     # below: its group closes into the run's earliest window, which `served_verdicts.py window` picks on a tie in requests.
     # Its session, bundle and log hold the group's prompts, request and cells, so they stay in the serve dir's private/
     (umask 077; mkdir -p "$D/private")
@@ -487,8 +490,8 @@ front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT
     || { say "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"; return 3; }
   case ${CERTIFIER_FRONT:-} in *"certifier_piece.py front"*) ;; *) return 0 ;; esac
   case " ${SERVE_ARGS:-} " in *" --protocol ids "*) ;; *)
-    say "PREFLIGHT: the certifier front's warden sends id-form requests, which serve-openai answers only under" \
-        "SERVE_ARGS='--protocol ids --id-payload 503'"; return 3 ;; esac
+    say "PREFLIGHT: the network certifier in front of the endpoint sends id-form requests, which serve-openai answers" \
+        "only under SERVE_ARGS='--protocol ids --id-payload 503'"; return 3 ;; esac
   local help f
   help=$(cd "$TREE" && "$PY" benchmarks/network_traces/certifier_piece.py front --help 2>&1) \
     || { say "PREFLIGHT: this tree's certifier front doesn't start: $(echo "$help" | tail -1 | cut -c1-300)"; return 3; }
@@ -683,9 +686,10 @@ cp "$D/period.json" "$OUT/serve/" 2>/dev/null
 [ -d "$D/h1" ] && (cd "$D" && cp --parents h1/window-program.json.gz h1/window-program.meta.json "$OUT/serve/" 2>/dev/null)
 [ -n "${H1_CIRCUITS:-}" ] && [ -f "$H1_CIRCUITS/circuit-files.json" ] && cp "$H1_CIRCUITS/circuit-files.json" "$OUT/serve/"
 # the serve dir's step trace and the load's records stay on the node; what the stock control's table reads is their aggregate.
-# A front's load is the warden's, paced by its buckets, which no stock run's is, and one window's aggregate is its timing.
+# A front's load is the network certifier's, paced by its buckets, which no stock run's is, and one window's aggregate is
+# its timing.
 if [ "$LOAD" = front ]; then
-  say "OVERHEAD: none with LOAD=front (the warden paces its requests, so no stock control compares)"
+  say "OVERHEAD: none with LOAD=front (the network certifier paces its requests, so no stock control compares)"
 else
   "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/serve/overhead.json" 2> "$D/overhead.err" \
     || { say "OVERHEAD: no aggregate: $(cut -c1-300 "$D/overhead.err")"; rm -f "$OUT/serve/overhead.json"; }

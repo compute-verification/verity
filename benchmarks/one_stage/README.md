@@ -90,7 +90,9 @@ negatives.
   Finally the all-protocols window report and the block record, which accepts only when every subprotocol accepted on this
   node and names each one missing, rejecting or about another server, with its reason (PoUW's development piece: development
   run, credits nothing). `PRODUCT=remote` composes sampled proofs and PoUW alone: the onsite pieces are dropped, not run
-  and not composed, and the preflight refuses any onsite piece's command. An accept's clause says when its weights were held and their share of the checkpoint, where its
+  and not composed, and the preflight refuses any onsite piece's command. `CERTIFIER_FRONT` is not a piece but how the
+  requests are served, so a remote run may set it (with `LOAD=front`) to serve through the network certifier in front
+  of its endpoint, its verdicts unchanged. An accept's clause says when its weights were held and their share of the checkpoint, where its
   profile says so (PoUS's), and each δ of the block record's at which its quantity is not established. With the
   certifier's piece split in two (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), V3c's step also runs the chain after
   its window commit, beside its audit (within `CERTIFIER_TIMEOUT`, default 4h), and the period check on its
