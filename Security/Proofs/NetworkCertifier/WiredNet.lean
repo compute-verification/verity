@@ -5,12 +5,12 @@ import Proofs.NetworkCertifier.SampledAuditAccepted
 # The wires a drawn proof block's session reveals
 
 `SessionWires` (`KSWired`) is `SessionOpens` with each wired gate a drawn proof block holds or reads opened to its
-writer's value (`WireRight`). Where the session proves the wire itself, its statement reading the writer's committed leaf
-as the wired input, a Flock witness in its relation reveals it. `RevealsWires H D opens wires` says so at an accepted
-run, at an opening check `opens`: for each wired gate of a checked unit's proof block, the reveal holds an opening at
-the gate, under the statement's roots, that `opens` accepts and whose value is its writer's (`WriterRevealed`): a
-constant writer's own, or another writer's, opened to the same value by an opening in the same reveal that `opens`
-accepts.
+writer's value (`WireRight`). Where the session proves the wire itself, its statement reading the writer's committed
+leaf as the wired input, a Flock witness in its relation reveals it. `RevealsWires H D opens wires` says so at an
+accepted run, at an opening check `opens`: for each wired gate of a checked unit's proof block, the reveal holds an
+opening at the gate, under the statement's roots, that `opens` accepts and whose value is its writer's
+(`WriterRevealed`): a constant writer's own, or another writer's, opened to the same value by an opening in the same
+reveal that `opens` accepts.
 
 * `WiresRevealed H D wires`: `RevealsWires` at the commitment's own check, `D.commit.Opens H`.
 * `RevealsWires.mono`: a check that accepts more keeps the wires revealed.
