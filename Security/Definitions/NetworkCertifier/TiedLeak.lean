@@ -7,12 +7,16 @@ import Definitions.NetworkCertifier.Period
 Definitions only. A phase is counted as its joint Program (`Phase.prog`, `Definitions.NetworkCertifier.Tied`), so its
 leak relation (`RLeakTied`) is `RLeakTap` for the joint Program: every observation sequence the network certifier
 registers at the scan's transfer gates is one the joint Program accepts at the phase's layout (`AccSeqsTied`), its
-inputs the traces' committed values (`Phase.val`) and values held only at the committed gates of one possible incorrect
-set of each statement. Each statement's incorrect set is its own, at its own wires and its own `δ`.
+inputs among a set `As` that may read the traces' committed values (`Phase.val`), and values held only at the committed
+gates of one possible incorrect set of each statement. Each statement's incorrect set is its own, at its own wires and
+its own `δ`. At a period's phases `As` reads no trace: it pins the registered inputs at the registration's values.
 
-A phase's good event (`PhaseGood`) is `WindowGood`'s, with the joint Program's registered inputs, the values the
-registration fixes before the run, in place of each statement's. A tied gate is no registered input: it is wired, and
-its value is its writer's.
+A phase's good event (`PhaseGood`) is `WindowGoodReg`'s for the joint Program: its registered inputs, each statement's
+(`Phase.reg`), are pinned at the values the registration opens (`Phase.regVal`), which it fixes before the run, not at
+the traces' values, and `ρ` is those values at the registered free inputs. A trace that disagrees with the registration
+at a registered input makes, with the registration's opening there, a collision among the calls that check the traces'
+openings and the registration's (`phaseRegLog`). A tied gate is no free input: it is wired, and its value is its
+writer's.
 
 The conditions a period of phases takes beyond a period of windows' are named here: the phase's bytes parse to its
 statements, one trace each (`PhaseParsed`), and each tied audit that can be wrong shows the rest of the phase at most a
@@ -82,30 +86,38 @@ def RLeakTied (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Op
 def phaseLog (H : Msg → Msg) (Cm : CommitmentScheme Bool) (ph : Phase) (ws : List Wit) : List (Msg × Msg) :=
   (ph.stmts.zip ws).flatMap fun sw => tapLog H Cm sw.1.roots sw.2.vals
 
+/-- The `H` calls that check the phase's registrations: each statement's registration openings `ops s` under its
+roots (`regLog`). -/
+def phaseRegLog (H : Msg → Msg) (Cm : CommitmentScheme Bool) (ph : Phase) (ops : AuditStatement → List (Opening Bool)) :
+    List (Msg × Msg) :=
+  ph.stmts.flatMap fun s => regLog H Cm s.roots (ops s)
+
 section Good
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **A phase registered as `ph₀`**: statement by statement, each registered as `ph₀`'s (`SameRegistration`). The
-phase's registered inputs are the joint Program's (`PhaseGood`'s `reg`), so no statement's own are compared. -/
+/-- **A phase registered as `ph₀`**: statement by statement, each registered as `ph₀`'s (`SameRegistration`, its
+registered inputs `reg` among what it compares). -/
 def SamePhase {L S : ℕ} (D : Deploy Coin Col T) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
-    (ph₀ ph : Phase) : Prop :=
-  List.Forall₂ (SameRegistration D lay k fun _ => ∅) ph₀.stmts ph.stmts
+    (reg : AuditStatement → Finset ℕ) (ph₀ ph : Phase) : Prop :=
+  List.Forall₂ (SameRegistration D lay k reg) ph₀.stmts ph.stmts
 
-/-- **A phase's good event**: at the phase's statements `xs`, the scan's first, and the audits' extracted witnesses
-`ws`, each statement is in the audit's scope, and they parse to a phase registered as `ph₀` at which the phase's leak
-relation at the network certifier's rows holds (`RLeakTied`, the joint Program's registered inputs `reg` pinned:
-`AsReg`), the traces hold `ρ` at `reg`, and the run's observations `o` have the horizon's length, jitter below `Dj` and
-every status complete. -/
+/-- **A phase's good event at the registration's values**: at the phase's statements `xs`, the scan's first, and the
+audits' extracted witnesses `ws`, each statement is in the audit's scope, and they parse to a phase registered as `ph₀`
+at which the phase's leak relation at the network certifier's rows holds with the joint Program's registered inputs
+pinned at the values the registration opens (`RLeakTied`, at `AsReg` of `Phase.reg reg` at `Phase.regVal ops`), the
+registration opens `ρ` at the registered free inputs, and the run's observations `o` have the horizon's length, jitter
+below `Dj` and every status complete. -/
 def PhaseGood (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
-    (k : AuditStatement → ℕ) (δ : ℕ → ℝ) (Dj : ℕ) (ph₀ : Phase) (t : Ties) (reg : Finset ℕ) (ρ : ℕ → Bool)
-    (tops : AuditStatement → List (Opening Bool)) (xs : List Msg) (ws : List Wit) (o : List (Obs L K S)) : Prop :=
+    (k : AuditStatement → ℕ) (δ : ℕ → ℝ) (reg : AuditStatement → Finset ℕ) (ops : AuditStatement → List (Opening Bool))
+    (Dj : ℕ) (ph₀ : Phase) (t : Ties) (ρ : ℕ → Bool) (tops : AuditStatement → List (Opening Bool)) (xs : List Msg)
+    (ws : List Wit) (o : List (Obs L K S)) : Prop :=
   (∀ x ∈ xs, ScopeAcc D lay k x) ∧
-    ∃ ph, SamePhase D lay k ph₀ ph ∧
+    ∃ ph, SamePhase D lay k reg ph₀ ph ∧
       RLeakTied H D.commit D.parse D.partition L K S lay (k ph.scan) ph t δ
-        (AsReg ph.prog (ph.layout lay t) (k ph.scan) reg) Dj (tops ph.scan) xs ws ∧
-      (∀ g ∈ reg, traceVal ph.prog (ph.val H D.commit ws) g = ρ g) ∧ Covered (k ph.scan) o ∧ o.length = k ph.scan ∧
-      ∀ y ∈ o, y.jitter < Dj
+        (fun _ => AsReg ph.prog (ph.layout lay t) (k ph.scan) (ph.reg reg) (ph.regVal ops)) Dj (tops ph.scan) xs ws ∧
+      (∀ g ∈ ph.reg reg, g ∈ freeInputs ph.prog (ph.layout lay t) (k ph.scan) → ph.regVal ops g = ρ g) ∧
+      Covered (k ph.scan) o ∧ o.length = k ph.scan ∧ ∀ y ∈ o, y.jitter < Dj
 
 /-- **The phase's bytes and traces**: the statements' bytes `xs` parse to the phase `ph`'s statements, the scan's first,
 and there is one trace for each (`ws`). -/

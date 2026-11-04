@@ -124,7 +124,7 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
       (NetTiming.sampledLeak_reg hSA H D L K S lay hks k δ decode hδ hdec reg β Dj hβ).2 x hx s P hs hP op _⟩
 
 theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
-theorem PeriodLeakTied : NetTiming.Guarantees.PeriodLeakTied := by
+theorem PeriodTiedCount : NetTiming.Guarantees.PeriodTiedCount := by
   sorry
 theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe := NetTiming.horizonIncorrectBlocks
 theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.horizonLeak

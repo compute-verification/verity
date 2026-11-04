@@ -1,4 +1,5 @@
 import Definitions.NetworkCertifier.SampledCharge
+import Definitions.NetworkCertifier.SampledReg
 
 /-!
 # A rows-form phase as one Program: its scan's and its tied compute audits', and the ties between them
@@ -13,18 +14,19 @@ among its wires (`Phase.layout`), so a tied gate is no free input (`freeInputs`)
 **The ties** (`Ties`), in the joint Program's gate numbers, each wiring a gate to its writer:
 
 * `state`: each tied audit's state read at row `a ≥ 1` to the scan's `o1` of unit `a − 1`, and the scan's state read
-  at unit `t ≥ 1` to its `o1` of unit `t − 1`. A state read at row `0` is no tie: it is a registered input, the empty
-  state, a value fixed before the run;
+  at unit `t ≥ 1` to its `o1` of unit `t − 1`. A state read at row `0` (`start`) is no tie: it is a registered input,
+  the empty state, a value fixed before the run;
 * `prog`: the scan's `prog` read at lane `l`, leaf `b` to its tied audit's slot entry of chunk `l`, leaf `b`.
 
 Beside them each statement keeps its own wires (`Phase.ownWires`), which its sampled proofs show right (`KSWired`). A
-tie is right by binding instead: its reader and its writer are committed at one position under one root (`Placed`, at
-the registrations' placement `place`), so two openings of them that differ make a collision
-(`Assumptions.SharedRootsParsed`).
+tie is right by binding instead: its reader and its writer are committed as one bit of one leaf under one root
+(`Placed`, at the registrations' placement `place`, bit by bit), so two openings of them that differ make a collision
+(`SharedRootsParsed`, the deployed parse's premise, which the sampled leg's bridge discharges).
 
 **What an accepted period gives**, each a named `Prop` that a property of the period check discharges:
 
 * `RowsStateHeld` and `RowsProgWired`: the state and the `prog` ties are placed together;
+* `RowsStateEmpty`: the state reads at row `0` are registered inputs that the registration opens at the empty state;
 * `RowsCircuitHeld`: each tied audit's Program is the class circuit's, one Program for the period;
 * `RowsTiesOrdered`: the phase's layout fits its joint Program (`BoundaryGates.Fits`, over `DependsWired`): the wires
   acyclic, and no step's egress reaching a later step's ingress through reads and wires, which holds when each slot
@@ -82,11 +84,23 @@ def Phase.locate (ph : Phase) (g : ℕ) : Option (ℕ × ℕ) :=
 def Phase.ownWires {L S : ℕ} (ph : Phase) (lay : AuditStatement → BoundaryGates L S) (g : ℕ) : Option ℕ :=
   (ph.locate g).bind fun (j, h) => (ph.stmts[j]?).bind fun s => ((lay s).wires h).map (· + ph.offset j)
 
+open Classical in
+/-- **The phase's registered inputs**, in the joint Program's gate numbers: each statement's own (`reg s`). -/
+noncomputable def Phase.reg (ph : Phase) (reg : AuditStatement → Finset ℕ) : Finset ℕ :=
+  (Finset.range ph.prog.gates.length).filter fun g =>
+    ∃ j h s, ph.locate g = some (j, h) ∧ ph.stmts[j]? = some s ∧ h ∈ reg s
+
+/-- **The registration's value** at the joint Program's gate `g`: that of the registration of the statement that holds
+it (`regVal`, its openings `ops s`), `false` off the phase's gates. -/
+def Phase.regVal (ph : Phase) (ops : AuditStatement → List (Opening Bool)) (g : ℕ) : Bool :=
+  ((ph.locate g).bind fun (j, h) => (ph.stmts[j]?).map fun s => NetTiming.regVal (ops s) h).getD false
+
 /-- **A phase's ties**, in the joint Program's gate numbers: each tied gate's writer, the state reads' (`state`) and the
-scan's `prog` reads' (`prog`). -/
+scan's `prog` reads' (`prog`), and the state reads at row `0`, which no tie writes (`start`). -/
 structure Ties where
   state : ℕ → Option ℕ
   prog : ℕ → Option ℕ
+  start : Finset ℕ
 
 /-- **The phase's layout**: the scan's egress and ingress gates (laid out first, the scan's gates keep their numbers),
 and as its wires each statement's own and the ties. -/
@@ -95,16 +109,31 @@ def Phase.layout {L S : ℕ} (ph : Phase) (lay : AuditStatement → BoundaryGate
   ingress := (lay ph.scan).ingress
   wires g := ph.ownWires lay g <|> t.state g <|> t.prog g
 
-/-- **Where the registrations commit each statement's gates**: `place s g = some (r, p)` when statement `s`'s
-registration commits gate `g`'s value at position `p` under the root `r`. -/
-abbrev Placement := AuditStatement → ℕ → Option (Msg × ℕ)
+/-- **Where the registrations commit each statement's gates**, bit by bit: `place s g = some (r, l, b)` when statement
+`s`'s registration commits gate `g`'s value as bit `b` of leaf `l` under the root `r`. Two gates at one leaf are at two
+bits of it. The position is the bit's place, built from `at_` and the deployed placement under `SampledProofs.Bits`
+(`RowPos`: row, leaf, bit), never from `at_` alone. -/
+abbrev Placement := AuditStatement → ℕ → Option (Msg × ℕ × ℕ)
 
-/-- **The wires `t` are placed together**: each joins a gate of the phase to a writer that the registrations commit at
-the same position under the same root. -/
+/-- **The wires `t` are placed together**: each joins a gate of the phase to a writer that the registrations commit as
+the same bit of the same leaf under the same root. -/
 def Placed (ph : Phase) (place : Placement) (t : ℕ → Option ℕ) : Prop :=
-  ∀ g w, t g = some w → ∃ (j h j' h' : ℕ) (s s' : AuditStatement) (p : Msg × ℕ),
+  ∀ g w, t g = some w → ∃ (j h j' h' : ℕ) (s s' : AuditStatement) (p : Msg × ℕ × ℕ),
     ph.locate g = some (j, h) ∧ ph.locate w = some (j', h') ∧ ph.stmts[j]? = some s ∧ ph.stmts[j']? = some s' ∧
       place s h = some p ∧ place s' h' = some p
+
+/-- **SharedRootsParsed**: at the deployment `D`, two gates of statements it parses that the registrations commit as one
+bit of one leaf under one root (`place`) open to one value, or the two openings' `H` calls collide. A tie is right by
+binding only if the deployment's parse puts each statement's registered roots among its `roots`, each gate at the bit
+the registration names, so that two passing openings of them are openings of one committed bit. It is a fact about the
+deployed parse, which the sampled leg's bridge proves at the deployed record, and no assumption about the period check,
+which checks the placements (`RowsStateHeld`, `RowsProgWired`). -/
+def SharedRootsParsed {Coin Col T : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (place : Placement) : Prop :=
+  ∀ (x x' : Msg) (s s' : AuditStatement) (g g' : ℕ) (p : Msg × ℕ × ℕ), D.parse x = some s → D.parse x' = some s' →
+    place s g = some p → place s' g' = some p →
+      ∀ o o' : Opening Bool, o.pos = g → o'.pos = g' → o.val ≠ o'.val → D.commit.Opens H s.roots o = true →
+        D.commit.Opens H s'.roots o' = true →
+          LogColl (((D.commit.opens s.roots o).eval H).2 ++ ((D.commit.opens s'.roots o').eval H).2)
 
 /-- **RowsStateHeld**: the phase's state ties are placed together. Each tied audit's state read at row `a ≥ 1` is
 committed where the scan's `o1` of unit `a − 1` is, under the scan's state root, and so is the scan's own state read at
@@ -114,6 +143,12 @@ def RowsStateHeld (ph : Phase) (place : Placement) (t : Ties) : Prop := Placed p
 /-- **RowsProgWired**: the phase's `prog` ties are placed together. The scan's `prog` read at lane `l`, leaf `b` is
 committed where its tied audit's slot entry of chunk `l`, leaf `b` is, under that audit's entries root. -/
 def RowsProgWired (ph : Phase) (place : Placement) (t : Ties) : Prop := Placed ph place t.prog
+
+/-- **RowsStateEmpty**: the phase's state reads at row `0` (`start`) are registered inputs of their statements (`reg`),
+which the registration (its openings `ops`) opens at the empty state, every bit `false`. -/
+def RowsStateEmpty (ph : Phase) (reg : AuditStatement → Finset ℕ) (ops : AuditStatement → List (Opening Bool))
+    (t : Ties) : Prop :=
+  ∀ g ∈ t.start, g ∈ ph.reg reg ∧ ph.regVal ops g = false
 
 /-- **RowsCircuitHeld**: each tied audit's Program is the class circuit `C`, the one Program the workload's class
 registers for the period, so the prover chooses no phase's circuit. -/

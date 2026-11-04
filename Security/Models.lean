@@ -38,7 +38,6 @@ import Definitions.Pous.Guarantees
 import Definitions.Pouw.Assumptions
 import Definitions.Pouw.Guarantees
 import Definitions.NetworkCertifier.Assumptions
-import Definitions.NetworkCertifier.Assumptions.Tied
 import Definitions.NetworkCertifier.Guarantees
 import Definitions.NetworkCertifier.Guarantees.Pooled
 import Definitions.Flock.Guarantees
