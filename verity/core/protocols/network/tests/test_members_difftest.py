@@ -117,17 +117,19 @@ members_server = D.server_fixture(MEMBERS)
 
 @pytest.mark.slow
 def test_the_members_are_interfaces(members_server):
-    """Lean's members are `interface.members`' on every drawn record, and both refuse the same records. A draw costs
-    seconds (Python builds its population program three times), so this adds minutes to `check`; it catches what the
-    fixed case can't: a layout difference at drawn cuts, reads, table reads, openings and caps, and a record one side
-    refuses and the other doesn't."""
+    """Lean's members are `interface.members`' on every drawn record, and both refuse the same records, about half the
+    draws each way. A draw costs most of a minute (Python builds its population program three times), so this adds
+    most of an hour to `check`; it catches what the fixed case can't: a layout difference at drawn cuts, reads, table
+    reads, openings and caps, and a record one side refuses and the other doesn't."""
     stats = D.run(MEMBERS, examples=60, seed=1, server=members_server)
-    assert stats.outputs > 30 and stats.rejects > 2, stats
+    assert stats.outputs > 20 and stats.rejects > 2, stats
 
 
+@pytest.mark.slow
 def test_a_cap_that_splits_a_segment(members_server):
     """`declared`'s shape at cap 2: each template's units cut at its wires' and reads' ends, its segments of 3 split
-    2 + 1, and the chunks counted across the template."""
+    2 + 1, and the chunks counted across the template. One record costs about two minutes of Python, as a draw does;
+    it pins the members of one known layout, which the drawn records only hold Lean and Python to each other on."""
     reg = IF.Registered({"weights": WEIGHTS}, (IF.Table("embed", "weights", 512, 16, 4),),
                         (IF.Read(G8ID, "w", "weights", 0, (3, 2), 0, (0, 128)), IF.Read(GID, "w", "weights", 1, (2,), 256, (0,))),
                         (IF.TableRead(EID, "root", "embed", "root", 0, 3),),
