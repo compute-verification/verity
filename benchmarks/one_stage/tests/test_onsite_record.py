@@ -17,7 +17,8 @@ audit drawn in part charges its slot entries in k_{skip,j}; each cell states its
 share of the schedule's egress capacity, and the served egress is missing. Sampled proofs' coins are live only where
 every COINS line names the live challenger at a named peer; otherwise, or with none, live-coins is open by name, the
 figure of record charges ℓ_a + 1 for each tied audit whatever else holds, and it, its cells and the sampled-proofs
-verdict are conditional on the coins. The run's `publish`
+verdict are conditional on the coins. One program a day is never claimed, open by name beside the day each ADVICE-LINE
+says, whatever the lines say. The run's `publish`
 leaves the record as written. The run is of record only when every verdict, the onsite composite's included,
 accepted. Its caller's serving settings, S and MAX_TOKENS, both or neither, label the record and its line, missing where
 it states none; runs' records at two settings go beside each other, each run's figures labelled with its own settings
@@ -448,6 +449,33 @@ def test_coins_a_line_names_live_add_no_condition_and_the_tight_K_is_of_record(t
     line = json.loads(capsys.readouterr().out.strip()[7:])
     assert (line["conditional_on"], line["K"], line["open"]) == ([], K, [])
     assert OR.summary({k: v for k, v in rec.items() if k != "coins"})["conditional_on"] == [OR.COINS_OPEN]
+
+
+#: the run's ADVICE-LINE as served_verdicts.py says it on a serve-openai --advice run, declaring B for day {}
+DECLARED = ("ADVICE-LINE: B (compiler digest 0123456789abcdef…, its advice toy, ℓ_a 32 bits) registered by the server "
+            "once, before its first window, the registration log's builder and the compiler prove_path.py recomputes "
+            "from serve.json, and declared day {}'s one program; every closed window's advice committed: PASS")
+NO_B = ("ADVICE-LINE: FAIL: no advice_registration.json: the server registered no B (serve-openai without "
+        "--advice)")
+
+
+@pytest.mark.parametrize("days", [["0"], ["3", "3"], [None], []])
+def test_one_program_a_day_is_never_claimed_but_open_by_name_beside_the_day_each_advice_line_says(tmp_path, capsys,
+                                                                                                    days):
+    """Whatever the run's ADVICE-LINEs say (a day's declaration of B, two of them, a line naming no day) or where it
+    published none (missing), the record doesn't claim one program a day: it is open by name in the record and its
+    line, on both counts (R2's day isn't the challenger's signed time, and the audit reads the node's copy of the
+    registration log, not the challenger's signed one), saying the day's registration and its refusals still run. The
+    figures don't read it: with the coins live and every premise discharged the tight K is of record."""
+    rec = with_coins(tmp_path, [coins_line(GATE), *(NO_B if d is None else DECLARED.format(d) for d in days)])
+    assert rec["one_program_a_day"] == {"open": True, "advice_line_day": days, "from": "verdicts.txt ADVICE-LINE",
+                                        "is": OR.DAY} | ({} if days else {"missing": OR.NO_ADVICE_LINE})
+    assert (rec["bound"]["of_record"]["K"], rec["bound"]["of_record"]["open"]) == (K, [])
+    line = json.loads(capsys.readouterr().out.strip()[7:])
+    assert (line["not_claimed"], line["conditional_on"], line["K"]) == ([OR.DAY_OPEN], [], K)
+    assert all(x in OR.DAY for x in ("doesn't claim", "R2's day isn't yet the challenger's signed time",
+                                     "doesn't yet read the challenger's signed registration log",
+                                     "(duplicate-declaration)", "(R2-declared)", "which no verdict here does"))
 
 
 def test_a_discharge_the_properties_lock_lists_counts_as_one_the_guarantees_lock_does(tmp_path, lock, monkeypatch):
@@ -1091,8 +1119,8 @@ def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_
     runs = doc["runs"]
     assert [(r["record"], r["run"], r["tree"], r["serving"], r["ell_a"]) for r in runs] == [
         (str(p), "toy-run", TREE, {"window_steps": s, "max_tokens": m}, [cap]) for p, (s, m, cap) in zip(paths, SETTINGS)]
-    assert [(r["of_record"], r["conditional_on"], r["K"], r["K_tight"], r["open"]) for r in runs] == [
-        (False, [], K + cap + 1, K, ["free", "circuit"]) for _, _, cap in SETTINGS]
+    assert [(r["of_record"], r["conditional_on"], r["not_claimed"], r["K"], r["K_tight"], r["open"]) for r in runs] == [
+        (False, [], [OR.DAY_OPEN], K + cap + 1, K, ["free", "circuit"]) for _, _, cap in SETTINGS]
     for p, r in zip(paths, runs):
         rec = json.loads(p.read_text())
         for name in ("periods", "periods_tight"):

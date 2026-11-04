@@ -35,6 +35,11 @@ run's, or the follow-on's where it audits), ``open`` unless each names the live 
 draw: the sampled-proofs verdict's, ``of_record``'s and the composite's error's ``conditional_on``, and the figure of
 record's ``open`` and ``conditional_on`` and its periods'.
 
+**One program a day** (``one_program_a_day``, `DAY`): not claimed, and open by its name in the record and its line
+(``not_claimed``): R2's day isn't yet the challenger's signed time, and the audit doesn't yet read the challenger's
+signed registration log. Beside it, the day each of the run's ADVICE-LINEs says the server declared B for, and
+``missing`` where the run published none; the day's registration and its refusals still run as `DAY` says.
+
 **The composite's error** (``composite_error``, `COMPOSITE`): the sum over the onsite composite's four subprotocols of
 each one's error, each subprotocol's δ with where the run states it: sampled proofs' and PoUW's from their rows (their
 answers' integrity-profile δ), the network certifier's from its bound (its eps), and inference-only's missing
@@ -211,6 +216,18 @@ COINS = (f"{COINS_OPEN}: V3c's tied audit drew its sample on the live challenger
          "entries E_w that k_{skip,j} charges rest on that draw, so every figure here, the figure of record's "
          "included, holds only on those coins and never as a live draw's")
 NO_COINS = "the run published no COINS line naming sampled proofs' coins (served_verdicts.sh's)"
+#: the run's published ADVICE-LINE (`served_verdicts.py advice_line`), whose day's declaration of B the record reads
+ADVICE_LINE = "ADVICE-LINE: "
+DAY_OPEN = "one-program-a-day"
+DAY = (f"{DAY_OPEN}: the record doesn't claim the run served one program a day. Open, by this name, on two counts "
+       "until each closes: R2's day isn't yet the challenger's signed time but the day the run's launcher passed the "
+       "server (serve-openai --advice-day), and the audit doesn't yet read the challenger's signed registration log "
+       "but the copy the served node holds. The day's registration and the declared-circuit refusals still run and "
+       "refuse as before: the server declares B as its day's one program in the registration log, whose check refuses "
+       "a second declaration of a day (duplicate-declaration); the run's ADVICE-LINE holds the log's last entry to "
+       "that declaration; and R2 refuses a record whose program isn't its day's declared one (R2-declared) wherever a "
+       "verifier passes it the day and the log's declarations, which no verdict here does")
+NO_ADVICE_LINE = "the run published no ADVICE-LINE (served_verdicts.sh's, on a serve-openai --advice run)"
 CHARGED = ("PeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audit tied to execution phase j's scan, those "
            "its Program neither registers at a pinned root nor ties (NetworkCheck.Period's tiedAudits sums the "
            "parameters' audits[].free, #(freeInputs \\ reg); `records_audit.py period`'s free for V3c's window audit). "
@@ -503,7 +520,8 @@ NO_SERVING = ("the run's caller stated no serving settings (--window-steps and -
               "WINDOW_STEPS and MAX_TOKENS)")
 BESIDE = "verity/onsite-network-records-beside/v1"
 BESIDE_IS = ("each run's figures from its own record, beside the others', each labelled with its serving settings "
-             "(`SERVING`), ℓ_a and what its figures are conditional on (`COINS`): its figure of record and tight K, "
+             "(`SERVING`), ℓ_a, what its figures are conditional on (`COINS`) and what it doesn't claim (`DAY`): its "
+             "figure of record and tight K, "
              "and each period's cells (bits and share of the weights). No figure is carried from one run's settings "
              "to another's")
 UNLABELLED = ("states no serving settings, which label its figures beside another run's: write it again from its OUT "
@@ -767,6 +785,15 @@ def coins(out: Path) -> dict[str, Any]:
             | ({} if said else {"missing": NO_COINS}))
 
 
+def day(out: Path) -> dict[str, Any]:
+    """One program a day, open (`DAY`), beside the day each of the run's ADVICE-LINEs says it declared B for (None where
+    it names none); ``missing`` where the run published no ADVICE-LINE."""
+    said = [m[1] if (m := re.search(r"declared day (\S+)'s one program", x)) else None
+            for x in lines(out, "verdicts.txt") if x.startswith(ADVICE_LINE)]
+    return ({"open": True, "advice_line_day": said, "from": f"verdicts.txt {ADVICE_LINE.strip()}", "is": DAY}
+            | ({} if said else {"missing": NO_ADVICE_LINE}))
+
+
 def charged(b: Mapping[str, Any]) -> dict[str, Any]:
     """ℓ_{a,j} as the bound charges each execution phase (`CHARGED`), and their share of K."""
     free = [t["bits"] for t in b["terms"] if t["symbol"] == "\\ell_{a,j}"]
@@ -972,7 +999,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
         "format": FORMAT, "extends": EXTENDS, "run": report.get("run"), "tree": tree, "node": report.get("node"),
         "serving": {"missing": NO_SERVING} if serving is None else {
             "window_steps": serving[0], "max_tokens": serving[1], "is": SERVING},
-        "verdicts": v, "coins": drawn,
+        "verdicts": v, "coins": drawn, "one_program_a_day": day(out),
         "of_record": {"holds": all(x["verdict"] == "accept" for x in v.values()),
                       "missing": [k for k, x in v.items() if x["verdict"] == "missing"],
                       "not_accepting": [k for k, x in v.items() if x["verdict"] not in ("accept", "missing")]}
@@ -1026,15 +1053,16 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
 
 def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     """The ``ONSITE`` line: the run's serving settings, each verdict, whether the run is of record and what every figure
-    is conditional on (`COINS`; open for a record that read no coins), K of record, the tight K and the checks it is
-    conditional on, its δ_net's terms, eps's split and connections, the composite's stated error, the year's datacenter
-    cell, and the measured advice charge's test run."""
+    is conditional on (`COINS`; open for a record that read no coins), what the record doesn't claim (`DAY`), K of
+    record, the tight K and the checks it is conditional on, its δ_net's terms, eps's split and connections, the
+    composite's stated error, the year's datacenter cell, and the measured advice charge's test run."""
     b, p, s = rec.get("bound") or {}, rec.get("periods") or {}, rec.get("serving") or {}
     year = (p.get("year") or {}).get("datacenter")
     m, fig = rec["advice_charge"]["measured"], b.get("of_record") or {}
     return {"serving": {k: s[k] for k in ("window_steps", "max_tokens")} if "window_steps" in s else None,
             "verdicts": {k: x["verdict"] for k, x in rec["verdicts"].items()}, "of_record": rec["of_record"]["holds"],
             "conditional_on": rec["of_record"].get("conditional_on", []) if "coins" in rec else [COINS_OPEN],
+            "not_claimed": [DAY_OPEN] if (rec.get("one_program_a_day") or {"open": True})["open"] else [],
             "K": fig.get("K"), "K_tight": b.get("K"), "open": fig.get("open"),
             "delta_net": None if "delta_net" not in b else delta_net(eps_of(b), b["phases"]),
             "delta": None if "delta" not in b else {k: b["delta"][k] for k in ("scan", "charged")},
@@ -1072,7 +1100,7 @@ def beside(paths: Sequence[Path]) -> dict[str, Any]:
             raise ValueError(f"{path} {UNLABELLED}")
         runs.append({"record": str(path), "run": rec.get("run"), "tree": rec.get("tree"), "serving": line["serving"],
                      "ell_a": (rec["advice_charge"].get("cap") or {}).get("ell_a"), "of_record": line["of_record"],
-                     "conditional_on": line["conditional_on"],
+                     "conditional_on": line["conditional_on"], "not_claimed": line["not_claimed"],
                      "K": line["K"], "K_tight": line["K_tight"], "open": line["open"],
                      "periods": cells(rec.get("periods")), "periods_tight": cells(rec.get("periods_tight"))})
     return {"format": BESIDE, "is": BESIDE_IS, "runs": runs}
@@ -1115,8 +1143,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         a.to.parent.mkdir(parents=True, exist_ok=True)
         a.to.write_text(json.dumps(doc, indent=1, sort_keys=True, ensure_ascii=False) + "\n")
-        print("ONSITE-BESIDE " + json.dumps([{k: r[k] for k in ("run", "serving", "ell_a", "conditional_on", "K",
-                                                                 "K_tight", "open")}
+        print("ONSITE-BESIDE " + json.dumps([{k: r[k] for k in ("run", "serving", "ell_a", "conditional_on",
+                                                                 "not_claimed", "K", "K_tight", "open")}
                                              for r in doc["runs"]], sort_keys=True, ensure_ascii=False), flush=True)
         return 0
     if a.out is None:
