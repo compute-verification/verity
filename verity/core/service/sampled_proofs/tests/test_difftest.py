@@ -2163,6 +2163,39 @@ def test_v2_per_member_runs_each_statement_on_its_members_inputs(server, server_
         assert run(per_member(), p=p1 | {"proofs": proofs_}) == ("reject", f"params: {why}"), proofs_
 
 
+def test_v2_per_member_holds_its_statements_to_the_members_order_and_one_session_each(server, server_v2):
+    """v2's per-member statements are public structure (`OneStageZk.membersHeld`), held before any session runs, on
+    sessions whose coins are the challenger's two trees: statements out of the members' order (by first unit, so `m10`
+    after `m2`, not by name) are refused, and so is a statement of two sessions; in the members' order, one session each,
+    each session runs and its own verdict rejects (no blob holds a circuit file)."""
+    s, law = SETUPS[3], {"k": 2, "law": "subset"}
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF)
+    circuits, public = {"m2": b"not a circuit file", "m10": b"not another circuit file"}, b"not a public file"
+    members = {"m2": {"circuit": _sha(circuits["m2"]), "registered": None, "units": [[0, 2]]},
+               "m10": {"circuit": _sha(circuits["m10"]), "registered": None, "units": [[2, 5]]}}
+    ch, _, base, p = _challenger_audit(server, random.Random("v2-members-order"), s, law, rec, 2)
+    p = p | {"proofs": {"members": members}}
+    records = [D.canonical(t.record).encode() for t in ch.trees]
+    blobs = [circuits["m2"].hex(), circuits["m10"].hex(), public.hex(), *(r.hex() for r in records)]
+
+    def run(*sts):
+        statements = [{"member": m, "public": _sha(public),
+                       "sessions": [{"name": n, "record": _sha(records[t]), "reps": {}} for n, t in ss]} for m, ss in sts]
+        e = base | {"proofs": {"statements": statements}, "sessions": [n for _, ss in sts for n, _ in ss]}
+        case = {"blobs": list(blobs), "commitment": _hex(rec), "evidence": _hex(e), "params": p}
+        out = server_v2.exchange(_json(case))
+        return out["verdict"], out["reason"]
+
+    assert run(("m10", [("s", 0)]), ("m2", [("t", 1)])) == (
+        "reject", "proofs: member m2: its statement follows member m10's, whose units start after its own: the statements "
+                  "are in the members' order (by first unit, the registration's), one order for one statement")
+    assert run(("m2", [("s", 0), ("t", 1)])) == (
+        "reject", "proofs: member m2: its statement has 2 sessions: a statement is one session on live coins, never "
+                  "retried")
+    assert run(("m2", [("s", 0)]), ("m10", [("t", 1)])) == ("reject", "verdict flock-verify/s did not accept")
+
+
 def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     """v2 reads its draw's coins as v1 does (`OneStageZk.coinsOf`, v1's `coinsOf`), and only from the auditor's
     challenger: parameters naming none, or one without a window, are refused (`NO_CHALLENGER`), and evidence whose coins

@@ -33,13 +33,16 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
   units other than the evidence's `proved_units`, or a circuit, public or record file no blob holds, rejects; a rep
   file no blob holds is that session's reject, as a file `flock-verify` can't read is;
-* **per member** (`runMembers`): each statement is verified as the one statement is, on its member's circuit and
-  registered file, after the statements before it, so no coin tree serves two statements. A statement naming no member
-  of the parameters or one an earlier statement named, its proofs in the other form than the parameters', or a session
-  proving a unit outside its member's units, rejects; the evidence's `proved_units` are held to the union of the
-  statements'. Only a stratum's `k` is not read here: a statement is one table (`inputsOf`'s `count`), so no stratum's
-  draw is split over a statement's tables. Every acceptance in this form is then refused (`MULTI_REFUSED`) until the
-  guarantee for a sample over several members' statements is in the lock.
+* **per member** (`runMembers`): before any session runs, the statements are held as public structure
+  (`membersHeld`): a statement naming no member of the parameters or one an earlier statement named, statements out of
+  the members' order (by first unit, the registration's: one order, one statement), or a statement of more than one
+  session (one session on live coins, never retried), rejects. Then each statement is verified as the one statement is,
+  on its member's circuit and registered file, after the statements before it, so no coin tree serves two statements.
+  Its proofs in the other form than the parameters', or a session proving a unit outside its member's units, rejects;
+  the evidence's `proved_units` are held to the union of the statements'. A stratum may span members, so a member's
+  drawn count may be zero and it has no statement. Only a stratum's `k` is not read here: a statement is one table
+  (`inputsOf`'s `count`), so no stratum's draw is split over a statement's tables. Every acceptance in this form is
+  then refused (`MULTI_REFUSED`) until the guarantee for a sample over several members' statements is in the lock.
 
 Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file.
 -/
@@ -502,21 +505,42 @@ def run (p : Own) (pub : String) (sessions : Array RunFiles) (provedUnits? : Opt
 /-- Whether unit `u` is in one of the ranges `rs`. -/
 def within (rs : Array (Nat × Nat)) (u : Nat) : Bool := rs.any fun (lo, hi) => lo ≤ u && u < hi
 
-/-- The per-member form's run (module docstring, **per member**): each statement on its member's own inputs
-(`runFrom`) after the statements before it, so `step`'s coin-tree keys are fresh across statements; a refusal when a
-statement names no member of the parameters or one an earlier statement named, or proves a unit outside its member's
-units, and for what `runFrom` refuses; then the union of the statements' proved units held to the evidence's
-(`provedHeld`). With the wires' context `wired`, each statement's sessions read their member's wired reads. -/
-def runMembers (ms : Array Member) (sts : Array StatementFiles) (want : Array Nat) (bs : Core.Blobs)
-    (wired : Option WiredReads.Ctx := none) : V Run := do
-  let mut r : Run := ⟨#[], #[], #[], true⟩
-  let mut seen : Array String := #[]
+/-- A member's first unit, its lowest. Members' units are disjoint, so it orders them, and in the registration's order:
+member `k`'s units start at its base, which grows with `k`. -/
+def Member.first (m : Member) : Nat := m.units.foldl (fun a (lo, _) => min a lo) ((m.units[0]?.map (·.1)).getD 0)
+
+/-- The per-member form's statements as public structure (module docstring, **per member**), before any session runs:
+each names a member of the parameters that no earlier statement named, in the canonical order (each member's first unit,
+`Member.first`, after the previous one's: one order, so one statement), with at most one session (one pass on live
+coins, never retried). Their members, statement by statement. -/
+def membersHeld (ms : Array Member) (sts : Array StatementFiles) : V (Array Member) := do
+  let mut held : Array Member := #[]
   for st in sts do
     let some name := st.member
       | throw "the evidence's proofs are one statement's (public, sessions) and the parameters' per member (members)"
     let some m := ms.find? (·.name == name) | throw s!"member {name}: the parameters name no such member"
-    if seen.contains name then throw s!"member {name}: a second statement: a member's units are one statement's"
-    seen := seen.push name
+    if held.any (·.name == name) then throw s!"member {name}: a second statement: a member's units are one statement's"
+    if let some prev := held.back? then
+      if m.first < prev.first then
+        throw (s!"member {name}: its statement follows member {prev.name}'s, whose units start after its own: the " ++
+          "statements are in the members' order (by first unit, the registration's), one order for one statement")
+    if st.sessions.size > 1 then
+      throw (s!"member {name}: its statement has {st.sessions.size} sessions: a statement is one session on live " ++
+        "coins, never retried")
+    held := held.push m
+  pure held
+
+/-- The per-member form's run (module docstring, **per member**): the statements' structure held (`membersHeld`), then
+each statement on its member's own inputs (`runFrom`) after the statements before it, so `step`'s coin-tree keys are
+fresh across statements; a refusal when a statement proves a unit outside its member's units, and for what `runFrom`
+refuses; then the union of the statements' proved units held to the evidence's (`provedHeld`). With the wires' context
+`wired`, each statement's sessions read their member's wired reads. -/
+def runMembers (ms : Array Member) (sts : Array StatementFiles) (want : Array Nat) (bs : Core.Blobs)
+    (wired : Option WiredReads.Ctx := none) : V Run := do
+  let held ← membersHeld ms sts
+  let mut r : Run := ⟨#[], #[], #[], true⟩
+  for (st, m) in sts.zip held do
+    let name := m.name
     let r' ← (runFrom m.own st.pub st.sessions bs r (wired.map (·, { name := m.name, units := m.units }))).mapError
       (s!"member {name}: {·}")
     if let some u := (r'.proved.extract r.proved.size r'.proved.size).find? (!within m.units ·) then
@@ -664,5 +688,31 @@ private def memberJ (units : List (Nat × Nat)) : Json :=
   ("sessions", Json.arr #[])]])])).toOption.map (·.map (·.member)) == some #[some "a"]
 #guard (statementsOf (Json.mkObj [("public", "p"), ("sessions", Json.arr #[])])).toOption.map (·.map (·.member)) ==
   some #[none]
+
+private def memberT (name : String) (units : Array (Nat × Nat)) : Member :=
+  { name, units, own := { programJ := Json.null, program := .empty, partition := Json.null, circuit := "", registered := none } }
+
+private def statementT (member : String) (sessions : Nat := 1) : StatementFiles :=
+  { member := some member, pub := "p", sessions := (List.replicate sessions { name := "s", record := "r", reps := #[] }).toArray }
+
+private def membersT : Array Member := #[memberT "m2" #[(2, 3)], memberT "m10" #[(10, 11)], memberT "m0" #[(5, 6), (0, 1)]]
+
+private def whyT (r : V (Array Member)) : String := match r with
+  | .error e => e
+  | .ok _ => ""
+
+#guard (memberT "m0" #[(5, 6), (0, 1)]).first == 0
+#guard ((membersHeld membersT #[statementT "m0", statementT "m2", statementT "m10"]).toOption.map (·.map (·.name))) ==
+  some #["m0", "m2", "m10"]
+#guard ((membersHeld membersT #[statementT "m2" 0, statementT "m10"]).toOption.map (·.map (·.name))) == some #["m2", "m10"]
+#guard ((membersHeld membersT #[]).toOption.map (·.size)) == some 0
+#guard (whyT (membersHeld membersT #[statementT "m2", statementT "m0"])).startsWith
+  "member m0: its statement follows member m2's, whose units start after its own"
+#guard (whyT (membersHeld membersT #[statementT "m0", statementT "m10", statementT "m2"])).startsWith
+  "member m2: its statement follows member m10's"
+#guard whyT (membersHeld membersT #[statementT "m0", statementT "m0"]) ==
+  "member m0: a second statement: a member's units are one statement's"
+#guard (whyT (membersHeld membersT #[statementT "m0" 2])).startsWith "member m0: its statement has 2 sessions"
+#guard whyT (membersHeld membersT #[statementT "m3"]) == "member m3: the parameters name no such member"
 
 end SampledProofs.OneStageZk

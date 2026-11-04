@@ -159,9 +159,9 @@ def _statement(member: str, public: bytes = PUBLIC) -> dict:
 #: at the params), v1's evidence under v2's params (refused by name at the evidence), v2's evidence naming verdicts,
 #: params naming no challenger or no partition, a circuit or public file no blob holds, proved units no session proved,
 #: a session whose coins are no tree the challenger logged, coins on another window or none; and in the per-member form
-#: (`_per_member`), a statement naming no member or a member twice, two members' units meeting, a member's units or keys
-#: malformed, its circuit or its statement's public file in no blob, the evidence's proofs in the other form than the
-#: params', and proved units no session proved.
+#: (`_per_member`), a statement naming no member or a member twice, statements out of the members' order, two members'
+#: units meeting, a member's units or keys malformed, its circuit or its statement's public file in no blob, the
+#: evidence's proofs in the other form than the params', and proved units no session proved.
 V2_BREAKS = {
     "v1": _v1,
     "v1-evidence": lambda a: {**a, "evidence": _v1(a)["evidence"]},
@@ -179,6 +179,8 @@ V2_BREAKS = {
     "no-coins": lambda a: {**a, "evidence": _without(a["evidence"], "coins")},
     "member-unknown": lambda a: _per_member(a, statements=[_statement("m1")]),
     "member-twice": lambda a: _per_member(a, statements=[_statement("m0"), _statement("m0")]),
+    "member-order": lambda a: _per_member(a, members={"m0": MEMBER, "m1": {**MEMBER, "units": [[1, 2]]}},
+                                          statements=[_statement("m1"), _statement("m0")]),
     "members-meet": lambda a: _per_member(a, members={"m0": MEMBER, "m1": {**MEMBER, "units": [[0, 2]]}}),
     "member-units": lambda a: _per_member(a, members={"m0": {**MEMBER, "units": [[1, 1]]}}),
     "member-keys": lambda a: _per_member(a, members={"m0": _without(MEMBER, "units")}),
