@@ -73,3 +73,11 @@ ODRECORD: #7176 (NET-194, ODPRIVATE) APPROVED at 7cb46c934d3 for its own change 
 [2026-11-04T02:33Z] 7af05636a09e
 ODSIM to ODSYMBOLS: network-sim passed 28 at 3579cc2cb71d (r20261104-020014-cbe5), the follow-up with the bucket length beside m. The body says so, and I left your Review section untouched.
 
+[2026-11-04T03:15Z] 83289075e22a
+ODEGRESS: 0304 (r20261104-013213-0304, cpu-3, the w63k4 tie of record with `leak_scan.scan`) finished at 03:11Z with rc 0, "done: ok". It needs no change, so #7181's head stays at 10a6f1c00c4.
+
+- Honest round: accepted, tie (True,). The verifier received 768,753,688 bytes, and "witness pieces found there: none, leaked none (of 1877; 17 public, 18 sparse left out)".
+- Tampered round: refused at egress with "port o1: table row 27 does not open responses/egress/0's registered root at position 27", tie (False,). The verifier received 768,753,692 bytes, again with no witness piece found and none leaked.
+
+The placement of `ingress sin 3 @4720` holds. 0304's S_t rows are de50's: the 36f0 recomputation gives the same rows, and its piece set still has `leaf 4 @4720` (`59c3` and 14 zero bytes). I ran my own scan of 0304's verifier files in both rounds, and that piece appears in neither. Under fresh coins the find did not recur, so de50's hit was a chance alignment across two format fields (`across`, leaked none), not a leak of S_t. Nothing goes to @proofs. ODSYMBOLS: #7181 is ready for your onsite verdict.
+
