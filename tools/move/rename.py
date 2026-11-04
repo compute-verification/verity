@@ -65,7 +65,7 @@ PIN = re.compile(r"^([0-9a-f]{64})  (.+)$", re.M)
 PINS_PY = "tools/verity/check/pins.py"              # the pins of Lean sources, some of them JSON (`json_pins`)
 MANIFEST = "lake-manifest.json"
 MOVES = L.MOVES                                     # research's record of each move's renamed paths
-JOBS, CHUNK = 32, 64                                # at most this many processes rewrite files, this many files a task
+JOBS, CHUNK = 32, 8                                 # at most this many processes rewrite files, this many files a task
 EXPORTS = re.compile(r"^__all__\s*\+?=\s*[\[(][^\])]*[\])]", re.M)   # a Python module's `__all__`: names, never data
 # a space of a phrase: one, a line break and what starts the next line, or a break between two string literals Python joins
 GAP = r"""(?: ["']\n[ \t]*[rbfRBF]{0,2}["']|["']\n[ \t]*[rbfRBF]{0,2}["'] | |\n[ \t]*(?:(?:///?|--|#|\*) )?)"""
@@ -454,6 +454,11 @@ class Words:
         pattern, new = self.rules(path, text)
         if pattern.search(text) is None:
             return text
+        parts = regions(path, text) if self.scope and protect else None
+        if parts is not None and all(k != PROSE for _, _, k in parts):     # a data file: every word stands
+            if kept is not None:
+                kept.update(re.sub(GAP, " ", m.group(0)) for m in pattern.finditer(text))
+            return text
         held = [(m.start(), m.end()) for k in self.keep if protect for m in k.finditer(text)]
         if held and path.endswith(".py") and (names := [(m.start(), m.end()) for m in EXPORTS.finditer(text)]):
             exported = [any(a <= s and e <= b for a, b in names) for s, e in held]
@@ -473,7 +478,6 @@ class Words:
             reach.append(far)
         held_in = [*self.keep_in.items(), *(() if protect else self.keep_paths.items())]
         skip = {w for g, ws in held_in if path and _match(path, g) for w in ws}
-        parts = regions(path, text) if self.scope and protect else None
 
         def one(m: re.Match) -> str:
             w = m.group(0)
@@ -706,22 +710,22 @@ def _rewrite(files: list[str]) -> tuple[dict[str, str], Counter, Counter]:
 
 
 def rewrite(root: Path, words: Words, run: L.Run, files: list[str], jobs: int) -> tuple[dict[str, str], Counter, Counter]:
-    """`_rewrite` of `files`, in `jobs` forked processes when that is more than one: a file's new text reads that file and
-    the map alone, so it is what one process writes, in the same order."""
+    """`_rewrite` of `files`, in `jobs` forked processes when that is more than one, largest files first: a file's new text
+    reads that file and the map alone, so it is what one process writes, in the files' order."""
     global _FORKED
     _FORKED = (root, words, run)
-    chunks = [files[i:i + CHUNK] for i in range(0, len(files), CHUNK)]
-    if jobs > 1 and len(chunks) > 1:
-        with concurrent.futures.ProcessPoolExecutor(min(jobs, len(chunks)), mp_context=multiprocessing.get_context("fork")) as ex:
-            parts = list(ex.map(_rewrite, chunks))
+    if jobs > 1 and len(files) > CHUNK:
+        big = sorted(files, key=lambda p: -os.path.getsize(root / p))
+        with concurrent.futures.ProcessPoolExecutor(jobs, mp_context=multiprocessing.get_context("fork")) as ex:
+            parts = list(ex.map(_rewrite, [big[i:i + CHUNK] for i in range(0, len(big), CHUNK)]))
     else:
-        parts = [_rewrite(c) for c in chunks]
-    texts, counts, kept = {}, Counter(), Counter()
+        parts = [_rewrite(files)]
+    got, counts, kept = {}, Counter(), Counter()
     for t, c, k in parts:
-        texts.update(t)
+        got.update(t)
         counts.update(c)
         kept.update(k)
-    return texts, counts, kept
+    return {p: got[p] for p in files if p in got}, counts, kept
 
 
 def main(argv: list[str] | None = None) -> int:
