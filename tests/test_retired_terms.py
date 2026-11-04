@@ -212,6 +212,8 @@ PENDING: dict[str, str] = {
     "tools/verity/check/README.md": "moves to the infra repository with the check's tooling; renamed there",
     "benchmarks/served_units/README.md": "a queued PR on next rewrites the lines that name Flock's circuit prover and its "
                                          "verifier; the rename follows it",
+    "tools/verity/graph/README.md": "main's line on Flock's Rust build is newer than the Flock rename's base, which takes "
+                                    "main only with its Lean locks; the rename follows it",
 }
 
 
