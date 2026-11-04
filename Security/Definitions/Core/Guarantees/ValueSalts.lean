@@ -1,5 +1,7 @@
-import Definitions.Core.ValueSalts
-import Definitions.Core.Assumptions.ZkServer
+module
+
+public import Definitions.Core.ValueSalts
+public import Definitions.Core.Assumptions.ZkServer
 
 /-!
 # What a registration leaks: at most `log₂ m` bits, `m` the sessions its epoch opened
@@ -25,6 +27,8 @@ not yet registered. So the stack chooses no `m` and no session, every record say
 `m = 1` is the whole of what a registration leaks (no `log₂ m` term), and over a stream, at every `m i = 1`, the stack's
 only choice is which registrations it passes over: at most `log₂ ∑_{i ≤ b} C(r, i)` bits.
 -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 

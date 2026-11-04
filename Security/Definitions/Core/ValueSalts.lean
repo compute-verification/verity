@@ -1,4 +1,6 @@
-import Definitions.Core.Game
+module
+
+public import Definitions.Core.Game
 
 /-!
 # The value commitments' salts, the ZK server's: what a registration shows
@@ -29,6 +31,8 @@ registration's record, or none where it passed it over (`StreamRecord`); `stream
 `streamPrfAdvantage` and `streamForgeAdvantage` are the five above over the stream, at each of the stack's choices
 (`streamChoices`: a session of each registration's epoch, or none, at most `b` none).
 -/
+
+@[expose] public section
 
 namespace Verity
 

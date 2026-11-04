@@ -1,6 +1,8 @@
-import Definitions.Core.Guarantees.ValueSalts
-import Proofs.Core.Game.Basic
-import Proofs.Core.Challenger
+module
+
+public import Definitions.Core.Guarantees.ValueSalts
+public import Proofs.Core.Game.Basic
+public import Proofs.Core.Challenger
 
 /-!
 # What a registration leaks: proof
@@ -23,6 +25,8 @@ record of a session of its epoch (one the stack registered, or a copy of its rec
 most `b`. The union bound over the choices gives the sum of their genuine probabilities, each at most the ideal one plus
 the PRF gap at that choice. Its witnesses are the single registration's, on a stream of one with none passed over.
 -/
+
+@[expose] public section
 
 namespace Verity
 
