@@ -1,4 +1,5 @@
 import Definitions.NetworkCertifier.SampledCharge
+import Proofs.NetworkCertifier.KSWired
 import Proofs.NetworkCertifier.Wires
 import Proofs.Flock.Claims.Witnesses.Sampling
 
