@@ -85,13 +85,15 @@ quotes the warm's beside it.
 ``period``: a window's audit as one compute audit of the network certifier's period (`NetworkCheck.Period`'s rows form),
 the ``audits`` entry `scan_period.rows_case` reads (`scan_zk.answers` writes the block round's in that shape): the window's
 registration (``--window``'s ``registration.json``), the population Program's descriptor the audit sampled (``--audit``'s
-``window/program.json``, the one the registration names), the audit's one-stage answer (`served_integrity.answer`), and
-its terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's
-own values pinned, its untied ones free) but for the scan's state (`TIED`): the period refuses an audit whose state isn't
-the scan's state tree (``stateTied``), so its reads count registered. Refused where the window commits no scan state, and
-where its registration binds a compiler or an advice: an advice bound at a root counts as registered there, so it falls
-in no term of K (``free``, ℓ_{a,j}, counts only the circuit's free inputs), and the period takes only a circuit the
-verifier registered, which reads no advice.
+``window/program.json``, the one the registration names), the audit's one-stage answer (`served_integrity.answer`), and its
+terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's own
+values pinned, its untied ones free) but for the scan's state (`TIED`): the period refuses an audit whose state isn't
+the scan's state tree (``stateTied``), so its reads count registered. The period check takes no ``free``: it counts an
+audit's off its Program (`NetworkCheck.Period.inputGates`, every input gate free), so ``free`` here is the tighter count
+beside it, which `scan_period` doesn't pass. Refused where the window commits no scan state, and where its registration
+binds a compiler or an advice: an advice bound at a root counts as registered there, so it falls in no term of K
+(ℓ_{a,j} counts only the circuit's free inputs), and the period takes only a circuit the verifier registered, which reads
+no advice.
 
 ``count``: a record that declares its inputs, counted before the committer writes its members' rows (`declared_count`): a
 stated one (cuts, registered reads, ingress: `interface.Circuit.declared`) from its description alone, and one that lists

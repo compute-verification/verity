@@ -15,7 +15,8 @@ collision (`Vocab.error`).
 with the errors summed over its subprotocols. `Soundness` is it at onsite, from its seven targets
 (`Vocab.SampledProofsSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
 `NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` the same statement at remote, whose subprotocols are a subset
-of onsite's, from its three (sampled proofs, PoUW and the inference-only policy). They are proved by
+of onsite's, from its three (sampled proofs, PoUW and the inference-only policy). At remote with the network certifier
+it is `SoundnessOf` at that composite, from its four (remote's three and the network certifier). They are proved by
 `Properties.Composition` (a composite's acceptance is its components' and its record's) and the union bound over one
 strategy in one game.
 

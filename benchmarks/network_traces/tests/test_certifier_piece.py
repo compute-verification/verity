@@ -589,7 +589,7 @@ def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_pa
     (v3c / "period.json").write_text(json.dumps(PERIOD))
     assert _hook("period", d, piece, v3c, *_lean(tmp_path, accept)) == 0, (piece / "period.log").read_text()
     params = json.loads((tmp_path / "seen" / "params.json").read_text())
-    assert params["audits"] == [{k: PERIOD[k] for k in ("free", "program", "steps")}]
+    assert params["audits"] == [{k: PERIOD[k] for k in ("program", "steps")}]
     assert json.loads(bytes.fromhex(json.loads((piece / CP.CASE).read_text())["commitment"]))["audits"] == [
         PERIOD["registration"]]
     got = S.pieces(d, K, tmp_path / "pieces", env=dict(os.environ, CERTIFIER_CMD="true"))

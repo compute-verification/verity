@@ -146,10 +146,10 @@ SELECT_ENTRY_PINS = ("f817250e0ac1d5028ea992bbe0c1ab12925bc1b709f020fdc54a57a0eb
 
 @dataclasses.dataclass(frozen=True)
 class Audit:
-    """`Audit`: a compute audit's layout terms (its free inputs and monitoring period) and what its Program gives: its
-    SHA-512, its units (its root's template instances), the most bits one of them commits, and its slot entries'
-    templates (`entries`: each root template node calling `SlotEntry_v1` or `SelectEntry_v1`, by descriptor id, members
-    and closure digest, `slot_entry_digest`)."""
+    """`Audit`: a compute audit's layout terms (its free inputs, its Program's input gates, and its monitoring period)
+    and what its Program gives: its SHA-512, its units (its root's template instances), the most bits one of them
+    commits, and its slot entries' templates (`entries`: each root template node calling `SlotEntry_v1` or
+    `SelectEntry_v1`, by descriptor id, members and closure digest, `slot_entry_digest`)."""
     free: int
     steps: int
     program: str
@@ -473,13 +473,21 @@ def slot_entry_digest(j: dict, key: str) -> str:
     return hashlib.sha512(codec.canonical_json(seen)).hexdigest()
 
 
+def input_gates(j: dict) -> int:
+    """`inputGates`: each of the root's input nodes, of either binding time, its members times its width."""
+    defs, callees = j["definitions"], j["callees"]
+    return sum(_members(x) * int(m[1]) for x in defs[j["root"]]["body"]["nodes"]
+               if defs[k := callees[x["fn"]]]["form"] == "primitive" and (m := INPUT_ID.fullmatch(k)))
+
+
 def _audit(a, ctx: str) -> Audit:
     """`auditOf`: the layout terms and the Program's descriptor, whose root's template instances are the audit's units,
-    each committing its template's return; a root with no template refused; its slot entries' templates
-    (`ENTRY_IDS`) with their closure digests. It reads the descriptor's root nodes, signatures and the slot entries'
-    Definitions; C-Flock's decoder, which Lean runs on it, refuses no descriptor this module writes."""
-    _exactly(a, ["free", "program", "steps"], ctx)
-    free, steps, j = _nat(a["free"], ctx), _nat(a["steps"], ctx), a["program"]
+    each committing its template's return; a root with no template refused; its free inputs the Program's input gates
+    (`input_gates`), never a parameter; its slot entries' templates (`ENTRY_IDS`) with their closure digests. It reads
+    the descriptor's root nodes, signatures and the slot entries' Definitions; C-Flock's decoder, which Lean runs on it,
+    refuses no descriptor this module writes."""
+    _exactly(a, ["program", "steps"], ctx)
+    steps, j = _nat(a["steps"], ctx), a["program"]
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
         raise D.Reject(f"{ctx}: program: not a Program's descriptor")
     defs, callees = j["definitions"], j["callees"]
@@ -490,7 +498,7 @@ def _audit(a, ctx: str) -> Audit:
         raise D.Reject(f"{ctx}: program: no template")
     entries = tuple((k, _members(x), slot_entry_digest(j, k)) for x in nodes
                     if (d := defs[k := callees[x["fn"]]])["form"] != "primitive" and d.get("id") in ENTRY_IDS)
-    return Audit(free, steps, program_sha512(j), sum(n for n, _ in units), max(b for _, b in units), entries)
+    return Audit(input_gates(j), steps, program_sha512(j), sum(n for n, _ in units), max(b for _, b in units), entries)
 
 
 def _scan(j, program: str, s: WardenParams) -> Scan:
@@ -910,8 +918,8 @@ def records(link: str) -> tuple[tuple[str, Direction], ...]:
 
 def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict,
                        x: Window) -> tuple[Facts, int]:
-    """`rowsWindowCheck`: on acceptance the scan's facts and its tied audits' free inputs, the parameters' `free` of
-    each audit its `prog` is an output of (`_tied_audits`)."""
+    """`rowsWindowCheck`: on acceptance the scan's facts and its tied audits' free inputs, the input gates
+    (`input_gates`) of each audit its `prog` is an output of (`_tied_audits`)."""
     what = f"window {w}"
     if x.registrations is None:
         raise Finding(REJECT, f"{what}: a clock certificate, not registrations")
@@ -987,21 +995,23 @@ def _facts_json(f: Facts) -> dict:
     return {"delta": str(f.delta), "drawn": f.drawn, "units": f.units, "wrong_units": f.wrong}
 
 
-def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, entries: int | None = None) -> dict:
+def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, entries: int | None = None,
+           tied: list[int] | None = None) -> dict:
     """`AuditTerms.of` (a compute audit's, `per_unit` its Program's widest unit's committed bits) and `Scan.terms` (a
     scan's, `per_unit` the wider instance's committed bits, `entries` the slot entry bits its tied audits' incorrect
-    proof blocks can set, `faulty_entries`)."""
+    proof blocks can set, `faulty_entries`, and `tied` those audits by index, `termsJson`'s)."""
     return _facts_json(f) | {"faulty_bits": f.wrong * per_unit, "faulty_sets": clog2(at_most(f.units, f.wrong)),
                              "free": free, "jitter": clog2(jitter ** steps)} | (
-        {} if entries is None else {"faulty_entries": entries})
+        {} if entries is None else {"faulty_entries": entries}) | ({} if tied is None else {"tied": tied})
 
 
-def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | None = None,
+def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int, list[int]]] | None = None,
            charged: list[Facts] = ()) -> dict:
     """K and its terms over `PeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
-    link-windows' scans (`scans`, each its facts, its tied audits' free inputs and its `β_w`; None in the clock form),
-    where a compute audit's own terms are in none, a tied audit's free inputs are in its link-window's `free` and its
-    incorrect proof blocks in its `faulty_entries`, and the δ of a tied audit drawn in part (`charged`) is in `eps`."""
+    link-windows' scans (`scans`, each its facts, its tied audits' free inputs, its `β_w` and its tied audits by index;
+    None in the clock form), where a compute audit's own terms are in none, a tied audit's free inputs are in its
+    link-window's `free` and its incorrect proof blocks in its `faulty_entries`, and the δ of a tied audit drawn in part
+    (`charged`) is in `eps`."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
     if scans is None:
         units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
@@ -1009,7 +1019,8 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | 
         out = {"audits": units}
     else:
         s = p.scan
-        units = [_terms(s.free + tied, s.steps, max(s.ingress, s.egress), f, p.jitter, b) for f, tied, b in scans]
+        units = [_terms(s.free + t, s.steps, max(s.ingress, s.egress), f, p.jitter, b, tied)
+                 for f, t, b, tied in scans]
         schedules = cells
         out = {"audits": [_facts_json(f) for f in facts], "scans": units}
     K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"]
@@ -1064,7 +1075,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
         return ACCEPT, public(p, facts), {"link": p.link, "windows": p.windows}
     beta = [p.scan.entries if any(i in charged and charged[i].wrong >= 1 for i in _tied_audits(c.audits, reg)) else 0
             for reg in c.windows]
-    return ACCEPT, public(p, facts, [(f, t, b) for (f, t), b in zip(scans, beta)], list(charged.values())), {
+    tied = [_tied_audits(c.audits, reg) for reg in c.windows]
+    return ACCEPT, public(p, facts, [(f, t, b, a) for (f, t), b, a in zip(scans, beta, tied)], list(charged.values())), {
         "link": p.link, "windows": p.windows}
 
 
@@ -1848,7 +1860,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             elif m == "audit-bound":
                 answer["public"] = r.choice([{"drawn": []}, answer["public"] | {"bound": -1},
                                              answer["public"] | {"bound": "3"}, []])
-        audit_params.append({"free": r.randint(0, 5), "program": desc, "steps": r.randint(0, 4)})
+        audit_params.append({"program": desc, "steps": r.randint(0, 4)})
         audit_regs.append(rec)
         audits.append(answer)
 
@@ -1870,7 +1882,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             case_params["cells"] = bound.caps(case_params["windows"])
     elif m == "count-audits":
         case_params["audits"] = r.choice([audit_params[1:], [*audit_params, {
-            "free": 0, "program": json.loads(audit_descriptor(((1, 2),))), "steps": 0}]])
+            "program": json.loads(audit_descriptor(((1, 2),))), "steps": 0}]])
     elif m == "evidence-count":
         e_json = r.choice([{"audits": audits, "windows": windows[1:]}, {"audits": audits, "windows": windows + windows[:1]},
                            {"audits": [*audits, audits[0] if audits else windows[0]["answer"]], "windows": windows}])
@@ -1924,13 +1936,14 @@ def bad_caps(p: dict) -> list[dict]:
 
 
 def bad_audits(p: dict) -> list[dict]:
-    """Parameters whose audits `auditOf` refuses, each one change to `p`: an audit without its monitoring period, with a
-    negative free count, not a list, and an audit whose Program isn't a descriptor, is of another schema, or has no
-    template in its root (the stand-in unit alone)."""
+    """Parameters whose audits `auditOf` refuses, each one change to `p`: an audit without its monitoring period, one
+    stating its free inputs (the check counts them off its Program), a negative monitoring period, not a list, and an
+    audit whose Program isn't a descriptor, is of another schema, or has no template in its root (the stand-in unit
+    alone)."""
     good = json.loads(audit_descriptor(((1, 2),)))
     bare = json.loads(D.canonical(codec.encode_program(Program(bind(AUDIT_UNIT, OUT=2)))))
-    one = lambda **kw: p | {"audits": [{"free": 0, "program": good, "steps": 0} | kw]}  # noqa: E731
-    return [p | {"audits": [{"free": 0, "program": good}]}, one(free=-1), p | {"audits": "x"}, one(program="x"),
+    one = lambda **kw: p | {"audits": [{"program": good, "steps": 0} | kw]}  # noqa: E731
+    return [p | {"audits": [{"program": good}]}, one(free=0), one(steps=-1), p | {"audits": "x"}, one(program="x"),
             one(program=good | {"schema": "verity-ir/v0"}), one(program=bare)]
 
 

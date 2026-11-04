@@ -608,7 +608,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         bdraw = {**sz.DR.derive(block, bquery, law), "population": E, "units": units}
         brec = {"accepted": True, "registration": breg, "draw": bdraw, "proved_units": units}
         return {"answer": sz.window_answer(breg, brec, sz.Fraction(1, 100), "unused"),
-                "free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "registration": breg, "steps": 0}
+                "program": encode_program(block), "registration": breg, "steps": 0}
 
     registrations = [h.at.sides[s][0].registration for s in ("ingress", "egress")]
     audit = block_audit(progs)
@@ -626,7 +626,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     assert (p["program"], p["windows"], p["first"]) == (reg["program"], 1, 0)
     caps = PC.params(p).schedule.caps(1)
     assert p["cells"] == caps == [sz.TEST.params.egress_cells] * (sz.TEST.params.lanes * T) and caps
-    assert p["audits"] == [{"free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "steps": 0}]
+    assert p["audits"] == [{"program": encode_program(block), "steps": 0}]
+    assert PC.params(p).audits[0].free == E * sz.IS.entry_bits(cls)
     key = sz.PA.template_id(defs["block"])
     digest = PC.slot_entry_digest(encode_program(block), key)
     assert PC.params(p).audits[0].entries == ((key, E, digest),) and E == T // cls.EVERY * cls.NR

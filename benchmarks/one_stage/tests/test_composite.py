@@ -1,4 +1,5 @@
-"""composite.py: onsite's and remote's case from their subprotocols' private cases and answers, in the formats the
+"""composite.py: onsite's, remote's and remote's with the network certifier's case from their subprotocols' private cases
+and answers, in the formats the
 composition's Lean reads (params and evidence canonical, the subprotocols in the order of their ids, the commitment `bind`
 of their digests), the product's check run on it, and the output split so the public part holds no case's evidence or
 params."""
@@ -96,6 +97,23 @@ def test_onsite_takes_the_policy_as_one_of_its_subprotocols(tmp_path):
     assert [c["id"] for c in params["components"]] == list(C.COMPONENTS["onsite"])
     assert POLICY in C.COMPONENTS["onsite"] and POLICY in C.COMPONENTS["remote"]
     assert "NOT_ESTABLISHED" not in (tmp_path / "public" / "verdicts.txt").read_text()
+
+
+def test_remote_network_is_remotes_subprotocols_and_the_network_certifiers(tmp_path):
+    assert C.COMPONENTS["remote-network"] == ("verity/certifier/v0", *C.COMPONENTS["remote"])
+    cert = put(tmp_path / "cert", "verity/certifier/v0", {"w": 1}, b"\x04", b"{}", b"\xdd" * 64, verdict="accept")
+    v1 = put(tmp_path / "v1", SAMPLED, {}, b"\x01", b"{}", b"\xaa" * 64)
+    exe = lean(tmp_path, {"protocol": "verity/remote-network/v0", "verdict": "reject", "reason": "params: x"}, 1)
+    assert C.main(["remote-network", "--cases", str(v1), "--cases", str(cert), *outs(tmp_path), "--exe", exe]) == 1
+    params = json.loads((tmp_path / "private" / "params.json").read_bytes())
+    assert [c["id"] for c in params["components"]] == ["verity/certifier/v0", SAMPLED]
+    body = ('{"components":[{"commitment":"' + "dd" * 64 + '","id":"verity/certifier/v0"},{"commitment":"' + "aa" * 64 +
+            '","id":"verity/sampled-proofs/v1"}]}')
+    assert (tmp_path / "private" / "commitment.bin").read_bytes() == \
+        hashlib.sha512(b"verity/remote-network/v0\0" + body.encode()).digest()
+    lines = (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
+    assert f"NOT_ESTABLISHED missing {POLICY}, {POUW}" in lines
+    assert "VERDICT verity/remote-network/v0 reject params" in lines
 
 
 def test_a_case_whose_commitment_did_not_decode_stands_in_its_own_commitment(tmp_path):

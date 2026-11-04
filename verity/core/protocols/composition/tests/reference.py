@@ -527,11 +527,24 @@ def window_records(commitment: bytes, evidence: bytes) -> list[bytes] | core_che
     return out
 
 
+def audit_records(commitment: bytes, evidence: bytes) -> list[bytes] | Exception:
+    """`Core.RemoteNetwork.auditRecords`: the digest of each compute audit's registration in the network certifier's
+    period commitment, in order, and the empty string for a period with none; else what refused the commitment, which
+    reads as no value."""
+    try:
+        audits = PERIOD.PC.commitment(commitment).audits
+        return [bytes.fromhex(PERIOD.PC.R.digest(r)) for r in audits] or [b""]
+    except (Reject, ValueError, KeyError, TypeError) as e:
+        return e
+
+
 #: `Core.Onsite.store`: PoUS's setup's root of `C*` and the root PoUB-P2's registration names (`p2_case.store_root`).
 STORE = Tie("store", (("verity/pous/p2/v4/run", _commitment_hex("root")),
                       ("verity/remote-bandwidth/p2/v0", _commitment_hex("root"))))
 #: `Core.Remote.windows`: every window of PoUW's period on the policy's record.
 WINDOWS = Tie("record", ((INFERENCE_ONLY.id, policy_record), (POUW_PERIOD.id, window_records)))
+#: `Core.RemoteNetwork.egress`: every compute audit of the network certifier's period on the policy's record.
+EGRESS = Tie("record", ((INFERENCE_ONLY.id, policy_record), (CERTIFIER.id, audit_records)))
 
 
 @dataclass(frozen=True)
@@ -567,10 +580,13 @@ class TiedSame(Same):
                 and (got := t.values(ev)) is not None]
 
 
-#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order of their ids: each one's
-#: policy and integrity committing to one registration record, every window of remote's PoUW period naming the policy's
-#: record, and onsite's PoUS and PoUB-P2 on one store.
+#: `Core.Remote.protocol`, `Core.RemoteNetwork.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order
+#: of their ids: each one's policy and integrity committing to one registration record, every window of remote's PoUW
+#: period naming the policy's record (at remote with the network certifier too, where every compute audit of the
+#: network certifier's period names it as well), and onsite's PoUS and PoUB-P2 on one store.
 REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SAMPLED_PROOFS), (INFERENCE_ONLY.id, SAMPLED_PROOFS.id),
                   (WINDOWS,))
+REMOTE_NETWORK = TiedSame("verity/remote-network/v0", (CERTIFIER, *REMOTE.components), REMOTE.same,
+                          (*REMOTE.ties, EGRESS))
 ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, ONE_STAGE_V1, WIPE),
                   (INFERENCE_ONLY.id, ONE_STAGE_V1.id), (STORE,))
