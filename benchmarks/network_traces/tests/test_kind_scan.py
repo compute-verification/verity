@@ -3,11 +3,12 @@ certifier's certificates. A rows-form period (`period_case`'s accept, its regist
 committed window's, as `scan_zk` and `prove_path.py window-commit` write them) and its answer with the piece's placement
 scan clean as DIR/case.json and as the hold's three period files. A field no declaration names is a finding wherever it
 lies: the window's own number in V3c's provenance, a count of requests in an answer, an advice length beside the
-parameters, and a file DIR doesn't declare, a log among them. Each Program DIR names is the verifier's: the parameters'
-program, the scan's descriptor and each scan registration's the scan Program pinned at the schedule
-(`scan_service.SCAN_PINS`), and each audit's descriptor and registration the class circuit, so another (a Program,
-the scan's annotations, which no digest covers, or a schedule no class pins) is a finding in either layout, naming no
-value; DIR without the period's files (the split's chain step) holds the scan's answers to some class's Program.
+parameters, a free count in an audit's, and a file DIR doesn't declare, a log among them. Each Program DIR names is the
+verifier's: the parameters' program, the scan's descriptor and each scan registration's the scan Program pinned at the
+schedule (`scan_service.SCAN_PINS`), and each audit's descriptor and registration the class circuit, so another (a
+Program, the scan's annotations, which no digest covers, or a schedule no class pins) is a finding in either layout,
+naming no value; DIR without the period's files (the split's chain step) holds the scan's answers to some class's
+Program.
 A key a table declares by no name comes from the source it names: an answer's bounds per template from the templates its
 profile draws by, a report step's bounds from the δs the chain bounds at (`chain_record.eps_at_delta`'s), a scan round's
 members from its link-windows and the schedule's lanes (`scan_zk.members_of`'s). A key from anywhere else is a finding
@@ -123,22 +124,26 @@ def test_the_pieces_period_and_answer_are_of_the_public_kinds_in_either_layout(t
 
 def test_a_field_no_declaration_names_is_a_finding_wherever_it_lies(tmp_path, period):
     """The window's own number in each audit's V3c provenance (which counts the run's windows), a count of requests in
-    the period's answer and in an execution phase's one-stage answer, and an advice length beside the parameters."""
+    the period's answer and in an execution phase's one-stage answer, an advice length beside the parameters, and a
+    free count in an audit's (which the period counts off its Program)."""
     case, answer = _case(period, V3C_WINDOW | {"window_circuit": {"class": [4, 32, 4, 4, 16], "window": 3}})
     n = len(case["params"]["audits"])
     ev = json.loads(bytes.fromhex(case["evidence"]))
     ev["windows"][0]["answer"]["public"]["requests"] = 7
-    case = {**case, "evidence": canonical_json(ev).hex(), "params": {**case["params"], "advice_bits": REALIZED}}
+    params = json.loads(canonical_json(case["params"])) | {"advice_bits": REALIZED}
+    params["audits"][0]["free"] = REALIZED
+    case = {**case, "evidence": canonical_json(ev).hex(), "params": params}
     answer = answer | {"public": answer["public"] | {"requests": 7}}
     want = [("answer.json", "public.requests"),
             *[("case.json", "commitment.audits[].window.window_circuit.window")] * n,
-            ("case.json", "evidence.windows[].answer.public.requests"), ("case.json", "params.advice_bits")]
+            ("case.json", "evidence.windows[].answer.public.requests"), ("case.json", "params.advice_bits"),
+            ("case.json", "params.audits[].free")]
     assert sorted(_paths(KS.scan(_dir(tmp_path / "dir", case, answer))[0])) == want
     held = KS.scan(_dir(tmp_path / "hold", case, answer, hold=True))[0]
     assert sorted(_paths(held)) == [("answer.json", "public.requests"),
                                     *[("period/commitment.bin", "audits[].window.window_circuit.window")] * n,
                                     ("period/evidence.json", "windows[].answer.public.requests"),
-                                    ("period/params.json", "advice_bits")]
+                                    ("period/params.json", "advice_bits"), ("period/params.json", "audits[].free")]
     assert KS.main([str(tmp_path / "dir")]) == 1
 
 

@@ -206,7 +206,7 @@ EVIDENCE = {**under("audits[]", ONE_STAGE), **under("windows[].answer", ONE_STAG
             **under("windows[].certificates[]", CERTIFICATE_DOC), **under("windows[].registrations[]", ROWS)}
 #: the parameters, each structure: a connection's cap (``cells``) is the registered schedule's (`WardenParams.caps`)
 PARAMS = {
-    "audits[].free": S, "audits[].steps": S, **under("audits[].program", DESCRIPTOR), **under("scan", DESCRIPTOR),
+    "audits[].steps": S, **under("audits[].program", DESCRIPTOR), **under("scan", DESCRIPTOR),
     **under("audits[].circuit", RECORD), **under("audits[].order", RECORD), "audits[].pins.*": M,
     "cells[]": S, "circuit": S, "first": S, "jitter": S, "key": S, "link": S, "program": S, "windows": S,
     **{f"lms.{k}": S for k in ("H", "N", "W", "toy")},
