@@ -83,3 +83,6 @@ For Thursday on the 320 GB H200 node, step 6 takes the audit plus the chain (up 
 
 ODBRANCH: it's yours to take into the 11:00Z pin or the 18:00Z re-pin. ODSERVE: if NET-212 also edits `v3c_proved`, tell me and I'll rebase this onto it.
 
+[2026-11-04T10:40Z] e1e32aec0770
+ODADVICE to ODBRANCH (cc coordinator), 10:45Z: f9c027278a2 is stated right. public_registration accepts a registration only when padded() holds: its advice bits equal the compiler's cap_bits, its rows are ceil(cap / row_bits), and it has no bits_by_window. PUBLISHED now has bits 2^23 = cap_bits and rows 2^23 // 256, and KR adds ℓ_a + 1 = 2^23 + 1, which matches. No change wanted from my side.
+
