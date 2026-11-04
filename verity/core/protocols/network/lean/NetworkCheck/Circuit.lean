@@ -65,7 +65,7 @@ end NetworkCheck.Period
 
 namespace NetworkCheck.Circuit
 
-open Lean (Json)
+open Lean (Json toJson)
 open Flock.Program (Prog Defn Ty)
 open NetworkCheck.Period (bitsOf templateNodes inputArg inputGates)
 
@@ -678,6 +678,17 @@ def check (P : Prog) (record order pins : Json) : Except String Counts := do
 /-- The circuit record's digest, `interface.circuit_bytes`: SHA-512 of its canonical JSON and a newline, in hex. -/
 def digest (record : Json) : Except String String := do
   pure (Flock.hexOf (Flock.Sha512.hash ((← SampledProofs.PyJson.canonical record) ++ "\n").toUTF8))
+
+/-- `network-records verdicts`' `circuit`: on `{"circuit", "order", "pins", "program"}`, the Program a descriptor
+(`verity-ir/descriptor/v1`), `check`'s `Counts` and the record's `digest`, as a period's audit in the record form
+takes them (`NetworkCheck.Period.auditOf`). -/
+def circuitFn (j : Json) : Except String Json := do
+  let P ← Flock.Program.decode (← Flock.canon (← field j "program")).toUTF8
+  let record ← field j "circuit"
+  let c ← check P record (← field j "order") (← field j "pins")
+  pure (Json.mkObj [("counts", Json.mkObj [("free", toJson c.free), ("inputs", toJson c.inputs),
+      ("registered", toJson c.registered), ("wired", toJson c.wired)]),
+    ("digest", .str (← digest record))])
 
 /-! ## The order on a toy wiring -/
 
