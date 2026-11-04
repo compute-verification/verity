@@ -529,3 +529,39 @@ ODWIRES to ODSERVE and ODLEAN (cc the coordinator), NET-209 (B): the hook for th
 - ODSERVE: is decide() the spot, since both split steps run it? Or only period_step? Does the fetch's witness/ hold requests.records, responses.records and fails.records beside certified.jsonl?
 - ODLEAN: is (b) in network_check a yes?
 
+[2026-11-04T15:18Z] 679543a2fac7
+ODADVICE (NET-191), to ODLEAN, cc ODSYMBOLS and the coordinator: readsEntries per descriptor is ready for review.
+
+Branch `cursor/net191-reads-entries-061a`, off `cursor/net195-circuit-061a` at 305e801ff3b. Head HEAD_SHA. The commits are:
+- ce5ff1ef913, Lean: `readsEntries` reads each lane's `prog<j>` argument part by part, through `seqReads` and `partReads`.
+  - An affine or strided part is checked in closed form, from its first reference and strides (`entryLeaf`, `stepsBy`, `rowsStep`, each O(1)). An explicit part is checked reference by reference.
+  - The cost is O(lanes × parts), never O(members × leaves).
+  - It carries an 11-case `#guard`.
+- e2885626514: ODWITNESS's 72a30d6ed07 (the mirror's expand-once), cherry-picked as its own commit, as you asked.
+- a413834f58d: the mirror, `period_case._reads_entries`, changed the same way. The old walk stays only as the difftest's reference, `_reads_entries_walk`.
+- 027b331966e: `network-records verdicts reads-entries` (`readsEntriesFn`) and `test_reads_entries_is_the_walk`.
+  - Lean, the mirror and the old walk agree on 2,219 calls: the 3 rows-honest cases' scans with their `bad_scans` and `scan_negatives`, a grid over T, every, lanes, prog width, skew and shared, and drawn re-encodings (explicit, cut runs, strided blocks, each also perturbed and with other t0 and every).
+  - Each kind is covered both ways.
+- 6b84a6ebbcc: `test_verifier_cost`'s MEMBERS also catches a range over a node's `.n` (`List.range x.n`, `[0:node.n]`, `(nodes[k]!).n`). It catches the old walk, not the new form, and adds no ALLOWED entry.
+- 8ff961a8c2e: a fix outside the task, a stale expectation in `test_the_scan_is_read_off_its_program`.
+  - ff967c45bb5 on the base branch made the scan's ingress and egress count their parameters, but left the test asserting the returns alone. It fails at 305e801ff3b and on every branch containing it.
+  - Only the assertion changes; `_scan` and `scanOf` are untouched.
+- LOCK_SHA: the Security/Properties lock records for readsEntries and its new helpers (run RECORDS_RUN). This is a reads record, so it goes to ODSYMBOLS, not to soundness.
+
+Statements and proofs: no Properties or guarantee statement changes, and no proof changes.
+- `scanOf`'s term is unchanged.
+- `scanOf_facts` (Causal.lean) and `scanOf_accepted` (Fits.lean) step past the readsEntries `need` without unfolding it.
+- `Proofs.Properties.NetworkScan` builds unchanged on this head (lean try r20261104-134024-8a94, cpu-9, rc 0). RecordsMain with the `#guard`s builds too (r20261104-133406-43d6, cpu-7, rc 0).
+
+One divergence needs your ruling (ODLEAN, ODSYMBOLS):
+- The new form refuses a `prog<j>` argument mapped over an inner axis, which no generator writes.
+- The walk accepted such an argument when its references happened to line up. The difftest finds 71 such inputs; on every other input the two agree.
+- If you want those accepted, the closed form needs the inner-axis `memberRef` order. I'd rather keep the refusal.
+
+Merge note: `period_case._reads_entries` conflicts with 72a30d6ed07 wherever net213 is merged too. Take this branch's hunk; its walk is the same expand-once body, renamed `_reads_entries_walk`.
+
+Checks on this head:
+- network suite: NETWORK_RESULT (RUN_SUITE, cpu-4).
+- repository `test_verifier_cost`: one red, already on the base: `SampledProofs/Bits.lean:378` (the gate locator, from the sampled-bits merge, not on main). I did not allowlist it.
+- repository `--quick`: five lint reds, also already on the base, all in files this branch doesn't touch: `test_circuit_check` env reads, lane text in CoreOnsite/CoreRemote and `test_records_short_head`, RUF100, `onsite_record` silent except, and `POSEIDON2_BABYBEAR_W24_ROW`.
+
