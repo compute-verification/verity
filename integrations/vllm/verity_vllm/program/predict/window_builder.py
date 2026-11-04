@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import bisect
 import math
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -20,6 +21,7 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.windows import interface as IF
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.weights_of_record import weight_param
+from verity_vllm.records import wire_order
 
 from .build import Unexpressible
 
@@ -183,6 +185,14 @@ class _Builder:
         self.made.append((tid, at, count, time))
         return tid, at
 
+    @contextmanager
+    def at(self, label: tuple[int, int], node: int) -> Iterator[None]:
+        """The units made inside are of ``label``, a (slot, step), and of class Program node ``node``, timed on leaving
+        (`timed`)."""
+        self.label, self.node = label, node
+        yield
+        self.timed()
+
     def timed(self) -> None:
         """Time the runs a slot's node just made: each one after every run of the node it reads, whatever order they were
         made in (an embedding read is made before the token unit it reads, a select's combine before its ``x0``)."""
@@ -323,6 +333,13 @@ class _Builder:
                 _merge(self.openings, lambda x: (x.reader, x.table, x.key, x.ports, x.verdict),
                        lambda x, n: IF.TableOpening(x.reader, x.table, x.key, x.ports, x.verdict, x.at, n)))
 
+    def ordered(self) -> tuple[tuple[IF.Wire, ...], tuple[IF.InferenceEntry, ...], dict[str, Any]]:
+        """The circuit's wires, each inside one writer entry and one reader entry (`placed`), its inference entries
+        (`entries`) and its wire-order certificate (`order`)."""
+        ents = entries(self.spans, self.programs, self.times)
+        pieces = placed(IF.coalesce(self.wires), [e for e, _, _ in ents])
+        return tuple(w for w, _, _ in pieces), tuple(e for e, _, _ in ents), order(pieces, ents)
+
 
 def _rows(fn: Any, cuts: dict[str, int] | None) -> int:
     """A unit of ``fn``'s rows in and out under ``cuts``, each an hm96 slot C-Flock's composer gives it
@@ -386,10 +403,6 @@ def entries(spans: dict[str, list[tuple[int, int, int, int]]], slots: int,
         out += [(IF.InferenceEntry(tid, at, tuple(r for r, _ in d), tuple(a for _, a in d), step), t, dt)
                 for at, d, step, t, dt in groups]
     return out
-
-
-#: the wire-order certificate's format (`order`)
-ORDER = "verity/wire-order/v1"
 
 
 def _places(radix: Sequence[int]) -> list[int]:
@@ -533,7 +546,7 @@ def placed(wires: Sequence[IF.Wire], ents: Sequence[IF.InferenceEntry]) -> list[
 
 def order(pieces: Sequence[tuple[IF.Wire, int, int]], ents: Sequence[tuple[IF.InferenceEntry, Time, tuple[Time, ...]]]
           ) -> dict[str, Any]:
-    """The circuit's wire-order certificate (`ORDER`) for its wires ``pieces`` (`placed`) and its entries ``ents``
+    """The circuit's wire-order certificate (`records.wire_order`) for its wires ``pieces`` (`placed`) and its entries ``ents``
     (`entries`): each entry a segment ranked by its units' time, node·S + sub with S past every sub, affine in its digits;
     each wire its writer segment and its reader segment. A wire is ordered where every writer unit's rank is below its
     reader unit's: each side's rank is affine in the wire's digits (`_place`), so its greatest rank(writer) - rank(reader)
@@ -554,4 +567,4 @@ def order(pieces: Sequence[tuple[IF.Wire, int, int]], ents: Sequence[tuple[IF.In
         if reach >= 0:
             raise Unexpressible(f"wire {i} {w.doc()}: rank(writer) - rank(reader) reaches {reach} >= 0; its writer isn't made "
                                 "before its reader")
-    return {"format": ORDER, "segments": segs, "wires": [list(ks) for _, *ks in pieces]}
+    return {"format": wire_order.SCHEMA, "segments": segs, "wires": [list(ks) for _, *ks in pieces]}

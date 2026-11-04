@@ -27,6 +27,7 @@ from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import WindowClass
+from verity_vllm.records import wire_order as WO
 
 from verity.ml.windows import interface as IF
 
@@ -82,8 +83,8 @@ def check(record, order) -> list[int]:
     so its greatest rank(writer) - rank(reader) is ``K_w - K_r + Σ_k max(0, (a_w,k - a_r,k)·(radix_k - 1))``."""
     units = {t: n for t, n in record["templates"]}
     wires = record["wires"]
-    if not isinstance(order, dict) or set(order) != {"format", "segments", "wires"} or order["format"] != WB.ORDER:
-        raise Refused(f"not a {WB.ORDER} certificate")
+    if not isinstance(order, dict) or set(order) != {"format", "segments", "wires"} or order["format"] != WO.SCHEMA:
+        raise Refused(f"not a {WO.SCHEMA} certificate")
     segs = order["segments"]
     for s, g in enumerate(segs):
         if not isinstance(g, dict) or set(g) != set(SEGMENT) or not (_int(g["at"]) and _int(g["c"])):
@@ -281,7 +282,7 @@ def _wire(reader: str, writer: str, at: int = 0, radix=(1,), base: int = 0, step
 
 
 def _order(*segments, wires=([0, 1],)) -> dict:
-    return {"format": WB.ORDER, "segments": [dict(zip(SEGMENT, s)) for s in segments], "wires": [list(p) for p in wires]}
+    return {"format": WO.SCHEMA, "segments": [dict(zip(SEGMENT, s)) for s in segments], "wires": [list(p) for p in wires]}
 
 
 #: B's units 0..7 read A's, unit for unit

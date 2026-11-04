@@ -31,4 +31,6 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
 * `predicted_row` -- a predicted row's record (`verity-vllm/predicted-row/v1`, ``predicted.json``): the Build of record the
   ahead-of-time compiler wrote and its manifest's sha256, as ``predict compare --predicted`` reads it; its `of` refuses an
   unknown field and `dump` writes it back.
+* `wire_order` -- the window circuit's wire-order certificate's schema id (`verity/wire-order/v1`) and nothing else: a
+  window writes it as ``order.json`` and only the period check, in Lean, reads it back.
 """
