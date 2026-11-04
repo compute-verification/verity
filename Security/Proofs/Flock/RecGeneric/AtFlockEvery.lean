@@ -1,8 +1,20 @@
 module
 
 public import Proofs.Flock.RecGeneric.AtFlock
+public import Proofs.Flock.RecGeneric.AtFlockProof
+public import Proofs.Flock.RecGeneric.StatementProof
 public import Proofs.Flock.Claims.Recursion.DeployFacts
 public import Proofs.Flock.Claims.Recursion.OuterKS
+public import Proofs.Flock.Claims.Recursion.KSFlockLinR
+public import Proofs.Flock.Claims.Recursion.BindsDeployed
+public import Proofs.Flock.Claims.Recursion.DeploySessions
+public import Proofs.Flock.Claims.Recursion.BoundRoute
+public import Proofs.Flock.Claims.Recursion.FlockKSRecord
+public import Proofs.Flock.Claims.Recursion.DeployedR
+public import Proofs.Flock.Claims.KS.ZkOuter
+public import Proofs.Flock.Claims.KS.PlainSimR
+public import Proofs.Flock.Claims.Assembled
+public import Proofs.Flock.Claims.Sampling.Assembled
 
 /-!
 # `KSLinkOn` at every statement, from the statements a run accepts
@@ -12,6 +24,8 @@ statements `G` admits: elsewhere no run accepts, so `Pr[accept ∧ ¬extract] = 
 tables' errors are (`ksLinkOn_every`). The deployed compiled verifier accepts only dense statements
 (`RecDeploy.run_acc_denseAt`, from `RecDeploy.acc_dense`), so `KSLinkOn` at `RecDeploy.DenseAt` gives
 `Flock.Guarantees.RecursiveKSEveryAtRec` at every compiled record `recBoundAt` builds (`recursiveKSEveryAtRec_of_dense`).
+At the deployment every premise of `RecoversLinkOn` but F7's contract holds, so `RecoversLinkOn` at the dense
+statements and `ContractDense` give `Flock.Guarantees.RecursiveKSEvery` (`recursiveKSEvery_of_recovers`).
 -/
 
 @[expose] public section
@@ -109,5 +123,64 @@ theorem recursiveKSEveryAtRec_of_dense (b : RecDeploy.Brings) (L : Claims.Recurs
     (fun _ _ _ _ _ h => RecDeploy.run_acc_denseAt _ (FlockDeploy.deployPlain _root_.Flock.Readable.relation).scopeCheck
       { b with rd := L.readers } FlockDeploy.sha512 h)
     (RecDeploy.tableErrNonneg _ _ _) hε
+
+/-- **`RecursiveKSEveryAtRec` from `RecoversLinkOn` at the dense statements and F7's contract there**, at every
+compiled record `recBoundAt` builds and every reader whose plain draws are in range (`hIn`): `RecoversLinkOn`'s other
+premises hold at the deployment, namely L1 (`Flock.SecurityProofs.GenericRecursiveKS`), `KSFlockLin` at `DE`
+(`RecDeploy.ksFlockLin_R`), each outer session's KS (`outerKS_of_flockKS` at `FlockDeploy.KS.zk_KS_outer` and the
+sessions' facts), the sessions' and `DE`'s nonnegative table errors, the record's inner statement, answers that decode
+to their coins (`decCoin`), F8 (`RecDeploy.lastCoinFree_ofFlock_R`), `rowIn` injective (`RecDeploy.binds_deployed`) and
+the deployed decoders listing within the radius (`listWithin_deployPlainTrim`, `listWithin_deployZk`). -/
+theorem recursiveKSEveryAtRec_of_recovers (b : RecDeploy.Brings) (L : Claims.Recursion.VStarB.LayoutB)
+    (rd : Msg → Option FinalP) (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg)) (wE w : Msg → ℝ)
+    (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x)
+    (hR : RecoversLinkOn FlockDeploy.sha512 (RecDeploy.recBoundAt _root_.Flock.Readable.relation b L)
+      (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rd)
+        (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
+        RecDeploy.rowInDeployed final w)
+      (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep RecDeploy.DenseAt)
+    (hC : ContractDenseAtRec (RecDeploy.recBoundAt _root_.Flock.Readable.relation b L) rd final wE w) :
+    _root_.Flock.Guarantees.RecursiveKSEveryAtRec (RecDeploy.recBoundAt _root_.Flock.Readable.relation b L) rd final
+      wE w := by
+  have hε : ∀ x, 0 ≤ (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rd)
+      (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
+      RecDeploy.rowInDeployed final w).DE.εtable x :=
+    fun x => FlockDeploy.Assembled.εtable_nonneg false x
+  refine recursiveKSEveryAtRec_of_dense b L rd final wE w (hR Flock.SecurityProofs.GenericRecursiveKS
+    (RecDeploy.ksFlockLin_R rd wE FlockDeploy.joinR final w hIn) ?_ (RecDeploy.tableErrNonneg _ _ _) (fun _ => rfl)
+    ⟨FlockDeploy.decCoin [], fun c => ?_⟩ hε (RecDeploy.lastCoinFree_ofFlock_R _ rd _ (by rfl) _ _)
+    (RecDeploy.binds_deployed _ _ _ wE FlockDeploy.joinR final w)
+    (Claims.Sampling.listWithin_deployPlainTrim _root_.Flock.Readable.relation)
+    (Claims.Sampling.listWithin_deployZk _root_.Flock.Readable.relation) hC) hε
+  · let Bd := RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rd)
+      (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
+      RecDeploy.rowInDeployed final w
+    exact outerKS_of_flockKS FlockDeploy.KS.zk_KS_outer (RecDeploy.sessionNums _ _ _ _)
+      (RecDeploy.tableErrNonneg _ _ _) (RecDeploy.sessionRounds (Inner.ofFlock Bd.deploy Bd.deploy.decode) _ _ _)
+      (RecDeploy.sessionAccepts _ _ _) (RecDeploy.sessionRuns_sha512 (Inner.ofFlock Bd.deploy Bd.deploy.decode) _ _ _)
+  · exact (congrArg (FlockDeploy.decCoin []) (RecDeploy.bdDeployed_ans _root_.Flock.Readable.relation
+      (FlockDeploy.nextR rd) (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
+      RecDeploy.rowInDeployed final w c)).trans (Function.leftInverse_invFun RecDeploy.coin_bytes_injective c)
+
+/-- **`Flock.Guarantees.RecursiveKSEvery` from `RecoversLinkOn` at the dense statements and F7**
+(`ContractDense`), at the deployment's records and values: `recursiveKSEveryAtRec_of_recovers` at the deployed
+reader, whose plain draws are in range (`FlockDeploy.KS.plainRdInR`). `RecoversLinkOn` there is F9a from F6's three
+term comparisons. -/
+theorem recursiveKSEvery_of_recovers
+    (hR : ∀ (b : RecDeploy.Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+      (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),
+      RecoversLinkOn FlockDeploy.sha512
+        (RecDeploy.recBoundAt _root_.Flock.Readable.relation
+          { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }
+          (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR))
+        (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
+          (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
+          RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
+          RecDeploy.DeployedR.wR)
+        (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep RecDeploy.DenseAt)
+    (hC : ContractDense) : _root_.Flock.Guarantees.RecursiveKSEvery :=
+  fun b aux nOf hd recRest => recursiveKSEveryAtRec_of_recovers _ _ _ _ _ _
+    (fun x _ => FlockDeploy.KS.plainRdInR RecDeploy.DeployedR.rdR x) (hR b aux nOf hd recRest)
+    (hC b aux nOf hd recRest)
 
 end Claims.RecGeneric
