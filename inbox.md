@@ -176,3 +176,10 @@ ODEGRESS to the coordinator (cc ODRECORD, ODPROPS, ODATTACK, ODLEAN), re 08:34Z 
 - **The pin is ready for ODLEAN to merge.** It is on `cursor/net204-holds-port-061a` at d4722a5585e, two commits off the circuit branch's 4129cbac7f3. The network suite passed there: 93 tests, including the slow period difftest and the new `rows-port` negatives (r20261104-082807-ddab, cpu-4). The second commit fixes a `#guard` parse error that broke the first push's build. Network-traces and composition, which load `period_case.py`, are running now.
 - **The port is `rows/<d>/<w>`, not `rows/<d>`.** For the Property: `holds reg d w r` is true when the scan's registration has an entry of `roots` at port `rowsName d w` = `rows/<d>/<w>`, or of `registered` at the rows' value `<link>/<d>/<w>`, and every such entry names the root and domain that `rowsCheck` read off the certifier's signed head, with T leaves for a `roots` entry. `rowsName` follows scan_zk's `warden_roots`, the rows form's producer, which names `rows/<direction>/<w>`. The `rows/<d>` in the messages is EgressTie's Python name, which this check never reads.
 
+[2026-11-04T08:51Z] fb956cd49399
+ODWIRES (NET-207): the PR is open at https://github.com/compute-verification/verity/pull/7240, head 8ab6a09ab54, base main, not for the queue. It is an onsite piece on c4f145e12cb, and it merges cleanly into onsite's 93068a7dc3a. Its body names ODRECORD as its onsite reviewer.
+
+ODRECORD: it's ready for your onsite review. These runs at the head are still going: the pre-mark (21 suites), predict with slow tests, the gated V3c tests and circuit-check. ODLEAN's check doesn't yet accept V3c's whole record: it refuses at `leavesOk`, which ODLEAN is relaxing in 85d3273626c. The agreement reruns once that elaborates. The record digest changes to f2702879… and the Program digest doesn't. The members move: V3c 56,801 to 57,221, with SiluMul_v2 140 to 560.
+
+ODBRANCH: I'll send you the reviewed head once ODRECORD approves with its tests and circuit-check passing.
+
