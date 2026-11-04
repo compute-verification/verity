@@ -950,16 +950,17 @@ def _relisted(case: dict, texts: list[str]) -> dict:
 
 
 def test_a_listed_audit_counts_its_vus_off_its_circuit_files(server, tmp_path):
-    """A record-form audit that lists its circuit file (`audit-listed`: its template's 8 instances at
-    `LISTED_UPV` = 2 a VU, its answer over 4 VUs) is accepted by `network-period check … CIRCUIT` with the mirror's
-    public, its units its VUs and each wrong one charged `vu_bits(2, words)`; with no files, or through `serve`, Lean
-    and the mirror refuse its parameters, as only the check given its files reads a listing; and each set of files
-    that is not the listing's is refused by both: a file of another SHA-512, a file too many, META naming another
-    Program or another partition, a unit returning one output word twice, a wire into the unit, a leaf cut past the
-    rows, or a cut input port wired by no leaf cut or by two (`SampledProofs.Bits.check`), and instances that are not
-    whole VUs. A file whose cut port each
-    instance wires by one leaf cut is accepted. A file at one instance a VU passes, and the audit's answer over 4 VUs is
-    then not its 8."""
+    """A record-form audit that lists its circuit file (`audit-listed`: its `Gemm_v2{K=16,N=16}` template's 8
+    instances, its parameters `x` and `w` 16 and 256 packed words, its return 16, at one instance a VU) is accepted by
+    `network-period check … CIRCUIT` with the mirror's public, its units its VUs and each wrong one charged
+    `vu_bits(1, words)`; so is the file with its last input port a cut input that one leaf cut wires. With no files, or
+    through `serve`, Lean and the mirror refuse its parameters, as only the check given its files reads a listing. Each
+    set of files that is not the listing's is refused by both, at the same reason: a file of another SHA-512, a file too
+    many, META naming another Program or another partition; and, as `SampledProofs.Bits.check` refuses them, a unit
+    returning one output word twice, a leaf map past the input rows, a cut input wired by no leaf cut or by two, a wire
+    into the unit, a leaf cut past the input rows, two row ports of one name, input rows out of the parameters' order,
+    output rows that are not the return's words, an input port reading another word than its parameter's (`fieldBit`),
+    a parameter bit past its row's bits, and two instances a VU."""
     exe = D.build(LEAN, "network-period")
     for n in range(4):
         case = build("audit-listed", n, small=n % 2 == 0)
@@ -970,44 +971,78 @@ def test_a_listed_audit_counts_its_vus_off_its_circuit_files(server, tmp_path):
         i, x = next((i, x) for i, x in enumerate(listing.audits) if x is not None)
         ((_, members, words),) = x.templates
         charged = PC.charged(p, listing, [PC.read_circuit(t) for t in texts]).audits[i]
-        assert (members, charged.units, charged.bits) == (PC.RECORD_UNITS[False], 4, 2 * 16 * words + 2), (n, charged)
+        units = PC.RECORD_UNITS[False]
+        assert (members, words, charged.units, charged.bits) == (units, 288, units, 16 * words + 2), (n, charged)
         term = out["public"]["audits"][i]
-        assert (term["units"], term["faulty_bits"]) == (4, term["wrong_units"] * charged.bits), (n, term)
+        assert (term["units"], term["faulty_bits"]) == (units, term["wrong_units"] * charged.bits), (n, term)
         got = _check_files(exe, tmp_path / f"{n}-accept", case, texts)
         assert (got["verdict"], got.get("public")) == (ACCEPT, out["public"]), (n, got)
         verdict, served = D.replay(PORT, case, server)
         assert verdict == REJECT and "lists circuit files" in json.loads(served)["reason"], (n, served)
         assert reference(case)["reason"].startswith("params:"), (n, reference(case))
         assert "lists circuit files" in _check_files(exe, tmp_path / f"{n}-none", case, [])["reason"]
-        cut = PC.listed_files(case, head=PC.CUT_HEAD, leaf_cuts=[["unit", k, 2, 0] for k in range(PC.LISTED_UPV)])
+        cut = PC.listed_files(case, cut=True)
         cut_case = _relisted(case, cut)
         mirror = PC.reference_with(cut_case, cut)
         got = _check_files(exe, tmp_path / f"{n}-cut", cut_case, cut)
         assert (mirror["verdict"], got["verdict"], got.get("public")) == (ACCEPT, ACCEPT, mirror["public"]), (n, got)
         program = PC.program_sha512(case["params"]["audits"][i]["program"])
+        ports = lambda *ps: [[nm, w, 0] for nm, w in ps]  # noqa: E731
         refusals = [
             (case, PC.listed_files(case, note="another file"), "is not its listing's"),
             (case, texts * 2, "circuit files"),
             (None, PC.listed_files(case, program_sha512=hashlib.sha512(b"another").hexdigest()), "program_sha512"),
             (None, PC.listed_files(case, partition={"rule": PC.PARTITION_V1, "digest": program}), "META partition"),
-            (None, PC.listed_files(case, leaves_out=[[0], [0]]), "returns an output word twice"),
-            (None, PC.listed_files(case, 3), "are not whole VUs of 3"),
-            (None, PC.listed_files(case, 1), "not its Program's"),
-            (None, PC.listed_files(case, head=PC.CUT_HEAD), "input port 2 of the circuit file's unit, template "
+            (None, PC.listed_files(case, leaves_out=[[0] * 16]), "returns an output word twice"),
+            (None, PC.listed_files(case, leaves_in=[[288, *range(1, 272)]]),
+             "a leaf map names a word past the circuit file's input rows"),
+            (None, PC.listed_files(case, cut=True, leaf_cuts=[]), "input port 271 of the circuit file's unit, template "
              "instance 0, is not wired exactly once"),
-            (None, PC.listed_files(case, head=PC.CUT_HEAD, leaf_cuts=[["unit", k, 2, 0] for k in (0, 0, 1)]),
-             "is not wired exactly once"),
-            (None, PC.listed_files(case, head=PC.CUT_HEAD, leaf_cuts=[["unit", k, 2, 0] for k in range(PC.LISTED_UPV)],
-                                   wires=[["unit", 0, 1, "unit", 0, 0]]), "a wire into the circuit file's unit"),
-            (None, PC.listed_files(case, head=PC.CUT_HEAD, leaf_cuts=[["unit", k, 2, 3 * PC.LISTED_UPV]
-                                                                      for k in range(PC.LISTED_UPV)]),
-             "a leaf cut outside the unit's cut inputs or the rows")]
+            (None, PC.listed_files(case, cut=True, leaf_cuts=[["unit", 0, 271, 271]] * 2), "is not wired exactly once"),
+            (None, PC.listed_files(case, cut=True, wires=[["unit", 0, 1, "unit", 0, 0]]),
+             "a wire into the circuit file's unit"),
+            (None, PC.listed_files(case, cut=True, leaf_cuts=[["unit", 0, 271, 288]]),
+             "a leaf cut outside the unit's cut inputs or the input rows"),
+            (None, PC.listed_files(case, ports=ports(("x", 16), ("x", 256), ("o", 16))),
+             "two row ports of the circuit file have one name"),
+            (None, PC.listed_files(case, ports=ports(("w", 256), ("x", 16), ("o", 16))),
+             "the circuit file's input rows are not its template's parameters in order, each 1 times its packed words"),
+            (None, PC.listed_files(case, ports=ports(("x", 16), ("w", 256), ("o", 32)), out_ports=[["o", 32]]),
+             "the circuit file's output rows are not 1 times its template's return's packed words"),
+            (None, PC.listed_files(case, leaves_in=[[1, 0, *range(2, 272)]]),
+             "template instance 0's input port 0 reads row word 1, not word 0 of its parameter x's rows"),
+            (None, PC.listed_files(case, row_schemas=[["hm96-sha512/row/v2", b] for b in (8, 4096, 256)]),
+             "bit 8 of parameter x of template instance 0 is no message bit of its rows"),
+            (None, PC.listed_files(case, 2), "the circuit file has 2 template instances a VU, not one")]
         for k, (c, files, fragment) in enumerate(refusals):
             c = c or _relisted(case, files)
             mirror = PC.reference_with(c, files)
             assert mirror["verdict"] == REJECT and fragment in mirror["reason"], (n, k, mirror)
             got = _check_files(exe, tmp_path / f"{n}-{k}", c, files)
             assert got["verdict"] == REJECT and fragment in got["reason"], (n, k, got)
+        dropped = json.loads(json.dumps(case["params"]))
+        dropped["audits"][i]["circuits"] = []
+        dropped = case | {"params": dropped}
+        for got in (PC.reference_with(dropped, []), _check_files(exe, tmp_path / f"{n}-dropped", dropped, [])):
+            assert got["reason"].startswith("params:") and "a file each" in got["reason"], (n, got)
+
+
+def test_a_tied_audit_lists_its_circuit_files(server, tmp_path):
+    """Given circuit files, the period check refuses a rows-form period whose audit the scan ties lists none
+    (`unlistedTied`), before it holds the files to the listing, so no tied audit escapes `SampledProofs.Bits.check`:
+    a small `rows-honest` period, whose scan ties its one audit, given an audit's valid circuit file, is refused by
+    Lean and the mirror at the same reason; with no files it is the check that reads none, and both accept it."""
+    exe = D.build(LEAN, "network-period")
+    text = PC.listed_files(build("audit-listed", 0, small=True))[0]
+    for n in range(2):
+        case = build("rows-honest", n, small=True)
+        p, listing = PC.params_listed(case["params"])
+        assert PC.unlisted_tied(p, listing, PC.commitment(bytes.fromhex(case["commitment"]))) == 0, n
+        for got in (PC.reference_with(case, [text]), _check_files(exe, tmp_path / f"{n}", case, [text])):
+            assert got["verdict"] == REJECT and got["reason"].startswith(
+                "circuit files: audit 0 is tied to the scan but lists no circuit files"), (n, got)
+        got = _check_files(exe, tmp_path / f"{n}-none", case, [])
+        assert (got["verdict"], got.get("public")) == (ACCEPT, reference(case)["public"]), (n, got)
 
 
 #: The refusals that hold a compute audit to its Program, in either form, each with what Lean's reason and the

@@ -26,8 +26,9 @@ supplies each of the statement's quantities as at most the check's number:
   (`faulty_bits`) and, when a tied audit is sampled in part with a bound of at least one incorrect proof block, every
   slot entry bit (`faulty_entries`, `E_w`), and `Dj^k` at most `jitter ^ steps`.
 
-`AcceptsWith` is what the period check with its listed circuit files accepts (`checkWith`): the files held to their
-listing, and `check` at the VUs they count and the bits a wrong VU is charged (`charged`).
+`AcceptsWith` is what the period check with its listed circuit files accepts (`checkWith`): every audit tied to the
+scan listing files, the files held to their listing, and `check` at the VUs they count and the bits a wrong VU is
+charged (`charged`).
 
 The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs, and its incorrect
 proof blocks only as the slot entries they can set, since the scan reads the audit only through its `prog` and its
@@ -96,9 +97,11 @@ def RowsKBoundsCount : Prop :=
         charged).K
 
 /-- **The period check with its listed circuit files accepts** (`network-period check PARAMS COMMITMENT EVIDENCE
-CIRCUIT…`, `protocolWith`): given the files `fs`, each its SHA-512 and header in `Listing.files`' order, `checkWith`
-accepts the parameters `p` (with the files they list), the commitment `c` and the evidence `e`. It holds the files to
-the listing (`circuitsWhy`) and checks the period at the VUs and bits they charge (`charged`). -/
+CIRCUIT…`, `protocolWith`): given the files `fs`, each its SHA-512 and circuit in `Listing.files`' order (a scan's
+file read whole, as its sessions' verifier parses it, `NetworkCheck.CircuitFile.whole`; an audit's its header,
+`NetworkCheck.CircuitFile.read`), `checkWith` accepts the parameters `p` (with the files they list), the commitment `c`
+and the evidence `e`. It refuses an audit tied to the scan that lists no files (`unlistedTied`), holds the files to the
+listing (`circuitsWhy`) and checks the period at the VUs and bits they charge (`charged`). -/
 def AcceptsWith (fs : Array (ByteArray × Flock.Circuit)) (p : Params × Listing) (c : Commitment) (e : Evidence) :
     Prop :=
   ∃ (pub : Public) (prof : Profile), checkWith fs p c e = .accept pub prof

@@ -1,17 +1,22 @@
 import Flock.Hash
 import Flock.HmRow
 import Flock.JsonParse
+import Flock.ProvedScope
 import Flock.Tags
 
 /-!
-# A circuit file's digest and header, read in chunks
+# A circuit file's digest and header, read in chunks, or the file read whole
 
 `network-period check P C E CIRCUIT…` reads each circuit file its parameters list in chunks of a fixed size: it hashes
 the whole file (`Hasher`, SHA-512) and keeps only its head line, its META line and each block's keyword line and its
 net's header line (`Lines`), never a net's rows, so a file of any size is read in memory of its header. `ofHeader` is
 the `Flock.Circuit` those lines describe, each net its header with no rows: what `SampledProofs.Bits.check` and the
-period's `circuitsWhy` read of a file. The file is a flat `flock-circuit` file (`Flock.Tags.circuit`); a typed or
-templated block's file is refused by name.
+period's `circuitsWhy` read of an audit's file. The file is a flat `flock-circuit` file (`Flock.Tags.circuit`); a typed
+or templated block's file is refused by name.
+
+A scan's file is read whole instead (`whole`), by the very function a session's verifier of `Flock.Tags.circuit`'s
+statement parses its circuit with (`Flock.ProvedScope.circuitOf`, `whole_circuit`), so the period reads the rows the
+scan's sessions prove.
 -/
 
 namespace NetworkCheck.CircuitFile
@@ -259,6 +264,24 @@ def read (path : System.FilePath) (chunk : Nat := 1 <<< 20) : IO (Flock.V (ByteA
     ls := ls.feed Flock.Tags.circuit.blockKeyword c
   return result hs ls
 
+/-! ## A file read whole -/
+
+/-- **The circuit file's bytes read whole**, as a session's verifier of `Flock.Tags.circuit`'s statement reads its circuit
+(`Flock.ProvedScope.circuitOf`, no tables: every net's rows parsed and the rows checked): its SHA-512 and the circuit, or
+why not. -/
+def whole (bytes : ByteArray) : Flock.V (ByteArray × Flock.Circuit) :=
+  (Flock.ProvedScope.circuitOf Flock.Tags.circuit bytes []).map fun c => (c.sha, c)
+
+/-- `whole`'s circuit is the session verifier's own parse of the same bytes. -/
+theorem whole_circuit (bytes : ByteArray) :
+    (whole bytes).map (·.2) = Flock.ProvedScope.circuitOf Flock.Tags.circuit bytes [] := by
+  unfold whole
+  cases Flock.ProvedScope.circuitOf Flock.Tags.circuit bytes [] <;> rfl
+
+/-- **Read the circuit file at `path` whole** (`whole`). -/
+def readWhole (path : System.FilePath) : IO (Flock.V (ByteArray × Flock.Circuit)) :=
+  return whole (← IO.FS.readBinFile path)
+
 /-! ## Checks -/
 
 private def bytes (n : Nat) : ByteArray := ⟨(Array.range n).map (·.toUInt8)⟩
@@ -320,6 +343,9 @@ private def jn (k : Nat) : Json := Lean.toJson k
   | .ok _ => false
 #guard match ofChunks ("flock-circuit/types toy\n").toUTF8 8 with
   | .error e => e.startsWith "not a flock-circuit file"
+  | .ok _ => false
+#guard match whole toyFile with
+  | .error _ => true
   | .ok _ => false
 
 end NetworkCheck.CircuitFile

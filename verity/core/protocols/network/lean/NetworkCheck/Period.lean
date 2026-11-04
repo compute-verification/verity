@@ -69,10 +69,12 @@ a file each of its Program's root templates, in the root's order (`chargesOf`), 
 `partition` must then be the `verity/partition/v1` digest of the record's program and query (`recordPartition`). The
 rows form's parameters may list the scan's root templates' files the same way (`scan_circuits`). Parameters that list
 files are read only by `network-period check PARAMS COMMITMENT EVIDENCE CIRCUIT…` (`protocolWith`; `protocol` refuses
-them), which takes the files in the listing's order, the audits' by index and then the scan's, and rejects the period
-unless each is its listing's by SHA-512, its META's `program_sha512` is its Program's, an audit's file's META
-`partition` is `verity/partition/v1` at its record's digest, `SampledProofs.Bits.check` lays it out as its template,
-and its template's instances are whole VUs of its `upv`, the scan's one instance a VU (`circuitsWhy`). An audit with
+them), which takes the files in the listing's order, the audits' by index and then the scan's, the scan's read whole,
+and rejects the period if an audit tied to the scan lists none (`unlistedTied`), and unless each is its listing's by
+SHA-512, its META's `program_sha512` is its Program's, an audit's file's META `partition` is `verity/partition/v1` at
+its record's digest, `SampledProofs.Bits.check` lays it out as its template, and its template's instances are whole
+VUs of its `upv`, the scan's one instance a VU whose rows read no input padding and every bit of its `row` parameter
+(`circuitsWhy`). An audit with
 files counts its VUs as its units, each template's instances over its file's `upv`, and charges a VU's bits
 (`charged`).
 The rows form has, in place of `sync_set`,
@@ -1946,7 +1948,8 @@ def protocol : Core.Protocol where
 
 `network-period check PARAMS COMMITMENT EVIDENCE CIRCUIT…` reads the circuit files the parameters list, each audit's
 (`audits[i].circuits`) with `i` ascending, then the scan's (`scan_circuits`), each a file a root template of its
-Program, in order; it reads each file's SHA-512 and header (`NetworkCheck.CircuitFile.read`), never its nets' rows. A
+Program, in order; it reads an audit's file's SHA-512 and header (`NetworkCheck.CircuitFile.read`), never its nets'
+rows, and reads a scan's file whole, as the scan's sessions' verifier parses it (`NetworkCheck.CircuitFile.whole`). A
 proof block is a VU, a file's `units_per_vu` template instances, so a listed audit's units are its VUs and a wrong one
 commits at most `vuBits upv words` (`charged`). -/
 
@@ -1968,7 +1971,10 @@ an audit, META's partition is not `verity/partition/v1` at its circuit record's 
 file's members could be laid out by another query than the record's; Bits doesn't lay it out as the template
 (`SampledProofs.Bits.check`); the template's instances are not whole VUs of its `units_per_vu`; or a scan's file packs
 more than one instance a VU, while the period counts the scan's units as its `2T` template instances
-(`rowsWindowCheck`). -/
+(`rowsWindowCheck`). A scan's file is read whole (`NetworkCheck.CircuitFile.whole`), so last its unit net's rows are
+checked: a net whose rows were not read (a header alone, its A or B shorter than its computed rows) is refused, and so is
+a row reading input padding or a bit of the template's `row` parameter that no row reads (`SampledProofs.Bits.readsWhy`
+at `unitReads`). -/
 def fileWhy (what : String) (scan : Bool) (x : Listed) (k : Nat) (sha : ByteArray) (cf : Flock.Circuit) :
     Option String :=
   let t := x.templates[k]!
@@ -1989,7 +1995,11 @@ def fileWhy (what : String) (scan : Bool) (x : Listed) (k : Nat) (sha : ByteArra
       else if scan && cf.upv != 1 then
         some s!"{at_}: {cf.upv} template instances a VU, not 1: the period counts the scan's units as its 2T template \
           instances"
-      else none
+      else if !scan then none
+      else if cf.unit.a.rows < cf.unit.constPos || cf.unit.b.rows < cf.unit.constPos then
+        some s!"{at_}: its unit net's rows were not read, so what they read can't be checked"
+      else (x.prog.defs.find? (·.key == t.template)).bind fun d =>
+        (SampledProofs.Bits.readsWhy cf d (SampledProofs.Bits.unitReads cf) ["row"]).map (s!"{at_}: " ++ ·)
 
 /-- **Why the files `fs` are not the period's listed circuit files**, or none: their number is not the listing's, or
 one is not its listed file (`fileWhy`), the first in order. -/
@@ -2032,14 +2042,24 @@ def toyListed : Listed where
   some s!"audit 1's circuit file for T: its SHA-512 is not its listing's"
 #guard (circuitsWhy {} #[]).isNone
 
-/-- **The period check with its listed circuit files** `fs`, each file's SHA-512 and header in the order
-`Listing.files` gives: a refusal where they are not the listed files (`circuitsWhy`), else `check` over the parameters
-they charge (`charged`). -/
+/-- **The first audit tied to the scan that lists no circuit files**, or none: an audit some link-window's scan ties
+(`tiedOf`) whose parameters list no `circuits`, so no `SampledProofs.Bits.check` holds its templates' files. -/
+def unlistedTied (p : Params × Listing) (c : Commitment) : Option Nat :=
+  (List.range p.2.audits.size).find? fun i => (p.2.audits[i]?.join).isNone && tiedOf p.1.form c i
+
+/-- **The period check with its listed circuit files** `fs`, each file's SHA-512 and circuit in the order
+`Listing.files` gives (the scan's read whole, the audits' their headers): a refusal where an audit tied to the scan
+lists no files (`unlistedTied`) or they are not the listed files (`circuitsWhy`), else `check` over the parameters they
+charge (`charged`). -/
 def checkWith (fs : Array (ByteArray × Flock.Circuit)) (p : Params × Listing) (c : Commitment) (e : Evidence) :
     Core.Outcome Public Profile :=
-  match circuitsWhy p.2 fs with
-  | some r => .reject s!"circuit files: {r}"
-  | none => check (charged p.1 p.2 fs) c e
+  match unlistedTied p c with
+  | some i => .reject s!"circuit files: audit {i} is tied to the scan but lists no circuit files (its circuits), so no \
+      Bits.check holds its templates' files: list a file for each of its Program's root templates"
+  | none =>
+    match circuitsWhy p.2 fs with
+    | some r => .reject s!"circuit files: {r}"
+    | none => check (charged p.1 p.2 fs) c e
 
 /-- The period protocol over parameters that may list circuit files (`paramsWith`), its check `chk`. -/
 def protocolBy (chk : Params × Listing → Commitment → Evidence → Core.Outcome Public Profile) : Core.Protocol where

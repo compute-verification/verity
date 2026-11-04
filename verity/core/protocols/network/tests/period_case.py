@@ -646,11 +646,11 @@ AUDIT_FORMS = (["program", "steps"], ["circuit", "order", "pins", "program", "st
 
 @dataclasses.dataclass(frozen=True)
 class Listed:
-    """`Listed`: what an audit's or the scan's listed circuit files are held to: its Program's SHA-512 and Definitions'
-    keys, its root templates' charges (`charges_of`: descriptor id, members and words), each one's file's SHA-512, in
-    order, and for an audit its circuit record's partition digest (`record_partition`)."""
+    """`Listed`: what an audit's or the scan's listed circuit files are held to: its Program's SHA-512 and Definitions
+    (`def_sig` by key), its root templates' charges (`charges_of`: descriptor id, members and words), each one's file's
+    SHA-512, in order, and for an audit its circuit record's partition digest (`record_partition`)."""
     program: str
-    keys: frozenset[str]
+    defs: dict[str, tuple[list, list]]
     templates: tuple[tuple[str, int, int], ...]
     files: tuple[str, ...]
     partition: str | None
@@ -686,7 +686,8 @@ def _listed(j: dict, fs, ctx: str, partition: str | None) -> Listed:
         got.append((_of(f["template"], str, ctx), f["sha512"]))
     if [t for t, _ in got] != [t for t, _, _ in ts]:
         raise D.Reject(f"{ctx}: the files' templates are not the Program's root templates in order, a file each")
-    return Listed(program_sha512(j), frozenset(j["definitions"]), tuple(ts), tuple(d for _, d in got), partition)
+    return Listed(program_sha512(j), {k: def_sig(d) for k, d in j["definitions"].items()}, tuple(ts),
+                  tuple(d for _, d in got), partition)
 
 
 def partition_digest(obj: dict) -> str:
@@ -1555,8 +1556,6 @@ def reference(case) -> dict:
 
 # --- the listed circuit files --------------------------------------------------------------------------------------------
 
-#: `build`'s `audit-listed`: the record-form audit's template instances a VU in its listed circuit file
-LISTED_UPV = 2
 #: a flat circuit file's head and META `format`, its statement and its blocks' keyword (`Flock.Tags.circuit`)
 CIRCUIT_FORMAT, CIRCUIT_STATEMENT, CIRCUIT_BLOCK = "flock-circuit", "verity/flock-circuit", "CIRCUIT"
 WORD = 128
@@ -1564,10 +1563,11 @@ WORD = 128
 
 @dataclasses.dataclass(frozen=True)
 class CircuitHeader:
-    """What `NetworkCheck.CircuitFile.read` reads of a circuit file: its SHA-512, META, units per VU and leaf maps, and
-    its unit net's header (`headerNet`): its constant's column, input words and port groups, each `(col, words,
-    bits)`; whether META's `out_net` is the unit; its row ports (`rowPorts`), each `(name, words, bits)`, and its output
-    rows' count (`outRows`)."""
+    """What `network-period check` reads of a circuit file: its SHA-512, META, units per VU and leaf maps, and its unit
+    net's header (`headerNet`): its constant's column, input words and port groups, each `(col, words, bits)`; whether
+    META's `out_net` is the unit; its row ports (`rowPorts`), each `(name, words, bits)`, and its output rows' count
+    (`outRows`); and, for a file read whole (the scan's, `NetworkCheck.CircuitFile.whole`), its unit's read input
+    columns (`Bits.unitReads`), else None (`NetworkCheck.CircuitFile.read`, its header alone)."""
     sha512: str
     meta: dict
     upv: int
@@ -1580,6 +1580,7 @@ class CircuitHeader:
     out_unit: bool
     ports: list[tuple[str, int, int]]
     out_rows: int
+    unit_reads: list[bool] | None = None
 
 
 def _header_net(line: str) -> tuple[int, int, list, list]:
@@ -1606,21 +1607,38 @@ def _header_net(line: str) -> tuple[int, int, list, list]:
     return const, in_words, ins, outs
 
 
-def read_circuit(text: str) -> CircuitHeader:
+def _unit_reads(const: int, in_words: int, rows: list[str]) -> list[bool]:
+    """`Bits.unitReads`: of the unit net's input columns, those a computed row (`Rows.ofNet`, its rows from the input
+    columns up to the constant) reads in its A or its B, each row `na a… nb b…`."""
+    n_in = min(in_words * WORD, const)
+    reads = [False] * n_in
+    for line in rows[n_in:const]:
+        t = [int(x) for x in line.split()]
+        for x in t[1:1 + t[0]] + t[2 + t[0]:2 + t[0] + t[1 + t[0]]]:
+            if x < n_in:
+                reads[x] = True
+    return reads
+
+
+def read_circuit(text: str, whole: bool = False) -> CircuitHeader:
     """`NetworkCheck.CircuitFile.read`: a flat circuit file's SHA-512, its META and each block's net header, no net's
-    rows; a file it can't read is refused (`D.Reject`)."""
+    rows; `whole`, the scan's file, its unit's rows too (`unit_reads`), which the mirror doesn't hold to the session
+    verifier's parse (`NetworkCheck.CircuitFile.whole`), so a toy scan file the mirror reads Lean may refuse. A file it
+    can't read is refused (`D.Reject`)."""
     lines = text.split("\n")
     if not lines[0].startswith(CIRCUIT_FORMAT + " ") or len(lines) < 2 or not lines[1].startswith("META "):
         raise D.Reject(f"not a {CIRCUIT_FORMAT} file with a META line")
     meta = json.loads(lines[1][5:])
     if meta.get("format") != CIRCUIT_FORMAT or meta.get("statement") != CIRCUIT_STATEMENT:
         raise D.Reject(f"META: not {CIRCUIT_STATEMENT}")
-    nets, i = {}, 2
+    nets, reads, i = {}, None, 2
     while i < len(lines) and lines[i]:
         kw, name, n = lines[i].split()
         if kw != CIRCUIT_BLOCK or not 0 < int(n) or i + int(n) >= len(lines):
             raise D.Reject("a block is truncated")
         nets[name] = _header_net(lines[i + 1])
+        if whole and name == "unit":
+            reads = _unit_reads(nets[name][0], nets[name][1], lines[i + 2:i + 1 + int(n)])
         i += 1 + int(n)
     if "unit" not in nets or meta.get("out_net", "unit") not in nets:
         raise D.Reject("no unit circuit, or META's out_net is no circuit")
@@ -1640,7 +1658,7 @@ def read_circuit(text: str) -> CircuitHeader:
     return CircuitHeader(hashlib.sha512(text.encode()).hexdigest(), meta, _nat(meta.get("units_per_vu"), "META"),
                          meta["leaves_in"], meta["leaves_out"], *nets["unit"], meta.get("out_net", "unit") == "unit",
                          _row_ports(meta), len(meta["out_row_ports"]) if "out_row_ports" in meta
-                         else len(out_ports) - len(meta.get("pinned_outputs", [])))
+                         else len(out_ports) - len(meta.get("pinned_outputs", [])), reads)
 
 
 def _row_ports(meta: dict) -> list[tuple[str, int, int]]:
@@ -1655,14 +1673,107 @@ def _row_ports(meta: dict) -> list[tuple[str, int, int]]:
     return [(p[0], p[1], schemas[i][1] if schemas is not None else 16 * p[1]) for i, p in enumerate(ports)]
 
 
-def bits_why(c: CircuitHeader, keys: frozenset[str], template: str) -> str | None:
-    """`SampledProofs.Bits.check` on a file's header: why Bits doesn't lay it out as `template`, or None."""
+def _n_in(c: CircuitHeader) -> int:
+    """`HmOut.nIn`: the input row ports, those before the output rows."""
+    return len(c.ports) - c.out_rows
+
+
+def _starts(c: CircuitHeader) -> list[int]:
+    """`KnownRead.starts`: each row port's first word among the rows'."""
+    return [sum(w for _, w, _ in c.ports[:q]) for q in range(len(c.ports))]
+
+
+def _port_cols(groups) -> list[tuple[int, int]]:
+    """`Flock.portCols`: each port's first column and width, a group's ports from its column on."""
+    out = []
+    for col, _, bits in groups:
+        at = col * WORD
+        for w in bits:
+            out.append((at, w))
+            at += w
+    return out
+
+
+def param_of(name: str) -> str:
+    """`Bits.paramOf`: a row port's parameter, its name up to its first `#`."""
+    return name.split("#")[0]
+
+
+def runs_of(c: CircuitHeader) -> list[tuple[str, int, int]]:
+    """`Bits.runsOf`: the input row ports in order, consecutive ones of one parameter merged, each its parameter, its
+    words and its first word among the rows'."""
+    st, runs = _starts(c), []
+    for q in range(_n_in(c)):
+        nm, w, _ = c.ports[q]
+        if runs and runs[-1][0] == param_of(nm):
+            runs[-1] = (runs[-1][0], runs[-1][1] + w, runs[-1][2])
+        else:
+            runs.append((param_of(nm), w, st[q]))
+    return runs
+
+
+def field_bit(upv: int, words: list[tuple[str, int]], f: str, beta: int) -> tuple[int, int, int] | None:
+    """`Bits.fieldBit`: bit `beta` of field `f`'s rows on the unit, `(k, P + j % w, beta % 16)` with `j = beta / 16`,
+    `k = j / w` and `P` the words of the fields before `f`; None for no such field or a bit past its rows."""
+    i = next((i for i, (nm, _) in enumerate(words) if nm == f), None)
+    if i is None or (w := words[i][1]) == 0 or upv * w <= beta // 16:
+        return None
+    return beta // 16 // w, sum(x for _, x in words[:i]) + beta // 16 % w, beta % 16
+
+
+def _msg_at(c: CircuitHeader, starts: list[int], x: int, t: int, wide: bool) -> bool:
+    """`Bits.msgAt` is a message bit: leaf word `x`'s bit `t` within the bits of the row port holding the word."""
+    q = max(sum(1 for s in starts if s <= x) - 1, 0)
+    s = starts[q] if q < len(starts) else 0
+    return (wide or t < 16) and 16 * max(x - s, 0) + t < (c.ports[q][2] if q < len(c.ports) else 0)
+
+
+def _src_msg(c: CircuitHeader, starts: list[int], cuts: dict, k: int, p: int, t: int) -> bool:
+    """`Bits.srcAt` is a message bit: a leaf port's leaf word's, else its first leaf cut's."""
+    if p < (len(c.in_groups[0][2]) if c.in_groups else 0):
+        row = c.leaves_in[k] if k < len(c.leaves_in) else []
+        x = row[p] if p < len(row) else 0
+        return x >= 0 and _msg_at(c, starts, x, t, True)
+    return (k, p) in cuts and _msg_at(c, starts, cuts[(k, p)], t, False)
+
+
+def params_why(c: CircuitHeader, params: list) -> str | None:
+    """`Bits.paramsWhy`: at each bit of parameter `π`'s rows, its port (`field_bit`) reads the row word it is, and each
+    of `π`'s bits is a message bit of its row."""
+    starts, runs = _starts(c), runs_of(c)
+    cut = len(c.in_groups[0][2]) if c.in_groups else 0
+    cuts: dict[tuple[int, int], int] = {}
+    for _, k, p, w in c.meta.get("leaf_cuts", []):
+        cuts.setdefault((k, p), w)
+    ws = [(nm, words_of(t)) for nm, t in params]
+    for j, (nm, t) in enumerate(params):
+        w, s = words_of(t), runs[j][2] if j < len(runs) else 0
+        for beta in range(16 * c.upv * w):
+            if (fb := field_bit(c.upv, ws, nm, beta)) is None:
+                return f"bit {beta} of parameter {nm}'s rows is on no input port"
+            k, p, b = fb
+            if b == 0:
+                row = c.leaves_in[k] if k < len(c.leaves_in) else []
+                x = (row[p] if p < len(row) else -1) if p < cut else cuts.get((k, p), -1)
+                if x != s + beta // 16:
+                    return (f"template instance {k}'s input port {p} reads row word {x}, not word {beta // 16} of its "
+                            f"parameter {nm}'s rows")
+            at = 16 * (beta // 16 % w) + b
+            if at < bits_of(t) and not _src_msg(c, starts, cuts, k, p, b):
+                return f"bit {at} of parameter {nm} of template instance {k} is no message bit of its rows"
+    return None
+
+
+def bits_why(c: CircuitHeader, defs: dict[str, tuple[list, list]], template: str) -> str | None:
+    """`SampledProofs.Bits.check` on a file's header: why Bits doesn't lay it out as `template` of a Program whose
+    Definitions are `defs` (`def_sig` by key), or None."""
     n_in = min(c.in_words * WORD, c.const)
     gi = c.in_groups[0][2] if c.in_groups else []
     go = c.out_groups[0][2] if c.out_groups else []
     outs = [x for u in c.leaves_out for x in u]
     out_col = (c.out_groups[0][0] if c.out_groups else 0) * WORD
-    if template not in keys:
+    in_rows = sum(w for _, w, _ in c.ports[:_n_in(c)])
+    if template not in defs:
         return "the circuit file's template is no Definition of the Program"
     if c.upv == 0:
         return "the circuit file's unit holds no template instance"
@@ -1671,13 +1782,14 @@ def bits_why(c: CircuitHeader, keys: frozenset[str], template: str) -> str | Non
     if len(c.leaves_in) != c.upv or len(c.leaves_out) != c.upv or any(
             len(c.leaves_in[k]) != len(gi) or len(c.leaves_out[k]) != len(go) for k in range(c.upv)):
         return "the circuit file's leaf maps are not one per template instance over its unit's ports"
+    if any(x >= in_rows for u in c.leaves_in for x in u):
+        return "a leaf map names a word past the circuit file's input rows"
     if any(w[0] == "unit" for w in c.meta.get("wires", [])):
         return "a wire into the circuit file's unit"
     pc = [b for g in c.in_groups for b in g[2]]
-    rows = sum(p[1] for p in c.ports)
-    if any(k >= c.upv or p < len(gi) or p >= len(pc) or pc[p] < 16 or w >= rows
+    if any(k >= c.upv or p < len(gi) or p >= len(pc) or pc[p] < 16 or w >= in_rows
            for _, k, p, w in c.meta.get("leaf_cuts", [])):
-        return "a leaf cut outside the unit's cut inputs or the rows"
+        return "a leaf cut outside the unit's cut inputs or the input rows"
     wired: dict[tuple[int, int], int] = {}
     for kp in [(x[1], x[2]) for x in c.meta.get("leaf_cuts", [])]:
         wired[kp] = wired.get(kp, 0) + 1
@@ -1694,6 +1806,48 @@ def bits_why(c: CircuitHeader, keys: frozenset[str], template: str) -> str | Non
         return "the circuit file returns its outputs from a net other than its unit"
     if not all(n_in <= out_col + 16 * j + t < c.const for u in c.leaves_out for j in range(len(u)) for t in range(16)):
         return "a returned output bit of the circuit file's unit sits on no computed row"
+    params, ret = defs[template]
+    rw = ret_words(ret)
+    if len({p[0] for p in c.ports}) != len(c.ports):
+        return "two row ports of the circuit file have one name"
+    if [(nm, w) for nm, w, _ in runs_of(c)] != [(nm, c.upv * words_of(t)) for nm, t in params]:
+        return (f"the circuit file's input rows are not its template's parameters in order, each {c.upv} times its "
+                "packed words")
+    if sum(w for _, w, _ in c.ports[_n_in(c):]) != c.upv * rw:
+        return f"the circuit file's output rows are not {c.upv} times its template's return's packed words"
+    if any(len(u) != rw for u in c.leaves_out):
+        return "a template instance's output leaves are not its template's return's packed words"
+    if len(pc) != sum(words_of(t) for _, t in params):
+        return "the circuit file's unit's input ports are not its template's parameters' packed words"
+    if (why := params_why(c, params)) is not None:
+        return why
+    if c.upv != 1:
+        return f"the circuit file has {c.upv} template instances a VU, not one"
+    return None
+
+
+def reads_why(c: CircuitHeader, params: list, reads: list[bool], names: list[str]) -> str | None:
+    """`SampledProofs.Bits.readsWhy`: the unit's read input columns `reads` are not one per input column, a computed row
+    reads an input column no port holds (input padding), or no row reads a bit of a parameter in `names`."""
+    n_in = min(c.in_words * WORD, c.const)
+    pc = _port_cols(c.in_groups)
+    if len(reads) != n_in:
+        return "the circuit file's unit's read columns are not one per input column"
+    held = [False] * n_in
+    for a0, w in pc:
+        for t in range(w):
+            if a0 + t < n_in:
+                held[a0 + t] = True
+    if (x := next((x for x in range(n_in) if reads[x] and not held[x]), None)) is not None:
+        return f"a row of the circuit file's unit reads its input column {x}, which no port holds"
+    at = 0
+    for nm, t in params:
+        if nm in names:
+            for beta in range(bits_of(t)):
+                col = (pc[at + beta // 16][0] if at + beta // 16 < len(pc) else 0) + beta % 16
+                if not (col < len(reads) and reads[col]):
+                    return f"no row of the circuit file's unit reads bit {beta} of its parameter {nm}"
+        at += words_of(t)
     return None
 
 
@@ -1707,7 +1861,7 @@ def _listing_files(listing: Listing) -> list[tuple[str, bool, Listed, int]]:
 def circuits_why(listing: Listing, files: list[CircuitHeader]) -> str | None:
     """`circuitsWhy`: why the files are not the period's listed circuit files, or None (`fileWhy`, the first in order:
     its SHA-512, META's `program_sha512`, an audit's file's META partition, `bits_why`, whole VUs, the scan's at one
-    instance a VU)."""
+    instance a VU, read whole and its unit's rows reading no padding and every bit of a `row` parameter, `reads_why`)."""
     want = _listing_files(listing)
     if len(files) != len(want):
         return f"the period lists {len(want)} circuit files, not the {len(files)} given"
@@ -1721,12 +1875,16 @@ def circuits_why(listing: Listing, files: list[CircuitHeader]) -> str | None:
         if x.partition is not None and not (isinstance(part, dict) and part.get("rule") == PARTITION_V1
                                             and part.get("digest") == x.partition):
             return f"{at}: META partition is not {PARTITION_V1} at its circuit record's digest"
-        if (why := bits_why(c, x.keys, t)) is not None:
+        if (why := bits_why(c, x.defs, t)) is not None:
             return f"{at}: {why}"
         if members % c.upv:
             return f"{at}: its {members} template instances are not whole VUs of {c.upv}"
         if scan and c.upv != 1:
             return f"{at}: {c.upv} template instances a VU, not 1"
+        if scan and c.unit_reads is None:
+            return f"{at}: its unit net's rows were not read, so what they read can't be checked"
+        if scan and (why := reads_why(c, x.defs[t][0], c.unit_reads, ["row"])) is not None:
+            return f"{at}: {why}"
     return None
 
 
@@ -1745,21 +1903,42 @@ def charged(p: Params, listing: Listing, files: list[CircuitHeader]) -> Params:
     return dataclasses.replace(p, audits=tuple(audits))
 
 
+def unlisted_tied(p: Params, listing: Listing, c: Commitment) -> int | None:
+    """`unlistedTied`: the first audit some link-window's scan ties (`tiedOf`) that lists no circuit files, or None."""
+    return next((i for i, x in enumerate(listing.audits)
+                 if x is None and p.schedule is not None and _tied_in(c.audits, c.windows, i)), None)
+
+
 def check_with(files: list[CircuitHeader], pl: tuple[Params, Listing], c: Commitment, e) -> tuple:
-    """`checkWith`: the files held to the listing (`circuits_why`), then `check` at what they charge (`charged`)."""
+    """`checkWith`: an audit tied to the scan that lists no files refused (`unlisted_tied`), the files held to the
+    listing (`circuits_why`), then `check` at what they charge (`charged`)."""
     p, listing = pl
+    if (i := unlisted_tied(p, listing, c)) is not None:
+        return REJECT, (f"circuit files: audit {i} is tied to the scan but lists no circuit files (its circuits), so no "
+                        "Bits.check holds its templates' files: list a file for each of its Program's root templates")
     if (why := circuits_why(listing, files)) is not None:
         return REJECT, f"circuit files: {why}"
     return check(charged(p, listing, files), c, e)
 
 
+def scan_files(params) -> int:
+    """`scanFiles`: how many files the parameters' `scan_circuits` lists, read before the parameters are: 0 for
+    parameters that list none or aren't an object."""
+    sc = params.get("scan_circuits") if isinstance(params, dict) else None
+    return len(sc) if isinstance(sc, list) else 0
+
+
 def reference_with(case: dict, texts: list[str]) -> dict:
     """`network-period check PARAMS COMMITMENT EVIDENCE CIRCUIT…`'s answer with the circuit files `texts`, in order
-    (`protocolWith`); a file it can't read (`read_circuit`) refuses the period (`refusing`)."""
-    files, why = [], None
+    (`protocolWith`), the last as many as the parameters' `scan_circuits` lists (`scan_files`) read whole; a file it
+    can't read (`read_circuit`) refuses the period (`refusing`). With no files it is the check that reads none
+    (`reference`)."""
+    if not texts:
+        return reference(case)
+    files, why, whole = [], None, len(texts) - scan_files(case["params"])
     for i, t in enumerate(texts):
         try:
-            files.append(read_circuit(t))
+            files.append(read_circuit(t, i >= whole))
         except D.Reject as x:
             why = f"circuit files: circuit file {i}: {x}"
             break
@@ -1771,35 +1950,53 @@ def reference_with(case: dict, texts: list[str]) -> dict:
                     digest=lambda c: tagged_sha512(COMMITMENT_TAG, c.bytes))
 
 
-#: the toy unit net's header line: one input word of two 16-bit leaf ports, its output word on computed rows
-TOY_HEAD = "flock-ir-unit/v2 toy 146 145 1 0 1 2 16 16 1 1 1 1 16"
-#: a header for the same rows with a second input word, one 16-bit cut port (port 2), and the output word past it; the
-#: period's check reads only the header, never the rows
-CUT_HEAD = "flock-ir-unit/v2 toy 273 272 2 0 1 2 16 16 1 1 1 16 1 2 1 1 16"
+def _pow2(x: int) -> int:
+    """The least power of two at least `x` (1 for `x ≤ 1`)."""
+    return 1 << max(0, (x - 1).bit_length())
 
 
-def circuit_file(program: str, partition: str | None, upv: int = LISTED_UPV, head: str = TOY_HEAD, **meta) -> str:
-    """A flat circuit file of `NetworkCheck.CircuitFile`'s toy unit net (one input word of two 16-bit ports, its output
-    word on computed rows), its header line `head`, at `upv` template instances a VU, each its own output word, an input
-    row `x` of two words an instance and an output row `o` of one, META
-    binding the Program's SHA-512 `program` and, given one, the `verity/partition/v1` digest `partition`; `meta`
-    overrides META's keys. The period's check reads only its SHA-512 and header."""
-    net = [head] + [
-        f"1 {i} 1 {i}" if i < 32 else "0 0" if i < 128 else f"2 {i - 128} {i - 112} 1 145" if i < 144
-        else "1 128 1 145" if i == 144 else "1 145 1 145" for i in range(146)]
+def circuit_file(desc: dict, template: str, part: str | None, upv: int = 1, cut: bool = False, **meta) -> str:
+    """A flat circuit file laying out `template` of the Program `desc` as `SampledProofs.Bits.check` places it, at `upv`
+    template instances a VU: an input row a parameter, `upv` times its packed words (`words_of`), then an output row `o`
+    of `upv` times its return's (`ret_words`); a unit net of a 16-bit input port a parameter word, each instance's read
+    off its row word by its leaf map (with `cut`, the last port a cut input in an input group of its own, read through
+    a leaf cut), and a 16-bit output port a return word, its sixteen computed rows reading the input bits congruent to
+    theirs, so every port bit is read and no padding; META binding the Program's SHA-512 and, given one, the
+    `verity/partition/v1` digest `part`. `meta` overrides META's keys."""
+    params, ret = def_sig(desc["definitions"][template])
+    pw, rw = [(nm, words_of(t)) for nm, t in params], ret_words(ret)
+    n = sum(w for _, w in pw)
+    starts = [upv * sum(w for _, w in pw[:i]) for i in range(len(pw))]
+    words = [[starts[i] + k * w + j for i, (_, w) in enumerate(pw) for j in range(w)] for k in range(upv)]
+    leaf = n - 1 if cut else n
+    g0 = _pow2(-(-16 * leaf // WORD))
+    in_words, ow = g0 + cut, _pow2(-(-16 * rw // WORD))
+    oc = -(-in_words // ow) * ow
+    const = oc * WORD + 16 * rw
+    held = list(range(16 * leaf)) + [g0 * WORD + t for t in range(16 if cut else 0)]
+    ins = [(0, g0, [16] * leaf)] + [(g0, 1, [16])] * cut
+    groups = lambda gs: [len(gs), *(x for col, w, bs in gs for x in (col, w, len(bs), *bs))]  # noqa: E731
+    head = " ".join(map(str, ["flock-ir-unit/v2", "toy", const + 1, const, *groups(ins), *groups([(oc, ow, [16] * rw)])]))
+    reader = lambda xs: f"{len(xs)} {' '.join(map(str, xs))} 1 {const}"  # noqa: E731
+    hs = set(held)
+    net = [head] + [f"1 {i} 1 {i}" if i in hs else "0 0" for i in range(in_words * WORD)] + [
+        reader(held[:1] or [const]) for _ in range(in_words * WORD, oc * WORD)] + [
+        reader(held[r::16 * rw] or [const]) for r in range(16 * rw)] + [f"1 {const} 1 {const}"]
     m = {"format": CIRCUIT_FORMAT, "statement": CIRCUIT_STATEMENT, "units_per_vu": upv,
-         "ports": [["x", 2 * upv, 0], ["o", upv, 0]], "out_ports": [["o", upv]],
-         "leaves_in": [[2 * k, 2 * k + 1] for k in range(upv)], "leaves_out": [[k] for k in range(upv)],
-         "program_sha512": program, **({"partition": {"rule": PARTITION_V1, "digest": partition}} if partition else {})}
+         "ports": [[nm, upv * w, 0] for nm, w in pw] + [["o", upv * rw, 0]], "out_ports": [["o", upv * rw]],
+         "leaves_in": [u[:leaf] for u in words], "leaves_out": [[k * rw + j for j in range(rw)] for k in range(upv)],
+         **({"leaf_cuts": [["unit", k, n - 1, words[k][n - 1]] for k in range(upv)]} if cut else {}),
+         "program_sha512": program_sha512(desc),
+         **({"partition": {"rule": PARTITION_V1, "digest": part}} if part else {})}
     return "\n".join([f"{CIRCUIT_FORMAT} toy", "META " + json.dumps(m | meta, separators=(",", ":")),
                       f"{CIRCUIT_BLOCK} unit {len(net)}", *net]) + "\n"
 
 
-def listed_files(case: dict, upv: int = LISTED_UPV, head: str = TOY_HEAD, **meta) -> list[str]:
-    """The circuit files `circuit_file` writes for each file a case's audits list, in `Listing.files`' order: each
-    audit's Program's SHA-512 and its record's partition digest."""
-    return [circuit_file(program_sha512(a["program"]), record_partition(a["circuit"], ""), upv, head, **meta)
-            for a in case["params"]["audits"] if "circuits" in a for _ in a["circuits"]]
+def listed_files(case: dict, upv: int = 1, cut: bool = False, **meta) -> list[str]:
+    """The circuit files `circuit_file` writes for each file a case's audits list, in `Listing.files`' order: each its
+    template of the audit's Program, bound to its record's partition digest."""
+    return [circuit_file(a["program"], f["template"], record_partition(a["circuit"], ""), upv, cut, **meta)
+            for a in case["params"]["audits"] if "circuits" in a for f in a["circuits"]]
 
 
 # --- the generator --------------------------------------------------------------------------------------------------------
@@ -2781,7 +2978,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         listed = i == a and m == "audit-listed"
         recorded, bits = i == a and m.startswith("audit-record") or listed, m == "audit-record-bits"
         if recorded:
-            desc, units = json.loads(record_audit(bits)[0]), RECORD_UNITS[bits] // (LISTED_UPV if listed else 1)
+            desc, units = json.loads(record_audit(bits)[0]), RECORD_UNITS[bits]
         elif anchors and in_class:
             desc = json.loads(anchor[0])
         prog = program_sha512(desc)
@@ -2833,9 +3030,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             rec["window"] |= {"circuit": held} | ({"registered_roots": roots} if roots else {})
             record = {"circuit": json.loads(doc), "order": json.loads(order), "pins": pins}
             if listed:
-                text = circuit_file(prog, record_partition(record["circuit"], ""))
-                record["circuits"] = [{"sha512": hashlib.sha512(text.encode()).hexdigest(), "template": t}
-                                      for t, _, _ in charges_of(desc)]
+                part = record_partition(record["circuit"], "")
+                record["circuits"] = [
+                    {"sha512": hashlib.sha512(circuit_file(desc, t, part).encode()).hexdigest(), "template": t}
+                    for t, _, _ in charges_of(desc)]
         elif anchors and in_class:
             _, doc, order = (json.loads(x) for x in anchor)
             if misanchor and i == ties[first + t]["audit"]:
