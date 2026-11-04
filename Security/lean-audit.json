@@ -67395,7 +67395,7 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "SampledProofs.ChallengerTrees": {
-   "digest": "5f788fda05bb061f3ff90f77b0eebc82b4df92d4d309262f6180988aa404ebb3",
+   "digest": "af0926b8c6d4a27a0099c66af4d151d864a349bcb90b99e36cfd85ec63b78253",
    "definitions": {
     "SampledProofs.Challenger.LINK_TABLES": "8af716a484dd7ab4f4e315c2eeb20f7828c8781f86bb7275cf827566b638e88d",
     "SampledProofs.Challenger.LoggedTree": "885ea6f8fcb5591d9bbb4b603865b76ffdf652083bbbff692a634efdf096f032",
@@ -67426,7 +67426,7 @@
     "SampledProofs.Challenger.isTreeSpec._sparseCasesOn_3": "7d0325932917a222b8be7ad4567c468f277ae569c585c2d8951014a95253d226",
     "SampledProofs.Challenger.linkAfter": "9134ba7b2df795021b258df443b0136b91f379a4a42d4abdc290347744a91e68",
     "SampledProofs.Challenger.recordCoins?": "ad53d7ff5d64c593532deb0dcc78c37ea5b0caf48161325381f19a55b9443b84",
-    "SampledProofs.Challenger.sessionTreeReason": "830d46e983c8e78fafcbf5c2ba3e668fada860dedfea39961ef6ce991c80f61e",
+    "SampledProofs.Challenger.sessionTreeReason": "c9a9124f1f14d5db5be829b98757486c50b9bb9346a2574241ca84a8c2592fa9",
     "SampledProofs.Challenger.sessionTreeReason._sparseCasesOn_9": "1b56b3602811edd94be432523815f320a65d4ac7971bf21cd6ef958a2015f89c",
     "SampledProofs.Challenger.sessionsTreeReason": "951c7b0987b9ab21aa408cd6ff5739d27a7d680be2b0e748f3b4f60da914dd89",
     "SampledProofs.Challenger.trustedTreesOf": "e507e753c0512ac0044ede65c1eba48434605e6d8b997f2150cf24720f09aa8b",
