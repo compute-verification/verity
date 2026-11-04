@@ -889,31 +889,31 @@ def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : 
         try ch.write s!"err a request `{first.trim}`\n".toUTF8 catch _ => pure ()
       try (c.shutdown).block catch _ => pure ()
 
-/-- **Why the loop serves no session of the statement `S`**, given `--salt-key FILE` and `--commitments FILE` (a refs file,
-`Salts.parseRefs`, of the value commitments the ZK server's value service made): some hm96 tree of its public file is
-none of them under the key (`Salts.checkStatement`). `none` where every one is, or where neither flag is given; one flag
-without the other is refused. -/
+/-- **Why the loop serves no session of the statement `S`**, given `--salt-key FILE` and `--commitments FILE` (a records
+file, `Salts.parseRecords`, of the registrations the ZK server's value service answered): some record's tag is not the
+server's, or some hm96 tree of its public file is no table of theirs (`Salts.checkStatement`). `none` where every one is,
+or where neither flag is given; one flag without the other is refused. -/
 def commitmentsWhy (args : List String) (S : Hello.Setup) : IO (Option String) := do
   match Witness.argOf args "--salt-key", Witness.argOf args "--commitments" with
   | none, none => return none
   | some _, none =>
-    return some "--salt-key: the loop serves only a statement whose value commitments the ZK server made (--commitments FILE)"
+    return some "--salt-key: the loop serves only a statement whose value commitments the ZK server registered (--commitments FILE)"
   | none, some _ => return some "--commitments: the loop checks them under the ZK server's salt key (--salt-key FILE)"
   | some kf, some cf =>
     match ← Salts.loadKey kf false with
     | .error e => return some e
     | .ok k =>
-      let refs ← match ← (IO.FS.readBinFile cf).toBaseIO with
+      let records ← match ← (IO.FS.readBinFile cf).toBaseIO with
         | .ok b => pure b
         | .error e => return some s!"--commitments {cf}: {e}"
-      match Salts.checkStatement k refs S.I.publicFile with
+      match Salts.checkStatement k records S.I.publicFile with
       | .ok () => return none
       | .error e => return some s!"--commitments: {e}"
 
 /-- `flock-firewall session --verifier HOST:PORT [--listen PORT] [--salt-key FILE --commitments FILE] [--statement ID]
 --circuit F --public F …` (the statement flags `Hello.FLAGS`): the firewall's session loop. With `--salt-key` and
-`--commitments` it serves only a statement whose every hm96 tree is a value commitment the ZK server made
-(`commitmentsWhy`), and otherwise prints `refused WHY` and exits. It listens on `127.0.0.1:PORT` (by default a port the system picks)
+`--commitments` it serves only a statement whose every hm96 tree is a table of a registration the ZK server's value service
+answered (`commitmentsWhy`), and otherwise prints `refused WHY` and exits. It listens on `127.0.0.1:PORT` (by default a port the system picks)
 for sessions and on a port the system picks for the reps' frames, the tables' level 0 and the sessions' finish, prints `LISTENING 127.0.0.1:PORT` and then
 `FRAMES 127.0.0.1:PORT` once it does, and serves each connection as one session (`serve`) or one frame (`frames`), each
 on its own thread, every session's `Hello` at one statement set up once a draw (`Hello.Setup.specAt`). When a session

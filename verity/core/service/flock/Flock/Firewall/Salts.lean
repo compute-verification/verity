@@ -14,14 +14,26 @@ Every salt message is 205 bytes and every tag message 333, under different const
 
 * `parseCommit`, `commitAnswer`: a commit request's tables, and their leaves, roots and tags at the session `s`.
 * `parseRefs`, `saltsAnswer`: the salts of the rows a refs file names, every table ref's tag checked (`TableRef.valid`).
-* `checkStatement`: every hm96 tree of a statement's public file is a table the server committed. The session loop
-  serves no statement whose value commitments it did not make (`Session.run`, `--salt-key`, `--commitments`).
+* `Epoch`, `recordOf`: the commit sessions the service opened since its last registration, and a registration's
+  record: the number `m` of them, the registered session's table refs and a record tag under `k` over both
+  (`recordTagOf`). A registration closes the epoch, so the stack registers one session of the `m` it had and no other.
+* `parseRecords`, `checkStatement`: every hm96 tree of a statement's public file is a table of a registration whose
+  record tag is the server's. The session loop serves no statement whose value commitments the server did not register
+  (`Session.run`, `--salt-key`, `--commitments`).
 * `loadKey`: the key file.
 
 No request takes a salt from the stack: a commit request's body is its digests and nothing else (`commitBody`). A
-statement whose leaves were made under salts of the stack's has roots no tag of the server's names, so the loop refuses
-it. A prover's witness salts must then be the server's for its proof to pass, since each leaf's `c` is the SHA-512 of
-its salt.
+statement whose leaves were made under salts of the stack's has roots no record of the server's holds, so the loop
+refuses it. A prover's witness salts must then be the server's for its proof to pass, since each leaf's `c` is the
+SHA-512 of its salt.
+
+**Grinding.** A stack that commits its values in `m` sessions and registers the one whose public roots it likes chooses
+among `m` outcomes, so it leaks at most `log₂ m` bits through the choice. The record makes `m` public, so the term is
+computable from what the verifier sees (`Flock.ValueSalts`, `Flock.Guarantees.RegisteredLeakage`).
+
+**The key is the ZK server's alone** (`zk-server-own-user`, `Flock.Assumptions.ZkServerOwnUser`): the value service and
+the session loop run under the ZK server's own OS user, which no worker and no serving stack shares, so nothing the stack
+runs reads the key or the epoch. The tags, the record tags and the count `m` mean what they say only under it.
 -/
 import Flock.Hm96
 import Flock.FV3
@@ -165,6 +177,73 @@ def saltsAnswer (k refs : ByteArray) : Except String ByteArray := do
     throw s!"table ref {t}: its tag is not the ZK server's for its session, table, domain, leaf count, schema and root"
   return rs.foldl (fun acc (t, i) => let r := ts[t]!; acc ++ saltOf k r.s r.j i) .empty
 
+/-! ### Registrations -/
+
+def REG_LABEL : ByteArray := label "verity/zk-server/registration/v1"
+
+/-- A registration record's bytes before its table refs: `be64 m ‖ be32 T`. -/
+def RECORD_HEAD_BYTES : Nat := 12
+def RECORD_TAG_BYTES : Nat := 64
+
+/-- A table ref's bytes, `TableRef.parse`'s layout. -/
+def TableRef.bytes (r : TableRef) : ByteArray :=
+  r.s ++ be32 r.j.toUInt32 ++ r.t.dom ++ be64 r.t.n.toUInt64 ++ ByteArray.mk #[r.t.schema.toUInt8] ++ r.root ++ r.tag
+
+/-- A commit session the service opened: its draw, and each of its tables with the root it answered, in table order. -/
+structure Opened where
+  s : ByteArray
+  tables : Array (Table × ByteArray)
+  deriving Inhabited
+
+/-- **The value service's epoch**: the commit sessions it opened since its last registration, or since it started, in the
+order it drew them. A registration closes it, so a session registers only in the epoch that opened it, and only once. -/
+structure Epoch where
+  opened : Array Opened := #[]
+  deriving Inhabited
+
+/-- **The record tag** of a registration whose epoch opened `m` commit sessions, over its `T` table refs' bytes `trefs`,
+under the key `k`. -/
+def recordTagOf (k : ByteArray) (m T : Nat) (trefs : ByteArray) : ByteArray :=
+  Sha512.hash (k ++ REG_LABEL ++ be64 m.toUInt64 ++ be32 T.toUInt32 ++ trefs)
+
+/-- **The registration record** of the session `o`, of an epoch that opened `m` commit sessions, under the key `k`:
+`be64 m ‖ be32 T ‖` the session's `T` table refs, each with its tag, `‖` the record tag. `m` is public: it is the number of
+sessions among which the stack chose the one it registers. -/
+def recordOf (k : ByteArray) (m : Nat) (o : Opened) : ByteArray :=
+  let trefs := (Array.range o.tables.size).foldl (fun acc j =>
+    let (t, root) := o.tables[j]!
+    acc ++ ({ s := o.s, j, t, root, tag := tagOf k o.s j t root } : TableRef).bytes) .empty
+  be64 m.toUInt64 ++ be32 o.tables.size.toUInt32 ++ trefs ++ recordTagOf k m o.tables.size trefs
+
+/-- A registration record as a records file holds it: its epoch's session count, its table refs, their bytes and its
+record tag. -/
+structure Record where
+  m : Nat
+  tables : Array TableRef
+  trefs : ByteArray
+  tag : ByteArray
+  deriving Inhabited
+
+/-- Whether `r`'s record tag is the server's for its session count and table refs, under the key `k`. -/
+def Record.valid (k : ByteArray) (r : Record) : Bool := ctEq r.tag (recordTagOf k r.m r.tables.size r.trefs)
+
+/-- **A records file**: registration records one after another, each `be64 m ‖ be32 T ‖ T table refs ‖ tag`, `T` at
+least one. -/
+def parseRecords (b : ByteArray) : Except String (Array Record) := go b.size 0 #[]
+where
+  go : Nat → Nat → Array Record → Except String (Array Record)
+    | 0, o, acc => if o == b.size then pure acc else throw s!"a records file of {b.size} bytes, past its records at byte {o}"
+    | fuel + 1, o, acc => do
+      if o == b.size then return acc
+      if b.size < o + RECORD_HEAD_BYTES then throw s!"a records file whose record at byte {o} is shorter than its counts"
+      let T := beAt b (o + 8) 4
+      if T == 0 then throw s!"a records file whose record at byte {o} holds no table"
+      let e := o + RECORD_HEAD_BYTES + TABLE_REF_BYTES * T + RECORD_TAG_BYTES
+      if b.size < e then throw s!"a records file whose record at byte {o}, of {T} table refs, runs {e - b.size} bytes past its end"
+      let tables ← (Array.range T).mapM fun t => TableRef.parse b (o + RECORD_HEAD_BYTES + TABLE_REF_BYTES * t)
+      go fuel e (acc.push { m := beAt b o 8, tables, trefs := b.extract (o + RECORD_HEAD_BYTES) (e - RECORD_TAG_BYTES),
+                            tag := b.extract (e - RECORD_TAG_BYTES) e })
+
 /-! ### A statement's value commitments -/
 
 /-- A statement's hm96 trees, from its public file's header: for each root of `frame_v3` whose schema is one of
@@ -191,17 +270,19 @@ def treesOf (header : Json) : Except String (Array (String × Table × ByteArray
     out := out.push (name, { dom, n := count, schema }, root)
   return out
 
-/-- **Whether a statement's value commitments are the server's**: every hm96 tree of its public file `publicFile`
-(`treesOf`) is a table one of the refs file `refs`'s table refs names, at its domain, leaf count, schema and root, with
-the server's tag under the key `k`. -/
-def checkStatement (k refs publicFile : ByteArray) : Except String Unit := do
-  let (rs, _) ← parseRefs refs
+/-- **Whether a statement's value commitments are the server's registrations**: every record of the records file
+`records` carries the server's record tag under the key `k`, and every hm96 tree of the public file `publicFile`
+(`treesOf`) is a table one of them holds, at its domain, leaf count, schema and root. -/
+def checkStatement (k records publicFile : ByteArray) : Except String Unit := do
+  let rs ← parseRecords records
+  if let some r := (List.range rs.size).find? fun r => !(rs[r]!.valid k) then
+    throw s!"record {r}: its tag is not the ZK server's for its session count and table refs"
   let some nl := findByte publicFile 10 | throw "public file: no header line"
   let some text := String.fromUTF8? (publicFile.extract 0 nl) | throw "public file: its header is not UTF-8"
   let trees ← treesOf (← JsonParse.parse text)
   for (name, t, root) in trees do
-    unless rs.any fun r => r.t.dom == t.dom && r.t.n == t.n && r.t.schema == t.schema && r.root == root && r.valid k do
-      throw s!"row {name}: its root is no value commitment of the ZK server's (no commitment of its domain, leaf count, schema and root carries the server's tag)"
+    unless rs.any fun r => r.tables.any fun x => x.t.dom == t.dom && x.t.n == t.n && x.t.schema == t.schema && x.root == root do
+      throw s!"row {name}: its root is no value commitment of the ZK server's (no table of a registration of its domain, leaf count, schema and root)"
 
 /-! ### The key -/
 
