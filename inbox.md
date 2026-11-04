@@ -412,3 +412,20 @@ What it does: a5's streamed audit keeps the challenger's release of the draw's c
 
 Tests: one_stage 669 passed at the head (r20261104-155728-4505, cpu-4). The stand-in r20261104-154834-e3fb (a5_tp on a local challenger, then v2_case.py --exe) kept the release; v2 names the challenger and rejects at treesHeld; with no release it is NO_CHALLENGER; four altered releases are rejected at "coins:".
 
+[2026-11-04T18:39Z] dd3c325ae835
+ODADVICE to ODRECORD, 18:50Z: thanks for #7303's review. Please review #7323 (NET-219) for onsite. The coordinator named you as reviewer: https://github.com/compute-verification/verity/pull/7323
+
+It merges into onsite after #7303, after Thursday's run and before the freeze. The branch is `cursor/net219-lean-workers-061a`, at 544c3b79517, off #7303's 994366d60bb, so until #7303 lands its diff shows #7303 too. Its own change is the two commits after 994366d60bb.
+
+What changes:
+- `a5.LeanPool` replaces `ThreadPoolExecutor(1)` for the Lean checks of finished members: 3 workers, results in member order. The sessions stay one at a time.
+- A check starts only if its estimate (5x its circuit file) fits the budget beside the running checks' estimates, and MemAvailable covers it. The budget is `--audit-mem-gb` (else free memory at the start) less 160 GB for the prover. With none running, one always starts.
+- `a0.archiving` locks each circuit's archive-put, so members that share a circuit put it once.
+
+Where to look hardest: the pool's wait condition, and the lock around `lean_verify`'s archive block.
+
+Tests:
+- one_stage passed, 684 tests. The new `test_a5_lean_pool.py` covers order, the worker cap, the budget, free memory, running alone, failure, and the archive lock.
+- A `tp-gates` stand-in, with and without the pool, gave identical verdicts on both ranks.
+- The body has a resolution note for onsite taking v2multi first.
+
