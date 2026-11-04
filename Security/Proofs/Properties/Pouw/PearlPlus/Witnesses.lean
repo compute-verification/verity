@@ -14,12 +14,12 @@ three different SHA-512 digests, neither open one value nor collide (`openingBin
 the kernel, one declaration each, once the hm96 mask of their zero salt is known to be zero (`Witness.mask_zero`), since
 the mask's tables are too large for it to build.
 
-`YIsTheUnscale`, `RefusedBeforeTheCoin`, `TileKeepsTheCap`, `LoadedGivesUp`, `PlanMeans` and `AcceptMeans` have both
-witnesses. `LoadedGivesUp`'s, `PlanMeans`' and `AcceptMeans`' `honest` ones are at one honest pass of the deployed scheme
-(`honestPass`, loaded from `honestManifest`): `load` reads it, `plan` draws its one tile, and `check` accepts its run at no
-draws, since a drawn tile is replayed on the noise `check` derives itself (`fixedNoise`), past what one kernel computation
-reaches. `TileAcceptMeans` has its `nontrivial` one; its `honest` one needs a tile the kernel replays whole: its openings,
-its noise lines and its forming.
+`YIsTheUnscale`, `RefusedBeforeTheCoin`, `TileKeepsTheCap`, `LoadedGivesUp`, `PlanMeans`, `AcceptMeans` and
+`TileAcceptMeans` have both witnesses. `LoadedGivesUp`'s, `PlanMeans`' and `AcceptMeans`' `honest` ones are at one honest
+pass of the deployed scheme (`honestPass`, loaded from `honestManifest`): `load` reads it, `plan` draws its one tile, and
+`check` accepts its run at no draws, since a drawn tile is replayed on the noise `check` derives itself (`fixedNoise`),
+past what one kernel computation reaches. `TileAcceptMeans`' `honest` one is the tile of a test pass (`testPass`, k = 128,
+1 × 1 tiles) at a test noise (`testNoise`): the property ranges over every noise, and the deployed one is another instance.
 -/
 
 namespace Properties.Pouw.PearlPlus
@@ -406,6 +406,17 @@ theorem acceptMeans_nontrivial : ∀ pl, ¬ ((acceptAllCheck emptyRun noOpening)
   cases h
 
 /-! ## A tile: `TileAcceptMeans` and `TileKeepsTheCap` -/
+
+/-- The test tile passes `checkTile` at the test noise: its A row, its B row and its leaf open against the test pass's
+roots, the words formed from its rows are its leaf's, and the rule keeps its cap. `TileAcceptMeans` ranges over every
+noise `wn`: the deployed check's is `fixedNoise` of the pass's salt and B's root (`noiseOf`), one instance, and this is
+another, the test noise `testNoise`, given rather than derived (deriving it is 2k = 256 noise lines and 32 × 32 FP32
+chains of k = 128). `opens` hands `RowsDomain.leaf` to the tree's check unapplied, so the unfolding reaches its hm96 leaf
+with `unfoldPartialApp`. -/
+theorem tileAcceptMeans_honest : checkTile testPass (.ok testNoise) 0 testOpening = none := by
+  simp +unfoldPartialApp only [checkTile, opens, RowsDomain.verify, RowsDomain.leaf, Flock.Hm96.Default512.leaf,
+    Flock.Hm96.Default512.treeLeaf, Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq]
+  decide +kernel
 
 /-- A tile check that accepts every tile passes tile 0 of a pass with no calls, which is no tile of the verifier's own. -/
 theorem tileAcceptMeans_nontrivial :
