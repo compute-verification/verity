@@ -72,7 +72,7 @@ def test_lg2_known_words(x: int, want: int) -> None:
 
 def test_lg2_is_log2_within_its_accuracy() -> None:
     """|lg2(x) - log2(x)| <= 2^-21.5 max(1, |log2 x|) on random positive normals: the worst over seeds 0..19 of 2^18 words each
-    (this draw) is 2^-22.1."""
+    (this sample) is 2^-22.1."""
     worst = 0.0
     for seed in range(4):
         rng = np.random.default_rng(seed)

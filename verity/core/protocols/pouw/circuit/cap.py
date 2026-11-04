@@ -38,8 +38,8 @@ split's reference.
 **The row** (`Pc8RowACap`) is `Pc8RowA`, node for node, plus ``sd``: per block of 32 elements, the count of elements whose
 support's two ends agree (`words.PouwBlackwellE4m3SaltDead`, `PouwHopperE4m3SaltDead`: the codes e4m3(atom(f32(α·x),
 [c_β]^32, [±0x43]^32)) are equal or both zeros), on the forming's own accumulator f32(α·x) and the row's flat code
-c_β = e4m3(f32(β·44)).  On a one-group step (sm_120's and the H100's atoms) that count is P3's `saltDeadP` count: #1013's
-(E) `saltDeadP_iff_ends` and (C) `saltDeadP_card_ends`, with no hypothesis on α, x or β.  Nothing here reads the code's
+c_β = e4m3(f32(β·44)).  On a one-group step (sm_120's and the H100's atoms) that count is P3's `saltDeadP` count:
+`Security/Proofs/Pouw/PearlC/Cap/SaltDead.lean`'s (E) `saltDeadP_iff_ends` and (C) `saltDeadP_card_ends`, with no hypothesis on α, x or β.  Nothing here reads the code's
 order in the signed count, which is monotone only for β >= 0 and antitone for β <= 0.
 
 **The word** (`Pc8CapWord`) is `pearl_c_debit.word_flags` and rev1's `laterZeroPromos` on the chain the tile already
@@ -94,7 +94,7 @@ strip reads its rows' ok words and computes their admission bits and the bound a
 tile in the strip; a row tally reads its row's words' flags, their count, their later +0 promotions and good, and its
 A row's salt-dead counts, and computes the row's sums; and the tally reads its rows' sums and the strip's bits and
 bound, all through their committed rows (`PORTS`; the cut is `pc8.unit_cut`'s).
-  - The tile and the tally are cut per tile row because C-Flock's composer gives each row a unit reads or writes an
+  - The tile and the tally are cut per tile row because Flock's composer gives each row a unit reads or writes an
     hm96 slot of 2^18 bits and a unit at most 2^27 bits (`circuit.K_MAX`), so at most 256 rows: a tile reading its
     words' rows directly would need 2^31 at 64 × 64.  Cut per row, no unit of a 64 × 64 tile has more than 66 rows
     (the row tally's TN cap-flags rows, its sd row and its cap-sums row).
@@ -131,7 +131,7 @@ from ..protocol import DomainError, Matmul, Shape
 from ..schemes import pearl_c as C
 from ..schemes import pearl_c_debit as D
 from ..schemes.pearl_c_device import DEVICES
-from . import boolean as _boolean  # noqa: F401  registers the windows' _v2 Definitions C-Flock's lowering falls back to
+from . import boolean as _boolean  # noqa: F401  registers the windows' _v2 Definitions Flock's lowering falls back to
 from . import hashes as H
 from . import leaves as L
 from . import pc4, pc8
@@ -254,7 +254,7 @@ ADVICE = ("cert",)
 
 #: each core atom's window of masked words (`words.WINDOW`: G = 4)
 WINDOWS = {"blackwell_sm120_e4m3_m16n8k32": W.PouwBlackwellE4m3Window, "hopper_e4m3_wgmma_k32": W.PouwHopperE4m3Window}
-#: each core atom's salt-dead bit (`words.ends_agree`); both atoms are one-group steps, where #1013's (E) holds
+#: each core atom's salt-dead bit (`words.ends_agree`); both atoms are one-group steps, where `SaltDead`'s (E) holds
 SALT_DEAD = {"blackwell_sm120_e4m3_m16n8k32": W.PouwBlackwellE4m3SaltDead,
              "hopper_e4m3_wgmma_k32": W.PouwHopperE4m3SaltDead}
 #: the flat E line's entry, 44 at Pearl's norm 256 (`SaltDead.flatLine`), as an FP32 word: c_β = e4m3(f32(β·44))
@@ -282,7 +282,7 @@ def _row_a_cap_body(B, S_, x, line, fa, fb):
 Pc8RowACapDef = CompositeDefinition(
     "Pc8RowACap", 1, ("K", "DEV"), _row_a_cap_sig, _row_a_cap_body,
     doc="`Pc8RowA`'s outputs, and per block of 32 elements the count of salt-dead elements: those whose support's two ends "
-        "agree on the forming's accumulator f32(α·x) and the row's flat code e4m3(f32(β·44)) (#1013's `EndsAgree`).",
+        "agree on the forming's accumulator f32(α·x) and the row's flat code e4m3(f32(β·44)) (`SaltDead`'s `EndsAgree`).",
     conformance="protocol-defined")
 
 

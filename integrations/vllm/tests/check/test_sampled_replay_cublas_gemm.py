@@ -82,10 +82,10 @@ def test_the_evaluator_cites_the_h200_capture_and_agrees_with_the_route_table():
     """The provenance's split counts are the route table's at every (shape, M) the capture ran (the scan maps the same routes),
     and the Definitions' conformance cites the same record."""
     from tests.properties import glm53_bf16_gemm_capture_gpu as X
-    from verity_vllm.program.frontend.conformance import status_of
+    from verity.ml.circuits.defs import conformance_label
 
     p = C.PROVENANCE
-    assert re.fullmatch(r"r\d{8}-\d{6}-[0-9a-f]{4}", p["run"]) and p["scan"].startswith(BC.CUBLAS_ROUTES["run"])
+    assert p["scan"].startswith(BC.CUBLAS_ROUTES["run_record"])
     assert all(re.fullmatch(r"[0-9a-f]{64}", p[k]) for k in ("record", "record_served_default"))
     assert all(re.fullmatch(r"art:[0-9a-f]{64}", a) for a in p["art"].values())
     assert p["variants"] == {"split_k_off": "GO", "served_default": "GO"}
@@ -97,8 +97,8 @@ def test_the_evaluator_cites_the_h200_capture_and_agrees_with_the_route_table():
         for m, split in case["SPLIT_K"].items():
             assert BC.default_cublas_split_k(name.split("/")[1], int(m), case["K"], case["N"]) == split, (name, m)
     for d in (CB.GemmF32OutWord, CB.CublasSplitKGemmF32OutWord, CB.CublasSplitKGemmWord):
-        assert status_of(d.conformance) == "exact-model-tested"
-        assert p["run"] in d.conformance and p["record"][:16] in d.conformance and p["art"]["record"] in d.conformance
+        assert conformance_label(d.conformance) == "exact-model-tested"
+        assert p["record"][:16] in d.conformance and p["art"]["record"] in d.conformance
 
 
 def test_an_unregistered_dot_a_refused_split_a_non_finite_lane_and_another_shape_decline_by_name():

@@ -564,6 +564,22 @@ def test_the_honest_forgery_stand_in_is_credited():
     assert v["credit"], v
 
 
+@pytest.mark.parametrize("name", [None, *FORGERIES])
+def test_the_value_check_on_the_device_is_the_hosts(name):
+    """`pouw_h1_records.reason` of a call's records, scales and served y left on a CUDA device, as the arm leaves them, is
+    what it is of their host copies: None for honest records, and each forgery's own refusal."""
+    if not torch.cuda.is_available():
+        pytest.skip("needs CUDA")
+    w = Linear(64, 1, None)
+    xq, s_a = int8_ops.row_quant((torch.randn(3, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16())
+    y, zy = E.scaled_mm_zy(xq, s_a, w.weight, w.weight_scale, ROWS)
+    if name is not None:
+        y, zy = FORGERIES[name][0](y.clone(), zy.clone(), xq, s_a, w.weight, w.weight_scale)
+    host = ZR.reason(zy.numpy(), ROWS, 64, y, s_a, w.weight_scale)
+    assert host == (None if name is None else FORGERIES[name][1])
+    assert ZR.reason(zy.cuda(), ROWS, 64, y.cuda(), s_a.cuda(), w.weight_scale.cuda()) == host
+
+
 def test_a_z_written_outside_the_trace_is_refused_as_untraced():
     w = torch.randint(-127, 128, (32, K), dtype=torch.int8)
     xq = torch.randint(-127, 128, (3, K), dtype=torch.int8)
@@ -1009,7 +1025,7 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
 
 
 def test_a_period_open_without_draw_k_is_refused(periodic):
-    """The proof service commits the draw's K in the period's open (`credit.K_FIELD`) before any draw; a period
+    """The proof system commits the draw's K in the period's open (`credit.K_FIELD`) before any draw; a period
     opened without one leaves its windows no K to be drawn with, so the window, the period's reading and its credit are
     each refused (``budget``), and a window in no period has no committed K either."""
     auditor = periodic(None, files=FILES)
@@ -1067,7 +1083,7 @@ def test_the_drawn_set_from_a_fixed_coin_is_cores():
 
 
 def test_the_period_k_is_sized_for_the_expected_credited_share_and_the_verifier_reports_its_eps():
-    """The proof service sizes the K a period's open commits (`draw_k`) for the share of a window's work it
+    """The proof system sizes the K a period's open commits (`draw_k`) for the share of a window's work it
     expects credited (`EXPECTED_CREDIT`, 8/9) at `DRAW_EPS` and δ = 2^-40, through `window.k_prime`'s own inputs, since
     that share isn't known at the open: 31,178 for the declared 8B window, which at 8/9 credited establishes at most
     0.1% (`window.eps_at`, what `credit.established` reports), and K sized as if all were credited establishes less."""

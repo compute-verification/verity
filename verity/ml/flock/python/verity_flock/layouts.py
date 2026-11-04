@@ -80,7 +80,7 @@ def read_rows_placed(n: int, lo: int, k: int) -> int:
 
 
 @dataclass(frozen=True)
-class Layout:
+class BlockLayout:
     type: str | None
     range_log: int | None
     in_split: tuple[int, ...]
@@ -110,7 +110,7 @@ class Layout:
         return {**self.record(), "sha512": self.digest()}
 
 
-def from_json(d: Mapping) -> Layout:
+def from_json(d: Mapping) -> BlockLayout:
     """The layout a record encodes; its ``sha512`` must be the record's digest."""
     def bad(why):
         raise InvalidLayout(why)
@@ -142,7 +142,7 @@ def from_json(d: Mapping) -> Layout:
         extra = set(d) - {"sha512", "type", "range_log", "in_split", "out_split", "own", "calls", "reads"}
         if extra:
             bad(f"unknown keys {sorted(extra)}")
-        lay = Layout(d.get("type"), d.get("range_log"), tuple(d["in_split"]), tuple(d["out_split"]), o, tuple(calls),
+        lay = BlockLayout(d.get("type"), d.get("range_log"), tuple(d["in_split"]), tuple(d["out_split"]), o, tuple(calls),
                      tuple(reads))
     except (KeyError, TypeError, AttributeError) as e:
         raise InvalidLayout(f"not a layout record: {e!r}") from None
@@ -208,7 +208,7 @@ def _uses(t: CT.CircuitType) -> dict[int, int]:
     return n
 
 
-def exported(t: CT.CircuitType, lay: Layout) -> set[int]:
+def exported(t: CT.CircuitType, lay: BlockLayout) -> set[int]:
     """The caller's input wires exported to a placed call: a whole single-wire argument that nothing else reads."""
     uses, out, c = _uses(t), set(), 0
     for it in t.items:
@@ -223,7 +223,7 @@ def exported(t: CT.CircuitType, lay: Layout) -> set[int]:
     return out
 
 
-def _own_items_rows(types: Mapping[str, CT.CircuitType], layouts: Sequence[Layout], t: CT.CircuitType, lay: Layout,
+def _own_items_rows(types: Mapping[str, CT.CircuitType], layouts: Sequence[BlockLayout], t: CT.CircuitType, lay: BlockLayout,
                     info: Callable[[str], TableInfo]) -> int:
     n = c = r = 0
     for it in t.items:
@@ -244,7 +244,7 @@ def _own_items_rows(types: Mapping[str, CT.CircuitType], layouts: Sequence[Layou
     return n
 
 
-def own_size(types: Mapping[str, CT.CircuitType], layouts: Sequence[Layout], j: int, info: Callable[[str], TableInfo]) -> int:
+def own_size(types: Mapping[str, CT.CircuitType], layouts: Sequence[BlockLayout], j: int, info: Callable[[str], TableInfo]) -> int:
     """Layout j's own-region rows under derive's v2 rule (a generated read: its whole rows)."""
     lay = layouts[j]
     if lay.own[0] == "gen":
@@ -267,13 +267,13 @@ def own_size(types: Mapping[str, CT.CircuitType], layouts: Sequence[Layout], j: 
     return rows + 1
 
 
-def _places_nothing(layouts: Sequence[Layout], j: int) -> bool:
+def _places_nothing(layouts: Sequence[BlockLayout], j: int) -> bool:
     lay = layouts[j]
     return (lay.own[0] == "derive" and all(q is None for _, _, q in lay.calls) and all(lj is None for _, lj, _ in lay.reads)
             and all(_places_nothing(layouts, jj) for _, jj, _ in lay.calls))
 
 
-def validate(types: Mapping[str, CT.CircuitType], layouts: Sequence[Layout], unit: int, info: Callable[[str], TableInfo | None]
+def validate(types: Mapping[str, CT.CircuitType], layouts: Sequence[BlockLayout], unit: int, info: Callable[[str], TableInfo | None]
              ) -> list[int]:
     """Refuse layouts that break a rule; return each layout's own-region size. ``types`` must already be valid
     (`circuit_types.validate`); ``info(sha512)`` describes a held table, or None."""
@@ -369,5 +369,5 @@ def validate(types: Mapping[str, CT.CircuitType], layouts: Sequence[Layout], uni
     return sizes
 
 
-__all__ = ["FORMAT", "GEN", "InvalidLayout", "Layout", "TableInfo", "decode_rows", "exported", "from_json", "k_of", "live_bits",
+__all__ = ["BlockLayout", "FORMAT", "GEN", "InvalidLayout", "TableInfo", "decode_rows", "exported", "from_json", "k_of", "live_bits",
            "own_size", "read_rows_inline", "read_rows_placed", "table_info", "validate"]

@@ -1,3 +1,4 @@
+import Flock.Desc
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 
 /-!
@@ -26,7 +27,7 @@ structure SpecP (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List
     (draw : Option Lean.Json) (own : Option ByteArray) (pi : HmIn.Ports) (st : Stmt) : Prop where
   tagsEq : st.tags = tags
   leaf : st.leaf = default
-  parse : HmOut.parse tags cf tables = .ok st.c
+  parse : HmOut.parseCommit tags cf tables = .ok st.c
   ports : HmIn.parse st.c = .ok pi
   merkle : MerkleScheme.find? st.c.leafScheme = some st.merkle
   pub : ∃ pop, HmIn.loadPublic tags st.c pi pf = .ok pop ∧ HmIn.checkOwn pi pop own = .ok () ∧
@@ -86,6 +87,37 @@ theorem setupHidden_specP (h : Stmt.setupHidden tags cf pf coins tables draw par
       inRange := by assumption
       sigma := rfl
       hello := by assumption }⟩
+
+/-- At a flat statement's tags (`Tags.isTmpl`), the committed circuit is `HmOut.parse`'s (`Spec.parseF`). -/
+theorem SpecP.parseF {own : Option ByteArray} {pi : HmIn.Ports} (s : SpecP tags cf pf coins tables draw own pi st)
+    (hi : tags.isTmpl = false) : HmOut.parse tags cf tables = .ok st.c := by
+  have h := s.parse
+  rwa [HmOut.parseCommit, if_neg (by simp [hi])] at h
+
+/-- **A flat descriptor's tables are flat**: `Flock.Desc.parse` is `HmOut.parse`, which refuses a templated file
+(`HmOut.parse_isTmpl`), so every table's tags (`tagsAt`) of a file it reads are flat. -/
+theorem isTmpl_of_desc {D : Flock.Desc} {cf₀ : ByteArray} {tables₀ : List (String × ByteArray)}
+    (hD : Flock.Desc.parse tags cf₀ tables₀ = .ok D) (count j : ℕ) :
+    (FlockSoundness.Discharge.Exec.tagsAt tags count j).isTmpl = false :=
+  (FlockSoundness.Discharge.Exec.tagsAt_isTmpl _ _ _).trans (HmOut.parse_isTmpl (Flock.Desc.parse_flat hD))
+
+/-- **Under a flat descriptor, the committed circuit is the flat one**: at any table's tags of a file `Flock.Desc.parse`
+reads, `HmOut.parseCommit` is `HmOut.parse`. So `SpecP`'s `parse` field there is the flat parse, and `AcceptedHP.hi`
+holds (`isTmpl_of_desc`): a statement that reads `SpecP` or `AcceptedHP` under such a descriptor means what it meant
+at the flat parse. -/
+theorem parseCommit_eq_of_desc {D : Flock.Desc} {cf₀ : ByteArray} {tables₀ : List (String × ByteArray)}
+    (hD : Flock.Desc.parse tags cf₀ tables₀ = .ok D) (count j : ℕ) :
+    HmOut.parseCommit (FlockSoundness.Discharge.Exec.tagsAt tags count j) cf tables =
+      HmOut.parse (FlockSoundness.Discharge.Exec.tagsAt tags count j) cf tables := by
+  rw [HmOut.parseCommit, if_neg (by simp [isTmpl_of_desc hD count j])]
+
+/-- `parseCommit_eq_of_desc` at `SpecP`: a `SpecP` at a table's tags of a flat descriptor's file is one at the flat
+parse. -/
+theorem SpecP.parse_flat_of_desc {D : Flock.Desc} {cf₀ : ByteArray} {tables₀ : List (String × ByteArray)}
+    {count j : ℕ} {own : Option ByteArray} {pi : HmIn.Ports} (hD : Flock.Desc.parse tags cf₀ tables₀ = .ok D)
+    (s : SpecP (FlockSoundness.Discharge.Exec.tagsAt tags count j) cf pf coins tables draw own pi st) :
+    HmOut.parse (FlockSoundness.Discharge.Exec.tagsAt tags count j) cf tables = .ok st.c :=
+  s.parseF (isTmpl_of_desc hD count j)
 
 /-- **Without the verifier's public inputs, `SpecP` is `Spec`**: `HmIn.checkOwn` at `none` leaves no public input port,
 and with none `HmIn`'s public file, draw, Δ and regions are `HmOut`'s. -/

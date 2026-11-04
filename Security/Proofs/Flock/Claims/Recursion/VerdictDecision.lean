@@ -56,7 +56,7 @@ theorem lt_tables {i : ℕ} (hi : i < D.sts.size) : i < D.spec.tables.size := by
   exact hi
 
 /-- **At an inner statement read at the dense form the setup returns one statement**, the inner statement's. -/
-theorem sts_dense {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem sts_dense {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) : D.sts.size = 1 := by
   obtain ⟨s, spec, st, -, hset, -, -, -⟩ := dense_inner hst hf
   obtain ⟨⟨s', spec', sts'⟩, c₁, r₀, rss, fl, link, pf, hv, -, -, -, -, -, hd⟩ := FlockDeploy.decR_some D.dec
@@ -66,13 +66,13 @@ theorem sts_dense {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse x
   rfl
 
 /-- **Table `0` is a table of the setup** at the dense form. -/
-theorem zero_lt {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem zero_lt {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) : 0 < D.sts.size := by
   rw [D.sts_dense hst hf hx]
   exact Nat.one_pos
 
 /-- **Table `0` is a table of the spec** at the dense form. -/
-theorem zero_lt_tables {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem zero_lt_tables {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) : 0 < D.spec.tables.size :=
   D.lt_tables (D.zero_lt hst hf hx)
 

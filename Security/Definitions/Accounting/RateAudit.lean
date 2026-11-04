@@ -53,9 +53,9 @@ with; the claims registry names the measurement that falsifies each for a deploy
 `bandwidth-side-cap`, and `rate-codec-work` for `c_enc`). Treating the stored words as uniform is
 `bandwidth-instantiation`; reading the deployed tag as the random oracle is `random-oracle`.
 
-**Windows.** `n` windows on one store (`Windows`) each draw fresh coins (a stream, an oracle and a sample). Window
-`i`'s device, its layout included, may be any function of the other windows' coins, earlier or later, and never of its
-own.
+**Windows.** `n` windows on one store each draw fresh coins (a stream, an oracle and a sample), each played by its own
+device (`Devices`). Window `i`'s device, its layout included, may be any function of the other windows' coins, earlier
+or later, and never of its own.
 -/
 
 namespace Accounting.Rate
@@ -203,12 +203,12 @@ capacity the certified stream leaves free and `(F − k·c_tag)/c_enc` the words
 tagging `k` words. -/
 def floor (b ρ S L F cTag cEnc k lam : ℕ) : ℕ := k * b * cEnc - ((S + (L - ρ) + lam) * cEnc + (F - k * cTag) * b)
 
-/-- `n` windows on one store: window `i`'s device, a function of every other window's coins. -/
-abbrev Windows (n N b h ρ S L q s : ℕ) : Type :=
+/-- **The devices of `n` windows on one store**: window `i`'s device, a function of every other window's coins. -/
+abbrev Devices (n N b h ρ S L q s : ℕ) : Type :=
   (i : Fin n) → ({j : Fin n // j ≠ i} → Coins N b h ρ s) → Device N b h ρ S L q
 
 /-- Window `i`'s device at the windows' coins `ω`: it reads every coin but its own. -/
-def Windows.dev {n N b h ρ S L q s : ℕ} (A : Windows n N b h ρ S L q s) (i : Fin n) (ω : Fin n → Coins N b h ρ s) :
+def Devices.dev {n N b h ρ S L q s : ℕ} (A : Devices n N b h ρ S L q s) (i : Fin n) (ω : Fin n → Coins N b h ρ s) :
     Device N b h ρ S L q :=
   A i (fun j => ω j.1)
 

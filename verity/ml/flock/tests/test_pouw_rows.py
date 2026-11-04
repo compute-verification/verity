@@ -1,13 +1,13 @@
-"""PoUW's tile-check rows (`verity.core.protocols.pouw.circuit.leaves`) are C-Flock's rows byte for byte: every row's vector of
-``verity/core/protocols/pouw/tests/vectors/pouw_rows.json``, recomputed from its case's words and salt through the port C-Flock stages
+"""PoUW's tile-check rows (`verity.core.protocols.pouw.circuit.leaves`) are Flock's rows byte for byte: every row's vector of
+``verity/core/protocols/pouw/tests/vectors/pouw_rows.json``, recomputed from its case's words and salt through the port Flock stages
 for the row (`circuit._port`: ``n_words`` u16 leaves, a bit row of ``16 n_words`` bits under ``hm96-sha512/row/v2`` or
 ``hm96-sha512/row-seg/v1``), gives the pinned row bytes, digest, commit string (`circuit._commit_strings`) and tree leaf;
 one vector of each row version and a tile's give the same commit string and tree leaf from the Lean verifier's own row
 constants (`Flock.HmRow`).  Every output row a PoUW unit writes is PoUW's row of exactly its words: a per-call row written
 as several output ports (A′_i ‖ P_A,i, Pearl-C's fp8-p row) as one segmented row, and the ok word, the tile digest and a
 registered row written as several ports (B̃_j ‖ P_B,j, the fp8-p row) as one v2 row; their writers' and readers' commit
-strings are PoUW's on C-Flock's writer/reader pairs (`test_lean_verifier.ROW_SEG_PAIRS`, ``ROW_V2_PAIRS``).  Each unit's
-output rows (`leaves.statement_rows`) are the rows C-Flock's composer gives its output ports, and each of the six units'
+strings are PoUW's on Flock's writer/reader pairs (`test_lean_verifier.ROW_SEG_PAIRS`, ``ROW_V2_PAIRS``).  Each unit's
+output rows (`leaves.statement_rows`) are the rows Flock's composer gives its output ports, and each of the six units'
 statement rows compose: META is `statement_rows`', and every staged row's ``b || c`` is PoUW's commit string."""
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def _flock_port(case: dict) -> FC.Port:
 
 
 def test_every_schema_has_a_flock_row():
-    """Every row and role of PoUW's has a pinned vector, and its schema is one C-Flock's META ``row_schemas`` names."""
+    """Every row and role of PoUW's has a pinned vector, and its schema is one Flock's META ``row_schemas`` names."""
     assert {(c["row"], V.ROLES[c["role"]]) for c in PINNED["cases"]} == set(L.ROW_SCHEMA)
     assert {row for row, _role in L.ROW_SCHEMA} == set(L.SCHEMAS)
     assert set(L.ROW_SCHEMA.values()) == {SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG}
@@ -59,7 +59,7 @@ def test_every_schema_has_a_flock_row():
 
 @pytest.mark.parametrize("case", PINNED["cases"], ids=lambda c: c["case"])
 def test_pouw_rows_are_flock_rows(case):
-    """C-Flock's port for the row commits exactly the pinned leaf: its schema is the vector's ``row_schema``, its leaves'
+    """Flock's port for the row commits exactly the pinned leaf: its schema is the vector's ``row_schema``, its leaves'
     bytes hash to ``row_bytes_sha256``, its row digest is ``x``, its ``b || c`` is ``bc``, and hm96's tree leaf over that
     is ``tree_leaf``."""
     words, salt = _case(case)
@@ -103,7 +103,7 @@ PAIRS = {"row-seg-pair/nvfp4-p-k4096": ("nvfp4-p", 4096, pc4), "row-seg-pair/fp8
 @pytest.mark.parametrize("vid", list(ROW_SEG_PAIRS))
 def test_a_row_unit_writes_its_row_seg_row_as_its_reader_commits_it(vid, tmp_path):
     """A row unit's per-call row written as its output ports (codes, scales and P: `Pc4RowA` at k = 4,096 writes A′_i ‖
-    P_A,i as 1,024 + 128 + 64 words, `Pc8RowA` at k = 1,024 its fp8-p row as 512 + 64) is C-Flock's writer of the pair,
+    P_A,i as 1,024 + 128 + 64 words, `Pc8RowA` at k = 1,024 its fp8-p row as 512 + 64) is Flock's writer of the pair,
     and PoUW's statement rows are its META: the writer's output row and the tile's input row are both `statement_rows`'
     [row-seg, bits] entry for the row, one run of the unit's first output ports.  On each instance the row's words are
     PoUW's row of their elements (`leaves.words_*`), and PoUW's commit string of them under the writer's salt
@@ -156,7 +156,7 @@ def _out_runs(ports: dict) -> tuple[tuple, tuple]:
 
 @pytest.mark.parametrize("m, role, j, row, row_role", OUT_ROWS, ids=[f"{m}-{role}-{row}" for m, role, _j, row, _r in OUT_ROWS])
 def test_a_units_output_rows_are_the_rows_flock_composes(m, role, j, row, row_role):
-    """Output row ``j`` of the unit (`leaves.statement_rows`: its schema and bits) is the row C-Flock's composer gives the
+    """Output row ``j`` of the unit (`leaves.statement_rows`: its schema and bits) is the row Flock's composer gives the
     unit's output ports (`circuit._out_ports`, a bit-row statement with each row-seg run in ``seg_out_rows`` and every
     other output row in ``v2_out_rows``), of the run of output ports `PORTS` names: a row of exactly its words, the ok word
     and the tile digest included."""
@@ -182,7 +182,7 @@ V2_PAIRS = {"row-v2-pair/ok": ("ok", ROLE_X, 1024, "pc4", "row_a"), "row-v2-pair
 @pytest.mark.parametrize("vid", list(ROW_V2_PAIRS))
 def test_a_units_v2_output_row_is_written_as_its_reader_commits_it(vid, tmp_path):
     """A unit's v2 output row of exactly its words, one port's (the 1-word ok row, the 16-word tile digest) or a run's (the
-    registered B̃_j ‖ P_B,j as 256 + 32 + 64 words and fp8-p row as 512 + 64 at k = 1,024), is C-Flock's writer of the
+    registered B̃_j ‖ P_B,j as 256 + 32 + 64 words and fp8-p row as 512 + 64 at k = 1,024), is Flock's writer of the
     exact-v2 pair: the unit's output ports for the row are the pair's, the writer's output row is `statement_rows`' [v2,
     bits] entry for it, and so is the reader's input row (for a registered row, the tile's B row).  On each instance PoUW's
     commit string of the row's words under the writer's salt is the writer's ``b || c`` and the reader's, and instance 0's
@@ -284,7 +284,7 @@ def _unit_toy(m: str, role: str, d: Path, n: int = 2) -> tuple[dict, dict, list,
 
 @pytest.mark.parametrize("m, role", [(m, r) for m in MODS for r in ("row_a", "row_b", "tile")])
 def test_each_unit_composes_its_statement_rows(m, role, tmp_path):
-    """Each of the six units' statement rows compose in C-Flock (`circuit.compose`, over a toy unit with the unit's ports,
+    """Each of the six units' statement rows compose in Flock (`circuit.compose`, over a toy unit with the unit's ports,
     `_unit_toy`): META's ``row_schemas`` and ``out_row_ports`` are `statement_rows`' (a 2 × 1 tile: two A rows, one B row),
     and every row's ``b || c`` in the staged public file is PoUW's commit string (`leaves.commit`) of that row's words in its
     role, under the row's staged salt: the input rows', and each output row's of its run of output words.  The anchors are
@@ -381,13 +381,13 @@ STAGED_TILES = {
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 @pytest.mark.parametrize("m", list(STAGED_TILES))
 def test_a_real_pouw_unit_is_staged_and_composed_on_its_rows(m, tmp_path):
-    """A real PoUW unit's gates (the check's tile unit, its tensor-core chain over a 1 × 1 tile, lowered by C-Flock) are staged
+    """A real PoUW unit's gates (the check's tile unit, its tensor-core chain over a 1 × 1 tile, lowered by Flock) are staged
     end to end by `class_statement.stage_unit`: its input rows are the rows a tile reads, row 0 of each of A's and of B's
     parameters as one PoUW row (`statement_rows`' [schema, bits]: A's row-seg, role X; B's v2, role W), its two output ports
     one exact v2 run (META ``out_row_ports``), its outputs the IR reference's on every instance, its salts
     `circuit.stage_salts`'.  Every input row's ``b || c`` in the public file is PoUW's commit string of its words
     (`leaves.commit`), the output run's is the v2 row's of its words, and the Lean verifier's statement digest is the pinned
-    one of `flock-circuit statement`, seeded and under `FC_COINS=os`.  The row units and the hiding tile wait on pieces C-Flock
+    one of `flock-circuit statement`, seeded and under `FC_COINS=os`.  The row units and the hiding tile wait on pieces Flock
     lacks (PoUW's FP32 square root, E4M3 and E2M1 casts and exact sums of squares) and on the tile digest's Keccak lowering."""
     from verity_flock import class_statement as CS
 

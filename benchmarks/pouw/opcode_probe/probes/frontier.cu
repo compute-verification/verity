@@ -1,5 +1,5 @@
 // The MMA + X joint frontiers that rows.csv's R2 (IMAD), R3 (HFMA2), R4 (ALU) and SHFL rows assumed, re-measured as mix
-// points (EPS1, note:20261017T0310Z-report-eps1-program). Each probe but the alone ones is a joint point: rows.jsonl
+// points. Each probe but the alone ones is a joint point: rows.jsonl
 // holds both classes' rates, and eps1.py turns the points into facets with the 2% noise margin.
 //   imma_ref        16 warps, 8 independent IMMA an iteration
 //   alone_<x>       16 warps, 16 ops of x an iteration on 8 chains (x's own rate)
@@ -158,7 +158,7 @@ MIX(shfl, X_SHFL, 18) MIX(shfl, X_SHFL, 20) MIX(shfl, X_SHFL, 22) MIX(shfl, X_SH
 #define PROBES_OF(x, OP, KIND, ROW) P_MIXES(x, OP, KIND, ROW), P_KNEE(x, OP), P_SPEC(x, OP, 4), P_SPEC(x, OP, 8)
 
 // shfl has no spec probe: in a warp-divergent role ptxas gives SHFL a BRA.DIV fallback placed after the closing clock read
-// that branches back into the loop, so the loop straddles the clock (r20261017-033312-5546).
+// that branches back into the loop, so the loop straddles the clock.
 static const OpProbe PROBES[] = {
     {.name = "imma_ref", .kernel = (const void*)imma_ref, .tpb = TPB, .expect = IMMA "=8", .iters = 4096},
     PROBES_OF(imad, "IMAD", "IMAD", "I"),

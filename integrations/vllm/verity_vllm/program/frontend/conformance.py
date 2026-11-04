@@ -2,11 +2,10 @@
 
     verity-vllm conformance [--out record.json]
 
-One entry per registered definition (`Name_vN`): its status (`exact-model-tested` | `model-untested` |
-`not-yet-established` | `superseded`), the free-text qualification attached to the status, and — for the
-definitions with recorded production divergences or derived Inputs — a structured `qualifications` list. The
-Input-gate qualifications (the `cos_sin_cache` table) are recorded here too, so that no
-summary of the B1/B0 programs can be produced from this record without them.
+One entry per registered definition (`Name_vN`): its status, the label its conformance text starts with (one of
+`verity.ml.circuits.defs.CONFORMANCE`), the text itself, and — for the definitions with recorded production divergences
+or derived Inputs — a structured `qualifications` list. The Input-gate qualifications (the `cos_sin_cache` table) are
+recorded here too, so that no summary of the B1/B0 programs can be produced from this record without them.
 
 `tests/program/test_conformance_record.py` holds the record to the registry, and `tests/program/test_nan_conversion.py`
 holds its NaN entry to the L8 NaN store scan (the data directory that test names) and the measured conversion words.
@@ -17,14 +16,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
+from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, conformance_label
 from verity_vllm.config import option
 from verity.ml.definitions.registry import b1, prims  # noqa: F401  (registration)
-
-STATUSES = ("exact-model-tested", "model-untested", "not-yet-established", "superseded",
-            # kinds of `ref_prims.py` whose semantics IS the evaluator's arithmetic;
-            # "exact" against torch CPU only over the tested domain recorded in `docs/data/ref-prims/`.
-            "reference-defined")
 
 # Structured qualifications on Input gates: which committed leaves are *not* checkpoint tensors and what their
 # registered source is. Counts are the correspondence records' (`corr-*.json`, `input_gate_records.weights`).
@@ -77,21 +71,13 @@ NAN_CANONICALISATION = {
 }
 
 
-def status_of(conformance: str) -> str:
-    head = conformance.split(";")[0].split(":")[0].strip()
-    for s in STATUSES:
-        if head.startswith(s):
-            return s
-    return "not-yet-established"
-
-
 def record() -> dict:
     defs = {}
     for fid, d in sorted(REGISTRY.defs.items()):
         if getattr(d, "family", None) == "Const":
             continue
         entry = {"kind": "primitive" if isinstance(d, PrimitiveDefinition) else "composite",
-                 "status": status_of(d.conformance), "conformance": d.conformance}
+                 "status": conformance_label(d.conformance, fid), "conformance": d.conformance}
         if isinstance(d, CompositeDefinition):
             entry["statics"] = list(d.statics)
         if fid in DIVERGENCES:

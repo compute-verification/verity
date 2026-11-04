@@ -68,7 +68,7 @@ def DampenerWindows : Prop :=
 
 /-- **The compute dampener over NCI's thread bound.** As `DampenerWindows`, with the declared computation's bound proved:
 the declared circuit `d` contains the reference training circuit `c` (`Mc`), threaded by `T` and with incompressible
-weights, and complies with NCI at `(Γ, α)`, with its baseline registered (`BaselineRegistered`), so its counted multiplications `|T.M|` number at most `size(d)/ρ_T`
+weights, and complies with NCI at `(Γ, α)`, with its θ registered (`ThetaRegistered`), so its counted multiplications `|T.M|` number at most `size(d)/ρ_T`
 (`Nci.Guarantees.ThreadedThrottled`), `ρ_T = b_a/(α Λ(αΓ))`, and `size(d) ≤ C`. The windows' bound is stated with
 `T`'s `Λ = T.bound`, as the memory cap over threads states it. Then `η ≤ s + min(r, μ (1 + L/H)) + ν_T + χ` with
 `ν_T = (1 − s) · 2/(κ ρ_T)` and `μ = 2 reuse · R α/(κ d b_w b_a)` at `T`'s reuse. -/
@@ -76,7 +76,7 @@ def DampenerThreaded : Prop :=
   ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n Γ : ℕ) (F H L R α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (dd e : ℕ)
     (Mc : Containment c.D d.D),
     0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →
-    Complies Γ α d → Assumptions.BaselineRegistered c d (PartialContainment.ofContainment Mc) →
+    Complies Γ α d → Assumptions.ThetaRegistered c d (PartialContainment.ofContainment Mc) →
     T.Threaded Γ (α * Γ) dd e →
     Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
     M ≤ Mu + Mr + T.M.card + Mx →
@@ -94,7 +94,7 @@ def DampenerThreadedSlots : Prop :=
   ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n Γ : ℕ) (F H L R α b_w b_a : ℝ) (c d : Declaration) (T : Threading c)
     (σ : T.Slots) (dd e : ℕ) (Mc : Containment c.D d.D),
     0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →
-    Complies Γ α d → Assumptions.BaselineRegistered c d (PartialContainment.ofContainment Mc) →
+    Complies Γ α d → Assumptions.ThetaRegistered c d (PartialContainment.ofContainment Mc) →
     T.Threaded Γ (α * Γ) dd e →
     Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
     M ≤ Mu + Mr + T.M.card + Mx →

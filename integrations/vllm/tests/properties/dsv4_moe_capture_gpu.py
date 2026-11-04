@@ -271,7 +271,7 @@ def clamp_sweep(d: int) -> np.ndarray:
 
 
 def clamp_rows(seed: int, n: int, d: int, sweep: bool) -> dict[str, np.ndarray]:
-    """n rows of 2d bf16 words, row r's gate and up halves of kind `CLAMP_KINDS[r % 5]` each (the two drawn independently), then
+    """n rows of 2d bf16 words, row r's gate and up halves of kind `CLAMP_KINDS[r % 5]` each (the two sampled independently), then
     `clamp_sweep(d)` when asked."""
     rng = np.random.default_rng(seed)
     kinds = np.arange(n) % (len(CLAMP_KINDS) - 1)

@@ -38,7 +38,7 @@ VLLM_DIR = Path(__file__).resolve().parents[2]
 #: `build_workload/` (the workload Program GP-01 composed)
 BUILD_101 = "art:2d65d5d7bdc21af3df01c041272e5a72b40a86bc74cc09075c7e726cc01f1fd0"
 #: the workload's manifest command (`row_stages.required_manifest`): every tap policy on, the word check at its default 16/32
-MANIFEST_POLICY = ("--norm-scales", "--router-softmax", "--vocab-range", "--guarded-max")
+MANIFEST_POLICY = ("--norm-scales", "--router-softmax", "--vocab-range")
 ROW_101 = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager"
 
 

@@ -1,10 +1,11 @@
 import PouwCommit.Draws
 import SampledProofs.Challenger
+import Identity.Domains
 
 /-!
 # A live window's round coins (`window.py`, "Live windows")
 
-PoUW's live window is the proof service's challenger's first client (`SampledProofs.Challenger`). The check item's
+PoUW's live window is the proof system's challenger's first client (`SampledProofs.Challenger`). The check item's
 optional `coins` is the window's coin mode (`mode`, Compose's `CoinMode`), seeded when the item names none. A live
 epoch's coins are the layout `liveFamilies R` under `LIVE_SCHEME`: its salt coin, its draw coin and `R` round coins
 (`pouw/round`, rounds numbered from 0), all committed before the epoch. Round `r`'s coin opens once, after the verifier
@@ -19,11 +20,11 @@ namespace PouwWindow
 open SampledProofs.Challenger (LiveCommitment LiveOpening)
 
 def COINS : String := "coins"
-def LIVE_SCHEME : String := "verity/pouw/epoch-coins/live/v1"
+def LIVE_SCHEME : String := Domains.POUW_EPOCH_COINS_LIVE
 def SALT : String := "pouw/salt"
 def DRAW : String := "pouw/draw"
 def ROUND : String := "pouw/round"
-def ROUND_NOISE_DOMAIN : String := "verity/pouw/round-noise/v1"
+def ROUND_NOISE_DOMAIN : String := Domains.POUW_ROUND_NOISE
 
 /-- A window's coin mode (Compose's `CoinMode`). -/
 inductive CoinMode where

@@ -1,12 +1,12 @@
-// sm_89 (L40S) uniform-datapath and IMAD-form probes (EPS1 ADA r2, note:20261017T0605Z-draft-eps1-ada): what a program
-// gains by moving the fold's work onto a unit the honest step leaves idle. Built as FACET-BREAK's uniform_up.cu is
+// sm_89 (L40S) uniform-datapath and IMAD-form probes: what a program
+// gains by moving the fold's work onto a unit the honest step leaves idle. Built as facet_break's uniform_up.cu is
 // (16 warps, 4 a SMSP, one block a SM; the chains loop-carried from a parameter into the sink), with the honest step at
 // L = 16 (8 IMMA.16816 and duo on each accumulator). ptxas 13.0.88 keeps a warp-uniform chain on the uniform datapath
 // only in a loop with MMAs, so "alone" keeps the MMAs with their results unread (ptxas deletes them after placing the
 // chain). The gate pins every loop opcode, vector and uniform alike, so a chain that lands on lanes refuses.
 //   u<F>_<K><S>   F: z alone (the MMAs unread); t 8 IMMA.16816 a step, accumulators carried to the sink (the tensor
 //                 pipe saturated); h honest16 (the MMAs and duo on each accumulator: the ALU pipe binds); g h and 64
-//                 FFMA on the accumulators' bits (FACET-BREAK's issue-nearest setting)
+//                 FFMA on the accumulators' bits (facet_break's issue-nearest setting)
 //                 S, the uniform step on each of four chain pairs: x ULOP3; a UIADD3 + ULOP3; s USHF + ULOP3;
 //                 p UPRMT + ULOP3; m UIMAD + ULOP3
 //   i<F>_<op>[_N] the IMAD forms of the fold's ALU work: op imad (mad.lo, a register multiplier), hi (mad.hi with its
@@ -63,7 +63,7 @@ struct UChains {
 
 enum { F_Z, F_T, F_H, F_G };
 
-// FACET-BREAK's issue-nearest setting: 64 FFMA a warp-iteration on the honest step's accumulator bits (on sm_89
+// facet_break's issue-nearest setting: 64 FFMA a warp-iteration on the honest step's accumulator bits (on sm_89
 // FFMA beside the fold's ALU work, not issue, holds it: 252 SMSP-cycles a warp-iteration for 171 instructions)
 struct Feed {
   float f[8], g;

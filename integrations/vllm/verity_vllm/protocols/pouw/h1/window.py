@@ -1,4 +1,4 @@
-"""H1's, ncp-v2's and Pearl-C's session on the proof service's challenger on its auditor host
+"""H1's, ncp-v2's and Pearl-C's session on the proof system's challenger on its auditor host
 (`verity.core.protocols.sampled_proofs.remote`), as the serving process opens and closes it; `pouw_h1_challenger` is
 the verifier's check of what it served.
 
@@ -193,7 +193,7 @@ def session(entry: str, at: str, steps: int, root: bytes,
 
 
 def gate_of(call: Callable[..., Mapping[str, Any]]) -> Gate:
-    """The `Gate` of infra's gate as words (`commit_coins.Gate.call`): ``open --session S --root R``, its ``commitment``
+    """The `Gate` of infra's gate as words (`commit_coins.ChallengerGate.call`): ``open --session S --root R``, its ``commitment``
     from ``status S`` when the open answers none, and only the fields a session's answer has (`pouw_h1_challenger.session_of`)."""
     def gate(sid: str, root: str) -> dict[str, Any]:
         answer = dict(call("open", "--session", sid, "--root", root))
@@ -311,7 +311,7 @@ class Window:
         self.reserved, self.gate, self.client = dict(reserved), gate, None
 
     def open(self, requests_root: bytes) -> tuple[bytes, LiveRecord, LiveRecord, dict[str, Any]]:
-        """The epoch's salt (`audit.salt_of` over the weights' root), the round and draw coins' `LiveRecord`s and what
+        """The epoch's salt (`audit.salt_of` over the weights' root), the round and sampling coins' `LiveRecord`s and what
         the commitment records of the session (its ``coins``, ``round_coins``, ``salt_opening`` and the gate's answer
         without its secret, ``session``). Refused (ValueError, the session closed when it was reached): an answer
         that isn't the gate's open of the reserved session on the window's open root, or a challenger off it
