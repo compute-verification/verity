@@ -61,9 +61,42 @@ def test_case_v2_names_the_proofs_files_in_place_of_verdicts(tmp_path, RP):
                                              s / "rep-0.bin", table)]
 
 
+EV = {"key": {"W": 4, "H": 5, "public": "aa" * 32}, "ledger": ["{}"], "main": ["cc" * 20], "pins": ["{}"],
+      "segment": {"label": "draw", "start": 1, "after": "dd" * 64, "openings": [{"coin": "ee" * 64}]},
+      "session": {"close": {}, "hellos": [], "log": [], "record": {}}}
+
+
+def test_the_draws_release_names_the_challenger_and_carries_the_coins():
+    """`drawn_by`: the params name the challenger's key under the draw's family and the window root, and the evidence
+    carries the coins in `Challenger.drawCoins`'s form, the evidence less its key; no evidence, no release."""
+    got = a5.drawn_by(EV, "ab" * 64)
+    assert got == {"params": {"challenger": {"key": EV["key"], "label": a5.AC.FAMILY}, "window_root": "ab" * 64},
+                   "evidence": {"coins": {k: v for k, v in EV.items() if k != "key"}}}
+    assert a5.drawn_by(None, "ab" * 64) is None
+
+
+def test_case_v2_with_the_release_names_the_challenger_v2_requires(tmp_path, RP):
+    (tmp_path / "circuit.txt").write_bytes(b"circuit")
+    (tmp_path / "pub-4.bin").write_bytes(b"public")
+    s = tmp_path / "sessions" / "a"
+    s.mkdir(parents=True)
+    (s / "session.json").write_bytes(b"{}")
+    evidence = {"draw": {"units": [1]}, "sessions": [sha(s / "session.json")], "verdicts": {}}
+    case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {"delta": "1/100"}}
+    proof = PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,))
+    drawn = a5.drawn_by(EV, "ab" * 64)
+    got = a5.case_v2(case, evidence["sessions"], proof=proof, circuit="cc" * 64, registered=None, tables=[], drawn=drawn)
+    assert got["params"] == {"delta": "1/100", "challenger": drawn["params"]["challenger"], "window_root": "ab" * 64,
+                             "proofs": {"circuit": "cc" * 64, "registered": None}}
+    assert json.loads(bytes.fromhex(got["evidence"]))["coins"] == drawn["evidence"]["coins"]
+    none = a5.case_v2(case, evidence["sessions"], proof=proof, circuit="cc" * 64, registered=None, tables=[])
+    assert "challenger" not in none["params"] and "coins" not in json.loads(bytes.fromhex(none["evidence"]))
+
+
 def test_v2_says_why_an_audit_has_no_case():
     assert "plain" in a5.v2_proof([{}], zk=False)
     assert "drew 2 members" in a5.v2_proof([{}, {}], zk=True)
+    assert "NO_CHALLENGER" in a5.v2_proof([{}], zk=True)
 
 
 def test_a_v2_refusal_is_written_beside_the_v1_case(tmp_path, monkeypatch, RP):

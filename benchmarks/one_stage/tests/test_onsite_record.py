@@ -920,7 +920,7 @@ def test_the_record_lists_the_re_proof_inputs_and_which_of_outs_the_run_wrote(tm
     got = OR.record(out)["reproof"]
     assert got["kept"] == OR.REPROOF_KEPT and list(got["inputs"]) == list(OR.REPROOF)
     serve = {k for k, v in got["inputs"].items() if v["in"] == "serve dir"}
-    assert {"values", "openings", "draw", "coins", "advice", "weights"} <= serve
+    assert {"values", "openings", "draw", "coins", "release", "advice", "weights"} <= serve
     assert not any("present" in got["inputs"][k] for k in serve) and not SV.NAMED.search(json.dumps(got))
     written = {OR.REGISTRATION, str(OR.CASE), "record/verdicts.json"}
     assert {v["path"]: v["present"] for v in got["inputs"].values() if v["in"] == "OUT"} == {

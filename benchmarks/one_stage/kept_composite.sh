@@ -10,7 +10,8 @@
 #    components) from the serve dir, each MISSING with why where the run holds no case of it. With pieces/pouw/ kept,
 #    the period is built from it, H1_KEY_SHA512, main.txt (or MAIN_FILE) and the drawn calls' statements and live
 #    evidence (POUW_STATEMENTS, POUW_LIVE, files on this node), its REFERENCE line credit's own verdict;
-#  - sampled proofs v2's: v2_case.py on the kept window, with its own Lean answer;
+#  - sampled proofs v2's: v2_case.py on the kept window, with its own Lean answer, under PP_CHALLENGER_KEY, the auditor's
+#    record of its challenger's key (challenger-key/v1; unset, the case names no challenger, which v2 refuses);
 #  - every kept piece directory pieces/NAME/ holding a case (case.json, or NAME.case.json as the wipe writes it) beside its
 #    own answer.json (the wipe's, PoUS's once served_case.sh has written its case), entered as kept, onsite only.
 # composite.py then composes and checks each product; $OUT/remote and $OUT/onsite get only its public output (verdict
@@ -63,7 +64,7 @@ REMOTE_CASES=(--cases "$P/remote")
 "$PY" -c 'import sys; sys.path.insert(0, "benchmarks/one_stage"); import composite as C
 sys.exit(0 if "verity/pouw/period/v1" in C.COMPONENTS["remote"] else 1)' && REMOTE_CASES+=(--cases "$P/period")
 log "$PY" benchmarks/one_stage/v2_case.py --window "$SRC/sampled-proofs/served/window" --out "$P/v2" --scratch "$W/rebuild" \
-  --exe "$V2"
+  ${PP_CHALLENGER_KEY:+--challenger-key "$PP_CHALLENGER_KEY"} --exe "$V2"
 for d in "$SRC"/pieces/*/; do
   name=$(basename "$d")
   [ "$name" = pouw ] && continue

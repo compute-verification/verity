@@ -1,13 +1,17 @@
 """Sampled proofs v2's case (`verity/sampled-proofs/one-stage/v2`) of a served window from the files its run kept, for
 `composite.py --cases`, and with ``--exe`` its own Lean answer on it.
 
-    v2_case.py --window DIR --out DIR --scratch DIR [--exe PATH]
+    v2_case.py --window DIR --out DIR --scratch DIR [--challenger-key RECORD] [--exe PATH]
 
 ``--window`` is the window directory `prove_path/run.sh` keeps (``out/sampled-proofs/served/window``): its v1 case
 (``case.json``), the verifier's partition (``partition.json``), ``m0/`` with the public file, ``compose.log`` and the
-circuit file, and ``session-m0/sessions/*/`` with each session's ``session.json`` and ``*.bin``. The case is a5.py's
-`case_v2` of those: v1's params with the partition and ``proofs: {circuit, registered: null}``, v1's commitment, the
-evidence with the sessions' proofs, and the blobs' paths.
+circuit file, ``session-m0/sessions/*/`` with each session's ``session.json`` and ``*.bin``, and the challenger's release
+of the draw's coins (``release.json``, `a5.RELEASE`) where the audit drew on a challenger's session. The case is a5.py's
+`case_v2` of those: v1's params with the partition, ``proofs: {circuit, registered: null}``, the challenger and the
+release's window root, v1's commitment, the evidence with the sessions' proofs and the release's coins, and the blobs'
+paths. The challenger's key is the auditor's own record's (``--challenger-key``, challenger-key/v1, `Ch.key_of_record`),
+never the one the release names (`drawn_of`): a release naming another key is refused, and leaves only ``missing.json``.
+A window with no release, or no record given, names no challenger, which v2 refuses (`OneStageZk.NO_CHALLENGER`).
 
 A run that didn't keep the circuit file gets it rebuilt in ``--scratch`` by the command its ``m0/compose.log`` records
 (`compose_circuit.py` over the verifier's synthetic input set, `run.sh`'s ``verity_numerical.bench.generate --n 4 --seed
@@ -16,9 +20,10 @@ anyway. The case goes to ``--out`` private as `composite.py` reads it (0700, its
 ``params.json``, ``commitment.bin``, ``evidence.json`` and, with ``--exe`` (``sampled-proofs-one-stage-zk``),
 ``answer.json``. A blob with no file leaves only ``missing.json`` saying why, so `composite.py` leaves the protocol out.
 
-Prints one ``V2CASE`` line (the pin, where the circuit file came from, the sessions and blobs) and, with ``--exe``, one
-``V2`` line with the answer's verdict only: the whole answer is witness-adjacent (its query is the partition's digest) and
-stays in ``--out``. Exits as the check does (0 accept, 1 reject, 2 undecided), 2 for a missing case, 0 without ``--exe``.
+Prints one ``V2CASE`` line (the pin, where the circuit file came from, which challenger it names or why none, the
+sessions and blobs; or why it was refused) and, with ``--exe``, one ``V2`` line with the answer's verdict only: the whole
+answer is witness-adjacent (its query is the partition's digest) and stays in ``--out``. Exits as the check does (0
+accept, 1 reject, 2 undecided), 2 for a missing or refused case, 0 without ``--exe``.
 """
 from __future__ import annotations
 
@@ -34,11 +39,16 @@ from pathlib import Path
 import a5
 from composite import canonical, write_private
 
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
 ID = "verity/sampled-proofs/one-stage/v2"
 TREE = Path(__file__).resolve().parents[2]
 CASE_FILES = ("case.json", "params.json", "commitment.bin", "evidence.json", "answer.json")
+
+
+class Refused(ValueError):
+    """The window's kept files make no case: why."""
 
 
 def compose_command(log: str) -> dict:
@@ -70,8 +80,30 @@ def rebuild(c: dict, scratch: Path) -> tuple[Path | None, str]:
     return f, f"rebuilt from compose.log's command, its SHA-512 the pin ({f.stat().st_size} bytes)"
 
 
-def case(window: Path, scratch: Path) -> tuple[dict, str, int]:
-    """`case_v2` of `window`'s kept files: the case, where its circuit file came from, and its sessions' count."""
+def drawn_of(window: Path, key: Ch.ChallengerKey | None) -> tuple[dict | None, str]:
+    """The draw `a5.case_v2` names (`a5.drawn_by`) from `window`'s kept release (`a5.RELEASE`), and which challenger:
+    the release's coins and window root under `key`, the auditor's own record's. The key the release names is the served
+    node's to write, and with it the prover would name its own key and sign its own coins, so it is never read into the
+    case, and a release naming another key than `key` is refused (`Refused`). With no release or no `key`, None."""
+    release = window / a5.RELEASE
+    if not release.is_file():
+        return None, "none: the window kept no release"
+    if key is None:
+        return None, "none: no --challenger-key, the auditor's record of its challenger's key"
+    try:
+        r = json.loads(release.read_text())
+        named, coins, root = r["params"]["challenger"]["key"], dict(r["evidence"]["coins"]), r["params"]["window_root"]
+    except (KeyError, TypeError, ValueError):
+        raise Refused(f"the kept {a5.RELEASE} is not a5.drawn_by's form") from None
+    if named != key.to_json():
+        raise Refused(f"the kept {a5.RELEASE} names another challenger key than the auditor's record's")
+    return a5.drawn_by({**coins, "key": key.to_json()}, root), "the auditor's record's key"
+
+
+def case(window: Path, scratch: Path, key: Ch.ChallengerKey | None = None) -> tuple[dict, str, int, str]:
+    """`case_v2` of `window`'s kept files under the auditor's challenger key `key` (`drawn_of`): the case, where its
+    circuit file came from, its sessions' count and which challenger it names."""
+    drawn, challenger = drawn_of(window, key)
     c = compose_command((window / "m0/compose.log").read_text())
     v1 = json.loads((window / "case.json").read_text())
     v1["params"]["partition"] = json.loads((window / "partition.json").read_text())
@@ -82,19 +114,26 @@ def case(window: Path, scratch: Path) -> tuple[dict, str, int]:
     if not circuit.is_file():
         got, how = rebuild(c, scratch)
         circuit = got or circuit
-    v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), circuit=c["pin"], registered=None, tables=[])
-    return v2, how, len(sessions)
+    v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), circuit=c["pin"], registered=None, tables=[],
+                    drawn=drawn)
+    return v2, how, len(sessions), challenger
+
+
+def missing(out: Path, why: str) -> None:
+    """Only ``missing.json`` in `out`, saying `why`, so `composite.py` leaves the protocol out."""
+    for f in (*CASE_FILES, "missing.json"):
+        (out / f).unlink(missing_ok=True)
+    write_private(out, {"missing.json": (json.dumps({"protocol": ID, "why": why}) + "\n").encode()})
 
 
 def write(out: Path, v2: dict, how: str) -> list[str]:
     """The case in `out`, or only ``missing.json`` when a blob has no file; the blobs with none."""
-    for f in (*CASE_FILES, "missing.json"):
-        (out / f).unlink(missing_ok=True)
     gone = [b for b in v2["blobs"] if not Path(b).is_file()]
     if gone:
-        why = f"no file for {', '.join(gone)} (circuit: {how})"
-        write_private(out, {"missing.json": (json.dumps({"protocol": ID, "why": why}) + "\n").encode()})
+        missing(out, f"no file for {', '.join(gone)} (circuit: {how})")
         return gone
+    for f in (*CASE_FILES, "missing.json"):
+        (out / f).unlink(missing_ok=True)
     write_private(out, {"case.json": json.dumps(v2, sort_keys=True).encode(), "params.json": canonical(v2["params"]),
                         "commitment.bin": bytes.fromhex(v2["commitment"]),
                         "evidence.json": bytes.fromhex(v2["evidence"])})
@@ -106,12 +145,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--window", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--scratch", type=Path, required=True, help="where a circuit file the run didn't keep is rebuilt")
+    ap.add_argument("--challenger-key", type=Path, metavar="RECORD",
+                    help="the auditor's record of its challenger's key (challenger-key/v1), the case's only key")
     ap.add_argument("--exe", help="sampled-proofs-one-stage-zk, for the case's own Lean answer")
     a = ap.parse_args(argv)
-    v2, how, n = case(a.window, a.scratch)
+    try:
+        key = Ch.key_of_record(json.loads(a.challenger_key.read_text())) if a.challenger_key else None
+    except (OSError, ValueError) as e:
+        ap.error(f"--challenger-key: {e}")
+    try:
+        v2, how, n, challenger = case(a.window, a.scratch, key)
+    except Refused as e:
+        missing(a.out, f"refused: {e}")
+        print("V2CASE " + json.dumps({"refused": str(e)}), flush=True)
+        return 2
     gone = write(a.out, v2, how)
-    print("V2CASE " + json.dumps({"circuit": v2["params"]["proofs"]["circuit"], "circuit_file": how, "sessions": n,
-                                  "blobs": len(v2["blobs"]), "missing": gone}), flush=True)
+    print("V2CASE " + json.dumps({"circuit": v2["params"]["proofs"]["circuit"], "circuit_file": how,
+                                  "challenger": challenger, "sessions": n, "blobs": len(v2["blobs"]), "missing": gone}),
+          flush=True)
     if gone:
         return 2
     if not a.exe:

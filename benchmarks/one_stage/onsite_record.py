@@ -102,13 +102,14 @@ one execution phase, proved only where m is 1.
 
 **Re-proof inputs** (``reproof``, `REPROOF`): what a later re-proof of the run's sampled units needs, each wire a sampled
 unit reads then proved inside its session: the committed values and their openings for every sampled unit and the units
-that write what it reads, the registration, the draw and its receipt, and the public files, each by where it is (the
-serve dir's by their paths there, naming no window) and what it holds, with whether the run wrote each of OUT's and how
-each must be kept (``kept``, `REPROOF_KEPT`). The serve dir's are witness, kept off OUT and custody in a copy off the
-served node (``--reproof-copy`` NODE:/PATH, ``--reproof-listing``, a listing of it kept off OUT): ``copy`` names its node
-and path, and each serve-dir input says whether the listing holds each file its path names and at least one file under
-each directory it names, never their bytes or digests; with no copy given, ``copy`` is missing with why. Under H1_TIE
-(``--h1-tie``) the circuit is the verifier's record reading H1's tables, the one V3c holds the tied commit to.
+that write what it reads, the registration, the draw, its receipt and the challenger's release of its coins, and the
+public files, each by where it is (the serve dir's by their paths there, naming no window) and what it holds, with whether
+the run wrote each of OUT's and how each must be kept (``kept``, `REPROOF_KEPT`). The serve dir's are witness, kept off
+OUT and custody in a copy off the served node (``--reproof-copy`` NODE:/PATH, ``--reproof-listing``, a listing of it kept
+off OUT): ``copy`` names its node and path, and each serve-dir input says whether the listing holds each file its path
+names and at least one file under each directory it names, never their bytes or digests; with no copy given, ``copy`` is
+missing with why. Under H1_TIE (``--h1-tie``) the circuit is the verifier's record reading H1's tables, the one V3c
+holds the tied commit to.
 
 The record's counts and indices are the certification period's (m and each phase j), public in the Lean answer's
 profile; it names no Commit window, whose count `publish` holds.
@@ -484,6 +485,10 @@ REPROOF = {
     "coins": ("serve dir", "v3c-w<K>-<class>/audit/challenger/",
               "the challenger session the draw read its coins from: a local development one unless the run's COINS "
               "line names the live challenger (`coins`)"),
+    "release": ("serve dir", "v3c-w<K>-<class>/audit/window/release.json",
+                "the challenger's release of the draw's coins (`a5.drawn_by`: its key, the window root and the coins, "
+                "settled), whose coins and window root a later v2 case of the drawn units reads under the auditor's own "
+                "key record, so it reads the same draw"),
     "advice": ("serve dir", "advice/w<K>/",
                "the advice's registration and its opening (private/advice.bin), which the window circuit reads under its "
                "hiding root"),
