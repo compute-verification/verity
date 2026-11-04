@@ -1301,8 +1301,9 @@ def chargeOf (p : Params) (audits windows : Array Json) (i : Nat) : Nat :=
   let window := fun (prog root : String) => Json.mkObj [("roots", Json.arr #[
     Json.mkObj [("port", progName 0), ("root", prog), ("domain", "q")],
     Json.mkObj [("port", stateName), ("root", root), ("domain", "d")]])]
-  let p : Params := ⟨#[{ free := 9, steps := 0, program := "", units := 1, bits := 0, entries := #[], record := none,
-    stateFree := 4 }], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none,
+  let a : Audit :=
+    { free := 9, steps := 0, program := "", units := 1, bits := 0, entries := #[], record := none, stateFree := 4 }
+  let p : Params := ⟨#[a], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none,
     .rows ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩ .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
   stateHeldIn #[audit [st "s"]] #[window "p" "s"] 0 &&
     stateHeldIn #[audit [st "s"]] #[window "p" "s", window "p" "s"] 0 &&
