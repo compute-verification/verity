@@ -14,9 +14,9 @@ public import Proofs.Flock.SamplingGeneric.Fails
   failed extraction at an accepted run is a failed session or a collision among the extraction's SHA-512 calls; failed
   sessions are rare where the sample is likely to hit an incorrect proof block (`Sessions.draws`). From
   `Compiled.KS_of_sessionKS`, it needs only that split.
-* `SessionKSOf` (`Sampling.SessionKS_of`, generic): `A`'s `KS`, its rounds its shape's and the contract give
-  `SessionKS`: at each session `A`'s knowledge soundness at the prover `Sessions.runs` shows, a session's fork being the
-  compiled verifier's at one of its `k(x)` rounds.
+* `SessionKSOf` (`Sampling.SessionKS_of`, generic): `A`'s `KS` and the contract give `SessionKS`: at each session
+  `A`'s knowledge soundness at the prover `Sessions.runs` shows, a session's fork being the compiled verifier's at one
+  of its `k(x)` rounds.
 
 `compilerKS_of` composes them.
 -/
@@ -34,13 +34,13 @@ def KSOf : Prop :=
     (H : Msg → Msg), L.commit.Binds H → L.Sessions H → L.SessionKS H → L.KS H
 
 /-- **The sessions' KS from the proof system's** (`Sampling.SessionKS_of`, generic): over a knowledge-sound proof
-system whose rounds are its shape's, a compiled sampled verifier that meets the contract has knowledge-sound sessions. -/
+system, a compiled sampled verifier that meets the contract has knowledge-sound sessions. -/
 def SessionKSOf : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
-    (H : Msg → Msg), A.WF → A.KS H → L.Sessions H → L.SessionKS H
+    (H : Msg → Msg), A.KS H → L.Sessions H → L.SessionKS H
 
 theorem compilerKS_of (hks : KSOf) (hsess : SessionKSOf) : CompilerKS := by
-  intro Coin _ _ _ A L H hwf hA hB hS
-  exact hks Coin A L H hB hS (hsess Coin A L H hwf hA hS)
+  intro Coin _ _ _ A L H hA hB hS
+  exact hks Coin A L H hB hS (hsess Coin A L H hA hS)
 
 end Claims.SamplingGeneric

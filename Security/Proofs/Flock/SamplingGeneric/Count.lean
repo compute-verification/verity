@@ -45,7 +45,7 @@ theorem ksCount_of_ks {H : Msg → Msg} {L : Compiled Coin A} (h : L.KS H) : L.K
 end Compiled
 
 theorem compilerKSCount_of (h : CompilerKS) : CompilerKSCount := by
-  intro Coin _ _ _ A L H hwf hA hB hS
-  exact Compiled.ksCount_of_ks (h Coin A L H hwf hA hB hS)
+  intro Coin _ _ _ A L H hA hB hS
+  exact Compiled.ksCount_of_ks (h Coin A L H hA hB hS)
 
 end Claims.SamplingGeneric

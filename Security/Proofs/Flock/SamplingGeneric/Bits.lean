@@ -64,8 +64,8 @@ def ExpOwnOf : Prop :=
         Sampling.ExtractOwnLe H L.E (fun x => L.k x ^ 2 * L.nPU x * (L.openCalls x + L.hs h x))
 
 theorem compilerBits_of (hks : CompilerKS) (heo : ExpOwnOf) : CompilerBits := by
-  intro Coin _ _ _ A L H e h hwf hA hB hS hexp hown hopen
+  intro Coin _ _ _ A L H e h hA hB hS hexp hown hopen
   obtain ⟨hr, ho⟩ := heo Coin A L H e h hS hexp hown hopen
-  exact Compiled.bits_of_ks (hks Coin A L H hwf hA hB hS) hr ho
+  exact Compiled.bits_of_ks (hks Coin A L H hA hB hS) hr ho
 
 end Claims.SamplingGeneric

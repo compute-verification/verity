@@ -5,7 +5,7 @@ public import Definitions.Claims.Recursion
 public import Definitions.Claims.ZKOut
 
 /-!
-# Claims: the sampled audit as a compiler, generic in the proof system for proof blocks (a draft, before it freezes)
+# Claims: the sampled audit as a compiler, generic in the proof system for proof blocks
 
 `Claims.Sampling` with its Flock-specific parts as parameters: the proof system the sessions of the sampled proof blocks
 run (`Arg`, for Flock `Sampling.Deploy.flock`) and its extractor (for Flock `E^rep`, `Sampling.unitExt`). Everything
@@ -17,27 +17,29 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
 
 1. **The proof system for proof blocks** (`Arg`): a public-coin verifier over byte strings, its statements' public shape
    (`Sh`, `shape`: what its rounds and its extractor's coins read) and the rounds a shape fixes, its witnesses and
-   relation, and its extractor: coins per shape (`EC`), a rerun program at the judged run's coins (`ext`), and its
-   errors per statement (`κ`, `γ`). It is knowledge sound in
-   `Claims.KS`'s form (`Arg.KS`); its cost is reruns (`Arg.RerunsLe`, `Arg.RerunsExpLe`) and its own SHA-512 calls
-   (`Arg.OwnLe`), both counted by `RP.eval`. Its zero knowledge is the claims core's per public outcome (`ZkArg.ZK`,
-   `Claims.ZKOut`), on its sessions' rounds (`kz`) and one tape type: at each outcome (each verdict, where a session
-   stopped), the honest view's probability of the outcome and an event is at most the simulator's, given the outcome,
-   plus an error that reads the statement, the witness, the verifier and the outcome.
+   relation, its extractor, and its errors per statement (`κ`, `γ`). The extractor is `E^rep` (`Claims.ERep`) at the
+   proof system's waits, truncation and accepted reruns, its openings read off each accepted rerun's view, and its
+   assemble step, a counted program (its candidate and its steps, as `Flock.Deploy.dec`): its coins are per shape
+   (`EC`), and its witness is what that step makes of the reruns' views. It is knowledge sound in `Claims.KS`'s form
+   (`Arg.KS`); its cost is reruns (`Arg.RerunsLe`, `Arg.RerunsExpLe`) and its own SHA-512 calls (`Arg.OwnLe`), both
+   counted by `RP.eval`. Its zero knowledge is the claims core's per public outcome (`ZkArg.ZK`, `Claims.ZKOut`), on its
+   sessions' rounds (`kz`) and one tape type: at each outcome (each verdict, where a session stopped), the honest view's
+   probability of the outcome and an event is at most the simulator's, given the outcome, plus an error that reads the
+   statement, the witness, the verifier and the outcome.
 2. **The compiled sampled verifier** (`Compiled`, `Sampling.Deploy` without Flock): its verifier, parser, scope check,
    partition and commitment; the second stage (`stage2`: the sample and the sessions); the sampled proof blocks
    (`checked`); each one's public shape (`sh`) and the bounds on its session's errors (`κb`, `γb`), its session's
-   rounds (`rounds`, whose order embedding `emb` of `A`'s
-   rounds is defined, from which `coinsOf` reads a session's coins and `place` replaces them), and its session
-   (`session`: its statement and view); the roots a run shows for a proof block's interior values (`iroots`); and what a session's
-   witness reveals (`reveal`), each opening checked at most `openCalls` SHA-512 calls.
+   rounds (`rounds`, whose order embedding `emb` of `A`'s rounds is defined, from which `coinsOf` reads a session's
+   coins and `place` replaces them), and its session (`session`: its statement and view); the roots a run shows for a
+   proof block's interior values (`iroots`); and what a session's witness reveals (`reveal`), each opening checked at
+   most `openCalls` SHA-512 calls.
 3. **The extractor** (`Compiled.E`): `Sampling.E` with each sampled proof block's extraction `Arg`'s extractor at its
    session (`Compiled.unitExt`), each rerun the judged run's coins with the session's rounds replaced (`place`), seen as
    the session's view, then what its witness reveals that passes its opening check. Its coins are per slot of the
    sample (`SlotEC`), as `Sampling.E`'s are, so a proof block at two slots is extracted twice, on independent coins
-   (`runExt`, a run's extractions). Every SHA-512 call of the
-   extraction is an `RP.hash` (the openings it checks, `Arg`'s own) or a rerun's, so `Bext`'s cost is counted, and the
-   extractor is fixed before `H`.
+   (`runExt`, a run's extractions). Every SHA-512 call of the extraction is an `RP.hash` (the openings it checks) or a
+   rerun's, so `Bext`'s cost counts them all. The statements hold at every `A` and `H`, so that the extracted trace is
+   the prover's rests on `A`'s assemble step being the program its count describes (at Flock, the deployed decoder).
 4. **The errors**: `κ_δ = c²·(δ + κ_s) + (1 + c)·(2k/K + e^{−k/8})`, `Sampling.κ` with Flock's `κ_F` replaced by the
    largest of the proof blocks' bounds on `Arg`'s `κ` (`κs`, at `κb`); `γ = c⁴·k(x)·γ_s`, with `γ_s` the largest of
    their bounds on `Arg`'s `γ` per round (`γb` over the shape's rounds; a session's fork finder is the compiled
@@ -46,30 +48,31 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    `Claims.Sampling`'s proofs take at Flock: the second stage draws the sample by the design (`draws`), in at most
    `n_PU` slots (`slots`); the verifier refuses what is out of scope (`refuses`); the interior roots precede the second
    stage (`interior`); the sample precedes its sessions (`fixed`); each sampled proof block's session, at the block's
-   shape and within its error bounds, decides the run and is a run of a prover against `Arg`'s verifier on the
-   session's coins (`runs`); and a witness in `Arg`'s relation reveals openings under which its proof block is correct
-   (`opens`).
+   shape and within its error bounds, accepts whenever the run does and is a run of a prover against `Arg`'s verifier
+   on the session's coins (`runs`); and a witness in `Arg`'s relation reveals openings under which its proof block is
+   correct (`opens`). A run with two sampled sessions meets it (`Witness.SamplingGeneric.twoSessions_meets`).
 6. **The claims** of a compiled verifier (`Compiled.KS`, `Compiled.KSCount`, `Compiled.Bits`, `Compiled.Efficient`);
    its committed form (`Compiled.KSReg`): the incorrect set of the committed trace (`Freg` at `regVal`, the plurality of
    what the prover's runs' extractions open at its tape, a definition nobody runs, fixed before the window's coins), not
-   the extracted one, so its sampling term is the escape `P_a(Freg)` a monitoring period's pooling reads, with the
-   binding term `B_conf` (two runs' extractions opening a gate two ways); and the claims of a masked one (`ZkCompiled`: the reference prover's framing, which routes each history to a message it fixes or
-   to a slot's session, `A`'s prover in each session on the slot's tape): `ZkCompiled.ZK`, zero knowledge per public
-   outcome relative to the published leaf layer, the outcome each session's (`outOf`), at the composed simulator
-   (`sim`: the framing, then each session's simulator given its outcome) and the error `err`, the sum over the sessions
-   of the expectation over the honest tape of `A`'s error at the session the honest run reaches. Its contract
+   the extracted one, so its sampling term is the acceptance probability `P_a(Freg)` a monitoring period's pooling
+   reads, with the binding term `B_conf` (two runs' extractions opening a gate two ways); and the claims of a masked
+   one (`ZkCompiled`: the reference prover's framing, which routes each history to a message it fixes or to a slot's
+   session, `A`'s prover in each session on the slot's tape): `ZkCompiled.ZK`, zero knowledge per public outcome
+   relative to the published leaf layer, the outcome each session's (`outOf`), at the composed simulator (`sim`: the
+   framing, then each session's simulator given its outcome) and the error `err`, the sum over the sessions of the
+   expectation over the honest tape of `A`'s error at the session the honest run reaches. Its contract
    (`ZkCompiled.ZkSessions`, `Claims.Sampling`'s `Framing` facts in their generic form): the rounds are the parts', the
    router puts each round in its part, each session's rounds and simulator coins are its slot's, an honest trace's
    session witnesses are in `A`'s relation, and the reference prover sends the composed prover's messages.
 7. **The compiler's statements** (`CompilerKS`, `CompilerKSReg`, `CompilerKSCount`, `CompilerBits`,
    `CompilerEfficient`, `CompilerZK`): each claim of every compiled verifier that meets the contract, from `Arg`'s.
-8. **Flock** (`Arg.ofFlock`): Flock's `E^rep` at a decoder, its shape the numbers its coins read, its errors Flock's;
-   `FlockArgKS` says
-   that `Flock.KS` is its `Arg.KS`, so `FlockKS` and `FlockKSReg` are `CompilerKS` and `CompilerKSReg` at Flock. They
-   read `Flock.KS` and the contract as hypotheses, at a record, not at a deployed verifier's code.
+8. **Flock** (`Arg.ofFlock`): Flock's `E^rep` at the record's deployed decoder (`D.decode`), its assemble step counted
+   (`flockAssemble`), its shape the numbers its coins read, its errors Flock's; `FlockArgKS` says that `Flock.KS` is its
+   `Arg.KS`, so `FlockKS` and `FlockKSReg` are `CompilerKS` and `CompilerKSReg` at Flock. They take `Flock.KS`, the
+   binding and the contract as hypotheses, at a record, not at a deployed verifier's code.
 
-Statements only: definitions, no proofs. `Claims.Sampling` stays as it is, frozen; it becomes this block's Flock instance
-when its extractor is restated as `Compiled.E` at `Arg.ofFlock`.
+Statements only: definitions, no proofs. `Claims.Sampling` stays as it is, frozen; it becomes this block's Flock
+instance when its extractor is restated as `Compiled.E` at `Arg.ofFlock`.
 -/
 
 @[expose] public section
@@ -90,29 +93,50 @@ def maxBelowN (n : ℕ) (f : ℕ → ℕ) : ℕ := ((List.range n).map f).foldr 
 /-! ## 1. The proof system for proof blocks -/
 
 /-- **A proof system for proof blocks**, as the sampled audit reads it: its statements' public shapes (`Sh`, `shape`:
-what its rounds and its extractor's coins read), its verifier and the rounds a shape fixes, its witnesses and relation,
-and its extractor: its coins (`EC`, a finite type per shape), its rerun program at the judged run's coins (`ext`), and
-its errors per statement (`κ`, `γ`). A field, so the extractor is fixed before the hash: it calls `H` only through
-`RP.hash`. -/
+what its rounds and its extractor's coins read), its verifier and the rounds a shape fixes (`wf`), its witnesses and
+relation, its extractor's parts, and its errors per statement (`κ`, `γ`). The extractor is `E^rep` (`Claims.ERep`):
+replay the judged run and, if it accepted, make `waits` waits, each over `cap` fresh coin vectors and stopping at `k`
+accepted reruns, and return the first candidate `assemble` makes of a wait's openings (`opens`, read off each accepted
+rerun's view) that `check` accepts. `assemble` is a counted program: with its candidate it returns the steps it took,
+as `Flock.Deploy.dec` does. So the extracted witness is what that step makes of the reruns' views, and the extraction
+calls `H` only through its reruns. -/
 structure Arg (Coin : Type) where
   Sh : Type
   shape : Msg → Sh
   V : Verifier Coin
   rounds : Sh → ℕ
+  wf : ∀ x, V.k x = rounds (shape x)
   W : Type
   R : Rel W
-  EC : Sh → Type
-  [fin : ∀ s, Fintype (EC s)]
-  [ne : ∀ s, Nonempty (EC s)]
-  ext : (x : Msg) → (Fin (V.k x) → Coin) → EC (shape x) → RP (Fin (V.k x) → Coin) (Option W)
+  Op : Type
+  opens : Seen → List Op
+  assemble : Msg → List Op → Option W × ℕ
+  check : Msg → W → Bool
+  waits : Sh → ℕ
+  k : Msg → ℕ
+  cap : Sh → ℕ
   κ : Msg → ℝ
   γ : Msg → ℝ
-
-attribute [instance] Arg.fin Arg.ne
 
 namespace Arg
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+
+/-- The extractor's coins at a shape: per wait, its `cap` coin vectors over the shape's rounds. -/
+def EC (A : Arg Coin) (s : A.Sh) : Type := Fin (A.waits s) → Fin (A.cap s) → Fin (A.rounds s) → Coin
+
+instance instFintypeEC (A : Arg Coin) (s : A.Sh) : Fintype (A.EC s) :=
+  inferInstanceAs (Fintype (Fin _ → Fin _ → Fin _ → Coin))
+
+instance instNonemptyEC (A : Arg Coin) (s : A.Sh) : Nonempty (A.EC s) :=
+  inferInstanceAs (Nonempty (Fin _ → Fin _ → Fin _ → Coin))
+
+/-- **The extractor's rerun program** at the judged run's coins `r₀`: `E^rep` at `A`'s parts, its coin vectors the
+shape's (`EC`) read over the statement's rounds (`wf`). -/
+def ext (A : Arg Coin) (x : Msg) (r₀ : Fin (A.V.k x) → Coin) (c : A.EC (A.shape x)) :
+    RP (Fin (A.V.k x) → Coin) (Option A.W) :=
+  (ERep A.V (fun x => A.waits (A.shape x)) A.k (fun x => A.cap (A.shape x)) A.opens (fun x os => (A.assemble x os).1)
+    A.check).ext x r₀ fun i j t => c i j (Fin.cast (A.wf x) t)
 
 /-- The proof system's extractor, as a claims-core extractor. -/
 def E (A : Arg Coin) : Extractor Coin A.W A.V where
@@ -121,9 +145,6 @@ def E (A : Arg Coin) : Extractor Coin A.W A.V where
 
 /-- **The proof system is knowledge sound** at its errors: `Claims.KS` of its extractor. -/
 def KS (H : Msg → Msg) (A : Arg Coin) : Prop := Claims.KS H A.V A.R A.E A.κ A.γ
-
-/-- Its rounds are its shape's. -/
-def WF (A : Arg Coin) : Prop := ∀ x, A.V.k x = A.rounds (A.shape x)
 
 /-- **Strict reruns**: at most `ρ` of the statement's shape, on every prover, tape and coin. -/
 def RerunsLe (H : Msg → Msg) (A : Arg Coin) (ρ : A.Sh → ℕ) : Prop :=
@@ -172,10 +193,10 @@ def ZkArg.ZK (H : Msg → Msg) {Coin : Type} (A : ZkArg Coin) : Prop :=
 the verifier, its parser, scope check and partition, the trace's commitment; the second stage (`stage2`: the sample
 and the sessions, after the registration); the slots of the proof blocks a run samples (`checked`); each one's public
 shape (`sh x u`, fixed by the statement) and the bounds on its session's errors (`κb x u`, `γb x u`: on `A`'s `κ` and
-`γ` at the session's statement); its session's rounds (`rounds`) and the session as a run shows it
-(`session`: its statement in `A` and its view); the roots a run shows for a proof block's interior values (`iroots`); what a session's witness reveals
-(`reveal`: committed values, each with the roots it is committed under); the SHA-512 calls of checking what one
-session's witness reveals (`openCalls`); and the reference prover on its tapes with its completeness error. -/
+`γ` at the session's statement); its session's rounds (`rounds`) and the session as a run shows it (`session`: its
+statement in `A` and its view); the roots a run shows for a proof block's interior values (`iroots`); what a session's
+witness reveals (`reveal`: committed values, each with the roots it is committed under); the SHA-512 calls of checking
+what one session's witness reveals (`openCalls`); and the reference prover on its tapes with its completeness error. -/
 structure Compiled (Coin : Type) (A : Arg Coin) where
   V : Verifier Coin
   parse : Msg → Option AuditStatement
@@ -365,9 +386,10 @@ def Scope (L : Compiled Coin A) (x : Msg) : Prop :=
   `γb`), `A` has as many rounds at `xS` as the session (so `emb` embeds them onto the
   session's in order: `SessionRuns`' embedding, the only order embedding onto them), and a prover
   against `A`'s verifier (the sampled prover with `r`'s coins off the session's rounds) is such that, at coins agreeing
-  with `r` off the session's rounds, the run accepts exactly when that prover's run on the session's coins does, and at
+  with `r` off the session's rounds, the run accepts only when that prover's run on the session's coins does, and at
   coins agreeing with `r` on the rounds outside the session's before its first, the session is that prover's run and
-  its SHA-512 calls are among the compiled verifier's.
+  its SHA-512 calls are among the compiled verifier's. Only that direction: the run's other sessions may reject what
+  this one accepts, so a run with several sampled sessions meets it (`Witness.SamplingGeneric.twoSessions_meets`).
 * `opens` (`SessionOpens`): on a statement in scope, at an accepted run that samples `u` and shows its session, a witness
   in `A`'s relation at the session's statement reveals openings such that any values and interior values agreeing with
   those that pass (under the statement's roots and the interior roots the run showed for `u`) make proof block `u`
@@ -387,7 +409,7 @@ structure Sessions (H : Msg → Msg) (L : Compiled Coin A) : Prop where
     ∃ (xS : Msg) (P' : Prover Unit), A.shape xS = L.sh x u ∧ A.κ xS ≤ L.κb x u ∧ A.γ xS ≤ L.γb x u ∧
       A.V.k xS = (L.rounds x u).card ∧
       (∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, r' t = r t) →
-        ((run H P L.V x ω r').out = .acc ↔ (run H P' A.V xS () (L.coinsOf x u xS r')).out = .acc)) ∧
+        (run H P L.V x ω r').out = .acc → (run H P' A.V xS () (L.coinsOf x u xS r')).out = .acc) ∧
       ∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, (∀ t' ∈ L.rounds x u, t < t') → r' t = r t) →
         L.session x u (run H P L.V x ω r').seen = some (xS, (run H P' A.V xS () (L.coinsOf x u xS r')).seen) ∧
           ∀ q ∈ (run H P' A.V xS () (L.coinsOf x u xS r')).vLog, q ∈ (run H P L.V x ω r').vLog
@@ -476,8 +498,8 @@ noncomputable def Freg (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : 
 
 /-- **`B_conf`**: the prover's tape, two independent runs at it, each with the extractor's coins there, and the first
 collision among the calls the two runs' extractions make themselves (the openings they check, `A`'s own). Two runs
-whose extractions open one gate two ways, or one run's that does, give one (`CommitmentScheme.Binds`). Its cost is both
-runs' extractions' SHA-512 calls, their reruns' included. -/
+whose extractions open one gate two ways, or one run's that does, give one (`CommitmentScheme.Binds`). Its cost is the
+SHA-512 calls of both runs, both parties', and of both runs' extractions, their reruns' included. -/
 noncomputable def Bconf (H : Msg → Msg) (L : Compiled Coin A) : FinderFamily := fun Ω _ _ P x =>
   match L.parse x with
   | none => { S := Unit, out := fun _ => none, cost := fun _ => 0 }
@@ -489,7 +511,9 @@ noncomputable def Bconf (H : Msg → Msg) (L : Compiled Coin A) : FinderFamily :
         findColl (ownLog H (run H P L.V x q.1) (L.runExt x s q.2.1.1 (run H P L.V x q.1 q.2.1.1).seen q.2.1.2) ++
           ownLog H (run H P L.V x q.1) (L.runExt x s q.2.2.1 (run H P L.V x q.1 q.2.2.1).seen q.2.2.2))
       cost := fun q =>
-        ((L.runExt x s q.2.1.1 (run H P L.V x q.1 q.2.1.1).seen q.2.1.2).eval H (run H P L.V x q.1)).2.1 +
+        (run H P L.V x q.1 q.2.1.1).pLog.length + (run H P L.V x q.1 q.2.1.1).vLog.length +
+          (run H P L.V x q.1 q.2.2.1).pLog.length + (run H P L.V x q.1 q.2.2.1).vLog.length +
+          ((L.runExt x s q.2.1.1 (run H P L.V x q.1 q.2.1.1).seen q.2.1.2).eval H (run H P L.V x q.1)).2.1 +
           ((L.runExt x s q.2.2.1 (run H P L.V x q.1 q.2.2.1).seen q.2.2.2).eval H (run H P L.V x q.1)).2.1 }
 
 /-- **The committed form's error**: `ε_reg = κ_s + √(k(x)·γ_s·Pr[B]) + N·√Pr[B_conf] + Pr[B_conf]`, the sessions'
@@ -504,7 +528,11 @@ noncomputable def εreg (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : 
 scope, at every prover: the run accepts with a sampled proof block in the committed trace's incorrect set (`Freg`, which
 the prover's tape fixes before the window's coins) with probability at most `ε_reg` (`εreg`); so, by the draw, it
 accepts with that set outside `M_δ` with probability at most `δ + ε_reg`, at every `δ ≥ 0`. The sampling term is the
-escape of a set fixed before the coins, `P_a(Freg)`, as a monitoring period's pooling reads it. -/
+acceptance probability of a set fixed before the coins, `P_a(Freg)`, as a monitoring period's pooling reads it.
+
+`Freg` is what `A`'s counted assemble step makes of the prover's reruns' views (`Arg`), its plurality over the coins:
+it is the trace the prover committed to as far as that step is the program its count describes, which at Flock is the
+deployed decoder (`Arg.ofFlock`, and `trustedBase`'s decoder count). -/
 def KSReg (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
   ∀ x, L.Scope x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
@@ -681,7 +709,7 @@ end ZkCompiled
 knowledge-sound proof system for proof blocks, with a binding commitment, meets `KS` at the proof system's errors. -/
 def CompilerKS : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
-    (H : Msg → Msg), A.WF → A.KS H → L.commit.Binds H → L.Sessions H → L.KS H
+    (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.KS H
 
 /-- **The committed form**: as `CompilerKS`, `KSReg`. A corollary of the sessions' bound at the sampled proof block a
 selection picks (`SessionKS`, which `A.KS` gives at the contract) and the rewinding lemma
@@ -690,17 +718,17 @@ not extracted, or its extraction reveals (`opens`) an opening off the committed 
 the plurality with probability at most `N·√Pr[B_conf]`, or open two ways in one run, a collision `B_conf` finds. -/
 def CompilerKSReg : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
-    (H : Msg → Msg), A.WF → A.KS H → L.commit.Binds H → L.Sessions H → L.KSReg H
+    (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.KSReg H
 
 /-- **The count form**: as `CompilerKS`, `KSCount`. -/
 def CompilerKSCount : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
-    (H : Msg → Msg), A.WF → A.KS H → L.commit.Binds H → L.Sessions H → L.KSCount H
+    (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.KSCount H
 
 /-- **Bits**: as `CompilerKS`, `Bits` at the proof system's expected reruns and own calls. -/
 def CompilerBits : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
-    (H : Msg → Msg) (e : A.Sh → ℝ) (h : A.Sh → ℕ), A.WF → A.KS H → L.commit.Binds H → L.Sessions H →
+    (H : Msg → Msg) (e : A.Sh → ℝ) (h : A.Sh → ℕ), A.KS H → L.commit.Binds H → L.Sessions H →
       A.RerunsExpLe H e → A.OwnLe H h → L.OpenCallsLe H → L.Bits H e h
 
 /-- **Efficiency**: the compiled extractor's reruns and own calls, from the proof system's and the opening checks'
@@ -723,38 +751,55 @@ section Flock
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-- **Flock as a proof system for proof blocks**, at a decoder: `E^rep` (`Flock.E`), its shape the numbers its coins
-read (waits `m′`, truncation `K`, rounds), and its errors Flock's (`Flock.κ`, `Flock.γ`). -/
-noncomputable def Arg.ofFlock (D : Claims.Flock.Deploy Coin Col T) (decode : List (ℕ × Col) → List T) :
-    Arg Coin where
+/-- **Flock's assemble step, counted**: `Flock.assemble` at the deployed decoder (`D.decode`), with its steps: per table
+of the statement, the decoder's on the table's opened columns (`D.dec`'s count) and one check per candidate it lists. -/
+def flockAssemble (D : Claims.Flock.Deploy Coin Col T) (x : Msg) (os : List (ℕ → List (ℕ × Col))) :
+    Option Claims.Flock.Wit × ℕ :=
+  (Claims.Flock.assemble D.parse D.table D.decode D.read x os,
+    match D.parse x with
+    | none => 0
+    | some s => ((List.range s.tables).map fun j =>
+        (D.dec (os.flatMap fun o => o j)).2 + (D.decode (os.flatMap fun o => o j)).length).sum)
+
+/-- **Flock as a proof system for proof blocks**: `E^rep` at the deployed decoder (`Flock.E D D.decode`), its assemble
+step counted (`flockAssemble`), its shape the numbers its coins read (waits `m′`, truncation `K`, rounds), and its
+errors Flock's (`Flock.κ`, `Flock.γ`). -/
+noncomputable def Arg.ofFlock (D : Claims.Flock.Deploy Coin Col T) : Arg Coin where
   Sh := ℕ × ℕ × ℕ
   shape x := (D.waits x, D.cap x, D.V.k x)
   V := D.V
   rounds s := s.2.2
+  wf _ := rfl
   W := Claims.Flock.Wit
   R := Claims.Flock.R D.parse
-  EC s := Fin s.1 → Fin s.2.1 → Fin s.2.2 → Coin
-  ext x r c := (Claims.Flock.E D decode).ext x r c
+  Op := ℕ → List (ℕ × Col)
+  opens v := [D.cols v]
+  assemble := flockAssemble D
+  check := Claims.Flock.check D.parse
+  waits s := s.1
+  k := D.k
+  cap s := s.2.1
   κ := Claims.Flock.κ D
   γ := Claims.Flock.γ D
 
-/-- **Flock's KS is `Arg.ofFlock`'s**: `Flock.KS` at a decoder within Flock's radius. -/
+/-- **Flock's KS is `Arg.ofFlock`'s**: `Flock.KS` at the deployed decoder, which is within Flock's radius. -/
 def FlockArgKS : Prop :=
-  ∀ (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T) [Zero Col] (decode : List (ℕ × Col) → List T),
-    Claims.Flock.KS H D → Claims.Flock.ListWithin D.len D.enc D.θ decode → (Arg.ofFlock D decode).KS H
+  ∀ (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T) [Zero Col],
+    Claims.Flock.KS H D → Claims.Flock.ListWithin D.len D.enc D.θ D.decode → (Arg.ofFlock D).KS H
 
-/-- **The sampled compiler at Flock**: every compiled sampled verifier over Flock at a decoder within its radius that
-meets the contract, with a binding commitment, meets `KS`, from `Flock.KS` (`CompilerKS` and `FlockArgKS`). -/
+/-- **The sampled compiler at Flock**: every compiled sampled verifier over Flock at the deployed decoder, within its
+radius, that meets the contract, with a binding commitment, meets `KS`, from `Flock.KS` (`CompilerKS` and
+`FlockArgKS`). `Flock.KS`, the binding and the contract are its hypotheses. -/
 def FlockKS : Prop :=
-  ∀ (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T) [Zero Col] (decode : List (ℕ × Col) → List T)
-    (L : Compiled Coin (Arg.ofFlock D decode)), Claims.Flock.KS H D →
-      Claims.Flock.ListWithin D.len D.enc D.θ decode → L.commit.Binds H → L.Sessions H → L.KS H
+  ∀ (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T) [Zero Col] (L : Compiled Coin (Arg.ofFlock D)),
+    Claims.Flock.KS H D → Claims.Flock.ListWithin D.len D.enc D.θ D.decode → L.commit.Binds H → L.Sessions H →
+      L.KS H
 
 /-- **The committed form at Flock**: as `FlockKS`, `KSReg` (`CompilerKSReg` and `FlockArgKS`). -/
 def FlockKSReg : Prop :=
-  ∀ (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T) [Zero Col] (decode : List (ℕ × Col) → List T)
-    (L : Compiled Coin (Arg.ofFlock D decode)), Claims.Flock.KS H D →
-      Claims.Flock.ListWithin D.len D.enc D.θ decode → L.commit.Binds H → L.Sessions H → L.KSReg H
+  ∀ (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T) [Zero Col] (L : Compiled Coin (Arg.ofFlock D)),
+    Claims.Flock.KS H D → Claims.Flock.ListWithin D.len D.enc D.θ D.decode → L.commit.Binds H → L.Sessions H →
+      L.KSReg H
 
 end Flock
 
