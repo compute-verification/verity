@@ -72,7 +72,7 @@ def WordsAreTheSemantics : Prop :=
     ∀ x < rows.length, (semH3 saltOf rootOf : PearlCSem Q R S).RowOK (U.layout.shape u).m (U.layout.shape u).k act
         rows[x]! →
       ∀ z < cols.length,
-        wordQ ch.c[x]![z]! = (protocolH3 saltOf rootOf ρ : Protocol Q R S).ticket H s U u act rows[x]! cols[z]! ∧
-          wordQ ch.u[x]![z]! = (protocolH3 saltOf rootOf ρ : Protocol Q R S).useful H s U u act rows[x]! cols[z]!
+        wordQ ((ch.c[x]!)[z]!) = (protocolH3 saltOf rootOf ρ : Protocol Q R S).ticket H s U u act rows[x]! cols[z]! ∧
+          wordQ ((ch.u[x]!)[z]!) = (protocolH3 saltOf rootOf ρ : Protocol Q R S).useful H s U u act rows[x]! cols[z]!
 
 end Pouw.PearlPlus.Bridge

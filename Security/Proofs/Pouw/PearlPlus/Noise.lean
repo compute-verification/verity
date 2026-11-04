@@ -52,7 +52,7 @@ def FixedNoiseIsTheSpec : Prop :=
   ∀ (salt rootB : ByteArray) (k : ℕ) (wn : Words.FixedNoise), Words.fixedNoise salt rootB k = .ok wn →
     bytesNat wn.seedB = Pouw.PearlC.NoiseSha512.seedB (bytesNat salt) (bytesNat rootB) ∧
       wn.fa.size = k ∧ wn.fb.size = k ∧ ∀ l < k, ∀ t : Fin Pouw.PearlC.Params.pi.r,
-        wn.fa[l]![t.val]! = (Pouw.PearlC.NoiseSha512.sampleLine (bytesNat wn.seedB) 0 1 l 16 t).val ∧
-          wn.fb[l]![t.val]! = (Pouw.PearlC.NoiseSha512.sampleLine (bytesNat wn.seedB) 1 1 l 16 t).val
+        (wn.fa[l]!)[t.val]! = (Pouw.PearlC.NoiseSha512.sampleLine (bytesNat wn.seedB) 0 1 l 16 t).val ∧
+          (wn.fb[l]!)[t.val]! = (Pouw.PearlC.NoiseSha512.sampleLine (bytesNat wn.seedB) 1 1 l 16 t).val
 
 end Pouw.PearlPlus.Bridge
