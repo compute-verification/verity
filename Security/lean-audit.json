@@ -2643,6 +2643,10 @@
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
   },
+  "Flock.SecurityProofs.RecursiveKSDeployed": {
+   "honest": ["RecDeploy.HonestHalfFixture.recursiveKSDeployed_honest"],
+   "nontrivial": "Flock.Guarantees.recursiveKSDeployed_nontrivial"
+  },
   "Pouw.SecurityProofs.Dither.FleetSound": {
    "honest": ["Pouw.SecurityProofs.Dither.FleetSound_honest"],
    "nontrivial": "Pouw.SecurityProofs.Dither.FleetSound_nontrivial"
@@ -6790,6 +6794,9 @@
    ],
    "assumptions": [],
    "type_hash": "795a1501a9407a0386e6ef5f40629d3ccf38bdfd7d1b98ee6b279260cc983b26"
+  },
+  "Flock.Guarantees.recursiveKSDeployed_nontrivial": {
+   "owner": "@proofs"
   },
   "Flock.Guarantees.recursiveKS_nontrivial": {
    "owner": "@proofs",
@@ -12920,6 +12927,9 @@
    ],
    "assumptions": ["RecDeploy.HonestFixture"],
    "type_hash": "3edc2cda6a0995890c3514cc686ad8f40d0e82e94c83753eaed688aabfb602ec"
+  },
+  "RecDeploy.HonestHalfFixture.recursiveKSDeployed_honest": {
+   "owner": "@proofs"
   },
   "RecDeploy.lamLin2_deployed_ge": {
    "owner": "@proofs",
