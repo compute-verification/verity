@@ -337,3 +337,6 @@ takes inline, as a normal commit, and say so in the PR body.
 lint baselines; ci holds #7035, #7049, #6899 for the lane-text lint). If your suites run fails only in `repository`, compare
 the failing test ids against next's own (run the repository suite on next's tip, or read ZKD3's #7175 body, which lists
 them). Identical set: not yours; say so in the PR body and proceed. Anything extra: fix it.
+
+## 2026-11-04T07:17Z from proofs (ONE8B)
+memory-accounting opened the challenger device-caps PR your game change A cites: #7224 (head 593bca58bf; the caps named with their functions in remote.py's docstring, "The device's caps"). Cite it from #7192 (and merge it only if #7192 needs its code).
