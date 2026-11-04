@@ -1,9 +1,7 @@
 module
 
 public import Definitions.Core.Game
-public import Definitions.Claims.Hm96
 public import Definitions.Flock.ZK.AnyValues
-public import Definitions.Flock.ZK.RealRelease
 
 /-!
 # Zero knowledge at any values
@@ -24,9 +22,6 @@ stopped), and nothing of the values. An outcome that correlates with the values 
   that passes only where they do (`Table.Gated`) is bounded by `S_shvzk(x, e)` on `w₀` plus the dummy's pre-final view.
 * `SessionReleaseAny`: `ZkAnyOutcome` for a session of `J` tables, the outcome being where it stopped: the tables whose
   files left show their views, each behind its check (`Session.Gated`), and the others their pre-final views.
-* `TableReleaseHm96`, `SessionReleaseHm96`: the same releases with every leaf a real hm96 leaf on both branches, within
-  `2·δ₁` a leaf left unopened of simulators with real leaves; the session's at witnesses fixed before the server's draws
-  (`Session.WitnessesFirst`), per outcome in `ZKOut`'s form.
 -/
 
 @[expose] public section
@@ -110,65 +105,5 @@ def SessionReleaseAny : Prop :=
         (Fintype.card St : ℝ≥0∞) *
           prCoin (fun p : St × (∀ j, (T j).SimRand × (T j).Rand) =>
             E (FlockSoundness.ZK.Session.simAt T full w₀ p.1 p.2))
-
-/-- **One table's release behind the ZK server's check, at any values, with real hm96 leaves**: `TableReleaseAny` with
-every leaf real. Where the check passes, the view's hidden leaves are hm96 leaves under fresh salts (`Hm96.viewR`); where
-it fails, the same run's pre-final messages leave, every leaf of them an hm96 leaf, `τ`'s commitment included
-(`Hm96.preR`, `Hm96.TauLeaf`). From hm96 hiding at `δ₁` a leaf, each branch is within `2·δ₁` a leaf it leaves unopened of
-its simulator with real leaves: `S_shvzk(x, e)` on `w₀` within `2·|Hid|·δ₁`, and `w₀`'s pre-final messages within
-`2·|PreLeaves|·δ₁`. No premise reads the values. -/
-def TableReleaseHm96 : Prop :=
-  ∀ {F K W Salt B D Hi VL C : Type} [Field F] [Field K] [CharP F 2] [Fintype F] [DecidableEq F] [Fintype K]
-    [DecidableEq K] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] [Fintype Hi] [DecidableEq Hi]
-    [AddCommGroup Salt] [AddCommGroup B] [AddCommGroup Hi]
-    (T : FlockSoundness.ZK.Table F K W Salt (B × Salt) D Hi VL) (M : T.Hm96 C) (digT : F → B) {δ₁ : ℝ≥0∞}
-    (go : T.Rand → Bool) (w w₀ : W),
-    Claims.Hm96Hiding M.My M.cs δ₁ → M.TauLeaf digT → T.Simulable → T.RegPublic w → T.RegPublic w₀ →
-    T.Gated go w →
-    ∀ E : T.View ⊕ T.PreView → Prop,
-      prCoin (fun p : T.Rand × (T.Hid → Salt) => go p.1 = true ∧ E (.inl (M.viewR w p.1 p.2))) ≤
-          prCoin (fun σ : T.SimRand × (T.Hid → Salt) => E (.inl (M.simR w₀ σ.1 σ.2))) +
-            2 * Fintype.card T.Hid * δ₁ ∧
-        prCoin (fun p : T.Rand × (T.Hid → Salt) => go p.1 = false ∧ E (.inr (M.preR w p.1 p.2))) ≤
-          prCoin (fun p : T.Rand × (T.Hid → Salt) => E (.inr (M.preR w₀ p.1 p.2))) +
-            2 * Fintype.card T.PreLeaves * δ₁ ∧
-        prCoin (fun p : T.Rand × (T.Hid → Salt) => E (M.releaseR go w p.1 p.2)) ≤
-          prCoin (fun σ : T.SimRand × (T.Hid → Salt) => E (.inl (M.simR w₀ σ.1 σ.2))) +
-            prCoin (fun p : T.Rand × (T.Hid → Salt) => E (.inr (M.preR w₀ p.1 p.2))) +
-              (2 * Fintype.card T.Hid * δ₁ + 2 * Fintype.card T.PreLeaves * δ₁)
-
-/-- **A session's release behind the ZK server's checks, at any values, with real hm96 leaves**: `SessionReleaseAny`
-with every leaf real, at witnesses fixed before the server's draws for the session (`Session.WitnessesFirst`: as a
-function `wit` of those draws, they read none of them). At each outcome `s`, jointly with it, the release is bounded by
-the simulator given `s` (`Session.simR`, which reads the dummies `w₀` and not the witnesses) plus `2·δ₁` for each leaf
-the release at `s` leaves unopened (`Session.unopened`), `ZKOut`'s per-outcome form; overall by the sum over outcomes,
-and by `|St|` times the simulator that draws the outcome uniformly plus the outcomes' errors, `ZKOutLeak`'s form. No
-premise reads the values. -/
-def SessionReleaseHm96 : Prop :=
-  ∀ {F K W Salt B D Hi VL C : Type} [Field F] [Field K] [CharP F 2] [Fintype F] [DecidableEq F] [Fintype K]
-    [DecidableEq K] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] [Fintype Hi] [DecidableEq Hi]
-    [AddCommGroup Salt] [AddCommGroup B] [AddCommGroup Hi] {J : ℕ}
-    (T : Fin J → FlockSoundness.ZK.Table F K W Salt (B × Salt) D Hi VL) (M : ∀ j, (T j).Hm96 C)
-    (digT : Fin J → F → B) {δ₁ : ℝ≥0∞} {St : Type} [Fintype St] (out : (∀ j, (T j).Rand) → St)
-    (full : St → Fin J → Bool) (wit : (∀ j, (T j).Rand × ((T j).Hid → Salt)) → Fin J → W) (w₀ : Fin J → W),
-    FlockSoundness.ZK.Session.WitnessesFirst wit →
-    (∀ j, Claims.Hm96Hiding (M j).My (M j).cs δ₁) → (∀ j, (M j).TauLeaf (digT j)) → (∀ j, (T j).Simulable) →
-    (∀ p j, (T j).RegPublic (wit p j)) → (∀ j, (T j).RegPublic (w₀ j)) →
-    (∀ p, FlockSoundness.ZK.Session.Gated T out full (wit p)) →
-    ∀ E : (∀ j, (T j).View ⊕ (T j).PreView) → Prop,
-      (∀ s, prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) => out (fun j => (p j).1) = s ∧
-          E (FlockSoundness.ZK.Session.releaseR T M full (wit p) (out fun j => (p j).1) p)) ≤
-        prCoin (fun σ => E (FlockSoundness.ZK.Session.simR T M full w₀ s σ)) +
-          2 * FlockSoundness.ZK.Session.unopened T full s * δ₁) ∧
-      prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) =>
-          E (FlockSoundness.ZK.Session.releaseR T M full (wit p) (out fun j => (p j).1) p)) ≤
-        ∑ s, (prCoin (fun σ => E (FlockSoundness.ZK.Session.simR T M full w₀ s σ)) +
-          2 * FlockSoundness.ZK.Session.unopened T full s * δ₁) ∧
-      prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) =>
-          E (FlockSoundness.ZK.Session.releaseR T M full (wit p) (out fun j => (p j).1) p)) ≤
-        (Fintype.card St : ℝ≥0∞) *
-          prCoin (fun q : St × (∀ j, ((T j).SimRand × ((T j).Hid → Salt)) × ((T j).Rand × ((T j).Hid → Salt))) =>
-            E (FlockSoundness.ZK.Session.simR T M full w₀ q.1 q.2)) +
-          ∑ s, 2 * FlockSoundness.ZK.Session.unopened T full s * δ₁
 
 end Flock.Guarantees

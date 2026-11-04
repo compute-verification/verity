@@ -2,17 +2,25 @@ module
 
 public import Proofs.Flock.ZkAny.Session
 public import Proofs.Flock.Soundness.ZK.Abort
-public import Definitions.Flock.ZK.RealRelease
-public import Definitions.Flock.Guarantees.ZkAny
+public import Definitions.Flock.ZK.RealView
 
 /-!
 # The ZK server's release with real hm96 leaves, at any values
 
 `ZkAny/Table.lean` and `ZkAny/Session.lean` bound the release behind the server's checks with every unopened leaf ideal.
-Here every leaf is real, on both branches. Each branch costs `2·δ₁` a leaf it leaves unopened: T1 over its leaves
-(`ideal_leaves_swap_fintype`, `real_leaves_swap_fintype`, the commitment to any trace against the ideal one at `δ₁` a
-leaf, of which `hm96_commit_ideal_close` is the form at one trace), once on each side, and nothing reads the values:
+Here every leaf is real, on both branches: where the check passes, the view's hidden leaves are hm96 leaves under fresh
+salts (`Hm96.viewR`); where it fails, the same run's pre-final messages leave (`Hm96.preR`), and every one of their leaves
+is an hm96 leaf of what it commits, `τ`'s commitment included (`Hm96.TauLeaf`), since nothing is opened. Each branch
+costs `2·δ₁` a leaf it leaves unopened: T1 over its leaves (`ideal_leaves_swap_fintype`, `real_leaves_swap_fintype`, the
+commitment to any trace against the ideal one at `δ₁` a leaf, of which `hm96_commit_ideal_close` is the form at one
+trace), once on each side, and nothing reads the values. These are lemmas for the deployed level's statements, not
+guarantees of their own:
 
+* `Table.PreLeaves`, `Table.preOf`, `Hm96.preR`, `Hm96.releaseR`: every leaf of the pre-final messages, a view's
+  pre-final messages, the real prover's, and one table's release behind the check with real leaves.
+* `Session.releaseR`, `Session.simR`, `Session.unopened`: a session's release at an outcome, its simulator, and how many
+  leaves the release at an outcome leaves unopened; `Session.WitnessesFirst`: the witnesses read none of the server's
+  draws for the session.
 * `SameDist.prCoin_prod_eq`: equal distributions stay equal beside an independent coin.
 * `Hm96.derived_close`, where the check passes: the view is the derived view with real hidden leaves (`viewR_derived`).
   Its hidden leaves go ideal, at each fixed vector of ideal leaves the derived view is distributed as `S_shvzk(x, e)`
@@ -21,9 +29,9 @@ leaf, of which `hm96_commit_ideal_close` is the form at one trace), once on each
   those leaves, so the salts move to a fresh vector over every leaf (`toPre_viewR`, `prCoin_salts`); every leaf goes ideal,
   which gives the pre-final view (`prCoin_preLeaves_ideal`), Lemma A (`table_prefinal_indep`) moves it to the dummy, and
   the leaves go real again there: `2·|PreLeaves|·δ₁` at any witness carrying the public region data.
-* `Hm96.release_hm96`, `Flock.SecurityProofs.TableReleaseHm96`: one table, by `ZkAnyGate`.
-* `Session.release_hm96`, `Flock.SecurityProofs.SessionReleaseHm96`: a session, by `prCoin_pi_close` and `ZkAnyOutcome`,
-  at witnesses fixed before the server's draws.
+* `Hm96.release_hm96`: one table, by `ZkAnyGate`.
+* `Session.release_hm96`: a session at fixed witnesses, by `prCoin_pi_close` and `ZkAnyOutcome`, per outcome in `ZKOut`'s
+  form; `Session.release_hm96_first`: the same at witnesses fixed before the server's draws.
 -/
 
 @[expose] public section
@@ -35,6 +43,73 @@ namespace FlockSoundness.ZK
 
 open Verity.Game
 open scoped ENNReal
+
+namespace Table
+
+variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [AddCommGroup B] [CharP F 2]
+  (T : Table F K W Salt (B × Salt) D Hi VL)
+
+/-- **Every leaf of the pre-final messages**: those the final message opens (level 0's at the opened positions, each
+rep's pads tree's at its opened positions, and each rep's commitment to `τ`), then those nobody opens (`Hid`). -/
+abbrev PreLeaves := (Fin T.nS ⊕ (Fin 2 × Fin T.nQ) ⊕ Fin 2) ⊕ T.Hid
+
+/-- **A view's pre-final messages**: everything before the final message, with the leaves the view has. -/
+def preOf (v : T.View) : T.PreView :=
+  { sHat := v.sHat, sReg := v.sReg, masked := v.masked, y1 := v.y1, ybar := v.ybar, lig := v.lig, inner := v.inner
+    Y1 := v.Y1, Y2 := v.Y2, leaves0 := v.leaves0, tauCom := v.tauCom, leavesP := v.leavesP }
+
+variable {T} {C : Type}
+
+/-- **The real prover's pre-final messages**: the pre-final part of its run with real leaves (`viewR`). Every leaf is an
+hm96 leaf of what it commits: level 0's and the pads trees' at the opened positions under their salts, the others under
+fresh salts, and `τ`'s commitment under `y_τ`. -/
+noncomputable def Hm96.preR (M : T.Hm96 C) (w : W) (ω : T.Rand) (ys : T.Hid → Salt) : T.PreView :=
+  T.preOf (M.viewR w ω ys)
+
+/-- **`τ`'s commitment is an hm96 leaf** of `τ`'s digest `digT τ`, as level 0's and the pads trees' leaves are. -/
+def Hm96.TauLeaf (M : T.Hm96 C) (digT : F → B) : Prop :=
+  ∀ t y, T.leafT t y = M.H (digT t + M.My y, M.cs y)
+
+/-- **What the ZK server releases behind the check `go`, with real leaves**: the view where `go` passes, the same run's
+pre-final messages where it doesn't. -/
+noncomputable def Hm96.releaseR (M : T.Hm96 C) (go : T.Rand → Bool) (w : W) (ω : T.Rand) (ys : T.Hid → Salt) :
+    T.View ⊕ T.PreView :=
+  if go ω then .inl (M.viewR w ω ys) else .inr (M.preR w ω ys)
+
+end Table
+
+namespace Session
+
+variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [AddCommGroup B] [CharP F 2] {J : ℕ}
+  (T : Fin J → Table F K W Salt (B × Salt) D Hi VL) {C : Type} (M : ∀ j, (T j).Hm96 C) {St : Type}
+
+/-- **What the ZK server releases from a session at the outcome `s`, with real leaves**: table `j`'s view where its file
+left (`full s j`), the same run's pre-final messages elsewhere, each on its table's randomness and fresh salts. -/
+noncomputable def releaseR (full : St → Fin J → Bool) (w : Fin J → W) (s : St)
+    (p : ∀ j, (T j).Rand × ((T j).Hid → Salt)) : ∀ j, (T j).View ⊕ (T j).PreView :=
+  fun j => if full s j then .inl ((M j).viewR (w j) (p j).1 (p j).2) else .inr ((M j).preR (w j) (p j).1 (p j).2)
+
+/-- **The simulator at the outcome `s`, with real leaves**: `S_shvzk(x, e)` on the dummy with real leaves where table
+`j`'s file left, the dummy's real pre-final messages elsewhere, each on its own randomness. -/
+noncomputable def simR (full : St → Fin J → Bool) (w₀ : Fin J → W) (s : St)
+    (σ : ∀ j, ((T j).SimRand × ((T j).Hid → Salt)) × ((T j).Rand × ((T j).Hid → Salt))) :
+    ∀ j, (T j).View ⊕ (T j).PreView :=
+  fun j => if full s j then .inl ((M j).simR (w₀ j) (σ j).1.1 (σ j).1.2)
+    else .inr ((M j).preR (w₀ j) (σ j).2.1 (σ j).2.2)
+
+/-- **The leaves the release at `s` leaves unopened**: a table's hidden leaves where its file left, every leaf of its
+pre-final messages elsewhere. -/
+def unopened (full : St → Fin J → Bool) (s : St) : ℕ :=
+  ∑ j, if full s j then Fintype.card (T j).Hid else Fintype.card (T j).PreLeaves
+
+/-- **The witnesses are fixed before the server's randomness**: the session's witnesses, as a function `wit` of every
+draw the server makes for it (each table's level-0 randomness, pads and salts), read none of those draws. A server that
+answers `level0` only once every table's witness is in gives it. At `Table.onVals` the witness carries the worker's
+values, so it fixes them too. -/
+def WitnessesFirst {Ω : Type} (wit : Ω → Fin J → W) : Prop :=
+  ∀ p p', wit p = wit p'
+
+end Session
 
 /-- **Equal distributions beside an independent coin**: an event of `f ω` and an independent uniform `u` has the same
 probability as the event of `g σ` and `u`. -/
@@ -271,30 +346,34 @@ theorem release_hm96 (T : Fin J → Table F K W Salt (B × Salt) D Hi VL) {C : T
   simp only [hε] at hper hsum hcard
   exact ⟨hper, hsum, hcard⟩
 
-end Session
-
-end FlockSoundness.ZK
-
-namespace Flock.SecurityProofs
-
-/-- **One table's release behind the ZK server's check, at any values, with real hm96 leaves**
-(`Flock.Guarantees.TableReleaseHm96`). -/
-theorem TableReleaseHm96 : Flock.Guarantees.TableReleaseHm96 := by
-  intro F K W Salt B D Hi VL C _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ T M digT δ₁ go w w₀ hT1 hT hsim hreg hreg₀ hgo E
-  obtain ⟨hrank, hpad, hW, hpads, hβ⟩ := hsim
-  exact M.release_hm96 hT hT1 hrank hpad hW hpads hβ go w w₀ hreg hreg₀ hgo E
-
-/-- **A session's release behind the ZK server's checks, at any values, with real hm96 leaves**
-(`Flock.Guarantees.SessionReleaseHm96`): at witnesses fixed before the server's draws, `Session.release_hm96` at the one
-witness they take. -/
-theorem SessionReleaseHm96 : Flock.Guarantees.SessionReleaseHm96 := by
-  intro F K W Salt B D Hi VL C _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ J T M digT δ₁ St _ out full wit w₀ hfirst hT1 hT hsim
-    hreg hreg₀ hgo E
+/-- **A session's release behind the ZK server's checks, at any values, with real leaves, at witnesses fixed before the
+server's draws** (`WitnessesFirst`): `release_hm96` at the one witness they take. At each outcome `s`, jointly with it,
+the release is within `2·δ₁` a leaf it leaves unopened of the simulator given `s`, which reads the dummies `w₀` and not
+the witnesses. -/
+theorem release_hm96_first (T : Fin J → Table F K W Salt (B × Salt) D Hi VL) {C : Type} (M : ∀ j, (T j).Hm96 C)
+    {digT : Fin J → F → B} (hT : ∀ j, (M j).TauLeaf (digT j)) {δ₁ : ℝ≥0∞}
+    (hT1 : ∀ j, Claims.Hm96Hiding (M j).My (M j).cs δ₁) (hsim : ∀ j, (T j).Simulable) {St : Type} [Fintype St]
+    (out : (∀ j, (T j).Rand) → St) (full : St → Fin J → Bool)
+    (wit : (∀ j, (T j).Rand × ((T j).Hid → Salt)) → Fin J → W) (w₀ : Fin J → W) (hfirst : WitnessesFirst wit)
+    (hreg : ∀ p j, (T j).RegPublic (wit p j)) (hreg₀ : ∀ j, (T j).RegPublic (w₀ j))
+    (hgo : ∀ p, Gated T out full (wit p)) (E : (∀ j, (T j).View ⊕ (T j).PreView) → Prop) :
+    (∀ s, prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) => out (fun j => (p j).1) = s ∧
+        E (releaseR T M full (wit p) (out fun j => (p j).1) p)) ≤
+      prCoin (fun σ => E (simR T M full w₀ s σ)) + 2 * unopened T full s * δ₁) ∧
+    prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) =>
+        E (releaseR T M full (wit p) (out fun j => (p j).1) p)) ≤
+      ∑ s, (prCoin (fun σ => E (simR T M full w₀ s σ)) + 2 * unopened T full s * δ₁) ∧
+    prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) =>
+        E (releaseR T M full (wit p) (out fun j => (p j).1) p)) ≤
+      (Fintype.card St : ℝ≥0∞) *
+        prCoin (fun q : St × (∀ j, ((T j).SimRand × ((T j).Hid → Salt)) × ((T j).Rand × ((T j).Hid → Salt))) =>
+          E (simR T M full w₀ q.1 q.2)) + ∑ s, 2 * unopened T full s * δ₁ := by
   have : Nonempty Salt := ⟨0⟩
   let p₀ : ∀ j, (T j).Rand × ((T j).Hid → Salt) := fun _ => (0, fun _ => 0)
   obtain ⟨w, rfl⟩ : ∃ w, wit = fun _ => w := ⟨wit p₀, funext fun p => hfirst p p₀⟩
-  exact FlockSoundness.ZK.Session.release_hm96 T M hT hT1 (fun j => (hsim j).1) (fun j => (hsim j).2.1)
-    (fun j => (hsim j).2.2.1) (fun j => (hsim j).2.2.2.1) (fun j => (hsim j).2.2.2.2) out full w w₀ (hreg p₀) hreg₀
-    (hgo p₀) E
+  exact release_hm96 T M hT hT1 (fun j => (hsim j).1) (fun j => (hsim j).2.1) (fun j => (hsim j).2.2.1)
+    (fun j => (hsim j).2.2.2.1) (fun j => (hsim j).2.2.2.2) out full w w₀ (hreg p₀) hreg₀ (hgo p₀) E
 
-end Flock.SecurityProofs
+end Session
+
+end FlockSoundness.ZK
