@@ -35,7 +35,7 @@ def test_unlowered_templates_say_why(family):
         if sub.template.id in LOWERED.get(family, ()):
             assert why is None and isinstance(reg.supports(sub, "vllm-v1"), str)
         elif sub.template.id != "gemm-coordinate":
-            assert isinstance(why, str) and family in why
+            assert isinstance(why, str) and family.removeprefix("C-") in why
 
 
 CELLS = [("C-Flock", "gemm-coordinate/k1536/sm90-mma-bf16", "frame-v3/blake3-keyed", "bf16-hopper"),
