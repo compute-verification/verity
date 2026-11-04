@@ -198,7 +198,7 @@ theorem row?_input {g : ℕ} (hg : g < kp.inputs) : kp.row? g = none := by
 theorem row?_some {g : ℕ} (h1 : kp.inputs ≤ g) (h2 : g < kp.size) : ∃ ab, kp.row? g = some ab := by
   unfold KeyProg.size at h2
   have hr : g - kp.inputs < kp.rows.size := by omega
-  exact ⟨kp.rows[g - kp.inputs], by rw [KeyProg.row?, if_neg (Nat.not_lt.2 h1), Array.getElem?_eq_getElem hr]⟩
+  exact ⟨kp.rows[g - kp.inputs], by rw [KeyProg.row?, ite_eq_right (Nat.not_lt.2 h1), Array.getElem?_eq_getElem hr]⟩
 
 theorem lt_size_of_row? {g : ℕ} {ab : List ℕ × List ℕ} (h : kp.row? g = some ab) : g < kp.size := by
   unfold KeyProg.row? at h
@@ -343,7 +343,7 @@ theorem keyProg_row? (c : Flock.Circuit) {n u i : ℕ} (hu : u < n) (hi : i < (k
         (((Rows.ofNet c.unit).stack c.upv).b.getD i []).map (wireOf c n u)) := by
   have hc : ¬ ((keyProg c n).inputs + (u * (keyProg c n).perUnit + i) < (keyProg c n).inputs) := by omega
   have hi' : i < ((Rows.ofNet c.unit).stack c.upv).nComp := by rw [← keyProg_perUnit c n]; exact hi
-  rw [KeyProg.row?, if_neg hc, Nat.add_sub_cancel_left, keyProg_rows, List.getElem?_toArray, keyProg_perUnit]
+  rw [KeyProg.row?, ite_eq_right hc, Nat.add_sub_cancel_left, keyProg_rows, List.getElem?_toArray, keyProg_perUnit]
   have h := getElem?_flatMap_range (fun u => (List.range ((Rows.ofNet c.unit).stack c.upv).nComp).map fun i =>
       ((((Rows.ofNet c.unit).stack c.upv).a.getD i []).map (wireOf c n u),
         (((Rows.ofNet c.unit).stack c.upv).b.getD i []).map (wireOf c n u))) hu (j := i)
@@ -544,7 +544,7 @@ theorem sum_take_map {α : Type} [Inhabited α] (F : α → ℕ) (l : List α) {
   induction m with
   | zero => simp
   | succ m ih =>
-    rw [List.take_succ, List.map_append, List.sum_append, ih (by omega), sum_range_add_one]
+    rw [List.take_add_one, List.map_append, List.sum_append, ih (by omega), sum_range_add_one]
     simp [List.getElem?_eq_getElem (show m < l.length by omega), List.getD_eq_getElem?_getD]
 
 theorem base_eq (ms : Members) {m : ℕ} (hm : m ≤ ms.length) :
