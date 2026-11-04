@@ -52,6 +52,7 @@ import kind_scan as KS  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from test_served_session import RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import registration as RG  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
@@ -549,9 +550,11 @@ def _hook(step: str, d: Path, dir_: Path, v3c: Path, *args: str) -> int:
 
 def _chained(tmp_path: Path, v3c: Path | None, verdict: str = "accepted", w: int = 0) -> list[str]:
     """``chain``'s arguments: a chain that leaves `_chain_out`'s report, its scan's summary naming V3c's window (``v3c``;
-    None: no V3c window), and notes what it was given in TMP/chain-args."""
+    None: no V3c window) and `PERIOD`'s registration as the one whose trees it read, and notes what it was given in
+    TMP/chain-args."""
     out = _chain_out(tmp_path / "chain", verdict, w)
-    (out / "out" / "scan" / "summary.json").write_text(json.dumps({"v3c": v3c and {"window": str(v3c / "window")}}))
+    (out / "out" / "scan" / "summary.json").write_text(json.dumps({"v3c": v3c and {
+        "window": str(v3c / "window"), "registration": RG.digest(PERIOD["registration"])}}))
     note = shlex.quote(str(tmp_path / "chain-args"))
     return ["--chain-cmd", f'printf "%s\\n" "$@" > {note}; mkdir -p "$RESEARCH_RUN_DIR" && '
                            f'cp -r {shlex.quote(str(out / "out"))} "$RESEARCH_RUN_DIR/"']
