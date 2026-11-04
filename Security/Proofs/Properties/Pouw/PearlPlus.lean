@@ -27,9 +27,6 @@ theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {
   | error e => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-theorem eq_of_bne_false {α : Type} [BEq α] [LawfulBEq α] {a b : α} (h : (a != b) = false) : a = b := by
-  simpa using h
-
 theorem throw_bind {ε α β : Type} (e : ε) (f : α → Except ε β) : (throw e >>= f : Except ε β) = .error e := rfl
 
 theorem eq_of_not_bne {α : Type} [BEq α] [LawfulBEq α] {a b : α} (h : ¬(a != b) = true) : a = b := by
@@ -44,23 +41,6 @@ theorem not_or_true {a b : Bool} (h : ¬(a || b) = true) : ¬a = true ∧ ¬b = 
   cases a <;> cases b <;> simp_all
 
 /-! ## A loaded pass -/
-
-theorem refuse_bind {α β : Type} (t w : String) (f : α → Except Refusal β) : (refuse t w >>= f) = refuse t w := rfl
-
-theorem refuse_ne {α : Type} (t w : String) (a : α) : refuse t w ≠ .ok a := nofun
-
-/-- Beta-reduce `h` without unfolding its `have`s: `do`'s join points stay shared, so a chain stays linear. -/
-local macro "bz " h:ident : tactic => `(tactic| try dsimp (config := { zeta := false }) only at $h:ident)
-
-/-- Peel one bind of the chain `h`: `a` is its value and `ha` the bound computation's equation. -/
-local macro "peel " h:ident a:ident ha:ident : tactic =>
-  `(tactic| (have h' := bind_ok $h; clear $h; rcases h' with ⟨$a:ident, $ha:ident, $h:ident⟩; bz $h))
-
-/-- Close a branch of the chain `h` that refuses. -/
-local macro "nope " h:ident : tactic => `(tactic| first
-  | exact absurd $h (refuse_ne _ _ _)
-  | (rw [refuse_bind] at $h:ident; exact absurd $h (refuse_ne _ _ _))
-  | cases $h:ident)
 
 theorem mapM_ok_mem {ε α β : Type} {f : α → Except ε β} :
     ∀ {l : List α} {l' : List β}, l.mapM f = .ok l' → ∀ b ∈ l', ∃ a ∈ l, f a = .ok b
@@ -109,11 +89,13 @@ theorem recordKept_of {splits : List (Nat × Nat)} {r : UnitRecord}
     not_or, Nat.not_lt] at hk hc
   exact ⟨hk.1, hk.2, hc.1, hc.2⟩
 
-theorem checkRecords_kept {splits : List (Nat × Nat)} {records : List UnitRecord} (h : checkRecords splits records = none) :
+theorem checkRecords_kept {splits : List (Nat × Nat)} {records : List UnitRecord}
+    (h : checkRecords splits records = none) :
     ∀ r ∈ records, RecordKept splits r := by
   unfold checkRecords at h
   simp only [Id.run_bind] at h
-  generalize hres : (forIn records (none, [], []) _ : Id (Option (Option String) × List (Nat × List Nat) × List (Nat × List Nat))) = res at h
+  generalize hres : (forIn records (none, [], []) _ :
+    Id (Option (Option String) × List (Nat × List Nat) × List (Nat × List Nat))) = res at h
   refine forIn_all' (RecordKept splits) _ ?_ records _ res hres ?_
   · intro a g
     dsimp only
@@ -131,149 +113,134 @@ theorem checkRecords_kept {splits : List (Nat × Nat)} {records : List UnitRecor
 
 theorem load_facts {coins : PouwCommit.CoinCommitment} {man : Lean.Json} {p : Pass} (h : load coins man = .ok p) :
     (∀ r ∈ p.records, r.reason = none) ∧
-      ∃ splits, checkRecords splits p.records = none ∧ recordsRoot p.salt p.weightsRoot splits p.records = p.recordsRoot := by
+      ∃ splits, checkRecords splits p.records = none ∧
+        recordsRoot p.salt p.weightsRoot splits p.records = p.recordsRoot := by
   unfold load at h
-  peel h u0 hman
+  obtain ⟨u0, hman, h⟩ := bind_ok h
   cases hd : passesDistinct [man] with
   | some w => simp [throwRefusal, hd] at h
   | none =>
   rw [throwRefusal.eq_def, hd] at h
-  bz h
-  peel h scheme hsch
-  peel h mj hmj
+  obtain ⟨scheme, hsch, h⟩ := bind_ok h
+  obtain ⟨mj, hmj, h⟩ := bind_ok h
   extract_lets j1 at h
   split at h
-  case h_2 => nope h
+  case h_2 => cases h
   rename_i usA
-  peel h us hus
+  obtain ⟨us, hus, h⟩ := bind_ok h
   cases hus
   dsimp (config := { zeta := false }) only [j1] at h
-  clear j1
-  peel h matmuls hmm
-  peel h wj hwj
+  obtain ⟨matmuls, hmm, h⟩ := bind_ok h
+  obtain ⟨wj, hwj, h⟩ := bind_ok h
   extract_lets ws j2 at h
   split at h
-  case h_2 => nope h
+  case h_2 => cases h
   rename_i kv
-  peel h weights hweights
+  obtain ⟨weights, hweights, h⟩ := bind_ok h
   cases hweights
   dsimp (config := { zeta := false }) only [j2] at h
-  clear j2
-  peel h roots hroots
+  obtain ⟨roots, hroots, h⟩ := bind_ok h
   split at h
-  case h_2 => nope h
+  case h_2 => cases h
   rename_i opening0 _
-  peel h claimedJ hcj
+  obtain ⟨claimedJ, hcj, h⟩ := bind_ok h
   extract_lets wtj jo ju at h
   split at h
-  case isTrue => nope h
+  case isTrue => cases h
   dsimp (config := { zeta := false }) only [ju] at h
-  clear ju
   split at h
-  case h_2 => nope h
+  case h_2 => cases h
   rename_i opening hop
-  peel h opening' hop'
+  obtain ⟨opening', hop', h⟩ := bind_ok h
   cases hop'
   dsimp (config := { zeta := false }) only [jo] at h
-  clear jo
   extract_lets e1 e2 e3 e4 e5 at h
   split at h
-  case h_2 => nope h
+  case h_2 => cases h
   rename_i claimed hcl
-  peel h claimed' hc'
+  obtain ⟨claimed', hc', h⟩ := bind_ok h
   cases hc'
   dsimp (config := { zeta := false }) only [e5] at h
-  clear e5
   split at h
-  case isTrue => nope h
+  case isTrue => cases h
   rename_i hep
   dsimp (config := { zeta := false }) only [e4] at h
-  clear e4
   split at h
-  case h_1 => nope h
+  case h_1 => cases h
   rename_i wr hwr
   dsimp (config := { zeta := false }) only [e3] at h
-  clear e3
   split at h
-  case isTrue => nope h
+  case isTrue => cases h
   rename_i hcov
   dsimp (config := { zeta := false }) only [e2] at h
-  clear e2
   split at h
-  case h_2 => nope h
+  case h_2 => cases h
   rename_i weightsRoot hwroot
-  peel h weightsRoot' hw'
+  obtain ⟨weightsRoot', hw', h⟩ := bind_ok h
   cases hw'
   dsimp (config := { zeta := false }) only [e1] at h
-  clear e1
   extract_lets f1 at h
   split at h
-  case h_2 => nope h
-  case h_3 => nope h
+  case h_2 => cases h
+  case h_3 => cases h
   rename_i salt hsalt
-  peel h salt' hs'
+  obtain ⟨salt', hs', h⟩ := bind_ok h
   cases hs'
   dsimp (config := { zeta := false }) only [f1] at h
-  clear f1
   extract_lets g1 at h
   split at h
-  case isTrue => nope h
+  case isTrue => cases h
   rename_i hsaltj
   dsimp (config := { zeta := false }) only [g1] at h
-  clear g1
-  peel h records hrecords
-  peel h splits hsplits
+  obtain ⟨records, hrecords, h⟩ := bind_ok h
+  obtain ⟨splits, hsplits, h⟩ := bind_ok h
   extract_lets k1 at h
   split at h
-  case h_1 => nope h
+  case h_1 => cases h
   rename_i cr hcr
   dsimp (config := { zeta := false }) only [k1] at h
-  clear k1
-  peel h pubj hpubj
-  peel h published hpub
+  obtain ⟨pubj, hpubj, h⟩ := bind_ok h
+  obtain ⟨published, hpub, h⟩ := bind_ok h
   extract_lets l1 at h
   split at h
-  case isTrue => nope h
+  case isTrue => cases h
   rename_i hroot
   dsimp (config := { zeta := false }) only [l1] at h
-  clear l1
-  peel h rootsA hrootsA
-  peel h c hc
-  peel h rootj hrootj
-  peel h root hroot'
-  peel h countj hcountj
+  obtain ⟨rootsA, hrootsA, h⟩ := bind_ok h
+  obtain ⟨c, hc, h⟩ := bind_ok h
+  obtain ⟨rootj, hrootj, h⟩ := bind_ok h
+  obtain ⟨root, hroot', h⟩ := bind_ok h
+  obtain ⟨countj, hcountj, h⟩ := bind_ok h
   split at h
-  case h_2 => nope h
+  case h_2 => cases h
   rename_i count hcount
-  peel h yRoots hyRoots
-  peel h u1 hdomain
+  obtain ⟨yRoots, hyRoots, h⟩ := bind_ok h
+  obtain ⟨u1, hdomain, h⟩ := bind_ok h
   extract_lets pp m1 at h
   split at h
-  case isTrue => nope h
+  case isTrue => cases h
   rename_i htiles
   dsimp (config := { zeta := false }) only [m1] at h
   have hp : pp = p := Except.ok.inj h
-  clear h m1
   subst hp
   refine ⟨fun r hr => ?_, splits, ?_, ?_⟩
   · obtain ⟨x, -, hfx⟩ := mapM_ok_mem hrecords r hr
-    bz hfx
     extract_lets wt at hfx
-    peel hfx real hreal
-    peel hfx kk hkk
+    obtain ⟨real, hreal, hfx⟩ := bind_ok hfx
+    obtain ⟨kk, hkk, hfx⟩ := bind_ok hfx
     split at hfx
-    case h_2 => nope hfx
+    case h_2 => cases hfx
     split at hfx
-    case h_2 => nope hfx
-    peel hfx eaj heaj
-    peel hfx ea hea
-    peel hfx ebj hebj
-    peel hfx eb heb
-    peel hfx va hva
-    peel hfx vb hvb
+    case h_2 => cases hfx
+    obtain ⟨eaj, heaj, hfx⟩ := bind_ok hfx
+    obtain ⟨ea, hea, hfx⟩ := bind_ok hfx
+    obtain ⟨ebj, hebj, hfx⟩ := bind_ok hfx
+    obtain ⟨eb, heb, hfx⟩ := bind_ok hfx
+    obtain ⟨va, hva, hfx⟩ := bind_ok hfx
+    obtain ⟨vb, hvb, hfx⟩ := bind_ok hfx
     extract_lets rr jr at hfx
     split at hfx
-    case h_1 => nope hfx
+    case h_1 => cases hfx
     rename_i hrr
     dsimp (config := { zeta := false }) only [jr] at hfx
     have hp : rr = r := Except.ok.inj hfx
@@ -391,7 +358,8 @@ theorem lookup_mem {α β : Type} [BEq α] [LawfulBEq α] {a : α} {b : β} :
       exact List.mem_cons_of_mem _ (lookup_mem h)
 
 /-- A loop that, on an invariant of its first component, only yields, pushing one task of value `V a` per item. -/
-theorem forIn_tasks {α σ τ : Type} (V : α → τ) (I : σ → Prop) (f : α → σ × Array (Task τ) → Id (ForInStep (σ × Array (Task τ))))
+theorem forIn_tasks {α σ τ : Type} (V : α → τ) (I : σ → Prop)
+    (f : α → σ × Array (Task τ) → Id (ForInStep (σ × Array (Task τ))))
     (hf : ∀ a n ts, I n → ∃ n', I n' ∧ f a (n, ts) = .yield (n', ts.push (Task.pure (V a)))) :
     ∀ (l : List α) (n : σ) (ts : Array (Task τ)), I n →
       ((forIn l (n, ts) f : Id _).2.toList.map Task.get) = ts.toList.map Task.get ++ l.map V
@@ -417,8 +385,10 @@ def verdictOf (pl : Plan) (opener : Nat → Nat → Except String TileOpening) (
     | .ok o => ⟨x.1, x.2, checkTile p (noiseOf p x.2) x.2 o⟩
 
 /-- A search loop: each item yields on, or stops with a value `P` of it; a value found is some item's. -/
-theorem forIn_found {α β γ : Type} (P : α → β → Prop) (f : α → Option (Option β) × γ → Id (ForInStep (Option (Option β) × γ)))
-    (hf : ∀ a g, (∃ g', f a (none, g) = .yield (none, g')) ∨ ∃ v g', f a (none, g) = .done (some (some v), g') ∧ P a v) :
+theorem forIn_found {α β γ : Type} (P : α → β → Prop)
+    (f : α → Option (Option β) × γ → Id (ForInStep (Option (Option β) × γ)))
+    (hf : ∀ a g, (∃ g', f a (none, g) = .yield (none, g')) ∨
+      ∃ v g', f a (none, g) = .done (some (some v), g') ∧ P a v) :
     ∀ (l : List α) (g : γ) (v : β), (forIn l (none, g) f : Id _).1 = some (some v) → ∃ a ∈ l, P a v
   | [], _, _, h => by cases h
   | a :: l, g, v, h => by
@@ -454,7 +424,8 @@ def NoiseHeld (pl : Plan) (noise : List ((Nat × Nat) × Task (Except String Fix
   ∀ e ∈ noise, ∃ r ∈ (pl.passes[e.1.1]!).records, r.matmul.weight = e.1.2 ∧
     e.2.get = fixedNoise (pl.passes[e.1.1]!).salt (((pl.passes[e.1.1]!).weightRoots.lookup e.1.2).getD .empty) r.matmul.k
 
-theorem replay_eq (pl : Plan) (opener : Nat → Nat → Except String TileOpening) (hk : ∀ i : Nat, KConsistent pl.passes[i]!) :
+theorem replay_eq (pl : Plan) (opener : Nat → Nat → Except String TileOpening)
+    (hk : ∀ i : Nat, KConsistent pl.passes[i]!) :
     replay pl opener = pl.todo.map (verdictOf pl opener) := by
   unfold replay
   refine (forIn_tasks (verdictOf pl opener) (NoiseHeld pl) _ ?_ pl.todo [] #[] (by intro e he; cases he)).trans
