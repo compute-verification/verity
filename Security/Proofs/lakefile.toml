@@ -78,4 +78,5 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.Recursive.Refusals", "Proofs.Properties.Verity.Subprotocols",
   "Proofs.Properties.Pous.WipeSigned", "Proofs.Properties.Challenger", "Proofs.Properties.Challenger.Limits",
   "Proofs.Properties.Firewall", "Proofs.Properties.Challenger.Session", "Proofs.Properties.Challenger.CanonRead",
-  "Proofs.Properties.Challenger.Window", "Proofs.Properties.Challenger.Coins"]
+  "Proofs.Properties.Challenger.Window", "Proofs.Properties.Challenger.CanonLine", "Proofs.Properties.Challenger.Drawn",
+  "Proofs.Properties.Challenger.Coins"]
