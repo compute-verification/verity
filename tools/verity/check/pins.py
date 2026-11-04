@@ -153,7 +153,6 @@ class Writer:
 
 
 CIRCUITS_TESTS, VLLM_PROGRAM_TESTS = "verity/ml/circuits/tests/", "integrations/vllm/tests/program/"
-CIRCUIT_CHECK_TESTS = "tools/verity/circuit_check/tests/"
 WRITERS = (
     *(Writer(CIRCUITS_TESTS + f, CIRCUITS_TESTS + m) for f, m in (
         ("boolean_vectors.json", "test_boolean.py"),
@@ -165,7 +164,8 @@ WRITERS = (
         ("template_instance_vectors.json", "test_template_instance.py"),
     )),
     Writer(VLLM_PROGRAM_TESTS + "data/sampling_split_digests.json", VLLM_PROGRAM_TESTS + "test_sampling_split.py"),
-    Writer(CIRCUIT_CHECK_TESTS + "fixtures/split/prims_serve.json", CIRCUIT_CHECK_TESTS + "test_split_prims_serve.py"),
+    Writer("tools/verity/circuit_check/tests/fixtures/split/prims_serve.json",
+           "tools/verity/circuit_check/tests/test_split_prims_serve.py"),
 )
 #: the directories whose every test module with a ``--write`` is a `Writer`'s (`tests/test_pins.py`)
 WRITER_DIRS = (CIRCUITS_TESTS, VLLM_PROGRAM_TESTS)
