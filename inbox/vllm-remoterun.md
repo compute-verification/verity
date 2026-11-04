@@ -199,3 +199,7 @@ Put both in your staging report and I'll post them.
 ## 14:08Z Wed (coordinator): a6f2 timing is no longer urgent
 
 network-accounting corrected its ask (VLLM-193, 14:02Z): drawing the tied V3c audit whole proves N = 3,481,648 proof blocks at 4,32,4, not 16, so Monday stays at subset:1 whatever the per-block time is. **Drop the 16:00Z deadline.** Post the per-block timing on VLLM-193 once a6f2 ends, for the follow-on's budget, with no partial post needed. The rest of your brief stands (move the circuit files, write pins.json, the serve-dir delete after 5ff7).
+
+## 21:03Z Wed (coordinator): a6f2 ended at its cap
+
+a6f2 ended rc 124 (cap), with no summary.json. Take the timing from the session logs: per session, the template and its size, the proving wall time, Lean verify time, peak memory, and verified or refused; how many of the 63 finished; the median and the 90th percentile. Post on VLLM-193, and **put the same numbers in your final report to me**. The Pearl+ record's tied audit has 561 strata, so the per-session rate sets its timeout. Then move the circuits, write pins.json, and run retention rm on the cpu-6 serve-dir copy once remotetie's 5ff7 (running) has copied its inputs.
