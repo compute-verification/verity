@@ -1,13 +1,15 @@
 import Properties.NetworkScan
 import Proofs.Properties.NetworkScan.Accept
+import Proofs.Properties.NetworkScan.Lowered
 
 /-!
 # Toward an accepted scan's fit, at Bits' positions
 
 `ScanFits` and `ScanScopeAcc` are stated at Bits' positions (`Properties.NetworkScan`): the statement's circuit is the
 scan's audit's members' joint program (`jointOf`), its layout read through `SampledProofs.Bits.inBit`, `outBit` and
-`wiresOf`. What `scanOf`'s acceptance gives of the Program is `Fits.scanOf_accepted` (`Accept`). Here are the facts
-both statements' witnesses read:
+`wiresOf`. What `scanOf`'s acceptance gives of the Program is `Fits.scanOf_accepted` (`Accept`), and what the joint
+program holds at each position, its inputs, outputs and reads, is `Lowered`'s. Here are the facts both statements'
+witnesses read:
 
 * `not_fits_of_no_outs`: a circuit that returns nothing fits no layout over a horizon of at least one step.
 * `jointOf_nil`, `not_fits_of_no_members`: an audit of no members has the empty joint program, so no layout fits it.
