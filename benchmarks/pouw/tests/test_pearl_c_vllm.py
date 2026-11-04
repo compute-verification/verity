@@ -7,6 +7,7 @@ import ctypes
 import dataclasses
 import hashlib
 import importlib.util
+import inspect
 import json
 import math
 import random
@@ -1376,16 +1377,17 @@ def test_served_passes_same_holds_two_seeded_serves_of_one_load_to_the_same_pass
 
 
 def test_served_passes_counts_a_passs_linear_macs_and_verify_run_its_credited_cells_macs(tmp_path):
-    """`served_passes.macs` is a pass's real rows × n × k, and `verify_run.pass_macs` the MACs of the cells `clear_work`
-    credits (`UnitRecord.credited` over the scheme's tiles, at kept K), `credit_at_assumption`'s ``macs`` over the pass
-    alone: a filler row, an excluded A row and an excluded B row each take their cells out."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    """`pearl_c.window.macs` (served.json's) is a pass's real rows × n × k, and `verify_run.pass_macs` the MACs of the cells
+    `clear_work` credits (`UnitRecord.credited` over the scheme's tiles, at kept K), `credit_at_assumption`'s ``macs`` over
+    the pass alone: a filler row, an excluded A row and an excluded B row each take their cells out."""
+    from verity_vllm.protocols.pouw.pearl_c.window import macs
+
     path = proved_pass(tmp_path, PROMOTED[0])[0]
     man = json.loads(path.read_text())
     p = VR.load(path, published(path))
-    assert SP.macs(str(path)) == sum(u["real_rows"] * u["n"] * u["k"] for u in man["matmuls"]) and SP.macs(None) is None
+    assert macs(str(path)) == sum(u["real_rows"] * u["n"] * u["k"] for u in man["matmuls"]) and macs(None) is None
     assert any(u["excluded_a"] for u in man["matmuls"]) and any(u["real_rows"] < u["m"] for u in man["matmuls"])
-    assert VR.pass_macs(p) == VR.credit_at_assumption([p], 459, Fraction(1, 100))["macs"] < SP.macs(str(path))
+    assert VR.pass_macs(p) == VR.credit_at_assumption([p], 459, Fraction(1, 100))["macs"] < macs(str(path))
     r = p.records[0]
     b = min(set(range(r.matmul.shape.n)) - set(r.excluded_b))
     more = dataclasses.replace(p, records=[dataclasses.replace(r, excluded_b=(*r.excluded_b, b)), *p.records[1:]])
@@ -1448,6 +1450,48 @@ def test_volunteer_pass_gives_up_the_rows_over_their_caps_and_every_tile_then_pa
     assert _replay_every_tile(VR.load(path, coins)) == {}
     again = VP.volunteer(path, coins, 1)
     assert again["ok"] and again["records_root"]["before"] == again["records_root"]["after"] == out["records_root"]["after"]
+
+
+def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row_over_its_cap(tmp_path, capsys):
+    """The pipelines give the rows over a debit cap up before the coin exactly where ``served_passes.py volunteer-needed``
+    says yes, so it says yes exactly where the verdict they call rejects a run on a drawn tile with a credited row over its
+    cap: on a pass with such rows (`proved_pass` under the h100 record's zero key) and a coin that draws them, ``verify``
+    (the run's verdict, `served_pearlplus.sh`'s) and `verify_run.verify` (a pass at a time, `glm53_passes.py`'s) reject iff
+    it says yes, under their own rule and each ``--over-cap`` they take.  A verifier whose over-cap rule changes moves the
+    give-up onto or off the prover's path with it; one that takes no ``over_cap`` refuses any."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    coins = published(path)
+    p = VR.load(path, coins)
+    over = _replay_every_tile(p)
+    assert over and all("replayed debit" in r for r in over.values()), over
+    d, source = _serve_dir(tmp_path, [path]), b"verifier" * 4
+    (d / SP.COIN).write_text(json.dumps({"commitment": VR.run_commitment([p]).hex(), "source": source.hex()}))
+    takes = {}
+    for verdict, fn in (("run", VR.verify_passes), ("pass", VR.verify)):
+        takes[verdict] = "over_cap" in inspect.signature(fn).parameters
+        for rule in (None, *(SP.OVER_CAP if takes[verdict] else ())):
+            flag = () if rule is None else ("--over-cap", rule)
+            capsys.readouterr()
+            assert SP.main(["volunteer-needed", "--verdict", verdict, *flag]) == 0
+            yes, took = capsys.readouterr().out.split()
+            assert yes in ("yes", "no") and took in SP.OVER_CAP and took == (rule or took)
+            if verdict == "run":
+                _, doc, answer = served_verify(d, tmp_path / "verify.json", "--draws", "32", *flag)
+                drawn = {v["tile"] for v in doc["verdicts"]}
+                rejects = answer["verdict"] == "reject" and "replayed debit" in answer["reason"]
+            else:
+                r = VR.verify(path, 32, 1, "test", source, coins=coins, **({} if rule is None else {"over_cap": rule}))
+                drawn, rejects = set(r["tiles"]), not r["accepted"] and "replayed debit" in r["line"]
+            assert drawn & set(over), (verdict, rule, sorted(drawn), sorted(over))
+            assert (yes == "yes") == rejects, (
+                f"volunteer-needed --verdict {verdict} says {yes} under over-cap rule {took}, but the verdict "
+                f"{'rejects' if rejects else 'does not reject'} a run on a drawn row over its cap: served_passes.over_cap_rule "
+                "must name the rule the verdict takes")
+    for verdict in (v for v, t in takes.items() if not t):
+        capsys.readouterr()
+        assert SP.main(["volunteer-needed", "--verdict", verdict, "--over-cap", "reject"]) == 2
+        assert "takes no over_cap" in capsys.readouterr().err
 
 
 class _StandInDebit:
@@ -1588,6 +1632,36 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_root_and_
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
 
 
+def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_credits_them(tmp_path):
+    """``retain --window-record W`` on a serve of a warm-up pass, a pass without calls and two timed passes: it drops the
+    warm-up's round 0, retains rounds 1 and 2 (places among served.json's passes with calls), and writes W over those two
+    under their numbers, so ``verify --tie W`` accepts the run tied to W's digest on its 8 tables and credits the timed
+    passes alone.  The warm-up retained, W can't tie it (W registers none of round 0, and `pearl_c.window.write` refuses
+    to); once the coin is drawn ``retain`` refuses to write W again."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    warm, a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
+    d = _serve_dir(tmp_path, [warm, a, b])
+    served = json.loads((d / "served.json").read_text())
+    served["passes"] = [{**served["passes"][0], "timed": False}, {"pass": 1, "units": 0, "tiles": 0},
+                        *({**p, "pass": p["pass"] + 1, "timed": True} for p in served["passes"][1:])]
+    (d / "served.json").write_text(json.dumps(served))
+    wfile, coins = tmp_path / "w.json", published(warm)
+    assert SP.main(["retain", "--passes", str(d)]) == 0 and not wfile.exists()
+    assert json.loads((d / SP.RETENTION).read_text())["rounds"] == [0, 1, 2]
+    assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 0
+    got = json.loads((d / SP.RETENTION).read_text())
+    assert got["rounds"] == [1, 2] and [(x["round"], x["why"]) for x in got["dropped"]] == [(0, SP.WARM_UP)]
+    w = json.loads(wfile.read_text())
+    assert sorted({e["value"].split("/")[1] for e in w["registered"]}) == ["1", "2"] and len(w["registered"]) == 8
+    r = VR.verify_passes([warm, a, b], 3, 1, "test", coins, b"verifier" * 4, window=w)
+    assert r["answer"]["verdict"] == "reject" and "W registers no pearl-a/0/0" in r["answer"]["reason"], r["line"]
+    rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile))
+    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 8}, doc["line"]
+    assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["timed"]["passes"]) == ([1, 2], [0], 2)
+    before = wfile.read_text()
+    assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 1 and wfile.read_text() == before
+
+
 def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_and_refuses_an_unretained_serve(tmp_path):
     """``served_passes.py volunteer``, the prover's step between the serve and the verifier's coin, runs `volunteer_pass` on
     each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
@@ -1702,6 +1776,117 @@ def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
     late = VR.verify_passes([path], 3, 1, "test", coins, record=record)
     assert late["answer"]["verdict"] == "reject" and late["refused"][0] == "after-coin" and "source" not in late, late["line"]
     assert VR.verify_passes([path], 3, 1, "test", coins)["answer"]["verdict"] == "accept"
+
+
+def test_the_run_verdict_takes_its_source_from_its_draw_once_and_never_asks_a_draw_again(tmp_path):
+    """``verify_passes``' ``draw(C, asking)``: its source is the draw's coin on the run's commitment C, recorded (v2) with
+    the draw before any replay and reused by a later verdict without drawing; a draw that fails before it asks rejects
+    and may be asked again, while one that fails after ``asking`` marked the record is refused (``asked-once``) and
+    never redrawn."""
+    VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    coins = published(path)
+    assert VP.volunteer(path, coins, 1)["ok"]
+    root = VR.run_commitment([VR.load(path, coins)])
+    calls = []
+
+    def draw(c, asking):
+        calls.append(c)
+        asking({"reserved": {"session": "s20261104T090000Z-dr01"}})
+        return b"\x5e" * 64, {"from": VR.DRAW_CHALLENGER, "session": {"session": "s20261104T090000Z-dr01"}}
+
+    record = tmp_path / "coin.json"
+    first = VR.verify_passes([path], 3, 1, "test", coins, record=record, draw=draw)
+    held = json.loads(record.read_text())
+    assert first["answer"]["verdict"] == "accept" and first["draw"] == "challenger" and calls == [root]
+    assert (held["schema"], held["commitment"], held["source"], held["draw"]["from"]) == (
+        VR.COIN_SCHEMA, root.hex(), "5e" * 64, "challenger")
+    again = VR.verify_passes([path], 3, 1, "test", coins, record=record, draw=draw)
+    assert again["answer"] == first["answer"] and calls == [root]
+
+    def before(c, asking):
+        raise Ch.CoinError("lane vllm's period p1 is open")
+
+    def after(c, asking):
+        asking({"reserved": {"session": "s20261104T090000Z-dr02"}})
+        raise Ch.CoinError("the gate's open timed out")
+
+    other = tmp_path / "other" / "coin.json"
+    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, draw=before)
+    assert r["answer"]["verdict"] == "reject" and "p1 is open" in r["line"] and not other.exists()
+    assert not other.with_name(other.name + VR.ASKED).exists()
+    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, draw=after)
+    assert r["answer"]["verdict"] == "reject" and "timed out" in r["line"] and not other.exists()
+    assert json.loads(other.with_name(other.name + VR.ASKED).read_text())["commitment"] == root.hex()
+    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, draw=draw)
+    assert r["refused"][0] == "asked-once" and r["answer"]["verdict"] == "reject" and calls == [root]
+    node = VR.verify_passes([path], 3, 1, "test", coins, record=tmp_path / "node" / "coin.json")
+    assert node["draw"] == "node" and json.loads((tmp_path / "node" / "coin.json").read_text())["draw"] == {
+        "from": "node", "claim": VR.NODE_CLAIM}
+
+
+def test_the_live_draw_reserves_a_withheld_draw_session_outside_any_period_and_opens_it_on_the_runs_commitment(monkeypatch):
+    """`bench_arm.LiveDraw` (``served_passes.py verify`` under PEARLC_CHALLENGER_GATE/PEER/LANE): with no period of the
+    lane's open, it reserves a draw session withheld (``reserve --peer P --scheme S --families [["pouw/draw",1]]
+    --withhold``), marks the record with the reserve before its open, and returns the session's ``pouw/draw`` coin 0
+    after C with the record's draw.  It refuses before reserving while the lane's period is open, and before its open
+    when the gate reserves it plain or into a period; `live_draw` is None with neither setting and refused with one."""
+    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+    from verity_vllm.protocols.pouw.h1 import window as PHW
+
+    BA = load("pearl_c_vllm_bench_arm", KERNEL.parent / "pearl_c_vllm" / "bench_arm.py")
+    gate, root = "ssh -i KEY -o BatchMode=yes research@gate", b"\xc1" * 64
+    reserved = {"session": "s20261104T090000Z-dr01", "seq": 9, "peer": "vy-dc-h200", "by": "vllm", "period": None,
+                "withheld": True}
+    ledger, asked, opened, marks = [], [], [], []
+
+    def run(argv):
+        assert argv[:-1] == shlex.split(gate)
+        asked.append(shlex.split(argv[-1]))
+        if asked[-1][0] == "ledger":
+            return 0, "".join(json.dumps(e) + "\n" for e in ledger)
+        return 0, json.dumps(reserved)
+
+    class Session:
+        def __init__(self, entry, at, got, call):
+            self.reserved, self.challenger = got, Wd.draw_challenger(0, random.Random(7).randbytes)
+            self.session = self.commitment = None
+
+        def record(self, c):
+            opened.append((self.reserved, c))
+            self.session, self.commitment = {"session": self.reserved["session"], "root": c.hex()}, self.challenger.commitment
+            return self.challenger.open(Wd.DRAW, 0, c)
+
+    monkeypatch.setattr(PHW, "DrawSession", Session)
+    coin, drew = BA.LiveDraw(gate, "vy-dc-h200", "vllm", run)(root, marks.append)
+    want = {k: v for k, v in reserved.items() if k != "withheld"}
+    assert asked == [["ledger"], ["reserve", "--peer", "vy-dc-h200", "--scheme", PHC.SCHEME, "--families",
+                                  PHC.draw_families(), "--withhold"]]
+    assert marks == [{"reserved": want}] and opened == [(want, root)]
+    assert drew["from"] == "challenger" and (drew["label"], drew["index"]) == (Wd.DRAW, 0) and drew["reserved"] == want
+    opening = Ch.LiveOpening.from_json(drew["opening"])
+    assert coin == opening.coin and len(coin) == 64 and opening.after == root
+    assert Wd.draw_epoch_reason(Ch.LiveCommitment.from_json(drew["commitment"])) is None
+    assert drew["session"] == {"session": reserved["session"], "root": root.hex()}
+
+    for case, why in (("plain", "plain, not withheld"), ("period", "joined period p2"), ("open", "period p1 is open")):
+        for held in (asked, marks, opened, ledger):
+            held.clear()
+        reserved.update(withheld=True, period=None)
+        if case == "plain":
+            reserved["withheld"] = False
+        elif case == "period":
+            reserved["period"] = "p2"
+        else:
+            ledger.append({"kind": "period-open", "session": None, "body": {"period": "p1", "lane": "vllm"}})
+        with pytest.raises(Ch.CoinError, match=why):
+            BA.LiveDraw(gate, "vy-dc-h200", "vllm", run)(root, marks.append)
+        assert marks == [] and opened == [] and asked[0] == ["ledger"] and len(asked) == (1 if case == "open" else 2)
+
+    assert BA.live_draw(None, None, "vllm") is None
+    for one in ((gate, None), (None, "vy-dc-h200")):
+        with pytest.raises(ValueError, match="together"):
+            BA.live_draw(*one, "vllm", run)
 
 
 def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes_over_the_dropped_rounds(tmp_path):
@@ -3350,6 +3535,112 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
         assert PPD._bytes(keys[:168]) == PPD.call_keys(F90, run.salt, roots[0], index, 32, run.tree_hash)
     assert [set(PPD._bytes(run.roots_buf[nb * c:nb * (c + 1)])) for c in range(3)] == [{0x11}, {0x22}, {0x11}]
     assert run.end()["schedule"] == "deferred-a"
+
+
+def test_the_served_whole_capture_launches_each_calls_a_tree_as_one_cta_on_the_tree_stream(sm90_run, monkeypatch):
+    """Inside a whole capture under the served arm's options (``whole_defer``, ``whole_defer_a``, ``whole_fork_stats``,
+    ``whole_tree_sm``) each decode call of m = 32 splits A's commitment: pd_commit in mode 1 (``rows_a``, a CTA a real row)
+    on the capturing stream, then A's tree in a launch of its own, pd_tree's one CTA, the tree stream's only launch, over the
+    same tree, both at PD_WHOLE's shared memory; the forward's last call joins the tree stream.  Under ``whole_pd_shared`` too
+    the capture's key says so and every launch is the same but pd_commit's and pd_tree's shared memory, half an SM's, and
+    the pipelines are left without it.  Without ``whole_defer_a`` the graphs made split aren't replayed, and graphs made
+    unsplit launch pd_commit in mode 0 alone.  The graphs are made as `_replay` makes them, a stand-in in the scatter's place
+    (a Triton launch)."""
+    G = PPD.graphs
+    make, kernel, weights, _ = sm90_run
+    run = make(schedule="serial")
+    run.graphs, run.order = True, {w: i for i, w in enumerate(weights)}
+    run.key_slots = torch.zeros((len(weights), G.SLOT_BYTES), dtype=torch.uint8)
+    for x in ("whole_defer", "whole_defer_a", "whole_fork_stats", "whole_tree_sm"):
+        setattr(run, x, True)
+    log, launched = [], []
+
+    class Lane:
+        def __init__(self, name, raw):
+            self.name, self.cuda_stream = name, raw
+
+        def wait_stream(self, other):
+            log.append(f"{self.name} waits for {other.name}")
+
+        def wait_event(self, event):
+            log.append(f"{self.name} waits for {event.at}'s mark")
+
+    class Mark:
+        def record(self, stream):
+            self.at = stream.name
+
+    class On:
+        def __init__(self, s):
+            self.s = s
+
+        def __enter__(self):
+            self.held, current[0] = current[0], self.s
+
+        def __exit__(self, *exc):
+            current[0] = self.held
+
+    current, made = [Lane("main", 0)], iter((Lane("side", 20), Lane("tree", 30), Lane("stats", 40)))
+    monkeypatch.setattr(torch.cuda, "current_stream", lambda device=None: current[0])
+    monkeypatch.setattr(torch.cuda, "Stream", lambda device=None: next(made))
+    monkeypatch.setattr(torch.cuda, "stream", On)
+    monkeypatch.setattr(torch.cuda, "Event", Mark)
+    monkeypatch.setattr(G, "_capturing", lambda: True)
+    record = kernel.dev.launch
+
+    def launch(name, grid, block, smem=0, p=(), i=(), stream=None):
+        if not name.endswith("_smem"):                     # the GEMMs' probes, at their first use alone
+            launched.append((name, grid, block, smem, kernel.dev.stream if stream is None else stream, tuple(p), tuple(i)))
+        record(name, grid, block, smem, p, i, stream)
+    monkeypatch.setattr(kernel.dev, "launch", launch)
+    shapes = {w: run._shape(32, run.weights[w].n, 1024) for w in weights}
+    xs = {w: torch.randn(32, 1024).to(torch.bfloat16) for w in weights}
+
+    def graphs():
+        run._graphs.clear()
+        for w, sh in shapes.items():
+            pipe = run._pipe(w, sh)[0]
+            g = G._Graph(torch.zeros((sh.mp, sh.n), dtype=torch.bfloat16), torch.zeros(run.nb * 8, dtype=torch.uint8), "graph")
+            g.steps = [*run._call_steps(pipe), lambda: log.append(f"scatter on {current[0].name}")]
+            g.cuts, g.tree_at, g.stats_at = run._call_cuts(pipe), run._call_tree(pipe), run._call_stats(pipe)
+            run._graphs[run._graph_key(w, sh, 32)[0]] = g
+
+    def forward():
+        launched.clear()
+        log.clear()
+        run.whole_capture_begin(run.whole_key(False))
+        for w in weights:
+            run.gemm(w, xs[w], weights[w], None)
+        assert [c.w for c in run.whole_capture_end()] == list(weights)
+        return list(launched)
+
+    def pd(got):
+        return [x for x in got if x[0].startswith(("pd_commit_", "pd_tree_"))]
+
+    graphs()
+    split = forward()
+    pipes = [run._pipe(w, sh)[0] for w, sh in shapes.items()]
+    assert all(p.split_a and p.pd_a == 851 for p in pipes) and "pd_shared" not in run.whole_key(False)
+    whole, half = 232448, (232448 - R90.CTA_RESERVED_SMEM) // 2
+    assert [x[:5] + x[6:] for x in pd(split)] == [x for _ in weights for x in (
+        ("pd_commit_851", 32, 128, whole, 0, (32, 1024, 1, 64)), ("pd_tree_851", 1, 128, whole, 30, (32, 0, 0, 64)))]
+    assert all(c[5][2] == t[5][2] == p.b["tree_a"] for c, t, p in zip(pd(split)[::2], pd(split)[1::2], pipes, strict=True))
+    assert {x[0] for x in split if x[4] == 30} == {"pd_tree_851"} and log.count("tree waits for main") == len(weights)
+    assert log[-2:] == ["main waits for side", "main waits for tree"]
+
+    run.whole_pd_shared = True
+    assert "pd_shared" in run.whole_key(False)
+    shared = forward()
+    assert [x[3] for x in pd(shared)] == [half] * 2 * len(weights) and not any(p.pd_shared for p in pipes)
+    assert [x[:3] + x[4:] for x in shared] == [x[:3] + x[4:] for x in split]
+    assert [x for x in shared if x not in pd(shared)] == [x for x in split if x not in pd(split)]
+
+    run.whole_pd_shared = run.whole_defer_a = run.whole_tree_sm = False
+    with pytest.raises(RuntimeError, match="no graph yet"):
+        forward()
+    run.whole_capture_end()
+    graphs()
+    unsplit = pd(forward())
+    assert [(x[0], x[4], x[6][2], x[3]) for x in unsplit] == [("pd_commit_851", 0, 0, whole)] * len(weights)
 
 
 def test_deferred_a_runs_sm120s_split_on_the_lanes(device_run, tmp_path):

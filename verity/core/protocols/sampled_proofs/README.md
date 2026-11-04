@@ -326,7 +326,14 @@ A program's weights, constants and tables are values: committed once, under hidi
   (`verity/core/protocols/pouw/tests/test_pouw_supplied_inputs.py`).
 - **Reads.** The verifier derives every proof block's reads from its own program (`reads`). C-Flock's Lean verifier
   checks each registered port's rows, paths and positions against the `--registered` file the verifier writes
-  (`reads_file`; `Flock.Registered`, `Flock.TemplateQuery`).
+  (`reads_file`; `Flock.Registered`, `Flock.TemplateQuery`). Every other port of the statement is either a registered
+  port too (`Registered.checkComplete`) or bound to the window's committed values: the file's `bound` names its rows'
+  root and domain as the registration holds them, and the public header's must be the same (`bind_ports`;
+  `Flock.RegBound`). No port that reads a registered input of the verifier's own program is ever bound, and nor is any
+  port the window's registered circuit record declares registered for the statement's template (its registered reads,
+  table reads and openings' verdicts, outputs included: `RegBound.declaredOf`), which must be a registered port of the
+  file. A file that binds ports is verified with that record (`flock-verify --interface`; one-stage v2's
+  `proofs.interface`, its SHA-512 a blob), and refused without it.
 - **Served trees.** A served path registers each tree a proof block reads as a registered value. `served.register_served`
   returns a `ServedRegistration`: the record's entries, R7's copies and the `--registered` file. That registration is the
   premise `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`.

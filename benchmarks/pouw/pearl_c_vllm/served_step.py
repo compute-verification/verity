@@ -14,7 +14,7 @@ run's calls (``pc``: `PearlCDeviceRun.gemm`, each call's Python, launches and up
 cudaProfilerStart and cudaProfilerStop, for ``nsys profile --capture-range=cudaProfilerApi``.  A protocol arm serving
 Pearl-C takes its salt coin from a live session on the auditor host when ``PEARLC_CHALLENGER_GATE`` and
 ``PEARLC_CHALLENGER_PEER`` are set (`_live`), else from a challenger in this process; ``coins.json`` says which, and how
-the session closed (`coins_of`).
+the session closed (`pearl_c.window.coins_of`).
 
 ``analyze`` reads nsys's SQLite export.  A decode step is an engine step whose every scheduled request takes one token; its
 window runs from its start to the next step's.  Per window: the GPU's busy time (the union of kernel intervals, every
@@ -162,22 +162,6 @@ def _engine(spec_name: str, arm_id: str):
     return spec, arm, _VllmEngine(arm, preset, False, eager), reserved
 
 
-def coins_of(option, reserved) -> dict:
-    """Where the PoUW option `option` took its salt coin: its ``coin_source``, the gate's answer it carries (``session``,
-    no secret), its salt epoch's number (``pass_index``) and the root its salt coin follows (that epoch's root over
-    the weights' root, `salt.epoch_open_root`; the weights' root for a coin held in-process), its salt, and how its
-    session closed (``details.challenger``, once the engine has closed), and the session head a retained pass's manifest
-    names (``manifest_head``, `pouw_pearl_c_manifest.session_head`); `reserved` the gate's reserve answer `_live` took."""
-    from verity.core.protocols.pouw import salt as PS
-    from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
-    c = option.commitment()
-    k, w = c.get("pass_index"), c.get("weights_root")
-    after = w if k is None or w is None else PS.epoch_open_root(bytes.fromhex(w), k).hex()
-    return {"source": c.get("coin_source", "in-process"), "reserved": reserved, "session": c.get("session"),
-            "pass_index": k, "weights_root": w, "salt_after": after, "salt": c.get("salt"),
-            "closed": option.info().get("challenger"), "manifest_head": session_head(c)}
-
-
 def run(a) -> int:
     from verity_bench.vllm.presets import expand_sweep
     spec, arm, engine, reserved = _engine(a.spec, a.arm)
@@ -214,6 +198,8 @@ def run(a) -> int:
                           **summarize_host(_STEPS, point.batch)}, default=str))
     engine.close()
     if option is not None:
+        from verity_vllm.protocols.pouw.pearl_c.window import coins_of
+
         coins = coins_of(option, reserved)
         (out / "coins.json").write_text(json.dumps(coins, indent=1))
         print(json.dumps({"coins": coins}))

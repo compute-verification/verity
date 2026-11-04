@@ -57,7 +57,9 @@ units read a registered value is a shared-row member, each read port a table of 
 committed under the registered value's salts (core's ``one_stage.registered``), so each row's public string is the
 registered one, and its header names each row's position and path to the value's root; the verifier's ``--registered``
 file of the member comes from the record and the roots it pinned alone (`registered_reads`), and Lean's registered reads
-open each row against them. A table is a registered parameter of its own, every row of it; a table
+open each row against them, in the parameter's row format (`value_format`: 16-bit leaves in ``hm96-sha512/row/v2`` rows, a
+table's in ``row-seg/v1`` rows, or the one `Registered.formats` declares, such as Pearl+'s FP32 words in ``row-seg/v1``
+rows, which is its readers' ports' row schema). A table is a registered parameter of its own, every row of it; a table
 read takes a supplied value (`supplied`), one row the verifier fills from its pin of the table's parameter, the root or
 the domain id, under public salts; an opening's verdict reads the table's supplied 1, so a verdict of 0 opens no root,
 and the opening's row, salt and path are its units' own values, which the verdict holds to the pinned root inside the
@@ -282,10 +284,11 @@ def layout(fn: Any) -> RowLayout:
 def unit_rows(fn: Any, cuts: Mapping[str, int] | None = None, seg: Sequence[str] = ()
               ) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
     """``fn``'s rows as C-Flock's `UnitStager` takes them, ``(in_rows, out_rows)``: one ``hm96-sha512/row/v2`` row per parameter,
-    or per row of a cut one (`Layout.cut`), then one per return field; a parameter in ``seg`` (`seg_ports`) is one
-    ``hm96-sha512/row-seg/v1`` row."""
+    or per row of a cut one (`Layout.cut`), then one per return field; a parameter or output in ``seg`` (`seg_ports`) is
+    one ``hm96-sha512/row-seg/v1`` row."""
     lay = layout(fn)
-    return [(p, SEG if p in seg else V2, 16 * w, ps) for p, w, ps in lay.cut(cuts)], [(V2, (j,)) for j in range(len(lay.outs))]
+    return ([(p, SEG if p in seg else V2, 16 * w, ps) for p, w, ps in lay.cut(cuts)],
+            [(SEG if p in seg else V2, (j,)) for j, (p, _w) in enumerate(lay.outs)])
 
 
 #: C-Flock's composer's sizes, which `verity_flock.circuit` and the benchmarks read from here: a C-Flock block of at most
@@ -600,48 +603,84 @@ class TableOpening:
                 "at": self.at, "units": self.units}
 
 
+#: a registered value's row format (`Registered.formats`): its rows' schema and its leaves' width in bits, of `WIDTHS`
+FORMAT_KEYS = ("row_schema", "word_bits")
+WIDTHS = (16, 32)
+
+
 @dataclass(frozen=True)
 class Registered:
     """What the registration fixes that units read: the registered root parameters by name with their leaves, the tables
     over them, and the reads (`Read`, `TableRead`, `TableOpening`). ``values``: registered parameters the circuit's program
     takes as parameters of its own, in order, which no unit reads but through its registered reads (`population_program`'s
     values, `program_values`), so the window's registration registers them as the program's (one-stage's R7), as the
-    outputs of an earlier registration that registered them first; recorded only when there are some."""
+    outputs of an earlier registration that registered them first; recorded only when there are some. ``formats``: by
+    parameter, the rows its reads read when they aren't 16-bit leaves in ``hm96-sha512/row/v2`` rows (`value_format`),
+    ``{"row_schema", "word_bits"}``: Pearl+'s A rows and y are FP32 words in ``hm96-sha512/row-seg/v1`` rows, as its trees
+    commit them; recorded only when there are some."""
     params: Mapping[str, int]
     tables: tuple[Table, ...] = ()
     reads: tuple[Read, ...] = ()
     roots: tuple[TableRead, ...] = ()
     openings: tuple[TableOpening, ...] = ()
     values: tuple[str, ...] = ()
+    formats: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.formats, Mapping) or not all(isinstance(f, Mapping) for f in self.formats.values()):
+            raise ValueError(f"formats {self.formats!r}: an object of a format by parameter")
+        object.__setattr__(self, "formats", {str(v): dict(f) for v, f in self.formats.items()})
+        tables = {t.param for t in self.tables}
+        for v, f in self.formats.items():
+            bits = f.get(FORMAT_KEYS[1])
+            if (v not in self.params or v in tables or set(f) != set(FORMAT_KEYS) or f[FORMAT_KEYS[0]] not in (V2, SEG)
+                    or type(bits) is not int or bits not in WIDTHS or (f[FORMAT_KEYS[0]], bits) == (V2, 16)
+                    or int(self.params[v]) * 16 % bits):
+                raise ValueError(f"{v!r}'s format {f}: a registered parameter's other than a table's, {{row_schema: {V2} or "
+                                 f"{SEG}, word_bits: 16 or 32}} other than the default (16-bit leaves in {V2} rows), its "
+                                 "16-bit leaves whole leaves of that width")
 
     def doc(self) -> dict[str, Any]:
         return {"params": dict(sorted(self.params.items())), "tables": [t.doc() for t in self.tables],
                 "reads": [r.doc() for r in self.reads], "roots": [r.doc() for r in self.roots],
-                "openings": [o.doc() for o in self.openings], **({"values": list(self.values)} if self.values else {})}
+                "openings": [o.doc() for o in self.openings], **({"values": list(self.values)} if self.values else {}),
+                **({"formats": dict(sorted(self.formats.items()))} if self.formats else {})}
 
     @classmethod
     def of(cls, d: Any) -> Registered:
         try:
             if not {"params", "tables", "reads", "roots", "openings"} <= set(d) <= {"params", "tables", "reads", "roots",
-                                                                                    "openings", "values"}:
+                                                                                    "openings", "values", "formats"}:
                 raise ValueError(sorted(d))
             return cls({str(k): v for k, v in d["params"].items()}, tuple(Table(**t) for t in d["tables"]),
                        tuple(Read.of(r) for r in d["reads"]), tuple(TableRead(**r) for r in d["roots"]),
                        tuple(TableOpening(**{**o, "ports": tuple(o["ports"])}) for o in d["openings"]),
-                       tuple(d.get("values", ())))
+                       tuple(d.get("values", ())), d.get("formats", {}))
         except (TypeError, ValueError, KeyError, AttributeError) as e:
-            raise ValueError(f"a circuit's registered reads are {{params, tables, reads, roots, openings}} and its values: "
-                             f"{e}") from e
+            raise ValueError(f"a circuit's registered reads are {{params, tables, reads, roots, openings}}, its values and "
+                             f"their formats: {e}") from e
+
+
+def value_format(registered: Registered | None, param: str) -> tuple[str, int]:
+    """The row schema and leaf width in bits of the rows ``registered``'s reads read of ``param``: its declared format
+    (`Registered.formats`), a table's parameter's 16-bit leaves in ``hm96-sha512/row-seg/v1`` rows (`gates.embedding`),
+    else 16-bit leaves in ``hm96-sha512/row/v2`` rows."""
+    reg = registered or Registered({})
+    if (f := reg.formats.get(param)) is not None:
+        return f[FORMAT_KEYS[0]], int(f[FORMAT_KEYS[1]])
+    return (SEG, 16) if param in {t.param for t in reg.tables} else (V2, 16)
 
 
 def program_values(registered: Registered | None) -> tuple[tuple[str, int, int], ...]:
-    """``registered``'s values as its program takes them (`population_program`'s ``values``): each ``(name, leaves, 16)``, a
-    registered parameter's 16-bit leaves. Refused (ValueError) unless each is a registered parameter, once."""
+    """``registered``'s values as its program takes them (`population_program`'s ``values``): each ``(name, leaves,
+    word_bits)``, a registered parameter's leaves in its format's width (`value_format`), its 16-bit leaves over
+    ``word_bits / 16``. Refused (ValueError) unless each is a registered parameter, once."""
     vs = registered.values if registered is not None else ()
     params = registered.params if registered is not None else {}
     if len(set(vs)) != len(vs) or not all(isinstance(v, str) and v in params for v in vs):
         raise ValueError(f"values {list(vs)}: registered parameters {sorted(params)}, each once")
-    return tuple((v, int(params[v]), 16) for v in vs)
+    bits = {v: value_format(registered, v)[1] for v in vs}
+    return tuple((v, int(params[v]) * 16 // bits[v], bits[v]) for v in vs)
 
 
 @dataclass(frozen=True)
@@ -751,6 +790,9 @@ def check_inputs(templates: Mapping[str, tuple[RowLayout, int]], cuts: Mapping[s
         lo, hi = r.span()
         if r.param not in reg.params or lo < 0 or hi + words // k > reg.params[r.param]:
             raise ValueError(f"read {r.doc()}: leaves [{lo}, {hi + words // k}) of a registered parameter {dict(reg.params)}")
+        if 16 * (words // k) % (bits := value_format(reg, r.param)[1]):
+            raise ValueError(f"read {r.doc()}: rows of {words // k} 16-bit words, not whole {bits}-bit leaves of {r.param!r}'s "
+                             "format")
         rects.append((r.reader, r.port, r.at, r.at + r.reader_units, r.cut[0], r.cut[0] + r.cut[1], r.doc()))
     for r in reg.roots:
         words, k = port(r.reader, r.port, r.doc())
@@ -815,21 +857,20 @@ def committed_reads(registered: Registered | None) -> tuple[Read, ...]:
 
 
 def seg_ports(registered: Registered | None) -> dict[str, frozenset[str]]:
-    """By template, the ports its registered reads (`Read`) fill with a declared table's parameter's rows, which are
-    ``hm96-sha512/row-seg/v1`` leaves (`gates.embedding`), so the port is a row of that schema (`unit_rows`) where every
-    other is ``hm96-sha512/row/v2``. Refused (ValueError) where one port reads a table's rows and another parameter's: a
-    template's port has one row schema."""
+    """By template, the ports its registered reads (`Read`) fill with ``hm96-sha512/row-seg/v1`` rows (`value_format`: a
+    declared table's parameter's, `gates.embedding`, or a value's of that format), so the port is a row of that schema
+    (`unit_rows`) where every other is ``hm96-sha512/row/v2``. Refused (ValueError) where one port reads rows of two
+    formats: a template's port has one row schema and one leaf width."""
     reg = registered or Registered({})
-    tables = {t.param for t in reg.tables}
-    by: dict[tuple[str, str], set[bool]] = {}
+    by: dict[tuple[str, str], set[tuple[str, int]]] = {}
     for r in reg.reads:
-        by.setdefault((r.reader, r.port), set()).add(r.param in tables)
-    if bad := sorted(k for k, v in by.items() if len(v) > 1):
-        raise ValueError(f"{bad}: a template's port reads a table's row-seg rows and another parameter's row/v2 rows; a port "
-                         "has one row schema")
+        by.setdefault((r.reader, r.port), set()).add(value_format(reg, r.param))
+    if bad := sorted((k, sorted(v)) for k, v in by.items() if len(v) > 1):
+        raise ValueError(f"{bad}: a template's port reads rows of two formats (row schema, leaf width); a port has one row "
+                         "schema and one leaf width")
     out: dict[str, set[str]] = {}
     for (tid, p), v in by.items():
-        if True in v:
+        if next(iter(v))[0] == SEG:
             out.setdefault(tid, set()).add(p)
     return {tid: frozenset(ps) for tid, ps in out.items()}
 
@@ -1110,8 +1151,9 @@ class Circuit:
 def read_shape(circuit: Circuit, value: str) -> dict[str, Any]:
     """Registered parameter ``value``'s rows as the circuit's reads fix them, the shape an outside committer (a network
     certifier's output value, `out_commit.OutShape`) commits it at: ``words``, the row width of the port every read of it
-    names; ``rows``, its leaves over that; 16-bit leaves in ``hm96-sha512/row/v2`` rows (`unit_rows`). Refused
-    (ValueError) when no read names it, two read it at two widths, or its leaves aren't whole rows."""
+    names, in leaves of its format's ``word_bits``; ``rows``, its 16-bit leaves over the port's 16-bit words; and its
+    ``row_schema`` (`value_format`: 16-bit leaves in ``hm96-sha512/row/v2`` rows unless declared). Refused (ValueError)
+    when no read names it, two read it at two widths, or its leaves aren't whole rows."""
     lays = circuit.layouts
     widths = {dict(lays[r.reader][0].rows + lays[r.reader][0].outs)[r.port] for r in circuit.reads if r.param == value}
     leaves = (circuit.registered.params if circuit.registered is not None else {}).get(value)
@@ -1119,10 +1161,10 @@ def read_shape(circuit: Circuit, value: str) -> dict[str, Any]:
         raise ValueError(f"{circuit.name}: no registered read of {value!r}")
     if len(widths) != 1:
         raise ValueError(f"{circuit.name}: {value!r} is read at {sorted(widths)} words a row, not one width")
-    (w,) = widths
+    (w,), (schema, bits) = widths, value_format(circuit.registered, value)
     if leaves % w:
         raise ValueError(f"{circuit.name}: {value!r}'s {leaves} leaves aren't whole rows of {w} words")
-    return {"value": value, "words": w, "rows": leaves // w, "word_bits": 16, "row_schema": V2}
+    return {"value": value, "words": 16 * w // bits, "rows": leaves // w, "word_bits": bits, "row_schema": schema}
 
 
 def members(circuit: Circuit, cap: int, built: tuple[Any, Mapping[str, Any]] | None = None) -> tuple[CS.Member, ...]:
@@ -1684,10 +1726,10 @@ def registered_reads(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, M
     the format of ``registered``, core's ``one_stage.registered``, by member key), from the stated record ``doc`` and its
     window ``w`` (`window_of_record`'s) alone, but for each parameter's entry from ``pins`` (``{param: entry}``: the value's
     ``root``, ``leaves``, ``words``, ``word_bits`` and ``domain`` as the verifier pinned them before the run): each read
-    port (`committed_reads`) reads its parameter's rows in the port's row format, and unit ``m.base + i`` the row its
-    ``i``-th unit reads (`_reads_of`). A table's supplied values the verifier makes itself from its pin of the table's
-    parameter (`supplied`, under ``w``'s partition digest). Refused (ValueError) where a read's parameter has no pin, or a
-    pin's rows are not the port's."""
+    port (`committed_reads`) reads its parameter's rows in the port's row format, its leaves the parameter's format's
+    width (`value_format`), and unit ``m.base + i`` the row its ``i``-th unit reads (`_reads_of`). A table's supplied
+    values the verifier makes itself from its pin of the table's parameter (`supplied`, under ``w``'s partition digest).
+    Refused (ValueError) where a read's parameter has no pin, or a pin's rows are not the port's in that width."""
     _wires, _cuts_, reg, _ingress = declarations(doc)
     reads = committed_reads(reg)
     if not reads:
@@ -1706,14 +1748,13 @@ def registered_reads(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, M
             words = dict(m.rows + m.outs)[p]
             if e is None:
                 raise ValueError(f"{m.key} {p} reads registered parameter {param!r}, whose root the verifier didn't pin")
-            if (e.get("words"), e.get("word_bits", registered.WORD_BITS)) != (words, registered.WORD_BITS) \
-                    or e.get("value") != param:
-                raise ValueError(f"{m.key} {p}: the pin of {param!r} is {e.get('value')!r} rows of {e.get('words')} "
-                                 f"{e.get('word_bits', registered.WORD_BITS)}-bit leaves, not the port's {words} 16-bit words")
-            ports[p] = {"value": param, "root": e["root"], "leaves": int(e["leaves"]), "words": words,
-                        "word_bits": registered.WORD_BITS, "domain": e["domain"],
-                        registered.SCHEMA_KEY: m.schema(p), "reads": [positions[int(i)] for i in refs],
-                        registered.READS_FROM: m.base}
+            n, bits, want = e.get("words"), e.get("word_bits", registered.WORD_BITS), value_format(reg, param)[1]
+            if bits != want or type(n) is not int or n * bits != 16 * words or e.get("value") != param:
+                raise ValueError(f"{m.key} {p}: the pin of {param!r} is {e.get('value')!r} rows of {n} {bits}-bit leaves, not "
+                                 f"the port's {words} 16-bit words in {want}-bit leaves")
+            ports[p] = {"value": param, "root": e["root"], "leaves": int(e["leaves"]), "words": n, "word_bits": bits,
+                        "domain": e["domain"], registered.SCHEMA_KEY: m.schema(p),
+                        "reads": [positions[int(i)] for i in refs], registered.READS_FROM: m.base}
         out[m.key] = {"format": registered.READS_V1, "ports": ports}
     return out
 
@@ -1825,10 +1866,12 @@ class Window:
         for r in self.circuit.reads:
             v = (self.registered or {}).get(r.param)
             lay = lays[r.reader][0]
-            words = dict(lay.rows + lay.outs)[r.port]
-            if v is not None and (v.words != words or v.words * v.leaves != params[r.param]):
-                raise ValueError(f"{r.param}: committed as {v.leaves} rows of {v.words} words, not the {params[r.param]} "
-                                 f"leaves {r.port}'s rows of {words} words read")
+            words, bits = dict(lay.rows + lay.outs)[r.port], value_format(self.circuit.registered, r.param)[1]
+            if v is not None and (v.word_bits != bits or CS.value_words(v) != words
+                                  or words * v.leaves != params[r.param]):
+                raise ValueError(f"{r.param}: committed as {v.leaves} rows of {v.words} {v.word_bits}-bit leaves, not the "
+                                 f"{params[r.param]} 16-bit leaves {r.port}'s rows of {words} words read in {bits}-bit "
+                                 "leaves")
         program, query = self.circuit.program()
         self.window = CS.Binding(program, query, dict(self.law), self.run, members(self.circuit, self.cap, (program, query)),
                                 work_table=None if self.work_table is None else dict(self.work_table))
@@ -1936,9 +1979,9 @@ class Window:
                 if (v := values.get(param)) is None:
                     raise ValueError(f"{m.key} {p} reads registered parameter {param!r}: give its committed value"
                                      + (" (`Window.supply`)" if param.rsplit("/", 1)[-1] in SUPPLIED else ""))
-                if v.words != words[p]:
-                    raise ValueError(f"{m.key} {p} reads {param!r}, committed as rows of {v.words} words, not the port's "
-                                     f"{words[p]}")
+                if CS.value_words(v) != words[p]:
+                    raise ValueError(f"{m.key} {p} reads {param!r}, committed as rows of {v.words} {v.word_bits}-bit "
+                                     f"leaves, not the port's {words[p]} 16-bit words")
                 wanted.setdefault(param, []).append(positions)
         drawn = _Drawn(values, wanted)
         data, salts_of, self._entries = [], {}, {}
@@ -2026,10 +2069,8 @@ class Window:
                 reads = _reads_of(tid, mlo, m.n, committed, dict(m.rows + m.outs))
                 if p in reads:
                     param, positions, refs = reads[p]
-                    v = self.registered[param]
-                    rows = np.asarray(v.rows[np.asarray(positions)[refs[s - mlo:e - mlo]]] if isinstance(v.rows, np.ndarray)
-                                      else [v.rows[positions[int(i)]] for i in refs[s - mlo:e - mlo]], dtype=np.uint16)
-                    a[s - lo:e - lo] = rows.reshape(e - s, w)
+                    at = np.asarray(positions, dtype=np.int64)[refs[s - mlo:e - mlo]]
+                    a[s - lo:e - lo] = CS.value_rows(self.registered[param], at).reshape(e - s, w)
                     continue
                 wires = {q: (o, ws) for q, o, ws in m.wired}
                 for j in range(k):
