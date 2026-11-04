@@ -555,6 +555,7 @@ advice_charge() {  # the test run's every closed window's advice and advice_char
     adv="$D/advice"
     say "ADVICE: the server's own, each window's committed as it served"
   else
+    advice_cap || return 3
     ca=$(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP" \
       | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])")
     [ -n "$ca" ] || { say "ADVICE-CHARGE: no registered compiler (prove_path.py compiler)"; return 13; }

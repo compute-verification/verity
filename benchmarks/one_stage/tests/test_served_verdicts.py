@@ -1703,6 +1703,39 @@ def test_a_server_with_the_prefix_cache_and_no_cap_is_refused_before_it_starts(t
     assert lines == ["PREFLIGHT: SERVE_ARGS serves with the prefix cache, whose KV sources ℓ_a's default leaves out: set CAP"]
 
 
+@pytest.mark.parametrize("env, cap", [
+    ({}, (4, 256, 512, 24)),
+    ({"WINDOW_STEPS": "1"}, "1328"),
+    ({"CAP": "65536"}, "65536"),
+    ({"SERVE_ARGS": "--prefix-caching"}, None),
+])
+def test_charge_on_a_serve_dir_whose_server_committed_no_advice_writes_it_under_b_at_cap(tmp_path, env, cap):
+    """`served_verdicts.sh charge` alone, on a serve dir with no advice.jsonl, writes each window's advice with
+    `verity-vllm advice` under prove_path's compiler, both at CAP, by default ℓ_a of the run's limits as `serve` derives
+    it, then charges it (advice_charge.py); with the prefix cache and no CAP it is the same PREFLIGHT refusal as `serve`'s,
+    before any of them runs."""
+    tree, venv, calls = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "calls"
+    (tree / "integrations" / "vllm").mkdir(parents=True)
+    _script(venv / "python", f'[ "$1" = -c ] && exec {sys.executable} "$@"\nprintf \'%s\\n\' "$*" >> {calls}\n'
+                             'case $1 in *prove_path.py) echo \'{"inner": {"name": "n", "digest": "d"}}\' ;; esac')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
+           "OUT": str(tmp_path / "out"), "H1_GATE": "", **env}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "charge"], cwd=tree, env=env, check=False,
+                        capture_output=True).returncode
+    ran = [c.split() for c in calls.read_text().splitlines()] if calls.exists() else []
+    if cap is None:
+        assert (rc, ran) == (3, []) and (tmp_path / "out" / "verdicts.txt").read_text().splitlines() == [
+            "PREFLIGHT: SERVE_ARGS serves with the prefix cache, whose KV sources ℓ_a's default leaves out: set CAP"]
+        return
+    cap = _default_cap(*cap) if isinstance(cap, tuple) else cap
+    compiler, advice, charge = ran
+    assert rc == 0 and compiler[:2] == ["benchmarks/prove_path/prove_path.py", "compiler"], (rc, ran)
+    assert compiler[compiler.index("--cap-bits") + 1] == cap and advice[advice.index("--cap") + 1] == cap
+    assert advice[:4] == ["-m", "verity_vllm.pipeline.cli", "advice", str(tmp_path / "serve")]
+    assert [advice[advice.index(f) + 1] for f in ("--compiler-name", "--compiler-digest")] == ["n", "d"]
+    assert charge[0] == str(tree / "benchmarks" / "one_stage" / "advice_charge.py")
+
+
 class _Response:
     """`urlopen`'s response, read whole or line by line; reading line i sets ``now[0]`` to ``times[i]``, and reading past the
     last line to ``end``."""
