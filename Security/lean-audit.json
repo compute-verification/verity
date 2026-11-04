@@ -2619,7 +2619,8 @@
    "nontrivial": "Nci.SecurityProofs.CapabilityFloorNontrivial"
   },
   "Nci.SecurityProofs.HeldBudget": {
-   "honest": ["Nci.SecurityProofs.HeldBudgetHonest"]
+   "honest": ["Nci.SecurityProofs.HeldBudgetHonest"],
+   "nontrivial": "Nci.SecurityProofs.HeldBudgetNontrivial"
   },
   "Nci.SecurityProofs.ImportOrRecompute": {
    "honest": ["Nci.SecurityProofs.ImportOrRecomputeHonest"],
@@ -2657,7 +2658,8 @@
    "kind": "exclusion"
   },
   "Nci.SecurityProofs.StatHeldBudget": {
-   "honest": ["Nci.SecurityProofs.StatHeldBudgetHonest"]
+   "honest": ["Nci.SecurityProofs.StatHeldBudgetHonest"],
+   "nontrivial": "Nci.SecurityProofs.StatHeldBudgetNontrivial"
   },
   "Nci.SecurityProofs.WeightedProductCap": {
    "honest": ["Nci.SecurityProofs.WeightedProductCapHonest"],
@@ -2914,12 +2916,6 @@
   "Nci.SecurityProofs.FitBound": "51bd3f7e82387c8acf4e636b2b68f2a2a4688846c86ce302c18139bddb9cdcd0",
   "Nci.SecurityProofs.FitBoundSlots": "3c31f9877b2753b9bd067ce2f820b64cf846a13f3cb0d77a894bbde938f2e2bd",
   "Nci.SecurityProofs.FitRate": "4ad0e8c3c012b570f1e87d47bbda107dce81f9772c33432b68aabccbf103a0da",
-  "Nci.SecurityProofs.HeldBudget": {
-   "type_hash": "649fa78eb4436954b0e70882bc9ade0c96348ae4fd1d8e5be0d04d7c8e6ea0e2",
-   "missing": "nontrivial",
-   "why": "its nontrivial witness, Nci.SecurityProofs.HeldBudgetNontrivial, negates the bound alone (¬ Nci.Capability.HeldPriceAtMost …), and an exclusion's states, at an explicit circuit, the other premises, the negation of one named premise (DescriptionHard, a partition's IsCK or the evaluation) and the negation of the bound; until its owner restates it, the honest witness stays checked"
-  },
-  "Nci.SecurityProofs.HeldBudgetNontrivial": "6dab089a301f5257866b903d1c9e885c0031f7aac94c698f704a25d534a87173",
   "Nci.SecurityProofs.IncompressibleContainedMatMulOn": "d8e0a11a49a4d39ff941fc7d55b66c4082a7e912c64d32536aa42d064cf716e8",
   "Nci.SecurityProofs.IncompressibleContainedTraining": "4227f6d22e9148a31c0837137544b6cf10c3e13aa7c68a4d5d1cfd8f6641c67b",
   "Nci.SecurityProofs.IncompressibleContainedTrainingOn": "9170485bec4c7f00877387a073840ef69c858782c201513859ec40f31fc6d8bb",
@@ -2932,12 +2928,6 @@
   "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn": "050a6a71067b4a587ac6b196844f86d1b35fe2ea863657b2695c575a06c1d95e",
   "Nci.SecurityProofs.ReadBound": "5aba3326c25c0abfefc6969e6eac4e93768b23b0600102b7ecbec0504e979548",
   "Nci.SecurityProofs.ReferenceTraining": "104a6c9425013ffea4548e58627a31cf0d67358b3da5a64e483d59379ff1566b",
-  "Nci.SecurityProofs.StatHeldBudget": {
-   "type_hash": "7b04ca7558d5fd635d255e44644c64f63f07eb204f47165af034f3e1ad2f0602",
-   "missing": "nontrivial",
-   "why": "its nontrivial witness, Nci.SecurityProofs.StatHeldBudgetNontrivial, negates the bound alone (¬ Nci.Capability.HeldPriceAtMost …), and an exclusion's states, at an explicit circuit, the other premises, the negation of one named premise (MinEntropyHard, the commitment's honesty or a partition's IsCK) and the negation of the bound; until its owner restates it, the honest witness stays checked"
-  },
-  "Nci.SecurityProofs.StatHeldBudgetNontrivial": "e2b5ec98cd836215e65e15aaab67dc73d7bd2032a760d166e02e303fc86aa0d7",
   "Nci.SecurityProofs.ThreadedThrottled": "6007575d1460a22e63346ad2afc4a83bc5c4c7fff749b280a150dba09d596041",
   "Nci.SecurityProofs.ThreadedThrottledDark": "a3965e5caa03cf2e61926408d5047b84693ac61a62baafca0cca6e13d857dd2e",
   "Nci.SecurityProofs.ThreadedThrottledDarkSlots": "f0fd651df80a204957a512ee9a4b43bbd40861f8aef36fd77bb331b62fa14301",
