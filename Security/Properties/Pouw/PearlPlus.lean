@@ -173,11 +173,12 @@ def YIsTheUnscale : Prop :=
 X_O (how many of them landed on a tile over its inert-work bound, `overCapDraws`) and δ = 1/100 (`creditAtAssumption`),
 crediting nothing on a test instance's input (`testCredit`); a refused or rejected run publishes none. -/
 def WorkIsTheCredit : Prop :=
-  ∀ (i : Input) (opener : Nat → Nat → Except String TileOpening),
-    ((check i opener).accept = true → ∃ pl, plan i = .ok pl ∧
+  (∀ (i : Input) (opener : Nat → Nat → Except String TileOpening),
+    (check i opener).accept = true → ∃ pl, plan i = .ok pl ∧
       (check i opener).work =
         some (testCredit i.testInstance (creditAtAssumption pl.passes i.draws (overCapDraws pl (check i opener).verdicts) DELTA))) ∧
-    ((check i opener).accept = false → (check i opener).work = none)
+  (∀ (i : Input) (opener : Nat → Nat → Except String TileOpening),
+    (check i opener).accept = false → (check i opener).work = none)
 
 /-! ## The trees -/
 
