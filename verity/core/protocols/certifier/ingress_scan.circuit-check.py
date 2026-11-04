@@ -18,3 +18,16 @@ def _network_ingress_scan_roots() -> list[Any]:
 
     statics = dict(B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
     return [bind(IngressScanBucket, **statics), bind(IngressScanFirst, **statics)]
+
+
+def _network_ingress_scan_w63k4_roots() -> list[Any]:
+    """The two units at the w63k4 class (scan_zk.py's ``w63k4``: w63's at KO 4 and KI 32, a window circuit's of 8
+    slots, 32 prompt ids and 4 outputs a request), the circuits its scan registers: their digest pins hold the units
+    the deployment proves, which the test class's can't, and they reach four lanes' slot entries, a 47-cell slot and an
+    ingress bound below the timestep. As large as w63's in ANDs (a slot's C·K prompt ids dominate the state), so this
+    unit is its own, rerun only when what it reads changes."""
+    from verity.ml.circuits.defs import bind
+    from verity.core.protocols.certifier.ingress_scan import IngressScanBucket, IngressScanFirst
+
+    statics = dict(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=4, KI=32)
+    return [bind(IngressScanBucket, **statics), bind(IngressScanFirst, **statics)]

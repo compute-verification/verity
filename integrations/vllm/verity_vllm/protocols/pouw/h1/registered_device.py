@@ -10,8 +10,8 @@ holds them (64-byte nodes, 128-byte strings, as bytes). `device_hash` launches t
 `Hashing` reading them out once the stream is done. `host_commit` runs
 the same functions on the CPU (`registered_rows_host.cpp`, built with the system C++ compiler): the twin the CPU tests
 hold to `pouw_h1_registered.commit`'s NumPy path on machines without a GPU. Builds share the Commit's row-table builder
-(`row_tables_device._build`, keyed by sources, flags and compiler) and its per-device state (`row_tables_device.Device`);
-nvcc is `pouw_device`'s (its `TOOLCHAIN`'s, or the one on the path).
+(`row_tables_device._build`, keyed by sources, the shared headers, flags and compiler) and its per-device state
+(`row_tables_device.DeviceLibrary`); nvcc is `pouw_device`'s (its `TOOLCHAIN`'s, or the one on the path).
 """
 from __future__ import annotations
 
@@ -28,8 +28,8 @@ from verity_vllm.commit import row_tables_device as RTD
 __all__ = ["CHUNK_BYTES", "Hashing", "Pub", "Table", "available", "device_commit", "device_hash", "device_lib",
            "device_public_salts", "host_commit", "host_lib", "host_public_salts", "nvcc", "pub", "table"]
 
-DEVICE_SOURCES = (RTD.SHA512_SOURCE, "ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_rows.cu")
-HOST_SOURCES = (RTD.SHA512_SOURCE, "ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_rows_host.cpp")
+DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_rows.cu")
+HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_rows_host.cpp")
 #: bytes of rows a chunk copies to the device
 CHUNK_BYTES = 1 << 28
 #: rows a value may have: row j's salt is ChaCha20 blocks 3j .. 3j + 2 under a 32-bit low counter word
@@ -168,8 +168,8 @@ def host_public_salts(head: bytes, first: int, n: int) -> bytes:
     return out.tobytes()
 
 
-def _device(torch: Any) -> RTD.Device:
-    return RTD.Device.of(torch, torch.cuda.current_device(), device_lib, "rr_midstates")
+def _device(torch: Any) -> RTD.DeviceLibrary:
+    return RTD.DeviceLibrary.of(torch, torch.cuda.current_device(), device_lib, "rr_midstates")
 
 
 @cache
