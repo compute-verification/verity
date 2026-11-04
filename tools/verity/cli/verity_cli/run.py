@@ -6,8 +6,9 @@
     verity config check CONFIG
     verity config hash CONFIG
 
-`verity run` checks the configuration, refusing any set of subprotocols that is neither remote's nor onsite's
-(``composite``, `verity.core.deploy.config.COMPOSITES`: protocol soundness covers only those two composites), then runs
+`verity run` checks the configuration, refusing any set of subprotocols that is no composite's (``composite``,
+`verity.core.deploy.config.COMPOSITES`: onsite, remote's composite of record, whose work is Pearl+'s run verdict, and
+remote's development composite, whose work is H1's period; protocol soundness covers the first two), then runs
 the parties it places on this machine (``--on``, default ``local``), or only the ``--party`` ones, for ``--periods``
 periods (default 1), in the shared state ``--state`` (default a new directory under the system's temporary one). The
 parties are those of the static table `REGISTRY` names: the served window's (`examples/onsite_served/served_table.py`);
@@ -475,7 +476,8 @@ def config_main(argv: Sequence[str], reg: Registry | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("new", help="a configuration that states only its choices")
     p.add_argument("--workload", required=True)
-    p.add_argument("--protocols", required=True, help="the subprotocols, comma-separated: remote's (sampled-proofs,pouw) "
+    p.add_argument("--protocols", required=True, help="the subprotocols, comma-separated: remote's "
+                   "(sampled-proofs,pearl-plus,inference-only; pouw in place of pearl-plus: its development composite) "
                    "or onsite's")
     p.add_argument("--on", dest="machine", default=K.LOCAL, metavar="MACHINE", help=f"every party's machine (default {K.LOCAL})")
     p.add_argument("--commit", help="the program's commit (default the running tree's HEAD)")

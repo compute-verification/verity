@@ -588,6 +588,34 @@ def test_remote_refuses_a_period_window_on_another_record(remote_server):
     assert sum(seen.values()) > 0, dict(seen)
 
 
+def test_remote_v1_ties_pearl_plus_run_to_the_policys_record():
+    """Remote v1's `run` tie, as `Core.Remote.V1`'s guards state it: a Pearl+ run naming the digest of the policy's
+    record holds, one naming another record's is a stray naming both, and a run whose commitment doesn't decode (an
+    extra key, a short digest, none) leaves Pearl+ to refuse it."""
+    assert R.REMOTE_V1.ties == (R.RUN,) and [s for s, _ in R.RUN.names] == [R.INFERENCE_ONLY.id, R.PEARL_PLUS.id]
+
+    def record(n: int) -> bytes:
+        return canonical({"format": "verity/registration/v2", "n": n, "registered": []}).encode()
+
+    def digest(n: int) -> bytes:
+        return R.policy_record(record(n), b"")[0]
+
+    def run(on: bytes, **extra) -> bytes:
+        return canonical({"manifests": [{}], "record": on.hex(), **extra}).encode()
+
+    def strays(policy: int, commitment: bytes) -> str | None:
+        return R.RUN.strays([(R.INFERENCE_ONLY.id, "{}", record(policy), b""),
+                             (R.PEARL_PLUS.id, "{}", commitment, b"")])
+
+    assert len(digest(0)) == 64 and R.run_record(run(digest(0)), b"") == [digest(0)]
+    assert strays(0, run(digest(0))) is None
+    assert strays(1, run(digest(0))) == (f"record: {R.INFERENCE_ONLY.id} committed {digest(1).hex()}, "
+                                         f"{R.PEARL_PLUS.id} committed {digest(0).hex()}")
+    for undecoded in (b"", run(digest(0), x=1), run(digest(0)[:32]),
+                      canonical({"manifests": [], "record": digest(0).hex()}).encode()):
+        assert R.run_record(undecoded, b"") is None and strays(1, undecoded) is None, undecoded
+
+
 def test_sampled_proofs_refuses_one_stage_v1(remote_server):
     """Sampled proofs' one-stage form is one-stage v2: v1's audit under it, one v1 itself decides (undecided, on an
     empty draw at its challenger's coins), is refused by name (`VStar.Recursive.Sampled.V1_REFUSED`) at its params,
@@ -636,17 +664,18 @@ def test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit(onsite_server, r
     assert stats.counts == {R.REJECT: 10} and seen["generic bandwidth"] == 10, (stats, dict(seen))
 
 
-def test_product_names_only_the_two_composites():
-    """`product IDS id` is remote over remote's subprotocols and onsite over onsite's, in any order, exactly the
-    configuration's composites (`verity.core.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS` gives their names),
-    and refuses every other set of their subprotocols and the wipe (exit 64)."""
+def test_product_names_only_the_composites():
+    """`product IDS id` is each composite over its subprotocols, in any order (onsite, remote v1 with Pearl+'s run and
+    remote v0 with H1's PoUW period), exactly the configuration's composites (`verity.core.deploy.config.COMPOSITES`,
+    by the ids `SUBPROTOCOLS` gives their names), and refuses every other set of their subprotocols and the wipe
+    (exit 64)."""
     exe = D.build(PROTOCOLS / "onsite", "product")
 
     def named(xs) -> tuple[int, str]:
         p = subprocess.run([exe, ",".join(xs), "id"], capture_output=True, text=True)
         return p.returncode, p.stdout.strip()
 
-    want = {p.id: sorted(C.id for C in p.components) for p in (R.ONSITE, R.REMOTE)}
+    want = {p.id: sorted(C.id for C in p.components) for p in (R.ONSITE, R.REMOTE_V1, R.REMOTE)}
     assert {cid: sorted(subs.values()) for cid, subs in SPP.SUBPROTOCOLS.items()} == want
     assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
         cid: sorted(subs) for cid, subs in SPP.SUBPROTOCOLS.items()}
@@ -656,7 +685,7 @@ def test_product_names_only_the_two_composites():
     every = sorted({i for ids in want.values() for i in ids} | {"verity/wipe/v0"})
     others = [s for k in range(len(every) + 1) for s in itertools.combinations(every, k)
               if sorted(s) not in want.values()]
-    assert len(others) == 2 ** len(every) - 2
+    assert len(others) == 2 ** len(every) - len(want)
     for s in others:
         assert named(s)[0] == 64, s
     assert named([R.POUW_PERIOD.id, R.POUW_PERIOD.id, R.SAMPLED_PROOFS.id])[0] == 64
