@@ -10370,6 +10370,9 @@
    "assumptions": ["NetTiming.Assumptions.SampledCodeRuns"],
    "type_hash": "19507de1e55510001f0ccda2dcead5bea8e15bad53a46e3f65ac053a8e695b28"
   },
+  "NetTiming.Witness.PeriodLeakRegistered_nontrivial": {
+   "owner": "@network-accounting"
+  },
   "NetTiming.Witness.PeriodLeakAccepted_nontrivial": {
    "owner": "@network-accounting",
    "signature": [
