@@ -65,7 +65,7 @@ theorem accum_digits : ∀ (ps : List (Nat × Int)) (i : Nat), accum ps i = weig
 theorem horner_digits : ∀ (ps : List (Nat × Int)) (i : Nat), i < prodR ps → horner ps (digits ps i) = i
   | [], i, hi => by
     simp only [prodR, List.foldr] at hi
-    simp only [digits, horner]
+    simp only [horner]
     omega
   | (r, _) :: ps, i, hi => by
     have hi' : i < r * prodR ps := hi
