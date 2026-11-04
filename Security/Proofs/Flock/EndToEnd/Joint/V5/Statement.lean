@@ -39,10 +39,9 @@ sampling design that draws member `m`'s part of a sample that ends (`JointAuditV
 them. A member with no proof block in the sample contributes nothing to `ε_bind,m` at that draw and the empty draw's
 knowledge term to `ε_ks,m`. Each member's session has one link-point count at every draw that ends (`JointAuditV5.hcls`),
 which the registration check makes so by refusing a member whose fewest and most proof blocks over the draws that end have
-different counts. Some draw ends (`JointAuditV5.hend`): a law none of whose draws ends fails every window it registers a
-member in, with nothing to bound. The named assumptions are A3 (`uniform/io-getrandombytes`) for the sample's bytes,
-`live-verifier` at each member (`MemberV5.hCust`,
-`RecordCustodyZKJPLaw` at `subset |S|` for its part `S`), and `cr/sha-512` (`Assumptions.TableCRZAt`) and `ecr/sha-512`
+different counts. Some draw ends within the verifier's bytes (`JointAuditV5.hend`): a window none of whose draws ends
+fails whenever it registers a member, with nothing to bound. The named assumptions are A3 (`uniform/io-getrandombytes`)
+for the sample's bytes, `live-verifier` at each member (`MemberV5.hCust`, `RecordCustodyZKJPLaw` at `subset |S|` for its part `S`), and `cr/sha-512` (`Assumptions.TableCRZAt`) and `ecr/sha-512`
 (`Assumptions.LinkCRZCAt`) at the strategy each member's session is played with alone (in a period, at every window's
 strategy on some run, `JointPeriodV5.Plays`), stated flat. Their proofs are in `Joint/V5/Bound.lean`.
 -/
@@ -179,8 +178,8 @@ def DrawEnds {Ω : Type} {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → Fin 
 /-- **A window's audit of several members**: every member registered at one registration `Reg`, in the registration's
 order; one live sample over the population of all their `nJ` proof blocks, drawn by the deployed draw on the verifier's
 one byte stream `src` under the registration's law `law` on strata of sizes `ns`, drawing `kd` proof blocks; then one
-session per member, in order. Some draw ends (`hend`), and each member's part of every draw that ends has its session's
-link points (`hcls`). -/
+session per member, in order. Some draw ends within the verifier's bytes (`hend`), and each member's part of every draw
+that ends has its session's link points (`hcls`). -/
 structure JointAuditV5 where
   Reg : Type
   nJ : ℕ
