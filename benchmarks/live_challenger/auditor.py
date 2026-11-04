@@ -1311,7 +1311,8 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
     `--scan-class` (with `--prompts`, recorded only when given) the scan's class they are of (`SCAN_CLASSES`: its
     schedule, prompt ids and tokens), and `--window-per-group` (with `--prompts`) sends them a group a link-window's
     span; `warden_prompts` reads them and checks what depends on them. With `load` (`load-relay`) it is the serving
-    session with its load first (`parse_load`: the request's ``load``), whose minutes come out of `--minutes` before the rehearsal's."""
+    session with its load first (`parse_load`: the request's ``load``), whose minutes come out of `--minutes` before
+    the rehearsal's."""
     p = argparse.ArgumentParser(prog=f"vy-challenger-gate {'load-relay' if load else 'warden-rehearse'}",
                                 exit_on_error=False, add_help=False, allow_abbrev=False)
     p.add_argument("--peer", required=True)
