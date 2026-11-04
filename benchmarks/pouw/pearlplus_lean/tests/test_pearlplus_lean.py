@@ -233,6 +233,23 @@ def test_the_forming_term_reads_a_block_every_credited_word_flags_and_not_one_so
         assert any(without in (v["reason"] or "") for v in out["verdicts"]), tile
 
 
+def test_the_forming_term_reads_a_row_some_of_whose_blocks_are_inert(exe, tmp_path, monkeypatch):
+    """E's per-block read on one row (`forming_elements`, `Rule.rowElements`) where neither its all-inert shortcut nor a
+    salt-dead element decides: under key 4, on 16 x 1 tiles, tile 14's one flagged row has its one credited word flag one
+    of its four atom blocks and not the other three, and no element of the tile is salt-dead.  So 32 of the row's 128
+    elements are inert and the tile's debit is 168 (40 for the flagged atom-word, 4 per inert element), 40 without the
+    term; reading the three unflagged blocks as the inert ones would make it 424.  The Lean's verdicts are the Python's
+    under each ``over_cap`` rule."""
+    path = T.proved_pass(tmp_path, H100, key=bytes([4]) * 32, tile=(16, 1))[0]
+    for rule in (None, *VR.OVER_CAP):
+        got = same(exe, [path], 96, over_cap=rule)
+        assert any(v["tile"] == 14 and "the replayed debit 168 exceeds the cap 38" in (v["reason"] or "")
+                   for v in got["verdicts"]), (rule, got["verdicts"])
+    monkeypatch.setattr(T.CW.D, "forming_elements", lambda flags, dead, device=None: 0)
+    out = VR.verify_passes([path], 96, 1, "test", T.published(path), SOURCE, test_instance=True)
+    assert any(v["tile"] == 14 and "the replayed debit 40 exceeds the cap 38" in (v["reason"] or "") for v in out["verdicts"])
+
+
 def test_openings_that_fail(exe, tmp_path):
     """A weight row, an activation row or a transcript leaf that isn't what the pass committed; a file whose size or
     SHA-256 isn't its manifest entry's; and records that leave out the excluded row."""
