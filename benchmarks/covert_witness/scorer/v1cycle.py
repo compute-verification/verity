@@ -26,7 +26,9 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    to the evidence store only (01:22Z).
 4. Once the builder's v2 is on that te_core (`policy_panels`), runs its `python -m te_core.algorithm_policy
    --publish` on the same ledger, with ladder-v3's points files as `--ladder-points` (`ladder_points`, 07:57Z),
-   else    te_core.frontier_fit's own (its LADDER, built from ladder-v3's manifest), which PUTs training/algorithm-policy and training/frontier-fit; then `python -m
+   else    te_core.frontier_fit's own (its LADDER, built from ladder-v3's manifest), which PUTs training/algorithm-policy and training/frontier-fit,
+   its rows labelled first (POLICY, v1labels: a void row unpriced, a frozen embedding's price under review) and the
+   coverage line saying which of its points are priced (`v1labels.priced`); then `python -m
    te_core.panels frontier-branches` (Daniel, coordinator 23:56Z; the integrator's builder, 23:59Z), stored only
    since algorithm-policy carries gain, gain_target and start_effective_gates (FB_RETIRED; 05:22Z, 07:48Z), so a
    refresh whose algorithm-policy isn't PUT PUTs no frontier either. A refused PUT is reported, not fatal. te_core's
@@ -60,6 +62,7 @@ sys.path.insert(0, str(HERE.parents[2] / "tools" / "research" / "src"))
 
 import scorer as S
 import trace40
+import v1labels
 
 RESCORE_WT = Path(os.environ.get("TE_RESCORE_WT", "/tmp/scorer/rescore"))
 #: what a re-score reads from its checkout: te_core, the analysis, and the pin and starts te_core reads (pin.py's
@@ -700,7 +703,7 @@ def measured_ledger(out: Path, shards: list[tuple[list[str], str, str]] = (), te
 #: and the copies took the 21:31Z re-score past this VM's memory (killed at 9.4 GB). A module that changed a shared
 #: trace would change every record that shares it, so a changed one stops the module before any PUT and at its exit
 #: (rc 70)
-LEAN = """
+LEAN_SETUP = """
 import atexit, hashlib, json, os, runpy, sys
 from te_core import console, ledger
 shared = {}
@@ -728,7 +731,17 @@ def checked_put(*a, **k):
     return put(*a, **k)
 ledger.json, console.put = Json(), checked_put
 atexit.register(check)
-runpy.run_module(sys.argv.pop(1), run_name="__main__", alter_sys=True)
+"""
+LEAN = LEAN_SETUP + 'runpy.run_module(sys.argv.pop(1), run_name="__main__", alter_sys=True)\n'
+#: LEAN for te_core.algorithm_policy with its rows labelled before it writes, stores or PUTs them (v1labels.run):
+#: argv[1] this directory, argv[2] v1labels.frozen_runs' JSON file; v1labels only, since scorer.py puts its own te_core
+#: first on sys.path, and this directory last, so no module of it shadows one te_core imports
+POLICY = LEAN_SETUP + """
+from pathlib import Path
+sys.path.append(sys.argv.pop(1))
+import v1labels
+from te_core import algorithm_policy
+sys.exit(v1labels.run(algorithm_policy, Path(sys.argv.pop(1))))
 """
 
 
@@ -822,12 +835,14 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
     if AP_V2 not in src("algorithm_policy.py"):
         return {"algorithm-policy": "not run (the builder's v2 isn't on this te_core yet)"}
     d = out / "algorithm-policy"
+    d.mkdir(parents=True, exist_ok=True)
+    frozen = d / "frozen-embedding.json"
+    frozen.write_text(json.dumps(v1labels.frozen_runs(trace40.STATE / "trace40")) + "\n")
     ladder, cap = ladder_points(out / "ladder"), ladder_fit()
-    r = subprocess.run([sys.executable, "-c", LEAN, "te_core.algorithm_policy", *ledger_args(d, root),
+    r = subprocess.run([sys.executable, "-c", POLICY, str(HERE), str(frozen), *ledger_args(d, root),
                         *(x for p in ladder for x in ("--ladder-points", str(p))), *cap,
                         *(["--publish"] if put else [])],
                        cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True, check=False)
-    d.mkdir(parents=True, exist_ok=True)
     (d / "run.log").write_text(r.stdout + r.stderr)
     why = (f"not PUT: {(r.stderr.strip().splitlines() or [f'rc {r.returncode}'])[-1][:200]}" if r.returncode
            else "not PUT (--no-put)")
@@ -844,6 +859,9 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
     used = re.search(r"(\d+) ladder points(?: \((art:\w+)\))?", json.loads(fit.read_text()).get("source") or ""
                      ) if fit.exists() else None
     res["ladder_used"] = {"points": int(used[1]), "art": used[2]} if used else None
+    labels = d / "labels.json"
+    res["labels"] = json.loads(labels.read_text()) if labels.exists() else None
+    res["priced"] = v1labels.priced(d)
     console = "import json; from te_core import algorithm_policy as a; print(json.dumps(list(a.CONSOLE)))"
     c = subprocess.run([sys.executable, "-c", console], cwd=RESCORE_WT / "benchmarks" / "covert_witness",
                        capture_output=True, text=True, check=False)
@@ -1055,8 +1073,10 @@ def main() -> int:
             "rule": "H and W* over every checkpoint (19:50Z)"}
     if policy:
         meta["algorithm_policy"] = {k: v for k, v in policy.items()
-                                    if k not in ("coverage", "ladder", "ladder_used", "console", "coverage_console")}
+                                    if k not in ("coverage", "ladder", "ladder_used", "console", "coverage_console",
+                                                 "labels", "priced")}
         meta["console"], meta["coverage_console"] = policy.get("console"), policy.get("coverage_console")
+        meta["labels"], meta["priced"] = policy.get("labels"), policy.get("priced")
         if "ladder" in policy:
             meta["ladder_points"], meta["ladder_used"] = policy["ladder"], policy.get("ladder_used")
         apc = out / "algorithm-policy" / "console" / "algorithm-policy.json"
@@ -1160,6 +1180,8 @@ def main() -> int:
                f"{cc['unmeasured']} rows unmeasured (null) and {cc.get('partial', 0)} partial (a lower bound, a "
                f"valid kind unmeasured) in no cell or frontier; {cc.get('fresh_records', 0)} records with a measured "
                f"fresh-products term: {cc['line']}")
+    if meta.get("priced"):
+        cov = (cov + " " if cov else "") + meta["priced"]
     print(json.dumps(summary))
     print(line)
     if not args.no_post and not args.no_publish:
@@ -1279,6 +1301,10 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
                   + (f", the one bound's binding kind {'/'.join(cells['binding_kind'])} with what it rests on and each "
                      "kind's term (reduction and update as sensitivities, 08:26Z)" if cells.get("binding_kind") else "")
                   + ", rho_default)" if cells else "")
+    lab = meta.get("labels") or {}
+    cells_said += (f", labelled in rests_on (v1labels): {lab.get('unpriced', 0)} void rows \""
+                   f"{v1labels.UNPRICED.format('CAUSE')}\", {lab.get('under_review', 0)} rows with a frozen embedding "
+                   f"\"{v1labels.UNDER_REVIEW}\"" if lab else "")
     ladder, used = meta.get("ladder_points"), meta.get("ladder_used") or {}
     n = f"{used['points']} " if used else ""
     ladder_said = ("" if ladder is None else f" (v3's fit with ladder-v3's {n}points: {', '.join(ladder)})" if ladder
