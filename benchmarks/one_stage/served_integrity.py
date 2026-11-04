@@ -59,8 +59,8 @@ def unproved(rec: Mapping[str, Any]) -> str:
 
 def opened(summary: Mapping[str, Any]) -> bool:
     """Whether the records audit whose ``summary.json`` is ``summary`` opened the advice (``records_audit.py audit
-    --opening``, its ``compile`` check): a development check, which no answer of record reads, since the record path's
-    window commit reads the advice under its hiding root inside its proofs."""
+    --opening``, its ``compile`` check): a development check, which no answer of record reads, since no audit of record
+    reads an advice: the record path's window is V3c's class window, whose circuit is the class's."""
     return summary.get("compile") is not None
 
 

@@ -18,10 +18,10 @@ count of its requests, the advice's length.
 
 The record path's two development checks are findings wherever they reach the verifier (`Development`, each naming its
 check): an advice binding in a registration (``window.compiler``, ``window.advice``: the compiler and the advice's root and
-length an audit opens, `records_audit.py audit --opening`), since the window commit's proofs read the advice under its
-hiding root and no registration of the record path binds it to be opened; and the chain's endpoint rebuild (the report's
-``endpoint`` step, chain_record.sh's CR_ENDPOINT on the endpoint's records and advice in the clear), which the
-active-warden path refuses. The report's steps are the active-warden path's (`STEPS`). A text field (a verdict's reason, a
+length an audit opens, `records_audit.py audit --opening`), since no audit of record reads an advice (V3c's class
+window's circuit is the class's) and no registration of the record path binds one to be opened; and the chain's
+endpoint rebuild (the report's ``endpoint`` step, chain_record.sh's CR_ENDPOINT on the endpoint's records and advice in
+the clear), which the active-warden path refuses. The report's steps are the active-warden path's (`STEPS`). A text field (a verdict's reason, a
 step's account of what ran in the clear) is declared by its key, its text not read. The logs (`LOGS`) are the run's
 account, published in its public form (`served_verdicts.publish`), not the verifier's input, and aren't read; any other
 file is a finding.
@@ -56,8 +56,8 @@ class Development:
 
 
 OPENING = Development("an advice binding, which an audit opens (records_audit.py audit --opening, a development check): "
-                      "on the record path the window commit's proofs read the advice under its hiding root, its length "
-                      "included, and nothing opens it")
+                      "no audit of record reads an advice or its length (V3c's class window's circuit is the class's), "
+                      "and nothing opens one")
 ENDPOINT = Development("the chain's endpoint rebuild (CR_ENDPOINT: the endpoint's records and advice, in the clear), a "
                        "development check the active-warden path refuses")
 #: the chain's steps on the active-warden path (`chain_record.report`)
