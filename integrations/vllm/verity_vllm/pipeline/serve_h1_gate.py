@@ -1,7 +1,7 @@
-"""serve-openai's PoUW H1 coins from the auditor host's challenger, one session a window, through infra's gate
-(`GateSessions`, `serve_h1`'s ``--challenger-gate``): each window's session and its sampling session reserved, opened on
-the window's roots once the auditor host's ``ssh -R`` listens here (`listening`), and waited for until their end
-entries."""
+"""serve-openai's PoUW coins from the auditor host's challenger, one session a window, through infra's gate
+(`GateSessions`, `serve_h1`'s ``--challenger-gate``): H1's, each window's session and its sampling session reserved,
+opened on the window's roots once the auditor host's ``ssh -R`` listens here (`listening`), and waited for until their
+end entries; and Pearl+'s, each window's salt-only session (`GateSessions.salt`), which its epoch's install opens."""
 from __future__ import annotations
 
 import threading
@@ -45,9 +45,10 @@ def listening(port: int) -> bool:
 
 
 class GateSessions:
-    """H1's coins from the auditor host's challenger, one session a window, through infra's gate `gate` (a
-    `commit_coins.ChallengerGate`) as peer `peer`, for windows of S `steps` rounds. `take` is a window's session, `open` (the
-    pouw setting ``gate``) opens it on the window's open root and its sampling session on its sample root, and `ended`
+    """PoUW's coins from the auditor host's challenger, one session a window, through infra's gate `gate` (a
+    `commit_coins.ChallengerGate`) as peer `peer`, for windows of S `steps` rounds. `take` is an H1 window's session, `salt`
+    a Pearl+ window's salt-only session as the pouw settings its install takes, `open` (the pouw setting ``gate``) opens a
+    session on its root (an H1 window's open root, its sampling session's sample root, a Pearl+ epoch's root), and `ended`
     waits for an end entry. ``held`` is each session reserved, as the gate answered it, under the window it was reserved
     for, its sampling session's (`reserve`, reserved withheld right after it) as its ``draw``; one no window opened says
     why (``unused``). With ``ahead`` (a `worker`), a window's session is reserved there before it opens (`ahead_of`,
@@ -93,6 +94,22 @@ class GateSessions:
         self.held_of(session)["draw"] = dict(reserved)
         print(f"[serve-h1] window {window}: reserved sampling session {reserved['session']} on {self.peer}", flush=True)
         return reserved
+
+    def salt(self, window: int, lane: str) -> dict[str, Any]:
+        """Pearl+'s pouw settings for window `window`, one Pearl+ epoch a window: a salt-only session reserved now in lane
+        `lane`'s open period (`pouw_h1_window.reserve_salt`, ``--epoch`` the window; ValueError while that period is
+        H1's, `CoinError` when the gate refuses) and held under the window. Its install opens it on its salt epoch's root
+        through `open` and takes its salt coin from it: ``challenger`` this machine's 127.0.0.1 at the port the open
+        answers, ``session`` the reserve answer, ``gate`` and ``period`` the lane's open period the reserve joined."""
+        from verity_vllm.protocols.pouw.h1 import window as PHW
+
+        answer, period = PHW.reserve_salt(self.gate.call, self.gate.ledger, lane, self.peer, window)
+        reserved = PHW.reserved_of({k: v for k, v in answer.items() if k in ("session", *PHW.RESERVE_FIELDS)})
+        with self._lock:
+            self.held.append({"window": window, **reserved})
+        print(f"[serve-pearl] window {window}: reserved salt session {reserved['session']} on {self.peer} "
+              f"(period {reserved.get('period')})", flush=True)
+        return {"challenger": "127.0.0.1:0", "session": reserved, "gate": self.open, "period": period}
 
     def draw_session(self, session: str) -> dict[str, Any] | None:
         """The pouw setting ``draw_session`` of `session`'s window: its sampling session's reserve (`reserve_draw`)."""
