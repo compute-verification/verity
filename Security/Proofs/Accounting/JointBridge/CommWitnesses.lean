@@ -58,7 +58,7 @@ theorem CommOfPeriodLeakAccepted_nontrivial :
           (Function.update (fun _ => ()) (CommWitness.acceptAll.own .network) x) ∧
         ¬ CommWitness.acceptAll.Holds ⟨0, 0, 0, 0, 0⟩ (fun _ => 1) .network
           (Function.update (fun _ => ()) (CommWitness.acceptAll.own .network) x) := fun _ =>
-    ⟨trivial, fun hK => absurd (hK : (1 : ℝ) ≤ 0) (by norm_num)⟩
+    ⟨trivial, fun hK => (by norm_num : ¬ (1 : ℝ) ≤ 0) hK⟩
   have hpr : Pouw.pr (fun x : Unit =>
       CommWitness.acceptAll.accepts .network
           (Function.update (fun _ => ()) (CommWitness.acceptAll.own .network) x) ∧
