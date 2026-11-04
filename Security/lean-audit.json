@@ -3618,8 +3618,6 @@
    "Proofs.NetworkCertifier.Witnesses": "the toy audit at the negation (`notStmt`, `notProg`, `notPart`, `notLay`, `obs0`) and the accepting verifier `leakD`, at which the count and period witnesses are stated; read only by the witnesses",
    "Proofs.NetworkCertifier.WitnessToys": "the instances the count and period witnesses are stated at: the honest certifier (`honestI`), the reference schedule over two execution blocks (`fxRate`), the verifier and the sender that accept and leak everything (`AccSeqsAt acceptAll`, `fxLeakI`), the ingress certifier `inI`, the sampled audit `sampProg`, the accepting tap verifier `tapD` and the Python certifier's fixture rows (`fxRows`); read only by the witnesses",
    "Proofs.NetworkCertifier.RecordRows": "the tap record of a rows format (`RowsFormat.tapRecord`) and the Python certifier's fixture schedule (`fxQueueSched`), at which the `honest` witnesses state that the fixture's schedule fits; read only by the witnesses",
-   "Proofs.Accounting.JointBridge.CommWitnesses": "the network audit that accepts everything (`CommWitness.acceptAll`), at which CommOfPeriodLeakAccepted's nontrivial witness is stated; read only by the witnesses",
-   "Proofs.Accounting.JointBridge.HonestH200": "the honest period's device and empty circuit (`device`, `emptyCircuit`), on which `CommWitness.acceptAll` is built; read only by the witnesses",
    "Proofs.Properties.Verity.Recursive": "the recursive audit (RecursiveAuditC3) states sampled proofs at the recursive configuration over the recursion's deployed record (`Dep`, `RecDeploy`), its session in the game (`SessionIn`) and verdict (`RecVerdict`), which read C-Flock's recursive model in Proofs; C-Flock is excepted until proofs extracts its spec"
   }
  },
