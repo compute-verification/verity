@@ -26,6 +26,9 @@ release ended, at the model's error: the outcome is each verdict and where the r
   at `relayCut`). A coin request the auditor answered without coins comes again as often as the worker sends it, so
   this outcome counts the worker's repeats and has no bound but the number of requests.
 * `relay_zkOut`: `relay_perOutcome` at a model that is `ZKOut`.
+* `relay_preFinish`: at the deferred release, where the relay's model frames are its messages each encoded by a public
+  `e`, the relay's release before the `Finish` is the unswitched prover's run (`LeanRelease.release_preFinish_runStar`),
+  encoded and woven with the control frames at the schedule's cut, on either branch.
 * `relay_stop`: at the deferred release, on its stop branch, the relay's release is the unswitched prover's run cut at
   its last round, then the stop (`LeanRelease.release_stop_runStar`), encoded and woven with the control frames at the
   schedule's cut.
@@ -146,6 +149,28 @@ theorem relay_zkOut {W St : Type} {N Ω : Msg → Type} [∀ x, Fintype (N x)] [
       (fun o (c : S.C x) => weave (ctlOf s) ((tmplOf s).take o.2) (enc ((S.given o.1).out H Vs θ x c)))
       (fun o => ENNReal.ofReal (ε x w Θ Vs θ o.1)) :=
   relay_perOutcome hold s ins enc (perOutcome_of_zkOut h hR Vs θ hk) hs hb hc hfr
+
+/-- **Before the `Finish` the deployed relay's release is the unswitched prover's**: at the deferred release against
+`V*` (`LeanRelease.release_preFinish_runStar`'s premises), where the relay's model frames are the deferred release's
+messages each encoded by a public `e`, the relay's release is the unswitched prover's first `n x - 1` messages, then the
+deferred release's last, encoded and woven with the setup's control frames over the schedule's cut where the release
+ended, on either branch. -/
+theorem relay_preFinish {Θ : Type} (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool)
+    (vs : S.SwVals) (L : LeanRelease Claims.Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (n : Msg → ℕ)
+    (wk : L.toSrv.Worker) (x : Msg) (w : Claims.Flock.Wit) (hn : n x = refK x + 2) (hlast : L.last x = refK x + 1)
+    (hR : StopsAt S Rf L H x) (hC : CheckIs S L H x) (hH : HelloEq S L x) (hLk : LinkRoundEqStop S vs L x w)
+    (hE : LiveRoundEqStop S vs L H wk x w) (hEf : FillRoundEqStop S vs L H wk x w) (Vs : VStar Θ) (θ : Θ)
+    (hk : Vs.k x = n x) (ω : (S.refP.Nonce × S.refP.Rand) × L.toSrv.Chk) (hold : Bool)
+    (s : V (SessionSpec × Array Stmt)) (ins : List (ByteArray × Env)) (e : Msg × Out → List ByteArray)
+    (hs : ∀ p ∈ ins, p.2.setup = s) (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome)
+    (hc : CoinReqsAnswered ins)
+    (hfr : relayFrames hold ins = (runStar H (L.toSrv.proverD L.fillOf n wk w) Vs x ω θ).msgs.map e) :
+    out hold {} {} ins = weave (ctlOf s) ((tmplOf s).take (relayCut hold ins))
+      (((runStar H (((S.withStops Rf L.stop).unP vs).prover w) Vs x ω.1 θ).msgs.take (n x - 1)).map e ++
+        ((runStar H (L.toSrv.proverD L.fillOf n wk w) Vs x ω θ).msgs.drop (n x - 1)).map e) := by
+  rw [(relay_release_cut hold s ins hs hb hc).2, hfr,
+    ← L.release_preFinish_runStar S Rf vs H n wk x w hn hlast hR hC hH hLk hE hEf Vs θ hk ω, ← List.map_append,
+    List.take_append_drop]
 
 /-- **On the stop branch the deployed relay's release is the unswitched cut, then the stop**: at the deferred release
 against `V*`, where the session stops at its `Finish` (`LeanRelease.release_stop_runStar`'s premises) and the relay's

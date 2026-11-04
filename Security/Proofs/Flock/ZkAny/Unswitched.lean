@@ -38,8 +38,8 @@ at exactly the witnesses zero knowledge at any values is about. Here the release
   (`OpeningsRefused`) and the three equalities.
 * **`LeanRelease.release_preFinish`, `LeanRelease.release_stop`**: for every worker and any values, the deferred
   release's messages before the `Finish` are the unswitched prover's run, and where the session stops at its `Finish`
-  the release is that run with its last message the stop (`release_stop_runStar` at a verifier's run). No premise reads
-  the relation, `RowsAt` or `RowsOK`.
+  the release is that run with its last message the stop (`release_preFinish_runStar`, `release_stop_runStar` at a
+  verifier's run). No premise reads the relation, `RowsAt` or `RowsOK`.
 -/
 
 @[expose] public section
@@ -856,6 +856,28 @@ theorem release_stop_runStar {Θ : Type} (S : RefSession) (Rf : (x : Msg) → (F
   rw [hsrv, hP]
   rw [hP] at hd
   exact L.release_stop S Rf vs H n wk x w hn hlast hR hC hH hLk hE hEf _ ω.1 ω.2 hd
+
+/-- **`release_preFinish` at a verifier's run**: against `V*` with `n x` rounds, the deferred release's messages before
+the `Finish` are the unswitched prover's run against `V*`, on either branch. -/
+theorem release_preFinish_runStar {Θ : Type} (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool)
+    (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (n : Msg → ℕ)
+    (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (hn : n x = refK x + 2) (hlast : L.last x = refK x + 1)
+    (hR : StopsAt S Rf L H x) (hC : CheckIs S L H x) (hH : HelloEq S L x) (hLk : LinkRoundEqStop S vs L x w)
+    (hE : LiveRoundEqStop S vs L H wk x w) (hEf : FillRoundEqStop S vs L H wk x w) (Vs : VStar Θ) (θ : Θ)
+    (hk : Vs.k x = n x) (ω : (S.refP.Nonce × S.refP.Rand) × L.toSrv.Chk) :
+    (runStar H (L.toSrv.proverD L.fillOf n wk w) Vs x ω θ).msgs.take (n x - 1) =
+      (runStar H (((S.withStops Rf L.stop).unP vs).prover w) Vs x ω.1 θ).msgs.take (n x - 1) := by
+  have hP : (runStar H (((S.withStops Rf L.stop).unP vs).prover w) Vs x ω.1 θ).msgs =
+      interact (fun as => ((Vs.next x as θ).eval H).1)
+        (fun h => (((((S.withStops Rf L.stop).unP vs).prover w).next x h ω.1).eval H).1) (n x) [] := by
+    rw [← hk]
+    exact runStar_msgs H (((S.withStops Rf L.stop).unP vs).prover w) Vs x ω.1 θ
+  have hsrv : (runStar H (L.toSrv.proverD L.fillOf n wk w) Vs x ω θ).msgs =
+      interact (fun as => ((Vs.next x as θ).eval H).1) (L.toSrv.nextD L.fillOf n wk x w ω.1 ω.2) (n x) [] := by
+    rw [runStar_msgs, hk]
+    rfl
+  rw [hsrv, hP]
+  exact L.release_preFinish S Rf vs H n wk x w hn hlast hR hC hH hLk hE hEf _ ω.1 ω.2
 
 end LeanRelease
 
