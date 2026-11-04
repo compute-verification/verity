@@ -4241,19 +4241,38 @@ def test_copy_sends_each_file_a_list_names_and_nothing_else_to_the_same_path_on_
     subprocess.run(["sha256sum", "--check", "--strict", "--quiet", f"private/{kind}/inputs.sha256"], cwd=copy, check=True)
 
 
+@pytest.mark.parametrize("to, sub", [("research@vy-nebius-cpu-6:", "serve"), ("research@vy-nebius-cpu-6:incoming/", "incoming/serve")])
+def test_copy_to_a_write_only_rsync_sends_the_list_under_the_serve_dirs_name_making_no_directory(tmp_path, to, sub):
+    """`copy deferred HOST:DIR` sends the same files under DIR/<the serve dir's name>/ in the directory HOST's rsync writes
+    to, without the remote mkdir a write-only rsync (`rrsync -wo`) refuses to run, and the copy passes its sums there."""
+    assert _deferred(tmp_path).returncode == 0
+    d = tmp_path / "serve"
+    listed = (d / "private" / "deferred" / "inputs.txt").read_text().splitlines()
+    rc, lines, _ = _copy(tmp_path, "deferred", to)
+    there = tmp_path / "copied" / "vy-nebius-cpu-6" / sub
+    assert rc == 0 and sorted(str(p.relative_to(there)) for p in there.rglob("*") if p.is_file()) == sorted(listed), lines
+    assert lines == [f"COPY the deferral's prover-side list's {len(listed)} files to vy-nebius-cpu-6, under {sub}/ in its "
+                     "rsync's directory, which its node moves to the serve dir's path: PASS"]
+    args = json.loads((tmp_path / "copied.args").read_text())
+    assert args[-2:] == [f"{d}/", f"research@vy-nebius-cpu-6:{sub}/"] and not any(a.startswith("--rsync-path") for a in args)
+    subprocess.run(["sha256sum", "--check", "--strict", "--quiet", "private/deferred/inputs.sha256"], cwd=there, check=True)
+
+
 @pytest.mark.parametrize("made, kind, to, extra, rc, line", [
     ("deferred", "deferred", "vy-auditor-2", {}, 3, "COPY refused: the deferral's list holds the window's witness, and "
      "vy-auditor-2 is COMPOSE_NODE, an auditor host where no witness goes: copy it to a prover node"),
     ("deferred", "deferred", "research@vy-auditor-3.example", {"COMPOSE_NODE": "vy-auditor-3"}, 3, "COPY refused: the "
      "deferral's list holds the window's witness, and vy-auditor-3.example is COMPOSE_NODE, an auditor host where no "
      "witness goes: copy it to a prover node"),
+    ("deferred", "deferred", "research@vy-auditor-2:incoming", {}, 3, "COPY refused: the deferral's list holds the "
+     "window's witness, and vy-auditor-2 is COMPOSE_NODE, an auditor host where no witness goes: copy it to a prover node"),
     ("handed", "compose", "vy-dc-h200.example", {"HOST": "cpu-6"}, 3, "COPY refused: vy-dc-h200.example is the served "
      "node, which the prover controls: copy the hand-off to COMPOSE_NODE (vy-auditor-2)"),
     ("handed+witness", "compose", "vy-auditor-2", {}, 3, "COPY refused: the hand-off's list names the served run's "
      "witness (WITNESS requests.jsonl: the requests' prompt and served ids, rows and seeds)"),
     ("deferred", "compose", "vy-auditor-2", {}, 3, "COPY refused: the serve dir {d} holds no compose list "
      "(private/compose/inputs.txt and compose.env)"),
-    ("handed", "values", "vy-auditor-2", {}, 3, "COPY refused: served_verdicts.sh copy deferred|compose HOST, not values"),
+    ("handed", "values", "vy-auditor-2", {}, 3, "COPY refused: served_verdicts.sh copy deferred|compose HOST[:DIR], not values"),
     ("handed", "compose", "vy-auditor-2", {"RSYNC_EXIT": "23"}, 23, "COPY the hand-off's verifier-side list's 22 files "
      "to vy-auditor-2, each to the same path there: FAIL (exit 23, the serve dir's private/copy-compose.log)"),
 ])

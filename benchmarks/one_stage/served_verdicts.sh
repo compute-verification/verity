@@ -160,7 +160,9 @@
 # `served_verdicts.sh copy deferred|compose HOST`, with D, on the node that holds the list, sends each file a deferral's
 # or a hand-off's inputs.txt lists, and nothing else, to the same path on HOST (RSYNC, default rsync over ssh), its log
 # in the serve dir's private/: the deferral's (prover-side, its window's witness) to a prover node, never COMPOSE_NODE;
-# the hand-off's only once `served_verdicts.py witness` passes its list again.
+# the hand-off's only once `served_verdicts.py witness` passes its list again. `HOST:DIR` (DIR may be empty) sends them
+# under DIR/<the serve dir's name>/ in the directory HOST's rsync writes to, a write-only rsync's (`rrsync -wo`, its key
+# in RSYNC_RSH), which makes no directory the path needs; HOST's node then moves that directory to the serve dir's path.
 # `served_verdicts.sh gate-compose PIECES [VERDICT]`, with D and OUT, on the node that holds the serve dir, writes the
 # hand-off from PIECES (and the inference-only VERDICT) and sends it to the compose gate on COMPOSE_NODE
 # (`benchmarks/live_verifier/host.py`'s `compose`: COMPOSE_GATE, default lane vllm's gate key as research@ on
@@ -1288,12 +1290,13 @@ compose_build() {  # what the compose follow-on runs: the tree's venv, and lake 
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
   uv sync --all-packages --extra torch-cpu || return 5
 }
-copy() {  # `served_verdicts.sh copy deferred|compose HOST`: each file the list names, and nothing else, to the same path on HOST
-  local kind=$1 host=$2 dir served composer n rc why log=$D/private/copy-$1.log
+copy() {  # `served_verdicts.sh copy deferred|compose HOST[:DIR]`: each file the list names, and nothing else, to the same path
+  # on HOST, or under DIR/<the serve dir's name>/ in the directory HOST's rsync writes to (a write-only rsync's, no remote mkdir)
+  local kind=$1 host=${2%%:*} name sub where dir served composer n rc why log=$D/private/copy-$1.log
   case $kind in
     deferred) dir=$DEFER_DIR ;;
     compose) dir=$COMPOSE_DIR ;;
-    *) say "COPY refused: served_verdicts.sh copy deferred|compose HOST, not $kind"; return 3 ;;
+    *) say "COPY refused: served_verdicts.sh copy deferred|compose HOST[:DIR], not $kind"; return 3 ;;
   esac
   [ -f "$dir/inputs.txt" ] && [ -f "$dir/$kind.env" ] \
     || { say "COPY refused: the serve dir $D holds no $kind list (private/$kind/inputs.txt and $kind.env)"; return 3; }
@@ -1312,11 +1315,19 @@ copy() {  # `served_verdicts.sh copy deferred|compose HOST`: each file the list 
       || { say "COPY refused: the hand-off's list names the served run's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 3; }
   fi
   n=$(count "$dir/inputs.txt")
-  # shellcheck disable=SC2086
-  ${RSYNC:-rsync} -a --files-from="$dir/inputs.txt" --rsync-path="mkdir -p $(printf %q "$D") && rsync" "$D/" "$2:$D/" > "$log" 2>&1
+  if [[ $2 == *:* ]]; then
+    name=${D%/} && name=${name##*/} && sub=${2#*:} && sub=${sub%/} && sub=${sub:+$sub/}$name
+    where="under $sub/ in its rsync's directory, which its node moves to the serve dir's path"
+    # shellcheck disable=SC2086
+    ${RSYNC:-rsync} -a --files-from="$dir/inputs.txt" "$D/" "${2%%:*}:$sub/" > "$log" 2>&1
+  else
+    where="each to the same path there"
+    # shellcheck disable=SC2086
+    ${RSYNC:-rsync} -a --files-from="$dir/inputs.txt" --rsync-path="mkdir -p $(printf %q "$D") && rsync" "$D/" "$2:$D/" > "$log" 2>&1
+  fi
   rc=$?
   say "COPY the $([ "$kind" = deferred ] && echo "deferral's prover-side" || echo "hand-off's verifier-side") list's $n files to $host," \
-      "each to the same path there: $([ "$rc" = 0 ] && echo PASS || echo "FAIL (exit $rc, the serve dir's private/copy-$kind.log)")"
+      "$where: $([ "$rc" = 0 ] && echo PASS || echo "FAIL (exit $rc, the serve dir's private/copy-$kind.log)")"
   return "$rc"
 }
 gate_compose() {  # `served_verdicts.sh gate-compose PIECES [VERDICT]`: the hand-off from PIECES (and the inference-only
@@ -1347,7 +1358,7 @@ if [ "${1:-}" = private-pieces ]; then private_pieces; exit $?; fi
 if [ "${1:-}" = defer ]; then defer "${2:?served_verdicts.sh defer WHY}"; exit $?; fi
 if [ "${1:-}" = served-compare ]; then K=${2:?served_verdicts.sh served-compare WINDOW}; served_compare; exit $?; fi
 if [ "${1:-}" = handoff ]; then handoff "$OUT/pieces" "$OUT/record/inference-only.json"; exit $?; fi
-if [ "${1:-}" = copy ]; then copy "${2:?served_verdicts.sh copy deferred|compose HOST}" "${3:?served_verdicts.sh copy deferred|compose HOST}"; exit $?; fi
+if [ "${1:-}" = copy ]; then copy "${2:?served_verdicts.sh copy deferred|compose HOST[:DIR]}" "${3:?served_verdicts.sh copy deferred|compose HOST[:DIR]}"; exit $?; fi
 if [ "${1:-}" = gate-compose ]; then gate_compose "${2:?served_verdicts.sh gate-compose PIECES [VERDICT]}" "${3:-}"; exit $?; fi
 
 # $OUT leaves the node: once the run is done, however it ends, each of its files that names a window or counts its own is
