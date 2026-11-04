@@ -24,8 +24,9 @@ parse one way: the `root_B`s are its last bytes, of their tables' lengths in tab
 
 The steps: what v2's check held of its one session's record (`checkBlobsAt_trees`, `treesHeld_one`,
 `sessionsTreeReason_one`), what a record `sessionTreeReason` accepts shows of its link (`sessionTreeReason_link`), the
-one table of the session v2 sets up (`setupAt_tables`) and its `root_B` length (`rootBTables_one`), the one entry of a JSON object with one key (`keys?_single`,
+one table of the session v2 sets up (`setupAt_tables`), the one entry of a JSON object with one key (`keys?_single`,
 `get?_mem`), and `Flock.Record`'s readers against `SampledProofs.getD` (`fld_getD`, `str_getD`, `str_get?`).
+`checkBlobsAt_link` reads that table's `root_B` length off `rootBTables` at the schedule `zk_verify_ok` gives.
 -/
 
 namespace Verity.Sampled
