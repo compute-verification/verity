@@ -266,22 +266,27 @@ theorem encard_acceptedFaulty_le (C : Prog) (P : Partition) (lay : BoundaryGates
         have h := Nat.mul_le_mul_right (D ^ n) (Nat.pow_le_pow_right (n := 2) (by norm_num) (card_faultyGateSet_le C P F))
         exact mul_le_mul' le_rfl (by exact_mod_cast h)
 
-/-- At `δ ≥ miss(1)` the only possible faulty set is empty: a non-empty set of slots is accepted with probability at
-most `miss(1)`, so it is not in `M_δ`. -/
-theorem eq_empty_of_mem_faultySets (d : Design) (P : Partition) {δ : ℝ} (hδ : d.miss P 1 ≤ δ) {F : Finset ℕ}
-    (hF : F ∈ faultySets d P δ) : F = ∅ := by
+/-- At `δ ≥ miss(b + 1)` every possible faulty set has at most `b` units: a set of more is accepted with probability
+at most `miss(b + 1)`, so it is not in `M_δ`. -/
+theorem card_le_of_mem_faultySets (d : Design) (P : Partition) {δ : ℝ} {b : ℕ} (hδ : d.miss P (b + 1) ≤ δ)
+    {F : Finset ℕ} (hF : F ∈ faultySets d P δ) : F.card ≤ b := by
   classical
   simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
   obtain ⟨hsub, hM, -⟩ := hF
-  by_contra hne
-  have hcard : 1 ≤ F.card := Finset.card_pos.mpr (Finset.nonempty_iff_ne_empty.mpr hne)
-  have : Finite {B : Finset ℕ // B ⊆ Finset.range P.blocks.length ∧ 1 ≤ B.card} :=
+  by_contra hlt
+  have hcard : b + 1 ≤ F.card := by omega
+  have : Finite {B : Finset ℕ // B ⊆ Finset.range P.blocks.length ∧ b + 1 ≤ B.card} :=
     Finite.of_injective (β := ↥(Finset.range P.blocks.length).powerset)
       (fun B => ⟨B.1, Finset.mem_powerset.mpr B.2.1⟩) fun B B' h => Subtype.ext (by simpa using h)
-  have hle : d.Pa P F ≤ d.miss P 1 :=
-    le_ciSup (f := fun B : {B : Finset ℕ // B ⊆ Finset.range P.blocks.length ∧ 1 ≤ B.card} => d.Pa P B.1)
+  have hle : d.Pa P F ≤ d.miss P (b + 1) :=
+    le_ciSup (f := fun B : {B : Finset ℕ // B ⊆ Finset.range P.blocks.length ∧ b + 1 ≤ B.card} => d.Pa P B.1)
       (Set.finite_range _).bddAbove ⟨F, hsub, hcard⟩
   exact absurd hM (not_lt.mpr (hle.trans hδ))
+
+/-- At `δ ≥ miss(1)` the only possible faulty set is empty (`card_le_of_mem_faultySets` at `b = 0`). -/
+theorem eq_empty_of_mem_faultySets (d : Design) (P : Partition) {δ : ℝ} (hδ : d.miss P 1 ≤ δ) {F : Finset ℕ}
+    (hF : F ∈ faultySets d P δ) : F = ∅ :=
+  Finset.card_eq_zero.1 (Nat.le_zero.1 (card_le_of_mem_faultySets d P (b := 0) hδ hF))
 
 theorem encard_accSeqsSampled_le (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (n : ℕ)
     (hfits : lay.Fits C n) (δ : ℝ) (As : Set (ℕ → Bool)) (c : ℕ) (hAs : As.encard ≤ ((2 ^ c : ℕ) : ℕ∞)) (β : ℕ)

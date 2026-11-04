@@ -1,6 +1,8 @@
 import Properties.NetworkPeriod
 import Properties.NetworkPeriod.Placed
 import Proofs.Properties.NetworkScan
+import Proofs.Flock.Claims.Sampling.Count
+import Proofs.NetworkCertifier.SampledCharge
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
@@ -12,6 +14,9 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 
 `RowsProgWired` and `RowsStateTied` read the check's refusals off its findings: on acceptance every finding is none
 (`firstFinding_none`), each link-window's `wiredCheck` and `stateCheck` among them.
+
+`ScanWindowsPlaced`'s `WrongBounds` holds at the bound the audit publishes, at a design whose rules are strata draws
+(`wrongBounds_of_countBound`): a set of more blocks is accepted with probability at most `miss(countBound + 1) < δ`.
 -/
 
 namespace Properties.NetworkPeriod
@@ -263,6 +268,20 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
       stateWindow rfl
   rw [stateWindow_skipped] at hs
   cases hs
+
+/-- **`WrongBounds` at the bound the audit publishes**: at a well-formed design whose rules are strata draws, with the
+code's strata, every possible incorrect set at `δ` holds at most `countBound strata δ` proof blocks, since
+`miss(countBound strata δ + 1) < δ` (`countBound_miss_design`). -/
+theorem wrongBounds_of_countBound {s : Claims.Sampling.AuditStatement} {P : Claims.Sampling.Partition}
+    (hw : s.design.WellFormed P) {sss : List (List (ℕ × ℕ))} (hs : sss.length = P.classes.length)
+    (hss : ∀ p ∈ (s.design.rules.zip P.classes).zip sss, p.1.1.strata (Claims.Sampling.strataSizes p.1.2) = some p.2)
+    (strata : Array Core.Stratum) (hlen : strata.size = sss.flatten.length)
+    (hst : ∀ i (h₁ : i < strata.size) (h₂ : i < sss.flatten.length),
+      strata[i].size = sss.flatten[i].1 ∧ strata[i].k = sss.flatten[i].2)
+    (δ : Core.Ratio) (hδ : 0 < δ.num) (hδd : 0 < δ.den) :
+    WrongBounds s P ((δ.num : ℝ) / δ.den) (SampledProofs.Bound.countBound strata δ) := fun _ hF =>
+  NetTiming.card_le_of_mem_faultySets _ _
+    (Claims.Sampling.Count.countBound_miss_design hw hs hss strata hlen hst δ hδ hδd).le hF
 
 theorem scanWindowsPlaced : ScanWindowsPlaced := by
   sorry
