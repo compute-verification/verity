@@ -24,8 +24,8 @@ coins of the draw's family released after the registration's digest.
   accepts in it at `ξ` under the challenger `dr`, the log it reads holds `ξ`'s bits at the start of the coins of `dr`'s
   family released after `dr`'s digest (`ShowsDraw`, `freshCoins`). Under `Logged` that log is the play's
   (`shows_of_logged`). The draw reads `coinsRead` through `DrawRead` alone, so it holds at any definition of
-  `coinsRead` that meets it (`coinsRead` does wherever v2's acceptance reads the log:
-  `Proofs.Properties.Verity.SampledRead`'s `drawRead_coinsRead`), and a log shows the draws of any log whose coins of
+  `coinsRead` that meets it (`coinsRead` does, with no premise: `Proofs.Properties.Verity.SampledRead`'s
+  `drawRead_coinsRead`), and a log shows the draws of any log whose coins of
   the draw's family after its digest start its own (`ShowsDraw.mono`).
 * **The bytes** (`append_of_bitsOf_prefix`, `fresh_prefix_coinBytes`): bytes whose bits start another's bits are its
   prefix, and coins at the start of a sample's coins have their bits at the start of the sample's bytes (`coinBytes`).

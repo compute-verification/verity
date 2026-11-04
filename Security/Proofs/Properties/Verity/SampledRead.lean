@@ -10,29 +10,22 @@ import Std.Tactic.Do
 # The device's log as v2's check reads it, and the draw it shows
 
 Where the sampled check's read of the device's log (`coinsRead`) returns a log from what the prover sent, in an accepted
-composition whose v2 case accepts, the log shows the draw (`shows_coinsRead`): the read takes the challenger session's
-release log in v2's evidence line by line as v2's check does (`readLines`), with the draw's coins `ξ`
+composition whose v2 case accepts, the log shows the draw (`shows_logRead`): the read takes the challenger session's
+release log in v2's evidence line by line as v2's check does (`readLog`), with the draw's coins `ξ`
 (`SampledProofs.OneStageZk.coinsOf`) placed in order on the releases of the draw's family after the registration's
-digest, one coin of `COIN_BYTES` bytes each. So the read meets the draw's ask (`DrawRead`) wherever v2's acceptance
-reads the log (`ReadsLog`, `drawRead_coinsRead`).
+digest, one coin of `COIN_BYTES` bytes each. So the read meets the draw's ask (`DrawRead`) with no premise
+(`drawRead_logRead`, `drawRead_coinsRead`).
 
 * **v2's challenger** (`drawCoins_ok`, `trustedSessionOf_ok`, `sessionNamed_ok`, `sessionOf_ok`, `releasedRootsOf_ok`,
   `challengerStream_ok`): where v2 reads `ξ`, the session's log is a list of lines, the roots of the draw's family are
   those its pairs' root lines show (`sel`), and `ξ` is `COIN_BYTES` bytes for each of them equal to the digest.
-* **What the read shows** (`fresh_readLines`, `countFresh_eq`, `chunks_flatten`): the read's coins of the draw's family
+* **What the read shows** (`fresh_readLog`, `countFresh_eq`, `chunks_flatten`): the read's coins of the draw's family
   after the digest are `ξ`'s coins, one for each such root, so their bits are `ξ`'s.
-* **What `coinsRead` leaves open** (`ReadsLog`): that the read returns a log wherever v2 accepts. The read refuses a
-  coin tree's line whose `event` string is neither a tree's nor an opening's, an opening whose stream its tree's spec
-  doesn't name, and a record that doesn't parse. v2's check tells a coin tree's line apart and finds its stream by
-  `jsonStrIs` (`treeLine`, `coinTreesOf`), and reads the trees over the whole log, its head included, where the read
-  takes them after the head; so v2's acceptance shows none of those to read. The pairs v2
-  shows to read: each root's line parses with its family and root, and none is left without its release
-  (`releasedRootsOf`).
-* **The read with v2's own tests** (`logRead`, `logRead_isSome`, `shows_logRead`, `drawRead_logRead`): `logRead` reads
-  the log as `coinsRead` does, but tells a tree's line apart, finds its tree and its stream with v2's own Bool tests
-  (`treeStep`), takes the trees over the whole log, and reads each session's record as v2's `treesHeld` does
-  (`recordsOn`). v2's loops then show it a log wherever v2 accepts (`coinTreesOf_fold`, `releasedRootsOf_pairsOk`,
-  `treesHeld_records`), so it meets the draw's ask with no premise.
+* **The read with v2's own tests** (`logRead`, `logRead_isSome`, `shows_logRead`, `drawRead_logRead`): `coinsRead`,
+  `logRead` by its own name (`coinsRead_eq_logRead`), tells a tree's line apart, finds its tree and its stream with v2's
+  own Bool tests (`treeStep`), takes the trees over the whole log, its head included, and reads each session's record
+  as v2's `treesHeld` does (`recordsOn`). v2's loops then show it a log wherever v2 accepts (`coinTreesOf_fold`,
+  `releasedRootsOf_pairsOk`, `treesHeld_records`), so it meets the draw's ask with no premise.
 * **v2's case** (`caseOf_of`): in an accepted composition the case `caseOf` finds under v2's id is the one v2 accepted,
   since the composite's components have distinct ids (`components_nodup`).
 * **The session's law** (`law_of_setsUp`, `coupled_draw_setsUp`, `coupled_draw_coins_setsUp`): v2's parameters in the
@@ -299,67 +292,6 @@ theorem releasedRootsOf_ok {c : LiveCommitment} {log : List String} {roots : Roo
 
 /-! ## What the read shows -/
 
-theorem freshCoins_cons_tree {records : List Json} {ts ts' : List (String × Flock.CoinTree.Spec)} {j : Json}
-    {r : Verity.Release} (h : treeRelease records ts j = some (r, ts')) (label : String) (after : ByteArray)
-    (rest : List Verity.Release) : freshCoins label after (r :: rest) = freshCoins label after rest := by
-  have hf := treeRelease_frame h
-  unfold freshCoins
-  rw [List.filterMap_cons]
-  cases hr : r.frame with
-  | fresh l => exact absurd hr (hf l)
-  | hello _ => rfl
-  | opening _ _ _ => rfl
-
-theorem fresh_readLines (label : String) (after : ByteArray) (records : List Json) :
-    ∀ (ls : List String) (ts : List (String × Flock.CoinTree.Spec)) (pending : Option String) (ξ : ByteArray)
-      {log : List Verity.Release}, readLines label after records ls ts pending ξ = some log →
-      freshCoins label after log = chunks (countFresh label after (pending.toList ++ ls.filter fun l => !treeLine l)) ξ
-  | [], _, none, _, _, h => by
-    simp only [readLines, Option.some.injEq] at h
-    subst h
-    rfl
-  | [], _, some _, _, _, h => by simp [readLines] at h
-  | l :: ls, ts, pending, ξ, log, h => by
-    unfold readLines at h
-    by_cases ht : treeLine l = true
-    · rw [ite_eq_left ht] at h
-      rw [List.filter_cons_of_neg (by simp [ht])]
-      simp only [Option.bind_eq_bind] at h
-      obtain ⟨⟨r, ts'⟩, hX, h⟩ := Option.bind_eq_some_iff.1 h
-      obtain ⟨j, -, hj⟩ := Option.bind_eq_some_iff.1 hX
-      simp only [Option.pure_def] at h
-      obtain ⟨rest, hR, h⟩ := Option.bind_eq_some_iff.1 h
-      cases h
-      rw [freshCoins_cons_tree hj]
-      exact fresh_readLines label after records ls ts' pending ξ hR
-    · rw [ite_eq_right ht] at h
-      rw [List.filter_cons_of_pos (by simp [ht])]
-      cases pending with
-      | none => exact fresh_readLines label after records ls ts (some l) ξ h
-      | some a =>
-        simp only [Option.toList_some, List.cons_append, List.nil_append]
-        simp only [Option.bind_eq_bind] at h
-        obtain ⟨⟨lab, root⟩, hra, h⟩ := Option.bind_eq_some_iff.1 h
-        simp only [Option.pure_def] at h
-        by_cases hm : lab = label ∧ root = after
-        · rw [ite_eq_left hm] at h
-          obtain ⟨rest, hR, h⟩ := Option.bind_eq_some_iff.1 h
-          cases h
-          have hc : rootOf a = some (label, after) := by rw [hra, hm.1, hm.2]
-          rw [countFresh, ite_eq_left hc, chunks]
-          simp only [freshCoins, List.filterMap_cons, and_self, ite_true]
-          congr 1
-          exact fresh_readLines label after records ls ts none _ hR
-        · rw [ite_eq_right hm] at h
-          obtain ⟨rest, hR, h⟩ := Option.bind_eq_some_iff.1 h
-          cases h
-          have hc : rootOf a ≠ some (label, after) := by
-            rw [hra]
-            exact fun e => hm (Prod.mk.inj (Option.some.inj e))
-          rw [countFresh, ite_eq_right hc, Nat.add_zero]
-          simp only [freshCoins, List.filterMap_cons, ite_eq_right hm]
-          exact fresh_readLines label after records ls ts none ξ hR
-
 theorem bit_cons_lt (x : UInt8) (l : List UInt8) {t : Nat} (ht : t < 8) :
     Flock.Hm96.bit ⟨⟨x :: l⟩⟩ t = x.toNat.testBit t := by
   unfold Flock.Hm96.bit
@@ -485,54 +417,6 @@ theorem linesOf_of {e : _root_.SampledProofs.OneStageZk.Evidence} {ls : Array Js
   rw [hls]
   exact mapM_str_ok (fun _ => rfl) lines
 
-theorem coinsRead_eq {s : Verity.Sent} {p : _root_.SampledProofs.OneStageZk.Params}
-    {c : _root_.SampledProofs.OneStage.Commitment} {e : _root_.SampledProofs.OneStageZk.Evidence}
-    {key : ChallengerKey} {label : String} {ξ : ByteArray} {lines : List String} (hcs : caseOf s = .ok (p, c, e))
-    (hch : p.base.challenger = some (key, label)) (hξ : _root_.SampledProofs.OneStageZk.coinsOf p c e = .ok ξ)
-    (hl : linesOf e = .ok lines) :
-    coinsRead s = (recordsOf s e).bind fun rs => readLines label c.digest rs lines.tail [] none ξ := by
-  simp only [coinsRead, hcs, Except.toOption, Option.bind_eq_bind, Option.bind_some, hch, hξ, hl]
-
-/-! ## The draw the read shows -/
-
-/-- **Where the read returns a log, it shows the draw**: wherever composite `k` accepted what the prover sent and v2's
-case in it accepts at the coins `ξ` it read under the challenger `dr`, a log `coinsRead` returns has exactly `ξ`'s bits
-as its coins of `dr`'s family released after `dr`'s digest. -/
-theorem shows_coinsRead {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
-    {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
-    {ev : _root_.SampledProofs.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
-    (hcase : V2Case k s a b e) (hacc : V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr)
-    {log : List Verity.Release} (h : coinsRead s = some log) : ShowsDraw log dr ξ := by
-  obtain ⟨hp, hc, hev, hξ, hdr, -⟩ := hacc
-  obtain ⟨key, hch, hafter⟩ := source_of hdr
-  obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
-  rw [hrξ] at hraw
-  obtain ⟨cm, roots, hts, hstream⟩ := drawCoins_ok hraw
-  obtain ⟨_, hsn⟩ := trustedSessionOf_ok hts
-  obtain ⟨_, hso⟩ := sessionNamed_ok hsn
-  obtain ⟨ls, lines, hlog, hls, hrr⟩ := sessionOf_ok hso
-  rw [coinsRead_eq (caseOf_of hS hcase hp hc hev) hch hξ (linesOf_of hlog hls)] at h
-  obtain ⟨rs, -, h⟩ := Option.bind_eq_some_iff.1 h
-  rw [hafter] at hstream
-  have hf : (freshCoins dr.label c.digest log).flatten = bitsOf ξ := by
-    rw [fresh_readLines _ _ _ _ _ _ _ h, Option.toList_none, List.nil_append, countFresh_eq, ← releasedRootsOf_ok hrr,
-      chunks_flatten _ _ (challengerStream_ok hstream)]
-  unfold ShowsDraw
-  rw [hafter]
-  exact hf ▸ List.prefix_refl _
-
-/-- **v2's acceptance reads the device's log**: wherever composite `k` accepted what the prover sent and v2's case in it
-accepts, `coinsRead` returns a log. -/
-def ReadsLog (k : Verity.Registration.Composite) : Prop :=
-  ∀ s a b e p c ev ξ dr, Verity.SameAccepts k s → V2Case k s a b e →
-    V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr → (coinsRead s).isSome
-
-/-- **The read shows the draw** wherever v2's acceptance reads the log (`ReadsLog`). -/
-theorem drawRead_coinsRead (k : Verity.Registration.Composite) (h : ReadsLog k) : DrawRead k coinsRead := by
-  intro s a b e p c ev ξ dr hS hcase hacc
-  obtain ⟨log, hlog⟩ := Option.isSome_iff_exists.1 (h s a b e p c ev ξ dr hS hcase hacc)
-  exact ⟨log, hlog, shows_coinsRead hS hcase hacc hlog⟩
-
 /-! ## The session's law -/
 
 /-- **v2's parameters in the parameters sent are the ones its case accepted**, in a composition composite `k`
@@ -561,7 +445,7 @@ theorem law_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A
     {units : Array ℕ} (hS : Verity.SameAccepts k s) (hθ : s.params = θ) (hd : Drew k s dr L n ξ units)
     (hn : A.n = n) : A.law = L := by
   obtain ⟨a, b, e, p, c, ev, hcase, hacc, hL, -, -⟩ := hd
-  obtain ⟨p', hp', -, -, hlaw⟩ := hA.params
+  obtain ⟨p', hp', -, -, hlaw, -⟩ := hA.params
   rw [← hθ] at hp'
   rw [paramsAt_case hS hcase hacc hp', hn, lawAt_of_lawOf hL] at hlaw
   exact (Except.ok.inj hlaw).symm
@@ -1167,7 +1051,9 @@ theorem fresh_readLog (label : String) (after : ByteArray) (records : List Json)
     · rw [ite_eq_right ht] at h
       exact fresh_readTail label after records ls [] none ξ h
 
-/-- **Where the read with v2's own tests returns a log, it shows the draw**, as `shows_coinsRead`. -/
+/-- **Where the read returns a log, it shows the draw**: wherever composite `k` accepted what the prover sent and v2's
+case in it accepts at the coins `ξ` it read under the challenger `dr`, a log `logRead` returns has exactly `ξ`'s bits
+as its coins of `dr`'s family released after `dr`'s digest. -/
 theorem shows_logRead {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
     {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
     {ev : _root_.SampledProofs.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
@@ -1196,5 +1082,11 @@ theorem drawRead_logRead (k : Verity.Registration.Composite) : DrawRead k logRea
   intro s a b e p c ev ξ dr hS hcase hacc
   obtain ⟨log, hlog⟩ := Option.isSome_iff_exists.1 (logRead_isSome hS hcase hacc)
   exact ⟨log, hlog, shows_logRead hS hcase hacc hlog⟩
+
+/-- **v2's read shows the draw**, with no premise: `coinsRead` is `logRead` (`coinsRead_eq_logRead`), so it meets the
+draw's ask (`DrawRead`). -/
+theorem drawRead_coinsRead (k : Verity.Registration.Composite) : DrawRead k coinsRead := by
+  rw [coinsRead_eq_logRead]
+  exact drawRead_logRead k
 
 end Verity.Sampled

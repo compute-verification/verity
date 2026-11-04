@@ -218,17 +218,6 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## v2's files are the vocabulary's -/
 
-/-- **v2's parameters name the vocabulary's digests, and the vocabulary reads the lookup tables as v2 does**: under
-v2's parameters in `θ`, the bytes v2's hex digests of the circuit file and the public file decode to are the
-vocabulary's `programDigest θ` and `publicDigest θ`, and the vocabulary reads the pinned MUFU tables off the committed
-files as v2 reads them off the blobs (`SampledProofs.OneStageZk.tablesOf`). -/
-structure DigestsAt (V : Vocab d α) (θ : ByteArray) : Prop where
-  circuit : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.circuit = .ok dg →
-    V.programDigest θ = some fun i => dg.data.getD i.val 0
-  publicFile : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.pub = .ok dg →
-    V.publicDigest θ = some fun i => dg.data.getD i.val 0
-  tables : ∀ F, (V.read θ F).tables = _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F)
-
 theorem getD_inj {a b : ByteArray} (ha : a.size = 64) (hb : b.size = 64)
     (h : (fun i : Fin 64 => a.data.getD i.val 0) = fun i => b.data.getD i.val 0) : a = b := by
   apply ByteArray.ext
