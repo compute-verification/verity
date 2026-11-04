@@ -1451,7 +1451,9 @@ class Queue:
             raise QueueError(str(e)) from None
         _git(self.workdir, "merge", "--abort", check=False)
         _git(self.workdir, "reset", "-q", "--hard")
-        _git(self.workdir, "clean", "-qfdx")
+        # `status` and a listing `review` let the lock go once they've fetched and merge on here, and git's merge drivers read
+        # their sides from `.merge_file_*` at the clone's root: removing those fails that merge ("Cannot lstat")
+        _git(self.workdir, "clean", "-qfdx", "-e", "/.merge_file_*")
 
     def fetch(self, prs: Iterable[PR] = ()) -> dict[int, str]:
         """Forced refspecs only: `main`, the queue's branch when it exists, and each open PR's head as `refs/queue/pr/{n}`;
