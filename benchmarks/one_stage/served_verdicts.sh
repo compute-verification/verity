@@ -173,9 +173,10 @@
 # proofs' step 3 samples on a local development challenger session's coins on the served node (run.sh's PP_CHALLENGER
 # default, local, pinned on PP_MAIN's line, else MAIN_FILE's, else origin's main's) unless PP_CHALLENGER names the live
 # challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY), and then too while V3c's audit is
-# live, since both open on the window's run root: step 3 is then a development check. A record composed after V3c (a
-# follow-on's, or the compose's from its hand-off) reads V3c's audit where it wrote its summary, else step 3's
-# (`sampled_of_record`). With H1_GATE (the
+# live, since both open on the window's run root: step 3 is then a development check. With V3c off (V3C_CLASS empty) step
+# 3's audit is the one of record, and the preflight refuses its local or loopback session unless DEVELOPMENT=1. A record
+# composed after V3c (a follow-on's, or the compose's from its hand-off) reads V3c's audit where it wrote its summary,
+# else step 3's (`sampled_of_record`). With H1_GATE (the
 # lane's gate command, by default "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"; empty, no
 # H1) the endpoint serves PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER,
 # default vy-dc-h200, at the engine's T and S WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a
@@ -1362,6 +1363,11 @@ if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live cha
         say "PREFLIGHT: V3C_PEER (default PP_PEER) is $V3C_PEER, and $what is $here: each names the node the run serves on, where V3c's audit's session listens as the other one does"; exit 3
       fi ;;
     *) say "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT or gate:USER@HOST, not $V3C_CHALLENGER"; exit 3 ;;
+  esac
+fi
+if [ -z "$V3C" ] && [ -z "$FOLLOW$COMPOSE" ] && [ "$DEVELOPMENT" != 1 ]; then  # step 3's audit is then the one of record
+  case $SP_CHALLENGER in local | loopback:*)
+    say "PREFLIGHT: with V3c off (V3C_CLASS empty) step 3's audit is the sampled-proofs audit of record, and PP_CHALLENGER is $SP_CHALLENGER, a development session, which only a development run takes: set PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, or DEVELOPMENT=1"; exit 3 ;;
   esac
 fi
 if [ -n "$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # the window served under Pearl+, its commit and audit tied to Pearl+'s W
