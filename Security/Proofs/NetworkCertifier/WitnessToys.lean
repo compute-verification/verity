@@ -7,6 +7,7 @@ import Definitions.NetworkCertifier.TapRows
 import Definitions.NetworkCertifier.Schedule
 import Definitions.NetworkCertifier.Ingress
 import Definitions.NetworkCertifier.Assumptions
+import Definitions.Core.Assumptions
 
 /-!
 # The instances the network certifier's count and period witnesses are stated at
@@ -566,5 +567,59 @@ theorem fxQueue_fits : (RowsFormat.tapRecord fxRows fxRows_wf 4 1).fits fxQueueS
       have := fxQueue_bucket c j hj
       omega
     simp [fxRows, h0]
+
+/-! ### A device that ignores the network certifier's code -/
+
+/-- `sksD` with no statement parsing, so none is in its scope. -/
+noncomputable def scopelessD (Coin : Type) : Claims.Sampling.Deploy Coin Unit Unit :=
+  { sksD Coin with parse := fun _ => none }
+
+/-- `KS` holds at `scopelessD`, at every hash: no statement is in its scope. -/
+theorem scopelessD_ks {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
+    Claims.Sampling.KS H (scopelessD Coin) := by
+  intro δ decode _ _ x hx
+  obtain ⟨s, P, hs, -⟩ := hx
+  simp [scopelessD] at hs
+
+/-- `scopelessD`'s commitment binds, at every hash: no opening passes. -/
+theorem scopelessD_binds {Coin : Type} (H : Msg → Msg) : (scopelessD Coin).commit.Binds H := by
+  intro roots o o' _ _ ho _
+  simp [scopelessD, sksD, CommitmentScheme.Opens, rejCm, OC.eval] at ho
+
+/-- Every trace is on `scopelessD`'s decoder's list: its traces are `Unit`. -/
+theorem scopelessD_listWithin {Coin : Type} :
+    Claims.Flock.ListWithin (scopelessD Coin).flock.len (scopelessD Coin).flock.enc (scopelessD Coin).flock.θ
+      (fun _ => [()]) :=
+  fun _ M _ => by cases M; simp
+
+/-- A schedule of no cells: one cell a bucket, no latency. -/
+def emptySched : WardenSchedule (Fin 3) := ⟨1, 0, fun _ => 0, fun _ => 0⟩
+
+/-- Arrivals of no data, on each of two servings. -/
+def noArr : Bool → Fin 3 → Arrivals Unit := fun _ _ => ⟨[], fun _ => 0⟩
+
+/-- **A device that ignores the network certifier's code**: on the serving `true` it shows the client a padding cell
+on connection `0`, which no cell of the schedule sends, and it registers no window. -/
+def leakyRun : Unit → WardenSchedule (Fin 3) × Bool → (Fin 3 → List (ℕ × CellView Unit)) × (Fin 0 → List (Obs 1 1 1)) :=
+  fun _ p => (fun _ => if p.2 then [(0, .pad)] else [], Fin.elim0)
+
+/-- Whether connection `0` showed the client a cell. -/
+def leakyDec (v : Fin 3 → List (ℕ × CellView Unit)) : Bool := !(v 0).isEmpty
+
+theorem leakyDec_run (z : Bool) : leakyDec (leakyRun () (emptySched, z)).1 = z := by
+  cases z <;> rfl
+
+theorem emptySched_fits : fxRows.Fits 1 0 emptySched := by
+  refine ⟨fun c j hj => by simp [emptySched] at hj, fun b => ?_⟩
+  simp [fxRows, laneLoad, emptySched]
+
+/-- **The device is not trusted-host's**: on the serving `true` it shows the client a cell the code, which sends no
+cell on `emptySched`, doesn't. -/
+theorem leakyRun_untrusted :
+    ¬ Verity.Assumptions.TrustedHost () leakyRun fun p =>
+      (wardenCode p.1 (noArr p.2), fxRows.record 1 0 p.1 (noArr p.2) (wardenCode p.1 (noArr p.2))) := by
+  intro h
+  have h0 := congrArg (fun q => q.1 0) (h (emptySched, true))
+  simp [leakyRun, wardenCode, emptySched, wardenLane] at h0
 
 end NetTiming.Witness

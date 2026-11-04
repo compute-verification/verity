@@ -17,6 +17,7 @@ import Proofs.NetworkCertifier.PeriodSum
 import Proofs.NetworkCertifier.Pooled
 import Proofs.NetworkCertifier.TapRows
 import Proofs.NetworkCertifier.Period
+import Proofs.NetworkCertifier.ReadFree
 import Proofs.NetworkCertifier.PeriodReg
 import Proofs.NetworkCertifier.PooledLeak
 import Proofs.NetworkCertifier.Schedule
