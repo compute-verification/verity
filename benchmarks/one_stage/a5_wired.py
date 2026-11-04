@@ -1,5 +1,5 @@
 """One-stage audit, run A5, on a wired stand-in, and v2's wired reads on its sessions. The window: a writer
-``Bf16AddRow_v1{N=16}`` (its ``a`` external, its ``b`` free) and a reader ``ArgmaxChunkBest_v1{C=16}``, four units each,
+``Bf16AddRow_v1{N=64}`` (its ``a`` external, its ``b`` free) and a reader ``ArgmaxChunkBest_v1{C=64}``, four units each,
 reader unit i's ``x`` the writer unit i's ``o0`` (one template-level wire, `interface.Wire`): small circuits, so that the
 case and circuits this run keeps are a small test fixture (`tests/test_a5_wired.py`). Committed by `interface.Window` under
 ``<ROOT>/rank0`` with its registered circuit record, and audited by `a5.audit` as rank 0 of a one-rank step on a local
@@ -60,7 +60,9 @@ from verity.ml.windows import interface as IF, rows as CS, wiring as WI  # noqa:
 ROOT = hashlib.sha512(b"verity/a5/wired-stand-in/v1").hexdigest()
 RULE = "stratified:1"
 UNITS = 4
-WRITER, READER = bind(RW.Bf16AddRow, N=16), bind(AX.ArgmaxChunkBest, C=16)
+#: rows of 64 words: the composer needs a row of each unit past one SHA-512 block (`verity_flock.circuit.Port.comps`)
+WIDTH = 64
+WRITER, READER = bind(RW.Bf16AddRow, N=WIDTH), bind(AX.ArgmaxChunkBest, C=WIDTH)
 WID, RID = descriptor_id(WRITER), descriptor_id(READER)
 OF = {"stand-in": "benchmarks/one_stage/a5_wired.py", "writer": WID, "reader": RID, "units": UNITS}
 #: a reader's refusal by its wired reads: its row doesn't open its writer's root (`RegWired.check`)
@@ -86,7 +88,7 @@ def values(seed: int = 0) -> tuple[list[np.ndarray], list[np.ndarray], list[np.n
     def out(fn: Any, *xs: np.ndarray) -> np.ndarray:
         return np.asarray(evaluate_batch(fn, *xs, kernel="reference"), dtype=np.uint16).reshape(UNITS, -1)
 
-    a, b = bf16(rng.standard_normal((UNITS, 16))), bf16(rng.standard_normal((UNITS, 16)))
+    a, b = bf16(rng.standard_normal((UNITS, WIDTH))), bf16(rng.standard_normal((UNITS, WIDTH)))
     y0 = out(WRITER, a, b)
     return [a, b], [y0], [y0], [out(READER, y0)]
 

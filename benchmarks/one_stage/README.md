@@ -37,7 +37,7 @@ negatives.
   tables over two engine steps, each chunk one table's, as rank 0 of a one-rank step on a local challenger's coins. Lean
   verifies each sampled chunk with its table's registered reads (`--registered`, `tables.registered_reads`).
 - `a5_wired.py` (`a5_tp.sh` with `A5_CHALLENGER=local` and `STANDIN=wired`): A5 on a window with a template-level wire, a
-  writer `Bf16AddRow_v1{N=16}` and a reader `ArgmaxChunkBest_v1{C=16}` whose `x` is the writer's `o0`, committed by
+  writer `Bf16AddRow_v1{N=64}` and a reader `ArgmaxChunkBest_v1{C=64}` whose `x` is the writer's `o0`, committed by
   `interface.Window` with its circuit record, on a local challenger's coins. Then v2's per-member verdicts on its case
   (`sampled-proofs-one-stage-zk verdicts --check`), whose sessions open each drawn reader's wired rows against their writers'
   roots: as made, each accepted verdict naming the wiring's SHA-512; without wires, all accepted and naming none; with the
