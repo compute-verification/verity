@@ -59,17 +59,25 @@ def _bit(c, i):
     return Coll(V1, c.refs.slice(i, i + 1))
 
 
-def _body(B, S, a, b, zy, salt, position, roots, call, blocks):
+def _fold(B, bits):
+    while len(bits) > 1:
+        bits = [B.call(XOR, operands(*bits[i:i + 2])) if i + 1 < len(bits) else bits[i] for i in range(0, len(bits), 2)]
+    return bits[0]
+
+
+def _body(B, S, *params):
     receipt, ok = (t for _n, t in _sig(S)[1].fields)
-    x = B.call(XOR, operands(_bit(a, 0), _bit(b, 0)))
+    zy = params[2]
+    x = _fold(B, [_bit(c, i) for c in params if isinstance(c, Coll) for i in range(c.type.leaves)])
     return coll_concat(_sig(S)[1], [coll_concat(receipt, [B.call(NOT, B.call(NOT, _bit(zy, i)))
                                                           for i in range(receipt.leaves)]),
                                     B.call(NOT, B.call(XOR, operands(x, x)))])
 
 
 #: J10-R's tile unit's signature (`h1window.tile_unit` over `h1tile.PouwH1Tile5`, so its statement's rows and public row
-#: are J10-R's), its receipt its record's leading bits (`_stand_in_receipts`) and its ok 1: a circuit of a few hundred
-#: gates
+#: are J10-R's), its receipt its record's leading bits (`_stand_in_receipts`) and its ok 1, which a XOR tree over every
+#: bit of every input reads, since the Lean verifier refuses a known port (pub) or a port read in full that no computed
+#: row reads in every bit (`KnownRead`)
 StandInJ10R = CompositeDefinition("H1DrawnTestTileJ10R", 0, ("K", "R", "C"), _sig, _body, register=False,
                                   ports=Ports(params={"salt": In(kind="coin"), "position": In(kind="position")},
                                               ret={"receipt": Out(sink=True)}))
