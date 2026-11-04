@@ -187,7 +187,6 @@ VLLM_PEARL_C_RUN_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"
 # Not yet read from here: the commitments' own (`verity.ml.commitments`)
 BLAKE3_KEYED_ROW_NVFP4 = "blake3-keyed/row-nvfp4/v1"
 BLAKE3_KEYED_ROW = "blake3-keyed/row/v2"
-POSEIDON2_BABYBEAR_W24_ROW = "poseidon2-babybear-w24/row/v2h"
 SHA256_ROW_NVFP4_DIGEST = "sha256/row-nvfp4/v1"
 SHA256_ROW_DIGEST = "sha256/row/v1"
 VLLM_EMPTY = "verity-vllm/empty/v1"
@@ -390,9 +389,8 @@ NETWORK_CERTIFICATE = "verity/network-certificate/v4"
 NETWORK_RECORDS = "verity/network-records/v3"
 PERIOD_CIRCUIT = "verity/window-circuit/v1"
 
-# Not yet read from here: composition (onsite, remote, product)
+# Not yet read from here: composition (onsite, remote)
 ONSITE_PROTOCOL = "verity/onsite/v0"
-PRODUCT_PROTOCOL = "verity/product/v0"
 REMOTE_PROTOCOL = "verity/remote/v0"
 
 # Not yet read from here: served periods (`verity.ml.windows`, the bytes say window)

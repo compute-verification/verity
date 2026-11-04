@@ -209,7 +209,7 @@ def _zeros_on_odd_rounds(blocks):
     return lambda i: bytes(len(blocks[i])) if i % 2 else blocks[i]
 
 
-def periods(signer, store: bytes = STORE) -> dict[str, period.Period]:
+def periods(signer, store: bytes = STORE) -> dict[str, period.Run]:
     """A small period of `store` on node `n0` at the small point, signed by `signer`: honest, and under a prover that
     answers every other label with zeros."""
     kw = dict(signer=signer, schemes=mc.SCHEMES if signer.scheme == mc.LMS else M.ts.SCHEMES,
