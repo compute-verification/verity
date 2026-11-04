@@ -76,8 +76,8 @@ open Classical in
 (`unMsgAt`); after it the switched prover's last message where the rows hold at the tape at the padded coins, else
 `abort`. -/
 noncomputable def goMsgAt (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin) :
-    Msg :=
+    (v : (c : Fin (refK x) → S.Coin) → (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (t : S.Tape) (cs : List S.Coin) : Msg :=
   if cs.length < refK x then S.unMsgAt x wt v t cs
   else if S.RowsAtTape x (S.pad cs) wt (v (S.pad cs)) t then S.swMsgAt x wt v t cs
   else S.abort
@@ -214,11 +214,11 @@ theorem goPreModel_link (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : 
     refine congrArg (fun g => S.refP.pmG H x ν g (ansHist a' i)) (funext fun _ => congrArg OC.ret ?_)
     exact hc x wt ω p (S.coinsOf a) (S.coinsOf a') (i.val - 1) fun k hk =>
       congrArg (fun o => S.decOf (msgOf o)) (h k.succ (Fin.lt_def.mpr (by simp only [Fin.val_succ]; omega)))
-  · intro ω p a a' i h
+  · intro ω s p a a' i h
     show S.refP.pmG H x ν _ (ansHist a i) = S.refP.pmG H x ν _ (ansHist a' i)
     rw [ansHist_congr a a' i h]
     refine congrArg (fun g => S.refP.pmG H x ν g (ansHist a' i)) (funext fun _ => congrArg OC.ret ?_)
-    exact huc x w ν ω p (S.coinsOf a) (S.coinsOf a') (i.val - 1) fun k hk =>
+    exact huc x w ν ω s p (S.coinsOf a) (S.coinsOf a') (i.val - 1) fun k hk =>
       congrArg (fun o => S.decOf (msgOf o)) (h k.succ (Fin.lt_def.mpr (by simp only [Fin.val_succ]; omega)))
 
 /-- **(HA) at `goP`**: before the last coin, the go prover's runs and the dummy's are within `2·|L|·δ₁`
@@ -238,24 +238,28 @@ open Classical in
 tape `t`: before the last coin round `j`'s encoding of the switched cut at `c`; after it `fin` of the switched views
 where the tables admit `c`, else `off` of the switched cut. -/
 noncomputable def fixMsgAt (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (c : Fin (refK x) → S.Coin) (v : ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (j : ℕ) : Msg :=
+    (c : Fin (refK x) → S.Coin)
+    (v : (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (j : ℕ) : Msg :=
   if j < refK x then S.enc x c j (S.swCutOf x c wt v t)
   else if S.Admits x c then S.fin x c (S.swViewsAt x c wt v t)
   else S.off x c (S.swCutOf x c wt v t)
 
 /-- `fixMsgAt` with `off` after the last coin at every coin vector. -/
 noncomputable def fixOffMsgAt (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (c : Fin (refK x) → S.Coin) (v : ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (j : ℕ) : Msg :=
+    (c : Fin (refK x) → S.Coin)
+    (v : (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (j : ℕ) : Msg :=
   if j < refK x then S.enc x c j (S.swCutOf x c wt v t) else S.off x c (S.swCutOf x c wt v t)
 
 theorem fixMsgAt_lt (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (c : Fin (refK x) → S.Coin) (v : ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) {j : ℕ}
+    (c : Fin (refK x) → S.Coin)
+    (v : (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) {j : ℕ}
     (h : j < refK x) : S.fixMsgAt x wt c v t j = S.enc x c j (S.swCutOf x c wt v t) := by
   unfold fixMsgAt
   exact ite_eq_left h
 
 theorem fixOffMsgAt_lt (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (c : Fin (refK x) → S.Coin) (v : ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) {j : ℕ}
+    (c : Fin (refK x) → S.Coin)
+    (v : (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) {j : ℕ}
     (h : j < refK x) : S.fixOffMsgAt x wt c v t j = S.enc x c j (S.swCutOf x c wt v t) := by
   unfold fixOffMsgAt
   exact ite_eq_left h
@@ -328,6 +332,8 @@ theorem fixCoinModel_link (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R 
   split_ifs with hA
   · refine ⟨vs x w ν c, hV x w hR, fun p => (hT x hx).2 c p _, fun (t : S.Tape) => ?_⟩
     refine (S.fixP_realVec vs H x w ν t c).trans ?_
+    refine Eq.trans ?_ (congrArg (fun V => (List.range (refK x + 1)).map fun j =>
+      if j < refK x then S.enc x c j (S.cutV x c V) else S.fin x c V) (S.swViewsAt_eq x c (S.wt x w) (vs x w ν c) t))
     show (List.range (refK x + 1)).map (S.fixMsgAt x (S.wt x w) c (vs x w ν c) t) =
       (List.range (refK x + 1)).map fun j =>
         if j < refK x then S.enc x c j (S.cutV x c (S.swViewsAt x c (S.wt x w) (vs x w ν c) t))
@@ -439,8 +445,8 @@ theorem unPS_realVec (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Msg
 
 /-- The switched prover's last message at a coin vector is `fixMsgAt`'s. -/
 theorem swMsgAt_ofFn (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape)
-    (c : Fin (refK x) → S.Coin) :
+    (v : (c : Fin (refK x) → S.Coin) → (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (t : S.Tape) (c : Fin (refK x) → S.Coin) :
     S.swMsgAt x wt v t ((List.ofFn c).take (refK x)) = S.fixMsgAt x wt c (v c) t (refK x) := by
   have hl : ((List.ofFn c).take (refK x)).length = refK x := by
     simp only [List.length_take, List.length_ofFn, Nat.min_self]
