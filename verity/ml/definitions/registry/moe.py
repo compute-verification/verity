@@ -561,9 +561,9 @@ _CC12, _CC90 = EVIDENCE["sigmoid_router_capture"]["cc12"], EVIDENCE["sigmoid_rou
            lambda S: ((("logits", Array(S.E, F32)), ("bias", Array(S.E, F32))), Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
            conformance="exact-model-tested; the RTX PRO 6000's (cc 12.0, 188 SMs) _moe_C.grouped_topk at E=256, TOPK=8, SCALE=2.5, "
                        "both launches: 10,240 rows bit-exact against this Program and every MUFU-range logit word (65,873,464) "
-                       f"against its twin (tests/properties/sigmoid_router_capture_gpu.py; runs {_CC12['runs'][0]} and "
-                       f"{_CC12['runs'][1]}, {_CC12['art']}); likewise cc 9.0's (132 SMs) at vLLM d9105ea80's defaults "
-                       f"(not batch invariant, the fused grouped top-k on; run {_CC90['run']}, {_CC90['art']})")
+                       f"against its twin (tests/properties/sigmoid_router_capture_gpu.py; {_CC12['run_record']}, "
+                       f"{_CC12['art']}); likewise cc 9.0's (132 SMs) at vLLM d9105ea80's defaults "
+                       f"(not batch invariant, the fused grouped top-k on; {_CC90['run_record']}, {_CC90['art']})")
 def MoeRouterSigmoidBias(B, S, logits, bias):
     """`_moe_C.grouped_topk(scores, n_group=1, topk_group=1, TOPK, renormalize=True, SCALE, bias, scoring_func=SIGMOID)` for one
     token row of f32 router logits (`GateLinear`'s f32 output) and the f32 `e_score_correction_bias`: per expert the sigmoid
@@ -653,7 +653,8 @@ def MoeExpertGemmW(B, S, x, e, g, w):
 # ---------------------------------------------------------------------------------------------------------
 
 SM120_EVIDENCE = ("RTX PRO 6000 (cc 12.0, 188 SMs), vLLM d9105ea80 fused_experts under VLLM_BATCH_INVARIANT=1 (BLOCK 64/64/32, GROUP_SIZE_M 8): "
-                  f"DOT=HopperBF16WgmmaDot16_v1 reproduces every w13 and w2 output of run {EVIDENCE['moe_expert_cc12_probe']['run']}'s 16 cases at "
+                  f"DOT=HopperBF16WgmmaDot16_v1 reproduces every w13 and w2 output of a probe's 16 cases "
+                  f"({EVIDENCE['moe_expert_cc12_probe']['run_record']}) at "
                   "E=8, TOPK=2, H=2048, I=1024, M=16 (1,048,576 words per launch) where the Ampere step differs in 428 and 286")
 
 
@@ -704,7 +705,7 @@ SUM_CONF = ("exact-model-tested at TOPK = 8, H = 6144: vLLM d9105ea80's moe_sum 
             "(132 SMs) at vLLM's defaults, inside GLM-5.3's served FusedMoEKernel (349 token rows) and on 8 planted rows (-0s, a tie into "
             "infinity, overflow, NaN payloads, infinities, ties, bf16 subnormals, order-dependent cancellations) on which descending "
             "order, a pairwise tree, the first slot's start, a bf16 accumulator, FTZ, NaN payloads kept and truncation each differ, "
-            f"0 mismatches (property glm53_block_fp8_capture/v4, run {_V4['run']}, {_V4['art']})")
+            f"0 mismatches (property glm53_block_fp8_capture/v4, {_V4['run_record']}, {_V4['art']})")
 
 
 @composite("MoeSumCoordinate", 1, ["TOPK"], lambda S: ((("col", Array(S.TOPK, BF16)),), BF16), conformance=SUM_CONF)

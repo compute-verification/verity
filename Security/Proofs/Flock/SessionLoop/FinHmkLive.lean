@@ -122,7 +122,7 @@ theorem swSrcE_hmk_live (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
     (hv : (viewRep vs x w ν t m₀ ρ₀ ops spec schs cms k extras ic).go l₀ = (.ok (p', tr), l'))
     (he : FlockComplete.eraseZ p' = FlockComplete.eraseZ p) :
     ∀ i < (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).zp 64,
-      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k / 2)).rep (k % 2)).masked i =
+      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2)).masked i =
         q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]! := by
   intro i hi
   have hx : Masked.Live x := Masked.live_of hsc hRel
@@ -133,7 +133,7 @@ theorem swSrcE_hmk_live (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
   have hA := admits_of_finCtx L₀ src real wk hServe hF
   have e := congrArg FlockComplete.RepSrc.masked
     (eraseS_finSrc vs w ν t hA (i := k / 2) (r := k % 2) (by omega) (Nat.mod_lt _ (by omega)))
-  have e' : ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k / 2)).rep (k % 2)).masked =
+  have e' : ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2)).masked =
       ((finSrc vs x w ν t ops (k / 2)).rep (k % 2)).masked := e.symm
   rw [congrFun e' i]
   exact finSrc_hmk_live vs hsc hsx hk hR hrun hv he i hi

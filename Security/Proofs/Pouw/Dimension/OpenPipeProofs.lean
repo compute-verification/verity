@@ -1,6 +1,5 @@
 import Definitions.Pouw.Assumptions.Dimension.OpenPipe
 import Proofs.Pouw.Dimension.ForestProofs
-import Definitions.Pouw.Guarantees.Dimension
 
 /-!
 # The open quadratic pipe: proofs
@@ -145,11 +144,6 @@ theorem quadToOpen : QuadToOpen := by
   intro N m n k cs P hP
   exact quad_open cs P [] [] (fun _ h => h) hP.1.1 hP.1.2.1 (fun i h => by simpa using hP.2 i h)
 
-theorem a2QuadToOpen : A2QuadToOpen := by
-  intro N m n k cs M W γ₂ hA2 q
-  obtain ⟨L, P, hL, hP, hout, hcost⟩ := hA2 q
-  exact ⟨L, P, hL, quadToOpen N m n k cs P hP, hout, hcost⟩
-
 /-- **Theorem 1 in the open quadratic pipe, for any word family.** -/
 theorem theorem1Open : Theorem1Open := by
   intro N m n k w U h2 hli pb cs L P hL hP S hS hout
@@ -241,75 +235,6 @@ theorem algBoundOpenQuad : AlgBoundOpenQuad := by
 theorem algBoundOpenQuad8 : AlgBoundOpenQuad8 := by
   intro k m n N R A B U L P hind hMR hU hL hP hout
   exact algBoundOpenQuad k m n N R A B U L P 16 8 hind hMR hU hL hP hout
-
-theorem ttNCPOpenQuadOfA2 : TTNCPOpenQuadOfA2 := by
-  intro k m n N R A B U M q γ₀ γ₂ h16 hk hind hMR hU hA2 hout hγ₂ hγ₀ hγ
-  obtain ⟨L, P, hL, hP, hPout, hcost⟩ := hA2 q
-  have hb := algBoundOpenQuad8 k m n N R A B U L P hind hMR hU hL hP
-    (fun u hu p hp => hPout _ (hout u hu p hp) ⟨u, hu, p, hp, rfl⟩)
-  refine pipe_ttncp (γ₁ := 0) h16 hk ?_ hcost hγ₂ hγ₀ (by rw [sub_zero, mul_one]; exact hγ)
-  rw [sub_zero, mul_one]
-  exact_mod_cast hb
-
-theorem openQuadChainConsistent : OpenQuadChainConsistent := by
-  intro k hk h16 m n N A B U hU
-  obtain ⟨R, hind, hMR, -, ⟨q, hq⟩, h0, h1, heq⟩ := quadChainConsistentTight k hk h16 m n N A B U hU
-  refine ⟨R, hind, hMR, ?_, ⟨⟨q.1, quadToOpen N m n k 8 q.1 q.2⟩, hq⟩, h0, h1, heq⟩
-  intro q'
-  exact ⟨coords N m n k, q'.1, coords_V0, q'.2, fun φ hφ _ => hφ, by simp [openMachine]⟩
-
-/-- The honest program on the words of `S`: one priced 16 instruction per word. -/
-noncomputable def honestOn (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat)
-    (S : Finset (ℕ × ℕ)) : List (Instr (Noise N m n k)) :=
-  S.toList.map fun x => Instr.priced 16 (word k m n N R A B x.1 x.2)
-
-theorem honestOn_quad {k m n N : ℕ} {R : Mat} {A : (Fin k → Fin n → Fin 64) → ℕ → Mat} {B : ℕ → Mat}
-    (S : Finset (ℕ × ℕ)) : QuadPipe 8 (honestOn k m n N R A B S) := by
-  have hbig : ∀ p f, Instr.priced p f ∈ honestOn k m n N R A B S → 16 ≤ p := fun p f hm => by
-    obtain ⟨x, -, heq⟩ := List.mem_map.1 hm
-    exact (Instr.priced.inj heq).1.le
-  have hpo := prodOuts_eq_nil hbig
-  refine ⟨⟨fun c w hm => ?_, fun p f hm => Or.inl (hbig p f hm), ?_⟩, ?_⟩
-  · obtain ⟨x, -, heq⟩ := List.mem_map.1 hm
-    cases heq
-  · rw [hpo]; intro i h; simp at h
-  · rw [hpo]; intro i h; simp at h
-
-theorem honestOn_cost {k m n N : ℕ} {R : Mat} {A : (Fin k → Fin n → Fin 64) → ℕ → Mat} {B : ℕ → Mat}
-    (S : Finset (ℕ × ℕ)) : cost (honestOn k m n N R A B S) = 16 * S.card := by
-  simp only [honestOn, cost, List.map_map]
-  rw [show (Instr.price ∘ fun x : ℕ × ℕ => Instr.priced 16 (word k m n N R A B x.1 x.2)) = fun _ => 16 from rfl,
-    List.map_const', List.sum_replicate, length_toList, smul_eq_mul, mul_comm]
-
-/-- **On the checked words, A2 does not depend on the pipe class.** -/
-theorem a2WordsIff : Pouw.Guarantees.Dimension.A2WordsIff := by
-  intro k m n N R A B U M γ₂ hind hMR hU hγ₂
-  obtain ⟨h2, hli⟩ := gridNear k m n N R A B U (word k m n N R A B) hind hMR hU
-    (fun u _ p _ => by rw [sub_self]; exact Submodule.zero_mem _)
-  have hfwd : ∀ (C : List (Instr (Noise N m n k)) → Prop), (∀ P, C P → OpenQuadPipe 16 8 P) →
-      A2_algebraicSufficiency γ₂ M C (wordSet (word k m n N R A B) U) → PerWordCost γ₂ M (word k m n N R A B) U := by
-    intro C hC hA2 q S hS hSw
-    obtain ⟨L, P, hL, hP, hout, hcost⟩ := hA2 q
-    have h := theorem1Open N m n k (word k m n N R A B) U h2 hli 16 8 L P hL (hC P hP) S hS fun x hx =>
-      hout _ (hSw x hx) ⟨x.1, (mem_product.1 (hS hx)).1, x.2, mem_range.1 (mem_product.1 (hS hx)).2, rfl⟩
-    have h' : (16 * S.card : ℝ) ≤ cost P := by exact_mod_cast h
-    calc (1 - γ₂) * (16 * S.card : ℝ) ≤ (1 - γ₂) * cost P := mul_le_mul_of_nonneg_left h' (by linarith)
-      _ ≤ M.cost q := hcost
-  have hbwd : ∀ (C : List (Instr (Noise N m n k)) → Prop), (∀ P, QuadPipe 8 P → C P) →
-      PerWordCost γ₂ M (word k m n N R A B) U → A2_algebraicSufficiency γ₂ M C (wordSet (word k m n N R A B) U) := by
-    intro C hC h q
-    classical
-    let S := (U ×ˢ range (nonFinal k m n)).filter fun x => word k m n N R A B x.1 x.2 ∈ M.outputs q
-    refine ⟨coords N m n k, honestOn k m n N R A B S, coords_V0, hC _ (honestOn_quad S), ?_, ?_⟩
-    · rintro φ hφ ⟨u, hu, p, hp, rfl⟩
-      refine mem_slots_of_priced (c := 16) (List.mem_map.2 ⟨(u, p), ?_, rfl⟩) _
-      exact mem_toList.2 (mem_filter.2 ⟨mem_product.2 ⟨hu, mem_range.2 hp⟩, hφ⟩)
-    · have hc := h q S (filter_subset _ _) fun x hx => (mem_filter.1 hx).2
-      rw [honestOn_cost]
-      push_cast
-      exact hc
-  exact ⟨⟨hfwd _ fun P hP => quadToOpen N m n k 8 P hP, hbwd _ fun P hP => hP⟩,
-    ⟨hfwd _ fun P hP => hP, hbwd _ fun P hP => quadToOpen N m n k 8 P hP⟩⟩
 
 theorem openOK_append (pb cs : ℕ) :
     ∀ (P Q : List (Instr (Noise N m n k))) (Vs : List (Noise N m n k → ℚ)), OpenOK pb cs Vs P →

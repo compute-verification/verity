@@ -15,7 +15,7 @@ the verdict has the property (`OnExpansions`).
 * `DescWitnesses`: a verdict of compliance witnesses the policy (`Witnessed`).
 * `DescThrottles`, `DescThrottlesDark`, `DescThrottlesSlots`, `DescThrottlesDarkSlots`: a verdict of compliance carries
   the thread bounds (`Throttled`, `ThrottledDark` and their `Slots` forms), under their named assumptions
-  (`WeightsIncompressible` or `WeightsIncompressibleSlots`, and `BaselineRegistered`), which the check does not see.
+  (`WeightsIncompressible` or `WeightsIncompressibleSlots`, and `ThetaRegistered`), which the check does not see.
 
 Each is proved from `DescAgrees` (`SecurityProofs.DescAgrees`, `Proofs.Properties.Nci.Agrees`): `DescReports` and
 `DescWitnesses` in `Proofs.Properties.Nci.DescVerdict`, and the four bounds in `Proofs.Nci.DescVerdict` (package
@@ -41,25 +41,25 @@ def DescWitnesses : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions Witnessed j out
 
 /-- **A verdict of compliance of the description-sized check throttles every threaded reference circuit the declaration
-contains, if its weights are incompressible and its baseline registered** (`WeightsIncompressible`,
-`BaselineRegistered`). On every instance with a verdict of `NciCheck.Desc.evaluate`, the verdict is `Throttled` on every
+contains, if its weights are incompressible and its θ registered** (`WeightsIncompressible`,
+`ThetaRegistered`). On every instance with a verdict of `NciCheck.Desc.evaluate`, the verdict is `Throttled` on every
 expansion. -/
 def DescThrottles : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions Throttled j out
 
 /-- **A verdict of compliance of the description-sized check puts counted multiplications off the books in dark
 gates**, for every threaded reference circuit the declaration contains partly, if its weights are incompressible and its
-baseline registered (`WeightsIncompressible`, `BaselineRegistered`). On every instance with a verdict of
+θ registered (`WeightsIncompressible`, `ThetaRegistered`). On every instance with a verdict of
 `NciCheck.Desc.evaluate`, the verdict is `ThrottledDark` on every expansion. -/
 def DescThrottlesDark : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions ThrottledDark j out
 
-/-- **`DescThrottles` per parameter slot** (`WeightsIncompressibleSlots`, `BaselineRegistered`): on every instance with
+/-- **`DescThrottles` per parameter slot** (`WeightsIncompressibleSlots`, `ThetaRegistered`): on every instance with
 a verdict of `NciCheck.Desc.evaluate`, the verdict is `ThrottledSlots` on every expansion. -/
 def DescThrottlesSlots : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions ThrottledSlots j out
 
-/-- **`DescThrottlesDark` per parameter slot** (`WeightsIncompressibleSlots`, `BaselineRegistered`): on every instance
+/-- **`DescThrottlesDark` per parameter slot** (`WeightsIncompressibleSlots`, `ThetaRegistered`): on every instance
 with a verdict of `NciCheck.Desc.evaluate`, the verdict is `ThrottledDarkSlots` on every expansion. -/
 def DescThrottlesDarkSlots : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions ThrottledDarkSlots j out

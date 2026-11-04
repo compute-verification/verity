@@ -25,7 +25,7 @@ import numpy as np
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.types import Type
+from verity.ml.circuits.types import Type, axis_runs
 
 from .reference import refuse_registered_tables
 
@@ -103,17 +103,20 @@ def compile(target: Any) -> Compiled:  # shadows `builtins.compile`, unused here
         return np.fromiter((p_base[i] + j if s == "p" else const[i] if i in const else node_base[i] + j for s, i, j in refs),
                            dtype=np.int64, count=refs.count)
 
-    def member_refs(nd, m: int) -> np.ndarray:
+    def member_refs(nd) -> np.ndarray:
+        """Row m: member m's operand wires, ``a.take(ax, m)`` of each argument mapped over ``ax`` and the whole of each shared
+        one, read off one pass over each argument's references."""
         out = []
         for a, ax in zip(nd.args, nd.axes):
+            whole = idx(a.refs)
             if ax is None:
-                out.append(idx(a.refs))
-            elif ax == 0:
-                L = a.type.elem.leaves
-                out.append(idx(a.refs.slice(m * L, (m + 1) * L)))
-            else:
-                out.append(idx(a.take(ax, m).refs))
-        return np.concatenate(out) if out else np.empty(0, np.int64)
+                out.append(np.broadcast_to(whole, (nd.n, len(whole))))
+                continue
+            outer, n, L = axis_runs(a.type, ax)
+            if n != nd.n:
+                raise ValueError(f"{spec.id}: a batch of {nd.n} maps an axis of {n}")
+            out.append(whole.reshape(outer, n, L).transpose(1, 0, 2).reshape(n, outer * L))
+        return np.concatenate(out, axis=1) if out else np.empty((nd.n, 0), np.int64)
 
     steps: list[tuple] = []
     run: list[tuple] = []
@@ -137,7 +140,7 @@ def compile(target: Any) -> Compiled:  # shadows `builtins.compile`, unused here
             if nd.form == "primitive":
                 ops = np.concatenate([idx(a.refs) for a in nd.args]).reshape(1, arity)
             else:
-                ops = np.stack([member_refs(nd, m) for m in range(nd.n)]).reshape(nd.n, arity)
+                ops = member_refs(nd).reshape(nd.n, arity)
             out = np.arange(base, base + len(ops), dtype=np.int64)
             ki, cols = _KINDS.index(kind), [ops[:, j] for j in range(arity)]
             while len(cols) > 2:
@@ -158,7 +161,7 @@ def compile(target: Any) -> Compiled:  # shadows `builtins.compile`, unused here
         if nd.form == "call":
             members = [np.concatenate([idx(a.refs) for a in nd.args]) if nd.args else np.empty(0, np.int64)]
         elif nd.form == "batch":
-            members = [member_refs(nd, m) for m in range(nd.n)]
+            members = member_refs(nd)
         else:
             xs = [(idx(a.refs), a.type.elem.leaves) for a in nd.args[1:1 + nd.n_xs]]
             shared = [idx(a.refs) for a in nd.args[1 + nd.n_xs:]]

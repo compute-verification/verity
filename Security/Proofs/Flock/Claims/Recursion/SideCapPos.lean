@@ -130,7 +130,7 @@ the table's two reps, `HH = d - cap` at that level (`levelMatch`), and the posit
 (`posAt_lt`, at table 0's setup, `inner_m`). -/
 theorem pieceCtx {D : Claims.Recursion.Deploy Coin} {shape : Claims.Recursion.Form → Prop}
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (hP : ∀ x, D.parse x = parse x)
-    (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) {x : Msg} {st : Claims.Recursion.Stmt}
+    (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) {x : Msg} {st : Claims.Recursion.CompiledStatement}
     (hx : D.parse x = some st) (hf : shape st.form) {r : XR} {ss : Array VStar.Stmt} {s lv LANES HH n : ℕ}
     (hr : readX x = some r) (hss : RecVStar.statements r.shape = .ok ss)
     (hsv : ss[s]? = some (.recOpen lv LANES HH n)) {q : OpenPiece}

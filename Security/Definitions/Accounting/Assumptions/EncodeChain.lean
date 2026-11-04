@@ -73,7 +73,7 @@ carries) are within `B = 128`, and spend at least `L − d(0)` units a squaring.
 
 **Units, and why a gather over run-time values pays one.** A gate that reads only registered values and constants is
 free (it computes one value on every draw), and a gather pays its fresh index bits, `⌈log₂ (V + 1)⌉` for a column
-of `V` words and the `0` outside it, `n` for a table read of its index's low `n` bits (`Gate.indexBits`), each kind
+of `V` words and the `0` outside it, `n` for a table read of its index's low `n` bits (`IntGate.indexBits`), each kind
 counted apart as property/v1 counts them: a one-word gather of a run-time index is the comparison
 `[i ≤ 0]`, and were it free, thresholds and affine maps would carry a square's column sums back to bytes and the
 chain would cost nothing. Without the extra unit for a
@@ -85,7 +85,7 @@ would compute any function of the draw (`(k + 2)·n` bits) for about that many u
 `{x, p − x}` with that sign rule, and what the conjecture charges is the pair's root, not the sign. -/
 def EncodeChainHardness (F : Field) (k B E εnum εden : ℕ) : Prop :=
   εden ≤ 2 ^ 64 * εnum → 0 < k → 2 ^ 66 ≤ F.p → F.p % 4 = 3 →
-  ∀ {ι : Type} (C : Dag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
+  ∀ {ι : Type} (C : IntDag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
     Restricted B C → CodecInputs F C (draws F k) m x → words.Nodup → (∀ i ∈ words, i < F.p) →
     ComputesWords F k C x m words out εnum εden →
     words.length * E * (F.n - 1) ≤ budgeted C * (F.n - 1) + runBits C * E
