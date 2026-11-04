@@ -12,10 +12,12 @@ path relative to the package, a package required by path as its own content, so 
 kept `.lake/build` follows it (`lean_audit.py`'s docstring has the key, `--explain PKG` what a miss changed).
 
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data (`Facts.lean`
-imports with initializers disabled and no environment extension loaded; kept as `facts.json.gz`), and the kernel replay
-(`Replay.lean`) loads them the same way. The only package code that runs is the build's and, after the facts and the
-replay, the tests' under `runs` (each deciding only its own pass), in a sandbox where the machine allows one; a test's data
-generator is the repository's code and runs outside it.
+imports with initializers disabled and no environment extension loaded), and the kernel replay (`Replay.lean`) loads them
+the same way. The only package code that runs is the build's and, after the facts and the replay, the tests' under `runs`
+(each deciding only its own pass), in a sandbox where the machine allows one; a test's data generator is the repository's
+code and runs outside it.
+
+A run keeps the facts only gzipped (`facts.json.gz`; `stored_facts` reads an older `facts.json` too).
 
 ~~~text
 bash tools/verity/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when
