@@ -13,17 +13,16 @@ declaration is consistent with it (`goodDeclTiles`). This file reads the code's 
   declaration (`declOf`). Its kept width is within `k` (`LoadedGivesUp`), and each credited A row it declares passes
   `RowOK`: `checkOpened` holds the row to `row_passes`, on the words its opening parses to and their `s5_stats`, which
   `RowsAreTheRules` reads as `RowOK` at the committed activations.
-* (d) The code's tickets are `drawTickets`: on a run laid out as the game's workload, a bijection from `tickets`'
-  entries onto the tiles with tickets maps each entry to its `TileOf` tile, its ticket that tile's `drawTickets` of
-  `pearlCDrawRev1 devH100` under the records' declarations (`decOf`). Its parts: `wref 1 k n` is
-  `wrefRowRev1 devH100 k n`, `ticketWeight` is the weight's numerator and denominator, and the run's lcm fold is
-  `Finset.lcm` over the tiles.
-* (d) Acceptance is the tolerant audit's: on an accepted run, every sample of the game on a drawn tile is in
-  `goodDeclTiles ∪ blankTiles` or over its cap, or SHA-512 collides.
+* (d) The code's tickets are `drawTickets` (`ticketsAreTheDraw`): on a run laid out as the game's workload, an
+  injective map from `tickets`' entries to the game's tiles, onto every tile with a ticket, takes each entry to its
+  `TileOf` tile, its tickets that tile's `drawTickets` of `pearlCDrawRev1 devH100` under the records' declarations
+  (`decOf`). Its parts: `wref 1 k n` is `wrefRowRev1 devH100 k n`, `ticketWeight` is the weight's numerator and
+  denominator, and the run's lcm fold is `Finset.lcm` over the tiles.
 
-The run's layout is what the game reads of the run: each pass tiles 64 × 64 (a manifest's `instance` may set another
-tile), each record is a committed unit of the workload with its shape and weight, and no two records share a call index.
-The game's transcript has one salt, so the run is one salt's; `passesDistinct` keys call indices per salt.
+The run's layout (`RunLayout`) is what the game reads of the run: each pass tiles 64 × 64 (a manifest's `instance` may
+set another tile), each record is a unit of the workload that the transcript commits, with the record's shape and
+weight, and no two records share a call index. `passesDistinct` keys call indices per salt, so a run whose passes of
+different salts share an index is not one game's run.
 -/
 
 namespace Pouw.PearlPlus.Draw
@@ -615,4 +614,532 @@ theorem parseRow_wordBytes {w : ℕ → ℕ} {k : ℕ} {x : Array ℕ} (h : Word
     rw [hx]
     simpa using hf
 
+open Pouw.PearlC Finset
+
+/-! ## A record -/
+
+/-- A record that loads keeps its real rows within `m` and its kept width within `k`, neither empty. -/
+theorem reason_none {r : UnitRecord} (h : r.reason = none) :
+    0 < r.realRows ∧ r.realRows ≤ r.matmul.m ∧ 0 < r.kKept ∧ r.kKept ≤ r.matmul.k := by
+  unfold UnitRecord.reason at h
+  dsimp only at h
+  split at h
+  · cases h
+  · rename_i hc
+    simp only [Bool.not_eq_true', Bool.not_eq_false, Bool.and_eq_true, decide_eq_true_eq] at hc
+    omega
+
+/-- A row's opening bytes are the row's words, four little-endian bytes each. -/
+theorem rowBytesOf_eq (W : Codes) (k i : ℕ) : Bridge.rowBytesOf W k i = wordBytes (W i) k := rfl
+
+/-! ## A tile's weight -/
+
+theorem cast_sub_max (a b : ℕ) : ((a - b : ℕ) : ℚ) = max ((a : ℚ) - b) 0 := by
+  rcases le_total b a with h | h
+  · rw [Nat.cast_sub h, max_eq_left (by linarith [(Nat.cast_le (α := ℚ)).2 h])]
+  · rw [Nat.sub_eq_zero_of_le h, max_eq_right (by linarith [(Nat.cast_le (α := ℚ)).2 h]), Nat.cast_zero]
+
+theorem wref_one_cast (k n : ℕ) : (wref 1 k n : ℚ) =
+    max ((n : ℚ) * k + 32 * n * ((k / 128 : ℕ) : ℚ) - 32 * n) 0 + (k : ℚ) * (32 : ℕ) + 2 * 2 * (32 : ℕ) * n +
+      (((64 : ℕ) : ℚ) + ((4 : ℕ) : ℚ)) * k := by
+  unfold wref
+  simp only [FADD, WINDOW, PouwCheck.PearlPlus.R, BF16_MAC, PEEL_K, FORMING]
+  push_cast [cast_sub_max]
+  ring_nf
+
+theorem wrefRowRev1_h100 (k n : ℕ) : wrefRowRev1 devH100 k n =
+    max ((n : ℚ) * k + 32 * n * ((k / 128 : ℕ) : ℚ) - 32 * n) 0 + (k : ℚ) * (32 : ℕ) + 2 * 2 * (32 : ℕ) * n +
+      (((64 : ℕ) : ℚ) + ((4 : ℕ) : ℚ)) * k := by
+  have hG : devH100.G = 4 := rfl
+  have hadd : devH100.prices.add = 32 := rfl
+  have hbf : devH100.prices.bf16 = 2 := rfl
+  have hfs : devH100.prices.costs.fs = 64 := rfl
+  have hqa : devH100.prices.costs.qa = 4 := rfl
+  have hr : Params.pi.r = 32 := rfl
+  unfold wrefRowRev1
+  rw [ite_eq_right (by rw [hG]; decide), hadd, hbf, hfs, hqa, hr, hG]
+
+/-- The code's `wref(1, k, n)` is the draw's `wrefRowRev1 devH100 k n`, the natural subtraction's cut at zero
+included. -/
+theorem wref_one_eq (k n : ℕ) : (wref 1 k n : ℚ) = wrefRowRev1 devH100 k n := by
+  rw [wref_one_cast, wrefRowRev1_h100]
+
+theorem num_den_div (x n : ℕ) (hn : 0 < n) :
+    ((x : ℚ) / n).num = ((x / Nat.gcd x n : ℕ) : ℤ) ∧ ((x : ℚ) / n).den = n / Nat.gcd x n := by
+  have hg : 0 < Nat.gcd x n := Nat.gcd_pos_of_pos_right x hn
+  have hcop : Nat.Coprime (x / Nat.gcd x n) (n / Nat.gcd x n) := Nat.coprime_div_gcd_div_gcd hg
+  have hb0 : 0 < n / Nat.gcd x n := Nat.div_pos (Nat.gcd_le_right x hn) hg
+  have hb : (0 : ℤ) < ((n / Nat.gcd x n : ℕ) : ℤ) := by exact_mod_cast hb0
+  have he : (x : ℚ) / n = (((x / Nat.gcd x n : ℕ) : ℤ) : ℚ) / (((n / Nat.gcd x n : ℕ) : ℤ) : ℚ) := by
+    rw [Int.cast_natCast, Int.cast_natCast, Nat.cast_div (Nat.gcd_dvd_left x n) (by exact_mod_cast hg.ne'),
+      Nat.cast_div (Nat.gcd_dvd_right x n) (by exact_mod_cast hg.ne'),
+      div_div_div_cancel_right₀ (by exact_mod_cast hg.ne')]
+  rw [he]
+  have hc : Nat.Coprime ((x / Nat.gcd x n : ℕ) : ℤ).natAbs ((n / Nat.gcd x n : ℕ) : ℤ).natAbs := by
+    rw [Int.natAbs_natCast, Int.natAbs_natCast]; exact hcop
+  refine ⟨Rat.num_div_eq_of_coprime hb hc, ?_⟩
+  have := Rat.den_div_eq_of_coprime hb hc
+  exact_mod_cast this
+
+/-- The weight of a tile with `cr` credited rows and `cc` credited columns, as the draw weighs it. -/
+def tileWeight (r : UnitRecord) (rows cols : List ℕ) : ℚ :=
+  ((wref 1 r.kKept r.matmul.n * (r.credited rows cols).1.length * (r.credited rows cols).2.length : ℕ) : ℚ) /
+    r.matmul.n
+
+/-- `ticketWeight` is `tileWeight` in lowest terms. -/
+theorem ticketWeight_eq (r : UnitRecord) (rows cols : List ℕ) (hn : 0 < r.matmul.n) :
+    ticketWeight r rows cols = ((tileWeight r rows cols).num.toNat, (tileWeight r rows cols).den) := by
+  obtain ⟨h1, h2⟩ := num_den_div
+    (wref 1 r.kKept r.matmul.n * (r.credited rows cols).1.length * (r.credited rows cols).2.length) r.matmul.n hn
+  rw [tileWeight, h1, h2, Int.toNat_natCast]
+  rfl
+
+theorem card_inter_filter {L : List ℕ} (hL : L.Nodup) (M : ℕ) (P : ℕ → Bool) (hM : ∀ i ∈ L, P i = true → i < M) :
+    (L.toFinset ∩ (range M).filter fun i => P i = true).card = (L.filter P).length := by
+  rw [← List.toFinset_card_of_nodup (hL.filter P)]
+  congr 1
+  ext i
+  simp only [Finset.mem_inter, List.mem_toFinset, Finset.mem_filter, Finset.mem_range, List.mem_filter]
+  constructor
+  · rintro ⟨h, -, hp⟩
+    exact ⟨h, hp⟩
+  · rintro ⟨h, hp⟩
+    exact ⟨h, hM i h hp, hp⟩
+
+/-! ## The game's tiles -/
+
+theorem block_nodup (len w b : ℕ) : (block len w b).Nodup := List.nodup_range' 1 Nat.one_pos
+
+theorem mem_block {len w b i : ℕ} : i ∈ block len w b ↔ b * w ≤ i ∧ i < b * w + min w (len - b * w) := by
+  rw [block, List.mem_range'_1]
+
+theorem block_lt {len w b i : ℕ} (h : i ∈ block len w b) : i < len := by
+  rw [mem_block] at h
+  generalize b * w = a at h
+  omega
+
+theorem block_toFinset (len w b : ℕ) : (block len w b).toFinset = Ico (b * w) (min ((b + 1) * w) len) := by
+  ext i
+  rw [List.mem_toFinset, mem_block, Finset.mem_Ico, Nat.succ_mul]
+  generalize b * w = a
+  omega
+
+theorem length_flatMap_const {α β : Type} (f : α → List β) (c : ℕ) (hc : ∀ a, (f a).length = c) :
+    ∀ L : List α, (L.flatMap f).length = L.length * c
+  | [] => by simp
+  | a :: L => by
+    rw [List.flatMap_cons, List.length_append, hc, length_flatMap_const f c hc L, List.length_cons, Nat.succ_mul,
+      Nat.add_comm]
+
+/-- Unit `u`'s tiles in `gridTiles 64 64`, in its order. -/
+def unitGrid (L : Layout) (u : ℕ) : List (ℕ × ℕ × ℕ) :=
+  (List.range (((L.shape u).m + 64 - 1) / 64)).flatMap fun bi =>
+    (List.range (((L.shape u).n + 64 - 1) / 64)).map fun bj => (u, bi, bj)
+
+theorem gridTiles_eq (L : Layout) : gridTiles 64 64 L = (List.range L.N).flatMap (unitGrid L) := rfl
+
+theorem unitGrid_length (L : Layout) (u : ℕ) :
+    (unitGrid L u).length = nblocks (L.shape u).m 64 * nblocks (L.shape u).n 64 := by
+  rw [unitGrid, length_flatMap_const _ (nblocks (L.shape u).n 64) (fun _ => by simp [nblocks]), List.length_range]
+  rfl
+
+theorem unitGrid_getElem? (L : Layout) (u x : ℕ) : (unitGrid L u)[x]? =
+    if x < nblocks (L.shape u).m 64 * nblocks (L.shape u).n 64 then
+      some (u, x / nblocks (L.shape u).n 64, x % nblocks (L.shape u).n 64) else none := by
+  unfold unitGrid
+  rw [getElem?_flatMap_const _ (nblocks (L.shape u).n 64) (fun _ => by simp [nblocks]), List.length_range]
+  by_cases hx : x < nblocks (L.shape u).m 64 * nblocks (L.shape u).n 64
+  · rw [ite_eq_left (by simpa [nblocks] using hx), ite_eq_left hx]
+    have hn : 0 < nblocks (L.shape u).n 64 := Nat.pos_of_ne_zero fun h => by rw [h, Nat.mul_zero] at hx; omega
+    have hq : x / nblocks (L.shape u).n 64 < nblocks (L.shape u).m 64 := (Nat.div_lt_iff_lt_mul hn).2 hx
+    have h1 : (List.range (((L.shape u).m + 64 - 1) / 64))[x / nblocks (L.shape u).n 64]? =
+        some (x / nblocks (L.shape u).n 64) := List.getElem?_range hq
+    have h2 : (List.range (((L.shape u).n + 64 - 1) / 64))[x % nblocks (L.shape u).n 64]? =
+        some (x % nblocks (L.shape u).n 64) := List.getElem?_range (Nat.mod_lt x hn)
+    rw [h1]
+    simp only [Option.bind_some, List.getElem?_map, h2, Option.map_some]
+  · rw [ite_eq_right (by simpa [nblocks] using hx), ite_eq_right hx]
+
+/-- The index in `gridTiles 64 64 L` of unit `u`'s first tile. -/
+def gstart (L : Layout) (u : ℕ) : ℕ := ((List.range u).map fun v => (unitGrid L v).length).sum
+
+theorem gridTiles_getElem? {L : Layout} {u x : ℕ} (hu : u < L.N)
+    (hx : x < nblocks (L.shape u).m 64 * nblocks (L.shape u).n 64) :
+    (gridTiles 64 64 L)[gstart L u + x]? =
+      some (u, x / nblocks (L.shape u).n 64, x % nblocks (L.shape u).n 64) := by
+  rw [gridTiles_eq, gstart, getElem?_flatMap_range (unitGrid L) L.N u x hu (by rw [unitGrid_length]; exact hx),
+    unitGrid_getElem?, ite_eq_left hx]
+
+theorem gridTiles_inv {L : Layout} {g : ℕ} {b : ℕ × ℕ × ℕ} (h : (gridTiles 64 64 L)[g]? = some b) :
+    ∃ u < L.N, ∃ x < nblocks (L.shape u).m 64 * nblocks (L.shape u).n 64, g = gstart L u + x ∧
+      b = (u, x / nblocks (L.shape u).n 64, x % nblocks (L.shape u).n 64) := by
+  rw [gridTiles_eq] at h
+  obtain ⟨u, hu, x, hx, rfl, hb⟩ := getElem?_flatMap_range_inv (unitGrid L) L.N g b h
+  rw [unitGrid_length] at hx
+  rw [unitGrid_getElem?, ite_eq_left hx, Option.some.injEq] at hb
+  exact ⟨u, hu, x, hx, rfl, hb.symm⟩
+
+/-- The audit's tile `x` of unit `u`: its index is below `NT`, and its unit, rows and columns are the code's. -/
+theorem audit_at {L : Layout} {u x : ℕ} (hu : u < L.N)
+    (hx : x < nblocks (L.shape u).m 64 * nblocks (L.shape u).n 64) :
+    gstart L u + x < (auditTiling 64 64 L).NT ∧ (auditTiling 64 64 L).unit (gstart L u + x) = u ∧
+      (auditTiling 64 64 L).rows (gstart L u + x) =
+        (block (L.shape u).m 64 (x / nblocks (L.shape u).n 64)).toFinset ∧
+      (auditTiling 64 64 L).cols (gstart L u + x) =
+        (block (L.shape u).n 64 (x % nblocks (L.shape u).n 64)).toFinset := by
+  have h := gridTiles_getElem? hu hx
+  have hd : (gridTiles 64 64 L).getD (gstart L u + x) (0, 0, 0) =
+      (u, x / nblocks (L.shape u).n 64, x % nblocks (L.shape u).n 64) := by
+    rw [List.getD_eq_getElem?_getD, h, Option.getD_some]
+  refine ⟨(List.getElem?_eq_some_iff.1 h).1, ?_, ?_, ?_⟩
+  · show ((gridTiles 64 64 L).getD _ (0, 0, 0)).1 = u
+    rw [hd]
+  · rw [block_toFinset]
+    show Ico (((gridTiles 64 64 L).getD _ (0, 0, 0)).2.1 * 64) _ = _
+    rw [hd]
+  · rw [block_toFinset]
+    show Ico (((gridTiles 64 64 L).getD _ (0, 0, 0)).2.2 * 64) _ = _
+    rw [hd]
+
 end Pouw.PearlPlus.Draw
+
+namespace Pouw.PearlPlus.Bridge
+
+open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus Finset Draw
+
+/-- **The declaration a unit's record makes** before the coin: its kept width, and the rows and columns it credits, as
+`UnitRecord.credited` filters a tile's (real, neither excluded nor voluntary). -/
+def declOf (r : UnitRecord) : Decl where
+  kept := r.kKept
+  rows := (Finset.range r.realRows).filter fun i =>
+    (decide (i < r.realRows) && !r.excludedA.contains i && !r.voluntaryA.contains i) = true
+  cols := (Finset.range r.matmul.n).filter fun j => (!r.excludedB.contains j && !r.voluntaryB.contains j) = true
+
+/-- **(c) A passed tile's declaration is consistent**: a tile of a pass `load` gives, which is audit tile `g` of `U`,
+whose unit `τ` commits as `c` and declares by its record (`declOf`), whose openings are `c`, and that `checkTile` passes
+on its weight's noise, has `declOK` at the deployed rules: its kept width is within `k`, and every credited row it
+declares in the tile passes `RowOK` at `c`'s activations. -/
+def TilePassGivesTheDecl : Prop :=
+  ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (coins : PouwCommit.CoinCommitment)
+    (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening) (U : Workload) (g : ℕ) (τ : Transcript) (c : Commit)
+    (dec : ℕ → Decl),
+    PouwCheck.PearlPlus.load coins man = .ok p → TileOf p tid U g →
+    τ ((auditTiling 64 64 U.layout).unit g) = some c → (∀ r ∈ p.records, dec r.matmul.index = declOf r) →
+    OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c →
+    checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = none →
+      declOK (tilesH3 saltOf rootOf ρ : TileRules Q R S) U τ dec g
+
+/-- **(c)** from what a passed tile establishes (`TileAcceptMeans`), what a loaded pass's records keep (`LoadedGivesUp`)
+and the per-row rules (`RowsAreTheRules`). -/
+theorem tilePassGivesTheDecl (hT : Properties.Pouw.PearlPlus.TileAcceptMeans)
+    (hL : Properties.Pouw.PearlPlus.LoadedGivesUp) (hR : RowsAreTheRules) : TilePassGivesTheDecl := by
+  intro Q R S saltOf rootOf ρ coins man p tid o U g τ c dec hload hof hτ hdec hopen hpass
+  obtain ⟨pos, rows, cols, htile, -, hunit, -, hk, -, -, hrows, -⟩ := hof
+  obtain ⟨pos', rows', cols', ops, ch, htile', hrest⟩ := hT p _ tid o hpass
+  simp only [htile, Option.some.injEq, Prod.mk.injEq] at htile'
+  obtain ⟨rfl, rfl, rfl⟩ := htile'
+  try dsimp only at hrest
+  obtain ⟨-, -, -, -, -, -, hform, -, hchk, -⟩ := hrest
+  obtain ⟨hp, -⟩ := Draw.tile?_some htile
+  have hrec : p.records[pos]! ∈ p.records := by rw [getElem!_pos p.records pos hp]; exact List.getElem_mem hp
+  obtain ⟨-, -, hkept0, hkept⟩ := Draw.reason_none ((hL coins man p hload).1 _ hrec).1
+  have hd : dec ((auditTiling 64 64 U.layout).unit g) = declOf p.records[pos]! := by rw [hunit]; exact hdec _ hrec
+  have hK := Assembly.record_domain hload pos
+  rw [← hk] at hK hkept
+  refine ⟨?_, fun i hi hdi => ?_⟩
+  · change (dec ((auditTiling 64 64 U.layout).unit g)).kept ≤ (U.layout.shape ((auditTiling 64 64 U.layout).unit g)).k
+    rw [hd]
+    exact hkept
+  · change i ∈ (auditTiling 64 64 U.layout).rows g at hi
+    change i ∈ (dec ((auditTiling 64 64 U.layout).unit g)).rows at hdi
+    have him := Assembly.rows_lt hi
+    rw [hrows, List.mem_toFinset] at hi
+    obtain ⟨x, hx, rfl⟩ := List.getElem_of_mem hi
+    rw [hd] at hdi
+    simp only [declOf, Finset.mem_filter, Finset.mem_range] at hdi
+    have hrp := Draw.checkOpened_credited hchk hx hdi.2
+    obtain ⟨wn', -, henc, -⟩ := Assembly.formed_ok hform
+    obtain ⟨hoa, -, -, hact, -, -⟩ := hopen pos rows cols htile
+    rw [hoa] at henc
+    obtain ⟨hparse, s, β, hst⟩ := Draw.encode_rowA (by simp) henc x hx
+    rw [getElem!_pos _ x (by simpa using hx), List.getElem_map, Draw.rowBytesOf_eq, ← hk] at hparse
+    obtain ⟨hsz, hwords⟩ := Draw.parseRow_wordBytes hparse
+    have hW : ∀ l < (U.layout.shape ((auditTiling 64 64 U.layout).unit g)).k,
+        (ops.a.x[x]!)[l]! = c.act rows[x] l ∧ c.act rows[x] l < 2 ^ 32 ∧ (wordQ (c.act rows[x] l)).isSome := by
+      intro l hl
+      have h32 := hact rows[x] (List.getElem_mem hx) l hl
+      obtain ⟨hxl, hfin⟩ := hwords l hl
+      rw [Nat.mod_eq_of_lt h32] at hxl
+      refine ⟨hxl, h32, ?_⟩
+      rw [hxl, word_and_ff] at hfin
+      have hne : (c.act rows[x] l >>> 23) % 256 ≠ 255 := by simpa using hfin
+      rw [Pouw.PearlC.PeelExactProofs.wordQ_fields hne]
+      rfl
+    have hiff := @hR Q R S saltOf rootOf _ _ c.act rows[x] ops.a.x[x]! s _ _ β him (by omega) (by omega) (by omega) hsz
+      hW hst
+    have hA : actOf τ ((auditTiling 64 64 U.layout).unit g) = c.act := by unfold actOf; rw [hτ]
+    show (tilesH3 saltOf rootOf ρ : TileRules Q R S).rowOK (U.layout.shape ((auditTiling 64 64 U.layout).unit g))
+      (actOf τ ((auditTiling 64 64 U.layout).unit g)) rows[x]
+    rw [hA]
+    exact hiff.1 hrp
+
+/-- The declaration the run's records make for unit `u`: its record's (`declOf`), or the empty one for a unit no record
+calls. -/
+def decOf (passes : List Pass) (u : ℕ) : Decl :=
+  match (passes.flatMap (·.records)).find? (·.matmul.index == u) with
+  | some r => declOf r
+  | none => ⟨0, ∅, ∅⟩
+
+/-- How the run's passes lie over the game's workload `U` and transcript `τ`: 64 × 64 tiles, each record's call a unit
+of `U` that `τ` commits, with the record's shape and weight, and no call in two records. -/
+structure RunLayout (passes : List Pass) (U : Workload) (τ : Transcript) : Prop where
+  tile64 : ∀ p ∈ passes, p.scheme.tileM = 64 ∧ p.scheme.tileN = 64
+  unit : ∀ p ∈ passes, ∀ r ∈ p.records, r.matmul.index < U.layout.N ∧
+    (U.layout.shape r.matmul.index).m = r.matmul.m ∧ (U.layout.shape r.matmul.index).k = r.matmul.k ∧
+    (U.layout.shape r.matmul.index).n = r.matmul.n ∧ U.layout.wid r.matmul.index = r.matmul.weight ∧
+    (τ r.matmul.index).isSome
+  index_inj : ∀ {i i' pos pos' : ℕ} {p p' : Pass} {r r' : UnitRecord}, passes[i]? = some p →
+    p.records[pos]? = some r → passes[i']? = some p' → p'.records[pos']? = some r' →
+    r.matmul.index = r'.matmul.index → i = i' ∧ pos = pos'
+
+variable {passes : List Pass} {U : Workload} {τ : Transcript}
+
+theorem decOf_cases (passes : List Pass) (u : ℕ) : decOf passes u = ⟨0, ∅, ∅⟩ ∨
+    ∃ (i : ℕ) (p : Pass) (pos : ℕ) (r : UnitRecord), passes[i]? = some p ∧ p.records[pos]? = some r ∧
+      r.matmul.index = u ∧ decOf passes u = declOf r := by
+  unfold decOf
+  split
+  · rename_i r h
+    right
+    obtain ⟨p, hp, hr⟩ := List.mem_flatMap.1 (List.mem_of_find?_eq_some h)
+    obtain ⟨i, hi⟩ := List.getElem?_of_mem hp
+    obtain ⟨pos, hpos⟩ := List.getElem?_of_mem hr
+    exact ⟨i, p, pos, r, hi, hpos, by simpa using List.find?_some h, rfl⟩
+  · left
+    rfl
+
+theorem decOf_eq (hL : RunLayout passes U τ) {i pos : ℕ} {p : Pass} {r : UnitRecord} (hp : passes[i]? = some p)
+    (hr : p.records[pos]? = some r) : decOf passes r.matmul.index = declOf r := by
+  unfold decOf
+  split
+  · rename_i r' h
+    obtain ⟨p', hp', hr'⟩ := List.mem_flatMap.1 (List.mem_of_find?_eq_some h)
+    obtain ⟨i', hi'⟩ := List.getElem?_of_mem hp'
+    obtain ⟨pos', hpos'⟩ := List.getElem?_of_mem hr'
+    have hu : r'.matmul.index = r.matmul.index := by simpa using List.find?_some h
+    obtain ⟨rfl, rfl⟩ := hL.index_inj hp hr hi' hpos' hu.symm
+    rw [hi', Option.some.injEq] at hp
+    subst hp
+    rw [hpos', Option.some.injEq] at hr
+    subst hr
+    rfl
+  · rename_i hn
+    have := List.find?_eq_none.1 hn r (List.mem_flatMap.2 ⟨p, List.mem_of_getElem? hp, List.mem_of_getElem? hr⟩)
+    simp at this
+
+/-- The game tile of a run's tile: tile `x` of its call's unit in `gridTiles 64 64`. -/
+def gOf (L : Layout) (c : Cell) : ℕ := gstart L c.r.matmul.index + c.x
+
+theorem cell_facts (hL : RunLayout passes U τ) {c : Cell} (hc : c ∈ cells passes) :
+    c.p ∈ passes ∧ c.r ∈ c.p.records ∧ c.x < nblocks c.r.matmul.m 64 * nblocks c.r.matmul.n 64 ∧
+      c.rows = block c.r.matmul.m 64 (c.x / nblocks c.r.matmul.n 64) ∧
+      c.cols = block c.r.matmul.n 64 (c.x % nblocks c.r.matmul.n 64) := by
+  obtain ⟨hp, hr, ht⟩ := mem_cells.1 hc
+  have hpm := List.mem_of_getElem? hp
+  obtain ⟨hM, hN⟩ := hL.tile64 _ hpm
+  rw [tiles_getElem?, hM, hN] at ht
+  by_cases hx : c.x < nblocks c.r.matmul.m 64 * nblocks c.r.matmul.n 64
+  · rw [ite_eq_left hx, Option.some.injEq, Prod.mk.injEq] at ht
+    exact ⟨hpm, List.mem_of_getElem? hr, hx, ht.1.symm, ht.2.symm⟩
+  · rw [ite_eq_right hx] at ht
+    cases ht
+
+theorem cell_n_pos (hL : RunLayout passes U τ) {c : Cell} (hc : c ∈ cells passes) : 0 < c.r.matmul.n := by
+  obtain ⟨-, -, hx, -⟩ := cell_facts hL hc
+  refine Nat.pos_of_ne_zero fun h => ?_
+  rw [h] at hx
+  simp [nblocks] at hx
+
+/-- A run's tile is its game tile's: the audit's tile `gOf` has the record's unit, shape, weight, rows and columns. -/
+theorem cell_audit (hL : RunLayout passes U τ) {c : Cell} (hc : c ∈ cells passes) :
+    gOf U.layout c < (auditTiling 64 64 U.layout).NT ∧
+      (auditTiling 64 64 U.layout).unit (gOf U.layout c) = c.r.matmul.index ∧
+      (auditTiling 64 64 U.layout).rows (gOf U.layout c) = c.rows.toFinset ∧
+      (auditTiling 64 64 U.layout).cols (gOf U.layout c) = c.cols.toFinset := by
+  obtain ⟨hp, hr, hx, hrows, hcols⟩ := cell_facts hL hc
+  obtain ⟨hu, hm, -, hn, -⟩ := hL.unit _ hp _ hr
+  rw [← hm, ← hn] at hx
+  obtain ⟨h1, h2, h3, h4⟩ := audit_at hu hx
+  refine ⟨h1, h2, ?_, ?_⟩
+  · rw [gOf, h3, hrows, hm, hn]
+  · rw [gOf, h4, hcols, hn]
+
+theorem cell_tileOf (hL : RunLayout passes U τ) {c : Cell} (hc : c ∈ cells passes) :
+    TileOf c.p (c.p.offsets[c.pos]! + c.x) U (gOf U.layout c) := by
+  obtain ⟨-, hrec, htl⟩ := mem_cells.1 hc
+  obtain ⟨hpm, hrm, -⟩ := cell_facts hL hc
+  obtain ⟨hp, hpr⟩ := List.getElem?_eq_some_iff.1 hrec
+  obtain ⟨hx, hxr⟩ := List.getElem?_eq_some_iff.1 htl
+  have hx' : c.x < (grid c.p.scheme c.p.records[c.pos]).length := by rw [hpr]; exact hx
+  have htile := tile?_offsets c.p hp hx'
+  have hg : (grid c.p.scheme c.p.records[c.pos])[c.x]! = (c.rows, c.cols) := by
+    rw [getElem!_pos _ c.x hx']
+    simp only [grid, hpr, hxr]
+  rw [hg] at htile
+  have hr! : c.p.records[c.pos]! = c.r := by rw [getElem!_pos c.p.records c.pos hp, hpr]
+  obtain ⟨hNT, hunit, hrows, hcols⟩ := cell_audit hL hc
+  obtain ⟨-, hm, hk, hn, hw, -⟩ := hL.unit _ hpm _ hrm
+  refine ⟨c.pos, c.rows, c.cols, htile, hNT, ?_, ?_, ?_, ?_, ?_, hrows, hcols⟩ <;> rw [hr!] <;> try rw [hunit]
+  · exact hm
+  · exact hk
+  · exact hn
+  · exact hw
+
+theorem cell_weight {Q R S : Type} {TR : TileRules Q R S} (hTR : ∀ L, TR.tiling L = auditTiling 64 64 L)
+    (hL : RunLayout passes U τ) {c : Cell} (hc : c ∈ cells passes) :
+    drawWeight TR (pearlCDrawRev1 devH100) U τ (decOf passes) (gOf U.layout c) = tileWeight c.r c.rows c.cols := by
+  obtain ⟨hpi, hrec, -⟩ := mem_cells.1 hc
+  obtain ⟨hpm, hrm, -, hrows, hcols⟩ := cell_facts hL hc
+  obtain ⟨-, -, -, hn, -, hτ⟩ := hL.unit _ hpm _ hrm
+  obtain ⟨-, hunit, hrows', hcols'⟩ := cell_audit hL hc
+  unfold drawWeight
+  rw [hTR, hunit, ite_eq_right (by rw [Option.isNone_iff_eq_none]; exact Option.isSome_iff_ne_none.1 hτ),
+    decOf_eq hL hpi hrec]
+  unfold pearlCDrawRev1
+  rw [hunit, hrows', hcols', hn]
+  have hr : (c.rows.toFinset ∩ (declOf c.r).rows).card = (c.r.credited c.rows c.cols).1.length := by
+    refine card_inter_filter (by rw [hrows]; exact block_nodup _ _ _) c.r.realRows _ fun i _ hi => ?_
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hi
+    exact hi.1.1
+  have hcc : (c.cols.toFinset ∩ (declOf c.r).cols).card = (c.r.credited c.rows c.cols).2.length :=
+    card_inter_filter (by rw [hcols]; exact block_nodup _ _ _) c.r.matmul.n _ fun j hj _ => by
+      rw [hcols] at hj; exact block_lt hj
+  rw [hr, hcc, tileWeight, declOf, ← wref_one_eq]
+  push_cast
+  ring
+
+theorem lcm_eq {Q R S : Type} {TR : TileRules Q R S} (hTR : ∀ L, TR.tiling L = auditTiling 64 64 L)
+    (hL : RunLayout passes U τ) (hsurj : ∀ g < (TR.tiling U.layout).NT,
+      drawWeight TR (pearlCDrawRev1 devH100) U τ (decOf passes) g ≠ 0 → ∃ c ∈ cells passes, gOf U.layout c = g) :
+    (range (TR.tiling U.layout).NT).lcm (fun g => (drawWeight TR (pearlCDrawRev1 devH100) U τ (decOf passes) g).den) =
+      lcmOf ((cells passes).map Cell.weight) := by
+  have hden : ∀ c ∈ cells passes, (drawWeight TR (pearlCDrawRev1 devH100) U τ (decOf passes) (gOf U.layout c)).den =
+      c.weight.2.2 := fun c hc => by
+    rw [cell_weight hTR hL hc, Cell.weight, ticketWeight_eq _ _ _ (cell_n_pos hL hc)]
+  refine Nat.dvd_antisymm (Finset.lcm_dvd fun g hg => ?_) (lcmOf_dvd fun e he => ?_)
+  · rw [Finset.mem_range] at hg
+    by_cases hv : drawWeight TR (pearlCDrawRev1 devH100) U τ (decOf passes) g = 0
+    · rw [hv, Rat.den_zero]
+      exact Nat.one_dvd _
+    · obtain ⟨c, hc, rfl⟩ := hsurj g hg hv
+      rw [hden c hc]
+      exact dvd_lcmOf (List.mem_map_of_mem hc)
+  · obtain ⟨c, hc, rfl⟩ := List.mem_map.1 he
+    rw [← hden c hc]
+    refine Finset.dvd_lcm (Finset.mem_range.2 ?_)
+    rw [hTR]
+    exact (cell_audit hL hc).1
+
+theorem cell_of_weight {Q R S : Type} {TR : TileRules Q R S} (hTR : ∀ L, TR.tiling L = auditTiling 64 64 L)
+    (hL : RunLayout passes U τ) {g : ℕ} (hg : g < (TR.tiling U.layout).NT)
+    (hv : drawWeight TR (pearlCDrawRev1 devH100) U τ (decOf passes) g ≠ 0) :
+    ∃ c ∈ cells passes, gOf U.layout c = g := by
+  rw [hTR] at hg
+  obtain ⟨u, hu, x, hx, rfl, -⟩ := gridTiles_inv (List.getElem?_eq_getElem hg)
+  obtain ⟨-, hunit, -, -⟩ := audit_at hu hx
+  unfold drawWeight at hv
+  rw [hTR, hunit] at hv
+  rcases decOf_cases passes u with h | ⟨i, p, pos, r, hp, hr, rfl, -⟩
+  · rw [h] at hv
+    unfold pearlCDrawRev1 at hv
+    simp at hv
+  · obtain ⟨hM, hN⟩ := hL.tile64 _ (List.mem_of_getElem? hp)
+    obtain ⟨-, hm, -, hn, -⟩ := hL.unit _ (List.mem_of_getElem? hp) _ (List.mem_of_getElem? hr)
+    rw [hm, hn] at hx
+    refine ⟨⟨i, p, pos, r, x, block r.matmul.m 64 (x / nblocks r.matmul.n 64),
+      block r.matmul.n 64 (x % nblocks r.matmul.n 64)⟩, mem_cells.2 ⟨hp, hr, ?_⟩, rfl⟩
+    rw [tiles_getElem?, hM, hN, ite_eq_left hx]
+
+theorem gOf_inj (hL : RunLayout passes U τ) {c c' : Cell} (hc : c ∈ cells passes) (hc' : c' ∈ cells passes)
+    (h : gOf U.layout c = gOf U.layout c') : c = c' := by
+  have hu := (cell_audit hL hc).2.1
+  rw [h, (cell_audit hL hc').2.1] at hu
+  obtain ⟨hp, hr, ht⟩ := mem_cells.1 hc
+  obtain ⟨hp', hr', ht'⟩ := mem_cells.1 hc'
+  obtain ⟨hi, hpos⟩ := hL.index_inj hp hr hp' hr' hu.symm
+  obtain ⟨i, p, pos, r, x, rows, cols⟩ := c
+  obtain ⟨i', p', pos', r', x', rows', cols'⟩ := c'
+  simp only at hi hpos hp hr ht hp' hr' ht' h hu
+  subst hi hpos
+  rw [hp', Option.some.injEq] at hp
+  subst hp
+  rw [hr', Option.some.injEq] at hr
+  subst hr
+  simp only [gOf, Nat.add_left_cancel_iff] at h
+  subst h
+  rw [ht', Option.some.injEq, Prod.mk.injEq] at ht
+  obtain ⟨rfl, rfl⟩ := ht
+  rfl
+
+/-- **The code's tickets are the draw's.** Over a run laid out on the game's workload (`RunLayout`), with each unit's
+declaration read from its record (`decOf`), each of `Run.tickets`' entries is a tile of its pass on a game tile, whose
+`drawTickets` under `pearlCDrawRev1 devH100` are the entry's tickets; distinct entries are on distinct game tiles, and
+every game tile with a ticket has an entry. -/
+def TicketsAreTheDraw : Prop :=
+  ∀ {Q R S : Type} (TR : TileRules Q R S) (passes : List Pass) (U : Workload) (τ : Transcript),
+    (∀ L, TR.tiling L = auditTiling 64 64 L) → RunLayout passes U τ →
+    ∃ φ : ℕ → ℕ,
+      (∀ j id t, (tickets passes)[j]? = some (id, t) →
+        TileOf passes[id.1]! id.2 U (φ j) ∧ t = drawTickets TR (pearlCDrawRev1 devH100) U τ (decOf passes) (φ j)) ∧
+      (∀ j j', j < (tickets passes).length → j' < (tickets passes).length → φ j = φ j' → j = j') ∧
+      ∀ g, drawTickets TR (pearlCDrawRev1 devH100) U τ (decOf passes) g ≠ 0 →
+        ∃ j < (tickets passes).length, φ j = g
+
+theorem ticketsAreTheDraw : TicketsAreTheDraw := by
+  intro Q R S TR passes U τ hTR hL
+  have hsurj : ∀ g < (TR.tiling U.layout).NT,
+      drawWeight TR (pearlCDrawRev1 devH100) U τ (decOf passes) g ≠ 0 → ∃ c ∈ cells passes, gOf U.layout c = g :=
+    fun g hg hv => cell_of_weight hTR hL hg hv
+  have hlen : (tickets passes).length = (cells passes).length := by rw [tickets_eq, List.length_map, List.length_map]
+  refine ⟨fun j => if h : j < (cells passes).length then gOf U.layout (cells passes)[j] else 0, ?_, ?_, ?_⟩
+  · intro j id t h
+    rw [tickets_eq, List.getElem?_map, List.getElem?_map] at h
+    cases hj : (cells passes)[j]? with
+    | none => rw [hj] at h; cases h
+    | some c =>
+      rw [hj] at h
+      simp only [Option.map_some, Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      obtain ⟨hjl, hjc⟩ := List.getElem?_eq_some_iff.1 hj
+      have hc : c ∈ cells passes := List.mem_of_getElem? hj
+      dsimp only
+      rw [dite_eq_left hjl, hjc]
+      obtain ⟨hpi, -, -⟩ := mem_cells.1 hc
+      have hp! : passes[c.i]! = c.p := by
+        obtain ⟨hil, hip⟩ := List.getElem?_eq_some_iff.1 hpi
+        rw [getElem!_pos passes c.i hil, hip]
+      refine ⟨by rw [Cell.weight, hp!]; exact cell_tileOf hL hc, ?_⟩
+      unfold drawTickets ticketsOf
+      rw [lcm_eq hTR hL hsurj, hTR, ite_eq_left (cell_audit hL hc).1, cell_weight hTR hL hc, Cell.weight,
+        ticketWeight_eq _ _ _ (cell_n_pos hL hc)]
+  · intro j j' hj hj' h
+    rw [hlen] at hj hj'
+    dsimp only at h
+    rw [dite_eq_left hj, dite_eq_left hj'] at h
+    exact (List.Nodup.getElem_inj_iff (cells_nodup passes)).1
+      (gOf_inj hL (List.getElem_mem hj) (List.getElem_mem hj') h)
+  · intro g hg
+    have hNT : g < (TR.tiling U.layout).NT := by
+      by_contra hn
+      unfold drawTickets ticketsOf at hg
+      rw [ite_eq_right hn] at hg
+      exact hg rfl
+    have hv : drawWeight TR (pearlCDrawRev1 devH100) U τ (decOf passes) g ≠ 0 := fun h0 => by
+      unfold drawTickets ticketsOf at hg
+      rw [h0] at hg
+      simp at hg
+    obtain ⟨c, hc, rfl⟩ := hsurj g hNT hv
+    obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem hc
+    exact ⟨j, by rw [hlen]; exact hj, by dsimp only; rw [dite_eq_left hj]⟩
+
+end Pouw.PearlPlus.Bridge
