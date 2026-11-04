@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Reps.StepsTie
+module
+
+public import Proofs.Flock.C3.Reps.StepsTie
 
 /-!
 # `RepsMsgsRead` at `repsOfVals`
@@ -10,6 +12,8 @@ The reps' part of a run's steps is the cap, the points' coin, then rep 0's steps
 each rep's rounds' read on their stages' (`TsRead`). At `repsOfVals` each rep's steps are the values' weave, so there
 `TsRead` is a read fact of `vals` on the layers (`repsMsgsRead_repsOfVals`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.LamDeployedTight
-import Proofs.Flock.Claims.Recursion.BitsLin2
+module
+
+public import Proofs.Flock.Claims.Recursion.LamDeployedTight
+public import Proofs.Flock.Claims.Recursion.BitsLin2
 
 /-!
 # Route 2C's split bound at the deployment's sizes: `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}`
@@ -21,6 +23,8 @@ bounds `n` and `v` `BitsLin2KOn` is read at:
 `u·2^{−255}` at `a ≥ 255` and `y ≤ u` (`two_rpow_neg_sub_le`; `γ`'s at `y ≤ u²`), and the five `u` sum to at most
 `2^{80.05}`. `Fdev`'s, `β₂·c_S`, is all but about `2^{−11}` of the sum: it is the term that sets `ε`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

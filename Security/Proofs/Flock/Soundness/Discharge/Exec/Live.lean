@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Refine.LiveCompiled
-import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
+module
+
+public import Proofs.Flock.Soundness.Refine.LiveCompiled
+public import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
 
 /-!
 # The refinement for one-table sessions: the live audit simulated in the salted audit
@@ -27,6 +29,8 @@ the coin server retains decode to the messages the proof files replay, and `wr` 
 more than one table (the circuit prover's default is one, `--session-tables 1`); and that the challenger's session is
 `liveTable`, whose coins are uniform and drawn after each round's bytes (A6).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

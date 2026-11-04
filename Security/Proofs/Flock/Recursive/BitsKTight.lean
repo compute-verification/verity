@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.BitsK
-import Proofs.Flock.Claims.Recursion.KappaEpsTight
-import Proofs.Flock.Claims.Recursion.CallsClosed
+module
+
+public import Proofs.Flock.Recursive.BitsK
+public import Proofs.Flock.Claims.Recursion.KappaEpsTight
+public import Proofs.Flock.Claims.Recursion.CallsClosed
 
 /-!
 # `Pr[acc ∧ ¬R] ≤ 2^{−140.4} + t·2^{−138.3}` at the deployed reader
@@ -21,6 +23,8 @@ run, and SHA-512's named collision assumptions, `StrictBirthday` at `B` and `Exp
 `F0I`, each finder charged the verifier's own calls at `n = nR` and `v = 2^55`. `λ₂ ≥ 135.7` charges each of its six
 terms the least one's bits less `log₂ 6`; the split form charges `κ` once and sums the five per-call terms.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

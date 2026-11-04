@@ -1,5 +1,7 @@
-import Flock.Hash
-import Flock.Bytes
+module
+
+public import Flock.Hash
+public import Flock.Bytes
 
 /-!
 # LMS verification (RFC 8554 over SHA-512)
@@ -11,6 +13,8 @@ key's (`I ‖ T[1]`), and verification (`digits`, `chain`, `leaf`, `interior`, `
 signing. A Python `ValueError` is an `Except.error` here. `H(x)` is `Flock.Sha512.hash` truncated to N bytes.
 `Lms.Difftest` holds these to the Python on generated keys and signatures.
 -/
+
+@[expose] public section
 
 namespace Lms
 

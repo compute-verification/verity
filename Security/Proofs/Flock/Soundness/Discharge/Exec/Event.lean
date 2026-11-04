@@ -1,7 +1,9 @@
-import Flock.HmRow
-import Flock.Norm
-import Flock.Verify
-import Proofs.Flock.Soundness.Audit.OneStage
+module
+
+public import Flock.HmRow
+public import Flock.Norm
+public import Flock.Verify
+public import Proofs.Flock.Soundness.Audit.OneStage
 
 /-!
 # flock-verify's acceptance, as an event of the audit
@@ -23,6 +25,8 @@ event, on an audit whose outcome carries the transcript.
   audit is at most the probability that the audit as Lean defines it accepts, plus a live event `bad` (for `bad = ⊥`,
   the skeleton's `hExec`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

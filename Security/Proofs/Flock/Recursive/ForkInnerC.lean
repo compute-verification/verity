@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.ForkLast
+module
+
+public import Proofs.Flock.Recursive.ForkLast
 
 /-!
 # Recursion: gap 2 at the committed rounds
@@ -15,6 +17,8 @@ leaf decodes. The conclusion is `zk_sessions_recursive_fork_inner`'s.
 * `zk_sessions_recursive_fork_innerC`: it for an inner verifier and a pick that ignore the last coin (`Inner.LastFree`,
   `PickLastFree`), the inner term from `innerAtLeavesL_of_forkOn`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

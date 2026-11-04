@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.Stage
-import Flock.Registered
+module
+
+public import Proofs.Flock.Recursive.Stage
+public import Flock.Registered
 
 /-!
 # `VFull` and the verifier's U4
@@ -18,6 +20,8 @@ in full; under a stratified draw that is the stratum holding it.
 * `full_stratum`: a unit a stratified draw draws in full is in a stratum it draws whole.
 * `vFull_of_whole`: `VFull` under the full draw (`--draw subset:N`), without U4.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Full
 
@@ -116,8 +120,7 @@ theorem indexed_digits (pre : String) (n : ℕ) :
   have hn : (toString n).toList = Nat.toDigits 10 n := Nat.toList_repr
   have hd : ((pre ++ toString n).drop pre.length).toString = toString n := by
     apply String.toList_injective
-    change ((pre ++ toString n).drop pre.length).copy.toList = _
-    rw [String.toList_copy_drop, String.toList_append]
+    rw [String.Slice.toString_eq, String.toList_copy_drop, String.toList_append]
     exact List.drop_left' String.length_toList
   have hpre : (pre ++ toString n).startsWith pre = true :=
     String.startsWith_string_iff.mpr (by rw [String.toList_append]; exact List.prefix_append _ _)

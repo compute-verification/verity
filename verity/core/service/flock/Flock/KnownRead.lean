@@ -16,10 +16,14 @@ A port the file marks `read_in_full` (`READ_KEY`) is checked the same way, as on
 (`fullRows`): its every bit is read, at the registered width, so two statements that read one registered row in full
 depend on the same bits of it.
 -/
-import Flock.RegKnown
-import Flock.RecResiduals
-import Flock.ProvedScope
-import Flock.TmplReads
+module
+
+public import Flock.RegKnown
+public import Flock.RecResiduals
+public import Flock.ProvedScope
+public import Flock.TmplReads
+
+@[expose] public section
 
 namespace Flock
 namespace KnownRead

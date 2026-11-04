@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.NonVacuous
-import Definitions.Claims.Sampling
-import Proofs.Flock.Claims.ZK.Indexed
+module
+
+public import Proofs.Flock.Claims.ZK.NonVacuous
+public import Definitions.Claims.Sampling
+public import Proofs.Flock.Claims.ZK.Indexed
 
 /-!
 # The sampling `ZK` is not vacuous
@@ -19,6 +21,8 @@ prover (`ZkDeploy.prover`) and simulator (`ZkDeploy.S`), so neither is the claim
   where `D₀` has an honest pair at a statement of at least one round, the sampling `ZK` is not met at every masked
   deployment (`not_forall_samplingZK`).
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling.ZKMal
 

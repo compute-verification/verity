@@ -9,6 +9,10 @@ place: a format in today's words is a new version and a new entry. An entry carr
 so a proof about code that reads one sees its literal. The entries under "Not yet read from here" are other protocols'
 separators, named before their owners' code reads them.
 -/
+module
+
+@[expose] public section
+
 namespace Domains
 
 -- PoUW: the protocol and its identifier

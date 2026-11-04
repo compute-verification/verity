@@ -4,10 +4,15 @@ over GF(2). The certificate is an inverse: for each `k`, the XOR of the weights 
 the kernel on the executable's `eqTable Flock.pinned`). So the bit matrix `M` of the weights has a right inverse, hence a
 left inverse, and `M c = 0` forces `c = 0`.
 -/
-import Proofs.Flock.Level3.ArithFacts
-import Proofs.Flock.Level3.Assembly
-import Mathlib.Data.Matrix.Mul
-import Mathlib.LinearAlgebra.Matrix.NonsingularInverse
+module
+
+public import Proofs.Flock.Level3.ArithFacts
+public import Proofs.Flock.Level3.Assembly
+public import Mathlib.Data.Matrix.Mul
+public import Mathlib.LinearAlgebra.Matrix.NonsingularInverse
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 open Polynomial Flock
 

@@ -1,5 +1,7 @@
-import Flock.Public
-import Randomness
+module
+
+public import Flock.Public
+public import Randomness
 
 /-!
 # frame-v3-sha512 over a range of positions
@@ -20,6 +22,8 @@ through SHA-512. Integers are `_uint`'s minimal big-endian bytes (`FlockSoundnes
 The memory challenger's session records and every auditor party's period tree (`Attest.Period`) are trees of this
 frame; a later shared package of core's commitments takes it as it is.
 -/
+
+@[expose] public section
 
 namespace FrameV3Sha512
 

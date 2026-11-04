@@ -6,8 +6,12 @@ before `ρ` and the blinded claim `T'` and the padding's combination `ybar` afte
 `ybar`'s codeword. The lane phase's claim is masked, so its checks are not made here: `ligerito` returns what `Flock.Zk`
 turns into constraints (`L0Rec`), and from `T'` on it is `Flock.Ligerito`'s verifier.
 -/
-import Flock.Ligerito
-import Flock.ZkProof
+module
+
+public import Flock.Ligerito
+public import Flock.ZkProof
+
+@[expose] public section
 
 namespace Flock.Zk
 

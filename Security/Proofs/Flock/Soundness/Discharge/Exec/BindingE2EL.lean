@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Exec.E2EL
-import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
-import Proofs.Flock.Soundness.Binding.E2E
-import Proofs.Flock.Soundness.Binding.RowsX
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.E2EL
+public import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
+public import Proofs.Flock.Soundness.Binding.E2E
+public import Proofs.Flock.Soundness.Binding.RowsX
 
 /-!
 # The end-to-end theorem with the value binding of `hm96-sha512/row/v1` rows
@@ -39,6 +41,8 @@ draw `Law.execOS` included, and read it only through their terms. The `_exec` fo
 outcomes are the byte tapes themselves, uniform by construction. The live verifier's bytes enter through `Law.execOS`, and
 A3 compares its count curve with `Law.stratified`'s (`Law.execOS_miss_le`): `Prog.flock_headline` composes the two.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

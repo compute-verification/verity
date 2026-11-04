@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FirstRefusal
+module
+
+public import Proofs.Flock.Claims.ZK.FirstRefusal
 
 /-!
 # The masked session's rounds after a refusal its coins show
@@ -26,6 +28,8 @@ reads is answered, so its encoding can send `[]` from there on.
   those answers. `Flock.zk_deployZk_masked_exe_live_gap`: `Flock.zk_deployZk_masked_exe_stopped_gap` without that
   premise (`thrown_stops`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

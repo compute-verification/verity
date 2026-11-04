@@ -1,8 +1,10 @@
-import Proofs.Flock.VBridge.Family.Transcript
-import Proofs.Flock.VBridge.Family.Registered
-import Proofs.Flock.VBridge.Family.Registrants
-import Proofs.Flock.VBridge.Family.Encode
-import Proofs.Flock.VBridge.Family.Structure
+module
+
+public import Proofs.Flock.VBridge.Family.Transcript
+public import Proofs.Flock.VBridge.Family.Registered
+public import Proofs.Flock.VBridge.Family.Registrants
+public import Proofs.Flock.VBridge.Family.Encode
+public import Proofs.Flock.VBridge.Family.Structure
 
 /-!
 # VBridge G at V*'s family, assembled from its parts' definitions
@@ -23,6 +25,8 @@ discharged by their theorems; `vbridgeRead_assembled` is `VBridgeRead` at `assem
 every defining equation by `rfl` and `hmsg` by `msgsAre_assembled`. Their hypotheses are named facts, each a `Prop`
 whose docstring names the check or lemma that establishes it.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

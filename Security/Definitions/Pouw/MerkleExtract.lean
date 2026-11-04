@@ -1,4 +1,6 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # Merkle commitments over an oracle, and their extractor (trusted)
@@ -24,6 +26,8 @@ leaf), and of its discharge from SHA-512 as a random oracle.
 * `Consistent qry h u`: `u` is the answer stream the oracle `h` gives the querier `qry`, the bridge from a uniform
   oracle `X → D` to the uniform stream.
 -/
+
+@[expose] public section
 
 namespace Pouw.MerkleExtract
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.LastBindsDeployed
-import Proofs.Flock.Claims.KS.ConflictTied
-import Proofs.Flock.Claims.KS.RoundsN
+module
+
+public import Proofs.Flock.Claims.Recursion.LastBindsDeployed
+public import Proofs.Flock.Claims.KS.ConflictTied
+public import Proofs.Flock.Claims.KS.RoundsN
 
 /-!
 # The deployed plain verifier binds its last message's columns
@@ -25,6 +27,8 @@ It holds at SHA-512 (`RecDeploy.plainCallsBindOrSlack_sha512`, in `CallsOfProofs
 `RecDeploy.plainLastBinds_sha512_of_calls` reduces `PlainLastBinds` to it and `CanonicalProofFiles`, and
 `RecDeploy.lastBindsEC_deployed_sha512` gives (P4) at the deployed bound record from the same two.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

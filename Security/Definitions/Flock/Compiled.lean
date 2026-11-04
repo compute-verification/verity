@@ -1,5 +1,7 @@
-import Definitions.Flock.Session
-import Definitions.Flock.Merkle
+module
+
+public import Definitions.Flock.Session
+public import Definitions.Flock.Merkle
 
 /-!
 # The compiled protocol: Merkle caps, openings after the last coin (`Flock.Ligerito`, `Flock.Merkle`)
@@ -19,6 +21,8 @@ records its request (`Req`) for the path checks.
 and their salts (`Salts`), and each path verifies from its row's leaf under its salt (`OpensOKL`). That at
 `Leaf.plain` `OpensOKL` is `OpensOK` (`opensOKL_plain`) is in `Proofs.Flock.Soundness.Model.Compiled`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Model
 

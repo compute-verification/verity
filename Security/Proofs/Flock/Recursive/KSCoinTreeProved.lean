@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.KSCoinTreeStatement
-import Proofs.Flock.Recursive.KSProved
-import Proofs.Flock.Claims.Recursion.DeployNil
+module
+
+public import Proofs.Flock.Recursive.KSCoinTreeStatement
+public import Proofs.Flock.Recursive.KSProved
+public import Proofs.Flock.Claims.Recursion.DeployNil
 
 /-!
 # `RecursiveKSDeployed`, proved
@@ -9,6 +11,8 @@ import Proofs.Flock.Claims.Recursion.DeployNil
 at `RecursiveKS`, whose compiled verifier answers each round with its coin's bytes or with nothing
 (`RecDeploy.answersCoinOrNil_V`), and the bytes determine the coin (`Claims.Bridge.coin_bytes_injective`).
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

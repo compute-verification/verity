@@ -1,5 +1,7 @@
-import Definitions.Accounting.Bandwidth.Game
-import Definitions.Accounting.Confidence
+module
+
+public import Definitions.Accounting.Bandwidth.Game
+public import Definitions.Accounting.Confidence
 
 /-!
 # The bandwidth audit on a strategy's runs: the chip's ports (trusted)
@@ -20,6 +22,8 @@ take as a hypothesis:
 - `OracleLocation`: the oracle's ports deliver a function of what the chip did and of the oracle's answers to the
   queries `Q` that fixes, the oracle being a location the chip queries and nothing else reads.
 -/
+
+@[expose] public section
 
 namespace Bandwidth.Causal
 

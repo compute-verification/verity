@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkSlackW
-import Proofs.Flock.Claims.KS.ZkSessionW
+module
+
+public import Proofs.Flock.Claims.KS.ZkSlackW
+public import Proofs.Flock.Claims.KS.ZkSessionW
 
 /-!
 # Every masked table's bound off the table on a witness lane
@@ -17,6 +19,8 @@ table at that verdict, whose events are on accepted runs, whose tables' level-0 
 whose slack fits the room (`Claims.Flock.SlackFitW`) (`ZkSessWJ`) give every masked table's bound
 (`zk_tableBoundJAccAtR_of_sessionsW`, the weight from `slackEscW_fitsForkR_zk`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

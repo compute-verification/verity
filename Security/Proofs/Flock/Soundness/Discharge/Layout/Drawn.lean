@@ -1,4 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
+
+@[expose] public section
 
 set_option Elab.async false
 
