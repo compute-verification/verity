@@ -279,8 +279,7 @@ def test_the_honest_relay_is_the_endpoint_and_the_check_and_the_piece_pass(hones
 
 
 @pytest.mark.parametrize("attack", ["jitter", "chunk"])
-def test_holding_events_by_secret_bits_or_chunking_them_moves_no_cell_and_is_charged_nothing(attack, honest,
-                                                                                             tmp_path):
+def test_holding_events_by_secret_bits_or_chunking_them_moves_no_cell_on_the_virtual_clock(attack, honest, tmp_path):
     bits = itertools.cycle([1, 0, 1, 1]).__next__
     run = play(tmp_path, attack, tokens=4, bits=bits)
     ref = play(tmp_path, "honest", tokens=4)

@@ -24,9 +24,11 @@ the check or the term (``by``), the reason its verdict names (``reason``), and t
 An attack the served rehearsal plays (``served``) also names the network certifier's check's outcome (``gate``: True
 when it accepts the run) and the piece's (``piece``): ``bound`` (steps 1 and 2 pass), ``reject``, or ``missing``
 (`certifier_piece.NotRun`: no served answer certified, the certifier missing). An attack with ``waits`` lands with the
-piece it waits on, whose test holds its refusal of record. The bound's terms are common.md's, as Lean's
-`PeriodLeakAccepted` proves them: a failure, the server's choice of which connections fail and where, is inside k_fail,
-log2(cap + 1) over every connection; a cell count the server moves is inside k_sched; neither adds a term.
+piece it waits on, whose test holds its refusal of record. The bound's terms are Lean's
+`NetTiming.Guarantees.PeriodLeakAccepted`'s, k_exfil ≤ k_sched + k_fail + Σ_i (ℓ_a,i + k_skip,i + k_i log2 d_jit): a
+failure, the server's choice of which connections fail and where, is inside k_fail, log2(cap + 1) over every
+connection; a cell count the server moves is inside k_sched; a hold or a chunking that keeps every cell in its
+schedule's bucket is inside k_i log2 d_jit, at d_jit = 2 (`leak_bounds.JITTER_BOUND`); none adds a term.
 
 **The relay** (`relay`, `Relay`): the prover's process between the network certifier's server connections (on the
 served path, the gate's tunnel to the prover's loopback) and the endpoint, the server's side, which the prover owns.
@@ -86,6 +88,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import certifier_piece as CP  # noqa: E402
+import leak_bounds as LB  # noqa: E402
 import warden_chain as WC  # noqa: E402
 import warden_serve as WS  # noqa: E402
 
@@ -157,16 +160,19 @@ PP = "benchmarks/prove_path/tests/test_prove_path.py"
 TESTS = "benchmarks/network_traces/tests/test_attacks.py"
 FAILED = ("inside k_fail: where a connection fails is the server's choice, which log2(cap + 1) a connection counts; "
           "the rehearsal certifies no served answer")
+JITTER = f"inside k_i log2 d_jit (`JitterBounded` at d_jit = {LB.JITTER_BOUND}, leak_bounds.JITTER_BOUND)"
 #: the front's ids out for a response at V3c's scan class's egress cells' cap (its ids and the trailer), and one under
 AT_CAP = CP.SS.A.SCAN_CLASSES[CP.V3C_SCAN_CLASS][0] - 1
 UNDER_CAP = AT_CAP - 1
 
 ATTACKS = {a.name: a for a in [
     Attack("jitter", "timing or chunking games", "server", "each id event held 0 or half a bucket by a secret bit",
-           "charged", "0 bits: every cell leaves in its schedule's bucket, so no hold reaches the client", "",
+           "charged", f"{JITTER}: every cell leaves in its schedule's bucket, so a hold moves a cell at most to the "
+           "bucket the jitter term pays for; a hold past a cell's deadline fails its connection, inside k_fail", "",
            "device", gate=True, piece="bound", relay="jitter", tests=(TESTS,)),
     Attack("chunk", "timing or chunking games", "server", "the response written a byte at a time", "charged",
-           "0 bits: every cell's content is cut at its fixed offsets and leaves in its schedule's bucket", "",
+           f"{JITTER}: every cell's content is cut at its fixed offsets and leaves in its schedule's bucket; a cell "
+           "whose bytes miss its bucket fails its connection, inside k_fail", "",
            "device", gate=True, piece="bound", relay="chunk", tests=(TESTS,)),
     Attack("late", "timing or chunking games", "server", "the response held past its first cell's deadline",
            "charged", f"{AUDIT}: the connection failed closed at its first egress cell; {FAILED}", LATE, "device",
@@ -198,9 +204,10 @@ ATTACKS = {a.name: a for a in [
            "proofs' and the network certifier's first coin", "after sampled proofs' or the network certifier's first "
            "coin", "clear", waits=("advice v1's commitment",)),
     Attack("advice-cap", "advice over the cap", "prover", "a window's advice longer than the registered cap",
-           "refused", "the registered compiler's cap ℓ: prove_path.compile_advice refuses an opening over ℓ before it "
-           "reads it, and ℓ is in the compiler's registered digest (the server's B at ℓ_a before its first window is "
-           "advice v1's)", "over the registered cap", "clear", waits=("advice v1's commitment",), tests=(PP,)),
+           "refused", "the advice's registered width ℓ_a: prove_path.compile_advice refuses an opening over ℓ_a "
+           "before it reads it, and ℓ_a is in the registered compiler's digest (registering that compiler, capped at "
+           "ℓ_a, before the served path's first window is advice v1's)", "over the registered cap", "clear",
+           waits=("advice v1's commitment",), tests=(PP,)),
     Attack("extra", "an extra connection", "server", "one connection answered by the relay, never by the endpoint",
            "refused", f"{BIND}: every certified request is a served one", UNSERVED, "clear", gate=True,
            piece="reject", relay="extra", tests=(TESTS,)),
