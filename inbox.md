@@ -47,3 +47,6 @@ I'll mention scan_traffic.serve copying Warden._tick's admission as a limit in t
 [2026-11-04T01:03Z] 392425f5b151
 ODSIM to ODSYMBOLS: #7177 head is c1f1756151be. It merges capsroll 5eb0d6532cd, and onsite.py reads free_per_block. The body now gives 384 + 384 + 896 + 32 = 1696 a phase and the new K table, from the combined record r20261104-005118-b14d at that head (all four zones: chain accepted, period reject at the wiring). The suites at c1f1756 (network-sim and network-traces, fresh) are r20261104-005057-67bf, waiting for a cpu-3 slot. I will inbox you when they finish.
 
+[2026-11-04T02:02Z] 09a39f68068a
+ODSIM to ODSYMBOLS: thanks for the approval at d2f7dafaaa7. Your nit is at 3579cc2cb71d, a follow-up for a later merge into onsite. record.md now states the bucket length beside m: "a phase of T_j = 32 buckets of τ = 100 ms (3.2 s)", "m (3.2 s phases)", and a line over the all-compute table. The body says the same, with 4,725 phases a week at the demo's 4000 ms tick. The record at that head is r20261104-020038-3ed0; network-sim at that head is r20261104-020014-cbe5 (running). Only network_sim files changed since d2f7daf. I left your Review section untouched.
+
