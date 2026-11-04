@@ -829,6 +829,73 @@ def test_a_pr_the_preflight_budget_skipped_is_preflighted_first_next_sync_within
     assert spent == [PREFLIGHT_BUDGET_S, PREFLIGHT_BUDGET_S / 2, PREFLIGHT_BUDGET_S], "no sync's preflights pass the budget"
 
 
+def _merges(q: Queue) -> list[int]:
+    """The PRs ``q``'s syncs merge (`Queue._merge_through`), in order."""
+    merged: list[int] = []
+    through = q._merge_through
+
+    def merge(tip, pr, members):
+        merged.append(pr.number)
+        return through(tip, pr, members)
+    q._merge_through = merge
+    return merged
+
+
+def test_a_pr_whose_preflight_cant_start_and_has_no_verdict_at_its_head_waits_unmerged(world):
+    """Past the budget a PR with no verdict recorded at its head waits whatever its merge would make (`_preflighted`), so the
+    sync doesn't make it, nor run the gates or the port's codemod on it (`Queue._unflown`); a later sync merges it in its
+    turn."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, two := world.change({"b.txt": "2\n"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}, base=two))
+    world.gh.put(4, world.change({"d.txt": "4\n"}))
+    q = world.queue()
+    q.preflight, now, calls = _slow_preflight()
+    q.clock, q.preflight_parallel = lambda: now[0], 1
+    merged = _merges(q)
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1] and calls == [1] and merged == [1], world.logs
+    assert all(entries[n].state == "waiting" for n in (2, 3, 4)) and "hasn't run" in entries[2].why
+    assert entries[3].why.endswith("which waits for its preflight"), entries[3].why
+    assert q.load_state()["preflight_waited"] == [2, 3, 4]
+    assert [m.pr for m in q.sync()[0]] == [1, 2] and calls == [1, 2] and merged == [1, 2], world.logs
+
+
+def test_a_pr_with_a_verdict_at_its_head_is_merged_past_the_budget_so_its_pass_can_stand(world):
+    """A verdict recorded at a PR's head may admit it without a preflight (`_standing`), which needs its merge: #3, placed
+    first below #1 and #2, spends the budget, and both are still merged, their passes standing onto #3's merge."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    q = world.queue()
+    q.preflight, calls = _sync_preflight({})
+    assert [m.pr for m in q.sync()[0]] == [1, 2] and sorted(n for n, _ in calls) == [1, 2]
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    q = world.queue(first=(3,))
+    q.preflight, now, slow = _slow_preflight()
+    q.clock, q.preflight_parallel = lambda: now[0], 1
+    merged = _merges(q)
+    assert [m.pr for m in q.sync()[0]] == [3, 1, 2] and slow == [3] and merged == [3, 1, 2], world.logs
+    assert world.logs[-1].endswith("kept 0, merged 3, preflights' verdicts reused for 2"), world.logs[-1]
+
+
+def test_a_pr_the_last_sync_left_out_is_merged_again_past_the_budget_and_stays_out(world):
+    """A PR the last sync left out at its head is merged again whatever the budget (last, as `out` orders it): refused again,
+    it keeps its place in the state's `conflicts`, where drive told its owner once, instead of waiting to be told again."""
+    world.gh.put(1, world.change({"a.txt": "one\n"}))
+    world.gh.put(2, world.change({"a.txt": "two\n"}))
+    q = world.queue()
+    q.preflight, _ = _sync_preflight({})
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1] and entries[2].state == "refused", world.logs
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    q.preflight, now, slow = _slow_preflight()
+    q.clock, q.preflight_parallel = lambda: now[0], 1
+    merged = _merges(q)
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 3] and slow == [3] and merged == [3, 2], world.logs
+    assert entries[2].state == "refused" and list(q.load_state()["conflicts"]) == ["2"]
+
+
 def test_a_sync_runs_four_preflights_at_once_in_its_order_each_onto_the_merge_below_its_place(world):
     """A sync keeps `PREFLIGHT_PARALLEL` preflights running: above one still running it merges on as if that one passes.  The
     stand-in gets past its barrier only once four are in it, so the first four PRs in the queue's order run together and the
