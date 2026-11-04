@@ -2210,12 +2210,12 @@ TIES = {"H1_TIE": "1", "H1_GATE": GATE, "H1_CIRCUITS": "circuits"}
      "90m, not 1h"),
     ({**TIES, "NODE_MEM_GB": "196"}, FAKE_V3C_PROVE_PATH, "PREFLIGHT: under H1_TIE, where this node has 196 GB, under the "
      "290 GB V3c's audit needs (V3C_AUDIT_MEM_GB), its audit and the composite are deferred to a follow-on, and onsite's "
-     "composite reads PoUS's case, which needs this node's card: PRODUCT=remote or remote-network, or a node "
-     "with the memory"),
+     "composite reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote or "
+     "remote-network, COMPOSITE set empty, or a node with the memory"),
     ({**TIES, "V3C_AUDIT_MEM_GB": "600"}, FAKE_V3C_PROVE_PATH, "PREFLIGHT: under H1_TIE, where this node has 512 GB, under "
      "the 600 GB V3c's audit needs (V3C_AUDIT_MEM_GB), its audit and the composite are deferred to a follow-on, and onsite's "
-     "composite reads PoUS's case, which needs this node's card: PRODUCT=remote or remote-network, or a node "
-     "with the memory"),
+     "composite reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote or "
+     "remote-network, COMPOSITE set empty, or a node with the memory"),
 ])
 def test_the_preflight_refuses_h1_tie_without_h1s_prover_or_v3c_or_window_commits_tie_or_past_the_sessions_time(
         tmp_path, extra, prove_path, line):
@@ -2340,11 +2340,13 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     assert not _window_data(out, 7) and oct(dd.stat().st_mode & 0o777) == "0o700"
 
 
-def _follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
+def _follow(tmp_path: Path, composite: str = FAKE_SERVED_COMPOSITE, **extra: str | None
+            ) -> tuple[int, list[str], list[str], list[str]]:
     """The follow-on of `_deferred`'s deferral: `served_verdicts.sh v3c` with D alone (no K, class or certifier) on
     cpu-6, a node with V3c's audit's memory, at the served node's tree, in `_v3c`'s toy tree with a record and a
-    composite that note their arguments (``extra`` adds to the environment, None unsetting): `_v3c`'s outcome."""
-    _script(tmp_path / "tree" / "benchmarks" / "one_stage" / "served_composite.sh", FAKE_SERVED_COMPOSITE)
+    composite step (``composite``'s body) that note their arguments (``extra`` adds to the environment, None unsetting):
+    `_v3c`'s outcome."""
+    _script(tmp_path / "tree" / "benchmarks" / "one_stage" / "served_composite.sh", composite)
     (tmp_path / "tree" / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(FAKE_RECORD)
     env = {"K": None, "V3C_CLASS": None, "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None,
            "PATH": f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", "HOST": "cpu-6", "NODE_MEM_GB": "755",
@@ -2430,12 +2432,16 @@ DEFERS = "so step 6 defers V3c's audit and the composite to a follow-on"
      f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, {DEFERS}"),
     ({**TIES, "NODE_MEM_GB": "196", "PRODUCT": "remote-network"},
      f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, {DEFERS}"),
+    ({**TIES, "NODE_MEM_GB": "196", "COMPOSITE": ""},
+     f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, so step 6 defers V3c's audit to a follow-on"),
 ])
 def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_kept_built_or_served(
         tmp_path, extra, said):
     """PREFLIGHT_ONLY=1 runs the preflight and stops there, exit 0, with one line: the serve's lease (under H1_TIE 150
     minutes capped at 160 GB, the serve's 128 and window-commit's peak, within a 196 GB node) and, on a node short of
-    V3c's audit's memory, its deferral. Nothing runs, and neither the serve root nor C-Flock's work dir is made."""
+    V3c's audit's memory, its deferral: of the audit alone where COMPOSITE is set empty, under which onsite, whose
+    composite reads the card's cases, defers too. Nothing runs, and neither the serve root nor C-Flock's work dir is
+    made."""
     rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
     assert (rc, lines, order, limits) == (0, [f"PREFLIGHT passed on vy-dc-h200-2, {said}. {ONLY}"], [], [])
@@ -2527,31 +2533,47 @@ def test_a_deferral_with_the_split_certifier_behind_its_front_leaves_the_chain_a
     listed and hashed, and nothing else of the certifier's private/; the follow-on runs the chain after V3c's audit and
     period rather than beside them (its node has the audit's memory alone), then the certifier's period check on that
     period.json into its own $OUT/pieces/certifier, the record on the served node's pieces with the certifier's answer
-    from here (remote-network's record reads it), the product's composite after that period check, and the onsite
-    record last."""
-    d = tmp_path / "serve"
+    from here (remote-network's record reads it), then `served_composite.sh` after that period check, told the served
+    node, and the onsite record last. remote-network's follow-on writes $OUT/composite/remote-network/composite.json,
+    the onsite record's verdict, from the network certifier's case checked here; remote's writes remote's alone."""
+    d, tree = tmp_path / "serve", tmp_path / "tree"
     for f in (*KEPT, "private/certifier/attacks/relay.log"):
         (d / f).parent.mkdir(parents=True, exist_ok=True)
         (d / f).write_text(f)
+    period = ('echo period-check >> "$ORDER"; test -s "$4/period.json" || exit 1; '
+              'echo \'{"evidence": "beef"}\' > "$3/case.json"; '
+              'echo \'{"protocol": "verity/certifier/v9", "verdict": "accept"}\' > "$3/answer.json"; echo checked')
     run = _deferred(tmp_path, PRODUCT=product, CERTIFIER_FRONT="front", CERTIFIER_CHAIN_CMD=CHAIN,
-                    CERTIFIER_PERIOD_CMD=PERIOD)
+                    CERTIFIER_PERIOD_CMD=period)
     assert run.returncode == 0, run.stderr
     dd = d / "private" / "deferred"
     assert [f for f in (dd / "inputs.txt").read_text().splitlines() if f.startswith("private/certifier/")] == list(KEPT)
     assert all(f in (dd / "inputs.sha256").read_text() for f in KEPT)
-    (tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True, exist_ok=True)
-    (tmp_path / "tree" / "benchmarks" / "one_stage" / "onsite_record.py").write_text(FAKE_ONSITE_RECORD)
-    rc, lines, order, limits = _follow(tmp_path)
-    pieces = tmp_path / "out" / "pieces" / "certifier"
-    assert rc == 0 and order == ["audit", "period", "chain", "period-check", "record", "composite", "onsite"], (lines, order)
-    assert limits == ["180m", "4h", "60m"]
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True, exist_ok=True)
+    (tree / "benchmarks" / "one_stage" / "onsite_record.py").write_text(FAKE_ONSITE_RECORD)
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+    for pkg in ("remote", "onsite"):
+        (tree / "verity" / "core" / "protocols" / pkg).mkdir(parents=True)
+    _script(tmp_path / "stubs" / "systemd-run", "exit 1")
+    rc, lines, order, limits = _follow(tmp_path, composite=(HERE.parent / "served_composite.sh").read_text(),
+                                       PATH=f"{_hosts(tmp_path)}:{tmp_path / 'stubs'}:{tmp_path / 'bin'}:{os.defpath}")
+    out, pieces = tmp_path / "out", tmp_path / "out" / "pieces" / "certifier"
+    products = {"remote": ["remote"], "remote-network": ["remote", "remote-network"]}[product]
+    assert rc == 0 and order == ["audit", "period", "chain", "period-check", "record",
+                                 *(f"composite-{x}" for x in products), "onsite"], (lines, order)
+    assert limits == ["180m", "4h", "60m", *["60m"] * len(products)]
     assert (tmp_path / "order.args").read_text().split() == [str(d), "7", str(pieces), str(d / f"v3c-w7-{VTAG}")]
-    assert json.loads((pieces / "answer.json").read_text()) == {"verdict": "accept"}
+    assert json.loads((pieces / "answer.json").read_text()) == {"protocol": "verity/certifier/v9", "verdict": "accept"}
     record = json.loads((tmp_path / "order.record").read_text())
     assert (record[record.index("--pieces") + 1], record[record.index("--product") + 1]) == (
         str(pieces.parent), product)
     assert (pieces.parent / "pouw" / "answer.json").read_text() == (dd / "pieces" / "pouw" / "answer.json").read_text()
-    assert (tmp_path / "order.composite").read_text().split()[:2] == ["vy-dc-h200", product]
+    assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == [
+        f"composite/{x}/composite.json" for x in products]
+    handed = {x: json.loads((d / "private" / "composite" / x / "private" / "argv.json").read_text()) for x in products}
+    assert handed == ({"remote": [], "remote-network": [str(pieces)]} if product == "remote-network" else {"remote": []})
+    assert ("COMPOSITE: composed on cpu-6, not the served node vy-dc-h200: from a prover-side copy of its serve dir's "
+            "audit inputs and the cases written here from it, not from the parties that produced them") in lines
     assert not (pieces / "chain.log").exists() and (d / "private" / "pieces" / "certifier" / "period.log").exists()
 
 
@@ -2687,13 +2709,15 @@ def test_the_advice_charge_runs_preflight_refuses_what_serve_openai_or_its_repor
     assert (rc, said) == (3, [line or f"PREFLIGHT: no {row}/manifest.json"])
 
 
-FAKE_COMPOSITE = '''import json, sys
+FAKE_COMPOSITE = '''import json, os, sys
 from pathlib import Path
 COMPONENTS = {"onsite": ("verity/pous/p2/v4/run", "verity/wipe/v0"),
               "remote": ("verity/pouw/v1", "verity/sampled-proofs/one-stage/v2"),
               "remote-network": ("verity/certifier/v9", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v2")}
 if __name__ == "__main__":
     a = sys.argv[1:]
+    if "ORDER" in os.environ:
+        open(os.environ["ORDER"], "a").write(f"composite-{a[0]}\\n")
     Path(a[a.index("--private-out") + 1]).mkdir(parents=True)
     Path(a[a.index("--public-out") + 1]).mkdir(parents=True)
     Path(a[a.index("--public-out") + 1], "composite.json").write_text(json.dumps({"product": a[0]}))

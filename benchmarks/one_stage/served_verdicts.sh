@@ -200,8 +200,8 @@
 # preflight refuses H1_TIE on a tree whose window-commit takes no --window-registration.
 # Under H1_TIE on a node with less memory than V3c's audit needs (its MemTotal, NODE_MEM_GB, under V3C_AUDIT_MEM_GB, default
 # 290), step 6 holds the tie (WINDOW-COMMIT, WINDOW-CIRCUIT-HELD) and defers the audit and the composite (`defer`), for
-# PRODUCT=remote and remote-network, whose composites read no PoUS case (onsite's composite reads PoUS's case, which
-# needs this node's card: the preflight refuses it).
+# PRODUCT=remote and remote-network, whose composites read neither PoUS's case nor the wipe's, and for onsite with
+# COMPOSITE set empty (onsite's composite reads both cases, which only this node's card writes: the preflight refuses it).
 # Step 5's record has sampled proofs missing and says what was deferred and why (its `deferred`), a DEFERRED line says
 # so, and the serve dir's
 # private/deferred gets the pieces the record read, the inference-only verdict (which the follow-on's record carries as
@@ -1057,14 +1057,15 @@ if [ -n "${H1_TIE:-}" ] && [ "${1:-}" != v3c ]; then  # V3c's window commit at e
     || { say "PREFLIGHT: under H1_TIE the window's sample coin waits for window-commit, and its session's reserve lasts the gate's 120 minutes from the serve's start: V3C_TIMEOUT is at most 90m, not $V3C_TIMEOUT"; exit 3; }
   LEASE_MIN=${LEASE_MIN:-150} LEASE_MEM_GB=${LEASE_MEM_GB:-160}
   if DEFER=$(short_of_memory); then  # step 6's audit and the composite go to a follow-on
-    [ "$PRODUCT" != onsite ] || { say "PREFLIGHT: under H1_TIE, where $DEFER, its audit and the composite are deferred to a follow-on, and onsite's composite reads PoUS's case, which needs this node's card: PRODUCT=remote or remote-network, or a node with the memory"; exit 3; }
+    [ "$PRODUCT" != onsite ] || [ -z "${COMPOSITE-1}" ] \
+      || { say "PREFLIGHT: under H1_TIE, where $DEFER, its audit and the composite are deferred to a follow-on, and onsite's composite reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote or remote-network, COMPOSITE set empty, or a node with the memory"; exit 3; }
   fi
 fi
 if [ -n "${PREFLIGHT_ONLY:-}" ]; then  # the checks above alone: nothing kept, built or served
   if [ -n "$FOLLOW" ]; then plan="the follow-on of $SERVED_NODE's deferral"
   else
     plan="the serve's lease ${LEASE_MIN:-60} min, capped at ${LEASE_MEM_GB:-128} GB"
-    [ -z "$DEFER" ] || plan+="; $DEFER, so step 6 defers V3c's audit and the composite to a follow-on"
+    [ -z "$DEFER" ] || plan+="; $DEFER, so step 6 defers $DEFERRED_WHAT to a follow-on"
   fi
   say "PREFLIGHT passed on $(hostname -s), $NODE_MEM_GB GB: $plan. PREFLIGHT_ONLY: nothing kept, built or served"
   exit 0
