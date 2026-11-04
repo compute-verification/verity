@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.Actual.Dampener
-import Proofs.Accounting.Actual.Threaded
+module
+
+public import Definitions.Accounting.Guarantees.Actual.Dampener
+public import Proofs.Accounting.Actual.Threaded
 
 /-!
 # The compute dampener's windows from the memory cap over threads
@@ -7,6 +9,8 @@ import Proofs.Accounting.Actual.Threaded
 `ThreadedRuntimeSlots` at `r = αF`, with `M_r + M_d ≤ |T.M|`, `⌈t/ω⌉₊ = (t + ω − 1)/ω` (`ceil_div_eq_pred_div`), and
 `Λ`, which is `Threading.bound` by definition; `DampenerWindowsCap` is its instance at one slot per weight gate.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Actual
 

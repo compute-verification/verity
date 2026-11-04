@@ -9,7 +9,12 @@ files, or whose `trow` is not the table at its root, rows, domain and fixed rows
 circuit `HmRow.parse` reads off V*'s own file and refuses a unit that is not V*'s net, and `RecLinkPart.outsOk` passes
 that circuit's outputs and refuses them laid out any other way.
 -/
-import Flock.RecLinkPart
+module
+
+public import Flock.RecLinkPart
+meta import Flock.RecLinkPart
+
+@[expose] public section
 
 namespace Flock.Test.RecLinkPart
 

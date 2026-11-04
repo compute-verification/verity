@@ -1,6 +1,8 @@
-import Proofs.Accounting.Compose.ServiceBudget
-import Proofs.Accounting.Compose.ServiceCovers
-import Proofs.Accounting.Headline.Luck
+module
+
+public import Proofs.Accounting.Compose.ServiceBudget
+public import Proofs.Accounting.Compose.ServiceCovers
+public import Proofs.Accounting.Headline.Luck
 
 /-!
 # `CircuitWork`: the circuit's work under live coins
@@ -20,6 +22,8 @@ import Proofs.Accounting.Headline.Luck
   `S_F + S_0` plus the cones `Z_F + Z_0 ≤ D₀` of tiles of no words, which `WorkAt` takes in the cheaper share
   (`workAt_of`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Compose.WorkProof
 

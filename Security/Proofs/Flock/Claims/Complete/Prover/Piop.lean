@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Prover.Transcript
+module
+
+public import Proofs.Flock.Claims.Complete.Prover.Transcript
 
 /-!
 # The honest prover's PIOP: zerocheck, lincheck and ring switch
@@ -18,6 +20,8 @@ what the verifier derives from it (`ZcOut`, `LcOut`, the switched claims).
   (`halve`, the top bit first); `z_partial` is `Zρ` once halved to 64 entries.
 * **Ring switch** (§12). Claim `k`'s `s_k[v] = Σ_y eq(x_k[1..], y)·z[128y + v]`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

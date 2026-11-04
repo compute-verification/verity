@@ -1,4 +1,6 @@
-import Definitions.Pouw.H1Zy.Lane
+module
+
+public import Definitions.Pouw.H1Zy.Lane
 
 /-!
 # `PouwH1LaneZyChunk_v1{TILE, CHUNKS, CHUNK}` on words, at a 32 × 32 leaf over `PouwH1Tile_v1` (trusted)
@@ -32,6 +34,8 @@ before the last chunk, and `admit`, the record and `partials` only at the last, 
 words are a list: honestly `2 (c + 1) K_c / 32` of them, the count `CARRY` gives, so the comparison is `_chunk_body`'s
 word by word. At `n = 1` the one chunk is the whole lane (`laneOk` at `chainOf`).
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

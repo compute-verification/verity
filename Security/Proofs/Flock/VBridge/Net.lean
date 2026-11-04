@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.RecOpen
-import Proofs.Flock.Soundness.Discharge.Hm.Laid
+module
+
+public import Proofs.Flock.VBridge.RecOpen
+public import Proofs.Flock.Soundness.Discharge.Hm.Laid
 
 /-!
 # V*'s opening as one laid-out net
@@ -20,6 +22,8 @@ freshness hypothesis: every builder `recOpen` runs adds rows only as `fresh` doe
 `colsHold_words`: columns that hold the bits of 16-bit words, bit `q % 16` of word `q / 16`, hold the bytes of the
 elements those words are the limbs of: bit `k` of element `i` is bit `k % 16` of word `8 i + k / 16` (`bitOf_limb`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

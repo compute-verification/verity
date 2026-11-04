@@ -1,6 +1,8 @@
-import Proofs.Flock.SessionLoop.FinHmkFc
-import Proofs.Flock.SessionLoop.FinRepErasedAt
-import Proofs.Flock.Claims.ZK.FinishSwFc
+module
+
+public import Proofs.Flock.SessionLoop.FinHmkFc
+public import Proofs.Flock.SessionLoop.FinRepErasedAt
+public import Proofs.Flock.Claims.ZK.FinishSwFc
 
 /-!
 # The views' masked values below `zp 64`, `final_c`'s included, from the history and the firewall's rep
@@ -15,6 +17,8 @@ switched cut's commitments sends the same (`repCut_eraseZ`, `go_err_of_eraseZ`),
 * `go_err_of_eraseZ`: runs equal up to `eraseZ` stop the same.
 * **`Loop.swSrcE_hmk_fw`**: every masked value of the views' source below `zp 64` is the request's plus its pad.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

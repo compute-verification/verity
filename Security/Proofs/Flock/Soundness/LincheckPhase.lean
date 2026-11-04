@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Rounds
-import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Game.Union
-import Proofs.Flock.Soundness.Game.Interleave
-import Mathlib.LinearAlgebra.Lagrange
+module
+
+public import Proofs.Flock.Soundness.Rounds
+public import Proofs.Flock.Soundness.Defs
+public import Proofs.Flock.Soundness.Game.Union
+public import Proofs.Flock.Soundness.Game.Interleave
+public import Mathlib.LinearAlgebra.Lagrange
 
 /-!
 # The lincheck phase (PROTOCOL.md §10)
@@ -24,6 +26,8 @@ lincheck ends with a true `ab` claim for `z` with probability at most `(2 + 2(k_
 
 `lincheck_phase_of_card` takes the union over a list of at most `L` codewords.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

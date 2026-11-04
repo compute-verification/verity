@@ -1,5 +1,7 @@
-import Proofs.Flock.SessionLoop.Tables
-import Proofs.Flock.Claims.ZK.FrameParse
+module
+
+public import Proofs.Flock.SessionLoop.Tables
+public import Proofs.Flock.Claims.ZK.FrameParse
 
 /-!
 # The loop's level-0 source is satisfiable
@@ -17,6 +19,8 @@ level-0 draws, written in `Level0.ofDraws`'s layout.
 * `Masked.linkIn` has that shape at every table, so **`Loop.level0Src_tapeSrc`**: the source `Loop.tapeSrc` meets
   `Loop.Level0Src` at every `x` and `w`.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Level0
 

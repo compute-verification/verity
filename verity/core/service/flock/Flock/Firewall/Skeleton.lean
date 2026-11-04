@@ -10,7 +10,11 @@ device's place. This is that schedule:
   `--zk` schedule's `k0`, level 0's cap and the rep's domain, but for the pads' label and root, which the masking
   challenger inserts itself (`padsFrames`). The coins it computes them on are `coin`'s; no round's frames depend on them.
 -/
-import Flock.Firewall.Finish
+module
+
+public import Flock.Firewall.Finish
+
+@[expose] public section
 
 namespace Flock.Firewall.Skeleton
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Split
-import Proofs.Flock.Claims.ZK.SimPiop
-import Proofs.Flock.Claims.Complete.Zk.Level0Opens
+module
+
+public import Proofs.Flock.Claims.ZK.Split
+public import Proofs.Flock.Claims.ZK.SimPiop
+public import Proofs.Flock.Claims.Complete.Zk.Level0Opens
 
 /-!
 # The deployed plan's last message is the honest prover's (`FinExe`)
@@ -34,6 +36,8 @@ gap: `finExe_of`.
 its source's `τ`, the view's (`srcV_tau`), so `RepOpenFinal` is the session's `τ` the view's (`RepTau`, `InnerTauVal`'s
 reading at the last message) and the four fields at opened positions (`RepOpenRest`): `finExe_of_rest`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.Compose
-import Proofs.Accounting.TS.Drawn
+module
+
+public import Definitions.Accounting.Guarantees.Compose
+public import Proofs.Accounting.TS.Drawn
 
 /-!
 # A prover's `δ_bind` through `ecr/sha-512`: proof
@@ -10,6 +12,8 @@ import Proofs.Accounting.TS.Drawn
 and the real bound passes to `ENNReal` (`ofReal_add_le`, `ofReal_mul`). If it doesn't, the bound is `⊤` unless `L` is
 empty, and then `M² ≤ 0`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Compose.Binding
 
