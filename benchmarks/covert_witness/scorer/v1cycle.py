@@ -28,7 +28,8 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    --publish` on the same ledger, with ladder-v3's points files as `--ladder-points` (`ladder_points`, 07:57Z),
    else    te_core.frontier_fit's own (its LADDER, built from ladder-v3's manifest), which PUTs training/algorithm-policy and training/frontier-fit,
    its rows labelled first (POLICY, v1labels: a void row unpriced, a frozen embedding's price under review) and the
-   coverage line saying which of its points are priced (`v1labels.priced`); then `python -m
+   coverage line saying which of its points are priced (`v1labels.priced`), before te_core 4.13; from 4.13 unwrapped
+   (POLICY_IO, `UNWRAPPED`), and a void row holds both PUTs; then `python -m
    te_core.panels frontier-branches` (Daniel, coordinator 23:56Z; the integrator's builder, 23:59Z), stored only
    since algorithm-policy carries gain, gain_target and start_effective_gates (FB_RETIRED; 05:22Z, 07:48Z), so a
    refresh whose algorithm-policy isn't PUT PUTs no frontier either. A refused PUT is reported, not fatal. te_core's
@@ -85,8 +86,9 @@ RESCORE_PATHS = ("benchmarks/covert_witness/te_core", "benchmarks/covert_witness
 RESCORE_REFS = ("cursor/covert-witness-4207",)
 #: the refresh runs on te_core 4.0 or later (coordinator 01:22Z): formalism v2's quantities measured on traced steps
 TE_MAJOR = 4
-# the scorer's te_core change awaiting the integrator's merge (Delta_t, coordinator 00:47Z), used while it holds theirs
-RESCORE_AHEAD = os.environ.get("TE_RESCORE_AHEAD", "cursor/te-delta-t-40-516a")
+# the scorer's te_core change awaiting the integrator's merge, used while it holds theirs: console.write's NoCut and
+# algorithm-policy's labels, off covert-witness-4207's 4.13
+RESCORE_AHEAD = os.environ.get("TE_RESCORE_AHEAD", "cursor/te-console-labels-516a")
 #: te_core VERSIONs that capture alike (4.1's capture differs from 4.0's in prose only; 4.3 prices the gradient cut at
 #: coded width from 4.2's traces, coordinator 07:48Z); a VERSION outside TE40_WT's group is a new capture, whose cache
 #: traces every run again (`next_capture`)
@@ -858,6 +860,20 @@ if os.environ.get("TE_SERVED"):
     put = lambda p: os.environ["TE_VM_PUT"]
 sys.exit(v1labels.run(algorithm_policy, Path(sys.argv.pop(1))))
 """
+#: te_core.algorithm_policy's main from `UNWRAPPED` on, whose console.put refuses any wrapped te_core object: nothing is
+#: wrapped but a node refresh's I/O (TE_SERVED), which holds no console token and no store write key, as POLICY's
+POLICY_IO = """
+import json, os, sys
+from te_core import algorithm_policy, console
+if os.environ.get("TE_SERVED"):
+    console.served = lambda producer="training": json.load(open(os.environ["TE_SERVED"]))
+    algorithm_policy.store = lambda path, meta: os.environ["TE_TABLES_CITE"]
+    console.put = lambda p: os.environ["TE_VM_PUT"]
+sys.exit(algorithm_policy.main(sys.argv[1:]))
+"""
+#: the te_core from which algorithm-policy runs unwrapped (POLICY_IO) and marks no row void: every row reads
+#: max(1, rho_HE) with its premises
+UNWRAPPED = (4, 13)
 
 
 def rescore(out: Path, gates: Path, final: Path | None = None, root: Path | None = None, extra: list[str] = ()) -> str:
@@ -957,11 +973,14 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None, gates: P
     d.mkdir(parents=True, exist_ok=True)
     if gates and gates.exists() and not (d / "analysis-gates.json").exists():
         (d / "analysis-gates.json").write_bytes(gates.read_bytes())
+    unwrapped = version(te_version(commit)) >= UNWRAPPED
     frozen = d / "frozen-embedding.json"
-    frozen.write_text(json.dumps(v1labels.frozen_runs(trace40.STATE / "trace40")) + "\n")
+    if not unwrapped:
+        frozen.write_text(json.dumps(v1labels.frozen_runs(trace40.STATE / "trace40")) + "\n")
     ladder, cap = ladder_points(out / "ladder"), ladder_fit()
     here = {"TE_VM_PUT": VM_PUT, "TE_TABLES_CITE": f"{here_cite('tables')}/algorithm-policy/tables"} if HERE_DIR else {}
-    r = subprocess.run([sys.executable, "-c", POLICY, str(HERE), str(frozen), *ledger_args(d, root),
+    policy = [POLICY_IO] if unwrapped else [POLICY, str(HERE), str(frozen)]
+    r = subprocess.run([sys.executable, "-c", *policy, *ledger_args(d, root),
                         *(x for p in ladder for x in ("--ladder-points", str(p))), *cap,
                         *(["--publish"] if put else [])],
                        cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True, check=False,
@@ -974,6 +993,13 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None, gates: P
         if x.startswith("PUT ") and ": " in x:
             url, status = x[4:].rsplit(": ", 1)
             res[url.rstrip("/").rsplit("/", 1)[-1]] = status[:200]
+    table = d / "tables" / "algorithm-policy.json"
+    if unwrapped and table.exists():
+        t = json.loads(table.read_text())
+        void = sum(row[t["columns"].index("basis_default")] == "void" for row in t["rows"])
+        if void:
+            held = f"not PUT: {void} rows void, and from te_core {'.'.join(map(str, UNWRAPPED))} no row is"
+            res |= {k: held if res.get(k) == VM_PUT else res.get(k) for k in ("algorithm-policy", FIT)}
     board = next((x.removeprefix("board: ") for x in r.stdout.splitlines() if x.startswith("board: coverage")), None)
     res["coverage"] = [board] if board else coverage(d, r.stdout)
     res["ladder"] = [p.name for p in ladder]

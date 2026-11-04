@@ -105,7 +105,7 @@ if [ -z "$(git -C "$R" branch -r --contains "$C")" ]; then
   git -C "$R" update-ref refs/te-scorer/merge "$C"
   git -C "$R" bundle create -q "$OUT/vm/merge.bundle" refs/te-scorer/merge \
     --not $(git -C "$R" for-each-ref --format='%(refname)' \
-            "refs/remotes/origin/${TE_RESCORE_AHEAD:-cursor/te-delta-t-40-516a}" refs/remotes/origin/cursor/covert-witness-4207)
+            "refs/remotes/origin/${TE_RESCORE_AHEAD:-cursor/te-console-labels-516a}" refs/remotes/origin/cursor/covert-witness-4207)
 fi
 du -sh "$K"/* > "$OUT/vm/du.txt" 2>&1 || true
 exit "$rc"

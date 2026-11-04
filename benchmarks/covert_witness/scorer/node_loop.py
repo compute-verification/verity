@@ -11,11 +11,12 @@ For each refresh run the VM pushes into the node's repository origin's branches,
 covert-witness branches and every commit the scorer's records name that it holds (`push`); GETs the panels the route
 serves for training (served.json, the rows the run's algorithm-policy keeps); launches refresh-node.sh with them, the
 last refresh's PUT statuses (vm-put.log) and the te_core ledger's records the node lacks (ledger.tar: the harness's
-launchers ingest every run into this VM's ledger, `launch.py --collect`); and once it has ended and custody has stored its record, fetches
-out/vm/'s small files, PUTs its console bodies, frontier-fit then algorithm-policy as te_core.algorithm_policy does,
-where the route still serves what the run read, posts post.json's lines with those statuses in place of
-v1cycle.VM_PUT, pushes merge.bundle to RESCORE_AHEAD, copies the panels and the efficiency table to the artifacts and
-labels the run's record, so the store keeps it past a run record's 7 days.
+launchers ingest every run into this VM's ledger, `launch.py --collect`); and once it has ended and custody has stored
+its record, fetches out/vm/'s small files, PUTs its console bodies, frontier-fit then algorithm-policy as
+te_core.algorithm_policy does, with RESCORE checked out at the run's re-score commit (`at_build`), where the route still
+serves what the run read, posts post.json's lines with those statuses in place of v1cycle.VM_PUT, pushes merge.bundle
+to RESCORE_AHEAD, copies the panels and the efficiency table to the artifacts and labels the run's record, so the store
+keeps it past a run record's 7 days.
 """
 import argparse
 import json
@@ -69,8 +70,12 @@ FILES = tuple(f"out/vm/{n}" for n in (
 ARTIFACTS = Path("/opt/cursor/artifacts")
 CONSOLE_PY = Path(os.environ.get("TE_CONSOLE_PYTHON", "/workspace/.venv/bin/python"))
 SERVED = "import json; from te_core import console; print(json.dumps(console.served()))"
+#: each body PUT by RESCORE's te_core checked out at the run's re-score commit (`at_build`), so its put's refusals hold
+#: for the tree that built it; a refused one says why
 PUT = ("import json, sys\nfrom te_core import console\nfor f in sys.argv[1:]:\n    p = json.load(open(f))\n"
-       "    print(f\"PUT {console.PANELS_URL}/{p['id']}: {console.put(p)}\", flush=True)\n")
+       "    try:\n        s = console.put(p)\n    except SystemExit as e:\n        s = f'not PUT: {str(e)[:300]}'\n"
+       "    print(f\"PUT {console.PANELS_URL}/{p['id']}: {s}\", flush=True)\n")
+MERGE = "refs/te-scorer/merge"
 
 
 def say(*a) -> None:
@@ -227,6 +232,17 @@ def fix(text: str, put: dict[str, str]) -> str:
     return text
 
 
+def at_build(commit: str | None, bundle: Path) -> str | None:
+    """RESCORE checked out, detached, at `commit`, the re-score's (cycle.json's te_core), its merge fetched from
+    `bundle` where the node made one; why not, else None."""
+    if not commit:
+        return "the run names no re-score commit"
+    if bundle.exists() and (f := git("fetch", "-q", str(bundle), f"+{MERGE}:{MERGE}", cwd=RESCORE)).returncode:
+        return f"its merge.bundle doesn't fetch: {f.stderr.strip()[-160:]}"
+    c = git("checkout", "-q", "--detach", commit, cwd=RESCORE)
+    return f"{RESCORE} can't check out {commit[:11]}: {c.stderr.strip()[-160:]}" if c.returncode else None
+
+
 def finish(run: str, until: float) -> dict:
     """Run `run`'s small results acted on (module docstring), once it ends (waited for until `until`); what it did."""
     d = Path.home() / ".research" / "runs" / run
@@ -250,6 +266,8 @@ def finish(run: str, until: float) -> dict:
             put = {k: "not PUT: the route's served panel changed while the refresh ran" for k in ap}
         elif not all(b.exists() for b in bodies):
             put = {k: "not PUT: the run left no console body" for k in ap}
+        elif built := at_build(cycle.get("te_core"), vm / "merge.bundle"):
+            put = {k: f"not PUT: {built}" for k in ap}
         else:
             r = console(PUT, *map(str, bodies))
             lines = [x for x in r.stdout.splitlines() if x.startswith("PUT ")]
@@ -261,8 +279,8 @@ def finish(run: str, until: float) -> dict:
         subprocess.run([sys.executable, str(HERE / "scorer.py"), "post", tag, fix(text, put)], check=True)
     merged = None
     if (vm / "merge.bundle").exists():
-        f = git("fetch", "-q", str(vm / "merge.bundle"), "refs/te-scorer/merge", cwd=RESCORE)
-        p = git("push", "-q", "origin", f"FETCH_HEAD:refs/heads/{V.RESCORE_AHEAD}", cwd=RESCORE) if not f.returncode else f
+        f = git("fetch", "-q", str(vm / "merge.bundle"), f"+{MERGE}:{MERGE}", cwd=RESCORE)
+        p = git("push", "-q", "origin", f"{MERGE}:refs/heads/{V.RESCORE_AHEAD}", cwd=RESCORE) if not f.returncode else f
         merged = "pushed" if not p.returncode else f"not pushed: {p.stderr.strip()[-200:]}"
     if (vm / "collect.json").exists():
         (LOOP / "missing.json").write_text(json.dumps(json.loads((vm / "collect.json").read_text())
