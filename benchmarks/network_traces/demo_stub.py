@@ -27,8 +27,8 @@ connection, each answered and the connection closed:
 Its generated ids are SHA-512's, not a model's: byte k of the counter-mode stream (`_stream`) of
 ``verity/demo-stub/v1/outputs``, 0x00, then the prompt's bytes, mod ``--vocab``.
 
-**With ``--out``** it keeps the records a `verity-vllm serve-openai` endpoint writes, the ones network accounting's
-endpoint step binds to the certified I/O (`network_e2e/chain.py`'s ``served_advice``, through `verity-vllm advice`): a
+**With ``--out``** it keeps the records a `verity-vllm serve-openai` endpoint writes, the ones network-e2e's endpoint
+step (the certifier-only path's) binds to the certified I/O (`network_e2e/chain.py`'s ``served_advice``, through `verity-vllm advice`): a
 class request goes through `demo_endpoint`'s scheduler (`Toy`, the class's outputs as its engine: vLLM V1's synchronous
 FCFS as network-e2e's derivation models it, each request one prefill row of its prompt, then a decode row a step), and
 each id goes to its connection as an id event as its step samples it, the trailer after the last. The bytes are the
@@ -36,8 +36,8 @@ same as without ``--out``. Under DIR: ``serve.json``, ``advice_trace.jsonl``, ``
 engine id, ``user``, the network certifier's release headers on it, its prompt and streamed ids, its finish and the
 clock at its arrival, first id and finish), ``windows.jsonl`` and ``served_rows/`` (`demo_endpoint`'s Commit windows, at
 most ``--window-steps`` steps each), and at SIGTERM or SIGINT, once the open window is closed, ``summary.json``. Its EOS
-id is ``--vocab``, which no answer holds, so every answer is ``--tokens`` ids long: the chain takes it as the model's
-EOS ids (chain_record.sh's ``CR_EOS_IDS``).
+id is ``--vocab``, which no answer holds, so every answer is ``--tokens`` ids long: `served_advice` takes it as the
+model's EOS ids (its ``eos``).
 
 `prompts` prints ``--count`` prompts of the class (`prompts`), the JSON array the gate's `--prompts` reads off its stdin:
 
@@ -175,8 +175,9 @@ class Endpoint:
             writer.close()
 
     async def read(self, reader: asyncio.StreamReader) -> tuple[dict | None, list | None, bytes | None]:
-        """The connection's one request: a class request's fields and the network certifier's release headers on it ([N,
-        run hex], `release.release_of`), or the whole answer to anything else."""
+        """The connection's one request: a class request's fields and the network certifier's release headers on it ([run
+        hex, N], as serve-openai's ``--admit release-order`` records them, "" for no run; `release.release_of`), or the
+        whole answer to anything else."""
         head = await reader.readuntil(b"\r\n\r\n")
         if head.startswith(b"GET /v1/models "):
             return None, None, http(200, {"object": "list", "data": [{"id": self.shape.name, "object": "model"}]})
@@ -189,7 +190,7 @@ class Endpoint:
             self.refused += 1
             return None, None, http(400, {"error": why})
         released = REL.release_of(head)
-        return fields, None if released is None else [released[0], released[1] and released[1].hex()], None
+        return fields, None if released is None else [released[1].hex() if released[1] else "", released[0]], None
 
     async def stream(self, fields: dict, release: list | None, writer: asyncio.StreamWriter) -> None:
         queue: asyncio.Queue = asyncio.Queue()

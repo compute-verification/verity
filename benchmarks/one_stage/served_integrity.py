@@ -7,7 +7,8 @@ are the ones `SampledProofs.OneStage.check` makes public (the drawn and proved u
 template's under a stratified or work law; `audit.profile` as `Core.Integrity`, δ an exact ratio). A refusal before the
 sample (the records, a check on the registration, the sample) rejects with its codes; an audit record that doesn't accept,
 with its failed checks and the first of Lean's refusals by member (a registered read that doesn't open its root names
-its port). An audit that ended with no summary is an error (RuntimeError), not a verdict.
+its port). An audit that ended with no summary is an error (RuntimeError), not a verdict, and so is one that opened the
+advice (`opened`), whatever its verdict.
 """
 from __future__ import annotations
 
@@ -56,6 +57,13 @@ def unproved(rec: Mapping[str, Any]) -> str:
     return f" (drawn units not proved: {'; '.join(named) or ','.join(map(str, missing))})"
 
 
+def opened(summary: Mapping[str, Any]) -> bool:
+    """Whether the records audit whose ``summary.json`` is ``summary`` opened the advice (``records_audit.py audit
+    --opening``, its ``compile`` check): a development check, which no answer of record reads, since the record path's
+    window commit reads the advice under its hiding root inside its proofs."""
+    return summary.get("compile") is not None
+
+
 def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
     """Sampled proofs' answer from the audit `records_audit.py` wrote under ``out`` (its ``summary.json``, and the audit
     record ``window/audit.json`` when the sample ran). On acceptance its public ``bound`` is the most of the profile's
@@ -65,6 +73,9 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
         summary = json.loads((out / "summary.json").read_text())
     except (OSError, ValueError) as e:
         raise RuntimeError(f"the records audit left no summary under {out}: {e}") from None
+    if opened(summary):
+        raise RuntimeError(f"the records audit under {out} opened the advice (records_audit.py audit --opening), a "
+                           "development check: no answer of record reads it")
     if summary.get("refused"):
         return _refusal("refused: " + json.dumps(summary["refused"], sort_keys=True, default=str), commitment)
     before = summary.get("checks_before_draw") or {}
@@ -99,4 +110,4 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
             "verdict": "accept"}
 
 
-__all__ = ["PROTOCOL", "answer"]
+__all__ = ["PROTOCOL", "answer", "opened"]
