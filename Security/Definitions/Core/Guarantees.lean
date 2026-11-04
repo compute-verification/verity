@@ -1,4 +1,5 @@
 import Definitions.Core.Guarantees.Circuit
+import Definitions.Core.Guarantees.DeviceFigures
 import Definitions.Core.Guarantees.Game
 import Definitions.Core.Guarantees.Challenger
 import Definitions.Core.Guarantees.NaiveStrassen
