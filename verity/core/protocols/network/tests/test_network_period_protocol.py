@@ -179,9 +179,9 @@ def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypat
 
 
 def test_a_tied_audit_that_runs_another_circuit_is_refused(server, monkeypatch):
-    """The rows form holds each link-window's tied audits to the class circuit, the parameters' `circuit`: a period
+    """The rows form holds each phase's tied audits to the class circuit, the parameters' `circuit`: a period
     whose every tied audit is registered under it passes, and Lean accepts it with the mirror's public, whose `held`
-    names `circuit` and `free`; each way the hold can fail (`PC.UNHOLDS`: the aimed link-window's tied audit registered
+    names `circuit` and `free`; each way the hold can fail (`PC.UNHOLDS`: the aimed phase's tied audit registered
     under another Program, or the parameters' `circuit` another digest) Lean and the mirror refuse by name; and a mirror
     that skips the hold accepts what Lean refuses."""
     for n in range(3):

@@ -42,7 +42,7 @@ sample), or its slot entries' or scan slots' stratum in part too (`tied-entries-
 link-window whose scan's state is not its
 wired audit's `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions,
 at another root or domain, or none, `UNSTATES`). The tied audits run one class circuit, a Program drawn once, whose
-SHA-512 is the parameters' `circuit` (`_held`), and a link-window whose tied audit runs another, or under another
+SHA-512 is the parameters' `circuit` (`_held`), and a phase whose tied audit runs another, or under another
 `circuit`, is refused (`circuit-swapped`, `UNHOLDS`). `case(kind, seed, form)` is a small period of the form aimed at a
 verdict, or at a decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with
 its answer, as a composition's difftest takes a real component's cases.
@@ -1449,7 +1449,7 @@ UNWIRES = ("output", "key", "chunk", "leaves", "lane", "members", "body")
 #: or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, or beside a second
 UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra", "audit", "audit-root", "audit-extra")
 #: How `rows-circuit-swapped` breaks the class circuit's hold while every tie, wiring and state holds: the aimed
-#: link-window's tied audit registered under a Program of one more unit, its answer and population that Program's
+#: phase's tied audit registered under a Program of one more unit, its answer and population that Program's
 #: (`audit`), or the parameters' `circuit` another digest: of no Program, the scan's, or an untied audit's (`params`)
 UNHOLDS = ("audit", "params")
 
