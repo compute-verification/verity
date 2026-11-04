@@ -119,10 +119,6 @@ ALLOWED: dict[str, str] = {
                                                        "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
-    "reads Programs with C-Flock's decoder": "`verity/core/protocols/network/nci/README.md`: a queued PR on next rewrites the "
-                                             "line beside it; renamed after it lands",
-    "It runs the Lean verifier of record, `remote-audit-verifier`": "`benchmarks/remote_session/README.md`: a queued PR on next "
-                                                                    "rewrites the line beside it; renamed after it lands",
 }
 
 PENDING: dict[str, str] = {
@@ -209,8 +205,6 @@ PENDING: dict[str, str] = {
     "verity/ml/flock/verifier/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/ml/flock/README.md": "a PR on next rewrites the lines beside its unit classes; the rename follows it",
     "tools/verity/check/README.md": "moves to the infra repository with the check's tooling; renamed there",
-    "benchmarks/served_units/README.md": "a queued PR on next rewrites the lines that name Flock's circuit prover and its "
-                                         "verifier; the rename follows it",
 }
 
 
