@@ -73,6 +73,8 @@
   "Proofs.Properties.Verity.Sampled",
   "Proofs.Properties.Verity.Sampled.Binding",
   "Proofs.Properties.Challenger.Window",
+  "Proofs.Properties.Challenger.CanonLine",
+  "Proofs.Properties.Challenger.Drawn",
   "Proofs.Properties.Remote",
   "Proofs.Properties.Remote.Honest",
   "Proofs.Properties.Verity.Recursive",
