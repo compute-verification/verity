@@ -25,7 +25,6 @@ import Proofs.Pouw.Dimension.H100MeasuredProofs
 import Proofs.Pouw.Dimension.H100PeakTcProofs
 import Proofs.Pouw.Dimension.H100Proofs
 import Proofs.Pouw.Dimension.H100WProofs
-import Proofs.Pouw.Dimension.LiftProofs
 import Proofs.Pouw.Dimension.Lifting
 import Proofs.Pouw.Dimension.MinRankProofs
 import Proofs.Pouw.Dimension.MixingProofs
@@ -57,7 +56,7 @@ import Proofs.Pouw.Fp8Atom.Proofs
 import Proofs.Pouw.FpG1
 import Proofs.Pouw.FpG1.H1
 import Proofs.Pouw.Game
-import Proofs.Pouw.HiddenCredit
+import SampledProofs.HiddenDraw
 import Proofs.Pouw.H1Zy
 import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.M1
@@ -110,7 +109,6 @@ import Proofs.Pouw.PearlC.DeviceSm120CapRev1Gap
 import Proofs.Pouw.PearlC.DeviceSm120Gap
 import Proofs.Pouw.PearlC.DeviceSm120KernelGap
 import Proofs.Pouw.PearlC.DeviceSm120LoopGap
-import Proofs.Pouw.PearlC.DeviceSm120v2LoopEquiv
 import Proofs.Pouw.PearlC.EncChecks
 import Proofs.Pouw.PearlC.FlockTile
 import Proofs.Pouw.PearlC.Forming
@@ -150,12 +148,9 @@ import Proofs.Pouw.PearlC.ServedFadd8Rev1Gap
 import Proofs.Pouw.PearlC.ServedMixedRev1Gap
 import Proofs.Pouw.PearlC.ServedRev1Gap
 import Proofs.Pouw.PearlC.Sm120Checks
-import Proofs.Pouw.PearlC.TTOutW1RowSeed
 import Proofs.Pouw.PearlC.Tile4Circuit
 import Proofs.Pouw.PearlC.TileCapRev1Gap
-import Proofs.Pouw.PearlC.TileCheck
 import Proofs.Pouw.PearlC.TileCircuit
-import Proofs.Pouw.PearlC.TileProtocol
 import Proofs.Pouw.PearlC.TileValues
 import Proofs.Pouw.PearlC.TileGap
 import Proofs.Pouw.PearlC.TileUOnlyGap
