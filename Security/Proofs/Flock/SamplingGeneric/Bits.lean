@@ -60,12 +60,12 @@ and third conjuncts, which read no strict bound on the proof system's reruns). -
 def ExpOwnOf : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
     (H : Msg → Msg) (e : A.Sh → ℝ) (h : A.Sh → ℕ), L.Sessions H → A.RerunsExpLe H e → A.OwnLe H h →
-      ExtractRunsExpLe H L.E (fun x => 1 + L.k x + (L.k x : ℝ) ^ 2 * (1 + L.nPU x * L.es e x)) ∧
+      L.OpenCallsLe H → ExtractRunsExpLe H L.E (fun x => 1 + L.k x + (L.k x : ℝ) ^ 2 * (1 + L.nPU x * L.es e x)) ∧
         Sampling.ExtractOwnLe H L.E (fun x => L.k x ^ 2 * L.nPU x * (L.openCalls x + L.hs h x))
 
 theorem compilerBits_of (hks : CompilerKS) (heo : ExpOwnOf) : CompilerBits := by
-  intro Coin _ _ _ A L H e h hwf hA hB hS hexp hown
-  obtain ⟨hr, ho⟩ := heo Coin A L H e h hS hexp hown
+  intro Coin _ _ _ A L H e h hwf hA hB hS hexp hown hopen
+  obtain ⟨hr, ho⟩ := heo Coin A L H e h hS hexp hown hopen
   exact Compiled.bits_of_ks (hks Coin A L H hwf hA hB hS) hr ho
 
 end Claims.SamplingGeneric
