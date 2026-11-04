@@ -1490,6 +1490,10 @@
    "owner": "@network-accounting",
    "digest": "9c3804d342282e4cb7c0e4657540d573ee43c40e686709ff8e0fc22c9bfc5b10"
   },
+  "NetTiming.CircuitCounts": {
+   "owner": "@network-accounting",
+   "digest": "88788989874d3548d8021922b9cdf09051950297489be201787e7c26009fbc14"
+  },
   "NetTiming.Guarantees.SampledAuditAccepted": {
    "owner": "@proofs",
    "digest": "6e868bb5841a24871d90f8a4202ce0cfa0f370fab1b79b8969c5bd4643547ad8"
@@ -1497,6 +1501,10 @@
   "NetTiming.JitterBounded": {
    "owner": "@network-accounting",
    "digest": "06b2728bc7d299f10f72698ed3900a75c420de7dccc468770103d11dba1ce7be"
+  },
+  "NetTiming.KSWired": {
+   "owner": "@network-accounting",
+   "digest": "faec94427efb4527a40af1f088a2434f24086958c4d250a8a8a860e214498bca"
   },
   "NetTiming.Packed": {
    "owner": "@network-accounting",
@@ -1506,9 +1514,33 @@
    "owner": "@network-accounting",
    "digest": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec"
   },
+  "NetTiming.SchedulesCovered": {
+   "owner": "@network-accounting",
+   "digest": "767ae474e9250336583b74a2c21af271e6294275cae4b0a63d321bcfde447cea"
+  },
+  "NetTiming.SchedulesHeld": {
+   "owner": "@network-accounting",
+   "digest": "ef3dc8e45f7f5aa3a85d6bfa4e16bfd85edf4b4a60ae1bf35f0ba3b825120f8f"
+  },
+  "NetTiming.SenderDecodes": {
+   "owner": "@network-accounting",
+   "digest": "621346fd7e57e053597eb741c016a7e58395610b3992ceaea041b53d40c15e1b"
+  },
+  "NetTiming.SharedRootsParsed": {
+   "owner": "@network-accounting",
+   "digest": "044c8c063ea976bdb1ba56784a8c81dd12f7fbe9f8d9006130cab0a2f97e0774"
+  },
   "NetTiming.StatusComplete": {
    "owner": "@network-accounting",
    "digest": "e76c46b0a2f8b619b953aeb4331cd813ba0128cec464f244821bd9c6d4ea7f06"
+  },
+  "NetTiming.TiedExposed": {
+   "owner": "@network-accounting",
+   "digest": "8bff9ff335c1a03cd63d43f287f4d6deb78f6b029b11f64b851f06f23392569b"
+  },
+  "NetTiming.WindowsPlaced": {
+   "owner": "@network-accounting",
+   "digest": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
   },
   "Pous.AuditSecure": {
    "owner": "@memory-accounting",
@@ -2253,37 +2285,6 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
-  },
-  "NetTiming.CircuitCounts": {
-   "owner": "@network-accounting",
-   "digest": "88788989874d3548d8021922b9cdf09051950297489be201787e7c26009fbc14"
-  },
-  "NetTiming.KSWired": {
-   "digest": "faec94427efb4527a40af1f088a2434f24086958c4d250a8a8a860e214498bca"
-  },
-  "NetTiming.SchedulesCovered": {
-   "owner": "@network-accounting",
-   "digest": "767ae474e9250336583b74a2c21af271e6294275cae4b0a63d321bcfde447cea"
-  },
-  "NetTiming.SchedulesHeld": {
-   "owner": "@network-accounting",
-   "digest": "ef3dc8e45f7f5aa3a85d6bfa4e16bfd85edf4b4a60ae1bf35f0ba3b825120f8f"
-  },
-  "NetTiming.SenderDecodes": {
-   "owner": "@network-accounting",
-   "digest": "621346fd7e57e053597eb741c016a7e58395610b3992ceaea041b53d40c15e1b"
-  },
-  "NetTiming.SharedRootsParsed": {
-   "owner": "@network-accounting",
-   "digest": "df50acd15aeda3cefd5181cac1208f26664a2d660dfa37f8ab6c59bd73a5123e"
-  },
-  "NetTiming.TiedExposed": {
-   "owner": "@network-accounting",
-   "digest": "8bff9ff335c1a03cd63d43f287f4d6deb78f6b029b11f64b851f06f23392569b"
-  },
-  "NetTiming.WindowsPlaced": {
-   "owner": "@network-accounting",
-   "digest": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
   }
  },
  "meaning": [
@@ -29976,9 +29977,9 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.Tied": {
-   "digest": "1c5fa874570cba6830e6e19ed20174107e6fe6e92c6003e3c51364b357aaf91b",
+   "digest": "72d7c381d4cb0a714d072b80a994e59dea80f51958ee3b4e2e40e7d7ab27ba77",
    "definitions": {
-    "NetTiming.Guarantees.PeriodTiedCount": "2ffc1521f5e4807286dad4c669614e8fcd36e224296734c6f3b2186045754bc6"
+    "NetTiming.Guarantees.PeriodTiedCount": "7a781d5ca7e246247bdb58c06185f77fb576a127b37da2b7c53570174dd0c2cd"
    },
    "guarantees": ["NetTiming.SecurityProofs.PeriodTiedCount"]
   },
@@ -30269,9 +30270,10 @@
    ]
   },
   "Definitions.NetworkCertifier.Tied": {
-   "digest": "861dbdd83b403691f8423c8a9229ea223f340b89a35372a265fc8ba218bc84ce",
+   "digest": "a97c00bf31868d950dc643a5de2c924b60370de0f088a82b31cb1670e9277e49",
    "definitions": {
     "NetTiming.CircuitCounts": "88788989874d3548d8021922b9cdf09051950297489be201787e7c26009fbc14",
+    "NetTiming.GatePlaces": "875fc9ad40ca7752b35801c2fa799543010d79af566d45078ffa30ed2bf706f5",
     "NetTiming.Phase": "723a09c44441294aee25376b167a0752dbd5517197f9683be894eaf5aa150d37",
     "NetTiming.Phase.layout": "488529a713e515b14502c4b3781351bfa5a0ae01b7f3cf313c2a928e97cfcda3",
     "NetTiming.Phase.locate": "a8f676db7aa9487333e9c93a2fe8b9fbd0fef5147fad67e83c6644cbc72e27bd",
@@ -30283,13 +30285,12 @@
     "NetTiming.Phase.scan": "f595b416d8c9fb92b9205644a621607de1b1b1f2c290e7e5a81ebc0a7033ee12",
     "NetTiming.Phase.stmts": "bbe66b080449b30b9cb251024d14c9d03bc98225f56763be63ce6f82ba77c738",
     "NetTiming.Phase.tied": "bd371d5793e592433c080936b58db48ad846673c497846f587afb5f6e20c823b",
-    "NetTiming.Placed": "abb095e3cd17b048db12e0033601a2c02150e3681f1a8a2f0cfa64c5eb1110b9",
-    "NetTiming.Placement": "85203408543e7a45bf3b9ce25ceb98dbcb0f2b800c2ca775dbe6a41ae63d4856",
-    "NetTiming.RowsProgWired": "c31f09f990c30be139969463ba1440272f311b97b87b10f90ffbfc9cca544598",
+    "NetTiming.Placed": "f7f539dae04a456232db49c11d8bbcda54ce6fa642972f33b6c9cc429006e3c2",
+    "NetTiming.RowsProgWired": "230e5200a8887e95b0798404df0873c5fbc9c40e8e348bd9741359b868592b5f",
     "NetTiming.RowsStateEmpty": "dc5fe109117a6f9f6ac602e34cc6fdb9fa502338beaf96939c5a4ca2fa5fea7e",
-    "NetTiming.RowsStateHeld": "4c93aa34ec3099bc3d9ea929299b4d949a782fc67ad17a5fe58f6311ae87047c",
+    "NetTiming.RowsStateHeld": "c9a83d3f3f97e073edd4ffd15928daba980120129941c23ef1754a9237630b71",
     "NetTiming.RowsTiesOrdered": "85c10286bee419ac73869e197f012e038f772b97609bff345583e47282518395",
-    "NetTiming.SharedRootsParsed": "df50acd15aeda3cefd5181cac1208f26664a2d660dfa37f8ab6c59bd73a5123e",
+    "NetTiming.SharedRootsParsed": "044c8c063ea976bdb1ba56784a8c81dd12f7fbe9f8d9006130cab0a2f97e0774",
     "NetTiming.Ties": "023062eb3b6437693edbee71d9cf09680eea0e6754175d6caa20277f3d313c7c",
     "NetTiming.Ties.prog": "18fa89e8a7f5be20d32c35e4f19f6643d619eff122f3a9cd37e044920929b944",
     "NetTiming.Ties.start": "b4cda39cf7d7d240761df86909ee833081ac89e910441a1622c9fd84c2d9c16c",
