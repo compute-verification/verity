@@ -285,26 +285,42 @@ def _statement_check(p: dict, own: dict, st: dict, held: dict) -> str | None:
     return None
 
 
+def _members_held(members: dict, sts: list) -> str | None:
+    """`OneStageZk.membersHeld`: each statement names a member of the params that no earlier statement named, in the
+    members' order by first unit (`Member.first`), with at most one session."""
+    first = {m: min(lo for lo, _ in x["units"]) for m, x in members.items()}
+    held: list[str] = []
+    for st in sts:
+        name = st["member"]
+        if name is None:
+            return "the evidence's proofs are one statement's (public, sessions) and the parameters' per member (members)"
+        if name not in members:
+            return f"member {name}: the parameters name no such member"
+        if name in held:
+            return f"member {name}: a second statement: a member's units are one statement's"
+        if held and first[name] < first[held[-1]]:
+            return (f"member {name}: its statement follows member {held[-1]}'s, whose units start after its own: the "
+                    "statements are in the members' order (by first unit, the registration's), one order for one statement")
+        if len(st["sessions"]) > 1:
+            return (f"member {name}: its statement has {len(st['sessions'])} sessions: a statement is one session on live "
+                    "coins, never retried")
+        held.append(name)
+    return None
+
+
 def _statements_check(p: dict, e: dict, held: dict) -> str | None:
     """`OneStageZk.runAll` on statements of no session: in the params' form, each statement's own refusals
-    (`_statement_check`), per member after its name is one of the params' members and no earlier statement's."""
+    (`_statement_check`), per member after the statements' structure holds (`_members_held`)."""
     sts = e["statements"]
     if p["members"] is None:
         if len(sts) != 1 or sts[0]["member"] is not None:
             return "the evidence's proofs are per member (statements) and the parameters' one statement's"
         return _statement_check(p, p["proofs"], sts[0], held)
-    seen = set()
+    if why := _members_held(p["members"], sts):
+        return why
     for st in sts:
-        name = st["member"]
-        if name is None:
-            return "the evidence's proofs are one statement's (public, sessions) and the parameters' per member (members)"
-        if name not in p["members"]:
-            return f"member {name}: the parameters name no such member"
-        if name in seen:
-            return f"member {name}: a second statement: a member's units are one statement's"
-        seen.add(name)
-        if why := _statement_check(p, p["members"][name], st, held):
-            return f"member {name}: {why}"
+        if why := _statement_check(p, p["members"][st["member"]], st, held):
+            return f"member {st['member']}: {why}"
     return None
 
 
