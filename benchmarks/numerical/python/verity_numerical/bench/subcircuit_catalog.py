@@ -195,7 +195,7 @@ def put(store: Any, tree: Path, meta: dict, report_art: str) -> str:
 
 def put_report(store: Any, path: Path) -> str:
     report = json.loads(path.read_text())
-    return store.put_artifact(RECORDS_KIND, {"targets": len(report["targets"]), "failures": len(report["summary"]["new_failures"])},
+    return store.put_artifact(RECORDS_KIND, {"targets": len(report["targets"]), "failures": report["summary"]["failures"]},
                               file=path)
 
 
