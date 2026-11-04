@@ -313,10 +313,10 @@ def rowBit (c : Flock.Circuit) (n g : Nat) : Option RowPos :=
 /-- **Where unit `u` commits output word `x`'s bit `t`**: bit `16 (x − at) + t` of its leaf of the output row whose run
 of output ports holds the word (`HmOut.outGroup`, `at` the run's first word). -/
 def outPos (c : Flock.Circuit) (u x t : Nat) : Option RowPos :=
-  ((List.range c.outRowPorts.size).find? fun o =>
-      decide ((HmOut.outGroup c o).2.2.1 ≤ x) && decide (x < (HmOut.outGroup c o).2.2.1 + (HmOut.outGroup c o).2.2.2)).map
-    fun o => { row := (c.ports.getD (HmOut.nIn c + o) default).name, leaf := u,
-               bit := 16 * (x - (HmOut.outGroup c o).2.2.1) + t }
+  let lo o := (Flock.HmOut.outGroup c o).2.2.1
+  let wd o := (Flock.HmOut.outGroup c o).2.2.2
+  ((List.range c.outRowPorts.size).find? fun o => decide (lo o ≤ x) && decide (x < lo o + wd o)).map fun o =>
+    { row := (c.ports.getD (Flock.HmOut.nIn c + o) default).name, leaf := u, bit := 16 * (x - lo o) + t }
 
 /-- **The commitment position of bit `t` of returned output leaf `j` of unit `u`'s instance `k`**: its output word's
 (`leavesOut`). -/
@@ -447,7 +447,8 @@ private def toyNet : Flock.Net :=
   let b := Array.replicate Flock.WORD #[] ++ Array.replicate 16 #[Flock.WORD + 16]
   match Flock.Sparse.ofRows a (Flock.WORD + 17), Flock.Sparse.ofRows b (Flock.WORD + 17) with
   | .ok a, .ok b =>
-    { (default : Flock.Net) with constPos := Flock.WORD + 16, inWords := 1, aT := .pure a, bT := .pure b,
+    { (default : Flock.Net) with
+      constPos := Flock.WORD + 16, inWords := 1, aT := .pure a, bT := .pure b,
       inGroups := #[⟨0, 1, #[16, 16]⟩], outGroups := #[⟨1, 1, #[16]⟩] }
   | _, _ => default
 
