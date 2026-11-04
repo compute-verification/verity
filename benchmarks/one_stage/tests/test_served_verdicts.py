@@ -3698,6 +3698,20 @@ def test_the_compose_gate_refuses_a_hand_off_off_its_sums_or_carrying_a_witness_
     assert len(logged) == 1 and logged[0]["rc"] == 3 and said in logged[0]["refused"]
 
 
+def test_no_answer_from_the_compose_gate_names_the_gate_commands_last_error(tmp_path):
+    """A gate that never answers (ssh refused the key, the host unreachable) fails with ssh's own last line, so the
+    sender's one line says why without a second look at the serve dir."""
+    answer, err = tmp_path / "answer.json", tmp_path / "gate.err"
+    answer.write_text("")
+    err.write_text("Warning: Permanently added 'h' (ED25519) to the list of known hosts.\n"
+                   "research@h: Permission denied (publickey).\n\n")
+    assert S.composed(answer, tmp_path / "out", 255, err) == (
+        1, "GATE-COMPOSE failed (ssh exit 255): no answer from the compose gate (IndexError): research@h: Permission "
+           "denied (publickey).")
+    assert S.composed(answer, tmp_path / "out", 255) == (
+        1, "GATE-COMPOSE failed (ssh exit 255): no answer from the compose gate (IndexError)")
+
+
 #: rsync as `served_verdicts.sh copy` calls it: each file --files-from lists, from the source dir to $COPIED/HOST/PATH
 #: for the destination HOST:PATH, its arguments in $COPIED.args, exiting $RSYNC_EXIT
 FAKE_RSYNC = f'''exec {sys.executable} - "$@" <<'EOF'

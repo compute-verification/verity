@@ -49,6 +49,10 @@ With ``whole_tree_sm`` too, the call's GEMMs beside its tree launch one persiste
 since the tree's CTA holds an SM whole and a GEMM CTA left without one would start only when the tree ends; each tile is
 computed as before, by another CTA.
 
+With ``whole_pd_shared`` (and hashing), a whole capture launches each call's pd_commit and pd_tree in half an SM's shared
+memory in place of PD_WHOLE's whole one (the pipeline's ``pd_shared``), so two of their CTAs, or one and a side lane's, share
+an SM.  The kernels are the same and use the same shared memory whatever the launch gives, so they write the same bytes.
+
 With ``whole_fork_stats`` too (deferring), a whole capture forks each call's A scales (``stats_a``, which reads A's words
 alone and writes its shape's alpha, beta, ia and aux) onto a stats stream before the call's A commitment, which reads and
 writes none of them, and the capturing stream joins it in its place (an event after ``stats_a``), before the forming steps
@@ -195,6 +199,9 @@ class GraphCalls:
     #: with ``whole_defer_a``, whether a call's GEMMs beside its forked A tree leave the tree's CTA its SM (the pipeline's
     #: ``beside``)
     whole_tree_sm: bool = False
+    #: whether a whole capture (with hashing) launches each call's pd_commit and pd_tree in half an SM's shared memory, not
+    #: PD_WHOLE's (the pipeline's ``pd_shared``): the same kernels and bytes, two of their CTAs to an SM
+    whole_pd_shared: bool = False
     #: with ``whole_defer``, whether a whole capture also prefetches each call's B̃ into L2 on the stats stream after its
     #: scales; inside one, the event after the last call's forked ``stats_a``, and whether a prefetch is unjoined
     whole_prefetch_b: bool = False
@@ -241,8 +248,8 @@ class GraphCalls:
     def whole_key(self, retained: bool | None = None) -> tuple | None:
         """What a forward captured whole depends on (hashing, omitted steps, schedule, with hashing whether its pass is
         retained, which `retained` sets in place of the open pass's, whether it defers the tile hashing, and after those
-        ``a_tree``, ``tree_sm``, ``stats``, ``prefetch_b`` and ``shape_joins`` where it takes those options), or None when the
-        pass can't replay one: graphs off, or a schedule the graph path doesn't run."""
+        ``a_tree``, ``tree_sm``, ``stats``, ``prefetch_b``, ``shape_joins`` and ``pd_shared`` where it takes those options),
+        or None when the pass can't replay one: graphs off, or a schedule the graph path doesn't run."""
         if not self.graphs or self.cur is None or self.schedule.side or self.schedule.main_priority == "greatest":
             return None
         retained = self.cur.retain is not None if retained is None else retained
@@ -252,6 +259,7 @@ class GraphCalls:
         key = (*key, "stats") if self._forks_stats() else key
         key = (*key, "prefetch_b") if self._prefetches() else key
         key = (*key, "shape_joins") if self._defers() and self.whole_shape_joins else key
+        key = (*key, "pd_shared") if self._pd_shared() else key
         return (*key, "statement") if self._statement_on() else key
 
     def _defers(self) -> bool:
@@ -265,6 +273,11 @@ class GraphCalls:
     def _forks_stats(self) -> bool:
         """Whether a whole capture forks each call's ``stats_a`` beside its A commitment (`whole_fork_stats`, deferring)."""
         return self.whole_fork_stats and self._defers()
+
+    def _pd_shared(self) -> bool:
+        """Whether a whole capture launches pd_commit and pd_tree in half an SM's shared memory (`whole_pd_shared`, with
+        hashing)."""
+        return self.whole_pd_shared and self.hashing
 
     def _prefetches(self) -> bool:
         """Whether a whole capture prefetches each call's B̃ beside its A commitment (`whole_prefetch_b`, deferring)."""
@@ -611,7 +624,9 @@ class GraphCalls:
         scales (`_forks_stats`, ``stats_at``) or prefetching B̃ (`_prefetches`), the call launches them on the stats stream
         as the module's docstring says and joins ``stats_a`` in its place; the last call joins that stream too.  Joining by
         shape (``whole_shape_joins``), the call doesn't join the call before's side steps; `join_before` joins its shape's.
-        The call's A words left to it (`_widening`) are widened before ``stats_a`` where `_reads_bf16`, else first."""
+        The call's A words left to it (`_widening`) are widened before ``stats_a`` where `_reads_bf16`, else first.  With
+        `_pd_shared` every step sees the pipeline's ``pd_shared`` set, so its pd_commit and pd_tree go into the capture in
+        half an SM's shared memory."""
         key, screen = self._graph_key(w, sh, m)
         g = self._graphs.get(key)
         if g is None or g.graph is None:
@@ -628,6 +643,9 @@ class GraphCalls:
         if bf16:
             pipe.rows_bf16 = widen[1:3]
         self.kernel.dev.stream = raw
+        shared = self._pd_shared()
+        if shared:
+            pipe.pd_shared = True
         try:
             if not self._defers():
                 for f in g.steps:
@@ -671,6 +689,8 @@ class GraphCalls:
             self.kernel.dev.stream = None
             if bf16:
                 pipe.rows_bf16 = None
+            if shared:
+                pipe.pd_shared = False
         return g.y, screen
 
     def _fork_tree(self, steps: list, raw: int) -> None:

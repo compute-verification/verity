@@ -1758,13 +1758,16 @@ def rebase(serve_dir: Path, served_dir: str, paths: Sequence[str]) -> list[str]:
     return done
 
 
-def composed(answer: Path, out: Path, gate_exit: int | None = None) -> tuple[int, str]:
+def composed(answer: Path, out: Path, gate_exit: int | None = None, err: Path | None = None) -> tuple[int, str]:
     """The compose gate's answer (one JSON line) written out under ``out``: its $OUT's files at their paths, and
-    ``gate.json`` (the pin and the exit, without the files). Its exit (0 composed and accepted) and its one line."""
+    ``gate.json`` (the pin and the exit, without the files). Its exit (0 composed and accepted) and its one line, which
+    without an answer ends with the last line of the gate command's stderr ``err`` (ssh's own refusal, say)."""
     try:
         doc = json.loads(answer.read_text().strip().splitlines()[-1])
     except (OSError, IndexError, ValueError) as e:
-        return 1, f"GATE-COMPOSE failed (ssh exit {gate_exit}): no answer from the compose gate ({type(e).__name__})"
+        said = [x for x in (err.read_text(errors="replace").splitlines() if err and err.is_file() else []) if x.strip()]
+        return 1, (f"GATE-COMPOSE failed (ssh exit {gate_exit}): no answer from the compose gate ({type(e).__name__})"
+                   + (f": {said[-1].strip()[:400]}" if said else ""))
     if "refused" in doc:
         return 3, f"GATE-COMPOSE refused by the compose gate: {str(doc['refused'])[:800]}"
     c = doc.get("compose") or {}
@@ -1978,6 +1981,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     cd.add_argument("answer", type=Path)
     cd.add_argument("out", type=Path)
     cd.add_argument("--gate-exit", type=int)
+    cd.add_argument("--err", type=Path)
     for q in (p, r):
         q.add_argument("--node", default=socket.gethostname())
         q.add_argument("--product", default="onsite")
@@ -2002,7 +2006,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "composed":
         a.out.mkdir(parents=True, exist_ok=True)
-        rc, line = composed(a.answer, a.out, a.gate_exit)
+        rc, line = composed(a.answer, a.out, a.gate_exit, a.err)
         print(line, flush=True)
         return rc
     if a.cmd == "public-registration":
