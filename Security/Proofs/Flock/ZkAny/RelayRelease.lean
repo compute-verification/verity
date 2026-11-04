@@ -70,8 +70,8 @@ theorem release_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (Ï
     rw [hr]
 
 /-- **A released round of the session is the model's release, and stops the session where the model's does**: at a
-round of the session's rep `(i, r)` whose place is the model's scheduled round and coin count, where the session's frames
-take no device round exactly once it stopped (`nd`), a frame of a live session is not stopped, and the frame's
+round of the session's rep `(i, r)` whose place is the model's scheduled round and coin count, where the session's
+frames take no device round exactly once it stopped (`nd`), a frame of a live session is not stopped, and the frame's
 configuration and masking state are the model's but for `stopped`, what the round releases is the model's release of the
 device round `v` where the session has not stopped and `v` passes, else of the scheduled round as a stopped rep's, after
 the stream's domain frame at its first round; after its put the session is stopped where it was or `v` fails. -/
