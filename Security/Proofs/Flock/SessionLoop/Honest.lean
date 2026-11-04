@@ -15,9 +15,8 @@ unswitched prover (`LeanRelease.TrustsStop`). At the deployed tables (`Masked.da
 * `LeanRelease.linkRoundEqStop_of_vals`, `liveRoundEqStop_of_vals`, `fillRoundEqStop_of_vals`: at the honest values the
   unswitched and switched provers' messages are both `refP`'s before the last coin (`unMsgAt_vals`, `swMsgAt_vals`), so
   each Stop trust is its switched trust.
-* `Loop.finS_tables`, `finS_dummyReg`, `finS_complete`, `finS_causal`, `finS_unCausal`, `finS_swCausal`, `finS_tapeOK`:
-  the session's Props at the deployed tables, `Causal` the stopped plan's (`causal_encStop` at `causalExe`) and `TapeOK`
-  the layout's tape's (`fibersEq_ofLayout`), at every statement.
+* `Loop.finS_complete`, `finS_unCausal`: the session's `Complete` at every relation inside the deployed one, and
+  `UnCausal` at the honest values. Its other Props at the deployed tables are `Proofs.Flock.SessionLoop.TablesSide`'s.
 * `Loop.acceptCross`, `LeanRelease.cross_acceptCross`: at `L₁` with Rust's checks (`cross`) passing every round, the
   loop's release accepts the honest device's rounds there, which is `Loop.RoundsPass`'s `cross` premise. The release
   keeps `L₁`'s `cross` (`cross_ofLoopLink_withInner`).
@@ -28,10 +27,10 @@ unswitched prover (`LeanRelease.TrustsStop`). At the deployed tables (`Masked.da
   `LiveRoundEqOwn` and `SwCausalOn`), and its frames refuse every coin fault (`frameUnrefused_ofLoop`) at tables that
   admit unrefused coins.
 * **`LeanRelease.trustsStop_honest`**: `TrustsStop` at the honest worker, at every relation inside the served, in-scope
-  deployed one, from `Loop.Src` (the loop's inputs being the tape's), `LiveSched` (the loop's scheduled rounds) and
-  `FillRoundEq` at the honest values. `LiveInner` is `liveInner_withInner`, the inner round 0 is the loop's
-  (`LoopInnerRound0Own`), and the worker takes the honest values (`takes_honestVals_ofLoopLink`,
-  `takesTau_honestVals_ofLoopLink`).
+  deployed one, from `Loop.Src` (the loop's inputs being the tape's) and `FillRoundEq` at the honest values. `LiveSched`
+  is `liveSched_honestVals`, `LiveInner` is `liveInner_withInner`, the inner round 0 is the loop's
+  (`LoopInnerRound0Own`), the worker takes the honest values (`takes_honestVals_ofLoopLink`,
+  `takesTau_honestVals_ofLoopLink`) and the switched causality is `swCausalOn_honestVals_dataE`.
 -/
 
 @[expose] public section
@@ -72,28 +71,11 @@ end LeanRelease
 
 namespace Loop
 
-theorem finS_tables : finS.Tables := Masked.tables _ _ _ _
-
-theorem finS_dummyReg : finS.DummyReg := Masked.dummyReg _ _ _ _
-
 /-- **`Complete` at every relation inside the deployed one** (`Masked.complete_tabC`). -/
 theorem finS_complete (Rl : Rel Flock.Wit) (h : ∀ x w, Rl x w → Masked.RZk x w) : finS.Complete Rl :=
   fun _ _ hR j => Masked.complete_tabC Masked.PE (h _ _ hR) j
 
-/-- **The deployed session is `Causal`**: its plan is `encExe` stopped where a refusal is seen, which is causal where
-`encExe` is (`causal_encStop`, `causalExe`). -/
-theorem finS_causal : finS.Causal :=
-  Masked.RoundPlan.causal (Masked.causal_encStop (cz := Masked.czExe Masked.PE) (enc := Masked.encExe Masked.PE)
-    (fin := Masked.finExe Masked.PE) Masked.causalExe) _ _
-
-theorem finS_unCausal : finS.UnCausal finS.honestVals := finS.unCausal_vals finS_causal
-
-theorem finS_swCausal : finS.SwCausal finS.honestVals := finS.swCausal_vals finS_causal
-
-/-- **The deployed session's tape is read with fibers of one size at every statement** (`fibersEq_ofLayout`). -/
-theorem finS_tapeOK : finS.TapeOK :=
-  (finS.tapeOKOn_iff).1 (finS.tapeOKOn_of_tape _ fun x _ =>
-    Masked.fibersEq_ofLayout (Masked.TapeLayout.exe Masked.PE) Masked.exeTape x)
+theorem finS_unCausal : finS.UnCausal finS.honestVals := finS.unCausal_vals causal_dataE
 
 /-- **`L` with Rust's checks passing**: Rust's own checks beside the Lean frame (`LeanRelease.cross`) accept every round.
 The guarantees hold at every `cross`, since Rust's checks only fail a round more. That they pass the honest worker's
@@ -158,16 +140,14 @@ theorem finalRoundEq_ofLoopLink (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit
 /-- **The transport's trusts at the honest session loop**: at the loop's own inner rounds (`withInner`, at the finish's
 rounds `fin`), link and `Finish`, at its own tables, the honest values and the honest worker (`valsWk`), `TrustsStop`
 holds at every relation whose statements the loop serves, are in the masked scope and have their witness in the deployed
-relation, where the loop's inputs are the tape's (`Loop.Src`), its scheduled rounds are the switched session's
-(`LiveSched`) and so are its stand-in rounds (`FillRoundEq`). -/
+relation, where the loop's inputs are the tape's (`Loop.Src`) and its stand-in rounds are the switched session's
+(`FillRoundEq`). Its scheduled rounds are the switched session's there (`liveSched_honestVals`). -/
 theorem trustsStop_honest (L₁ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (fin : Msg → Flock.Wit → Tp → List (Msg × Msg) → Array ByteArray) (Rl : Rel Flock.Wit)
     (hRl : ∀ x w, Rl x w → Serves x ∧ Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x ∧
       Masked.RZk x w)
     (hSrc : ∀ x w, Rl x w → Loop.Src (withInner Masked.dataE L₁ (realOf src) fin) src x w)
-    (hS : ∀ x w, Rl x w → LiveSched finS.honestVals (withInner Masked.dataE L₁ (realOf src) fin) src (realOf src)
-      (valsWk finS.honestVals (ofLoopLink (withInner Masked.dataE L₁ (realOf src) fin) src (realOf src))) x w)
     (hEf : ∀ x w, Rl x w → FillRoundEq finS finS.honestVals
       (ofLoopLink (withInner Masked.dataE L₁ (realOf src) fin) src (realOf src)) CoinOpen.shaH
       (valsWk finS.honestVals (ofLoopLink (withInner Masked.dataE L₁ (realOf src) fin) src (realOf src))) x w) :
@@ -179,7 +159,8 @@ theorem trustsStop_honest (L₁ : LeanRelease Flock.Wit Tp)
   have hE : LiveRoundEq finS finS.honestVals (ofLoopLink (withInner Masked.dataE L₁ (realOf src) fin) src (realOf src))
       CoinOpen.shaH (valsWk finS.honestVals (ofLoopLink (withInner Masked.dataE L₁ (realOf src) fin) src (realOf src)))
       x w :=
-    liveRoundEq_ofLoopLink _ _ src _ _ x w (hS x w h)
+    liveRoundEq_ofLoopLink _ _ src _ _ x w
+      (liveSched_honestVals _ src (realOf src) rfl Loop.tables_dataE Loop.tapeOK_dataE hR hSv hsc (hSrc x w h))
       (liveInner_withInner _ L₁ src (realOf src) fin x w (Masked.live_of hsc hR) hSv
         (fun ρ _ _ _ hs => realTabs_realOf src x w ρ hs) (hSrc x w h).2 _
         (takes_honestVals_ofLoopLink _ src (realOf src)).2 (takesTau_honestVals_ofLoopLink _ src (realOf src))
@@ -188,7 +169,7 @@ theorem trustsStop_honest (L₁ : LeanRelease Flock.Wit Tp)
     liveRoundEqStop_of_vals _ _ _ _ x w hE, fillRoundEqStop_of_vals _ _ _ _ x w (hEf x w h),
     finalRoundEq_ofLoopLink _ _ src _ x w hsc hR hSv
       (_root_.Flock.SecurityProofs.LoopInnerRound0Own Masked.dataE L₁ (realOf src) fin x w) (hSrc x w h) hE.own
-      (finS.swCausalOn_of_swCausal _ _ finS_swCausal),
+      Loop.swCausalOn_honestVals_dataE,
     finishRows_honestVals _ src _ _ hR hSv⟩
 
 end LeanRelease
