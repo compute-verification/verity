@@ -102,11 +102,11 @@ open Flock FlockLevel3 Game
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- The round the server records for framed bytes `b` and their `n` coins: the coin count, the bytes' digest `dg b`, the
-coins, and the bytes themselves, which the unsalted path's server retains (PROTOCOL.md §6.2, §7.1). -/
+coins, and the bytes themselves, which the unsalted path's server retains (`Flock.Transcript`, `Tags.coinScheme`). -/
 def roundOf (dg : ByteArray → ByteArray) (b : ByteArray) (n : ℕ) (c : Fin n → 𝔽) : Round :=
   { n, sha := dg b, coins := Array.ofFn fun i => (c i).val, bytes := some b }
 
-/-- A round the prover submits to the challenger (PROTOCOL.md §7.1): its stream (rep `0` or `1`), the framed bytes,
+/-- A round the prover submits to the challenger (`Tags.coinScheme`): its stream (rep `0` or `1`), the framed bytes,
 and the coin count. -/
 structure Submit where
   rep : Fin 2
@@ -117,7 +117,7 @@ structure Submit where
 def addRound (acc : List Round × List Round) (r : Fin 2) (rd : Round) : List Round × List Round :=
   if r = 0 then (acc.1 ++ [rd], acc.2) else (acc.1, acc.2 ++ [rd])
 
-/-- **The challenger's rounds** (PROTOCOL.md §7.1). The prover submits a round on either rep's stream, or stops, at
+/-- **The challenger's rounds** (`Tags.coinScheme`). The prover submits a round on either rep's stream, or stops, at
 most `N` times; the server draws the round's `n` coins uniformly once its bytes are fixed, and appends the round to that
 stream. The output is the two streams' rounds, in order. -/
 def liveRounds (dg : ByteArray → ByteArray) : ℕ → List Round × List Round → Game (List Round × List Round)
@@ -134,7 +134,7 @@ structure LiveOut (mPts : ℕ) where
   rep1 : List Round
   proofs : Array ByteArray
 
-/-- **One table's live session** (PROTOCOL.md §5, §7): `Commit` sends the root `root_B`, the server draws the two link
+/-- **One table's live session** (`Flock.Record`, `Flock.Draw`): `Commit` sends the root `root_B`, the server draws the two link
 points, the prover runs its rounds on the two reps' streams, then sends the two proof files. -/
 def liveTable (dg : ByteArray → ByteArray) (mPts N : ℕ) : Game (LiveOut mPts) :=
   .send ByteArray fun rootB =>

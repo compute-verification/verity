@@ -1,4 +1,4 @@
-"""A window's wiring across statements (`verifier/PROTOCOL.md` §16.13 ``Wiring``): a wired member (``serving_rows.Member.wired``,
+"""A window's wiring across statements (`HmOut` ``Wiring``): a wired member (``serving_rows.Member.wired``,
 one ``(port, out, writers)`` per wire) reads, unit by unit, other units' output rows: its unit i's ``port`` row is global unit
 ``writers[i]``'s ``out`` row, committed under that row's salt, so the two rows' ``b || c`` are one string.  Lean's links hold
 inside one statement; these join statements (one coordinate's K-chunks, chunk c's ``acc`` chunk c - 1's output; split partials,

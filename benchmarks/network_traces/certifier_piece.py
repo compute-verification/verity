@@ -1,5 +1,5 @@
 """certifier-piece: the network certifier's piece of `served_verdicts.sh` (its ``CERTIFIER_CMD``), and the front that puts
-the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
+the active network certifier in front of serve-openai there (its ``CERTIFIER_FRONT``).
 
     python certifier_piece.py front PORT SERVE_DIR OUT [--gate USER@HOST | --gate local] [--key KEY] [--peer NAME]
         [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--height 10] [--minutes M] [--bucket-ms MS]
@@ -35,14 +35,15 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
   Exit as `served_session.session`'s.
 * **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
   form): accept only when the chain accepted and ``network-period check`` accepted the period, whose answer it then is.
-  1. The kept warden run: exactly one fetch under SERVE_DIR/`PRIVATE`, whose rehearsal the gate's check passed (its
-     ``end.json``: exit 0 and accepted, as the front's exit reads it). With none the run's load didn't go through the
-     front (it wasn't set, or the gate, its tunnel or ssh failed); a rehearsal that failed (each request late past the
-     warden's D·τ, or cut) certified no served answer, so there is none for the protocol to reject (`rehearsed`).
-  2. The window's requests are certified ones: each window request's user names one of the warden's certified
+  1. The kept network certifier run: exactly one fetch under SERVE_DIR/`PRIVATE`, whose rehearsal the gate's check
+     passed (its ``end.json``: exit 0 and accepted, as the front's exit reads it). With none the run's load didn't go
+     through the front (it wasn't set, or the gate, its tunnel or ssh failed); a rehearsal that failed (each request
+     late past the network certifier's D·τ, or cut) certified no served answer, so there is none for the protocol to
+     reject (`rehearsed`).
+  2. The window's requests are certified ones: each window request's user names one of the network certifier's certified
      requests (`warden_chain.io`), with the same prompt and streamed ids; else reject.
-  3. The chain (`served_session.py chain`: chain_record.sh's warden path, certs, endpoint, N2, tie and scan) on the
-     kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
+  3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, endpoint, N2, tie and scan)
+     on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
      take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a
      reject with its why.
@@ -303,7 +304,7 @@ def window_requests(serve_dir: Path, window: int) -> list[dict]:
 
 
 def unpack(fetch: Path) -> tuple[Path, Path]:
-    """The kept fetch unpacked in a 0700 scratch directory beside it, and its warden run."""
+    """The kept fetch unpacked in a 0700 scratch directory beside it, and its network certifier run."""
     d = Path(tempfile.mkdtemp(dir=fetch.parent, prefix="unpacked-"))
     try:
         with tarfile.open(fetch, "r:gz") as tar:
@@ -334,7 +335,7 @@ def rehearsed(run: Path) -> None:
 
 
 def bind(reqs: list[dict], io: dict) -> dict[str, dict]:
-    """Each window request's certified record by its user; Rejected when one isn't the warden's."""
+    """Each window request's certified record by its user; Rejected when one isn't the network certifier's."""
     if not io["accepted"]:
         raise Rejected(f"the warden's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
     by, got = {r["user"]: r for r in io["records"]}, {}

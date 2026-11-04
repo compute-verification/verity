@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
 /-!
 # The public words that the statement pins at the unit slots' public leaves
 
-A statement with public input ports (§16.10, `HmIn`) reads them from the in regions (`HmIn.inRegions`): region "in x",
+A statement with public input ports (`Flock.HmRow`, `HmIn`) reads them from the in regions (`HmIn.inRegions`): region "in x",
 `(w, s)`, is `2^s` words from word `w` of every unit slot (`regions_in`). Its free bits are a slot's `7 + s` column bits
 and the slot's `log2ceil count` bits above the unit range's slot bits, at word `w` (`inBlock_in`); its bytes are, slot by
 slot, each of its `8·2^s` leaves' 16-bit words, u16 LE (`inBytes_bit`): a public leaf its instance's public word, else 0

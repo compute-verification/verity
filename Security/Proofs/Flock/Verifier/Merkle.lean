@@ -1,5 +1,5 @@
 /-
-Level 3, L3-M (PROTOCOL.md §14, §17.4 stage 1b): Merkle binding. Two openings the verifier accepts for one position of one
+Level 3, L3-M (`Flock.Merkle`, `verity/ml/flock/verifier/README.md` stage 1b): Merkle binding. Two openings the verifier accepts for one position of one
 cap, with different rows, give an explicit collision of the scheme's hash: two different digest-width node inputs, or two
 different rows, with one digest. Parametric in the scheme; for each scheme the verifier knows, such a collision is a SHA-256
 or SHA-512 collision (`MerkleScheme.collision_hash`). No random oracle.

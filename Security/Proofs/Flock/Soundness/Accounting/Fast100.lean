@@ -4,7 +4,7 @@ import Definitions.Flock.Accounting.Fast100
 # The bound for `fast100` run twice on one root
 
 For every witness size the profile supports and every statement shape the three statements of
-PROTOCOL.md §16 can take (at most `2^27` bits per block, 1024 public regions and 64 link-point
+`Flock.Statement` can take (at most `2^27` bits per block, 1024 public regions and 64 link-point
 coordinates, well beyond today's statements), `tableError` is at most
 
 * `2^-205` for every `22 ≤ m ≤ 35` (`tableError_le_of_le_33`, `tableError_le_of_34_35`), at the

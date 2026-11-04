@@ -2,9 +2,9 @@ import Definitions.Flock.Compiled
 import Proofs.Flock.Soundness.Merkle
 
 /-!
-# The compiled protocol: Merkle caps, openings after the last coin (PROTOCOL.md §13–§14)
+# The compiled protocol: Merkle caps, openings after the last coin (`Flock.Ligerito`, `Flock.Merkle`)
 
-The protocol as run commits each table by a Merkle cap (§14) and opens the queried rows with
+The protocol as run commits each table by a Merkle cap (`Flock.Merkle`) and opens the queried rows with
 their sibling paths in the proof file, which the server receives after every round (S17). The
 openings enter no round, so the prover chooses them after all coins of both reps: the table's
 last message here (`Opens`, per rep, level and query). The verifier then checks every path

@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.10 (registered reads): a value the verifier registers itself at public content. Its `--registered` port
+`Flock.HmRow` (registered reads): a value the verifier registers itself at public content. Its `--registered` port
 entry names the content under `known` (each row's u16 words and its salt), and the verifier computes the value's
 registered root from it and refuses a file whose stated root is another (`checkKnownAll`, which `flock-verify` runs on
 `--registered F` before any statement: `FlockVerify.registeredInput`). A registrant's row that opens the root is then

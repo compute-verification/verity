@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Network accounting's side of a memory wipe: one warden session through the auditor's gate (`warden-rehearse --scan
-# --prompts`, the toy's class) spanning the wipe's session, under the lane's gate key (GATE_KEY), inside a job on the
-# machine that holds it (site.json's auditor), cwd = the source tree; everything into $OUT. GATE_KEY, CHALLENGER, PEER
-# and KEEP default to site.json's gate_key (under ~/.ssh), gate, peer and keep.
+# Network accounting's side of a memory wipe: one network certifier session through the auditor's gate (`warden-rehearse
+# --scan --prompts`, the toy's class) spanning the wipe's session, under the lane's gate key (GATE_KEY), inside a job on
+# the machine that holds it (site.json's auditor), cwd = the source tree; everything into $OUT. GATE_KEY, CHALLENGER,
+# PEER and KEEP default to site.json's gate_key (under ~/.ssh), gate, peer and keep.
 #
 # With AT (a UTC time) it first waits until then, so a run launched early fires on the clock with no VM awake: give the
 # run a time limit past AT, MINUTES, the fetch and the leak guard (below). Launched more than LATE_S (60) seconds

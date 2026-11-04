@@ -14,8 +14,7 @@ POINTS: `{"link": [[hex, ...], ...], "reps": [{"alpha", "beta", "lw": [64], "rho
 `os`: the statement's tags on the verifier's live OS coins (`verify --coins os`), else seeded coins.
 `--partition`: the verifier's copy of the `verity/partition/v1` object a circuit binds (`verify --partition`).
 `--registered`: the verifier's own registered reads (`verify --registered`, `verity/registered-reads/v0`) of the inner
-statement's description: its rows, read from the developer's registration (`Registered.checkDescription`, PROTOCOL.md
-§16.16), or the fold is refused; without it, a statement naming registered reads is refused.
+statement's description: its rows, read from the developer's registration (`Registered.checkDescription`, `Tags.withPlainLeaves`), or the fold is refused; without it, a statement naming registered reads is refused.
 `--plain-leaves`: the statement's tags with the inner statement's plain SHA-512 leaves (`leafSchemePlain`) in place of
 their own leaf-commitment scheme: a recursive session's inner statement, whose tree tops the firewall salts.
 `--hide NET`: circuit NET's unit circuits are hidden (`verity_flock.rec_session`): each rep's `comb` is the fold of the

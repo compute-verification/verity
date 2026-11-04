@@ -5,9 +5,9 @@ the kernel function it slept in at each of its samples (`wchan`), its kernel sta
 the page faults the thread took during it, and its memory cgroup's state at its start: a charge past the cgroup's
 limit reclaims in the charging thread, which sleeps in D while it does.
 
-It is a process of its own because a thread of the warden's process can't run while the ticker holds the interpreter
-in the kernel (a page fault holds the GIL), which is when it is needed. Times are seconds after T, the warden's origin
-on the monotonic clock, which every process of the host shares.
+It is a process of its own because a thread of the network certifier's process can't run while the ticker holds the
+interpreter in the kernel (a page fault holds the GIL), which is when it is needed. Times are seconds after T, the
+network certifier's origin on the monotonic clock, which every process of the host shares.
 
 FILE has `threads` (each sampled thread: its process, label, samples by state, and its minor and major page faults
 from the origin to its last sample), `episodes`, the sampler's own `interval_ms` quantiles and every `gap` of
@@ -272,7 +272,7 @@ def stop(proc, out: Path) -> dict:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="stall_probe.py", description=__doc__.splitlines()[0])
     ap.add_argument("--out", required=True, type=Path)
-    ap.add_argument("--origin", required=True, type=float, help="the warden's origin on the monotonic clock")
+    ap.add_argument("--origin", required=True, type=float, help="the network certifier's origin on the monotonic clock")
     ap.add_argument("--label", action="append", default=[], help="TID=NAME: a thread's label (default: thread)")
     ap.add_argument("--samples", type=int, help="stop after this many samples")
     ap.add_argument("watched", nargs="+", help="NAME=PID: a process whose threads are sampled")

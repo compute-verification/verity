@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.Refine.ExecLM
 import Proofs.Flock.Soundness.Refine.Schedule
 
 /-!
-# Ligerito's rounds refine the model's (PROTOCOL.md §13.3)
+# Ligerito's rounds refine the model's (`Flock.Ligerito`)
 
 The executable's Ligerito verifier carries the running claim `s` and the round polynomial `q` as values; the compiled
 model carries them as functions of the openings (`LigStateC`), since the consistency values read the opened rows, which
@@ -35,13 +35,13 @@ theorem getElem!_of_getElem? {α : Type} [Inhabited α] {a : Array α} {i : ℕ}
   obtain ⟨hi, hx⟩ := Array.getElem?_eq_some_iff.1 h
   rw [getElem!_pos a i hi, hx]
 
-/-- A `K` coin: the round's two coins as `c₀ + c₁·u` (§2.4, §13.2). -/
+/-- A `K` coin: the round's two coins as `c₀ + c₁·u` (`Flock.Field`, `Flock.Ligerito`). -/
 theorem ofLimbs_coin (c : Array F128) :
     execArith.ofLimbs (fOf c[0]!) (fOf c[1]!) = gOf ⟨c.getD 0 0, c.getD 1 0⟩ := by
   rw [gOf_limbs, getElem!_eq_getD, getElem!_eq_getD]
   rfl
 
-/-- **The folding rounds** (§13.3 step 4 and each recursive round). The executable's `k` challenges, from `stE` and
+/-- **The folding rounds** (`Flock.Ligerito` step 4 and each recursive round). The executable's `k` challenges, from `stE` and
 `t`, are the model's `foldRoundsC`, played with the proof's next `k` sumcheck messages and the `k` rounds consumed; at
 the proof's openings `o`, the model's claim and polynomial are the executable's. -/
 theorem fold_refines (p : LigeritoProof) (o : Opens 𝔽 D) :
@@ -133,7 +133,7 @@ theorem ofFn_vecOf (n : ℕ) (c : Array F128) (hc : c.size = n) : List.ofFn (fun
   simp only [List.getElem_ofFn, List.getElem_map, Array.getElem_toList]
   rw [getElem!_pos c i (by simpa using h₁)]
 
-/-- One out-of-domain sample's update of the claim and the polynomial (§13.3 step 6), as the executable computes it. -/
+/-- One out-of-domain sample's update of the claim and the polynomial (`Flock.Ligerito` step 6), as the executable computes it. -/
 theorem ood_update (sE : F256) (qE : Poly) (y : F128) (m : F256 × F256) (c : Array F128) :
     gOf (sE + (F256.ofF y).smul (c.getD 0 0)) = gOf sE + execArith.embed (fOf c[0]!) * execArith.embed (fOf y) ∧
       quadOf (qE.addScaled (Poly.ofMsg m (F256.ofF y)) (c.getD 0 0)) =
@@ -143,7 +143,7 @@ theorem ood_update (sE : F256) (qE : Poly) (y : F128) (m : F256 × F256) (c : Ar
   · rw [gOf_add, gOf_smul, gOf_ofF, getElem!_eq_getD, mul_comm]; rfl
   · rw [quadOf_addScaled, quadOf_ofMsg, gOf_ofF, getElem!_eq_getD]; rfl
 
-/-- **Two out-of-domain samples** (§13.3 step 6): the model's `twoOodC`, fed the two points' coins, the two values and
+/-- **Two out-of-domain samples** (`Flock.Ligerito` step 6): the model's `twoOodC`, fed the two points' coins, the two values and
 intro messages, and the two batching coins, updates the claim and the polynomial as the executable does, and records
 the two contexts. -/
 theorem twoOodC_plays (o : Opens 𝔽 D) (dim split : ℕ) (sM : Opens 𝔽 D → 𝕂) (qM : Opens 𝔽 D → Model.Quad 𝕂)
@@ -184,12 +184,12 @@ theorem twoOodC_plays (o : Opens 𝔽 D) (dim split : ℕ) (sM : Opens 𝔽 D �
   refine Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawOne c₂ hc₂) ?_ (by simp) (by simp)
   exact Plays.pure _
 
-/-! ## Query positions (§13.5) -/
+/-! ## Query positions (`Flock.Ligerito`) -/
 
 theorem shift_or (a b k : ℕ) (hb : b < 2 ^ k) : (a <<< k) ||| b = a * 2 ^ k + b := by
   rw [← Nat.shiftLeft_add_eq_or_of_lt hb, Nat.shiftLeft_eq]
 
-/-- The greedy strata of `Q` sum to `Q`: `Σ 2^{c_i} = Q` (§13.5). -/
+/-- The greedy strata of `Q` sum to `Q`: `Σ 2^{c_i} = Q` (`Flock.Ligerito`). -/
 theorem strata_go_sum (d : ℕ) : ∀ (fuel rem : ℕ), rem ≤ fuel →
     ((Model.strata.go d fuel rem).map (2 ^ ·)).sum = rem
   | 0, rem, h => by simp [Model.strata.go]; omega
@@ -250,7 +250,7 @@ theorem positions_foldl (d : ℕ) (coins : Array F128) : ∀ (st : List ℕ) (ou
       simp only [slotsOf, List.flatMap_cons, List.zipIdx_append, List.map_append, List.append_assoc,
         List.length_map, List.length_range', List.range_eq_range']
 
-/-- **The query positions** (§13.5): the executable's `positions` is the model's, at every `fast100` level. -/
+/-- **The query positions** (`Flock.Ligerito`): the executable's `positions` is the model's, at every `fast100` level. -/
 theorem positions_eq (lv : Flock.Level) (hl : LevelSeam lv) (coins : Array F128) :
     Model.positions execArith (levelOf lv).queries (levelOf lv).logLen (vecOf lv.q coins) =
       (Flock.positions lv coins).toList := by
@@ -280,7 +280,7 @@ theorem positions_eq (lv : Flock.Level) (hl : LevelSeam lv) (coins : Array F128)
   rw [shift_or _ _ _ (Nat.mod_lt _ (Nat.two_pow_pos _))]
   rfl
 
-/-! ## The consistency value (§13.3 step 10) -/
+/-! ## The consistency value (`Flock.Ligerito` step 10) -/
 
 theorem gOf_foldl_row (fold : Array F256) (row : Array F128) : ∀ (n : ℕ) (acc : F256),
     gOf ((List.range n).foldl (fun acc l => acc + F256.smul (eqTableK fold)[l]! row[l]!) acc) =
@@ -306,7 +306,7 @@ theorem gOf_foldl_cons (g : ℕ → F256) (alpha : Array F128) : ∀ (n : ℕ) (
         Finset.sum_range_succ, add_assoc]
       rfl
 
-/-- **The consistency value** (§13.3 step 10): the executable's `consE` is the model's `consValueO` on the opened rows,
+/-- **The consistency value** (`Flock.Ligerito` step 10): the executable's `consE` is the model's `consValueO` on the opened rows,
 when every opened row has one entry per folded lane and the consistency coins index every query. -/
 theorem consValue_eq (rows : Array (Array F128)) (q : ℕ) (alpha : Array F128) (fold : Array F256) (pos : List ℕ)
     (hpos : pos.length = q) (hrows : ∀ j < q, rows[j]!.size = 2 ^ fold.size) (halpha : q ≤ 2 ^ alpha.size) :
@@ -334,7 +334,7 @@ theorem consValue_eq (rows : Array (Array F128)) (q : ℕ) (alpha : Array F128) 
       List.getElem_map, Array.getElem_toList, getElem!_pos rows[j]! l hl]
   · rw [eqTable_eqList alpha j (by omega)]
 
-/-! ## Queries and batching (§13.3 steps 7–11) -/
+/-! ## Queries and batching (`Flock.Ligerito` steps 7–11) -/
 
 /-- The model's state after `queryAndBatchC` on the coins `cw`, `cα`, `cβ` and, with a message, `m`. -/
 noncomputable def qbOut (r : ℕ) (lv : Accounting.Level) (ch : List 𝕂) (start : ℕ) (stM : LigStateC 𝔽 𝕂 D)
@@ -374,9 +374,9 @@ theorem queryAndBatchC_plays (r : ℕ) (lv : Accounting.Level) (ch : List 𝕂) 
       refine Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawOne cβ hcβ) ?_ (by simp) (by simp)
       exact Plays.pure _
 
-/-! ## The recursive rounds (§13.3) -/
+/-! ## The recursive rounds (`Flock.Ligerito`) -/
 
-/-- **A non-last recursive round of the model** (§13.3), composed from its parts: the folds (`hfold`), the next
+/-- **A non-last recursive round of the model** (`Flock.Ligerito`), composed from its parts: the folds (`hfold`), the next
 level's cap `C'`, the two out-of-domain samples (`htwo`), the queries with their message (`queryAndBatchC_plays`), and
 any run of the remaining rounds from the resulting state (`hrec`). -/
 theorem iterNL_model (r n : ℕ) (b : ℕ → 𝔽) (initial : List 𝕂) (ext : ℕ) (lv lv' : Accounting.Level)
@@ -408,7 +408,7 @@ theorem iterNL_model (r n : ℕ) (b : ℕ → 𝔽) (initial : List 𝕂) (ext :
   refine Plays.bind' (ms₂ := [kMsg mq] ++ msR) (cs₂ := [cw, cα, cβ] ++ csR) htwo ?_ (by simp) (by simp)
   exact Plays.bind' hqb hrec rfl rfl
 
-/-- **The last recursive round of the model** (§13.3, §13.6), composed from its parts: the folds, the clear residual
+/-- **The last recursive round of the model** (`Flock.Ligerito`), composed from its parts: the folds, the clear residual
 `yr`, and the final queries (no message). Its verdict is the final check on the resulting state. -/
 theorem iterLast_model (r n : ℕ) (b : ℕ → 𝔽) (initial : List 𝕂) (ext : ℕ) (lv : Accounting.Level)
     (stM : LigStateC 𝔽 𝕂 D)
@@ -431,7 +431,7 @@ theorem iterLast_model (r n : ℕ) (b : ℕ → 𝔽) (initial : List 𝕂) (ext
   refine Plays.bind' (ms₂ := []) (cs₂ := [cw, cα, cβ]) (Plays.recv _ yr) ?_ (by simp) (by simp)
   exact Plays.bind' hqb (Plays.pure _) (by simp) (by simp)
 
-/-- **The level loop, composed** (§13.3): iterations `i, …, R − 1` of the executable's loop are the model's rounds
+/-- **The level loop, composed** (`Flock.Ligerito`): iterations `i, …, R − 1` of the executable's loop are the model's rounds
 from `i` on (`G i`), when each non-last iteration extends any run of the rounds after it (`hstep`) and the last one is a
 run of the last round (`hlast`). -/
 theorem loop_compose {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (R : ℕ)
