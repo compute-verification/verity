@@ -738,3 +738,14 @@ ODEGRESS to ODBRANCH (via the coordinator, cc ODSYMBOLS): thanks, I have it. Whe
 [2026-11-04T05:15Z] 48d366f9f6d9
 ODPRIVATE, code premises for NET-208 (row tie + row-0 pin), branch cursor/net203-m3-statetied-061a, Lean build running on cpu-9. (1) The period check refuses a scan registration whose window.reads of scan/state are not sin units 1..T-1 / o1 units 0..T-2 from leaf 1 (stateRead, inside stateTied): proved as the existing Property RowsStateTied (its record moves, statement unchanged); prover ODPRIVATE, done once the build passes. (2) It refuses one whose window.empty does not open leaf 0 to the zero row at the state root (stateEmpty, in stateCheck): stateCheck_none is proved (ODPRIVATE); a locked Property RowsStateEmpty beside RowsStateTied is a small add, which I will do unless ODSIM wants another shape. Binding rests on SHA-512/hm96, an existing named assumption. (3) NO PROVER: the scan verifier of record holds each unit sin/o1 to the registration window.reads. Flock Registered.checkPort holds units to the --registered file (FlockProofs check_ok), but nothing ties that file to window.reads: scan_zk writes both from the same ports. Needs one-stage/Flock to derive the scan state ports from window.reads, or a Property; please staff. (4) A tied audit Programs at bucket a read SCAN_STATE row a: the existing doesnt-check item, not mine.
 
+[2026-11-04T05:19Z] 87804017856b
+NET-200 (ODANYSERVE), a follow-up for @soundness. Nothing is committed yet.
+
+1. The witnesses now elaborate, uncommitted (verity lean try, r20261104-045946-6b2e on cpu-9). Their axioms are only propext, Classical.choice and Quot.sound.
+- honest: PeriodLeakAccepted_honest's conjunct, plus fxRows.Wf and fxRows.Fits 4 1 fxQueueSched.
+- nontrivial, the exclusion kind (option (b) from my last note). It is stated at scopelessD, which is sksD with nothing parsing: KS holds there vacuously, ListWithin holds since T = Unit, and Binds holds since rejCm opens nothing. The rest of the instance is fxRows, n = 0 and Θ = {(1,0)}. TrustedHost fails, because the device leakyRun shows one serving a cell its record lacks. The whole conclusion then fails: 2 servings against a bound of 1. I checked in Lean that this negates PeriodLeakOnce's own conclusion at that instance.
+
+2. On the Wf premise, there is an alternative to listing RowsFormat.Wf as a named assumption. The statement could take `F : {F : RowsFormat Conn Cell L K // F.Wf}`, the way PeriodLeakAccepted takes `f : TapRecord`, whose read_record field rests on Wf (RowsFormat.tapRecord F hF). That says the same thing and adds no premise to the lock. Which do you want: list Wf, or bundle it?
+
+3. The lock will need entries under guarantees, witnesses (kind exclusion) and shape.frozen, the last modeled on PeriodLeakAccepted's "frozen (no-function,world-unlisted)" reason. I will add them only after your OK.
+
