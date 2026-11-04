@@ -118,12 +118,14 @@ theorem openCallsLe_of_deploy {H : Msg → Msg} (L : Compiled Coin (Arg.ofFlock 
   rw [hcommit, hreveal, hcalls]
   exact h x s hs u v w
 
+omit [Fintype Coin] [Nonempty Coin] in
 theorem openCallsLe_ofDeploy {H : Msg → Msg} (h : Claims.Sampling.OpenCallsLe H D) :
     (ofDeploy D iroots).OpenCallsLe H :=
   openCallsLe_of_deploy D _ rfl rfl rfl rfl h
 
 /-! ## The errors -/
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- **`κ` is within the frozen one**: each proof block's bound is `κ_F`, nonnegative where `ε_table` is. -/
 theorem κ_ofDeploy_le (δ : ℝ) (x : Msg) (hε : 0 ≤ D.εtable x) :
     (ofDeploy D iroots).κ δ x ≤ Claims.Sampling.κ D δ x := by
@@ -177,6 +179,7 @@ theorem flock_check_of_R {parse : Msg → Option Claims.Flock.Stmt} {xS : Msg} {
   simp only [Claims.Flock.check, hs]
   exact decide_eq_true hrel
 
+omit [Nonempty Coin] in
 /-- **The contract from the frozen hypotheses**: `KS_of`'s, at `D`, give `ofDeploy`'s `Sessions`. The sample's members
 are the checked units at slots below `n_PU` (`mem_ofDeploy_checked`); a session's rounds number Flock's at its statement
 and its embedding is `emb`, both from `SessionRuns`' order embedding onto them (`Finset.orderEmbOfFin_unique`); its
