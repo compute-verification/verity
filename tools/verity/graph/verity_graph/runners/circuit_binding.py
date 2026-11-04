@@ -7,8 +7,11 @@ records and results by the ``VERITY_*`` and ``CIRCUIT_CHECK_*`` environment, whi
 
 A pass is circuit-check's exit 0; a fail its exit 1 (a target's new failure) or its refusal of a name no catalog binding has
 (`NO_BINDING`); anything else is an error: another refusal (the records give no task list), a kill, no report.  `detail`:
-the binding's targets, how many passed, failed and were reused, and the new failures' names.  `checker`, `pack` and `unpack`
-are the circuit-catalog and circuit-coverage runners' too."""
+the binding's targets, how many passed, failed and were reused, and the new failures' names.  Its one output is every failure
+of its Definition targets, known ones too, each by its check, code and Definition (`FIELDS`), which the circuit-known task
+holds `circuit_check.known` to, as `circuit-check --all` does the whole list's: this report is its targets' alone, unjoined,
+so it can't tell an entry no failure matches any more.  `checker`, `pack` and `unpack` are the circuit-catalog and
+circuit-coverage runners' too."""
 from __future__ import annotations
 
 import gzip
@@ -31,6 +34,8 @@ REPORT = "report.json"
 TOP = "cache"
 #: the new failures `detail` names, at most
 NAMED = 100
+#: what `circuit_check.known.stale` reads of a failure
+FIELDS = ("check", "code", "definition")
 
 
 def cache() -> Path:
@@ -102,6 +107,11 @@ def run(task: dict, work: Path) -> dict:
     if rc not in (0, 1) or rep is None:
         return {"status": "error", "detail": {"error": f"circuit-check --binding exited {rc}"
                                               + ("" if rep is not None else " and wrote no report")}}
+    facts = sorted({tuple(f[k] for k in FIELDS) for t in rep["targets"] if t["kind"] == "definition"
+                    for f in t.get("failures", [])})
+    out = work / task["outputs"][0]["path"]
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({"binding": name, "failures": [dict(zip(FIELDS, f)) for f in facts]}, sort_keys=True) + "\n")
     new = set(rep["summary"]["new_failures"])
     failed = sorted({t["target"] for t in rep["targets"] if any(f.get("name") in new for f in t.get("failures", []))})
     detail = {"targets": len(rep["targets"]), "passed": len(rep["targets"]) - len(failed), "failed": len(failed),
