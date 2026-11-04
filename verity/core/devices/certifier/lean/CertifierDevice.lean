@@ -9,6 +9,7 @@ import CertifierDevice.Issuer
 import CertifierDevice.Difftest
 import CertifierDevice.IssuerDifftest
 import CertifierDevice.Relay
+import CertifierDevice.RelayDifftest
 
 /-!
 # The active network certifier device
@@ -23,5 +24,6 @@ reuses `certifier_program` (`NetworkCertifier`: statuses, `ClockSync`, `SyncSet`
 (`NetworkCheck`: grid parameters, the record head and certificate encodings), `lms` (`Lms`: signing and verification)
 and `core_world` (`Core.World`, `Core.Conn`). Code: no Mathlib and nothing of `verity/Security/`. `Difftest` holds `step` to `active.Proxy` on generated traces, and `IssuerDifftest` holds
 `Issuer.certify` and `Issuer.clock` to `certificate.Issuer` on generated records and syncs. `Relay` is the schedule
-of the relay form, `warden.py`'s `Warden`: its refusal, admission, egress limit and cut.
+of the relay form, `warden.py`'s `Warden`: its refusal, admission, egress limit and cut; `RelayDifftest` holds
+`Relay.run` to `warden.Warden` on generated connections.
 -/

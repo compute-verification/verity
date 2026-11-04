@@ -3,6 +3,7 @@
  "exempt": {
   "CertifierDevice.DifftestMain": "the difftest against active.Proxy, under `runs`: compiled evaluation of CertifierDevice.Difftest.main, audited under CertifierDevice, a test and not a proof",
   "CertifierDevice.IssuerDifftestMain": "the issuer difftest against certificate.Issuer, under `runs`: compiled evaluation of CertifierDevice.IssuerDifftest.main, audited under CertifierDevice, a test and not a proof",
+  "CertifierDevice.RelayDifftestMain": "the relay difftest against warden.Warden, under `runs`: compiled evaluation of CertifierDevice.RelayDifftest.main, audited under CertifierDevice, a test and not a proof",
   "CertifierDevice.SmokeMain": "a smoke run of run on the host's clock in an in-memory loopback world, with the issuer certifying its records, run by hand: it reads the wall clock, so it is no test, and nothing proves anything of it"
  },
  "runs": {
@@ -23,6 +24,15 @@
     "issuer/python.jsonl": "406b38efc88ead6a73ca6724efe6f4f6078e472d4a1924545342a786b675d1c6"
    },
    "generate": ["python3", "scripts/issuer_vectors.py", "{repo}", "--out", "{out}"]
+  },
+  "CertifierDevice.RelayDifftestMain": {
+   "why": "300 runs of the relay form, of one to four slots, one to three lanes, queues of one to eight, one to three windows of six to sixteen buckets and caps of one to forty cells, on connections arriving in bursts, each answered by its server whole, in chunks, late, without an end or past the cap, on which Relay.run decides what the checkout's warden.Warden does, driven tick by tick on a virtual clock: each connection refused, cut queued, or admitted at its tick with its lane's cells (its END or FAIL with them, capped at egress_cells or cut at the run's end), each lane's END-or-FAIL index from a run of its own with no cap and no cut, the parameters parsed by NetworkCheck.Period.scheduleOf",
+   "args": ["{relay/instances.jsonl}", "{relay/python.jsonl}", "300"],
+   "data": {
+    "relay/instances.jsonl": "",
+    "relay/python.jsonl": ""
+   },
+   "generate": ["python3", "scripts/relay_vectors.py", "{repo}", "--out", "{out}"]
   }
  },
  "layers": {

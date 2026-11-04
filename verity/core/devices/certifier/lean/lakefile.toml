@@ -3,7 +3,8 @@
 # `network_check`'s grid parameters and encodings, `lms`'s signing and `core_world`'s World; no Mathlib and nothing of
 # Security.
 name = "certifier_device"
-defaultTargets = ["CertifierDevice", "certifier-device-difftest", "certifier-issuer-difftest", "certifier-device-smoke"]
+defaultTargets = ["CertifierDevice", "certifier-device-difftest", "certifier-issuer-difftest", "certifier-relay-difftest",
+  "certifier-device-smoke"]
 
 [leanOptions]
 autoImplicit = false
@@ -35,6 +36,10 @@ root = "CertifierDevice.DifftestMain"
 [[lean_exe]]
 name = "certifier-issuer-difftest"
 root = "CertifierDevice.IssuerDifftestMain"
+
+[[lean_exe]]
+name = "certifier-relay-difftest"
+root = "CertifierDevice.RelayDifftestMain"
 
 [[lean_exe]]
 name = "certifier-device-smoke"
