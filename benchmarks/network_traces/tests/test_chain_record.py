@@ -546,7 +546,8 @@ def test_leak_counts_a_w63k4_run_at_w63k4s_class(tmp_path):
     doc = cr.leak(run)
     assert cr.run_class(sz.W63K4.params) == sz.W63K4.cls and cr.run_class(sz.W63.params) == sz.W63.cls
     assert (doc["class"]["KO"], doc["class"]["KI"]) == (4, 32)
-    assert doc["terms"]["schedules_per_request"] == doc["terms"]["cells_per_request"] == 3
+    assert (doc["terms"]["cell"], doc["terms"]["connections_per_block"]) == (3, 128)
+    assert doc["terms"]["schedules_per_block"] == doc["terms"]["cells_per_block"] == 384
 
 
 def test_subset_bound():
