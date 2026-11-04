@@ -594,7 +594,7 @@ def arguments(S, pool: Pool, op: CallInputs) -> list[list[int]]:
     """The unit's arguments (each a flat list of bits, as `evaluate_bits` takes one instance)."""
     _in_class(S, pool, op)
     Z = widths(S)
-    N, D, R = S.N, S.D, S.R
+    D, R = S.D, S.R
     none = Entry(0, (0,) * S.U, 0, 0, ())
     ents = [x or none for x in pool.table]
     copies = [list(x.copies) + [Copy(0, 0)] * (D - len(x.copies)) for x in ents]

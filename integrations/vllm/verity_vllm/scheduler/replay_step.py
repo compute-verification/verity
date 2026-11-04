@@ -475,7 +475,7 @@ def _shift_right(C, slots, amt, n_out):
 
 def _shift_left(C, slots, amt):
     """Slot p of the result is slot p + amt of `slots` (zero past the end)."""
-    n, w = len(slots), len(slots[0])
+    n = len(slots)
     cur = [list(s) for s in slots]
     for k, s in enumerate(amt):
         sh = 1 << k

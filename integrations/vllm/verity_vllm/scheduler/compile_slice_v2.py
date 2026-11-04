@@ -548,7 +548,7 @@ def _build_pool_step(C, S, prow, tp: dict, hit, ev, ret, tau, cert) -> tuple:
     """`pool_step` as a circuit on ReplayStep_v1's tapped wires `tp`: (ok, the next pool row)."""
     sh = shape(S)
     Y, Z, ZR, KL, KC = sh.Y, sh.Z, sh.ZR, sh.KL, sh.KC
-    R, W, A, B, N, CA = S.R, S.W, S.A, S.B, S.CN, S.W + S.A
+    R, W, B, CA = S.R, S.W, S.B, S.W + S.A
     LB, RCW, NW = B.bit_length() - 1, ZR.RC + 1, max(ZR.LW, ZR.TW) + 1
     pool = _unpool(S, prow)
     fl = pool["fl"]
