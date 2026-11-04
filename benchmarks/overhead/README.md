@@ -61,8 +61,12 @@ with a 95% interval from the ratios' order statistics.
 
 ## The source check
 
-An overhead of record comes only from a labelled run of this door. A γ stands when its run is labelled
-`run_of_record=overhead`, passed with exit 0 from a clean tree, was timed at points of record that nothing supersedes, ran
+An overhead of record comes only from a labelled run of this door. A run is the door's when its recorded command is the
+node job `bash benchmarks/harness/overhead_node.sh points|run` with only the options the door gives it, alone or behind
+`research run --gpus 1`'s `gpu-lease` wait, and it set no variable with `--env` but `VERITY_BENCH_VENV`: `points --store`
+and `run --record` refuse any other, so a wrapper script, a patched interpreter or another environment never makes a
+record. Points are stored only from a sweep under the door's rule (C's share, L's slack, the grid and the largest m). A γ
+stands when its run is the door's, labelled `run_of_record=overhead`, passed with exit 0 from a clean tree, was timed at points of record that nothing supersedes, ran
 the arm's cubin from the `art:` id it was sent (the art's bytes are a binary the run's SASS gate passed; a cubin built in
 the run is development only), and its point passed every rule: each linear timed, at least 20 paired reps, a 95%
 interval within ±5% of the ratio, the cross-check, and the arm's reference verifier accepting every row

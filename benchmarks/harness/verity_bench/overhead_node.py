@@ -113,8 +113,7 @@ def points(a: argparse.Namespace, run: Runner = _run) -> int:
     results: list[dict] = []
     rounds: list[dict] = []
     doc: dict = {"schema": O.POINTS_SCHEMA, "card": card.gpu, "model": a.model, "precision": a.precision,
-                 "families": list(fams), "rule": {"c_share": O.C_SHARE, "l_slack": O.L_SLACK, "grid": O.GRID,
-                                                  "m_max": O.M_MAX}, "rounds": rounds}
+                 "families": list(fams), "rule": dict(O.RULE), "rounds": rounds}
     fingerprint = {"door": "points", "card": card.gpu, "model": a.model, "precision": a.precision}
     why = None
     while why is None and (todo := O.next_ms(times, a.model)):

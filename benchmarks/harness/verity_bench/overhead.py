@@ -36,6 +36,8 @@ RUN_SCHEMA = "verity-bench/overhead/v1"
 C_SHARE, L_SLACK = 0.9, 0.1
 #: the sweep: powers of two up to M_MAX, then bisection on multiples of GRID (the kernels' tile granularity)
 M_MAX, GRID = 32768, 16
+#: what a sweep records of the rule, and points of record must have been swept under
+RULE = {"c_share": C_SHARE, "l_slack": L_SLACK, "grid": GRID, "m_max": M_MAX}
 #: a figure of record: at least MIN_REPS paired reps, its 95% interval within HALF_WIDTH of the median ratio, and its
 #: busy SM-time within CROSS_CHECK of its kernels' durations x the SMs their blocks occupy
 MIN_REPS, HALF_WIDTH, CROSS_CHECK = 20, 0.05, 0.05

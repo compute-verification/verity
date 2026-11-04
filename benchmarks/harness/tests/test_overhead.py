@@ -29,6 +29,8 @@ SHA = "c" * 40
 #: the arm's stand-in cubin, and the art a node-only run names it by
 CUBIN = b"stand-in cubin"
 CUBIN_ART = "art:" + "a" * 64
+#: the gpu-lease wait `research run --gpus 1` puts before a direct run's command, as its attempt records it
+LEASE = ["gpu-lease", "1", "--wait", "--mem-gb", "0", "--"]
 
 # ---- stand-in timings ---------------------------------------------------------------------------------------------------------
 
@@ -565,15 +567,21 @@ class Store:
 
         return LocalStore(self.tmp / name, config_path=self.config)
 
-    def ran(self, run: str, run_dir: Path, *, validation: str = "passed", rc: int = 0, dirty: bool = False) -> None:
+    def ran(self, run: str, run_dir: Path, *, sub: str = "run", argv: list[str] | None = None, env: dict | None = None,
+            validation: str = "passed", rc: int = 0, dirty: bool = False) -> None:
+        """The run's attempt: by default the door's node job `sub` as `research run --gpus 1` records it."""
+
         from research.store import canon
 
         files = self.store.put_artifact("run-files/v1", {}, tree=run_dir)
         self.store.push(files)
         start = f"{run[1:5]}-{run[5:7]}-{run[7:9]}T{run[10:12]}:{run[12:14]}:{run[14:16]}Z"
+        if argv is None:
+            argv = [*LEASE, "bash", R.NODE_JOB, sub, "--card", "h200"]
         attempt = {
-            "schema": "research/attempt/v0.1", "id": run, "tool": {"name": "bash", "version": "0"},
-            "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": [], "params": {}, "key_params": [], "inputs": {},
+            "schema": "research/attempt/v0.1", "id": run, "tool": {"name": "gpu-lease", "version": None},
+            "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": argv,
+            "params": {"argv": argv, **({"env": env} if env else {})}, "key_params": ["argv"], "inputs": {},
             "conditions": {}, "key_conditions": [], "source": {"commit": SHA, "dirty": dirty}, "closure": None,
             "execution": {"start_utc": start, "machine": "vy-dc-h200"}, "cost": None,
             "status": {"state": "done" if rc == 0 else "failed", "rc": rc, "validation": validation},
@@ -584,7 +592,7 @@ class Store:
 
 def stored_points(tmp: Path, s: Store, run: str) -> str:
     node_points(tmp, Node(tmp), run)
-    s.ran(run, tmp / run)
+    s.ran(run, tmp / run, sub="points")
     return R.store_points(s.store, run)
 
 
@@ -618,9 +626,52 @@ def test_points_are_stored_versioned_and_the_newest_supersedes_the_last(tmp_path
         second).meta.items()
 
     node_points(tmp_path, Node(tmp_path), "r20261104-020000-0003")
-    s.ran("r20261104-020000-0003", tmp_path / "r20261104-020000-0003", validation="failed", rc=1)
+    s.ran("r20261104-020000-0003", tmp_path / "r20261104-020000-0003", sub="points", validation="failed", rc=1)
     with pytest.raises(ValueError, match="isn't a passing run"):
         R.store_points(s.store, "r20261104-020000-0003")
+
+
+def test_only_a_run_of_the_door_s_own_job_can_be_stored_or_recorded(tmp_path):
+    """The source check's first step: the run's recorded command is the node job the door launches, with the door's options
+    and no variable but the door's, so a sweep or timed run under a wrapper script, a patched interpreter, an option the
+    node job sets itself (another nsys) or another environment never becomes a record; nor do points swept under another
+    rule."""
+
+    s = Store(tmp_path)
+    art = stored_points(tmp_path, s, "r20261104-020000-0001")
+    node_points(tmp_path, Node(tmp_path), "r20261104-020000-0002")
+    wrapped = ["bash", "-c", 'bash "$RESEARCH_RUN_DIR/inputs/points.sh"']
+    for i, (kw, why) in enumerate((
+            ({"argv": wrapped}, "isn't a run of the door"),
+            ({"argv": [*LEASE, "python", "-c", "import verity_bench.overhead_node"]}, "isn't a run of the door"),
+            ({"sub": "run"}, "isn't a run of the door"),
+            ({"argv": [*LEASE, "bash", R.NODE_JOB, "points", "--card", "h200", "--uuid=GPU-0"]}, "isn't a run of the door"),
+            ({"sub": "points", "env": {"VERITY_BENCH_SETUP": "patch.sh"}}, "set VERITY_BENCH_SETUP with --env"))):
+        run = f"r20261104-020000-001{i}"
+        s.ran(run, tmp_path / "r20261104-020000-0002", **kw)
+        with pytest.raises(ValueError, match=why):
+            R.store_points(s.store, run)
+    s.ran("r20261104-020000-0020", tmp_path / "r20261104-020000-0002", argv=["bash", R.NODE_JOB, "points", "--card=h200"],
+          env={"VERITY_BENCH_VENV": "/workspace/jobs/venv312"})
+    assert R.store_points(s.store, "r20261104-020000-0020").startswith("art:")
+
+    points = tmp_path / "r20261104-020000-0002" / "out" / "points.json"
+    doc = json.loads(points.read_text())
+    points.write_text(json.dumps(doc | {"rule": O.RULE | {"m_max": 64}}))
+    s.ran("r20261104-020000-0021", tmp_path / "r20261104-020000-0002", sub="points")
+    with pytest.raises(ValueError, match="'m_max': 64"):
+        R.store_points(s.store, "r20261104-020000-0021")
+
+    sent = tmp_path / "sent-points.json"
+    sent.write_bytes(Path(s.store.fetch(art)).read_bytes())
+    rc, run_dir = node_run(tmp_path, Node(tmp_path), sent, "stock", art, run="r20261104-030000-0001")
+    assert rc == 0
+    for i, kw in enumerate(({"sub": "points"}, {"argv": [*LEASE, "bash", R.NODE_JOB, "run", "--nsys", "/tmp/nsys"]})):
+        run = f"r20261104-030000-001{i}"
+        s.ran(run, run_dir, **kw)
+        with pytest.raises(ValueError, match="isn't a run of the door"):
+            R.record_run(s.store, run)
+        assert not R.of_record(s.store, run)[0]
 
 
 def test_the_table_shows_only_labelled_runs_of_record_and_refuses_the_rest_with_why(tmp_path, scheme):

@@ -7,7 +7,8 @@ are the newest art of kind `POINTS_KIND` labelled `run_of_record=overhead-points
 of record is a run labelled `run_of_record=overhead`.
 
 **The source check** (`of_record`, `gamma_of_record`): an overhead of record comes only from a labelled run of the door. A
-γ stands when its run is labelled, passed with exit 0 from a clean tree, wrote an `overhead.json` of `RUN_SCHEMA` the
+γ stands when its run is labelled, ran the door's node job as the door launches it (`door_why`), passed with exit 0 from a
+clean tree, wrote an `overhead.json` of `RUN_SCHEMA` the
 node side found nothing against, was timed at the points of an art of record that nothing supersedes, ran its arm's cubin
 from the `art:` it was sent (`run --cubin ART`; the art's bytes a binary the run's SASS gate passed, `cubin_why`; a cubin
 built in the run is development only), and its own point passed the door's rules (`overhead.point_whys`: every linear timed, at least 20 paired reps, an
@@ -19,6 +20,7 @@ figure and says why; a reader of γ outside this package (the protocol table, th
 from __future__ import annotations
 
 import json
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -37,6 +39,11 @@ BY = "benchmarks"
 #: each card's GPU node, where `--on` names none
 NODES = {"h200": "vy-dc-h200"}
 NODE_JOB = "benchmarks/harness/overhead_node.sh"
+#: the options the door gives each node job (`launch_points`, `launch_run`); the node job sets the rest itself
+DOOR_OPTIONS = {"points": {"--card", "--model", "--precision"},
+                "run": {"--card", "--scheme", "--points", "--points-art", "--point", "--cubin", "--cubin-art"}}
+#: the one variable a run of the door sets with `--env` (`launch_argv`): any other could change what the node job runs
+DOOR_ENV = frozenset({"VERITY_BENCH_VENV"})
 #: the run's bound, which its GPU lease enforces too: the sweep's and a timed run's
 MINUTES = {"points": 150, "run": 60}
 CENSUS = Path("benchmarks/census")
@@ -103,12 +110,31 @@ def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point:
 # ---- reading the store -------------------------------------------------------------------------------------------------------
 
 
-def run_files(store: Any, run: str) -> tuple[dict | None, str | None]:
-    """A run's attempt and its run files' art, or (None, why) when it isn't a passing run from a clean tree."""
+def door_why(attempt: Mapping, run: str, sub: str) -> str | None:
+    """Why `run` isn't a run of the door's `sub`: its command isn't the node job `bash NODE_JOB sub` with the door's options
+    (`DOOR_OPTIONS`), alone or after the gpu-lease wait `research run --gpus 1` puts before it, or it set a variable with
+    `--env` the door doesn't (`DOOR_ENV`)."""
+
+    argv = [str(x) for x in attempt.get("argv") or []]
+    cmd = argv[argv.index("--") + 1:] if argv[:1] == ["gpu-lease"] and "--" in argv else argv
+    options = {x.partition("=")[0] for x in cmd[3:] if x.startswith("-")}
+    if cmd[:3] != ["bash", NODE_JOB, sub] or options - DOOR_OPTIONS[sub]:
+        return (f"{run} isn't a run of the door: it ran `{shlex.join(argv)[:300]}`, not `bash {NODE_JOB} {sub}` with the "
+                f"door's options (launch it with `verity bench overhead {sub}`)")
+    if extra := sorted(set((attempt.get("params") or {}).get("env") or {}) - DOOR_ENV):
+        return f"{run} set {', '.join(extra)} with --env, which a run of the door doesn't: it sets only {', '.join(sorted(DOOR_ENV))}"
+    return None
+
+
+def run_files(store: Any, run: str, sub: str) -> tuple[dict | None, str | None]:
+    """A run's attempt and its run files' art, or (None, why) when it isn't a passing run of the door's `sub` from a clean
+    tree."""
 
     attempt = store.get_attempt(run)
     if attempt is None:
         return None, f"{run} is not in the store or on its remote"
+    if why := door_why(attempt, run, sub):
+        return None, why
     status, source, out = attempt.get("status") or {}, attempt.get("source") or {}, attempt.get("outputs") or {}
     if status.get("validation") != "passed" or status.get("rc") != 0 or source.get("dirty"):
         return None, (f"{run} isn't a passing run from a clean tree (validation {status.get('validation')}, rc "
@@ -139,7 +165,7 @@ def current_points(store: Any, card: str, model: str = O.KERNEL_MODEL, precision
 def of_record(store: Any, run: str) -> tuple[dict | None, list[str]]:
     """A run's `overhead.json` and why it can't stand as a whole (each point's own whys are in it), or (None, whys)."""
 
-    attempt, files = run_files(store, run)
+    attempt, files = run_files(store, run, "run")
     if attempt is None:
         return None, [files]
     try:
@@ -224,7 +250,7 @@ def store_points(store: Any, run: str, by: str = BY) -> str:
     """A finished sweep's points.json as the next version of its card's, model's and precision's points art, labelled of
     record; the version it replaces is labelled `superseded_by` it."""
 
-    attempt, files = run_files(store, run)
+    attempt, files = run_files(store, run, "points")
     if attempt is None:
         raise ValueError(files)
     with tempfile.TemporaryDirectory() as tmp:
@@ -232,6 +258,8 @@ def store_points(store: Any, run: str, by: str = BY) -> str:
         doc = json.loads(path.read_text())
         if doc.get("schema") != O.POINTS_SCHEMA or doc.get("error") or None in (doc.get("c"), doc.get("l")):
             raise ValueError(f"{run}'s points.json isn't a finished sweep: {doc.get('error') or doc.get('schema')}")
+        if doc.get("rule") != O.RULE:
+            raise ValueError(f"{run} swept under the rule {doc.get('rule')}, not the door's {O.RULE}")
         prior = current_points(store, doc["card"], doc["model"], doc["precision"])
         version = 1 + (store.get_manifest(prior).meta.get("version", 0) if prior else 0)
         meta = {k: doc[k] for k in ("card", "model", "precision", "c", "l")} | {"run": run, "version": version,
