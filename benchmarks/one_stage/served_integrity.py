@@ -9,10 +9,17 @@ sample (the records, a check on the registration, the sample) rejects with its c
 with its failed checks and the first of Lean's refusals by member (a registered read that doesn't open its root names
 its port). An audit that ended with no summary is an error (RuntimeError), not a verdict, and so is one that opened the
 advice (`opened`), whatever its verdict.
+
+`public_copy` writes what `answer` reads of an audit, and nothing else (`SUMMARY`, `RECORD`): the copy a verifier on
+another machine reads, from which `answer` makes the same answer.
+
+    python benchmarks/one_stage/served_integrity.py public-copy AUDIT DST
 """
 from __future__ import annotations
 
+import argparse
 import json
+import sys
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping
@@ -20,6 +27,58 @@ from typing import Any, Mapping
 from verity.core.protocols.sampled_proofs.one_stage import audit as A, registration as R
 
 PROTOCOL = R.PROTOCOL
+#: what `answer` reads of the audit's ``summary.json``, by key (its value whole, or of those keys alone): whether it
+#: opened the advice, its refusal, its checks before and after the draw, and the audit's verdict, outcome and Lean's
+#: refusals
+SUMMARY = {"compile": None, "refused": None, "checks_before_draw": None, "fixed_before_draw": ("ok", "codes"),
+           "audit": ("accepted", "outcome", "why")}
+#: what `answer` reads of the audit record ``window/audit.json``: its verdict, each check's outcome and the proved units
+#: its statement covers, the draw, the registration, the bound on wrong units and the units proved
+RECORD = {"accepted": None, "checks": None, "draw": None, "registration": None, "wrong_units": None, "proved_units": None}
+
+
+def _only(doc: Mapping[str, Any], keys: Mapping[str, Any]) -> dict[str, Any]:
+    return {k: ({x: doc[k][x] for x in sub if x in doc[k]} if sub and isinstance(doc[k], Mapping) else doc[k])
+            for k, sub in keys.items() if k in doc}
+
+
+def _object(path: Path) -> Mapping[str, Any]:
+    doc = json.loads(path.read_text())
+    if not isinstance(doc, Mapping):
+        raise ValueError(f"{path}: not a JSON object")
+    return doc
+
+
+def _checks(checks: Any) -> Any:
+    """Each check's outcome (``ok``, ``codes``), and the proved check's units (`unproved`), not its other detail."""
+    if not isinstance(checks, Mapping):
+        return checks
+    out = {c: _only(v, {"ok": None, "codes": None}) if isinstance(v, Mapping) else v for c, v in checks.items()}
+    proved = checks.get("proved")
+    units = (proved.get("detail") or {}).get("units") if isinstance(proved, Mapping) else None
+    if isinstance(units, Mapping):
+        out["proved"]["detail"] = {"units": _only(units, {"drawn": None, "statement": None})}
+    return out
+
+
+def public_copy(out: Path, dst: Path) -> None:
+    """What `answer` reads of the audit under ``out`` (`SUMMARY`, `RECORD`) written under ``dst``: its ``summary.json``
+    and, where the sample ran, ``window/audit.json``. A missing summary or record is left missing, as `answer` reads it,
+    and so is a ``compile`` that is None (`opened` reads the two alike); one that isn't a JSON object raises."""
+    dst.mkdir(parents=True, exist_ok=True)
+    if not (out / "summary.json").is_file():
+        return
+    summary = _only(_object(out / "summary.json"), SUMMARY)
+    if summary.get("compile") is None:
+        summary.pop("compile", None)
+    (dst / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str) + "\n")
+    if not (out / "window" / "audit.json").is_file():
+        return
+    rec = _only(_object(out / "window" / "audit.json"), RECORD)
+    if "checks" in rec:
+        rec["checks"] = _checks(rec["checks"])
+    (dst / "window").mkdir(exist_ok=True)
+    (dst / "window" / "audit.json").write_text(json.dumps(rec, indent=1, sort_keys=True, default=str) + "\n")
 
 
 def _refusal(reason: str, commitment: str | None) -> dict[str, Any]:
@@ -68,8 +127,8 @@ def exact_delta(delta: float | str | Fraction) -> Fraction:
 
 def opened(summary: Mapping[str, Any]) -> bool:
     """Whether the records audit whose ``summary.json`` is ``summary`` opened the advice (``records_audit.py audit
-    --opening``, its ``compile`` check): a development check, which no answer of record reads, since the record path's
-    window commit reads the advice under its hiding root inside its proofs."""
+    --opening``, its ``compile`` check): a development check, which no answer of record reads, since no audit of record
+    reads an advice: the record path's window is V3c's class window, whose circuit is the class's."""
     return summary.get("compile") is not None
 
 
@@ -119,4 +178,19 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
             "verdict": "accept"}
 
 
-__all__ = ["PROTOCOL", "answer", "exact_delta", "opened"]
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="served_integrity.py", description=__doc__.splitlines()[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("public-copy", help="what `answer` reads of the audit under AUDIT, written under DST")
+    p.add_argument("audit", type=Path)
+    p.add_argument("dst", type=Path)
+    a = ap.parse_args(argv)
+    public_copy(a.audit, a.dst)
+    return 0
+
+
+__all__ = ["PROTOCOL", "RECORD", "SUMMARY", "answer", "exact_delta", "opened", "public_copy"]
+
+
+if __name__ == "__main__":
+    sys.exit(main())

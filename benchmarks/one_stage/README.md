@@ -79,8 +79,8 @@ negatives.
   `WC_RECORD_TIMEOUT` (default 20m), after the record: a timeout or refusal there is reported and never fails the run. Then
   comes V3c, sampled proofs' audit of record, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`: the window committed as the
   class circuit's units (`prove_path.py window-commit`), then its records audit (`records_audit.py audit --circuit`, on a
-  challenger's coins), which is C-Flock `--zk` on the drawn proof blocks and the Lean verifier. The window commit's proofs
-  read the advice under its hiding root, so no advice opening reaches the verifier. V3c writes its audit as the network
+  challenger's coins), which is C-Flock `--zk` on the drawn proof blocks and the Lean verifier. The class circuit is the
+  class's, whatever the window's requests, and reads no advice, so no advice opening reaches the verifier. V3c writes its audit as the network
   certifier's period reads it (`period.json`). Then come PoUW, PoUS, the bandwidth audit and the network certifier. Each runs its piece where
   `POUW_CMD`, `POUS_CMD`, `BANDWIDTH_CMD` or `CERTIFIER_CMD` names one, within its own limit; otherwise its `MISSING` line
   names the command it lacks and its owner, and it gets no verdict. The script sets each owner's command by default where
