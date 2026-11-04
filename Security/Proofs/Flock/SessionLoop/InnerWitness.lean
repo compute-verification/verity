@@ -114,8 +114,10 @@ theorem _root_.Flock.SecurityProofs.LoopInnerRound0Own_nontrivial (hfix : Loop.R
   obtain ⟨w', -, he⟩ := hL ρ h (fun _ => none) s0 spec sts q k j tr hr rsched hx hlen hloc hreal hs hsize
   change [] = _ at he
   have e := congrArg List.length he
-  simp only [List.length_nil, ByteArray.data_append, Array.toList_append, List.length_append,
-    FlockSoundness.Refine.header_length] at e
+  simp only [List.length_nil, ByteArray.data_append, Array.toList_append, List.length_append] at e
+  have h3 : 8 ≤ (header 3 1 1).data.toList.length := by
+    rw [_root_.Flock.Transcript.header, ByteArray.data_append, Array.toList_append, List.length_append]
+    exact Nat.le_add_right _ _
   omega
 
 end Claims.ZKServer
