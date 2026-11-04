@@ -838,6 +838,10 @@
    "owner": "@proofs",
    "digest": "33b65996171d0478084ebb76475db9a2763cd9a1ac2ed40bd46d75dd3ce0f3e2"
   },
+  "Claims.Sampling.KSBy": {
+   "owner": "@proofs",
+   "digest": "59faf1fee511bf765c65f95cb23805288bbb6be952587c82e7bb774bab65cfed"
+  },
   "Claims.StrictBirthday": {
    "owner": "@proofs",
    "digest": "113a796cfd6c01393b0be92014ae0e59eb6e5c5010f858f56fa480f5b1249cd8"
@@ -1512,15 +1516,11 @@
   },
   "NetTiming.Guarantees.SampledAuditAccepted": {
    "owner": "@proofs",
-   "digest": "6e868bb5841a24871d90f8a4202ce0cfa0f370fab1b79b8969c5bd4643547ad8"
+   "digest": "75aee8595216e6cd88fd4918ffa84c82b1a79ab2a2f6d0ea263393a4d27b2fdd"
   },
   "NetTiming.JitterBounded": {
    "owner": "@network-accounting",
    "digest": "06b2728bc7d299f10f72698ed3900a75c420de7dccc468770103d11dba1ce7be"
-  },
-  "NetTiming.KSWired": {
-   "owner": "@network-accounting",
-   "digest": "faec94427efb4527a40af1f088a2434f24086958c4d250a8a8a860e214498bca"
   },
   "NetTiming.Packed": {
    "owner": "@network-accounting",
@@ -2613,6 +2613,7 @@
    "Claims.Sampling.Faulty": "a helper the claims read: a faulty unit, which the sampling relation reads",
    "Claims.Sampling.FaultyBoundary": "proved of every program (`Claims.Sampling.faultyBoundary`), not of a deployment",
    "Claims.Sampling.InScope": "a helper the claims read: the programs and partitions the sampling scope takes",
+   "Claims.Sampling.IncorrectBy": "a helper the claims read: an incorrect unit at a check on a proof block, which the sampling relation at that check (`RBy`) reads",
    "Claims.Sampling.LogColl": "a helper the claims read: a collision in a log of `H` calls",
    "Claims.Sampling.OneStage.WellFormed": "a helper the claims read: a well-formed one-stage design",
    "Claims.Sampling.Partition.Partitions": "a helper the claims read: a partition of a program's gates into proof units",
@@ -3102,23 +3103,23 @@
   "NetTiming.SecurityProofs.PeriodLeakAccepted": {
    "type_hash": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b",
    "missing": "honest",
-   "why": "its premises at the network certifier's rows are the sampled leg's (KSWired at the layout's wires and CommitmentScheme.Binds at each deployment), whose honest lemmas at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest at layouts with no wiring, NetTiming.ksWired_of_record at a wired one) take the assembled record's hypotheses, which are no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record"
+   "why": "its premises at the network certifier's rows are the sampled leg's (KSBy at the wired check at the layout's wires and CommitmentScheme.Binds at each deployment), whose honest lemmas at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest at layouts with no wiring, NetTiming.ksWired_of_record at a wired one) take the assembled record's hypotheses, which are no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record"
   },
   "NetTiming.SecurityProofs.PooledWrongUnitsLe": "4b11601f70dff05cee40e380db457b79380461d4bb512fd7a54931a34a305d38",
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "type_hash": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048",
    "missing": "honest",
-   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest) concludes KSWired at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness; at a wired layout NetTiming.ksWired_of_record concludes KSWired at the deployed record from SessionKS, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope and WiredReads, likewise no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record"
+   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest) concludes KSBy at the wired check at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness; at a wired layout NetTiming.ksWired_of_record concludes KSBy at the wired check at the deployed record from SessionKS, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope and WiredReads, likewise no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record"
   },
   "NetTiming.SecurityProofs.SampledLeakAccepted": {
    "type_hash": "43970f90d531d3e7171623b15c9ce94eef5f67c55a52c6b00059cca4d554f37d",
    "missing": "honest",
-   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledLeakAccepted_honest) concludes KSWired, the decoder's radius and a charge at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness; at a wired layout NetTiming.ksWired_of_record concludes KSWired at the deployed record from SessionKS, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope and WiredReads, likewise no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record"
+   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledLeakAccepted_honest) concludes KSBy at the wired check, the decoder's radius and a charge at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness; at a wired layout NetTiming.ksWired_of_record concludes KSBy at the wired check at the deployed record from SessionKS, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope and WiredReads, likewise no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record"
   },
   "NetTiming.SecurityProofs.SampledLeakRegistered": {
    "type_hash": "0eeee44bc28dd8a98e2c2545e9f4418b9741a630c9cfd62f72773757c1f9e3b3",
    "missing": "honest",
-   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledLeakRegistered_honest) concludes KSWired, binding, the decoder's radius and a charge at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness; at a wired layout NetTiming.ksWired_of_record concludes KSWired at the deployed record from SessionKS, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope and WiredReads, likewise no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record"
+   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledLeakRegistered_honest) concludes KSBy at the wired check, binding, the decoder's radius and a charge at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness; at a wired layout NetTiming.ksWired_of_record concludes KSBy at the wired check at the deployed record from SessionKS, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope and WiredReads, likewise no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record"
   },
   "Pous.SecurityProofs.BandPubMeets14": "cc0a571f0b841ecb8d43acbf6b871e6cc71d9c7f83d30199fc0e717b117175f9",
   "Pous.SecurityProofs.BandPubMeets14Global": "c6339d61d58538bdee3dfd430d8eb58fb714ba7c635b54a1300d7d20ff438066",
@@ -14543,15 +14544,15 @@
    "Nci.SecurityProofs.CoveringBoundPriced": "frozen (no-function): CoveringBoundTwoCosts's twin with a price per weight in place of one weight cost c_w, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardPricedAt (Security/Definitions/Nci/Assumptions/CoveringPriced.lean) and with ActivationChainedAt read in its statement (Security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Accounting.SecurityProofs.DeclaredCircuitRequirement": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed's game (sketch receipts at 16 rows, 2,773 openings a window, a store per pass made by the append-coin rule) on a layout that reads the codec and the append coins through an a-bit summary the pass's devices are told (Accounting.Assumptions.SteeredLayout: RateSketch.steeredStore, RateSketch.SketchSummarySession), each append's blocks read within the lifetime cap L of the window it joined (RateSketch.LifetimeCapped), a layer-1 bound on the prover system parametric in its resources a pass within the pass deadline tau (kept S, link Lr*tau, hash budget qr*tau, rebuilds Xr*tau), carriers of a declared circuit passing the stacking property (Gates.Property, Gates.Restricted) within its caps, charged over L windows (Accounting.Assumptions.CircuitCarriers, RateSketch.Provenance.OfCircuit: C = 8*R_L + ceil(1024*L*c*P*N*4096/E), R_L the most run-input bytes of L windows, a window certifying at most P*N*4096 bytes), slack k tiles a pass traded against k+1 query guesses ((qr*tau/2^96)^(k+1), 2^a once per pass), and its shortfall read pass by pass: the distinct sectors each pass read (RateSketch.SketchDeployedWindow.readsIn) from the tiles holding the appended blocks of the circuit's credited reads at the step it is bound to (strictly increasing), against the larger of the circuit's credited live bits in those blocks and its read bits in appended blocks less a block a group (Requirement.bitsAt, bits, OneBlockEach), with the memory map holding the circuit's credited blocks and each pass's plan covering its reads (Requirement.StoreMatches, PlanMatches: one-sided, other blocks may be resident or planned and earn nothing) and the plan's blocks at distinct positions of the pass's store, for a placed execution (Requirement.Placement, Placement.Deadlines: each pass tau ticks of the devices' clocks), layout, groups, binding, memory map, plans and addresses chosen after every coin; abstract verbatim pass devices in the random-oracle and ideal encoding models under the named assumptions SketchRank, SketchHashBudget, SquaringFloor and ChainSum (at their floor, epsilon at least 2^-64), KeyBinding, CircuitCarriers and SteeredLayout, not the rate audit's, the memory map's or the engine's code; attribution to the node's devices and tiers is not here. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest nonlinear units, budgeted units and data products, of Gates.encodeCosts, ⊤ where there is none).",
    "Accounting.SecurityProofs.Remote.SketchBoundLine": "frozen (no-function,hash): It carries the receipts' sketch bound to the memory line's coins (Accounting.Remote.Draw.Coins n κ X at X a sketch outcome, the space LineHeld is stated over), not the verifier's code: SketchBound at δ on the line's trace read on the sketch outcomes (Accounting.Remote.Held.Trace.sketch, a block computed on outside the node counted with the chips') is SketchBoundAt at δ on the line's trace, so Accounting.SecurityProofs.Remote.SketchBoundDeployed on that trace, its prover's coins carrying the openings coins, gives LineHeld's SketchBoundAt premise at its δs, timing.sketch_failure (red team RD-25, note:20261025T0040Z-report-sketch-lift).",
-   "NetTiming.SecurityProofs.SampledLeakAccepted": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with KSWired at the layout's wires at each deployment), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_reg's statement, which charges the free inputs outside each statement's registered inputs (freeInputs \\ reg, at AsReg), since RAcc pins the inputs to the trace's committed values.",
-   "NetTiming.SecurityProofs.SampledAuditAccepted": "frozen (no-function): It is stated over a sampling deployment's knowledge soundness at the incorrect set (KSWired at the layout's wires, its one hypothesis, which is Claims.Sampling.KS at a layout with no wires) and the circuit's Program (circuitProgram), not runs of the network check's code: it carries an accepted sampled audit to RAcc delta (the incorrect set in M_delta, none of it drawn all, and Accepted with the incorrect proof blocks' committed gates as advice), the runs EncardAccSeqsSampledLe counts.",
+   "NetTiming.SecurityProofs.SampledLeakAccepted": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with KSBy at the wired check at the layout's wires at each deployment, until Claims.Sampling.KSByDeployed discharges it), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_reg's statement, which charges the free inputs outside each statement's registered inputs (freeInputs \\ reg, at AsReg), since RAcc pins the inputs to the trace's committed values.",
+   "NetTiming.SecurityProofs.SampledAuditAccepted": "frozen (no-function): It is stated over a sampling deployment's knowledge soundness at the incorrect set (KSBy at the wired check at the layout's wires, its one hypothesis until Claims.Sampling.KSByDeployed discharges it (at wiredOk, from WiresRevealed), which is Claims.Sampling.KS at a layout with no wires) and the circuit's Program (circuitProgram), not runs of the network check's code: it carries an accepted sampled audit to RAcc delta (the incorrect set in M_delta, none of it drawn all, and Accepted with the incorrect proof blocks' committed gates as advice), the runs EncardAccSeqsSampledLe counts.",
    "Flock.SecurityProofs.IntegrityPeriod": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityHorizon": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityPeriodLog": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Accounting.SecurityProofs.BandwidthOfAuditPerRun": "frozen (no-function,hash): It is BandwidthOfAudit at the coins drawn: it carries Accounting.SecurityProofs.Remote.AuditRO, a bound in the random-oracle model over an abstract chip program, to the per-run bandwidth guarantee (BandwidthSoundPerRun) of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/BandwidthAudit.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "Flock.SecurityProofs.SampledKSLiveStated": "frozen (no-function): It states no property of the verifier: it reads SampledKSLive (Security/Proofs/Flock/Bridge/Statement.lean), so the lock records its text, and it leaves when a guarantee proves SampledKSLive at the deployed sampled verifier.",
-   "NetTiming.SecurityProofs.SampledLeakRegistered": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with KSWired at the layout's wires and CommitmentScheme.Binds at each deployment, and the registration's openings RegOpens), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_registered's statement with sampledLeak_reg's count, at the registered inputs' registration values (AsReg at regVal) rather than the trace's, a disagreement being a collision Breg finds.",
+   "NetTiming.SecurityProofs.SampledLeakRegistered": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with KSBy at the wired check at the layout's wires, until Claims.Sampling.KSByDeployed discharges it, and CommitmentScheme.Binds at each deployment, and the registration's openings RegOpens), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_registered's statement with sampledLeak_reg's count, at the registered inputs' registration values (AsReg at regVal) rather than the trace's, a disagreement being a collision Breg finds.",
    "Flock.SecurityProofs.SampledKSLiveV2": "frozen (no-function): the network certifier chain's theorem, proved; it reads SampledKSLiveV2 (Security/Proofs/Flock/Bridge/Canon.lean), the sampled statement at RowsOk circuit files (row/v1, row/v2 and row-seg/v1 ports) at the constants and canonAt, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod": "frozen (no-function): It carries C-Flock's integrity audit over a horizon of windows (Flock.Guarantees.IntegrityHorizon) to the sampled audit's per-period guarantee (PeriodRun.Sound) of an abstract period of the device model whose verdict is a field of the run, not a Lean function, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityPeriod, Security/Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": "lemma: the forking step behind the remote audit's receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which PooledDraw and the drawn memory-line guarantees charge, over a session and its receipts, not a Lean function: with the held row by definition the plurality of the rows the receipt shows over window t's continuations (Accounting.Remote.Draw.Receipts.held, at Accounting.Remote.Draw.cont) and no premise beyond L_t holding every receipt window t opens, the binding term is at most sum_t sqrt(|L_t| s_t (fork_t + split_t)), fork_t the chance that two runs from window t's cut on independent openings coins hash a SHA-512 collision between one receipt's two openings' checks (Receipts.Broken, Hash.SecurityProofs.RowBinding) and split_t the chance that their roots, ranks or verifiers differ (Receipts.Split); split_t is not bounded here: the deployed prover holds no coin commitment until the session's outcome, but that window t's roots read only its cut is not a premise (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
@@ -14577,7 +14578,7 @@
    "Flock.SecurityProofs.JointStratifiedHorizonMT": "frozen (hash,world-unlisted,scope): It is zk_session_soundHJ_custody's hidden-output session of J tables with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each sampling block is played with on some run of the period) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody at the stratified law, RecordCustodyZKJS), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.JointStratifiedMT": "frozen (hash,world-unlisted,scope): It is zk_session_soundHJ_custody's hidden-output session of J tables with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy that plays the sampling block) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody at the stratified law, RecordCustodyZKJS), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": "frozen (no-function): It carries C-Flock's integrity audit of one server-time block with carried state (Flock.Guarantees.IntegrityBlockCarried) to block b's sampled audit's per-period guarantee (PeriodRun.Sound) in a monitoring period of blocks of the device model whose verdicts are fields of the run, not Lean functions, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityBlock, Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
-   "NetTiming.SecurityProofs.PeriodLeakAccepted": "frozen (no-function,world-unlisted): It composes the sampled leak bound at the network certifier's rows (NetTiming.TapProof.sampledLeak_tap: RLeakTap, the observations the network certifier registers at the transfer gates under the statement's roots, TapOpens, with KSWired at the layout's wires and CommitmentScheme.Binds at each deployment) with the read-back of its record (tap_cells_read), over the network certifier's code (tapCode: the active warden's code wardenCode and the record of its cells, in any record format TapRecord whose cells read back on the schedules it holds, TapRecord.fits, which every schedule in Ss meets, hfit; the Python network certifier's rows are one, RowsFormat.tapRecord) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a monitoring period of windows: it bounds AccSeqsSampled at each window's registration and the cells of the network certifier's code, not runs of the network check's code or of a compiled warden program, and, where the network certifier registers its observations at every window (TapOpens, an antecedent), it counts the secrets whose every window meets its good event (WindowGood: RLeakTap at the extracted witness and the registration's values at the prover's registered inputs), with each window's failure bounded on its own (Btap the collisions with the network certifier's openings) and no union over the monitoring period's live coins yet.",
+   "NetTiming.SecurityProofs.PeriodLeakAccepted": "frozen (no-function,world-unlisted): It composes the sampled leak bound at the network certifier's rows (NetTiming.TapProof.sampledLeak_tap: RLeakTap, the observations the network certifier registers at the transfer gates under the statement's roots, TapOpens, with KSBy at the wired check at the layout's wires, until Claims.Sampling.KSByDeployed discharges it, and CommitmentScheme.Binds at each deployment) with the read-back of its record (tap_cells_read), over the network certifier's code (tapCode: the active warden's code wardenCode and the record of its cells, in any record format TapRecord whose cells read back on the schedules it holds, TapRecord.fits, which every schedule in Ss meets, hfit; the Python network certifier's rows are one, RowsFormat.tapRecord) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a monitoring period of windows: it bounds AccSeqsSampled at each window's registration and the cells of the network certifier's code, not runs of the network check's code or of a compiled warden program, and, where the network certifier registers its observations at every window (TapOpens, an antecedent), it counts the secrets whose every window meets its good event (WindowGood: RLeakTap at the extracted witness and the registration's values at the prover's registered inputs), with each window's failure bounded on its own (Btap the collisions with the network certifier's openings) and no union over the monitoring period's live coins yet.",
    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": "frozen (no-function): The network audit's PeriodRun.Sound on a run that realizes the network certifier's period of sampled audits (RealizesCommOfPeriodLeakAccepted), from PeriodLeakAccepted's per-window conjunct and the union bound over the windows: the verdicts and the claim are fields of the run (Security/Definitions/Accounting/JointPeriod.lean), not a Lean function, and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointPeriodLive": "frozen (no-function): The union bound over a period played as a causal game (Verity.Game, R5): each audit's per-period guarantee, at an error that is a function of the strategy, is a hypothesis over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonLive": "frozen (no-function): Like JointPeriodLive, over a horizon of periods in one causal game: each period's per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
@@ -19217,9 +19218,9 @@
    "guarantees": ["Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod"]
   },
   "Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted": {
-   "digest": "03bde9402743326494dd598348cea7351235874d64114c749e9db83fe953d74f",
+   "digest": "269c7196f950f3a5b6ccfadddba5bd4d3425d63bb2ee8f4223e3ae8a881e1985",
    "definitions": {
-    "Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted": "c72512e4e1428f029bde203f5c27e7496fd25f6895ef4f5fd076f7cc1bb00359"
+    "Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted": "cb00d341df6d0ede9d039823f9d5807d0fc1626f538d52dcc54ce5c1814a6f34"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted"]
   },
@@ -22773,7 +22774,7 @@
    ]
   },
   "Definitions.Claims.Sampling": {
-   "digest": "127c4c76bcb3bf1d51439b2f0d227ada915710a7b437d6a64927c4ee7373862c",
+   "digest": "6a0c01cb763706171d48acf6dc78c3f6403c1465ba849ad0ebcb99ca3bfad0e6",
    "definitions": {
     "Claims.Sampling.AuditStatement": "14dca2945e169db647822bc5ada687c2bc9d3c764e14fe1a86a63ed6862061f8",
     "Claims.Sampling.AuditStatement.design": "91e2b9592fce2faa8cd2c622f9b00f2a3a45f4a39d15b8793549795948ce108d",
@@ -22794,6 +22795,7 @@
     "Claims.Sampling.Binding": "0bd48abf74d29412972210378926b0968b6359be458a97aced7ba0f75620ae05",
     "Claims.Sampling.Bits": "32127d04d1abb75b3b4b6338f14750f5b6108b2f69d3cbd8b969c35e07cfed91",
     "Claims.Sampling.BitsLin": "12104e21f4e2f56bfd5155466aa311b5bb32a85e1a8487d7f7dcabd2598f5e16",
+    "Claims.Sampling.BlockCheck": "826d47709d1f4633fc8a0c0e99d725528f3b583922cfb2baf91003357878e5b0",
     "Claims.Sampling.BoundaryFaulty": "df548114fb099f7b1fe0ec4a1f684fcdd419a3ebae3eb0d8de71c8ca2494d80e",
     "Claims.Sampling.CommitmentScheme": "f16d42f6cd8b9ee922f24a2204f69509e7537e3892abff5873b1e225db7fd5f2",
     "Claims.Sampling.CommitmentScheme.Binds": "3721109897c7352486ba0cc4c2d6a6c330af86f384b982fe0bb34b397ca8e748",
@@ -22842,7 +22844,9 @@
     "Claims.Sampling.Faulty": "5ba34c79566d772b9fabfa657a1d5a1228cf558b0788f69793993fd346f7334a",
     "Claims.Sampling.FaultyBoundary": "2d7d9c96d6f06d47da143a445b28728b5da45398bf64fc320600db2317cb8127",
     "Claims.Sampling.InScope": "e9ce0f984e182875fb1c4d7e79fc2a89130881c245150293e81c9b6a2986e7c9",
+    "Claims.Sampling.IncorrectBy": "d1814abef1e17b8598b3dd1516fe3f88e48907777da4a79b5c9177e499d03a5f",
     "Claims.Sampling.KS": "33b65996171d0478084ebb76475db9a2763cd9a1ac2ed40bd46d75dd3ce0f3e2",
+    "Claims.Sampling.KSBy": "59faf1fee511bf765c65f95cb23805288bbb6be952587c82e7bb774bab65cfed",
     "Claims.Sampling.KSCount": "2efbb9432a8bc328bb911364ff9eceba711c48f28c6a06625967f2ae42354688",
     "Claims.Sampling.KSLinOn": "3cd3242c014dcfc2396edb1804401628881a6073f98b1da31842b3655b58e08b",
     "Claims.Sampling.LogColl": "556b27152133c315374dc4629cb20ba9925e4044187c7529eb9fb9c86de3ce30",
@@ -22890,6 +22894,7 @@
     "Claims.Sampling.Prog.wires._sparseCasesOn_1": "87b9f7f5605a459f7d747d2d55dfc19c79516c4c2f4746a95ea58fc5f9c622cd",
     "Claims.Sampling.Query": "8b0f68d5f4f1e79282adb0797878c15261606d156c382f52a1a52aacb8e609ba",
     "Claims.Sampling.R": "3f9bdbc4144449b2bf68bce494c6dc6145f28a6832b15aba575b7e0741951eae",
+    "Claims.Sampling.RBy": "01382dd56ba01896436ed1084b1af7f59657f58a9a46154f1ae5f8a0e6b3eec9",
     "Claims.Sampling.RCount": "c0f9b80ba26ed25d7b7f50e14e3d53f980129fe3868836fe84ac08db68a7f33d",
     "Claims.Sampling.RelS": "33cd8ec6255a0a63bb4a6b0176309bf1929fa939087aec157093b63b954854ab",
     "Claims.Sampling.Rhon": "3cb4e93f0cf7943b424a7be761d9ead3a164dd325bc59d460cf20629ca8f41ba",
@@ -22925,9 +22930,11 @@
     "Claims.Sampling.classesPa": "1a9908b32e1ccba5cbbdf8270eb5194612daad9afbf1c1dad62015cadcc33a17",
     "Claims.Sampling.classesPa._sparseCasesOn_1": "4741fd7a40dab4dc667f81d0b784966659776dad758f504959ea1b541d966c19",
     "Claims.Sampling.committed": "22df212fb72ce74a19e26f8872e3485f5f8121ae32b0a01d4e3d5afb27e0a4e3",
+    "Claims.Sampling.correctOk": "287c818843405a06ffb86a47ddf56d77c537b1ba90fc9391c044fa0b4340dc66",
     "Claims.Sampling.faulty": "98d5637298d99791f6f17938dd68ef0e09f363464b6b7d2a9cc65c662937ebe9",
     "Claims.Sampling.flatMapRP": "bea068d72aa648819f676ab064d266d0db072b368e2a84b32cd502e1b3d78c4d",
     "Claims.Sampling.forkOn": "f86f748aae578ded533b09d6e9840b27a07f961c663c062b12c550b359a18e65",
+    "Claims.Sampling.incorrectBy": "874239cb8f449bda2c48bf246df285d0b0ad66342d7d2bd551e3af0ee2806208",
     "Claims.Sampling.instDecidableEqBGate": "9352d07d9bab8e8f6b39d537474b7c73b29fdd005cef32a21b1c2c38d8b26bd9",
     "Claims.Sampling.instDecidableEqBGate.decEq": "9aed4716ee68f3cebe56a55e16e99f1fd3907559c230098775cb77532d579fd3",
     "Claims.Sampling.lamLin": "982170ab965dfa31a00902f80cbfaa5ae369b4702912481358c2a94085d4a4c4",
@@ -26907,9 +26914,9 @@
    "guarantees": ["Flock.SecurityProofs.RecursionClaimsStated"]
   },
   "Definitions.Flock.Guarantees.SamplingClaims": {
-   "digest": "71217a013a9ecd56f1f171d658c6fdda412e08ec7c3cd2be87af27a796f38858",
+   "digest": "07b4fce801d9c6c38a55380f804bf639bc2d18da5ee5d63342a4ca9f85ab8dd0",
    "definitions": {
-    "Flock.Guarantees.SamplingClaimsStated": "d8cd6de39a7dae15e189b083b00c9a1c1db9386de45269b767a13ab9cd3e275e"
+    "Flock.Guarantees.SamplingClaimsStated": "24b6d0e4a5c9d66c13a96d887d538837d431d1f35fc13c282a3da286df2decc8"
    },
    "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
   },
@@ -29577,9 +29584,9 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "9cff97a17371047ba75c80fada5e40a02e220e2eadf463a114114b64e33d0947",
+   "digest": "c3cc5024012cf4a73ddc9907de44682a92f7a3bd189c541b3e8a5e8fb2440b7c",
    "definitions": {
-    "NetTiming.Guarantees.PeriodLeakAccepted": "ca8bc795f7f5b3c906c2e56e4b9a5c38a5f7422e5cc1275ce7d87715ff61ee8b"
+    "NetTiming.Guarantees.PeriodLeakAccepted": "a0a9c23666273efec9d2ddef896331f0d5a3699e707f317fe3de4e7189f29a17"
    },
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
@@ -29598,9 +29605,9 @@
    "guarantees": ["NetTiming.SecurityProofs.PooledLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledAudit": {
-   "digest": "8155753df2f0a4430542e3657304c7ab66756a05ba45449ecc948c766ec1cb8b",
+   "digest": "60e84857774066d8f8e2a56bc8cc16327b4c54a259e7cf0fb1461d031abbd11e",
    "definitions": {
-    "NetTiming.Guarantees.SampledAuditAccepted": "6e868bb5841a24871d90f8a4202ce0cfa0f370fab1b79b8969c5bd4643547ad8"
+    "NetTiming.Guarantees.SampledAuditAccepted": "75aee8595216e6cd88fd4918ffa84c82b1a79ab2a2f6d0ea263393a4d27b2fdd"
    },
    "guarantees": [
     "NetTiming.SecurityProofs.SampledAuditAccepted",
@@ -29609,11 +29616,11 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledCharge": {
-   "digest": "dbc54837529d87d029a6f49d23fbdf7e5890eb655c7952c3c78c1b744ebaeb4e",
+   "digest": "86401354bd3b7e08dd7f9bed54be5f18e641ec543cd084e2473c848d8de6367d",
    "definitions": {
     "NetTiming.Guarantees.EncardAccSeqsSampledLe": "6a0c10f472ffc975c011a4bf4ddadd694e54802b89ca8085dc019ac9fe3ea567",
-    "NetTiming.Guarantees.SampledLeakAccepted": "20ee8bb8251fdc5e42a87a2f08812c7d6b70baaf6f420cb7e92e962fd09635f1",
-    "NetTiming.Guarantees.SampledLeakRegistered": "2c10270c99d7f951476d68c7081395737380df3c655f837ab95f6fbb1a40cee0"
+    "NetTiming.Guarantees.SampledLeakAccepted": "12ee1bcae6bcc4f87a71cb9ca959948aadc95fa2d29d70120f816fa82d5eae05",
+    "NetTiming.Guarantees.SampledLeakRegistered": "694742146fef621980a9710528df250bcba032baec248b44920e4f2ea2e2c8cc"
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
@@ -29740,7 +29747,7 @@
    ]
   },
   "Definitions.NetworkCertifier.SampledAudit": {
-   "digest": "42d35087918b86e733c14d8340df2e197f72740d409656b5304d5bf4fa35032c",
+   "digest": "ed272ad56648cfdb180018b452e7162948f4e8f13bfce9ae0fc6f2aba8a5e53d",
    "definitions": {
     "NetTiming.BoundaryGates": "d3e54616f8da666218af8aa727cc81d6b675fb41bea0a8cf49691b641f30c7a3",
     "NetTiming.BoundaryGates.Fits": "9c3804d342282e4cb7c0e4657540d573ee43c40e686709ff8e0fc22c9bfc5b10",
@@ -29755,11 +29762,9 @@
     "NetTiming.DependsWired": "968b74120864ef6de7ebe2dba81192beef61215a9a0fb361c0642ef7f7476bbc",
     "NetTiming.FaultyGate": "bbc940eb0195b83903ed55053117b14b34c4ced8f375905ce44f5cb54f4afdc3",
     "NetTiming.KSAccepted": "f632a6201349aced4bbba77f283dd73b64c818f5afdd10c7ce2f109584ad58da",
-    "NetTiming.KSWired": "faec94427efb4527a40af1f088a2434f24086958c4d250a8a8a860e214498bca",
     "NetTiming.RAcc": "bf37f96e6bbf5111d2f78c55d24344c4a96e2b19832f9ae27e5212386a971476",
-    "NetTiming.RWired": "f5220812020ea152ee9fff31e6e39d1123b187898d3dc08abfba05a776f4ba03",
     "NetTiming.ScopeAcc": "c7fd760721042dfff5fa8908b38893d3749f30682f2cda072d1b29a9550d03f5",
-    "NetTiming.WireRight": "ce787205ada5f5978ade9c5c32c1e83fa957792b7cf5541b76b490ccef13d222",
+    "NetTiming.WireRight": "52a8c5614d162c8cbaccd458f27e9c93ab85568f1b3a12250de12569feb34bc9",
     "NetTiming.WireWrong": "5d0ee730d327f97853b224386dc060eb5b5ee0574bcb21c2a840b3a8e873f990",
     "NetTiming.WiresAcyclic": "d122d0fc7f6b27fce9c33e2f68a116089b4b2a26ce6a9fe431fb103ae7864869",
     "NetTiming.allSlots": "1eb924389e5ffa3b1cce62cd754f9ed3b413f91286b038c394ab98209c426b56",
@@ -29773,7 +29778,8 @@
     "NetTiming.slotGates": "18b5cf00d01de76454aa5c83b4f78ecbfb92810ca9b0389aa74215a1d9372e0d",
     "NetTiming.traceVal": "a0ec132a217fc9cd0dd90cf6b0494a435a3dac6a2b70c8f77ac23113a49c2f81",
     "NetTiming.valOver": "e98e961a4e7a5d8dcb2b280a5cdc18ca8c87a546301aa91defbf4300ba44d7f2",
-    "NetTiming.wireWrong": "d0c79c814490d49cc9955da14fc8d070f0d8027437f21dce7bd548992b358344"
+    "NetTiming.wireWrong": "d0c79c814490d49cc9955da14fc8d070f0d8027437f21dce7bd548992b358344",
+    "NetTiming.wiredOk": "4672c484a42d5c8b2a3bdc265ad94732eba85fde762870227b7ceb4d48851e2e"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",

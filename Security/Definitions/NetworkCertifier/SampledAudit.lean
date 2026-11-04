@@ -29,8 +29,8 @@ inputs other than the ingress and the wired gates, plus values held at a set of 
 block's committed values need not be what its gates compute, so they enter as advice.
 
 **The incorrect set** (`incorrect`) is the faulty set and the wire-wrong proof blocks (`wireWrong`): those holding a
-wired gate, or a gate that reads one, whose committed value is not the value its writer is read at (`WireRight`: a
-constant's own value, any other gate's committed one). With no wires it is the faulty set.
+wired gate, or a gate that reads one, whose committed value is not its writer's committed value, or whose writer is a
+constant gate (`WireRight`). With no wires it is the faulty set.
 
 **The relation** (`RAcc`) has three parts:
 
@@ -42,8 +42,9 @@ constant's own value, any other gate's committed one). With no wires it is the f
   Program every observation sequence and operator that the trace's transfer gates carry (`Carries`) with every status
   complete (`Covered`).
 
-**Sampling at the incorrect set** (`KSWired`) is `Claims.Sampling.KS` with the incorrect set in place of the faulty
-set: a drawn proof block is correct and its wired rows are its writers' values (`WireRight`). With no wires it is `KS`.
+**Sampling at the incorrect set** is `Claims.Sampling.KSBy` at the wired check (`wiredOk`): a drawn proof block is
+correct and its wired rows are its writers' committed values (`WireRight`), and the proof blocks that fail it are the
+incorrect set. With no wires it is `KS`.
 
 **What this module does not model.** The certifier's signed rows and the operator's moves are tied to the transfer gates
 by the transfer-gate proof blocks and, beyond them, by the certifier's trust (`trusted-host`). That tie is the condition
@@ -132,14 +133,15 @@ def DependsWired (C : Prog) (wires : ℕ → Option ℕ) (i g : ℕ) : Prop :=
   Relation.ReflTransGen (fun a b => a ∈ (C.gates[b]?.map BGate.reads).getD [] ∨ wires b = some a) i g
 
 /-- **The wiring fits the program** over the horizon `k`. Each wired gate is an input of `C` and no ingress gate before
-`k`, so its value is committed, and its writer is a gate `C` returns or an input, so its value is committed too, read
-as a gate outside its proof block reads it (`Prog.read`): a constant's own value, any other gate's committed value. A
-writer may be a computed gate, a constant or an input, and an input writer may itself be wired. An input writer is how
-a later copy of an input bit reads its first copy, where the layout gives each reading proof block its own copy. A
-writer may depend on ingress; that no step's egress reaches a later step's ingress through a wire is the layout's
-causality (`BoundaryGates.Fits`, over `DependsWired`). The wires are acyclic (`WiresAcyclic`), so the chain of writers
-from a wired gate ends, at a writer that is not a wired gate: a constant, a computed gate, an ingress gate, a registered
-input or a free input. -/
+`k`, so its value is committed, and its writer is a gate `C` returns or an input, so its value is committed too, and a
+wire reads that committed value (`WireRight`). A wire from a constant gate is never right, since a constant need sit in
+no proof block: a constant's or a pass-through's wired leaf is written by its copy gate, a computed gate of the writer's
+proof block that the block's own proof holds to the leaf's value. An input writer may itself be wired: it is how a later
+copy of an input bit reads its first copy, where the layout gives each reading proof block its own copy. A writer may
+depend on ingress; that no step's egress reaches a later step's ingress through a wire is the layout's causality
+(`BoundaryGates.Fits`, over `DependsWired`). The wires are acyclic (`WiresAcyclic`), so the chain of writers from a
+wired gate ends, at a writer that is not a wired gate: a computed gate, an ingress gate, a registered input or a free
+input. -/
 def BoundaryGates.WiresFit {L S : ℕ} (lay : BoundaryGates L S) (C : Prog) (k : ℕ) : Prop :=
   (∀ g w, lay.wires g = some w → C.gates[g]? = some .input ∧ (∀ t < k, g ∉ lay.ingress t) ∧
     (w ∈ C.outs ∨ C.gates[w]? = some .input)) ∧
@@ -190,15 +192,18 @@ def allSlotsFrom : List OneStage → List (List (List (List ℕ))) → ℕ → F
 /-- **The slots drawn `all`**: the proof units of the classes whose rule draws every member. -/
 def allSlots (d : Design) (P : Partition) : Finset ℕ := allSlotsFrom d.rules P.classes 0
 
-/-- **The wire into gate `g` of `C` is right** on the committed values `val`: where `g` is wired to the writer `w`, `g`
-is opened to the value `w` is read at (`Prog.read`): a constant writer's own value, any other writer's committed
-value. -/
+/-- **The wire into gate `g` of `C` is right** on the committed values `val`: where `g` is wired to the writer `w`, `w`
+is no constant gate and `g` is opened to `w`'s committed value: the leaf a reader's session opens, not the value
+`Prog.read` gives a constant. A constant's or a pass-through's wired leaf is written by its copy gate
+(`BoundaryGates.WiresFit`), so a writer whose committed bit isn't the bit it copies is in an incorrect proof block. At
+the deployment the wires are `SampledProofs.Bits.wiresOf`'s, and each writer is a copy row's AND or an input in the
+members' lowered programs (`Properties.SampledProofs.Wires.wiresOf_gate`). -/
 def WireRight (C : Prog) (wires : ℕ → Option ℕ) (val : ℕ → Option Bool) (g : ℕ) : Prop :=
-  ∀ w, wires g = some w → ∃ b, val g = some b ∧ C.read val w = some b
+  ∀ w, wires g = some w → (∀ c, C.gates[w]? ≠ some (.const c)) ∧ ∃ b, val g = some b ∧ val w = some b
 
 /-- **A wire-wrong proof block** at slot `v` of `P` under `w`, at the wiring `wires`: the proof unit there holds a wired
-gate, or a gate that reads one, whose wire is not right (`WireRight`): its committed value is not the value its writer
-is read at, or it, or a writer that is no constant, is unopened. -/
+gate, or a gate that reads one, whose wire is not right (`WireRight`): its writer is a constant gate, or its committed
+value is not its writer's, or either is unopened. -/
 def WireWrong (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition) (wires : ℕ → Option ℕ)
     (w : Wit) (v : ℕ) : Prop :=
   ∃ u, P.blocks[v]? = some u ∧ ∃ g, (g ∈ u ∨ ∃ x ∈ u, g ∈ (s.prog.gates[x]?.map BGate.reads).getD []) ∧
@@ -215,6 +220,13 @@ ones. With no wires it is the faulty set. -/
 noncomputable def incorrect (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition)
     (wires : ℕ → Option ℕ) (w : Wit) : Finset ℕ :=
   faulty H Cm s P w ∪ wireWrong H Cm s P wires w
+
+/-- **The wired check** on proof block `u`, a check on each proof block (`Claims.Sampling.BlockCheck`): correct
+(`correctOk`), and each wired gate it holds or reads has its wire right (`WireRight`) at the statement's wiring
+`wires s`. The proof blocks that fail it are the incorrect set (`incorrect`). -/
+def wiredOk (wires : AuditStatement → ℕ → Option ℕ) : BlockCheck := fun s u val ι =>
+  correctOk s u val ι ∧
+    ∀ g, (g ∈ u ∨ ∃ x ∈ u, g ∈ (s.prog.gates[x]?.map BGate.reads).getD []) → WireRight s.prog (wires s) val g
 
 /-- **The sampled audit's relation** at `δ`, on the statement's bytes. The statement parses, its query evaluates, and,
 at the layout's wiring: the sampling relation holds at the incorrect set (`incorrect`: it is in `M_δ`); the incorrect
@@ -234,13 +246,6 @@ def RAcc (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option 
         Carries (lay s) s.prog (w.val H Cm s) op (k s) o → Covered (k s) o →
           Accepted (circuitProgram s.prog (lay s) (k s)) op (k s) o (traceVal s.prog (w.val H Cm s), free)
 
-/-- **The sampling relation at the incorrect set** at `δ`, on the statement's bytes, at each statement's wiring
-`wires s`: the statement parses, its query evaluates, and the incorrect set is in `M_δ`. With no wires it is
-`Claims.Sampling.R`. -/
-def RWired (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement)
-    (partition : AuditStatement → Option Partition) (wires : AuditStatement → ℕ → Option ℕ) (δ : ℝ) : Rel Wit :=
-  fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ incorrect H Cm s P (wires s) w ∈ s.design.M P δ
-
 section Claim
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
@@ -259,17 +264,6 @@ def KSAccepted (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : Au
   ∀ (δ : ℝ) decode, 0 ≤ δ → Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
     KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) (E D decode) (κ D δ) (γ D)
       (fun _ => 1) (Bext H D.V (E D decode))
-
-/-- **Sampling at the incorrect set** at the deployment `D`, at each statement's wiring `wires s`: `Claims.Sampling.KS`
-with the incorrect set (`RWired`) in place of the faulty set. On the statements in the sampling scope, at every `δ ≥ 0`,
-at the sampling extractor and every decoder that lists every trace within Flock's radius,
-`Pr[acc ∧ ¬RWired δ] ≤ δ + ε_ks + ε_bind`, at `KS`'s errors. It holds where each drawn proof block's session shows it
-correct and its wired rows its writers' values (a constant's own, any other writer's committed one), so an undrawn
-wire-wrong proof block is in the incorrect set at `KS`'s error. With no wires it is `KS`. -/
-def KSWired (H : Msg → Msg) (D : Deploy Coin Col T) (wires : AuditStatement → ℕ → Option ℕ) : Prop :=
-  ∀ (δ : ℝ) decode, 0 ≤ δ → Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
-    KSLinOn H D.V (Scope D) (RWired H D.commit D.parse D.partition wires δ) (E D decode) (κ D δ) (γ D) (fun _ => 1)
-      (Bext H D.V (E D decode))
 
 end Claim
 

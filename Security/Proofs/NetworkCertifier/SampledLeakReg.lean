@@ -212,7 +212,7 @@ theorem Pr_regColl_le_Breg (H : Msg → Msg) (D : Deploy Coin Col T) (decode : L
     | some st => rw [hx] at hp; exact regLog_valid H D.commit st.roots (ops st) p hp
 
 /-- **The leak bound at the registration's values**, at any deployment `D` of the sampled verifier where sampling at the
-incorrect set holds at the layout's wiring (`KSWired`, which is `KS` with no wires) and the trace's commitment binds, given `SampledAuditAccepted`. Take a public layout `lay` and horizon `k`, `δ ≥ 0`, a
+incorrect set holds at the layout's wiring (`KSBy` at the wired check, which is `KS` with no wires) and the trace's commitment binds, given `SampledAuditAccepted`. Take a public layout `lay` and horizon `k`, `δ ≥ 0`, a
 decoder that lists every trace within Flock's radius, each statement's registered inputs `reg` and the registration's
 openings `ops` of them. On the statements in scope whose registration opens their registered inputs:
 
@@ -220,7 +220,7 @@ openings `ops` of them. On the statements in scope whose registration opens thei
 values (`AsReg` at `regVal`), a set the statement and the registration fix. -/
 theorem sampledLeak_registered (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D : Deploy Coin Col T)
     (hb : D.commit.Binds H) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
-    (hks : KSWired H D (fun s => (lay s).wires)) (k : AuditStatement → ℕ) (δ : ℝ)
+    (hks : KSBy H D (wiredOk fun s => (lay s).wires)) (k : AuditStatement → ℕ) (δ : ℝ)
     (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
     (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ)
     (ops : AuditStatement → List (Opening Bool)) (Dj : ℕ) (x : Msg) (hx : ScopeAcc D lay k x)

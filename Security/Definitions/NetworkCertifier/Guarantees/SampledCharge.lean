@@ -58,8 +58,10 @@ def EncardAccSeqsSampledLe : Prop :=
       ((2 ^ c * (faultySets d P δ).card * 2 ^ β * D ^ n : ℕ) : ℕ∞)
 
 /-- **An accepted sampled audit bounds the leak, given `SampledAuditAccepted`.** At every deployment `D` of the sampled
-verifier, every public layout `lay` at whose wiring sampling at the incorrect set holds (`KSWired`, which is
-`Claims.Sampling.KS` with no wires) and horizon `k` of its statements, `δ ≥ 0`, a
+verifier, every public layout `lay` at whose wiring sampling at the incorrect set holds (`Claims.Sampling.KSBy` at the
+wired check `wiredOk`, which is `Claims.Sampling.KS` with no wires; at a wired layout it follows from `KS_of`'s
+hypotheses with `WiresRevealed`, `ksWired_of_revealed`, at the deployed record `WiredReads`, `ksWired_of_record`, which
+the verifier of record's check of each session's wired reads is to give) and horizon `k` of its statements, `δ ≥ 0`, a
 decoder that lists every trace within Flock's radius, and `β` bounding each possible incorrect set's committed bits
 (`faultyBits`), on the statements in scope:
 
@@ -77,7 +79,7 @@ def SampledLeakAccepted : Prop :=
   SampledAuditAccepted →
     ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
       (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
-      (hks : KSWired H D (fun s => (lay s).wires)) (k : AuditStatement → ℕ)
+      (hks : KSBy H D (wiredOk fun s => (lay s).wires)) (k : AuditStatement → ℕ)
       (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
       (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ) (β : AuditStatement → ℕ)
       (Dj : ℕ) (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s),
@@ -91,7 +93,8 @@ def SampledLeakAccepted : Prop :=
                 Dj ^ k s : ℕ) : ℕ∞)
 
 /-- **An accepted sampled audit bounds the leak at the registration's values, given `SampledAuditAccepted`.** As
-`SampledLeakAccepted`, where the trace's commitment also binds (`CommitmentScheme.Binds`) and each statement's registration
+`SampledLeakAccepted` (with `KSBy` at the wired check, at a wired layout from `WiresRevealed`, `ksWired_of_revealed`,
+at the deployed record `WiredReads`), where the trace's commitment also binds (`CommitmentScheme.Binds`) and each statement's registration
 opens its registered inputs `reg` under the statement's roots (`RegOpens`, openings `ops`), on the statements in scope:
 
 * `Pr[acc ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind + Pr[B_reg]`, with the inputs besides the ingress pinned at the registration's
@@ -102,7 +105,8 @@ def SampledLeakRegistered : Prop :=
   SampledAuditAccepted →
     ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
       (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hb : D.commit.Binds H) (L K S : ℕ)
-      (lay : AuditStatement → BoundaryGates L S) (hks : KSWired H D (fun s => (lay s).wires)) (k : AuditStatement → ℕ)
+      (lay : AuditStatement → BoundaryGates L S) (hks : KSBy H D (wiredOk fun s => (lay s).wires))
+      (k : AuditStatement → ℕ)
       (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
       (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ)
       (ops : AuditStatement → List (Opening Bool)) (β : AuditStatement → ℕ) (Dj : ℕ)
