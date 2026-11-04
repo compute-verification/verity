@@ -15,7 +15,7 @@ from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32_WRAP
 from verity.ml.circuits.types import Array
-from verity.ml.commitments.gates import lms
+from verity.ml.commitments.gates import sha512 as SHA
 
 from verity.core.protocols.pouw.circuit import words as W
 from verity.core.protocols.pouw.circuit.hashes import Emit, Sha512Compress, keccak_lanes, sha512, sha_words, shake256
@@ -44,7 +44,7 @@ def test_sha512_matches_hashlib(nwords):
 
 
 def test_the_compression_is_the_boolean_one():
-    """`PouwSha512Compress_v1`, each 64-bit word as its (hi, lo) halves, is `gates.lms`'s Boolean ``Sha512Compress_v1``, each
+    """`PouwSha512Compress_v1`, each 64-bit word as its (hi, lo) halves, is `gates.sha512`'s Boolean ``Sha512Compress_v1``, each
     word LSB first, on edge and random chaining values and blocks: a word form can't call the Boolean one, so this holds them
     together."""
     rng = random.Random(6)
@@ -55,7 +55,7 @@ def test_the_compression_is_the_boolean_one():
     def bits(rows):
         return np.array([[(v >> k) & 1 for v in row for k in range(64)] for row in rows], dtype=np.uint8)
 
-    out = evaluate_bits(bind(lms.Sha512Compress), bits([cv for cv, _ in cases]), bits([block for _, block in cases]))
+    out = evaluate_bits(bind(SHA.Sha512Compress), bits([cv for cv, _ in cases]), bits([block for _, block in cases]))
     for (cv, block), got in zip(cases, np.asarray(out).reshape(len(cases), -1)):
         halves = evaluate(Sha512Compress, [h for v in cv for h in (v >> 32, v & W.M32)],
                           [h for v in block for h in (v >> 32, v & W.M32)])

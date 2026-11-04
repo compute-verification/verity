@@ -17,7 +17,7 @@ row of W.
 Every array is of `Value<1>`.  A byte string is bits in byte order, bit t being bit t mod 8 of byte ⌊t/8⌋ (hm96's order);
 an integer is bits least significant first.  A big-endian integer of N bytes and its byte string differ by
 `PousByteSwap_v1{N}`, which is wiring.  A chaining value is SHA-512's eight words, each least significant bit first, and
-every compression is `gates.sha512.compress_gadget`: a midstate's blocks after its first are calls of `gates.lms`'s
+every compression is `gates.sha512.compress_gadget`: a midstate's blocks after its first are calls of `gates.sha512`'s
 ``Sha512Compress_v1`` (`answer_circuit.compress_call`).
 
 **The decode** (`schemes.p2.decode_segment` for one label):

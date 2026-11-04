@@ -39,10 +39,10 @@ from verity.ml.circuits.types import Array
 from verity.ml.commitments.merkle import RANGE_U64_MESSAGE_BYTES, range_u64_domain_message
 from verity.ml.crypto import lms as R
 
-from .lms import DIGEST, IDENT, WORD, LmsEqual, Sha512Compress, _bytes, _check, _group, _join, _value, _value_bits, _Wires, _words
+from .lms import IDENT, LmsEqual, _bytes, _check, _group, _join, _value, _value_bits, _Wires, _words
 from .lms import arguments as lms_arguments
 from .lms import verifier
-from .sha512 import IV, midstate, pad_tail
+from .sha512 import DIGEST, IV, WORD, Sha512Compress, midstate, pad_tail
 
 __all__ = ["AttestPeriod", "BINDING", "arguments", "context", "period"]
 

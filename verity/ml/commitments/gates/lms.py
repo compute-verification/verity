@@ -20,7 +20,7 @@ P (2^W - 1) chain hashes whatever the digits. The tree level puts the current no
 **The parts,** each its own traced Definition (`trace.part`, which Flock lowers by its builder), so a unit of a proof is at
 most one level of the tree's two compressions:
 
-    Sha512Compress_v1                 (cv: Array<8, Word>, block: Array<16, Word>) -> Array<8, Word>, one compression
+    Sha512Compress_v1                 `gates.sha512`'s, one compression
     LmsMessage_v1{N, W}               (I, q32, C, message) -> Array<P, Array<W, Value<1>>>: Q and its checksum's digits
     LmsChainStep_v1{N, W}             (I, q32, i: Array<16>, j: Array<W>, a: Array<W>, s) -> H(I||q||i||j||s) if a <= j else s
     LmsLeaf_v1{N}                     (I, r: Array<32>, K) -> H(I || u32(r) || D_LEAF || K)
@@ -45,14 +45,12 @@ from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array
 from verity.ml.crypto import lms as R
 
-from .sha512 import IV, compress_gadget, pad_tail, words_be
+from .sha512 import DIGEST, IV, WORD, Sha512Compress, compress_gadget, pad_tail, words_be
 
-__all__ = ["LmsChainStep", "LmsEqual", "LmsLeaf", "LmsMessage", "LmsNode", "LmsVerify", "Sha512Compress", "arguments",
-           "chain_step", "leaf_hash", "message_digits", "node_hash", "verifier"]
+__all__ = ["LmsChainStep", "LmsEqual", "LmsLeaf", "LmsMessage", "LmsNode", "LmsVerify", "arguments", "chain_step", "leaf_hash",
+           "message_digits", "node_hash", "verifier"]
 
 BIT = BL.BIT
-WORD = Array(64, BIT)
-DIGEST = Array(8, WORD)
 IDENT = Array(2, WORD)
 U32 = Array(32, BIT)
 
@@ -139,15 +137,6 @@ def _group(e: Sequence, n: int) -> list[list]:
 
 def _check(S) -> R.Params:
     return _params(S)
-
-
-def _sig_compress(S):
-    return (("cv", DIGEST), ("block", Array(16, WORD))), DIGEST
-
-
-Sha512Compress = TR.part(
-    "Sha512Compress", (), _sig_compress, lambda C, S, *e: compress_gadget(C, list(e[:8]), list(e[8:24])),
-    "One SHA-512 compression (FIPS 180-4 §6.4.2) with its feed-forward, on 64-bit words LSB first")
 
 
 def _sig_message(S):

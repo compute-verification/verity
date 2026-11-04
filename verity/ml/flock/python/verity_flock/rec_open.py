@@ -46,9 +46,9 @@ an opening of ``H ≤ 16`` reads word 0 alone, so its gates are the same at eith
 
 `_steps` states the computation once over two interpreters: `forms` for the M0 unit (`unit_circuit`: constant blocks fold, the
 products are summed leaf by leaf as `rec_residuals.residual_forms` sums them) and the IR for the Definition (`RecOpen`'s body:
-each compression a Call of `gates.lms`'s ``Sha512Compress_v1``, so the descriptor holds one compression's gates, and the
-consistency term a Call of ``GfResiduals_v1{cons_structure(LANES)}``). `open_ref` (over ``hashlib`` and `gf2k.mul`) is the
-reference of both.
+each compression a Call of `gates.sha512`'s ``Sha512Compress_v1``, so the descriptor holds one compression's gates, and the
+consistency term a Call of ``GfResiduals_v1{cons_structure(LANES)}``). `open_ref` (over
+``hashlib`` and `gf2k.mul`) is the reference of both.
 """
 from __future__ import annotations
 
@@ -62,8 +62,7 @@ from verity.ml.circuits.refs import Coll, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import ONE, ZERO
-from verity.ml.commitments.gates.lms import Sha512Compress
-from verity.ml.commitments.gates.sha512 import IV, compress_gadget, pad_tail
+from verity.ml.commitments.gates.sha512 import BLOCK, DIGEST, IV, Sha512Compress, compress_gadget, pad_tail
 from verity.ml.circuits.ops.boolean import gf2k as G
 
 from .rec_residuals import residual_forms
@@ -75,9 +74,6 @@ __all__ = ["ACC_WORDS", "DIRS_BITS", "DIRS_WORDS", "OUT_WORDS", "PORTS", "RecOpe
 
 BIT = BL.BIT
 U16 = Array(16, BIT)
-WORD = Array(64, BIT)
-DIGEST = Array(8, WORD)
-BLOCK = Array(16, WORD)
 NODE_WORDS = 32
 OUT_WORDS = 64
 ACC_WORDS = 64
