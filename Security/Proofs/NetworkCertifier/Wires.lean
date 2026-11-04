@@ -79,6 +79,11 @@ theorem resolveWires_of_none {C : Prog} {wires : ℕ → Option ℕ} {inp : ℕ 
   | 0 => by simp only [resolveWires, h]
   | n + 1 => by simp only [resolveWires, h]
 
+/-- With no wires, the resolution is the inputs. -/
+theorem resolveWires_nil {C : Prog} {wires : ℕ → Option ℕ} (h : wires = fun _ => none) (inp : ℕ → Bool)
+    (free : ℕ → Option Bool) (n : ℕ) : resolveWires C wires inp free n = inp :=
+  funext fun g => resolveWires_of_none (by rw [h]) n
+
 theorem resolveWires_succ {C : Prog} {wires : ℕ → Option ℕ} {inp : ℕ → Bool} {free : ℕ → Option Bool} {g w : ℕ}
     (h : wires g = some w) (n : ℕ) :
     resolveWires C wires inp free (n + 1) g = valOver C (resolveWires C wires inp free n) free w := by

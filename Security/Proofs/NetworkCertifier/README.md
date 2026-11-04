@@ -70,7 +70,12 @@ PerWindow.lean  the last two over the run's first `m` whole execution blocks, an
 Warden.lean     the warden's code is the client view: its lane is the client view of its first late
                                          cell (wardenLane_eq), and so are its code's cells (wardenCode_eq), which
                                          Tap reads the network certifier's cells from
-SampledCharge.lean  the leak bound under a sampled audit: by the layout's causality, holding each faulty
+Wires.lean      a gate's value reads only what it depends on (valOver_congr_inp); under a wiring that fits
+                                         the program the wires' resolution is a fixed point (resolveWires_fix) that
+                                         carries no ingress (resolveWires_ingress)
+KSWired.lean    sampling at the incorrect set (KSWired) from KS_of's hypotheses at the wired check
+                                         (KSWired_of), and from KS at a layout with no wires (ksWired_none)
+SampledCharge.lean  the leak bound under a sampled audit: by the layout's causality, holding each incorrect
                                          committed gate at one bit leaves every step's egress as it was
 SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (RAcc) gives the leak
                                          relation (rLeak_of_rAcc), composed with SampledAuditAccepted as a
@@ -82,7 +87,8 @@ Tap.lean        what the tap's certifier saw is what its warden sent: under trus
 RecordRows.lean  the rows format reads back the code's cells on every schedule that fits it (read_record), so it
                                          is a record format (tapRecord); #guards hold it to the Python network
                                          certifier's egress records
-TapRows.lean    the leak bound at the network certifier's rows: the sampling relation at a trace that agrees
+TapRows.lean    the leak bound at the network certifier's rows: the sampling relation at the incorrect set,
+                                         at a trace that agrees
                                          with its openings gives the leak relation at them (rLeakTap_of_r, through the
                                          trace filled in with its values), and a disagreement is a collision
                                          (tapColl_of_disagree); sampledLeak_tap
@@ -262,22 +268,25 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
 - **The ingress bound** (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
   `EncardIngressObsDecodableLeContentsPerWindow`.
-- **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, `KS`'s bound at
-  `RAcc δ` on the statements whose layout fits the program: no faulty proof block is sampled `all`, and the advice
-  holding the faulty proof blocks' committed gates at the trace's values makes `Accepted` every run the trace carries.
-  `SampledAuditInstance.lean` discharges its `KS` hypothesis from `Claims.Sampling.sampling_assembled_of`'s `KS`
-  conjunct: `sampledAuditAccepted_of` over any Flock record, `sampledAuditAccepted_zk` and `sampledAuditAccepted_plain`
-  at the masked and plain records.
+- **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, `KSWired`'s bound at
+  `RAcc δ` on the statements whose layout fits the program: no incorrect proof block (faulty, or wire-wrong: holding or
+  reading a wired gate whose committed value is not its writer's) is sampled `all`, and the advice holding the
+  incorrect proof blocks' committed gates at the trace's values makes `Accepted` every run the trace carries, each
+  wired gate reading its writer (`resolveWires`). With no wires `KSWired` is `Claims.Sampling.KS` (`ksWired_none`).
+  `SampledAuditInstance.lean` discharges its hypothesis at layouts with no wires from
+  `Claims.Sampling.sampling_assembled_of`'s `KS` conjunct: `sampledAuditAccepted_of` over any Flock record,
+  `sampledAuditAccepted_zk` and `sampledAuditAccepted_plain` at the masked and plain records.
 - **The leak bound under a sampled audit** (`SampledCharge.lean`):
-  `EncardAccSeqsSampledLe`, the count of the sequences accepted with a possible faulty set: the inputs other than the
-  ingress, the faulty proof blocks' committed bits and the choice of faulty set. `SampledLeakAccepted` is what an accepted
-  sampled audit establishes: with `SampledAuditAccepted` as its hypothesis and `Claims.Sampling.KS` at the deployment,
+  `EncardAccSeqsSampledLe`, the count of the sequences accepted with a possible incorrect set: the inputs other than the
+  ingress and the wired gates, the incorrect proof blocks' committed bits and the choice of incorrect set.
+  `SampledLeakAccepted` is what an accepted sampled audit establishes: with `SampledAuditAccepted` as its hypothesis
+  and `KSWired` at the deployment,
   the carried sequences of length `k` are among those the count bounds except with probability `δ + ε_ks + ε_bind`
   (`RLeak`), and the count holds with `c` the number of free inputs not in the statement's registered inputs `reg`
   (`freeInputs`, at `AsReg`), at whatever values the trace holds at `reg`. It is `SampledLeak.lean`'s
   `sampledLeak_reg`. `RAcc` pins the inputs to the trace, so the values at `reg` are the trace's; that the
   registration's commitment binds them is a separate statement, not yet proved. Both `SampledAuditAccepted` and
-  `Claims.Sampling.KS` are named assumptions in the lock.
+  `KSWired` are named assumptions in the lock.
 - **The leak through the network certifier over a monitoring period** (`Period.lean`): `PeriodLeakAccepted` composes
   the leak bound at the network certifier's rows (`TapRows.lean`'s `sampledLeak_tap`) with the read-back of its
   record, so the bound's content term comes from the audits: over a monitoring period's windows, each registered as a
@@ -285,9 +294,9 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   under the statement's roots), the secrets of a covert sender whose every window meets its good event (`WindowGood`)
   number at most `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, and each
   window's audit fails the leak relation at the network certifier's rows (`RLeakTap`) with probability at most
-  `δ + ε_ks + ε_bind + Pr[B_tap]`. Every unit outside the faulty set is correct, so the extracted trace opens every
+  `δ + ε_ks + ε_bind + Pr[B_tap]`. Every unit outside the incorrect set is correct, so the extracted trace opens every
   transfer gate there, at the network certifier's value unless the two openings collide (`B_tap`, under
-  `CommitmentScheme.Binds`); filled in with the network certifier's values, it carries its records, and the faulty units'
+  `CommitmentScheme.Binds`); filled in with the network certifier's values, it carries its records, and the incorrect units'
   gates are the advice the count already charges, so the count is unchanged. The network certifier is one device on
   the server's uplink, and it functions as an active warden (`Definitions/NetworkCertifier/Tap.lean`):
   one run of its code (`tapCode`, under one `trusted-host`) gives the cells the client receives and the observations
@@ -298,7 +307,7 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   in the monitoring period's buckets, at most `S` a bucket, and its `#guard`s hold it to the Python records. The record
   holds the fail cells and padding too, so the proof counts the cells through the
   observations and needs no fail-cell charge: `∏_c (cap_c + 1)` is room. Its named assumptions are
-  `Claims.Sampling.KS`, `CommitmentScheme.Binds`, `Claims.Flock.ListWithin` and `trusted-host`. The union over the monitoring
+  `KSWired` (`Claims.Sampling.KS` with no wires), `CommitmentScheme.Binds`, `Claims.Flock.ListWithin` and `trusted-host`. The union over the monitoring
   period's live coins and the registration's binding of the prover's values at `reg` are not yet stated.
   `Claims.Sampling.KS` stands in for proofs' live bound (`Flock.Guarantees.SampledKSLive`), which replaces it once
   locked, with live forms of `SampledAuditAccepted` and `SampledLeakAccepted`.
