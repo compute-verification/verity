@@ -334,6 +334,7 @@ def zone_record(zd: Path) -> dict:
         "per_phase": {"connections": k["terms"]["connections_per_block"], "cell": k["terms"]["cell"],
                       "k_sched": k["terms"]["schedules_per_block"], "k_fail": k["terms"]["cells_per_block"],
                       "ell_a": k["terms"]["free_per_block"][READING], "k_skip": 0, "T_j": T,
+                      "tau_ms": k["params"]["bucket_ms"], "phase_s": k["run"]["link_window_s"],
                       "d_jit": k["terms"]["jitter_bound"], "jitter": k["terms"]["jitter_per_block"],
                       "K": next(r["per_link_window"] for r in k["rows"] if r["prog"] == READING)},
         "periods": {p: terms(k, p) for p in LB.PERIODS},
@@ -458,12 +459,14 @@ def markdown(doc: dict) -> str:
             z["verdict"], f"the period check answered {z['verdict']}")
         status = "established" if k["established"] else f"not established: {why}"
         lines += [f"**{b}** ({status}) at scan class {k['scan_class']}, "
-                  f"{k['run']['requests_per_link_window']:g} requests served in a phase of T_j = {w['T_j']} buckets. "
-                  f"Its terms a phase, whatever the requests served: k_sched = k_fail = {w['k_sched']:,} ({w['connections']} connections the schedule can carry, "
+                  f"{k['run']['requests_per_link_window']:g} requests served in a phase of T_j = {w['T_j']} buckets "
+                  f"of τ = {w['tau_ms']} ms ({w['phase_s']:g} s). Its terms a phase, whatever the requests served: "
+                  f"k_sched = k_fail = {w['k_sched']:,} ({w['connections']} connections the schedule can carry, "
                   f"{w['cell']} bits each), ℓ_a,j = {w['ell_a']:,}, k_skip,j = 0, T_j·log2 d_jit = {w['jitter']} "
                   f"(d_jit = {w['d_jit']}); K a phase = {w['K']:,.0f}.", "",
-                  "| period | m | k_sched | k_fail | Σ_j ℓ_a,j | Σ_j T_j·log2 d_jit | K per period (share) | "
-                  "eps (δ part) | K pooled, δ = 1e-6 (k_skip) |", "|---|---|---|---|---|---|---|---|---|"]
+                  f"| period | m ({w['phase_s']:g} s phases) | k_sched | k_fail | Σ_j ℓ_a,j | Σ_j T_j·log2 d_jit | "
+                  "K per period (share) | eps (δ part) | K pooled, δ = 1e-6 (k_skip) |",
+                  "|---|---|---|---|---|---|---|---|---|"]
         for p, t in k["periods"].items():
             pooled = t["pooled"]["1e-06"]
             lines.append(f"| {p} | {fmt(t['m'])} | {fmt(t['k_sched'])} | {fmt(t['k_fail'])} | {fmt(t['ell_a'])} | "
@@ -473,8 +476,13 @@ def markdown(doc: dict) -> str:
     if doc["lab"]:
         first = next(z["K"] for z in zones.values() if z["K"])
         lab = held(doc["lab"]["established"])
-        lines += ["## Over all compute", "", "| period | scope | links | m | established | K per period (share) | "
-                  "eps (δ part) | K pooled, δ = 1e-6 | basis |", "|---|---|---|---|---|---|---|---|---|"]
+        w = first["per_phase"]
+        lines += ["## Over all compute", "",
+                  f"m counts the phases over the period, summed over the scope's links, each phase T_j = {w['T_j']} "
+                  f"buckets of τ = {w['tau_ms']} ms ({w['phase_s']:g} s), the lab's tick. K a phase reads no τ, so at "
+                  "a longer tick a period holds fewer phases and its K and eps shrink in proportion.", "",
+                  "| period | scope | links | m | established | K per period (share) | eps (δ part) | "
+                  "K pooled, δ = 1e-6 | basis |", "|---|---|---|---|---|---|---|---|---|"]
         for p in LB.PERIODS:
             for b, z in zones.items():
                 if z["K"]:

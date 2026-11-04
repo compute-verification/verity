@@ -167,6 +167,9 @@ def test_the_record_is_each_zones_verdicts_and_K_in_the_bounds_terms_labelled_si
     assert "δ_net = eps + m·(ε_ks + ε_bind + ε_tap)" in md and "δ_net has no number here" in md
     assert "k_sched = k_fail = 384 (128 connections the schedule can carry, 3 bits each)" in md
     assert "whatever the requests served" in md and "a request's" not in md
+    assert params["bucket_ms"] == 100 and k["per_phase"]["phase_s"] == pytest.approx(3.2)
+    assert "a phase of T_j = 32 buckets of τ = 100 ms (3.2 s)" in md and "| m (3.2 s phases) |" in md
+    assert "each phase T_j = 32 buckets of τ = 100 ms (3.2 s), the lab's tick" in md
     assert "(vacuous)" in md and "known overcount" in md and "Σ_j (ℓ_a,j + k_skip,j + T_j·log2 d_jit)" in md
     for retired in ("D_j", "k_i", "link-window", "delta_net", "J is", "brief", "NET-"):
         assert retired not in md, retired
