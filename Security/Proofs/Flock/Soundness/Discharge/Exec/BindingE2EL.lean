@@ -30,7 +30,7 @@ be SHA-512; each at its finders' budgets:
 **`δ_tree`.** "Accept" is `execAccept`, read from the registered roots, and the bound counts it with the Lean
 protocol's acceptance at the registered leaves (`Layout.regLeaf`). Where they differ is `δ_tree`: `tr` covers the event
 that the executable accepts and the Lean protocol rejects by runs that open a serving root off its plurality
-(`TreeRewind.covers`). That cover is the link from the executable's openings to the Lean protocol's (R11), still open,
+(`TreeRewind.covers`). That cover is the link from the executable's openings to the Lean protocol's, still open,
 so `tr` is a named hypothesis. The skeleton's `hExec` (every accept is the Lean protocol's) gives a cover with no
 positions, at `δ_tree = 0` (`TreeRewind.ofNever`).
 

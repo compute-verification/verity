@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.Refine.Tapes
 /-!
 # The live session, and simulating it in the model
 
-The transfer (R11) compares two interactions. The **live** one is the challenger's session as the executable sees it:
+The transfer compares two interactions. The **live** one is the challenger's session as the executable sees it:
 the prover sends framed bytes, the server draws coins, and at the end the executable checks what the server recorded.
 The **model** one is the compiled game the soundness theorems bound.
 

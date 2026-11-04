@@ -42,7 +42,7 @@ What it takes, against `PublicAudit`:
   top rows under, which they hold (`registrant-holds-openings`: the guarantee is applied at the held salts), so `st`
   fixes the cap up to `topFinder`'s collision. No registrant's
   openings are taken: the word is the one the prover's
-  own runs open at R's level 0 against `cap` at each draw (`regWord`, the knowledge form of `note:41519fce`), on which
+  own runs open at R's level 0 against `cap` at each draw (`regWord`, in knowledge form), on which
   two runs disagree only by a collision, read as an inner fork. The word's closeness to a codeword is no hypothesis: the
   statement holds only when some table within the unique-decoding radius of the word has a satisfiable hidden
   statement, so a far word is a false statement that the bound covers;

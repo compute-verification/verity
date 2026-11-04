@@ -27,10 +27,12 @@ don't read), the circuit file parses to a descriptor `D` (`Desc.parse`), `D` is 
 (`ProvedScope.scopeOkH`), no two of its ports share a name (`Registered.dupName`), its public input ports parse
 (`HmIn.parse`), and the public file loads over them (`HmIn.loadPublic`).
 
-Assumption record. It assumes a computation's result: run `r20261027-025931-f22c` evaluated each conjunct with these
-functions, built from the verifier's source at `main` 0600bab855, on that session's two files (the circuit has no
-public input ports, and the public file loads with 32 instances and its shared-row tables), and run
-`r20261027-114351-93be` evaluated them again at the source this module is checked at. It asks nothing of a hash or of
+Assumption record. It assumes a computation's result: a run (its record
+`art:40319a7cb5304cfc4069c0ca9b7d49b2f7bf6224020daaf788bfc1e57debe7cd`) evaluated each conjunct with these
+functions, built from the verifier's source, on that session's two files (the circuit has no public input ports, and
+the public file loads with 32 instances and its shared-row tables), and a second
+(`art:13efca343cee68bd208fb8db512c0de2d5f7540576e7a87508488f8836e56eab`) evaluated them again at the source this
+module is checked at. It asks nothing of a hash or of
 the prover; a change to any of these functions or to the files makes it a new premise, to be checked by a new run. -/
 def ServedFilesParseV5 : Prop :=
   ∃ cf pf : ByteArray,
