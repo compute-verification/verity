@@ -109,6 +109,8 @@ theorem ledgerMessage_spec (I : ByteArray) (m : Json) : ⦃⌜True⌝⦄ ledgerM
 theorem join_spec (ps : Array MonitoringPeriod) (cur : Array (String × String)) (i : Nat) (lane s : String) :
     ⦃⌜True⌝⦄ join ps cur i lane s ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
+theorem verifyDays_spec (es : Array LedgerEntry) : ⦃⌜True⌝⦄ verifyDays es ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+
 theorem inv_nil : LedgerInv [] #[] false where
   seq := by simp
   v2 := by simp
@@ -357,7 +359,7 @@ theorem verifyLedger_inv {es : Array LedgerEntry} {key : ChallengerKey} {r : Arr
   · have hr : r.1 = s.1 := by
       refine of_triple (Q := fun r => r.1 = s.1) ?_ h
       clear hI hs h
-      mvcgen [-Spec.throw_Except, throw_spec]
+      mvcgen [-Spec.throw_Except, throw_spec, verifyDays_spec]
     rw [hr]; exact ⟨_, hI⟩
   · intro pre e s t hI hb
     obtain ⟨wins, leaves, records, periods, current, reserves, prev, last, v2, twoStep⟩ := s
