@@ -121,6 +121,7 @@ WINDOW_SALT = "verity/one-stage/window-salt/v1"
 SOURCES = ("port", "value", "bytes", "position", "window")
 _INST = hm96.SHA512
 _HEX = re.compile(r"[0-9a-f]+")
+_HEX_BYTES = re.compile(r"(?:[0-9a-f]{2})*")
 _DEC = re.compile(r"0|[1-9][0-9]*")
 
 
@@ -692,11 +693,58 @@ def entry_clash(ports: Sequence[tuple[str, Mapping[str, Any]]], record: Any,
     return None
 
 
+def _unhex(text: Any) -> bytes | None:
+    return bytes.fromhex(text) if isinstance(text, str) and _HEX_BYTES.fullmatch(text) else None
+
+
+def roots_of(record: Any) -> dict[str, tuple[bytes, bytes]]:
+    """The registration record's port roots (``roots``) by port name, each its root and domain as bytes
+    (`SampledProofs.Registered.rootsOf`): the last entry naming a port, none for it when that entry's root or domain is
+    not lowercase hex. In the per-member form a port is ``<member>/<port>``."""
+    out: dict[str, tuple[bytes, bytes]] = {}
+    rs = record.get("roots") if isinstance(record, dict) else None
+    for r in rs if isinstance(rs, list) else ():
+        port = r.get("port") if isinstance(r, dict) else None
+        if not isinstance(port, str):
+            continue
+        root, dom = _unhex(r.get("root")), _unhex(r.get("domain"))
+        if root is None or dom is None:
+            out.pop(port, None)
+        else:
+            out[port] = (root, dom)
+    return out
+
+
+def _frame_v3(header: Any, key: str, port: str) -> bytes | None:
+    f = header.get("frame_v3") if isinstance(header, dict) else None
+    m = f.get(key) if isinstance(f, dict) else None
+    return _unhex(m.get(port)) if isinstance(m, dict) else None
+
+
+def statement_clash(roots: Mapping[str, tuple[bytes, bytes]], member: str, registered: Iterable[str], header: Any,
+                    ports: Sequence[str]) -> tuple[str, bool] | None:
+    """The first of a statement's ``ports`` that is none of ``registered`` (its verifier's registered ports) and whose
+    frame-v3-sha512 root and domain in the public ``header`` are not ``roots``' for ``<member>/<port>`` (`roots_of`):
+    with False when ``roots`` has none, True when they differ; or None (`SampledProofs.Registered.statementClash`). The
+    v2 audit's per-member form refuses it at the session's set-up (`OneStageZk.heldChecks`), so a writer's statement is
+    proved about the rows its readers open."""
+    registered = set(registered)
+    for q in ports:
+        if q in registered:
+            continue
+        want = roots.get(f"{member}/{q}")
+        if want is None:
+            return q, False
+        if (_frame_v3(header, "roots", q), _frame_v3(header, "domain_ids", q)) != want:
+            return q, True
+    return None
+
+
 __all__ = ["BLOCK", "BOUND", "ENTRY_KEYS", "OWNER", "PARAM_KEY", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
            "SCHEMA_SEG", "SCHEMA_V2", "SESSION_KEY", "SOURCES", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WINDOW_SALT",
            "WORD_BITS",
            "bind_ports", "bytes_leaves", "domain", "entry_clash", "entry_fields", "entry_of", "leaf", "log_base",
            "parameter_gates", "port_registration", "ports_twice", "reads", "reads_file", "registered_entries",
-           "root_clash", "row_digest", "row_leaves", "row_words", "schema_entry", "shape", "sources",
-           "supplied_root", "supplied_rows", "supplied_salts", "supplied_value", "table", "verify_read", "width",
+           "root_clash", "roots_of", "row_digest", "row_leaves", "row_words", "schema_entry", "shape", "sources",
+           "statement_clash", "supplied_root", "supplied_rows", "supplied_salts", "supplied_value", "table", "verify_read", "width",
            "width_entry", "window_root", "window_salt"]
