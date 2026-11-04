@@ -213,3 +213,44 @@ Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and s
 ## 09:28Z Wed (coordinator)
 
 - The BF16 row's fixture art:b630b5916ab4c7a35e9ec54e54f6beef55be6ae354a5063b392c97af62f8e8d8 is in the public export now (infra exported it from the pod). Remote suite runs can fetch it, so there's no need to copy it into the clone.
+
+## 10:05Z Wed (vllm-pp-arm): **the arm, to integrate: `cursor/vllm-pp-arm-496a` at ea673ae66f** (remote 8bb07c24b5 merged in)
+
+- **Commits:**
+  - 85cf1c98f7: sampled proofs admits Pearl-C only when the window is cut at its sites.
+  - f4eb9d5f2f: the runner fix, below.
+  - 19f5f8fef5: the arm, `verity_vllm/pipeline/serve_pearl.py`.
+  - 54092e13dc: CPU tests on test_pearltie's toy.
+  - ea673ae66f: `served_passes.py arm`; `serve_pearl` is now PUBLIC (I1).
+- **Suites:** the changed suites against 8bb07c24b5 are run **r20261104-095445-35f3** (vy-nebius-cpu-1). I'll post its verdict.
+- **Turning the arm on in tie mode:**
+  1. Source `benchmarks/harness/setup/pearl_c_sm90.sh` (it exports PEARLC_KERNEL and PEARLC_CUBIN).
+  2. Write the config: `served_passes.py arm --spec benchmarks/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml --out CFG`. It writes the spec arm's `{"pouw": {device, kernel, cubin}}` with the `$` values read and no coins drawn.
+  3. Serve: `serve-openai --precision bfloat16 --protocols pouw:pearl-c-h100-v1-h3 --protocols-config CFG --scheme rows-sha512 --seal --required-manifest <the BF16 row's> --admit release-order --window-requests SLOTS --window-steps S`, with the rest as served_verdicts.sh's serve(). Use REPO unsloth/Llama-3.2-1B at REV 9535bd9b….
+  - **The environment:** keep VLLM_BATCH_INVARIANT=1 (served_pearlplus.sh unsets it; the arm must not), and PEARLC_BF16_ROWS=0.
+  - **What preflight refuses beside the entry:** H1's flags (`--challenger-gate`, `--challenger-peer`, `--h1-*`), `--release-after pouw`, a precision other than bfloat16, and a missing Commit, scheme or manifest.
+- **Live coins:**
+  - The hook is `PearlWindows(model, runner, com, *, out, config, run_id, coins=None, clock)`, where `coins(k)` returns window k's pouw settings.
+  - `open` installs `{**config.pouw, "transcript_dir", "runner", **coins(k)}` and keeps `coins(k)["session"]` for `served.json`.
+  - So pass `coins=lambda k: sessions.salt(k, lane)`. The config carries no `coins` key, so nothing needs dropping.
+  - Given coins, `ready()` doesn't build the Lean verifier.
+  - Then lift the GateOptions refusal in `serve_pearl.refusal` (its `opts.gate` check) for the gate flags you take, and build that `coins` in `serve_pearl.arm_of`.
+- **What each window writes,** under `$D/pearl/w<k>/` (0700):
+  - `pass-NNNNN/`: each pass's manifest, which holds the salt key.
+  - `coins.json`: the epoch's coin commitment.
+  - `served.json`: `schema` (`pearl_c.window.SERVED_SCHEMA`), `entry`, `run`, `window`, `retained`, `commit_steps`, `passes` (`served_passes` form, every pass with calls, all `timed`), `passes_with_calls`, `coins` (`coins_of`), `ok` and `error`.
+  - The window line's `pouw_pearl`: entry, window, steps, passes, calls, salt, weights_root, coin_source, served and seconds, plus `error` when one fails.
+  - `summary.json`'s `commit.pouw_pearl`.
+  - `serve.json`'s top-level `protocols` is the arm's description.
+  - The seal covers `windows/w<k>/` only, as you said.
+- **The runner fix (f4eb9d5f2f).** The committer patches `runner.execute_model` on the instance before the arm installs, so the class wrap in `pearl_c.passes.hook_steps` never ran and a window's calls all landed in one pass.
+  - `hook_steps` now wraps the instance too, through the pouw setting `runner`, which is allowed for Pearl-C schemes. The class wrap and the instance wrap share one depth, so each step ends exactly one pass.
+  - `fills` still gives `runner` only to H1.
+- **Bring-up 1: run r20261104-093447-e0de** (vy-dc-h200, in-process coins, fixed load 4,32,2). The serve dir is `/workspace/research/vllm-pp-arm/r20261104-093447-e0de`.
+  - One window was sealed, and the Commit passed its identity check.
+  - The epoch had 2 passes and 128 calls, and `served.json` was ok.
+  - `retain --window-record` wrote W with 256 values, all of them matching vllm-pp-row's contract.
+  - `verify --tie W --fast` held the tie (256 tables), then **rejected** 3 of 467 tiles, all in pass 0, each with "A row r's replayed debit 440 exceeds its cap 427/435". That is V-EX: I skipped the prover's give-up before the coin.
+  - **So your tie mode must run `served_passes.py volunteer --passes $D/pearl/w<K> --device <debit_sm90.cubin>` (after `debit.py`, as served_pearlplus.sh does) between the seal and `retain --volunteer V --window-record W`.**
+  - Verify took about 20 minutes on vy-dc-h200's 16 CPUs for one 4,32,2 window.
+- **Bring-up 2: run r20261104-100124-6163** is the same with the volunteer step. ETA about 10:35Z; I'll post its verdict here.
