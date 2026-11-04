@@ -1,6 +1,6 @@
 // The served useful GEMM on the exact int8 grid, with and without receipts of its running sums, on sm_120a (RTX PRO 6000).
 //
-// The scheme (note:20261015T0727Z-draft-int8-grid): Q(A) (m x k) and Q(B) (n x k) are row-major int8 codes in [-121, 121].
+// The scheme: Q(A) (m x k) and Q(B) (n x k) are row-major int8 codes in [-121, 121].
 // Noise per chunk of L = 32 columns: A~ = Q(A) + E_A F_A^T, B~ = Q(B) + E_B F_B^T, with E_A (m x 32), E_B (n x 32) uniform on
 // {-3..3} (the live coins) and F_A, F_B (k x 32) two signed permutations per chunk (fixed per shape). The tensor cores run
 // C = A~ B~^T (s8 x s8 -> s32, mma.sync m16n8k32), and the exact peel returns
@@ -10,8 +10,8 @@
 //
 // Receipts (Pi_L): every RS = 32 or 64 steps of k, each accumulator word T_s (the running sum C over the first s columns)
 // is absorbed into a per-thread chain; the chains' finishes are the tile's receipts. phi = duo (3 SASS ops a word,
-// note:20261015T0432Z-draft-receipt-phi: u = y ^ p ^ k_t; y = u a_t + z; z = rotl(u, r_t) + y; receipt y ^ rotl(z, 16)) or
-// duo2, the follow-up's margin variant (note:20261015T0711Z-draft-receipt-phi-followup; receipt_phi/phi.cu's DUO2): two duo
+// u = y ^ p ^ k_t; y = u a_t + z; z = rotl(u, r_t) + y; receipt y ^ rotl(z, 16)) or
+// duo2, the follow-up's margin variant (receipt_phi/phi.cu's DUO2): two duo
 // lanes on each word, keys (a, k) and (b, c), rotations R1 and R2, receipt y ^ rotl(z, 16) ^ rotl(y2 ^ rotl(z2, 16), 8);
 // 6 ops a word. At each receipt boundary in ascending k, a thread absorbs its words acc[mi][ni][e] in (mi, ni) order (each
 // right after the MMA that completes it) at
@@ -68,7 +68,7 @@ __host__ __device__ constexpr uint32_t mix32(uint32_t x) {
 // ADD3 and MUL2 are cost probes, not receipts: duo with its multiply replaced by a three-input add (y = u + a + z; all
 // three ops on the ALU pipe), and duo with its rotate-add replaced by a second multiply-add (z = u b + y; two of three on
 // the FMA pipe)
-// TB4, TB2 and TB1 are the tensor-core receipts (note:20261015T1625Z-draft-tensor-byte-receipt): at each boundary the
+// TB4, TB2 and TB1 are the tensor-core receipts: at each boundary the
 // warp folds every accumulator tile's bytes into one m16n8 s32 receipt accumulator R with a keyed IMMA, R += bytes(C) K_t,
 // bytes as u8 and keys as s8. TB4: all 4 bytes of each word, the accumulator's 4 registers read as an m16n8k32 A fragment
 // in their own order, so with no instruction (A row g: word (g, 2q) at k 4q.., word (g + 8, 2q) at 16 + 4q..; A row g + 8:
@@ -83,7 +83,7 @@ __host__ __device__ constexpr uint32_t mix32(uint32_t x) {
 // registers read as an m16n8k32 A fragment in their own order (TB4's layout on R), one more m16n8k32 a warp a boundary.
 // Unchained, R is a sum over the boundaries of the same keyed bytes, so a byte that gains d at each of S boundaries and
 // wraps W times cancels when S d = 256 W; chained, a difference at one boundary reaches every later one through bytes(R).
-// An m16n8k16 IMMA costs sm_120 as much tensor time as an m16n8k32 (r20261015-164105-3962: TB2 runs at TB4's speed), so
+// An m16n8k16 IMMA costs sm_120 as much tensor time as an m16n8k32 (TB2 runs at TB4's speed), so
 // TB2W and TB1W pack the same bytes into m16n8k32 operands: TB2W the two low bytes of tiles (mi, 2j) and (mi, 2j + 1)
 // (k 2c + i of tile 2j's word column c, 16 + 2c + i of tile 2j + 1's), one m16n8k32 a pair; TB1W byte 1 of the four tiles
 // (mi, 0..3), TB1's two pair operands side by side in k, one m16n8k32 a row block. TB2WC and TB1WC are them chained.

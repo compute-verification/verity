@@ -1,6 +1,6 @@
 """Nothing under ``verity/`` needs an integration (AGENTS.md "Design rules", "Integrations are frontends";
 ARCHITECTURE.md "Integrations"): any serving stack plugs in without changing ``verity/``.
-Today some files do: C-Flock takes the vLLM integration's registered Definitions and kernels where ``verity`` has no
+Today some files do: Flock takes the vLLM integration's registered Definitions and kernels where ``verity`` has no
 equivalent yet, and core's difftests of the primitives and sigma hold the Lean to them (a benchmark may compose an
 integration).  ``KNOWN`` lists every such ``(file, module)`` site and may only shrink: a new site fails, and so does a
 listed site that is gone, so the list stays exact.
@@ -19,7 +19,7 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-#: The tree that needs no integration: ``verity``, C-Flock and their tests.
+#: The tree that needs no integration: ``verity``, Flock and their tests.
 SCANNED = ROOT / "verity"
 #: The integrations' import packages, from each distribution's wheel configuration (a virtual member, such as the Slack
 #: events service, has none to import).

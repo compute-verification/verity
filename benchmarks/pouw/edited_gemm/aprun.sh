@@ -10,7 +10,7 @@
 # (out/ncu/, read by eps_profile.py) and on VP_NCU at VP_SHAPES (out/ncu_vp/, read by vprod_profile.py); the two
 # profiles and their TOML end the run. Clocks are read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=BC-KERNEL \
+#   research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     -- bash benchmarks/pouw/edited_gemm/aprun.sh
 set -uo pipefail
 export O=${OUT:?}

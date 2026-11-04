@@ -37,9 +37,6 @@
   "NetworkHeadCheck_v2{L=9,T=4,COUNTS=1}": {
    "sha512": "d2e76192e983214f23adc8f2426a4c831be3575cfe020ffb02afc46c2e7dc3363a1057bd13289f10dde98b038c737f7ef7c7afe6c5b0c34e81fc1de9b3e8e9d4"
   },
-  "NetworkHeadCheck_v2{L=9,T=512,COUNTS=0}": {
-   "sha512": "8e2a77fd80bec456f97a302475b06792c220f230138122498514167797d21e177462a964d3c360b636a9c017abc9567732b43aac39c14dc6f7b0202dcdc4d949"
-  },
   "NetworkHeadCheck_v2{L=9,T=8,COUNTS=0}": {
    "sha512": "c0ab2ceae22cbacaa1ccfcbbb61c80484af487bc6f8590bc1deb096601a27e683667ca2aeb4167645ad9f6b8b0216a14d451c1c7a2bcba9e97f73a6e366a7d85"
   }

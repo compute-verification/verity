@@ -357,7 +357,7 @@ def test_a_request_its_client_aborts_passes_as_an_abort_after_its_k_streamed_ids
     assert s.windows.summary()["passed"]
 
     def check(streamed: list[int], k: int = K_GONE) -> dict:
-        return s.windows.check(sc.Ledger(q["http_id"], q["engine_id"], q["prompt_ids"], q["ingress"], q["user"], streamed=streamed,
+        return s.windows.check(sc.LiveRequest(q["http_id"], q["engine_id"], q["prompt_ids"], q["ingress"], q["user"], streamed=streamed,
                                          finish={"reason": "abort", "stop_reason": None, "k": k}, finished=True))
 
     assert check(list(q["streamed_ids"]))["passed"]
@@ -436,7 +436,7 @@ def test_a_request_its_client_aborts_before_it_is_ever_scheduled_is_in_no_window
     assert not any(row[0] == e for r in recs if r["kind"] == "step" for row in r["rows"])
     assert (q["finish"]["reason"], q["finish"]["k"], q["streamed_ids"], q["windows"]) == ("abort", 0, [], [])
     assert q["check"]["passed"] and s.windows.summary()["passed"], q["check"]
-    ran = s.windows.check(sc.Ledger(q["http_id"], e, q["prompt_ids"], q["ingress"], q["user"], streamed=[],
+    ran = s.windows.check(sc.LiveRequest(q["http_id"], e, q["prompt_ids"], q["ingress"], q["user"], streamed=[],
                                     finish={"reason": "length", "stop_reason": None}, finished=True))
     assert ran["problems"] == ["no committed row"]
     rep = ADV.write(tmp_path, compiler=C)

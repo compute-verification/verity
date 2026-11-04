@@ -1,5 +1,5 @@
-# The honest edited GEMM a MMA: Dither with duo receipts at L = 32 (decision 45's served GEMM). Provisional: the counts
-# are the design's, not ncu's, with no overhead beyond operands and address math. The designs read PROFILE's measured
+# The honest edited GEMM a MMA: Dither with duo receipts at L = 32 (the served GEMM). Provisional: the counts
+# are the design's, not ncu's, with no overhead beyond operands and address math. The designs read the measured
 # kernel (e-l7qs.toml); this one stays for the tests' hand arithmetic.
 name = "dither-duo-l32"
 status = "provisional"
@@ -19,7 +19,7 @@ ALU = 8.125     # address math 0.125, and the fold's LOP3 and LEA.HI on 4 words 
 IMAD = 4        # the fold's IMAD on 4 words a lane
 TMA512 = 0.125  # the block's tiles into shared memory
 
-[operands]      # the least operand delivery any program pays a MMA (`--operands floor`); SPEC's §3.4 replaces it
+[operands]      # the least operand delivery any program pays a MMA (`--operands floor`); the register floor replaces it
 floor = { LDS128 = 0.2 }
 source = "CALC's register-capacity estimate: a lane holds an a x b tile of m16n8k32 accumulators (4ab registers) and its operand fragments (4a + 2b), so (4a + 2b)/4 LDS.128 feed ab MMAs; under 255 registers the least is 0.2 a MMA (a = 5, b = 10). Honest's 64x64 tile pays 0.25, and its TMA and address math 0.25 more"
 

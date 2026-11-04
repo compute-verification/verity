@@ -6,7 +6,8 @@ import Proofs.Properties.CertifierDevice.Lms
 `Issuer.prepare` fixes the record head (its link, direction and window are the record's), the head's digest under the
 salt and the certificate message; `Issuer.finish` signs the message at the reserved leaf. `CertifiedRecord.verify` recomputes the
 digest and the message from the certificate's fields, which are the ones signed, decodes the signature (decode∘encode)
-and verifies it under the key's public key (`Lms.verify_signAt`), so it accepts (`verify_cert`).
+and verifies it under the key's public key (`Lms.verify_signAt`), so it accepts (`verify_cert`). `Issuer.certify` signs
+only a complete record (`certify_complete`).
 -/
 
 namespace Properties.CertifierDevice
@@ -136,6 +137,8 @@ theorem issuerVerifies_valid {i i' : Issuer} {salt : ByteArray} {leaf : Except S
   · cases h
   · rename_i prepared hprep
     obtain ⟨head, digest, message⟩ := prepared
+    split at h
+    · simp [pure, Except.pure] at h
     unfold Issuer.finish at h
     cases leaf with
     | error e => simp [pure, Except.pure] at h
@@ -164,23 +167,41 @@ theorem issuerVerifies_proof : IssuerVerifies := by
   rw [hpk] at this
   exact this
 
+/-- **The issuer certifies only a complete record**: a record `Issuer.certify` returns a certificate of has status
+complete. Any other is listed in `refused` and signed nothing, so a certificate that verifies under the issuer's key
+is of a complete record unless it is a forgery. -/
+theorem certify_complete {i i' : Issuer} {salt : ByteArray} {leaf : Except String Nat} {record : Record}
+    {direction : NetworkCheck.Direction} {params : Params} {parameters : ByteArray} {deadline : Bool}
+    {cr : CertifiedRecord}
+    (h : i.certify salt leaf record direction params parameters deadline = .ok (i', some cr)) :
+    record.status = .complete := by
+  unfold Issuer.certify at h
+  obtain ⟨_, -, h⟩ := except_bind_ok h
+  split at h
+  · simp [pure, Except.pure] at h
+  · rename_i hst
+    cases hs : record.status with
+    | complete => rfl
+    | notEstablished r => simp [hs, Status.reason?] at hst
+
 /-- **The issuer certifies at every leaf** (completeness, not a guarantee): with a key `ValidKey`, given a leaf below
-`2^H` and a record with a head and a 64-byte salt (`Issuer.prepare` succeeds), `Issuer.certify` returns a certificate,
-which verifies. -/
+`2^H` and a complete record with a head and a 64-byte salt (`Issuer.prepare` succeeds), `Issuer.certify` returns a
+certificate, which verifies. -/
 def IssuerSigns : Prop :=
   ∀ (i : Issuer) (salt : ByteArray) (q : Nat) (record : Record) (direction : NetworkCheck.Direction) (params : Params)
     (parameters : ByteArray) (deadline : Bool) (prepared : NetworkCheck.RecordHead × ByteArray × ByteArray),
-    ValidKey i.key → q < 2 ^ i.key.params.H →
+    ValidKey i.key → q < 2 ^ i.key.params.H → record.status = .complete →
     i.prepare salt record direction params parameters deadline = .ok prepared →
     ∃ cr, i.certify salt (.ok q) record direction params parameters deadline = .ok (i, some cr) ∧
       cr.verify i.key.params i.key.publicKey i.session = true
 
 theorem issuerSigns : IssuerSigns := by
-  intro i salt q record direction params parameters deadline prepared hk hq hprep
+  intro i salt q record direction params parameters deadline prepared hk hq hst hprep
   obtain ⟨head, digest, message⟩ := prepared
   obtain ⟨sig, hs, hv⟩ := verify_cert hk hprep hq
   refine ⟨_, ?_, hv⟩
   unfold Issuer.certify Issuer.finish
-  simp only [hprep, hs, bind, Except.bind, pure, Except.pure]
+  simp only [hprep, hs, hst, Status.reason?, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, bind, Except.bind,
+    pure, Except.pure]
 
 end Properties.CertifierDevice.Proofs.Issuer

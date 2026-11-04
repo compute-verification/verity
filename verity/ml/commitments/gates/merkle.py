@@ -21,7 +21,7 @@ and where a unit uses the Definition only ``root`` is public.
 the padding block, whose schedule is free; 4-ary, two message blocks, then the padding block. The slots: binary, a conditional
 swap (``t = d AND (cur XOR s)``, one AND per bit, 512); 4-ary, c_0 and c_3 each pick between the digest and one sibling (512
 each), c_1 and c_2 among three (1,024 each), over the digit's one-hot ends ``d_0 = 0 = d_1`` and ``d_0 = 1 = d_1`` (2 ANDs): 3,074.
-The comparison with ``root`` is 511 more. The tests pin each level's ANDs and the rows C-Flock commits for it (`forms` counts
+The comparison with ``root`` is 511 more. The tests pin each level's ANDs and the rows Flock commits for it (`forms` counts
 the ANDs and the copies `sha512.commit` adds).
 
 It is traced from `build` (`trace`); it names no word Definition, and `opens` (over ``hashlib``) is its reference.

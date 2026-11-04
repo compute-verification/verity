@@ -5,6 +5,7 @@ import Flock.RecVStar
 import Flock.RecCoins
 import Flock.Registered
 import Flock.Lookup
+import Flock.JsonParse
 
 /-!
 # `flock-witness`: the recursive audit's predicates, evaluated on recorded sessions
@@ -51,7 +52,7 @@ structure Inputs where
 
 /-- A record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`norm`): `Main.recordDraw`. -/
 def recordDraw (record : String) : Option Json :=
-  match Json.parse record with
+  match JsonParse.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
     | .ok d => some (Flock.norm d)
@@ -70,11 +71,13 @@ def setupOf (I : Inputs) (record : String) : V (SessionSpec × Array Stmt) :=
     I.program
 
 /-- `verify --zk --registered F`'s verdict on a session set up as `s`: every table's registered reads against `own`,
-every table's shape, and `Zk.verify`. -/
+every port of every table's circuit a port of `own` (`Registered.checkComplete`), every table's shape, and
+`Zk.verify`. -/
 def acceptsZKRAt (s : V (SessionSpec × Array Stmt)) (own : Array Registered.Port) (record : String)
     (proofs : Array ByteArray) : V Unit := do
   let r ← s
   r.2.forM (checkRegistered · (some own))
+  r.2.forM fun st => Registered.checkComplete st.c own
   r.2.forM Zk.shapeOk
   Zk.verify r.1 (r.2.map Setup.ofCircuit) record proofs
 
@@ -181,7 +184,7 @@ def readTables (args : List String) : IO (List (String × ByteArray)) := do
 def readJson (path : String) : IO (Except String Json) := do
   try
     let t ← IO.FS.readFile path
-    return (Json.parse t).mapError fun e => s!"{path}: not JSON: {e}"
+    return (JsonParse.parse t).mapError fun e => s!"{path}: not JSON: {e}"
   catch e => return .error s!"{path}: {e}"
 
 def registeredOf (args : List String) : IO (Except String (Array Registered.Port)) := do
@@ -241,7 +244,7 @@ def await {α : Type} (t : Task (Except IO.Error α)) : IO α := do
 
 /-- The Σ a session record's `hello` names (`link.sigma`). -/
 def recordSigma (record : Json) : V String := do
-  let h ← Json.parse (← record.getObjValAs? String "hello")
+  let h ← JsonParse.parse (← record.getObjValAs? String "hello")
   (← h.getObjVal? "link").getObjValAs? String "sigma"
 
 def innerCmd (args : List String) : IO UInt32 := do

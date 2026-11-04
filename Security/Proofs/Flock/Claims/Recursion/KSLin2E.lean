@@ -254,8 +254,9 @@ theorem bitsLin2_deployedE_recRead (b : Brings)
 (`recTr`) and `VE`'s steps, from `DecompB` and `htab`**: `ksLin2_deployedE_recRead` at the brings whose transcript is
 `recTr aux nOf hd recRest`, with its inner check `PartAccepts` (`exists_chk_iff`), `ReadsBackB` from `readsBack_recTr`
 and `ReadersTrue` from `readersTrue_layoutBTops`, as `ksLin2_deployed_partAccepts` is at the deployed plain
-verifier's steps. What stays open: `DecompB` at what each part's circuit accepts, at `VE`'s bound, and the plain
-record's table bound at the abort law at `VE` (`htab`). This bounds no number by itself: those premises are open. -/
+verifier's steps. Its premises are `DecompB` at what each part's circuit accepts, at `VE`'s bound, and the plain
+record's table bound at the abort law at `VE` (`htab`); `Flock.SecurityProofs.RecursiveKS` proves `KSLin2` at the
+deployed reader with none. -/
 theorem ksLin2_deployedE_partAccepts (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)

@@ -5,14 +5,18 @@
   * renumbering: the k-th record of a base id in graph order gets FLAG | k << INV_SHIFT | base (shared-module call sites)
   * the ring: a replayed graph's slots are drained with the step's row count; a slot is never allocated inside capture; eager ids outside a
     step allocate nothing; compiled_omit:<leaf> leaves the module unwrapped; compiled_late_drain drains the previous step's values
+  * the step's row count is the committer's `_plan_shape`, not bits of its plan key, which the geometry key (`plan_key_of`) hashes
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
+import torch
 
-torch = pytest.importorskip("torch")
-
-from verity_vllm.acquire.sources import compiled_source as cs  # noqa: E402
+from verity_vllm.acquire.sources import compiled_kernel_source as cks
+from verity_vllm.acquire.sources import compiled_source as cs
+from verity_vllm.commit.committer.native_collect import plan_key_of
 
 cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 #: A CUDA build of torch (PyPI's) asks the driver whether a graph is being captured when the record op runs, even on CPU.
@@ -53,12 +57,13 @@ class _Top(torch.nn.Module):
 
 
 class _Committer:
-    """Minimal committer stand-in: records _acquire calls; `_cur` marks an active step; `_plan_key` carries (ntok << 16 | nreq)."""
+    """Minimal committer stand-in: records _acquire calls; `_cur` marks an active step; `_plan_shape` carries (ntok, nreq)."""
 
     def __init__(self):
         self.acq = []
         self._cur = None
         self._plan_key = 0
+        self._plan_shape = None
         self.gather = False
         self.sources = []
         self.name = "fake"
@@ -139,7 +144,7 @@ def test_capture_replay_and_drain():
     src.attach(c)
     before = src.stats["capture_calls"] + src.stats["eager_calls"]
     x.copy_(torch.randn(2, 8, device="cuda"))
-    c._plan_key = (2 << 16) | 1
+    c._plan_shape = (2, 1)
     c._cur = object()
     src.on_step_begin()
     g.replay()
@@ -204,3 +209,42 @@ def test_omit_fault_leaves_module_unwrapped():
     src.wrap_model(m, runner=None, plan={"sites": hooks, "hooks": hooks, "unsupported": []})
     assert src.omitted == ["layers.0.down_proj"] and src.wrapped == ["layers.0.up_proj"]
     assert "forward" in m.layers[0].up_proj.__dict__ and "forward" not in m.layers[0].down_proj.__dict__
+
+
+def _begin(c: _Committer, reqs: list[tuple[str, int, int]]) -> None:
+    """The step as the collector begins it: the geometry key of `reqs` = [(id, KV length, new tokens)] and its (ntok, nreq)."""
+    sched = SimpleNamespace(scheduled_new_reqs=[], num_scheduled_tokens={r: n for r, _kv, n in reqs},
+                            scheduled_cached_reqs=SimpleNamespace(req_ids=[r for r, _kv, _n in reqs], num_computed_tokens=[kv for _r, kv, _n in reqs]))
+    shape = (sum(n for _r, _kv, n in reqs), len(reqs))
+    c._plan_key, mode = plan_key_of(sched, *shape)
+    assert mode == "geometry" and (c._plan_key >> 16, c._plan_key & 0xFFFF) != shape, "the key's bits must not read as the shape"
+    c._plan_shape, c._cur = shape, SimpleNamespace(step=0)
+
+
+def test_a_replayed_graph_drains_the_steps_tokens_and_requests_under_the_geometry_key():
+    src = cs.CompiledGraphSource(rows=4)
+    c = _Committer()
+    src.attach(c)
+    per_token, per_request = (src._id("layers.0.mlp"), 0), (src._id("logits_processor"), 0)
+    for key in (per_token, per_request):
+        src.slots[key] = torch.arange(12, dtype=torch.float32).reshape(4, 3)
+        src.captured_keys.add(key)
+    _begin(c, [("a", 0, 2), ("b", 9, 1)])
+    src.on_step_begin()
+    src.on_step_end(c._cur)
+    assert [(n, t.shape[0]) for n, t in c.acq] == [("layers.0.mlp", 3), ("logits_processor", 2)]
+
+
+def test_a_lone_requests_replayed_kernels_are_drained_under_the_geometry_key():
+    src = cks.CompiledKernelSource()
+    c = _Committer()
+    c.step_rows = {}
+    src.attach(c)
+    src.capture_sizes = {1, 2, 4}
+    key = (0, 0, "triton_poi_fused_0", "out", (1, 3))
+    src.slots[key], src.slot_meta[key] = torch.ones(1, 3), (0, "c0.triton_poi_fused_0/out", "out")
+    _begin(c, [("a", 283, 1)])
+    src.on_step_begin()
+    src.on_step_end(c._cur)
+    assert [(n, t.shape[0]) for n, t in c.acq] == [("c0.triton_poi_fused_0/out", 1)]
+    assert src.stats["replayed_steps"] == 1 and "uncaptured_without_hooks" not in src.stats
