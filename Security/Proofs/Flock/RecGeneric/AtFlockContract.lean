@@ -454,9 +454,10 @@ open RecDeploy.DecompBR RecDeploy.RestLow
 
 /-- **The contract at the deployment's dense statements**, at every inner and outer decoder: `contract_deployedR_layRVD`
 at the deployed reader `DeployedR.rdR`, its last message's reading `DeployedR.finalR`, the elements `OpenRows.elemR`,
-the deployed weights and brings, with `DecompBVS` from chain B's leaves as `Flock.SecurityProofs.recursiveKSAt_of_leaves`
-discharges them, at the residual leaf `ResLower.hres_deployed` (any key), the setup's listing `resSetup_deployedB` and
-the last message's reading `RestRead.finalReads`, `RestElem.readsAt_elemR_closed`. It takes no hypothesis. -/
+the deployed weights and brings, with `DecompBVS` from chain B's leaves as
+`Flock.SecurityProofs.recursiveKSAt_of_leaves` discharges them, at the residual leaf `ResLower.hres_deployed` (any
+key), the setup's listing `resSetup_deployedB` and the last message's reading `RestRead.finalReads`,
+`RestElem.readsAt_elemR_closed`. It takes no hypothesis. -/
 theorem contract_deployed (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) :
@@ -546,7 +547,8 @@ calls of no witnesses are true, and at every inner and outer decoder the composi
 the server's `Open(DE, hm96)` and the element-level Flock's openings (`RecDeploy.contract_deployed`,
 `contract_ofBound`). It takes F1's `IVStarOfBound` and `OpenViewOfBound` at the deployed bound. -/
 theorem contractDenseOn
-    (hIV : IVStarOfBound (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
+    (hIV : IVStarOfBound (RecDeploy.bdDeployed _root_.Flock.Readable.relation
+      (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
       (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
       RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
       RecDeploy.DeployedR.wR))
@@ -573,5 +575,22 @@ theorem contractDenseOn
   exact ⟨h.1, fun decI decO =>
     contract_ofBound D Bd decI (RecDeploy.deployZkRec _root_.Flock.Readable.relation) decO FlockDeploy.KS.CpDep
       hIV hOV (h.2 decI decO)⟩
+
+/-- **F7 at the deployment** (`ContractDense`): `contractDenseOn`, whose contract holds at every decoder, so at those
+meeting `decOK`. It takes F1's `IVStarOfBound` and `OpenViewOfBound` at the deployed bound. -/
+theorem contractDense
+    (hIV : IVStarOfBound (RecDeploy.bdDeployed _root_.Flock.Readable.relation
+      (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
+      (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
+      RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
+      RecDeploy.DeployedR.wR))
+    (hOV : OpenViewOfBound (RecDeploy.bdDeployed _root_.Flock.Readable.relation
+      (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
+      (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
+      RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
+      RecDeploy.DeployedR.wR)) :
+    ContractDense := fun b aux nOf hd recRest x hx =>
+  ⟨(contractDenseOn hIV hOV b aux nOf hd recRest x hx).1,
+    fun decI _ decO _ => (contractDenseOn hIV hOV b aux nOf hd recRest x hx).2 decI decO⟩
 
 end Claims.RecGeneric
