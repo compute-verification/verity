@@ -446,7 +446,7 @@ def _front(front: Path, played: Played, run: str, span: tuple[float, float]) -> 
 def test_the_judge_reads_a_kept_front_and_its_serve_dir(tmp_path, honest):
     """`judge` on the gate's layout: the front's session.json and span, the kept fetch under the serve dir's
     private/certifier, and requests.jsonl, of which another run's requests, those without a release the endpoint
-    received outside the front's span, and the warm-ups aren't read."""
+    received outside the front's span, and the warm-ups (``--warmup``'s, ``--stop-prompt``'s, or both) aren't read."""
     run, serve = "r-honest", tmp_path / "serve"
     _kept(serve, run, honest)
     start = 1000.0
@@ -454,12 +454,15 @@ def test_the_judge_reads_a_kept_front_and_its_serve_dir(tmp_path, honest):
     stray = dict(honest.served[0], engine_id="old", user="varied.0", release=None, times={"received": start - 1})
     other = dict(honest.served[0], engine_id="other", release=["cd" * 16, 0], times={"received": start + 2})
     warm = dict(honest.served[0], engine_id="warm", user="warmup-ab-0", release=None, times={"received": start + 1})
-    (serve / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [stray, other, warm, *rows]))
+    stop = dict(warm, engine_id="stop", user="warmup-cd-0")
+    (serve / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [stray, other, warm, stop, *rows]))
     front = tmp_path / "front"
     _front(front, honest, run, (start, start + 60))
-    (front / "warmup.json").write_text(json.dumps({"requests": [{"user": "warmup-ab-0"}]}))
-    got = AT.judge("jitter", front, serve)
-    assert (got["piece"], got["ok"]) == ("bound", True), got
+    for warmups in ({"requests": [{"user": "warmup-ab-0"}], "stop_prompt": [{"user": "warmup-cd-0"}]},
+                    {"stop_prompt": [{"user": "warmup-ab-0"}, {"user": "warmup-cd-0", "finish_reason": "stop"}]}):
+        (front / "warmup.json").write_text(json.dumps(warmups))
+        got = AT.judge("jitter", front, serve)
+        assert (got["piece"], got["ok"]) == ("bound", True), (warmups, got)
     (serve / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [warm | {"user": "x"}, *rows]))
     got = AT.judge("bypass", front, serve)
     assert (got["piece"], got["ok"]) == ("reject", True), got
