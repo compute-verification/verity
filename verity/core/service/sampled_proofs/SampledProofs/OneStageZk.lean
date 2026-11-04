@@ -212,7 +212,7 @@ def buildSessionOf (parsed : V Flock.Circuit) (tags : Flock.Tags) (circuitB pubB
 
 /-- `flock-verify`'s `programDigest`: SHA-512 of the canonical descriptor without `annotations`. -/
 def programDigest (b : ByteArray) : Option String := do
-  let j ← (Json.parse (← String.fromUTF8? b)).toOption
+  let j ← (Flock.JsonParse.parse (← String.fromUTF8? b)).toOption
   let bare := match j with
     | .obj kvs => Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
     | x => x
@@ -226,7 +226,7 @@ private def headerLine (b : ByteArray) : ByteArray := Id.run do
 /-- The public file's header as `HmRow.loadPublic` reads it: parsed, then `Flock.norm`. -/
 private def headerOf (pubB : ByteArray) : V Json := do
   let some line := String.fromUTF8? (headerLine pubB) | throw "the public file's header is not UTF-8"
-  Flock.norm <$> (Json.parse line).mapError (s!"the public file's header is not JSON: {·}")
+  Flock.norm <$> (Flock.JsonParse.parse line).mapError (s!"the public file's header is not JSON: {·}")
 
 /-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
 one-stage drivers hold theirs before the draw): its header's scheme, `frame_v3` roots and their `domain_ids`, and
@@ -242,7 +242,8 @@ record drew (`unit_draw.units`), ascending. -/
 def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
   let h ← headerOf pubB
   let .arr is := getD (getD h "units") "indices" | throw "the public file's header names no units.indices"
-  let .arr ds := getD (getD (← Json.parse record) "unit_draw") "units" | throw "the record's unit_draw names no units"
+  let .arr ds := getD (getD (← Flock.JsonParse.parse record) "unit_draw") "units"
+    | throw "the record's unit_draw names no units"
   let units ← ds.mapM fun d => match nat? d >>= fun i => is[i]? >>= nat? with
     | some u => pure u
     | none => throw "the record draws an instance the public file's units.indices does not name"
@@ -337,7 +338,7 @@ def coinKeyOf (record : String) (st : SetUp) : Option String :=
   match st with
   | .ok (spec, _, _) =>
     if spec.coinTree.isNone then none
-    else (Json.parse record).toOption.bind fun j =>
+    else (Flock.JsonParse.parse record).toOption.bind fun j =>
       (j.getObjVal? "coin_tree").toOption.bind fun ct => (ct.getObjValAs? String "key").toOption
   | .error _ => none
 
@@ -576,7 +577,8 @@ def main (args : List String) : IO UInt32 := do
 #guard !(oneSession #[⟨"s", "", #[]⟩, ⟨"t", "", #[]⟩]).toBool
 
 private def heldRecord : Json :=
-  (Json.parse "{\"population\":2,\"roots\":[{\"domain\":\"dd\",\"port\":\"x\",\"root\":\"aa\"}],\"scheme\":\"s\"}").toOption.getD
+  (Flock.JsonParse.parse
+    "{\"population\":2,\"roots\":[{\"domain\":\"dd\",\"port\":\"x\",\"root\":\"aa\"}],\"scheme\":\"s\"}").toOption.getD
     .null
 
 private def refusal : V Unit → String

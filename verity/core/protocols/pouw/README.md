@@ -24,7 +24,7 @@ protocol's front door is
 
 ## What runs
 
-The verifier is Lean, three Lake packages under `lean/`:
+The verifier is Lean, the source of truth for what PoUW checks: three Lake packages under `lean/`.
 
 - `lean/check` (`pouw_check`): `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), the `Core.Protocol` both the
   onsite and the remote protocol compose, and `PouwCheck.protocol` (`verity/pouw/v1`), one execution phase's check,
@@ -104,11 +104,12 @@ reads. Proved:
   `Accounting.SecurityProofs.ComputeOfPouwPerRun`, `Accounting.SecurityProofs.PouwEndToEndPerRun` and
   `Accounting.SecurityProofs.PouwLocalOff`.
 
-Stated, open: an execution phase's ε from its calls' (`Pouw.Guarantees.WindowEps`, and `Pouw.Guarantees.ServiceEscapes` for
-the deployed sample, `Security/Definitions/Pouw/Guarantees/Window.lean`); Dither's guarantees
-(`Security/Definitions/Pouw/Guarantees/DitherInstance.lean`); and several of Pearl-C's per-shape and per-model instances
-(`Security/Definitions/Pouw/Guarantees/PearlC.lean`). No guarantee over the remote protocol as a whole is stated yet; `Properties.Composition` (`Security/Properties/Composition.lean`) proves the composition's accept
-rule against its code.
+Stated, open: an execution phase's ε from its calls' (`Pouw.Guarantees.Window.WindowEps`, and
+`Pouw.Guarantees.Window.ServiceEscapes` for the deployed sample, `Security/Definitions/Pouw/Guarantees/Window.lean`);
+Dither's guarantees (`Security/Definitions/Pouw/Guarantees/DitherInstance.lean`); and several of Pearl-C's per-shape and
+per-model instances (`Security/Definitions/Pouw/Guarantees/PearlC.lean`). No guarantee over the remote protocol as a whole
+is stated yet; `Properties.Composition` (`Security/Properties/Composition.lean`) proves the composition's accept rule
+against its code.
 
 The guarantees rest on named assumptions, each a hypothesis of the statement: the schemes' conjectures, stated and not
 proved (`Pouw.NCP.Assumptions.TTNCP_U`, and Pearl-C's TT_OUT forms such as
@@ -140,6 +141,6 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the s
   (`compile`) and the sampling plan (`plan`). Each Definition has its `circuit-check` sidecar.
 - `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its difftest; `lean/check/README.md` and
   `lean/window/README.md` map each Lean module to its Python.
-- `PROTOCOL.md`: the experimental spec, until the Lean covers it.
 - `dither/`: Dither, experimental, with its `PROTOCOL.md`.
-- `tests/`: the package's suite. `benchmarks/pouw/` is the measuring side; nothing here imports it.
+- `tests/`: the package's suite, with the schemes' and the window's pinned vectors under `tests/vectors`.
+  `benchmarks/pouw/` is the measuring side; nothing here imports it.
