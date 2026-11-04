@@ -57,20 +57,44 @@
 #      (`pearlplus_draw`), its load, the replay's node and the rounds dropped, Pearl+'s verdict's credit,
 #      its shares (with the unretained serve's beside them) and why it credits nothing (served_verdicts.PEARLPLUS_WHY: its
 #      passes are not the window sampled proofs audited, so WINDOW names nothing here).
+# Under served_verdicts.sh's PEARL_TIE=1 the window's own serve is Pearl+'s served run (serve-openai's Pearl+ arm, its
+# passes the window's steps in SERVE_DIR/pearl/wWINDOW/), and the steps go three ways:
+#   bash benchmarks/one_stage/served_pearlplus.sh arm DIR                    (before the window's serve: step 1 in DIR,
+#        DIR/setup.paths the kernel and the cubin, then `served_passes.py arm` writes DIR/protocols-config.json from
+#        PEARLPLUS_SPEC's Pearl-C arm, serve-openai's --protocols-config for its Pearl+ arm; exit 0 iff it wrote it)
+#   bash benchmarks/one_stage/served_pearlplus.sh give-up SERVE_DIR WINDOW   (once the window is picked, before any coin of
+#        Pearl+'s: step 3 on the window's passes, its files in SERVE_DIR/private/pearl-give-up, the card's counts with
+#        the debit cubin beside PEARLC_CUBIN, and then retain, run whatever the volunteer did, writes Pearl+'s window
+#        record W, pearl/wWINDOW/window-record.json, over the rounds it keeps; a window whose arm wrote no served.json or
+#        an error there gets none; exit 0 iff it wrote W)
+# and the piece is steps 4 and 5 alone over those passes: verify holds them to W (`--tie W`, no verify without W), and
+# `served_verdicts.py pearlplus --tie W` holds its verdict to W's digest (`pearlplus`'s ``tie``).
 # The passes hold the run's activations, so they stay in SERVE_DIR/private, under served_verdicts.sh's `research keep`,
 # and the piece runs under umask 077, so every file it or a step writes there is 0600.
-# env: served_verdicts.sh's (VENV, HF_HOME, CUDA_HOME), PEARLPLUS_* above. Its lines name no window. Exit 0 once step 5
-# wrote the piece.
+# env: served_verdicts.sh's (VENV, HF_HOME, CUDA_HOME, PEARL_TIE), PEARLPLUS_* above. Its lines name no window. Exit 0
+# once step 5 wrote the piece.
 set -uo pipefail
-mkdir -p "${3:?PIECE_DIR}" && SD=$(cd "${1:?SERVE_DIR}" && pwd) && P=$(cd "$3" && pwd) || exit 1
+MODE=piece
+case ${1:-} in arm | give-up) MODE=$1; shift ;; esac
+case $MODE in
+  arm) mkdir -p "${1:?DIR}" && Q=$(cd "$1" && pwd) || exit 1 ;;
+  give-up) SD=$(cd "${1:?SERVE_DIR}" && pwd) && Q=$SD/private/pearl-give-up PASSES=$SD/pearl/w${2:?WINDOW} || exit 1 ;;
+  *) mkdir -p "${3:?PIECE_DIR}" && SD=$(cd "${1:?SERVE_DIR}" && pwd) && P=$(cd "$3" && pwd) || exit 1
+     Q=$SD/private/pearlplus PASSES=$SD/private/pearlplus/passes
+     [ -z "${PEARL_TIE:-}" ] || PASSES=$SD/pearl/w${2:?WINDOW} ;;
+esac
+# the piece's own serve (steps 1-3 in full) only untied; the arm has no passes
+UNTIED=$([ "$MODE" = piece ] && [ -z "${PEARL_TIE:-}" ] && echo 1)
+[ "$MODE" = arm ] || SERVED=$PASSES/served.json W=$PASSES/window-record.json
+[ -z "$UNTIED" ] || SERVED=$Q/served.json
 cd "$(dirname "$0")/../.." || exit 1
 TREE=$PWD TPY=$PWD/.venv/bin/python
 [ -x "$TPY" ] || TPY=${PY:-python3}
-Q=$SD/private/pearlplus SPEC=${PEARLPLUS_SPEC:-benchmarks/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml}
+SPEC=${PEARLPLUS_SPEC:-benchmarks/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml}
 FAST=${PEARLPLUS_FAST-1}
 # every file the piece writes is its owner's alone, the passes' files a step rewrites too: a manifest holds the salt key
 umask 077
-rm -rf "$Q" && mkdir -p "$Q" || exit 1
+[ "$MODE" = arm ] || { rm -rf "$Q" && mkdir -p "$Q"; } || exit 1
 say() { echo "POUW $*"; }
 took() { echo "$(( ($(date +%s) - $1) / 60 )) min"; }
 export VERITY_BENCH_VENV=${VERITY_BENCH_VENV:-${VENV:-/workspace/cp/venv312}}
@@ -83,13 +107,19 @@ unset VLLM_BATCH_INVARIANT
 export PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
 BF16="sm_90's BF16 rows $([ "$PEARLC_BF16_ROWS" = 0 ] && echo off || echo on) (PEARLC_BF16_ROWS=$PEARLC_BF16_ROWS)"
 
-t=$(date +%s)
-( export RESEARCH_RUN_DIR=$Q
-  # shellcheck source=/dev/null
-  . benchmarks/harness/setup/pearl_c_sm90.sh && printf '%s\n' "$PEARLC_KERNEL" "$PEARLC_CUBIN" > "$Q/setup.paths" ) \
-  > "$Q/setup.log" 2>&1
-rc=$?
-if [ "$rc" = 0 ] && [ -s "$Q/setup.paths" ]; then
+cubin() {  # step 1 in $Q: PEARLC_KERNEL and PEARLC_CUBIN exported and in $Q/setup.paths; 0 iff built
+  local t rc harness
+  t=$(date +%s)
+  rm -f "$Q/setup.paths"
+  ( export RESEARCH_RUN_DIR=$Q
+    # shellcheck source=/dev/null
+    . benchmarks/harness/setup/pearl_c_sm90.sh && printf '%s\n' "$PEARLC_KERNEL" "$PEARLC_CUBIN" > "$Q/setup.paths" ) \
+    > "$Q/setup.log" 2>&1
+  rc=$?
+  if [ "$rc" != 0 ] || [ ! -s "$Q/setup.paths" ]; then
+    say "cubin: pearl_c_sm90.sh failed (exit $rc after $(took "$t")): $(tail -1 "$Q/setup.log" | cut -c1-400)"
+    return 1
+  fi
   { read -r PEARLC_KERNEL; read -r PEARLC_CUBIN; } < "$Q/setup.paths"
   export PEARLC_KERNEL PEARLC_CUBIN
   harness=$("$TPY" -c 'import json, sys
@@ -99,9 +129,18 @@ print("pass" if d.get("ok") else "FAIL, " + str(d.get("error")).split(".cubin: "
   say "cubin: pearl_c_sm90.sh built it and the SASS gates build.sh enforces passed after $(took "$t") (cubin sha256" \
     "$(sha256sum "$PEARLC_CUBIN" | cut -c1-16), debit cubin $(sha256sum "${PEARLC_CUBIN%/*}/debit/debit_sm90.cubin" | cut -c1-16));" \
     "the harness's .FTZ and FP32 MUFU gate, recorded and not enforced on sm_90a: $harness"
-else
-  say "cubin: pearl_c_sm90.sh failed (exit $rc after $(took "$t")): $(tail -1 "$Q/setup.log" | cut -c1-400)"
+}
+if [ "$MODE" = arm ]; then
+  rm -f "$Q/protocols-config.json"
+  cubin || exit 1
+  "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py arm --spec "$SPEC" --out "$Q/protocols-config.json" \
+    > "$Q/arm.log" 2>&1
+  rc=$? line=$(tail -1 "$Q/arm.log")
+  say "arm: served_passes.py arm exit $rc: $(echo "${line//"$Q/"/}" | cut -c1-400)"
+  [ "$rc" = 0 ] && [ -s "$Q/protocols-config.json" ]
+  exit $?
 fi
+[ -z "$UNTIED" ] || cubin
 
 serve() {  # LOG ARGS...: served_passes.py serve of the piece's load under its own lease
   local log=$1; shift
@@ -152,7 +191,7 @@ trap copy_back EXIT
 trap 'STOPPED=1; exit 143' TERM HUP
 trap 'STOPPED=1; exit 130' INT
 
-if [ -n "${PEARLC_CUBIN:-}" ]; then
+if [ -n "$UNTIED" ] && [ -n "${PEARLC_CUBIN:-}" ]; then
   if [ -n "${PEARLPLUS_UNRETAINED-1}" ]; then
     t=$(date +%s)
     ( unset PEARLC_CHALLENGER_GATE PEARLC_CHALLENGER_PEER
@@ -179,46 +218,68 @@ if [ -n "${PEARLC_CUBIN:-}" ]; then
 fi
 
 VOLUNTEER=${PEARLPLUS_VOLUNTEER-1} VMIN=${PEARLPLUS_VOLUNTEER_MIN:-60} JOBS=${PEARLPLUS_JOBS:-$(nproc)}
-if [ -s "$Q/served.json" ] && [ -n "$VOLUNTEER" ]; then
-  t=$(date +%s)
-  if [ "$VOLUNTEER" = cpu ]; then
-    how="on the CPU"
-    timeout "${VMIN}m" "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer --passes "$Q/passes" \
-      --out "$Q/volunteer.json" --jobs "$JOBS" > "$Q/volunteer.log" 2>&1
-  else
-    how=--device DEBIT=$(dirname "${PEARLC_CUBIN:-.}")/debit/debit_sm90.cubin
-    # shellcheck disable=SC2016
-    GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-pearlplus} gpu-lease 1 --wait --max-min "$VMIN" -- bash -c '
-      "$1/bin/python" benchmarks/pouw/pearl_c_sm90/debit.py --cubin "$3" --out "$2/debit.json" > "$2/debit.log" 2>&1 || {
-        echo "debit.py refused the debit cubin on the leased card, so no row is given up: $(tail -1 "$2/debit.log")"
-        exit 3; }
-      exec "$1/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer --passes "$2/passes" \
-        --out "$2/volunteer.json" --jobs "$4" --device "$3" ${5:+--device-check "$5"}' \
-      _ "$VENV" "$Q" "$DEBIT" "$JOBS" "${PEARLPLUS_DEVICE_CHECK:-}" > "$Q/volunteer.log" 2>&1
+if [ "$MODE" = give-up ]; then  # the window's epoch as serve-openai's arm closed it: one Pearl+ round a Commit step
+  why=$("$TPY" -c 'import json, sys
+d = json.load(open(sys.argv[1]))
+print("" if d.get("ok", True) else d.get("error") or "its served.json says it failed")' "$SERVED" 2>&1) \
+    || why="no served passes of the window (serve-openai's Pearl+ arm wrote no served.json for it)"
+  [ -z "$why" ] || { say "give-up: none, and no W: $(echo "$why" | tail -1 | cut -c1-400)"; exit 1; }
+fi
+if [ -n "$UNTIED" ] || [ "$MODE" = give-up ]; then
+  if [ -s "$SERVED" ] && [ -n "$VOLUNTEER" ]; then
+    t=$(date +%s)
+    if [ "$VOLUNTEER" = cpu ]; then
+      how="on the CPU"
+      timeout "${VMIN}m" "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer --passes "$PASSES" \
+        --out "$Q/volunteer.json" --jobs "$JOBS" > "$Q/volunteer.log" 2>&1
+    else
+      how=--device DEBIT=$(dirname "${PEARLC_CUBIN:-.}")/debit/debit_sm90.cubin
+      # shellcheck disable=SC2016
+      GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-pearlplus} gpu-lease 1 --wait --max-min "$VMIN" -- bash -c '
+        "$1/bin/python" benchmarks/pouw/pearl_c_sm90/debit.py --cubin "$3" --out "$2/debit.json" > "$2/debit.log" 2>&1 || {
+          echo "debit.py refused the debit cubin on the leased card, so no row is given up: $(tail -1 "$2/debit.log")"
+          exit 3; }
+        exec "$1/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer --passes "$6" \
+          --out "$2/volunteer.json" --jobs "$4" --device "$3" ${5:+--device-check "$5"}' \
+        _ "$VENV" "$Q" "$DEBIT" "$JOBS" "${PEARLPLUS_DEVICE_CHECK:-}" "$PASSES" > "$Q/volunteer.log" 2>&1
+    fi
+    rc=$?
+    say "volunteer: served_passes.py volunteer $how exit $rc after $(took "$t"): $(tail -1 "$Q/volunteer.log" | cut -c1-400)"
+  elif [ -s "$SERVED" ]; then
+    say "volunteer: not run (PEARLPLUS_VOLUNTEER empty): no row over a debit cap is given up before the verifier's coin"
   fi
-  rc=$?
-  say "volunteer: served_passes.py volunteer $how exit $rc after $(took "$t"): $(tail -1 "$Q/volunteer.log" | cut -c1-400)"
-  if [ -s "$Q/volunteer.json" ]; then
-    "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py retain --passes "$Q/passes" \
-      --volunteer "$Q/volunteer.json" > "$Q/retain.log" 2>&1
-    say "retain: served_passes.py retain exit $?: $(tail -1 "$Q/retain.log" | cut -c1-400)"
+  # untied, only after a volunteer; under the tie always, since retain is what writes W
+  RETAIN=()
+  [ -s "$Q/volunteer.json" ] && RETAIN=(--volunteer "$Q/volunteer.json")
+  [ "$MODE" = give-up ] && RETAIN+=(--window-record "$W")
+  if [ -s "$SERVED" ] && [ "${#RETAIN[@]}" -gt 0 ]; then
+    "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py retain --passes "$PASSES" "${RETAIN[@]}" \
+      > "$Q/retain.log" 2>&1
+    rc=$? line=$(tail -1 "$Q/retain.log")
+    say "retain: served_passes.py retain exit $rc: $(echo "${line//"$PASSES/"/}" | cut -c1-400)"
   fi
-elif [ -s "$Q/served.json" ]; then
-  say "volunteer: not run (PEARLPLUS_VOLUNTEER empty): no row over a debit cap is given up before the verifier's coin"
+fi
+if [ "$MODE" = give-up ]; then
+  [ -s "$W" ] || { say "W: none written, so nothing ties the window's passes to a commit (retain's log in the serve dir)"; exit 1; }
+  exit 0
 fi
 
-if [ -s "$Q/served.json" ]; then
+if [ -n "${PEARL_TIE:-}" ] && [ ! -s "$W" ]; then
+  say "verdict: served_passes.py verify not run: the window's passes have no Pearl+ window record W to hold them to" \
+    "(served_pearlplus.sh give-up wrote none), so no coin is drawn on them"
+elif [ -s "$SERVED" ]; then
   t=$(date +%s)
-  DRAW=()
+  DRAW=() TIE=()
   [ -n "${PEARLC_CHALLENGER_GATE:-}" ] && DRAW=(--draw-gate "$PEARLC_CHALLENGER_GATE" --draw-peer "${PEARLC_CHALLENGER_PEER:-}")
-  "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py verify --passes "$Q/passes" --out "$P/verify.json" \
-    --answer "$P/pearlplus-answer.json" --jobs "${PEARLPLUS_JOBS:-$(nproc)}" ${PEARLPLUS_DRAWS:+--draws "$PEARLPLUS_DRAWS"} \
-    ${FAST:+--fast} ${DRAW[@]+"${DRAW[@]}"} > "$Q/verify.log" 2>&1 &
+  [ -n "$UNTIED" ] || TIE=(--tie "$W")
+  "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py verify --passes "$PASSES" --out "$P/verify.json" \
+    --answer "$P/pearlplus-answer.json" --jobs "$JOBS" ${PEARLPLUS_DRAWS:+--draws "$PEARLPLUS_DRAWS"} \
+    ${FAST:+--fast} ${TIE[@]+"${TIE[@]}"} ${DRAW[@]+"${DRAW[@]}"} > "$Q/verify.log" 2>&1 &
   V=$!
   # the coin record leaves the passes the moment verify draws it, before its replay: a deleted one would draw afresh
-  while [ ! -s "$Q/passes/coin.json" ] && kill -0 "$V" 2>/dev/null; do sleep 1; done
-  if [ -s "$Q/passes/coin.json" ]; then
-    "$TPY" benchmarks/one_stage/served_verdicts.py coin "$P" --record "$Q/passes/coin.json" --run "${RESEARCH_RUN_ID:-}" \
+  while [ ! -s "$PASSES/coin.json" ] && kill -0 "$V" 2>/dev/null; do sleep 1; done
+  if [ -s "$PASSES/coin.json" ]; then
+    "$TPY" benchmarks/one_stage/served_verdicts.py coin "$P" --record "$PASSES/coin.json" --run "${RESEARCH_RUN_ID:-}" \
       > "$Q/coin.log" 2>&1
     say "coin: $(tail -1 "$Q/coin.log" | cut -c1-400)"
   else
@@ -232,7 +293,10 @@ fi
 UN=()
 [ -s "$Q/served-unretained.json" ] && UN=(--unretained "$Q/served-unretained.json")
 [ -s "$Q/volunteer.json" ] && UN+=(--volunteer "$Q/volunteer.json")
-"$TPY" benchmarks/one_stage/served_verdicts.py pearlplus "$P" --served "$Q/served.json" --verify "$P/verify.json" \
+[ -z "${PEARL_TIE:-}" ] || {
+  UN+=(--tie "$W")
+  [ ! -s "$SD/private/pearl-give-up/volunteer.json" ] || UN+=(--volunteer "$SD/private/pearl-give-up/volunteer.json"); }
+"$TPY" benchmarks/one_stage/served_verdicts.py pearlplus "$P" --served "$SERVED" --verify "$P/verify.json" \
   ${UN[@]+"${UN[@]}"} ${PEARLC_CHALLENGER_GATE:+--gate "$PEARLC_CHALLENGER_GATE"} ${H1_KEY_SHA512:+--key-sha512 "$H1_KEY_SHA512"} \
   ${MAIN_FILE:+--main "$MAIN_FILE"} ${PEARLC_CHALLENGER_LANE:+--lane "$PEARLC_CHALLENGER_LANE"} --coin "$P/coin-put.json" \
   > "$Q/pearlplus.log" 2>&1

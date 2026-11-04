@@ -1391,6 +1391,227 @@ def test_a_pearlplus_piece_on_in_process_coins_claims_no_verdict(tmp_path, monke
     assert doc["reasons"] == ["coins: in-process, not a live session on the gate, so nothing checks them"]
 
 
+#: Pearl+'s window record W of window 7 under PEARL_TIE, as `retain --window-record` writes it (its values elided)
+TOY_W = {"format": "verity/registration/v2", "window": 7, "previous": None, "registered": []}
+
+
+def _tied_pearlplus_run(tmp_path: Path, tie: str | None = "W") -> tuple[dict, dict, Path]:
+    """Pearl+'s window 7 under PEARL_TIE: serve-openai's Pearl+ arm's served.json for it (one round each of its two Commit
+    steps, its coins in-process), Pearl+'s verdict accepting it, its answer's tie the record ``tie`` names (``W``, the
+    window record W's digest; None, no tie), and W's file."""
+    served, verified = _pearlplus_run(source="in-process")
+    served = {"schema": "verity-pouw/pearl-c-served-passes/v1", "entry": "pouw:pearl-c-h100-v1-h3", "run": "r", "window": 7,
+              "commit_steps": 2, "passes": [{"pass": i, "timed": True, "units": 64} for i in range(2)],
+              "coins": served["coins"], "ok": True, "error": None}
+    (w := tmp_path / "window-record.json").write_text(json.dumps(TOY_W))
+    record = REG.digest(TOY_W) if tie == "W" else tie
+    public = {**verified["answer"]["public"], **({"tie": {"record": record, "tables": 256}} if record else {})}
+    return served, {**verified, "answer": {**verified["answer"], "public": public}}, w
+
+
+def test_a_tied_pearlplus_piece_is_the_windows_own_epoch_its_verdict_held_to_w(tmp_path, capsys):
+    """Under PEARL_TIE (``--tie W``) the piece is the window's own Pearl+ epoch, serve-openai's arm's served.json for it:
+    an accept on the arm's in-process salt coin claims no verdict (`PEARLPLUS_WHY_TIED_IN_PROCESS`), its ``tie`` W's
+    digest and the tables the verdict held, its load the window's steps and no shares, since the arm's document times
+    nothing. Given the gate, the replay's draws are a draw session's there, and the in-process salt isn't rejected as an
+    untied run's is: the window's salt is the arm's to make live. Its line names the tie."""
+    served, verified, w = _tied_pearlplus_run(tmp_path)
+    doc = S.pearlplus(tmp_path / "a", served, verified, tie=w)
+    assert (doc["verdict"], doc["reasons"], doc["why"]) == (S.UNCLAIMED, [], S.PEARLPLUS_WHY_TIED_IN_PROCESS)
+    assert doc["tie"] == {"record": REG.digest(TOY_W), "tables": 256} and doc["shares"] is None
+    assert (doc["arm"], doc["scheme"], doc["passes"], doc["load"]) == ("pouw:pearl-c-h100-v1-h3", "pearl-c-h100-v1-h3", 2,
+                                                                       {"window_steps": 2})
+    assert doc["coins"] == {**S.PEARLPLUS_COINS_IN_PROCESS, "epoch": S.PEARLPLUS_EPOCH_TIED_IN_PROCESS}
+    gated = S.pearlplus(tmp_path / "b", served, verified, gate=GATE, key="ff" * 64, main=tmp_path / "main.txt", tie=w)
+    assert (gated["verdict"], gated["reasons"]) == (S.UNCLAIMED, [])
+    assert gated["coins"] == {**S.PEARLPLUS_COINS_IN_PROCESS, "epoch": S.PEARLPLUS_EPOCH_TIED_IN_PROCESS,
+                              "draws": S.PEARLPLUS_COINS["draws"]}
+    for name, d in (("served.json", served), ("v.json", verified)):
+        (tmp_path / name).write_text(json.dumps(d))
+    assert S.main(["pearlplus", str(tmp_path / "cli"), "--served", str(tmp_path / "served.json"), "--verify",
+                   str(tmp_path / "v.json"), "--tie", str(w)]) == 0
+    line = json.loads(capsys.readouterr().out.removeprefix("POUW-DEV "))
+    assert (line["verdict"], line["tie"], line["load"]) == (S.UNCLAIMED, doc["tie"], {"window_steps": 2})
+
+
+@pytest.mark.parametrize("case, reason", [
+    ("other tie", f"Pearl+'s verdict isn't held to the window record W: its answer's tie is {'ab' * 64}, W's digest "),
+    ("untied", "Pearl+'s verdict isn't held to the window record W: its answer's tie is None, W's digest "),
+    ("no W", "no window record W to hold the verdict to: FileNotFoundError: "),
+    ("not ok", "the window's Pearl+ epoch isn't one round a Commit step: its epoch made 3 rounds of 2 Commit steps"),
+    ("not served", "no served run: serve-openai's Pearl+ arm wrote no served.json for the window"),
+])
+def test_a_tied_pearlplus_piece_rejects_a_verdict_not_held_to_w_and_an_epoch_that_isnt_the_windows(tmp_path, case, reason):
+    """Under PEARL_TIE an accept must be held to W itself (its answer's tie W's digest), W must be there to read, and the
+    arm's document must be there and say its epoch was one round a Commit step (its ``error`` why not): each rejects,
+    naming why."""
+    served, verified, w = _tied_pearlplus_run(tmp_path, {"other tie": "ab" * 64, "untied": None}.get(case, "W"))
+    if case == "no W":
+        w = tmp_path / "none.json"
+    if case == "not ok":
+        served.update(ok=False, error="its epoch made 3 rounds of 2 Commit steps")
+    doc = S.pearlplus(tmp_path / "a", None if case == "not served" else served, verified, tie=w)
+    assert doc["verdict"] == "reject" and doc["reasons"][0].startswith(reason), doc["reasons"]
+
+
+def test_a_tied_pearlplus_accepts_draw_is_checked_wherever_the_gate_is_given(tmp_path, monkeypatch):
+    """Under PEARL_TIE the replay's coin is a draw session's on the gate whatever the epoch's salt coin (the arm's
+    in-process challenger's today), so a gate given checks the published coin against it (`pearlplus_draw`), a refusal
+    rejecting the accept; with no gate there is none to check."""
+    from verity_vllm.protocols.pouw.pearl_c import draw as PD
+
+    served, verified, w = _tied_pearlplus_run(tmp_path)
+    (rec := tmp_path / "coin.json").write_bytes(_coin_record())
+    S.coin(rec, pub := tmp_path / "pub", "r1", research=["research"], put=_put(NODE_PUT)[0])
+    held = {**verified, "answer": {**verified["answer"], "commitment": "c1" * 64, "profile": {"source": "5e" * 32}}}
+    seen = []
+    monkeypatch.setattr(S, "pearlplus_draw", lambda record, out, gate, key, main, lane: seen.append((gate, lane)) or PD.NO_DRAW)
+    doc = S.pearlplus(tmp_path / "a", served, held, gate=GATE, key="ff" * 64, main=tmp_path / "main.txt",
+                      coin=pub / S.COIN_PUT, tie=w)
+    assert (doc["verdict"], doc["reasons"], seen) == ("reject", [f"coin: its draw: {PD.NO_DRAW}"], [(GATE, "vllm")])
+    doc = S.pearlplus(tmp_path / "b", served, held, coin=pub / S.COIN_PUT, tie=w)
+    assert (doc["verdict"], doc["coin"]["reason"], "draw" in doc["coin"], len(seen)) == (S.UNCLAIMED, None, False, 1)
+
+
+#: served_passes.py in `_pearlplus_sh`'s toy tree: each call's arguments noted in $ORDER.passes; volunteer writes its
+#: answer, retain W where --window-record names it (unless NO_W is set), arm its config, and verify nothing
+FAKE_SERVED_PASSES = '''import json, os, sys
+a = sys.argv[1:]
+open(os.environ["ORDER"] + ".passes", "a").write(json.dumps(a) + "\\n")
+out = lambda f: a[a.index(f) + 1]
+if a[0] == "volunteer":
+    open(out("--out"), "w").write(json.dumps({"given_up": []}))
+    print("volunteer: no row given up")
+elif a[0] == "retain" and "--window-record" in a and not os.environ.get("NO_W"):
+    open(out("--window-record"), "w").write(json.dumps(TOY_W))
+    print("retain: W " + out("--window-record"))
+elif a[0] == "arm":
+    open(out("--out"), "w").write(json.dumps({"pouw": {"device": "cuda:0"}}))
+    print("arm: wrote " + out("--out"))
+'''.replace("TOY_W", repr(TOY_W))
+#: pearl_c_sm90.sh in `_pearlplus_sh`'s toy tree: a cubin and its debit cubin in the step's run dir (none under NO_CUBIN)
+TOY_SM90 = '''[ -z "${NO_CUBIN:-}" ] || { echo "nvcc: no sm_90a here"; return 4; }
+mkdir -p "$RESEARCH_RUN_DIR/build/debit" && printf c > "$RESEARCH_RUN_DIR/build/k.cubin"
+printf d > "$RESEARCH_RUN_DIR/build/debit/debit_sm90.cubin"
+PEARLC_KERNEL=pearl_c PEARLC_CUBIN=$RESEARCH_RUN_DIR/build/k.cubin
+'''
+SERVED_EPOCH = {"ok": True, "error": None, "commit_steps": 2, "passes": []}
+#: served_verdicts.py in `_pearlplus_sh`'s toy tree: each call's arguments noted in $ORDER.verdicts, and a piece line
+FAKE_PIECE_VERDICTS = '''import json, os, sys
+open(os.environ["ORDER"] + ".verdicts", "a").write(json.dumps(sys.argv[1:]) + "\\n")
+print("POUW-DEV " + json.dumps({"verdict": "unclaimed"}))
+'''
+
+
+def _pearlplus_sh(tmp_path: Path, *args: str, served: dict | None = None,
+                  **extra: str) -> tuple[int, list[str], list[list[str]]]:
+    """`served_pearlplus.sh ARGS` in a toy tree whose served_passes.py is FAKE_SERVED_PASSES, served_verdicts.py
+    FAKE_PIECE_VERDICTS and pearl_c_sm90.sh TOY_SM90, under a no-op `sleep`, its toy serve dir's window 7 holding
+    serve-openai's arm's served.json ``served`` (None: none), on the CPU and two jobs (``extra`` adds to the environment):
+    the exit status, its lines and served_passes.py's calls."""
+    tree, venv, w7 = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "serve" / "pearl" / "w7"
+    for p in (tree / "benchmarks" / "one_stage", tree / "benchmarks" / "harness" / "setup", venv, w7,
+              tree / "benchmarks" / "pouw" / "pearl_c_vllm"):
+        p.mkdir(parents=True, exist_ok=True)
+    (tree / "benchmarks" / "one_stage" / "served_pearlplus.sh").symlink_to(HERE.parent / "served_pearlplus.sh")
+    (tree / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(FAKE_PIECE_VERDICTS)
+    (tree / "benchmarks" / "harness" / "env.sh").write_text("")
+    (tree / "benchmarks" / "harness" / "setup" / "pearl_c_sm90.sh").write_text(TOY_SM90)
+    (tree / "benchmarks" / "pouw" / "pearl_c_vllm" / "served_passes.py").write_text(FAKE_SERVED_PASSES)
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    _script(tmp_path / "bin" / "sleep", "exit 0")
+    if served is not None:
+        (w7 / "served.json").write_text(json.dumps(served))
+    env = {"PATH": f"{tmp_path / 'bin'}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "PY": sys.executable,
+           "PEARL_TIE": "1", "ORDER": str(tmp_path / "order"), "PEARLPLUS_VOLUNTEER": "cpu", "PEARLPLUS_JOBS": "2", **extra}
+    run = subprocess.run(["bash", str(tree / "benchmarks" / "one_stage" / "served_pearlplus.sh"), *args], cwd=tmp_path,
+                         env=env, check=False, capture_output=True, text=True)
+    noted = tmp_path / "order.passes"
+    return run.returncode, run.stdout.splitlines(), [json.loads(x) for x in noted.read_text().splitlines()] \
+        if noted.exists() else []
+
+
+def test_pearlplus_arm_builds_the_cubin_then_writes_serve_openais_protocols_config_from_the_spec(tmp_path):
+    """Before the window's serve, `served_pearlplus.sh arm DIR` builds the cubin in DIR (setup.paths naming the kernel and
+    it) and has `served_passes.py arm` write DIR/protocols-config.json from the spec's Pearl-C arm; with no cubin there is
+    no config and no arm, and it fails."""
+    q = tmp_path / "arm"
+    rc, lines, calls = _pearlplus_sh(tmp_path, "arm", str(q))
+    assert rc == 0 and (q / "setup.paths").read_text().splitlines() == ["pearl_c", str(q / "build" / "k.cubin")], lines
+    assert [x.split(":")[0] for x in lines] == ["POUW cubin", "POUW arm"] and (q / "protocols-config.json").exists()
+    assert lines[1] == "POUW arm: served_passes.py arm exit 0: arm: wrote protocols-config.json"
+    assert calls == [["arm", "--spec", "benchmarks/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml", "--out",
+                      str(q / "protocols-config.json")]]
+    q = tmp_path / "none" / "arm"
+    rc, lines, calls = _pearlplus_sh(tmp_path / "none", "arm", str(q), NO_CUBIN="1")
+    assert (rc, len(lines), calls, (q / "protocols-config.json").exists()) == (1, 1, [], False), lines
+    assert lines[0].startswith("POUW cubin: pearl_c_sm90.sh failed (exit 4 after ") \
+        and lines[0].endswith(": nvcc: no sm_90a here")
+
+
+@pytest.mark.parametrize("volunteer", ["cpu", ""])
+def test_pearlplus_give_up_runs_the_volunteer_on_the_windows_passes_then_retain_writes_w_over_what_it_keeps(
+        tmp_path, volunteer):
+    """Once the window is picked, before any coin of Pearl+'s, `served_pearlplus.sh give-up SERVE_DIR WINDOW` runs on the
+    passes serve-openai's arm wrote for the window (pearl/wWINDOW): the volunteer (here on the CPU), then retain, which
+    writes W whether or not a volunteer ran, given its answer when one did; it exits 0 once W is there."""
+    rc, lines, calls = _pearlplus_sh(tmp_path, "give-up", str(tmp_path / "serve"), "7", served=SERVED_EPOCH,
+                                     PEARLPLUS_VOLUNTEER=volunteer)
+    p, q = tmp_path / "serve" / "pearl" / "w7", tmp_path / "serve" / "private" / "pearl-give-up"
+    assert rc == 0 and json.loads((p / "window-record.json").read_text()) == TOY_W, lines
+    ran = [["volunteer", "--passes", str(p), "--out", str(q / "volunteer.json"), "--jobs", "2"]] if volunteer else []
+    given = ["--volunteer", str(q / "volunteer.json")] if volunteer else []
+    assert calls == [*ran, ["retain", "--passes", str(p), *given, "--window-record", str(p / "window-record.json")]]
+    assert [x.split(":")[0] for x in lines] == ["POUW volunteer", "POUW retain"], lines
+    assert lines[-1] == "POUW retain: served_passes.py retain exit 0: retain: W window-record.json"
+
+
+@pytest.mark.parametrize("served, extra, said", [
+    (None, {}, "no served passes of the window (serve-openai's Pearl+ arm wrote no served.json for it)"),
+    ({**SERVED_EPOCH, "ok": False, "error": "its epoch made 3 rounds of 2 Commit steps"}, {},
+     "its epoch made 3 rounds of 2 Commit steps"),
+    (SERVED_EPOCH, {"NO_W": "1"}, None),
+])
+def test_pearlplus_give_up_writes_no_w_of_a_window_the_arm_served_no_epoch_of_or_one_retain_wrote_none_for(
+        tmp_path, served, extra, said):
+    """No W, and so no commit R and no coin, for a window serve-openai's arm wrote no served.json for, or one whose epoch
+    wasn't a round a Commit step (its served.json's error), each before the volunteer or retain runs; nor where retain
+    wrote none. Each fails, saying why."""
+    rc, lines, calls = _pearlplus_sh(tmp_path, "give-up", str(tmp_path / "serve"), "7", served=served, **extra)
+    assert rc == 1 and not (tmp_path / "serve" / "pearl" / "w7" / "window-record.json").exists(), lines
+    if said:
+        assert (lines, calls) == ([f"POUW give-up: none, and no W: {said}"], [])
+    else:
+        assert [c[0] for c in calls] == ["volunteer", "retain"] and lines[-1] == (
+            "POUW W: none written, so nothing ties the window's passes to a commit (retain's log in the serve dir)"), lines
+
+
+@pytest.mark.parametrize("held", [True, False])
+def test_under_pearl_tie_pearlpluss_piece_verifies_the_windows_passes_held_to_w_and_never_without_it(tmp_path, held):
+    """Under PEARL_TIE the piece is steps 4 and 5 alone, over the window's passes as the arm wrote them: verify holds them
+    to W (--tie W) and `served_verdicts.py pearlplus` holds its verdict to W, given give-up's volunteer answer. With no W
+    verify isn't run, so no coin is drawn on the passes, and the piece still writes its verdict."""
+    p, piece = tmp_path / "serve" / "pearl" / "w7", tmp_path / "piece"
+    (q := tmp_path / "serve" / "private" / "pearl-give-up").mkdir(parents=True)
+    (q / "volunteer.json").write_text(json.dumps({"given_up": []}))
+    if held:
+        p.mkdir(parents=True)
+        (p / "window-record.json").write_text(json.dumps(TOY_W))
+    rc, lines, calls = _pearlplus_sh(tmp_path, str(tmp_path / "serve"), "7", str(piece), served=SERVED_EPOCH)
+    w = str(p / "window-record.json")
+    assert rc == 0 and calls == ([["verify", "--passes", str(p), "--out", str(piece / "verify.json"), "--answer",
+                                   str(piece / "pearlplus-answer.json"), "--jobs", "2", "--fast", "--tie", w]] if held else [])
+    assert [json.loads(x) for x in (tmp_path / "order.verdicts").read_text().splitlines()] == [[
+        "pearlplus", str(piece), "--served", str(p / "served.json"), "--verify", str(piece / "verify.json"), "--tie", w,
+        "--volunteer", str(q / "volunteer.json"), "--coin", str(piece / "coin-put.json")]]
+    said = [x.split(" after ")[0] for x in lines if x.startswith(("POUW coin: ", "POUW verdict: "))]
+    assert said == (["POUW coin: served_passes.py verify drew none (it refused the run before its coin)",
+                     "POUW verdict: served_passes.py verify exit 0"] if held else [
+        "POUW verdict: served_passes.py verify not run: the window's passes have no Pearl+ window record W to hold them to "
+        "(served_pearlplus.sh give-up wrote none), so no coin is drawn on them"]), lines
+    assert lines[-2:] == ['POUW-DEV {"verdict": "unclaimed"}', "POUW piece: served_verdicts.py pearlplus exit 0"]
+
+
 PEARL_W = "d7" * 64
 PEARL_LEAN_WORK = {"credited": 5400, "credited_tiles": 40, "macs": 5600, "rho": "1/100", "epsilon": "1/100"}
 
@@ -1854,6 +2075,7 @@ else:
         sys.exit(2)
     out.mkdir(parents=True)
     (out / "circuit.json").write_text(json.dumps({{"run": "ab"}}))
+    assert "--pearl-served" not in a or "--window-registration" in a
     if "--window-registration" in a:
         tail = a[a.index("--window-registration"):]
         open(os.environ["ORDER"] + ".commit", "w").write("\\n".join(tail))
@@ -1874,7 +2096,7 @@ if a[0] == "warm":
     sys.exit(0)
 out = Path(a[a.index("--out") + 1])
 if a[0] == "audit":
-    assert ("--tie" in a) == ("--tie-prefix" in a)
+    assert "--tie-prefix" not in a or "--tie" in a
     open(os.environ["ORDER"] + ".audit", "w").write(json.dumps(a))
     open(os.environ["ORDER"] + ".main", "w").write(open(a[a.index("--main") + 1]).read())
     out.mkdir(parents=True)
@@ -2439,6 +2661,158 @@ def test_under_h1_tie_a_window_h1_bound_no_r_for_or_another_r_has_no_v3c(tmp_pat
     assert (rc, order, lines[-1]) == (16, ["window-circuit"], f"WINDOW-COMMIT class {W63K4}: {why}"), lines
 
 
+def _pearl_tied_commit(tmp_path: Path, chained: bool = True) -> Path:
+    """Window 7's commit as `pearl_commit` left it under PEARL_TIE in the toy serve dir: Pearl+'s window record W, V3c's
+    registration R (`TIED_LAW`'s sample), chained right after W unless ``chained`` is False, R's circuit and the commit's
+    answer. Returns W's path."""
+    d = tmp_path / "serve"
+    vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
+    for p in (vw, d / "pearl" / "w7"):
+        p.mkdir(parents=True)
+    (w := d / "pearl" / "w7" / "window-record.json").write_text(json.dumps(TOY_W))
+    previous = REG.digest(TOY_W) if chained else "ab" * 64
+    (vw / "registration.json").write_text(json.dumps({**TOY_W, "previous": previous, "law": TIED_LAW}))
+    (vw / "circuit.json").write_text(json.dumps({"run": "ab"}))
+    (d / "pearl" / "w7" / "window-commit.json").write_text(json.dumps({"run": "ab", "circuit": "cd", "population": 37}))
+    return w
+
+
+def test_under_pearl_tie_v3c_audits_the_commit_chained_right_after_pearlpluss_w_tied_to_it(tmp_path):
+    """Under PEARL_TIE the window's one commit is the one made once Pearl+'s W was written (`pearl_commit`): V3c holds its
+    registration R to being chained right after W and its circuit to the verifier's, runs no window-commit of its own,
+    and audits it tied to W (records_audit's --tie W, no prefix: the values R registers are W's own) at stratified:1, on a
+    port a sampled proof block."""
+    w = _pearl_tied_commit(tmp_path)
+    rc, lines, order, _limits = _v3c(tmp_path, PEARL_TIE="1")
+    assert rc == 0 and "window-commit" not in order and order[0] == "window-circuit" and "audit" in order, (lines, order)
+    assert lines.pop(0) == V3C_ENTRY
+    assert lines[1].startswith(f"WINDOW-COMMIT class {W63K4} once Pearl+'s window record W was written, before any coin "
+                               "of Pearl+'s verdict or V3c's audit (R ") and '"run": "ab"' in lines[1], lines
+    assert ", chained right after W " in lines[1] and "population" not in lines[1]
+    assert lines[2].endswith("window-circuit record: PASS")
+    assert _audited(tmp_path) == {"--law": "stratified:1", "--tie": str(w), "--tie-prefix": None, "--ports": "3"}
+
+
+@pytest.mark.parametrize("case, why", [
+    ("unchained", "window-commit's registration R isn't chained right after Pearl+'s window record W"),
+    ("no W", "Pearl+ wrote no window record W of the window (served_pearlplus.sh give-up), so V3c has no commit of it"),
+    ("no R", "window-commit left no registration R beside W (the serve dir's pearl/w<k>/window-commit.err)"),
+])
+def test_under_pearl_tie_a_window_with_no_w_or_no_r_chained_right_after_it_has_no_v3c(tmp_path, case, why):
+    """No retries: a window whose W or R wasn't written before any coin isn't committed again for V3c, and an R that
+    isn't chained right after W isn't audited as if it were."""
+    w = _pearl_tied_commit(tmp_path, chained=case != "unchained")
+    gone = {"no W": w, "no R": tmp_path / "serve" / f"v3c-w7-{W63K4.replace(',', '-')}" / "window" / "registration.json"}
+    if case in gone:
+        gone[case].unlink()
+    rc, lines, order, _limits = _v3c(tmp_path, PEARL_TIE="1")
+    assert (rc, order, lines[-1]) == (16, ["window-circuit"], f"WINDOW-COMMIT class {W63K4}: {why}"), lines
+
+
+#: the serve's run under PEARL_TIE in `_v3c`'s toy tree: its row a BF16 row's (`_v3c`'s row dir under a BF16 row's id)
+PEARL_TIES = {"PEARL_TIE": "1", "ROW_ID": "llama32-1b__bf16__h200__tp1__b4__i256__o4__fixed__greedy__bi-eager"}
+ARM_PASSES = 'a = sub.add_parser("arm")\nr.add_argument("--window-record")\n'
+
+
+def _pearl_tree(tmp_path: Path, arm: bool = True, passes: str = ARM_PASSES) -> None:
+    """What PEARL_TIE's run reads of the toy tree beyond `_v3c`'s: serve-openai's Pearl+ arm (unless not ``arm``),
+    served_passes.py (``passes``) and the package of PoUW's Lean verifier, which the run builds before serving."""
+    tree = tmp_path / "tree"
+    pipeline, passes_dir = tree / "integrations" / "vllm" / "verity_vllm" / "pipeline", tree / "benchmarks" / "pouw" / "pearl_c_vllm"
+    for p in (pipeline, passes_dir, tree / "verity" / "core" / "protocols" / "pouw" / "lean" / "check"):
+        p.mkdir(parents=True)
+    if arm:
+        (pipeline / "serve_pearl.py").write_text("")
+    (passes_dir / "served_passes.py").write_text(passes)
+
+
+NO_ARM_PASSES = ("PREFLIGHT: PEARL_TIE needs served_passes.py's arm (serve-openai's --protocols-config) and retain's "
+                 "--window-record (W), which this tree's served_passes.py lacks")
+NO_PEARL_TIE = ("PREFLIGHT: under PEARL_TIE V3c's audit is tied to Pearl+'s W, whose values the circuit's cut linears read, "
+                "with records_audit's --tie, which this tree's records_audit.py doesn't take")
+
+
+def _no_pearl_reader(law: str) -> str:
+    return ("PREFLIGHT: under PEARL_TIE every value Pearl+'s W registers needs a sampled reader, which only stratified:K, a "
+            f"stratum of each table's readers, gives: V3C_LAW is {law}")
+
+
+@pytest.mark.parametrize("args, extra, toy, line", [
+    ((), {"H1_TIE": "1"}, {}, "PREFLIGHT: H1_TIE chains V3c's commit right after H1's W and PEARL_TIE right after "
+                              "Pearl+'s, one W a window: set one"),
+    ((), {"POUW": "h1"}, {}, "PREFLIGHT: PEARL_TIE makes Pearl+'s verdict PoUW's piece, and POUW is h1: set POUW=pearlplus"),
+    ((), {"PRECISION": "verity_int8"}, {}, "PREFLIGHT: PEARL_TIE serves the BF16 checkpoint's linears as Pearl+'s FP8 "
+                                           "product, and PRECISION is verity_int8: set it bfloat16"),
+    ((), {"ROW_ID": None}, {}, "PREFLIGHT: PEARL_TIE serves the BF16 checkpoint, and ROW_ID row is no BF16 row's (its id "
+                               "names __bf16__): set ROW to the BF16 row's dir"),
+    ((), NO_V3C, {}, "PREFLIGHT: PEARL_TIE commits the window at V3C_CLASS, and it is empty"),
+    ((), {"CLASSES": "4,32,4"}, {}, f"PREFLIGHT: PEARL_TIE commits the window at V3C_CLASS {W63K4}, whose window circuit "
+                                    "CLASSES (4,32,4) doesn't count: add it"),
+    ((), {"WINDOW_STEPS": "16"}, {}, "PREFLIGHT: under PEARL_TIE each Commit step is a Pearl+ round, and W's rounds are "
+                                     f"V3C_CLASS's outputs: V3C_CLASS {W63K4}'s outputs aren't WINDOW_STEPS (16)"),
+    ((), {"LOAD": "front", "CERTIFIER_FRONT": "true"}, {}, "PREFLIGHT: under PEARL_TIE the load fills each window's steps, "
+                                                          "and LOAD=front sends the warden's group alone: LOAD fixed or varied"),
+    ((), {}, {"arm": False}, "PREFLIGHT: PEARL_TIE serves through serve-openai's Pearl+ arm "
+                             "(verity_vllm.pipeline.serve_pearl), which this tree doesn't have"),
+    ((), {}, {"passes": 'r.add_argument("--window-record")\n'}, NO_ARM_PASSES),
+    ((), {}, {"passes": 'a = sub.add_parser("arm")\n'}, NO_ARM_PASSES),
+    ((), {}, {"prove_path": "import sys\n"}, "PREFLIGHT: PEARL_TIE needs window-commit's --pearl-served, its registration "
+                                             "chained right after Pearl+'s W, which this tree's prove_path.py doesn't take"),
+    ((), {}, {"records_audit": "import sys\n"}, NO_PEARL_TIE),
+    (("v3c",), {}, {"records_audit": "import sys\n"}, NO_PEARL_TIE),
+    ((), {"V3C_LAW": "subset:1"}, {}, _no_pearl_reader("subset:1")),
+    (("v3c",), {"V3C_LAW": "work:4"}, {}, _no_pearl_reader("work:4")),
+    ((), {"NODE_MEM_GB": "196"}, {}, "PREFLIGHT: under PEARL_TIE, where this node has 196 GB, under the 290 GB V3c's audit "
+     "needs (V3C_AUDIT_MEM_GB), its audit and the composite are deferred to a follow-on, and onsite's composite reads "
+     "PoUS's case, which needs this node's card: PRODUCT=remote, or a node with the memory"),
+])
+def test_the_preflight_refuses_pearl_tie_beside_h1_tie_off_its_bf16_pearlplus_serve_or_on_a_tree_without_its_steps(
+        tmp_path, args, extra, toy, line):
+    """PEARL_TIE chains V3c's commit R right after Pearl+'s W, so beside H1_TIE (H1's W) it is refused; it serves the BF16
+    checkpoint through serve-openai's Pearl+ arm, one round a Commit step, so another POUW, PRECISION or row, a V3C_CLASS
+    CLASSES doesn't count or whose outputs aren't the window's steps, and LOAD=front are refused; so is a tree without the
+    arm, served_passes.py's arm and retain's --window-record, window-commit's --pearl-served or records_audit's --tie, a
+    design that can leave a value of W with no sampled reader (in `served_verdicts.sh v3c` too), and a deferral onsite's
+    composite can't follow: each before anything runs."""
+    _pearl_tree(tmp_path, **{k: v for k, v in toy.items() if k in ("arm", "passes")})
+    rc, lines, order, _limits = _v3c(tmp_path, args, **{k: v for k, v in toy.items() if k in ("prove_path", "records_audit")},
+                                     **{**PEARL_TIES, **extra})
+    assert (rc, lines, order) == (3, [line], [])
+
+
+#: PoUW's piece under PEARL_TIE, as the COINS line names it
+PEARL_TIED_RUN = ("PoUW: Pearl+ serving the window itself (PEARL_TIE: serve-openai's Pearl+ arm, one epoch the window and a "
+                  "round a Commit step, its verdict held to its window record W, which V3c's commit R is chained right after)")
+
+
+@pytest.mark.parametrize("live", [True, False])
+def test_under_pearl_tie_the_coins_line_says_the_windows_salt_coins_are_the_arms_in_process_challengers(tmp_path, live):
+    """Under PEARL_TIE the COINS line, the record's first, names PoUW's piece as Pearl+ serving the window itself, its
+    epoch's salt coin the arm's in-process challenger's, so it leads with the record claiming no Pearl+ verdict, and its
+    replay's draws a draw session's on PEARLC_CHALLENGER_GATE, which the run checks first, or with it empty the node's."""
+    _pearl_tree(tmp_path)
+    venv = tmp_path / "toy-venv" / "bin"
+    _script(venv / "python", '[ "$1 $2" = "-m research" ] && exit 0\n[ "$1 $2" = "-m verity_vllm.pipeline.cli" ] && exit 9\n'
+                             f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
+    _script(gate := tmp_path / "gate", FAKE_GATE)
+    (one := tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True)
+    (one / "served_verdicts.py").symlink_to(HERE.parent / "served_verdicts.py")
+    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200",
+                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                      PEARLC_CHALLENGER_GATE=str(gate) if live else "", **PEARL_TIES)
+    assert rc == 17 and lines[-1] == "STOP at predict (exit 17)", lines
+    draws = ("a draw session's of its own on vy-challenger-1's gate (peer vy-dc-h200, lane vllm), opened on the run's "
+             "commitment once before the replay, checked against the auditor's ledger by pearl_c.draw in its piece" if live
+             else "the Lean verifier's IO.getRandomBytes on this node, taken once before the replay")
+    assert lines[0].startswith("GATE ready: ") == live and sum(x.startswith("GATE") for x in lines) == live, lines
+    assert lines[int(live)] == (
+        f"COINS Pearl+'s epoch salt coins are in-process and the record claims no Pearl+ verdict; sampled proofs: "
+        f"{LOCAL_COINS}; {PEARL_TIED_RUN}, its epoch's salt coin the arm's in-process challenger's (serve_pearl.in_process), "
+        f"which the serving process holds, and its replay's draws {draws}, cited by store id in the POUW line's coin; a "
+        f"development piece, it credits nothing;{V3C_COINS} the bandwidth audit's: vy-auditor-2's bw_party, inside PoUS's "
+        "piece"), lines
+
+
 TIES = {"H1_TIE": "1", "H1_GATE": GATE, "H1_CIRCUITS": "circuits"}
 
 
@@ -2523,17 +2897,18 @@ def _hosts(tmp_path: Path) -> Path:
     return tmp_path / "hosts"
 
 
-def _deferred(tmp_path: Path, **extra: str | None) -> subprocess.CompletedProcess:
-    """Window 7 of a toy serve dir under H1's tie: its commit as the tie left it, with a value file, H1's records, the
-    record's and the composite's inputs, files no step after the serve reads (a row dir, a key, an audit session), and
-    the pieces the record read in $OUT; then step 6's deferral (`served_verdicts.sh defer WHY`) on vy-dc-h200, a node short
-    of V3c's audit's memory, at the tree of commit SHA, in a development run (``extra`` adds to the environment, None
-    unsetting)."""
+def _deferred(tmp_path: Path, pearl: bool = False, **extra: str | None) -> subprocess.CompletedProcess:
+    """Window 7 of a toy serve dir under H1's tie (``pearl``: Pearl+'s, PEARL_TIE): its commit as the tie left it, with a
+    value file, H1's records (Pearl+'s W), the record's and the composite's inputs, files no step after the serve reads (a
+    row dir, a key, an audit session), and the pieces the record read in $OUT; then step 6's deferral
+    (`served_verdicts.sh defer WHY`) on vy-dc-h200, a node short of V3c's audit's memory, at the tree of commit SHA, in a
+    development run (``extra`` adds to the environment, None unsetting)."""
     d, out = tmp_path / "serve", tmp_path / "served-out"
-    _tied_commit(tmp_path, "same")
+    _pearl_tied_commit(tmp_path) if pearl else _tied_commit(tmp_path, "same")
     vw = d / f"v3c-w7-{VTAG}" / "window"
-    files = {"h1/w7/registration.json": W_OF_7, "h1/w7/record.json": json.loads((vw / "registration.json").read_text()),
-             f"window-circuit-w7-{VTAG}.json": {}, "weights_registration.json": {},
+    h1 = {} if pearl else {"h1/w7/registration.json": W_OF_7,
+                           "h1/w7/record.json": json.loads((vw / "registration.json").read_text())}
+    files = {**h1, f"window-circuit-w7-{VTAG}.json": {}, "weights_registration.json": {},
              "seals.jsonl": {"window": 7, "requests": ["a"]},
              "requests.jsonl": {"user": "a", "engine_id": "a", "windows": [7], "check": {"passed": True}},
              "sampled-proofs-served/summary.json": {"audit": {}},
@@ -2553,8 +2928,8 @@ def _deferred(tmp_path: Path, **extra: str | None) -> subprocess.CompletedProces
     (tmp_path / "served-tree").mkdir()
     env = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(tmp_path / "served-venv"),
            "D": str(d), "K": "7", "OUT": str(out), "SERVE_ROOT": str(tmp_path / "root"), "V3C_CLASS": W63K4,
-           "PRODUCT": "remote", "H1_TIE": "1", "HOST": "vy-dc-h200", "RESEARCH_SOURCE_SHA": SHA,
-           "GIT_CEILING_DIRECTORIES": str(tmp_path), "DEVELOPMENT": "1"}
+           "PRODUCT": "remote", **({"PEARL_TIE": "1"} if pearl else {"H1_TIE": "1"}), "HOST": "vy-dc-h200",
+           "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path), "DEVELOPMENT": "1"}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     return subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "defer", SHORT], cwd=tmp_path / "served-tree",
                           env=env, check=False, capture_output=True, text=True)
@@ -2562,8 +2937,8 @@ def _deferred(tmp_path: Path, **extra: str | None) -> subprocess.CompletedProces
 
 def _deferral_settings(tmp_path: Path) -> dict[str, str]:
     """The settings `_deferred`'s deferral recorded for its follow-on (private/deferred/deferred.env), as bash reads them."""
-    names = ("K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER "
-             "DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE")
+    names = ("K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE PEARL_TIE COMPOSITE ALPHA GAMMA SERVED_NODE "
+             "SERVED_PEER DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE")
     said = subprocess.run(["bash", "-c", f'. "$1"; for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done', "_",
                            str(tmp_path / "serve" / "private" / "deferred" / "deferred.env")],
                           check=True, capture_output=True, text=True).stdout
@@ -2594,8 +2969,9 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     d, dd, out = tmp_path / "serve", tmp_path / "serve" / "private" / "deferred", tmp_path / "served-out"
     assert _deferral_settings(tmp_path) == {
         "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": "stratified:1", "V3C_CHALLENGER": "local",
-        "DEVELOPMENT": "1", "H1_TIE": "1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
-        "SERVED_PEER": "", "DEFERRED_TREE": SHA, "COMPOSE_OFF_NODE": off, "COMPOSE_NODE": "vy-auditor-2"}
+        "DEVELOPMENT": "1", "H1_TIE": "1", "PEARL_TIE": "", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "",
+        "SERVED_NODE": "vy-dc-h200", "SERVED_PEER": "", "DEFERRED_TREE": SHA, "COMPOSE_OFF_NODE": off,
+        "COMPOSE_NODE": "vy-auditor-2"}
     listed = (dd / "inputs.txt").read_text().splitlines()
     window = [f"v3c-w7-{VTAG}/window/{f}" for f in ("circuit.json", "registration.json", "values/a.bin")]
     own = ["private/deferred/deferred.env", "private/deferred/pieces/pouw/answer.json"]
@@ -2656,6 +3032,26 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert (argv[-4], len(argv[-3]), argv[-2:]) == ("--key-sha512", 128, ["--lane", "vllm"])
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", str(d), str(out)]
     assert not _window_data(out, 7), _window_data(out, 7)
+
+
+def test_under_pearl_tie_a_deferral_hands_its_follow_on_pearlpluss_w_which_it_holds_r_and_ties_the_audit_to(tmp_path):
+    """Under PEARL_TIE the deferral records PEARL_TIE for its follow-on and lists Pearl+'s W and the tie's commit answer
+    where H1's log and records would be; the follow-on, at those settings, holds R to being chained right after W as the
+    served node did, makes no commit of its own, and audits R tied to W."""
+    assert _deferred(tmp_path, pearl=True, COMPOSE_OFF_NODE="0").returncode == 0
+    d = tmp_path / "serve"
+    assert {k: v for k, v in _deferral_settings(tmp_path).items() if k.endswith("_TIE")} == {"H1_TIE": "", "PEARL_TIE": "1"}
+    window = [f"v3c-w7-{VTAG}/window/{f}" for f in ("circuit.json", "registration.json", "values/a.bin")]
+    reads = [*(f for f in DEFERRED_READS if not f.startswith("h1/")), "pearl/w7/window-record.json",
+             "pearl/w7/window-commit.json", "private/deferred/deferred.env", "private/deferred/pieces/pouw/answer.json"]
+    assert (d / "private" / "deferred" / "inputs.txt").read_text().splitlines() == [
+        *sorted([*reads, *window]), "private/deferred/inputs.sha256"]
+    rc, lines, order, _limits = _follow(tmp_path)
+    assert rc == 0 and order == ["audit", "period", "record", "composite"], (lines, order)
+    assert lines[3].startswith(f"WINDOW-COMMIT class {W63K4} once Pearl+'s window record W was written") \
+        and ", chained right after W " in lines[3], lines
+    assert _audited(tmp_path) == {"--law": "stratified:1", "--tie": str(d / "pearl" / "w7" / "window-record.json"),
+                                  "--tie-prefix": None, "--ports": "3"}
 
 
 FOLLOW_FAIL = ("FOLLOW-ON on cpu-6, 755 GB: V3c's audit, which the served node vy-dc-h200 deferred, "
@@ -2760,6 +3156,17 @@ def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_
                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
     assert (rc, lines, order, limits) == (0, [f"PREFLIGHT passed on vy-dc-h200-2, {said}. {ONLY}"], [], [])
     assert not (tmp_path / "root").exists() and not (tmp_path / "fw").exists()
+
+
+def test_preflight_only_under_pearl_tie_says_pearlplus_serves_the_window_its_r_chained_right_after_its_w(tmp_path):
+    """Under PEARL_TIE the plan says Pearl+ serves the window and V3c's commit R is chained right after its W before any
+    coin; its commit runs after the lease, so the lease is the serve's own."""
+    _pearl_tree(tmp_path)
+    rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                    HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **PEARL_TIES)
+    assert (rc, lines, order, limits) == (0, [
+        "PREFLIGHT passed on vy-dc-h200-2, 512 GB: the serve's lease 60 min, capped at 128 GB; Pearl+ serves the window "
+        f"(PEARL_TIE), V3c's commit R chained right after its W before any coin; {OFF}. {ONLY}"], [], [])
 
 
 def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_path):
@@ -3670,12 +4077,15 @@ def test_the_offline_program_is_the_one_serve_openai_declares_under_the_same_pro
 
 
 def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
-    """`served_verdicts.sh serve` in a toy tree whose venv python records serve-openai's argv and exits before listening,
-    under a no-op `sleep`: the exit status and that argv."""
+    """`served_verdicts.sh serve` in a toy tree whose venv python records serve-openai's argv (and in ``env`` beside it
+    the engine's VLLM_BATCH_INVARIANT and PEARLC_BF16_ROWS) and exits before listening, under a no-op `sleep`: the exit
+    status and that argv."""
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
     for d in (tree / "integrations" / "vllm", bin_, venv):
         d.mkdir(parents=True)
-    for path, body in ((venv / "python", f"printf '%s\\n' \"$@\" > {tmp_path}/argv; exit 1"), (bin_ / "sleep", "exit 0")):
+    python = (f"printf '%s\\n' \"$@\" > {tmp_path}/argv\nprintf '%s=%s\\n' VLLM_BATCH_INVARIANT \"$VLLM_BATCH_INVARIANT\" "
+              f"PEARLC_BF16_ROWS \"$PEARLC_BF16_ROWS\" > {tmp_path}/env\nexit 1")
+    for path, body in ((venv / "python", python), (bin_ / "sleep", "exit 0")):
         path.write_text(f"#!/bin/sh\n{body}\n")
         path.chmod(0o755)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
@@ -3699,6 +4109,25 @@ def test_the_engine_gets_one_token_budget_with_or_without_h1(tmp_path, env, budg
     assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
     assert argv.count("--max-num-batched-tokens") == 1 and argv[argv.index("--max-num-batched-tokens") + 1] == budget
     assert ("--protocols" in argv) == bool(env["H1_GATE"]) and "--h1-window-commit" not in argv
+
+
+@pytest.mark.parametrize("env, config, rows", [
+    ({}, "serve/private/pearl-arm/protocols-config.json", "0"),
+    ({"PEARL_PROTOCOLS_CONFIG": "arm.json", "PEARLC_BF16_ROWS": "1"}, "arm.json", "1"),
+])
+def test_under_pearl_tie_the_endpoint_serves_the_bf16_1b_through_pearlpluss_arm_a_round_a_commit_step(
+        tmp_path, env, config, rows):
+    """Under PEARL_TIE serve-openai serves the BF16 1B at bfloat16 through its Pearl+ arm (--protocols pouw:SCHEME, its
+    --protocols-config the one `pearl_arm` wrote, PEARL_PROTOCOLS_CONFIG) and no H1, a Commit step a window's step at
+    V3C_CLASS's outputs, batch-invariant, with sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise."""
+    env = {k: str(tmp_path / v) if k == "PEARL_PROTOCOLS_CONFIG" else v for k, v in env.items()}
+    rc, argv = _serve_argv(tmp_path, {"PEARL_TIE": "1", **env})
+    flag = lambda f: argv[argv.index(f) + 1] if argv.count(f) == 1 else argv.count(f)  # noqa: E731
+    assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
+    assert [flag(f) for f in ("--model", "--revision", "--precision", "--window-steps", "--protocols")] == [
+        "unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "bfloat16", "2", "pouw:pearl-c-h100-v1-h3"]
+    assert flag("--protocols-config") == str(tmp_path / config) and "--challenger-gate" not in argv, argv
+    assert (tmp_path / "env").read_text().splitlines() == ["VLLM_BATCH_INVARIANT=1", f"PEARLC_BF16_ROWS={rows}"]
 
 
 class _Response:
