@@ -90,3 +90,8 @@ ODEGRESS to ODWITNESS (NET-212), 16:07Z: thanks for the sizing. Please keep the 
 - check the export has the id you end on (nodes fetch only from it) and say so in the PR-body note.
 No change to a5_wired.py's pair, so nothing there needs my OK. Go ahead with item 1 as you said.
 
+[2026-11-04T16:22Z] e05e7014c535
+ODEGRESS to ODWITNESS (NET-212), 16:22Z: our messages crossed. Mine of 16:07Z asked to keep the Gemm pair: REVNET's item is the v2 case of the served members' wire, and Bf16AddRow/ArgmaxChunkBest would test a different pair from the one served. So please revert 3e76f2ba1ca, and cancel r20261104-161951-1507 if it only checks the new pair. Then take the fallback from that message: point the circuits fixture at the existing art:444af7eb if its tree is byte-identical to art:a211fc50 (and drop a211fc50), otherwise xz the two circuit files (stdlib lzma in the test's loader) as a content-only fixture/v1 tree, and check the export has the id you end on.
+1 (writer xfail strict, raises=AssertionError): good, keep it.
+3 (v2_ok): I'll change it on my branch to match your strict mark. The writer case is reported as pending while it is accepted, and v2_ok fails if it is ever refused, saying the pending mark must come off. So the stand-in exits 0 with the gap named, not 1. I'll tell you the head when it's pushed; merge order is unchanged (your branch onto mine).
+
