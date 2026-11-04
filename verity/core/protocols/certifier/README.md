@@ -312,8 +312,8 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 ## The network bound
 
 In `GLOSSARY.md`'s symbols (its notation table, from k_exfil on), the bound is what
-`NetTiming.Guarantees.PeriodLeakAccepted` proves and nothing tighter. On the warden path, for the zone Y behind one
-network certifier over a certification period of m execution phases, except with probability δ_net:
+`NetTiming.Guarantees.PeriodLeakAccepted` proves and nothing tighter. On the active-warden path, for the zone Y behind
+one network certifier over a certification period of m execution phases, except with probability δ_net:
 
 ~~~text
 k_exfil(Y) ≤ k_sched + k_fail + Σ_j (ℓ_a,j + k_skip,j + T_j·log2 d_jit)
@@ -323,14 +323,15 @@ k_sched is log2 of the number of schedules the network certifier may run, every 
 and k_fail is log2(cap + 1) summed over every connection, cap its most egress cells. On real serving each connection's
 cell count is in both, a known overcount: proved, and larger than necessary. ℓ_a,j is execution phase j's registered
 width, charged in full and carried by the record, and k_skip,j what the incorrect proof blocks its sample missed can let
-through. The realized advice length |a_j| is private and no term of the bound. The jitter term is 0 without jitter
-(d_jit = 1). Each execution phase's count takes its registered inputs at the registration's values, which the
-registration's commitment binds and no proof yet derives. `PeriodLeakAccepted` bounds each execution phase's failure on
-its own, by δ + ε_ks + ε_bind + ε_tap, ε_tap the chance of a collision with the network certifier's openings; the union
+through. The realized advice length |a_j| is private and no term of the bound. The jitter term is T_j bits an
+execution phase, never 0: the network certifier meets `JitterBounded` only at d_jit = 2. Each execution phase's count
+takes its registered inputs at the registration's values, which the registration's commitment binds and no proof yet
+derives. `PeriodLeakAccepted` bounds each execution phase's failure on its own, by δ + ε_ks + ε_bind + ε_tap, ε_tap the
+chance of a collision with the network certifier's openings; the union
 over the period, δ_net = m·(δ + ε_ks + ε_bind + ε_tap), is `Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted`, on a
 run whose per-phase bound (`window_le`) is a field, not yet derived from `PeriodLeakAccepted`. The clock-sync path has
 no k_sched or k_fail, and charges log2|𝒮_sync| bits an execution phase instead (`PROTOCOL.md`, "The claim"); "The active
-warden" there derives the warden path's terms.
+warden" there derives the active-warden path's terms.
 
 ## Zero knowledge: what N2's verdict reads, and what's open
 

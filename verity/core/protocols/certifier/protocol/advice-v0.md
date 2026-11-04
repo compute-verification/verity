@@ -86,8 +86,9 @@ charge really counts: what the serving engine, which is the prover, chooses.
 
 What's left free are the step count, which requests each step runs and in what order, the chunk sizes, the
 preemptions, the cache hits and their sources, and whether the row past an EOS ran. `release` is determined, and the
-timing terms charge it: m·log2|𝒮_sync| and the jitter on the clock-sync path, k_sched and k_fail on the warden path.
-The advice carries it only so that the compiler and the tie to the certified egress know which output each frame is.
+timing terms charge it: m·log2|𝒮_sync| on the clock-sync path, k_sched and k_fail on the active-warden path, and the
+jitter on both. The advice carries it only so that the compiler and the tie to the certified egress know which output
+each frame is.
 
 **Validity.** `Advice` replays the schedule, keeping for each request the positions computed (`num_computed_tokens`),
 the known tokens and the kept outputs, and refuses:
