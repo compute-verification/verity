@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# `verity bench overhead`'s job on a GPU node, run from the shipped source by the `research run --on NODE --gpus 1 --cwd
-# source` that `verity_bench.overhead_records` launches: it builds the PoUW harness for the card (native/build.sh at the
+# `verity bench overhead`'s job on a GPU node, run from the shipped source by the `research run --on NODE --cwd source` that
+# `verity_bench.overhead_records` launches, under `gpu-lease 1 --wait --max-min M`: it builds the PoUW harness for the card (native/build.sh at the
 # card's PH_ARCH, its cache under POUW_HARNESS_BUILD on the node, so a timed run compiles only a changed harness) and runs
 # `python -m verity_bench.overhead_node` on the lease's GPU, with a scratch directory outside $OUT for the Nsight report.
 #
@@ -11,7 +11,7 @@
 # VERITY_BENCH_VENV names the Python with torch and vLLM (default /workspace/cp/venv312), CUDA the toolkit with nvcc and
 # nsys (default /usr/local/cuda-13.0).
 set -euo pipefail
-: "${RESEARCH_RUN_DIR:?}" "${RESEARCH_RUN_ID:?}" "${GPU_LEASE_UUID:?run it on a GPU lease: research run --gpus 1}"
+: "${RESEARCH_RUN_DIR:?}" "${RESEARCH_RUN_ID:?}" "${GPU_LEASE_UUID:?run it on a GPU lease: gpu-lease 1 --wait -- bash $0 ...}"
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 O=${OUT:-$RESEARCH_RUN_DIR/out}

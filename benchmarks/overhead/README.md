@@ -14,8 +14,9 @@ verity bench overhead run --record RUN                        label RUN a run of
 verity bench overhead table [--json]                          γ per scheme, point and card, from runs of record alone
 ```
 
-A run takes one GPU of its node through the node's GPU lease (`research run --on NODE --gpus 1`, which waits for it); the
-H200's node is `vy-dc-h200`. Its outputs are `out/points.json` or `out/overhead.json` and `out/busy.json`, beside each
+A run takes one GPU of its node through the node's `gpu-lease`, which waits for it and holds it for the run's bound
+(`research run --on NODE -- gpu-lease 1 --wait --max-min M -- bash benchmarks/harness/overhead_node.sh ...`; `research run
+--gpus` is refused on a node whose GPUs gpu-lease doesn't hand out). The H200's node is `vy-dc-h200`. Its outputs are `out/points.json` or `out/overhead.json` and `out/busy.json`, beside each
 `bench.py` result and log.
 
 ## The operating points
@@ -62,15 +63,15 @@ with a 95% interval from the ratios' order statistics.
 ## The source check
 
 An overhead of record comes only from a labelled run of this door. A run is the door's when its recorded command is the
-node job `bash benchmarks/harness/overhead_node.sh points|run` with only the options the door gives it, alone or behind
-`research run --gpus 1`'s `gpu-lease` wait, and it set no variable with `--env` but `VERITY_BENCH_VENV`: `points --store`
-and `run --record` refuse any other, so a wrapper script, a patched interpreter or another environment never makes a
-record. Points are stored only from a sweep under the door's rule (C's share, L's slack, the grid and the largest m). A γ
-stands when its run is the door's, labelled `run_of_record=overhead`, passed with exit 0 from a clean tree, was timed at points of record that nothing supersedes, ran
-the arm's cubin from the `art:` id it was sent (the art's bytes are a binary the run's SASS gate passed; a cubin built in
-the run is development only), and its point passed every rule: each linear timed, at least 20 paired reps, a 95%
-interval within ±5% of the ratio, the cross-check, and the arm's reference verifier accepting every row
-(`verify.py --every-row`). Runs of record are chosen by label, as `served-table`'s are. `table` refuses every other figure
+node job `bash benchmarks/harness/overhead_node.sh points|run` with only the options the door gives it, under the
+`gpu-lease` that holds its GPU, and it set no variable with `--env` but `VERITY_BENCH_VENV`: `points --store` and `run
+--record` refuse any other, so a wrapper script, a patched interpreter or another environment never makes a record. Points
+are stored only from a sweep under the door's rule (C's share, L's slack, the grid and the largest m). A γ stands when its
+run is the door's, labelled `run_of_record=overhead`, passed with exit 0 from a clean tree, was timed at points of record
+that nothing supersedes, ran the arm's cubin from the `art:` id it was sent (the art's bytes are a binary the run's SASS
+gate passed; a cubin built in the run is development only), and its point passed every rule: each linear timed, at least
+20 paired reps, a 95% interval within ±5% of the ratio, the cross-check, and the arm's reference verifier accepting every
+row (`verify.py --every-row`). Runs of record are chosen by label, as `served-table`'s are. `table` refuses every other figure
 and says why. A reader of γ outside `benchmarks/` takes it from `table --json`, whose rows carry `of_record` and `why`;
 inside, `overhead_records.gamma_of_record` raises on a γ without one.
 

@@ -20,6 +20,7 @@ figure and says why; a reader of γ outside this package (the protocol table, th
 from __future__ import annotations
 
 import json
+import math
 import shlex
 import shutil
 import subprocess
@@ -58,14 +59,21 @@ def _execute(argv: Sequence[str], root: Path) -> int:
     return subprocess.run(list(argv), cwd=root, check=False).returncode
 
 
+def gpu_lease(minutes: float) -> list[str]:
+    """The wait for one GPU of the node, held for the run's bound. The node job takes it itself, since `research run --gpus`
+    is refused on a node whose GPUs gpu-lease doesn't hand out (vy-dc-h200)."""
+
+    return ["gpu-lease", "1", "--wait", "--max-min", str(math.ceil(minutes)), "--"]
+
+
 def launch_argv(root: Path, node: str, minutes: float, job: Sequence[str], sends: Sequence[Path] = ()) -> list[str]:
-    """The node side as a `research run` on one GPU of `node` (`--gpus 1`: it waits for the lease), from this checkout."""
+    """The node side as a `research run` on one GPU of `node`, from this checkout."""
 
     env = [f"VERITY_BENCH_VENV={v}"] if (v := settings.VERITY_BENCH_VENV) else []
-    return ["research", "run", "--on", node, "--gpus", "1", "--project", "verity", "--campaign", "overhead",
+    return ["research", "run", "--on", node, "--project", "verity", "--campaign", "overhead",
             "--source", str(root), "--cwd", "source", "--timeout", f"{minutes:g}m", "--require-result",
             *[x for f in sends for x in ("--send", str(f))], *[x for e in env for x in ("--env", e)],
-            "--", "bash", NODE_JOB, *job]
+            "--", *gpu_lease(minutes), "bash", NODE_JOB, *job]
 
 
 def launch_points(root: Path, node: str, card: str, model: str, precision: str, minutes: float | None = None,
@@ -112,8 +120,8 @@ def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point:
 
 def door_why(attempt: Mapping, run: str, sub: str) -> str | None:
     """Why `run` isn't a run of the door's `sub`: its command isn't the node job `bash NODE_JOB sub` with the door's options
-    (`DOOR_OPTIONS`), alone or after the gpu-lease wait `research run --gpus 1` puts before it, or it set a variable with
-    `--env` the door doesn't (`DOOR_ENV`)."""
+    (`DOOR_OPTIONS`), under the gpu-lease that holds its GPU (the door's own, or `research run --gpus`'s) or alone, or it set
+    a variable with `--env` the door doesn't (`DOOR_ENV`)."""
 
     argv = [str(x) for x in attempt.get("argv") or []]
     cmd = argv[argv.index("--") + 1:] if argv[:1] == ["gpu-lease"] and "--" in argv else argv
