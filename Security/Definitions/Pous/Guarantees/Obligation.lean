@@ -11,9 +11,9 @@ oracle's values at distinct tags, so they are uniform and independent of every o
 is then P2's audit of the snapshot with whatever the prover holds about the other tags as advice: at every block count,
 a payload and a responder fixed by the other tags' keys pass with probability at most any bound on P2's audit at that
 count (`ObligationOfStatic`, no premise), so within P2's graded bound wherever `P2RingRoundSecure` gives it, from `2^19`
-to `2^25` blocks (`ObligationOfRoundSecure`), and to `2^27` under the widened conjecture `P2RingRoundSecureWide`
+to `2^25` blocks (`ObligationOfRoundSecure`), and to `2^27` under the conjecture at that ceiling
 (`ObligationOfRoundSecureWide`). `ObligationDemo` is the demo's memory term at `1038·2^16` blocks, outside the first
-range, and `ObligationDemoWide` its 105-read window's bound under the widened one; `ObligationWide320` bounds a
+range, and `ObligationDemoWide` its 105-read window's bound at the `2^27` ceiling; `ObligationWide320` bounds a
 320-read window by `2^-20` at every block count of the widened range. Over a uniform offset a block's code has one
 distribution for every content fixed before the offset is drawn (`P2ContentAbsorbs`).
 
@@ -75,12 +75,12 @@ def ObligationOfStatic : Prop :=
               (snap tag y.1, y.2.1, y.2.2)) ≤ c
 
 /-- **An audit window of the mutable store, from P2's per-round floor.** If P2 in the ring model holds per round with
-floor `p` and bad-event mass `ε₀` (`P2RingRoundSecure p ε₀ D Q L`), then for every block count `N` from `2^19` to `2^25`,
-every injective snapshot `tag` into the store's tags `T`, every schedule `Sz` and `k`, and every payload `W`,
-preprocessor `A₁` and responder `A₂` (holding `Sz j` bits at boundary `j`, each round within `(D, Q, L)`) chosen from the
-key pairs of the tags outside the snapshot: over the store's oracle and the `k` challenges, all `k` answers about the
-snapshot (`snap`) are correct with probability at most `(1 − p)^m + k·ε₀`, `m` the boundaries `j < k` at which the state
-is at most `S₀ = ⌊ρ·|C|⌋` bits.
+floor `p` and bad-event mass `ε₀` (`P2RingRoundSecure (2 ^ 25) p ε₀ D Q L`), then for every block count `N` from `2^19`
+to `2^25`, every injective snapshot `tag` into the store's tags `T`, every schedule `Sz` and `k`, and every payload `W`,
+preprocessor `A₁` and responder `A₂` (holding `Sz j` bits at boundary `j`, each round within `(D, Q, L)`) chosen from
+the key pairs of the tags outside the snapshot: over the store's oracle and the `k` challenges, all `k` answers about
+the snapshot (`snap`) are correct with probability at most `(1 − p)^m + k·ε₀`, `m` the boundaries `j < k` at which the
+state is at most `S₀ = ⌊ρ·|C|⌋` bits.
 
 What the other tags' keys stand for: earlier versions of the snapshot's blocks and blocks it doesn't hold, so this
 covers the weights as a payload fixed before the ring is drawn, and a prover that uses everything it saw of earlier
@@ -89,7 +89,7 @@ versions' keys. The range is the conjecture's.
 Frozen (no-function, hash): it bounds P2's ring-model audit at a snapshot of a mutable store, not the PoUS code, and
 rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecure. -/
 def ObligationOfRoundSecure : Prop :=
-  ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ), Pous.P2.Assumptions.P2RingRoundSecure p ε₀ D Q L →
+  ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ), Pous.P2.Assumptions.P2RingRoundSecure (2 ^ 25) p ε₀ D Q L →
     ∀ (N : ℕ) [NeZero N], 2 ^ 19 ≤ N → N ≤ 2 ^ 25 →
       ∀ (T : Type) [Fintype T] [DecidableEq T] (tag : Fin N → T), Function.Injective tag →
         ∀ (Sz : ℕ → ℕ) (k : ℕ)
@@ -105,12 +105,13 @@ def ObligationOfRoundSecure : Prop :=
 
 /-- **An audit window of the mutable store to `2^27` blocks, from the widened per-round floor.**
 `ObligationOfRoundSecure`'s bound, `(1 − p)^m + k·ε₀`, for every block count `N` from `2^19` to `2^27`, from
-`P2RingRoundSecureWide p ε₀ D Q L`.
+`P2RingRoundSecure (2 ^ 27) p ε₀ D Q L`.
 
 Frozen (no-function, hash): it bounds P2's ring-model audit at a snapshot of a mutable store, not the PoUS code, and
-rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in `N` above `2^25`. -/
+rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecure at the ceiling `2^27`, unchecked in `N` above
+`2^25`. -/
 def ObligationOfRoundSecureWide : Prop :=
-  ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ), Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
+  ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ), Pous.P2.Assumptions.P2RingRoundSecure (2 ^ 27) p ε₀ D Q L →
     ∀ (N : ℕ) [NeZero N], 2 ^ 19 ≤ N → N ≤ 2 ^ 27 →
       ∀ (T : Type) [Fintype T] [DecidableEq T] (tag : Fin N → T), Function.Injective tag →
         ∀ (Sz : ℕ → ℕ) (k : ℕ)
@@ -163,7 +164,7 @@ def ObligationDemo : Prop :=
               varPassesOn _ k k (W (rest tag y.1)) (A₁ (rest tag y.1)) (A₂ (rest tag y.1))
                 (snap tag y.1, y.2.1, y.2.2)) ≤ c
 
-/-- **The demo's window bound, from the widened per-round floor.** If `P2RingRoundSecureWide p ε₀ D Q L` and
+/-- **The demo's window bound, from the widened per-round floor.** If `P2RingRoundSecure (2 ^ 27) p ε₀ D Q L` and
 `(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130` (which `p = 0.043`, `ε₀ = 2^-137` meet, `PousP2Rounds.floor_043_eps`),
 then at the demo's `N = 1038·2^16` labels, for every injective snapshot, every schedule at most
 `S₀ = 1,060,008,348,186` bits at each of a window's 105 challenge times, and every payload, preprocessor and
@@ -172,11 +173,12 @@ So `ObligationDemo`'s `c` is that, and outside it some challenge time of each wi
 `undeclared ≤ 0.1211·M + S_chip + Σ cap·round`, the last step being the device model's.
 
 Frozen (no-function, hash): it bounds P2's ring-model audit at a snapshot of the demo's store, not the PoUS code, and
-rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in `N` above `2^25`. -/
+rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecure at the ceiling `2^27`, unchecked in `N` above
+`2^25`. -/
 def ObligationDemoWide : Prop :=
   ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ),
     (1 - p) ^ 105 + 105 * ε₀ ≤ ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) →
-    Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
+    Pous.P2.Assumptions.P2RingRoundSecure (2 ^ 27) p ε₀ D Q L →
     ∀ (N : ℕ) [NeZero N], N = 1038 * 2 ^ 16 →
       ∀ (T : Type) [Fintype T] [DecidableEq T] (tag : Fin N → T), Function.Injective tag →
         ∀ (Sz : ℕ → ℕ), (∀ j < 105, Sz j ≤ 1060008348186) →
@@ -194,7 +196,7 @@ def ObligationDemoWide : Prop :=
 `ObligationOfRoundSecure` gives a window whose state is at most `S₀` at each of its `k` challenge times, at most `c`. -/
 def RoundsBound (p ε₀ : ℝ≥0∞) (k : ℕ) (c : ℝ≥0∞) : Prop := (1 - p) ^ k + k * ε₀ ≤ c
 
-/-- **A block count of the widened range**: `2^19 ≤ N ≤ 2^27`, where `P2RingRoundSecureWide` bounds P2's rounds. -/
+/-- **A block count of the widened range**: `2^19 ≤ N ≤ 2^27`, where `P2RingRoundSecure (2 ^ 27)` bounds P2's rounds. -/
 def WideBlockCount (N : ℕ) : Prop := 2 ^ 19 ≤ N ∧ N ≤ 2 ^ 27
 
 /-- **Distinct tags**: the snapshot's blocks have pairwise different tags, so each block's key pair is the oracle's value
@@ -204,7 +206,7 @@ def TagsInjective {N : ℕ} {T : Type} (tag : Fin N → T) : Prop := Function.In
 /-- **A state schedule within `S` at a window's `k` challenge times**: `Sz j ≤ S` for each `j < k`. -/
 def StateWithin (Sz : ℕ → ℕ) (k S : ℕ) : Prop := ∀ j < k, Sz j ≤ S
 
-/-- **A 320-read window at `2^-20`, from the widened per-round floor.** If `P2RingRoundSecureWide p ε₀ D Q L` and
+/-- **A 320-read window at `2^-20`, from the widened per-round floor.** If `P2RingRoundSecure (2 ^ 27) p ε₀ D Q L` and
 `RoundsBound p ε₀ 320 2^-20`, `(1 − p)^320 + 320·ε₀ ≤ 2^-20` (which `p = 0.043`, `ε₀ = 2^-137` meet,
 `PousP2Rounds.floor_043_eps_320`: `0.957^320 ≈ 7.8·10^-7`), then at every block count `N` from `2^19` to `2^27`
 (`WideBlockCount N`; the registered point's `2^19` and the demo's `1038·2^16` among them), for every injective snapshot
@@ -213,10 +215,11 @@ def StateWithin (Sz : ℕ → ℕ) (k S : ℕ) : Prop := ∀ j < k, Sz j ≤ S
 window passes with probability at most `2^-20`. At the demo's `N`, `S₀` is `ObligationDemo`'s 1,060,008,348,186 bits.
 
 Frozen (no-function, hash): it bounds P2's ring-model audit at a snapshot of a mutable store, not the PoUS code, and
-rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in `N` above `2^25`. -/
+rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecure at the ceiling `2^27`, unchecked in `N` above
+`2^25`. -/
 def ObligationWide320 : Prop :=
   ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ), RoundsBound p ε₀ 320 ((2⁻¹ : ℝ≥0∞) ^ 20) →
-    Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
+    Pous.P2.Assumptions.P2RingRoundSecure (2 ^ 27) p ε₀ D Q L →
     ∀ (N : ℕ) [NeZero N], WideBlockCount N →
       ∀ (T : Type) [Fintype T] [DecidableEq T] (tag : Fin N → T), TagsInjective tag →
         ∀ (Sz : ℕ → ℕ), StateWithin Sz 320 ((p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ) →

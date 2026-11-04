@@ -75,7 +75,8 @@ def test_demo_bs_store_is_certified_by_period_held_at():
 def test_320_reads_keep_the_105_read_certificates():
     """At `k ≥ 320` challenges the run keeps the 105-read certificates and their `1% + 2^-128`: the registered point
     under `P2SlackFamilyUncond`, Demo B's store and `2^27` blocks under `periodHeldAt`. `ObligationWide320`'s `2^-20`
-    (`p2.wide320_certificate`, from the open conjecture `P2RingRoundSecureWide`) is no run's certificate."""
+    (`p2.wide320_certificate`, from the open conjecture `P2RingRoundSecure` at the ceiling `2^27`) is no run's
+    certificate."""
     def at(bps: int, segments: int, k: int) -> R.Point:
         return R.Point(P2Params(16448, 21065, bps, segments), k, R.DEPLOYED.limit_ns)
 

@@ -2,7 +2,7 @@ import Proofs.Pous.P2.Rounds
 import Proofs.Pous.P2.RingTrunc
 
 /-!
-# Falsification tests of `P2RingRoundSecure`, at every block count from `2^19` to `2^25`
+# Falsification tests of `P2RingRoundSecure`, at every ceiling and every block count from `2^19` to it
 
 `RingTight`'s and `RingTrunc`'s responders, each at round `0` of a one-challenge audit at block count `N`:
 
@@ -43,10 +43,11 @@ theorem recSeq_accepts (hp : p.Prime) (h4 : p % 4 = 3) (hb : 2 ^ b ≤ p) (hp2 :
 
 end Tight
 
-/-- **Recomputation refutes every positive per-round floor**, at every block count from `2^19` to `2^25`: if `p` is
-prime, `P2RingRoundSecure p ε₀ D Q L` at `D ≥ 32,894`, `Q ≥ 2` and `L ≥ 65,789` forces `p = 0` whenever `ε₀ < 1`. -/
-theorem round_tight (hP : PrimeP16448) (p ε₀ : ℝ≥0∞) (D Q L : ℕ) (hD : 32894 ≤ D) (hQ : 2 ≤ Q)
-    (hL : 65789 ≤ L) (h : P2RingRoundSecure p ε₀ D Q L) (N : ℕ) [NeZero N] (h1 : 2 ^ 19 ≤ N) (h2 : N ≤ 2 ^ 25)
+/-- **Recomputation refutes every positive per-round floor**, at every block count from `2^19` to the ceiling: if `p`
+is prime, `P2RingRoundSecure Nmax p ε₀ D Q L` at `D ≥ 32,894`, `Q ≥ 2` and `L ≥ 65,789` forces `p = 0` whenever
+`ε₀ < 1`. -/
+theorem round_tight (hP : PrimeP16448) {Nmax : ℕ} (p ε₀ : ℝ≥0∞) (D Q L : ℕ) (hD : 32894 ≤ D) (hQ : 2 ≤ Q)
+    (hL : 65789 ≤ L) (h : P2RingRoundSecure Nmax p ε₀ D Q L) (N : ℕ) [NeZero N] (h1 : 2 ^ 19 ≤ N) (h2 : N ≤ Nmax)
     (hε : ε₀ < 1) : p = 0 := by
   let A₂ := recSeq N 16448 (2 ^ 16448 - 21065) 16432 16446 D Q L (by omega) hQ (by omega)
   obtain ⟨bad, hbad, hstep⟩ := h N h1 h2 _ 1 (fun _ => false) (fun _ _ _ _ _ => false) (ofSeq A₂)
@@ -75,13 +76,13 @@ theorem round_tight (hP : PrimeP16448) (p ε₀ : ℝ≥0∞) (D Q L : ℕ) (hD 
     exact ENNReal.mul_lt_mul_left hpos hfin (ENNReal.sub_lt_self ENNReal.one_ne_top one_ne_zero hp)
   exact absurd hs (not_le.2 hlt)
 
-/-- **Truncation bounds the per-round floor**, at every block count from `2^19` to `2^25`: if `p` is prime, keeping
-`m ≤ N` blocks without their low `t` bits within `S₀` gives `m/N ≤ 1 − p + ε₀` under
-`P2RingRoundSecure p ε₀ D Q L` at `D ≥ 2`, `Q ≥ 2` and `L ≥ 2^(t+1)`. At `2^19`, `t = 166` and `m = 501,757` this
-refutes `p = 0.043` with `ε₀ ≤ 2^-130`. -/
-theorem round_trunc (hP : PrimeP16448) (p ε₀ : ℝ≥0∞) (D Q L t : ℕ) (hD : 2 ≤ D) (hQ : 2 ≤ Q)
-    (ht : t ≤ 16448) (hL : 2 ^ (t + 1) ≤ L) (h : P2RingRoundSecure p ε₀ D Q L) (N : ℕ) [NeZero N]
-    (h1 : 2 ^ 19 ≤ N) (h2 : N ≤ 2 ^ 25) (m : ℕ) (hm : m ≤ N)
+/-- **Truncation bounds the per-round floor**, at every block count from `2^19` to the ceiling: if `p` is prime,
+keeping `m ≤ N` blocks without their low `t` bits within `S₀` gives `m/N ≤ 1 − p + ε₀` under
+`P2RingRoundSecure Nmax p ε₀ D Q L` at `D ≥ 2`, `Q ≥ 2` and `L ≥ 2^(t+1)`. At `2^19`, `t = 166` and `m = 501,757`
+this refutes `p = 0.043` with `ε₀ ≤ 2^-130`. -/
+theorem round_trunc (hP : PrimeP16448) {Nmax : ℕ} (p ε₀ : ℝ≥0∞) (D Q L t : ℕ) (hD : 2 ≤ D) (hQ : 2 ≤ Q)
+    (ht : t ≤ 16448) (hL : 2 ^ (t + 1) ≤ L) (h : P2RingRoundSecure Nmax p ε₀ D Q L) (N : ℕ) [NeZero N]
+    (h1 : 2 ^ 19 ≤ N) (h2 : N ≤ Nmax) (m : ℕ) (hm : m ≤ N)
     (hS : m * (16448 - t) ≤ (p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ) :
     (m : ℝ≥0∞) / N ≤ (1 - p) + ε₀ := by
   let A₂ : SeqResponderOn (p2ring N 16448 (2 ^ 16448 - 21065) 16432)
@@ -105,8 +106,8 @@ theorem round_trunc (hP : PrimeP16448) (p ε₀ : ℝ≥0∞) (D Q L t : ℕ) (h
 
 /-- **At `2^19` blocks, truncation refutes `p = 0.043` from `L = 2^167`**: keeping `501,757` blocks without their low
 `166` bits (`16,282` bits a block, within `S₀ = 8,169,621,180`) passes a round with probability
-`501757/2^19 ≈ 0.95703 > 0.957 + 2^-130`. So `P2RingRoundSecure (43/1000) ε₀ D Q L` is false at `D ≥ 2`, `Q ≥ 2`,
-`L ≥ 2^167` whenever `ε₀ ≤ 2^-130`, if `p` is prime.
+`501757/2^19 ≈ 0.95703 > 0.957 + 2^-130`. So `P2RingRoundSecure Nmax (43/1000) ε₀ D Q L` is false at every ceiling
+`Nmax ≥ 2^19`, `D ≥ 2`, `Q ≥ 2` and `L ≥ 2^167` whenever `ε₀ ≤ 2^-130`, if `p` is prime.
 
 `t = 166` and `167` (rates `0.957026` and `0.957085`) sit in the window `(1 − p, 0.01^(1/105)] = (0.957, 0.957089]`
 in which only the per-round form fails: the same truncation could refute the 105-challenge whole-audit form
@@ -114,13 +115,14 @@ in which only the per-round form fails: the same truncation could refute the 105
 meet-in-the-middle decoder takes one root of the stored value (depth `16,446`, both signs compared locally) and then
 one squaring per candidate, about `2^166 + 2^16` multiplications, so the true threshold is about `L ≥ 2^166` at
 `D ≥ 16,446`. That decoder is not proved here. -/
-theorem round_trunc_b19 (hP : PrimeP16448) (ε₀ : ℝ≥0∞) (D Q L : ℕ) (hD : 2 ≤ D) (hQ : 2 ≤ Q)
-    (hL : 2 ^ 167 ≤ L) (hε : ε₀ ≤ (2⁻¹ : ℝ≥0∞) ^ 130) : ¬ P2RingRoundSecure (43 / 1000) ε₀ D Q L := by
+theorem round_trunc_b19 (hP : PrimeP16448) {Nmax : ℕ} (hN : 2 ^ 19 ≤ Nmax) (ε₀ : ℝ≥0∞) (D Q L : ℕ) (hD : 2 ≤ D)
+    (hQ : 2 ≤ Q) (hL : 2 ^ 167 ≤ L) (hε : ε₀ ≤ (2⁻¹ : ℝ≥0∞) ^ 130) :
+    ¬ P2RingRoundSecure Nmax (43 / 1000) ε₀ D Q L := by
   intro h
   have hS : 501757 * (16448 - 166) ≤ (p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ := by
     rw [stateBound_p2ring_b19]
     norm_num
-  have hb := (round_trunc hP _ ε₀ D Q L 166 hD hQ (by norm_num) hL h (2 ^ 19) le_rfl (by norm_num) 501757
+  have hb := (round_trunc hP _ ε₀ D Q L 166 hD hQ (by norm_num) hL h (2 ^ 19) le_rfl hN 501757
     (by norm_num) hS).trans (add_le_add le_rfl hε)
   have hm : ((501757 : ℕ) : ℝ≥0∞) / ((2 ^ 19 : ℕ) : ℝ≥0∞) = ENNReal.ofReal (501757 / 2 ^ 19) := by
     rw [← ENNReal.ofReal_natCast, ← ENNReal.ofReal_natCast (2 ^ 19), ← ENNReal.ofReal_div_of_pos (by norm_num)]

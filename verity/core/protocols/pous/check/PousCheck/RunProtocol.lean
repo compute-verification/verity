@@ -34,7 +34,7 @@ the certificate's claims. Off it, `s_bits` is 0 and `eps` 0, the vacuous stateme
 At Demo B's store, 1038 segments of `2^16` blocks, that is `Pous.Period.PeriodHeldDemo`'s 1,060,008,348,186 bits at
 `1% + 2^-128`. More challenges than a certificate's `k` keep its `eps`: at `k` of at least 320 it stays `1% + 2^-128`,
 and `wide320Certificate`'s `2^-20` (`Pous.SecurityProofs.ObligationWide320`, from the open conjecture
-`P2RingRoundSecureWide`) is no run's certificate.
+`P2RingRoundSecure` at the ceiling `2^27`) is no run's certificate.
 
 `protocol` (`verity/pous/p2/v4/run`) accepts S1's LMS (`SCHEMES`) only; `testProtocol`, under an id of its own, the test
 signers' schemes and only them.
@@ -131,7 +131,7 @@ def familyCertificate (w c0 blocks : Nat) : Option Certificate.Certificate :=
   else none
 
 /-- `p2.WIDE_CLAIMS`: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks
-(`P2RingRoundSecureWide`, `RingDeviceAt`, `CoinCommitHides (coinViewAt N)`). -/
+(`P2RingRoundSecure (2 ^ 27)`, `RingDeviceAt`, `CoinCommitHides (coinViewAt N)`). -/
 def WIDE_CLAIMS : List String :=
   Certificate.P2_CLAIMS ++ ["p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding"]
 

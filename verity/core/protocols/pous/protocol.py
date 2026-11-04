@@ -71,7 +71,7 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
     Entry("seq-root", "assumption",
           "One modular square root at the scheme's width takes longer than twice the deadline on the fastest core, "
           "with up to 8 cores of one chiplet cooperating", "SeqRoot", "measured"),
-    # Lean's `Pous.P2.Assumptions.P2RingRoundSecureWide` (Security/Definitions/Pous/Assumptions/P2.lean)
+    # Lean's `Pous.P2.Assumptions.P2RingRoundSecure` at the ceiling 2^27 (Security/Definitions/Pous/Assumptions/P2.lean)
     Entry("p2-ring-round-secure-wide", "assumption",
           "P2 in the ring model, per round, at every block count N from 2^19 to 2^27: outside a bad event of mass k·ε₀, "
           "a state of at most ⌊ρ·|C|⌋ bits answers each fresh uniform challenge with probability at most 1 − p, with "

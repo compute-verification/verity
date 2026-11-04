@@ -51,8 +51,8 @@ Definitions/Pous/Guarantees/Obligation.lean
                                     the mutable store's audit window: tag freshness (`SnapshotFresh`), a block's
                                     offset absorbing its content (`P2ContentAbsorbs`), the window's bound from
                                     P2's static one at every block count (`ObligationOfStatic`), from
-                                    `P2RingRoundSecure` (`ObligationOfRoundSecure`) and from its widening to `2^27`
-                                    blocks, `P2RingRoundSecureWide` (`ObligationOfRoundSecureWide`), and the demo's
+                                    `P2RingRoundSecure` at the ceiling `2^25` (`ObligationOfRoundSecure`) and at
+                                    `2^27` blocks (`ObligationOfRoundSecureWide`), and the demo's
                                     memory term at `1038·2^16` blocks (`ObligationDemo`, `ObligationDemoWide`),
                                     and a 320-read window at `2^-20` from `2^19` to `2^27` blocks (`ObligationWide320`),
                                     proved in `Proofs/Pous/Obligation.lean`
