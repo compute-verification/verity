@@ -219,7 +219,9 @@ negatives.
   over a debit cap before the verifier's coin (`served_passes.py volunteer --device`: every word's counts from the card's
   debit cubin, every `volunteer_pass.CROSS_CHECK`-th tile replayed on the CPU too; `PEARLPLUS_VOLUNTEER=cpu` replays
   every tile on the CPU, far too slow for the default load), takes Pearl+'s verdict over all of them
-  (`served_passes.py verify`), and writes the piece through `served_verdicts.py pearlplus`: the verdict, the
+  (`served_passes.py verify`, its coin, where the lane's gate is set, a draw session's of its own there reserved once the
+  lane's Pearl-C period around the serve closed and opened on the run's commitment, `bench_arm.LiveDraw`), and writes
+  the piece through `served_verdicts.py pearlplus`: the verdict, the
   linears' declared and credited shares (`served_shares.pearlplus_shares`), and why it credits nothing.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
