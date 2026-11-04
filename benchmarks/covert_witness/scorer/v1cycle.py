@@ -472,8 +472,8 @@ def to_trace(te: Path, busy: set[str]) -> list[tuple[int, str]]:
 
 def reached_left(te: Path) -> list[str]:
     """The published and reached runs (`retrace_order`'s ranks 0 and below) in scope that `te`'s cache hasn't traced
-    or failed: while any is left, a refresh over CAPTURE_FINAL's capture PUTs nothing, so the console's products terms
-    move to the new capture together and its frontier doesn't flip empty and back (coordinator 20:56Z)."""
+    or failed. They hold no PUT: a refresh publishes on the traces it has and again as each lands (coordinator
+    10:56Z), and cycle.json lists them (`reached_untraced`)."""
     done = trace40.done(trace40.cache(te))
     scope = {r["run_id"] for r in trace40.scope()}
     return sorted(r for r, k in retrace_order(v3_scope()).items() if k <= 0 and r in scope and r not in done)
@@ -1208,10 +1208,8 @@ def main() -> int:
     last = rescore(rs, args.gates, final, root)
     on = nxt or trace40.TE40_WT
     untraced = [] if final or not same_capture(capture_version(on), CAPTURE_FINAL) else reached_left(on)
-    hold = (f"{len(untraced)} of the published and reached runs not yet traced on {CAPTURE_FINAL}'s capture"
-            if untraced else None)
-    if HERE_DIR and not os.environ.get("TE_SERVED") and not hold:
-        hold = "the VM read no served panels for this refresh on the node (TE_SERVED)"
+    hold = ("the VM read no served panels for this refresh on the node (TE_SERVED)"
+            if HERE_DIR and not os.environ.get("TE_SERVED") else None)
     policy = {} if final else policy_panels(out, commit, not args.no_put and not hold, root, args.gates)
     if hold:
         policy |= {k: f"not PUT ({hold})" + (f"; its build failed: {v.removeprefix('not PUT: ')}"
@@ -1273,7 +1271,7 @@ def main() -> int:
     if pools:
         meta["pools"] = pools
     if untraced:
-        meta["put_held_for"] = untraced
+        meta["reached_untraced"] = untraced
     if mem_wait:
         meta["trace_mem_wait"] = mem_wait
     if held:
