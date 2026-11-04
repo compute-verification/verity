@@ -248,7 +248,7 @@ instance instNonemptyBefore (τ : Strategy w.game) (k : Fin w.ms.length) (ω : w
 /-- **The sample's coins on which the draw ends.** -/
 abbrev EΩ : Type := {ω : w.L.Ω // DrawEnds w.src w.law w.nJ ω}
 
-noncomputable instance : Fintype w.EΩ := Subtype.fintype _
+noncomputable instance : Fintype w.EΩ := Subtype.fintype fun ω : w.L.Ω => DrawEnds w.src w.law w.nJ ω
 
 instance : Nonempty w.EΩ := w.hend.elim fun ω h => ⟨⟨ω, h⟩⟩
 
