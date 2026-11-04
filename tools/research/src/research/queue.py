@@ -2127,19 +2127,25 @@ class Queue:
         tree, and each preflight takes a place in the sync's pool and wall time of its budget.  It stands when (a) the head's
         change is the same onto both bases: `git diff-tree -r` from base to merge, each path with its modes and blobs on both
         sides, so no path it touches differs between the bases and the merge (a rebuilt pin, a restack) wrote the same files;
-        (b) between the bases no path of `PREFLIGHT_RULES` changed and none was deleted; and (c) the change deletes no path.
-        `Preflight.onto` refuses only what fails on the merge and not on its base, so what a check says of a file alone (a
-        Markdown cap, a report-genre name, a pin, which every change to its inputs rewrites) carries across, and (b) and (c) keep
-        out a reference from one side to a path the other takes away (a module string, a doc path).  What still carries is a
-        reference to a name the other side drops from a file it keeps (a `module:attr` whose attribute a change below removed):
-        the after-landing run's suites run these checks on `checked`'s tip and revert the culprit, as for a preflight that fails
-        to run.  The record may be of a preflight run above one that then refused (`_Back`): it judged the trees it names all
-        the same.  A record whose trees this clone lacks stands for nothing."""
+        (b) the change deletes no path; (c) no path deleted between the bases is named by a file the change writes
+        (`_names_deleted`); and (d) between the bases no path of `PREFLIGHT_RULES` changed, unless the pass is the one onto the
+        base the member had on `next`.  `Preflight.onto` refuses only what fails on the merge and not on its base, so what a
+        check says of a file alone (a Markdown cap, a report-genre name, a pin, which every change to its inputs rewrites)
+        carries across, and (b) and (c) keep out a reference from one side to a path the other takes away (a module string, a
+        doc path).  A member keeps its admission across a change to what the checks run, as one landing below it in four
+        makes (tools/research/src/ and tools/verity/check/ change most), while a PR entering `next` is preflighted under the
+        checks as they are.  What still carries is a reference to a name the other side drops from a file it keeps (a
+        `module:attr` whose attribute a change below removed), and a member a changed check would refuse: the after-landing
+        run's suites run these checks on `checked`'s tip and revert the culprit, as for a preflight that fails to run.  The
+        record may be of a preflight run above one that then refused (`_Back`): it judged the trees it names all the same.  A
+        record whose trees this clone lacks stands for nothing."""
         records = []
+        member = None
         if (on_next := self._next_base(head)) is not None:
             key = f"{head}:{on_next}"
             if (rec := flights["now"].get(key) or flights["before"].get(key)) is not None:
                 records.append((key, rec))
+                member = key
         newest = next(((k, rec) for fl in (flights["now"], flights["before"]) for k, rec in reversed(fl.items())
                        if rec.get("head") == head), None)
         if newest is not None and newest[0] not in {k for k, _ in records}:
@@ -2160,9 +2166,46 @@ class Queue:
                 continue
             if mine is None:
                 mine = rows(base_tree, tree)
-            if (change == mine and not any(meta.endswith(" D") for meta, _ in [*change, *between])
-                    and not any(ruled(p) for _, p in between)):
+            if (change != mine or any(meta.endswith(" D") for meta, _ in change)
+                    or (old_key != member and any(ruled(p) for _, p in between))):
+                continue
+            gone = [p for meta, p in between if meta.endswith(" D")]
+            if not gone or not self._names_deleted(gone, change, base_tree):
                 return True
+        return False
+
+    def _names_deleted(self, gone: list[str], change: list[tuple[str, str]], base_tree: str) -> bool:
+        """Whether a file ``change`` (`git diff-tree -r -z` rows) writes may name a path of ``gone``, deleted between two bases: its
+        blob holds one of the forms a doc path or a module string names the path by (`deleted_names`).  So it may when a
+        directory of ``gone`` is gone from ``base_tree`` too (a doc names a directory by itself), or the change writes more than
+        `NAMES_DELETED_MAX_BYTES` to read.  A path no file of the change names reads the same in the merge and in its base."""
+        dirs = sorted({posixpath.dirname(p) for p in gone} - {""})
+        if dirs:
+            r = _git(self.workdir, "ls-tree", "-z", "--name-only", base_tree, "--", *dirs, check=False)
+            if r.returncode or set(dirs) - set(filter(None, r.stdout.split("\0"))):
+                return True
+        blobs = [m[3] for m in (meta.split() for meta, _ in change) if m[4] != "D" and m[1] != "160000"]
+        if not blobs:
+            return False
+        sizes = subprocess.run(["git", "cat-file", "--batch-check=%(objectsize)"], cwd=self.workdir, input="\n".join(blobs) + "\n",
+                               capture_output=True, text=True)
+        if sizes.returncode or sum(int(s) for s in sizes.stdout.split() if s.isdigit()) > NAMES_DELETED_MAX_BYTES:
+            return True
+        r = subprocess.run(["git", "cat-file", "--batch"], cwd=self.workdir, input=("\n".join(blobs) + "\n").encode(),
+                           capture_output=True)
+        if r.returncode:
+            return True
+        names = set().union(*map(deleted_names, gone))
+        out, at = r.stdout, 0
+        while at < len(out):
+            header_end = out.index(b"\n", at)
+            if len(header := out[at:header_end].split()) < 3:
+                return True
+            size = int(header[2])
+            text = out[header_end + 1:header_end + 1 + size].decode("utf-8", "replace")
+            if any(n in text for n in names):
+                return True
+            at = header_end + 1 + size + 1
         return False
 
     def _read_priority(self, state: dict) -> frozenset[int]:
@@ -3325,9 +3368,26 @@ PREFLIGHT_TEST_PATHS = ("tests/test_module_strings.py", "tests/test_pins.py", "t
 #: for the two directories they run in, the conftest of `tools/research/tests` (one added beside the root's tests belongs here
 #: too), `waits.py`, `pins.py` and the `suites.py` the module strings take the members' packages from, under
 #: `tools/verity/check/`, and the `research` on their PYTHONPATH), and the workspace's members (the root `pyproject.toml`); a
-#: directory ends in `/`.  A base that changes one of them carries no verdict across (`Queue._standing`)
+#: directory ends in `/`.  A base that changes one of them carries no verdict across but a member's (`Queue._standing`)
 PREFLIGHT_RULES = (*PREFLIGHT_TEST_PATHS, "tools/research/tests/conftest.py", "tools/research/tests/waits.py",
                    "tools/research/pyproject.toml", "tools/research/src/", "tools/verity/check/", "pyproject.toml")
+#: the most a change's written files may hold for `Queue._names_deleted` to read them; past it they may name anything
+NAMES_DELETED_MAX_BYTES = 32 << 20
+
+
+def deleted_names(path: str) -> set[str]:
+    """The forms a doc path or a module string names ``path`` by, any of which a file holding names it: its file name (a doc
+    beside it), and its directory's name with its stem, as a path and as a module (a Lean import, `pkg.mod:attr`); a package's
+    `__init__.py` by its package, as a directory too."""
+    parts = path.split("/")
+    names = {parts[-1]}
+    if parts[-1] == "__init__.py" and len(parts) > 1:
+        parts = parts[:-1]
+        names = {parts[-1] + "/"}
+    stem = parts[-1].rsplit(".", 1)[0] if "." in parts[-1][1:] else parts[-1]
+    if len(parts) > 1:
+        names |= {f"{parts[-2]}/{stem}", f"{parts[-2]}.{stem}"}
+    return names
 
 
 def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]:
