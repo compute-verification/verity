@@ -13,7 +13,7 @@ open. The period the served windows join opens, through infra's own gate, on the
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
 `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
 gates nothing; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
-front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its composite
+front doesn't take, a front whose endpoint isn't on the network certifier's id form, and a front load with no front; its composite
 step publishes each case's and each product's verdict lines and nothing else. Its V3c step runs the split network
 certifier's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
 written; its preflight refuses the split beside the certifier's whole piece, or without V3c. Its load, `serve_load.py
@@ -715,7 +715,8 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
     composed, whatever their pieces left, and composes accept from sampled proofs' and PoUW's accepts on its node. The
     same pieces composed for onsite reject on the wipe's answer. The report and the line say they were composed on the
-    served node, from the answer files it wrote, and the published line keeps that."""
+    served node, from the answer files it wrote, and the published line keeps that. A certifier front's kept fetch and
+    session in the serve dir leave remote's record as it was."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
@@ -753,6 +754,14 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     where = {"host": "vy-dc-h200", "served_node": True, "from": S.COMPOSED_FROM}
     assert report["composed_on"] == line["composed_on"] == where
     assert json.loads(S.public_line("RECORD " + json.dumps(line)).removeprefix("RECORD "))["composed_on"] == where
+    front = tmp_path / "serve" / "private"
+    (front / "certifier" / "c20260101T000000Z-ab12").mkdir(parents=True)
+    (front / "certifier" / "c20260101T000000Z-ab12" / "fetch.tar.gz").write_bytes(b"the front's kept fetch")
+    (front / "certifier-front").mkdir()
+    (front / "certifier-front" / "session.json").write_text(json.dumps({"run": "c20260101T000000Z-ab12", "rc": 0}))
+    assert S.main(argv) == 0
+    assert json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD ")) == line
+    assert json.loads((tmp_path / "record" / "block-record.json").read_text()) == rec
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
     assert S.main(argv) == 0
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
@@ -1175,8 +1184,8 @@ IDS = "--protocol ids --id-payload 503"
     ("varied", FRONT, "--gate --warmup --bucket-ms-x", IDS, "PREFLIGHT: CERTIFIER_FRONT passes --bucket-ms, which this "
                                                              "tree's certifier front doesn't take"),
     ("front", "", "", "", "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"),
-    ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", "PREFLIGHT: the certifier front's warden sends "
-     "id-form requests, which serve-openai answers only under SERVE_ARGS='--protocol ids --id-payload 503'"),
+    ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", "PREFLIGHT: the network certifier in front of the "
+     "endpoint sends id-form requests, which serve-openai answers only under SERVE_ARGS='--protocol ids --id-payload 503'"),
 ])
 def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_front_load_with_no_front(
         tmp_path, load, front, takes, serve_args, line):
@@ -1217,16 +1226,21 @@ def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused
     ("remote", {"POUS_CMD": "true"}, "PREFLIGHT: PRODUCT=remote runs no onsite piece, and POUS_CMD is set: unset it"),
     ("remote", {"CERTIFIER_CHAIN_CMD": "true"},
      "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_CHAIN_CMD is set: unset it"),
-    ("remote", {"CERTIFIER_FRONT": FRONT},
-     "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_FRONT is set: unset it"),
+    ("remote", {"CERTIFIER_CMD": "true"},
+     "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_CMD is set: unset it"),
+    ("remote", {"LOAD": "front", "CERTIFIER_FRONT": FRONT, "SERVE_ARGS": IDS}, None),
     ("onsite", {}, None),
     ("offsite", {}, "PREFLIGHT: PRODUCT is onsite or remote, not offsite"),
 ])
 def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_command(tmp_path, product, extra, line):
     """PRODUCT=remote drops the onsite pieces: in a tree that has the wipe's piece its default WIPE_CMD isn't set, and
-    the preflight refuses any onsite piece's command set, before anything runs."""
+    the preflight refuses any onsite piece's command set, before anything runs. The certifier's front is how a run's
+    requests are served, not a piece, so remote takes it."""
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     _script(tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh", "exit 0")
+    (tree / "benchmarks" / "network_traces").mkdir(parents=True)
+    (tree / "benchmarks" / "network_traces" / "certifier_piece.py").write_text(
+        "print('usage: certifier_piece.py front PORT [--gate --warmup --bucket-ms]')\n")
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "PRODUCT": product, **extra}
