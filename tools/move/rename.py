@@ -174,12 +174,12 @@ def kind_at(spans: list[tuple[int, int, str]], i: int) -> str:
 def prose_word(text: str, spans: list[tuple[int, int, str]], s: int, e: int) -> bool:
     """Whether the word at ``text[s:e]`` stands in prose as a word, which a map with `scope = "prose"` renames: each of its
     characters but the spaces is prose, and it is no part of a name, a path, a flag or a call (`unit_draw`, `.draw`,
-    `draw.py`, `--draw`, `draw(`), nor a constant's name (`DRAW`). `Words.sub` also keeps a word whose new word is a name
-    (`NAMED`)."""
+    `draw.py`, `--draw`, `draw(`), nor a constant's or a camel-case name (`DRAW`, `DrawnUnit`), which prose names as the code
+    spells it. `Words.sub` also keeps a word whose new word is a name (`NAMED`)."""
     w = text[s:e]
     if any(not text[i].isspace() and kind_at(spans, i) != PROSE for i in range(s, e)):
         return False
-    if re.search(r"[_./]", w) or (sum(c.isalpha() for c in w) > 1 and w.upper() == w):
+    if re.search(r"[_./]|[a-z][A-Z]", w) or (sum(c.isalpha() for c in w) > 1 and w.upper() == w):
         return False
     left, right, after = text[s - 1:s], text[e:e + 1], text[e + 1:e + 2]
     if left and (left.isalnum() or left in "_./\\:@$`{<" or (left == "-" and text[s - 2:s - 1] in ("", "-", " ", "\t", "\n", "(", "`"))):

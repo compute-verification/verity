@@ -430,7 +430,7 @@ def test_two_files_landing_at_one_path_fail(toy):
 
 
 PROSE = M.Words({"scope": "prose", "words": {"draw": "sample", "firewall": "ZK server", "firewalled": "zk_served",
-                                             "escape": "acceptance probability"}})
+                                             "escape": "acceptance probability", "DrawnUnit": "SampledBlock"}})
 
 
 @pytest.mark.parametrize("path, old, new", [
@@ -444,8 +444,9 @@ PROSE = M.Words({"scope": "prose", "words": {"draw": "sample", "firewall": "ZK s
      '/-- A sample of the ZK server. -/\ndef draw : Nat := 1 -- the sample\n#eval s!"draw {draw}"\n'
      '/- nested /- sample -/ acceptance probability -/\n'),
     ("n.md",
-     "A draw (`draw()`), [draw](draw.md) and https://x/draw; a firewalled escape.\n\n```\ndraw\n```\n",
-     "A sample (`draw()`), [sample](draw.md) and https://x/draw; a firewalled acceptance probability.\n\n```\ndraw\n```\n"),
+     "A draw (`draw()`), [draw](draw.md) and https://x/draw; a firewalled escape; a DrawnUnit.\n\n```\ndraw\n```\n",
+     "A sample (`draw()`), [sample](draw.md) and https://x/draw; a firewalled acceptance probability; a DrawnUnit.\n\n"
+     "```\ndraw\n```\n"),
     ("s.sh",
      "#!/bin/bash\n# a draw\necho \"draw\" 'draw'\ndraw() { :; }\ncat <<X\ndraw\nX\n",
      "#!/bin/bash\n# a sample\necho \"draw\" 'draw'\ndraw() { :; }\ncat <<X\ndraw\nX\n"),
