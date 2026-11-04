@@ -136,8 +136,11 @@ HD void sha512_compress(uint64_t h[8], const uint64_t blk[16]) {
   h[0] += a; h[1] += b; h[2] += c; h[3] += d; h[4] += e; h[5] += f; h[6] += g; h[7] += hh;
 }
 
+// The IV is copied in from a local array: sx::iv's stores straight into s.h move registered rows' leaves on sm_90.
 HD void sha512_init(Sha512& s) {
-  sx::iv(s.h);
+  uint64_t iv[8];
+  sx::iv(iv);
+  for (int i = 0; i < 8; ++i) s.h[i] = iv[i];
   for (int i = 0; i < 16; ++i) s.w[i] = 0;
   s.fill = 0;
   s.len = 0;
