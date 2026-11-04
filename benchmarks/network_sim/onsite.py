@@ -389,7 +389,8 @@ def notes() -> list[str]:
         "the record reads it as registered (leak_bounds): the audit's NR·T_j/EVERY slot entries, NE bits each",
         "every K here is conditional: it charges ℓ_a,j as the tied audit's counted free inputs, which holds only once "
         "two checks are Lean refusals in the period check (" + "; ".join(OPEN_CHECKS) + "). Until both are in, a tied "
-        "audit is charged its advice's cap ℓ_a + 1 bits instead, a figure this record doesn't compute",
+        "audit is charged its advice's cap ℓ_a + 1 bits instead, a figure this record doesn't compute: ℓ_a there is "
+        "the advice's padded length, which the record doesn't carry yet, not the registered ℓ_a,j it reads",
         "k_skip,j is 0 in the per-period form, every proof block being drawn; the pooled form's k_skip at δ is "
         "F·log2(N + 1) + b·F (leak_bounds), and that form is conditional (hesc and hleak await SampledKSLive and P2)",
         f"the jitter is T_j·log2 d_jit at d_jit = {LB.JITTER_BOUND}, T_j bits a phase: JitterBounded holds only at "
