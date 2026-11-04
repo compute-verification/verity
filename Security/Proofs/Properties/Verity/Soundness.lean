@@ -3,13 +3,14 @@ import Properties.Verity.Idle
 import Proofs.Properties.Composition
 import Proofs.Core.Game.Prob
 import Proofs.Core.Game.Seq
+import Proofs.Flock.Claims.Prob
 
 /-!
 # Soundness at the verifier of record, from its subprotocols' targets
 
 A composite's acceptance is its acceptance as a `same` composition and every component's on its own case
 (`accepts_same`, `accepts_components`, from `Properties.Composition`'s `answerAccepts` at the composite, `acceptTied` at
-onsite's ties and `acceptSame`). So the event `Verity.SoundnessOf` bounds at a composite lies inside the union of its
+its ties and `acceptSame`). So the event `Verity.SoundnessOf` bounds at a composite lies inside the union of its
 subprotocols' events, each at most its target's error at the strategy: the union bound over the composite's
 subprotocols in one game (`soundness_at_of_targets`). `soundness_of_subprotocols` is it at onsite's seven, and
 `remote_soundness_of_subprotocols` at remote's three, which are a subset of onsite's.
@@ -25,6 +26,10 @@ The event isn't restricted to some input shape: the prover sends the committed f
 evidence's blobs with the evidence, and the composite reads both, so every input whose blobs begin with the committed
 files is what some strategy sends (`sent_reachable`), and every acceptance of the compiled verifier on such an input
 at files that pass the commit phase's check lies in the event with probability one (`Vocab.accepts_reachable`).
+
+The premises at a subprotocol's further finders (`Vocab.finderCR`) are what `ecr/sha-512` gives them: each finder's
+calls are within its budget on every coin, so where it meets `Claims.ExpectedCR` it finds a collision with probability
+at most its budget over `2^256` (`finderCROf_of_expectedCR`).
 
 The witnesses of each of the three theorems are at the idle deployment (`Properties.Verity.Idle`), at the compiled
 composites: its hypotheses hold at `Idle.unbounded` (`soundness_at_of_targets_honest`, `soundness_of_subprotocols_honest`,
@@ -52,7 +57,8 @@ theorem verifier_mem (k : Verity.Registration.Composite) :
   · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))
 
 /-- **What a composite's verifier of record accepts, it accepted as a `same` composition**: an accepted composition of
-its components whose record subprotocols committed to one record, and at onsite PoUS and PoUB-P2 on one store. -/
+its components whose record subprotocols committed to one record, at onsite PoUS and PoUB-P2 on one store, and at
+remote every window of PoUW's period on the policy's record. -/
 theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) : SameAccepts k s := by
   cases k
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
@@ -63,10 +69,10 @@ theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts
       Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
       Properties.Composition.answerAccepts (Remote.protocol.on s.blobs) s.params s.commitment s.evidence h
-    have hch' : Composition.checkSame "verity/remote/v0" (tied .remote) (s.components .remote) ps c ev =
-        .accept pub prof := hch
+    obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied [Remote.windows] ev
+      (Composition.checkSame "verity/remote/v0" Remote.tied (s.components .remote) ps c ev) pub prof hch
     exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
-      Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hch', fun t ht => absurd ht List.not_mem_nil⟩
+      Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
 
 /-- **What a composite's verifier of record accepts, each of its subprotocols' components accepts on its own
 case.** -/
@@ -336,6 +342,26 @@ theorem namedFinder_collides {h : Option Hash.Digest} {F R : Array ByteArray} (h
 theorem namedFinder_calls (h : Option Hash.Digest) (F R : Array ByteArray) (x : (namedFinder h F R).S) (n : ℕ) :
     (namedFinder h F R).cost x ≤ 0 * n + 2 := by
   simp [namedFinder]
+
+/-- **`ecr/sha-512` at a further finder gives its premise**: its calls are within its budget on every coin
+(`FinderSpec.calls`), so where it meets `Claims.ExpectedCR` it finds a collision with probability at most its budget
+over `2^256`. -/
+theorem FinderSpec.cr_of_expectedCR {G : Game Exchange} {cost : Game.Strategy G → ℕ} (f : FinderSpec G cost)
+    (σ : Game.Strategy G) (h : Claims.ExpectedCR sha512Msg (f.finder σ)) : f.CR σ := by
+  unfold FinderSpec.CR
+  unfold Claims.ExpectedCR at h
+  have hex : Claims.Ex (fun s => ((f.finder σ).cost s : ℝ)) ≤ (f.budget (cost σ) : ℝ) :=
+    calc Claims.Ex (fun s => ((f.finder σ).cost s : ℝ))
+        ≤ Claims.Ex (fun _ : (f.finder σ).S => (f.budget (cost σ) : ℝ)) :=
+          Claims.Ex_mono fun s => Nat.cast_le.2 (f.calls σ s)
+      _ = (f.budget (cost σ) : ℝ) := Claims.Ex_const _
+  exact h.trans (div_le_div_of_nonneg_right hex (Real.rpow_nonneg (by norm_num) _))
+
+/-- **`ecr/sha-512` at every further finder gives their premises** (`finderCROf`). -/
+theorem finderCROf_of_expectedCR {G : Game Exchange} {cost : Game.Strategy G → ℕ} (fs : List (FinderSpec G cost))
+    (σ : Game.Strategy G) (h : ∀ f ∈ fs, Claims.ExpectedCR sha512Msg (f.finder σ)) : finderCROf fs σ := by
+  unfold finderCROf
+  exact List.forall_iff_forall_mem.2 fun f hf => f.cr_of_expectedCR σ (h f hf)
 
 namespace Idle
 

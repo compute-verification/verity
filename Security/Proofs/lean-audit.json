@@ -60,6 +60,7 @@
   "Proofs.Properties.RemoteAudit.Component",
   "Proofs.Flock.Claims.Bridge.CustodyZkP",
   "Proofs.Properties.Verity.SampledCoins",
+  "Proofs.Properties.Verity.Sampled.Deployed",
   "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Pouw.LiveSalt.Canon",
   "Proofs.Properties.Pouw.LiveSalt.Coin",
@@ -72,8 +73,13 @@
   "Proofs.Properties.Verity.Sampled",
   "Proofs.Properties.Remote",
   "Proofs.Properties.Remote.Honest",
+  "Proofs.Properties.Verity.Recursive",
+  "Proofs.Properties.Verity.Recursive.Target",
+  "Proofs.Properties.Verity.Recursive.Refusals",
+  "Proofs.Properties.Verity.Recursive.Audit",
   "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Challenger",
+  "Proofs.Properties.Firewall",
   "Proofs.Properties.Challenger.Coins"
  ],
  "exempt": {

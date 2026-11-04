@@ -9,8 +9,9 @@ circuit file is read as empty files under the netlist tags (`fileRead`); the coi
 prover closes the device at once, no check reads its log, and there are no commitment openings and no gates computed;
 the world charges nothing over an empty window (`world`); the schedule is one
 empty block (`blocks`), and its wipe fills nothing and accepts nothing (`wipe`). Every finder and forger outputs nothing
-on its one coin. The circuit file's and the public file's digests in the parameters are both the parameters' own
-SHA-512, so the committed files pass the commit phase's check exactly when one of them is the parameters.
+on its one coin, and no bound reads a further finder. The circuit file's and the public file's digests in the parameters
+are both the parameters' own SHA-512, so the committed files pass the commit phase's check exactly when one of them is
+the parameters.
 
 `vocab δ W` publishes the error `δ` for every subprotocol, the work certificate `W`, and no collision, forgery or loss
 term. At `unbounded` (`δ = ⊤`) every subprotocol's error is `⊤`, so every target holds. At `exact` (`δ = 0`, `W = 1`)
@@ -95,7 +96,7 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   callsMul _ _ := 0
   callsAdd _ _ := 0
   finder_calls _ _ _ _ _ _ := Nat.zero_le _
-  finderCR _ _ _ _ _ := True
+  finders _ _ _ _ := []
   forger _ _ _ _ _ := forger
   forger_calls _ _ _ _ _ _ := Nat.zero_le _
   signatures _ := 0
