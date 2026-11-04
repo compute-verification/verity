@@ -47,10 +47,13 @@ An audit's free inputs (`free`) are no parameter: the check counts them off its 
 no registered value as pinned and `WindowGood` holds no registration values.
 The rows form has, in place of `sync_set`,
 
+    "circuit": hex,
     "scan": descriptor,
     "schedule": {"bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells",
                  "lanes", "queue", "slots", "window"}
 
+the class circuit, the SHA-512 of the Program of the one window circuit the workload's class registers (the verifier's
+own window-circuit record's `program`), which every tied compute audit runs (`held`);
 the scan's Program, its descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`), and the network
 certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
 header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a slot stride's buckets, dividing T, so each
@@ -164,6 +167,11 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   anchored at bucket 0 read it, whose entries the scan reads for no slot, since its state before bucket 0 has none
   occupied. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
   the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`).
+* in the rows form, link-window `w`'s tied compute audits run the class circuit (`held`): each audit its scan's `prog`
+  is an output of (`tiedAudits`) has a registration naming the parameters' `circuit` as its Program. A window circuit's
+  own digest binds its window's run, so it is another each window; its Program is the class's, one for the period, and
+  is what the audit's free inputs are read off. So no link-window's tied audit runs a Program the prover chose for that
+  window, and the free inputs its term counts are the class circuit's (`Properties.NetworkPeriod.RowsCircuitHeld`).
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `PeriodLeakAccepted`'s factor:
 
@@ -334,6 +342,9 @@ structure Params where
   key : ByteArray
   session : ByteArray
   program : String
+  /-- The rows form's class circuit, its window circuit's Program's SHA-512, which every tied compute audit runs
+  (`held`); none in the clock form, which ties no audit. -/
+  circuit : Option String
   form : Form
   windows : Nat
 
@@ -423,7 +434,8 @@ def paramsKeys : List String :=
   ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
 
 def rowsParamsKeys : List String :=
-  ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule", "session", "windows"]
+  ["audits", "cells", "circuit", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule", "session",
+    "windows"]
 
 def scheduleOf (j : Json) : V Schedule := do
   exactly j ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes",
@@ -796,6 +808,10 @@ def paramsOf (j : Json) : V Params := do
   unless session.size = sessionBytes do throw s!"a certifier session id is {sessionBytes} bytes, not {session.size}"
   let program ← Flock.J.str j "program" "the object"
   unless isDigest program do throw "program: not a SHA-512 digest (128 lowercase hex digits)"
+  let circuit ← if keysOf j == paramsKeys then pure none else do
+    let d ← Flock.J.str j "circuit" "the object"
+    unless isDigest d do throw "circuit: not a SHA-512 digest (128 lowercase hex digits)"
+    pure (some d)
   let form ← if keysOf j == paramsKeys then do pure (Form.clock (← syncSetOf (← Flock.J.get j "sync_set" "the object")))
     else do
       let s ← scheduleOf (← Flock.J.get j "schedule" "the object")
@@ -807,7 +823,7 @@ def paramsOf (j : Json) : V Params := do
       throw s!"cells: the rows form's caps are egress_cells = {s.egressCells} for each of the lanes · windows · \
         window = {s.lanes * (windows * s.window)} connections the schedule can carry (Schedule.caps), not these \
         {cells.size}"
-  pure { audits, cells, first, jitter, link, lms, key, session, program, form, windows }
+  pure { audits, cells, first, jitter, link, lms, key, session, program, circuit, form, windows }
 
 /-- A window record of one of `Flock.WindowRecord.FORMATS`. -/
 def registrationOf (j : Json) (ctx : String) : V Json := do
@@ -1185,6 +1201,34 @@ def stateChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × S
   | .rows s .. => c.windows.zipIdx.map fun (reg, i) => stateCheck p s c.audits (p.first + i) reg
   | .clock _ => #[]
 
+/-- Whether a compute audit's registration names `circuit`, a class circuit's Program's SHA-512, as its Program: its
+window circuit is that class's. None with no class circuit. -/
+def runsCircuit (circuit : Option String) (reg : Json) : Bool := match circuit, reg.getObjValD "program" with
+  | some d, .str x => x == d
+  | _, _ => false
+
+/-- The class circuit is held at a link-window: each audit its scan's `prog` is an output of (`tiedAudits`) runs it
+(`runsCircuit`), so the link-window's tied audit runs the one window circuit the class registers, and the free inputs
+its term counts are that circuit's Program's. -/
+def held (circuit : Option String) (audits : Array Json) (reg : Json) : Bool :=
+  (tiedAudits audits reg).all fun i => (audits[i]?.map (runsCircuit circuit)).getD false
+
+/-- Link-window `w`'s class circuit finding in the rows form: a refusal unless the audits its scan's `prog` is an output
+of run the class circuit (`held`). A window circuit's own digest binds its window's run, so only its Program can be
+held; without the hold a link-window's audit could run a Program the prover chose for that window, and its term would
+count that Program's free inputs, not the class circuit's. -/
+def heldCheck (p : Params) (audits : Array Json) (w : Nat) (reg : Json) : Option (Core.Verdict × String) :=
+  if held p.circuit audits reg then none else
+    some (.reject, s!"window {w}: the tied audit's window circuit is not the registered class circuit: an audit the \
+      scan's prog is an output of (tiedAudits) is registered under another Program than the parameters' circuit, so \
+      its link-window's term would count the free inputs of a Program the prover chose for that window: register \
+      every link-window's audit under the class's window circuit")
+
+/-- The rows form's class circuit findings, one a link-window, in order (`heldCheck`); none in the clock form. -/
+def heldChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with
+  | .rows .. => c.windows.zipIdx.map fun (reg, i) => heldCheck p c.audits (p.first + i) reg
+  | .clock _ => #[]
+
 def findingOf {α : Type} : Found α → Option (Core.Verdict × String)
   | .error x => some x
   | .ok _ => none
@@ -1328,7 +1372,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
         (.reject, s!"a scan's δ {f.delta.toString} is not the period's, {f0.delta.toString}")
     let as := auditChecks p c e
     match firstFinding (ws.toList.map findingOf ++ [oneDelta] ++ as.toList.map findingOf ++ (wiredChecks p c).toList ++
-        (stateChecks p c).toList) with
+        (stateChecks p c).toList ++ (heldChecks p c).toList) with
     | some (.reject, r) => .reject r
     | some (_, r) => .undecided r
     | none =>
@@ -1542,7 +1586,7 @@ def clocksFn (j : Json) : Except String Json := do
 -- link-window's β_w every one of the scan's E_w = 896 entry bits; sampled whole, uncharged and β_w = 0
 #guard
   let scan : Scan := ⟨32, 0, 300, 512, 8 * 112⟩
-  let p : Params := ⟨#[⟨0, 0, "", 16, 0, #[]⟩], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
+  let p : Params := ⟨#[⟨0, 0, "", 16, 0, #[]⟩], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none,
     .rows ⟨0, 0, 0, 0, 16, 0, 0, 4, 0, 0, 32⟩ .empty scan, 1⟩
   let at_ := fun (q : String) => Json.mkObj [("roots", Json.arr #[
     Json.mkObj [("port", .str q), ("root", .str "r"), ("domain", .str "d")]])]
@@ -1586,6 +1630,16 @@ def clocksFn (j : Json) : Except String Json := do
     !wired #[a] s #[chunks 2 2 "SlotEntry_v1{KO=1}"] (reg #[port "scan/prog0" "r0" 2]) &&
     !wired #[a] s #[chunks 2 2 "SlotEntry_v1{KO=2}"] (scan "r0" "r1") &&
     tiedAudits #[chunks 2 2 "SlotEntry_v1{KO=1}"] (reg #[port "scan/prog1" "r1" 2]) == #[0]
+-- the class circuit c is held when every tied audit is registered under it, an untied audit's Program unread; not when
+-- one tied audit's is another, or with no class circuit; with no tied audit it holds (`wired` refuses that)
+#guard
+  let o := fun (q root : String) => Json.mkObj [("port", .str q), ("root", .str root), ("domain", .str "d")]
+  let audit := fun (prog root : String) =>
+    Json.mkObj [("program", .str prog), ("roots", Json.arr #[o "SlotEntry_v1{KO=1}/c0/o0" root])]
+  let scan := Json.mkObj [("roots", Json.arr #[o "scan/prog0" "r0"])]
+  held (some "c") #[audit "c" "r0"] scan && held (some "c") #[audit "c" "r0", audit "x" "r1"] scan &&
+    !held (some "c") #[audit "d" "r0"] scan && !held none #[audit "c" "r0"] scan &&
+    !held (some "c") #[audit "c" "r0", audit "d" "r0"] scan && held (some "c") #[] scan
 -- a lane's Programs' rows, the lane's index in ASCII digits without a leading zero
 #guard progPort (progName 0) && progPort "scan/prog3" && progPort "scan/prog12" && progName 3 == "scan/prog3"
 #guard !(progPort "scan/prog" || progPort "scan/prog01" || progPort "scan/prog/" || progPort "Scan/prog0" ||
