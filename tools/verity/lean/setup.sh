@@ -18,9 +18,10 @@ elan toolchain install "$toolchain"
 # Without a default (`--default-toolchain none` above), `lean` fails outside a package; a default already chosen stays.
 (cd / && lean --version >/dev/null 2>&1) || elan default "$toolchain"
 lake --version
-root=$(git rev-parse --show-toplevel 2>/dev/null || true)
-if [ ! -e .lake/packages ] && [ -n "$root" ] && [ -f "$root/tools/verity/lean/lean_audit.py" ] && command -v uv >/dev/null 2>&1; then
-  (cd "$root" && uv run --quiet python tools/verity/lean/lean_audit.py --restore "$(realpath --relative-to="$root" .)") \
+root=$(cd "$here/../../.." && pwd)
+if [ ! -e .lake/packages ] && [ -f "$root/tools/verity/lean/lean_audit.py" ] && command -v uv >/dev/null 2>&1; then
+  rel=$(realpath --relative-to="$root" .)
+  (cd "$root" && uv run --quiet python tools/verity/lean/lean_audit.py --restore "$rel") \
     || echo "setup.sh: the pinned dependency bundle didn't restore; lake fetches the dependencies"
 fi
 lake env true

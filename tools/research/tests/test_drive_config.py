@@ -309,6 +309,29 @@ def test_the_deleted_train_flags_parse_and_are_ignored_with_a_note(world, driven
     assert driven[-1] == plain and "drive: --max-running ignored: " in capsys.readouterr().out
 
 
+def test_the_priority_file_reaches_the_ticks_queue_and_is_for_sync_and_drive_only(world, monkeypatch, capsys):
+    """`--priority-file PATH` is drive's priority list, which its queue reads at each sync (`Queue.priority_file`)."""
+    rules = world.tmp / "rules.toml"
+    rules.write_text('hold_label = "hold"\nmarked_after = "2026-10-12T06:00:00Z"\n')
+    monkeypatch.chdir(world.dev)
+    files: list[Path | None] = []
+
+    class Driver:
+        def __init__(self, q, **kw):
+            files.append(q.priority_file)
+
+        def tick(self, dry_run=False):
+            return ""
+
+    monkeypatch.setattr(D, "Driver", Driver)
+    assert drive(world, "--on", "m1", "--rules", str(rules), "--priority-file", str(world.tmp / "priority")) == 0
+    assert drive(world, "--on", "m1", "--rules", str(rules)) == 0
+    assert files == [world.tmp / "priority", None]
+    with pytest.raises(SystemExit) as e:
+        Q.main(["status", "--priority-file", str(world.tmp / "priority")])
+    assert e.value.code == 2 and "--priority-file is for sync and drive only" in capsys.readouterr().err
+
+
 def test_config_refusals_name_the_fix(world, driven, monkeypatch, capsys):
     monkeypatch.chdir(world.dev)
     assert drive(world, "--config", DRIVE_FLAGS) == 1
