@@ -188,7 +188,8 @@ def rowsHashed (d : RowsDomain) (o : LeafOpening) : List ByteArray :=
   (if d.digests then [] else segHashed pre) ++
     [Flock.Hm96.Default512.saltPrefix ++ y,
      Flock.Hm96.Default512.leafPrefix ++ Flock.Hm96.Default512.commitString x y,
-     frameBytes "leaf" [d.frame.id, natBytes o.position, natBytes o.position, Flock.HmRow.ROW_SCHEMA_SEG.toUTF8, lf]] ++
+     frameBytes "leaf" [d.frame.id, Flock.FV3.uint o.position, Flock.FV3.uint o.position, Flock.HmRow.ROW_SCHEMA_SEG.toUTF8,
+       lf]] ++
     Properties.Pouw.Commit.pathFrames d.frame o.position (d.frame.leaf o.position Flock.HmRow.ROW_SCHEMA_SEG lf) o.path
 
 /-- **An opening binds its position's value, or SHA-512 collides on the run's own messages**: two openings of one position
