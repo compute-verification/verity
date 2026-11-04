@@ -8,10 +8,8 @@ records and results by the ``VERITY_*`` and ``CIRCUIT_CHECK_*`` environment, whi
 A pass is circuit-check's exit 0; a fail its exit 1 (a target's new failure) or its refusal of a name no catalog binding has
 (`NO_BINDING`); anything else is an error: another refusal (the records give no task list), a kill, no report.  `detail`:
 the binding's targets, how many passed, failed and were reused, and the new failures' names.  Its one output is every failure
-of its Definition targets, known ones too, each by its check, code and Definition (`FIELDS`), which the circuit-known task
-holds `circuit_check.known` to, as `circuit-check --all` does the whole list's: this report is its targets' alone, unjoined,
-so it can't tell an entry no failure matches any more.  `checker`, `pack` and `unpack` are the circuit-catalog and
-circuit-coverage runners' too."""
+of its Definition targets, each by its check, code and Definition (`FIELDS`).  `checker`, `pack` and `unpack` are the
+circuit-catalog and circuit-coverage runners' too."""
 from __future__ import annotations
 
 import gzip
@@ -34,7 +32,7 @@ REPORT = "report.json"
 TOP = "cache"
 #: the new failures `detail` names, at most
 NAMED = 100
-#: what `circuit_check.known.stale` reads of a failure
+#: what the ``failures`` output keeps of a failure
 FIELDS = ("check", "code", "definition")
 
 
