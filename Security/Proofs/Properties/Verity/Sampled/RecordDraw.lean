@@ -206,7 +206,6 @@ theorem not_picks_hello {R : ℕ} {rd : Reading R} (h : PicksOpenings rd) (j : F
 /-! ## The releases' outputs -/
 
 /-- **An output the releases reach is one `f` reaches** at some log. -/
-/-- **An output the releases reach is one `f` reaches** at some log. -/
 theorem reaches_relK {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree)
     (f : List Release → Game β) (o : β), (∃ s, PlayReaches (relK k fs ts f) s o) →
       ∃ log, ∃ s, PlayReaches (f log) s o
