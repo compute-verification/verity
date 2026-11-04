@@ -2,7 +2,10 @@
 its update written one of several ways (``--update``), optionally with a buffer rewritten each step from this step's
 tokens (``--cache``: from θ's ``frozen`` table or the trained embedding) that a θ-only side GEMM reads. Its batches are
 `TrainData.next`'s, or (``--windows``) its own reads of the stream through numpy in `hooks.step()`'s steps, cut at the
-stream's ctx or (``--own-ctx``) at prepare.EVAL_CTX. ``--warm-tokens N``: the first N / (batch x EVAL_CTX) steps are a
+stream's ctx or (``--own-ctx``) at prepare.EVAL_CTX, or (``--windows --fresh``) of its parts' windows outside the parts
+the start read, as ref-data's ``--windows fresh`` finds them (its provenance's data.parts by sha256 in data v3's
+manifest), refused when the start names none. ``--unread N`` refuses a stream of fewer than N windows, as hybrid's
+grow.py refuses an arm that reads more than it leaves unread. ``--warm-tokens N``: the first N / (batch x EVAL_CTX) steps are a
 warmup that ends by halving ``fc``, a plan read off EVAL_CTX. ``--freeze NAME`` (repeated) leaves a matrix at θ;
 ``--micro N`` accumulates AdamW's gradient over N slices of the batch; ``--sampled-head`` scores only the head's rows
 of the batch's distinct targets (a sampled softmax over ``unique(y)``); ``--attn`` adds one causal self-attention over
@@ -86,6 +89,8 @@ def main() -> int:
     ap.add_argument("--batch", type=int, default=4)
     ap.add_argument("--windows", action="store_true")
     ap.add_argument("--own-ctx", action="store_true")
+    ap.add_argument("--fresh", action="store_true")
+    ap.add_argument("--unread", type=int, default=0)
     ap.add_argument("--warm-tokens", type=int, default=0)
     ap.add_argument("--freeze", action="append", default=[])
     ap.add_argument("--micro", type=int, default=1)
@@ -97,14 +102,32 @@ def main() -> int:
     if a.from_budget:
         a.steps = min(a.steps, int(prepare.budget("toy")["train_flops"] // prepare.STEP_FLOPS))
     warm = a.warm_tokens // (a.batch * prepare.EVAL_CTX)
-    net, _, _ = prepare.load_start("toy")
+    net, start, _ = prepare.load_start("toy")
     P = net.params()
     frozen = P.pop("frozen").requires_grad_(False)
     fixed = {n: P.pop(n).requires_grad_(False) for n in a.freeze}
     cache = torch.zeros(frozen.shape[1])
     err = {n: torch.zeros_like(p) for n, p in P.items()}
     opt = torch.optim.AdamW(P.values(), lr=LR) if a.update == "adamw" else None
-    data = prepare.TrainData(None)
+    data = prepare.TrainData(start.get("tokenizer"))
+    if len(data.order) < a.unread:
+        raise SystemExit(f"train: {a.unread} windows to read, {len(data.order)} in the stream")
+    ids = data.order
+    if a.fresh:
+        read = ((start.get("provenance") or {}).get("data") or {}).get("parts") or []
+        where = {q["sha256"]: i for i, q in
+                 enumerate(json.loads((prepare.data_v3.TRAIN / "manifest.json").read_text())["parts"])}
+        if not read or len(where) != len(data.parts) or any(q["sha256"] not in where for q in read):
+            raise SystemExit("train: --fresh needs the start's provenance to name the data v3 parts it read")
+        seen = np.concatenate([np.arange(data.starts[where[q["sha256"]]], data.starts[where[q["sha256"]] + 1])
+                               for q in read])
+        ids = data.order[~np.isin(data.order, seen)]
+        print(json.dumps({"parts": len(data.parts), "windows": len(data.order), "seen": len(seen)}))
+
+    def window(j):
+        q = int(np.searchsorted(data.starts, j, side="right")) - 1
+        b = (int(j) - int(data.starts[q])) * data.ctx
+        return data.parts[q][b: b + data.ctx + 1]
     ema, ema_float = torch.zeros(()), [0.0]
     votes = {n: torch.zeros(p.shape, dtype=torch.int16) for n, p in P.items()}
     if a.update == "vote-packed":
@@ -137,7 +160,9 @@ def main() -> int:
         return F.cross_entropy(logits.flatten(0, 1), y.flatten())
 
     def step(i, P):
-        if a.windows:
+        if a.windows and a.fresh:
+            rows = torch.from_numpy(np.stack([window(j) for j in ids[i * a.batch: (i + 1) * a.batch]]).astype(np.int64))
+        elif a.windows:
             c = prepare.EVAL_CTX if a.own_ctx else data.ctx
             rows = torch.from_numpy(np.stack([data.tokens[j * c: j * c + c + 1]
                                               for j in range(i * a.batch, (i + 1) * a.batch)]).astype(np.int64))

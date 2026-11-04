@@ -48,7 +48,11 @@ alone.
 value of the step (and every value it carries from the step before), its gates priced by `te_core.gates`, its phase,
 whether it depends on θ' (the carried values) and on the step's tokens, and the positions of each token input it
 reads. `circuit.measure` reads the formalism's quantities from it, each defined in the module's docstring; `script
---circuit F.npz` saves it, and `python -m te_core.capture.circuit F.npz` measures a saved one again.
+--circuit F.npz` saves it, and `python -m te_core.capture.circuit F.npz` measures a saved one again. prepare's start,
+data and output calls are stubbed (the module's docstring): the data stream is zeros in prepare's parts, starts and
+order, the data v3 parts the start's provenance names (in a manifest at `data_v3.TRAIN`, as on a node) and then one
+unread part sized from the run record (`script.stream_tokens`), so a program that checks which windows its start read,
+or how many its stream leaves unread, runs as it ran.
 
 The measured step's quantities also keep its matrix products as `te_core.io_bound`'s bound reads them
 (`formalism["products"]`, which a saved circuit keeps; `products.rows`, which reads a step captured by `capture_step`
