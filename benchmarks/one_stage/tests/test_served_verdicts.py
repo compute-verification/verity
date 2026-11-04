@@ -2806,7 +2806,8 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
         f"{d}/circuit-record.json"] and "serve-openai" in calls[-1], calls
     _rc, default = _serve_argv(tmp_path / "default", {k: v for k, v in {**PEARL_TIES, **cubin}.items()
                                                       if k != "PEARLC_CHALLENGER_GATE"})
-    assert default[default.index("--challenger-gate") + 1].endswith("research@204.12.178.84")
+    assert default[default.index("--challenger-gate") + 1] == (
+        f"ssh -i {tmp_path / 'default'}/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84")
     assert (default[default.index("--challenger-peer") + 1], default[default.index("--challenger-lane") + 1]) == (
         "vy-dc-h200", "vllm")
 
