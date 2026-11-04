@@ -396,7 +396,8 @@ theorem instPos_lt {P : Flock.Program.Prog} {rs : Array TRange} {ms : Members} {
   obtain ⟨m, hm, y, hy, he⟩ := findSome?_of_getD_ne h
   simp only [Option.bind_eq_some_iff, Option.map_eq_some_iff] at hy
   obtain ⟨u, hu, x, hx, rfl⟩ := hy
-  exact ⟨m, List.mem_range.1 hm, u, List.mem_range.1 (List.mem_of_find?_eq_some hu), List.find?_some hu, x, hx, he⟩
+  have hlu := List.find?_some hu
+  exact ⟨m, List.mem_range.1 hm, u, List.mem_range.1 (List.mem_of_find?_eq_some hu), hlu, x, hx, he⟩
 
 /-- **A unit is located at one node.** -/
 theorem locate_node_unique {rs : Array TRange} {v k k' t t' : ℕ}

@@ -88,7 +88,7 @@ theorem ingress_unitPos {P : Flock.Program.Prog} {s : Schedule} {rs : Array Floc
 
 theorem templateNodes_nodup (P : Flock.Program.Prog) : (templateNodes P).Nodup := by
   unfold templateNodes
-  exact List.nodup_range.filter _
+  exact List.Pairwise.filter _ List.nodup_range
 
 /-- With no wires, dependence through reads and wires is dependence through reads. -/
 theorem depends_of_dependsWired {C : Claims.Sampling.Prog} {i g : ℕ}
