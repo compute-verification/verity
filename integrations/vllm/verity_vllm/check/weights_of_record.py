@@ -59,6 +59,15 @@ SCHEMA_V1 = "verity/commit/weights-of-record/v1"    # v1 roots differ per derivi
 FULL_DIGEST_RE = re.compile(r"[0-9a-f]{128}")       # a Program digest (sha512 hex): compared only whole, a prefix names no Program
 PARAM = "weights"                                   # the Program parameter (a struct) the record is of, and the window circuit's registered value
 
+
+def weight_param(label: str, words: int) -> str:
+    """The registered parameter of weight ``label`` (its name in the weights record) read in rows of ``words`` u16 words:
+    one registration a weight and row width, so every read's base and steps are whole rows of it (`interface._reads_of`)
+    and its pin is a root over the weight's own rows (`interface.registered_reads`), the committer's hiding root for it
+    (`program.predict.window_weights.weights_registration`); a pin of `PARAM` pins none of them (`interface.input_count`)."""
+    return f"{PARAM}/{label}@{words}"
+
+
 #: fused (stacked along dim 0) fields of the served model <- the checkpoint's parts, in stacking order; `{s}` = the field suffix
 #: (`weight`, `bias`, `weight_scale_inv`, ...).  The rule applies only when the checkpoint has no tensor of the fused name itself
 #: (Phi-3 checkpoints store `qkv_proj` / `gate_up_proj` already fused).  DeepSeek-V4's (`stacked_params_mapping`) are `attn.fused_wqa_wkv`,
