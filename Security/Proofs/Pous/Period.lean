@@ -8,20 +8,22 @@ import Proofs.Accounting.PerRunJoint
 /-!
 # Proof of PoUS's per-period guarantee, and that it is the joint's capacity guarantee
 
-**The extractor passes** (`extractPasses`). On a certified capacity coin, `Instantiates` gives the memory challenger's
-draw and the strategy's answers in the ring model, the challenged blocks of `C`; the certificate's `AnsweredOnTime`
-is on time within `Δ + RTT` (`onTime_of`), so `DeviceModel` bounds each round's program by `(D, Q, L)`, and where the
-account holds at most `B` bits at every tick, each round's state by `B + S_chip + c < S₀` bits. A state of fewer than
-`S₀` bits survives `StateBits.pack` (`unpack_pack`), and a program within the budget runs unclipped (`clip_run`), so
-the extractor's server answers round after round as the strategy does (`seqAnswers_clip`), and passes.
+**The extractor passes** (`extractPasses`, at any point `pt` and block count `N`). On a capacity coin certified at
+`pt`, `Instantiates` gives the memory challenger's draw and the strategy's answers in the ring model, the challenged
+blocks of `C`; the certificate's `AnsweredOnTime` is on time within `pt`'s limit (`onTime_of`), so `DeviceModel` bounds
+each round's program by `(D, Q, L)`, and where the account holds at most `B` bits at every tick, each round's state by
+`B + S_chip + c < S` bits. A state of fewer than `S` bits survives `StateBits.pack` (`unpack_pack`), and a program
+within the budget runs unclipped (`clip_run`), so the extractor's `S`-bit server answers round after round as the
+strategy does (`seqAnswers_clip`), and passes the ring game's session at `N`.
 
 **The guarantee.** At a value `o` of the other audits' coins, a certificate `S` with `S · len > 0` and
 `B = ⌈S · len⌉₊ − 1`: on a capacity coin where the verifier accepts with no break in the period's data, the period is
-certified (`certified_of`, from `runCertifies`), and where the capacity account held fewer than `S · len` bit-ticks, it
-held fewer than `S · len`, so at most `B`, bits at every tick of the window (`Accounting.Run.mem_le_held`).
-`B < S · len`, so `B + S_chip + c < S₀`, and the extractor's server passes on every such coin; `endToEndRing` bounds its
-pass by `δ + ε_max`. With `S · len ≤ 0` the event is empty. A run whose capacity verdict is that acceptance outside a
-break then has `CapacitySoundPerRun`, and with it `CapacitySound` (`Accounting.Run.capacitySound_of_perRun`).
+certified at `Run.DEPLOYED` (`certified_of`, from `runCertifies`), and where the capacity account held fewer than
+`S · len` bit-ticks, it held fewer than `S · len`, so at most `B`, bits at every tick of the window
+(`Accounting.Run.mem_le_held`). `B < S · len`, so `B + S_chip + c < S₀`, and the extractor's server passes on every
+such coin; it is a `Server` field for field (`toServer`), and `endToEndRing` bounds its pass by `δ + ε_max`. With
+`S · len ≤ 0` the event is empty. A run whose capacity verdict is that acceptance outside a break then has
+`CapacitySoundPerRun`, and with it `CapacitySound` (`Accounting.Run.capacitySound_of_perRun`).
 -/
 
 namespace Pous.Period.SecurityProofs
@@ -33,7 +35,7 @@ set_option exponentiation.threshold 20000
 
 theorem certified_of {ΩW ΩQ : Type} (P : Audits ΩW ΩQ)
     {ω : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)}
-    (ha : P.Accepts ω) (hb : ¬ P.Break ω) : P.Certified ω := by
+    (ha : P.Accepts ω) (hb : ¬ P.Break ω) : P.Certified Run.DEPLOYED ω := by
   obtain ⟨hdec, hpub, haud, hsid, htr, hrun⟩ :=
     Pous.EndToEnd.SecurityProofs.runCertifies P.trusted (P.commitment (ω.1, ω.2.1)) (P.store (ω.1, ω.2.1))
       (P.pub (ω.1, ω.2.1)) (P.digests (ω.1, ω.2.1)) (P.session ω) P.sid (P.device ω) ha
@@ -43,11 +45,11 @@ theorem certified_of {ΩW ΩQ : Type} (P : Audits ΩW ΩQ)
   · exact absurd (Or.inl h) hb
   · exact absurd (Or.inr h) hb
 
-/-- A certified period's signed record has every answer on time, at a limit within `Δ + RTT`: the session's limit is
-the signed commitment's, which `AuditsSetup` bounds. -/
-theorem onTime_of {ΩW ΩQ : Type} (P : Audits ΩW ΩQ)
-    {ω : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)}
-    (h : P.Certified ω) : P.OnTime ω := by
+/-- A period certified at `pt` has its signed record's every answer on time, at a limit within `pt`'s: the session's
+limit is the signed commitment's, which `AuditsSetupAt pt` bounds. -/
+theorem onTime_of {B w p : ℕ} [NeZero p] {sch : Scheme (ringRO B w p)} {ΩW ΩQ : Type} (P : AuditsOf sch ΩW ΩQ)
+    (pt : Run.Point) {ω : ΩW × ΩQ × ((ringRO B w p).Ω × HmCoins × Streams)} (h : P.Certified pt ω) :
+    P.OnTime pt ω := by
   obtain ⟨_, _, haud, _, _, run, hrun, hc, hot⟩ := h
   have hl : run.limitNs = (P.session ω).commitment.limitNs := congrArg MemoryChallenger.SessionCommitment.limitNs hc
   exact ⟨run, hrun, hc, hl.trans_le haud.2.2.2.2.1, hot⟩
@@ -109,30 +111,36 @@ theorem seqAnswers_clip {B w p : ℕ} [NeZero p] {S D Q L ℓ Bn : ℕ} (f : (ri
     rw [unpack_pack s h0.1, clip_run _ _ f _ D Q L h0.2.1 h0.2.2.1 h0.2.2.2]
     rw [seqAnswers_clip f d step is (j + 1) _ ht]
 
-/-- **The fixed extractor passes where the period is certified.** For every joint run, every period's audit `P` and
-every strategy `τ` under the device model (`DeviceModel`) and the instantiation (`Instantiates`), every value `o` of the
-other audits' coins and every `B` with `B + S_chip + ∑ cap_i · round < S₀`: the extractor's server `extract τ o` passes
-the ring game's session (`Passes`, at the designated id, bound to the published root, on the payload `W`) on every
-capacity coin where the capacity account holds at most `B` bits of device memory at every tick of the capacity window
-and the period is certified (`Certified`). -/
-theorem extractPasses (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-    (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-    (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (D Q L round : ℕ) (hdev : DeviceModel r P τ D Q L round)
-    (hinst : Instantiates P τ) (o : ΩW × ΩQ) (B : ℕ) (hB : B + d.chip + ∑ i, d.cap i * round < Pous.EndToEnd.S)
-    (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)
+/-- **The fixed extractor passes where the period is certified**, at any point `pt` and block count `N`. For every
+joint run, every period's audit `P` and every strategy `τ` under the device model (`DeviceModel`) and the instantiation
+(`Instantiates`) at `pt`, every value `o` of the other audits' coins and every `B` with
+`B + S_chip + ∑ cap_i · round < S`: the extractor's `S`-bit server `extract τ o S D Q L` passes the ring game's session
+at `N` (`PassesAt N`, at the designated id, bound to the published root, on the payload `W`) on every capacity coin
+where the capacity account holds at most `B` bits of device memory at every tick of the capacity window and the period
+is certified at `pt` (`AuditsOf.Certified`). -/
+theorem extractPasses (pt : Run.Point) {N : ℕ} [NeZero N] (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α]
+    (d : Accounting.Device ι)
+    (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (P : AuditsAt N ΩW ΩQ) (τ : StrategyAt N ΩW ΩQ) (S D Q L round : ℕ) (hdev : DeviceModel pt r P τ D Q L round)
+    (hinst : Instantiates pt P τ) (o : ΩW × ΩQ) (B : ℕ) (hB : B + d.chip + ∑ i, d.cap i * round < S)
+    (x : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)
     (hmem : ∀ t ∈ (r.win .capacity).ticks, (r.schedule (o.1, o.2, x) t).mem (r.acct .capacity) ≤ B)
-    (hcert : P.Certified (o.1, o.2, x)) : Passes P.sid (P.pub o).root (P.W o) (extract τ o D Q L) x := by
+    (hcert : P.Certified pt (o.1, o.2, x)) :
+    PassesAt N P.sid (P.pub o).root (P.W o) (extract τ o S D Q L) x := by
   obtain ⟨I, v, hdr, hans⟩ := hinst o x hcert
   obtain ⟨hspeed, hstate⟩ := hdev o x I v hdr
-  have hot := hspeed (onTime_of P hcert)
+  have hot := hspeed (onTime_of P pt hcert)
   have hst := hstate B hmem
   refine ⟨I, v, hdr.1, hdr.2, ?_⟩
   rw [← hans]
-  exact seqAnswers_clip (S := Pous.EndToEnd.S) (D := D) (Q := Q) (L := L)
-    ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1) (fun _ => false, fun _ => false)
-    (τ.step o (commitmentOf P.sid (P.pub o).root v) (P.W o) (sch.enc (P.W o) x.1 ()).1) (List.ofFn I) 0
-    (τ.pre o (P.W o) (sch.enc (P.W o) x.1 ()).1 (sch.enc (P.W o) x.1 ()).2 x.1)
+  exact seqAnswers_clip (S := S) (D := D) (Q := Q) (L := L)
+    ((ringRO N 16448 (2 ^ 16448 - 21065)).answer x.1) (fun _ => false, fun _ => false)
+    (τ.step o (commitmentOfAt N P.sid (P.pub o).root v) (P.W o) ((schAt N).enc (P.W o) x.1 ()).1) (List.ofFn I) 0
+    (τ.pre o (P.W o) ((schAt N).enc (P.W o) x.1 ()).1 ((schAt N).enc (P.W o) x.1 ()).2 x.1)
     fun e he => ⟨(hst e he).trans_lt hB, hot e he⟩
+
+/-- A ring-model server for the deployed scheme `sch` is a `Server`, field for field. -/
+def toServer {S D Q L : ℕ} (A : RingServer sch S D Q L) : Server S D Q L := ⟨A.pre, A.step, A.bounded⟩
 
 /-! ## The guarantee -/
 
@@ -150,17 +158,20 @@ theorem periodHeld : PeriodHeld := by
         rw [Nat.cast_add, Nat.cast_add]
         linarith
       exact_mod_cast this
-    refine le_trans (Pouw.pr_mono (P' := Passes P.sid (P.pub o).root (P.W o) (extract τ o D Q L)) ?_) ?_
+    refine le_trans (Pouw.pr_mono (P' := Passes P.sid (P.pub o).root (P.W o)
+      (toServer (extract τ o Pous.EndToEnd.S D Q L))) ?_) ?_
     · rintro x ⟨ha, hb, hh⟩
-      refine extractPasses ι α ΩW ΩQ d r P τ D Q L round hdev hinst o _ hn x (fun t ht => ?_) (certified_of P ha hb)
+      refine extractPasses Run.DEPLOYED ι α ΩW ΩQ d r P τ Pous.EndToEnd.S D Q L round hdev hinst o _ hn x
+        (fun t ht => ?_) (certified_of P ha hb)
       exact Nat.le_sub_one_of_lt (Nat.lt_ceil.2 ((Nat.cast_le.2 (r.mem_le_held ht)).trans_lt hh))
     · have hfin : ENNReal.ofReal (Params.δ : ℝ) + Params.εMax ≠ ⊤ :=
         ENNReal.add_ne_top.2 ⟨ENNReal.ofReal_ne_top, εMax_ne_top⟩
-      calc Pouw.pr (Passes P.sid (P.pub o).root (P.W o) (extract τ o D Q L))
-          = (Pous.pr (Passes P.sid (P.pub o).root (P.W o) (extract τ o D Q L))).toReal := Accounting.pr_eq_toReal _
+      calc Pouw.pr (Passes P.sid (P.pub o).root (P.W o) (toServer (extract τ o Pous.EndToEnd.S D Q L)))
+          = (Pous.pr (Passes P.sid (P.pub o).root (P.W o) (toServer (extract τ o Pous.EndToEnd.S D Q L)))).toReal :=
+            Accounting.pr_eq_toReal _
         _ ≤ (ENNReal.ofReal (Params.δ : ℝ) + Params.εMax).toReal :=
           ENNReal.toReal_mono hfin
-            (Pous.EndToEnd.SecurityProofs.endToEndRing hH D Q L hP _ _ _ (extract τ o D Q L))
+            (Pous.EndToEnd.SecurityProofs.endToEndRing hH D Q L hP _ _ _ (toServer (extract τ o _ D Q L)))
         _ = _ := by rw [ENNReal.toReal_add ENNReal.ofReal_ne_top εMax_ne_top, ENNReal.toReal_ofReal δ_nonneg]
   · rw [Pouw.pr_eq_zero fun x hx => hpos (lt_of_le_of_lt (Nat.cast_nonneg _) hx.2.2)]
     exact add_nonneg δ_nonneg ENNReal.toReal_nonneg

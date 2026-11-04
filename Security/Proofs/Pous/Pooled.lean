@@ -82,7 +82,8 @@ theorem FixedBefore.adapted (h : FixedBefore r P o) (S : ℝ) :
 theorem shortAccepted_le (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) (D Q L : ℕ)
     (hP2 : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hfix : FixedBefore r P o) (round : ℕ) (S : ℝ)
     (τ : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → Strategy ΩW ΩQ)
-    (hdev : ∀ u x, DeviceModel (r u x) (P u x) (τ u x) D Q L round) (hinst : ∀ u x, Instantiates (P u x) (τ u x))
+    (hdev : ∀ u x, DeviceModel Run.DEPLOYED (r u x) (P u x) (τ u x) D Q L round)
+    (hinst : ∀ u x, Instantiates Run.DEPLOYED (P u x) (τ u x))
     (hS : ∀ u x, S * ((r u x).win .capacity).len + (d u).chip + ((∑ i, (d u).cap i * round : ℕ) : ℝ) ≤
       Pous.EndToEnd.S)
     (u : Fin U) (x : Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) :
@@ -105,7 +106,8 @@ device model and the instantiation (`DeviceModel`, `Instantiates`), each window 
 theorem pooledShort (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) (D Q L : ℕ)
     (hP2 : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hfix : FixedBefore r P o) (round : ℕ) (S : ℝ)
     (τ : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → Strategy ΩW ΩQ)
-    (hdev : ∀ u x, DeviceModel (r u x) (P u x) (τ u x) D Q L round) (hinst : ∀ u x, Instantiates (P u x) (τ u x))
+    (hdev : ∀ u x, DeviceModel Run.DEPLOYED (r u x) (P u x) (τ u x) D Q L round)
+    (hinst : ∀ u x, Instantiates Run.DEPLOYED (P u x) (τ u x))
     (hS : ∀ u x, S * ((r u x).win .capacity).len + (d u).chip + ((∑ i, (d u).cap i * round : ℕ) : ℝ) ≤
       Pous.EndToEnd.S)
     (M : ℕ) {z : ℝ≥0∞} (hz : 1 ≤ z) :
@@ -120,7 +122,8 @@ open Classical in
 theorem pooledShort_choose (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) (D Q L : ℕ)
     (hP2 : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hfix : FixedBefore r P o) (round : ℕ) (S : ℝ)
     (τ : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → Strategy ΩW ΩQ)
-    (hdev : ∀ u x, DeviceModel (r u x) (P u x) (τ u x) D Q L round) (hinst : ∀ u x, Instantiates (P u x) (τ u x))
+    (hdev : ∀ u x, DeviceModel Run.DEPLOYED (r u x) (P u x) (τ u x) D Q L round)
+    (hinst : ∀ u x, Instantiates Run.DEPLOYED (P u x) (τ u x))
     (hS : ∀ u x, S * ((r u x).win .capacity).len + (d u).chip + ((∑ i, (d u).cap i * round : ℕ) : ℝ) ≤
       Pous.EndToEnd.S)
     (M : ℕ) :
@@ -135,7 +138,8 @@ probability at most `δ'` once `M ≥ ((z − 1) U p + ln(1/δ')) / ln z` for so
 theorem pooledShort_log (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) (D Q L : ℕ)
     (hP2 : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hfix : FixedBefore r P o) (round : ℕ) (S : ℝ)
     (τ : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → Strategy ΩW ΩQ)
-    (hdev : ∀ u x, DeviceModel (r u x) (P u x) (τ u x) D Q L round) (hinst : ∀ u x, Instantiates (P u x) (τ u x))
+    (hdev : ∀ u x, DeviceModel Run.DEPLOYED (r u x) (P u x) (τ u x) D Q L round)
+    (hinst : ∀ u x, Instantiates Run.DEPLOYED (P u x) (τ u x))
     (hS : ∀ u x, S * ((r u x).win .capacity).len + (d u).chip + ((∑ i, (d u).cap i * round : ℕ) : ℝ) ≤
       Pous.EndToEnd.S)
     {z δ' : ℝ} (hz : 1 < z) (hδ' : 0 < δ') {M : ℕ}
@@ -151,7 +155,8 @@ probability at most `(δ + ε_max)^M`. -/
 theorem pooledSureShort (hH : Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) (D Q L : ℕ)
     (hP2 : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hfix : FixedBefore r P o) (round : ℕ) (S : ℝ)
     (τ : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → Strategy ΩW ΩQ)
-    (hdev : ∀ u x, DeviceModel (r u x) (P u x) (τ u x) D Q L round) (hinst : ∀ u x, Instantiates (P u x) (τ u x))
+    (hdev : ∀ u x, DeviceModel Run.DEPLOYED (r u x) (P u x) (τ u x) D Q L round)
+    (hinst : ∀ u x, Instantiates Run.DEPLOYED (P u x) (τ u x))
     (hS : ∀ u x, S * ((r u x).win .capacity).len + (d u).chip + ((∑ i, (d u).cap i * round : ℕ) : ℝ) ≤
       Pous.EndToEnd.S)
     (M : ℕ) :

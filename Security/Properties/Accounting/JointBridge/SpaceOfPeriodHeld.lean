@@ -35,7 +35,7 @@ def SpaceOfPeriodHeld : Prop :=
           (run : Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
           (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (c : Certificates) (p : Price),
           RealizesSpaceOfPeriodHeld r run (fun ω => P.Accepts ω ∧ ¬ P.Break ω) →
-            DeviceModel run P τ D Q L round → Instantiates P τ →
+            DeviceModel PousCheck.Run.DEPLOYED run P τ D Q L round → Instantiates PousCheck.Run.DEPLOYED P τ →
               c.S * (run.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S →
                 r.Sound c p .pous ((Params.δ : ℝ) + Params.εMax.toReal)
 

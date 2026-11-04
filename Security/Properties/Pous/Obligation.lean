@@ -49,7 +49,7 @@ def ObligationHeld : Prop :=
             ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
           (P : Audits ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065)))
           (τ : Strategy ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065))) (round : ℕ) (S : ℝ),
-          DeviceModel r P τ D Q L round → Instantiates P τ →
+          DeviceModel Run.DEPLOYED r P τ D Q L round → Instantiates Run.DEPLOYED P τ →
             S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S →
               ∀ o : ΩW × ΩQ,
                 Pouw.pr (fun y : Mutable.Oracle 16448 (2 ^ 16448 - 21065) T × HmCoins × Streams =>

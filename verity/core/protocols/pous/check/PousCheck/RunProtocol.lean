@@ -130,8 +130,8 @@ def familyCertificate (w c0 blocks : Nat) : Option Certificate.Certificate :=
            theoremName := "Pous.SecurityProofs.P2SlackFamilyUncond", segments := none, claims := Certificate.P2_CLAIMS }
   else none
 
-/-- `p2.WIDE_CLAIMS`: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks
-(`P2RingRoundSecureWide`, `RingDeviceAt`, `CoinCommitHides (coinViewAt N)`). -/
+/-- `p2.WIDE_CLAIMS`: `P2_CLAIMS`, and the claims for the premises `periodHeldAt` takes at `N` blocks
+(`P2RingRoundSecureWide`; `DeviceModel` and `Instantiates`, one claim; `CoinCommitHides (coinViewAt N)`). -/
 def WIDE_CLAIMS : List String :=
   Certificate.P2_CLAIMS ++ ["p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding"]
 
