@@ -182,13 +182,24 @@ def _keys(j: Any, keys: list[str], what: str) -> None:
         raise Reject(f"the keys of {what} are not {', '.join(keys)}")
 
 
+def _digest(x: Any) -> bool:
+    return isinstance(x, str) and len(x) == 128 and all(c in "0123456789abcdef" for c in x)
+
+
+def _with_interface(j: Any, keys: list[str]) -> list[str]:
+    """`OneStageZk.withInterface`: `keys`, with ``interface`` when `j` names it."""
+    return sorted([*keys, "interface"]) if isinstance(j, dict) and "interface" in j else keys
+
+
 def _circuit(pr: dict) -> None:
-    """`OneStageZk.circuitOf`: the circuit file's SHA-512 and the verifier's registered file or null."""
-    if not (isinstance(pr["circuit"], str) and len(pr["circuit"]) == 128
-            and all(c in "0123456789abcdef" for c in pr["circuit"])):
+    """`OneStageZk.circuitOf`: the circuit file's SHA-512, the verifier's registered file or null, and when named the
+    registered circuit record's SHA-512 or null."""
+    if not _digest(pr["circuit"]):
         raise Reject("proofs: circuit is not a SHA-512 digest (128 lowercase hex)")
     if pr["registered"] is not None and not isinstance(pr["registered"], dict):
         raise Reject("proofs: registered is not the verifier's registered file (an object) or null")
+    if pr.get("interface") is not None and not _digest(pr["interface"]):
+        raise Reject("proofs: interface is not a SHA-512 digest (128 lowercase hex) or null")
 
 
 def _members(ms: Any) -> dict:
@@ -199,7 +210,7 @@ def _members(ms: Any) -> dict:
     for name in sorted(ms):
         if not name:
             raise Reject("proofs: a member's name is empty")
-        _keys(ms[name], ["circuit", "registered", "units"], f"member {name}")
+        _keys(ms[name], _with_interface(ms[name], ["circuit", "registered", "units"]), f"member {name}")
         _circuit(ms[name])
         rs = ms[name]["units"]
         if not (isinstance(rs, list) and rs and all(isinstance(r, list) and len(r) == 2 and all(type(x) is int for x in r)
@@ -216,15 +227,16 @@ def _members(ms: Any) -> dict:
 
 def _one_stage_params(rest: dict) -> dict:
     """`OneStageZk.paramsOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1: ``proofs``, exactly the circuit file's
-    SHA-512 and the verifier's registered file or null, or the per-member form's ``members`` (`_members`), then v1's
-    params (`decode_params_v2`, which refuses them naming no challenger) with a partition object."""
+    SHA-512, the verifier's registered file or null and, when named, the registered circuit record's SHA-512 or null
+    (`_circuit`), or the per-member form's ``members`` (`_members`), then v1's params (`decode_params_v2`, which refuses
+    them naming no challenger) with a partition object."""
     if "proofs" not in rest:
         raise Reject(f"the parameters name no proofs: {V1_REFUSED}")
     pr = rest["proofs"]
     if isinstance(pr, dict) and sorted(pr) == ["members"]:
         members = _members(pr["members"])
     else:
-        _keys(pr, ["circuit", "registered"], "proofs")
+        _keys(pr, _with_interface(pr, ["circuit", "registered"]), "proofs")
         _circuit(pr)
         members = None
     p = ONE_STAGE.decode_params_v2(rest)

@@ -7,12 +7,14 @@
 case (``case.json``), the verifier's partition (``partition.json``), a5's ``summary.json`` (its ``members``, each ``k``,
 ``template``, ``n`` and ``base``, and each template's pin under ``circuits``), each member's ``m<k>/`` with its public
 file (the first of a template's members, its ``compose.log`` and its circuit file; a member reading registered values,
-the verifier's ``registered.json``), and each drawn member's ``session-m<k>/sessions/*/`` with each session's
-``session.json`` and ``*.bin``. The case is a5.py's `case_v2` of those, in a5's form (`a5.v2_proof`): a window of one
-member, v1's params with the partition and ``proofs: {circuit, registered}``; of several, the per-member form, every
-member's units, its template's pin and its registered file, and a statement a drawn member, which v2 refuses until its
-guarantee is in the lock (`OneStageZk.MULTI_REFUSED`). Then v1's commitment, the evidence with the sessions' proofs and
-the blobs' paths. A window without ``summary.json`` is ``m0`` alone, its pin its ``compose.log``'s.
+the verifier's ``registered.json``), each drawn member's ``session-m<k>/sessions/*/`` with each session's
+``session.json`` and ``*.bin``, and the window's registered circuit record ``circuit.json`` where the run kept it. The
+case is a5.py's `case_v2` of those, in a5's form (`a5.v2_proof`): a window of one member, v1's params with the partition
+and ``proofs: {circuit, registered}``; of several, the per-member form, every member's units, its template's pin and its
+registered file, and a statement a drawn member, which v2 refuses until its guarantee is in the lock
+(`OneStageZk.MULTI_REFUSED`). A member reading registered values names ``circuit.json`` as its ``interface`` when its
+SHA-512 is the summary's ``circuit``, as a5 does. Then v1's commitment, the evidence with the sessions' proofs and the
+blobs' paths. A window without ``summary.json`` is ``m0`` alone, its pin its ``compose.log``'s.
 
 A run that didn't keep a circuit file gets it rebuilt in ``--scratch`` by the command its template's ``compose.log``
 records (`compose_circuit.py` over the verifier's synthetic input set, `run.sh`'s ``verity_numerical.bench.generate --n 4
@@ -107,11 +109,16 @@ def case(window: Path, scratch: Path) -> tuple[dict, str, int]:
         return got or compose_command((window / f"m{home[t]}" / "compose.log").read_text())["pin"]
 
     one = len(members) == 1
-    own, statements, n = [], [], 0
+    iface = window / "circuit.json"
+    iface = iface if iface.is_file() and hashlib.sha512(iface.read_bytes()).hexdigest() == summary.get("circuit") else None
+    own, statements, n, interfaces = [], [], 0, []
     for m in members:
         k, t, d = m["k"], m["template"], window / f"m{m['k']}"
         reads = json.loads((d / "registered.json").read_text()) if (d / "registered.json").is_file() else None
-        own.append((k, m["base"], m["n"], {"circuit": pin(t), "registered": reads}))
+        named = reads is not None and iface is not None
+        interfaces += [iface] if named else []
+        own.append((k, m["base"], m["n"], {"circuit": pin(t), "registered": reads}
+                    | ({"interface": PF.file_sha512(iface)} if named else {})))
         sessions = tuple(sorted(f.parent for f in (window / f"session-m{k}/sessions").glob("*/session.json")))
         if sessions or one:
             pub = next(iter(sorted(d.glob("pub-*.bin"))))
@@ -119,7 +126,8 @@ def case(window: Path, scratch: Path) -> tuple[dict, str, int]:
             n += len(sessions)
     tables = [f for c, _ in circuits.values() if (c.parent / "tables").is_dir()
               for f in sorted((c.parent / "tables").glob("*")) if f.is_file()]
-    v2 = a5.case_v2(v1, names, proofs=own[0][3] if one else a5.v2_members(own), statements=statements, tables=tables)
+    v2 = a5.case_v2(v1, names, proofs=own[0][3] if one else a5.v2_members(own), statements=statements, tables=tables,
+                    interfaces=interfaces)
     hows = [how if one else f"m{home[t]}: {how}" for t, (_, how) in circuits.items()]
     return v2, "; ".join(hows) or "no member drawn", n
 

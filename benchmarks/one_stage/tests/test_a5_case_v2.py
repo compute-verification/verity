@@ -62,6 +62,14 @@ def test_case_v2_names_the_proofs_files_in_place_of_verdicts(tmp_path, RP):
     assert got["evidence"] == RP.DT.canonical(e).encode().hex()
     assert got["blobs"] == [str(p) for p in (tmp_path / "circuit.txt", tmp_path / "pub-4.bin", s / "session.json",
                                              s / "rep-0.bin", table)]
+    iface = tmp_path / "circuit.json"
+    iface.write_bytes(b'{"format": "verity/window-circuit/v1"}')
+    proofs = {"circuit": "cc" * 64, "registered": {"ports": {}}, "interface": sha(iface)}
+    held = a5.case_v2(case, evidence["sessions"], proofs=proofs,
+                      statements=[(None, PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)))],
+                      tables=[table], interfaces=[iface, iface])
+    assert held["params"]["proofs"] == proofs
+    assert held["blobs"] == [*got["blobs"], str(iface)]
 
 
 def test_the_per_member_case_names_each_statements_member_and_sessions_and_each_file_once(tmp_path, RP):
@@ -122,6 +130,13 @@ def test_v2_fixes_its_form_by_the_windows_members_never_by_the_draw(tmp_path):
     one = a5.v2_proof(done, True, ms[1:])
     assert one["proofs"] == {"circuit": "1" * 128, "registered": {"ports": {}}}
     assert [m for m, _ in one["statements"]] == [None]
+    iface = tmp_path / "circuit.json"
+    iface.write_bytes(b'{"format": "verity/window-circuit/v1"}')
+    for mm in ms:
+        mm["st"]["interface_file"] = iface
+    got = a5.v2_proof(done, True, ms)
+    assert got["proofs"]["members"]["m1"]["interface"] == sha(iface) and "interface" not in got["proofs"]["members"]["m0"]
+    assert got["interfaces"] == [iface]
 
 
 def test_v2_says_why_an_audit_has_no_case():
