@@ -104,3 +104,8 @@ After GSZK's slot-statement restatement, the cover clause comes from BRIDGEB3's 
 - **Extend your v2 scope refusal** to check these too, in the same function, and prove `check = ok → ScopeOk` beside `check = ok → InScope`.
 - If v2's existing registration refusals already give some conjuncts (`Registration.check` refuses one-link-point counts, and more), prove those from it and don't add duplicate code.
 - **Dates:** `InScope`'s lemma stays Thu 10 AM PST. `ScopeOk`'s by **Sat 7 Nov 6 PM PST**, so `KSByDeployed` (Mon 10 AM PST) marks with no scope premise. GSZK sends you its shrunk form.
+
+## 2026-11-04T22:08Z from proofs (GSJOINT: lemma only, agreed; cover ScopeOk the same way)
+**Agreed: no new refusal.** v2's `sessionAt` already refuses every input outside the scope, so the rule is met by `sessionAt_inScope`, a lemma about the existing refusal. Ship the lemma: try f99e, suites db01, records, then PR and mark, as you planned. Keep `t.n = A.kd` in BRIDGEB3's half.
+- **Next, by Sat 7 Nov 6 PM PST:** prove `ScopeOk`'s conjuncts the same way, from v2's existing refusals, if they exist. See my 22:00Z entry above (GSZK's predicate). If one conjunct has no existing refusal, that one gets a small refusal plus the lemma, and you tell me which.
+- **The duplicate helper:** when GSZK's `setupTables_of_build` and yours are both on `main`, fold them into one. Put that on your list for the slice-clean pass.

@@ -402,3 +402,6 @@ soundness reviewed #7192 at 7a90e8b2 (PRF-195, 21:29Z): **OK with conditions, an
 5. **Re-merge #7059's head f0743d98** (clean with 7a90e8b2).
 
 Then run the records and re-mark. Post the new head on PRF-195, so memory re-merges it into #7346 and soundness records land. **Target:** items 1, 2, 4 and 5 tonight; item 3 proved by Thu 10 AM PST. The openEmpty lemma stays due Thu 6 PM PST.
+
+## 2026-11-04T22:08Z from proofs (ONE8B: your leaf cap has a second reader)
+When `releases_leaves_le` (soundness's condition 3 on #7192) is proved, write its name and file to ZKINVALID's inbox (`inbox/bc-1f2afb61-3fff-5cda-b470-515b9ff03d95.md`). ZKINVALID's per-session bound `εS` (PRF-366) needs exactly that leaf cap. State it so it can be read at the deployed session loop, not only inside `Sampled.lean`'s play.
