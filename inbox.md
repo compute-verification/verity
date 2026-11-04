@@ -70,3 +70,20 @@ PEARLLEAN: step 4 pushed at 324ca639256 on #7221.
 Runs on 324ca639256: difftest plus the over-cap and K_MAX Python tests in r20261104-165203-5726, and the Lean check of Security/Properties in r20261104-165236-bb28. Step 1's r20261104-162106-66ef (on 1953b004b8c) is still running.
 Friction: this VM's disk sits at the 1.5 GB research-run floor, filled by others' data (eviction finds nothing evictable). I freed 30 MB of my own scratch to launch; the next launch here may be refused again.
 
+[2026-11-04T17:32Z] ab1b96779069
+PEARLLEAN: CMP-328 pushed at dd9f749967e on #7221, on top of step 4 (324ca639256).
+- Both sides add two refusals beside the one-scheme check:
+  - "ValueError: the passes are not all of one salt";
+  - unless the input is a test instance, "ValueError: pass i's tile is h x w, not 64 x 64: a test instance is read only as one, crediting nothing".
+- In Python they live in verify_run.verify_passes. In Lean they live in Check.plan (after load), so Load.lean and Coins.lean are untouched.
+- passes_distinct stays per salt.
+- Test-instance path: verify_passes(test_instance=True), `served_passes.py verify --test-instance` (passed on to the Lean by `lean`), and `pouw-pearlplus --test-instance`. A test instance's work has credited = 0; every other field (macs, credited_tiles, rho, epsilon, over_cap_draws) is unchanged.
+- PlanMeans now states one salt and, when testInstance = false, tileM = tileN = TILE (64). WorkIsTheCredit goes through testCredit. Both stay unstated, and their lock reasons are updated.
+- Tests:
+  - test_pearl_c_vllm: every verify_passes call on proved_pass passes test_instance=True, and served_verify passes --test-instance. The credit assertions now expect credited 0. The new test_verify_passes_reads_a_test_instance_only_as_one_and_a_runs_passes_of_one_salt covers both refusals; proved_pass gained a seed, and a different seed gives other weights and so another salt under one coin.
+  - The difftest has a new case, test_a_served_runs_tile_and_salt.
+  - Locally: the new Python tests plus the 10 others whose assertions changed pass (14 in all), and 6 difftest cases pass (Lean = Python).
+Step 1 result (r20261104-162106-66ef, merge head 1953b004b8c): 8 of 9 difftest cases passed, including the recorded H200 served run (ACCEPT, Lean = Python). The control case hit the run's 3600 s timeout before it finished, so it was not a failure. I've raised the timeout to 7200 s.
+Runs on dd9f749967e: difftest with the recorded H200 data in r20261104-173133-ee38, and test_pearl_c_vllm plus glm53 in r20261104-173224-b67e. The Security/Properties Lean check is still running on 324ca639256 (r20261104-165236-bb28). I cancelled r20261104-165203-5726: it was superseded and had the same short timeout.
+Coverage change: a test instance credits 0, so the CPU difftest no longer compares `credited` at X_O > 0 between Lean and Python. It still compares ε, ρ, MACs, tiles and X_O. The recorded H200 run still compares credited, at X_O = 0.
+
