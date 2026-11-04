@@ -2404,7 +2404,7 @@ def test_under_h1_tie_a_window_h1_bound_no_r_for_or_another_r_has_no_v3c(tmp_pat
 
 
 #: Pearl+'s window record W of window 7 (`retain --window-record`'s), the record a Pearl+-tied commit is chained after
-PEARL_W = {"format": "verity/registration/v2", "window": {"scheme": "pearl-c-h100-v1-h3"}, "previous": None,
+PEARL_WREC = {"format": "verity/registration/v2", "window": {"scheme": "pearl-c-h100-v1-h3"}, "previous": None,
            "registered": {"pearl-a/0/0": {}}}
 PEARL_TIES = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PEARLC_CHALLENGER_GATE": ""}
 
@@ -2423,7 +2423,7 @@ def _pearl_tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProces
                              f'{tmp_path}/advice.py "$@"; }}\nunset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
     d.mkdir()
     (d / "weights_registration.json").write_text("{}")
-    (tmp_path / "piece" / "window-record.json").write_text(json.dumps(PEARL_W))
+    (tmp_path / "piece" / "window-record.json").write_text(json.dumps(PEARL_WREC))
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "tie-out"),
            "ORDER": str(tmp_path / "order"), "V3C_CLASS": W63K4, **PEARL_TIES, **extra}
     run = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", "pearl-tie", str(d), "7",
@@ -2439,11 +2439,11 @@ def test_under_pearlplus_tie_the_pieces_tie_commits_the_window_cut_at_pearls_lin
     registration R it holds chained right after W. It says nothing in $OUT; its commit's answer stays in the serve dir."""
     run, order = _pearl_tie(tmp_path)
     d = tmp_path / "serve"
-    w = REG.digest(PEARL_W)
+    w = REG.digest(PEARL_WREC)
     assert run.returncode == 0 and order == ["compiler", "advice", "window-commit"], (run.stdout, run.stderr, order)
     assert run.stdout.splitlines()[-1].startswith(
         f"PEARL-TIE: window-commit class {W63K4}, its circuit cut at Pearl+'s linears: W {w[:16]}…, R ")
-    assert json.loads((d / "pearlplus" / "w7" / "registration.json").read_text()) == PEARL_W
+    assert json.loads((d / "pearlplus" / "w7" / "registration.json").read_text()) == PEARL_WREC
     vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
     assert json.loads((vw / "registration.json").read_text())["previous"] == w
     assert (tmp_path / "order.commit").read_text().split() == [
@@ -2457,7 +2457,7 @@ def test_under_pearlplus_tie_the_pieces_tie_commits_the_window_cut_at_pearls_lin
     ({"FAIL_COMMIT": "1"}, 16,
      f"PEARL-TIE: window-commit class {W63K4} refused (exit 2): prove_path.py window-commit: the row dir holds no window 7"),
     ({"BREAK_CHAIN": "1"}, 16, f"PEARL-TIE: window-commit's registration R is chained after {'ef' * 8}…, not right after "
-                               f"Pearl+'s W {REG.digest(PEARL_W)[:16]}…"),
+                               f"Pearl+'s W {REG.digest(PEARL_WREC)[:16]}…"),
     ({"PEARLPLUS_TIE": ""}, 3, "PEARL-TIE: PEARLPLUS_TIE or V3C_CLASS is empty"),
 ])
 def test_a_pearl_tie_whose_commit_is_refused_or_not_chained_right_after_w_fails(tmp_path, extra, rc, said):
@@ -2493,9 +2493,9 @@ def _pearl_tied_commit(tmp_path: Path, chained: bool = True) -> None:
     vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
     vw.mkdir(parents=True)
     (d / "pearlplus" / "w7").mkdir(parents=True)
-    (d / "pearlplus" / "w7" / "registration.json").write_text(json.dumps(PEARL_W))
+    (d / "pearlplus" / "w7" / "registration.json").write_text(json.dumps(PEARL_WREC))
     (d / "pearlplus" / "w7" / "window-commit.json").write_text(json.dumps({"run": "ab", "circuit": "cd", "population": 37}))
-    r = {"format": "toy", "previous": REG.digest(PEARL_W) if chained else "ef" * 64, "law": TIED_LAW}
+    r = {"format": "toy", "previous": REG.digest(PEARL_WREC) if chained else "ef" * 64, "law": TIED_LAW}
     (vw / "registration.json").write_text(json.dumps(r))
     (vw / "circuit.json").write_text(json.dumps({"run": "ab"}))
 
@@ -2506,7 +2506,7 @@ def test_under_pearlplus_tie_v3c_audits_the_commit_tied_to_pearls_w_with_records
     _pearl_tied_commit(tmp_path)
     rc, lines, order, _limits = _v3c(tmp_path, **PEARL_TIES, CERTIFIER_CHAIN_CMD=None, CERTIFIER_PERIOD_CMD=None)
     assert rc == 0 and "window-commit" not in order and "audit" in order, (lines, order)
-    w = REG.digest(PEARL_W)
+    w = REG.digest(PEARL_WREC)
     assert lines[2].startswith(f"WINDOW-COMMIT class {W63K4} in Pearl+'s piece, its registration chained right after "
                                f"Pearl+'s window record W before Pearl+'s coin (W {w[:16]}…, R "), lines
     assert _audited(tmp_path) == {"--law": "stratified:1", "--tie": str(tmp_path / "serve" / "pearlplus" / "w7" / "registration.json"),
@@ -2520,7 +2520,7 @@ def test_under_pearlplus_tie_v3c_audits_no_commit_not_chained_right_after_w(tmp_
     rc, lines, order, _limits = _v3c(tmp_path, **PEARL_TIES, CERTIFIER_CHAIN_CMD=None, CERTIFIER_PERIOD_CMD=None)
     assert (rc, order) == (16, ["window-circuit"]), lines
     assert lines[-1] == (f"WINDOW-COMMIT class {W63K4}: window-commit's registration R is chained after {'ef' * 8}…, not "
-                         f"right after Pearl+'s W {REG.digest(PEARL_W)[:16]}…")
+                         f"right after Pearl+'s W {REG.digest(PEARL_WREC)[:16]}…")
 
 
 @pytest.mark.parametrize("extra, line", [
