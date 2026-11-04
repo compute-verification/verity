@@ -530,13 +530,39 @@ def test_try_builds_the_files_imports_then_runs_lean_on_it_in_its_owning_package
     said = []
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 1, "lean's exit status"
     assert calls["build"] == [("Sec/Proofs", tree, ["+Proofs.Flock.X:deps"], False, None),
-                              ("Sec/Proofs", tree, None, False, ["env", "lean", "Flock/X.lean"])]
+                              ("Sec/Proofs", tree, None, False, ["env", "lean", ".lake/axiom-probe/Flock/X.lean"])]
     assert calls["link"] == [("Sec/Proofs", True)], "the owning package's dependencies, a copy as --records takes"
     assert calls["run"] == [], "no check.py, audit or --update"
     assert not (tree / LC.DIRTY).exists() and any("lean exit 1" in s for s in said)
     assert LC.main(["--try", "Sec/Proofs/Flock/X.lean", "--tree", str(tree)]) == 1
     with pytest.raises(SystemExit):
         LC.main(["--try", "Sec/Proofs/Flock/X.lean", "--records", "Sec"])
+
+
+def test_try_elaborates_the_files_probed_copy_and_ends_with_the_theorems_beyond_the_standard_axioms(trying, tmp_path,
+                                                                                                     monkeypatch):
+    """Lean's exit 0 isn't proved: the last line names the theorem resting on `sorry`, and an error on an appended
+    `#print axioms` line leaves the file's status 0."""
+    tree, calls = trying
+    x = LC.ROOT / "Sec" / "Proofs" / "Flock" / "X.lean"
+    x.write_text("namespace F\ntheorem holey : 1 = 2 := sorry\ntheorem clean : True := trivial\nend F\n")
+    seen = []
+
+    def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None):
+        if cmd is None:
+            return 0, ""
+        seen.append((t / pkg / cmd[2]).read_text())
+        return 1, (".lake/axiom-probe/Flock/X.lean:8:14: error: Unknown constant `F.clean`\n"
+                   "'F.holey' depends on axioms: [sorryAx]\n")
+
+    monkeypatch.setattr(LC, "build", build)
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 0
+    assert seen[0].endswith("end F\n\n#print axioms F.holey\n#print axioms F.clean\n")
+    assert not (tree / "Sec" / "Proofs" / ".lake" / "axiom-probe" / "Flock" / "X.lean").exists()
+    assert "lean exit 0" in said[-2] and said[-1] == (
+        "lean-try: Sec/Proofs/Flock/X.lean: axiom probe: 1 of the 1 it read use axioms beyond propext, Classical.choice "
+        "and Quot.sound: F.holey (sorryAx); no answer for 1 (an error on its `#print axioms` line above): F.clean")
 
 
 def test_try_forgets_both_modules_an_import_clash_names_so_the_next_try_rebuilds_them(trying, tmp_path):
@@ -558,6 +584,38 @@ def test_try_forgets_both_modules_an_import_clash_names_so_the_next_try_rebuilds
     said.clear()
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 1
     assert other.exists() and not any("clash" in s for s in said), "any other error forgets nothing"
+
+
+def test_try_with_siblings_compiles_the_file_then_imports_it_beside_its_built_siblings(trying, tmp_path, monkeypatch):
+    tree, calls = trying
+    (tree / "Sec" / "Proofs" / "Flock").mkdir(parents=True)
+    (tree / "Sec" / "Proofs" / "lakefile.toml").write_text('name = "p"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Proofs"\n')
+    (tree / "Sec" / "Proofs" / "Flock" / "X.lean").write_text("module\n")
+    (tree / "Sec" / "Proofs" / "Y.lean").write_text("module\n")
+    olean = tree / "Sec" / "Proofs" / LC.SIBLINGS.LIB / "Proofs" / "Y.olean"
+    olean.parent.mkdir(parents=True)
+    olean.write_bytes(b"olean")
+    os.utime(olean, (2_000_000_000.0,) * 2)
+    ran = []
+
+    def run(argv, cwd):
+        ran.append(argv)
+        return 1, "error: import Proofs.Y failed, environment already contains 'f' from Proofs.Flock.X\n", 2.0, 700
+
+    monkeypatch.setattr(LC.SIBLINGS, "run", run)
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True) == 1
+    lean = calls["build"][1][4]
+    assert lean[:3] == ["env", "lean", "-R"] and lean[3].startswith(".lake/axiom-probe/siblings-") and lean[4] == "-o"
+    assert lean[5].endswith("/Proofs/Flock/X.olean") and lean[6] == f"{lean[3]}/Proofs/Flock/X.lean", \
+        "the probed copy, at its module's path under -R"
+    assert ran[0][1:4] == ["env", "lean", "--setup"]
+    assert any("siblings: Proofs.Flock.X and Proofs.Y both declare 'f'" in s for s in said), said
+    assert not list((tree / "Sec" / "Proofs" / LC.SIBLINGS.COPIES).iterdir()), "the scratch build is removed"
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=lambda _: None) == 0 and len(ran) == 1, \
+        "no check without --siblings"
+    with pytest.raises(SystemExit):
+        LC.main(["--records", "Sec", "--siblings"])
 
 
 def test_try_runs_no_lean_when_the_imports_fail_to_build(trying, tmp_path):

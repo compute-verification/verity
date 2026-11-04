@@ -19,7 +19,7 @@ from verity.ml.commitments.merkle import merkle_depth
 from verity.ml.crypto import lms
 
 LABEL = "commit"
-HOST = "vy-nebius-cpu-1"
+HOST = "auditor-1"
 
 
 def entropy(seed: str):
@@ -299,7 +299,7 @@ def test_a_commitment_the_prover_supplies_is_refused(tmp_path):
     assert forged.commitment == prover.commitment
     assert C.trusted_reason(key, forged.to_json(), prover.commitment, lms_verify) == unsigned
     assert C.trusted_reason(verifier_key(1), doc, ch.commitment, lms_verify) == unsigned
-    for bad in ({**doc, "host": "vy-nebius-2"}, {**doc, "signature": doc["signature"][:-2]},
+    for bad in ({**doc, "host": "auditor-2"}, {**doc, "signature": doc["signature"][:-2]},
                 {**doc, "commitment": {**doc["commitment"], "epoch": 8}}):
         assert C.record_reason(key, bad, lms_verify) == unsigned
     rewritten_path = tmp_path / "rewritten.json"

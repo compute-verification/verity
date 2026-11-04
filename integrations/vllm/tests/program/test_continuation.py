@@ -264,7 +264,7 @@ def test_profile_a_is_the_resolved_header_field_through_the_one_lag_rule_never_d
         K.resolve_profile({"profile": {"engine_kwargs": {"async_scheduling": None}}})
     with pytest.raises(ValueError, match="not attested"):
         K.resolve_profile({"profile": {"engine_kwargs": {}}})
-    with pytest.raises(ValueError, match="DP-pad-02"):
+    with pytest.raises(ValueError, match="post-EOS lag must be declared"):
         K.check_profile(2)
     assert K.declared_profile({"workload_fn": "Workload_v1{requests=(a,b),shared=weights,lag=1}"}) == (1, lifted_records.LAG_STATIC_FIELD + ":lag=")
 
