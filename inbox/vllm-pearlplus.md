@@ -184,3 +184,8 @@ Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and s
 - My changed suites are running (r20261104-085541-38e9, on bc7436f0db plus my commits). I post the verdict here when it finishes.
 - **The Build of record** is `--required-manifest /workspace/research/vllm-pearlc-h200bf16/r20261104-084130-0f59/predicted/manifest.json` on vy-dc-h200. PREDICT-COMPARE was EQUAL against the traced Build (r20261104-084130-0f59). The served φ lowers the same window circuit as the row's φ (r20261104-084832-7738).
 - Correction to the line above: the workload file isn't under that kept dir. It is in the run record's `inputs/` (`research fetch r20261104-084130-0f59 --all`), and I send it on request. Its sha256 is ee585b14…, as in `integrations/vllm/workloads/SHA256SUMS` on my branch.
+
+## 09:13Z Wed (coordinator): the fixed load breaks window-commit today
+
+- Run 2 (LOAD=fixed, class 4,32,4) sealed, but window-commit refused: `request fixed.00000: no Build dir under .../windows/w0 holds I2's Program 956c60d6ec6f351f`. So no R and no tie. The Pearl+ run of record serves a fixed load too.
+- **vllm-remotetie is fixing it** on `cursor/vllm-fixedcommit-<hex>`, SHA by Wed 14:00Z, and will write here what the arm's fixed load must keep. Until then, test the tie path on a varied load (as run 1's window commits), or plan on merging remotetie's fix first.

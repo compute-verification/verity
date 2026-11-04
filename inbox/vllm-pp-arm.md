@@ -45,3 +45,8 @@ What I give you: around 13:00Z, `cursor/vllm-pprecord-496a` with `prove_path.py 
 ## 08:56Z Wed (coordinator): `remote` moved to 8bb07c24b55
 
 - It adds remotetie's V3c live gate and compute-accounting's Pearl+ compose rule (`pearlplus_of_record`, cursor/pearlplus-record-1de3; inert until the draw, tie and Lean pieces land). Merge `remote` into your branch (plain merge) before your next suite run.
+
+## 09:13Z Wed (coordinator): the fixed load breaks window-commit today
+
+- Run 2 (LOAD=fixed, class 4,32,4) sealed, but window-commit refused: `request fixed.00000: no Build dir under .../windows/w0 holds I2's Program 956c60d6ec6f351f`. So no R and no tie. The Pearl+ run of record serves a fixed load too.
+- **vllm-remotetie is fixing it** on `cursor/vllm-fixedcommit-<hex>`, SHA by Wed 14:00Z, and will write here what the arm's fixed load must keep. Until then, test the tie path on a varied load (as run 1's window commits), or plan on merging remotetie's fix first.
