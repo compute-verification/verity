@@ -316,13 +316,16 @@ theorem scanWindowsPlaced_nontrivial :
     fun _ => rfl, fun _ => ?_, fun h => ?_⟩
   · unfold WrongBounds
     intro F hF
-    have hsub := Finset.mem_powerset.1 (Finset.mem_filter.1 hF).1
-    calc F.card ≤ (Finset.range oneInputPart.blocks.length).card := Finset.card_le_card hsub
+    classical
+    simp only [NetTiming.faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
+    calc F.card ≤ (Finset.range oneInputPart.blocks.length).card := Finset.card_le_card hF.1
       _ = 1 := (Finset.card_range _).trans rfl
   · have hPa : Claims.Sampling.Design.Pa oneInputStmt.design oneInputPart {0} = 1 := rfl
     have hall : NetTiming.allSlots oneInputStmt.design oneInputPart = ∅ := rfl
     have hin : ({0} : Finset ℕ) ∈ NetTiming.faultySets oneInputStmt.design oneInputPart (1 / 2) := by
-      refine Finset.mem_filter.2 ⟨Finset.mem_powerset.2 fun v hv => ?_, ?_, ?_⟩
+      classical
+      simp only [NetTiming.faultySets, Finset.mem_filter, Finset.mem_powerset]
+      refine ⟨fun v hv => ?_, ?_, ?_⟩
       · rw [Finset.mem_singleton.1 hv, Finset.mem_range]
         decide
       · show (1 / 2 : ℝ) < Claims.Sampling.Design.Pa oneInputStmt.design oneInputPart {0}
