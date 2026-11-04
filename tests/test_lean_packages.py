@@ -52,8 +52,9 @@ def test_one_mathlib():
 #: the size of each lock's `unwitnessed`: the guarantees stating what an acceptance means, or an exclusion's bound, that
 #: had no `honest` and `nontrivial` witnesses when the witness rule came (`check.py`'s `witness_failures`), with those the
 #: PRs on `next` then brought, and the exclusion bounds that read a partition once a derived circuit's registration built
-#: its one-block partition (`RegisteredCircuit.ofCircuit`)
-UNWITNESSED = {"Security": 464, "Security/Properties": 221, "verity/core/service/flock": 7}
+#: its one-block partition (`RegisteredCircuit.ofCircuit`), less the 41 that left with the lemmas and completeness
+#: theorems the lock stopped listing
+UNWITNESSED = {"Security": 423, "Security/Properties": 221, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
