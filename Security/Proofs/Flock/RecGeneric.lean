@@ -34,6 +34,7 @@ public import Proofs.Flock.RecGeneric.AtFlockCompiledSessions
 public import Proofs.Flock.RecGeneric.AtFlockCompiledContract
 public import Proofs.Flock.RecGeneric.AtFlockCompiledKS
 public import Proofs.Flock.RecGeneric.AtFlockCompiledNontrivial
+public import Proofs.Flock.RecGeneric.Witnesses
 
 /-! The recursion as a compiler, generic in Π_in, Π_out and the server, over Π_in with repetition extractors: its
 statements (`Definitions.Claims.RecursionGeneric`: `CompositionKS`, L1, and `CompilerKS`, L2), their honest and
