@@ -207,7 +207,7 @@ def test_a_salt_dead_element_over_the_row_cap(exe, tmp_path, monkeypatch):
     reasons = [v["reason"] for v in took["verdicts"] if v["reason"]]
     assert took["verdict"] == "accept" and reasons and all(why in r for r in reasons)
     monkeypatch.setattr(T.CW.D, "forming_elements", lambda flags, dead, device=None: 0)
-    without = answer(VR.verify_passes([path], 16, 1, "test", T.published(path), SOURCE))
+    without = answer(VR.verify_passes([path], 16, 1, "test", T.published(path), SOURCE, test_instance=True))
     assert without["verdict"] == "accept" and not any(v["reason"] for v in without["verdicts"])
 
 
