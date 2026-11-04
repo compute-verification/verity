@@ -370,14 +370,17 @@ def evaluate(book, model, choose):
     credited), the matrix setting it, the credited share of the model's MACs, the credited matrices unpriced, and
     those a reorder could take under the line, or further under it: a split at a rank priced in the natural order
     only whose cost less NEAR, over the credit, is under both the line and the matrix's least cost over credit
-    (`natural`), or a variant within NEAR of the line never priced with the split (`unsplit`)."""
+    (`natural`), or a variant within NEAR of the line never priced with the split (`unsplit`). A deflated matrix's
+    part served apart, r·(n + K) MACs, is uncredited and counts in the model's MACs."""
     worst = {k: (math.inf, None, None) for k in KEYS}
-    credited = 0.0
+    credited, apart = 0.0, 0
     unpriced, natural, unsplit = [], [], []
     for t in all_tensors(model):
         var, credit = choose(book, model, t)
         if credit == 0:
             continue
+        if var and var[2]:
+            apart += var[2] * sum(shape(model, kind(t)))
         credited += macs(model, kind(t)) * credit
         if var is None:
             unpriced.append(t)
@@ -392,7 +395,7 @@ def evaluate(book, model, choose):
             ol = s[k][0] / credit
             if ol < worst[k][0]:
                 worst[k] = (ol, t, s[k][1])
-    return worst, credited / total_macs(model), unpriced, natural, unsplit
+    return worst, credited / (total_macs(model) + apart), unpriced, natural, unsplit
 
 
 def served_map(book, model, choose) -> dict:
