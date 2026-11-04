@@ -3,6 +3,7 @@ import Definitions.Pouw.PearlC.DeviceRev1
 import Definitions.Pouw.PearlC.RowSem
 import Definitions.Pouw.PearlC.NoiseSha512
 import Proofs.Pouw.PearlPlus.Noise
+import Proofs.Pouw.PearlPlus.Numerics
 
 /-!
 # Pearl+'s bridge, part (b): a tile's words under -h3's noise are the semantics'
@@ -43,23 +44,26 @@ noncomputable def tilesH3 {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ
 def rowVals (k : ℕ) (x : Array ℕ) : Fin k → ℚ := fun l => (wordQ x[l.val]!).getD 0
 
 /-- **(b) The row statistics are `pc8`'s**: on a row of `k` finite FP32 words, `s5_stats`' ρ, α and β are `pc8`'s
-`rowRho`, `alpha8` and `beta8` of the row's values re-encoded. -/
+`rowRho`, `alpha8` and `beta8` of the row's values re-encoded. `8 ∣ k`, as `s5_stats` reads `⌈k/8⌉` positions where
+`rowRho` reads `⌊k/8⌋`; `k ≤ 2^27`, as `Words.ofInt` is exact only up to `2^24`. -/
 def StatsAreTheRow : Prop :=
-  ∀ (k : ℕ) (x : Array ℕ) (s ρw αw βw : ℕ), x.size = k → 0 < k → (∀ l < k, x[l]! < 2 ^ 32 ∧ (wordQ x[l]!).isSome) →
+  ∀ (k : ℕ) (x : Array ℕ) (s ρw αw βw : ℕ), x.size = k → 0 < k → 8 ∣ k → k ≤ 2 ^ 27 →
+    (∀ l < k, x[l]! < 2 ^ 32 ∧ (wordQ x[l]!).isSome) →
     Words.s5Stats x = .ok (s, ρw, αw, βw) →
       ρw = RowCircuit.rowRho RowCircuit.coreOps .id (RowCircuit.encRow k (rowVals k x)) k ∧
         αw = RowCircuit.alpha8 RowCircuit.coreOps (RowCircuit.encRow k (rowVals k x)) k ∧
         βw = RowCircuit.beta8 RowCircuit.coreOps (RowCircuit.encRow k (rowVals k x)) k
 
 /-- **(b) A tile's words are the semantics'**: for a unit `u` of `U` with salt and weight root the semantics' bytes, a
-tile's rows and columns in the unit, every weight row of its columns passing the rules (as `TileGood` asks), opened rows
-that are the commitment's activation rows and the weight's rows, and the check's noise, operands and checked words
-values (no rejection): each word of a row that passes the rules has the reference ticket and useful values. -/
+depth `k` within the domain's `K_MAX` (which the run checks when it loads the pass), a tile's rows and columns in the
+unit, every weight row of its columns passing the rules (as `TileGood` asks), opened rows that are the commitment's
+activation rows and the weight's rows, and the check's noise, operands and checked words values (no rejection): each
+word of a row that passes the rules has the reference ticket and useful values. -/
 def WordsAreTheSemantics : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (H : Q → R) (s : S) (U : Pouw.PearlC.Workload) (u : ℕ)
     (act : Codes) (salt rootB : ByteArray) (wn : Words.FixedNoise) (rows cols : List ℕ) (ops : Words.Ops)
     (ch : Words.Checked),
-    bytesNat salt = saltOf s → bytesNat rootB = rootOf (U.layout.wid u) →
+    bytesNat salt = saltOf s → bytesNat rootB = rootOf (U.layout.wid u) → (U.layout.shape u).k ≤ 2 ^ 16 →
     (∀ i ∈ rows, i < (U.layout.shape u).m) → (∀ j ∈ cols, j < (U.layout.shape u).n) →
     (∀ i ∈ rows, ∀ l < (U.layout.shape u).k, act i l < 2 ^ 32) →
     (∀ j ∈ cols, ∀ l < (U.layout.shape u).k, U.weight (U.layout.wid u) j l < 2 ^ 32) →

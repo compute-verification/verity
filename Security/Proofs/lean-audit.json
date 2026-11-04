@@ -17,6 +17,7 @@
   "Proofs.Properties.Pouw.Strata",
   "Proofs.Properties.Pouw.PearlPlus",
   "Proofs.Properties.Pouw.PearlPlus.Open",
+  "Proofs.Pouw.PearlPlus.Numerics",
   "Proofs.Properties.Nci",
   "Proofs.Properties.Nci.DescAgree",
   "Proofs.Properties.Nci.Walk",
