@@ -39,7 +39,7 @@ M_MAX, GRID = 32768, 16
 #: what a sweep records of the rule, and points of record must have been swept under
 RULE = {"c_share": C_SHARE, "l_slack": L_SLACK, "grid": GRID, "m_max": M_MAX}
 #: a figure of record: at least MIN_REPS paired reps, its 95% interval within HALF_WIDTH of the median ratio, and its
-#: busy SM-time within CROSS_CHECK of its kernels' durations x the SMs their blocks occupy
+#: busy SM-time at most CROSS_CHECK over its kernels' durations x the SMs their blocks occupy
 MIN_REPS, HALF_WIDTH, CROSS_CHECK = 20, 0.05, 0.05
 #: the scheme gate: γ at most this at each point
 GAMMA_CAP = 10.0
@@ -469,14 +469,16 @@ def layer_gamma(result: Mapping, busy: Mapping[str, Mapping], card: Gpu, m: int,
 
 
 def cross_check_why(ratios: Mapping[str, float | None], bound: float = CROSS_CHECK) -> str | None:
-    """Why the SMs Active reading can't stand: an entry whose busy SM-time differs from its kernels' occupied SM-time (each
-    kernel's duration times the SMs its blocks occupy) by more than `bound`, or one without kernels."""
+    """Why the SMs Active reading can't stand: an entry whose busy SM-time exceeds its kernels' occupied SM-time (each
+    kernel's duration times the SMs its blocks occupy, the most SMs Active can read while they run) by more than `bound`, or
+    one without kernels. Below it, the ratio reads the SMs the kernels left idle (a partial last wave, a persistent grid's
+    uneven tiles), which hides no work: SMs Active counts every cycle an SM holds a warp."""
 
-    off = {k: r for k, r in ratios.items() if r is None or abs(r - 1) > bound}
+    off = {k: r for k, r in ratios.items() if r is None or r - 1 > bound}
     if not off:
         return None
-    worst = max(off, key=lambda k: math.inf if off[k] is None else abs(off[k] - 1))
-    return (f"{len(off)} entries' SMs Active SM-time differs from their kernels' occupied SM-time by over {bound:.0%} "
+    worst = max(off, key=lambda k: math.inf if off[k] is None else off[k])
+    return (f"{len(off)} entries' SMs Active SM-time exceeds their kernels' occupied SM-time by over {bound:.0%} "
             f"({worst}: {off[worst]})")
 
 

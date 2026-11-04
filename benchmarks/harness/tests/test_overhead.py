@@ -385,7 +385,8 @@ def test_busy_sm_time_integrates_sms_active_over_each_ranges_kernels_and_checks_
     assert nsys.report(tmp_path / "prime.sqlite", H200, "item ") == {"busy": {}, "ranges": 0, "stray": 0}
     assert O.cross_check_why({"a": got["item 0"]["ratio"]}) is None
     assert "1 entries" in O.cross_check_why({"a": got["item 0"]["ratio"], "b": got["item 1"]["ratio"]})
-    assert "(tail: 0.7)" in O.cross_check_why({"tail": 0.7, "a": 1.02}) and O.cross_check_why({"none": None})
+    assert O.cross_check_why({"tail": 0.7, "a": 1.02}) is None and O.cross_check_why({"none": None})
+    assert "exceeds their kernels' occupied SM-time by over 5% (over: 1.07)" in O.cross_check_why({"over": 1.07, "a": 1.02})
 
 
 def test_blocks_an_sm_holds_are_the_tightest_of_warps_registers_and_shared_memory():
