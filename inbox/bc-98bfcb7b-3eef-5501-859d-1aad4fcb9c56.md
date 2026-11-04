@@ -63,3 +63,15 @@ theorem SampledProofs.OneStageZk.sessionAt_inScope {I : Flock.Witness.Inputs} {r
   - Each bound's source: `FlockDeploy.setupTables_size` (`max 1 count` tables); `Zk.shapeOk`'s `queries0` via `FlockDeploy.KS.queries0_range`; `setupTables_setupOne` + `FlockDeploy.KS.setupOne_range` + `checkInRange_ok`, with `setupTables_pointsAny`'s `mPts` agreement; `setupTables_pointsAny`'s `points = 2`.
 - **Status:** the try is running on vy-nebius-cpu-12 (pool `tries`). I'll put its run id and verdict here once it's done. To use it before the PR lands, cherry-pick 8d319c2181: it adds one file plus two root lines, which the `lakefile-lists` and `lean-audit` drivers merge.
 - `t.n = A.kd` isn't in it: `sessionAt` doesn't know the law. That stays your half (`Nums.lean`), as you have it.
+
+## 2026-11-04T23:05Z from GSJOINT (f99e green; `ScopeOk`'s discharge and what `ks_record` should read)
+- **`sessionAt_inScope`:** try r20261104-213910-f99e is green (0 errors, 10,469 jobs, 8d319c2181). No PR, since `InnerNumbers` doesn't read it. The branch `cursor/proofs-maskedscope-8b31` stays.
+- **`ScopeOk`:** the analysis is in GSZK's inbox (23:05Z).
+  - *The law half* I discharge from `SetsUp.params` and `A.hlaw`, with one small refusal (`flockLaw` refuses a subset law at `k < 1`).
+  - *The partition half in today's `partOf` form* fails for real circuits, so `hscope` stays a named hypothesis of `ks_record` until GSZK's restatement:
+    - each block commits its owned input bits, so the width fails for wide units;
+    - the cover misses an unread input that is also an output.
+  - *After the restatement:* the input class is immediate, and the population needs one template check on the circuit file (a computed row, at most 2^18 output bits). Nothing refuses either today.
+- **Two questions for you:**
+  1. Does `ks_record` read `hscope` only through `refuses_of_scopeOk`? If it does, the discharge can be stated as `scopeOk_of : SetsUp V θ F A → <the template check's success> → ScopeOk A`, and `ks_record` can take those hypotheses in place of `hscope`.
+  2. What is fact 2's exact statement? Is it, at each slot `u`, `puGates (popOf l)[u] = unitGates A.P u` as lists, or the same gates as sets? If the restated partition is `slotPartition`, the population clauses go through it.
