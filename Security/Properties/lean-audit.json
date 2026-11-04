@@ -6047,6 +6047,10 @@
    "Proofs.NetworkCertifier.encardProgramRunsLeWindows": {
     "function": "NetworkCertifier.handingBuckets",
     "outcome": "none"
+   },
+   "Properties.Pouw.PearlPlus.drawIsOnItsStreams": {
+    "function": "PouwCheck.PearlPlus.draw",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -6061,7 +6065,6 @@
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Pouw.PearlPlus.OpeningBinds": "unstated: two accepted openings of one position of an hm96 tree open one value, or two different messages hashed in checking them (`rowsHashed`) collide under SHA-512; proved (`Properties.Pouw.PearlPlus.openingBinds`), and listed under guarantees once it has its witnesses",
-   "Properties.Pouw.PearlPlus.drawIsOnItsStreams": "restatable: its one hypothesis, that the run's tickets hold some weight (`0 < ticketTotal (tickets passes)`), is no acceptance of `draw`, which returns or throws on every input; it states what `draw` returns wherever the tickets hold weight",
    "Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets": "frozen (no-function): a bound on a probability over the draw's coin bytes (`Pouw.pr`), not a property of one function: it reads Pearl+'s code only through `drawBytes` and `uniformOn`, which `DrawIsOnItsStreams` ties to `draw`",
    "Properties.Pouw.PearlPlus.workIsTheCredit": "restatable: a conjunction under its `∀ i opener` binders, which the shape reads as one part with no acceptance, since a statement splits at `∧` only at its top; restated as two conjuncts, each over its own `∀ i opener`, one taking `check`'s acceptance and one its refusal, it is a property of `PouwCheck.PearlPlus.check` accepting",
    "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
