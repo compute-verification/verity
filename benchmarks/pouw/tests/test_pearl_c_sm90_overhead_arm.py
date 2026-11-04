@@ -88,26 +88,28 @@ def test_the_record_names_the_art_of_record_only_for_its_bytes(tmp_path, monkeyp
 def test_the_record_keeps_the_path_the_door_sent(tmp_path, monkeypatch):
     (tmp_path / "store.cubin").write_bytes(b"cubin")
     (tmp_path / "pearl_c_sm90.cubin").symlink_to(tmp_path / "store.cubin")
-    assert OA.cubin_of({OA.CUBIN_ENV: str(tmp_path / "pearl_c_sm90.cubin")}, tmp_path) == (tmp_path / "pearl_c_sm90.cubin", "sent")
+    assert OA.cubin_of(str(tmp_path / "pearl_c_sm90.cubin"), tmp_path) == (tmp_path / "pearl_c_sm90.cubin", "sent")
     monkeypatch.chdir(tmp_path)
-    assert OA.cubin_of({OA.CUBIN_ENV: "pearl_c_sm90.cubin"}, tmp_path) == (tmp_path / "pearl_c_sm90.cubin", "sent")
+    assert OA.cubin_of("pearl_c_sm90.cubin", tmp_path) == (tmp_path / "pearl_c_sm90.cubin", "sent")
 
 
 def test_a_sent_cubin_that_is_no_file_is_refused(tmp_path):
     with pytest.raises(FileNotFoundError, match="isn't a file"):
-        OA.cubin_of({OA.CUBIN_ENV: str(tmp_path / "absent.cubin")}, tmp_path)
+        OA.cubin_of(str(tmp_path / "absent.cubin"), tmp_path)
 
 
-@pytest.mark.parametrize("env", [{}, {OA.CUBIN_ENV: ""}])
-def test_without_a_sent_cubin_the_arm_builds_one_for_development(tmp_path, env):
+@pytest.mark.parametrize("sent", [None, ""])
+def test_without_a_sent_cubin_the_arm_builds_one_for_development(tmp_path, monkeypatch, sent):
     made = []
 
     def build(out: Path) -> Path:
         made.append(out)
         return out / "pearl_c_sm90.cubin"
 
-    assert OA.cubin_of(env, tmp_path, build) == (tmp_path / "pearl-plus-cubin" / "pearl_c_sm90.cubin", "development")
+    assert OA.cubin_of(sent, tmp_path, build) == (tmp_path / "pearl-plus-cubin" / "pearl_c_sm90.cubin", "development")
     assert made == [tmp_path / "pearl-plus-cubin"]
+    monkeypatch.delenv(OA.CUBIN_ENV, raising=False)
+    assert OA.settings().VERITY_BENCH_CUBIN is None
 
 
 def test_the_development_build_is_build_sh_s_cubin_and_gates_alone(tmp_path, monkeypatch):

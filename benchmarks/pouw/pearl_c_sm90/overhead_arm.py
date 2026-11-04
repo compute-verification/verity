@@ -31,10 +31,11 @@ for `epsilon` alone.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import subprocess
-from collections.abc import Mapping
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -84,10 +85,9 @@ def pinned() -> dict:
     return json.loads(PINNED.read_text())["cubin"]
 
 
-def cubin_of(env: Mapping[str, str], out_dir: Path, build=None) -> tuple[Path, str]:
-    """The cubin the arm loads and how it came: the file ``$VERITY_BENCH_CUBIN`` names (``sent``), else one `build`
-    (default `build_dev`) makes in `out_dir` (``development``)."""
-    sent = env.get(CUBIN_ENV)
+def cubin_of(sent: str | None, out_dir: Path, build=None) -> tuple[Path, str]:
+    """The cubin the arm loads and how it came: the file `sent` names (``$VERITY_BENCH_CUBIN``'s, ``sent``), else one
+    `build` (default `build_dev`) makes in `out_dir` (``development``)."""
     if sent:
         path = Path(sent)
         if not path.is_file():
@@ -117,11 +117,21 @@ def m16(m: int) -> int:
     return -(-m // 16) * 16
 
 
-def kernels() -> Any:
-    """This directory's run.py, for its constants and buffer sizes off the device: the module `Kernel.load` runs."""
-    from verity_vllm.protocols.pouw.pearl_c.kernel import _load
+def settings() -> Any:
+    from verity_config.settings import of
 
-    return _load("pearl_c_run", HERE / "run.py")[0]
+    return of(__file__)
+
+
+def kernels() -> Any:
+    """This directory's run.py, for its constants off the device (on it, `Kernel.load` loads its own copy, whose
+    `Pipeline` the arm's buffers are sized by)."""
+    name = "pearl_c_sm90_overhead_run"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, HERE / "run.py")
+        mod = sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    return sys.modules[name]
 
 
 def tiles_of(m: int, n: int) -> int:
@@ -145,7 +155,7 @@ class PearlPlus:
     def build(self, ctx: dict) -> dict:
         if ctx["arch"] != ARCH:
             raise RuntimeError(f"{SCHEME} runs on {ARCH} (an H100 or H200), not {ctx['arch']}: time it with --card h200")
-        cubin, source = cubin_of(os.environ, Path(ctx["out_dir"]))
+        cubin, source = cubin_of(settings().VERITY_BENCH_CUBIN, Path(ctx["out_dir"]))
         self.cubin, sha, pin = cubin, sha256(cubin), pinned()
         return {"scheme": SCHEME, "served": SERVED, "binaries": [str(cubin)],
                 "cubin": {"path": str(cubin), "sha256": sha, "source": source,
@@ -394,7 +404,7 @@ class _Call:
         run.hashing = True
         run.begin(at=INDEX)
         cur = run.cur
-        cur.retain, cur.run = out, os.environ.get("RESEARCH_RUN_ID")
+        cur.retain, cur.run = out, settings().RESEARCH_RUN_ID
         mm = Matmul(PPD.call_index(run), Unit(self.m16, self.k, self.n), 0)
         cur.matmuls.append(mm)
         cur.flag_rows, cur.tiles = self.m, self.tiles
