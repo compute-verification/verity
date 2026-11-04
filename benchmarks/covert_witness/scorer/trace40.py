@@ -45,8 +45,9 @@ REPO = Path(os.environ.get("TE_REPO", "/workspace"))
 PIN_REV = os.environ.get("TE_PIN_REV", "origin/cursor/covert-witness-4207")
 CW = "benchmarks/covert_witness"
 V3_TOKENIZER = "bpe32k"
-#: a run whose dominant update structure starts late replays every step before it (a 4-arm shallow run: 3,493 steps)
-TRACE_TIMEOUT = 5400
+#: a run whose dominant update structure starts late replays every step before it (a 4-arm shallow run: 3,493 steps);
+#: TE_TRACE_TIMEOUT sets it for a node run that retries one that timed out (coordinator 21:47Z: once, at twice it)
+TRACE_TIMEOUT = int(os.environ.get("TE_TRACE_TIMEOUT") or 5400)
 #: the node step's version: a run that failed under an older one is traced again
 CODE = 2
 #: the formalism's fields in bits of the update or the gradient, which seed-subspace's d scales
