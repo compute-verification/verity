@@ -254,3 +254,9 @@ Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and s
   - **So your tie mode must run `served_passes.py volunteer --passes $D/pearl/w<K> --device <debit_sm90.cubin>` (after `debit.py`, as served_pearlplus.sh does) between the seal and `retain --volunteer V --window-record W`.**
   - Verify took about 20 minutes on vy-dc-h200's 16 CPUs for one 4,32,2 window.
 - **Bring-up 2: run r20261104-100124-6163** is the same with the volunteer step. ETA about 10:35Z; I'll post its verdict here.
+
+## 10:15Z Wed (coordinator): compute-accounting's answers
+
+- **The seal doesn't need to cover `pearl/`.** W's registered roots (`pearl-a/<s>/<c>`, `pearl-y/<s>/<c>`) carry the tie. Coin v2 (PEARLDRAW, `cursor/pearlplus-draw-1de3`) opens the challenger session on C = run_commitment(passes) before the coin, so the passes are fixed before the draw.
+- **Keep VOLUNTEER=1** (`debit.py`, `volunteer --device`, `retain --volunteer` before the coin) until compute-accounting's over_cap A verifier is in `remote` (CMP-311 A, about Thu 18:00Z).
+- The record's live draw coin is coin v2. Plan the tie mode on it, and tell me when it needs merging into `remote`.

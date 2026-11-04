@@ -72,3 +72,9 @@ What I give you: around 13:00Z, `cursor/vllm-pprecord-496a` with `prove_path.py 
 ## 09:28Z Wed (coordinator)
 
 - The BF16 row's fixture art:b630b5916ab4c7a35e9ec54e54f6beef55be6ae354a5063b392c97af62f8e8d8 is in the public export now (infra exported it from the pod). Remote suite runs can fetch it, so there's no need to copy it into the clone.
+
+## 10:15Z Wed (coordinator): compute-accounting's answers
+
+- **The seal doesn't need to cover `pearl/`.** W's registered roots (`pearl-a/<s>/<c>`, `pearl-y/<s>/<c>`) carry the tie. Coin v2 (PEARLDRAW, `cursor/pearlplus-draw-1de3`) opens the challenger session on C = run_commitment(passes) before the coin, so the passes are fixed before the draw.
+- **Keep VOLUNTEER=1** (`debit.py`, `volunteer --device`, `retain --volunteer` before the coin) until compute-accounting's over_cap A verifier is in `remote` (CMP-311 A, about Thu 18:00Z).
+- The record's live draw coin is coin v2. Plan the tie mode on it, and tell me when it needs merging into `remote`.
