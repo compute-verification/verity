@@ -154,7 +154,7 @@ Protocols and claims:
 
 - Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
   exclusion, which reports in AND gates. Whoever finds a reason this is wrong floats it at once.
-- Credit of declared size, values certified, is a statement about values (SPOT[Flock]'s). Compute credit (Dither's;
+- Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (Dither's;
   PoUW's bar is now T1–T3) also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute
   credit as well as of exclusion (ASK-166). SAK is over noised operands only, never prover-chosen ones (pinned weights,
   served activations, un-noised outputs), and an un-noised call earns no compute credit (ASK-174).
@@ -196,7 +196,7 @@ Protocols and claims:
 - A guarantee's checked family may fold in a check the compiled verifier already runs, or a new fail-closed
   refusal modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition
   decidable at any literal instantiation, discharged by computation at use, never a listed assumption.
-- The end goal is SPOT[Flock] through recursion with hidden unit circuits and a hidden partition; the auditor
+- The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
   checks only padded counts. One key per protecting party, sampled once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
   are sampled from the OS, not expanded by a PRG, but the lead keys its instances under one window key (`Hash.Keyed`).
@@ -207,10 +207,10 @@ Protocols and claims:
 - A table that tabulates a fixed function is a value, even with no program parameter; an operation's own
   definition holds only the hardware's measured tables. No protocol gets an exemption for public values: in development a
   proof may be replaced by replay, or verification skipped, as a labelled shortcut, never as the protocol.
-- The sampled audit as a compiler is SPOT, the Sample-and-PrOve Transform, always in capitals: SPOT[Π] is read "SPOT
-  over Π", a SPOT proof is one run's output, and prose calls the sampled-proofs subprotocol SPOT[Flock]
-  (`ARCHITECTURE.md`'s Glossary). Identifiers (`sampled_proofs`, `SampledProofs.*`, `Claims.Sampling*`) are renamed
-  to SPOT once `Claims.SamplingGeneric` is on main. The recursion compiler has no name.
+- The sampled audit as a compiler is SPOT, the Sample-and-PrOve Transform, always in capitals: a transform, not a
+  protocol, which compiles Π into the argument SPOT[Π], read "SPOT over Π"; the deployed one is SPOT[Flock], and a SPOT
+  proof is one run's output (`ARCHITECTURE.md`'s Glossary). `Claims.SamplingGeneric` and its Flock instance
+  `Claims.Sampling` take its name once the former is on main. The recursion compiler has none.
 
 ## Before you finish
 

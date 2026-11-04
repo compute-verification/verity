@@ -282,7 +282,7 @@ core ε (`--checking full`, the default), Corollary D3's (`Accounting.Guarantees
 
     1 − ε_core = (1 − ε_skip − ε_mand − ε_machine − ε_luck)(1 − ε_sched)(1 − ε_clock)
 
-SPOT adds ε_sample = ε_adapt on its own line and in its own columns (`--checking sampled`): a function
+The sampling compiler adds ε_sample = ε_adapt on its own line and in its own columns (`--checking sampled`): a function
 of the proof block and its selection rule, 0 at 100% sampling. The two layers meet only in `Eps.total()`, for the
 record, never to compare designs. `solve` prints τ, the price vectors' real-time factor, as a vector's record; the core
 ε under the floor credit is the guarantee's reading. Every term is a fraction of honest time:
