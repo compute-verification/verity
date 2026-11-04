@@ -144,13 +144,12 @@ def regions(path: str, text: str) -> list[tuple[int, int, str]]:
     here reads, or one its lexer can't read, is a literal throughout. In prose, a span in backticks is a literal, since it
     quotes code."""
     lang = language(path, text)
-    try:
-        spans = {"python": _python, "lean": _lean, "shell": _shell, "c": _c_like, "markdown": _markdown}[lang](text) \
-            if lang != "data" else None
-    except (SyntaxError, ValueError):
-        spans = None
-    if spans is None:
+    if lang == "data":
         return [(0, len(text), LITERAL)] if text else []
+    try:
+        spans = {"python": _python, "lean": _lean, "shell": _shell, "c": _c_like, "markdown": _markdown}[lang](text)
+    except (SyntaxError, ValueError):                    # unread, so nothing in it is renamed
+        return [(0, len(text), LITERAL)]
     out = []
     for s, e, k in sorted(spans):
         if k != PROSE or lang == "markdown":
@@ -620,10 +619,8 @@ def pinned(root: Path) -> set[str]:
     renames only prose leaves them as they are."""
     out = set()
     for pin, key, under in json_pins(root):
-        try:
+        if (root / pin).is_file():
             out |= {posixpath.normpath(posixpath.join(under, p)) for p in json.loads((root / pin).read_text()).get(key, {})}
-        except (OSError, ValueError):
-            continue
     return out
 
 
