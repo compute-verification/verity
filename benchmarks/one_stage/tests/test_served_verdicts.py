@@ -3298,32 +3298,32 @@ def test_the_preflight_refuses_pearlplus_tie_under_a_live_gate_without_main_file
 #: `df` on a toy filesystem: its arguments in $ORDER.df, the line under its header DF_LINE
 FAKE_DF = 'echo "$@" > "$ORDER.df"\necho "Inodes IFree Mounted on"\necho "$DF_LINE"'
 SHORT_INODES = ("PREFLIGHT: the serve dir's filesystem /workspace has 100 inodes free, 772288 short of PEARLPLUS_INODES "
-                "(772388), two windows of Pearl+'s passes at three files a pass member: delete earlier runs' Pearl+ "
-                "windows with `research retention rm`, or set SERVE_ROOT on another filesystem")
+                "(772388), two commits of the tied window at three files a member: delete earlier runs' Pearl+ windows "
+                "with `research retention rm`, or set SERVE_ROOT on another filesystem")
 
 
 @pytest.mark.parametrize("env, df, refusal", [
     (PEARL_TIED, "2000000 100 /workspace", SHORT_INODES),
-    ({"POUW": "pearlplus", "PEARLC_CHALLENGER_GATE": ""}, "2000000 100 /workspace", SHORT_INODES),
     (PEARL_TIED, "- - /workspace", "PREFLIGHT: the serve dir's free inodes can't be held to PEARLPLUS_INODES (772388): df "
                                    "says - free of - on {at}"),
     (PEARL_TIED, "2000000 772388 /workspace", None),
     (PEARL_TIED, "0 0 /workspace", None),
+    ({"POUW": "pearlplus", "PEARLC_CHALLENGER_GATE": ""}, "2000000 100 /workspace", None),
     ({}, "2000000 100 /workspace", None),
 ])
-def test_the_preflight_refuses_a_pearlplus_serve_where_the_serve_dirs_filesystem_has_fewer_inodes_free_than_two_windows(
+def test_the_preflight_refuses_a_pearlplus_tie_where_the_serve_dirs_filesystem_has_fewer_inodes_free_than_two_commits(
         tmp_path, env, df, refusal):
-    """Pearl+'s passes, three files a pass member, go to the serve dir's filesystem, so under POUW=pearlplus, tied or not,
-    the preflight refuses to serve where df counts fewer than PEARLPLUS_INODES free there (by default two windows' at the
-    class of record) or counts none, naming the filesystem and the shortfall, before anything runs. It asks df about the
-    serve dir's nearest existing directory, since the serve dir is made after the preflight. A filesystem with no inode
-    table makes its inodes as it needs them, and H1's serve writes no Pearl+ window."""
+    """Under PEARLPLUS_TIE Pearl+'s piece commits the window on the served node, three files a member, into the serve dir,
+    so the preflight refuses to serve where df counts fewer than PEARLPLUS_INODES free on its filesystem (by default two
+    commits' at the class of record) or counts none, naming the filesystem and the shortfall, before anything runs. It
+    asks df about the serve dir's nearest existing directory, since the serve dir is made after the preflight. A
+    filesystem with no inode table makes its inodes as it needs them, and an untied serve commits no tied window."""
     _script(tmp_path / "bin" / "df", FAKE_DF)
     rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                      HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", D=str(tmp_path / "root" / "r1"),
                                      DF_LINE=df, PEARLPLUS_INODES=None, **env)
     asked = (tmp_path / "order.df").read_text().split() if (tmp_path / "order.df").exists() else None
-    assert asked == (["--output=itotal,iavail,target", str(tmp_path)] if env else None)
+    assert asked == (["--output=itotal,iavail,target", str(tmp_path)] if "PEARLPLUS_TIE" in env else None)
     if refusal is None:
         assert (rc, order) == (0, []) and len(lines) == 1 and lines[0].startswith("PREFLIGHT passed"), lines
     else:
