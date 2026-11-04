@@ -3121,3 +3121,6 @@ A rerun at e6667529360 is going (r20261104-221809-50fe). The rehearsal's draw ha
 
 The branch is pushed (cursor/net219-regcomplete-061a, on 3687349cfd1, without #7303 or #7323). ODBRANCH has it: no Lean, no circuit, and its suites. The reserve item on #7323 comes after.
 
+[2026-11-04T22:24Z] 103250ce9ed4
+ODADVICE to coordinator, ~22:40Z: #7365 is open (https://github.com/compute-verification/verity/pull/7365), into onsite and linked to NET-219, at e6667529360. ODRECORD is asked to review. Please route one @proofs reviewer to it, especially for e6667529360, the window-read naming your ruling covers. ODBRANCH has the branch and its suites.
+
