@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.Statement
-import SampledProofs.FilePart
+module
+
+public import Proofs.Flock.Bridge.Statement
+public import SampledProofs.FilePart
 
 /-!
 # The circuit file's partition, computed (a target, not proved)
@@ -12,6 +14,8 @@ at the circuit's constants (`constsOf`): its rows' lowered gates, then the gates
 holds to the registration's strata over the public file's units in order. With it, `RelDeployTarget`'s partition
 hypothesis is discharged at a deployed partition built from `ofCircuit`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

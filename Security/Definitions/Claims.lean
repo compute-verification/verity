@@ -1,8 +1,10 @@
-import Mathlib
-import Definitions.Core.Boolean
-import Definitions.Core.Interaction
-import Definitions.Claims.Hm96
-import Definitions.Claims.Json
+module
+
+public import Mathlib
+public import Definitions.Core.Boolean
+public import Definitions.Core.Interaction
+public import Definitions.Claims.Hm96
+public import Definitions.Claims.Json
 
 /-!
 # Claims: Flock's claim statements (frozen before any proof work)
@@ -72,6 +74,8 @@ here but `Flock.ZK`, and the shared forms of `Definitions/Core/Interaction.lean`
 `Flock.Guarantees.MaskedZK`, which states `Flock.ZK` at the deployed masked record: the lock records each one's text
 under `reads`, so a changed claim is a changed record.
 -/
+
+@[expose] public section
 
 namespace Claims
 

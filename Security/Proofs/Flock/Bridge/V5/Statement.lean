@@ -1,7 +1,9 @@
-import Proofs.Flock.Bridge.LeafMap
-import Proofs.Flock.Bridge.Draw
-import Proofs.Flock.Bridge.DrawnLaw
-import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
+module
+
+public import Proofs.Flock.Bridge.LeafMap
+public import Proofs.Flock.Bridge.Draw
+public import Proofs.Flock.Bridge.DrawnLaw
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
 
 /-!
 # `SampledKSLiveV5`: the sampled audit's knowledge soundness at the verifier's public inputs (stated)
@@ -37,6 +39,8 @@ The targets V5's assembly takes (`Bridge.AssemblyTargetV5`): `TransportsLiveV5` 
 draw), `EndToEndHiddenV5` (`EndToEndHiddenC` at these, from `OpeningsCanonTargetV5`, bounding the event that a set `W`
 of proof blocks is wrong by the law's `P_a` of `W`), and `FaultyRightTargetC` as V2 takes it.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

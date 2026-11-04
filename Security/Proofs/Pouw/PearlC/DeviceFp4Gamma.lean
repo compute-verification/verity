@@ -1,5 +1,7 @@
-import Proofs.Pouw.PearlC.TileGamma
-import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
+module
+
+public import Proofs.Pouw.PearlC.TileGamma
+public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
 
 /-!
 # γ at an FP4 record, and Pearl-C4's headline on sm_120 (staged, nothing pinned)
@@ -27,6 +29,8 @@ import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
   `pearlCDomainFp4`, now bounded to the grant's shapes, and read only its one-shape clause, so the instances are
   unchanged.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

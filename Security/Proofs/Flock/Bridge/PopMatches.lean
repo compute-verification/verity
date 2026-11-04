@@ -1,6 +1,8 @@
-import Proofs.Flock.Bridge.Defs
-import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
-import Proofs.Flock.Claims.Sampling.Select.Misses
+module
+
+public import Proofs.Flock.Bridge.Defs
+public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
+public import Proofs.Flock.Claims.Sampling.Select.Misses
 
 /-!
 # The registration's population is the game's units, in order (`Bridge.PopMatches`)
@@ -18,6 +20,8 @@ gates are unit `u`'s proof block in the game's partition is `FilePartTarget`.
   ranges' units: the sizes the claims' layout lays (`FilePart.sizes`, `sizes_ok`). `nsOf_eq` reads them off the strata,
   and `nsOf_sum`: at `PopMatches`, they sum to `n`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

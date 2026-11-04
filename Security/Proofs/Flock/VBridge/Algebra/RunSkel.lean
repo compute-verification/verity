@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Algebra.Rows
-import Proofs.Flock.VBridge.Algebra.Ligerito
+module
+
+public import Proofs.Flock.VBridge.Algebra.Rows
+public import Proofs.Flock.VBridge.Algebra.Ligerito
 
 /-!
 # `run`'s residuals have one skeleton at every coin source
@@ -14,6 +16,8 @@ rep's coins have one skeleton whenever both runs succeed (`residualLins_skel`), 
 The values related are linear (no products) except the zerocheck's and the lincheck's residuals, whose products are
 `mv` of message elements and so the same at both sources.
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

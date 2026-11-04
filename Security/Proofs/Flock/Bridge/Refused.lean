@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.Canon
-import Flock.PortRoots
+module
+
+public import Proofs.Flock.Bridge.Canon
+public import Flock.PortRoots
 
 /-!
 # `SampledKSLiveV2`'s file preconditions, refused by the verifiers (`SampledKSLiveV3`)
@@ -23,6 +25,8 @@ refuses the registration (`SampledProofs.Run.run`,
   without the three hypotheses. `sampledKSLiveV3_of` derives it from `SampledKSLiveV2`: files that pass give V2's
   hypotheses, and at files that fail the event is empty.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

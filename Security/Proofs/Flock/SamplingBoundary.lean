@@ -1,4 +1,6 @@
-import Definitions.Claims.Sampling
+module
+
+public import Definitions.Claims.Sampling
 
 /-!
 # The sampling block's faulty set is the boundary form's
@@ -8,6 +10,8 @@ nowhere: a value it reads from outside it is committed, and a gate of it compute
 and from an input's committed value, which is on its boundary (`runIn_refIn`). So it is correct under some interior
 exactly when it is correct on the committed values, under any interior (`core`).
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling.Boundary
 

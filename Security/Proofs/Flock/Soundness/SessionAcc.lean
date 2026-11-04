@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Session
-import Proofs.Flock.Soundness.ExtractAcc
+module
+
+public import Proofs.Flock.Soundness.Session
+public import Proofs.Flock.Soundness.ExtractAcc
 
 /-!
 # Knowledge soundness in the session, from accepted reruns (DESIGN.md §3)
@@ -16,6 +18,8 @@ because the product is also at most `ε`.
 the session's own acceptance (every table accepts), so that the relative term is relative to the
 probability the audit accepts.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

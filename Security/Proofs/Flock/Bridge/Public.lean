@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.KSLive
-import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
+module
+
+public import Proofs.Flock.Bridge.KSLive
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
 
 /-!
 # `SampledKSLiveV2` with a public error
@@ -25,6 +27,8 @@ at the knowledge finders' budgets `q_F = 2(t' + v)` and `q_S = t' + v` and the l
 (`rateM1 k ≤ ρ`) where `SampledKSLiveV2`'s reads the plan, and every other hypothesis, named assumption included, is
 `SampledKSLiveV2`'s.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

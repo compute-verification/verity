@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.Scheme
+module
+
+public import Definitions.Pous.Model.Scheme
 
 /-!
 # The timed audit game, perfect isolation
@@ -17,6 +19,8 @@ import Definitions.Pous.Model.Scheme
 
 A bounded program always answers on time, so "every answer correct and on time" is "every answer correct" here.
 -/
+
+@[expose] public section
 
 namespace Pous
 

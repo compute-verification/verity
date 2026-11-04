@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
-import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 
 /-!
 # `zk_session_soundJ_custody`, "wrong" measured against the public file
@@ -17,6 +19,8 @@ wrong units contain `zk_session_soundJ_custody`'s (`wrong_subset_wrongRegZ`), so
 * `rsZJ_wrongRegZ`: the registered commit strings are the public file's, so `wrongRegZ` is one set at every
   registration.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Layout
 

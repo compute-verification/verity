@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BoundRouteMerged
-import Proofs.Flock.Claims.Recursion.BoundMergedLin
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundRouteMerged
+public import Proofs.Flock.Claims.Recursion.BoundMergedLin
 
 /-!
 # `KSBoundLin` at the deployment with no bridge and no `WeightCovers` (route 2B, linearly)
@@ -14,6 +16,8 @@ neither: `γ`'s weight at `IVStar` need only be at least `DE`'s.
 `KSLin_of_plainKSAbort_binds` there, carried to the deployed record by `ksLin_of_C` as `ksA_of_C` carries `KSA`.
 `RecDeploy.ksBoundDeployedLin_merged_wE` is the route at `w := wE`, where the weight premise holds.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

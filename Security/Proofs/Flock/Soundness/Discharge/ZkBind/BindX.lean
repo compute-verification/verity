@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
-import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
-import Proofs.Flock.Soundness.Binding.RowsX
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
+public import Proofs.Flock.Soundness.Binding.RowsX
 
 /-!
 # `--zk` rows each under its own encoding
@@ -14,6 +16,8 @@ import Proofs.Flock.Soundness.Binding.RowsX
 * `HmRowsZX.ofShadow`: the `--zk` rows of a public layout's `HmRowsX`, and `HmRowsZX.ofShadow_computes`;
 * `zk_flock_countC_execOS_keyProgX`: the compiled `--zk` count curve at such rows' binding.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkBind
 

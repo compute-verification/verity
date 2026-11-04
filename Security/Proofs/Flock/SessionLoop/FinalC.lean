@@ -1,4 +1,6 @@
-import Proofs.Flock.SessionLoop.TakenVals
+module
+
+public import Proofs.Flock.SessionLoop.TakenVals
 
 /-!
 # `vs`'s `final_c` is fixed by its round-1c values
@@ -16,6 +18,8 @@ over `vs` beside `Loop.TakesVals` and `Loop.RowsOK`:
   `Loop.takes_honestVals_ofLoopLink` and `Loop.rowsOK_honestVals`, the honest values meet every premise over `vs` at the
   session loop.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

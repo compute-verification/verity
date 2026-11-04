@@ -1,7 +1,9 @@
-import Proofs.Flock.Bridge.Draw
-import Proofs.Flock.Bridge.PopMatches
-import Proofs.Flock.Claims.Sampling.Select.Design
-import SampledProofs.OneStage
+module
+
+public import Proofs.Flock.Bridge.Draw
+public import Proofs.Flock.Bridge.PopMatches
+public import Proofs.Flock.Claims.Sampling.Select.Design
+public import SampledProofs.OneStage
 
 /-!
 # The law the audit draws under (`Bridge.drawnLaw`)
@@ -23,6 +25,8 @@ work table `tb`, at the population `n`:
 * `lawOn_drawnLaw`, `lawOn_drawsUnder`: at `PopMatches`, it is on the registration's strata (`LawOn` at `nsOf`), drawing
   `lawK` units.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

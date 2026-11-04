@@ -2,8 +2,12 @@
 PROTOCOL.md §6: the replay transcript. The only source of coins is the session record; every coin is returned only after
 the framed bytes that precede it hash to the recorded digest (R2).
 -/
-import Flock.Bytes
-import Flock.Hash
+module
+
+public import Flock.Bytes
+public import Flock.Hash
+
+@[expose] public section
 
 namespace Flock
 

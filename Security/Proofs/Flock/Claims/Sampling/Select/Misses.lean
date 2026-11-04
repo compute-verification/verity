@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Sampling.Select.Bounds
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Bounds
 
 /-!
 # `Slots.select` misses a set of slots no more often than the claims' `P_a` (`Properties.SampledProofs.DrawMisses`)
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.Sampling.Select.Bounds
 * `law_bound`: the law `Select.select` samples misses a set of units no more often than its `P_a` over the strata.
 * `drawMisses`: the draw is accepted and misses `B` with probability at most `missBound`.
 -/
+
+@[expose] public section
 
 open SampledProofs
 

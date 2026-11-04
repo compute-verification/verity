@@ -1,4 +1,6 @@
-import Proofs.Flock.Bridge.Canon
+module
+
+public import Proofs.Flock.Bridge.Canon
 
 /-!
 # The assembly with canonical openings (`Bridge.AssemblyTargetC`, proved)
@@ -13,6 +15,8 @@ constants, `canonAt`'s second clause; at a constant, `canonAt`'s first clause ma
 evaluation, the constant; the constants are inputs, `constsOf_isInput`). `K₁`'s miss term is `K₀`'s
 (`choose_min_count`): where they differ both are `0`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

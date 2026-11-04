@@ -18,8 +18,14 @@ the slots of the proof blocks a draw checks.
   then `[g, g + 1]` for each source it owns. `checked` is its `[slot, 0]` pairs, until a format version: the
   difftest's Python side (`one_stage.slots`) reads them.
 -/
-import SampledProofs.Select
-import SampledProofs.FilePart
+module
+
+public import SampledProofs.Select
+public import SampledProofs.FilePart
+meta import SampledProofs.Select
+meta import SampledProofs.FilePart
+
+@[expose] public section
 
 namespace SampledProofs.Slots
 

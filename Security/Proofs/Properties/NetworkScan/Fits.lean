@@ -1,6 +1,8 @@
-import Properties.NetworkScan
-import Proofs.Properties.Nci.BodiesOk
-import Proofs.Properties.NetworkScan.Accept
+module
+
+public import Properties.NetworkScan
+public import Proofs.Properties.Nci.BodiesOk
+public import Proofs.Properties.NetworkScan.Accept
 
 /-!
 # The scan's layout fits its Program: where its egress and ingress gates resolve
@@ -18,6 +20,8 @@ checks.
 * A template member's parameter whose argument is one input node's leaves resolves, one step up and one down, to a gate
   of that input node (`resolve_param_input`).
 -/
+
+@[expose] public section
 
 namespace Properties.NetworkScan.Fits
 

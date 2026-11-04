@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.OutTopRows
-import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.Claims.Recursion.CapLower
-import Proofs.Flock.Claims.Recursion.SlotsCalls
-import Proofs.Flock.Claims.Recursion.RestLens
+module
+
+public import Proofs.Flock.Claims.Recursion.OutTopRows
+public import Proofs.Flock.Claims.Recursion.OpensReads
+public import Proofs.Flock.Claims.Recursion.CapLower
+public import Proofs.Flock.Claims.Recursion.SlotsCalls
+public import Proofs.Flock.Claims.Recursion.RestLens
 
 /-!
 # Every holder of a stream round's row holds the row its first holder opens
@@ -16,6 +18,8 @@ to a collision among the recorded calls every holder's row is the opened one.
 * `held_rows_tie`: two holders with one commit string hold one row (`rows_eq_of_calls'`, prefixes of one length).
 * `held_rowSlot`: at the joint witnesses, every holder's row is its round's `rowSlot`'s.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResHeld
 

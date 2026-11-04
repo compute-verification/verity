@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Refine.Rep
-import Proofs.Flock.Soundness.Refine.Frames
-import Definitions.Flock.HoloCompiled
-import Proofs.Flock.VBridge.Algebra.Holo
+module
+
+public import Proofs.Flock.Soundness.Refine.Rep
+public import Proofs.Flock.Soundness.Refine.Frames
+public import Definitions.Flock.HoloCompiled
+public import Proofs.Flock.VBridge.Algebra.Holo
 
 /-!
 # One rep with hidden unit circuits, on the transcript
@@ -21,6 +23,8 @@ elements) and squeezes `r'`. The rounds end at `dot (comb + h) z_partial` (`RecA
 `HoloRefines.lean` refines the program to the model's `holoRepC`; `HoloRepConverse.lean` gives its run from its
 stages' checks.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 
