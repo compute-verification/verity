@@ -35,7 +35,6 @@ import json
 import random
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -174,8 +173,8 @@ SAMPLED_CASES = st.one_of(empty_draws().map(form_case),
 #: One-stage v2's audit of a real session, as `serve` reads its case (``case.json``, with its blobs) and Lean's answer to
 #: it, an acceptance (``verdict.json``): `benchmarks/one_stage/v2_case.sh`'s, a RoPE d64 statement of 32 proof blocks
 #: proved by C-Flock under `--zk`, its draw (all 32) and its coin tree from one withheld session of a test challenger.
-V2_CASE = "art:227cd37ad55ff737bcdd1705f2fdbf7100789762fdde4ca7091565256d31b032"
-VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
+#: A registered fixture (`fixtures/artifacts.json`), fetched before the suite runs.
+V2_CASE = Path(__file__).resolve().parent / "fixtures" / "v2-case"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -512,17 +511,12 @@ product_remote_server = D.server_fixture(PRODUCT[R.REMOTE.id])
 
 
 @pytest.fixture(scope="module")
-def accepted(tmp_path_factory) -> Accepted:
-    """`V2_CASE`, fetched from the evidence store as `test_proofs.py` fetches its fixture (skipped when the store is not
-    reachable), whose audit the reference accepts too."""
-    sys.path.insert(0, str(VERIFIER))
-    import ci
-
-    try:
-        case = json.loads(ci.fetch(f"{V2_CASE}/case.json", tmp_path_factory.mktemp("store")).read_text())
-    except (subprocess.CalledProcessError, OSError) as e:
-        pytest.skip(f"the evidence store is not reachable: {e}")
-    acc = accepted_of(case)
+def accepted() -> Accepted:
+    """`V2_CASE`, whose audit the reference accepts too."""
+    path = V2_CASE / "case.json"
+    assert path.is_file(), (
+        f"{V2_CASE} is not fetched: `uv run research data fetch-fixtures {V2_CASE.relative_to(Path(__file__).parents[5])}`")
+    acc = accepted_of(json.loads(path.read_text()))
     got = R.SAMPLED_PROOFS.answer({**form_case(acc.audit), "blobs": list(acc.blobs)})
     assert got["verdict"] == R.ACCEPT, got
     return acc
