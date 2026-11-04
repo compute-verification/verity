@@ -103,7 +103,7 @@ reaches a fork, so a child stream is refused.
 | S2 | `hello` is the verifier's own `Hello` byte for byte (profile, reps, flavour, tables, Σ, link shape, coin scheme) |
 | S3 | the link was exchanged (`require_link`, `link_mode = link.mode = "exchange"`) before any coin |
 | S4 | `link.sigma = Σ` |
-| U1–U4 | the unit sample (§7.3) |
+| U1–U4 | the unit draw (§7.3) |
 | S5–S7 | each configured table's root_B, root_F and public words are present and match their digests; `root_F = Σ` |
 | S8 | the committed public words are consistent with the public input |
 | S9–S10 | the link points have the configured shape; every `y` is zero |
@@ -145,13 +145,13 @@ The single-table block-R1CS path makes no fork, so the verifier implements none 
 
 ## 7. Coin sources
 
-The verifier reads every coin from the record; how the server flipped them decides only what soundness assumes.
+The verifier reads every coin from the record; how the server drew them decides only what soundness assumes.
 
 ### 7.1 `os`
 
-The server takes each round's coins from the OS after recording the round's digest. Soundness assumes only that they are
+The server draws each round's coins from the OS after recording the round's digest. Soundness assumes only that they are
 uniform and unknown to the prover before it sent the round. `verify --coins os` binds the identity that mode
-(`FC_COINS=os`) writes; it binds the identity, not who flipped the coins.
+(`FC_COINS=os`) writes; it binds the identity, not who drew the coins.
 
 ### 7.2 `seed`
 
@@ -161,20 +161,20 @@ reads the coins from the record; with a seed, soundness also assumes the commitm
 
 ### 7.3 The unit sample
 
-`Flock.Draw`, `flock-verify draw`. After serving registers its roots and before the session, the verifier samples the
-units from its own OS randomness with `verity.ml.randomness`'s exact samplers, in the clear and under no hash.
-The sample is the public header's `unit_draw` (so under the public digest and Σ), instance `i` being unit `u_i`.
+`Flock.Draw`, `flock-verify draw`. After serving registers its roots and before the session, the verifier draws the
+sampled units from its own OS randomness with `verity.ml.randomness`'s exact samplers, in the clear and under no hash.
+The draw is the public header's `unit_draw` (so under the public digest and Σ), instance `i` being unit `u_i`.
 
 - **Sampling designs.** `subset(k, n)` (partial Fisher–Yates), `bernoulli(p)`, `stratified` (the default: strata by the
   template descriptor id of each unit's root node, derived from the verifier's own program and partition object, stratum
-  `s` sampling `max(1, round(K n_s / N))`), and `work` (the stratified strata sized by each template's work share from the
+  `s` drawing `max(1, round(K n_s / N))`), and `work` (the stratified strata sized by each template's work share from the
   verifier's own `--work-table`, with floors, optionally with a `closure` from the verifier's own closure map). The
-  verifier never takes a sample's `K`, strata, works, floors or closure as stated: it derives them and compares.
-- **Checks.** U1: the record keeps the statement's sample. U2: the sample is well formed and the verifier's own derivation.
-  U3: the statement's instances are the sampled proof blocks and their closure. U4: every unit that reads a round's commitment
-  (`rec-c<i>`, `rec-top-L<l>`, `rec-opening-c<i>`, `rec-top-stacked-L<l>`, `rec-sparse-<p>`) is sampled in full.
+  verifier never takes a draw's `K`, strata, works, floors or closure as stated: it derives them and compares.
+- **Checks.** U1: the record keeps the statement's draw. U2: the draw is well formed and the verifier's own derivation.
+  U3: the statement's instances are the drawn units and their closure. U4: every unit that reads a round's commitment
+  (`rec-c<i>`, `rec-top-L<l>`, `rec-opening-c<i>`, `rec-top-stacked-L<l>`, `rec-sparse-<p>`) is drawn in full.
 - Which designs a soundness claim covers is §16.15's rule; the guarantees are in `Security/Proofs/Flock/`.
-  `stratified_agree.py` holds the Lean's samples to core's (`verity.core.protocols.sampled_proofs.one_stage.draw`).
+  `stratified_agree.py` holds the Lean draws to core's (`verity.core.protocols.sampled_proofs.one_stage.draw`).
 
 ### 7.4 The keyed coin tree
 
@@ -225,7 +225,7 @@ the c-claim's interpolation equals `final_c_eval`, and the last claim equals `fi
 
 The verifier folds the block matrices itself: `comb = α·A_0ᵀe + B_0ᵀe` with the constant-wire coin `β` on the pin
 column, over `k_log − 6` rounds (top bit first), then checks the prover's 64 skip evaluations against the claim and
-flips a fresh skip coin. The fold is computed once per slot type (`Stmt.fold`).
+draws a fresh skip coin. The fold is computed once per slot type (`Stmt.fold`).
 
 ## 11. The claims handed to the opening
 
@@ -374,11 +374,11 @@ and every value private. Only strict statements exist in the Lean verifier.
 
 `Flock.HmRow`. Serving rows are `hm96-sha512/row/v1` leaves (or `row/v2` bit rows, or `row-seg/v1` segmented bit rows)
 proved in the circuit: `x = SHA-512(prefix ‖ row)`, `b = x ⊕ M(key)·y`, `c = SHA-512(salt_prefix ‖ y)`, under the pinned
-default key. Every identity and binding digest is SHA-512, and the unit sample is live (§7.3).
+default key. Every identity and binding digest is SHA-512, and the unit draw is live (§7.3).
 
 - **Slots and nets.** `sha512x3` and `hm96` slots compute each row's leaf; their nets must be the verifier's own
   (`Flock.HmNets`). So must the recursion's units (`rec-open/…`, `rec-open-stacked/…`, `rec-cap/…`, `rec-residuals/…`,
-  `rec-opening/…`), each named with its parameters and checked against the verifier's own construction before its net is built
+  `rec-opening/…`), each named with its parameters and checked against the verifier's builder before its net is built
   (`Flock.RecOpen`, `Flock.RecResiduals`, `Flock.RecOpening`, `Flock.RecVStar`).
 - **Layout.** At least one unit per VU and a power of two of VUs per block; header sizes bounded before any power is
   computed; row wires, the pin and Δ derived by the verifier and compared; the region-word and region-size checks.
@@ -404,7 +404,7 @@ the verifier derives every row itself (`DeriveAll.deriveChecked`). No typed stat
 ### 16.12 Sessions of several tables
 
 `verify --session-tables J` (the verifier's setting, never the record's): the session's units split across `J` tables,
-the sample of a fixed count (`subset` or `stratified`).
+the draw of a fixed count (`subset` or `stratified`).
 
 ### 16.13 Hidden outputs
 
@@ -435,10 +435,10 @@ with `refused: <why>: a statement form the soundness proof does not cover`. The 
 8. `Layout.scopeOk` (with hidden outputs `scopeOkI`, the general instance form);
 9. every table's `m` at least 22, or 25 under `--zk`.
 
-Also refused: a sample by a design no claim covers (bernoulli, work, a work sample with a closure, and a subset sample without
-`--zk` at public outputs; under `--plain-tables` the subset design alone), a session without a sample, a session verified
-without the verifier's own `--program`, and under `--rec-inner` a V* session that does not sample every unit of its one
-full table (`RecSetup.fullDraw`, `RecSetup.oneFull`), over an inner session whose record holds no sample
+Also refused: a draw by a design no claim covers (bernoulli, work, a work draw with a closure, and a subset draw without
+`--zk` at public outputs; under `--plain-tables` the subset design alone), a session without a draw, a session verified
+without the verifier's own `--program`, and under `--rec-inner` a V* session that does not draw every unit of its one
+full table (`RecSetup.fullDraw`, `RecSetup.oneFull`), over an inner session whose record holds no draw
 (`RecSetup.innerDrawn`), or at a holo or sparse inner shape (`RecSetup.denseOnly`: `RecursiveKS` covers the dense form
 only, and the compiled model refuses the same sessions, `RecDeploy.acc_dense`); a recursive session without `--rec-inner`
 or without `--zk` (`RecSetup.zkOnly`) is refused too. Last, once every other check has passed, `verify` refuses a
@@ -450,7 +450,7 @@ stay parsed, so recorded sessions replay through every check.
 ### 16.16 Plain leaves
 
 `verity/flock-circuit+plain-leaves`: §16.13's statement with `flock-leaf/sha512-unsalted` Merkle leaves, a recursive
-session's inner statement, whose ZK server commits every tree top under its own salt. Checked without `--zk` only.
+session's inner statement, whose firewall commits every tree top under its own salt. Checked without `--zk` only.
 
 ## 17. Acceptance, assumptions and trust
 
@@ -473,17 +473,17 @@ copying upstream. The deliberate divergences, each refused by Lean and accepted 
 | D8, D9 | no unit in a VU; no VU in a block, or a count that is not a power of two |
 | D10 | an `identifier` other than the verifier's own `--identifier F` |
 | D11 | an output group past its slot |
-| D12 | a statement form, sampling design or session the soundness proof does not cover (§16.15), and a `--zk` mask slot below 2^13 bits or met by Δ or a region; `vectors.json`'s `lean_refuses*` marks compare such a session as accepted |
+| D12 | a statement form, draw design or session the soundness proof does not cover (§16.15), and a `--zk` mask slot below 2^13 bits or met by Δ or a region; `vectors.json`'s `lean_refuses*` marks compare such a session as accepted |
 | D13 | a `rec-open` unit whose name, bits, rows or net are not the verifier's |
-| D14 | a sample that does not sample in full each unit reading a round's commitment (U4) |
+| D14 | a draw that does not draw in full each unit reading a round's commitment (U4) |
 | D15 | an inner statement's registered description that is not the registration |
-| D16 | a V* session whose instance labels are not its sampled proof blocks |
+| D16 | a V* session whose instance labels are not its drawn units |
 | D17 | a plain file in the form its statement doesn't pin, or a byte after a proof's end |
 | D18 | a non-empty `matrix_evals` |
 | D19 | a V* cap session that does not read its level's tops at the verifier's shared rows |
 | D20 | a record not in its canonical text (S0) |
 | D21 | a nonzero proof-of-work nonce |
-| D22 | the verifier's own `--program` with a reference that reads a leaf at another width than its type gives that position (`E_REINTERPRET`, `verity/ml/circuits/PROTOCOL.md` §4.4): `Flock.Program.Widths`, which `NciCheck` decodes with too, refuses it at setup with the codec's message; upstream reads no program. `qword_program_agree.py --widths` holds the decoder to the codec on the inference-only policy's mistyped descriptors |
+| D22 | the verifier's own `--program` with a reference that reads a leaf at another width than its type gives that position (`E_REINTERPRET`, `verity/ml/circuits/PROTOCOL.md` §4.4): `Flock.Program.Widths`, which `NciCheck` decodes with too, refuses it at setup with the codec's message; upstream reads no program. `qword_program_agree.py --widths` holds the decoder to the codec on NCI's mistyped descriptors |
 
 ### 17.2 Assumptions
 

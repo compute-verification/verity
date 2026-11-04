@@ -9,7 +9,7 @@ This directory holds the outline, the agreement scripts and the vectors.
 
 The default statement, `verity/flock-circuit`, is the format of C-Flock's circuit prover (M0, `verity_flock.circuit`):
 serving rows are `hm96-sha512/row/v1` leaves proved in the circuit, every output is a hidden row, every identity and
-binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit sample is live. Its variants:
+binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit draw is live. Its variants:
 
 - `verity/flock-circuit/types`: the typed statement (`PROTOCOL.md` §16.11);
 - `verity/flock-circuit/tmpl`: the templated statement, which the verifier parses and refuses until its proof lands;
@@ -18,7 +18,7 @@ binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and t
 - `+seed-injection` on any of them: the statement as the prover's selftest build pins it, for its recorded cases, which
   `verify` checks and then refuses (below).
 
-`verify` fails closed (§16.15): a session whose statement form, sample or setting no soundness theorem covers is refused,
+`verify` fails closed (§16.15): a session whose statement form, draw or setting no soundness theorem covers is refused,
 once every check has passed, with `refused: <why>: …`, so a session that fails a check keeps that check's reason.
 `flock_verify_sound` is the one theorem over everything it accepts (`Security/Proofs/Flock/`). Under `--rec-inner`
 that includes a session at a holo or sparse inner shape (`Flock.RecSetup.denseOnly`: `RecursiveKS` covers the dense
@@ -29,7 +29,7 @@ form only, and the compiled model refuses the same sessions, `RecDeploy.acc_dens
 live coins (`--coins os`, or under `--zk` the keyed coin tree). Every other version it sets up and checks, so the agreement
 corpus and the recorded fixtures replay, and then refuses the session (`ProvedScope.servedForm`, last, once every check has
 passed): a `+seed-injection` one as a selftest build's statement, the rest as superseded; a plain session on seed coins
-(`--coins seed`, the default without `--zk`) is refused the same way. A typed version, or one before `hm96-sha512/row/v1` leaves, is refused
+(`--coins seed`, the default without `--zk`) is refused the same way. A typed version, or one before hm96 rows, is refused
 earlier, for its form (`ProvedScope.check`).
 
 A recursive statement is one `verify --zk` per V* part, and no part sees another. Each part's `VERDICT` names its part
@@ -47,7 +47,7 @@ shared inputs, in the compiled verifier's form, and no two sessions share a coin
 It also holds the parts to one run, C10 `OneRun`, through `--rec-run`: the challenger's interactive-run record
 (`verity/rec-run/v1`, written by `sampled_proofs.challenger.RunRecord`). The record stages the rows file and
 `rec_shared` before any session, logs every session the challenger opened for the run's parts (a retry's too) and is
-closed after the last; it holds no coin, since each part's coins are flipped fresh at its own Hello and never committed
+closed after the last; it holds no coin, since each part's coins are drawn fresh at its own Hello and never committed
 before the run. The live challenger writes it: its operator stages it before any session and closes it after the last,
 and C-Flock's `flock-circuit serve --zk --rec-run FILE --rec-part J` appends one `open` for every Hello it answers with
 coins, in one write, before the answer carrying the session's fresh coin key leaves; a Hello it can't log is refused
@@ -96,7 +96,7 @@ flock-verify statement [--statement ID] --circuit F --public pub.bin [--tables D
 
 Each session `DIR` holds `session.json` (the `flock-live-session/v1` record) and each table's `<table>.rep0.bin` and
 `<table>.rep1.bin`. `verify` prints one `VERDICT {"accepted", "session", "why", …}` line per session and exits 0 iff all
-are accepted. The per-primitive checks are `field-test`, `hash-test`, `merkle-test`, `hm96-test` (on
+are accepted. The component checks are `field-test`, `hash-test`, `merkle-test`, `hm96-test` (on
 `verity/ml/commitments/hm96/vectors.json`) and `comp-check`.
 
 ## Agreement with upstream
@@ -117,8 +117,8 @@ python agree.py --lean flock-verify --upstream flock-circuit [--statement ID] --
 `agree.py` writes `agreement.tsv` and `result.json`, and exits 1 if the verifiers disagree, or miss an expected verdict,
 on any session. `--jobs J` deals each public file's sessions into chunks run by `J` process pairs, with the same output.
 The Lean verifier is deliberately stricter than upstream in the places `PROTOCOL.md` §17.1 lists (D1–D21); a set marked
-`lean_refuses`, `lean_refuses_drawn` or `lean_refuses_drawless` compares a session refused for its form, sample or missing
-sample alone as accepted.
+`lean_refuses`, `lean_refuses_drawn` or `lean_refuses_drawless` compares a session refused for its form, draw or missing
+draw alone as accepted.
 
 Each version's vectors patch (`netlist-vectors.patch`, `circuit-vectors*.patch`) applies to the M0 commit it names and
 adds three subcommands to upstream's binary: `vectors` (record honest and negative sessions through a loopback
@@ -132,7 +132,7 @@ The statements no pinned upstream build has (hidden outputs, `--zk`) agree with 
 Other scripts here hold one Lean part to its Python or Rust counterpart: `transcript_check.py` (the transcript and layout
 rebuilt from `PROTOCOL.md` alone), `template_query_agree.py`, `qword_agree.py`, `qword_program_agree.py`, `qcall_agree.py`,
 `cut_check_agree.py`, `unit_cut_agree.py`, `layout_agree.py`, `circuit_type_agree.py`, `record_text.py`, `zk_mutants.py`,
-and the ZK server's (`firewall_agree.py`, `firewall_controls.sh`, `firewall_finish_agree.py`): its contract
+and the firewall's (`firewall_agree.py`, `firewall_controls.sh`, `firewall_finish_agree.py`): the ZK server's contract
 and session loop against the inner phase's proxy, and each tamper control held to a visible refusal.
 
 ## Tests
