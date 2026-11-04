@@ -9,7 +9,8 @@ public import Proofs.Flock.Claims.Sampling.KS
 `Compiled.E` at an accepted run assembles the openings its sampled proof blocks' extractions keep. This file proves the
 split `Compiled.KS_of_sessionKS` takes (`SamplingGeneric/Fails.lean`): an accepted run whose extraction fails is in the
 failure event `Fails` at the found event `Found`, or its extraction's own calls collide (`split`, `Claims.Sampling`'s
-`split` with Flock's `E^rep` replaced by `Arg`'s extractor at each sampled proof block's session).
+`split` with Flock's `E^rep` replaced by `Arg`'s extractor at each sampled proof block's session). So `KSOf` holds
+(`ksOf`).
 
 * `innerBody`, `outerBody`, `outerList`, `found`: **the extractor's parts**, and what it keeps (`E_eval`); the kept
   openings pass their checks, with the checks' calls among the extractor's own (`passes_found`, `ownLog_E`), and the
@@ -19,6 +20,7 @@ failure event `Fails` at the found event `Found`, or its extraction's own calls 
   calls that checked them (`CommitmentScheme.Binds`), so without one the kept openings agree and assemble a witness;
   its faulty set is refused at `δ`, and a block of it good at a kept run would be correct at the kept openings
   (`Sessions.opens`, with the interior roots fixed by the first stage, `Sessions.interior`).
+* `ksOf`: **`KSOf`**, `Compiled.KS_of_sessionKS` at `split`.
 -/
 
 @[expose] public section
@@ -253,5 +255,12 @@ theorem split {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H)
   exact hnc hcorr
 
 end Compiled
+
+set_option synthInstance.maxSize 1024 in
+/-- **KS from the sessions' KS** (`KSOf`): `Compiled.KS_of_sessionKS` at the split. -/
+theorem ksOf : KSOf := by
+  intro Coin _ _ _ A L H hbind hS hSK
+  exact Compiled.KS_of_sessionKS hS hSK fun δ _ x _ P s hacc hfail =>
+    Compiled.split hbind hS δ x P s.1 s.2.1 s.2.2 hacc hfail
 
 end Claims.SamplingGeneric

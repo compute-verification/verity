@@ -18,9 +18,9 @@ The compiled extractor's failure event, its probability and `Compiled.KS` from t
 `Arg.ofFlock` is Flock's `E^rep` at a decoder with Flock's errors, so its knowledge soundness is `Flock.KS`'s
 (`flockArgKS`, by unfolding: its coins, extractor, `κ` and `γ` are `Flock.E`'s, `Flock.κ`'s and `Flock.γ`'s), and its
 rounds are its shape's (`arg_ofFlock_wf`). So the compiler's knowledge soundness gives Flock's (`flockKS_of_compilerKS`);
-it is two steps (`SamplingGeneric/Split.lean`: `KSOf`, `SessionKSOf`, composed by `compilerKS_of`). The split `KSOf`
-needs, an accepted run whose extraction fails being in `Fails` at `Found` or its extraction's own calls colliding, is
-`Compiled.split` (`SamplingGeneric/Assemble.lean`). `CompilerKSCount` and `CompilerBits` follow from it
+it is two steps (`SamplingGeneric/Split.lean`: `KSOf`, `SessionKSOf`, composed by `compilerKS_of`). `KSOf` is proved
+(`ksOf`, `SamplingGeneric/Assemble.lean`: an accepted run whose extraction fails is in `Fails` at `Found` or its
+extraction's own calls collide, `Compiled.split`). `CompilerKSCount` and `CompilerBits` follow from it
 (`SamplingGeneric/Count.lean`, `SamplingGeneric/Bits.lean`, the latter through the extractor's expected reruns and own
 calls, `ExpOwnOf`). `CompilerEfficient` as stated is false (`Counter.not_compilerEfficient`,
 `SamplingGeneric/Efficient.lean`). A session's coins in a compiled run, `coinsOf` and `place`, invert each other
