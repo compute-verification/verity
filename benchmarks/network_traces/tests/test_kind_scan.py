@@ -69,13 +69,13 @@ def period():
 
 
 def _case(period, v3c: dict = V3C_WINDOW) -> tuple[dict, dict]:
-    """The rows-form accept, its registrations' provenance V3c's (``v3c``) and the scan's, and its answer as the piece
-    writes it."""
+    """The rows-form accept, its registrations' provenance V3c's (its first audit's ``v3c``, any other's `V3C_WINDOW`, so
+    a field planted in ``v3c`` is one finding) and the scan's, and its answer as the piece writes it."""
     case = period.case("accept", 1, "rows")
     answer = period.reference(case)
     assert answer["verdict"] == "accept"
     com = json.loads(bytes.fromhex(case["commitment"]))
-    com = {"audits": [{**r, "window": v3c} for r in com["audits"]],
+    com = {"audits": [{**r, "window": v3c if i == 0 else V3C_WINDOW} for i, r in enumerate(com["audits"])],
            "windows": [{**r, "window": SCAN_WINDOW} for r in com["windows"]]}
     return {**case, "commitment": canonical_json(com).hex()}, answer | {"profile": answer["profile"] | {
         "placement": PLACEMENT}}
