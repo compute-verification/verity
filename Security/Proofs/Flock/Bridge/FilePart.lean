@@ -8,10 +8,12 @@ import Proofs.Flock.Soundness.Discharge.Layout.Scope
 # The circuit file's partition, computed (`FilePartTarget`, proved), and `RelDeployTarget`'s partition hypothesis
 
 `filePartTarget : FilePartTarget` (`filePart_of_log`): at every descriptor whose unit net has `unitLog ≤ 32`, unit `u`'s
-block of `SampledProofs.FilePart.ofCircuit` is `blockOf` of the key program's partition at `constsOf`
-(`blockOf_keyProg`): its rows' lowered gates (`FilePart.blockOf_uniform`), then the sources it owns
-(`FilePart.mem_srcs_iff`), because `RecResiduals.readIns` marks exactly the template inputs a computed row of
-`Rows.ofNet` reads (`readIns_iff`).
+block of `SampledProofs.FilePart.ofCircuit` is `blockOf` of the key program's partition at the constant wires
+`constWiresOf`, at any outputs (`blockOf_keyProg`): its rows' lowered gates (`FilePart.blockOf_uniform`), then the
+sources it owns (`FilePart.mem_srcs_iff`), because `RecResiduals.readIns` marks exactly the template inputs a computed
+row of `Rows.ofNet` reads (`readIns_iff`). At the circuit's outputs it is `blockOf` at the circuit's constants
+`constsOf` too (`blockOf_keyProg_consts`): `constsOf` also fixes the program inputs no unit reads, which no block holds,
+so the blocks at both constant sets are one (`blockOf_constsOf`, through `blockOf_congr`).
 
 The bound is the one `Rows.ofNet_a` and `Rows.ofNet_b` take: `readIns` reads the net's sparse rows, which hold each
 column modulo `2^32`, while `Rows.ofNet` holds rows whose columns run to `2^unitLog`. Past `unitLog = 32` a computed row
@@ -47,12 +49,12 @@ theorem readIns_iff {net : Flock.Net} (hU : FlockSoundness.Built net) (hlog : ne
     exact (FlockC3.Reps.ReadWhole.getD_readIns net y).2
       ⟨lt_of_lt_of_eq hy (FlockSoundness.Rows.ofNet_nIn hU), r, hr, hr', hc⟩
 
-/-- **The circuit's constants fix exactly the constant's and the zero's gates**, `0` and `1`. -/
-theorem constsOf_eq_none (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (n : ℕ)
-    (g : Fin (FlockSoundness.Discharge.Layout.keyN c hU n)) : constsOf c hU n g = none ↔ 2 ≤ g.val := by
+/-- **The circuit's constant wires fix exactly the constant's and the zero's gates**, `0` and `1`. -/
+theorem constWiresOf_eq_none (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (n : ℕ)
+    (g : Fin (FlockSoundness.Discharge.Layout.keyN c hU n)) : constWiresOf c hU n g = none ↔ 2 ≤ g.val := by
   have h1 : (FlockSoundness.Discharge.Layout.oneG : Fin (FlockSoundness.Discharge.Layout.keyN c hU n)).val = 0 := rfl
   have h0 : (FlockSoundness.Discharge.Layout.zeroG : Fin (FlockSoundness.Discharge.Layout.keyN c hU n)).val = 1 := rfl
-  unfold constsOf
+  unfold constWiresOf
   by_cases ho : g = FlockSoundness.Discharge.Layout.oneG
   · rw [if_pos ho]
     have : g.val = 0 := by rw [ho]; exact h1
@@ -71,12 +73,53 @@ theorem constsOf_eq_none (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) 
       have h0' : g.val ≠ 1 := fun h => hz (Fin.ext (h.trans h0.symm))
       exact ⟨fun _ => by omega, fun _ => rfl⟩
 
+/-- **A unit's proof block reads the constants only at the inputs it owns**: constants that agree at every gate some
+unit reads give every unit the same block. -/
+theorem blockOf_congr {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
+    {κ κ' : Fin C.N → Option Bool} (h : ∀ g, owner P g ≠ none → κ g = κ' g) (u : Fin n) :
+    blockOf P κ u = blockOf P κ' u := by
+  have hins : insOf P κ u = insOf P κ' u := by
+    unfold insOf
+    refine List.filter_congr fun g _ => ?_
+    by_cases ho : owner P g = some u
+    · simp only [h g (by rw [ho]; exact Option.some_ne_none u)]
+    · simp [ho]
+  unfold blockOf
+  rw [hins]
+
+/-- **The circuit's constants are its constant wires at every gate some unit reads**: they differ only at the program
+inputs no unit reads, which `constsOf` fixes to `0`. -/
+theorem constsOf_eq_constWiresOf (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (n : ℕ)
+    {g : Fin (FlockSoundness.Discharge.Layout.keyN c hU n)}
+    (h : owner ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition
+      (FlockSoundness.Discharge.Layout.outsOf c hU n)) g ≠ none) :
+    constsOf c hU n g = constWiresOf c hU n g := by
+  unfold constsOf constWiresOf
+  by_cases ho : g = FlockSoundness.Discharge.Layout.oneG
+  · rw [if_pos ho, if_pos ho]
+  · rw [if_neg ho, if_neg ho]
+    by_cases hz : g = FlockSoundness.Discharge.Layout.zeroG
+    · rw [if_pos hz, if_pos]
+      exact Or.inl hz
+    · rw [if_neg hz, if_neg]
+      rintro (h' | ⟨-, h'⟩)
+      exacts [hz h', h h']
+
+/-- **The proof blocks are the same at both constant sets**: the circuit's constants (`constsOf`) and its constant
+wires (`constWiresOf`) differ only at inputs no unit reads, which no block holds. -/
+theorem blockOf_constsOf (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (n : ℕ) (u : Fin n) :
+    blockOf ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition
+        (FlockSoundness.Discharge.Layout.outsOf c hU n)) (fun g => constsOf c hU n g) u =
+      blockOf ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition
+        (FlockSoundness.Discharge.Layout.outsOf c hU n)) (fun g => constWiresOf c hU n g) u :=
+  blockOf_congr _ (fun _ h => constsOf_eq_constWiresOf c hU n h) u
+
 /-- **The code's block is `blockOf`'s**: at `unitLog ≤ 32`, any outputs `outs` and unit `u`, `ofCircuit`'s block `u` is
-`blockOf` of the key program's partition at the circuit's constants. -/
+`blockOf` of the key program's partition at the circuit's constant wires. -/
 theorem blockOf_keyProg (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (hlog : c.unit.unitLog ≤ 32) (n : ℕ)
     (outs : Finset (Fin (FlockSoundness.Discharge.Layout.keyN c hU n))) (u : Fin n) :
     ((SampledProofs.FilePart.ofCircuit c n).block u.val).toList =
-      blockOf ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition outs) (fun g => constsOf c hU n g) u := by
+      blockOf ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition outs) (fun g => constWiresOf c hU n g) u := by
   have hSm := FilePart.mem_srcs_iff c (FlockSoundness.Rows.ofNet hU) (Flock.RecResiduals.readIns c.unit)
     (readIns_iff hU hlog) _ (SampledProofs.FilePart.mem_ofCircuit_srcs c n)
   rw [SampledProofs.FilePart.block_toList]
@@ -86,8 +129,8 @@ theorem blockOf_keyProg (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (
     (ins := FlockSoundness.Discharge.Placed.insOf n (FlockSoundness.Discharge.Layout.keyB c hU)
       (FlockSoundness.Discharge.Aliased.keyIdx c (FlockSoundness.Discharge.Layout.keyB c hU)))
     (one := FlockSoundness.Discharge.Placed.oneGate n _)
-    (hone := FlockSoundness.Discharge.Placed.insOf_ne_one n _ _) outs (fun g => constsOf c hU n g)
-    (B := FlockSoundness.Discharge.Layout.keyB c hU) rfl (fun g _ => constsOf_eq_none c hU n g)
+    (hone := FlockSoundness.Discharge.Placed.insOf_ne_one n _ _) outs (fun g => constWiresOf c hU n g)
+    (B := FlockSoundness.Discharge.Layout.keyB c hU) rfl (fun g _ => constWiresOf_eq_none c hU n g)
     (Rd := fun b => ∃ i : Fin (FlockSoundness.Discharge.Placed.circuitRows c hU).nComp,
       ∃ col ∈ (FlockSoundness.Discharge.Placed.circuitRows c hU).a i ++
         (FlockSoundness.Discharge.Placed.circuitRows c hU).b i,
@@ -96,6 +139,15 @@ theorem blockOf_keyProg (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (
           Fin.val = some b)
     (fun g v hg2 hgk => FilePart.reads_uniform outs g v hg2 hgk) _
     (SampledProofs.FilePart.ofCircuit_srcs_sorted c n) hSm u).symm
+
+/-- **The code's block is `blockOf`'s at the circuit's constants**: at `unitLog ≤ 32` and unit `u`, `ofCircuit`'s block
+`u` is `blockOf` of the key program's partition at `constsOf` (`blockOf_constsOf`). -/
+theorem blockOf_keyProg_consts (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (hlog : c.unit.unitLog ≤ 32)
+    (n : ℕ) (u : Fin n) :
+    ((SampledProofs.FilePart.ofCircuit c n).block u.val).toList =
+      blockOf ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition
+        (FlockSoundness.Discharge.Layout.outsOf c hU n)) (fun g => constsOf c hU n g) u :=
+  (blockOf_keyProg c hU hlog n _ u).trans (blockOf_constsOf c hU n u).symm
 
 /-- **`FilePartTarget` at `unitLog ≤ 32`**: at every descriptor `D` whose unit net has `unitLog ≤ 32`, unit rows `hU`,
 population `n` and unit `u`, `FilePart.ofCircuit`'s block `u` is `blockOf` of the key program's partition at the
@@ -106,7 +158,7 @@ theorem filePart_of_log (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.uni
       (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)
     ((SampledProofs.FilePart.ofCircuit D.unroll n).block u.val).toList =
       blockOf P (fun g => constsOf D.unroll hU n g) u :=
-  blockOf_keyProg D.unroll hU hlog n (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n) u
+  blockOf_keyProg_consts D.unroll hU hlog n u
 
 theorem filePartTarget : FilePartTarget := by
   intro D hU hlog n u
@@ -136,8 +188,7 @@ theorem partOf_ofCircuit (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit)
       (List.range n).map fun u => ((SampledProofs.FilePart.ofCircuit c n).block u).toList := by
     rw [← FilePart.map_val_finRange n, List.map_map]
     exact List.map_congr_left fun u _ =>
-      (blockOf_keyProg c hU (unitLog_le_of_scopeOkH hscope) n
-        (FlockSoundness.Discharge.Layout.outsOf c hU n) u).symm
+      (blockOf_keyProg_consts c hU (unitLog_le_of_scopeOkH hscope) n u).symm
   unfold partOf filePartOf
   rw [h]
 
