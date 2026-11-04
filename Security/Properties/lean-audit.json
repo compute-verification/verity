@@ -24495,7 +24495,7 @@
    ]
   },
   "SampledProofs.Bits": {
-   "digest": "8437ee328afb4110370e289b6e86272b25fa4ef533745408aed37c835b5b327a",
+   "digest": "45b4f0517cb48753989e6f824dfa0325263c52369e4d284ef62e7b25e196cfec",
    "definitions": {
     "SampledProofs.Bits.Index": "8b77434ffef93be5dba6fb2b5a6e7d6f6406f7a67a3ff965d1d8d03e3cd4598a",
     "SampledProofs.Bits.Index.cuts": "cb96d72a1737767ddab4cdd1c8f415b327dba403c2ec3f01eb8694b497196581",
@@ -24509,6 +24509,7 @@
     "SampledProofs.Bits.KeyProg.row?": "38b8612e98a37ff4ef7fb3903a85176f811df35eed499226a6198987c0abc49e",
     "SampledProofs.Bits.KeyProg.rows": "7211243d0d8f2e653461fe5f52d6ea99bcaf4d0cb5eb83f1f58af944613c7bfe",
     "SampledProofs.Bits.KeyProg.size": "b61d8c5f8ca84a179dc83ee221b7f0543c9b8edecb334bde8a9bcc1a61607c4d",
+    "SampledProofs.Bits.KeyProg.snoc": "05191616c19f97a5013ea5413e20e067c331c0ac9d8e79e993c8a57a72bce441",
     "SampledProofs.Bits.KeyProg.units": "a9b93c526df7e7d604cb4055155e83f2c469690dd390400cdf152cb31cca2702",
     "SampledProofs.Bits.LGate": "589b9c2200430382776ce5ddaf922b84fa5100b5048239fa4e6f2cb8acabf5ea",
     "SampledProofs.Bits.LGate.and": "26d955289e6c6b9431082b4063b49d03ae037b1bd41e4552f55ea6583d99e3f2",
@@ -24551,7 +24552,7 @@
     "SampledProofs.Bits.instDecidableEqSrc": "05457f81c46883d35629ba6962f7ead105c4bfb13e25e95a4e3075c863f60f29",
     "SampledProofs.Bits.instDecidableEqSrc.decEq": "3bd4229509f84b0c8c5b8bd44f2c67325adc5409bb1c8c90a3fec18865e9cd79",
     "SampledProofs.Bits.keyIdx": "d02c4150bf803f849cc485da298eb4fb32a4c143c141b0027ffc46c7cf276c35",
-    "SampledProofs.Bits.keyProg": "2f7079da8aca77cfd17bbb0f49fb72968861efb75de6d58dd6374c7abe673e02",
+    "SampledProofs.Bits.keyProg": "a0a8097cc68e209be9c70d5fd71ee92c49c54c65a3b8d31fda10fe62a9b793c8",
     "SampledProofs.Bits.lastLe": "0794fa49bc8c4548eefe9863cb85a0f62237ba80ea83258ab31c147a19e5ca30",
     "SampledProofs.Bits.lower": "7f1cfb8d36c18871a29de9d6d76c61e89c596035dcb1d08c499aa2f47d8c7852",
     "SampledProofs.Bits.msgAt": "d539321a2f472fc3cfb307bff99fce3cec821d02792878336d386c7996234c02",
@@ -24570,6 +24571,7 @@
     "SampledProofs.Bits.srcKey": "2f9e925b7b1bdbe507f8ca1a2f6fdf85a881778719eee1e0fae481fed24d6fb3",
     "SampledProofs.Bits.srcPos._sparseCasesOn_1": "160d9a1c64cc44e9babdb64285af8fd821b4dd56534c86fdd3e5f1aa29b10326",
     "SampledProofs.Bits.srcPos.match_1": "f96da44754eab918f3177797e33dd04fd7741766f0cf28f4d1c4627976fed68f",
+    "SampledProofs.Bits.uniform": "26b16dfb60632430e3bd7e448b3efc49a6f20e394ea27e3b3d677b99e1e20042",
     "SampledProofs.Bits.unitGates": "4664f0ccad2a460d9ca9cd96dd964ec7b08d2b64bc90ebb50e2e830a6bce2945",
     "SampledProofs.Bits.unitOf": "759cc643c9e4a835657b124c236c683d2ff388ae14d53fac9a20637463b341ca",
     "SampledProofs.Bits.wordsOf": "6c44a9e966a215065d4331328c016fa3bc964e1e1b673d962b2815d663315bcb",
