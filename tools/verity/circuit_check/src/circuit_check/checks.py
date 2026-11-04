@@ -71,7 +71,7 @@ from verity.ml.circuits.evaluation import ScalarReference, evaluate, kernels, se
 from verity.ml.circuits.evaluation.reference import resolve, signature_of, standalone_call
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import is_boolean
-from verity.ml.circuits.defs import PrimitiveDefinition
+from verity.ml.circuits.defs import PrimitiveDefinition, conformance_label
 
 from . import bodies as BD
 from . import sidecars as SC
@@ -892,11 +892,17 @@ def q_call(fn: Any, opts: Options, F: Findings, memo: dict) -> dict:
 
 # --- one Definition ---------------------------------------------------------------------------------------------------------
 
+def conformance_of(t: Any) -> str | None:
+    """``t``'s conformance label (`verity.ml.circuits.defs.CONFORMANCE`), which its entry records as ``conformance``; None for a
+    `ScalarReference`, which has none."""
+    return None if isinstance(t, ScalarReference) else conformance_label(getattr(t, "defn", t).conformance, t.id)
+
+
 def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = None, pins: dict | None = None,
                      lower_whole: bool = True, as_call: bool | None = None) -> dict:
     """Every check on one Definition (a primitive, a bound composite) or `ScalarReference`: its entry, with its failures and
-    warnings.  ``memo`` shares the word query's `word.unit_rule` results and the entries across calls;
-    ``lower_whole=False`` leaves the Boolean lowering to a template's proof blocks; ``as_call`` says whether the partition
+    warnings and its conformance label (`conformance_of`).  ``memo`` shares the word query's `word.unit_rule` results and the
+    entries across calls; ``lower_whole=False`` leaves the Boolean lowering to a template's proof blocks; ``as_call`` says whether the partition
     invariant applies (default: its family is a Call of a served Program, `circuit_check.targets.is_call`).  A Boolean Definition held as a Call is judged by `Q_word` v2
     (`partition`), a word Definition by v1.  A by-calls root (`circuit_check.targets.is_by_calls`) is checked by its calls
     alone (`circuit_check.by_calls`)."""
@@ -918,7 +924,8 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
         return done[(t.id, lower_whole, as_call)]
     F = Findings()
     kind = "reference" if isinstance(t, ScalarReference) else "primitive" if isinstance(t, PrimitiveDefinition) else "composite"
-    entry: dict[str, Any] = {"definition": t.id, "form": kind, "gates": None if kind == "reference" else _gates(t)}
+    entry: dict[str, Any] = {"definition": t.id, "form": kind, "conformance": conformance_of(t),
+                             "gates": None if kind == "reference" else _gates(t)}
     with spent("correspondence"):
         corr, arrays, ref = correspondence(t, opts, F)
     params, _ = signature_of(t)
@@ -1265,6 +1272,6 @@ def report(targets: list[dict], opts: Options) -> dict:
 
 
 __all__ = ["Findings", "Options", "SCHEMA", "UNIT_OWNERS", "block_range", "check_definition", "check_row", "check_subcircuit",
-           "correspondence", "dead_gates", "is_commit", "load_pins", "partition", "redundant_ands", "redundant_gates", "report",
-           "summarize", "target_equivalence", "template_lowering", "unit_block",
+           "conformance_of", "correspondence", "dead_gates", "is_commit", "load_pins", "partition", "redundant_ands",
+           "redundant_gates", "report", "summarize", "target_equivalence", "template_lowering", "unit_block",
            "whole_lowering"]
