@@ -42,7 +42,7 @@ lean = D.server_fixture(port("op", R.python_op, R.op_input()))
 
 def _vectors() -> list[dict]:
     v = json.loads(R.VECTORS.read_text())
-    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "schedule", "escapes"}
+    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "schedule", "escapes", "registrations"}
     return v["cases"]
 
 
@@ -88,8 +88,9 @@ def _tallied(reference, tally: Counter, key):
 
 def _assert_ops_seen(tally: Counter) -> None:
     ops = {k.split(":")[0] for k in tally}
-    assert ops == {"open", "finish", "stop", "release", "admit", "failures", "slot"}, tally
-    for k in ("open:ok", "open:refused", "open:error", "admit:ok", "admit:refused"):
+    assert ops == {"open", "finish", "stop", "release", "admit", "failures", "slot", "register", "registrations"}, tally
+    for k in ("open:ok", "open:refused", "open:error", "admit:ok", "admit:refused", "registrations:ok",
+              "registrations:refused"):
         assert tally[k] >= 10, (k, tally)
 
 
