@@ -45,3 +45,17 @@ def test_keystream_blocks_are_consecutive_and_refuse_out_of_range():
     for bad in ((key[:16], 0, 0, 1), (key, 1 << 64, 0, 1), (key, 0, (1 << 64) - 1, 2), (key, 0, -1, 1)):
         with pytest.raises(ValueError):
             chacha20.keystream(*bad)
+
+
+@pytest.mark.parametrize("first", [0, 1, (7 << 32) + 2])
+def test_salts_are_three_keystream_blocks_a_row_from_first(first):
+    """Row j's salt is blocks ``first + 3j`` .. ``first + 3j + 2``, rows in any order and repeated; a row whose blocks leave the
+    64-bit counter, a negative row and a non-integer row are refused."""
+    key, rows = bytes(range(9, 41)), [4, 0, 4, 9]
+    assert batch.salts(key, 6, rows, first) == b"".join(chacha20.keystream(key, 6, first + 3 * j, 3) for j in rows)
+    assert batch.salts(key, 6, [], first) == b""
+    last = ((1 << 64) - first - 3) // 3
+    assert batch.salts(key, 6, [last], first) == chacha20.keystream(key, 6, first + 3 * last, 3)
+    for bad in ([last + 1], [-1], [0.5]):
+        with pytest.raises(ValueError):
+            batch.salts(key, 6, bad, first)
