@@ -19,8 +19,7 @@ unswitched prover (`LeanRelease.TrustsStop`). At the deployed tables (`Masked.da
   the session's Props at the deployed tables, `Causal` the stopped plan's (`causal_encStop` at `causalExe`) and `TapeOK`
   the layout's tape's (`fibersEq_ofLayout`), at every statement.
 * `Loop.acceptCross`, `LeanRelease.cross_acceptCross`: at `L₁` with Rust's checks (`cross`) passing every round, the
-  loop's release accepts the honest device's rounds there, which is `Loop.RoundsPass`'s `cross` premise. The release
-  keeps `L₁`'s `cross` (`cross_ofLoopLink_withInner`).
+  loop's release accepts the honest device's rounds there, which is `Loop.RoundsPass`'s `cross` premise.
 * `LeanRelease.finishRows_honestVals`: on a live history of `refK x` openings whose last coins the frame takes, no
   zerocheck outer coin is `1` (`outer_ne_one_ofLoopLink`), so the rows hold at the honest values
   (`Loop.rowsOK_honestVals`).
@@ -106,18 +105,9 @@ namespace LeanRelease
 
 open Loop
 
-/-- **The loop's release keeps `L₁`'s Rust checks**: `withInner`, `withLink`, `withFiles`, `withFrames` and `loop` each
-leave `cross` as it is. -/
-theorem cross_ofLoopLink_withInner (L₁ : LeanRelease Flock.Wit Tp)
-    (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
-    (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
-    (fin : Msg → Flock.Wit → Tp → List (Msg × Msg) → Array ByteArray) :
-    (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).cross = L₁.cross :=
-  rfl
-
-/-- **`Loop.RoundsPass`'s `cross` premise at `acceptCross L₁`**: the loop's release's Rust checks accept every round at
-every statement, witness, tape and history, so they accept the honest device's rounds (`valsDev`'s), whatever `L₁`'s
-other fields are. -/
+/-- **`Loop.RoundsPass`'s `cross` premise at `acceptCross L₁`**: the loop's release keeps `L₁`'s Rust checks, so they
+accept every round at every statement, witness, tape and history, the honest device's rounds (`valsDev`'s) among them,
+whatever `L₁`'s other fields are. -/
 theorem cross_acceptCross (L₁ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (fin : Msg → Flock.Wit → Tp → List (Msg × Msg) → Array ByteArray) (x : Msg) (w : Flock.Wit) (ρ : Tp)
