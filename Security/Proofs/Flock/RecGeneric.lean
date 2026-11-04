@@ -7,6 +7,7 @@ public import Proofs.Flock.RecGeneric.LinkBits
 public import Proofs.Flock.RecGeneric.AtFlockPlans
 public import Proofs.Flock.RecGeneric.AtFlockServer
 public import Proofs.Flock.RecGeneric.AtFlockProof
+public import Proofs.Flock.RecGeneric.AtFlockEvery
 public import Proofs.Flock.RecGeneric.Sampled
 public import Proofs.Flock.RecGeneric.SampledProof
 public import Proofs.Flock.RecGeneric.Toy
@@ -25,7 +26,8 @@ extractors: its statements (`Proofs.Flock.RecGeneric.Statement`), the Flock inst
 link plan's expected cost and a finder's collision bound from it (`Proofs.Flock.RecGeneric.LinkBits`), its
 plans at its own runs as its finders (`Proofs.Flock.RecGeneric.AtFlockPlans`), its server as the bound record's
 (`Proofs.Flock.RecGeneric.AtFlockServer`), and its well-formedness, its inner KS, its outer extraction's KS from each session's and its last-coin
-hypothesis at the deployment proved (`Proofs.Flock.RecGeneric.AtFlockProof`), and the bridge to the sampled compiler (`Proofs.Flock.RecGeneric.Sampled`,
+hypothesis at the deployment proved (`Proofs.Flock.RecGeneric.AtFlockProof`), `KSLinkOn` at the dense statements lifted
+to every statement, since the deployed verifier accepts only dense ones (`Proofs.Flock.RecGeneric.AtFlockEvery`), and the bridge to the sampled compiler (`Proofs.Flock.RecGeneric.Sampled`,
 B1), with B1's proof and the recursive audit from L1 (`Proofs.Flock.RecGeneric.SampledProof`), and a toy outer argument
 and compiler at which L2's hypotheses are stated to hold together (`Proofs.Flock.RecGeneric.Toy`), proved to hold
 (`Proofs.Flock.RecGeneric.ToyProof`). L1's proof: the
