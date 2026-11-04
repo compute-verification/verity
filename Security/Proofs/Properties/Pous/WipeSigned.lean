@@ -4,7 +4,7 @@ import Proofs.Properties.Pous.WipeSigned.Header
 import Proofs.Properties.Pous.WipeSigned.Inputs
 import Proofs.Properties.Pous.WipeSigned.Run
 import Proofs.Properties.Pous.MemoryChallenger
-import Proofs.Properties.CertifierDevice.Lms
+import Proofs.Properties.NetworkCertifier.Device.Lms
 import Mathlib.Tactic.SplitIfs
 
 /-!

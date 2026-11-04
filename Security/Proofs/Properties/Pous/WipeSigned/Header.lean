@@ -1,6 +1,6 @@
 import Proofs.Properties.Pous.WipeSigned.Json
 import Proofs.Properties.Pous.MemoryChallenger.Sort
-import Proofs.Properties.NetworkRecords.Bytes
+import Proofs.Properties.NetworkCertifier.Records.Bytes
 
 /-!
 # The wipe's signed header determines its commitment

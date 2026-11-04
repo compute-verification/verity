@@ -1,7 +1,7 @@
 import CoreRemote
 import Definitions.Core
 import Properties.Composition
-import Properties.NciDesc
+import Properties.Nci.Desc
 import Properties.Nci.Baseline
 import Properties.SampledProofs
 
