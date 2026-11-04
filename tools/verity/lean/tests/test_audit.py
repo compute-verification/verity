@@ -856,6 +856,64 @@ def test_a_file_split_changes_no_definition_s_hash_though_lean_renames_the_helpe
     assert rep["review"] == [f"reads: 2 {A.MOVED_READS}"]
 
 
+PORT = """namespace Control
+inductive K | a | b | c | d
+private def p : K → Nat
+  | .a => 1
+  | _ => 0
+def q : K → Nat
+  | .a => 1
+  | _ => 0
+def Spec (k : K) : Prop := match k with
+  | .a => q k = 1
+  | _ => True
+theorem picked : q .a = 1 := rfl
+theorem spec (k : K) : Spec k := by cases k <;> trivial
+end Control
+"""
+
+
+def ported(text: str) -> str:
+    """``text`` written in Lean's module system, as the port writes it: its declarations public, the bodies its theorems
+    unfold exposed."""
+    for a, b in (("inductive", "public inductive"), ("def q", "@[expose] public def q"),
+                 ("def Spec", "@[expose] public def Spec"), ("theorem", "public theorem")):
+        text = text.replace(a, b)
+    return "module\n\n" + text
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_port_to_the_module_system_leaves_the_lock_byte_identical_though_lean_renumbers_the_helpers(tmp_path):
+    """A public declaration of a module never shares the matcher a private one made, so a port to the module system
+    gives `q` and the statement `Spec` (which `spec` is lifted into) their own `q.match_1` and `q._sparseCasesOn_1` where
+    they read the private `p`'s before. Every text holds those helpers in place, a read definition's and a lifted
+    statement's alike, so the port's record is byte for byte the one before it, and passes as it is."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    port = pkg / "Control" / "Port.lean"
+    port.write_text(PORT)
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Port\n")
+    pol = unclaimed(A.load(pkg))
+    names = ("Control.main_thm", "Control.picked", "Control.spec")
+    A.dump(pkg, pol | {"layers": pol["layers"] | {"Control.Port": {"imports": []}},
+                       "guarantees": {n: {"owner": "@lean"} for n in names}})
+
+    def built() -> tuple[str, dict]:
+        subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+        assert unshaped(A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None)) == []
+        f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": dict.fromkeys(names, {})}, tmp_path)
+        own = {r["name"]: r["own"] for r in f["pins"]["Control.spec"]["reads"]}
+        return (pkg / A.POLICY).read_text(), own
+
+    before, own = built()
+    assert own["Control.q"] == own["Control.Spec"] == [], "both share the private `p`'s matcher"
+    port.write_text(ported(PORT))
+    after, own = built()
+    assert own["Control.q"] == own["Control.Spec"] == ["Control.q.match_1"]
+    assert after == before
+    assert unshaped(A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None)) == []
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_lift_into_guarantees_is_certified_on_a_real_build(tmp_path):
     """`Facts.lean`'s one-step unfolding on a real build, without `--moved`: lifts with no binders, with binders whose argument

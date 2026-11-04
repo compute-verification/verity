@@ -304,8 +304,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
   which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
   literals) and drops what it drops (binder names and binder info, `let` names, metadata). A renamed hypothesis is
-  therefore the same statement, and a different term is a different one. A definition's text holds the matchers and
-  proofs Lean shares across a module in place, not by name, so a file split changes no hash. Records written with
+  the same statement. Each text holds the matchers and proofs Lean shares across a module in place, not by name, so
+  neither a file split nor a module-system port changes a hash. Records written with
   `Expr.hash` (32 bits) are checked as they are and noted; `--update` rewrites them, its review saying "rehashed" where
   the 32-bit hash still matches, which the landing DM leaves out.
 

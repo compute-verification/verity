@@ -58,8 +58,9 @@ judgement; `check.py` holds the policy.
 The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `check.py` keeps them only to check records written
 before SHA-256. When `CONFIG` names a `canon` path, the pins' statements and the definitions they read are also written
 there, one JSON line each, as `canon` texts (and those `assumption_reads` holds), and `check.py` hashes those with SHA-256.
-A definition's text holds the matchers and abstracted proofs Lean shares between the declarations of a module in place,
-not by name (`readCanon`), and they are not reads of their own, so a file split changes no definition's hash. A pinned statement that is a
+Each text, a statement's and a definition's, holds the matchers and abstracted proofs Lean shares between the declarations
+of a module in place, not by name (`helperCanon`), and they are not reads of their own, so neither a file split nor a port
+to the module system, which renumber them, changes a hash. A pinned statement that is a
 definition under `meaning` applied under binders (`∀ xs, G as`) is also written with that definition unfolded once
 (`liftOf`), with the definition and its module, so that `check.py` can certify a statement lifted into a `Guarantees`
 definition as the statement its record holds.
@@ -183,13 +184,16 @@ def canonText (e : Expr) (rn : Name → Name := id) : String := Id.run do
 
 /-- Whether `n` is a constant the elaborator numbers within a module and reuses for the next declaration of that module
 that needs the same one: a matcher (`match_<n>`), a sparse case split (`_sparseCasesOn_<n>`) or a proof abstracted out of
-a definition (`_proof_<n>`). A declaration moved to another file gets new ones under its own name, so the name a
-definition reads one by says what else its file declares, not what the definition means. -/
+a definition (`_proof_<n>`), or a constant under one's name (a matcher's `splitter`). A declaration moved to another file
+gets new ones under its own name, and so does a public one in a module whose earlier private declaration made the one it
+would share (a port to Lean's module system), so the name a definition reads one by says what else its file declares,
+not what the definition means. -/
 def sharedHelper : Name → Bool
-  | .str _ s => ["match_", "_sparseCasesOn_", "_proof_"].any fun pre =>
+  | .str p s => sharedHelper p || ["match_", "_sparseCasesOn_", "_proof_"].any fun pre =>
       match s.splitOn pre with
       | ["", k] => k.toNat?.isSome
       | _ => false
+  | .num p _ => sharedHelper p
   | _ => false
 
 /-- `e` with each `sharedHelper` in place, by what it is rather than its name: a definition by its value at its levels, a
@@ -205,10 +209,15 @@ partial def inlineHelpers (env : Environment) (e : Expr) : Expr :=
       | _ => none
     | _ => none
 
-/-- What a read definition contributes to what a statement means: its type, and a definition's value, each with the
-helpers it uses in place (`inlineHelpers`), so that a file split, which renames them, changes no read's text. -/
+/-- `canonText` of `e` with the helpers it uses in place (`inlineHelpers`), so that a file split or a port, which renames
+them, changes no text. -/
+def helperCanon (env : Environment) (e : Expr) (rn : Name → Name := id) : String :=
+  canonText (inlineHelpers env e) rn
+
+/-- What a read definition contributes to what a statement means: its type, and a definition's value, each by
+`helperCanon`. -/
 def readCanon (env : Environment) (ci : ConstantInfo) (rn : Name → Name := id) : String :=
-  let text (e : Expr) := canonText (inlineHelpers env e) rn
+  let text (e : Expr) := helperCanon env e rn
   match ci with
   | .defnInfo v => text v.type ++ "\n=\n" ++ text v.value
   | .opaqueInfo v => text v.type ++ "\n=\n" ++ text v.value
@@ -751,12 +760,15 @@ applies. In each conjunct, disjunct, `if` branch and `∃` body of a conclusion,
 a conclusion applies (outside an assumptions module, `unfoldSpec?`), and in each predicate a conclusion passes to a
 constant it doesn't unfold that states it (`asserts`: a `match`'s branches, `List.Pairwise (fun a b => …)`, a recursive
 definition's step), only the assumptions and the constants of a module under `premises` (`shape.premises`) its
-hypotheses mention (`only`): its other hypotheses (an acceptance event, a target) are what the conclusion means, not
-premises. A predicate that constant takes as data, an event it measures (`Likely (fun o => A o → bad o)` with `Likely E`
+hypotheses mention, and the heads (`packedHeads`) of its hypotheses that are constants of a module this repository builds
+(`built`) outside an assumptions module (`only`): an antecedent the package states (`TapOpens … → bound`) is a premise
+the guarantee rests on, named and recorded like an assumption's, while its other hypotheses (an acceptance event, a
+target, `x ∈ S`) are what the conclusion means. A predicate that constant takes as data, an event it measures (`Likely (fun o => A o → bad o)` with `Likely E`
 holding when `prob E ≤ ε`), is what the conclusion means too: `A` there is part of the event, not something the
 statement rests on. -/
-partial def premisesOf (env : Environment) (meaning premises : Array Name) (moduleOf : Name → Option Name) (only : Bool)
-    (e : Expr) : MetaM (Array Json) := do
+partial def premisesOf (env : Environment) (meaning premises : Array Name) (built : NameSet) (moduleOf : Name → Option Name)
+    (only : Bool) (e : Expr) : MetaM (Array Json) := do
+  let mine (h : Name) : Bool := !assumption moduleOf h && ((moduleOf h).map built.contains).getD false
   let mut out := #[]
   for c in conjuncts e do
     out := out ++ (← forallTelescope c fun xs body => do
@@ -766,6 +778,8 @@ partial def premisesOf (env : Environment) (meaning premises : Array Name) (modu
         let hs ← if !(← isProp t) then fieldPremises env meaning premises moduleOf true t
           else if only then mentioned env premises moduleOf t
           else do pure ((← packedHeads moduleOf t) ++ (← mentioned env premises moduleOf t))
+        let hs := (hs.foldl (init := (({} : NameSet), #[])) fun (s, out) h =>
+          if s.contains h then (s, out) else (s.insert h, out.push h)).2
         for h in hs do
           ps := ps.push <| Json.mkObj [("binder", toJson (← x.fvarId!.getDecl).userName.toString),
             ("head", toJson h.toString), ("module", toJson ((moduleOf h).map toString))]
@@ -1235,21 +1249,21 @@ unsafe def main (args : List String) : IO UInt32 := do
     for p in pins do
       let some ci := env.find? p | continue
       lines := lines.push <| Task.spawn fun _ =>
-        (Json.mkObj [("id", toJson s!"pin:{p}"), ("canon", toJson (canonText ci.type))]).compress
+        (Json.mkObj [("id", toJson s!"pin:{p}"), ("canon", toJson (helperCanon env ci.type))]).compress
       let head := liftOf env meaning ci.type
       if let some (g, s) := head then
         let m := (env.getModuleIdxFor? g).map fun i => (moduleName env i).toString
         lines := lines.push <| Task.spawn fun _ =>
           (Json.mkObj [("id", toJson s!"lift:{p}"), ("head", toJson g.toString), ("module", toJson m),
-            ("canon", toJson (canonText s))]).compress
+            ("canon", toJson (helperCanon env s))]).compress
       if !back.isEmpty then
         named := (ci.type.getUsedConstants ++ ((head.map (·.2.getUsedConstants)).getD #[])).foldl (·.insert ·) (named.insert p)
         lines := lines.push <| Task.spawn fun _ =>
           let unfolded := match head with
-            | some (g, s) => [("head", toJson g.toString), ("unfolded", toJson (canonText s rn))]
+            | some (g, s) => [("head", toJson g.toString), ("unfolded", toJson (helperCanon env s rn))]
             | none => []
           (Json.mkObj ([("id", toJson s!"moved-pin:{p}"), ("as", toJson (rn p).toString),
-            ("canon", toJson (canonText ci.type rn))] ++ unfolded)).compress
+            ("canon", toJson (helperCanon env ci.type rn))] ++ unfolded)).compress
       for (c, _, rci) in (readsOf.getD p (#[], #[])).1 do
         if done.contains c then continue
         done := done.insert c
