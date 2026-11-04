@@ -208,7 +208,7 @@ noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
         ζ := fun r => fOf (c.rest.zeta r)
         rep := fun k => if k.val < 2 then 0 else 1
         lanes := I.lanes
-        vals := I.vals
+        vals := fun r w u V => I.vals r w u V.2.1
         lig := I.lig
         lam := I.lam
         theta := I.theta
