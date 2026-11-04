@@ -93,3 +93,4 @@ art:c109f12fe7690c3b54a3c256d21975f80a9f5326ad5270511b0155901430b153, moved ther
 11:22Z integrator [STARTED] FINAL r20261104-061740-7601 seed 102: r20261104-112212-6360 on vy-nebius-3 (e1mb s-t20, about 79 min once it holds a GPU)
 11:34Z integrator [STARTED] FINAL r20261104-060859-bf07 seed own: r20261104-113357-6660 on vy-nebius-3 (wildcard s-t20, about 70 min once it holds a GPU)
 11:36Z integrator [TOOL] te_core's fresh suite on e5790ce7d70 (the scorer's rho_own), r20261104-112040-a146 on vy-nebius-cpu-3: te_core 529 passed; standard-workloads 16 passed with the same 3 pinned texts red, awaiting its owner's re-pin.
+11:41Z integrator [STARTED] FINAL r20261104-060859-bf07 seed 101: r20261104-114058-21fc on vy-nebius-1 (wildcard s-t20, about 70 min once it holds a GPU)
