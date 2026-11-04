@@ -1439,7 +1439,7 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
 
 
 def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows_retained_steps(tmp_path):
-    """`pearl_tie`: with ``--pearl-passes DIR`` (``served_passes.py window``'s) and ``--window-registration`` W, Pearl+'s
+    """`pearl_tie`: with ``--pearl-passes DIR`` (serve_pearl's ``pearl/w<k>/``) and ``--window-registration`` W, Pearl+'s
     window record, window-commit's circuit is cut at its linears under W's scheme (`window_class.PearlTables`) and reads
     the retained passes' manifests at their rounds; `h1_tie` then stands aside. Refused by name without W, beside
     ``--h1-key``, for a W of no Pearl-C scheme, and where the rounds retained aren't the class's outputs."""
