@@ -37,5 +37,6 @@ identity hash (`Identity.Tagged`).
 /-!
 `NetworkCheck.Circuit` checks a compute audit's circuit record against its Program at the size of their description:
 the population program, the wires, the registered reads, the wire order and the count of free input bits. Beyond the
-above it imports NCI's layout checks (`NciCheck.Desc`) and the sampled audit's wires (`SampledProofs.Wires`).
+above it imports NCI's layout checks (`NciCheck.Desc`), the sampled audit's wires (`SampledProofs.Wires`) and Bits' leaf
+widths (`SampledProofs.Bits`).
 -/

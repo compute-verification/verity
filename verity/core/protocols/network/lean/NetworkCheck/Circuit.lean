@@ -1,5 +1,6 @@
 import Flock.Program
 import NciCheck.Desc
+import SampledProofs.Bits
 import SampledProofs.Wires
 import SampledProofs.PyJson
 
@@ -59,13 +60,15 @@ def inputArg (P : Flock.Program.Prog) (a : Flock.Program.Arg) : Option Nat :=
   | _ => none
 
 /-- **A Program's input gates**, in bits: each of its root's input nodes (`Flock.Program.inputId?`, of either binding
-time) gives its members times its width, so a `Value<w>` leaf counts `w`. The decoder refuses an input node outside the
-root's body, so these are all of them. For a Boolean Program this is `#freeInputs` at no ingress; the sampled circuit
-lays a wider leaf out as one gate, so then it is at least that. Either way it is at least `#(freeInputs \ reg)` at every
-`reg` and horizon. It reads the root's nodes, not the unrolled circuit. -/
+time) gives its members times its leaf's width (`SampledProofs.Bits.defWidth`, the width Bits lays the leaf out at), so
+a `Value<w>` leaf counts `w`. The decoder refuses an input node outside the root's body, so these are all of them. For
+a Boolean Program this is `#freeInputs` at no ingress; the sampled circuit lays a wider leaf out as one gate, so then it
+is at least that. Either way it is at least `#(freeInputs \ reg)` at every `reg` and horizon. It reads the root's
+nodes, not the unrolled circuit. -/
 def inputGates (prog : Flock.Program.Prog) : Nat :=
   (((prog.defs[prog.root]?).map (·.body.nodes)).getD #[]).foldl (fun n x => n + match prog.defs[x.fn]? with
-    | some d => if d.prim then ((Flock.Program.inputId? d.key).map (x.members * ·.2)).getD 0 else 0
+    | some d =>
+      if d.prim && (Flock.Program.inputId? d.key).isSome then x.members * SampledProofs.Bits.defWidth d else 0
     | none => 0) 0
 
 end NetworkCheck.Period

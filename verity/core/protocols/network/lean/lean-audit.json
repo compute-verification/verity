@@ -30,9 +30,9 @@
    "why": "the check is code: the record's encodings, the certifier program's Program grid and Σ_sync, the LMS verifier and the core protocol interface, no Mathlib and nothing of Security"
   },
   "NetworkCheck.Circuit": {
-   "imports": ["Flock.Program", "NciCheck.Desc", "SampledProofs.Wires", "SampledProofs.PyJson"],
+   "imports": ["Flock.Program", "NciCheck.Desc", "SampledProofs.Bits", "SampledProofs.Wires", "SampledProofs.PyJson"],
    "except": [],
-   "why": "a compute audit's circuit check is code: C-Flock's program decoder (the population program and its gates), NCI's description-sized layout checks, the sampled audit's wires and canonical JSON (the record's digest), no Mathlib and nothing of Security"
+   "why": "a compute audit's circuit check is code: C-Flock's program decoder (the population program and its gates), NCI's description-sized layout checks, the sampled audit's wires, Bits' leaf widths and canonical JSON (the record's digest), no Mathlib and nothing of Security"
   },
   "NetworkCheck.Period": {
    "imports": [
