@@ -13,7 +13,8 @@ fix, one in a registry passing, a read moved within its file passing, a rename m
 the change's base, the list's total held, a loosened lint failing, a base lint that doesn't load leaving the change unjudged),
 the silent-except check beside that (a new swallowing handler, typed or broad, refused by name with the fix, one that
 re-raises or records its outcome passing, a rename moving its entry, the list's total held, a loosened lint failing, both
-counted lints counting one change), a repository list (ruff's, a counted lint's) catching up to what its base holds and no
+counted lints counting one change), the retired-terms check (a new use refused with the term the checkout's glossary gives),
+a repository list (ruff's, a counted lint's) catching up to what its base holds and no
 further, a counted lint's list rising with an edit to its lint at the files the change leaves untouched and no others, a
 public command P16's list gains (passing when the file it names runs it, refused when that file doesn't or isn't
 there), the source checks' findings kept beside the verdict, where ruff comes from (this
@@ -1316,3 +1317,24 @@ def test_a_lint_that_comes_to_count_more_records_its_list_at_the_files_it_leaves
     lane_linted.commit("records them with the lint as it is", {REPO_LANE_JSON: _allowlist(DOCS_A, b)})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_LANE_JSON}: {G.key({'file': 'docs/b.md'})} 0 -> 2"]), c["why"]
+
+
+REPO_TERMS_LINT = "tests/lint/test_repo_retired_terms.py"
+REPO_TERMS_JSON = "tests/lint/allowlists/repo_retired_terms.json"
+TOY_GLOSSARY = '# Glossary\n\n## Older names\n\n| Old name, where it stays | Term |\n|---|---|\n| "teapot" | kettle |\n'
+
+
+def test_a_retired_term_is_counted_as_the_glossary_of_the_tree_the_gate_runs_in_retires_it(repo):
+    """The retired-terms lint, loaded alone from the base, reads the checkout's GLOSSARY.md: a new use in a file the change
+    touches is refused with the term to say, and saying it passes."""
+    repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), "GLOSSARY.md": TOY_GLOSSARY,
+                                  REPO_TERMS_JSON: _allowlist(DOCS_A), "docs/a.md": "# A\n\nA teapot boils it.\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("another use", {"docs/a.md": "# A\n\nA teapot boils it, and a teapot pours it.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["counted"].get("repo_retired_terms")) == ("failed", ["docs/a.md"]), c["why"]
+    assert c["fix"] == ["docs/a.md:3 'teapot' is retired; say kettle (GLOSSARY.md)"], c["why"]
+    repo.git("checkout", "-q", "-B", "pr", "main")
+    repo.commit("says the term", {"docs/a.md": "# A\n\nA kettle boils it.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["counted"].get("repo_retired_terms")) == ("passed", ["docs/a.md"]), c["why"]
