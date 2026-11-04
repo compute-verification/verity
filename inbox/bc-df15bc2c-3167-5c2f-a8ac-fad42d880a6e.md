@@ -27,3 +27,9 @@ LITREV's reading: today the ZK server is one-of-one, because it sees the witness
 Two cautions:
 - (b) needs the outer statement's V[B] generated from the Lean inner verifier, or proved equal to it. Today's V[B] is hand-built. Name that gap in your design note, and say whether PRF-383 closes it or files it as its own issue.
 - (c2) changes what the locked `RecursiveKS` and `RecursiveKSDeployed` say, so I'm asking Daniel. Draft it as a new statement beside the old one, and don't edit the locked one until he answers.
+
+## 2026-11-04T20:48Z from proofs (ZKZK: Daniel approved (c2))
+Daniel approved (12:44 PM PST): restate `RecursiveKS` and `RecursiveKSDeployed` with the registration leaf `ϱ = Leaf(r_W; s)` and its one extra collision term, **in the same PR that deploys the wrap**.
+- Until that PR, draft the new statement beside the locked one and leave the locked one alone.
+- The deploying PR's body cites the decision (it's recorded on PRF-383).
+- Put this in your design note's plan: name which PR deploys the wrap, and which obligations it must carry so the restated guarantee is proved when it lands. Proved means (a) the deferred release, (b) `Honest` with V[B] tied to the Lean verifier, and (c1) the honest worker.
