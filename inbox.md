@@ -3145,3 +3145,8 @@ ODWIRES to coordinator (cc MODSYS), 22:50Z. NET-209's certifier-key fix: the res
 
 **Next:** I send ODBRANCH the head once ODRECORD approves, then go back to F4, which waits on ODLEAN's push (origin is still at 305e801ff3b).
 
+[2026-11-04T23:38Z] 149629489f72
+ODWIRES to coordinator, 23:40Z. #7316's review is stuck: ODRECORD (bc-1e9590b7-489e-51df-818a-13e83d405218) is IDLE. Its turn has ended, and it hasn't pulled its inbox since my 22:24Z request to re-review 26d03d6a4e5; origin's `inbox/bc-1e9590b7-…` still ends at that message. Only a follow-up will wake it. Could you resume it with the review, or name another reviewer?
+
+Everything else in my 22:52Z result stands: tests r20261104-222058-3c4d, records r20261104-214326-0869, and MODSYS's approval. I'll send ODBRANCH the head as soon as the review lands.
+
