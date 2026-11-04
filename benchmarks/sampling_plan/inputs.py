@@ -4,9 +4,11 @@ the models' shapes; and what every scale commits at serve time, a token a layer,
 table)."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from math import ceil, log2
 
+from verity.ml.windows.interface import K_MAX, proof_block_k_log
 from verity.core.protocols.sampled_proofs.costfit import Observation
 
 
@@ -164,6 +166,21 @@ def tree_chain(leaves: float) -> int:
     """A frame-v3 tree's dependent compressions over `leaves` leaves: 3 a node level."""
     return 3 * max(0, ceil(log2(max(leaves, 1))))
 
+
+
+def block_k_log(ands: int, rows: Sequence[int]) -> int:
+    """The ``k_log`` of the C-Flock block that holds one proof block of ``ands`` ANDs opening ``rows`` (bytes each, the
+    output's row last) before the composer packs it: `proof_block_k_log` unpacked. A row's opening is its hm96 and
+    sha512x3 slots, not ANDs in the unit's slot."""
+    return proof_block_k_log(rows[:-1], rows[-1:], ands, packed=False)
+
+
+def cap(ands: int, rows: Sequence[int]) -> int:
+    """A statement's proof blocks of ``ands`` ANDs opening ``rows``: one a C-Flock block of 2^`block_k_log` under
+    m = k_log + nbl <= 35, at most 2^20 (below 2^22 the composer packs several a block, about as many a statement); 0, not a
+    proof block, past C-Flock's 2^`K_MAX`."""
+    k = block_k_log(ands, rows)
+    return 0 if k > K_MAX else min(1 << (35 - k), 1 << 20)
 
 
 def s8_coord_ands(k: int) -> int:
