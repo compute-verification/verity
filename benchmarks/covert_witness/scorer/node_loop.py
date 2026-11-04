@@ -283,7 +283,9 @@ def once(slot: float) -> dict:
     if not r.returncode:
         served.write_text(r.stdout)
         send.append(served)
-    env = {"TE_HERE_UNTIL": f"{min(slot + UNTIL_S, END):.0f}"}
+    # a refresh off the slots' grid (`once` by hand) stops its shards before the next slot, which then runs
+    after = FIRST + ((slot - FIRST) // SLOT_S + 1) * SLOT_S
+    env = {"TE_HERE_UNTIL": f"{min(slot + UNTIL_S, after - LATE_S, END):.0f}"}
     if last.get("vm_put") and last.get("stamp"):
         log.write_text(last["vm_put"])
         send.append(log)
