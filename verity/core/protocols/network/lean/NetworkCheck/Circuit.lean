@@ -18,8 +18,8 @@ of their description (AGENTS.md "Design rules"), never per unit:
   laid out as C-Flock's decoder lays one out, within its resolution's walk (`NciCheck.Desc`), and topological.
 * **The wires** (`SampledProofs.Wires.check`), with the templates' rows read off their Definitions (`templateOf`,
   `interface.layout`); each wire's reader row is its writer's output field bit for bit, each side in leaves of one
-  width, the widths equal or one of them a Boolean-profile port's 1 (`leavesOk`). A writer's leaf may be a constant or
-  an input its template passes through.
+  width, the widths equal or one of them a Boolean-profile port's 1 (`leavesOk`). A writer's leaf is a gate its
+  template computes or an input it passes through: a return names a parameter or a node, never a literal.
 * **The declarations** (`declRects`): the registered parameters, tables, reads, table reads and openings well formed
   for the templates (`interface.check_inputs`), and no row filled twice by a wire or a declaration (`apart`). A record
   that lists its members, declares ingress, or registers values or formats beside its reads is refused.
@@ -675,8 +675,8 @@ def refusalWhy (e : SampledProofs.Wires.Refusal) : String :=
 (`populationOk`); its wires pass `SampledProofs.Wires.check`, each reader row its writer's output field bit for bit
 (`leavesOk`); its declarations are well formed and fill no row a
 wire or another declaration fills (`declRects`, `apart`); and `order` ranks every wire's writers below its readers
-(`ordered`). A writer leaf may be a constant or an input its template passes through: the order ranks the chain's
-writers below its readers, so it ends at a computed gate, a constant, or a free or registered input. `pins` are the
+(`ordered`). A writer leaf is a gate its template computes or an input it passes through: the order ranks the chain's
+writers below its readers, so it ends at a computed gate or a free or registered input. `pins` are the
 registered parameters the verifier pinned whose window root the audit's registration records as the pin,
 `{param: root}`. On acceptance, the record's `Counts`. -/
 def check (P : Prog) (record order pins : Json) : Except String Counts := do
