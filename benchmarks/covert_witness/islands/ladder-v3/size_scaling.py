@@ -3,7 +3,8 @@ starts and the console's 1B reference size), gain target and policy, standard tr
 frontier's least S = p·ρ, in the dashboard's columns (`COLUMNS`).
 
     python islands/ladder-v3/size_scaling.py trace --out DIR [--only NAME,...]   # on a node, with torch: the steps
-    python islands/ladder-v3/size_scaling.py build --tables DIR --ledger DIR --steps DIR --out DIR [--trace-run RUN]
+    python islands/ladder-v3/size_scaling.py build --tables DIR --ledger DIR --steps DIR --out DIR \
+        [--trace-runs RUN | NAME=RUN,...]
     python islands/ladder-v3/size_scaling.py put FILE                            # on the VM: PUT a built body
 
 Run from `benchmarks/covert_witness/`. c and |C| are Boolean gates (te_core.gates), k bits.
@@ -160,7 +161,13 @@ def products_inputs(m: formalism.Measured, c: float, k: float) -> str:
     """What the products term read at (c, k) (`INPUTS`, where it gives them) with |C|, as one JSON cell."""
     got = formalism.bound(m, c, k)["inputs"]["fresh_products"]
     vals = {"C": m.gates} | {x: got[x] for x in INPUTS if got.get(x) is not None}
-    return json.dumps({x: finite(v) if isinstance(v, float) else v for x, v in vals.items()}, separators=(",", ":"))
+    return json.dumps({x: finite(v) if isinstance(v, float) and x != "k_classified" else v for x, v in vals.items()},
+                      separators=(",", ":"))
+
+
+def rests(one: dict) -> str:
+    """What a published ρ rests on, with its `why` where it has one (an unmeasured kind, or a void term's reason)."""
+    return one["rests_on"] + (f": {one['why']}" if one["why"] else "")
 
 
 # ---- build -----------------------------------------------------------------------------------------------------------
@@ -247,12 +254,34 @@ def standard(m: formalism.Measured | None, path: Path, c: float, k: float, run: 
                       "traced_or_modelled": None, "run": None}
     one = formalism.published(m, c, k, "A")
     return row | {"rho": finite(one["rho"]), "S": finite(one["rho"]), "binding_kind": one["binding_kind"],
-                  "rests_on": one["rests_on"] + (f": {one['why']}" if one["why"] else ""), "reading": one["reading"],
+                  "rests_on": rests(one), "reading": one["reading"],
                   "rho_products": finite(one["terms"].get("fresh_products")), "basis": basis(m, one, False, c, k),
                   "products_inputs": products_inputs(m, c, k)}
 
 
-def build(tables: Path, ledger: Path, steps: Path, trace_run: str | None, stamp: str) -> tuple[dict, dict]:
+def unpriced(cands: list[dict], priced: dict, measured: dict, pol: str, c: float, k: float) -> tuple[str, int] | None:
+    """The commonest reason the products term has no figure among the candidates `cands` at (c, k), to its first
+    clause, and on how many; None where it has one on each."""
+    off: dict[str, int] = {}
+    for x in cands:
+        key = checkpoint(x["record"])
+        if key in measured and priced[(key, pol)][0]["terms"].get("fresh_products") is None:
+            b = formalism.bound(measured[key], c, k)
+            why = (b["unmeasured"].get("fresh_products") or b["void"].get("fresh_products") or "void").split(";")[0]
+            off[why] = off.get(why, 0) + 1
+    return max(off.items(), key=lambda kv: kv[1]) if off else None
+
+
+def trace_runs(text: str | None) -> dict[str, str]:
+    """`--trace-runs`: each size's trace run, as NAME=RUN,... or one RUN for every size."""
+    if not text:
+        return {}
+    if "=" not in text:
+        return {name: text for name, _, _ in SIZES}
+    return dict(x.split("=", 1) for x in text.split(","))
+
+
+def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: str) -> tuple[dict, dict]:
     """The panel and what it rests on: every candidate's ρ, binding and basis at the console's policy beside the
     table's (`check`), and the candidates the scorer's rows don't give (`missing`)."""
     from te_core import algorithm_policy
@@ -290,7 +319,7 @@ def build(tables: Path, ledger: Path, steps: Path, trace_run: str | None, stamp:
             cands = [r for r in reached if r["name"] == name and r["gain_target"] == g]
             for pol, (c, k) in policies(params).items():
                 at = base | {"gain_target": g, "policy": pol, "c_gates": finite(c), "k_bits": k}
-                rows.append(at | standard(own, path, c, k, trace_run))
+                rows.append(at | standard(own, path, c, k, runs.get(name)))
                 best, bases = None, {}
                 for x in cands:
                     key = checkpoint(x["record"])
@@ -316,22 +345,25 @@ def build(tables: Path, ledger: Path, steps: Path, trace_run: str | None, stamp:
                 if best is not None:
                     (S, _, _), x, one, b, m = best
                     rows.append(at | {"route": x["method_key"], "p": finite(x["p"]), "rho": finite(one["rho"]),
-                                      "S": finite(S), "binding_kind": one["binding_kind"],
-                                      "rests_on": one["rests_on"], "reading": one["reading"],
-                                      "traced_or_modelled": "traced", "run": x["record"],
+                                      "S": finite(S), "binding_kind": one["binding_kind"], "rests_on": rests(one),
+                                      "reading": one["reading"], "traced_or_modelled": "traced", "run": x["record"],
                                       "rho_products": finite(one["terms"].get("fresh_products")), "basis": b,
                                       "products_inputs": products_inputs(m, c, k)})
                 elif name not in attempted or not cands:
                     rows.append(at | {"route": NO_ATTACK if name not in attempted else "none reached"})
                 else:
                     count = ", ".join(f"{n} {b}" for b, n in sorted(bases.items(), key=lambda kv: -kv[1]))
+                    off = unpriced(cands, priced, measured, pol, c, k)
                     rows.append(at | {"route": "none with a full rho", "rests_on": (
-                        f"{len(cands)} reached ({count}): a row that is unmeasured, rests on a stub, reads a void term "
-                        "or is partial is never the least S")})
+                        f"{len(cands)} reached ({count})" + (f"; on {off[1]} the products term is {off[0]}" if off
+                                                             else "") +
+                        ": a row that is unmeasured, rests on a stub, reads a void term or is partial is never the "
+                        "least S")})
     p = {"id": PANEL, "title": "Red teaming by model size: standard training's rho and the frontier's least S = p*rho",
          "kind": "table", "updated_at": stamp,
          "source": f"python islands/ladder-v3/size_scaling.py build (training's slowdown code {VERSION}; frontier: the "
-                   f"scorer's algorithm-policy table of {made}; steps traced in {trace_run or 'no run'})",
+                   f"scorer's algorithm-policy table of {made}; steps traced in "
+                   f"{', '.join(sorted(set(runs.values()))) or 'no run'})",
          "note": note(), "columns": COLUMNS, "rows": [[r.get(c) for c in COLUMNS] for r in rows]}
     missing = sorted({r["record"] for r in reached if checkpoint(r["record"]) not in measured})
     return p, {"check": check, "mismatches": [x for x in check if not x["ok"]], "missing": missing,
@@ -339,11 +371,11 @@ def build(tables: Path, ledger: Path, steps: Path, trace_run: str | None, stamp:
 
 
 def note() -> str:
-    return (f"Per size, gain target and policy ({UNIT}): standard training (the ladder's step traced at full size, p = 1)"
-            " and the measured frontier's least S = p*rho over reached attack routes; partial, stub, void and "
-            "unmeasured rows are never the least S. console: the 45M session; grown: the size's own 4,096-in "
-            "1,024-out session at k 65,536; serving: k 1.6e6, its own 100,000-in session. rho: training's slowdown "
-            "code's published rho; rho_products its products term. 1B: the console's reference size, no start.")
+    return (f"Per size, gain and policy ({UNIT}): standard training (traced at full size, p = 1) and the measured "
+            "frontier's least S = p*rho over reached attacks, never a partial, stub, void or unmeasured row. console: "
+            "the 45M session; grown: the size's own 4,096-in 1,024-out session at k 65,536; serving: k 1.6e6, its own "
+            "100,000-in session. rho: training's slowdown code's published rho, rho_products its products term. 1B: "
+            "the console's reference size, no start.")
 
 
 def main(argv=None) -> int:
@@ -357,7 +389,7 @@ def main(argv=None) -> int:
     b.add_argument("--ledger", type=Path, required=True, help="the ledger the scorer read (its records/)")
     b.add_argument("--steps", type=Path, required=True, help="trace's DIR")
     b.add_argument("--out", type=Path, required=True)
-    b.add_argument("--trace-run", default=None)
+    b.add_argument("--trace-runs", default=None, help="RUN, or NAME=RUN,...: the run that traced each size")
     u = sub.add_parser("put")
     u.add_argument("file", type=Path)
     a = ap.parse_args(argv)
@@ -376,7 +408,7 @@ def main(argv=None) -> int:
 
     if a.cmd == "build":
         stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        p, info = build(a.tables, a.ledger, a.steps, a.trace_run, stamp)
+        p, info = build(a.tables, a.ledger, a.steps, trace_runs(a.trace_runs), stamp)
         refused = console.refused(p)
         a.out.mkdir(parents=True, exist_ok=True)
         (a.out / "size-scaling.json").write_bytes(console.body(p))
@@ -385,9 +417,10 @@ def main(argv=None) -> int:
               f"console check {len(info['check'])} rows, {len(info['mismatches'])} mismatched, "
               f"{len(info['missing'])} candidates not in the scorer's rows, {len(info['unmeasured'])} unmeasured"
               + (f"; REFUSED: {refused}" if refused else ""))
-        return 1 if refused or info["mismatches"] or len(console.body(p)) > console.BODY_MAX else 0
+        return 1 if refused or info["mismatches"] or len(console.body(p)) > console.BODY_MAX or \
+            len(p["note"]) > console.NOTE_MAX else 0
     p = json.loads(a.file.read_text())
-    if console.refused(p) or len(console.body(p)) > console.BODY_MAX:
+    if console.refused(p) or len(console.body(p)) > console.BODY_MAX or len(p["note"]) > console.NOTE_MAX:
         raise SystemExit(f"size_scaling put: the route refuses {a.file}: {console.refused(p)}")
     print(f"PUT {console.PANELS_URL}/{p['id']}: {console.put(p)} at {datetime.now(UTC).strftime('%H:%M:%SZ')}")
     return 0
