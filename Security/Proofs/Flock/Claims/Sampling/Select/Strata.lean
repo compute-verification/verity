@@ -549,7 +549,9 @@ theorem bernoulliDerived : BernoulliDerived := by
 /-- **`BernoulliDerived`'s premises hold at the code** (the two-lemma rule's `_honest`): `Draw.derive` leaves a
 `bernoulli` object at `2/4` as it is; and on a layout's partition of a population class of two proof blocks and an
 input class of one, the design `flockLaw` reads of that object, `bernoulli 2 4`, then the input class drawn `all`, draws
-the population's two proof blocks at the profile's ratio `1/2`. -/
+the population's two proof blocks at `1/2`, the ratio `Core.Ratio.mk' 2 4` gives. `Select.Rule.lawOver` of a
+`bernoulli` rule and `Record.profileDraw` of that object are not evaluated here: `parseLaw` and `Draw.probability?` read
+their text with `String.splitOn`, which neither `rfl` nor `decide` reduces. -/
 theorem bernoulliDerived_honest :
     Draw.derive default Json.null (Json.mkObj [("law", "bernoulli"), ("p", "2/4")]) none =
         .ok (Json.mkObj [("law", "bernoulli"), ("p", "2/4")]) ∧
