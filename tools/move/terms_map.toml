@@ -414,7 +414,8 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
             '\bpower[._ -]draws?\b', '(?i:\bpower draws?\b)', '(?i:power[- ]laws?|laws? of large numbers)',
             "(?:Amdahl|Moore|Little|Zipf|Kerckhoffs)'s laws?", 'round_digest[^\n]*', 'replay_set=warden/re-verify',
             '\bMODES\W{1,8}firewall\b', '(?<=,)firewall(?=,)', '--modes [\w,]+', '\(firewall\)', 'dials firewall']
-strings = []
+# what `tests/test_retired_terms.py`'s ALLOWED holds as written, byte for byte, until its owner renames the line
+strings = ["the PoUW window's keyed draw takes A4 and A5", "no faulty proof block, every one being drawn"]
 
 [keep_in]
 # the placement gate's role `firewall`; the recursion run's mode `firewall`, which its pod script's case statements and
