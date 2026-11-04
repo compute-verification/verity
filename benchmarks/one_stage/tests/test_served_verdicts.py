@@ -44,12 +44,15 @@ import os
 import re
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
 import tarfile
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from fractions import Fraction
 from pathlib import Path
+from typing import Any
 
 import jsonschema
 import pytest
@@ -623,7 +626,9 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
     composed, whatever their pieces left, and composes accept from sampled proofs' and PoUW's accepts on its node. The
     same pieces composed for onsite reject on the wipe's answer. The report and the line say they were composed on the
-    served node, from the answer files it wrote, and the published line keeps that."""
+    served node, from the answer files it wrote, and the published line keeps that. Off the node from its compose
+    hand-off (``--off-node``) the record takes its engine steps from ``--steps``, with no requests file there, says it was
+    composed from the hand-off, and is refused on the served node itself."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
@@ -671,9 +676,156 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     assert S.main(argv) == 0
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     assert line["composed_on"] == {"host": "vy-auditor-2", "served_node": False, "from": S.COPIED_FROM}
+    (tmp_path / "serve" / "requests.jsonl").unlink()
+    assert S.main([*argv, "--steps", "5,11", "--off-node"]) == 0
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
+    handed = {"host": "vy-auditor-2", "served_node": False, "from": S.HANDED_FROM}
+    assert (line["composed_on"], report["composed_on"], line["steps"]) == (handed, handed, [5, 11])
+    assert json.loads(S.public_line("RECORD " + json.dumps(line)).removeprefix("RECORD "))["composed_on"] == handed
+    with pytest.raises(SystemExit):
+        S.main([*argv, "--steps", "5", "--off-node"])
+    capsys.readouterr()
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    assert S.main([*argv, "--steps", "5,11", "--off-node"]) == 1
+    assert capsys.readouterr().out.strip() == ("RECORD refused: a record composed off the served node is not composed on "
+                                               "it: this host is vy-dc-h200")
+    with pytest.raises(ValueError, match="this host is vy-dc-h200"):
+        S.record(_rows(_accepted(), pieces), window=1, steps=(5, 11), node="vy-dc-h200", run="r1", off_node=True)
+    _serve_dir(tmp_path / "serve")
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
     assert S.main([*argv, "--product", "onsite"]) == 1
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     assert (line["product"], line["composed"], line["by"]) == ("onsite", "reject", ["the wipe"])
+
+
+#: remote's sampled proofs Lean (`vstar-recursive`) as `record --sampled-lean` runs it: its arguments and the case files
+#: it was handed in $SEEN, and $ANSWER as its answer line (none when empty)
+FAKE_SAMPLED_LEAN = f'''#!{sys.executable}
+import json, os, sys
+from pathlib import Path
+a = sys.argv[1:]
+json.dump({{"argv": a, "files": {{Path(f).name: Path(f).read_text() for f in a[2:5]}}}}, open(os.environ["SEEN"], "w"))
+print("checking")
+print(os.environ["ANSWER"])
+'''
+#: the toy registration record the hand-off's cases commit to
+LEAN_RECORD = {"format": "toy-registration", "window": 7}
+
+
+def _lean_handed(tmp_path: Path) -> tuple[list[str], Path]:
+    """A compose host's copy of a hand-off, off the served node vy-dc-h200: sampled proofs' records audit with the
+    summary the served node wrote (a refusal of its own), v1's case and v2's naming one proof blob, PoUW's piece's
+    accepted answer, and a `FAKE_SAMPLED_LEAN`; then `record --off-node --sampled-lean` on it, remote's product. Its argv
+    and the stand-in."""
+    from verity.ml.circuits import codec
+
+    d = tmp_path / "serve"
+    w = d / "sampled-proofs-served" / "window"
+    (w / "m0").mkdir(parents=True)
+    (w / "m0" / "p0.bin").write_bytes(b"proof")
+    v1 = {"params": {"verifier": "toy"}, "commitment": codec.canonical_json(LEAN_RECORD).hex(),
+          "evidence": codec.canonical_json({"draw": [0, 3]}).hex()}
+    (w / "case.json").write_text(json.dumps(v1))
+    (w / "case-v2.json").write_text(json.dumps({**v1, "params": {"verifier": "toy", "proofs": {}},
+                                                "blobs": [str(w / "m0" / "p0.bin")]}))
+    (d / "sampled-proofs-served" / "summary.json").write_text(json.dumps({"refused": "the node's own verdict"}))
+    (p := tmp_path / "pieces" / "pouw").mkdir(parents=True)
+    (p / "answer.json").write_text(json.dumps({"verdict": "accept", "reason": None, "commitment": "ef" * 64,
+                                               **ACCEPTS["pouw"]}))
+    (p / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
+    exe = tmp_path / "vstar-recursive"
+    exe.write_text(FAKE_SAMPLED_LEAN)
+    exe.chmod(0o755)
+    return (["record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"),
+             "--pieces", str(tmp_path / "pieces"), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200",
+             "--product", "remote", "--steps", "0,3", "--off-node", "--sampled-lean", "--sampled-exe", str(exe)], exe)
+
+
+def _recorded(tmp_path: Path, argv: list[str], capsys) -> tuple[int, dict, dict]:
+    rc = S.main(argv)
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    return rc, line, json.loads((tmp_path / "record" / "verdicts.json").read_text())["protocols"]
+
+
+@pytest.mark.parametrize("edit", [
+    {"summary.json": json.dumps({"refused": "another verdict of the node's"})},
+    {"summary.json": json.dumps({"audit": {"accepted": True}})},
+    {"summary.json": "{}", "window/audit.json": json.dumps({"accepted": False, "checks": {"proved": {"ok": False}}})},
+    {"summary.json": None},
+])
+def test_an_edit_to_the_served_nodes_sampled_proofs_answer_leaves_the_row_recomputed_here_unchanged(
+        tmp_path, monkeypatch, capsys, edit):
+    """Off the served node, `record --sampled-lean` takes sampled proofs' row from this host's own run of its Lean on the
+    hand-off's v2 case in the form ``one-stage``, handed the case's files and its proof blob, the answer tied to the
+    record the case commits to: the summary and audit record the served node wrote don't enter it, so editing or deleting
+    them leaves the row as it was, while without --sampled-lean the row follows them. The row and the line name its
+    source, and PoUW's, still read from its piece's answer file, as the served node wrote it, which its edit changes."""
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    argv, _exe = _lean_handed(tmp_path)
+    answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": R.digest(LEAN_RECORD)}
+    monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
+    monkeypatch.setenv("ANSWER", json.dumps(answer))
+    rc, line, rows = _recorded(tmp_path, argv, capsys)
+    assert rc == 0 and line["composed"] == "accept" and rows["integrity"]["answer"] == answer, line
+    pouw_from = f"{S.AS_WRITTEN} (its piece files in pouw/)"
+    assert line["answers"] == {"sampled proofs": S.LEAN_HERE, "PoUW": pouw_from}
+    assert (rows["integrity"]["answer_from"], rows["work"]["answer_from"]) == (S.LEAN_HERE, pouw_from)
+    seen = json.loads((tmp_path / "seen.json").read_text())
+    w = tmp_path / "serve" / "sampled-proofs-served" / "window"
+    assert seen["argv"][:2] == ["sampled", "check"] and seen["argv"][5:] == [str(w / "m0" / "p0.bin")]
+    assert json.loads(seen["files"]["params.json"]) == {"form": "one-stage", "proofs": {}, "verifier": "toy"}
+    assert json.loads(seen["files"]["commitment.bin"]) == LEAN_RECORD
+    plain = [x for x in argv if x not in ("--sampled-lean", "--sampled-exe", argv[-1])]
+    _rc, _line, node_rows = _recorded(tmp_path, plain, capsys)
+    for name, body in edit.items():
+        target = tmp_path / "serve" / "sampled-proofs-served" / name
+        if body is None:
+            target.unlink()
+        else:
+            target.write_text(body)
+    _rc, line, edited = _recorded(tmp_path, argv, capsys)
+    assert edited["integrity"] == rows["integrity"] and line["composed"] == "accept"
+    _rc, _line, node_edited = _recorded(tmp_path, plain, capsys)
+    assert node_edited["integrity"] != node_rows["integrity"]
+    assert node_rows["integrity"]["answer_from"] == f"{S.AS_WRITTEN} ({S.WRITTEN['integrity']})"
+    (tmp_path / "pieces" / "pouw" / "answer.json").write_text(json.dumps({
+        "verdict": "reject", "reason": "the node says so", "commitment": "ef" * 64, "protocol": "verity/pouw/v1",
+        "public": None, "profile": None}))
+    _rc, line, edited = _recorded(tmp_path, argv, capsys)
+    assert edited["integrity"] == rows["integrity"] and edited["work"]["verdict"] == "reject"
+
+
+@pytest.mark.parametrize("change, verdict, said", [
+    ("no-v2", "reject", "refused: \"the node's own verdict\""),
+    ("another-record", "error", "commits to"),
+    ("no-blob", "error", "blob(s) that aren't files"),
+    ("no-line", "error", "answered no line"),
+])
+def test_a_sampled_proofs_row_the_lean_here_cant_recompute_says_so_and_never_takes_the_nodes_word_for_a_bad_case(
+        tmp_path, monkeypatch, capsys, change, verdict, said):
+    """With no v2 case the hand-off holds no proofs to recompute from, so the row is the served node's, its answer_from
+    saying so; a v2 case naming a missing blob, a Lean answer about another record, or one that answers no line is the
+    row's error, recomputed here, never the node's verdict."""
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    argv, _exe = _lean_handed(tmp_path)
+    w = tmp_path / "serve" / "sampled-proofs-served" / "window"
+    monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
+    other = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": "00" * 64}
+    monkeypatch.setenv("ANSWER", "" if change == "no-line" else json.dumps(other))
+    if change == "no-v2":
+        (w / "case-v2.json").unlink()
+    if change == "no-blob":
+        (w / "m0" / "p0.bin").unlink()
+    _rc, line, rows = _recorded(tmp_path, argv, capsys)
+    row = rows["integrity"]
+    assert row["verdict"] == verdict and said in row["reason"], row
+    assert row["answer_from"] == (S.LEAN_HERE if change != "no-v2" else (
+        f"{S.AS_WRITTEN} ({S.WRITTEN['integrity']}): the records audit wrote no v2 case (window/case-v2.json), so "
+        "there are no proofs to recompute it from"))
+    assert line["answers"]["sampled proofs"] == row["answer_from"]
 
 
 SID = "s20261026T221500Z-ab12"
@@ -792,9 +944,9 @@ def live(monkeypatch, tmp_path):
 def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_path, capsys, live):
     """``pearlplus``: Pearl+'s own served run, accepted by Pearl+'s verdict over its passes and its epoch's salt its live
     session's, is accepted with that verdict's line and credit and its shares (the timed passes' MACs and their credit at
-    θ over the timed call's wall), and its row in the record stays missing with its own reason, its passes not the window
-    sampled proofs audited, so the record composes pending; the pieces' line says it's a development run's, and names
-    the session."""
+    θ over the timed call's wall), and its row in the record stays missing, naming the first condition of record it fails
+    (a compose with no key pin), so the record composes pending; the pieces' line says it's a development run's, and
+    names the session."""
     calls, args = live
     served, verified = _pearlplus_run()
     doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, **args)
@@ -810,11 +962,12 @@ def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_pa
     assert doc["shares"]["credit"] == {"rho": "1/100", "epsilon": "1/100", "delta": "1/100", "draws": 459}
     assert (tensor["declared_linears"], tensor["credited"]) == (6000 / rho / 2.0, 5300 / rho / 2.0)
     row = S.piece_row("work", tmp_path / "pieces")
-    assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", S.PEARLPLUS_WHY, "accept")
+    why = f"{S.DEV_VERDICT}: the compose holds the coins to no key pin (--key-sha512, H1_KEY_SHA512)"
+    assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", why, "accept")
     report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run="r")
     assert line["composed"] == "pending" and line["development"] == {"PoUW": "accept"}
-    assert line["missing"]["PoUW"] == S.PEARLPLUS_WHY and BR.check(rec) == {}
-    assert rec["composed"]["onsite"]["reason"].startswith(f"sampled proofs: accept; PoUW: {S.PEARLPLUS_WHY}; ")
+    assert line["missing"]["PoUW"] == why and BR.check(rec) == {}
+    assert rec["composed"]["onsite"]["reason"].startswith(f"sampled proofs: accept; PoUW: {why}; ")
     got = S.pieces(tmp_path, 1, tmp_path / "again", env={"POUW_CMD": f"cp {tmp_path}/pieces/pouw/development.json \"$3/\""})
     assert "POUW (development run, credits nothing) " in capsys.readouterr().out
     assert (got["pouw"]["verdict"], got["pouw"]["passes"], got["pouw"]["credited"]) == ("accept", 4, False)
@@ -910,10 +1063,34 @@ def test_a_pearlplus_piece_names_the_rounds_its_prover_dropped_before_the_coin(t
     assert S.development_line(S.pearlplus(tmp_path / "all", served, verified, **live[1]))["dropped"] is None
 
 
-def _coin_record(source: str = "5e" * 32) -> bytes:
-    """The verifier's coin record as ``served_passes.py verify`` writes it before any replay (``DIR/coin.json``)."""
-    return (json.dumps({"schema": S.COIN_KIND, "commitment": "c1" * 64, "source": source, "passes": ["p0", "p1"]},
-                       indent=1) + "\n").encode()
+DSID = "s20261104T090000Z-dr01"
+
+
+def _draw(after: str = "c1" * 64, seed: int = 7) -> dict:
+    """A challenger draw as the coin record carries it (`bench_arm.LiveDraw`): a real draw session's commitment and its
+    coin ``pouw/draw`` 0 opened after ``after``, reserved as `DSID`."""
+    import random
+
+    from verity.core.protocols.pouw import window as Wd
+
+    ch = Wd.draw_challenger(0, random.Random(seed).randbytes)
+    opening = ch.open(Wd.DRAW, 0, bytes.fromhex(after))
+    return {"from": "challenger", "label": Wd.DRAW, "index": 0,
+            "reserved": {"session": DSID, "seq": 9, "by": "vllm", "period": None},
+            "session": {"session": DSID, "seq": 10, "root": after}, "commitment": ch.commitment.to_json(),
+            "opening": opening.to_json()}
+
+
+DRAW = _draw()
+DRAW_COIN = DRAW["opening"]["coin"]
+NODE = {"from": "node", "claim": "uniform/io-getrandombytes"}
+
+
+def _coin_record(source: str = "5e" * 32, draw: dict | None = None, commitment: str = "c1" * 64) -> bytes:
+    """The verifier's coin record as ``served_passes.py verify`` writes it before any replay (``DIR/coin.json``), its
+    draw the node's unless ``draw`` names a challenger's."""
+    return (json.dumps({"schema": S.COIN_KIND, "commitment": commitment, "source": source, "passes": ["p0", "p1"],
+                        "draw": draw or NODE}, indent=1) + "\n").encode()
 
 
 def _put(answers: dict) -> tuple:
@@ -952,7 +1129,7 @@ def test_coin_puts_the_verifiers_coin_record_in_the_store_the_moment_it_is_drawn
                              "no store": (None, False, "research data put --preserve: FileNotFoundError: [Errno 2] No "
                                                        "such file: 'research'")}[case]
     assert got == {"sha512": hashlib.sha512(raw).hexdigest(), "commitment": "c1" * 64, "source": "5e" * 32, "run": "r1",
-                   "art": art, "preserved": preserved, "error": error}
+                   "draw": "node", "art": art, "preserved": preserved, "error": error, "custody": None}
     assert (out / S.COIN_RECORD).read_bytes() == raw and json.loads((out / S.COIN_PUT).read_text()) == got
     meta = json.dumps({"commitment": "c1" * 64, "run": "r1"})
     assert calls[0] == (["research", "data", "put", "--kind", S.COIN_KIND, "--meta", meta, "--file", str(out / "coin.json"),
@@ -969,7 +1146,7 @@ def test_coin_refuses_a_record_not_the_verifiers_and_a_second_coin_in_one_piece(
     rec, out = tmp_path / "coin.json", tmp_path / "pieces" / "pouw"
     for bad in ({"schema": "other", "commitment": "c1", "source": "5e"}, {"schema": S.COIN_KIND, "source": "5e"}, [1]):
         rec.write_text(json.dumps(bad))
-        with pytest.raises(ValueError, match="is no verity-pouw/pearl-plus-coin/v1 record"):
+        with pytest.raises(ValueError, match="is no verity-pouw/pearl-plus-coin/v2 record"):
             S.coin(rec, out, "r1", research=["research"], put=put)
     assert not out.exists()
     rec.write_bytes(first := _coin_record())
@@ -989,7 +1166,7 @@ def test_the_coin_command_says_where_the_verifiers_coin_went(tmp_path, capsys, m
     for i, (answers, said) in enumerate((
             ({True: (0, json.dumps({"id": "art:aa"}), "")}, "preserved in the evidence store as art:aa"),
             (NODE_PUT, "art:bb in this node's store, not preserved (research data put --preserve: StoreError: no remote "
-                       "configured): a put of the run's custody copy of coin.json as verity-pouw/pearl-plus-coin/v1 with "
+                       "configured): a put of the run's custody copy of coin.json as verity-pouw/pearl-plus-coin/v2 with "
                        "meta {run, commitment} preserves that id"),
             ({True: OSError("gone"), False: OSError("gone")},
              "in no store (research data put --preserve: OSError: gone): coin.json goes with the run's custody"))):
@@ -999,6 +1176,25 @@ def test_the_coin_command_says_where_the_verifiers_coin_went(tmp_path, capsys, m
     rec.write_text("{}")
     assert S.main(["coin", str(tmp_path / "out9"), "--record", str(rec)]) == 1
     assert capsys.readouterr().out.startswith("COIN refused: ValueError: ")
+
+
+def test_the_coin_names_the_runs_attempt_as_its_custody_off_the_node(tmp_path, capsys, monkeypatch):
+    """Where no put preserves the coin (vy-dc-h200's workload shells hold no store key), ``coin-put.json`` names the run's
+    Attempt, which carries ``out/``, and the coin's path in it: only for a valid run id and a copy under the run's
+    ``out/``; the COIN line says so."""
+    (rec := tmp_path / "coin.json").write_bytes(_coin_record(DRAW_COIN, DRAW))
+    run_dir, run = tmp_path / "runs" / "r20261104-090000-ab12", "r20261104-090000-ab12"
+    put = _put(NODE_PUT)[0]
+    got = S.coin(rec, run_dir / "out" / "pieces" / "pouw", run, research=["research"], put=put, run_dir=run_dir)
+    assert (got["draw"], got["custody"]) == ("challenger", {"attempt": run, "path": "out/pieces/pouw/coin.json"})
+    for other, kw in ((tmp_path / "x" / "pouw", {"run_dir": run_dir}), (run_dir / "scratch", {"run_dir": run_dir}),
+                      (run_dir / "out" / "a", {"run_dir": None})):
+        assert S.coin(rec, other, run, research=["research"], put=put, **kw)["custody"] is None
+    assert S.coin(rec, run_dir / "out" / "b", "local", research=["research"], put=put, run_dir=run_dir)["custody"] is None
+    real = S.coin
+    monkeypatch.setattr(S, "coin", lambda *a, **k: real(*a, **k, put=put))
+    assert S.main(["coin", str(run_dir / "out" / "c"), "--record", str(rec), "--run", run, "--run-dir", str(run_dir)]) == 0
+    assert capsys.readouterr().out.rstrip().endswith(f"; the run's Attempt {run} carries it at out/c/coin.json")
 
 
 def test_a_pearlplus_piece_holds_its_accept_to_the_coin_it_published(tmp_path, capsys, live):
@@ -1173,6 +1369,282 @@ def test_a_pearlplus_piece_on_in_process_coins_claims_no_verdict(tmp_path, monke
     assert doc["reasons"] == ["coins: in-process, not a live session on the gate, so nothing checks them"]
 
 
+PEARL_W = "d7" * 64
+PEARL_LEAN_WORK = {"credited": 5400, "credited_tiles": 40, "macs": 5600, "rho": "1/100", "epsilon": "1/100"}
+
+
+def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record") -> tuple[Path, Path, str, str]:
+    """Pearl+'s accepted piece as `served_pearlplus.sh` leaves it, every condition of record met unless ``case`` breaks
+    one: its live session checked (`live`), the session's tree and the auditor's ledger as the gate gave them (the lane's
+    own reserve in its open Pearl-C period), its coin published, Pearl+'s verdict tied to W, the window's registration R
+    chained after W and its audit tied to W, and the Lean verdict on the same run. Returns the pieces dir, the sampled
+    proofs dir, the compose's key pin and lane."""
+    from verity.core.protocols.sampled_proofs import remote
+
+    served, verified = _pearlplus_run()
+    draw = {"node draw": NODE, "draw off C": _draw("c2" * 64)}.get(case, DRAW)
+    source = {"node draw": "5e" * 32, "source not coin": "77" * 64}.get(case, DRAW_COIN)
+    answer = {"protocol": S.PEARLPLUS_PROTOCOL, "verdict": "accept", "reason": None, "commitment": "c1" * 64,
+              "public": {"work": verified["answer"]["public"]["work"], "unit": "MAC",
+                         **({} if case == "untied" else {"tie": {"record": PEARL_W, "tables": 6}})},
+              "profile": {"delta": "1/100", "draws": 459, "source": source}}
+    piece = tmp_path / "pieces" / "pouw"
+    piece.mkdir(parents=True)
+    (rec := tmp_path / "coin.json").write_bytes(_coin_record(source, draw))
+    S.coin(rec, piece, "r1", research=["research"], put=_put(NODE_PUT)[0])
+    checked = {"from": draw["from"], "session": DSID if draw is not NODE else None, "reason": None}
+    monkeypatch.setattr(S, "pearlplus_draw", lambda *a, **k: dict(checked))
+    doc = S.pearlplus(piece, served, {**verified, "answer": answer}, coin=piece / S.COIN_PUT, **live[1])
+    assert (doc["verdict"], doc["reasons"], doc["coins"]["draw"]) == ("accept", [], checked)
+    doc.update({"in-process coins": {"coin_source": "in-process"},
+                "session refused": {"coins": {**doc["coins"], "check": {**doc["coins"]["check"],
+                                                                         "reason": "pass 2: coin: bad"}}},
+                "draw refused": {"coins": {**doc["coins"], "draw": {**checked,
+                                                                     "reason": "ValueError: the record's draw coin: bad"}}},
+                "unpublished coin": {"coin": None}}.get(case, {}))
+    (piece / S.DEVELOPMENT).write_text(json.dumps(doc))
+    (piece / S.PEARLPLUS_ANSWER).write_text(json.dumps(answer))
+    (piece / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "120m"}))
+    for sid, public in ((SID, PUBLIC), (DSID, bytes(80) if case == "draw key" else PUBLIC)):
+        (piece / "session" / sid / "out").mkdir(parents=True)
+        (piece / "session" / sid / "out" / remote.KEY).write_text(json.dumps({"H": 5, "W": 4, "public": public.hex()}))
+    opens = {"no period": [], "H1 period": [{"kind": "period-open", "body": {"period": "p-h1", "lane": "vllm", "cap": 4,
+                                                                            "circuit": "c1" * 64, "draw_k": 27, "rows": 64}}]}
+    ledger = opens.get(case, [{"kind": "period-open", "body": {"period": "p-pc", "lane": "vllm", "cap": 1,
+                                                                "circuit": "c1" * 64}}])
+    by = {"reserved for": {"by": "vy-admin", "for": "vllm"}}.get(case, {"by": "vllm"})
+    ledger += [] if case == "no reserve" else [{"kind": "reserve", "session": SID, "body": by}]
+    if case != "period open":
+        ledger += [{"kind": "period-close", "session": None, "body": {"period": "p-pc", "lane": "vllm"}}]
+    reserve = {"by": "vllm", "families": [["pouw/draw", 1]], **({} if case == "draw not withheld" else {"withheld": True})}
+    if case == "drawn again":
+        ledger += [{"kind": "reserve", "session": "s-first", "body": {**reserve}}]
+    ledger += [{"kind": "reserve", "session": DSID, "body": reserve},
+               {"kind": "open", "session": DSID, "body": {"window": {"root": "c1" * 64}, "withheld": True}}]
+    if case == "second open":
+        ledger += [{"kind": "open", "session": "s-other", "body": {"window": {"root": "c1" * 64}, "withheld": True}}]
+    (piece / "ledger.jsonl").write_text("".join(json.dumps(e) + "\n" for e in ledger))
+    lean = {"verdict": "accept", "reason": None, "refused": None, "commitment": "c1" * 64, "source": source,
+            "drawn": 459, "verdicts": [], "work": PEARL_LEAN_WORK, "tie": {"record": PEARL_W}}
+    lean.update({"Lean rejects": {"verdict": "reject", "reason": "the live session's coins are out of scope"},
+                 "Lean other run": {"commitment": "c2" * 64}, "Lean untied": {"tie": None},
+                 "Lean credits nothing": {"work": {**PEARL_LEAN_WORK, "credited": 0}},
+                 "Lean other epsilon": {"work": {**PEARL_LEAN_WORK, "epsilon": "1/50"}}}.get(case, {}))
+    if case != "no Lean":
+        (piece / S.PEARLPLUS_LEAN).write_text(json.dumps(lean))
+    audit = tmp_path / "audit"
+    (audit / "windows" / "rank0").mkdir(parents=True)
+    (audit / S.WINDOW_REGISTRATION).write_text(json.dumps(
+        {"format": REG.FORMAT_V2, "previous": "ab" * 64 if case == "R not after W" else PEARL_W, "registered": []}))
+    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({} if case == "audit untied" else {"tie": {"record": PEARL_W}}))
+    pin = "00" * 64 if case == "other key" else None if case == "no pin" else hashlib.sha512(PUBLIC).hexdigest()
+    return piece.parent, audit, pin, "kernels" if case == "other lane" else "vllm"
+
+
+def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verdict_of_record(tmp_path, monkeypatch,
+                                                                                             capsys, live):
+    """Pearl+'s accepted piece whose live coins the compose holds to its pin, whose session the lane reserved under its own
+    gate key in its open Pearl-C period, whose passes are tied to the window sampled proofs audited, and which the Lean
+    `PouwCheck.PearlPlus` verdict accepts on the same run with nonzero work, is PoUW's verdict of record: its row is
+    Pearl+'s answer with the Lean's work, and remote's record composes accept with W_cert that work."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
+    row = S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+    assert (row["protocol"], row["verdict"], row["commitment"], row["delta"]) == (S.PEARLPLUS_PROTOCOL, "accept",
+                                                                                  "c1" * 64, "1/100")
+    assert row["quantity"]["work"] == PEARL_LEAN_WORK and row["quantity"]["tie"]["record"] == PEARL_W
+    profile = row["answer"]["profile"]
+    assert (profile["lane"], profile["key_sha512"], profile["period"], profile["session"]) == ("vllm", pin, "p-pc", SID)
+    assert profile["draw_session"] == DSID and profile["source"] == DRAW_COIN
+    assert profile["lean"]["work"] == PEARL_LEAN_WORK and row["piece"]["piece"] == "pearlplus" and "development" not in row
+    (tmp_path / "serve").mkdir()
+    assert S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
+                   str(audit), "--pieces", str(pieces), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200",
+                   "--product", "remote", "--key-sha512", pin, "--lane", lane]) == 0
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert (line["composed"], line["verdicts"]["PoUW"], line["check"]) == ("accept", "accept", {})
+    assert rec["legs"]["pouw"]["protocol"] == S.PEARLPLUS_PROTOCOL
+    assert rec["legs"]["pouw"]["quantity"] == {"symbol": "W_cert", "value": 5400, "unit": "work", "tiles": 40}
+
+
+@pytest.mark.parametrize("case, why", [
+    ("in-process coins", "its epoch's coins come from 'in-process', not a live session on the auditor host's challenger"),
+    ("session refused", "the live session's check refused its passes: pass 2: coin: bad"),
+    ("no pin", "the compose holds the coins to no key pin (--key-sha512, H1_KEY_SHA512)"),
+    ("other key", "the live session's challenger key is not the compose's pin: the challenger key at "),
+    ("no reserve", f"the piece's ledger holds no reserve of the live session {SID}"),
+    ("reserved for", "the live session was reserved by vy-admin for lane vllm, not under the lane's own gate key"),
+    ("other lane", "the live session was reserved under lane vllm's gate key, not lane kernels's own"),
+    ("no period", "the live session joined no period of lane vllm"),
+    ("H1 period", "the live session joined period p-h1, H1's (its open commits draw_k, rows): a Pearl-C salt session is "
+                  "credited in a Pearl-C period alone"),
+    ("node draw", S.PEARLPLUS_NODE_DRAW),
+    ("draw refused", "the draw session's check refused it: ValueError: the record's draw coin: bad"),
+    ("draw key", "the draw session's challenger key is not the compose's pin: the challenger key at "),
+    ("period open", "the piece's ledger doesn't close the Pearl-C period p-pc, so no draw follows it"),
+    ("drawn again", f"the draw session {DSID} is not lane vllm's first reserve after its Pearl-C period p-pc closed "
+                    "(that is s-first): a draw is taken once"),
+    ("draw not withheld", f"the draw session {DSID} was not reserved withheld with a draw session's layout alone"),
+    ("second open", f"the ledger opens ['{DSID}', 's-other'] on the run's commitment, not the draw session {DSID} alone"),
+    ("draw off C", "the record's draw coin: "),
+    ("source not coin", "the record's source is not its draw session's coin"),
+    ("unpublished coin", "the verdict is not held to the coin published at its draw: none published"),
+    ("untied", "Pearl+'s verdict holds its passes to no window record W (served_passes.py verify --tie W), so nothing "
+               "ties them to the window"),
+    ("R not after W", f"the window's registration R is chained after {'ab' * 8}..., not right after Pearl+'s window "
+                      f"record W {PEARL_W[:16]}..."),
+    ("audit untied", f"the window's records audit is not tied to Pearl+'s window record W {PEARL_W[:16]}... "
+                     "(records_audit --tie W)"),
+    ("no Lean", f"no Lean PouwCheck.PearlPlus verdict ({S.PEARLPLUS_LEAN}: FileNotFoundError"),
+    ("Lean rejects", "the Lean PouwCheck.PearlPlus verdict is reject: the live session's coins are out of scope"),
+    ("Lean other run", f"the Lean verdict is on run {'c2' * 8}... at source {DRAW_COIN[:16]}..., not Pearl+'s verdict's "
+                       "run and source"),
+    ("Lean untied", f"the Lean verdict doesn't hold the passes to Pearl+'s window record W {PEARL_W[:16]}..."),
+    ("Lean credits nothing", "the Lean verdict credits 0 MACs over 40 tiles: nothing"),
+    ("Lean other epsilon", "the Lean verdict's ε '1/50' is not the reference's '1/100'"),
+])
+def test_pearlpluss_accepted_piece_that_fails_a_condition_of_record_stays_a_development_piece_naming_it(
+        tmp_path, monkeypatch, live, case, why):
+    """Each condition of record broken alone leaves Pearl+'s accepted piece a development one: its row missing with its
+    document, its ``why`` the development verdict and the condition, in `pearlplus_of_record`'s order, so remote's record
+    composes pending and names it."""
+    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, case)
+    row = S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+    assert (row["verdict"], row["development"]["piece"]) == ("missing", "pearlplus"), row
+    assert row["why"].startswith(f"{S.DEV_VERDICT}: {why}"), row["why"]
+    _report, rec, line = S.record({"integrity": _accepted(), "work": row}, window=1, steps=(0, 4), node="vy-dc-h200",
+                                  run="r", servers={"work": ("vy-dc-h200", "real")}, product="remote")
+    assert (line["composed"], line["verdicts"]["PoUW"], line["missing"]["PoUW"]) == ("pending", S.DEV_VERDICT, row["why"])
+    assert rec["legs"]["pouw"] is None
+
+
+def _draw_answers(calls: list, public: bytes = PUBLIC):
+    """The gate's answers for the run's draw session, as `pearlplus_draw` asks them: its tree for ``fetch`` (its key),
+    the ledger (its reserve and its open on the run's commitment) and the pins."""
+    def ask(*words: str) -> bytes:
+        calls.append(words)
+        if words[0] == "fetch":
+            buf = io.BytesIO()
+            with tarfile.open(fileobj=buf, mode="w:gz") as t:
+                for name, body in (("key.json", json.dumps({"H": 5, "W": 4, "public": public.hex()}).encode()),
+                                   ("record.json", b"{}"), ("releases.jsonl", b'{"event": "root"}\n'), ("close.json", b"{}")):
+                    info = tarfile.TarInfo(f"{words[1]}/out/{name}")
+                    info.size = len(body)
+                    t.addfile(info, io.BytesIO(body))
+            return buf.getvalue()
+        if words[0] == "ledger":
+            return ("".join(json.dumps(e) + "\n" for e in (
+                {"kind": "reserve", "session": DSID, "body": {"by": "vllm", "withheld": True, "families": [["pouw/draw", 1]]}},
+                {"kind": "open", "session": DSID, "body": {"window": {"root": "c1" * 64}, "withheld": True}}))).encode()
+        return (PINS_LINE + "\n").encode()
+    return ask
+
+
+@pytest.mark.parametrize("case, reason", [
+    ("honest", None),
+    ("node", None),
+    ("no gate", "ValueError: no gate, key pin or main's first-parent line to check the draw session by"),
+    ("other key", "CoinError: the challenger key at "),
+    ("untrusted", "CoinError: the auditor's ledger opens no challenger session for this window"),
+    ("not withheld", "ValueError: the run's draw session: the session the auditor's ledger opens on the window does not "
+                     "withhold"),
+    ("other commitment", "ValueError: the record's draw commitment is not the one the draw session's challenger signed"),
+    ("other root", "ValueError: the draw session's log does not show the run's commitment as the one root its draw coin "
+                   "followed"),
+    ("off C", "ValueError: the record's draw coin: "),
+    ("other source", "ValueError: the record's source is not its draw session's coin"),
+])
+def test_the_pearlplus_piece_holds_the_verifiers_draw_to_its_draw_session(tmp_path, monkeypatch, case, reason):
+    """`pearlplus_draw`: a challenger draw's session fetched through the gate with the ledger and pins, its key held to
+    the pin, the ledger opening it alone on the run's commitment C (`challenger.trusted_session_of`, its signed session),
+    withheld, its signed commitment the record's, its log showing C as its coin's one root, and the record's opening its
+    coin after C with the record's source that coin; a node's draw is checked by none of it. Each failure names why, and
+    the piece rejects on it."""
+    from verity.core.protocols.pouw import window as Wd
+    from verity.core.protocols.sampled_proofs import challenger as Ch
+
+    other = _draw(seed=8)
+    signed = {"other commitment": other["commitment"]}.get(case, DRAW["commitment"])
+    root = bytes.fromhex("c2" * 64 if case == "other root" else "c1" * 64)
+    seen = []
+
+    def trusted(ledger, window, key, pins, main, session, verify):
+        seen.append((window, key.public, pins, main))
+        if case == "untrusted":
+            raise Ch.CoinError("the auditor's ledger opens no challenger session for this window")
+        return Ch.LiveCommitment.from_json(signed), {Wd.DRAW: (root,)}
+    monkeypatch.setattr(Ch, "trusted_session_of", trusted)
+
+    def withheld_on(ledger, window):
+        assert [json.loads(x)["kind"] for x in ledger] == ["reserve", "open"] and window == "c1" * 64
+        return case != "not withheld"
+    monkeypatch.setattr(Ch, "withheld_on", withheld_on)
+    draw = {"off C": _draw("c2" * 64)}.get(case, DRAW)
+    (rec := tmp_path / "coin.json").write_bytes(_coin_record({"other source": "77" * 64}.get(case, DRAW_COIN),
+                                                             NODE if case == "node" else draw))
+    (main := tmp_path / "main.txt").write_text("aa" * 20 + "\n")
+    calls = []
+    ask = _draw_answers(calls, public=bytes(80) if case == "other key" else PUBLIC)
+    out = tmp_path / "pieces" / "pouw"
+    out.mkdir(parents=True)
+    got = S.pearlplus_draw(rec, out, None if case == "no gate" else GATE, hashlib.sha512(PUBLIC).hexdigest(), main,
+                           fetch=None if case == "no gate" else ask)
+    assert got["reason"] == reason if reason is None else got["reason"].startswith(reason), got
+    assert (got["from"], got["session"]) == (("node", None) if case == "node" else ("challenger", DSID))
+    assert calls == ([] if case in ("node", "no gate") else [("fetch", DSID), ("ledger",), ("pins",)])
+    if case in ("honest", "untrusted", "other commitment", "other root", "off C", "other source", "not withheld"):
+        assert seen == [({"root": "c1" * 64}, PUBLIC, [PINS_LINE], ["aa" * 20])]
+    if case != "no gate":
+        return
+    served, verified = _pearlplus_run()
+    monkeypatch.setattr(S, "pearlplus_coins", lambda *a: {"session": SID, "closed": None, "passes": 4, "reason": None})
+    monkeypatch.setattr(S, "_gate_out", lambda gate, *words: ask(*words))
+    answer = {**verified["answer"], "commitment": "c1" * 64, "profile": {"source": DRAW_COIN}}
+    S.coin(rec, out, "r1", research=["research"], put=_put(NODE_PUT)[0])
+    doc = S.pearlplus(out, served, {**verified, "answer": answer}, gate=GATE, key="00" * 64, main=main,
+                      coin=out / S.COIN_PUT)
+    assert doc["verdict"] == "reject" and doc["reasons"] == [f"draw: {doc['coins']['draw']['reason']}"]
+    assert doc["coins"]["draw"]["reason"].startswith("CoinError: the challenger key at ")
+    assert doc["coins"]["draws"] == S.PEARLPLUS_COINS["draws"]
+
+
+def test_the_pearlplus_period_opens_around_the_retained_serve_and_closes_before_the_draw(tmp_path, monkeypatch, capsys):
+    """``pearlplus-period open``: the lane's Pearl-C period opened at the gate with cap 1 (the serve's one salt session)
+    and circuit the SHA-512 of the piece's descriptor (Pearl+'s protocol, the scheme and the cubin's SHA-512), its answer
+    in ``period.json``; ``close`` closes it by that name. A gate that refuses is a PERIOD refused line, exit 1."""
+    calls = []
+
+    def gate_out(gate: str, *words: str) -> bytes:
+        calls.append((gate, words))
+        if "refuse" in words:
+            return b'{"refused": "lane vllm has period p0 open: close it first"}'
+        return json.dumps({"period": words[2], "verb": words[0]}).encode()
+    monkeypatch.setattr(S, "_gate_out", gate_out)
+    (cubin := tmp_path / "k.cubin").write_bytes(b"sass")
+    piece = tmp_path / "pieces" / "pouw"
+    assert S.main(["pearlplus-period", "open", str(piece), "--gate", GATE, "--name", "pearlplus-r1", "--cubin",
+                   str(cubin)]) == 0
+    raw = (piece / S.PEARLPLUS_DESCRIPTOR).read_bytes()
+    assert json.loads(raw) == {"schema": S.PEARLPLUS_DESCRIPTOR_SCHEMA, "protocol": S.PEARLPLUS_PROTOCOL,
+                               "scheme": "pearl-c-h100-v1-h3", "cubin_sha512": hashlib.sha512(b"sass").hexdigest()}
+    circuit = hashlib.sha512(raw).hexdigest()
+    assert capsys.readouterr().out == f"PERIOD opened pearlplus-r1: Pearl-C, cap 1, circuit {circuit[:16]}... " \
+                                      f"({S.PEARLPLUS_DESCRIPTOR})\n"
+    assert calls == [(GATE, ("period-open", "--name", "pearlplus-r1", "--cap", "1", "--circuit", circuit))]
+    assert S.main(["pearlplus-period", "close", str(piece), "--gate", GATE]) == 0
+    assert calls[1] == (GATE, ("period-close", "--name", "pearlplus-r1"))
+    doc = json.loads((piece / S.PERIOD).read_text())
+    assert (doc["name"], doc["cap"], doc["circuit"], doc["close"]["verb"]) == ("pearlplus-r1", 1, circuit, "period-close")
+    assert capsys.readouterr().out.startswith("PERIOD closed pearlplus-r1: ")
+    assert S.main(["pearlplus-period", "open", str(tmp_path / "other"), "--gate", GATE, "--name", "refuse"]) == 1
+    assert capsys.readouterr().out.startswith("PERIOD refused: RuntimeError: the gate refused period-open: ")
+    assert S.main(["pearlplus-period", "open", str(tmp_path / "other"), "--gate", GATE]) == 1
+
+
 def test_the_pouw_piece_fetches_the_windows_sample_session_and_gives_the_check_its_tree(tmp_path, monkeypatch):
     """A window whose record names its sample's session (``draw_session``, which the coin check refuses without): the
     piece fetches it beside the window's session, and the check gets its tree as ``--draw-dir``."""
@@ -1215,6 +1687,24 @@ def test_the_pouw_piece_gives_credit_the_declared_program_the_period_and_the_pro
     assert (doc["credit"]["window"], doc["credit"]["calls"], doc["credit"]["credit"]) == (None, [3], [3])
     assert (doc["AcceptedLive"], doc["SaltIsLiveCoin"]) == ({"met": True, "why": S.LIVE_MET},
                                                             {"met": True, "why": S.SALT_MET})
+
+
+def test_the_pouw_piece_hands_the_verifiers_memo_to_the_check_and_records_what_it_took(tmp_path, monkeypatch):
+    """``--lean-answers`` reaches the challenger check as its own flag, never among credit's inputs, and the piece's
+    document carries the check's counts of answers it ran and took by key."""
+    monkeypatch.setattr(S, "_gate_out", _gate([]))
+    d = _h1_serve_dir(tmp_path)
+    memo, got = tmp_path / "verifier" / "answers", []
+    counts = {"ran": 1, "taken": {"the fill": 33}, "unkeyed": 0}
+
+    def check(*a):
+        got.append(a[-1])
+        return {"ok": True, "reason": None, "manifest": None, "credit": {"credit": [3]}, "lean_answers": counts}
+
+    doc = S.pouw(d, 1, tmp_path / "pieces" / "pouw", gate=GATE, key="ff" * 64, main=None, check=check,
+                 lean_answers=memo)
+    assert got[0]["--lean-answers"] == str(memo) and "--lean-answers" not in doc["credit_inputs"]
+    assert doc["lean_answers"] == counts
 
 
 def test_a_record_that_isnt_one_manifest_under_its_salt_coin_doesnt_meet_salt_is_live_coin(tmp_path, monkeypatch):
@@ -1269,10 +1759,27 @@ def test_the_gate_is_refused_while_the_lane_has_a_period_open(tmp_path, monkeypa
     assert ok and line.startswith("GATE ready: lane vllm's open period None;") and "NOT on the verifier's" in line
 
 
+def test_the_gate_refuses_a_root_an_open_in_its_ledger_names(monkeypatch):
+    """``gate --root``: the gate opens a root once, ever, so a run root an open in the ledger names (v2's window root) is
+    refused before a session of the run reserves, and another root is ready; the lane's open period still refuses."""
+    opened = {"kind": "open", "session": "s1", "schema": "verity/challenger-auditor/v2", "body": {"window": {"root": "ab" * 64}}}
+    answers = {"ledger": [{"kind": "reserve", "session": "s1", "body": {"by": "vllm"}}, opened], "pins": []}
+    monkeypatch.setattr(S, "_gate_out", lambda gate, verb: "".join(json.dumps(e) + "\n" for e in answers[verb]).encode())
+    ok, line = S.gate_ready(GATE, "vllm", root="AB" * 64)
+    assert not ok and line.startswith("GATE refused: lane vllm's open period None; root ABABABABABABABAB… already has its "
+                                      "session s1 (one session a root, ever);")
+    ok, line = S.gate_ready(GATE, "vllm", root="cd" * 64)
+    assert ok and "; root cdcdcdcdcdcdcdcd… has no session yet;" in line
+    answers["ledger"].append({"kind": "period-open", "session": None, "body": {"period": "p1", "lane": "vllm"}})
+    ok, line = S.gate_ready(GATE, "vllm", root="cd" * 64)
+    assert not ok and line.startswith("GATE refused: lane vllm's open period p1 (a reserve would join it); root cdcd")
+
+
 FAKE_PROVE_PATH = '''import json, sys
 a = sys.argv[1:]
 assert a[0] == "window-circuit"
-c = a[a.index("--class") + 1] if "--class" in a else "record"
+open("argv.jsonl", "a").write(json.dumps(a) + "\\n")
+c = (a[a.index("--class") + 1] if "--class" in a else "record") + ("+tie" if "--window-registration" in a else "")
 answer = json.load(open("answers.json"))[c]
 if answer != "count":
     print("prove_path.py window-circuit: refused at", c, file=sys.stderr)
@@ -1282,10 +1789,11 @@ print(json.dumps({"bits": 772, "count": {"free": 3, "inputs": 10, "registered": 
 '''
 
 
-def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[str], list[str]]:
+def _circuits(tmp_path: Path, classes: str, answers: dict, **extra: str) -> tuple[int, list[str], list[str]]:
     """`served_verdicts.sh circuits 0` in a toy tree whose prove_path.py counts a class, refuses it, or exits 124 as
-    `timeout` does when a count runs out of time (``answers``, by class), under a `timeout` that records the limit it got:
-    the exit status, the verdict lines, and the limits in order."""
+    `timeout` does when a count runs out of time (``answers``, by class, ``C+tie`` for class C reading H1's tables), under
+    a `timeout` that records the limit it got (``extra`` adds to the environment): the exit status, the verdict lines,
+    and the limits in order."""
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
     for d in (tree / "benchmarks" / "prove_path", bin_, venv, tmp_path / "serve"):
         d.mkdir(parents=True)
@@ -1297,7 +1805,7 @@ def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[st
         path.write_text(f"#!/bin/sh\n{body}\n")
         path.chmod(0o755)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent),
-           "D": str(tmp_path / "serve"), "OUT": str(tmp_path / "out"), "CLASSES": classes}
+           "D": str(tmp_path / "serve"), "OUT": str(tmp_path / "out"), "CLASSES": classes, **extra}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "circuits", "0"], cwd=tree, env=env,
                         check=False).returncode
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), (tmp_path / "limits").read_text().split()
@@ -1327,6 +1835,24 @@ def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classe
     assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
     measured = [line for line in lines if line.startswith("WINDOW-CIRCUIT class record (measurement)")]
     assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "45m")
+
+
+@pytest.mark.parametrize("tied", ["count", "refuse"])
+def test_under_h1_tie_step_3_writes_v3cs_record_reading_h1s_tables_after_the_classes_and_gates_nothing_on_it(tmp_path, tied):
+    """Under H1_TIE the commit V3c holds is the tie's, whose circuit reads H1's W's tables, so after the classes CLASSES
+    gates on, step 3 writes the verifier's record at V3C_CLASS reading them too (window-circuit --window-registration W,
+    the window's H1 registration; its tag's suffix -tie), the record V3c holds that commit to. It gates nothing."""
+    rc, lines, limits = _circuits(tmp_path, "4,32,4", {"4,32,4": "count", "4,32,4+tie": tied, "record": "count"},
+                                  H1_TIE="1", V3C_CLASS="4,32,4")
+    d = tmp_path / "serve"
+    argv = [json.loads(x) for x in (tmp_path / "tree" / "argv.jsonl").read_text().splitlines()]
+    assert rc == 0 and limits == ["30m", "30m", "45m"], (rc, lines)
+    assert [x[x.index("--out") + 1] for x in argv] == [str(d / f"window-circuit-w0-{t}.json")
+                                                       for t in ("4-32-4", "4-32-4-tie", "record")]
+    assert [x[x.index("--window-registration") + 1] if "--window-registration" in x else None for x in argv] == [
+        None, str(d / "h1" / "w0" / "registration.json"), None]
+    head = "WINDOW-CIRCUIT class 4,32,4 reading H1's tables"
+    assert lines[1].startswith(f"{head}: registered 7 bits" if tied == "count" else f"{head} refused (exit 2): "), lines
 
 
 FAKE_INFERENCE_ONLY = '''import json, os, sys
@@ -1463,8 +1989,12 @@ if a[0] == "compiler":
     sys.exit(0)
 out = Path(a[a.index("--out") + 1])
 assert a[a.index("--class") + 1] == "{W63K4}"
+# with W the circuit reads H1's tables, in the verifier's record and the commit alike
+tables = {{"tables": "h1"}} if "--window-registration" in a else {{}}
 if a[0] == "window-circuit":
-    out.write_text("{{}}")
+    if tables:
+        open(os.environ["ORDER"] + ".circuit", "w").write(json.dumps([out.name, *a[a.index("--window-registration"):]]))
+    out.write_text(json.dumps(tables))
     print(json.dumps({{"bits": 772, "count": {{"free": 3, "inputs": 10, "registered": 7, "units": 1}}}}))
 else:
     assert a[0] == "window-commit"
@@ -1472,7 +2002,8 @@ else:
         print("prove_path.py window-commit: the row dir holds no window 7", file=sys.stderr)
         sys.exit(2)
     out.mkdir(parents=True)
-    (out / "circuit.json").write_text(json.dumps({{"run": "ab"}}))
+    (out / "circuit.json").write_text(json.dumps({{"run": "ab", **tables}}))
+    open(os.environ["ORDER"] + ".law", "w").write(a[a.index("--law") + 1] if "--law" in a else "")
     if "--window-registration" in a:
         tail = a[a.index("--window-registration"):]
         open(os.environ["ORDER"] + ".commit", "w").write("\\n".join(tail))
@@ -1493,7 +2024,7 @@ if a[0] == "warm":
     sys.exit(0)
 out = Path(a[a.index("--out") + 1])
 if a[0] == "audit":
-    assert ("--tie" in a) == ("--tie-prefix" in a) and a[a.index("--challenger") + 1] == "local"
+    assert ("--tie" in a) == ("--tie-prefix" in a)
     open(os.environ["ORDER"] + ".audit", "w").write(json.dumps(a))
     open(os.environ["ORDER"] + ".main", "w").write(open(a[a.index("--main") + 1]).read())
     out.mkdir(parents=True)
@@ -1513,11 +2044,14 @@ PERIOD = 'echo period-check >> "$ORDER"; cp "$4/period.json" "$3/"; echo \'{"ver
 
 
 def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = FAKE_V3C_PROVE_PATH,
-         records_audit: str = FAKE_RECORDS_AUDIT, **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
+         records_audit: str = FAKE_RECORDS_AUDIT, lease: bool = True,
+         **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
     """`served_verdicts.sh v3c` (or ``args``) on window 7 of a toy serve dir at the certifier's class, in a toy tree whose
     prove_path.py (``prove_path``) and records_audit.py (``records_audit``) note each step they run, its builds stubbed,
-    main's first-parent line a toy MAIN_FILE and the split certifier's two commands set (``extra`` adds to the
-    environment, None unsetting): the exit status, the verdict lines, the steps in order and the limits."""
+    main's first-parent line a toy MAIN_FILE, the split certifier's two commands set, a development run's local coins
+    and no composite, so the default COMPOSE_OFF_NODE=1 composes the final record alone off the node (``extra`` adds to
+    the environment, None unsetting; ``lease`` False, no gpu-lease on the PATH): the exit status, the verdict lines, the
+    steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
               tree / "verity" / "core" / "service" / "sampled_proofs", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
@@ -1530,21 +2064,22 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
         f.write_text("")
     (d / "weights_registration.json").write_text("{}")
-    _write(d, "windows.jsonl", [{"window": 7, "run_root": "ab" * 64}])
+    if not (d / "windows.jsonl").exists():
+        _write(d, "windows.jsonl", [{"window": 7, "run_root": "ab" * 64}])
     (tmp_path / "main.txt").write_text(TOY_MAIN)
     # the toy tree's verity/ directories, on the PYTHONPATH the script sets and as `python -`'s working directory, would
     # shadow the installed verity
     py = f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\n[ "$1 $2" = "-m research" ] && exit 0\nexec {sys.executable} "$@"'
     for path, body in ((venv / "python", py), (tree / ".venv" / "bin" / "python", py),
                        (bin_ / "timeout", f'[ "$1" = -k ] && shift 2\necho "$1" >> {tmp_path}/limits; shift; exec "$@"'),
-                       (bin_ / "gpu-lease", "exit 99"), (bin_ / "uv", "exit 0"), (bin_ / "lake", "exit 0")):
+                       *([(bin_ / "gpu-lease", "exit 99")] if lease else []), (bin_ / "uv", "exit 0"), (bin_ / "lake", "exit 0")):
         _script(path, body)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "K": "7",
            "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path / "root"), "FLOCK_WORK": str(tmp_path / "fw"),
            "ROW": str(tmp_path / "row"), "HIDDEN_SO": str(tmp_path / "h.so"), "NORM_TAP_SO": str(tmp_path / "n.so"),
            "ORDER": str(tmp_path / "order"), "H1_GATE": "", "V3C_CLASS": W63K4, "CLASSES": W63K4,
            "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD, "NODE_MEM_GB": "512",
-           "MAIN_FILE": str(tmp_path / "main.txt")}
+           "MAIN_FILE": str(tmp_path / "main.txt"), "DEVELOPMENT": "1", "COMPOSITE": ""}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
@@ -1552,15 +2087,22 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), read("order"), read("limits")
 
 
+#: where V3c's audit's coins come from in `_v3c`'s development run, as `served_verdicts.sh v3c`'s first line says
+V3C_DEV = "a development challenger session where it runs (V3C_CHALLENGER local), in a development run (DEVELOPMENT=1)"
+V3C_ENTRY = f"COINS V3c's audit: {V3C_DEV}"
+
+
 def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_the_period_json_after(tmp_path):
-    """The window commit, then the split certifier's chain (it reads the commit's scan state) beside V3c's audit and its
-    period.json, and the certifier's period check on it once both are done, each within its own limit; the check gets
-    the serve dir, the window, the certifier's piece dir and V3c's dir, and writes the answer `pieces` reads there. The
-    two steps' logs, which count the window's requests, end in the serve dir's private/pieces/certifier, not in $OUT,
-    which leaves the node. $OUT then names no window and counts none of its own (the window commit's population, the
-    audit's, the chain's window): each line is whole in the serve dir's private/verdicts.txt, each file in its private/out."""
+    """After its COINS line, the window commit, then the split certifier's chain (it reads the commit's scan state)
+    beside V3c's audit and its period.json, and the certifier's period check on it once both are done, each within its
+    own limit; the check gets the serve dir, the window, the certifier's piece dir and V3c's dir, and writes the answer
+    `pieces` reads there. The two steps' logs, which count the window's requests, end in the serve dir's
+    private/pieces/certifier, not in $OUT, which leaves the node. $OUT then names no window and counts none of its own (the
+    window commit's population, the audit's, the chain's window): each line is whole in the serve dir's
+    private/verdicts.txt, each file in its private/out."""
     rc, lines, order, limits = _v3c(tmp_path)
     assert rc == 0, lines
+    assert lines.pop(0) == V3C_ENTRY
     assert order[:2] == ["window-circuit", "window-commit"] and order[-1] == "period-check"
     assert sorted(order[2:-1]) == ["audit", "chain", "period"] and order.index("audit") < order.index("period")
     assert limits[:2] == ["30m", "120m"] and sorted(limits[2:-1]) == ["180m", "4h"] and limits[-1] == "60m"
@@ -1693,15 +2235,15 @@ TIED_LAW = {"law": "stratified", "k": 1, "strata": [{"template": t, "units": [[3
 
 def _tied_commit(tmp_path: Path, bound: str | None, law: dict | None = TIED_LAW) -> None:
     """Window 7's commit as the tie left it in the toy serve dir: its registration R (its sample ``law``; None, none) and
-    circuit, its answer, and H1's log naming W and, unless ``bound`` is None, the record H1 bound (``same``: R; ``other``:
-    another)."""
+    circuit, which reads H1's tables, its answer, and H1's log naming W and, unless ``bound`` is None, the record H1 bound
+    (``same``: R; ``other``: another)."""
     d = tmp_path / "serve"
     vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
     vw.mkdir(parents=True)
     (d / "h1" / "w7").mkdir(parents=True)
     r = {"format": "toy", "after": W_OF_7, **({"law": law} if law else {})}
     (vw / "registration.json").write_text(json.dumps(r))
-    (vw / "circuit.json").write_text(json.dumps({"run": "ab"}))
+    (vw / "circuit.json").write_text(json.dumps({"run": "ab", "tables": "h1"}))
     (d / "h1" / "w7" / "window-commit.json").write_text(json.dumps({"run": "ab", "circuit": "cd", "population": 37}))
     log = [{"window": 7, "kind": "registration", "file": "w7/registration.json", "digest": "aa" * 64}]
     if bound is not None:
@@ -1712,20 +2254,31 @@ def _tied_commit(tmp_path: Path, bound: str | None, law: dict | None = TIED_LAW)
 
 def test_under_h1_tie_v3c_audits_the_commit_h1_bound_and_makes_none_of_its_own(tmp_path):
     """The window's one commit is the one its close made: V3c holds its registration to the record H1 bound (the log's
-    digest) and its circuit to the verifier's, runs no window-commit, and goes on to its audit."""
+    digest) and its circuit to the verifier's, which reads H1's W's tables as the commit's does (window-circuit
+    --window-registration W, its own record beside the untied one), runs no window-commit, and goes on to its audit."""
     _tied_commit(tmp_path, "same")
     rc, lines, order, _limits = _v3c(tmp_path, H1_TIE="1")
     assert rc == 0 and "window-commit" not in order and order[0] == "window-circuit" and "audit" in order, (lines, order)
+    d = tmp_path / "serve"
+    assert json.loads((tmp_path / "order.circuit").read_text()) == [
+        f"window-circuit-w7-{W63K4.replace(',', '-')}-tie.json", "--window-registration", str(d / "h1" / "w7" / "registration.json")]
+    assert not (d / f"window-circuit-w7-{W63K4.replace(',', '-')}.json").exists()
+    assert lines.pop(0) == V3C_ENTRY
+    assert lines[0].startswith(f"WINDOW-CIRCUIT class {W63K4} reading H1's tables: registered 7 bits"), lines
     assert lines[1].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close, its registration the Commit record H1 bound "
                                "before the sample coin (R ") and '"run": "ab"' in lines[1] and "population" not in lines[1]
     assert lines[2] == (f"WINDOW-CIRCUIT-HELD class {W63K4}: the committed circuit.json less its run fields is the "
                         "verifier's own window-circuit record: PASS")
 
 
-def _audited(tmp_path: Path) -> dict[str, str | None]:
-    """The sampling design's, the tie's and the ports' flags the toy records_audit.py's audit got."""
+#: the flags naming the challenger whose coins records_audit's audit takes
+COIN_FLAGS = ("--challenger", "--peer", "--challenger-key", "--gate-key")
+
+
+def _audited(tmp_path: Path, flags: tuple[str, ...] = ("--law", "--tie", "--tie-prefix", "--ports")) -> dict[str, str | None]:
+    """The flags `flags` the toy records_audit.py's audit got (by default the sampling design's, the tie's and the ports')."""
     a = json.loads((tmp_path / "order.audit").read_text())
-    return {f: a[a.index(f) + 1] if f in a else None for f in ("--law", "--tie", "--tie-prefix", "--ports")}
+    return {f: a[a.index(f) + 1] if f in a else None for f in flags}
 
 
 @pytest.mark.parametrize("tied, extra, ports", [(False, {}, "16"), (True, {}, "3"), (True, {"V3C_PORTS": "40"}, "40")])
@@ -1742,6 +2295,25 @@ def test_under_h1_tie_v3cs_audit_is_tied_to_h1s_w_at_a_stratum_of_each_tables_re
     w = str(tmp_path / "serve" / "h1" / "w7" / "registration.json")
     assert _audited(tmp_path) == ({"--law": "stratified:1", "--tie": w, "--tie-prefix": "h1/", "--ports": ports} if tied
                                   else {"--law": "subset:1", "--tie": None, "--tie-prefix": None, "--ports": ports})
+
+
+@pytest.mark.parametrize("extra, law", [({}, "subset:1"), ({"V3C_LAW": "stratified:1"}, "stratified:1")])
+def test_an_untied_v3c_registers_its_window_at_the_sampling_design_its_audit_samples_by(tmp_path, extra, law):
+    """Untied, window-commit registers the window at V3C_LAW's sampling design and the audit samples by that one: R1 holds
+    a sample to the registration's design, so a commit at subset:1 under a stratified:1 audit is refused before its sample."""
+    rc, lines, order, _limits = _v3c(tmp_path, **extra)
+    assert rc == 0 and order.index("window-commit") < order.index("audit"), (lines, order)
+    assert (tmp_path / "order.law").read_text() == law and _audited(tmp_path, ("--law",)) == {"--law": law}
+
+
+def test_v3c_on_an_existing_serve_dir_needs_no_row_dir_taps_or_gpu_lease(tmp_path):
+    """`served_verdicts.sh v3c` serves nothing, so a CPU node with the audit's memory runs it: its preflight asks for the
+    venv's python alone, not the row dir, the FlashAttention and norm-tap builds or gpu-lease that serving reads."""
+    gone = {"ROW": str(tmp_path / "no-row"), "HIDDEN_SO": str(tmp_path / "no-h.so"), "NORM_TAP_SO": str(tmp_path / "no-n.so")}
+    rc, lines, order, _limits = _v3c(tmp_path, lease=False, **gone)
+    assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
+    rc, lines, _order, _limits = _v3c(tmp_path / "no-venv", lease=False, VENV=str(tmp_path / "no-venv" / "none"), **gone)
+    assert rc == 3 and lines[-1].startswith(f"PREFLIGHT: no {tmp_path / 'no-venv' / 'none'}/bin/python"), lines
 
 
 @pytest.mark.parametrize("tied, extra, limit", [
@@ -1801,9 +2373,9 @@ def test_the_preflight_refuses_a_warm_at_no_positive_number_of_jobs_or_on_a_tree
 
 @pytest.mark.parametrize("given", ["MAIN_FILE", "MAIN_SHA"])
 def test_v3cs_audit_samples_on_a_local_challenger_session_pinned_on_mains_first_parent_line(tmp_path, given):
-    """records_audit samples only on the auditor's challenger's coins, so V3c's audit takes a local development session's
-    (--challenger local), pinned on main's first-parent line: MAIN_FILE's, else MAIN_SHA's in the tree, kept as
-    $OUT/v3c-audit/main.txt, the --main the audit reads."""
+    """records_audit samples only on the auditor's challenger's coins, so a development run's V3c audit takes a local
+    development session's (--challenger local, no peer), pinned on main's first-parent line: MAIN_FILE's, else MAIN_SHA's
+    in the tree, kept as $OUT/v3c-audit/main.txt, the --main the audit reads."""
     extra, line = {}, TOY_MAIN
     if given == "MAIN_SHA":
         tree = tmp_path / "tree"
@@ -1816,6 +2388,8 @@ def test_v3cs_audit_samples_on_a_local_challenger_session_pinned_on_mains_first_
         extra, line = {"MAIN_FILE": None, "MAIN_SHA": git("rev-parse", "HEAD~1").strip()}, git("rev-list", "--first-parent", "HEAD~1")
     rc, lines, order, _limits = _v3c(tmp_path, **extra)
     assert rc == 0 and "audit" in order, (lines, order)
+    assert _audited(tmp_path, COIN_FLAGS) == {"--challenger": "local", "--peer": None, "--challenger-key": None,
+                                              "--gate-key": None}
     assert len(line.split()) == 2 and (tmp_path / "order.main").read_text() == line
     assert (tmp_path / "out" / "v3c-audit" / "main.txt").read_text() == line
 
@@ -1835,27 +2409,143 @@ def test_v3c_runs_no_audit_without_a_line_of_main_for_its_session_to_pin_on(tmp_
 
 
 LOCAL_COINS = "a local development challenger session on vy-dc-h200, the served node, not an auditor's (PP_CHALLENGER local)"
-V3C_COINS = " V3c's audit: a local development challenger session where it runs;"
+V3C_COINS = f" V3c's audit: {V3C_DEV};"
+LIVE = "gate:research@auditor"
+LIVE_COINS = f"the challenger {LIVE} (peer vy-dc-h200)"
+V3C_LIVE = f"the challenger {LIVE} (peer vy-dc-h200), the window's run root's one session, the sampled-proofs audit of record"
+STEP3_LOCAL = ("a local development challenger session on vy-dc-h200, the served node, for step 3, a development check, since "
+               "V3c's audit's live session takes the window's run root, which the gate opens once, ever")
+NO_V3C = {"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}
+#: in a parametrized environment, the path of the challenger key record `_key` writes
+KEYED = "<challenger key record>"
+
+
+def _key(tmp_path: Path) -> Path:
+    """A challenger key record for the preflight to find readable (the toy records_audit.py reads none)."""
+    (key := tmp_path / "challenger-key.json").write_text('{"schema": "challenger-key/v1"}')
+    return key
 
 
 @pytest.mark.parametrize("extra, coins, v3c", [
     ({}, LOCAL_COINS, V3C_COINS),
-    ({"PP_CHALLENGER": "gate:research@auditor", "PP_PEER": "vy-dc-h200"},
-     "the challenger gate:research@auditor (peer vy-dc-h200)", V3C_COINS),
-    ({"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}, LOCAL_COINS, ""),
+    ({"PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200", "V3C_CHALLENGER": "local"}, LIVE_COINS, V3C_COINS),
+    ({"PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200", "PP_CHALLENGER_KEY": KEYED}, STEP3_LOCAL, f" V3c's audit: {V3C_LIVE};"),
+    (NO_V3C, LOCAL_COINS, ""),
+    ({**NO_V3C, "PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200"}, LIVE_COINS, ""),
 ])
 def test_the_coins_line_says_whose_coins_each_sample_is_on(tmp_path, extra, coins, v3c):
     """Before step 0 the run says whose coins each sample is on: sampled proofs' (run.sh's local development session
-    unless PP_CHALLENGER names a challenger), PoUW H1's, and V3c's audit's when it runs. Here step 0's `predict row` then
-    fails, and the run stops there."""
+    unless PP_CHALLENGER names a challenger, and then too while V3c's audit takes its coins there, since both open on the
+    window's run root), PoUW H1's, and V3c's audit's when it runs (V3C_CHALLENGER, by default PP_CHALLENGER). Here step
+    0's `predict row` then fails, and the run stops there."""
     venv = tmp_path / "toy-venv" / "bin"
     _script(venv / "python", '[ "$1 $2" = "-m research" ] && exit 0\n[ "$1 $2" = "-m verity_vllm.pipeline.cli" ] && exit 9\n'
                              f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
+    extra = {k: str(_key(tmp_path)) if v == KEYED else v for k, v in extra.items()}
     rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200",
                                       PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **extra)
     assert rc == 17 and lines[-1] == "STOP at predict (exit 17)", lines
     assert f"COINS sampled proofs: {coins}; PoUW H1: not served (H1_GATE empty);{v3c} the bandwidth audit's: " \
            "vy-auditor-2's bw_party, inside PoUS's piece" in lines, lines
+
+
+#: infra's gate behind `ssh`, for V3c's live challenger: its ledger the test's ($HOME/ledger.jsonl) and its pins pinning
+#: TOY_MAIN's head; each word sent noted in $ORDER (gate-WORD) and each call's arguments in $ORDER.ssh
+FAKE_SSH = ('for w; do :; done\necho "gate-$w" >> "$ORDER"\nprintf "%s\\n" "$*" >> "$ORDER.ssh"\ncase "$w" in\n'
+            'ledger) cat "$HOME/ledger.jsonl" ;;\n'
+            f"""pins) echo '{{"commit": "{"ef" * 20}", "main": "{"ef" * 20}", "pinned_utc": "2026-10-26T21:35:00Z"}}' ;;\n"""
+            "*) exit 2 ;;\nesac")
+OPENED = json.dumps({"kind": "open", "session": "s1", "schema": "verity/challenger-auditor/v2",
+                     "body": {"window": {"root": "ab" * 64}}})
+PERIOD_OPEN = json.dumps({"kind": "period-open", "session": None, "body": {"period": "p1", "lane": "vllm"}})
+
+
+def _live(tmp_path: Path, ledger: list[str], hosts: bool = False) -> dict[str, str | None]:
+    """`_v3c`'s environment for a run of record (DEVELOPMENT unset) whose V3c audit takes its coins from the live
+    challenger LIVE from peer vy-dc-h200 under a key record and a gate key, the gate a fake `ssh` (FAKE_SSH) whose ledger
+    is `ledger`; with `hosts`, `hostname` says $HOST."""
+    _script(tmp_path / "gate" / "ssh", FAKE_SSH)
+    (tmp_path / "ledger.jsonl").write_text("".join(x + "\n" for x in ledger))
+    (tmp_path / "gate_ed25519").write_text("")
+    path = [*([str(_hosts(tmp_path))] if hosts else []), str(tmp_path / "gate"), str(tmp_path / "bin"), os.defpath]
+    return {"DEVELOPMENT": None, "PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200", "PP_CHALLENGER_KEY": str(_key(tmp_path)),
+            "PP_GATE_KEY": str(tmp_path / "gate_ed25519"), "PATH": ":".join(path)}
+
+
+def test_v3cs_audit_samples_on_the_live_challenger_once_the_gate_holds_no_session_on_its_run_root(tmp_path):
+    """V3c's audit is the sampled-proofs audit of record: with PP_CHALLENGER the live challenger it takes its coins
+    there (records_audit's --challenger, --peer PP_PEER, --challenger-key and --gate-key), as its COINS line says, once
+    `served_verdicts.py gate --root`, through the same ssh and key, finds no session on the window's run root and no
+    period of the lane open, which its V3C-GATE line says, and when, before the audit reserves anything."""
+    env = _live(tmp_path, [LEDGER_LINE])
+    rc, lines, order, _limits = _v3c(tmp_path, **env)
+    assert rc == 0 and order.index("gate-ledger") < order.index("gate-pins") < order.index("audit"), (lines, order)
+    assert lines[0] == f"COINS V3c's audit: {V3C_LIVE}"
+    gate = [x for x in lines if x.startswith("V3C-GATE")]
+    assert len(gate) == 1 and gate[0].startswith(
+        f"V3C-GATE ready: lane vllm's open period None; root {'ab' * 8}… has no session yet; the ledger's 1 entries; "
+        f"pinned {'ef' * 6} (main {'ef' * 6}, 2026-10-26T21:35:00Z), on the verifier's first-parent line of main (checked "), gate
+    assert re.fullmatch(r".* \(checked \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\)", gate[0]), gate
+    assert _audited(tmp_path, COIN_FLAGS) == {"--challenger": LIVE, "--peer": "vy-dc-h200",
+                                              "--challenger-key": env["PP_CHALLENGER_KEY"], "--gate-key": env["PP_GATE_KEY"]}
+    assert (tmp_path / "order.ssh").read_text().splitlines() == [
+        f"-o BatchMode=yes -o IdentitiesOnly=yes -i {env['PP_GATE_KEY']} research@auditor {w}" for w in ("ledger", "pins")]
+
+
+@pytest.mark.parametrize("ledger, said", [
+    ([LEDGER_LINE, OPENED], f"V3C-GATE refused: lane vllm's open period None; root {'ab' * 8}… already has its session s1 "
+                            "(one session a root, ever); the ledger's 2 entries;"),
+    ([PERIOD_OPEN], f"V3C-GATE refused: lane vllm's open period p1 (a reserve would join it); root {'ab' * 8}… has no "
+                    "session yet; the ledger's 1 entries;"),
+])
+def test_v3c_reserves_no_session_on_a_run_root_the_gate_opened_or_while_its_lane_has_a_period_open(tmp_path, ledger, said):
+    """The gate opens a root once, ever, and a reserve joins the lane's open period: V3c's audit runs on neither, so a run
+    root with its session already (step 3's, or an earlier audit's) or a lane with a period open gets no audit, and no
+    retry, and its V3C-GATE line says why."""
+    rc, lines, order, _limits = _v3c(tmp_path, **_live(tmp_path, ledger))
+    assert rc == 1 and "audit" not in order and order.count("gate-ledger") == 1, (lines, order)
+    assert sum(x.startswith(said) for x in lines) == 1, lines
+
+
+def _not_development(challenger: str) -> str:
+    return ("PREFLIGHT: V3c's audit is the sampled-proofs audit of record, and V3C_CHALLENGER (default PP_CHALLENGER) is "
+            f"{challenger}, a development session, which only a development run takes: set PP_CHALLENGER=gate:USER@HOST "
+            "with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, or DEVELOPMENT=1")
+
+
+@pytest.mark.parametrize("extra, line", [
+    ({"DEVELOPMENT": None}, _not_development("local")),
+    ({"DEVELOPMENT": None, "V3C_CHALLENGER": "loopback:127.0.0.1:7000"}, _not_development("loopback:127.0.0.1:7000")),
+    ({"DEVELOPMENT": "yes"}, "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not yes"),
+    ({"V3C_CHALLENGER": "gate:auditor"}, "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT or "
+                                         "gate:USER@HOST, not gate:auditor"),
+    ({"PP_CHALLENGER": LIVE}, f"PREFLIGHT: V3c's audit's session on {LIVE} listens on its peer's 127.0.0.1, and V3C_PEER "
+                              "(default PP_PEER), this node's name in the gate's /etc/vy/peers, is unset"),
+    ({"PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200"}, f"PREFLIGHT: V3c's audit's session on {LIVE} is held to the "
+                                                       "challenger key record PP_CHALLENGER_KEY, which is unset and not a "
+                                                       "readable file"),
+])
+def test_the_preflight_refuses_v3c_on_a_development_session_outside_a_development_run_or_a_live_one_it_cannot_hold(
+        tmp_path, extra, line):
+    """V3c's audit is the sampled-proofs audit of record, so its coins are the live challenger's: a local or loopback
+    session is refused unless the run is a development run (DEVELOPMENT=1, which is otherwise unset), and a live one with
+    no peer for its session to listen on or no key record to hold it to; each before anything runs."""
+    rc, lines, order, _limits = _v3c(tmp_path, **extra)
+    assert (rc, lines, order) == (3, [line], [])
+
+
+@pytest.mark.parametrize("extra, other", [
+    ({"H1_GATE": GATE, "H1_PEER": "vy-dc-h200-3"}, "H1_PEER"),
+    ({"POUW": "pearlplus", "H1_PEER": "vy-dc-h200-3"}, "PEARLC_CHALLENGER_PEER"),
+])
+def test_the_preflight_refuses_a_v3c_peer_other_than_the_one_the_runs_other_live_session_names(tmp_path, extra, other):
+    """On the served node V3c's audit's session and H1's (H1_PEER), or Pearl+'s (PEARLC_CHALLENGER_PEER, default
+    H1_PEER), each listen on their peer's 127.0.0.1, the node the run serves on: a V3C_PEER naming another is refused
+    before anything runs."""
+    rc, lines, order, _limits = _v3c(tmp_path, (), **_live(tmp_path, [], hosts=True), HOST="vy-dc-h200", **extra)
+    assert (rc, lines, order) == (3, [f"PREFLIGHT: V3C_PEER (default PP_PEER) is vy-dc-h200, and {other} is vy-dc-h200-3: "
+                                      "each names the node the run serves on, where V3c's audit's session listens as the "
+                                      "other one does"], [])
 
 
 PEARLPLUS_RUN = "PoUW: Pearl+'s own served run on this card after the window's (POUW=pearlplus)"
@@ -1887,10 +2577,11 @@ def test_under_pouw_pearlplus_the_coins_line_says_whether_pearlpluss_epoch_coins
                             f"{'ef' * 6}, 2026-10-26T21:35:00Z), on the verifier's first-parent line of main"), lines
         assert lines[1] == (f"COINS sampled proofs: {LOCAL_COINS}; {PEARLPLUS_RUN}, its epoch's salt coin a live session's "
                             "of its own on vy-challenger-1's gate (peer vy-dc-h200, lane vllm), each pass's salt checked by "
-                            "core_check.live_salt in its piece, and its replay's draws the Lean verifier's "
-                            "IO.getRandomBytes on this node, taken once before the replay and cited by store id in the "
-                            "POUW line's coin; a development piece under the lane's development key, it credits "
-                            f"nothing{tail}"), lines
+                            "core_check.live_salt in its piece, its serve inside a Pearl-C period of that lane's own, and "
+                            "its replay's draws a draw session's coin on that gate, reserved withheld once the period "
+                            "closed and opened on the run's commitment, taken once before the replay, checked against the "
+                            "signed ledger in its piece and cited by store id in the POUW line's coin; a development piece "
+                            f"under the lane's development key, it credits nothing{tail}"), lines
     else:
         assert lines[0] == ("COINS Pearl+'s epoch coins are in-process and the record claims no Pearl+ verdict; sampled "
                             f"proofs: {LOCAL_COINS}; {PEARLPLUS_RUN}, its epoch's coins an in-process challenger's "
@@ -1988,7 +2679,7 @@ VTAG = W63K4.replace(",", "-")
 SHA = "5a" * 20
 SHORT = "this node has 196 GB, under the 290 GB V3c's audit needs (V3C_AUDIT_MEM_GB)"
 #: what a deferral's follow-on reads in `_deferred`'s serve dir, but for V3c's window dir and the deferral's own files
-DEFERRED_READS = ("weights_registration.json", f"window-circuit-w7-{VTAG}.json", "windows.jsonl", "seals.jsonl",
+DEFERRED_READS = ("weights_registration.json", f"window-circuit-w7-{VTAG}-tie.json", "windows.jsonl", "seals.jsonl",
                   "requests.jsonl", "h1/log.jsonl", "h1/w7/registration.json", "h1/w7/record.json",
                   "h1/w7/window-commit.json", "sampled-proofs-served/summary.json", "sampled-proofs-served/window/audit.json",
                   "sampled-proofs-served/windows/rank0/registration.json", "sampled-proofs-served/runs.json",
@@ -2010,17 +2701,21 @@ def _hosts(tmp_path: Path) -> Path:
     return tmp_path / "hosts"
 
 
-def _deferred(tmp_path: Path, **extra: str) -> subprocess.CompletedProcess:
+def _deferred(tmp_path: Path, **extra: str | None) -> subprocess.CompletedProcess:
     """Window 7 of a toy serve dir under H1's tie: its commit as the tie left it, with a value file, H1's records, the
     record's and the composite's inputs, files no step after the serve reads (a row dir, a key, an audit session), and
     the pieces the record read in $OUT; then step 6's deferral (`served_verdicts.sh defer WHY`) on vy-dc-h200, a node short
-    of V3c's audit's memory, at the tree of commit SHA (``extra`` adds to the environment)."""
+    of V3c's audit's memory, at the tree of commit SHA, in a development run (``extra`` adds to the environment, None
+    unsetting)."""
     d, out = tmp_path / "serve", tmp_path / "served-out"
     _tied_commit(tmp_path, "same")
     vw = d / f"v3c-w7-{VTAG}" / "window"
     files = {"h1/w7/registration.json": W_OF_7, "h1/w7/record.json": json.loads((vw / "registration.json").read_text()),
-             f"window-circuit-w7-{VTAG}.json": {}, "weights_registration.json": {}, "seals.jsonl": {"window": 7},
-             "requests.jsonl": {"windows": [7]}, "sampled-proofs-served/summary.json": {"audit": {}},
+             f"window-circuit-w7-{VTAG}.json": {}, f"window-circuit-w7-{VTAG}-tie.json": {"tables": "h1"},
+             "weights_registration.json": {},
+             "seals.jsonl": {"window": 7, "requests": ["a"]},
+             "requests.jsonl": {"user": "a", "engine_id": "a", "windows": [7], "check": {"passed": True}},
+             "sampled-proofs-served/summary.json": {"audit": {}},
              "sampled-proofs-served/window/audit.json": {"accepted": True},
              "sampled-proofs-served/windows/rank0/registration.json": {"format": "toy"},
              "sampled-proofs-served/runs.json": ["r0"], "private/pouw/period/case.json": {"evidence": "beef"},
@@ -2029,7 +2724,7 @@ def _deferred(tmp_path: Path, **extra: str) -> subprocess.CompletedProcess:
     for f, body in files.items():
         (d / f).parent.mkdir(parents=True, exist_ok=True)
         (d / f).write_text(json.dumps(body))
-    _write(d, "windows.jsonl", [{"window": 7, "run_root": "ab" * 64}])
+    _write(d, "windows.jsonl", [{"window": 7, "run_root": "ab" * 64, "passed": True, "commit": {"steps": 3}}])
     (vw / "values").mkdir()
     (vw / "values" / "a.bin").write_bytes(b"\x01")
     (out / "pieces" / "pouw").mkdir(parents=True)
@@ -2038,27 +2733,48 @@ def _deferred(tmp_path: Path, **extra: str) -> subprocess.CompletedProcess:
     env = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(tmp_path / "served-venv"),
            "D": str(d), "K": "7", "OUT": str(out), "SERVE_ROOT": str(tmp_path / "root"), "V3C_CLASS": W63K4,
            "PRODUCT": "remote", "H1_TIE": "1", "HOST": "vy-dc-h200", "RESEARCH_SOURCE_SHA": SHA,
-           "GIT_CEILING_DIRECTORIES": str(tmp_path), **extra}
+           "GIT_CEILING_DIRECTORIES": str(tmp_path), "DEVELOPMENT": "1"}
+    env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     return subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "defer", SHORT], cwd=tmp_path / "served-tree",
                           env=env, check=False, capture_output=True, text=True)
 
 
-def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_and_hashing_each_input(tmp_path):
+def _deferral_settings(tmp_path: Path) -> dict[str, str]:
+    """The settings `_deferred`'s deferral recorded for its follow-on (private/deferred/deferred.env), as bash reads them."""
+    names = ("K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER "
+             "DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE")
+    said = subprocess.run(["bash", "-c", f'. "$1"; for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done', "_",
+                           str(tmp_path / "serve" / "private" / "deferred" / "deferred.env")],
+                          check=True, capture_output=True, text=True).stdout
+    return dict(x.split("=", 1) for x in said.splitlines())
+
+
+DEFERRED_LINE = {
+    "1": (f"DEFERRED V3c's audit: {SHORT}. A follow-on on a node with the memory runs it there and writes the compose "
+          "hand-off, from the serve dir's audit inputs copied prover-side, outside any run dir, each file its "
+          "private/deferred/inputs.txt lists: D={d} bash benchmarks/one_stage/served_verdicts.sh v3c; the final record "
+          "and the composite are composed off both nodes, on COMPOSE_NODE (vy-auditor-2), from that hand-off"),
+    "0": (f"DEFERRED V3c's audit and the composite: {SHORT}. A follow-on on a node with the memory runs them and composes "
+          "the final record there, from the serve dir's audit inputs copied prover-side, outside any run dir, each file "
+          "its private/deferred/inputs.txt lists: D={d} bash benchmarks/one_stage/served_verdicts.sh v3c")}
+
+
+@pytest.mark.parametrize("off", ["1", "0"])
+def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_and_hashing_each_input(tmp_path, off):
     """Step 6's deferral leaves in the serve dir's private/deferred the pieces the record read, the settings the
-    follow-on runs at (the window, the product, V3c's class and law, H1_TIE, the composite, the served node and the tree's
-    commit), and the follow-on's every input, listed for the prover's copy and hashed for the follow-on to hold it to:
-    V3c's window dir whole, H1's log and each record it names, the tie's commit answer, the record's and the composite's
-    inputs and its own files, and nothing else of the serve dir. Its one line in $OUT names what was deferred, why and the
-    follow-on's command, and no window; nothing else lands in $OUT."""
-    run = _deferred(tmp_path)
+    follow-on runs at (the window, the product, V3c's class, law and coins, H1_TIE, the composite, the served node, its
+    peer, the tree's commit and where the final record is composed), and the follow-on's every input, listed for the
+    prover's copy and hashed for the follow-on to hold it to: V3c's window dir whole, H1's log and each record it names,
+    the tie's commit answer, the record's and the composite's inputs and its own files, and nothing else of the serve dir.
+    Its one line in $OUT names what was deferred, why and the follow-on's command (under COMPOSE_OFF_NODE=1, the default,
+    V3c's audit alone, the record and the composite composed off both nodes), and no window; nothing else lands in $OUT."""
+    run = _deferred(tmp_path, **({} if off == "1" else {"COMPOSE_OFF_NODE": off}))
     assert run.returncode == 0, run.stderr
     d, dd, out = tmp_path / "serve", tmp_path / "serve" / "private" / "deferred", tmp_path / "served-out"
-    names = "K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE"
-    said = subprocess.run(["bash", "-c", f'. "$1"; for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done', "_",
-                           str(dd / "deferred.env")], check=True, capture_output=True, text=True).stdout
-    assert dict(x.split("=", 1) for x in said.splitlines()) == {
-        "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": "stratified:1", "H1_TIE": "1", "COMPOSITE": "1",
-        "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200", "DEFERRED_TREE": SHA}
+    assert _deferral_settings(tmp_path) == {
+        "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": "stratified:1", "V3C_CHALLENGER": "local",
+        "DEVELOPMENT": "1", "H1_TIE": "1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
+        "SERVED_PEER": "", "DEFERRED_TREE": SHA, "COMPOSE_OFF_NODE": off, "COMPOSE_NODE": "vy-auditor-2"}
     listed = (dd / "inputs.txt").read_text().splitlines()
     window = [f"v3c-w7-{VTAG}/window/{f}" for f in ("circuit.json", "registration.json", "values/a.bin")]
     own = ["private/deferred/deferred.env", "private/deferred/pieces/pouw/answer.json"]
@@ -2066,10 +2782,7 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     sums = {f: h for h, f in (x.split("  ", 1) for x in (dd / "inputs.sha256").read_text().splitlines())}
     assert sums == {f: hashlib.sha256((d / f).read_bytes()).hexdigest() for f in listed[:-1]}
     assert (dd / "pieces" / "pouw" / "answer.json").read_text() == (out / "pieces" / "pouw" / "answer.json").read_text()
-    assert (out / "verdicts.txt").read_text().splitlines() == [
-        f"DEFERRED V3c's audit and the composite: {SHORT}. A follow-on on a node with the memory runs them and composes the "
-        "final record there, from the serve dir's audit inputs copied prover-side, outside any run dir, each file its "
-        f"private/deferred/inputs.txt lists: D={d} bash benchmarks/one_stage/served_verdicts.sh v3c"]
+    assert (out / "verdicts.txt").read_text().splitlines() == [DEFERRED_LINE[off].replace("{d}", str(d))]
     assert sorted(f.relative_to(out).as_posix() for f in out.rglob("*") if f.is_file()) == [
         "pieces/pouw/answer.json", "verdicts.txt"]
     assert not _window_data(out, 7) and oct(dd.stat().st_mode & 0o777) == "0o700"
@@ -2081,7 +2794,7 @@ def _follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], list[s
     composite that note their arguments (``extra`` adds to the environment, None unsetting): `_v3c`'s outcome."""
     _script(tmp_path / "tree" / "benchmarks" / "one_stage" / "served_composite.sh", FAKE_SERVED_COMPOSITE)
     (tmp_path / "tree" / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(FAKE_RECORD)
-    env = {"K": None, "V3C_CLASS": None, "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None,
+    env = {"K": None, "V3C_CLASS": None, "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None, "COMPOSITE": None,
            "PATH": f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", "HOST": "cpu-6", "NODE_MEM_GB": "755",
            "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path)}
     return _v3c(tmp_path, **{**env, **extra})
@@ -2093,15 +2806,16 @@ def _follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], list[s
 ])
 def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_composes_the_final_record_there(
         tmp_path, extra, tree):
-    """The follow-on, at the settings the deferral recorded: the copy held to the served node's sums, then no window
-    circuit or commit of its own (the served node's record at the class, its tree's, and the commit H1 bound, held as
-    there), V3c's audit and period, the final record about the served node from the pieces it read, and the composite,
-    told the served node, so each says it composed elsewhere. Another tree runs only under FOLLOW_ANY_TREE, which its
-    line names. $OUT names no window."""
-    assert _deferred(tmp_path).returncode == 0
+    """The follow-on of a deferral made under COMPOSE_OFF_NODE=0, at the settings the deferral recorded: the copy held to
+    the served node's sums, then no window circuit or commit of its own (the served node's record at the class, its
+    tree's, and the commit H1 bound, held as there), V3c's audit and period, the final record about the served node from
+    the pieces it read, and the composite, told the served node, so each says it composed elsewhere. Another tree runs
+    only under FOLLOW_ANY_TREE, which its line names. $OUT names no window."""
+    assert _deferred(tmp_path, COMPOSE_OFF_NODE="0").returncode == 0
     rc, lines, order, limits = _follow(tmp_path, **extra)
     d, out = tmp_path / "serve", tmp_path / "out"
     assert rc == 0 and order == ["audit", "period", "record", "composite"], (lines, order)
+    assert lines.pop(0) == V3C_ENTRY
     assert lines[:2] == [
         "FOLLOW-ON on cpu-6, 755 GB: V3c's audit and the composite, which the served node vy-dc-h200 deferred, from its "
         "serve dir's audit inputs copied here prover-side, each as it hashed them (the serve dir's "
@@ -2113,32 +2827,34 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert lines[-1] == "COMPOSITE: composed on cpu-6" and limits == ["180m"]
     assert _audited(tmp_path) == {"--law": "stratified:1", "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
-    assert json.loads((tmp_path / "order.record").read_text()) == [
+    argv = json.loads((tmp_path / "order.record").read_text())
+    assert argv[:-4] == [
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"), "--pieces",
         str(d / "private" / "deferred" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",
         "vy-dc-h200"]
+    assert (argv[-4], len(argv[-3]), argv[-2:]) == ("--key-sha512", 128, ["--lane", "vllm"])
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", str(d), str(out)]
     assert not _window_data(out, 7), _window_data(out, 7)
 
 
-FOLLOW_FAIL = ("FOLLOW-ON on cpu-6, 755 GB: V3c's audit and the composite, which the served node vy-dc-h200 deferred, "
+FOLLOW_FAIL = ("FOLLOW-ON on cpu-6, 755 GB: V3c's audit, which the served node vy-dc-h200 deferred, "
                "from its serve dir's audit inputs copied here prover-side, each as it hashed them (the serve dir's "
                "private/deferred/inputs.sha256): FAIL (the serve dir's private/deferred/check.log)")
 CLASH = ("PREFLIGHT: the follow-on runs at the deferral's settings (the serve dir's private/deferred/deferred.env), and "
          "the environment sets another")
 
 
-@pytest.mark.parametrize("change, extra, line", [
-    ("values/a.bin", {}, FOLLOW_FAIL),
-    ("case.json", {}, FOLLOW_FAIL),
-    (None, {"K": "8"}, f"{CLASH} K: unset it"),
-    (None, {"PRODUCT": "onsite", "COMPOSITE": ""}, f"{CLASH} PRODUCT COMPOSITE: unset it"),
-    (None, {"NODE_MEM_GB": "196"}, f"PREFLIGHT: the follow-on runs the V3c audit the served node deferred, and {SHORT}"),
-    (None, {"RESEARCH_SOURCE_SHA": "cd" * 20}, "PREFLIGHT: the follow-on reads the served node's window-circuit record, "
-     f"which its tree {SHA} wrote, and this tree is {'cd' * 20}: run it at that commit, or set FOLLOW_ANY_TREE=1"),
+@pytest.mark.parametrize("change, extra, said", [
+    ("values/a.bin", {}, [V3C_ENTRY, FOLLOW_FAIL]),
+    ("case.json", {}, [V3C_ENTRY, FOLLOW_FAIL]),
+    (None, {"K": "8"}, [f"{CLASH} K: unset it"]),
+    (None, {"PRODUCT": "onsite", "COMPOSITE": ""}, [f"{CLASH} PRODUCT COMPOSITE: unset it"]),
+    (None, {"NODE_MEM_GB": "196"}, [f"PREFLIGHT: the follow-on runs the V3c audit the served node deferred, and {SHORT}"]),
+    (None, {"RESEARCH_SOURCE_SHA": "cd" * 20}, ["PREFLIGHT: the follow-on reads the served node's window-circuit record, "
+     f"which its tree {SHA} wrote, and this tree is {'cd' * 20}: run it at that commit, or set FOLLOW_ANY_TREE=1"]),
 ])
 def test_a_follow_on_refuses_a_copy_unlike_the_served_nodes_another_setting_a_node_short_of_the_memory_or_another_tree(
-        tmp_path, change, extra, line):
+        tmp_path, change, extra, said):
     """No retries, and no follow-on unlike the deferral: a copied value file changed or a listed input missing fails the
     copy's check before anything runs, and a setting other than the deferral's, a node short of the audit's memory (the
     served node itself, after its deferral) or another tree is refused at the preflight."""
@@ -2149,25 +2865,76 @@ def test_a_follow_on_refuses_a_copy_unlike_the_served_nodes_another_setting_a_no
     elif change == "case.json":
         (d / "private" / "pouw" / "period" / "case.json").unlink()
     rc, lines, order, _limits = _follow(tmp_path, **extra)
+    assert (rc, lines, order) == (3, said, []), lines
+
+
+def _live_follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
+    """`_deferred`'s deferral in a run of record whose V3c audit takes its coins from the live challenger LIVE from the
+    served node's peer vy-dc-h200, then its follow-on on cpu-6 under `_live`'s gate with V3C_PEER cpu-6 (``extra`` adds
+    to the environment, None unsetting): `_v3c`'s outcome."""
+    assert _deferred(tmp_path, DEVELOPMENT=None, PP_CHALLENGER=LIVE, PP_PEER="vy-dc-h200").returncode == 0
+    env = {**_live(tmp_path, [LEDGER_LINE], hosts=True), "PP_CHALLENGER": None, "PP_PEER": None, "V3C_PEER": "cpu-6"}
+    return _follow(tmp_path, **{**env, **extra})
+
+
+def test_a_follow_on_of_a_deferral_of_record_samples_on_the_challenger_it_recorded_from_its_own_node(tmp_path):
+    """A deferral in a run of record records V3c's audit's coins (V3C_CHALLENGER, DEVELOPMENT unset) and the served
+    node's peer, so its follow-on takes its coins from that challenger, whatever its own environment's PP_CHALLENGER,
+    from its own node (V3C_PEER, default PP_PEER), as its COINS line says, once the gate holds no session on the window's
+    run root."""
+    rc, lines, order, _limits = _live_follow(tmp_path)
+    assert {k: v for k, v in _deferral_settings(tmp_path).items() if k in ("V3C_CHALLENGER", "DEVELOPMENT", "SERVED_PEER")} == {
+        "V3C_CHALLENGER": LIVE, "DEVELOPMENT": "", "SERVED_PEER": "vy-dc-h200"}
+    assert rc == 0 and order == ["gate-ledger", "gate-pins", "audit", "period"], (lines, order)
+    assert lines[-1].startswith("HANDOFF"), lines
+    assert lines[0] == (f"COINS V3c's audit: the challenger {LIVE} (peer cpu-6), the window's run root's one session, the "
+                        "sampled-proofs audit of record")
+    assert sum(x.startswith("V3C-GATE ready: lane vllm's open period None; root ") for x in lines) == 1, lines
+    assert _audited(tmp_path, COIN_FLAGS) == {
+        "--challenger": LIVE, "--peer": "cpu-6", "--challenger-key": str(tmp_path / "challenger-key.json"),
+        "--gate-key": str(tmp_path / "gate_ed25519")}
+
+
+@pytest.mark.parametrize("extra, line", [
+    ({"V3C_PEER": "vy-dc-h200"}, "PREFLIGHT: V3C_PEER (default PP_PEER) is vy-dc-h200, the served node's (SERVED_PEER), "
+     "which deferred the audit: its session would listen on that node's 127.0.0.1, not this one's; name this node as the "
+     "gate's /etc/vy/peers does"),
+    ({"V3C_PEER": None}, f"PREFLIGHT: V3c's audit's session on {LIVE} listens on its peer's 127.0.0.1, and V3C_PEER "
+     "(default PP_PEER), this node's name in the gate's /etc/vy/peers, is unset"),
+    ({"DEVELOPMENT": "1"}, f"{CLASH} DEVELOPMENT: unset it"),
+    ({"V3C_CHALLENGER": "local"}, f"{CLASH} V3C_CHALLENGER: unset it"),
+])
+def test_a_follow_on_of_a_deferral_of_record_refuses_the_served_nodes_peer_no_peer_or_other_coins(tmp_path, extra, line):
+    """The follow-on's session listens on its own node, never the served node's, and its coins are the deferral's: a
+    development run or another challenger is a setting other than the deferral's. Each is refused before anything runs."""
+    rc, lines, order, _limits = _live_follow(tmp_path, **extra)
     assert (rc, lines, order) == (3, [line], []), lines
 
 
 ONLY = "PREFLIGHT_ONLY: nothing kept, built or served"
-DEFERS = "so step 6 defers V3c's audit and the composite to a follow-on"
+DEFERS = "so step 6 defers V3c's audit to a follow-on"
+OFF = "the final record composed off this node, on COMPOSE_NODE (vy-auditor-2), from its compose hand-off"
+SHORT_REMOTE = {**TIES, "NODE_MEM_GB": "196", "PRODUCT": "remote", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}
 
 
 @pytest.mark.parametrize("extra, said", [
-    ({}, "512 GB: the serve's lease 60 min, capped at 128 GB"),
-    (TIES, "512 GB: the serve's lease 150 min, capped at 160 GB"),
-    ({**TIES, "LEASE_MEM_GB": "64"}, "512 GB: the serve's lease 150 min, capped at 64 GB"),
-    ({**TIES, "NODE_MEM_GB": "196", "PRODUCT": "remote", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None},
-     f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, {DEFERS}"),
+    ({}, f"512 GB: the serve's lease 60 min, capped at 128 GB; {OFF}"),
+    ({"COMPOSE_OFF_NODE": "0"}, "512 GB: the serve's lease 60 min, capped at 128 GB"),
+    (TIES, f"512 GB: the serve's lease 150 min, capped at 160 GB; {OFF}"),
+    ({**TIES, "LEASE_MEM_GB": "64"}, f"512 GB: the serve's lease 150 min, capped at 64 GB; {OFF}"),
+    (SHORT_REMOTE, f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, {DEFERS}; {OFF}"),
+    ({**SHORT_REMOTE, "COMPOSE_OFF_NODE": "0", "COMPOSITE": None},
+     f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, so step 6 defers V3c's audit and the composite to a "
+     "follow-on"),
+    ({"COMPOSITE": None, "PRODUCT": "remote", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None},
+     f"512 GB: the serve's lease 60 min, capped at 128 GB; {OFF.replace('record', 'record and the composite')}"),
 ])
 def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_kept_built_or_served(
         tmp_path, extra, said):
     """PREFLIGHT_ONLY=1 runs the preflight and stops there, exit 0, with one line: the serve's lease (under H1_TIE 150
-    minutes capped at 160 GB, the serve's 128 and window-commit's peak, within a 196 GB node) and, on a node short of
-    V3c's audit's memory, its deferral. Nothing runs, and neither the serve root nor C-Flock's work dir is made."""
+    minutes capped at 160 GB, the serve's 128 and window-commit's peak, within a 196 GB node), on a node short of V3c's
+    audit's memory its deferral, and under COMPOSE_OFF_NODE=1, the default, what is composed off the node. Nothing runs,
+    and neither the serve root nor C-Flock's work dir is made."""
     rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
     assert (rc, lines, order, limits) == (0, [f"PREFLIGHT passed on vy-dc-h200-2, {said}. {ONLY}"], [], [])
@@ -2179,25 +2946,576 @@ def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_pa
     node's tree) and stops before its copy's check or V3c's audit."""
     assert _deferred(tmp_path).returncode == 0
     rc, lines, order, _limits = _follow(tmp_path, PREFLIGHT_ONLY="1")
-    assert (rc, lines, order) == (0, [f"PREFLIGHT passed on cpu-6, 755 GB: the follow-on of vy-dc-h200's deferral. {ONLY}"],
-                                  [])
+    assert (rc, lines, order) == (0, ["PREFLIGHT passed on cpu-6, 755 GB: the follow-on of vy-dc-h200's deferral, its "
+                                      f"compose hand-off for COMPOSE_NODE (vy-auditor-2). {ONLY}"], [])
 
 
 def test_a_deferral_carries_the_served_nodes_inference_only_verdict_into_the_follow_ons_record(tmp_path):
     """The inference-only verdict the served node judged goes with the deferral, listed and hashed with the follow-on's
     inputs, and into the follow-on's record as the served node wrote it, said before the record: the follow-on judges it
-    no second time."""
+    no second time (under COMPOSE_OFF_NODE=0; under 1 the hand-off carries it)."""
     verdict = {"format": "verity-bench/inference-only-verdict/v3", "verdict": "accept", "classes": [["ab", 7, 3]]}
     (tmp_path / "served-out" / "record").mkdir(parents=True)
     (tmp_path / "served-out" / "record" / "inference-only.json").write_text(json.dumps(verdict))
-    assert _deferred(tmp_path).returncode == 0
+    assert _deferred(tmp_path, COMPOSE_OFF_NODE="0").returncode == 0
     dd = tmp_path / "serve" / "private" / "deferred"
     assert "private/deferred/inference-only.json" in (dd / "inputs.txt").read_text().splitlines()
     assert json.loads((dd / "inference-only.json").read_text()) == verdict
     rc, lines, order, _limits = _follow(tmp_path)
     assert rc == 0 and order == ["audit", "period", "record", "composite"], (lines, order)
+    assert lines.pop(0) == V3C_ENTRY
     assert [x.split(" ")[0] for x in lines[4:]] == ["V3C-AUDIT", "V3C-PERIOD", "INFERENCE-ONLY:", "RECORD", "COMPOSITE:"]
     assert json.loads((tmp_path / "out" / "record" / "inference-only.json").read_text()) == verdict
+
+
+#: a5's v2 case's blobs in `_handed`'s serve dir: its circuit, public file, lookup table, and a session's record and proof
+BLOBS = tuple(f"sampled-proofs-served/window/m0/{f}" for f in (
+    "circuit.txt", "pub-0.bin", "tables/t0.bin", "session-m0/sessions/s0/session.json", "session-m0/sessions/s0/p0.bin"))
+#: what `_handed`'s serve dir holds that no hand-off may carry: the a5 member's prover files beside its blobs, a value
+#: file, V3c's index salts, H1's prover state, a key, a row dir, the advice and the requests
+HELD_BACK = ("sampled-proofs-served/window/m0/inst-0.bin", "sampled-proofs-served/window/m0/prover/rows.bin",
+             f"v3c-w7-{VTAG}/window/values/a.bin", f"v3c-w7-{VTAG}/window/index-salt.bin", "private/h1/key",
+             "private/weights.key", "windows/w7/rows.bin",
+             "advice/w7/private/advice.bin", "requests.jsonl")
+#: what the composite and the final record read in `_handed`'s serve dir, but for the blobs and the hand-off's own files
+HANDED_READS = ("h1/log.jsonl", "h1/w7/record.json", "h1/w7/registration.json", "private/pouw/period/answer.json",
+                "private/pouw/period/case.json", "sampled-proofs-served/runs.json", "sampled-proofs-served/summary.json",
+                "sampled-proofs-served/window/audit.json", "sampled-proofs-served/window/case-v2.json",
+                "sampled-proofs-served/window/case.json", "sampled-proofs-served/windows/rank0/registration.json",
+                f"v3c-w7-{VTAG}/audit/window/case.json")
+HANDED_OWN = ("private/compose/compose.env", "private/compose/inference-only.json",
+              "private/compose/pieces/pouw/answer.json", "private/compose/pieces/pouw/served.json")
+HANDOFF_LINE = ("HANDOFF the final record and the composite, composed off this node: on COMPOSE_NODE (vy-auditor-2), "
+                "from the serve dir's verifier-side files and no witness, each file its private/compose/inputs.txt lists, "
+                "copied to the same path there: D={d} bash benchmarks/one_stage/served_verdicts.sh compose")
+
+
+def _env_of(f: Path, names: str) -> dict[str, str]:
+    said = subprocess.run(["bash", "-c", f'. "$1"; for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done', "_",
+                           str(f)], check=True, capture_output=True, text=True).stdout
+    return dict(x.split("=", 1) for x in said.splitlines())
+
+
+def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, verdict: bool = True, files: Mapping[str, Any] | None = None,
+            cmd: Sequence[str] = ("handoff",), pouw: Mapping[str, Any] | None = None,
+            **extra: str) -> subprocess.CompletedProcess:
+    """Window 7 of a toy serve dir as the served node leaves it at its record under H1's tie: its records audits' cases
+    (a5's v2 case naming ``blobs``, relative to the serve dir unless absolute), H1's log and records, PoUW's period case,
+    the window's seal, Commit line and request, every file of `HELD_BACK`, and in $OUT the record's pieces and (if
+    ``verdict``) inference-only verdict; then `served_verdicts.sh handoff` (or ``cmd``) on vy-dc-h200 at the tree of
+    commit SHA (``files`` replaces a file's body, by its path, None leaving it unwritten; ``pouw`` PoUW's answer;
+    ``extra`` adds to the environment)."""
+    d, out = tmp_path / "serve", tmp_path / "served-out"
+    sp = "sampled-proofs-served"
+    served = {"seals.jsonl": {"window": 7, "requests": ["a"]},
+             "windows.jsonl": {"window": 7, "run_root": "ab" * 64, "passed": True, "commit": {"steps": 3}},
+             "requests.jsonl": {"user": "a", "engine_id": "a", "windows": [7], "check": {"passed": True}},
+             "h1/log.jsonl": {"window": 7, "kind": "registration", "file": "w7/registration.json"},
+             "h1/w7/registration.json": W_OF_7, "h1/w7/record.json": {"format": "toy"}, "h1/w7/window-commit.json": {},
+             f"{sp}/summary.json": {"audit": {}}, f"{sp}/window/audit.json": {"accepted": True},
+             f"{sp}/windows/rank0/registration.json": {"format": "toy"}, f"{sp}/runs.json": ["r0"],
+             f"{sp}/window/case.json": {"evidence": "beef"},
+             f"{sp}/window/case-v2.json": {"blobs": [b if b.startswith("/") else str(d / b) for b in blobs]},
+             f"v3c-w7-{VTAG}/audit/window/case.json": {"evidence": "cafe"},
+             "private/pouw/period/case.json": {"evidence": "beef"},
+             "private/pouw/period/answer.json": {"protocol": "verity/pouw/period/v1"},
+             **{f: {} for f in (*BLOBS, *HELD_BACK) if f != "requests.jsonl"}}
+    files = {**served, **(files or {})}
+    for f, body in files.items():
+        if body is None:
+            continue
+        (d / f).parent.mkdir(parents=True, exist_ok=True)
+        (d / f).write_text(json.dumps(body) + "\n")
+    with open(d / "h1" / "log.jsonl", "a") as log:
+        log.write(json.dumps({"window": 7, "kind": "record", "file": "w7/record.json"}) + "\n")
+    (out / "pieces" / "pouw").mkdir(parents=True)
+    for f, body in (("answer.json", pouw or {"verdict": "accept"}), ("served.json", {"server": "vy-dc-h200"}),
+                    ("piece.log", "")):
+        (out / "pieces" / "pouw" / f).write_text(json.dumps(body))
+    (out / "record").mkdir()
+    if verdict:
+        (out / "record" / "inference-only.json").write_text(json.dumps({"verdict": "accept"}))
+    (tmp_path / "served-tree").mkdir(exist_ok=True)
+    env = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(tmp_path / "served-venv"),
+           "D": str(d), "K": "7", "OUT": str(out), "SERVE_ROOT": str(tmp_path / "root"), "V3C_CLASS": W63K4,
+           "PRODUCT": "remote", "H1_TIE": "1", "HOST": "vy-dc-h200", "RESEARCH_SOURCE_SHA": SHA,
+           "GIT_CEILING_DIRECTORIES": str(tmp_path), **extra}
+    return subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *cmd], cwd=tmp_path / "served-tree",
+                          env=env, check=False, capture_output=True, text=True)
+
+
+COMPOSES = "K PRODUCT COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON STEPS"
+
+
+def test_the_served_nodes_compose_hand_off_lists_and_hashes_the_verifier_side_files_alone(tmp_path):
+    """The compose hand-off (COMPOSE_OFF_NODE=1, the default) leaves in the serve dir's private/compose the files the
+    final record reads of each piece (no log), the inference-only verdict, the settings its follow-on composes at (the
+    window and its engine steps, picked here, the product, the composite, the served node, COMPOSE_NODE and the tree's
+    commit), and its every input, listed for the copy and hashed for the follow-on: the records audits' cases and the
+    blobs a5's v2 case names, H1's log and the records it names, PoUW's period case and sampled proofs' summary and
+    registration. It lists no witness: no value, instance or prover file, H1's prover state, key, row dir, advice or
+    request, and nothing `served_verdicts.py witness` refuses. Its one line names the follow-on's command and no window."""
+    run = _handed(tmp_path)
+    assert run.returncode == 0, run.stderr
+    d, dc, out = tmp_path / "serve", tmp_path / "serve" / "private" / "compose", tmp_path / "served-out"
+    assert _env_of(dc / "compose.env", COMPOSES) == {
+        "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
+        "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "", "STEPS": "0,3"}
+    listed = (dc / "inputs.txt").read_text().splitlines()
+    assert listed == [*sorted([*HANDED_READS, *BLOBS, *HANDED_OWN]), "private/compose/inputs.sha256"]
+    assert not set(listed) & set(HELD_BACK) and S.witness(listed) == []
+    sums = {f: h for h, f in (x.split("  ", 1) for x in (dc / "inputs.sha256").read_text().splitlines())}
+    assert sums == {f: hashlib.sha256((d / f).read_bytes()).hexdigest() for f in listed[:-1]}
+    assert sorted(p.name for p in (dc / "pieces" / "pouw").iterdir()) == ["answer.json", "served.json"]
+    assert (out / "verdicts.txt").read_text().splitlines() == [HANDOFF_LINE.replace("{d}", str(d))]
+    assert not _window_data(out, 7) and oct(dc.stat().st_mode & 0o777) == "0o700"
+
+
+def test_a_hand_off_of_a_record_with_no_inference_only_verdict_lists_the_rest(tmp_path):
+    """A record with no inference-only verdict still hands off: its list is every other file, and nothing is refused."""
+    run = _handed(tmp_path, verdict=False)
+    assert run.returncode == 0, run.stderr
+    listed = (tmp_path / "serve" / "private" / "compose" / "inputs.txt").read_text().splitlines()
+    own = [f for f in HANDED_OWN if f != "private/compose/inference-only.json"]
+    assert listed == [*sorted([*HANDED_READS, *BLOBS, *own]), "private/compose/inputs.sha256"]
+
+
+@pytest.mark.parametrize("blob, said", [
+    ("sampled-proofs-served/window/m0/inst-0.bin", "it would carry the served run's witness (WITNESS "
+     "sampled-proofs-served/window/m0/inst-0.bin: a prover's instance file (its rows))"),
+    ("sampled-proofs-served/window/m0/prover/rows.bin", "it would carry the served run's witness (WITNESS "
+     "sampled-proofs-served/window/m0/prover/rows.bin: a prover's input file (its rows and salts))"),
+    ("/elsewhere/pub-0.bin", "{case} names a blob outside the serve dir: /elsewhere/pub-0.bin"),
+])
+def test_a_hand_off_that_would_carry_a_witness_or_a_blob_outside_the_serve_dir_is_refused(tmp_path, blob, said):
+    """No witness leaves the served node: a case naming a prover's file as a blob, or a blob outside the serve dir, refuses
+    the hand-off, which writes no sums for a copy to be held to."""
+    run = _handed(tmp_path, (*BLOBS, blob))
+    case = tmp_path / "serve" / "sampled-proofs-served" / "window" / "case-v2.json"
+    assert run.returncode == 1
+    assert (tmp_path / "served-out" / "verdicts.txt").read_text().splitlines() == [
+        "HANDOFF refused: " + said.replace("{case}", str(case))]
+    assert not (tmp_path / "serve" / "private" / "compose" / "inputs.sha256").exists()
+
+
+def test_witness_names_each_path_a_served_run_holds_as_its_witness_and_why(tmp_path, capsys, monkeypatch):
+    """`served_verdicts.py witness` refuses each of `HELD_BACK` (by a directory part, the serve dir's top directory, H1's
+    prover state or a name) and passes the verifier-side files a hand-off carries, exiting 1 iff it named one."""
+    found = dict(S.witness([*HELD_BACK, *HANDED_READS, *BLOBS, *HANDED_OWN, "private/h1/w0/state.json"]))
+    assert sorted(found) == sorted([*HELD_BACK, "private/h1/w0/state.json"])
+    assert found["private/h1/key"] == "H1's prover state (its key)" and found["windows/w7/rows.bin"].startswith("a sealed row")
+    monkeypatch.setattr(sys, "stdin", io.StringIO("".join(f"{x}\n" for x in (*HANDED_READS, *BLOBS))))
+    assert S.main(["witness"]) == 0 and capsys.readouterr().out == ""
+    monkeypatch.setattr(sys, "stdin", io.StringIO("h1/log.jsonl\nrequests.jsonl\n"))
+    assert S.main(["witness"]) == 1
+    assert capsys.readouterr().out == "WITNESS requests.jsonl: the requests' prompt and served ids, rows and seeds\n"
+
+
+@pytest.mark.parametrize("extra, line", [
+    ({"COMPOSITE": None}, "PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite off this node from its hand-off, and "
+     "onsite's reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, COMPOSITE set empty, "
+     "or COMPOSE_OFF_NODE=0 for a development composite here"),
+    ({"COMPOSITE": None, "COMPOSE_OFF_NODE": "0"}, None),
+    ({}, None),
+    ({"COMPOSE_OFF_NODE": "yes"}, "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default) or 0, not yes"),
+])
+def test_the_preflight_refuses_an_onsite_composite_off_the_node_whose_cases_only_its_card_writes(tmp_path, extra, line):
+    """Onsite's composite reads PoUS's and the wipe's cases, which `served_case.sh` writes under the served card's lease,
+    so they can't be composed off the node: under COMPOSE_OFF_NODE=1 the preflight refuses onsite with a composite, before
+    anything runs, and passes it with none or under COMPOSE_OFF_NODE=0."""
+    rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
+    assert (rc, order) == ((3, []) if line else (0, [])) and (lines == [line] if line else len(lines) == 1), lines
+    assert line or lines[0].startswith("PREFLIGHT passed")
+
+
+FAKE_COMPOSE_COMPOSITE = '''echo composite >> "$ORDER"
+printf "%s\\n" "$SERVED_NODE" "$COMPOSE_HANDOFF" "$@" > "$ORDER.composite"
+echo "COMPOSITE: composed on $(hostname -s)" >> "$2/verdicts.txt"'''
+
+
+def _compose(tmp_path: Path, keep: tuple[str, ...] = (), **extra: str | None) -> tuple[int, list[str], list[str]]:
+    """The compose follow-on of the hand-off in `tmp_path`'s serve dir: the files its inputs.txt lists (and ``keep``)
+    copied to the same path on vy-auditor-2, the rest of the serve dir moved away, then `served_verdicts.sh compose` with
+    D alone in a toy tree whose record and composite note their arguments (``extra`` adds to the environment, None
+    unsetting): the exit status, the verdict lines and the steps in order."""
+    d, held = tmp_path / "serve", tmp_path / "served-node"
+    listed = (d / "private" / "compose" / "inputs.txt").read_text().splitlines()
+    d.rename(held)
+    for f in (*listed, *keep):
+        (d / f).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(held / f, d / f)
+    tree, bin_, venv = tmp_path / "compose-tree", tmp_path / "compose-bin", tmp_path / "compose-venv" / "bin"
+    py = f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\n[ "$1 $2" = "-m research" ] && exit 0\nexec {sys.executable} "$@"'
+    for path, body in ((venv / "python", py), (tree / ".venv" / "bin" / "python", py), (bin_ / "uv", "exit 0"),
+                       (bin_ / "lake", "exit 0"),
+                       (tree / "benchmarks" / "one_stage" / "served_composite.sh", FAKE_COMPOSE_COMPOSITE)):
+        _script(path, body)
+    (tree / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(FAKE_RECORD)
+    env = {"PATH": f"{_hosts(tmp_path)}:{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent),
+           "D": str(d), "OUT": str(tmp_path / "compose-out"), "SERVE_ROOT": str(tmp_path / "root"),
+           "FLOCK_WORK": str(tmp_path / "fw"), "ORDER": str(tmp_path / "order"), "HOST": "vy-auditor-2",
+           "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path)}
+    env = {k: v for k, v in {**env, **extra}.items() if v is not None}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "compose"], cwd=tree, env=env, check=False,
+                        capture_output=True).returncode
+    said = tmp_path / "compose-out" / "verdicts.txt"
+    order = tmp_path / "order"
+    return rc, said.read_text().splitlines() if said.exists() else [], order.read_text().split() if order.exists() else []
+
+
+COMPOSED = ("COMPOSE on vy-auditor-2 (COMPOSE_NODE vy-auditor-2): the final record and the composite of the served "
+            "node vy-dc-h200, from its compose hand-off (verifier-side files, no witness; {audit}), each file as it hashed "
+            "it (the serve dir's private/compose/inputs.sha256): {verdict}")
+
+
+def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_record_and_composite_off_the_node(tmp_path):
+    """The compose follow-on, on a node of neither the serve nor the audit, from the hand-off alone: the copy held to the
+    served node's sums, the inference-only verdict carried as the served node wrote it, then the final record about the
+    served node from the hand-off's pieces at the steps it picked (`record --steps --off-node`, so its composed_on is this
+    host, served_node false, from the hand-off), and the composite, told the served node and the hand-off. $OUT names no
+    window."""
+    assert _handed(tmp_path).returncode == 0
+    rc, lines, order = _compose(tmp_path)
+    d, out = tmp_path / "serve", tmp_path / "compose-out"
+    assert rc == 0 and order == ["record", "composite"], (lines, order)
+    assert lines[0] == COMPOSED.format(audit="no V3c audit", verdict="PASS")
+    assert [x.split(" ")[0] for x in lines[1:]] == ["INFERENCE-ONLY:", "RECORD", "COMPOSITE:"]
+    assert lines[-1] == "COMPOSITE: composed on vy-auditor-2"
+    argv = json.loads((tmp_path / "order.record").read_text())
+    assert argv[:17] == [
+        "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"), "--pieces",
+        str(d / "private" / "compose" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",
+        "vy-dc-h200", "--steps", "0,3"]
+    assert (argv[17], len(argv[18]), argv[19:]) == ("--key-sha512", 128, ["--lane", "vllm", "--off-node", "--sampled-lean",
+                                                                         "--tree", SHA])
+    assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", "1", str(d), str(out)]
+    assert json.loads((out / "record" / "inference-only.json").read_text()) == {"verdict": "accept"}
+    assert not (d / "requests.jsonl").exists() and not _window_data(out, 7)
+
+
+COMPOSE_CLASH = ("PREFLIGHT: the compose follow-on runs at the hand-off's settings (the serve dir's "
+                 "private/compose/compose.env), and the environment sets another")
+
+
+@pytest.mark.parametrize("keep, change, extra, line", [
+    ((), "sampled-proofs-served/window/m0/pub-0.bin", {}, COMPOSED.format(
+        audit="no V3c audit", verdict="FAIL (the serve dir's private/compose/check.log)")),
+    ((), None, {"HOST": "vy-dc-h200"}, "PREFLIGHT: this is the served node vy-dc-h200, which the prover controls, so "
+     "nothing composed here claims a record: compose on COMPOSE_NODE (vy-auditor-2)"),
+    (("advice/w7/private/advice.bin",), None, {}, "PREFLIGHT: the compose follow-on holds no witness of the served run, "
+     "and this node's serve dir does (WITNESS advice/wK/private/advice.bin: the advice and its opening): compose on a "
+     "node that holds the hand-off alone"),
+    ((f"v3c-w7-{VTAG}/window/values/a.bin",), None, {}, "PREFLIGHT: the compose follow-on holds no witness of the served "
+     f"run, and this node's serve dir does (WITNESS v3c-wK-{VTAG}/window/values/a.bin: a committed value file): compose "
+     "on a node that holds the hand-off alone"),
+    ((), None, {"PRODUCT": "onsite"}, f"{COMPOSE_CLASH} PRODUCT: unset it"),
+    ((), None, {"RESEARCH_SOURCE_SHA": "cd" * 20}, "PREFLIGHT: the compose follow-on composes with the served node's "
+     f"tree {SHA}, and this tree is {'cd' * 20}: run it at that commit, or set FOLLOW_ANY_TREE=1"),
+    ((), "private/compose/compose.env", {}, "PREFLIGHT: the compose follow-on composes from the served node's hand-off, "
+     "and the serve dir {d} holds none (private/compose/compose.env): copy each file its private/compose/inputs.txt "
+     "lists to the same path here first"),
+])
+def test_a_compose_follow_on_refuses_the_served_node_a_witness_a_changed_copy_another_setting_or_tree(
+        tmp_path, keep, change, extra, line):
+    """No record is composed on the served node, which the prover controls, nor where a witness of the served run is
+    held (the follow-on's serve dir holds the hand-off alone), and no retries: a copied file changed fails the copy's check
+    before anything runs, and a setting other than the hand-off's, another tree or no hand-off is refused."""
+    assert _handed(tmp_path).returncode == 0
+    d = tmp_path / "serve"
+    if change == "private/compose/compose.env":
+        (d / change).unlink()
+        listed = d / "private" / "compose" / "inputs.txt"
+        listed.write_text("".join(f"{x}\n" for x in listed.read_text().splitlines() if x != change))
+    elif change:
+        (d / change).write_text("changed")
+    rc, lines, order = _compose(tmp_path, keep, **extra)
+    assert (rc, lines, order) == (3, [line.replace("{d}", str(d))], []), lines
+
+
+def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_nothing(tmp_path):
+    """Under COMPOSE_OFF_NODE=1 the deferral's follow-on is prover-side (it holds the copy's value files), so after V3c's
+    audit it composes neither the record nor the composite: it writes the compose hand-off, naming itself as where V3c's
+    audit ran, with the deferral's pieces and inference-only verdict. A compose follow-on on a third node then composes
+    both from that hand-off alone, and refuses the follow-on's serve dir, which holds the value files."""
+    verdict = {"format": "verity-bench/inference-only-verdict/v3", "verdict": "accept"}
+    (tmp_path / "served-out" / "record").mkdir(parents=True)
+    (tmp_path / "served-out" / "record" / "inference-only.json").write_text(json.dumps(verdict))
+    assert _deferred(tmp_path).returncode == 0
+    rc, lines, order, _limits = _follow(tmp_path)
+    d, dc = tmp_path / "serve", tmp_path / "serve" / "private" / "compose"
+    assert rc == 0 and order == ["audit", "period"], (lines, order)
+    assert lines.pop(0) == V3C_ENTRY
+    assert [x.split(" ")[0] for x in lines[4:]] == ["V3C-AUDIT", "V3C-PERIOD", "HANDOFF"]
+    assert lines[-1] == HANDOFF_LINE.replace("{d}", str(d))
+    assert _env_of(dc / "compose.env", COMPOSES) == {
+        "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
+        "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6", "STEPS": "0,3"}
+    listed = (dc / "inputs.txt").read_text().splitlines()
+    assert listed == [*sorted([
+        "h1/log.jsonl", "h1/w7/record.json", "h1/w7/registration.json", "private/compose/compose.env",
+        "private/compose/inference-only.json", "private/compose/pieces/pouw/answer.json", "private/pouw/period/answer.json",
+        "private/pouw/period/case.json", "sampled-proofs-served/runs.json", "sampled-proofs-served/summary.json",
+        "sampled-proofs-served/window/audit.json", "sampled-proofs-served/windows/rank0/registration.json"]),
+        "private/compose/inputs.sha256"]
+    assert S.witness(listed) == [] and json.loads((dc / "inference-only.json").read_text()) == verdict
+    (tmp_path / "order").unlink()
+    rc, lines, order = _compose(tmp_path, HOST="vy-auditor-2")
+    assert rc == 0 and order == ["record", "composite"], (lines, order)
+    assert lines[0] == COMPOSED.format(audit="V3c's audit from cpu-6", verdict="PASS")
+    for x in ("serve", "compose-out"):
+        shutil.rmtree(tmp_path / x)
+    (tmp_path / "served-node").rename(tmp_path / "serve")
+    (tmp_path / "order").unlink()
+    rc, lines, order = _compose(tmp_path, keep=(f"v3c-w7-{VTAG}/window/values/a.bin",), HOST="cpu-6")
+    assert rc == 3 and order == [] and lines[0].startswith("PREFLIGHT: the compose follow-on holds no witness")
+
+
+#: the compose gate as `vy-compose-gate` serves it over ssh, its words its argv: `host.gate` on a compose host under
+#: $GATE_ROOT with lane vllm's key, its compose `host.compose_handoff` in-process with $GATE_ENV added (no runuser); the
+#: hand-off in transit with $TAMPER's member rewritten or a $CARRY member added
+GATE_DRIVER = '''import io, json, os, sys, tarfile
+from datetime import datetime, timezone
+from pathlib import Path
+sys.path.insert(0, os.environ["LIVE_VERIFIER"])
+import host as H
+root = Path(os.environ["GATE_ROOT"])
+host = H.Host(root=root / "var", config=root / "compose.json", pins=root / "pins.jsonl", main=root / "main.txt",
+              compose=True)
+src = sys.stdin.buffer
+if os.environ.get("TAMPER") or os.environ.get("CARRY"):
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=src, mode="r|") as t, tarfile.open(fileobj=buf, mode="w") as w:
+        for m in t:
+            body = t.extractfile(m).read() if m.isreg() else b""
+            if m.name == os.environ.get("TAMPER"):
+                body = b"tampered"
+                m.size = len(body)
+            w.addfile(m, io.BytesIO(body))
+        if os.environ.get("CARRY"):
+            w.addfile(tarfile.TarInfo(os.environ["CARRY"]), io.BytesIO(b""))
+    buf.seek(0)
+    src = buf
+
+
+def compose(argv, scratch):
+    Path(os.environ["GATE_ARGV"]).write_text(json.dumps(argv))
+    i = argv.index("compose")
+    return H.compose_handoff(host, scratch, src, pinned=argv[i + 2], on=(argv[i + 3:] or [None])[0],
+                             env=json.loads(os.environ["GATE_ENV"]))
+
+
+sys.exit(H.gate(["--ssh", " ".join(sys.argv[1:]), "--key", "vllm"], host, sink=sys.stdout.buffer,
+                pinned=os.environ["PIN"], busy=lambda: [], own=lambda p: None, compose=compose,
+                now=datetime(2026, 11, 4, 12, tzinfo=timezone.utc), token="ab12"))
+'''
+GATE_PIN = "c0" * 20
+
+
+def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
+                   **extra: str) -> tuple[subprocess.CompletedProcess, Path]:
+    """`_handed`'s serve dir with `_lean_handed`'s sampled proofs cases (v2's naming a5's ``BLOBS``), sent by
+    `served_verdicts.sh gate-compose` to `GATE_DRIVER`, pinned at GATE_PIN on remote, where the compose runs this tree's
+    `served_verdicts.sh compose` and record on vy-auditor-2 with a `FAKE_SAMPLED_LEAN`, no composite and no git (as the
+    pinned archive has none). ``edit`` replaces the served node's sampled-proofs files before the hand-off (None deletes);
+    ``extra`` adds to the sender's environment. The sender's run and $OUT."""
+    from verity.ml.circuits import codec
+
+    d, out, gate = tmp_path / "serve", tmp_path / "served-out", tmp_path / "gate-host"
+    v1 = {"params": {"verifier": "toy"}, "commitment": codec.canonical_json(LEAN_RECORD).hex(),
+          "evidence": codec.canonical_json({"draw": [0, 3]}).hex()}
+    sp = "sampled-proofs-served"
+    cases = {f"{sp}/window/case.json": v1, f"{sp}/summary.json": {"refused": "the node's own verdict"},
+             f"{sp}/window/case-v2.json": {**v1, "params": {"verifier": "toy", "proofs": {}},
+                                           "blobs": [str(d / b) for b in BLOBS]}}
+    gate.mkdir()
+    H = _live_host()
+    H.record_pin(gate / "pins.jsonl", GATE_PIN, datetime(2026, 11, 4, 11, tzinfo=UTC), on="remote", seal=lambda p: None)
+    driver = tmp_path / "gate-driver.py"
+    driver.write_text(GATE_DRIVER)
+    exe = tmp_path / "vstar-recursive"
+    exe.write_text(FAKE_SAMPLED_LEAN)
+    exe.chmod(0o755)
+    answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": REG.digest(LEAN_RECORD)}
+    gate_env = {"PATH": f"{_hosts(tmp_path)}:{Path(sys.executable).parent}:/usr/bin:/bin", "HOST": "vy-auditor-2",
+                "SAMPLED_EXE": str(exe), "SEEN": str(tmp_path / "seen.json"), "ANSWER": json.dumps(answer),
+                "GIT_DIR": str(tmp_path / "no-git")}
+    cases.update({f"{sp}/{name}": None if body is None else json.loads(body) for name, body in (edit or {}).items()})
+    run = _handed(tmp_path, files=cases, cmd=("gate-compose", str(out / "pieces"), str(out / "record" / "inference-only.json")),
+                  pouw={"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]},
+                  COMPOSITE="", COMPOSE_GATE=f"{sys.executable} {driver}", LIVE_VERIFIER=str(HERE.parents[1] / "live_verifier"),
+                  GATE_ROOT=str(gate), PIN=GATE_PIN, GATE_ENV=json.dumps(gate_env), GATE_ARGV=str(tmp_path / "gate.argv"),
+                  **extra)
+    return run, out
+
+
+def _live_host():
+    spec = importlib.util.spec_from_file_location("live_host", HERE.parents[1] / "live_verifier" / "host.py")
+    mod = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.parametrize("edit", [
+    None,
+    {"summary.json": json.dumps({"audit": {"accepted": True}})},
+    {"summary.json": None},
+])
+def test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_record_at_its_pin_and_answers_it(
+        tmp_path, edit):
+    """`gate-compose` sends the hand-off to the compose gate (lane vllm's key, the word `compose`, the tar on stdin), which
+    receives it in a scratch of its own, holds it to the served node's sums, rebases the cases' blobs onto its copy and
+    composes the record there with the pinned tree, off the served node: sampled proofs' row is its Lean's answer on the
+    copy's v2 case and blobs, whatever summary the served node wrote, and the record names the gate's pin and the branch
+    infra pinned it on. The answer lands in the sender's $OUT/compose, and the gate removes its scratch."""
+    run, out = _gate_composed(tmp_path, edit)
+    gate = tmp_path / "gate-host"
+    lines = (out / "verdicts.txt").read_text().splitlines()
+    assert run.returncode == 0, (run.stderr, lines)
+    assert lines[0].startswith("HANDOFF ")
+    assert lines[-1].startswith(f"GATE-COMPOSE at the compose gate's tree {GATE_PIN[:12]} (on remote): exit 0, the record "
+                                "accept, ") and lines[-1].endswith(f" files of its $OUT in {out / 'compose'}"), lines
+    argv = json.loads((tmp_path / "gate.argv").read_text())
+    scratch = gate / "var" / "scratch" / "compose-20261104T120000Z-ab12"
+    assert argv[:3] == ["runuser", "-u", "auditor"] and argv[-4:] == ["compose", str(scratch), GATE_PIN, "remote"]
+    composed = json.loads((out / "compose" / "record" / "verdicts.json").read_text())
+    assert composed["composed_on"] == {"host": socket.gethostname(), "served_node": False, "from": S.HANDED_FROM,
+                                       "tree": GATE_PIN, "tree_on": "remote"}
+    row = composed["protocols"]["integrity"]
+    assert row["answer_from"] == S.LEAN_HERE and row["answer"]["commitment"] == REG.digest(LEAN_RECORD), row
+    seen = json.loads((tmp_path / "seen.json").read_text())
+    assert seen["argv"][5:] == [str(scratch / "serve" / b) for b in BLOBS]
+    assert not scratch.exists() and list((gate / "var" / "scratch").iterdir()) == []
+    said = json.loads((out / "compose" / "gate.json").read_text())
+    assert (said["pinned"], said["pin"], said["by"], said["compose"]["rc"]) == (
+        GATE_PIN, {"line": 0, "utc": "2026-11-04T11:00:00Z", "on": "remote"}, "vllm", 0)
+    logged = [json.loads(x) for x in (gate / "var" / "composes.jsonl").read_text().splitlines()]
+    assert [(x["by"], x["rc"], x["refused"]) for x in logged] == [("vllm", 0, None)]
+    assert logged[0]["sums_sha512"] == hashlib.sha512(
+        (tmp_path / "serve" / "private" / "compose" / "inputs.sha256").read_bytes()).hexdigest() == said["compose"]["sums_sha512"]
+    assert not _window_data(out, 7)
+
+
+@pytest.mark.parametrize("extra, said", [
+    ({"TAMPER": "sampled-proofs-served/summary.json"}, "sampled-proofs-served/summary.json isn't the file the served node "
+     "hashed: its SHA-256 isn't its sum (1 such)"),
+    ({"TAMPER": "sampled-proofs-served/window/case-v2.json"}, "sampled-proofs-served/window/case-v2.json isn't the file the "
+     "served node hashed"),
+    ({"CARRY": "private/h1/key"}, "the hand-off carries the served run's witness: private/h1/key (H1's prover state (its "
+     "key))"),
+    ({"CARRY": "sampled-proofs-served/window/m0/inst-0.bin"}, "the hand-off carries the served run's witness: "
+     "sampled-proofs-served/window/m0/inst-0.bin"),
+    ({"CARRY": "notes.txt"}, "the hand-off carries notes.txt, which its sums don't list"),
+])
+def test_the_compose_gate_refuses_a_hand_off_off_its_sums_or_carrying_a_witness_and_composes_nothing(tmp_path, extra, said):
+    """No retries, and nothing composed from bytes the served node didn't hash or beside a witness: a file changed in
+    transit (even the summary a Lean row would never read) or a file added is refused before anything runs, the refusal
+    the sender's one line and exit 3, the gate's scratch removed and its log naming the refusal."""
+    run, out = _gate_composed(tmp_path, **extra)
+    lines = (out / "verdicts.txt").read_text().splitlines()
+    assert run.returncode == 3 and lines[-1].startswith("GATE-COMPOSE refused by the compose gate: "), lines
+    assert said in lines[-1] and not (tmp_path / "seen.json").exists()
+    assert not (out / "compose" / "record").exists()
+    gate = tmp_path / "gate-host" / "var"
+    assert list((gate / "scratch").iterdir()) == []
+    logged = [json.loads(x) for x in (gate / "composes.jsonl").read_text().splitlines()]
+    assert len(logged) == 1 and logged[0]["rc"] == 3 and said in logged[0]["refused"]
+
+
+#: rsync as `served_verdicts.sh copy` calls it: each file --files-from lists, from the source dir to $COPIED/HOST/PATH
+#: for the destination HOST:PATH, its arguments in $COPIED.args, exiting $RSYNC_EXIT
+FAKE_RSYNC = f'''exec {sys.executable} - "$@" <<'EOF'
+import json, os, shutil, sys
+a = sys.argv[1:]
+json.dump(a, open(os.environ["COPIED"] + ".args", "w"))
+listed = next(x.split("=", 1)[1] for x in a if x.startswith("--files-from="))
+host, dest = a[-1].split(":", 1)
+for f in open(listed).read().split():
+    to = os.path.join(os.environ["COPIED"], host.split("@")[-1], dest.lstrip("/"), f)
+    os.makedirs(os.path.dirname(to), exist_ok=True)
+    shutil.copy2(os.path.join(a[-2], f), to)
+sys.exit(int(os.environ.get("RSYNC_EXIT", "0")))
+EOF'''
+
+
+def _copy(tmp_path: Path, kind: str, to: str, **extra: str) -> tuple[int, list[str], list[str]]:
+    """`served_verdicts.sh copy KIND TO` with D alone on the node `extra`'s HOST names (default vy-dc-h200), through
+    `FAKE_RSYNC`: the exit status, the lines it said and the files that reached TO's serve dir."""
+    d, copied = tmp_path / "serve", tmp_path / "copied"
+    _script(tmp_path / "copy-bin" / "rsync", FAKE_RSYNC)
+    (tmp_path / "served-tree").mkdir(exist_ok=True)
+    env = {"PATH": f"{_hosts(tmp_path)}:{tmp_path / 'copy-bin'}:{os.defpath}", "HOME": str(tmp_path), "D": str(d),
+           "OUT": str(tmp_path / "copy-out"), "SERVE_ROOT": str(tmp_path / "root"), "HOST": "vy-dc-h200",
+           "COPIED": str(copied), "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path), **extra}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "copy", kind, to], cwd=tmp_path / "served-tree",
+                        env=env, check=False, capture_output=True).returncode
+    said = tmp_path / "copy-out" / "verdicts.txt"
+    there = copied / to.split("@")[-1] / str(d).lstrip("/")
+    return (rc, said.read_text().splitlines() if said.exists() else [],
+            sorted(str(p.relative_to(there)) for p in there.rglob("*") if p.is_file()) if there.exists() else [])
+
+
+@pytest.mark.parametrize("kind, to, host, what", [
+    ("compose", "vy-auditor-2", "vy-dc-h200", "the hand-off's verifier-side"),
+    ("deferred", "research@vy-nebius-cpu-6", "vy-dc-h200", "the deferral's prover-side"),
+    ("compose", "vy-auditor-2", "cpu-6", "the hand-off's verifier-side"),
+])
+def test_copy_sends_each_file_a_list_names_and_nothing_else_to_the_same_path_on_its_host(tmp_path, kind, to, host, what):
+    """`served_verdicts.sh copy deferred|compose HOST` sends the files a deferral's or a hand-off's inputs.txt lists, its
+    sums among them, and nothing else of the serve dir, to the same path on HOST, creating it there; the copy passes the
+    sums its follow-on holds it to. A hand-off goes to COMPOSE_NODE from the served node or from a deferral's follow-on
+    (cpu-6, which holds the window's witness and sends none of it)."""
+    if kind == "compose" and host == "vy-dc-h200":
+        assert _handed(tmp_path).returncode == 0
+    else:
+        assert _deferred(tmp_path).returncode == 0
+        if kind == "compose":
+            assert _follow(tmp_path)[0] == 0
+    d = tmp_path / "serve"
+    listed = (d / "private" / kind / "inputs.txt").read_text().splitlines()
+    rc, lines, there = _copy(tmp_path, kind, to, HOST=host)
+    assert rc == 0 and there == sorted(listed), (lines, there)
+    assert lines == [f"COPY {what} list's {len(listed)} files to {to.split('@')[-1]}, each to the same path there: PASS"]
+    assert kind == "deferred" or S.witness(there) == []
+    args = json.loads((tmp_path / "copied.args").read_text())
+    assert args[-2:] == [f"{d}/", f"{to}:{d}/"] and f"--rsync-path=mkdir -p {d} && rsync" in args
+    copy = tmp_path / "copied" / to.split("@")[-1] / str(d).lstrip("/")
+    subprocess.run(["sha256sum", "--check", "--strict", "--quiet", f"private/{kind}/inputs.sha256"], cwd=copy, check=True)
+
+
+@pytest.mark.parametrize("made, kind, to, extra, rc, line", [
+    ("deferred", "deferred", "vy-auditor-2", {}, 3, "COPY refused: the deferral's list holds the window's witness, and "
+     "vy-auditor-2 is COMPOSE_NODE, an auditor host where no witness goes: copy it to a prover node"),
+    ("deferred", "deferred", "research@vy-auditor-3.example", {"COMPOSE_NODE": "vy-auditor-3"}, 3, "COPY refused: the "
+     "deferral's list holds the window's witness, and vy-auditor-3.example is COMPOSE_NODE, an auditor host where no "
+     "witness goes: copy it to a prover node"),
+    ("handed", "compose", "vy-dc-h200.example", {"HOST": "cpu-6"}, 3, "COPY refused: vy-dc-h200.example is the served "
+     "node, which the prover controls: copy the hand-off to COMPOSE_NODE (vy-auditor-2)"),
+    ("handed+witness", "compose", "vy-auditor-2", {}, 3, "COPY refused: the hand-off's list names the served run's "
+     "witness (WITNESS requests.jsonl: the requests' prompt and served ids, rows and seeds)"),
+    ("deferred", "compose", "vy-auditor-2", {}, 3, "COPY refused: the serve dir {d} holds no compose list "
+     "(private/compose/inputs.txt and compose.env)"),
+    ("handed", "values", "vy-auditor-2", {}, 3, "COPY refused: served_verdicts.sh copy deferred|compose HOST, not values"),
+    ("handed", "compose", "vy-auditor-2", {"RSYNC_EXIT": "23"}, 23, "COPY the hand-off's verifier-side list's 22 files "
+     "to vy-auditor-2, each to the same path there: FAIL (exit 23, the serve dir's private/copy-compose.log)"),
+])
+def test_copy_never_sends_a_deferrals_witness_to_compose_node_nor_a_hand_off_to_the_served_node_or_with_a_witness(
+        tmp_path, made, kind, to, extra, rc, line):
+    """The deferral's list is prover-side (the window's witness), so it never goes to COMPOSE_NODE, the deferral's or the
+    environment's, however its host is written; a hand-off never goes back to the served node, and its list is held to
+    `served_verdicts.py witness` again before it leaves, so a list edited to name a witness sends nothing. No list, or
+    another kind, is refused, and a failed transfer says so and where its log is."""
+    if made == "deferred":
+        assert _deferred(tmp_path).returncode == 0
+    else:
+        assert _handed(tmp_path).returncode == 0
+    d = tmp_path / "serve"
+    if made == "handed+witness":
+        with open(d / "private" / "compose" / "inputs.txt", "a") as listed:
+            listed.write("requests.jsonl\n")
+    got, lines, there = _copy(tmp_path, kind, to, **extra)
+    assert (got, lines) == (rc, [line.replace("{d}", str(d))]), lines
+    assert there == [] or rc != 3
 
 
 def _script(path: Path, body: str) -> None:
@@ -2291,6 +3609,8 @@ if __name__ == "__main__":
     Path(a[a.index("--public-out") + 1], "composite.json").write_text(json.dumps({"product": a[0]}))
     cases = [a[i + 1] for i, x in enumerate(a) if x == "--cases"]
     Path(a[a.index("--private-out") + 1], "argv.json").write_text(json.dumps(cases))
+    Path(a[a.index("--private-out") + 1], "development.json").write_text(
+        json.dumps(a[a.index("--development") + 1] if "--development" in a else None))
     print("PIECE verity/pous/p2/v4/run accept 0123456789abcdef0123")
     print("NOT_ESTABLISHED missing verity/wipe/v0")
     print(f"VERDICT verity/{a[0]}/v0 reject components")
@@ -2310,8 +3630,10 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/sampled-proofs-served``) once it holds a
     case, but not under H1's tie (a ``SERVE_DIR/h1/log.jsonl``), whose cases are on the record H1 named; and no product
     is handed a case under ``SERVE_DIR/private/pouw``, whose period case reaches a product only as served_cases.py
-    writes it, tied to that record. Where SERVED_NODE names another host (a deferral's follow-on), it says it composed
-    there, from a prover-side copy of the serve dir's audit inputs."""
+    writes it, tied to that record. On the served node (SERVED_NODE unset) it composes only under COMPOSE_OFF_NODE=0, a
+    development check its first line and each product's composite.py say claims no record. Where SERVED_NODE names
+    another host it says it composed there, from the compose hand-off (COMPOSE_HANDOFF) or a deferral's prover-side copy
+    of the serve dir's audit inputs."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
     out.mkdir()
     _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
@@ -2341,7 +3663,8 @@ print("CASE " + json.dumps({{"protocol": "verity/registration/v0", "verdict": "a
 print("NOT_WRITTEN " + json.dumps({{"protocol": "verity/inference-only/v0", "reason": "no alpha 0123456789abcdef"}}))
 sys.exit(1)
 ''')
-    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable}
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
+           "COMPOSE_OFF_NODE": "0"}
     run = lambda: subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
                                  check=False, capture_output=True, text=True)
     r = run()
@@ -2349,8 +3672,11 @@ sys.exit(1)
     host = subprocess.run(["hostname", "-s"], check=True, capture_output=True, text=True).stdout.strip()
     on = (f"COMPOSITE: composed on {host}, which holds the serve dir, from the cases the served node wrote there, not "
           "from the parties that produced them")
+    why = (f"composed on the served node {host}, which the prover controls: a development check, no claim of record "
+           "(COMPOSE_OFF_NODE=0)")
+    dev = f"COMPOSITE DEVELOPMENT: {why}"
     assert (out / "verdicts.txt").read_text().splitlines() == [
-        "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE CASES: served_case.sh exit 0",
+        dev, "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE CASES: served_case.sh exit 0",
         "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept",
         "COMPOSITE CASE verity/registration/v0 accept",
         "COMPOSITE NOT_WRITTEN verity/inference-only/v0",
@@ -2361,6 +3687,7 @@ sys.exit(1)
     p = d / "private" / "composite"
     assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == [str(v2)]
     assert json.loads((p / "onsite" / "private" / "argv.json").read_text()) == [str(d / "private" / "pous" / "w0")]
+    assert all(json.loads((p / x / "private" / "development.json").read_text()) == why for x in ("remote", "onsite"))
     assert oct((d / "private").stat().st_mode & 0o777) == "0o700"
     assert sorted(out.iterdir()) == [out / "composite", out / "verdicts.txt"]
     assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == [
@@ -2369,7 +3696,7 @@ sys.exit(1)
     (out / "verdicts.txt").unlink()
     shutil.rmtree(out / "composite")
     assert run().returncode == 1
-    assert (out / "verdicts.txt").read_text() == "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
+    assert (out / "verdicts.txt").read_text() == f"{dev}\nCOMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
     (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
     (tree / "benchmarks" / "pous" / "served_case.sh").unlink()
     (out / "verdicts.txt").unlink()
@@ -2378,7 +3705,7 @@ sys.exit(1)
     r = run()
     assert r.returncode == 0, r.stderr
     assert (out / "verdicts.txt").read_text().splitlines() == [
-        "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept", "COMPOSITE CASE verity/registration/v0 accept",
+        dev, "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept", "COMPOSITE CASE verity/registration/v0 accept",
         "COMPOSITE NOT_WRITTEN verity/inference-only/v0", "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
         "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
         on]
@@ -2407,9 +3734,30 @@ sys.exit(1)
         shutil.rmtree(x)
     env["SERVED_NODE"] = "the-served-node"
     assert run().returncode == 0
-    assert (out / "verdicts.txt").read_text().splitlines()[-1] == (
+    said = (out / "verdicts.txt").read_text().splitlines()
+    assert said[-1] == (
         f"COMPOSITE: composed on {host}, not the served node the-served-node: from a prover-side copy of its serve dir's "
         "audit inputs and the cases written here from it, not from the parties that produced them")
+    assert not any("DEVELOPMENT" in x for x in said)
+    assert json.loads((p / "remote" / "private" / "development.json").read_text()) is None
+    (out / "verdicts.txt").unlink()
+    for x in (out / "composite", p, v2):
+        shutil.rmtree(x)
+    env |= {"COMPOSE_HANDOFF": "1", "COMPOSE_OFF_NODE": "1"}
+    assert run().returncode == 0
+    assert (out / "verdicts.txt").read_text().splitlines()[-1] == (
+        f"COMPOSITE: composed on {host}, not the served node the-served-node: from its compose hand-off (verifier-side "
+        "files, no witness) and the cases written and checked here from it, not from the parties that produced them")
+    (out / "verdicts.txt").unlink()
+    for x in (out / "composite", p, v2):
+        shutil.rmtree(x)
+    del env["SERVED_NODE"], env["COMPOSE_OFF_NODE"]
+    assert run().returncode == 1
+    assert (out / "verdicts.txt").read_text().splitlines() == [
+        f"COMPOSITE refused: this is the served node {host}, which the prover controls, so a composite here claims no "
+        "record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it "
+        "here as a development check)"]
+    assert not (out / "composite").exists() and not p.exists()
 
 
 DIGEST = "5e" * 64

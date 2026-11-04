@@ -6,7 +6,7 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
                          [--output-tokens 16] [--max-num-batched-tokens N] [--no-retain [--seeded]]
   served_passes.py same A.json B.json --out same.json
   served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J] [--device DEBIT_CUBIN [--device-check N]]
-  served_passes.py retain --passes DIR [--volunteer volunteer.json] [--drop ROUND ...]
+  served_passes.py retain --passes DIR [--volunteer volunteer.json] [--drop ROUND ...] [--window-record W]
   served_passes.py verify --passes DIR [--manifest M ...] [--tie W] --out verify.json [--answer answer.json]
                           [--draws 459] [--delta 1/100] [--jobs J] [--fast] [--coin-record R]
 
@@ -53,18 +53,24 @@ retained none, and any once the verifier's coin is drawn (``DIR/coin.json``).
 ``retain`` is the prover's last step before the coin: it writes ``DIR/retention.json``, the rounds (places among
 ``served.json``'s passes with calls) the verdict is to read, dropping each ``--drop`` round and, with ``--volunteer``, each
 pass that step didn't finish or left over a cap.  A dropped pass credits nothing and its MACs stay in what the run
-declared.  It refuses once the coin is drawn.
+declared.  It refuses once the coin is drawn.  With ``--window-record W`` (a tied run) it drops the warm-up's rounds too
+(``timed`` false), which a tied run's W doesn't list, and after ``DIR/retention.json`` writes Pearl+'s window record W
+over the rounds it retains, each under its round (`pearl_c.window.write`), for ``verify --tie W`` and the one-stage
+audit tied to it.
 
 ``verify`` is Pearl+'s PoUW verdict on the run (`verify_run.verify_passes`): the passes ``--manifest`` names (a capture's
 ``prefill/`` and ``decode/`` beside its ``coins.json``), else those with calls that ``DIR/served.json`` names, each at its
 round, less the rounds ``DIR/retention.json`` drops, with the verifier's coin recorded in ``DIR/coin.json``
 (``--coin-record``; a verdict over other passes or records after it is refused, ``after-coin``), else every
 ``DIR/pass-NNNNN/manifest.json`` (a transcript dir a served engine retained), in order, each epoch re-started against
-``DIR/coins.json``.  It first holds the passes together to distinct call indices of
-one salt (`credit.passes_distinct`: the device numbers calls across the epoch, and a run whose passes share an index is
-refused before any replay), then reads every pass, holds the window record ``--tie W`` to them where one is named
+``DIR/coins.json``.  It first holds the passes together to distinct call indices of one salt (`credit.passes_distinct`:
+the device numbers calls across the epoch, and a run whose passes share an index is refused before any replay), then
+reads every pass, holds the window record ``--tie W`` (``retain --window-record W`` writes it) to them where one is named
 (`verify_run.tie`: each call's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>`` entry its root and its domain recomputed from
-the salt and the call's index), takes the verifier's coin, and replays ``--draws`` work-weighted tiles over all of them and
+the salt and the call's index), takes the verifier's coin (with ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER``
+set, a draw session's on the auditor host opened on the run's commitment, `bench_arm.LiveDraw`, reserved under
+``PEARLC_CHALLENGER_LANE`` once that lane has no period open; else the node's, `verify_run.node_draw`; the format is
+`verify_run`'s "The coin record"), and replays ``--draws`` work-weighted tiles over all of them and
 each pass's exclusion tiles.  It writes the details to ``--out``, with, where ``served.json`` says which passes the timed
 call made and no ``--manifest`` names others, the credit over those retained alone (`timed_credit`), and the core answer
 (`answer_of`'s form, ``public.work.credited`` the MACs credited at Pearl's Assumption 1 at ``--delta``) to ``--answer``
@@ -110,6 +116,8 @@ UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so 
 COIN, RETENTION = "coin.json", "retention.json"
 #: why `retain` and `volunteer` refuse once the verifier's coin is drawn
 DRAWN = "the verifier's coin is drawn (DIR/coin.json), so the passes and their records are fixed"
+#: why ``retain --window-record`` drops a warm-up pass (`pearl_c.window`)
+WARM_UP = "the warm-up's (timed false): a tied run's W lists only the timed call's rounds, so it credits nothing"
 #: why `serve` refuses ``--seeded`` beside retention or a live session's coins
 SEEDED_ALONE = ("serve --seeded fixes the coins and the hm96 salt key, so its commitments hide nothing and bind nothing a "
                 "verdict may read: it takes --no-retain and no PEARLC_CHALLENGER_GATE")
@@ -405,6 +413,10 @@ def retain(args: argparse.Namespace) -> int:
                 why.setdefault(s, "its replay did not finish before the coin (served_passes.py volunteer)")
             elif not v["ok"]:
                 why.setdefault(s, f"{len(v['left'])} tiles left over a cap after its give-up")
+    if args.window_record:
+        for s, p in enumerate(held):
+            if not p.get("timed", True):
+                why.setdefault(s, WARM_UP)
     rounds = [s for s in range(len(held)) if s not in why]
     doc = {"schema": "verity-pouw/pearl-plus-retention/v1", "served_run": served.get("run"), "volunteer": args.volunteer,
            "rounds": rounds, "dropped": [{"round": s, "pass": held[s].get("pass"), "manifest": held[s]["manifest"],
@@ -413,11 +425,25 @@ def retain(args: argparse.Namespace) -> int:
     print(f"retain {'PASS' if rounds else 'FAIL'}: {len(rounds)} of {len(held)} passes with calls retained, "
           f"{len(why)} dropped before the coin (credit nothing, declared still)"
           + "".join(f"; round {d['round']}: {d['why']}" for d in doc["dropped"][:8]), flush=True)
-    return 0 if rounds else 1
+    if not rounds:
+        return 1
+    if args.window_record:
+        from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+        from verity_vllm.protocols.pouw.pearl_c import window as PWR
+
+        try:
+            w = PWR.write(args.window_record, served["passes"], rounds)
+        except (KeyError, OSError, ValueError) as e:
+            print(f"retain FAIL: W: {type(e).__name__}: {e}", flush=True)
+            return 1
+        print(f"retain W: {args.window_record}, rounds {rounds[0]}..{rounds[-1]} ({len(rounds)}), {len(w['registered'])} "
+              f"values, digest {REG.digest(w)[:16]}…", flush=True)
+    return 0
 
 
 def verify(args: argparse.Namespace) -> int:
     sys.path.insert(0, str(HERE))
+    import bench_arm as BA
     import verify_run as VR
 
     passes = Path(args.passes)
@@ -438,9 +464,11 @@ def verify(args: argparse.Namespace) -> int:
     if paths is not None:
         coins = VR.epoch_coins(passes / "coins.json")
         window = json.loads(Path(args.tie).read_text()) if args.tie else None
+        draw = BA.live_draw(settings.PEARLC_CHALLENGER_GATE, settings.PEARLC_CHALLENGER_PEER,
+                            settings.PEARLC_CHALLENGER_LANE) or VR.node_draw
         doc.update(VR.verify_passes(paths, args.draws, args.jobs, args.commit, coins, fast=args.fast,
                                     cross_check=args.cross_check, delta=args.delta, window=window, rounds=rounds,
-                                    dropped=dropped, record=record))
+                                    dropped=dropped, record=record, draw=draw))
         if served is not None and not args.manifest and doc["answer"]["verdict"] == "accept":
             doc["timed"] = timed_credit(served, doc["answer"]["public"]["work"], coins, rounds)
     out = Path(args.out)
@@ -482,12 +510,14 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--volunteer", help="volunteer's document: drop each pass it didn't finish or left over a cap")
     r.add_argument("--drop", type=int, action="append", default=[], metavar="ROUND",
                    help="drop this round (its place among served.json's passes with calls), repeated")
+    r.add_argument("--window-record", metavar="W", help="a tied run: drop the warm-up's rounds too and write Pearl+'s window "
+                   "record W over the rounds retained, after the retention (pearl_c.window), for verify --tie W")
     v = sub.add_parser("verify")
     v.add_argument("--passes", required=True)
     v.add_argument("--manifest", action="append", type=Path,
                    help="a pass's manifest, in order, repeated (default: those DIR/served.json names, else DIR/pass-*/)")
-    v.add_argument("--tie", metavar="W", help="the window record Pearl+ wrote at the window's close: each call's A and y "
-                   "entry must be its root and recomputed domain (verify_run.tie)")
+    v.add_argument("--tie", metavar="W", help="the window record retain --window-record wrote: each retained round's "
+                   "calls' A and y entry must be its root and recomputed domain (verify_run.tie)")
     v.add_argument("--out", required=True)
     v.add_argument("--answer", help="where the core answer goes (default: answer.json beside --out)")
     v.add_argument("--draws", type=int, default=DRAWS)

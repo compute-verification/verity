@@ -1573,6 +1573,36 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_root_and_
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
 
 
+def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_credits_them(tmp_path):
+    """``retain --window-record W`` on a serve of a warm-up pass, a pass without calls and two timed passes: it drops the
+    warm-up's round 0, retains rounds 1 and 2 (places among served.json's passes with calls), and writes W over those two
+    under their numbers, so ``verify --tie W`` accepts the run tied to W's digest on its 8 tables and credits the timed
+    passes alone.  The warm-up retained, W can't tie it (W registers none of round 0, and `pearl_c.window.write` refuses
+    to); once the coin is drawn ``retain`` refuses to write W again."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    warm, a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
+    d = _serve_dir(tmp_path, [warm, a, b])
+    served = json.loads((d / "served.json").read_text())
+    served["passes"] = [{**served["passes"][0], "timed": False}, {"pass": 1, "units": 0, "tiles": 0},
+                        *({**p, "pass": p["pass"] + 1, "timed": True} for p in served["passes"][1:])]
+    (d / "served.json").write_text(json.dumps(served))
+    wfile, coins = tmp_path / "w.json", published(warm)
+    assert SP.main(["retain", "--passes", str(d)]) == 0 and not wfile.exists()
+    assert json.loads((d / SP.RETENTION).read_text())["rounds"] == [0, 1, 2]
+    assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 0
+    got = json.loads((d / SP.RETENTION).read_text())
+    assert got["rounds"] == [1, 2] and [(x["round"], x["why"]) for x in got["dropped"]] == [(0, SP.WARM_UP)]
+    w = json.loads(wfile.read_text())
+    assert sorted({e["value"].split("/")[1] for e in w["registered"]}) == ["1", "2"] and len(w["registered"]) == 8
+    r = VR.verify_passes([warm, a, b], 3, 1, "test", coins, b"verifier" * 4, window=w)
+    assert r["answer"]["verdict"] == "reject" and "W registers no pearl-a/0/0" in r["answer"]["reason"], r["line"]
+    rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile))
+    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 8}, doc["line"]
+    assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["timed"]["passes"]) == ([1, 2], [0], 2)
+    before = wfile.read_text()
+    assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 1 and wfile.read_text() == before
+
+
 def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_and_refuses_an_unretained_serve(tmp_path):
     """``served_passes.py volunteer``, the prover's step between the serve and the verifier's coin, runs `volunteer_pass` on
     each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
@@ -1687,6 +1717,117 @@ def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
     late = VR.verify_passes([path], 3, 1, "test", coins, record=record)
     assert late["answer"]["verdict"] == "reject" and late["refused"][0] == "after-coin" and "source" not in late, late["line"]
     assert VR.verify_passes([path], 3, 1, "test", coins)["answer"]["verdict"] == "accept"
+
+
+def test_the_run_verdict_takes_its_source_from_its_draw_once_and_never_asks_a_draw_again(tmp_path):
+    """``verify_passes``' ``draw(C, asking)``: its source is the draw's coin on the run's commitment C, recorded (v2) with
+    the draw before any replay and reused by a later verdict without drawing; a draw that fails before it asks rejects
+    and may be asked again, while one that fails after ``asking`` marked the record is refused (``asked-once``) and
+    never redrawn."""
+    VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    coins = published(path)
+    assert VP.volunteer(path, coins, 1)["ok"]
+    root = VR.run_commitment([VR.load(path, coins)])
+    calls = []
+
+    def draw(c, asking):
+        calls.append(c)
+        asking({"reserved": {"session": "s20261104T090000Z-dr01"}})
+        return b"\x5e" * 64, {"from": VR.DRAW_CHALLENGER, "session": {"session": "s20261104T090000Z-dr01"}}
+
+    record = tmp_path / "coin.json"
+    first = VR.verify_passes([path], 3, 1, "test", coins, record=record, draw=draw)
+    held = json.loads(record.read_text())
+    assert first["answer"]["verdict"] == "accept" and first["draw"] == "challenger" and calls == [root]
+    assert (held["schema"], held["commitment"], held["source"], held["draw"]["from"]) == (
+        VR.COIN_SCHEMA, root.hex(), "5e" * 64, "challenger")
+    again = VR.verify_passes([path], 3, 1, "test", coins, record=record, draw=draw)
+    assert again["answer"] == first["answer"] and calls == [root]
+
+    def before(c, asking):
+        raise Ch.CoinError("lane vllm's period p1 is open")
+
+    def after(c, asking):
+        asking({"reserved": {"session": "s20261104T090000Z-dr02"}})
+        raise Ch.CoinError("the gate's open timed out")
+
+    other = tmp_path / "other" / "coin.json"
+    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, draw=before)
+    assert r["answer"]["verdict"] == "reject" and "p1 is open" in r["line"] and not other.exists()
+    assert not other.with_name(other.name + VR.ASKED).exists()
+    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, draw=after)
+    assert r["answer"]["verdict"] == "reject" and "timed out" in r["line"] and not other.exists()
+    assert json.loads(other.with_name(other.name + VR.ASKED).read_text())["commitment"] == root.hex()
+    r = VR.verify_passes([path], 3, 1, "test", coins, record=other, draw=draw)
+    assert r["refused"][0] == "asked-once" and r["answer"]["verdict"] == "reject" and calls == [root]
+    node = VR.verify_passes([path], 3, 1, "test", coins, record=tmp_path / "node" / "coin.json")
+    assert node["draw"] == "node" and json.loads((tmp_path / "node" / "coin.json").read_text())["draw"] == {
+        "from": "node", "claim": VR.NODE_CLAIM}
+
+
+def test_the_live_draw_reserves_a_withheld_draw_session_outside_any_period_and_opens_it_on_the_runs_commitment(monkeypatch):
+    """`bench_arm.LiveDraw` (``served_passes.py verify`` under PEARLC_CHALLENGER_GATE/PEER/LANE): with no period of the
+    lane's open, it reserves a draw session withheld (``reserve --peer P --scheme S --families [["pouw/draw",1]]
+    --withhold``), marks the record with the reserve before its open, and returns the session's ``pouw/draw`` coin 0
+    after C with the record's draw.  It refuses before reserving while the lane's period is open, and before its open
+    when the gate reserves it plain or into a period; `live_draw` is None with neither setting and refused with one."""
+    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+    from verity_vllm.protocols.pouw.h1 import window as PHW
+
+    BA = load("pearl_c_vllm_bench_arm", KERNEL.parent / "pearl_c_vllm" / "bench_arm.py")
+    gate, root = "ssh -i KEY -o BatchMode=yes research@gate", b"\xc1" * 64
+    reserved = {"session": "s20261104T090000Z-dr01", "seq": 9, "peer": "vy-dc-h200", "by": "vllm", "period": None,
+                "withheld": True}
+    ledger, asked, opened, marks = [], [], [], []
+
+    def run(argv):
+        assert argv[:-1] == shlex.split(gate)
+        asked.append(shlex.split(argv[-1]))
+        if asked[-1][0] == "ledger":
+            return 0, "".join(json.dumps(e) + "\n" for e in ledger)
+        return 0, json.dumps(reserved)
+
+    class Session:
+        def __init__(self, entry, at, got, call):
+            self.reserved, self.challenger = got, Wd.draw_challenger(0, random.Random(7).randbytes)
+            self.session = self.commitment = None
+
+        def record(self, c):
+            opened.append((self.reserved, c))
+            self.session, self.commitment = {"session": self.reserved["session"], "root": c.hex()}, self.challenger.commitment
+            return self.challenger.open(Wd.DRAW, 0, c)
+
+    monkeypatch.setattr(PHW, "DrawSession", Session)
+    coin, drew = BA.LiveDraw(gate, "vy-dc-h200", "vllm", run)(root, marks.append)
+    want = {k: v for k, v in reserved.items() if k != "withheld"}
+    assert asked == [["ledger"], ["reserve", "--peer", "vy-dc-h200", "--scheme", PHC.SCHEME, "--families",
+                                  PHC.draw_families(), "--withhold"]]
+    assert marks == [{"reserved": want}] and opened == [(want, root)]
+    assert drew["from"] == "challenger" and (drew["label"], drew["index"]) == (Wd.DRAW, 0) and drew["reserved"] == want
+    opening = Ch.LiveOpening.from_json(drew["opening"])
+    assert coin == opening.coin and len(coin) == 64 and opening.after == root
+    assert Wd.draw_epoch_reason(Ch.LiveCommitment.from_json(drew["commitment"])) is None
+    assert drew["session"] == {"session": reserved["session"], "root": root.hex()}
+
+    for case, why in (("plain", "plain, not withheld"), ("period", "joined period p2"), ("open", "period p1 is open")):
+        for held in (asked, marks, opened, ledger):
+            held.clear()
+        reserved.update(withheld=True, period=None)
+        if case == "plain":
+            reserved["withheld"] = False
+        elif case == "period":
+            reserved["period"] = "p2"
+        else:
+            ledger.append({"kind": "period-open", "session": None, "body": {"period": "p1", "lane": "vllm"}})
+        with pytest.raises(Ch.CoinError, match=why):
+            BA.LiveDraw(gate, "vy-dc-h200", "vllm", run)(root, marks.append)
+        assert marks == [] and opened == [] and asked[0] == ["ledger"] and len(asked) == (1 if case == "open" else 2)
+
+    assert BA.live_draw(None, None, "vllm") is None
+    for one in ((gate, None), (None, "vy-dc-h200")):
+        with pytest.raises(ValueError, match="together"):
+            BA.live_draw(*one, "vllm", run)
 
 
 def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes_over_the_dropped_rounds(tmp_path):

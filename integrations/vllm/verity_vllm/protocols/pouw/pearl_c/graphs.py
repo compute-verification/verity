@@ -594,9 +594,11 @@ class GraphCalls:
     def _graph_key(self, w: int, sh: Any, m: int) -> tuple[tuple, bool]:
         """A call's graph and whether it screens the call's rows (with hashing).  A graph of m₁₆ rows serves every m it rounds
         up from, so it screens only when there are no filler rows, and `_after` screens the rest; inside a whole capture
-        (from its warm-up on) vLLM's batch fixes m, so the graph is m's own and screens it, as no `_after` runs at replay."""
+        (from its warm-up on) vLLM's batch fixes m, so the graph is m's own and screens it, as no `_after` runs at replay.  A
+        deferred-a capture's graphs (`_defers_a`) are its own: their pipelines split A's commitment (`_split_whole`), and a
+        graph made unsplit would keep A's tree on the main lane."""
         rows = m if self.hashing and (m == sh.m16 or self._whole is not None) else 0
-        return (w, sh.m16, self.omit, self.hashing, self.schedule.name, rows), rows > 0
+        return (w, sh.m16, self.omit, self.hashing, self.schedule.name, rows, self._defers_a()), rows > 0
 
     def _into(self, w: int, sh: Any, pipe: Any, raw: int, tiles: int, m: int) -> tuple[Any, bool]:
         """The call's graph steps launched on `raw`, the stream vLLM is capturing, over the graph's own buffers.  The graph
