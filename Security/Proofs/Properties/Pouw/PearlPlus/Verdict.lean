@@ -5,12 +5,13 @@ import Proofs.Properties.Pouw.Commit
 /-!
 # What Pearl+'s run verdict establishes (`Properties.Pouw.PearlPlus`)
 
-`PlanMeans`, `AcceptMeans`, `RefusedBeforeTheCoin`, `LoadedGivesUp`, `TileAcceptMeans`, `TileKeepsTheCap` and
-`YIsTheUnscale`, by unfolding the port's definitions step by step: each `Except` chain one bind at a time (`bind_ok`),
+`PlanMeans`, `AcceptMeans`, `RefusedBeforeTheCoin`, `LoadedGivesUp`, `TileAcceptMeans`, `TileKeepsTheCap`,
+`YIsTheUnscale` and `WorkIsTheCredit`, by unfolding the port's definitions step by step: each `Except` chain one bind at a time (`bind_ok`),
 each `for` loop by induction over its list with the loop's state as the invariant's, and the replay's tasks by their pure
 model (a task's `get` is its function's value). The unscale is the Definition's through `Properties.Evaluator`'s FP32
 equalities. A tile over its inert-work bound gets `checkOpened`'s refusal as its verdict, so a tile that passes keeps the
-inert-work bound (`TileKeepsTheCap`).
+inert-work bound (`TileKeepsTheCap`). The work an accepted run publishes is `check`'s own field, and a refused or
+rejected answer leaves it at its default, `none` (`WorkIsTheCredit`).
 -/
 
 namespace Properties.Pouw.PearlPlus
@@ -726,5 +727,22 @@ theorem yIsTheUnscale : YIsTheUnscale := by
   · cases h
   · cases h
     exact unscale_eq u alphaA alphaB
+
+/-! ## The published work -/
+
+theorem workIsTheCredit : WorkIsTheCredit := by
+  intro i opener
+  cases hp : plan i with
+  | error r =>
+    refine ⟨fun hacc => ?_, fun _ => ?_⟩
+    · rw [refusedBeforeTheCoin i opener r hp] at hacc; cases hacc
+    · rw [refusedBeforeTheCoin i opener r hp]
+  | ok pl =>
+  unfold check
+  rw [hp]
+  dsimp only
+  split
+  · exact ⟨fun _ => ⟨pl, rfl, rfl⟩, fun h => nomatch h⟩
+  · exact ⟨fun h => (nomatch h), fun _ => rfl⟩
 
 end Properties.Pouw.PearlPlus
