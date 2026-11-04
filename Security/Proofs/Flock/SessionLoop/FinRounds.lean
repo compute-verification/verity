@@ -498,7 +498,8 @@ theorem admits_of_finCtx (L₀ : LeanRelease Flock.Wit Tp)
 /-- **Where every table admits the coins, the switched cut is the switched views'** with every guarded message sent
 (`cutV_swViewsAt`, `famGuard_admits`). -/
 theorem swCutOf_viewCut {x : Msg} {c : Fin (refK x) → finS.Coin} (hA : finS.Admits x c)
-    (wt : ∀ j, FlockSoundness.Model.Witness (finS.C x j).S.m) (v : ∀ j, ((finS.C x j).T (finS.cz x c j)).tab.Vals)
+    (wt : ∀ j, FlockSoundness.Model.Witness (finS.C x j).S.m)
+    (v : (∀ j, FlockSoundness.Discharge.ZkView.Seen (finS.C x j).z) → ∀ j, ((finS.C x j).T (finS.cz x c j)).tab.Vals)
     (t : finS.Tape) (j : Fin (finS.J x)) :
     finS.swCutOf x c wt v t j = Masked.viewCut (finS.swViewsAt x c wt v t j) := by
   rw [← RefSession.cutV_swViewsAt]
@@ -1059,7 +1060,7 @@ theorem viewRep_rounds (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     refine Array.ext ?_ fun e he1 he2 => ?_
     · rw [Array.size_map, Array.size_range, hws,
         Nat.min_eq_left (show loopNr x (l.size + j) ≤ _root_.Flock.Firewall.Frames.COIN_MAX from hcap)]
-    · have es := wordsAt_slot Masked.dataE x ops hF.1 (s := ops.length) (p := l.size + j) (e := e) hlt le_rfl
+    · have es := wordsAt_slot Masked.dataE x ops hF.1.le (s := ops.length) (p := l.size + j) (e := e) hlt le_rfl
         (by rw [List.take_length]; exact he2)
       rw [List.take_length] at es
       rw [Array.getElem_map, Array.getElem_range, ← getElem!_pos _ e he2, es]

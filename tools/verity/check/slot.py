@@ -36,8 +36,9 @@ lock is not in the line: it takes that slot whenever it frees.
 `python3 tools/verity/check/slot.py --priority -- CMD...`: the lander's train checks (`train.sh`). A priority waiter's ticket sorts
 before every lane waiter's, so it takes the next slot that frees ahead of the lanes' checks already waiting; it never stops a
 running check, and priority waiters keep their own arrival order. Merges unblock everyone. With `--rank N`
-(drive's train checks: the train's first-parent depth, so the lowest train's is the least), priority
-waiters go by rank, then arrival: the train that lands next takes the next slot, ahead of trains above it that came first. A priority waiter without a rank (drive's post-landing run) goes after the ranked.
+(drive's after-landing run, rank 0: `research.drive.POSTLAND_SLOT_RANK`), priority waiters go by rank, then arrival, and a
+priority waiter without a rank (drive's Lean checks of `next`) goes after the ranked: the run `main` waits on takes the next
+slot, ahead of Lean checks that came first.
 
 `--wait-max SECONDS`: a waiter that has no slot after SECONDS leaves the line and exits NOT_STARTED (75) without running CMD, so
 its caller can tell a check that never started from one that failed. `--run-max SECONDS`: CMD's time limit, counted from the slot
@@ -74,6 +75,7 @@ why), held (which slot, since when) or left (why), so `research status` shows a 
 from __future__ import annotations
 
 import fcntl
+import importlib.util
 import json
 import os
 import re
@@ -332,8 +334,15 @@ DISK_MIN_INODES, DISK_MIN_GB = 400_000, 50
 def cache_disk() -> Path:
     """Where the check cache (`check.py`'s $CHECK_CACHE, default ~/.cache/verity-check) lives: its nearest existing directory.
     Its Lean build trees reach tens of GB, so its disk counts as DISK does; it is another disk (the 247 GB root) wherever
-    vm_setup.sh's link onto /workspace is missing."""
-    cache = Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check")
+    vm_setup.sh's link onto /workspace is missing. `common.cache_dir` names it, loaded by path since slot.py runs as a script;
+    shipped alone (check.py's and research.auto's slot reads send its source over ssh), it is the default path."""
+    try:
+        spec = importlib.util.spec_from_file_location("verity_check_common", Path(__file__).with_name("common.py"))
+        common = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(common)
+        cache = common.cache_dir()
+    except (NameError, OSError):
+        cache = Path.home() / ".cache" / "verity-check"
     return next((p for p in (cache, *cache.parents) if p.is_dir()), Path("/"))
 
 

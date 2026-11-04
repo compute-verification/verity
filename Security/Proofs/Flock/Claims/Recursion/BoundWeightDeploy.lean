@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.Recursion.BoundRouteCols
 # The deployed bound record at `coverW`, and the route with (P3) discharged
 
 The deployed bound record states its inner claim at `IVStar` at the weight `coverW` of `deployPlainTrim`'s weight, the
-least at which (P3) (`Bound.WeightCovers`) holds, at about 4 bits of `λ`.
+least at which (P3) (`Bound.WeightCovers`) holds.
 
 * **The weight** is `wCover rel = coverW (deployPlainTrim rel).weight`, and **the deployed bound record** `bdCover` is
   `bdDeployed` at it, at every other choice the code side makes. `bdDeployed` keeps `γ`'s weight at `IVStar` a parameter,
@@ -16,16 +16,13 @@ least at which (P3) (`Bound.WeightCovers`) holds, at about 4 bits of `λ`.
 * **The route with (P3) discharged** (`ksBoundRouteCols_cover`): `ksBoundRoute_of_bridge_cols` at `bdCover`, its
   premises but (P3) giving `KSBoundCover`, `KSBoundDeployed` at `wCover rel`.
 
-At one table of `N₀ = 2^23` and the bounds `k_I = 4402`, `C_DE = 2^33`, `wCover` is about `2^69.65`. At the deployed
-shape (one inner table at `m = 35`, `k_log = 24`) the recursion's security level (`Claims.Recursion.lam`) is about 65.2
-bits per SHA-512 call at `wCover`, against 69.4 at `w = C_DE`: its third term, `128 − log₂(γ_E·c_Be)/2`, the one that
-binds, loses about 4 bits. That is below the 100-bit floor and the `2^-128` target under every weight. Route
-2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about
-165.8), but `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises
-still open: `PartChecksBV`, `PartOpensB`, `DecompB`, the readers' three facts and the coin server's transcript
-reading back (`RecDeploy.ReadsBackB`, `RecDeploy.ksLin2_deployed_open`, with the last round's pieces at the parts that
-commit the earlier rounds, `RecDeploy.finOpen`). Holo statements are candidate 3's own model, and `BitsLin2` at the dense
-statements follows from it (`bitsLin2On_of_ksLin2On`).
+At one table of `N₀ = 2^23` and the bounds `k_I = 4402`, `C_DE = 2^33`, `wCover` is about `2^69.65`. No theorem
+evaluates the recursion's security level (`Claims.Recursion.lam`) at the deployment, at `wCover` or at any other
+weight. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records
+(`RecDeploy.lamLin2_deployed_ge_dep_tight`; at least 100, `RecDeploy.lamLin2_deployed_ge_dep`), and `KSLin2` at the
+deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`, at the deployed reader) is proved with no hypothesis
+(`Flock.Guarantees.RecursiveKS`, `Flock.SecurityProofs.RecursiveKS`). Holo statements are candidate 3's own model, and
+`BitsLin2` at the dense statements follows from `KSLin2` there (`bitsLin2On_of_ksLin2On`).
 -/
 
 namespace RecDeploy
@@ -81,12 +78,11 @@ theorem weightCovers_bdCover_plain (rel : _root_.Flock.Readable.Parsed → _root
 
 /-- **The deployed route with (P3) discharged**: `ksBoundRoute_of_bridge_cols` at the bridge (`bridge_bdDeployed`) at
 the deployed bound record (`bdCover`), wherever `DE`'s weight is at most the deployed plain record's (the intended
-choice among them), with (P3) from `weightCovers_bdCover`. The other premises are `KSBoundRouteCols`', at `bdCover`. Its
-level (`Claims.Recursion.lam`) is about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the
-`2^-128` target (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
-(`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
-candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
+choice among them), with (P3) from `weightCovers_bdCover`. The other premises are `KSBoundRouteCols`', at `bdCover`. No
+theorem evaluates its level (`Claims.Recursion.lam`) at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at
+least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's
+dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements
+being candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
 theorem ksBoundRouteCols_cover (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB)
     (hRows : L.ReadsRows FlockDeploy.sha512) (nextE : Msg → List Msg → List Coin → Claims.OC Out)

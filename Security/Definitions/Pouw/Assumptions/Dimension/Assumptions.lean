@@ -1,12 +1,16 @@
 import Definitions.Pouw.Dimension.Defs
 
 /-!
-# Theorem D's residue: the named assumptions A1 and A2 (trusted)
+# Theorem D's residue: the named assumption A1 (trusted)
 
-`docs/pouw/milder-assumptions.md` §2.4 and §2.5. `Prop`s taken as hypotheses by the statements that use them, never
-`axiom`s. Theorem D (`Pouw.Dimension.AlgBound`) prices every priced register write at 16 or more (H_16). A1 covers the
-scalar-pipe products H_16 leaves out; A2 says that a program of the machine does no better than an algebraic program
-that outputs the same checked words on the whole grid.
+`docs/pouw/milder-assumptions.md` §2.4. `Prop`s taken as hypotheses by the statements that use them, never `axiom`s.
+Theorem D (`Pouw.Dimension.AlgBound`) prices every priced register write at 16 or more (H_16). A1 covers the
+scalar-pipe products H_16 leaves out.
+
+The survey's A2 (algebraic sufficiency of a machine's programs, on its own abstract machine) is not stated: on the
+checked words it is the per-word cost itself, TT_NCP restated, so it reduces TT_NCP to nothing milder, and TTNCP_U
+stays the named conjecture (`Pouw.NCP.Assumptions.TTNCP_U`). The accounting's machine model is ACCEL's
+(`Verity.Accel.Machine`).
 -/
 
 namespace Pouw.Dimension.Assumptions
@@ -44,36 +48,5 @@ Brockett–Dobkin; false at MinRank 2 to 4). The recommended chain uses `A1_cost
 pipe (`Pouw.Dimension.Pipe`). -/
 def A1_W1 (γ₁ : ℝ) (k : ℕ) (R : Mat) : Prop :=
   CheckpointIndependent k 16 R → MinRank2 k R → A1_multiplicative 2 γ₁ k R
-
-/-- A machine for NCP's checked words (M_4090 when instantiated): its programs, their W1 cost, and each program's
-outputs, the functions of the noise it outputs correctly on the whole grid. -/
-structure Machine (G : Type) where
-  /-- The programs, fixed before the salt. -/
-  Prog : Type
-  /-- A program's W1 cost. -/
-  cost : Prog → ℝ
-  /-- The functions of the noise a program outputs correctly on the whole grid. -/
-  outputs : Prog → Set (G → ℚ)
-
-/-- The non-final checked words of a word family `w` at the units in `U`: the functions `w u p` with `u ∈ U` and
-`p < nonFinal`. A2's target set for `w = word` (or route U's words). -/
-def wordSet {N m n k : ℕ} (w : ℕ → ℕ → Noise N m n k → ℚ) (U : Finset ℕ) : Set (Noise N m n k → ℚ) :=
-  {φ | ∃ u ∈ U, ∃ p < nonFinal k m n, φ = w u p}
-
-/-- **Assumption A2(γ₂), algebraic sufficiency** (survey §2.5), for a machine `M` on an NCP instance's noise grid, a
-class `Alg` of AlgM programs and a target set `W` (the checked words, `wordSet`): every program of `M` is matched
-by a program of `Alg` on inputs in `V₀` that outputs every function of `W` it outputs, at a price of at most
-`cost/(1 − γ₂)`. The survey's A2 takes `Alg` = AlgM_4090 (scalar products at 8); with `Alg = H16` it also contains A1.
-
-Only the outputs in `W` are matched: a program's other outputs, such as triple products or FP32 sums
-of a tensor-core word, which the model may price above their real cost, are not constrained.
-
-This is the deterministic form: `M.outputs` is correctness on the whole grid. The probabilistic lifting, from
-a program correct at the realized noise with probability `ε` to one correct on the whole grid, is not in A2; it is a
-separate node of the chain (`Lift_MinRank`, open), which needs MinRank. -/
-def A2_algebraicSufficiency (γ₂ : ℝ) {N m n k : ℕ} (M : Machine (Noise N m n k))
-    (Alg : List (Instr (Noise N m n k)) → Prop) (W : Set (Noise N m n k → ℚ)) : Prop :=
-  ∀ q : M.Prog, ∃ (L : List (Noise N m n k → ℚ)) (P : List (Instr (Noise N m n k))), (∀ f ∈ L, f ∈ V0 N m n k) ∧
-    Alg P ∧ (∀ φ ∈ M.outputs q, φ ∈ W → φ ∈ slots P L) ∧ (1 - γ₂) * (cost P : ℝ) ≤ M.cost q
 
 end Pouw.Dimension.Assumptions

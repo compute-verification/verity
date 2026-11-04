@@ -55,7 +55,7 @@ theorem schedMatches_sparse : SchedMatches Claims.Recursion.Form.Sparse :=
 /-- **The inner shape the verifier's list accepts has a rep schedule**: `RecVStar.checkTopsListed` refuses one without. -/
 theorem repSched_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
     ∃ rs, repSched i = some rs := by
-  obtain ⟨_, _, _, _, _, -, -, -, ht, -, -, -⟩ := FlockC3.VStarList.statements_ok h
+  obtain ⟨_, _, _, _, _, _, -, -, -, ht, -, -, -, -⟩ := FlockC3.VStarList.statements_ok h
   unfold RecVStar.checkTopsListed at ht
   unfold repSched
   cases hrs : (if i.holo then RecVStar.holoRepRounds else RecVStar.repRounds) i.m i.kLog i.claims with
