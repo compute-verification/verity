@@ -64,6 +64,11 @@
    "imports": ["NetworkCheck.Check", "Lms.Verify", "Flock.Hm96", "Flock.Canon", "Flock.FV3", "Identity.Tagged"],
    "except": [],
    "why": "N2's link-window verdict of record is code: v4's certificate, its one LMS check and its encodings, the LMS verifier, C-Flock's hm96 row commitment, canonical JSON and frame-v3-sha512 domain, and core's identity hash, no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.Members": {
+   "imports": ["NetworkCheck.Circuit", "Std.Data.HashMap"],
+   "except": [],
+   "why": "a stated record's members are code: the circuit check's stated record and Lean's hash map, no Mathlib and nothing of Security"
   }
  },
  "reads_exempt": {

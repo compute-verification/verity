@@ -5,6 +5,7 @@ import NetworkCheck.Records
 import NetworkCheck.RecordsGrid
 import NetworkCheck.RecordsBytes
 import NetworkCheck.Circuit
+import NetworkCheck.Members
 import NetworkCheck.CircuitFile
 import NetworkCheck.Period
 import NetworkCheck.LinkWindow
@@ -39,7 +40,8 @@ identity hash (`Identity.Tagged`).
 `NetworkCheck.Circuit` checks a compute audit's circuit record against its Program at the size of their description:
 the population program, the wires, the registered reads, the wire order and the count of free input bits. Beyond the
 above it imports NCI's layout checks (`NciCheck.Desc`), the sampled audit's wires (`SampledProofs.Wires`) and Bits' leaf
-widths (`SampledProofs.Bits`).
+widths (`SampledProofs.Bits`). `NetworkCheck.Members` derives a stated record's members, each statement's units and
+first VU (`interface._members`), from the record alone, held to `interface.members` by `tests/test_members_difftest.py`.
 -/
 
 /-!
