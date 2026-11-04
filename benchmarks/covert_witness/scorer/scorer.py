@@ -199,9 +199,11 @@ def branches(commits: set[str]) -> dict[str, list[str]]:
                         "+refs/heads/cursor/covert-witness-4207:refs/remotes/origin/cursor/covert-witness-4207"],
                        capture_output=True, text=True)
     for c in todo:
-        # local branches too: agents on this VM share its object store, and some never push their branch
-        out = subprocess.run(["git", "-C", str(REPO), "branch", "-a", "--contains", c, "--format=%(refname:short)"],
-                             capture_output=True, text=True)
+        # local branches too: agents on this VM share its object store, and some never push their branch. --list
+        # (the names kept below) spares git a walk from each of origin's thousands of other refs, which in a repository
+        # without a commit-graph (the node's) is most of collect's time
+        out = subprocess.run(["git", "-C", str(REPO), "branch", "-a", "--contains", c, "--format=%(refname:short)",
+                              "--list", "*/te-*", "*covert-witness*"], capture_output=True, text=True)
         names = {b.removeprefix("origin/") for b in out.stdout.split() if "/te-" in b or "covert-witness" in b}
         known[c] = sorted(names)
     path.write_text(json.dumps(known, indent=1, sort_keys=True) + "\n")
