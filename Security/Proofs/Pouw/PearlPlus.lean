@@ -6,6 +6,7 @@ import Proofs.Pouw.PearlPlus.Stats
 import Proofs.Pouw.PearlPlus.Keys
 import Proofs.Pouw.PearlPlus.Rho
 import Proofs.Pouw.PearlPlus.Assembly
+import Proofs.Pouw.PearlPlus.Draw
 
 /-!
 # Pearl+'s bridge: the Lean check's verdict on a tile, read in the Models game
@@ -19,4 +20,8 @@ premise `TTOutTilePearlCH100Rev1` reads. Four parts:
 * (c) `Rules` and `Keys`: the per-row rules are `RowOK`, and a word's debit replay is the game's (`Keys`: the replay's
   keys, bisection and carried add).
 * (d) `Assembly`: a passed tile whose openings are its unit's commitment has good words, or SHA-512 collides.
+
+`Draw` reads the run's draw and acceptance as `TileDraw`'s game draws and audits: a passed tile's declaration is
+consistent (`declOK`), the code's tickets are `drawTickets`, and an accepted run's samples are accepted by the tolerant
+audit over `goodDeclTiles ∪ blankTiles`, or SHA-512 collides.
 -/

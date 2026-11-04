@@ -1,9 +1,9 @@
 """circuit-check over every registered Definition and subcircuit template, a served workload's request Program, and the checks' own
 negatives (each check fires by name on a circuit built to break it).
 
-A failure is a correctness or invariant violation.  The ones `main` already has are listed in `circuit_check.known` with their
-cause; a test whose only failures are known is an expected failure, and `test_known_failures_are_current` fails once a known one
-is fixed, so the entry is dropped.  Redundant and dead gates are warnings: counted in the report, never a test failure here.
+A failure is a correctness or invariant violation, and fails its test: whether one may stay red is drive's policy
+(`research.policy`), never the checker's.  Redundant and dead gates are warnings: counted in the report, never a test failure
+here.
 The per-target tests are marked `circuit_suite` and collected only under `-m circuit_suite` (see conftest.py): `check` runs the
 same checks as `circuit-check --all`.
 
@@ -24,7 +24,6 @@ import numpy as np
 import pytest
 
 from circuit_check import checks as CK
-from circuit_check import known as KN
 from circuit_check import targets as TG
 from circuit_check import vectors as VX
 
@@ -34,15 +33,9 @@ MEMO: dict = {}
 PINS = CK.load_pins()
 TEMPLATES = {label: (sub, sts) for label, sub, sts in TG.templates()}
 
-_known = KN.known
-
 
 def _clean(entry: dict) -> None:
-    new = [f["name"] for f in entry["failures"] if _known(f) is None]
-    assert not new, "\n".join(new)
-    known = sorted({_known(f) for f in entry["failures"]} - {None})
-    if known:
-        pytest.xfail(" | ".join(known))
+    assert not entry["failures"], "\n".join(f["name"] for f in entry["failures"])
 
 
 # --- coverage -----------------------------------------------------------------------------------------------------------------
@@ -360,13 +353,6 @@ def test_a_call_output_no_commitment_holds_is_named(tmp_path):
     r = CK.check_row(_request_program(tmp_path, attn=True), OPTS, memo=MEMO, pins=PINS)
     assert "partition/output-not-committed Gemm_v1{K=48,N=16} (4 Call(s) under model.model.layers.0.self_attn.o_proj)" in \
         [f["name"] for f in r["failures"]]
-
-
-@pytest.mark.circuit_suite
-def test_known_failures_are_current(suite):
-    """Each known entry still fails somewhere: a fixed one is dropped from `circuit_check.known`."""
-    fails = [f for fid in sorted(suite) for f in CK.check_definition(suite[fid], OPTS, memo=MEMO, pins=PINS)["failures"]]
-    assert not KN.stale(fails), KN.stale(fails)
 
 
 # --- the vectors ----------------------------------------------------------------------------------------------------------------
@@ -1119,10 +1105,8 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     assert not real["lowered"] and real["reason"].endswith("over the whole-Definition budget (1)")
     capsys.readouterr()
     fp8 = "ScaledMmFp8Block_v1{K=128,N=128,G=128}"
-    assert cli.main([fp8, *call]) == 0                                           # a known failure: named, not failing
-    assert f"known partition/gate-recomputed {fp8}" in capsys.readouterr().out
-    assert cli.main([fp8, *call, "--strict"]) == 1
-    capsys.readouterr()
+    assert cli.main([fp8, *call]) == 1                       # a failure drive's policy allows is still its real verdict
+    assert f"FAIL partition/gate-recomputed {fp8}" in capsys.readouterr().out
     assert cli.main([BOOL_RECOMPUTE, *call]) == 0
     assert "1 Boolean Call(s) recomputing 1120 gate(s) across units (Q_word v2)" in capsys.readouterr().out
 

@@ -176,6 +176,7 @@
   "art:98ccdf6cfe3a5a632e5babed1245d0600d6ef38d67672113d25a32ffa026ef4f": "integrations/vllm/tests/commit/serving_row_leaf_vector.json",
   "art:7a85c5c4238b971371cf46c2153b94548a11988891cc4018b196535c3cb92bbb": "verity/ml/flock/tests/fixtures/f1-gate",
   "art:ff28796246bdf4ea6df75289ccd8d1fddee94ecd17d21ef7b3c009f35bbcc863": "verity/ml/flock/tests/fixtures/rec-links",
+  "art:8bfe414af3d247db7b062b4c99a13b2d50f757cebeadf6c7411c39387bbed65c": "verity/ml/flock/tests/fixtures/plain-tree",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"

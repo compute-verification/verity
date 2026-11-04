@@ -57,8 +57,9 @@ import Proofs.Pouw.Lead
 import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.M1
 import Proofs.Pouw.MerkleExtract
-import Proofs.Pouw.Salt
 import Proofs.Pouw.OnsiteFreed
+import Proofs.Pouw.Salt
+import Proofs.Pouw.Salt.Witness
 import Proofs.Pouw.ShaRealize
 import Proofs.Pouw.ShaRealizeWitness
 import Proofs.Pouw.Milestone
@@ -147,6 +148,8 @@ import Proofs.Pouw.PearlC.TileCapRev1Gamma
 import Proofs.Pouw.PearlC.TileCircuit
 import Proofs.Pouw.PearlC.TileValues
 import Proofs.Pouw.PearlC.TileGamma
+import Proofs.Pouw.PearlC.TileGammaTol
+import Proofs.Pouw.PearlC.TileDrawGamma
 import Proofs.Pouw.PearlC.UOnlyGamma
 import Proofs.Pouw.PearlC.UOnlyLoopGamma
 import Proofs.Pouw.PearlC.W1BudgetAbort
@@ -164,6 +167,7 @@ import Proofs.Pouw.PearlC.RowStats
 import Proofs.Pouw.PearlC.PeelExists
 import Proofs.Pouw.PearlC.PeelExists4
 import Proofs.Pouw.PearlC.TileCheckWords
+import Proofs.Pouw.PearlC.TileCheckWordsRev1
 import Proofs.Pouw.PearlPlus
 import Proofs.Pouw.Pool
 import Proofs.Pouw.PoolWitness
@@ -200,5 +204,6 @@ import Proofs.Pouw.Writes
 Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Definitions.Pouw.Assumptions`'
 named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
 `Game`, `NCP`, `PearlC`, `Receipt`), and the keyed leaf's as `Pouw.Salt.keyed_leaf_hides` and `Pouw.Salt.keyed_leaf_binds`
-(`Salt`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Definitions.Pouw`.
+(`Salt`, its witnesses in `Salt/Witness`); the kernel checks them, and nobody reviews them for meaning. The topics' maps
+are in `Definitions.Pouw`.
 -/

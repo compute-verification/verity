@@ -35,7 +35,8 @@ broader credential sits on the machine to mint a shorter-lived one. Every write 
 412 or 409 means the object exists: a blob then must be stored with its MD5 as ETag (blobs go up in one part, so it is),
 and a record must be byte-identical, or the package isn't published. The record goes last, so every blob it names exists.
 Integration's own builds never read the cache: `check.py` runs Lake with `LEAN_CACHE=off`, and with `LAKE_ARTIFACT_CACHE=false`
-or, in check's audit, a local Lake cache that only a passing audit on that node writes (`lean_audit.LakeArtifacts`).
+or, in check's audit and a records run, a local Lake cache that only a passing run on that node writes, restoring a module
+only under its key (`lean_audit.LakeArtifacts`, `module_keys.py`).
 """
 from __future__ import annotations
 
