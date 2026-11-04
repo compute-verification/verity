@@ -82,20 +82,20 @@ theorem prob_member (τ : Strategy w.game) (k : Fin w.ms.length)
     refine congrArg avg (funext fun ω => ?_)
     rw [prob_map]
     by_cases hω : DrawEnds w.src w.law w.nJ ω
-    · rw [if_pos hω]
+    · rw [ite_eq_left hω]
       have hp : ∀ ts : List Discharge.Exec.Transcript,
           ((w.out τ.1 ω ts).2.2[k.1]?).elim False (E ((w.ms.get k).part (w.out τ.1 ω ts).2.1)) ↔
             (ts[k.1]?).elim False (E ((w.ms.get k).part (w.L.draw ω))) := fun ts => by
-        simp only [JointAuditV5.out, if_pos hω]
+        simp only [ite_eq_left hω]
       refine (le_antisymm (prob_mono (fun ts hts => (hp ts).1 hts) _ _)
         (prob_mono (fun ts hts => (hp ts).2 hts) _ _)).trans ?_
       exact (prob_seqG (fun m : MemberV5 w.Reg w.nJ => m.live (m.part (w.L.draw ω)) τ.1)
         (fun x => x.elim False (E ((w.ms.get k).part (w.L.draw ω)))) w.ms k.1 k.2 _).trans
         (avg_congr_fintype _ _ _)
-    · rw [if_neg hω]
+    · rw [ite_eq_right hω]
       refine le_antisymm ((prob_mono (q := fun _ => False) (fun ts hts => ?_) _ _).trans_eq (prob_false _ _))
         zero_le
-      simp [JointAuditV5.out, hω] at hts
+      simp [hω] at hts
   have hR : prob (fun o => E o.2.1 o.2.2) ((w.ms.get k).game (w.memberLaw τ k)) (w.memberStrat τ k) =
       avg fun x : (w.memberLaw τ k).Ω => h x.1.1 (x.2 x.1) := by
     show avg (fun x => prob (fun o => E o.2.1 o.2.2) (((w.ms.get k).live ((w.memberLaw τ k).draw x) τ.1).map
