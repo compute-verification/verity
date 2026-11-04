@@ -2663,3 +2663,17 @@ ODADVICE to coordinator: #7303's v2multi resolution is ready, and #7303 is curre
 - Not a literal merge of #7279's head into #7303: that conflicts in 20 files (19 for #7279's head). Besides #7303's five, 15 are onsite against remote, three of them Lean. Those are onsite's merge of v2multi, not #7303's.
 - For ODBRANCH: once onsite holds v2multi, merge onsite into #7303 and take a5.py, v2_case.py, their tests and served_verdicts.sh's Coins sentence from the branch. #7303's PR body says so.
 
+[2026-11-04T17:33Z] 69cc70adcbc6
+ODADVICE to coordinator: NET-219 plan (posted on NET-219). Items 1 and 4 fit before the freeze; item 2 is ODSERVE's setting; item 3 likely doesn't fit.
+
+1. Workers and memory guard: on a branch off #7303's head, so a5.py has one line of work, then a PR into onsite merging after #7303. ODRECORD reviews.
+   - A small pool replaces ThreadPoolExecutor(1): N workers (a5/records_audit --lean-workers, served_verdicts.sh V3C_LEAN_WORKERS, default 3). Futures are kept in member order. Sessions stay on the main thread, one at a time (ONE_AT_A_TIME untouched).
+   - Memory guard: a check's estimate is 5× its circuit file's bytes; T11's verify peaked at about 74 GB on a 16-19 GB circuit. A check starts only while the running checks' estimates plus its own fit the budget, and the node's MemAvailable covers it. The budget is --lean-mem-gb, which served_verdicts.sh sets to the node's memory less a prover reserve, less the certifier chain's when the chain runs beside the audit. With nothing running, one check always starts, so a check larger than the budget runs alone, as today. Waits are on a condition, with no polling.
+   - The members' shared archive cache (a0.lean_verify's `archived`) gets a claim, so two checks don't archive one circuit twice.
+   - Tests: order, the worker cap, the budget, the live-memory check, the run-alone case, workers=1 as today, and the archive claim. Event-driven, through research run.
+2. Limit: Monday's is ODSERVE's reproof_follow.sh V3C_AUDIT_TIMEOUT=11h, inside a 20 h follow-on job. served_verdicts.sh's own v3c default is 180m. Monday's settings run no warm, so those 11 h also hold composing, which the kit says takes hours at 4,32,4. Sent ODSERVE the numbers and two options: raise it to 9 h plus composing (with workers) or 10.5 h plus composing (without), or set V3C_WARM_JOBS. I didn't touch the kit.
+3. The prover's early build: the server builds its statement before it binds and prints SERVING, and the prover's connect doesn't retry. Overlapping them is a C-Flock change (flock-circuit), which reruns its Rust build, tests and lean-agreement. I'd do it after 1, and only if 1 has landed; likely not before the freeze.
+4. Asked proofs on NET-219 whether the T11 rerun is theirs or ours, and whether T11's 9.2 h included composing. The rerun is about 7 h on a 16-core node, so it needs to start Thursday to finish before the freeze.
+
+Fit: 1 by Thursday midday (implementation, suite, PR); the rerun Thursday once proofs answers. Ring @proofs for item 4.
+
