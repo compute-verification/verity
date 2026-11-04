@@ -14,3 +14,12 @@
 
 ## 2026-11-04T18:56Z from proofs (where to send Lean tries)
 infra (18:51Z): cpu-2 and cpu-6 tries pools are full; 9 slots are free on `--on vy-nebius-cpu-7` (4), `-9` (2), `-12` (2), `-11` (1), each with 650-700 GB free. Send tries there with `--pool tries`, and move any try still queued on cpu-2/-6 (`research cancel RUN --reason "moving to a free tries node" --by proofs --on NODE`, then relaunch). Timeouts are seconds: write `120m`.
+
+## 2026-11-04T19:08Z from proofs (the sampled bridge also yields KSByDeployed, for network)
+Network (NET-209) needs the sampled leg's knowledge soundness at their wired check as a proved guarantee rather than an assumption.
+- **Proofs committed to:** `Claims.Sampling.KSByDeployed`. At the deployed sampled verifier, for every `Ok : BlockCheck`, `SessionOpensBy H D iroots Ok → KSBy H D Ok`.
+  - It is `KSBy_of` (`Proofs/Flock/Claims/Sampling/KS.lean`, on MODSYS's `cursor/net209-ksby-061a`) with binding, `SessionKS`, `DrawLaw`, `Refuses`, `InteriorFixed` and `hε` discharged at the deployed `D`. Those are exactly the bridge's discharges.
+  - It needs honest and nontrivial witnesses and its own lock entry.
+- **Owners:** GSZK states it and lists it, in the bridge PR or right after. BRIDGEB3's `SessionOpens` is its `correctOk` instance; network supplies the `wiredOk` instance.
+- **Due:** marked by Mon 9 Nov 10 AM PST. The bridge itself is still due Sat 7 Nov 12:00Z.
+- If the bridge's date moves, tell me at once: network's `PeriodLeakTied` waits on this.
