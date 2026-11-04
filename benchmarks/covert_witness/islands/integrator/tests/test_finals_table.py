@@ -27,7 +27,8 @@ L0, POOL_L0 = 1.2, 1.25
 OTHER = "f" * 40
 #: (point's search run, island, planned seeds, label, rerun, its checkpoints' final-set bpb by step, measured at)
 POINTS = [("r-honest", "ref-optim", ["own", "101"], None, "f-a", {4: 1.18, 9: 1.12}, None),
-          ("r-covert", "lowrank", ["own"], FT.SINGLE, "f-b", {1: 1.19, 9: 1.16}, OTHER)]
+          ("r-covert", "lowrank", ["own", {"seed": "101", "dropped": "late"}], FT.SINGLE, "f-b", {1: 1.19, 9: 1.16},
+           OTHER)]
 #: the scorer's search rows: (record, gain target, reached, rho_own, rho_default)
 SEARCH = [("r-honest@40", 1.1, "yes", 1.5, 2.0), ("r-honest@90", 2, "yes", 1.5, 2.0), ("r-honest@90", 11, "no", 1.5, 2.0),
           ("r-covert@10", 1.1, "yes", 3.0, 4.0), ("r-covert@90", 2, "no", 3.0, 4.0), ("r-covert@90", 11, "no", 3.0, 4.0)]
@@ -51,7 +52,8 @@ def fixture(tmp_path: Path, rho_own: bool = True) -> list[str]:
     and `build`'s arguments over them. The covert point's first launch was superseded by its step check."""
     pin = frontier.pinned()[0]
     finals = {"points": [{"point": f"{run} point", "run": run, "start": "s1", "island": island,
-                          "mechanism": f"{island}/m", "reruns": [{"seed": s} for s in seeds]}
+                          "mechanism": f"{island}/m",
+                          "reruns": [s if isinstance(s, dict) else {"seed": s} for s in seeds]}
                          | ({"label": label} if label else {}) for run, island, seeds, label, *_ in POINTS]}
     (tmp_path / "FINALS.json").write_text(json.dumps(finals))
     launches = [{"key": "r-honest seed own", "node": "n1", "run": "f-a", "rc": 0},
@@ -137,6 +139,7 @@ def test_every_point_the_table_leaves_out_or_seed_it_lacks_says_why(tmp_path):
     assert pts["r-covert"]["at"]["2"]["seeds"]["own"]["step"] == 9  # not reached: at its last checkpoint
     assert "1 of 2 seeds finished: seed 101 not launched" in pts["r-honest"]["label"]
     assert pts["r-covert"]["label"][0] == FT.SINGLE
+    assert pts["r-covert"]["at"]["2"]["planned"] == 1 and "101" not in pts["r-covert"]["seeds"]  # dropped, unlaunched
     assert f"seed own measured at {OTHER[:12]}, outside the pin's version" in pts["r-covert"]["label"]
     assert pts["r-honest"]["seeds"]["101"] == {"rerun": None, "state": "not launched"}
     assert "Not shown: 1 point(s): neither the search run" in md

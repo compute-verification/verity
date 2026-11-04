@@ -21,7 +21,8 @@ unavailable. `build` reads te_core and changes nothing in it:
   from the scorer's stored tables (`--policy`'s frontier-fit.json), and l0 that seed's own start_bpb on the final set:
   the final set is the search pool's distribution, so the fit carries over and only l0 moves. The seed reaches g at its
   first checkpoint at or below its target (C that checkpoint's |C|), else it is "not reached" at its last;
-- per point: the seeds reached (k of the seeds finished, of those planned), C's mean and spread over the reached seeds;
+- per point: the seeds reached (k of the seeds finished, of those planned: its FINALS.json reruns but a seed dropped or
+  skipped there and never launched), C's mean and spread over the reached seeds;
 - H at (start, gain) is the honest point (`honest`: its island a reference direction, te_core.frontier's
   `REF_DIRECTIONS`) with the least mean C, with its own spread, and p = C/H; `H_any`, the
   least mean C over every point, covert routes included (te_core.frontier's `target`, the 19:50Z ruling, and
@@ -216,10 +217,12 @@ def build(finals: dict, runs: dict[str, dict[str, str]], records: Path, fits: di
     for pt in finals["points"]:
         shape = shapes.get(pt["start"])
         data = frontier_fit.data_of_shape(shape) if shape else None
-        planned = [s for s in (x["seed"] for x in pt.get("reruns", [])) if s in SEEDS]
+        launched = runs.get(pt["run"], {})
+        planned = [x["seed"] for x in pt.get("reruns", []) if x["seed"] in SEEDS
+                   and (x["seed"] in launched or not {"dropped", "skipped"} & x.keys())]
         seeds = {}
         for s in planned:
-            run = runs.get(pt["run"], {}).get(s)
+            run = launched.get(s)
             if run is None:
                 seeds[s] = {"rerun": None, "state": "not launched"}
                 continue
