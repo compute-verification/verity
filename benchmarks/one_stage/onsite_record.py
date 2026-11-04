@@ -184,7 +184,8 @@ CHECKS = {"free": "each tied audit's free inputs computed from its Program's des
           "circuit": "each tied audit's circuit held fixed whatever its advice"}
 #: Security's locks in this tree (`tools/verity/lean/check.py`'s record of each guarantee's named assumptions): the
 #: guarantees', and the Properties' that discharge premises at the deployed code
-LOCKS = (HERE.parents[1] / "Security" / "lean-audit.json", HERE.parents[1] / "Security" / "Properties" / "lean-audit.json")
+ROOT = HERE.parents[1]
+LOCKS = (ROOT / "Security" / "lean-audit.json", ROOT / "Security" / "Properties" / "lean-audit.json")
 #: the guarantees the tight K rests on, by their names in `LOCKS`
 RESTS_ON = ("NetTiming.SecurityProofs.PeriodLeakAccepted",)
 #: each premise the tight K rests on, by the name ``open`` gives it: what it says, the theorems that discharge it at the
@@ -421,7 +422,7 @@ def census_line(name: str, *fields: str) -> dict[str, Any]:
     SHA-512 of its canonical JSON."""
     d, = (d for d in json.loads((LB.CENSUS / name).read_text()) if d["role"] == "reference")
     canonical = json.dumps(d, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
-    return {"file": str((LB.CENSUS / name).relative_to(HERE.parents[1])), "id": d["id"],
+    return {"file": str((LB.CENSUS / name).relative_to(ROOT)), "id": d["id"],
             "read": {f: d[f] for f in fields}, "sha512": hashlib.sha512(canonical).hexdigest()}
 
 
@@ -526,14 +527,15 @@ def premises(locks: Sequence[Path]) -> dict[str, Any]:
     no lock lists (``missing``) and the named assumptions of those one does that don't stand (``assumes``), each
     guarantee of `RESTS_ON` with its named assumptions, and ``open``: each premise not discharged, then each assumption
     of `RESTS_ON` neither standing nor a premise's, and each of its guarantees no lock lists. A lock that can't be read
-    lists nothing, and ``unread`` names it with why."""
+    lists nothing, and ``unread`` names it, by its path in the tree where it is one, with why."""
     listed: dict[str, Any] = {}
     unread: list[str] = []
     for lock in locks:
         try:
             listed |= json.loads(lock.read_text())["guarantees"]
         except (OSError, ValueError, KeyError, TypeError) as e:
-            unread.append(f"{lock}: {type(e).__name__}: {e}")
+            name = lock.relative_to(ROOT) if lock.is_relative_to(ROOT) else lock
+            unread.append(f"{name}: {type(e).__name__}: {e.strerror if isinstance(e, OSError) else e}")
     found, open_ = {}, []
     for name, p in PREMISES.items():
         missing = [t for t in p["discharged_by"] if t not in listed]

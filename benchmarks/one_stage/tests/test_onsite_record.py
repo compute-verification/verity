@@ -330,19 +330,21 @@ def test_a_discharge_the_properties_lock_lists_counts_as_one_the_guarantees_lock
 @pytest.mark.parametrize("text, error", [(None, "FileNotFoundError"), ("{", "JSONDecodeError"), ("{}", "KeyError")])
 def test_a_lock_that_cant_be_read_lists_nothing_and_is_named_so_every_premise_it_would_discharge_is_open(
         tmp_path, lock, monkeypatch, text, error):
-    """The Properties' lock missing, not JSON, or with no guarantees: the record states it under ``unread`` with why
-    and reads the other lock, so each premise only it would discharge is open and the figure of record charges the
-    cap, never a crash."""
-    discharges = [t for p in OR.PREMISES.values() for t in p["discharged_by"]]
-    write_lock(lock, dict.fromkeys(discharges))
-    props = tmp_path / "properties-lean-audit.json"
-    if text is not None:
+    """The Properties' lock missing, not JSON, or with no guarantees: the record states it under ``unread``, by its path
+    in the tree and with why, and reads the other lock, so only the premise whose discharge that lock alone would list
+    is open and the figure of record charges the cap, never a crash."""
+    write_lock(lock, {"Properties.NetworkCertifier.circuitCounts": None})
+    if text is None:
+        props = OR.ROOT / "Security" / "Properties" / "absent-lean-audit.json"
+        name = "Security/Properties/absent-lean-audit.json"
+    else:
+        props = name = tmp_path / "lean-audit.json"
         props.write_text(text)
     monkeypatch.setattr(OR, "LOCKS", (lock, props))
     of = held_both(tmp_path / "out")["bound"]["of_record"]
-    assert (of["open"], of["K"]) == (list(OR.PREMISES), KR)
+    assert (of["open"], of["K"]) == (["free-count"], KR)
     (why,) = of["premises"]["unread"]
-    assert why.startswith(f"{props}: {error}: ")
+    assert why.startswith(f"{name}: {error}: ") and (text is not None or str(OR.ROOT) not in why)
 
 
 def test_an_assumption_a_premise_stands_for_is_open_only_while_that_premise_is(tmp_path, lock, monkeypatch):
