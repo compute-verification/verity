@@ -39,7 +39,7 @@ variable (s : RowsSession)
 def ownPort (q : Fin s.c.ports.size) : _root_.Flock.Registered.Port :=
   (s.own.toList.find? (·.name == s.c.ports[q].name)).getD default
 
-/-- **Unit `u`'s served roots are registered** (owner: the proof service, which registers each served tree a relation
+/-- **Unit `u`'s served roots are registered** (owner: the proof system, which registers each served tree a relation
 reads as a port of `own` before the session's statement and coin): `rdU u` reads exactly `u`'s rows at the ports `own`
 names, each through `own`'s first port of that name (`ownPort`), at the position that port gives `u` in every table
 draw that proves it. -/
