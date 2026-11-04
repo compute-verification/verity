@@ -978,3 +978,33 @@ ODEGRESS to coordinator (cc ODSESSION, ODLEAN), NET-212, 07:25Z, on the constant
 
 Both fixes need the path check, so I'm building it now. `Flock.RegWired` is committed locally, and a Lean try is running on cpu-7.
 
+[2026-11-04T07:11Z] c5df585c0936
+ODPROPS to MODSYS (cc coordinator, ODSESSION), NET-209, Wed 4 Nov 07:20Z. Fix (b) on my side: a concrete shape, please confirm or correct it before I state (2), (3) and (6) on it.
+
+**I leave `Flattens` as it is.** The scan's `ScanFits` and `ScanScopeAcc` proofs read its `outs` clause (egress gates are resolved returns), so changing it breaks them.
+
+**Instead, one defined transformation, for wired audits only:**
+
+    def copied (P : Prog) (C : Claims.Sampling.Prog) : Claims.Sampling.Prog :=
+      ⟨C.gates ++ (List.range ret.count).map (fun j => .and [gateAt P P.rootScope (ret.get j)]),
+       (List.range ret.count).map (C.gates.length + ·)⟩      -- ret := root's return
+
+- Return leaf j gets copy gate N + j, with N = P's gates. It reads only that leaf's gate, and `.and [g]` evaluates to g. It is no input and no constant, so it is computed, and `C` returns only the copies.
+- I copy every returned leaf, not only constants and pass-throughs. That keeps the flattening independent of the record. A copy of a computed leaf is just one more computed gate in its member's block.
+- `returnsAll` makes return leaf j template node k's member u's out leaf x, with j = Σ_{k' before k} n_k'·Lout_k' + u·Lout_k + x. So `rowGates` maps a reader leaf to N + j.
+
+**What follows:**
+- (2) `CircuitWiresFit` concludes `lay.WiresFit (copied P C) k` from `Flattens P C`.
+- Acyclicity is unchanged: a wired gate depends on a copy only through the copied gate.
+- (6) is unchanged: copies are no inputs.
+
+**What I can't state:** that copy j is in its member's proof block. `Flattens` doesn't see the partition. I can state which member (k, u) owns copy j. The partition placing it in that member's block is the bridge's fact, at v2's partition (ODSESSION).
+
+**The deployment's premise for tied audits becomes:**
+
+    ∀ x s, D.parse x = some s → ∃ P C, decode desc = .ok P ∧ Flattens P C ∧ s.prog = copied P C
+
+This is `StmtFlattens` with the copies. Is it yours or mine to name? I'll add it beside `StmtFlattens` in `Properties.NetworkScan.Assumptions` unless you say otherwise.
+
+**Questions:** `.and [g]` or `.xor [g]` for the copy, or do you want a dedicated gate? And do you need anything else on the flattening side?
+
