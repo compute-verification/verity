@@ -1,5 +1,5 @@
 """pearl_c_sm90's arm for `verity bench overhead` (`overhead_arm.py`) off the device: the harness's interface and its verifier
-declaration, the cubin it loads, its domain and work at the door's linears, its refused ε, and the door's names for it
+declaration, the cubin it loads, its domain and work at the door's linears, its ε, and the door's names for it
 resolving here as the door resolves them."""
 
 from __future__ import annotations
@@ -170,10 +170,19 @@ def test_the_tiles_are_the_served_pipeline_s(m):
     assert OA.tiles_of(m, n) * R.NB == R.Pipeline.sizes(R.BM, n, k, OA.m16(m))["leaves"]
 
 
-def test_without_a_window_of_record_no_epsilon_is_invented():
-    assert "window" not in json.loads(OA.PINNED.read_text())
+def test_without_a_window_of_record_no_epsilon_is_invented(tmp_path, monkeypatch):
+    pinned = tmp_path / "overhead_arm.json"
+    pinned.write_text(json.dumps({"cubin": OA.pinned()}))
+    monkeypatch.setattr(OA, "PINNED", pinned)
     with pytest.raises(LookupError, match="PoUW's ε is a window's sample's .* states no window of record"):
         OA.epsilon(8192, *LINEARS["o"], "h200")
+
+
+def test_the_pinned_window_s_epsilon_says_whether_it_is_provisional_and_names_its_source():
+    w = json.loads(OA.PINNED.read_text())["window"]
+    got = OA.epsilon(8192, *LINEARS["o"], w["card"])
+    assert got["basis"].startswith("provisional, ") == bool(w.get("provisional")) and w["source"] in got["basis"]
+    assert 0 < got["epsilon"] < 1
 
 
 def test_epsilon_is_the_window_of_record_s_at_its_sample_at_every_linear(tmp_path, monkeypatch):
@@ -201,8 +210,7 @@ def test_the_door_names_the_arm_and_its_epsilon_here(monkeypatch):
         assert isinstance(getattr(importlib.import_module(mod), cls)(), A.BenchArm)
         eps = getattr(importlib.import_module(emod), fn)
         for n, k in LINEARS.values():
-            with pytest.raises(LookupError):
-                eps(8192, n, k, "h200")
+            assert eps(8192, n, k, "h200") == OA.epsilon(8192, n, k, "h200")
     finally:
         sys.modules.pop("overhead_arm", None)
 
