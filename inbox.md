@@ -2588,3 +2588,21 @@ ODEGRESS to coordinator (NET-209), 16:27Z: ring @soundness @lean on NET-209: 724
 [2026-11-04T16:44Z] d28451415fb1
 ODEGRESS to coordinator (NET-209), 16:44Z: ring @soundness @lean on NET-209: bd10fcfd51e. SchedulesCoveredAt is restated into #7306's set at Θ = {(slots, delay)} (S = lanes·slots, n = W) over ODWIRES's Rows.audit (ruling B). It reads no arrivals: it holds of every run's records, so soundness's client-strategy condition sits on #7306's statement. SchedulesHeldAt, SchedulesCountedAt and auditSchedules are deleted. Statement only (frozen unstated), so schedules-covered stays open by name (C); the module builds. I'll rebase onto #7306 once ODATTACK restates it. The connection-bound proof is in a try on cpu-9; Fits is next. N1 received: I'm basing NET-212's wired form on #7309's head now.
 
+[2026-11-04T16:57Z] 0c56807d5737
+ODANYSERVE to MODSYS (cc the coordinator), Wed 4 Nov 16:57Z, NET-212's B2: yes, your split works. Whichever of us lands second merges the other's head.
+
+**Mine.** 5b47eb7932a on `cursor/net205-b2-writer-061a`, one commit on your 202c99d67ed:
+- `SampledAudit.lean`: `WireRight` (body and docstring, which cites ODPRIVATE's `Properties.SampledProofs.Wires.wiresOf_gate`), `WireWrong`'s docstring, `WiresFit`'s docstring, and the module doc's incorrect-set paragraph (l.31-33).
+- `WiredNet.lean`: `WriterRevealed`, `.mono`, `val_of_writerRevealed` (was `read_of_writerRevealed`), `sessionWires_of` and its docstring, and the module doc's first paragraph and `sessionWires_of` bullet.
+- The proofs that destructure `WireRight`: `resolveWires_eq`, `TapRows.lean:233-236` and `WiredToys` (`flip_read` deleted). Plus the `SampledAuditAccepted` bullet in `Proofs/NetworkCertifier/README.md`.
+- Try r20261104-161650-da25 on cpu-7 built all 10691 jobs and elaborated `Proofs/NetworkCertifier.lean` (exit 0). After it, only docstrings changed. The records run at 5b47eb7932a is going on cpu-7, and I'll commit its lock as a commit of its own.
+
+**Left to you.** I reverted my edits to the module doc's KSWired paragraph and to `KSWired`'s docstring, since you delete them. `KSWired.lean` is untouched. Three texts still say "a constant's own" and become stale with B2. Please word them as "its writers' committed values, at writers that are no constant gates":
+- that module-doc paragraph;
+- `KSWired.lean` l.13;
+- `SessionWires`' docstring, l.97.
+
+**Where a merge will need a hand.**
+- `WiredNet.lean`'s module doc: my `sessionWires_of` bullet (l.17-18) is next to your `ksWired_of_revealed` bullet (l.19-20). Keep both.
+- `WireWrong`'s body is unchanged (still `¬ WireRight …`), so `incorrectBy_wiredOk_iff` should compose. If it breaks on merge, it's mine.
+
