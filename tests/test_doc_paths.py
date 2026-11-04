@@ -124,7 +124,7 @@ def test_every_path_a_document_names_exists():
     bad = dead_paths(_tree())
     assert not bad, (
         "documents name repository paths that aren't in the tree. Write each path's current location (where it moved: "
-        "`git log --follow -- PATH`, `tools/move/layout_map.toml`) or drop the mention; an identifier that only looks like a "
+        "`git log --follow -- PATH`) or drop the mention; an identifier that only looks like a "
         "path goes in this test's NOT_PATHS with a reason:\n" + "\n".join(f"  {d}:{n}: `{t}`" for d, n, t in bad))
 
 

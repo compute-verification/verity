@@ -16,12 +16,13 @@ spec = ["**/lean-toolchain", "**/lake-manifest.json"]
 spec = ["verity/ml/flock/check_build.sh"]
 
 [family.test-file]
+# one task per test file of every suite; a suite's [tool.verity.tests] worker_gb and timeout_s stand in for mem_gb and timeout_s
 files = ["**/tests/**/test_*.py", "**/tests/test_*.py"]
 kinds = ["test-file"]
 env = "py"
-about = "run the tests in {name}"
+about = "pytest on {name} alone, as suite {suite} runs it"
 resources = { cores = 1, mem_gb = 4, disk_gb = 2 }
-timeout_s = 3600
+timeout_s = 900
 
 [family.lean-module]
 files = ["**/*.lean"]
