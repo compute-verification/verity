@@ -168,7 +168,7 @@ theorem segLeaf_binds (H : Msg → Msg) (place : ℕ → (w : ℕ) × Fin w) (bi
       have hb := FlockLevel3.RowV2.packBits_inj (by simp only [SamplingDeploy.rowBits, List.length_ofFn]) e
       simp only [SamplingDeploy.rowBits] at hb
       exact hv (by simpa using congrFun (List.ofFn_inj.1 hb) (place p).2)
-    obtain ⟨j, hj, hs⟩ := FlockSoundness.Binding.RowSeg.exists_segBytes_ne (hlen _) (hlen _) hk
+    obtain ⟨j, hj, hs⟩ := FlockSoundness.Binding.RowSeg.exists_segBytes_ne (hlen ⟨p, v, d⟩) (hlen ⟨p, v', d'⟩) hk
     refine ⟨j, by simpa [segsOf] using hj, by simpa [segsOf] using hj, ?_⟩
     simp only [segsOf, List.getElem_map, List.getElem_range, FlockSoundness.Binding.RowSeg.segMsg]
     exact fun e => hs (List.append_cancel_left e)
@@ -242,7 +242,7 @@ theorem rowDep_seg (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option
   | none => simp [segAt, hp] at hs
   | some p =>
     have hps : p.segs.isSome = true := by simpa [segAt, hp] using hs
-    simp only [rowDep, hp, rowMsg, hps, ↓reduceIte, SamplingDeploy.rowBits, List.length_ofFn]
+    simp only [rowDep, hp, rowMsg, ite_eq_left hps, SamplingDeploy.rowBits, List.length_ofFn]
 
 /-- **`rowLeaf` binds, for every `H`, at every circuit file**: one position is one port, whose leaf binds, the row-seg
 leaf (`segLeaf_binds`) or hm96's of a row that places the value there (`hm96Leaf_pair`, `rowDep_ne`). -/
@@ -253,9 +253,9 @@ theorem rowLeaf_binds (H : Msg → Msg) (C : FlockSoundness.Audit.Circuit) (rows
   unfold rowLeaf at h h' ⊢
   rw [← hpos] at h' ⊢
   by_cases hs : segAt C rows c o.pos = true
-  · simp only [hs, ↓reduceIte] at h h' ⊢
+  · simp only [ite_eq_left hs] at h h' ⊢
     exact segLeaf_binds H place bits salt o o' l hpos hne h h'
-  · simp only [hs, Bool.false_eq_true, ↓reduceIte] at h h' ⊢
+  · simp only [ite_eq_right hs] at h h' ⊢
     exact hm96Leaf_pair H hpos hne (rowDep_ne C rows c place bits hs hpos hne) h h'
 
 /-- **At SHA-512 `rowLeaf` is `commitDepL`'s leaf**, hm96's of `rowDep`. -/
@@ -280,8 +280,7 @@ theorem rowLeaf_calls_le (H : Msg → Msg) (C : FlockSoundness.Audit.Circuit) (r
     simp only [segsOf, List.length_map, List.length_range] at hc
     exact hc
   · rw [hm96Leaf_log]
-    simp only [List.length_cons, List.length_nil]
-    omega
+    simp
 
 /-! ### The deployed commitment -/
 
@@ -310,8 +309,9 @@ theorem commitRowL_binds (H : Msg → Msg) (C : FlockSoundness.Audit.Circuit) (r
 /-- **At SHA-512 `commitRowL` opens what `commitDepL` opens.** -/
 theorem commitRowL_sha512 (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (L : LeafMap) (roots rs : List Msg) (o : Opening Bool) :
-    (commitRowL C rows c L roots).Opens sha512Msg rs o = (commitDepL C rows c L roots).Opens sha512Msg rs o :=
-  pathCommit_opens_congr (rowLeaf_sha512 C rows c (placeOf C rows) (bitsOf L.d) saltOf) rs o
+    (commitRowL C rows c L roots).Opens sha512Msg rs o = (commitDepL C rows c L roots).Opens sha512Msg rs o := by
+  unfold commitRowL commitDepL
+  exact pathCommit_opens_congr (rowLeaf_sha512 C rows c (placeOf C rows) (bitsOf L.d) saltOf) rs o
 
 /-- **Sampling: binding, at `rowLeaf` leaves under the registered path check**, at every circuit file. -/
 theorem Binding_of_rowLeaf {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T)
