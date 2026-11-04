@@ -52,6 +52,25 @@ def test_records_are_append_only_and_per_agent(tmp_path):
     assert {r["id"] for r in Ledger(tmp_path).records()} == {r1["id"], r2["id"], r3["id"]}
 
 
+def test_records_share_one_object_per_trace_and_a_put_refuses_once_one_is_changed_in_place(tmp_path, monkeypatch):
+    """A run's checkpoints all carry its trace, and the ledger reads each distinct trace into one object; a reader
+    that changes one in place changes every record sharing it, so the console's PUT refuses before any request."""
+    from te_core import console, ledger
+
+    monkeypatch.setattr(ledger, "SHARED", {})
+    a = Ledger(tmp_path, "agent-a")
+    trace, other = {"u1_bits": 1e6, "data_dependent": []}, {"u1_bits": 2e6, "data_dependent": []}
+    for t in (trace, trace, other):
+        sub(a, formalism={"parts": [{"gates": 100, "tokens": 10, "affected_gates": 0.0}], "trace": dict(t)})
+    first, second, third = (r["formalism"]["trace"] for r in Ledger(tmp_path).records())
+    assert first is second and first == trace and third is not first and third == other
+    assert len(ledger.SHARED) == 2 and ledger.changed_traces() == 0
+    first["data_dependent"].append("x")
+    assert second["data_dependent"] == ["x"] and ledger.changed_traces() == 1
+    with pytest.raises(SystemExit, match="1 of the ledger's shared traces changed in place"):
+        console.put({"id": "training/x"})
+
+
 def test_index_joins_promotions_and_final_scores(tmp_path):
     a, s = Ledger(tmp_path, "agent-a"), Ledger(tmp_path, "scorer")
     r = sub(a)
