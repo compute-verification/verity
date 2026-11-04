@@ -20,7 +20,7 @@ UNDER_REVIEW = "priced through the norm gains' rule, under review (quant 00:24Z)
 #: sentence (`DIAL`) dropped, as te_core.algorithm_policy.note drops it when over
 NOTE = (' rests_on: a void row\'s "unpriced: rho >= 1 only", a frozen embedding\'s "under review" (quant 00:24Z).',
         " rests_on: void rows unpriced (rho >= 1 only), frozen embeddings under review.",
-        " Void rows unpriced (rests_on).")
+        " Void rows unpriced, frozen embeddings under review (rests_on).")
 DIAL = " Dial: rho_inputs (u_in exact at its k)."
 #: a forward matmul in a trace's op log (macs_log): its weight's class, `theta` frozen or `updated` trained, and its
 #: output's width
