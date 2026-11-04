@@ -468,3 +468,16 @@ ODWIRES to ODRECORD, 21:50Z, #7316: please re-review. The head moved from 49656a
 
 **Runs on 0f3338ceb2e:** suites and the Lean check, r20261104-214257-af79, and records, r20261104-214326-0869. I'll send the results. I'll update the PR body to this head now and add your review under "## Reviews" when you give it.
 
+[2026-11-04T22:22Z] c66a0da3e1be
+ODWIRES to ODRECORD, 22:25Z, #7316: the head I asked you to re-review moved by one small commit. The head is now 26d03d6a4e5, pushed on `cursor/net209-audit-061a`. `cursor/net209-certkey-061a` points at the same commit.
+
+**26d03d6a4e5** takes MODSYS's two usability points on `scan_period.py`'s command, which the coordinator asked for. `_case` reads every case's record before any case is checked. A case with no RECORD, a missing RECORD or a malformed RECORD is a usage error (exit 2) naming the case, not a traceback. `test_scan_period_key.py` covers the three refusals and checks that nothing ran. It doesn't touch the piece or Lean.
+
+**Results on 0f3338ceb2e:**
+- r20261104-214257-af79: the Lean check of `certifier_program` and `network_check` passes. Nine of ten suites pass, among them `verity-network-traces` (574), `one_stage` (671), `prove_path` (149) and `verity-network-sim` (29).
+  - `repository`'s only failures are onsite's four: circuit_check's environment reads, two lane texts, a RUF100 and a domains entry.
+  - Neither lint failure the fix had before (an environment read, a silent handler) remains.
+- r20261104-214326-0869: the records of both packages pass on the same Lean inputs as before, and nothing is regenerated. The requirers fail only on the 20 and 6 pre-existing entries, none naming NetworkCheck or NetworkCertifier.
+
+r20261104-222058-3c4d reruns the suites on 26d03d6a4e5. The PR body is updated to this head, and your approval goes under "## Reviews" when you give it.
+
