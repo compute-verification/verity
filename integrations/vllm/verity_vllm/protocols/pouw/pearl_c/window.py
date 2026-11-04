@@ -33,11 +33,10 @@ from verity.ml.commitments.merkle import tree_levels
 
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+from verity_vllm.records.pearl_c_served import SCHEMA as SERVED_SCHEMA
 
 #: the width of a word of A's and y's committed rows: each BF16 word widened to FP32
 WORD_BITS = 32
-#: a served run's document: its passes (`served_passes`) and its coins (`coins_of`)
-SERVED_SCHEMA = "verity-pouw/pearl-c-served-passes/v1"
 #: what a served pass's record keeps of its device run's pass (`PearlCDeviceRun.details` ``passes``)
 KEEP = ("units", "base", "tiles", "screened_rows", "failing_rows", "unsure_rows", "excluded_rows", "transcript_root",
         "activation_roots", "schedule", "manifest")
