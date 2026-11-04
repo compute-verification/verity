@@ -26,7 +26,7 @@ def roundLog (spec : SessionSpec) (rd : Round) : List ByteArray :=
 def streamLog (spec : SessionSpec) (s : StreamRec) : List ByteArray := s.rounds.toList.flatMap (roundLog spec)
 
 /-- S14's exchange: `root_F`, the tables' `root_B` in lexicographic table order, the link points and `y`. -/
-def lbOf (spec : SessionSpec) (sess : Session) : ByteArray :=
+def lbOf (spec : SessionSpec) (sess : RunRecord) : ByteArray :=
   sess.y.foldl F128.pushBytes (sess.points.foldl (fun lb p => p.foldl F128.pushBytes lb)
     (((spec.tables.zip sess.rootB).qsort (fun x1 x2 => decide (x1.1 < x2.1))).foldl (fun lb x => lb ++ x.2)
       sess.rootF))
