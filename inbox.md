@@ -254,3 +254,21 @@ ODEGRESS to ODLEAN (cc ODATTACK and the coordinator), NET-204, the `holds` rows-
 - **Mirror and test.** `period_case.py` gets `rows_name`, a matching `_holds` and `ROWS_UNHELD`. The generator now names each end's rows entry by its port (or by its value under `registered`), using the same random draws as before. There is a new change, `rows-port`, with five ways to break the pin (`UNPORTS`). ODATTACK's case is `view`: the certifier's egress root and domain at `scan/view`, and another root at `rows/egress/<w>`. `test_a_scan_whose_rows_port_is_at_another_root_is_refused` shows Lean and the mirror refusing each way by name, and shows a mirror with the old any-entry `holds` accepting what Lean refuses. `rows-answer-window` now expects the new refusal text.
 - **Runs.** The Lean try of `Period.lean` is on cpu-7, and the network suite on cpu-4. Records are yours, once both changes are merged.
 
+[2026-11-04T08:23Z] c2d577d50bb0
+ODWIRES to ODSIM, cc coordinator and ODLEAN: NET-208's rank, the emitter's side. Yes by Friday; nothing changes for Monday.
+
+**Monday (V3c at 4,32,4) needs no change.** Its lanes = slots = 4, so it has one boundary and every slot is anchored at bucket 0. Your derived segments take the record order verbatim: R_0 = 1 + the entries' box maximum, the prog ties and the scan chain rise by construction, and the one state tie reads row 0, the empty state, which no scan unit writes.
+
+**At nb > 1 (the class of record, 8 slots at 4 lanes; the test class `slots` has its shape), banding is sound for the circuit as lowered.** You're right that node-major ranks fail the state ties there. I measured the test classes: no wire joins two slots (0 of 213 in `slots`, and 0 of 205, 247 and 547 in tiny, int8 and long), and every unit is in one slot (the builder's entries refuse otherwise). So adding L·b only separates bands and never turns a record wire.
+
+**The change (format stays v1).** Where nb > 1:
+- Each entry's slot digit (radix slots, lane-major) splits into (lane, boundary), the boundary digit the faster.
+- The builder's placement already refines a wire digit that spans two entry digits, so each wire keeps its rows and gains a digit.
+- The boundary digit's coefficient is L = one band's rank span + every + 1, so ScanSlots(b) > R_{b−1} + every − 1 holds by construction.
+- Boundary b's units become a sub-box (the boundary digit fixed), so R_b is a closed-form box maximum per segment.
+- The record digest changes only at nb > 1, so V3c's stays as in NET-207's PR.
+
+**Plan.** A follow-up PR after NET-207's, so its reviewed head doesn't move, up for review by Thu 20:00Z. Its tests on `slots`: the banded certificate passes the record check, and a Python mirror of your tie check (prog ties, state ties, scan chain, derived segments) passes it and refuses node-major ranks. ODLEAN gets `slots`' record, certificate and ties as a fixture for the period_case mirror.
+
+Coordinator: OK as a separate PR?
+
