@@ -28,15 +28,23 @@ supplies each of the statement's quantities as at most the check's number:
 
 The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs, and its incorrect
 proof blocks only as the slot entries they can set, since the scan reads the audit only through its `prog` and its
-state is the scan's own. The check accepts a tied audit at any sample; the consistency check of one is `RowsProgWired`
-and `RowsStateTied`. `RowsProgWired` says it accepts no link-window whose scan's `prog` is not a compute audit's slot
-entries, a lane's tree the entries port of its chunk of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's
-own Program. `RowsStateTied` says it accepts no link-window whose scan's state is not the `SCAN_STATE` of an audit its
-`prog` is wired to, so a state that skips or alters one of the scan's transitions is no Program's input. Each
-says its conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`) of every period `check` accepts, and so is, by definition,
+state is the scan's own. The check accepts a tied audit at any sample; the consistency check of one is `RowsProgWired`,
+`RowsStateTied` and `RowsCircuitHeld`. `RowsProgWired` says it accepts no link-window whose scan's `prog` is not a
+compute audit's slot entries, a lane's tree the entries port of its chunk of a `SlotEntry_v1` or `SelectEntry_v1`
+template of that audit's own Program. `RowsStateTied` says it accepts no link-window whose scan's state is not the
+`SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or alters one of the scan's transitions is no
+Program's input. Each says its conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`) of every period `check` accepts, and so is, by definition,
 its property of any period check at `check` (`RowsProgWiredOf`, `RowsStateTiedOf`), which the nontrivial lemmas state
 false at `acceptAllRows`, a check that accepts every period. Each guarantee writes its acceptance of `check` out rather
 than being its `…Of check`: the shape rule reads the acceptance off the statement's own binders.
+
+`RowsCircuitHeld` says the check accepts no phase whose tied audit's registration names a Program other than the class
+circuit, the parameters' `circuit`: the one Program the workload's class registers, fixed for the period, so the prover
+chooses no phase's circuit. It states the registrations alone: that the descriptor whose input gates a
+tied audit's term counts is the Program its registration names is the audit check's (`auditCheck`, which compares
+them by matching, `isStr`) and no property here states. Its witnesses are an empty rows-form period
+`check` accepts, beside a tied audit registered under the class circuit, and an explicit period whose tied audit is
+registered under another (`RowsCircuitHeldAt` false), which a check that accepts everything accepts.
 -/
 
 namespace Properties.NetworkPeriod
@@ -114,10 +122,42 @@ def RowsStateTied : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateTiedAt p c
 
+/-- What `RowsCircuitHeld` says of a period its check accepted: in the rows form, each phase's tied compute audits are
+registered under the parameters' class circuit (`held`). -/
+def RowsCircuitHeldAt (p : Params) (c : Commitment) : Prop :=
+  ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+    ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → held p.circuit c.audits reg = true
+
+/-- **The rows form accepts no phase whose tied compute audit's window circuit is not the class circuit.** If the check
+accepts a period in the rows form, every audit a phase's scan's `prog` is an output of (`tiedAudits`) has a
+registration whose `program` is the parameters' `circuit`, the SHA-512 of the Program of the one window circuit the
+workload's class registers (`held`). A window circuit's own digest binds its window's run; its Program is one for the
+period, so no phase's tied audit is registered under a Program the prover chose for that phase. That its term
+counts the free inputs of that Program's descriptor is the audit check's (`auditCheck`), not stated here. -/
+def RowsCircuitHeld : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → RowsCircuitHeldAt p c
+
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window: what
 `RowsProgWiredOf` and `RowsStateTiedOf` must fail at for `RowsProgWired` and `RowsStateTied` (each its `…Of` at
 `check`) to say something. -/
 def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
   .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
+
+/-- A phase's window record whose `prog` is at the root `r` and the domain `d`. -/
+def tiedWindow : Lean.Json :=
+  Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")]])]
+
+/-- A compute audit whose Program has one `SlotEntry_v1` template of one member, a pinned Definition (its closure
+digest `slotEntryPins`' first), and the schedule of one slot a window (one lane, T = 1, `every` 1). -/
+def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)], none⟩
+
+def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
+
+/-- The slot audit's registration under the Program `d`: its entries port at the root `r` and the domain `d`, so
+`tiedWindow`'s scan's `prog` is its output. -/
+def heldReg (d : String) : Lean.Json :=
+  Lean.Json.mkObj [("program", .str d), ("roots", Lean.Json.arr #[Lean.Json.mkObj
+    [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
 
 end Properties.NetworkPeriod

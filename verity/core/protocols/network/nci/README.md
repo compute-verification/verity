@@ -9,7 +9,8 @@ ZK proof that B ran correctly and explains the committed trace can also show tha
 bits outside θ (`verity/core/protocols/remote/README.md`, "Lifecycle"). In Lean it is `Nci.Complies`, in an older form
 (below), and its check is `NciCheck`.
 
-The inference-only policy is a subprotocol of both composites, onsite and remote (`verity/core/protocols/composition`):
+The inference-only policy is a subprotocol of every composite, onsite, remote and remote with the network certifier
+(`verity/core/protocols/composition`):
 `NciCheck.Protocol.protocol` (`verity/inference-only/v0`, the executable `inference-only`) is its check behind the core
 interface. Its params are the registered circuit, the budgets and the registration log before the run; its commitment is
 the run's own registration record, which must name the registered circuit and which each composite requires to be the
@@ -64,7 +65,7 @@ nothing else but Lean core and the core interface (`core_protocol`).
   format is in `NciCheck.Check`'s docstring. `nci-check --policy` runs the policy's check alone, without θ's
   provenance, which is what `benchmarks/verifier_cost` measures.
 - `inference-only id | check | serve` runs `NciCheck.Baseline.check` as the core protocol `verity/inference-only/v0`
-  (`NciCheck.Protocol`), the subprotocol of onsite and remote.
+  (`NciCheck.Protocol`), the subprotocol of every composite.
 - `nci-difftest`, `nci-desc-difftest`, `nci-desc-liveness`, `nci-desc-fuzz` and `nci-baseline-difftest` hold them to
   each other and to the Python reference `lean/scripts/nci_reference.py`, run by `../tests/test_nci_*.py`;
   `../tests/test_inference_only_protocol.py` holds `inference-only serve` to that reference behind the protocol's

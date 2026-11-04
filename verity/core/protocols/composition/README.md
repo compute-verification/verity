@@ -1,8 +1,8 @@
 # core_composition: the onsite and remote protocols as compositions of subprotocols
 
-Verity's two composite protocols, onsite and remote, are each one verdict over a list of subprotocols. Three Lake packages
-hold them, each on Flock's verifier and the core interface (`../interface`) by path, onsite and remote also on their
-subprotocols' packages, with no Mathlib:
+Verity's three composite protocols, onsite, remote and remote with the network certifier, are each one verdict over a
+list of subprotocols. Three Lake packages hold them, each on Flock's verifier and the core interface (`../interface`) by
+path, onsite and remote also on their subprotocols' packages, with no Mathlib:
 
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id subprotocols`, the
   `Core.Protocol` of a composition, with its verdict rule, its formats and the commitment's binding (`Product.lean`);
@@ -12,18 +12,22 @@ subprotocols' packages, with no Mathlib:
 - `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): sampled proofs, the inference-only policy,
   PoUW, PoUS, PoUB-P2 (on PoUS's store), network certification and the memory challenger's
   wipe, the policy and sampled proofs on one registration record, and PoUS and PoUB-P2 on one store (a `tiedSameB`).
+  The package also holds remote with the network certifier (`Core.RemoteNetwork.protocol`, `verity/remote-network/v0`,
+  `CoreRemoteNetwork.lean`): remote's subprotocols and network certification under remote's record subprotocols,
+  remote's tie and its own (`egress`), so its verdict is the AND of remote's and network certification's over one
+  registration record.
 - `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs, the inference-only policy and
   PoUW's period, the policy and sampled proofs on one registration record and every window of the period on it (a
   `tiedSameB`).
 
-The rule and the formats are written once, over any list of subprotocols, and the two composites are values of it that
+The rule and the formats are written once, over any list of subprotocols, and the three composites are values of it that
 differ in their id and subprotocols. Each composite's executable is the core CLI (`onsite id | check | serve`,
-`remote id | check | serve`), and its `serve` is what the difftest drives.
+`remote id | check | serve`, `remote-network id | check | serve`), and its `serve` is what the difftest drives.
 
-These two are the only composites a verifier runs. `product IDS id | check | serve` (`../onsite/CoreComposites.lean`,
-`Core.Composites.ofIds`), which `verity run`'s verifier runs over a configuration's subprotocols, is onsite's CLI for
-onsite's subprotocols and remote's for remote's, in any order, and refuses every other set, since protocol soundness
-covers only these two.
+These three are the only composites a verifier runs. `product IDS id | check | serve` (`../onsite/CoreComposites.lean`,
+`Core.Composites.ofIds`), which `verity run`'s verifier runs over a configuration's subprotocols, is each composite's CLI
+for that composite's subprotocols, in any order, and refuses every other set, since protocol soundness covers only these
+three.
 
 Their security argument, layer by layer from one proof to the training slowdown, is the remote protocol's README
 (`../remote/README.md`, "The security argument, end to end"); onsite shares its layers and adds its own subprotocols'.
@@ -63,18 +67,21 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 
 ## Subprotocols
 
-| subprotocol | onsite | remote | `Core.Protocol` | id |
-| --- | --- | --- | --- | --- |
-| network certification (over the period: its sampling blocks of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
-| PoUW (its period credit: the period's windows credited all or nothing) | yes | yes | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
-| sampled proofs at remote (the audit on the proofs themselves, one-stage v2's or the recursive audit's, which it reads as blobs, as the params' `form` names it; one-stage v1 refused) | | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../service/vstar/recursive`) | `verity/sampled-proofs/v1` |
-| sampled proofs at onsite (the one-stage audit, whose verdicts are the evidence's) | yes | | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
-| the inference-only policy (its check: the declared circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `NciCheck.Protocol.protocol` (`nci_check`, `../network/nci/lean`) | `verity/inference-only/v0` |
-| PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
-| PoUB-P2 (its session over PoUS's store) | yes | | `RemoteAudit.P2Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/p2/v0` |
-| the wipe (the memory challenger's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../devices/memory_challenger/lean`) | `verity/wipe/v0` |
+| subprotocol | onsite | remote | remote with the network certifier | `Core.Protocol` | id |
+| --- | --- | --- | --- | --- | --- |
+| network certification (over the period: its sampling blocks of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | yes | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
+| PoUW (its period credit: the period's windows credited all or nothing) | yes | yes | yes | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
+| sampled proofs at remote (the audit on the proofs themselves, one-stage v2's or the recursive audit's, which it reads as blobs, as the params' `form` names it; one-stage v1 refused) | | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../service/vstar/recursive`) | `verity/sampled-proofs/v1` |
+| sampled proofs at onsite (the one-stage audit, whose verdicts are the evidence's) | yes | | | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
+| the inference-only policy (its check: the declared circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | yes | `NciCheck.Protocol.protocol` (`nci_check`, `../network/nci/lean`) | `verity/inference-only/v0` |
+| PoUS (its check of a run) | yes | | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
+| PoUB-P2 (its session over PoUS's store) | yes | | | `RemoteAudit.P2Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/p2/v0` |
+| the wipe (the memory challenger's streamed-label wipe of the period) | yes | | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../devices/memory_challenger/lean`) | `verity/wipe/v0` |
 
-Every subprotocol of both products is ported to its own `Core.Protocol`.
+Every subprotocol of every product is ported to its own `Core.Protocol`. Remote with the network certifier's network
+certification reads its audits' answers as its evidence carries them: no tie holds them to sampled proofs' answer
+(`NetworkCheck.Period`'s "What it doesn't check"), though `egress` holds each audit's registration to the policy's
+record.
 
 A subprotocol without a port is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port replaces
 its stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, its package a
@@ -92,7 +99,7 @@ the policy's record to sampled proofs' (one record, below), so the circuit the p
 audited.
 
 A stated exception: the policy's v0 publishes the division and each inference block's profile (its gates and
-fresh-input bits) in the clear. Both products compose it for one run of record only, as an exception to
+fresh-input bits) in the clear. Every product composes it for one run of record only, as an exception to
 everything-zero-knowledge, and v1's private form (the division committed under hiding leaves, compliance proved, a
 padded profile) replaces it. `tests/test_inference_only_not_composed.py` refuses any protocol that publishes
 private data among the products' components unless its `KNOWN` lists it with its reason, and `KNOWN` only shrinks;
@@ -108,12 +115,15 @@ carries them as hex under `blobs`.
 Every subprotocol whose commitment is the run's record must commit to the composition's one. `same id ss components`
 (`sameB` over blobs) is the product of the subprotocols, except that once the cases fit, subprotocols `ss` that didn't
 all commit to the first one's digest reject it whatever the subprotocols answer (`strays`: `record: s committed D, t
-committed D'`); one whose commitment doesn't decode rejects as a subprotocol. Its formats are the product's. Both
-products are one:
+committed D'`); one whose commitment doesn't decode rejects as a subprotocol. Its formats are the product's. Every
+product is one:
 
 - remote, `tiedSameB "verity/remote/v0" [verity/inference-only/v0, verity/sampled-proofs/v1] [windows]
   components`, whose policy and sampled proofs each commit to the run's registration record (in either form, the
   one-stage audit's);
+- remote with the network certifier, `tiedSameB "verity/remote-network/v0" [verity/inference-only/v0,
+  verity/sampled-proofs/v1] [windows, egress] components`, remote's record subprotocols and tie over its four
+  subprotocols, and its own tie;
 - onsite, `tiedSameB "verity/onsite/v0" [verity/inference-only/v0, verity/sampled-proofs/one-stage/v1] [store]
   components`, whose policy and one-stage audit each commit to the run's registration record.
 
@@ -131,7 +141,10 @@ commitment's `root`, the case's `store_root`). PoUB's generic session (`verity/r
 root is its own salted tree's, is not a subprotocol. Once the log exists, both read the store's hardware entry.
 Remote's one tie, `Core.Remote.windows`, puts every window of PoUW's period on the policy's record: the digest of the
 record the policy's commitment is, and the digest of each window's Commit record as the period's credit reads it
-(`PouwCheck.Credit.commitOf?`). The period's own commitment is the auditor's ledger, so it can't join `same`.
+(`PouwCheck.Credit.commitOf?`). The period's own commitment is the auditor's ledger, so it can't join `same`. Remote
+with the network certifier adds `Core.RemoteNetwork.egress`, which puts every compute audit of the network certifier's
+period on the policy's record: the digest of each registration in the period commitment's `audits`
+(`Flock.WindowRecord.digest`, one-stage's); a period with no compute audit names the empty string and is refused.
 
 ## The difftest
 
@@ -178,10 +191,15 @@ rejects already; `test_onsite_refuses_two_stores_and_else_keeps_its_verdict` sho
 verdict. A case that names PoUB-P2's by the generic audit's id is refused, as no subprotocol.
 `test_a_reference_without_reject_dominance_is_caught` shows the difftest tells the rule above from one in which a
 rejection need not reject the whole: such a reference disagrees with the Lean on a case where one subprotocol rejects and another is undecided.
-`product` names the two composites and refuses every other subset of their subprotocols
-(`test_product_names_only_the_two_composites`), and over each composite's subprotocols its `serve` gives that
+`product` names the three composites and refuses every other subset of their subprotocols
+(`test_product_names_only_the_three_composites`), and over each composite's subprotocols its `serve` gives that
 composite's verdicts (`test_product_over_remotes_subprotocols_is_remote`,
-`test_product_over_onsites_subprotocols_is_onsite`).
+`test_product_over_remote_networks_subprotocols_is_remote_network`, `test_product_over_onsites_subprotocols_is_onsite`).
+Remote with the network certifier's cases are remote's beside network certification's
+(`test_remote_network_agrees`). On remote's accepting case it accepts beside an accepted period of network
+certification whose compute audits are on remote's record, rejects beside a rejected one and is undecided beside an
+undecided one. Beside an accepted period with no compute audit, or one on another record, it refuses by `egress`. Each
+holds in Lean, `product` and Python (`test_remote_network_is_remotes_verdict_and_the_network_certifiers`).
 
 A bare `uv run` inside this directory stops its workspace search at `verity/core/protocols/pyproject.toml`; run the suite
 through `suites.py`, or `pytest` with the workspace's `.venv`.
