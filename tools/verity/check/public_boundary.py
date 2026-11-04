@@ -3,7 +3,7 @@
     uv run tools/verity/check/public_boundary.py                # the edges ALLOWED doesn't list; exit 1 when there is one
     uv run tools/verity/check/public_boundary.py --all          # every edge, by the public group its file is in
     uv run tools/verity/check/public_boundary.py --public       # the public set: the files the export copies
-    uv run tools/verity/check/public_boundary.py --json         # the public set, every edge and what each target drags in
+    uv run tools/verity/check/public_boundary.py --json         # the public set, every edge, what moving its target moves
     uv run tools/verity/check/public_boundary.py --prune        # drop from ALLOWED the edges no tree given has
     uv run tools/verity/check/public_boundary.py --record       # ALLOWED is the edges of the trees given
     uv run tools/verity/check/public_boundary.py --root DIR ... # judge other checkouts (a worktree of `next`), one or more
@@ -574,18 +574,21 @@ def judge(tree: Tree, boundary: Boundary) -> Judgment:
     return Judgment(why, edges)
 
 
-def drags(tree: Tree, judgment: Judgment, target: str) -> set[str]:
-    """The files that aren't public which ``target`` needs, itself included, directly or through one another: what moving
-    it to the public side would move with it."""
-    seen, todo = set(), [target]
+def drags(tree: Tree, boundary: Boundary, judgment: Judgment, target: str) -> tuple[set[str], set[str]]:
+    """(what moving ``target`` to the public side would move with it: the files neither public nor `private` it needs,
+    itself included, directly or through one another; the `private` files among what they need, which can't move)."""
+    seen, stuck, todo = set(), set(), [target]
     while todo:
         t = todo.pop()
         for x in [t] if t in tree.files else tree.under(t):
-            if x in seen or x in judgment.public:
+            if x in seen or x in stuck or x in judgment.public:
+                continue
+            if boundary.is_private(x):
+                stuck.add(x)
                 continue
             seen.add(x)
             todo += [e.target for e in tree.edges(x)]
-    return seen
+    return seen, stuck
 
 
 def read_allowed(path: Path = ALLOWED) -> list[str]:
@@ -615,7 +618,7 @@ def main(argv: list[str] | None = None) -> int:
     mode = p.add_mutually_exclusive_group()
     mode.add_argument("--all", action="store_true", help="every edge, by the public group its file is in")
     mode.add_argument("--public", action="store_true", help="the public set, one file a line")
-    mode.add_argument("--json", action="store_true", help="the public set, every edge and what each target drags in")
+    mode.add_argument("--json", action="store_true", help="the public set, every edge, and what moving its target moves")
     mode.add_argument("--prune", action="store_true", help="drop from ALLOWED the edges no tree given has")
     mode.add_argument("--record", action="store_true", help="ALLOWED is the edges of the trees given")
     ns = p.parse_args(argv)
@@ -635,10 +638,12 @@ def main(argv: list[str] | None = None) -> int:
         out = []
         for t, j in judged:
             t.prefetch(f for f in t.files if f.rpartition("/")[2].endswith(PARSED))
+            moved = {x: drags(t, boundary, j, x) for x in {e.target for e in j.edges}}
             out.append({"root": str(t.root), "public": j.public,
                         "edges": [e._asdict() | {"private": boundary.is_private(e.target),
                                                  "group": j.public[e.source].split(":")[0],
-                                                 "drags": sorted(drags(t, j, e.target))} for e in j.edges]})
+                                                 "moves": sorted(moved[e.target][0]),
+                                                 "blocked_by": sorted(moved[e.target][1])} for e in j.edges]})
         print(json.dumps(out, indent=1))
         return 0
     if ns.all:
