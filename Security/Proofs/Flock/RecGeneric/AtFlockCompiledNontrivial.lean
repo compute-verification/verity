@@ -45,6 +45,7 @@ theorem RunFinder.PrAt_log_nil {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype
     simp only [RunFinder.finder, hlog, hfm, findColl, reduceCtorEq] at hs
   · rfl
 
+omit [Nonempty Coin] in
 /-- **No rerun's witnesses fall outside `R_O` where `E_O` gives none.** -/
 theorem Comp.PrOut_of_wits_none (K : Comp Coin) (H : Msg → Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg)
     (hW : ∀ ω u, K.wits H P x ω u = none) : K.PrOut H P x = 0 := by
@@ -53,6 +54,7 @@ theorem Comp.PrOut_of_wits_none (K : Comp Coin) (H : Msg → Msg) {Ω : Type} [F
   rintro ⟨w, hw, -⟩
   cases (hW t.1 t.2).symm.trans hw
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- **A rerun logs no call where `E_O` gives no witnesses**: `calls` is read only at witnesses. -/
 theorem Comp.rerunCalls_of_wits_none (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg)
     (hW : ∀ ω u, K.wits H P x ω u = none) (ω : Ω) (u : (Fin (K.V.k x) → Coin) × K.EO.C x) :
@@ -92,8 +94,11 @@ theorem Compiled.prBad_silent (DO : Claims.Flock.Deploy Coin Col' T') (L : Compi
     (hv : ∀ as cs, L.V.next x as cs = .ret .acc) (hk : 0 < L.V.k x) (hs : ∀ ms, L.stmts x ms = [])
     (hS : 0 < L.nS x) (hP : DO.parse [] = none) :
     PrBad H L.V (L.toComp.R I) (L.toComp.E I S) x Claims.Witness.silentP = 1 :=
-  prBad_acc H _ _ _ x _ hv hk fun ω r₀ c => Comp.E_none_of_EO_none _ _ _ H _ x ω r₀ c fun d c' =>
-    Compiled.EO_none_of_stmts_nil DO L H Claims.Witness.silentP x hs hS hP ω d c'
+  have hO : ∀ (ω : Unit) (d : Fin (L.toComp.V.k x) → Coin) (c : L.toComp.EO.C x),
+      (L.toComp.EO.eval H Claims.Witness.silentP x ω d c).1 = none :=
+    fun ω d c => Compiled.EO_none_of_stmts_nil DO L H Claims.Witness.silentP x hs hS hP ω d c
+  prBad_acc H L.V (L.toComp.R I) (L.toComp.E I S) x Claims.Witness.silentP hv hk fun ω r₀ c =>
+    Comp.E_none_of_EO_none L.toComp I S H Claims.Witness.silentP x ω r₀ c (hO ω)
 
 /-- **`Comp.err` at the element-level Flock where nothing is found**: where `B` finds nothing, no rerun's witnesses
 fall outside `R_O` and no run finder finds anything in the composite's reruns, `Comp.err` at the loop bounds
@@ -178,14 +183,17 @@ theorem Compiled.not_bound_silent (DO : Claims.Flock.Deploy Coin Col' T') (L : C
     (Claims.Witness.Recursion.f0_tail_lt (Bd.DE.k (L.toComp.xI x)))
   exact absurd (h1.trans_lt h2) (by norm_num)
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- **`Bd.deploy`'s `κ` is `DE`'s**: it changes only `DE`'s verifier, opened columns and weight. -/
 theorem Bound.deploy_κ (Bd : Bound Coin Col T) (y : Msg) : Claims.Flock.κ Bd.deploy y = Claims.Flock.κ Bd.DE y := by
   simp only [Claims.Flock.κ, Claims.Flock.Deploy.k, Bound.deploy]
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- **`Bd.deploy`'s waits are `DE`'s.** -/
 theorem Bound.deploy_waits (Bd : Bound Coin Col T) (y : Msg) : Bd.deploy.waits y = Bd.DE.waits y := by
   simp only [Bound.deploy]
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- **`Bd.deploy`'s accepted reruns per wait are `DE`'s.** -/
 theorem Bound.deploy_k (Bd : Bound Coin Col T) (y : Msg) : Bd.deploy.k y = Bd.DE.k y := by
   simp only [Claims.Flock.Deploy.k, Bound.deploy]
@@ -215,18 +223,22 @@ section AcceptAll
 variable (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin)
   (x : Msg)
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- The compiled verifier at the verifier that accepts everything accepts at every round. -/
 theorem compiledAt_acceptAll_next : ∀ as cs, (compiledAt D.acceptAll Bd DO Cp).V.next x as cs = .ret .acc :=
   fun _ _ => rfl
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- The compiled verifier at the verifier that accepts everything stages no statement. -/
 theorem compiledAt_acceptAll_stmts : ∀ ms, (compiledAt D.acceptAll Bd DO Cp).stmts x ms = [] :=
   fun _ => rfl
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- The compiled verifier at the verifier that accepts everything makes no call of its own. -/
 theorem compiledAt_acceptAll_own (H : Msg → Msg) : ∀ ms, (compiledAt D.acceptAll Bd DO Cp).own H x ms = [] :=
   fun _ => rfl
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- The compiled verifier at the verifier that accepts everything takes the compiled record's rounds, at the bound
 record's `IVStar` (`IVStarOfBound`). -/
 theorem compiledAt_acceptAll_k (hIV : IVStarOfBound Bd) :
@@ -234,6 +246,7 @@ theorem compiledAt_acceptAll_k (hIV : IVStarOfBound Bd) :
   show (D.record ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)).V.k x = _
   rw [hIV]
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- The compiled verifier at the verifier that accepts everything has the compiled record's sessions, at the bound
 record's `IVStar` (`IVStarOfBound`). -/
 theorem compiledAt_acceptAll_nS (hIV : IVStarOfBound Bd) :
