@@ -213,11 +213,11 @@ def instance(seed: int) -> dict:
     windows = rng.randint(1, 3)
     horizon = windows * params.window
     ready: list[int] = []
-    for _ in range(rng.randint(0, 4)):
+    for _ in range(rng.randint(1, 4)):
         at = rng.choice([0, rng.randrange(horizon), horizon - 1 - rng.randrange(min(horizon, params.delay + 2))])
         ready += [at] * rng.randint(1, 4)
     ready.sort()
-    shapes, answers = zip(*(answer_of(rng, params) for _ in ready)) if ready else ((), ())
+    shapes, answers = zip(*(answer_of(rng, params) for _ in ready))
     conns = [[t, last_of(params, a)] for t, a in zip(ready, answers)]
     return {"seed": seed, "schedule": dataclasses.asdict(params), "windows": windows, "conns": conns,
             "answers": [[shape, [[b, None if d is EOF else len(d)] for b, d in a]] for shape, a in zip(shapes, answers)],
