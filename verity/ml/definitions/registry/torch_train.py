@@ -79,6 +79,7 @@ from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.registry.boolean_moe import nv_expf_in, nv_expf_out
+from verity.ml.definitions.registry.torch_optim import _flag
 
 __all__ = ["RmsNormTorch", "RmsNormTorchBackward", "RmsNormTorchIn", "RmsNormTorchOut", "RmsNormTorchWeightGrad", "SiluTorch",
            "SiluTorchBackward", "SiluTorchBackwardOut", "SiluTorchIn", "SiluTorchOut", "Transpose", "column_ctas", "column_sum",
@@ -106,13 +107,6 @@ def _count(name: str, v: Any, least: int = 1) -> int:
 
 def _c(value: float) -> list:
     return fp.f32_const(int(np.float32(value).view(np.uint32)))
-
-
-def _flag(S: Any, k: str) -> bool:
-    v = getattr(S, k)
-    if v not in (0, 1) or isinstance(v, bool):
-        raise ValueError(f"{k} is 0 or 1, not {v!r}")
-    return bool(v)
 
 
 # --- Transpose -------------------------------------------------------------------------------------------------------------

@@ -11,7 +11,7 @@ s8(fminf(fmaxf(rint(RN32(x_k / s)), -127), 127) (`Int8QuantElement`: ties to eve
 that is not NaN, so the clamp is total).  Every s8 product is a chain of `BlackwellS8ImmaDot32_v1` steps from 0, 32 codes a step
 summed exactly and clamped to s32 (`s8_chain`); then the epilogues as `registry.int8_exact` states them, one f32 or f64 rounding per
 operation, with the attention's fixed-point A from the Definition's own primitives.  A non-finite bf16 word is declined before the
-kernel (`rows._instance`).  Registered from `rows` (kernel "rows", `register_rows`).
+kernel (`rows._instance`).  Registered from `rows` (kernel "rows").
 """
 from __future__ import annotations
 
@@ -216,12 +216,5 @@ def check_targets(family: str = FAMILY) -> list:
     }[family]()
 
 
-def register_rows(evaluators: dict, row: Callable) -> None:
-    """Register this module's row evaluators without growing the shared rows catalog."""
-    evaluators |= EVALUATORS
-    for family, (fn, returns) in ROWS.items():
-        row(family, fn, returns, check_targets=lambda rng, f=family: check_targets(f))
-
-
 __all__ = ["ATTENTION_ROW", "EVALUATORS", "FAMILY", "KV_QUANT", "ROWS", "SCALED_MM", "attn_scale", "check_targets", "int8_row_quant",
-           "int8_row_quant_rows", "kv_quant", "lut_attention_row", "register_rows", "s8_chain", "scaled_mm"]
+           "int8_row_quant_rows", "kv_quant", "lut_attention_row", "s8_chain", "scaled_mm"]

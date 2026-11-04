@@ -57,17 +57,10 @@ def build(force: bool = False) -> Path:
     return _jit.atomic_build(LIB, [CPP_SRC, CPP_DEP], lambda out: _jit.cxx_compile(out, CPP_SRC, cwd=CPP_SRC.parent), force=force)
 
 
-def _load() -> ctypes.CDLL:
-    try:
-        return ctypes.CDLL(str(build()))
-    except OSError:  # a stale or foreign-platform .so (e.g. copied from another machine): rebuild here
-        return ctypes.CDLL(str(build(force=True)))
-
-
 def lib() -> ctypes.CDLL:
     global _lib
     if _lib is None:
-        _lib = _load()
+        _lib = _jit.load(build)
         _lib.fa2_rows.restype = None
         _lib.fa2_rows.argtypes = (
             [ctypes.c_void_p] * 3 + [ctypes.c_int, ctypes.c_int] + [ctypes.c_void_p] * 3

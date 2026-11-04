@@ -16,6 +16,7 @@ its zero l and acc) is `fma_zero_product`.  No table or lookup gate.
 """
 from __future__ import annotations
 
+from functools import partial
 from types import SimpleNamespace
 
 from verity.ml.circuits import boolean as BL
@@ -87,25 +88,7 @@ class GateOps(BI.GateOps):
         return ue8m0_inv(self.C, e)
 
 
-def traced(name: str, statics: list[str], signature, body, word):
-    """The Boolean Definition ``name_v2{statics}``: `dsv4_compressor`'s ``body`` over `GateOps`, traced per binding, its word view
-    ``word`` at the same statics (`boolean_dsv4_indexer.traced` over these steps)."""
-    sig = signature(BITS)
-
-    def build(S):
-        counts = [len(BL.elements(t)) for _, t in sig(S)[0]]
-
-        def run(C_, *elements):
-            parts, i = [], 0
-            for n in counts:
-                parts.append(list(elements[i:i + n]))
-                i += n
-            return body(GateOps(C_), S, *parts)
-        return run
-
-    return EW.specialized(name, 2, statics, build, sig, doc=f"`{word.name}_v1`'s body on bits: {(body.__doc__ or '').strip()}",
-                          word=lambda b: bind(word, **b))
-
+traced = partial(BI.traced, bits=BITS, ops=GateOps)
 
 Dsv4MlaC4ColumnV2 = traced("Dsv4MlaC4Column", ["ROWS"], C.c4_column_sig, C.c4_column, C.Dsv4MlaC4Column)
 Dsv4MlaC128ColumnV2 = traced("Dsv4MlaC128Column", ["W", "R"], C.c128_column_sig, C.c128_column, C.Dsv4MlaC128Column)

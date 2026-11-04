@@ -30,7 +30,7 @@ import numpy as np
 from verity.ml.circuits.evaluation import Kernel, register_kernel, self_check
 from verity.ml.circuits.evaluation.reference import key_of, statics_of
 
-__all__ = ["Declined", "Registered", "check", "covers", "instance", "prim_static", "register", "registered"]
+__all__ = ["Declined", "Registered", "check", "covers", "instance", "prim_static", "register", "register_rows", "registered"]
 
 
 class Declined(Exception):
@@ -116,6 +116,14 @@ def register(target: Any, fn: Callable[..., Any], *, kernel: str, domain: str = 
                            partial=True)
     reg = _REGISTERED[(core.key, kernel)] = Registered(core.key, kernel, fn, check_targets, covers, core)
     return reg
+
+
+def register_rows(m: Any, evaluators: dict, row: Callable[..., None]) -> None:
+    """Register row module ``m``'s ``EVALUATORS`` into ``evaluators`` and each of its ``ROWS`` (``family: (fn, returns)``) with
+    ``row`` (`rows._row`), its check specialisations ``m.check_targets(family)``, without growing the shared rows catalog."""
+    evaluators |= m.EVALUATORS
+    for family, (fn, returns) in m.ROWS.items():
+        row(family, fn, returns, check_targets=lambda rng, f=family: m.check_targets(f))
 
 
 def instance(target: Any, kernel: str) -> Callable[..., Any]:

@@ -65,6 +65,7 @@ from verity.ml.circuits.boolean.forms import NOT, and_reduce, mux, or_reduce, co
 from verity.ml.circuits.ops.boolean.softmax import f32_gt
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.definitions.registry.boolean_attention import _Bits
+from verity.ml.definitions.registry.ll_bf16 import _check
 
 __all__ = ["F32MulConst", "MlaBmm", "MoeSharedCombine", "MoeSharedCombineElement", "TritonExpSub", "TritonMlaBlock",
            "TritonMlaDecode", "TritonMlaDecodeHead", "TritonMlaGate", "TritonMlaOut", "TritonMlaScore", "GLM47_FLASH"]
@@ -144,12 +145,6 @@ class _Memo:
         if key not in self.done:
             self.done[key] = (self.B.call(fn, *args), args)
         return self.done[key][0]
-
-
-def _check(name: str, **ok: bool) -> None:
-    bad = [k for k, v in ok.items() if not v]
-    if bad:
-        raise ValueError(f"{name}: unsupported statics ({', '.join(bad)})")
 
 
 def _block_type(S):
