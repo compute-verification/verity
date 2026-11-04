@@ -1,7 +1,9 @@
-import Proofs.Flock.SessionLoop.InnerSlot
-import Proofs.Flock.SessionLoop.LiveInner
-import Proofs.Flock.SessionLoop.CutPiopLive
-import Proofs.Flock.Claims.ZK.FrameZK
+module
+
+public import Proofs.Flock.SessionLoop.InnerSlot
+public import Proofs.Flock.SessionLoop.LiveInner
+public import Proofs.Flock.SessionLoop.CutPiopLive
+public import Proofs.Flock.Claims.ZK.FrameZK
 
 /-!
 # The loop's frames refuse every coin fault shown below the inner proof's rounds
@@ -23,6 +25,8 @@ At `Loop.InnerAt` the history stands at a rep's inner round, within the rep's ro
   loop's state one round on is the check's (`ofLoop_progChecks_sizes`, at `withInner`'s round 0, the firewall's own:
   `LoopInnerRound0Own`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

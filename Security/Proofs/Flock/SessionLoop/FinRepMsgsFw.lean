@@ -1,7 +1,9 @@
-import Proofs.Flock.SessionLoop.FinPrevFw
-import Proofs.Flock.SessionLoop.FinHmkRet
-import Proofs.Flock.SessionLoop.FinRepPads
-import Proofs.Flock.Claims.ZK.FinishSwMkAny
+module
+
+public import Proofs.Flock.SessionLoop.FinPrevFw
+public import Proofs.Flock.SessionLoop.FinHmkRet
+public import Proofs.Flock.SessionLoop.FinRepPads
+public import Proofs.Flock.Claims.ZK.FinishSwMkAny
 
 /-!
 # `FinRepMsgs` with no rows
@@ -18,6 +20,8 @@ request's. Here it holds outright, reading no table's rows:
 
 **`Loop.finRepMsgs_ret`** states it.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

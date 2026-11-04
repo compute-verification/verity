@@ -1,5 +1,7 @@
-import Proofs.Flock.SessionLoop.FinHmkCut
-import Proofs.Flock.Claims.ZK.FinishLigEnd
+module
+
+public import Proofs.Flock.SessionLoop.FinHmkCut
+public import Proofs.Flock.Claims.ZK.FinishLigEnd
 
 /-!
 # `final_c` from the history: the views' masked `final_c`, read off the inner proof's round 0
@@ -16,6 +18,8 @@ The loop's frame reads `final_c'` there (`finalCOf`) and adds its pad (`valsOf_f
 * **`finalCOf_inner`**: `final_c'` of the inner proof's round 0 is its `final_c`, from no pending bytes.
 * **`Loop.swSrcE_hmk_cut_fc`**: the views' masked `final_c` is the request's plus its pad.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

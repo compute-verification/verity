@@ -1,22 +1,24 @@
-import Proofs.Flock.Claims.ZK.FinishRank
-import Proofs.Flock.Claims.ZK.PiopFree
-import Proofs.Flock.Claims.ZK.RepCutFw
-import Proofs.Flock.Claims.ZK.RepFree
-import Proofs.Flock.Claims.ZK.PrefixLive
-import Proofs.Flock.Claims.ZK.Round0
-import Proofs.Flock.Claims.ZK.FinishSwPts
-import Proofs.Flock.Claims.ZK.FinishSrc
-import Proofs.Flock.Claims.ZK.SimInner
-import Proofs.Flock.Claims.ZK.SimLig
-import Proofs.Flock.Claims.ZK.MaskedTables
-import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
-import Proofs.Flock.Claims.Complete.Zk.Level0Run
-import Proofs.Flock.Claims.Complete.Zk.RepRounds
-import Proofs.Flock.Claims.Complete.Zk.MaskRank
-import Proofs.Flock.Claims.Complete.Reps
-import Proofs.Flock.Claims.Complete.Shaped
-import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
-import Proofs.Flock.VBridge.Algebra.Lincheck
+module
+
+public import Proofs.Flock.Claims.ZK.FinishRank
+public import Proofs.Flock.Claims.ZK.PiopFree
+public import Proofs.Flock.Claims.ZK.RepCutFw
+public import Proofs.Flock.Claims.ZK.RepFree
+public import Proofs.Flock.Claims.ZK.PrefixLive
+public import Proofs.Flock.Claims.ZK.Round0
+public import Proofs.Flock.Claims.ZK.FinishSwPts
+public import Proofs.Flock.Claims.ZK.FinishSrc
+public import Proofs.Flock.Claims.ZK.SimInner
+public import Proofs.Flock.Claims.ZK.SimLig
+public import Proofs.Flock.Claims.ZK.MaskedTables
+public import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
+public import Proofs.Flock.Claims.Complete.Zk.Level0Run
+public import Proofs.Flock.Claims.Complete.Zk.RepRounds
+public import Proofs.Flock.Claims.Complete.Zk.MaskRank
+public import Proofs.Flock.Claims.Complete.Reps
+public import Proofs.Flock.Claims.Complete.Shaped
+public import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
+public import Proofs.Flock.VBridge.Algebra.Lincheck
 
 /-!
 # A rep returns on its coins alone
@@ -39,6 +41,8 @@ step needs a run of the session's rep.
   first send `repBase x k`, returns at `repBase x (k + 1)` where the coins below round `n`, past the rep's `β` round,
   show no refusal.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

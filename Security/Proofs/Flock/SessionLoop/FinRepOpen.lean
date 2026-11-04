@@ -1,6 +1,8 @@
-import Proofs.Flock.SessionLoop.FinRepFinal
-import Proofs.Flock.Claims.ZK.FinPads
-import Proofs.Flock.Claims.ZK.FinishInner
+module
+
+public import Proofs.Flock.SessionLoop.FinRepFinal
+public import Proofs.Flock.Claims.ZK.FinPads
+public import Proofs.Flock.Claims.ZK.FinishInner
 
 /-!
 # (c.3)'s `FinRepOpen`: the pads' opened columns and salts
@@ -23,6 +25,8 @@ queried positions are one, and at each the two commitments agree:
 wherever every table's rows hold at its base (`Loop.FinRepRows`) and each rep stream's run from the views ends at the next
 one's first round (`Loop.FinRepRounds`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

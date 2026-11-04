@@ -1,8 +1,10 @@
-import Proofs.Flock.SessionLoop.FinRepOpen
-import Proofs.Flock.SessionLoop.FinRepXs
-import Proofs.Flock.SessionLoop.Tables
-import Proofs.Flock.Claims.ZK.FinishFwRep
-import Proofs.Flock.Claims.ZK.FrameUnrefused
+module
+
+public import Proofs.Flock.SessionLoop.FinRepOpen
+public import Proofs.Flock.SessionLoop.FinRepXs
+public import Proofs.Flock.SessionLoop.Tables
+public import Proofs.Flock.Claims.ZK.FinishFwRep
+public import Proofs.Flock.Claims.ZK.FrameUnrefused
 
 /-!
 # `FinRepRows`: every table's rows hold at its base
@@ -28,6 +30,8 @@ consumes, none a premise of a guarantee:
 **`Loop.finRepRows`**: in the masked scope, with a witness, at a statement the loop serves whose level 0 the source draws
 from the tape (`Loop.Level0Src`), the four give `FinRepRows`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

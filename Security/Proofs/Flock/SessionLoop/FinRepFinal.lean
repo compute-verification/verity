@@ -1,7 +1,9 @@
-import Proofs.Flock.SessionLoop.FinRepView
-import Proofs.Flock.SessionLoop.RepSrc
-import Proofs.Flock.Claims.ZK.FinishSwTau
-import Proofs.Flock.Claims.ZK.Blind
+module
+
+public import Proofs.Flock.SessionLoop.FinRepView
+public import Proofs.Flock.SessionLoop.RepSrc
+public import Proofs.Flock.Claims.ZK.FinishSwTau
+public import Proofs.Flock.Claims.ZK.Blind
 
 /-!
 # (c.3)'s `FinRepFinal`, in parts
@@ -22,6 +24,8 @@ salt, and the pads' opened columns and salts. `Loop.FinRepAt P` is that context 
 
 **`Loop.finRepFinal_of`**: the four give `FinRepFinal`.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

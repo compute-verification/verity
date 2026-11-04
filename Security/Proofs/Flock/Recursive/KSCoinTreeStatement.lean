@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.KSStatement
-import Proofs.Flock.Claims.Recursion.KSLin2Committed
+module
+
+public import Proofs.Flock.Recursive.KSStatement
+public import Proofs.Flock.Claims.Recursion.KSLin2Committed
 
 /-!
 # The recursive verifier's knowledge soundness at Hello-committed coins (trusted)
@@ -16,6 +18,8 @@ named assumption `hash-derived-key` at the pinned key) has a simulator `S` such 
 root and the openings, the committed run accepts at most as often as `RecursiveKS`'s extractor, run on the prover with
 `S`'s root and openings, recovers a witness, plus `RecursiveKS`'s bound at that prover and `2 · k(x) · δ₁`.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

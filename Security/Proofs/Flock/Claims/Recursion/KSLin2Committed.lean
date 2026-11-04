@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.KSLin2
-import Proofs.Flock.Claims.Bridge.CommittedNil
+module
+
+public import Proofs.Flock.Claims.Recursion.KSLin2
+public import Proofs.Flock.Claims.Bridge.CommittedNil
 
 /-!
 # `KSLin2On` at Hello-committed coins
@@ -13,6 +15,8 @@ accepts at most as often as `KSLin2On`'s extractor, run on the prover with `S`'s
 (`Bridge.simProverM`), recovers a witness, plus `KSLin2On`'s bound at that prover (`lin2Rhs`) and `2 · k(x) · δ₁`.
 `ksLin2OnC_of_ksLin2On` derives it from `KSLin2On` (`Bridge.Pr_acc_runCM_le`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

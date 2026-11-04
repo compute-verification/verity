@@ -1,14 +1,16 @@
-import Proofs.Accounting.TS.Session.Group.Guarantees
-import Proofs.Accounting.TS.Session.Lanes.KnownRead
-import Proofs.Accounting.TS.Session.Lanes.Partials
-import Proofs.Accounting.TS.Session.Lanes.Committed
-import Proofs.Flock.C3.RegLevels.TopLeaf
-import Proofs.Accounting.TS.CheckedSound
-import Proofs.Accounting.TS.HeldSound
-import Proofs.Pouw.RelativeSecurity
-import Proofs.Flock.VBridge.Family.Registrants
-import PouwWindow.OwnPorts
-import PouwWindow.FullDraw
+module
+
+public import Proofs.Accounting.TS.Session.Group.Guarantees
+public import Proofs.Accounting.TS.Session.Lanes.KnownRead
+public import Proofs.Accounting.TS.Session.Lanes.Partials
+public import Proofs.Accounting.TS.Session.Lanes.Committed
+public import Proofs.Flock.C3.RegLevels.TopLeaf
+public import Proofs.Accounting.TS.CheckedSound
+public import Proofs.Accounting.TS.HeldSound
+public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Flock.VBridge.Family.Registrants
+public import PouwWindow.OwnPorts
+public import PouwWindow.FullDraw
 
 /-!
 # A leaf's group of linked sessions realizes one unit, any shape (the proof)
@@ -45,6 +47,8 @@ fails at every `δ` with `(T.lanes · n + 1) δ < 1`, so its premises are what m
 This module imports `Proofs.Flock.SoundAtBridge` (through `Proofs.Accounting.TS.CheckedSound`), whose imports make `X`
 a token, so `Proofs/Accounting.lean` imports it.
 -/
+
+@[expose] public section
 
 namespace Flock.SoundAtBridge.RowsSession
 

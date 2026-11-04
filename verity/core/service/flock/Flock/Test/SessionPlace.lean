@@ -4,7 +4,12 @@ session of two rep streams: along the honest prover's order (the first rep strea
 the second's `Open` and rounds, `Finish`) each leaves once, at its place; a second `Register`, `Hello`, `Link` or `Open`,
 and each of them out of its place, is refused; and after a refusal every request is refused for its reason.
 -/
-import Flock.Firewall.Session
+module
+
+public import Flock.Firewall.Session
+meta import Flock.Firewall.Session
+
+@[expose] public section
 
 namespace Flock.Test.SessionPlace
 

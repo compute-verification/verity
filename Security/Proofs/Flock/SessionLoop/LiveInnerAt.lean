@@ -1,14 +1,16 @@
-import Proofs.Flock.SessionLoop.InnerUnrefused
-import Proofs.Flock.SessionLoop.CutInnerLive
-import Proofs.Flock.SessionLoop.TakesTau
-import Proofs.Flock.SessionLoop.RepSrc
-import Proofs.Flock.SessionLoop.FinRounds
-import Proofs.Flock.SessionLoop.FinCommits
-import Proofs.Flock.Claims.ZK.FinishSwInner
-import Proofs.Flock.Claims.ZK.SimInner
-import Proofs.Flock.Claims.ZK.FinishSwMk
-import Proofs.Flock.Claims.ZK.FrameInner
-import Proofs.Flock.Claims.ZK.FrameTape
+module
+
+public import Proofs.Flock.SessionLoop.InnerUnrefused
+public import Proofs.Flock.SessionLoop.CutInnerLive
+public import Proofs.Flock.SessionLoop.TakesTau
+public import Proofs.Flock.SessionLoop.RepSrc
+public import Proofs.Flock.SessionLoop.FinRounds
+public import Proofs.Flock.SessionLoop.FinCommits
+public import Proofs.Flock.Claims.ZK.FinishSwInner
+public import Proofs.Flock.Claims.ZK.SimInner
+public import Proofs.Flock.Claims.ZK.FinishSwMk
+public import Proofs.Flock.Claims.ZK.FrameInner
+public import Proofs.Flock.Claims.ZK.FrameTape
 
 /-!
 # `LiveInner` at the session loop's own inner rounds
@@ -31,6 +33,8 @@ coins the openings open:
   worker's `τ` commitment, the switched source's; round 3 `Y` at the rep's pads and `β`, the switched source's where the
   rows hold.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`

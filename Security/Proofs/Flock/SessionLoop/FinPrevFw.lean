@@ -1,7 +1,9 @@
-import Proofs.Flock.SessionLoop.FinPiopRet
-import Proofs.Flock.SessionLoop.FinRepOpen
-import Proofs.Flock.SessionLoop.FinRepRows
-import Proofs.Flock.Claims.ZK.RepCutFw
+module
+
+public import Proofs.Flock.SessionLoop.FinPiopRet
+public import Proofs.Flock.SessionLoop.FinRepOpen
+public import Proofs.Flock.SessionLoop.FinRepRows
+public import Proofs.Flock.Claims.ZK.RepCutFw
 
 /-!
 # The views' cut rep returns where the firewall's rep did, with no rows
@@ -19,6 +21,8 @@ No premise on the views' masked values, and none on the rows.
 `swSrcE_hmk_fw` and `swSrcE_l0_views` take as `hprev`: at table `j`'s rep `r`, every stream below `2j + r` returns
 from its base and ends at the next one's, at any pads commitment.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

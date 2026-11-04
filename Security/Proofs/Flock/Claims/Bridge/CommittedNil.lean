@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Bridge.Hm96Tree
+module
+
+public import Proofs.Flock.Claims.Bridge.Hm96Tree
 
 /-!
 # Committed coins at a verifier that may answer a round with nothing
@@ -20,6 +22,8 @@ The recursion's compiled verifier doesn't: it answers a V\* session that accepts
   most as often as the extractor, run on `simProverM`, recovers a witness, plus `PrBad` at `simProverM` and
   `2 · k(x) · δ₁`.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge
 

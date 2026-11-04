@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FinishLigEnd
-import Proofs.Flock.Claims.ZK.FinishFc
-import Proofs.Flock.Claims.ZK.L0PinCoins
+module
+
+public import Proofs.Flock.Claims.ZK.FinishLigEnd
+public import Proofs.Flock.Claims.ZK.FinishFc
+public import Proofs.Flock.Claims.ZK.L0PinCoins
 
 /-!
 # The rep from a source that misses the firewall at `final_c`, at its inner proof's first round
@@ -13,6 +15,8 @@ first round, after the firewall's PIOP and Ligerito logs. Here that stop is plac
 * `piopCut_fw_fc`: `piopCut_fw` from a source that may differ at `fc`; its zerocheck proof's `finalC` is the source's.
 * `repCut_fw_inner_at`: the rep from the source, cut at the inner proof's first round, sends that round's body there.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.SessionLoop.FinRepXs
-import Proofs.Flock.Claims.ZK.L0PinLoop
-import Proofs.Flock.Claims.ZK.L0PinCut
+module
+
+public import Proofs.Flock.SessionLoop.FinRepXs
+public import Proofs.Flock.Claims.ZK.L0PinLoop
+public import Proofs.Flock.Claims.ZK.L0PinCut
 
 /-!
 # Level 0's values at the views' source
@@ -19,6 +21,8 @@ pair and the folded weight's products with the extra lanes (`l0Clear`), at their
 * **`Loop.swSrcE_l0_live`**: the same with the cut opening's bodies from the earlier reps' returns
   (`Masked.runCut_cutL0_of_ret`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
