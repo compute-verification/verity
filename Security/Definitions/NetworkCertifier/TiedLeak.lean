@@ -8,12 +8,18 @@ Definitions only. A phase is counted as its joint Program (`Phase.prog`, `Defini
 leak relation (`RLeakTied`) is `RLeakTap` for the joint Program: every observation sequence the network certifier
 registers at the scan's transfer gates is one the joint Program accepts at the phase's layout (`AccSeqsTied`), its
 inputs the traces' committed values (`Phase.val`) and values held only at the committed gates of one possible incorrect
-set of each statement. Each statement's incorrect set is its own, at its own wires and its own `δ`, so the charge is
-theirs together (`Phase.charge`).
+set of each statement. Each statement's incorrect set is its own, at its own wires and its own `δ`.
 
 A phase's good event (`PhaseGood`) is `WindowGood`'s, with the joint Program's registered inputs, the values the
 registration fixes before the run, in place of each statement's. A tied gate is no registered input: it is wired, and
 its value is its writer's.
+
+The conditions a period of phases takes beyond a period of windows' are named here: the phase's bytes parse to its
+statements, one trace each (`PhaseParsed`), and each tied audit that can be wrong shows the rest of the phase at most a
+given number of gates (`TiedExposed`, at `Phase.exposed`). The scan is charged its incorrect sets and their committed
+bits, as a window is; a tied audit's Program and the scan's are side by side, so the rest of the phase reads a tied
+audit only through the ties, at the gates it shows, and a wrong tied audit is charged those gates' values, whichever of
+its incorrect sets holds.
 -/
 
 namespace NetTiming
@@ -37,10 +43,13 @@ def Phase.IncorrectGate (ph : Phase) (Ps : List Partition) (Fs : List (Finset �
   ∃ j h s P F, ph.locate g = some (j, h) ∧ ph.stmts[j]? = some s ∧ Ps[j]? = some P ∧ Fs[j]? = some F ∧
     FaultyGate s.prog P F h
 
-/-- **The phase's charge for its incorrect sets** at `δ`, at its statements' partitions `Ps` and committed-bit bounds
-`β`: over its statements, each one's number of possible incorrect sets times `2^β` (`faultySets`, `faultyBits`). -/
-noncomputable def Phase.charge (ph : Phase) (Ps : List Partition) (δ : ℕ → ℝ) (β : ℕ → ℕ) : ℕ :=
-  ((ph.stmts.zip Ps).mapIdx fun j sP => (faultySets sP.1.design sP.2 (δ j)).card * 2 ^ β j).prod
+open Classical in
+/-- **The gates statement `j` shows the rest of the phase**: its gates that a wire of the phase's layout carries to a
+gate of another statement. The rest of the phase reads statement `j` only there. -/
+noncomputable def Phase.exposed {L S : ℕ} (ph : Phase) (lay : AuditStatement → BoundaryGates L S) (t : Ties) (j : ℕ) :
+    Finset ℕ :=
+  (Finset.range ph.prog.gates.length).filter fun w => (ph.locate w).map Prod.fst = some j ∧
+    ∃ g < ph.prog.gates.length, (ph.layout lay t).wires g = some w ∧ (ph.locate g).map Prod.fst ≠ some j
 
 /-- **The sequences a phase's audits accept** at `δ`: the observation sequences of length `k`, with jitter below `Dj`,
 that the joint Program accepts at the phase's layout (`Phase.layout`), with its inputs other than the ingress and the
@@ -97,6 +106,20 @@ def PhaseGood (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : Aud
         (AsReg ph.prog (ph.layout lay t) (k ph.scan) reg) Dj (tops ph.scan) xs ws ∧
       (∀ g ∈ reg, traceVal ph.prog (ph.val H D.commit ws) g = ρ g) ∧ Covered (k ph.scan) o ∧ o.length = k ph.scan ∧
       ∀ y ∈ o, y.jitter < Dj
+
+/-- **The phase's bytes and traces**: the statements' bytes `xs` parse to the phase `ph`'s statements, the scan's first,
+and there is one trace for each (`ws`). -/
+def PhaseParsed (D : Deploy Coin Col T) (ph : Phase) (xs : List Msg) (ws : List Wit) : Prop :=
+  List.Forall₂ (fun x s => D.parse x = some s) xs ph.stmts ∧ ws.length = xs.length
+
+/-- **The gates the period's tied audits show**: in each phase `pw i`, each tied audit `s`, the phase's statement
+`j + 1`, that can be wrong, a nonempty set among its possible incorrect sets at its partition and `δ (j + 1)`
+(`faultySets`), shows the rest of the phase at most `βt i j` gates (`Phase.exposed`, at the phase's layout and ties
+`t i`). -/
+def TiedExposed {L S n : ℕ} (D : Deploy Coin Col T) (lay : AuditStatement → BoundaryGates L S) (δ : ℕ → ℝ)
+    (pw : Fin n → Phase) (t : Fin n → Ties) (βt : Fin n → ℕ → ℕ) : Prop :=
+  ∀ i j s P, (pw i).tied[j]? = some s → D.partition s = some P → (∃ F ∈ faultySets s.design P (δ (j + 1)), F.Nonempty) →
+    ((pw i).exposed lay (t i) (j + 1)).card ≤ βt i j
 
 end Good
 
