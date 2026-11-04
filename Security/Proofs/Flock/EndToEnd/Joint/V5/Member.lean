@@ -107,8 +107,9 @@ theorem prob_member (τ : Strategy w.game) (k : Fin w.ms.length)
     rw [prob_map]
     exact congrArg (prob _ _) (Strategy.ofMap_map _ _ _)
   rw [hL, hR]
-  exact (avg_ite_le _ _).trans_eq
-    ((avg_prod_pi fun ω : w.EΩ => h ω.1).symm.trans (avg_congr_fintype _ _ _))
+  exact (avg_ite_le (fun ω => DrawEnds w.src w.law w.nJ ω) fun ω => avg (h ω)).trans_eq
+    ((avg_congr_fintype (C := w.EΩ) _ _ _).trans
+      ((avg_prod_pi fun ω : w.EΩ => h ω.1).symm.trans (avg_congr_fintype _ _ _)))
 
 /-- An average over member `k`'s sampling design played alone of a function of its part of the sample is the average
 over `design k`. -/

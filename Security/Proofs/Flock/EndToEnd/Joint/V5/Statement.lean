@@ -247,6 +247,8 @@ instance (τ : Strategy w.game) (k : Fin w.ms.length) (ω : w.L.Ω) : Nonempty (
 /-- **The sample's coins on which the draw ends.** -/
 abbrev EΩ : Type := {ω : w.L.Ω // DrawEnds w.src w.law w.nJ ω}
 
+noncomputable instance : Fintype w.EΩ := Subtype.fintype _
+
 instance : Nonempty w.EΩ := w.hend.elim fun ω h => ⟨⟨ω, h⟩⟩
 
 /-- **Member `k`'s session's sampling design, played alone at `τ`**: the sample's coins on which the draw ends and, for
