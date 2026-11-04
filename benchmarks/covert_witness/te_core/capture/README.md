@@ -59,16 +59,25 @@ entry of it at the console's k and the chain that makes one whole, identical row
 kinds and chains move with k. A recorded
 program reads a weight through the version the previous step's update wrote, so these rates and chains are keyed by
 the capture's values, not by graph nodes as `io_bound`'s are. The summation order is `unknown`: a GEMM is one ATen op,
-summed as its kernel sums it. `"capture"` names the version of these rows (`products.CAPTURE`);
+summed as its kernel sums it. `"capture"` names the version of these rows (`products.CAPTURE`), and a recorded
+program's trace (`script.record`, from te_core 4.12.14 on) adds `"capture_code"`, the te_core VERSION whose code wrote
+it, so a row priced from it can be told apart from one priced from a trace that 4.12.9 to 4.12.13's code wrote;
 `te_core.formalism.products_of_trace` reads them. `"elementwise_products"` lists the matrix products the step writes
 with elementwise ops, which no row is: a multiplication of two θ′-dependent values that broadcasts both (an outer
 product, or `(x.unsqueeze(-1) * W).sum(-2)` for `x @ W`), and gathered rows multiplied by such a value and summed by
 index (gather, mul and `index_add`). A value's entries are its sources' (`products._sources`: a GEMM's output, a graph
-source and a lookup of a module tensor's rows by the step's data are their own), so a broadcast is found whatever map,
-scaling, copy in place or multiplication by a value outside the update it passes through, and an embedding's rows are
-no broadcast; two broadcasts along the same dims (a token's code over lanes times its scale) are elementwise
-(`products._flats`), and dims the capture can't tell never exempt one. The formalism leaves the fresh-products term
-unmeasured where the list has any, and on a trace captured before this check (`formalism.ELEMENTWISE_FROM`).
+source and a lookup of a table's rows by the step's data are their own, the table a module tensor or one the step
+builds whose entries are its own, as a grown model's copy of θ's is), so a broadcast is found whatever map, scaling,
+copy in place or multiplication by a value outside the update it passes through, and an embedding's rows are no
+broadcast; two broadcasts along the same dims (a token's code over lanes times its scale) are elementwise. A value is
+flat along runs of its entries' index (`products._flats`: a dim, or part of one), which a view keeps however it
+regroups the dims, a permutation moves with its dims, and a map, cast or broadcast meets over its arguments. Runs the
+capture can't tell never exempt a multiplication, unless the other operand is flat along the whole index (a scalar's
+broadcast, as a gradient clip's coefficient is), which mixes with nothing. The runs are compared on the grid both
+share (`products._cells`), so a coded message's levels whose lanes a view merges into their group, times the group's
+scale, are elementwise whatever maps follow the view, and two broadcasts each flattened by a view are still a product.
+The formalism leaves the fresh-products term unmeasured where the list has any, and on a trace captured before this
+check (`formalism.ELEMENTWISE_FROM`).
 
 A Python number the program reads from a tensor has no value in the trace, so whatever Python decides from it is the
 stand-in's. The recording lists each such read-back by its source line and steps, in `formalism["data_dependent"]` (a

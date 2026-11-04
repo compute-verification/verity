@@ -1,0 +1,1917 @@
+{
+ "schema": "covert-witness/finals-plan/v1",
+ "rule": "every frontier point rerun at three seeds (its own, 101, 102) in final mode (launch.py --direction scorer --final: CW_FINAL=1, every checkpoint and start_bpb scored on the sealed final set, nothing ingested), longest first from 08:00Z on vy-nebius-1/-3, each seed started only if it ends by 15:00Z; a point left without its three seeds is labelled 'single seed: a rerun doesn't fit before the nodes end'",
+ "window": {
+  "from": "08:00Z",
+  "ends_by": "15:00Z",
+  "gpus": 16,
+  "gpu_h": 112
+ },
+ "gpu_h": {
+  "total": 78.8,
+  "v3": 56.2,
+  "pilot": 22.6,
+  "by": {
+   "hybrid": 24.2,
+   "quant": 1.6,
+   "ref-optim": 18.3,
+   "scorer": 23.1,
+   "shallow": 4.5,
+   "wildcard": 7.2
+  }
+ },
+ "ends": {
+  "planning: 12 GPUs, the in-flight ends": {
+   "v3": "14:27Z",
+   "all": "15:00Z"
+  },
+  "all 16 free at 08:00Z": {
+   "v3": "13:27Z",
+   "all": "13:27Z"
+  },
+  "all 16 busy to 09:00Z": {
+   "v3": "14:27Z",
+   "all": "14:27Z"
+  },
+  "all 16 busy to 09:30Z": {
+   "v3": "14:57Z",
+   "all": "14:57Z"
+  }
+ },
+ "order": "launch longest first: 18b2, 0360, 9325, 3327 and 82a6 at 08:00Z; 18b2 must start by 09:30Z to end by 15:00Z; the short reruns after them, the pilot last",
+ "slots": {
+  "rule": "the coordinator's 06:25Z ruling: from 08:00Z the finals take every GPU that frees ahead of any queued search run; a search run that can't end by 15:00Z, or serves no frontier cell, is cancelled by its owner (research cancel RUN --reason ... --by LANE) when its slot is needed",
+  "in_flight": {
+   "vy-nebius-1": [
+    [
+     "g2",
+     "r20261104-060859-bf07",
+     "wildcard s-t20 long",
+     "07:27Z"
+    ],
+    [
+     "g3",
+     "r20261104-060905-8d56",
+     "hybrid m-t20 long",
+     "08:13Z"
+    ],
+    [
+     "g4",
+     "r20261104-061039-62e0",
+     "ref-data m-t20 long",
+     "08:50Z"
+    ],
+    [
+     "g5",
+     "r20261104-061126-5627",
+     "shallow s-t20 long",
+     "07:50Z"
+    ],
+    [
+     "g6",
+     "r20261104-061509-8e1d",
+     "lowrank-restart s-t20 long",
+     "08:42Z"
+    ],
+    [
+     "g7",
+     "r20261104-061725-a6d2",
+     "e1mb s-t20",
+     "06:53Z"
+    ]
+   ],
+   "vy-nebius-3": [
+    [
+     "g1",
+     "r20261104-060904-d64c",
+     "hybrid m-t20 long",
+     "08:13Z"
+    ],
+    [
+     "g2",
+     "r20261104-061054-94f3",
+     "quant s-t20",
+     "06:25Z"
+    ],
+    [
+     "g3",
+     "r20261104-061136-1a68",
+     "shallow m-t20 long",
+     "07:58Z"
+    ],
+    [
+     "g4",
+     "r20261104-061218-162a",
+     "ref-data m-t20 long",
+     "08:51Z"
+    ],
+    [
+     "g5",
+     "r20261104-061733-dfcb",
+     "e1mb s-t20",
+     "06:55Z"
+    ],
+    [
+     "g7",
+     "r20261104-061718-5a8a",
+     "e1mb s-t20",
+     "06:49Z"
+    ]
+   ]
+  },
+  "not_seen": "vy-nebius-1 g0, g1 and vy-nebius-3 g0, g6: held by runs launched elsewhere; the plan counts them never free",
+  "queued_at_06:20Z": [
+   "r20261104-061733-8bbd sparse s-t20 long",
+   "r20261104-061741-a1fd sparse s-t20 long",
+   "r20261104-062008-fe3a placement s-t20 long",
+   "r20261104-061950-3b63 placement s-t20",
+   "r20261104-061740-7601 e1mb",
+   "r20261104-061747-4dc3 e1mb",
+   "r20261104-061754-1bbb e1mb"
+  ],
+  "protected": {
+   "vy-nebius-1": [
+    [
+     "r20261104-062520-3959",
+     "g3 from 08:13Z, ends by 10:03Z"
+    ],
+    [
+     "r20261104-062615-0ba1",
+     "g5 from 08:26Z, ends by 10:16Z"
+    ],
+    [
+     "r20261104-062615-4497",
+     "g6 from 08:42Z, ends by 10:32Z"
+    ]
+   ],
+   "vy-nebius-3": [
+    [
+     "r20261104-062615-5e40",
+     "g7 from 07:31Z, ends by 09:21Z"
+    ],
+    [
+     "r20261104-062615-2787",
+     "growreg, g3 from 07:58Z, ends by 09:48Z"
+    ]
+   ]
+  },
+  "planning_case": "each slot's holder in queue order at its run cap (6600 s) or estimate: vy-nebius-1 g2 7601 then 3b63 to 08:45Z, g4 free 08:50Z, g7 sparse's 8bbd to about 09:53Z; vy-nebius-3 g1 free 08:13Z (4551's evaluation first), g2 sparse's a1fd to about 09:25Z, g4 free 08:51Z, g5 placement's fe3a to about 09:55Z; the protected runs as listed",
+  "cancel": "none of the in-flight runs: each ends by 08:51Z. At 08:00Z each lane cancels its search runs still waiting for a slot, except seed-subspace's five protected runs, so the finals are next in line; a search run holding a slot past 09:30Z while a finals rerun waits is cancelled unless it serves a frontier cell and ends by 15:00Z (sparse's 8bbd and a1fd, placement's fe3a)"
+ },
+ "drop_order": "if GPUs run short, drop from the end: the pilot (rank 5, least needed first: f69a, 111e, 0066, bce4, ba87, 0530, ac47, 2c21, f403, 44df, 8ee3, 8f70, 0c01, 4c3f, 6688, 8d8e, 7c3b, e4f3), then the other starts' H-setters (rank 4: ff7f, 0360, 82a6, 7066, 18b2, 9325), then the unpriced point (3: 5409); the 1.1x envelope (2) and the s-t20 H-setters (1: 3327, 84c2) last",
+ "dropped_in_planning_case": [
+  "f69a",
+  "111e",
+  "0066",
+  "bce4",
+  "ba87",
+  "0530",
+  "ac47",
+  "2c21",
+  "f403",
+  "44df"
+ ],
+ "planning_gpu_h": {
+  "available_to_15:00Z": 65.6,
+  "scheduled": 63.4
+ },
+ "dropped": [
+  {
+   "point": "s-t20 11x H (4551): seeds 101 and 102",
+   "gpu_h_per_seed": 15.4,
+   "label": "single seed: a rerun doesn't fit before the nodes end"
+  },
+  {
+   "point": "v3 11x earlier best attempt r20261103-131141-7c21, not reached",
+   "gpu_h_per_seed": 12.9,
+   "label": "not a frontier point: it never reached 11x"
+  },
+  {
+   "point": "the starts l16-t20 and xl-t20 from scratch (the fit's points)",
+   "gpu_h_per_seed": [
+    22.9,
+    176
+   ],
+   "label": "single seed: a rerun doesn't fit before the nodes end"
+  },
+  {
+   "point": "the starts s-t20 and m-t20 from scratch (the fit's points)",
+   "gpu_h_per_seed": [
+    0.8,
+    2.7
+   ],
+   "label": "single seed: starts.py fixes init and data seeds at 0, so a seeded start is a new start; their sealed L0 is each rerun's start_bpb and, for xl-t20, one final-mode `evaluate.py --start xl-t20` by the scorer"
+  }
+ ],
+ "points": [
+  {
+   "rank": 1,
+   "data": "v3",
+   "point": "s-t20 2x H, the only 2x point",
+   "run": "r20261103-102408-3327",
+   "island": "wildcard",
+   "program": "train.py",
+   "island_commit": "1bd3d07308fe3295a755ab9dca3d84dc62c2c887",
+   "start": "s-t20",
+   "mechanism": "wildcard/topcode",
+   "tier": "long",
+   "long": "06:57Z coordinator",
+   "args": "--mechanism topcode --set blocks\\..*|norm --method muon --lr 3e-3 --norm-lr 3e-3 --muon-wd 0.05 --schedule wsd --decay-frac 0.25 --warmup 40 --batch 128 --micro 64 --grow 6 --grow-copy --cut 12:dnq2b4 --budget-fraction 0.03",
+   "measured_at": null,
+   "gpu_min_per_seed": 143,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
+   "by": "wildcard",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-1",
+     "queue_at": "10:32Z",
+     "ends_by": "12:55Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island wildcard --direction scorer --final --mechanism topcode --node vy-nebius-1 --long '06:57Z coordinator' --note 'FINAL r20261103-102408-3327 seed own' -- --mechanism topcode --set 'blocks\\..*|norm' --method muon --lr 3e-3 --norm-lr 3e-3 --muon-wd 0.05 --schedule wsd --decay-frac 0.25 --warmup 40 --batch 128 --micro 64 --grow 6 --grow-copy --cut 12:dnq2b4 --budget-fraction 0.03"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-1",
+     "queue_at": "10:03Z",
+     "ends_by": "12:26Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island wildcard --direction scorer --final --mechanism topcode --node vy-nebius-1 --long '06:57Z coordinator' --note 'FINAL r20261103-102408-3327 seed 101' -- --mechanism topcode --set 'blocks\\..*|norm' --method muon --lr 3e-3 --norm-lr 3e-3 --muon-wd 0.05 --schedule wsd --decay-frac 0.25 --warmup 40 --batch 128 --micro 64 --grow 6 --grow-copy --cut 12:dnq2b4 --budget-fraction 0.03 --data-seed 101"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-1",
+     "queue_at": "10:16Z",
+     "ends_by": "12:39Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island wildcard --direction scorer --final --mechanism topcode --node vy-nebius-1 --long '06:57Z coordinator' --note 'FINAL r20261103-102408-3327 seed 102' -- --mechanism topcode --set 'blocks\\..*|norm' --method muon --lr 3e-3 --norm-lr 3e-3 --muon-wd 0.05 --schedule wsd --decay-frac 0.25 --warmup 40 --batch 128 --micro 64 --grow 6 --grow-copy --cut 12:dnq2b4 --budget-fraction 0.03 --data-seed 102"
+    }
+   ],
+   "check": "train.log's first line reads steps 6702 (the original's, measured before the meter pin); if not, cancel it and relaunch with --budget-fraction scaled by 6702/steps"
+  },
+  {
+   "rank": 1,
+   "data": "v3",
+   "point": "s-t20 1.1x H (sets p of every 1.1x envelope point)",
+   "run": "r20261103-154524-84c2",
+   "island": "ref-optim",
+   "program": "train.py",
+   "island_commit": "57cb09ab4f1a80d2f2aeba8167faa1af43af4fb8",
+   "start": "s-t20",
+   "mechanism": "ref-optim/fullmuon-fe-wsd",
+   "tier": "search",
+   "long": null,
+   "args": "--mat-lr 0.0015 --embed-lr 0.0015 --norm-lr 0.0015 --freeze-embed --batch 64 --micro 64 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.14",
+   "measured_at": "8ebfad8480d",
+   "gpu_min_per_seed": 12,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
+   "by": "ref-optim",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-1",
+     "queue_at": "13:55Z",
+     "ends_by": "14:07Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island ref-optim --direction scorer --final --mechanism fullmuon-fe-wsd --node vy-nebius-1 --note 'FINAL r20261103-154524-84c2 seed own' -- --mat-lr 0.0015 --embed-lr 0.0015 --norm-lr 0.0015 --freeze-embed --batch 64 --micro 64 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.14"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-3",
+     "queue_at": "13:52Z",
+     "ends_by": "14:04Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island ref-optim --direction scorer --final --mechanism fullmuon-fe-wsd --node vy-nebius-3 --note 'FINAL r20261103-154524-84c2 seed 101' -- --mat-lr 0.0015 --embed-lr 0.0015 --norm-lr 0.0015 --freeze-embed --batch 64 --micro 64 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.14 --data-seed 101"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-3",
+     "queue_at": "13:53Z",
+     "ends_by": "14:05Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island ref-optim --direction scorer --final --mechanism fullmuon-fe-wsd --node vy-nebius-3 --note 'FINAL r20261103-154524-84c2 seed 102' -- --mat-lr 0.0015 --embed-lr 0.0015 --norm-lr 0.0015 --freeze-embed --batch 64 --micro 64 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.14 --data-seed 102"
+    }
+   ]
+  },
+  {
+   "rank": 1,
+   "data": "v3",
+   "point": "s-t20 11x H, the first 11x on any start",
+   "run": "r20261103-121552-4551",
+   "island": "hybrid",
+   "program": "grow.py",
+   "island_commit": "2a194f4960",
+   "start": "s-t20",
+   "mechanism": "hybrid/grow-mlp",
+   "tier": "long",
+   "long": "03:00Z coordinator",
+   "measured_at": "d96d3c3dfc8",
+   "gpu_min_per_seed": 926,
+   "label": "single seed: a rerun doesn't fit before the nodes end",
+   "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "reached",
+     "node": "vy-nebius-3",
+     "queue_at": "08:00Z",
+     "ends_by": "08:45Z",
+     "launch": "CW_FINAL=1 python evaluate.py --split final from its measurement commit d96d3c3dfc8 over vy-nebius-3's copy /workspace/research/runs/r20261103-121552-4551/out (its E/ files; custody ends 12:15Z), the coordinator's 06:18Z ruling"
+    }
+   ]
+  },
+  {
+   "rank": 2,
+   "data": "v3",
+   "point": "1.1x envelope p 2.02",
+   "run": "r20261103-234313-5870",
+   "island": "shallow",
+   "program": "train.py",
+   "island_commit": "a73f241dec4132fbf977334aaec3b92dbb60eee6",
+   "start": "s-t20",
+   "mechanism": "shallow/depthshare",
+   "tier": "search",
+   "long": null,
+   "args": "--full t1.*,t0.*,final --opt muon --muon-lr 1.5e-3 --lr 1.5e-3 --warmup 50 --schedule wsd --wsd-decay 0.4 --store q8 --budget-fraction 0.35",
+   "measured_at": "024bbb42b6a",
+   "gpu_min_per_seed": 20,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101,
+     "--seed": 101
+    },
+    "102": {
+     "--data-seed": 102,
+     "--seed": 102
+    }
+   },
+   "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
+   "by": "shallow",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-3",
+     "queue_at": "12:55Z",
+     "ends_by": "13:15Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island shallow --direction scorer --final --mechanism depthshare --node vy-nebius-3 --note 'FINAL r20261103-234313-5870 seed own' -- --full 't1.*,t0.*,final' --opt muon --muon-lr 1.5e-3 --lr 1.5e-3 --warmup 50 --schedule wsd --wsd-decay 0.4 --store q8 --budget-fraction 0.35"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-1",
+     "queue_at": "12:55Z",
+     "ends_by": "13:15Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island shallow --direction scorer --final --mechanism depthshare --node vy-nebius-1 --note 'FINAL r20261103-234313-5870 seed 101' -- --full 't1.*,t0.*,final' --opt muon --muon-lr 1.5e-3 --lr 1.5e-3 --warmup 50 --schedule wsd --wsd-decay 0.4 --store q8 --budget-fraction 0.35 --data-seed 101 --seed 101"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-1",
+     "queue_at": "12:55Z",
+     "ends_by": "13:15Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island shallow --direction scorer --final --mechanism depthshare --node vy-nebius-1 --note 'FINAL r20261103-234313-5870 seed 102' -- --full 't1.*,t0.*,final' --opt muon --muon-lr 1.5e-3 --lr 1.5e-3 --warmup 50 --schedule wsd --wsd-decay 0.4 --store q8 --budget-fraction 0.35 --data-seed 102 --seed 102"
+    }
+   ]
+  },
+  {
+   "rank": 2,
+   "data": "v3",
+   "point": "1.1x envelope p 1.23",
+   "run": "r20261103-231145-05da",
+   "island": "shallow",
+   "program": "train.py",
+   "island_commit": "c3ff84684da2f13682b56a430768c4695eef60d0",
+   "start": "s-t20",
+   "mechanism": "shallow/depthshare",
+   "tier": "search",
+   "long": null,
+   "args": "--blocks 6 --opt muon --muon-lr 1.5e-3 --lr 1.5e-3 --warmup 50 --schedule wsd --wsd-decay 0.4 --store q8 --budget-fraction 0.2",
+   "measured_at": "024bbb42b6a",
+   "gpu_min_per_seed": 19,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101,
+     "--seed": 101
+    },
+    "102": {
+     "--data-seed": 102,
+     "--seed": 102
+    }
+   },
+   "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
+   "by": "shallow",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-1",
+     "queue_at": "13:15Z",
+     "ends_by": "13:34Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island shallow --direction scorer --final --mechanism depthshare --node vy-nebius-1 --note 'FINAL r20261103-231145-05da seed own' -- --blocks 6 --opt muon --muon-lr 1.5e-3 --lr 1.5e-3 --warmup 50 --schedule wsd --wsd-decay 0.4 --store q8 --budget-fraction 0.2"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-1",
+     "queue_at": "12:59Z",
+     "ends_by": "13:18Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island shallow --direction scorer --final --mechanism depthshare --node vy-nebius-1 --note 'FINAL r20261103-231145-05da seed 101' -- --blocks 6 --opt muon --muon-lr 1.5e-3 --lr 1.5e-3 --warmup 50 --schedule wsd --wsd-decay 0.4 --store q8 --budget-fraction 0.2 --data-seed 101 --seed 101"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-1",
+     "queue_at": "13:02Z",
+     "ends_by": "13:21Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island shallow --direction scorer --final --mechanism depthshare --node vy-nebius-1 --note 'FINAL r20261103-231145-05da seed 102' -- --blocks 6 --opt muon --muon-lr 1.5e-3 --lr 1.5e-3 --warmup 50 --schedule wsd --wsd-decay 0.4 --store q8 --budget-fraction 0.2 --data-seed 102 --seed 102"
+    }
+   ]
+  },
+  {
+   "rank": 2,
+   "data": "v3",
+   "point": "1.1x envelope p 1.39",
+   "run": "r20261104-001944-1b6b",
+   "island": "shallow",
+   "program": "train.py",
+   "island_commit": "c4d146cdf03200c15dcca03c612fe13b40696009",
+   "start": "s-t20",
+   "mechanism": "shallow/strideshare",
+   "tier": "search",
+   "long": null,
+   "args": "--full t0.*,t2.*,t4.*,final --opt muon --muon-lr 1.5e-3 --lr 1.5e-3 --warmup 50 --schedule wsd --wsd-decay 0.4 --store q8 --budget-fraction 0.2",
+   "measured_at": "024bbb42b6a",
+   "gpu_min_per_seed": 18,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101,
+     "--seed": 101
+    },
+    "102": {
+     "--data-seed": 102,
+     "--seed": 102
+    }
+   },
+   "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
+   "by": "shallow",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-3",
+     "queue_at": "13:17Z",
+     "ends_by": "13:35Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island shallow --direction scorer --final --mechanism strideshare --node vy-nebius-3 --note 'FINAL r20261104-001944-1b6b seed own' -- --full 't0.*,t2.*,t4.*,final' --opt muon --muon-lr 1.5e-3 --lr 1.5e-3 --warmup 50 --schedule wsd --wsd-decay 0.4 --store q8 --budget-fraction 0.2"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-1",
+     "queue_at": "13:15Z",
+     "ends_by": "13:33Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island shallow --direction scorer --final --mechanism strideshare --node vy-nebius-1 --note 'FINAL r20261104-001944-1b6b seed 101' -- --full 't0.*,t2.*,t4.*,final' --opt muon --muon-lr 1.5e-3 --lr 1.5e-3 --warmup 50 --schedule wsd --wsd-decay 0.4 --store q8 --budget-fraction 0.2 --data-seed 101 --seed 101"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-3",
+     "queue_at": "13:15Z",
+     "ends_by": "13:33Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island shallow --direction scorer --final --mechanism strideshare --node vy-nebius-3 --note 'FINAL r20261104-001944-1b6b seed 102' -- --full 't0.*,t2.*,t4.*,final' --opt muon --muon-lr 1.5e-3 --lr 1.5e-3 --warmup 50 --schedule wsd --wsd-decay 0.4 --store q8 --budget-fraction 0.2 --data-seed 102 --seed 102"
+    }
+   ]
+  },
+  {
+   "rank": 2,
+   "data": "v3",
+   "point": "1.1x envelope p 1.31",
+   "run": "r20261103-225333-9784",
+   "island": "shallow",
+   "program": "train.py",
+   "island_commit": "d1510318dd26084bfa2d9fc03e31e91c0e5c201a",
+   "start": "s-t20",
+   "mechanism": "shallow/depthshare",
+   "tier": "search",
+   "long": null,
+   "args": "--full t2.*,t1.*,t0.*,final --opt muon --muon-lr 1.5e-3 --lr 1.5e-3 --warmup 50 --schedule wsd --wsd-decay 0.4 --store q8 --budget-fraction 0.2",
+   "measured_at": "024bbb42b6a",
+   "gpu_min_per_seed": 17,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101,
+     "--seed": 101
+    },
+    "102": {
+     "--data-seed": 102,
+     "--seed": 102
+    }
+   },
+   "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
+   "by": "shallow",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-1",
+     "queue_at": "13:33Z",
+     "ends_by": "13:50Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island shallow --direction scorer --final --mechanism depthshare --node vy-nebius-1 --note 'FINAL r20261103-225333-9784 seed own' -- --full 't2.*,t1.*,t0.*,final' --opt muon --muon-lr 1.5e-3 --lr 1.5e-3 --warmup 50 --schedule wsd --wsd-decay 0.4 --store q8 --budget-fraction 0.2"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-1",
+     "queue_at": "13:18Z",
+     "ends_by": "13:35Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island shallow --direction scorer --final --mechanism depthshare --node vy-nebius-1 --note 'FINAL r20261103-225333-9784 seed 101' -- --full 't2.*,t1.*,t0.*,final' --opt muon --muon-lr 1.5e-3 --lr 1.5e-3 --warmup 50 --schedule wsd --wsd-decay 0.4 --store q8 --budget-fraction 0.2 --data-seed 101 --seed 101"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-1",
+     "queue_at": "13:21Z",
+     "ends_by": "13:38Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island shallow --direction scorer --final --mechanism depthshare --node vy-nebius-1 --note 'FINAL r20261103-225333-9784 seed 102' -- --full 't2.*,t1.*,t0.*,final' --opt muon --muon-lr 1.5e-3 --lr 1.5e-3 --warmup 50 --schedule wsd --wsd-decay 0.4 --store q8 --budget-fraction 0.2 --data-seed 102 --seed 102"
+    }
+   ]
+  },
+  {
+   "rank": 2,
+   "data": "v3",
+   "point": "1.1x envelope p 2.20",
+   "run": "r20261104-005813-5029",
+   "island": "quant",
+   "program": "train.py",
+   "island_commit": "4f4e65b3ef6d5a6b6132cbdcb59d1563c9f72e0f",
+   "start": "s-t20",
+   "mechanism": "quant/embed-sparse-ternary-qat",
+   "tier": "search",
+   "long": null,
+   "args": "--mode qat --train blocks\\.[0-9]+\\.w,^embed --qat sparse --qat-keep 0.10 --muon-lr 0.0015 --adam-lr 3e-4 --decay-frac 0.4 --emit quan --xz min --batch 64 --micro 64 --budget-fraction 0.32",
+   "measured_at": null,
+   "gpu_min_per_seed": 17,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101,
+     "--seed": 101
+    },
+    "102": {
+     "--data-seed": 102,
+     "--seed": 102
+    }
+   },
+   "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
+   "by": "quant",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-1",
+     "queue_at": "13:50Z",
+     "ends_by": "14:07Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island quant --direction scorer --final --mechanism embed-sparse-ternary-qat --node vy-nebius-1 --note 'FINAL r20261104-005813-5029 seed own' -- --mode qat --train 'blocks\\.[0-9]+\\.w,^embed' --qat sparse --qat-keep 0.10 --muon-lr 0.0015 --adam-lr 3e-4 --decay-frac 0.4 --emit quan --xz min --batch 64 --micro 64 --budget-fraction 0.32"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-3",
+     "queue_at": "13:35Z",
+     "ends_by": "13:52Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island quant --direction scorer --final --mechanism embed-sparse-ternary-qat --node vy-nebius-3 --note 'FINAL r20261104-005813-5029 seed 101' -- --mode qat --train 'blocks\\.[0-9]+\\.w,^embed' --qat sparse --qat-keep 0.10 --muon-lr 0.0015 --adam-lr 3e-4 --decay-frac 0.4 --emit quan --xz min --batch 64 --micro 64 --budget-fraction 0.32 --data-seed 101 --seed 101"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-1",
+     "queue_at": "13:38Z",
+     "ends_by": "13:55Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island quant --direction scorer --final --mechanism embed-sparse-ternary-qat --node vy-nebius-1 --note 'FINAL r20261104-005813-5029 seed 102' -- --mode qat --train 'blocks\\.[0-9]+\\.w,^embed' --qat sparse --qat-keep 0.10 --muon-lr 0.0015 --adam-lr 3e-4 --decay-frac 0.4 --emit quan --xz min --batch 64 --micro 64 --budget-fraction 0.32 --data-seed 102 --seed 102"
+    }
+   ]
+  },
+  {
+   "rank": 2,
+   "data": "v3",
+   "point": "1.1x envelope p 4.61",
+   "run": "r20261104-000307-6d2c",
+   "island": "shallow",
+   "program": "train.py",
+   "island_commit": "303bbf4ec91a14401b2e734f96e9581af8ef4d4d",
+   "start": "s-t20",
+   "mechanism": "shallow/depthshare",
+   "tier": "search",
+   "long": null,
+   "args": "--full t0.*,final --opt muon --muon-lr 4e-3 --lr 1e-3 --warmup 50 --store q8 --budget-fraction 0.6",
+   "measured_at": "024bbb42b6a",
+   "gpu_min_per_seed": 17,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101,
+     "--seed": 101
+    },
+    "102": {
+     "--data-seed": 102,
+     "--seed": 102
+    }
+   },
+   "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
+   "by": "shallow",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-1",
+     "queue_at": "13:35Z",
+     "ends_by": "13:52Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island shallow --direction scorer --final --mechanism depthshare --node vy-nebius-1 --note 'FINAL r20261104-000307-6d2c seed own' -- --full 't0.*,final' --opt muon --muon-lr 4e-3 --lr 1e-3 --warmup 50 --store q8 --budget-fraction 0.6"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-3",
+     "queue_at": "13:33Z",
+     "ends_by": "13:50Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island shallow --direction scorer --final --mechanism depthshare --node vy-nebius-3 --note 'FINAL r20261104-000307-6d2c seed 101' -- --full 't0.*,final' --opt muon --muon-lr 4e-3 --lr 1e-3 --warmup 50 --store q8 --budget-fraction 0.6 --data-seed 101 --seed 101"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-1",
+     "queue_at": "13:34Z",
+     "ends_by": "13:51Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island shallow --direction scorer --final --mechanism depthshare --node vy-nebius-1 --note 'FINAL r20261104-000307-6d2c seed 102' -- --full 't0.*,final' --opt muon --muon-lr 4e-3 --lr 1e-3 --warmup 50 --store q8 --budget-fraction 0.6 --data-seed 102 --seed 102"
+    }
+   ]
+  },
+  {
+   "rank": 3,
+   "data": "v3",
+   "point": "1.1x p 1.38, unpriced (rho >= 1 only)",
+   "run": "r20261103-234019-5409",
+   "island": "quant",
+   "program": "train.py",
+   "island_commit": "5a9d51d97ce02b22377f052a4a28baa1f2719b86",
+   "start": "s-t20",
+   "mechanism": "quant/sparse-ternary-qat",
+   "tier": "search",
+   "long": null,
+   "args": "--mode qat --train blocks\\.[2345]\\.w --qat sparse --qat-keep 0.50 --muon-lr 0.0015 --decay-frac 0.4 --emit quan --xz min --batch 64 --micro 64 --budget-fraction 0.20",
+   "measured_at": null,
+   "gpu_min_per_seed": 14,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101,
+     "--seed": 101
+    },
+    "102": {
+     "--data-seed": 102,
+     "--seed": 102
+    }
+   },
+   "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
+   "by": "quant",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-1",
+     "queue_at": "13:52Z",
+     "ends_by": "14:06Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island quant --direction scorer --final --mechanism sparse-ternary-qat --node vy-nebius-1 --note 'FINAL r20261103-234019-5409 seed own' -- --mode qat --train 'blocks\\.[2345]\\.w' --qat sparse --qat-keep 0.50 --muon-lr 0.0015 --decay-frac 0.4 --emit quan --xz min --batch 64 --micro 64 --budget-fraction 0.20"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-3",
+     "queue_at": "13:50Z",
+     "ends_by": "14:04Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island quant --direction scorer --final --mechanism sparse-ternary-qat --node vy-nebius-3 --note 'FINAL r20261103-234019-5409 seed 101' -- --mode qat --train 'blocks\\.[2345]\\.w' --qat sparse --qat-keep 0.50 --muon-lr 0.0015 --decay-frac 0.4 --emit quan --xz min --batch 64 --micro 64 --budget-fraction 0.20 --data-seed 101 --seed 101"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-1",
+     "queue_at": "13:51Z",
+     "ends_by": "14:05Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island quant --direction scorer --final --mechanism sparse-ternary-qat --node vy-nebius-1 --note 'FINAL r20261103-234019-5409 seed 102' -- --mode qat --train 'blocks\\.[2345]\\.w' --qat sparse --qat-keep 0.50 --muon-lr 0.0015 --decay-frac 0.4 --emit quan --xz min --batch 64 --micro 64 --budget-fraction 0.20 --data-seed 102 --seed 102"
+    }
+   ]
+  },
+  {
+   "rank": 4,
+   "data": "v3",
+   "point": "m-t20 -5% H",
+   "run": "r20261103-161953-18b2",
+   "island": "hybrid",
+   "program": "grow.py",
+   "island_commit": "5e9d1d1f15",
+   "start": "m-t20",
+   "mechanism": "hybrid/grow-depth",
+   "tier": "long",
+   "long": "03:00Z coordinator",
+   "args": "--grow depth --depth 18 --zero 1 --lr 0.008 --wd 0.05 --adam-lr 3e-3 --embed-lr 6e-3 --warmup 200 --batch 128 --micro 32 --evals 24 --eval-windows 512 --budget-fraction 0.02 --tier long",
+   "measured_at": "8ebfad8480d",
+   "gpu_min_per_seed": 327,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--seed": 101
+    },
+    "102": {
+     "--seed": 102
+    }
+   },
+   "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
+   "by": "hybrid",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-1",
+     "queue_at": "08:50Z",
+     "ends_by": "14:17Z",
+     "launch": "python benchmarks/covert_witness/launch.py m-t20 --island hybrid --program grow.py --direction scorer --final --mechanism grow-depth --node vy-nebius-1 --long '03:00Z coordinator' --note 'FINAL r20261103-161953-18b2 seed own' -- --grow depth --depth 18 --zero 1 --lr 0.008 --wd 0.05 --adam-lr 3e-3 --embed-lr 6e-3 --warmup 200 --batch 128 --micro 32 --evals 24 --eval-windows 512 --budget-fraction 0.02 --tier long"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-3",
+     "queue_at": "08:43Z",
+     "ends_by": "14:10Z",
+     "launch": "python benchmarks/covert_witness/launch.py m-t20 --island hybrid --program grow.py --direction scorer --final --mechanism grow-depth --node vy-nebius-3 --long '03:00Z coordinator' --note 'FINAL r20261103-161953-18b2 seed 101' -- --grow depth --depth 18 --zero 1 --lr 0.008 --wd 0.05 --adam-lr 3e-3 --embed-lr 6e-3 --warmup 200 --batch 128 --micro 32 --evals 24 --eval-windows 512 --budget-fraction 0.02 --tier long --seed 101"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-1",
+     "queue_at": "08:45Z",
+     "ends_by": "14:12Z",
+     "launch": "python benchmarks/covert_witness/launch.py m-t20 --island hybrid --program grow.py --direction scorer --final --mechanism grow-depth --node vy-nebius-1 --long '03:00Z coordinator' --note 'FINAL r20261103-161953-18b2 seed 102' -- --grow depth --depth 18 --zero 1 --lr 0.008 --wd 0.05 --adam-lr 3e-3 --embed-lr 6e-3 --warmup 200 --batch 128 --micro 32 --evals 24 --eval-windows 512 --budget-fraction 0.02 --tier long --seed 102"
+    }
+   ]
+  },
+  {
+   "rank": 4,
+   "data": "v3",
+   "point": "m-t200 1.1x H",
+   "run": "r20261103-175844-0360",
+   "island": "ref-optim",
+   "program": "train.py",
+   "island_commit": "201e2c29dc1fd6abd67fe714ab1b6e5c599b36a0",
+   "start": "m-t200",
+   "mechanism": "ref-optim/fullmuon-wsd",
+   "tier": "long",
+   "long": "03:00Z coordinator",
+   "args": "--mat-lr 0.001 --embed-lr 0.001 --norm-lr 0.001 --batch 128 --micro 32 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.0012",
+   "measured_at": "8ebfad8480d",
+   "gpu_min_per_seed": 179,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
+   "by": "ref-optim",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-3",
+     "queue_at": "09:25Z",
+     "ends_by": "12:24Z",
+     "launch": "python benchmarks/covert_witness/launch.py m-t200 --island ref-optim --direction scorer --final --mechanism fullmuon-wsd --node vy-nebius-3 --long '03:00Z coordinator' --note 'FINAL r20261103-175844-0360 seed own' -- --mat-lr 0.001 --embed-lr 0.001 --norm-lr 0.001 --batch 128 --micro 32 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.0012"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-3",
+     "queue_at": "08:51Z",
+     "ends_by": "11:50Z",
+     "launch": "python benchmarks/covert_witness/launch.py m-t200 --island ref-optim --direction scorer --final --mechanism fullmuon-wsd --node vy-nebius-3 --long '03:00Z coordinator' --note 'FINAL r20261103-175844-0360 seed 101' -- --mat-lr 0.001 --embed-lr 0.001 --norm-lr 0.001 --batch 128 --micro 32 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.0012 --data-seed 101"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-3",
+     "queue_at": "09:21Z",
+     "ends_by": "12:20Z",
+     "launch": "python benchmarks/covert_witness/launch.py m-t200 --island ref-optim --direction scorer --final --mechanism fullmuon-wsd --node vy-nebius-3 --long '03:00Z coordinator' --note 'FINAL r20261103-175844-0360 seed 102' -- --mat-lr 0.001 --embed-lr 0.001 --norm-lr 0.001 --batch 128 --micro 32 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.0012 --data-seed 102"
+    }
+   ]
+  },
+  {
+   "rank": 4,
+   "data": "v3",
+   "point": "m-t20 2x H (rho unmeasured)",
+   "run": "r20261104-000727-9325",
+   "island": "hybrid",
+   "program": "grow.py",
+   "island_commit": "d7673203974135e8763031b7a4d19e89b834b2f6",
+   "start": "m-t20",
+   "mechanism": "hybrid/grow-wide",
+   "tier": "long",
+   "long": "03:00Z coordinator",
+   "args": "--arms grow=mlp,depth=12,mlp_mult=2 --zero 1 --lr 0.006 --wd 0.05 --adam-lr 3e-3 --embed-lr 4.5e-3 --warmup 200 --batch 128 --micro 32 --evals 24 --eval-windows 512 --budget-fraction 0.013 --tier long",
+   "measured_at": "024bbb42b6a",
+   "gpu_min_per_seed": 157,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--seed": 101
+    },
+    "102": {
+     "--seed": 102
+    }
+   },
+   "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
+   "by": "hybrid",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-3",
+     "queue_at": "09:55Z",
+     "ends_by": "12:32Z",
+     "launch": "python benchmarks/covert_witness/launch.py m-t20 --island hybrid --program grow.py --direction scorer --final --mechanism grow-wide --node vy-nebius-3 --long '03:00Z coordinator' --note 'FINAL r20261104-000727-9325 seed own' -- --arms grow=mlp,depth=12,mlp_mult=2 --zero 1 --lr 0.006 --wd 0.05 --adam-lr 3e-3 --embed-lr 4.5e-3 --warmup 200 --batch 128 --micro 32 --evals 24 --eval-windows 512 --budget-fraction 0.013 --tier long"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-3",
+     "queue_at": "09:48Z",
+     "ends_by": "12:25Z",
+     "launch": "python benchmarks/covert_witness/launch.py m-t20 --island hybrid --program grow.py --direction scorer --final --mechanism grow-wide --node vy-nebius-3 --long '03:00Z coordinator' --note 'FINAL r20261104-000727-9325 seed 101' -- --arms grow=mlp,depth=12,mlp_mult=2 --zero 1 --lr 0.006 --wd 0.05 --adam-lr 3e-3 --embed-lr 4.5e-3 --warmup 200 --batch 128 --micro 32 --evals 24 --eval-windows 512 --budget-fraction 0.013 --tier long --seed 101"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-1",
+     "queue_at": "09:53Z",
+     "ends_by": "12:30Z",
+     "launch": "python benchmarks/covert_witness/launch.py m-t20 --island hybrid --program grow.py --direction scorer --final --mechanism grow-wide --node vy-nebius-1 --long '03:00Z coordinator' --note 'FINAL r20261104-000727-9325 seed 102' -- --arms grow=mlp,depth=12,mlp_mult=2 --zero 1 --lr 0.006 --wd 0.05 --adam-lr 3e-3 --embed-lr 4.5e-3 --warmup 200 --batch 128 --micro 32 --evals 24 --eval-windows 512 --budget-fraction 0.013 --tier long --seed 102"
+    }
+   ]
+  },
+  {
+   "rank": 4,
+   "data": "v3",
+   "point": "l16-t20 1.1x H",
+   "run": "r20261103-132106-82a6",
+   "island": "ref-optim",
+   "program": "train.py",
+   "island_commit": "531b97fe808e511ee47ba4ed2263d62f773209b3",
+   "start": "l16-t20",
+   "mechanism": "ref-optim/fullmuon-fe-wsd",
+   "tier": "long",
+   "long": "03:00Z coordinator",
+   "args": "--mat-lr 0.002 --embed-lr 0.0015 --norm-lr 0.0015 --freeze-embed --batch 192 --micro 16 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.0008",
+   "measured_at": "d96d3c3dfc8",
+   "gpu_min_per_seed": 123,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
+   "by": "ref-optim",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-3",
+     "queue_at": "12:24Z",
+     "ends_by": "14:27Z",
+     "launch": "python benchmarks/covert_witness/launch.py l16-t20 --island ref-optim --direction scorer --final --mechanism fullmuon-fe-wsd --node vy-nebius-3 --long '03:00Z coordinator' --note 'FINAL r20261103-132106-82a6 seed own' -- --mat-lr 0.002 --embed-lr 0.0015 --norm-lr 0.0015 --freeze-embed --batch 192 --micro 16 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.0008"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-3",
+     "queue_at": "11:50Z",
+     "ends_by": "13:53Z",
+     "launch": "python benchmarks/covert_witness/launch.py l16-t20 --island ref-optim --direction scorer --final --mechanism fullmuon-fe-wsd --node vy-nebius-3 --long '03:00Z coordinator' --note 'FINAL r20261103-132106-82a6 seed 101' -- --mat-lr 0.002 --embed-lr 0.0015 --norm-lr 0.0015 --freeze-embed --batch 192 --micro 16 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.0008 --data-seed 101"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-3",
+     "queue_at": "12:20Z",
+     "ends_by": "14:23Z",
+     "launch": "python benchmarks/covert_witness/launch.py l16-t20 --island ref-optim --direction scorer --final --mechanism fullmuon-fe-wsd --node vy-nebius-3 --long '03:00Z coordinator' --note 'FINAL r20261103-132106-82a6 seed 102' -- --mat-lr 0.002 --embed-lr 0.0015 --norm-lr 0.0015 --freeze-embed --batch 192 --micro 16 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.0008 --data-seed 102"
+    }
+   ],
+   "check": "train.log's first line reads steps 1793 (the original's, measured before the meter pin); if not, cancel it and relaunch with --budget-fraction scaled by 1793/steps"
+  },
+  {
+   "rank": 4,
+   "data": "v3",
+   "point": "s-t200 1.1x H",
+   "run": "r20261103-180955-ff7f",
+   "island": "ref-optim",
+   "program": "train.py",
+   "island_commit": "e20a9cd5004f7e80ec5d67dad88c78fd16f5e1d8",
+   "start": "s-t200",
+   "mechanism": "ref-optim/fullmuon-wsd",
+   "tier": "long",
+   "long": "03:00Z coordinator",
+   "args": "--mat-lr 0.001 --embed-lr 0.001 --norm-lr 0.001 --batch 128 --micro 64 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.0010",
+   "measured_at": "8ebfad8480d",
+   "gpu_min_per_seed": 29,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
+   "by": "ref-optim",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-1",
+     "queue_at": "12:30Z",
+     "ends_by": "12:59Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t200 --island ref-optim --direction scorer --final --mechanism fullmuon-wsd --node vy-nebius-1 --long '03:00Z coordinator' --note 'FINAL r20261103-180955-ff7f seed own' -- --mat-lr 0.001 --embed-lr 0.001 --norm-lr 0.001 --batch 128 --micro 64 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.0010"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-3",
+     "queue_at": "12:25Z",
+     "ends_by": "12:54Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t200 --island ref-optim --direction scorer --final --mechanism fullmuon-wsd --node vy-nebius-3 --long '03:00Z coordinator' --note 'FINAL r20261103-180955-ff7f seed 101' -- --mat-lr 0.001 --embed-lr 0.001 --norm-lr 0.001 --batch 128 --micro 64 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.0010 --data-seed 101"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-1",
+     "queue_at": "12:26Z",
+     "ends_by": "12:55Z",
+     "launch": "python benchmarks/covert_witness/launch.py s-t200 --island ref-optim --direction scorer --final --mechanism fullmuon-wsd --node vy-nebius-1 --long '03:00Z coordinator' --note 'FINAL r20261103-180955-ff7f seed 102' -- --mat-lr 0.001 --embed-lr 0.001 --norm-lr 0.001 --batch 128 --micro 64 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.0010 --data-seed 102"
+    }
+   ]
+  },
+  {
+   "rank": 4,
+   "data": "v3",
+   "point": "m-t20 1.1x H",
+   "run": "r20261103-184231-7066",
+   "island": "ref-optim",
+   "program": "train.py",
+   "island_commit": "b0b23efadde4341788cfc6866588504f329e8191",
+   "start": "m-t20",
+   "mechanism": "ref-optim/fullmuon-fe-wsd",
+   "tier": "search",
+   "long": null,
+   "args": "--mat-lr 0.0015 --embed-lr 0.0015 --norm-lr 0.0015 --freeze-embed --batch 96 --micro 32 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.75",
+   "measured_at": "8ebfad8480d",
+   "gpu_min_per_seed": 23,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
+   "by": "ref-optim",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-3",
+     "queue_at": "12:54Z",
+     "ends_by": "13:17Z",
+     "launch": "python benchmarks/covert_witness/launch.py m-t20 --island ref-optim --direction scorer --final --mechanism fullmuon-fe-wsd --node vy-nebius-3 --note 'FINAL r20261103-184231-7066 seed own' -- --mat-lr 0.0015 --embed-lr 0.0015 --norm-lr 0.0015 --freeze-embed --batch 96 --micro 32 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.75"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-3",
+     "queue_at": "12:32Z",
+     "ends_by": "12:55Z",
+     "launch": "python benchmarks/covert_witness/launch.py m-t20 --island ref-optim --direction scorer --final --mechanism fullmuon-fe-wsd --node vy-nebius-3 --note 'FINAL r20261103-184231-7066 seed 101' -- --mat-lr 0.0015 --embed-lr 0.0015 --norm-lr 0.0015 --freeze-embed --batch 96 --micro 32 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.75 --data-seed 101"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-1",
+     "queue_at": "12:39Z",
+     "ends_by": "13:02Z",
+     "launch": "python benchmarks/covert_witness/launch.py m-t20 --island ref-optim --direction scorer --final --mechanism fullmuon-fe-wsd --node vy-nebius-1 --note 'FINAL r20261103-184231-7066 seed 102' -- --mat-lr 0.0015 --embed-lr 0.0015 --norm-lr 0.0015 --freeze-embed --batch 96 --micro 32 --sched wsd --warmup 0.02 --decay-frac 0.4 --snap-at 0.85,0.93 --wd 0.05 --val-rows 64 --budget-fraction 0.75 --data-seed 102"
+    }
+   ]
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "1.1x front p6.60",
+   "run": "r20261102-215623-111e",
+   "island": "e1mb",
+   "program": "train.py",
+   "island_commit": "8e5b08430d32b3f24cea7f8d807ceb1e62f48a35",
+   "start": "s100",
+   "mechanism": "lowrank/dora4",
+   "tier": "search",
+   "long": null,
+   "args": "--layers top:3 --targets all --norms adapted --bits 4 --dtype f16 --dora --lr 1e-3 --budget-fraction 0.70 --class e1mb",
+   "measured_at": "11d96c1b874",
+   "gpu_min_per_seed": 49,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101,
+     "--seed": 101
+    },
+    "102": {
+     "--data-seed": 102,
+     "--seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ],
+   "label": "single seed: a rerun doesn't fit before the nodes end, in the planning case (12 GPUs): it runs last, each seed only if it ends by 15:00Z"
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "2x front p1.76",
+   "run": "r20261102-213927-ac47",
+   "island": "hybrid",
+   "program": "qat.py",
+   "island_commit": "cbc53a9278f138ed3497f2164de6955a42810f1f",
+   "start": "s100",
+   "mechanism": "hybrid/lateqat",
+   "tier": "search",
+   "long": null,
+   "args": "--klass reference --start s100 --code all:all=rtn3 --mult 1.0 --qat-from 0.8 --muon-lr 0.015 --adam-lr 3e-4 --batch 64 --micro 32 --xz 9e",
+   "measured_at": "11d96c1b874",
+   "gpu_min_per_seed": 41,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101,
+     "--seed": 101
+    },
+    "102": {
+     "--data-seed": 102,
+     "--seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ],
+   "label": "single seed: a rerun doesn't fit before the nodes end, in the planning case (12 GPUs): it runs last, each seed only if it ends by 15:00Z"
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "1.1x unpriced p4.78",
+   "run": "r20261102-200153-f69a",
+   "island": "hybrid",
+   "program": "train.py",
+   "island_commit": "f5deb357135955abffbb1b1d128fd72497568e03",
+   "start": "m100",
+   "mechanism": "hybrid/fullrank",
+   "tier": "search",
+   "long": null,
+   "args": "--klass reference --start m100 --full all:all --opt muon --lr 0.006 --norm-lr 3e-4 --batch 128 --micro 32 --snaps 20 --store bf16",
+   "measured_at": "11d96c1b874",
+   "gpu_min_per_seed": 39,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101,
+     "--seed": 101
+    },
+    "102": {
+     "--data-seed": 102,
+     "--seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ],
+   "label": "single seed: a rerun doesn't fit before the nodes end, in the planning case (12 GPUs): it runs last, each seed only if it ends by 15:00Z"
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "2x front p1.02",
+   "run": "r20261102-141653-44df",
+   "island": "ref-optim",
+   "program": "train.py",
+   "island_commit": "1a21d1fbe594d3c5d3fddda98f660a50f951daaa",
+   "start": "s50",
+   "mechanism": "ref-optim/freeze-embed",
+   "tier": "search",
+   "long": null,
+   "args": "--mat-lr 0.015 --freeze-embed --ema-frac 0.1 --snap-at 0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9",
+   "measured_at": "36aac280a62",
+   "gpu_min_per_seed": 38,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ],
+   "label": "single seed: a rerun doesn't fit before the nodes end, in the planning case (12 GPUs): it runs last, each seed only if it ends by 15:00Z"
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "2x front p2.14",
+   "run": "r20261102-225950-0530",
+   "island": "hybrid",
+   "program": "qat.py",
+   "island_commit": "aa4dd6200c4b78507758ad955ed3dc3f40dc16b5",
+   "start": "s100",
+   "mechanism": "hybrid/qat",
+   "tier": "search",
+   "long": null,
+   "args": "--klass reference --code all:all=rtn8 --group -1 --mult 0.5 --momentum-dtype bf16 --muon-lr 0.015 --adam-lr 3e-4 --batch 64 --micro 32 --xz 9e",
+   "measured_at": "11d96c1b874",
+   "gpu_min_per_seed": 34,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101,
+     "--seed": 101
+    },
+    "102": {
+     "--data-seed": 102,
+     "--seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ],
+   "label": "single seed: a rerun doesn't fit before the nodes end, in the planning case (12 GPUs): it runs last, each seed only if it ends by 15:00Z"
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "1.1x front p1.50",
+   "run": "r20261102-135703-2c21",
+   "island": "wildcard",
+   "program": "train.py",
+   "island_commit": "babaef79a274c7b73b6c9a9bc3e0448804efd63b",
+   "start": "m50",
+   "mechanism": "wildcard/topmlp",
+   "tier": "search",
+   "long": null,
+   "args": "--class shallow --set mlp-in:-1,down:-1 --allow-deep --method adamw --lr 1e-3 --warmup 20 --batch 16 --micro 16 --mechanism topmlp --snaps 6 --budget-fraction 0.04",
+   "measured_at": "36aac280a62",
+   "gpu_min_per_seed": 34,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ],
+   "label": "single seed: a rerun doesn't fit before the nodes end, in the planning case (12 GPUs): it runs last, each seed only if it ends by 15:00Z"
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "2x front p2.14b",
+   "run": "r20261102-222519-ba87",
+   "island": "hybrid",
+   "program": "qat.py",
+   "island_commit": "658814c4b73b61c6f4cc2ef879063cc62d725316",
+   "start": "s100",
+   "mechanism": "hybrid/qat",
+   "tier": "search",
+   "long": null,
+   "args": "--klass reference --start s100 --code all:all=rtn4 --mult 0.5 --momentum-dtype bf16 --muon-lr 0.015 --adam-lr 3e-4 --batch 64 --micro 32 --xz 9e",
+   "measured_at": "11d96c1b874",
+   "gpu_min_per_seed": 33,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101,
+     "--seed": 101
+    },
+    "102": {
+     "--data-seed": 102,
+     "--seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ],
+   "label": "single seed: a rerun doesn't fit before the nodes end, in the planning case (12 GPUs): it runs last, each seed only if it ends by 15:00Z"
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "2x H s50 front",
+   "run": "r20261102-134355-7c3b",
+   "island": "ref-optim",
+   "program": "train.py",
+   "island_commit": "1a21d1fbe594d3c5d3fddda98f660a50f951daaa",
+   "start": "s50",
+   "mechanism": "ref-optim/muon-lr",
+   "tier": "search",
+   "long": null,
+   "args": "--mat-lr 0.015 --ema-frac 0.1 --snap-at 0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9",
+   "measured_at": "36aac280a62",
+   "gpu_min_per_seed": 29,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-1",
+     "queue_at": "14:07Z",
+     "ends_by": "14:36Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-3",
+     "queue_at": "14:05Z",
+     "ends_by": "14:34Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-1",
+     "queue_at": "14:06Z",
+     "ends_by": "14:35Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ]
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "2x front p1.01",
+   "run": "r20261102-141652-8ee3",
+   "island": "ref-optim",
+   "program": "train.py",
+   "island_commit": "1a21d1fbe594d3c5d3fddda98f660a50f951daaa",
+   "start": "m50",
+   "mechanism": "ref-optim/freeze-embed",
+   "tier": "search",
+   "long": null,
+   "args": "--mat-lr 0.008 --freeze-embed --ema-frac 0.1 --snap-at 0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9",
+   "measured_at": "36aac280a62",
+   "gpu_min_per_seed": 26,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-3",
+     "queue_at": "14:34Z",
+     "ends_by": "15:00Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-1",
+     "queue_at": "14:33Z",
+     "ends_by": "14:59Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-3",
+     "queue_at": "14:34Z",
+     "ends_by": "15:00Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ]
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "2x H m50",
+   "run": "r20261102-134353-0c01",
+   "island": "ref-optim",
+   "program": "train.py",
+   "island_commit": "1a21d1fbe594d3c5d3fddda98f660a50f951daaa",
+   "start": "m50",
+   "mechanism": "ref-optim/muon-lr",
+   "tier": "search",
+   "long": null,
+   "args": "--mat-lr 0.008 --ema-frac 0.1 --snap-at 0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9",
+   "measured_at": "36aac280a62",
+   "gpu_min_per_seed": 22,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-3",
+     "queue_at": "14:27Z",
+     "ends_by": "14:49Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-1",
+     "queue_at": "14:17Z",
+     "ends_by": "14:39Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-3",
+     "queue_at": "14:23Z",
+     "ends_by": "14:45Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ]
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "1.1x H s50",
+   "run": "r20261102-140220-4c3f",
+   "island": "ref-optim",
+   "program": "train.py",
+   "island_commit": "1a21d1fbe594d3c5d3fddda98f660a50f951daaa",
+   "start": "s50",
+   "mechanism": "ref-optim/cooldown-forks",
+   "tier": "search",
+   "long": null,
+   "args": "--mat-lr 0.01 --sched wsd --warmup 10 --forks 0.04,0.1,0.2,0.35,0.6 --fork-len 0.3 --snap-at  --budget-fraction 0.1",
+   "measured_at": "36aac280a62",
+   "gpu_min_per_seed": 21,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-1",
+     "queue_at": "14:15Z",
+     "ends_by": "14:36Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-1",
+     "queue_at": "14:12Z",
+     "ends_by": "14:33Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-3",
+     "queue_at": "14:13Z",
+     "ends_by": "14:34Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ]
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "1.1x H m50",
+   "run": "r20261102-140219-8d8e",
+   "island": "ref-optim",
+   "program": "train.py",
+   "island_commit": "1a21d1fbe594d3c5d3fddda98f660a50f951daaa",
+   "start": "m50",
+   "mechanism": "ref-optim/cooldown-forks",
+   "tier": "search",
+   "long": null,
+   "args": "--mat-lr 0.006 --sched wsd --warmup 10 --forks 0.04,0.1,0.2,0.35,0.6 --fork-len 0.3 --snap-at  --budget-fraction 0.1",
+   "measured_at": "36aac280a62",
+   "gpu_min_per_seed": 21,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-3",
+     "queue_at": "14:08Z",
+     "ends_by": "14:29Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-1",
+     "queue_at": "14:07Z",
+     "ends_by": "14:28Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-3",
+     "queue_at": "14:08Z",
+     "ends_by": "14:29Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ]
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "1.1x front p3.39",
+   "run": "r20261102-133625-bce4",
+   "island": "wildcard",
+   "program": "train.py",
+   "island_commit": "7086b93a48db1419599c2f963616ef3be74d4aaf",
+   "start": "s50",
+   "mechanism": "wildcard/topmlp",
+   "tier": "search",
+   "long": null,
+   "args": "--class shallow --set mlp-in:-1,down:-1 --allow-deep --method adamw --lr 3e-3 --warmup 20 --batch 16 --micro 16 --mechanism topmlp --snaps 5 --budget-fraction 0.02",
+   "measured_at": "36aac280a62",
+   "gpu_min_per_seed": 20,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ],
+   "label": "single seed: a rerun doesn't fit before the nodes end, in the planning case (12 GPUs): it runs last, each seed only if it ends by 15:00Z"
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "2x H s100",
+   "run": "r20261102-225823-8f70",
+   "island": "ref-data",
+   "program": "train.py",
+   "island_commit": "58940e8b78043baa5699e0583205ea17e4193cac",
+   "start": "s100",
+   "mechanism": "ref-data/fullmuon-ema",
+   "tier": "search",
+   "long": null,
+   "args": "--class reference --mat-lr 0.015 --embed-lr 8e-3 --norm-lr 3e-4 --ema-frac 0.1 --windows fresh --budget-fraction 0.44 --val-rows 16 --snap-at 0.4,0.5,0.6,0.7,0.75,0.8,0.85,0.9,0.95",
+   "measured_at": "11d96c1b874",
+   "gpu_min_per_seed": 16,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-3",
+     "queue_at": "14:29Z",
+     "ends_by": "14:45Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-1",
+     "queue_at": "14:28Z",
+     "ends_by": "14:44Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-3",
+     "queue_at": "14:29Z",
+     "ends_by": "14:45Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ]
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "1.1x front p4.40",
+   "run": "r20261103-003910-0066",
+   "island": "wildcard",
+   "program": "train.py",
+   "island_commit": "0ee0cac2d87f80efc6d8fba0196fe35208b8cfed",
+   "start": "m100",
+   "mechanism": "wildcard/onelayer",
+   "tier": "search",
+   "long": null,
+   "args": "--class shallow --set mlp-in:7,down:7 --allow-deep --mechanism onelayer --method muon --lr 2.5e-3 --warmup 50 --batch 32 --micro 32 --snaps 9 --budget-fraction 0.6",
+   "measured_at": "11d96c1b874",
+   "gpu_min_per_seed": 13,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ],
+   "label": "single seed: a rerun doesn't fit before the nodes end, in the planning case (12 GPUs): it runs last, each seed only if it ends by 15:00Z"
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "1.1x front p1.40",
+   "run": "r20261102-142819-f403",
+   "island": null,
+   "program": null,
+   "island_commit": null,
+   "start": null,
+   "mechanism": "shallow/muon",
+   "tier": "search",
+   "long": null,
+   "args": null,
+   "measured_at": null,
+   "gpu_min_per_seed": 8,
+   "seeds": {
+    "own": null,
+    "101": {},
+    "102": {}
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "the first that frees after every other rerun",
+     "queue_at": "last",
+     "ends_by": "15:00Z or not started",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ],
+   "label": "single seed: a rerun doesn't fit before the nodes end, in the planning case (12 GPUs): it runs last, each seed only if it ends by 15:00Z"
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "1.1x H m100 front",
+   "run": "r20261102-234714-e4f3",
+   "island": "ref-data",
+   "program": "train.py",
+   "island_commit": "9e281e41c28b7549ab5da8fbaa8151b81aef9ac3",
+   "start": "m100",
+   "mechanism": "ref-data/top2muon",
+   "tier": "search",
+   "long": null,
+   "args": "--class reference --top-blocks 2 --mat-lr 0.0025 --norm-lr 3e-3 --warmup 25 --windows fresh --budget-fraction 0.14 --val-rows 16 --snap-at 0.5,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95",
+   "measured_at": "11d96c1b874",
+   "gpu_min_per_seed": 4,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-1",
+     "queue_at": "14:05Z",
+     "ends_by": "14:09Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-3",
+     "queue_at": "14:04Z",
+     "ends_by": "14:08Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-3",
+     "queue_at": "14:04Z",
+     "ends_by": "14:08Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ]
+  },
+  {
+   "rank": 5,
+   "data": "v2.3-pilot",
+   "point": "1.1x H s100",
+   "run": "r20261102-235751-6688",
+   "island": "ref-data",
+   "program": "train.py",
+   "island_commit": "f8e4d5b9479ba88af1d4269aafc672cb51c04b81",
+   "start": "s100",
+   "mechanism": "ref-data/top4muon",
+   "tier": "search",
+   "long": null,
+   "args": "--class reference --top-blocks 4 --mat-lr 0.007 --norm-lr 3e-3 --warmup 25 --windows fresh --budget-fraction 0.072 --val-rows 16 --snap-at 0.5,0.6,0.7,0.75,0.8,0.85,0.9,0.95",
+   "measured_at": "11d96c1b874",
+   "gpu_min_per_seed": 3,
+   "seeds": {
+    "own": null,
+    "101": {
+     "--data-seed": 101
+    },
+    "102": {
+     "--data-seed": 102
+    }
+   },
+   "final_set": "heldout/v2.2/final (2^21 tokens, gpt2 3bda7a07f3ad)",
+   "by": "scorer",
+   "reruns": [
+    {
+     "seed": "own",
+     "node": "vy-nebius-1",
+     "queue_at": "14:12Z",
+     "ends_by": "14:15Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "101",
+     "node": "vy-nebius-1",
+     "queue_at": "14:09Z",
+     "ends_by": "14:12Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    },
+    {
+     "seed": "102",
+     "node": "vy-nebius-3",
+     "queue_at": "14:10Z",
+     "ends_by": "14:13Z",
+     "launch": "the scorer's v2.3 overlay (launch.py from d19e1056a8, the island at its commit overlaid, measured at 11d96c1b874) with --final, these args and seed"
+    }
+   ]
+  }
+ ]
+}
