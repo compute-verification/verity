@@ -1,6 +1,7 @@
 import Proofs.Pouw.Sampling
 import Definitions.Pouw.Game.ClopperPearson
 import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.BigOperators.Field
 import Mathlib.Algebra.Order.Field.Basic
 import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Linarith
@@ -49,9 +50,12 @@ theorem card_count_succ (t k : ℕ) :
           else ((univ : Finset (Fin t → α)).filter fun c => (univ.filter fun i => P (c i)).card = k).card := by
         rw [Fintype.sum_prod_type]
         refine sum_congr rfl fun x _ => ?_
+        simp only [count_cons]
         by_cases hx : P x
-        · simp only [count_cons, hx, ↓reduceIte, card_filter]
-        · simp only [count_cons, hx, ↓reduceIte, zero_add, card_filter]
+        · simp only [hx, ↓reduceIte]
+          exact (card_filter _ _).symm
+        · simp only [hx, ↓reduceIte, zero_add]
+          exact (card_filter _ _).symm
     _ = _ := by rw [sum_ite, sum_const, sum_const, smul_eq_mul, smul_eq_mul]
 
 /-- **`t` uniform draws land `k` times in `P`** for `C(t, k)·a^k·b^(t−k)` of them, `a` the elements in `P` and `b` the
@@ -106,8 +110,7 @@ theorem pr_count_le (t x : ℕ) (hα : 0 < Fintype.card α) :
       · intro h
         exact ⟨by omega, h⟩
     · intro c hc
-      have := (mem_filter.mp hc).2
-      exact mem_range.mpr (by omega)
+      exact mem_range.mpr (Nat.lt_succ_of_le (mem_filter.mp hc).2)
   have hn : (0 : ℝ) < Fintype.card α := by exact_mod_cast hα
   have hab : ((univ.filter P).card : ℝ) + (univ.filter fun y => ¬ P y).card = Fintype.card α := by
     have h := card_filter_add_card_filter_not (s := (univ : Finset α)) P
