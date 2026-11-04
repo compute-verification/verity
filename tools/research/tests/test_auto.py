@@ -117,7 +117,7 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
 
 
 def test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen(tmp_path, monkeypatch):
-    """INF-443, 3 Nov: node 2 carries /etc/vy/runs-via-slot, its launcher refused an `--on auto` suites run placed on its share."""
+    """A node 2 carrying /etc/vy/runs-via-slot refuses a run placed on its share, so its share reads as unread."""
     monkeypatch.setattr(cores, "CLAIMS", tmp_path / "claims")
     monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")
     monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
