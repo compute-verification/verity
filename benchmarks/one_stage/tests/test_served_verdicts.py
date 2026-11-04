@@ -1465,7 +1465,8 @@ assert [a[a.index(f) + 1].rsplit("/", 1)[-1] for f in ("--compiler", "--registra
 FAKE_PROVE_PATH = f'''import json, os, sys
 a = sys.argv[1:]
 {WINDOW_CIRCUIT}
-c = a[a.index("--class") + 1] if "--class" in a else "record"
+open("argv.jsonl", "a").write(json.dumps(a) + "\\n")
+c = (a[a.index("--class") + 1] if "--class" in a else "record") + ("+tie" if "--window-registration" in a else "")
 answer = json.load(open("answers.json"))[c]
 if answer != "count":
     print("prove_path.py window-circuit: refused at", c, file=sys.stderr)
@@ -1475,10 +1476,11 @@ print(json.dumps({{"count": {{"free": 3, "inputs": 10, "registered": 7, "units":
 '''
 
 
-def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[str], list[str]]:
+def _circuits(tmp_path: Path, classes: str, answers: dict, **extra: str) -> tuple[int, list[str], list[str]]:
     """`served_verdicts.sh circuits 0` in a toy tree whose prove_path.py counts a class, refuses it, or exits 124 as
-    `timeout` does when a count runs out of time (``answers``, by class), under a `timeout` that records the limit it got:
-    the exit status, the verdict lines, and the limits in order."""
+    `timeout` does when a count runs out of time (``answers``, by class, ``C+tie`` for class C reading H1's tables), under
+    a `timeout` that records the limit it got (``extra`` adds to the environment; under H1_TIE the serve dir holds H1's
+    window Program's meta): the exit status, the verdict lines, and the limits in order."""
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
     for d in (tree / "benchmarks" / "prove_path", bin_, venv, tmp_path / "serve" / "advice" / "w0"):
         d.mkdir(parents=True)
@@ -1486,12 +1488,15 @@ def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[st
     (tree / "answers.json").write_text(json.dumps(answers))
     (tmp_path / "serve" / "weights_registration.json").write_text("{}")
     (tmp_path / "serve" / "advice" / "w0" / "registration.json").write_text(json.dumps(REGISTRATION))
+    if extra.get("H1_TIE"):
+        (tmp_path / "serve" / "h1").mkdir()
+        (tmp_path / "serve" / "h1" / "window-program.meta.json").write_text(json.dumps({"program_digest": "p" * 128}))
     for path, body in ((venv / "python", f'exec {sys.executable} "$@"'),
                        (bin_ / "timeout", f'echo "$1" >> {tmp_path}/limits; shift; exec "$@"')):
         path.write_text(f"#!/bin/sh\n{body}\n")
         path.chmod(0o755)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent),
-           "D": str(tmp_path / "serve"), "OUT": str(tmp_path / "out"), "CLASSES": classes}
+           "D": str(tmp_path / "serve"), "OUT": str(tmp_path / "out"), "CLASSES": classes, **extra}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "circuits", "0"], cwd=tree, env=env,
                         check=False).returncode
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), (tmp_path / "limits").read_text().split()
@@ -1524,6 +1529,26 @@ def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classe
     assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
     measured = [line for line in lines if line.startswith("WINDOW-CIRCUIT class record (measurement)")]
     assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "45m")
+
+
+@pytest.mark.parametrize("tied", ["count", "refuse"])
+def test_under_h1_tie_step_3_writes_v3cs_record_reading_h1s_tables_after_the_classes_and_gates_nothing_on_it(tmp_path, tied):
+    """Under H1_TIE the commit V3c holds is the tie's, whose circuit reads H1's W's tables, so after the classes CLASSES
+    gates on, step 3 writes the verifier's record at V3C_CLASS reading them too (window-circuit --window-registration W,
+    the window's H1 registration, with --h1-meta its Program's meta as the run publishes it; its tag's suffix -tie), the
+    record V3c holds that commit to. It gates nothing."""
+    rc, lines, limits = _circuits(tmp_path, "4,32,4", {"4,32,4": "count", "4,32,4+tie": tied, "record": "count"},
+                                  H1_TIE="1", V3C_CLASS="4,32,4")
+    d, meta = tmp_path / "serve", tmp_path / "out" / "serve" / "h1" / "window-program.meta.json"
+    argv = [json.loads(x) for x in (tmp_path / "tree" / "argv.jsonl").read_text().splitlines()]
+    assert rc == 0 and limits == ["30m", "30m", "45m"], (rc, lines)
+    assert [x[x.index("--out") + 1] for x in argv] == [str(d / f"window-circuit-w0-{t}.json")
+                                                       for t in ("4-32-4", "4-32-4-tie", "record")]
+    assert [x[x.index("--window-registration"):] if "--window-registration" in x else None for x in argv] == [
+        None, ["--window-registration", str(d / "h1" / "w0" / "registration.json"), "--h1-meta", str(meta)], None]
+    assert meta.read_bytes() == (d / "h1" / "window-program.meta.json").read_bytes()
+    head = "WINDOW-CIRCUIT class 4,32,4 reading H1's tables"
+    assert lines[1].startswith(f"{head}: registered 7 bits" if tied == "count" else f"{head} refused (exit 2): "), lines
 
 
 FAKE_INFERENCE_ONLY = '''import json, os, sys
@@ -1659,8 +1684,12 @@ if a[0] != "window-commit":
 {textwrap.indent(WINDOW_CIRCUIT, "    ")}
 out = Path(a[a.index("--out") + 1])
 assert a[a.index("--class") + 1] == "{W63K4}"
+# with W the circuit reads H1's tables, in the verifier's record and the commit alike
+tables = {{"tables": "h1"}} if "--window-registration" in a else {{}}
 if a[0] == "window-circuit":
-    out.write_text("{{}}")
+    if tables:
+        open(os.environ["ORDER"] + ".circuit", "w").write(json.dumps([out.name, *a[a.index("--window-registration"):]]))
+    out.write_text(json.dumps(tables))
     c = {{"count": {{"free": 3, "inputs": 10, "registered": 7, "units": 1}}}}
     print(json.dumps({{"bits": 772, **c}} if os.environ.get("ADVICE_BITS") else c))
 else:
@@ -1669,7 +1698,7 @@ else:
         print("prove_path.py window-commit: the row dir holds no window 7", file=sys.stderr)
         sys.exit(2)
     out.mkdir(parents=True)
-    (out / "circuit.json").write_text(json.dumps({{"run": "ab"}}))
+    (out / "circuit.json").write_text(json.dumps({{"run": "ab", **tables}}))
     if "--window-registration" in a:
         tail = a[a.index("--window-registration"):]
         open(os.environ["ORDER"] + ".commit", "w").write("\\n".join(tail))
@@ -1967,15 +1996,16 @@ TIED_LAW = {"law": "stratified", "k": 1, "strata": [{"template": t, "units": [[3
 
 def _tied_commit(tmp_path: Path, bound: str | None, law: dict | None = TIED_LAW) -> None:
     """Window 7's commit as the tie left it in the toy serve dir: its registration R (its sample ``law``; None, none) and
-    circuit, its answer, and H1's log naming W and, unless ``bound`` is None, the record H1 bound (``same``: R; ``other``:
-    another)."""
+    circuit, which reads H1's tables, its answer, H1's window Program's meta, and H1's log naming W and, unless ``bound``
+    is None, the record H1 bound (``same``: R; ``other``: another)."""
     d = tmp_path / "serve"
     vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
     vw.mkdir(parents=True)
     (d / "h1" / "w7").mkdir(parents=True)
     r = {"format": "toy", "previous": REG.digest(W_OF_7), **({"law": law} if law else {})}
     (vw / "registration.json").write_text(json.dumps(r))
-    (vw / "circuit.json").write_text(json.dumps({"run": "ab"}))
+    (vw / "circuit.json").write_text(json.dumps({"run": "ab", "tables": "h1"}))
+    (d / "h1" / "window-program.meta.json").write_text(json.dumps({"program_digest": "p" * 128}))
     (d / "h1" / "w7" / "window-commit.json").write_text(json.dumps({"run": "ab", "circuit": "cd", "population": 37}))
     log = [{"window": 7, "kind": "registration", "file": "w7/registration.json", "digest": "aa" * 64}]
     if bound is not None:
@@ -1986,11 +2016,19 @@ def _tied_commit(tmp_path: Path, bound: str | None, law: dict | None = TIED_LAW)
 
 def test_under_h1_tie_v3c_audits_the_commit_h1_bound_and_makes_none_of_its_own(tmp_path):
     """The window's one commit is the one its close made: V3c holds its registration to the record H1 bound (the log's
-    digest) and its circuit to the verifier's, runs no window-commit, and goes on to its audit."""
+    digest) and its circuit to the verifier's, which reads H1's W's tables as the commit's does (window-circuit
+    --window-registration W, with its Program's meta as the run publishes it; its own record beside the untied one), runs
+    no window-commit, and goes on to its audit."""
     _tied_commit(tmp_path, "same")
     rc, lines, order, _limits = _v3c(tmp_path, H1_TIE="1")
     assert rc == 0 and "window-commit" not in order and order[:2] == ["compiler", "window-circuit"] and "audit" in order, \
         (lines, order)
+    d = tmp_path / "serve"
+    assert json.loads((tmp_path / "order.circuit").read_text()) == [
+        f"window-circuit-w7-{W63K4.replace(',', '-')}-tie.json", "--window-registration", str(d / "h1" / "w7" / "registration.json"),
+        "--h1-meta", str(tmp_path / "out" / "serve" / "h1" / "window-program.meta.json")]
+    assert not (d / f"window-circuit-w7-{W63K4.replace(',', '-')}.json").exists()
+    assert lines[0].startswith(f"WINDOW-CIRCUIT class {W63K4} reading H1's tables: registered 7 bits"), lines
     assert lines[1].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close, its registration the Commit record H1 bound "
                                "before the sample coin (R ") and '"run": "ab"' in lines[1] and "population" not in lines[1]
     assert lines[2] == (f"WINDOW-CIRCUIT-HELD class {W63K4}: the committed circuit.json less its run fields is the "
@@ -2261,7 +2299,7 @@ VTAG = W63K4.replace(",", "-")
 SHA = "5a" * 20
 SHORT = "this node has 196 GB, under the 290 GB V3c's audit needs (V3C_AUDIT_MEM_GB)"
 #: what a deferral's follow-on reads in `_deferred`'s serve dir, but for V3c's window dir and the deferral's own files
-DEFERRED_READS = ("weights_registration.json", f"window-circuit-w7-{VTAG}.json", "windows.jsonl", "seals.jsonl",
+DEFERRED_READS = ("weights_registration.json", f"window-circuit-w7-{VTAG}-tie.json", "windows.jsonl", "seals.jsonl",
                   "requests.jsonl", "h1/log.jsonl", "h1/w7/registration.json", "h1/w7/record.json",
                   "h1/w7/window-commit.json", "private/pouw/period/case.json", "private/pouw/period/answer.json")
 FAKE_RECORD = '''import json, os, sys
@@ -2290,7 +2328,8 @@ def _deferred(tmp_path: Path, **extra: str) -> subprocess.CompletedProcess:
     _tied_commit(tmp_path, "same")
     vw = d / f"v3c-w7-{VTAG}" / "window"
     files = {"h1/w7/registration.json": W_OF_7, "h1/w7/record.json": json.loads((vw / "registration.json").read_text()),
-             f"window-circuit-w7-{VTAG}.json": {}, "weights_registration.json": {}, "seals.jsonl": {"window": 7},
+             f"window-circuit-w7-{VTAG}.json": {}, f"window-circuit-w7-{VTAG}-tie.json": {"tables": "h1"},
+             "weights_registration.json": {}, "seals.jsonl": {"window": 7},
              "requests.jsonl": {"windows": [7]}, "private/pouw/period/case.json": {"evidence": "beef"},
              "private/pouw/period/answer.json": {"protocol": "verity/pouw/period/v1"},
              "windows/w7/rows.bin": {}, "private/weights.key": {}, "sampled-proofs-served/window/audit.json": {}}
