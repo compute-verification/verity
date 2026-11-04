@@ -150,10 +150,16 @@ class Words:
         if pattern.search(text) is None:
             return text
         held = [(m.start(), m.end()) for k in self.keep if protect for m in k.finditer(text)]
-        if held and path.endswith(".py"):
-            names = [(m.start(), m.end()) for m in EXPORTS.finditer(text)]
-            held = [(s, e) for s, e in held
-                    if not (text[e - 1] in "\"'" and any(a <= s and e <= b for a, b in names))]
+        if held and path.endswith(".py") and (names := [(m.start(), m.end()) for m in EXPORTS.finditer(text)]):
+            exported = [any(a <= s and e <= b for a, b in names) for s, e in held]
+            rest = [h for h, x in zip(held, exported) if not x]
+
+            def free(name: str) -> bool:                            # the name stands somewhere outside every kept span
+                return any(not any(s <= m.start() and m.end() <= e for s, e in rest)
+                           for m in re.finditer(rf"(?<![\w'\"]){re.escape(name)}(?![\w'\"])", text))
+
+            held = [(s, e) for (s, e), x in zip(held, exported)
+                    if not (x and (text[e - 1] in "\"'" or free(text[s:e])))]
         spans = sorted([*keep, *held])
         starts, reach, far = [], [], 0
         for s, e in spans:                                          # reach[i]: the furthest end of spans[:i + 1]
