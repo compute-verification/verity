@@ -1,4 +1,4 @@
-import Proofs.Core.Game.Tape
+import Definitions.Core.Game.Tape
 import Proofs.Flock.Soundness.Assumptions.Finders
 import Proofs.Flock.Bridge.V5.Statement
 import Proofs.Flock.EndToEnd.Joint.MT.Statement
