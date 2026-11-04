@@ -2,9 +2,11 @@
 Sampled proofs' one-stage audit on the proofs themselves (`verity/sampled-proofs/one-stage/v2`), a `Core.BlobProtocol`: the
 v1 audit (`OneStage`) with the verdicts computed here, from the statement's files, rather than read from the evidence.
 
-* **params**: v1's, plus `proofs`, exactly `{"circuit", "registered"}`: the SHA-512 the auditor committed for the circuit
-  file (lowercase hex of 64 bytes) and the verifier's own registered file (`flock-verify --registered`'s object, or null
-  for a program that reads no registered value). The partition must not be null: the sessions are verified against the
+* **params**: v1's, plus `proofs`, exactly `{"circuit", "registered"}` or `{"circuit", "interface", "registered"}`: the
+  SHA-512 the auditor committed for the circuit file (lowercase hex of 64 bytes), the verifier's own registered file
+  (`flock-verify --registered`'s object, or null for a program that reads no registered value) and the SHA-512 of the
+  window's registered circuit record (`flock-verify --interface`'s, a blob; null or absent for none, when a registered
+  file that binds ports is refused). The partition must not be null: the sessions are verified against the
   verifier's own partition object; and v1's `challenger`, with its `window_root`, must be named (`NO_CHALLENGER`);
 * **commitment**: v1's (the registration record);
 * **evidence**: v1's without `verdicts`, plus `proofs`, exactly `{"public", "sessions"}`: the public file's SHA-512 and,
@@ -49,13 +51,15 @@ def NO_CHALLENGER : String :=
     "with window_root), never the prover's record"
 
 /-- The verifier's own inputs to `flock-verify verify --zk`: the program's descriptor (as JSON and as the bytes
-`--program` reads), the partition object, the circuit file's committed SHA-512 and the registered file. -/
+`--program` reads), the partition object, the circuit file's committed SHA-512, the registered file and the SHA-512 of
+the window's registered circuit record (`--interface`). -/
 structure Own where
   programJ : Json
   program : ByteArray
   partition : Json
   circuit : String
   registered : Option Json
+  interface : Option String := none
 
 structure Params where
   base : OneStage.Params
@@ -98,36 +102,44 @@ def readsRegistered (program : Json) : Bool :=
   | .obj kvs => kvs.toArray.any fun (k, _) => registeredInputName k
   | _ => true
 
-private def circuitOf (pr : Json) : V (String × Option Json) := do
+private def circuitOf (pr : Json) : V (String × Option Json × Option String) := do
   let .str circuit := getD pr "circuit" | throw "proofs: circuit is not a SHA-512 digest (128 lowercase hex)"
   if !digest? circuit then throw "proofs: circuit is not a SHA-512 digest (128 lowercase hex)"
   let registered ← match getD pr "registered" with
     | .null => pure none
     | r@(.obj _) => pure (some r)
     | _ => throw "proofs: registered is not the verifier's registered file (an object) or null"
-  pure (circuit, registered)
+  let interface ← match getD pr "interface" with
+    | .null => pure none
+    | .str d => if digest? d then pure (some d) else throw "proofs: interface is not a SHA-512 digest (128 lowercase hex) or null"
+    | _ => throw "proofs: interface is not a SHA-512 digest (128 lowercase hex) or null"
+  pure (circuit, registered, interface)
+
+/-- `ks`, with `interface` when `j` names it: the one key of the verifier's own inputs that may be absent. -/
+private def withInterface (j : Json) (ks : Array String) : Array String :=
+  if (field? j "interface").isSome then ks.push "interface" else ks
 
 def paramsOfJson (j : Json) : V Params := do
   let some pr := field? j "proofs"
     | throw "the parameters name no proofs (the auditor's circuit digest and the verifier's registered reads)"
-  exactly pr #["circuit", "registered"] "proofs"
-  let (circuit, registered) ← circuitOf pr
+  exactly pr (withInterface pr #["circuit", "registered"]) "proofs"
+  let (circuit, registered, interface) ← circuitOf pr
   let rest := Json.mkObj (without j "proofs")
   let base ← OneStage.paramsOfJson rest
   if base.challenger.isNone then throw NO_CHALLENGER
   let some partition := base.verifier.partition
     | throw "partition is null: the sessions are verified against the verifier's own partition object"
   let programJ := getD rest "program"
-  pure { base, own := { programJ, program := (← Flock.canon programJ).toUTF8, partition, circuit, registered } }
+  pure { base, own := { programJ, program := (← Flock.canon programJ).toUTF8, partition, circuit, registered, interface } }
 
-/-- The `verdicts` command's own inputs: exactly `{"circuit", "partition", "program", "registered"}`, the program and
-partition objects. -/
+/-- The `verdicts` command's own inputs: exactly `{"circuit", "partition", "program", "registered"}`, and `interface`
+when named, the program and partition objects. -/
 def ownOfJson (j : Json) : V Own := do
-  exactly j #["circuit", "partition", "program", "registered"] "the verifier's own inputs"
-  let (circuit, registered) ← circuitOf j
+  exactly j (withInterface j #["circuit", "partition", "program", "registered"]) "the verifier's own inputs"
+  let (circuit, registered, interface) ← circuitOf j
   let (programJ@(.obj _), partition@(.obj _)) := (getD j "program", getD j "partition")
     | throw "the program and the partition are not objects"
-  pure { programJ, program := (← Flock.canon programJ).toUTF8, partition, circuit, registered }
+  pure { programJ, program := (← Flock.canon programJ).toUTF8, partition, circuit, registered, interface }
 
 private def sessionOf (j : Json) : V RunFiles := do
   exactly j #["name", "record", "reps"] "a session of the proofs"
@@ -220,13 +232,15 @@ def inputsOf (tags : Flock.Tags) (p : Own) (circuitB pubB : ByteArray) (bs : Cor
   { tags, circuitFile := circuitB, publicFile := pubB, count := 1, tables := tablesOf bs, partition := some p.partition,
     program := some p.program }
 
-/-- The verifier's registered reads, as `verifyCmd` derives them from its registered file: its own ports, the reads it
-knows, the registered parameters, and the ports it binds to the window's committed values. -/
+/-- The verifier's registered reads, as `verifyCmd` derives them from its registered file and its registered interface:
+its own ports, the reads it knows, the registered parameters, the ports it binds to the window's committed values, and
+the ports the window's interface declares registered (`RegBound.declaredOf`). -/
 structure Reads where
   registered : Option (Array Flock.Registered.Port)
   known : Array (String × Array (Array Nat × ByteArray))
   params : Array String
   bound : Array Flock.RegBound.Bound := #[]
+  declared : Option (Array (String × String)) := none
 
 def readsOf : Option Json → V Reads
   | none => pure ⟨none, #[], #[], #[]⟩
@@ -239,10 +253,18 @@ def readsOf : Option Json → V Reads
     pure ⟨some own, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j), ← Flock.Registered.paramsOf j,
       bound⟩
 
+/-- The ports the window's registered circuit record declares registered (`RegBound.declaredOfBytes`, its `program` the
+partition object's), from the blob `p.interface` names; none when it names none, and then a registered file that binds
+ports is refused (`RegBound.templatePorts`). -/
+def declaredOf (p : Own) (bs : Core.Blobs) : V (Option (Array (String × String))) := do
+  let some d := p.interface | return none
+  let program := match getD p.partition "program" with | .str s => some s | _ => none
+  some <$> Flock.RegBound.declaredOfBytes (← bs.get d "interface") program
+
 /-- The checks `verifyCmd` makes on a session's tables once they are set up, before `Zk.shapeOk`. -/
 def setupChecks (I : Flock.Witness.Inputs) (rd : Reads) (sts : Array Flock.Stmt) : V Unit := do
   if let some own := rd.registered then
-    sts.forM fun (st : Flock.Stmt) => Flock.RegBound.check st.c st.pub I.program own rd.bound
+    sts.forM fun (st : Flock.Stmt) => Flock.RegBound.check st.c st.pub I.program own rd.bound rd.declared
   sts.forM fun (st : Flock.Stmt) => Flock.Registered.checkCover st.c I.program I.partition rd.registered rd.params
   sts.forM fun (st : Flock.Stmt) => Flock.KnownRead.check st.c rd.known
   Flock.RecSetup.checks none none I.tags I.tables sts I.circuitFile I.partition I.program rd.registered none none none
@@ -384,7 +406,7 @@ def run (p : Own) (pub : String) (sessions : Array RunFiles) (provedUnits? : Opt
   let circuitB ← bs.get p.circuit "circuit"
   let pubB ← bs.get pub "public file"
   let I := inputsOf tags0 p circuitB pubB bs
-  let rd ← readsOf p.registered
+  let rd := { (← readsOf p.registered) with declared := ← declaredOf p bs }
   let tags := Flock.Witness.zkTags I
   let scope := Flock.ProvedScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags true pubB I.count
     false rd.registered.isSome

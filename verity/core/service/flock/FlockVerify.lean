@@ -355,6 +355,19 @@ def registeredInput (args : List String) (flag : String := "--registered") (ctx 
       else .error s!"{ctx}: the file binds ports ({RegBound.KEY}), which only a statement's `verify` and `statement` read"
     | none => .ok none
 
+/-- `--interface F`: the window's registered circuit record (`RegBound.declaredOf`), a path, or with `--archive` its
+SHA-512: the ports it declares registered, which a `--registered` file binding ports (`RegBound.KEY`) must register and
+never bind. Its `program` is held to the partition object's (`partition`). A file naming a key twice in one object is
+refused, as `registeredFile`'s. -/
+def interfaceInput (args : List String) (partition : Option Lean.Json) :
+    IO (Except String (Option (Array (String × String)))) := do
+  let some f := argOf args "--interface" | return .ok none
+  let bytes ← match argOf args "--archive" with
+    | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"registered interface: {e}"))
+    | some dir => archiveGet dir f
+  return bytes >>= fun b =>
+    (RegBound.declaredOfBytes b (partition.bind fun p => (p.getObjValAs? String "program").toOption)).map some
+
 /-- The SHA-512 of the file `flag F` names, in hex: a path, or with `--archive` the object held under its SHA-512
 (`archiveGet` checks that it hashes to it). -/
 def fileDigest (args : List String) (flag : String) : IO (Except String (Option String)) := do
@@ -841,7 +854,7 @@ verifier's own `--program` the one META's `program_sha512` names (`ProvedScope.p
 plain multi-table claims cover; the check is the one without `--registered F` (`FailClosed.ScopeP`), so a shared-row
 public file is refused. Without it a plain session has at most one table. Not with `--zk`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F [--interface F]] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   if let some why := (argOf args "--statement").bind ProvedScope.legacyWhy then
     for dir in (args.dropWhile (· != "--session")).drop 1 do
@@ -897,6 +910,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
     | .error e => IO.eprintln e; return 2
   let (registered, known, params, bound) ← match ← registeredFile args with
     | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[], (r.map (·.2.2.1)).getD #[], (r.map (·.2.2.2)).getD #[])
+    | .error e => IO.eprintln e; return 2
+  let declared ← match ← interfaceInput args partition with
+    | .ok d => pure d
     | .error e => IO.eprintln e; return 2
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p
@@ -967,7 +983,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         RecBudget.statements recInner
         let r ← buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
-        if let some own := registered then r.2.forM fun (st : Stmt) => RegBound.check st.c st.pub program own bound
+        if let some own := registered then r.2.forM fun (st : Stmt) => RegBound.check st.c st.pub program own bound declared
         r.2.forM fun (st : Stmt) => Registered.checkCover st.c program partition registered params
         r.2.forM fun (st : Stmt) => KnownRead.check st.c known
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
@@ -1119,7 +1135,7 @@ statement to the table, to the roots of the inner statement's input and output r
 (`RecLinkPart.check`, which needs the inner statement's files; `Flock.Guarantees.LinksBindDeployed`). -/
 def statementCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public")
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]]] [--coins seed|os]"; return 2
+    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F [--interface F]] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]]] [--coins seed|os]"; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let some tags := Tags.byName? stmtName
     | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
@@ -1138,6 +1154,9 @@ def statementCmd (args : List String) : IO UInt32 := do
     | .error e => IO.eprintln e; return 2
   let (registered, known, bound) ← match ← registeredFile args with
     | .ok r => pure (r.map Prod.fst, (r.map (·.2.1)).getD #[], (r.map (·.2.2.2)).getD #[])
+    | .error e => IO.eprintln e; return 2
+  let declared ← match ← interfaceInput args partition with
+    | .ok d => pure d
     | .error e => IO.eprintln e; return 2
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p
@@ -1181,7 +1200,7 @@ def statementCmd (args : List String) : IO UInt32 := do
       let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
         (identifier.map Prod.snd)
       RecBudget.table recInner #[st]
-      if let some own := registered then RegBound.check st.c st.pub program own bound
+      if let some own := registered then RegBound.check st.c st.pub program own bound declared
       KnownRead.check st.c known
       if recInner.isSome then
         RecSetup.checks recInner recCommits stmtTags tables #[st] circuitB partition program registered recPart

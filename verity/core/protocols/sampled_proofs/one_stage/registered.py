@@ -615,8 +615,10 @@ def bind_ports(file: Mapping[str, Any], ports: Iterable[str], roots: Mapping[str
     """``file``, a `READS_V1` ``--registered`` file, with each of the statement's ``ports`` that it names no registered port
     for bound to the window's committed values (`BOUND`, `Flock.RegBound`): the root and domain of its rows in ``roots``
     (``{port: {"root", "domain"}}``, the window's registration, which the verifier accepted before any coin), which the
-    Lean verifier holds the public header's to. A file of another format, or one with no other port, is returned as it is:
-    Lean holds it to name every port. ValueError for a port ``roots`` holds no root and domain for."""
+    Lean verifier holds the public header's to. Lean refuses a bound port the window's registered circuit record declares
+    registered, and a file that binds ports without that record (`--interface`). A file of another format, or one with no
+    other port, is returned as it is: Lean holds it to name every port. ValueError for a port ``roots`` holds no root and
+    domain for."""
     free = sorted(p for p in ports if p not in file["ports"])
     if file.get("format") != READS_V1 or not free:
         return dict(file)
