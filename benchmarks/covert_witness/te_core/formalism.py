@@ -80,8 +80,8 @@ most that. The kinds:
   (`fresh_products`) on the run's products (`Measured.products`, which `products_of` takes from steps captured by
   capture_step or capture_fn, and `products_of_trace` from the product rows a recorded program's trace keeps from
   te_core 4.8 on (te_core.capture.products), each at the k it classifies them at, a trace's from te_core 4.12.1 on at
-  every k of the console's dial too, `at`), its figure without P-cell, a premise on the partition (`P_CELL`; the
-  whole-cell figure is the sensitivity fresh_cell). At a fixed k the term is linear in c, so the console's dial reads
+  every k of the console's dial too, `at`), its figure with P-cell, a premise on the partition (`P_CELL`, Daniel's
+  whole-cell ruling; the figure without it is the sensitivity fresh_no_cell). At a fixed k the term is linear in c, so the console's dial reads
   it as c times a number for each k it has products at (`fresh_per_c`, in te_core.panels' rho_inputs). io_bound's cap has the
   chain order's constant (its premise P-chain), which is the reference circuit's order by construction (`ORDER`:
   te_core.gates prices a GEMM MAC as a dot cell adding into one running 32-bit sum), so the term is measured on every
@@ -94,8 +94,10 @@ most that. The kinds:
   every product with an operand that reads an embedding's rows before any op makes them token-specific (tokens that
   share an id share its row, so a block that pays for it gets their products free), named the same way (`gathered`),
   and each token-indexed product's share at the positions sequences can share (`SHARED_PREFIX`, `shared_prefix`).
-  Where a counted product is fed by a cycle that diverges, which no subset may drop (coordinator 19:30Z), the term is
-  unmeasured (`FRESH_VOID`), never 0, with the best subset of the rest beside it (fresh_converged), and so it is
+  Where a counted product is fed by a cycle that diverges, or no subset has a proved Λ, the term is void
+  (`FRESH_VOID`) and is the best subset's figure among the products no diverged cycle feeds, a valid lower bound
+  since that subset keeps only products whose feeding classes converge, or None where no such subset has one; a
+  void term is computed, so ρ's floor reads it (coordinator 21:54Z, `published`). It is unmeasured
   where an op breaks P-match,
   on a trace whose product rows predate what the term reads (`FRESH_RETRACE`). Products that come without one (a model's, a hand-written set) take io_bound's
   one-class rule, named in `inputs` (`ONE_CLASS`). It is unmeasured, with io_bound's chain figure in `inputs`,
@@ -120,20 +122,20 @@ ones (None, and so ρ where Fit fails, where none is). Beside the kinds, never i
 - decoding_form: (D) under reading B, a block reading the update code holding at most max(c − d, min(c, α_max(x0·s +
   s*))) affected gates;
 - per_gate: the token kind with each gate at the best witness that holds it, not closed under unions (below);
-- fresh_cell: the fresh-products term with P-cell, every block holding whole dot cells, a premise on the partition;
-- fresh_converged: where the fresh-products term is void because a counted product is fed by a cycle with no fixed
-  point, its figure on the best subset of the products no such cycle feeds, with the share of the counted MACs it
-  keeps (`published`'s `fresh_converged_share`); None where the term is measured.
+- fresh_cell: the fresh-products figure with P-cell, every block holding whole dot cells, a premise on the partition
+  (the term where `P_CELL`);
+- fresh_no_cell: the fresh-products figure without P-cell (the term where `P_CELL` is off).
 (R) and (U) hold only for partitions split by tokens, not by layers or tensors (a block holding only frozen layers'
 work passes no partial), reading B isn't A1's approved reading, per_gate holds only for blocks that are no union of
-witnesses, and P-cell only for partitions that cut no dot cell, so they aren't lower bounds on their own; and
-fresh_converged is out of the max by ruling, since a product a diverged cycle feeds is never dropped to escape the
-void (coordinator 19:30Z); `kinds` refuses them. Each result is labelled "te_core VERSION, reading A". `published` is
+witnesses, and P-cell only for partitions that cut no dot cell, so they aren't lower bounds on their own without its
+premise; `kinds` refuses them. Each result is labelled "te_core VERSION, reading A". `published` is
 the console's ρ (coordinator 08:26Z), under reading A where a row's token kind is measured (its trace's entries and an
 op log), else reading B's token form, a target: Fit's c/(c − d) where it holds; else the max of the measured terms
 where it exceeds 1, partial where a kind is unmeasured; else None where a kind is unmeasured; else 1, binding none
-(coordinator 12:20Z). Each comes with the kind it binds on and what that rests on, short (`RESTS_ON_CELL`), and the
-reduction, update, fresh_cell and fresh_converged sensitivities.
+(coordinator 12:20Z), a void fresh-products term counting as computed and saying why (`void`; coordinator 21:54Z: the
+largest valid lower bound, floored at 1, never empty once the kinds are computed). Each comes with the kind it binds
+on and what that rests on, short (`RESTS_ON_CELL`), and the reduction and update sensitivities with the
+fresh-products figure the term doesn't take (fresh_no_cell where `P_CELL`).
 
 **Reading A** (A1's approved reading): every block I reads |in(I) \\ θ| ≥ u_I + Σ_T a_T(e_T(I)), u_I the
 update bits I's work reads, counted once, and a_T(e) the bits of token T's computed state where I's work on T begins,
@@ -596,9 +598,9 @@ def _blocks(p: Part, c: float) -> float:
 
 
 #: whether the fresh-products term takes P-cell (a block holds whole dot cells), a premise on the partition, which the
-#: attacker chooses: off, the term is io_bound's proved figure without it (`rho_no_cell`) and the whole-cell figure is
-#: the sensitivity `fresh_cell`; on only if Daniel takes the whole-cell option on his premises card
-P_CELL = False
+#: attacker chooses: on (Daniel's ruling, 21:57Z: assume whole multiply-add circuits per block, as a named premise),
+#: the term is io_bound's proved figure with it (`rho`) and the figure without it is the sensitivity `fresh_no_cell`
+P_CELL = True
 #: what every string a panel publishes calls this code, which names no module, function or constant of it
 #: (tests/test_formalism.py's code-name check)
 THE_CODE = "training's slowdown code"
@@ -652,13 +654,12 @@ SENSITIVITIES = {
     "per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate "
                 "at the best witness that holds it; a block holding one gate of a product beside another product's "
                 "tile or the best run holds more, for a few bits of that gate's own operands",
-    "fresh_cell": f"sensitivity, assuming that {P_CELL_WORDS}: the fresh-products term's figure where every block "
-                  "does, a premise on the partition, which the attacker chooses; the term is the figure without it",
-    "fresh_converged": "sensitivity, where the fresh-products term is void because a counted product is fed by a cycle "
-                       "of the step's whole-making system with no fixed point: the term's figure on the best set of "
-                       "the products no such cycle feeds, with the share of the step's counted fresh multiplications "
-                       "that set keeps; still a lower bound, published beside the void term and never in the max, "
-                       "since a product so fed is never dropped to escape the void",
+    "fresh_cell": f"sensitivity, assuming that {P_CELL_WORDS}: the fresh-products figure where every block does, a "
+                  "premise on the partition, which the attacker chooses" + (
+                      "; the term takes this premise" if P_CELL else "; the term is the figure without it"),
+    "fresh_no_cell": f"sensitivity, without assuming that {P_CELL_WORDS}: the fresh-products figure where a block may "
+                     "split a multiply cell, as a partition the attacker chooses may" + (
+                         "; the term assumes whole cells" if P_CELL else "; the term is this figure"),
 }
 #: the orders a circuit may declare its products' output entries summed in, each with its cap's constant; io_bound has
 #: the chain's
@@ -675,14 +676,24 @@ PRODUCTS_FROM = "4.8"
 #: why the fresh-products kind is unmeasured on a record with no product rows
 FRESH_UNMEASURED = (f"unmeasured: the record has no product rows (a step captured on its own has them, and a recorded "
                     f"program's trace has them from {THE_CODE} {PRODUCTS_FROM} on)")
-#: why the fresh-products kind is unmeasured where a counted product is fed by chains with no fixed point, which no
-#: subset may drop (coordinator 19:30Z), or every subset voids the proved Λ
-FRESH_VOID = ("unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed "
-              "point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, "
-              "and that compounds), so Λ has no proved value on any set of products that keeps it, and the bound "
-              "never drops a product so fed to escape that; a void is never a measured 0, and where the products no "
-              "such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, "
-              "never in the max")
+#: what a void fresh-products term is: a counted product is fed by chains with no fixed point, or every subset voids
+#: the proved Λ. The term is then the best subset's figure, a valid lower bound, and ρ's floor reads it as computed
+#: (coordinator 21:54Z); with no such subset it has no figure, and this is why
+FRESH_VOID = ("void: the products count diverges at this k: a counted product is fed by a cycle of the step's "
+              "whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand "
+              "entries whole than they read, and that compounds), or no set of the products has a proved bound, so "
+              "the bound has no figure on the whole step. The term is the best figure on a set of the products no "
+              "such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes "
+              "converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason")
+
+
+def void_reason(term: float | None, kept: float | None) -> str:
+    """A void fresh-products term's reason in a row, short (`FRESH_VOID` in full): its best subset's figure `term` and
+    the share of the step's counted fresh multiplications that subset keeps (`kept`), or that none has a figure."""
+    if term is None:
+        return "the products count diverges; no subset has a proved bound"
+    return f"the products count diverges; best subset {term:.3g}" + (
+        "" if kept is None else f", keeping {100 * kept:.3g}% of the step's fresh multiplications")
 #: the first te_core whose capture writes everything the term reads: the whole-making system's rows (each product's
 #: `fed` and `P`, the trace's `p_match`) and which operands read a gather's rows (`gathered`)
 SYSTEM_FROM = "4.12.1"
@@ -697,6 +708,13 @@ SHARED_PREFIX = 1
 #: system misses their classes. 4.12.7's check lost a broadcast at any op but a view, so a map, a copy or a
 #: multiplication by a value outside the update hid it, and it took an embedding's rows for a broadcast
 ELEMENTWISE_FROM = "4.12.9"
+#: the first te_core whose capture records the VERSION of the code that wrote a trace (its products' `capture_code`,
+#: te_core.capture.script's `record`), beside the frozen `capture` tag. It gates nothing, and only a reason names it: a
+#: trace without the field was written by 4.12.9 to 4.12.13's code, and those differ only in that the check lists
+#: fewer elementwise products from `LISTS_FEWER` on (a broadcast whose dims a view regroups, a scalar's broadcast, a
+#: lookup of a table the step builds), so a trace that lists none prices the same whichever of them wrote it
+CAPTURE_CODE_SINCE = "4.12.14"
+LISTS_FEWER = "4.12.12"
 
 
 def _release(v) -> tuple[int, ...]:
@@ -868,8 +886,9 @@ def products_of_trace(block: dict, steps: float = 1.0) -> dict:
     shared = {"length": SHARED_PREFIX, "sequence": seq, "kept": keep,
               "trimmed_macs_share": trimmed / macs if macs else 0.0} if seq else None
     got = {"k": float(block["k"]), "order": order, "trace_order": block["order"], "capture": block["capture"],
-           "products": out, "kinds_macs": kinds, "system": system_of(block["rows"]), "p_match": block.get("p_match"),
-           "gathered": gathered, "shared_prefix": shared,
+           "capture_code": block.get("capture_code"), "products": out, "kinds_macs": kinds,
+           "system": system_of(block["rows"]), "p_match": block.get("p_match"), "gathered": gathered,
+           "shared_prefix": shared,
            "elementwise_products": block.get("elementwise_products") if _release(block.get("capture")) >=
            _release(ELEMENTWISE_FROM) else None}
     if "at" in block:
@@ -984,9 +1003,9 @@ def _subset(sub: dict | None) -> dict | None:
 
 def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str | None, dict]:
     """The fresh-products kind's term at (c, k), te_core.io_bound's bound with Λ proved (`io_bound.bound`) on the run's
-    products (`Measured.products`) and the record's |C|, its figure without P-cell (`rho_no_cell`; with it where
-    `P_CELL`); its reason where unmeasured (None: measured); and what it read, the whole-cell figure among it
-    (`fresh_cell`). The products are io_bound's at the k `rows_of` classified them at, or a trace's at each k of the
+    products (`Measured.products`) and the record's |C|, its figure with P-cell where `P_CELL` (`rho`; without it,
+    `rho_no_cell`, where it is off); its reason where it has no figure (None: it has one); and what it read, both
+    figures among it (`fresh_cell`, `fresh_no_cell`). The products are io_bound's at the k `rows_of` classified them at, or a trace's at each k of the
     console's dial (`classified_at`), summed in the reference circuit's chains (`ORDER`, io_bound's premise P-chain)
     unless their circuit declares another order, so a term at another k, or for a circuit that declares a tree, is
     unmeasured, with io_bound's chain figure in what it read. A
@@ -995,10 +1014,11 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
     shape (`of_record`), is in what it read, and so is `subset` where io_bound's best subset for the term dropped
     products (how many, of how many, their share of the counted MACs and the subset's least whole-making chain, and
     on a trace's rows the rule that kept it, its e and the classes only the dropped products read); where no subset has
-    a proved Λ, or a counted product is fed by chains with no fixed point, which no subset drops (coordinator 19:30Z),
-    the term is unmeasured (`FRESH_VOID`), and in the second case `converged` has the best subset of the rest, its
-    figure without P-cell (`term`, the sensitivity fresh_converged) and with it, the share of the counted MACs it keeps
-    and how many products it may not drop. `gathered` is what G dropped before that, the products that read
+    a proved Λ, or a counted product is fed by chains with no fixed point, the term is void (coordinator 21:54Z): its
+    figures are the best subset's among the products no diverged cycle feeds (`subset` names what it dropped), a
+    valid lower bound, None with `FRESH_VOID` where no such subset has one, and `void` has the row's short reason
+    (`void_reason`), the share of the counted MACs the subset keeps and how many products a diverged cycle feeds.
+    `gathered` is what G dropped before that, the products that read
     an embedding's rows before any op makes them token-specific, and `shared_prefix` what it trimmed at the sequences'
     first positions (`products_of_trace`). Products that come with a whole-making system are unmeasured where the step
     writes matrix products with elementwise ops (they are products, never elementwise work, and the system misses
@@ -1017,8 +1037,8 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
     p = classified_at(p, k) or p
     order = p.get("order") or ORDER
     got = {"k_classified": p["k"], "order": order, "products": len(p["products"])} | {
-        x: p[x] for x in ("capture", "trace_order", "kinds_macs", "stand_in", "gathered", "shared_prefix",
-                          "other_program") if x in p}
+        x: p[x] for x in ("capture", "capture_code", "trace_order", "kinds_macs", "stand_in", "gathered",
+                          "shared_prefix", "other_program") if x in p}
     if "other_program" in p:
         o = p["other_program"]
         return None, FRESH_OTHER.format(unmatched=o["unmatched"], shapes=o["shapes"], ran=o["ran"], largest=", ".join(
@@ -1045,7 +1065,11 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
                       f"does, or gathered rows multiplied and added by index): {ops}. They are products, which the "
                       f"bound never prices as elementwise work, and no product row says how their outputs are made "
                       f"whole; write them as matrix products (x @ W, or a sparse matrix's product) and trace the run "
-                      f"again"), got
+                      f"again") + ("" if "capture" not in p or p.get("capture_code") else (
+                          f"; this trace records no capture code, so {THE_CODE} before {CAPTURE_CODE_SINCE} wrote it, "
+                          f"and from {LISTS_FEWER} on the check lists fewer (a broadcast whose dims a view regroups, a "
+                          f"scalar's broadcast, a lookup of a table the step builds), so a trace on {THE_CODE} "
+                          f"{CAPTURE_CODE_SINCE} or later may clear it")), got
     elif p.get("p_match"):
         got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, math.inf)
         got["p_match"] = p["p_match"]
@@ -1060,18 +1084,17 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
         got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, w["whole_chain"],
                                          made_whole=w["mu"] if own else None)
     if order == "chain":
-        proved = got["io_bound"]["proved"]
-        got["fresh_cell"] = proved["rho"]
-        sub = _subset(proved["subset" if P_CELL else "subset_no_cell"])
+        conv = got["io_bound"].get("converged")
+        best = got["io_bound"]["proved"] if conv is None else conv
+        got["fresh_cell"], got["fresh_no_cell"] = best["rho"], best["rho_no_cell"]
+        sub = _subset(best["subset" if P_CELL else "subset_no_cell"])
         if sub is not None and sub["dropped"]:
             got["subset"] = sub
-        conv = got["io_bound"].get("converged")
-        if conv is not None:
-            sub = _subset(conv["subset" if P_CELL else "subset_no_cell"])
-            got["converged"] = {"term": conv["rho" if P_CELL else "rho_no_cell"], "fresh_cell": conv["rho"],
-                                "kept_macs_share": None if sub is None else 1 - sub["dropped_macs_share"],
-                                "diverged_fed": len(got["io_bound"]["diverged_fed"]), "subset": sub}
-        term = proved["rho" if P_CELL else "rho_no_cell"]
+        term = best["rho" if P_CELL else "rho_no_cell"]
+        if conv is not None or term is None:
+            kept = None if sub is None else 1 - sub["dropped_macs_share"]
+            got["void"] = {"reason": void_reason(term, kept), "kept_macs_share": kept,
+                           "diverged_fed": len(got["io_bound"]["diverged_fed"])}
         return term, FRESH_VOID if term is None else None, got
     return None, (f"unmeasured: the circuit declares its products summed in a {order}, and the bound has the chain "
                   f"constant only (its premise that {P_CHAIN}); the chain figure is in the inputs, never the bound"), got
@@ -1079,33 +1102,35 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
 
 def fresh_per_c(m: Measured) -> dict[str, list[float] | None] | None:
     """The fresh-products term as the console's dial reads it: for each k the run's products are classified at (by
-    its integer as a string; a trace's at each k of the console's dial, `classified_at`), the term over c without
-    P-cell and with it, [rho_no_cell/c, rho/c] (`fresh_products`' term and fresh_cell where `P_CELL` is off): at a
-    fixed k io_bound's blocks don't move with c, so the term at (c, k) is c times it exactly. None at a k where the
-    term is unmeasured; None for a run with no product rows."""
+    its integer as a string; a trace's at each k of the console's dial, `classified_at`), the figure over c without
+    P-cell and with it, [rho_no_cell/c, rho/c] (`fresh_products`' fresh_no_cell and fresh_cell; the term is the second
+    where `P_CELL`): at a fixed k io_bound's blocks don't move with c, so each at (c, k) is c times it exactly. On a
+    void term they are its best subset's, [None, None] where no subset has a figure (ρ's floor reads it as computed);
+    None at a k where the term is unmeasured; None for a run with no product rows."""
     p = m.products
     if p is None:
         return None
     out = {}
     for k in sorted({p["k"], *(b["k"] for b in p.get("at", {}).values())}):
         term, why, got = fresh_products(m, 1.0, k)
-        proved = got["io_bound"]["proved"] if why is None else None
-        out[f"{k:.0f}"] = None if proved is None else [proved["rho_no_cell"], proved["rho"]]
+        out[f"{k:.0f}"] = [got["fresh_no_cell"], got["fresh_cell"]] if why is None or "void" in got else None
     return out
 
 
 def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> dict:
     """The counting lemma over the kinds of block work that are lower bounds on their own (module docstring) at (c, k):
-    each kind's term (None: unmeasured, its reason in `unmeasured`), ρ ≥ their max over `kinds`, the kind that max
-    binds on (`binding`; None where no kind is measured) and what each kind rests on (`rests_on`); and beside them the
+    each kind's term (None: no figure, its reason in `unmeasured`), ρ ≥ their max over `kinds`, the kind that max
+    binds on (`binding`; None where no kind has a figure) and what each kind rests on (`rests_on`); `void`, each kind
+    whose term is void but computed (the fresh products' best subset, or none with a figure) with its short reason,
+    which ρ's floor reads as computed (`published`); and beside them the
     sensitivities (`SENSITIVITIES`), never in the max, reduction and update each the sum over the parts that measure
     it (None where none does; `unmeasured` names it where a part doesn't). `inputs` holds what each term reads beyond
     `m`'s fields."""
     off = [kind for kind in kinds if kind in SENSITIVITIES]
     if off:
         raise ValueError(f"kinds {off!r}: sensitivities, never in the bound's max (they hold only for partitions split "
-                         f"by tokens, under reading B, for blocks that are no union of witnesses, under P-cell, or "
-                         f"beside a void term); bound() returns them under 'sensitivities'")
+                         f"by tokens, under reading B, for blocks that are no union of witnesses, or are the "
+                         f"fresh-products figure the term doesn't take); bound() returns them under 'sensitivities'")
     if not kinds or set(kinds) - set(KINDS):
         raise ValueError(f"kinds {kinds!r}: some of {KINDS}")
     from . import VERSION
@@ -1141,11 +1166,10 @@ def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> di
     cap = max(c - d if code else 0.0, min(c, m.alpha_max * (x0r * c / m.w + sr)))
     sens = {"token_form": _token_form(m.sigma, x0, c / m.w, s_star, m.alpha_ratio),
             "decoding_form": share * c / cap if cap > 0 else (math.inf if share else 0.0), "per_gate": per_gate(m, c, k),
-            "fresh_cell": fresh.get("fresh_cell"), "fresh_converged": (fresh.get("converged") or {}).get("term")}
+            "fresh_cell": fresh.get("fresh_cell"), "fresh_no_cell": fresh.get("fresh_no_cell")}
     if "fresh_products" in unmeasured:
-        unmeasured["fresh_cell"] = unmeasured["fresh_products"]
-        if sens["fresh_converged"] is None:
-            unmeasured["fresh_converged"] = unmeasured["fresh_products"]
+        unmeasured["fresh_cell"] = unmeasured["fresh_no_cell"] = unmeasured["fresh_products"]
+    void = {"fresh_products": fresh["void"]["reason"]} if "void" in fresh else {}
     blocks = [_blocks(p, c) for p in m.parts]
     split = [(p, b) for p, b in zip(m.parts, blocks) if b >= 2]
     red = [p.steps * (b - 1) * p.partial_bits for p, b in split if p.partial_bits is not None]
@@ -1166,7 +1190,7 @@ def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> di
     top = max(on, key=lambda kind: terms[kind]) if on else None
     return {"version": VERSION, "label": f"{THE_CODE} {VERSION}, reading A", "terms": terms,
             "kinds": [kind for kind in KINDS if kind in kinds], "max": terms[top] if top else None, "binding": top,
-            "rests_on": dict(RESTS_ON), "unmeasured": unmeasured,
+            "rests_on": dict(RESTS_ON), "unmeasured": unmeasured, "void": void,
             "sensitivities": {name: sens[name] for name in SENSITIVITIES}, "inputs": inputs,
             "labels": dict(SENSITIVITIES)}
 
@@ -1175,8 +1199,8 @@ def at(m: Measured, c: float, k: float, reading: str | None = None, kinds: tuple
     """ρ at (c, k), with each part's s, w and Fit, Slowdown's bound and its terms, and the attack side (module
     docstring); with `m.context`, s* is the context charge's (`context_s_star`) and v2's is `s_star_a1`. An unmeasured
     decoder (d None) fits no block. With `reading` A, ρ where Fit fails is the one bound's, max(1, `bound`'s max over
-    `kinds`; None where no kind is measured), and `bound` gives its terms and label; without it, Slowdown's token form
-    alone."""
+    `kinds`; 1 where every kind is computed and none has a figure, a void term's floor; None where a kind isn't
+    computed and none has a figure), and `bound` gives its terms and label; without it, Slowdown's token form alone."""
     if reading not in (None, "A"):
         raise ValueError(f"reading {reading!r}: None (Slowdown's token form) or A (the one bound); reading B's token "
                          f"form is a sensitivity of bound() (token_form), never the bound")
@@ -1211,6 +1235,8 @@ def at(m: Measured, c: float, k: float, reading: str | None = None, kinds: tuple
     s_star_known = t * tail_tokens if x0_known < 1 else 0.0
     one = {} if reading is None else {"bound": bound(m, c, k, kinds)}
     low = one["bound"]["max"] if one else slow
+    if low is None and one and not uncomputed(one["bound"]):
+        low = 1.0
     rho = rho_fit if fit else None if low is None else max(1.0, low)
     return {"c": c, "k": k, "sigma": sigma, "w": m.w, "s": s, "x0": x0, "s_star": s_star, "alpha_ratio": ratio,
             "slowdown": slow, "delta_counted": delta is not None, "parts": parts, "fit": fit, "rho_fit": rho_fit,
@@ -1233,10 +1259,10 @@ RESTS_ON_CELL = {
     "none": "no kind exceeds 1",
     "unmeasured": "unmeasured",
 }
-#: the sensitivities a published ρ carries beside it (the coordinator's 08:28Z: reduction and update; fresh_cell, the
-#: fresh-products term with P-cell; 19:30Z: fresh_converged, a void term's best set of the products no diverged cycle
-#: feeds), on every console row, so the others (`SENSITIVITIES`) stay in `bound`
-CELL_SENSITIVITIES = ("reduction", "update", "fresh_cell", "fresh_converged")
+#: the sensitivities a published ρ carries beside it (the coordinator's 08:28Z: reduction and update; 21:57Z: the
+#: fresh-products figure the term doesn't take, without P-cell where `P_CELL`), on every console row, so the others
+#: (`SENSITIVITIES`) stay in `bound`
+CELL_SENSITIVITIES = ("reduction", "update", "fresh_no_cell" if P_CELL else "fresh_cell")
 #: whether a row whose token kind is measured (its trace's `entries` and an op log) publishes reading A (`published`)
 READING_A = True
 
@@ -1247,13 +1273,15 @@ def published(m: Measured, c: float | None = None, k: float | None = None, readi
     the row's token kind is measured): Fit's c/(c − d) where it holds; else the max of the measured terms where it
     exceeds 1, binding that kind, `partial` where a kind is unmeasured (ρ is then only a lower bound); else, where a
     kind is unmeasured, None (binding `unmeasured`), with `why` saying so, never 1, which would read as no slowdown
-    (coordinator 12:20Z); else 1, binding `none` (every kind measured, none above 1: the floor sets that 1, not any
-    kind). Under reading B, Slowdown's token form, a target. Beside it what it rests on (`RESTS_ON_CELL`), the terms
-    its max takes (None: unmeasured; under reading B the token form), the bound's `CELL_SENSITIVITIES`, and
-    `fresh_subset`, the products the fresh-products term's best subset dropped (`fresh_products`' `subset`; None where
-    it dropped none or the term is unmeasured), and `fresh_converged_share`, the share of the step's counted fresh
-    multiplications that the sensitivity fresh_converged's set keeps (None where that sensitivity is). This is the one
-    place that rule lives: nothing downstream relabels its output."""
+    (coordinator 12:20Z); else 1, binding `none` (every kind computed, none above 1: the floor sets that 1, not any
+    kind). A void fresh-products term is computed (`uncomputed`): its best subset's figure is in the max, and `void`
+    has its short reason, which `why` carries too, so a row whose void term proves nothing above 1 reads 1 with it
+    (coordinator 21:54Z: "the products count diverges; best subset 0.17"). Under reading B, Slowdown's token form, a
+    target. Beside it what it rests on (`RESTS_ON_CELL`), the terms its max takes (None: no figure; under reading B
+    the token form), the bound's `CELL_SENSITIVITIES`, `fresh_subset`, the products the fresh-products term's
+    best subset dropped (`fresh_products`' `subset`; None where it dropped none or the term is unmeasured), and
+    `capture_code`, the VERSION of the code that wrote the trace its products came from (None: a trace from before
+    `CAPTURE_CODE_SINCE`, or no trace). This is the one place that rule lives: nothing downstream relabels its output."""
     if (c is None) != (k is None):
         raise ValueError("published: give both c and k, or neither for the console's policy")
     if c is None:
@@ -1267,7 +1295,8 @@ def published(m: Measured, c: float | None = None, k: float | None = None, readi
     v = at(m, c, k, "A") if reading == "A" else at(m, c, k)
     b = v["bound"] if reading == "A" else bound(m, c, k)
     rho, partial, why = v["rho"], False, None
-    off = [kind for kind in b["kinds"] if b["terms"][kind] is None]
+    off = uncomputed(b)
+    void = b["void"].get("fresh_products") if reading == "A" and not v["fit"] else None
     if v["fit"]:
         binding = "fit"
     elif reading == "B":
@@ -1276,19 +1305,27 @@ def published(m: Measured, c: float | None = None, k: float | None = None, readi
         rho, binding, partial = b["max"], b["binding"], bool(off)
     elif off:
         rho, binding = None, "unmeasured"
-        why = (f"the measured kinds give at most 1; {', '.join(kind.replace('_', ' ') for kind in off)} unmeasured"
-               if b["binding"] is not None else "no kind is measured")
+        names = ", ".join(kind.replace("_", " ") for kind in off)
+        why = ("no kind is measured" if len(off) == len(b["kinds"]) else f"{names} unmeasured" if b["binding"] is None
+               else f"the measured kinds give at most 1; {names} unmeasured")
     else:
         rho, binding = 1.0, "none"
+    if void is not None:
+        why = void if why is None else f"{why}; {void}"
     terms = dict(b["terms"]) if reading == "A" else {"token_form": v["slowdown"]}
     return {"reading": reading, "label": f"{THE_CODE} {VERSION}, reading {reading}", "rho": rho,
             "binding_kind": binding, "rests_on": RESTS_ON_CELL["unmeasured" if rho is None else binding],
-            "partial": partial, "why": why,
+            "partial": partial, "why": why, "void": void,
             "terms": terms,
             "sensitivities": {name: b["sensitivities"][name] for name in CELL_SENSITIVITIES},
             "fresh_subset": b["inputs"]["fresh_products"].get("subset"),
-            "fresh_converged_share": (b["inputs"]["fresh_products"].get("converged") or {}).get("kept_macs_share")
-            if b["sensitivities"]["fresh_converged"] is not None else None}
+            "capture_code": b["inputs"]["fresh_products"].get("capture_code")}
+
+
+def uncomputed(b: dict) -> list[str]:
+    """The kinds of `bound`'s result `b` not yet computed: no figure and not void (a void term is computed, its best
+    subset's figure or none, so ρ's floor reads it; coordinator 21:54Z)."""
+    return [kind for kind in b["kinds"] if b["terms"][kind] is None and kind not in b["void"]]
 
 
 def rhos(m: Measured, cells: dict[str, tuple[float, float]]) -> tuple[dict[str, float], dict[str, bool], dict]:
