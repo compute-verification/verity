@@ -35,6 +35,7 @@
   "Properties.NetworkPeriod",
   "Properties.NetworkPeriod.Placed",
   "Properties.NetworkPeriod.Bernoulli",
+  "Properties.NetworkPeriod.Derived",
   "Properties.Core.Period",
   "Properties.NetworkScan",
   "Properties.SampledProofs",
@@ -451,6 +452,7 @@
   "Properties.NetworkPeriod",
   "Properties.NetworkPeriod.Placed",
   "Properties.NetworkPeriod.Bernoulli",
+  "Properties.NetworkPeriod.Derived",
   "Properties.NetworkScan",
   "Properties.SampledProofs",
   "SampledProofs",
@@ -1138,8 +1140,13 @@
     "Definitions.NetworkCertifier.PeriodConditions",
     "Properties.NetworkScan.Flattens"
    ],
-   "except": [],
+   "except": ["Properties.NetworkPeriod.Derived"],
    "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, and what its scan's `faulty_bits` charges against the sampled statement's layout as the code lays it out (`SampledProofs.Bits`, its members' joint program `Properties.NetworkScan.Flattens`), the period's premise it meets (`NetTiming.WindowsPlaced`), and the audit's bound against the code's count bound (`SampledProofs.Bound`) at the claims' strata draw (`Definitions.Claims.Sampling.Strata`), never a proof"
+  },
+  "Properties.NetworkPeriod.Derived": {
+   "imports": ["Properties.SampledProofs.Draw", "Properties.NetworkPeriod.Bernoulli"],
+   "except": [],
+   "why": "the Bernoulli draw the audit publishes is stated against the deployed draw's design and partition as `Properties.SampledProofs.Draw` reads them (`slotDesign`, `slotPartition`) and the one-rate draw of the period's bound (`Properties.NetworkPeriod.BernoulliDrawn`), never a proof"
   },
   "Properties.Composition": {
    "imports": ["CoreComposition.Product", "CoreComposition.Registered", "CoreComposition.Tie"],

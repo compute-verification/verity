@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Sampling.Select.Design
+import Properties.NetworkPeriod.Derived
 
 /-!
 # The strata the audit publishes are the ones the draw ran (`Properties.SampledProofs.StrataDerived`)
@@ -12,7 +13,7 @@ import Proofs.Flock.Claims.Sampling.Select.Design
 * `profileDraw_bernoulli`, `mk'_cross`, `card_outside_all`: the profile's Bernoulli draw is a `bernoulli` object at the
   ratio of its `p`, that ratio is the rate as written, and a class's law followed by a class drawn `all` leaves the
   first class's proof blocks outside the classes drawn `all`.
-* `bernoulliDerived` (`Properties.SampledProofs.BernoulliDerived`); `bernoulliDerived_honest` and
+* `bernoulliDerived` (`Properties.NetworkPeriod.BernoulliDerived`); `bernoulliDerived_honest` and
   `bernoulliDerived_nontrivial`, its two witnesses.
 -/
 
@@ -481,11 +482,11 @@ theorem card_outside_all (a b : ℕ) (c0 c1 : List (List (List ℕ))) :
           omega
     _ = c0.flatten.length := Finset.card_range _
 
-/-- **The Bernoulli draw the audit publishes is the one the draw ran** (`Properties.SampledProofs.BernoulliDerived`):
+/-- **The Bernoulli draw the audit publishes is the one the draw ran** (`Properties.NetworkPeriod.BernoulliDerived`):
 the law is a `bernoulli` object, which `Draw.deriveLaw` leaves as it is, so the rule is a law and its design is the
 `bernoulli a b` that `flockLaw` reads of the object's `p`, at the ratio the profile reads of it, then the input class
 drawn `all`; the population's proof blocks, those outside the input class, number `n`. -/
-theorem bernoulliDerived : BernoulliDerived := by
+theorem bernoulliDerived : Properties.NetworkPeriod.BernoulliDerived := by
   intro rule d query table l D n named law p hl hD hn hnamed hlaw hdraw
   have hwf := designWellFormed rule d query table l D hl hD
   obtain ⟨rs, he, pop, rfl, hlays⟩ := layout_ok d query l hl
