@@ -450,7 +450,7 @@ theorem readOf_sess {d : Msg} (hfits : Fits A o d) {r : Flock.Readable.Read}
   | ok s' =>
     rw [hi] at hs
     cases hs
-    exact ⟨s', rfl, rfl⟩
+    exact ⟨_, hi, rfl⟩
 
 /-- **flock-verify reads the session's statement as v2's inputs**: where the session's statement at the draw file `d`
 fits its length words and flock-verify `--zk` reads it as `r`, `r` is `ins_sess`'s reading: v2's inputs at `A`
