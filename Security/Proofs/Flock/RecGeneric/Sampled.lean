@@ -84,8 +84,7 @@ open Claims Claims.RecGeneric FlockSoundness FlockSoundness.Game FlockSoundness.
 open scoped ENNReal
 
 /-- **B1: a claims-core proof system through the sampled compiler.** For every claims verifier `V` with relation `Rl`
-and extractor `E`, both fixed before the oracle `H` (so `E` reaches `H` only through its `.hash` nodes), and every `H`
-at which `E`'s error at each sampled statement is at most `err` on every prover
+and extractor `E`, and every `H` at which `E`'s error at each sampled statement is at most `err` on every prover
 (`PrBad ≤ err`), sampling design `L`, binding commitment `B` to the trace, proof blocks' correctness `Correct`,
 statements `stmt` and witnesses' openings (`reads`, `opens`) that are sound for the proof blocks
 (`JointExtractor.Sound`), and nonnegative budget `t`: at every audit prover `σ` whose link finders meet ecr/sha-512
@@ -93,7 +92,9 @@ statements `stmt` and witnesses' openings (`reads`, `opens`) that are sound for 
 $$\Pr[\text{accept}] \le P_a(F) + \mathbb E_S \max_{u \in S} \mathrm{err}(\mathrm{stmt}(S, R), P_S)
 + \varepsilon_{\rm bind},$$
 with `R` the registration, `P_S` the claims prover `σ` plays on the sample `S`, `F` the incorrect set of the plurality
-of the trials and `ε_bind` their binding term. -/
+of the trials and `ε_bind` their binding term. `E` is any rerun program and may depend on `H`; its computation between
+reruns is not counted, so `F` is the committed trace's incorrect set only at a counted `E` (Flock's `E^rep` at the
+deployed decoder), and `t` is declared, not counted from `E`'s runs. -/
 def GenericSampledKSClaims : Prop :=
   ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (V : Verifier Coin) (Rl : Rel W)
     (E : Claims.Extractor Coin W V) (H : Claims.Msg → Claims.Msg) (err : Claims.Msg → Prover Unit → ℝ) (n : ℕ)

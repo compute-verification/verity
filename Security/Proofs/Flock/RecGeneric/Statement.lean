@@ -72,7 +72,9 @@ server `S` that binds (`Server.Binds`), compiled verifier with an outer extracti
 `Open(Π, S)` and `Π`'s reading of opened views (`Comp.Contract`: code facts, and V\*'s two where some run accepts `x`):
 on every prover and at every loop bound,
 `Pr[run = acc ∧ ¬R(x, E*(x))] ≤ Comp.err`, `E*` the inner `E^rep` served by `E_O` (`Comp.E`). Every accepted
-statement is covered wherever the contract holds at every statement. -/
+statement is covered wherever the contract holds at every statement. `Π`'s `assemble` and `E_O` are any programs, their
+computation between reruns not counted, so `E*`'s witness is the one the prover committed only where they are counted
+(Flock's `E^rep` at the deployed decoders), and bits are read only there. -/
 def GenericRecursiveKS : Prop :=
   ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) (I : Proto Coin W) (S : Server)
     (K : Claims.RecGeneric.Comp Coin),
@@ -90,7 +92,10 @@ sampled audit's proof system for proof blocks, `Claims.SamplingGeneric.Arg`), se
 `Pr[run = acc ∧ ¬R(x, E*(x))] ≤ Comp.err` at `compile(Π, A, S)`, with `κ_O = Σ_s κ_A(sh_s)` and
 `γ_O = (Σ_s √(γ_A(sh_s)·k(x)))²`. `E*` is the inner `E^rep` served by `E_O`, and `E_O` replays the judged run and runs
 `A`'s extractor at each session in order (`Compiled.EO`): their costs compose as `ExtractCost` says. It is L1 with
-`OuterSessionsKS`. -/
+`OuterSessionsKS`. As in L1, `A`'s extractor is any rerun program, so the witness is the committed one only at a
+counted one. The contract is met with any number of sequential sessions: `Compiled.Accepts` is one-way, and
+`Compiled.Runs` reads each session's own verdict, not the compiled run's (`EchoHolds` at an inner verifier of `k ≥ 2`
+rounds runs `k` sessions). -/
 def GenericRecursiveKSCompiled : Prop :=
   ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) (I : Proto Coin W) (S : Server)
     (A : Arg Coin) (C : Compiler Coin A),

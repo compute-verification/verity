@@ -264,7 +264,9 @@ outer error `ε_O`: where the leaves hide within `δ` and the outer phase is zer
 within `ε_O` on every witness in the outer relation (`ZkRelease.OuterZK`), the compiled prover is zero knowledge per
 outcome at every witness, at the simulator `ZkRelease.sim` given the released outcome (the outer phase's `some o`, or
 `none` where no outer view is released), within `ZkRelease.err`: the outer error averaged over the first part where
-the server releases, at `some o` only, plus `n_h·δ`. -/
+the server releases, at `some o` only, plus `n_h·δ`. The outer simulator `progO` is any program, and Z1 transfers
+whatever `OuterZK` gives it: a simulator that picks an outer witness by choice can meet `OuterZK`, so the result is
+zero knowledge in the usual sense only at a counted simulator (Flock's at the instance). -/
 def GenericRecursiveZK : Prop :=
   ∀ (H : Msg → Msg) {W : Type} (Lv : Leaves) (Zs : ZkRelease W Lv)
     (εO : (x : Msg) → Msg → Zs.WO → (Θ : Type) → VStar Θ → Θ → Zs.St → ℝ) (δ : ℝ),
