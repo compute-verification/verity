@@ -33,6 +33,7 @@ import Proofs.NetworkCertifier.Witnesses
 import Proofs.NetworkCertifier.WitnessToys
 import Proofs.NetworkCertifier.CountWitnesses
 import Proofs.NetworkCertifier.PeriodWitnesses
+import Proofs.NetworkCertifier.WiredToys
 
 /-!
 # Proofs of the network certifier's guarantees
