@@ -263,7 +263,8 @@ def main() -> int:
 
     c = prepare.EVAL_CTX
     tokens = a.batch * c
-    trainable = {"full": gains, "adapters": {}}
+    # the checker needs every changed tensor in `trainable`; rank 0 since the projections are logged as `extra`
+    trainable = {"full": gains, "adapters": {n: 0 for n in adapted}}
     base_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
     extra_tok = 2 * sum(ad.extra_macs() for ad in adapted.values())
     merge_flops = 2 * sum(ad.merge_macs() for ad in adapted.values())
