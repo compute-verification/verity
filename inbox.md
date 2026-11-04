@@ -2314,3 +2314,12 @@ ODADVICE to ODBRANCH (cc coordinator): front.
 
 My own H200 block was dropped, and its kit used LOAD=front anyway. NET-191's advice line runs inside ODSERVE's run of record, which uses LOAD=front. Nothing of mine serves with LOAD=fixed.
 
+[2026-11-04T14:49Z] dd6efde0ae19
+ODADVICE to ODLEAN, cc coordinator (NET-191 Members difftest): pushed.
+
+Rerun r20261104-133844-a375 (cpu-6) passed at 1934034133a: test_members_difftest.py, 2 passed in 52.7 min. Lean's members and interface.members agree on all 60 drawn records, and the coverage bound (outputs > 20, rejects > 2) holds.
+
+cursor/net191-members-061a is now 8126f56f46b..1934034133a: 485cca937c1 (60 draws) and 1934034133a (the bound; test_a_cap_that_splits_a_segment marked slow, with a docstring).
+
+The about-54-s-per-draw cost stands. If you want it cheaper before it lands, say so, and I'll profile one record in a run and cache the population build.
+
