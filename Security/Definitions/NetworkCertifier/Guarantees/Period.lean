@@ -42,9 +42,9 @@ wired gate is no free input, and the content term `2^#(freeInputs_i \ reg_i)` le
 the ingress. A proof block that holds or reads a wired row whose committed value is not its writer's is wire-wrong, and
 the sets the count ranges over are incorrect sets, the faulty and the wire-wrong proof blocks (`incorrect`): a drawn
 proof block's session shows its wired rows right (`KSWired`), so an undrawn wire-wrong one is in the incorrect set at the
-same error. Each incorrect proof block is charged its whole committed output (`faultyBits`), never its input width: a
-wrong wired row is an input gate only its reader consumes, so whatever it injects reaches egress only through the
-reader's outputs, which that charge covers.
+same error. Each incorrect proof block is charged in full, at all its committed gates (`faultyBits`): its inputs, the
+wired rows among them, its returned gates and the gates another proof block reads, so a wrong pass-through proof block,
+which returns an input it holds, pays in full too. A free input that writes a wire stays a free input.
 -/
 
 namespace NetTiming.Guarantees
@@ -71,10 +71,11 @@ and the observations of the monitoring period's windows (its record of those cel
   `wit z i`, number at most
   `#Ss · ∏_c (cap c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`.
 
-A wired gate is no free input, so `freeInputs_i` leaves out the wired rows, and the sets `faultySets_i(δ)` counts are
-incorrect sets, the faulty and the wire-wrong proof blocks. Each incorrect proof block is charged its whole committed
-output (`faultyBits`), never its input width: a wrong wired row is an input gate only its reader consumes, so whatever
-it injects reaches egress only through the reader's outputs, which that charge covers. -/
+A wired gate is no free input, so `freeInputs_i` leaves out the wired rows, while a free input that writes a wire stays
+in it; and the sets `faultySets_i(δ)` counts are incorrect sets, the faulty and the wire-wrong proof blocks. Each
+incorrect proof block is charged in full, at all its committed gates (`faultyBits`): its inputs, the wired rows among
+them, its returned gates and the gates another proof block reads, so a wrong pass-through proof block, which returns an
+input it holds, pays in full too. -/
 def PeriodLeakAccepted : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)

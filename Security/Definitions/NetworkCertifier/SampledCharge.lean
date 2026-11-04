@@ -8,9 +8,9 @@ holding values at the incorrect proof blocks' committed gates (`RAcc`, `Definiti
 faulty and the wire-wrong ones. Those values are the prover's to choose, and so is which proof blocks are incorrect, so
 the leak bound of a sampled audit charges, beyond the inputs the circuit reads besides the ingress and the wired gates
 (`freeInputs`), the incorrect proof blocks' committed bits (`faultyBits`) and the choice of incorrect set among the ones
-`RAcc δ` allows (`faultySets`). Each incorrect proof block is charged its whole committed output, never its input width:
-a wrong wired row is an input gate only its reader consumes, so whatever it injects reaches egress only through the
-reader's outputs, which that charge covers. The sequences it counts are `AccSeqsSampled`.
+`RAcc δ` allows (`faultySets`). Each incorrect proof block is charged in full, at all its committed gates (`committed`):
+its inputs, the wired rows among them, its returned gates and the gates another proof block reads; a wrong pass-through
+proof block, which returns an input it holds, pays the same. The sequences it counts are `AccSeqsSampled`.
 -/
 
 namespace NetTiming
@@ -58,7 +58,8 @@ def AdviceIn {L S : ℕ} (K : ℕ) (C : Prog) (P : Partition) (d : Design) (lay 
     AcceptedFaulty C P lay k {ρ} F op o → AcceptedFaulty C P lay k As F op o
 
 /-- **The free inputs** of `C` over the horizon `k`: its input gates that are no step's ingress before `k` and not wired,
-the inputs the circuit's Program reads from the advice (`BoundaryGates.inputOf`, `resolveWires`). -/
+the inputs the circuit's Program reads from the advice (`BoundaryGates.inputOf`, `resolveWires`). A free input that
+writes a wire stays a free input: only its wired readers are left out. -/
 def freeInputs {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : ℕ) : Finset ℕ :=
   (Finset.range C.gates.length).filter fun g =>
     C.gates[g]? = some .input ∧ (List.range k).any (fun i => (lay.ingress i).contains g) = false ∧ lay.wires g = none
