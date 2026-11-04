@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.DeployInputs
 public import Proofs.Flock.Claims.ZK.Reference
 public import Proofs.Flock.Recursive.FirewallWire
+public import Proofs.Flock.SessionLoop.ConcreteNet
+public import Properties.Flock.Nets
 import all Init.Data.String.Defs
 
 /-! # A statement the deployed `--zk` setup parses
@@ -12,6 +14,9 @@ import all Init.Data.String.Defs
 
 * `FlockDeploy.decode_encode_of_fits`: `decode` reads back every `Raw` whose lengths fit their 8-byte words, so a
   statement is the encoding of the `Raw` the setup reads (`Raw.Fits`).
+* `FlockDeploy.fixedNets_parse`: at the open guarantee that the verifier's two fixed nets build
+  (`Properties.Flock.Nets.FixedNetsBuild`), the text of each that every circuit file carries reads back as the net
+  `HmNets.check` holds it to (`ConcreteNet.parse_netLs`).
 * `Claims.ZKMal.refK_pos`: a statement that sets up has a coin round.
 -/
 
@@ -147,6 +152,38 @@ theorem decode_encode_of_fits {w : Raw} (hw : w.Fits) : decode w.encode = some w
   unfold decode
   rw [h]
   simp
+
+/-! ## The verifier's two fixed nets, as a circuit file's text carries them -/
+
+open Properties.Flock.Nets (Builds built FixedNetsBuild)
+open RecDeploy.VStarNets (netLs)
+
+/-- **A net that builds reads back from its text**, at the header fields it builds at. -/
+theorem parse_builds {name : String} {l : HmNets.Laid} {useful : ℕ} {ig og : Group} {w : ℕ} (hw : ConcreteNet.Tok name)
+    (hb : Builds name l useful ig og w) :
+    ∃ a b, HmNets.netOf name l = .ok (built name useful ig og w a b) ∧
+      Net.parse (netLs name l).toArray = .ok (built name useful ig og w a b) := by
+  obtain ⟨hra, hrb, a, b, h⟩ := hb
+  have h' : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (built name useful ig og w a b) := h
+  have hu : useful = l.useful := (Net.ofRows_ok h').2.2.2.1
+  exact ⟨a, b, h, ConcreteNet.parse_netLs hw (hra.trans hu) (hrb.trans hu) h⟩
+
+theorem sha_tok : ConcreteNet.Tok "sha512x3" := ⟨by decide, by unfold FlockVBridge.Names.NoWs; decide⟩
+
+theorem hm_tok : ConcreteNet.Tok "hm96" := ⟨by decide, by unfold FlockVBridge.Names.NoWs; decide⟩
+
+/-- **The verifier's two nets read back from their text**, at the open guarantee that they build: the `sha512x3` and
+`hm96` sections every circuit file with hm96 rows carries parse to the nets `HmNets.check` compares them with. -/
+theorem fixedNets_parse (hn : FixedNetsBuild) :
+    (∃ a b, HmNets.netOf "sha512x3" (HmNets.shaLaid ()) =
+        .ok (built "sha512x3" 256001 ⟨0, 64, HmNets.SHA_IN⟩ ⟨1984, 16, HmNets.SHA_OUT⟩ 64 a b) ∧
+      Net.parse (netLs "sha512x3" (HmNets.shaLaid ())).toArray =
+        .ok (built "sha512x3" 256001 ⟨0, 64, HmNets.SHA_IN⟩ ⟨1984, 16, HmNets.SHA_OUT⟩ 64 a b)) ∧
+    ∃ a b, HmNets.netOf "hm96" (HmNets.hmLaid ()) =
+        .ok (built "hm96" 246785 ⟨0, 32, HmNets.HM_IN⟩ ⟨1920, 8, HmNets.HM_OUT⟩ 32 a b) ∧
+      Net.parse (netLs "hm96" (HmNets.hmLaid ())).toArray =
+        .ok (built "hm96" 246785 ⟨0, 32, HmNets.HM_IN⟩ ⟨1920, 8, HmNets.HM_OUT⟩ 32 a b) :=
+  ⟨parse_builds sha_tok hn.1, parse_builds hm_tok hn.2⟩
 
 end FlockDeploy
 
