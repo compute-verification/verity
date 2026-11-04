@@ -63,7 +63,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 
 The code is `CoreRemote.lean`: `V1.protocol = tiedSameB "verity/remote/v1" tied [run] components` (`remote-v1`), which
 `Verity.SoundnessOf` reads, and v0, `protocol = tiedSameB "verity/remote/v0" tied [windows] components`, which no
-soundness theorem covers. Pearl+'s run names its record's digest, tied to the policy's by `V1.run`; its check doesn't
+soundness theorem covers and no configuration names. Pearl+'s run names its record's digest, tied to the policy's by `V1.run`; its check doesn't
 read that record yet. The policy and sampled proofs commit to the run's record, which names the registered circuit; once
 the cases fit, two different records reject remote whatever the subprotocols answer (`Core.Composition.same`). v0's
 period commitment is the auditor's ledger, not the record, so it joins by a tie (`Core.Remote.windows`): every window of

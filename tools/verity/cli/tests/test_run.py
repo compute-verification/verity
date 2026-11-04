@@ -117,16 +117,12 @@ def test_a_set_of_subprotocols_that_is_neither_composite_is_refused(protocols):
 
 
 def test_the_composites_are_remote_and_onsite():
-    assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE, REMOTE_V0)} == {
-        "verity/onsite/v0", "verity/remote/v1", "verity/remote/v0"}
+    assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE)} == {"verity/onsite/v0", "verity/remote/v1"}
     assert K.composite(ONSITE[::-1], REG.components) == "verity/onsite/v0"
     assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
         cid: sorted(subs) for cid, subs in SP.SUBPROTOCOLS.items()}
     assert SP.SUBPROTOCOLS["verity/remote/v1"] == {"inference-only": "verity/inference-only/v0",
                                                    "pearl-plus": "verity/pouw/pearl-plus/v1",
-                                                   "sampled-proofs": "verity/sampled-proofs/v1"}
-    assert SP.SUBPROTOCOLS["verity/remote/v0"] == {"inference-only": "verity/inference-only/v0",
-                                                   "pouw": "verity/pouw/period/v1",
                                                    "sampled-proofs": "verity/sampled-proofs/v1"}
     assert SP.SUBPROTOCOLS["verity/onsite/v0"]["sampled-proofs"] == "verity/sampled-proofs/one-stage/v1"
     assert SP.SUBPROTOCOLS["verity/onsite/v0"]["pouw"] == "verity/pouw/period/v1"
@@ -351,10 +347,14 @@ def test_remotes_verdict_covers_exactly_its_subprotocols(tmp_path, capsys):
     assert "network-certifier" not in capsys.readouterr().out
 
 
-def test_remotes_development_composite_stays_reachable(tmp_path):
-    rc, lines = run(tmp_path, registry(), cfg=config(REMOTE_V0))
-    assert rc == 0 and lines[0]["components"] == {c: "accept" for c in REMOTE_V0}
-    assert lines[0]["product"] == "verity/remote/v0"
+def test_remotes_development_composite_is_no_composite():
+    """H1's development composite (remote with PoUW's period as its work) is no composite a configuration can name:
+    protocol soundness covers only onsite and remote v1, so `check` refuses it by name."""
+    assert refused(edit(lambda c: c.update(protocols=list(REMOTE_V0)))) == "composite"
+    with pytest.raises(K.Refused) as e:
+        K.composite(REMOTE_V0, REG.components)
+    assert e.value.name == "composite" and "verity/remote/v1 (inference-only, pearl-plus, sampled-proofs)" in str(e.value)
+    assert "verity/remote/v0" not in K.COMPOSITES and "verity/remote/v0" not in SP.SUBPROTOCOLS
 
 
 def test_verity_run_refuses_a_configuration_that_is_no_composite(tmp_path, capsys):

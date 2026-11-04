@@ -141,10 +141,11 @@ def test_onsites_subprotocols_answers_and_cases_reach_the_composite():
     assert POUW == "verity/pouw/period/v1" and POUW in ids and P.IDS["pouw"] not in ids
 
 
-def test_remotes_development_composite_works_by_the_period():
-    (line,) = go(Machine(), components=REMOTE_V0).outcomes[P.VERIFIER]["outcome"]["verdicts"]
-    assert line["product"] == "verity/remote/v0" and line["verdict"] == "accept"
-    assert P.ids_of(list(REMOTE_V0))["pouw"] == POUW and P.ids_of(list(REMOTE))["pearl-plus"] == WORK
+def test_remotes_development_composite_is_refused():
+    """H1's development composite (PoUW's period as remote's work) is no composite: its parameters are refused."""
+    with pytest.raises(ValueError, match="components lists one composite's subprotocols"):
+        P.ids_of(list(REMOTE_V0))
+    assert "verity/remote/v0" not in P.SUBPROTOCOLS and P.ids_of(list(REMOTE))["pearl-plus"] == WORK
 
 
 def test_an_accepting_audit_of_another_registration_rejects():

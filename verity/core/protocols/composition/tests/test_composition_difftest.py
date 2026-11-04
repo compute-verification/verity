@@ -470,13 +470,13 @@ def ids(product: R.Product) -> str:
 SEEN = {"onsite": collections.Counter(), "remote": collections.Counter()}
 ONSITE = port("onsite", R.ONSITE, SEEN["onsite"], UndecidedPort)
 REMOTE = port("remote", R.REMOTE, SEEN["remote"], RejectingPort)
-#: `product IDS serve` over each composite's subprotocols, which `verity run`'s verifier runs
-PRODUCT = {p.id: port("product", p, SEEN[n], kind, serve=(ids(p), "serve"), package="onsite")
-           for n, p, kind in (("onsite", R.ONSITE, UndecidedPort), ("remote", R.REMOTE, RejectingPort))}
+#: `product IDS serve` over onsite's subprotocols, which `verity run`'s verifier runs (remote v1's Pearl+ run has no
+#: reference cases yet, and H1's development composite is no product)
+PRODUCT = {R.ONSITE.id: port("product", R.ONSITE, SEEN["onsite"], UndecidedPort, serve=(ids(R.ONSITE), "serve"),
+                             package="onsite")}
 onsite_server = D.server_fixture(ONSITE)
 remote_server = D.server_fixture(REMOTE)
 product_onsite_server = D.server_fixture(PRODUCT[R.ONSITE.id])
-product_remote_server = D.server_fixture(PRODUCT[R.REMOTE.id])
 
 
 @pytest.fixture(scope="module")
@@ -665,23 +665,24 @@ def test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit(onsite_server, r
 
 
 def test_product_names_only_the_composites():
-    """`product IDS id` is each composite over its subprotocols, in any order (onsite, remote v1 with Pearl+'s run and
-    remote v0 with H1's PoUW period), exactly the configuration's composites (`verity.core.deploy.config.COMPOSITES`,
-    by the ids `SUBPROTOCOLS` gives their names), and refuses every other set of their subprotocols and the wipe
-    (exit 64)."""
+    """`product IDS id` is each composite over its subprotocols, in any order (onsite, and remote v1 with Pearl+'s
+    run), exactly the configuration's composites (`verity.core.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS`
+    gives their names), and refuses every other set of their subprotocols, H1's development composite's among them,
+    and the wipe (exit 64)."""
     exe = D.build(PROTOCOLS / "onsite", "product")
 
     def named(xs) -> tuple[int, str]:
         p = subprocess.run([exe, ",".join(xs), "id"], capture_output=True, text=True)
         return p.returncode, p.stdout.strip()
 
-    want = {p.id: sorted(C.id for C in p.components) for p in (R.ONSITE, R.REMOTE_V1, R.REMOTE)}
+    want = {p.id: sorted(C.id for C in p.components) for p in (R.ONSITE, R.REMOTE_V1)}
     assert {cid: sorted(subs.values()) for cid, subs in SPP.SUBPROTOCOLS.items()} == want
     assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
         cid: sorted(subs) for cid, subs in SPP.SUBPROTOCOLS.items()}
     for cid, ids in want.items():
         assert named(ids) == (0, cid)
         assert named(ids[::-1]) == (0, cid)
+    assert named(C.id for C in R.REMOTE.components)[0] == 64
     every = sorted({i for ids in want.values() for i in ids} | {"verity/wipe/v0"})
     others = [s for k in range(len(every) + 1) for s in itertools.combinations(every, k)
               if sorted(s) not in want.values()]
@@ -690,12 +691,6 @@ def test_product_names_only_the_composites():
         assert named(s)[0] == 64, s
     assert named([R.POUW_PERIOD.id, R.POUW_PERIOD.id, R.SAMPLED_PROOFS.id])[0] == 64
     assert named([R.INFERENCE_ONLY.id, "verity/pouw/v1", R.SAMPLED_PROOFS.id])[0] == 64
-
-
-@pytest.mark.slow
-def test_product_over_remotes_subprotocols_is_remote(product_remote_server):
-    _agree(PRODUCT[R.REMOTE.id], product_remote_server, SEEN["remote"], 1000,
-           (R.REJECT, "reject, a component undecided", "reject, no component rejected", "one record", "two records"))
 
 
 @pytest.mark.slow

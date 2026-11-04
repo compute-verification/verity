@@ -16,10 +16,10 @@ one-stage audit, PoUW as Pearl+'s run verdict, `PouwCheck.PearlPlus.Protocol.pro
 `verity/core/protocols/remote/CoreRemote.lean`, id `verity/remote/v1`). It accepts only when every subprotocol accepts
 its own case, its commitment binds the subprotocols' commitments, the policy and the one-stage audit committed to one
 record, and Pearl+'s run commitment names that record (`Core.Remote.V1.run`); any one's rejection rejects it
-(`Core.Composition.tiedSameB`, `verity/core/protocols/composition/README.md`). Its development composite
-(`Core.Remote.protocol`, `verity/remote/v0`) has PoUW's period check, `PouwCheck.Period.protocol`
+(`Core.Composition.tiedSameB`, `verity/core/protocols/composition/README.md`). H1's development executable
+(`Core.Remote.protocol`, `verity/remote/v0`, which no configuration names) has PoUW's period check, `PouwCheck.Period.protocol`
 (`verity/pouw/period/v1`), as onsite does, in Pearl+'s place, every window of the period naming the record as its
-Commit record (`Core.Remote.windows`). In the remote demo, on the development composite, the vLLM demo
+Commit record (`Core.Remote.windows`). In the remote demo, on that development executable, the vLLM demo
 (`verity example vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
 credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case. The remote
 protocol's front door is

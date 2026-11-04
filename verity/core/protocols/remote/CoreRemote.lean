@@ -7,8 +7,8 @@ their work subprotocol:
   work-weighted draw over their tiles at δ = 1/100, and the run's credit at Pearl's assumption) and sampled proofs.
   `Verity.Registration.Composite.remote` reads it.
 * `Core.Remote.protocol` (`verity/remote/v0`), **development**: H1's period credit in Pearl+'s place, with the
-  period's windows tied to the run's record (`windows`). It stays reachable (`remote`, `Core.Composites`) for H1's
-  development, and no soundness theorem covers it.
+  period's windows tied to the run's record (`windows`). It is no verifier: `Core.Composites` doesn't list it, so no
+  configuration names it, and no soundness theorem covers it; it runs only as its development executable (`remote`).
 
 The id bumps with the work subprotocol, because an accepted answer of each means something different: v0's work is a
 period's credit, every window credited all or nothing and named on the run's record, and v1's is one run's credit at

@@ -17,8 +17,8 @@ verifier establishes with no hardware of its own at the prover's site. It compos
   proof block in C-Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
 - work, by Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`): tiles of the run's retained passes, drawn by work
   weight on a live coin, are recomputed, and the run's commitment names the one record the policy and sampled proofs
-  committed to (`Core.Remote.V1.run`). Its development composite, `verity/remote/v0` (`Core.Remote.protocol`), has
-  PoUW's period check (`verity/pouw/period/v1`, onsite's work subprotocol too) in its place: the GPU's time is credited
+  committed to (`Core.Remote.V1.run`). H1's development executable, `verity/remote/v0` (`Core.Remote.protocol`),
+  which no configuration names, has PoUW's period check (`verity/pouw/period/v1`, onsite's work subprotocol too) in its place: the GPU's time is credited
   to useful matmuls through receipts the live coins open, the period's windows all or nothing, each window's Commit
   record that one record;
 - the inference-only policy (`verity/inference-only/v0`): the declared circuit divides into inference blocks within
@@ -30,8 +30,8 @@ the commitment, never flipped again) and on what each subprotocol's own
 guarantee assumes; each subprotocol states its guarantee in `Security/`, and the composite's
 (`Verity.RemoteSoundness`, `Security/Properties/Verity/Soundness.lean`) is proved from theirs, which it takes as
 hypotheses, so no example's `proof` is past `none`. `lifecycle/` is the only example that steps through the whole
-remote composite, the development one, on CPU with a stand-in prover. Its demo is the vLLM demo
-(`verity example vllm`), on the development composite: one served run of Llama-3.2-1B INT8 on one H200, sampled proofs
+remote composite, H1's development one, on CPU with a stand-in prover. Its demo is the vLLM demo
+(`verity example vllm`), on H1's development executable: one served run of Llama-3.2-1B INT8 on one H200, sampled proofs
 and PoUW on the served model, whose PoUW verdict is a development run that credits nothing; `h200/` runs remote's
 sampled-proofs half. The inference-only policy runs in `lifecycle/` only: no served run produces the declared
 division yet. Five other things are called "remote" (PoUB among them);

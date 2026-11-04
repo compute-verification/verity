@@ -74,9 +74,8 @@ COMPOSED = "verity/sampled-proofs/v1"
 VERSION = 1
 CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
 #: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
-#: `Core.Remote.V1.components`, `Core.Remote.components`): onsite's PoUW is its period check and its bandwidth the P2
-#: session on PoUS's store; remote's composite of record (v1) works by Pearl+'s run verdict and its development
-#: composite (v0) by the period check; remote composes sampled proofs as `COMPOSED` and onsite audits it with the
+#: `Core.Remote.V1.components`): onsite's PoUW is its period check and its bandwidth the P2 session on PoUS's store,
+#: remote's PoUW is Pearl+'s run verdict, remote composes sampled proofs as `COMPOSED` and onsite audits it with the
 #: one-stage audit (`ID`, one-stage v1)
 SUBPROTOCOLS = {
     "verity/onsite/v0": {"bandwidth": "verity/remote-bandwidth/p2/v0", "certifier": "verity/certifier/v0",
@@ -84,8 +83,6 @@ SUBPROTOCOLS = {
                          "pouw": "verity/pouw/period/v1", "sampled-proofs": ID,
                          "wipe": "verity/wipe/v0"},
     "verity/remote/v1": {"inference-only": "verity/inference-only/v0", "pearl-plus": "verity/pouw/pearl-plus/v1",
-                         "sampled-proofs": COMPOSED},
-    "verity/remote/v0": {"inference-only": "verity/inference-only/v0", "pouw": "verity/pouw/period/v1",
                          "sampled-proofs": COMPOSED},
 }
 #: a configuration's subprotocol names and the protocol id each has outside a composite

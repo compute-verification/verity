@@ -14,8 +14,8 @@ subprotocols' packages, with no Mathlib:
   wipe, the policy and sampled proofs on one registration record, and PoUS and PoUB-P2 on one store (a `tiedSameB`).
 - `core_remote` (`../remote`): the composite of record `Core.Remote.V1.protocol` (`verity/remote/v1`): sampled proofs,
   the inference-only policy and Pearl+'s run, the policy and sampled proofs on one registration record and the run's
-  commitment naming it; and the development composite `Core.Remote.protocol` (`verity/remote/v0`), with PoUW's period
-  in Pearl+'s place and every window of the period on that record (each a `tiedSameB`).
+  commitment naming it (a `tiedSameB`); and H1's development executable `Core.Remote.protocol` (`verity/remote/v0`),
+  with PoUW's period in Pearl+'s place and every window of the period on that record, which no configuration names.
 
 The rule and the formats are written once, over any list of subprotocols, and the composites are values of it that
 differ in their id and subprotocols. Each composite's executable is the core CLI (`onsite id | check | serve`,
@@ -23,8 +23,8 @@ differ in their id and subprotocols. Each composite's executable is the core CLI
 
 These are the only composites a verifier runs. `product IDS id | check | serve` (`../onsite/CoreComposites.lean`,
 `Core.Composites.ofIds`), which `verity run`'s verifier runs over a configuration's subprotocols, is each composite's
-CLI for its subprotocols, in any order, and refuses every other set. Protocol soundness covers onsite and
-`verity/remote/v1`; `verity/remote/v0` is development, kept for its runs of record.
+CLI for its subprotocols, in any order, and refuses every other set, since protocol soundness covers only onsite and
+`verity/remote/v1`: H1's `verity/remote/v0` is refused, and runs only as its development executable.
 
 Their security argument, layer by layer from one proof to the training slowdown, is the remote protocol's README
 (`../remote/README.md`, "The security argument, end to end"); onsite shares its layers and adds its own subprotocols'.
@@ -180,9 +180,9 @@ verdict. A case that names PoUB-P2's by the generic audit's id is refused, as no
 `test_a_reference_without_reject_dominance_is_caught` shows the difftest tells the rule above from one in which a
 rejection need not reject the whole: such a reference disagrees with the Lean on a case where one subprotocol rejects and another is undecided.
 `product` names the composites and refuses every other subset of their subprotocols
-(`test_product_names_only_the_composites`), and over each composite's subprotocols its `serve` gives that
-composite's verdicts (`test_product_over_remotes_subprotocols_is_remote`,
-`test_product_over_onsites_subprotocols_is_onsite`).
+(`test_product_names_only_the_composites`, H1's development composite's among them), and over onsite's
+subprotocols its `serve` gives onsite's verdicts (`test_product_over_onsites_subprotocols_is_onsite`); remote v1's has
+no difftest until Pearl+'s run has reference cases.
 
 A bare `uv run` inside this directory stops its workspace search at `verity/core/protocols/pyproject.toml`; run the suite
 through `suites.py`, or `pytest` with the workspace's `.venv`.

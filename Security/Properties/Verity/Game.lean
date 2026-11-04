@@ -21,7 +21,7 @@ the composite `Core.Composites.composites` lists for it (`verifier`): onsite's `
 (`verity/onsite/v0`, `Core.Composition.tiedSameB`) and remote's composite of record `Core.Remote.V1.protocol`
 (`verity/remote/v1`, `Core.Composition.tiedSameB`), each composing its subprotocols over the blobs the prover sent.
 Remote's development composite, `Core.Remote.protocol` (`verity/remote/v0`, H1's period as its work), is no
-composite's verifier here. Onsite has seven
+composite's verifier, and `Core.Composites.ofIds` refuses its subprotocols. Onsite has seven
 subprotocols and remote three of them, each subprotocol at the component its composite names for it (`component`);
 the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
 

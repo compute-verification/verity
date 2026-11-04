@@ -5,8 +5,7 @@ entry or `LIVE` (`PARTIES`), and the live run of sampled proofs' core parties (`
 
 No workload serves here: `Machine`'s ``serve``, ``pin``, ``host`` and ``audit`` are `SP.Unavailable` until a test's
 stand-in gives them, and the network certifier's entry (`network_certifier`) and every other subprotocol's period check
-(`CHECKS`) likewise. The toy workload provides every subprotocol's hooks, so every composite, onsite and remote's of
-record and development, runs on it.
+(`CHECKS`) likewise. The toy workload provides every subprotocol's hooks, so both composites run on it.
 ``component`` reads ``STATE/record/w<I>/<name>/``'s ``answer.json`` and ``case.json``, and ``product`` runs
 ``STATE/tools.json``'s ``product`` as ``product IDS check PARAMS COMMITMENT EVIDENCE``.
 """
