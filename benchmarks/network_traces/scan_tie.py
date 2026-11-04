@@ -23,8 +23,8 @@ the verifier's registered reads); `EgressTie.tie` reads the verdict off the stre
 * **The prover's trees**: ``scan/view`` and ``scan/last`` (S_{T−1}), each under fresh salts.
 * **What the verifier receives** (`verifier_dir`) is scanned as scan_zk scans its rounds (`scan_zk.received`) for
   every proof block's input and output rows but the public ``o0`` and every salt but ``o0``'s, less what is public
-  anyway (`scan_zk.known`), the prover's instance files the control: a round is as expected only when none is found
-  there.
+  anyway (`scan_zk.known`), the prover's instance files the control: a round is as expected only when none of it
+  leaked there (`scan_zk.unseen`; a find whose every placement straddles fields, ``across``, isn't a leak).
 * ``--dry`` stages every statement and checks it on the host (each block's outputs the references', every o0 1),
   registers and samples, and proves nothing.
 """
