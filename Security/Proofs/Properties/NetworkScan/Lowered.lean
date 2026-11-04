@@ -74,7 +74,6 @@ theorem getElem?_flatMap_range {α : Type} (f : ℕ → List α) {n g j : ℕ} (
     rcases Nat.lt_or_ge g n with h | h
     · have hle := sum_range_mono (fun i => (f i).length) (show g + 1 ≤ n from h)
       rw [sum_range_add_one] at hle
-      beta_reduce at hle
       have hlt : ((List.range g).map fun i => (f i).length).sum + j < ((List.range n).flatMap f).length := by
         rw [List.length_flatMap]; omega
       rw [List.getElem?_append_left hlt, ih h]
@@ -118,9 +117,9 @@ theorem range_filter_lt (n g : ℕ) :
     rw [range_add_one, List.filter_append, ih]
     by_cases h : n < g
     · rw [Nat.min_eq_left (Nat.le_of_lt h), Nat.min_eq_left (show n + 1 ≤ g from h), range_add_one]
-      simp [List.filter_cons, h]
+      simp [h]
     · rw [Nat.min_eq_right (show g ≤ n by omega), Nat.min_eq_right (show g ≤ n + 1 by omega)]
-      simp [List.filter_cons, h]
+      simp [h]
 
 theorem off_eq_min (g : ℕ) : off kp g = ((List.range (min kp.size g)).map (gateSize kp)).sum := by
   unfold off; rw [range_filter_lt]
@@ -257,7 +256,7 @@ theorem prog_input_iff (x : ℕ) : (prog kp κ).1[x]? = some .input ↔ x < kp.i
       obtain rfl : j = 0 := by omega
       rw [Nat.add_zero, off_input kp (Nat.le_of_lt hi)]
       rcases hκ : κ g with _ | b
-      · exact ⟨hi, by simp [hκ]⟩
+      · exact ⟨hi, by simp⟩
       · simp [lower, row?_input kp hi, hκ] at h
     · obtain ⟨⟨a, b⟩, hr⟩ := row?_some kp (Nat.not_lt.1 hi) hg
       obtain _ | _ | _ | j := j <;> simp [lower, hr] at h
