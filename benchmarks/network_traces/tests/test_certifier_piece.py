@@ -196,12 +196,13 @@ def _stub_rows(tmp_path: Path, answer: dict | None = None) -> Path:
 
 def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None, lean: Path | None = None,
                rows: Path | None = None) -> str:
-    """The piece's command, its `network-period` `_stub_lean`'s answering ``answer`` and its `network-rows`
-    `_stub_rows`' accept (or ``rows``)."""
+    """The piece's command, its auditor's record the follow-on's ``CERTIFIER_KEY``, its `network-period`
+    `_stub_lean`'s answering ``answer`` and its `network-rows` `_stub_rows`' accept (or ``rows``)."""
     lean, rows = lean or _stub_lean(tmp_path, answer), rows or _stub_rows(tmp_path)
     cmd = cmd or f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
     return (f"{shlex.quote(sys.executable)} {shlex.quote(str(HERE / 'certifier_piece.py'))} piece \"$@\" "
-            f"--lean {shlex.quote(str(lean))} --rows {shlex.quote(str(rows))} --chain-cmd {shlex.quote(cmd)}")
+            f"--certifier-key \"${{CERTIFIER_KEY:-}}\" --lean {shlex.quote(str(lean))} --rows {shlex.quote(str(rows))} "
+            f"--chain-cmd {shlex.quote(cmd)}")
 
 
 def _integrity() -> dict:
@@ -439,8 +440,8 @@ def _piece(tmp_path: Path, warden: dict, chain: Path) -> tuple[int, Path, Path]:
     lean.chmod(0o755)
     cmd = f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
     piece = tmp_path / "pieces" / "certifier"
-    rc = CP.main(["piece", str(d), str(K), str(piece), "--lean", str(lean), "--rows", str(_stub_rows(tmp_path)),
-                  "--chain-cmd", cmd])
+    rc = CP.main(["piece", str(d), str(K), str(piece), "--certifier-key", str(warden["key"]), "--lean", str(lean),
+                  "--rows", str(_stub_rows(tmp_path)), "--chain-cmd", cmd])
     return rc, piece, d
 
 
@@ -738,9 +739,9 @@ def _v3c(serve: Path, period: dict | None = None, committed: bool = True) -> Pat
 
 def _hook(step: str, d: Path, dir_: Path, v3c: Path, *args: str) -> int:
     """The split piece's ``step`` as `served_verdicts.sh`'s ``certifier_step`` runs it: ``bash -c CMD _ D K DIR V3C`` in
-    the tree, its output DIR/<step>.log."""
+    the tree, CMD the module docstring's (``--certifier-key "${CERTIFIER_KEY:-}"``), its output DIR/<step>.log."""
     cmd = f"{shlex.quote(sys.executable)} {shlex.quote(str(HERE / 'certifier_piece.py'))} {step} \"$@\" " + \
-        " ".join(map(shlex.quote, args))
+        '--certifier-key "${CERTIFIER_KEY:-}" ' + " ".join(map(shlex.quote, args))
     dir_.mkdir(parents=True, exist_ok=True)
     with open(dir_ / f"{step}.log", "w") as log:
         return subprocess.run(["bash", "-c", cmd, "_", str(d), str(K), str(dir_), str(v3c)], cwd=ROOT, stdout=log,

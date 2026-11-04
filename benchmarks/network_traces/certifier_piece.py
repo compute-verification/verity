@@ -52,7 +52,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   ``network-period check`` accepted the period, whose answer it then is.
   1. The kept network certifier run: exactly one fetch under SERVE_DIR/`PRIVATE` (with none the run's load didn't go
      through the front: it wasn't set, or the gate, its tunnel or ssh failed), held to the auditor's record of the
-     run's deployment (`held`: ``--certifier-key``, else ``$CERTIFIER_KEY``, a `warden_chain.RECORD` file, the gate's
+     run's deployment (`held`: ``--certifier-key RECORD``, a `warden_chain.RECORD` file, the gate's
      own ``out/deployment.json`` of the run as the auditor read it off the gate, with its SHA-512, key and session).
      Every ``deployment.json`` the fetch holds must be the record's, and every check below reads the network
      certifier's key, session and schedule off the record, never off the fetch, which the prover's node holds and
@@ -114,8 +114,9 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   and the scan's answers under RESEARCH_RUN_DIR/out).
 * **chain** and **period** are the piece split in two around V3c (`served_verdicts.sh`'s ``CERTIFIER_CHAIN_CMD`` and
   ``CERTIFIER_PERIOD_CMD``, each run as ``bash -c CMD _ D K DIR V3C``, e.g. ``CERTIFIER_CHAIN_CMD='python
-  benchmarks/network_traces/certifier_piece.py chain "$@"'``), so the period's compute audit is V3c's audit of the
-  served window itself, on the run's registration record, which remote with the network certifier's egress tie
+  benchmarks/network_traces/certifier_piece.py chain "$@" --certifier-key "${CERTIFIER_KEY:-}"'``, the follow-on's
+  CERTIFIER_KEY naming the auditor's record, and the period's alike), so the period's compute audit is V3c's audit of
+  the served window itself, on the run's registration record, which remote with the network certifier's egress tie
   requires of every compute audit (`Core.RemoteNetwork.egress`); the whole piece's are its scan's own registrations, so
   ``served_verdicts.sh`` takes only the split at ``PRODUCT=remote-network``. **chain** runs steps 1 to 4 once V3c's window is committed, its scan on V3c's trees
   (``scan_zk.py --class CLASS --v3c V3C/window`` in CR_SCAN_ARGS: the window's committed scan state and slot entries):
@@ -162,8 +163,8 @@ PROTOCOL = "verity/certifier/v0"
 ROWS = "verity/network-rows/v1"
 #: the named assumption the certifier's guarantee reads (`NetworkCheck.Period`): the certifier is the auditor's device
 PREMISE = "trusted-host"
-#: where piece, chain and period find the auditor's record of the kept run's deployment (`warden_chain.RECORD`) when
-#: ``--certifier-key`` isn't given
+#: the follow-on's variable naming the auditor's record of the kept run's deployment (`warden_chain.RECORD`), which its
+#: hooks pass to piece, chain and period as ``--certifier-key``: they read no environment for it
 CERTIFIER_KEY = "CERTIFIER_KEY"
 #: the front's public outcome, copied beside the kept fetch
 SESSION = "session.json"
@@ -1022,9 +1023,9 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("dir", type=Path)
         if name != "piece":
             q.add_argument("v3c", type=Path, help="V3c's directory: window/ (window-commit's) and period.json")
-        q.add_argument("--certifier-key", metavar="RECORD", default=os.environ.get(CERTIFIER_KEY),
-                       help="the auditor's record of the kept run's deployment, the gate's own (certifier-key/v1; "
-                            f"default ${CERTIFIER_KEY}): without it the piece refuses")
+        q.add_argument("--certifier-key", metavar="RECORD",
+                       help="the auditor's record of the kept run's deployment, the gate's own (certifier-key/v1; the "
+                            f"hooks pass ${CERTIFIER_KEY}): without it the piece refuses")
         q.add_argument("--rows", help="network-rows, built (else built here)")
     q = sub.choices["piece"]
     q.add_argument("--lean", help="network-period, built (else built here)")
