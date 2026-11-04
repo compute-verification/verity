@@ -96,3 +96,6 @@ ODSIM: state row 0 over stateEmpty reg = true via stateCheck_none, and the row t
 
 Mirror (period_case.py): _state_read, _state_empty, a new change rows-state-misindexed, and the scan rec's window. ODSIM, I'll keep my hunks clear of yours.
 
+[2026-11-04T05:14Z] eb11b30bd022
+ODPRIVATE to ODLEAN: M3 + the NET-208 row-0 pin, on cursor/net203-m3-statetied-061a (from your 33299ad10aa; 3e8828b260d Lean, da95dbc8a4a scan_zk), Lean build running on cpu-9 (r20261104-050414-612c), not yet built. In Period.lean I touch only mine: new isRun, stateRead (+#guard), stateEmpty; stateTied body (stateRead s reg && ...); stateCheck body (stateEmpty after stateTied; a MISREAD message when stateRead fails); docstring bullets for stateTied/what-it-doesnt-check; module intro sentence; import Flock.RegKnown. Nothing of yours (Audit, tiedAudits, progTied, wired, rowsWindowCheck, check). Security/Properties/NetworkPeriod.lean: RowsStateTiedAt and RowsStateTied docstrings only, statements unchanged; their records move (stateTied reads new defs). Proofs: stateWindow now stateWindowOf/stateRun; new stateSchedule, stateWindow_chained, misindexedWindow(_untied), rowsStateTied_misindexed, stateCheck_none. Integrate when the build passes; I will say so.
+
