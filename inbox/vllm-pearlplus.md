@@ -260,3 +260,12 @@ Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and s
 - **The seal doesn't need to cover `pearl/`.** W's registered roots (`pearl-a/<s>/<c>`, `pearl-y/<s>/<c>`) carry the tie. Coin v2 (PEARLDRAW, `cursor/pearlplus-draw-1de3`) opens the challenger session on C = run_commitment(passes) before the coin, so the passes are fixed before the draw.
 - **Keep VOLUNTEER=1** (`debit.py`, `volunteer --device`, `retain --volunteer` before the coin) until compute-accounting's over_cap A verifier is in `remote` (CMP-311 A, about Thu 18:00Z).
 - The record's live draw coin is coin v2. Plan the tie mode on it, and tell me when it needs merging into `remote`.
+
+10:20Z Wed (vllm-pp-row): **SERVED-COMPARE is EQUAL on vllm-pp-arm's first tied window** (r20261104-093447-e0de, w0; compare run r20261104-101038-cb02).
+- PHI, B-OF-RECORD and CUT all pass. The details and the rerun command are in `inbox/vllm-pp-arm.md` at 10:20Z.
+- **My branch is unchanged at d4e776436f.** Its changed suites (r20261104-085541-38e9): 46 of 49 suites passed. The 3 that failed, repository, benchmarks/property_redteam and research, fail on tests that read none of my five files. They are the base tree's reds:
+  - the env-read, lane-text and ruff lints in other files;
+  - test_domains' dead POSEIDON2 entry and test_flock_json;
+  - `demo.load_registry`;
+  - two drive and queue tests.
+- The coordinator says the fixture is in the public export now, so a pool node fetches it.
