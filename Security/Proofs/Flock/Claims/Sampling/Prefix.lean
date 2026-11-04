@@ -267,7 +267,7 @@ theorem run_pre (hS : PrefixAt H V FV x p n ok stmt) {Ω : Type} (P : Prover Ω)
       simp
     refine ⟨hlen, ?_, fun h => ?_, fun _ =>
       ⟨{ t' with msgs := t'.msgs ++ [(pa, .msg [])],
-          pLog := t'.pLog ++ ((P.next x (t'.msgs.map histOf) ω).eval H).2, vLog := t'.vLog ++ lo },
+                 pLog := t'.pLog ++ ((P.next x (t'.msgs.map histOf) ω).eval H).2, vLog := t'.vLog ++ lo },
         htk.symm, ?_⟩⟩
     · (rw [hget, hgd, hfst, hb]) <;> rfl
     · rw [hfst, hb] at h
@@ -486,7 +486,7 @@ theorem sessionRuns_prefix {Col T : Type} [DecidableEq Col] [Zero Col] (H : Msg 
       funext i
       show coinSeq r' (p x + i.val) = r' ⟨p x + i.val, hemb _ hk i⟩
       unfold coinSeq
-      rw [dif_pos (hemb _ hk i)]
+      rw [dite_eq_left (hemb _ hk i)]
     refine ⟨stmtAt (stmt x) (p x) ((run H P D.V x ω r).msgs.take (p x)), fun i => ⟨p x + i.val, hemb _ hk i⟩,
       sessProver P x ω ((run H P D.V x ω r).msgs.take (p x)), hmono _ hk, hround _ hk, ?_, ?_⟩
     · intro r' hr'
