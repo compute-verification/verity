@@ -1,0 +1,4 @@
+# 70B down_proj at its served K (28,672), where its plain route is under the line (1.043) and it is credited at a
+# margin: the split in all three orders on the six whose top 128 directions hold the most of ||q||^2 (11.6-13.2%,
+# screen.py run r20261104-082313-608c; the median down_proj holds 6.9%)
+70b-down-full-o --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,11,12,14,15,26 --match down_proj --fast --ranks 16,64,128,256 --orders none,fold,sort --workers 6

@@ -20,6 +20,9 @@ ARMS = [
     ("8b", "layer 0 q, k at 6%", "r20261104-081323-5f94", "8b-clip"),
     ("8b", "layer 0 q, k uncredited", "r20261104-081323-5f94", "8b-broken-out"),
     ("8b", "q, k, v uncredited", "r20261104-081323-5f94", "8b-qkv-out"),
+    ("8b", "layer 0 q at 8%, k at 6%", "r20261104-110454-7328", "8b-op"),
+    ("8b", "design U, live weight noise f = 1 on q, k, v", "r20261104-111958-9ae0", "8b-u2-w1"),
+    ("8b", "design U, live weight noise f = 4 on q, k, v", "r20261104-111958-9ae0", "8b-u2-w4"),
     ("70b", "bf16", "r20261104-081312-879a", "70b-bf16"),
     ("70b", "design U (2%)", "r20261104-082313-bf53", "70b-u2"),
     ("70b", "q, k, v uncredited", "r20261104-091006-89f8", "70b-qkv-out"),
@@ -27,6 +30,11 @@ ARMS = [
     ("70b", "8 concentrated gate/up uncredited", "r20261104-095716-8e45", "70b-gu-out"),
     ("70b", "31 broken q, k, v uncredited", "r20261104-095739-e299", "70b-qkvb-out"),
     ("70b", "layer 0 q, k, v and layer 1 v uncredited", "r20261104-095749-e38f", "70b-unfix-out"),
+    ("70b", "56 at their least clip that clears, up to 30%", "r20261104-110454-943c", "70b-clip"),
+    ("70b", "50 clipped up to 30%, layer 0 q, k, v and layer 1 q uncredited", "r20261104-110454-c096", "70b-op"),
+    ("70b", "24 clipped at 5%, layer 0 q, k, v and layer 1 v uncredited", "r20261104-113440-42a5", "70b-op5"),
+    ("70b", "design U, live weight noise f = 1 on q, k, v", "r20261104-112058-99e8", "70b-u2-w1"),
+    ("70b", "design U, live weight noise f = 4 on q, k, v", "r20261104-112058-99e8", "70b-u2-w4"),
 ]
 
 
