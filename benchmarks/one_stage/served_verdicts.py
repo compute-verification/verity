@@ -24,7 +24,9 @@ What leaves the node names no window and counts none of a window's own: no windo
 sealed or refused, and no engine step, request count or user of one. ``public-lines`` prints each line of stdin in its
 published form (`public_line`), the line in full appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and
 ``publish`` holds each file of OUT, once the run is done, in full under DIR where it names or counts a window (`publish`),
-its public form in its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
+its public form in its place; what a verifier reads of OUT (`RECEIVED`) it leaves with every key and value but its text's
+with ``--received-scanned`` (``kind_scan.py --received OUT`` found every field of it one of the public kinds), and holds
+whole without it. The class's padded counts, the period's declared T and S, the bench Build's requests and the
 verifier's coins and draws are public. ``public-registration`` prints what the run publishes of a window's advice
 registration (`public_registration`: the advice's length padded to its compiler's cap), and ``front-line`` the
 CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
@@ -134,6 +136,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import fnmatch
 import hashlib
 import json
 import os
@@ -331,6 +334,11 @@ _FIELD = re.compile(r'\\?"(?:%s)\\?":' % "|".join(sorted(OWN | NUMBERED)))
 CUT = "{…} (cut short; in full in the serve dir's private/verdicts.txt)"
 #: a file `publish` reads larger than this is held whole
 PUBLISH_MAX = 256 << 20
+#: what a verifier on another machine reads of OUT, by glob (``*`` any path below): the certifier's piece, V3c's audit and
+#: the window circuit's inputs and counts, each held field by field by the kind scan (`kind_scan.RECEIVED`), which
+#: dropping a field would break (their digests and the record's answer are over them as written)
+RECEIVED = ("pieces/certifier/*", "v3c-audit/*", "compiler.json", "registration.json", "weights_registration.json",
+            "window-circuit-*.json")
 
 
 def _numbered(v: Any) -> bool:
@@ -409,39 +417,53 @@ def public_lines(src: Any, dst: Any, private: Path | None) -> None:
             keep.close()
 
 
-def public_doc(text: str) -> str:
-    """A published file's text in its public form: a JSON document's `public_json`, else each line's `public_line`; ``text``
-    itself where nothing in it names or counts a window."""
+def public_strings(o: Any) -> Any:
+    """``o`` with each string value in its `public_text` form, its keys and every other value as they are: the public
+    form of what a verifier reads (`RECEIVED`), whose fields the kind scan holds to their kinds but whose text it doesn't
+    read."""
+    if isinstance(o, Mapping):
+        return {k: public_strings(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [public_strings(v) for v in o]
+    return public_text(o) if isinstance(o, str) else o
+
+
+def public_doc(text: str, form: Callable[[Any], Any] = public_json) -> str:
+    """A published file's text in its public form: a JSON document's ``form`` (`public_json`), else each line's
+    `public_line`; ``text`` itself where nothing in it names or counts a window."""
     try:
         doc = json.loads(text)
     except ValueError:
         return "".join(public_line(x) for x in text.splitlines(keepends=True))
-    pub = public_json(doc)
+    pub = form(doc)
     return text if pub == doc else json.dumps(pub, indent=1) + "\n"
 
 
-def publish(out: Path, private: Path) -> list[str]:
+def publish(out: Path, private: Path, received_scanned: bool = False) -> list[str]:
     """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
     `PUBLISH_MAX` keeps from being read, held whole, and one whose text names or counts a window (`public_doc`) held in
     full, under ``private`` at its path under ``out``, its public form left in its place. A file that isn't UTF-8 text
-    stays. The paths held, in order."""
+    stays. What a verifier reads (`RECEIVED`) is held whole unless ``received_scanned`` (the kind scan found every
+    field of it one of the public kinds), and then keeps every key and value but its text's (`public_strings`), which a
+    digest or the record reads as written. The paths held, in order."""
     held: list[str] = []
     for p in sorted(out.rglob("*")):
         if p.is_symlink() or not p.is_file():
             continue
         rel = p.relative_to(out).as_posix()
+        received = any(fnmatch.fnmatchcase(rel, g) for g in RECEIVED)
         dst = private / rel
         private.mkdir(mode=0o700, parents=True, exist_ok=True)
         dst.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         data = p.read_bytes() if p.stat().st_size <= PUBLISH_MAX else None
-        if data is None or NAMED.search(rel):
+        if data is None or (received and not received_scanned) or NAMED.search(rel):
             shutil.move(p, dst)
             held.append(rel)
             continue
         text = data.decode(errors="replace")
         if text.encode() != data:
             continue
-        pub = public_doc(text)
+        pub = public_doc(text, public_strings if received else public_json)
         if pub != text:
             dst.write_bytes(data)
             p.write_text(pub)
@@ -1359,6 +1381,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     pb = sub.add_parser("publish")
     pb.add_argument("out", type=Path)
     pb.add_argument("--private", type=Path, required=True)
+    pb.add_argument("--received-scanned", action="store_true", help="the kind scan found what a verifier reads of OUT "
+                    "(RECEIVED) clean: leave its every key and value but its text's, rather than hold it whole")
     fl = sub.add_parser("front-line")
     fl.add_argument("session", type=Path)
     p = sub.add_parser("pieces")
@@ -1397,10 +1421,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         public_lines(sys.stdin, sys.stdout, a.private)
         return 0
     if a.cmd == "publish":
-        held = publish(a.out, a.private)
+        held = publish(a.out, a.private, a.received_scanned)
         if held:
             print(f"PUBLISH: {a.out}'s files that name a window or count its own are held in full in {a.private}, "
                   "their public form in their place", flush=True)
+        if not a.received_scanned and any(fnmatch.fnmatchcase(h, g) for h in held for g in RECEIVED):
+            print(f"PUBLISH: what a verifier reads of {a.out} (RECEIVED) wasn't found clean by the kind scan: held whole "
+                  f"in {a.private}", flush=True)
         return 0
     if a.cmd == "window":
         try:

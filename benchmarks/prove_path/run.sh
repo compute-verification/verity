@@ -26,8 +26,8 @@
 #     `prove_path.py compiler` prints). With PP_RECORDS=1 (a served window, PP_SERVE_RUN or PP_SERVE_STANDIN), each window is
 #     audited from its records alone (records_audit.py: circuit.json, the registration and the values, the advice's opening),
 #     its registered compiler run as a command (prove_path.py circuit), instead of by prove_path.py audit. That audit opens
-#     the advice to the verifier, so it is a development check, never a served run's audit of record (V3c's class window
-#     reads the advice under its hiding root): no record, case or period reads it (`served_integrity.opened`).
+#     the advice to the verifier, so it is a development check, never a served run's audit of record (V3c's class window,
+#     whose circuit is the class's, reads no advice): no record, case or period reads it (`served_integrity.opened`).
 #   PP_LLAMA, PP_SERVE_RUN and PP_SERVE_ROWS name directories on this node, the serve directory's; an art: id is refused,
 #     since a published row dir's sealed bundle and a published run's requests.jsonl hold request values.
 #   PP_VLLM_PYTHON=PY: ignored (prove_path.py audit's and circuit's --vllm-python): a TP1 or served window's verifier writes its
