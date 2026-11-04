@@ -602,6 +602,7 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
 
 
 def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp_path):
+    (tmp_path / "registration.json").write_text(json.dumps({"window": {"circuit": "cd" * 64}}))
     row = S.sampled_proofs_row(tmp_path, None, tmp_path / "registration.json")
     assert row["verdict"] == "error" and "no summary" in row["reason"]
     _report, rec, line = S.record(_rows(row, tmp_path), window=1, steps=(5, 11), node="n", run=None)
@@ -610,7 +611,8 @@ def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp
 
 def test_a_v3c_audit_refused_before_staging_commits_to_the_registration_it_is_given(tmp_path, monkeypatch):
     """V3c's audit dir holds no registration of its own until it stages its members; ``--registration`` (the window
-    commit's) is the one its row commits to, and a registration file that isn't there commits it to none."""
+    commit's) is the one its row commits to. A registration file that isn't there is an ``error`` row, and so is an
+    accept whose audit record registers another window than ``--registration``."""
     from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
     audit, reg = tmp_path / "v3c" / "audit", {"format": R.FORMAT, "window": {"circuit": "cd" * 64}}
@@ -619,7 +621,15 @@ def test_a_v3c_audit_refused_before_staging_commits_to_the_registration_it_is_gi
     (tmp_path / "v3c" / "registration.json").write_text(json.dumps(reg))
     row = S.sampled_proofs_row(audit, None, tmp_path / "v3c" / "registration.json")
     assert (row["verdict"], row["commitment"]) == ("reject", R.digest(reg)) and "refused" in row["reason"]
-    assert S.sampled_proofs_row(audit, None, audit / "registration.json")["commitment"] is None
+    missing = S.sampled_proofs_row(audit, None, audit / "registration.json")
+    assert missing["verdict"] == "error" and "registration.json" in missing["reason"] and "commitment" not in missing
+    import served_integrity as SI
+
+    for registered, want in ((reg, "accept"), ({**reg, "window": {"circuit": "ab" * 64}}, "error")):
+        answered = {**_accepted()["answer"], "commitment": R.digest(registered)}
+        monkeypatch.setattr(SI, "answer", lambda _d, _r, a=answered: a)
+        row = S.sampled_proofs_row(audit, None, tmp_path / "v3c" / "registration.json")
+        assert row["verdict"] == want and (want == "accept" or "commits to another registration" in row["reason"])
     seen = []
     monkeypatch.setattr(S, "sampled_proofs_row", lambda d, _run=None, r=None: seen.append((d, r)) or _accepted())
     (tmp_path / "serve").mkdir()

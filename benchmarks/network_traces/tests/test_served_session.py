@@ -4,7 +4,7 @@ and its hand start, and a request the gate or the class refuses is refused with 
 gate keeps
 the session's fetch (with witness/) 0700 under KEEP and publishes only the bundle less witness/ and its outcome, removes
 a published file that holds a prompt's ids, and refuses a KEEP inside --out; --at waits on the injected clock and sends
-nothing when late; chain runs chain_record.sh's active-warden path on the kept fetch, opening no endpoint records, and is
+nothing when late; chain runs chain_record.sh's network certifier path on the kept fetch, opening no endpoint records, and is
 refused without the leak guard; its draw on the gate's coins names the auditor's node as the coin link's peer, and the
 served node is refused."""
 from __future__ import annotations

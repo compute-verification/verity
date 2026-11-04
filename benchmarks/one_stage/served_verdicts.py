@@ -108,9 +108,10 @@ its passes are not the window sampled proofs audited).
 ``record``: sampled proofs' answer from the records audit kept under ``--sampled-proofs`` (``summary.json``,
 ``window/audit.json``) on the registration ``--registration``, read as `served_integrity.answer` reads it:
 `served_verdicts.sh` passes V3c's audit of the window committed as its class circuit's units
-(``$D/v3c-w<K>-<class>/audit``, on the window commit's ``window/registration.json``), which reads no advice opening, and an
-audit that opened the advice (`prove_path/run.sh`'s ``PP_RECORDS=1``, a development check) is an ``error`` row; with
-``--deferred`` that audit is left to a follow-on, and sampled proofs' row is ``missing``, naming why; each other
+(``$D/v3c-w<K>-<class>/audit``, on the window commit's ``window/registration.json``), which reads no advice opening. An
+audit that opened the advice (`prove_path/run.sh`'s ``PP_RECORDS=1``, a development check), a ``--registration`` that
+isn't there and an answer committing to another registration than it are each an ``error`` row; with ``--deferred``
+that audit is left to a follow-on, and sampled proofs' row is ``missing``, naming why; each other
 subprotocol's from
 ``--pieces/<component>/answer.json`` (`piece_row`), else a ``missing`` row naming why. Each answer is about the server
 `piece_server` names: sampled proofs' the record's node, a piece's the one its ``served.json`` names, else the node it ran
@@ -1214,13 +1215,21 @@ def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, A
 
 
 def sampled_proofs_row(audit_dir: Path, run: str | None, registration: Path) -> dict[str, Any]:
-    """Sampled proofs' row from the records audit kept under ``audit_dir``, on ``registration`` (module docstring)."""
+    """Sampled proofs' row from the records audit kept under ``audit_dir``, on ``registration`` (module docstring): an
+    ``error`` where that file isn't a registration, or where the answer commits to another (an accept's commitment is
+    the audit record's own registration's digest)."""
     import served_integrity as SI
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
     try:
-        a = SI.answer(audit_dir, json.loads(registration.read_text()) if registration.exists() else None)
+        reg = json.loads(registration.read_text())
+        if not isinstance(reg, dict):
+            raise ValueError(f"{registration} is not a JSON object")
+        a = SI.answer(audit_dir, reg)
+        if a.get("commitment") != R.digest(reg):
+            raise ValueError(f"the audit's answer commits to another registration than {registration}")
         return row_of(INTEGRITY_OWNER, a, audit_dir, run)
-    except (RuntimeError, ValueError) as e:
+    except (OSError, RuntimeError, ValueError) as e:
         return {"verdict": "error", "owner": INTEGRITY_OWNER, "reason": f"{type(e).__name__}: {e}"[:2000]}
 
 

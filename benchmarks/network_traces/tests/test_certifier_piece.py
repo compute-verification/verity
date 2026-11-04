@@ -463,7 +463,7 @@ def _numbers(p: Path) -> set[int]:
 
 
 def _private_chain_out(out: Path) -> Path:
-    """What the chain's active-warden path leaves in out/ on a served window: each step's file carrying the window's private
+    """What the chain's network certifier path leaves in out/ on a served window: each step's file carrying the window's private
     values where the chain writes them, and the report and report.md that ``chain_record.py report`` makes of them."""
     docs = {
         "custody.json": {"verdict": "accepted", "gate_runs": [{"gate_run": RUN, "strategies": {}}]},
