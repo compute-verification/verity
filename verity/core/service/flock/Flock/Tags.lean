@@ -6,7 +6,7 @@ module
 
 public import Lean.Data.Json
 public import Flock.Hm96
-public import Flock.Firewall
+public import Flock.CanonForm
 
 @[expose] public section
 set_option backward.privateInPublic true
