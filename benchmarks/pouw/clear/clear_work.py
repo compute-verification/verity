@@ -221,7 +221,15 @@ def _rules(scheme) -> tuple[Callable[[bytes, int], list[int]], Callable[[Sequenc
 
 def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Sequence[bytes], b_rows: Sequence[bytes],
                  ops) -> str | None:
-    """The tile rule on an opened tile whose openings and digest have passed: None, or the reason it fails."""
+    """The tile rule on an opened tile whose openings and digest have passed: None, or the reason it fails (its rows,
+    `rows_failure`, then its inert-work bound, `cap_failure`)."""
+    return (rows_failure(scheme, record, tile, a_rows, b_rows, ops)
+            or cap_failure(scheme, record, tile, ops, getattr(scheme, "r1_tolerance", 0)))
+
+
+def rows_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Sequence[bytes], b_rows: Sequence[bytes],
+                 ops) -> str | None:
+    """`check_opened`'s rows: None, or the reason one of the tile's rows fails its declaration."""
     k = record.matmul.shape.k
     parse, passes = _rules(scheme)
     ea, eb = set(record.excluded_a), set(record.excluded_b)
@@ -261,7 +269,7 @@ def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
             return f"{side} row {index} is {kind} but {'fails' if kind == 'credited' else 'passes'} the per-row rules"
         if kind == "credited" and r1(side, index, True):
             return f"{side} row {index} is credited but its own debit passes R1's bound (ρ·its cell credit)"
-    return cap_failure(scheme, record, tile, ops, tol)
+    return None
 
 
 def cap_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops, tol=0) -> str | None:

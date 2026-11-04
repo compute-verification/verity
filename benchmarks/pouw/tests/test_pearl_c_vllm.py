@@ -1258,11 +1258,18 @@ def test_served_passes_verify_accepts_an_epochs_passes_numbered_on(tmp_path):
 
 
 def test_a_runs_credit_at_pearls_assumption_is_its_credited_macs_less_epsilon(tmp_path):
-    """`verify_run.epsilon` is the least ε (on its 10^-9 grid) with (1 − ε)^t ≤ δ, and a run's credit is at most
-    (1 − ρ)(1 − ε) of its credited cells' MACs (each at |K|), the excluded row's and the filler rows' cells credited
-    nothing."""
+    """`verify_run.epsilon` is the least ε (on its 10^-9 grid) with (1 − ε)^t ≤ δ, and, with X_O draws over the
+    inert-work bound, with P[Binomial(t, ε) ≤ X_O] ≤ δ; a run's credit is at most (1 − ρ)(1 − ε) of its credited cells'
+    MACs (each at |K|), the excluded row's and the filler rows' cells credited nothing."""
     eps = VR.epsilon(459, Fraction(1, 100))
     assert (1 - eps) ** 459 <= Fraction(1, 100) < (1 - eps + Fraction(2, 10 ** 9)) ** 459 and abs(eps - Fraction(1, 100)) < Fraction(1, 10 ** 4)
+
+    def miss(e: Fraction, x: int) -> Fraction:
+        return sum(math.comb(459, i) * e ** i * (1 - e) ** (459 - i) for i in range(x + 1))
+
+    for x in (1, 3):
+        ex = VR.epsilon(459, Fraction(1, 100), x)
+        assert miss(ex, x) <= Fraction(1, 100) < miss(ex - Fraction(2, 10 ** 9), x) and ex > eps
     path = proved_pass(tmp_path, PROMOTED[0])[0]
     p = VR.load(path, published(path))
     got = VR.credit_at_assumption([p], 459, Fraction(1, 100))
@@ -1409,7 +1416,7 @@ def test_verify_run_refuses_a_call_index_at_2_to_the_32_and_one_held_twice(tmp_p
 def _replay_every_tile(p) -> dict[int, str]:
     """Every tile of pass `p` through the verifier's check (`verify_run.replay`): the failing tiles' reasons by tile id."""
     got, _ = VR.replay([p], [(0, ref.matmul, ref.id) for ref in p.verifier.refs], 1)
-    return {tid: reason for _, tid, ok, reason, _ in got if not ok}
+    return {tid: reason for _, tid, ok, reason, *_ in got if not ok}
 
 
 def test_a_salt_dead_element_puts_its_row_over_the_cap(tmp_path, monkeypatch):

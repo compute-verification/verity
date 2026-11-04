@@ -1,5 +1,6 @@
 import PouwPearlPlus
 import Definitions.Pouw.PearlC.Unscale
+import Properties.Pouw.Commit
 
 /-!
 # Pearl+'s run verdict: what its Lean code (`PouwCheck.PearlPlus.check`) does
@@ -14,20 +15,23 @@ What they compose into is the remote theorem's useful-work part: on an accepted 
 record per drawn tile (`TTOutTilePearlCH100Rev1`), the run's credit is at most its cost up to the draw's ε at δ, or a
 SHA-512 break on the run's trees. These properties are the code's side of it:
 
-* `AcceptMeans`: an accepted run is a plan (`PlanMeans`) whose every drawn and exclusion tile passes `checkTile`.
+* `AcceptMeans`: an accepted run is a plan (`PlanMeans`) whose every drawn and exclusion tile passes `checkTile`, or,
+  under `over_cap` `uncredited` (CMP-311 option A, the default), is over its inert-work bound with every other check
+  passed and is credited nothing.
 * `PlanMeans`: the plan's passes are the loaded passes, its commitment theirs, its source the coin record's when there is one
   (retention and give-up fixed before the coin, `after-coin`), and its tiles the draw's over their tickets, keyed by the
   source and the commitment.
 * `LoadedGivesUp`: a loaded pass's records are its published root's, and V-EX's give-up is within its caps.
-* `TileAcceptMeans`: a tile that passes opens against the pass's roots, its checked words are the committed leaf's, its
-  rows keep the per-row rules, its credited cells' replayed inert work, P3's forming term included, is within the
-  inert-work share ρ = 1/400 of their credit (as a tile and per credited A row), and its served y rows are the unscale
-  of its U.
+* `TileAcceptMeans`: a tile that passes, or is only over its inert-work bound, opens against the pass's roots, its
+  checked words are the committed leaf's, its rows keep the per-row rules, its credited cells' replayed inert work, P3's
+  forming term included, is within the inert-work share ρ = 1/400 of their credit (as a tile and per credited A row)
+  where it passes and over it where it doesn't, and its served y rows are the unscale of its U.
 * `YIsTheUnscale`: the unscale the check holds y to is `Pouw.PearlC.unscale`, the served y's Definition
   (`PearlCUnscale_v1` at `BIAS` off).
 * `WorkIsTheCredit`: the work an accepted run publishes is its credit at Pearl's assumption (`creditAtAssumption`) over
-  the plan's passes, at the run's draws and δ = 1/100.
-* `OpeningBinds`: two openings of one position of a tree both accepted name one value, or SHA-512 collides.
+  the plan's passes, at the run's draws, the draws over the inert-work bound (X_O) and δ = 1/100.
+* `OpeningBinds`: two openings of one position of a tree both accepted open one value, or two different messages hashed
+  in checking them (`rowsHashed`) collide under SHA-512.
 
 The window record's tie (`tie`) is not ported.
 
@@ -43,7 +47,7 @@ that record the premise reads is the H200's, so the properties are stated at it 
   H100 SXM's;
 * the steps (`hopperE4m3K32` at G = 4, the BF16 k16 peel, `PeelExact`, `Skip.unitFlags`, `SaltDead`) and W1's fragments
   (`h100Frags`: wgmma E4M3 m64nNk32 and BF16 m64nNk16, N = 64 to 256, each priced whole): the same wgmma on the same die,
-  and the verifier recomputed the H200's served tiles bit for bit at `HOPPER_E4M3_K32` (r20261103-140949-ca34, 459 tiles);
+  and the verifier recomputes an H200 run's drawn tiles bit for bit at `HOPPER_E4M3_K32`;
 * W1's `sha` and `fetch` prices are not the record's but the cost model's parameters, taken at the H200's measured ones
   (they differ from the H100's in its memory, which W1 does not otherwise price, and the bound only weakens as they grow).
 -/
@@ -73,17 +77,19 @@ def PlanMeans : Prop :=
     (∀ h, i.held = some h → h.commitment = pl.root ∧ pl.source = h.source ∧ (i.source = none ∨ i.source = some h.source)) ∧
     (i.held = none → i.source = some pl.source) ∧
     ∃ key drawn, PouwCheck.PearlPlus.drawKey pl.source pl.root = .ok key ∧ PouwCheck.PearlPlus.draw pl.passes key i.draws = .ok drawn ∧
-      pl.todo = todo pl.passes drawn ∧ pl.drawn = drawn.length
+      pl.todo = todo pl.passes drawn ∧ pl.drawn = drawn.length ∧ pl.picks = drawn
 
 /-- **What `check` accepts**: a plan, every one of whose tiles the prover opened and `checkTile` passed, on the fixed
-operand's noise of its weight; the verdicts are those tiles', in the plan's order, each passed. -/
+operand's noise of its weight, or found over its inert-work bound with every other check passed where the run's
+`over_cap` is `uncredited`; the verdicts are those tiles', in the plan's order, each ok under that rule. -/
 def AcceptMeans : Prop :=
   ∀ (i : Input) (opener : Nat → Nat → Except String TileOpening), (check i opener).accept = true →
-    ∃ pl, plan i = .ok pl ∧ (check i opener).plan = some pl ∧
+    ∃ pl, plan i = .ok pl ∧ (check i opener).plan = some pl ∧ (check i opener).overCap = i.overCap ∧
       (check i opener).verdicts.map (fun v => (v.pass, v.tile)) = pl.todo ∧
-      (∀ v ∈ (check i opener).verdicts, v.reason = none) ∧
+      (∀ v ∈ (check i opener).verdicts, v.ok i.overCap = true) ∧
       ∀ pi tid, (pi, tid) ∈ pl.todo → ∃ p o, pl.passes[pi]? = some p ∧ opener pi tid = .ok o ∧
-        checkTile p (noiseOf p tid) tid o = none
+        (checkTile p (noiseOf p tid) tid o = .pass ∨
+          i.overCap = .uncredited ∧ ∃ why, checkTile p (noiseOf p tid) tid o = .overCap why)
 
 /-- **A run the verdict refuses before any tile is opened carries no commitment**: a refusal of `plan` (`after-coin`, a
 pass that doesn't load, passes that share a call) answers with no plan and no verdicts. -/
@@ -111,14 +117,16 @@ def formed (p : Pass) (wn : Reject FixedNoise) (rows cols : List Nat) (u : Matmu
     (o.a.map (openedValue ·.value)) cols (o.b.map (openedValue ·.value))
   pure (ops, ← checked ops)
 
-/-- **What a passed tile establishes**: the tile is the verifier's own (`tile?`); its A and B rows and its leaf open, at the
-tile's positions, against the call's A root, the weight's root and the pass's transcript root (hm96 under SHA-512); its
-words formed from those rows under the pass's salt and the fixed operand's noise are checked and hash to the opened leaf;
-its rows keep the per-row rules and its credited cells' replayed debit is within the cap (`Rule.checkOpened`); and on a
-call with y, the tile's real rows open against the y root and each word is the unscale of the tile's U
-(`Rule.yReason`). -/
+/-- **What a tile that passes, or is only over its inert-work bound, establishes**: the tile is the verifier's own
+(`tile?`); its A and B rows and its leaf open, at the tile's positions, against the call's A root, the weight's root and
+the pass's transcript root (hm96 under SHA-512); its words formed from those rows under the pass's salt and the fixed
+operand's noise are checked and hash to the opened leaf; its rows keep the per-row rules (`Rule.rowsFailure`); its
+credited cells' replayed inert work is within the bound where it passes and over it, with that reason, where it is
+`overCap` (`Rule.capCheck`); and on a call with y, the tile's real rows open against the y root and each word is the
+unscale of the tile's U (`Rule.yReason`). -/
 def TileAcceptMeans : Prop :=
-  ∀ (p : Pass) (wn : Reject FixedNoise) (tid : Nat) (o : TileOpening), checkTile p wn tid o = none →
+  ∀ (p : Pass) (wn : Reject FixedNoise) (tid : Nat) (o : TileOpening) (bound : Option String),
+    checkTile p wn tid o = (match bound with | none => .pass | some why => .overCap why) →
     ∃ pos rows cols ops ch, p.tile? tid = some (pos, rows, cols) ∧
       let r := p.records[pos]!
       let u := r.matmul
@@ -128,7 +136,7 @@ def TileAcceptMeans : Prop :=
         ((p.weightRoots.lookup u.weight).getD ByteArray.empty) ROW_SCHEMA) ∧
       opens (transcriptDomain p.salt p.weightsRoot p.count HM96) p.transcriptRoot TILE_SCHEMA o.leaf ∧
       formed p wn rows cols u o = .ok (ops, ch) ∧ leaf ch = openedValue o.leaf.value ∧
-      Rule.checkOpened p.scheme r rows cols ops = none ∧
+      Rule.rowsFailure r rows cols ops = none ∧ Rule.capCheck p.scheme r rows cols ops = .ok bound ∧
       ∀ yRoot, p.yRoots[pos]! = some yRoot → ∃ ys, o.y = .ok ys ∧
         ys.map (·.position) = rows.filter (· < r.realRows) ∧
         ys.all (opens (rowsDomain (yBinding p.salt u.index) u.index r.realRows HM96 false) yRoot ROW_SCHEMA) ∧
@@ -164,21 +172,49 @@ def YIsTheUnscale : Prop :=
   (∀ u alphaA alphaB, Rule.unscale u alphaA alphaB = Pouw.PearlC.unscale u alphaA alphaB) ∧
   ∀ u alphaA alphaB y, Rule.yOf u alphaA alphaB = some y → y = Pouw.PearlC.unscale u alphaA alphaB
 
-/-- **The work an accepted run publishes is its credit at Pearl's assumption**: over the plan's passes, at the run's draws and
-δ = 1/100 (`creditAtAssumption`); a refused or rejected run publishes none. -/
+/-- **The work an accepted run publishes is its credit at Pearl's assumption**: over the plan's passes, at the run's draws,
+X_O (how many of them landed on a tile over its inert-work bound, `overCapDraws`) and δ = 1/100 (`creditAtAssumption`); a
+refused or rejected run publishes none. -/
 def WorkIsTheCredit : Prop :=
   ∀ (i : Input) (opener : Nat → Nat → Except String TileOpening),
     ((check i opener).accept = true → ∃ pl, plan i = .ok pl ∧
-      (check i opener).work = some (creditAtAssumption pl.passes i.draws DELTA)) ∧
+      (check i opener).work = some (creditAtAssumption pl.passes i.draws (overCapDraws pl (check i opener).verdicts) DELTA)) ∧
     ((check i opener).accept = false → (check i opener).work = none)
 
 /-! ## The trees -/
 
-/-- **An opening binds its position's value, or SHA-512 collides**: two openings of one position of one hm96 tree, both
-accepted against its root, open one value, or two distinct messages have one compiled SHA-512. -/
+/-- The messages `sha512/row-seg/v1` hashes for the row `row`: each 1024-byte segment's under its first block, then the outer
+one over their digests. -/
+def segHashed (row : ByteArray) : List ByteArray :=
+  let l := 8 * row.size
+  let segs := (Flock.HmRow.segShape l).1
+  let inner := (List.range segs.size).map fun j =>
+    Flock.HmRow.segmentPrefix j segs.size segs[j]!.1 ++ row.extract (1024 * j) (1024 * j + (segs[j]!.1 + 7) / 8)
+  inner ++ [inner.foldl (fun acc m => acc ++ Flock.Sha512.hash m) (Flock.HmRow.rowPrefixSeg l)]
+
+/-- What SHA-512 hashes when `RowsDomain.verify` checks the opening `o` in the hm96 tree `d`, from the value up: the
+preimage's row digest's messages (none in a tile tree, whose preimage is the digest), the hm96 leaf's salt-digest and leaf
+inputs, the tree leaf's frame, and the frame of each node on its path. -/
+def rowsHashed (d : RowsDomain) (o : LeafOpening) : List ByteArray :=
+  let pre := o.value.extract 0 (o.value.size - HM96_SALT)
+  let y := o.value.extract (o.value.size - HM96_SALT) o.value.size
+  let x := if d.digests then pre else Flock.HmRow.segDigest (8 * pre.size) pre
+  let lf := Flock.Hm96.Default512.leaf x y
+  (if d.digests then [] else segHashed pre) ++
+    [Flock.Hm96.Default512.saltPrefix ++ y,
+     Flock.Hm96.Default512.leafPrefix ++ Flock.Hm96.Default512.commitString x y,
+     frameBytes "leaf" [d.frame.id, Flock.FV3.uint o.position, Flock.FV3.uint o.position, Flock.HmRow.ROW_SCHEMA_SEG.toUTF8,
+       lf]] ++
+    Properties.Pouw.Commit.pathFrames d.frame o.position (d.frame.leaf o.position Flock.HmRow.ROW_SCHEMA_SEG lf) o.path
+
+/-- **An opening binds its position's value, or SHA-512 collides on the run's own messages**: two openings of one position
+of one hm96 tree, both accepted against its root, open one value, or two different messages, one hashed in checking each
+opening, have one SHA-512 digest. -/
 def OpeningBinds : Prop :=
-  ∀ (d : Except String RowsDomain) (root : ByteArray) (schema : String) (o o' : LeafOpening), o.position = o'.position →
-    opens d root schema o = true → opens d root schema o' = true →
-      o.value = o'.value ∨ ∃ x y : ByteArray, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y
+  ∀ binding owner count digests (d : RowsDomain) (root : ByteArray) (schema : String) (o o' : LeafOpening),
+    rowsDomain binding owner count HM96 digests = .ok d → o.position = o'.position →
+    opens (.ok d) root schema o = true → opens (.ok d) root schema o' = true →
+      o.value = o'.value ∨
+        ∃ x ∈ rowsHashed d o, ∃ y ∈ rowsHashed d o', x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y
 
 end Properties.Pouw.PearlPlus

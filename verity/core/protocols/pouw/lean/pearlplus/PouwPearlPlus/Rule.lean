@@ -205,9 +205,9 @@ inductive Kind where
 def Kind.name : Kind → String
   | .filler => "filler" | .excluded => "excluded" | .voluntary => "voluntary" | .credited => "credited"
 
-/-- `check_opened` on a tile whose openings and digest passed: `ops` its formed operands, the rows' words theirs.
-`none`, or the reason it fails. -/
-def checkOpened (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops) : Option String := Id.run do
+/-- `check_opened`'s rows (`clear_work.rows_failure`) on a tile whose openings and digest passed: `ops` its formed
+operands, the rows' words theirs. `none`, or the reason a row fails. -/
+def rowsFailure (r : UnitRecord) (rows cols : List Nat) (ops : Ops) : Option String := Id.run do
   let kinds := (rows.zipIdx.map fun (i, p) =>
       ("A", i, ops.a, p, if i ≥ r.realRows then Kind.filler else if r.excludedA.contains i then .excluded
         else if r.voluntaryA.contains i then .voluntary else .credited)) ++
@@ -225,37 +225,50 @@ def checkOpened (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops)
     let ok := rowPasses f.rho[p]! f.alpha[p]! words
     if (kind == .credited && !ok) || (kind == .excluded && ok) then
       return some s!"{side} row {index} is {kind.name} but {if kind == .credited then "fails" else "passes"} the per-row rules"
-  capFailure s r rows cols ops
-where
-  capFailure (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops) : Option String := Id.run do
-    let (cr, cc) := r.credited rows cols
-    if cr.isEmpty || cc.isEmpty then return none
-    let posA := fun i => rows.idxOf i
-    let posB := fun j => cols.idxOf j
-    let replay : Except String (List Nat) := do
-      let words ← cr.mapM fun i => cc.mapM fun j => wordFlags ops.a.codes[posA i]! ops.b.codes[posB j]!
-      let elems ← (cr.zip words).mapM fun (i, ws) =>
-        rowElements ops.a.alpha[posA i]! ops.a.beta[posA i]! ops.a.x[posA i]! (ws.map (·.1))
-      pure ((words.zip elems).map fun (ws, e) =>
-        debitUnits r.matmul.n cc.length (ws.foldl (fun t w => t + (w.1.filter id).size) 0) (ws.foldl (· + ·.2) 0) e)
-    match replay with
-    | .error e => return some s!"the debit replay: {e}"
-    | .ok rowDebit =>
-      let u := r.matmul
-      let credit := creditOf 1 r.kKept u.n
-      let debit := rowDebit.foldl (· + ·) 0
-      let capNum := CAP_NUM * credit * cr.length * cc.length
-      if debit * CAP_DEN > capNum then
-        return some (s!"the replayed debit {roundHalfEven debit u.n} exceeds the cap {roundHalfEven capNum (CAP_DEN * u.n)} " ++
-          "(ρ·the credited cells' credit)")
-      let widen := if s.censusKs.contains u.k then 4 else 1
-      for (i, d) in cr.zip rowDebit do
-        let capNum := CAP_NUM * credit * cc.length * widen
-        if d * CAP_DEN > capNum then
-          return some (s!"A row {i}'s replayed debit {roundHalfEven d u.n} exceeds its cap " ++
-            s!"{roundHalfEven capNum (CAP_DEN * u.n)} (the row cap: " ++
-            s!"{if widen == 1 then "" else toString widen}ρ·its credited cells' credit)")
-      return none
+  return none
+
+/-- The inert-work bound (`clear_work.cap_failure`) on the tile's credited rows × columns: `.ok none` within it,
+`.ok (some why)` over it (as a tile, or on one credited A row), `.error why` where the debit replay fails. -/
+def capCheck (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops) : Except String (Option String) := do
+  let (cr, cc) := r.credited rows cols
+  if cr.isEmpty || cc.isEmpty then return none
+  let posA := fun i => rows.idxOf i
+  let posB := fun j => cols.idxOf j
+  let replay : Except String (List Nat) := do
+    let words ← cr.mapM fun i => cc.mapM fun j => wordFlags ops.a.codes[posA i]! ops.b.codes[posB j]!
+    let elems ← (cr.zip words).mapM fun (i, ws) =>
+      rowElements ops.a.alpha[posA i]! ops.a.beta[posA i]! ops.a.x[posA i]! (ws.map (·.1))
+    pure ((words.zip elems).map fun (ws, e) =>
+      debitUnits r.matmul.n cc.length (ws.foldl (fun t w => t + (w.1.filter id).size) 0) (ws.foldl (· + ·.2) 0) e)
+  match replay with
+  | .error e => throw s!"the debit replay: {e}"
+  | .ok rowDebit =>
+    let u := r.matmul
+    let credit := creditOf 1 r.kKept u.n
+    let debit := rowDebit.foldl (· + ·) 0
+    let capNum := CAP_NUM * credit * cr.length * cc.length
+    if debit * CAP_DEN > capNum then
+      return some (s!"the replayed debit {roundHalfEven debit u.n} exceeds the cap {roundHalfEven capNum (CAP_DEN * u.n)} " ++
+        "(ρ·the credited cells' credit)")
+    let widen := if s.censusKs.contains u.k then 4 else 1
+    for (i, d) in cr.zip rowDebit do
+      let capNum := CAP_NUM * credit * cc.length * widen
+      if d * CAP_DEN > capNum then
+        return some (s!"A row {i}'s replayed debit {roundHalfEven d u.n} exceeds its cap " ++
+          s!"{roundHalfEven capNum (CAP_DEN * u.n)} (the row cap: " ++
+          s!"{if widen == 1 then "" else toString widen}ρ·its credited cells' credit)")
+    return none
+
+/-- `cap_failure`: `capCheck`'s reason, over the bound or the replay's. -/
+def capFailure (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops) : Option String :=
+  match capCheck s r rows cols ops with
+  | .ok why => why
+  | .error why => some why
+
+/-- `check_opened` on a tile whose openings and digest passed: the rows, then the inert-work bound. `none`, or the reason
+it fails. -/
+def checkOpened (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops) : Option String :=
+  (rowsFailure r rows cols ops).orElse fun _ => capFailure s r rows cols ops
 
 /-- The FP32 word of 1.0. Must equal `Pouw.PearlC.UNSCALE_ONE`. -/
 def UNSCALE_ONE : Nat := 0x3F800000
@@ -273,8 +286,8 @@ def yOf (u alphaA alphaB : Nat) : Option Nat :=
   let out := unscale u alphaA alphaB
   if (t >>> 23) &&& 0xFF == 0xFF || (w >>> 23) &&& 0xFF == 0xFF || out &&& 0x7FFF ≥ 0x7F80 then none else some out
 
-/-- Four cells of Pearl+'s y as the H200 stored it (r20261103-053659-36f1's decode pass, matmul 0 at k = n = 2,048, tile 5),
-(U, α_A, α_B, y): `verity/core/protocols/pouw/tests/test_pouw_pearl_c_u.py`'s `H200_Y`. -/
+/-- Four cells of Pearl+'s y as the H200 stored it (a decode pass's matmul 0 at k = n = 2,048, tile 5), (U, α_A, α_B, y):
+`verity/core/protocols/pouw/tests/test_pouw_pearl_c_u.py`'s `H200_Y`. -/
 def H200_Y : List (Nat × Nat × Nat × Nat) :=
   [(0x478391C0, 0x426D4BA7, 0x448F000E, 0x3F7E), (0xC78DF380, 0x4275FF63, 0x44965964, 0xBF7C),
    (0x47BB95B0, 0x426E5313, 0x448643AF, 0x3FC0), (0xC81016D0, 0x42757555, 0x4495D9AA, 0xC000)]
