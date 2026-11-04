@@ -20,7 +20,7 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
                               [--product P] [--deferred WHY] [--steps LO,HI] [--off-node]
                               [--sampled-lean [--sampled-exe PATH]] [--key-sha512 HEX] [--lane L] [--window-tie DIR]
-                              [--tree SHA [--tree-on BRANCH]]
+                              [--tree SHA [--tree-on BRANCH]] [--served-compare FILE]
     served_verdicts.py witness < PATHS
     served_verdicts.py rebase SERVE_DIR SERVED_DIR < PATHS
     served_verdicts.py composed ANSWER DIR [--gate-exit RC]
@@ -162,7 +162,8 @@ with core's refusal of the window's credit. Prints one ``RECORD`` line, naming t
 elsewhere, and the reason. The report and the line say where they were composed (``composed_on``: the host, whether it
 is the record's node, and what it read, `COMPOSED_FROM`, or off that node `COPIED_FROM`), and with ``--deferred`` what
 the run left to a follow-on and why (``deferred``: `served_verdicts.sh`'s step 6 on a node short of V3c's audit's
-memory, or its compose hand-off), which composes the final record on another host, the record's node still ``--node``.
+memory, or its compose hand-off), which composes the final record on another host, the record's node still ``--node``,
+and with ``--served-compare`` the served compare's verdict line (``served_compare``, `served_compare_line`).
 ``--steps LO,HI`` gives the window's engine steps, which the record otherwise picks from the serve dir's seals, windows
 and requests (`pick`): a compose follow-on holds no requests file. ``--off-node`` composes from the served node's compose
 hand-off (``composed_on``'s ``from`` `HANDED_FROM`), and is refused on the record's node itself. ``--sampled-lean``
@@ -1963,15 +1964,28 @@ def composed(answer: Path, out: Path, gate_exit: int | None = None, err: Path | 
                 f"{len(files)} files of its $OUT in {out}" + (f", {len(c['not_sent'])} not sent" if c.get("not_sent") else ""))
 
 
+def served_compare_line(path: Path) -> str:
+    """The served compare's verdict line, as `served_compare.py` kept it in ``path`` (its ``line``), or why there is
+    none."""
+    try:
+        line = json.loads(path.read_text())["line"]
+    except FileNotFoundError:
+        return f"SERVED-COMPARE: none ({path.name} absent: served_compare.py wrote no verdict)"
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        return f"SERVED-COMPARE: none ({path.name} can't be read: {type(e).__name__}: {e})"[:600]
+    return str(line)
+
+
 def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[int, int], node: str,
            run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite",
-           deferred: str | None = None, off_node: bool = False,
-           tree: Mapping[str, str] | None = None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+           deferred: str | None = None, off_node: bool = False, tree: Mapping[str, str] | None = None,
+           served_compare: str | None = None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
     drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; sampled proofs'
     answer is about ``node``, and a piece's that names no server isn't carried. ``deferred``: what the run left to a
-    follow-on and why, which the report and the line carry. ``off_node``: composed from the served node's compose
+    follow-on and why, and ``served_compare``: the served compare's verdict line (`served_compare_line`), each of which
+    the report and the line carry. ``off_node``: composed from the served node's compose
     hand-off (`HANDED_FROM`); ValueError on ``node`` itself. ``tree``: the composing tree's ``tree`` (its commit) and
     ``tree_on`` (the branch its host pinned it from), which ``composed_on`` carries."""
     from verity_e2e_demo import block_record as BR
@@ -1998,7 +2012,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                            "reason": f"its answer is not the block record's {legs[k]} leg: {type(e).__name__}: {e}"[:2000]}
     where = {"host": host, "served_node": host == node,
              "from": HANDED_FROM if off_node else COMPOSED_FROM if host == node else COPIED_FROM, **(tree or {})}
-    left = {"deferred": deferred} if deferred else {}
+    left = {k: v for k, v in (("deferred", deferred), ("served_compare", served_compare)) if v}
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
               "servers": {k: at[k][0] for k in rows}, "composed_on": where, **left}
     verdicts = {NAMES[k]: DEV_VERDICT if "development" in r and r.get("verdict") == "missing" else r.get("verdict")
@@ -2135,6 +2149,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--pieces", type=Path, required=True)
     r.add_argument("--out", type=Path, required=True)
     r.add_argument("--deferred", help="what the run left to a follow-on and why, which the record carries")
+    r.add_argument("--served-compare", type=Path, help="the served compare's served_compare.json (served_compare.py), "
+                                                       "whose verdict line the record names")
     r.add_argument("--steps", help="LO,HI: the window's engine steps, in place of picking them from the serve dir")
     r.add_argument("--off-node", action="store_true", help="composed from the served node's compose hand-off, off it")
     r.add_argument("--sampled-lean", action="store_true",
@@ -2348,7 +2364,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
                                servers={k: at for k, (_, at) in got.items()}, product=a.product, deferred=a.deferred,
                                off_node=a.off_node, tree={"tree": a.tree, **({"tree_on": a.tree_on} if a.tree_on else {})}
-                               if a.tree else None)
+                               if a.tree else None,
+                               served_compare=None if a.served_compare is None else served_compare_line(a.served_compare))
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:

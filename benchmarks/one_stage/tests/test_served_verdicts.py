@@ -626,9 +626,11 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
     composed, whatever their pieces left, and composes accept from sampled proofs' and PoUW's accepts on its node. The
     same pieces composed for onsite reject on the wipe's answer. The report and the line say they were composed on the
-    served node, from the answer files it wrote, and the published line keeps that. Off the node from its compose
-    hand-off (``--off-node``) the record takes its engine steps from ``--steps``, with no requests file there, says it was
-    composed from the hand-off, and is refused on the served node itself."""
+    served node, from the answer files it wrote, and the published line keeps that, as it keeps what the run deferred
+    (``--deferred``) and the served compare's line (``--served-compare``; none, saying why, where its file is absent or
+    can't be read). Off the node from its compose hand-off (``--off-node``) the record takes its engine steps from
+    ``--steps``, with no requests file there, says it was composed from the hand-off, and is refused on the served node
+    itself."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
@@ -672,6 +674,22 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
     assert (line["composed_on"], line["deferred"]) == (report["composed_on"], report["deferred"]) == (where, left)
     assert json.loads(S.public_line("RECORD " + json.dumps(line)).removeprefix("RECORD "))["deferred"] == left
+    compare = tmp_path / "served-compare" / "served_compare.json"
+    assert S.main([*argv, "--served-compare", str(compare)]) == 0
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    assert line["served_compare"] == "SERVED-COMPARE: none (served_compare.json absent: served_compare.py wrote no verdict)"
+    said = "SERVED-COMPARE: EQUAL (the serve against row r's Build of record: PHI, BUILD and CUT PASS; B-OF-RECORD is the seal's)"
+    compare.parent.mkdir()
+    compare.write_text(json.dumps({"ok": True, "line": said}))
+    assert S.main([*argv, "--served-compare", str(compare)]) == 0
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
+    assert line["served_compare"] == report["served_compare"] == said and "deferred" not in line
+    assert json.loads(S.public_line("RECORD " + json.dumps(line)).removeprefix("RECORD "))["served_compare"] == said
+    compare.write_text("{")
+    assert S.main([*argv, "--served-compare", str(compare)]) == 0
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    assert line["served_compare"].startswith("SERVED-COMPARE: none (served_compare.json can't be read: JSONDecodeError: ")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
     assert S.main(argv) == 0
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
@@ -2963,6 +2981,75 @@ def test_a_pearl_tie_whose_commit_is_refused_or_not_chained_right_after_w_fails(
     says before its coin; V3c then finds no commit tied to W and audits none."""
     run, _order = _pearl_tie(tmp_path, **extra)
     assert (run.returncode, run.stdout.splitlines()[-1]) == (rc, said), run.stderr
+
+
+#: `served_compare.py` as the served compare runs it: its arguments and CUDA_VISIBLE_DEVICES in $ORDER.compare; at
+#: FAKE_COMPARE_RC 0 or 1 a CUT line naming W, its verdicts in --out and its SERVED-COMPARE line, and above 1 it dies
+#: before a verdict
+FAKE_COMPARE = '''import json, os, sys
+from pathlib import Path
+rc = int(os.environ.get("FAKE_COMPARE_RC") or 0)
+Path(os.environ["ORDER"] + ".compare").write_text(json.dumps({"argv": sys.argv[1:], "cuda": os.environ.get("CUDA_VISIBLE_DEVICES")}))
+if rc > 1:
+    sys.stderr.write("served_compare.py: died before a verdict\\n")
+    sys.exit(rc)
+at = dict(zip(sys.argv[1::2], sys.argv[2::2]))
+print(f"CUT: W ({at['--window-record']}) registers 2 values: {'FAIL' if rc else 'PASS'}", flush=True)
+line = f"SERVED-COMPARE: {'NOT EQUAL' if rc else 'EQUAL'} (the serve against row {at['--row']}'s Build of record)"
+for name, doc in (("served_compare.json", {"ok": not rc, "line": line}), ("circuit_facts.json", {})):
+    Path(at["--out"], name).write_text(json.dumps(doc))
+print(line, flush=True)
+sys.exit(rc)
+'''
+PEARL_ROW = "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
+
+
+@pytest.mark.parametrize("case", ["equal", "unequal", "died", "untied"])
+def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and_w(tmp_path, case):
+    """`served_verdicts.sh served-compare K`, the run's step under PEARLPLUS_TIE once Pearl+'s piece wrote W and before the
+    record, runs served_compare.py with no GPU on the serve dir, the row of record, V3C's class, Pearl+'s scheme, PRED and
+    the row's Build of record, against W in pearlplus/w<k>/: its verdicts in the serve dir's served-compare/, copied to
+    $OUT, its lines published (W's path naming no window) and its exit the step's. One that dies before a verdict says
+    NOT EQUAL with its exit and error, and no earlier compare's verdict stands for it; without PEARLPLUS_TIE it isn't run."""
+    tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
+    (tree / "benchmarks").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").symlink_to(HERE.parent, target_is_directory=True)
+    (tmp_path / "compare.py").write_text(FAKE_COMPARE)
+    _script(venv / "python", f'[ "$1" = benchmarks/one_stage/served_compare.py ] && {{ shift; exec {sys.executable} '
+                             f'{tmp_path}/compare.py "$@"; }}\nexec {sys.executable} "$@"')
+    (d / "served-compare").mkdir(parents=True)
+    stale = d / "served-compare" / "served_compare.json"
+    stale.write_text(json.dumps({"ok": True, "line": "SERVED-COMPARE: EQUAL (an earlier compare's)"}))
+    rc = {"unequal": 1, "died": 2}.get(case, 0)
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "out"),
+           "ORDER": str(tmp_path / "order"), "V3C_CLASS": W63K4, **PEARL_TIES, "FAKE_COMPARE_RC": str(rc),
+           **({"PEARLPLUS_TIE": ""} if case == "untied" else {})}
+    run = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", "served-compare", "7"], cwd=tree, env=env,
+                         check=False, capture_output=True, text=True)
+    lines = run.stdout.splitlines()
+    if case == "untied":
+        assert (run.returncode, lines) == (
+            3, ["SERVED-COMPARE: not run: PEARLPLUS_TIE is empty, so no W ties the serve to the row"]), run.stderr
+        assert not (tmp_path / "order.compare").exists()
+        return
+    called = json.loads((tmp_path / "order.compare").read_text())
+    at = dict(zip(called["argv"][::2], called["argv"][1::2], strict=True))
+    assert re.fullmatch("[0-9a-f]{128}:[0-9a-f]{128}", at.pop("--of-record"))
+    assert (called["cuda"], at) == ("", {
+        "--serve": str(d), "--row": PEARL_ROW, "--class": W63K4, "--pearl-tables": "pearl-c-h100-v1-h3",
+        "--pred": f"{d}/predicted", "--window-record": f"{d}/pearlplus/w7/registration.json", "--out": f"{d}/served-compare"})
+    published = tmp_path / "out" / "served-compare" / "served_compare.json"
+    if case == "died":
+        assert (run.returncode, lines) == (2, ["SERVED-COMPARE: NOT EQUAL (served_compare.py exit 2: served_compare.py: died "
+                                               "before a verdict)"]), run.stderr
+        assert not stale.exists() and not published.exists()
+        return
+    said = f"SERVED-COMPARE: {'NOT EQUAL' if rc else 'EQUAL'} (the serve against row {PEARL_ROW}'s Build of record)"
+    assert (run.returncode, lines) == (rc, [f"CUT: W ({d}/pearlplus/wK/registration.json) registers 2 values: "
+                                            f"{'FAIL' if rc else 'PASS'}", said]), run.stderr
+    assert json.loads(published.read_text()) == json.loads(stale.read_text()) == {"ok": not rc, "line": said}
+    assert (tmp_path / "out" / "served-compare" / "circuit_facts.json").is_file()
+    assert (d / "served-compare" / "compare.err").is_file()
 
 
 def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(tmp_path):
