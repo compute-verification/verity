@@ -41,8 +41,10 @@ at the draws on the server's tape (`LeanRelease.draws`):
   the scheduled round in its place, and the device round passes where it equals the scheduled round byte for byte
   outside the algebraic phase's masked values and the frame takes it. A round that passes leaves as the frame's release
   of it, and one that fails as the frame's release of the scheduled round, as a stopped rep's
-  (`LeanRelease.check_release`). Rust's own checks run first and can only fail a round more (`LeanRelease.cross`). The
-  inner proof's rounds, which the firewall sends alone, are `check`'s against themselves (`check_self`).
+  (`LeanRelease.check_release`). Rust's own checks run first and can only fail a round more (`LeanRelease.cross`), and
+  so can the loop's: at an inner round its finish has not computed, it hands the frame no device round
+  (`Frames.roundStep`). At the inner proof's rounds the scheduled round is the frame's own (`Frame.innerSched`, on the
+  finish's rounds), which Rust relays; relayed as the frame computed it, it is `check`'s against itself (`check_self`).
 
 `LeanRelease.toSrv` is it as a `ZkServer` with one slot per round, of the deployed session's kinds
 (`LeanRelease.kindAt`):
@@ -216,8 +218,8 @@ theorem check_some {c : Cfg} {s : Masker} {v r : ByteArray} {n : Nat} {out : Byt
     | error e => simp only [hr] at h; cases h
     | ok x => simp only [hr] at h; cases h; rfl
 
-/-- A round checked against itself passes wherever the frame takes it: the inner proof's rounds, which the firewall sends
-alone (`round N LEN`), are `check`'s with the round in its own place. -/
+/-- A round checked against itself passes wherever the frame takes it: an inner proof's round relayed as the frame
+computed it (`Frame.innerSched`) is `check`'s with the round in its own place. -/
 theorem check_self {c : Cfg} {s : Masker} {v : ByteArray} {n : Nat} {out : ByteArray} {s' : Masker}
     (hs : s.stopped = false) (h : _root_.Flock.Firewall.Frame.round c s v n = .ok (out, s')) :
     check c s v v n = .ok (out, s', none) := by
@@ -312,13 +314,14 @@ structure LeanRelease (W R : Type) where
   computed : Msg → W → R → List (Msg × Msg) → _root_.Flock.Firewall.Contract.ReleaseLog
   /-- Rust's own checks on a worker's rep beside the Lean frame's pass decision (`pass`): the worker failing, the
   device's level-0 root, the constraints on the pads, the end check on the returned proof and Rust's masking
-  cross-checks. Each can only fail a round more, the failed rep's rounds reaching the loop as no device round, which
-  the frame fails: any decision at all -/
+  cross-checks; and the session loop's, at an inner round its finish has not computed (`Frames.roundStep`). Each can
+  only fail a round more, the failed rep's rounds reaching the loop's frame as no device round, which the frame fails:
+  any decision at all -/
   cross : Msg → ℕ → W → R → List (Msg × Msg) → Msg → Bool
   /-- the device round the firewall sends in the device's place once a round failed: the skeleton's round with zero
-  values in the algebraic phase, the Lean finish's round in the opening, and at the inner proof's rounds, which the firewall
-  sends alone, the firewall's own round itself (`check_self`), given the values the firewall fixes by its own
-  computation, by name -/
+  values in the algebraic phase, the Lean finish's round in the opening, and at the inner proof's rounds the frame's own
+  round (`Frame.innerSched` on the finish's rounds, `LeanRelease.withInner`), given the values the firewall fixes by its
+  own computation, by name -/
   scheduled : Msg → W → R → List (Msg × Msg) → (String → Option ByteArray) → Msg
   /-- round `j`'s coin count -/
   coins : Msg → ℕ → ℕ
