@@ -137,7 +137,7 @@ its own block. -/
 noncomputable def realCore (w : W) (ω : T.Rand) : T.Core :=
   (T.nu w + T.maskHom ω.1,
     (fun q l => ∑ c, T.lanes w ω.1 l c * T.E q c, fun r => T.y1 w ω.1 r, 0) + T.mask1 ω.2.1,
-    (fun r => (T.vals r w ω.1 ω.2.1.2.1, 0, 0)) + T.mask2 ω.2.2.1,
+    (fun r => (T.vals r w ω.1 (T.visOf ω), 0, 0)) + T.mask2 ω.2.2.1,
     (fun r k => ∑ i, T.Ch r k i * T.hFull (ω.2.2.1 r) i, 0, fun r => T.hFull (ω.2.2.1 r), 0) + T.mask3 ω.2.2.2)
 
 /-- `S_shvzk`'s last block: its fresh `C_h`, `Y₂`, `Y₁`, and the dummy run's salts and seeds. -/

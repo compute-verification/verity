@@ -7,7 +7,7 @@ import Proofs.Flock.C3.VStarList.Range
 /-!
 # The recursive audit at candidate 3: its proof
 
-`Flock.SecurityProofs.RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3`, `PublicAudit`'s proof at candidate 3's
+`Flock.SecurityProofs.RecursiveAuditHolo : Flock.Guarantees.RecursiveAuditHolo`, `PublicAudit`'s proof at candidate 3's
 table, and `RecursiveFirewallPrivate`.
 
 In (i), as in `PublicAudit`'s:
@@ -287,14 +287,14 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     rows hob hF dg N σ wmsg Sk cmt msg hk hRw hM hρ hr hbr
 
 /-- **The recursive audit at candidate 3, as the verifier of record runs it, with no A3.** -/
-theorem RecursiveAuditC3NoA3 : Flock.Guarantees.RecursiveAuditC3NoA3 := by
+theorem RecursiveAuditHoloNoA3 : Flock.Guarantees.RecursiveAuditHoloNoA3 := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate
   exact recursiveAuditC3AtNoA3 Flock.Guarantees.holoCTs Flock.Guarantees.holoMap
 
 /-- **The recursive audit at candidate 3, as the verifier of record runs it.** -/
-theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
+theorem RecursiveAuditHolo : Flock.Guarantees.RecursiveAuditHolo := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate
