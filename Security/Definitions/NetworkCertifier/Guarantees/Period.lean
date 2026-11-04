@@ -32,9 +32,10 @@ audits, not from a premise:
 The union of the windows' failures over the monitoring period's live coins is not stated here. `WindowGood` is the
 event the first part bounds, plus one condition no proof here gives: the registration's values at the prover's
 registered inputs, which the registration's commitment binds. The network certifier's rows are not pinned: they vary
-with the secret. The first part covers an extracted trace that leaves them outside the faulty units, where every
-transfer gate is opened; the count charges a faulty proof block's rows through the Program, from the free inputs, the
-faulty sets, their committed bits and the timing. A proof block the sample missed is in the faulty set.
+with the secret. The first part covers an extracted trace that leaves them outside the incorrect proof blocks, where
+every transfer gate is opened; the count charges an incorrect proof block's rows through the Program, from the free
+inputs, the possible incorrect sets, their committed bits and the timing. A proof block the sample missed is in the
+incorrect set.
 
 **Wired rows.** The layout's wiring (`BoundaryGates.wires`) carries each wired input gate's writer's value into it, so a
 wired gate is no free input, and the content term `2^#(freeInputs_i \ reg_i)` leaves out the wired rows as it leaves out
@@ -58,7 +59,7 @@ deployment `D` of the sampled verifier where sampling at the incorrect set holds
 which is `Claims.Sampling.KS` with no wires) and the trace's commitment binds
 (`CommitmentScheme.Binds`), with a decoder that lists every trace within Flock's radius, over a monitoring period of `n`
 windows registered as `sw i` (partition `Pw i`, registered values `ρ i`, operator `op i`, and `β i` bounding the
-committed bits of each of its possible faulty sets), with the network certifier's openings `tops s` at each statement,
+committed bits of each of its possible incorrect sets), with the network certifier's openings `tops s` at each statement,
 and a network certifier that runs its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
 (`TapRecord.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
 and the observations of the monitoring period's windows (its record of those cells, in the format `f`):
@@ -68,7 +69,12 @@ and the observations of the monitoring period's windows (its record of those cel
   (`TapOpens`), a covert sender in the server, whose secrets a decoder recovers from the client's view of the server
   side: its secrets whose every window meets `WindowGood`, at that window's statement `x z i` and extracted witness
   `wit z i`, number at most
-  `#Ss · ∏_c (cap c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`. -/
+  `#Ss · ∏_c (cap c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`.
+
+A wired gate is no free input, so `freeInputs_i` leaves out the wired rows, and the sets `faultySets_i(δ)` counts are
+incorrect sets, the faulty and the wire-wrong proof blocks. Each incorrect proof block is charged its whole committed
+output (`faultyBits`), never its input width: a wrong wired row is an input gate only its reader consumes, so whatever
+it injects reaches egress only through the reader's outputs, which that charge covers. -/
 def PeriodLeakAccepted : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)
