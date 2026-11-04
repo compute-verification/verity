@@ -135,12 +135,12 @@ theorem zkOut_stops (H : Claims.Msg → Claims.Msg) (rel : Parser) (S : Claims.Z
       (S.withStops_tapeOK Rf L.stop hT)).2 x w hR wk
     (L.refD H _ _ wk x w
       ⟨L.helloRefine_withStops S Rf vs H x w hH,
-        L.ownRefine_withStops S Rf vs H (rounds rel) wk x w (Claims.ZKServer.deployZk_last_eq rel x) hlast hst hO
+        L.ownRefine_withStops S Rf vs H (rounds rel) wk x w (Claims.ZKServer.deployZk_last_eq hR) hlast hst hO
           hLk hF,
         L.liveRefine_withStops S Rf vs H wk x w hlast hst hO hE,
-        L.fillRefine_withStops S Rf vs H (rounds rel) wk x w (Claims.ZKServer.deployZk_last_eq rel x).le hlast hst hO
+        L.fillRefine_withStops S Rf vs H (rounds rel) wk x w (Claims.ZKServer.deployZk_last_eq hR).le hlast hst hO
           hEf,
-        L.stopRefine_withStops S Rf vs H (rounds rel) wk x w (Claims.ZKServer.deployZk_last_eq rel x).le hst⟩)
+        L.stopRefine_withStops S Rf vs H (rounds rel) wk x w (Claims.ZKServer.deployZk_last_eq hR).le hst⟩)
     Vs θ hk o Ev
 
 /-- **Flock's ZK server is zero knowledge per outcome** (`Claims.ZKOut`): at a statement in the relation with its live

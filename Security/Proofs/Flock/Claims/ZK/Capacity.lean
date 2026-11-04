@@ -20,8 +20,7 @@ probabilities meets:
   size (`fibersEq_tabRand`: `randOf` is a bijection, and `baseWith` drops only the base's revealed salts).
 * `deployOn D A`: the record `D` whose parser refuses every statement outside `A`, so its relation is `D`'s on `A`
   (`r_deployOn`).
-* `zkmalR_congr_on`: `zkmalR_congr` with the two provers agreeing only on the relation's statements. `zkmalR_on`:
-  `ZKmalR` on the relation's statements in `A` is `ZKmalR` on the relation at the bound `1` outside `A`.
+* `zkmalR_on`: `ZKmalR` on the relation's statements in `A` is `ZKmalR` on the relation at the bound `1` outside `A`.
 * `Flock.zkAt_deployZk_ref_on`: `Claims.Flock.ZKAt` at `refP`'s prover at `deployOn (deployZk rel) A`, under the
   session's Props with `TapeOKOn A` for `TapeOK`. `zk_zkOf_on`: `zk_zkOf` with `Proto.HonestOn A R` at the relation
   for `Proto.Honest`.
@@ -42,23 +41,6 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
 /-! ## `ZKmalR` on a class of statements -/
-
-/-- **`ZKmalR` carries over to a prover with the same messages and more calls where the relation holds**, at `γ ≥ 0`:
-`zkmalR_congr` with the two provers agreeing only on the relation's statements. -/
-theorem zkmalR_congr_on {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg}
-    {k : Msg → ℕ} {P Q : W → Prover (N × Ω)} {R : Rel W} {S : Simulator} {εzk γ : Msg → ℝ} (hγ : ∀ x, 0 ≤ γ x)
-    (hv : ∀ w x, R x w → ∀ (hist : List (Msg × Msg)) ω, hist.length < k x →
-      (((P w).next x hist ω).eval H).1 = (((Q w).next x hist ω).eval H).1)
-    (hl : ∀ w x, R x w → ∀ (hist : List (Msg × Msg)) ω, hist.length < k x →
-      (((P w).next x hist ω).eval H).2 ⊆ (((Q w).next x hist ω).eval H).2)
-    (h : ZKmalR H k P R S εzk γ) : ZKmalR H k Q R S εzk γ := by
-  intro x w hR Θ Vs θ hk Ev
-  have e : ∀ ω, (runStar H (Q w) Vs x ω θ).msgs = (runStar H (P w) Vs x ω θ).msgs := fun ω =>
-    (runStar_msgs_congr H (P w) (Q w) Vs x ω θ fun hist hh => hv w x hR hist ω (hk ▸ hh)).symm
-  simp only [e]
-  exact (h x w hR Θ Vs θ hk Ev).trans (add_le_add le_rfl (mul_le_mul_of_nonneg_left
-    (fork_pr_mono H (P w) (Q w) Vs θ x (fun hist ω hh => hv w x hR hist ω (hk ▸ hh))
-      (fun hist ω hh => hl w x hR hist ω (hk ▸ hh))) (hγ x)))
 
 /-- **`ZKmalR` on the relation's statements in `A` is `ZKmalR` on the relation at the bound `1` outside `A`**, at
 `γ ≥ 0`: outside `A` any two probabilities are within `1`. -/
@@ -142,7 +124,7 @@ at the relation's witnesses (`Proto.HonestOn`), at `γ ≥ 0`. -/
 theorem zk_zkOf_on (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit)
     (coinOf : Msg → Msg) (tapeOf : G.Nonce × G.Rand → FlockComplete.TapeZk) (S : Simulator) {H : Msg → Msg}
     {εzk γ : Msg → ℝ} (A : Msg → Prop) [DecidablePred A] (hγ : ∀ x, 0 ≤ γ x)
-    (hk : ∀ x, G.k x = (FlockDeploy.deployZk rel).V.k x + 1)
+    (hk : ∀ x w, Flock.R (FlockDeploy.deployZk rel).parse x w → G.k x = (FlockDeploy.deployZk rel).V.k x + 1)
     (hG : G.HonestOn A (Flock.R (FlockDeploy.deployZk rel).parse) H FlockComplete.ZkTables.honestPR coinOf tapeOf)
     (h : Claims.Flock.ZKAt H (deployOn (FlockDeploy.deployZk rel) A) G.prover S εzk γ) :
     Claims.Flock.ZK H (zkOf rel G coinOf tapeOf S) (fun x => if A x then εzk x else 1) γ := by
@@ -151,10 +133,10 @@ theorem zk_zkOf_on (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable
     zkmalR_congr_on hγ
       (fun w x hR hist ω hh => (zkOf_prover_on rel G coinOf tapeOf S H A _ hG w x
         ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).1 ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).2
-        hist ω (lt_of_lt_of_eq hh (hk x).symm)).1)
+        hist ω (lt_of_lt_of_eq hh (hk x w ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).2).symm)).1)
       (fun w x hR hist ω hh => (zkOf_prover_on rel G coinOf tapeOf S H A _ hG w x
         ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).1 ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).2
-        hist ω (lt_of_lt_of_eq hh (hk x).symm)).2)
+        hist ω (lt_of_lt_of_eq hh (hk x w ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).2).symm)).2)
       h.2
   exact ⟨h.1, zkmalR_on A hγ (fun x w hR hA => (r_deployOn (FlockDeploy.deployZk rel) A x w).2 ⟨hA, hR⟩) h'⟩
 
@@ -402,9 +384,11 @@ theorem Flock.zkAt_deployZk_ref_on (H : Msg → Msg)
         Pr (fun r : S.Tape => E (FlockSoundness.ZK.run (S.refP.preStrat H x ν (S.refP.dmsg x ν)) V r))| ≤
         2 * S.nLeaves x * δ₁.toReal := fun x w hR ν V E =>
     (S.preModel H x ν).runs_close H hT1 hδ₁ ν w (hL x w hR ν).1 (hOK.1 x ν) V E
+  refine Flock.zkAt_withK (k := fun x => refK x + 1)
+    (fun x w hR => (V_k_of_R ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).2).symm) ?_
   rw [← S.refP.withSim_prover fun x _ c => S.coinModel x c]
-  exact Flock.zkR_gkE_hm96_bind H (deployOn (FlockDeploy.deployZk rel) A)
-    (S.refP.withSim fun x _ c => S.coinModel x c) t ht rfl (fun x => (deployZk_proto_k rel _ (fun _ => rfl) x).symm) δ₁
+  exact Flock.zkR_gkE_hm96_bind H ((deployOn (FlockDeploy.deployZk rel) A).withK fun x => refK x + 1)
+    (S.refP.withSim fun x _ c => S.coinModel x c) t ht rfl (fun _ => rfl) δ₁
     S.nLeaves S.nLeaves hA (S.refP.withSim_shvzk H _ hT1 hδ₁ _ S.nLeaves (fun x _ c => S.coinModel_size x c)
       (fun x w hR ν c => (hL x w hR ν).2 c) hOK.2) (S.binding H)
 
@@ -423,7 +407,7 @@ theorem Flock.zk_zkD_ref_on (H : Msg → Msg)
     Claims.Flock.ZK H (S.zkD rel coinOf tapeOf t)
       (fun x => if A x then 8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t else 1)
       fun _ => 4 * t * 3 ^ t :=
-  zk_zkOf_on rel S.refP coinOf tapeOf _ A (fun _ => by positivity) (deployZk_proto_k rel S.refP fun _ => rfl)
+  zk_zkOf_on rel S.refP coinOf tapeOf _ A (fun _ => by positivity) (fun _ _ hR => S.refP_k_of_R hR)
     (S.honestOn_of_msgs A _ H coinOf tapeOf hH) (Flock.zkAt_deployZk_ref_on H rel S A t ht hT1 hδ₁ hS hV hD hc hT)
 
 /-- **Flock's zero knowledge at the deployed masked record, on a class of statements**: `Claims.Flock.ZK` at

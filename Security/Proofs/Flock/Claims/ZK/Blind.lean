@@ -614,8 +614,9 @@ theorem Flock.zk_deployZk_sw (H : Msg → Msg) (rel : _root_.Flock.Readable.Pars
       ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
       (fun x => 8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
       fun _ => 4 * t * 3 ^ t :=
-  Flock.zkAt_sw_of H _ rfl S vs (fun x => (deployZk_proto_k rel (S.swPS vs) (fun _ => rfl) x).symm) (fun _ => True)
-    t ht hT1 hδ₁ hS hV hD hc hsc ((S.tapeOKOn_iff).2 hT) fun _ _ _ => trivial
+  Flock.zkAt_withK (fun _ _ hR => (V_k_of_R hR).symm)
+    (Flock.zkAt_sw_of H ((FlockDeploy.deployZk rel).withK fun x => refK x + 1) rfl S vs (fun _ => rfl) (fun _ => True)
+      t ht hT1 hδ₁ hS hV hD hc hsc ((S.tapeOKOn_iff).2 hT) fun _ _ _ => trivial)
 
 /-- **The same on a class of statements**: `Claims.Flock.ZKAt` at the record whose parser refuses every statement
 outside `A` (`deployOn`), with `TapeOK` asked for only on `A` (`RefSession.TapeOKOn`). -/
@@ -629,10 +630,10 @@ theorem Flock.zk_deployZk_sw_on (H : Msg → Msg)
       ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
       (fun x => 8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
       fun _ => 4 * t * 3 ^ t :=
-  Flock.zkAt_sw_of H (deployOn (FlockDeploy.deployZk rel) A) rfl S vs
-    (fun x => (deployZk_proto_k rel (S.swPS vs) (fun _ => rfl) x).symm) A t ht hT1 hδ₁
-    hS (fun x w hR => hV x w ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR)) hD hc hsc hT
-    fun x w hR => ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).1
+  Flock.zkAt_withK (fun x w hR => (V_k_of_R ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).2).symm)
+    (Flock.zkAt_sw_of H ((deployOn (FlockDeploy.deployZk rel) A).withK fun x => refK x + 1) rfl S vs (fun _ => rfl) A
+      t ht hT1 hδ₁ hS (fun x w hR => hV x w ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR)) hD hc hsc hT
+      fun x w hR => ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).1)
 
 /-- **At the honest values `Flock.zk_deployZk_sw` is `Flock.zkAt_deployZk_ref`**: the switched prover is `refP`
 (`RefSession.swP_vals`) and `SwCausal` is `Causal` (`RefSession.swCausal_vals`). -/
