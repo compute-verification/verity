@@ -753,14 +753,14 @@ theorem couples_of_within {A : Live} {rd : Reading A.rounds} {σ : Strategy (V.g
     (h : CouplesWithin V θ F c A rd σ D M ε) (hε : ε ≤ A.hidingTerm) : Couples V θ F c A rd σ D M := fun Q =>
   (h Q).trans (add_le_add le_rfl hε)
 
-/-- **The coin map's start is within `ε₀` of the uniform tape**: over the widened sample, the period's tape the start
+/-- **The coin map's start is within `ε₀` of the uniform tape**: over the widened coins, the period's tape the start
 gives is, at every reading of it bounded by 1, within `ε₀` of the uniform tape. -/
 def StartWithin (A : Live) (σ : Strategy (V.game θ F c)) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP)
     (ε₀ : ℝ≥0∞) : Prop :=
   ∀ H : CoinTape (V.game θ F c) σ → ℝ≥0∞, (∀ x, H x ≤ 1) →
     avg H ≤ avg (fun ω : (A.extend M.widening).L.Ω => H (M.start ω)) + ε₀
 
-/-- **The stops' term**: over the widened sample, `γL` at the first stop and the rounds' error after it, over the
+/-- **The stops' term**: over the widened coins, `γL` at the first stop and the rounds' error after it, over the
 tapes from the stop. -/
 noncomputable def couplesErr (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP)
