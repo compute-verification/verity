@@ -401,9 +401,9 @@ def test_the_window_circuit_command_writes_the_class_circuit_from_what_the_run_p
     doc = PP.compiler_doc(str(s.run), None, None, CAP)
     assert {"name": doc["name"], "digest": doc["digest"]} == s.bound["compiler"]
 
-    def lower(registered, cls):
+    def lower(registered, cls, tables=None):
         assert cls == WC.CLASS_OF_RECORD and registered.phi.to_json() == doc["phi"] and not registered.phi.workload
-        assert (registered.default_seed, registered.cap_bits) == (doc["default_seed"], CAP)
+        assert (registered.default_seed, registered.cap_bits) == (doc["default_seed"], CAP) and tables is None
         if refuse:
             raise Unexpressible("a family the class's lowering doesn't take")
         return circuit
@@ -455,6 +455,49 @@ def test_the_window_circuit_command_writes_the_class_circuit_from_what_the_run_p
     assert PP.main([*base, "--out", str(tmp_path / "e.json")]) == RA.REFUSED
     assert "prove_path.py window-circuit: I2's class circuit refuses the class" in capsys.readouterr().err
 
+
+def test_the_window_circuit_command_under_h1s_w_reads_its_tables_with_no_key(tmp_path, monkeypatch, capsys):
+    """``prove_path.py window-circuit --window-registration W --h1-meta F``, the verifier's record of a window H1 tied:
+    I2's class circuit reads H1's tables of W's Program (`h1_tie`'s, as window-commit's circuit with W reads them), from
+    the Program's meta as the run publishes it and what else the run publishes alone, with no serve dir or row dir; the
+    command takes no key, which is H1's prover's alone; without W it reads none. Refused for a W under another Program
+    and without the meta."""
+    import prove_path as PP
+    import served_verdicts as SV
+    from test_prove_path import CAP, _served
+    from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.protocols.pouw import h1 as PH
+
+    s, circuit, seen = _served(tmp_path, monkeypatch), _registered_circuit(), []
+
+    def lower(registered, cls, tables=None):
+        seen.append((cls.outputs, tables))
+        return circuit
+
+    monkeypatch.setattr(WC, "class_circuit", lower)
+    compiler, reg_file = tmp_path / "compiler.json", tmp_path / "registration.json"
+    compiler.write_text(json.dumps(PP.compiler_doc(str(s.run), None, None, CAP)))
+    reg_file.write_text(json.dumps(SV.public_registration(json.loads((s.run / "advice" / "w0" / "registration.json").read_text()))))
+    for d in (s.run, Path(s.a.row_dir)):
+        shutil.rmtree(d)
+    layout = {"calls": [["a", 0], ["b", 0]] * 2, "linears": [["a", 64, 8], ["b", 64, 8]], "m": 8}
+    meta = tmp_path / "out" / "serve" / "h1" / PH.PROGRAM_META
+    meta.parent.mkdir(parents=True)
+    meta.write_text(json.dumps({"program_digest": "p" * 128, "steps": 2, "layout": layout}))
+    (tmp_path / "w.json").write_text(json.dumps({"program": "p" * 128, "registered": []}))
+    (tmp_path / "other.json").write_text(json.dumps({"program": "q" * 128}))
+    base = ["window-circuit", "--compiler", str(compiler), "--registration", str(reg_file), "--class", "4,32,2"]
+    tie = ["--h1-meta", str(meta), "--window-registration"]
+    assert PP.main([*base, "--out", str(tmp_path / "c.json")]) == 0
+    assert PP.main([*base, "--out", str(tmp_path / "t.json"), *tie, str(tmp_path / "w.json")]) == 0
+    assert seen == [(2, None), (2, WC.Tables(64, 8, 2))]
+    with pytest.raises(SystemExit):
+        PP.main([*base, "--out", str(tmp_path / "k.json"), *tie, str(tmp_path / "w.json"), "--h1-key", "k"])
+    capsys.readouterr()
+    assert PP.main([*base, "--out", str(tmp_path / "o.json"), *tie, str(tmp_path / "other.json")]) == RA.REFUSED
+    assert "is no registration under the serve's H1 window Program" in capsys.readouterr().err
+    assert PP.main([*base, "--out", str(tmp_path / "m.json"), "--window-registration", str(tmp_path / "w.json")]) == RA.REFUSED
+    assert "give --h1-meta" in capsys.readouterr().err
 
 def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = False,
                 listed: bool = False) -> SimpleNamespace:

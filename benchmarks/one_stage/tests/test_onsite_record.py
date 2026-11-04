@@ -814,20 +814,23 @@ def test_the_record_lists_the_re_proof_inputs_and_which_of_outs_the_run_wrote(tm
     assert got["copy"] == {"missing": OR.NO_COPY}
 
 
+def _reproof_files(path: str, tie: bool = False) -> list[str]:
+    """A file of window 7 at class c64 for each a `REPROOF` path names (one under each directory), H1-tied where ``tie``."""
+    out = []
+    for part in path.split(", "):
+        m = re.fullmatch(r"(.*)\{([^}]*)\}(.*)", part)
+        for p in [m[1] + x + m[3] for x in m[2].split(",")] if m else [part]:
+            p = p.replace("<K>", "7").replace("<class>", "c64").replace("<tie>", "-tie" if tie else "")
+            out.append(p + "m0-private.bin" if p.endswith("/") else p)
+    return out
+
+
 def test_the_serve_dirs_re_proof_inputs_are_checked_against_their_copys_listing_by_path_alone(tmp_path):
     """The serve dir's inputs, witness, are copied off the node: the record names the copy's node and path and says of
     each input whether the listing holds each file its path names and at least one under each directory it names, and
     nothing of the listing's window names; one file short is that input not copied, and a copy that isn't NODE:/PATH
     or a listing it can't read is the copy's error."""
-    def files(path: str) -> list[str]:
-        out = []
-        for part in path.split(", "):
-            m = re.fullmatch(r"(.*)\{([^}]*)\}(.*)", part)
-            for p in [m[1] + x + m[3] for x in m[2].split(",")] if m else [part]:
-                p = p.replace("<K>", "7").replace("<class>", "c64")
-                out.append(p + "m0-private.bin" if p.endswith("/") else p)
-        return out
-
+    files = _reproof_files
     out = accepted(tmp_path)
     serve = [p for at, p, _ in OR.REPROOF.values() if at == "serve dir"]
     listing = tmp_path / "private" / "listing.txt"
@@ -845,6 +848,32 @@ def test_the_serve_dirs_re_proof_inputs_are_checked_against_their_copys_listing_
         "error": "--reproof-copy 'vy-nebius-cpu-3' isn't NODE:/PATH"}
     assert OR.record(out, copy="n:/p", listing=tmp_path / "none.txt")["reproof"]["copy"] == {
         "error": "the copy's listing (--reproof-listing) can't be read: FileNotFoundError"}
+
+
+def test_under_h1s_tie_the_re_proofs_circuit_is_the_record_reading_h1s_tables(tmp_path):
+    """Under H1_TIE the window commit's circuit is held to the verifier's record reading H1's tables (served_verdicts.sh's
+    `v3c_record`, window-circuit-w<K>-<class>-tie.json), so a tied run's copy holding only the untied record at the
+    class hasn't copied the circuit; `--h1-tie` says the run is tied, and the record names the circuit it needs."""
+    out, copy = accepted(tmp_path), "vy-nebius-cpu-3:/home/research/keep/reproof"
+    serve = [p for at, p, _ in OR.REPROOF.values() if at == "serve dir"]
+    listing = tmp_path / "private" / "listing.txt"
+    listing.parent.mkdir()
+    for tie in (False, True):
+        listing.write_text("\n".join(f for p in serve for f in _reproof_files(p, tie)) + "\n")
+        got = OR.record(out, copy=copy, listing=listing, tie=tie)["reproof"]
+        assert got["copy"]["not_copied"] == []
+        assert got["inputs"]["circuit"]["path"] == f"window-circuit-w<K>-<class>{'-tie' * tie}.json"
+        assert OR.main([str(out), "--reproof-copy", copy, "--reproof-listing", str(listing), *(["--h1-tie"] * tie)]) == 0
+        written = json.loads((out / "record" / "onsite.json").read_text())["reproof"]
+        assert written["copy"]["not_copied"] == [] and written["inputs"]["circuit"] == got["inputs"]["circuit"]
+        assert "<tie>" not in json.dumps(written)
+    untied = [f for p in serve for f in _reproof_files(p)]
+    listing.write_text("\n".join(untied) + "\n")
+    assert OR.record(out, copy=copy, listing=listing, tie=True)["reproof"]["copy"]["not_copied"] == ["circuit"]
+    assert OR.main([str(out), "--reproof-copy", copy, "--reproof-listing", str(listing), "--h1-tie"]) == 0
+    assert json.loads((out / "record" / "onsite.json").read_text())["reproof"]["copy"]["not_copied"] == ["circuit"]
+    [tied] = OR.named("window-circuit-w<K>-<class><tie>.json", tie=True)
+    assert tied.fullmatch("window-circuit-w7-c64-tie.json") and not tied.fullmatch("window-circuit-w7-c64.json")
 
 
 def test_the_record_leaves_the_node_as_written(tmp_path):
