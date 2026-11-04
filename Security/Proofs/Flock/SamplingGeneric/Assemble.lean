@@ -6,21 +6,21 @@ public import Proofs.Flock.Claims.Sampling.KS
 /-!
 # The sampled compiler's extraction: assembling and binding
 
-`Compiled.E` at an accepted run assembles the openings its sampled proof blocks' extractions keep. This file proves the
-split `Compiled.KS_of_sessionKS` takes (`SamplingGeneric/Fails.lean`): an accepted run whose extraction fails is in the
-failure event `Fails` at the found event `Found`, or its extraction's own calls collide (`split`, `Claims.Sampling`'s
-`split` with Flock's `E^rep` replaced by `Arg`'s extractor at each sampled proof block's session). So `KSOf` holds
-(`ksOf`).
+`Compiled.E` at an accepted run assembles the openings its sampled proof blocks' extractions keep. This file proves
+`KSOf`'s deterministic half: an extraction that fails gives the failure event the probabilistic half bounds
+(`Compiled.Fails` at `Compiled.Found`, `SamplingGeneric/Fails.lean`), or a `Bext` collision (`split`,
+`Claims.Sampling`'s `split` with Flock's `E^rep` replaced by `Arg`'s extractor at each sampled proof block's session).
+With `KS_of_sessionKS` it gives `KSOf` (`ksOf`).
 
 * `innerBody`, `outerBody`, `outerList`, `found`: **the extractor's parts**, and what it keeps (`E_eval`); the kept
   openings pass their checks, with the checks' calls among the extractor's own (`passes_found`, `ownLog_E`), and the
   revealed openings that pass, of a sampled block's extracted witness, are kept (`unitExt_mem`, `mem_found`).
-* `split`: **the deterministic half**. At an accepted run whose extraction fails, `Fails` holds at `Found` or the
-  extractor's own calls collide. Two kept openings under one roots at one position that disagree are a collision of the
-  calls that checked them (`CommitmentScheme.Binds`), so without one the kept openings agree and assemble a witness;
-  its faulty set is refused at `δ`, and a block of it good at a kept run would be correct at the kept openings
+* `split`: **the deterministic half**. At an accepted run whose extraction fails, `Fails` holds or the extractor's own
+  calls collide. Two kept openings under one roots at one position that disagree are a collision of the calls that
+  checked them (`CommitmentScheme.Binds`), so without one the kept openings agree and assemble a witness; its faulty
+  set is refused at `δ`, and a block of it found at a kept inner run would be correct at the kept openings
   (`Sessions.opens`, with the interior roots fixed by the first stage, `Sessions.interior`).
-* `ksOf`: **`KSOf`**, `Compiled.KS_of_sessionKS` at `split`.
+* `ksOf`: **`KSOf`**, `KS_of_sessionKS` at `split`.
 -/
 
 @[expose] public section
@@ -28,9 +28,9 @@ failure event `Fails` at the found event `Found`, or its extraction's own calls 
 namespace Claims.SamplingGeneric
 
 open Claims Finset
-open Claims.Sampling (AuditStatement Partition Opening InScope waitAccC forkOn flatMapRP checkRevealed assemble
-  ownLog ownLog_bind accList OwnColl flatMapRP_eval waitAccC_eval_nil accList_map mem_zip_finRange getElem?_map_pair
-  mem_checkRevealed agree_of_passes val_assemble ιOf ιOf_eq faulty_wrong acc_of_accList accList_length_eq)
+open Claims.Sampling (AuditStatement Opening waitAccC forkOn flatMapRP assemble ownLog ownLog_bind accList OwnColl
+  flatMapRP_eval waitAccC_eval_nil accList_map mem_zip_finRange getElem?_map_pair mem_checkRevealed agree_of_passes
+  val_assemble ιOf ιOf_eq faulty_wrong acc_of_accList accList_length_eq)
 open Claims.Recursion (serve viewing)
 
 namespace Compiled
@@ -192,12 +192,12 @@ theorem mem_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditSt
 
 /-! ## The split -/
 
-/-- **The split**: at an accepted run whose extraction fails, the failure event holds at the found event `Found` or the
-extractor's own calls collide. Otherwise the kept openings agree (`agree_of_passes`); take `B` the assembled witness's
-faulty set, refused at `δ`, and a kept outer run `r`. At the interior values the kept openings under `r`'s interior
-roots give, the proof block at each `v ∈ B` is wrong (`faulty_wrong`); a kept inner run at which `v` is good (its
-session's extraction finds a witness in `A`'s relation) would make it correct (`Sessions.opens`, its revealed openings
-kept by `mem_found`, the interior roots `r`'s by `Sessions.interior`), so `r` is bad for `B`. -/
+/-- **The split**: at an accepted run whose extraction fails, the failure event holds or the extractor's own calls
+collide. Otherwise the kept openings agree (`agree_of_passes`); take `B` the assembled witness's faulty set, refused
+at `δ`, and a kept outer run `r`. At the interior values the kept openings under `r`'s interior roots give, the proof
+block at each `v ∈ B` is wrong (`faulty_wrong`); a kept inner run at which `v` is found would make it correct
+(`Sessions.opens`, its revealed openings kept by `mem_found`, the interior roots `r`'s by `Sessions.interior`), so `r`
+is bad for `B`. -/
 theorem split {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H) (δ : ℝ)
     (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (r₀ : Fin (L.V.k x) → Coin) (c : L.ECoins x)
     (hacc : (run H P L.V x ω r₀).out = .acc)
@@ -256,8 +256,7 @@ theorem split {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H)
 
 end Compiled
 
-set_option synthInstance.maxSize 1024 in
-/-- **KS from the sessions' KS** (`KSOf`): `Compiled.KS_of_sessionKS` at the split. -/
+/-- **`KSOf`**: the sessions' bound at `Found` (`SessionKS`) and the split give `Compiled.KS`. -/
 theorem ksOf : KSOf := by
   intro Coin _ _ _ A L H hbind hS hSK
   exact Compiled.KS_of_sessionKS hS hSK fun δ _ x _ P s hacc hfail =>

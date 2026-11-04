@@ -7,15 +7,16 @@ public import Proofs.Flock.SamplingGeneric.Bits
 # The compiler's efficiency, as stated, is false
 
 `CompilerEfficient` bounds the compiled extractor's own SHA-512 calls by `k²·n_PU·(openCalls + h_s)`, from the contract
-(`Compiled.Sessions`) and the proof system's costs alone, and so does `ExpOwnOf` (`SamplingGeneric/Bits.lean`), which
-`compilerBits_of` reads. Two things the bound reads are not in the contract:
+(`Compiled.Sessions`), `OpenCallsLe` and the proof system's costs, and so does `ExpOwnOf` (`SamplingGeneric/Bits.lean`),
+which `compilerBits_of` reads.
 
-* **`openCalls` bounds nothing.** It is a field of `Compiled` that the contract never relates to `commit` or `reveal`,
-  so checking what one session's witness reveals can cost more SHA-512 calls than `openCalls`
-  (`not_ownLe_openCalls`, at a sample without repeats; so `not_compilerEfficient` and `not_expOwnOf`).
+* **Without `OpenCallsLe`, `openCalls` bounds nothing.** The contract never relates it to `commit` or `reveal`, so
+  checking what one session's witness reveals can cost more SHA-512 calls than `openCalls` (`not_ownLe_openCalls`, at
+  a sample without repeats). So both statements take `OpenCallsLe`.
 * **The sample may repeat a proof block.** `Compiled.E` extracts once per entry of `checked`, and the contract never
-  says the entries are distinct, so an inner run that samples one block twice extracts it twice
-  (`not_efficient_repeats`, where checking what a session's witness reveals costs exactly `openCalls`).
+  says the entries are distinct or at most `n_PU`, so an inner run that samples one block twice extracts it twice
+  (`not_ownLe_repeats`, where checking what a session's witness reveals costs exactly `openCalls`); so
+  `not_compilerEfficient` and `not_expOwnOf`.
 
 `L₀ n oc` is the compiled verifier both use: one proof block, a verifier of one round that accepts, a proof system of
 one round whose extractor returns at once, a sample of `n` copies of the block, a reveal of one opening whose check is
@@ -285,35 +286,44 @@ theorem not_efficient_openCalls (H : Msg → Msg) :
 theorem nodup_checked₀ (x : Msg) (r : Fin ((L₀ 1 0).V.k x) → Unit) : ((L₀ 1 0).checked x r).Nodup :=
   List.nodup_singleton 0
 
+theorem openCalls_repeats (H : Msg → Msg) (x : Msg) (s : AuditStatement) (u : ℕ) (v : Seen) (w : Unit) :
+    (((L₀ 2 1).reveal s u v w).map fun p => (((L₀ 2 1).commit.opens p.1 p.2).eval H).2.length).sum =
+      (L₀ 2 1).openCalls x :=
+  rfl
+
+/-- `L₀ 2 1` meets `OpenCallsLe`: checking its reveal costs exactly `openCalls`. -/
+theorem openCallsLe₀ (H : Msg → Msg) : (L₀ 2 1).OpenCallsLe H := fun x s _ u v w =>
+  (openCalls_repeats H x s u v w).le
+
 /-- **With `openCalls` bounding each reveal's check, repeats break the bound**: `L₀ 2 1` samples its one block twice;
-checking its reveal costs exactly `openCalls = 1` (`openCalls_repeats`), and its extractor's `2k²` own calls exceed
-the bound `k²·1·(1 + 0)`. -/
-theorem not_efficient_repeats (H : Msg → Msg) :
-    ¬ (L₀ 2 1).Efficient H (fun _ => 0) (fun _ => 0) (fun _ => 0) := by
+checking its reveal costs exactly `openCalls = 1` (`openCallsLe₀`), and its extractor's `2k²` own calls exceed the
+bound `k²·1·(1 + 0)`. -/
+theorem not_ownLe_repeats (H : Msg → Msg) :
+    ¬ ExtractOwnLe H (L₀ 2 1).E
+      (fun x => (L₀ 2 1).k x ^ 2 * (L₀ 2 1).nPU x * ((L₀ 2 1).openCalls x + (L₀ 2 1).hs (fun _ => 0) x)) := by
   intro h
   obtain ⟨c⟩ : Nonempty ((L₀ 2 1).E.C []) := inferInstance
-  have h3 := (ownLog_E₀ H 2 1 P₁ [] () (fun _ => ()) c).symm.trans_le (h.2.2 [] Unit P₁ () (fun _ => ()) c)
+  have h3 := (ownLog_E₀ H 2 1 P₁ [] () (fun _ => ()) c).symm.trans_le (h [] Unit P₁ () (fun _ => ()) c)
   have hb : (L₀ 2 1).openCalls [] + (L₀ 2 1).hs (fun _ => 0) [] = 1 := rfl
   have hn : (L₀ 2 1).nPU [] = 1 := rfl
   have hk := (L₀ 2 1).k_pos []
   simp only [hb, hn, mul_one] at h3
   nlinarith [Nat.mul_pos hk hk]
 
-theorem openCalls_repeats (H : Msg → Msg) (x : Msg) (s : AuditStatement) (u : ℕ) (v : Seen) (w : Unit) :
-    (((L₀ 2 1).reveal s u v w).map fun p => (((L₀ 2 1).commit.opens p.1 p.2).eval H).2.length).sum =
-      (L₀ 2 1).openCalls x :=
-  rfl
+theorem not_efficient_repeats (H : Msg → Msg) :
+    ¬ (L₀ 2 1).Efficient H (fun _ => 0) (fun _ => 0) (fun _ => 0) :=
+  fun h => not_ownLe_repeats H h.2.2
 
-/-- **`CompilerEfficient` is false**: `L₀ 1 0` meets the contract over a proof system that costs nothing, and its
-extractor's own calls exceed the bound. -/
+/-- **`CompilerEfficient` is false**: `L₀ 2 1` meets the contract and `OpenCallsLe` over a proof system that costs
+nothing, and its extractor's own calls exceed the bound. -/
 theorem not_compilerEfficient : ¬ CompilerEfficient := fun h =>
-  not_efficient_openCalls id (h Unit A₀ (L₀ 1 0) id (fun _ => 0) (fun _ => 0) (fun _ => 0)
-    (sessions₀ id Nat.one_pos 0) (A₀_runs id) (A₀_runsExp id) (A₀_own id))
+  not_efficient_repeats id (h Unit A₀ (L₀ 2 1) id (fun _ => 0) (fun _ => 0) (fun _ => 0)
+    (sessions₀ id (by norm_num) 1) (A₀_runs id) (A₀_runsExp id) (A₀_own id) (openCallsLe₀ id))
 
-/-- **`ExpOwnOf` is false**: its own-calls conjunct is `CompilerEfficient`'s third, which `L₀ 1 0` breaks. -/
+/-- **`ExpOwnOf` is false**: its own-calls conjunct is `CompilerEfficient`'s third, which `L₀ 2 1` breaks. -/
 theorem not_expOwnOf : ¬ ExpOwnOf := fun h =>
-  not_ownLe_openCalls id (h Unit A₀ (L₀ 1 0) id (fun _ => 0) (fun _ => 0) (sessions₀ id Nat.one_pos 0)
-    (A₀_runsExp id) (A₀_own id)).2
+  not_ownLe_repeats id (h Unit A₀ (L₀ 2 1) id (fun _ => 0) (fun _ => 0) (sessions₀ id (by norm_num) 1)
+    (A₀_runsExp id) (A₀_own id) (openCallsLe₀ id)).2
 
 end Counter
 

@@ -402,6 +402,13 @@ def Efficient (H : Msg → Msg) (L : Compiled Coin A) (ρ : A.Sh → ℕ) (e : A
     ExtractRunsExpLe H L.E (fun x => 1 + L.k x + (L.k x : ℝ) ^ 2 * (1 + L.nPU x * L.es e x)) ∧
     ExtractOwnLe H L.E (fun x => L.k x ^ 2 * L.nPU x * (L.openCalls x + L.hs h x))
 
+/-- **The opening checks' count**: checking what one session's witness reveals, each opening under its roots, makes at
+most `openCalls` SHA-512 calls, at a statement that parses (`Sampling.OpenCallsLe`, generic). The own-call bounds of
+`Efficient` and `Bits` read it. -/
+def OpenCallsLe (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
+  ∀ x s, L.parse x = some s → ∀ u v w,
+    ((L.reveal s u v w).map fun p => ((L.commit.opens p.1 p.2).eval H).2.length).sum ≤ L.openCalls x
+
 /-! ### The committed form -/
 
 /-- The program's gates at `x`, `0` on a statement that doesn't parse. -/
@@ -674,13 +681,14 @@ def CompilerKSCount : Prop :=
 def CompilerBits : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
     (H : Msg → Msg) (e : A.Sh → ℝ) (h : A.Sh → ℕ), A.WF → A.KS H → L.commit.Binds H → L.Sessions H →
-      A.RerunsExpLe H e → A.OwnLe H h → L.Bits H e h
+      A.RerunsExpLe H e → A.OwnLe H h → L.OpenCallsLe H → L.Bits H e h
 
-/-- **Efficiency**: the compiled extractor's reruns and own calls, from the proof system's. -/
+/-- **Efficiency**: the compiled extractor's reruns and own calls, from the proof system's and the opening checks'
+count. -/
 def CompilerEfficient : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
     (H : Msg → Msg) (ρ : A.Sh → ℕ) (e : A.Sh → ℝ) (h : A.Sh → ℕ), L.Sessions H →
-      A.RerunsLe H ρ → A.RerunsExpLe H e → A.OwnLe H h → L.Efficient H ρ e h
+      A.RerunsLe H ρ → A.RerunsExpLe H e → A.OwnLe H h → L.OpenCallsLe H → L.Efficient H ρ e h
 
 /-- **The sampled compiler is zero knowledge**: every masked compiled sampled verifier that meets the zero-knowledge
 contract over a proof system for proof blocks that is zero knowledge with a public outcome is zero knowledge with a
