@@ -668,11 +668,10 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
 
 
 def covered_params(j) -> dict:
-    """`OneStage.paramsOfJson`: `decode_params` (`paramsParsed`), and a bernoulli law at 0 < p < 1 refused (`service.count_varies`)."""
+    """`OneStage.paramsOfJson`: `decode_params` (`paramsParsed`), and every bernoulli law refused, at any p."""
     p = decode_params(j)
-    if service.count_varies(p["law"]):
-        raise D.Reject("the law is bernoulli at 0 < p < 1, which the sampled audit's soundness statement doesn't cover "
-                       "(its drawn count varies)")
+    if p["law"].get("law") == "bernoulli":
+        raise D.Reject("the law is bernoulli, which the sampled audit's soundness statement doesn't cover")
     return p
 
 
@@ -3915,20 +3914,27 @@ def test_the_run_refuses_a_closure_map(pieces):
         assert _ran(pieces, _from_challenger(case, random.Random(n))[1])["symbol"] == "accept"
 
 
-def _covered_case(kind: str) -> tuple[dict, dict, dict]:
-    """An accepted v1 audit of `SETUPS[3]` under `kind` (`bernoulli` at 1/2, or `work`), as params, record and evidence,
-    its draw a work draw's with a closure when `kind` is `closure`."""
+def _covered_case(kind: str, p: str = "1/2") -> tuple[dict, dict, dict]:
+    """An honest v1 audit of `SETUPS[3]` under `kind`, as params, record and evidence: `bernoulli` at `p`, `subset`,
+    `stratified`, `work`, `all` (the law the stream's All rule names, `subset` over every unit), or `closure`, a work
+    draw that carries a closure."""
     s = SETUPS[3]
-    law = {"law": "bernoulli", "p": "1/2"} if kind == "bernoulli" else {"k": 3, "law": "work"}
-    table = None if kind == "bernoulli" else {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}}
+    n = s.population
+    law = ({"law": "bernoulli", "p": p} if kind == "bernoulli" else service.selection_law(service.All(), n) if kind == "all"
+           else {"k": 2, "law": "subset"} if kind == "subset" else {"k": 3, "law": "work" if kind == "closure" else kind})
+    table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}} if law["law"] == "work" else None
     mine = DR.derive(s.program, s.query, law, table)
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF, work_table=table)
-    units = [1, 2, 4] if kind == "bernoulli" else sorted(
-        u for st_ in mine["strata"] for u in [u for lo, hi in st_["units"] for u in range(lo, hi)][:st_["k"]])
-    d = {**mine, "population": s.population, "units": units}
+    if law["law"] == "bernoulli":
+        units = {Fraction(0): [], Fraction(1): list(range(n))}.get(Fraction(p), [1, 2, 4])
+    elif law["law"] == "subset":
+        units = list(range(law["k"]))
+    else:
+        units = sorted(u for st_ in mine["strata"] for u in [u for lo, hi in st_["units"] for u in range(lo, hi)][:st_["k"]])
+    d = {**mine, "population": n, "units": units}
     if kind == "closure":
-        d["closure"] = [u for u in range(s.population) if u not in units][:1]
+        d["closure"] = [u for u in range(n) if u not in units][:1]
     proved = DR.proved(d)
     evidence = {"draw": d, "instances": len(proved), "proved_units": proved,
                 "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
@@ -3941,16 +3947,22 @@ def _covered_case(kind: str) -> tuple[dict, dict, dict]:
 
 def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
     """The one-stage audit, v1 (`OneStage.protocol`) and v2 (`OneStageZk`), Lean's the Python's: parameters under a
-    Bernoulli law at 0 < p < 1 are refused (`paramsOfJson`), and evidence whose draw carries a closure
+    Bernoulli law are refused at every p, 0, 1 and between (`paramsOfJson`), and evidence whose draw carries a closure
     (`evidenceOf`), after its commitment's digest, v2's parameters naming a challenger so that its refusal of
-    parameters naming none (`NO_CHALLENGER`) isn't what refuses them; the same work audit without the closure is
-    accepted by v1."""
-    for kind, stage in (("bernoulli", "params: "), ("closure", "evidence: ")):
-        params, rec, evidence = _covered_case(kind)
+    parameters naming none (`NO_CHALLENGER`) isn't what refuses them. The same audit under subset, stratified, work and
+    All's law is accepted by v1, and v2 takes its parameters."""
+    bernoulli = [("bernoulli", p, "params: ") for p in ("0/1", "0/4", "1/1", "3/3", "1/2", "2/3")]
+    for kind, p, stage in (*bernoulli, ("subset", None, None), ("stratified", None, None), ("work", None, None),
+                           ("all", None, None), ("closure", None, "evidence: ")):
+        params, rec, evidence = _covered_case(kind, p or "1/2")
         case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
         out = server.exchange(case)
-        assert out == answer(case) | {"reason": out["reason"]} and out["verdict"] == "reject", (kind, out)
-        assert out["reason"].startswith(stage) and "soundness statement doesn't cover" in out["reason"], (kind, out)
+        assert out == answer(case) | {"reason": out["reason"]}, (kind, p, out)
+        if stage is None:
+            assert out["verdict"] == "accept", (kind, out)
+        else:
+            assert out["verdict"] == "reject" and out["reason"].startswith(stage), (kind, p, out)
+            assert "soundness statement doesn't cover" in out["reason"], (kind, p, out)
         circuit, public, record = b"not a circuit file", b"not a public file", b"{}"
         base = {k: v for k, v in evidence.items() if k != "verdicts"}
         d = Drawn(random.Random(kind))
@@ -3960,11 +3972,11 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
                                   "proofs": {"circuit": _sha(circuit), "registered": None},
                                   "window_root": d.ledger.window["root"]}}
         out = server_v2.exchange(_json(v2))
-        assert out["verdict"] == "reject" and out["reason"].startswith(stage), (kind, out)
-        assert "soundness statement doesn't cover" in out["reason"], (kind, out)
-    params, rec, evidence = _covered_case("work")
-    case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
-    assert D.replay(ONE_STAGE, case, server)[0] == "accept"
+        if stage is None:
+            assert not (out["reason"] or "").startswith("params: "), (kind, out)
+        else:
+            assert out["verdict"] == "reject" and out["reason"].startswith(stage), (kind, p, out)
+            assert "soundness statement doesn't cover" in out["reason"], (kind, p, out)
 
 
 def test_the_run_refuses_a_population_out_of_order(pieces):

@@ -66,10 +66,10 @@ BLOBS = [CIRCUIT, PUBLIC]
 
 @st.composite
 def empty_draws(draw) -> dict:
-    """A valid audit of a program that reads no registered value, whose draw drew no unit (a subset of none, or Bernoulli
-    at 0): with no session and no proved unit, v1 is undecided on it for want of the verifier of record."""
+    """A valid audit of a program that reads no registered value, whose draw drew no unit (a subset of none): with no
+    session and no proved unit, v1 is undecided on it for want of the verifier of record."""
     s = draw(st.sampled_from(OS.SETUPS))
-    law = draw(st.sampled_from([{"k": 0, "law": "subset"}, {"law": "bernoulli", "p": "0/1"}]))
+    law = {"k": 0, "law": "subset"}
     part = {"program": s.sha512, "query": s.query}
     rec = OS.R.record(s.program, s.query, law, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
                       OS.WINDOW, leaf_layer=OS.LEAF, partition=part)
