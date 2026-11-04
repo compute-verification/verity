@@ -402,7 +402,7 @@ def ask (ch : Frame.Chan) (reg : IO.Ref Sessions) (l0s : IO.Ref Level0.Slots) (l
   match askOf (← reg.get) (← l0s.get) line with
   | .ok (l, b) =>
     ch.write (l ++ "\n").toUTF8
-    ch.write b
+    unless b.isEmpty do ch.write b
   | .error why => ch.write s!"err {why.replace "\n" " "}\n".toUTF8
 
 /-- Session `sid` ended: its frames, their openings and the salts, inner proofs' rounds and proof files of its tables'
