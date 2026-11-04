@@ -122,7 +122,7 @@ theorem step_nan (w : ℕ) (x : AtomIn) (hx : ¬ Freeze.FiniteAtom x) : Skip.ste
       fun c => productTotal c.1 c.2)).any Value.isNaN = true := by
     obtain ⟨l, hl⟩ : ∃ l, (x.1 l).isNaN = true ∨ (x.2 l).isNaN = true := by
       by_contra hne
-      push_neg at hne
+      push Not at hne
       exact hx ⟨fun l => by simpa using (hne l).1, fun l => by simpa using (hne l).2⟩
     have hlen : ((List.ofFn x.1).zip (List.ofFn x.2)).length ≤ 32 := by simp
     rw [List.any_eq_true]
