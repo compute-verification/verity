@@ -1602,7 +1602,11 @@ def _header_net(line: str) -> tuple[int, int, list, list]:
     outs, end = groups(at)
     useful, const = int(h[2]), int(h[3])
     in_words = ins[-1][0] + ins[-1][1] if ins else 0
-    if end != len(h) or not outs or const + 1 != useful or in_words * WORD > const:
+    if end != len(h) or not outs or const + 1 != useful:
+        raise D.Reject("flock-ir-unit/v2: not a header headerNet reads")
+    if any(sum(bs) > w * WORD or c + w > in_words for c, w, bs in ins) or any(sum(bs) > w * WORD for _, w, bs in outs):
+        raise D.Reject("flock-ir-unit/v2: a port group's ports overrun its words, or an input group the input rows")
+    if in_words * WORD > const:
         raise D.Reject("flock-ir-unit/v2: not a header headerNet reads")
     return const, in_words, ins, outs
 
@@ -1974,14 +1978,14 @@ def _pow2(x: int) -> int:
 
 
 def circuit_file(desc: dict, template: str, part: str | None, upv: int = 1, cut: bool = False,
-                 cut_at: int | None = None, **meta) -> str:
+                 cut_group: tuple[int, int] | None = None, **meta) -> str:
     """A flat circuit file laying out `template` of the Program `desc` as `SampledProofs.Bits.check` places it, at `upv`
     template instances a VU: an input row a parameter, `upv` times its packed words (`words_of`), then an output row `o`
     of `upv` times its return's (`ret_words`); a unit net of a 16-bit input port a parameter word, each instance's read
-    off its row word by its leaf map (with `cut`, the last port a cut input in an input group of its own, at word
-    `cut_at` or else past the first group's, read through a leaf cut), and a 16-bit output port a return word, its
-    sixteen computed rows reading the input bits congruent to
-    theirs, so every port bit is read and no padding; META binding the Program's SHA-512 and, given one, the
+    off its row word by its leaf map (with `cut`, the last port a cut input in an input group of its own, at
+    `cut_group`'s word and width or else one word past the first group's, read through a leaf cut; the last group ends
+    the input rows), and a 16-bit output port a return word, its sixteen computed rows reading the input bits congruent
+    to theirs, so every port bit is read and no padding; META binding the Program's SHA-512 and, given one, the
     `verity/partition/v1` digest `part`. `meta` overrides META's keys."""
     params, ret = def_sig(desc["definitions"][template])
     pw, rw = [(nm, words_of(t)) for nm, t in params], ret_words(ret)
@@ -1990,11 +1994,11 @@ def circuit_file(desc: dict, template: str, part: str | None, upv: int = 1, cut:
     words = [[starts[i] + k * w + j for i, (_, w) in enumerate(pw) for j in range(w)] for k in range(upv)]
     leaf = n - 1 if cut else n
     g0 = _pow2(-(-16 * leaf // WORD))
-    in_words, ow = g0 + cut, _pow2(-(-16 * rw // WORD))
+    ins = [(0, g0, [16] * leaf)] + [(*(cut_group or (g0, 1)), [16])] * cut
+    in_words, ow = ins[-1][0] + ins[-1][1], _pow2(-(-16 * rw // WORD))
     oc = -(-in_words // ow) * ow
     const = oc * WORD + 16 * rw
-    held = list(range(16 * leaf)) + [g0 * WORD + t for t in range(16 if cut else 0)]
-    ins = [(0, g0, [16] * leaf)] + [(g0 if cut_at is None else cut_at, 1, [16])] * cut
+    held = list(range(16 * leaf)) + [ins[-1][0] * WORD + t for t in range(16 if cut else 0)]
     groups = lambda gs: [len(gs), *(x for col, w, bs in gs for x in (col, w, len(bs), *bs))]  # noqa: E731
     head = " ".join(map(str, ["flock-ir-unit/v2", "toy", const + 1, const, *groups(ins), *groups([(oc, ow, [16] * rw)])]))
     reader = lambda xs: f"{len(xs)} {' '.join(map(str, xs))} 1 {const}"  # noqa: E731
@@ -2012,10 +2016,11 @@ def circuit_file(desc: dict, template: str, part: str | None, upv: int = 1, cut:
                       f"{CIRCUIT_BLOCK} unit {len(net)}", *net]) + "\n"
 
 
-def listed_files(case: dict, upv: int = 1, cut: bool = False, cut_at: int | None = None, **meta) -> list[str]:
+def listed_files(case: dict, upv: int = 1, cut: bool = False, cut_group: tuple[int, int] | None = None,
+                 **meta) -> list[str]:
     """The circuit files `circuit_file` writes for each file a case's audits list, in `Listing.files`' order: each its
     template of the audit's Program, bound to its record's partition digest."""
-    return [circuit_file(a["program"], f["template"], record_partition(a["circuit"], ""), upv, cut, cut_at, **meta)
+    return [circuit_file(a["program"], f["template"], record_partition(a["circuit"], ""), upv, cut, cut_group, **meta)
             for a in case["params"]["audits"] if "circuits" in a for f in a["circuits"]]
 
 
