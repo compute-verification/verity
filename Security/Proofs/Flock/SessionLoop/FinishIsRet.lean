@@ -35,8 +35,8 @@ clear values below `zp 64` and its level 0 values from the returns (`finRepMsgs_
 theorem finishIs_of_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w) (hSrc : Loop.Src L₀ src x w)
-    (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs)
+    (hE : LeanRelease.LiveRoundEqOwn finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs)
     (hT : FinRepTarget vs L₀ src (realOf src) wk x w) (hTP : FinRepRestart vs L₀ src (realOf src) wk x w)
     (hL : FinRepL0 vs L₀ src (realOf src) wk x w) :
     LeanRelease.FinishIs finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w :=

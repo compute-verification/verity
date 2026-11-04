@@ -12,7 +12,7 @@ rows and salts, `τ` and its salt, the pads' opened columns and salts) included,
 each named here, none a premise of a guarantee:
 
 * **`Loop.FinRepErased`**: the run from the views returns, with the same transcript, a proof equal to `p` up to
-  `eraseZ`: `Masked.swSrcE_repCut` at the views' source, the views' values tied to the history's by `LiveRoundEq`.
+  `eraseZ`: `Masked.swSrcE_repCut` at the views' source, the views' values tied to the history's by `LiveRoundEqOwn`.
 * **`Loop.FinRepFinal`**: where it returns so, the final-only data agree (`Masked.FinalEq`).
 * **`Loop.FinRepXs`**: the extra claims from the views have the request's coordinates (`Drive.extras`), so as many
   claims as `claimsOf`.

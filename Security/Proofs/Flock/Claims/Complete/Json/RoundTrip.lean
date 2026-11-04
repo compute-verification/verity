@@ -7,7 +7,7 @@ public import Proofs.Flock.Claims.Complete.Prover.Print
 public import Std.Data.TreeMap.Raw.Lemmas
 public import Std.Data.TreeMap.Raw.WF
 public import Batteries.Tactic.OpenPrivate
-public import Proofs.Properties.RemoteAudit.Sort
+import all Init.Data.Array.QSort.Basic
 import all Init.Data.Repr
 import all Init.Data.Int.Repr
 import all Lean.Data.Json.Basic
@@ -23,19 +23,81 @@ The proof is one relation, `ReadBack.Pr j t`: a text `t` that `value` reads as a
 up to a separator (`Stop`). Both printers print a text in it (`print_pr`, `canon_pr`), and `pr_value` reads it, by
 induction on `Pr`. A string's text is a run of escapes `str` reads back one character at a time (`Esc`, `esc_of`); a
 number's is `Int.repr` (`num_int`); an object's fields are `Flock.canon`'s keys in `Array.qsort`'s order, a permutation
-of the tree's own (`Properties.RemoteAudit.qsort_perm`), and `object` inserts them into a tree alike at every key (`Inv`,
-`obj_loop`).
+of the tree's own (`qsort_perm`), and `object` inserts them into a tree alike at every key (`Inv`, `obj_loop`).
 -/
 
 @[expose] public section
 
 open private Flock.hex4 from Flock.Canon
+open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 
 namespace FlockComplete.JsonRT.ReadBack
 
 open Lean (Json JsonNumber)
 open Flock.JsonParse
 open Claims.Json
+
+/-! ## `Array.qsort` permutes -/
+
+private theorem loop_perm {α} {n} (lt : α → α → Bool) (lo hi : Nat) (hhi : hi < n) (pivot : α) :
+    ∀ (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi),
+    (Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w).2.Perm as := by
+  intro as i k ilo ik w
+  induction h : hi - k generalizing as i k with
+  | zero =>
+    rw [Array.qpartition.loop.eq_def]
+    split
+    · omega
+    · exact Vector.swap_perm (by omega) hhi
+  | succ d ih =>
+    rw [Array.qpartition.loop.eq_def]
+    split
+    · split
+      · exact (ih _ _ _ _ _ _ (by omega)).trans (Vector.swap_perm (by omega) (by omega))
+      · exact ih _ _ _ _ _ _ (by omega)
+    · omega
+
+theorem qpartition_perm {α} {n} (as : Vector α n) (lt : α → α → Bool) (lo hi : Nat) (w : lo ≤ hi)
+    (hlo : lo < n) (hhi : hi < n) : (Array.qpartition as lt lo hi w hlo hhi).2.Perm as := by
+  unfold Array.qpartition
+  refine (loop_perm _ _ _ _ _ _ _ _ _ _ _).trans ?_
+  have sw : ∀ (bs : Vector α n) (c : Bool) (i j : Nat) (hi : i < n) (hj : j < n),
+      (if c then bs.swap i j hi hj else bs).Perm bs := fun bs c i j hi hj => by
+    cases c
+    · exact Vector.Perm.refl _
+    · exact Vector.swap_perm hi hj
+  exact ((sw _ _ _ _ _ _).trans (sw _ _ _ _ _ _)).trans (sw _ _ _ _ _ _)
+
+private theorem sort_perm {α} (lt : α → α → Bool) {n} :
+    ∀ (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n),
+    (Array.qsort.sort lt as lo hi w hlo hhi).Perm as := by
+  intro as lo hi w hlo hhi
+  suffices ∀ F, hi - lo < F → (Array.qsort.sort lt as lo hi w hlo hhi).Perm as from this _ (Nat.lt_succ_self _)
+  intro F hF
+  induction F generalizing as lo hi with
+  | zero => omega
+  | succ F ih =>
+    rw [Array.qsort.sort.eq_def]
+    split
+    · split
+      rename_i mid hmid bs hp
+      have hb : bs.Perm as := by
+        have := qpartition_perm as lt lo hi w hlo hhi
+        rw [hp] at this
+        exact this
+      split
+      · exact hb
+      · exact ((ih _ _ _ _ _ _ (by omega)).trans (ih _ _ _ _ _ _ (by omega))).trans hb
+    · exact Vector.Perm.refl _
+
+theorem qsort_perm {α} (as : Array α) (lt : α → α → Bool) : (as.qsort lt).Perm as := by
+  unfold Array.qsort
+  split
+  · exact Array.Perm.refl _
+  · rename_i h
+    have := sort_perm lt as.toVector (min 0 (as.size - 1)) (max (min 0 (as.size - 1)) (min (as.size - 1) (as.size - 1)))
+      (by omega) (by omega) (by omega)
+    exact Vector.perm_iff_toArray_perm.1 this
 
 /-! ## Texts the parser reads back -/
 
@@ -1041,7 +1103,7 @@ theorem canon_pr {j : Json} (h : Good j) : ∀ s, Flock.canon j = .ok s → Pr j
         rw [← ha, List.map_map]
         exact (map_eq_of_zip (fun p => p.1.1) (·.1) _ _ (by omega) fun q hq => (hpair q hq).1.symm).symm
       let items := vals.qsort (fun a b => a.1 < b.1)
-      have hperm : items.toList.Perm vals.toList := Properties.RemoteAudit.qsort_toList_perm _ _
+      have hperm : items.toList.Perm vals.toList := Array.perm_iff_toList_perm.1 (qsort_perm _ _)
       let fs := items.toList.map fun w => (w.1, (m.get? w.1).getD .null, escK w.1, w.2.toList)
       have hfs : ∀ f ∈ fs, ∃ w ∈ vals.toList, f = (w.1, (m.get? w.1).getD .null, escK w.1, w.2.toList) := by
         intro f hf

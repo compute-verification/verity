@@ -1704,66 +1704,9 @@ noncomputable abbrev cutC (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (t
   cutAt (tabC PE x) (czExe PE x c) wt ω fun l =>
     ZkView.leafH (digOf (tabC PE x) (czExe PE x c) wt ω l + (p l).1, (p l).2)
 
-/-- What the session reads from `cutC`. -/
-noncomputable abbrev srcC (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m)
-    (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
-    (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray) (c : Fin (refK x) → FlockDeploy.Coin) :
-    ℕ → FlockComplete.TabSrc :=
-  tabSrcCut PE x (czExe PE x c) (cutC x wt ω p c)
-
-/-- **The sources agree where the session reads them**: at a live statement and coins agreeing before `n ≥ 1`, level 0's
-and the pads' commitments are the same, and each rep stream's source agrees where read from its first body. -/
-def SrcAgree : Prop :=
-  ∀ x, Live x → ∀ wt ω p (c c' : Fin (refK x) → FlockDeploy.Coin) (n : ℕ), (∀ j : Fin (refK x), j.val < n → c j = c' j) →
-    1 ≤ n → ∀ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) →
-      (∀ ms lv i, FlockComplete.commit0Cut hsE ms lv (srcC x wt ω p c i) =
-        FlockComplete.commit0Cut hsE ms lv (srcC x wt ω p c' i)) ∧
-      (∀ N i r, FlockComplete.padsTreeCut hsE N ((srcC x wt ω p c i).rep r) =
-        FlockComplete.padsTreeCut hsE N ((srcC x wt ω p c' i).rep r)) ∧
-      ∃ G : ℕ → ℕ, G 0 = 1 ∧ ∀ schs, ((FlockDeploy.tabsOf (stsOf x)).mapM fun st =>
-          (monadLift (_root_.Flock.Zk.schedule st.m) : _root_.Flock.V (_root_.Flock.Schedule × ℕ))) = .ok schs →
-        ∀ k (hk : k < spec.repStreams.size) i r w, spec.repStreams[k] = (i, r, w) → ∀ extras,
-          (FlockDeploy.tabsOf (stsOf x))[i]!.extra (ptsOf (fun k i => slotAt c k i) spec) = .ok extras →
-          SchOk (FlockDeploy.tabsOf (stsOf x))[i]! schs[i]!.1 ∧
-            G (k + 1) = G k + repSends (FlockDeploy.tabsOf (stsOf x))[i]! schs[i]!.1 extras ∧
-            RepAgree n (G k) (FlockDeploy.tabsOf (stsOf x))[i]! schs[i]!.1 extras ((srcC x wt ω p c i).rep r)
-              ((srcC x wt ω p c' i).rep r)
-
 theorem stsOf_of {x : Msg} {s spec sts} (h : FlockDeploy.setupOf true x = some (s, spec, sts)) : stsOf x = sts := by
   unfold stsOf
   rw [h]
-
-theorem srcC_dead {x : Msg} (hx : ¬ Live x) (wt ω p) (c : Fin (refK x) → FlockDeploy.Coin) :
-    srcC x wt ω p c = fun _ => default := by
-  have hj : jOf x = 0 := by
-    unfold jOf
-    simp [hx]
-  funext i
-  unfold srcC tabSrcCut
-  rw [dif_neg (by omega)]
-
-/-- **The deployed plan is causal given the sources agree where read.** -/
-theorem causalExe_of (hB : SrcAgree) : CausalExe := by
-  intro x wt ω p c c' n hcc
-  show encExe PE x c n (cutC x wt ω p c) = encExe PE x c' n (cutC x wt ω p c')
-  unfold encExe
-  by_cases hn : n = 0
-  · simp only [hn, ↓reduceIte]
-    exact enc0_causal PE x _ _ wt ω p
-  rw [if_neg hn, if_neg hn]
-  rcases hsx : FlockDeploy.setupOf true x with _ | ⟨s, spec, sts⟩
-  · rfl
-  dsimp only
-  have hs : stsOf x = sts := stsOf_of hsx
-  have hrun : runCut x c n spec (srcC x wt ω p c) = runCut x c' n spec (srcC x wt ω p c') := by
-    unfold runCut
-    rw [FlockComplete.asksCut_congr (coin := fun k i => slotAt c' k i) (coin' := fun k i => slotAt c k i)
-      (fun k hk => funext fun e => (slotAt_congr hcc hk e).symm)]
-    by_cases hx : Live x
-    · obtain ⟨hcm, hic, G, hG0, hR⟩ := hB x hx wt ω p c c' n hcc (by omega) s spec (by rw [hs]; exact hsx)
-      exact sessionCut_eq _ n spec _ _ _ _ (by omega) hcm hic G hG0 hR
-    · rw [srcC_dead hx, srcC_dead hx]
-  rw [hrun]
 
 /-! ## The commitments read no coin -/
 
@@ -1836,26 +1779,6 @@ theorem padLeaf_agree (c c' : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x
         Cx.digOf_pads PE x (czExe PE x c) (czExe PE x c') wt ω j r]
     · simp only [padLeafCut, hq, ↓reduceDIte]
 
-theorem commits_agree (c c' : Fin (refK x) → FlockDeploy.Coin) :
-    (∀ ms lv i, FlockComplete.commit0Cut hsE ms lv (srcC x wt ω p c i) =
-        FlockComplete.commit0Cut hsE ms lv (srcC x wt ω p c' i)) ∧
-      (∀ N i r, FlockComplete.padsTreeCut hsE N ((srcC x wt ω p c i).rep r) =
-        FlockComplete.padsTreeCut hsE N ((srcC x wt ω p c' i).rep r)) := by
-  refine ⟨fun ms lv i => ?_, fun N i r => ?_⟩
-  · by_cases h : i < jOf x
-    · rw [srcC, srcC, tabSrcCut_live _ _ h, tabSrcCut_live _ _ h]
-      exact commit0Cut_congr ms lv (leaf0_agree x wt ω p c c' ⟨i, h⟩) rfl rfl
-    · rw [srcC, srcC, tabSrcCut_dead _ _ h, tabSrcCut_dead _ _ h]
-  · by_cases h : i < jOf x
-    · by_cases hr : r < 2
-      · rw [srcC, srcC, tabSrcCut_rep _ _ h hr, tabSrcCut_rep _ _ h hr]
-        refine padsTreeCut_congr N ?_ ?_ ?_ ?_
-        · rw [repSrcCut_padLeaf, repSrcCut_padLeaf]
-          exact padLeaf_agree x wt ω p c c' ⟨i, h⟩ ⟨r, hr⟩
-        all_goals simp only [repSrcCut]
-      · rw [srcC, srcC, tabSrcCut_rep_dead _ _ h hr, tabSrcCut_rep_dead _ _ h hr]
-    · rw [srcC, srcC, tabSrcCut_dead _ _ h, tabSrcCut_dead _ _ h]
-
 end Agree
 
 /-! ## The reps' bookkeeping -/
@@ -1874,10 +1797,53 @@ theorem schOk_of {st : _root_.Flock.Stmt} (y : ZkHidden.ZkTab st) : SchOk (_root
   obtain ⟨h1, -, h3, h4, -, ⟨hn, hL, -⟩, hlv, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ y.hz
   exact ⟨show 14 ≤ st.m by omega, by omega, h4, hL, fun j hj => (hlv j hj).q_ne_zero⟩
 
-theorem srcAgree_of (h : RepOk) : SrcAgree := by
-  intro x hx wt ω p c c' n hcc hn s spec hsx
-  obtain ⟨hcm, hic⟩ := commits_agree x wt ω p c c'
-  refine ⟨hcm, hic, FlockComplete.repStartZk spec (stsOf x), by simp [FlockComplete.repStartZk], ?_⟩
+section Generic
+
+variable {x : Msg} (cut : ∀ c : Fin (refK x) → FlockDeploy.Coin, ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Cut)
+  {c c' : Fin (refK x) → FlockDeploy.Coin}
+
+/-- **The commitments of cuts whose level-0 and pads leaves agree are the same.** -/
+theorem commitsCut_agree
+    (hl : ∀ j, leafAt PE x (czExe PE x c) (cut c) j = leafAt PE x (czExe PE x c') (cut c') j)
+    (hpl : ∀ j r, padLeafCut PE x (czExe PE x c) (cut c) j r = padLeafCut PE x (czExe PE x c') (cut c') j r) :
+    (∀ ms lv i, FlockComplete.commit0Cut hsE ms lv (tabSrcCut PE x (czExe PE x c) (cut c) i) =
+        FlockComplete.commit0Cut hsE ms lv (tabSrcCut PE x (czExe PE x c') (cut c') i)) ∧
+      (∀ N i r, FlockComplete.padsTreeCut hsE N ((tabSrcCut PE x (czExe PE x c) (cut c) i).rep r) =
+        FlockComplete.padsTreeCut hsE N ((tabSrcCut PE x (czExe PE x c') (cut c') i).rep r)) := by
+  refine ⟨fun ms lv i => ?_, fun N i r => ?_⟩
+  · by_cases h : i < jOf x
+    · rw [tabSrcCut_live _ _ h, tabSrcCut_live _ _ h]
+      exact commit0Cut_congr ms lv (hl ⟨i, h⟩) rfl rfl
+    · rw [tabSrcCut_dead _ _ h, tabSrcCut_dead _ _ h]
+  · by_cases h : i < jOf x
+    · by_cases hr : r < 2
+      · rw [tabSrcCut_rep _ _ h hr, tabSrcCut_rep _ _ h hr]
+        refine padsTreeCut_congr N ?_ ?_ ?_ ?_
+        · rw [repSrcCut_padLeaf, repSrcCut_padLeaf]
+          exact hpl ⟨i, h⟩ ⟨r, hr⟩
+        all_goals simp only [repSrcCut]
+      · rw [tabSrcCut_rep_dead _ _ h hr, tabSrcCut_rep_dead _ _ h hr]
+    · rw [tabSrcCut_dead _ _ h, tabSrcCut_dead _ _ h]
+
+/-- **Each rep stream's sources agree where read from its first body** at cuts whose reps' sources do, table `j`'s
+rep `r` from `repStartZk (2j + r)`. -/
+theorem repStreams_agree (hx : Live x) {n : ℕ} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
+    (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
+    (hR : ∀ (j : Fin (jOf x)) (r : Fin 2) (e : Array _root_.Flock.Claim),
+      e.size = (stAt x j).regions.size * spec.points →
+      RepAgree n (FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val))
+        (_root_.Flock.Setup.ofCircuit (stAt x j)) (zkTab x j).sch e
+        (repSrcCut PE x (czExe PE x c) (cut c) j r) (repSrcCut PE x (czExe PE x c') (cut c') j r)) :
+    ∀ schs, ((FlockDeploy.tabsOf (stsOf x)).mapM fun st =>
+          (monadLift (_root_.Flock.Zk.schedule st.m) : _root_.Flock.V (_root_.Flock.Schedule × ℕ))) = .ok schs →
+        ∀ k (hk : k < spec.repStreams.size) i r w, spec.repStreams[k] = (i, r, w) → ∀ extras,
+          (FlockDeploy.tabsOf (stsOf x))[i]!.extra (ptsOf (fun k i => slotAt c k i) spec) = .ok extras →
+          SchOk (FlockDeploy.tabsOf (stsOf x))[i]! schs[i]!.1 ∧
+            FlockComplete.repStartZk spec (stsOf x) (k + 1) = FlockComplete.repStartZk spec (stsOf x) k +
+              repSends (FlockDeploy.tabsOf (stsOf x))[i]! schs[i]!.1 extras ∧
+            RepAgree n (FlockComplete.repStartZk spec (stsOf x) k) (FlockDeploy.tabsOf (stsOf x))[i]! schs[i]!.1
+              extras ((tabSrcCut PE x (czExe PE x c) (cut c) i).rep r)
+              ((tabSrcCut PE x (czExe PE x c') (cut c') i).rep r) := by
   intro schs hschs k hk i r w hkw extras hext
   obtain ⟨-, -, hspec, -⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
   rw [FlockDeploy.repStreams_getElem spec hk] at hkw
@@ -1905,7 +1871,7 @@ theorem srcAgree_of (h : RepOk) : SrcAgree := by
   have hes : extras.size = (stAt x ⟨k / 2, hj⟩).regions.size * spec.points := by
     rw [FlockDeploy.extraClaims_size (st := stAt x ⟨k / 2, hj⟩) hext]
     simp
-  rw [htab, hsch, srcC, srcC, tabSrcCut_rep _ _ hj hr, tabSrcCut_rep _ _ hj hr]
+  rw [htab, hsch, tabSrcCut_rep _ _ hj hr, tabSrcCut_rep _ _ hj hr]
   refine ⟨schOk_of _, ?_, ?_⟩
   · have hk6 := (zkTab x ⟨k / 2, hj⟩).wf.1.hk6
     have hm := (FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x ⟨k / 2, hj⟩).hz).1
@@ -1916,10 +1882,57 @@ theorem srcAgree_of (h : RepOk) : SrcAgree := by
     show _ = _ + (3 + ((stAt x ⟨k / 2, hj⟩).m - 6) + (3 + ((stAt x ⟨k / 2, hj⟩).c.kLog - 6)) + _ + 1 + _ + 4)
     rw [hes.trans (Nat.mul_comm _ _)]
     omega
-  · have := h x hx wt ω p c c' n hcc s spec hsx ⟨k / 2, hj⟩ ⟨k % 2, hr⟩ extras hes
+  · have := hR ⟨k / 2, hj⟩ ⟨k % 2, hr⟩ extras hes
     rwa [show 2 * (⟨k / 2, hj⟩ : Fin (jOf x)).val + (⟨k % 2, hr⟩ : Fin 2).val = k by simp only; omega] at this
 
-theorem causalExe_of_rep (h : RepOk) : CausalExe := causalExe_of (srcAgree_of h)
+/-- **The deployed round encodings of cuts agree at coins agreeing below the round** where the cuts' level-0 and pads
+leaves agree and, at a live statement, each rep's sources agree where read. -/
+theorem encExe_congr {n : ℕ} (hcc : ∀ k : Fin (refK x), k.val < n → c k = c' k)
+    (hl : ∀ j, leafAt PE x (czExe PE x c) (cut c) j = leafAt PE x (czExe PE x c') (cut c') j)
+    (hpl : ∀ j r, padLeafCut PE x (czExe PE x c) (cut c) j r = padLeafCut PE x (czExe PE x c') (cut c') j r)
+    (hR : Live x → ∀ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) → ∀ (j : Fin (jOf x)) (r : Fin 2)
+      (e : Array _root_.Flock.Claim), e.size = (stAt x j).regions.size * spec.points →
+      RepAgree n (FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val))
+        (_root_.Flock.Setup.ofCircuit (stAt x j)) (zkTab x j).sch e
+        (repSrcCut PE x (czExe PE x c) (cut c) j r) (repSrcCut PE x (czExe PE x c') (cut c') j r)) :
+    encExe PE x c n (cut c) = encExe PE x c' n (cut c') := by
+  unfold encExe
+  by_cases hn : n = 0
+  · simp only [hn, ↓reduceIte]
+    unfold enc0
+    simp only [hl]
+  rw [if_neg hn, if_neg hn]
+  rcases hsx : FlockDeploy.setupOf true x with _ | ⟨s, spec, sts⟩
+  · rfl
+  dsimp only
+  have hs : stsOf x = sts := stsOf_of hsx
+  have hrun : runCut x c n spec (tabSrcCut PE x (czExe PE x c) (cut c)) =
+      runCut x c' n spec (tabSrcCut PE x (czExe PE x c') (cut c')) := by
+    unfold runCut
+    rw [FlockComplete.asksCut_congr (coin := fun k i => slotAt c' k i) (coin' := fun k i => slotAt c k i)
+      (fun k hk => funext fun e => (slotAt_congr hcc hk e).symm)]
+    by_cases hx : Live x
+    · have hsx' : FlockDeploy.setupOf true x = some (s, spec, stsOf x) := by rw [hs]; exact hsx
+      obtain ⟨hcm, hic⟩ := commitsCut_agree cut hl hpl
+      exact sessionCut_eq _ n spec _ _ _ _ (by omega) hcm hic _ (by simp [FlockComplete.repStartZk])
+        (repStreams_agree cut hx hsx' (hR hx s spec hsx'))
+    · have hj : jOf x = 0 := by
+        unfold jOf
+        simp [hx]
+      have hd : ∀ c₀ : Fin (refK x) → FlockDeploy.Coin,
+          tabSrcCut PE x (czExe PE x c₀) (cut c₀) = fun _ => default :=
+        fun c₀ => funext fun i => tabSrcCut_dead _ _ (by omega)
+      rw [hd, hd]
+  rw [hrun]
+
+end Generic
+
+/-- **The deployed plan is causal given each rep's sources agree where read** (`encExe_congr` at `cutC`). -/
+theorem causalExe_of_rep (h : RepOk) : CausalExe := by
+  intro x wt ω p c c' n hcc
+  show encExe PE x c n (cutC x wt ω p c) = encExe PE x c' n (cutC x wt ω p c')
+  exact encExe_congr (cutC x wt ω p) hcc (leaf0_agree x wt ω p c c') (padLeaf_agree x wt ω p c c')
+    fun hx s spec hsx => h x hx wt ω p c c' n hcc s spec hsx
 
 /-! ## The pads layout's positions -/
 

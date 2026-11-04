@@ -83,6 +83,7 @@ public import Proofs.Flock.Claims.ZK.Server
 public import Proofs.Flock.Claims.ZK.Blind
 public import Proofs.Flock.Claims.ZK.Release
 public import Proofs.Flock.Claims.ZK.Refine
+public import Proofs.Flock.Claims.ZK.OwnHistAny
 public import Proofs.Flock.Claims.ZK.CoinPass
 public import Proofs.Flock.Claims.ZK.Os
 public import Proofs.Flock.Claims.ZK.FrameTape
@@ -189,6 +190,7 @@ public import Proofs.Flock.Claims.ZK.RepReplay
 public import Proofs.Flock.Claims.ZK.RepInner
 public import Proofs.Flock.Claims.ZK.RepCutFw
 public import Proofs.Flock.Claims.ZK.RepRet
+public import Proofs.Flock.Claims.ZK.RepCons
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -499,7 +501,8 @@ public import Proofs.Flock.Claims.ZK.RepRet
   a pad-blind worker sees of every table, `RefSession.seenOf`), with `refP`'s simulator, which never reads the prover's messages (`Proto.simulatorE_msg`):
   **`Flock.zk_deployZk_sw`**, `Claims.Flock.ZKAt` at the same `ε_zk`, `γ` and simulator as `Flock.zkAt_deployZk_ref`
   for any values whose round encoding is causal (`RefSession.SwCausal`), `Flock.zkAt_deployZk_ref` its case at the
-  tables' own values (`Flock.zkAt_deployZk_ref_of_sw`); and **`Flock.zk_server_blind`**, the server that defers every
+  tables' own values (`Flock.zkAt_deployZk_ref_of_sw`), and the same from the switched prover's message links alone
+  (`Flock.zkAt_sw_of_links`), each causal at one tape (`Proto.TPreModel.SwCausal`); and **`Flock.zk_server_blind`**, the server that defers every
   stop to the session's last round (`ZkServer.zk_deferred`) at every pad-blind worker within a factor 2 of the
   simulator that guesses whether it stops (one bit a session; over a stream, `log₂ ∑_{i ≤ b} C(m, i)` bits,
   `stream_leak_deferred`), with no term for the masked checks, and at a
@@ -541,7 +544,11 @@ public import Proofs.Flock.Claims.ZK.RepRet
   (`LeanRelease.liveRefine_withStops`, `fillRefine_withStops`; the deferred server takes no worker value past the
   `Finish`, `LeanRelease.live_lt_last`), its `HelloRefine` and `OwnRefine` from the server's `Hello`, the firewall's
   link and its `Finish` being the session's (`HelloEq`, `LinkRoundEq`, `FinalRoundEq`: `helloRefine_withStops`,
-  `ownRefine_withStops`), so `Flock.zk_server_lean_stops` assumes no part of `ItemsRefine`. A transport that reads the
+  `ownRefine_withStops`), so `Flock.zk_server_lean_stops` assumes no part of `ItemsRefine`. It asks the round encoding
+  to be causal only where the session with stops computes a round (`RefSession.SwCausalOn` at an `Ok` with
+  `RefSession.StopsOk`, `Flock.zk_deployZk_sw_stops`): its models before the last coin and off the tables' coins are at
+  the coins cut at the last round the rule doesn't stop (`RefSession.cutCoins`, `swPreCut`, `swOffCut`), with the
+  simulator unchanged. A transport that reads the
   history only through the decoded coins on the histories its check passes (`LeanRelease.ReadsCoins`) gives the rule
   and `StopsAt` (`LeanRelease.rfOf`, `stopsAt_of_readsCoins`). `Flock.zk_server_lean_coinLayer` is it at the deployed
   coin layer (`CoinLayer.session`) at SHA-512 from the transport's trusts alone, each named for its reason:
@@ -555,6 +562,10 @@ public import Proofs.Flock.Claims.ZK.RepRet
   (`LeanRelease.checkIs_coinLayer`). The released bytes are read only through `LiveRoundEq`, `FillRoundEq`,
   `FinalRoundEq` (from `FrameAdmits` and `FinishIs`), `LinkRoundEq` (from `LinkIs`) and `ProgReads`, none of them yet
   proved about the live path, so the deployed ZK server is not yet proved zero-knowledge.
+* `OwnHistAny`: the deferred server's own histories (`ZkServer.OwnHist`, closed under prefixes: `OwnHist.take`; each
+  the own history on its answers: `OwnHist.eq_ownOf`), their messages at the Lean frame's live and stand-in rounds
+  (`LeanRelease.ownHist_msg_live`, `ownHist_msg_fill`): what the proofs of `LeanRelease.LiveRoundEqOwn` (`Refine`,
+  `LiveRoundEq` at the own histories only) share.
 * `SessionLean`: the release at the session loop (`LeanRelease.loop`): its `Hello`, its coin check's reading of it and its
   requests are the loop's pure functions at the statement's setup (`Flock.Firewall.Session.helloOf`, `planOf`, `reqAt`),
   so `HelloIs`, `HelloParses` and `ReqsFollow` hold at every statement and `Finish` is one past the last coin

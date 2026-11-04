@@ -24,8 +24,9 @@ unswitched prover (`LeanRelease.TrustsStop`). At the deployed tables (`Masked.da
 * `LeanRelease.finishRows_honestVals`: on a live history of `refK x` openings whose last coins the frame takes, no
   zerocheck outer coin is `1` (`outer_ne_one_ofLoopLink`), so the rows hold at the honest values
   (`Loop.rowsOK_honestVals`).
-* `LeanRelease.finalRoundEq_ofLoopLink`: the loop's `Finish` is the switched session's (`Loop.finishIs`), and its
-  frames refuse every coin fault (`frameUnrefused_ofLoop`) at tables that admit unrefused coins.
+* `LeanRelease.finalRoundEq_ofLoopLink`: the loop's `Finish` is the switched session's (`Loop.finishIs`, at
+  `LiveRoundEqOwn` and `SwCausalOn`), and its frames refuse every coin fault (`frameUnrefused_ofLoop`) at tables that
+  admit unrefused coins.
 * **`LeanRelease.trustsStop_honest`**: `TrustsStop` at the honest worker, at every relation inside the served, in-scope
   deployed one, from `Loop.Src` (the loop's inputs being the tape's), `LiveSched` (the loop's scheduled rounds) and
   `FillRoundEq` at the honest values. `LiveInner` is `liveInner_withInner`, the inner round 0 is the loop's
@@ -147,7 +148,8 @@ theorem finalRoundEq_ofLoopLink (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Serves x)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w) (hSrc : Loop.Src L₀ src x w)
-    (hE : LiveRoundEq finS vs (ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w) (hc : finS.SwCausal vs) :
+    (hE : LiveRoundEqOwn finS vs (ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs) :
     FinalRoundEq finS vs (ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w :=
   finalRoundEq_ofLoop Masked.dataE vs (withFiles (withLink L₀ src) src) (realOf src) _ wk x w
     tablesAdmitUnrefused_dataE (frameUnrefused_ofLoop _ _ _ _ wk x w hSv)
@@ -185,8 +187,8 @@ theorem trustsStop_honest (L₁ : LeanRelease Flock.Wit Tp)
   exact ⟨linkRoundEqStop_of_vals _ _ x w (linkRoundEq_ofLoopLink _ _ src _ hsc hR (hSrc x w h).1.linkLevel0),
     liveRoundEqStop_of_vals _ _ _ _ x w hE, fillRoundEqStop_of_vals _ _ _ _ x w (hEf x w h),
     finalRoundEq_ofLoopLink _ _ src _ x w hsc hR hSv
-      (_root_.Flock.SecurityProofs.LoopInnerRound0Own Masked.dataE L₁ (realOf src) fin x w) (hSrc x w h) hE
-      finS_swCausal,
+      (_root_.Flock.SecurityProofs.LoopInnerRound0Own Masked.dataE L₁ (realOf src) fin x w) (hSrc x w h) hE.own
+      (finS.swCausalOn_of_swCausal _ _ finS_swCausal),
     finishRows_honestVals _ src _ _ hR hSv⟩
 
 end LeanRelease

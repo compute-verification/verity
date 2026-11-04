@@ -72,6 +72,7 @@ public import Proofs.Accounting.TS.SharedNoise
 public import Proofs.Accounting.TS.J10RChecks
 public import Proofs.Accounting.TS.SessionSound
 public import Proofs.Accounting.TS.CheckedSound
+public import Proofs.Accounting.TS.GroupSound
 public import Proofs.Accounting.TS.LanesSound
 public import Proofs.Accounting.TS.Session.Lanes.Layout
 public import Proofs.Accounting.TS.Session.Lanes.Decode
@@ -97,9 +98,10 @@ public import Proofs.Accounting.Compose
 public import Proofs.Accounting.ComposePeriod
 public import Proofs.Accounting.ComposePeriod.Honest
 public import Proofs.Accounting.Served
+public import Proofs.Accounting.Additive
 public import Proofs.Accounting.ServingBlocks
 public import Proofs.Accounting.ServingBlocks.Witnesses
-public import Proofs.Accounting.Additive
+public import Proofs.Accounting.Coverage
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/
 
