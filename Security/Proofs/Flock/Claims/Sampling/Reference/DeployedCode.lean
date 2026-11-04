@@ -9,8 +9,9 @@ verifier (`SampledProofs`) computes taken from it, and the rest `c`'s:
 
 * `checked`: the draw of record. `SampledProofs.Slots.select` runs on the registration the statement names (`reg x`, a
   `Reg`: the selection rule, the verifier's own program, query and work table, and the challenger's closure map, as
-  `SampledProofs.Run.run` reads them) over `L x` bytes of the coins (`bytes`), and every slot of the layout is
-  checked where the draw is refused (`drawChecked`). Nothing is checked where the statement names no registration.
+  `SampledProofs.Run.run` reads them, and the circuit file whose layout the draw's slots are) over `L x` bytes of the
+  coins (`bytes`), and every slot of the layout is checked where the draw is refused (`drawChecked`). Nothing is checked
+  where the statement names no registration.
 * `sessions`, `session`, `rounds`: one proof session per registration proves every drawn unit
   (`Stream.session`, where each covered registration's draw is its own tables of the session's statement). So every
   checked unit's session is the run's one session (`sess`) on its rounds (`sr`), and `sessions = 1`.
@@ -25,9 +26,9 @@ At this code:
 * `sessionSlots_code`: `SessionSlots` holds (`sessionSlots_of_one`).
 * `δc_code`: the record's completeness error is the largest `ZkTables.δc` over its one session's statements, with no
   union bound factor.
-* `drawSlots_code`: `DrawSlots` from `RegMatches` (the registration's program is the statement's descriptor, its layout
-  the statement's partition and its design the statement's design) and `BytesUniform` (the bytes are uniform when the
-  coins are).
+* `drawSlots_code`: `DrawSlots` from `RegMatches` (the registration's program is the statement's descriptor, its circuit
+  file's layout the statement's partition and its design the statement's design) and `BytesUniform` (the bytes are
+  uniform when the coins are).
 * `drawFixed_code`: `DrawFixed` from `BytesFixed` (the session's rounds are second-stage, and the draw's bytes don't
   read them).
 * `framed_code_iff`, `acceptsFramed_code_iff`, `sessionsScope_code_iff`, `sessionWit_code_iff`, `sessionsIn_code_iff`:
@@ -51,11 +52,13 @@ open Lean (Json)
 
 /-- **A registration as the draw of record reads it**, what `SampledProofs.Run.run` passes to `Select.select`: the
 verifier's own copies (`Run.Input.params.verifier`, whose program, query and work table the draw reads), the selection
-rule and the challenger's closure map. -/
+rule and the challenger's closure map; and the circuit file, whose layout in the program's strata the draw's slots are
+(`Slots.fileLayout`). -/
 structure Reg where
   verifier : SampledProofs.Registration.Verifier
   rule : SampledProofs.Select.Rule
   closure : Option (Array (Int × Array Int))
+  circuit : _root_.Flock.Circuit
 
 def Reg.program (g : Reg) : SampledProofs.Program := g.verifier.program
 
@@ -63,16 +66,16 @@ def Reg.query (g : Reg) : Json := g.verifier.query
 
 def Reg.table (g : Reg) : Option Json := g.verifier.workTable
 
-/-- The registration's layout (`Slots.layout`), empty where its query doesn't apply. -/
+/-- The registration's layout (`Slots.fileLayout`), empty where its query doesn't apply. -/
 def Reg.layout (g : Reg) : SampledProofs.Slots.Layout :=
-  match SampledProofs.Slots.layout g.program g.query with
+  match SampledProofs.Slots.fileLayout g.circuit g.program g.query with
   | .ok l => l
   | .error _ => default
 
 /-- **The draw of record's checked units** on the bytes `src`: `Slots.select`'s, and every slot of the layout where it
 is refused (`drawChecked`). -/
 def Reg.checked (g : Reg) (src : ByteArray) : List ℕ :=
-  (drawChecked g.rule g.program g.query g.table g.closure g.layout src).toList
+  (drawChecked g.rule g.circuit g.program g.query g.table g.closure g.layout src).toList
 
 /-- **The sampled verifier's code with its Lean draw**: `c` with `checked` the draw of record on the registration
 `reg x` over the bytes `bytes x` of the coins, and one session per registration, `sess`, on the rounds `sr`. -/
@@ -121,12 +124,12 @@ theorem δc_code (H : Msg → Msg) (x : Msg) :
 /-! ## The draw -/
 
 /-- **The registration is the statement's**: at a statement that parses and whose query evaluates, the statement names
-a registration whose program is the statement's descriptor (`Program.parse`), whose layout (`Slots.layout`) is the
-statement's partition and whose design (`slotDesign`) is the statement's. -/
+a registration whose program is the statement's descriptor (`Program.parse`), whose circuit file's layout
+(`Slots.fileLayout`) is the statement's partition and whose design (`slotDesign`) is the statement's. -/
 def RegMatches : Prop :=
   ∀ x s Pt, c.parse x = some s → c.partition s = some Pt →
     ∃ g l, reg x = some g ∧ SampledProofs.Program.parse ⟨s.desc.toArray⟩ = .ok g.program ∧
-      SampledProofs.Slots.layout g.program g.query = .ok l ∧ Pt = slotPartition l ∧
+      SampledProofs.Slots.fileLayout g.circuit g.program g.query = .ok l ∧ Pt = slotPartition l ∧
       slotDesign g.rule g.program g.query g.table = .ok s.design
 
 /-- **The draw's bytes are uniform when the coins are.** -/
@@ -141,8 +144,8 @@ theorem drawSlots_code (hreg : RegMatches c reg) (hunif : BytesUniform c L bytes
     DrawSlots (deploy rel (code c reg L bytes sr sess)) := by
   intro x s Pt hx hP
   obtain ⟨g, l, hg, hd, hl, hPt, hds⟩ := hreg x s Pt hx hP
-  refine ⟨g.rule, g.program, g.query, g.table, g.closure, l, L x, bytes x, hd, hl, hPt ▸ rfl, hds, hunif x,
-    fun r => ?_⟩
+  refine ⟨g.rule, g.circuit, g.program, g.query, g.table, g.closure, l, L x, bytes x, hd, hl, hPt ▸ rfl, hds,
+    hunif x, fun r => ?_⟩
   show ((reg x).map fun g => g.checked (bytesOf (bytes x r))).getD [] = _
   rw [hg]
   simp only [Option.map_some, Option.getD_some, Reg.checked, Reg.layout, hl]
