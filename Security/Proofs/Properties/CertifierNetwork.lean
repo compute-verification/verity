@@ -1,6 +1,5 @@
 import Proofs.Properties.CertifierNetwork.Defs
 import Proofs.Properties.CertifierNetwork.Accepted
-import Proofs.Properties.CertifierNetwork.Instance
 
 /-!
 # The certifier device's output is accepted: completeness, proved
