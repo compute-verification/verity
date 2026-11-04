@@ -18,8 +18,8 @@
 #      for b/<K>, the server's --h1-model; or H1_WEIGHTS_KEY, a key file)  H1_DRAW_K (else period.json's)
 #      FLOCK_PROVE, FLOCK_SELFTEST, FLOCK_VERIFY (prebuilt; else job.sh builds them under HZ_CACHE)  FC_FIREWALL_LEAN (the
 #      ZK server's flock-firewall, prebuilt; else built beside FLOCK_VERIFY)  H1_DRAWN_MEM_GB (the job's budget, default
-#      90% of the host's memory)  H1_ZK_SERVER_GB (a session's live verifier, `serve --zk`, its cap, default 88)
-#      H1_ZK_LEAN_GB (what the prover's share leaves the ZK server's Lean processes, default 96)  H1_FIREWALL (1; 0 the
+#      90% of the host's memory)  H1_ZK_SERVER_GB (a session's live verifier, `serve --zk`, its cap, default 125)
+#      H1_ZK_LEAN_GB (what the prover's share leaves the ZK server's Lean processes, default 145)  H1_FIREWALL (1; 0 the
 #      unfirewalled --zk path, for a cost comparison only: no ZK server serves it)
 #      PY (served_verdicts.sh's venv python, default .venv's)  H1_DRAWN_ONLY=1: write and check the statements, no verdict
 #      H1_DRAWN_CHECK=0: no drawn.py check, for a caller whose credit verifies the statements itself
@@ -30,14 +30,15 @@
 # H1_DRAWN_MEM_GB less H1_ZK_LEAN_GB. The ZK server's Lean processes are the prover's children, and under an
 # address-space cap their runtime can't create its threads, so they start through a wrapper that lifts the soft cap
 # they inherit: they are bounded by the H1_ZK_LEAN_GB the prover's cap leaves them and the job's cgroup, not by a
-# limit of their own. The verifier's default is sized to an unfirewalled K 2048 lane session (2^27 slots: 24.4M ANDs,
-# k_log 26, m 29; a combine is 4223 ANDs), which peaked at 65.4 GiB resident in the verifier and 61.3 GiB in the
-# prover, 238 s to prove at 8 threads (r20261102-160857-5d19): each side's cap is its peak plus ~35%, since an address
-# space outgrows resident memory by the allocator's arenas and the threads' stacks. Under the ZK server the same lane
-# peaked at 64.2 GiB in the prover and 77.8 GiB summed over the ZK server's two Lean processes (r20261104-012048-4559),
-# hence H1_ZK_LEAN_GB's 96. drawn.sh refuses before staging when the prover's cap is below its 65 GB resident peak, so a
-# K 2048 window wants H1_DRAWN_MEM_GB >= 88 + 96 + 65 = 249 (H1_DRAWN_MEM_GB=400: the prover's cap is 216). A larger K's
-# lane is measured again before it runs.
+# limit of their own. An unfirewalled K 2048 lane session (2^27 slots: 24.4M ANDs, k_log 26, m 29; a combine is 4223
+# ANDs) peaked at 65.4 GiB resident in the verifier and 61.3 GiB in the prover, 238 s to prove at 8 threads
+# (r20261102-160857-5d19); under the ZK server, 64.2 GiB in the prover and 77.8 GiB summed over the ZK server's two Lean
+# processes (r20261104-012048-4559). A J10-R tile call of one unit (k_log 27, m 30) peaked at 92.2 GiB in the verifier on
+# either path (whose 88 GiB cap it outgrew, r20261104-032759-3438), 98.5 GiB in the prover and 108.1 GiB in the Lean
+# processes (r20261104-043623-2364). The defaults are those k_log 27 peaks plus ~35% for the verifier and the Lean
+# processes, since an address space outgrows resident memory by the allocator's arenas and the threads' stacks.
+# drawn.sh refuses before staging when the prover's cap is below its 99 GB resident peak, so a k_log 27 window wants
+# H1_DRAWN_MEM_GB >= 125 + 145 + 99 = 369 (H1_DRAWN_MEM_GB=400: the prover's cap is 130, its peak plus 32%).
 # Out: PIECE_DIR/drawn/ (statements.json and job.log, and sessions/<statement>/: the live verifier's log, the prover's
 # LIVE verdict lines, both sides' wall seconds, peak RSS and CPU seconds, and the job cgroup's CPU seconds over the
 # session (cgroup.json, the ZK server's Lean processes among them), kept whether the session passed or failed;
@@ -59,11 +60,11 @@ export HZ_MEM_GB=${H1_DRAWN_MEM_GB:-$(awk '/MemTotal/ {print int($2 * 0.9 / 1048
 . benchmarks/pouw/hidden_zk/job.sh
 trap 'cp "$OUT/job.log" "$P/drawn/" 2>/dev/null; rm -rf "$W"; [ -n "${H1_DRAWN_WORK:-}" ] || rm -rf "$SCR"' EXIT
 FW=${H1_FIREWALL:-1}
-SERVE_GB=${H1_ZK_SERVER_GB:-88} LEAN_GB=0
-[ "$FW" = 1 ] && LEAN_GB=${H1_ZK_LEAN_GB:-96}
+SERVE_GB=${H1_ZK_SERVER_GB:-125} LEAN_GB=0
+[ "$FW" = 1 ] && LEAN_GB=${H1_ZK_LEAN_GB:-145}
 PROVE_GB=$(( MEM_GB - SERVE_GB - LEAN_GB ))
-[ "$PROVE_GB" -ge 65 ] || { log "drawn: the prover's cap, $MEM_GB - $SERVE_GB (H1_ZK_SERVER_GB) - $LEAN_GB (H1_ZK_LEAN_GB) =" \
-  "$PROVE_GB GB, is below a K 2048 lane session's 65 GB peak: raise H1_DRAWN_MEM_GB (a larger host, or a CPU node) or," \
+[ "$PROVE_GB" -ge 99 ] || { log "drawn: the prover's cap, $MEM_GB - $SERVE_GB (H1_ZK_SERVER_GB) - $LEAN_GB (H1_ZK_LEAN_GB) =" \
+  "$PROVE_GB GB, is below a k_log 27 session's 99 GB peak: raise H1_DRAWN_MEM_GB (a larger host, or a CPU node) or," \
   "for a smaller K, lower H1_ZK_SERVER_GB"; exit 1; }
 vlimit() { echo "ulimit -S -v $(( $1 * 1024 * 1024 ));"; }
 setup

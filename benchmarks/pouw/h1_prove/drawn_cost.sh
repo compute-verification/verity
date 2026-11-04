@@ -4,8 +4,8 @@
 # K 2): each arm stages, proves and has credit check (drawn.py check, the Lean flock-verify) the window's drawn calls.
 # out/summary.json has each arm's sessions: the job cgroup's CPU seconds over each (the ZK server's Lean among them), both
 # sides' timed.py records, the LIVE verdicts, credit's line, and the peak RSS summed over the flock-firewall processes.
-#   research run --on auto --cpus 32 --mem-gb 240 --timeout 180m --cwd source --wait -- bash benchmarks/pouw/h1_prove/drawn_cost.sh
-# env: DC_MEM_GB (drawn.sh's H1_DRAWN_MEM_GB, 250)  DC_SERVE_GB (H1_ZK_SERVER_GB, 88)  DC_LEAN_GB (H1_ZK_LEAN_GB, 96)
+#   research run --on auto --cpus 32 --mem-gb 320 --timeout 180m --cwd source --wait -- bash benchmarks/pouw/h1_prove/drawn_cost.sh
+# env: DC_MEM_GB (drawn.sh's H1_DRAWN_MEM_GB, 400)  DC_SERVE_GB (H1_ZK_SERVER_GB, 125)  DC_LEAN_GB (H1_ZK_LEAN_GB, 145)
 #      DC_ARMS ("1 0": H1_FIREWALL of each arm, in order)  HZ_CACHE (/workspace/research/cache/pouw-hidden-zk)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -37,7 +37,7 @@ SAMPLER=$!
 for fw in ${DC_ARMS:-1 0}; do
   echo "fw$fw" > "$B/arm"
   H1_FIREWALL=$fw H1_CIRCUITS=$T/circuits H1_WEIGHTS=$T/weights.npz H1_WEIGHTS_KEY=$T/wkey H1_DRAW_K=2 H1_DRAWN_ONLY=1 \
-    H1_DRAWN_MEM_GB=${DC_MEM_GB:-250} H1_ZK_SERVER_GB=${DC_SERVE_GB:-88} H1_ZK_LEAN_GB=${DC_LEAN_GB:-96} \
+    H1_DRAWN_MEM_GB=${DC_MEM_GB:-400} H1_ZK_SERVER_GB=${DC_SERVE_GB:-125} H1_ZK_LEAN_GB=${DC_LEAN_GB:-145} \
     HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk} PY=$PWD/.venv/bin/python H1_DRAWN_WORK=$B/work$fw \
     bash benchmarks/pouw/h1_prove/drawn.sh "$T/serve" 0 "$OUT/fw$fw" > "$OUT/fw$fw.log" 2>&1
   echo "fw$fw exit $?" | tee -a "$OUT/arms.txt"
