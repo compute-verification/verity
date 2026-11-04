@@ -151,7 +151,11 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   two ports of one root registering it differently (a row's opening finds its port by root), and every port of a value
   the registration record has an entry for agreeing with that entry in root, leaf count, words, word bits and domain,
   its row format the one the verifier counts the value's rows in (`registered.ports_twice`, `root_clash` and
-  `entry_clash` are their Python, which the difftest holds to them). `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
+  `entry_clash` are their Python, which the difftest holds to them). In the per-member form, each session's set-up also
+  holds every port of its member's statement that no registered port names to the root and domain the registration
+  record commits for `<member>/<port>`, in the public header's frame_v3 (`Registered.statementHeld`, O(ports), drawn or
+  not; `registered.statement_clash`), so a writer's statement is proved about the rows its readers open.
+  `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
   to `verify`'s. Remote reads v2 as `VStar.Recursive.Sampled`'s one-stage form, and refuses v1; onsite's integrity
   component (`Core.Onsite`) is still v1 until it reads v2.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
