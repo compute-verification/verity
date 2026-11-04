@@ -63,7 +63,7 @@ Python's builder with C-Flock's CPU prover, not `refP`.
 
 What ties the two provers is `verity/core/service/vstar/tests/test_vstar_trace_difftest.py`. `refP`'s V\* parts are
 `bringsAt`'s `refPartsFin (A0 mask)`: each part's `VStar.Trace.assign` at its fitted port inputs (`VStar.In.partIn`,
-which `test_vstar_in_difftest` holds to Python's stager). The trace difftest holds `VStar.Trace.assign` (`vstar-trace`) to
+whose level, algebra and cap builders `test_vstar_in_difftest` holds to Python's stager). The trace difftest holds `VStar.Trace.assign` (`vstar-trace`) to
 C-Flock's CPU prover's witness (`flock-trace`: `Stmt::row_inputs`, `unit_inputs`, `converge`, `witness`), block for
 block and range for range, on parts Python's `rec_vstage.stage` staged:
 * `test_the_recorded_plain_leaf_sessions_traces` (at 547915a62c)

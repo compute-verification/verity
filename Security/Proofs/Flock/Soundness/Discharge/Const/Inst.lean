@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Lowering
+import Properties.Flock.Circuit.Outs
 
 /-!
 # A program's own instance of each unit's rows
@@ -25,12 +26,6 @@ section snoc
 variable {N₀ n₀ : ℕ} (p : FlockSoundness.Prog N₀ n₀) (R : Rows) (ins : Fin R.nIn → Fin N₀) (one : Fin N₀)
   (hone : ∀ c, ins c ≠ one)
 
-theorem rows_last : (snoc p R ins one hone).rows (Fin.last n₀) = R := by
-  simp [FlockSoundness.Prog.rows]
-
-theorem rows_castSucc (v : Fin n₀) : (snoc p R ins one hone).rows v.castSucc = p.rows v := by
-  simp [FlockSoundness.Prog.rows, v.isLt]
-
 /-- A new unit's constant column is on the gate it is wired to. -/
 theorem colWire_one : colWire R ins one R.one = Fin.castAdd R.nComp one := by
   apply Fin.ext
@@ -45,11 +40,6 @@ theorem colWire_input (c : Fin R.w) (hc : c.val < R.nIn) : colWire R ins one c =
 
 end snoc
 
-/-- A program-level instance, carried along an equality of rows. -/
-def castW {N n : ℕ} {q : FlockSoundness.Prog N n} {u : Fin n} {R R' : Rows} (e : R = R') (W : q.RowsWire u R) :
-    q.RowsWire u R' :=
-  e ▸ W
-
 theorem castW_wire {N n : ℕ} {q : FlockSoundness.Prog N n} {u : Fin n} {R R' : Rows} (e : R = R')
     (W : q.RowsWire u R) (c : Fin R'.w) : (castW e W).wire c = W.wire (Fin.cast (by rw [e]) c) := by
   subst e
@@ -59,15 +49,6 @@ theorem castW_wire_one {N n : ℕ} {q : FlockSoundness.Prog N n} {u : Fin n} {R 
     (W : q.RowsWire u R) : (castW e W).wire R'.one = W.wire R.one := by
   subst e
   rfl
-
-/-- **Unit `u`'s rows, wired as the program wires them**: the last unit's by `Prog.rowsWire_last`, an earlier one's
-lifted by `Prog.rowsWire_snoc`. -/
-def rowsWireC : ∀ {N n : ℕ} (p : FlockSoundness.Prog N n) (u : Fin n), p.RowsWire u (p.rows u)
-  | _, _, .inputs _, u => u.elim0
-  | _, _, .snoc p R ins one hone, u =>
-    Fin.lastCases (motive := fun u => (snoc p R ins one hone).RowsWire u ((snoc p R ins one hone).rows u))
-      (castW (rows_last p R ins one hone).symm (rowsWire_last p R ins one hone))
-      (fun v => castW (rows_castSucc p R ins one hone v).symm (rowsWire_snoc p R ins one hone (rowsWireC p v))) u
 
 /-- **Unit `u`'s rows, wired as the program wires them**, as an instance in the program's circuit. -/
 def instC {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) (u : Fin n) :

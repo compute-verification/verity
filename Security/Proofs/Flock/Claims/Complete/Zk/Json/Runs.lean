@@ -1,10 +1,11 @@
 import Proofs.Flock.Claims.Complete.Zk.Json.Files
 import Proofs.Flock.Claims.Complete.Runs
+import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The honest masked session runs
 
-`Runs.lean` at the masked session: the goal `SessionRunsZk`, given `JsonSpec` and `StmtOkZk` (the masked record's
+`Runs.lean` at the masked session: the goal `SessionRunsZk`, given `StmtOkZk` (the masked record's
 `hello` prints) and one named hypothesis on the masked prover's pieces, `ProverRunsZk`: at every good masked case's
 table, on the masked level-0 commitment, the extra claims at the link's points (which return, the table's regions
 fitting by `readyZk`) and the tape's pads committed, rep `0` returns from the link's send and rep `1` from where rep `0`
@@ -96,12 +97,12 @@ theorem Runs.forIn_idx {α β : Type} (f : α → β → PS (ForInStep β)) (inv
     exact ih
 
 /-- **The masked session runs**: the goal `SessionRunsZk`. -/
-theorem sessionRunsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (hS : StmtOkZk H rel)
+theorem sessionRunsZk_goal (hS : StmtOkZk H rel)
     (hR : ProverRunsZk H rel) : SessionRunsZk H rel := by
   intro c
   obtain ⟨st, hst, hsp, hm1, hm2⟩ := c.table
   obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg⟩ := hS c
-  obtain ⟨hz, hc⟩ := S.canon_ok _ hg
+  obtain ⟨hz, hc, -⟩ := FlockComplete.JsonRT.canon_ok _ hg
   obtain ⟨ct, hct⟩ : ∃ ct, c.spec.coinTree = some ct := Option.isSome_iff_exists.1 c.ready_parts.2.2.2.2
   have ht : c.spec.tables = #[st.tags.table] := by rw [hsp]; rfl
   obtain ⟨v, hv⟩ := zkSchedule_ok (m := (Setup.ofCircuit st).m) hm1 hm2

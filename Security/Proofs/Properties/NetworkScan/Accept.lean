@@ -5,10 +5,10 @@ import Proofs.Properties.Nci.BodiesOk
 # What `NetworkCheck.Period.scanOf`'s acceptance gives of the scan's Program
 
 `scanOf_accepted` reads `scanOf`'s steps one by one (each check a `need`, so each step a bind) and keeps what
-`NetTiming.Layout.Fits`'s first two parts rest on (`Accepted`): the description's layout and walk checks, the egress
-template's node (a batch of `T`, returning a u16 and the row, every leaf its own, all `T` instances' leaves returned by
-the root in one run), each step's ingress bucket (`Ingress`: a batch member, its first parameter the row, its first
-argument one input node's leaves), and the Program topological (`Prog.orderViolation`), which part (3) reads.
+`NetTiming.BoundaryGates.Fits`'s first two parts rest on (`Accepted`): the description's layout and walk checks, the
+egress template's node (a batch of `T`, returning a u16 and the row, every leaf its own, all `T` instances' leaves
+returned by the root in one run), each step's ingress bucket (`Ingress`: a batch member, its first parameter the row,
+its first argument one input node's leaves), and the Program topological (`Prog.orderViolation`), which part (3) reads.
 -/
 
 namespace Properties.NetworkScan.Fits
@@ -40,7 +40,7 @@ def Ingress (P : Prog) (s : Schedule) (km : ℕ × ℕ) : Prop :=
     0 < (callee P km.1).params.size ∧ ((callee P km.1).params[0]!).2 = rowTy s ∧
     ∃ kr, ((node P km.1).args[0]?).bind (inputArg P) = some kr
 
-/-- **What an accepted scan's Program is**, as `NetTiming.Layout.Fits`'s first two parts read it. -/
+/-- **What an accepted scan's Program is**, as `NetTiming.BoundaryGates.Fits`'s first two parts read it. -/
 structure Accepted (P : Prog) (s : Schedule) : Prop where
   laid : NciCheck.Desc.rootLaidOut P = true ∧ NciCheck.Desc.inputsAtRoot P = true ∧ NciCheck.Desc.walkable P = true
   egress_mem : egressNode P ∈ templateNodes P
@@ -131,6 +131,9 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   obtain ⟨_, h12, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, h15, -⟩ := bind_ok h
   replace h15 := Option.isNone_iff_eq_none.1 (need_ok h15)
   replace h3 := need_ok h3
@@ -184,10 +187,10 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   obtain ⟨⟨hn1, hnl⟩, -⟩ := h3
   obtain ⟨⟨⟨⟨hxf, hxn⟩, hln⟩, hxeb⟩, hxen⟩ := h4
   obtain ⟨hr0, hrl⟩ := h5
-  have hdf : df.params.size = 2 := by
+  have hdf : 0 < df.params.size := by
     have := congrArg Array.size hn1
     rw [Array.size_map] at this
-    exact this.trans rfl
+    rw [this]; simp [firstParams]
   refine ⟨⟨h9.1.1, h9.1.2, h9.2⟩, hemem, ⟨form_batch hxeb, hxen⟩, BodiesOk.ty_beq h7, h11, hret, ?_, h15⟩
   rcases hpick with ⟨a, e, hts, hfa, rfl⟩ | ⟨a, b, e, hts, hfa, rfl⟩
   · simp only [Prod.mk.injEq] at hfa
@@ -204,10 +207,10 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   · simp only [Prod.mk.injEq] at hfa
     obtain ⟨rfl, rfl⟩ := hfa
     simp only [Option.all_some] at hnl hrl
-    have hbs : (callee P b).params.size = 3 := by
+    have hbs : 0 < (callee P b).params.size := by
       have := congrArg Array.size (beq_iff_eq.1 hnl)
       rw [Array.size_map] at this
-      exact this.trans rfl
+      rw [this]; simp [ingressParams]
     try dsimp only at hln
     split at hln
     · rename_i hcond

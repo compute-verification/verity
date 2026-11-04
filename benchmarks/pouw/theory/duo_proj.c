@@ -21,10 +21,10 @@
 // xorshift bijection (a scaled stand-in for the served z = mix32(y + golden)); the first-word reduction then fails, so
 // every pair of runs is compared by a sort of all 2^(nL) fingerprints.
 //
-// Keys: -a a_1,..,a_L and -r r_1,..,r_L (the driver computes schedules and phases); -s sweeps every odd multiplier at
-// every position (OpenMP over assignments). -h sets the receipt rotation (default n / 2). Prints each key assignment
-// with a kernel element and up to -v kernel elements (words, word differences, kappa; one per assignment under -s),
-// and a summary line
+// Keys: -a a_1,..,a_L and -r r_1,..,r_L (one multiplier and one rotation a position, at width n); -s sweeps every odd
+// multiplier at every position (OpenMP over assignments). -h sets the receipt rotation (default n / 2). Prints each
+// key assignment with a kernel element and up to -v kernel elements (words, word differences, kappa; one per
+// assignment under -s), and a summary line
 //   "n L mode h configs N hit_configs C hits H toponly T kappas K"
 // T the elements whose word differences are all 0 or 2^(n-1), K the distinct kappas seen (up to 16 listed).
 #include <omp.h>

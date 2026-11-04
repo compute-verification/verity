@@ -150,7 +150,7 @@ def gates (cost : ℕ → ℕ∞) (E : SketchStore N m) : Provenance N m α → 
 /-- **A provenance that is `W`'s over the windows `I`** of the audit `A`: at every store its inputs are at most the
 bits of `W`'s run inputs in those windows, and its encodes, at `cost x` for `x` bits, cost at most `W`'s nonlinear
 units there: its budgeted units (`Gates.census`, property/v1's units) and its data products (`Gates.productsAt`). -/
-def OfCircuit {ι : Type} (K : Provenance N m α) (cost : ℕ → ℕ∞) (W : Gates.Dag ι) (A : Gates.Audit)
+def OfCircuit {ι : Type} (K : Provenance N m α) (cost : ℕ → ℕ∞) (W : Gates.IntDag ι) (A : Gates.Audit)
     (I : Finset ℕ) : Prop :=
   ∀ E, K.inputs E ≤ ∑ v ∈ I, (Gates.census W fun t => A.win t = v).runBits ∧
     K.gates cost E ≤

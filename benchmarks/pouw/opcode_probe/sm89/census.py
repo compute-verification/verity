@@ -16,7 +16,7 @@ Every kind is one warp instruction; MMA kinds are tensor_kinds' (one a SASS form
   so it is the pipe's own rate, not the probe's. Kinds share a row only where that pipe accounting shows it (`A`).
 - the `E*` facets of each MMA + X family (eps1.py `facets`), with every non-MMA instruction of a probe's loops counted
   as X: an overhead instruction could be an X in an attacker's program, so the facets stay sound, and loose at the X
-  axis, where the pipe row binds. With `--ji`, FACET-BREAK's schedule (2-3 accumulators, 2 warps a SMSP) beside
+  axis, where the pipe row binds. With `--ji`, facet_break's schedule (2-3 accumulators, 2 warps a SMSP) beside
   IMMA.16832 joins the families it beat (`JI_FAMILIES`), each program whose loop holds only the family's class and loop
   overhead beside its MMAs.
 - `UP` (with the uniform run): the uniform pipe, UNI (one uniform instruction, any form) at the largest rate its alone
@@ -78,7 +78,7 @@ PIPES = {
 }
 MARGIN = 0.02
 #: uniform.cu's loops: the uniform chains alone, beside saturated IMMA.16816 (ut_0 the MMAs alone), and each base loop
-#: with the loops that add uniform chains to it: honest16 (the ALU pipe binds), honest16 + 64 FFMA (FACET-BREAK's)
+#: with the loops that add uniform chains to it: honest16 (the ALU pipe binds), honest16 + 64 FFMA (facet_break's)
 UNI_ALONE = ("uz_64x", "uz_64a", "uz_64s", "uz_64p", "uz_64m")
 UNI_TENSOR = ("ut_0", "ut_32x", "ut_64x", "ut_128x", "ut_64a", "ut_64s", "ut_64p", "ut_64m", "ut_128m")
 UNI_BESIDE = {"uh_0": ("uh_32x", "uh_64x", "uh_64a", "uh_64s", "uh_64p", "uh_64m", "uh_128m"),
@@ -192,7 +192,7 @@ def build(scalar: Path, tk: Path, ji: list[Path] = ()) -> tuple[list[list[str]],
     return rws, cen
 
 
-#: a ji.py lane: the E families its IMMA.16832 programs join, the ones a ji32 program beat (r20261017-102743-9e4d: EFFMA0
+#: a ji.py lane: the E families its IMMA.16832 programs join, the ones a ji32 program beat (EFFMA0
 #: 1.097, EALU2 and EIADD32 1.075; IMAD lanes reach EIMAD2 0.988, so EIMAD keeps scalar.cu's fit). Both ALU families
 #: bound IMMA16832 + ALU.
 JI_FAMILIES = {"fmuli": ("ffma",), "faddi": ("ffma",), "ffmai": ("ffma",), "ffma": ("ffma",), "iadd3": ("iadd3", "lop3"),

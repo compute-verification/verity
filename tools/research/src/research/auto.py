@@ -12,12 +12,14 @@ then takes, in order:
     run, with no cgroup cap) is free and unblocked for every waiter ahead and this job;
   - else the pool with the shortest wait, as waiters ahead per fitting slot;
   - node 2 only when no pool fits the job or none can be read, and node 2 itself can be. Node 2 is the only GPU node, and on
-    24 Oct 02:10Z its GPUs sat at 0% under a load of 235 on 120 cores from CPU work while cpu-5 ran at 8 of 192 (top).
+    24 Oct 02:10Z its GPUs sat at 0% under a load of 235 on 120 cores from CPU work while cpu-5 ran at 8 of 192 (top). A node 2
+    that carries remote.RUNS_VIA_SLOT_FILE counts as unread: its launcher refuses a run that doesn't come through a check
+    slot.
 
 A GPU job, a run naming its own node, or one asking more than a pool slot gives stays on node 2's queue. A machine that can't
 be read is skipped; with node 2 unread and no pool fitting, the job is refused (`Unplaceable`) with where to run it. A pool
-run waits up to an hour in its line (slot_only.POOL_WAIT_S) and then exits 75 without running; its --timeout counts from
-taking the slot.
+run waits up to slot_only.POOL_WAIT_S (4 h) in its line and then exits 75 without running; its --timeout counts from taking
+the slot, and a wait inside it for a Lean audit slot (lean_slot.py) moves it later by as long.
 """
 from __future__ import annotations
 
@@ -61,6 +63,8 @@ def load(name, src, env):
 
 
 def share(cpus, d, root):
+    if os.path.exists(VIA_SLOT):
+        raise RuntimeError(f"{VIA_SLOT}: its launcher takes a run only through a check slot")
     c = load("auto_cores", CORES_SRC, {})
     want, d = c.parse(cpus), Path(d)
     if not d.is_dir():
@@ -121,12 +125,13 @@ def share_cpus(source: Path) -> str | None:
 
 
 def payload(source: Path, cpus: int, share: str | None, pools: list[str]) -> bytes:
-    from . import cores
+    from . import cores, remote
     from .pods.nebius import slot_only
 
     head = {"CORES_SRC": Path(cores.__file__).read_text(), "SLOT_SRC": (Path(source) / SLOT_PY).read_text() if pools else "",
             "JOB_CPUS": max(cpus, 1), "SHARE": share, "CLAIMS": str(cores.CLAIMS), "CPU_ROOT": str(cores.CPU_ROOT),
-            "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB}
+            "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB,
+            "VIA_SLOT": remote.RUNS_VIA_SLOT_FILE}
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + PROBE).encode()
 
 

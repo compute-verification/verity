@@ -1,5 +1,5 @@
 /-
-Halevi–Micali hiding leaves (`verity.commitments.hm96`, PR #88), generic over the hash. For an inner digest `x` of the value
+Halevi–Micali hiding leaves (`verity.commitments.hm96`), generic over the hash. For an inner digest `x` of the value
 and a salt `y`:
 
     c    = H(pad(SALT_TAG) ‖ y)          b = x ⊕ M·y,  M[i][j] = key bit (i + j)
@@ -69,13 +69,13 @@ def leaf (h : Hm96) (key x y : ByteArray) : ByteArray := h.treeLeaf key (h.commi
 
 private def tag (s : String) : ByteArray := s.toUTF8.push 0
 
-/-- `hm96-sha256/v1` (PR #88). -/
+/-- `hm96-sha256/v1`. -/
 def sha256 : Hm96 :=
   { name := "hm96-sha256/v1", hash := Sha256.hash, digestBytes := 32, saltBytes := 128, block := 64,
     saltTag := tag "verity/hm96-sha256/salt/v1", leafTag := tag "verity/hm96-sha256/leaf/v1",
     keyLabel := tag "verity/hm96-sha256/key/v1" }
 
-/-- `hm96-sha512/v1` (PR #93): every commitment path of the target statement. -/
+/-- `hm96-sha512/v1`: every commitment path of the target statement. -/
 def sha512 : Hm96 :=
   { name := "hm96-sha512/v1", hash := Sha512.hash, digestBytes := 64, saltBytes := 192, block := 128,
     saltTag := tag "verity/hm96-sha512/salt/v1", leafTag := tag "verity/hm96-sha512/leaf/v1",

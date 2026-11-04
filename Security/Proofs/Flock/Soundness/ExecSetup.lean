@@ -288,6 +288,12 @@ theorem netOK_lookup {nm : String} {tb : ByteArray} {n lo bits : ℕ} {net : Net
   have : (0 : ℕ) * WORD = 0 := Nat.zero_mul _
   omega
 
+/-- **Every net fits its slot**, and reads itself at its constant when it has a slot and fits `rd32`'s words: what
+`nets_ok` gives a flat circuit and `parseTmpl_nets_ok` a templated one. -/
+abbrev NetsFit (c : Circuit) : Prop :=
+  ∀ i, NetOK (c.nets.getD i default).2 ∧ (i < c.nets.size → 7 ≤ (c.nets.getD i default).2.unitLog ∧
+    ((c.nets.getD i default).2.unitLog ≤ 32 → ConstRow (c.nets.getD i default).2))
+
 theorem nets_ok {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (i : ℕ) :
     NetOK (c.nets.getD i default).2 ∧ (i < c.nets.size → 7 ≤ (c.nets.getD i default).2.unitLog ∧
       ((c.nets.getD i default).2.unitLog ≤ 32 → ConstRow (c.nets.getD i default).2)) := by
@@ -464,7 +470,8 @@ theorem layout_of {tags : Tags} {st : Stmt} (P : ParseFacts tags st.c) (hpin : H
     unit_mem := hum
     unit_kind := huk
     unit_count := huc
-    unit_built := hU
+    unit_built := by rw [lunit_flat P.tmpl]; exact hU
+    unit_at := UnitAt.flat P.tmpl hU hUin
     unit_lookup := hUlk
     unit_in := hUin
     unit_const := built_constRow hU
@@ -494,8 +501,7 @@ template instance `g` has its `units_per_vu` unit slots' rows (the unit net's ro
 theorem placement_of_setupH (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g) :
     Placement ((setupH_layout ht h).model regs) ((unitRows st (setupH_layout ht h).unit_built).stack st.c.upv)
-      (stackPlace ((setupH_layout ht h).model regs) (unitRows st (setupH_layout ht h).unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) ((setupH_layout ht h).hb hg)) :=
+      ((setupH_layout ht h).col regs hg) :=
   (setupH_layout ht h).placement regs hg
 
 /-- **A drawn unit's place, from the executable's accept step** (`UnitPlace`, which `loweringSoundB_of_place` and

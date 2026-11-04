@@ -509,7 +509,7 @@ _PADDED_BLOCK_MEMO_MAX = 4
 
 def padded_moe_block(statics: dict[str, Any], args: list[np.ndarray], *, router_gemm: bool) -> dict[str, np.ndarray]:
     """`MoeFfnFixedL_v1{E,TOPK,VPT,H,I}(x, logits, w13, w2)` (and `MoeFfnFixed_v1(x, wg, w13, w2)` with `router_gemm`) on one token row --
-    the vectorised twin of `verity.ml.definitions.registry.moe_pad._fixed_core`, statement for statement, built from the twins the MOE-01 evaluators
+    the vectorised twin of `verity.ml.definitions.registry.moe_pad._fixed_core`, statement for statement, built from the twins the indexed-read MoE evaluators
     already use (dot_bf16 / f2fp_bf16 / silu_mul_rows / mul_rn / add_rn / moe_router_topk).  Returns EVERY member a query may name on the
     row: `out` [H] bf16, `router_ids` [TOPK] i32, `router_w` [TOPK] f32, and per slot e `slot<e>/up` [2I] bf16, `slot<e>/act` [I] bf16,
     `slot<e>/down` [H] bf16, `slot<e>/g` [1] f32 (0.0f where the router did not pick e; the body is evaluated for EVERY slot, as the

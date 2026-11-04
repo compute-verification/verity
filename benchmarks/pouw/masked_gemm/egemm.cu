@@ -1,6 +1,6 @@
 // The honest cost of the edited GEMM on sm_120a (RTX PRO 6000): both dynamic operands edited with fresh noise from
 // S = {5, 7, -5, -7} for every instance, A' = A + E_A and B' = B + E_B, and A' B'^T served, with no peel and no mask
-// factors (note:20261015T1810Z-draft-relative-security-def; S is not FP4-representable, note:20261015T1827Z-draft-d4-attacks).
+// factors (S is not FP4-representable).
 // The noise is counter-based: one 16-byte chunk of a stacked row from nz_hash(key, row, k/16, chunk) (fgemm.cu), the keys
 // from the seed and the instance. int8 operands are kept in [-120, 120] and E4M3's in [-9, 9], so A' and B' can't
 // saturate and every sum is exact (s32, or f32 below 2^24).

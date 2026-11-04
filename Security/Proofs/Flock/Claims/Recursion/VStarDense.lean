@@ -4,15 +4,16 @@ import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.C3.Reps.AtList
 
 /-!
-# V\*'s parts at the dense form are levels, algebra parts and caps (`partAt_dense`)
+# V\*'s parts at the dense form are levels, algebra parts, caps and the link table's part (`partAt_dense`)
 
 At a statement the reader reads at the dense form (`Form.Dense`: no sparse phase), the verifier's own inner shape names
 no RecSparse shape, so candidate 3's list is empty (`candidate3_ok`: none without a `sparse` entry, and R without one is
-refused), and V\*'s list is its levels (`.recOpen`), its algebra parts (`.inner`) and its caps (`.cap`)
-(`getElem?_list`). No part is `.sparse`, `.recOpenStacked` or `.opening`, the statements `partIn` has no builder for.
+refused), and V\*'s list is its levels (`.recOpen`), its algebra parts (`.inner`), its caps (`.cap`) and, where the
+statement carries a link table, the table's part (`.link`) (`getElem?_list`). No part is `.sparse`, `.recOpenStacked` or
+`.opening`, the statements `partIn` has no builder for.
 
-`hok_dense` is `hok_of_fits` with its premise split by those three kinds: a level's checks (`LevelInFits`), an algebra
-part's (`AlgInFits`) and a cap's (`capIn` accepting).
+`hok_dense` is `hok_of_fits` with its premise split by those four kinds: a level's checks (`LevelInFits`), an algebra
+part's (`AlgInFits`), a cap's (`capIn` accepting) and none at the link table's part (`linkIn` refuses nothing).
 
 `IrShaped Ir x w ρ hist` is what the stager reads of the inner prover's `rest` at one run: both reps have an opening, and
 at each level part `.recOpen l L H n` the level's openings number `n`, each of `L` lanes and `H` siblings, and each one's
@@ -36,12 +37,13 @@ theorem sparse_none_of_dense {x : Msg} {st : Claims.Recursion.CompiledStatement}
   | none => rfl
   | some sp => rw [h] at h2; cases h2
 
-/-- **Every part of a dense statement is a level, an algebra part or a cap**: candidate 3's list is empty without a
-sparse phase, so V\*'s list is its levels, its algebra parts and its caps. -/
+/-- **Every part of a dense statement is a level, an algebra part, a cap or the link table's part**: candidate 3's list
+is empty without a sparse phase, so V\*'s list is its levels, its algebra parts, its caps and the link table's part. -/
 theorem partAt_dense {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : parse x = some st)
     (hf : Claims.Recursion.Form.Dense st.form) {s : ℕ} {sv : _root_.VStar.Stmt} {c : Circuit}
     (hp : partAt x s = some (sv, c)) :
-    (∃ l L H n, sv = .recOpen l L H n) ∨ (∃ j nm p, sv = .inner j nm p) ∨ ∃ l N, sv = .cap l N := by
+    (∃ l L H n, sv = .recOpen l L H n) ∨ (∃ j nm p, sv = .inner j nm p) ∨ (∃ l N, sv = .cap l N) ∨
+      ∃ UB PB N, sv = .link UB PB N := by
   obtain ⟨r, hr, hsp⟩ := sparse_none_of_dense hx hf
   obtain ⟨ss, hss, -⟩ := readX_parts hr
   have hsv : ss[s]? = some sv := by
@@ -57,7 +59,8 @@ theorem partAt_dense {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : p
     exact .inr (.inr (hK _ (Array.mem_iff_getElem?.2 ⟨_, hsv⟩)))
 
 /-- **The stager accepts at every part of a dense statement** where it accepts at each of its kinds: a level's checks
-hold (`LevelInFits`), an algebra part's (`AlgInFits`), and `capIn` accepts at a cap. -/
+hold (`LevelInFits`), an algebra part's (`AlgInFits`), and `capIn` accepts at a cap; it always accepts at the link
+table's part. -/
 theorem hok_dense {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} {hist : List (Msg × Msg)}
     {st : Claims.Recursion.CompiledStatement} {s : ℕ} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
     (hL : ∀ l L H n c src, partAt x s = some (.recOpen l L H n, c) → srcOf I x w ρ hist = some src →
@@ -69,10 +72,11 @@ theorem hok_dense {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} 
     ∀ sv c src, partAt x s = some (sv, c) → srcOf I x w ρ hist = some src →
       ∃ pin, _root_.VStar.In.partIn src (progOf c) sv = .ok pin := by
   refine hok_of_fits fun sv c src hp hs => ?_
-  rcases partAt_dense hx hf hp with ⟨l, L, H, n, rfl⟩ | ⟨j, nm, p, rfl⟩ | ⟨l, N, rfl⟩
+  rcases partAt_dense hx hf hp with ⟨l, L, H, n, rfl⟩ | ⟨j, nm, p, rfl⟩ | ⟨l, N, rfl⟩ | ⟨UB, PB, N, rfl⟩
   · exact hL l L H n c src hp hs
   · exact hA j nm p c src hp hs
   · exact hC l N c src hp hs
+  · trivial
 
 /-! ## The inner prover's openings at a run (`IrShaped`) -/
 

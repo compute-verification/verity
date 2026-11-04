@@ -67,7 +67,7 @@ theorem bit_toZ (b : Bool) : FlockSoundness.bit (toZ b) = b := by cases b <;> rf
 (`Layout.model`, at any regions) be satisfied by the table's share of the hidden values (`zOf`), and the verifier have
 built the table's unit from `l` (`netOf`). Then in every block `o`, at every VU `g` and copy `u`, `l`'s rows hold at the
 copy's columns (`copyCol`), from the end of the unit's input rows. -/
-theorem laidRows_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st)
+theorem laidRows_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st) (hfl : st.c.tmpl = none)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {J c : ℕ} {w : Claims.Flock.Wit}
     (hz : (L.model regs).Satisfies (zOf J w c st.m)) {o g u : ℕ} (ho : o < 2 ^ (st.m - st.c.kLog))
     (hg : g < st.c.g) (hu : u < st.c.upv) {name : String} {l : Flock.HmNets.Laid}
@@ -80,18 +80,25 @@ theorem laidRows_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st)
   have hone := FlockVBridge.stack_one _ _ hu hs
   beta_reduce at hone
   rw [hpl.one_eq hz ⟨o, ho⟩] at hone
-  have hL := FlockVBridge.laidRows_ofNet L.unit_built hl (L.unitLog_le (L.slot_lt hg hu)) hs1
+  have hl' : Flock.HmNets.netOf name l = .ok (FlockSoundness.lunit st.c) := by
+    rw [FlockSoundness.lunit_flat hfl]; exact hl
+  have hL := FlockVBridge.laidRows_ofNet L.unit_built hl' (L.lunitLog_le (L.slot_lt hg hu)) hs1
     (hone.trans (by simp [FlockSoundness.bit]))
+  rw [L.unit_at.in_eq] at hL
   have hw : (unitRows st L.unit_built).w = st.c.unit.constPos + 1 := by
     show _ + _ + 1 = _
-    rw [L.unitRows_nIn_nComp]
+    rw [L.unitRows_nIn_nComp, FlockSoundness.lunit_flat hfl]
   have hw' : (Rows.ofNet L.unit_built).w = st.c.unit.constPos + 1 := hw
   convert hL using 1
   funext j
   unfold FlockVBridge.colVal copyCol
   split_ifs
-  · have e := stackPlace_stackCol (L.model regs) (unitRows st L.unit_built) st.c.upv
-      (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) hu ⟨j, by omega⟩
+  · have hj : st.c.unitRange.slot (g * st.c.upv + u) + j < 2 ^ (L.model regs).kLog := by
+      have := L.hbM regs hg u hu ⟨j, by omega⟩
+      rwa [FlockSoundness.upos_flat hfl] at this
+    have e : L.col regs hg ((unitRows st L.unit_built).stackCol st.c.upv hu ⟨j, by omega⟩) = ⟨_, hj⟩ := by
+      apply Fin.ext
+      rw [L.col_stackCol regs hg hu, FlockSoundness.upos_flat hfl]
     exact (bit_toZ _).symm.trans
       (congrArg (fun i => FlockSoundness.bit ((L.model regs).block (zOf J w c st.m) ⟨o, ho⟩ i)) e.symm)
   · omega
@@ -103,7 +110,7 @@ the table's circuit, its unit named for part `j` of a shape `sh` the verifier ac
 row ports of `ns` elements and a `v` of `nv`. In every block, at every VU and copy, if the copy's input columns hold
 `W` on the row ports and `vv` on `v`'s (`InCols`), `W` and `vv` zero past `ns`'s total and `nv`, its output columns
 hold each of S's residuals at `W`, `vv`, 128 bits each, then zeros (`PartCols`). -/
-theorem partCols_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st)
+theorem partCols_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st) (hfl : st.c.tmpl = none)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {J c : ℕ} {w : Claims.Flock.Wit}
     (hz : (L.model regs).Satisfies (zOf J w c st.m)) {o g u : ℕ} (ho : o < 2 ^ (st.m - st.c.kLog))
     (hg : g < st.c.g) (hu : u < st.c.upv) (hc : RecResiduals.check st.c = .ok ()) {m k cl j : ℕ}
@@ -118,7 +125,7 @@ theorem partCols_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st)
   obtain ⟨S', ns', nv', hpart', hn⟩ := check_part hc hp hsh hh
   rw [hpart] at hpart'
   cases hpart'
-  have hL := laidRows_of_satisfies L regs hz ho hg hu hn
+  have hL := laidRows_of_satisfies L hfl regs hz ho hg hu hn
   rw [inWords_unitLaid hn] at hL
   exact laid_part S ns nv (part_small hpart) _ hL W vv hw0 hv0 hin
 
@@ -128,7 +135,7 @@ input columns hold a row `r`, `H` siblings `ss`, `acc`'s first elements `a` and 
 and the position's bits `idx`, the output columns hold the verifier of record's climb from the row's leaf
 (`Flock.climb`) and 64 zero bytes, then the consistency term at `k = 0, 1` and `rest`: `laid_unit` at the verifier's
 net (`RecOpen.check_ok`). -/
-theorem climb_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st)
+theorem climb_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st) (hfl : st.c.tmpl = none)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {J c : ℕ} {w : Claims.Flock.Wit}
     (hz : (L.model regs).Satisfies (zOf J w c st.m)) {o g u : ℕ} (ho : o < 2 ^ (st.m - st.c.kLog))
     (hg : g < st.c.g) (hu : u < st.c.upv) {v : ℕ → Bool}
@@ -156,7 +163,7 @@ theorem climb_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st)
   have hH : H ≤ 32 := by
     simp only [Flock.RecOpen.valid, Bool.and_eq_true, decide_eq_true_eq] at hvalid
     exact hvalid.2
-  have hL := laidRows_of_satisfies L regs hz ho hg hu hl
+  have hL := laidRows_of_satisfies L hfl regs hz ho hg hu hl
   rw [FlockVBridge.inWords_unit hl] at hL
   exact FlockVBridge.laid_unit ms hms LANES H hH _ hL r a cf rest idx ss hr ha hcf hrest hss hrow haux hacc hcoef hdir
 
@@ -192,6 +199,41 @@ theorem layout_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {
   obtain ⟨L, hz⟩ := (relS_layout hp' ht hpi w).1 hR t htl
   exact ⟨L, _, hz⟩
 
+/-- **Every table is flat at `Flock.check`**: at an untyped statement without public input words, each table's circuit
+is one `HmRow.parse` returned (`tableAt`), which carries no template. -/
+theorem flat_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+    (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
+    (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
+    (hrec : Flock.HmOut.recUnit p.sts[t].c.unit.name = true) : p.sts[t].c.tmpl = none := by
+  obtain ⟨p', hx', hp', -⟩ := relS_of_check h
+  rw [hx] at hx'
+  cases hx'
+  obtain ⟨hc, -⟩ := tableAt (tablesOf_of_parses hp') ht hpi htl
+  unfold ProvedScope.circuitOf at hc
+  split at hc
+  · rcases FlockSoundness.Discharge.Hidden.committed_of_commit hc with hc | hc
+    · exact (FlockSoundness.parse_facts (FlockSoundness.Discharge.Hidden.parse_untyped ht hc).1).tmpl
+    · rw [FlockSoundness.TmplValue.parseTmpl_notRec hc] at hrec
+      cases hrec
+  · exact (FlockSoundness.parse_facts hc).tmpl
+
+theorem recUnit_open {n : String} {L H : ℕ}
+    (h : Flock.RecOpen.params n = some (L, H) ∨ Flock.RecOpen.stackedParams n = some (L, H)) :
+    Flock.HmOut.recUnit n = true := by
+  rcases h with h | h <;> simp [Flock.HmOut.recUnit, h]
+
+theorem recUnit_residuals {n : String} {q : ℕ × ℕ × ℕ × ℕ} (h : Flock.RecResiduals.params n = some q) :
+    Flock.HmOut.recUnit n = true := by
+  simp [Flock.HmOut.recUnit, h]
+
+theorem recUnit_sparse {n : String} {sh : Flock.RecSparse.Shape} (h : Flock.RecSparse.params n = some sh) :
+    Flock.HmOut.recUnit n = true := by
+  simp [Flock.HmOut.recUnit, h]
+
+theorem recUnit_opening {n : String} {q : ℕ × ℕ × ℕ} (h : Flock.RecOpening.params n = some q) :
+    Flock.HmOut.recUnit n = true := by
+  simp [Flock.HmOut.recUnit, h]
+
 /-- **An algebra part's copies compute its residuals at `Flock.check`** (`partCols_of_satisfies` at every table):
 wherever `Flock.check` holds at the deployed parser, at an untyped parsed statement without public input words, a
 table `RecResiduals.check` accepted as part `j` of a shape's algebra holds, at every copy whose input columns hold `W`
@@ -210,7 +252,7 @@ theorem partCols_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg}
     PartCols S W vv (copyCol p.sts.size t w p.sts[t].c.kLog o
       (p.sts[t].c.unitRange.slot (g * p.sts[t].c.upv + u)) p.sts[t].c.unit.constPos) (partBase S ns nv) := by
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
-  exact partCols_of_satisfies L regs hz ho hg hu hc hp hsh hh hpart W vv hw0 hv0 hin
+  exact partCols_of_satisfies L (flat_of_check h hx ht hpi htl (recUnit_residuals hp)) regs hz ho hg hu hc hp hsh hh hpart W vv hw0 hv0 hin
 
 /-- **A rec-open part's copies climb at `Flock.check`** (`climb_of_satisfies` at every table): wherever `Flock.check`
 holds at the deployed parser, at an untyped parsed statement without public input words, a table `RecOpen.check`
@@ -241,7 +283,7 @@ theorem climb_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w
         (Flock.MerkleScheme.rowBytes #[FlockVBridge.consTerm LANES r a cf 0, FlockVBridge.consTerm LANES r a cf 1] ++
           rest)) := by
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
-  exact climb_of_satisfies L regs hz ho hg hu hv ms hms hrec hp r a cf rest idx ss hr ha hcf hrest hss hrow haux hacc
+  exact climb_of_satisfies L (flat_of_check h hx ht hpi htl (recUnit_open (.inl hp))) regs hz ho hg hu hv ms hms hrec hp r a cf rest idx ss hr ha hcf hrest hss hrow haux hacc
     hcoef hdir
 
 /-- The columns of copy `u` of VU `g` in block `o` of table `t`, off the hidden values (`copyCol`). -/

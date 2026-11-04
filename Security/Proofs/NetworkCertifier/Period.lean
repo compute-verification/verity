@@ -14,7 +14,7 @@ it sends, so the client's view reads back from them under its schedule, one its 
 (`tap_cells_read`): the views, and the secrets
 they decode to, number at most `#Ss` times the size of the product of those sets (`encard_periodGood_le`). The record
 holds the fail cells and the padding too, so the count needs no separate charge for them: the bound's
-`∏_c (cap_c + 1)`, the fail choices in `EncardWardenViewsLe`, is room here. `periodLeak` adds the per-window bound at
+`∏_c (cap_c + 1)`, one fail choice per connection, is room here. `periodLeak` adds the per-window bound at
 the network certifier's rows (`sampledLeak_tap`).
 -/
 
@@ -22,7 +22,7 @@ namespace NetTiming
 
 open Claims Claims.Sampling Finset
 
-theorem asReg_congr {L S : ℕ} (C : Prog) (lay : Layout L S) (k : ℕ) (R : Finset ℕ) {ρ ρ' : ℕ → Bool}
+theorem asReg_congr {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : ℕ) (R : Finset ℕ) {ρ ρ' : ℕ → Bool}
     (h : ∀ g ∈ R, ρ g = ρ' g) : AsReg C lay k R ρ = AsReg C lay k R ρ' := by
   ext a
   constructor <;> rintro ⟨h1, h2⟩ <;> refine ⟨fun g hg hf => ?_, h2⟩
@@ -35,7 +35,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 theorem mem_accSeqsSampled_of_windowGood {H : Msg → Msg} {D : Deploy Coin Col T} {L K S : ℕ}
-    {lay : AuditStatement → Layout L S} {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ} {Dj : ℕ} {s₀ : AuditStatement} {P₀ : Partition}
+    {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ} {Dj : ℕ} {s₀ : AuditStatement} {P₀ : Partition}
     (hP₀ : D.partition s₀ = some P₀) {ρ : ℕ → Bool} {tops : AuditStatement → List (Opening Bool)}
     {op : ℕ → List (Obs L K S) → List Bool} {x : Msg} {w : Wit} {o : List (Obs L K S)}
     (htap : ∀ s, D.parse x = some s → TapOpens H D.commit (lay s) (k s) op s (tops s) o)
@@ -55,7 +55,8 @@ theorem mem_accSeqsSampled_of_windowGood {H : Msg → Msg} {D : Deploy Coin Col 
   exact ⟨hfits, hmem⟩
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem encard_periodGood_le (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : AuditStatement → Layout L S)
+theorem encard_periodGood_le (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ)
+    (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (δ : ℝ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ) {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition)
     (hPw : ∀ i, D.partition (sw i) = some (Pw i)) (ρ : Fin n → ℕ → Bool)
     (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ)

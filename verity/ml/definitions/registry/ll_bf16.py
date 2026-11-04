@@ -58,7 +58,7 @@ _CAPTURE = EVIDENCE["glm53_bf16_gemm_capture"]
 CONFORMANCE = ("exact-model-tested: every gate word at K/N = 6144/256 and 7168/384, at the captured router M to 16, each launch the "
                "kernel bf16_gemm_check's dispatch table names, FMA 1 as the words decide it (FMA 0 misses 483 of the 7,040 dotprod "
                "words, FMA 1 none), on cc 9.0 with 132 SMs under vLLM's served default and the split-K-off variant: property "
-               f"glm53_bf16_gemm_capture, run {_CAPTURE['run']}, record {_CAPTURE['record'][:16]}, {_CAPTURE['art']['record']} "
+               f"glm53_bf16_gemm_capture, record {_CAPTURE['record'][:16]}, {_CAPTURE['art']['record']} "
                "(tests/properties/glm53_bf16_gemm_capture_gpu.py)")
 
 
