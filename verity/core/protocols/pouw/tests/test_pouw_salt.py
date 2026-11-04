@@ -22,6 +22,7 @@ import random
 import pytest
 
 import epoch_coins as E
+from verity.ml.commitments import hm96
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import active
 from verity.core.protocols.certifier.active import Proxy
@@ -132,6 +133,47 @@ def test_pouw_salt_form():
     for bad in (b"", bytearray(root), root.hex(), None):
         with pytest.raises(DomainError, match="public key"):
             PS.prover_id(bad)
+
+
+def test_lead_record_form():
+    """What the lead records for a window before its salt is SHA-512(b"verity/pouw-lead-record/v1" ‖ weights' root ‖
+    stream ‖ prover ‖ key leaf ‖ u64be(calls)), 290 bytes, pinned on the lead's keyed vector, whose key leaf is the
+    `hm96.SHA512` tree leaf over ks_w under a 192-byte salt y₀, and on one of consecutive bytes. A part that isn't 64
+    bytes, and a call count that isn't a positive u64, are refused; another key leaf or call count is another record."""
+    def label(name: str, n: int) -> bytes:
+        tag = f"lead/keyed/vector/{name}".encode()
+        return b"".join(hashlib.sha512(tag + i.to_bytes(8, "big")).digest() for i in range(-(-n // 64)))[:n]
+    H = hm96.SHA512
+    weights, ks_w, stream, prover = (hashlib.sha512(f"lead/keyed/vector/{n}".encode()).digest()
+                                     for n in ("weights", "ks_w", "stream", "prover"))
+    key_leaf = H.tree_leaf(H.default_key, H.commit_string(H.default_key, ks_w, label("y0", H.salt_bytes)))
+    assert key_leaf.hex() == (
+        "e121d1ae87e74b21ddb3585cff79d9c21aac50281d5e3a77fa18453007ae3f8d"
+        "1315a9b3c0dda315ed6e199f57f62a9dee19a9fa4fcd25ac67be7c612672c095")
+    assert PS.lead_record(weights, stream, prover, key_leaf, 64).hex() == (
+        "546ffb4bbb7d5ead4ecbdbe7ada190d9e4201369fb8659b6327e459d21c5b7f3"
+        "a2860f62d77c0ed21185f131b71eabf5fb9f45b9e074891f0e300fa0cfe6edbe")
+    message = b"verity/pouw-lead-record/v1" + weights + stream + prover + key_leaf + (64).to_bytes(8, "big")
+    assert len(message) == 290 and PS.lead_record(weights, stream, prover, key_leaf, 64) == hashlib.sha512(message).digest()
+    stream, prover, root, leaf = (bytes(range(i, i + 64)) for i in (0, 64, 128, 192))
+    assert PS.lead_record(root, stream, prover, leaf, 3).hex() == (
+        "7d1472590172ae63855670e09f66e734792de175ac711a0a6be3992c94a3f6e7"
+        "671957517ba0a0db3c3541aea569ceb0fbcd912675444e1e5a0dd91aba53075f")
+    assert PS.lead_record(root, stream, prover, leaf, 3) != PS.pouw_record(root, stream, prover)
+    assert len({PS.lead_record(root, stream, prover, leaf, 3), PS.lead_record(root, stream, prover, leaf, 4),
+                PS.lead_record(root, stream, prover, root, 3)}) == 3
+    for bad in (leaf[:32], leaf + b"\0", bytearray(leaf), leaf.hex()):
+        with pytest.raises(DomainError, match="weights' root is 64 bytes"):
+            PS.lead_record(bad, stream, prover, leaf, 3)
+        with pytest.raises(DomainError, match="stream is a 64-byte digest"):
+            PS.lead_record(root, bad, prover, leaf, 3)
+        with pytest.raises(DomainError, match="prover is a 64-byte id"):
+            PS.lead_record(root, stream, bad, leaf, 3)
+        with pytest.raises(DomainError, match="key leaf is 64 bytes"):
+            PS.lead_record(root, stream, prover, bad, 3)
+    for bad in (0, -1, 1 << 64, True, 3.0):
+        with pytest.raises(DomainError, match="positive u64"):
+            PS.lead_record(root, stream, prover, leaf, bad)
 
 
 def test_window_open_root_form():
