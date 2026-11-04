@@ -2464,6 +2464,10 @@
    "Pous.Claims.StreamedWipeMeetsDisk": {
     "fails": "Pous.Claims.StreamedWipeMeetsDisk_fails",
     "meets": ["Pous.Claims.StreamedWipeMeetsDisk_meets"]
+   },
+   "Claims.ZKOut": {
+    "fails": "Claims.ZKOut_fails",
+    "meets": ["Claims.Flock.masked_meets_zk", "Claims.Flock.scope_meets_zk"]
    }
   },
   "not": {
@@ -2508,7 +2512,8 @@
    "Claims.Sampling.PrivateCircuit.Fits": "a helper the claims read: a private circuit of a size class",
    "Claims.Json.Ascii": "a helper: a text of ASCII without DEL, which every text `Flock.canon` prints is",
    "Claims.Sampling.CommitmentScheme.Binds": "a helper the claims read: a commitment scheme's binding, which `Binding` reads",
-   "Claims.Recursion.DrawRecord.Full": "a V* session's draw record that takes every unit, a clause of the readable scope (`InScope`), no claim"
+   "Claims.Recursion.DrawRecord.Full": "a V* session's draw record that takes every unit, a clause of the readable scope (`InScope`), no claim",
+   "Claims.ZKOutLeak": "a corollary of `ZKOut`, proved of every `ZKOut` (`Claims.zkOutLeak`), not of a deployment"
   }
  },
  "witnesses": {
@@ -6481,6 +6486,9 @@
    ],
    "assumptions": [],
    "type_hash": "c9aee9249a386b4232cc2e4430bafa74c02dd818197685ebfd898a3ef2d4c60e"
+  },
+  "Claims.ZKOut_fails": {
+   "owner": "@proofs"
   },
   "Claims.ZKmalR_fails": {
    "owner": "@proofs",
