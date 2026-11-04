@@ -27064,11 +27064,13 @@
    "guarantees": [
     "Nci.SecurityProofs.HeldBudget",
     "Nci.SecurityProofs.HeldBudgetHonest",
+    "Nci.SecurityProofs.HeldBudgetNontrivial",
     "Nci.SecurityProofs.RecoveredBudget",
     "Nci.SecurityProofs.RecoveredBudgetHonest",
     "Nci.SecurityProofs.RecoveredBudgetNontrivial",
     "Nci.SecurityProofs.StatHeldBudget",
-    "Nci.SecurityProofs.StatHeldBudgetHonest"
+    "Nci.SecurityProofs.StatHeldBudgetHonest",
+    "Nci.SecurityProofs.StatHeldBudgetNontrivial"
    ]
   },
   "Definitions.Nci.Assumptions.Cover": {
@@ -27786,10 +27788,10 @@
    ]
   },
   "Definitions.Nci.Guarantees.Capability.Witnesses": {
-   "digest": "98575b725b91bbf6e64710656396fb09c62b22f47bb51c8638d465fc728f0b82",
+   "digest": "21e5d828794c1e53a60039575203584eeff0e902e2a95670c64d92b2567b7114",
    "definitions": {
     "Nci.Guarantees.HeldBudgetHonest": "5db0a66d388088af0c8826f3d1e27067f9828d0bdbd8a6602ddf84b02b0b1f0f",
-    "Nci.Guarantees.HeldBudgetNontrivial": "571e5511728d55cab5de7761f4055578ca12ed95ff0901d9e05006508d3ea66e",
+    "Nci.Guarantees.HeldBudgetNontrivial": "6ead30cfb4fe65aed17e3d370f11e5b1201ec1cd2ad8da585848f08b4e687532",
     "Nci.Guarantees.ImportOrRecomputeHonest": "6078c3a58c854085d04473d0bb830408664d7c92624db14e630f51955692dd53",
     "Nci.Guarantees.ImportOrRecomputeNontrivial": "064ff13755ff7d95dcf1673c17b4c5880e662eafef0922c869dca6a138aeb2a8",
     "Nci.Guarantees.IncidenceCapHonest": "6b066eb05e8af78956c035b3001bad56b7876ced08824ab6094b1fc7355ef2d4",
@@ -27805,7 +27807,7 @@
     "Nci.Guarantees.RecoveredBudgetHonest": "85881b40664b71457699c5f31ce4e6125bab57cdad6026086c9a934648392b80",
     "Nci.Guarantees.RecoveredBudgetNontrivial": "8435f2a6aa5767ff14663e2d9021e305eaa2204dc79a08629e281a216feebd32",
     "Nci.Guarantees.StatHeldBudgetHonest": "31e0331f3739f3fbc173b41a82885bdc6dd84e0f3384c58fa6de2e18c61de1aa",
-    "Nci.Guarantees.StatHeldBudgetNontrivial": "126292e9a8c5d52439c2e4b660706a44d851da598daadd9f189d685549f5937e",
+    "Nci.Guarantees.StatHeldBudgetNontrivial": "0ad5068f6a5a056e195a4fa7a0115313eea0b2505db154fe4ed53791f1290323",
     "Nci.Guarantees.WeightedProductCapHonest": "f6a60c4b9c1b45915ee73a308305e007f7b7ce819b9896f58c934831120a3f2f",
     "Nci.Guarantees.WeightedProductCapNontrivial": "77a3c47a2e7eca698bf74f171eed7fce1f9a446dcdc626a990a85d21d831d825"
    },
