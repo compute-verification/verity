@@ -11,8 +11,10 @@ import Proofs.Flock.Claims.Sampling.Cost
 
 * Every proof system's extractor is `E^rep` (`Arg`), so its cost premises hold at every `A`: at most `1 + m′·K` reruns,
   strictly and in expectation (`arg_reruns`, `arg_rerunsExp`, from `ERep_cost`), and no SHA-512 call of its own
-  (`arg_own`). The expected bound is the strict one: `E^rep`'s expected `1 + m′·k` reads `k`, a statement's, which a
-  bound over shapes can't.
+  (`arg_own`). There the expected bound is the strict one: `E^rep`'s expected `1 + m′·k` reads `k`, a statement's,
+  which a bound over shapes reads only where the shape carries it. Flock's carries `N₀`, so at `Arg.ofFlock` the
+  expected bound is `1 + m′·⌈4·N₀/e⌉` (`ofFlock_reruns`). `twoCosts_meets` states the strict one at `twoA`, the bound
+  every `Arg` meets.
 * `sksL` (`Witnesses.SamplingGeneric`) accepts every run while no witness is in its relation at `δ = 0`, and there
   `λ > 0` at no reruns and no calls of the proof system's: `Compiled.Bits_fails`.
 * `effL`: a compiled verifier over `findA`, a proof system whose verifier accepts after one round and whose extractor

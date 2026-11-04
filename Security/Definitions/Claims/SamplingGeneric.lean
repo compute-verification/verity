@@ -66,9 +66,9 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
 7. **The compiler's statements** (`CompilerKS`, `CompilerKSReg`, `CompilerKSCount`, `CompilerBits`,
    `CompilerEfficient`, `CompilerZK`): each claim of every compiled verifier that meets the contract, from `Arg`'s.
 8. **Flock** (`Arg.ofFlock`): Flock's `E^rep` at the record's deployed decoder (`D.decode`), its assemble step counted
-   (`flockAssemble`), its shape the numbers its coins read, its errors Flock's; `FlockArgKS` says that `Flock.KS` is its
-   `Arg.KS`, so `FlockKS` and `FlockKSReg` are `CompilerKS` and `CompilerKSReg` at Flock. They take `Flock.KS`, the
-   binding and the contract as hypotheses, at a record, not at a deployed verifier's code.
+   (`flockAssemble`), its shape the numbers it reads (its coins' and `N₀`), its errors Flock's; `FlockArgKS` says that
+   `Flock.KS` is its `Arg.KS`, so `FlockKS` and `FlockKSReg` are `CompilerKS` and `CompilerKSReg` at Flock. They take
+   `Flock.KS`, the binding and the contract as hypotheses, at a record, not at a deployed verifier's code.
 
 Statements only: definitions, no proofs. `Claims.Sampling` stays as it is, frozen; it becomes this block's Flock
 instance when its extractor is restated as `Compiled.E` at `Arg.ofFlock`.
@@ -759,13 +759,13 @@ def flockAssemble (D : Claims.Flock.Deploy Coin Col T) (x : Msg) (os : List (ℕ
         (D.dec (os.flatMap fun o => o j)).2 + (D.decode (os.flatMap fun o => o j)).length).sum)
 
 /-- **Flock as a proof system for proof blocks**: `E^rep` at the deployed decoder (`Flock.E D D.decode`), its assemble
-step counted (`flockAssemble`), its shape the numbers its coins read (waits `m′`, truncation `K`, rounds), and its
-errors Flock's (`Flock.κ`, `Flock.γ`). -/
+step counted (`flockAssemble`), its shape the numbers it reads (waits `m′`, truncation `K`, rounds, and `N₀`, which
+fixes each wait's `k` and so its expected reruns), and its errors Flock's (`Flock.κ`, `Flock.γ`). -/
 noncomputable def Arg.ofFlock (D : Claims.Flock.Deploy Coin Col T) : Arg Coin where
-  Sh := ℕ × ℕ × ℕ
-  shape x := (D.waits x, D.cap x, D.V.k x)
+  Sh := ℕ × ℕ × ℕ × ℝ
+  shape x := (D.waits x, D.cap x, D.V.k x, D.N₀ x)
   V := D.V
-  rounds s := s.2.2
+  rounds s := s.2.2.1
   wf _ := rfl
   W := Claims.Flock.Wit
   R := Claims.Flock.R D.parse

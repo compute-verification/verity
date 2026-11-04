@@ -1,4 +1,5 @@
 import Definitions.Claims.SamplingGeneric
+import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.SamplingGeneric.Fails
 import Proofs.Flock.SamplingGeneric.Split
 import Proofs.Flock.SamplingGeneric.Assemble
@@ -18,7 +19,9 @@ The compiled extractor's failure event, its probability and `Compiled.KS` from t
 
 `Arg.ofFlock` is Flock's `E^rep` at the deployed decoder with Flock's errors, so its knowledge soundness is `Flock.KS`'s
 at that decoder (`flockArgKS`, by unfolding: its coins, extractor, `κ` and `γ` are `Flock.E D D.decode`'s, `Flock.κ`'s
-and `Flock.γ`'s). So the compiler's knowledge soundness gives Flock's (`flockKS_of_compilerKS`);
+and `Flock.γ`'s). Its shape carries `N₀`, so its reruns are `E^rep`'s at the shape: at most `1 + m′·K`, and
+`1 + m′·k` in expectation (`ofFlock_reruns`). So the compiler's knowledge soundness gives Flock's
+(`flockKS_of_compilerKS`);
 it is two steps (`SamplingGeneric/Split.lean`: `KSOf`, `SessionKSOf`, composed by `compilerKS_of`), the second proved
 from the session transfer and the session's fork (`SamplingGeneric/Session.lean`: `sessionKSOf`), the first from
 `KSOf`'s deterministic half, a failed extraction giving the failure event or a `Bext` collision (`split`,
@@ -38,6 +41,15 @@ and with it Flock's (`flockKSReg`).
 namespace Claims.SamplingGeneric
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+
+omit [DecidableEq Col] in
+/-- **`E^rep`'s reruns at its shape**: at most `1 + m′·K` on every coin, and `1 + m′·k` in expectation, with
+`k = ⌈4·N₀/e⌉` read from the shape (`ERep_cost`). -/
+theorem ofFlock_reruns (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T) :
+    (Arg.ofFlock D).RerunsLe H (fun s => 1 + s.1 * s.2.1) ∧
+      (Arg.ofFlock D).RerunsExpLe H (fun s => 1 + s.1 * ⌈4 * s.2.2.2 / Real.exp 1⌉₊) :=
+  Claims.ERep_cost H D.V D.waits D.k D.cap (fun v => [D.cols v]) (fun x os => (flockAssemble D x os).1)
+    (Claims.Flock.check D.parse)
 
 theorem flockArgKS : FlockArgKS (Coin := Coin) (Col := Col) (T := T) := by
   intro H D _ hKS hdec
