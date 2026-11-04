@@ -141,7 +141,7 @@
   "art:124a9d7ed54e99b74b05e0f90b7dbf48b7f2e6a59a16b2247ab2420addf04bc9": "integrations/vllm/workloads/workload_qwen15_32x16_1req.json",
   "art:7d947140aaee50e3bb2dc6ea031450acc703fa02ca4d2f209d0d9ea222bf5ceb": "verity/ml/flock/tests/fixtures/rec-coins",
   "art:22fbef314a3ba3e417b9e49bfa30fe460a364913f1dbcc926768c7a254c5b50c": "verity/ml/flock/tests/fixtures/f1-gate",
-  "art:76a4a543fed5f92fba901007ddfd4e035844421cb3893d243780d2d7c9974e06": "verity/ml/flock/tests/fixtures/rec-links",
+  "art:6d14f28a00edc46e3aa4b3432ef2e4b56fbeb9e12e6e0ad4e6179500f18b70b4": "verity/ml/flock/tests/fixtures/rec-links",
   "art:2cf0182ca5bd415214ed211025a1d2b53b223540c46779284b49fdd344938798": "verity/ml/flock/tests/fixtures/rec-c3-inner",
   "art:cc0144301c8d6f1c8c82c22e7eaabc1e7faeccfaa78722e37678183e3004f390": "benchmarks/one_stage/tests/fixtures/bundle-window",
   "previous": {
@@ -194,7 +194,8 @@
       "art:cd6a7a1b0c579c5b4ae3553689e9918cc459822bca72ec74144ba2e79a1410ee",
       "art:d0158e94e1964b37d698d880ee8c6944f7271b3dcc48bda55ea0741e3e557073"
     ],
-    "art:76a4a543fed5f92fba901007ddfd4e035844421cb3893d243780d2d7c9974e06": [
+    "art:6d14f28a00edc46e3aa4b3432ef2e4b56fbeb9e12e6e0ad4e6179500f18b70b4": [
+      "art:76a4a543fed5f92fba901007ddfd4e035844421cb3893d243780d2d7c9974e06",
       "art:cb8c701f408b4f005205cfe338da1e14b491c79642c30c455ce8b53522088ddf",
       "art:ff28796246bdf4ea6df75289ccd8d1fddee94ecd17d21ef7b3c009f35bbcc863"
     ],
