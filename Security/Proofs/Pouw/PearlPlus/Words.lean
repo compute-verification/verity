@@ -17,9 +17,11 @@ Pearl-C at `pc8`'s row arithmetic on core's primitives and the H100 atom, with -
 (`sha512Sem`). `WordsAreTheSemantics` says the check's words are those values on every word of a credited row.
 
 It composes the noise (`Noise.lean`), the row statistics (`StatsAreTheRow`), the forming, the chain (the H100 chain is
-`chainWordP? hopperE4m3K32 4`, whose value `TileValues.chainWordP_value` gives) and the peel (`peelExactP` at the H100).
-The check reads a row's raw words and the semantics their values re-encoded (`wordsVal`, `encRow`), so a `−0` word and
-an A′ or B̃ code `0x80` agree with the semantics' `+0` in value only; every statement here is on values (`wordQ`).
+`chainWordP? hopperE4m3K32 4`, whose value `TileValues.chainWordP_value` gives), the peel factor rows (`PeelARow`,
+`PeelBRow`) and the peel (`peelExactP` at the H100). The proof is `Semantics.lean`'s, since it reads `Stats.lean` and
+`Peel.lean`, which import this file. The check reads a row's raw words and the semantics their values re-encoded
+(`wordsVal`, `encRow`), so a `−0` word and an A′ or B̃ code `0x80` agree with the semantics' `+0` in value only; every
+statement here is on values (`wordQ`).
 -/
 
 namespace Pouw.PearlPlus.Bridge
@@ -81,6 +83,33 @@ def WordsAreTheSemantics : Prop :=
       ∀ z < cols.length,
         wordQ ((ch.c[x]!)[z]!) = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).ticket H s U u act rows[x]! cols[z]! ∧
           wordQ ((ch.u[x]!)[z]!) = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).useful H s U u act rows[x]! cols[z]!
+
+/-- **(b) `P_A`'s rows are `paRow?`'s**: where `peelA` is a value on a formed side whose row `x` has 32 `E′` codes `E`,
+none NaN, and `F_B` has 32 columns, row `x` of `P_A` is `paRow?` of the codes' `bf16(E′)` words (`codeBf16`) and the
+row's 32 `A′·F_B` chains. -/
+def PeelARow : Prop :=
+  ∀ (wn : Words.FixedNoise) (side : Words.Formed) (pas : Array (Array ℕ)) (x : ℕ) (E : Fin Params.pi.r → Code),
+    Words.peelA wn side = .ok pas → side.codes.size = side.ep.size → x < side.codes.size → wn.fbCols.size = 32 →
+    (side.ep[x]!).size = 32 → (∀ q : Fin Params.pi.r, (side.ep[x]!)[q.val]! = (E q).val) →
+    (∀ q, (E q).isNaN = false) →
+      pas.size = side.codes.size ∧ (pas[x]!).size = 64 ∧ ∃ af : Fin 32 → ℕ,
+        (∀ q : Fin 32, Words.chain side.codes[x]! wn.fbCols[q.val]! = .ok (af q)) ∧
+          PeelExact.paRow? (List.ofFn fun q : Fin 32 => codeBf16 (E q)) (List.ofFn af) = some (pas[x]!).toList
+
+/-- **(b) `P_B`'s rows are `pbRow?`'s**: where `peelB` is a value on a formed side whose row `j` has 32 `E′` codes `E`,
+none NaN, and whose Gram words `G` are finite, row `j` of `P_B` is `pbRow?` of the codes' `bf16(E′)` words, the row's 32
+`B̃·F_A` chains and `G` by rows. -/
+def PeelBRow : Prop :=
+  ∀ (wn : Words.FixedNoise) (side : Words.Formed) (pbs : Array (Array ℕ)) (j : ℕ) (E : Fin Params.pi.r → Code)
+    (G : Fin 32 → Fin 32 → ℕ),
+    Words.peelB wn side = .ok pbs → side.codes.size = side.ep.size → j < side.codes.size →
+    (side.ep[j]!).size = 32 → (∀ q : Fin Params.pi.r, (side.ep[j]!)[q.val]! = (E q).val) →
+    (∀ q, (E q).isNaN = false) →
+    (∀ p q : Fin 32, (wn.gram[p.val]!)[q.val]! = G p q ∧ G p q < 2 ^ 32 ∧ (wordQ (G p q)).isSome) →
+      pbs.size = side.codes.size ∧ (pbs[j]!).size = 64 ∧ ∃ bf : Fin 32 → ℕ,
+        (∀ q : Fin 32, Words.chain side.codes[j]! wn.faCols[q.val]! = .ok (bf q)) ∧
+          PeelExact.pbRow? (List.ofFn fun q : Fin 32 => codeBf16 (E q)) (List.ofFn bf)
+            (List.ofFn fun p => List.ofFn (G p)) = some (pbs[j]!).toList
 
 /-! ## The check read forward
 
