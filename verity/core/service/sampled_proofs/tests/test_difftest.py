@@ -11,8 +11,10 @@ Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the
 `slots` piece that sample in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
 nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
 arbitrary calls tables, for `check_public` and `check_verdicts` the proof system's own (`service.check_public`,
-`service.check_verdicts`), and for the `run` piece (a registration's whole run, `Run.run`) those references in a
-`Stream`'s order. The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
+`service.check_verdicts`), for the `fits` piece v2's refusal of a length a session's statement can't hold
+(`proofs.fits_why`, `proofs.draw_fits_why`) at small limits, and for the `run` piece (a registration's whole run,
+`Run.run`) those references in a `Stream`'s order.
+The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
 programs of random members of three templates, and rarely of `FORK` and of `IDENTITY`, of no gate, which one-stage
 refuses, under template queries over them, and programs of random root Calls (`call_program`) under `Q_word` and `Q_call`, a 32-bit
 Call among them, whose unit `Q_word` takes in the 32-bit class and `Q_call` at `X = 16` refuses, and `SHARED`, whose
@@ -58,8 +60,8 @@ from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
-                                                            partition as P, produced as PD, registered as G,
-                                                            registration as R)
+                                                            partition as P, produced as PD, proofs as PF,
+                                                            registered as G, registration as R)
 from verity.core.protocols.sampled_proofs.challenger import (COIN_BYTES, NO_TREE, SHARED_TREE, UNUSED_TREE,
                                                              ChallengerKey, CoinError)
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_coins, draw_first
@@ -952,6 +954,33 @@ def pop_order(j):
         raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
     ok = P.in_order(PROGRAMS[sha], query, n)
     return {"layout": ok, "ranges": ok}
+
+
+_LOWER_HEX = re.compile(r"(?:[0-9a-f]{2})*")
+
+
+def _unhex(x) -> bytes:
+    if not (isinstance(x, str) and _LOWER_HEX.fullmatch(x)):
+        raise D.Reject("not lowercase hex of whole bytes")
+    return bytes.fromhex(x)
+
+
+def fits(j):
+    """`OneStageZk.fitsWhy` and `drawFitsWhy` at ``limit`` (`proofs.fits_why`, `proofs.draw_fits_why`): the files hex,
+    the tables ``[name, hex]`` pairs, the program hex or null, and the partition object, registered reads and draw null
+    for none."""
+    j = _json(j)
+    if not (isinstance(j, dict) and _nat(j.get("limit"))):
+        raise D.Reject("limit is not a natural number")
+    circuit, public = _unhex(j.get("circuit")), _unhex(j.get("public"))
+    ts = j.get("tables")
+    if not (isinstance(ts, list) and all(isinstance(t, list) and len(t) == 2 and all(isinstance(x, str) for x in t)
+                                         for t in ts)):
+        raise D.Reject("tables is not a list of names and their hex")
+    tables = [(name, _unhex(b)) for name, b in ts]
+    program = None if j.get("program") is None else _unhex(j["program"])
+    return {"inputs": PF.fits_why(j["limit"], circuit, public, tables, program, j.get("partition"), j.get("registered")),
+            "draw": PF.draw_fits_why(j["limit"], j.get("draw"))}
 
 
 def bound(j):
@@ -2561,6 +2590,16 @@ SLOTS = D.Port(PIECES, "slots", slots, st.one_of(selections(), selections(), cha
 POP_ORDER = D.Port(PIECES, "pop_order", pop_order, st.one_of(*[st.builds(
     lambda part, dn: {"population": max(0, part[2] + dn), "program": part[0], "query": part[1]}, partitions(),
     st.sampled_from([0, 0, 0, -1, 1]))] * 3, JSON), package=PACKAGE)
+_FITS_HEX = st.binary(max_size=6).map(bytes.hex)
+_FITS_JSON = st.recursive(st.none() | st.booleans() | st.integers(-300, 300) | TEXT | st.sampled_from(["\n\r\t\\", "\x1f\x7f"]),
+                          lambda inner: st.lists(inner, max_size=3) | st.dictionaries(TEXT, inner, max_size=3),
+                          max_leaves=5)
+FITS = D.Port(PIECES, "fits", fits, st.one_of(
+    st.builds(lambda limit, c, p, ts, program, part, reg, draw: {
+        "circuit": c, "draw": draw, "limit": limit, "partition": part, "program": program, "public": p, "registered": reg,
+        "tables": ts}, st.integers(0, 24), _FITS_HEX, _FITS_HEX, st.lists(st.tuples(TEXT, _FITS_HEX).map(list), max_size=3),
+        st.none() | _FITS_HEX, _FITS_JSON, _FITS_JSON, _FITS_JSON),
+    JSON), package=PACKAGE)
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
                   min_size=1, max_size=3, unique_by=lambda s: s["name"])
@@ -3241,7 +3280,7 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRAT
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (DESIGN, 300), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300)]
+              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (FITS, 400)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])

@@ -23,6 +23,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`Slots.select`);
 * `pop_order`: the run's `population-order` check as it runs (`Slots.popOk`, from the ranges: `Slots.popOkRanges`) and
   as `popOk` states it, off the layout's population;
+* `fits`: what of v2's inputs and of a session's draw a session's statement would hold at a given number of bytes or
+  more (`OneStageZk.fitsWhy`, `OneStageZk.drawFitsWhy`), which v2 refuses at `2^64`;
 * `bound`: the exact bounds on wrong units at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
@@ -81,6 +83,7 @@ import SampledProofs.Produced
 import SampledProofs.HiddenDraw
 import SampledProofs.PartitionRef
 import SampledProofs.WiresDrawn
+import SampledProofs.OneStageZk
 
 namespace SampledProofs.Pieces
 
@@ -589,6 +592,30 @@ def run (j : Json) : V Json := do
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
             served := getD j "served", sessionRoots := getD j "session_roots", coins := getD j "coins" }
 
+/-- `{"limit", "circuit", "public", "tables", "program", "partition", "registered", "draw"}` to `{"inputs", "draw"}`: what
+of v2's inputs (`OneStageZk.fitsWhy`) and of a session's draw (`OneStageZk.drawFitsWhy`) a session's statement would hold
+at `limit` bytes or more, each null for nothing. The files are hex, the tables `[name, hex]` pairs, the program hex or
+null, and the partition object, the registered reads and the draw null for none. -/
+def fits (j : Json) : V Json := do
+  let some limit := nat? (getD j "limit") | throw "limit is not a natural number"
+  let circuit ← Flock.unhex (← Flock.J.str j "circuit" "the lengths")
+  let pub ← Flock.unhex (← Flock.J.str j "public" "the lengths")
+  let .arr ts := getD j "tables" | throw "tables is not a list"
+  let tables ← ts.toList.mapM fun
+    | .arr #[.str n, .str b] => do pure (n, ← Flock.unhex b)
+    | _ => throw "a table is not its name and its hex"
+  let program ← match getD j "program" with
+    | .null => pure none
+    | .str b => some <$> Flock.unhex b
+    | _ => throw "the program is not hex or null"
+  let given (k : String) : Option Json := match getD j k with
+    | .null => none
+    | x => some x
+  let why := fun (w : Option String) => w.elim Json.null Json.str
+  return Json.mkObj [
+    ("inputs", why (OneStageZk.fitsWhy limit circuit pub tables program (given "partition") (given "registered"))),
+    ("draw", why (OneStageZk.drawFitsWhy limit (given "draw")))]
+
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
    ("registered", registered),
@@ -599,7 +626,7 @@ def table : List (String × (Json → V Json)) :=
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
    ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
    ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check),
-   ("pop_order", popOrder),
+   ("pop_order", popOrder), ("fits", fits),
    ("challenger_commitment", Challenger.commitmentPiece),
    ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),
    ("challenger_order", Challenger.orderPiece), ("challenger_key", Challenger.keyPiece),

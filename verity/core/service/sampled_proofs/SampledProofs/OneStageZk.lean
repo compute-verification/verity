@@ -26,7 +26,10 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   `check` on those verdicts, one of
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
   units other than the evidence's `proved_units`, or a circuit, public or record file no blob holds, rejects; a rep
-  file no blob holds is that session's reject, as a file `flock-verify` can't read is.
+  file no blob holds is that session's reject, as a file `flock-verify` can't read is. So does a length a session's
+  statement can't hold, since it writes each in an 8-byte word: the circuit or public file, the lookup tables, the
+  program, the partition object, the registered reads or a session's draw at `2^64` bytes or more (`fitsWhy`,
+  `drawFitsWhy`, the JSON ones as `Flock.RecordText.printT` prints them).
 
 Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file.
 -/
@@ -220,6 +223,36 @@ def inputsOf (tags : Flock.Tags) (p : Own) (circuitB pubB : ByteArray) (bs : Cor
   { tags, circuitFile := circuitB, publicFile := pubB, count := 1, tables := tablesOf bs, partition := some p.partition,
     program := some p.program }
 
+/-- The bound on each length a session's statement holds: `flock-verify`'s statement writes every length in an 8-byte
+word. -/
+def WORD : Nat := 2 ^ 64
+
+/-- A JSON value's length as a session's statement holds it: its text as `Flock.RecordText.printT` prints it, in
+UTF-8. -/
+def printedSize (j : Json) : Nat := (Flock.RecordText.printT j).utf8ByteSize
+
+/-- What a session's statement would hold at `limit` bytes or more, the first of: the circuit and public files, the
+number of lookup tables, a lookup table's name (in UTF-8) or bytes, the program, the partition object and the
+registered reads (`printedSize`); `none` when every length is under `limit`. -/
+def fitsWhy (limit : Nat) (circuit pub : ByteArray) (tables : List (String × ByteArray)) (program : Option ByteArray)
+    (partition registered : Option Json) : Option String :=
+  if limit ≤ circuit.size then some "the circuit file"
+  else if limit ≤ pub.size then some "the public file"
+  else if limit ≤ tables.length then some "the number of lookup tables"
+  else if tables.any (fun t => limit ≤ t.1.utf8ByteSize || limit ≤ t.2.size) then some "a lookup table"
+  else if program.any (limit ≤ ·.size) then some "the program"
+  else if partition.any (limit ≤ printedSize ·) then some "the partition object"
+  else if registered.any (limit ≤ printedSize ·) then some "the registered reads"
+  else none
+
+/-- `some "the draw"` when a session's statement would hold its record's draw `draw` at `limit` bytes or more
+(`printedSize`). -/
+def drawFitsWhy (limit : Nat) (draw : Option Json) : Option String :=
+  if draw.any (limit ≤ printedSize ·) then some "the draw" else none
+
+/-- The refusal of a length `fitsWhy` or `drawFitsWhy` names at `WORD`. -/
+def FITS : String := "2^64 bytes or more, past the 8-byte word a session's statement holds each length in"
+
 /-- The verifier's registered reads, as `verifyCmd` derives them from its registered file: its own ports, the reads it
 knows, and the registered parameters. -/
 structure Reads where
@@ -350,13 +383,17 @@ def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (w
 
 /-- One session's `flock-verify verify --zk` on the blobs, after the sessions `r` holds: set up at its record's own draw
 (`setupAt`), its rep files the blobs its `reps` name, its coin-tree key fresh, `Zk.verify` and the checks `verifyCmd`
-makes after it (`verdictOf`), its verdict pushed (`push`). A refusal when its record is in no blob or not UTF-8, or it
-accepted naming another program than the partition object's. -/
+makes after it (`verdictOf`), its verdict pushed (`push`). A refusal when its record is in no blob or not UTF-8, its
+draw doesn't fit the session's statement (`drawFitsWhy`), or it accepted naming another program than the partition
+object's. -/
 def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope ksFiles : V Unit) (programSha : Option String)
     (want : Json) (r : Run) (s : RunFiles) : V Run := do
   let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
     | throw s!"session {s.name}'s record is not UTF-8"
   let draw := Flock.Witness.recordDraw record
+  (match drawFitsWhy WORD draw with
+    | some what => throw s!"session {s.name}: {what}: {FITS}"
+    | none => pure () : V Unit)
   let st := setupAt I rd draw
   let coinKey := coinKeyOf record st
   push I rd programSha want r s record st coinKey
@@ -366,7 +403,7 @@ def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope ksFile
 session set up at its own record's draw: every session's verdict, the units the accepted ones proved and whether all
 accepted. A refusal for what `proofs.verify` refuses: registered values read without the verifier's registered file, a
 file no blob holds, an accepted session naming another program than the partition object's, or proved units other than
-the evidence's. -/
+the evidence's; and for a length a session's statement can't hold (`fitsWhy`, `drawFitsWhy`, at `WORD`). -/
 def run (p : Own) (pub : String) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) :
     V Run := do
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
@@ -379,6 +416,9 @@ def run (p : Own) (pub : String) (sessions : Array RunFiles) (provedUnits? : Opt
   let circuitB ← bs.get p.circuit "circuit"
   let pubB ← bs.get pub "public file"
   let I := inputsOf tags0 p circuitB pubB bs
+  (match fitsWhy WORD I.circuitFile I.publicFile I.tables I.program I.partition p.registered with
+    | some what => throw s!"{what}: {FITS}"
+    | none => pure () : V Unit)
   let rd ← readsOf p.registered
   let tags := Flock.Witness.zkTags I
   let scope := Flock.ProvedScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags true pubB I.count
