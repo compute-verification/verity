@@ -30,35 +30,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 
-V16, V32 = Value(16), Value(32)
-A16 = Array(16, V16)
-
-
-def prim(name: str, params, ret, fn) -> PrimitiveDefinition:
-    return PrimitiveDefinition(name, 1, tuple(params), ret, fn, register=False)
-
-
-Add32 = prim("TAdd32", [("a", V32), ("b", V32)], V32, lambda a, b: (a + b) & 0xFFFFFFFF)
-Mul32 = prim("TMul32", [("a", V32), ("b", V32)], V32, lambda a, b: (a * b) & 0xFFFFFFFF)
-Zero32 = prim("TZero32", [], V32, lambda: 0)
-Dot16 = prim("TDot16", [("acc", V32), ("a", A16), ("b", A16)], V32, lambda acc, *ab: acc)
-Cvt16 = prim("TCvt16", [("a", V32)], V16, lambda a: a >> 16)
-
-
-def _dot(Bd, S, x, w):
-    acc = Bd.call(Zero32)
-    for s in range(S.K // 16):
-        acc = Bd.call(Dot16, acc, x[16 * s:16 * s + 16], w[16 * s:16 * s + 16])
-    return acc
-
-
-Dot = CompositeDefinition("TDot", 1, ("K",), lambda S: ((("x", Array(S.K, V16)), ("w", Array(S.K, V16))), V32), _dot,
-                          register=False)
-Coord = CompositeDefinition("TGemmCoordinate", 1, ("K",), lambda S: ((("x", Array(S.K, V16)), ("wrow", Array(S.K, V16))), V16),
-                            lambda Bd, S, x, wrow: Bd.call(Cvt16, Bd.call(bind(Dot, K=S.K), x, wrow)), register=False)
-Gemm = CompositeDefinition("TGemm", 1, ("K", "N"),
-                           lambda S: ((("x", Array(S.K, V16)), ("w", Array(S.N, Array(S.K, V16)))), Array(S.N, V16)),
-                           lambda Bd, S, x, w: Bd.batch(bind(Coord, K=S.K), x, w, axes=(None, 0)), register=False)
+from test_ir_liveness import V16, V32, Add32, Gemm, Mul32, Zero32
 
 
 # ---------------------------------------------------------------------------------------------------------
