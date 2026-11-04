@@ -79,7 +79,7 @@ def tieOf (w : Json) (passes : List (Json × Pass)) (rounds : Option (List Nat))
   for e in regs do
     let v := match e with | .obj _ => get? e "value" | _ => none
     if let some (.str v) := v then
-      if TIE_PREFIXES.any v.startsWith then
+      if TIE_PREFIXES.any (fun t => v.startsWith t) then
         if (got.lookup v).isSome then throw s!"W registers {v} twice"
         got := got ++ [(v, e)]
   let want ← tieEntries passes rounds
