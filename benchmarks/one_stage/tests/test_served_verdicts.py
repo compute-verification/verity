@@ -2703,10 +2703,12 @@ def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_r
     assert lines[0] == COMPOSED.format(audit="no V3c audit", verdict="PASS")
     assert [x.split(" ")[0] for x in lines[1:]] == ["INFERENCE-ONLY:", "RECORD", "COMPOSITE:"]
     assert lines[-1] == "COMPOSITE: composed on vy-auditor-2"
-    assert json.loads((tmp_path / "order.record").read_text()) == [
+    argv = json.loads((tmp_path / "order.record").read_text())
+    assert argv[:17] == [
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"), "--pieces",
         str(d / "private" / "compose" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",
-        "vy-dc-h200", "--steps", "0,3", "--off-node", "--sampled-lean"]
+        "vy-dc-h200", "--steps", "0,3"]
+    assert (argv[17], len(argv[18]), argv[19:]) == ("--key-sha512", 128, ["--lane", "vllm", "--off-node", "--sampled-lean"])
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", "1", str(d), str(out)]
     assert json.loads((out / "record" / "inference-only.json").read_text()) == {"verdict": "accept"}
     assert not (d / "requests.jsonl").exists() and not _window_data(out, 7)
