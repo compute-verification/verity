@@ -86,6 +86,22 @@ def test_the_band_rule_a_voluntary_row_zeroes_its_band():
     assert W.UnitRecord(u, 192, K, voluntary_a=(63, 64)).credited(S.tiles(u.shape)[-1])[0] == list(range(176, 192))
 
 
+def test_the_band_rule_holds_in_the_draw_a_tile_of_a_voluntary_rows_band_has_no_ticket():
+    """Proofs' counterexample to a band rule in the cap alone: a 64 × K × 64 record with 64 real rows and voluntary A row 5
+    is one 64 × 64 tile, which a per-row rule credits 63 rows of and so draws, and the band rule credits none.  The band
+    rule is in `UnitRecord.credited`, which the ticket weight reads, so the tile has no ticket and is never drawn: every
+    draw lands on the other record's tile."""
+    s = C.PearlC(k_min=32, tile=(64, 64), forming="v1")
+    r = W.UnitRecord(Matmul(0, Shape(64, K, 64), 0), 64, K, voluntary_a=(5,))
+    clean = W.UnitRecord(Matmul(1, Shape(64, K, 64), 1), 64, K)
+    (tile,) = s.tiles(r.matmul.shape)
+    assert r.credited(tile) == ([], list(range(64))) and CW.tile_weight(s, r, tile) == 0
+    key = CW.draw_key(b"a coin", bytes(32), bytes(32), bytes(32))
+    assert [(p, w) for p, _, w in CW.tickets(s, [r, clean])][0] == (0, 0) and CW.draw(s, [r], key, 50) == []
+    picks = CW.draw(s, [r, clean], key, 200)
+    assert len(picks) == 200 and {p for p, _ in picks} == {1}
+
+
 def test_the_band_rule_a_padding_row_zeroes_its_block():
     """An excluded or voluntary B row takes the credit of its block of 64 columns (``j // 64``).  `pad_weight`'s padded
     rows are voluntary, so a weight of 100 rows padded to 112 on 16-column tiles loses its block 64 … 111: the 32 real
