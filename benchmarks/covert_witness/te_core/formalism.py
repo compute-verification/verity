@@ -1243,7 +1243,8 @@ def he_figure(he: dict, c: float, C: float, tau: float | None = None, beta_code:
     `step_tokens` tokens each), their N and O lose the ⌊k/(τ·T)⌋ steps after the first update (a block of k bits
     holds the inputs they read), τ the bits a token's input costs. On a subset, for each product P of a group's two
     β, M_P its groups with product at least P, charged β_w·β_x = P (the group's weight's β and its activation's, or
-    its wider and narrower where its operands are of one class), b_y M_P's
+    its wider and narrower where its operands are of one class), the least pair among M_P's products, which F needs
+    where a layer's arrays differ in β (Motzkin-Straus sums u_r·u_s/(β_r·β_s) over the pairs M_P multiplies), b_y M_P's
     least output width and F = 2/√3 where M_P holds a backward product (+2: a layer's forward, input-gradient and
     weight-gradient products share arrays; Motzkin-Straus bounds π by 4/3 where no four arrays are pairwise
     multiplied), else 1, and 1 on the weight gradients alone; the subset's term is the largest `he_rho` over P. The
