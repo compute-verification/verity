@@ -1,0 +1,4 @@
+# 70B gate and up on the layers whose top 32 directions hold 41-90% of ||q||^2, where the split breaks 2% or comes
+# nearest: deflation (the top 32 directions served apart, the rest at 2%) and the 20% clip, in all three orders
+70b-defl32-gu-o --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,5,9,33 --match gate_proj,up_proj --deflate 32 --fast --ranks 8,16,32,64,128 --orders none,fold,sort --workers 8
+70b-gu-clip20-o --hf unsloth/Meta-Llama-3.1-70B --target 0.2 --layers 5,9,33 --match gate_proj,up_proj --fast --ranks 8,16,32,64,128 --orders none,fold,sort --workers 6
