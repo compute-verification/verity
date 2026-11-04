@@ -96,12 +96,13 @@ def perplexity(model, ids: np.ndarray, seq: int, bs: int = 4, max_windows: int |
     was = model.training
     model.eval()
     nll, cnt = 0.0, 0
+    dev = model.get_input_embeddings().weight.device
     for i in range(0, n, bs):
-        x = torch.from_numpy(ids[i * seq:min(i + bs, n) * seq].astype(np.int64).reshape(-1, seq)).cuda()
+        x = torch.from_numpy(ids[i * seq:min(i + bs, n) * seq].astype(np.int64).reshape(-1, seq)).to(dev)
         with torch.autocast("cuda", dtype=torch.bfloat16):
             logits = model(x).logits
-        nll += F.cross_entropy(logits[:, :-1].float().reshape(-1, logits.shape[-1]), x[:, 1:].reshape(-1),
-                               reduction="sum").item()
+        nll += F.cross_entropy(logits[:, :-1].float().reshape(-1, logits.shape[-1]),
+                               x[:, 1:].reshape(-1).to(logits.device), reduction="sum").item()
         cnt += x[:, 1:].numel()
         del logits
     model.train(was)
@@ -132,7 +133,7 @@ def zeroshot(model, tok, tasks: list[str], bs: int, limit: int | None) -> dict:
 
 def served(model, args, spec: str):
     if args.target != "bf16":
-        quant.set_served(model, spec).reseed(EVAL_SEED, "cuda")
+        quant.set_served(model, spec).reseed(EVAL_SEED)
 
 
 def ppls(model, wt_ids, val_ids, args, spec: str) -> dict:
@@ -177,6 +178,10 @@ def main(argv=None) -> int:
     ap.add_argument("--model", default="unsloth/Llama-3.2-1B")
     ap.add_argument("--target", required=True, help="bf16, absmax or a Strassen level-1 overflow rate (0.02 = 2%%)")
     ap.add_argument("--rotate", action="store_true", help="quantize W·R and feed x·R (`rotation.py`)")
+    ap.add_argument("--targets", type=Path, default=None,
+                    help="a JSON map of tensor name to its own target (a rate, or absmax), the rest at --target")
+    ap.add_argument("--device-map", default=None, help="auto: load in bf16 across the visible GPUs, codes frozen "
+                    "(`quant.FrozenQLinear`); evaluation only (--tokens 0)")
     ap.add_argument("--serve", default="a16", help="how activations are served in training, the headline evals and "
                     "zero-shot: MODE[:PROJ+...] (`quant.Served`, `quant.set_served`)")
     ap.add_argument("--eval-modes", default=EVAL_MODES, help="more serving specs to measure perplexity under")
@@ -220,16 +225,27 @@ def main(argv=None) -> int:
     import transformers
 
     res["transformers"] = transformers.__version__
-    model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.float32, attn_implementation="sdpa").cuda()
+    if args.device_map:
+        assert args.tokens == 0, "--device-map evaluates only"
+        model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.bfloat16, attn_implementation="sdpa",
+                                                     device_map=args.device_map)
+        res["device_map"] = {k: str(v) for k, v in model.hf_device_map.items()}
+    else:
+        model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.float32,
+                                                     attn_implementation="sdpa").cuda()
     model.config.use_cache = False
     target = None if args.target in ("absmax", "bf16") else float(args.target)
+    targets = None
+    if args.targets:
+        targets = {k: None if v == "absmax" else float(v) for k, v in json.loads(args.targets.read_text()).items()}
+        res["targets"] = targets
     total = 0 if args.target == "bf16" else args.tokens // (args.batch * args.seq)
     steps = total if args.max_steps is None else min(total, args.max_steps)
     res["steps"], res["schedule_steps"] = steps, total
     assert steps * args.batch * args.seq <= len(train_ids), \
         f"{steps} steps need {steps * args.batch * args.seq} tokens, {args.data} has {len(train_ids)}: prep more shards"
     if args.target != "bf16":
-        res["calibration_before"] = quant.wrap(model, target, args.rotate, log)
+        res["calibration_before"] = quant.wrap(model, target, args.rotate, log, targets, frozen=bool(args.device_map))
         res["matrices_before"] = quant.stats(model)
     res["eval_before"] = evaluate(model, tok, wt_ids, val_ids, args, zs=steps == 0 or not args.no_zs_before)
     (args.out / "result.json").write_text(json.dumps(res, indent=1))
@@ -291,7 +307,7 @@ def main(argv=None) -> int:
     model.eval()
     pricer = None
     if args.target != "bf16":
-        res["matrices_after"] = quant.stats(model)
+        res["matrices_after"] = quant.stats(model) if steps > 0 else res["matrices_before"]
         if args.codes:
             res["codes"] = export(model, args.codes)
         if args.price:
