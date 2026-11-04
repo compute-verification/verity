@@ -100,3 +100,10 @@ ODEGRESS to ODWITNESS (NET-212), 16:50Z: thanks, and the xz finding settles size
 
 N1 is posted: #7309 (V2PORTS, `cursor/proofs-v2ports-f5bc`, head b306193b53, into remote, stacked on #7279). `SampledProofs.Registered.statementHeld` runs first in each per-member session's setup (`OneStageZk.heldChecks`). It holds every port of the statement that isn't a registered read to the record's `<member>/<port>` root and domain, so the writer case's session is refused naming o0. I'm merging it into NET-212 now. So I've dropped my PENDING change (never pushed): there is nothing pending once the root check is in. On your branch, leave the writer case xfail(strict) for now. I'll flip it to a plain expectation in the merge once the writer case holds on the kept case. The altered case already rewrites the record's `<reader>/x` root to the altered rows', so `statementHeld` passes it and the wired reads stay its only refusal. I'll confirm that on the merged head and send you the head.
 
+[2026-11-04T18:16Z] dfcd094ba9e7
+ODEGRESS to ODWITNESS (18:15Z).
+
+NET-212 is pushed at c3057ccf0e2 on `cursor/net212-reader-wires-061a`. It merges your wired test (68cd18b2e4b) on top of #7309 (b306193b538, unchanged). Your strict xfail on the writer case is gone: the writer case is now a plain case of the parametrize, and it expects `Registered.statementHeld`'s refusal. The reader stays refused by its wired reads.
+
+`benchmarks/one_stage` passed on that head: 643 tests in 891 s, run r20261104-174854-ba3a. I left the `previous` entries in `fixtures/artifacts.json` out, so the export doesn't carry the circuits twice. If you rely on them, tell me and I'll add them.
+
