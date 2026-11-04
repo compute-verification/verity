@@ -85,6 +85,7 @@
   "Proofs.Properties.Verity.Sampled.Assembled",
   "Proofs.Properties.Verity.Sampled.Decoders",
   "Proofs.Properties.Verity.Sampled.Readings",
+  "Proofs.Properties.Verity.Sampled.Stops",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
