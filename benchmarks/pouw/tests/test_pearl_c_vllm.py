@@ -1041,7 +1041,7 @@ def honest_pass(tmp_path, request):
 
 
 def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None,
-                live: int | None = None, seed: int = 11):
+                live: int | None = None, seed: int = 11, tile: tuple[int, int] = (16, 16)):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
     salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so clear_work can't
@@ -1052,19 +1052,22 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     The calls have the epoch's indices `indices`, and every pass built here is of the one epoch (the same weights, key and
     salt coin), as passes of one install are.  With `live` the salt coin is a live session's, opened after salt epoch
     `live`'s root over the weights' root (`live_coin`), and the manifest names that epoch (``pass_index``).  `seed` draws
-    the rows: under another, the weights are others, and so is the salt the one coin gives them."""
+    the rows: under another, the weights are others, and so is the salt the one coin gives them.  `tile` is the
+    instance's tile: at 64 x 64 each weight has 64 rows and each matmul is one tile, partial down its rows, k_min 32
+    keeping it a test instance."""
     if key is None:
         key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
-    s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
+    s = PPD.scheme_of(scheme, k_min=32, tile=tile)
     rng, k = np.random.default_rng(seed), 128
-    wrows = {0: bf16_words(rng, 16, k), 1: bf16_words(rng, 32, k)}
+    n0, n1 = max(16, tile[1]), max(32, tile[1])
+    wrows = {0: bf16_words(rng, n0, k), 1: bf16_words(rng, n1, k)}
     a0 = bf16_words(rng, 32, k)
     a0[20:] = 0
     a0[5, [1, 2, 3]] = np.float32(1e4).view(np.uint32) & 0xFFFF0000
     i0, i1 = indices
     acts = {i0: a0, i1: bf16_words(rng, 16, k)}
     rows = lambda x: [r.tobytes() for r in x]
-    work = Workload((Matmul(i0, Shape(32, k, 16), 0), Matmul(i1, Shape(16, k, 32), 1)))
+    work = Workload((Matmul(i0, Shape(32, k, n0), 0), Matmul(i1, Shape(16, k, n1), 1)))
     prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=key)
     salted = lambda v, nonce, i: v + hm96_salt(prover.salt_key, nonce, i)  # noqa: E731
     if live is None:
@@ -1104,7 +1107,7 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     leaves = [prover.digest(t) for t in range(count)]
     dt = transcript_domain(epoch, count, s.commitment_hash)
     head = {"schema": PPD.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{scheme}", "scheme": scheme,
-            "instance": {"k_min": 32, "tile": [16, 16]},
+            "instance": {"k_min": 32, "tile": list(tile)},
             "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(), "salt": epoch.salt.hex(),
             **({} if live is None else {"pass_index": live}),
             "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
@@ -1260,17 +1263,22 @@ def test_served_passes_verify_accepts_an_epochs_passes_numbered_on(tmp_path):
 
 @pytest.mark.slow
 def test_verify_passes_reads_a_test_instance_only_as_one_and_a_runs_passes_of_one_salt(tmp_path):
-    """A test instance's pass (16 x 16 tiles) is refused as a served run's, whose tile is 64 x 64, and accepted as a test
-    instance's, crediting nothing.  Passes of two salts (other weights under the one coin) are refused, though each holds
-    calls 0 and 1: `passes_distinct` holds call indices apart per salt."""
+    """A test instance's pass (k_min 32, at 16 x 16 tiles or at the served 64 x 64) is refused as a served run's, whose
+    instance is k_min 1,024 at 64 x 64, and accepted as a test instance's, crediting nothing.  Passes of two salts (other
+    weights under the one coin) are refused, though each holds calls 0 and 1: `passes_distinct` holds call indices apart
+    per salt."""
     a = proved_pass(tmp_path / "a", PROMOTED[0])[0]
+    wide = proved_pass(tmp_path / "wide", PROMOTED[0], tile=(64, 64))[0]
+    for path, tile in ((a, 16), (wide, 64)):
+        coins, source = published(path), b"verifier" * 4
+        served = VR.verify_passes([path], 3, 1, "test", coins, source)
+        assert served["answer"]["reason"] == (f"ValueError: pass 0's instance is k_min 32 at {tile} x {tile} tiles, not the "
+                                              "served 1024 at 64 x 64: a test instance is read only as one, crediting "
+                                              "nothing") and "verdicts" not in served
+        test = VR.verify_passes([path], 3, 1, "test", coins, source, test_instance=True)
+        work = test["answer"]["public"]["work"]
+        assert test["answer"]["verdict"] == "accept" and work["credited"] == 0 < work["macs"], test["line"]
     coins, source = published(a), b"verifier" * 4
-    served = VR.verify_passes([a], 3, 1, "test", coins, source)
-    assert served["answer"]["reason"] == ("ValueError: pass 0's tile is 16 x 16, not 64 x 64: a test instance is read only "
-                                          "as one, crediting nothing") and "verdicts" not in served
-    test = VR.verify_passes([a], 3, 1, "test", coins, source, test_instance=True)
-    work = test["answer"]["public"]["work"]
-    assert test["answer"]["verdict"] == "accept" and work["credited"] == 0 < work["macs"], test["line"]
     b = proved_pass(tmp_path / "b", PROMOTED[0], seed=12)[0]
     assert json.loads(a.read_text())["salt"] != json.loads(b.read_text())["salt"]
     for kw in ({}, {"test_instance": True}):

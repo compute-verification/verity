@@ -17,7 +17,7 @@ import PouwPearlPlus.Credit
 * **The prover's openings** (`opener pass tile`): each opened tile's rows, leaf and y rows with their paths. The verifier
   asks only for the tiles its draw names.
 * **The verdict**: every pass loads (`load`), all of one salt and, unless the input is a test instance's
-  (`testInstance`), at `TILE × TILE` tiles; the passes are W's (`tieOf`, refused as its `ValueError`), the run's
+  (`testInstance`), each at the served instance, `k_min` `K_MIN` and `TILE × TILE` tiles; the passes are W's (`tieOf`, refused as its `ValueError`), the run's
   commitment is the coin record's where there is one (`after-coin`), the record's challenger draw is coin ``pouw/draw`` 0
   opened after it (`drawReason`, refused as `draw`), a verdict of record takes only a challenger draw on live coins
   (`ofRecordReason`, refused as `of-record`), the draw over every pass's tickets names the drawn tiles, each pass adds one
@@ -54,6 +54,9 @@ def OverCap.ofName? : String → Option OverCap
 /-- `pearl_c.TILE`: a served pass's tiles are `TILE × TILE`. -/
 def TILE : Nat := 64
 
+/-- `pearl_c.K_MIN`, Pearl's domain: a served pass's `k_min`. -/
+def K_MIN : Nat := 1024
+
 structure Input where
   coins : EpochCoins
   manifests : List Json
@@ -61,8 +64,8 @@ structure Input where
   source : Option ByteArray := none
   held : Option CoinRecord := none
   overCap : OverCap := .uncredited
-  /-- The passes are a test instance's (`verify_passes`' ``test_instance``): their tile may be other than `TILE × TILE`,
-  and the verdict credits nothing. -/
+  /-- The passes are a test instance's (`verify_passes`' ``test_instance``): their `k_min` and tile may be other than
+  `K_MIN` and `TILE × TILE`, and the verdict credits nothing. -/
   testInstance : Bool := false
   tie : Option Json := none
   rounds : Option (List Nat) := none
@@ -148,9 +151,11 @@ def plan (i : Input) : Except Refusal Plan := do
   let passes ← i.manifests.mapM (load i.coins)
   if passes.any (·.salt != passes[0]!.salt) then throw { reason := "ValueError: the passes are not all of one salt" }
   if !i.testInstance then
-    match (passes.zip (List.range passes.length)).find? fun (p, _) => p.scheme.tileM != TILE || p.scheme.tileN != TILE with
+    match (passes.zip (List.range passes.length)).find? fun (p, _) =>
+        p.scheme.kMin != K_MIN || p.scheme.tileM != TILE || p.scheme.tileN != TILE with
     | some (p, j) =>
-      throw { reason := s!"ValueError: pass {j}'s tile is {p.scheme.tileM} x {p.scheme.tileN}, not {TILE} x {TILE}: " ++
+      throw { reason := s!"ValueError: pass {j}'s instance is k_min {p.scheme.kMin} at {p.scheme.tileM} x " ++
+        s!"{p.scheme.tileN} tiles, not the served {K_MIN} at {TILE} x {TILE}: " ++
         "a test instance is read only as one, crediting nothing" }
     | none => pure ()
   let tie ← match i.tie with

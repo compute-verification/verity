@@ -275,13 +275,17 @@ def test_an_epochs_passes(exe, tmp_path):
 
 
 def test_a_served_runs_tile_and_salt(exe, tmp_path):
-    """Read as a served run's, a test instance's pass is refused before the coin: its tile is 16 x 16, not 64 x 64. Passes
-    of two salts (other weights under the one coin), each holding calls 0 and 1, are refused, test instance or not."""
+    """Read as a served run's, a test instance's pass is refused before the coin: its instance is k_min 32 at 16 x 16 or
+    64 x 64 tiles, not the served k_min 1,024 at 64 x 64. Passes of two salts (other weights under the one coin), each
+    holding calls 0 and 1, are refused, test instance or not."""
     a = T.proved_pass(tmp_path / "a", H100)[0]
-    served = same(exe, [a], test_instance=False)
-    assert served["verdict"] == "reject" and served["source"] is None and served["verdicts"] == []
-    assert served["reason"] == ("ValueError: pass 0's tile is 16 x 16, not 64 x 64: a test instance is read only as one, "
-                                "crediting nothing")
+    wide = T.proved_pass(tmp_path / "wide", H100, tile=(64, 64))[0]
+    for path, tile in ((a, 16), (wide, 64)):
+        served = same(exe, [path], test_instance=False)
+        assert served["verdict"] == "reject" and served["source"] is None and served["verdicts"] == []
+        assert served["reason"] == (f"ValueError: pass 0's instance is k_min 32 at {tile} x {tile} tiles, not the served "
+                                    "1024 at 64 x 64: a test instance is read only as one, crediting nothing")
+    assert same(exe, [wide])["verdict"] == "accept"
     b = T.proved_pass(tmp_path / "b", H100, seed=12)[0]
     for test_instance in (False, True):
         two = same(exe, [a, b], test_instance=test_instance)

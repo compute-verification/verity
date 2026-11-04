@@ -16,8 +16,8 @@ process of its own (this file's ``serve`` verb, `auditor.run` with no coin link,
 3. ``served_verdicts.py pearlplus-period close``, once that session has ended.
 4. ``served_passes.py verify --tie W --test-instance`` under PEARLC_CHALLENGER_GATE/PEER/LANE: the verifier's draw a draw
    session reserved withheld after the period closed and opened on the run's commitment (`bench_arm.LiveDraw`), recorded
-   in coin.json. The toy's tiles aren't the served 64 x 64, so its passes are read as a test instance's, crediting
-   nothing.
+   in coin.json. The toy isn't the served instance (k_min 1,024 at 64 x 64 tiles), so its passes are read as a
+   test instance's, crediting nothing.
 5. ``served_verdicts.py coin`` and ``served_verdicts.py pearlplus``: the coin published and the piece written, each
    session fetched through the gate and held to the signed ledger under the scratch key's pin.
 6. `served_verdicts.piece_row`: PoUW's row, composed of record when `pearlplus_of_record` holds. A test instance
