@@ -9,12 +9,13 @@ import random
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import bits as EB
 from verity.ml.commitments import hm96
-from verity.ml.commitments.gates.sha512 import pad_tail
+from verity.ml.commitments.gates.sha512 import IV, pad_tail
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 from verity.core.protocols.pous import answer_circuit as A
+from verity.core.protocols.pous.circuit import bits
 
 RNG = random.Random(9)
 INST = hm96.SHA512
@@ -52,14 +53,15 @@ def test_row_digest_is_sha512_row_v2(N):
 
 
 @pytest.mark.slow
-def test_compress_is_sha512s():
-    """One compression from SHA-512's IV over a padded one-block message is SHA-512 of it."""
-    iv = (0x6A09E667F3BCC908, 0xBB67AE8584CAA73B, 0x3C6EF372FE94F82B, 0xA54FF53A5F1D36F1,
-          0x510E527FADE682D1, 0x9B05688C2B3E6C1F, 0x1F83D9ABFB41BD6B, 0x5BE0CD19137E2179)
-    cv = np.array([[(w >> k) & 1 for w in iv for k in range(64)]], dtype=np.uint8)
+def test_a_compress_call_is_sha512s():
+    """One compression call (`compress_call`) from SHA-512's IV over a padded one-block message in byte order is SHA-512 of
+    it: the block's bytes reach the compression's words as SHA-512 reads them."""
+    call = CompositeDefinition("PousCompressCall", 1, (), lambda S: ((("cv", bits(512)), ("msg", bits(1024))), bits(512)),
+                               lambda B, S, cv, msg: A.compress_call(B, cv, msg), register=False)
+    cv = np.array([[(w >> k) & 1 for w in IV for k in range(64)]], dtype=np.uint8)
     msgs = [_rand(n) for n in (0, 5, 111)]
     blocks = [m + pad_tail(len(m)) for m in msgs]
-    out = EB.evaluate_bits(bind(A.PousSha512Compress), np.repeat(cv, len(msgs), axis=0), _bits(blocks))
+    out = EB.evaluate_bits(bind(call), np.repeat(cv, len(msgs), axis=0), _bits(blocks))
     words = [[int(sum(int(r[64 * i + k]) << k for k in range(64))) for i in range(8)] for r in out]
     assert [b"".join(w.to_bytes(8, "big") for w in ws) for ws in words] == [hashlib.sha512(m).digest() for m in msgs]
 
