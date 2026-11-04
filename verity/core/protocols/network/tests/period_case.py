@@ -2158,3 +2158,20 @@ def cases(seed: int = 0, form: str = "clock") -> dict[str, tuple[dict, dict]]:
     """One small period of the form of each kind it can be aimed at (`kinds`) with its answer,
     `{kind: (case, answer)}`."""
     return {k: (c, answer(c)) for k in kinds(form) for c in [case(k, seed, form)]}
+
+
+def audits_of(case: dict) -> list[tuple[dict, dict, dict]]:
+    """A period's compute audits, each its params' entry, its registration record and one-stage's answer for it."""
+    c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
+    return list(zip(case["params"]["audits"], c["audits"], e["audits"], strict=True))
+
+
+def with_audits(case: dict, audits: list[tuple[dict, dict, dict]]) -> dict:
+    """`case` with the compute audits `audits` (as `audits_of` gives them) in its params, commitment and evidence. The
+    check holds no audit to a record outside the period: beside a rows-form period's tied audit, an audit no
+    link-window ties (a stray, another period's) is accepted, and a composite that ties every compute audit to its
+    policy's record is what refuses it."""
+    c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
+    return {"commitment": D.canonical({**c, "audits": [a[1] for a in audits]}).encode().hex(),
+            "evidence": D.canonical({**e, "audits": [a[2] for a in audits]}).encode().hex(),
+            "params": {**case["params"], "audits": [a[0] for a in audits]}}
