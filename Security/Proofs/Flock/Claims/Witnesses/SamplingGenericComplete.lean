@@ -34,7 +34,7 @@ theorem twoWit_val (H : Msg → Msg) {v : ℕ} (hv : v < 2) : twoWit.val H trueC
 /-- Under `trueCm`, `twoWit` leaves no proof block of `twoPart` faulty. -/
 theorem two_rhon (H : Msg → Msg) (x : Msg) :
     Claims.Sampling.Rhon H trueCm (fun _ => some twoStmt) (fun _ => some twoPart) x twoWit := by
-  refine ⟨twoStmt, twoPart, rfl, rfl, Finset.eq_empty_of_forall_not_mem fun v hv => ?_⟩
+  refine ⟨twoStmt, twoPart, rfl, rfl, Finset.eq_empty_of_forall_notMem fun v hv => ?_⟩
   rw [Claims.Sampling.faulty, Finset.mem_filter, Finset.mem_range] at hv
   obtain ⟨hv2, hf⟩ := hv
   replace hv2 : v < 2 := by simpa [twoPart_blocks] using hv2
@@ -86,6 +86,7 @@ theorem twoA_complete (H : Msg → Msg) :
     _ = Pr fun r : Fin ((twoA Coin).V.k x) → Coin => (run H silentP (twoA Coin).V x ω r).out = .acc :=
       ((Pr_congr fun r => iff_true_intro (hacc r)).trans Claims.ZKMal.Pr_true).symm
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- `twoL` meets the completeness contract over `twoA`'s silent prover at `K = 2`: block `u`'s session is the silent
 prover's run of `sesV` on its own round, the run accepts when both sessions do, each sampled block is at its own slot,
 and the errors are `0`. -/
