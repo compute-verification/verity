@@ -37,5 +37,6 @@ import Definitions.Claims.RecursionLin
 import Definitions.Claims.Sampling
 import Definitions.Hash
 import Definitions.Flock
+import Definitions.Assumptions
 
 /-! The trusted vocabulary: each component's definitions. -/

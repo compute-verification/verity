@@ -43,13 +43,17 @@ environment extension loaded, so none of the package's code runs), and replays t
                  `imports` prefixes; a `sealed` layer's modules are ruled only by the layers at or under it, and an
                  `imports` prefix that holds a sealed layer below it doesn't admit that layer's modules (a vocabulary
                  `Definitions.Pouw` imports no `Definitions.Pouw.Guarantees`, which sits under it)
-    assumptions  a named assumption (listed by name under `assumptions`: a definition of the spec stated as a `Prop`, taken
-                 as a hypothesis or read in a guarantee's statement) has no `owner`, no guarantee reads it, or its
+    assumptions  a named assumption (listed by name under `assumptions`: a `Prop` declared in `assumptions_module`, taken
+                 as a premise by a guarantee) has no `owner`, no guarantee reads it, is declared elsewhere, or its
                  definition no longer has the digest its record holds; or the policy still lists assumption modules,
                  which `--update` converts into the definitions the guarantees read there
+    open         a premise declared outside `assumptions_module` is not listed under `open` with its `owner`, the
+                 Linear `issue` that discharges it and its `due` date (`--update` adds one only under `open_seed`), or
+                 its entry has no owner, no guarantee takes it, or its definition no longer has its recorded digest
     guarantees   a theorem in `guarantees` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop`
-                 hypothesis that is not a listed assumption, or no longer says what its record says:
-                 signature, named assumptions, premises (the named assumptions its statement rests on, `assumption_records`),
+                 hypothesis that is not a listed premise, or no longer says what its record says:
+                 signature, named assumptions, premises (the named assumptions and open premises its statement rests on,
+                 and the assumptions-module `Prop`s it only reads, `assumption_records`),
                  type hash, and (under `reads`, per module) the definitions the guarantees
                  read and the digest of those definitions, which with the type hashes fix what each guarantee reads, so
                  the record lists no readers (one that does fails until `--update`); the hashes are SHA-256 over a

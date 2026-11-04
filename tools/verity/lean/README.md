@@ -206,20 +206,22 @@ installs it first, so a machine without elan works), must pass clean and fail on
   test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
   a test of the package's own (PoUW's `verity/core/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
-- `assumptions`: the named assumptions, by name, each with its `owner`: the `Prop` definitions a guarantee may take as a
-  closed hypothesis, or reads in its statement. Each premise a statement takes whose head the repository builds is
-  listed too (`Facts.lean`'s `premises`), and an unlisted one fails until `--update` adds it with its guarantees' owner;
-  its failure prints the entry `--update` would write, and what the premise unfolds to. A premise that is an alias of
-  listed assumptions is no new one, open or closed: a definition whose value asserts, through `∧`, the bodies of `∀` and
-  `→` and reducible unfolding, only listed assumptions or such aliases (`Facts.lean`'s `unfolds`; what it takes, an
-  antecedent or a binder's type, may mention only listed ones). Its parts are held to the lock in its place, and a closed
-  one's are the guarantee's named assumptions. One that asserts anything else (an unlisted `Prop`, `False`, a bound
-  predicate, a constant applied to a proposition or a predicate, a recursive definition) is a new one.
+- `assumptions_module`: the one module a named assumption is declared in. `assumptions`: the named assumptions, each
+  with its `owner`, the premises declared there; one declared elsewhere fails. `open`: every other premise, each with
+  its `owner`, the Linear `issue` that discharges it and its `due` date, written by hand: an unlisted one fails, update
+  or not, naming the entry to write, and only `open_seed` ({module prefix or owner: {issue, due[, owner]}}, consumed)
+  lets `--update` add one. A premise is a closed hypothesis, or one a statement takes whose head the repository builds
+  (`Facts.lean`'s `premises`); a `Prop` a statement only reads is in neither, held by its `reads` record. A new named
+  assumption fails until `--update` adds it with its guarantees' owner. An alias of listed premises is no new one, open or closed: a definition whose value asserts, through `∧`, the bodies of
+  `∀` and `→` and reducible unfolding, only listed premises or such aliases (`Facts.lean`'s `unfolds`; what it takes may
+  mention only listed ones). Its parts are held to the lock in its place, and a closed one's are the guarantee's. One
+  that asserts anything else (an unlisted `Prop`, `False`, a bound predicate, a constant applied to a proposition or a
+  predicate, a recursive definition) is a new one.
   In a conclusion, and under a definition outside a `Guarantees` module, a premise is a constant of an assumptions
   module or of a module under `shape.premises` that a hypothesis mentions, or a hypothesis's head that the repository
   builds (a condition or a scope, which no witness is held to). `--update` writes each one's `digest`: its `reads`
   record's, else that of it and every definition it reads in `meaning` and this repository's modules
-  (`assumption_reads`). So a change to an assumption or to what it reads fails under its own name,
+  (`assumption_reads`). So a change to a premise or to what it reads fails under its own name,
   and the landing DM shows it; one no guarantee reads fails. A list of modules is the old form:
   it fails, and `--update` converts it into the definitions the guarantees read there, each owned by their owner.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
@@ -235,7 +237,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   modules the package imports.
 - `guarantees`: the guarantees (README "Glossary"), and any lemma still listed beside them.
   `--update` fills each record, and a `reads` section, from the build: the signature, the named assumptions among the
-  hypotheses, the `premises` (every named assumption it rests on), a hash of the type, and for each module the
+  hypotheses, the `premises` (its named assumptions, open premises, and the `Prop`s it only `reads`), a hash of the type, and for each module the
   definitions the guarantees read, with a hash each (not who
   reads them), and a `digest` of those hashes. Without `--update` the audit fails on any difference, so a statement, or
   a definition it depends on, cannot change without a visible diff of this file. A record holds the statement, not the
@@ -301,23 +303,20 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - **Heartbeat overrides are listed, never refused.** Each `set_option maxHeartbeats N` (and
   `synthInstance.maxHeartbeats`) in a package's sources is in its report (`heartbeats` in `report.json`, and printed
   under its `AUDIT` line, so the nightly lists them): its file and line, its value, the reason beside it (a `--` comment
-  ending its line, else the `--` comments just above), and the build time of its module in the audit's own build. Write
-  the reason beside the override.
+  ending its line, else the `--` comments just above), and the build time of its module in the audit's own build.
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
   which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
-  literals) and drops what it drops (binder names and binder info, `let` names, metadata). A renamed hypothesis is
-  the same statement. Each text holds the matchers and proofs Lean shares across a module in place, not by name, so
+  literals) and drops what it drops (binder names and binder info, `let` names, metadata). Each text holds the matchers and proofs Lean shares across a module in place, not by name, so
   neither a file split nor a module-system port changes a hash. Records written with
   `Expr.hash` (32 bits) are checked as they are and noted; `--update` rewrites them, its review saying "rehashed" where
   the 32-bit hash still matches, which the landing DM leaves out.
 
 **A changed guarantee is shown when it lands.** A weakened definition leaves every proof valid, so the axiom checks and
-the replay pass it: only the records see it, and only a person can judge it. (A redefinition of `Collision` once made a
-Merkle binding guarantee vacuous for unsalted schemes; the records flagged it and a review caught it.) `--update` records
+the replay pass it: only the records see it, and only a person can judge it. `--update` records
 the change and prints it: each changed guarantee's signature before and after, and each changed definition a guarantee
 reads, with the guarantees that read it and its source now (also in `review.txt` among the reports). Say so in the PR.
 An audit without `--update` whose only failures are record differences (a guarantee's signature, named assumptions,
-premises or type hash, a `reads` group, an assumption's digest: what a train's merge of two PRs, each recorded on its own side, can
+premises or type hash, a `reads` group, a premise's digest: what a train's merge of two PRs, each recorded on its own side, can
 leave) writes the `lean-audit.json` and `review.txt` that `--update` would among its reports, and its `report.json`'s
 `regenerated` names that file; a missing record or name, an owner or any other failure writes none. Which failures those
 are is decided by code, not by text: every failure carries one (`check.py`'s `Failure`, such as `guarantees.signature` or
@@ -338,8 +337,7 @@ are, and in place of `G as` the value of `G` at the type's universe levels with 
 `Meta.unfoldDefinition?` unfolds an applied constant), the proofs Lean abstracts out of a definition (its `G._proof_<n>`
 theorems) put back in place, as a theorem's type keeps them. Nothing else is reduced, and the text is hashed as every
 type is. A certified lift gets one line, "lifted into G: the same statement, its definition unfolded once", and `G`, new and
-read by no other guarantee, needs no reading of its own; the review then holds no statement change. (No merge needs a
-statement reviewer, for a lift or any other change.) Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
+read by no other guarantee, needs no reading of its own; the review then holds no statement change. Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
 (binder names and metadata aside), a `G` outside a `Guarantees` module, and a lift that moves a named assumption from the
 theorem's binders into `G`, which the record's `assumptions` would lose. The landing DM reads only the records, so it
 still lists a lifted guarantee as changed.

@@ -1,6 +1,7 @@
 {
  "roots": ["Definitions", "Models"],
  "proved_in": ["Proofs"],
+ "assumptions_module": "Definitions.Assumptions",
  "assumptions": {
   "Accounting.Additive": {
    "owner": "@memory-accounting",
@@ -2291,7 +2292,8 @@
   "PouwCommit.Draws",
   "SampledProofs",
   "Properties.SampledProofs.Draw",
-  "Proofs.Pouw.OnsiteFreed"
+  "Proofs.Pouw.OnsiteFreed",
+  "Definitions.Assumptions"
  ],
  "claims": {
   "modules": ["Definitions.Claims", "Definitions.Core.Interaction", "Definitions.Pous.Claims"],
@@ -3373,6 +3375,12 @@
    ],
    "except": [],
    "why": "the network certifier's bridge to the joint period reads the period run (Definitions.Accounting.JointPeriod), the network certifier's window good event (Definitions.NetworkCertifier.Period), and the deployed network certifier's code and record format (Definitions.NetworkCertifier.Tap) with its trust, trusted-host (Definitions.Core.Assumptions), which the run carries as a field; it imports no guarantee or proof"
+  },
+  "Definitions.Assumptions": {
+   "imports": ["Mathlib", "Definitions.Hash", "Definitions.Core", "Definitions.Accounting", "Definitions.Assumptions"],
+   "except": [],
+   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, never a guarantee or a proof",
+   "sealed": true
   }
  },
  "reads_exempt": {
