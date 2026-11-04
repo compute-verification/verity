@@ -11,9 +11,9 @@ import Proofs.Flock.EndToEnd.Joint.MT.Statement
 input ports and public file, and the verifier's own recomputation `own`), as one-stage v2 verifies them. The window's
 audit (`JointAuditV5`) registers every member, draws one sample over all their proof blocks on live coins
 (`Flock.Draw.drawOS` at `.stratified`, `Law.execOS`, its population the members' proof blocks, each member's proof
-blocks `MemberV5.emb` into it and its strata within one member), and then runs one flock-verify session per member in
-order, member `m` proving its part of the sample (`MemberV5.part`). The run accepts when every session accepts
-(`JointAuditV5.Accepts`).
+blocks `MemberV5.emb` into it; a stratum may span members), and then runs one flock-verify session per member in
+order, member `m` proving its part of the sample (`MemberV5.part`). The run accepts when the session of every member
+with a proof block in the sample accepts (`JointAuditV5.Accepts`).
 
 A prover may read every coin it has seen, so member `m`'s session is played with a strategy that read the sample and the
 earlier members' sessions. `JointAuditV5.memberLaw` and `JointAuditV5.memberStrat` are that session played alone: its
@@ -22,7 +22,7 @@ part, and plays the strategy `τ` leaves for member `m`'s session there (`Verity
 proof blocks are `wrongRegZc` at V5's canonical openings in the committed trace fixed at the joint registration
 (`XplurZC`), at that play; the window's are their images in the population (`JointAuditV5.wrongSet`).
 
-* `JointStratifiedV5`, per window: except with probability `δ + Σ_m (ε_ks,m + ε_bind,m)`, if every session accepts, the
+* `JointStratifiedV5`, per window: except with probability `δ + Σ_m (ε_ks,m + ε_bind,m)`, if the run accepts, the
   window's incorrect proof blocks `B` lie in the confidence set (`Law.stratified`'s escape of `B` is at least `δ`), so
   they spend at most the one budget, `Σ_s k_s·x_s/n_s ≤ ln(1/δ)` over every stratum of every member, and their ANDs and
   output bits are each at most the most any set in the confidence set holds (`JointAuditV5.maxHarm`).
@@ -202,9 +202,10 @@ and each member's session proves its part. -/
 noncomputable def game : Game (w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript) :=
   .send w.Reg fun R => .coin w.L.Ω fun ω => (w.sessions (w.L.draw ω) R).map fun ts => (R, w.L.draw ω, ts)
 
-/-- **The run accepts**: flock-verify `--zk --public-inputs` accepts every member's session at its `own`. -/
+/-- **The run accepts**: flock-verify `--zk --public-inputs` accepts, at its `own`, the session of every member with a
+proof block in the sample. A member with none has no statement to verify, so nothing reads its session's verdict. -/
 def Accepts (o : w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript) : Prop :=
-  List.Forall₂ (fun m t => AcceptsZKP m.I m.own t) w.ms o.2.2
+  List.Forall₂ (fun m t => (m.part o.2.1).Nonempty → AcceptsZKP m.I m.own t) w.ms o.2.2
 
 /-- **The coins of the sessions before member `k`'s**, at the strategy `τ` and the sample's coins `ω`. -/
 def before (τ : Strategy w.game) (k : Fin w.ms.length) (ω : w.L.Ω) : Type :=
@@ -270,8 +271,9 @@ end JointAuditV5
 /-- **The joint stratified bound over a window's members.** For a window's audit as in `JointAuditV5`, whose one live
 stratified sample takes `k_s` of the `n_s` proof blocks of each stratum `s` across the members and whose members'
 sessions each prove their part of it, every `δ > 0`, every per-proof-block weights `ands` (each proof block's ANDs) and
-`bits` (its output bits), and every live prover `τ`, the probability that flock-verify accepts every member's session and
-the window's incorrect proof blocks `B` are not within its one budget is at most
+`bits` (its output bits), and every live prover `τ`, the probability that flock-verify accepts the session of every
+member with a proof block in the sample and the window's incorrect proof blocks `B` are not within its one budget is at
+most
 $$\delta + \sum_m (\varepsilon_{ks,m} + \varepsilon_{bind,m}):$$
 outside it, an accepted window's incorrect proof blocks escape the stratified sample with probability at least `δ`,
 spend `Σ_s k_s·x_s/n_s ≤ ln(1/δ)` across all its strata, and hold at most `maxHarm ands δ` ANDs and at most
@@ -292,8 +294,8 @@ def JointStratifiedV5 : Prop :=
     prob (fun o => w.Accepts o ∧ ¬ w.Within δ ands bits (w.wrongSet τ)) w.game τ ≤
       ENNReal.ofReal δ + ∑ k, ((w.ms.get k).epsKs (w.design k) + (w.ms.get k).link (w.design k))
 
-/-- What a monitoring period's run records of window `idx`: whether every member's session accepted, its incorrect
-proof blocks (`JointAuditV5.wrongSet`), and whether a sampled proof block is one of them. -/
+/-- What a monitoring period's run records of window `idx`: whether its run accepted (`JointAuditV5.Accepts`), its
+incorrect proof blocks (`JointAuditV5.wrongSet`), and whether a sampled proof block is one of them. -/
 structure AuditRecV5 (W : ℕ → JointAuditV5) where
   idx : ℕ
   accepted : Prop
@@ -363,8 +365,8 @@ end JointPeriodV5
 /-- **The joint stratified bound over a monitoring period of windows of several members, pooled.** In a monitoring
 period of `T` windows `W t` as in `JointAuditV5`, each with a fresh live stratified sample over its members' proof
 blocks, played by one adaptive prover `s`, for every `δ > 0` and every per-proof-block weights `ands t` (each proof
-block's ANDs) and `bits t` (its output bits), the probability that flock-verify accepts every member's session of every
-window and their incorrect proof blocks are not within the period's one budget is at most
+block's ANDs) and `bits t` (its output bits), the probability that every window's run accepts (`JointAuditV5.Accepts`)
+and their incorrect proof blocks are not within the period's one budget is at most
 $$\delta + \sum_t \sum_m (\varepsilon_{ks,t,m} + \varepsilon_{bind,t,m}):$$
 outside it, when every window is accepted, their samples miss their incorrect proof blocks together with probability at
 least `δ`, the incorrect proof blocks spend `Σ_t Σ_s k_{t,s}·x_{t,s}/n_{t,s} ≤ ln(1/δ)` across every stratum of every

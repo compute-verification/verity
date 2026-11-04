@@ -10,15 +10,16 @@ The proofs of `JointStratifiedV5` and `JointStratifiedHorizonV5` (`Joint/V5/Stat
 
 * `JointAuditV5.accepted_drawnWrong_le`: the window's audit accepts with a sampled proof block incorrect with
   probability at most `Σ_m (ε_ks,m + ε_bind,m)`: an incorrect sampled proof block is member `m`'s, in its part of the
-  sample, and an accepted run accepted member `m`'s session (`forall₂_getElem?`), so a union over the members
-  (`ZkSession.prob_exists_le`) of `JointAuditV5.member_accepted_drawnWrong_le` bounds it;
+  sample, and an accepted run accepted the session of member `m`, which has that proof block in its part
+  (`forall₂_getElem?`), so a union over the members (`ZkSession.prob_exists_le`) of
+  `JointAuditV5.member_accepted_drawnWrong_le` bounds it;
 * `JointAuditV5.drawMiss_le`: the sample misses a set `B` with probability at most `Law.stratified`'s escape of `B`,
   under A3 (`Law.execOS_escape_le`);
-* `Flock.SecurityProofs.JointStratifiedV5`: if the window's incorrect proof blocks `B` are in the confidence set, they are
-  within the one budget (`JointAuditV5.within_of_le`), so the event is empty; otherwise an accepted window outside the
-  budget has a sampled proof block incorrect, or its sample misses `B`, at most `B`'s escape `< δ`;
-* `Flock.SecurityProofs.JointStratifiedHorizonV5`: a run in which every window is accepted and the incorrect proof blocks
-  are not within the period's budget either has a window accepted with a sampled proof block incorrect, at most
+* `Flock.SecurityProofs.JointStratifiedV5`: if the window's incorrect proof blocks `B` are in the confidence set, they
+  are within the one budget (`JointAuditV5.within_of_le`), so the event is empty; otherwise an accepted window outside
+  the budget has a sampled proof block incorrect, or its sample misses `B`, at most `B`'s escape `< δ`;
+* `Flock.SecurityProofs.JointStratifiedHorizonV5`: a run in which every window is accepted and the incorrect proof
+  blocks are not within the period's budget either has a window accepted with a sampled proof block incorrect, at most
   `Σ_t Σ_m (ε_ks,t,m + ε_bind,t,m)` by `period_union`, or every sample misses with the product of the escapes below `δ`,
   at most `δ` by `period_prod`.
 -/
@@ -64,9 +65,10 @@ theorem accepted_drawnWrong_le (τ : Strategy w.game)
   obtain ⟨k, -, hk⟩ := Finset.mem_biUnion.1 hw
   obtain ⟨v, hv, rfl⟩ := Finset.mem_image.1 hk
   obtain ⟨t, ht, hacc'⟩ := forall₂_getElem? hacc k
+  have hv' : v ∈ (w.ms.get k).part o.2.1 := Finset.mem_filter.2 ⟨Finset.mem_univ _, hu⟩
   refine ⟨k, Finset.mem_univ _, ?_⟩
   rw [ht]
-  exact And.intro hacc' ⟨v, Finset.mem_filter.2 ⟨Finset.mem_univ _, hu⟩, hv⟩
+  exact And.intro (hacc' ⟨v, hv'⟩) ⟨v, hv', hv⟩
 
 private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s : Strategy g) :
     prob (fun _ => Q) g s = if Q then 1 else 0 := by
