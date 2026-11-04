@@ -69,7 +69,7 @@ structure Lowering (P : Prog) (gatesOf : String → Option ℕ) (D : Verity.Circ
 /-- Every Boolean declaration that lowers `j`'s Program by the instance's gate table, with θ the bits of θ's root nodes,
 has at most `n` `(c, k)`-inference blocks. -/
 def CountWitnessed (j : Json) : Prop :=
-  ∀ (i : Count.Instance) (P : Prog) (d : Verity.Declaration) (lw : Lowering P i.gatesOf d.D),
+  ∀ (i : Count.Instance) (P : Prog) (d : Verity.RegisteredCircuit) (lw : Lowering P i.gatesOf d.D),
     CountParses j i → Flock.Program.decode i.program.toUTF8 = .ok P → d.D.Boolean →
     (∀ b, b ∈ d.θ ↔ ∃ g, b ∈ lw.L g ∧ InTheta P i.theta g) → Nci.CompliesAtMost i.c i.k i.n d
 

@@ -28,7 +28,7 @@ from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import window as PHW  # noqa: E402
 
 from tests.protocols import challenger_host as CH  # noqa: E402
-from tests.protocols.test_pouw_h1 import K, Int8Arm, Linear, Model, _entry, _host, _remote, _so  # noqa: E402
+from tests.protocols.test_pouw_h1 import K, Int8Arm, Linear, Model, _entry, _gate, _host, _remote, _so  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -72,10 +72,11 @@ def _served(settings, n=40, arm=Int8Arm):
 
 
 def test_a_window_closed_by_another_process_is_the_one_its_session_served(tmp_path, monkeypatch):
-    """The serving process saves its window and hands its challenge phase's stream to a holder, and its own end of the stream
-    goes; the window resumed from the file on that descriptor closes, opens its last round's coin and its sample, and
-    closes the challenge phase: the record is one manifest under the coins the auditor's challenge phase released, in order, and each
-    call's A table is under its round's root."""
+    """The serving process saves its window and hands its challenge phase's stream to a holder, and its own end of the
+    stream goes; the window resumed from the file on that descriptor closes, opens its last round's coin, and closes the
+    challenge phase, then opens its sampling challenge phase through the gate it is given, withheld on its sample root,
+    and takes its sample: the record is one manifest under the coins the auditor's challenge phases released, in order,
+    and each call's A table is under its round's root."""
     host = _host(tmp_path, monkeypatch)
     run = _served(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64))))
     assert len(run.round_log) == 2 and not run.closed
@@ -86,7 +87,7 @@ def test_a_window_closed_by_another_process_is_the_one_its_session_served(tmp_pa
     HO.send_stream(client, holder.path)
     fd = holder.take()
     client._wire.sock.close()
-    resumed, rclient = HO.resume(tmp_path / "state", fd)
+    resumed, rclient = HO.resume(tmp_path / "state", fd, _gate)
     assert resumed.round_log == run.round_log and [c.index for c in resumed.calls] == [c.index for c in run.calls]
     resumed.listen(lambda call, a, s_a, w, s: {"listener": "close"} if call.m == 0 and tuple(a.shape) == (0, call.k) else None)
     PHW.finish(resumed, rclient)
@@ -96,7 +97,8 @@ def test_a_window_closed_by_another_process_is_the_one_its_session_served(tmp_pa
     record = json.loads((tmp_path / "w" / PH.CALLS_FILE).read_text())
     assert PHC.manifest_reason(record) is None and len(record["commitment"]["rounds"]) == 3
     assert PHC.trusted_rounds_reason(record["commitment"], host.directory, [host.ledger.path], host.window, host.key,
-                                     pins=[host.ledger.pins_path], main=CH.MAIN) is None
+                                     pins=[host.ledger.pins_path], main=CH.MAIN,
+                                     draw_directory=host.draw.directory) is None
 
 
 def test_a_window_hands_off_once_open_and_unclosed_and_a_table_off_its_root_is_refused(tmp_path, monkeypatch):
@@ -126,8 +128,9 @@ def test_a_window_hands_off_once_open_and_unclosed_and_a_table_off_its_root_is_r
 @pytest.mark.slow
 def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypatch):
     """`pouw_h1_gpu.py --close-from` on a handed-off window and the record its serving phase left: the window closed,
-    measured and released on the challenge phase's stream, and the record (``pouw_h1_gpu.json``) completed with its commitment,
-    the challenge phase closed and each call's A table under its round's root."""
+    measured and released on the challenge phase's stream, its draw's challenge phase opened through ``--gate``, and the
+    record (``pouw_h1_gpu.json``) completed with its commitment, the challenge phase closed and each call's A table under
+    its round's root."""
     from tests.protocols import pouw_h1_gpu as GPU
     host, out = _host(tmp_path, monkeypatch), tmp_path / "out"
     run = _served(_remote(transcript_dir=str(out), served=SV.Served(window=bytes(64))), n=64, arm=ZyArm)
@@ -139,7 +142,8 @@ def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypat
         "plain": {"static": {"ok": True}}, "engine": {"enforce_eager": True},
         "h1": {"same_tokens": True, "static_schedule": {"ok": True}, "hook_bad": [], "handoff": {"requests": 3},
                "serve": {"tokens_per_s": 1.0}, "decode_step_s_median": None, "tokens_digest": "0" * 16, "step_s": []}}))
-    GPU.main(["--out", str(out), "--close-from", str(tmp_path / "state"), "--stream-fd", str(fd)])
+    monkeypatch.setattr(GPU, "gate_command", lambda argv: _gate)
+    GPU.main(["--out", str(out), "--close-from", str(tmp_path / "state"), "--stream-fd", str(fd), "--gate", "gate"])
     doc = json.loads((out / GPU.RECORD).read_text())
     h = doc["h1"]
     assert h["challenger"] == {"closed": True} and host.ended() is None and doc["close_argv"]

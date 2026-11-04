@@ -4481,8 +4481,9 @@
      {
       "dir": "art:bf70d8eb/vectors/honest",
       "expect": {
-       "accepted": true,
-       "why": ""
+       "accepted": false,
+       "why": "setup: registered reads (complete): the statement's port ",
+       "upstream_accepted": true
       }
      },
      {
@@ -4649,28 +4650,28 @@
    {
     "tags": "verity/flock-circuit (hidden outputs, registered reads: header registered and shared_rows, flock-verify --registered without --zk, PROTOCOL.md §16.15 rule 6)",
     "pr83": "61e5c2617",
-    "generator": "pod/89-served-registered.sh ZK=0 on vy-nebius-cpu-2 (r20261025-031112-428a, source 61e5c2617: --features sha512, CPU, FC_COINS=os): served_registered.py's RoPE d64 stage (32 units, each reading its cs row from the served tree cs_table, registered with register_served), one plain session under the verifier's own stratified draw of 16 (flock-verify draw --stratified 16, stage/draw.json), served from its file",
+    "generator": "pod/89-served-registered.sh ZK=0 on vy-nebius-cpu-4 (r20261027-130427-933f, source 4fb69563c2: --features sha512, CPU, FC_COINS=os): served_registered.py's RoPE d64 stage (32 units, each reading its cs row from the served tree cs_table, with x and the outputs registered beside it: registered_file, every port of the circuit a registered port), one plain session under the verifier's own stratified draw of 16 (flock-verify draw --stratified 16, stage/draw.json), served from its file",
     "statement": {
-     "circuit": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/circuit.txt",
-     "public": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/pub-32.bin",
-     "partition": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/partition.json",
-     "program": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/program.json",
-     "registered": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/registered.json",
+     "circuit": "art:d1f2e2ffb692f3f631659ca231a429bff0eeecd6a7196d7e186f71001557afa3/stage/circuit.txt",
+     "public": "art:d1f2e2ffb692f3f631659ca231a429bff0eeecd6a7196d7e186f71001557afa3/stage/pub-32.bin",
+     "partition": "art:d1f2e2ffb692f3f631659ca231a429bff0eeecd6a7196d7e186f71001557afa3/stage/partition.json",
+     "program": "art:d1f2e2ffb692f3f631659ca231a429bff0eeecd6a7196d7e186f71001557afa3/stage/program.json",
+     "registered": "art:d1f2e2ffb692f3f631659ca231a429bff0eeecd6a7196d7e186f71001557afa3/stage/registered.json",
      "stratified": 16,
      "coins": "os",
      "circuit_sha512": "7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0",
-     "detail": "RoPE d64, 32 RegisteredRoPE units reading cs_table rows (registered root 6dd69162, row/v1), Q_template_instance v0: a shared-row public file at hidden outputs and hm96-sha512/v1 leaves; registered.json is the verifier's own (register_served on its own program)"
+     "detail": "RoPE d64, 32 RegisteredRoPE units reading cs_table rows (registered roots: cs 10feae1b, x d0781727, out 38ec0e51; row/v1), Q_template_instance v0: a shared-row public file at hidden outputs and hm96-sha512/v1 leaves; registered.json is the verifier's own (register_served on its own program)"
     },
     "sessions": [
      {
-      "dir": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/vectors/honest",
+      "dir": "art:d1f2e2ffb692f3f631659ca231a429bff0eeecd6a7196d7e186f71001557afa3/vectors/honest",
       "expect": {
        "accepted": true,
        "why": ""
       }
      },
      {
-      "dir": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/vectors/root",
+      "dir": "art:d1f2e2ffb692f3f631659ca231a429bff0eeecd6a7196d7e186f71001557afa3/vectors/root",
       "expect": {
        "accepted": false,
        "why": "setup: registered reads: port cs: table row 0 does not open cs_table's registered root at position 3",
@@ -4678,7 +4679,7 @@
       }
      },
      {
-      "dir": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/vectors/none",
+      "dir": "art:d1f2e2ffb692f3f631659ca231a429bff0eeecd6a7196d7e186f71001557afa3/vectors/none",
       "expect": {
        "accepted": false,
        "why": "setup: registered reads: the statement reads registered values, and the verifier holds no registered roots",
@@ -4687,7 +4688,7 @@
      }
     ],
     "lean_statement": "verity/flock-circuit",
-    "agreement": "ci.py --live --sets 6 on vy-nebius-cpu-2 (r20261025-033213-b071, Lean at 1cec4f455): 3/3, 1 accepted",
+    "agreement": "the fixture run's own Lean verdicts (r20261027-130427-933f, Lean at 4fb69563c2): 3/3 as expected, 1 accepted; ci.py --live --sets 6 not rerun on this fixture",
     "sessions_note": "honest: the session with the verifier's own reads (accepted); root: its registered.json with the tree's root zeroed; none: registered.json null (no --registered). Upstream's verdicts are the live server's (each case.json, from serve's record), which reads no registered roots"
    }
   ]

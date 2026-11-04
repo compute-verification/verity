@@ -27,7 +27,7 @@ class UnitValues:
     unit: str
     gates: tuple[int, ...]
     width: int
-    registration: advice.Registration
+    registration: advice.Committed
 
     @property
     def root(self) -> bytes:
@@ -50,4 +50,4 @@ def commit(unit: str, gates: Sequence[int], value: dict[int, int], width: int = 
     gates = tuple(sorted(gates))
     if not gates:
         raise ValueError(f"unit {unit} holds no values")
-    return UnitValues(unit, gates, width, advice.register(rows(gates, value, width), ROW_BITS, binding(unit), salts))
+    return UnitValues(unit, gates, width, advice.commit(rows(gates, value, width), ROW_BITS, binding(unit), salts))

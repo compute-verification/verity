@@ -133,7 +133,7 @@ theorem wrPDJK_viewR {I : Exec.Inputs} {d : Json} {mPts : ℕ} {spec : SessionSp
     (wrPDJK id I d (viewOfJ 1 mPts spec link c₁ (jAt sha512 spec sts c₁ mids f)
         (FlockDeploy.filesAt (tabsOf sts) (pointsOf spec c₁) f.ps))).proofs =
       FlockDeploy.filesAt (tabsOf sts) (pointsOf spec c₁) f.ps ∧
-    ∀ (spec' : SessionSpec) (sts' : Array Stmt) (sess : Session), setupAtD I (some d) = .ok (spec', sts') →
+    ∀ (spec' : SessionSpec) (sts' : Array Stmt) (sess : RunRecord), setupAtD I (some d) = .ok (spec', sts') →
       Record.decodeJWithK id With.std spec' (wrPDJK id I d (viewOfJ 1 mPts spec link c₁
         (jAt sha512 spec sts c₁ mids f) (FlockDeploy.filesAt (tabsOf sts) (pointsOf spec c₁) f.ps))).j = .ok sess →
       ∀ k < 2, ∀ y : StreamRec,
@@ -423,7 +423,7 @@ theorem plainClashRunR_of (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt}
     {d : Json} (hd : ins.read.draw = some d) (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
-    (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtDJK id ins.read.I (some d) (wrPDJK id ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,
@@ -520,7 +520,7 @@ theorem plainRel_ofR (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {s : C
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt}
     {d : Json} (hd : ins.read.draw = some d) (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
-    (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtDJK id ins.read.I (some d) (wrPDJK id ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,
