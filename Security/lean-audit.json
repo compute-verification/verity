@@ -2480,6 +2480,24 @@
      "Claims.Flock.decoder_meets_zk",
      "Claims.Witness.SamplingGeneric.twoSessions_meets"
     ]
+   },
+   "Claims.SamplingGeneric.Compiled.Bits": {
+    "fails": "Claims.SamplingGeneric.Compiled.Bits_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoCosts_meets",
+     "Claims.Witness.SamplingGeneric.twoSessions_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.Compiled.Efficient": {
+    "fails": "Claims.SamplingGeneric.Compiled.Efficient_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoCosts_meets",
+     "Claims.Witness.SamplingGeneric.twoSessions_meets"
+    ]
    }
   },
   "not": {
@@ -2535,7 +2553,13 @@
    "Claims.SamplingGeneric.CompilerKSReg": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerKSReg`)",
    "Claims.SamplingGeneric.FlockArgKS": "proved of every Flock record and decoder (`Claims.SamplingGeneric.flockArgKS`)",
    "Claims.SamplingGeneric.FlockKS": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKS`)",
-   "Claims.SamplingGeneric.FlockKSReg": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKSReg`)"
+   "Claims.SamplingGeneric.FlockKSReg": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKSReg`)",
+   "Claims.SamplingGeneric.Arg.RerunsLe": "a helper the claims read: the proof system's reruns, at most a bound, which `CompilerEfficient` reads",
+   "Claims.SamplingGeneric.Arg.RerunsExpLe": "a helper the claims read: the proof system's expected reruns, at most a bound, which `CompilerBits` and `CompilerEfficient` read",
+   "Claims.SamplingGeneric.Arg.OwnLe": "a helper the claims read: the proof system's own calls, at most a bound, which `CompilerBits` and `CompilerEfficient` read",
+   "Claims.SamplingGeneric.Compiled.OpenCallsLe": "a helper the claims read: the opening checks' count, which `CompilerBits` and `CompilerEfficient` read",
+   "Claims.SamplingGeneric.CompilerBits": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerBits`)",
+   "Claims.SamplingGeneric.CompilerEfficient": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerEfficient`)"
   }
  },
  "witnesses": {
@@ -5946,6 +5970,12 @@
    "assumptions": [],
    "type_hash": "675704364f3448b485b9eab1cfed1206470023637a9201a86df48979457ddf97"
   },
+  "Claims.SamplingGeneric.Compiled.Bits_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.Compiled.Efficient_fails": {
+   "owner": "@proofs"
+  },
   "Claims.SamplingGeneric.Compiled.KSCount_fails": {
    "owner": "@proofs",
    "signature": [
@@ -6538,6 +6568,9 @@
    ],
    "assumptions": [],
    "type_hash": "c9aee9249a386b4232cc2e4430bafa74c02dd818197685ebfd898a3ef2d4c60e"
+  },
+  "Claims.Witness.SamplingGeneric.twoCosts_meets": {
+   "owner": "@proofs"
   },
   "Claims.Witness.SamplingGeneric.twoSessions_meets": {
    "owner": "@proofs",
