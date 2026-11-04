@@ -218,8 +218,10 @@
 # log's check (duplicate-declaration) and the serve doesn't start; the same one again (a rerun within the day) is the day's.
 # Each H1 W names the declaration, an R of another program is refused at its close, and V3c's audit runs R2 against the
 # log's declarations (records_audit's --day). Under H1_TIE DAY_PROGRAM is V3C_CLASS's window circuit's at H1's tables, R's
-# `program` (h1/w<k>/record.json), which the model, the class and H1's layout alone fix. The preflight refuses DAY with a
-# deferral, whose follow-on doesn't carry DAY_LOG.
+# `program` (h1/w<k>/record.json), which the model, the class and H1's layout alone fix. A deferral carries the day: DAY
+# in its settings, and DAY_LOG and DAY_PARAMS as the serve left them, copied to private/deferred/day-log.json and
+# day-params.json and hashed with the serve's declaration.json among its inputs. Its follow-on audits against that copy
+# alone, once the sums hold and the copy holds the declaration declaration.json names by digest (DAY-HELD).
 # Under H1_TIE on a node with less memory than V3c's audit needs (its MemTotal, NODE_MEM_GB, under V3C_AUDIT_MEM_GB, default
 # 290), step 6 holds the tie (WINDOW-COMMIT, WINDOW-CIRCUIT-HELD) and defers the audit (and, under COMPOSE_OFF_NODE=0, the
 # composite; `defer`), for PRODUCT=remote alone (onsite's composite reads PoUS's case, which needs this node's card: the
@@ -289,7 +291,7 @@ ROOT=${SERVE_ROOT:-/workspace/research/vllm-served-verdicts}
 D=${D:-$ROOT/${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}
 # step 6's deferral (`defer`): the settings the follow-on runs at, its inputs' list and sums, and the pieces the record read
 DEFER_DIR=$D/private/deferred
-FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE"
+FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE DAY"
 # the compose hand-off (`handoff`): the settings its follow-on composes at, its inputs' list and sums, and the pieces
 COMPOSE_DIR=$D/private/compose
 COMPOSES="K PRODUCT COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON STEPS"
@@ -308,6 +310,10 @@ if [ "${1:-}" = v3c ] && [ -f "$DEFER_DIR/deferred.env" ]; then  # the follow-on
   FOLLOW=1
   follow_env "$DEFER_DIR/deferred.env" "$FOLLOWS"
   COMPOSE_OFF_NODE=${COMPOSE_OFF_NODE-0}  # a deferral that names no COMPOSE_OFF_NODE predates it: it composes as it did
+  if [ -n "${DAY:-}" ]; then  # the day's log and parameters as the deferral copied them, never this node's
+    DAY_LOG=$DEFER_DIR/day-log.json DAY_PARAMS=
+    [ ! -f "$DEFER_DIR/day-params.json" ] || DAY_PARAMS=$DEFER_DIR/day-params.json
+  fi
 elif [ "${1:-}" = compose ]; then  # the compose follow-on of a hand-off, at the settings it recorded
   COMPOSE=1
   [ ! -f "$COMPOSE_DIR/compose.env" ] || follow_env "$COMPOSE_DIR/compose.env" "$COMPOSES"
@@ -861,10 +867,11 @@ private_pieces() {
 # tie's window-commit answer, and the commit's window dir (circuit.json, registration.json, every value file). The
 # record's: seals.jsonl, windows.jsonl and requests.jsonl (the pick's steps), step 3's records audit's summary, audit
 # record, registration and runs, the pieces it read, and the inference-only verdict it carries. The composite's: PoUW's
-# period case. And deferred.env, the settings the follow-on runs at. Each is listed where it exists.
+# period case. Under DAY, the serve's declaration.json and the deferral's copy of the day's log and parameters. And
+# deferred.env, the settings the follow-on runs at. Each is listed where it exists.
 deferred_inputs() {
   {
-    printf '%s\n' weights_registration.json "window-circuit-w$K-$vtag.json" windows.jsonl seals.jsonl requests.jsonl \
+    printf '%s\n' weights_registration.json "window-circuit-w$K-$vtag.json" windows.jsonl seals.jsonl requests.jsonl declaration.json \
       h1/log.jsonl "h1/w$K/window-commit.json" sampled-proofs-served/summary.json sampled-proofs-served/window/audit.json \
       sampled-proofs-served/windows/rank0/registration.json sampled-proofs-served/runs.json private/pouw/period/case.json \
       private/pouw/period/answer.json private/deferred/inference-only.json
@@ -872,7 +879,8 @@ deferred_inputs() {
 for x in open(sys.argv[1]):
     if x.strip():
         print("h1/" + str(json.loads(x).get("file")))' "$D/h1/log.jsonl"
-    (cd "$D" && find "v3c-w$K-$vtag/window" private/deferred/pieces private/deferred/deferred.env -type f 2>/dev/null)
+    (cd "$D" && find "v3c-w$K-$vtag/window" private/deferred/pieces private/deferred/deferred.env private/deferred/day-log.json \
+      private/deferred/day-params.json -type f 2>/dev/null)
   } | (cd "$D" && while IFS= read -r f; do [ ! -f "$f" ] || echo "$f"; done) | LC_ALL=C sort -u
 }
 HANDED_WHAT="the final record$([ -z "${COMPOSITE-1}" ] || echo " and the composite")"
@@ -884,10 +892,14 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
   (umask 077; rm -rf "$DEFER_DIR" && mkdir -p "$DEFER_DIR/pieces") || return 1
   [ ! -d "$OUT/pieces" ] || cp -a "$OUT/pieces/." "$DEFER_DIR/pieces/" || return 1
   [ ! -f "$OUT/record/inference-only.json" ] || cp "$OUT/record/inference-only.json" "$DEFER_DIR/inference-only.json" || return 1
+  if [ -n "${DAY:-}" ]; then
+    cp "$DAY_LOG" "$DEFER_DIR/day-log.json" || return 1
+    [ -z "${DAY_PARAMS:-}" ] || cp "$DAY_PARAMS" "$DEFER_DIR/day-params.json" || return 1
+  fi
   printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "${V3C_LAW:-subset:1}" V3C_CHALLENGER "$V3C_CHALLENGER" \
     DEVELOPMENT "$DEVELOPMENT" H1_TIE "${H1_TIE:-}" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
     SERVED_NODE "$(hostname)" SERVED_PEER "$V3C_PEER" DEFERRED_TREE "$(tree_sha)" COMPOSE_OFF_NODE "$COMPOSE_OFF_NODE" \
-    COMPOSE_NODE "$COMPOSE_NODE" > "$DEFER_DIR/deferred.env" || return 1
+    COMPOSE_NODE "$COMPOSE_NODE" DAY "${DAY:-}" > "$DEFER_DIR/deferred.env" || return 1
   deferred_inputs > "$DEFER_DIR/inputs.txt"
   (cd "$D" && tr '\n' '\0' < "$DEFER_DIR/inputs.txt" | xargs -0 -r sha256sum) > "$DEFER_DIR/inputs.sha256" || return 1
   echo private/deferred/inputs.sha256 >> "$DEFER_DIR/inputs.txt"
@@ -902,6 +914,29 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
         "lists: D=$D bash benchmarks/one_stage/served_verdicts.sh v3c"
   fi
 }
+day_held() {  # a follow-on under DAY: the deferral's copy of the day's log, which core's check accepts, holds the
+  # declaration the serve's declaration.json names by digest, of day DAY, so V3c's audit runs R2 against the day the serve declared
+  local got
+  got=$("$TREE/.venv/bin/python" -c 'import json, sys
+from verity.core import site as S
+from verity.core.protocols import registration as G
+decl, day = json.load(open(sys.argv[1])), int(sys.argv[3])
+composite, log = G.log_of(json.load(open(sys.argv[2])))
+p = G.params_of(json.load(open(sys.argv[4]))) if len(sys.argv) > 4 else (composite, S.Auditor())
+got = G.check_log(p, (composite, log))
+if got[0] != "accept":
+    sys.exit(f"core check refuses it, {got[1]}")
+want = decl.get("declaration")
+if decl.get("day") != day or not any(isinstance(e, G.Declaration) and e.day == day and e.digest() == want for e in log):
+    sys.exit(f"it holds no declaration of day {day} with digest {str(want)[:16]}…")
+program = str(decl.get("program"))
+print(f"day {day}, program {program[:16]}…, declaration {want[:16]}…")' \
+    "$D/declaration.json" "$DEFER_DIR/day-log.json" "$DAY" ${DAY_PARAMS:+"$DAY_PARAMS"} 2>&1)
+  local rc=$?
+  say "DAY-HELD: the serve dir's private/deferred/day-log.json, the day's registration log as the deferral copied it," \
+      "holds the declaration the serve's declaration.json names: $([ "$rc" = 0 ] && echo "PASS ($got)" || echo "FAIL ($(echo "$got" | tail -1 | cut -c1-300))")"
+  return "$rc"
+}
 follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: the copy held to the served node's sums, then
   # step 6's audit, and the final record and the composite here rather than on the served node, or under
   # COMPOSE_OFF_NODE=1 the compose hand-off for a node of neither
@@ -914,6 +949,7 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   [ "$rc" = 0 ] || return 3
   wait "$BUILD"; rc=$?
   [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
+  [ -z "${DAY:-}" ] || day_held || return 3
   local sha
   sha=$(tree_sha)
   say "WINDOW-CIRCUIT class $V3C: the served node's record at the class (step 3's), from its tree's commit $DEFERRED_TREE" \
@@ -1123,6 +1159,8 @@ if [ -n "$FOLLOW" ]; then  # a deferral's follow-on: no serve, its venv the tree
   sha=$(tree_sha)
   [ -n "$DEFERRED_TREE" ] && { [ "$sha" = "$DEFERRED_TREE" ] || [ -n "${FOLLOW_ANY_TREE:-}" ]; } \
     || { say "PREFLIGHT: the follow-on reads the served node's window-circuit record, which its tree ${DEFERRED_TREE:-(unknown)} wrote, and this tree is ${sha:-(unknown)}: run it at that commit, or set FOLLOW_ANY_TREE=1"; exit 3; }
+  [ -z "${DAY:-}" ] || grep -q -- '"--day"' "$TREE/benchmarks/prove_path/records_audit.py" \
+    || { say "PREFLIGHT: the deferral declared day $DAY, whose audit runs R2 with records_audit's --day, which this tree's records_audit.py doesn't take"; exit 3; }
 elif [ -n "$COMPOSE" ]; then  # a compose follow-on: no serve, row dir, card or gpu-lease, and never the served node
   [ -f "$COMPOSE_DIR/compose.env" ] \
     || { say "PREFLIGHT: the compose follow-on composes from the served node's hand-off, and the serve dir $D holds none (private/compose/compose.env): copy each file its private/compose/inputs.txt lists to the same path here first"; exit 3; }
@@ -1202,7 +1240,6 @@ if [ -n "${DAY:-}" ] && [ -z "$FOLLOW$COMPOSE" ]; then  # the day's one circuit 
     || { say "PREFLIGHT: DAY=N declares day N's circuit: it needs DAY_LOG (the deployment's registration log) and DAY_PROGRAM (the SHA-512, lowercase hex, of the program its windows register)"; exit 3; }
   [ -f "$TREE/integrations/vllm/verity_vllm/pipeline/serve_day.py" ] && grep -q -- '"--day"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { say "PREFLIGHT: DAY needs serve-openai's --day and records_audit's --day, which this tree hasn't"; exit 3; }
-  [ -z "$DEFER" ] || { say "PREFLIGHT: DAY's audit reads DAY_LOG on this node, and $DEFER defers it to a follow-on that doesn't carry the log: a node with the memory, or no DAY"; exit 3; }
 fi
 if [ -n "${PREFLIGHT_ONLY:-}" ]; then  # the checks above alone: nothing kept, built or served
   if [ -n "$FOLLOW" ]; then plan="the follow-on of $SERVED_NODE's deferral"
