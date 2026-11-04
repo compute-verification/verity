@@ -762,7 +762,7 @@ the deployment's sizes, under the named SHA-512 collision assumptions (`RecDeplo
 supersedes `Claims.Recursion.KS` and its level `Claims.Recursion.lam`. Route 2C's bound λ₂ (`lamLin2`) evaluates to at
 least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `BitsLin2` at the dense
 statements follows from `KSLin2` (`bitsLin2On_of_ksLin2On`). The dense form, which `verity/sampled-proofs/recursive/v1`
-accepts, is `RecursiveAuditC3`, at `λ₂ = 100`.
+accepts, is `RecursiveAuditC3`, at `λ₂ = 135.7` and, at the deployment's tables, at `κ + t'·ε`.
 -/
 def RecursiveAuditHolo : Prop :=
   RecursiveAuditC3At holoCTs holoMap ∧ RecursiveFirewallPrivate
