@@ -7,6 +7,9 @@ module
 public import Lean.Data.Json
 public import Flock.Canon
 public import Flock.Hash
+meta import Lean.Data.Json
+meta import Flock.Canon
+meta import Flock.Hash
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
@@ -89,8 +92,7 @@ decreasing_by
     omega
   · exact Flock.sizeOf_lt_of_mem_toArray p.2
 
-example : sortedKeys (Json.mkObj [("b", .arr #[Json.mkObj [("y", 1), ("x", 2)]]), ("a", .null)]) = true := by
-  decide +kernel
+#guard sortedKeys (Json.mkObj [("b", .arr #[Json.mkObj [("y", 1), ("x", 2)]]), ("a", .null)])
 
 /-- A failure code, kept once, in the order first found (`verdict._Collect`). -/
 def addCode (cs : Array String) (code : String) : Array String := if cs.contains code then cs else cs.push code
