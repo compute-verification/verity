@@ -795,25 +795,41 @@ theorem r2loop (g : String → Json) (a : Json) (oq : Flock.V String) (od : Opti
 
 theorem id_bind {α β : Type} (x : Id α) (f : α → Id β) : x >>= f = f x := rfl
 
+theorem linkRefused_false_iff (v : Registration.Verifier) : Registration.linkRefused v = false ↔ RL v := by
+  unfold Registration.linkRefused RL
+  cases v.members.isEmpty
+  · simp only [Bool.not_false, Bool.true_and, forall_const]
+    rcases LinkPoints.lawOf v.program v.query v.law v.workTable with e | ⟨law, n⟩
+    · simp [bind, Except.bind]
+    · cases hr : LinkPoints.refused law n v.members with
+      | error e => simp [bind, Except.bind, hr]
+      | ok rs =>
+        simp only [bind, Except.bind, hr, Bool.not_eq_false', Array.isEmpty_iff]
+        exact ⟨fun h => ⟨law, n, rfl, by rw [hr, h]⟩,
+          fun ⟨_, _, h1, h⟩ => by cases h1; rw [hr] at h; exact Except.ok.inj h⟩
+  · simp
+
 theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     Registration.check rec v = #[] ↔ ∃ law, Registered v rec law := by
   rw [Registration.check_eq_checkRef]
   unfold Registration.checkRef
   extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 j4 j3 j2 j1 j0
     c1
-  have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ True := fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩
-  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ (v2 = true → R7 rec v) ∧ True := by
+  have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ RL v ∧ True :=
+    step_ite (P := True) (RL v) j14 (fun _ c => (pure c : Id (Array String))) _ _
+      (fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩) (fun _ => rfl) (linkRefused_false_iff v)
+  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ (v2 = true → R7 rec v) ∧ RL v ∧ True := by
     intro c
     simp only [j13]
     by_cases hv : v2 = true
     · simp only [hv, ↓reduceIte, true_implies]
       rw [h14, checkOutputs_nil]
-      exact ⟨fun ⟨⟨a, b⟩, _⟩ => ⟨a, b, trivial⟩, fun ⟨a, b, _⟩ => ⟨⟨a, b⟩, trivial⟩⟩
+      exact ⟨fun ⟨⟨a, b⟩, r⟩ => ⟨a, b, r⟩, fun ⟨a, b, r⟩ => ⟨⟨a, b⟩, r⟩⟩
     · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14]
-      exact ⟨fun ⟨a, _⟩ => ⟨a, trivial, trivial⟩, fun ⟨a, _⟩ => ⟨a, trivial⟩⟩
+      exact ⟨fun ⟨a, r⟩ => ⟨a, trivial, r⟩, fun ⟨a, _, r⟩ => ⟨a, r⟩⟩
   have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (∀ sp, v.binding = some sp →
       jeq (getD (get "window") "stream") (.str sp.1) = true ∧
-      jeq (getD (get "window") "prover") (.str sp.2) = true) ∧ ((v2 = true → R7 rec v) ∧ True) := by
+      jeq (getD (get "window") "prover") (.str sp.2) = true) ∧ ((v2 = true → R7 rec v) ∧ RL v ∧ True) := by
     intro c
     simp only [j12]
     rcases hb : v.binding with _ | ⟨stream, prover⟩
@@ -985,15 +1001,15 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   rw [ek, ef, e7]
   constructor
   · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hsch, hroots, hports, h7',
-      h4', h5', h6a, h6b, h6c, h7r, _⟩
+      h4', h5', h6a, h6b, h6c, h7r, hrl, _⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
     exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop⟩,
-      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r⟩
+      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r, hrl⟩
   · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop⟩,
-      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r⟩
+      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r, hrl⟩
     refine ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
       (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4', h5',
-      h6a, h6b, h6c, h7r, trivial⟩
+      h6a, h6b, h6c, h7r, hrl, trivial⟩
     have : some d' = some d := hd''.symm.trans hd'
     cases this
     exact l3
