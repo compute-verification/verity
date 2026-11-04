@@ -1,4 +1,4 @@
-import Definitions.Nci.Cut
+import Definitions.Nci.Guarantees.Cut
 import Proofs.Core.Circuit
 import Proofs.Nci.Covering
 import Proofs.Nci.LoomisWhitneyBase
@@ -12,9 +12,9 @@ import Mathlib.Data.Fintype.BigOperators
 /-!
 # The min-cut bound, its slowdown, and its corollaries
 
-Proofs of the statements of `Definitions.Nci.Cut`. Fix a partition into `m` blocks, each with at most `k` inputs outside
-`θ`; a block's **entries** (`entries`) are those inputs, at most `m k` in all. A MAC is **split** when no block holds
-all its gates.
+Proofs of the guarantees of `Definitions.Nci.Guarantees.Cut`. Fix a partition into `m` blocks, each with at most `k`
+inputs outside `θ` (`ReadsAtMost`); a block's **entries** (`entries`) are those inputs, at most `m k` in all. A MAC is
+**split** when no block holds all its gates.
 
 1. **Split MACs** (`card_split_le`): a split MAC is connected, so one of its wires runs between two blocks
    (`exists_cross`); that wire is a computed gate the other block reads, so it is one of that block's entries, and
@@ -31,24 +31,24 @@ all its gates.
    block, at most `O` such pairs in all, or lies in `E(block)`. The block's gates that another block reads (`leaving`)
    separate it from `E(block)` (`meets_exits`), so `b_y |E(block)| ≤ |leaving|`, and each leaving gate is an entry of
    the block reading it (`sum_card_leaving_le`): `b_y ∑ |E| ≤ m k`.
-5. **Algebra** (`real_step`): `N ≤ m k + V`, `V ≤ √(m Π O) + √(m Π ∑ |E|)` and `∑ |E| ≤ m k / b_y` give `bound`, and
-   `slowdown` follows by cases on `m` against `N / (k + α)` (`slow_step`).
+5. **Algebra** (`real_step`): `N ≤ m k + V`, `V ≤ √(m Π O) + √(m Π ∑ |E|)` and `∑ |E| ≤ m k / b_y` give `Bound`, and
+   `Slowdown` follows by cases on `m` against `N / (k + α)` (`slow_step`).
 
-`onePremise` bounds `π(S) ≤ |val(S ∩ W)| |val(S ∩ X)|` (`pi_le_card_mul`: a MAC's pair of words goes to its pair of
-values, one-to-one since `val` is one-to-one on each matmul's words and no two matmuls share a pair of values) and
-applies AM–GM (`amgm_bound`). With shared arrays, `|S ∩ W_a| ≤ |val(S ∩ A r)|` (`card_inter_le_image`), and
-`u_r = β_r |val(S ∩ A r)|` and `q ≤ β_r β_s` on each matmul's arrays give `q π(S) ≤ ∑ u_r u_s` over those pairs:
-`sharedArrays` bounds the sum by `(∑ u)² / 3` (`triangle_bound`), and `sharedArraysClique` by the weighted Turán
-inequality (`weighted_turan_real`), the limit of Turán's theorem on the graph that replaces each array `r` by `⌊n u_r⌋`
-copies (`blowUp`, `weighted_turan`).
+Under (H) at the arrays `W` and `X`, `onePremise` bounds `π(S) ≤ |val(S ∩ W)| |val(S ∩ X)|` (`pi_le_card_mul`: a MAC's
+pair of words goes to its pair of values, one-to-one since `val` is one-to-one on each matmul's words and no two matmuls
+share a pair of values) and applies AM–GM (`amgm_bound`). With shared arrays, `|S ∩ W_a| ≤ |val(S ∩ A r)|`
+(`card_inter_le_image`), and `u_r = β_r |val(S ∩ A r)|` and `q ≤ β_r β_s` on each matmul's arrays give
+`q π(S) ≤ ∑ u_r u_s` over those pairs, which `sharedArraysClique` bounds by the weighted Turán inequality
+(`weighted_turan_real`), the limit of Turán's theorem on the graph that replaces each array `r` by `⌊n u_r⌋` copies
+(`blowUp`, `weighted_turan`).
 
-`he` and `heShared` put those bounds on `Π(k)`, and `b ≤ b_y` from (E) (`le_bY`, `alpha_le_of_exports`), into
-`bound` (`bound_of_le`), and take the slowdown from the bound so obtained (`slowdown_of_bound`).
+`HE` and `HEShared` put those bounds on `Π(k)`, and `b ≤ b_y` from (E) (`le_bY`, `alpha_le_of_exports`), into
+`Bound` (`bound_of_le`), and take the slowdown from the bound so obtained (`slowdown_of_bound`).
 -/
 
-namespace Nci.SecurityProofs.Cut
+namespace Nci.Cut.SecurityProofs
 
-open Verity Finset Nci.Covering Nci.Cut
+open Verity Finset Nci.Covering
 
 variable {C : Circuit}
 
@@ -94,8 +94,8 @@ theorem enters {R S : Finset (Fin C.N)} {g t : Fin C.N} (hp : FeedsWithin C R g 
       · exact hvg
 
 /-- A block's inputs outside `θ` separate the unregistered inputs from every wire the block reads. -/
-theorem meets_into (d : Declaration) {B Y : Finset (Fin d.D.N)} (hB : B ⊆ d.D.computed)
-    (hY : ∀ y ∈ Y, ∃ h ∈ B, y ∈ d.D.reads h) : Separates d.D (d.D.into B \ d.θ) (unregistered d) Y := by
+theorem meets_into (d : RegisteredCircuit) {B Y : Finset (Fin d.D.N)} (hB : B ⊆ d.D.computed)
+    (hY : ∀ y ∈ Y, ∃ h ∈ B, y ∈ d.D.reads h) : Separates d.D (d.D.into B \ d.θ) (unregisteredInputs d) Y := by
   intro x hx y hy hp
   obtain ⟨h, hh, hyh⟩ := hY y hy
   have hhR : h ∈ univ \ (d.D.into B \ d.θ) :=
@@ -135,17 +135,29 @@ theorem kappa_le {X Y Z : Finset (Fin C.N)} (hZ : Separates C Z X Y) : kappa C X
   unfold kappa
   exact Nat.sInf_le ⟨Z, rfl, hZ⟩
 
-theorem kappa_pos {X Y : Finset (Fin C.N)} {x y : Fin C.N} (hx : x ∈ X) (hy : y ∈ Y) (hxy : C.Feeds x y) :
-    0 < kappa C X Y := by
-  unfold kappa
+/-- A least separator exists: all the gates separate `X` from `Y`. -/
+theorem exists_separator (X Y : Finset (Fin C.N)) :
+    ∃ Z : Finset (Fin C.N), Z.card = kappa C X Y ∧ Separates C Z X Y := by
   have hne : {n | ∃ Z : Finset (Fin C.N), Z.card = n ∧ Separates C Z X Y}.Nonempty := by
     refine ⟨_, univ, rfl, ?_⟩
     intro a _ b _ hab
-    simpa using Covering.FeedsWithin.mem_right hab
-  obtain ⟨Z, hZ, hsep⟩ := Nat.sInf_mem hne
+    simpa using Nci.SecurityProofs.Covering.FeedsWithin.mem_right hab
+  exact Nat.sInf_mem hne
+
+theorem kappa_pos {X Y : Finset (Fin C.N)} {x y : Fin C.N} (hx : x ∈ X) (hy : y ∈ Y) (hxy : C.Feeds x y) :
+    0 < kappa C X Y := by
+  obtain ⟨Z, hZ, hsep⟩ := exists_separator X Y
   rcases Z.eq_empty_or_nonempty with rfl | hZne
   · exact (hsep x hx y hy (by rw [sdiff_empty]; exact feedsWithin_univ hxy)).elim
   · exact lt_of_lt_of_eq (card_pos.2 hZne) hZ
+
+/-- Every separator holds `X ∩ Y`: a gate of both is a path from `X` to `Y` by itself. -/
+theorem card_inter_le_kappa (X Y : Finset (Fin C.N)) : (X ∩ Y).card ≤ kappa C X Y := by
+  obtain ⟨Z, hZ, hsep⟩ := exists_separator X Y
+  rw [← hZ]
+  refine card_le_card fun g hg => ?_
+  by_contra hgZ
+  exact hsep g (mem_inter.1 hg).1 g (mem_inter.1 hg).2 (.refl (mem_sdiff.2 ⟨mem_univ g, hgZ⟩))
 
 /-! ### Blocks -/
 
@@ -166,17 +178,17 @@ theorem sum_card_inter_gates_le (P : Partition C m) (Y : Finset (Fin C.N)) : ∑
       ((P.mem_gates.1 (mem_inter.1 hu).2).symm.trans (P.mem_gates.1 (mem_inter.1 hv).2))
 
 /-- The blocks' entries: a block and one of its inputs outside `θ`. -/
-def entries {d : Declaration} (P : Partition d.D m) : Finset (Σ _ : Fin m, Fin d.D.N) :=
+def entries {d : RegisteredCircuit} (P : Partition d.D m) : Finset (Σ _ : Fin m, Fin d.D.N) :=
   univ.sigma fun u => d.D.into (P.gates u) \ d.θ
 
-theorem card_entries_le {d : Declaration} {k : ℕ} (P : Partition d.D m)
-    (hk : ∀ u, (d.D.into (P.gates u) \ d.θ).card ≤ k) : (entries P).card ≤ m * k := by
+theorem card_entries_le {d : RegisteredCircuit} {k : ℕ} (P : Partition d.D m)
+    (hk : ReadsAtMost d P k) : (entries P).card ≤ m * k := by
   rw [entries, card_sigma]
   calc ∑ u, (d.D.into (P.gates u) \ d.θ).card ≤ ∑ _u : Fin m, k := sum_le_sum fun u _ => hk u
     _ = m * k := by rw [sum_const, card_univ, Fintype.card_fin, smul_eq_mul]
 
 /-- A computed gate that a gate of block `u` reads from outside `u` is an entry of `u`. -/
-theorem mem_entries {d : Declaration} (P : Partition d.D m) {a h : Fin d.D.N} {u : Fin m}
+theorem mem_entries {d : RegisteredCircuit} (P : Partition d.D m) {a h : Fin d.D.N} {u : Fin m}
     (ha : d.D.isInput a = false) (hah : a ∈ d.D.reads h) (hu : P.unit h = some u) (hau : P.unit a ≠ some u) :
     (⟨u, a⟩ : Σ _ : Fin m, Fin d.D.N) ∈ entries P := by
   refine mem_sigma.2 ⟨mem_univ _, mem_sdiff.2 ⟨mem_into.2 ⟨fun h' => hau (P.mem_gates.1 h'), h, P.mem_gates.2 hu, hah⟩,
@@ -209,7 +221,7 @@ theorem exists_cross (P : Partition C m) {A : Finset (Fin C.N)} (hA : Connected 
   exact false_of_iff_not _ (hfa.symm.trans (hcross.trans (not_congr hfh)))
 
 /-- **Step 1.** At most `m k` MACs are split. -/
-theorem card_split_le {d : Declaration} {ι : Type} [Fintype ι] (P : Partition d.D m) (W : Work d.D ι) :
+theorem card_split_le {d : RegisteredCircuit} {ι : Type} [Fintype ι] (P : Partition d.D m) (W : Work d.D ι) :
     (univ.filter fun s : W.Mac => ∀ u, ¬ W.mac s ⊆ P.gates u).card ≤ (entries P).card := by
   refine card_le_card_of_forall_subsingleton (fun s e => e.2 ∈ W.mac s) (fun s hs => ?_) fun e _ s hs t ht => ?_
   · obtain ⟨a, ha, h, hh, hah, hne⟩ :=
@@ -243,13 +255,13 @@ theorem mem_readWords {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C �
     exact ⟨h, (mem_filter.1 hs).2 hh, hah⟩
 
 /-- **Step 2.** The words a block's MACs read have `κ` at most the block's inputs outside `θ`. -/
-theorem kappaWords_readWords_le {d : Declaration} {ι : Type} [Fintype ι] (P : Partition d.D m) (W : Work d.D ι)
+theorem kappaWords_readWords_le {d : RegisteredCircuit} {ι : Type} [Fintype ι] (P : Partition d.D m) (W : Work d.D ι)
     (u : Fin m) : kappaWords d (readWords P W u) ≤ (d.D.into (P.gates u) \ d.θ).card := by
   unfold kappaWords
   exact kappa_le (meets_into d (P.gates_subset_computed u) fun _ ha => mem_readWords P W u ha)
 
-theorem pi_readWords_le {d : Declaration} {ι : Type} [Fintype ι] {k : ℕ} (P : Partition d.D m) (W : Work d.D ι)
-    (hk : ∀ u, (d.D.into (P.gates u) \ d.θ).card ≤ k) (u : Fin m) : W.pi (readWords P W u) ≤ piMax d W k := by
+theorem pi_readWords_le {d : RegisteredCircuit} {ι : Type} [Fintype ι] {k : ℕ} (P : Partition d.D m) (W : Work d.D ι)
+    (hk : ReadsAtMost d P k) (u : Fin m) : W.pi (readWords P W u) ≤ piMax d W k := by
   unfold piMax
   exact le_sup (f := W.pi) (mem_filter.2 ⟨mem_univ _, (kappaWords_readWords_le P W u).trans (hk u)⟩)
 
@@ -275,7 +287,7 @@ theorem card_inBlock_sq_le {ι : Type} [Fintype ι] (P : Partition C m) (W : Wor
       exact Prod.ext (congrArg Prod.snd h) (congrArg Prod.fst h)
   calc (inBlock P W u a).card ^ 2
       ≤ ((inBlock P W u a).image fun t => (t.1, t.2.1)).card * ((inBlock P W u a).image fun t => (t.1, t.2.2)).card *
-          ((inBlock P W u a).image fun t => (t.2.1, t.2.2)).card := loomis_whitney _
+          ((inBlock P W u a).image fun t => (t.2.1, t.2.2)).card := Nci.SecurityProofs.loomis_whitney _
     _ ≤ ((inBlock P W u a).image fun t => (t.1, t.2.1)).card * (readWords P W u ∩ W.wWords a).card *
           (readWords P W u ∩ W.xWords a).card := Nat.mul_le_mul (Nat.mul_le_mul le_rfl hw) hx
     _ = (readWords P W u ∩ W.wWords a).card * (readWords P W u ∩ W.xWords a).card *
@@ -337,7 +349,7 @@ theorem bY_mul_card_clear_le {ι : Type} [Fintype ι] [DecidableEq ι] (W : Work
           exact_mod_cast h
 
 /-- Each gate leaving a block is an entry of the block reading it. -/
-theorem sum_card_leaving_le {d : Declaration} (P : Partition d.D m) :
+theorem sum_card_leaving_le {d : RegisteredCircuit} (P : Partition d.D m) :
     ∑ u, (leaving (P.gates u)).card ≤ (entries P).card := by
   rw [← card_sigma]
   refine card_le_card_of_forall_subsingleton (fun s e => e.2 = s.2) (fun s hs => ?_) fun e _ s hs t ht => ?_
@@ -369,8 +381,8 @@ theorem bY_nonneg {ι : Type} [Fintype ι] [DecidableEq ι] (W : Work C ι) : 0 
 
 /-- Steps 1 to 4, as counts: `V` unsplit MACs, `F` pairs of a block and an output it feeds, and `E` pairs of a block
 and an output in its `E(block)`. -/
-theorem counts {ι : Type} [Fintype ι] [DecidableEq ι] {d : Declaration} {k : ℕ} (W : Work d.D ι)
-    (P : Partition d.D m) (hk : ∀ u, (d.D.into (P.gates u) \ d.θ).card ≤ k) :
+theorem counts {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredCircuit} {k : ℕ} (W : Work d.D ι)
+    (P : Partition d.D m) (hk : ReadsAtMost d P k) :
     ∃ V F E : ℕ, W.N ≤ m * k + V ∧ V ^ 2 ≤ m * piMax d W k * F ∧ F ≤ W.O + E ∧ W.bY * E ≤ m * k ∧
       (E = 0 ∨ 0 < W.bY) := by
   refine ⟨∑ u, ∑ a, (inBlock P W u a).card, ∑ u, (fedBy P W u).card, ∑ u, (W.clear (P.gates u)).card,
@@ -438,7 +450,7 @@ theorem real_step {N V m k P O E b : ℝ} (hm : 0 ≤ m) (hk : 0 ≤ k) (hP : 0 
   have h3 : √(m * P * O) = √(P * m * O) := by rw [mul_comm m P]
   linarith
 
-theorem bound : Bound := by
+theorem Bound : Guarantees.Bound := by
   intro ι _ _ d W k m P hk
   obtain ⟨V, F, E, hN, hV, hF, hbE, hb⟩ := counts W P hk
   have hV' : (V : ℝ) ^ 2 ≤ m * piMax d W k * (W.O + E) := by
@@ -450,7 +462,7 @@ theorem bound : Bound := by
   exact real_step (Nat.cast_nonneg m) (Nat.cast_nonneg k) (Nat.cast_nonneg _) (Nat.cast_nonneg _)
     (Nat.cast_nonneg E) hN' hV' hbE hE'
 
-theorem alpha_nonneg {ι : Type} [Fintype ι] [DecidableEq ι] (d : Declaration) (W : Work d.D ι) (k : ℕ) :
+theorem alpha_nonneg {ι : Type} [Fintype ι] [DecidableEq ι] (d : RegisteredCircuit) (W : Work d.D ι) (k : ℕ) :
     0 ≤ alpha d W k :=
   Real.sqrt_nonneg _
 
@@ -488,23 +500,23 @@ theorem slowdown_of_bound {N m L P O c n : ℝ} (hm : 0 ≤ m) (hL : 0 ≤ L) (h
     (hn : 0 ≤ n) (h : N ≤ m * L + √(P * m * O)) : c / n * (N / L - √(P * O * N) / L ^ (3 / 2 : ℝ)) ≤ m * c / n :=
   (mul_le_mul_of_nonneg_left (slow_step hm hL hP hO h) (div_nonneg hc hn)).trans_eq (by ring)
 
-theorem slowdown : Slowdown := by
+theorem Slowdown : Guarantees.Slowdown := by
   intro ι _ _ d W k m c P hk
   exact slowdown_of_bound (Nat.cast_nonneg m) (add_nonneg (Nat.cast_nonneg k) (alpha_nonneg d W k))
-    (Nat.cast_nonneg _) (Nat.cast_nonneg _) (Nat.cast_nonneg c) (Nat.cast_nonneg _) (bound ι d W k m P hk)
+    (Nat.cast_nonneg _) (Nat.cast_nonneg _) (Nat.cast_nonneg c) (Nat.cast_nonneg _) (Bound ι d W k m P hk)
 
-/-- `bound` with upper bounds on `α` and `Π(k)` in their places. -/
-theorem bound_of_le {ι : Type} [Fintype ι] [DecidableEq ι] {d : Declaration} {W : Work d.D ι} {k m : ℕ}
-    {P : Partition d.D m} (hk : ∀ u, (d.D.into (P.gates u) \ d.θ).card ≤ k) {a p : ℝ} (ha : alpha d W k ≤ a)
+/-- `Bound` with upper bounds on `α` and `Π(k)` in their places. -/
+theorem bound_of_le {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredCircuit} {W : Work d.D ι} {k m : ℕ}
+    {P : Partition d.D m} (hk : ReadsAtMost d P k) {a p : ℝ} (ha : alpha d W k ≤ a)
     (hp : (piMax d W k : ℝ) ≤ p) : (W.N : ℝ) ≤ m * (k + a) + √(p * m * W.O) := by
   have h1 : (m : ℝ) * (k + alpha d W k) ≤ m * (k + a) := mul_le_mul_of_nonneg_left (by linarith) (Nat.cast_nonneg m)
   have h2 : √(piMax d W k * m * W.O) ≤ √(p * m * W.O) := Real.sqrt_le_sqrt
     (mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_right hp (Nat.cast_nonneg m)) (Nat.cast_nonneg _))
-  linarith [bound ι d W k m P hk]
+  linarith [Bound ι d W k m P hk]
 
 /-! ### Bounds on `Π(k)` -/
 
-theorem piMax_le {ι : Type} [Fintype ι] {d : Declaration} (W : Work d.D ι) {k : ℕ} {B : ℝ} (hB : 0 ≤ B)
+theorem piMax_le {ι : Type} [Fintype ι] {d : RegisteredCircuit} (W : Work d.D ι) {k : ℕ} {B : ℝ} (hB : 0 ≤ B)
     (h : ∀ S, kappaWords d S ≤ k → (W.pi S : ℝ) ≤ B) : (piMax d W k : ℝ) ≤ B := by
   unfold piMax
   refine sup_induction (p := fun n : ℕ => (n : ℝ) ≤ B) ?_ ?_ ?_
@@ -524,10 +536,7 @@ theorem piMax_le {ι : Type} [Fintype ι] {d : Declaration} (W : Work d.D ι) {k
 /-- When `val` is one-to-one on each matmul's `w`-words and on its `x`-words, and no two matmuls share both a `w`- and
 an `x`-value, `π(S) ≤ |val(S ∩ W)| |val(S ∩ X)|`. -/
 theorem pi_le_card_mul {ι V : Type} [Fintype ι] [DecidableEq V] (W : Work C ι) (val : Finset (Fin C.N) → V)
-    (hval : ∀ a, Set.InjOn val (W.wWords a) ∧ Set.InjOn val (W.xWords a))
-    (h : ∀ a b, a ≠ b → Disjoint ((W.wWords a).image val) ((W.wWords b).image val) ∨
-      Disjoint ((W.xWords a).image val) ((W.xWords b).image val))
-    (S : Finset (Finset (Fin C.N))) :
+    (hval : ValuesInjective W val) (h : NoSharedPair W val) (S : Finset (Finset (Fin C.N))) :
     W.pi S ≤ ((S ∩ W.allW).image val).card * ((S ∩ W.allX).image val).card := by
   rw [← card_product]
   calc W.pi S = (univ.sigma fun a => (S ∩ W.wWords a) ×ˢ (S ∩ W.xWords a)).card := by
@@ -584,63 +593,28 @@ theorem sqrt_quarter {k βw βx b : ℝ} : √(k * (k ^ 2 / (4 * βw * βx)) / b
     Real.sqrt_div' _ (by norm_num : (0 : ℝ) ≤ 4), show (4 : ℝ) = 2 ^ 2 by norm_num,
     Real.sqrt_sq (by norm_num : (0 : ℝ) ≤ 2)]
 
-theorem alpha_bound {ι : Type} [Fintype ι] [DecidableEq ι] {d : Declaration} (W : Work d.D ι) {k : ℕ}
+theorem alpha_bound {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredCircuit} (W : Work d.D ι) {k : ℕ}
     {βw βx : ℝ} (hpi : (piMax d W k : ℝ) ≤ k ^ 2 / (4 * βw * βx)) :
     alpha d W k ≤ √(k ^ 3 / (βw * βx * W.bY)) / 2 := by
   unfold alpha
   exact (Real.sqrt_le_sqrt (div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left hpi (Nat.cast_nonneg k))
     (bY_nonneg W))).trans_eq sqrt_quarter
 
-theorem onePremise : OnePremise := by
-  intro ι V _ _ _ d W val k βw βx hw hx hval hshare hprem
+/-- **One pair of arrays.** With `val` one-to-one on each matmul's words (`ValuesInjective`), no two matmuls sharing
+both a `w`- and an `x`-value (`NoSharedPair`), and (H) at the arrays `W` and `X`, a value of each costing `β_w` and
+`β_x`: `Π(k) ≤ k² / (4 β_w β_x)` and `α ≤ ½ √(k³ / (β_w β_x b_y))`. -/
+theorem onePremise {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {d : RegisteredCircuit} {W : Work d.D ι}
+    {val : Finset (Fin d.D.N) → V} {k : ℕ} {βw βx : ℝ} (hw : 0 < βw) (hx : 0 < βx) (hval : ValuesInjective W val)
+    (hshare : NoSharedPair W val) (hH : Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] k) :
+    (piMax d W k : ℝ) ≤ k ^ 2 / (4 * βw * βx) ∧ alpha d W k ≤ √(k ^ 3 / (βw * βx * W.bY)) / 2 := by
   have hpi : (piMax d W k : ℝ) ≤ k ^ 2 / (4 * βw * βx) := by
     refine piMax_le W (div_nonneg (sq_nonneg _) (mul_pos (mul_pos zero_lt_four hw) hx).le) fun S hS => ?_
     have h1 : (W.pi S : ℝ) ≤ ((S ∩ W.allW).image val).card * ((S ∩ W.allX).image val).card := by
       exact_mod_cast pi_le_card_mul W val hval hshare S
-    exact h1.trans (amgm_bound hw hx (Nat.cast_nonneg _) (Nat.cast_nonneg _)
-      ((hprem S hS).trans (Nat.cast_le.2 hS)))
+    have h2 : βw * ((S ∩ W.allW).image val).card + βx * ((S ∩ W.allX).image val).card ≤ kappaWords d S := by
+      simpa only [Fin.sum_univ_two, Matrix.cons_val_zero, Matrix.cons_val_one] using hH S hS
+    exact h1.trans (amgm_bound hw hx (Nat.cast_nonneg _) (Nat.cast_nonneg _) (h2.trans (Nat.cast_le.2 hS)))
   exact ⟨hpi, alpha_bound W hpi⟩
-
-/-- With `q ≤ β_a β_b, β_a β_c, β_c β_b`, `ab + ac + cb ≤ (β_a a + β_b b + β_c c)² / (3 q)`. -/
-theorem triangle_bound {a b c βa βb βc q κ : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) (hc : 0 ≤ c) (hq : 0 < q)
-    (hab : q ≤ βa * βb) (hac : q ≤ βa * βc) (hcb : q ≤ βc * βb) (hs : 0 ≤ βa * a + βb * b + βc * c)
-    (h : βa * a + βb * b + βc * c ≤ κ) : a * b + a * c + c * b ≤ 4 / 3 * (κ ^ 2 / (4 * q)) := by
-  have h1 : q * (a * b + a * c + c * b) ≤ βa * a * (βb * b) + βa * a * (βc * c) + βc * c * (βb * b) := by
-    nlinarith [mul_le_mul_of_nonneg_right hab (mul_nonneg ha hb), mul_le_mul_of_nonneg_right hac (mul_nonneg ha hc),
-      mul_le_mul_of_nonneg_right hcb (mul_nonneg hc hb)]
-  have h2 : 3 * (βa * a * (βb * b) + βa * a * (βc * c) + βc * c * (βb * b)) ≤ (βa * a + βb * b + βc * c) ^ 2 := by
-    nlinarith [sq_nonneg (βa * a - βb * b), sq_nonneg (βb * b - βc * c), sq_nonneg (βa * a - βc * c)]
-  have h3 := mul_self_le_mul_self hs h
-  have h4 : 4 / 3 * (κ ^ 2 / (4 * q)) = κ ^ 2 / (3 * q) := by ring
-  rw [h4, le_div_iff₀ (mul_pos three_pos hq)]
-  nlinarith [h1, h2, h3]
-
-theorem sharedArrays : SharedArrays := by
-  intro V _ d W val k A β hβ h00 h01 h10 h12 h22 h21 hval hprem
-  have hq : 0 < min (β 0 * β 1) (min (β 0 * β 2) (β 2 * β 1)) :=
-    lt_min (mul_pos (hβ 0) (hβ 1)) (lt_min (mul_pos (hβ 0) (hβ 2)) (mul_pos (hβ 2) (hβ 1)))
-  have hB : (0 : ℝ) ≤ 4 / 3 * (k ^ 2 / (4 * min (β 0 * β 1) (min (β 0 * β 2) (β 2 * β 1)))) :=
-    mul_nonneg (by norm_num) (div_nonneg (sq_nonneg _) (mul_pos four_pos hq).le)
-  refine piMax_le W hB fun S hS => ?_
-  have key : ∀ n : Fin 3 → ℕ, (S ∩ W.wWords 0).card ≤ n 0 → (S ∩ W.xWords 0).card ≤ n 1 →
-      (S ∩ W.wWords 1).card ≤ n 0 → (S ∩ W.xWords 1).card ≤ n 2 → (S ∩ W.wWords 2).card ≤ n 2 →
-      (S ∩ W.xWords 2).card ≤ n 1 → β 0 * (n 0 : ℝ) + β 1 * n 1 + β 2 * n 2 ≤ k →
-      (W.pi S : ℝ) ≤ 4 / 3 * (k ^ 2 / (4 * min (β 0 * β 1) (min (β 0 * β 2) (β 2 * β 1)))) := by
-    intro n h0w h0x h1w h1x h2w h2x hk
-    have hpi : W.pi S ≤ n 0 * n 1 + n 0 * n 2 + n 2 * n 1 := by
-      rw [Work.pi, Fin.sum_univ_three]
-      exact Nat.add_le_add (Nat.add_le_add (Nat.mul_le_mul h0w h0x) (Nat.mul_le_mul h1w h1x)) (Nat.mul_le_mul h2w h2x)
-    have hpi' : (W.pi S : ℝ) ≤ n 0 * n 1 + n 0 * n 2 + n 2 * n 1 := by
-      exact_mod_cast hpi
-    have hs : 0 ≤ β 0 * (n 0 : ℝ) + β 1 * n 1 + β 2 * n 2 :=
-      add_nonneg (add_nonneg (mul_nonneg (hβ 0).le (Nat.cast_nonneg _)) (mul_nonneg (hβ 1).le (Nat.cast_nonneg _)))
-        (mul_nonneg (hβ 2).le (Nat.cast_nonneg _))
-    exact hpi'.trans (triangle_bound (Nat.cast_nonneg _) (Nat.cast_nonneg _) (Nat.cast_nonneg _) hq (min_le_left _ _)
-      ((min_le_right _ _).trans (min_le_left _ _)) ((min_le_right _ _).trans (min_le_right _ _)) hs hk)
-  exact key (fun r => ((S ∩ A r).image val).card) (card_inter_le_image (hval 0).1 h00 S)
-    (card_inter_le_image (hval 0).2 h01 S) (card_inter_le_image (hval 1).1 h10 S)
-    (card_inter_le_image (hval 1).2 h12 S) (card_inter_le_image (hval 2).1 h22 S)
-    (card_inter_le_image (hval 2).2 h21 S) ((hprem S hS).trans (Nat.cast_le.2 hS))
 
 /-- The blow-up of `G`: each vertex `r` replaced by `z r` copies, copies adjacent when their vertices are. -/
 def blowUp {ρ : Type} (G : SimpleGraph ρ) (z : ρ → ℕ) : SimpleGraph (Σ r, Fin (z r)) := G.comap Sigma.fst
@@ -722,8 +696,15 @@ theorem clique_real {t T U σ k q ω : ℝ} (hq : 0 < q) (hω : 1 ≤ ω) (hσ :
   nlinarith [mul_le_mul_of_nonneg_left (mul_self_le_mul_self hσ hk) h3, mul_le_mul_of_nonneg_left ht h2ωq,
     mul_le_mul_of_nonneg_left hqT (mul_pos two_pos hω0).le]
 
-theorem sharedArraysClique : SharedArraysClique := by
-  intro ι ρ V _ _ _ _ d W val k ω G A e β q hω hG hadj hinj hsub hval hβ hq hqe hprem
+/-- **Shared arrays.** Matmul `a` reads arrays `(e a).1` and `(e a).2`, an edge of a graph with no clique of `ω + 1`
+(`Arrays`), `val` is one-to-one on each matmul's words (`ValuesInjective`), array `r` costs `β_r ≥ 0` a value and each
+matmul's pair at least `q > 0` (`CostsAtLeast`). (H) at those arrays gives `Π(k) ≤ 2 (1 - 1/ω) k² / (4 q)`. -/
+theorem sharedArraysClique {ι ρ V : Type} [Fintype ι] [DecidableEq ι] [Fintype ρ] [DecidableEq V]
+    {d : RegisteredCircuit} {W : Work d.D ι} {val : Finset (Fin d.D.N) → V} {k ω : ℕ} {G : SimpleGraph ρ}
+    {A : ρ → Finset (Finset (Fin d.D.N))} {e : ι → ρ × ρ} {β : ρ → ℝ} {q : ℝ} (hω : 0 < ω) (hβ : ∀ r, 0 ≤ β r)
+    (hq : 0 < q) (hA : Arrays W G A e ω) (hval : ValuesInjective W val) (hqe : CostsAtLeast e β q)
+    (hprem : Assumptions.Hardness d A val β k) : (piMax d W k : ℝ) ≤ 2 * (1 - 1 / ω) * (k ^ 2 / (4 * q)) := by
+  obtain ⟨hG, hadj, hinj, hsub⟩ := hA
   have hω' : 1 ≤ ω := hω
   have hω1 : (1 : ℝ) ≤ ω := Nat.one_le_cast.2 hω'
   have hB : (0 : ℝ) ≤ 2 * (1 - 1 / ω) * (k ^ 2 / (4 * q)) := by
@@ -757,19 +738,17 @@ theorem sharedArraysClique : SharedArraysClique := by
 /-! ### The theorem of record -/
 
 /-- (E) at `b` gives `b ≤ b_y` once some `E(A)` is nonempty. -/
-theorem le_bY {ι : Type} [Fintype ι] [DecidableEq ι] (W : Work C ι) {b : ℝ}
-    (hE : ∀ B ⊆ C.computed, b * (W.clear B).card ≤ kappa C B ((W.clear B).biUnion W.y)) (h : W.fed.Nonempty) :
-    b ≤ W.bY := by
+theorem le_bY {ι : Type} [Fintype ι] [DecidableEq ι] (W : Work C ι) {b : ℝ} (hE : Assumptions.Exports W b)
+    (h : W.fed.Nonempty) : b ≤ W.bY := by
   rw [Work.bY, dite_eq_left h]
   refine le_inf' h _ fun B hB => ?_
   obtain ⟨-, hBc, hne⟩ := mem_filter.1 hB
   exact (le_div_iff₀ (Nat.cast_pos.2 (card_pos.2 hne))).2 (hE B hBc)
 
 /-- With (E) at `b > 0`, `α ≤ √(k P / b)` for every `P ≥ Π(k)`. -/
-theorem alpha_le_of_exports {ι : Type} [Fintype ι] [DecidableEq ι] {d : Declaration} (W : Work d.D ι) {k : ℕ}
-    {b p : ℝ} (hb : 0 < b)
-    (hE : ∀ B ⊆ d.D.computed, b * (W.clear B).card ≤ kappa d.D B ((W.clear B).biUnion W.y))
-    (hp : (piMax d W k : ℝ) ≤ p) : alpha d W k ≤ √(k * p / b) := by
+theorem alpha_le_of_exports {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredCircuit} (W : Work d.D ι) {k : ℕ}
+    {b p : ℝ} (hb : 0 < b) (hE : Assumptions.Exports W b) (hp : (piMax d W k : ℝ) ≤ p) :
+    alpha d W k ≤ √(k * p / b) := by
   unfold alpha
   by_cases h : W.fed.Nonempty
   · have hbY := le_bY W hE h
@@ -789,9 +768,9 @@ theorem alphaHE_nonneg (k : ℕ) (q b : ℝ) : 0 ≤ alphaHE k q b :=
 
 theorem shareF_nonneg (ω : ℕ) : 0 ≤ shareF ω := Real.sqrt_nonneg _
 
-theorem he : HE := by
+theorem HE : Guarantees.HE := by
   intro ι V _ _ _ d W val k m c P βw βx b hw hx hb hval hshare hH hE hk
-  obtain ⟨hpi, -⟩ := onePremise ι V d W val k βw βx hw hx hval hshare hH
+  obtain ⟨hpi, -⟩ := onePremise hw hx hval hshare hH
   have hα : alpha d W k ≤ alphaHE k (βw * βx) b := (alpha_le_of_exports W hb hE hpi).trans_eq sqrt_quarter
   have hp : (0 : ℝ) ≤ k ^ 2 / (4 * βw * βx) := div_nonneg (sq_nonneg _) (mul_pos (mul_pos four_pos hw) hx).le
   have hk2 : (0 : ℝ) ≤ k / 2 := div_nonneg (Nat.cast_nonneg k) zero_le_two
@@ -804,8 +783,8 @@ theorem he : HE := by
     sqrt_scaled hk2] at hs
   exact ⟨hN, hs⟩
 
-theorem heShared : HEShared := by
-  intro ι ρ V _ _ _ _ d W val k m c ω P G A e β q b hω hG hadj hinj hsub hval hβ hq hqe hb hH hE hk
+theorem HEShared : Guarantees.HEShared := by
+  intro ι ρ V _ _ _ _ d W val k m c ω P G A e β q b hω hβ hq hb hA hval hqe hH hE hk
   have hω' : 1 ≤ ω := hω
   have hω1 : (1 : ℝ) ≤ ω := Nat.one_le_cast.2 hω'
   have hF : (0 : ℝ) ≤ 2 * (1 - 1 / ω) := by
@@ -813,7 +792,7 @@ theorem heShared : HEShared := by
       rw [sub_nonneg, div_le_iff₀ (by linarith : (0 : ℝ) < ω)]
       linarith
     linarith
-  have hpi := sharedArraysClique ι ρ V d W val k ω G A e β q hω hG hadj hinj hsub hval hβ hq hqe hH
+  have hpi := sharedArraysClique hω hβ hq hA hval hqe hH
   have hα : alpha d W k ≤ shareF ω * alphaHE k q b := by
     refine (alpha_le_of_exports W hb hE hpi).trans_eq ?_
     rw [show (k : ℝ) * (2 * (1 - 1 / ω) * (k ^ 2 / (4 * q))) / b = 2 * (1 - 1 / ω) * (k ^ 3 / (q * b) / 2 ^ 2) by
@@ -831,4 +810,4 @@ theorem heShared : HEShared := by
     2 * (1 - 1 / ω) * ((k / 2) ^ 2 * (W.O * W.N / q)) by ring, Real.sqrt_mul hF, sqrt_scaled hk2, ← shareF] at hs
   exact ⟨hN, hs⟩
 
-end Nci.SecurityProofs.Cut
+end Nci.Cut.SecurityProofs

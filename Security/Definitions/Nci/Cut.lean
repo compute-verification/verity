@@ -1,15 +1,16 @@
-import Definitions.Core.Partition
+import Definitions.Core.Formalism
 import Definitions.Nci.Covering
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Combinatorics.SimpleGraph.Clique
 
 /-!
-# The min-cut statement of the training slowdown
+# The min-cut statement of the training slowdown: its vocabulary
 
 A lower bound on the number of blocks any partition of a circuit needs, from the matrix multiplications it charges,
 stated with cuts: what a block reads is bounded by how few gates separate it from the unregistered inputs, and no width
 premise enters. The circuit is read as a DAG of wires: an edge runs from a gate to each gate that reads it, so a path
-runs from the inputs towards the outputs. The input gates outside `θ` are the unregistered inputs (`unregistered`).
+runs from the inputs towards the outputs. The input gates outside `θ` are the unregistered inputs
+(`unregisteredInputs`).
 
 * `κ(X → Y)` (`kappa`) is the least number of gates meeting every path from `X` to `Y`, its ends included
   (`Separates`). A word is a set of gates, and for a set `S` of words `κ(S)` (`kappaWords`) is `κ` from the unregistered
@@ -25,20 +26,15 @@ runs from the inputs towards the outputs. The input gates outside `θ` are the u
   `b_y = min_{E(A) ≠ ∅} κ(A → E(A)) / |E(A)|` (`Work.bY`, `0` when every `E(A)` is empty, where `b_y = ∞` would give the
   same `α`), and `α = √(k Π(k) / b_y)` (`alpha`).
 
-`Bound` is the theorem: every partition into `m` blocks, each with at most `k` inputs outside `θ`, has
-`N ≤ m (k + α) + √(Π(k) m O)`. `Slowdown` is its form for the slowdown `ρ = m c / |C|` of blocks of at most `c` gates;
-nothing ties `c` to the blocks, and it holds for every `c`. `OnePremise` bounds `Π(k)` and `α` under (H), one premise
-on cuts, and `SharedArrays` and `SharedArraysClique` bound `Π(k)` when the matmuls share arrays, each array at its own
-cost a value: a layer's forward, `dX` and `dW` products, and in general. `HE` is the theorem of record: `Bound` and its
-slowdown under (H) and (E), a floor on what a set of gates exports; `HEShared` is its form with shared arrays, no
-`ω + 1` of them pairwise read together, for an `ω` its caller supplies.
-
-A word is a set of gates, so a value and each of its casts are distinct words. The premises count values: `val` names
-the value each word carries, the casts of one value carrying one, and is one-to-one on each matmul's `w`-words and on
-its `x`-words. (H) and the arrays' costs count `val(S ∩ W)`, the values of `S`'s words in `W`, the share condition
-compares the matmuls' values, and `val = id` counts words. The statements carry no hypothesis their proofs don't read:
-no fan-in bound, `W` and `X` may share values, and outputs may repeat. None is listed in `lean-audit.json`;
-`Proofs.Nci.Cut` proves each.
+A block reads at most `k` gates outside `θ` when `|in(I) \ θ| ≤ k` (`ReadsAtMost`, through
+`RegisteredCircuit.unregistered`). The slowdown `ρ = m c / |C|` prices each of a partition's `m` blocks at `c`, so it
+is read with blocks of at most `c` gates, none padded. A word is a set of gates, so a value and each of its casts are
+distinct words; `val` names the value each word carries, the casts of one value carrying one, one-to-one on each
+matmul's `w`-words and on its `x`-words (`ValuesInjective`), and `val = id` counts words. When no two matmuls share
+both a `w`- and an `x`-value (`NoSharedPair`), or when the matmuls read shared arrays, matmul `a` the pair `e a`, an
+edge of a graph with no clique of `ω + 1` (`Arrays`), at least `q` a pair of values (`CostsAtLeast`), two cut
+conjectures bound the work: (H) and (E) (`Definitions.Nci.Assumptions.Cut`). The guarantees are
+`Definitions.Nci.Guarantees.Cut`'s.
 -/
 
 namespace Nci.Cut
@@ -59,12 +55,12 @@ def Connected (C : Circuit) (A : Finset (Fin C.N)) : Prop :=
   A.Nonempty ∧ ∀ T ⊆ A, T.Nonempty → T ≠ A → ∃ a ∈ A, ∃ h ∈ A, a ∈ C.reads h ∧ (a ∈ T ↔ h ∉ T)
 
 /-- The unregistered inputs: the input gates outside `θ`. -/
-def unregistered (d : Declaration) : Finset (Fin d.D.N) :=
+def unregisteredInputs (d : RegisteredCircuit) : Finset (Fin d.D.N) :=
   univ.filter fun g => d.D.isInput g = true ∧ g ∉ d.θ
 
 /-- `κ(S)` for a set `S` of words: `κ` from the unregistered inputs to the gates of `S`'s words. -/
-noncomputable def kappaWords (d : Declaration) (S : Finset (Finset (Fin d.D.N))) : ℕ :=
-  kappa d.D (unregistered d) (S.biUnion id)
+noncomputable def kappaWords (d : RegisteredCircuit) (S : Finset (Finset (Fin d.D.N))) : ℕ :=
+  kappa d.D (unregisteredInputs d) (S.biUnion id)
 
 /-- A matmul `y = wx`, as its communication pattern: words `w_il`, `x_lj`, `y_ij`, and for each triple `(i, j, l)` a
 MAC `g_ijl`. -/
@@ -154,120 +150,44 @@ noncomputable def bY : ℝ :=
 end Work
 
 /-- `Π(k) = max {π(S) : κ(S) ≤ k}`, over sets `S` of words. -/
-noncomputable def piMax {ι : Type} [Fintype ι] (d : Declaration) (W : Work d.D ι) (k : ℕ) : ℕ :=
+noncomputable def piMax {ι : Type} [Fintype ι] (d : RegisteredCircuit) (W : Work d.D ι) (k : ℕ) : ℕ :=
   ((univ : Finset (Finset (Finset (Fin d.D.N)))).filter fun S => kappaWords d S ≤ k).sup W.pi
 
 /-- `α = √(k Π(k) / b_y)`. -/
-noncomputable def alpha {ι : Type} [Fintype ι] [DecidableEq ι] (d : Declaration) (W : Work d.D ι) (k : ℕ) : ℝ :=
+noncomputable def alpha {ι : Type} [Fintype ι] [DecidableEq ι] (d : RegisteredCircuit) (W : Work d.D ι) (k : ℕ) : ℝ :=
   √(k * piMax d W k / W.bY)
 
-/-- **The min-cut bound.** Every partition of the gates into `m` blocks with `|in(I) \ θ| ≤ k` for each block `I` has
-`N ≤ m (k + α) + √(Π(k) m O)`. -/
-def Bound : Prop :=
-  ∀ (ι : Type) [Fintype ι] [DecidableEq ι] (d : Declaration) (W : Work d.D ι) (k m : ℕ) (P : Partition d.D m),
-    (∀ u, (d.D.into (P.gates u) \ d.θ).card ≤ k) →
-      (W.N : ℝ) ≤ m * (k + alpha d W k) + √(piMax d W k * m * W.O)
-
-/-- **The slowdown.** With blocks of at most `c` gates, `ρ = m c / |C|` is at least
-`(c / |C|) (N / (k + α) - √(Π(k) O N) / (k + α)^{3/2})`; the inequality holds for every `c`. -/
-def Slowdown : Prop :=
-  ∀ (ι : Type) [Fintype ι] [DecidableEq ι] (d : Declaration) (W : Work d.D ι) (k m c : ℕ) (P : Partition d.D m),
-    (∀ u, (d.D.into (P.gates u) \ d.θ).card ≤ k) →
-      (c / d.D.size d.D.computed : ℝ) *
-          (W.N / (k + alpha d W k) - √(piMax d W k * W.O * W.N) / (k + alpha d W k) ^ (3 / 2 : ℝ)) ≤
-        m * c / d.D.size d.D.computed
-
-/-- **The one premise.** Let `val` name the value each word carries, one-to-one on each matmul's `w`-words and on its
-`x`-words. If no two matmuls share both a `w`- and an `x`-value, and every `S` with `κ(S) ≤ k` has
-`β_w |val(S ∩ W)| + β_x |val(S ∩ X)| ≤ κ(S)`, then `Π(k) ≤ k² / (4 β_w β_x)` and `α ≤ ½ √(k³ / (β_w β_x b_y))`. -/
-def OnePremise : Prop :=
-  ∀ (ι V : Type) [Fintype ι] [DecidableEq ι] [DecidableEq V] (d : Declaration) (W : Work d.D ι)
-    (val : Finset (Fin d.D.N) → V) (k : ℕ) (βw βx : ℝ), 0 < βw → 0 < βx →
-    (∀ a, Set.InjOn val (W.wWords a) ∧ Set.InjOn val (W.xWords a)) →
-    (∀ a b, a ≠ b → Disjoint ((W.wWords a).image val) ((W.wWords b).image val) ∨
-      Disjoint ((W.xWords a).image val) ((W.xWords b).image val)) →
-    (∀ S, kappaWords d S ≤ k →
-      βw * ((S ∩ W.allW).image val).card + βx * ((S ∩ W.allX).image val).card ≤ kappaWords d S) →
-      (piMax d W k : ℝ) ≤ k ^ 2 / (4 * βw * βx) ∧ alpha d W k ≤ √(k ^ 3 / (βw * βx * W.bY)) / 2
-
-/-- **Shared arrays, one layer.** The forward product `Y = W X` (matmul `0`), `dX = Wᵀ dY` (matmul `1`) and
-`dW = dY Xᵀ` (matmul `2`) read three arrays `A 0`, `A 1`, `A 2` (the weights, the activations, the output gradients),
-array `r` at cost `β r` a value, with `val` one-to-one on each matmul's `w`-words and on its `x`-words. If every `S`
-with `κ(S) ≤ k` has `∑_r β_r |val(S ∩ A r)| ≤ κ(S)`, then `Π(k)` is at most `4/3` times `k² / (4 q)`, with `q` the
-least `β_r β_s` over the pairs of arrays a matmul reads. -/
-def SharedArrays : Prop :=
-  ∀ (V : Type) [DecidableEq V] (d : Declaration) (W : Work d.D (Fin 3)) (val : Finset (Fin d.D.N) → V) (k : ℕ)
-    (A : Fin 3 → Finset (Finset (Fin d.D.N))) (β : Fin 3 → ℝ), (∀ r, 0 < β r) →
-    W.wWords 0 ⊆ A 0 → W.xWords 0 ⊆ A 1 → W.wWords 1 ⊆ A 0 → W.xWords 1 ⊆ A 2 → W.wWords 2 ⊆ A 2 →
-    W.xWords 2 ⊆ A 1 → (∀ a, Set.InjOn val (W.wWords a) ∧ Set.InjOn val (W.xWords a)) →
-    (∀ S, kappaWords d S ≤ k → β 0 * ((S ∩ A 0).image val).card + β 1 * ((S ∩ A 1).image val).card +
-      β 2 * ((S ∩ A 2).image val).card ≤ kappaWords d S) →
-      (piMax d W k : ℝ) ≤ 4 / 3 * (k ^ 2 / (4 * min (β 0 * β 1) (min (β 0 * β 2) (β 2 * β 1))))
-
-/-- **Shared arrays, in general.** Matmul `a` reads arrays `(e a).1` (its `w`-words) and `(e a).2` (its `x`-words),
-an edge of a graph `G` on the arrays with no clique of `ω + 1`, distinct matmuls on distinct edges; array `r` costs
-`β r` a value, `val` is one-to-one on each matmul's `w`-words and on its `x`-words, and `q ≤ β_r β_s` for each matmul's
-pair of arrays `(r, s)` (at best, the least such product). If every `S` with `κ(S) ≤ k` has
-`∑_r β_r |val(S ∩ A r)| ≤ κ(S)`, then `Π(k)` is at most `2 (1 - 1/ω)` times `k² / (4 q)`. -/
-def SharedArraysClique : Prop :=
-  ∀ (ι ρ V : Type) [Fintype ι] [DecidableEq ι] [Fintype ρ] [DecidableEq V] (d : Declaration) (W : Work d.D ι)
-    (val : Finset (Fin d.D.N) → V) (k ω : ℕ) (G : SimpleGraph ρ) (A : ρ → Finset (Finset (Fin d.D.N)))
-    (e : ι → ρ × ρ) (β : ρ → ℝ) (q : ℝ), 0 < ω →
-    G.CliqueFree (ω + 1) → (∀ a, G.Adj (e a).1 (e a).2) → (∀ a b, s((e a).1, (e a).2) = s((e b).1, (e b).2) → a = b) →
-    (∀ a, W.wWords a ⊆ A (e a).1 ∧ W.xWords a ⊆ A (e a).2) →
-    (∀ a, Set.InjOn val (W.wWords a) ∧ Set.InjOn val (W.xWords a)) →
-    (∀ r, 0 ≤ β r) → 0 < q → (∀ a, q ≤ β (e a).1 * β (e a).2) →
-    (∀ S, kappaWords d S ≤ k → ∑ r, β r * ((S ∩ A r).image val).card ≤ kappaWords d S) →
-      (piMax d W k : ℝ) ≤ 2 * (1 - 1 / ω) * (k ^ 2 / (4 * q))
-
-/-- The theorem of record's `α`: `½ √(k³ / (q b))`, at `q = β_w β_x` and (E)'s floor `b`. -/
+/-- `α` under (H) and (E): `½ √(k³ / (q b))`, at `q = β_w β_x` and (E)'s floor `b`. -/
 noncomputable def alphaHE (k : ℕ) (q b : ℝ) : ℝ := √(k ^ 3 / (q * b)) / 2
 
-/-- `F = √(2 (1 - 1/ω))`, what shared arrays with no `ω + 1` of them pairwise read together put on both terms of
-`HEShared`: `1` at `ω = 2`, `2/√3` at `ω = 3`. -/
+/-- `F = √(2 (1 - 1/ω))`, what shared arrays with no `ω + 1` of them pairwise read together put on both terms of the
+bound: `1` at `ω = 2`, `2/√3` at `ω = 3`. -/
 noncomputable def shareF (ω : ℕ) : ℝ := √(2 * (1 - 1 / ω))
 
-/-- **The theorem of record.** `val` names the value each word carries, one-to-one on each matmul's `w`-words and on
-its `x`-words. (H): no two matmuls share both a `w`- and an `x`-value, and every `S` with `κ(S) ≤ k` has
-`β_w |val(S ∩ W)| + β_x |val(S ∩ X)| ≤ κ(S)`. (E) at `b > 0`: every set `B` of computed gates has
-`κ(B → E(B)) ≥ b |E(B)|`, as at `b = b_y` (`Work.bY`). Then every partition into `m` blocks with `|in(I) \ θ| ≤ k` has
-`N ≤ m (k + α) + (k/2) √(m O / (β_w β_x))`, with `α = ½ √(k³ / (β_w β_x b))` (`alphaHE`), and for every `c`,
-`m c / |C| ≥ (c / |C|) (N / (k + α) - (k/2) √(O N / (β_w β_x)) / (k + α)^{3/2})`. -/
-def HE : Prop :=
-  ∀ (ι V : Type) [Fintype ι] [DecidableEq ι] [DecidableEq V] (d : Declaration) (W : Work d.D ι)
-    (val : Finset (Fin d.D.N) → V) (k m c : ℕ) (P : Partition d.D m) (βw βx b : ℝ), 0 < βw → 0 < βx → 0 < b →
-    (∀ a, Set.InjOn val (W.wWords a) ∧ Set.InjOn val (W.xWords a)) →
-    (∀ a a', a ≠ a' → Disjoint ((W.wWords a).image val) ((W.wWords a').image val) ∨
-      Disjoint ((W.xWords a).image val) ((W.xWords a').image val)) →
-    (∀ S, kappaWords d S ≤ k →
-      βw * ((S ∩ W.allW).image val).card + βx * ((S ∩ W.allX).image val).card ≤ kappaWords d S) →
-    (∀ B ⊆ d.D.computed, b * (W.clear B).card ≤ kappa d.D B ((W.clear B).biUnion W.y)) →
-    (∀ u, (d.D.into (P.gates u) \ d.θ).card ≤ k) →
-      (W.N : ℝ) ≤ m * (k + alphaHE k (βw * βx) b) + k / 2 * √(m * W.O / (βw * βx)) ∧
-      (c / d.D.size d.D.computed : ℝ) * (W.N / (k + alphaHE k (βw * βx) b) -
-          k / 2 * √(W.O * W.N / (βw * βx)) / (k + alphaHE k (βw * βx) b) ^ (3 / 2 : ℝ)) ≤
-        m * c / d.D.size d.D.computed
+/-- Every block of `P` reads at most `k` gates outside `θ`: `|in(I) \ θ| ≤ k` (`RegisteredCircuit.unregistered`). -/
+def ReadsAtMost {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m) (k : ℕ) : Prop :=
+  ∀ u, (d.unregistered (P.gates u)).card ≤ k
 
-/-- **The theorem of record with shared arrays.** The arrays, costs and values of `SharedArraysClique`, no `ω + 1`
-arrays pairwise read together by a matmul, as when the arrays fall into `ω` classes and no matmul reads two of one
-class: `ω = 3` with every layer's forward, `dX` and `dW` products on its weights, activations and output gradients,
-however many layers share an array, and `ω = 2` with products of at most two of those three kinds. With (E) at `b`,
-both terms of `HE` grow by `F = √(2 (1 - 1/ω))` (`shareF`), with `q` for `β_w β_x`:
-`N ≤ m (k + F α) + F (k/2) √(m O / q)` with `α = ½ √(k³ / (q b))`, and the slowdown likewise. -/
-def HEShared : Prop :=
-  ∀ (ι ρ V : Type) [Fintype ι] [DecidableEq ι] [Fintype ρ] [DecidableEq V] (d : Declaration) (W : Work d.D ι)
-    (val : Finset (Fin d.D.N) → V) (k m c ω : ℕ) (P : Partition d.D m) (G : SimpleGraph ρ)
-    (A : ρ → Finset (Finset (Fin d.D.N))) (e : ι → ρ × ρ) (β : ρ → ℝ) (q b : ℝ), 0 < ω → G.CliqueFree (ω + 1) →
-    (∀ a, G.Adj (e a).1 (e a).2) → (∀ a a', s((e a).1, (e a).2) = s((e a').1, (e a').2) → a = a') →
-    (∀ a, W.wWords a ⊆ A (e a).1 ∧ W.xWords a ⊆ A (e a).2) →
-    (∀ a, Set.InjOn val (W.wWords a) ∧ Set.InjOn val (W.xWords a)) →
-    (∀ r, 0 ≤ β r) → 0 < q → (∀ a, q ≤ β (e a).1 * β (e a).2) → 0 < b →
-    (∀ S, kappaWords d S ≤ k → ∑ r, β r * ((S ∩ A r).image val).card ≤ kappaWords d S) →
-    (∀ B ⊆ d.D.computed, b * (W.clear B).card ≤ kappa d.D B ((W.clear B).biUnion W.y)) →
-    (∀ u, (d.D.into (P.gates u) \ d.θ).card ≤ k) →
-      (W.N : ℝ) ≤ m * (k + shareF ω * alphaHE k q b) + shareF ω * (k / 2 * √(m * W.O / q)) ∧
-      (c / d.D.size d.D.computed : ℝ) * (W.N / (k + shareF ω * alphaHE k q b) -
-          shareF ω * (k / 2 * √(W.O * W.N / q)) / (k + shareF ω * alphaHE k q b) ^ (3 / 2 : ℝ)) ≤
-        m * c / d.D.size d.D.computed
+/-- `val` names the value each word carries, one-to-one on each matmul's `w`-words and on its `x`-words: the casts of
+one value carry one, and a matmul's distinct words carry distinct values. -/
+def ValuesInjective {C : Circuit} {ι V : Type} (W : Work C ι) (val : Finset (Fin C.N) → V) : Prop :=
+  ∀ a, Set.InjOn val (W.wWords a) ∧ Set.InjOn val (W.xWords a)
+
+/-- No two matmuls share both a `w`- and an `x`-value. -/
+def NoSharedPair {C : Circuit} {ι V : Type} [DecidableEq V] (W : Work C ι) (val : Finset (Fin C.N) → V) : Prop :=
+  ∀ a a', a ≠ a' → Disjoint ((W.wWords a).image val) ((W.wWords a').image val) ∨
+    Disjoint ((W.xWords a).image val) ((W.xWords a').image val)
+
+/-- The matmuls read shared arrays: matmul `a` reads arrays `(e a).1` (its `w`-words) and `(e a).2` (its `x`-words), an
+edge of the graph `G` on the arrays, which has no clique of `ω + 1`, distinct matmuls on distinct edges. -/
+def Arrays {C : Circuit} {ι ρ : Type} (W : Work C ι) (G : SimpleGraph ρ) (A : ρ → Finset (Finset (Fin C.N)))
+    (e : ι → ρ × ρ) (ω : ℕ) : Prop :=
+  G.CliqueFree (ω + 1) ∧ (∀ a, G.Adj (e a).1 (e a).2) ∧
+    (∀ a a', s((e a).1, (e a).2) = s((e a').1, (e a').2) → a = a') ∧
+    ∀ a, W.wWords a ⊆ A (e a).1 ∧ W.xWords a ⊆ A (e a).2
+
+/-- Each matmul's pair of arrays costs at least `q` a pair of values: `q ≤ β_r β_s` for matmul `a` on `(r, s) = e a`. -/
+def CostsAtLeast {ι ρ : Type} (e : ι → ρ × ρ) (β : ρ → ℝ) (q : ℝ) : Prop :=
+  ∀ a, q ≤ β (e a).1 * β (e a).2
 
 end Nci.Cut
