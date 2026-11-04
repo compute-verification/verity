@@ -4,7 +4,7 @@ traced step; its rows need `ledger ingest --structures`).
 
     python trace40.py pack --out PACK.tar [--te TE40_WT] [--all]   # here: the runs with no trace yet, and what tracing reads
     python trace40.py node --pack PACK.tar --out DIR [--workers N]  # on a CPU node, under a venv with torch (job40.sh)
-    python trace40.py take RUN                                      # here: a node run's out/ into the trace cache
+    python trace40.py take RUN [--src DIR]                          # here: a node run's out/ into the trace cache
     python trace40.py ledger [--out LEDGER]                         # here: the measured ledger the refresh scores
 
 The node step is the toolsmith's re-trace (art:191e5aa65ab1's helpers/driver.py, art:7bbd4cd32918's ingest): each run is
@@ -436,16 +436,18 @@ def node(pack_tar: Path, out: Path, workers: int) -> int:
 # -- here: the node's output into the cache, and the measured ledger
 
 
-def take(run: str, te: Path) -> dict:
-    """A node run's out/ (fetched to ~/.research/runs/RUN) into this te_core's cache: records and traced.json."""
-    # a fetch the store fails for a moment (exit 4, 19:19Z) would send the shard's runs to be traced again
-    for wait in (0, 15, 60):
-        time.sleep(wait)
-        r = subprocess.run(["research", "fetch", run, "--all"], capture_output=True, check=False)
-        if not r.returncode:
-            break
-    r.check_returncode()
-    src = HOME / ".research" / "runs" / run / "out"
+def take(run: str, te: Path, src: Path | None = None) -> dict:
+    """A node run's out/ (fetched to ~/.research/runs/RUN, or `src` where it is here already) into this te_core's cache:
+    records and traced.json."""
+    if src is None:
+        # a fetch the store fails for a moment (exit 4, 19:19Z) would send the shard's runs to be traced again
+        for wait in (0, 15, 60):
+            time.sleep(wait)
+            r = subprocess.run(["research", "fetch", run, "--all"], capture_output=True, check=False)
+            if not r.returncode:
+                break
+        r.check_returncode()
+        src = HOME / ".research" / "runs" / run / "out"
     man = json.loads((src / "manifest.json").read_text())
     c = cache(te)
     if man["te_tree"] != te_tree(te):
@@ -566,6 +568,7 @@ def main() -> int:
     t = sub.add_parser("take")
     t.add_argument("run")
     t.add_argument("--te", type=Path, default=TE40_WT)
+    t.add_argument("--src", type=Path, default=None, help="the run's out/ here (default: `research fetch RUN --all`'s)")
     led = sub.add_parser("ledger")
     led.add_argument("--out", type=Path, default=MEASURED)
     led.add_argument("--te", type=Path, default=TE40_WT)
@@ -579,7 +582,7 @@ def main() -> int:
     elif a.cmd == "node":
         return node(a.pack, a.out, a.workers)
     elif a.cmd == "take":
-        new = take(a.run, a.te)
+        new = take(a.run, a.te, a.src)
         print(json.dumps({"runs": len(new), "errors": sum(bool(v.get("error")) for v in new.values())}))
     else:
         print(json.dumps(ledger(a.out, a.te, a.over)))
