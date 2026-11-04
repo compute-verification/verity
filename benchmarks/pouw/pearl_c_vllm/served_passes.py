@@ -6,6 +6,7 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
                          [--output-tokens 16] [--max-num-batched-tokens N] [--no-retain [--seeded]]
   served_passes.py same A.json B.json --out same.json
   served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J] [--device DEBIT_CUBIN [--device-check N]]
+  served_passes.py volunteer-needed [--over-cap reject|uncredited] [--verdict run|pass]
   served_passes.py retain --passes DIR [--volunteer volunteer.json] [--drop ROUND ...] [--window-record W]
   served_passes.py verify --passes DIR [--manifest M ...] [--tie W] --out verify.json [--answer answer.json]
                           [--draws 459] [--delta 1/100] [--jobs J] [--fast] [--coin-record R]
@@ -50,6 +51,13 @@ pass ends (``done`` once all have), with the node it ran on and, on the device, 
 replayed (``device``), prints one line and exits 0 only when no pass has a tile left over a cap; it refuses a serve that
 retained none, and any once the verifier's coin is drawn (``DIR/coin.json``).
 
+``volunteer-needed`` prints ``yes`` and the over-cap rule (`over_cap_rule`) where the verdict a pipeline calls (``run``,
+the default: ``verify``'s, `verify_run.verify_passes`; ``pass``: `verify_run.verify`, a pass at a time) rejects a run on
+a drawn tile with a credited row or tile over its debit cap under ``--over-cap`` (default: the verdict's own rule), and
+``no`` and the rule where it credits such a row nothing instead.  The pipelines (`served_pearlplus.sh`,
+`pearl_c_sm90/h200.sh`) ask it before they serve: they run ``volunteer`` exactly when it says ``yes``, and refuse to skip
+it then.
+
 ``retain`` is the prover's last step before the coin: it writes ``DIR/retention.json``, the rounds (places among
 ``served.json``'s passes with calls) the verdict is to read, dropping each ``--drop`` round and, with ``--volunteer``, each
 pass that step didn't finish or left over a cap.  A dropped pass credits nothing and its MACs stay in what the run
@@ -79,6 +87,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import inspect
 import itertools
 import json
 import math
@@ -107,6 +116,9 @@ VOLUNTEER_KEEP = ("manifest", "ok", "line", "tiles", "over", "voluntary_a", "vol
                   "credit_kept", "device")
 #: what `volunteer`'s document sums of its passes' ``device``
 DEVICE_SUMS = ("replayed", "bad_tiles", "form_s", "device_s", "replay_s")
+#: Pearl+'s rules for a drawn tile with a credited row or tile over its debit cap (``verify --over-cap``, `verify_run`'s
+#: ``over_cap``): the verdict rejects the run, or credits the row nothing; ``volunteer`` is the prover's under the first
+OVER_CAP = ("reject", "uncredited")
 #: why `verify` and `volunteer` refuse a serve run with ``--no-retain``
 UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so there is nothing to replay")
 #: the verifier's record of its coin (`verify_run.verify_passes`' ``record``) and the prover's retention, in DIR
@@ -391,6 +403,35 @@ def volunteer(args: argparse.Namespace) -> int:
     return 0 if doc["ok"] else 1
 
 
+def over_cap_rule(verdict, rule: str | None = None) -> str:
+    """The rule `verdict` (`verify_run.verify_passes` or `verify_run.verify`) takes on a drawn tile with a credited row or
+    tile over its debit cap, given ``over_cap=rule`` where `rule` isn't None: its ``over_cap`` default, or ``reject``
+    where it takes no ``over_cap``, a verdict without it having that one rule."""
+    took = inspect.signature(verdict).parameters.get("over_cap")
+    if took is None:
+        if rule is not None:
+            raise ValueError(f"verify_run.{verdict.__name__} takes no over_cap (its one rule is reject), so no --over-cap")
+        return OVER_CAP[0]
+    rule = took.default if rule is None else rule
+    if rule not in OVER_CAP:
+        raise ValueError(f"verify_run.{verdict.__name__}'s over-cap rule {rule!r} is none of {', '.join(OVER_CAP)}")
+    return rule
+
+
+def volunteer_needed(args: argparse.Namespace) -> int:
+    sys.path.insert(0, str(HERE))
+    import verify_run as VR
+
+    verdict = VR.verify_passes if args.verdict == "run" else VR.verify
+    try:
+        rule = over_cap_rule(verdict, args.over_cap)
+    except ValueError as e:
+        print(f"volunteer-needed FAIL: {e}", file=sys.stderr, flush=True)
+        return 2
+    print("yes" if rule == OVER_CAP[0] else "no", rule, flush=True)
+    return 0
+
+
 def retain(args: argparse.Namespace) -> int:
     passes = Path(args.passes)
     served = json.loads((passes / "served.json").read_text())
@@ -499,6 +540,10 @@ def main(argv: list[str] | None = None) -> int:
     o.add_argument("--device", help="pearl_c_sm90's debit_sm90.cubin: the words' counts on this node's H100 or H200")
     o.add_argument("--device-check", type=int, metavar="N",
                    help="with --device, replay every Nth tile on the CPU too (default volunteer_pass.CROSS_CHECK)")
+    n = sub.add_parser("volunteer-needed")
+    n.add_argument("--over-cap", choices=OVER_CAP, help="the rule verify is to take (default: the verdict's own)")
+    n.add_argument("--verdict", choices=("run", "pass"), default="run",
+                   help="run: verify's (verify_run.verify_passes); pass: verify_run.verify's, a pass at a time")
     r = sub.add_parser("retain")
     r.add_argument("--passes", required=True)
     r.add_argument("--volunteer", help="volunteer's document: drop each pass it didn't finish or left over a cap")
@@ -523,7 +568,8 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--coin-record", help=f"the verifier's coin record (default: DIR/{COIN} where served.json names the "
                    "passes, none with --manifest)")
     args = p.parse_args(argv)
-    return {"serve": serve, "same": same, "volunteer": volunteer, "retain": retain, "verify": verify}[args.cmd](args)
+    return {"serve": serve, "same": same, "volunteer": volunteer, "volunteer-needed": volunteer_needed, "retain": retain,
+            "verify": verify}[args.cmd](args)
 
 
 if __name__ == "__main__":

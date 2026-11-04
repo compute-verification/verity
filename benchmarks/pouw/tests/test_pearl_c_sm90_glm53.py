@@ -9,7 +9,10 @@ import contextlib
 import hashlib
 import importlib.util
 import json
+import os
 import re
+import shutil
+import subprocess
 import sys
 from dataclasses import replace
 from fractions import Fraction
@@ -221,6 +224,34 @@ def test_h200_session_runs_the_tables_shapes():
     lock, trap = sh.index('sudo -n nvidia-smi -i "$U" -lgc "$LOCK_MHZ,$LOCK_MHZ"'), sh.index('trap "sudo -n nvidia-smi -i $U -rgc')
     assert trap < lock < sh.index('"$D/glm53_timing.py" --model "$MODEL" --out "$O" --graphs')
     assert '-lgc exit $?" > "$O/clock.txt"' in sh and "kill \"$smi\"'" in sh
+
+
+@pytest.mark.parametrize("needed, volunteer, step, rc", [
+    ("yes reject", None, "1", "ship rc 2"), ("yes reject", "device", "device", "ship rc 2"),
+    ("yes reject", "0", "0", "volunteer refused rc 2"), ("no uncredited", None, "0", "ship rc 2"),
+    ("no uncredited", "1", "1", "ship rc 2"), ("", None, None, "volunteer-needed rc 2")])
+def test_h200_session_gives_rows_up_exactly_while_the_verdict_rejects_one_over_its_cap(tmp_path, needed, volunteer, step, rc):
+    """h200.sh asks ``served_passes.py volunteer-needed --verdict pass`` (a stand-in here) before the ship is unpacked:
+    while the verdict glm53_passes.py verify takes rejects a pass on a drawn row over its cap, VOLUNTEER defaults to 1 and
+    one that skips the give-up stops the session; once that verdict credits such a row nothing it defaults to 0, and any
+    other answer stops the session too.  The stand-in ship is missing, so a session the guard lets through stops there."""
+    tree, out = tmp_path / "tree", tmp_path / "out"
+    (tree / "benchmarks" / "pouw" / "pearl_c_sm90").mkdir(parents=True)
+    shutil.copy(HERE / "h200.sh", tree / "benchmarks" / "pouw" / "pearl_c_sm90")
+    (sp := tree / "benchmarks" / "pouw" / "pearl_c_vllm" / "served_passes.py").parent.mkdir(parents=True)
+    sp.write_text('import os, sys\nassert sys.argv[1:] == ["volunteer-needed", "--verdict", "pass"], sys.argv\n'
+                  'print(os.environ["NEEDED"])\nsys.exit(0 if os.environ["NEEDED"] else 2)\n')
+    (tree / "venv" / "bin").mkdir(parents=True)
+    (tree / "venv" / "bin" / "python").symlink_to(sys.executable)
+    out.mkdir()
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "OUT": str(out), "RESEARCH_RUN_DIR": str(tmp_path / "run"),
+           "VERITY_BENCH_VENV": str(tree / "venv"), "NEEDED": needed, **({} if volunteer is None else {"VOLUNTEER": volunteer})}
+    r = subprocess.run(["bash", "benchmarks/pouw/pearl_c_sm90/h200.sh"], cwd=tree, env=env, capture_output=True, text=True,
+                       check=False)
+    lines = (out / "rc.txt").read_text().splitlines()
+    assert r.returncode == 2 and len(lines) == 1 and lines[0].startswith(rc), r.stdout + r.stderr
+    said = out / "volunteer-needed.txt"
+    assert (said.read_text() if said.exists() else None) == (step and f"volunteer-needed: {needed}; VOLUNTEER={step}\n")
 
 
 def test_slowdowns_divide_by_the_fastest_stock_call_its_graph_and_the_plain_gemm_apart():

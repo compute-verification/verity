@@ -7,6 +7,7 @@ import ctypes
 import dataclasses
 import hashlib
 import importlib.util
+import inspect
 import json
 import math
 import random
@@ -1433,6 +1434,48 @@ def test_volunteer_pass_gives_up_the_rows_over_their_caps_and_every_tile_then_pa
     assert _replay_every_tile(VR.load(path, coins)) == {}
     again = VP.volunteer(path, coins, 1)
     assert again["ok"] and again["records_root"]["before"] == again["records_root"]["after"] == out["records_root"]["after"]
+
+
+def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row_over_its_cap(tmp_path, capsys):
+    """The pipelines give the rows over a debit cap up before the coin exactly where ``served_passes.py volunteer-needed``
+    says yes, so it says yes exactly where the verdict they call rejects a run on a drawn tile with a credited row over its
+    cap: on a pass with such rows (`proved_pass` under the h100 record's zero key) and a coin that draws them, ``verify``
+    (the run's verdict, `served_pearlplus.sh`'s) and `verify_run.verify` (a pass at a time, `glm53_passes.py`'s) reject iff
+    it says yes, under their own rule and each ``--over-cap`` they take.  A verifier whose over-cap rule changes moves the
+    give-up onto or off the prover's path with it; one that takes no ``over_cap`` refuses any."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    coins = published(path)
+    p = VR.load(path, coins)
+    over = _replay_every_tile(p)
+    assert over and all("replayed debit" in r for r in over.values()), over
+    d, source = _serve_dir(tmp_path, [path]), b"verifier" * 4
+    (d / SP.COIN).write_text(json.dumps({"commitment": VR.run_commitment([p]).hex(), "source": source.hex()}))
+    takes = {}
+    for verdict, fn in (("run", VR.verify_passes), ("pass", VR.verify)):
+        takes[verdict] = "over_cap" in inspect.signature(fn).parameters
+        for rule in (None, *(SP.OVER_CAP if takes[verdict] else ())):
+            flag = () if rule is None else ("--over-cap", rule)
+            capsys.readouterr()
+            assert SP.main(["volunteer-needed", "--verdict", verdict, *flag]) == 0
+            yes, took = capsys.readouterr().out.split()
+            assert yes in ("yes", "no") and took in SP.OVER_CAP and took == (rule or took)
+            if verdict == "run":
+                _, doc, answer = served_verify(d, tmp_path / "verify.json", "--draws", "32", *flag)
+                drawn = {v["tile"] for v in doc["verdicts"]}
+                rejects = answer["verdict"] == "reject" and "replayed debit" in answer["reason"]
+            else:
+                r = VR.verify(path, 32, 1, "test", source, coins=coins, **({} if rule is None else {"over_cap": rule}))
+                drawn, rejects = set(r["tiles"]), not r["accepted"] and "replayed debit" in r["line"]
+            assert drawn & set(over), (verdict, rule, sorted(drawn), sorted(over))
+            assert (yes == "yes") == rejects, (
+                f"volunteer-needed --verdict {verdict} says {yes} under over-cap rule {took}, but the verdict "
+                f"{'rejects' if rejects else 'does not reject'} a run on a drawn row over its cap: served_passes.over_cap_rule "
+                "must name the rule the verdict takes")
+    for verdict in (v for v, t in takes.items() if not t):
+        capsys.readouterr()
+        assert SP.main(["volunteer-needed", "--verdict", verdict, "--over-cap", "reject"]) == 2
+        assert "takes no over_cap" in capsys.readouterr().err
 
 
 class _StandInDebit:
