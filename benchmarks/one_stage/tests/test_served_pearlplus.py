@@ -127,6 +127,7 @@ def test_under_pearlplus_tie_the_piece_ties_the_windows_own_epoch_to_its_w(tmp_p
     assert verify[verify.index("--tie") + 1] == w and verify[verify.index("--passes") + 1] == str(q / "passes")
     pearlplus = argv["served_verdicts.py pearlplus"]
     assert pearlplus[pearlplus.index("--served") + 1] == str(q / "passes" / "served.json")
+    assert pearlplus[pearlplus.index("--tie") + 1] == w
     lines = run.stdout.splitlines()
     assert any(x.startswith("POUW window: the window's own Pearl+ epoch ") and x.endswith("coins in-process -> OK")
                for x in lines), lines
@@ -138,12 +139,15 @@ def test_under_pearlplus_tie_the_piece_ties_the_windows_own_epoch_to_its_w(tmp_p
 
 def test_under_pearlplus_tie_a_window_whose_epoch_failed_or_is_missing_gets_no_retain_tie_or_verdict(tmp_path):
     """No retries: an epoch whose served.json isn't ok, or none at all, is the window's failure, and the piece gives up,
-    retains, ties, verifies or asks the Lean nothing, still writing its piece over what it has."""
+    retains, ties, verifies or asks the Lean nothing, still writing its piece over what it has, as the window's own
+    epoch (``--tie W``)."""
     for name, served in (("failed", _epoch(ok=False)), ("missing", None)):
         d = tmp_path / name
-        run, _sd, _tree = _piece(d, served)
+        run, sd, _tree = _piece(d, served)
         assert [Path(a[0]).name + " " + a[1] for a in _steps(d)] == ["served_passes.py volunteer-needed",
                                                                      "served_verdicts.py pearlplus"], run.stdout
+        pearlplus = _steps(d)[-1]
+        assert pearlplus[pearlplus.index("--tie") + 1] == str(sd / "private" / "pearlplus" / "window-record.json")
         assert not (d / "tie.args").exists()
         said = [x for x in run.stdout.splitlines() if x.startswith("POUW window: ")]
         assert len(said) == 1 and (said[0].endswith("so round s isn't step s") if served else
