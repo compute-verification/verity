@@ -32,8 +32,8 @@ link plan's expected cost and a finder's collision bound from it (`Proofs.Flock.
 plans at its own runs as its finders (`Proofs.Flock.RecGeneric.AtFlockPlans`), its server as the bound record's
 (`Proofs.Flock.RecGeneric.AtFlockServer`), and its well-formedness, its inner KS, its outer extraction's KS from each session's and its last-coin
 hypothesis at the deployment proved (`Proofs.Flock.RecGeneric.AtFlockProof`), `KSLinkOn` at the dense statements lifted
-to every statement, since the deployed verifier accepts only dense ones (`Proofs.Flock.RecGeneric.AtFlockEvery`), the
-reruns' views as `Claims.Recursion`'s samples (`Proofs.Flock.RecGeneric.AtFlockReruns`), the term comparisons (F6,
+to every statement, since the deployed verifier accepts only dense ones
+(`Proofs.Flock.RecGeneric.AtFlockEvery`), the reruns' views as `Claims.Recursion`'s samples (`Proofs.Flock.RecGeneric.AtFlockReruns`), the term comparisons (F6,
 `Proofs.Flock.RecGeneric.AtFlockTerms`), the contract at the deployment's dense statements (F7,
 `Proofs.Flock.RecGeneric.AtFlockContract`), `RecoversLinkOn` from L1 at the term comparisons (F9a,
 `Proofs.Flock.RecGeneric.AtFlockRecovers`) and with no hypothesis left (`Proofs.Flock.RecGeneric.AtFlockL1`), and

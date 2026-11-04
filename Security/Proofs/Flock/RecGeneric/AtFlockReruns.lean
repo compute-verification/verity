@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.RecGeneric.AtFlock
+public import Proofs.Flock.RecGeneric.AtFlockPlans
 public import Proofs.Flock.RecGeneric.BadDev
 
 /-!
@@ -25,10 +26,7 @@ namespace Claims.RecGeneric
 
 open Claims Claims.Recursion
 
-/-! ## Forks, loops and slots -/
-
-theorem fork_self {Coin : Type} {k : ℕ} (j : ℕ) (r : Fin k → Coin) : fork j r r = r :=
-  funext fun i => by simp [fork]
+/-! ## Loops and slots -/
 
 section Pick
 
@@ -77,11 +75,6 @@ variable {Coin C : Type} {n : ℕ}
 theorem slotRuns_le {s : ℕ} (us : Fin (s + 1) → (Fin n → Coin) × C) {i : ℕ} (h : i ≤ s) :
     slotRuns us i = us ⟨i, Nat.lt_succ_of_le h⟩ :=
   congrArg us (Fin.ext (Nat.min_eq_left h))
-
-theorem slotRuns_cons_zero {s : ℕ} (u : (Fin n → Coin) × C) (vs : Fin s → (Fin n → Coin) × C) :
-    slotRuns (Fin.cons u vs : Fin (s + 1) → (Fin n → Coin) × C) 0 = u := by
-  rw [slotRuns_le _ (Nat.zero_le s)]
-  rfl
 
 theorem slotRuns_cons_one_add {s : ℕ} (u : (Fin n → Coin) × C) (vs : Fin s → (Fin n → Coin) × C) (t : Fin s) :
     slotRuns (Fin.cons u vs : Fin (s + 1) → (Fin n → Coin) × C) (1 + t.val) = vs t := by
