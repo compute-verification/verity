@@ -2,6 +2,8 @@ module
 
 public import Definitions.Pouw.Guarantees.KeyedLeaf
 public import Definitions.Pouw.PearlC.Sha512
+import all Init.Data.List.Basic
+import all Init.Data.String.Defs
 
 /-!
 # `keyed_leaf_binds` says something
