@@ -1,0 +1,4 @@
+# The split at the ranks 70B's concentrated gate, up and down_proj lack in all orders: rank 1 on the gate and up priced
+# from rank 8, and ranks 1, 8 and 32 on the down_proj priced from rank 16
+70b-gu-small --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,1,2,3,4,5,6,8,9,11,33,79 --match gate_proj,up_proj --fast --ranks 1 --orders none,fold,sort --workers 12
+70b-down-small --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,11,12,14,15,26 --match down_proj --fast --ranks 1,8,32 --orders none,fold,sort --workers 6

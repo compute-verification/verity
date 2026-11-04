@@ -1,0 +1,4 @@
+# The split at ranks 1 and 8 in all orders on 70B's k and v at 2% and the k the 5% point clips, whose all-orders
+# records start at rank 16
+70b-kv-small --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --match k_proj,v_proj --fast --ranks 1,8 --orders none,fold,sort --workers 12
+70b-k5-small --hf unsloth/Meta-Llama-3.1-70B --target 0.05 --layers 4,5,8,9,24,42,45,47,48,49,50,51,53,54,55,58,59,61,63,66,79 --match k_proj --fast --ranks 1,8 --orders none,fold,sort --workers 4

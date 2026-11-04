@@ -1,0 +1,5 @@
+# The split at ranks 1 and 8 in all orders on every 8B matrix at 2%, and on layer 0's q and k at the clips that
+# clear: 8B's all-orders records start at rank 16 (q, k) or 32 (down_proj), and v, o, gate and up have the natural
+# order only
+8b-small --hf unsloth/Meta-Llama-3.1-8B --target 0.02 --fast --ranks 1,8 --orders none,fold,sort --workers 24
+8b-l0-small --hf unsloth/Meta-Llama-3.1-8B --target 0.06,0.08 --layers 0 --match q_proj,k_proj --fast --ranks 1,8 --orders none,fold,sort --workers 4

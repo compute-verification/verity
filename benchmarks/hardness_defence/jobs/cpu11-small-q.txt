@@ -1,0 +1,5 @@
+# The split at ranks 1 and 8 in all orders, where the all-orders records start at rank 16 or 32: on a flat matrix the
+# split is cheapest at its smallest rank (HT-PUBLIC v2's records at ranks 1 and 8, r20261101-072723-fc78)
+70b-q-small --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --match q_proj --fast --ranks 1,8 --orders none,fold,sort --workers 12
+70b-q5-small --hf unsloth/Meta-Llama-3.1-70B --target 0.05 --layers 4,5,8 --match q_proj --fast --ranks 1,8 --orders none,fold,sort --workers 3
+70b-o-small --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,7,8,12 --match o_proj --fast --ranks 1,8 --orders none,fold,sort --workers 4
