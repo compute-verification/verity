@@ -482,7 +482,7 @@ variable {label : String} {after : ByteArray} {recs : List Json}
 theorem readTail_none {l : String} {ls : List String} {ts : List (String × Json)} {ξ : ByteArray}
     (ht : treeLine l = false) :
     readTail label after recs (l :: ls) ts none ξ = readTail label after recs ls ts (some l) ξ := by
-  rw [Verity.Sampled.readTail, if_neg (by simp [ht])]
+  rw [Verity.Sampled.readTail, ite_eq_right (by simp [ht])]
 
 /-- **A pending root's line with no root survives no read.** -/
 theorem pending_none {a : String} (ha : Verity.Sampled.rootOf a = none) {ls : List String} :
@@ -492,13 +492,13 @@ theorem pending_none {a : String} (ha : Verity.Sampled.rootOf a = none) {ls : Li
   | cons l ls ih =>
     intro ts ξ
     by_cases ht : treeLine l = true
-    · rw [Verity.Sampled.readTail, if_pos ht]
+    · rw [Verity.Sampled.readTail, ite_eq_left ht]
       cases (event l).toOption.bind (treeStep recs ts) with
       | none => rfl
       | some p =>
         obtain ⟨r, ts'⟩ := p
         simp only [Option.bind_eq_bind, Option.bind_some, ih, Option.bind_none]
-    · rw [Verity.Sampled.readTail, if_neg ht]
+    · rw [Verity.Sampled.readTail, ite_eq_right ht]
       simp only [ha, Option.bind_eq_bind, Option.bind_none]
 
 /-- **v2's read of a log `releasedRootsOf` accepts is `readTail`'s of the lines after its head**: the head is the coin
@@ -769,7 +769,7 @@ theorem trees_log {log : List String} {trees : Array LoggedTree} (h : coinTreesO
         unfold helloRoot
         rw [hev]
         dsimp only
-        rw [if_pos htree, hR]
+        rw [ite_eq_left htree, hR]
       have hnew : ∀ t ∈ ts, t.root ≠ R := by
         intro t ht e
         apply hany
@@ -834,7 +834,7 @@ theorem trees_log {log : List String} {trees : Array LoggedTree} (h : coinTreesO
         unfold helloRoot
         rw [hev]
         dsimp only
-        rw [if_neg hopen]
+        rw [ite_eq_right hopen]
       split at hr
       all_goals
         try dsimp only at hr
@@ -922,7 +922,7 @@ theorem read_prints : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines 
     intro tsj ξ out hR htl hn hst hξ h
     have ht1 := treeLine_plain hd hr.plain
     have ht2 := treeLine_plain hd' hp'
-    rw [readTail_none ht1, Verity.Sampled.readTail, if_neg (by simp [ht2])] at h
+    rw [readTail_none ht1, Verity.Sampled.readTail, ite_eq_right (by simp [ht2])] at h
     dsimp only at h
     have hn' : ((ts.map fun p => Flock.hexOf p.1) ++ lines.filterMap helloRoot).Nodup := by
       rwa [List.filterMap_cons_none (helloRoot_plain hd hr.plain),
@@ -960,7 +960,7 @@ theorem read_prints : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines 
       have hS := spec_of hev hd hh.spec
       have hrel := treeStep_hello (recs := recs) (ts := tsj) hE (str_of hev hd hh.key) (str_of hev hd hh.nonce)
         (str_of hev hd hh.root) (specOf_value hS)
-      rw [Verity.Sampled.readTail, if_pos hT, hev] at h
+      rw [Verity.Sampled.readTail, ite_eq_left hT, hev] at h
       simp only [Except.toOption, Option.bind_eq_bind, Option.bind_some, hrel, Option.pure_def] at h
       obtain ⟨rest, hrest, h⟩ := Option.bind_eq_some_iff.1 h
       cases h
@@ -998,7 +998,7 @@ theorem read_prints : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines 
       have hrel := treeStep_open (recs := recs) hnt (str_of hev hd ho.tree) (str_of hev hd ho.stream)
         (str_of hev hd ho.after) (nat_of hev hd ho.round) (nat_of hev hd ho.n) (findIdx_root hR hpre hi) hget
         (findIdx_spec hx hsn hs)
-      rw [Verity.Sampled.readTail, if_pos hT, hev] at h
+      rw [Verity.Sampled.readTail, ite_eq_left hT, hev] at h
       simp only [Except.toOption, Option.bind_eq_bind, Option.bind_some, hrel, Option.pure_def] at h
       obtain ⟨rest, hrest, h⟩ := Option.bind_eq_some_iff.1 h
       cases h
@@ -1006,7 +1006,7 @@ theorem read_prints : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines 
         unfold helloRoot
         rw [hev]
         dsimp only
-        rw [if_neg (by rw [hnt]; decide)]
+        rw [ite_eq_right (by rw [hnt]; decide)]
       refine .cons ⟨rfl, rfl, fun hne => ?_⟩ (ih hR (htl.sub fun l hl => List.mem_cons_of_mem _ hl)
         (by rwa [List.filterMap_cons_none hnone] at hn) hst (by simpa [freshOf] using hξ) hrest)
       unfold openCoins at hne ⊢
@@ -1070,8 +1070,8 @@ theorem readTail_agree {lines : List String} : ∀ {ts : List (String × Json)}
     by_cases ht : treeLine l = true
     · cases pending
       all_goals
-        rw [Verity.Sampled.readTail, if_pos ht] at h
-        rw [Verity.Sampled.readTail, if_pos ht]
+        rw [Verity.Sampled.readTail, ite_eq_left ht] at h
+        rw [Verity.Sampled.readTail, ite_eq_left ht]
         cases hX : (event l).toOption.bind (treeStep recs ts) with
         | none => rw [hX] at h; cases h
         | some p =>
@@ -1084,12 +1084,12 @@ theorem readTail_agree {lines : List String} : ∀ {ts : List (String × Json)}
           exact ⟨r :: rest', by rw [hrest']; rfl, .cons ⟨rfl, rfl, fun _ => rfl⟩ hag⟩
     · cases pending with
       | none =>
-        rw [Verity.Sampled.readTail, if_neg ht] at h
-        rw [Verity.Sampled.readTail, if_neg ht]
+        rw [Verity.Sampled.readTail, ite_eq_right ht] at h
+        rw [Verity.Sampled.readTail, ite_eq_right ht]
         exact ih ξ' h
       | some a =>
-        rw [Verity.Sampled.readTail, if_neg ht] at h
-        rw [Verity.Sampled.readTail, if_neg ht]
+        rw [Verity.Sampled.readTail, ite_eq_right ht] at h
+        rw [Verity.Sampled.readTail, ite_eq_right ht]
         dsimp only at h ⊢
         cases hR : Verity.Sampled.rootOf a with
         | none => rw [hR] at h; cases h
@@ -1098,7 +1098,7 @@ theorem readTail_agree {lines : List String} : ∀ {ts : List (String × Json)}
           simp only [hR, Option.bind_eq_bind, Option.bind_some, Option.pure_def] at h ⊢
           split at h
           · rename_i hc
-            rw [if_pos hc]
+            rw [ite_eq_left hc]
             obtain ⟨rest, hrest, h⟩ := Option.bind_eq_some_iff.1 h
             cases h
             obtain ⟨rest', hrest', hag⟩ := ih (ξ'.extract COIN_BYTES ξ'.size) hrest
@@ -1107,7 +1107,7 @@ theorem readTail_agree {lines : List String} : ∀ {ts : List (String × Json)}
             rw [hrest']
             rfl
           · rename_i hc
-            rw [if_neg hc]
+            rw [ite_eq_right hc]
             obtain ⟨rest, hrest, h⟩ := Option.bind_eq_some_iff.1 h
             cases h
             obtain ⟨rest', hrest', hag⟩ := ih ξ' hrest
@@ -1124,8 +1124,8 @@ theorem readLog_agree {lines : List String} {ξ : ByteArray} {out : List Release
   | nil => rw [Verity.Sampled.readLog] at h; cases h; exact ⟨[], rfl, .nil⟩
   | cons l ls =>
     by_cases ht : treeLine l = true
-    · rw [Verity.Sampled.readLog, if_pos ht] at h
-      rw [Verity.Sampled.readLog, if_pos ht]
+    · rw [Verity.Sampled.readLog, ite_eq_left ht] at h
+      rw [Verity.Sampled.readLog, ite_eq_left ht]
       cases hX : (event l).toOption.bind (treeStep recs []) with
       | none => rw [hX] at h; cases h
       | some p =>
@@ -1136,8 +1136,8 @@ theorem readLog_agree {lines : List String} {ξ : ByteArray} {out : List Release
         cases h
         obtain ⟨rest', hrest', hag⟩ := readTail_agree ξ' hrest
         exact ⟨r :: rest', by rw [hrest']; rfl, .cons ⟨rfl, rfl, fun _ => rfl⟩ hag⟩
-    · rw [Verity.Sampled.readLog, if_neg ht] at h
-      rw [Verity.Sampled.readLog, if_neg ht]
+    · rw [Verity.Sampled.readLog, ite_eq_right ht] at h
+      rw [Verity.Sampled.readLog, ite_eq_right ht]
       exact readTail_agree ξ' h
 
 /-- **The openings as v2's check reads them, without the draw's coins**: `Verity.Sampled.coinsRead`'s read with none
@@ -1190,7 +1190,7 @@ theorem open_collision : ∀ {out log out' : List Release}, List.Forall₂ ReadO
     | @cons _ y' _ ys' hag ha =>
       rw [openCollision]
       by_cases hc : opening? y'.frame = true ∧ y'.coins ≠ [] ∧ coinBytes y'.coins ≠ coinBytes x.coins
-      · rw [if_pos hc]
+      · rw [ite_eq_left hc]
         refine ⟨_, _, rfl, hc.2.2, ?_⟩
         have hop : opening? y.frame = true := hag.1 ▸ hc.1
         have hco : y'.coins = y.coins := hag.2.2 hop
@@ -1198,7 +1198,7 @@ theorem open_collision : ∀ {out log out' : List Release}, List.Forall₂ ReadO
         rcases hyx.2.2 hc.2.1 with e | ⟨-, -, hh⟩
         · exact (hc.2.2 (by rw [e])).elim
         · exact hh
-      · rw [if_neg hc]
+      · rw [ite_eq_right hc]
         refine ih ha fun hrest => hn (.cons (fun hne => ?_) hrest)
         rcases hyx.2.2 hne with e | ⟨hop, hne', -⟩
         · exact e
