@@ -648,6 +648,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     registered value, at the root its owner signed (a warden's cells), which the caller read before calling. ``ports``: how
     many ports from ``port`` the caller reserved, a sample whose sessions need more refused before any listens
     (`port_refusal`); None for no reservation to hold them to."""
+    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+
     out.mkdir(parents=True, exist_ok=True)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
     table = mine.work_table
@@ -720,7 +722,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         ok = {"pin": header.get("circuit_sha512") == made["pin"],
               "partition": meta.get("partition") == {"rule": P.FORMAT, "digest": pd},
               "program": meta.get("program_sha512") == part["program"],
-              "indices": header["units"]["indices"] == list(range(m.base, m.base + m.n)),
+              "indices": PF.units_exactly([[m.base, m.base + m.n]], header["units"]["indices"]),
               "classes": header["units"].get("classes") == [made.get("class_sha512")] * m.n,
               "template_program": programs_ok[m.template, circ.pin],
               "shared_rows": header.get("shared_rows") == ({**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}
@@ -737,6 +739,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                "program_file": out / "program.json"},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
+    summary["link_points"] = link_points(drawn_law, n_all, members)
     leaf_layer = CS.leaf_layer(publics)
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
                                      **tie(a)).to_json()
@@ -754,6 +757,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     summary.update(registration=R.digest(rec), leaf_layer=leaf_layer, checks_before_draw={c: v["ok"] for c, v in checks.items()},
                    circuits={mm["m"].template: {"pin": mm["pin"], "class": mm["class"], "compose_s": mm["compose_s"],
                                                 "k_log": mm["st"]["meta"].get("k_log"), "unit_log": mm["st"]["meta"].get("unit_log"),
+                                                "vus_per_block": mm["st"]["meta"].get("vus_per_block"),
                                                 **({"cached": kept[mm["m"].template]} if mm["m"].template in kept else {})}
                              for mm in members if mm["circuit"].parent == mm["st"]["dir"]})
     if not all(v["ok"] for v in checks.values()):
@@ -787,6 +791,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     else:
         stream, draw, counts_of, coins, segment, refused, need = coins_draw(a, rank, rec, mine, members, want, leaf_layer)
         read = bytes(coins.read)
+        summary["draw_ran_out"] = draw_ran_out(drawn_law, n_all, read)
         (out / "segment.json").write_text(json.dumps({"source": "challenger",
                                                       "segment": segment, "read": read.hex(), "need": need}, sort_keys=True))
         if draw is None:
@@ -903,7 +908,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=sorted(served_units), v2=v2_proof(done, not plain(a)), partition=part)
+                   served=sorted(served_units), v2=v2_proof(done, not plain(a), members), partition=part)
     else:  # every verdict of record names the sessions delivered (`service.check_verdicts`)
         verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
         given = {"proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -922,7 +927,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=tie(a))
+                   served=given["served"], v2=v2_proof(done, not plain(a), members), partition=part, tied=tie(a))
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
@@ -1047,40 +1052,113 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
         (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
 
 
-def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, registered: dict | None,
-            tables: Sequence[Path], interface: Path | None = None) -> dict:
-    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest,
-    the verifier's registered file and, given `interface`, the window's registered circuit record's SHA-512, its file a
-    blob), the evidence with its ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's
-    ``sessions``), and ``blobs``, the paths of the files those name and of the pinned lookup tables, which onsite reads
-    after the evidence (`compose.onsite_check`)."""
+def case_v2(case: dict, sessions: Sequence[str], *, proofs: dict, statements: Sequence[tuple[str | None, Any]],
+            tables: Sequence[Path], interfaces: Sequence[Path] = ()) -> dict:
+    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (`v2_proof`'s), the evidence with
+    its ``verdicts`` replaced by the ``statements``' files under the evidence's ``sessions`` (`proofs.evidence_v2` on the
+    one statement, named None; `proofs.statements_v2` on a statement a drawn member, named by it), and ``blobs``, the
+    paths of the files those name, of the window's registered circuit records ``interfaces`` that ``proofs`` names by
+    SHA-512 and of the pinned lookup tables, each file once, which onsite reads after the evidence
+    (`compose.onsite_check`)."""
     import replay as RP
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
-    pr, blobs = PF.evidence_v2(proof, sessions)
+    if [m for m, _ in statements] == [None]:
+        pr, blobs = PF.evidence_v2(statements[0][1], sessions)
+    else:
+        pr, blobs = PF.statements_v2(statements, sessions)
     evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
-    own = {"circuit": circuit, "registered": registered} | ({"interface": PF.file_sha512(interface)} if interface else {})
-    return {"blobs": [str(b) for b in (*blobs, *tables, *([interface] if interface else []))], "commitment": case["commitment"],
-            "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {**case["params"], "proofs": own}}
+    return {"blobs": [str(b) for b in _once([*blobs, *tables, *interfaces])], "commitment": case["commitment"],
+            "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {**case["params"], "proofs": proofs}}
 
 
-def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
-    """`case_v2`'s files from the drawn members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
-    one table's `--zk` sessions on its circuit and public file."""
+def _once(paths: Sequence[Path]) -> list[Path]:
+    """``paths`` without one that is a file an earlier one is (the same path, or a link to it)."""
+    seen, out = set(), []
+    for p in map(Path, paths):
+        s = p.stat() if p.exists() else None
+        key: Any = (s.st_dev, s.st_ino) if s else p
+        if key not in seen:
+            seen.add(key)
+            out.append(p)
+    return out
+
+
+def v2_members(members: Sequence[tuple[int, int, int, int, Any]]) -> dict:
+    """The per-member form's parameters (`OneStageZk.Form`) for the window's members ``(k, base, n, g, own)``: each
+    member ``m<k>``'s units ``[base, base + n)``, its circuit's ``g`` units a proof block (META ``vus_per_block``, whose
+    link points the registration checks) and its statement's ``own`` inputs, its circuit digest, registered file and
+    registered circuit record, all fixed before the draw."""
+    return {"members": {f"m{k}": {**own, "units": [[base, base + n]], "vus_per_block": g}
+                        for k, base, n, g, own in members}}
+
+
+def draw_ran_out(law: dict, population: int, read: bytes) -> bool | str:
+    """Whether the draw under the verifier's ``law`` runs out of the challenger's coins the rank read (``read``), which
+    fails the window in v2's per-member form (`OneStageZk.RAN_OUT`, `coins.ran_out`); where the law refuses otherwise,
+    why."""
+    try:
+        return CC.ran_out(law, population, read)
+    except ValueError as e:
+        return str(e)
+
+
+def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
+    """The per-member registration's `link-points` (`link_points.refused`) over the window's staged members, each its
+    units ``[base, base + n)`` at its circuit's units a proof block: the members it would refuse, each with its fewest
+    and most drawn units under the drawn law over the draws that end (one that runs out of coins fails the window:
+    `draw_ran_out`), or why it refuses them all, a law no draw of which ends among them (`link_points.NEVER_ENDS`).
+    Recorded here; v2's per-member registration refuses (`Registration.check`)."""
+    from verity.core.protocols.sampled_proofs.one_stage import link_points as LP
+
+    ms = [([[mm["m"].base, mm["m"].base + mm["m"].n]], int(mm["st"]["meta"]["vus_per_block"])) for mm in members]
+    try:
+        if why := CC.law_problem(law, population):
+            raise ValueError(why)
+        bounds = LP.bounds(law, population, ms)
+        refused = set(LP.refused(law, population, ms))
+    except ValueError as e:
+        return {"members": len(ms), "error": str(e)}
+    return {"members": len(ms), "refused": [
+        {"member": f"m{mm['k']}", "template": mm["m"].template, "n": mm["m"].n, "vus_per_block": g, "fewest": b[0],
+         "most": b[1]}
+        for i, (mm, (_, g), b) in enumerate(zip(members, ms, bounds)) if i in refused]}
+
+
+def v2_proof(done: Sequence[dict], zk: bool, members: Sequence[dict]) -> dict | str:
+    """`case_v2`'s inputs from the window's ``members`` and the drawn ones' sessions (`member_checks`'s), or why the audit
+    has no v2 case. v2 verifies a drawn member's `--zk` sessions on its circuit, public file and registered file: a window
+    of one member in the one-statement form, of several in the per-member form (`v2_members`), which v2 refuses until
+    the guarantee for a sample over several members' statements is in the lock (`OneStageZk.MULTI_REFUSED`)."""
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"
-    if len(done) != 1:
-        return f"v2 verifies one table's sessions on its circuit and public file; this audit drew {len(done)} members"
-    mm, sdir = done[0]["mm"], done[0]["sdir"]
-    st, n = mm["st"], mm["m"].n
-    tables = sorted(f for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
-    reads = st.get("registered_file")
-    return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin",
-                              tuple(f.parent for f in sorted((sdir / "sessions").glob("*/session.json")))),
-            "circuit": mm["pin"], "registered": json.loads(reads.read_text()) if reads else None, "tables": tables,
-            "interface": st.get("interface_file") if reads else None}
+    if not done:
+        return "v2 verifies the drawn members' sessions; this audit drew none"
+
+    def interface(mm: dict) -> Path | None:
+        return mm["st"].get("interface_file") if mm["st"].get("registered_file") else None
+
+    def own(mm: dict) -> dict:
+        reads = mm["st"].get("registered_file")
+        return ({"circuit": mm["pin"], "registered": json.loads(reads.read_text()) if reads else None}
+                | ({"interface": PF.file_sha512(i)} if (i := interface(mm)) else {}))
+
+    def proof(got: dict) -> PF.Proof:
+        st = got["mm"]["st"]
+        return PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{got['mm']['m'].n}.bin",
+                        tuple(f.parent for f in sorted((got["sdir"] / "sessions").glob("*/session.json"))))
+
+    tables = [f for got in done if (d := got["mm"]["st"]["dir"] / "tables").is_dir() for f in sorted(d.glob("*")) if f.is_file()]
+    interfaces = [i for mm in members if (i := interface(mm))]
+    if len(members) == 1:
+        return {"proofs": own(members[0]), "statements": [(None, proof(done[0]))], "tables": tables,
+                "interfaces": interfaces}
+    return {"proofs": v2_members([(mm["k"], mm["m"].base, mm["m"].n, int(mm["st"]["meta"]["vus_per_block"]), own(mm))
+                                  for mm in members]),
+            "statements": [(f"m{got['mm']['k']}", proof(got)) for got in done], "tables": tables,
+            "interfaces": interfaces}
 
 
 def streamed(a: argparse.Namespace) -> bool:
