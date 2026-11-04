@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.DeploySessions
 import Proofs.Flock.Claims.Recursion.VStarCross
+import Proofs.Flock.Claims.Sampling.Session
 
 /-!
 # A sampled verifier that runs its own rounds, then one Flock session (`SessionRuns`)
@@ -84,8 +85,10 @@ theorem stepWith_long (vn : List Msg → Claims.OC Out) :
 theorem run_acc_of_mem {C : Type} [Inhabited C] (V : Verifier C) (r : Fin (V.k x) → C) {a : Msg}
     (h : (a, Out.acc) ∈ (run H P V x ω r).msgs) : (run H P V x ω r).out = .acc := by
   obtain ⟨i, hi, he⟩ := List.getElem_of_mem h
-  exact stepWith_acc_out H P x ω _ (V.k x) i [] [] ⟨[], [], [], .rej⟩ a
-    (by simpa [Claims.run, List.getElem?_eq_getElem hi] using he)
+  have h2 : (run H P V x ω r).msgs[0 + i]? = some (a, .acc) := by
+    rw [Nat.zero_add, List.getElem?_eq_getElem hi, he]
+  exact stepWith_acc_out H P x ω (fun as => V.next x as ((List.range as.length).map (coinSeq r))) (V.k x) i [] []
+    ⟨[], [], [], .rej⟩ a h2
 
 end Steps
 
@@ -141,6 +144,19 @@ structure PrefixAt (H : Msg → Msg) (V FV : Verifier Coin) (x : Msg) (p n : ℕ
 /-- The session's statement, read off the `p`-th of the first rounds `M`. -/
 def stmtAt (stmt : Msg → Msg) (p : ℕ) (M : List (Msg × Out)) : Msg := stmt ((M.map Prod.fst).getD (p - 1) [])
 
+/-- **A list whose first `p` entries are `L ++ [e]`** has `p` of them, `e` its `p`-th, and `e`'s message the `p`-th
+of their messages. -/
+theorem take_last {l L : List (Msg × Out)} {e : Msg × Out} {p : ℕ} (hp : 0 < p) (hL : L.length = p - 1)
+    (h : l.take p = L ++ [e]) :
+    (l.take p).length = p ∧ l[p - 1]? = some e ∧ ((l.take p).map Prod.fst).getD (p - 1) [] = e.1 := by
+  have hg : (L ++ [e])[p - 1]? = some e := by
+    rw [List.getElem?_append_right (by omega), hL, Nat.sub_self, List.getElem?_cons_zero]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [h, List.length_append, hL, List.length_singleton]
+    omega
+  · rw [← List.getElem?_take_of_lt (l := l) (show p - 1 < p by omega), h, hg]
+  · (rw [h, List.getD_eq_getElem?_getD, List.getElem?_map, hg]) <;> rfl
+
 section Prefix
 
 variable {H : Msg → Msg} {V FV : Verifier Coin} {x : Msg} {p n : ℕ} {ok : List Msg → List Coin → Bool}
@@ -191,51 +207,49 @@ theorem run_pre (hS : PrefixAt H V FV x p n ok stmt) {Ω : Type} (P : Prover Ω)
     have hR2 := hR.trans (RecDeploy.stepWith_succ_rej H P x ω
       (fun as => V.next x as ((List.range as.length).map (coinSeq r))) n (t'.msgs.map histOf) (t'.msgs.map Prod.fst)
       t' hvb)
-    subst hR2
-    have htk : (t'.msgs ++ [(pa, Out.rej)]).take p = t'.msgs ++ [(pa, Out.rej)] :=
-      List.take_of_length_le (by simp [hl1]; omega)
-    have hgd : ((t'.msgs ++ [(pa, Out.rej)]).map Prod.fst).getD (p - 1) [] = pa := by
-      simp [List.getD_eq_getElem?_getD, List.getElem?_append_right (by simp [hl1] : (t'.msgs.map Prod.fst).length ≤ p - 1),
-        hl1]
-    simp only [htk]
-    refine ⟨by simp [hl1]; omega, ?_, fun _ => rfl, fun h => ?_⟩
-    · rw [hgd]
-      simp only [List.map_append, List.map_cons, List.map_nil, hb, Bool.false_eq_true, ↓reduceIte]
-      rw [List.getElem?_append_right (by omega)]
-      simp [hl1]
-    · simp only [List.map_append, List.map_cons, List.map_nil, hb] at h
+    have hRm : R.msgs = t'.msgs ++ [(pa, Out.rej)] := congrArg Trace.msgs hR2
+    have hRo : R.out = .rej := congrArg Trace.out hR2
+    have htk : R.msgs.take p = t'.msgs ++ [(pa, Out.rej)] := by
+      rw [hRm]
+      exact List.take_of_length_le (by rw [List.length_append, hl1, List.length_singleton]; omega)
+    obtain ⟨hlen, hget, hgd⟩ := take_last hp hl1 htk
+    have hfst : (R.msgs.take p).map Prod.fst = t'.msgs.map Prod.fst ++ [pa] := by
+      rw [htk]
+      simp
+    refine ⟨hlen, ?_, fun _ => hRo, fun h => ?_⟩
+    · (rw [hget, hgd, hfst, hb]) <;> rfl
+    · rw [hfst, hb] at h
       cases h
   | true =>
     rw [hb] at hg
     simp only [↓reduceIte] at hg
     subst hg
-    have hR2 := hR.trans (RecDeploy.stepWith_succ_msg H P x ω
-      (fun as => V.next x as ((List.range as.length).map (coinSeq r))) n (t'.msgs.map histOf) (t'.msgs.map Prod.fst)
-      t' hvb)
-    subst hR2
+    have hR2 : R = stepWith H P x ω (fun as => V.next x as ((List.range as.length).map (coinSeq r))) n
+        (t'.msgs.map histOf ++ [(pa, [])]) (t'.msgs.map Prod.fst ++ [pa])
+        { t' with msgs := t'.msgs ++ [(pa, .msg [])], pLog := t'.pLog ++ ((P.next x (t'.msgs.map histOf) ω).eval H).2,
+                  vLog := t'.vLog ++ lo } :=
+      hR.trans (RecDeploy.stepWith_succ_msg H P x ω
+        (fun as => V.next x as ((List.range as.length).map (coinSeq r))) n (t'.msgs.map histOf) (t'.msgs.map Prod.fst)
+        t' hvb)
     obtain ⟨rest, hrest⟩ := (RecDeploy.stepWith_mono H P x ω
       (fun as => V.next x as ((List.range as.length).map (coinSeq r))) n
       (t'.msgs.map histOf ++ [(pa, [])]) (t'.msgs.map Prod.fst ++ [pa])
       { t' with msgs := t'.msgs ++ [(pa, .msg [])], pLog := t'.pLog ++ ((P.next x (t'.msgs.map histOf) ω).eval H).2,
                 vLog := t'.vLog ++ lo }).1
-    have htk : (stepWith H P x ω (fun as => V.next x as ((List.range as.length).map (coinSeq r))) n
-        (t'.msgs.map histOf ++ [(pa, [])]) (t'.msgs.map Prod.fst ++ [pa])
-        { t' with msgs := t'.msgs ++ [(pa, .msg [])], pLog := t'.pLog ++ ((P.next x (t'.msgs.map histOf) ω).eval H).2,
-                  vLog := t'.vLog ++ lo }).msgs.take p = t'.msgs ++ [(pa, .msg [])] := by
-      rw [← hrest]
+    have htk : R.msgs.take p = t'.msgs ++ [(pa, .msg [])] := by
+      rw [hR2, ← hrest]
       exact List.take_left' (by simp [hl1]; omega)
-    have hgd : ((t'.msgs ++ [(pa, Out.msg [])]).map Prod.fst).getD (p - 1) [] = pa := by
-      simp [List.getD_eq_getElem?_getD, List.getElem?_append_right (by simp [hl1] : (t'.msgs.map Prod.fst).length ≤ p - 1),
-        hl1]
-    rw [htk]
-    refine ⟨by simp [hl1]; omega, ?_, fun h => ?_, fun _ => ⟨_, rfl, ?_⟩⟩
-    · rw [hgd, ← hrest]
-      simp only [List.map_append, List.map_cons, List.map_nil, hb, ↓reduceIte]
-      rw [List.append_assoc, List.getElem?_append_right (by omega)]
-      simp [hl1]
-    · simp only [List.map_append, List.map_cons, List.map_nil, hb] at h
+    obtain ⟨hlen, hget, hgd⟩ := take_last hp hl1 htk
+    have hfst : (R.msgs.take p).map Prod.fst = t'.msgs.map Prod.fst ++ [pa] := by
+      rw [htk]
+      simp
+    refine ⟨hlen, ?_, fun h => ?_, fun _ => ⟨{ t' with msgs := t'.msgs ++ [(pa, .msg [])],
+      pLog := t'.pLog ++ ((P.next x (t'.msgs.map histOf) ω).eval H).2, vLog := t'.vLog ++ lo }, htk.symm, ?_⟩⟩
+    · (rw [hget, hgd, hfst, hb]) <;> rfl
+    · rw [hfst, hb] at h
       cases h
-    · simp [histOf, outMsg]
+    · rw [htk, hR2]
+      simp [histOf, outMsg]
 
 /-- **After a passed `p`-th round the run is `FV`'s session**: at coins `r'` that agree with `r` on the first `p`
 rounds, where `ok` passed at `r`, the session's prover (`sessProver`: `P` after the first `p` rounds) against `FV` at
@@ -251,6 +265,7 @@ theorem run_session (hS : PrefixAt H V FV x p n ok stmt) (hF : FlockAt H FV) {Ω
         (stmtAt stmt p ((run H P V x ω r).msgs.take p)) ()
         (sessCoins p r' (FV.k (stmtAt stmt p ((run H P V x ω r).msgs.take p))))).vLog,
       l ∈ (run H P V x ω r').vLog := by
+  have hp := hS.pos
   have hM := run_take_agree H P V x ω r r' p hr
   rw [← hM]
   rw [← hM, ← coins_agree hr (le_refl p)] at hok
@@ -273,7 +288,7 @@ theorem run_session (hS : PrefixAt H V FV x p n ok stmt) (hF : FlockAt H FV) {Ω
       exact hok)]
     have hgd : (M.map Prod.fst ++ bs).getD (p - 1) [] = (M.map Prod.fst).getD (p - 1) [] := by
       simp only [List.getD_eq_getElem?_getD]
-      rw [List.getElem?_append_left (by omega)]
+      rw [List.getElem?_append_left (show p - 1 < (M.map Prod.fst).length by omega)]
     have hcs : ((List.range (M.map Prod.fst ++ bs).length).map (coinSeq r')).drop p =
         (List.range bs.length).map (coinSeq (sessCoins p r' (FV.k (stmtAt stmt p M)))) := by
       rw [hl, RecDeploy.range_map_drop]
@@ -281,15 +296,17 @@ theorem run_session (hS : PrefixAt H V FV x p n ok stmt) (hF : FlockAt H FV) {Ω
         rw [List.mem_range] at hi
         rw [RecDeploy.coinSeq_sessCoins p r' _ (by omega)]
     rw [hgd, List.drop_left' hml, hcs]
-    show _ = (RecDeploy.sessOut true _ ((FV.next (stmtAt stmt p M) bs _).eval H).1, _)
+    show (FV.next (stmtAt stmt p M) bs ((List.range bs.length).map
+      (coinSeq (sessCoins p r' (FV.k (stmtAt stmt p M)))))).eval H = _
     rcases he : (FV.next (stmtAt stmt p M) bs ((List.range bs.length).map
       (coinSeq (sessCoins p r' (FV.k (stmtAt stmt p M)))))).eval H with ⟨o, lo⟩
     cases o with
     | msg m => rfl
     | rej => rfl
     | acc =>
-      have := hF.acc (stmtAt stmt p M) bs _ (by simp) (by rw [he])
-      simp [RecDeploy.sessOut, this]
+      have hacc := hF.acc (stmtAt stmt p M) bs ((List.range bs.length).map
+        (coinSeq (sessCoins p r' (FV.k (stmtAt stmt p M))))) (by simp) (by simp only [he])
+      simp [RecDeploy.sessOut, hacc]
   have key := RecDeploy.sim H P x ω (sessProver P x ω M) (stmtAt stmt p M)
     (fun bs => FV.next (stmtAt stmt p M) bs ((List.range bs.length).map
       (coinSeq (sessCoins p r' (FV.k (stmtAt stmt p M))))))
@@ -360,7 +377,6 @@ theorem sessionRuns_prefix {Col T : Type} [DecidableEq Col] [Zero Col] (H : Msg 
   have hagree : ∀ r' : Fin (D.V.k x) → Coin, (∀ t ∉ D.rounds x u, r' t = r t) →
       ∀ t : Fin (D.V.k x), t.val < p x → r' t = r t := fun r' h t ht =>
     h t (fun hm => absurd ((hrounds x u t).1 hm) (by omega))
-  obtain ⟨-, -, hrej, -⟩ := run_pre hS P ω r
   have hemb : ∀ xS, D.flock.V.k xS = n x → ∀ i : Fin (D.flock.V.k xS), p x + i.val < D.V.k x := fun xS hk i => by
     rw [hS.k]
     have := i.isLt
@@ -373,7 +389,7 @@ theorem sessionRuns_prefix {Col T : Type} [DecidableEq Col] [Zero Col] (H : Msg 
     · intro ht
       have := t.isLt
       rw [hS.k] at this
-      exact ⟨⟨t.val - p x, by omega⟩, Fin.ext (by simp only; omega)⟩
+      exact ⟨⟨t.val - p x, by omega⟩, Fin.ext (show p x + (t.val - p x) = t.val by omega)⟩
     · rintro ⟨i, rfl⟩
       exact Nat.le_add_right _ _
   have hmono : ∀ xS (hk : D.flock.V.k xS = n x),
@@ -404,32 +420,34 @@ theorem sessionRuns_prefix {Col T : Type} [DecidableEq Col] [Zero Col] (H : Msg 
       have hr := hbefore _ (hn₀ x) r' hr'
       obtain ⟨-, hlast', -, -⟩ := run_pre hS P ω r'
       rw [run_take_agree H P D.V x ω r r' (p x) hr, coins_agree hr (le_refl _), hok] at hlast'
+      simp only [Bool.false_eq_true, ↓reduceIte] at hlast'
       obtain ⟨h2, h3⟩ := twoP_run hF (xS₀ x) fun i => r' ⟨p x + i.val, hemb _ (hn₀ x) i⟩
       refine ⟨?_, fun q hq => ?_⟩
       · rw [h2]
-        exact hrefuse x u _ _ hlast'
+        exact hrefuse x u (run H P D.V x ω r').seen _ hlast'
       · rw [h3] at hq
         cases hq
   | true =>
     have hk : D.flock.V.k (stmtAt (stmt x) (p x) ((run H P D.V x ω r).msgs.take (p x))) = n x := hS.nOk _ _ hok
     have hcoins : ∀ r' : Fin (D.V.k x) → Coin,
-        (fun i : Fin (D.flock.V.k (stmtAt (stmt x) (p x) ((run H P D.V x ω r).msgs.take (p x)))) =>
-          r' ⟨p x + i.val, hemb _ hk i⟩) =
-        sessCoins (p x) r' (D.flock.V.k (stmtAt (stmt x) (p x) ((run H P D.V x ω r).msgs.take (p x)))) := by
+        sessCoins (p x) r' (D.flock.V.k (stmtAt (stmt x) (p x) ((run H P D.V x ω r).msgs.take (p x)))) =
+          fun i => r' ⟨p x + i.val, hemb _ hk i⟩ := by
       intro r'
       funext i
-      simp only [sessCoins, coinSeq]
+      show coinSeq r' (p x + i.val) = r' ⟨p x + i.val, hemb _ hk i⟩
+      unfold coinSeq
       rw [dif_pos (hemb _ hk i)]
     refine ⟨stmtAt (stmt x) (p x) ((run H P D.V x ω r).msgs.take (p x)), fun i => ⟨p x + i.val, hemb _ hk i⟩,
       sessProver P x ω ((run H P D.V x ω r).msgs.take (p x)), hmono _ hk, hround _ hk, ?_, ?_⟩
     · intro r' hr'
-      have hr := hagree r' hr'
-      rw [hcoins r']
-      have hs := (run_session hS hF P ω r r' hr hok).1
+      have hs := (run_session hS hF P ω r r' (hagree r' hr') hok).1
+      rw [hcoins r'] at hs
       have ho := congrArg Seen.out hs
+      simp only [sview, Trace.seen] at ho
       rw [ho]
-      simp only [sview, Trace.seen]
       constructor
+      · intro h
+        rw [if_pos h]
       · intro h
         split_ifs at h with hacc
         · exact hacc
@@ -441,20 +459,16 @@ theorem sessionRuns_prefix {Col T : Type} [DecidableEq Col] [Zero Col] (H : Msg 
             rw [RecDeploy.fixLast_true] at this
             exact (List.drop_subset _ _) ((List.take_subset _ _) this)
           · cases h
-      · intro h
-        rw [h]
-        rfl
     · intro r' hr'
       have hr := hbefore _ hk r' hr'
-      rw [hcoins r']
       obtain ⟨hs, hlog⟩ := run_session hS hF P ω r r' hr hok
+      rw [hcoins r'] at hs hlog
       refine ⟨?_, hlog⟩
       rw [hs]
       obtain ⟨-, hlast', -, -⟩ := run_pre hS P ω r'
       rw [run_take_agree H P D.V x ω r r' (p x) hr, coins_agree hr (le_refl _), hok] at hlast'
       simp only [↓reduceIte] at hlast'
-      have hd := hokD x _ _ hok
-      exact hpass x u _ _ hlast' hd
+      exact hpass x u (run H P D.V x ω r').seen _ hlast' (hokD x _ _ hok)
 
 /-! ## At flock-verify `--zk` -/
 
@@ -465,9 +479,10 @@ theorem flockAt_sha512 : FlockAt FlockDeploy.sha512 (FlockDeploy.V true) where
   acc _ _ _ hcs h := FlockDeploy.next_acc_length_sha512 true hcs h
   msg xS as cs m h := by
     obtain ⟨c, hc⟩ := RecDeploy.next_msg_coin FlockDeploy.sha512 h
-    rw [FlockDeploy.next_coin FlockDeploy.sha512 hc] at h
-    simp only [Prod.mk.injEq, Out.msg.injEq] at h
-    rw [← h.1]
+    have h' : ((FlockDeploy.next true xS as cs).eval FlockDeploy.sha512).1 = .msg m := h
+    rw [FlockDeploy.next_coin FlockDeploy.sha512 hc] at h'
+    have hm : c.bytes = m := Out.msg.inj h'
+    rw [← hm]
     exact RecDeploy.coin_bytes_ne_nil c
   pos xS := by
     show 0 < (match FlockDeploy.setupOf true xS with
