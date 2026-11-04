@@ -5,10 +5,12 @@ import Proofs.Properties.Pouw.Commit
 /-!
 # What Pearl+'s run verdict establishes (`Properties.Pouw.PearlPlus`)
 
-`PlanMeans`, `AcceptMeans`, `RefusedBeforeTheCoin`, `LoadedGivesUp`, `TileAcceptMeans` and `YIsTheUnscale`, by
-unfolding the port's definitions step by step: each `Except` chain one bind at a time (`bind_ok`), each `for` loop by
-induction over its list with the loop's state as the invariant's, and the replay's tasks by their pure model (a task's
-`get` is its function's value). The unscale is the Definition's through `Properties.Evaluator`'s FP32 equalities.
+`PlanMeans`, `AcceptMeans`, `RefusedBeforeTheCoin`, `LoadedGivesUp`, `TileAcceptMeans`, `TileKeepsTheCap` and
+`YIsTheUnscale`, by unfolding the port's definitions step by step: each `Except` chain one bind at a time (`bind_ok`),
+each `for` loop by induction over its list with the loop's state as the invariant's, and the replay's tasks by their pure
+model (a task's `get` is its function's value). The unscale is the Definition's through `Properties.Evaluator`'s FP32
+equalities. A tile over its cap gets `checkOpened`'s refusal as its verdict, so a tile that passes keeps the cap
+(`TileKeepsTheCap`).
 -/
 
 namespace Properties.Pouw.PearlPlus
@@ -513,6 +515,120 @@ theorem tileAcceptMeans : TileAcceptMeans := by
     rename_i hy'
     obtain ⟨hyp, hyo⟩ := not_or_true hy'
     exact ⟨ys, hys, eq_of_not_bne hyp, of_not_not hyo, h⟩
+
+/-! ## A tile's cap -/
+
+theorem mapM_ok_length {ε α β : Type} {f : α → Except ε β} :
+    ∀ {l : List α} {l' : List β}, l.mapM f = .ok l' → l'.length = l.length
+  | [], l', h => by cases h; rfl
+  | a :: l, l', h => by
+    rw [List.mapM_cons] at h
+    obtain ⟨b0, h0, h⟩ := bind_ok h
+    obtain ⟨bs, hbs, h⟩ := bind_ok h
+    cases h
+    exact congrArg (· + 1) (mapM_ok_length hbs)
+
+theorem mem_zip_snd {α β : Type} :
+    ∀ {l : List α} {l' : List β}, l'.length ≤ l.length → ∀ b ∈ l', ∃ a, (a, b) ∈ l.zip l'
+  | _, [], _, _, hb => by cases hb
+  | [], _ :: _, h, _, _ => absurd h (Nat.not_succ_le_zero _)
+  | a :: l, b' :: l', h, b, hb => by
+    rcases List.mem_cons.1 hb with rfl | hb
+    · exact ⟨a, List.mem_cons_self⟩
+    · obtain ⟨a', ha'⟩ := mem_zip_snd (Nat.le_of_succ_le_succ h) b hb
+      exact ⟨a', List.mem_cons_of_mem _ ha'⟩
+
+/-- A loop whose only exit is `return some _` never ends holding `some none`. -/
+theorem forIn_ne_some_none {α β γ : Type}
+    (f : α → Option (Option β) × γ → Id (ForInStep (Option (Option β) × γ)))
+    (hf : ∀ a g, (∃ g', f a (none, g) = .yield (none, g')) ∨ ∃ v g', f a (none, g) = .done (some (some v), g')) :
+    ∀ (l : List α) (g : γ), (forIn l (none, g) f : Id _).1 ≠ some none
+  | [], g => fun h => by
+    have h' : (none : Option (Option β)) = some none := h
+    cases h'
+  | a :: l, g => by
+    rcases hf a g with ⟨g', he⟩ | ⟨v, g', he⟩
+    · rw [List.forIn_cons, he]
+      exact forIn_ne_some_none f hf l g'
+    · rw [List.forIn_cons, he]
+      intro h
+      have h' : (some (some v) : Option (Option β)) = some none := h
+      cases h'
+
+theorem forIn_all_of {α β γ : Type} (Q : α → Prop)
+    (f : α → Option (Option β) × γ → Id (ForInStep (Option (Option β) × γ)))
+    (hf : ∀ a g, (∃ g', f a (none, g) = .yield (none, g') ∧ Q a) ∨ ∃ v g', f a (none, g) = .done (some (some v), g'))
+    (l : List α) (g : γ) {o : Option (Option β)} (hres : (forIn l (none, g) f : Id _).1 = o)
+    (ho : ∀ v, o ≠ some (some v)) : ∀ a ∈ l, Q a :=
+  forIn_all Q f hf l g (by subst hres; exact ho)
+
+theorem capFailure_of {s : Scheme} {r : UnitRecord} {rows cols : List Nat} {ops : Ops}
+    (h : Rule.checkOpened s r rows cols ops = none) : Rule.checkOpened.capFailure s r rows cols ops = none := by
+  unfold Rule.checkOpened at h
+  simp only [Id.run_bind] at h
+  split at h
+  · rename_i a heq
+    have ha : a = none := h
+    subst ha
+    refine absurd heq (forIn_ne_some_none _ ?_ _ _)
+    intro x g
+    obtain ⟨side, index, f, p, kind⟩ := x
+    dsimp only
+    repeat' split
+    all_goals first
+      | exact .inl ⟨_, rfl⟩
+      | exact .inr ⟨_, _, rfl⟩
+  · exact h
+
+theorem tileKeepsTheCap : TileKeepsTheCap := by
+  intro s r rows cols ops h
+  have hc := capFailure_of h
+  unfold Rule.checkOpened.capFailure at hc
+  revert hc
+  cases r.credited rows cols with
+  | mk cr cc =>
+  intro hc
+  dsimp only at hc ⊢
+  intro hcr hcc
+  split at hc
+  · rename_i hE
+    simp only [Bool.or_eq_true, List.isEmpty_iff] at hE
+    exact (hE.elim hcr hcc).elim
+  split at hc
+  · cases hc
+  rename_i words hw
+  split at hc
+  · cases hc
+  rename_i hcap
+  refine ⟨words, hw, Nat.not_lt.mp hcap, ?_⟩
+  simp only [Id.run_bind] at hc
+  have hall : ∀ x ∈ cr.zip (words.map fun ws => Rule.debitUnits (ws.foldl (· + ·.1) 0) (ws.foldl (· + ·.2) 0)),
+      x.2 * (Rule.CAP_DEN * r.matmul.n) ≤
+        Rule.CAP_NUM * creditOf 1 r.kKept r.matmul.n * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1) := by
+    split at hc
+    · rename_i a heq
+      have ha : a = none := hc
+      subst ha
+      refine forIn_all_of _ _ ?_ _ _ heq (fun v hv => by cases hv)
+      intro x g
+      obtain ⟨i, d⟩ := x
+      dsimp only
+      repeat' split
+      all_goals first
+        | exact .inr ⟨_, _, rfl⟩
+        | exact .inl ⟨_, rfl, Nat.not_lt.mp ‹_›⟩
+    · rename_i heq
+      refine forIn_all_of _ _ ?_ _ _ heq (fun v hv => by cases hv)
+      intro x g
+      obtain ⟨i, d⟩ := x
+      dsimp only
+      repeat' split
+      all_goals first
+        | exact .inr ⟨_, _, rfl⟩
+        | exact .inl ⟨_, rfl, Nat.not_lt.mp ‹_›⟩
+  intro d hd
+  obtain ⟨i, hi⟩ := mem_zip_snd (l := cr) (Nat.le_of_eq (by rw [List.length_map, mapM_ok_length hw])) d hd
+  exact hall (i, d) hi
 
 /-! ## The run's refusal before the coin -/
 

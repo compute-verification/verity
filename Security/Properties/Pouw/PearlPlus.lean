@@ -9,7 +9,7 @@ The properties of the executable verdict (`verity/core/protocols/pouw/lean/pearl
 `benchmarks/pouw/pearl_c_vllm/verify_run.verify_passes`), stated against `check` and the functions it runs, for every input:
 the epoch's coin commitment, the retained passes' manifests, the number of draws, the verifier's coin (a source, or its
 record of the coin) and the prover's openings. Each has one shape, the input, the acceptance, then what it establishes.
-`Proofs.Properties.Pouw.PearlPlus` proves them, on Lean core: all but `TileKeepsTheCap` and `WorkIsTheCredit` so far.
+`Proofs.Properties.Pouw.PearlPlus` proves them, on Lean core: all but `WorkIsTheCredit` so far.
 
 What they compose into is the remote theorem's useful-work part: on an accepted run, under Pearl's Assumption 1 at the H100
 record per drawn tile (`TTOutTilePearlCH100Rev1`), the run's credit is at most its cost up to the draw's ε at δ, or a
