@@ -2501,7 +2501,7 @@
    },
    "Claims.ZKOut": {
     "fails": "Claims.ZKOut_fails",
-    "meets": ["Claims.Flock.masked_meets_zk"]
+    "meets": ["Claims.Flock.masked_meets_zk", "Claims.Flock.scope_meets_zk"]
    },
    "Claims.SamplingGeneric.ZkArg.ZK": {
     "fails": "Claims.SamplingGeneric.ZkArg.ZK_fails",
@@ -2570,7 +2570,7 @@
    "Claims.SamplingGeneric.CompilerBits": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerBits`)",
    "Claims.SamplingGeneric.CompilerEfficient": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerEfficient`)",
    "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier",
-   "Claims.ZKOutLeak": "proved of every protocol zero knowledge with a public outcome over finitely many outcomes (`Claims.zkOutLeak`)",
+   "Claims.ZKOutLeak": "a corollary of `ZKOut`, proved of every `ZKOut` (`Claims.zkOutLeak`), not of a deployment",
    "Claims.SamplingGeneric.CompilerZK": "proved of every zero-knowledge proof system and masked compiled verifier (`Claims.SamplingGeneric.compilerZK`)"
   }
  },
