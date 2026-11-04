@@ -84,7 +84,7 @@ theorem prefixAt :
     rw [ite_eq_right (show ¬as.length ≤ DRAW_ROUNDS by omega),
       ite_eq_right (show ¬as.length = DRAW_ROUNDS + 1 by omega), flockV_next, Nat.add_sub_cancel]
   nOk as cs h := by
-    have h2 : Nums (sessStmt A o (as.getD DRAW_ROUNDS [])) = Nums (xS₀ A o) := (drawOk_of_okAt A o h).2
+    have h2 : Nums (sessStmt A o (as.getD DRAW_ROUNDS [])) = Nums (xS₀ A o) := (drawOk_of_okAt A o h).2.1
     have h3 := congrArg Prod.fst h2
     rw [nums_fst, nums_fst] at h3
     rw [Nat.add_sub_cancel, kS]
@@ -100,7 +100,7 @@ theorem sessionRuns : SessionRuns FlockDeploy.sha512 (record A o e) :=
       obtain rfl := eq_xOf_of_nPU A o e hx
       rw [record_V, record_flockV]
       exact prefixAt A o)
-    (fun _ _ _ h => (drawOk_of_okAt A o h).2)
+    (fun _ _ _ h => (drawOk_of_okAt A o h).2.1)
     (fun _ => by rw [record_flockV, kS])
     (fun x u t => by
       rw [record_rounds]

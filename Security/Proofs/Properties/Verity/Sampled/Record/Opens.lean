@@ -22,8 +22,7 @@ make the unit's proof block correct wherever the values carry those that open (`
   * `Names`, v2's reads of the registered file and `A`'s partition object as v2's: through them, wherever flock-verify
     reads the session's statement at a draw file that fits its length words, the reading is `--zk` at `A`'s inputs,
     with no public input words, and sets up as `A`'s session at the draw file's JSON (`SessionIns`, `sessionIns_of`
-    through `read_sess`);
-  * `KeptFits`: every draw file the draw file round keeps fits the statement's length words (`Fits`);
+    through `read_sess`); the draw file round keeps only a draw file that fits (`drawOk`, `fits_of_drawOk`);
   * `ProvedIn`: every unit the coins draw is one the kept draw file proves, below the population. v2 credits the
     public file's `units.indices` of the instances the draw names (`provedOf`), and refuses a public file whose
     `units.indices` are not the population's units in order, so the indices are the instances themselves
@@ -124,9 +123,6 @@ def SessionIns (o : Own) : Prop :=
       r.setup = Flock.Stmt.setupTables (FlockSoundness.Discharge.ZkExec.zkTags A.I) A.I.circuitFile
         A.I.publicFile (FlockSoundness.Discharge.ZkExec.zkCoins A.I) A.I.count A.I.tables (some (Flock.norm J))
         A.I.partition A.I.program
-
-/-- **Every kept draw file fits the statement's length words.** -/
-def KeptFits (o : Own) : Prop := ∀ d cs, drawOk A o d cs → Fits A o d
 
 /-- **Every unit the coins draw is one the kept draw file proves**, below the population. -/
 def ProvedIn (o : Own) : Prop :=
@@ -400,9 +396,9 @@ theorem nTab_one (hc1 : A.I.count = 1) : nTab A.I = 1 := by
   exact ite_eq_left (by omega)
 
 /-- **A Flock witness the session's statement checks satisfies its one table**: flock-verify reads the statement at the
-kept draw file as `A`'s session at the draw file's JSON (`SessionIns`), which sets up one table (`setupTables_okHP`)
-that the witness satisfies (`tableLowers`). -/
-theorem session_lowers (o : Own) (hc1 : A.I.count = 1) (hins : SessionIns A o) (hfits : KeptFits A o) {d : Msg}
+kept draw file, which fits its length words (`fits_of_drawOk`), as `A`'s session at the draw file's JSON (`SessionIns`),
+which sets up one table (`setupTables_okHP`) that the witness satisfies (`tableLowers`). -/
+theorem session_lowers (o : Own) (hc1 : A.I.count = 1) (hins : SessionIns A o) {d : Msg}
     {cs : List FlockDeploy.Coin} (hdOk : drawOk A o d cs) {wF : Claims.Flock.Wit}
     (hchk : Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (sessStmt A o d) wF = true) :
     ∃ J, FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J ∧
@@ -415,7 +411,7 @@ theorem session_lowers (o : Own) (hc1 : A.I.count = 1) (hins : SessionIns A o) (
   obtain ⟨pp, hpb, hpP, hR⟩ := Flock.Readable.relS_of_check (decode := FlockDeploy.readOf true) hchk
   unfold Flock.Readable.parseBytes at hpb
   obtain ⟨rr, hrr, hpb⟩ := Option.bind_eq_some_iff.1 hpb
-  obtain ⟨J, hJ, hzk, htags, hpin, hsetup⟩ := hins d rr (hfits d cs hdOk) hrr
+  obtain ⟨J, hJ, hzk, htags, hpin, hsetup⟩ := hins d rr (fits_of_drawOk hdOk) hrr
   refine ⟨J, hJ, ?_⟩
   unfold Flock.Readable.Read.parse at hpb
   obtain ⟨sts, hts, rfl⟩ := Option.map_eq_some_iff.1 hpb
@@ -525,7 +521,7 @@ theorem sessionOpens (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι}
     (hpart : A.I.partition = some p.own.partition) {is : Array ℕ}
     (his : _root_.SampledProofs.PublicUnits.indicesOf A.pub.header = .ok is)
     (hex : _root_.SampledProofs.PublicUnits.exactly #[(0, A.n)] is = true) (hcd : (record A o e).commit = A.Cd)
-    (hfits : KeptFits A o) (he : e.reveal = revealRec A)
+    (he : e.reveal = revealRec A)
     (iroots : Msg → Seen → ℕ → List Msg) : SessionOpens FlockDeploy.sha512 (record A o e) iroots := by
   have hc1 := hsu.count
   have hpr := provedIn_of_exactly A o his hex
@@ -537,11 +533,11 @@ theorem sessionOpens (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι}
   obtain ⟨d, hdOk, hl⟩ := accepted_draw A o e hx P ω r hacc
   rw [checked_at A o e hx] at hq
   have hud : u ∈ drawn A (drawBytes (coinsAt r)) := List.mem_of_getElem? hq
-  rw [session_at A o e hx, sessionOf_kept A o hl hdOk.2] at hsess
+  rw [session_at A o e hx, sessionOf_kept A o hl hdOk.2.1] at hsess
   obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj hsess)
   rw [record_flockParse] at hchk
   obtain ⟨J, hJ, st, hst, hshape, hsat⟩ :=
-    session_lowers A o hc1 (sessionIns_of hn hpl hrd hc1 hpart) hfits hdOk hchk
+    session_lowers A o hc1 (sessionIns_of hn hpl hrd hc1 hpart) hdOk hchk
   obtain ⟨hun, hne, hy⟩ := session_table A o hc1 hpr hdOk hJ hst hshape hud
   refine ⟨Flock.Bridge.blockOf A.P A.κ ⟨u, hun⟩,
     Flock.Bridge.blocks_partOf_getElem? A.P (Flock.Bridge.nsOf_sum A.hpop) ⟨u, hun⟩, fun val ι hval => ?_⟩
