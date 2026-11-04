@@ -2650,6 +2650,7 @@
    "Claims.Rel.ext": "a helper the claims read: a relation at an extractor's optional witness",
    "Claims.Sampling.BoundaryFaulty": "a helper the claims read: a faulty unit on the boundary trace, which `FaultyBoundary` reads",
    "Claims.Sampling.Design.WellFormed": "a helper the claims read: a well-formed design, one well-formed rule per class",
+   "Claims.Sampling.StrataDrawn": "a premise of the count bound (`Properties.NetworkPeriod.WrongBoundsDrawn`, `countBound_miss_design`): a design's strata draw on a partition, its classes' strata in order, a condition on a design like `Design.WellFormed`, no claim",
    "Claims.Sampling.ExtractOwnLe": "a helper the claims read: an extractor's own calls, at most a bound, which the sampling `Efficient` reads",
    "Claims.Sampling.Faulty": "a helper the claims read: a faulty unit, which the sampling relation reads",
    "Claims.Sampling.FaultyBoundary": "proved of every program (`Claims.Sampling.faultyBoundary`), not of a deployment",

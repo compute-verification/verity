@@ -270,11 +270,18 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   rw [stateWindow_skipped] at hs
   cases hs
 
+/-- Where a draw reads as strata, the bound the audit publishes is their count bound: `boundOf` takes `countBound` of
+`strataOf`'s strata at every draw but a Bernoulli one, which reads as none. -/
+theorem boundOf_of_strataOf {population : ℕ} {draw : Core.SamplingDesign} {strata : Array Core.Stratum}
+    (h : SampledProofs.Bound.strataOf population draw = some strata) (δ : Core.Ratio) :
+    SampledProofs.Bound.boundOf population draw δ = SampledProofs.Bound.countBound strata δ := by
+  cases draw <;> simp_all [SampledProofs.Bound.boundOf, SampledProofs.Bound.strataOf]
+
 /-- **`WrongBoundsDrawn`**: at strata that, then strata drawn whole, are the design's strata draw, every possible
 incorrect set at `δ` holds at most `countBound strata δ` proof blocks, since `miss(countBound strata δ + 1) < δ`
-(`countBound_miss_design`). -/
-theorem wrongBoundsDrawn : WrongBoundsDrawn := fun _ _ strata ns δ h hδ hδd _ hF =>
-  NetTiming.card_le_of_mem_faultySets _ _
+(`countBound_miss_design`), and that is the bound the audit publishes (`boundOf_of_strataOf`). -/
+theorem wrongBoundsDrawn : WrongBoundsDrawn := fun _ _ strata hs _ _ ns δ h hδ hδd _ hF =>
+  (boundOf_of_strataOf hs δ).symm ▸ NetTiming.card_le_of_mem_faultySets _ _
     (Claims.Sampling.Count.countBound_miss_design strata ns h δ hδ hδd).le hF
 
 theorem scanWindowsPlaced : ScanWindowsPlaced := by
@@ -361,15 +368,20 @@ theorem oneInput_not_strataDrawn (ns : List ℕ) :
   obtain ⟨⟨hl, _⟩, _⟩ := h
   exact absurd hl (by decide)
 
-/-- **`WrongBoundsDrawn`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at `oneInputStmt`, whose
-design of no rule draws nothing, its one proof block is a possible incorrect set at `δ = 1/2` (`oneInput_faulty`), so
-the code's count bound over no strata, `0`, is no `WrongBounds` bound there. Every other premise holds at
-`δ = ⟨1, 2⟩`, and the strata draw (`StrataDrawn`) fails, whatever strata drawn whole follow
-(`oneInput_not_strataDrawn`). -/
+/-- **`WrongBoundsDrawn`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): a stratified draw of no
+strata reads as no strata, and at `oneInputStmt`, whose design of no rule draws nothing, its one proof block is a
+possible incorrect set at `δ = 1/2` (`oneInput_faulty`), so the bound the audit publishes for that draw, `0`, is no
+`WrongBounds` bound there. Every other premise holds at `δ = ⟨1, 2⟩`, and the strata draw (`StrataDrawn`) fails,
+whatever strata drawn whole follow (`oneInput_not_strataDrawn`). -/
 theorem wrongBoundsDrawn_nontrivial :
-    ¬ WrongBounds oneInputStmt oneInputPart (((⟨1, 2⟩ : Core.Ratio).num : ℝ) / (⟨1, 2⟩ : Core.Ratio).den)
-      (SampledProofs.Bound.countBound #[] ⟨1, 2⟩) := fun h => by
-  have h0 : SampledProofs.Bound.countBound #[] ⟨1, 2⟩ = 0 := by simp [SampledProofs.Bound.countBound]
+    ∃ (strata : Array Core.Stratum) (_ : SampledProofs.Bound.strataOf 0 (.stratified #[]) = some strata)
+      (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition),
+      ¬ WrongBounds s P (((⟨1, 2⟩ : Core.Ratio).num : ℝ) / (⟨1, 2⟩ : Core.Ratio).den)
+        (SampledProofs.Bound.boundOf 0 (.stratified #[]) ⟨1, 2⟩) := by
+  refine ⟨#[], rfl, oneInputStmt, oneInputPart, fun h => ?_⟩
+  have h0 : SampledProofs.Bound.boundOf 0 (.stratified #[]) ⟨1, 2⟩ = 0 := by
+    rw [boundOf_of_strataOf rfl]
+    simp [SampledProofs.Bound.countBound]
   have hδ : (((⟨1, 2⟩ : Core.Ratio).num : ℝ) / (⟨1, 2⟩ : Core.Ratio).den) = 1 / 2 := by norm_num
   rw [h0, hδ] at h
   simpa using h {0} oneInput_faulty

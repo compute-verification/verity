@@ -5967,8 +5967,8 @@
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.wrongBoundsDrawn": {
-    "function": "SampledProofs.Bound.countBound",
-    "outcome": "none"
+    "function": ["SampledProofs.Bound.strataOf", "SampledProofs.Bound.boundOf"],
+    "outcome": "accept"
    },
    "Pouw.SecurityProofs.Lead.Commit.leafFirstBlock": {
     "function": "PouwCommit.Domain.mk?",
