@@ -20,11 +20,16 @@ trap 'kill "${SAMPLER:-}" 2>/dev/null; rm -rf "$B"' EXIT
 T=$(ls -d "$B"/t/test_a_served* | head -1)
 echo "fixture: $T" | tee "$OUT/arms.txt"
 # the flock-firewall processes' summed RSS, its peak per arm (they are the prover's children it never waits for)
+MINE=$(cat /proc/self/cgroup)
 ( peak=0 arm=
   while :; do
     a=$(cat "$B/arm" 2>/dev/null)
     [ "$a" != "$arm" ] && { [ -n "$arm" ] && echo "$arm $peak" >> "$OUT/firewall-rss.txt"; arm=$a peak=0; }
-    r=$(ps -C flock-firewall -o rss= 2>/dev/null | awk '{s += $1} END {print s + 0}')
+    r=0
+    for p in $(pgrep -x flock-firewall); do
+      [ "$(cat "/proc/$p/cgroup" 2>/dev/null)" = "$MINE" ] || continue
+      r=$(( r + $(awk '$1 == "VmRSS:" {print $2}' "/proc/$p/status" 2>/dev/null || echo 0) ))
+    done
     [ "$r" -gt "$peak" ] && peak=$r
     sleep 2
   done ) &
