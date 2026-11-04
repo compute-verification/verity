@@ -292,6 +292,13 @@ PREMISES: dict[str, dict[str, Any]] = {
                          "unit per VU (units_per_vu 1): its discharge counts only at a statement that takes no premise "
                          "on units_per_vu, which the period check's circuit read gives once it refuses every other",
                    "discharged_by": ("Properties.NetworkPeriod.phaseCounts",)},
+    "session-tags": {"is": "the read bitmap's bridge to the sampled sessions' tags: the period check counts each tied "
+                           "audit's free inputs off the inputs its circuit reads as the reader parses it (circuitOf at "
+                           "Tags.circuit, whole_circuit), where the bridge is definitional, while each session proves "
+                           "the circuit at Zk.tags (Tags.circuit.withCoins c), and that the two read the same inputs is "
+                           "an identity lemma, not a definition. Open, by this name, until a theorem in the lock gives "
+                           "it at every c: a change to Flock that makes it definitional, or a lemma at each parse",
+                     "discharged_by": ()},
     "held-performed": {"is": "the public's held names only the checks the period check performed, each holding of it",
                        "discharged_by": ("Properties.NetworkPeriod.rowsHeld",)},
     "rows-state-held": {"is": "RowsStateHeld: each tied audit's state read at row a ≥ 1 committed where the scan's o1 of "
