@@ -35,6 +35,7 @@ public import Definitions.Population
 public import Definitions.Claims
 public import Definitions.Claims.IndexedTapes
 public import Definitions.Claims.Recursion
+public import Definitions.Claims.RecursionGeneric
 public import Definitions.Claims.RecursionLin
 public import Definitions.Claims.Sampling
 public import Definitions.Claims.SamplingGeneric

@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Flock.RecGeneric.Plan
-public import Proofs.Flock.RecGeneric.Server
+public import Definitions.Claims.RecursionGeneric.Plan
+public import Definitions.Claims.RecursionGeneric.Server
 
 /-!
 # The inner protocol, abstract

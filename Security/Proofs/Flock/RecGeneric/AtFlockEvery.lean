@@ -126,7 +126,7 @@ theorem recursiveKSEveryAtRec_of_dense (b : RecDeploy.Brings) (L : Claims.Recurs
 
 /-- **`RecursiveKSEveryAtRec` from `RecoversLinkOn` at the dense statements and F7's contract there**, at every
 compiled record `recBoundAt` builds and every reader whose plain draws are in range (`hIn`): `RecoversLinkOn`'s other
-premises hold at the deployment, namely L1 (`Flock.SecurityProofs.GenericRecursiveKS`), `KSFlockLin` at `DE`
+premises hold at the deployment, namely L1 (`compositionKS`), `KSFlockLin` at `DE`
 (`RecDeploy.ksFlockLin_R`), each outer session's KS (`outerKS_of_flockKS` at `FlockDeploy.KS.zk_KS_outer` and the
 sessions' facts), the sessions' and `DE`'s nonnegative table errors, the record's inner statement, answers that decode
 to their coins (`decCoin`), F8 (`RecDeploy.lastCoinFree_ofFlock_R`), `rowIn` injective (`RecDeploy.binds_deployed`) and
@@ -146,7 +146,7 @@ theorem recursiveKSEveryAtRec_of_recovers (b : RecDeploy.Brings) (L : Claims.Rec
       (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
       RecDeploy.rowInDeployed final w).DE.εtable x :=
     fun x => FlockDeploy.Assembled.εtable_nonneg false x
-  refine recursiveKSEveryAtRec_of_dense b L rd final wE w (hR Flock.SecurityProofs.GenericRecursiveKS
+  refine recursiveKSEveryAtRec_of_dense b L rd final wE w (hR compositionKS
     (RecDeploy.ksFlockLin_R rd wE FlockDeploy.joinR final w hIn) ?_ (RecDeploy.tableErrNonneg _ _ _) (fun _ => rfl)
     ⟨FlockDeploy.decCoin [], fun c => ?_⟩ hε (RecDeploy.lastCoinFree_ofFlock_R _ rd _ (by rfl) _ _)
     (RecDeploy.binds_deployed _ _ _ wE FlockDeploy.joinR final w)

@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.RecGeneric.Plan
+public import Definitions.Claims.RecursionGeneric.Plan
 
 /-!
 # Run finders every recursion reads, and Flock's

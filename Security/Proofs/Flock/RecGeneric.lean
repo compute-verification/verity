@@ -1,6 +1,8 @@
 module
 
-public import Proofs.Flock.RecGeneric.Statement
+public import Definitions.Claims.RecursionGeneric
+public import Proofs.Flock.RecGeneric.Outer
+public import Proofs.Flock.RecGeneric.ZK
 public import Proofs.Flock.RecGeneric.AtFlock
 public import Proofs.Flock.RecGeneric.PlansProof
 public import Proofs.Flock.RecGeneric.LinkBits
@@ -33,8 +35,9 @@ public import Proofs.Flock.RecGeneric.AtFlockCompiledContract
 public import Proofs.Flock.RecGeneric.AtFlockCompiledKS
 public import Proofs.Flock.RecGeneric.AtFlockCompiledNontrivial
 
-/-! The recursion as a compiler, generic in the outer argument and the server, over inner protocols with repetition
-extractors: its statements (`Proofs.Flock.RecGeneric.Statement`), the Flock instance's
+/-! The recursion as a compiler, generic in Π_in, Π_out and the server, over Π_in with repetition extractors: its
+statements (`Definitions.Claims.RecursionGeneric`: `CompositionKS`, L1, and `CompilerKS`, L2), their honest and
+nontrivial witnesses (`Proofs.Flock.RecGeneric.Witnesses`), the Flock instance's
 (`Proofs.Flock.RecGeneric.AtFlock`), with its plans' reads by Wald's bound (`Proofs.Flock.RecGeneric.PlansProof`), the
 link plan's expected cost and a finder's collision bound from it (`Proofs.Flock.RecGeneric.LinkBits`), its
 plans at its own runs as its finders (`Proofs.Flock.RecGeneric.AtFlockPlans`), its server as the bound record's

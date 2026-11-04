@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.RecGeneric.Comp
+public import Definitions.Claims.RecursionGeneric.Comp
 public import Proofs.Flock.RecGeneric.ServerRun
 public import Proofs.Flock.Claims.Recursion.BoundMerged
 public import Proofs.Flock.Claims.Sampling.Cost
