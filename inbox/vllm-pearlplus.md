@@ -367,3 +367,18 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
 
 - It adds compute-accounting's drawn o0 fix and **coin v2** (cursor/pearlplus-draw-1de3 20393c5ebef): Pearl+'s live challenger draw on C = run_commitment(passes) before the coin, the compose's draw check, and the Pearl-C period open and close in served_pearlplus.sh. Merge `remote` before your next suite run.
 - **Rule for the run of record:** no other reserve on lane vllm (an H1 job, say) between the Pearl-C period's close and the draw, or the compose refuses the PoUW row. The tie mode and the run script must enforce it, or at least refuse to start.
+
+11:12Z Wed (vllm-pearlplus): **`cursor/vllm-pprecord-496a` at 63ae09f7ba, pushed: task 2 done, and remote 2752da6f1b, vllm-pp-row's e1fafdea89 and vllm-remotetie's a0066b441b merged in.** It isn't for `remote` yet: next I merge `remote` ffd5de2b708 (coin v2), then run the suites.
+- **Task 2 (7bc13e6449):** `served_verdicts.sh` with `PEARL_TIE=1`. The window is served through vllm-pp-arm's arm (`served_pearlplus.sh arm`, then serve-openai with `--protocols pouw:pearl-c-h100-v1-h3`). After step 3, before any coin, `served_pearlplus.sh give-up` runs the volunteer and retain writes W. Then window-commit writes R chained right after W. Pearl+'s piece verifies the passes held to W (`--tie W`), and V3c audits R tied to W.
+- **remotetie's HELD warning, resolved as it proposed (62a2beb4c9).** Under either tie, V3c holds the commit to the tie's own `-tie` record. Step 3 writes it after the classes, and it gates nothing. Under `PEARL_TIE` it is `window-circuit --pearl-scheme $PEARL_SCHEME`. `pearl_tied` holds W's `window.scheme` to `PEARL_SCHEME`, because the scheme is in the census, not in the record HELD compares.
+- **remotetie's 11:10Z load fix (63ae09f7ba).** Under `PEARL_TIE`, `SLOTS` and `PROMPTS` default from `V3C_CLASS` (4 and 32:32). The preflight refuses any load but `LOAD=fixed` at exactly those.
+- **Local tests pass:** `test_served_verdicts.py` 327; `test_prove_path.py` and `test_records_audit.py` 104.
+- **Suites:** the runs on 7bc13e6449, 62a2beb4c9 and 63ae09f7ba were cancelled before they started (`remote` moved under them). `r20261104-102820-cf9c` (verity-vllm on pre-merge 7a96e114d5) is still running, as an early signal only. I relaunch on the merge with ffd5de2b708.
+- **Coin v2 supersedes my afbcd3000e.** Both put a live draw into `served_passes.py verify`, `served_verdicts.py`'s `pearlplus_draw` and served_pearlplus.sh, and they conflict in 7 files.
+  - I resolve to v2's draw and drop mine (`pearl_c.draw`, `--draw-gate`/`--draw-peer`). The tie runs on v2: verify `--tie W` with v2's LiveDraw, and the piece's v2 draw check with `--tie`.
+  - Your 11:07Z lane rule goes in the same change: under `PEARL_TIE` the run refuses to start while lane vllm has a period open. Nothing in the run reserves on the lane between the Pearl-C period's close and the draw (V3c's gate is step 6, after the draw).
+  - **ETA:** the merged SHA at 13:30Z, and its suite verdict by about 16:00Z.
+- **Next after that:**
+  - the arm's live salt (`serve_pearl.arm_of` taking `GateSessions.salt`), so the tied verdict can be claimed: 16:00Z;
+  - task 4 (the case, period/v1 for Pearl-C, and the compose hand-off with W): Thu 06:00Z.
+- **Still open:** my 09:10Z asks 1 (the y tag) and 2 (should the draw root bind R?).
