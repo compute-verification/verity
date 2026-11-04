@@ -1267,11 +1267,20 @@ def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_comma
     ({"SERVE_ARGS": f"{IDS} --h1-prover"}, "PREFLIGHT: advice-charge serves with H1_GATE empty, and serve-openai "
      "refuses SERVE_ARGS' --h1-receipts or --h1-prover without H1's --protocols: drop them"),
     ({"SERVE_ARGS": IDS}, None),
+    ({"SERVE_ARGS": f"{IDS} --advice-tau 4"}, "PREFLIGHT: the server commits the advice in buckets of SERVE_ARGS' "
+     "--advice-tau (4 s), and advice_charge.py charges it in buckets of ADVICE_TAU (0.1 s): make them equal"),
+    ({"SERVE_ARGS": IDS, "ADVICE_TAU": "4"}, "PREFLIGHT: the server commits the advice in buckets of SERVE_ARGS' "
+     "--advice-tau (0.1 s), and advice_charge.py charges it in buckets of ADVICE_TAU (4 s): make them equal"),
+    ({"SERVE_ARGS": f"{IDS} --advice-tau 4", "ADVICE_TAU": "4"}, None),
+    ({"SERVE_ARGS": f"--advice-tau=4.0 {IDS}", "ADVICE_TAU": "4"}, None),
 ])
-def test_the_advice_charge_run_serves_remote_with_no_h1_option_serve_openai_would_refuse(tmp_path, extra, line):
-    """advice-charge serves a test run with H1_GATE empty, which passes serve-openai no H1 --protocols, so its preflight
-    refuses an onsite product, an H1 gate, and an H1 option in SERVE_ARGS, which serve-openai refuses only once the node
-    is leased; a run it lets through goes on to the row's files (here absent)."""
+def test_the_advice_charge_runs_preflight_refuses_what_serve_openai_or_its_report_would_refuse_after_the_lease(
+        tmp_path, extra, line):
+    """advice-charge serves a test run with H1_GATE empty, which passes serve-openai no H1 --protocols, and charges the
+    server's advice in buckets of ADVICE_TAU. So its preflight refuses an onsite product, an H1 gate, an H1 option in
+    SERVE_ARGS, which serve-openai refuses only once the node is leased, and a server --advice-tau other than ADVICE_TAU,
+    which advice_charge.py refuses only once the run has served; a run it lets through goes on to the row's files (here
+    absent)."""
     tree, venv, row = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "row"
     tree.mkdir()
     _script(venv / "python", f'exec {sys.executable} "$@"')
@@ -1701,6 +1710,39 @@ def test_a_server_with_the_prefix_cache_and_no_cap_is_refused_before_it_starts(t
     lines = (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
     assert rc == 3 and argv == [], (rc, argv)
     assert lines == ["PREFLIGHT: SERVE_ARGS serves with the prefix cache, whose KV sources ℓ_a's default leaves out: set CAP"]
+
+
+@pytest.mark.parametrize("env, cap", [
+    ({}, (4, 256, 512, 24)),
+    ({"WINDOW_STEPS": "1"}, "1328"),
+    ({"CAP": "65536"}, "65536"),
+    ({"SERVE_ARGS": "--prefix-caching"}, None),
+])
+def test_charge_on_a_serve_dir_whose_server_committed_no_advice_writes_it_under_b_at_cap(tmp_path, env, cap):
+    """`served_verdicts.sh charge` alone, on a serve dir with no advice.jsonl, writes each window's advice with
+    `verity-vllm advice` under prove_path's compiler, both at CAP, by default ℓ_a of the run's limits as `serve` derives
+    it, then charges it (advice_charge.py); with the prefix cache and no CAP it is the same PREFLIGHT refusal as `serve`'s,
+    before any of them runs."""
+    tree, venv, calls = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "calls"
+    (tree / "integrations" / "vllm").mkdir(parents=True)
+    _script(venv / "python", f'[ "$1" = -c ] && exec {sys.executable} "$@"\nprintf \'%s\\n\' "$*" >> {calls}\n'
+                             'case $1 in *prove_path.py) echo \'{"inner": {"name": "n", "digest": "d"}}\' ;; esac')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
+           "OUT": str(tmp_path / "out"), "H1_GATE": "", **env}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "charge"], cwd=tree, env=env, check=False,
+                        capture_output=True).returncode
+    ran = [c.split() for c in calls.read_text().splitlines()] if calls.exists() else []
+    if cap is None:
+        assert (rc, ran) == (3, []) and (tmp_path / "out" / "verdicts.txt").read_text().splitlines() == [
+            "PREFLIGHT: SERVE_ARGS serves with the prefix cache, whose KV sources ℓ_a's default leaves out: set CAP"]
+        return
+    cap = _default_cap(*cap) if isinstance(cap, tuple) else cap
+    compiler, advice, charge = ran
+    assert rc == 0 and compiler[:2] == ["benchmarks/prove_path/prove_path.py", "compiler"], (rc, ran)
+    assert compiler[compiler.index("--cap-bits") + 1] == cap and advice[advice.index("--cap") + 1] == cap
+    assert advice[:4] == ["-m", "verity_vllm.pipeline.cli", "advice", str(tmp_path / "serve")]
+    assert [advice[advice.index(f) + 1] for f in ("--compiler-name", "--compiler-digest")] == ["n", "d"]
+    assert charge[0] == str(tree / "benchmarks" / "one_stage" / "advice_charge.py")
 
 
 class _Response:
