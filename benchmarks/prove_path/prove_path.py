@@ -49,7 +49,8 @@ Two kinds of committed run:
     prove_path.py circuit --serve-run DIR --window K --partition F --advice FILE --out FILE [--hf-config F] [--target F] \\
         [--cap-bits L] [--transfer-gate T ...]
     prove_path.py window-circuit --compiler FILE --registration FILE --out FILE [--cap N] [--description] \\
-        [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--pin NAME=ROOT ...] [--pins FILE ...]
+        [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--pin NAME=ROOT ...] [--pins FILE ...] \\
+        [--window-registration W --h1-meta FILE]
     prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE \\
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --key FILE --registration FILE \\
@@ -110,7 +111,9 @@ Two kinds of committed run:
   public-registration`: the advice's length padded to the cap), records the pinned root for its parameter, and any
   other is free), which
   ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
-  unit's rows as the record's members.
+  unit's rows as the record's members. With ``--window-registration W`` (H1's registration of the window) and
+  ``--h1-meta`` (its Program's meta as the run publishes it), the class's circuit reads H1's tables (`window_class.Tables`
+  of W's Program, no key), the circuit an H1-tied window-commit commits.
 * **class-size**: that Circuit's padded size at ``--class``, too large to lower there (`class_size_of_advice`): one class
   Program of the window's registration lowered at the small class ``--probe`` and projected with v19's heads
   (`class_size.project`), its units, ANDs and m a Program and at the class's slots (the window's circuit, whatever its
@@ -1188,16 +1191,20 @@ def window_circuit_of_class(a: argparse.Namespace) -> dict[str, Any]:
     members stated at ``--cap`` units), or with ``--description`` as the description `interface.input_count` reads, no
     program built. -> the record's input count at the verifier's pins (``--pin NAME=ROOT``, ``--pins FILE``: `pins_of`),
     each held to the root the window's advice registration as the run publishes it (``--registration``, its length
-    padded to the cap) records for its parameter (`registration_roots`)."""
+    padded to the cap) records for its parameter (`registration_roots`). With ``--window-registration`` (H1's W of the
+    window, `h1_tie` with no key) and ``--h1-meta`` (H1's window Program's meta as the run publishes it), the class's
+    circuit reads H1's tables, the circuit an H1-tied window-commit commits."""
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.window_circuit import class_circuit
 
     registration, pins = json.loads(Path(a.registration).read_text()), pins_of(a.pin, a.pins)
     registered = registered_of_compiler(json.loads(Path(a.compiler).read_text()), registration)
     cls = window_class_of(a.window_class)
+    tie = h1_tie(a, cls, key=False)
+    tables = None if tie is None else tie[2]
     t0 = time.time()
     try:
-        circuit = class_circuit(registered, cls)
+        circuit = class_circuit(registered, cls, tables=tables)
     except Unexpressible as e:
         raise ValueError(f"I2's class circuit refuses the class: {e}") from None
     lowered = time.time() - t0
@@ -1362,20 +1369,24 @@ def place_slots(cls: Any, served: Sequence[str], ingress: Mapping[str, Mapping[s
     return out
 
 
-def h1_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], dict[str, Any], Any] | None:
+def h1_tie(a: argparse.Namespace, cls: Any, key: bool = True) -> tuple[dict[str, Any], dict[str, Any], Any] | None:
     """With ``--window-registration``: H1's registration W of the window, its window Program's meta (the serve dir's
-    ``h1/`` `pouw_h1.PROGRAM_META`) and the circuit's tables of it (`window_class.Tables`, `pouw_h1_commit.shape`); None
-    without. ValueError where there's no ``--h1-key``, W is under another Program, or H1's rounds aren't the class's
-    outputs, a table a round the circuit reads."""
+    ``h1/`` `pouw_h1.PROGRAM_META`; without ``key``, ``--h1-meta``, the copy the run publishes) and the circuit's tables of
+    it (`window_class.Tables`, `pouw_h1_commit.shape`); None without. The tables are W's Program's alone, so the verifier's
+    ``window-circuit``, which reads no serve dir, reads them with no key (not ``key``). ValueError where there's no
+    ``--h1-key`` (``key``: window-commit's, whose registration reuses W's salts) or no ``--h1-meta`` (not ``key``), W is
+    under another Program, or H1's rounds aren't the class's outputs, a table a round the circuit reads."""
     if not a.window_registration:
         return None
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import commit as CT
-    if not a.h1_key:
+    if key and not a.h1_key:
         raise ValueError("--window-registration: give --h1-key, H1's prover key, whose salts W's tables take")
+    if not key and not a.h1_meta:
+        raise ValueError("--window-registration: give --h1-meta, H1's window Program's meta as the run publishes it")
     w = json.loads(Path(a.window_registration).read_text())
-    meta = json.loads((Path(a.serve_run) / "h1" / PH.PROGRAM_META).read_text())
+    meta = json.loads((Path(a.serve_run) / "h1" / PH.PROGRAM_META if key else Path(a.h1_meta)).read_text())
     if not isinstance(w, dict) or w.get("program") != meta.get("program_digest"):
         raise ValueError(f"{a.window_registration} is no registration under the serve's H1 window Program "
                          f"{str(meta.get('program_digest'))[:16]}…")
@@ -1674,6 +1685,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pins", action="append", default=[], metavar="FILE", help="pins as a JSON {param: root}, or a "
                    "registration of values {program, values}, the committer's weights registration "
                    "(window_weights.weights_registration), as `records_audit.py count --pins` takes them (repeatable)")
+    p.add_argument("--window-registration", help="H1's registration W of the window: the class's circuit reads H1's tables "
+                   "(`window_class.Tables` of W's Program, from --h1-meta; no key), the circuit window-commit "
+                   "--window-registration W commits")
+    p.add_argument("--h1-meta", help="with --window-registration: H1's window Program's meta as the run publishes it "
+                   "(OUT/serve/h1/window-program.meta.json, the serve dir's h1/window-program.meta.json)")
     p = sub.add_parser("class-size", help="a served window's padded size at its class, projected from a small probe class")
     for flag in ("--serve-run", "--row-dir", "--advice"):
         p.add_argument(flag, required=True)

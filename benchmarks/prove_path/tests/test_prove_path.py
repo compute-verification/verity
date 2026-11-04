@@ -1477,7 +1477,9 @@ def test_the_committers_key_is_made_once_private_and_read_back(tmp_path):
 def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
     """`h1_tie`: with ``--window-registration`` W, H1's registration of the window, and ``--h1-key``, window-commit's
     circuit reads W's tables (`window_class.Tables` of the serve's H1 window Program); none without W. Refused by name
-    without the key, for a W under another Program, and where H1's rounds aren't the class's outputs."""
+    without the key, for a W under another Program, and where H1's rounds aren't the class's outputs. The verifier's
+    window-circuit, which holds no key and reads no serve dir (not ``key``), reads the same tables from the Program's meta
+    as the run publishes it (``--h1-meta``), refused by name without it."""
     from verity_vllm.program.predict.window_circuit import Tables
     from verity_vllm.protocols.pouw import h1 as PH
     serve, cls = tmp_path / "serve", SimpleNamespace(outputs=2)
@@ -1494,6 +1496,13 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
     assert w["program"] == meta["program_digest"] and tables == Tables(64, 8, 2)
     with pytest.raises(ValueError, match="give --h1-key"):
         tie(h1_key=None)
+    published = tmp_path / "out" / "serve" / "h1" / PH.PROGRAM_META
+    published.parent.mkdir(parents=True)
+    published.write_bytes((serve / "h1" / PH.PROGRAM_META).read_bytes())
+    verifier = {"window_registration": str(tmp_path / "w.json"), "h1_key": None}
+    assert PP.h1_tie(argparse.Namespace(**verifier, h1_meta=str(published)), cls, key=False) == (w, meta, tables)
+    with pytest.raises(ValueError, match="give --h1-meta"):
+        PP.h1_tie(argparse.Namespace(**verifier, h1_meta=None), cls, key=False)
     (tmp_path / "other.json").write_text(json.dumps({"program": "q" * 128}))
     with pytest.raises(ValueError, match="is no registration under the serve's H1 window Program"):
         tie(window_registration=str(tmp_path / "other.json"))
