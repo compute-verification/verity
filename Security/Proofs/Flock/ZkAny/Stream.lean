@@ -36,16 +36,17 @@ namespace Tup
 variable {F : ℕ → Type}
 
 /-- Tuples of finite entries are finite. -/
+@[instance_reducible]
 def fintype' [∀ j, Fintype (F j)] : ∀ ℓ, Fintype (Tup F ℓ)
   | 0 => inferInstanceAs (Fintype Unit)
-  | ℓ + 1 => letI := fintype' (F := F) ℓ; inferInstanceAs (Fintype (Tup F ℓ × F ℓ))
+  | ℓ + 1 => letI := fintype' ℓ; inferInstanceAs (Fintype (Tup F ℓ × F ℓ))
 
 instance instFintype [∀ j, Fintype (F j)] (ℓ : ℕ) : Fintype (Tup F ℓ) := fintype' ℓ
 
 /-- Tuples of nonempty entries are nonempty. -/
 theorem nonempty' [∀ j, Nonempty (F j)] : ∀ ℓ, Nonempty (Tup F ℓ)
   | 0 => ⟨()⟩
-  | ℓ + 1 => haveI := nonempty' (F := F) ℓ; inferInstanceAs (Nonempty (Tup F ℓ × F ℓ))
+  | ℓ + 1 => haveI := nonempty' ℓ; inferInstanceAs (Nonempty (Tup F ℓ × F ℓ))
 
 instance instNonempty [∀ j, Nonempty (F j)] (ℓ : ℕ) : Nonempty (Tup F ℓ) := nonempty' ℓ
 
