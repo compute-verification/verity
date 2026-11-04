@@ -2341,6 +2341,7 @@
   "CoreComposition",
   "CoreOnsite",
   "CoreRemote",
+  "CoreRemoteNetwork",
   "NciCheck.Check",
   "NciCheck.Baseline",
   "NciCheck.Desc",

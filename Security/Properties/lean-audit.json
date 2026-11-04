@@ -481,6 +481,7 @@
   "Properties.Verity",
   "CoreOnsite",
   "CoreRemote",
+  "CoreRemoteNetwork",
   "Properties.Remote",
   "Properties.NciDesc",
   "Definitions.Pouw.Window",
