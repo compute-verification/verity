@@ -71,7 +71,8 @@ omit [DecidableEq Col] in
 theorem ofFlock_reruns (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T) (decode : List (ℕ × Col) → List T) :
     (Arg.ofFlock D decode).RerunsLe H (fun s => 1 + s.1 * s.2.1) ∧
       (Arg.ofFlock D decode).RerunsExpLe H (fun s => 1 + s.1 * ⌈4 * s.2.2.2 / Real.exp 1⌉₊) :=
-  Claims.ERep_cost H D.V D.waits D.k D.cap _ _ _
+  Claims.ERep_cost H D.V D.waits D.k D.cap (fun v => [D.cols v])
+    (Claims.Flock.assemble D.parse D.table decode D.read) (Claims.Flock.check D.parse)
 
 theorem flockArgKS : FlockArgKS (Coin := Coin) (Col := Col) (T := T) := by
   intro H D _ decode hKS hdec

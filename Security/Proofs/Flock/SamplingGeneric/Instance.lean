@@ -227,8 +227,8 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 
 omit [Inhabited Coin] [DecidableEq Col] in
 theorem ofFlock_ext_cast (Dfl : Claims.Flock.Deploy Coin Col T) (decode : List (ℕ × Col) → List T) {xS : Msg}
-    {W C K : ℕ} (h : (Arg.ofFlock Dfl decode).shape xS = (W, C, K)) (hw : Dfl.waits xS = W) (hc : Dfl.cap xS = C)
-    (hk : Dfl.V.k xS = K) (g : Fin W → Fin C → Fin K → Coin) (r : Fin (Dfl.V.k xS) → Coin) :
+    {W C K : ℕ} {N : ℝ} (h : (Arg.ofFlock Dfl decode).shape xS = (W, C, K, N)) (hw : Dfl.waits xS = W)
+    (hc : Dfl.cap xS = C) (hk : Dfl.V.k xS = K) (g : Fin W → Fin C → Fin K → Coin) (r : Fin (Dfl.V.k xS) → Coin) :
     (Arg.ofFlock Dfl decode).ext xS r (cast (congrArg (Arg.ofFlock Dfl decode).EC h.symm) g) =
       (Claims.Flock.E Dfl decode).ext xS r fun i j t => g (Fin.cast hw i) (Fin.cast hc j) (Fin.cast hk t) := by
   subst hw hc hk
@@ -390,8 +390,9 @@ theorem unitExt_agree (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.S
   have hemb : ∀ t, emb t = (D.rounds x u).orderEmbOfFin rfl (Fin.cast hcard' t) := fun t =>
     (congrFun (Finset.orderEmbOfFin_unique hcard'.symm hS hmono) t).trans (orderEmbOfFin_cast _ hcard'.symm t)
   have hshape : (Arg.ofFlock D.flock decode).shape xS = (ofDeploy D decode iroots).sh x u := by
-    show (D.flock.waits xS, D.flock.cap xS, D.flock.V.k xS) = (D.innerWaits x, D.innerCap x, (D.rounds x u).card)
-    rw [hw, hc, hcard']
+    show (D.flock.waits xS, D.flock.cap xS, D.flock.V.k xS, D.flock.N₀ xS) =
+      (D.innerWaits x, D.innerCap x, (D.rounds x u).card, D.innerN₀ x)
+    rw [hw, hc, hcard', hN]
   have hsessL : (ofDeploy D decode iroots).session x u (run H P D.V x ω r).seen = _ := hsess
   have ha' : (run H P' D.flock.V xS () fun i => r (emb i)).seen.out = .acc := (hacc r fun _ _ => rfl).1 hr
   have hviewL : ∀ r' : Fin (D.V.k x) → Coin, (∀ t ∉ D.rounds x u, (∀ t' ∈ D.rounds x u, t < t') → r' t = r t) →
