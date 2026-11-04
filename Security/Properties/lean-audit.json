@@ -31,6 +31,7 @@
   "Properties.Evaluate",
   "Properties.NetworkRecords",
   "Properties.NetworkPeriod",
+  "Properties.NetworkPeriod.Placed",
   "Properties.Core.Period",
   "Properties.NetworkScan",
   "Properties.SampledProofs",
@@ -454,6 +455,7 @@
   "Definitions.Core.TC.Spec",
   "Properties.NetworkRecords",
   "Properties.NetworkPeriod",
+  "Properties.NetworkPeriod.Placed",
   "Properties.NetworkScan",
   "Properties.SampledProofs",
   "SampledProofs",
@@ -737,6 +739,11 @@
   "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial": "aeb0e3753dce706751cb8042d5bf851959cd4ef89bd7357d993df497631c23fd",
   "Properties.NetworkPeriod.rowsUntiedRefused": "a6422e99a7badb1dc8a3922255ccfe6783a66bdba2511039bf21dc30042d5a24",
   "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial": "aa00cfe5835bf525712d992edb7d9e6ab94b7914b335d01ade734f3611ede2f5",
+  "Properties.NetworkPeriod.scanWindowsPlaced": {
+   "type_hash": "e9dedfc752c9606c233f7c1ef9c8b0d87ca8955ce390931958bf5645cb3b9ff1",
+   "missing": "honest",
+   "why": "its premises at the deployed parse are the sampled leg's bridge facts (StmtBits, and WrongBounds at the audit's published bound, which wrongBounds_of_countBound gives from the code's strata), whose honest lemmas at the deployed record take the assembled record's hypotheses, which are no named assumptions"
+  },
   "Properties.NetworkRecords.acceptMeans": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
   "Properties.NetworkRecords.answerAcceptMeans": "c5c91cdf640198af01ce5e2e90ba3ba4e42c21fc97c0610eb0ad09a01671615c",
   "Properties.NetworkRecords.noGridAcceptsMore": "34f6be27c3079d33abff38adbc90f5aeb66dd7446e7a2efada385c63921aa1c3",
