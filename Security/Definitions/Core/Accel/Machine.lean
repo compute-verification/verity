@@ -1,4 +1,6 @@
-import Definitions.Core.Accel.Card
+module
+
+public import Definitions.Core.Accel.Card
 
 /-!
 # The machine 𝓜 (trusted)
@@ -21,6 +23,8 @@ A run of `T` seconds meets the model (`Fits`) if
 The model has no latency, no per-clock limit and no SM boundaries (each resource and store is pooled over the card, and
 any thread names any location), and a resource with no stated rate is free: each lets a program do more than the card.
 -/
+
+@[expose] public section
 
 open scoped NNRat
 

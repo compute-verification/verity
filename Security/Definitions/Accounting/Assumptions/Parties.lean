@@ -1,4 +1,6 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # An auditor party's assumptions: `Faithful`, `Secret`, `Confined`, and its witness path's `WitnessPathPrivate`
@@ -23,6 +25,8 @@ owns and the prover doesn't control is why we believe them, not an assumption.
 `Covered` (`Accounting.Covered`) stays the site premise. What the auditor and the prover see of a party under these
 (`auditorView`, `proverView`) is stated over its code's messages in `Properties.Attest`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.Parties
 

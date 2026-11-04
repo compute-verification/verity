@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.TableBound
+module
+
+public import Proofs.Flock.Claims.KS.TableBound
 
 /-!
 # KS at the trimmed records, from the full-width obligations
@@ -21,6 +23,8 @@ So KS at the trimmed records at SHA-512 asks only the fixed-table bound over ful
 instance (`FlockDeploy.KS.plain_KS_trim`, `FlockDeploy.KS.zk_KS_trim`), statement by statement at the accepted ones
 (`FlockDeploy.KS.plain_KS_trim_of_acc`, `FlockDeploy.KS.zk_KS_trim_of_acc`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

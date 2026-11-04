@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.RegLevels.Kappa
+module
+
+public import Proofs.Flock.C3.RegLevels.Kappa
 
 /-!
 # n7's levels: the coef `checkStackedLevel` registers (`hreg`)
@@ -9,6 +11,8 @@ and its `coef` port passed `checkValue` at the verifier's rows: opening `j`'s `c
 α the verifier's (`o.lg.conss[l]!`). `hreg_of_check` is `Kappa`'s `hreg` at that level, at any `ops` whose `coef` is
 the values the check accepted (`hval`), and `coef_of_check` is `SessionAt`'s coef conjunct there (`alpha_of_opening`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

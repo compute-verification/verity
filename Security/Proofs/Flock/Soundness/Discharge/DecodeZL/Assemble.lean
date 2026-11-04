@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
 /-!
 # The decoder is right at the headline's draws
@@ -15,6 +17,8 @@ accepts:
 * `repRun_at` (`Runs.lean`) makes each rep's run a `RepRun` for `decAt`; `RecordsLive` says the outcome's rounds, link
   points, root and proof files are the record's.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZL
 

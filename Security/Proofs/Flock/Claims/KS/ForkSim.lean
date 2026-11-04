@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Bridge.Live
-import Proofs.Flock.Claims.Bridge.Dead
+module
+
+public import Proofs.Flock.Claims.Bridge.Live
+public import Proofs.Flock.Claims.Bridge.Dead
 
 /-!
 # Two runs forked after a number of coins, through a simulation
@@ -17,6 +19,8 @@ first `j` coins.
 * `NoCoin`, `Fresh`, `forkX_fresh`, `fresh_sessionK`, `forkX_sessionK`: on a game whose every coin answers its own
   send (`Fresh`), as the live session's do, `B`'s fork at round `j` (`forkX`) is the fork after `j` coins.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.DeployScope
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployScope
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 
 /-!
 # Flock's plain verifier sets the inner statement up as its files do
@@ -26,6 +28,8 @@ statement up as one table at the `m`, `k_log` and region count, and with the poi
   (`regions_size`).
 -/
 
+@[expose] public section
+
 namespace RecDeploy
 
 open Flock FlockSoundness.Refine
@@ -35,11 +39,11 @@ open Claims (Msg)
 
 /-- A file read as JSON, where its text parses. -/
 theorem jsonOf_of {b : ByteArray} {t : String} {d : Lean.Json} {g : String → String}
-    (ht : String.fromUTF8? b = some t) (hd : (Lean.Json.parse t).mapError g = .ok d) (what : String) :
+    (ht : String.fromUTF8? b = some t) (hd : (Flock.JsonParse.parse t).mapError g = .ok d) (what : String) :
     FlockDeploy.jsonOf what b = .ok d := by
   unfold FlockDeploy.jsonOf
   simp only [ht]
-  cases hp : Lean.Json.parse t with
+  cases hp : Flock.JsonParse.parse t with
   | error e => rw [hp] at hd; cases hd
   | ok j => rw [hp] at hd; cases hd; rfl
 

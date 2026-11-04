@@ -1,5 +1,7 @@
-import NetworkCheck.LinkWindow
-import Lms.Sign
+module
+
+public import NetworkCheck.LinkWindow
+public import Lms.Sign
 
 /-!
 # N2's execution phase verdict of record: what its Lean code (`NetworkCheck.LinkWindow`) does
@@ -22,6 +24,8 @@ function in the verdict's place (`LinkWindowAcceptMeansBy`, `AcceptsAll`) and sa
 warden link one whose certificates the device signed whatever its syncs; the nontrivial one, that no verifier accepting
 every execution phase has the property.
 -/
+
+@[expose] public section
 
 open NetworkCheck NetworkCheck.LinkWindow
 open Lean (Json toJson)

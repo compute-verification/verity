@@ -1,4 +1,6 @@
-import Proofs.Core.TC.Proofs.Step
+module
+
+public import Proofs.Core.TC.Proofs.Step
 
 /-!
 # Completeness: the honest witness satisfies every predicate
@@ -7,6 +9,8 @@ import Proofs.Core.TC.Proofs.Step
 magnitudes), and `group_complete` checks each of the group's predicates on it, for any admissible accumulator and any
 sixteen BF16 operand pairs.
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs
 

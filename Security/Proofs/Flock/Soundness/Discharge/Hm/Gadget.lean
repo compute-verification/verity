@@ -2,8 +2,12 @@
 What the rows of the verifier's builder (`Flock.HmNets`) force: a Hoare-style judgement `Sound m P` (whenever every row of
 the final state holds, the result satisfies `P`) and the primitive gadgets' rules: a fresh bit, AND, majority, commit.
 -/
-import Mathlib.Tactic
-import Flock.HmNets
+module
+
+public import Mathlib.Tactic
+public import Flock.HmNets
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 

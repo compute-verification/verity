@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Hash.Basic
+module
+
+public import Mathlib
+public import Definitions.Hash.Basic
 
 /-!
 # frame-v3 trees over a hash (trusted)
@@ -16,6 +18,8 @@ An opening at `rank` is the leaf digest and the path's siblings from the leaf le
 Leaf, node and root are 64-byte digests, which the verifier's size checks (`root.size`, each sibling's) refuse otherwise;
 `Digest` carries that in its type. `Tree.hashed` lists the node messages the climb hashed, bottom first.
 -/
+
+@[expose] public section
 
 namespace Hash.Tree
 

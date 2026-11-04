@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ConflictMerkle
+module
+
+public import Proofs.Flock.Claims.KS.ConflictMerkle
 
 /-!
 # Two passing Merkle checks at one cap and positions open alike, or collide
@@ -18,6 +20,8 @@ Two passing Merkle checks at one cap and positions then carry the same rows, sib
 openings collide (`merkleCheck_coll`), and a collision among two lists of inputs that a decision's calls log is a
 collision among those calls (`CollIn.tied`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZkCols
+module
+
+public import Proofs.Flock.Claims.ZkCols
 
 /-!
 The masked reader `zkRunCols` (`Proofs.Flock.Claims.ZkCols`) on a recorded `flock-circuit --zk` session, held to the
@@ -20,6 +22,8 @@ times regions) are each table's setup, under the `hm96-sha512/v1` leaf scheme. O
 `--zk` RoPE d64 sessions, k_log 22, 8 claims): `sessions/drawn/*` at m 25 with table `circuit`, `sessions/j2/*` at m 25
 with tables `circuit-00 circuit-01`, `sessions/m26/*` at m 26 with table `circuit`.
 -/
+
+@[expose] public section
 
 open Lean Flock
 
@@ -92,7 +96,7 @@ def main (args : List String) : IO UInt32 := do
     | IO.eprintln "usage: ZkColsSession.lean SESSION_DIR M K_LOG CLAIMS TABLE..."; return 2
   let (some m, some kLog, some claims) := (m.toNat?, kLog.toNat?, claims.toNat?)
     | IO.eprintln "M, K_LOG and CLAIMS are natural numbers"; return 2
-  let j ← ofV "session.json" (Json.parse (← IO.FS.readFile s!"{dir}/session.json"))
+  let j ← ofV "session.json" (Flock.JsonParse.parse (← IO.FS.readFile s!"{dir}/session.json"))
   let mut ok := true
   for t in tables do
     ok := (← table j dir m kLog claims t) && ok

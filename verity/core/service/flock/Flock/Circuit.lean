@@ -5,11 +5,18 @@ statement's `Tags`). The parser refuses every part the verifier would have to ev
 `cut`, `cut_words`, `public_ports`, `public`, `native`, `outputs_by_tail`), and checks the layout's generic shape; the row
 leaf checks its own ranges (`RowLeaf.checkLayout`). Lookup slots are built from their pinned tables (`Flock.Lookup`).
 -/
-import Lean.Data.Json
-import Flock.Lookup
-import Flock.TmplAt
-import Flock.Tags
-import Flock.Typed
+module
+
+public import Lean.Data.Json
+public import Flock.Lookup
+public import Flock.TmplAt
+public import Flock.Tags
+public import Flock.Typed
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 
@@ -245,7 +252,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   let name := (head.drop (tags.fileFormat.length + 1)).toString
   let metaLine := (lines.getD 1 "").trimAsciiEnd.toString
   if !metaLine.startsWith "META " then throw "circuit: no META line"
-  let mj ← match Json.parse (metaLine.drop 5).toString with
+  let mj ← match JsonParse.parse (metaLine.drop 5).toString with
     | .ok j => pure j
     | .error e => throw s!"META: {e}"
   if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then

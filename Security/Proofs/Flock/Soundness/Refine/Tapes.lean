@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Refine.Run
-import Proofs.Flock.Soundness.Instance
-import Flock.Verify
+module
+
+public import Proofs.Flock.Soundness.Refine.Run
+public import Proofs.Flock.Soundness.Instance
+public import Flock.Verify
 
 /-!
 # The model's messages, read off a decoded proof
@@ -11,6 +13,8 @@ order the model receives them. The coins need no such function: they are the rec
 
 This file holds those tapes and the correspondence between the executable's and the model's phase outputs.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

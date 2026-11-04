@@ -9,8 +9,14 @@ A rule's law text is a rate law (`parseRate`: `rate:NUM/DEN[:T]`, what a new Spe
 law names no law until the population is known: over `n` units it is `subset:k` at `k = Rate.count` (`Rule.over`,
 `resolve`), so the draw, the registration's law and the audit are a uniform `k`-subset's, and `select` runs on that rule.
 -/
-import SampledProofs.Draw
-import SampledProofs.Rate
+module
+
+public import SampledProofs.Draw
+public import SampledProofs.Rate
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Select
 

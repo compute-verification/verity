@@ -21,10 +21,14 @@ gates are then its own nodes' gates.
   `uint(rows)`; a per-window value's binding adds `"window": R`, the window's open root (`domainAt`), so a root
   registered in one window opens under no other window's domain, and a value held across windows leaves it out.
 -/
-import Flock.Program
-import Flock.Public
-import Flock.Registered
-import SampledProofs.Partition
+module
+
+public import Flock.Program
+public import Flock.Public
+public import Flock.Registered
+public import SampledProofs.Partition
+
+@[expose] public section
 
 namespace SampledProofs.Registered
 

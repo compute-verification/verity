@@ -1,5 +1,7 @@
-import Proofs.Pouw.PearlC.Gamma
-import Proofs.Pouw.Sampling
+module
+
+public import Proofs.Pouw.PearlC.Gamma
+public import Proofs.Pouw.Sampling
 
 /-!
 # γ under the sampled audit, from TT_OUT per tile
@@ -21,6 +23,8 @@ Staged; nothing pinned. The pins proposed are `pearlCSampled8192`, `pearlCSample
 * `ttOutTilePearlCWitness`: `TTOutTilePearlC` is satisfiable, beside an honest reference whose cost is at most the
   layout's `W_ref` tile by tile, and an in-domain workload whose one tile is within the cap and has positive credit.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 
