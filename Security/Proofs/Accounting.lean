@@ -72,6 +72,7 @@ public import Proofs.Accounting.TS.SharedNoise
 public import Proofs.Accounting.TS.J10RChecks
 public import Proofs.Accounting.TS.SessionSound
 public import Proofs.Accounting.TS.CheckedSound
+public import Proofs.Accounting.TS.GroupSound
 public import Proofs.Accounting.TS.LanesSound
 public import Proofs.Accounting.TS.Session.Lanes.Layout
 public import Proofs.Accounting.TS.Session.Lanes.Decode

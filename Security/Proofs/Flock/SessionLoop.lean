@@ -1,6 +1,11 @@
 module
 
 public import Proofs.Flock.SessionLoop.Statement
+public import Proofs.Flock.SessionLoop.TakenVals
+public import Proofs.Flock.SessionLoop.FinalC
+public import Proofs.Flock.SessionLoop.TakesTau
+public import Proofs.Flock.SessionLoop.Inner
+public import Proofs.Flock.SessionLoop.LiveInner
 public import Proofs.Flock.Claims.ZK.FrameUnrefused
 public import Proofs.Flock.SessionLoop.Link
 public import Proofs.Flock.Claims.ZK.FinishSwFrame
@@ -11,7 +16,6 @@ public import Proofs.Flock.SessionLoop.FinPoints
 public import Proofs.Flock.SessionLoop.FinRounds
 public import Proofs.Flock.Claims.ZK.FinishBridge
 public import Proofs.Flock.Claims.ZK.FinishTrunc
-public import Proofs.Flock.SessionLoop.FinRounds
 public import Proofs.Flock.Claims.ZK.FinHmkLive
 public import Proofs.Flock.Claims.ZK.FinishFwRep
 public import Proofs.Flock.Claims.ZK.FinTau
@@ -26,6 +30,13 @@ public import Proofs.Flock.Claims.ZK.FinishLigEnd
 public import Proofs.Flock.Claims.ZK.RepCutFw
 public import Proofs.Flock.Claims.ZK.FinishSwMkAny
 public import Proofs.Flock.Claims.ZK.FinishFwL0
+public import Proofs.Flock.SessionLoop.FinishIsLoop
+public import Proofs.Flock.SessionLoop.PiopState
+public import Proofs.Flock.SessionLoop.CutPiopLive
+public import Proofs.Flock.SessionLoop.CutInnerLive
+public import Proofs.Flock.SessionLoop.InnerSlot
+public import Proofs.Flock.SessionLoop.InnerUnrefused
+public import Proofs.Flock.SessionLoop.LiveInnerAt
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames
@@ -38,7 +49,8 @@ admitting unrefused coins (`LeanRelease.finalRoundEq_ofLoop`). `SessionLoopZKDep
 which admit unrefused coins (`LeanRelease.tablesAdmitUnrefused_dataE`), at the loop's own link and `Finish`
 (`LeanRelease.ofLoopLink`),
 whose `LinkRoundEq` holds in the masked scope where the loop draws the tape's level 0
-(`LeanRelease.linkRoundEq_ofLoopLink`, from `Loop.Src`'s level-0 half, `Loop.Level0Src.linkLevel0`).
+(`LeanRelease.linkRoundEq_ofLoopLink`, from `Loop.Src`'s level-0 half, `Loop.Level0Src.linkLevel0`), and whose `FinishIs`
+holds there at `LoopInnerRound0`, `Loop.Src`, `LiveRoundEq` and `SwCausal` (`Loop.finishIs`).
 -/
 
 @[expose] public section
@@ -87,12 +99,13 @@ theorem SessionLoopZK : Flock.Guarantees.SessionLoopZK := by
 
 /-- **C-Flock's zero knowledge at the session loop's own frames and link, at the deployed tables**: `SessionLoopZK` at
 `Masked.dataE`, whose tables admit unrefused coins, and the release `withFiles (withLink L₀ src) src`, whose
-`LinkRoundEq` is `linkRoundEq_ofLoopLink`. -/
+`LinkRoundEq` is `linkRoundEq_ofLoopLink` and whose `FinishIs` is `Loop.finishIs`. -/
 theorem SessionLoopZKDeployed : Flock.Guarantees.SessionLoopZKDeployed := by
-  intro vs t ht hS hV hD hc hsc hT L₀ src real hreal wk x w hR hServe hL0 hScope hSrc hFin hE hEf Θ Vs θ hk Ev
+  intro vs t ht hS hV hD hc hsc hT L₀ src real hreal wk x w hR hServe hL0 hScope hSrc hE hEf Θ Vs θ hk Ev
+  subst hreal
   exact SessionLoopZK _ Claims.ZKServer.LeanRelease.tablesAdmitUnrefused_dataE vs t ht hS hV hD hc hsc hT
-    (Claims.ZKServer.LeanRelease.withFiles (Claims.ZKServer.LeanRelease.withLink L₀ src) src) src real hreal wk x w hR hServe hL0
-    (Claims.ZKServer.LeanRelease.linkRoundEq_ofLoopLink vs L₀ src real hScope hR hSrc.1.linkLevel0) hFin hE hEf Vs θ hk
-    Ev
+    (Claims.ZKServer.LeanRelease.withFiles (Claims.ZKServer.LeanRelease.withLink L₀ src) src) src _ rfl wk x w hR hServe
+    hL0 (Claims.ZKServer.LeanRelease.linkRoundEq_ofLoopLink vs L₀ src _ hScope hR hSrc.1.linkLevel0)
+    (Claims.ZKServer.Loop.finishIs vs L₀ src wk x w hScope hR hServe hL0 hSrc hE hsc) hE hEf Vs θ hk Ev
 
 end Flock.SecurityProofs

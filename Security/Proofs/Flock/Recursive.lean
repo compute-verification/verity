@@ -80,6 +80,8 @@ public import Proofs.Flock.Recursive.KS
 public import Proofs.Flock.Recursive.KSV
 public import Proofs.Flock.Recursive.KSDeployed
 public import Proofs.Flock.Recursive.KSProved
+public import Proofs.Flock.Recursive.KSCoinTreeProved
+public import Proofs.Flock.Recursive.KSCoinTreeWitnesses
 public import Proofs.Flock.Recursive.KSLinked
 public import Proofs.Flock.Claims.Recursion.DeployedCounts
 public import Proofs.Flock.Claims.Recursion.LamDeployedTight
