@@ -728,3 +728,6 @@ def test_a_run_extends_the_deployments_log_with_its_days_declaration_and_a_day_d
     with pytest.raises(ValueError, match="the registration log is onsite's, not remote's"):
         SA.register(tmp_path / "d3", serve, 4096, "remote", day=3, log=second["registration"]["log"])
     assert not any((tmp_path / d).exists() for d in ("d1b", "d2", "d3"))
+    (tmp_path / "d4").mkdir()
+    _c, net = SA.register(tmp_path / "d4", serve, 4096, "remote-network", day=0)
+    assert "remote-network" in SA.COMPOSITES and REGLOG.log_of(net["registration"]["log"])[0] == "remote-network"

@@ -9,7 +9,7 @@
         [--copy-records-to $OUT] [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
-        [--advice [--advice-cap BITS] [--advice-composite onsite|remote] [--advice-day 0 [--advice-log JSON]] [--advice-tau 0.1]
+        [--advice [--advice-cap BITS] [--advice-composite onsite|remote|remote-network] [--advice-day 0 [--advice-log JSON]] [--advice-tau 0.1]
                   [--advice-weights JSON]]
 
 It serves what the network certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
