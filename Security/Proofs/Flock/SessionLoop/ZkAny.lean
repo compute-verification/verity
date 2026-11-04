@@ -49,6 +49,10 @@ pinned key (`CROnly.hm96Hiding_gap`). Scope: the released bytes and their order,
   the loop's own link and `Finish` (`LeanRelease.ofLoopLink`, `SessionLoopZKDeployed`'s release), where the tables' side
   holds. It is the deployed statement without `SessionLoopZKDeployed`'s valid witness: any values, no `Flock.R`, no
   `RowsOK`.
+
+The ZK server never stops for good after failed sessions: a worker chooses its sessions' verdicts, so what they reveal is
+bounded per outcome of each session (its `Finish` verdict, and at the held relay how many frames left), and is not
+capped over a monitoring period.
 -/
 
 @[expose] public section
@@ -212,7 +216,9 @@ def _root_.Flock.Guarantees.SessionLoopZKAny : Prop :=
 loop's own tables, `Loop.realOf src`), where the session's other Props hold. In place of `SessionLoopZKDeployed`'s valid
 witness (`Flock.R`, through which the workers' rows hold at the values, `Loop.RowsOK`) and its switched causality, it is
 at any values whose unswitched round encoding is causal (`UnCausal`), at every relation at whose statements the
-session's table witnesses are valid, where the transport's trusts hold at those statements (`LeanRelease.TrustsStop`). -/
+session's table witnesses are valid, where the transport's trusts hold at those statements (`LeanRelease.TrustsStop`).
+The ZK server never stops for good after failed sessions, so what the verdicts reveal is bounded per outcome of each
+session, and is not capped over a monitoring period. -/
 def _root_.Flock.Guarantees.SessionLoopZKAnyDeployed : Prop :=
   ∀ (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (t : ℕ), 0 < t →
     ∀ (Rl : Rel Flock.Wit), (CoinLayer.session Loop.loopNr Masked.dataE).Complete Rl →
