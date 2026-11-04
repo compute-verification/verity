@@ -37,11 +37,9 @@
 #     count of the windows closed, sealed or refused, no engine step, request count or user of one. Each line goes out
 #     through `served_verdicts.py public-lines`, in full to the serve dir's private/verdicts.txt, and once the run is
 #     done, however it ends, `served_verdicts.py publish` holds in full in the serve dir's private/out each file of $OUT
-#     that names or counts a window, its public form in its place. The advice registration's published copies
-#     ($OUT/registration.json, the records audit's served-records) carry the advice's length padded to its compiler's
-#     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
-#     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
-#     them.
+#     that names or counts a window, its public form in its place. The advice registration's published copy
+#     ($OUT/registration.json) carries the advice's length padded to its compiler's cap (`served_verdicts.py
+#     public-registration`).
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; the
 #     pick stays in the serve dir's private/window.json, the WINDOW line saying only the class's SLOTS slots, and CLASSES
 #     the window circuit's classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
@@ -51,10 +49,10 @@
 #     pins: at each class of CLASSES (default 4,32,4, V2's), each within WC_TIMEOUT (default 30m), all of which the run needs;
 #     and at the class of record, a measurement within WC_RECORD_TIMEOUT (default 45m), run after the record (step 5),
 #     since nothing reads it, whose timeout or refusal is said and never fails the run (unless CLASSES names `record`, which
-#     then gates here instead); then the window audited from its records alone
-#     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): C-Flock `--zk` on the sampled proof blocks behind the Lean
-#     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
-#     layer 0's SiluMul_v2 at step 1, or at step 0 with MAX_TOKENS 1, whose window has no step 1), not the window circuit's.
+#     then gates here instead); then the window audited from its records alone, by V3c (step 6, run here): C-Flock `--zk`
+#     on the class circuit's sampled proof blocks behind the Lean firewall, and the Lean verifier's verdict. That circuit
+#     reads the advice only inside the window commit's proofs, under its hiding root, so no advice opening reaches the
+#     verifier.
 #  4. PoUW (H1 credit), PoUS, the bandwidth audit and the network certifier: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, POUS_CMD, BANDWIDTH_CMD or CERTIFIER_CMD names it, one at a time (the certifier's alone, the longest,
 #     from the moment the window is picked, beside step 3, its lines said after the others'; split in two, the answer step
@@ -95,28 +93,31 @@
 #     CERTIFIER_FRONT is remote's too: the network certifier in front of the endpoint is how its requests are served, not
 #     a piece, so its session stays in the serve dir's private/ and its exit is the CERTIFIER-FRONT line's, which remote's
 #     record doesn't read.
-#  6. V3c, after the record since V2 doesn't read it: it proves the window circuit's own units at V3C_CLASS (default 4,32,4,
+#  6. V3c, sampled proofs' audit of record, run before step 4 (V3C_CLASS set empty is refused): it proves the window
+#     circuit's own units at V3C_CLASS (default 4,32,4,
 #     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
 #     registration's root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the
 #     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), draws the
-#     registration's members (V3C_LAW, default subset:1) and proves them; then `records_audit.py period` writes the audit
-#     as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json, and a copy in $OUT/v3c-audit: the
-#     registration, the Program, its answer and its free inputs), and V3c fails where it writes none.
+#     registration's members (V3C_LAW, default subset:1) on the run's coins (Coins, below) and proves them; then
+#     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
+#     and a copy in $OUT/v3c-audit: the registration, the Program, its answer and its free inputs), and V3c fails where it
+#     writes none. The record reads that audit ($D/v3c-w<K>-<class>/audit, on the window commit's registration).
 #     `served_verdicts.sh v3c` runs only that step on an
-#     existing serve dir (D and its window K set), the build first, its limits 120m and 180m. V3C_CLASS set empty leaves
-#     V3c out of the run, for a `served_verdicts.sh v3c` started once the window's advice is written.
+#     existing serve dir (D and its window K set), the build first, its limits 120m and 180m.
 #     With the network certifier's piece split in two, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD (CERTIFIER_CMD then
-#     unset, and V3C_CLASS the certifier's scan class, which CLASSES holds), V3c runs before step 4, since the certifier's
-#     answer reads its period.json: the chain after the window commit, beside V3c's audit and period.json, within
+#     unset, and V3C_CLASS the certifier's scan class, which CLASSES holds), the certifier's answer reads V3c's
+#     period.json: the chain after the window commit, beside V3c's audit and period.json, within
 #     CERTIFIER_TIMEOUT (default 4h), and the period check once both are done and V3c wrote period.json, within
 #     CERTIFIER_PERIOD_TIMEOUT (default 60m), each as `bash -c CMD _ D K DIR V3C` in TREE with DIR $OUT/pieces/certifier
 #     and V3C V3c's $D/v3c-w<K>-<class>. V3c then takes the window commit, the longer of the chain and V3c's audit,
 #     and the period check, which the run's --timeout holds beside the other steps. The period check writes the
 #     certifier's answer.json in DIR, which step 4's certifier piece reads; `served_verdicts.sh v3c`, which writes no
 #     record, moves the steps' logs (CERTIFIER_PRIVATE) to the serve dir's private/pieces/certifier before it exits.
-# Coins: sampled proofs' draw is Lean's IO.getRandomBytes in the verifier's process on the served node unless PP_CHALLENGER
-# names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
+# Coins: sampled proofs' draw is a local development challenger session's on the served node (V3c's audit's
+# `--challenger local`) unless PP_CHALLENGER names the live challenger (gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and
+# PP_GATE_KEY); the verifier draws none of its own. Its session is pinned on the verifier's copy of main's first-parent
+# history: PP_MAIN, else MAIN_FILE's, else origin's main fetched into the clone. With H1_GATE (the
 # lane's gate command, by default "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"; empty, no
 # H1) the endpoint serves PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER,
 # default vy-dc-h200, at the engine's T and S WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a
@@ -290,23 +291,45 @@ sys.exit(0 if ok else 1)
 EOF
   [ "${PIPESTATUS[0]}" = 0 ] && v3c_ok=1
 }
+v3c_coins() {  # V3C_CH: the challenger the audit draws on (Coins, above), as prove_path/run.sh hands its records audit
+  local main=${PP_MAIN:-${MAIN_FILE:-}} un=()
+  if [ -z "$main" ]; then
+    main=$OUT/v3c-audit/main.txt
+    [ "$(git -C "$TREE" rev-parse --is-shallow-repository 2>/dev/null)" = true ] && un=(--unshallow)
+    { git -C "$TREE" fetch -q ${un[@]+"${un[@]}"} origin +refs/heads/main:refs/remotes/origin/main \
+      || git -C "$TREE" fetch -q ${un[@]+"${un[@]}"} origin +refs/remotes/origin/main:refs/remotes/origin/main; } \
+      > "$OUT/v3c-audit/fetch-main.log" 2>&1 && git -C "$TREE" rev-list --first-parent refs/remotes/origin/main > "$main"
+  fi
+  [ -s "$main" ] || { say "V3C-AUDIT: no copy of main's first-parent history (PP_MAIN, MAIN_FILE or origin's main) to pin its coins' session on"; return 1; }
+  V3C_CH=(--challenger "${PP_CHALLENGER:-local}" --main "$main")
+  case ${PP_CHALLENGER:-local} in gate:*)
+    V3C_CH+=(--peer "${PP_PEER:-}" --challenger-key "${PP_CHALLENGER_KEY:-}" ${PP_GATE_KEY:+--gate-key "$PP_GATE_KEY"});;
+  esac
+}
 # The audit's sessions listen on V3C_PORTS ports (default 16, a5's RANK_PORTS), a draw needing more refused before any
 # listens: a subset:K draw opens one for each of at most K members, and records_audit's own default, a port for every
 # member, finds no free span in `records_audit.PORTS` at a class window.
-v3c_audit() {  # the committed window audited from its records alone: its circuit and run root the verifier's, the weights pinned
-  local run leanb m0 rc
+v3c_audit() {  # the committed window audited from its records alone: its circuit and run root the verifier's, the weights
+               # pinned, and no advice opening: the window commit's proofs read the advice under its hiding root
+  local run leanb m0 rc V3C_CH=()
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
     "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for the window in windows.jsonl"; return 1; }
   leanb=$TREE/verity/core/service/flock/.lake/build/bin
   m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/ml/flock/python:$TREE/integrations/vllm
   mkdir -p "$OUT/v3c-audit"
+  v3c_coins || return 1
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
-    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" \
+    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${V3C_CH[@]}" \
     --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/flock-verify" \
     --firewall "$leanb/flock-firewall" --ports "${V3C_PORTS:-16}" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
   rc=$?
+  # what the record's row reads, which the onsite check reads from the public record: the summary, the audit record and
+  # the registration it audited
+  mkdir -p "$OUT/v3c-audit/window"
   cp "$VW/audit/summary.json" "$OUT/v3c-audit/" 2>/dev/null
+  cp "$VW/audit/window/audit.json" "$OUT/v3c-audit/window/" 2>/dev/null
+  cp "$VW/window/registration.json" "$OUT/v3c-audit/" 2>/dev/null
   say "V3C-AUDIT class $V3C (records_audit.py exit $rc): $(grep -m1 '^RECORDS' "$OUT/v3c-audit/audit.log" | cut -c1-3000)"
   [ -n "$(grep -m1 '^RECORDS' "$OUT/v3c-audit/audit.log")" ] \
     || say "V3C-AUDIT: no RECORDS line; $(tail -3 "$OUT/v3c-audit/audit.err" | tr '\n' ' ' | cut -c1-800)"
@@ -493,10 +516,10 @@ front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT
       || { say "PREFLIGHT: CERTIFIER_FRONT passes $f, which this tree's certifier front doesn't take"; return 3; }
   done
 }
-# the certifier's chain files list and count the window's requests (its certs, its tie's prompt lengths, its N2 warden's
-# counts, its report and the piece's log, or the split's two logs); once the record has read them, or
-# `served_verdicts.sh v3c` is done, they move to the serve dir's private/
-CERTIFIER_PRIVATE="chain/certs.json chain/report chain/tie/summary.json chain/n2/summary.json piece.log chain.log period.log"
+# the certifier's chain files list and count the window's requests (its certs, its N2 warden's counts, its report and the
+# piece's log, or the split's two logs); once the record has read them, or `served_verdicts.sh v3c` is done, they move to
+# the serve dir's private/
+CERTIFIER_PRIVATE="chain/certs.json chain/report chain/n2/summary.json piece.log chain.log period.log"
 private_pieces() {
   local f
   for f in $CERTIFIER_PRIVATE; do
@@ -553,10 +576,11 @@ stop() { say "STOP at $1 (exit $2)"; exit "$2"; }
 for f in "$ROW/manifest.json" "$ROW/build_summary.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
 command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
 front_ok || exit 3
+[ -n "$V3C" ] \
+  || { say "PREFLIGHT: sampled proofs' audit of record is V3c's (and the split certifier reads its period.json), and V3C_CLASS is empty"; exit 3; }
 SPLIT=
 if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split certifier: its period check writes its answer
   [ -z "${CERTIFIER_CMD:-}" ] || { say "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"; exit 3; }
-  [ -n "$V3C" ] || { say "PREFLIGHT: the split certifier's period check reads V3c's period.json, and V3C_CLASS is empty"; exit 3; }
   SPLIT=1
 fi
 mkdir -p "$D" "$ROOT/cache" "$FW"
@@ -572,7 +596,7 @@ if [ -n "$H1_GATE" ] || [[ " ${SERVE_ARGS:-} " == *" --protocols "* ]]; then
     || { tail -20 "$OUT/h1-lean.log"; say "PREFLIGHT: H1's Lean verifier (pouw-check-difftest) didn't build"; exit 3; }
 fi
 
-build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.sh's own builds then find them done
+build() {  # what V3c's audit runs (prove_path/run.sh's builds), here while the endpoint serves
   command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
   uv sync --all-packages --extra torch-cpu || return 5
@@ -622,7 +646,7 @@ if [ -n "${PP_CHALLENGER:-}" ]; then
   say "COINS sampled proofs: the live challenger $PP_CHALLENGER (peer ${PP_PEER:-?}); $H1_COINS;" \
       "the bandwidth audit's: vy-auditor-2's bw_party, inside PoUS's piece"
 else
-  say "COINS sampled proofs: Lean's IO.getRandomBytes in the verifier's process on $(hostname -s), the served node, not an auditor's challenger (PP_CHALLENGER unset); $H1_COINS;" \
+  say "COINS sampled proofs: a local development challenger session on $(hostname -s), the served node, not an auditor's challenger (PP_CHALLENGER unset); $H1_COINS;" \
       "the bandwidth audit's: vy-auditor-2's bw_party, inside PoUS's piece"
 fi
 
@@ -767,29 +791,11 @@ wc_ok=0
 circuits && wc_ok=1
 wait "$BUILD"; rc=$?
 [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
-[ "$MAX_TOKENS" = 1 ] && export PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step0.json}
-env -u PYTHONPATH PP_SERVE_RUN="$D" PP_WINDOW="$K" PP_SERVE_ROWS="$D/windows/w$K" PP_RECORDS=1 PP_ONLY="${PP_ONLY:-honest}" \
-  PP_MAIN="${PP_MAIN:-${MAIN_FILE:-}}" PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$D/sampled-proofs.log" 2>&1
-rc=$?
-SP=$D/sampled-proofs-served
-rm -rf "$SP"; [ ! -d "$OUT/sampled-proofs/served" ] || mv "$OUT/sampled-proofs/served" "$SP"
-# run.sh's records copy holds the window's request lists (windows.jsonl), its request count and prefill tokens
-# (serve.json) and the advice's length (registration.json): the published copy is the registration's public form alone
-SR=$OUT/sampled-proofs/served-records
-rm -f "$SR/windows.jsonl" "$SR/serve.json"
-if [ -f "$SR/registration.json" ]; then
-  "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$SR/registration.json" > "$SR/registration.public.json" \
-    && mv "$SR/registration.public.json" "$SR/registration.json" || rm -f "$SR/registration.json" "$SR/registration.public.json"
-fi
-say "SAMPLED-PROOFS (run.sh exit $rc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" sampled-line "$D/sampled-proofs.log" \
-  --partition "${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json}" 2>&1 | cut -c1-3000)$(
-  grep -q '^RECORDS' "$D/sampled-proofs.log" || echo " (run.sh's log in the serve dir, on the node)")"
 
-# 6. here with the split certifier, whose period check reads V3c's period.json: its piece then reads the answer it wrote
-if [ -n "$SPLIT" ]; then
-  v3c_commit && v3c_proved
-  export CERTIFIER_CMD=true
-fi
+# 6. here: V3c's audit is sampled proofs' of record, and the split certifier's period check reads its period.json (its
+# piece then reads the answer that check wrote)
+v3c_commit && v3c_proved
+[ -z "$SPLIT" ] || export CERTIFIER_CMD=true
 
 # 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks
 TPY=$TREE/.venv/bin/python
@@ -797,9 +803,9 @@ TPY=$TREE/.venv/bin/python
   --product "$PRODUCT" 2>&1 | publish_lines
 [ -z "$CERT" ] || { wait "$CERT"; publish_lines < "$OUT/pieces-certifier.txt"; }
 
-# 5. one record of every verdict
-"$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$SP" \
-  --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" 2>&1 | publish_lines
+# 5. one record of every verdict, sampled proofs' V3c's audit on the window commit's registration
+"$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$VW/audit" \
+  --registration "$VW/window/registration.json" --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" 2>&1 | publish_lines
 rec=${PIPESTATUS[0]}
 private_pieces
 comp=0
@@ -807,9 +813,5 @@ comp=0
 [ -z "${CERTIFIER_CMD:-}${CERTIFIER_FRONT:-}" ] \
   || "$TPY" benchmarks/one_stage/onsite_record.py "$OUT" ${ADVICE_CHARGE:+--advice-charge "$ADVICE_CHARGE"} 2>&1 | publish_lines
 measure
-# V3c after the record, each step within its limit: it gates nothing
-if [ -n "$SPLIT" ]; then :
-elif [ -n "$V3C" ]; then v3c_commit && v3c_proved
-else say "V3C: not in this run (V3C_CLASS empty): \`served_verdicts.sh v3c\` runs it on the serve dir"; fi
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
 [ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && grep -q '"composed": "\(pending\|accept\)"' "$OUT/verdicts.txt"

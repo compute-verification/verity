@@ -589,11 +589,13 @@ def test_the_report_carries_every_stage_on_the_planned_profile(virtual, tmp_path
     assert c["bits"]["bound"] is None and c["prove_path"]["dir"] == str(tmp_path / "pp.tgz") and c["prove_path"]["ok"]
     rows = c["negatives"]["rows"]
     assert c["negatives"]["ok"] and all(rows[k]["ok"] is True for k in ("late", "extra", "head"))
-    # the ingress tie refuses a request the certified ingress doesn't hold, and accepts length's honest requests
-    assert all(rows[k]["ran"] and rows[k]["ok"] for k in ("advice-length", "advice-missing", "advice-release"))
-    assert rows["advice-length"]["codes"] == [] and rows["advice-missing"]["codes"] == ["IoTieRequest"]
+    # no check reads the advice in the clear: each advice negative is made and round-trips, its check pending
+    advice = ("advice-length", "advice-missing", "advice-release")
+    assert all(rows[k]["ran"] and rows[k]["valid"] and rows[k]["ok"] is None and "codes" not in rows[k] for k in advice)
+    assert rows["advice-missing"]["code"] == "NetworkPeriod.state"
     assert rows["wrong-token"]["ran"] is False
     md = (out / "report.md").read_text()
+    assert "Negatives pending or not run here: " in md and "advice-missing" in md
     for section in ("## Advice", "## Advice bits per link-window", "## Prove path",
                     "## Negatives (the negatives registry)", "## What's still stubbed"):
         assert section in md, section

@@ -495,7 +495,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     stream = lw.stream(budget=rd.plan["windows"], delta=getattr(a, "delta", None) or cs.DELTA, challenger="n2-zk",
                        coins=cs._no_coins, clock=time.monotonic)
     gpu = getattr(a, "gpu", False)
-    # the ZK server rechecks a witness the host computed, so a device prover takes the host's, as n2_tie_zk's does
+    # the ZK server rechecks a witness the host computed, so a device prover takes the host's
     env = {**zk_server_env(M, sg), **({"FC_HOST_WITNESS": "1"} if gpu else {})}
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=gpu)
     vdir = out / "verifier"

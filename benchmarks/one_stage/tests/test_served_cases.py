@@ -493,16 +493,20 @@ def test_v2_is_refused_when_its_case_is_not_the_audits(tmp_path, capsys, change,
 @pytest.mark.parametrize("change, reason", [
     ("error", "no v1 case: ValueError: the audit's record has no receipt"),
     ("key", "window/case.json is not a case: it holds exactly ['commitment', 'evidence', 'params']"),
+    ("opened", "the records audit opened the advice (records_audit.py audit --opening), a development check"),
 ])
 def test_no_case_is_written_when_a5s_v1_case_is_not_one(tmp_path, capsys, change, reason):
-    """v1's case is the base of every other: when a5 wrote its ``case-error.txt`` instead (which says why) or a case
-    holding another key, every case is refused and no Lean runs."""
+    """v1's case is the base of every other: when a5 wrote its ``case-error.txt`` instead (which says why), a case
+    holding another key, or a case of an audit that opened the advice (its summary's compile check), every case is
+    refused and no Lean runs."""
     program, query = toy()
     v1 = v1_case(program, query)
     audit = audit_dir(tmp_path, v1, v2=False)
     if change == "error":
         (audit / "window" / "case.json").unlink()
         (audit / "window" / "case-error.txt").write_text("ValueError: the audit's record has no receipt\n")
+    elif change == "opened":
+        (audit / "summary.json").write_text(json.dumps({"compile": {"ok": True}}))
     else:
         (audit / "window" / "case.json").write_text(json.dumps(v1 | {"public": {}}))
     rc, cases, refused, out = run(capsys, "--audit", audit, "--private", tmp_path / "private", "--alpha", "1",

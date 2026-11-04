@@ -290,11 +290,19 @@ def build(package: Path, name: str) -> Path:
 
 
 def audit_of(a: argparse.Namespace) -> Path:
+    """The audit the cases are made from; refused where it opened the advice (`served_integrity.opened`)."""
+    import served_integrity as SI
+
     if a.audit is not None:
-        return a.audit
-    found = sorted(d for d in a.serve_dir.glob("v3c-w*/audit") if (d / "window" / "case.json").is_file())
-    _need(len(found) == 1, f"{a.serve_dir} holds {len(found)} audited windows with a case; pass --audit")
-    return found[0]
+        audit = a.audit
+    else:
+        found = sorted(d for d in a.serve_dir.glob("v3c-w*/audit") if (d / "window" / "case.json").is_file())
+        _need(len(found) == 1, f"{a.serve_dir} holds {len(found)} audited windows with a case; pass --audit")
+        audit = found[0]
+    s = audit / "summary.json"
+    _need(not (s.is_file() and SI.opened(_json(s))), f"{audit}: the records audit opened the advice (records_audit.py "
+          "audit --opening), a development check whose case no composite reads")
+    return audit
 
 
 def produce(a: argparse.Namespace) -> int:
