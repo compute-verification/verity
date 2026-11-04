@@ -39,7 +39,10 @@ theorem hm96Leaf_bytes (r y : Msg) :
         (_root_.Flock.Hm96.Default512.commitString (_root_.Flock.Sha512.hash (bytes r)) (bytes y)) := by
   have h := hm96_treeLeaf (Val := List UInt8) id Function.injective_id r (bytes y)
   rw [show (bytes y).data.toList = y by simp [bytes]] at h
-  exact (bytes_of_list (H512 (hm96Input r y)).1).trans h
+  -- Rewritten, not unified: unifying `digBytes` with `.data.toList` makes `whnf` evaluate `Sha512.hash`.
+  rw [digBytes, dig_eq, show bytes (H512 (hm96Input r y)).1.data.toList = (H512 (hm96Input r y)).1 from
+    bytes_of_list (H512 (hm96Input r y)).1]
+  exact h
 
 /-- **The verifier's own check accepts the opening `o` under `roots`**: at the root and leaf index `c.at_` names for
 its position, the verifier's own port whose root that is opens the commit string `b ‖ c` of the opening's row under its
