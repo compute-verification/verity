@@ -17390,7 +17390,7 @@
    }
   },
   "SampledProofs.ChallengerCoins": {
-   "digest": "832efefa919c19db4a834a90134684a03129867cf856477dad856d5ac685b995",
+   "digest": "ec62e38ceba4f9a3173fa6b678dbad276fd3c26e3f2a400b04680306c9135f80",
    "definitions": {
     "SampledProofs.Challenger.LIMITS": "9d35f8c8f93928609b185ca1c26f34ead899d97201388065d3a44804df00a9d0",
     "SampledProofs.Challenger.Limits": "b2fbcba59235916aa2a97bac77c853c4d8b409f57f4041e3cc3f020d3e5ff964",
@@ -17412,7 +17412,9 @@
     "SampledProofs.Challenger.challengerStream._sparseCasesOn_1": "9af0c29da241258797763e2ee249dcf4ce7a4e40e212324d62f5f91c86f188f6",
     "SampledProofs.Challenger.challengerStream._sparseCasesOn_8": "20b15d55bb0a2555909fbfdba7e97028afdcb8c8c950727f6588268e6f68eebb",
     "SampledProofs.Challenger.challengerStream._sparseCasesOn_9": "84f78ac33f4312b45af97aea912c4592bbd87dd66daa8cd55d3fd5288a658e50",
-    "SampledProofs.Challenger.withheldOn": "5f9554873f4c880f872ef8bc05ab32dfb7c986c44b256649b4a1e33547f36622",
+    "SampledProofs.Challenger.withheldOn": "491f3e0294acbc7140a1ac4772a88da5d9ff663799f9f5aad3a2e8b45e761d8c",
+    "SampledProofs.Challenger.withheldOn._sparseCasesOn_5": "70411d01cf164d1a1581e57d1c2718f637b905677f91a156f53d177cf8238834",
+    "SampledProofs.Challenger.withheldOn._sparseCasesOn_6": "382c4e81c1ca65bad84a4bfffd8f991533ffd37becfcb855b1e9ab1857f105bc",
     "SampledProofs.Challenger.withinAt": "79d07cd5fa54918d40b11dcdd53906fb1621994470f9029d4b7baf362ae9c693"
    }
   },
@@ -17692,7 +17694,7 @@
    }
   },
   "SampledProofs.Json": {
-   "digest": "4c29a8c0b7636c454987f472599cfc4d4cc3de26feb1fb08129255de5b9af172",
+   "digest": "84342373a7559271c6c36690cb00a242b23e8625208d292b780320c0576417c0",
    "definitions": {
     "SampledProofs.Check": "c36d7266f9e5d5eabed9940b4e1bee672817580f28bd272281d8bc152f0a219a",
     "SampledProofs.Check.codes": "e97b326cd99a3b7fd4464f75bcda497be198ef4903395062e0b65629f9269147",
@@ -17703,6 +17705,8 @@
     "SampledProofs.entries": "071867ae788b2c1dc2d04ce962b774c4b76c25fd43f72f1aee6dc8c3f2286c63",
     "SampledProofs.field?": "34de9a547d7ceba63ea306bc8723c89ed04eea9d8f28a323d4785f1e3c0f6e6d",
     "SampledProofs.getD": "0fdac810868183ad3f74efdf4816d4563ec0f3f8f581a69be6e44f29cca2c656",
+    "SampledProofs.increasing": "5875d73a53e7a59b8f7dfc13a1863b55284ccc7690de31d487044d59c1cff787",
+    "SampledProofs.increasing._sparseCasesOn_1": "1ba124b2103ef0477047a33971221ad750b7f71d980b590b7c82063dd5762a8f",
     "SampledProofs.int?": "60ae5103368c82f706fca68ce77a04012f27ef646ac28b2d827ef266e764c004",
     "SampledProofs.intsJson": "169353b93ee457432dad8ed402cff1bc094913274baf1cc5351a1a210d81dbda",
     "SampledProofs.isHex": "7af045f62eb5db1e2da1093369f5d8037f127c9148d40ac6921a5968ae08bfb5",
@@ -17715,6 +17719,8 @@
     "SampledProofs.pyRepr": "8029d0704dab2d8880ca760d813ae20b7355e0288c0787dec2f0a4cb2116c274",
     "SampledProofs.sha512Hex": "3f40cb28aac91887f052863ba8a169e8b9fdbdcefd6b1fe9f7eef5c6212633f6",
     "SampledProofs.sortStrings": "eafeb4424c88e596bb6f173558cbe70ed56327a1830957c875e0fbeb7b475f11",
+    "SampledProofs.sortedKeys": "3121fdffe3de0e1f877164b309e0ed068f3ba33561d342a5d02adae251ca5039",
+    "SampledProofs.sortedKeys._sparseCasesOn_1": "e2958e5ec92d53d58cdc677c5243fbe589ccb2b91af3531f4fe3f4f6f9bd790b",
     "SampledProofs.truthy": "7ccb6edc8bf773e73dfbb67779c31f01260ef1fbdcb7d9125bac58eba9418e1d",
     "_private.SampledProofs.Json.0.SampledProofs.hexDigits": "4caf758cb28fc30e4e641ee7f8165b4f2fa6340f153d37dcaa1904c4ed3bfda2"
    }
