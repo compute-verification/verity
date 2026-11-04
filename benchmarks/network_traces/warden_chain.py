@@ -49,6 +49,9 @@ PROXY = ("a certifier rehearsal's run (certifier_serve.py, its records through a
 CERTIFIER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`active.id_request`'s keywords but the frame's)
 FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")
+#: `io`'s violation for an egress cell that isn't an id-form one: a `FAIL` (its connection failed closed), or bytes that
+#: are no output's
+FAILED_CELL, NOT_ID_CELL = "a FAIL cell: its connection failed closed", "an egress cell that isn't an id-form cell"
 #: a network certifier link declares no sync, so its Σ_sync is never read (`service.LinkWindows`'s ``warden``); one
 #: value for the field
 UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
@@ -186,7 +189,7 @@ def io(run: Path) -> dict:
                     continue
                 c, bucket = IT.parse_cell(f), rec.window * T + t
                 if c is None:
-                    violations.append([bucket, "an egress cell that isn't an id-form cell"])
+                    violations.append([bucket, FAILED_CELL if f[0] == W.FAIL else NOT_ID_CELL])
                 elif c.data:
                     r = by.get(c.stream)
                     if r is None or r["release"] is None or bucket < r["release"]:

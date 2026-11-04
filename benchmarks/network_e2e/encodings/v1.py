@@ -13,7 +13,7 @@ them as witness):
   its `max_tokens`; and its release, the bucket a of its connection's last ingress cell (`Request.end`), from which the
   server holds its whole body;
 - each request's output ids, its id events' `token_id`s in order, and each output's release bucket (`Request.release`),
-  which the warden's fixed schedule sets (egress cell i in bucket a + D + ⌊i/r⌋).
+  which the warden's fixed schedule sets (egress cell i in bucket s + Δ_nc + ⌊i/r⌋, s its connection's admission).
 The reference order is the warden's release order, the requests by (a, ordinal) (`release_order`).
 
 **Sent, the order**: the engine doesn't admit in that order. It admits in the API server's body-read order, which
@@ -21,8 +21,7 @@ comes after the release and overtakes it under load (the trace corpus behind the
 pairs on its heavy trace, 3 on small KV). So the engine's arrival order (`arrival_order`, recovered from the advice) is
 sent as the permutation from release order to it (`_deviations`): for each arrival that isn't the earliest released
 request not yet arrived, its position and its rank among those, in code_v1's `order` field as (position, (rank,)).
-`streams` (`Decoded.streams`) is that permutation as the I/O tie's egress side reads it: each I1 request's warden
-ordinal.
+`streams` (`Decoded.streams`) is that permutation: each I1 request's network certifier ordinal.
 
 **Replayed, 0 bits**: `replay.replay` runs vLLM's scheduler over the requests in arrival order under the
 registered engine (`Registered.engine`, its KV pool `num_gpu_blocks` included), and gives every step's rows (request,
@@ -235,16 +234,15 @@ def _topo(after: dict[int, set[int]], key: Callable[[int], int]) -> tuple[list[i
 
 
 def streams(advice: I1.Advice, record: CertifiedRequests) -> tuple[int, ...]:
-    """The order permutation as the I/O tie's egress side reads it (`walk.order` through the arrival order): for each I1
-    request q, the warden's ingress ordinal of the stream that carries it."""
+    """The order permutation (`walk.order` through the arrival order): for each I1 request q, the network certifier's
+    ingress ordinal of the stream that carries it."""
     ordinal = {q.id: k for k, q in enumerate(record.requests)}
     return tuple(ordinal[q.id] for q in advice.requests)
 
 
 class Decoded(NamedTuple):
-    """What a string carries under the record: the advice; `streams`, each I1 request's warden ordinal (the I/O tie's
-    egress side checks each cell's stream against its request q through it); and the arrival order, the ordinals in the
-    order the engine took them."""
+    """What a string carries under the record: the advice; `streams`, each I1 request's network certifier ordinal; and
+    the arrival order, the ordinals in the order the engine took them."""
 
     advice: I1.Advice
     streams: tuple[int, ...]
