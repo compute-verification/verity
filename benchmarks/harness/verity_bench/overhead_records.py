@@ -77,7 +77,7 @@ def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point:
             raise ValueError(f"--cubin: {scheme} has no arm to load it")
         try:
             payload = store.get_manifest(cubin).payload
-        except Exception as ex:  # noqa: BLE001 - the store's NotFound, named in the error
+        except Exception as ex:
             raise ValueError(f"--cubin {cubin} isn't in the store ({type(ex).__name__}: {ex})") from ex
         if getattr(payload, "type", None) != "file":
             raise ValueError(f"--cubin {cubin} isn't one file: it names the art of the one cubin the arm loads")
