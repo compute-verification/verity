@@ -1510,9 +1510,21 @@
    "owner": "@network-accounting",
    "digest": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec"
   },
+  "NetTiming.SchedulesHeld": {
+   "owner": "@network-accounting",
+   "digest": "ef3dc8e45f7f5aa3a85d6bfa4e16bfd85edf4b4a60ae1bf35f0ba3b825120f8f"
+  },
+  "NetTiming.SenderDecodes": {
+   "owner": "@network-accounting",
+   "digest": "57f1ac7a9f0a6d967c78005f17ef9880ba2c3680e9e6d624e2cbad89a2691629"
+  },
   "NetTiming.StatusComplete": {
    "owner": "@network-accounting",
    "digest": "e76c46b0a2f8b619b953aeb4331cd813ba0128cec464f244821bd9c6d4ea7f06"
+  },
+  "NetTiming.WindowsPlaced": {
+   "owner": "@network-accounting",
+   "digest": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
   },
   "Pous.AuditSecure": {
    "owner": "@memory-accounting",
@@ -2257,18 +2269,6 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
-  },
-  "NetTiming.SchedulesHeld": {
-   "owner": "@network-accounting",
-   "digest": "ef3dc8e45f7f5aa3a85d6bfa4e16bfd85edf4b4a60ae1bf35f0ba3b825120f8f"
-  },
-  "NetTiming.SenderDecodes": {
-   "owner": "@network-accounting",
-   "digest": "57f1ac7a9f0a6d967c78005f17ef9880ba2c3680e9e6d624e2cbad89a2691629"
-  },
-  "NetTiming.WindowsPlaced": {
-   "owner": "@network-accounting",
-   "digest": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
   }
  },
  "meaning": [
@@ -10370,9 +10370,6 @@
    "assumptions": ["NetTiming.Assumptions.SampledCodeRuns"],
    "type_hash": "19507de1e55510001f0ccda2dcead5bea8e15bad53a46e3f65ac053a8e695b28"
   },
-  "NetTiming.Witness.PeriodLeakRegistered_nontrivial": {
-   "owner": "@network-accounting"
-  },
   "NetTiming.Witness.PeriodLeakAccepted_nontrivial": {
    "owner": "@network-accounting",
    "signature": [
@@ -10403,6 +10400,45 @@
    ],
    "assumptions": [],
    "type_hash": "6d5989bb9928b43e730b8de9d106321e4bf69b6f3c022bb3cc664608992a6bd5"
+  },
+  "NetTiming.Witness.PeriodLeakRegistered_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      (Claims.PrBad FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
+    "        (NetTiming.RLeakTap FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).commit (NetTiming.Witness.tapD Unit).parse",
+    "          (NetTiming.Witness.tapD Unit).partition 1 1 1 (fun x => NetTiming.Witness.notLay) (fun x => 1) (1 / 8)",
+    "          (fun s x =>",
+    "            NetTiming.AsReg s.prog NetTiming.Witness.notLay 1 Finset.instEmptyCollection.emptyCollection",
+    "              (NetTiming.regVal List.nil))",
+    "          1 fun x => NetTiming.Witness.tapOps)",
+    "        (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil) List.nil",
+    "        Claims.Witness.silentP)",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd (Claims.Sampling.κ (NetTiming.Witness.tapD Unit) (1 / 8) List.nil)",
+    "              (instHMul.hMul (Claims.Sampling.γ (NetTiming.Witness.tapD Unit) List.nil)",
+    "                  (Claims.PrB FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V Claims.Witness.silentP List.nil)).sqrt)",
+    "            (Claims.Finder.Pr FlockDeploy.sha512",
+    "              (Claims.Sampling.Bext FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
+    "                (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil) Unit",
+    "                Claims.Witness.silentP List.nil)))",
+    "          (Claims.Finder.Pr FlockDeploy.sha512",
+    "            (NetTiming.Btap FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
+    "              (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil)",
+    "              (NetTiming.Witness.tapD Unit).commit (NetTiming.Witness.tapD Unit).parse",
+    "              (fun x => NetTiming.Witness.tapOps) Unit Claims.Witness.silentP List.nil)))",
+    "        (Claims.Finder.Pr FlockDeploy.sha512",
+    "          (NetTiming.Breg FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
+    "            (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil)",
+    "            (NetTiming.Witness.tapD Unit).commit (NetTiming.Witness.tapD Unit).parse (fun x => List.nil) Unit",
+    "            Claims.Witness.silentP List.nil))))"
+   ],
+   "assumptions": [],
+   "type_hash": "9d7f0a96bd8af156085a23d514bc81f7f6917a1f3d623232b39952b8ce15ff3c"
   },
   "NetTiming.Witness.PooledLeakAccepted_honest": {
    "owner": "@network-accounting",
@@ -22677,6 +22713,7 @@
     "NetTiming.SecurityProofs.SampledLeakRegistered",
     "NetTiming.Witness.PeriodLeakAccepted_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -23247,6 +23284,7 @@
     "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
     "NetTiming.Witness.PeriodLeakAccepted_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_nontrivial"
    ]
   },
@@ -23787,6 +23825,7 @@
     "NetTiming.SecurityProofs.SampledLeakRegistered",
     "NetTiming.Witness.PeriodLeakAccepted_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep",
@@ -24039,6 +24078,7 @@
     "NetTiming.SecurityProofs.SampledLeakRegistered",
     "NetTiming.Witness.PeriodLeakAccepted_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
@@ -25222,6 +25262,7 @@
     "NetTiming.SecurityProofs.SampledLeakRegistered",
     "NetTiming.Witness.PeriodLeakAccepted_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_nontrivial",
     "Pouw.Salt.keyed_leaf_binds",
     "Pouw.Salt.keyed_leaf_hides",
@@ -25498,6 +25539,7 @@
     "NetTiming.SecurityProofs.SampledLeakRegistered",
     "NetTiming.Witness.PeriodLeakAccepted_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_nontrivial",
     "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest",
@@ -29708,6 +29750,7 @@
     "NetTiming.Witness.Ingress_honest",
     "NetTiming.Witness.PeriodLeakAccepted_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_honest",
     "NetTiming.Witness.PooledLeakAccepted_nontrivial"
    ]
@@ -29921,6 +29964,7 @@
     "NetTiming.Witness.Ingress_honest",
     "NetTiming.Witness.PeriodLeakAccepted_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_honest",
     "NetTiming.Witness.PooledLeakAccepted_nontrivial"
    ]
@@ -29962,6 +30006,7 @@
     "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
     "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_nontrivial"
    ]
   },
@@ -29987,6 +30032,7 @@
     "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
     "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "NetTiming.Witness.PooledLeakAccepted_nontrivial"
    ]
   },
@@ -29998,7 +30044,11 @@
     "NetTiming.regLog": "38c80d57935e3a410a11a2af5106dab9e862563e242ba814155e49214562a7c8",
     "NetTiming.regVal": "aa7243eafeed844f556710542e32c50bc76f877e77932e1700755dc310ee4873"
    },
-   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakRegistered", "NetTiming.SecurityProofs.SampledLeakRegistered"]
+   "guarantees": [
+    "NetTiming.SecurityProofs.PeriodLeakRegistered",
+    "NetTiming.SecurityProofs.SampledLeakRegistered",
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial"
+   ]
   },
   "Definitions.NetworkCertifier.Schedule": {
    "digest": "f111025e1c4fd3b54ab0b3e233cd45ec6207e10ef6e40d1058c19954dc177694",
@@ -30051,7 +30101,8 @@
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.PeriodLeakRegistered",
-    "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.Warden": {
@@ -40527,6 +40578,7 @@
     "FlockVBridge.unit_recOpen",
     "NetTiming.Witness.PeriodLeakAccepted_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -53146,6 +53198,7 @@
     "Flock.SecurityProofs.RecursiveKSDeployed",
     "NetTiming.Witness.PeriodLeakAccepted_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -53378,6 +53431,7 @@
     "Flock.SecurityProofs.RecursiveKSDeployed",
     "NetTiming.Witness.PeriodLeakAccepted_honest",
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -56296,7 +56350,8 @@
     "Claims.Witness.Recursion.ZKPriv_fails",
     "Claims.Witness.Recursion.ZKStop_fails",
     "Claims.Witness.Recursion.ZK_fails",
-    "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakRegistered_nontrivial"
    ]
   },
   "Proofs.Flock.Claims.ZK.Capacity": {
