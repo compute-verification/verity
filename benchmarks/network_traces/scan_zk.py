@@ -66,7 +66,8 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   its rows aren't the scan's own. The honest round's ``scan/state`` and ``scan/prog<j>`` are then V3c's roots and
   domains, which the consistency check (`NetworkCheck.Period`'s rows form: `stateTied`, `wired`) holds to V3c's
   audit at any sample of it, and there is no block round: V3c's audit proves the anchored Programs' slot entries, and
-  ``answers.json`` carries no ``audits`` (the period reads V3c's ``period.json``, `scan_period.rows_case`).
+  ``answers.json`` carries no ``audits`` (the period reads V3c's ``period.json``, `scan_period.rows_case`, which
+  refuses an audit of another registration than the one ``summary.json``'s ``v3c`` names, whose trees the scan read).
 * **The honest round, one registration**: one Program of three templates (`TEMPLATES`) in the generator form
   (`scan_root`, the form `NetworkCheck.Period`'s `scanOf` reads): the first unit (`IngressScanFirst`, bucket 0), G·T − 1
   ingress units (buckets 1 … G·T − 1) and G·T egress units, each template one batch with its row, state and egress
@@ -798,14 +799,14 @@ def v3c_entries(window: Path, rec: dict, win: dict, cls: IS.Class, entries: list
 
 
 def v3c_trees(window: Path, cls: IS.Class, states: list[list[int]],
-              entries: list[list[list[int]]]) -> dict[str, Held]:
-    """``--v3c``: the trees the scan reads of V3c's window ``window`` (`prove_path.py window-commit`'s directory), in
-    place of its own: ``state`` its `SCAN_STATE` (`v3c_state`) and each ``prog<j>`` chunk j's o0 of its
-    `SELECT_ENTRY` template (`v3c_entries`), each refused by name where it isn't the scan's."""
+              entries: list[list[list[int]]]) -> tuple[str, dict[str, Held]]:
+    """``--v3c``: the digest of V3c's window ``window``'s registration (`prove_path.py window-commit`'s directory) and
+    the trees the scan reads of it, in place of its own: ``state`` its `SCAN_STATE` (`v3c_state`) and each ``prog<j>``
+    chunk j's o0 of its `SELECT_ENTRY` template (`v3c_entries`), each refused by name where it isn't the scan's."""
     try:
         rec = json.loads((window / "registration.json").read_text())
         win = json.loads((window / "window.json").read_text())
-        return {"state": v3c_state(window, rec, states), **v3c_entries(window, rec, win, cls, entries)}
+        return RG.digest(rec), {"state": v3c_state(window, rec, states), **v3c_entries(window, rec, win, cls, entries)}
     except (OSError, ValueError, KeyError, TypeError) as e:
         raise _v3c_refused(window, f"{type(e).__name__}: {e}") from None
 
@@ -847,8 +848,10 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
     states, entries = IS.window_state(cls, ch.states[1:], 0, group * T), slot_entries(cls, ch.progs)
     trees = {k: tree(k, rows, heads, got.session) for k, rows in (("state", states), *zip(lane_kinds(cls), entries),
                                                                  ("view", ch.views))}
+    v3c_registration = None
     if v3c is not None:
-        trees.update(v3c_trees(v3c, cls, states, entries))
+        v3c_registration, held = v3c_trees(v3c, cls, states, entries)
+        trees.update(held)
     swapped = list(states)
     swapped[setup.A + 1], swapped[setup.A + 2] = swapped[setup.A + 2], swapped[setup.A + 1]
     admitted: dict[int, int] = {}
@@ -863,7 +866,8 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
                            unread=_unread(cls, ch, heads, got.session),
                            tampered=None if void else _tamper(got, ch.egress, T, cls.B, cls.egress.R),
                            ordinals=sorted(admitted), admitted=dict(sorted(admitted.items())), void=void,
-                           failed=got.failed, failed_why=got.failed_why, v3c=v3c, run_s=round(time.time() - t0, 1))
+                           failed=got.failed, failed_why=got.failed_why, v3c=v3c, v3c_registration=v3c_registration,
+                           run_s=round(time.time() - t0, 1))
 
 
 def _bits(reg: ADV.Committed, i: int) -> list[int]:
@@ -1784,8 +1788,8 @@ def prove(a) -> int:
                                       "end": sum(r[s * cls.B] == W.END for r in rows for s in range(sh.R))}
                                for side, rows in (("ingress", ch.ingress), ("egress", ch.egress))},
                      "roots": {k: r.root.hex() for k, r in at.trees.items()},
-                     "v3c": at.v3c and {"window": str(at.v3c), "trees": sorted(k for k, r in at.trees.items()
-                                                                               if isinstance(r, Held))},
+                     "v3c": at.v3c and {"window": str(at.v3c), "registration": at.v3c_registration,
+                                        "trees": sorted(k for k, r in at.trees.items() if isinstance(r, Held))},
                      "host": {name: [{"member": m.name, "refused": m.refused, "outputs": m.outputs} for m in ms]
                               for name, ms in h.rounds.items()}}
     void = (f" but its FAIL buckets {at.void} (void: the honest round alone, refused at {targets(at, 'honest')})"
