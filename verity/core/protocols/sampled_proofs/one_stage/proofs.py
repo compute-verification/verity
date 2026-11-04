@@ -181,6 +181,13 @@ def proved_units(public: Path, session: Path) -> tuple[int, ...]:
     return tuple(sorted(indices[i] for i in drawn))
 
 
+def units_exactly(units: Sequence[Sequence[int]], indices: Sequence[int]) -> bool:
+    """Whether a public file's ``units.indices`` are exactly the units of the ``[lo, hi)`` ranges `units`, ascending, so
+    slot ``i`` of its table is the ``i``-th of them (`PublicUnits.exactly`): the per-member form holds each statement's
+    file to its member's units, and ``[[0, n]]`` is a registration's population in order."""
+    return list(indices) == [u for lo, hi in sorted(map(tuple, units)) for u in range(lo, hi)]
+
+
 def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
            registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
     """Each of `proof`'s sessions verified by C-Flock's Lean verifier against the verifier's own `program` (its
@@ -352,4 +359,4 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
 
 __all__ = ["EXE", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "Finding", "LeanError", "Proof",
            "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "proved_units", "reads_registered",
-           "statements_v2", "v2_executable", "verdicts_v2", "verify"]
+           "statements_v2", "units_exactly", "v2_executable", "verdicts_v2", "verify"]

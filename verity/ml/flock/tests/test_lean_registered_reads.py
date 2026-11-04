@@ -98,8 +98,23 @@ def stage(d: Path) -> SimpleNamespace:
     own = G.reads_file(program, query, {VALUE: 64, "x": 64}, {VALUE: reg.root.hex(), "x": xreg.root.hex()})
     own = {**own, "ports": {**own["ports"], "out": {**out.entry(), "word_bits": 16, "reads": list(OUT_POSITIONS)}}}
     (d / "own.json").write_text(json.dumps(own))
-    return SimpleNamespace(dir=d, text=text, reg=reg, xreg=xreg, own=own, out=out, program=program, x=x,
-                           bound=["--partition", str(d / "partition.json"), "--program", str(d / "program.json")])
+    s = SimpleNamespace(dir=d, text=text, reg=reg, xreg=xreg, own=own, out=out, program=program, x=x,
+                        part=part, template=query["params"]["template"])
+    s.bound = ["--partition", str(d / "partition.json"), "--program", str(d / "program.json"),
+               "--interface", str(_interface(s, "interface"))]
+    return s
+
+
+def _interface(s, name: str, reads=("cs",), verdicts=(), program: str | None = None) -> Path:
+    """The window's registered circuit record (`verity/window-circuit/v1`) as `RegBound.declaredOf` reads it: its program
+    the partition object's (or `program`), declaring registered, for the statement's template, the ports `reads` (the
+    program's registered read of `cs`, as `G.reads` finds it) and the openings' verdicts `verdicts` (an output, as an
+    embedding read's ``o1``)."""
+    reg = {"params": {}, "tables": [], "reads": [{"reader": s.template, "port": p} for p in reads], "roots": [],
+           "openings": [{"reader": s.template, "verdict": v} for v in verdicts]}
+    (s.dir / f"{name}.json").write_text(json.dumps({"format": "verity/window-circuit/v1",
+                                                     "program": program or s.part["program"], "registered": reg}))
+    return s.dir / f"{name}.json"
 
 
 def _stage(s, name: str, registered=True, salts=None, entry=None, extra=None, outs=None, out_salts=None, cs=None,
@@ -289,7 +304,8 @@ def _bound(s, name: str, drop: tuple[str, ...], public: Path, bound: tuple[str, 
 
 
 def test_a_port_the_reads_leave_out_is_bound_to_the_windows_committed_root(staged):
-    """`Flock.RegBound`: a statement that commits a port's rows afresh passes when the verifier's file binds that port at
+    """`Flock.RegBound`, under the window's registered circuit record declaring only `cs` registered (`staged.bound`'s
+    `--interface`): a statement that commits a port's rows afresh passes when the verifier's file binds that port at
     the frame-v3-sha512 root and domain of its rows, and is refused when it binds it at another root, binds a registered
     port too, or leaves another port committed afresh neither registered nor bound."""
     public = _stage(staged, "x-bound", afresh=("x",))
@@ -306,6 +322,31 @@ def test_a_port_the_reads_leave_out_is_bound_to_the_windows_committed_root(stage
                           "registered reads nor bound") in out, out
     code, out = _statement(staged, both, _bound(staged, "own-x-out-bound", ("x", "out"), both, ("x", "out")))
     assert code == 0, out
+
+
+def test_a_port_the_interface_declares_registered_is_never_bound(staged):
+    """`RegBound.check` reads which ports are registered from the window's registered circuit record (`--interface`,
+    `RegBound.declaredOf`), not from the reads file: where the record declares `out` registered for the statement's
+    template (an opening's verdict, as an embedding read's ``o1``), a statement that commits `out` afresh is refused
+    under a reads file that binds it, and under one that names it neither registered nor bound, which the record
+    declaring only `cs` accepts. A file that binds ports is refused without the record, and with another program's."""
+    both = _stage(staged, "x-out-afresh-declared", afresh=("x", "out"))
+    out_bound = _bound(staged, "own-out-bound-declared", ("x", "out"), both, ("x", "out"))
+    out_neither = _bound(staged, "own-out-neither-declared", ("x", "out"), both, ("x",))
+    declared = [*staged.bound[:4], "--interface", str(_interface(staged, "interface-out", verdicts=("out",)))]
+    code, out = _statement(staged, both, out_bound, declared)
+    assert code == 1 and ("registered reads (declared): port out is one the window's interface declares registered: it "
+                          "reads at a registered root, never a window's") in out, out
+    code, out = _statement(staged, both, out_neither, declared)
+    assert code == 1 and ("registered reads (declared): the statement's port out is one the window's interface declares "
+                          "registered, and no port of the verifier's registered reads") in out, out
+    code, out = _statement(staged, both, out_bound)
+    assert code == 0, out
+    code, out = _statement(staged, both, out_bound, staged.bound[:4])
+    assert code == 1 and "the verifier holds no registered interface (--interface)" in out, out
+    other = [*staged.bound[:4], "--interface", str(_interface(staged, "interface-other", program="00" * 64))]
+    code, out = _statement(staged, both, out_bound, other)
+    assert code == 2 and "the record's program is not the partition object's: it is another window's interface" in out, out
 
 
 def test_a_v1_files_reads_start_at_its_first_unit(staged):

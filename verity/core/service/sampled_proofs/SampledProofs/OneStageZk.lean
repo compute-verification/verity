@@ -3,15 +3,19 @@ Sampled proofs' one-stage audit on the proofs themselves (`verity/sampled-proofs
 v1 audit (`OneStage`) with the verdicts computed here, from the statement's files, rather than read from the evidence.
 
 * **params**: v1's, plus `proofs`, in one of two forms (`Form`). The one-statement form is exactly `{"circuit",
-  "registered"}`: the SHA-512 the auditor committed for the circuit file (lowercase hex of 64 bytes) and the verifier's
-  own registered file (`flock-verify --registered`'s object, or null for a program that reads no registered value). The
-  per-member form is `{"members"}` or `{"members", "wires"}`: `members` an object from each member's name (the window's
-  member key, a statement's units of the population) to exactly `{"units", "circuit", "registered"}`, its units as
-  `[lo, hi)` ranges, no unit in two members' ranges, and its statement's circuit digest and registered file, as the
+  "registered"}` or `{"circuit", "interface", "registered"}`: the SHA-512 the auditor committed for the circuit file
+  (lowercase hex of 64 bytes), the verifier's own registered file (`flock-verify --registered`'s object, or null for a
+  program that reads no registered value) and the SHA-512 of the window's registered circuit record (`flock-verify
+  --interface`'s, a blob; null or absent for none, when a registered file that binds ports is refused). The per-member
+  form is `{"members"}` or `{"members", "wires"}`: `members` an object from each member's name (the window's member
+  key, a statement's units of the population) to exactly `{"units", "vus_per_block", "circuit", "registered"}`, or with
+  `interface`: its units as `[lo, hi)` ranges, no unit in two members' ranges, its circuit's units a proof block (META
+  `vus_per_block`, positive), and its statement's circuit digest, registered file and registered circuit record, as the
   one-statement form's; `wires` null or the window's wiring (`Wires.Wiring.ofJson`'s `{"templates", "cuts", "wires"}`,
-  which `Wires.check` must accept, each template one of the partition's with its units). The partition must not be null: the
-  sessions are verified against the verifier's own partition object; and v1's `challenger`, with its `window_root`, must
-  be named (`NO_CHALLENGER`);
+  which `Wires.check` must accept, each template one of the partition's with its units). The members go to v1's
+  registration check, which refuses a member whose fewest and most drawn units over the draws that end give different
+  link points (`Registration.linkRefused`). The partition must not be null: the sessions are verified against the
+  verifier's own partition object; and v1's `challenger`, with its `window_root`, must be named (`NO_CHALLENGER`);
 * **commitment**: v1's (the registration record);
 * **evidence**: v1's without `verdicts`, plus `proofs`: in the one-statement form exactly `{"public", "sessions"}`, the
   public file's SHA-512 and, per session, `{"name", "record", "reps"}`: its name, its `session.json`'s SHA-512 and
@@ -35,13 +39,18 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
   units other than the evidence's `proved_units`, or a circuit, public or record file no blob holds, rejects; a rep
   file no blob holds is that session's reject, as a file `flock-verify` can't read is;
-* **per member** (`runMembers`): before any session runs, the statements are held as public structure
+* **per member** (`runMembers`): a draw that runs out of the challenger's coins fails the window before anything else
+  is checked (`RAN_OUT`, `OneStage.ranOut`), with no retry and no redraw. Before any session runs, the statements are
+  held as public structure
   (`membersHeld`): a statement naming no member of the parameters or one an earlier statement named, statements out of
-  the members' order (by first unit, the registration's: one order, one statement), or a statement of more than one
-  session (one session on live coins, never retried), rejects. Then each statement is verified as the one statement is,
-  on its member's circuit and registered file, after the statements before it, so no coin tree serves two statements.
-  Its proofs in the other form than the parameters', or a session proving a unit outside its member's units, rejects;
-  the evidence's `proved_units` are held to the union of the statements'. A stratum may span members, so a member's
+  the members' order (by first unit, the registration's: one order, one statement), or a statement of other than
+  exactly one session (one session on live coins, never retried; none proves nothing), rejects. Then each statement is
+  verified as the one statement is, on its member's circuit and registered file, after the statements before it, so no
+  coin tree serves two statements, and its public file's units (`units.indices`) must be exactly its member's units,
+  ascending (`PublicUnits.exactly`), so every unit its sessions prove is its member's, and its circuit's units a proof
+  block must be the ones the parameters name, which the link points were checked at. Its proofs in the other form than
+  the parameters', a public file of other units, or a circuit of other units a proof block, rejects; the evidence's
+  `proved_units` are held to the union of the statements'. A stratum may span members, so a member's
   drawn count may be zero and it has no statement. Only a stratum's `k` is not read here: a statement is one table
   (`inputsOf`'s `count`), so no stratum's draw is split over a statement's tables. With `wires`, each session's setup
   opens every session instance's wired rows against the writers' committed roots at the positions the wires give
@@ -55,6 +64,7 @@ Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file
 import CoreProtocol.Blobs
 import SampledProofs.OneStage
 import SampledProofs.ChallengerTrees
+import SampledProofs.PublicUnits
 import SampledProofs.WiredReads
 import Flock
 
@@ -75,20 +85,28 @@ statements under one draw. -/
 def MULTI_REFUSED : String :=
   "the per-member form (proofs.members) is refused until the guarantee for a sample over several members' statements " ++
     "under one draw is in the lock: verify one statement (proofs {circuit, registered})"
+/-- The per-member form's refusal of a window whose draw ran out of the challenger's coins (`OneStage.ranOut`): the
+window fails, visibly; nothing redraws it and no fallback draws every unit. -/
+def RAN_OUT : String :=
+  "the draw ran out of the challenger's coins: the window fails, with no retry and no redraw"
 
 /-- The verifier's own inputs to `flock-verify verify --zk`: the program's descriptor (as JSON and as the bytes
-`--program` reads), the partition object, the circuit file's committed SHA-512 and the registered file. -/
+`--program` reads), the partition object, the circuit file's committed SHA-512, the registered file and the SHA-512 of
+the window's registered circuit record (`--interface`). -/
 structure Own where
   programJ : Json
   program : ByteArray
   partition : Json
   circuit : String
   registered : Option Json
+  interface : Option String := none
 
-/-- A member of the per-member form: its name, its units as `[lo, hi)` ranges, and its statement's own inputs. -/
+/-- A member of the per-member form: its name, its units as `[lo, hi)` ranges, its circuit's units a proof block (META
+`vus_per_block`) and its statement's own inputs. -/
 structure Member where
   name : String
   units : Array (Nat × Nat)
+  g : Nat
   own : Own
 
 /-- The parameters' `proofs` (module docstring, **params**): one statement on the verifier's own inputs, or a statement
@@ -151,27 +169,39 @@ def readsRegistered (program : Json) : Bool :=
   | .obj kvs => kvs.toArray.any fun (k, _) => registeredInputName k
   | _ => true
 
-private def circuitOf (pr : Json) : V (String × Option Json) := do
+private def circuitOf (pr : Json) : V (String × Option Json × Option String) := do
   let .str circuit := getD pr "circuit" | throw "proofs: circuit is not a SHA-512 digest (128 lowercase hex)"
   if !digest? circuit then throw "proofs: circuit is not a SHA-512 digest (128 lowercase hex)"
   let registered ← match getD pr "registered" with
     | .null => pure none
     | r@(.obj _) => pure (some r)
     | _ => throw "proofs: registered is not the verifier's registered file (an object) or null"
-  pure (circuit, registered)
+  let interface ← match getD pr "interface" with
+    | .null => pure none
+    | .str d => if digest? d then pure (some d) else throw "proofs: interface is not a SHA-512 digest (128 lowercase hex) or null"
+    | _ => throw "proofs: interface is not a SHA-512 digest (128 lowercase hex) or null"
+  pure (circuit, registered, interface)
+
+/-- `ks`, with `interface` when `j` names it: the one key of the verifier's own inputs that may be absent. -/
+private def withInterface (j : Json) (ks : Array String) : Array String :=
+  if (field? j "interface").isSome then ks.push "interface" else ks
 
 /-- The per-member form's `members` (module docstring, **params**): each a nonempty name, exactly its keys, its units
-`Draw.ranges?` of naturals, no unit in two members' ranges, and its circuit digest and registered file (`circuitOf`). -/
-private def membersOf (j : Json) : V (Array (String × Array (Nat × Nat) × String × Option Json)) := do
+`Draw.ranges?` of naturals, no unit in two members' ranges, its circuit's units a proof block, and its circuit digest,
+registered file and registered circuit record (`circuitOf`). -/
+private def membersOf (j : Json) :
+    V (Array (String × Array (Nat × Nat) × Nat × String × Option Json × Option String)) := do
   let .obj _ := j | throw "proofs: members is not an object from a member's name to its units, circuit and registered"
   let ms ← (entries j).mapM fun (name, m) => do
     if name.isEmpty then throw "proofs: a member's name is empty"
-    exactly m #["circuit", "registered", "units"] s!"member {name}"
-    let (circuit, registered) ← circuitOf m
+    exactly m (withInterface m #["circuit", "registered", "units", "vus_per_block"]) s!"member {name}"
+    let cr ← circuitOf m
     let some units := (Draw.ranges? (getD m "units")).bind fun rs =>
         rs.mapM fun (lo, hi) => if 0 ≤ lo then some (lo.toNat, hi.toNat) else none
       | throw s!"proofs: member {name}'s units are not a nonempty list of [lo, hi] with 0 <= lo < hi"
-    pure (name, units, circuit, registered)
+    let some g := (nat? (getD m "vus_per_block")).filter (0 < ·)
+      | throw s!"proofs: member {name}'s vus_per_block is not a positive natural number"
+    pure (name, units, g, cr)
   if ms.isEmpty then throw "proofs: members names no member"
   let rs := (ms.foldl (fun acc (_, us, _) => acc ++ us) #[]).qsort (·.1 < ·.1)
   for i in [1:rs.size] do
@@ -188,8 +218,8 @@ def paramsOfJson (j : Json) : V Params := do
         | w => some <$> WiredReads.specOf w
       pure (Sum.inr (← membersOf (getD pr "members"), wires))
     else do
-      exactly pr #["circuit", "registered"] "proofs"
-      (Sum.inl <$> circuitOf pr : V (Sum (String × Option Json) _))
+      exactly pr (withInterface pr #["circuit", "registered"]) "proofs"
+      (Sum.inl <$> circuitOf pr : V (Sum (String × Option Json × Option String) _))
   let rest := Json.mkObj (without j "proofs")
   let base ← OneStage.paramsOfJson rest
   if base.challenger.isNone then throw NO_CHALLENGER
@@ -197,19 +227,22 @@ def paramsOfJson (j : Json) : V Params := do
     | throw "partition is null: the sessions are verified against the verifier's own partition object"
   let programJ := getD rest "program"
   let program := (← Flock.canon programJ).toUTF8
-  let own := fun ((circuit, registered) : String × Option Json) => ({ programJ, program, partition, circuit, registered } : Own)
-  pure { base, form := match mine with
-    | .inl cr => .one (own cr)
-    | .inr (ms, wires) => .members (ms.map fun (name, units, cr) => { name, units, own := own cr }) wires }
+  let own := fun ((circuit, registered, interface) : String × Option Json × Option String) =>
+    ({ programJ, program, partition, circuit, registered, interface } : Own)
+  match mine with
+  | .inl cr => pure { base, form := .one (own cr) }
+  | .inr (ms, wires) =>
+    pure { base := { base with verifier := { base.verifier with members := ms.map fun (_, units, g, _) => (units, g) } },
+           form := .members (ms.map fun (name, units, g, cr) => { name, units, g, own := own cr }) wires }
 
-/-- The `verdicts` command's own inputs: exactly `{"circuit", "partition", "program", "registered"}`, the program and
-partition objects. -/
+/-- The `verdicts` command's own inputs: exactly `{"circuit", "partition", "program", "registered"}`, and `interface`
+when named, the program and partition objects. -/
 def ownOfJson (j : Json) : V Own := do
-  exactly j #["circuit", "partition", "program", "registered"] "the verifier's own inputs"
-  let (circuit, registered) ← circuitOf j
+  exactly j (withInterface j #["circuit", "partition", "program", "registered"]) "the verifier's own inputs"
+  let (circuit, registered, interface) ← circuitOf j
   let (programJ@(.obj _), partition@(.obj _)) := (getD j "program", getD j "partition")
     | throw "the program and the partition are not objects"
-  pure { programJ, program := (← Flock.canon programJ).toUTF8, partition, circuit, registered }
+  pure { programJ, program := (← Flock.canon programJ).toUTF8, partition, circuit, registered, interface }
 
 private def sessionOf (j : Json) : V RunFiles := do
   exactly j #["name", "record", "reps"] "a session of the proofs"
@@ -289,15 +322,10 @@ def programDigest (b : ByteArray) : Option String := do
     | x => x
   return Flock.hexOf (Flock.Sha512.hash (← (Flock.canon bare).toOption).toUTF8)
 
-private def headerLine (b : ByteArray) : ByteArray := Id.run do
-  for i in [0:b.size] do
-    if b[i]! == 10 then return b.extract 0 i
-  return b
-
 /-- `one_stage.proofs.proved_units`: the public file's unit indices (`units.indices`) of the instances the session's
 record drew (`unit_draw.units`), ascending. -/
 def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
-  let some line := String.fromUTF8? (headerLine pubB) | throw "the public file's header is not UTF-8"
+  let some line := String.fromUTF8? (PublicUnits.headerLine pubB) | throw "the public file's header is not UTF-8"
   let h ← Json.parse line
   let .arr is := getD (getD h "units") "indices" | throw "the public file's header names no units.indices"
   let .arr ds := getD (getD (← Json.parse record) "unit_draw") "units" | throw "the record's unit_draw names no units"
@@ -319,31 +347,41 @@ def inputsOf (tags : Flock.Tags) (p : Own) (circuitB pubB : ByteArray) (bs : Cor
   { tags, circuitFile := circuitB, publicFile := pubB, count := 1, tables := tablesOf bs, partition := some p.partition,
     program := some p.program }
 
-/-- The verifier's registered reads, as `verifyCmd` derives them from its registered file: its own ports, the reads it
-knows, the registered parameters, and the ports it binds to the window's committed values; and in the per-member form
-with wires, what each session's wired reads are derived from (`WiredReads.derive`). -/
+/-- The verifier's registered reads, as `verifyCmd` derives them from its registered file and its registered interface:
+its own ports, the reads it knows, the registered parameters, the ports it binds to the window's committed values, and
+the ports the window's interface declares registered (`RegBound.declaredOf`); and in the per-member form with wires,
+what each session's wired reads are derived from (`WiredReads.derive`). -/
 structure Reads where
   registered : Option (Array Flock.Registered.Port)
   known : Array (String × Array (Array Nat × ByteArray))
   params : Array String
   bound : Array Flock.RegBound.Bound := #[]
+  declared : Option (Array (String × String)) := none
   wired : Option (WiredReads.Ctx × WiredReads.Member) := none
 
 def readsOf : Option Json → V Reads
-  | none => pure ⟨none, #[], #[], #[], none⟩
+  | none => pure { registered := none, known := #[], params := #[] }
   | some j => do
     let bound ← Flock.RegBound.ofJson j
     let j := Flock.RegBound.ownOf j
     let own ← Flock.Registered.ofJson j
     let known ← Flock.Registered.knownOf j
     Flock.Registered.checkKnownAll own known
-    pure ⟨some own, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j), ← Flock.Registered.paramsOf j,
-      bound, none⟩
+    pure { registered := some own, known := known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j),
+           params := ← Flock.Registered.paramsOf j, bound }
+
+/-- The ports the window's registered circuit record declares registered (`RegBound.declaredOfBytes`, its `program` the
+partition object's), from the blob `p.interface` names; none when it names none, and then a registered file that binds
+ports is refused (`RegBound.templatePorts`). -/
+def declaredOf (p : Own) (bs : Core.Blobs) : V (Option (Array (String × String))) := do
+  let some d := p.interface | return none
+  let program := match getD p.partition "program" with | .str s => some s | _ => none
+  some <$> Flock.RegBound.declaredOfBytes (← bs.get d "interface") program
 
 /-- The checks `verifyCmd` makes on a session's tables once they are set up, before `Zk.shapeOk`. -/
 def setupChecks (I : Flock.Witness.Inputs) (rd : Reads) (sts : Array Flock.Stmt) : V Unit := do
   if let some own := rd.registered then
-    sts.forM fun (st : Flock.Stmt) => Flock.RegBound.check st.c st.pub I.program own rd.bound
+    sts.forM fun (st : Flock.Stmt) => Flock.RegBound.check st.c st.pub I.program own rd.bound rd.declared
   sts.forM fun (st : Flock.Stmt) => Flock.Registered.checkCover st.c I.program I.partition rd.registered rd.params
   sts.forM fun (st : Flock.Stmt) => Flock.KnownRead.check st.c rd.known
   Flock.RecSetup.checks none none I.tags I.tables sts I.circuitFile I.partition I.program rd.registered none none none
@@ -477,8 +515,13 @@ def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope ksFile
 the sessions `r` holds, each session set up at its own record's draw: every session's verdict, the units the accepted
 ones proved and whether all accepted. A refusal for what `proofs.verify` refuses: registered values read without the
 verifier's registered file, a file no blob holds, or an accepted session naming another program than the partition
-object's. -/
-def runFrom (p : Own) (pub : String) (sessions : Array RunFiles) (bs : Core.Blobs) (r : Run)
+object's; and, given a member's units and units a proof block `member?`, a public file whose `units.indices` are not
+exactly them, ascending (`PublicUnits.exactly`), or a circuit of other units a proof block than the parameters name,
+which the registration's `link-points` read (`Registration.linkRefused`), before any session. With `wired`, the
+member's bound ports are held to the registration's roots (`WiredReads.boundHeld`) and its sessions read its wired
+reads. -/
+def runFrom (p : Own) (pub : String) (sessions : Array RunFiles) (bs : Core.Blobs)
+    (member? : Option (Array (Nat × Nat) × Nat)) (r : Run)
     (wired : Option (WiredReads.Ctx × WiredReads.Member) := none) : V Run := do
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
   (if tags0.plainLeaves then throw s!"{tags0.name}: a statement with plain SHA-512 leaves: --zk's hiding needs hm96 leaves"
@@ -489,17 +532,25 @@ def runFrom (p : Own) (pub : String) (sessions : Array RunFiles) (bs : Core.Blob
     else pure () : V Unit)
   let circuitB ← bs.get p.circuit "circuit"
   let pubB ← bs.get pub "public file"
+  if let some (us, _) := member? then
+    if !PublicUnits.exactly us (← PublicUnits.unitIndices pubB) then
+      throw ("units: the public file's units.indices are not exactly the member's units, ascending: slot i of its " ++
+        "table is the member's i-th unit")
   let I := inputsOf tags0 p circuitB pubB bs
-  let rd ← readsOf p.registered
+  let rd := { (← readsOf p.registered) with declared := ← declaredOf p bs }
   let rd ← match wired with
     | none => pure rd
     | some (ctx, m) => do
       WiredReads.boundHeld ctx m rd.bound
       pure { rd with wired := some (ctx, m) }
   let tags := Flock.Witness.zkTags I
-  let scope := Flock.ProvedScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags true pubB I.count
-    false rd.registered.isSome
-  let ksFiles := Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags pubB
+  let parsed := Flock.ProvedScope.circuitOf tags I.circuitFile I.tables
+  if let (some (_, g), .ok c) := (member?, parsed) then
+    if c.g != g then
+      throw (s!"vus_per_block: the member's circuit has {c.g} units a proof block, not the {g} the parameters name, " ++
+        "whose link points the registration checked")
+  let scope := Flock.ProvedScope.checkOf parsed tags true pubB I.count false rd.registered.isSome
+  let ksFiles := Flock.PortRoots.checkOf parsed tags pubB
   sessions.foldlM (step I rd bs scope ksFiles (programDigest p.program) (getD p.partition "program")) r
 
 /-- `r` once every session accepted, held to the evidence's proved units `want`: a refusal when the units they proved
@@ -514,10 +565,7 @@ def provedHeld (want : Option (Array Nat)) (r : Run) : V Run :=
 /-- One statement's run (`runFrom`, after no session), its proved units held to `provedUnits?` (`provedHeld`). -/
 def run (p : Own) (pub : String) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) :
     V Run := do
-  provedHeld provedUnits? (← runFrom p pub sessions bs ⟨#[], #[], #[], true⟩)
-
-/-- Whether unit `u` is in one of the ranges `rs`. -/
-def within (rs : Array (Nat × Nat)) (u : Nat) : Bool := rs.any fun (lo, hi) => lo ≤ u && u < hi
+  provedHeld provedUnits? (← runFrom p pub sessions bs none ⟨#[], #[], #[], true⟩)
 
 /-- A member's first unit, its lowest. Members' units are disjoint, so it orders them, and in the registration's order:
 member `k`'s units start at its base, which grows with `k`. -/
@@ -525,8 +573,9 @@ def Member.first (m : Member) : Nat := m.units.foldl (fun a (lo, _) => min a lo)
 
 /-- The per-member form's statements as public structure (module docstring, **per member**), before any session runs:
 each names a member of the parameters that no earlier statement named, in the canonical order (each member's first unit,
-`Member.first`, after the previous one's: one order, so one statement), with at most one session (one pass on live
-coins, never retried). Their members, statement by statement. -/
+`Member.first`, after the previous one's: one order, so one statement), with exactly one session (one pass on live
+coins, never retried; a statement of none would prove nothing, and an undrawn member has no statement). Their members,
+statement by statement. -/
 def membersHeld (ms : Array Member) (sts : Array StatementFiles) : V (Array Member) := do
   let mut held : Array Member := #[]
   for st in sts do
@@ -538,28 +587,25 @@ def membersHeld (ms : Array Member) (sts : Array StatementFiles) : V (Array Memb
       if m.first < prev.first then
         throw (s!"member {name}: its statement follows member {prev.name}'s, whose units start after its own: the " ++
           "statements are in the members' order (by first unit, the registration's), one order for one statement")
-    if st.sessions.size > 1 then
-      throw (s!"member {name}: its statement has {st.sessions.size} sessions: a statement is one session on live " ++
-        "coins, never retried")
+    if st.sessions.size != 1 then
+      throw (s!"member {name}: its statement has {st.sessions.size} sessions: a statement is exactly one session on " ++
+        "live coins, never retried, and an undrawn member has no statement")
     held := held.push m
   pure held
 
 /-- The per-member form's run (module docstring, **per member**): the statements' structure held (`membersHeld`), then
-each statement on its member's own inputs (`runFrom`) after the statements before it, so `step`'s coin-tree keys are
-fresh across statements; a refusal when a statement proves a unit outside its member's units, and for what `runFrom`
-refuses; then the union of the statements' proved units held to the evidence's (`provedHeld`). With the wires' context
-`wired`, each statement's sessions read their member's wired reads. -/
+each statement on its member's own inputs and units (`runFrom`) after the statements before it, so `step`'s coin-tree
+keys are fresh across statements and each statement's public file is exactly its member's units, which every unit its
+sessions prove is then (`provedUnits` reads them off that file); a refusal for what `runFrom` refuses; then the union
+of the statements' proved units held to the evidence's (`provedHeld`). With the wires' context `wired`, each
+statement's sessions read their member's wired reads. -/
 def runMembers (ms : Array Member) (sts : Array StatementFiles) (want : Array Nat) (bs : Core.Blobs)
     (wired : Option WiredReads.Ctx := none) : V Run := do
   let held ← membersHeld ms sts
   let mut r : Run := ⟨#[], #[], #[], true⟩
   for (st, m) in sts.zip held do
-    let name := m.name
-    let r' ← (runFrom m.own st.pub st.sessions bs r
-      (wired.map (·, ({ name := m.name, units := m.units } : WiredReads.Member)))).mapError (s!"member {name}: {·}")
-    if let some u := (r'.proved.extract r.proved.size r'.proved.size).find? (!within m.units ·) then
-      throw s!"member {name}: its statement proved unit {u}, outside the member's units"
-    r := r'
+    r ← (runFrom m.own st.pub st.sessions bs (some (m.units, m.g)) r
+      (wired.map (·, ({ name := m.name, units := m.units } : WiredReads.Member)))).mapError (s!"member {m.name}: {·}")
   provedHeld (some want) r
 
 /-- The wires' context in the per-member form with wires (`WiredReads.ctxOf`): the verifier's own program, query and
@@ -612,9 +658,11 @@ def treesHeld (ts : Array Challenger.LoggedTree) (e : Evidence) (bs : Core.Blobs
 /-- The check at the coins `ξ` (module docstring, **check**): each session's coins held to the trees the challenger
 logged (`treesOf`, `treesHeld`), then the sessions' verdicts on the blobs (`runAll`), then v1's `checkAt` at `ξ` on
 them. v1 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own `all` says it again, so an acceptance
-reads the run rather than the verdicts' JSON. In the per-member form what would accept is refused (`MULTI_REFUSED`). -/
+reads the run rather than the verdicts' JSON. In the per-member form a draw that runs out of `ξ` fails the window first
+(`RAN_OUT`), and what would accept is refused (`MULTI_REFUSED`). -/
 def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
+  if p.form.perMember && OneStage.ranOut p.base c ξ then .reject s!"draw: {RAN_OUT}" else
   match treesOf p e >>= (treesHeld · e bs) >>= fun () => runAll p c e bs with
   | .error err => .reject s!"proofs: {err}"
   | .ok r =>
@@ -696,25 +744,26 @@ def main (args : List String) : IO UInt32 := do
 #guard (provedUnits "{\"units\":{\"indices\":[7,3,9]}}\nrest".toUTF8 "{\"unit_draw\":{\"units\":[2,0]}}").toOption
   == some #[7, 9]
 #guard (provedUnits "{\"units\":{\"indices\":[7]}}".toUTF8 "{\"unit_draw\":{\"units\":[1]}}").toOption.isNone
-#guard within #[(0, 4), (8, 9)] 8 && !within #[(0, 4), (8, 9)] 4 && !within #[] 0
 
 private def memberJ (units : List (Nat × Nat)) : Json :=
   Json.mkObj [("circuit", Json.str ("".pushn 'c' 128)), ("registered", Json.null),
-    ("units", Json.arr (units.toArray.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi]))]
+    ("units", Json.arr (units.toArray.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])),
+    ("vus_per_block", Lean.toJson (1 : Nat))]
 
 #guard ((membersOf (Json.mkObj [("a", memberJ [(0, 4)]), ("b", memberJ [(4, 6), (8, 9)])])).toOption.map
-  (·.map fun (n, us, _) => (n, us))) == some #[("a", #[(0, 4)]), ("b", #[(4, 6), (8, 9)])]
+  (·.map fun (n, us, g, _) => (n, us, g))) == some #[("a", #[(0, 4)], 1), ("b", #[(4, 6), (8, 9)], 1)]
 #guard (membersOf (Json.mkObj [("a", memberJ [(0, 4)]), ("b", memberJ [(3, 6)])])).toOption.isNone
 #guard (membersOf (Json.mkObj [("a", memberJ [(0, 4), (2, 3)])])).toOption.isNone
 #guard (membersOf (Json.mkObj [("a", memberJ [])])).toOption.isNone
 #guard (membersOf (Json.mkObj [])).toOption.isNone
+#guard (membersOf (Json.mkObj [("a", (memberJ [(0, 4)]).setObjVal! "vus_per_block" (Lean.toJson (0 : Nat)))])).toOption.isNone
 #guard (statementsOf (Json.mkObj [("statements", Json.arr #[Json.mkObj [("member", "a"), ("public", "p"),
   ("sessions", Json.arr #[])]])])).toOption.map (·.map (·.member)) == some #[some "a"]
 #guard (statementsOf (Json.mkObj [("public", "p"), ("sessions", Json.arr #[])])).toOption.map (·.map (·.member)) ==
   some #[none]
 
 private def memberT (name : String) (units : Array (Nat × Nat)) : Member :=
-  { name, units, own := { programJ := Json.null, program := .empty, partition := Json.null, circuit := "", registered := none } }
+  { name, units, g := 1, own := { programJ := Json.null, program := .empty, partition := Json.null, circuit := "", registered := none } }
 
 private def statementT (member : String) (sessions : Nat := 1) : StatementFiles :=
   { member := some member, pub := "p", sessions := (List.replicate sessions { name := "s", record := "r", reps := #[] }).toArray }
@@ -728,8 +777,10 @@ private def whyT (r : V (Array Member)) : String := match r with
 #guard (memberT "m0" #[(5, 6), (0, 1)]).first == 0
 #guard ((membersHeld membersT #[statementT "m0", statementT "m2", statementT "m10"]).toOption.map (·.map (·.name))) ==
   some #["m0", "m2", "m10"]
-#guard ((membersHeld membersT #[statementT "m2" 0, statementT "m10"]).toOption.map (·.map (·.name))) == some #["m2", "m10"]
+#guard ((membersHeld membersT #[statementT "m2", statementT "m10"]).toOption.map (·.map (·.name))) == some #["m2", "m10"]
 #guard ((membersHeld membersT #[]).toOption.map (·.size)) == some 0
+#guard (whyT (membersHeld membersT #[statementT "m2" 0, statementT "m10"])).startsWith
+  "member m2: its statement has 0 sessions"
 #guard (whyT (membersHeld membersT #[statementT "m2", statementT "m0"])).startsWith
   "member m0: its statement follows member m2's, whose units start after its own"
 #guard (whyT (membersHeld membersT #[statementT "m0", statementT "m10", statementT "m2"])).startsWith

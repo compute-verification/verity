@@ -137,16 +137,17 @@ def _v1(a: dict) -> dict:
             "evidence": {**_without(a["evidence"], "proofs"), "verdicts": {}}}
 
 
-#: The per-member form's one member over `empty_draws`' files: one unit, the circuit file `BLOBS` hold, no registered file.
-MEMBER = {"circuit": _sha(CIRCUIT), "registered": None, "units": [[0, 1]]}
+#: The per-member form's one member over `empty_draws`' files: one unit, the circuit file `BLOBS` hold, no registered file,
+#: one unit a proof block.
+MEMBER = {"circuit": _sha(CIRCUIT), "registered": None, "units": [[0, 1]], "vus_per_block": 1}
 
 
 def _per_member(a: dict, members: dict | None = None, statements: list | None = None, wires: dict | None = None) -> dict:
     """v2's audit `a` in the per-member form: the params' ``members`` (`MEMBER` as ``m0`` unless given), its ``wires``
-    when given, and the evidence's ``statements`` (``m0``'s, on the public file `BLOBS` hold, of no session, unless
-    given). With no session and no proved unit it is undecided as `a` is."""
+    when given, and the evidence's ``statements`` (none unless given: `a` drew nothing, so no member was drawn and none
+    has a statement). With no statement and no proved unit it is undecided as `a` is."""
     members = {"m0": MEMBER} if members is None else members
-    statements = [{"member": "m0", "public": _sha(PUBLIC), "sessions": []}] if statements is None else statements
+    statements = [] if statements is None else statements
     proofs = {"members": members} | ({} if wires is None else {"wires": wires})
     return {**a, "params": {**a["params"], "proofs": proofs},
             "evidence": {**a["evidence"], "proofs": {"statements": statements}}}
@@ -168,18 +169,22 @@ def _wired(a: dict) -> dict:
     return _per_member(a, wires=_wiring(a))
 
 
-def _statement(member: str, public: bytes = PUBLIC) -> dict:
-    return {"member": member, "public": _sha(public), "sessions": []}
+def _statement(member: str) -> dict:
+    return {"member": member, "public": _sha(PUBLIC), "sessions": []}
 
 
 #: One change to v2's audit (`empty_draws`) that sampled proofs refuses or rejects: the audit as v1's (refused by name
 #: at the params), v1's evidence under v2's params (refused by name at the evidence), v2's evidence naming verdicts,
 #: params naming no challenger or no partition, a circuit or public file no blob holds, proved units no session proved,
 #: a session whose coins are no tree the challenger logged, coins on another window or none; and in the per-member form
-#: (`_per_member`), a statement naming no member or a member twice, statements out of the members' order, two members'
-#: units meeting, a member's units or keys malformed, its circuit or its statement's public file in no blob, the
+#: (`_per_member`), a statement naming no member or of no session, two members' units meeting, a member's units, keys or
+#: units a proof block malformed, a member's units outside the population (the registration's `link-points`), the
 #: evidence's proofs in the other form than the params', proved units no session proved, and wires the wire check
-#: refuses, naming a template outside the verifier's partition or of other units than its, or reading a unit's own output.
+#: refuses, naming a template outside the verifier's partition or of other units than its, or reading a unit's own
+#: output. A statement's other refusals (a member twice, statements out of the members' order, a circuit or public file
+#: in no blob, a public file whose units are not exactly its member's) come after its one session's coins are held to a
+#: tree the challenger logged, outside the mirror: sampled proofs' difftest holds them on the challenger's trees, and its
+#: `public_units` piece holds the units rule to `proofs.units_exactly`.
 V2_BREAKS = {
     "v1": _v1,
     "v1-evidence": lambda a: {**a, "evidence": _v1(a)["evidence"]},
@@ -196,15 +201,13 @@ V2_BREAKS = {
     "other-window": lambda a: {**a, "params": {**a["params"], "window_root": "ab" * 64}},
     "no-coins": lambda a: {**a, "evidence": _without(a["evidence"], "coins")},
     "member-unknown": lambda a: _per_member(a, statements=[_statement("m1")]),
-    "member-twice": lambda a: _per_member(a, statements=[_statement("m0"), _statement("m0")]),
-    "member-order": lambda a: _per_member(a, members={"m0": MEMBER, "m1": {**MEMBER, "units": [[1, 2]]}},
-                                          statements=[_statement("m1"), _statement("m0")]),
+    "member-no-session": lambda a: _per_member(a, statements=[_statement("m0")]),
     "members-meet": lambda a: _per_member(a, members={"m0": MEMBER, "m1": {**MEMBER, "units": [[0, 2]]}}),
     "member-units": lambda a: _per_member(a, members={"m0": {**MEMBER, "units": [[1, 1]]}}),
     "member-keys": lambda a: _per_member(a, members={"m0": _without(MEMBER, "units")}),
+    "member-block": lambda a: _per_member(a, members={"m0": {**MEMBER, "vus_per_block": 0}}),
+    "member-link-points": lambda a: _per_member(a, members={"m0": {**MEMBER, "units": [[0, 1000]]}}),
     "no-members": lambda a: _per_member(a, members={}),
-    "member-circuit": lambda a: _per_member(a, members={"m0": {**MEMBER, "circuit": _sha(b"another circuit")}}),
-    "member-public": lambda a: _per_member(a, statements=[_statement("m0", b"another public file")]),
     "member-evidence": lambda a: {**_per_member(a), "evidence": a["evidence"]},
     "member-params": lambda a: {**_per_member(a), "params": a["params"]},
     "member-proved": lambda a: {**_per_member(a), "evidence": {**_per_member(a)["evidence"], "proved_units": [0]}},

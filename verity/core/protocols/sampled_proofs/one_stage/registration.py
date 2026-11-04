@@ -79,7 +79,7 @@ from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import Program
 
-from . import draw as D, partition as P, registered as G
+from . import draw as D, link_points as LP, partition as P, registered as G
 from .verdict import Verdict, _Collect
 
 FORMAT = "verity/registration/v1"
@@ -154,7 +154,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           binding: Mapping[str, str] | None = None,
           outputs: Mapping[str, Mapping[str, str]] | None = None,
           schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-          held: Sequence[str] | None = None) -> Verdict:
+          held: Sequence[str] | None = None, members: Sequence[LP.Member] = ()) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -179,7 +179,10 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     (`registered.domain`).  So a per-window value registered in one window is held to nothing in the next, and a root of
     another window's opens under no domain R7 takes.  Without `window_root`, a value it doesn't hold across windows that
     the log registered under the domain it takes now is a ValueError (`unwindowed`).  R3 reads `ports` by name, so its codes come in the ports' sorted
-    order whatever order the mapping has, as the Lean port reads them."""
+    order whatever order the mapping has, as the Lean port reads them.  `members`: the per-member form's members, each
+    its units (`[lo, hi)` ranges) and its circuit's units a proof block; after R7, `link-points` refuses the record when
+    a member's fewest and most drawn units give different link points (`link_points.refused`), or the members or the
+    sampling design are not well formed over the population."""
     c = _Collect()
     v2 = bool(registered)
     sup = G.sources(supplied if supplied is not None else {})
@@ -268,6 +271,14 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     if v2:
         _check_registered(c, rec["registered"], program, registered, pins, rec, sup, earlier, bound, outs, formats, window,
                           fixed)
+    if members:
+        try:
+            refused = LP.refused(*LP.law_of(program, query, law, work_table), members)
+        except (P.QueryRefused, ValueError) as e:
+            c.fail("link-points", str(e))
+        else:
+            if refused:
+                c.fail("link-points", {"members": refused})
     return c.verdict()
 
 

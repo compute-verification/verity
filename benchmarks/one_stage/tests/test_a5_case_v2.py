@@ -62,6 +62,14 @@ def test_case_v2_names_the_proofs_files_in_place_of_verdicts(tmp_path, RP):
     assert got["evidence"] == RP.DT.canonical(e).encode().hex()
     assert got["blobs"] == [str(p) for p in (tmp_path / "circuit.txt", tmp_path / "pub-4.bin", s / "session.json",
                                              s / "rep-0.bin", table)]
+    iface = tmp_path / "circuit.json"
+    iface.write_bytes(b'{"format": "verity/window-circuit/v1"}')
+    proofs = {"circuit": "cc" * 64, "registered": {"ports": {}}, "interface": sha(iface)}
+    held = a5.case_v2(case, evidence["sessions"], proofs=proofs,
+                      statements=[(None, PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)))],
+                      tables=[table], interfaces=[iface, iface])
+    assert held["params"]["proofs"] == proofs
+    assert held["blobs"] == [*got["blobs"], str(iface)]
 
 
 def test_the_per_member_case_names_each_statements_member_and_sessions_and_each_file_once(tmp_path, RP):
@@ -81,11 +89,11 @@ def test_the_per_member_case_names_each_statements_member_and_sessions_and_each_
     evidence = {"draw": {"units": [1, 2]}, "sessions": names, "verdicts": {"m0": {"accepted": True}}}
     case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {"delta": "1/100"}}
     own = [{"circuit": "cc" * 64, "registered": None}, {"circuit": "cc" * 64, "registered": {"ports": {}}}]
-    proofs = a5.v2_members([(0, 0, 2, own[0]), (1, 2, 2, own[1])])
+    proofs = a5.v2_members([(0, 0, 2, 1, own[0]), (1, 2, 2, 1, own[1])])
     statements = [(f"m{k}", PF.Proof(d / "circuit.txt", d / "pub-2.bin", (s,))) for k, (d, s) in enumerate(((m0, s0), (m1, s1)))]
     got = a5.case_v2(case, names, proofs=proofs, statements=statements, tables=[])
-    assert got["params"] == {"delta": "1/100", "proofs": {"members": {"m0": {**own[0], "units": [[0, 2]]},
-                                                                      "m1": {**own[1], "units": [[2, 4]]}}}}
+    assert got["params"] == {"delta": "1/100", "proofs": {"members": {
+        "m0": {**own[0], "units": [[0, 2]], "vus_per_block": 1}, "m1": {**own[1], "units": [[2, 4]], "vus_per_block": 1}}}}
     e = json.loads(bytes.fromhex(got["evidence"]))
     assert "verdicts" not in e and e["sessions"] == names
     assert [(st["member"], st["public"], [x["name"] for x in st["sessions"]]) for st in e["proofs"]["statements"]] == [
@@ -98,12 +106,12 @@ def test_the_per_member_case_names_each_statements_member_and_sessions_and_each_
 
 def test_v2_fixes_its_form_by_the_windows_members_never_by_the_draw(tmp_path):
     """`v2_proof`'s parameters are the window's, fixed before the draw: a window of one member is the one-statement
-    form; a window of several is the per-member form, naming every member, the undrawn too, with its units, pin and
-    registered file, and a statement a drawn member, even when only one was drawn."""
+    form; a window of several is the per-member form, naming every member, the undrawn too, with its units, pin, units
+    a proof block and registered file, and a statement a drawn member, even when only one was drawn."""
     def member(k: int, base: int, n: int, reads: dict | None = None) -> dict:
         d = tmp_path / f"m{k}"
         d.mkdir()
-        st = {"dir": d}
+        st = {"dir": d, "meta": {"vus_per_block": k + 1}}
         if reads is not None:
             st["registered_file"] = d / "registered.json"
             st["registered_file"].write_text(json.dumps(reads))
@@ -115,13 +123,21 @@ def test_v2_fixes_its_form_by_the_windows_members_never_by_the_draw(tmp_path):
     (sdir / "sessions" / "a" / "session.json").write_text("{}")
     done = [{"mm": ms[1], "sdir": sdir}]
     got = a5.v2_proof(done, True, ms)
-    assert got["proofs"] == {"members": {"m0": {"circuit": "0" * 128, "registered": None, "units": [[0, 2]]},
-                                         "m1": {"circuit": "1" * 128, "registered": {"ports": {}}, "units": [[2, 5]]}}}
+    assert got["proofs"] == {"members": {
+        "m0": {"circuit": "0" * 128, "registered": None, "units": [[0, 2]], "vus_per_block": 1},
+        "m1": {"circuit": "1" * 128, "registered": {"ports": {}}, "units": [[2, 5]], "vus_per_block": 2}}}
     assert [(m, p.circuit, p.public, p.sessions) for m, p in got["statements"]] == [
         ("m1", tmp_path / "m1" / "circuit.txt", tmp_path / "m1" / "pub-3.bin", (sdir / "sessions" / "a",))]
     one = a5.v2_proof(done, True, ms[1:])
     assert one["proofs"] == {"circuit": "1" * 128, "registered": {"ports": {}}}
     assert [m for m, _ in one["statements"]] == [None]
+    iface = tmp_path / "circuit.json"
+    iface.write_bytes(b'{"format": "verity/window-circuit/v1"}')
+    for mm in ms:
+        mm["st"]["interface_file"] = iface
+    got = a5.v2_proof(done, True, ms)
+    assert got["proofs"]["members"]["m1"]["interface"] == sha(iface) and "interface" not in got["proofs"]["members"]["m0"]
+    assert got["interfaces"] == [iface]
 
 
 def test_v2_says_why_an_audit_has_no_case():
@@ -177,3 +193,31 @@ def test_the_case_carries_the_verifiers_partition_which_v2_verifies_the_sessions
     a5.write_case(tmp_path, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
                   session_roots={}, served=[], partition=part)
     assert json.loads((tmp_path / "case.json").read_text())["params"]["partition"] == part
+
+
+def test_a5_records_the_members_whose_link_points_the_registration_refuses():
+    """`a5.link_points` over the staged members, each its units at its circuit's units a proof block: under `subset:20`
+    over 40 units a draw that ends holds 8 to 20 of a member of 28, whose link points differ at one unit a proof block,
+    so it is recorded refused, and not at four; one of 8, or of 4 at two a proof block, is not. Under `subset:2` a draw
+    that ends holds at most 2 of it, so it is not refused (one that runs out of coins fails the window:
+    `a5.draw_ran_out`). A law that doesn't apply refuses every member, recorded with why."""
+    def member(k: int, template: str, base: int, n: int, g: int) -> dict:
+        return {"k": k, "m": SimpleNamespace(template=template, base=base, n=n), "st": {"meta": {"vus_per_block": g}}}
+
+    ms = [member(0, "t", 0, 28, 1), member(1, "u", 28, 8, 1), member(2, "v", 36, 4, 2)]
+    assert a5.link_points({"k": 20, "law": "subset"}, 40, ms) == {"members": 3, "refused": [
+        {"member": "m0", "template": "t", "n": 28, "vus_per_block": 1, "fewest": 8, "most": 20}]}
+    assert a5.link_points({"k": 20, "law": "subset"}, 40, [member(0, "t", 0, 28, 4)]) == {"members": 1, "refused": []}
+    assert a5.link_points({"k": 2, "law": "subset"}, 40, ms) == {"members": 3, "refused": []}
+    got = a5.link_points({"k": 41, "law": "subset"}, 40, ms)
+    assert got == {"members": 3, "error": "a subset draw of 41 exceeds the population of 40"}
+
+
+def test_a5_records_whether_the_draw_ran_out_of_the_challengers_coins():
+    """`a5.draw_ran_out`, which fails the window in v2's per-member form: `subset:9` over 10 units first reads a stream
+    of 226 bytes (`2 k · width(n) + 64`), so it runs out of one coin's 64 bytes and not of 256 zero bytes, which reject
+    no word; a law that doesn't apply is None."""
+    law = {"k": 9, "law": "subset"}
+    assert a5.draw_ran_out(law, 10, bytes(64)) is True
+    assert a5.draw_ran_out(law, 10, bytes(256)) is False
+    assert a5.draw_ran_out({"k": 11, "law": "subset"}, 10, bytes(256)) is None
