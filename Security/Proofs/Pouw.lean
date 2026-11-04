@@ -6,6 +6,7 @@ public import Proofs.Pouw.Barrier.Proofs
 public import Proofs.Pouw.BudgetAbort
 public import Proofs.Pouw.Copy
 public import Proofs.Pouw.Credit
+public import Proofs.Pouw.Credit.Witness
 public import Proofs.Pouw.Deadline
 public import Proofs.Pouw.EndToEndWindow.Statement
 public import Proofs.Pouw.Eps1
