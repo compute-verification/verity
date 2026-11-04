@@ -17,7 +17,7 @@ pv = "peel"
 
 [operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
 floor = { LDSM_X4 = 0.025641 }
-source = "SPEC §3.4: at the zero instance B̃ = ΠUᵀ repeats every 32 rows, so only A's fragment is delivered: >= 1/b with 4ab + 4a + 2b <= 240, least 1/39 at (a, b) = (1, 39)"
+source = "at the zero instance B̃ = ΠUᵀ repeats every 32 rows, so only A's fragment is delivered: >= 1/b with 4ab + 4a + 2b <= 240, least 1/39 at (a, b) = (1, 39)"
 
 [fold]
 name = "duo"
@@ -26,7 +26,7 @@ IMAD = 1
 
 [skip.served]
 eps = 0.123
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 18.342 SMSP-cycles a 4096-MAC MMA on ADA-89; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 32K decode: the linears' one-sided strip 0.480%; QKᵀ's one-sided strip 11.7%; P·V's peel 0.115%: its tail 0.0801%, the sums DG, S and X(0) 0.0290%, the served epilogue 0.00548%. With P·V's served output checked it is 12.3% (8B) / 9.08% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold and served epilogue at one an issue cycle; a one-sided strip's 2L executed products at ♭'s price a MAC, on sm_120's instruction counts for the same kernel source, on this device's Π; the clean lm_head skips nothing, its words are ♭'s"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭, ♭ 18.342 SMSP-cycles a 4096-MAC MMA on ADA-89; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 32K decode: the linears' one-sided strip 0.480%; QKᵀ's one-sided strip 11.7%; P·V's peel 0.115%: its tail 0.0801%, the sums DG, S and X(0) 0.0290%, the served epilogue 0.00548%. With P·V's served output checked it is 12.3% (8B) / 9.08% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold and served epilogue at one an issue cycle; a one-sided strip's 2L executed products at ♭'s price a MAC, on sm_120's instruction counts for the same kernel source, on this device's Π; the clean lm_head skips nothing, its words are ♭'s"
 
 [mand.fold]
 eps = 0.0
@@ -34,13 +34,13 @@ source = "named assumption: duo at 3 lane instructions a word is the cheapest im
 
 [clock]
 eps = 0.371032
-source = "EPS1 ADA (50 s a kernel): f_max = 2,520 MHz (light and zero-operand IMMA, no throttle reason), honest at L = 32 1585 MHz at thermal steady state, 1 − 1585/2520"
+source = "50 s a kernel (@l40s-clock): f_max = 2,520 MHz (light and zero-operand IMMA, no throttle reason), honest at L = 32 1585 MHz at thermal steady state, 1 − 1585/2520"
 
 [luck]
 delta = 4.547473508864641e-13
 p = 0.75
 checks = 48000
-source = "SPEC §5: Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
+source = "Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
 
 [baseline]          # honest's own lane program: its words belong to the baseline, not to ε
 name = "dp4a"

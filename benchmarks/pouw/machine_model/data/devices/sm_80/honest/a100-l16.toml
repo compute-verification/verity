@@ -29,7 +29,7 @@ source = "egemm80 e16's hold, 8192 x 8192 x 4096; the interleaved bench's median
 
 [operands]      # the least operand delivery any program pays a MMA when the design names none
 floor = { LDSM_X4 = 0.097222 }
-source = "SPEC §3.4's register count for m16n8k16 (CALC): A in 2 registers a lane, B in 1, accumulators 4, no instruction writes more than 4; a register tile with 4ab + 2a + b <= 240 delivers >= (2a + b)/(4ab), least 7/72 at (a, b) = (6, 9) (the same count gives SPEC's 0.20 and 1/39 for m16n8k32)"
+source = "the register count for m16n8k16: A in 2 registers a lane, B in 1, accumulators 4, no instruction writes more than 4; a register tile with 4ab + 2a + b <= 240 delivers >= (2a + b)/(4ab), least 7/72 at (a, b) = (6, 9) (the same count gives 0.20 and 1/39 for m16n8k32)"
 
 [fold]          # the fold inside per_mma, lane instructions a committed word (12 warp instructions a MMA at L = 16)
 name = "duo"    # u = y ^ d ^ k (LOP3); y = u*a + z (IMAD); z = rotl(u, r) + y (LEA.HI)

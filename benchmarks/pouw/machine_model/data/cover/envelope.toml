@@ -184,6 +184,6 @@ rho = { tensor = 4096, issue = 4, alu = 64, imad = 64, shfl = 32, f64 = 64, sfu 
 dram = 1.2e12
 proposed_rho = { collective = 0.5, tex = 4 }
 rho_source = """H200.lean (CPG 12.9 Table 7 CC 9.0; tensor DS 1,979 TOPS; b1 CALIB; HBM3e 4.8 TB/s); collective: MATCH.ANY \
-and REDUX's unit, 0.4999 and 0.4990 alone, 0.2498 each beside the other (vy-dc-h200-2 at 1980 MHz); \
+and REDUX's unit, 0.4999 and 0.4990 alone, 0.2498 each beside the other (an H200 at 1980 MHz); \
 tex: θ tex"""
 weight = { s8 = 1, u8 = 1, b1 = 0.125, e4m3 = 1, e5m2 = 1, e2m1 = 1, f16 = 2, bf16 = 2, tf32 = 4, nvf4 = 1, mxf4 = 1, f64 = 32, e3m2 = 1, e2m3 = 1, mxf8 = 1, mxf6 = 1 }
