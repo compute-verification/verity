@@ -1,7 +1,7 @@
 import Batteries.Tactic.OpenPrivate
 import Proofs.Flock.Claims.Complete.Json.Canon
 import Proofs.Flock.Claims.Complete.Json.Record
-import Proofs.Flock.Claims.Sampling.Select.LetWalk
+import Proofs.Flock.Claims.Sampling.Select.ParamsLaw
 import Proofs.Flock.Claims.Sampling.Select.Steps
 import Proofs.Pouw.Period.Sort
 import SampledProofs.OneStage
@@ -13,13 +13,12 @@ import SampledProofs.OneStage
 canonical text parse back to one value (`FlockComplete.JsonRT.ReadBack.pr_parse`), and the profile reads alike values
 alike (`SameLaw.profileDraw_same`), so the record's law, the rule's expanded law and the verifier's have one profile.
 The verifier's law is one `OneStage.rule` accepts as it stands: its keys are exactly the ones the rule names, each found
-by lookup, so its rebuilt tree (`SameLaw.raw_text`) prints its text and reads its profile.
+by lookup, so its rebuilt tree (`SameLaw.raw_text`) prints its text and reads its profile. That premise holds of every
+verifier `OneStage.paramsOfJson` accepts (`paramsOfJson_rule`, in `Select.ParamsLaw`).
 
 * `SameLaw.profileDraw_same`: alike values have one profile.
 * `SameLaw.raw_text`: a law `OneStage.rule` accepts as it stands prints a text of an alike well-formed object with its
   profile.
-* `paramsOfJson_rule`: the verifier's law, as `OneStage.paramsOfJson` keeps it, is one `OneStage.rule` accepts as it
-  stands, which discharges `SameLawProfile`'s premise.
 * `sameLawProfile`; `sameLawProfile_honest` and `sameLawProfile_nontrivial`, its two witnesses.
 * `nat?_of_jeq_toJson`: a value with the canonical bytes of `toJson n` reads as `n`.
 -/
@@ -326,8 +325,6 @@ theorem shape_k {law : Json} {kind w : String} {u : Unit} (hl : getD law "law" =
     obtain ⟨hg, hne⟩ := good_of_nat? hv
     exact ⟨_, get?_of_getD rfl hne, hg⟩
 
-theorem throw_bind_eq {α β : Type} (e : String) (f : α → Flock.V β) : ((throw e : Flock.V α) >>= f) = throw e := rfl
-
 theorem rule_shape {law : Json} (h : OneStage.rule law = .ok law) : Shape law := by
   unfold OneStage.rule at h
   try dsimp only at h
@@ -336,19 +333,6 @@ theorem rule_shape {law : Json} (h : OneStage.rule law = .ok law) : Shape law :=
   all_goals first
     | exact shape_bern (by assumption) (by assumption) (by assumption)
     | exact shape_k (by assumption) (by assumption) (by assumption)
-
-theorem rule_eq {x y : Json} (h : OneStage.rule x = .ok y) : y = x := by
-  unfold OneStage.rule at h
-  try dsimp only at h
-  try simp only [throw_bind_eq] at h
-  repeat' walk_step
-  all_goals
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    exact h.symm
-
-theorem rule_self {x y : Json} (h : OneStage.rule x = .ok y) : OneStage.rule y = .ok y := by
-  obtain rfl := rule_eq h
-  exact h
 
 /-! ## The printed text of a law -/
 
@@ -582,30 +566,6 @@ theorem lit_head (s mid tail : String) (c : Char) (hs : s.toList = [c]) :
 end SameLaw
 
 open SameLaw
-
-/-- **The verifier's law, as `OneStage.paramsParsed` keeps it, is one `OneStage.rule` accepts as it stands.** -/
-theorem paramsParsed_rule {j : Json} {p : OneStage.Params} (h : OneStage.paramsParsed j = .ok p) :
-    OneStage.rule p.verifier.law = .ok p.verifier.law := by
-  revert p
-  show FlockSoundness.Refine.Ret (OneStage.paramsParsed j) fun p => OneStage.rule p.verifier.law = .ok p.verifier.law
-  rw [OneStage.paramsParsed.eq_def]
-  ret_walk_let [OneStage.rule]
-  all_goals
-    subst_vars
-    exact rule_self (by assumption)
-
-/-- **The verifier's law, as `OneStage.paramsOfJson` keeps it, is one `OneStage.rule` accepts as it stands**:
-`SameLawProfile`'s premise holds of every verifier `OneStage.paramsOfJson` accepts. -/
-theorem paramsOfJson_rule {j : Json} {p : OneStage.Params} (h : OneStage.paramsOfJson j = .ok p) :
-    OneStage.rule p.verifier.law = .ok p.verifier.law := by
-  unfold OneStage.paramsOfJson at h
-  try dsimp only at h
-  try simp only [throw_bind_eq] at h
-  repeat' walk_step
-  all_goals
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    exact paramsParsed_rule (by assumption)
 
 /-- **The record's law has one profile** (`SameLawProfile`): the record's law has the canonical bytes of both expanded
 laws, so the three parse back to one value, whose profile is each one's. -/
