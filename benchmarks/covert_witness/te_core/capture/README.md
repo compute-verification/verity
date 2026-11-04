@@ -62,7 +62,9 @@ the capture's values, not by graph nodes as `io_bound`'s are. The summation orde
 summed as its kernel sums it. `"capture"` names the version of these rows (`products.CAPTURE`), and a recorded
 program's trace (`script.record`, from te_core 4.12.14 on) adds `"capture_code"`, the te_core VERSION whose code wrote
 it, so a row priced from it can be told apart from one priced from a trace that 4.12.9 to 4.12.13's code wrote;
-`te_core.formalism.products_of_trace` reads them. `"elementwise_products"` lists the matrix products the step writes
+`te_core.formalism.products_of_trace` reads them. The capture is frozen at 4.12.9 under the trace job's torch,
+`products.TORCH` (2.15.0): a step's graph moves with torch's version, so `python -m te_core.capture.script` refuses
+to trace under another. `"elementwise_products"` lists the matrix products the step writes
 with elementwise ops, which no row is: a multiplication of two θ′-dependent values that broadcasts both (an outer
 product, or `(x.unsqueeze(-1) * W).sum(-2)` for `x @ W`), and gathered rows multiplied by such a value and summed by
 index (gather, mul and `index_add`). A value's entries are its sources' (`products._sources`: a GEMM's output, a graph
