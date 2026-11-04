@@ -189,12 +189,15 @@ chain, then `network-period`) runs on each zone's serve dir at the endpoint's on
 the class the front's gate ran (w63k4 by default). With no compute audit of the window (V3c), the period check refuses
 the honest case at the wiring. `record` writes `record.json` and `record.md`: each zone's verdicts (the gate's check,
 the chain's, the period check's) and its K in `PeriodLeakAccepted`'s terms (k_sched, k_fail, and ℓ_a,j, k_skip,j and
-T_j·log2 d_jit over m execution phases), per week, month and year, for each zone, the lab's zones summed, the census's
+T_j·log2 d_jit over m execution phases, ℓ_a,j being the period check's `scans[j].free`), per week, month and year, for each zone, the lab's zones summed, the census's
 datacenter and the world, each marked with what it rests on (`onsite.BASIS`). Beside each bound is δ_net term by
 term: the period check's eps, its δ part, and ε_ks, ε_bind and ε_tap once a phase, which no check computes, so δ_net
 has no number. K is established only for a zone whose
 period check accepted, since `PeriodLeakAccepted` bounds only such a period; every other zone's figures are the bound
-its run's load would have had.
+its run's load would have had. Every K is conditional (`onsite.OPEN_CHECKS`): it charges ℓ_a,j as the tied audit's
+counted free inputs, which holds only once the period check computes `free` off the tied audit's registered descriptor
+and holds each phase's window circuit to the registered class circuit, both in Lean; until then a tied audit is charged
+its advice's cap ℓ_a + 1 bits.
 
 As two recorded runs on the lab host: the front with the lab up and idle (it needs sudo), then the piece from a clone in
 the network slots (its chain needs hidden_zk's builds), given the front's published outputs (`--front`, the front run's
