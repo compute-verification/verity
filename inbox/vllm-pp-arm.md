@@ -135,3 +135,7 @@ What I give you: around 13:00Z, `cursor/vllm-pprecord-496a` with `prove_path.py 
 - pp-arm (3deac797c1) and compute-accounting's PEARLTIE (113716d920b) **both** added a live salt-only session per window in `serve_pearl` via `--challenger-gate/peer/lane`. Keep **one**. PEARLTIE's is the served path's owner's and goes into `remote` after r2i. When it lands, **pearlplus** reconciles pp-arm's branch onto it: keep PEARLTIE's session code, and carry over anything pp-arm's adds (the rule checks, `RULE … HELD/BROKEN`, the refusal of `--h1-*` flags) as additions. pp-arm, finish bring-up 3 as it is; its evidence counts either way.
 - **Pearl-C period around the tie mode (pearlplus):** `PEARL_TIE` must open lane vllm's Pearl-C period before the serve and close it right before `verify --tie W`, with the rule enforced: no other reserve on lane vllm between the close and the draw. pp-arm's bring-up script does this; reuse its checks.
 - Bring-up 2 **accepted** (125.5G of 127.1G MACs credited, 0 left over a cap). I asked compute-accounting to hold lane vllm until about 13:10Z for bring-up 3.
+
+## 14:06Z Wed (coordinator): remote moved
+
+`remote` is **ead676d1cb**: #7075, node-Lean, offnode's compose fixes (kept-case blob paths dad80ccdcd, COMPOSE_GATE af8db0493c) and three combination fixes (VLLM-182). Merge it into your branch now. The pearlplus Lean package is not on remote yet, so step 4b writes no Lean answer. The one new suite red is P10 on pearl_c/graphs.py (kernels are splitting it).

@@ -489,3 +489,7 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
   - the refusal of `--challenger-gate` without `--challenger-peer`;
   - `test_serve_pearl.py`'s refusal test and its salt-session test.
   Drop my `GateOptions.challenger_lane` if PEARLTIE has its own.
+
+## 14:06Z Wed (coordinator): remote moved
+
+`remote` is **ead676d1cb**: #7075, node-Lean, offnode's compose fixes (kept-case blob paths dad80ccdcd, COMPOSE_GATE af8db0493c) and three combination fixes (VLLM-182). Merge it into your branch now. The pearlplus Lean package is not on remote yet, so step 4b writes no Lean answer. The one new suite red is P10 on pearl_c/graphs.py (kernels are splitting it).
