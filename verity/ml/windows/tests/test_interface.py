@@ -594,6 +594,19 @@ def test_a_cut_port_is_rows_each_wired_from_its_own_writer():
         sliced(wires=(*c.wires, I.Wire(GID, "x", G8ID, "o0", at=2, radix=(1,), base=0, step=(0,), cut=(1, 1))))
 
 
+def test_the_wiring_a_v2_audit_reads_is_its_records_templates_cuts_and_wires():
+    """`wiring_of_record` gives v2's ``proofs.wires`` from the stated record alone: each template's units, each parameter's
+    words and outer length (uncut: the cut is stated beside them) and each output's words, the record's cuts and its
+    wires' records, as `wiring` gives them from the circuit."""
+    c = sliced()
+    want = {"templates": {G8ID: {"units": 6, "rows": {"x": [16, 16], "w": [128, 8]}, "outs": {"o0": 8}},
+                          GID: {"units": 3, "rows": {"x": [16, 16], "w": [256, 16]}, "outs": {"o0": 16}}},
+            "cuts": {GID: {"x": 2}}, "wires": [json.loads(json.dumps(c.wires[0].doc()))]}
+    assert I.wiring_of_record(I.descriptor_record(c, 2)) == want
+    assert I.wiring({G8ID: (I.layout(G8), 6), GID: (I.layout(GEMM), 3)}, c.wires, c.cuts) == want
+    assert I.wiring({GID: (I.layout(GEMM), 3)}, ())["cuts"] == {} and json.loads(json.dumps(want)) == want
+
+
 def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():
     """A template passes with the k_log its rows alone need, and is refused, its message naming it, its cuts, its rows and
     the fix, when its rows are more than Flock's composer takes, none is past 111 bytes, or they alone need a Flock block

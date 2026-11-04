@@ -42,7 +42,8 @@ writers' words (RoPE's query from the Q coordinates, attention's K and V from ea
 form, the wire cut (``cuts``, `SampledProofs.Wires`): a port read from several writers is cut ``k`` ways, parameter ``p``
 is ``k`` rows ``p#j``, row ``j`` its outer elements ``[j·n/k, (j+1)·n/k)``, and a wire covers some of a port's rows
 (`Wire.cut`). A unit that reads one row gathered from several writers' outputs reads it through a gather unit
-(``AllGather_v1``) whose ``parts`` are cut.
+(``AllGather_v1``) whose ``parts`` are cut. A per-member v2 audit reads the circuit's wires as `wiring` gives them (its
+record's, `wiring_of_record`), and each drawn unit's session opens its wired rows against their writers' roots.
 
 The circuit also declares what fills its other inputs (`Registered`, `Ingress`): rows of a registered parameter read at
 public positions (`Read`), a registered table's root or domain id (`TableRead`), a table's row opened at a hidden key
@@ -732,6 +733,23 @@ def check_wires(templates: Mapping[str, tuple[RowLayout, int]], wires: Sequence[
             raise ValueError(f"wire {w.doc()}: reader units [{w.at}, {w.at + w.reader_units}) of {rn}, writer units [{lo}, {hi}] "
                              f"of {wn}; each among its template's")
     _disjoint([(w.reader, w.port, w.at, w.at + w.reader_units, w.cut[0], w.cut[0] + w.cut[1], w.doc()) for w in wires], "wires")
+
+
+def wiring(templates: Mapping[str, tuple[RowLayout, int]], wires: Sequence[Wire],
+           cuts: Mapping[str, Mapping[str, int]] | None = None) -> dict[str, Any]:
+    """The circuit's wiring as `SampledProofs.Wires.Wiring.ofJson` reads it, a per-member v2 audit's ``proofs.wires``
+    (`SampledProofs.OneStageZk`): each template (``templates``: by descriptor id, its layout and units) its units, each
+    parameter's words and outer length and each output's words, its ``cuts`` and its ``wires``' records."""
+    return json.loads(json.dumps({
+        "templates": {tid: {"units": n, "rows": {p: [w, o] for (p, w), o in zip(lay.rows, lay.outer)}, "outs": dict(lay.outs)}
+                      for tid, (lay, n) in templates.items()},
+        "cuts": {t: dict(kv) for t, kv in (cuts or {}).items()}, "wires": [w.doc() for w in wires]}))
+
+
+def wiring_of_record(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve) -> dict[str, Any]:
+    """A stated circuit record's `wiring`, its templates' layouts their Definitions' (``resolve``, by descriptor id)."""
+    wires, cuts, _registered, _ingress = declarations(doc)
+    return wiring({t: (layout(resolve(t)), int(n)) for t, n in doc["templates"]}, wires, cuts)
 
 
 def _cut_ok(w: _Pattern, k: int, what: str) -> None:
