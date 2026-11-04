@@ -2048,25 +2048,25 @@
    "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
    "args": "--full t0.mlp_norm,t0.w_gate,t0.w_up,t1.mlp_norm,t1.w_gate,t1.w_up,t2.mlp_norm,t2.w_gate,t2.w_up,t3.mlp_norm,t3.w_gate,t3.w_up,t4.mlp_norm,t4.w_gate,t4.w_up,t5.mlp_norm,t5.w_gate,t5.w_up,final --opt muon --muon-lr 2e-3 --lr 1.5e-3 --schedule wsd --wsd-decay 0.3 --warmup 50 --batch 128 --budget-fraction 0.0354",
    "by": "integrator (the finals job)",
-   "queue": "the conditional tail, after the planned reruns and ahead of the dropped seeds (coordinator 09:03Z and 09:10Z)",
+   "queue": "ahead of the planned reruns (coordinator 11:50Z: re-simulated at 12:35Z on each held rerun's own minutes a seed, it ends by 15:00Z only queued ahead)",
    "label": "single seed where a seed can't end by 15:00Z",
    "reruns": [
     {
      "seed": "own",
      "if": "it ends by 15:00Z",
-     "simulated": "late in the 09:58Z simulation: no GPU frees early enough",
+     "simulated": "queued 12:45Z, ends by about 14:58Z in the 12:35Z simulation (its seeds' GPUs free about 12:54Z, 12:56Z and 13:13Z)",
      "launch": "python benchmarks/covert_witness/launch.py s-t20 --island placement --direction scorer --final --mechanism mlp-in-all --node NODE --long '06:15Z coordinator (one aimed at 2x)' --note 'FINAL r20261104-062008-fe3a seed own' --no-wait -- --full t0.mlp_norm,t0.w_gate,t0.w_up,t1.mlp_norm,t1.w_gate,t1.w_up,t2.mlp_norm,t2.w_gate,t2.w_up,t3.mlp_norm,t3.w_gate,t3.w_up,t4.mlp_norm,t4.w_gate,t4.w_up,t5.mlp_norm,t5.w_gate,t5.w_up,final --opt muon --muon-lr 2e-3 --lr 1.5e-3 --schedule wsd --wsd-decay 0.3 --warmup 50 --batch 128 --budget-fraction 0.0354"
     },
     {
      "seed": "101",
      "if": "it ends by 15:00Z",
-     "simulated": "late in the 09:58Z simulation: no GPU frees early enough",
+     "simulated": "queued 12:45Z, ends by about 14:58Z in the 12:35Z simulation (its seeds' GPUs free about 12:54Z, 12:56Z and 13:13Z)",
      "launch": "python benchmarks/covert_witness/launch.py s-t20 --island placement --direction scorer --final --mechanism mlp-in-all --node NODE --long '06:15Z coordinator (one aimed at 2x)' --note 'FINAL r20261104-062008-fe3a seed 101' --no-wait -- --full t0.mlp_norm,t0.w_gate,t0.w_up,t1.mlp_norm,t1.w_gate,t1.w_up,t2.mlp_norm,t2.w_gate,t2.w_up,t3.mlp_norm,t3.w_gate,t3.w_up,t4.mlp_norm,t4.w_gate,t4.w_up,t5.mlp_norm,t5.w_gate,t5.w_up,final --opt muon --muon-lr 2e-3 --lr 1.5e-3 --schedule wsd --wsd-decay 0.3 --warmup 50 --batch 128 --budget-fraction 0.0354 --data-seed 101 --seed 101"
     },
     {
      "seed": "102",
      "if": "it ends by 15:00Z",
-     "simulated": "late in the 09:58Z simulation: no GPU frees early enough",
+     "simulated": "queued 12:45Z, ends by about 14:58Z in the 12:35Z simulation (its seeds' GPUs free about 12:54Z, 12:56Z and 13:13Z)",
      "launch": "python benchmarks/covert_witness/launch.py s-t20 --island placement --direction scorer --final --mechanism mlp-in-all --node NODE --long '06:15Z coordinator (one aimed at 2x)' --note 'FINAL r20261104-062008-fe3a seed 102' --no-wait -- --full t0.mlp_norm,t0.w_gate,t0.w_up,t1.mlp_norm,t1.w_gate,t1.w_up,t2.mlp_norm,t2.w_gate,t2.w_up,t3.mlp_norm,t3.w_gate,t3.w_up,t4.mlp_norm,t4.w_gate,t4.w_up,t5.mlp_norm,t5.w_gate,t5.w_up,final --opt muon --muon-lr 2e-3 --lr 1.5e-3 --schedule wsd --wsd-decay 0.3 --warmup 50 --batch 128 --budget-fraction 0.0354 --data-seed 102 --seed 102"
     }
    ]
@@ -2095,25 +2095,28 @@
    "args": "--targets all --opt muon --msg-bits 4 --rotate --mom-bits 8 --b1 0.95 --lr 2.5e-3 --warmup 100 --phase-cooldown 0.4 --batch 64 --budget-fraction 0.5 --store q8 --store-scale sticky --group 64 --leaf 4",
    "by": "integrator (the finals job)",
    "queue": "the conditional tail, after the planned reruns and ahead of the dropped seeds (coordinator 09:03Z and 09:10Z)",
-   "label": "single seed where a seed can't end by 15:00Z",
+   "label": "not rerun: no seed can end by 15:00Z (139 min a seed; the first GPU it could take frees about 12:54Z, so about 15:13Z at best)",
    "reruns": [
     {
      "seed": "own",
      "if": "it ends by 15:00Z",
-     "simulated": "late in the 09:58Z simulation: no GPU frees early enough",
-     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island lowrank-restart --program delta_grad.py --direction scorer --final --mechanism dgrad-q4muon-full --node NODE --long '06:15Z coordinator' --note 'FINAL r20261104-061509-8e1d seed own' --no-wait -- --targets all --opt muon --msg-bits 4 --rotate --mom-bits 8 --b1 0.95 --lr 2.5e-3 --warmup 100 --phase-cooldown 0.4 --batch 64 --budget-fraction 0.5 --store q8 --store-scale sticky --group 64 --leaf 4"
+     "simulated": "late in the 12:26Z and 12:35Z simulations, in every order",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island lowrank-restart --program delta_grad.py --direction scorer --final --mechanism dgrad-q4muon-full --node NODE --long '06:15Z coordinator' --note 'FINAL r20261104-061509-8e1d seed own' --no-wait -- --targets all --opt muon --msg-bits 4 --rotate --mom-bits 8 --b1 0.95 --lr 2.5e-3 --warmup 100 --phase-cooldown 0.4 --batch 64 --budget-fraction 0.5 --store q8 --store-scale sticky --group 64 --leaf 4",
+     "dropped": "no seed can end by 15:00Z"
     },
     {
      "seed": "101",
      "if": "it ends by 15:00Z, and starts by 12:45Z",
-     "simulated": "late in the 09:58Z simulation: no GPU frees early enough",
-     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island lowrank-restart --program delta_grad.py --direction scorer --final --mechanism dgrad-q4muon-full --node NODE --long '06:15Z coordinator' --note 'FINAL r20261104-061509-8e1d seed 101' --no-wait -- --targets all --opt muon --msg-bits 4 --rotate --mom-bits 8 --b1 0.95 --lr 2.5e-3 --warmup 100 --phase-cooldown 0.4 --batch 64 --budget-fraction 0.5 --store q8 --store-scale sticky --group 64 --leaf 4 --data-seed 101 --seed 101"
+     "simulated": "late in the 12:26Z and 12:35Z simulations, in every order",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island lowrank-restart --program delta_grad.py --direction scorer --final --mechanism dgrad-q4muon-full --node NODE --long '06:15Z coordinator' --note 'FINAL r20261104-061509-8e1d seed 101' --no-wait -- --targets all --opt muon --msg-bits 4 --rotate --mom-bits 8 --b1 0.95 --lr 2.5e-3 --warmup 100 --phase-cooldown 0.4 --batch 64 --budget-fraction 0.5 --store q8 --store-scale sticky --group 64 --leaf 4 --data-seed 101 --seed 101",
+     "dropped": "no seed can end by 15:00Z"
     },
     {
      "seed": "102",
      "if": "it ends by 15:00Z, and starts by 12:45Z",
-     "simulated": "late in the 09:58Z simulation: no GPU frees early enough",
-     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island lowrank-restart --program delta_grad.py --direction scorer --final --mechanism dgrad-q4muon-full --node NODE --long '06:15Z coordinator' --note 'FINAL r20261104-061509-8e1d seed 102' --no-wait -- --targets all --opt muon --msg-bits 4 --rotate --mom-bits 8 --b1 0.95 --lr 2.5e-3 --warmup 100 --phase-cooldown 0.4 --batch 64 --budget-fraction 0.5 --store q8 --store-scale sticky --group 64 --leaf 4 --data-seed 102 --seed 102"
+     "simulated": "late in the 12:26Z and 12:35Z simulations, in every order",
+     "launch": "python benchmarks/covert_witness/launch.py s-t20 --island lowrank-restart --program delta_grad.py --direction scorer --final --mechanism dgrad-q4muon-full --node NODE --long '06:15Z coordinator' --note 'FINAL r20261104-061509-8e1d seed 102' --no-wait -- --targets all --opt muon --msg-bits 4 --rotate --mom-bits 8 --b1 0.95 --lr 2.5e-3 --warmup 100 --phase-cooldown 0.4 --batch 64 --budget-fraction 0.5 --store q8 --store-scale sticky --group 64 --leaf 4 --data-seed 102 --seed 102",
+     "dropped": "no seed can end by 15:00Z"
     }
    ]
   },
@@ -2140,13 +2143,13 @@
    "final_set": "heldout/v3/final (2^21 tokens, bpe32k b753d476cfeebd6b)",
    "args": "--scale --vera 512 --lr 3e-3",
    "by": "integrator (the finals job)",
-   "queue": "the conditional tail, after the planned reruns and ahead of the dropped seeds (coordinator 09:03Z and 09:10Z)",
+   "queue": "ahead of the planned reruns (coordinator 11:50Z: re-simulated at 12:35Z on each held rerun's own minutes a seed, it ends by 15:00Z only queued ahead)",
    "label": "single seed where a seed can't end by 15:00Z",
    "reruns": [
     {
      "seed": "own",
      "if": "it ends by 15:00Z",
-     "simulated": "late in the 09:58Z simulation: no GPU frees early enough",
+     "simulated": "queued behind fe3a, ends about 14:04Z in the 12:35Z simulation",
      "launch": "python benchmarks/covert_witness/launch.py s-t20 --island seed-subspace --direction scorer --final --mechanism vera --node NODE --note 'FINAL r20261104-062520-3959 seed own' --no-wait -- --scale --vera 512 --lr 3e-3"
     }
    ]
@@ -2161,7 +2164,19 @@
    "r20261104-062520-3959"
   ],
   "ahead": [
-   "r20261104-060904-d64c"
-  ]
+   "r20261104-060904-d64c",
+   "r20261104-062008-fe3a",
+   "r20261104-062520-3959"
+  ],
+  "reordered": {
+   "at": "12:41Z",
+   "by": "coordinator 11:50Z (item 3): fe3a at three seeds for plot 2 if possible",
+   "requeued": {
+    "r20261104-122954-98ba": "r20261104-001417-6111 seed 102",
+    "r20261104-123219-2ee4": "r20261103-184231-7066 seed own",
+    "r20261104-123702-42c8": "r20261103-184231-7066 seed 101"
+   },
+   "why": "cancelled waiting for a GPU, never started, so fe3a's three seeds take the GPUs freeing before 13:15Z; requeued behind fe3a and 3959, they still end by 15:00Z (the planned reruns' 590 GPU-min against about 1,000 free before 15:00Z)"
+  }
  }
 }
