@@ -142,8 +142,9 @@ def test_a_rehearsal_records_each_missing_part_with_its_why_and_no_figure(tmp_pa
 def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_connections(tmp_path):
     rec = OR.record(accepted(tmp_path))
     b = rec["bound"]
-    assert (b["K"], b["phases"], b["period_s"], b["delta_net"], b["statement"]) == (
-        K, 1, "63/50", "1/1048576", "NetTiming.Guarantees.PeriodLeakAccepted")
+    assert (b["K"], b["phases"], b["period_s"], b["eps"], b["beside_eps"], b["statement"]) == (
+        K, 1, "63/50", "1/1048576", "1 · (ε_ks + ε_bind + Pr[B_tap])", "NetTiming.Guarantees.PeriodLeakAccepted")
+    assert "delta_net" not in b and "δ part" in OR.BESIDE_EPS
     assert (rec["run"], rec["tree"], b["verdict_line"]) == ("toy-run", TREE, LINE)
     assert [(t["symbol"], t.get("phase"), t["bits"], t["lean"]) for t in b["terms"]] == [
         ("k_{sched}", None, 756, ["schedules"]), ("k_{fail}", None, 756, ["cells"]),
@@ -151,7 +152,7 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
         ("k_{skip,i}", 0, 0, ["scans[0].faulty_sets", "scans[0].faulty_bits", "scans[0].faulty_entries"]),
         ("k_i \\log_2 d_{jit}", 0, 63, ["scans[0].jitter"])]
     assert sum(t["bits"] for t in b["terms"]) == b["K"]
-    assert b["notes"] == [OR.OVERCOUNT] and "k_sched" in OR.OVERCOUNT and "k_fail" in OR.OVERCOUNT
+    assert b["notes"] == [OR.OVERCOUNT, OR.BESIDE_EPS] and "k_sched" in OR.OVERCOUNT and "k_fail" in OR.OVERCOUNT
     assert b["connections"] == {"count": 4 * 63, "from": OR.CONNECTIONS}
     assert rec["placement"] == {"trusted-host": "the certifier on the gate's host"}
     assert rec["advice_charge"]["registered"] == {
@@ -170,6 +171,7 @@ def test_w63k4_at_a_4_s_tick_charges_768_bits_a_link_window_for_its_128_connecti
     rec = OR.record(accepted(tmp_path, public, windows=3, schedule=schedule))
     b = rec["bound"]
     assert [t["bits"] for t in b["terms"] if t.get("phase") is None] == [1152, 1152]
+    assert b["beside_eps"] == rec["periods"]["run"]["beside_eps"] == "3 · (ε_ks + ε_bind + Pr[B_tap])"
     assert b["connections"] == {"count": 3 * 128, "from": OR.CONNECTIONS}
     assert (rec["periods"]["phase_s"], rec["periods"]["run"]["seconds"], b["period_s"]) == ("128", "384", "384")
     assert rec["periods"]["week"]["node"]["parameters"]["connections"] == str(128 * math.ceil(7 * 86400 / 128))
@@ -195,8 +197,8 @@ def census_line(name: str, *fields: str) -> dict:
 def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one_phase(tmp_path):
     p = OR.record(accepted(tmp_path))["periods"]
     phase = Fraction(63 * 20, 1000)
-    one = {"bits": K, "share": K / LB.WEIGHTS.bits, "eps": "1/1048576", "vacuous": False, "how": "proved",
-           "statement": LB.STATEMENTS["per_period"]}
+    one = {"bits": K, "share": K / LB.WEIGHTS.bits, "eps": "1/1048576", "beside_eps": OR.beside_eps(1),
+           "vacuous": False, "how": "proved", "statement": LB.STATEMENTS["per_period"]}
     assert p["phase_s"] == str(phase) and p["run"] == one | {
         "seconds": str(phase), "phases": 1, "connections": 252, "per_phase": one}
     links = {"node": 1, "datacenter": LB.datacenter_links(), "world": LB.world_links()}
@@ -206,13 +208,15 @@ def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one
         assert (p[name]["seconds"], p[name]["phases"]) == (seconds, w)
         for where, n in links.items():
             c = p[name][where]
-            assert (c["bits"], c["eps"], c["how"], c["rule"]) == (K * w * n, str(Fraction(1, 2 ** 20) * w * n),
-                                                                  "scaled", rules[where])
+            assert (c["bits"], c["eps"], c["beside_eps"], c["how"], c["rule"]) == (
+                K * w * n, str(Fraction(1, 2 ** 20) * w * n), f"{w * n} · (ε_ks + ε_bind + Pr[B_tap])", "scaled",
+                rules[where])
             assert c["vacuous"] == (w * n >= 2 ** 20) and c["share"] == K * w * n / LB.WEIGHTS.bits
             assert c["parameters"] == {"phases": w, "phase_s": str(phase), "connections": str(252 * w * n), "links": n}
             assert c["per_phase"] == (one if where == "node" else {
                 "bits": K * n, "share": K * n / LB.WEIGHTS.bits, "eps": str(Fraction(n, 2 ** 20)),
-                "vacuous": n >= 2 ** 20, "how": "scaled", "rule": where, "statement": OR.STATEMENTS[where]})
+                "beside_eps": OR.beside_eps(n), "vacuous": n >= 2 ** 20, "how": "scaled", "rule": where,
+                "statement": OR.STATEMENTS[where]})
     assert p["week"]["datacenter"]["statement"] == LB.STATEMENTS["datacenter"]
     assert {k: r["sources"] for k, r in p["rules"].items()} == {
         "per-phase": [OR.FROM_BOUND], "run-to-period": [OR.FROM_BOUND, OR.FROM_SCHEDULE],

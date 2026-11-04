@@ -25,9 +25,11 @@ notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields
 (``schedules``), k_fail (``cells``) and, for each execution phase i of the certification period (the code's link-window,
 the public's ``scans[i]``), ℓ_{a,i} (``free``), k_{skip,i} (``faulty_sets``, ``faulty_bits`` and ``faulty_entries``) and
 the jitter (``jitter``). They sum to K, by which `NetTiming.Guarantees.PeriodLeakAccepted` bounds what the serving node
-sends past its committed program except with δ_net, the answer's ``eps`` (`DELTA_NET_BESIDE`), over ``period_s``
-seconds, the run's m execution phases of T buckets of τ (the certifier's case's ``schedule``). K is that statement's
-count as proved, a known overcount (``notes``, `OVERCOUNT`); ``connections`` is how many connections k_sched and k_fail
+sends past its committed program except with δ_net over ``period_s`` seconds, the run's m execution phases of T buckets
+of τ (the certifier's case's ``schedule``). δ_net is the answer's ``eps``, only its δ part (m · δ and each charged
+audit's δ), plus ``beside_eps``, m · (ε_ks + ε_bind + Pr[B_tap]): each phase's knowledge, binding and collision errors,
+which no check computes (`BESIDE_EPS`). K is that statement's count as proved, a known overcount (`OVERCOUNT`; both
+are ``notes``); ``connections`` is how many connections k_sched and k_fail
 count, every one the schedule can carry (`CONNECTIONS`), its ``error`` where the case's caps aren't those; and
 ``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in verdicts.txt), None where it
 has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's ``error``. Beside the bound,
@@ -43,7 +45,8 @@ covers the monitoring period's seconds (its m execution phases), and otherwise s
 datacenter's and the world's are scaled from the node's. Each scaled cell names its rule, which ``rules`` states with
 its sources (`RULES`): the bound, the case's schedule, and each census line it reads with its SHA-512 (`census`). Each
 cell gives K in bits (the least integer at or above a scaled one), its share of one copy of the weights
-(`leak_bounds.WEIGHTS`), its ε, whether that ε is vacuous (at least 1) and the statement it rests on; beside that pooled
+(`leak_bounds.WEIGHTS`), its ``eps`` and ``beside_eps`` over the execution phases it counts, whether eps alone is
+already vacuous (at least 1) and the statement it rests on; beside that pooled
 total, ``per_phase`` is the same over one execution phase, proved only where m is 1.
 
 The record's counts and indices are the certification period's (m and each phase i), public in the Lean answer's
@@ -98,13 +101,16 @@ CONNECTIONS = ("the caps of the certifier's case's params (``cells``), one a con
                "but its schedule's (`NetworkCheck.Period.Schedule.caps`), egress_cells for each of the lanes · m · T "
                "connections the network certifier can carry over the period's m execution phases, so this counts the "
                "connections the schedule can carry, not those served")
-DELTA_NET_BESIDE = "the scans' knowledge and collision errors, which eps doesn't count"
+BESIDE_EPS = ("δ_net is eps plus beside_eps: eps is only its δ part, m · δ and each charged audit's δ, and each execution "
+              "phase adds its audit's knowledge error ε_ks, binding error ε_bind and Pr[B_tap], the collisions between "
+              "the extracted trace's openings and the network certifier's, as PeriodLeakAccepted states them; no "
+              "check computes those")
 #: the run's published line of the network certifier's verdict (`served_verdicts.pieces`)
 LINE = "THE NETWORK CERTIFIER "
 REGISTERED = "registered width, an upper bound on the honest charge"
 #: each scaled cell's rule, by the name it gives; `rules` adds each one's sources
 RULES = {
-    "per-phase": "the run's K and ε over one of its m execution phases, K/m: their average, which no statement bounds a "
+    "per-phase": "the run's K and eps over one of its m execution phases, K/m: their average, which no statement bounds a "
                  "phase by where m exceeds 1",
     "run-to-period": "the run's per execution phase times the period's execution phases, ⌈seconds / (T·τ)⌉, each as the "
                      "run's at its load: ℓ_{a,i}, k_{skip,i} and the jitter scale with the phases, and k_sched and "
@@ -116,7 +122,7 @@ RULES = {
              "an H100-equivalent's FLOP/s, in machines of the reference datacenter's GPUs, rounded up, one network "
              "certifier on each",
 }
-FROM_BOUND = "bound: the run's K and delta_net over its m execution phases"
+FROM_BOUND = "bound: the run's K and eps over its m execution phases"
 FROM_SCHEDULE = f"{CASE} params.schedule: an execution phase's T buckets of τ"
 STATEMENTS = {"run": LB.STATEMENTS["per_period"], "node": LB.STATEMENTS["per_period"],
               "datacenter": LB.STATEMENTS["datacenter"], "world": LB.STATEMENTS["datacenter"]}
@@ -197,8 +203,13 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
     m = len(public["scans"])
     if "windows" in public and int(public["windows"]) != m:
         raise ValueError(f"{m} scans for the period's {public['windows']} execution phases")
-    return {"statement": LB.STATEMENTS["per_period"], "K": K, "phases": m, "delta_net": str(eps),
-            "delta_net_beside": DELTA_NET_BESIDE, "notes": [OVERCOUNT], "terms": terms}
+    return {"statement": LB.STATEMENTS["per_period"], "K": K, "phases": m, "eps": str(eps),
+            "beside_eps": beside_eps(m), "notes": [OVERCOUNT, BESIDE_EPS], "terms": terms}
+
+
+def beside_eps(phases: int) -> str:
+    """δ_net's errors that ``eps`` doesn't count, over ``phases`` execution phases (`BESIDE_EPS`)."""
+    return f"{phases} · (ε_ks + ε_bind + Pr[B_tap])"
 
 
 def schedule(case: Mapping[str, Any], phases: int) -> tuple[Fraction, int]:
@@ -238,9 +249,10 @@ def census() -> dict[str, Any]:
             "world": {"links": LB.world_links(), "sources": world}}
 
 
-def cell(bits: Fraction, eps: Fraction, where: str, rule: str | None = None) -> dict[str, Any]:
-    """A cell proved, or scaled by ``rule`` (`RULES`)."""
-    return {"bits": math.ceil(bits), "share": float(bits / LB.WEIGHTS.bits), "eps": str(eps), "vacuous": eps >= 1,
+def cell(bits: Fraction, eps: Fraction, phases: int, where: str, rule: str | None = None) -> dict[str, Any]:
+    """A cell over ``phases`` execution phases, proved, or scaled by ``rule`` (`RULES`)."""
+    return {"bits": math.ceil(bits), "share": float(bits / LB.WEIGHTS.bits), "eps": str(eps),
+            "beside_eps": beside_eps(phases), "vacuous": eps >= 1,
             "statement": STATEMENTS[where]} | ({"how": "scaled", "rule": rule} if rule else {"how": "proved"})
 
 
@@ -251,9 +263,9 @@ def periods(K: int, eps: Fraction, m: int, phase_s: Fraction, connections: int) 
     refs = census()
     links = {"node": 1, **{k: v["links"] for k, v in refs.items()}}
     one, one_eps, period_s = Fraction(K, m), eps / m, m * phase_s
-    per_phase = cell(one, one_eps, "run", None if m == 1 else "per-phase")
-    run = cell(Fraction(K), eps, "run") | {"seconds": str(period_s), "phases": m, "connections": connections,
-                                           "per_phase": per_phase}
+    per_phase = cell(one, one_eps, 1, "run", None if m == 1 else "per-phase")
+    run = cell(Fraction(K), eps, m, "run") | {"seconds": str(period_s), "phases": m, "connections": connections,
+                                              "per_phase": per_phase}
     sources = {"per-phase": [FROM_BOUND], "run-to-period": [FROM_BOUND, FROM_SCHEDULE],
                **{k: v["sources"] for k, v in refs.items()}}
     out: dict[str, Any] = {"phase_s": str(phase_s), "weights": LB.WEIGHTS.label, "run": run,
@@ -267,9 +279,9 @@ def periods(K: int, eps: Fraction, m: int, phase_s: Fraction, connections: int) 
             rule = where if where != "node" else None if covered else "run-to-period"
             params = {"phases": node, "phase_s": str(phase_s), "links": n,
                       "connections": str(Fraction(connections, m) * node * n)}
-            out[name][where] = cell(one * node * n, one_eps * node * n, where, rule) | {
+            out[name][where] = cell(one * node * n, one_eps * node * n, node * n, where, rule) | {
                 "parameters": params,
-                "per_phase": per_phase if where == "node" else cell(one * n, one_eps * n, where, where)}
+                "per_phase": per_phase if where == "node" else cell(one * n, one_eps * n, n, where, where)}
     return out
 
 
@@ -350,18 +362,20 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
         return rec | {"periods": {"error": f"{CASE}: {type(e).__name__}: {e}"}}
     b["connections"] = {"count": connections, "from": CONNECTIONS}
     b["period_s"] = str(b["phases"] * phase_s)
-    return rec | {"periods": periods(b["K"], Fraction(b["delta_net"]), b["phases"], phase_s, connections)}
+    return rec | {"periods": periods(b["K"], Fraction(b["eps"]), b["phases"], phase_s, connections)}
 
 
 def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
-    """The ``ONSITE`` line: each verdict, whether the run is of record, K, its ε and connections, the year's datacenter
-    cell, and the measured advice charge's test run."""
+    """The ``ONSITE`` line: each verdict, whether the run is of record, K, its eps and beside_eps and connections, the
+    year's datacenter cell, and the measured advice charge's test run."""
     b, p = rec.get("bound") or {}, rec.get("periods") or {}
     year = (p.get("year") or {}).get("datacenter")
     m = rec["advice_charge"]["measured"]
     return {"verdicts": {k: x["verdict"] for k, x in rec["verdicts"].items()}, "of_record": rec["of_record"]["holds"],
-            "K": b.get("K"), "delta_net": b.get("delta_net"), "connections": (b.get("connections") or {}).get("count"),
-            "year_datacenter": None if year is None else {k: year[k] for k in ("bits", "share", "eps", "how")},
+            "K": b.get("K"), "eps": b.get("eps"), "beside_eps": b.get("beside_eps"),
+            "connections": (b.get("connections") or {}).get("count"),
+            "year_datacenter": None if year is None else {
+                k: year[k] for k in ("bits", "share", "eps", "beside_eps", "how")},
             "advice_measured_on": m.get("run"), **{k: b[k] for k in ("missing", "error") if k in b}}
 
 
