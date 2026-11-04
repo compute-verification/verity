@@ -75,8 +75,8 @@ SHA-512, its META's `program_sha512` is its Program's, an audit's file's META `p
 its record's digest, `SampledProofs.Bits.check` lays it out as its template, and its template's instances are whole
 VUs of its `upv`, the scan's one instance a VU whose rows read no input padding and every bit of its `row` parameter
 (`circuitsWhy`). An audit with
-files counts its VUs as its units, each template's instances over its file's `upv`, and charges a VU's bits
-(`charged`).
+files counts its VUs as its units, each template's instances over its file's `upv`, charges a VU's bits, and counts
+each VU's input padding, the unit's input columns no port holds, among its free inputs (`charged`, `padCols`).
 The rows form has, in place of `sync_set`,
 
     "circuit": hex,
@@ -1941,7 +1941,8 @@ def protocol : Core.Protocol where
 Program, in order; it reads an audit's file's SHA-512 and header (`NetworkCheck.CircuitFile.read`), never its nets'
 rows, and reads a scan's file whole, as the scan's sessions' verifier parses it (`NetworkCheck.CircuitFile.whole`). A
 proof block is a VU, a file's `units_per_vu` template instances, so a listed audit's units are its VUs and a wrong one
-commits at most `vuBits upv words` (`charged`). -/
+commits at most `vuBits upv words`; and each VU's input padding, the unit's input columns no port holds (`padCols`),
+counts among its free inputs (`charged`). -/
 
 /-- The owners of listed files, in the order their files are given: each audit that lists files, by index, then the
 scan; each with whether it is the scan and what its files are held to. -/
@@ -2000,21 +2001,36 @@ def circuitsWhy (l : Listing) (fs : Array (ByteArray × Flock.Circuit)) : Option
       given"
   else (want.zip fs).findSome? fun ((w, s, x, k), (sha, cf)) => fileWhy w s x k sha cf
 
-/-- **Audit `a` as its listed files charge it**, `upvs` its templates' files' `units_per_vu` in order: its units its
-VUs, `Σ members / upv` over its templates, and its bits the most a wrong VU commits, `vuBits upv words`. -/
-def Listed.charge (x : Listed) (a : Audit) (upvs : Array Nat) : Audit :=
-  let ts := x.templates.zipIdx.map fun (t, k) => (t, upvs.getD k 1)
-  { a with units := ts.foldl (fun n (t, u) => n + t.members / u) 0,
-           bits := ts.foldl (fun b (t, u) => max b (vuBits u t.words)) 0 }
+/-- **A circuit file's unit's input padding**: its unit net's input columns (`SampledProofs.Bits.Rows.ofNet`'s `nIn`)
+that no port holds (`Flock.portCols`), counted as columns. A row may read one, and Δ fills it from no row, so its value
+is the prover's: a free input of each VU, read off the header. -/
+def padCols (cf : Flock.Circuit) : Nat :=
+  let nIn := min (cf.unit.inWords * Flock.WORD) cf.unit.constPos
+  let held := (Flock.portCols cf.unit.inGroups).foldl
+    (fun h (a0, w) => (List.range w).foldl (fun h t => h.set! (a0 + t) true) h) (Array.replicate nIn false)
+  held.foldl (fun n b => if b then n else n + 1) 0
 
-/-- **The parameters as the files `fs` charge them**: each listed audit charged by its files (`Listed.charge`). A proof
-block is a VU, so the answer's units, its draw and its bound count VUs (`auditCheck`, `AuditTerms.of`). The scan's
-files are at one instance a VU (`fileWhy`), so its terms stand. -/
+/-- **Audit `a` as its listed files charge it**, `heads` its templates' files' `units_per_vu` and input padding
+(`padCols`) in order: its units its VUs, `Σ members / upv` over its templates; its bits the most a wrong VU commits,
+`vuBits upv words`; and its free inputs, with the scan's state held or not (`free`, `stateFree`), each VU's padding
+more, `Σ members / upv · pad`, which its record's count (`NetworkCheck.Circuit.countsOf`) doesn't see. -/
+def Listed.charge (x : Listed) (a : Audit) (heads : Array (Nat × Nat)) : Audit :=
+  let ts := x.templates.zipIdx.map fun (t, k) => (t, heads.getD k (1, 0))
+  let pad := ts.foldl (fun n (t, u, p) => n + t.members / u * p) 0
+  { a with units := ts.foldl (fun n (t, u, _) => n + t.members / u) 0,
+           bits := ts.foldl (fun b (t, u, _) => max b (vuBits u t.words)) 0,
+           free := a.free + pad, stateFree := a.stateFree + pad }
+
+/-- **The parameters as the files `fs` charge them**: each listed audit charged by its files' headers
+(`Listed.charge`). A proof block is a VU, so the answer's units, its draw and its bound count VUs (`auditCheck`,
+`AuditTerms.of`), and each VU's input padding counts free. The scan's files are at one instance a VU and read no
+padding (`fileWhy`), so its terms stand. -/
 def charged (p : Params) (l : Listing) (fs : Array (ByteArray × Flock.Circuit)) : Params :=
   let starts := (l.audits.foldl (fun (acc, n) o => (acc.push n, n + (o.map (·.files.size)).getD 0))
     ((#[] : Array Nat), 0)).1
   { p with audits := (p.audits.zip l.audits).zipIdx.map fun ((a, o), i) => match o with
-      | some x => x.charge a ((Array.range x.files.size).map fun k => ((fs[starts[i]! + k]?).map (·.2.upv)).getD 1)
+      | some x => x.charge a ((Array.range x.files.size).map fun k =>
+          ((fs[starts[i]! + k]?).map fun (_, cf) => (cf.upv, padCols cf)).getD (1, 0))
       | none => a }
 
 /-- A listing of two root templates: `T`, 6 instances of 5 words, and `U`, 4 of 3, their files `f` and `g`. -/
@@ -2024,9 +2040,15 @@ def toyListed : Listed where
   files := #["f", "g"]
   partition := none
 
-#guard (fun (a : Audit) => a.units == 3 + 4 && a.bits == 2 * 16 * 5 + 2)
-  (toyListed.charge
-    { free := 0, steps := 0, program := "", units := 10, bits := vuBits 1 5, entries := #[], record := none } #[2, 1])
+#guard (fun (a : Audit) => a.units == 3 + 4 && a.bits == 2 * 16 * 5 + 2 && a.free == 7 + 3 * 80 + 4 * 112 &&
+    a.stateFree == 5 + 3 * 80 + 4 * 112)
+  (toyListed.charge { free := 7, steps := 0, program := "", units := 10, bits := vuBits 1 5, entries := #[],
+    record := none, stateFree := 5 } #[(2, 80), (1, 112)])
+
+/-- A unit of two input words, ports of 16 at word 0 and two of 16 at word 1: 256 input columns, 208 of them padding. -/
+#guard padCols { (default : Flock.Circuit) with
+  nets := #[("unit", { (default : Flock.Net) with inWords := 2, constPos := 2 * Flock.WORD + 4,
+    inGroups := #[⟨0, 1, #[16]⟩, ⟨1, 1, #[16, 16]⟩] })], unitNet := 0 } == 2 * Flock.WORD - 48
 #guard (circuitsWhy { audits := #[some toyListed] } #[]).isSome
 #guard (circuitsWhy { audits := #[none, some toyListed] } #[(.empty, default), (.empty, default)]) ==
   some s!"audit 1's circuit file for T: its SHA-512 is not its listing's"

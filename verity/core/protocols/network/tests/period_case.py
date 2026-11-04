@@ -1826,6 +1826,21 @@ def bits_why(c: CircuitHeader, defs: dict[str, tuple[list, list]], template: str
     return None
 
 
+def _held(c: CircuitHeader) -> list[bool]:
+    """Of the unit net's input columns, whether a port holds each (`Flock.portCols`)."""
+    held = [False] * min(c.in_words * WORD, c.const)
+    for a0, w in _port_cols(c.in_groups):
+        for t in range(w):
+            if a0 + t < len(held):
+                held[a0 + t] = True
+    return held
+
+
+def pad_cols(c: CircuitHeader) -> int:
+    """`padCols`: the unit net's input columns no port holds, each a free input of each VU."""
+    return _held(c).count(False)
+
+
 def reads_why(c: CircuitHeader, params: list, reads: list[bool], names: list[str]) -> str | None:
     """`SampledProofs.Bits.readsWhy`: the unit's read input columns `reads` are not one per input column, a computed row
     reads an input column no port holds (input padding), or no row reads a bit of a parameter in `names`."""
@@ -1833,11 +1848,7 @@ def reads_why(c: CircuitHeader, params: list, reads: list[bool], names: list[str
     pc = _port_cols(c.in_groups)
     if len(reads) != n_in:
         return "the circuit file's unit's read columns are not one per input column"
-    held = [False] * n_in
-    for a0, w in pc:
-        for t in range(w):
-            if a0 + t < n_in:
-                held[a0 + t] = True
+    held = _held(c)
     if (x := next((x for x in range(n_in) if reads[x] and not held[x]), None)) is not None:
         return f"a row of the circuit file's unit reads its input column {x}, which no port holds"
     at = 0
@@ -1889,17 +1900,21 @@ def circuits_why(listing: Listing, files: list[CircuitHeader]) -> str | None:
 
 
 def charged(p: Params, listing: Listing, files: list[CircuitHeader]) -> Params:
-    """`charged`: each listed audit's units its VUs, its templates' members over their files' `units_per_vu`, and its
-    bits the most a wrong VU is charged (`vu_bits`)."""
+    """`charged`: each listed audit's units its VUs, its templates' members over their files' `units_per_vu`, its
+    bits the most a wrong VU is charged (`vu_bits`), and each VU's input padding (`pad_cols`) more free inputs, with the
+    scan's state held or not."""
     at, audits = 0, []
     for a, x in zip(p.audits, listing.audits):
         if x is None:
             audits.append(a)
             continue
-        upvs = [c.upv for c in files[at:at + len(x.files)]]
+        heads = [(c.upv, pad_cols(c)) for c in files[at:at + len(x.files)]]
         at += len(x.files)
-        audits.append(dataclasses.replace(a, units=sum(n // u for (_, n, _), u in zip(x.templates, upvs)),
-                                          bits=max(vu_bits(u, w) for (_, _, w), u in zip(x.templates, upvs))))
+        pad = sum(n // u * q for (_, n, _), (u, q) in zip(x.templates, heads))
+        audits.append(dataclasses.replace(a, units=sum(n // u for (_, n, _), (u, _) in zip(x.templates, heads)),
+                                          bits=max(vu_bits(u, w) for (_, _, w), (u, _) in zip(x.templates, heads)),
+                                          free=a.free + pad,
+                                          state_free=None if a.state_free is None else a.state_free + pad))
     return dataclasses.replace(p, audits=tuple(audits))
 
 

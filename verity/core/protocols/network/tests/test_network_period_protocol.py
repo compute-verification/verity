@@ -956,8 +956,9 @@ def _relisted(case: dict, texts: list[str]) -> dict:
 def test_a_listed_audit_counts_its_vus_off_its_circuit_files(server, tmp_path):
     """A record-form audit that lists its circuit file (`audit-listed`: its `Gemm_v2{K=16,N=16}` template's 8
     instances, its parameters `x` and `w` 16 and 256 packed words, its return 16, at one instance a VU) is accepted by
-    `network-period check … CIRCUIT` with the mirror's public, its units its VUs and each wrong one charged
-    `vu_bits(1, words)`; so is the file with its last input port a cut input that one leaf cut wires. With no files, or
+    `network-period check … CIRCUIT` with the mirror's public, its units its VUs, each wrong one charged
+    `vu_bits(1, words)`, and each VU's input padding (`padCols`, its unit's input columns no port holds) counted free;
+    so is the file with its last input port a cut input that one leaf cut wires. With no files, or
     through `serve`, Lean and the mirror refuse its parameters, as only the check given its files reads a listing. Each
     set of files that is not the listing's is refused by both, at the same reason: a file of another SHA-512, a file too
     many, META naming another Program or another partition; and, as `SampledProofs.Bits.check` refuses them, a unit
@@ -977,6 +978,8 @@ def test_a_listed_audit_counts_its_vus_off_its_circuit_files(server, tmp_path):
         charged = PC.charged(p, listing, [PC.read_circuit(t) for t in texts]).audits[i]
         units = PC.RECORD_UNITS[False]
         assert (members, words, charged.units, charged.bits) == (units, 288, units, 16 * words + 2), (n, charged)
+        pad = PC.pad_cols(PC.read_circuit(texts[0]))
+        assert pad > 0 and charged.free == p.audits[i].free + units * pad, (n, pad, charged)
         term = out["public"]["audits"][i]
         assert (term["units"], term["faulty_bits"]) == (units, term["wrong_units"] * charged.bits), (n, term)
         got = _check_files(exe, tmp_path / f"{n}-accept", case, texts)
