@@ -83,7 +83,7 @@ ADVICE = "advice"  # certifier_serve.ADVICE: the profile whose egress counts der
 
 CLEAR = {
     "custody": "the SHA-512 of each fetched file against the gate's end.json (public files)",
-    "endpoint": "at the auditor, on the endpoint's records and the run's certified I/O: each Commit window's advice "
+    "endpoint": "at the auditor, on the endpoint's records and the run's certified I/O: each Commit period's advice "
                 "opened to its registered root and rebuilt from the certified I/O",
     "certificates": "at the client, on its kept certificates (their public parts): each certificate's and clock "
                     "certificate's LMS signature under the certifier's key and session, by the Lean "
@@ -103,10 +103,10 @@ CLEAR = {
                            "warden's key and session, the audit and the client's view), and the public "
                            "certificates.jsonl held to the certified lines",
     "warden_endpoint": "at the auditor, on the endpoint's records and the warden's certified I/O (warden_chain.io, off "
-                       "the records' cells): each Commit window's advice opened to its registered root and rebuilt "
+                       "the records' cells): each Commit period's advice opened to its registered root and rebuilt "
                        "from the certified I/O",
     "warden_endpoint_served": "on the served node, the prover's, whose records hold request values and stay there: "
-                              "each Commit window's advice opened to its registered root and rebuilt from the warden's "
+                              "each Commit period's advice opened to its registered root and rebuilt from the warden's "
                               "certified I/O sent to it (served_session.py endpoint); the chain reads its report",
     "tie": "at the verifier: each ingress bucket unit's pub row opened to the verifier's own copy (the advice's prompt "
            "lengths and the warden's release) and its o0 verdict bit; never a cell or its salt (n2_tie_zk's RECEIVED, "

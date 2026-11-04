@@ -36,7 +36,7 @@ driver's docstring says what it runs, what it publishes and what its verifier re
   slice); `scan_tie.py` proves the egress tie (`scan_service.EgressTie`, `scan_zk.sh` with `SC_TIE=1`).
   `leak_scan.py` is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with `window_chain.py` (a served
-  endpoint's Commit windows as one I1 v0 advice), `negatives.py` (what network accounting must refuse, each by the
+  endpoint's Commit periods as one I1 v0 advice), `negatives.py` (what network accounting must refuse, each by the
   check and code that refuse it) and `leak_guard.py` (the record's leak guard, below). `block_certifier.py` decides a
   period by `network-period check` and writes its accepted answer as the block record's certifier entry.
   `demo_chain.sh` runs the one-H200 demo by the certifier-only path, and `served_session.py` is the served session's
@@ -118,7 +118,7 @@ rejecting the served window is a reject: with no fetch kept, a rehearsal the gat
 late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
 profile names its placement: the certifier on the gate's host, and the chain, the period check and their proofs' coins
 on the prover's node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report,
-whose rows count each Commit window's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
+whose rows count each Commit period's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
 does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ, and the scan's answers):
 report.md, the report's other keys and the steps' summaries count the window's requests and outputs and the advice's
 bits. The leak guard (`--public`) moves any file the piece doesn't declare out of its directory. Split in two around V3c
@@ -155,7 +155,7 @@ directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
 |---|---|---|---|
 | custody | each gate run's files against the SHA-512s in its `end.json` | none: a check of files | the files' digests |
 | certificates | each sampling block's two certified records and its clock certificate, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature of the client's kept certificates by the Lean (`NetworkCheck.LinkWindow.refusals`, `audit.certificate_refusals` its reference), and the Lean's audit (`NetworkCheck.Records`, `audit.Audit` its reference) of the run's certified heads under the syncs the Lean reads from its clock openings (`NetworkCheck.Period.signedSyncs`, `certificate.SignedClocks` its reference) |
-| endpoint | the endpoint's own advice bound to the run (each Commit window opened to its registered root, rebuilt from the certified I/O, `e2e.py --no-prove`); required on the advice profile | none: in the clear | all of it |
+| endpoint | the endpoint's own advice bound to the run (each Commit period opened to its registered root, rebuilt from the certified I/O, `e2e.py --no-prove`); required on the advice profile | none: in the clear | all of it |
 | N2 | each sampling block's N2 proof block, proved `--zk` and decided by N2's verifier of record (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no sampling block undrawn; a sampled draw of k of n sampling blocks hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the draw, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
 | scan | the scan's ingress and egress proof blocks of a sampling block, one registration, `verify --zk --registered` | the audit's `wrong_units` at the draw's sampling design | each proof block's output bit; the ingress tie (`IoTieRequest`) stays outside the proofs |
 | Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |
@@ -195,12 +195,12 @@ parameters digest, no sync declared or charged). The ingress tie is proved on th
 --class warden`, the report's `tie` step), and the scan is `scan_zk.py prove --warden-run`'s. Each step is held to the
 one relay run the certificates step read, and every one is required.
 
-A Commit window that carries a request across its open or close (`verity_vllm.pipeline.window_advice`, schema
-`verity-vllm/window-advice/v1`) is bound with the Commit window before it: `chain.served_advice` joins them into one I1
-v0 advice (`window_chain.join`). A carried request's record and state are the earlier Commit window's, as its
+A Commit period that carries a request across its open or close (`verity_vllm.pipeline.window_advice`, schema
+`verity-vllm/window-advice/v1`) is bound with the Commit period before it: `chain.served_advice` joins them into one I1
+v0 advice (`window_chain.join`). A carried request's record and state are the earlier Commit period's, as its
 registered advice closed them (`window_advice.follows`), never the later one's own string's, so the advice's bits, and
-N2's K, charge the carry once. A Commit window that carries a request in from one the run doesn't hold, or that leaves a
-request with outputs still to keep and no next Commit window, is refused.
+N2's K, charge the carry once. A Commit period that carries a request in from one the run doesn't hold, or that leaves a
+request with outputs still to keep and no next Commit period, is refused.
 
 ## The leak bound
 
