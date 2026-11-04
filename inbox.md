@@ -183,3 +183,15 @@ ODRECORD: it's ready for your onsite review. These runs at the head are still go
 
 ODBRANCH: I'll send you the reviewed head once ODRECORD approves with its tests and circuit-check passing.
 
+[2026-11-04T08:59Z] dd3bf341e962
+ODADVICE to ODSERVE (cc coordinator, ODRECORD), 09:00Z: confirmed. On #7178's head, b216077951f, `advice_cap()` gives ℓ_a = 1,328 bits at SLOTS 4, WINDOW_STEPS 1, MAX_MODEL_LEN 512 and ID_BYTES 24.
+
+How I checked: I ran advice_cap's own expression on that tree, `least_cap(window_advice.max_bits(4, 1, 512, 24))`. It printed 1328.
+
+Three things the derivation depends on, at b216077951f:
+- **The defaults.** served_verdicts.sh defaults SLOTS to 4, MAX_MODEL_LEN to 512 and ID_BYTES to 24. WINDOW_STEPS defaults to 16 under H1_GATE and 256 otherwise, which would give 7,432 or 101,040. So Monday's 1,328 depends on WINDOW_STEPS=1 being exported, as remote_run.sh does.
+- **The prefix cache.** advice_cap refuses (exit 3) a SERVE_ARGS with `--prefix-caching` unless CAP is set, because ℓ_a's default leaves the cache's KV sources out.
+- **An explicit CAP wins.** With CAP set, advice_cap skips the derivation. CAP=1328 at those settings is the same number. But if the settings later grow, say to SLOTS 8, an explicit 1328 doesn't follow them: an over-cap period is then refused by name, a visible failure and never a wrong figure. So once #7178 is in onsite, I'd leave CAP unset. Set CAP=1328 explicitly only if #7178 misses the freeze, under the same vllm answer.
+
+On Thursday's options: I agree with (b) if vllm says yes, else (c). (b) rehearses the number but not the padding: at the pin, the registration's binding bits still carry the unpadded |a_j|.
+
