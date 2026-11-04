@@ -602,20 +602,24 @@ def test_the_scan_is_read_off_its_program(server):
     """The rows form's scan terms are its registered Program's, in the generator form: T, no free input (its `prog` a
     compute audit's output), what an ingress and an egress instance is charged (`vu_bits` at one instance a VU of their
     parameters' words, the more of bucket 0's and a later bucket's for ingress, and their returns': a u16 with the
-    state and view, or with the row, each one-bit leaf a 16-bit word), and its slot entries' bits (lanes · T / every
-    entries of its `prog` ports' width); and
+    state and view, or with the row, each parameter and each return field packed on whole 16-bit words of its own),
+    and its slot entries' bits (lanes · T / every entries of its `prog` ports' width); and
     Lean and the mirror refuse, as parameters, a scan that isn't a descriptor, another Program's, one in the checker
     form (its egress row an input), one whose templates have other parameters or other than 1, T − 1 and T instances,
     or rows other than the schedule's, one whose lane reads another row of its input than its bucket's or another
     lane's input, one with an input gate no template's, and each negative of a check of what
     `NetTiming.BoundaryGates.Fits` asks."""
+    def w(bits: int) -> int:
+        return -(-bits // 16)
+
     for n in range(3):
         case = build("rows-honest", n, small=n % 2 == 0)
         p, desc = PC.params(case["params"]), case["params"]["scan"]
         state, prog, view, words = PC._scan_widths(desc)
         s, T, row = p.schedule, p.schedule.window, WR.row_bytes(p.schedule)
-        ins = 8 * row + (state if T > 1 else 0) + s.lanes * prog
-        assert p.scan == PC.Scan(T, 0, PC.vu_bits(1, ins + 16 + state + view), PC.vu_bits(1, 16 * words + 16 + 8 * row),
+        ins = w(8 * row) + (w(state) if T > 1 else 0) + s.lanes * w(prog)
+        assert p.scan == PC.Scan(T, 0, PC.vu_bits(1, ins + 1 + w(state) + w(view)),
+                                 PC.vu_bits(1, w(16 * words) + 1 + w(8 * row)),
                                  s.lanes * (T // s.every) * prog), (n, p.scan)
         for bad in PC.bad_scans(case["params"]):
             broken = case | {"params": bad}
