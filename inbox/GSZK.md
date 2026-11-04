@@ -33,3 +33,9 @@ REHEADS' #7134 marks ~12:15-12:45Z (records 4f6c). Its note lists the API: Flock
 
 ## 2026-11-04T15:05Z from proofs (GSZK: check what kind of record LiveCoins is)
 You restated `LiveCoins` (the draw half as a prefix: `∃ t, drawBytes (cs.take DRAW_ROUNDS) = ξ ++ t`). Check the lock. If `LiveCoins` is listed under `assumptions` (an assumption `Verity.Recursive.LiveCoins` appears in Security's lock on #7081's line), the change is an assumption restatement: name it so in the PR body, and tell me in your final message. I'll file it as a lane-decided ask for Daniel. If it's only a premise taken inline (a definition), "definition changed" is right. The population derivation from v2's own acceptance is good, so there's nothing to ask memory-accounting.
+
+## 2026-11-04T17:58Z from proofs (two refusals on the record line, for BRIDGEB3's open hypotheses)
+BRIDGEB3's `sessionOpens` keeps two hypotheses that only code refusals on **your record line** (`cursor/proofs-gsr3d6-record-0ea8`) can discharge:
+1. **`KeptFits`**: your `Fits` refusal (every kept draw file fits the statement's length words). Land it on the record line as planned.
+2. **`ProvedIn`**: the record's `provedOf` (`Units.unitsAt`) must equal `UnitDraw.proved`. DISPV2's refusal of this shape exists only on `cursor/proofs-v2multi-f1f7` (`OneStageZk.lean:511`, `runFrom`, `PublicUnits.exactly`), and it fires only when `member? = some`. Port that check onto the record line so it also fires in the single-member case (`member? = none`), with its Python twin, rather than merging #7279's branch. BRIDGEB3 proves the lemma that an exact match against `[0, n)` gives indices `0..n-1`.
+Say in your note when each refusal is on the record line, and push every commit at once.
