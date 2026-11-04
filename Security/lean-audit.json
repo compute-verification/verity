@@ -10564,7 +10564,7 @@
     "  {π : Pouw.PearlC.Layout → Equiv Q Q} (m : Nat)",
     "  (hTT : Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : Pouw.PearlC.RowSeedNoise sem sem')",
     "  (hC : Pouw.PearlC.CodeSeedNoise sem' semC π) (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) :",
-    "  Pouw.PearlC.GγSampledDrawTol CM",
+    "  Pouw.PearlC.GγSampledDrawTolThreshold CM",
     "    (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100))",
     "    (Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100))",
     "    (fun L =>",
@@ -10574,7 +10574,7 @@
     "    Pouw.PearlC.εPearlC q (instHMul.hMul N m)"
    ],
    "assumptions": [],
-   "type_hash": "62bee2c33317dee5161ad0e68adaddfffd20f603ae68cd5502b1246829927962"
+   "type_hash": "da0b40685f9de11c32470f5a00335cb067753050462f689bad196ece67d3a743"
   },
   "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256": {
    "owner": "@compute-accounting",
@@ -10601,7 +10601,7 @@
     "  [Fintype S] (CM : Pouw.PearlC.CostModel Q R S) {sem sem' : Pouw.PearlC.PearlCSem Q R S} (m : Nat)",
     "  (hTT : Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : Pouw.PearlC.RowSeedNoise sem sem')",
     "  (hCM : CM.SplitClosed) :",
-    "  Pouw.PearlC.GγSampledDrawTol CM",
+    "  Pouw.PearlC.GγSampledDrawTolThreshold CM",
     "    (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100))",
     "    (Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100))",
     "    (fun L =>",
@@ -10611,7 +10611,7 @@
     "    Pouw.PearlC.εPearlC q (instHMul.hMul N m)"
    ],
    "assumptions": [],
-   "type_hash": "5265da81c3c015eb3e45664b8393c9c08780a564fb37c370dadbc5f62ce2cdff"
+   "type_hash": "8d8e0fac632471f9dd593417808a54b73d2353214f54aae7021062ca6a43a748"
   },
   "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192": {
    "owner": "@compute-accounting",
@@ -32527,7 +32527,7 @@
    ]
   },
   "Definitions.Pouw.Game.Defs": {
-   "digest": "83521cbe5616b65eee31c1359936c66219901c6fddc7d7c1bcacc7c9e17c9297",
+   "digest": "a116fbc0761839bba7fce81c19a963293d81e3a490591882761614f0bc601c75",
    "definitions": {
     "Pouw.ActOK": "57df5c36d420d174dd1ebd0c6da6f2b1b1224f87e845887cad3141376edf8246",
     "Pouw.AdmitsRef": "18672cb8492b5f31c1d2409559ff52b617493363921150daeacc7c57395aa6fd",
@@ -32559,7 +32559,6 @@
     "Pouw.Layout.rowsOf": "f2d53689ee5b0744e61153f82a68fd213b64da0c401d927766a25f54b028c5d6",
     "Pouw.Layout.shape": "8430626bcd7f744f5d427e1fea19463ca0973dfefdd08dbccdbce0f30e96c720",
     "Pouw.Layout.wid": "25290d19a9bb88eb16fd3c112a6554b6c78a952c5ee5cb1e4b31201679ba4675",
-    "Pouw.MissBound": "4ab38b497cb3510606382ec2372884c2b57c6b178b061ff44d0abe0b5084d977",
     "Pouw.OutOK": "36923e158438ab4f66170c0882135d3703bbb91c87c587b3219c0894adc6f7dd",
     "Pouw.Protocol": "9de4d268fda0a18e2e12d7697292862e2d3e8288d384c1f47fe216527ae22573",
     "Pouw.Protocol.Wref": "266ac4c2322894a8cef5c3da0563c656f68452e80289587c8c8e6f4026ee20bf",
@@ -36151,14 +36150,14 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
   },
   "Definitions.Pouw.PearlC.TileDraw": {
-   "digest": "e6b9e2c6b945cbf0fc4924fcdb21fd8195ac2b6834038fc81ec89ee2710a7895",
+   "digest": "651ebc2b476b322e3bf6395aa20ed3c9ecc4fba952230ece70b3a73ef99cb643",
    "definitions": {
     "Pouw.PearlC.Decl": "141fb994d42557b746b1ecc75426b646cfc1c3469e75ab7614bd66e4a92c64dc",
     "Pouw.PearlC.Decl.cols": "e1ce13ba51bd3add61f510baa924d9f013c702b55c7fa80ae8013735e404aeb7",
     "Pouw.PearlC.Decl.kept": "0b0c019bb2854eb81ad1deb35c69a3c81454270f59dc7f19828577107ed6d228",
     "Pouw.PearlC.Decl.rows": "4c695d0ca526ee20bc2d6468e9783f08b39597e06b3c7e30d2e1e1b8b24a1380",
     "Pouw.PearlC.GγSampledDraw": "7e15f72467fcb1c36d14725aa5fe91ff0450abe16a5fe4329a3b2a6e7f008ffe",
-    "Pouw.PearlC.GγSampledDrawTol": "be708fde4724084365016d0c6285b2bc1d3c0d368133ea6d34e6c8a1eae2832c",
+    "Pouw.PearlC.GγSampledDrawTolThreshold": "b071fc20cb5c717883102e93ef5cb9c0ff4cba333d767678450fbe25aa3ccecc",
     "Pouw.PearlC.claimedDraw": "7e1f80a332b907b43ae3a928c34471415c9f6aa93e90b6fc2c6624a660aafe62",
     "Pouw.PearlC.declOK": "5f965b450232e6b5793c38d8a3aec92b13321694619aa0c4149a1f11ef755156",
     "Pouw.PearlC.drawTickets": "764c9b72ba32fd18079e7acb3eca9b3fb23b17758b6c35521acdabd450c1e433",
