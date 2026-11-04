@@ -1,4 +1,5 @@
 import NetworkCheck.Check
+import NetworkCheck.Circuit
 import CoreProtocol.Profile
 import Flock.Program
 import Flock.Public
@@ -462,9 +463,6 @@ def firstParams (lanes : Nat) : Array String := #["row"] ++ progParams lanes
 def ingressParams (lanes : Nat) : Array String := #["row", "sin"] ++ progParams lanes
 def egressParams : Array String := #["state"]
 
-/-- A type's bits: its leaves' widths summed. -/
-def bitsOf (t : Flock.Program.Ty) : Nat := t.widths.foldl (· + ·) 0
-
 /-- Parameters' bits: their types' summed. -/
 def paramBits (ps : Array (String × Flock.Program.Ty)) : Nat := ps.foldl (fun n p => n + bitsOf p.2) 0
 
@@ -484,22 +482,6 @@ def ownReturns (P : Flock.Program.Prog) : Array Bool :=
       !p && match defn.body.nodes[k]? with
         | some n => n.form != .scan && ((P.defs[n.fn]!).prim || (n.fn < d && a[n.fn]!))
         | none => false)) #[]
-
-/-- The root's template nodes, in order: those calling a composite. -/
-def templateNodes (P : Flock.Program.Prog) : List Nat :=
-  let nodes := (P.defs[P.root]!).body.nodes
-  (List.range nodes.size).filter fun k => match P.defs[nodes[k]!.fn]? with
-    | some d => !d.prim
-    | none => false
-
-/-- The root node a template's argument reads when the argument is that input node's leaves in order from its first
-(one affine run), as the generator form binds each parameter to an input array of its own. -/
-def inputArg (P : Flock.Program.Prog) (a : Flock.Program.Arg) : Option Nat :=
-  match a.seq.parts.toList with
-  | [.affine false k 0 _] => match (P.defs[P.root]!).body.nodes[k]? with
-    | some n => if NciCheck.Desc.isInputNode P n then some k else none
-    | none => none
-  | _ => none
 
 /-- Refuses with `why` unless `b`: one step of a `do` block, so what its acceptance gives is read off it step by step
 (`Properties.NetworkScan`). -/
@@ -618,15 +600,6 @@ def selectEntryPins : List String :=
 
 /-- The entries' Definitions the check takes, by closure digest: `slotEntryPins` and `selectEntryPins`. -/
 def entryPins : List String := slotEntryPins ++ selectEntryPins
-
-/-- **A Program's input gates**: each of its root's input nodes (`Flock.Program.inputId?`, of either binding time) gives
-its members times its width, so a `Value<w>` leaf is `w` Boolean input gates. The decoder refuses an input node
-outside the root's body, so these are all of them: `#freeInputs` at no ingress, at least `#(freeInputs \ reg)` at
-every `reg` and horizon. It reads the root's nodes, not the unrolled circuit. -/
-def inputGates (prog : Flock.Program.Prog) : Nat :=
-  (((prog.defs[prog.root]?).map (·.body.nodes)).getD #[]).foldl (fun n x => n + match prog.defs[x.fn]? with
-    | some d => if d.prim then ((Flock.Program.inputId? d.key).map (x.members * ·.2)).getD 0 else 0
-    | none => 0) 0
 
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
 canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
