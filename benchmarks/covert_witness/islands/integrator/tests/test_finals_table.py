@@ -154,42 +154,42 @@ def test_two_reruns_give_p_against_the_best_route_with_the_search_runs_rho(tmp_p
 
 
 def test_where_the_search_splits_h_has_no_finished_finals_seed_p_is_the_search_splits(tmp_path):
-    """At 1.1x the search's honest H is r-cheap (C 2e9, below r-honest's 4e9), whose rerun f-c hasn't finished: the
-    honest p is the search split's, C_gates over r-cheap's, so labelled, never a final-set p against r-honest, which
-    goes beside it; p_any still reads the final set, its search H r-covert having a finished seed. With a cheaper
-    covert search point outside the finals, p_any too is the search split's, the scorer's stored p, and S reads it.
-    An H that isn't launched or is dropped says so; one that finished without reaching leaves p on the final set,
-    with a caveat."""
+    """At 1.1x the search's honest H is r-cheap (C 2e9, below r-honest's 4e9), whose rerun f-c hasn't finished: every
+    row of the group takes the search split's honest p, C_gates over r-cheap's, so labelled, and no finals C is
+    divided by r-honest's; p_any still reads the final set, its search H r-covert having a finished seed. With a
+    cheaper covert search point outside the finals, p_any too is the search split's, the scorer's stored p, and S
+    reads it. An H that isn't launched or is dropped says so; one that finished without reaching leaves p on the
+    final set, with a caveat."""
     t, md = table(tmp_path, cheap="running")
     by = {tb["gain"]: tb for tb in t["tables"]}
     one, rows = by[1.1], {r["run"]: r for r in by[1.1]["rows"]}
-    running = "p on the search split: H's reruns f-c not finished"
+    running = "search split, H's seeds own (f-c) unfinished"
     assert one["H_honest_search"] | {"seeds": None} == {
         "record": "r-cheap@20", "C_gates": 2e9, "point": "r-cheap point", "seeds": None, "finished": 0, "planned": 1}
-    assert one["p_honest_basis"] == running and rows["r-covert"]["p_honest_basis"] == running
-    assert rows["r-covert"]["p_honest"] == 0.5 and rows["r-covert"]["p_honest_final"] == pytest.approx(0.4)
-    assert rows["r-honest"]["p_honest"] == 2 and rows["r-honest"]["p_honest_final"] == 1
-    assert rows["r-honest"]["p_honest_range"] is None and rows["r-honest"]["p_honest_final_range"] == [1, 1]
+    assert one["p_honest_basis"] == running
+    assert all(r["p_honest_basis"] == running and r["p_honest_final"] is None and r["p_honest_range"] is None
+               for r in one["rows"]) and len(one["rows"]) == 3  # the whole group, never a row against r-honest
+    assert rows["r-covert"]["p_honest"] == 0.5 and rows["r-honest"]["p_honest"] == 2
     assert rows["r-cheap"]["p_honest"] == 1 and rows["r-cheap"]["C"] is None  # shown: its search run reached
-    assert one["p_any_basis"] == FT.FINAL_SET and rows["r-covert"]["p_any"] == 1
+    assert one["p_any_basis"] == FT.FINAL_SET and rows["r-covert"]["p_any"] == 1 == rows["r-covert"]["p_any_final"]
     assert rows["r-covert"]["S"] == pytest.approx(1 * 3.0)
     assert rows["r-cheap"]["p_any"] is None and rows["r-cheap"]["p_any_search"] == 2
     assert by[2]["p_honest_basis"] == FT.FINAL_SET  # r-honest is the search's honest H there, and it finished
-    assert f"- p_honest, p against the honest reference, reads: {running}" in md
-    assert "0.5 (search split) (final set 0.4; search split 0.5)" in md
+    assert f"- p_honest, p against the honest reference, reads: {running}" in md and "| 0.5 (search split) |" in md
 
     t, md = table(tmp_path / "other", cheap="running", other=True)
     one = t["tables"][0]
     rows = {r["run"]: r for r in one["rows"]}
-    assert one["p_any_basis"] == "p on the search split: H (r-other@3) is not a finals point"
+    assert one["p_any_basis"] == "search split, H (r-other@3) is not a finals point"
     assert one["H_any_search"] == {"record": "r-other@3", "C_gates": 3e8, "point": None}
-    assert rows["r-covert"]["p_any"] == pytest.approx(1e9 / 3e8) and rows["r-covert"]["p_any_final"] == 1
-    assert rows["r-covert"]["S"] == pytest.approx(1e9 / 3e8 * 3.0) and rows["r-honest"]["p_any_final"] == 2.5
+    assert all(r["p_any_basis"] == one["p_any_basis"] and r["p_any_final"] is None for r in one["rows"])
+    assert rows["r-covert"]["p_any"] == pytest.approx(1e9 / 3e8) and rows["r-honest"]["p_any"] == pytest.approx(4e9 / 3e8)
+    assert rows["r-covert"]["S"] == pytest.approx(1e9 / 3e8 * 3.0)
     assert [r["run"] for r in one["rows"]] == ["r-covert", "r-cheap", "r-honest"]  # by the search split's p_any
     assert rows["r-covert"]["p_honest_basis"] == running and "not a finals point" in md
 
-    for mode, basis in (("unlaunched", "p on the search split: H's reruns not launched (seeds own planned)"),
-                        ("dropped", "p on the search split: H (r-cheap point, r-cheap@20) not rerun in the finals")):
+    for mode, basis in (("unlaunched", "search split, H's seeds own (not launched) unfinished"),
+                        ("dropped", "search split, H (r-cheap point, r-cheap@20) not rerun in the finals")):
         t, _ = table(tmp_path / mode, cheap=mode)
         assert t["tables"][0]["p_honest_basis"] == basis
         assert {r["run"]: r for r in t["tables"][0]["rows"]}["r-covert"]["p_honest"] == 0.5
