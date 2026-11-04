@@ -357,7 +357,7 @@ def _median(xs: Sequence[float]) -> float | None:
 def layer_gamma(result: Mapping, busy: Mapping[str, Mapping], card: Gpu, m: int, sch: Scheme,
                 model: str = KERNEL_MODEL) -> dict:
     """γ of one summed layer at `m` from a `bench.py --traced --twins` result and each traced item's busy SM-time
-    (`nsys.busy`, by range text "item <index in traced_items>"). Each linear's stock arm is the fastest of `sch.family`'s
+    (`nsys.report`'s `busy`, by range text "item <index in traced_items>"). Each linear's stock arm is the fastest of `sch.family`'s
     timed kernels by wall time (the timed pass's graph median); `gamma_least_sm` is over the one of least busy SM-time
     instead. Rep r of the layer is every linear's rep r, summed: the scheme's busy SM-time (the traced pass's rep r) and its
     host CPU above the stock side's (the timed pass's burst rep r), over the stock side's busy SM-time. `aa` is the A/A

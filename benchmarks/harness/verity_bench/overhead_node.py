@@ -17,7 +17,8 @@ in one `bench.py` process under Nsight Systems, the arm loading the cubin the ru
 the SASS gate must pass): the timed pass untraced, then at each shape a traced pass of the same
 entries that nsys captures alone (SMs Active at 10 kHz, each item an NVTX range; `--traced`). It then runs the arm's
 reference verifier on every row (`verify.py --every-row`), reads each traced item's busy SM-time from the reports
-(`nsys.busy`, the reports kept in `--scratch`, outside `$OUT`), and writes `overhead.json`: per point, the layer's γ over
+(`nsys.report`, the reports kept in `--scratch`, outside `$OUT`; a report that collected past its traced pass, or a traced
+item no report holds, refuses the run), and writes `overhead.json`: per point, the layer's γ over
 the fastest stock arm by wall time, beside it over the least-SM-time arm, with the weight side as a bound, the A/A control,
 the cross-check, ε from the scheme's function at the same point and card, and why each point's γ isn't of record. A kernel
 point runs no model, so it has no perplexity; nor does it serve requests, so it has no load counts to keep on the node.
@@ -258,10 +259,21 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
                 whys.append(f"nsys export of {report.name} exited {erc}")
                 continue
             try:
-                busy |= nsys.busy(sqlite, card, "item ")
+                got = nsys.report(sqlite, card, "item ")
             except ValueError as ex:
                 whys.append(f"{report.name} has no busy SM-time: {ex}")
-        doc["reports"] = exports
+                continue
+            busy |= got["busy"]
+            exports[-1] |= {"items": got["ranges"], "stray_kernels": got["stray"]}
+            if got["ranges"] and got["stray"] > got["ranges"]:
+                whys.append(f"{report.name} traced {got['stray']} kernels outside its {got['ranges']} traced items, more "
+                            "than a flush each: its capture range ran past the traced pass, so a timed pass may have run "
+                            "traced")
+        traced = len(result.get("traced_items") or [])
+        if missing := [i for i in range(traced) if f"item {i}" not in busy]:
+            whys.append(f"nsys recorded {traced - len(missing)} of the {traced} traced items (item {missing[0]} the first "
+                        "missing): a capture range opened after its items")
+        doc["reports"], doc["traced_prime"] = exports, result.get("traced_prime")
         _write(out / "busy.json", busy)
         if sch.arm:
             vrc = run([sys.executable, str(HARNESS / "verify.py"), str(bench_json), "--every-row", "--no-ledger",

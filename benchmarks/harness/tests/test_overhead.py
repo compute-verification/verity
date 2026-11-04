@@ -71,21 +71,26 @@ RUN_ENTRIES = (("baseline", "k_fast", 1.0, 1.0), ("baseline", "k_lean", 0.8, 1.2
                ("arm", "hash", 1.5, 1.6), ("weight", "hash", 0.1, 0.1))
 #: the host's enqueue as a share of a call's SM-time, at the card's weight
 HOST = 0.1
+#: the kernels a late capture range collected outside the traced items (the next shape's whole pipeline)
+STRAY = 500
 
 
 class Node:
     """The node's programs: bench.py's results from the roofline (a sweep) or from `RUN_ENTRIES` (a timed run, its traced
-    pass beside it), nsys's reports, one a shape's capture range, with each traced item's kernels at full SMs Active, and
-    verify.py's verdicts. The arm loads the cubin the run was sent (`loads`), or else builds `built`, and the SASS gate
-    passes the one it loads."""
+    pass beside it), nsys's reports, the priming range's (empty) and then one a shape's capture range, with each traced
+    item's kernels at full SMs Active, and verify.py's verdicts. The arm loads the cubin the run was sent (`loads`), or
+    else builds `built`, and the SASS gate passes the one it loads. `late`: the first shape's range opened after its items,
+    so nsys collected from then to the next shape's stop (`STRAY` kernels besides its items)."""
 
     def __init__(self, tmp: Path, *, reps: int = 20, accept: bool = True, card: str = "NVIDIA H200", spread: float = 0.0,
-                 loads: bool = True, built: bytes = b"a cubin built in the run", bridge_errors: dict | None = None):
+                 loads: bool = True, built: bytes = b"a cubin built in the run", bridge_errors: dict | None = None,
+                 late: bool = False):
         self.tmp, self.reps, self.accept, self.card, self.spread = tmp, reps, accept, card, spread
-        self.loads, self.built, self.bridge_errors = loads, built, bridge_errors or {}
+        self.loads, self.built, self.bridge_errors, self.late = loads, built, bridge_errors or {}, late
         self.calls: list[list[str]] = []
         self.env: dict[str, str] = {}
         self.reports: dict[str, list[tuple[int, int, bool]]] = {}
+        self.strays: dict[str, int] = {}
 
     def __call__(self, argv: list[str], log: Path) -> int:
         self.calls.append(argv)
@@ -119,15 +124,21 @@ class Node:
         bench = argv[argv.index("-o") + 2:]
         fam, arm = between(bench, "--families")[0], "--arm" in bench
         items, traced, rows = [], [], []
+        prime = prof.with_name(f"{prof.name}.1.nsys-rep")
+        prime.write_text("a priming range's report")
+        self.reports[str(prime)] = []
         for j, lab in enumerate(between(bench, "--shapes")):
             m, n, k = mnk(lab)
             base = m * n * k * 1e-12  # SM-seconds a call
             entries = [e for e in RUN_ENTRIES if arm or e[0] not in ("arm", "weight")]
             keys = {e: [e[0], lab, ARM if e[0] in ("arm", "weight") else fam, e[1]] for e in entries}
             graph: dict[str, list[float]] = {}
-            report = prof.with_name(f"{prof.name}.{j + 1}.nsys-rep")
-            report.write_text("a report")
-            kernels = self.reports[str(report)] = []
+            report = prof.with_name(f"{prof.name}.{j + 2 - self.late}.nsys-rep")
+            if not (self.late and j == 0):
+                report.write_text("a report")
+            if self.late and j == 1:
+                self.strays[str(report)] = STRAY
+            kernels = [] if self.late and j == 0 else self.reports.setdefault(str(report), [])
             for r in range(self.reps):
                 drift = 1 + 0.01 * (r * 7 % 5)
                 for e in entries:
@@ -147,7 +158,8 @@ class Node:
                     kernels.append((len(traced) - 1, round(sm_s * 1e9 / H200.sms), e[0] == "arm"))
             rows.append({"label": lab, "m": m, "n": n, "k": k, **({"arms": {ARM: {}}} if arm else {}),
                          "summary": {key: {"graph": {"median": sorted(xs)[len(xs) // 2]}} for key, xs in graph.items()}})
-        more = {"items": items, "traced_items": traced, "sass_gate": {"ok": True, "binaries": []}}
+        more = {"items": items, "traced_items": traced, "sass_gate": {"ok": True, "binaries": []},
+                "traced_prime": {"start_s": [0.2], "ready_s": 5.0, "ready": True}}
         if arm:
             sent = self.env.get(overhead_node.CUBIN_ENV) if self.loads else None
             path, cubin = (sent, Path(sent).read_bytes()) if sent else ("built.cubin", self.built)
@@ -162,8 +174,14 @@ class Node:
         cuLaunchKernel) that launches one kernel of 16 blocks an SM on every SM, at SMs Active 100% for its duration."""
 
         db = sqlite3.connect(argv[argv.index("-o") + 1])
+        if not self.reports[argv[-1]]:
+            db.close()
+            return 0
         db.executescript(SCHEMA)
         t = 1000
+        for c in range(self.strays.get(argv[-1], 0)):
+            db.execute("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, ?, 1, 1, 1, 128, 1, 1, 32, 0, 0)",
+                       (t, t + 10, 10 ** 6 + c))
         for i, dur, driver in self.reports[argv[-1]]:
             db.execute("INSERT INTO NVTX_EVENTS VALUES (?, ?, 7, ?, NULL)", (t, t + dur + 200, f"item {i}"))
             db.execute(f"INSERT INTO CUPTI_ACTIVITY_KIND_{'DRIVER' if driver else 'RUNTIME'} VALUES (?, ?, 7, ?)",
@@ -342,7 +360,8 @@ def test_busy_sm_time_integrates_sms_active_over_each_ranges_kernels_and_checks_
     db.execute("INSERT INTO CUPTI_ACTIVITY_KIND_RUNTIME VALUES (100, 200, 1, 11)")
     db.execute("INSERT INTO CUPTI_ACTIVITY_KIND_DRIVER VALUES (20100, 20200, 1, 12)")
     db.executemany("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, ?, ?, 1, 1, 128, 1, 1, 32, 0, 0)",
-                   [(1000, 5000, 11, H200.sms * 16), (5000, 6000, 11, 32), (21000, 29000, 12, H200.sms * 16)])
+                   [(1000, 5000, 11, H200.sms * 16), (5000, 6000, 11, 32), (21000, 29000, 12, H200.sms * 16),
+                    (15000, 16000, 13, 1)])
     # SMs Active: full over the first kernel, 2 of 132 SMs over the second, then 100% sampled every 2 µs over the third
     # but reading 110% of the SMs (a metric that over-reads)
     samples = [(1000, 0.0), (5000, 100.0), (6000, 100 * 2 / H200.sms), (21000, 0.0)]
@@ -351,13 +370,17 @@ def test_busy_sm_time_integrates_sms_active_over_each_ranges_kernels_and_checks_
     db.commit()
     db.close()
 
-    got = nsys.busy(db_path, H200, "item ")
+    rep = nsys.report(db_path, H200, "item ")
+    got = rep["busy"]
+    assert rep["ranges"] == 3 and rep["stray"] == 1
     assert set(got) == {"item 0", "item 1", "item 2"}
     assert got["item 0"]["kernels"] == 2 and got["item 0"]["span_ns"] == 5000
     assert got["item 0"]["sm_ns"] == pytest.approx(H200.sms * 4000 + 2 * 1000)
     assert got["item 0"]["occupied_sm_ns"] == pytest.approx(H200.sms * 4000 + 2 * 1000) and got["item 0"]["ratio"] == 1
     assert got["item 1"]["sm_ns"] == pytest.approx(H200.sms * 8000 * 1.1)
     assert got["item 2"] == {"sm_ns": None, "occupied_sm_ns": None, "ratio": None, "kernels": 0}
+    sqlite3.connect(tmp_path / "prime.sqlite").close()
+    assert nsys.report(tmp_path / "prime.sqlite", H200, "item ") == {"busy": {}, "ranges": 0, "stray": 0}
     assert O.cross_check_why({"a": got["item 0"]["ratio"]}) is None
     assert "1 entries" in O.cross_check_why({"a": got["item 0"]["ratio"], "b": got["item 1"]["ratio"]})
     assert "(tail: 0.7)" in O.cross_check_why({"tail": 0.7, "a": 1.02}) and O.cross_check_why({"none": None})
@@ -450,7 +473,10 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
     bench = prof[prof.index("-o") + 2:]
     assert {"--traced", "--twins", "--bridge"} <= set(bench) and between(bench, "--families") == ["fp8-blk128"]
     assert between(bench, "--methods") == ["graph", "burst"] and between(bench, "--arm") == [scheme.arm]
-    assert len(exports) == 2 * len(LINEARS) == len(doc["reports"]) and all(e["exit"] == 0 for e in doc["reports"])
+    assert len(exports) == 1 + 2 * len(LINEARS) == len(doc["reports"]) and all(e["exit"] == 0 for e in doc["reports"])
+    assert doc["reports"][0] == {"report": "prof.1.nsys-rep", "exit": 0, "items": 0, "stray_kernels": 0}
+    assert {(e["items"], e["stray_kernels"]) for e in doc["reports"][1:]} == {(5 * 20, 0)}
+    assert doc["traced_prime"]["ready"]
     assert all(e[1] == "export" and e[e.index("-o") + 1].startswith(str(tmp_path / "scratch")) for e in exports)
     assert verify[2:5] == [str(run_dir / "out" / "bench.json"), "--every-row", "--no-ledger"] and SHA in verify
     assert not list((run_dir / "out").glob("*.nsys-rep")) and not list((run_dir / "out").glob("*.sqlite"))
@@ -464,7 +490,7 @@ def test_stocks_gamma_is_the_aa_control_of_its_twinned_kernel_against_its_origin
     node = Node(tmp_path)
     rc, run_dir = node_run(tmp_path, node, points, "stock", "art:" + "b" * 64)
     doc = json.loads((run_dir / "out" / "overhead.json").read_text())
-    assert rc == 0 and len(node.calls) == 1 + 2 * len(LINEARS) and "--arm" not in node.calls[0]
+    assert rc == 0 and len(node.calls) == 2 + 2 * len(LINEARS) and "--arm" not in node.calls[0]
     for p in doc["points"].values():
         assert p["gamma"] == p["aa"] and p["gamma"]["gamma"] == pytest.approx(0.0, abs=1e-4) and p["whys"] == []
         assert p["epsilon"] == {"why": "stock has no ε: it is the A/A control"} and p["verified"] == {}
@@ -490,6 +516,19 @@ def test_a_timed_run_says_why_each_point_isnt_of_record(tmp_path, scheme):
     assert json.loads((run_dir / "out" / "overhead.json").read_text())["whys"] == [
         f"no binary the SASS gate passed is the cubin the run was sent ({CUBIN_ART}): the arm must load "
         "$VERITY_BENCH_CUBIN and list it in its binaries"]
+
+
+def test_a_timed_run_refuses_a_capture_range_that_opened_after_its_items(tmp_path, scheme):
+    """As nsys does when a start outlasts its wait: the first shape's items in no report, and the next report collected
+    from then to its own stop, the next shape's timed pass included."""
+
+    points = node_points(tmp_path, Node(tmp_path))
+    rc, run_dir = node_run(tmp_path, Node(tmp_path, late=True), points, "pearl-plus")
+    doc = json.loads((run_dir / "out" / "overhead.json").read_text())
+    assert rc == 1 and doc["whys"] == [
+        f"prof.2.nsys-rep traced {STRAY} kernels outside its 100 traced items, more than a flush each: its capture range "
+        "ran past the traced pass, so a timed pass may have run traced",
+        "nsys recorded 700 of the 800 traced items (item 0 the first missing): a capture range opened after its items"]
 
 
 def test_a_timed_run_refuses_points_that_arent_a_finished_sweep_of_its_card(tmp_path):

@@ -71,6 +71,8 @@ MEMORY_SHARE = 0.85
 WARMUP_MS, WARMUP_MAX_MS, STEADY = 10_000.0, 60_000.0, 0.005
 #: a timed item's device ms at least (every entry's sized to the same); the panel's "clock gap" between the sides' medians
 ITEM_MS, CLOCK_GAP = 40.0, 0.005
+#: `--traced`'s priming: a profiler start taking this long (s) found the profiler not yet collecting; at most this many
+PRIME_READY_S, PRIME_TRIES = 5.0, 4
 
 
 class NegativeControlFailed(RuntimeError):
@@ -347,6 +349,23 @@ class Bench:
             out.append({"key": list(e.key), "ms_per_call": ms, "calls": unit(e, burst) * e.replays, "replays": e.replays,
                         "item_ms": ms * unit(e, burst) * e.replays})
         return {"target_ms": target, "entries": out}
+
+
+def prime_profiler(dev, clock=time.monotonic, ready_s: float = PRIME_READY_S, tries: int = PRIME_TRIES) -> dict:
+    """Empty capture ranges before the first shape (`--traced`), until a profiler start returns within `ready_s`. A
+    profiler's first start is slow (nsys's can block about 30 s), and one that returns before the profiler collects loses
+    its range: nsys ignores the stop and collects on to the next one, through whatever ran between them. `start_s`: each
+    start's seconds."""
+
+    starts: list[float] = []
+    while len(starts) < tries:
+        t0 = clock()
+        dev.profiler_start()
+        starts.append(clock() - t0)
+        dev.profiler_stop()
+        if starts[-1] < ready_s:
+            break
+    return {"start_s": starts, "ready_s": ready_s, "ready": starts[-1] < ready_s}
 
 
 def free_entries(bench: Bench, entries: list[Entry]) -> None:
@@ -1150,7 +1169,8 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--traced", action="store_true",
                    help="after each shape's timed reps, a traced pass of as many burst reps between cudaProfilerStart and "
                         "Stop, each item an NVTX range 'item <index in traced_items>', for nsys to attribute its kernels "
-                        "(verity bench overhead's busy SM-time)")
+                        "(verity bench overhead's busy SM-time); first, empty ranges until a start returns at once "
+                        "(traced_prime)")
     p.add_argument("--twins", action="store_true",
                    help="time each family's fastest finalist twice, the second as ('twin', ...): an A/A control")
     p.add_argument("--plan", action="store_true", help="print each shape's operand sets, burst and memory, and exit")
@@ -1289,6 +1309,11 @@ def main(argv: list[str] | None = None) -> int:
         card = I.check_card(dev.info["name"], dev.info["capability"], dev.info["sms"], nid["driver"])
         out["identity"] = {**ident, "card": card, "nvml": nid, "cuda": dev.info}
         out["versions"] = N.versions(dev)
+        if args.traced:
+            if not dev.has_profiler:
+                raise RuntimeError("--traced needs a libpouw_harness.so with NVTX ranges and the profiler API "
+                                   "(ph_profiler_start): rebuild it")
+            out["traced_prime"] = prime_profiler(dev)
         out["preflight_fill"] = preflight_fill(dev)
         if any(chained(args, s) for s in SH.select(args.shapes)):
             if not dev.has_chain:
@@ -1326,9 +1351,6 @@ def main(argv: list[str] | None = None) -> int:
         lt_ws = dev.alloc(B.LT_WORKSPACE)
         bench = Bench(dev, nvml, args.reps, tuple(args.methods), log)
         bench.sass, bench.bridge, bench.traced = sass, bridge, args.traced
-        if args.traced and not dev.has_profiler:
-            raise RuntimeError("--traced needs a libpouw_harness.so with NVTX ranges and the profiler API "
-                               "(ph_profiler_start): rebuild it")
         fams = [B.FAMILIES[f] for f in args.families]
         for i, shape in enumerate(SH.select(args.shapes)):
             log(f"shape {shape.label}")

@@ -40,7 +40,10 @@ beside every finalist stock kernel of that scaling and the tune's fastest one's 
 `bench.py` process under Nsight Systems. Warm-up is the harness's own. At each shape the timed pass runs untraced (graph
 replays for wall time, bursts for the host's CPU), and a traced pass of the same entries runs beside it (`--traced`):
 nsys captures only that pass (`--capture-range=cudaProfilerApi`), each item an NVTX range, and samples "SMs Active" at
-10 kHz. An item's busy SM-time is that metric integrated over its kernels' span, a call.
+10 kHz. An item's busy SM-time is that metric integrated over its kernels' span, a call. nsys's first start is slow, and
+one that returns before nsys collects loses its range, so `bench.py` first opens empty ranges until one starts at once
+(`traced_prime`). A run is refused if a report traced kernels outside its items (more than a flush each: the timed pass
+may have run traced), or if a traced item is in no report.
 
 Rep r of the layer is every linear's rep r, summed. γ's numerator is the scheme's busy SM-time plus the host CPU
 core-seconds it spends above stock's, at the node's weight (0.48 SM-s a core-second on the H200 node, 1.64 on the

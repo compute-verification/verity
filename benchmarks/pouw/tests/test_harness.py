@@ -412,6 +412,32 @@ def test_the_traced_pass_reps_every_entry_by_burst_inside_the_profilers_range_ea
         (e.key, r, "burst") for e in es for r in range(S.MIN_REPS))
 
 
+def test_the_profiler_is_primed_with_empty_ranges_until_a_start_returns_at_once():
+    """A start that blocks (the profiler starting up) is followed by another empty range; one that returns at once ends the
+    priming, and it stops at its bound unready."""
+
+    class Dev:
+        def __init__(self, blocks):
+            self.blocks, self.t, self.log = list(blocks), 0.0, []
+
+        def profiler_start(self):
+            self.t += self.blocks.pop(0) if self.blocks else 0.0
+            self.log.append("start")
+
+        def profiler_stop(self):
+            self.log.append("stop")
+
+    dev = Dev([30.0, 0.1])
+    got = H.prime_profiler(dev, clock=lambda: dev.t)
+    assert got["start_s"] == pytest.approx([30.0, 0.1]) and got["ready"] and got["ready_s"] == H.PRIME_READY_S
+    assert dev.log == ["start", "stop"] * 2
+    dev = Dev([])
+    assert H.prime_profiler(dev, clock=lambda: dev.t)["start_s"] == [0.0] and dev.log == ["start", "stop"]
+    dev = Dev([30.0] * 9)
+    got = H.prime_profiler(dev, clock=lambda: dev.t, tries=3)
+    assert got["start_s"] == [30.0] * 3 and not got["ready"] and dev.log == ["start", "stop"] * 3
+
+
 def test_a_burst_cycles_the_operand_sets():
     dev = FakeDevice()
     calls = [FakeCall(dev, 1.0) for _ in range(3)]

@@ -12,6 +12,9 @@ kernel's threads, registers and shared memory under the card's limits (`overhead
         --gpu-metrics-frequency=10000 --capture-range=cudaProfilerApi --capture-range-end=repeat -o PROF CMD...
     nsys export --type sqlite -o PROF.sqlite PROF.nsys-rep      (each report: one a capture range)
 
+`bench.py --traced` primes the profiler with empty capture ranges first, whose reports hold no range; a report that holds
+kernels its ranges didn't launch, beyond one flush a range, collected past the traced pass (`report`'s `stray`).
+
 Standard library only.
 """
 
@@ -103,9 +106,8 @@ class Range:
 def ranges(db: sqlite3.Connection, prefix: str = "") -> list[Range]:
     """Every NVTX push/pop range whose text starts with `prefix`, with the kernels the CUDA calls inside it launched."""
 
-    for table in ("NVTX_EVENTS", "CUPTI_ACTIVITY_KIND_RUNTIME", "CUPTI_ACTIVITY_KIND_KERNEL"):
-        if not _has(db, table):
-            raise ValueError(f"the report has no {table}: profile with --trace=cuda,nvtx")
+    if not _has(db, "NVTX_EVENTS"):
+        return []
     strings = _strings(db)
     cols = _cols(db, "NVTX_EVENTS")
     text = "COALESCE(text, textId)" if "textId" in cols else "text"
@@ -113,6 +115,11 @@ def ranges(db: sqlite3.Connection, prefix: str = "") -> list[Range]:
              for a, b, tid, t in db.execute(f"SELECT start, end, globalTid, {text} FROM NVTX_EVENTS "
                                             "WHERE end IS NOT NULL ORDER BY start")]
     marks = [m for m in marks if str(m[3]).startswith(prefix)]
+    if not marks:
+        return []
+    for table in ("CUPTI_ACTIVITY_KIND_RUNTIME", "CUPTI_ACTIVITY_KIND_KERNEL"):
+        if not _has(db, table):
+            raise ValueError(f"the report has no {table}: profile with --trace=cuda,nvtx")
     calls: dict[int, list[tuple[int, int]]] = defaultdict(list)
     for table in CALLS:
         if _has(db, table):
@@ -154,14 +161,20 @@ def occupied_ns(k: Kernel, card) -> float:
     return (k.end - k.start) * min(card.sms, -(-k.blocks // blocks_per_sm(k, card)))
 
 
-def busy(db_path: Path, card, prefix: str = "") -> dict[str, dict]:
-    """Each range's busy SM-time (SM·ns) from SMs Active, its cross-check and their ratio, by the range's text."""
+def report(db_path: Path, card, prefix: str = "") -> dict:
+    """One report's ranges whose text starts with `prefix`: `busy`, each one's busy SM-time (SM·ns) from SMs Active, its
+    cross-check and their ratio, by its text; `ranges`, how many; and `stray`, the report's kernels none of them launched
+    (a capture range around the ranges alone holds one flush a range besides). A report with no such range (a priming
+    range's) has an empty `busy` and needs no metric."""
 
     db = sqlite3.connect(db_path)
     try:
-        ts, vs = sm_active(db)
+        rs = ranges(db, prefix)
+        kernels = db.execute("SELECT COUNT(*) FROM CUPTI_ACTIVITY_KIND_KERNEL").fetchone()[0] if _has(
+            db, "CUPTI_ACTIVITY_KIND_KERNEL") else 0
         out = {}
-        for r in ranges(db, prefix):
+        ts, vs = sm_active(db) if rs else ([], [])
+        for r in rs:
             span = r.span
             if span is None:
                 out[r.text] = {"sm_ns": None, "occupied_sm_ns": None, "ratio": None, "kernels": 0}
@@ -170,6 +183,6 @@ def busy(db_path: Path, card, prefix: str = "") -> dict[str, dict]:
             occupied = sum(occupied_ns(k, card) for k in r.kernels)
             out[r.text] = {"sm_ns": sm_ns, "occupied_sm_ns": occupied, "ratio": sm_ns / occupied if occupied else None,
                            "kernels": len(r.kernels), "span_ns": span[1] - span[0]}
-        return out
+        return {"busy": out, "ranges": len(rs), "stray": kernels - sum(len(r.kernels) for r in rs)}
     finally:
         db.close()
