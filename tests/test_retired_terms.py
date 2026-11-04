@@ -3,11 +3,14 @@ A semantically meaningful part of the registered or actual circuit is a block, a
 (`ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty or wrong unit an incorrect
 proof block (Glossary, "Incorrect proof block"). The proof service is the proof system (`ARCHITECTURE.md`, Glossary, "Proof system").
 
-Scanned: every tracked text file but the Lean packages' `lakefile.toml` and their locks' reasons (`lean-audit.json`), and
-of a `.lean` file only its comments and docstrings (``lean_prose``, the lane-text lint's reader), where every site is held
-to its file's count in ``LEAN_LIST``: a file past its count, or with a site and no entry, fails, and the ratchet gate holds
-the list's total from rising, so it only shrinks (``--prune`` lowers it to what the tree holds). A term matches
-case-insensitively as two words, hyphenated, or wrapped onto the next line (behind a comment marker or not). Every file under `benchmarks/rho/`, `benchmarks/network_traces/` and the
+Scanned: every tracked text file but the Lean packages' `lakefile.toml` and their locks' reasons (`lean-audit.json`), the
+lints that name the terms (``LINTS``: `tests/lint/test_repo_retired_terms.py` holds every term the table retires, in the
+whole text of each file, to the file's count, while this one holds its terms at zero in prose outside the Lean) and the
+word maps of `tools/move/`, which name the words they retire; and of a `.lean` file only its comments and docstrings
+(``lean_prose``, the lane-text lint's reader), where every site is held to its file's count in ``LEAN_LIST``: a file past
+its count, or with a site and no entry, fails, and the ratchet gate holds the list's total from rising, so it only shrinks
+(``--prune`` lowers it to what the tree holds). A term matches case-insensitively as two words, hyphenated, or wrapped onto
+the next line (behind a comment marker or not). Every file under `benchmarks/rho/`, `benchmarks/network_traces/` and the
 network tests retires more (``INCORRECT_TERMS``): its proof blocks, their steps, outputs and windows, and K's terms for
 them are incorrect, never faulty or wrong, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`,
 a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-terms table
@@ -208,10 +211,16 @@ PENDING: dict[str, str] = {
 }
 
 
+#: the lints that name the terms to find them: this one, and the ratchet over every term `GLOSSARY.md`'s table retires
+LINTS = ("tests/test_retired_terms.py", "tests/lint/test_repo_retired_terms.py")
+#: the word maps a move renames by, which name the words they retire
+MAPS = "tools/move/"
+
+
 def scanned(files: list[str]) -> list[str]:
-    """Every file but the Lean packages' configs and locks, PENDING and this one, which names the terms to find them."""
+    """Every file but the Lean packages' configs and locks, PENDING, the LINTS and the word maps."""
     return sorted(f for f in files if not f.endswith(("lean-audit.json", "lakefile.toml"))
-                  and f not in PENDING and f != "tests/test_retired_terms.py")
+                  and f not in PENDING and f not in LINTS and not f.startswith(MAPS))
 
 
 _CODE_CHAR = re.compile(r"\S")
