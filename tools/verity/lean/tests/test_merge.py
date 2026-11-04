@@ -526,6 +526,72 @@ def test_an_inline_premise_one_side_dropped_stays_while_the_merged_record_lists_
     assert why == ["shape[inline][P.t][a]: removed on one side and changed on the other"]
 
 
+def test_a_checkout_whose_merge_rules_predate_origin_main_s_merges_by_origin_main_s_drivers(tmp_path, monkeypatch):
+    """#6676's 935c15b76 merged #5899's head into its checkout of b018a08d, and git ran that checkout's `merge.py`, from
+    before `held`: it applied a side's drop of `shape.inline` premises that the merged tree still printed, for 12 guarantees,
+    and the merged tree's records failed `guarantees.inline-hypothesis` (LEAN-172).  Here a branch whose checkout has a
+    `merge.py` without `held` dropped premise `a`, and merges `main`, whose driver has it: the driver defers to
+    `origin/main`'s copy of its directory (`deferred`), so `a` stays.  With deferring off, the checkout's own driver drops `a`,
+    as 935c15b76 did.  A branch that changed `merge.py` itself merges by its own, and so does one that holds `origin/main`'s
+    rules."""
+    for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+                 "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.delenv(M.DEFERRED, raising=False)
+    repo, rec = tmp_path / "repo", {"owner": "@lean", "signature": ["P.t : P.T"], "assumptions": [], "type_hash": "a" * 64}
+    (lean := repo / "tools" / "verity" / "lean").mkdir(parents=True)
+    driver = (HERE.parent / "merge.py").read_text()
+    assert (stale := driver.replace("    held(base, ours, theirs, out, candidate)\n", "")) != driver
+    (lean / "merge.py").write_text(stale)
+    shutil.copy(HERE.parent / "check.py", lean / "check.py")
+    (repo / ".gitattributes").write_text("lean-audit.json merge=lean-audit\n")
+    t, path, deferring = {"a": "why a", "b": "why b"}, repo / "lean-audit.json", "merge.py: merging with origin/main's drivers"
+
+    def commit(msg: str, **inline: dict) -> None:
+        path.write_text(A.text({"guarantees": {"P.t": rec, "P.u": rec}, "shape": {"inline": {f"P.{g}": v for g, v in inline.items()}}}))
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", msg)
+
+    def inline() -> dict:
+        return json.loads(path.read_text())["shape"]["inline"]
+    git(repo, "init", "-q", "-b", "main")
+    commit("base", t=t, u={"c": "why c"})
+    subprocess.run([sys.executable, "tools/verity/lean/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
+    git(repo, "checkout", "-q", "-b", "pr")
+    commit("pr: --update on an older tree", t={"b": "why b"}, u={"c": "why c"})
+    git(repo, "checkout", "-q", "main")
+    (lean / "merge.py").write_text(driver)
+    commit("main: held", t=t, u={"c": "why c", "d": "why d"})
+    git(repo, "update-ref", "refs/remotes/origin/main", "main")
+    git(repo, "checkout", "-q", "pr")
+
+    monkeypatch.setenv(M.DEFERRED, "off")
+    off = git(repo, "merge", "--no-edit", "main")
+    monkeypatch.delenv(M.DEFERRED)
+    assert deferring not in off.stderr and inline() == {"P.t": {"b": "why b"}, "P.u": {"c": "why c", "d": "why d"}}
+    git(repo, "reset", "-q", "--hard", "ORIG_HEAD")
+
+    git(repo, "checkout", "-q", "-b", "own")
+    (lean / "merge.py").write_text(stale + "# a rule of its own\n")
+    git(repo, "commit", "-q", "-am", "own: merge.py")
+    own = git(repo, "merge", "--no-edit", "main")
+    assert deferring not in own.stderr and inline()["P.t"] == {"b": "why b"}
+
+    git(repo, "checkout", "-q", "pr")
+    merged = git(repo, "merge", "--no-edit", "main")
+    assert deferring in merged.stderr and "shape[inline][P.t][a] (kept)" in merged.stderr
+    assert inline() == {"P.t": t, "P.u": {"c": "why c", "d": "why d"}}
+    assert (lean / "merge.py").read_text() == driver
+
+    git(repo, "checkout", "-q", "main")
+    commit("main: e", t=t, u={"c": "why c", "d": "why d", "e": "why e"})
+    git(repo, "update-ref", "refs/remotes/origin/main", "main")
+    git(repo, "checkout", "-q", "pr")
+    commit("pr: f", t=t | {"f": "why f"}, u={"c": "why c", "d": "why d"})
+    again = git(repo, "merge", "--no-edit", "main")
+    assert deferring not in again.stderr and inline() == {"P.t": t | {"f": "why f"}, "P.u": {"c": "why c", "d": "why d", "e": "why e"}}
+
+
 def test_two_branches_that_each_widen_a_layer_merge_its_imports_and_reasons():
     """#1860 against #1842 (12 Oct): each side added imports to `Definitions.Accounting` and a clause to its `why`."""
     base = {"layers": {"D": {"imports": ["Mathlib", "D"], "except": [], "why": "trusted text; they import no proof"},

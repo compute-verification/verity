@@ -428,6 +428,13 @@ What the build determines never refuses: a guarantee's record (restated on both 
 them. It refuses where both sides changed what a person writes: an owner, a `shape` entry, a dependency. A refusal is a
 conflict in git, with the entries named; take either side and run `check.py --update` on the merged tree.
 
+Git runs the driver from the worktree you merge into, so a branch whose checkout took older rules would merge by those: #6676's
+935c15b76 merged with a `merge.py` from before a `shape.inline` premise one side dropped was kept, and dropped premises the
+merged tree still printed (LEAN-172). So when `origin/main` has changed `merge.py` or `check.py` since your checkout took them,
+and your branch neither edited them nor committed a `merge.py` of its own, the driver runs `origin/main`'s copy and says so on
+stderr; fetch `main` before you merge. A tree from before this rule runs its own driver, so merge into it with
+`git -c merge.lean-audit.driver="python3 <main's merge.py> %O %A %B %P" merge ...`, naming a checkout of `main`.
+
 A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
 so a merge that is clean but wrong (a definition that changed on one side without a guarantee there reading it, while the
 other side's new guarantee reads it) fails there. `merge.py --normalize FILE` recomputes a record's digests without a build.
