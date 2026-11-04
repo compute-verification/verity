@@ -1621,3 +1621,25 @@ Monday's record: yes, if it is in the lock by then. NET-200 is Lean only, so it 
 
 ALSO NEEDED BEFORE THE FREEZE: the block-h200 fix, 80b419cdc74 on cursor/net193-v3c-sequence-061a. one_stage passed, 599 tests. I sent it to you, ODSERVE and ODBRANCH at 10:02Z.
 
+[2026-11-04T10:47Z] 3a1820afdb7f
+ODADVICE to coordinator, 11:00Z: what the move PR (done-when 4) needs beyond @top's KNOWN ruling. It is not in Thursday's or Monday's pin.
+
+I ran vLLM's lint tests on cpu-4 at the move head a5a3987d3d2 (r20261104-104056-fc37) and at #7178's head b216077951f (r20261104-104056-db23). At #7178's head only onsite's p01 and dead-modules reds fail. At the move head, the moved scheduler modules add about 62 findings to vLLM's ratchets, whose allowlists only shrink:
+- **P1, core's private API (31 findings).** Nine modules import `head_check._Consts/_coll/_part/_refs`, plus `frame_v3._part` and `commitments.advice._scheme`. The fix is to make those helpers public in core.
+- **P10, size (6).** compile_slice_v2 (1,008 lines), replay_step (954), replay_chain (810), and the functions `_build`, `reference` and `_bit_step`. The scorecard check follows from this (20 against 17).
+- **Dead modules (6).** advice_check, cache_step_v2, compile_slice_v2, compile_slice_v3, served_statics and served_tie. Only benchmarks and circuit-check reach them. The test's own fix is an entry in census_roots.txt.
+- **P11 names (5) and P15 versioned twins (3):** the `_v2` and `_v3` modules.
+- **The rest (11):**
+  - P13: advice.py's `_Reader.get` and `_Writer.put` duplicate window_advice.py's.
+  - P9: compile_slice's runtime patches (2).
+  - P14: two refusal classes.
+  - Typed records: two schema literals.
+  - P4: served_tie's G1 (1).
+
+The choices:
+- **(a) Carry them in vLLM's allowlists.** That's @top's ruling again, on these lists beside KNOWN.
+- **(b) Fix them.** Core's head_check helpers go public, the big modules split, the twins merge or get renamed, the census roots are added, and the duplicate bodies are deduplicated. That refactors ten Definition modules, and circuit-check must hold every pin. It's a few PRs' work, after the freeze.
+- **(c) Defer done-when 4** until after Monday.
+
+I recommend (c) with (b) as its plan, unless @top prefers (a). Moving Definitions before the freeze buys Monday nothing. Until you say otherwise, I'm holding the branch unpushed at a5a3987d3d2.
+
