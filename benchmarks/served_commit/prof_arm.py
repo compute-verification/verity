@@ -218,7 +218,7 @@ class NativeDrainArm(RootsArm):
 
 
 class RowsArm(NativeDrainArm):
-    """`NativeDrainArm` committing under rows-sha512, COMMIT-GPU's leaves and trees on the windowed worker."""
+    """`NativeDrainArm` committing under rows-sha512, `benchmarks/pouw/commit_gpu/`'s leaves and trees on the windowed worker."""
 
     commit_scheme = "rows-sha512"
 
