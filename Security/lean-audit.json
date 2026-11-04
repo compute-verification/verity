@@ -30404,9 +30404,9 @@
    "guarantees": ["Pous.SecurityProofs.StreamedWipeMeetsInfoStated"]
   },
   "Definitions.Pous.Guarantees.StreamedWipeReads": {
-   "digest": "2b80ee77f929b3b04b8b38597ad78a77e27349558754667b3baad9697a843cce",
+   "digest": "06d75c5b02398e1920c98fc0a63d578ad80a5e185007e66c897e657df71d586e",
    "definitions": {
-    "Pous.Guarantees.StreamedWipeMeetsH200": "b87708fee02440f927c63fe6054401cdc46ce87e3095659c1d0fa89bf8793895",
+    "Pous.Guarantees.StreamedWipeMeetsH200": "3a40ae771c4bbfb62357ea0a4c8e18c0ca705a1d9e4418dab51d7390f5bc2a12",
     "Pous.Guarantees.StreamedWipeMeetsReads": "0a36a70da47be9c52663087b4373ad8a41f51d28ed4116e3037324b6045057de"
    },
    "guarantees": ["Pous.SecurityProofs.StreamedWipeMeetsH200", "Pous.SecurityProofs.StreamedWipeMeetsReads"]
