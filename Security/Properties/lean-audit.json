@@ -449,6 +449,7 @@
   "Evaluate.Casts",
   "Evaluate.TC.Spec",
   "Evaluate.TC.Dots",
+  "Evaluate.TC.Fp8Atom",
   "Evaluate.Prims",
   "Definitions.Core.Scalar",
   "Definitions.Core.Fp32",
