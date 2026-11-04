@@ -261,13 +261,14 @@ def KSLinkOn [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bou
             1 / ((M : ℝ) + 1))
 
 /-- **The instance's contract at the statements `G` admits**: at each, the calls of no witnesses are true, and at every
-inner and outer decoder the compiler's contract (`Comp.Contract`) at `Open(DE, hm96)` and `DE`'s reading of opened
-views. -/
-def ContractOn [Zero Col] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
+inner and outer decoder that meets the list-decoding spec (`decOK`, as `KSLinkOn` reads them) the compiler's contract
+(`Comp.Contract`) at `Open(DE, hm96)` and `DE`'s reading of opened views. -/
+def ContractOn [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) : Prop :=
   ∀ x, G x → (∀ e ∈ (D.record Bd.IVStar).calls x [], H e.1 = e.2) ∧
-    ∀ decI decO, (compAt D Bd decI DO decO).Contract H ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)
-      (fun v => (Proto.ofFlock Bd decI Cp).opens ((Server.ofBound Bd).openView v)) x
+    ∀ decI, decOK Bd.deploy decI → ∀ decO, decOK DO decO →
+      (compAt D Bd decI DO decO).Contract H ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)
+        (fun v => (Proto.ofFlock Bd decI Cp).opens ((Server.ofBound Bd).openView v)) x
 
 /-- **L1 at Flock gives `KSLinkOn` at the statements `G` admits.** From the generic theorem, the element-level Flock's
 KS with no root (`KSFlockLin` at `DE`), each outer session's KS (`OuterKS`), the sessions' nonnegative table errors,
