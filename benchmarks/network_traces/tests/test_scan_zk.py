@@ -589,6 +589,12 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     sz.entry_reads(program, query, members, cls, nb)
     (scan / "joint").mkdir(parents=True)
     (scan / "joint" / "program.json").write_bytes(canonical_json(encode_program(program)))
+    texts = {tp: f"flock-ir-unit/v2 {tp} stand-in\n".encode() for tp in sz.TEMPLATES}
+    for tp, text in texts.items():
+        (scan / "joint" / tp).mkdir()
+        (scan / "joint" / tp / "circuit.txt").write_bytes(text)
+    stagers = {f"joint/{tp}": {"template": sz.PA.template_id(defs[tp]), "pin": hashlib.sha512(text).hexdigest(),
+                               "base": k} for k, (tp, text) in enumerate(texts.items())}
     trs, st = [h.at.trees[p] for p in sz.lane_kinds(cls)], h.at.trees["state"]
     progs = [{"root": tr.root.hex(), "leaves": nb, "domain": sz.ADV.domain(tr.binding, nb).domain_id.hex()}
              for tr in trs]
@@ -632,7 +638,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         {"window": 0, "answer": answer, "registrations": registrations}]}
     (scan / "answers.json").write_text(json.dumps(doc))
     (scan / "summary.json").write_text(json.dumps({"rounds": {r: {"audit": {"why": {"x": "y"}}}
-                                                              for r in ("tampered", "chain")}}))
+                                                              for r in ("tampered", "chain")}, "stagers": stagers}))
     dep, regs = json.loads((run / "deployment.json").read_text()), _cells(run)
     case = SP.rows_case(run, scan)
     p = case["params"]
@@ -649,6 +655,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     assert PC.params(p).audits[0].entries == ((key, E, digest),) and E == T // cls.EVERY * cls.NR
     assert digest not in PC.SLOT_ENTRY_PINS
     assert p["scan"] == json.loads((scan / "joint" / "program.json").read_text())
+    assert p["scan_circuits"] == [{"sha512": stagers[f"joint/{tp}"]["pin"], "template": sz.PA.template_id(defs[tp])}
+                                  for tp in sz.TEMPLATES]
     assert p["jitter"] == SP.LB.JITTER_BOUND
     assert json.loads(bytes.fromhex(case["commitment"])) == {"audits": [audit["registration"]], "windows": [reg]}
     ev = json.loads(bytes.fromhex(case["evidence"]))

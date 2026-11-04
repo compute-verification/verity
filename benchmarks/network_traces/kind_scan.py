@@ -10,7 +10,9 @@ a finding.
 DIR is a piece's DIR, or its hold before the leak guard releases it (`certifier_piece.settle` runs the scan there on
 every served run and refuses on a finding, releasing nothing): `DOCS`' files, the case as DIR/case.json (its commitment
 and evidence hex, `certifier_piece.write_case`, as the composite reads it) or as the three files ``network-period`` reads
-(DIR/period). Each file's JSON is walked to its leaves, the commitment's and evidence's bytes decoded as JSON, and each
+(DIR/period), and the scan's circuit files (DIR/circuits, `CIRCUITS`: each declared whole where the case's
+``scan_circuits`` names it and its SHA-512 is its name). Each file's JSON is walked to its leaves, the commitment's and
+evidence's bytes decoded as JSON, and each
 leaf's key path (a list's items ``[]``) must match one its file declares: ``*`` is any one key (a Definition's, a port's,
 a stratum's, a δ's), and ``**`` everything below, a Program's descriptor (`DESCRIPTOR`, the circuit, which is structure)
 or a development check's field. A list's length and an object's keys are the shape of the leaves they hold. So a field
@@ -30,8 +32,8 @@ CERTIFIER_PRIVATE).
 ``--received OUT`` scans what a verifier on another machine reads of a served run's OUT (`RECEIVED`, the files
 `served_verdicts.RECEIVED` names, which `served_verdicts.publish` leaves as they are only once this scan is clean): the
 certifier's piece (``pieces/certifier``, `DOCS`) and V3c's audit (``v3c-audit``, `V3C_DOCS`, what `served_integrity.answer`
-reads of it and the period's compute audit, with the period's circuit files, `CIRCUITS`: each declared whole where
-period.json names it and its SHA-512 is its name), each whole, so a file in either that no declaration covers is a finding;
+reads of it and the period's compute audit, with its circuit files, `CIRCUITS`: each declared whole where period.json
+names it and its SHA-512 is its name), each whole, so a file in either that no declaration covers is a finding;
 and the window circuit's inputs and count, each the verifier's: the registered compiler (`COMPILER`), the advice
 registration (`ADVICE_REGISTRATION`, its length held to the cap: `padded`), the weights registration (`WEIGHTS`) and each
 class's count (`COUNT`). None of them reads the advice: an advice binding, a compile, an unpadded length or a φ that
@@ -135,10 +137,12 @@ CERTIFICATE_DOC = dict.fromkeys(("digest", "direction", "key_id", "link", "signa
 COMMITMENT = {**under("audits[]", REGISTRATION), **under("windows[]", REGISTRATION)}
 EVIDENCE = {**under("audits[]", ONE_STAGE), **under("windows[].answer", ONE_STAGE),
             **under("windows[].certificates[]", CERTIFICATE_DOC), **under("windows[].registrations[]", ROWS)}
-#: the parameters, each structure: a connection's cap (``cells``) is the registered schedule's (`WardenParams.caps`)
+#: the parameters, each structure: a connection's cap (``cells``) is the registered schedule's (`WardenParams.caps`), and
+#: a circuit file is named by its template and SHA-512
 PARAMS = {
     "audits[].free": S, "audits[].steps": S, **under("audits[].program", DESCRIPTOR), **under("scan", DESCRIPTOR),
     **under("audits[].circuit", RECORD), **under("audits[].order", RECORD), "audits[].pins.*": M,
+    **{f"{x}[].{k}": S for x in ("audits[].circuits", "scan_circuits") for k in ("template", "sha512")},
     "cells[]": S, "circuit": S, "first": S, "jitter": S, "key": S, "link": S, "program": S, "windows": S,
     **{f"lms.{k}": S for k in ("H", "N", "W", "toy")},
     **{f"schedule.{f.name}": S for f in dataclasses.fields(WardenParams)},
@@ -219,10 +223,14 @@ PERIOD = {**under("answer", ONE_STAGE), "free": S, "steps": S, **under("program"
 #: its period audit)
 V3C_DOCS: dict[str, dict[str, Any]] = {"summary.json": SUMMARY_DOC, "window/audit.json": AUDIT_RECORD,
                                        "registration.json": REGISTRATION, "period.json": PERIOD}
-#: V3c's circuit files beside its period audit (``v3c-audit/circuits/<sha512>.txt``, `records_audit.period`'s
-#: ``--circuits``): each the C-Flock circuit the verifier composed from a template's public Definition, structure, declared
-#: whole, its bytes not walked, where its name is its SHA-512 and period.json's ``circuits`` names it
+#: the circuit files beside a period's audit or case: V3c's (``v3c-audit/circuits/<sha512>.txt``, `records_audit.period`'s
+#: ``--circuits``) and the scan's (``pieces/certifier/circuits/<sha512>.txt``, `scan_period.ship`), each the C-Flock circuit
+#: the verifier composed from a template's public Definition, structure, declared whole, its bytes not walked, where its
+#: name is its SHA-512 and the dir's `NAMES` file names it
 CIRCUITS = "circuits"
+#: the files of a dir whose key path names its circuit files: V3c's period.json's ``circuits``, the period case's
+#: ``scan_circuits`` (its params.json before the piece writes its case, the case after)
+NAMES = {"period.json": ("circuits",), "period/params.json": ("scan_circuits",), "case.json": ("params", "scan_circuits")}
 #: the run's registered compiler (`prove_path.compiler_doc`): its name, digest and cap, the compiler it wraps and the
 #: server's code, its model's transfer gates, the default seed and φ (the model, target, TP, sampling, engine and
 #: execution), all structure. φ's workload is the requests', which a registered φ never carries: nothing under it is
@@ -338,25 +346,22 @@ def _json(rel: str, p: Path, out: list[Finding]) -> Any:
         return None
 
 
-def _named(d: Path) -> set[str]:
-    """The SHA-512s V3c's period.json under ``d`` names in its ``circuits``: none where it is missing or isn't JSON."""
-    try:
-        doc = json.loads((d / "period.json").read_bytes())
-    except (OSError, ValueError):
-        return set()
-    got = doc.get("circuits") if isinstance(doc, dict) else None
-    return {c["sha512"] for c in got if isinstance(c, dict) and isinstance(c.get("sha512"), str)} \
-        if isinstance(got, list) else set()
+def _named(doc: Any, path: tuple[str, ...]) -> set[str]:
+    """The SHA-512s the list at key path ``path`` of ``doc`` names (`NAMES`): none where it is missing."""
+    for k in path:
+        doc = doc.get(k) if isinstance(doc, dict) else None
+    return {c["sha512"] for c in doc if isinstance(c, dict) and isinstance(c.get("sha512"), str)} \
+        if isinstance(doc, list) else set()
 
 
 def circuit_file(rel: str, p: Path, named: set[str]) -> Finding | None:
-    """A V3c circuit file's finding (`CIRCUITS`): a symlink, one ``named`` (period.json's) doesn't name, or one whose
-    SHA-512 isn't its name; None where it is declared."""
+    """A circuit file's finding (`CIRCUITS`): a symlink, one ``named`` (its dir's `NAMES` files') doesn't name, or one
+    whose SHA-512 isn't its name; None where it is declared."""
     if p.is_symlink():
         return Finding(rel, "", "a symlink, which the verifier would receive as the file it names")
     name = rel.removeprefix(f"{CIRCUITS}/").removesuffix(".txt")
     if rel != f"{CIRCUITS}/{name}.txt" or name not in named:
-        return Finding(rel, "", "a circuit file period.json's circuits doesn't name")
+        return Finding(rel, "", "a circuit file its period's audit or case doesn't name")
     with open(p, "rb") as h:
         if hashlib.file_digest(h, "sha512").hexdigest() != name:
             return Finding(rel, "", "a circuit file whose SHA-512 isn't its name")
@@ -364,26 +369,29 @@ def circuit_file(rel: str, p: Path, named: set[str]) -> Finding | None:
 
 
 def scan(d: Path, docs: Mapping[str, Mapping[str, Any]] = DOCS) -> tuple[list[Finding], Counter]:
-    """Every file under ``d`` scanned by its declaration in ``docs`` (module docstring; `DOCS`, a piece's DIR; under
-    `V3C_DOCS`, each circuit file by `circuit_file`): the findings, and the leaves counted by kind."""
-    kinds, out = Counter(), []
-    named = _named(d) if docs is V3C_DOCS else None
+    """Every file under ``d`` scanned by its declaration in ``docs`` (module docstring; `DOCS`, a piece's DIR, or
+    `V3C_DOCS`), and each circuit file, once the rest are read, by `circuit_file` against the names its `NAMES` files
+    give: the findings, and the leaves counted by kind."""
+    kinds, out, named, circuits = Counter(), [], set(), []
     for p in sorted(x for x in d.rglob("*") if x.is_file() or x.is_symlink()):
         rel = p.relative_to(d).as_posix()
         if rel in TEXT and docs is DOCS and not p.is_symlink():
             kinds[TEXT[rel]] += 1
             continue
-        if named is not None and rel.startswith(f"{CIRCUITS}/"):
-            if (f := circuit_file(rel, p, named)) is None:
-                kinds[S] += 1
-            else:
-                out.append(f)
+        if rel.startswith(f"{CIRCUITS}/"):
+            circuits.append((rel, p))
             continue
         if rel not in docs:
             out.append(Finding(rel, "", "a file the verifier would receive that no declaration covers"))
             continue
         if (doc := _json(rel, p, out)) is not None:
             out += scan_doc(rel, doc, kinds, docs)
+            named |= _named(doc, NAMES[rel]) if rel in NAMES else set()
+    for rel, p in circuits:
+        if (f := circuit_file(rel, p, named)) is None:
+            kinds[S] += 1
+        else:
+            out.append(f)
     return out, kinds
 
 

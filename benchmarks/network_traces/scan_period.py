@@ -12,8 +12,9 @@ and its Lean.
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor and steps, off which
   descriptor the period check counts its free inputs, and V3c's circuit record, wire order and pins where ``--v3c``'s
   ``period.json`` carries them, on which it counts them instead, `AUDIT_KEYS`),
-  the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the
-  scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
+  the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), the
+  scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms, and its
+  class circuit files by SHA-512 (``scan_circuits``, `scan_circuits`: each template's, in its units' order); the
   commitment the audits' registrations and the scan's; the evidence the audits' answers, then the scan's answer, the
   certificates of W's three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations
   (``cells.jsonl``, as ``answers.json`` carries them). The rows form reads a registration of one link-window's 2T
@@ -26,7 +27,9 @@ and its Lean.
 * **forged**: the honest case with the responses record's certificate's signature changed: a certificate the network
   certifier didn't sign.
 * **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path: `reference`) and
-  ``network-period check`` (``--lean``), whose verdicts must agree and be the case's: reject, and where the scan's
+  ``network-period check`` (``--lean``) on its three files and its circuit files (`circuit_files`: V3c's, beside
+  ``--v3c``'s ``period.json`` in ``circuits/``, then the scan's, shipped into ``DIR/NAME/circuits``, `ship`), whose
+  verdicts must agree and be the case's: reject, and where the scan's
   answer accepts, at the wiring (the mirror's ``UNWIRED`` in its reason and in Lean's). The block round's o0 is a
   `SlotEntry_v1` stand-in's entries, whose closure digest is none the period check pins (`entryPins`: the scan's
   `prog` is a ``scan/prog<j>`` a lane, and lane j's must be chunk j, ``<descriptor id>/c<j>/o0``, of a pinned
@@ -49,9 +52,10 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -67,8 +71,9 @@ from verity.ml.windows.interface import CIRCUIT  # noqa: E402
 
 CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "window")
 #: a compute audit's parameters: its Program and steps, and where ``records_audit.py period`` gives them its circuit
-#: record, its wires' order and the pins its registration holds, on which the period check counts its free inputs
-AUDIT_KEYS = ("circuit", "order", "pins", "program", "steps")
+#: record, its wires' order and the pins its registration holds, on which the period check counts its free inputs, and
+#: each template's circuit file by its SHA-512 (``circuits``), which the check reads
+AUDIT_KEYS = ("circuit", "circuits", "order", "pins", "program", "steps")
 
 
 def certificates(run: Path, w: int) -> list[dict]:
@@ -133,8 +138,9 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
               "circuit": circuit, "first": x["window"], "jitter": LB.JITTER_BOUND, "key": dep["key"]["public"],
               "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
-              "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),
-              "session": dep["session"], "windows": 1}
+              "scan": json.loads((scan / "joint" / "program.json").read_text()),
+              "scan_circuits": [{"sha512": pin, "template": t} for t, pin, _f in scan_circuits(scan)],
+              "schedule": dict(dep["params"]), "session": dep["session"], "windows": 1}
     commitment = canonical_json({"audits": [a["registration"] for a in audits], "windows": [reg]})
     evidence = canonical_json({"audits": [a["answer"] for a in audits], "windows": [
         {"answer": answer, "certificates": certs, "registrations": x["registrations"]}]})
@@ -176,16 +182,44 @@ def scan_circuits(scan: Path) -> list[tuple[str, str, Path]]:
     return out
 
 
-def lean_check(exe: str, case: dict, d: Path,
+def ship(scan: Path, to: Path) -> list[Path]:
+    """The scan's class circuit files (`scan_circuits`) copied into ``to`` as ``<sha512>.txt``, the form a verifier of
+    the rows case receives them in beside it: the copies, in the scan's order."""
+    to.mkdir(parents=True, exist_ok=True)
+    out = []
+    for _t, pin, f in scan_circuits(scan):
+        shutil.copyfile(f, to / f"{pin}.txt")
+        out.append(to / f"{pin}.txt")
+    return out
+
+
+def circuit_files(case: dict, audits: Path | None, scans: Path) -> list[Path]:
+    """``network-period check``'s circuit files for ``case``, each ``<sha512>.txt`` as a verifier receives it: every
+    audit's (``params.audits[i].circuits``, i ascending) in ``audits``, then the scan's (``params.scan_circuits``) in
+    ``scans``. SystemExit naming one that is missing."""
+    p = case["params"]
+    named = [*((audits, c["sha512"]) for a in p["audits"] for c in a.get("circuits", ())),
+             *((scans, c["sha512"]) for c in p["scan_circuits"])]
+    out = []
+    for d, sha in named:
+        if d is None or not (f := d / f"{sha}.txt").is_file():
+            raise SystemExit(f"no circuit file {sha[:16]}… in {d or 'no directory'}: the period check reads each circuit "
+                             "file its case names")
+        out.append(f)
+    return out
+
+
+def lean_check(exe: str, case: dict, d: Path, circuits: Sequence[Path] = (),
                run: Callable[[list[str]], subprocess.CompletedProcess] | None = None) -> dict:
-    """``network-period check`` on the case's three files in ``d``: its answer (its last line). ``run`` runs it with its
-    output captured as text (`subprocess.run`'s ``capture_output=True, text=True`` by default)."""
+    """``network-period check`` on the case's three files in ``d`` and its circuit files (`circuit_files`' order): its
+    answer (its last line). ``run`` runs it with its output captured as text (`subprocess.run`'s
+    ``capture_output=True, text=True`` by default)."""
     d.mkdir(parents=True, exist_ok=True)
     files = [d / "params.json", d / "commitment.bin", d / "evidence.json"]
     files[0].write_bytes(canonical_json(case["params"]))
     files[1].write_bytes(bytes.fromhex(case["commitment"]))
     files[2].write_bytes(bytes.fromhex(case["evidence"]))
-    argv = [exe, "check", *map(str, files)]
+    argv = [exe, "check", *map(str, files), *map(str, circuits)]
     p = run(argv) if run else subprocess.run(argv, capture_output=True, text=True)
     if p.returncode not in (0, 1, 2) or not p.stdout.strip():
         raise SystemExit(f"network-period check exited {p.returncode}: {p.stderr[-2000:]}")
@@ -224,7 +258,9 @@ def main(argv=None) -> int:
         case = rows_case(Path(run), Path(scan), *round_, v3c=a.v3c, circuit=circuit)
         (a.out / name).mkdir(exist_ok=True)
         (a.out / name / "case.json").write_text(json.dumps(case, indent=1, sort_keys=True))
-        py, lean = m.reference(case), lean_check(a.lean, case, a.out / name)
+        ship(Path(scan), a.out / name / "circuits")
+        files = circuit_files(case, a.v3c.parent / "circuits" if a.v3c else None, a.out / name / "circuits")
+        py, lean = m.reference(case), lean_check(a.lean, case, a.out / name, files)
         scan_said = {x["answer"]["verdict"] for x in json.loads((Path(scan) / "answers.json").read_text())["windows"]}
         honest = not round_ and scan_said == {"accept"}
         if honest and a.v3c:

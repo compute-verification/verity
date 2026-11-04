@@ -70,13 +70,16 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   4. The period's execution phase is the scan's (the one entry of ``answers.json``'s ``windows``): every audited
      request's release and streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
-     (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's, an accept's profile
+     (``--lean``, else built in verity/core/protocols/network/lean) with the case's circuit files
+     (`scan_period.circuit_files`: its compute audits', then the scan's, shipped into DIR/`CIRCUITS` as
+     ``<sha512>.txt``, `scan_period.ship`); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): the certifier on the gate's host, and the chain, the period check and
      their proofs' coins in this piece on the prover's node, so `trusted-host` is assumed with the auditor's devices
      not placed.
   DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ, and the scan's answers; never the
-  report's counts or a step's summary, which are private) and the check's three input files in
-  DIR/period. All of them and the answer are written to a fresh hold under SERVE_DIR/`PRIVATE`/held (0700), where the
+  report's counts or a step's summary, which are private), the check's three input files in
+  DIR/period and the scan's class circuit files in DIR/`CIRCUITS`, which a verifier of the case reads beside it. All of
+  them and the answer are written to a fresh hold under SERVE_DIR/`PRIVATE`/held (0700), where the
   kind scan (`kind_scan.py`) must find every field of them one of the four public kinds or the network certifier's
   certificate, else the piece refuses (its findings in the hold's `KIND_SCAN`), and reach
   DIR only through the record's leak guard (`leak_guard.py`), which reads DIR and the hold against the warden run's
@@ -105,7 +108,8 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   a reject is DIR/answer.json as the piece's, an accept DIR/`CHAINED`. **period** runs once V3c's audit wrote
   V3C/period.json: steps 1, 2 and 4 again on the chain's kept report (no chain runs), then step 5 on the rows case whose
   one compute audit is V3C/period.json (`scan_period.rows_case`), held to the class circuit of the verifier's own
-  window-circuit record beside V3C (`class_circuit`); its answer is DIR/answer.json. It answers nothing
+  window-circuit record beside V3C (`class_circuit`), its circuit files V3C/`CIRCUITS`'s (`records_audit.py period
+  --circuits`); its answer is DIR/answer.json. It answers nothing
   where the chain step refused (DIR/`REFUSED`) or rejected (its answer stands), and refuses where it left no
   DIR/`CHAINED`, the chain's scan read no V3c window or another, or V3C has no window-circuit record beside it. Each
   releases through its own hold and refuses as
@@ -174,10 +178,13 @@ CHAINED = "chain.json"
 KIND_SCAN = "kind-scan.txt"
 #: the logs `served_verdicts.sh` and `served_verdicts.py` write in DIR, which a refusal keeps
 LOGS = ("piece.log", "chain.log", "period.log")
-#: every file DIR may hold when the leak guard reads it and the hold (its ``--public``): the answer, the logs, the
-#: split's `CHAINED`, the period check's three input files and `PUBLIC`'s
+#: the period's circuit files in DIR (and in V3C, V3c's own), each ``<sha512>.txt``: the C-Flock circuit the auditor
+#: composed from a template's public Definition, which ``network-period check`` reads beside the case
+CIRCUITS = "circuits"
+#: every file DIR may hold when the leak guard reads it and the hold (its ``--public`` globs): the answer, the logs, the
+#: split's `CHAINED`, the period check's three input files, the scan's circuit files and `PUBLIC`'s
 PIECE_FILES = ("answer.json", *LOGS, CHAINED, "period/commitment.bin", "period/evidence.json", "period/params.json",
-               *(f"chain/{rel}" for rel in PUBLIC))
+               f"{CIRCUITS}/*.txt", *(f"chain/{rel}" for rel in PUBLIC))
 LEAN_DIR = TREE / "verity" / "core" / "protocols" / "network" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
 PROMPTS, PROMPT_IDS, TOKENS = 4, 24, 4
@@ -603,12 +610,23 @@ def period_exe(lean: str | None) -> str:
     return str(exe)
 
 
-def period_check(exe: str, case: dict, d: Path) -> dict:
+def period_check(exe: str, case: dict, files: list[Path], d: Path) -> dict:
     import scan_period as SP
     try:
-        return SP.lean_check(exe, case, d, run=captured)
+        return SP.lean_check(exe, case, d, files, run=captured)
     except (SystemExit, OSError, ValueError) as e:
         raise NotRun(f"network-period check: {type(e).__name__}: {e}") from None
+
+
+def circuits_of(case: dict, scan: Path, d: Path, audits: Path | None) -> list[Path]:
+    """The case's circuit files for its check (`scan_period.circuit_files`): the scan's shipped into ``d``/`CIRCUITS`
+    (`scan_period.ship`), its compute audits' read in ``audits``; `NotRun` for one missing or not its pin."""
+    import scan_period as SP
+    try:
+        SP.ship(scan, d / CIRCUITS)
+        return SP.circuit_files(case, audits, d / CIRCUITS)
+    except (SystemExit, OSError) as e:
+        raise NotRun(f"the period's circuit files: {type(e).__name__}: {e}") from None
 
 
 def case_of(warden: Path, scan: Path, v3c: Path | None = None, circuit: str | None = None) -> dict:
@@ -668,12 +686,13 @@ def publish(chain_out: Path, d: Path) -> None:
 
 
 def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str, int], int] | None,
-           check: Callable[[dict, Path], dict] | None,
-           case: Callable[[Path, Path], dict] = case_of) -> tuple[dict | None, Path | None]:
+           check: Callable[[dict, list[Path], Path], dict] | None,
+           case: Callable[[Path, Path], dict] = case_of, audits: Path | None = None) -> tuple[dict | None, Path | None]:
     """Window ``window``'s answer (module docstring) and the unpacked fetch (for the leak guard), its files in ``d``;
     ``chain`` is given KEEP, the run and the run's link-windows, or is None to read the report
     of the chain the split's chain step ran; ``check`` None stops once the chain accepted, with no answer (the split's
-    chain step). `NotRun` when a step can't run."""
+    chain step), else is given the case, its circuit files (`circuits_of`, its compute audits' in ``audits``) and
+    ``d``/period. `NotRun` when a step can't run."""
     import warden_chain as WC
     keep = serve_dir / PRIVATE
     run = kept_run(serve_dir)
@@ -709,7 +728,8 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
         in_link_window(certified, T, w)
         if check is None:
             return None, unpacked
-        got = check(case(warden, out / "scan"), d / "period")
+        c = case(warden, out / "scan")
+        got = check(c, circuits_of(c, out / "scan", d, audits), d / "period")
         if got.get("protocol") != PROTOCOL or got.get("verdict") not in ("accept", "reject", "undecided"):
             raise NotRun(f"network-period answered no {PROTOCOL} verdict: {json.dumps(got)[:400]}")
         return got, unpacked
@@ -850,7 +870,7 @@ def piece(a: argparse.Namespace) -> int:
     def step(hold: Path) -> tuple[dict | None, Path | None]:
         exe = period_exe(a.lean)
         chain = lambda keep, run, n: run_chain(keep, run, a.draw, sized(n, a.set), a.chain_cmd)  # noqa: E731
-        return decide(serve_dir, a.window, hold, chain=chain, check=lambda c, p: period_check(exe, c, p))
+        return decide(serve_dir, a.window, hold, chain=chain, check=lambda c, f, p: period_check(exe, c, f, p))
     try:
         got = settle(serve_dir, d, "CERTIFIER_TIMEOUT", step)
     except NotRun as e:
@@ -875,6 +895,7 @@ def chain_step(a: argparse.Namespace) -> int:
     d.mkdir(parents=True, exist_ok=True)
     for f in ("answer.json", CHAINED, REFUSED, CASE):
         (d / f).unlink(missing_ok=True)
+    rm(d / CIRCUITS)
     if not sets_ok(a.set):
         return 2
     try:
@@ -905,8 +926,8 @@ def period_step(a: argparse.Namespace) -> int:
         if not (d / CHAINED).is_file():
             raise NotRun(f"no {CHAINED} in DIR: the chain step (CERTIFIER_CHAIN_CMD) didn't run, or didn't finish")
         exe = period_exe(a.lean)
-        return decide(serve_dir, a.window, hold, chain=None, check=lambda c, p: period_check(exe, c, p),
-                      case=v3c_case(v3c))
+        return decide(serve_dir, a.window, hold, chain=None, check=lambda c, f, p: period_check(exe, c, f, p),
+                      case=v3c_case(v3c), audits=v3c / CIRCUITS)
     try:
         got = settle(serve_dir, d, "CERTIFIER_PERIOD_TIMEOUT", step)
     except NotRun as e:

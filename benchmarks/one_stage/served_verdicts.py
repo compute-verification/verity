@@ -25,9 +25,9 @@ sealed or refused, and no engine step, request count or user of one. ``public-li
 published form (`public_line`), the line in full appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and
 ``publish`` holds each file of OUT, once the run is done, in full under DIR where it names or counts a window (`publish`),
 its public form in its place; what a verifier reads of OUT (`RECEIVED`) it leaves with every key and value but its text's
-with ``--received-scanned`` (``kind_scan.py --received OUT`` found every field of it one of the public kinds), V3c's
-circuit files as written (`AS_WRITTEN`), and holds it whole without it. The class's padded counts, the period's declared T and S, the bench Build's requests and the
-verifier's coins and draws are public. ``public-registration`` prints what the run publishes of a window's advice
+with ``--received-scanned`` (``kind_scan.py --received OUT`` found every field of it one of the public kinds), the
+period's circuit files as written (`AS_WRITTEN`), and holds it whole without it. The class's padded counts, the period's
+declared T and S, the bench Build's requests and the verifier's coins and draws are public. ``public-registration`` prints what the run publishes of a window's advice
 registration (`public_registration`: the advice's length padded to its compiler's cap), and ``front-line`` the
 CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
 
@@ -340,10 +340,10 @@ PUBLISH_MAX = 256 << 20
 #: dropping a field would break (their digests and the record's answer are over them as written)
 RECEIVED = ("pieces/certifier/*", "v3c-audit/*", "compiler.json", "registration.json", "weights_registration.json",
             "window-circuit-*.json")
-#: what of `RECEIVED` the verifier reads as written, which `publish` never reads: V3c's circuit files, each the circuit
-#: the verifier composes itself from a template's public Definition, read by its SHA-512, which the kind scan holds to
-#: its name and V3c's period.json to name (`kind_scan.CIRCUITS`)
-AS_WRITTEN = ("v3c-audit/circuits/*",)
+#: what of `RECEIVED` the verifier reads as written, which `publish` never reads: the period's circuit files, V3c's and
+#: the scan's, each the circuit the verifier composes itself from a template's public Definition, read by its SHA-512,
+#: which the kind scan holds to its name and V3c's period.json or the certifier's case to name (`kind_scan.CIRCUITS`)
+AS_WRITTEN = ("v3c-audit/circuits/*", "pieces/certifier/circuits/*")
 
 
 def _numbered(v: Any) -> bool:

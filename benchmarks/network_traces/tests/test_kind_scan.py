@@ -107,6 +107,23 @@ def test_the_pieces_period_and_answer_are_of_the_public_kinds_in_either_layout(t
     assert KS.main([str(tmp_path / "False")]) == 0
 
 
+def test_the_scans_circuit_files_its_case_names_are_structure_in_either_layout_and_any_other_a_finding(tmp_path, period):
+    """The scan's class circuit files (DIR/circuits/<sha512>.txt, `scan_period.ship`) are declared whole where the case's
+    ``scan_circuits`` names them (case.json in DIR, period/params.json in the hold) and each hashes to its name; one the
+    case doesn't name, or whose bytes aren't its name's, is a finding."""
+    case, answer = _case(period)
+    case, pin, other = _shipped(case), SCAN_CIRCUITS[0]["sha512"], hashlib.sha512(b"witness").hexdigest()
+    for hold in (False, True):
+        d = _dir(tmp_path / str(hold), case, answer, hold)
+        (d / KS.CIRCUITS).mkdir()
+        (d / KS.CIRCUITS / f"{pin}.txt").write_bytes(SCAN_CIRCUIT)
+        found, kinds = KS.scan(d)
+        assert found == [] and all(kinds[k] for k in KS.KINDS), found
+        (d / KS.CIRCUITS / f"{other}.txt").write_bytes(b"witness")
+        (d / KS.CIRCUITS / f"{pin}.txt").write_bytes(SCAN_CIRCUIT + b"requests 2\n")
+        assert sorted(_paths(KS.scan(d)[0])) == [(f"circuits/{other}.txt", ""), (f"circuits/{pin}.txt", "")]
+
+
 def test_a_field_no_declaration_names_is_a_finding_wherever_it_lies(tmp_path, period):
     """The window's own number in V3c's provenance (which counts the run's windows), a count of requests in the
     period's answer and in an execution phase's one-stage answer, and an advice length beside the parameters."""
@@ -177,9 +194,12 @@ def test_a_file_dir_doesnt_declare_is_a_finding_a_log_among_them(tmp_path, perio
 
 
 def test_dirs_files_are_the_pieces():
-    """Every file the piece releases but its logs has its declaration, and the logs have none: they move to the serve
-    dir's private/ before anything leaves the node (`served_verdicts.sh`'s CERTIFIER_PRIVATE)."""
-    assert {*CP.PIECE_FILES, CP.CASE, CP.CHAINED, CP.REFUSED} - set(CP.LOGS) <= set(KS.DOCS) | set(KS.TEXT)
+    """Every file the piece releases but its logs has its declaration, the scan's circuit files theirs by name
+    (`kind_scan.CIRCUITS`), and the logs have none: they move to the serve dir's private/ before anything leaves the node
+    (`served_verdicts.sh`'s CERTIFIER_PRIVATE)."""
+    circuits = {f for f in CP.PIECE_FILES if f.startswith(f"{CP.CIRCUITS}/")}
+    assert circuits == {f"{KS.CIRCUITS}/*.txt"}
+    assert {*CP.PIECE_FILES, CP.CASE, CP.CHAINED, CP.REFUSED} - set(CP.LOGS) - circuits <= set(KS.DOCS) | set(KS.TEXT)
     assert not set(CP.LOGS) & (set(KS.DOCS) | set(KS.TEXT))
     assert f"profile.placement.{CP.PREMISE}" in KS.ANSWER
 
@@ -213,16 +233,28 @@ WEIGHTS = {"schema": "verity-vllm/weights-registration/v1", "program": "window-c
 #: a stand-in of V3c's circuit file (`records_audit.period`'s ``--circuits``), and its SHA-512
 CIRCUIT = b"flock-ir-unit/v2 stand-in\n"
 CIRCUIT_PIN = hashlib.sha512(CIRCUIT).hexdigest()
+#: a stand-in of the scan's class circuit file (`scan_period.ship`), and the case's ``scan_circuits`` naming it
+SCAN_CIRCUIT = b"flock-ir-unit/v2 scan stand-in\n"
+SCAN_CIRCUITS = [{"sha512": hashlib.sha512(SCAN_CIRCUIT).hexdigest(), "template": "IngressScanFirst_v3"}]
+
+
+def _shipped(case: dict) -> dict:
+    """``case`` naming the scan's circuit file (`SCAN_CIRCUITS`) as `scan_period.rows_case` does."""
+    return {**case, "params": {**case["params"], "scan_circuits": SCAN_CIRCUITS}}
 
 
 def _out(tmp_path: Path, period) -> Path:
-    """A served run's OUT as the verifier receives it (`RECEIVED`): the certifier's piece, V3c's audit as the run
-    copies it (its summary and audit record as `served_integrity.public_copy` writes them, the registration it audited,
-    its period audit and its circuit file), the registered compiler, the window's advice registration in its public form
-    (`served_verdicts.public_registration`), the weights registration and a class's count."""
+    """A served run's OUT as the verifier receives it (`RECEIVED`): the certifier's piece with the scan's circuit file,
+    V3c's audit as the run copies it (its summary and audit record as `served_integrity.public_copy` writes them, the
+    registration it audited, its period audit and its circuit file), the registered compiler, the window's advice
+    registration in its public form (`served_verdicts.public_registration`), the weights registration and a class's
+    count."""
     out = tmp_path / "out"
     case, answer = _case(period)
+    case = _shipped(case)
     piece = _dir(out / "pieces" / "certifier", case, answer)
+    (piece / KS.CIRCUITS).mkdir()
+    (piece / KS.CIRCUITS / f"{SCAN_CIRCUITS[0]['sha512']}.txt").write_bytes(SCAN_CIRCUIT)
     (piece / "piece.json").write_text(json.dumps({"server": "node", "rc": 0, "limit": "CERTIFIER_TIMEOUT"}))
     com, ev = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
     reg, units = com["audits"][0], [0, 1]
@@ -260,7 +292,7 @@ def test_what_a_verifier_receives_of_a_served_run_is_of_the_public_kinds(tmp_pat
     assert found == [] and all(kinds[k] for k in KS.KINDS), (found, kinds)
     assert KS.main(["--received", str(out)]) == 0
     assert {f"{d}/*" for d in KS.RECEIVED_DIRS} | set(KS.RECEIVED) == set(SV.RECEIVED)
-    assert SV.AS_WRITTEN == (f"v3c-audit/{KS.CIRCUITS}/*",)
+    assert SV.AS_WRITTEN == (f"v3c-audit/{KS.CIRCUITS}/*", f"pieces/certifier/{KS.CIRCUITS}/*")
     published = sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file())
     assert all(any(fnmatch.fnmatchcase(p, g) for g in SV.RECEIVED) for p in published), published
 
@@ -310,6 +342,8 @@ def test_v3cs_period_audit_with_its_wires_order_is_of_the_public_kinds(tmp_path,
     (lambda o: (o / "v3c-audit" / "circuits" / f"{CIRCUIT_PIN}.txt").write_bytes(CIRCUIT + b"requests 2\n"),
      [(f"v3c-audit/circuits/{CIRCUIT_PIN}.txt", "")]),
     (lambda o: (o / "v3c-audit" / "circuits" / "witness.bin").write_bytes(b"\x00"), [("v3c-audit/circuits/witness.bin", "")]),
+    (lambda o: (o / "pieces" / "certifier" / "circuits" / f"{CIRCUIT_PIN}.txt").write_bytes(CIRCUIT),
+     [(f"pieces/certifier/circuits/{CIRCUIT_PIN}.txt", "")]),
 ])
 def test_what_reads_the_advice_or_counts_the_window_is_a_finding_in_what_a_verifier_receives(
         tmp_path, period, plant, want):
@@ -317,8 +351,9 @@ def test_what_reads_the_advice_or_counts_the_window_is_a_finding_in_what_a_verif
     or the registration as `verity-vllm advice` writes it (its requests, compiles, length and window); a workload in the
     compiler's φ; the advice's length in a class's count; a compile in V3c's summary (the audit opened the advice); an
     advice binding in the registration V3c audited; a field of the audit record `served_integrity.answer` doesn't
-    read; and among V3c's circuit files one period.json doesn't name (under its own SHA-512, or under no SHA-512) or one
-    whose bytes aren't its name's: each is a finding, and the scan exits 1."""
+    read; among V3c's circuit files one period.json doesn't name (under its own SHA-512, or under no SHA-512) or one
+    whose bytes aren't its name's; and among the piece's, one its case doesn't name (V3c's, which period.json names
+    in V3c's dir alone): each is a finding, and the scan exits 1."""
     out = _out(tmp_path, period)
     plant(out)
     found = KS.received(out)[0]

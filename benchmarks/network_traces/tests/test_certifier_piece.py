@@ -23,6 +23,7 @@ front."""
 from __future__ import annotations
 
 import argparse
+import hashlib
 import http.server
 import importlib.util
 import json
@@ -68,6 +69,10 @@ GATE_HOST = "gate-host"
 #: the window's private values, as numbers no other field of the chain's files takes: its request and output counts
 REQUESTS, OUTPUTS = 7919, 7933
 PRIVATE = {REQUESTS, OUTPUTS}
+#: the scan's one class circuit, as the chain keeps it (``joint/<template>/circuit.txt``), and its summary's stager of it
+SCAN_CIRCUIT = b"flock-ir-unit/v2 scan stand-in\n"
+SCAN_PIN = hashlib.sha512(SCAN_CIRCUIT).hexdigest()
+STAGERS = {"joint/first": {"template": "t:first", "pin": SCAN_PIN, "base": 0}}
 
 
 @pytest.fixture(scope="module")
@@ -132,10 +137,12 @@ def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: b
 
 
 def _chain_out(d: Path, verdict: str, w: int) -> Path:
-    """What the chain leaves in its run dir's out/: its report and the scan's one link-window."""
+    """What the chain leaves in its run dir's out/: its report, the scan's one link-window and its class circuit."""
     out = d / "out"
     (out / "report").mkdir(parents=True)
-    (out / "scan" / "joint").mkdir(parents=True)
+    (out / "scan" / "joint" / "first").mkdir(parents=True)
+    (out / "scan" / "joint" / "first" / "circuit.txt").write_bytes(SCAN_CIRCUIT)
+    (out / "scan" / "summary.json").write_text(json.dumps({"stagers": STAGERS}))
     (out / "report" / "report.json").write_text(json.dumps({"verdict": verdict, "why": None if verdict == "accepted"
                                                             else {"n2": "a window refused"}}))
     (out / "scan" / "answers.json").write_text(json.dumps({"registration": {"program": "ab" * 64}, "windows": [
@@ -145,10 +152,12 @@ def _chain_out(d: Path, verdict: str, w: int) -> Path:
 
 
 def _stub_lean(tmp_path: Path, answer: dict) -> Path:
-    """A stand-in `network-period` that keeps the three files it reads in TMP/seen and answers ``answer``."""
+    """A stand-in `network-period` that keeps the three files it reads and the circuit files after them in TMP/seen, and
+    their names in order in TMP/seen/argv, and answers ``answer``."""
     lean, seen = tmp_path / "network-period", shlex.quote(str(tmp_path / "seen"))
     (tmp_path / "lean-answer.json").write_text(json.dumps(answer, sort_keys=True))
-    lean.write_text(f"#!/bin/sh\nmkdir -p {seen} && cp \"$2\" \"$3\" \"$4\" {seen}/\n"
+    lean.write_text(f"#!/bin/sh\nmkdir -p {seen} && cp \"$2\" \"$3\" \"$4\" {seen}/ && shift 4\n"
+                    f"for f; do cp \"$f\" {seen}/ && basename \"$f\" >> {seen}/argv; done\n"
                     f"cat {shlex.quote(str(tmp_path / 'lean-answer.json'))}\n")
     lean.chmod(0o755)
     return lean
@@ -204,12 +213,17 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert where[CP.PREMISE].startswith("assumed, the auditor's devices not placed")
     assert [(x["name"], x["counted"]) for x in where["links"]] == [("certified", True), ("gate", False)]
     assert json.loads((piece / "chain" / "report" / "report.json").read_text())["verdict"] == "accepted"
-    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", CP.CASE, "chain", "piece.log"}
+    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", CP.CASE, CP.CIRCUITS, "chain",
+                                                                  "piece.log"}
     assert [(f.file, f.path) for f in KS.scan(piece)[0]] == [("piece.log", "")]  # served_verdicts.sh's CERTIFIER_PRIVATE
     seen = {f.name: f.read_bytes() for f in (tmp_path / "seen").iterdir()}
     raw = (piece / CP.CASE).read_bytes()
     case = json.loads(raw)
     assert sorted(case) == ["commitment", "evidence", "params"] and raw == canonical_json(case) + b"\n"
+    assert case["params"]["scan_circuits"] == [{"sha512": SCAN_PIN, "template": "t:first"}]
+    assert seen["argv"].split() == [f"{SCAN_PIN}.txt".encode()] and seen[f"{SCAN_PIN}.txt"] == SCAN_CIRCUIT
+    assert [p.name for p in (piece / CP.CIRCUITS).iterdir()] == [f"{SCAN_PIN}.txt"]
+    assert (piece / CP.CIRCUITS / f"{SCAN_PIN}.txt").read_bytes() == SCAN_CIRCUIT
     assert (bytes.fromhex(case["commitment"]), bytes.fromhex(case["evidence"]), canonical_json(case["params"])) == (
         seen["commitment.bin"], seen["evidence.json"], seen["params.json"])
     log = (piece / "piece.log").read_text()
@@ -252,8 +266,10 @@ def _decide(tmp_path, warden, verdict="accepted", w=None, records=None, check=No
         _chain_out(keep / run / "chain", verdict, warden["w"] if w is None else w)
         return 0
     (tmp_path / "dir").mkdir()
-    a, unpacked = CP.decide(d, K, tmp_path / "dir", chain=chain, check=check or (lambda c, p: pytest.fail("no check")),
-                            case=lambda run, scan: {"params": {}, "commitment": "", "evidence": ""})
+    a, unpacked = CP.decide(d, K, tmp_path / "dir", chain=chain,
+                            check=check or (lambda c, f, p: pytest.fail("no check")),
+                            case=lambda run, scan: {"params": {"audits": [], "scan_circuits": []}, "commitment": "",
+                                                    "evidence": ""})
     assert unpacked is not None and unpacked.parent == d / CP.PRIVATE / RUN
     return a
 
@@ -273,7 +289,7 @@ def test_a_refused_chain_a_request_off_the_scans_link_window_and_a_rejected_peri
         a = _decide(tmp_path / "mixed", warden, records=[*warden["records"][:1], warden["others"][0]])
         assert a["verdict"] == "reject" and "spans link-windows" in a["reason"]
     rejected = CP.answer("reject", "window 0: certificates")
-    assert _decide(tmp_path / "period", warden, check=lambda c, p: rejected) == rejected
+    assert _decide(tmp_path / "period", warden, check=lambda c, f, p: rejected) == rejected
 
 
 LOOP = "while :; do :; done"
@@ -556,7 +572,7 @@ def _chained(tmp_path: Path, v3c: Path | None, verdict: str = "accepted", w: int
     None: no V3c window) and `PERIOD`'s registration as the one whose trees it read, and notes what it was given in
     TMP/chain-args."""
     out = _chain_out(tmp_path / "chain", verdict, w)
-    (out / "out" / "scan" / "summary.json").write_text(json.dumps({"v3c": v3c and {
+    (out / "out" / "scan" / "summary.json").write_text(json.dumps({"stagers": STAGERS, "v3c": v3c and {
         "window": str(v3c / "window"), "registration": RG.digest(PERIOD["registration"])}}))
     note = shlex.quote(str(tmp_path / "chain-args"))
     return ["--chain-cmd", f'printf "%s\\n" "$@" > {note}; mkdir -p "$RESEARCH_RUN_DIR" && '
@@ -580,8 +596,9 @@ def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_pa
     """The chain step runs the chain with its scan on V3c's window (``--class w63k4 --v3c V3C/window`` first in
     CR_SCAN_ARGS) and marks DIR/chain.json; the period step reads that chain's report again, without running it, and
     checks the rows case whose one compute audit is V3c's period.json, held to the class circuit of the verifier's own
-    window-circuit record beside V3c, its answer the one `pieces` reads (with CERTIFIER_CMD ``true``, as
-    `served_verdicts.sh` sets it) into the block record, its case written and both steps' logs kept."""
+    window-circuit record beside V3c, on its circuit files (V3c's, beside its period.json, then the scan's, shipped into
+    DIR), its answer the one `pieces` reads (with CERTIFIER_CMD ``true``, as `served_verdicts.sh` sets it) into the block
+    record, its case written and both steps' logs kept."""
     accept = period.reference(period.case("accept", 1, "clock"))
     d = _serve_dir(tmp_path / "serve", warden)
     v3c, piece = _v3c(d), tmp_path / "pieces" / "certifier"
@@ -591,17 +608,25 @@ def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_pa
     assert json.loads((piece / CP.CHAINED).read_text()) == {"chain": "accepted"}
     assert f"CR_SCAN_ARGS=--class w63k4 --v3c {v3c / 'window'} --x 1" in (tmp_path / "chain-args").read_text()
     assert not (piece / "answer.json").exists()
-    (v3c / "period.json").write_text(json.dumps(PERIOD))
+    text = b"flock-ir-unit/v2 v3c stand-in\n"
+    pin = hashlib.sha512(text).hexdigest()
+    (v3c / CP.CIRCUITS).mkdir()
+    (v3c / CP.CIRCUITS / f"{pin}.txt").write_bytes(text)
+    circuits = [{"sha512": pin, "template": "t:v3c"}]
+    (v3c / "period.json").write_text(json.dumps({**PERIOD, "circuits": circuits}))
     assert _hook("period", d, piece, v3c, *_lean(tmp_path, accept)) == 0, (piece / "period.log").read_text()
     params = json.loads((tmp_path / "seen" / "params.json").read_text())
-    assert params["audits"] == [{k: PERIOD[k] for k in ("program", "steps")}]
+    assert params["audits"] == [{**{k: PERIOD[k] for k in ("program", "steps")}, "circuits": circuits}]
+    assert params["scan_circuits"] == [{"sha512": SCAN_PIN, "template": "t:first"}]
+    assert (tmp_path / "seen" / "argv").read_text().split() == [f"{pin}.txt", f"{SCAN_PIN}.txt"]
+    assert sorted(p.name for p in (piece / CP.CIRCUITS).iterdir()) == [f"{SCAN_PIN}.txt"]
     assert params["circuit"] == CIRCUIT["program"]
     assert json.loads(bytes.fromhex(json.loads((piece / CP.CASE).read_text())["commitment"]))["audits"] == [
         PERIOD["registration"]]
     got = S.pieces(d, K, tmp_path / "pieces", env=dict(os.environ, CERTIFIER_CMD="true"))
     assert (got["certifier"]["verdict"], got["certifier"]["rc"]) == ("accept", 0)
-    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", CP.CASE, CP.CHAINED, "chain",
-                                                                  "chain.log", "period.log", "piece.log"}
+    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", CP.CASE, CP.CHAINED, CP.CIRCUITS,
+                                                                  "chain", "chain.log", "period.log", "piece.log"}
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
     assert BR.check(rec) == {} and line["verdicts"]["the network certifier"] == "accept"
 
