@@ -1,7 +1,9 @@
-import Proofs.Properties.Challenger.Break
-import Proofs.Properties.Challenger.Commitment
-import Proofs.Properties.Pouw.LiveSalt.Ledger
-import Proofs.Properties.Pouw.LiveSalt.Coin
+module
+
+public import Proofs.Properties.Challenger.Break
+public import Proofs.Properties.Challenger.Commitment
+public import Proofs.Properties.Pouw.LiveSalt.Ledger
+public import Proofs.Properties.Pouw.LiveSalt.Coin
 
 /-!
 # A session `sessionOf` accepts is a run the device closed, or a break
@@ -24,6 +26,8 @@ closed it, read from that run's own release log, which is the session's log, or 
 `sessionOf`'s, `sessionNamed`'s and `drawCoins`' facts are Hoare triples proved by `mvcgen` (`sessionOf_ok`,
 `sessionNamed_ok`, `drawCoins_ok`), read back at an `.ok` result by `of_triple`.
 -/
+
+@[expose] public section
 
 set_option mvcgen.warning false
 

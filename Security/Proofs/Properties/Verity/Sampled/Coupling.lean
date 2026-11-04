@@ -1,4 +1,6 @@
-import Proofs.Properties.Verity.Sampled.Messages
+module
+
+public import Proofs.Properties.Verity.Sampled.Messages
 
 /-!
 # Sampled proofs' coupling: the target off the binding and the logged coupling
@@ -20,6 +22,8 @@ is held to (the binding's `Logged`: the log the check read is the device's):
 The two meet by the union bound on the tape (`noMiss_le_of_logged`): an accepted play that misses nowhere either is
 one `P` holds of or is one it doesn't.
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled
 

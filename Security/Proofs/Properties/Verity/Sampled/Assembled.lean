@@ -1,7 +1,9 @@
-import Proofs.Properties.Verity.Sampled.CoinMap
-import Proofs.Properties.Verity.Sampled.Accepts
-import Proofs.Properties.Verity.Sampled.Binding
-import Proofs.Properties.Verity.SampledRead
+module
+
+public import Proofs.Properties.Verity.Sampled.CoinMap
+public import Proofs.Properties.Verity.Sampled.Accepts
+public import Proofs.Properties.Verity.Sampled.Binding
+public import Proofs.Properties.Verity.SampledRead
 
 /-!
 # Sampled proofs' coupling, assembled from its pieces
@@ -33,6 +35,8 @@ sets up (`hA`), the vocabulary's digests (`hDg`), the writer's view (`hW`), and 
 (`hM`), with the readings `rd`, the decoders `D`, the sample's family `label` and digest `after` and the field's
 encoding `e` as parameters.
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled
 

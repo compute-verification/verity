@@ -1,10 +1,12 @@
-import Proofs.Properties.Verity.Sampled.Moves
-import Proofs.Properties.Verity.Sampled.Project
-import Proofs.Flock.Recursive.Witness
-import Proofs.Flock.Soundness.Refine.Walk
-import Proofs.Flock.Soundness.Refine.Lookups
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
-import Proofs.Properties.NetworkCertifier.Bytes
+module
+
+public import Proofs.Properties.Verity.Sampled.Moves
+public import Proofs.Properties.Verity.Sampled.Project
+public import Proofs.Flock.Recursive.Witness
+public import Proofs.Flock.Soundness.Refine.Walk
+public import Proofs.Flock.Soundness.Refine.Lookups
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+public import Proofs.Properties.NetworkCertifier.Bytes
 
 /-!
 # Sampled proofs' acceptance: v2's verdict is flock-verify `--zk`'s on the session's files
@@ -41,6 +43,8 @@ are one check on one pair of byte strings, and the writer carries the acceptance
   files on the accepted plays (at the vocabulary's digests and tables) and the outcomes on the joint law's support are
   the writer's at moves v2's files decode to (`MovesReach`, the decoders' and the coin map's).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

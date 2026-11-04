@@ -1,6 +1,8 @@
-import Proofs.Properties.Challenger
-import Proofs.Properties.Challenger.Coins
-import Proofs.Properties.Challenger.Window
+module
+
+public import Proofs.Properties.Challenger
+public import Proofs.Properties.Challenger.Coins
+public import Proofs.Properties.Challenger.Window
 
 /-!
 # The coins a draw reads are the ones its challenger drew
@@ -12,6 +14,8 @@ lines (`Session.sessionOf_run`), and the device's own ledger opens it withheld o
 break; so that run released the coins, its log the session's (`drawn_log`), and `DrawnByDevice` holds (`drawn`,
 `drawnByDevice`), with `CoinsFromLog` from it (`coinsFromLog_holds`).
 -/
+
+@[expose] public section
 
 namespace Properties.Challenger.Drawn
 

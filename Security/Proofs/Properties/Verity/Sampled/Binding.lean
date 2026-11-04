@@ -1,12 +1,14 @@
-import Proofs.Properties.Verity.Sampled
-import Proofs.Properties.Challenger
-import Proofs.Core.Game.Tape
-import Proofs.Properties.Challenger.Break
-import Proofs.Properties.Challenger.Drawn
-import Proofs.Properties.Verity.Sampled.Trees
-import Proofs.Properties.Challenger.CanonLine
-import Proofs.Properties.Challenger.Limits
-import Proofs.Properties.Verity.Sampled.Lines
+module
+
+public import Proofs.Properties.Verity.Sampled
+public import Proofs.Properties.Challenger
+public import Proofs.Core.Game.Tape
+public import Proofs.Properties.Challenger.Break
+public import Proofs.Properties.Challenger.Drawn
+public import Proofs.Properties.Verity.Sampled.Trees
+public import Proofs.Properties.Challenger.CanonLine
+public import Proofs.Properties.Challenger.Limits
+public import Proofs.Properties.Verity.Sampled.Lines
 
 /-!
 # The log the sampled check read is the device's, or a break: the read finder and the forger
@@ -58,6 +60,8 @@ collision, or the forger outputs a forgery of the device's LMS signature.
   (`Lines.PrintsLog`), `Binds` holds: an accepted read is the log's (`Lines.read_run`), so where it isn't `Logged` an
   opening's read coins differ from the released ones under one digest (`Lines.open_collision`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Binding
 

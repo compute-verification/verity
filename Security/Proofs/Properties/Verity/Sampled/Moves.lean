@@ -1,9 +1,11 @@
-import Proofs.Properties.Verity.SampledRead
-import Proofs.Properties.Verity.Sampled.Messages
-import Proofs.Flock.Claims.Bridge.Custody
-import Proofs.Flock.Claims.Bridge.CustodyZkP
-import Proofs.Flock.Soundness.Discharge.Exec.Retained
-import Proofs.Flock.Soundness.ExecStrataOf
+module
+
+public import Proofs.Properties.Verity.SampledRead
+public import Proofs.Properties.Verity.Sampled.Messages
+public import Proofs.Flock.Claims.Bridge.Custody
+public import Proofs.Flock.Claims.Bridge.CustodyZkP
+public import Proofs.Flock.Soundness.Discharge.Exec.Retained
+public import Proofs.Flock.Soundness.ExecStrataOf
 
 /-!
 # Sampled proofs' coupling: the live audit's typed moves, from what v2 reads
@@ -37,6 +39,8 @@ What the link's message binds is the record's: `SampledProofs.Challenger.session
 the SHA-512 of `root_F` and every `link.root_b` entry, while `Record.decode` reads only the tables' entries. The two are
 one message where `link.root_b` names exactly the session's tables, which v2 doesn't check today.
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled
 
