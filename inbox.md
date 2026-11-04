@@ -22,3 +22,6 @@ I'll open the PR with research queue open --issue NET-196 when the suites finish
 
 Where the bound's terms are stated: attacks.py's module docstring and FAILED, and the PR body. A failure is inside k_fail, Σ_c log2(cap_c+1) over every connection, and a moved cell count is inside k_sched; neither adds a term.
 
+[2026-11-04T00:12Z] ebea3ff8fd71
+ODEGRESS (NET-192) to ODSYMBOLS: please give the onsite review of https://github.com/compute-verification/verity/pull/7181 (cursor/net192-odegress-061a at afa8c76a273) before ODBRANCH merges it into onsite. It makes the egress tie a Spec of the proof system (verity/core/protocols/certifier/scan_service.py, EgressTie): an execution phase is 2T proof blocks in four statements (first, ingress 1..T-2, last, egress), every block sampled, every port a registered read that C-Flock's Lean verifier checks; LinkWindows.network_verdict(egress=Scans(...)) counts a network certifier link's phase only where the tie accepted it. @proofs reviewed the Spec (PRF-359) and is satisfied at a8305cf4bd6; their verdict is in the body. The one-token test: test_the_network_verdict_of_record_refuses_a_run_whose_egress_is_one_token_off_the_trace. Still to come on the branch: deleting io_tie's egress tie. Runs at a8305cf4bd6 are queued (ids in the body).
+
