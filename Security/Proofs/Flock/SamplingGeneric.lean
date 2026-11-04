@@ -1,23 +1,25 @@
 module
 
 public import Definitions.Claims.SamplingGeneric
-public import Proofs.Flock.SamplingGeneric.Wait
+public import Proofs.Flock.SamplingGeneric.Fails
 public import Proofs.Flock.SamplingGeneric.Split
+public import Proofs.Flock.SamplingGeneric.Coins
 public import Proofs.Flock.SamplingGeneric.Count
 public import Proofs.Flock.SamplingGeneric.Bits
 
 /-!
 # The sampled compiler in the claims core, at Flock
 
-The compiled extractor's waits, the failure event's probability and `Compiled.KS` from the split are in
-`SamplingGeneric/Wait.lean`.
+The compiled extractor's failure event, its probability and `Compiled.KS` from the split are in
+`SamplingGeneric/Fails.lean`.
 
 `Arg.ofFlock` is Flock's `E^rep` at a decoder with Flock's errors, so its knowledge soundness is `Flock.KS`'s
 (`flockArgKS`, by unfolding: its coins, extractor, `κ` and `γ` are `Flock.E`'s, `Flock.κ`'s and `Flock.γ`'s), and its
 rounds are its shape's (`arg_ofFlock_wf`). So the compiler's knowledge soundness gives Flock's (`flockKS_of_compilerKS`);
 it is two steps (`SamplingGeneric/Split.lean`: `KSOf`, `SessionKSOf`, composed by `compilerKS_of`). `CompilerKSCount`
 and `CompilerBits` follow from it (`SamplingGeneric/Count.lean`, `SamplingGeneric/Bits.lean`, the latter through the
-extractor's expected reruns and own calls, `ExpOwnOf`).
+extractor's expected reruns and own calls, `ExpOwnOf`). A session's coins in a compiled run, `coinsOf` and `place`,
+invert each other (`SamplingGeneric/Coins.lean`).
 -/
 
 @[expose] public section
