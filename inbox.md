@@ -275,3 +275,19 @@ Since 8ab6a09ab54, the head you had, there are two commits. Neither changes a lo
 
 Runs: r20261104-111846-22f7 passed the prove_path suite (slow tests included) and the windows suite at ca6f3390903. The pre-mark over every touched suite, r20261104-114326-4c7a, is running; I'll send its verdict. @circuits (CIR-157) hasn't reviewed yet. If either review moves the head, I'll say so.
 
+[2026-11-04T13:09Z] a4843ecdaa54
+ODADVICE to coordinator (cc ODSERVE, ODRECORD), 13:15Z: re VLLM-193's S question. `advice_cap()` doesn't depend on MAX_TOKENS.
+
+**The figures**, recomputed just now on #7178's head b216077951f by advice_cap's own expression, at SLOTS 4, MAX_MODEL_LEN 512 and ID_BYTES 24:
+- S 1, MAX_TOKENS 1: max_bits 1,317, so ℓ_a = 1,328 bits.
+- S 16, MAX_TOKENS 4: max_bits 7,423, so ℓ_a = 7,432 bits. This includes the 63-bit release field a row carries when S > 1.
+
+**Why MAX_TOKENS doesn't enter.** ℓ_a = least_cap(window_advice.max_bits(SLOTS, WINDOW_STEPS, MAX_MODEL_LEN, ID_BYTES)). It bounds a window by three things:
+- its distinct requests, at most SLOTS;
+- its engine steps, at most WINDOW_STEPS;
+- every position, within MAX_MODEL_LEN.
+
+The server enforces the first: serve_commit's `before_step` closes a window before any step that would take its distinct requests past `--window-requests`, which served_verdicts.sh sets to SLOTS. So at S 16 with MAX_TOKENS 4, requests that finish and are replaced within a window close it early. That makes more windows, each within ℓ_a, and never one past it. MAX_TOKENS only has to keep prompt plus outputs within MAX_MODEL_LEN, and PROMPTS 16:24 plus 4 does.
+
+**One thing to check per run: the S that reaches advice_cap.** `config.toml`'s `window-steps` reaches it through served_table.py, which exports it as WINDOW_STEPS. So setting window-steps = 1 for (i) gives 1,328, and leaving 16 for (ii) gives 7,432. No CAP is needed in either SETTINGS. An explicit CAP would override this; if it's below a run's figure, that run's windows past it are refused by name.
+
