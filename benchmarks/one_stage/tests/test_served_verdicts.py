@@ -1323,6 +1323,22 @@ def test_a_pearlplus_piece_on_in_process_coins_claims_no_verdict(tmp_path, monke
     assert doc["reasons"] == ["coins: in-process, not a live session on the gate, so nothing checks them"]
 
 
+def test_a_pearlplus_piece_over_a_commit_windows_epoch_names_its_arm_and_no_shares(tmp_path):
+    """Under PEARLPLUS_TIE the piece reads the window's own epoch, serve_pearl's ``pearl/w<k>/served.json``: it names the
+    arm by its ``entry``, and since that epoch times no generate call of its own it has no shares, which is no reason to
+    reject; the same doc short of ok still rejects."""
+    served, verified = _pearlplus_run(source="in-process")
+    window = {"schema": served.get("schema"), "entry": served["arm"], "run": "r", "window": 0, "retained": True,
+              "commit_steps": 3, "passes": [{**p, "timed": True} for p in served["passes"][1:]], "passes_with_calls": 3,
+              "coins": served["coins"], "ok": True, "error": None}
+    doc = S.pearlplus(tmp_path / "w", window, verified)
+    assert (doc["verdict"], doc["reasons"], doc["arm"], doc["scheme"]) == (S.UNCLAIMED, [], served["arm"], "pearl-c-h100-v1-h3")
+    assert list(doc["shares"]) == ["none"] and doc["passes"] == 3
+    assert S.development_line(doc)["shares_at_tensor_clock"] == {"declared_linears": None, "credited": None}
+    bad = S.pearlplus(tmp_path / "bad", {**window, "ok": False, "error": "pass 2 retained no manifest"}, verified)
+    assert bad["verdict"] == "reject" and bad["shares"] is None
+
+
 PEARL_W = "d7" * 64
 PEARL_LEAN_WORK = {"credited": 5400, "credited_tiles": 40, "macs": 5600, "rho": "1/100", "epsilon": "1/100"}
 
@@ -2468,22 +2484,21 @@ def test_a_pearl_tie_whose_commit_is_refused_or_not_chained_right_after_w_fails(
 
 
 def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(tmp_path):
-    """Under PEARLPLUS_TIE serve-openai serves Pearl-C's arm on the window's own engine (`serve_pearl`), with the cubin
-    and kernel PEARLPLUS-CUBIN built and the epoch's salt session reserved under Pearl+'s lane, on Llama 3.2 1B's BF16
-    checkpoint, one fixed window of the class's outputs, and no H1."""
-    gate = "ssh -i KEY research@gate"
-    rc, argv = _serve_argv(tmp_path, {**PEARL_TIES, "PEARLC_CHALLENGER_GATE": gate, "PEARLC_CHALLENGER_PEER": "vy-dc-h200",
-                                      "PEARLC_CHALLENGER_LANE": "vllm", "PEARLC_KERNEL": "pearl_c_sm90",
-                                      "PEARLC_CUBIN": "/c/pearl_c_sm90.cubin"})
+    """Under PEARLPLUS_TIE serve-openai serves Pearl-C's arm on the window's own engine (`serve_pearl`), its
+    --protocols-config the cubin and kernel PEARLPLUS-CUBIN built, at the arm's precision bfloat16 on Llama 3.2 1B's BF16
+    checkpoint, one fixed window of the class's outputs, no H1 and no gate: the arm draws each epoch's coins in-process."""
+    rc, argv = _serve_argv(tmp_path, {**PEARL_TIES, "PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": "/c/pearl_c_sm90.cubin"})
     assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
-    at = {f: argv[argv.index(f) + 1] for f in ("--protocols", "--protocols-config", "--challenger-gate", "--challenger-peer",
-                                               "--pearl-lane", "--model", "--revision", "--precision", "--window-steps")}
-    assert at == {"--protocols": "pouw:pearl-c-h100-v1-h3", "--challenger-gate": gate, "--challenger-peer": "vy-dc-h200",
-                  "--pearl-lane": "vllm", "--model": "unsloth/Llama-3.2-1B",
-                  "--revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "--precision": "pin", "--window-steps": "4",
+    at = {f: argv[argv.index(f) + 1] for f in ("--protocols", "--protocols-config", "--model", "--revision", "--precision",
+                                               "--window-steps")}
+    assert at == {"--protocols": "pouw:pearl-c-h100-v1-h3", "--model": "unsloth/Llama-3.2-1B",
+                  "--revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "--precision": "bfloat16", "--window-steps": "4",
                   "--protocols-config": json.dumps({"pouw": {"device": "cuda", "kernel": "pearl_c_sm90",
                                                              "cubin": "/c/pearl_c_sm90.cubin"}})}
     assert argv.count("--protocols") == 1 and "--h1-prover" not in argv and "--h1-window-commit" not in argv
+    assert not {"--challenger-gate", "--challenger-peer", "--pearl-lane"} & set(argv)
+    _rc, unset = _serve_argv(tmp_path / "default", {k: v for k, v in PEARL_TIES.items() if k != "PEARLC_CHALLENGER_GATE"})
+    assert "--challenger-gate" not in unset
 
 
 def _pearl_tied_commit(tmp_path: Path, chained: bool = True) -> None:
@@ -2534,12 +2549,15 @@ def test_under_pearlplus_tie_v3c_audits_no_commit_not_chained_right_after_w(tmp_
     ({"CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None, "WINDOW_STEPS": "16"},
      "PREFLIGHT: under PEARLPLUS_TIE round s of Pearl+'s W is the window's s-th step, the class's s-th output, so the window "
      "is one full window of fixed length: LOAD=fixed (not fixed) and WINDOW_STEPS the class's outputs, 4 (not 16)"),
+    ({"CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None, "PEARLC_CHALLENGER_GATE": GATE},
+     "PREFLIGHT: under PEARLPLUS_TIE serve-openai's Pearl+ arm (serve_pearl) draws each window's coins in-process and "
+     f"takes no gate: set PEARLC_CHALLENGER_GATE empty (it is {GATE})"),
 ])
 def test_the_preflight_refuses_pearlplus_tie_without_pearls_piece_beside_h1s_tie_or_the_split_or_off_one_fixed_window(
         tmp_path, extra, line):
     """PEARLPLUS_TIE ties the window to the W Pearl+'s piece writes, so it needs that piece (POUW=pearlplus) and not H1's
-    tie, V3c after step 4 (not the split certifier's, before it), and one fixed window whose s-th step is the class's s-th
-    output: each refused before anything runs."""
+    tie, V3c after step 4 (not the split certifier's, before it), one fixed window whose s-th step is the class's s-th
+    output, and no gate, which serve_pearl doesn't take: each refused before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), **{**PEARL_TIES, **extra})
     assert (rc, lines, order) == (3, [line], [])
 

@@ -232,14 +232,15 @@
 # H1_KEY_SHA512 and MAIN_FILE's line, as H1's piece does. PEARLC_CHALLENGER_GATE set empty leaves Pearl+'s coins an
 # in-process challenger's: the COINS line, the run's first, leads with that, and the piece claims no verdict.
 # With PEARLPLUS_TIE=1 too, the window itself is served under Pearl+, the way H1_TIE ties H1's: serve-openai serves
-# PEARLPLUS_ARM (default pouw:pearl-c-h100-v1-h3) on its one engine (`serve_pearl`, --protocols with the cubin
-# PEARLPLUS-CUBIN built before the lease, and with PEARLC_CHALLENGER_GATE set --challenger-gate, --challenger-peer and
-# --pearl-lane, the epoch's salt session reserved under that lane), so the window's linears are the Pearl+ matmuls whose
-# passes are committed, each retained in the serve dir's private/pearlplus-serve. Its defaults are then Llama 3.2 1B's
-# BF16 checkpoint (REPO unsloth/Llama-3.2-1B, PRECISION pin: its own BF16 linears), the BF16 B4 row's traced Build under
+# PEARLPLUS_ARM (default pouw:pearl-c-h100-v1-h3) on its one engine (`serve_pearl`, --protocols with --protocols-config
+# naming the cubin PEARLPLUS-CUBIN built before the lease), one Pearl+ epoch a Commit window beside sampled proofs cut at
+# Pearl+'s linears, so the window's linears are the Pearl+ matmuls whose passes are committed, each window's retained in
+# the serve dir's pearl/w<k>/. The arm draws each epoch's coins in-process and takes no gate, so PEARLC_CHALLENGER_GATE
+# defaults to empty (the preflight refuses it set) and the piece claims no verdict. Its defaults are then Llama 3.2 1B's
+# BF16 checkpoint (REPO unsloth/Llama-3.2-1B, PRECISION bfloat16, the arm's), the BF16 B4 row's traced Build under
 # /workspace/research/vllm-pearlc-h200bf16 as ROW, LOAD=fixed and WINDOW_STEPS V3C_CLASS's outputs (round s of W is the
 # window's s-th step, the class's s-th output), PEARLC_BF16_ROWS=0 and V3C_LAW stratified:1. Pearl+'s piece then serves
-# nothing of its own (served_pearlplus.sh's PEARLPLUS_TIE): it cuts the window's passes from the serve's, writes W
+# nothing of its own (served_pearlplus.sh's PEARLPLUS_TIE): it takes the window's epoch pearl/w<k>/, writes W
 # (`retain --window-record`), and runs `served_verdicts.sh pearl-tie` (PEARLPLUS_TIE_CMD) before its coin: the window's
 # advice and `prove_path.py window-commit --window-registration W --pearl-passes DIR --law V3C_LAW`, the circuit cut at
 # Pearl+'s linears and R chained right after W, in the serve dir's pearlplus/w<k>/; then `verify --tie W`. V3c then runs
@@ -308,8 +309,10 @@ PEARLPLUS_TIE=${PEARLPLUS_TIE:-}
 if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B's BF16 checkpoint, whose linears Pearl-C reads
   HB=/workspace/research/vllm-pearlc-h200bf16
   ROW=${ROW:-$HB/r20261104-084130-0f59/llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
-  REPO=${REPO:-unsloth/Llama-3.2-1B} REV=${REV:-9535bd9b1d1dea6acafbdc4813b728796aeb28da} PRECISION=${PRECISION:-pin}
+  REPO=${REPO:-unsloth/Llama-3.2-1B} REV=${REV:-9535bd9b1d1dea6acafbdc4813b728796aeb28da} PRECISION=${PRECISION:-bfloat16}
   LOAD=${LOAD:-fixed} PEARLPLUS_ARM=${PEARLPLUS_ARM:-pouw:pearl-c-h100-v1-h3}
+  # serve_pearl draws each window's coins in-process: it takes no gate
+  PEARLC_CHALLENGER_GATE=${PEARLC_CHALLENGER_GATE-}
   # sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise (e2e.BF16_RACE)
   export PEARLPLUS_TIE PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
 fi
@@ -679,7 +682,7 @@ tie() {  # serve-openai's --h1-window-commit (`serve_tie`) at window $2's close,
   echo "TIE: window-commit class $V3C: its registration is the window's record R"
 }
 pearl_tie() {  # served_pearlplus.sh's PEARLPLUS_TIE_CMD once Pearl+'s W is written and before Pearl+'s coin: $1 the serve
-  # dir, $2 the window, $3 W (retain --window-record's), $4 the window's passes (served_passes.py window's). W and the
+  # dir, $2 the window, $3 W (retain --window-record's), $4 the window's passes (serve_pearl's pearl/w<k>/). W and the
   # commit go to the serve dir's pearlplus/w<k>/; like `tie`, it says nothing in $OUT
   K=$2 VW=$D/v3c-w$2-$vtag
   local ca rc why dir
@@ -706,11 +709,9 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   [ -n "$H1_GATE" ] && h1=(--protocols pouw:eps1-sm120-h1fx1 --challenger-gate "$H1_GATE"
                            --challenger-peer "$H1_PEER" "${pc[@]}")
   [ -n "$H1_GATE" ] && [ -n "${H1_CIRCUITS:-}" ] && h1+=(--h1-prover "$D/private/h1")
-  if [ -n "$PEARLPLUS_TIE" ]; then  # the window's linears Pearl+'s matmuls on this one engine (serve_pearl), every pass retained
+  if [ -n "$PEARLPLUS_TIE" ]; then  # the window's linears Pearl+'s matmuls on this one engine (serve_pearl), one epoch a window
     h1=(--protocols "$PEARLPLUS_ARM" --protocols-config "$("$SAY_PY" -c 'import json, sys; print(json.dumps({"pouw": {"device": "cuda", "kernel": sys.argv[1], "cubin": sys.argv[2]}}))' \
       "$PEARLC_KERNEL" "$PEARLC_CUBIN")")
-    [ -z "$PEARLC_CHALLENGER_GATE" ] || h1+=(--challenger-gate "$PEARLC_CHALLENGER_GATE" --challenger-peer "$PEARLC_CHALLENGER_PEER"
-                                             --pearl-lane "$PEARLC_CHALLENGER_LANE")
   fi
   local polls=450
   if [ -n "${H1_TIE:-}" ]; then  # a window's line waits for its release, which waits for its window commit
@@ -1226,6 +1227,8 @@ if [ -n "$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # the window served under
   [ -n "$V3C" ] || { say "PREFLIGHT: PEARLPLUS_TIE commits the window at V3C_CLASS, and it is empty"; exit 3; }
   [ -z "$SPLIT" ] || { say "PREFLIGHT: under PEARLPLUS_TIE V3c runs once Pearl+'s piece wrote W, after step 4, and the split certifier's period check needs it before: set CERTIFIER_CMD instead"; exit 3; }
   if [ -z "$FOLLOW" ] && [ "${1:-}" != v3c ]; then  # the serve's run, whose piece commits the window tied to W
+    [ -z "$PEARLC_CHALLENGER_GATE" ] \
+      || { say "PREFLIGHT: under PEARLPLUS_TIE serve-openai's Pearl+ arm (serve_pearl) draws each window's coins in-process and takes no gate: set PEARLC_CHALLENGER_GATE empty (it is $PEARLC_CHALLENGER_GATE)"; exit 3; }
     outs=$(cut -d, -f3 <<< "$V3C")
     [ "$LOAD" = fixed ] && [ "$WINDOW_STEPS" = "$outs" ] \
       || { say "PREFLIGHT: under PEARLPLUS_TIE round s of Pearl+'s W is the window's s-th step, the class's s-th output, so the window is one full window of fixed length: LOAD=fixed (not $LOAD) and WINDOW_STEPS the class's outputs, $outs (not $WINDOW_STEPS)"; exit 3; }

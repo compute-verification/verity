@@ -54,13 +54,15 @@
 #      coin (`pearlplus_coin`), its load, the replay's node and the rounds dropped, Pearl+'s verdict's credit,
 #      its shares (with the unretained serve's beside them) and why it credits nothing (served_verdicts.PEARLPLUS_WHY: its
 #      passes are not the window sampled proofs audited, so WINDOW names nothing here).
-# With PEARLPLUS_TIE set (served_verdicts.sh's PEARLPLUS_TIE: the window itself served under Pearl+ by serve-openai's
-# Pearl+ arm, every pass retained in SERVE_DIR/private/pearlplus-serve), the piece serves nothing of its own: step 1
-# takes the window serve's cubin (PEARLC_CUBIN) where it is set; step 2 is `served_passes.py window`, the window WINDOW's
-# own passes cut from the serve's (passes/served.json, round s the window's s-th step); step 3's `retain` writes Pearl+'s
-# window record W (`--window-record`, passes' rounds dropped as above) and then, before the coin, PEARLPLUS_TIE_CMD
-# (`served_verdicts.sh pearl-tie SERVE_DIR WINDOW W PASSES`) commits the window tied to W, its registration R chained
-# right after W; step 4 is `verify --tie W`, which holds the passes to W.
+# With PEARLPLUS_TIE set (served_verdicts.sh's PEARLPLUS_TIE: the window itself served under serve-openai's Pearl+ arm,
+# `serve_pearl`, one Pearl+ epoch a Commit window in SERVE_DIR/pearl/w<k>/), the piece serves nothing of its own: step 1
+# takes the window serve's cubin (PEARLC_CUBIN) where it is set; step 2 takes window WINDOW's own epoch, passes/ a
+# symlink to SERVE_DIR/pearl/wWINDOW (its served.json, coins.json and owner-only pass-NNNNN/, round s the window's step
+# s), and goes no further unless that served.json says ok; steps 3 and 4 read and write there, `retain` writing Pearl+'s
+# window record W (`--window-record`, private/pearlplus/window-record.json, rounds dropped as above) and then, before the coin,
+# PEARLPLUS_TIE_CMD (`served_verdicts.sh pearl-tie SERVE_DIR WINDOW W PASSES`) committing the window tied to W, its
+# registration R chained right after W; step 4 is `verify --tie W`, which holds the passes to W. Its coins are the arm's
+# in-process ones (serve_pearl takes no gate), so the piece claims no verdict.
 # The passes hold the run's activations, so they stay in SERVE_DIR/private, under served_verdicts.sh's `research keep`,
 # and the piece runs under umask 077, so every file it or a step writes there is 0600.
 # env: served_verdicts.sh's (VENV, HF_HOME, CUDA_HOME), PEARLPLUS_* above. Its lines name no window. Exit 0 once step 5
@@ -167,13 +169,21 @@ trap copy_back EXIT
 trap 'STOPPED=1; exit 143' TERM HUP
 trap 'STOPPED=1; exit 130' INT
 
-if [ -n "$TIE" ]; then  # the window's own passes, which serve-openai's Pearl+ arm served and retained
-  "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py window --serve-dir "$SD" --window "$K" \
-    --passes "$Q/passes" > "$Q/window.log" 2>&1
-  rc=$?
-  say "window: served_passes.py window exit $rc: the window's own passes, which the window serve's Pearl+ arm retained," \
-    "$BF16: $(tail -1 "$Q/window.log" | sed -E 's/^window [0-9]+: //' | cut -c1-300)"
-  [ "$rc" = 0 ] || GO=
+if [ -n "$TIE" ]; then  # the window's own epoch, which serve-openai's Pearl+ arm served and retained
+  E=$SD/pearl/w$K
+  if [ -s "$E/served.json" ] && ln -s "$E" "$Q/passes"; then
+    line=$("$TPY" -c 'import json, sys
+d = json.load(open(sys.argv[1]))
+print(d.get("passes_with_calls"), "passes with calls of its Commit window'\''s", d.get("commit_steps"), "steps, coins",
+      (d.get("coins") or {}).get("source"), "->", "OK" if d.get("ok") else "FAIL, " + str(d.get("error"))[:300])
+sys.exit(0 if d.get("ok") else 1)' "$E/served.json" 2>&1)
+    rc=$?
+    say "window: the window's own Pearl+ epoch $E (serve_pearl), $BF16: $(tail -1 <<< "$line" | cut -c1-400)"
+    [ "$rc" = 0 ] || GO=
+  else
+    say "window: the window serve wrote no Pearl+ epoch $E/served.json (serve_pearl), so there are no passes to tie"
+    GO=
+  fi
 elif [ -n "${PEARLC_CUBIN:-}" ]; then
   if [ -n "${PEARLPLUS_UNRETAINED-1}" ]; then
     t=$(date +%s)

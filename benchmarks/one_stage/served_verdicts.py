@@ -1105,7 +1105,8 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
                            "coin_source": source, "coins": coins, "scheme": None, "arm": None, "passes": None, "load": None,
                            "dropped": None, "line": None, "credit": None, "coin": None, "give_up": None, "shares": None}
     if served is not None:
-        doc.update(arm=served.get("arm"), scheme=(served.get("arm") or "").partition(":")[2] or None,
+        arm = served.get("arm") or served.get("entry")
+        doc.update(arm=arm, scheme=(arm or "").partition(":")[2] or None,
                    passes=sum(1 for p in served.get("passes") or () if p.get("units")),
                    load={**{k: served.get(k) for k in ("requests", "prompt_tokens", "output_tokens")},
                          "max_num_batched_tokens": (served.get("engine") or {}).get("max_num_batched_tokens")},
@@ -1118,7 +1119,10 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
             reasons.append(f"coin: {doc['coin']['reason']}")
     if volunteered is not None:
         doc["give_up"] = give_up(volunteered)
-    if served is not None and served.get("ok"):
+    if served is not None and served.get("ok") and "generate_s" not in served:
+        doc["shares"] = {"none": "the epoch is a Commit window's (serve_pearl's pearl/w<k>/served.json), which times no "
+                                 "generate call of its own"}
+    elif served is not None and served.get("ok"):
         try:
             doc["shares"] = SS.pearlplus_shares(dict(served), dict(verified or {}))
         except (KeyError, TypeError, ValueError) as e:
