@@ -2,6 +2,7 @@ import NetworkCheck.Check
 import CoreProtocol.Profile
 import Flock.Program
 import Flock.Public
+import Flock.RegKnown
 import Flock.WindowRecord
 import NciCheck.Desc
 
@@ -22,8 +23,8 @@ It accepts when every execution phase passes its form's check and every compute 
 bits a covert sender in the server can move through the network certifier in the period, as
 `NetTiming.Guarantees.PeriodLeakAccepted` counts them. In the rows form each link-window's scan's Programs' row must be a
 compute audit's slot entries (`wired`, below), and the state that audit's Programs read (its `SCAN_STATE`) the scan's
-state, by root and domain (`stateTied`), so a slot's entry is the one its Program computed on the requests the scan
-read.
+state, by root and domain, which the scan's units read and register as its transitions chain it from the empty state
+(`stateTied`, `stateEmpty`), so a slot's entry is the one its Program computed on the requests the scan read.
 
 **Params**, JSON with exactly these keys (and each nested object exactly its own), in the clock form
 
@@ -158,12 +159,19 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 * in the rows form, link-window `w`'s scan's state is the `SCAN_STATE` of an audit its `prog` is wired to
   (`stateTied`): the scan's registration has an entry of its `roots` whose port is `scan/state` or of its `registered`
   whose value is `verity/certifier/scan-state/v1`, every such entry at one root and domain, and so has a `wired`
-  audit's registration, every such entry at that root and domain. The scan's ingress unit t reads `sin` as that root's
-  row t and its `o1` as row t + 1, but for its last unit, whose `o1` no row holds (the egress tie's is the prover's
-  one-leaf `scan/last`, registered before any coin), so each row past row 0 is the state the scan's transition computed
-  from the row before it, the prover's word for none; row 0 is the empty state, which no unit reads, and only the
-  Programs anchored at bucket 0 read it, whose entries the scan reads for no slot, since its state before bucket 0 has
-  none occupied. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
+  audit's registration, every such entry at that root and domain; and the scan's registration states its units' reads
+  of that state and opens its row 0, its `window`'s
+
+      "reads": {"scan/state": {"o1": {"leaf": 1, "units": [0, T − 1]}, "sin": {"leaf": 1, "units": [1, T]}}, …},
+      "empty": {"scan/state": {"words": W, "salt": hex, "path": hex}, …}
+
+  (`stateRead`, a run a port: unit `lo + i` at leaf `l + i`), so the scan's ingress unit t (bucket t) reads `sin` as
+  that root's row t and registers its `o1` as row t + 1, but for its last unit, whose `o1` no row holds (the egress
+  tie's is the prover's one-leaf `scan/last`, registered before any coin), and each row past row 0 is the state the
+  scan's transition computed from the row before it, the prover's word for none; and row 0, which no unit computes and
+  only the Programs anchored at bucket 0 read, is the empty state, `W` zero u16 words, opened under its salt through
+  its path to the state entry's root and domain (`stateEmpty`: the row and its salt are public, the other leaves
+  hidden). A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
   the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`).
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `PeriodLeakAccepted`'s factor:
@@ -229,8 +237,9 @@ What it doesn't check: the proof's public row against the certificates' digests 
 verifier of record checks inside the answer (`LinkWindows.verify`, with C-Flock's Lean verifier on the `--zk` proof);
 the clock form's link-window registration's domain; in the rows form, the records' certificates' digests against the
 rows (each signs its salted record, witness) and the scan's statements against its registration (lane `j`'s slot
-entries' input node the value it registers as `scan/prog<j>`), which one-stage's verifier of record checks inside the
-answer, and that the network certifier holds each lane to `egress_cells` cells with at most `lanes` connections live,
+entries' input node the value it registers as `scan/prog<j>`, and each unit's `sin` and `o1` read at the leaf its
+`reads` state), which one-stage's verifier of record checks inside the answer, and that the network certifier holds
+each lane to `egress_cells` cells with at most `lanes` connections live,
 which the caps read (`Schedule.caps`; `trusted-host`); that a tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
 its `SCAN_STATE` (the check reads no wires of an audit's Program, only its root templates' ids and closure digests);
 and that the audits' answers are the sampled-proofs component's own,
@@ -1076,13 +1085,43 @@ def stateEntries (reg : Json) : Array Json :=
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
   (entries "roots").filter (named "port" stateName) ++ (entries "registered").filter (named "value" stateValue)
 
-/-- The scan's state is the state its slots' Programs read: the scan's registration has a state entry (`stateEntries`),
-every one at one root and domain, and an audit `wired` to the scan's `prog` has one, every one at that root and domain.
-The scan's units read their states at that root (`sin` row t, `o1` row t + 1, but the last unit's `o1`, which no row
-holds), so the `SCAN_STATE` that audit's Programs read is the chain of the scan's transitions. -/
+/-- Whether `j` is the run `{"leaf": l, "units": [lo, hi]}`: units `lo` to `hi − 1`, unit `lo + i` at leaf `l + i`. Read
+field by field, which the kernel evaluates (`Json`'s `==` it doesn't). -/
+def isRun (j : Json) (lo hi l : Nat) : Bool :=
+  let nat := fun (x : Json) (n : Nat) => match x.getNat? with
+    | .ok m => m == n
+    | .error _ => false
+  nat (j.getObjValD "leaf") l && match j.getObjValD "units" with
+    | .arr xs => match xs.toList with
+      | [a, b] => nat a lo && nat b hi
+      | _ => false
+    | _ => false
+
+/-- The scan's registration states its units' reads of its state as the scan's transitions chain them: its `window`'s
+`reads` of `stateName` has `sin` the run of units 1 to T − 1 from leaf 1 and `o1` the run of units 0 to T − 2 from leaf 1
+(`isRun`), so ingress unit `t` reads `sin` at leaf `t`, S_{t−1}, and registers its `o1`, S_t, at leaf `t + 1`. Unit `t` is
+bucket `t`: one-stage numbers the scan's units in its root's order, bucket 0's first and then the later ingress
+buckets' (`scanOf`). Leaf 0, the empty state, no unit reads, and the last ingress unit's `o1` no leaf holds. One run a
+port, so the check reads the description, never a unit. -/
+def stateRead (s : Schedule) (reg : Json) : Bool :=
+  let r := ((reg.getObjValD "window").getObjValD "reads").getObjValD stateName
+  isRun (r.getObjValD "sin") 1 s.window 1 && isRun (r.getObjValD "o1") 0 (s.window - 1) 1
+
+#guard stateRead ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 3⟩ (Json.mkObj [("window", Json.mkObj [("reads", Json.mkObj
+  [(stateName, Json.mkObj [("o1", Json.mkObj [("leaf", toJson 1), ("units", toJson [0, 2])]),
+                           ("sin", Json.mkObj [("leaf", toJson 1), ("units", toJson [1, 3])])])])])]) &&
+  !stateRead ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 3⟩ (Json.mkObj [("window", Json.mkObj [("reads", Json.mkObj
+  [(stateName, Json.mkObj [("o1", Json.mkObj [("leaf", toJson 0), ("units", toJson [0, 2])]),
+                           ("sin", Json.mkObj [("leaf", toJson 1), ("units", toJson [1, 3])])])])])])
+
+/-- The scan's state is the state its slots' Programs read, read where the scan's transitions chain it: the scan's
+registration states its state reads as the chain (`stateRead`: unit `t`'s `sin` at leaf `t`, its `o1` at leaf `t + 1`),
+has a state entry (`stateEntries`), every one at one root and domain, and an audit `wired` to the scan's `prog` has one,
+every one at that root and domain. So the `SCAN_STATE` that audit's Programs read is the chain of the scan's
+transitions, each row past row 0 the one the unit before registered. -/
 def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json) : Bool :=
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
-  match (stateEntries reg)[0]? with
+  stateRead s reg && match (stateEntries reg)[0]? with
   | some e => match e.getObjValD "root", e.getObjValD "domain" with
     | .str root, .str dom =>
       let atRoot := fun (o : Json) => named "root" root o && named "domain" dom o
@@ -1090,6 +1129,28 @@ def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : J
         wired #[a] s #[r] reg && !(stateEntries r).isEmpty && (stateEntries r).all atRoot
     | _, _ => false
   | none => false
+
+/-- The scan's registration opens its state's row 0 to the empty state: its `window`'s
+`"empty": {"scan/state": {"words": W, "salt": hex, "path": hex}}` is leaf 0's opening, `W` zero u16 words (`W` at least
+1) under a salt of `HmRow.SALT_BYTES` bytes, whose hm96 leaf (`Registered.knownPayload`, as the verifier registers a
+value at known content), framed at 0 under the state entry's domain, climbs `path`, one sibling a level of the T
+leaves', to that entry's root. Row 0 is the state before bucket 0, which no unit computes and only the Programs
+anchored at bucket 0 read; a row's digest binds its length, so a reader of another width doesn't open it. The row is
+public, the empty state, and so is its salt; every other leaf stays hidden. -/
+def stateEmpty (s : Schedule) (reg : Json) : Bool :=
+  let o := ((reg.getObjValD "window").getObjValD "empty").getObjValD stateName
+  let hex := fun (k : String) (j : Json) => match j.getObjValD k with
+    | .str x => (Flock.unhex x).toOption
+    | _ => none
+  let depth := Flock.log2ceil s.window
+  match (stateEntries reg)[0]?, (o.getObjValD "words").getNat? with
+  | some e, .ok w => match hex "salt" o, hex "path" o, hex "root" e, hex "domain" e with
+    | some salt, some path, some root, some dom =>
+      decide (0 < w) && decide (salt.size = Flock.HmRow.SALT_BYTES) && decide (path.size = 64 * depth) &&
+        decide (Flock.FV3.Sha512.climb dom (Flock.FV3.Sha512.leafAs Flock.HmRow.ROW_SCHEMA_V2 dom 0
+          (Flock.Registered.knownPayload (Array.replicate w 0) salt)) 0 depth path = root)
+    | _, _, _, _ => false
+  | _, _ => false
 
 /-- Audit `i` is tied to a link-window's scan: some link-window's registration's `prog` is its output (`tiedAudits`). -/
 def tiedIn (audits windows : Array Json) (i : Nat) : Bool :=
@@ -1172,15 +1233,28 @@ def wiredChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × S
   | .clock _ => #[]
 
 /-- Link-window `w`'s state finding in the rows form: a refusal unless its scan's state is the `SCAN_STATE` of an audit
-its `prog` is wired to (`stateTied`). With the `prog` wired, each slot's entry is the one its Program computed, and a
-Program reads the requests from its own registered `SCAN_STATE`; unless that is the scan's state, it computes its entry
-on a state the prover chose. -/
+its `prog` is wired to, read where the scan's transitions chain it (`stateTied`), and its row 0 the empty state
+(`stateEmpty`). With the `prog` wired, each slot's entry is the one its Program computed, and a Program reads the
+requests from its own registered `SCAN_STATE`; unless that is the scan's state, each of its rows past row 0 the one the
+scan's unit before registered (`stateRead`) and row 0 the empty state, it computes its entry on a state the prover
+chose. -/
 def stateCheck (p : Params) (s : Schedule) (audits : Array Json) (w : Nat) (reg : Json) :
     Option (Core.Verdict × String) :=
-  if stateTied p.audits s audits reg then none else
-    some (.reject, s!"window {w}: the scan's state is no wired audit's SCAN_STATE: its {stateName} entries' root and \
-      domain are not every {stateValue} entry's of an audit whose slot entries are its prog, so a slot's Program can \
-      compute its entry on a state the prover chose: register the scan's state tree as that audit's SCAN_STATE")
+  if stateTied p.audits s audits reg then
+    if stateEmpty s reg then none else
+      some (.reject, s!"window {w}: the scan's state's row 0 is not the empty state: its registration's window.empty \
+        of {stateName} is no opening of leaf 0 to zero u16 words under its salt at its state entry's root and domain \
+        (stateEmpty), so the Programs anchored at bucket 0 can read a state the prover chose: open leaf 0, the empty \
+        state, with its salt and path")
+  else
+    some (.reject, if stateRead s reg then s!"window {w}: the scan's state is no wired audit's SCAN_STATE: its \
+      {stateName} entries' root and domain are not every {stateValue} entry's of an audit whose slot entries are its \
+      prog, so a slot's Program can compute its entry on a state the prover chose: register the scan's state tree as \
+      that audit's SCAN_STATE"
+    else s!"window {w}: the scan's state reads are not its transitions' chain: its registration's window.reads of \
+      {stateName} are not sin \{\"leaf\": 1, \"units\": [1, {s.window}]} and o1 \{\"leaf\": 1, \"units\": [0, \
+      {s.window - 1}]} (stateRead), so a unit could read a state no unit registered: register unit t's sin at leaf t \
+      and its o1 at leaf t + 1")
 
 /-- The rows form's state findings, one a link-window, in order (`stateCheck`); none in the clock form. -/
 def stateChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with

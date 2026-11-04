@@ -268,12 +268,13 @@ RESTS_ON: dict[str, dict[str, Any]] = {
                   "hfit": "schedules-held", "hs": "schedules-covered", "hdz": "client-decodes",
                   "NetTiming.ScopeAcc": "wires-fit", "NetTiming.TapOpens": "taps-open"}},
     "NetTiming.SecurityProofs.PeriodLeakRegistered": {
-        "statement": "79ebe236812c4d1257a7dd6dfc7dbc9816c7d1846745f64dce1596c5ebd20034",
+        "statement": "a950c611a388e2a0afa380e293fdc65946330ba10ed90b6f8f567883d6f1af09",
         "takes": {"Claims.Sampling.KS": "sampled-leg-bridge", "Claims.Flock.ListWithin": "sampled-leg-bridge",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
                   "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
                   "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.SchedulesHeld": "schedules-held",
-                  "NetTiming.SenderDecodes": "schedules-covered", "NetTiming.ScopeAcc": "wires-fit",
+                  "NetTiming.SchedulesCovered": "schedules-covered", "NetTiming.SenderDecodes": "client-decodes",
+                  "NetTiming.ScopeAcc": "wires-fit",
                   "NetTiming.RegOpensAt": "reg-opens-at", "NetTiming.TapsOpen": "taps-open"}},
     "NetTiming.SecurityProofs.PeriodTiedCount": {
         "statement": None,
@@ -315,10 +316,12 @@ PREMISES: dict[str, dict[str, Any]] = {
                                  "into its padding (FilesOf's readsWhy at no reads is none). The period check reads "
                                  "the scan's circuit files whole, so the scan's half follows from its acceptance, but "
                                  "reads each tied audit's file to its header only, so a file whose units read into "
-                                 "its padding isn't refused. Open, by this name, until a pass over each tied audit's "
-                                 "whole file computes its unit reads, and a proved Property, never a difftest, gives "
-                                 "that they are the parsed file's unitReads, in the lock as CircuitCountsAt's "
-                                 "tied-audit premise",
+                                 "its padding isn't refused. Open, by this name, and never assumed: it goes once the "
+                                 "circuit check counts every padding column of each tied audit's units (its nIn less "
+                                 "its port columns, known from the header alone) as free, and is otherwise discharged "
+                                 "once a pass over each tied audit's whole file computes its unit reads and a proved "
+                                 "Property, never a difftest, gives that they are the parsed file's unitReads, in the "
+                                 "lock as CircuitCountsAt's tied-audit premise",
                            "discharged_by": ()},
     "session-tags": {"is": "the read bitmap's bridge to the sampled sessions' tags: the period check counts each tied "
                            "audit's free inputs off the inputs its circuit reads as the reader parses it (circuitOf at "
@@ -378,14 +381,14 @@ PREMISES: dict[str, dict[str, Any]] = {
                              "(TapRecord.fits, the rows format's). Open until the theorem that gives it of the network "
                              "certifier's code is named",
                        "discharged_by": ()},
-    "schedules-covered": {"is": "SenderDecodes's schedule half, PeriodLeakAccepted's hs: each secret K counts runs on a "
-                                "schedule of Ss, whose number k_sched counts, so Ss must hold every schedule the "
-                                "network certifier's signed records can show, the union over their arrivals. A "
-                                "property of the compiled Lean audit the verification runs over those records, which "
-                                "trusted-host makes the traffic that crossed, never of the device's code. Open, by "
-                                "this name, until k_sched's count bounds that union and the Property that gives it, "
-                                "stated over that audit, is in the lock at the statement `DISCHARGES` pins; the "
-                                "decoder half is what K counts (`COUNTS`)",
+    "schedules-covered": {"is": "SchedulesCovered, PeriodLeakAccepted's hs: each secret K counts runs on a schedule of "
+                                "Ss, whose number k_sched counts, so Ss must hold every schedule the network "
+                                "certifier's signed records can show, the union over their arrivals. A property of "
+                                "the compiled Lean audit the verification runs over those records, which trusted-host "
+                                "makes the traffic that crossed, never of the device's code. Open, by this name, "
+                                "until k_sched's count bounds that union and the Property that gives it, stated over "
+                                "that audit, is in the lock at the statement `DISCHARGES` pins; SenderDecodes, the "
+                                "decoder, is what K counts (`COUNTS`)",
                           "discharged_by": ("Properties.NetworkCertifier.schedulesCoveredAt",)},
     "sampled-leg-bridge": {"is": "the sampled leg's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
                                  "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KS; "
@@ -417,7 +420,7 @@ STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifi
 #: what K counts: the hypotheses on the covert sender's strategy that its guarantee quantifies, which no deployment
 #: discharges, so none is open
 COUNTS = {"client-decodes": "the secrets a decoder recovers from the client's view, the cells the network certifier's "
-                            "run gives the client: SenderDecodes's decoder half, PeriodLeakAccepted's hdz"}
+                            "run gives the client: SenderDecodes, PeriodLeakAccepted's hdz"}
 DISCHARGE = ("the tight K's premises (`PREMISES`), each open until every theorem that discharges it at the deployed code "
              "is in Security's lock at the statement `DISCHARGES` pins (``unpinned``, with the lock's digest, where it "
              "isn't), with no named assumption but a standing one (`STANDING`) or one its pin takes, and every premise "

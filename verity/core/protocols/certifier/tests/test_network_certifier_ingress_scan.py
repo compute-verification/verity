@@ -19,8 +19,8 @@ nothing, and ignores every entry outside a due, occupied slot (an entry off its 
 entry's padding, a due slot's entry whose occupancy word is 0, which takes no outputs); the Programs' entries are
 `SlotEntry_v1`'s rows, word-aligned, one port a slot; the same traffic at a KI one below request 3's prompt is
 refused at the cell that takes it past; a window
-circuit's state rows (`window_state`) are the scan's from t0 − 1, the empty state's first; the first bucket's circuit
-is the ingress circuit at the empty state, bit for bit; the egress circuit is its reference on the views;
+circuit's state rows (`window_state`) are the state tree's leaves from t0, leaf 0 the empty state; the first bucket's
+circuit is the ingress circuit at the empty state, bit for bit; the egress circuit is its reference on the views;
 `scan_traffic.serve`, the zk run's driver, ticks the same rows as the network certifier; phase 6's prompt split and
 phase 9's carried field count are other scan states; and the w63 class's state is the scan's sized layout, with the
 outputs N2's view reads."""
@@ -195,7 +195,9 @@ def test_the_scan_reads_each_prompt_off_its_cells_so_a_split_or_a_carried_count_
         assert ok == 0 or st != ch.outputs(t)[0], delta
 
 
-def test_a_window_circuit_reads_the_scan_s_state_rows_from_t0_minus_one(run):
+def test_a_window_circuit_reads_the_scan_s_state_tree_from_leaf_t0(run):
+    """`window_state` numbers the rows as the state tree's leaves: leaf 0 the empty state, leaf t + 1 bucket t's o1, so
+    the window from t0 reads leaves t0 … t0 + n − 1, which is the chain's own numbering (``states[t + 1]`` is S_t)."""
     ch, T = run.chain, PARAMS.window
     registered = ch.states[1:]
     assert len(registered) == T and IS.window_state(CLS, registered, 0, T) == ch.states[:T]

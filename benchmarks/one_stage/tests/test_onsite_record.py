@@ -349,8 +349,9 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     tags = OR.PREMISES["session-tags"]["is"]
     assert "circuitOf at Tags.circuit" in tags and "Tags.circuit.withCoins c" in tags
     padding = OR.PREMISES["tied-padding-reads"]["is"]
-    assert all(x in padding for x in ("scan's circuit files whole", "to its header only", "never a difftest",
-                                      "CircuitCountsAt"))
+    assert all(x in padding for x in ("scan's circuit files whole", "to its header only", "never assumed",
+                                      "every padding column", "never a difftest", "CircuitCountsAt"))
+    assert "tied-padding-reads" not in json.dumps(OR.STANDING)
 
 
 @pytest.mark.parametrize("given, open_", [
