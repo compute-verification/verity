@@ -47,7 +47,7 @@ theorem ex_le_add_pr {α : Type} [Fintype α] (f : α → ℝ) (E : α → Prop)
       exact sum_le_sum fun a ha => h2 a (mem_filter.mp ha).2
     rw [nsmul_eq_mul, mul_add, mul_one] at hA
     rw [nsmul_eq_mul] at hB
-    have hcard := filter_card_add_filter_neg_card_eq_card (s := (univ : Finset α)) E
+    have hcard := Finset.card_filter_add_card_filter_not (s := (univ : Finset α)) E
     rw [card_univ] at hcard
     have hcard' : ((univ.filter E).card : ℝ) * δ + ((univ.filter (fun a => ¬ E a)).card : ℝ) * δ =
         δ * Fintype.card α := by
@@ -80,21 +80,26 @@ theorem ticketsOf_cast (NT : ℕ) (v : ℕ → ℚ) {g : ℕ} (hg : g < NT) (hv 
   push_cast
   field_simp
 
+theorem goodDeclTiles_subset {Q R S : Type} (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R)
+    (s : S) (τ : Transcript) (dec : ℕ → Decl) : goodDeclTiles P TR U H s τ dec ⊆ goodTiles P TR U H s τ := by
+  unfold goodDeclTiles
+  exact filter_subset _ _
+
 /-- **The draw's bound for one oracle and salt.** Fix a transcript `τ`, its declarations `dec`, a set `good` of its
-committed tiles on which the draw's weight is at most `Ω` times `credit`, and a set `over` of committed tiles disjoint from
+committed tiles on which the draw's weight is at most `Ω` times `credit`, and a set `O` of committed tiles disjoint from
 `good` and the blank ones. Unless `good`'s credit exceeds `T/(1 − γ₀)`, the tolerant audit drawn by `τ`'s tickets accepts
-`good ∪ blank` and `over` while `T` is below `1 − γ` of `1 − u(X_O)` of the claimed work, `γ = 1 − (1 − γ₀)/Ω`, with
+`good ∪ blank` and `O` while `T` is below `1 − γ` of `1 − u(X_O)` of the claimed work, `γ = 1 − (1 − γ₀)/Ω`, with
 probability at most `δ`. -/
 theorem sampledOfGoodDrawTol {Q R S : Type} (TR : TileRules Q R S) (Wd : Layout → ℕ → Decl → ℚ) (U : Workload)
-    (τ : Transcript) (dec : ℕ → Decl) (good over : Finset ℕ) (credit : ℕ → ℝ) (γ₀ Ω T : ℝ) (hγ₀ : γ₀ < 1)
+    (τ : Transcript) (dec : ℕ → Decl) (good O : Finset ℕ) (credit : ℕ → ℝ) (γ₀ Ω T : ℝ) (hγ₀ : γ₀ < 1)
     (hΩ : 0 < Ω) (hsub : good ⊆ range (TR.tiling U.layout).NT \ blankTiles TR U τ)
-    (hdisj : Disjoint (good ∪ blankTiles TR U τ) over)
+    (hdisj : Disjoint (good ∪ blankTiles TR U τ) O)
     (hW0 : ∀ g < (TR.tiling U.layout).NT, 0 ≤ drawWeight TR Wd U τ dec g)
     (hW : ∀ g ∈ good, (drawWeight TR Wd U τ dec g : ℝ) ≤ Ω * credit g)
     (t : ℕ) (u : ℕ → ℝ) (δ : ℝ) (hu : MissBound t u δ) (hE : ¬ T / (1 - γ₀) < ∑ g ∈ good, credit g) :
     pr (fun c : Fin t → Ticket (drawTickets TR Wd U τ dec) (TR.tiling U.layout).NT =>
-        AuditAcceptsTol (good ∪ blankTiles TR U τ) over c ∧
-        T < (1 - (1 - (1 - γ₀) / Ω)) * (1 - u (drawsIn over c)) * claimedDraw TR Wd U τ dec) ≤ δ := by
+        AuditAcceptsTol (good ∪ blankTiles TR U τ) O c ∧
+        T < (1 - (1 - (1 - γ₀) / Ω)) * (1 - u (drawsIn O c)) * claimedDraw TR Wd U τ dec) ≤ δ := by
   classical
   set NT := (TR.tiling U.layout).NT with hNT
   set v := drawWeight TR Wd U τ dec with hv
@@ -122,24 +127,24 @@ theorem sampledOfGoodDrawTol {Q R S : Type} (TR : TileRules Q R S) (Wd : Layout 
     rw [← hKv]
     exact (sum_sdiff hKsub).symm
   let E1 : (Fin t → Ticket w NT) → Prop := fun c =>
-    AuditAcceptsTol K over c ∧ u (drawsIn over c) * ∑ g ∈ range NT, (w g : ℝ) < ∑ g ∈ range NT \ K, (w g : ℝ)
-  have hstep : ∀ c : Fin t → Ticket w NT, (AuditAcceptsTol K over c ∧
-      T < (1 - (1 - (1 - γ₀) / Ω)) * (1 - u (drawsIn over c)) * claimedDraw TR Wd U τ dec) → E1 c := by
+    AuditAcceptsTol K O c ∧ u (drawsIn O c) * ∑ g ∈ range NT, (w g : ℝ) < ∑ g ∈ range NT \ K, (w g : ℝ)
+  have hstep : ∀ c : Fin t → Ticket w NT, (AuditAcceptsTol K O c ∧
+      T < (1 - (1 - (1 - γ₀) / Ω)) * (1 - u (drawsIn O c)) * claimedDraw TR Wd U τ dec) → E1 c := by
     intro c ⟨hacc, hT⟩
     by_contra h1
     refine hE ?_
-    have hbad : ∑ g ∈ range NT \ K, (w g : ℝ) ≤ u (drawsIn over c) * ∑ g ∈ range NT, (w g : ℝ) := by
+    have hbad : ∑ g ∈ range NT \ K, (w g : ℝ) ≤ u (drawsIn O c) * ∑ g ∈ range NT, (w g : ℝ) := by
       by_contra h
       exact h1 ⟨hacc, lt_of_not_ge h⟩
     rw [hsumw _ sdiff_subset, hsumw _ (Subset.refl _)] at hbad
-    have hbad' : ∑ g ∈ range NT \ K, (v g : ℝ) ≤ u (drawsIn over c) * claimedDraw TR Wd U τ dec := by
-      have h' : L * ∑ g ∈ range NT \ K, (v g : ℝ) ≤ L * (u (drawsIn over c) * claimedDraw TR Wd U τ dec) := by
-        calc _ ≤ u (drawsIn over c) * (L * ∑ g ∈ range NT, (v g : ℝ)) := hbad
-          _ = L * (u (drawsIn over c) * claimedDraw TR Wd U τ dec) := by
+    have hbad' : ∑ g ∈ range NT \ K, (v g : ℝ) ≤ u (drawsIn O c) * claimedDraw TR Wd U τ dec := by
+      have h' : L * ∑ g ∈ range NT \ K, (v g : ℝ) ≤ L * (u (drawsIn O c) * claimedDraw TR Wd U τ dec) := by
+        calc _ ≤ u (drawsIn O c) * (L * ∑ g ∈ range NT, (v g : ℝ)) := hbad
+          _ = L * (u (drawsIn O c) * claimedDraw TR Wd U τ dec) := by
               rw [show claimedDraw TR Wd U τ dec = ∑ g ∈ range NT, (v g : ℝ) from rfl]
               ring
       exact le_of_mul_le_mul_left h' hLpos
-    have hgood : (1 - u (drawsIn over c)) * claimedDraw TR Wd U τ dec ≤ ∑ g ∈ good, (v g : ℝ) := by
+    have hgood : (1 - u (drawsIn O c)) * claimedDraw TR Wd U τ dec ≤ ∑ g ∈ good, (v g : ℝ) := by
       rw [sub_mul, one_mul]
       linarith
     have hcred : ∑ g ∈ good, (v g : ℝ) ≤ Ω * ∑ g ∈ good, credit g := by
@@ -149,7 +154,7 @@ theorem sampledOfGoodDrawTol {Q R S : Type} (TR : TileRules Q R S) (Wd : Layout 
     have hpos : 0 < (1 - γ₀) / Ω := div_pos h1γ₀ hΩ
     rw [show 1 - (1 - (1 - γ₀) / Ω) = (1 - γ₀) / Ω by ring, mul_assoc] at hT
     rw [div_lt_iff₀ h1γ₀]
-    calc T < (1 - γ₀) / Ω * ((1 - u (drawsIn over c)) * claimedDraw TR Wd U τ dec) := hT
+    calc T < (1 - γ₀) / Ω * ((1 - u (drawsIn O c)) * claimedDraw TR Wd U τ dec) := hT
       _ ≤ (1 - γ₀) / Ω * (Ω * ∑ g ∈ good, credit g) := mul_le_mul_of_nonneg_left (hgood.trans hcred) hpos.le
       _ = (∑ g ∈ good, credit g) * (1 - γ₀) := by field_simp
   refine (pr_mono hstep).trans ((pr_mono fun c hc => ?_).trans (hu NT w (range NT \ K) sdiff_subset))
@@ -178,7 +183,7 @@ theorem gammaSampledDrawTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype 
   have hδ : 0 ≤ δ := (pr_nonneg _).trans (hu 0 (fun _ => 0) ∅ (empty_subset _))
   have hTT' := hTT.2 U hU T hT q (hq.trans (by norm_num)) A hA
   refine (ex_le_add_pr _ _ δ hδ (fun x => (pr_le_one _).trans (by linarith)) (fun x hx => ?_)).trans
-    (add_le_add_left hTT' δ)
+    (add_le_add le_rfl hTT')
   set τ := A.transcript U x.1 x.2 with hτ
   have hgood : ∀ g ∈ goodDeclTiles P TR U x.1 x.2 τ (dec x.1 x.2), ∃ c,
       τ ((TR.tiling U.layout).unit g) = some c ∧ TileGood P TR U x.1 x.2 g c ∧
@@ -190,8 +195,9 @@ theorem gammaSampledDrawTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype 
     exact ⟨c, hc, hgc, mem_range.mp hgr, hdc⟩
   refine sampledOfGoodDrawTol TR Wd U τ (dec x.1 x.2) (goodDeclTiles P TR U x.1 x.2 τ (dec x.1 x.2))
     (overCapTiles TR U x.1 x.2 τ) (fun g => TR.credit x.1 x.2 U g (actOf τ ((TR.tiling U.layout).unit g))) γ₀ Ω T hγ₀
-    hΩ ((filter_subset _ _).trans (goodTiles_subset P TR U x.1 x.2 τ))
-    ((overCapTiles_disjoint P TR U x.1 x.2 τ).mono_left (union_subset_union (filter_subset _ _) (Subset.refl _)))
+    hΩ ((goodDeclTiles_subset P TR U x.1 x.2 τ _).trans (goodTiles_subset P TR U x.1 x.2 τ))
+    ((overCapTiles_disjoint P TR U x.1 x.2 τ).mono_left
+      (union_subset_union (goodDeclTiles_subset P TR U x.1 x.2 τ _) (Subset.refl _)))
     ?_ ?_ t u δ hu ?_
   · intro g hg
     unfold drawWeight
@@ -209,7 +215,8 @@ theorem gammaSampledDrawTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype 
     rw [hact]
     exact hgc.1
   · intro hlt
-    refine hx (lt_of_lt_of_le hlt (sum_le_sum_of_subset_of_nonneg (filter_subset _ _) fun g hg _ => ?_))
+    refine hx (lt_of_lt_of_le hlt
+      (sum_le_sum_of_subset_of_nonneg (goodDeclTiles_subset P TR U x.1 x.2 τ _) fun g hg _ => ?_))
     unfold goodTiles at hg
     rw [mem_filter] at hg
     obtain ⟨hgr, c, hc, hgc⟩ := hg
@@ -231,7 +238,7 @@ theorem gammaSampledDraw_of_tol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fint
     (h U hU T hT q hq A hA dec t _ _ (missBound_strict t εs hεs))
   obtain ⟨hacc, hTlt⟩ := hc
   have hdisj := (overCapTiles_disjoint P TR U x.1 x.2 (A.transcript U x.1 x.2)).mono_left
-    (union_subset_union (filter_subset _ _) (Subset.refl _))
+    (union_subset_union (goodDeclTiles_subset P TR U x.1 x.2 (A.transcript U x.1 x.2) (dec x.1 x.2)) (Subset.refl _))
   have h0 : drawsIn (overCapTiles TR U x.1 x.2 (A.transcript U x.1 x.2)) c = 0 := by
     unfold drawsIn
     rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
