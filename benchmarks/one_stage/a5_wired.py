@@ -14,7 +14,8 @@ the audit's draw's, `a5.drawn_by`) by
 * ``moved``: the wire reading the writer's units in reverse: the reader's session refused by its wired reads, since its
   rows are the writer's at the other positions;
 * ``altered``: the reader's public file with each unit's ``x`` row other than its writer's (a byte of its ``b || c``
-  flipped), the evidence naming that file: the reader's session refused by its wired reads.
+  flipped) and its header's ``x`` root the altered rows', the evidence naming that file: the reader's session refused
+  by its wired reads.
 
 The window as a whole stays refused by v2's check until a sample over several members' statements is in the lock
 (`OneStageZk.MULTI_REFUSED`); these are the sessions' verdicts it reads. The run exits 0 only when the audit is accepted
@@ -147,14 +148,25 @@ def unwired(case: dict) -> dict:
 
 def altered(case: dict, reader: CS.Member, d: Path) -> dict:
     """``case`` with the reader's public file's every ``x`` row other than its writer's (the first byte of its ``b || c``
-    flipped, `wiring.string_at`), written to ``d`` and named by the reader's statement and the blobs."""
+    flipped, `wiring.string_at`) and its header's ``x`` root the altered rows' (`rows.port_tree`), so that the file is
+    its own rows' and only the wire tells them from the writer's: written to ``d`` and named by the reader's statement and
+    the blobs."""
     e = evidence_of(case)
     (st,) = [s for s in e["proofs"]["statements"] if s["member"] == reader.key]
     (src,) = [Path(b) for b in case["blobs"] if Path(b).is_file() and hashlib.sha512(Path(b).read_bytes()).hexdigest() == st["public"]]
     head, body = src.read_bytes().split(b"\n", 1)
     body = bytearray(body)
-    for u in range(reader.n):
-        body[WI.string_at(reader, bytes(body), "x", u)] ^= 1
+    fv = json.loads(head)["frame_v3"]
+    at = [WI.string_at(reader, bytes(body), "x", u) for u in range(reader.n)]
+
+    def root() -> str:
+        return CS.port_tree(fv, "x", [bytes(body[i:i + CS.BC_BYTES]) for i in at]).commitment.root.hex()
+    was = fv["roots"]["x"]
+    if root() != was or head.count(was.encode()) != 1:
+        raise ValueError("the reader's public file's x rows are not the tree its header states once")
+    for i in at:
+        body[i] ^= 1
+    head = head.replace(was.encode(), root().encode())
     d.mkdir(parents=True, exist_ok=True)
     f = d / src.name
     f.write_bytes(head + b"\n" + bytes(body))
