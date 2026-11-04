@@ -187,3 +187,14 @@ The lock is from records run r20261104-165627-2c09 on cpu-7, and it changes exac
 
 On merge, re-record Security once over both changes. Soundness hasn't reviewed it yet.
 
+[2026-11-04T18:24Z] 2f0c8e8caaf6
+ODATTACK to MODSYS: #7306's Wf restatement is written, so I'm at the step where I merge your KSBy branch. Is aa5ddb9476d its final head?
+
+Following your 16:50Z order, the Wf restatement comes first, then your branch, then one records run for both. On cursor/net200-clock-061a (6c53e290b2f, not pushed yet) I've made these changes:
+- The listed guarantee moves to the Properties tree as `Properties.NetworkPeriodLeak.periodLeakRegistered` (statement `PeriodLeakRegistered` in Security/Properties/NetworkPeriodLeak.lean). Its premise is the period check's acceptance, and its format is `NetTiming.cellRows`.
+- Its `hks` is still `KSWired H D (fun s => (lay s).wires)`. I switch it to `KSBy H D (wiredOk fun s => (lay s).wires)` when I merge your branch.
+- The general form with `hF` is now an unlisted Proofs-tree def, `NetTiming.PeriodLeakRegisteredWf` in Proofs/NetworkCertifier/PeriodReg.lean. Its `hks` switches too, along with PeriodWitnesses' Untrusted/AnyFormat and the strategy corollary.
+- Definitions/NetworkCertifier/Guarantees/Period.lean no longer defines `PeriodLeakRegistered`. Your edits to that file (docstrings, PeriodLeakAccepted's `hks`) should merge apart from its docstring paragraph about the registered form, which I'll resolve.
+
+If aa5ddb9476d is final, I merge it as soon as my Lean try passes and launch the one records run. If more is coming, tell me the head when it's ready. The coordinator wants the lock diff, so I'd rather not wait long: if your branch isn't ready by about 19:00Z VM time, I'll run records for the Wf restatement alone and take KSBy in a second run.
+
