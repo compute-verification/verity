@@ -1095,8 +1095,9 @@ def v2_members(members: Sequence[tuple[int, int, int, int, Any]]) -> dict:
 def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
     """The per-member registration's `link-points` (`link_points.refused`) over the window's staged members, each its
     units ``[base, base + n)`` at its circuit's units a proof block: the members it would refuse, each with its fewest
-    and most drawn units under the drawn law (the draw's every-unit fallback included), or why it refuses them all.
-    Recorded here; v2's per-member registration refuses (`Registration.check`)."""
+    and most drawn units under the drawn law over the draws that end (one that runs out of coins draws every unit, the
+    member's whole file, its own case), or why it refuses them all. Recorded here; v2's per-member registration refuses
+    (`Registration.check`)."""
     from verity.core.protocols.sampled_proofs.one_stage import link_points as LP
 
     ms = [([[mm["m"].base, mm["m"].base + mm["m"].n]], int(mm["st"]["meta"]["vus_per_block"])) for mm in members]
@@ -1107,8 +1108,9 @@ def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
     except ValueError as e:
         return {"members": len(ms), "error": str(e)}
     return {"members": len(ms), "refused": [
-        {"member": f"m{mm['k']}", "template": mm["m"].template, "n": mm["m"].n, "vus_per_block": g, "fewest": lo, "most": hi}
-        for mm, (_, g), (lo, hi) in zip(members, ms, bounds) if LP.nbl(g, lo) != LP.nbl(g, hi)]}
+        {"member": f"m{mm['k']}", "template": mm["m"].template, "n": mm["m"].n, "vus_per_block": g, "fewest": b[0],
+         "most": b[1]}
+        for mm, (_, g), b in zip(members, ms, bounds) if b is not None and LP.nbl(g, b[0]) != LP.nbl(g, b[1])]}
 
 
 def v2_proof(done: Sequence[dict], zk: bool, members: Sequence[dict]) -> dict | str:

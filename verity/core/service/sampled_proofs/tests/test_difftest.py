@@ -970,8 +970,8 @@ def public_units(j):
 
 
 def link_points(j):
-    """Each member's fewest and most drawn units under the law over the population, and the members whose link points
-    differ (`link_points.bounds`, `refused`; Lean `LinkPoints.piece`)."""
+    """Each member's fewest and most drawn units under the law over the population when the draw ends (None where none
+    does), and the members whose link points differ (`link_points.bounds`, `refused`; Lean `LinkPoints.piece`)."""
     j = _json(j)
     if not (isinstance(j, dict) and _nat(j.get("population"))):
         raise D.Reject("the population is not a natural number")
@@ -990,7 +990,8 @@ def link_points(j):
             raise D.Reject("a member's units are not a nonempty list of [lo, hi] with 0 <= lo < hi")
         members.append((us, m["vus_per_block"]))
     try:
-        return {"bounds": [list(b) for b in LP.bounds(law, n, members)], "refused": LP.refused(law, n, members)}
+        return {"bounds": [None if b is None else list(b) for b in LP.bounds(law, n, members)],
+                "refused": LP.refused(law, n, members)}
     except ValueError as e:
         raise D.Reject(str(e)) from None
 
@@ -2267,19 +2268,21 @@ def test_v2_per_member_holds_its_statements_to_the_members_order_and_one_session
 
 def test_v2_per_member_registration_refuses_a_member_whose_link_points_vary(server, server_v2):
     """The per-member form's registration (`Registration.check`'s `link-points`, `link_points.refused`), run before any
-    session's verdict is read: over 10 units under `subset:2`, a member of all 10 draws 2 of them, or all 10 when the
-    draw runs out of coins, whose link points differ at one unit a proof block (3 and 4), so it is refused; at two both
-    give 3 and the audit goes on to its session's verdict, which rejects (no blob holds a circuit file). A member with a
-    unit outside the population is refused too. The Python registration's codes are Lean's."""
-    s, law = Setup(P.population_program(PAIR, 10), P.template_instance_query(PAIR.id)), {"k": 2, "law": "subset"}
+    session's verdict is read. Over 10 units under `bernoulli:1/2`, a draw that ends holds anywhere from none to all 10
+    of a member of all 10, whose link points differ at one unit a proof block (3 and 4), so it is refused; at two both
+    give 3 and the audit goes on to its session's verdict, which rejects (no blob holds a circuit file). Under `subset:2`
+    every draw that ends holds 2 of them, and one that runs out of coins all 10, its whole file, which is its own case,
+    so at one unit a proof block it is not refused. A member with a unit outside the population is refused. The Python
+    registration's codes are Lean's."""
+    s = Setup(P.population_program(PAIR, 10), P.template_instance_query(PAIR.id))
     PROGRAMS[s.sha512] = s.program
-    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
     circuit = b"not a circuit file"
-    ch, _, base, p = _challenger_audit(server, random.Random("v2-link-points"), s, law, rec, 1)
-    record = D.canonical(ch.trees[0].record).encode()
 
-    def run(units: list, g: int) -> tuple:
+    def run(law: dict, units: list, g: int) -> tuple:
+        rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                       WINDOW, leaf_layer=LEAF)
+        ch, _, base, p = _challenger_audit(server, random.Random("v2-link-points"), s, law, rec, 1)
+        record = D.canonical(ch.trees[0].record).encode()
         public = _public_file(*(u for lo, hi in units for u in range(lo, hi)))
         members = {"m0": {"circuit": _sha(circuit), "registered": None, "units": units, "vus_per_block": g}}
         e = base | {"proofs": {"statements": [{"member": "m0", "public": _sha(public), "sessions": [
@@ -2289,9 +2292,11 @@ def test_v2_per_member_registration_refuses_a_member_whose_link_points_vary(serv
         out = server_v2.exchange(_json(case))
         return (out["verdict"], out["reason"]), _registration(decode_params_v2(p) | {"link_members": [(units, g)]}, rec)
 
-    assert run([[0, 10]], 1) == (("reject", "registration: link-points"), ("link-points",))
-    assert run([[0, 10]], 2) == (("reject", "verdict flock-verify/s did not accept"), ())
-    assert run([[0, 11]], 2) == (("reject", "registration: link-points"), ("link-points",))
+    half, two = {"law": "bernoulli", "p": "1/2"}, {"k": 2, "law": "subset"}
+    assert run(half, [[0, 10]], 1) == (("reject", "registration: link-points"), ("link-points",))
+    assert run(half, [[0, 10]], 2) == (("reject", "verdict flock-verify/s did not accept"), ())
+    assert run(two, [[0, 10]], 1) == (("reject", "verdict flock-verify/s did not accept"), ())
+    assert run(two, [[0, 11]], 2) == (("reject", "registration: link-points"), ("link-points",))
 
 
 def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):

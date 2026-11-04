@@ -2,10 +2,10 @@
 
 A session of a member's statement opens its link at `PT_LOCAL + nbl(g, c)` points for its `c` proved units and its
 circuit's `g` units a proof block (META `vus_per_block`). A draw over several members draws a random count of each
-member's units, so the registration of the per-member form refuses a member whose fewest and most drawn units give
-different link points (`refused`, the registration's `link-points`): at every draw the sample can be, the deployed
-draw's fallback included (one that runs out of coins draws every unit), the member's count lies between its fewest and
-most (`bounds`), and its statement's whole public file, exactly its units, has the most.
+member's units, in two cases of the verifier's public coins: one that runs out of coins draws every unit, so the
+member's count is its statement's whole public file's, exactly its units; one that ends draws between the member's
+fewest and most units (`ended`, `bounds`). The registration of the per-member form refuses a member whose fewest and
+most give different link points (`refused`, the registration's `link-points`).
 """
 from __future__ import annotations
 
@@ -34,27 +34,33 @@ def overlap(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]]) -> int:
     return sum(max(0, min(hi, hi2) - max(lo, lo2)) for lo, hi in a for lo2, hi2 in b)
 
 
-def fewest(law: Mapping[str, Any], population: int, us: Sequence[Sequence[int]]) -> int:
-    """The fewest of the units `us` of `[0, population)` a draw under `law` (well formed: `coins.law_problem`) holds when
-    it ends: what is left after its units fill the rest of the population, or of each stratum, first; a member's whole
-    count where the draw never ends, so only the fallback's every unit is a sample."""
+def ended(law: Mapping[str, Any], population: int, us: Sequence[Sequence[int]]) -> tuple[int, int] | None:
+    """The fewest and most of the units `us` of `[0, population)` a draw under `law` (well formed: `coins.law_problem`)
+    holds when it ends: the fewest is what is left after its units fill the rest of the population, or of each stratum,
+    first, and the most `k`, or each stratum's `k_s`, where the member holds that many. None where no draw ends (`subset`
+    above the population, a stratum drawing more than it has), so every sample is the fallback's every unit."""
     n = size(us)
     if law["law"] == "subset":
         k = law["k"]
-        return max(0, k - (population - n)) if k <= population else n
+        return (max(0, k - (population - n)), min(k, n)) if k <= population else None
     if law["law"] == "bernoulli":
         num, den = (int(x) for x in law["p"].split("/"))
-        return n if num != 0 and den <= num else 0
+        return (0, 0) if num == 0 else None if den == 0 else (n, n) if den <= num else (0, n)
     strata = law["strata"]
     if any(size(s["units"]) < s["k"] for s in strata):
-        return n
-    return sum(max(0, s["k"] - (size(s["units"]) - overlap(us, s["units"]))) for s in strata)
+        return None
+    lo = hi = 0
+    for s in strata:
+        o = overlap(us, s["units"])
+        lo += max(0, s["k"] - (size(s["units"]) - o))
+        hi += min(s["k"], o)
+    return lo, hi
 
 
-def bounds(law: Mapping[str, Any], population: int, members: Sequence[Member]) -> list[tuple[int, int]]:
-    """Each member's fewest and most drawn units: a member is its units, `[lo, hi)` ranges, and its circuit's units a
-    proof block. ValueError for a member with no unit, a range of none, ranges that meet, a unit outside the population,
-    or no unit a proof block."""
+def bounds(law: Mapping[str, Any], population: int, members: Sequence[Member]) -> list[tuple[int, int] | None]:
+    """Each member's fewest and most drawn units when the draw ends (`ended`): a member is its units, `[lo, hi)` ranges,
+    and its circuit's units a proof block. ValueError for a member with no unit, a range of none, ranges that meet, a
+    unit outside the population, or no unit a proof block."""
     out = []
     for i, (us, g) in enumerate(members):
         if g == 0:
@@ -64,14 +70,15 @@ def bounds(law: Mapping[str, Any], population: int, members: Sequence[Member]) -
                 or any(rs[j + 1][0] < rs[j][1] for j in range(len(rs) - 1))):
             raise ValueError(f"link points: member {i}: its units are not nonempty, disjoint [lo, hi) ranges of the "
                              f"population's {population}")
-        out.append((fewest(law, population, us), size(us)))
+        out.append(ended(law, population, us))
     return out
 
 
 def refused(law: Mapping[str, Any], population: int, members: Sequence[Member]) -> list[int]:
-    """The members whose fewest and most drawn units give different link points (`bounds`), by index."""
-    return [i for i, ((_, g), (lo, hi)) in enumerate(zip(members, bounds(law, population, members)))
-            if nbl(g, lo) != nbl(g, hi)]
+    """The members whose fewest and most drawn units, over the draws that end, give different link points (`bounds`),
+    by index."""
+    return [i for i, ((_, g), b) in enumerate(zip(members, bounds(law, population, members)))
+            if b is not None and nbl(g, b[0]) != nbl(g, b[1])]
 
 
 def law_of(program: Program, query: Mapping[str, Any], law: Mapping[str, Any],

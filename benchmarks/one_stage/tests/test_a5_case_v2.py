@@ -196,16 +196,18 @@ def test_the_case_carries_the_verifiers_partition_which_v2_verifies_the_sessions
 
 
 def test_a5_records_the_members_whose_link_points_the_registration_refuses():
-    """`a5.link_points` over the staged members, each its units at its circuit's units a proof block: under `subset:2`
-    over 40 units a member of 28 draws 0 to 28 of them (the draw's every-unit fallback its most), whose link points
-    differ at one unit a proof block, so it is recorded refused, and not at four; one of 8, or of 4 at two a proof
-    block, is not. A law that doesn't apply refuses every member, recorded with why."""
+    """`a5.link_points` over the staged members, each its units at its circuit's units a proof block: under `subset:20`
+    over 40 units a draw that ends holds 8 to 20 of a member of 28, whose link points differ at one unit a proof block,
+    so it is recorded refused, and not at four; one of 8, or of 4 at two a proof block, is not. Under `subset:2` a draw
+    that ends holds at most 2 of it, and one that runs out of coins all 28, its own case, so it is not refused. A law
+    that doesn't apply refuses every member, recorded with why."""
     def member(k: int, template: str, base: int, n: int, g: int) -> dict:
         return {"k": k, "m": SimpleNamespace(template=template, base=base, n=n), "st": {"meta": {"vus_per_block": g}}}
 
     ms = [member(0, "t", 0, 28, 1), member(1, "u", 28, 8, 1), member(2, "v", 36, 4, 2)]
-    assert a5.link_points({"k": 2, "law": "subset"}, 40, ms) == {"members": 3, "refused": [
-        {"member": "m0", "template": "t", "n": 28, "vus_per_block": 1, "fewest": 0, "most": 28}]}
-    assert a5.link_points({"k": 2, "law": "subset"}, 40, [member(0, "t", 0, 28, 4)]) == {"members": 1, "refused": []}
+    assert a5.link_points({"k": 20, "law": "subset"}, 40, ms) == {"members": 3, "refused": [
+        {"member": "m0", "template": "t", "n": 28, "vus_per_block": 1, "fewest": 8, "most": 20}]}
+    assert a5.link_points({"k": 20, "law": "subset"}, 40, [member(0, "t", 0, 28, 4)]) == {"members": 1, "refused": []}
+    assert a5.link_points({"k": 2, "law": "subset"}, 40, ms) == {"members": 3, "refused": []}
     got = a5.link_points({"k": 41, "law": "subset"}, 40, ms)
     assert got == {"members": 3, "error": "a subset draw of 41 exceeds the population of 40"}
