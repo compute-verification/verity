@@ -278,6 +278,8 @@ theorem stage_zk_at {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.One
   unfold SampledProofs.OneStageZk.checkBlobsAt at h
   split at h
   · cases h
+  split at h
+  · cases h
   · rename_i r _
     refine ⟨r, ?_⟩
     generalize SampledProofs.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = o at h ⊢
@@ -307,6 +309,8 @@ theorem stage_zk_at_one_statement {p : SampledProofs.OneStageZk.Params} {c : Sam
     {prof : Integrity} (h : SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     p.form.perMember = false := by
   unfold SampledProofs.OneStageZk.checkBlobsAt at h
+  split at h
+  · cases h
   split at h
   · cases h
   · rename_i r _

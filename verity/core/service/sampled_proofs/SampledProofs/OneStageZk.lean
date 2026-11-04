@@ -37,7 +37,9 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
   units other than the evidence's `proved_units`, or a circuit, public or record file no blob holds, rejects; a rep
   file no blob holds is that session's reject, as a file `flock-verify` can't read is;
-* **per member** (`runMembers`): before any session runs, the statements are held as public structure
+* **per member** (`runMembers`): a draw that runs out of the challenger's coins fails the window before anything else
+  is checked (`RAN_OUT`, `OneStage.ranOut`), with no retry and no redraw. Before any session runs, the statements are
+  held as public structure
   (`membersHeld`): a statement naming no member of the parameters or one an earlier statement named, statements out of
   the members' order (by first unit, the registration's: one order, one statement), or a statement of other than
   exactly one session (one session on live coins, never retried; none proves nothing), rejects. Then each statement is
@@ -76,6 +78,10 @@ statements under one draw. -/
 def MULTI_REFUSED : String :=
   "the per-member form (proofs.members) is refused until the guarantee for a sample over several members' statements " ++
     "under one draw is in the lock: verify one statement (proofs {circuit, registered})"
+/-- The per-member form's refusal of a window whose draw ran out of the challenger's coins (`OneStage.ranOut`): the
+window fails, visibly; nothing redraws it and no fallback draws every unit. -/
+def RAN_OUT : String :=
+  "the draw ran out of the challenger's coins: the window fails, with no retry and no redraw"
 
 /-- The verifier's own inputs to `flock-verify verify --zk`: the program's descriptor (as JSON and as the bytes
 `--program` reads), the partition object, the circuit file's committed SHA-512, the registered file and the SHA-512 of
@@ -610,9 +616,11 @@ def treesHeld (ts : Array Challenger.LoggedTree) (e : Evidence) (bs : Core.Blobs
 /-- The check at the coins `ξ` (module docstring, **check**): each session's coins held to the trees the challenger
 logged (`treesOf`, `treesHeld`), then the sessions' verdicts on the blobs (`runAll`), then v1's `checkAt` at `ξ` on
 them. v1 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own `all` says it again, so an acceptance
-reads the run rather than the verdicts' JSON. In the per-member form what would accept is refused (`MULTI_REFUSED`). -/
+reads the run rather than the verdicts' JSON. In the per-member form a draw that runs out of `ξ` fails the window first
+(`RAN_OUT`), and what would accept is refused (`MULTI_REFUSED`). -/
 def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
+  if p.form.perMember && OneStage.ranOut p.base c ξ then .reject s!"draw: {RAN_OUT}" else
   match treesOf p e >>= (treesHeld · e bs) >>= fun () => runAll p e bs with
   | .error err => .reject s!"proofs: {err}"
   | .ok r =>

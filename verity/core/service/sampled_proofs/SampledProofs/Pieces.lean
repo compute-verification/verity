@@ -16,7 +16,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   `Produced.opened`, `Produced.shared`);
 * `known_port`: the root and opening of a port the verifier registers at known content (`Produced.known`);
 * `check_draw`, `check_proved`: the draw's checks, each `{"ok", "codes", "detail"}`;
-* `draw`: the draw from given bytes of the challenger's coins;
+* `draw`: the draw from given bytes of the challenger's coins; `ran_out`: whether that draw runs out of them;
 * `select`: the challenger's draw from a Spec's selection rule on, over a program and query, from given bytes of its
   coins, with the number of bytes it read (`Select.select`);
 * `slots`: the claims' partition over the program and query, and the slots of that draw's checked proof blocks
@@ -241,6 +241,14 @@ def draw (j : Json) : V Json := do
   if !(getD j "law" matches .obj _) then throw "law is not an object"
   let some n := nat? (getD j "population") | throw "population is not a natural number"
   Draw.drawFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw"))
+
+/-- `draw`'s input to `{"ran_out"}`: whether that draw runs out of the source's bytes (`Draw.ranOutOf`,
+`coins.ran_out`); refused, as `draw`, where it refuses otherwise. -/
+def ranOut (j : Json) : V Json := do
+  if !(getD j "law" matches .obj _) then throw "law is not an object"
+  let some n := nat? (getD j "population") | throw "population is not a natural number"
+  let b ← Draw.ranOutOf (Draw.drawFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw")))
+  return Json.mkObj [("ran_out", Json.bool b)]
 
 /-- `{"rule", "program", "query", "work_table", "closure", "source"}` to `{"draw", "read"}`: the challenger's draw
 (`Select.select`) under a Spec's selection rule over the units of the program under the query (`Select.resolve`, a rate
@@ -599,7 +607,7 @@ def run (j : Json) : V Json := do
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
    ("registered", registered),
-   ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("design", design),
+   ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("ran_out", ranOut), ("select", select), ("design", design),
    ("slots", slots), ("check_proved", checkProved),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),

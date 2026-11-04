@@ -41,7 +41,8 @@ nothing is registered afresh.
 A verifier of the per-member form (`OneStageZk`) names its members (`members`: each its units and its circuit's units a
 proof block, META `vus_per_block`), and after R7 the check refuses a member whose fewest and most drawn units under the
 law the draw runs on, over the draws that end, give different link points, or a law it can't draw on (`link-points`,
-`linkRefused`): a draw that ends then gives each member one count, and one that runs out of coins its whole file's.
+`linkRefused`): a draw that ends then gives each member one count, and one that runs out of coins fails the window
+(`OneStageZk.RAN_OUT`).
 -/
 import Flock.WindowRecord
 import SampledProofs.Draw

@@ -2,19 +2,18 @@
 A member's link points. Each session of a member's statement opens its link at `PT_LOCAL + nbl g c` points, for its
 `c` proved units and its circuit's `g` units a proof block (META `vus_per_block`), as `HmRow.setup` and `HmOut`'s
 setup compute it. A draw over several members draws a random count of each member's units, so the guarantee for the
-per-member form (`JointAuditV5.hcls_of_bounds`) reads one count of link points per member, in two cases of the
-verifier's public coins. A draw that runs out of coins (`Bridge.execSel`'s fallback) draws every unit, so the member's
-count is its statement's whole public file's (exactly its units, `PublicUnits.exactly`), one count. A draw that ends
-draws between the member's fewest and most units (`ended`, `bounds`), and the registration refuses a member whose
-fewest and most give different counts (`refused`, `Registration.check`'s `link-points`).
+per-member form (`JointAuditV5.hcls_of_bounds`) reads one count of link points per member. A draw that runs out of the
+verifier's public coins fails the window (`OneStageZk.RAN_OUT`), so only a draw that ends gives counts: between the
+member's fewest and most units (`ended`, `bounds`), and the registration refuses a member whose fewest and most give
+different counts (`refused`, `Registration.check`'s `link-points`).
 
 A draw that ends (`Draw.drawUnits`) draws, under `subset k`, `k` distinct units of the population (`k` above the
 population never ends); under `bernoulli a b`, none when `a = 0`, each unit when `a ≥ b > 0`, and any number of them
 otherwise (`b = 0 < a` never ends); and under `stratified` and `work`, `k_s` distinct units of each stratum `s` (a
 stratum with `k_s` above its size never ends). The fewest is what is left after the draw's units fill the rest of the
 population, or of each stratum, first; the most is `k`, or each stratum's `k_s`, where the member holds that many. A
-law no draw of which ends leaves only the fallback, so it refuses no member. O(members × strata × ranges), the
-descriptor's size, never the units'.
+law no draw of which ends gives no counts, so it refuses no member: each of its windows fails. O(members × strata ×
+ranges), the descriptor's size, never the units'.
 -/
 import Flock.Net
 import SampledProofs.Draw
