@@ -33,6 +33,11 @@ the rows its wires fill (`wired`), the rows its registered reads, table reads an
 
 namespace NetworkCheck.Period
 
+/-- Whether `j` is the string `s`: `Json`'s `==` on strings, by a match a proof unfolds. -/
+def isStr (j : Lean.Json) (s : String) : Bool := match j with
+  | .str x => x == s
+  | _ => false
+
 /-- A type's bits: its leaves' widths summed. -/
 def bitsOf (t : Flock.Program.Ty) : Nat := t.widths.foldl (· + ·) 0
 
@@ -65,9 +70,9 @@ end NetworkCheck.Period
 
 namespace NetworkCheck.Circuit
 
-open Lean (Json)
+open Lean (Json toJson)
 open Flock.Program (Prog Defn Ty)
-open NetworkCheck.Period (bitsOf templateNodes inputArg inputGates)
+open NetworkCheck.Period (isStr bitsOf templateNodes inputArg inputGates)
 
 abbrev Wire := SampledProofs.Wires.Wire
 abbrev Wiring := SampledProofs.Wires.Wiring
@@ -251,8 +256,8 @@ def recordOf (P : Prog) (j : Json) : Except String Record := do
       is no ingress gate"
   | .ok _ => throw "the circuit's ingress is not a list"
   | .error _ => pure ()
-  unless j.getObjValD "format" == .str FORMAT do throw s!"the circuit's format is not {FORMAT}"
-  unless j.getObjValD "program" == .str (Flock.hexOf P.sha512) do
+  unless isStr (j.getObjValD "format") FORMAT do throw s!"the circuit's format is not {FORMAT}"
+  unless isStr (j.getObjValD "program") (Flock.hexOf P.sha512) do
     throw "the circuit's program is not the audit's Program's SHA-512"
   let cap ← natAt j "cap"
   let named ← (← arrOf "templates" (← field j "templates")).mapM fun t => do
@@ -585,24 +590,39 @@ def orderWhy (c : Wiring) (o : Order) : Option String :=
 /-- **The order holds**: every wire's writers rank below its readers (`orderWhy`). -/
 def ordered (c : Wiring) (o : Order) : Bool := (orderWhy c o).isNone
 
+/-- Segment `i`'s object: its keys exactly `{template, at, radix, c, r}`, a string template, a natural `at`, an integer
+`c`. -/
+def segmentHead (j : Json) : Except String (String × Nat × Int) := do
+  sameKeys j ["template", "at", "radix", "c", "r"] ""
+  pure (← strOf "" (← field j "template"), ← natAt j "at", ← intOf "" (← field j "c"))
+
+def intsOf (j : Json) : Except String (List Int) := do (← arrOf "" j).mapM (intOf "")
+
 def segmentOf (i : Nat) (j : Json) : Except String Segment := do
-  sameKeys j ["template", "at", "radix", "c", "r"] s!"segment {i}"
+  let (template, start, c) ← (segmentHead j).mapError fun _ => s!"segment {i}: not a segment of integers at and c"
   let bad := s!"segment {i}: radix and r are one integer each a digit, each radix at least 1"
-  let radix ← (← arrOf s!"segment {i}: radix" (← field j "radix")).mapM (intOf s!"segment {i}: a radix")
-  let r ← (← arrOf s!"segment {i}: r" (← field j "r")).mapM (intOf s!"segment {i}: an r")
+  let digits : Except String (List Int × List Int) := do pure (← intsOf (← field j "radix"), ← intsOf (← field j "r"))
+  let (radix, r) ← digits.mapError fun _ => bad
   if radix.length != r.length || radix.any (· < 1) then throw bad
-  pure { template := ← strOf s!"segment {i}: template" (← field j "template"), start := ← natAt j "at",
-         radix := radix.map Int.toNat, c := ← intOf s!"segment {i}: c" (← field j "c"), r }
+  pure { template, start, radix := radix.map Int.toNat, c, r }
+
+/-- The certificate's segments and wires: its keys exactly `{format, segments, wires}`, its format `ORDER`. -/
+def orderLists (j : Json) : Except String (List Json × List Json) := do
+  sameKeys j ["format", "segments", "wires"] ""
+  unless isStr (j.getObjValD "format") ORDER do throw ""
+  pure (← arrOf "" (← field j "segments"), ← arrOf "" (← field j "wires"))
+
+def pairOf (p : Json) : Except String (Nat × Nat) := do
+  match ← arrOf "" p with
+  | [a, b] => pure (← natOf "" a, ← natOf "" b)
+  | _ => throw ""
 
 /-- The certificate, `{"format", "segments", "wires"}` exactly, its format `verity/wire-order/v1`. -/
 def orderOf (j : Json) : Except String Order := do
-  sameKeys j ["format", "segments", "wires"] "the order"
-  unless j.getObjValD "format" == .str ORDER do throw s!"the order's format is not {ORDER}"
-  let segments ← (← arrOf "segments" (← field j "segments")).zipIdx.mapM fun (s, i) => segmentOf i s
-  let wires ← (← arrOf "wires" (← field j "wires")).mapM fun p => do
-    match ← arrOf "a wire pair" p with
-    | [a, b] => pure (← natOf "a writer segment" a, ← natOf "a reader segment" b)
-    | _ => throw "a wire pair is [writer segment, reader segment]"
+  let (segs, ws) ← (orderLists j).mapError fun _ => s!"not a {ORDER} certificate"
+  let segments ← segs.zipIdx.mapM fun (s, i) => segmentOf i s
+  let wires ← ws.zipIdx.mapM fun (p, i) =>
+    (pairOf p).mapError fun _ => s!"wire {i}: not a [writer segment, reader segment] pair"
   pure { segments := segments.toArray, wires := wires.toArray }
 
 /-! ## The count -/
@@ -670,7 +690,7 @@ def check (P : Prog) (record order pins : Json) : Except String Counts := do
   let rects ← declRects r.wiring r.registered
   unless apart rects (r.wiring.wires.map wireRect) do
     throw "the circuit's inputs: a row filled by two of its wires, registered reads, table reads or openings"
-  match orderWhy r.wiring (← orderOf order) with
+  match orderWhy r.wiring (← (orderOf order).mapError ("order: " ++ ·)) with
   | some e => throw s!"order: {e}"
   | none => pure ()
   pure (countsOf r s (← heldOf pins))
@@ -678,6 +698,17 @@ def check (P : Prog) (record order pins : Json) : Except String Counts := do
 /-- The circuit record's digest, `interface.circuit_bytes`: SHA-512 of its canonical JSON and a newline, in hex. -/
 def digest (record : Json) : Except String String := do
   pure (Flock.hexOf (Flock.Sha512.hash ((← SampledProofs.PyJson.canonical record) ++ "\n").toUTF8))
+
+/-- `network-records verdicts`' `circuit`: on `{"circuit", "order", "pins", "program"}`, the Program a descriptor
+(`verity-ir/descriptor/v1`), `check`'s `Counts` and the record's `digest`, as a period's audit in the record form
+takes them (`NetworkCheck.Period.auditOf`). -/
+def circuitFn (j : Json) : Except String Json := do
+  let P ← Flock.Program.decode (← Flock.canon (← field j "program")).toUTF8
+  let record ← field j "circuit"
+  let c ← check P record (← field j "order") (← field j "pins")
+  pure (Json.mkObj [("counts", Json.mkObj [("free", toJson c.free), ("inputs", toJson c.inputs),
+      ("registered", toJson c.registered), ("wired", toJson c.wired)]),
+    ("digest", .str (← digest record))])
 
 /-! ## The order on a toy wiring -/
 
@@ -724,6 +755,20 @@ private def toySegments (ss : List (String × Nat × Nat)) : Order :=
 #guard orderWhy (toyWiring []) (toySegments [("A", 2, 3)]) == some "segment 0: units [2, 5) outside A's 4"
 #guard orderWhy (toyWiring []) (toySegments [("C", 0, 1)]) == some "segment 0 names no template of the record"
 #guard orderWhy (toyWiring []) (toySegments [("A", 0, 2), ("A", 1, 2)]) == some "segments 0 and 1 of A overlap"
+private def orderError (format : String) (segments wires : Array Json) : String :=
+  match orderOf (Json.mkObj [("format", .str format), ("segments", .arr segments), ("wires", .arr wires)]) with
+  | .error e => e
+  | .ok _ => ""
+private def toySegment (at_ : Int) (radix : Array Json) : Json :=
+  Json.mkObj [("template", .str "A"), ("at", toJson at_), ("radix", .arr radix), ("c", toJson (0 : Int)),
+    ("r", .arr #[toJson (0 : Int)])]
+#guard orderError ORDER #[toySegment 0 #[toJson 2]] #[.arr #[toJson 0, toJson 0]] == ""
+#guard orderError "verity/wire-order/v2" #[] #[] == "not a verity/wire-order/v1 certificate"
+#guard orderError ORDER #[toySegment (-1) #[toJson 2]] #[] == "segment 0: not a segment of integers at and c"
+#guard orderError ORDER #[toySegment 0 #[toJson 0]] #[] ==
+  "segment 0: radix and r are one integer each a digit, each radix at least 1"
+#guard orderError ORDER #[] #[.arr #[toJson 0, toJson 1], .arr #[toJson 0]] ==
+  "wire 1: not a [writer segment, reader segment] pair"
 #guard rank (toyOrder [5, 1] [1, 5] 1 [2, 2]) "B" 2 == 2 && rank (toyOrder [5, 1] [1, 5] 1 [2, 2]) "A" 3 == 6
 
 end NetworkCheck.Circuit

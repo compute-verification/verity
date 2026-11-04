@@ -41,8 +41,8 @@ than being its `…Of check`: the shape rule reads the acceptance off the statem
 `RowsCircuitHeld` says the check accepts no phase whose tied audit's registration names a Program other than the class
 circuit, the parameters' `circuit`: the one Program the workload's class registers, fixed for the period, so the prover
 chooses no phase's circuit. It states the registrations alone: that the descriptor whose input gates a
-tied audit's term counts is the Program its registration names is the audit check's (`auditCheck`), which compares
-them as `Json` (`==`, which no proof unfolds) and no property states. Its witnesses are an empty rows-form period
+tied audit's term counts is the Program its registration names is the audit check's (`auditCheck`, which compares
+them by matching, `isStr`) and no property here states. Its witnesses are an empty rows-form period
 `check` accepts, beside a tied audit registered under the class circuit, and an explicit period whose tied audit is
 registered under another (`RowsCircuitHeldAt` false), which a check that accepts everything accepts.
 -/

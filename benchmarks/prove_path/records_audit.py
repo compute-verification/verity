@@ -90,7 +90,13 @@ terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declare
 values pinned, its untied ones free) but for the scan's state (`TIED`): the period refuses an audit whose state isn't
 the scan's state tree (``stateTied``), so its reads count registered. The period check takes no ``free``: it counts an
 audit's off its Program (`NetworkCheck.Period.inputGates`, every input gate free), so ``free`` here is the tighter count
-beside it, which `scan_period` doesn't pass. Refused where the window commits no scan state.
+beside it, which `scan_period` doesn't pass. A window with its wires' order certificate (``order.json`` beside
+``circuit.json``, ``verity/wire-order/v1``) gives the period its circuit record (``circuit``), the order (``order``) and
+the pins its registration records as their parameters' registered roots (``pins``, `interface.held_params`), but the
+scan state's, which the period refuses (it fixes no value before the run): the period check then counts the audit's free
+inputs on the record (`NetworkCheck.Circuit.check`: the input gates less the rows its wires and its pinned parameters'
+registered reads fill), the state's reads among them, and holds the registration to both. Refused where the window
+commits no scan state.
 
 ``count``: a record that declares its inputs, counted before the committer writes its members' rows (`declared_count`): a
 stated one (cuts, registered reads, ingress: `interface.Circuit.declared`) from its description alone, and one that lists
@@ -679,7 +685,8 @@ TIED = SCAN_STATE
 
 def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]:
     """The window's audit as one compute audit of the network certifier's period (module docstring's ``period``):
-    ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`). ValueError where the
+    ``{answer, free, program, registration, steps}``, and ``circuit``, ``order`` and ``pins`` where the window has its
+    wires' order (``order.json``). ``pins`` are the verifier's (`pins_of`). ValueError where the
     circuit isn't the one the registration binds, the window commits no `TIED` value its circuit reads, the audit wrote no
     Program or another than the registration names, or its answer commits to another registration; RuntimeError where
     the audit opened the advice (`served_integrity.opened`: ``--opening``, a development check no period reads)."""
@@ -704,7 +711,11 @@ def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]
     answer = SI.answer(audit, rec)
     if answer["commitment"] != R.digest(rec):
         raise ValueError("the audit's answer commits to another registration than the window's")
-    return {"answer": answer, "free": count["free"], "program": program, "registration": rec, "steps": 0}
+    out = {"answer": answer, "free": count["free"], "program": program, "registration": rec, "steps": 0}
+    if (order := window / "order.json").exists():
+        held = IF.held_params(pins, IF.registered_roots(own)) - {TIED}
+        out |= {"circuit": doc, "order": json.loads(order.read_text()), "pins": {p: pins[p] for p in sorted(held)}}
+    return out
 
 
 def verifier_window(window_dir: Path, law: Mapping[str, Any], template_sets: Path | None) -> tuple[Any, dict, dict]:

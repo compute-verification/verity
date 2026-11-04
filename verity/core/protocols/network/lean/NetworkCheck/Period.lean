@@ -636,12 +636,18 @@ def selectEntryPins : List String :=
 /-- The entries' Definitions the check takes, by closure digest: `slotEntryPins` and `selectEntryPins`. -/
 def entryPins : List String := slotEntryPins ++ selectEntryPins
 
+/-- The value a window circuit registers the scan's state rows as (`ingress_scan`'s `SCAN_STATE`), row a the state
+before bucket a: the entry of an audit's `registered`, or of the scan's, whose value it is. -/
+def stateValue : String := "verity/certifier/scan-state/v1"
+
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
 canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
 template is refused. Its free inputs are counted here and never read from the parameters: the Program's input gates
 (`inputGates`), or, where the audit carries its window's circuit record, the order of its wires and the verifier's
 pins, what `NetworkCheck.Circuit.check` counts free after checking the record against the Program (its input gates
-less the rows its wires and its pinned parameters' registered reads fill). Its slot entries' templates are its root's
+less the rows its wires and its pinned parameters' registered reads fill). A pin of `stateValue` is refused: the scan's
+state is no value the verifier fixes before the run, and nothing yet holds an audit's reads of it to its scan's state
+rows, so they count free. Its slot entries' templates are its root's
 template nodes whose Definition is `SlotEntry_v1` or `SelectEntry_v1` (`entryIds`), each with its closure digest
 (`slotEntryDigest`). -/
 def auditOf (a : Json) (ctx : String) : V Audit := do
@@ -666,9 +672,12 @@ def auditOf (a : Json) (ctx : String) : V Audit := do
     | .ok c => do
       let why := (s!"{ctx}: circuit: " ++ ·)
       let pins ← Flock.J.get a "pins" ctx
+      let held ← (NetworkCheck.Circuit.pinsOf pins).mapError why
+      if held.any (·.1 == stateValue) then
+        throw (why s!"a pin of {stateValue}: the scan's state is no value the verifier fixes before the run, so its \
+          reads count free")
       let counts ← (NetworkCheck.Circuit.check prog c (← Flock.J.get a "order" ctx) pins).mapError why
-      pure (counts.free,
-        some (← (NetworkCheck.Circuit.digest c).mapError why, ← (NetworkCheck.Circuit.pinsOf pins).mapError why))
+      pure (counts.free, some (← (NetworkCheck.Circuit.digest c).mapError why, held))
     | .error _ => pure (inputGates prog, none)
   pure { free, steps := ← Flock.J.nat a "steps" ctx, program := Flock.hexOf prog.sha512,
          units := templates.foldl (· + ·.1) 0, bits := templates.foldl (fun b t => max b t.2) 0, entries, record }
@@ -1090,10 +1099,6 @@ def wired (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json)
 /-- The scan's state in a registration: the entry of its `roots` whose port is `scan/state`. -/
 def stateName : String := "scan/state"
 
-/-- The value a window circuit registers the scan's state rows as (`ingress_scan`'s `SCAN_STATE`), row a the state
-before bucket a: the entry of an audit's `registered`, or of the scan's, whose value it is. -/
-def stateValue : String := "verity/certifier/scan-state/v1"
-
 /-- A registration's state entries: those of its `roots` whose port is `stateName` and of its `registered` whose value
 is `stateValue`. -/
 def stateEntries (reg : Json) : Array Json :=
@@ -1177,9 +1182,9 @@ record (`window.circuit`, its digest) and records each pin the count held as its
 (`pinHeld`); a tied audit sampled in part is charged in its link-windows' terms (`chargedOf`, `faultyEntries`). -/
 def auditCheck (i : Nat) (a : Audit) (reg : Json) (x : Core.Answer) : Found Facts := do
   let what := s!"audit {i}"
-  unless reg.getObjValD "program" == .str a.program do refuse s!"{what}: registration: not its Program"
+  unless isStr (reg.getObjValD "program") a.program do refuse s!"{what}: registration: not its Program"
   if let some (d, pins) := a.record then
-    unless (reg.getObjValD "window").getObjValD "circuit" == .str d do
+    unless isStr ((reg.getObjValD "window").getObjValD "circuit") d do
       refuse s!"{what}: registration: its window binds another circuit record than the one its free inputs are \
         counted on"
     if let some (p, _) := pins.find? (!pinHeld reg ·) then
@@ -1683,6 +1688,7 @@ def clocksFn (j : Json) : Except String Json := do
 #guard
   let reg := Json.mkObj [("window", Json.mkObj [("registered_roots", Json.mkObj [("w", .str "AB")])])]
   pinHeld reg ("w", "ab") && !pinHeld reg ("w", "ac") && !pinHeld reg ("v", "ab") && !pinHeld (Json.mkObj []) ("w", "ab")
+#guard isStr (.str "ab") "ab" && !isStr (.str "ab") "AB" && !isStr (toJson 1) "1" && !isStr .null ""
 -- a lane's Programs' rows, the lane's index in ASCII digits without a leading zero
 #guard progPort (progName 0) && progPort "scan/prog3" && progPort "scan/prog12" && progName 3 == "scan/prog3"
 #guard !(progPort "scan/prog" || progPort "scan/prog01" || progPort "scan/prog/" || progPort "Scan/prog0" ||
