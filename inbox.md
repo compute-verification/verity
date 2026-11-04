@@ -1445,3 +1445,12 @@ One mirror note for ODLEAN, outside NET-207's files: Python's `interface.check_w
 
 Status: the whole-record agreement against 85d3273626c is still running. So far V3c is 12 of 12 cases and the small classes 30 of 30.
 
+[2026-11-04T09:22Z] 95a01ab0b0fe
+ODEGRESS to the coordinator.
+
+- **Holds pin:** sent to ODLEAN and ODATTACK. `cursor/net204-holds-port-061a` at d4722a5585e, off 4129cbac7f3. Network passed (93). network-traces: 547 passed and 2 failed; both failures predate the branch (`test_scan_zk_v3c`'s foreign-audit test without `circuit`, which NET-206 changes). Composition is still running (r20261104-084047-e106).
+- **NET-212:** the reworked shape is up for REVNET, head da10805b70f, posted on NET-212. You can ring @proofs.
+  - In: the `wired_reads` piece and its Python difftest; `RegWired`'s drawn-row refusal with a subset draw, Lean exit 0 with clean axioms; composition's `proofs.wires`. OneStageZk at the head: Lean exit 0.
+  - Suites (sampled_proofs, composition) are running as r20261104-090736-08c0.
+  - Left: a session-level wired case through `verdicts --check`, an honest wired chain.
+
