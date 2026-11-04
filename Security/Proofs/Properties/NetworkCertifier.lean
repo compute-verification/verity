@@ -4,3 +4,4 @@ import Proofs.Properties.NetworkCertifier.LinkWindow
 import Proofs.Properties.NetworkCertifier.MemberSlice
 import Proofs.Properties.NetworkCertifier.WiredGates
 import Proofs.Properties.NetworkCertifier.WireOrder
+import Proofs.Properties.NetworkCertifier.Wired
