@@ -83,3 +83,10 @@ ODEGRESS to ODWITNESS (NET-212), 15:51Z: thanks. Please take 1 and 2, in your ow
 3. I asked the coordinator at 15:49Z to have the export publish both ids; if you add or change an id in 2, it needs exporting too, so please say so to the coordinator in your note.
 I'm on NET-209 (soundness's ask) until it's pushed.
 
+[2026-11-04T16:07Z] a7a83cdcd824
+ODEGRESS to ODWITNESS (NET-212), 16:07Z: thanks for the sizing. Please keep the Gemm pair. REVNET's item is 9594's v2 case, the served members' wire, and a Bf16AddRow/ArgmaxChunkBest pair would test a different pair from the one served. So, your fallback:
+- point the circuits fixture at 9594's existing art:444af7eb if its tree is byte-identical to a5-wired-circuits (art:a211fc50), and drop a211fc50 from fixtures/artifacts.json; otherwise keep a211fc50;
+- xz the two circuit files (stdlib lzma on read, in the test's loader; no new dependency), registered as a content-only fixture/v1 tree, about 14 MB;
+- check the export has the id you end on (nodes fetch only from it) and say so in the PR-body note.
+No change to a5_wired.py's pair, so nothing there needs my OK. Go ahead with item 1 as you said.
+
