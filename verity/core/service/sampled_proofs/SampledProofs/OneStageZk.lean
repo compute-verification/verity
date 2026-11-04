@@ -739,12 +739,8 @@ theorem portsHeld_ok {p : Params} {c : OneStage.Commitment} (h : portsHeld p c =
     | .members ms => ∀ m ∈ ms, ownHeld p.base.verifier.schemas c.record m.own.registered = .ok () := by
   unfold portsHeld at h
   split at h
-  · rename_i own hf
-    rw [hf]
-    exact h
-  · rename_i ms hf
-    rw [hf]
-    intro m hm
+  · exact h
+  · intro m hm
     have e := Flock.RecCompose.forM_ok h m (Array.mem_toList_iff.2 hm)
     cases hx : ownHeld p.base.verifier.schemas c.record m.own.registered with
     | ok u => rfl
