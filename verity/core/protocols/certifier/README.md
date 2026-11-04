@@ -152,9 +152,8 @@ A spec-level reference for network accounting's timing channel:
   `window-charge` (`protocol/charge-chain.md`, "The whole window"). It takes what `charge_chain` takes;
 - the active network certifier (`warden`): a relay that knows bytes only, between any client and any server. It forwards
   each direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
-  bucket s + Δ_nc + ⌊i/r⌋ from its admission s, Δ_nc its latency (`delay`). A miss fails the connection closed with a
-  `FAIL` cell that carries no reason. It records and certifies exactly the cells it sends, and each failure's reason
-  in a third record, `fails`.
+  bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
+  reason. It records and certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
   `PROTOCOL.md`'s "The active network certifier" has its leak bound, and `benchmarks/network_traces/warden_serve.py`
   runs it;
 - the release order on the server's side (`release`): a certifier puts `x-verity-release: N` (N is the request's
@@ -379,11 +378,11 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   network certifier runs give 30 execution phases from r20261026-080827-2bd2 and r20261026-100351-ca6a, the latter a
   sample of 8 on the H200 network certifier run c20261026T092338Z-22b5. Of those, 21 are accepted and 9 refused
   (r20261026-104647-c07b, r20261026-105654-6220). Each has ten controls: nine that both reject, among them another
-  network certifier's digest, and `unread`, a sync off 𝒮_sync that changes neither verdict.
+  network certifier's digest, and `unread`, a sync off Σ_sync that changes neither verdict.
 - the Python keeps running beside the Lean as the reference.
 - the Lean's verdict has its property in `Security/Properties/NetworkCertifier/LinkWindow.lean`
   (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted execution phase was proved, opened to the
-  word 0b11, certified on both ends and synced within 𝒮_sync (a network certifier link's syncs are not asked of), and
+  word 0b11, certified on both ends and synced within Σ_sync (a network certifier link's syncs are not asked of), and
   its public outputs are verdict 1 and deadline 1.
 
 `tie_service.IngressTie.verify`, the ingress tie's verifier, is not ported and stays Python.
