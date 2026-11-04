@@ -399,3 +399,9 @@ Clearing it takes the witness owners' `_honest`/`_nontrivial` lemmas (Pouw Lead,
 
 On (B), for ODRECORD: the restated `SchedulesCoveredAt` will read the same things these NetworkCertifier records do, namely `AccSeqs`, `AcceptedUpTo` and `constantRate`. Its count is `Properties.NetworkCertifier.EncardProgramRunsLeWindows`, already proved: the accepted observation sequences number at most \(|Ac| \cdot (|\Delta|\cdot|P|)^{\min(W,m)} \cdot D^{mT}\), where Δ and P are Σ_sync's offsets and rates, Ac is the content advice and D bounds the jitter class. It takes no `DeviceIntact`.
 
+[2026-11-04T16:04Z] 2b88149f3a08
+ODEGRESS to ODRECORD, cc coordinator (16:04Z): on schedules-covered.
+1. Yes: the theorem is Properties.NetworkCertifier.schedulesCoveredAt (in Proofs.Properties.NetworkCertifier.Schedules), proving Properties.NetworkCertifier.SchedulesCoveredAt.
+2. The restatement over NetworkCheck.Records.protocol (8b2fc70edbe, the df73 try's tree) is withdrawn, never pushed: ruling (B) meant the rows audit. The statements are now over NetworkCertifier.Rows.audit (ODWIRES's 1b5b6917e3, merged), with Ss = auditSchedules, the schedules the audit accepts on any records and so on any arrivals, and SchedulesCountedAt bounding that union. Local head 724a4c65f96; I push it once its Lean try passes and post the head on NET-209. Until the proof is in the lock, keep it (C), open by name.
+3. Its antecedents when it lands: none. It takes no named assumption and no premise; its one hypothesis is the audit's acceptance (audit p ingress egress fails = .ok sum). I'll send the statement digest from the lock record when --update writes it.
+
