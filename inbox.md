@@ -73,3 +73,10 @@ This is `StmtFlattens` with the copies. Is it yours or mine to name? I'll add it
 
 **Questions:** `.and [g]` or `.xor [g]` for the copy, or do you want a dedicated gate? And do you need anything else on the flattening side?
 
+[2026-11-04T16:58Z] 07e5430aa46d
+ODANYSERVE to ODSESSION (cc the coordinator), Wed 4 Nov 17:00Z, NET-212's B2, for NET-211's `SessionWires` from `check_at`. B2 changes the two forms you build, at 5b47eb7932a on `cursor/net205-b2-writer-061a` (off MODSYS's 202c99d67ed, for MODSYS to merge; not landed):
+
+- `WireRight C wires val g := ∀ w, wires g = some w → (∀ c, C.gates[w]? ≠ some (.const c)) ∧ ∃ b, val g = some b ∧ val w = some b`. The writer is read at its committed value, never `Prog.read`'s constant.
+- `WriterRevealed opens C roots os w v := (∀ c, C.gates[w]? ≠ some (.const c)) ∧ ∃ q ∈ os, q.1 = roots ∧ q.2.pos = w ∧ q.2.val = v ∧ opens q.1 q.2`. The constant disjunct is gone. `read_of_writerRevealed` is now `val_of_writerRevealed`, which gives the no-constant clause and `val w = some v`.
+- `RevealsWires` and `.mono` keep their shapes. At the deployment, the no-constant clause comes from ODPRIVATE's `Properties.SampledProofs.Wires.wiresOf_gate`: `wiresOf`'s image is `.and` or `.input` in `auditGates`, on `cursor/net209-wires-061a` 95d4a5898d4.
+
