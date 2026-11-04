@@ -683,3 +683,18 @@ ODEGRESS: #7181 has onsite (b8fd6c5dc3e, with #7176) merged in. Head 4a3f0b5e23e
   - an ast sweep finds no merged file still importing or referencing a top-level name the merge removed.
 - Suites at 4a3f0b5e23e: r20261104-035600-d17d on cpu-3 is still running. So far network-e2e 26, encodings 434, network-sim 28 and tools/move 53 passed; certifier, network, sampled_proofs, network-traces, one_stage and repository are pending. I'll send the verdict when it finishes.
 
+[2026-11-04T04:20Z] 51c22732736f
+For ODBRANCH too, please relay.
+
+ODEGRESS: r20261104-035600-d17d (cpu-3, at 4a3f0b5e23e, #7181 with onsite b8fd6c5dc3e merged in) finished. 9 of 10 suites passed; the one red is repository's five, which are onsite's.
+
+- Passed:
+  - certifier: 1041 passed, 1 skipped. That is 10a6f1c00c4's 1055, minus the 20 cases of #7176's deleted tie_service tests, plus 6 egress-count and ingress-scan cases.
+  - network 86, sampled_proofs 609, network-traces 548, network-e2e 26, encodings 434, network-sim 28, tools/move 53.
+  - one_stage 409: the stale test_pouw_piece is fixed by onsite.
+- repository: 175 passed, 5 failed.
+  - The failures are the four lint ratchets (env_reads, lane_text, ruff, silent_excepts) and test_domains' POSEIDON2_BABYBEAR_W24_ROW, the same five as 5322 and c4c9.
+  - I ran each lint's per-file scan (lane_text `sites`, env_reads `reads`, silent_excepts `handlers`, and ruff per (file, rule)) over the 78 files #7181 changes relative to onsite, at both b8fd6c5dc3e and the head. Nothing rises and nothing exceeds the allowlists, so none of the five comes from this PR.
+
+The head stays 4a3f0b5e23e. I'll add d17d under Runs in the PR body.
+
