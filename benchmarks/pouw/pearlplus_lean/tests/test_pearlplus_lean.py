@@ -22,6 +22,7 @@ import os
 import shutil
 import subprocess
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -57,10 +58,11 @@ def exe() -> Path:
 
 
 def lean(exe: Path, paths: list[Path], draws: int, source: bytes | None = SOURCE, record: Path | None = None,
-         coins: Path | None = None) -> dict:
+         coins: Path | None = None, over_cap: str | None = None) -> dict:
     argv = [str(exe), "--coins", str(coins or paths[0].parent / "coins.json"), "--draws", str(draws)]
     argv += [] if source is None else ["--source", source.hex()]
     argv += [] if record is None else ["--record", str(record)]
+    argv += [] if over_cap is None else ["--over-cap", over_cap]
     p = subprocess.run([*argv, *map(str, paths)], capture_output=True, text=True)
     assert p.returncode in (0, 1) and not p.stderr, p.stderr
     got = json.loads(p.stdout)
@@ -70,16 +72,22 @@ def lean(exe: Path, paths: list[Path], draws: int, source: bytes | None = SOURCE
 
 
 def answer(out: dict) -> dict:
-    """`verify_passes`' (or a served verify document's) outcome in the Lean's terms."""
+    """`verify_passes`' (or a served verify document's) outcome in the Lean's terms.  A document written before
+    ``over_cap`` ran under ``reject``, where an accepted run has no draw over the inert-work bound."""
+    work = (out["answer"]["public"] or {}).get("work")
     return {"verdict": out["answer"]["verdict"], "reason": out["answer"]["reason"], "refused": out.get("refused"),
-            "commitment": out.get("commitment"), "source": out.get("source"), "verdicts": out.get("verdicts", []),
-            "work": (out["answer"]["public"] or {}).get("work")}
+            "commitment": out.get("commitment"), "source": out.get("source"),
+            "over_cap": out.get("over_cap", VR.REJECT), "verdicts": out.get("verdicts", []),
+            "work": None if work is None else {"over_cap_draws": 0, **work}}
 
 
-def same(exe: Path, paths: list[Path], draws: int = 3, source: bytes | None = SOURCE, record: Path | None = None) -> dict:
-    """The Python's verdict on `paths`, asserted to be the Lean's; the Lean reads the record the Python wrote, if any."""
-    want = answer(VR.verify_passes(paths, draws, 1, "test", T.published(paths[0]), source, record=record))
-    got = lean(exe, paths, draws, source, record)
+def same(exe: Path, paths: list[Path], draws: int = 3, source: bytes | None = SOURCE, record: Path | None = None,
+         over_cap: str | None = None) -> dict:
+    """The Python's verdict on `paths`, asserted to be the Lean's; the Lean reads the record the Python wrote, if any.
+    ``over_cap`` None is each side's default."""
+    rule = {} if over_cap is None else {"over_cap": over_cap}
+    want = answer(VR.verify_passes(paths, draws, 1, "test", T.published(paths[0]), source, record=record, **rule))
+    got = lean(exe, paths, draws, source, record, over_cap=over_cap)
     assert got == want
     return got
 
@@ -93,19 +101,40 @@ def edit(path: Path, f) -> None:
 def test_an_honest_pass(exe, tmp_path):
     path = T.proved_pass(tmp_path, H100)[0]
     for draws in (3, 16):
-        got = same(exe, [path], draws)
-        assert got["verdict"] == "accept" and len(got["verdicts"]) == draws + 1
-        assert 0 < got["work"]["credited"] < got["work"]["macs"]
+        works = []
+        for rule in (None, *VR.OVER_CAP):
+            got = same(exe, [path], draws, over_cap=rule)
+            assert got["verdict"] == "accept" and len(got["verdicts"]) == draws + 1
+            assert got["over_cap"] == (rule or VR.UNCREDITED) and got["work"]["over_cap_draws"] == 0
+            assert 0 < got["work"]["credited"] < got["work"]["macs"]
+            works.append(got["work"])
+        assert works[0] == works[1] == works[2]
 
 
 def test_a_row_over_its_cap_and_its_give_up(exe, tmp_path):
-    """Under the zero key a credited row is over its row cap; given up (V-EX), every tile passes; more given-up rows than
-    V-EX allows, or records unlike the published root, are refused before the coin."""
+    """Under the zero key a credited row is over its row cap: under ``reject`` the run is rejected; under ``uncredited``
+    (the default) it is accepted, each tile over its inert-work bound ok with its bound's reason and credited nothing,
+    the credit taking X_O, the draws on such tiles, at a larger ε.  Given up (V-EX), every tile passes; more given-up rows
+    than V-EX allows, or records unlike the published root, are refused before the coin."""
     path = T.proved_pass(tmp_path, H100, key=bytes(32))[0]
-    over = same(exe, [path], 16)
-    assert over["verdict"] == "reject" and "the row cap" in over["reason"]
+    draws = 16
+    over = same(exe, [path], draws, over_cap=VR.REJECT)
+    assert over["verdict"] == "reject" and "the row cap" in over["reason"] and over["work"] is None
+    for rule in (None, VR.UNCREDITED):
+        took = same(exe, [path], draws, over_cap=rule)
+        assert took["verdict"] == "accept" and took["over_cap"] == VR.UNCREDITED and took["reason"] is None
+        assert [v["reason"] for v in took["verdicts"]] == [v["reason"] for v in over["verdicts"]]
+        assert all(v["ok"] for v in took["verdicts"])
+        drawn_over = sum(1 for v in took["verdicts"][:draws] if v["reason"])
+        assert drawn_over > 0 and took["work"]["over_cap_draws"] == drawn_over
+        assert all("the row cap" in v["reason"] for v in took["verdicts"] if v["reason"])
+    honest = VR.credit_at_assumption([VR.load(path, T.published(path))], draws, VR.DELTA)
+    assert took["work"]["credited"] < honest["credited"]
+    assert Fraction(took["work"]["epsilon"]) > Fraction(honest["epsilon"])
     assert VP.volunteer(path, T.published(path), 1)["ok"]
-    assert same(exe, [path], 16)["verdict"] == "accept"
+    for rule in VR.OVER_CAP:
+        given = same(exe, [path], draws, over_cap=rule)
+        assert given["verdict"] == "accept" and given["work"]["over_cap_draws"] == 0
     man = json.loads(path.read_text())
     u = next(u for u in man["matmuls"] if u.get("voluntary_a"))
     many = [i for i in range(u["real_rows"]) if i not in u["excluded_a"]][:T.CW.voluntary_cap(u["m"]) + 1]
@@ -210,5 +239,6 @@ def test_a_recorded_h200_run(exe, name, passes):
     d = Path(RECORDED)
     want = json.loads((d / "verdicts" / f"{name}.json").read_text())
     paths = [d / "passes" / p / "manifest.json" for p in passes]
-    got = lean(exe, paths, want["draws"], bytes.fromhex(want["source"]), coins=d / "passes" / "coins.json")
+    got = lean(exe, paths, want["draws"], bytes.fromhex(want["source"]), coins=d / "passes" / "coins.json",
+               over_cap=want.get("over_cap", VR.REJECT))
     assert got == answer(want)

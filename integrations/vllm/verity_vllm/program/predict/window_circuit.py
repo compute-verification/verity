@@ -151,7 +151,7 @@ from .build import Unexpressible
 from .steps import RequestUnit, request_program
 from .window_builder import WEIGHTS, Grain, Row, _Builder, _spans, _step, _word, inference
 from .window_class import CLASS_OF_RECORD, GREEDY, FixedLoad, PearlTables, Tables, WindowClass, takes
-from .window_cut import Linears, cut_linear, cut_values, linears
+from .window_cut import ROW_FORMAT, Linears, cut_linear, cut_values, linears
 
 NAME = "verity-vllm/window"
 PROMPT = "prompt"
@@ -772,7 +772,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     else:
         held = ()
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
-                        tuple(openings), values=held)
+                        tuple(openings), values=held, formats={v: ROW_FORMAT for v in held} if layout is not None else {})
     circuit = IF.Circuit(name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
                          external=(f"{descriptor_id(scan)}/state", f"{progs[0].entry_unit[0]}/o0"),
                          wires=tuple(IF.coalesce(b.wires)), cuts=b.cuts, registered=reg,
