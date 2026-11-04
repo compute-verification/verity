@@ -29,12 +29,16 @@ from __future__ import annotations
 import math
 import operator
 
+import torch
+
 from te_core import io_bound
 from te_core.capture.structure import _GATHERS, _WALK, _closure, _dtype_name, _Flow, _gemms, _macs, _phases, _pk, _shape
 
 #: the capture's version of these rows (te_core's VERSION when they were last changed), so a trace that has them is
-#: distinguishable from one traced before them
-CAPTURE = "4.12.7"
+#: distinguishable from one traced before them. A recorded program's trace also carries the te_core VERSION whose code
+#: wrote it (`capture_code`, te_core.capture.script's `record`, from 4.12.14 on; a trace without it was written by 4.12.9
+#: to 4.12.13's code, which differ only in that 4.12.12's and 4.12.13's list fewer elementwise products)
+CAPTURE = "4.12.9"
 ORDER = "unknown"
 #: the console's dial's k levels in bits (te_core.panels' `K_LEVELS`, which a test holds this to): each of its block
 #: sizes, the reference's, the served demo's block and the console's default
@@ -334,9 +338,6 @@ def _gathered(vs: _Values, made: dict) -> set:
 #: elementwise multiplications, by the positions of their two multiplicands
 _MULTIPLY = {"mul": (0, 1), "mul_": (0, 1), "div": (0, 1), "div_": (0, 1), "addcmul": (1, 2), "addcmul_": (1, 2),
              "addcdiv": (1, 2), "addcdiv_": (1, 2)}
-#: ops whose entries are their first argument's, moved, broadcast or repeated: views, casts, repeats and gathers
-_SPREAD = _WALK | _GATHERS | {"broadcast_to", "tile", "repeat_interleave"}
-
 
 def _sums_by_index(n) -> bool:
     """Whether node `n` adds its source's entries into its output at indices (index_add, scatter_add, an accumulating
@@ -351,23 +352,224 @@ def _sums_by_index(n) -> bool:
     return False
 
 
+def _rows_by_data(n):
+    """The table node `n` gathers rows of by the step's data (an embedding by its token ids): a gather of rows
+    (embedding, table[ids], index_select along dim 0) whose index is a graph input through views and casts; else
+    None."""
+    name, a = _pk(n.target), n.args
+    if name == "embedding" and len(a) > 1:
+        index = a[1]
+    elif name in ("index", "_unsafe_index") and len(a) > 1 and isinstance(a[1], (list, tuple)) and a[1] and \
+            all(x is None for x in a[1][1:]):
+        index = a[1][0]
+    elif name == "index_select" and len(a) > 2 and a[1] == 0:
+        index = a[2]
+    else:
+        return None
+    if not (hasattr(a[0], "op") and hasattr(index, "op")):
+        return None
+    return a[0] if getattr(io_bound._root(index), "op", None) == "placeholder" else None
+
+
+def _lookup(n) -> bool:
+    """Whether node `n` looks a module tensor's rows up by the step's data (`_rows_by_data`, its table a module
+    tensor through views and casts). Its rows repeat only where the data does, so its entries are its own; an index
+    a program computes is no lookup, and a table it builds is one only where its entries are its own (`_sources`)."""
+    table = _rows_by_data(n)
+    return table is not None and getattr(io_bound._root(table), "op", None) == "get_attr"
+
+
+def _sources(vs: _Values) -> list:
+    """Each value's sources, the values that depend on θ′ whose entries it is computed from (None: it doesn't depend on
+    θ′). A graph source, a GEMM's output (a product the rows count) and a lookup's (`_lookup`) are their own sources,
+    and so is a gather of rows by the step's data (`_rows_by_data`) from a table the program builds, where each version
+    of it the gather reads is its own source (a copy of θ's table, never a broadcast); and so is any value with at
+    least as many entries as its sources have; any other value's are its affected predecessors', storage-versioned
+    (`_Flow`), so a view, a cast, a map, a multiplication by a value outside the update or a copy in place keeps the
+    entries of the value it broadcasts."""
+    flow, dep = vs.flow, vs.dep
+    own = {n for n in vs.nodes if n.op == "call_function" and (_gemms(n) or _lookup(n))}
+    rows = {n: t for n in vs.nodes if n.op == "call_function" and (t := _rows_by_data(n)) is not None}
+    size = _sizes(vs)
+    src: list = [None] * len(flow.preds)
+    for v, ps in enumerate(flow.preds):
+        if not dep[v]:
+            continue
+        aff = [p for p in ps if dep[p]]
+        n = flow.node[v]
+        whole = n in rows and all(src[x] == frozenset((x,)) for x in _reads(vs, n, rows[n]) if dep[x])
+        s = frozenset((v,)) if not aff or n in own or whole else frozenset().union(*(src[p] for p in aff))
+        src[v] = s if sum(size[x] for x in s) < size[v] else frozenset((v,))
+    return src
+
+
+def _sizes(vs: _Values) -> list[int]:
+    """Each value's entries (a Python scalar's 1)."""
+    return [max(b // max(w, 1), 1) for b, w in zip(vs.flow.bits, vs.flow.width)]
+
+
+#: ops whose output is their first argument's entries, its shape unchanged: casts and copies
+_SAME = {"_to_copy", "to", "clone", "contiguous", "detach", "alias", "lift_fresh_copy", "lift_fresh", "type_as"}
+#: views that only add or drop dims of size 1, or merge none
+_RESHAPE = {"unsqueeze", "squeeze", "view", "_unsafe_view", "reshape", "_reshape_alias", "view_as", "flatten",
+            "unflatten", "squeeze_copy", "unsqueeze_copy", "view_copy"}
+#: ops that broadcast their first argument to their output's shape
+_EXPAND = {"expand", "expand_as", "broadcast_to", "expand_copy"}
+
+
+def _shape_of(x) -> tuple | None:
+    v = x.meta.get("val") if hasattr(x, "meta") else None
+    return tuple(int(s) for s in v.shape) if hasattr(v, "shape") else None
+
+
+def _cuts(shape: tuple) -> list[int]:
+    """The sizes of `shape`'s trailing blocks (each dim's entries times every later dim's), from 1 up: dim i is the run
+    of an entry's index, in order, from prod(shape[i + 1:]) to prod(shape[i:])."""
+    return sorted({math.prod(shape[i:]) for i in range(len(shape) + 1)})
+
+
+def _cells(runs: list[frozenset], shape: tuple) -> tuple[list[int], list[frozenset]] | None:
+    """Sets of runs (lo, hi) of the index of an array of `shape` on the finest grid through their ends and its dims'
+    (`_cuts`): the grid and each set's cells (cell j from grid[j] to grid[j + 1]); None where the ends don't nest
+    (each a divisor of the next), so no grid has every run as cells (a 2 x 3 and a 3 x 2 share none)."""
+    grid = sorted({*_cuts(shape), *(e for s in runs for r in s for e in r)})
+    if any(b % a for a, b in zip(grid, grid[1:])):
+        return None
+    return grid, [frozenset(j for j in range(len(grid) - 1) if any(lo <= grid[j] and grid[j + 1] <= hi for lo, hi in s))
+                  for s in runs]
+
+
+def _moved(runs: frozenset, shape: tuple, out: tuple, to: dict) -> frozenset | None:
+    """Runs of an array of `shape` as runs of `out`'s index, each dim i of `shape` moved to dim to[i] of `out` (a
+    broadcast's or a permutation's); None where they don't nest with `shape`'s dims."""
+    got = _cells([runs], shape)
+    if got is None:
+        return None
+    grid, (cells,) = got
+    moved = set()
+    for j in cells:
+        lo, hi = grid[j], grid[j + 1]
+        i = next(i for i in range(len(shape)) if math.prod(shape[i + 1:]) <= lo and hi <= math.prod(shape[i:]))
+        below, at = math.prod(shape[i + 1:]), math.prod(out[to[i] + 1:])
+        moved.add((lo // below * at, hi // below * at))
+    return frozenset(moved)
+
+
+def _broadcast(runs, shape: tuple, out: tuple) -> frozenset | None:
+    """The runs of `out`'s index along which a value of `shape`, flat along `runs`, is, broadcast to it: its own, and
+    every dim of `out` it lacks or has size 1 in."""
+    if runs is None or shape is None or out is None or len(shape) > len(out):
+        return None
+    k = len(out) - len(shape)
+    got = _moved(runs, shape, out, {i: i + k for i in range(len(shape))})
+    return None if got is None else got | {(math.prod(out[j + 1:]), math.prod(out[j:])) for j in range(len(out))
+                                           if out[j] > 1 and (j < k or shape[j - k] == 1)}
+
+
+def _meet(runs: list[frozenset], shape: tuple) -> frozenset | None:
+    """The runs of an array of `shape`'s index in every set of `runs`; None where they don't nest."""
+    got = _cells(runs, shape)
+    return None if got is None else frozenset((got[0][j], got[0][j + 1]) for j in frozenset.intersection(*got[1]))
+
+
+def _whole(runs: frozenset, shape: tuple) -> bool:
+    """Whether `runs` cover an array of `shape`'s whole index, so a value flat along them reads the same entries at
+    every position (a scalar's broadcast)."""
+    got = _cells([runs], shape)
+    return got is not None and len(got[1][0]) == len(got[0]) - 1
+
+
+def _flats(vs: _Values, src: list) -> list:
+    """Each value's flat runs: the runs of its entries' index (`_cuts`'s, a dim or part of one) along which what it
+    reads of θ′ doesn't vary, so it is a broadcast along them (None: unknown, or it doesn't depend on θ′). A value
+    that is its own source (`_sources`) has none; a map, cast, copy or broadcast is flat where every affected argument
+    is, broadcast to its shape; a view keeps its argument's, since it keeps the entries' order, however it regroups
+    their dims (a code's levels, flat along the lanes of their byte, merged with the bytes into the group); a
+    permutation moves them with their dims; every other op's are unknown."""
+    flow, dep = vs.flow, vs.dep
+    written = {v for _, v, _ in flow.writes}
+    flat: list = [None] * len(flow.preds)
+    for v, s in enumerate(src):
+        if s is not None and s == frozenset((v,)):
+            flat[v] = frozenset()
+    for n in vs.nodes:
+        v = flow.val.get(n)
+        if n.op != "call_function" or not isinstance(v, int) or not dep[v] or flat[v] is not None or v in written:
+            continue
+        out, name = _shape_of(n), _pk(n.target)
+        if out is None:
+            continue
+        first = n.args[0] if n.args and hasattr(n.args[0], "op") else None
+        own = flow.val.get(first) if first is not None else None
+        shape = _shape_of(first) if first is not None else None
+        f = flat[own] if isinstance(own, int) else None
+        if name in _EXPAND or name in _SAME or name in _MULTIPLY or torch.Tag.pointwise in getattr(n.target, "tags", ()):
+            got = [_broadcast(flat[x] if isinstance(x := flow.val.get(a), int) else None, _shape_of(a), out)
+                   for a in io_bound._tensor_args(n) if vs.reads_affected(n, a)]
+            flat[v] = None if not got or None in got else _meet(got, out)
+        elif name in _RESHAPE and f is not None and shape is not None and math.prod(shape) == math.prod(out):
+            flat[v] = f
+        elif name in ("permute", "transpose", "t", "numpy_T", "mT") and f is not None and shape is not None:
+            order = list(range(len(shape)))
+            if name == "permute":
+                order = [int(d) % len(shape) for d in n.args[1]]
+            elif len(shape) >= 2:
+                d0, d1 = ((int(n.args[1]), int(n.args[2])) if name == "transpose" else (-2, -1))
+                d0, d1 = d0 % len(shape), d1 % len(shape)
+                order[d0], order[d1] = order[d1], order[d0]
+            flat[v] = _moved(f, shape, out, {d: i for i, d in enumerate(order)})
+    return flat
+
+
 def _elementwise_products(vs: _Values) -> list[dict]:
     """The measured step's matrix products written with elementwise ops, which no row is and whose outputs the
     whole-making system would miss: a multiplication of two values that depend on θ′ whose result has more entries
-    than either reads (each broadcast or repeated along a dim the other lacks: an outer product, a GEMM with K = 1, or
-    a matrix product once summed, as (x.unsqueeze(-1) * W).sum(-2) writes x @ W), and a sum by index
-    (`_sums_by_index`) of a multiplication of two such values one of which reads a gather's rows (a sparse product:
-    gather, mul and index_add), in the forward or the backward. A multiplication of two values of its own size (a
-    norm's, a gate's) is elementwise, and so is one with an operand that doesn't depend on θ′, whose product is θ's
-    and never counted (P-match checks its broadcast). [{"op", "count", "macs"}] by op, the multiplications' MACs."""
+    than the sources (`_sources`) of either have, each broadcast or repeated along a run of the index the other isn't
+    (`_flats`; runs it can't tell never exempt, unless the other is flat along the whole index, a scalar's broadcast,
+    which mixes with nothing): an outer product, a GEMM with K = 1, or a matrix product once summed, as
+    (x.unsqueeze(-1) * W).sum(-2) writes x @ W, whatever maps or copies the broadcast passes through first. Two
+    broadcasts along the same dims (a token's code over lanes times the token's scale) are elementwise. The runs are
+    compared on the grid both share (`_cells`), so a code's levels whose lanes a view merges into their group, times
+    the group's scale, are elementwise, whatever maps and casts follow the view, and two broadcasts each flattened by
+    a view are still a product. And a sum by
+    index (`_sums_by_index`) of a multiplication of two such values one of which carries a gather's rows (a sparse
+    product: gather, mul and index_add), in the forward or the backward. A gather's rows and such a multiplication are
+    carried by every view, and by every other op with one affected argument and no fewer entries (a cast, a map, a
+    broadcast). A multiplication of two values of its own size (a norm's, a gate's) is elementwise, and so is one with
+    an operand that doesn't depend on θ′, whose product is θ's and never counted (P-match checks its broadcast).
+    [{"op", "count", "macs"}] by op, the multiplications' MACs."""
     phases = _phases(vs.gm)
-    entries: dict = {}
+    dep = vs.dep
+    made = _made(vs)
+    src, size = _sources(vs), _sizes(vs)
+    flat = _flats(vs, src)
     gathered: set = set()
     product: dict = {}
     found: dict = {}
 
-    def ent(a) -> int:
-        return entries.get(a, io_bound._numel(a))
+    def ent(n, a) -> int:
+        s = frozenset().union(*(src[x] for x in _reads(vs, n, a) if dep[x]))
+        return min(io_bound._numel(a), sum(size[x] for x in s))
+
+    def runs(n, a) -> frozenset | None:
+        """Operand `a` of `n` broadcast to `n`'s entries: the runs of their index along which it is flat."""
+        own = vs.flow.val.get(a)
+        if not isinstance(own, int) or _reads(vs, n, a) - {own}:
+            return None
+        return _broadcast(flat[own], _shape_of(a), _shape_of(n))
+
+    def mixes(n, a, b) -> bool:
+        """Whether each operand is a broadcast along a run the other isn't (unknown: it may be, unless the other is
+        flat along the whole index), compared on the grid both share (`_cells`)."""
+        out = _shape_of(n)
+        fa, fb = runs(n, a), runs(n, b)
+        if any(f is not None and _whole(f, out) for f in (fa, fb)):
+            return False
+        got = None if fa is None or fb is None else _cells([fa, fb], out)
+        if got is None:
+            return True
+        ga, gb = got[1]
+        return not (ga <= gb or gb <= ga)
 
     def add(name: str, macs: int) -> None:
         c, m = found.get(name, (0, 0))
@@ -377,29 +579,31 @@ def _elementwise_products(vs: _Values) -> list[dict]:
         if n.op != "call_function":
             continue
         name = "getitem" if n.target is operator.getitem else _pk(n.target)
-        src = n.args[0] if n.args and hasattr(n.args[0], "op") else None
-        if src is not None and (name in _SPREAD or name == "getitem"):
-            entries[n] = min(io_bound._numel(n), ent(src))
-            if src in gathered or name in _GATHERS and vs.reads_affected(n, src):
-                gathered.add(n)
-            if src in product:
-                product[n] = product[src]
-            continue
+        outs = made.get(n, [])
+        aff = [a for a in io_bound._tensor_args(n) if vs.reads_affected(n, a)]
+        a, b = (n.args[i] if len(n.args) > i else None for i in _MULTIPLY[name]) if name in _MULTIPLY else (None, None)
+        both = a in aff and b in aff
+        if name in _GATHERS and n.args and n.args[0] in aff:
+            gathered.update(outs)
+        elif len(aff) == 1 and not both and not _gemms(n) and (name in _WALK or
+                                                                io_bound._numel(n) >= io_bound._numel(aff[0])):
+            got = _reads(vs, n, aff[0])
+            if gathered & got:
+                gathered.update(outs)
+            if carried := [product[x] for x in got if x in product]:
+                product.update(dict.fromkeys(outs, max(carried)))
         if not vs.measured(n) or phases.get(n, "forward") not in ("forward", "backward"):
             continue
-        if name in _MULTIPLY:
-            a, b = (n.args[i] if len(n.args) > i else None for i in _MULTIPLY[name])
-            if not (hasattr(a, "op") and hasattr(b, "op") and vs.reads_affected(n, a) and vs.reads_affected(n, b)):
-                continue
-            size = io_bound._numel(n)
-            if size > ent(a) and size > ent(b):
-                add(name, size)
-            elif a in gathered or b in gathered:
-                product[n] = size
+        if both:
+            out = io_bound._numel(n)
+            if out > ent(n, a) and out > ent(n, b) and mixes(n, a, b):
+                add(name, out)
+            elif gathered & (_reads(vs, n, a) | _reads(vs, n, b)):
+                product.update(dict.fromkeys(outs, out))
         elif _sums_by_index(n):
-            for a in io_bound._tensor_args(n)[1:]:
-                if a in product:
-                    add(name, product[a])
+            for x in io_bound._tensor_args(n)[1:]:
+                if carried := [product[v] for v in _reads(vs, n, x) if v in product]:
+                    add(name, max(carried))
                     break
     return [{"op": op, "count": c, "macs": m} for op, (c, m) in sorted(found.items())]
 

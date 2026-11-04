@@ -572,11 +572,10 @@ def test_the_one_bound_is_the_max_over_its_kinds_each_resting_on_what_it_names()
     b = F.bound(coded, c, 2800)
     assert (b["terms"]["token"], b["terms"]["decoding"], b["binding"]) == (
         pytest.approx(0.5), pytest.approx(c * 0.5 / (5e10 + 1.75e8)), "decoding")
-    assert b["max"] == b["terms"]["decoding"] and b["label"] == f"te_core {F_VERSION}, reading A"
+    assert b["max"] == b["terms"]["decoding"] and b["label"] == f"{F.THE_CODE} {F_VERSION}, reading A"
     assert b["terms"]["fresh_products"] is None and b["unmeasured"]["fresh_products"].startswith(
         f"unmeasured: {F.LOG_UNKNOWN}; 100% of its products' MACs")
-    assert b["unmeasured"]["fresh_products"].endswith(f"a trace with te_core {F.PRODUCTS_FROM} or later keeps them "
-                                                      f"(te_core.capture.products)")
+    assert b["unmeasured"]["fresh_products"].endswith(f"a trace from {F.THE_CODE} {F.PRODUCTS_FROM} on keeps them")
     assert b["inputs"]["fresh_products"] == {"source": "op log", "order": "chain", "rows": 1, "unknown_share": 1.0,
                                              "macs": {"theta": 0.0, "attention": 0.0, "unknown": 1e12}}
     assert F.bound(replace(coded, ops=None), c, 2800)["unmeasured"]["fresh_products"] == F.FRESH_UNMEASURED
@@ -599,12 +598,13 @@ SYSTEM = {"classes": [{"k": 512, "c": 1 / 3, "P": 1.0, "feeds": [[512, 1.0]]}], 
 
 
 def test_the_fresh_products_kind_is_io_bounds_bound_on_the_runs_products():
-    """The term is te_core.io_bound's bound with Λ proved on the record's products and |C|, without P-cell (a premise
-    on the partition), with the whole-cell figure beside it as the sensitivity fresh_cell, on every console row. The
-    products are summed in the reference circuit's chains (`ORDER`), so a run's products are measured whether or not
-    they give an order; only a circuit that declares a tree is unmeasured, with io_bound's chain figure in the inputs,
-    and so is a term at a k other than the one the products were classified at. The term is the same over S steps of
-    the same products, and the products survive the record's JSON."""
+    """The term is te_core.io_bound's bound with Λ proved on the record's products and |C|, with P-cell (a premise on
+    the partition, Daniel's whole-cell ruling), with the figure without it beside it as the sensitivity fresh_no_cell,
+    on every console row. The products are summed in the reference circuit's chains (`ORDER`), so a run's products are
+    measured whether or not they give an order; only a circuit that declares a tree is unmeasured, with io_bound's
+    chain figure in the inputs, and so is a term at a k other than the one the products were classified at. The term
+    is the same over S steps of the same products, and the products survive the record's JSON. The published row
+    names the code that wrote the products' trace where the trace records it, and None where it doesn't."""
     from te_core import io_bound
 
     c, k = 1e11, policy.CONSOLE[1]
@@ -614,26 +614,30 @@ def test_the_fresh_products_kind_is_io_bounds_bound_on_the_runs_products():
     wc = F.whole_chain(SYSTEM, k)["whole_chain"]
     assert wc == pytest.approx(io_bound.whole_chain(k, 512, 16), rel=1e-9)
     proved = io_bound.bound([SQUARE], c, k, 1e12, wc)["proved"]
-    rho = proved["rho_no_cell"]
-    assert not F.P_CELL and F.ORDER == "chain" and 10 < rho < 100 < proved["rho"] < 1e3
+    rho, no_cell = proved["rho"], proved["rho_no_cell"]
+    assert F.P_CELL and F.ORDER == "chain" and 10 < no_cell < 100 < rho < 1e3
     assert b["terms"]["fresh_products"] == rho and b["binding"] == "fresh_products"
-    assert b["sensitivities"]["fresh_cell"] == proved["rho"] and "P-cell" in b["labels"]["fresh_cell"]
-    assert "fresh_products" not in b["unmeasured"] and "fresh_cell" not in b["unmeasured"]
+    assert b["sensitivities"]["fresh_cell"] == rho and "P-cell" in b["labels"]["fresh_cell"]
+    assert b["sensitivities"]["fresh_no_cell"] == no_cell and "without assuming" in b["labels"]["fresh_no_cell"]
+    assert not {"fresh_products", "fresh_cell", "fresh_no_cell"} & set(b["unmeasured"]) and b["void"] == {}
     assert b["inputs"]["fresh_products"]["io_bound"]["share"] == pytest.approx(0.5, rel=1e-12)
     assert F.published(chain)["reading"] == ("A" if F.READING_A else "B")
     one = F.published(chain, reading="A")
     assert one["binding_kind"] == "fresh_products" and one["rho"] == pytest.approx(rho * policy.CONSOLE[0] / c,
                                                                                    rel=1e-12)
-    assert one["sensitivities"]["fresh_cell"] == pytest.approx(proved["rho"] * policy.CONSOLE[0] / c, rel=1e-12)
-    assert "P-chain" in one["rests_on"] and "without P-cell" in one["rests_on"]
+    assert set(one["sensitivities"]) == {"reduction", "update", "fresh_no_cell"} and one["void"] is None
+    assert one["sensitivities"]["fresh_no_cell"] == pytest.approx(no_cell * policy.CONSOLE[0] / c, rel=1e-12)
+    assert "P-chain" in one["rests_on"] and f"given that {F.P_CELL_WORDS}" in one["rests_on"]
+    assert one["capture_code"] is None and F.published(replace(chain, products=chain.products | {
+        "capture_code": F.CAPTURE_CODE_SINCE}), reading="A")["capture_code"] == F.CAPTURE_CODE_SINCE
     assert F.bound(replace(chain, products=chain.products | {"order": None}), c, k)["terms"]["fresh_products"] == rho
     tree = F.bound(replace(chain, products=chain.products | {"order": "tree"}), c, k)
     assert tree["terms"]["fresh_products"] is None and "declares its products summed in a tree" in tree["unmeasured"][
         "fresh_products"]
     assert "chain constant only" in tree["unmeasured"]["fresh_products"]
-    assert tree["inputs"]["fresh_products"]["io_bound"]["proved"]["rho_no_cell"] == rho
+    assert tree["inputs"]["fresh_products"]["io_bound"]["proved"]["rho"] == rho
     assert tree["sensitivities"]["fresh_cell"] is None and tree["unmeasured"]["fresh_cell"] == tree["unmeasured"][
-        "fresh_products"]
+        "fresh_products"] == tree["unmeasured"]["fresh_no_cell"]
     elsewhere = F.bound(chain, c, 80_000)
     assert elsewhere["terms"]["fresh_products"] is None and "classified at k = 65536" in elsewhere["unmeasured"][
         "fresh_products"]
@@ -645,13 +649,59 @@ def test_the_fresh_products_kind_is_io_bounds_bound_on_the_runs_products():
     assert F.bound(steps, c, k)["terms"]["fresh_products"] == pytest.approx(rho, rel=1e-10)
     assert F.from_json(chain.to_json()).products == chain.products
     assert "fresh operands" in F.RESTS_ON["fresh_products"] and "P-chain" in F.RESTS_ON["fresh_products"]
-    assert all(x in F.RESTS_ON["fresh_products"] for x in ("P-match", "P-width extended"))
-    assert all(x in F.RESTS_ON_CELL["fresh_products"] for x in ("P-match", "P-width (extended)", "P-chain"))
+    assert all(x in F.RESTS_ON["fresh_products"] for x in (F.P_MATCH, F.P_WIDTH, F.P_CHAIN, "P-share"))
+    assert all(x in F.RESTS_ON_CELL["fresh_products"] for x in (F.P_MATCH, "(P-width, extended", F.P_CHAIN))
     assert F.bound(replace(chain, products=chain.products | {"system": None}), c, k)["unmeasured"][
         "fresh_products"] == F.FRESH_RETRACE
     hand = F.bound(replace(chain, products={"k": k, "order": "chain", "products": [SQUARE]}), c, k)
-    assert hand["terms"]["fresh_products"] == io_bound.bound([SQUARE], c, k, 1e12)["proved"]["rho_no_cell"]
+    assert hand["terms"]["fresh_products"] == io_bound.bound([SQUARE], c, k, 1e12)["proved"]["rho"]
     assert hand["inputs"]["fresh_products"]["whole_making"] == F.ONE_CLASS
+
+
+#: a code name in a published string: a dotted path (a module's, or its function's), an identifier with an underscore
+#: (te_core, io_bound, rows_of, ONE_CLASS, FRESH_VOID, k_whole) or a command-line flag
+CODE_NAME = __import__("re").compile(r"\b[A-Za-z]\w*\.[A-Za-z_]\w*|\b[A-Za-z][A-Za-z0-9]*_\w+\b|--[a-z]")
+
+
+def test_no_published_string_names_the_code():
+    """Every string a panel publishes is plain words, since the dashboard prints them on a reader's page: what each kind
+    and each published ρ rests on, every reason a term is unmeasured (an op log, no product rows, another k, a tree, a
+    retrace, an unchecked trace, products written elementwise, a broken P-match, a void, a stand-in), the
+    sensitivities' labels, the record's labels and the label. The code is "training's slowdown code", and a premise is
+    named in words beside its name."""
+    c, k = 1e11, policy.CONSOLE[1]
+    static = [F.RESTS_ON, F.RESTS_ON_CELL, F.SENSITIVITIES, F.STUBS, F.TRACED, F.DECODER, F.V23,
+              F.FRESH_UNMEASURED, F.FRESH_VOID, F.FRESH_RETRACE, F.FRESH_UNCHECKED, F.ONE_CLASS, F.LOG_UNKNOWN,
+              F.STAND_IN, F.ENTRIES, F.OPS, F.PRODUCTS, F.TRACED_PRODUCTS, F.CONTEXT, F.TAIL]
+    strings = [s for x in static for s in (x.values() if isinstance(x, dict) else [x])]
+    chain = {"k": k, "order": "chain", "products": [SQUARE], "system": SYSTEM, "elementwise_products": []}
+    coded = one_segment(delta=500.0, decoder=5e10)
+    records = [coded, replace(coded, ops=None), replace(coded, ops=[]), replace(coded, entries=None)] + [
+        replace(one_segment(), products=chain | x) for x in (
+            {}, {"system": None}, {"elementwise_products": None}, {"order": "tree"},
+            {"elementwise_products": [{"op": "mul", "count": 2, "macs": 4.0}]},
+            {"p_match": [{"op": "expand", "fan_out": 16.0, "count": 1}]})] + [
+        replace(one_segment(), products={x: v for x, v in chain.items() if x != "system"})]
+    reasons = set()
+    for m in records:
+        for at in (k, 2800.0, 80_000.0):
+            b = F.bound(m, c, at)
+            strings += [b["label"], *b["rests_on"].values(), *b["unmeasured"].values(), *b["labels"].values(),
+                        *b["void"].values()]
+            reasons |= set(b["unmeasured"].values())
+            if isinstance(b["inputs"]["fresh_products"].get("whole_making"), str):
+                strings.append(b["inputs"]["fresh_products"]["whole_making"])
+            for reading in ("A", "B"):
+                one = F.published(m, c, at, reading)
+                strings += [one["label"], one["rests_on"], one["why"] or "", one["void"] or ""]
+    strings += [F.void_reason(0.17, 0.5), F.void_reason(0.023, 7e-5), F.void_reason(None, None)]
+    assert {F.FRESH_UNMEASURED, F.FRESH_RETRACE, F.FRESH_UNCHECKED} <= reasons
+    assert all(any(x in r for r in reasons) for x in ("op log", "classified at k", "summed in a tree", "elementwise "
+                                                      "steps (", "breaks the premise", "no entries", "no op log"))
+    named = {s: CODE_NAME.findall(s) for s in strings if CODE_NAME.search(s)}
+    assert not named, named
+    assert all(f"{words} ({name})" in F.RESTS_ON["fresh_products"] for name, words in F.PREMISES.items()
+               if name != "P-cell") and F.P_CELL_WORDS in F.RESTS_ON_CELL["fresh_products"]
 
 
 def test_published_reading_a_where_fit_holds_is_fits_c_over_c_minus_d():
@@ -758,7 +808,7 @@ def test_a_dense_steps_product_rows_give_io_bounds_bound_on_it(monkeypatch):
     io_bound.chain_classes', so io_bound's bound is the same: at the console's policy about 69,676 fresh MACs a block,
     0.552 of |C| and ρ 2.87e6 with P-cell. The trace's order is unknown and the reference circuit's chain stands, so
     the term is measured, on G without each sequence's first of 256 positions and each subset with its own
-    whole-making factor: the figure without P-cell, 1.633e5, with 2.869e6 beside it as fresh_cell. The rows, with
+    whole-making factor: the figure with P-cell, 2.869e6, with 1.633e5 beside it as fresh_no_cell. The rows, with
     those at the console dial's other k, are the fixture the
     vectors read (`dense_45m.products.json`). The one check of the strong bound's figure on a model's own shape (about
     6 s on a CPU): the fixtures' tiny start has almost no fresh products."""
@@ -799,20 +849,24 @@ def test_a_dense_steps_product_rows_give_io_bounds_bound_on_it(monkeypatch):
     assert t["rho_no_cell"] == pytest.approx(1.633e5, rel=1e-3) and t["rho"] == pytest.approx(2.869e6, rel=1e-3)
     m = replace(one_segment(), parts=(F.Part(gates=C, tokens=512, token_gates=C, affected_gates=C / 2),), products=got)
     one = F.bound(m, c, k)
-    assert one["terms"]["fresh_products"] == t["rho_no_cell"] and one["binding"] == "fresh_products"
-    assert one["sensitivities"]["fresh_cell"] == t["rho"]
-    assert one["inputs"]["fresh_products"]["capture"] == products.CAPTURE and "subset" not in one["inputs"]["fresh_products"]
+    assert one["terms"]["fresh_products"] == t["rho"] and one["binding"] == "fresh_products"
+    assert one["sensitivities"]["fresh_cell"] == t["rho"] and one["sensitivities"]["fresh_no_cell"] == t["rho_no_cell"]
+    assert one["inputs"]["fresh_products"]["capture"] == products.CAPTURE
+    assert one["inputs"]["fresh_products"]["subset"]["dropped"] == 4
 
 
 def test_the_45m_dense_steps_term_reads_its_whole_making_system_and_a_rank_one_class_voids_it():
     """The 45M dense step's products (its fixture rows, batch 2 at ctx 256) at the console: attention's 64-long chains
     sit below every counted operand, so the step's whole-making system gives whole_chain 1.0887 (the one-class rule at
-    its least k_whole gave 1.033), and the term, with G without each sequence's first position, is 163,341 without
-    P-cell, 2,869,161 with it (163,708 and 2,870,251 before the trim). A rank-1 adapter's class on the residual stream
+    its least k_whole gave 1.033), and the term, with G without each sequence's first position, is 2,869,161 with
+    P-cell, on the best subset, which drops the 4 of 19 products the 256-long chains feed (5.8% of the fresh MACs),
+    and 163,341 without it on all 19 (2,870,251 and 163,708 before the trim). A rank-1 adapter's class on the residual stream
     added to the system (r = k/(3·1²·16), fed by the 512-long chains and feeding them and the counted operands) closes
-    a cycle with no fixed point through every class, and every counted product reads one of them, so the term is void:
-    unmeasured (`FRESH_VOID`), never a measured 0; a product no class feeds would keep it measured on its own. A
-    broken P-match is unmeasured with the op that breaks it. No counted product
+    a cycle with no fixed point through every class, and every counted product reads one of them, so the term is void
+    with no subset's figure (`FRESH_VOID`), never a measured 0, and computed: with every other kind measured, ρ is
+    theirs with the void's reason. A product no class feeds makes the term that product's figure, 24,154 with P-cell
+    on 0.78% of the step's fresh multiplications, a valid lower bound that binds (coordinator 21:54Z), with the void's
+    reason beside it. A broken P-match is unmeasured with the op that breaks it. No counted product
     reads the embedding's rows before RoPE or attention's output makes them token-specific (layer 0's projections of
     them and their weight gradients are expansion products, PV and dP attention's), so G drops none of the 333; a
     counted row that read them would be dropped, and a 4.12 trace, whose rows don't say, is unmeasured until it is
@@ -822,13 +876,16 @@ def test_the_45m_dense_steps_term_reads_its_whole_making_system_and_a_rank_one_c
     c, k = policy.CONSOLE
     C = rows["gates"]
 
+    def measured(products):
+        return replace(one_segment(), parts=(F.Part(gates=C, tokens=512, token_gates=C, affected_gates=C / 2),),
+                       products=products)
+
     def term(products):
-        m = replace(one_segment(), parts=(F.Part(gates=C, tokens=512, token_gates=C, affected_gates=C / 2),),
-                    products=products)
-        return F.fresh_products(m, c, k)
+        return F.fresh_products(measured(products), c, k)
 
     rho, why, inputs = term(got)
-    assert why is None and round(rho) == 163_341 and round(inputs["fresh_cell"]) == 2_869_161
+    assert why is None and round(rho) == round(inputs["fresh_cell"]) == 2_869_161 and "void" not in inputs
+    assert round(inputs["fresh_no_cell"]) == 163_341
     assert inputs["gathered"] == {"dropped": 0, "of": 333, "dropped_macs_share": 0.0}
     assert inputs["shared_prefix"] == {"length": 1, "sequence": 256, "kept": 255 / 256,
                                        "trimmed_macs_share": pytest.approx(0.0020407, abs=1e-7)}
@@ -848,24 +905,56 @@ def test_the_45m_dense_steps_term_reads_its_whole_making_system_and_a_rank_one_c
         {x: y for x, y in r.items() if x != "gathered"} for r in rows["rows"]]})
     assert old["system"] is None and old["gathered"] is None and term(old)[1] == F.FRESH_RETRACE
     assert inputs["whole_making"]["e"] == pytest.approx(0.058322155, rel=1e-6)
-    assert inputs["io_bound"]["whole_chain"] == pytest.approx(1.08874665, rel=1e-6) and "subset" not in inputs
+    assert inputs["io_bound"]["whole_chain"] == pytest.approx(1.08874665, rel=1e-6)
+    assert inputs["subset"] == {"dropped": 4, "of": 19, "dropped_macs_share": pytest.approx(0.0583702, rel=1e-6),
+                                "k_whole_min": 512.0, "rule": "k_whole", "threshold": 512.0,
+                                "e": pytest.approx(0.01964116, rel=1e-6), "dropped_fed": [256.0]}
     w = F.whole_chain(got["system"], k)
     assert w["mu"][64] == pytest.approx(0.3451, abs=1e-4) and w["r"][64] == pytest.approx(1 / 3)
     classes = [e | {"feeds": [*e["feeds"], [1, 1.0]]} if e["k"] == 512 else e for e in got["system"]["classes"]]
     system = got["system"] | {"classes": [*classes, {"k": 1, "c": 1 / 3, "P": 1.0, "feeds": [[512, 1.0]]}],
                               "counted": [*got["system"]["counted"], [1, 1.0]]}
     void, why, inputs = term(got | {"system": system})
-    assert void is None and why == F.FRESH_VOID and inputs["fresh_cell"] is None
+    assert void is None and why == F.FRESH_VOID and inputs["fresh_cell"] is None and inputs["fresh_no_cell"] is None
     assert inputs["whole_making"] == {"e": None, "whole_chain": None, "diverged": [1, 64, 256, 512, 1408, 32000]}
+    n = len(got["products"])
+    assert inputs["void"] == {"reason": "the products count diverges; no subset has a proved bound",
+                              "kept_macs_share": None, "diverged_fed": n}
     alone = got | {"system": system, "products": [got["products"][0] | {"fed": []}, *got["products"][1:]]}
     kept, why, inputs = term(alone)
-    assert why is None and kept > 0 and inputs["subset"]["rule"] in ("e", "mu") and inputs["subset"]["e"] == 0
-    assert inputs["subset"]["dropped"] == len(got["products"]) - 1
+    assert why is None and round(kept) == round(inputs["fresh_cell"]) == 24_154
+    assert 1 < inputs["fresh_no_cell"] < kept and inputs["void"]["diverged_fed"] == n - 1
+    sub = inputs["subset"]
+    assert sub["rule"] in ("e", "mu") and sub["e"] == 0 and sub["dropped"] == n - 1
+    assert inputs["void"]["kept_macs_share"] == pytest.approx(1 - sub["dropped_macs_share"], rel=1e-12)
+    assert inputs["void"]["reason"] == ("the products count diverges; best subset 2.42e+04, keeping 0.778% of the "
+                                        "step's fresh multiplications")
     b = F.bound(replace(one_segment(), products=got | {"system": system}), c, k)
     assert b["terms"]["fresh_products"] is None and b["unmeasured"]["fresh_products"] == F.FRESH_VOID
     assert b["sensitivities"]["fresh_cell"] is None and b["unmeasured"]["fresh_cell"] == F.FRESH_VOID
+    assert b["sensitivities"]["fresh_no_cell"] is None and b["unmeasured"]["fresh_no_cell"] == F.FRESH_VOID
+    assert b["void"] == {"fresh_products": "the products count diverges; no subset has a proved bound"}
+    assert F.uncomputed(b) == []
+    pub = F.published(replace(one_segment(), products=got | {"system": system}), c, k, "A")
+    assert pub["binding_kind"] == "token" and pub["rho"] == b["max"] and not pub["partial"]
+    assert pub["why"] == pub["void"] == b["void"]["fresh_products"]
+    one = F.bound(measured(alone), c, k)
+    assert one["terms"]["fresh_products"] == kept and one["binding"] == "fresh_products"
+    assert one["sensitivities"]["fresh_no_cell"] == inputs["fresh_no_cell"] and "fresh_no_cell" not in one["unmeasured"]
+    pub = F.published(measured(alone), c, k, "A")
+    assert (pub["rho"], pub["binding_kind"], pub["partial"]) == (kept, "fresh_products", False)
+    assert pub["void"] == pub["why"] == inputs["void"]["reason"] and pub["fresh_subset"] == sub
+    for products, reason in ((alone, "best subset 0.0242, keeping 0.778% of the step's fresh multiplications"),
+                             (got | {"system": system}, "no subset has a proved bound")):
+        floor = F.published(measured(products), c / 1e6, k, "A")
+        assert (floor["rho"], floor["binding_kind"], floor["partial"]) == (1.0, "none", False)
+        assert floor["why"] == floor["void"] == f"the products count diverges; {reason}"
+        assert floor["rests_on"] == F.RESTS_ON_CELL["none"] and F.at(measured(products), c / 1e6, k, "A")["rho"] == 1
+    open_ = F.published(replace(measured(got | {"system": system}), ops=None, entries=None), c / 1e6, k, "A")
+    assert (open_["rho"], open_["binding_kind"]) == (None, "unmeasured") and open_["why"] == (
+        "token, decoding unmeasured; the products count diverges; no subset has a proved bound")
     broken, why, inputs = term(got | {"p_match": [{"op": "expand", "fan_out": 2.0, "count": 6}]})
-    assert broken is None and "breaks P-match" in why and "expand (fan-out 2, 6×)" in why
+    assert broken is None and f"breaks the premise that {F.P_MATCH}" in why and "expand (fan-out 2, 6×)" in why
     assert inputs["p_match"] == [{"op": "expand", "fan_out": 2.0, "count": 6}]
 
 
@@ -873,10 +962,11 @@ def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there_which_the_d
     """A trace from te_core 4.12.1 on keeps its product rows at each k of the console's dial (te_core.capture.products'
     `at`), so the fresh-products term is measured at each of them on that k's products and whole-making system, and
     off the dial it is unmeasured with the reason. At a fixed k io_bound's blocks don't move with c, so the dial reads
-    the term as c times a number for each k (`fresh_per_c`, [without P-cell, with it]). On the 45M dense step the term
-    falls with k (163,341 at the console's 65,536 bits, 130,996 at 80,000 and 64,340 at the served block's 145,568)
-    and is void from 800,000 bits up, where its whole-making system's one cycle, which feeds every counted product, has
-    no fixed point."""
+    the term as c times a number for each k (`fresh_per_c`, [without P-cell, with it], the term the second). On the 45M
+    dense step the term falls with k (2,869,161 at the console's 65,536 bits, 2,089,282 at 80,000 and 778,360 at the
+    served block's 145,568; 163,341, 130,996 and 64,340 without P-cell) and is void from 800,000 bits up, where its
+    whole-making system's one cycle, which feeds every counted product, has no fixed point, so no subset has a figure
+    and the dial reads [None, None] there, computed, which ρ's floor reads."""
     from te_core.capture import products
 
     rows = json.loads((FIXTURES / "dense_45m.products.json").read_text())
@@ -891,16 +981,17 @@ def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there_which_the_d
         for c in (1e12, policy.CONSOLE[0]):
             term, why, inputs = F.fresh_products(m, c, k)
             assert inputs["k_classified"] == k
-            if per[str(k)] is None:
-                assert term is None and why == F.FRESH_VOID
+            if per[str(k)] == [None, None]:
+                assert term is None and why == F.FRESH_VOID and inputs["void"]["kept_macs_share"] is None
             else:
-                assert why is None and term == pytest.approx(c * per[str(k)][0], rel=1e-12)
-                assert inputs["fresh_cell"] == pytest.approx(c * per[str(k)][1], rel=1e-12)
+                assert why is None and term == pytest.approx(c * per[str(k)][1], rel=1e-12)
+                assert inputs["fresh_no_cell"] == pytest.approx(c * per[str(k)][0], rel=1e-12)
     c = policy.CONSOLE[0]
+    assert [round(c * per[str(k)][1]) for k in (65_536, 80_000, 145_568)] == [2_869_161, 2_089_282, 778_360]
     assert [round(c * per[str(k)][0]) for k in (65_536, 80_000, 145_568)] == [163_341, 130_996, 64_340]
-    assert [per[str(k)] is None for k in products.DIAL_K] == [False] * 3 + [True] * 4
+    assert [per[str(k)] == [None, None] for k in products.DIAL_K] == [False] * 3 + [True] * 4
     term, why, _ = F.fresh_products(m, c, 100_000)
-    assert term is None and "keep none at it" in why and "DIAL_K" in why
+    assert term is None and "keep none at it" in why and "each k of the console's dial" in why
     assert F.fresh_per_c(replace(m, products={x: v for x, v in got.items() if x != "at"})) == {"65536": per["65536"]}
     assert F.fresh_per_c(replace(m, products=None)) is None
     assert F.from_json(m.to_json()).products == m.products
@@ -909,17 +1000,19 @@ def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there_which_the_d
 def test_a_block_5_slots_term_grows_with_its_rank_and_never_falls_below_what_no_class_feeds():
     """The lowrank worker's single-slot LoRA steps on block 5 of the s-t20 start (one traced step of 64 sequences of
     1,024 tokens each, the console's product rows, `block5_slots.products.json`): each slot's term at the console grows
-    with its rank (w_down 0.131 at rank 1 to 328 at 256, w_gate and w_up 8.03 at 4 to 370 at 64, wo and wv about 11
-    at 16 and over 300 at 256), never below the products no class feeds alone, and two micro-batches read as one.
+    with its rank (with P-cell w_down 0.155 at rank 1 to 6,177 at 256, w_gate and w_up 13.1 at 4 to 2,599 at 64, wo
+    and wv about 33 at 16 and about 6,000 at 256; without it w_down 0.131 to 328, w_gate and w_up 8.03 to 370, wo and
+    wv about 11 and over 300), never below the products no class feeds alone, and two micro-batches read as one.
     From rank 32 on the rank class makes e large (722 on w_down r64), which one factor for the whole step brought to
     1.4e-5, so the best subset drops the products it feeds; at ranks 1 and 4 the system has no cycle and is solved
-    exactly; on all three MLP matrices the residual stream closes a cycle with no fixed point, and the term is the
-    product it doesn't feed."""
+    exactly; on all three MLP matrices the residual stream closes a cycle with no fixed point, so the term is void
+    and is the figure of the product no diverged cycle feeds (187.7 with P-cell, 63.41 without, on 0.595 of the
+    step's counted fresh MACs), a valid lower bound (coordinator 21:54Z)."""
     from te_core import io_bound
 
     fx = json.loads((FIXTURES / "block5_slots.products.json").read_text())
     c, k = policy.CONSOLE
-    terms, inputs = {}, {}
+    terms, no_cell, inputs = {}, {}, {}
     for name, p in fx["programs"].items():
         block = {x: v for x, v in p.items() if x != "args"} | {"rows": [fx["rows"][i] for i in p["rows"]]}
         got = F.products_of_trace(block)
@@ -927,16 +1020,23 @@ def test_a_block_5_slots_term_grows_with_its_rank_and_never_falls_below_what_no_
         m = replace(one_segment(), parts=(F.Part(gates=C, tokens=block["tokens"], token_gates=C, affected_gates=C / 2),),
                     products=got)
         terms[name], why, inputs[name] = F.fresh_products(m, c, k)
-        assert why is None and terms[name] > 0, name
-        assert got["shared_prefix"]["sequence"] == 1024
-        unfed = [q for q in got["products"] if not any(a > 0 for _, a in q["fed"])]
-        assert terms[name] >= io_bound.bound(unfed, c, k, C, 1.0)["proved"]["rho_no_cell"] * (1 - 1e-12), name
+        no_cell[name] = inputs[name]["fresh_no_cell"]
+        assert why is None and terms[name] == inputs[name]["fresh_cell"], name
+        assert ("void" in inputs[name]) == bool(inputs[name]["whole_making"]["diverged"]), name
+        assert no_cell[name] > 0 and got["shared_prefix"]["sequence"] == 1024, name
+        unfed = io_bound.bound([q for q in got["products"] if not any(a > 0 for _, a in q["fed"])], c, k, C, 1.0)
+        assert terms[name] >= unfed["proved"]["rho"] * (1 - 1e-12), name
+        assert no_cell[name] >= unfed["proved"]["rho_no_cell"] * (1 - 1e-12), name
     slots = {"w_down": (1, 4, 16, 32, 64, 256), "w_gate,w_up": (4, 16, 32, 64), "wo": (16, 256), "wv": (16, 256)}
-    by_rank = {slot: [terms[f"{slot}-r{r}-m64"] for r in ranks] for slot, ranks in slots.items()}
-    assert all(ts == sorted(ts) for ts in by_rank.values())
-    assert [round(t, 3) for t in by_rank["w_down"]] == [0.131, 1.471, 11.631, 28.98, 67.933, 328.164]
-    assert [round(t, 3) for t in by_rank["w_gate,w_up"]] == [8.03, 63.467, 157.993, 369.688]
-    assert [round(t) for t in by_rank["wo"] + by_rank["wv"]] == [11, 323, 11, 309]
+    for figure, want in ((terms, ([0.155, 2.399, 34.427, 121.743, 477.569, 6176.697],
+                                  [13.103, 187.865, 663.727, 2598.916], [34, 6078, 32, 5825])),
+                         (no_cell, ([0.131, 1.471, 11.631, 28.98, 67.933, 328.164],
+                                    [8.03, 63.467, 157.993, 369.688], [11, 323, 11, 309]))):
+        by_rank = {slot: [figure[f"{slot}-r{r}-m64"] for r in ranks] for slot, ranks in slots.items()}
+        assert all(ts == sorted(ts) for ts in by_rank.values())
+        assert [round(t, 3) for t in by_rank["w_down"]] == want[0]
+        assert [round(t, 3) for t in by_rank["w_gate,w_up"]] == want[1]
+        assert [round(t) for t in by_rank["wo"] + by_rank["wv"]] == want[2]
     assert terms["w_down-r64-m32"] == pytest.approx(terms["w_down-r64-m64"], rel=1e-9)
     sub = inputs["w_down-r64-m64"]["subset"]
     assert (sub["rule"], sub["e"], sub["dropped"], sub["of"], sub["dropped_fed"]) == ("e", 0, 2, 3, [64.0])
@@ -944,8 +1044,14 @@ def test_a_block_5_slots_term_grows_with_its_rank_and_never_falls_below_what_no_
     assert inputs["w_down-r1-m64"]["whole_making"] == {"e": 0, "whole_chain": 1.0, "diverged": []}
     mlp = inputs["mlp-r16-m64"]
     assert mlp["whole_making"] == {"e": None, "whole_chain": None, "diverged": [16, 512, 1408, 65536]}
+    assert mlp["void"]["diverged_fed"] == 2
     assert (mlp["subset"]["e"], mlp["subset"]["dropped"], mlp["subset"]["dropped_fed"]) == (0, 2, [512.0, 1408.0])
-    assert terms["mlp-r16-m64"] == pytest.approx(63.41, rel=1e-4)
+    assert terms["mlp-r16-m64"] == pytest.approx(187.699, rel=1e-5)
+    assert no_cell["mlp-r16-m64"] == pytest.approx(63.41, rel=1e-4)
+    assert mlp["void"]["kept_macs_share"] == pytest.approx(0.594595, rel=1e-5)
+    assert mlp["void"]["reason"] == ("the products count diverges; best subset 188, keeping 59.5% of the step's fresh "
+                                     "multiplications")
+    assert [name for name, x in inputs.items() if "void" in x] == ["mlp-r16-m64"]
 
 
 @pytest.mark.parametrize("name", ("dense_blocks", "lora_blocks", "wildcard_adapter"))
@@ -1105,6 +1211,55 @@ def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does(
     assert F.complete(now | {"products": own}, out, SHAPE).products == own
 
 
+def test_a_trace_of_another_program_than_the_runs_is_never_priced():
+    """Coordinator 20:42Z: a products term is priced only on a trace of the run's own program. A trace keeps no list
+    of the tensors it trains, so `complete` reads the row's op log beside the trace's rows when the row is read
+    (`other_program`, whatever te_core ingested it): where every matrix-product shape the rows run is a product the
+    log ran, in either orientation, the term is priced as before; where one isn't (a rank, a width or a batch the
+    capture took and the run didn't), the term is unmeasured at every k the trace keeps rows at, with the counts as
+    its reason (`FRESH_OTHER`), and so are fresh_cell and fresh_no_cell. A batched product is no match for a plain
+    one, and a row with no op log isn't checked."""
+    row = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m": 4, "k": 512, "n": 8},
+           "token_dims": ["m"], "macs": 16384, "outputs": 32, "affected": [True, True], "widths": [16, 16],
+           "rates": [16.0, 16.0], "paid": [True, True], "self": False, "b_c": 32, "k_whole": 512,
+           "gates_per_mac": 1480.0, "cell_gates": 23682.0, "fed": [], "P": 1.0, "gathered": [False, False]}
+    served = 145_568.0
+    block = {"capture": F.ELEMENTWISE_FROM, "k": 65536.0, "order": "unknown", "tokens": 8, "gates": None,
+             "p_match": [], "elementwise_products": [], "rows": [row],
+             "at": {f"{served:.0f}": {"k": served, "rows": [row], "p_match": []}}}
+    log = [["fwd", "updated", "mm", "[[4, 512], [512, 8]]", 2, 2 * 16384]]
+    f = F.of_record({"steps": [{"step": 0, "tokens": 8, "struct": "a", "by": {"fwd/updated": 2 * 16384}}],
+                     "structures": {"a": {"updated": [], "log": log, "affected_share": 0.5, "sigma": 1.0,
+                                          "token_factor": 1.0, "delta_grad_bits": 10}},
+                     "formalism": {"trace": {"products": block}}})
+    assert "other_program" not in f["products"]
+
+    def fresh(ops, k=65536.0):
+        r = {"output": {"e_bytes": 10}} | ({} if ops is None else {"macs_log": {"by": {}, "ops": ops}})
+        return F.bound(F.complete(f, r, SHAPE), 1e11, k)
+
+    for ops in (None, {}, {"fwd updated mm [[4, 512], [512, 8]]": [2, 32768]},
+                {"bwd grad mm [[8, 512], [512, 4]]": [2, 32768], "fwd theta mm [[4, 8], [8, 3]]": [1, 96]}):
+        for k in (65536.0, served):
+            b = fresh(ops, k)
+            assert b["terms"]["fresh_products"] > 0 and "fresh_products" not in b["unmeasured"], (ops, k)
+            assert "other_program" not in b["inputs"]["fresh_products"]
+    for ops, ran in (({"fwd updated mm [[4, 512], [512, 3]]": [2, 12288]}, 1),
+                     ({"fwd updated bmm [[1, 4, 512], [1, 512, 3]]": [2, 12288],
+                       "fwd updated bmm [[2, 4, 512], [2, 512, 8]]": [1, 32768]}, 1)):
+        for k in (65536.0, served):
+            b = fresh(ops, k)
+            why = F.FRESH_OTHER.format(unmatched=1, shapes=1, ran=ran, largest="4×512 by 512×8")
+            assert b["terms"]["fresh_products"] is None and b["unmeasured"]["fresh_products"] == why, (ops, k)
+            assert b["inputs"]["fresh_products"]["other_program"] == {"shapes": 1, "unmatched": 1, "ran": ran,
+                                                                      "largest": [[4, 512, 8]]}
+            assert b["sensitivities"]["fresh_cell"] is None and b["sensitivities"]["fresh_no_cell"] is None
+            assert b["unmeasured"]["fresh_cell"] == b["unmeasured"]["fresh_no_cell"] == why and b["void"] == {}
+            assert "io_bound" not in b["inputs"]["fresh_products"]
+    assert F.fresh_per_c(F.complete(f, {"output": {"e_bytes": 10}, "macs_log": {"by": {}, "ops": ops}}, SHAPE)) == {
+        "65536": None, f"{served:.0f}": None}
+
+
 def test_a_ledger_row_publishes_what_its_trace_rows_give_at_every_dial_k_whatever_te_core_ingested_it(monkeypatch):
     """The 45M dense step's capture (`dense_45m.products.json`) as a ledger row's trace. Ingested at 4.11 (rows
     with no `fed`, `P` or `gathered`, products with no system) the row published the one-class rule's number; read
@@ -1192,12 +1347,13 @@ def test_reduction_update_and_the_token_form_are_sensitivities_never_the_bound()
     assert b["sensitivities"]["token_form"] == F.at(m, c, k)["slowdown"]
     assert b["sensitivities"]["reduction"] is None and set(b["unmeasured"]) == {"fresh_products", "token", "decoding",
                                                                                "per_gate", "reduction", "update",
-                                                                               "fresh_cell"}
+                                                                               "fresh_cell", "fresh_no_cell"}
     assert "no entries" in b["unmeasured"]["token"]
     cut = replace(m, parts=(replace(m.parts[0], partial_bits=1e6, grad_bits=2e6),))
     b = F.bound(cut, c, k)
     assert b["inputs"]["reduction"]["blocks"] == [8] and set(b["unmeasured"]) == {"fresh_products", "token", "decoding",
-                                                                                 "per_gate", "fresh_cell"}
+                                                                                 "per_gate", "fresh_cell",
+                                                                                 "fresh_no_cell"}
     assert b["sensitivities"]["reduction"] == pytest.approx(c * 7 * 1e6 / (k * 1e12))
     assert b["sensitivities"]["update"] == pytest.approx(c * 2e6 / (k * 1e12))
     assert b["max"] is None and b["binding"] is None and set(b["labels"]) == set(F.SENSITIVITIES)

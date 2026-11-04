@@ -39,6 +39,9 @@ elementwise ops (RoPE, the norms' gains, SwiGLU's product) are left out: under 0
 their count moves with te_core.flops' version (the starts' `forward_macs_per_token` exceed the products by 27,392
 at s50 and 40,192 at s-t20).
 
+The console's dials move the reference model over `REFERENCE_SIZES` (20M to 1B at vocab 50,304, each a shape `SHAPES`
+states) and k over `K_GRID`, a session's input ids at each of `DIAL_IN_TOKENS` input tokens (16,384 to 524,288 bits).
+
 The scoring cap (`eligible`; coordinator 08:09Z): a checkpoint is scored only when its own forward gates per token are
 at most the greater of twice its start's (`CAP_FALLBACK`) and the compute-optimal model's at the loss under the ladder's
 fit (`ladder_fit`), and twice its start's where the fit gives no value there. Nothing caps what the harness
@@ -67,15 +70,27 @@ MANIFEST = Path(__file__).resolve().parents[1] / "starts_store.json"
 CAP_FALLBACK = 2.0
 #: data v3's tokenizer (covert_witness's data_v3.TOKENIZER), which a start on v3's data has in its shape
 V3_TOKENIZER = "bpe32k"
-#: the reference model's shape at each size the starts have, by parameter count: the lf family's s, m and l16 (model.py,
-#: islands/ladder-v3's `SIZES`) at the GPT-2 vocabulary padded to 50,304 or bpe32k's 32,000
+#: the reference model's shape at each size the starts have and at each of the console's reference sizes
+#: (`REFERENCE_SIZES`), by parameter count: the lf family's s, m, l16 and xl (model.py, islands/ladder-v3's `SIZES`) at
+#: the GPT-2 vocabulary padded to 50,304 or bpe32k's 32,000, model.py's l, and three lf shapes in the family's form
 SHAPES = {
     45_029_888: {"d_model": 512, "n_layer": 6, "n_head": 8, "d_ff": 1408, "vocab": 50_304},
     95_269_632: {"d_model": 768, "n_layer": 8, "n_head": 12, "d_ff": 2048, "vocab": 50_304},
     35_658_240: {"d_model": 512, "n_layer": 6, "n_head": 8, "d_ff": 1408, "vocab": 32_000},
     81_212_160: {"d_model": 768, "n_layer": 8, "n_head": 12, "d_ff": 2048, "vocab": 32_000},
     238_322_688: {"d_model": 1024, "n_layer": 16, "n_head": 16, "d_ff": 2816, "vocab": 32_000},
+    656_146_944: {"d_model": 1536, "n_layer": 21, "n_head": 24, "d_ff": 4224, "vocab": 32_000},
+    21_179_200: {"d_model": 320, "n_layer": 4, "n_head": 5, "d_ff": 896, "vocab": 50_304},
+    205_677_568: {"d_model": 1024, "n_layer": 12, "n_head": 16, "d_ff": 2816, "vocab": 50_304},
+    400_532_160: {"d_model": 1344, "n_layer": 15, "n_head": 21, "d_ff": 3712, "vocab": 50_304},
+    999_397_440: {"d_model": 1728, "n_layer": 25, "n_head": 27, "d_ff": 4736, "vocab": 50_304},
 }
+#: the console's reference sizes, its dials' model sizes at vocab 50,304 (the dashboard's 19:01Z), each by the
+#: parameters of the shape `SHAPES` states for it: the lf family's s, m and l (model.py) where the family has a shape
+#: within 5% of the size, else the lf shape nearest it in the family's form: heads of 64, the SwiGLU width the multiple
+#: of 64 nearest 2.75 d (halves up), and d/n_layer from l16's 64 to m's 96
+REFERENCE_SIZES = {"20M": 21_179_200, "45M": 45_029_888, "95M": 95_269_632, "200M": 205_677_568,
+                   "400M": 400_532_160, "1B": 999_397_440}
 #: the console's reference model: the 45M dense starts (s50 and s100)
 REFERENCE_PARAMS = 45_029_888
 #: the console's session, (input tokens, output tokens)
@@ -124,6 +139,10 @@ def session_gates(params: int, in_tokens: int, out_tokens: int, shape: dict | No
 #: the console's policy, (c gates, k bits): one session of the 45M reference, 4,096 tokens in and 1,024 out
 CONSOLE = (session_gates(REFERENCE_PARAMS, *CONSOLE_SESSION),
            float(CONSOLE_SESSION[0] * id_bits(SHAPES[REFERENCE_PARAMS]["vocab"])))
+#: the console's k dial (the dashboard's 19:01Z): a session of each of these input tokens, its ids at the reference
+#: vocabulary's 16 bits, so k from 16,384 to 524,288 bits, the console's 65,536 among them (`K_GRID`)
+DIAL_IN_TOKENS = (1024, 2048, 4096, 8192, 16_384, 32_768)
+K_GRID = tuple(n * id_bits(SHAPES[REFERENCE_PARAMS]["vocab"]) for n in DIAL_IN_TOKENS)
 
 
 def c0(shape: dict) -> tuple[float, str]:
