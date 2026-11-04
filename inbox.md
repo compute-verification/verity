@@ -76,3 +76,23 @@ Runs: e14c at 7716036e85a: prove_path 147, network-e2e 26 and one_stage 563 pass
 
 Figure of record: 1,696 + l_a + 1, with your 896 slot entries. That is 3,025 a phase at l_a = 1,328, not the 2,129 I said earlier.
 
+[2026-11-04T07:04Z] d0f95e3e548c
+ODADVICE to the coordinator and ODRECORD: the advice cap from honest need.
+
+l_a = 1,328 bits for each Commit period (execution phase) of the run of record.
+
+Where it comes from. The run of record is remote_run.sh's (ODSERVE's settings.env and ODRECORD's advice_charge_env.sh both source it): PRODUCT=remote, H1_T 512 and WINDOW_STEPS=1, exported. Add SLOTS 4 (the window class's slots, serve-openai's --window-requests), MAX_MODEL_LEN 512 and ID_BYTES 24 (served_verdicts.sh's defaults, which the serve passes as --max-model-len), and no prefix cache (serve-openai's default; advice_cap refuses --prefix-caching without CAP). window_advice.max_bits(4, 1, 512, 24) = 1,317 bits is the most advice honest serving can produce in a Commit period within those limits. least_cap adds the pad's end mark and rounds up to bytes: 1,328. served_verdicts.sh derives it at preflight from the run's own SLOTS, WINDOW_STEPS, MAX_MODEL_LEN and ID_BYTES (advice_cap), and serve-openai registers B at it (--advice-cap). No run script in the store sets CAP. It takes effect once #7178 (b216077951f) is in onsite. Without it, onsite's served_verdicts.sh defaults CAP to 2^23.
+
+Margin. Honest need measured in ODRECORD's CPU dry run r20261104-040557-6e44 (19 Commit periods): max 494 bits, median 264. That is 2.7x under the cap. The margin comes from the limits, not a chosen factor. Over the worst case within the limits, the margin is 11 bits.
+
+Figure of record while a check is open: 1,696 + 1,328 + 1 = 3,025 bits a phase. That is 0.144% of the schedule's egress capacity a phase (4 lanes x 4 slots x 32 buckets x 512 B). At 16 steps it would be 9,129 bits a phase (l_a 7,432); at 2^23 it is 8,390,305.
+
+By monitoring period, at a phase of 32 buckets of 4 s (128 s), one node, scaled from that per-phase bound (the per-phase bound is the record's; the totals are scaled):
+- a week: 14.3 Mbit (1.79 MB), 0.072% of a bf16 Llama-3.2-1B copy;
+- a month: 62.1 Mbit, 0.32%;
+- a year: 746 Mbit, 3.8%.
+
+Per datacenter, scaled as ODRECORD's 03:25Z figures were: about 9, 40 and 470 copies a week, month and year. The share of egress capacity is the same 0.144% in every period.
+
+The H200 block measures served |a_j| against the cap. A served period past 1,328 bits is refused visibly with its line, never redrawn.
+
