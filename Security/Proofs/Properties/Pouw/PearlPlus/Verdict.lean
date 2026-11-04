@@ -743,6 +743,6 @@ theorem workIsTheCredit : WorkIsTheCredit := by
   dsimp only
   split
   · exact ⟨fun _ => ⟨pl, rfl, rfl⟩, fun h => nomatch h⟩
-  · exact ⟨fun h => nomatch h, fun _ => rfl⟩
+  · exact ⟨fun h => (nomatch h), fun _ => rfl⟩
 
 end Properties.Pouw.PearlPlus
