@@ -1,0 +1,5 @@
+# 70B q in all three orders (cpu7-orders-kv.txt's reason): every layer at 2%, the early layers up the clip ladder, and
+# the four o_proj whose top 128 directions hold the most of ||q||^2 (19.3-26.8%, screen.py) with the split
+70b-q-o2 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --match q_proj --fast --ranks 32,64,128,256,384 --orders none,fold,sort --workers 48
+70b-q-oclip --hf unsloth/Meta-Llama-3.1-70B --target 0.05,0.1,0.2,0.3 --layers 1,2,3,4,5,8 --match q_proj --fast --ranks 32,64,128,256,384 --orders none,fold,sort --workers 24
+70b-o-o2 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,7,8,12 --match o_proj --fast --ranks 32,64,128,256,384 --orders none,fold,sort --workers 4
