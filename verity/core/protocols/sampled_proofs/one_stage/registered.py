@@ -629,10 +629,74 @@ def bind_ports(file: Mapping[str, Any], ports: Iterable[str], roots: Mapping[str
     return {**file, BOUND: {p: {"root": roots[p]["root"], "domain": roots[p]["domain"]} for p in free}}
 
 
+def ports_twice(names: Sequence[str]) -> str | None:
+    """The first of a ``--registered`` file's port names that a later port repeats (`Flock.Registered.dupName?`), or None:
+    Lean refuses a file naming a port twice (`Flock.Registered.ofJson`), since a verdict reports one port per name. A file
+    parsed from bytes names each once; the refusal holds for any object the verifier is given."""
+    return next((n for i, n in enumerate(names) if n in names[i + 1:]), None)
+
+
+def port_registration(port: Mapping[str, Any]) -> tuple[Any, ...]:
+    """What a ``--registered`` file's port registers of its value (`Flock.Registered.Port.registration`): the value, its
+    leaf count, words (None when the port names none), word bits, domain and row schema."""
+    return (port["value"], port["leaves"], port.get("words"), port.get(WIDTH_KEY, WORD_BITS), port["domain"],
+            port.get(SCHEMA_KEY, SCHEMA))
+
+
+def root_clash(ports: Sequence[tuple[str, Mapping[str, Any]]]) -> tuple[str, str] | None:
+    """The first two of ``ports`` (``(name, port)`` in the file's order) of one root whose registrations differ
+    (`Flock.Registered.rootClash`), by name, or None. The v2 audit refuses them (`OneStageZk.ownOf`): a row's opening finds
+    the verifier's port by its root and reads that port's leaf count, schema and domain. Ports of one registration may
+    share a root, as an array of rows' ports ``name[i]`` read one value."""
+    return next(((a, b) for a, p in ports for b, q in ports
+                 if p["root"] == q["root"] and port_registration(p) != port_registration(q)), None)
+
+
+def entry_of(record: Any, value: str) -> Any:
+    """The registration record's entry for ``value`` (`SampledProofs.Registered.entryOf`): the last of its ``registered``
+    entries naming it, as R7 reads it, or None."""
+    es = record.get("registered") if isinstance(record, dict) else None
+    if not isinstance(es, list):
+        return None
+    return next((e for e in reversed(es) if isinstance(e, dict) and e.get("value") == value), None)
+
+
+def _int(x: Any) -> int | None:
+    return x if type(x) is int else None
+
+
+def entry_fields(port: Mapping[str, Any], entry: Mapping[str, Any],
+                 schemas: Mapping[str, str]) -> list[tuple[str, bool]]:
+    """A ``--registered`` file's ``port`` against the record's ``entry`` for its value, field by field
+    (`SampledProofs.Registered.entryFields`): the root and domain, the leaf count, the words, the word bits (16 where the
+    entry leaves them out) and the row schema, which the entry leaves to the verifier (``schemas``, its ``row_schemas``:
+    `SCHEMA` for a value it doesn't name)."""
+    bits = _int(entry[WIDTH_KEY]) if WIDTH_KEY in entry else WORD_BITS
+    return [("root", entry.get("root") == port["root"]), ("leaves", _int(entry.get("leaves")) == port["leaves"]),
+            ("words", _int(entry.get("words")) == port.get("words")),
+            (WIDTH_KEY, bits == port.get(WIDTH_KEY, WORD_BITS)), ("domain", entry.get("domain") == port["domain"]),
+            (SCHEMA_KEY, port.get(SCHEMA_KEY, SCHEMA) == schemas.get(port["value"], SCHEMA))]
+
+
+def entry_clash(ports: Sequence[tuple[str, Mapping[str, Any]]], record: Any,
+                schemas: Mapping[str, str]) -> tuple[str, str] | None:
+    """The first of ``ports`` that differs from the record's entry for its value (`entry_of`), with the first field it
+    differs in (`entry_fields`), or None (`SampledProofs.Registered.entryClash`). The v2 audit refuses it
+    (`OneStageZk.portsHeld`): R7 holds the entry to the verifier's own, and the verdicts report only the port's root. A
+    port of a value the record has no entry for is held by nothing here."""
+    for name, p in ports:
+        e = entry_of(record, p["value"])
+        k = None if e is None else next((k for k, ok in entry_fields(p, e, schemas) if not ok), None)
+        if k is not None:
+            return name, k
+    return None
+
+
 __all__ = ["BLOCK", "BOUND", "ENTRY_KEYS", "OWNER", "PARAM_KEY", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
            "SCHEMA_SEG", "SCHEMA_V2", "SESSION_KEY", "SOURCES", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WINDOW_SALT",
            "WORD_BITS",
-           "bind_ports", "bytes_leaves", "domain", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
-           "row_digest", "row_leaves", "row_words", "schema_entry", "shape", "sources",
+           "bind_ports", "bytes_leaves", "domain", "entry_clash", "entry_fields", "entry_of", "leaf", "log_base",
+           "parameter_gates", "port_registration", "ports_twice", "reads", "reads_file", "registered_entries",
+           "root_clash", "row_digest", "row_leaves", "row_words", "schema_entry", "shape", "sources",
            "supplied_root", "supplied_rows", "supplied_salts", "supplied_value", "table", "verify_read", "width",
            "width_entry", "window_root", "window_salt"]
