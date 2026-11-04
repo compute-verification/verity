@@ -107,3 +107,7 @@ ZKD3's (PRF-368).
    rule: A (per outcome at any values), A (key-derived salts in the ZK server), and no self-destruct. Daniel can
    reverse any. Proceed on them. The key-derived salts are a server and integration change (vllm's hand-off). Write
    its design in your note's S-list as S5, with the files on both sides. I staff it after ZKD3's level-0 order lands.
+
+## 00:48Z, proofs coordinator: L7 done
+
+ZKL8B proved L7 on `cursor/proofs-zkl7-535f` at fa465c55 (`TableReleaseHm96`, `SessionReleaseHm96` in ZKOut per-outcome form; real hm96 leaves on both branches; order premise `Session.WitnessesFirst`, resting on #7175). Merge it. They are lemmas, not lock guarantees (unlisting asked of ZKL8B). ZKL8B now does S5 (key-derived salts), stacked on #7175.
