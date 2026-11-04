@@ -1,5 +1,5 @@
 /-
-The proof service's own checks (`service.py`), each with Python's codes, order and details:
+The proof system's own checks (`service.py`), each with Python's codes, order and details:
 
 * `checkPublic`: the public-items rule (`service.check_public`) on a one-stage registration record: each observable item
   is the service's own, a salted root of one of the given values, or an item the Spec declares. Codes: `keys` alone for a

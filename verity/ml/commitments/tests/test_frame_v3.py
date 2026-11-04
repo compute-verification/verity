@@ -54,7 +54,7 @@ def test_row_leaf_vectors(case: dict) -> None:
 @pytest.mark.parametrize("case", VECTORS["row_trees"], ids=lambda c: f"{c['hash']}-n{len(c['rows'])}")
 def test_row_tree_vectors(case: dict) -> None:
     n = len(case["rows"])
-    d = CommitmentDomain(_b(case["domain"]["binding"]), case["domain"]["owner"], RangeIndexedDomain(*case["domain"]["range"]))
+    d = CommitmentDomain(_b(case["domain"]["binding"]), case["domain"]["owner"], RangeIndexedDomain(*case["domain"]["range"]), hash="sha256")
     assert d.domain_id.hex() == case["domain"]["domain_id"]
     scheme = FrameV3({"rows": Port(d, RowLeaf(case["hash"], case["role"], case["word_bits"], case["n_words"]))})
     leaves = [_b(x) for x in case["leaves"]]
@@ -71,7 +71,7 @@ def test_row_tree_vectors(case: dict) -> None:
 
 def test_word_leaf_layout_is_the_frame_v3_leaf() -> None:
     for case in VECTORS["word_leaves"]:
-        d = CommitmentDomain(_b(case["domain"]["binding"]), case["domain"]["owner"], RangeIndexedDomain(*case["domain"]["range"]))
+        d = CommitmentDomain(_b(case["domain"]["binding"]), case["domain"]["owner"], RangeIndexedDomain(*case["domain"]["range"]), hash="sha256")
         scheme = FrameV3({"y": Port(d, WordLeaf(case["schema"], 2))})
         layout = scheme.leaf_layout("y", case["position"])
         assert layout.prefix.hex() == case["prefix"]
@@ -89,7 +89,7 @@ def test_sha256_prefix_is_one_block_and_binds_role_width_length() -> None:
 
 
 def test_configuration_reports_its_hashes() -> None:
-    d = CommitmentDomain(bytes(32), 0, RangeIndexedDomain(2))
+    d = CommitmentDomain(bytes(32), 0, RangeIndexedDomain(2), hash="sha256")
     assert FrameV3({"x": Port(d, RowLeaf("sha256", 1, 16, 4))}).hashes == ("sha256",)
     both = FrameV3({"x": Port(d, RowLeaf("sha256", 1, 16, 4)), "w": Port(d, RowLeaf("blake3", 2, 16, 4))})
     assert both.hashes == ("sha256", "blake3") and all(HASH_CLASS[h] == "standard" for h in both.hashes)

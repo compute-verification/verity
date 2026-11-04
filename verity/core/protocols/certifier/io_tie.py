@@ -75,7 +75,7 @@ from verity.ml.circuits.types import Array
 from verity.ml.commitments import hm96
 from verity.ml.commitments.gates.frame_v3 import _part, leaf_ref, node_ref, opens
 from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import _PAD, CommitmentDomain, _hash, _uint
+from verity.ml.commitments.merkle import _PAD, CommitmentDomain, frame_hash, _uint
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier.active import DATA, EVENT_END, EVENT_HEAD, HEADER, PAD
@@ -381,7 +381,7 @@ def rows_levels(domain_id: bytes, rows: Sequence[bytes], salts: Sequence[bytes])
                          f"{len(salts)} salts")
     level = [leaf_ref(domain_id, SCHEMA, HC.hiding_value(r, s), i) for i, (r, s) in enumerate(zip(rows, salts))]
     width = 1 << (len(rows) - 1).bit_length()
-    level += [_hash(_PAD, domain_id, _uint(i), hash="sha512") for i in range(len(rows), width)]
+    level += [frame_hash(_PAD, domain_id, _uint(i), hash="sha512") for i in range(len(rows), width)]
     levels = [level]
     while len(level) > 1:
         level = [node_ref(domain_id, len(levels) - 1, t, level[2 * t], level[2 * t + 1]) for t in range(len(level) // 2)]
