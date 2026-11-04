@@ -180,6 +180,16 @@ KNOWN = frozenset({
     "verity_vllm.query.module_body",
     "verity_vllm.query.program_view",
     "verity_vllm.query.required",
+    "verity_vllm.scheduler.cache_step",
+    "verity_vllm.scheduler.cache_step_v2",
+    "verity_vllm.scheduler.compile_slice",
+    "verity_vllm.scheduler.compile_slice_v2",
+    "verity_vllm.scheduler.compile_slice_v3",
+    "verity_vllm.scheduler.replay_chain",
+    "verity_vllm.scheduler.replay_step",
+    "verity_vllm.scheduler.served_rows",
+    "verity_vllm.scheduler.served_statics",
+    "verity_vllm.scheduler.served_tie",
 })
 
 #: Every private name outside code imports from a module of the package. Move its importers off it and delete it.
