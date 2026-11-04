@@ -39,6 +39,7 @@
   "Flock.Test.RegFormats",
   "Flock.Test.RegComplete",
   "Flock.Test.RegBound",
+  "Flock.Test.RegWired",
   "Flock.Test.RegProgram",
   "Flock.Test.DescOfProg",
   "Flock.Test.LinkUnits",

@@ -54,6 +54,7 @@ import Flock.PortRoots
 import Flock.KsScope
 import Flock.Registered
 import Flock.RegBound
+import Flock.RegWired
 import Flock.WindowRecord
 import Flock.RegKnown
 import Flock.KnownRead
