@@ -503,3 +503,71 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
 - The script now asks `volunteer-needed` in every mode, `arm` included, so `test_served_verdicts.py`'s `FAKE_SERVED_PASSES` answers it (`$NEEDED`, default `no uncredited`). Without that, your arm, give-up and tie tests exit 2. A new test holds give-up to refusing when the give-up is off under `reject`.
 - Left as r2j has it: the Lean step reads `$Q/served.json` and `$Q/passes`, so under `PEARL_TIE` it never runs. r2j's `verify` also takes no `--over-cap` yet, though the script passes one when `PEARLPLUS_OVER_CAP` is set.
 - Local: test_served_pearlplus 7, the give-up, tie and arm tests 13, test_pearl_c_vllm and its lean tests 129, and test_serve_pearl all pass. Suites: r20261104-141403-7530 (verity-vllm, cpu-9) and r20261104-141433-21fe (the rest of `--changed ead676d1cb`, cpu-11), both waiting for a slot.
+
+## 14:20Z Wed (vllm-pearlplus): **`cursor/vllm-pprecord-496a` at 9a6a1ac6f2, pushed, with `remote` ead676d1cb merged. Your 12:29Z items (2) and (3) are done, and the BF16 policy accepts on run 2's window. Suites on 9a6a1ac6f2 are queued; verdict about 15:45Z.**
+
+- **What pprecord adds since 3de088f72a:**
+  - 4c8088bc2c, your item (2): under PEARL_TIE, step 3's partition defaults to `llama32_1b_tg_l0_step1.json`. That is work:2 over layer 0's SiluMul_v2, with every unit of RoPEHead_v1{D=64} proved, since those are the BF16 1B's transfer gates of record. PP_SETS defaults to `rope-head/d64/bf16`. The preflight refuses a partition of another law, or one without those gates, before anything is built or served.
+  - aec0b7d161: a record composed after V3c (a follow-on's, or the compose's from its hand-off) reads V3c's audit, the sampled-proofs audit of record (`sampled_of_record`). Before this, it read step 3's, which is on local coins whenever V3c's is live. compose.env names it (SAMPLED_AUDIT), and the hand-off carries its summary, record, registration and runs.
+  - a0a6800e25, your item (3): the BF16 policy, below.
+  - c41344e826: with V3c off (V3C_CLASS empty), step 3's audit is the one of record, so the preflight now refuses a local or loopback PP_CHALLENGER there unless DEVELOPMENT=1.
+  - 9a6a1ac6f2 merges `remote` ead676d1cb. Three files conflicted, and I resolved them as follows:
+    - served_pearlplus.sh: volunteer-needed's rule decides the give-up in both modes, and under the tie retain always writes W. The Pearl-C period still closes right before verify (your 11:07Z rule), and verify takes `--over-cap` beside `--tie`. Step 4b's Lean step reads the passes its mode names.
+    - served_passes.py dispatches `arm` beside `lean`.
+    - The README keeps both texts.
+- **Your 12:47Z question about the challenger.** Run 2 was a development run, with its sampled proofs on local coins, so the gate's Lean was right to refuse them. Under the record's settings the sampled proofs are drawn on the auditor's challenger:
+  - **The setting:** `PP_CHALLENGER=gate:research@204.12.178.84` (vy-challenger-1, the lane's gate), with:
+    - `PP_PEER`: the served node, as the gate's /etc/vy/peers names it;
+    - `PP_CHALLENGER_KEY`: its challenger-key/v1 record;
+    - `PP_GATE_KEY`: the lane's gate key;
+    - DEVELOPMENT unset.
+  - V3c is on by default (class 4,32,4, or 4,32,2 under PEARL_TIE), and its audit is the sampled-proofs audit of record. It draws on V3C_CHALLENGER, which defaults to PP_CHALLENGER, and the preflight refuses a local or loopback one unless DEVELOPMENT=1.
+  - Step 3 then samples on local coins as a development check, because the gate opens a window's run root only once and V3c's audit takes it. Since aec0b7d161 the record and the compose read V3c's audit, not step 3's. With V3c off, c41344e826 holds step 3 to the same rule.
+  - **Open:**
+    - a5 writes a v2 case only for an audit of one table, and V3c's stratified tie audit draws several. The compose gate then has no proofs to recompute and takes the audit's answer as the node wrote it (AS_WRITTEN), so the gate itself doesn't recheck whose coins they were.
+    - The compose gate's tree needs aec0b7d161 to read V3c's audit.
+- **BF16 (your item 3, and the φ question).**
+  - **Whose code:** `benchmarks/one_stage/inference_only.py`. It cut the class circuit under the int8 serve's φ, where `int8_exact` is 'linears', and the vocabulary can't express a BF16 checkpoint there. `served_shares.MODELS` also lacked the BF16 1B (a KeyError in `session_work`). `remote` already holds the file's v3 and v4, so I fixed both on pprecord in a0a6800e25 rather than route them.
+  - **Can the policy take the serve's own recorded φ?** Not serve.json itself. serve.json is written as the endpoint listens, after the policy must be fixed, and the verdict refuses a policy written after the serve began unless `--retroactive`.
+  - It can take serve-phi's statement of the same φ. Under the tie, PEARLTIE's `prove_path.py serve-phi` writes exactly the fields `registered_of_serve` reads (model, revision, target, execution, default_seed). It writes them on the card, under the lease, before serve-openai, from the same `serve_seal.target_of` that serve.json's φ comes from.
+  - **The change:**
+    - `policy --serve FILE` takes either a serve-phi statement or a serve.json, and refuses one whose model or revision isn't `--model`/`--revision`'s.
+    - `--pearl-tables SCHEME` cuts the class circuit at Pearl+'s linears, as the window's record is cut.
+    - An inexpressible φ is refused by name, and no policy is written.
+  - **Checked on hardware:** r20261104-134550-923c on vy-dc-h200, using run 2's serve dir, class 4,32,4, cut pearl-c-h100-v1-h3, `--retroactive` because that serve is past.
+    - The policy: c 13,818,131,814,643 gates, k 422,197,408 fresh bits, n 25,165,824.
+    - The verdict: **accept, `registered_session` true**. The policy's session is the window's own: c equals the window's gates, and k its fresh bits.
+    - It took 2 min 41 s and 4.8 GB.
+  - **Left:** under the tie, served_verdicts.sh's policy step moves to right after serve-phi and before serve-openai, with `--serve $D/pearlplus/serve-phi.json --pearl-tables ${PEARLPLUS_ARM#pouw:}`. That needs PEARLTIE's serve-phi in `remote`, so it goes with task 3.
+  - The BF16 fixture d68964bffd0 is in pprecord through pp-row's merge.
+- **Suites.**
+  - **On 3de088f72a:**
+    - a32a (verity-vllm): passed.
+    - c5ac: 22 of 22 passed.
+    - 116f: 27 of 30 passed. Its 3 reds are `remote`'s own: repository's 5, research's `test_queue` vouch test, and property_redteam's 2 errors.
+  - **On aec0b7d161,** r20261104-132829-2bb4: 6 of 7 passed (one_stage 674, network-traces 534, pous 222, live_verifier 203, prove_path 141, verity-cli 95). repository failed `remote`'s 5.
+  - **Locally on c41344e826:** test_served_verdicts.py 354 passed, and test_served_cases.py 72 passed. Without the new refusal, its new test fails.
+  - **On 9a6a1ac6f2, the 53 suites touched from `remote`:**
+    - r20261104-135456-20b4 (verity-vllm, cpu-9) is running on the scratch merge a240f00ffb. verity-vllm's inputs are the same there as on 9a6a1ac6f2. Expect your P10 red on graphs.py.
+    - r20261104-141249-6752 (30 suites, cpu-11) and r20261104-141319-10db (22 verity/ suites, cpu-7) are both waiting for a check slot. Their verdict is about 15:45Z if slots free by about 14:45Z.
+- **vllm-pp-arm's 13:55Z handoff: taken.**
+  - **`--main`:** under a live Pearl+ gate, served_verdicts.sh already exports MAIN_FILE (else MAIN_SHA's first-parent line, by default the tree's HEAD), and step 5 passes it. PEARL_TIE's piece therefore gets `--main`; the bring-up's own piece ran outside served_verdicts.sh.
+  - **`_PEARLPLUS_TIED`:** its "no period holds the epoch" is true of pprecord's tie today, which uses in-process salt and no period. It becomes false once PEARLTIE's live salt and the period around the tie are in. PEARLTIE's served.json carries the gate's reserve answer at `coins.reserved`, which names the period, so in task 3 the text will read the run.
+  - **The gate host's pin 022255702a** is on no first-parent line, which is infra's to repin, as pp-arm routed it. Until then no live Pearl+ row passes `first_parent_reason`. When the repin lands, I'll change the served_verdicts.sh comment that says to pass next's line.
+  - **The rule checks:** bring-up 3's `ledger_check open|close|draw` are the checks I'll carry onto PEARL_TIE's period.
+- **Before code-complete (Thu 12:00Z):**
+  - **Task 3 needs PEARLTIE (113716d920) in `remote`.** The work:
+    - one tie mode on PEARLPLUS_TIE, using PEARLTIE's `serve_pearl.live`;
+    - pp-arm's additions: the `--h1-*` refusal, the refusal of `--challenger-gate` without `--challenger-peer`, and their two tests;
+    - drop `GateSessions.salt`;
+    - lane vllm's Pearl-C period opened before serve-openai (cap 1) and closed right before `verify --tie W`, with the ledger checks and `RULE … HELD|BROKEN`;
+    - the tied text reading the period, and the policy step after serve-phi;
+    - `--pearl-scheme` renamed to `--pearl-tables`.
+  - It takes about 2 to 3 hours after PEARLTIE lands.
+  - Task 4 (the Pearl+ case, the period piece, and the composite hand-off with W) is due Thu 06:00Z.
+- **Blocking:**
+  - PEARLTIE in `remote`;
+  - the gate host's repin;
+  - asks 1 (the y tag) and 2 (should the draw root bind R?);
+  - the one-table v2 case at the compose gate;
+  - the compose gate's re-pin to a tree with aec0b7d161.
