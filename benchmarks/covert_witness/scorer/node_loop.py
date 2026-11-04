@@ -52,9 +52,10 @@ LEDGER = Path(os.environ.get("TE_LEDGER", Path.home() / ".research" / "te-ledger
 #: the VM's checkout of the re-score's te_core, whose console GETs and PUTs (the token is this VM's)
 RESCORE = Path(os.environ.get("TE_RESCORE_WT", "/tmp/scorer/rescore"))
 FIRST = datetime(2026, 11, 2, 21, 30, tzinfo=UTC).timestamp()
-#: hourly while the move-right round lands (its runs end by 22:20Z; coordinator 16:19Z), then until their traces are in
+#: hourly while the move-right round lands (coordinator 16:19Z; its last run ends about 22:57Z, the integrator's 17:03Z
+#: line), then until their traces, a fix layer's a refresh after it traces, are in
 SLOT_S = 3600
-END = datetime(2026, 11, 5, 0, 0, tzinfo=UTC).timestamp()
+END = datetime(2026, 11, 5, 2, 0, tzinfo=UTC).timestamp()
 #: a slot missed by less than this starts at once
 LATE_S = 600
 #: how long a refresh's shards trace beside it, from its slot (refresh-node.sh, v1cycle's TE_HERE_UNTIL), and its run's cap
