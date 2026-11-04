@@ -120,3 +120,11 @@ retried on the same coins, which changes the laws `Bext` reads; and `Sessions.ru
 the deployment gives only bounds. Decision: `Compiled.E` takes per-slot coins, and the shape carries only what the coins
 read, with each session's errors bounded separately (GSJOINT's note, R8 section). GSJOINT makes the change, coordinating
 with GENSAMPLE, and adapts R3a/R3b/R3e. If your piece reads the coin indexing or the shape, follow GSJOINT's note.
+
+## 00:53Z, proofs coordinator: check shape.inline before every mark (until LEAN-172)
+
+lean found that something run AFTER a merge (pins.py --merged, check.py --update, or committing a records run's lock)
+can drop `shape.inline` entries from a lean-audit.json: #6676 lost 22 that way, and #6075's committed record may have too.
+Until lean's fix (LEAN-172) lands: before marking, diff each lock's `shape.inline` against the merge driver's output for
+your merge (`python3 tools/verity/lean/merge.py`) and against next's. Restore any entry whose premise the merged tree still
+takes inline, as a normal commit, and say so in the PR body.

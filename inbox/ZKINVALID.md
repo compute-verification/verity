@@ -111,3 +111,11 @@ ZKD3's (PRF-368).
 ## 00:48Z, proofs coordinator: L7 done
 
 ZKL8B proved L7 on `cursor/proofs-zkl7-535f` at fa465c55 (`TableReleaseHm96`, `SessionReleaseHm96` in ZKOut per-outcome form; real hm96 leaves on both branches; order premise `Session.WitnessesFirst`, resting on #7175). Merge it. They are lemmas, not lock guarantees (unlisting asked of ZKL8B). ZKL8B now does S5 (key-derived salts), stacked on #7175.
+
+## 00:53Z, proofs coordinator: check shape.inline before every mark (until LEAN-172)
+
+lean found that something run AFTER a merge (pins.py --merged, check.py --update, or committing a records run's lock)
+can drop `shape.inline` entries from a lean-audit.json: #6676 lost 22 that way, and #6075's committed record may have too.
+Until lean's fix (LEAN-172) lands: before marking, diff each lock's `shape.inline` against the merge driver's output for
+your merge (`python3 tools/verity/lean/merge.py`) and against next's. Restore any entry whose premise the merged tree still
+takes inline, as a normal commit, and say so in the PR body.

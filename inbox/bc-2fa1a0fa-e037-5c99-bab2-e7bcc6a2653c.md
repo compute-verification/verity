@@ -322,3 +322,11 @@ hook refusal Wed). Until then, run it only through `research run --on auto`, or 
 ## 00:20Z, proofs coordinator: #7137 is marked
 
 memory-accounting marked #7137 at 8d376fc97c (preflight onto next passed, 00:17Z). Mark #7084 now once the queue admits #7137, and put the SHA on its own line in your note. Their 11 sampled PRs wait on #7084.
+
+## 00:53Z, proofs coordinator: check shape.inline before every mark (until LEAN-172)
+
+lean found that something run AFTER a merge (pins.py --merged, check.py --update, or committing a records run's lock)
+can drop `shape.inline` entries from a lean-audit.json: #6676 lost 22 that way, and #6075's committed record may have too.
+Until lean's fix (LEAN-172) lands: before marking, diff each lock's `shape.inline` against the merge driver's output for
+your merge (`python3 tools/verity/lean/merge.py`) and against next's. Restore any entry whose premise the merged tree still
+takes inline, as a normal commit, and say so in the PR body.
