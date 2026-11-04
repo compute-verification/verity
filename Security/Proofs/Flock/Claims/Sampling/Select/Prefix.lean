@@ -36,7 +36,7 @@ theorem take_append {ξ t : ByteArray} {need p : ℕ} {x : ByteArray × ℕ}
   · cases h
   · rename_i hle
     have hle' : ¬ (ξ ++ t).size < p + need := by rw [ByteArray.size_append]; omega
-    rw [if_neg hle', extract_append_of_le (show p + need ≤ ξ.size by omega)]
+    rw [ite_eq_right hle', extract_append_of_le (show p + need ≤ ξ.size by omega)]
     exact h
 
 /-- A `repeat` loop whose body returns on `g` what it returns on `f`, and whose every `yield` on `f` moves the state up,
