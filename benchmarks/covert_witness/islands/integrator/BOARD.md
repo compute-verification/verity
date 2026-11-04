@@ -147,3 +147,7 @@ art:c109f12fe7690c3b54a3c256d21975f80a9f5326ad5270511b0155901430b153, moved ther
 13:48Z integrator [TOOL] finals addition: FINAL r20261104-061509-8e1d seed own not launched, it would end after 15:00Z, so the point is not rerun
 13:48Z integrator [TOOL] finals addition: FINAL r20261104-061509-8e1d seed 101 not launched, it would end after 15:00Z, so the point is labelled single seed
 13:48Z integrator [TOOL] finals addition: FINAL r20261104-061509-8e1d seed 102 not launched, it would end after 15:00Z, so the point is labelled single seed
+13:50Z integrator [STARTED] FINAL r20261103-180955-ff7f seed 102: r20261104-135020-adb6 on vy-nebius-1 (ref-optim s-t200, about 29 min once it holds a GPU)
+13:50Z integrator [STARTED] FINAL r20261104-061725-a6d2 seed own: r20261104-135028-61d2 on vy-nebius-1 (e1mb s-t20, about 22 min once it holds a GPU)
+13:50Z integrator [STARTED] FINAL r20261104-061725-a6d2 seed 101: r20261104-135035-22d8 on vy-nebius-3 (e1mb s-t20, about 22 min once it holds a GPU)
+13:50Z integrator [STARTED] FINAL r20261104-061725-a6d2 seed 102: r20261104-135042-ac14 on vy-nebius-3 (e1mb s-t20, about 22 min once it holds a GPU)
