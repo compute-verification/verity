@@ -15,9 +15,10 @@ coins the device opened, so they are the device's or bytes of one SHA-512 with t
 * **What the device printed** (`Prints`, `PrintsLog`): each release as lines that are their values' `Flock.canon`
   texts (`Canon`), with the fields v2 reads: a family's coin as a root's line (`RootValue`) and its release's line
   (`PlainValue`), a tree's hello as its key, nonce, root and spec (`HelloValue`, `SpecValue`), and a round opened as its
-  tree's root, stream, round, count, the bytes it answers and its coins' SHA-512 (`OpenValue`); and the coins the run
-  released of a family after a root, `COIN_BYTES` bytes each in order, the family's coins in its log (`Holds`,
-  `freshOf`). These are the properties the device's history at a play is to have.
+  tree's root, stream, round, count, the bytes it answers and its coins' SHA-512 (`OpenValue`); and, where the run's
+  release log reads as its coin commitment's (`releasedRootsOf`), the coins it released of a family after a root,
+  `COIN_BYTES` bytes each in order, the family's coins in its log (`Holds`, `freshOf`). These are the properties the
+  device's history at a play is to have.
 * **A line reads back** (`CanonLine.event_getD`): where v2's line reader (`SampledProofs.Challenger.event`) accepts a
   line that is a sorted value's `canon` text, it reads the value's fields (`str_of`, `nat_of`, `spec_of`). The reader's
   parse can't be seen into, so that it accepts a printed line is what `readTail`'s success shows: a line it refuses is
@@ -120,11 +121,13 @@ inductive Holds : ByteArray → List (List Bool) → Prop
       Holds (cb ++ ξ) (bitsOfBytes cb :: css)
 
 /-- **The device printed its log `log`**, the properties the device's history at a play is to have: each run of the
-device its ledger opens withheld on a window prints `log` after its release log's head (`Prints`), and released of each
-family after each root the coins `log` shows released so (`Holds`). -/
+device its ledger opens withheld on a window prints `log` after its release log's head (`Prints`), and, where its
+release log reads as its coin commitment's (`releasedRootsOf`), released of each family after each root the coins
+`log` shows released so (`Holds`). -/
 def PrintsLog (dev : History) (log : List Release) : Prop :=
   ∀ pk w r, r ∈ dev.runs pk → OpensOn dev pk w r.id →
-    Prints [] r.log.tail log ∧ ∀ label after, Holds (r.released label after) (freshOf label after log)
+    Prints [] r.log.tail log ∧ ((∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) →
+      ∀ label after, Holds (r.released label after) (freshOf label after log))
 
 /-! ## A release as v2 reads it -/
 
@@ -1045,7 +1048,7 @@ theorem read_run {dev : History} {log : List Release} (hP : PrintsLog dev log) {
   have hT := trees_log hts
   have hn : (r.log.filterMap helloRoot).Nodup := hT.roots ▸ hT.nodup
   refine read_prints hp .nil ((tree_lines hts hrecs).sub fun _ hl => List.mem_of_mem_tail hl) ?_
-    (fun _ h => absurd h List.not_mem_nil) (hξ label after) h
+    (fun _ h => absurd h List.not_mem_nil) (hξ hcr label after) h
   simpa using hn.sublist ((List.tail_sublist r.log).filterMap _)
 
 /-! ## The openings without the draw's coins -/
