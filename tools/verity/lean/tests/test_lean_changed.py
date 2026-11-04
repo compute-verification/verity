@@ -530,7 +530,8 @@ def test_try_builds_the_files_imports_then_runs_lean_on_it_in_its_owning_package
     said = []
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 1, "lean's exit status"
     assert calls["build"] == [("Sec/Proofs", tree, ["+Proofs.Flock.X:deps"], False, None),
-                              ("Sec/Proofs", tree, None, False, ["env", "lean", "Flock/X.lean"])]
+                              ("Sec/Proofs", tree, None, False, ["lean", "Flock/X.lean"])], \
+        "`lake lean`, which gives lean the module's options; `lake env lean` gives none"
     assert calls["link"] == [("Sec/Proofs", True)], "the owning package's dependencies, a copy as --records takes"
     assert calls["run"] == [], "no check.py, audit or --update"
     assert not (tree / LC.DIRTY).exists() and any("lean exit 1" in s for s in said)

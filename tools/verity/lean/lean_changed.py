@@ -11,9 +11,11 @@ the audit's cold build reaches it.
 `--try` elaborates one file (FILE: its path from the repository's root) on the same warm tree as `--records`, under the same
 `build` slot, tree lock, sync, `repair` and dependencies, for the closure of the package that owns FILE only: there it runs
 `lake build +MODULE:deps` (FILE's imports; Lake rebuilds only what changed since the slot's last build) and then
-`lake env lean FILE` in that package's directory, and exits with lean's status; when that status is an import clash (an
-import declaring what an earlier one did), the two modules it names lose their traces (`clashed`), so the next try rebuilds
-them against the outputs in place. It never runs check.py, so it reads and writes
+`lake lean FILE` in that package's directory: lean with the module's options, `[leanOptions]` among them, as `lake build`
+runs it (`lake env lean` takes none, so a try would pass an `autoImplicit = false` package's unbound name that its build
+refuses). It exits with lean's status; when that status is an import clash (an import declaring what an earlier one did),
+the two modules it names lose their traces (`clashed`), so the next try rebuilds them against the outputs in place. It
+never runs check.py, so it reads and writes
 no record; where the node grants no `build` slot it refuses, naming the nodes that do. Dependencies the tree holds that no
 `--records` run took (not in its `links.json`) are kept as they are; without a sandbox Lake runs unsandboxed, and fetches
 dependencies the node does not keep.
@@ -966,7 +968,7 @@ def module_of(pkg: str, file: str) -> str:
 def try_file(file: str, deps: Path, tree: Path | None = None, log=print) -> int:
     """`--try`: on the tree of the `build` slot it takes (as `--records` does), with the closure of the package that owns
     ``file`` synced from this checkout and its fetched dependencies taken, `lake build +MODULE:deps` (its imports, of which
-    Lake rebuilds only what changed) then `lake env lean FILE` in that package's directory; lean's exit status, or 2 when
+    Lake rebuilds only what changed) then `lake lean FILE` in that package's directory; lean's exit status, or 2 when
     ``file`` is in no package, no `build` slot is granted, or the tree's dependencies can't be had. Never check.py."""
     file = file.removeprefix("./")
     base = (LA.COMMON.cache_dir() / RECORDS).resolve()
@@ -1020,10 +1022,10 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print) -> int:
             write_links(tree, links)
             mark(tree, package=pkg, phase="try")
             log(f"lean-try: {file} on {tree} ({n} files changed there, {time.monotonic() - t0:.0f} s; "
-                f"{'' if sandbox else 'no sandbox here, '}lake build +{mod}:deps, then lake env lean {rel})")
+                f"{'' if sandbox else 'no sandbox here, '}lake build +{mod}:deps, then lake lean {rel})")
             step, (rc, text) = f"lake build +{mod}:deps", build(pkg, tree, lake, [f"+{mod}:deps"], sandbox)
             if rc == 0:
-                step, (rc, text) = "lean", build(pkg, tree, lake, sandbox=sandbox, cmd=["env", "lean", rel])
+                step, (rc, text) = "lean", build(pkg, tree, lake, sandbox=sandbox, cmd=["lean", rel])
             log(f"lean-try: {file}: {step} exit {rc} in {time.monotonic() - t0:.0f} s")
             if rc and (healed := clashed(tree, closure(pkg), text)):
                 log(f"lean-try: {file}: an import clash between {' and '.join(healed)}, which this tree can leave when one "
@@ -1302,7 +1304,7 @@ def main(argv: list[str]) -> int:
                     "passed on the same Lean inputs or that a merge of main leaves a candidate of")
     ap.add_argument("--try", dest="try_", metavar="FILE",
                     help=f"elaborate FILE (from the repository's root) on the tree of a Lean slot of pool {FAST_POOL}: "
-                    "lake build of its imports, then lake env lean FILE; never check.py")
+                    "lake build of its imports, then lake lean FILE (lean with the module's options); never check.py")
     ap.add_argument("--build", nargs="+", metavar="FILE",
                     help=f"lake build the modules of these files (from the repository's root) on the tree of a Lean slot of pool "
                     f"{FAST_POOL}, as --try does, with no dependency fetched cold; its last line is `{BUILD_LINE}` and JSON "

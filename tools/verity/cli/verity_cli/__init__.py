@@ -22,8 +22,8 @@
     verity example NAME [ARGS]      examples/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its
                                     workload on its placement
     verity example --status         every example's protocol, workload, run and proof, and each one's next missing evidence
-    verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that
-                                    holds it, exiting with lean's status (on a project machine with --on NODE [--pool P])
+    verity lean try FILE            elaborate one Lean file, the edit loop: `lake lean --no-build FILE` in the Lake package
+                                    that holds it, exiting with lean's status (on a project machine with --on NODE [--pool P])
 """
 from __future__ import annotations
 
@@ -107,7 +107,8 @@ def _snapshot(tree: Path, tmp: Path) -> Path:
 
 
 def _lean_here(file: str) -> int:
-    """`lake env lean FILE` in the directory of the nearest lakefile above FILE, against that package's built imports."""
+    """`lake lean --no-build FILE` in the directory of the nearest lakefile above FILE: lean with the module's options
+    (`[leanOptions]`, which `lake env lean` drops) against that package's built imports, refused when one is out of date."""
     path = (Path(file) if Path(file).is_file() else _tree(file) / file).resolve()
     pkg = next((d for d in path.parents if any((d / name).is_file() for name in LAKEFILES)), None)
     if not path.is_file() or path.suffix != ".lean" or pkg is None:
@@ -119,14 +120,15 @@ def _lean_here(file: str) -> int:
         raise SystemExit(f"verity lean try: no `lake` here: `bash tools/verity/lean/setup.sh {where}` installs elan, the "
                          "toolchain and the package's dependencies, then `lake build` there builds its imports")
     rel = os.path.relpath(path, pkg)
-    print(f"verity lean try: lake env lean {rel} (in {where})", flush=True)
-    return subprocess.run([lake, "env", "lean", rel], cwd=pkg).returncode
+    print(f"verity lean try: lake lean --no-build {rel} (in {where})", flush=True)
+    return subprocess.run([lake, "lean", "--no-build", rel], cwd=pkg).returncode
 
 
 def _lean(args: list[str]) -> int:
-    ap = argparse.ArgumentParser(prog="verity lean try", description="Elaborate one Lean file: `lake env lean FILE` in the Lake "
-                                 "package that holds it (the nearest lakefile above FILE), against that package's built "
-                                 "imports (`lake build` there first), exiting with lean's status.")
+    ap = argparse.ArgumentParser(prog="verity lean try", description="Elaborate one Lean file: `lake lean --no-build FILE` "
+                                 "in the Lake package that holds it (the nearest lakefile above FILE), with the module's "
+                                 "options, against that package's built imports (`lake build` there first), exiting with "
+                                 "lean's status.")
     ap.add_argument("file", metavar="FILE", help="the .lean file: a path from here, or from the root of "
                     "the checkout you're in, which is the tree it elaborates")
     ap.add_argument("--on", metavar="NODE", help="elaborate it on a project machine instead")

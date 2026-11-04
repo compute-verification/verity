@@ -1,4 +1,4 @@
-"""`verity lean try FILE` without `--on`: `lake env lean FILE` in the directory of the nearest lakefile above FILE, with
+"""`verity lean try FILE` without `--on`: `lake lean --no-build FILE` in the directory of the nearest lakefile above FILE, with
 lean's exit status passed through, against a stand-in `lake` on PATH, so no Lean toolchain is needed.  With or without
 `--on`, it takes FILE from the checkout FILE is in (or the current directory's), not the one the CLI's code lives in."""
 from __future__ import annotations
@@ -22,7 +22,7 @@ def stand_in_lake(tmp_path: Path, monkeypatch, rc: int) -> Path:
     return called
 
 
-def test_try_runs_lake_env_lean_in_the_nearest_package_and_passes_its_status(tmp_path, monkeypatch, capsys):
+def test_try_runs_lake_lean_in_the_nearest_package_and_passes_its_status(tmp_path, monkeypatch, capsys):
     (tmp_path / "lakefile.toml").write_text('name = "Outer"\n')
     pkg = tmp_path / "Outer" / "Inner"
     (pkg / "Inner" / "Area").mkdir(parents=True)
@@ -31,8 +31,8 @@ def test_try_runs_lake_env_lean_in_the_nearest_package_and_passes_its_status(tmp
     file.write_text("theorem t : True := trivial\n")
     called = stand_in_lake(tmp_path, monkeypatch, 3)
     assert verity_cli.main(["lean", "try", str(file)]) == 3
-    assert called.read_text().splitlines() == [str(pkg.resolve()), "env lean Inner/Area/File.lean"]
-    assert f"verity lean try: lake env lean Inner/Area/File.lean (in {pkg.resolve()})" in capsys.readouterr().out
+    assert called.read_text().splitlines() == [str(pkg.resolve()), "lean --no-build Inner/Area/File.lean"]
+    assert f"verity lean try: lake lean --no-build Inner/Area/File.lean (in {pkg.resolve()})" in capsys.readouterr().out
 
 
 def test_try_refuses_a_file_in_no_package_and_remote_options_without_on(tmp_path, monkeypatch, capsys):

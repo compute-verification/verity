@@ -1,7 +1,7 @@
 ---
 name: lean-proofs
 description: >
-  How to work on Lean in Verity: where a new Lean file or package goes, the edit loop (verity lean try FILE, lake env lean
+  How to work on Lean in Verity: where a new Lean file or package goes, the edit loop (verity lean try FILE, lake lean
   in the file's package; scratch probes with #print axioms, exact? and trace_state; profiling a slow proof), building and auditing with
   tools/verity/lean/check.py and its fast path, stating assumptions as named Props, freezing and listing guarantees in
   lean-audit.json, moving them without a landing DM (--moved), the shape of a property, watching dependencies for
@@ -36,8 +36,8 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 ## Build, iterate, check
 
-- **The edit loop is `verity lean try FILE`**: `lake env lean FILE` in the Lake package that holds FILE, against its
-  built imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), exiting with lean's status. It
+- **The edit loop is `verity lean try FILE`**: `lake lean --no-build FILE` in the Lake package that holds FILE, with
+  the module's options (`autoImplicit = false`, which `lake env lean` drops), against its built imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), exiting with lean's status. It
   never writes a record. After editing a file others import, `lake build` its module, then try an importer. It also runs
   on a project machine with `--on` (the README).
 - **Build on a CPU machine.** Never `lake update`, and never change a `require`, a revision or `lean-toolchain` in a
