@@ -1,4 +1,5 @@
-"""`verity.core.protocols.pouw.circuit`'s word primitives and in-circuit hashes against their native counterparts."""
+"""`verity.core.protocols.pouw.circuit`'s word primitives and in-circuit hashes against their native counterparts, and its
+SHA-512 compression against the Boolean one."""
 from __future__ import annotations
 
 import hashlib
@@ -6,15 +7,18 @@ import random
 import struct
 from dataclasses import replace
 
+import numpy as np
 import pytest
 
 from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32_WRAP
 from verity.ml.circuits.types import Array
+from verity.ml.commitments.gates import lms
 
 from verity.core.protocols.pouw.circuit import words as W
-from verity.core.protocols.pouw.circuit.hashes import Emit, keccak_lanes, sha512, sha_words, shake256
+from verity.core.protocols.pouw.circuit.hashes import Emit, Sha512Compress, keccak_lanes, sha512, sha_words, shake256
 
 
 def _definition(name, n_in, n_out, body):
@@ -37,6 +41,26 @@ def test_sha512_matches_hashlib(nwords):
 
     out = evaluate(_definition(f"TSha{nwords}", 2 * len(ins), 16, body), [h for i in ins for h in words[i]])
     assert b"".join(((out[2 * i] << 32) | out[2 * i + 1]).to_bytes(8, "big") for i in range(8)) == hashlib.sha512(data).digest()
+
+
+def test_the_compression_is_the_boolean_one():
+    """`PouwSha512Compress_v1`, each 64-bit word as its (hi, lo) halves, is `gates.lms`'s Boolean ``Sha512Compress_v1``, each
+    word LSB first, on edge and random chaining values and blocks: a word form can't call the Boolean one, so this holds them
+    together."""
+    rng = random.Random(6)
+    ones = (1 << 64) - 1
+    cases = [([0] * 8, [0] * 16), ([ones] * 8, [ones] * 16)]
+    cases += [([rng.getrandbits(64) for _ in range(8)], [rng.getrandbits(64) for _ in range(16)]) for _ in range(4)]
+
+    def bits(rows):
+        return np.array([[(v >> k) & 1 for v in row for k in range(64)] for row in rows], dtype=np.uint8)
+
+    out = evaluate_bits(bind(lms.Sha512Compress), bits([cv for cv, _ in cases]), bits([block for _, block in cases]))
+    for (cv, block), got in zip(cases, np.asarray(out).reshape(len(cases), -1)):
+        halves = evaluate(Sha512Compress, [h for v in cv for h in (v >> 32, v & W.M32)],
+                          [h for v in block for h in (v >> 32, v & W.M32)])
+        assert [(halves[2 * i] << 32) | halves[2 * i + 1] for i in range(8)] == \
+            [sum(int(got[64 * i + k]) << k for k in range(64)) for i in range(8)], (cv, block)
 
 
 @pytest.mark.parametrize("nlanes,nbytes", [(1, 4), (7, 64), (16, 136), (17, 200), (20, 300)])

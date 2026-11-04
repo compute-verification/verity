@@ -17,7 +17,8 @@ row of W.
 Every array is of `Value<1>`.  A byte string is bits in byte order, bit t being bit t mod 8 of byte ⌊t/8⌋ (hm96's order);
 an integer is bits least significant first.  A big-endian integer of N bytes and its byte string differ by
 `PousByteSwap_v1{N}`, which is wiring.  A chaining value is SHA-512's eight words, each least significant bit first, and
-every compression is `answer_circuit`'s `PousSha512Compress_v1` (core's `compress_gadget`).
+every compression is `gates.sha512.compress_gadget`: a midstate's blocks after its first are calls of `gates.lms`'s
+``Sha512Compress_v1`` (`answer_circuit.compress_call`).
 
 **The decode** (`schemes.p2.decode_segment` for one label):
 
@@ -51,7 +52,7 @@ from verity.ml.circuits.refs import Coll, concat
 from verity.ml.commitments.gates.sha512 import IV, pad_tail
 from verity.ml.commitments.scheme import DIGEST_BYTES
 
-from .answer_circuit import PousSha512Compress, compress, from_words
+from .answer_circuit import compress, compress_call, from_words
 from .circuit import PousModSquare, _check, _traced_body, bits, column_sum
 
 __all__ = ["PousByteSwap", "PousP2Decode", "PousP2Finish", "PousP2Negate", "PousP2Sigma", "PousP2Sq", "PousSha512Ctr",
@@ -131,7 +132,7 @@ def _mid_sig(S):
 def _mid_body(B, S, prefix):
     cv = B.call(bind(PousSha512Head), prefix[0:1024])
     for i in range(1, S.M):
-        cv = B.call(bind(PousSha512Compress), cv, prefix[1024 * i:1024 * (i + 1)])
+        cv = compress_call(B, cv, prefix[1024 * i:1024 * (i + 1)])
     return cv
 
 

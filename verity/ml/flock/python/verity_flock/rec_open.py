@@ -46,9 +46,9 @@ an opening of ``H ≤ 16`` reads word 0 alone, so its gates are the same at eith
 
 `_steps` states the computation once over two interpreters: `forms` for the M0 unit (`unit_circuit`: constant blocks fold, the
 products are summed leaf by leaf as `rec_residuals.residual_forms` sums them) and the IR for the Definition (`RecOpen`'s body:
-each compression a Call of `RecSha512Compress_v1`, traced from `sha512.compress_gadget`, so the descriptor holds one
-compression's gates, and the consistency term a Call of ``GfResiduals_v1{cons_structure(LANES)}``). `open_ref` (over
-``hashlib`` and `gf2k.mul`) is the reference of both.
+each compression a Call of `gates.lms`'s ``Sha512Compress_v1``, so the descriptor holds one compression's gates, and the
+consistency term a Call of ``GfResiduals_v1{cons_structure(LANES)}``). `open_ref` (over ``hashlib`` and `gf2k.mul`) is the
+reference of both.
 """
 from __future__ import annotations
 
@@ -62,13 +62,14 @@ from verity.ml.circuits.refs import Coll, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import ONE, ZERO
+from verity.ml.commitments.gates.lms import Sha512Compress
 from verity.ml.commitments.gates.sha512 import IV, compress_gadget, pad_tail
 from verity.ml.circuits.ops.boolean import gf2k as G
 
 from .rec_residuals import residual_forms
 from .sha512_circuit import word_bit
 
-__all__ = ["ACC_WORDS", "DIRS_BITS", "DIRS_WORDS", "OUT_WORDS", "PORTS", "RecOpen", "RecSha512Compress", "acc_ref", "aux_words", "coef_words",
+__all__ = ["ACC_WORDS", "DIRS_BITS", "DIRS_WORDS", "OUT_WORDS", "PORTS", "RecOpen", "acc_ref", "aux_words", "coef_words",
            "compressions", "cons_structure", "definition", "dirs_words", "elements", "expected", "open_ref", "pack", "port_words",
            "row_words", "unit_circuit", "words"]
 
@@ -253,7 +254,7 @@ class _Ir:
         return [c.refs[i] for i in range(len(c.refs))]
 
     def compress(self, cv: list, msg: list) -> list:
-        return self._list(self.B.call(RecSha512Compress, Coll(DIGEST, TR._refs(cv)), Coll(BLOCK, TR._refs(msg))))
+        return self._list(self.B.call(Sha512Compress, Coll(DIGEST, TR._refs(cv)), Coll(BLOCK, TR._refs(msg))))
 
     def _pairs(self, fn, a: list, b: list) -> list:
         return self._list(self.B.batch(fn, Coll(Array(2, Array(len(a), BIT)), TR._refs(a + b)), axes=(1,)))
@@ -268,10 +269,6 @@ class _Ir:
 
 
 # --- the Definitions ---------------------------------------------------------------------------------------------------------
-
-RecSha512Compress = TR.definition(
-    "RecSha512Compress", 1, lambda C, *e: compress_gadget(C, list(e[:8]), list(e[8:])), (("cv", DIGEST), ("msg", BLOCK)), DIGEST,
-    doc="One SHA-512 compression (FIPS 180-4 §6.4.2) with the feed-forward, words LSB first: sha512.compress_gadget")
 
 PORTS = ("row", "aux", "acc", "coef", "dirs")
 
