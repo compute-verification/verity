@@ -10704,14 +10704,18 @@
    ]
   },
   "Definitions.NetworkCertifier.SampledAudit": {
-   "digest": "50cb1d3f166211f0f040e72fa49f621c506d29a7c6cfd259c698856f6e7ebaae",
+   "digest": "2c12800a83fb83f7d30ff60baa8eb524d261da018f9548282a2da9f12e53f6f9",
    "definitions": {
-    "NetTiming.BoundaryGates": "fa62e710a7aac7d4f76bb7c7c2a4400f4d483ad59c9d5d7adf193c0ece654d55",
-    "NetTiming.BoundaryGates.Fits": "ebd05c19dd122a05cfe405333069c75efe8856277437c8e6766d9f1f6f2c233b",
+    "NetTiming.BoundaryGates": "d3e54616f8da666218af8aa727cc81d6b675fb41bea0a8cf49691b641f30c7a3",
+    "NetTiming.BoundaryGates.Fits": "9c3804d342282e4cb7c0e4657540d573ee43c40e686709ff8e0fc22c9bfc5b10",
+    "NetTiming.BoundaryGates.WiresFit": "d138d04cb945a90178aa8421c073488d39becadffef24a17605c93d18663a360",
     "NetTiming.BoundaryGates.egress": "7b6781ceed9e705bdcd2f73da44515d154ded194be9ce8c07e8a80adaca1765c",
     "NetTiming.BoundaryGates.ingress": "0cd000b86e85138614ec3ab7313538273046b378ee4a37b1718995198a41da24",
+    "NetTiming.BoundaryGates.wires": "ec18eaece927d5f4897fdbb09627b8ec350567de081d9e7f260fd3b2ed89f21e",
     "NetTiming.Depends": "f211d957c793800d99efe76d3fbd2afc44b357018a916000b6358941e750ac83",
+    "NetTiming.DependsWired": "968b74120864ef6de7ebe2dba81192beef61215a9a0fb361c0642ef7f7476bbc",
     "NetTiming.ScopeAcc": "c7fd760721042dfff5fa8908b38893d3749f30682f2cda072d1b29a9550d03f5",
+    "NetTiming.WiresAcyclic": "d122d0fc7f6b27fce9c33e2f68a116089b4b2a26ce6a9fe431fb103ae7864869",
     "NetTiming.slotGates": "18b5cf00d01de76454aa5c83b4f78ecbfb92810ca9b0389aa74215a1d9372e0d"
    },
    "guarantees": [
@@ -20873,13 +20877,13 @@
    ]
   },
   "Properties.NetworkScan": {
-   "digest": "39a59b535062c28193d1ba1cdff3ab472ccb53b6d57fb7143bf7a1ff940163db",
+   "digest": "3da1d8b8e22f7bb297057f8817eddb6c3277fd0db93c4e73904334c5989a7f43",
    "definitions": {
     "Properties.NetworkScan.ScanFits": "5f2430c038392abe606d6578beef8615a1e0b800b56c8205341082a209c10906",
     "Properties.NetworkScan.ScanScopeAcc": "fb8120b5845dcfc226891abe77600ffbe65657129370ba72d7676fa8ed984c8a",
     "Properties.NetworkScan.gateAt": "e4aebb4c0d3ac773a86f2760eaa99f09c90a0fe73f2465ed07b03be6aa8f9572",
-    "Properties.NetworkScan.layOf": "5394737e0797755936169638c28c5a322d5fea963856a47cae16609f69372396",
-    "Properties.NetworkScan.scanLayout": "e20dc682d93b04e93b017c91e7b177e5f44822a56f35c62b63432b9e76b975f0"
+    "Properties.NetworkScan.layOf": "64d91ce99468857f3d877c2a2b2273851457ff06c7a28be50ea807bf9199b530",
+    "Properties.NetworkScan.scanLayout": "ab30651071a51b97ef5a452bbc5382c0f4d54187be1ef25f1fb2a1a15e3ae260"
    },
    "guarantees": [
     "Properties.NetworkScan.scanFits",

@@ -20,8 +20,9 @@ prover's registered inputs pinned: `AsReg`) with that read-back, so the content 
 audits, not from a premise:
 
 * each window's audit, at a statement in its scope, fails the leak relation at the network certifier's rows with
-  probability at most `δ + ε_ks + ε_bind + Pr[B_tap]` at that statement (`Claims.Sampling.KS`'s errors, and `B_tap` the
-  collisions between the extracted trace's openings and the network certifier's, under `CommitmentScheme.Binds`);
+  probability at most `δ + ε_ks + ε_bind + Pr[B_tap]` at that statement (the errors of sampling at the incorrect set,
+  `KSWired`, and `B_tap` the collisions between the extracted trace's openings and the network certifier's, under
+  `CommitmentScheme.Binds`);
 * where the network certifier registers its observations, the secrets of a covert sender in the server whose every
   window meets its good event (`WindowGood`) number at most
   `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`: the sender moves at most
@@ -31,9 +32,22 @@ audits, not from a premise:
 The union of the windows' failures over the monitoring period's live coins is not stated here. `WindowGood` is the
 event the first part bounds, plus one condition no proof here gives: the registration's values at the prover's
 registered inputs, which the registration's commitment binds. The network certifier's rows are not pinned: they vary
-with the secret. The first part covers an extracted trace that leaves them outside the faulty units, where every
-transfer gate is opened; the count charges a faulty proof block's rows through the Program, from the free inputs, the
-faulty sets, their committed bits and the timing. A proof block the sample missed is in the faulty set.
+with the secret. The first part covers an extracted trace that leaves them outside the incorrect proof blocks, where
+every transfer gate is opened; the count charges an incorrect proof block's rows through the Program, from the free
+inputs, the possible incorrect sets, their committed bits and the timing. A proof block the sample missed is in the
+incorrect set.
+
+**Wired rows.** The layout's wiring (`BoundaryGates.wires`) carries each wired input gate's writer's value into it, so a
+wired gate is no free input, and the content term `2^#(freeInputs_i \ reg_i)` leaves out the wired rows as it leaves out
+the ingress. A proof block that holds or reads a wired row whose committed value is not its writer's is wire-wrong, and
+the sets the count ranges over are incorrect sets, the faulty and the wire-wrong proof blocks (`incorrect`): a drawn
+proof block's session shows its wired rows right (`KSWired`), so an undrawn wire-wrong one is in the incorrect set at the
+same error. Each incorrect proof block is charged in full, at all its committed gates (`faultyBits`): its inputs, the
+wired rows among them, its returned gates and the gates another proof block reads, so a wrong pass-through proof block,
+which returns an input it holds, pays in full too. An incorrect proof block reaches the rest of the circuit only through
+its committed gates, each held at one bit: those it returns or another proof block reads, and its inputs, among them a
+first copy of an input bit that later copies in other proof blocks read through their wires. A free input that writes a
+wire stays a free input.
 
 `PeriodLeakRegistered` removes that condition. Its first part bounds the leak relation with the registered inputs at
 the values the registration opens under the statement's roots (`RegOpens`), adding `Pr[B_reg]`, and its count is over
@@ -49,10 +63,11 @@ open Claims.Sampling Finset
 set_option linter.unusedVariables false
 
 /-- **The leak through the network certifier over a monitoring period of accepted sampled audits.** At every
-deployment `D` of the sampled verifier where `Claims.Sampling.KS` holds and the trace's commitment binds
+deployment `D` of the sampled verifier where sampling at the incorrect set holds at the layout's wiring (`KSWired`,
+which is `Claims.Sampling.KS` with no wires) and the trace's commitment binds
 (`CommitmentScheme.Binds`), with a decoder that lists every trace within Flock's radius, over a monitoring period of `n`
 windows registered as `sw i` (partition `Pw i`, registered values `ρ i`, operator `op i`, and `β i` bounding the
-committed bits of each of its possible faulty sets), with the network certifier's openings `tops s` at each statement,
+committed bits of each of its possible incorrect sets), with the network certifier's openings `tops s` at each statement,
 and a network certifier that runs its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
 (`TapRecord.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
 and the observations of the monitoring period's windows (its record of those cells, in the format `f`):
@@ -62,11 +77,19 @@ and the observations of the monitoring period's windows (its record of those cel
   (`TapOpens`), a covert sender in the server, whose secrets a decoder recovers from the client's view of the server
   side: its secrets whose every window meets `WindowGood`, at that window's statement `x z i` and extracted witness
   `wit z i`, number at most
-  `#Ss · ∏_c (cap c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`. -/
+  `#Ss · ∏_c (cap c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`.
+
+A wired gate is no free input, so `freeInputs_i` leaves out the wired rows, while a free input that writes a wire stays
+in it; and the sets `faultySets_i(δ)` counts are incorrect sets, the faulty and the wire-wrong proof blocks. Each
+incorrect proof block is charged in full, at all its committed gates (`faultyBits`): its inputs, the wired rows among
+them, its returned gates and the gates another proof block reads, so a wrong pass-through proof block, which returns an
+input it holds, pays in full too. An incorrect proof block reaches the rest of the circuit only through its committed
+gates, each held at one bit: those it returns or another proof block reads, and its inputs, among them a first copy of
+an input bit that later copies in other proof blocks read through their wires. -/
 def PeriodLeakAccepted : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-    (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hks : KS H D) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S)
+    (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)
+    (lay : AuditStatement → BoundaryGates L S) (hks : KSWired H D (fun s => (lay s).wires))
     (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
     (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (hPw : ∀ i, D.partition (sw i) = some (Pw i))

@@ -1,14 +1,17 @@
 import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Proofs.NetworkCertifier.Advice
+import Proofs.NetworkCertifier.Wires
 import Mathlib.Tactic.Ring
 
 /-!
 # The sampled audit's charge (`Guarantees.SampledCharge`)
 
 A gate's value under held gates reads only the gates it depends on (`valOver_congr_inp`). The layout fits the program
-(`BoundaryGates.Fits`), so step `t`'s egress gates depend on no later step's ingress, and holding every committed gate
-of the faulty units at the value it takes over the whole horizon leaves each step's egress rows as they were
-(`valOver_hold`, `rows_holdAll`). So an accepted sequence is accepted with advice that holds each of those gates at one
+(`BoundaryGates.Fits`), so step `t`'s egress gates depend on no later step's ingress through reads or wires, a wired
+gate resolves alike at two ingresses that agree where it depends on them (`resolveWires_congr_inp`), and holding every
+committed gate of the incorrect proof blocks at the value it takes over the
+whole horizon, the wires resolved, leaves each step's egress rows as they were (`valOver_hold`, `resolveWires_hold`,
+`rows_holdAll`). So an accepted sequence is accepted with advice that holds each of those gates at one
 bit, and the count is Theorem 3's with that advice (`encard_acceptedFaulty_le`): the inputs besides the ingress, one bit
 per committed gate of the faulty units, and the jitter code, summed over the possible faulty sets
 (`encard_accSeqsSampled_le`). At `δ ≥ miss(1)` the only possible faulty set is empty (`eq_empty_of_mem_faultySets`).
@@ -19,63 +22,6 @@ namespace NetTiming
 open Finset Claims.Sampling
 
 variable {L K S : ℕ}
-
-/-! ### A gate's value reads only what it depends on -/
-
-theorem mapM_congr_option {ws : List ℕ} {rd rd' : ℕ → Option Bool} (h : ∀ i ∈ ws, rd i = rd' i) :
-    ws.mapM rd = ws.mapM rd' := by
-  induction ws with
-  | nil => rfl
-  | cons w ws ih =>
-    simp only [List.mapM_cons]
-    rw [h w List.mem_cons_self, ih fun i hi => h i (List.mem_cons_of_mem w hi)]
-
-theorem bgate_val_congr (x : BGate) {rd rd' : ℕ → Option Bool} (own : Option Bool)
-    (h : ∀ i ∈ x.reads, rd i = rd' i) : x.val rd own = x.val rd' own := by
-  cases x with
-  | input => rfl
-  | const b => rfl
-  | not i => simp only [BGate.val, h i (by simp [BGate.reads])]
-  | and ws => simp only [BGate.val, mapM_congr_option (ws := ws) fun i hi => h i (by simpa [BGate.reads] using hi)]
-  | xor ws => simp only [BGate.val, mapM_congr_option (ws := ws) fun i hi => h i (by simpa [BGate.reads] using hi)]
-
-theorem depends_of_read {C : Prog} {g : ℕ} {x : BGate} (hx : C.gates[g]? = some x) {i : ℕ} (hi : i ∈ x.reads) :
-    Depends C i g :=
-  Relation.ReflTransGen.single (by simp [hx, hi])
-
-theorem valOver_of_some (C : Prog) (inp : ℕ → Bool) {free : ℕ → Option Bool} {g : ℕ} {b : Bool}
-    (hf : free g = some b) : valOver C inp free g = b := by
-  rw [valOver]
-  simp only [hf]
-
-theorem valOver_of_none_none (C : Prog) (inp : ℕ → Bool) {free : ℕ → Option Bool} {g : ℕ}
-    (hf : free g = none) (hx : C.gates[g]? = none) : valOver C inp free g = false := by
-  rw [valOver]
-  simp only [hf, hx]
-
-theorem valOver_of_none_some (C : Prog) (inp : ℕ → Bool) {free : ℕ → Option Bool} {g : ℕ} {x : BGate}
-    (hf : free g = none) (hx : C.gates[g]? = some x) :
-    valOver C inp free g =
-      (x.val (fun i => if _h : i < g then some (valOver C inp free i) else some false) (some (inp g))).getD false := by
-  rw [valOver]
-  simp only [hf, hx]
-
-/-- Inputs that agree on every gate `g` depends on give `g` one value. -/
-theorem valOver_congr_inp (C : Prog) {inp inp' : ℕ → Bool} (free : ℕ → Option Bool) (g : ℕ)
-    (h : ∀ i, Depends C i g → inp i = inp' i) : valOver C inp free g = valOver C inp' free g := by
-  induction g using Nat.strong_induction_on with
-  | _ g ih =>
-    rcases hf : free g with _ | b
-    · rcases hx : C.gates[g]? with _ | x
-      · rw [valOver_of_none_none C inp hf hx, valOver_of_none_none C inp' hf hx]
-      · rw [valOver_of_none_some C inp hf hx, valOver_of_none_some C inp' hf hx, h g Relation.ReflTransGen.refl]
-        congr 1
-        apply bgate_val_congr x
-        intro i hi
-        split_ifs with hig
-        · rw [ih i hig fun j hj => h j (hj.trans (depends_of_read hx hi))]
-        · rfl
-    · rw [valOver_of_some C inp hf, valOver_of_some C inp' hf]
 
 /-! ### Causality: a step's egress reads no later ingress -/
 
@@ -100,18 +46,18 @@ theorem length_ingressUpTo {In : Type} (op : ℕ → List (Obs L K S) → In) (o
     (ingressUpTo op o m).length = m + 1 := by
   simp [ingressUpTo]
 
-/-- A gate that an egress gate of step `t` depends on reads the same input whether the ingress runs to `t` or further:
-by causality it is no ingress gate of a later step. -/
+/-- A gate that an egress gate of step `t` depends on through reads and wires reads the same input whether the ingress
+runs to `t` or further: by causality it is no ingress gate of a later step. -/
 theorem inputOf_eq_of_causal {lay : BoundaryGates L S} {C : Prog} {n t : ℕ} (hfits : lay.Fits C n) (ht : t < n)
     {ℓ : Fin L} {σ : Fin S} {e : ℕ} (he : e ∈ slotGates (lay.egress t ℓ σ)) {ins ins' : List (List Bool)}
     (hlen : ins.length = t + 1) (hlen' : t + 1 ≤ ins'.length) (hlen'' : ins'.length ≤ n)
-    (hpre : ∀ j ≤ t, ins.getD j [] = ins'.getD j []) (a : ℕ → Bool) {i : ℕ} (hi : Depends C i e) :
+    (hpre : ∀ j ≤ t, ins.getD j [] = ins'.getD j []) (a : ℕ → Bool) {i : ℕ} (hi : DependsWired C lay.wires i e) :
     lay.inputOf n ins a i = lay.inputOf n ins' a i := by
   unfold BoundaryGates.inputOf
   have hnone : ∀ j, t + 1 ≤ j → j < ins'.length →
       ((lay.ingress j).findIdx? (· == i)).map (j, ·) = none := by
     intro j h1 h2
-    have hm : i ∉ lay.ingress j := fun hm => hfits.2.2 t ht j (by omega) (by omega) ℓ σ e he i hm hi
+    have hm : i ∉ lay.ingress j := fun hm => hfits.2.2.1 t ht j (by omega) (by omega) ℓ σ e he i hm hi
     rw [Option.map_eq_none_iff, List.findIdx?_eq_none_iff]
     intro x hx
     simp only [beq_eq_false_iff_ne, ne_eq]
@@ -163,27 +109,69 @@ theorem rowOf_congr {val val' : ℕ → Bool} {p : Fin S → ℕ × List ℕ}
   rw [h σ (p σ).1 (by simp [slotGates]),
     List.map_congr_left fun g hg => h σ g (by simp [slotGates, hg])]
 
+/-- **Holding gates at their resolved values leaves the resolution**: with every gate of `G` held at what it computes
+on the resolved inputs, where `free` holds only gates of `G`, each wired gate resolves as before. By induction on the
+wired gates the rank puts below it: both resolutions are fixed points (`resolveWires_fix`), the hold leaves the writer
+(`valOver_hold`), and the writer's wired inputs rank lower. -/
+theorem resolveWires_hold {C : Prog} {lay : BoundaryGates L S} {k : ℕ} (hwf : lay.WiresFit C k) (r : ℕ → ℕ)
+    (hr : ∀ g w g', lay.wires g = some w → lay.wires g' ≠ none → Depends C g' w → r g' < r g)
+    (inp : ℕ → Bool) (free : ℕ → Option Bool) (G : Finset ℕ) (hG : ∀ g b, free g = some b → g ∈ G) :
+    ∀ m g w, lay.wires g = some w → (wiredBelow C lay.wires r g).card < m →
+      resolveWires C lay.wires inp
+          (fun g => if g ∈ G then some (valOver C (resolveWires C lay.wires inp free C.gates.length) free g) else none)
+          C.gates.length g =
+        resolveWires C lay.wires inp free C.gates.length g := by
+  intro m
+  induction m with
+  | zero => intro g w _ hc; exact absurd hc (Nat.not_lt_zero _)
+  | succ m ih =>
+  intro g w hw hc
+  rw [resolveWires_fix hwf r hr inp free hw, resolveWires_fix hwf r hr inp _ hw,
+    valOver_hold C (resolveWires C lay.wires inp free C.gates.length) (resolveWires C lay.wires inp free C.gates.length)
+      free G hG w (fun _ _ => rfl) w Relation.ReflTransGen.refl]
+  refine valOver_congr_inp C _ w fun g' hdep => ?_
+  cases hw' : lay.wires g' with
+  | none => rw [resolveWires_of_none hw', resolveWires_of_none hw']
+  | some w' =>
+    have hlt := card_wiredBelow_lt_of_depends hwf hr hw hw' hdep
+    exact ih g' w' hw' (by omega)
+
 /-- **The advice that holds each gate of `G` at one bit**: its value over the whole horizon, on the ingress `o`'s
-operator moves give. -/
+operator moves give, the wires resolved. -/
 noncomputable def holdAll (C : Prog) (lay : BoundaryGates L S) (n : ℕ) (op : ℕ → List (Obs L K S) → List Bool)
     (o : List (Obs L K S)) (a : ℕ → Bool) (free : ℕ → Option Bool) (G : Finset ℕ) : ℕ → Option Bool :=
-  fun g => if g ∈ G then some (valOver C (lay.inputOf n (ingressUpTo op o (n - 1)) a) free g) else none
+  fun g => if g ∈ G then
+    some (valOver C (resolveWires C lay.wires (lay.inputOf n (ingressUpTo op o (n - 1)) a) free C.gates.length) free g)
+  else none
 
 theorem rows_holdAll (C : Prog) (lay : BoundaryGates L S) (n : ℕ) (hfits : lay.Fits C n)
     (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)) (p : (ℕ → Bool) × (ℕ → Option Bool))
     (G : Finset ℕ) (hG : ∀ g b, p.2 g = some b → g ∈ G) {t : ℕ} (ht : t < n) :
     (circuitProgram C lay n).rows t (ingressUpTo op o t) p =
       (circuitProgram C lay n).rows t (ingressUpTo op o t) (p.1, holdAll C lay n op o p.1 p.2 G) := by
+  have hwf := hfits.2.2.2
+  obtain ⟨r, hr⟩ := hwf.2
   funext ℓ
   simp only [circuitProgram]
   apply rowOf_congr
   intro σ e he
-  apply valOver_hold C _ _ p.2 G hG e _ e Relation.ReflTransGen.refl
-  intro i hi
-  apply inputOf_eq_of_causal hfits ht he (length_ingressUpTo op o t)
-    (by rw [length_ingressUpTo]; omega) (by rw [length_ingressUpTo]; omega) _ p.1 hi
-  intro j hj
-  rw [ingressUpTo_getD op o [] hj, ingressUpTo_getD op o [] (by omega)]
+  have hin : ∀ j, DependsWired C lay.wires j e →
+      lay.inputOf n (ingressUpTo op o t) p.1 j = lay.inputOf n (ingressUpTo op o (n - 1)) p.1 j := fun j hj =>
+    inputOf_eq_of_causal hfits ht he (length_ingressUpTo op o t) (by rw [length_ingressUpTo]; omega)
+      (by rw [length_ingressUpTo]; omega)
+      (fun j' hj' => by rw [ingressUpTo_getD op o [] hj', ingressUpTo_getD op o [] (by omega)]) p.1 hj
+  have hres : ∀ i, Depends C i e → ∀ free : ℕ → Option Bool,
+      resolveWires C lay.wires (lay.inputOf n (ingressUpTo op o t) p.1) free C.gates.length i =
+        resolveWires C lay.wires (lay.inputOf n (ingressUpTo op o (n - 1)) p.1) free C.gates.length i :=
+    fun i hi free => resolveWires_congr_inp C lay.wires free _ i fun j hj =>
+      hin j (hj.trans (dependsWired_of_depends hi))
+  refine (valOver_hold C _ _ p.2 G hG e (fun i hi => hres i hi p.2) e Relation.ReflTransGen.refl).trans
+    (valOver_congr_inp C _ e fun i hi => ?_)
+  cases hw : lay.wires i with
+  | none => rw [resolveWires_of_none hw, resolveWires_of_none hw]
+  | some w =>
+    rw [hres i hi p.2, hres i hi]
+    exact (resolveWires_hold hwf r hr _ p.2 G hG _ i w hw (card_wiredBelow_lt (wired_lt hwf hw))).symm
 
 /-! ### The count -/
 
@@ -231,7 +219,9 @@ theorem encard_acceptedFaulty_le (C : Prog) (P : Partition) (lay : BoundaryGates
     refine ⟨hacc.choose_spec.1, fun g b hgb => mem_faultyGateSet (hacc.choose_spec.2.choose_spec.1 g b hgb),
       hacc.choose_spec.2.choose_spec.2⟩
   let code : List (Obs L K S) → (ℕ → Bool) × (↥G → Bool) × (Fin n → ℕ) := fun o =>
-    ((adv o).1, (fun g => valOver C (lay.inputOf n (ingressUpTo op o (n - 1)) (adv o).1) (adv o).2 g), jitterCode o)
+    ((adv o).1, (fun g => valOver C
+      (resolveWires C lay.wires (lay.inputOf n (ingressUpTo op o (n - 1)) (adv o).1) (adv o).2 C.gates.length)
+      (adv o).2 g), jitterCode o)
   have hinj : Set.InjOn code Sq := by
     intro o ho o' ho' h
     simp only [code, Prod.mk.injEq] at h

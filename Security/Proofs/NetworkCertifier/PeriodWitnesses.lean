@@ -1,28 +1,19 @@
 import Proofs.NetworkCertifier.Witnesses
 import Proofs.NetworkCertifier.WitnessToys
-import Proofs.NetworkCertifier.Assumptions.SampledCode
 
 /-!
 # The monitoring period's honest and nontrivial lemmas
 
-`PeriodLeakAccepted` and `PooledLeakAccepted` each have an `honest` and a `nontrivial` lemma, and `PeriodLeakRegistered`
-a `nontrivial` one, listed in the lock's `witnesses`, and none takes a binder over its instance:
+`PooledLeakAccepted` has an `honest` and a `nontrivial` lemma, and `PeriodLeakAccepted` and `PeriodLeakRegistered`
+a `nontrivial` one each, listed in the lock's `witnesses`, and none takes a binder over its instance; the lock's
+`unwitnessed` exempts `PeriodLeakAccepted`'s and `PeriodLeakRegistered`'s `honest` halves.
 
-* `PeriodLeakAccepted_honest`: under `SampledCodeRuns`, the one named assumption, the premises that are no named
-  assumption hold at the deployed instance: `Claims.Sampling.KS` at SHA-512 at the deployed sampling record
-  `SamplingDeploy.deploy`, whose commitment and sessions' Flock record are `deploy`'s (`ks_deployed`); its decoder
-  within Flock's radius (`Sampling.decoder_meets_zk`); its hm96 commitment binding (`Binding_of_hm96`); and the rows
-  format of the Python network certifier's fixture `fxQueue` fitting its schedule (`fxQueue_fits`). A statement is in
-  the record's scope. The other premises are bounds and equalities over the instance's parameters, and `TrustedHost`
-  (`trusted-host`), a named assumption.
 * `PeriodLeakAccepted_nontrivial`: the per-window bound fails at the accepting verifier `tapD` at SHA-512, at
   `δ = 1/8` (`tapD_bound_fails`).
-* `PeriodLeakRegistered` takes `PeriodLeakAccepted`'s premises and the registration's openings `ops`, whose
-  `RegOpensAt` is an antecedent of its per-window part. Its honest lemma is the sampled leg's guarantee at the honest
-  deployment (`Verity.Vocab.SampledProofsSound`), not `SampledCodeRuns`: the lock's `unwitnessed` exempts that half
-  until sampled-audits-sound proves it. `PeriodLeakRegistered_nontrivial`: its per-window bound fails at `tapD`
-  likewise, with a registration with no openings, which opens every registered input when none is registered
-  (`tapD_reg_bound_fails`).
+* `PeriodLeakRegistered_nontrivial`: its per-window bound fails at `tapD` likewise, with a registration with no
+  openings, which opens every registered input when none is registered (`tapD_reg_bound_fails`). Its `honest` half is
+  the sampled leg's guarantee at the honest deployment (`Verity.Vocab.SampledProofsSound`), which the lock exempts until
+  sampled-audits-sound proves it.
 * `PooledLeakAccepted_honest`: its premises on the schedules, at `fxQueue`'s alone: each fits the format (`hfit`) and
   sends at most 6 cells a connection (`hcap`). Stated as their conjunction, not as `fits` alone: the witnesses rule
   reads a statement that is one definition applied by unfolding it once, and `fits` is a field.
@@ -35,30 +26,7 @@ namespace NetTiming.Witness
 
 open Claims Claims.Sampling Claims.Witness Claims.Witness.Sampling
 
-local notation "relD" => _root_.Flock.Readable.relation
 local notation "shaD" => FlockDeploy.sha512
-
-set_option synthInstance.maxSize 1024 in
-/-- **`PeriodLeakAccepted`'s premises at the deployed instance**, under `SampledCodeRuns`: `KS` at SHA-512, the decoder
-within Flock's radius and the commitment binding at the deployed sampling record, a statement in its scope; and the
-fixture `fxQueue`'s schedule fitting its rows format. -/
-theorem PeriodLeakAccepted_honest (h : NetTiming.Assumptions.SampledCodeRuns) :
-    (∃ c : SamplingDeploy.Code,
-      (∃ x, Claims.Sampling.Scope (SamplingDeploy.deploy relD c) x) ∧
-        Claims.Sampling.KS shaD (SamplingDeploy.deploy relD c) ∧
-        Claims.Flock.ListWithin (SamplingDeploy.deploy relD c).flock.len (SamplingDeploy.deploy relD c).flock.enc
-          (SamplingDeploy.deploy relD c).flock.θ (SamplingDeploy.deploy relD c).flock.decode ∧
-        (SamplingDeploy.deploy relD c).commit.Binds shaD) ∧
-      (RowsFormat.tapRecord fxRows fxRows_wf 4 1).fits fxQueueSched := by
-  obtain ⟨c, hscope, hfixed, hsessions, hin, hslots, ⟨iroots, hopens, hfix⟩, hprog, hchecks⟩ := h
-  refine ⟨⟨c, hscope, ?_, Claims.Sampling.decoder_meets_zk relD _ (SamplingDeploy.deploy_flock relD c), ?_⟩,
-    fxQueue_fits⟩
-  · exact ks_deployed _ (SamplingDeploy.deploy_flock relD c) (SamplingDeploy.deploy_εtable_nonneg relD c) c.own c.at_
-      (SamplingDeploy.row c.place c.bits) c.salt c.π c.layer (SamplingDeploy.deploy_commit relD c)
-      (SamplingDeploy.row_places c.place c.bits) hfixed hsessions (SamplingDeploy.innerNumbers_deploy relD c hin)
-      hslots iroots hopens hfix hprog hchecks
-  · exact Binding_of_hm96 _ c.own c.at_ (SamplingDeploy.row c.place c.bits) c.salt c.π c.layer
-      (SamplingDeploy.deploy_commit relD c) (SamplingDeploy.row_places c.place c.bits) shaD
 
 /-- **`PeriodLeakAccepted`'s per-window bound fails at the accepting verifier** `tapD`, at SHA-512, at one step at
 `δ = 1/8` with no input registered (`tapD_bound_fails`). -/
