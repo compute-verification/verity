@@ -31,7 +31,8 @@ added, a malformed key, nonce, root, spec, after or coins, a root or key sampled
 round of no tree sampled earlier, of a stream the tree lacks, out of order, opened twice or past the tree's rounds or
 block; a record on no logged tree or on another than the one logged under its root, its link's roots or points edited, a
 round's coins, count or message edited, a round added or swapped, a stream renamed, each malformed form, its link
-unopened, a tree two sessions use, or one none does. The release logs of `RELEASED`, `READ` and `DRAW_COINS` hold tree
+unopened, a tree two sessions use, or one none does; and a tree that opens a round its record doesn't record (a
+stream's next round, the link's stream again, a round or a stream the record leaves out). The release logs of `RELEASED`, `READ` and `DRAW_COINS` hold tree
 lines among their roots and releases too, and `RELEASED` a root or a release relabelled a tree's. Each piece answers
 ``{"refused": why}`` where the challenger refuses, so the reasons are compared too.
 """
@@ -1906,7 +1907,9 @@ def coin_trees_case(rng: random.Random, name: str) -> Any:
 SESSION_TREES_NAMES = ["honest", "no-tree", "coin-tree", "other-tree", "link-root-f", "link-root-b", "points",
                        "link-form", "round-coins", "round-n", "round-msg", "round-extra", "round-swap", "stream-unknown",
                        "stream-form", "streams-form", "unlinked", "shared", "unused", "record-type", "log-malformed",
-                       "request"]
+                       "opened-extra", "opened-link", "opened-unrecorded", "request"]
+#: each a session whose tree opens a round its record doesn't record, every other check passing (`EXTRA_OPENING`)
+EXTRA_OPENINGS = ["opened-extra", "opened-link", "opened-unrecorded"]
 
 
 def _rounds(r: dict) -> list[tuple[dict, dict]]:
@@ -1995,6 +1998,12 @@ def _record_mutated(rng: random.Random, t: TreeSession, others: list[TreeSession
             r = rng.choice([_body(r, streams=DROP), {**r, "streams": None}, {**r, "streams": {}}])
         case "record-type":
             r = rng.choice([None, [], 5, "x", {}])
+        case "opened-unrecorded":
+            s = rng.choice([s for s in r["streams"] if s["rounds"]])
+            if rng.random() < 0.5:
+                s["rounds"].pop()
+            else:
+                r["streams"].remove(s)
     return r
 
 
@@ -2017,6 +2026,17 @@ def session_trees_case(rng: random.Random, name: str) -> Any:
         case "log-malformed":
             i = next(i for i, line in enumerate(log) if line == t.lines[0])
             log = log[:i + 1] + [_edit(t.lines[0], key=rng.randbytes(CT.KEY_BYTES).hex())] + log[i + 1:]
+        case "opened-extra" | "opened-link":
+            room = [(i, s) for i, (_, o) in enumerate(named)
+                    for s in ([CT.SESSION] if name == "opened-link" else o.spec["streams"][1:])
+                    if o.opened[s] < 1 << o.spec["rounds_log"]]
+            if not room:
+                return session_trees_case(rng, name)
+            i, s = rng.choice(room)
+            t = named[i][1]
+            after = max(log.index(line) for line in t.lines) + 1
+            t.open(s, rng.randint(0, t.spec["block"]), rng.randbytes(64))
+            log.insert(rng.randint(after, len(log)), t.lines[-1])
         case "honest" | "request":
             pass
         case _:
@@ -2095,3 +2115,15 @@ def test_a_challenger_piece_agrees(pieces, port, make, names, examples):
             outcomes[name, clean] += 1
             assert clean == (name == "honest"), (port.fn, name, seed, kind, text)
     print(f"{port.fn}: {stats}; swept {sum(outcomes.values())}")
+
+
+@pytest.mark.parametrize("name", EXTRA_OPENINGS)
+def test_a_tree_opening_a_round_its_record_doesnt_is_refused_for_it(pieces, name):
+    """A session whose coin tree opens a round past what its record records, a stream's next round, the link's
+    ``session`` stream again or a round the record leaves out, passes every other check and is refused for that
+    (`EXTRA_OPENING`), Lean and Python alike; the honest sessions beside it pass."""
+    for seed in range(8):
+        kind, text = D.replay(SESSION_TREES, session_trees_case(random.Random(f"extra/{name}/{seed}"), name), pieces)
+        assert kind == "output" and json.loads(text)["reason"].endswith(Ch.EXTRA_OPENING), (name, seed, kind, text)
+        kind, text = D.replay(SESSION_TREES, session_trees_case(random.Random(f"extra/{name}/{seed}"), "honest"), pieces)
+        assert kind == "output" and json.loads(text) == {"reason": None}, (name, seed, kind, text)

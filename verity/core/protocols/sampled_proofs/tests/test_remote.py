@@ -582,7 +582,8 @@ def test_a_coin_tree_is_drawn_and_opened_in_the_windows_session_under_its_signed
     """The challenger samples a ``--zk`` session's coin tree under the prover's nonce and opens each round itself, after
     what it follows, between the session's own coins; each line is logged before its answer, the signed close covers
     them, the verifier's read of the session's roots reads past them, and a record on those coins is held to them
-    (`session_tree_reason`), one whose round's coins differ refused."""
+    (`session_tree_reason`), one whose round's coins differ refused, and one that leaves out a round the challenger
+    opened (`EXTRA_OPENING`)."""
     host = Host(tmp_path, signer, withhold=True)
     client = R.RemoteChallenger.connect(host.address)
     positions = C.LiveRecord(client, "positions", itertools.count().__next__)
@@ -605,6 +606,8 @@ def test_a_coin_tree_is_drawn_and_opened_in_the_windows_session_under_its_signed
     assert list(trees) == [tree_root.hex()] and trees[tree_root.hex()].record()["key"] == key.hex()
     record = tree_record(nonce, tree_root, key, points, {"t/rep0": [(root(30), 3, rep[0]), (root(31), 2, rep[1])]})
     assert C.session_tree_reason(trees, record) is None
+    short = tree_record(nonce, tree_root, key, points, {"t/rep0": [(root(30), 3, rep[0])]})
+    assert C.session_tree_reason(trees, short) == C.EXTRA_OPENING
     record["streams"][0]["rounds"][1]["coins"][0] = f128(rep[1][0] ^ 1)
     assert C.session_tree_reason(trees, record) == ("its t/rep0 round 1 is not coins the challenger opened under its tree "
                                                     "after that round's message")
