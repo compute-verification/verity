@@ -1153,11 +1153,7 @@ class Stream:
         if dict(spec.check.query) != query:
             raise ValueError("the check's query is not the template query over the challenger's unit (a window's: "
                              "Q_template_instances over its templates, in its order)")
-        counts = None if program is None else self._counts_of(program, units, query)
-        if program is not None and (isinstance(unit, SpecializedDefinition) or counts is None):
-            raise ValueError("a stream's own population program is a window's, its proof blocks its templates' "
-                             "instances, each template's in its order and every one read stratum by stratum in order "
-                             "(partition.in_order)")
+        counts = None if program is None else self._counts_of(program, unit, units, query)
         if not (type(budget) is int and budget >= 1):
             raise ValueError(f"a failure budget is a positive integer, not {budget!r}")
         if not (isinstance(delta, float) and 0 < delta < 1):
@@ -1434,14 +1430,20 @@ class Stream:
         return reg
 
     @staticmethod
-    def _counts_of(program: Program, units: Sequence[SpecializedDefinition],
-                   query: Mapping[str, Any]) -> dict[str, int] | None:
-        """`{template's descriptor id: instances}` of a window's own population `program` under `query`, when its proof
-        blocks are `units`' instances, each template's runs in its order, read stratum by stratum in order; else None."""
+    def _counts_of(program: Program, unit: SpecializedDefinition | Sequence[SpecializedDefinition],
+                   units: Sequence[SpecializedDefinition], query: Mapping[str, Any]) -> dict[str, int]:
+        """`{template's descriptor id: instances}` of a window's own population `program` under `query`; raises
+        ValueError unless `unit` is a window's and the program's proof blocks are `units`' instances, each template's
+        runs in its order, read stratum by stratum in order."""
+        refused = ValueError("a stream's own population program is a window's, its proof blocks its templates' "
+                             "instances, each template's in its order and every one read stratum by stratum in order "
+                             "(partition.in_order)")
+        if isinstance(unit, SpecializedDefinition):
+            raise refused
         try:
             ranges = P.ranges(program, query)
-        except (P.QueryRefused, ValueError):
-            return None
+        except (P.QueryRefused, ValueError) as e:
+            raise refused from e
         ids, seen = [P.template_id(t) for t in units], []
         for tid, _lo, _n in ranges:
             if not seen or seen[-1] != tid:
@@ -1450,7 +1452,7 @@ class Stream:
         for tid, _lo, n in ranges:
             counts[tid] = counts.get(tid, 0) + n
         if seen != ids or not P.in_order(program, query, sum(counts.values())):
-            return None
+            raise refused
         return counts
 
     def _program(self, n: int, counts: Mapping[str, int] | None) -> Program | None:

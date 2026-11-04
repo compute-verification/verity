@@ -60,6 +60,7 @@ registration the trace's roots are read off. That the network certifier's rows a
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
@@ -95,6 +96,7 @@ ROWS = {Direction.INGRESS: "rows/ingress", Direction.EGRESS: "rows/egress"}
 STATE, VIEW, LAST = "scan/state", "scan/view", "scan/last"
 #: a ``--registered`` port's known content (Flock's `Registered.KNOWN_KEY`)
 KNOWN_KEY = "known"
+HEX = re.compile("(?:[0-9a-f]{2})+")
 
 
 def prog(j: int) -> str:
@@ -470,10 +472,12 @@ class EgressTie:
 
     @staticmethod
     def _roots(record: Mapping[str, Any]) -> dict[str, bytes] | None:
-        try:
-            return {r["port"]: bytes.fromhex(r["root"]) for r in record["roots"]}
-        except (KeyError, TypeError, ValueError):
+        rows = record.get("roots") if isinstance(record, Mapping) else None
+        if not (isinstance(rows, list) and all(isinstance(r, Mapping) and isinstance(r.get("port"), str)
+                                               and isinstance(r.get("root"), str) and HEX.fullmatch(r["root"])
+                                               for r in rows)):
             return None
+        return {r["port"]: bytes.fromhex(r["root"]) for r in rows}
 
     # the verifier
 
