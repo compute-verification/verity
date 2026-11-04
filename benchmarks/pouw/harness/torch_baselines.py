@@ -10,11 +10,15 @@ then is a stock library, the divisor timed beside the arms, never a binary a ver
 
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass, field
 
 #: each family the bridge serves, and its sources: vLLM's CUTLASS for every FP8 scaling, DeepGEMM for 128-block only
 SOURCES = {"fp8-e4m3": ("cutlass-vllm",), "fp8-e4m3-rowwise": ("cutlass-vllm",), "fp8-blk128": ("cutlass-vllm", "deepgemm")}
 BLOCK = 128
+#: where vLLM finds DeepGEMM, in its order (`vllm.utils.import_utils.has_deep_gemm`): an installed `deep_gemm`, else the copy
+#: its wheel vendors
+DEEP_GEMM = ("deep_gemm", "vllm.third_party.deep_gemm")
 
 
 class _Raw:
@@ -58,10 +62,8 @@ class Bridge:
 
             if not DG.is_deep_gemm_supported():
                 raise RuntimeError("vllm.utils.deep_gemm.is_deep_gemm_supported() is False on this card")
+            b.versions["deep_gemm_module"], b.versions["deep_gemm"] = deep_gemm()
             b.dg = DG
-            import deep_gemm
-
-            b.versions["deep_gemm"] = getattr(deep_gemm, "__version__", None)
         except Exception as ex:  # noqa: BLE001
             b.errors["deepgemm"] = f"{type(ex).__name__}: {ex}"
         return b
@@ -124,6 +126,17 @@ class Bridge:
                 run()
         torch.cuda.synchronize()
         return launch
+
+
+def deep_gemm() -> tuple[str, str | None]:
+    """The DeepGEMM module vLLM calls and its version."""
+    for name in DEEP_GEMM:
+        try:
+            mod = importlib.import_module(name)
+        except ImportError:
+            continue
+        return name, getattr(mod, "__version__", None)
+    raise ImportError(f"no DeepGEMM: none of {', '.join(DEEP_GEMM)} imports")
 
 
 def exempt(gate, paths: list[str]) -> None:

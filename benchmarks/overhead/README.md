@@ -22,7 +22,7 @@ H200's node is `vy-dc-h200`. Its outputs are `out/points.json` or `out/overhead.
 A card's points belong to it, a model and a precision (`overhead.MODELS`: Llama-3.1-70B's four linears for the kernel
 points). Each is a summed layer: at each m, every linear's fastest stock kernel over every library the card runs (on the
 H200 cuBLASLt, vLLM's CUTLASS and DeepGEMM) and every scaling (per-tensor, rowwise and 128-block FP8), by the graph replays'
-wall time, summed.
+wall time, summed. A sweep or a timed run in which one of the card's libraries didn't load is refused.
 
 - **C**: the smallest m at which the layer's throughput reaches 90% of the best sampled, and every m sampled above it does.
 - **L**: the largest m whose time, and every sampled time below it, stays within 10% of the time at m = 1.

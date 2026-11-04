@@ -123,7 +123,7 @@ def points(a: argparse.Namespace, run: Runner = _run) -> int:
             rounds.append({"ms": ms, "bench": str((d / "bench.json").relative_to(out)), "exit": rc,
                            "error": res.get("error"), "clocks": (res.get("clocks") or {}).get("timed")})
             why = (f"bench.py exited {rc} at m = {ms}: {res.get('error') or 'see ' + str(d / 'bench.log')}" if rc
-                   else _card_why(card, res))
+                   else _card_why(card, res) or O.libraries_why(card, res))
             if why:
                 break
             doc.setdefault("identity", res.get("identity"))
@@ -219,6 +219,8 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
     if rc:
         whys.append(f"bench.py exited {rc}: {result.get('error') or 'see bench.log'}")
     if why := _card_why(card, result):
+        whys.append(why)
+    if bench_json.is_file() and (why := O.libraries_why(card, result)):
         whys.append(why)
     arm = next(iter(result.get("arms") or {}), None) if sch.arm else None
     if sch.arm:

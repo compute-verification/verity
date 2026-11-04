@@ -122,6 +122,25 @@ def card(gpu: str) -> Card:
         raise ValueError(f"no card {gpu!r}: the door measures on {', '.join(CARDS)} (verity_bench.overhead.CARDS)") from None
 
 
+#: the libraries a card's bridge serves (`bench.py --bridge`), by the bridge's name for each
+BRIDGED = {"cutlass": "cutlass-vllm", "deepgemm": "deepgemm"}
+
+
+def libraries_why(c: Card, result: Mapping) -> str | None:
+    """Why a `bench.py` result didn't time every library the card's stock kernel is chosen among (a bridged library that
+    didn't load), or None."""
+
+    if not c.bridge:
+        return None
+    if "bridge" not in result:
+        return f"bench.py ran without --bridge: the {c.name}'s {', '.join(c.libraries)} are the stock kernel's libraries"
+    errors = result["bridge"].get("errors") or {}
+    off = {lib: errors.get(BRIDGED[lib]) or errors.get("torch") for lib in c.libraries if lib in BRIDGED}
+    if off := {lib: why for lib, why in off.items() if why}:
+        return "; ".join(f"the {c.name}'s {lib} didn't load ({why})" for lib, why in off.items())
+    return None
+
+
 def label(m: int, n: int, k: int) -> str:
     """A shape's label as the PoUW harness keys it (`shapes.key`), which `bench.py --shapes` takes for any m, n and k."""
 

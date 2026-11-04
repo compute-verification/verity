@@ -79,9 +79,9 @@ class Node:
     verify.py's verdicts. The arm's build record names `cubin_art`, and the SASS gate passes `cubin`."""
 
     def __init__(self, tmp: Path, *, reps: int = 20, accept: bool = True, card: str = "NVIDIA H200", spread: float = 0.0,
-                 cubin_art: str | None = CUBIN_ART, cubin: bytes = CUBIN):
+                 cubin_art: str | None = CUBIN_ART, cubin: bytes = CUBIN, bridge_errors: dict | None = None):
         self.tmp, self.reps, self.accept, self.card, self.spread = tmp, reps, accept, card, spread
-        self.cubin_art, self.cubin = cubin_art, cubin
+        self.cubin_art, self.cubin, self.bridge_errors = cubin_art, cubin, bridge_errors or {}
         self.calls: list[list[str]] = []
         self.reports: dict[str, list[tuple[int, int, bool]]] = {}
 
@@ -94,9 +94,10 @@ class Node:
             return self.verify(Path(argv[2]))
         return self.sweep(argv)
 
-    def _result(self, rows: list[dict], **more) -> dict:
+    def _result(self, argv: list[str], rows: list[dict], **more) -> dict:
+        bridge = {"bridge": {"versions": {}, "errors": self.bridge_errors}} if "--bridge" in argv else {}
         return {"identity": {"card": {"name": self.card}}, "clocks": {"timed": {"sm_mhz": [1980, 1980]}}, "shapes": rows,
-                **more}
+                **bridge, **more}
 
     def sweep(self, argv: list[str]) -> int:
         fams = between(argv, "--families")
@@ -106,7 +107,7 @@ class Node:
             rows.append({"label": lab, "m": m, "n": n, "k": k, "summary": {
                 f"baseline/{lab}/{f}/{c}_{f}": {"graph": {"median": roof_ms(f, c, m, n, k)}, "items_with_bad_throttle": 0}
                 for f in fams for c in ("cublaslt", "cutlass-vllm")}})
-        Path(between(argv, "--out")[0]).write_text(json.dumps(self._result(rows)))
+        Path(between(argv, "--out")[0]).write_text(json.dumps(self._result(argv, rows)))
         return 0
 
     def profile(self, argv: list[str]) -> int:
@@ -147,7 +148,7 @@ class Node:
             more["arms"] = {ARM: {"build": {"cubin_art": self.cubin_art, "binaries": ["arm.cubin"]}, "verifier": "verify.py"}}
             more["sass_gate"]["binaries"] = [{"path": "arm.cubin", "sha256": hashlib.sha256(self.cubin).hexdigest(),
                                               "ok": True, "bytes": len(self.cubin)}]
-        Path(between(bench, "--out")[0]).write_text(json.dumps(self._result(rows, **more)))
+        Path(between(bench, "--out")[0]).write_text(json.dumps(self._result(bench, rows, **more)))
         return 0
 
     def export(self, argv: list[str]) -> int:
@@ -375,6 +376,18 @@ def test_the_node_sweeps_for_the_points_in_rounds_of_bench_py(tmp_path):
     result = json.loads((tmp_path / "r20261104-020000-0001" / "result.json").read_text())
     assert result["validation"]["status"] == "passed" and result["validation"]["evidence"] == ["out/points.json"]
     assert {m["name"]: m["value"] for m in result["measurements"]} == {"C": want.c, "L": want.l}
+
+
+def test_the_node_refuses_a_sweep_without_every_library_the_card_chooses_among(tmp_path):
+    out, run_dir = tmp_path / "out", tmp_path
+    node = Node(tmp_path, bridge_errors={"deepgemm": "ImportError: no DeepGEMM"})
+    rc = overhead_node.main(["points", "--card", "h200", "--uuid", UUID, "--out", str(out), "--run-dir", str(run_dir),
+                             "--run-id", "r1"], run=node)
+    assert rc == 1 and len(node.calls) == 1 and "--bridge" in node.calls[0]
+    assert json.loads((out / "points.json").read_text())["error"] == "the H200's deepgemm didn't load (ImportError: no DeepGEMM)"
+    assert O.libraries_why(H200, {}) == "bench.py ran without --bridge: the H200's cublaslt, cutlass, deepgemm are the stock " \
+                                       "kernel's libraries"
+    assert O.libraries_why(O.CARDS["rtx-pro-6000"], {}) is None
 
 
 def test_the_node_refuses_a_sweep_on_another_card(tmp_path):

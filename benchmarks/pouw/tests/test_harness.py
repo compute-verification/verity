@@ -8,6 +8,7 @@ import argparse
 import random
 import re
 import sys
+import types
 from pathlib import Path
 
 import numpy as np
@@ -25,6 +26,7 @@ import identity as I  # noqa: E402
 import report as R  # noqa: E402
 import schedule as S  # noqa: E402
 import shapes as SH  # noqa: E402
+import torch_baselines as TB  # noqa: E402
 
 UUID5 = "GPU-0a1b2c3d-0000-1111-2222-333344445555"
 
@@ -1502,3 +1504,20 @@ def test_a_transcript_buffer_over_an_operand_is_refused_before_anything_is_poiso
     assert rec["by"] == "harness" and "a overlaps operand a" in rec["error"] and not (tmp_path / "transcripts").exists()
     assert dev.read(sets[0].a.ptr, 64) == b"\x07" * 64
     assert H.operand_overlaps({"root": call.outputs["root"]}, sets[0]) == []
+
+
+def test_the_bridge_finds_deepgemm_where_vllm_does_an_installed_package_first_then_the_wheels_copy(monkeypatch):
+    def module(name: str, version: str) -> types.ModuleType:
+        m = types.ModuleType(name)
+        m.__version__ = version
+        return m
+
+    monkeypatch.setitem(sys.modules, "deep_gemm", None)
+    monkeypatch.setitem(sys.modules, "vllm.third_party.deep_gemm", module("vllm.third_party.deep_gemm", "2.6.1"))
+    assert TB.deep_gemm() == ("vllm.third_party.deep_gemm", "2.6.1")
+    monkeypatch.setitem(sys.modules, "deep_gemm", module("deep_gemm", "2.7.0"))
+    assert TB.deep_gemm() == ("deep_gemm", "2.7.0")
+    monkeypatch.setitem(sys.modules, "deep_gemm", None)
+    monkeypatch.setitem(sys.modules, "vllm.third_party.deep_gemm", None)
+    with pytest.raises(ImportError, match="no DeepGEMM"):
+        TB.deep_gemm()
