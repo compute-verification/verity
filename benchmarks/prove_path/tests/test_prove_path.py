@@ -20,7 +20,9 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
   reads it only from its own Build of each Program, which its compile writes (`own_builds`, `naming.write_build`), whatever the
   row dir holds under the same digests, and its compile command runs with no vLLM importable.
 * A served window's circuit record states its window ingress at each step, so the leak count prints a window figure, the
-  advice's charge under its named premise, beside the run figure, which stays vacuous (`records_audit.declared_count`)."""
+  advice's charge under its named premise, beside the run figure, which stays vacuous (`records_audit.declared_count`).
+* Window-commit's write of a closed window of TINY's class (`window_write`): its circuit's wire-order certificate beside its
+  circuit record, of the record's entries and wires."""
 from __future__ import annotations
 
 import argparse
@@ -1436,3 +1438,51 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
         tie(window_registration=str(tmp_path / "other.json"))
     with pytest.raises(ValueError, match="H1's windows are 2 rounds, and the class's 4 outputs"):
         tie(SimpleNamespace(outputs=4))
+
+
+@pytest.mark.slow
+def test_window_commit_writes_its_circuits_wire_order_certificate_beside_its_circuit_record(tmp_path):
+    """`window_write`, window-commit's write, on TINY's class of 2 slots, prompts of 4 and 2 outputs, lowered, its window
+    filled from random weights and a stand-in scan state, recorded and closed: beside its ``circuit.json`` is ``order.json``,
+    the lowering's certificate (`window_circuit.Lowered.order`) in `interface.circuit_bytes`, a ``verity/wire-order/v1``
+    segment for each of the record's inference entries, in their order, and for each of its wires a pair of them, the
+    writer's and the reader's, each of its side's template. The SHA-512s it returns are the two files'. What no cheaper
+    test reaches: the write needs a closed window, so this pays a window's close, and served_verdicts.sh's window-commit
+    would otherwise run it first."""
+    import numpy as np
+    from verity_vllm.program.predict import scan_state as SS
+    from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.program.predict import window_rows as WRS
+    from verity_vllm.program.predict import window_weights as WW
+    from verity_vllm.program.predict.phi import Phi
+    from verity_vllm.program.predict.steps import Registered
+    from verity_vllm.records import wire_order as WO
+
+    from verity.core.protocols.sampled_proofs.one_stage import registered as G
+
+    reg = Registered.of(Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY},
+                            target={"compute_capability": [12, 0], "num_sms": 188}), default_seed=7)
+    cls, grain, key, run = WC.WindowClass(2, 4, 2), WC.Grain(gemm_words=1024, rows=256, select=64), bytes(range(32)), "ab" * 64
+    low, rng = WC.lower(reg, cls, None, grain, provable=False), np.random.default_rng(3)
+    fields = {}
+    for label, ty in dict(low.fn.signature()[0])[WC.WEIGHTS].fields:
+        (bits,), n = ty.width_set(), ty.leaves
+        x = np.ones(n, np.float32) if bits == 32 or "norm" in label else rng.uniform(-.5, .5, n).astype(np.float32)
+        fields[label] = x.view(np.uint32) if bits == 32 else (x.view(np.uint32) >> 16).astype(np.uint16)
+    state = WRS.standin_state(WC.NAME, cls, [([1, 4, 17, 3, 250, 9], 2), ([1, 3, 5, 77, 42, 0], 2)], key, 0, window=run)
+    values = {**WW.weight_values(reg, fields, key, grain, keep_rows=True), SS.SCAN_STATE: state}
+    slots = [WRS.Slot(low.fn, cls, row, lambda label, lo, hi: fields[label][lo:hi]) for row, _ in WRS.scan_slots(low, state.rows)]
+    win = IF.Window(low.circuit, run, DR.parse_law("stratified:2"), 64, registered=values, forms=WRS.FORMS)
+    win.supply(G)
+    WRS.Rows(low, slots, values).record(win)
+    sha = PP.window_write(win, win.close(), low, cls, state, tmp_path, key, 0)
+    body = {f: (tmp_path / f"{f}.json").read_bytes() for f in ("circuit", "order")}
+    assert sha == {f: hashlib.sha512(b).hexdigest() for f, b in body.items()}
+    assert body["order"] == IF.circuit_bytes(low.order)
+    record, order = json.loads(body["circuit"]), json.loads(body["order"])
+    segs, entries = order["segments"], record["blocks"]["inference"]["entries"]
+    assert order["format"] == WO.SCHEMA and set(order) == {"format", "segments", "wires"}
+    assert [[s["template"], s["at"], s["radix"]] for s in segs] == [[e["template"], e["at"], e["radix"]] for e in entries]
+    assert len(order["wires"]) == len(record["wires"]) > 0
+    assert [[segs[s]["template"], segs[u]["template"]] for s, u in order["wires"]] == [
+        [w["writer"], w["reader"]] for w in record["wires"]]

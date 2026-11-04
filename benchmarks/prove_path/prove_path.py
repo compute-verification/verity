@@ -1435,6 +1435,26 @@ def h1_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], dict[str, A
     return w, meta, WC.Tables(*CT.shape(meta["layout"], int(meta["steps"])))
 
 
+def window_write(win: Any, c: Any, low: Any, cls: Any, state: Any, out: Path, key: bytes, window: int,
+                 previous: str | None = None) -> dict[str, str]:
+    """Window-commit's write of the window ``win`` of class ``cls``'s circuit ``low`` (`window_circuit.lower`'s), closed as
+    ``c``, under ``out``: its records (`interface.Window.write`, registered after ``previous``, their provenance the class
+    and the scan state ``state``, the window's `SCAN_STATE` value, their index salted at window ``window`` under the
+    committer's key ``key``), beside its ``circuit.json`` the circuit's wire-order certificate ``order.json``
+    (`window_circuit.Lowered.order`), and ``state`` opened whole (`scan_state_opening`). -> the SHA-512 of ``circuit.json``
+    (``circuit``) and of ``order.json`` (``order``)."""
+    from verity_vllm.program.predict import scan_state as SS
+    from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.program.predict import window_rows as WRS
+
+    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every]},
+            "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: state.entry()}}}
+    win.write(c, out, prov, registrar=R, index_salt=WRS.index_salt(key, window), previous=previous)
+    (out / "order.json").write_bytes(IF.circuit_bytes(low.order))
+    scan_state_opening(state, out)
+    return {f: hashlib.sha512((out / f"{f}.json").read_bytes()).hexdigest() for f in ("circuit", "order")}
+
+
 def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window committed as its window class's one Circuit (module docstring): the class lowered
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
@@ -1447,7 +1467,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     slots, a served request in none or one that wasn't served, or the scan's prompt or ``max_tokens`` isn't the served
     one); else slot k holds the advice's k-th request and the scan state is a stand-in, the rows its slots' rows and
     ``max_tokens`` give (`window_rows.standin_state`). Its wire-order certificate (`window_circuit.Lowered.order`) is written
-    beside its ``circuit.json`` as ``order.json``. Refused for a registration of another model. With
+    beside its ``circuit.json`` as ``order.json`` (`window_write`). Refused for a registration of another model. With
     ``--window-registration`` (`h1_tie`), the circuit reads H1's tables and the registration reuses W's (``tie``: the
     digest of W it is chained after, and the tables). -> the window's run root, the SHA-512 of its circuit record and of
     its certificate, its population and members, the scan state's kind (``scanned`` or ``stand-in``), the registered
@@ -1546,14 +1566,9 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     lap("record")
     c = win.close(workers=a.workers or min(16, os.cpu_count() or 1))
     lap("close")
-    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every]},
-            "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
-    win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)), previous=previous)
-    (Path(a.out) / "order.json").write_bytes(IF.circuit_bytes(low.order))
-    scan_state_opening(values[SS.SCAN_STATE], Path(a.out))
+    sha = window_write(win, c, low, cls, values[SS.SCAN_STATE], Path(a.out), key, int(a.window), previous)
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
-    sha = {f: hashlib.sha512((Path(a.out) / f"{f}.json").read_bytes()).hexdigest() for f in ("circuit", "order")}
     return {"run": run, **sha, "population": sum(filled.n.values()), "members": len(win.window.members), "sources": sources,
             "scan_state": "stand-in" if state is None else "scanned",
             "registration": {"held": len(held), "free": sorted(set(reg.values) - set(held)), "unrooted": sorted(reg.unrooted)},
