@@ -255,19 +255,21 @@
 # (`serve_pearl`: --protocols pouw:pearl-c-h100-v1-h3, its --protocols-config the one `served_pearlplus.sh arm` writes
 # before the lease from the cubin it builds, the PEARL-ARM lines) over the BF16 1B (REPO unsloth/Llama-3.2-1B, PRECISION
 # bfloat16, ROW the BF16 row's), one Pearl+ epoch a window and one round a Commit step, its passes in the serve dir's
-# pearl/w<k>/ and its salt coins the arm's. LOAD then defaults to fixed (SLOTS requests of WINDOW_STEPS tokens, all at
-# once), V3C_CLASS to 4,32,2, CLASSES to it, and WINDOW_STEPS and MAX_TOKENS to its outputs. The classes' records are
-# the untied run's, and V3c's record of the window is cut at its linears at PEARL_SCHEME (`v3c_record`: step 3's
-# `window-circuit --pearl-scheme` after the classes, which gates nothing). Once the window's circuits are counted, before
-# any coin of Pearl+'s or of V3c's audit, `served_pearlplus.sh give-up` gives up the passes' rows over a debit cap (from
-# the card's counts) and retain writes Pearl+'s window record W over the rounds it keeps, and `prove_path.py window-commit
-# --window-registration W --pearl-served` then commits the window at V3C_CLASS within V3C_TIMEOUT (default 60m), its
-# registration R chained right after W, which is held to PEARL_SCHEME (the PEARL-TIE lines). PoUW's piece is Pearl+'s verdict on those passes held to W (`served_passes.py
-# verify --tie W`, its draw the gate's as above; `served_verdicts.py pearlplus --tie W`), and step 6 audits R tied to W
-# (records_audit's --tie W, V3C_LAW default stratified:1), deferred as under H1_TIE on a node short of its memory. The
-# preflight refuses PEARL_TIE beside H1_TIE, with another POUW, PRECISION or row, at a V3C_CLASS CLASSES lacks or whose
-# outputs aren't WINDOW_STEPS, with LOAD=front, or on a tree without the arm, `served_passes.py arm`, retain's
-# --window-record or window-commit's --pearl-served.
+# pearl/w<k>/ and its salt coins the arm's. V3C_CLASS then defaults to 4,32,2, CLASSES to it, and the load to the class's
+# fixed one, at whose rows the cut circuit reads Pearl+'s tables (`window_class.takes`): LOAD fixed, SLOTS its slots'
+# requests of PROMPTS P:P tokens at its prompt P, all prefilled at the window's first step, and WINDOW_STEPS and
+# MAX_TOKENS its outputs. The classes' records are the untied run's, and V3c's record of the window is cut at its linears
+# at PEARL_SCHEME (`v3c_record`: step 3's `window-circuit --pearl-scheme` after the classes, which gates nothing). Once
+# the window's circuits are counted, before any coin of Pearl+'s or of V3c's audit, `served_pearlplus.sh give-up` gives
+# up the passes' rows over a debit cap (from the card's counts) and retain writes Pearl+'s window record W over the rounds
+# it keeps, and `prove_path.py window-commit --window-registration W --pearl-served` then commits the window at V3C_CLASS
+# within V3C_TIMEOUT (default 60m), its registration R chained right after W, which is held to PEARL_SCHEME (the
+# PEARL-TIE lines). PoUW's piece is Pearl+'s verdict on those passes held to W (`served_passes.py verify --tie W`, its
+# draw the gate's as above; `served_verdicts.py pearlplus --tie W`), and step 6 audits R tied to W (records_audit's --tie
+# W, V3C_LAW default stratified:1), deferred as under H1_TIE on a node short of its memory. The preflight refuses
+# PEARL_TIE beside H1_TIE, with another POUW, PRECISION or row, at a V3C_CLASS CLASSES lacks or whose outputs aren't
+# WINDOW_STEPS, at a load other than the class's fixed one, or on a tree without the arm, `served_passes.py arm`,
+# retain's --window-record or window-commit's --pearl-served.
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
 #   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 6h -- \
@@ -332,6 +334,10 @@ if [ -n "${PEARL_TIE:-}" ]; then  # Pearl+ serves the window: the BF16 1B under 
   POUW=${POUW:-pearlplus} LOAD=${LOAD:-fixed} V3C_CLASS=${V3C_CLASS-4,32,2}
   CLASSES=${CLASSES:-$V3C_CLASS} WINDOW_STEPS=${WINDOW_STEPS:-$(cut -s -d, -f3 <<< "$V3C_CLASS")}
   MAX_TOKENS=${MAX_TOKENS:-$WINDOW_STEPS}
+  # the class's fixed load, at whose rows the circuit cut at Pearl+'s linears reads its tables (`window_class.takes`)
+  IFS=, read -r slots prompt _ <<< "$V3C_CLASS"
+  SLOTS=${SLOTS:-$slots}
+  [ -z "$prompt" ] || PROMPTS=${PROMPTS:-$prompt:$prompt}
   # sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise, as served_pearlplus.sh's serve has it (e2e.BF16_RACE)
   export PEARL_TIE PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
 fi
@@ -1302,8 +1308,9 @@ if [ -n "${PEARL_TIE:-}" ] && [ "${1:-}" != v3c ] && [ -z "$COMPOSE" ]; then  # 
     say "PREFLIGHT: PEARL_TIE commits the window at V3C_CLASS $V3C, whose window circuit CLASSES ($CLASSES) doesn't count: add it"; exit 3 ;; esac
   [ "$(cut -s -d, -f3 <<< "$V3C")" = "$WINDOW_STEPS" ] \
     || { say "PREFLIGHT: under PEARL_TIE each Commit step is a Pearl+ round, and W's rounds are V3C_CLASS's outputs: V3C_CLASS $V3C's outputs aren't WINDOW_STEPS ($WINDOW_STEPS)"; exit 3; }
-  [ "$LOAD" != front ] \
-    || { say "PREFLIGHT: under PEARL_TIE the load fills each window's steps, and LOAD=front sends the warden's group alone: LOAD fixed or varied"; exit 3; }
+  IFS=, read -r slots prompt _ <<< "$V3C"
+  [ "$LOAD" = fixed ] && [ "$SLOTS" = "$slots" ] && [ "$PROMPTS" = "$prompt:$prompt" ] \
+    || { say "PREFLIGHT: under PEARL_TIE the circuit cut at Pearl+'s linears reads its tables at V3C_CLASS's fixed load, its slots' requests of its prompt's ids each, all prefilled at the window's first step (window_class.takes): LOAD=fixed (not $LOAD), SLOTS $slots (not $SLOTS) and PROMPTS $prompt:$prompt (not $PROMPTS)"; exit 3; }
   [ -f "$TREE/integrations/vllm/verity_vllm/pipeline/serve_pearl.py" ] \
     || { say "PREFLIGHT: PEARL_TIE serves through serve-openai's Pearl+ arm (verity_vllm.pipeline.serve_pearl), which this tree doesn't have"; exit 3; }
   grep -q -F 'add_parser("arm")' "$TREE/benchmarks/pouw/pearl_c_vllm/served_passes.py" \

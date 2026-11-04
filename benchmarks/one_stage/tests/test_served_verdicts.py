@@ -2811,6 +2811,12 @@ def _no_pearl_reader(law: str) -> str:
             f"stratum of each table's readers, gives: V3C_LAW is {law}")
 
 
+def _not_the_class_load(load: str = "fixed", slots: str = "8", prompts: str = "32:32") -> str:
+    return ("PREFLIGHT: under PEARL_TIE the circuit cut at Pearl+'s linears reads its tables at V3C_CLASS's fixed load, its "
+            "slots' requests of its prompt's ids each, all prefilled at the window's first step (window_class.takes): "
+            f"LOAD=fixed (not {load}), SLOTS 8 (not {slots}) and PROMPTS 32:32 (not {prompts})")
+
+
 @pytest.mark.parametrize("args, extra, toy, line", [
     ((), {"H1_TIE": "1"}, {}, "PREFLIGHT: H1_TIE chains V3c's commit right after H1's W and PEARL_TIE right after "
                               "Pearl+'s, one W a window: set one"),
@@ -2824,8 +2830,10 @@ def _no_pearl_reader(law: str) -> str:
                                     "CLASSES (4,32,4) doesn't count: add it"),
     ((), {"WINDOW_STEPS": "16"}, {}, "PREFLIGHT: under PEARL_TIE each Commit step is a Pearl+ round, and W's rounds are "
                                      f"V3C_CLASS's outputs: V3C_CLASS {W63K4}'s outputs aren't WINDOW_STEPS (16)"),
-    ((), {"LOAD": "front", "CERTIFIER_FRONT": "true"}, {}, "PREFLIGHT: under PEARL_TIE the load fills each window's steps, "
-                                                          "and LOAD=front sends the warden's group alone: LOAD fixed or varied"),
+    ((), {"LOAD": "front", "CERTIFIER_FRONT": "true"}, {}, _not_the_class_load(load="front")),
+    ((), {"LOAD": "varied"}, {}, _not_the_class_load(load="varied")),
+    ((), {"SLOTS": "4"}, {}, _not_the_class_load(slots="4")),
+    ((), {"PROMPTS": "16:24"}, {}, _not_the_class_load(prompts="16:24")),
     ((), {}, {"arm": False}, "PREFLIGHT: PEARL_TIE serves through serve-openai's Pearl+ arm "
                              "(verity_vllm.pipeline.serve_pearl), which this tree doesn't have"),
     ((), {}, {"passes": 'r.add_argument("--window-record")\n'}, NO_ARM_PASSES),
@@ -2843,8 +2851,9 @@ def _no_pearl_reader(law: str) -> str:
 def test_the_preflight_refuses_pearl_tie_beside_h1_tie_off_its_bf16_pearlplus_serve_or_on_a_tree_without_its_steps(
         tmp_path, args, extra, toy, line):
     """PEARL_TIE chains V3c's commit R right after Pearl+'s W, so beside H1_TIE (H1's W) it is refused; it serves the BF16
-    checkpoint through serve-openai's Pearl+ arm, one round a Commit step, so another POUW, PRECISION or row, a V3C_CLASS
-    CLASSES doesn't count or whose outputs aren't the window's steps, and LOAD=front are refused; so is a tree without the
+    checkpoint through serve-openai's Pearl+ arm, one round a Commit step, and its cut circuit reads Pearl+'s tables at
+    the class's fixed load's rows, so another POUW, PRECISION or row, a V3C_CLASS CLASSES doesn't count or whose outputs
+    aren't the window's steps, and any load but the class's fixed one (its slots, P:P) are refused; so is a tree without the
     arm, served_passes.py's arm and retain's --window-record, window-commit's --pearl-served or records_audit's --tie, a
     design that can leave a value of W with no sampled reader (in `served_verdicts.sh v3c` too), and a deferral onsite's
     composite can't follow: each before anything runs."""
@@ -4353,13 +4362,14 @@ def test_under_pearl_tie_the_endpoint_serves_the_bf16_1b_through_pearlpluss_arm_
         tmp_path, env, config, rows):
     """Under PEARL_TIE serve-openai serves the BF16 1B at bfloat16 through its Pearl+ arm (--protocols pouw:SCHEME, its
     --protocols-config the one `pearl_arm` wrote, PEARL_PROTOCOLS_CONFIG) and no H1, a Commit step a window's step at
-    V3C_CLASS's outputs, batch-invariant, with sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise."""
+    V3C_CLASS's outputs and a window its slots' requests, batch-invariant, with sm_90's BF16-rows path off unless
+    PEARLC_BF16_ROWS says otherwise."""
     env = {k: str(tmp_path / v) if k == "PEARL_PROTOCOLS_CONFIG" else v for k, v in env.items()}
     rc, argv = _serve_argv(tmp_path, {"PEARL_TIE": "1", **env})
     flag = lambda f: argv[argv.index(f) + 1] if argv.count(f) == 1 else argv.count(f)  # noqa: E731
     assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
-    assert [flag(f) for f in ("--model", "--revision", "--precision", "--window-steps", "--protocols")] == [
-        "unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "bfloat16", "2", "pouw:pearl-c-h100-v1-h3"]
+    assert [flag(f) for f in ("--model", "--revision", "--precision", "--window-steps", "--window-requests", "--protocols")] == [
+        "unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "bfloat16", "2", "4", "pouw:pearl-c-h100-v1-h3"]
     assert flag("--protocols-config") == str(tmp_path / config) and "--challenger-gate" not in argv, argv
     assert (tmp_path / "env").read_text().splitlines() == ["VLLM_BATCH_INVARIANT=1", f"PEARLC_BF16_ROWS={rows}"]
 
