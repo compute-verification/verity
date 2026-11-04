@@ -358,12 +358,16 @@ def _never_constant(text: str) -> Any:
     raise ValueError(f"{text} is not JSON")
 
 
+def _naturals(units: Sequence[Any]) -> list[int]:
+    """Of `units`, the natural numbers (Lean's ``filterMap nat?``)."""
+    return [u for u in units if isinstance(u, int) and not isinstance(u, bool) and u >= 0]
+
+
 def printed_draw(law: Mapping[str, Any], population: int, units: Sequence[Any]) -> dict:
     """The draw of `law` (a sampling design object as `draw.derive` expands it) over `population` proof blocks drawing
     `units`, with no closure, as `Flock.Draw.UnitDraw.toJson` prints it: a Bernoulli ``p`` as its numerator and
-    denominator print, and of `units` the natural numbers (Lean's ``filterMap nat?``)."""
-    d = {**law, "population": population, "units": [u for u in units if isinstance(u, int) and not isinstance(u, bool)
-                                                       and u >= 0]}
+    denominator print, and of `units` the natural numbers (`_naturals`)."""
+    d = {**law, "population": population, "units": _naturals(units)}
     if law.get("law") == "bernoulli":
         num, _, den = law["p"].partition("/")
         d["p"] = f"{int(num)}/{int(den)}"
@@ -371,11 +375,15 @@ def printed_draw(law: Mapping[str, Any], population: int, units: Sequence[Any]) 
 
 
 def record_drawn(law: Mapping[str, Any], population: int, units: Sequence[Any], record: str) -> bool:
-    """`OneStageZk.recordDrawn`: the session record `record`'s ``unit_draw``, read as `flock-verify` reads it
-    (`Flock.Witness.recordDraw`: a key named twice keeps its last value, a lone surrogate is U+FFFD, a number reads as
-    `_number_of` reads it, and ``unit_draw`` absent or null is no draw), is `printed_draw`'s in canonical JSON. False
-    where it is not, the record isn't JSON or the draw holds a number that isn't an integer. A record nested past
-    Python's recursion limit is refused here, where Lean reads it."""
+    """`OneStageZk.recordDrawn`: of `units`, the natural numbers (`_naturals`) ascend within the population, as
+    `Flock.Draw.UnitDraw.ofJson` holds a draw's units, and the session record `record`'s ``unit_draw``, read as
+    `flock-verify` reads it (`Flock.Witness.recordDraw`: a key named twice keeps its last value, a lone surrogate is
+    U+FFFD, a number reads as `_number_of` reads it, and ``unit_draw`` absent or null is no draw), is `printed_draw`'s
+    in canonical JSON. False where they don't or it is not, the record isn't JSON or the draw holds a number that isn't
+    an integer. A record nested past Python's recursion limit is refused here, where Lean reads it."""
+    us = _naturals(units)
+    if not all(u < population for u in us) or any(a >= b for a, b in zip(us, us[1:])):
+        return False
     try:
         j = json.loads(record, object_pairs_hook=_object_of, parse_float=_number_of, parse_int=_int_of,
                        parse_constant=_never_constant)
@@ -401,7 +409,8 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
     coin tree that release log shows the challenger sampled and opened (`challenger.sessions_tree_reason`), the
     program's proof blocks must be `record`'s population in order (`partition.in_order`), the public file's header
     must be `record`'s (`registration.matches_public`), and the session's record's ``unit_draw`` must be the draw v2
-    drew under v1's law and population, with the evidence's units (`record_drawn`), before the session is verified."""
+    drew under v1's law and population, with the evidence's units, which must ascend within the population
+    (`record_drawn`), before the session is verified."""
     pr, blobs = evidence_v2(proof, evidence["sessions"])
     p2 = {**params, "proofs": {"circuit": circuit_sha512, "public": public_sha512, "registered": registered}}
     e2 = {k: v for k, v in evidence.items() if k != "verdicts"} | {"proofs": pr}

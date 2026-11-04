@@ -2064,7 +2064,8 @@ def test_v2_holds_the_session_record_to_its_draw(server_v2):
     the session's coins and the public file are held and before it is verified, Lean's verdict Python's
     `proofs.record_drawn`'s. Each record is the coin tree's with members after it (`_spellings`), on a subset and a
     stratified audit: the draw in Lean's other spellings of it goes on to the session's verdict, and every other is refused
-    with `DRAW_HELD`. A record reaching the check is one `treesHeld` parsed, so this is every record it reads."""
+    with `DRAW_HELD`, as is evidence whose drawn units don't ascend within the population, its record printing them as
+    drawn. A record reaching the check is one `treesHeld` parsed, so this is every record it reads."""
     for law in ({"k": 2, "law": "subset"}, {"k": 3, "law": "stratified"}):
         s = SETUPS[3]
         rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
@@ -2081,10 +2082,14 @@ def test_v2_holds_the_session_record_to_its_draw(server_v2):
                   "proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None},
                   "query": s.query, "registered": None, "scheme": SCHEME, "window_root": ch.ledger.window["root"],
                   "work_table": None}
-        for name, (drawn, members) in _spellings(d).items():
-            record = _tree_record(ch, *members)
-            assert PF.record_drawn(mine, s.population, d["units"], record.decode()) is drawn, (law, name)
-            evidence = base | {"proofs": {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}}
+        us = d["units"]
+        unsorted = {"descending": us[::-1], "a unit twice": [us[0], *us[:-1]], "a unit past the population":
+                    [*us[:-1], s.population]}
+        tries = [(name, d, drawn, _tree_record(ch, *members)) for name, (drawn, members) in _spellings(d).items()]
+        tries += [(name, {**d, "units": u}, False, _drawn_record(ch, {**d, "units": u})) for name, u in unsorted.items()]
+        for name, draw, drawn, record in tries:
+            assert PF.record_drawn(mine, s.population, draw["units"], record.decode()) is drawn, (law, name)
+            evidence = base | {"draw": draw, "proofs": {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}}
             case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
                     "evidence": _hex(evidence), "params": params}
             out = server_v2.exchange(_json(case))

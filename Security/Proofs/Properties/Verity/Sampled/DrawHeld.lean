@@ -6,9 +6,10 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 
 v2 refuses a session whose record's `unit_draw` is not the draw it drew (`SampledProofs.OneStageZk.drawHeld`): under
 the law `L` and population `n` v1's check draws under (`SampledProofs.OneStageZk.drawLaw`, `LawOf`), the record must print,
-in canonical UTF-8, as the draw of `L` over `n` units drawing the evidence's units (`recordDrawn`). So wherever v2 drew
-`units` in what the prover sent (`Drew`), the record it reads there (`sentRecord`) prints as that draw (`DrawHeld`,
-`draw_held`).
+in canonical UTF-8, as the draw of `L` over `n` units drawing the evidence's units, and those units must ascend within
+the population, as `Flock.Draw.UnitDraw.ofJson` holds a draw's (`recordDrawn`). So wherever v2 drew
+`units` in what the prover sent (`Drew`), those units ascend within the population and the record it reads there
+(`sentRecord`) prints as that draw (`DrawHeld`, `draw_held`).
 
 `DrawHeld` takes the composition's acceptance (`Verity.SameAccepts`), as `sent_verified` does: `Drew`'s case is one of the
 components' cases, zipped with the parameters and the evidence in order, while `sentRecord` reads the case `caseOf` finds by
@@ -84,7 +85,7 @@ theorem recordDrawn_of_drawHeld {v : _root_.SampledProofs.Registration.Verifier}
 
 /-- **v2 holds the record it reads to the draw it drew**: wherever composite `k` accepted what the prover sent as a
 `same` composition and v2 drew `units` there under the law `L` over `n` units (`Drew`), the session's record v2 reads
-(`sentRecord`) prints, in canonical UTF-8, as that draw (`recordDrawn`). -/
+(`sentRecord`) prints, in canonical UTF-8, as that draw, and `units` ascend within the population (`recordDrawn`). -/
 def DrawHeld (k : Verity.Registration.Composite) : Prop :=
   ∀ s dr L n ξ units record, Verity.SameAccepts k s → Drew k s dr L n ξ units → sentRecord s = some record →
     _root_.SampledProofs.OneStageZk.recordDrawn L n units record = true
