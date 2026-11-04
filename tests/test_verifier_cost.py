@@ -66,9 +66,6 @@ ALLOWED: dict[str, str] = {
         "HmOut.unrolled (and HmOut.parseStmt), a templated file's statement circuit, the flat circuit its template "
         "unrolls to (ASK-112 option A), which the soundness statements read; no check runs it: verify sets up on and "
         "checks the committed circuit (HmOut.parseCommit), its template by its description (ProvedScope.scopeOkT)",
-    "verity/core/service/sampled_proofs/SampledProofs/Bits.lean":
-        "Bits.width, the leaf width at a Program's layout gate, which the sampled statements' bits read; no check runs "
-        "it: a check reads a Definition's (Bits.defWidth), once per Definition times its members",
     "verity/core/service/flock/Flock/TmplLayout.lean":
         "Tmpl.posMap, every column's committed position: the reference Tmpl.posOf is proved to read (posMap_tree)",
     "verity/core/service/flock/Flock/TmplFold.lean":
