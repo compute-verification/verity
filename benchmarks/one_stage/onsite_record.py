@@ -103,6 +103,7 @@ if str(HERE.parent / "network_traces") not in sys.path:
     sys.path.insert(0, str(HERE.parent / "network_traces"))
 import advice_charge as AC  # noqa: E402
 import leak_bounds as LB  # noqa: E402
+from served_integrity import exact_delta  # noqa: E402
 
 FORMAT = "verity/onsite-network-record/v1"
 EXTENDS = "verity/all-protocols-window/v1"
@@ -433,8 +434,8 @@ def composite_error(rows: Mapping[str, Any], eps: Fraction | None, why: str = "n
                                           "integrity-profile δ"}
         d = (rows.get(ROWS[name]) or {}).get("delta")
         try:
-            terms.append(t | ({"missing": "its row states no δ"} if d is None else {"delta": str(Fraction(str(d)))}))
-        except ValueError:
+            terms.append(t | ({"missing": "its row states no δ"} if d is None else {"delta": str(exact_delta(d))}))
+        except (TypeError, ValueError):
             terms.append(t | {"error": f"its row's δ {d!r} isn't a number"})
     terms.append({"subprotocol": "inference-only", "missing": NO_NCI_DELTA})
     terms.append({"subprotocol": "the network certifier", "from": f"{EPS['source']}: its eps (`EPS`)"}

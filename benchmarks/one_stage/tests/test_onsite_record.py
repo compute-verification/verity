@@ -614,6 +614,13 @@ def test_a_composite_term_the_run_doesnt_state_is_missing_and_one_that_isnt_a_nu
     assert rec["composite_error"]["stated"] == net["delta"] == PUBLIC["eps"]
 
 
+def test_a_composite_term_stated_as_a_float_is_the_ratio_it_was_given_as(tmp_path):
+    """2^-64 as a float is 1/2^64 and 0.01 is 1/100, never a nearby decimal or ratio."""
+    sampled, pouw, _nci, _net = OR.record(with_deltas(accepted(tmp_path), integrity=0.01, work=2.0 ** -64))[
+        "composite_error"]["terms"]
+    assert (sampled["delta"], pouw["delta"]) == ("1/100", f"1/{2 ** 64}")
+
+
 def test_a_node_cell_is_proved_where_the_runs_period_covers_its_monitoring_period(tmp_path):
     """An execution phase of 63 buckets of 10,000 s covers a week but not a month: the node's week is the run's K,
     proved, and its datacenter scaled from that by its machines; its month is scaled from the run."""
