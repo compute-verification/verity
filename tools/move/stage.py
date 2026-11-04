@@ -9,12 +9,13 @@ For each map in order, on BASE (default `origin/main`, fetched first) or on the 
 2. run that script at the root of a fresh worktree of the commit, as BASE has it (`tools/move/*.py`, `move_check.py` and
    the pins list they read, written out as drive's `move_scripts` does), so the move is the one drive regenerates and the
    lander checks, whatever this checkout holds;
-3. commit what it changed as one commit, whose message names the command and ends in `Move: MAP` for a word map (the
-   line drive and `move_check.py` read) or `Layout-move: MAP` for a path map;
+3. commit what it changed as one commit, whose message names the command and ends in its move line: `Move: MAP` for a
+   word map (the line drive and `move_check.py` read), `Layout-move: MAP` for a path map (with `--no-lock` if given), by
+   which `restack.py` finds the move and its script;
 4. certify the commit with BASE's `move_check.py PARENT COMMIT --json` (each `--map OLD=NEW` passed on), and refuse it
    unless certified, printing what isn't a pure move;
-5. run the map again on the commit, and refuse it unless that changes nothing (`--no-rerun` skips this): `restack.py`
-   carries open branches across the move by rerunning it.
+5. run the map again on the commit, and refuse it unless that changes nothing (`--no-rerun` skips this): once the moves
+   land, `restack.py BRANCH` carries an open branch across all of them by rerunning each.
 
 Nothing in this checkout changes but the branch `--branch` names, created at the last commit (refused if it exists
 here, or on the remote with `--push`); `--push` pushes it, never forced. `--certificate FILE` writes each commit's
@@ -34,13 +35,18 @@ import tempfile
 import tomllib
 from pathlib import Path
 
-RENAME, LAYOUT, MOVE_CHECK = "tools/move/rename.py", "tools/move/layout.py", "tools/verity/check/move_check.py"
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import restack as RS  # noqa: E402
+
+MOVE_CHECK = "tools/verity/check/move_check.py"
 #: what the scripts import from their own checkout: `tools/move/`'s other scripts and the pins list
 MOVE_DIR, PINS = "tools/move/", "tools/verity/check/pins.py"
 #: a map is a file directly in `tools/move/`, where `move_check.py` reads word maps and drive's `Move:` line names them
 MAP = re.compile(r"^tools/move/[\w.-]+\.toml$")
-SCRIPT = {"words": RENAME, "paths": LAYOUT}
-TRAILER = {"words": "Move", "paths": "Layout-move"}
+#: each kind of map's move line, which names its script (`restack.LINE_SCRIPT`) for whoever reruns the move
+LINE = {"words": "Move", "paths": "Layout-move"}
+SCRIPT = {kind: RS.LINE_SCRIPT[line] for kind, line in LINE.items()}
 SHOWN = 20
 
 
@@ -133,7 +139,9 @@ class Stage:
             raise Refused(f"`{shown}` changes nothing on {parent[:12]}: its move is there already, or its map maps nothing there")
         check = shlex.join(["verity", "check", "move", parent[:12], "HEAD", *self.extra])
         message = (f"Move by {path}\n\n`{shown}` at the root of {parent}, with {self.base[:12]}'s scripts, committed by "
-                   f"`tools/move/stage.py`; `{check}` certifies it.\n\n{TRAILER[kind]}: {path}\n")
+                   f"`tools/move/stage.py`; `{check}` certifies it.\n\n{' '.join([f'{LINE[kind]}:', path, *args[2:]])}\n")
+        m = RS.MOVE_LINE.search(message)
+        assert m and (RS.LINE_SCRIPT[m[1]], ["--map", m[2], *m[3].split()]) == (script, args), message
         commit = git(self.repo, "commit-tree", tree, "-p", parent, "-m", message)
         git(self.wt, "reset", "-q", "--soft", commit)
 
@@ -229,6 +237,7 @@ def main(argv: list[str] | None = None) -> int:
     print("the lander checks each:")
     for m in moves:
         print(f"  {m['check']}")
+    print("once they land, an open branch crosses them all: python3 tools/move/restack.py BRANCH --push-to NEWBRANCH")
     return 0
 
 

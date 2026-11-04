@@ -90,7 +90,7 @@ def test_a_word_map_and_a_path_map_stage_as_a_chain_of_certified_commits(tmp_pat
     p = paths["commit"]
     assert _show(repo, p, "beta/x.py") == "def f():\n    return 1"
     assert _show(repo, p, "user.py") == "from beta.x import f  # a quux"
-    assert git(repo, "log", "-1", "--format=%B", p).endswith("\n\nLayout-move: tools/move/alpha_map.toml")
+    assert git(repo, "log", "-1", "--format=%B", p).endswith("\n\nLayout-move: tools/move/alpha_map.toml --no-lock")
 
     for m in (words, paths):
         r = MC.certify(m["parent"], m["commit"], cwd=str(repo))
@@ -99,6 +99,37 @@ def test_a_word_map_and_a_path_map_stage_as_a_chain_of_certified_commits(tmp_pat
     assert words["report"]["words"] == "tools/move/zorble_map.toml"
     assert git(repo, "rev-parse", "HEAD") == base and git(repo, "status", "--porcelain") == ""
     assert len(git(repo, "worktree", "list").splitlines()) == 1
+
+
+def test_an_open_branch_crosses_every_landed_move_with_one_restack_command(tmp_path, monkeypatch, capsys):
+    """The window: two moves staged on main and landed as `research merge` lands a ref (`--no-ff`), then a commit after
+    them; a branch from before them crosses both with `restack.py BRANCH`, which finds each by its move line and reruns its
+    script on the branch's own changes, so what the branch added is renamed and moved too."""
+    repo, base = _repo(tmp_path, {**TREE, "tools/move/zorble_map.toml": WORDS, "tools/move/alpha_map.toml": PATHS})
+    git(repo, "checkout", "-q", "-b", "pr")
+    (repo / "alpha/y.py").write_text("from alpha.x import f  # a zorble helper\n")
+    (repo / "notes.md").write_text(TREE["notes.md"] + "Another zorble.\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "the branch's own change")
+    git(repo, "checkout", "-q", "main")
+    assert _stage(monkeypatch, repo, "tools/move/zorble_map.toml", "tools/move/alpha_map.toml", "--base", base,
+                  "--no-lock", "--branch", "staged") == 0
+    assert "restack.py BRANCH" in capsys.readouterr().out
+    git(repo, "merge", "-q", "--no-ff", "-m", "land the moves", "staged")
+    (repo / "later.md").write_text("after the moves\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "after the moves")
+
+    assert ST.RS.main(["pr", "--main", "main", "--no-pins", "--json"]) == 0
+    [r] = json.loads(capsys.readouterr().out)
+    assert r["status"] == "clean" and r["crossed"] == [git(repo, "rev-parse", "staged~1"), git(repo, "rev-parse", "staged")]
+    result = r["result"]
+    assert git(repo, "merge-base", "--is-ancestor", "main", result) == ""
+    assert _show(repo, result, "beta/y.py") == "from beta.x import f  # a quux helper"
+    assert _show(repo, result, "notes.md") == "A quux is `zorble`.\nAnother quux."
+    assert _show(repo, result, "later.md") == "after the moves"
+    assert "alpha/y.py" not in git(repo, "ls-tree", "-r", "--name-only", result)
+    assert git(repo, "rev-parse", "pr") == r["head"]
 
 
 def test_a_map_the_base_lacks_is_refused_before_anything_runs(tmp_path, monkeypatch, capsys):

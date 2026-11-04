@@ -9,7 +9,7 @@ root, and refuses a dirty worktree; a second run changes nothing.
 | `stage.py` | Stages a move on a base: one commit per map, each certified by `move_check.py` and rerun to check it changes nothing, for its lander (`MAP...`, `--base`, `--branch`, `--push`, `--certificate`). |
 | `layout.py` | Moves the paths a layout map names and rewrites every path, module name, import, pyproject and anchor that pointed at them (`--dry-run`, `--modules`, `--resolve M`). |
 | `rename.py` | Renames the words a word map names, in paths, modules, Lean names and prose, leaving the Lean locks' records for `tools/verity/lean/check.py --update --moved` (`--map MAP`, `--dry-run`, `--moves`). |
-| `restack.py` | Carries an open branch across a move by rerunning the move's script on it, then merging the moved `main`. |
+| `restack.py` | Carries an open branch across every move `main` has and it lacks, by rerunning each move's script on it, then merging the moved `main` (`BRANCH`, `--push-to`). |
 
 A layout map (`layout.py --map`) maps old paths to new ones; a word map (`rename.py --map`) maps old words to new ones:
 
@@ -49,8 +49,8 @@ A move lands alone, as one commit per map on the commit it was made on. Its lead
    For each map in order, on `origin/main` (fetched first; `--base REF` names another) or on the commit the map before it
    made, it runs the base's own `rename.py` (a map with `[words]`) or `layout.py` (a map with `[paths]`; `--no-lock` skips
    `uv lock`) at the root of a fresh worktree, commits what that changed as one commit whose message names the command and
-   ends in `Move: MAP` or `Layout-move: MAP`, certifies it with the base's `move_check.py PARENT COMMIT`, and runs the map
-   again to check that changes nothing. Nothing in the checkout changes but the new branch, pushed and never forced.
+   ends in its move line, `Move: MAP` or `Layout-move: MAP`, certifies it with the base's `move_check.py PARENT COMMIT`,
+   and runs the map again to check that changes nothing. Nothing in the checkout changes but the new branch, pushed and never forced.
    `--certificate` writes each commit's `move_check.py --json` report;
 3. hands the lander the branch and the command `stage.py` printed for each commit, `verity check move PARENT COMMIT`
    (`move_check.py`, which exits 0 on a pure move, 1 naming what isn't).
@@ -72,8 +72,15 @@ with each path's first offending hunk, every change its docstring doesn't list a
   head;
 - a file added or deleted that no rename pairs, other than a new Lake package's files copied from its source package.
 
-Once the move has landed, an open branch crosses it with `python3 tools/move/restack.py BRANCH --move-commit SHA --script
-SCRIPT --script-arg=--map --script-arg MAP`. A word move that renames declarations a lock records leaves those records for
-a commit of their own: `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves` prints.
+Once the moves have landed, each open branch crosses all of them with one command:
+
+    python3 tools/move/restack.py BRANCH --push-to NEWBRANCH
+
+It finds each move `origin/main` (`--main`; fetch it first) has and the branch lacks by its move line, oldest first, reruns that move's
+script and map on the branch, its own additions included, and merges the moved `main` last. It changes no branch: the
+result is pushed to the new branch, never over one. It reports `clean`, or where it stopped: a conflict of the branch's
+own, a script that failed, or pins or Lean locks to regenerate. A word move that renames declarations a lock records leaves
+those records for a commit of their own: `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves`
+prints.
 
     uv run tools/verity/check/suites.py tools/move     # the tests (remotely: AGENTS.md "Tests")
