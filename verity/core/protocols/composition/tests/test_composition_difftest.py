@@ -15,8 +15,8 @@ component dropped, unknown, repeated or out of order, a case under other params,
 non-canonical or malformed evidence, blobs missing or malformed) or the case itself (a field missing or not hex, not an
 object), and every field of the outcome but its reason must agree exactly. Integrity's cases are aimed at undecided at
 best (an audit that drew nothing), so no product accepts here; remote's case on one record that reuses the window's
-registration of its tables (`reusing`) is one made case, undecided for want of sampled proofs' verifier of record.
-`product IDS serve` over each composite's subprotocols,
+registration of its tables (`reusing`) is one made case, which sampled proofs refuses until a session of record opens
+those tables. `product IDS serve` over each composite's subprotocols,
 the composite `verity run`'s verifier runs, is held to the same reference, and `product IDS id` names remote and onsite
 for their subprotocols and refuses every other set: the same two composites a configuration may list
 (`verity.core.deploy.config.COMPOSITES`)."""
@@ -653,8 +653,8 @@ def reusing_audit(m: dict, outputs: bool = True) -> dict:
     """Sampled proofs' one-stage v2 case on `reusing`'s R (`m`) over the log [W], with R's outputs unless not `outputs`:
     its draw at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin tree) drew
     nothing, so it has no session and no proved unit, `BLOBS` hold its circuit and public files, and its registered file
-    names R's tables, which no proof block of R's program reads. v2 is undecided on it for want of the verifier of
-    record once R1-R7 accept R."""
+    names R's tables, which no proof block of R's program reads. Once R1-R7 accept R, v2 refuses it by the audit's
+    `registered` check: no session of record opened R's tables."""
     s, rec = m["setup"], m["record"]
     ch, d, coins = OS._challenger_draw(random.Random("remote/reusing"), s, REUSING_LAW, rec, trees=0)
     reads = {"format": "verity/registered-reads/v1", "ports": {
@@ -676,38 +676,37 @@ def reusing_audit(m: dict, outputs: bool = True) -> dict:
 def test_remote_on_one_record_that_reuses_the_windows_registration(remote_server):
     """A period of one window whose Commit record is R, the run's registration chained after W, the window's
     registration of its tables, reusing W's entries as R's outputs (`reusing`): the policy on the log [W] and R and the
-    period accept, and sampled proofs' one-stage v2 audit of R, at the window's open root, passes R1-R7 and is undecided
-    for want of the verifier of record (no session's proof here: a served window's case carries them), so remote is
-    undecided, the policy's record and the window's both R, in Lean as in Python. Without the outputs, R7 refuses R
-    (``R7-domain``) and remote rejects. With the same policy and audit and an honest period whose window names its own
-    Commit record, remote refuses by its `windows` tie, naming R and that record. R registers one window's tables, so a
-    period credits at most one window on it."""
+    period accept, and every reader of remote reads R (its `windows` tie holds). Sampled proofs' one-stage v2 audit of
+    R, at the window's open root, passes R1-R7 and refuses R by its `registered` check: no session of record opened R's
+    tables (an audit that drew nothing has none; a served window's case carries them), so remote rejects, in Lean as in
+    Python. Without the outputs, R7 refuses R (``R7-domain``). An honest period whose window names its own Commit record
+    breaks the tie. R registers one window's tables, so a period credits at most one window on it."""
     PPC, made = R.POUW_PERIOD_CASES, []
     period = as_component(R.POUW_PERIOD, PPC.serve(PPC.credit_cases.period_instance(
         random.Random("remote/reusing"), windows=1, commit=reusing(made), **PPC.COVERED)))
-    audit = as_component(R.SAMPLED_PROOFS, reusing_audit(made[0]))
+    reused = reusing_audit(made[0])
+    audit = as_component(R.SAMPLED_PROOFS, reused)
     policy = policy_on(audit)
     record = OS.R.digest(made[0]["record"])
     assert [x.hex() for x in R.policy_record(policy["root"], policy["evidence"])] == [record]
     assert [x.hex() for x in R.window_records(period["root"], period["evidence"])] == [record]
     bare = reusing_audit(made[0], outputs=False)
-    assert R.SAMPLED_PROOFS.answer({**bare, "blobs": BLOBS})["reason"] == "registration: R7-domain"
+    assert R.SAMPLED_PROOFS.answer({**reused, "blobs": BLOBS})["reason"] == "checks"
+    assert R.SAMPLED_PROOFS.answer({**bare, "blobs": BLOBS})["reason"] == "registration"
     own = as_component(R.POUW_PERIOD, PPC.serve(PPC.credit_cases.period_instance(
         random.Random("remote/reusing"), windows=1, **PPC.COVERED)))
-    window = R.window_records(own["root"], own["evidence"])[0].hex()
-    assert window != record
-    for cases, verdicts, verdict, reason in (
-            ([policy, period, audit], [R.ACCEPT, R.ACCEPT, R.UNDECIDED], R.UNDECIDED, None),
-            ([policy, period, as_component(R.SAMPLED_PROOFS, bare)], [R.ACCEPT, R.ACCEPT, R.REJECT], R.REJECT, None),
-            ([policy, own, audit], [R.ACCEPT, R.ACCEPT, R.UNDECIDED], R.REJECT,
-             f"record: {R.INFERENCE_ONLY.id} committed {record}, {R.POUW_PERIOD.id} committed {window}")):
+    assert R.window_records(own["root"], own["evidence"])[0].hex() != record
+    refused = f"{R.SAMPLED_PROOFS.id} reject: "
+    for cases, one, why in (
+            ([policy, period, audit], True, "the audit's checks failed: registered"),
+            ([policy, period, as_component(R.SAMPLED_PROOFS, bare)], True, "registration: R7-domain"),
+            ([policy, own, audit], False, "the audit's checks failed: registered")):
         case = remote_case(cases)
-        assert R.REMOTE.verdicts(case) == verdicts, R.REMOTE.verdicts(case)
+        assert R.REMOTE.verdicts(case) == [R.ACCEPT, R.ACCEPT, R.REJECT], R.REMOTE.verdicts(case)
+        assert R.REMOTE.tied(case) == [(R.WINDOWS.what, one)], R.REMOTE.tied(case)
         python, lean = R.REMOTE.answer(case), remote_server.exchange(case)
         assert {k: v for k, v in lean.items() if k != "reason"} == {k: v for k, v in python.items() if k != "reason"}
-        for out in (python, lean):
-            assert out["verdict"] == verdict, out
-            assert reason is None or out["reason"] == reason, out
+        assert python["verdict"] == R.REJECT and lean["reason"] == refused + why, lean
 
 
 @pytest.mark.slow
