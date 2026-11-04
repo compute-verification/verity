@@ -19,24 +19,27 @@ a row at every target: `reached` "yes" at its first checkpoint reaching it, C th
 else "no" at its last checkpoint, C its total |C| and p = C/H a lower bound on its p (null without H). A start at or
 below its fit's E has no rows, and a data with no fit none.
 
-Each row's ρ is te_core.formalism's `published` at its checkpoint at the console's default policy (`CONSOLE`,
-te_core.policy's: one full session of the 45M reference, attention included), the one default of every ρ column
-(coordinator 08:09Z and 10:23Z: rows are reported at that c only); `rho_served` is the same at the registered serving
-block (te_core.panels' `SERVED`), the figure beside every headline. `rho_default` is it as a number: under reading B
-c/(c − d) where Fit holds for the training (basis `fit`), else Slowdown's token form (`target`), null where infinite;
-under reading A, Fit's, else the measured terms' max over the kinds valid on their own where it exceeds 1 (basis its
-binding kind, or `partial` where a valid kind is unmeasured, so ρ is only a lower bound), else null with basis
-`unmeasured` where a valid kind is unmeasured, else 1 (basis `none`), as `published` gives it (coordinator 12:20Z).
+Each row's ρ is te_core.formalism's `published` at its checkpoint under three policies (`POLICIES`), a column each,
+and ρ scales with c. The headline, `rho_own` (basis `basis_own`), is at the start's own session (`own_session`:
+te_core.policy's `session` on the start's model, `CONSOLE_SESSION`'s 4,096 tokens in and 1,024 out, c `own_c_gates`)
+at k = `OWN_K`, 65,536 bits, one 16-bit word an input token; the start's packed ids (`own_k_bits`, 61,440 at bpe32k's
+32,000) leave every products term unmeasured, and the bound falls as k grows, so ρ there is at least rho_own
+(`OWN_K_LABEL`). `rho_default` (basis `basis_default`) is it at the console's default (`CONSOLE`, te_core.policy's:
+one full session of the 45M reference, attention included) and `rho_served` at the registered serving block
+(te_core.panels' `SERVED`), both sensitivities. Each is a number: under reading B c/(c − d) where Fit holds for the
+training (basis `fit`), else Slowdown's token form (`target`), null where infinite; under reading A, Fit's, else the
+measured terms' max over the kinds valid on their own where it exceeds 1 (basis its binding kind, or `partial` where a
+valid kind is unmeasured, so ρ is only a lower bound), else null with basis `unmeasured` where a valid kind is
+unmeasured, else 1 (basis `none`), as `published` gives it (coordinator 12:20Z).
 No row is void: a products term of 0 is the theorem of record's floor, so the row reads max(1, ρ_HE) with its
-premises. Both ρ columns are sensitivities: ρ scales with c, and the console's headline is the start's own serving
-session (the dashboard's `grown`), which its dial computes from `rho_inputs`; the note and the figure name each
-column's policy (`POLICIES`). Where ρ is the products term's or its floor's, `rests_on` opens with `TRACED`: the
-theorem is about Boolean circuits, and the grader doesn't read them yet. `rho_inputs`, one JSON cell, carries
-every input the console's dial needs to recompute the token form at any (c, k), a row's ρ under reading B and a
-sensitivity under A: `panels.PACKED` and `SPLIT`, u_in through its points at the dial's k (`panels.through`, the
-console's among them), where x0 is exact; `page_rho` is the dial's formula on them. `build` refuses a row whose
-rounded columns don't give formalism.at's token form and basis at every cell of te_core.panels' dial and at `CONSOLE`
-(`panels.mismatches`).
+premises. The note and the figure name each column's policy. Where the default's ρ is the products term's or its
+floor's, `rests_on` opens with `TRACED`: the theorem is about Boolean circuits, and the grader doesn't read them yet.
+`rho_inputs`, one JSON cell, carries every input the console's dial needs to recompute the token form at any (c, k),
+a row's ρ under reading B and a sensitivity under A, the dashboard's own session (`grown`) among them:
+`panels.PACKED` and `SPLIT`, u_in through its points at the dial's k (`panels.through`, the console's among them),
+where x0 is exact; `page_rho` is the dial's formula on them. `build` refuses a row whose rounded columns don't give
+formalism.at's token form and basis at every cell of te_core.panels' dial, at `CONSOLE` and at the start's own
+session (`panels.mismatches`).
 `estimated` names the inputs that are stubs, bounds, assumptions or estimates, and gain:provisional where its data's
 fit is provisional (te_core.frontier_fit's `FIT_TARGET`), which the note names. The dashboard's cells (coordinator
 08:26Z and the dashboard's ruling): `rho_console`, the same ρ ("inf" where infinite, null where reading A
@@ -47,8 +50,8 @@ sensitivities it leaves out, with a measured fresh-products term's premises besi
 that term is its best subset's, the products it dropped (`fresh_subset`, te_core 4.10). p is relative to the best
 route found (H), which can be a covert route.
 
-The coverage (`coverage`) is, per gain target, data and decade of ρ (`DECADES`: from 1, 10, ... and 1e5 and above,
-an infinite ρ there, and an unmeasured one, one resting on a stub input (basis `stub`) or a partial one (basis
+The coverage (`coverage`) is, per gain target, data and decade of rho_default (`DECADES`: from 1, 10, ... and 1e5 and
+above, an infinite ρ there, and an unmeasured one, one resting on a stub input (basis `stub`) or a partial one (basis
 `partial`, ρ a lower bound: drawn and marked, but in no cell and on no front; coordinator 12:20Z) in none, which the
 table counts), the reached row with the least p, else the failed attempt with the greatest gain, else EMPTY.
 The console's copy (`cut`) is the whole table when it fits the panels route (te_core.console), else the coverage's
@@ -59,8 +62,8 @@ for. DIR gets the
 uncut tables in `tables/` (`algorithm-policy.json`, `coverage.json`, `coverage.md`, `refused.json`, each valid
 checkpoint te_core.formalism refuses with its reason, which no row holds, and te_core.frontier_fit's
 `frontier-fit.json` and `frontier-points.json`), both panels' console copies in `console/` and `algorithm-policy.png`
-(p against ρ at the console's default on the headline data, v3 once it has rows, else the pilot: a panel per gain
-target, with iso-S diagonals). `--publish` GETs what the route serves (`console.served`; no PUT when that fails), puts
+(p against the headline rho_own on the headline data, v3 once it has rows, else the pilot: a panel per gain target,
+with iso-S diagonals). `--publish` GETs what the route serves (`console.served`; no PUT when that fails), puts
 `tables/` in the evidence store, whose art id the cut's note names, and PUTs `training/frontier-fit`, then the cut. On
 each data whose served rows are at a newer te_core (`kept_data`), both panels keep the served rows (`guarded`), which
 the note and the board line name. An older te_core's rows are always replaced, even where this build has no row for a
@@ -104,21 +107,24 @@ SPLIT = ("delta_bits", "w_fwd_gates", "u_points", "u_in_points")
 COLUMNS = ["start", "start_compute_gates", "start_effective_gates", "start_loss", "end_loss", "gain_target", "gain",
            "reached", "C_gates", "H_gates", "p", "rho_default", "basis_default", "method_key", "family", "record", "data",
            "estimated", "rho_inputs", "reading", "te_core", "rho_console", "binding_kind", "rests_on", "kinds",
-           "rho_served"]
+           "rho_served", "rho_own", "basis_own", "own_c_gates", "own_k_bits"]
 #: the console's default policy, the one default of `rho_default` and `rho_console` (coordinator 08:09Z): te_core.policy's
 #: `CONSOLE`, one full session of the 45M reference with 4,096 input and 1,024 output tokens (`policy.session_gates`)
 #: and k = 65,536 bits
 CONSOLE = policy.CONSOLE
 #: the columns the console's copy leaves out (the stored tables keep them), so its rows fit the route's
-#: `console.COLUMNS_MAX` and its finer tiers `console.BODY_MAX`: H is C/p, and what ρ's inputs rest on is the same on
-#: every row of a te_core version
-CONSOLE_DROP = ("H_gates", "estimated")
+#: `console.COLUMNS_MAX` and its finer tiers `console.BODY_MAX`: H is C/p, what ρ's inputs rest on is the same on
+#: every row of a te_core version, C_eff(l0) is training/frontier-fit's fit at start_loss, the own session's c and
+#: packed k are the start's model's (te_core.policy's `session`), and a partial rho_own is still a lower bound on ρ at
+#: the packed k, as its label says
+CONSOLE_DROP = ("H_gates", "estimated", "start_effective_gates", "basis_own", "own_c_gates", "own_k_bits")
 CONSOLE_COLUMNS = [c for c in COLUMNS if c not in CONSOLE_DROP]
 LOSSES = ("start_loss", "end_loss")
 #: significant digits of the console copy's compute and ρ inputs, so its dial reproduces ρ and its gains and p
 #: recompute, and of its other numbers
 INPUT_DIGITS, DIGITS = 6, 4
-EXACT = ("start_compute_gates", "start_effective_gates", "C_gates", "H_gates", "delta_bits", "w_fwd_gates")
+EXACT = ("start_compute_gates", "start_effective_gates", "C_gates", "H_gates", "delta_bits", "w_fwd_gates",
+         "own_c_gates")
 #: the cut's tiers, the finest first: the groups whose (p, ρ) fronts and best failed attempts it keeps
 TIERS = ("family", "start", "coverage")
 #: each column whose value rests on a record's labelled quantities, and those quantities (te_core.formalism's names), the
@@ -148,10 +154,19 @@ PARTIAL = "partial"
 LOWER = {PARTIAL: 6}
 #: what `rests_on` opens with where ρ is the products term's or its floor's (binding `fresh_products` or `none`)
 TRACED = "computed from the traced op graph's matmuls and widths, (H) betas and (E) b_y assumed"
+#: the headline's k: one 16-bit word an input token of the console's session, the dial's measured k (the console's
+#: own). A start's packed ids, CONSOLE_SESSION[0]·⌈log2 V⌉ (61,440 at bpe32k's 32,000), leave every products term
+#: unmeasured, since a trace classifies products only at te_core.capture.products' `DIAL_K`; the bound falls as k
+#: grows, so ρ at OWN_K is at most ρ at the packed k
+OWN_K = CONSOLE[1]
+#: a v3 start's packed k, its session's input ids at bpe32k's 32,000 (`policy.session`'s k_bits)
+V3_PACKED_K = policy.CONSOLE_SESSION[0] * policy.id_bits(32_000)
+OWN_K_LABEL = f"k = {OWN_K:,.0f} (16-bit ids); at the packed {V3_PACKED_K:,} rho is at least this"
 #: each ρ column's policy, as the note and the figure name it
-POLICIES = {"rho_default": "the console's fixed default, one session of the 45M reference",
-            "rho_served": "the frontier-scale serving block",
-            "headline": "the start's own serving session (the dashboard's grown, its dial on rho_inputs)"}
+POLICIES = {"rho_own": f"the start's own session ({policy.CONSOLE_SESSION[0]:,} in + {policy.CONSOLE_SESSION[1]:,} "
+                       f"out on its model), {OWN_K_LABEL}",
+            "rho_default": "the console's fixed default, one session of the 45M reference",
+            "rho_served": "the frontier-scale serving block"}
 #: the kinds whose measured term the kinds cell labels with what it rests on (te_core.formalism's `RESTS_ON_CELL`),
 #: binding or not: the fresh-products term rests on premises on the reference circuit, P-width and P-chain
 #: (coordinator 12:09Z), which `rests_on` names only where it binds
@@ -161,6 +176,20 @@ PREMISED = ("fresh_products",)
 def finite(rho: float | None) -> float | None:
     """A published ρ as a number column: null where infinite or unmeasured."""
     return None if rho is None or math.isinf(rho) else rho
+
+
+def own_session(shape: dict) -> dict:
+    """The start's own session (te_core.policy's `session`, `CONSOLE_SESSION`'s tokens on its model): its shape is
+    `policy.SHAPES`' for its parameters, since a start's shape lacks d_ff, else its own."""
+    p = shape["parameters"]
+    return policy.session(p, *policy.CONSOLE_SESSION, None if p in policy.SHAPES or "d_ff" not in shape else shape)
+
+
+def basis_of(one: dict, est: str) -> str:
+    """A published ρ's basis column: `UNMEASURED`, `STUB` where it rests on a stub input, `PARTIAL`, else its binding
+    kind."""
+    return (UNMEASURED if one["rho"] is None else STUB if any(t.endswith(f":{STUB}") for t in est.split())
+            else PARTIAL if one.get("partial") else one["binding_kind"])
 
 
 def num(v: float, digits: int = INPUT_DIGITS) -> str:
@@ -315,6 +344,7 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
         if f is None or st.l0 <= f["E"]:
             continue
         runs, dials, own = runs_of(st), {}, frontier_fit.c_eff(f, st.l0)
+        sess = own_session(st.shape)
         for g in GAINS:
             target = frontier_fit.target(f, st.l0, g)
             h = panels.least(st.honest, target)
@@ -324,21 +354,24 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
                 r = hit or cps[-1]
                 m = r["measured"]
                 if r["id"] not in dials:
-                    dials[r["id"]] = panels.dial(m, st.w) | {(CONSOLE[0] / st.w, CONSOLE[1]): formalism.at(m, *CONSOLE)}
-                    rhos[r["id"]] = formalism.published(m), formalism.published(m, *panels.SERVED)
-                one, served = rhos[r["id"]]
+                    dials[r["id"]] = panels.dial(m, st.w) | {
+                        (CONSOLE[0] / st.w, CONSOLE[1]): formalism.at(m, *CONSOLE),
+                        (sess["gates"] / st.w, OWN_K): formalism.at(m, sess["gates"], OWN_K)}
+                    rhos[r["id"]] = (formalism.published(m), formalism.published(m, *panels.SERVED),
+                                     formalism.published(m, sess["gates"], OWN_K))
+                one, served, mine = rhos[r["id"]]
                 gain, est = frontier_fit.gain_from(f, st.l0, r["val_bpb"]), estimated(m)
-                basis = (UNMEASURED if one["rho"] is None else STUB if any(t.endswith(f":{STUB}") for t in est.split())
-                         else PARTIAL if one.get("partial") else one["binding_kind"])
                 row = [st.label, st.c0, None if math.isinf(own) else own, st.l0, r["val_bpb"], g,
                        None if math.isinf(gain) else gain,
                        "yes" if hit else "no", r["gates"], h, r["gates"] / h if h else None, finite(one["rho"]),
-                       basis, plots.method(r), r.get("family"), f"{run}@{r.get('checkpoint_step')}", st.data,
-                       " ".join(filter(None, (est, "gain:provisional" if f.get("provisional") else "")))]
+                       basis_of(one, est), plots.method(r), r.get("family"), f"{run}@{r.get('checkpoint_step')}",
+                       st.data, " ".join(filter(None, (est, "gain:provisional" if f.get("provisional") else "")))]
                 cols = {"rho_inputs": rho_inputs(m, st.w), "reading": one["reading"], "te_core": VERSION,
                         "rho_console": None if one["rho"] is None else "inf" if math.isinf(one["rho"]) else one["rho"],
                         "binding_kind": one["binding_kind"], "rests_on": rests_on(one), "kinds": kinds(one),
-                        "rho_served": finite(served["rho"])}
+                        "rho_served": finite(served["rho"]), "rho_own": finite(mine["rho"]),
+                        "basis_own": basis_of(mine, est), "own_c_gates": sess["gates"],
+                        "own_k_bits": sess["k_bits"]}
                 row += [cols[c] for c in COLUMNS[len(row):]]
                 d = dict(zip(COLUMNS, rounded(row)))
                 wrong += panels.mismatches(d | {"run": d["record"]}, dials[r["id"]], st.w)
@@ -356,12 +389,15 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
 def note(art: str | None = None, tier: str | None = None, kept: str = "", provisional: tuple = ()) -> str:
     """The panel's note; `tier` names what a cut keeps (None: no cut), `art` the stored tables, `kept` the data whose
     served rows stay (`kept_data`) and `provisional` the data whose gains read a provisional fit. Over the route's
-    `console.NOTE_MAX` it drops the kept data's versions, then the dial's sentence."""
-    def text(kept: str, dial: bool) -> str:
-        out = (f"Per run, start, g = {', '.join(f'{g:g}' for g in GAINS)} (gain C(L)/C(l0)): yes at the first "
-               "checkpoint reaching g, else no at the last. p = C/H relative to the best route found (H), a bound if "
-               "no. Headline policy: the start's own session (grown); sensitivities rho_default = rho_console "
-               "(console default), rho_served (serving)." + (" Dial: rho_inputs (u_in exact at its k)." if dial else ""))
+    `console.NOTE_MAX` it drops the kept data's versions, then the dial's sentence, then the opening's glosses of g, p
+    and H; the headline's label stays whole."""
+    def text(kept: str, dial: bool, gloss: bool = True) -> str:
+        out = (f"Per run, start, g = {', '.join(f'{g:g}' for g in GAINS)}" + (" (gain C(L)/C(l0))" if gloss else "")
+               + ": yes at the first checkpoint reaching g, else no at the last; p = C/H"
+               + (", H the best route found (a bound if no)" if gloss else "")
+               + f". Headline rho_own: the start's own session, {OWN_K_LABEL}. "
+               "Sensitivities: rho_default = rho_console (45M), rho_served."
+               + (" Dial: rho_inputs (u_in exact at its k)." if dial else ""))
         if provisional:
             out += f" {', '.join(provisional)}: provisional fit."
         if tier:
@@ -374,7 +410,8 @@ def note(art: str | None = None, tier: str | None = None, kept: str = "", provis
         return out
 
     bare = re.sub(r" \(te_core [\d.]+\)", "", kept)
-    return next((t for t in (text(kept, True), text(bare, True)) if len(t) <= console.NOTE_MAX), text(bare, False))
+    return next((t for t in (text(kept, True), text(bare, True), text(bare, False)) if len(t) <= console.NOTE_MAX),
+                text(bare, False, False))
 
 
 def decade(rho: float | None, basis: str | None = None) -> int | None:
@@ -631,18 +668,20 @@ def store(path: Path, meta: dict) -> str:
 
 
 def figure(p: dict, out: Path) -> Path:
-    """p against ρ at the console's default on the headline data, log-log, one panel per gain target: a colour per family,
-    a marker per start, filled where reached and open at a failed attempt's lower bound on p, a caret up from a partial
-    row's (`PARTIAL`, ρ a lower bound, never the least S), the coverage's decades of ρ dotted and the iso-S diagonals
-    S = p ρ at `LEVELS`; its title names its policy, a sensitivity beside the headline's (`POLICIES`)."""
+    """p against the headline rho_own (`basis_own`) on the headline data, log-log, one panel per gain target: a colour
+    per family, a marker per start, filled where reached and open at a failed attempt's lower bound on p, a caret up
+    from a partial row's (`PARTIAL`, ρ a lower bound, never the least S), decades of ρ dotted and the iso-S diagonals
+    S = p ρ at `LEVELS`; its title names the headline's policy with each start's c and packed k, and the sensitivities'
+    (`POLICIES`)."""
+    y, b = "rho_own", "basis_own"
     data = headline(p)
     every = [d for d in plots.frame(p) if d["data"] == data]
-    rows = [d for d in every if d["p"] is not None and d["rho_default"] is not None and d["basis_default"] != STUB]
+    rows = [d for d in every if d["p"] is not None and d.get(y) is not None and d[b] != STUB]
     families = sorted({d["family"] or "?" for d in rows})
     starts = list(dict.fromkeys(d["start"] for d in rows))
     xlo = 10 ** math.floor(math.log10(min([d["p"] for d in rows] + [0.8])))
     xhi = 10 ** math.ceil(math.log10(1.5 * max([d["p"] for d in rows] + [5.0])))
-    yhi = 10 ** math.ceil(math.log10(1.5 * max([d["rho_default"] for d in rows] + [float(max(LEVELS))])))
+    yhi = 10 ** math.ceil(math.log10(1.5 * max([d[y] for d in rows] + [float(max(LEVELS))])))
     fig, axes = plt.subplots(1, len(GAINS), figsize=(15, 6), sharex=True, sharey=True)
     xs = [10 ** (i / 20) for i in range(int(20 * math.log10(xlo)), int(20 * math.log10(xhi)) + 1)]
     for ax, g in zip(axes, GAINS):
@@ -656,21 +695,20 @@ def figure(p: dict, out: Path) -> Path:
         for d in mine:
             yes = d["reached"] == "yes"
             colour = f"C{families.index(d['family'] or '?') % 10}"
-            ax.plot(d["p"], d["rho_default"], MARKERS[starts.index(d["start"]) % len(MARKERS)], ms=4.5, alpha=0.75,
-                    color=colour, mfc=colour if yes else "none", mec="k" if yes and d["basis_default"] == "fit" else
-                    colour, mew=0.7)
-            if d["basis_default"] in LOWER:
-                ax.plot(d["p"], d["rho_default"], marker=LOWER[d["basis_default"]], ms=9, color=colour, mew=1.0)
+            ax.plot(d["p"], d[y], MARKERS[starts.index(d["start"]) % len(MARKERS)], ms=4.5, alpha=0.75,
+                    color=colour, mfc=colour if yes else "none", mec="k" if yes and d[b] == "fit" else colour, mew=0.7)
+            if d[b] in LOWER:
+                ax.plot(d["p"], d[y], marker=LOWER[d[b]], ms=9, color=colour, mew=1.0)
         reached = [d for d in mine if d["reached"] == "yes"]
-        whole = [d for d in reached if d["basis_default"] not in LOWER]
+        whole = [d for d in reached if d[b] not in LOWER]
         at = [d for d in every if d["gain_target"] == g]
         unplotted = len(at) - len(mine)
         if reached:
             least = ";\nno least S: every reached row is partial"
             if whole:
-                best = min(whole, key=lambda d: d["p"] * d["rho_default"])
-                ax.plot(best["p"], best["rho_default"], "o", mfc="none", mec="red", ms=11)
-                least = f";\nleast S {best['p'] * best['rho_default']:.3g} ({best['start']}, {best['method_key']})"
+                best = min(whole, key=lambda d: d["p"] * d[y])
+                ax.plot(best["p"], best[y], "o", mfc="none", mec="red", ms=11)
+                least = f";\nleast S {best['p'] * best[y]:.3g} ({best['start']}, {best['method_key']})"
             ax.set_title(f"gain {g:g}: {len(reached)} reached"
                          + (f" ({len(reached) - len(whole)} partial)" if len(whole) < len(reached) else "")
                          + f", {len(mine) - len(reached)} not"
@@ -689,20 +727,22 @@ def figure(p: dict, out: Path) -> Path:
         ax.set_ylim(0.8, yhi)
         ax.grid(alpha=0.15, which="major")
         ax.set_xlabel("p = C/H relative to the best route found (H) (open: not reached, p a lower bound)")
-    axes[0].set_ylabel(f"rho at the console's default (c = {CONSOLE[0]:.3g} gates, k = {CONSOLE[1]:,.0f} bits)")
+    axes[0].set_ylabel(f"rho_own at the start's own session\n({OWN_K_LABEL})", fontsize=8)
     keys = [Line2D([], [], marker="o", ls="none", color=f"C{i % 10}", label=f) for i, f in enumerate(families)]
     keys += [Line2D([], [], marker=MARKERS[i % len(MARKERS)], ls="none", color="0.3", label=s)
              for i, s in enumerate(starts)]
     keys.append(Line2D([], [], marker="o", ls="none", mfc="none", mec="red", ms=9, label="least S reached"))
-    if any(d["basis_default"] == PARTIAL for d in rows):
+    if any(d[b] == PARTIAL for d in rows):
         keys.append(Line2D([], [], marker=LOWER[PARTIAL], ls="none", color="0.3", ms=8,
                            label="partial: rho a lower bound"))
     fig.legend(handles=keys, loc="lower center", ncol=min(len(keys), 7), fontsize=7, bbox_to_anchor=(0.5, 0.04))
-    fig.suptitle(f"{p['title']}, {data} data\npolicy: {POLICIES['rho_default']}, a sensitivity (the headline is "
-                 f"{POLICIES['headline']})\n(grey: iso-S, S = p rho; dotted: the coverage's decades of rho)",
-                 fontsize=10)
+    own = {d["start"]: (d["own_c_gates"], d["own_k_bits"]) for d in every if d.get("own_c_gates") is not None}
+    fig.suptitle(f"{p['title']}, {data} data\nheadline rho_own: {POLICIES['rho_own']}\nc, packed k per start: "
+                 + ", ".join(f"{s} {c:.3g} gates, {k:,} bits" for s, (c, k) in own.items())
+                 + f"\nsensitivities in the tables: rho_default, {POLICIES['rho_default']}; rho_served, "
+                 f"{POLICIES['rho_served']}\n(grey: iso-S, S = p rho; dotted: decades of rho)", fontsize=9)
     fig.text(0.01, 0.005, p["note"], fontsize=5.5, wrap=True, va="bottom")
-    fig.tight_layout(rect=(0, 0.12, 1, 0.9))
+    fig.tight_layout(rect=(0, 0.12, 1, 0.86))
     path = out / f"{NAME}.png"
     fig.savefig(path, dpi=130)
     plt.close(fig)
@@ -711,10 +751,10 @@ def figure(p: dict, out: Path) -> Path:
 
 def summary(p: dict, info: dict) -> str:
     """Per data, start and gain target: its target loss, the runs, how many reach it, the least p and the least S
-    among them (S on no row resting on a stub or partial), and the best failed attempt."""
+    among them at the headline rho_own (S on no row resting on a stub or partial), and the best failed attempt."""
     rows = plots.frame(p)
-    lines = ["| data | start | gain | own gain | runs | reached | least p (run) | least S (p, rho) | best not reached |",
-             "|---|---|---|---|---|---|---|---|---|"]
+    lines = ["| data | start | gain | own gain | runs | reached | least p (run) | least S (p, rho_own) | "
+             "best not reached |", "|---|---|---|---|---|---|---|---|---|"]
     for st in info["starts"]:
         f = info["fits"].get(st.data)
         if f is None:
@@ -724,12 +764,12 @@ def summary(p: dict, info: dict) -> str:
             yes = [d for d in mine if d["reached"] == "yes"]
             no = [d for d in mine if d["reached"] == "no"]
             lp = min(yes, key=lambda d: d["p"]) if yes else None
-            fin = [d for d in yes if d["rho_default"] is not None and d["basis_default"] not in (STUB, *LOWER)]
-            ls = min(fin, key=lambda d: d["p"] * d["rho_default"]) if fin else None
+            fin = [d for d in yes if d["rho_own"] is not None and d["basis_own"] not in (STUB, *LOWER)]
+            ls = min(fin, key=lambda d: d["p"] * d["rho_own"]) if fin else None
             bn = max(no, key=lambda d: d["gain"]) if no else None
             lines.append(f"| {st.data} | {st.label} | {g:g} | {frontier_fit.gain(f, st.l0, st.c0):.3f} | {len(mine)} | "
                          f"{len(yes)} | " + (f"{lp['p']:.3g} ({lp['method_key']} {lp['record']})" if lp else "-")
-                         + " | " + (f"{ls['p'] * ls['rho_default']:.3g} ({ls['p']:.3g}, {ls['rho_default']:.3g})"
+                         + " | " + (f"{ls['p'] * ls['rho_own']:.3g} ({ls['p']:.3g}, {ls['rho_own']:.3g})"
                                     if ls else "-")
                          + " | " + (f"gain {bn['gain']:.3g} ({bn['method_key']} {bn['record']})" if bn else "-")
                          + " |" + ("" if mine else " no rows: its loss is at or below the fit's E"))
