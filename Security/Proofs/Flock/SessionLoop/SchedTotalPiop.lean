@@ -73,8 +73,6 @@ theorem pt_modify (g : Transcript → Transcript) :
     PT coins [] (fun _ => True) (liftTM (modify g : Transcript.TM Unit) : TMW OpenM Unit) :=
   fun t got _ => ⟨(((), g t), got), rfl, trivial, rfl⟩
 
-theorem step_pure_bind {α β : Type} (a : α) (g : α → Step β) : Step.bind (pure a) g = g a := rfl
-
 /-- **A PIOP round** takes its coin where it fits the count its squeeze header holds. -/
 theorem round_false (got : Got) (c : ByteArray) {cs : Array F128} (hc : coins[got.size]? = some cs)
     (hn : cs.size = (_root_.Flock.u64OfLE c (c.size - 8)).toNat) :
