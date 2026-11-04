@@ -58,10 +58,10 @@ def Server.openT (S : Server) (v : Seen) : Trace :=
 theorem Server.openT_rel (S : Server) (v : Seen) :
     (v.out = .acc ↔ (S.openT v).seen.out = .acc) ∧ (v.out = .acc → S.openView v = (S.openT v).seen) := by
   by_cases h : v.out = .acc
-  · have e : S.openT v = ⟨(S.openView v).msgs, [], [], .acc⟩ := if_pos h
+  · have e : S.openT v = ⟨(S.openView v).msgs, [], [], .acc⟩ := ite_eq_left h
     rw [e]
     exact ⟨⟨fun _ => rfl, fun _ => h⟩, fun _ => S.openView_eq_of_acc h⟩
-  · have e : S.openT v = abortTrace := if_neg h
+  · have e : S.openT v = abortTrace := ite_eq_right h
     rw [e]
     exact ⟨⟨fun h' => absurd h' h, fun h' => by simp [abortTrace, Trace.seen] at h'⟩, fun h' => absurd h' h⟩
 
@@ -71,6 +71,7 @@ variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-! ## `E*` as the served `E^rep` -/
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **`replayOC` returns the replayed run's view**: from `n` rounds left, the history `hist` and the trace `t`, with as
 many prover messages sent as the history holds. -/
 theorem stepWith_replayOC (H : Msg → Msg) (IV : Verifier Coin) (xI : Msg) (as : List Msg) (cs : ℕ → Coin) :
@@ -133,6 +134,7 @@ theorem E_eval (K : Comp Coin) (I : Proto Coin W) (S : Server) (H : Msg → Msg)
         (Claims.outerStage K.EO (K.dec (S.IVStar I.V I.ans) H) x)).eval H (run H P K.V x ω)).1
   rw [serve_eq, erep_eq, (RP.serve_eval H _ _ _).1, (RP.serve_eval H _ _ _).1, hs]
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- The relation, inherited, at an extractor's output. -/
 theorem R_ext (K : Comp Coin) (I : Proto Coin W) (x : Msg) (o : Option W) :
     (K.R I).ext x o ↔ K.parses x ∧ I.R.ext (K.xI x) o := by
@@ -214,6 +216,7 @@ def InnerRejectsO (t : Ω × (Fin (K.V.k x) → Coin) × K.EO.C x) : Prop :=
 
 variable {K I S H P x}
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- At a draw where `E_O` gives witnesses whose inner view opens to the messages `ms`, the draw's openings are `ms`'. -/
 theorem oMsg_eq {ω : Ω} {d : (Fin (K.V.k x) → Coin) × K.EO.C x} {w : K.WO} (hw : K.wits H P x ω d = some w)
     {ms : List (Msg × Out)} (hov : S.openView (K.view (S.IVStar I.V I.ans) H x d.1 w) = ⟨ms, .acc⟩) (j : ℕ) :
@@ -223,6 +226,7 @@ theorem oMsg_eq {ω : Ω} {d : (Fin (K.V.k x) → Coin) × K.EO.C x} {w : K.WO} 
   show ((S.openView (K.view (S.IVStar I.V I.ans) H x d.1 w)).msgs.map Prod.fst).getD j [] = _
   rw [hov]
 
+omit [Nonempty Coin] in
 theorem keepDO_true {ω : Ω} {d : (Fin (K.V.k x) → Coin) × K.EO.C x} {w : K.WO} (hw : K.wits H P x ω d = some w)
     (hRO : K.RO x w) (hacc : (K.view (S.IVStar I.V I.ans) H x d.1 w).out = .acc) (ha : K.AgreesO I S H P x ω d) :
     K.keepDO I S H P x ω d = true := by
@@ -294,7 +298,7 @@ theorem runO (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (ω : Ω)
       rfl
   obtain ⟨h1, h2, h3⟩ := run_replay_known H I.V (K.xI x) (S.opened os last) (firstCoins (I.V.k (K.xI x)) d.1)
     (Server.ansAt I.V I.ans (K.xI x) (firstCoins (I.V.k (K.xI x)) d.1)) hk
-    (fun j hj => (hag j hj).1) (fun j hj => ⟨_, by unfold Server.ansAt; exact if_pos hj⟩)
+    (fun j hj => (hag j hj).1) (fun j hj => ⟨_, by unfold Server.ansAt; exact ite_eq_left hj⟩)
     (by simp only [Server.ansAt, show ¬ (I.V.k (K.xI x) - 1 + 1 < I.V.k (K.xI x)) by omega, ↓reduceIte])
   rw [hcongr, hov']
   refine ⟨?_, h2, fun e he => ?_⟩
@@ -317,13 +321,13 @@ theorem servedO_seen (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (�
       rw [hw] at hw'
       obtain rfl : w = w' := Option.some_inj.1 hw'
       exact hn hR
-    have e1 : S.openT abortTrace.seen = abortTrace := if_neg (by simp [abortTrace, Trace.seen])
+    have e1 : S.openT abortTrace.seen = abortTrace := ite_eq_right (by simp [abortTrace, Trace.seen])
     have e2 : K.innerFO I S H P x decC ω d = abortTrace := by
       unfold Comp.innerFO
       rw [hk]
       rfl
-    rw [if_pos hout, e1, e2]
-  rw [if_neg hout, servedRun_seen, outerStage_eval]
+    rw [ite_eq_left hout, e1, e2]
+  rw [ite_eq_right hout, servedRun_seen, outerStage_eval]
   change (S.openT (K.dec (S.IVStar I.V I.ans) H x d.1 (K.wits H P x ω d))).seen = _
   rcases ho : K.wits H P x ω d with _ | w
   · have hk : K.keepDO I S H P x ω d = false := by
@@ -331,7 +335,7 @@ theorem servedO_seen (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (�
       rintro ⟨⟨w', hw', -⟩, -⟩
       rw [ho] at hw'
       cases hw'
-    have e1 : S.openT (K.dec (S.IVStar I.V I.ans) H x d.1 none) = abortTrace := if_neg (by simp [Comp.dec])
+    have e1 : S.openT (K.dec (S.IVStar I.V I.ans) H x d.1 none) = abortTrace := ite_eq_right (by simp [Comp.dec])
     have e2 : K.innerFO I S H P x decC ω d = abortTrace := by
       unfold Comp.innerFO
       rw [hk]
@@ -348,7 +352,7 @@ theorem servedO_seen (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (�
       have e : K.innerFO I S H P x decC ω d =
           run H (K.innerPO I S H P x decC) I.V (K.xI x) ω (firstCoins (I.V.k (K.xI x)) d.1) := by
         unfold Comp.innerFO
-        rw [if_pos hk]
+        rw [ite_eq_left hk]
       rw [e, (runO decC hdec ω d ho hacc ha).1]
       exact ((S.openT_rel _).2 hacc).symm
     · have hk : K.keepDO I S H P x ω d = false := by
@@ -356,13 +360,14 @@ theorem servedO_seen (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (�
         rintro ⟨-, hv, -⟩
         rw [ho] at hv
         exact hacc hv
-      have e1 : S.openT (K.dec (S.IVStar I.V I.ans) H x d.1 (some w)) = abortTrace := if_neg hacc
+      have e1 : S.openT (K.dec (S.IVStar I.V I.ans) H x d.1 (some w)) = abortTrace := ite_eq_right hacc
       have e2 : K.innerFO I S H P x decC ω d = abortTrace := by
         unfold Comp.innerFO
         rw [hk]
         rfl
       rw [e1, e2]
 
+omit [Nonempty Coin] in
 theorem abortRun_eqO (decC : Msg → Coin) (hn : I.V.k (K.xI x) ≤ K.V.k x) (ω : Ω)
     (t : (Fin (I.V.k (K.xI x)) → Coin) × (Fin (K.V.k x) → Coin) × K.EO.C x) :
     abortRun H (K.innerPO I S H P x decC) I.V (K.xI x) (K.keepAO I S H P x) ω t =
@@ -432,7 +437,7 @@ theorem PrBadGood_le (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (h
         (fun v => I.opens (S.openView v)) (I.assemble (K.xI x)) (I.check (K.xI x)) (s.2.1, s.2.2.1) s.2.2.2)
       fun d hd => by
         unfold Comp.servedG
-        rw [if_neg (hG d hd)]
+        rw [ite_eq_right (hG d hd)]
     have heq1 : ((erepProg (I.waits (K.xI x)) (I.k (K.xI x)) (I.cap (K.xI x)) (fun v => I.opens (S.openView v))
         (I.assemble (K.xI x)) (I.check (K.xI x)) (s.2.1, s.2.2.1) s.2.2.2).eval H (K.servedG I S H P x s.1)).1 =
         ((erepProg (I.waits (K.xI x)) (I.k (K.xI x)) (I.cap (K.xI x)) I.opens (I.assemble (K.xI x))
@@ -471,7 +476,7 @@ theorem PrBadGood_le (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (h
     have hk := keepDO_true hw hRO hacc ha
     refine ⟨?_, fun hI => hs.2.2 ?_⟩
     · unfold Comp.innerFO
-      rw [if_pos hk]
+      rw [ite_eq_left hk]
       exact (runO decC hdec s.1 (s.2.1, s.2.2.1) hw hacc ha).2.1
     · show (K.R I).ext x (((erepProg (I.waits (K.xI x)) (I.k (K.xI x)) (I.cap (K.xI x))
           (fun v => I.opens (S.openView v)) (I.assemble (K.xI x)) (I.check (K.xI x)) (s.2.1, s.2.2.1)
