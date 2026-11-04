@@ -215,14 +215,17 @@ negatives.
   the tensor and boost clock readings.
 - `served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR`: PoUW's piece with Pearl+ (`served_verdicts.sh`'s `POUW=pearlplus`).
   After the window's serve, it serves Llama-3.2-1B's BF16 checkpoint on the same card through `pouw:pearl-c-h100-v1-h3`
-  (`benchmarks/pouw/pearl_c_vllm/served_passes.py`, a prefill-heavy load), retains every pass, gives up the passes' rows
-  over a debit cap before the verifier's coin (`served_passes.py volunteer --device`: every word's counts from the card's
-  debit cubin, every `volunteer_pass.CROSS_CHECK`-th tile replayed on the CPU too; `PEARLPLUS_VOLUNTEER=cpu` replays
-  every tile on the CPU, far too slow for the default load), takes Pearl+'s verdict over all of them
-  (`served_passes.py verify`, its coin, where the lane's gate is set, a draw session's of its own there reserved once the
-  lane's Pearl-C period around the serve closed and opened on the run's commitment, `bench_arm.LiveDraw`), and writes
-  the piece through `served_verdicts.py pearlplus`: the verdict, the
-  linears' declared and credited shares (`served_shares.pearlplus_shares`), and why it credits nothing.
+  (`benchmarks/pouw/pearl_c_vllm/served_passes.py`, a prefill-heavy load), retains every pass, and while Pearl+'s
+  verdict rejects a run on a drawn row over its debit cap (over-cap rule `reject`, which `served_passes.py
+  volunteer-needed` reports before anything is served) gives up the passes' rows over a debit cap before the verifier's
+  coin (`served_passes.py volunteer --device`: every word's counts from the card's debit cubin, every
+  `volunteer_pass.CROSS_CHECK`-th tile replayed on the CPU too; `PEARLPLUS_VOLUNTEER=cpu` replays every tile on the CPU,
+  far too slow for the default load), refusing to serve with the give-up turned off then; under `uncredited`, where the
+  verdict credits such a row nothing, the give-up is off unless `PEARLPLUS_VOLUNTEER` is set. It takes Pearl+'s verdict
+  over all of them (`served_passes.py verify`, `--over-cap` from `PEARLPLUS_OVER_CAP`; its coin, where the lane's gate is
+  set, a draw session's of its own there reserved once the lane's Pearl-C period around the serve closed and opened on
+  the run's commitment, `bench_arm.LiveDraw`), and writes the piece through `served_verdicts.py pearlplus`: the verdict,
+  the linears' declared and credited shares (`served_shares.pearlplus_shares`), and why it credits nothing.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as

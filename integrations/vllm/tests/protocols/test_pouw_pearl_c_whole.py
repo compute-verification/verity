@@ -952,6 +952,41 @@ def test_a_tree_sm_capture_launches_the_steps_beside_each_calls_a_tree_with_the_
     assert [b for _, b in forward()] == [0] * 6
 
 
+def test_a_pd_shared_capture_launches_every_step_with_the_pipelines_pd_shared_set(monkeypatch):
+    """Under ``whole_pd_shared`` (with hashing) every step a call launches into a whole capture, deferred or not, sees the
+    pipeline's ``pd_shared`` set, so its pd_commit and pd_tree take half an SM's shared memory, and the pipeline is left
+    without it; the capture's key carries ``pd_shared``, its call graphs' don't.  Without the option, or without hashing,
+    no step sees it and no key carries it."""
+    torch = pytest.importorskip("torch")
+    run, log = Calls(torch), []
+    run.whole_defer, run.whole_defer_a, run.whole_pd_shared, run.device, run._graphs = True, True, True, "cuda", {}
+    run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
+    _lanes(monkeypatch, torch, log)
+    monkeypatch.setattr(PG, "_capturing", lambda: True)
+    sh, pipe, seen = SimpleNamespace(m16=32, k=8, n=16), SimpleNamespace(b={}, size={"tree_a": 64}, pd_shared=False), []
+    names = ("rows_a", "tree_seed_a", "eprime_a", "gemm", "hash_leaf", "scatter")
+    steps = [lambda x=x: seen.append((x, pipe.pd_shared)) for x in names]
+    g = PG._Graph(torch.zeros(1), torch.zeros(1), "graph", steps, (2, 4), 1)
+    run._graphs[run._graph_key(7, sh, 32)[0]] = g
+
+    def forward():
+        seen.clear()
+        run.whole_capture_begin(run.whole_key(False))
+        run._graph_call(7, sh, pipe, 1, 4, 32, 0, None)
+        run.whole_capture_end()
+        return seen
+
+    assert forward() == [(x, True) for x in names] and not pipe.pd_shared and "pd_shared" in run.whole_key(False)
+    assert "pd_shared" not in run._graph_key(7, sh, 32)[0]
+    run.whole_defer = run.whole_defer_a = False               # the steps in order on the capturing stream
+    run._graphs[run._graph_key(7, sh, 32)[0]] = g
+    assert forward() == [(x, True) for x in names] and not pipe.pd_shared
+    run.whole_pd_shared = False
+    assert forward() == [(x, False) for x in names] and "pd_shared" not in run.whole_key(False)
+    run.whole_pd_shared, run.hashing = True, False
+    assert "pd_shared" not in run.whole_key(False) and not run._pd_shared()
+
+
 def test_a_calls_steps_split_after_its_a_tree_and_before_its_tile_hashing():
     pipe = SimpleNamespace(steps=lambda: [(x, None, None) for x in PPD.CALL_STEPS if x != "pad_a"])
     run = SimpleNamespace(entry="test", hashing=True, omit=frozenset())

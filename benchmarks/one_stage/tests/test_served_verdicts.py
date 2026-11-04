@@ -1466,10 +1466,14 @@ def test_a_tied_pearlplus_accepts_draw_is_held_to_its_draw_session_whatever_its_
             assert doc["coins"]["draws"] == S.PEARLPLUS_NODE_DRAWS
 
 
-#: served_passes.py in `_pearlplus_sh`'s toy tree: each call's arguments noted in $ORDER.passes; volunteer writes its
-#: answer, retain W where --window-record names it (unless NO_W is set), arm its config, and verify nothing
+#: served_passes.py in `_pearlplus_sh`'s toy tree: volunteer-needed answers $NEEDED (default ``no uncredited``) and is
+#: noted nowhere; every other call's arguments are noted in $ORDER.passes; volunteer writes its answer, retain W where
+#: --window-record names it (unless NO_W is set), arm its config, and verify nothing
 FAKE_SERVED_PASSES = '''import json, os, sys
 a = sys.argv[1:]
+if a[0] == "volunteer-needed":
+    print(os.environ.get("NEEDED", "no uncredited"))
+    sys.exit(0)
 open(os.environ["ORDER"] + ".passes", "a").write(json.dumps(a) + "\\n")
 out = lambda f: a[a.index(f) + 1]
 if a[0] == "volunteer":
@@ -1557,6 +1561,16 @@ def test_pearlplus_give_up_runs_the_volunteer_on_the_windows_passes_then_retain_
     assert calls == [*ran, ["retain", "--passes", str(p), *given, "--window-record", str(p / "window-record.json")]]
     assert [x.split(":")[0] for x in lines] == ["POUW volunteer", "POUW retain"], lines
     assert lines[-1] == "POUW retain: served_passes.py retain exit 0: retain: W window-record.json"
+
+
+def test_pearlplus_give_up_refuses_with_the_give_up_off_where_the_verdict_rejects_a_row_over_its_cap(tmp_path):
+    """Where Pearl+'s verdict rejects a run on a drawn row over its debit cap (`served_passes.py volunteer-needed` says
+    yes), `served_pearlplus.sh give-up` with PEARLPLUS_VOLUNTEER empty runs neither the volunteer nor retain and writes no
+    W, so no coin is drawn on passes it didn't give up."""
+    rc, lines, calls = _pearlplus_sh(tmp_path, "give-up", str(tmp_path / "serve"), "7", served=SERVED_EPOCH,
+                                     PEARLPLUS_VOLUNTEER="", NEEDED="yes reject")
+    assert (rc, calls) == (2, []) and not (tmp_path / "serve" / "pearl" / "w7" / "window-record.json").exists(), lines
+    assert lines[-1].startswith("POUW volunteer: refused, so nothing is served: "), lines
 
 
 @pytest.mark.parametrize("served, extra, said", [
@@ -3869,6 +3883,20 @@ def test_the_compose_gate_refuses_a_hand_off_off_its_sums_or_carrying_a_witness_
     assert list((gate / "scratch").iterdir()) == []
     logged = [json.loads(x) for x in (gate / "composes.jsonl").read_text().splitlines()]
     assert len(logged) == 1 and logged[0]["rc"] == 3 and said in logged[0]["refused"]
+
+
+def test_no_answer_from_the_compose_gate_names_the_gate_commands_last_error(tmp_path):
+    """A gate that never answers (ssh refused the key, the host unreachable) fails with ssh's own last line, so the
+    sender's one line says why without a second look at the serve dir."""
+    answer, err = tmp_path / "answer.json", tmp_path / "gate.err"
+    answer.write_text("")
+    err.write_text("Warning: Permanently added 'h' (ED25519) to the list of known hosts.\n"
+                   "research@h: Permission denied (publickey).\n\n")
+    assert S.composed(answer, tmp_path / "out", 255, err) == (
+        1, "GATE-COMPOSE failed (ssh exit 255): no answer from the compose gate (IndexError): research@h: Permission "
+           "denied (publickey).")
+    assert S.composed(answer, tmp_path / "out", 255) == (
+        1, "GATE-COMPOSE failed (ssh exit 255): no answer from the compose gate (IndexError)")
 
 
 #: rsync as `served_verdicts.sh copy` calls it: each file --files-from lists, from the source dir to $COPIED/HOST/PATH

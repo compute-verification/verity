@@ -33,26 +33,36 @@
 #      leaving them in RAM, its line naming where;
 #   3. after the serve's lease and before the verifier's coin, `served_passes.py volunteer` gives up, in the passes'
 #      records, the rows over a debit cap (V-EX), which the serve's screen can't see, from every tile's words' counts
-#      over the whole run, not a sample's. With PEARLPLUS_VOLUNTEER=1 (the default) the counts are the card's, under a
-#      lease of its own: debit.py first checks step 1's debit cubin against fast_tile on the leased card, and only if
-#      it passed the volunteer takes them from it (`--device`), every PEARLPLUS_DEVICE_CHECK-th tile (default
-#      volunteer_pass.CROSS_CHECK) and each tile with a word the card marks non-finite replayed on the CPU too and held
-#      equal. With PEARLPLUS_VOLUNTEER=cpu it replays every tile on the CPU in PEARLPLUS_JOBS processes instead, which
-#      at the default load runs far past POUW_TIMEOUT; set empty, it doesn't run and the verdict may draw a tile over
-#      its cap. It stops at PEARLPLUS_VOLUNTEER_MIN (default 60), and `served_passes.py retain` then drops, still
-#      before the coin, each pass it didn't finish or left over a cap: those credit nothing and stay in the declared
-#      share;
+#      over the whole run, not a sample's, by default exactly while step 4's verdict rejects a run on a drawn row over
+#      its cap: its over-cap rule (PEARLPLUS_OVER_CAP, verify's --over-cap; default the verdict's own) is reject, which
+#      `served_passes.py volunteer-needed` says before anything is built or served, and under it a PEARLPLUS_VOLUNTEER
+#      set empty is refused (exit 2); under uncredited, where the verdict credits such a row nothing, the give-up runs
+#      only where PEARLPLUS_VOLUNTEER is set. With PEARLPLUS_VOLUNTEER=1 (the default where it runs) the counts are the
+#      card's, under a lease of its own: debit.py first checks step 1's debit cubin against fast_tile on the leased
+#      card, and only if it passed the volunteer takes them from it (`--device`), every PEARLPLUS_DEVICE_CHECK-th tile
+#      (default volunteer_pass.CROSS_CHECK) and each tile with a word the card marks non-finite replayed on the CPU too
+#      and held equal. With PEARLPLUS_VOLUNTEER=cpu it replays every tile on the CPU in PEARLPLUS_JOBS processes
+#      instead, which at the default load runs far past POUW_TIMEOUT. It stops at PEARLPLUS_VOLUNTEER_MIN (default 60),
+#      and `served_passes.py retain` then drops, still before the coin, each pass it didn't finish or left over a cap:
+#      those credit nothing and stay in the declared share;
 #   4. `served_passes.py verify` takes Pearl+'s verdict over every retained pass on the CPU in PEARLPLUS_JOBS processes (default
 #      nproc): one draw of PEARLPLUS_DRAWS work-weighted tiles (default its own, 459) over all the passes, and each pass's
 #      exclusion tiles, replayed on fast_tile's batch forms, the first and every 256th after it on the scalar reference
 #      too (a scalar replay takes minutes a tile at the 1B's K), or with PEARLPLUS_FAST set empty on the scalar reference
-#      alone. Its document goes to PIECE_DIR/verify.json and its core answer to PIECE_DIR/pearlplus-answer.json, not
-#      answer.json, which the record would compose as the window's PoUW answer. Under the gate its draw source is a draw
-#      session's coin on vy-challenger-1, reserved withheld once the period closed and opened on the run's commitment
-#      (`bench_arm.LiveDraw`; verify_run.py's "The run's draw"), else the node's. Its coin, recorded in passes/coin.json
-#      before the replay, leaves the passes the moment it is drawn (`served_verdicts.py coin`: PIECE_DIR/coin.json, put
+#      alone, under PEARLPLUS_OVER_CAP's rule where it is set. Its document goes to PIECE_DIR/verify.json and its core
+#      answer to PIECE_DIR/pearlplus-answer.json, not answer.json, which the record would compose as the window's PoUW
+#      answer. Under the gate its draw source is a draw session's coin on vy-challenger-1, reserved withheld once the
+#      period closed and opened on the run's commitment (`bench_arm.LiveDraw`; verify_run.py's "The run's draw"), else
+#      the node's. Its coin, recorded in passes/coin.json before the replay, leaves the passes the moment it is drawn
+#      (`served_verdicts.py coin`: PIECE_DIR/coin.json, put
 #      in the evidence store, preserved where the node holds a store key and else in the node's own store under the same
 #      id, its answer in PIECE_DIR/coin-put.json, which names the run's Attempt carrying out/'s copy as its custody);
+#   4b. once verify wrote its document, `served_passes.py lean` takes the Lean verdict of record, PouwCheck.PearlPlus's
+#      pouw-pearlplus (PEARLPLUS_LEAN_EXE, else built here as served_pouw.sh builds pouw-period, its log
+#      pouw-pearlplus-build.log; one that doesn't build answers nothing), on the same passes, epoch coins, draws and coin
+#      record, within PEARLPLUS_LEAN_TIMEOUT seconds (default 3,600), and writes its answer to PIECE_DIR/pearlplus-lean.json,
+#      the file `served_verdicts.pearlplus_of_record` reads, only where it is the Python verdict's; both verdicts, its
+#      command line and the executable's SHA-256 go to PIECE_DIR/pearlplus-lean-check.json either way;
 #   5. `served_verdicts.py pearlplus` writes the piece (PIECE_DIR/development.json): its verdict, with each pass's salt
 #      held to the serve's live session (`pearlplus_coins`: the session fetched through PEARLC_CHALLENGER_GATE, under
 #      H1_KEY_SHA512 and MAIN_FILE's line; with in-process coins it claims no verdict) and an accept to the published
@@ -102,6 +112,21 @@ took() { echo "$(( ($(date +%s) - $1) / 60 )) min"; }
 export VERITY_BENCH_VENV=${VERITY_BENCH_VENV:-${VENV:-/workspace/cp/venv312}}
 # shellcheck source=/dev/null
 . benchmarks/harness/env.sh
+NEEDED=$("$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer-needed \
+  ${PEARLPLUS_OVER_CAP:+--over-cap "$PEARLPLUS_OVER_CAP"} 2> "$Q/volunteer-needed.log")
+RULE=${NEEDED#* } VOLUNTEER=${PEARLPLUS_VOLUNTEER-auto}
+case ${NEEDED%% *} in
+  yes) [ "$VOLUNTEER" = auto ] && VOLUNTEER=1
+    if [ -z "$VOLUNTEER" ]; then
+      say "volunteer: refused, so nothing is served: Pearl+'s verdict rejects a run on a drawn row over its debit cap" \
+        "(over-cap rule $RULE), so the give-up before its coin can't be skipped (PEARLPLUS_VOLUNTEER is empty)"
+      exit 2
+    fi ;;
+  no) [ "$VOLUNTEER" = auto ] && VOLUNTEER='' ;;
+  *) say "volunteer: served_passes.py volunteer-needed answered '$NEEDED', so nothing is served:" \
+       "$(tail -1 "$Q/volunteer-needed.log" | cut -c1-300)"
+     exit 2 ;;
+esac
 # Pearl+ served as vLLM serves it, not under the window serve's batch invariance
 unset VLLM_BATCH_INVARIANT
 # sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise: a whole capture forking each call's A tree and A
@@ -235,7 +260,7 @@ if [ -n "$UNTIED" ] && [ -n "${PEARLC_CUBIN:-}" ]; then
   period close
 fi
 
-VOLUNTEER=${PEARLPLUS_VOLUNTEER-1} VMIN=${PEARLPLUS_VOLUNTEER_MIN:-60} JOBS=${PEARLPLUS_JOBS:-$(nproc)}
+VMIN=${PEARLPLUS_VOLUNTEER_MIN:-60} JOBS=${PEARLPLUS_JOBS:-$(nproc)}
 if [ "$MODE" = give-up ]; then  # the window's epoch as serve-openai's arm closed it: one Pearl+ round a Commit step
   why=$("$TPY" -c 'import json, sys
 d = json.load(open(sys.argv[1]))
@@ -264,7 +289,8 @@ if [ -n "$UNTIED" ] || [ "$MODE" = give-up ]; then
     rc=$?
     say "volunteer: served_passes.py volunteer $how exit $rc after $(took "$t"): $(tail -1 "$Q/volunteer.log" | cut -c1-400)"
   elif [ -s "$SERVED" ]; then
-    say "volunteer: not run (PEARLPLUS_VOLUNTEER empty): no row over a debit cap is given up before the verifier's coin"
+    say "volunteer: not run: Pearl+'s verdict credits a drawn row over its debit cap nothing (over-cap rule $RULE), so" \
+      "no row is given up before the verifier's coin"
   fi
   # untied, only after a volunteer; under the tie always, since retain is what writes W
   RETAIN=()
@@ -291,7 +317,7 @@ elif [ -s "$SERVED" ]; then
   [ -n "$UNTIED" ] || TIE=(--tie "$W")
   "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py verify --passes "$PASSES" --out "$P/verify.json" \
     --answer "$P/pearlplus-answer.json" --jobs "$JOBS" ${PEARLPLUS_DRAWS:+--draws "$PEARLPLUS_DRAWS"} \
-    ${FAST:+--fast} ${TIE[@]+"${TIE[@]}"} > "$Q/verify.log" 2>&1 &
+    ${PEARLPLUS_OVER_CAP:+--over-cap "$PEARLPLUS_OVER_CAP"} ${FAST:+--fast} ${TIE[@]+"${TIE[@]}"} > "$Q/verify.log" 2>&1 &
   V=$!
   # the coin record leaves the passes the moment verify draws it, before its replay: a deleted one would draw afresh
   while [ ! -s "$PASSES/coin.json" ] && kill -0 "$V" 2>/dev/null; do sleep 1; done
@@ -305,6 +331,22 @@ elif [ -s "$SERVED" ]; then
   wait "$V"
   rc=$?
   say "verdict: served_passes.py verify exit $rc after $(took "$t"): $(tail -1 "$Q/verify.log" | cut -c1-400)"
+fi
+
+rm -f "$P/pearlplus-lean.json"
+if [ -s "$Q/served.json" ] && [ -s "$P/verify.json" ]; then
+  t=$(date +%s)
+  LX=${PEARLPLUS_LEAN_EXE:-}
+  if [ -z "$LX" ]; then
+    LX=$TREE/verity/core/protocols/pouw/lean/pearlplus/.lake/build/bin/pouw-pearlplus
+    (cd verity/core/protocols/pouw/lean/pearlplus && lake build pouw-pearlplus) > "$Q/pouw-pearlplus-build.log" 2>&1 || {
+      say "lean: pouw-pearlplus doesn't build (its log in the serve dir's private/pearlplus), so no Lean answer is written"
+      LX=; }
+  fi
+  [ -n "$LX" ] && [ -x "$LX" ] || LX=
+  "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py lean --passes "$Q/passes" --verify "$P/verify.json" \
+    --exe "${LX:-none}" --out "$P/pearlplus-lean.json" --timeout "${PEARLPLUS_LEAN_TIMEOUT:-3600}" > "$Q/lean.log" 2>&1
+  say "lean: served_passes.py lean exit $? after $(took "$t"): $(tail -1 "$Q/lean.log" | cut -c1-400)"
 fi
 
 UN=()
