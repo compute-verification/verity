@@ -119,14 +119,11 @@ from a `requirement.Requirement`, its `Layout` and `Store` (`layout_words`, `map
 from __future__ import annotations
 
 from bisect import bisect_left
-from functools import lru_cache
-from types import SimpleNamespace
 from typing import Sequence
 
 from . import boolean as BL
 from .boolean import trace as TR
 from .boolean.forms import ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
-from .defs import CompositeDefinition
 from .requirement import BLOCK_BITS, Layout, Requirement, Store
 from .types import Array
 
@@ -457,38 +454,22 @@ def _map_signature(S):
              ("val", Array(S.K, Array(value_bits(S.SLOTS) // 16, U16))), ("pay", Array(S.C, Array(BLOCK_WORDS, U16)))), U16)
 
 
-def _unit(name: str, version: int, statics: tuple[str, ...], signature, build, doc: str) -> CompositeDefinition:
-    @lru_cache(maxsize=None)
-    def traced(*key) -> TR.Traced:
-        S = SimpleNamespace(**dict(zip(statics, key)))
-        params, ret = signature(S)
-        return TR.trace(lambda C, *e: build(C, S, *e), [t for _, t in params], ret)
-
-    def body(B, S, *colls):
-        params, ret = signature(S)
-        return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
-
-    d = CompositeDefinition(name, version, statics, signature, body, conformance="exact-model-tested", doc=doc)
-    d.traced = traced  # type: ignore[attr-defined]
-    return d
-
-
-PlanMatch = _unit(
-    "PlanMatch", 1, ("P", "NR", "V", "G", "TB", "RPB"), _plan_signature, _plan_build,
+PlanMatch = TR.part(
+    "PlanMatch", ("P", "NR", "V", "G", "TB", "RPB"), _plan_signature, _plan_build,
     "1 iff plan[0 .. count) is strictly increasing, zero after, and exactly the blocks the step reads: the registered blocks "
     "regmask names, block TB + tok[g] / RPB of each gather gmask names, and block lam[2 i] of each written value kvmask names")
-PlanShard = _unit(
-    "PlanShard", 1, ("S", "GAPS"), _shard_signature, _shard_build,
+PlanShard = TR.part(
+    "PlanShard", ("S", "GAPS"), _shard_signature, _shard_build,
     "1 iff plan[0 .. count) is strictly increasing below size (at most S), zero after, leaves out at most GAPS of the "
     "shard's size blocks, and holds every block regmask names: a shard of a pass's plan holds the registered blocks its "
     "step reads")
-MemoryMapStep = _unit(
-    "MemoryMapStep", 3, ("K", "C", "V", "E", "M", "N", "SLOTS", "T"), _map_signature, _map_build,
+MemoryMapStep = TR.part(
+    "MemoryMapStep", ("K", "C", "V", "E", "M", "N", "SLOTS", "T"), _map_signature, _map_build,
     "1 iff every present value k is in a slot of a block first .. first + count that carries val[k] there, no two in one "
     "slot, each such block is written at t, holds a value, has its empty slots zero and is freed at its values' last "
     "structural reader, each registered block rfree names is freed at t, and each value present at epoch ep[k] > 0 comes "
     "from the same slot of a written block below first whose write step is below the cap pi[W - life], W the windows "
-    "whose last pass is at or before t (0 if W < life or W = T)")
+    "whose last pass is at or before t (0 if W < life or W = T)", 3)
 
 
 # --- each instance's rows -------------------------------------------------------------------------------------------------
