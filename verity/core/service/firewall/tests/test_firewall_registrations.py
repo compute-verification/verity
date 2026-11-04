@@ -204,9 +204,10 @@ def test_the_loop_admits_each_registration_once_oldest_first(exe, tmp_path):
             py.admit(s, "L0", timed=True)
             try:
                 py.admit_reads(s, "L0", reads if reads is not None else why)
-            except FW.Refused:
-                pass
+            except FW.Refused as e:
+                assert why is not None and why in str(e), (s, str(e))
             else:
+                assert why is None, (s, why)
                 py.stop(s, "L0", CUT)
         assert record(state) == record(tmp_path / "py"), s
     events = [(e["event"], e.get("n")) for e in FW.Firewall(state).record() if e["event"] in ("admit", "skip")]
