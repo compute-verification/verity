@@ -11,7 +11,7 @@ the server's check: where it passes, the view's hidden leaves are hm96 leaves un
 fails, the same run's pre-final messages leave (`Hm96.preR`), and every one of their leaves is an hm96 leaf of what it
 commits, `τ`'s commitment included, since nothing is opened.
 
-* `Table.Opened`, `Table.PreLeaves`: the leaves the final message opens, and every leaf of the pre-final messages.
+* `Table.PreLeaves`: every leaf of the pre-final messages, the ones the final message opens first.
 * `Table.preOf`: a view's pre-final messages. `Hm96.preR`: the real prover's, `preOf` of its run with real leaves.
 * `Hm96.TauLeaf`: `τ`'s commitment is an hm96 leaf.
 * `Hm96.releaseR`: one table's release behind the check, with real leaves.
@@ -32,12 +32,9 @@ namespace Table
 variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [AddCommGroup B] [CharP F 2]
   (T : Table F K W Salt (B × Salt) D Hi VL)
 
-/-- The leaves the final message opens: level 0's at the opened positions, `τ`'s commitments, and each rep's pads tree's
-at its opened positions. -/
-abbrev Opened := Fin T.nS ⊕ Fin 2 ⊕ (Fin 2 × Fin T.nQ)
-
-/-- Every leaf of the pre-final messages: those the final message opens, and those nobody opens. -/
-abbrev PreLeaves := T.Opened ⊕ T.Hid
+/-- **Every leaf of the pre-final messages**: those the final message opens (level 0's at the opened positions, each
+rep's pads tree's at its opened positions, and each rep's commitment to `τ`), then those nobody opens (`Hid`). -/
+abbrev PreLeaves := (Fin T.nS ⊕ (Fin 2 × Fin T.nQ) ⊕ Fin 2) ⊕ T.Hid
 
 /-- **A view's pre-final messages**: everything before the final message, with the leaves the view has. -/
 def preOf (v : T.View) : T.PreView :=

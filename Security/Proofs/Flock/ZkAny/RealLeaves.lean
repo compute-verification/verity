@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.ZkAny.Session
-public import Proofs.Flock.SampledGeneric.FlockHide
+public import Proofs.Flock.Soundness.ZK.Abort
 public import Definitions.Flock.ZK.RealRelease
 public import Definitions.Flock.Guarantees.ZkAny
 
@@ -9,19 +9,18 @@ public import Definitions.Flock.Guarantees.ZkAny
 # The ZK server's release with real hm96 leaves, at any values
 
 `ZkAny/Table.lean` and `ZkAny/Session.lean` bound the release behind the server's checks with every unopened leaf ideal.
-Here every leaf is real, on both branches. Each branch costs `2·δ₁` a leaf it leaves unopened, through
-`hm96_commit_ideal_close` (the commitment to any trace against the ideal one, `δ₁` a leaf, both ways), and nothing reads
-the values:
+Here every leaf is real, on both branches. Each branch costs `2·δ₁` a leaf it leaves unopened: T1 over its leaves
+(`ideal_leaves_swap_fintype`, `real_leaves_swap_fintype`, the commitment to any trace against the ideal one at `δ₁` a
+leaf, of which `hm96_commit_ideal_close` is the form at one trace), once on each side, and nothing reads the values:
 
-* `prCoin_commit_ideal_close`: `hm96_commit_ideal_close` beside other randomness, at the test "the event holds".
 * `SameDist.prCoin_prod_eq`: equal distributions stay equal beside an independent coin.
-* `Hm96.derived_close`, where the check passes: the view is the derived view with real hidden leaves (`psi_realCore_at`).
+* `Hm96.derived_close`, where the check passes: the view is the derived view with real hidden leaves (`viewR_derived`).
   Its hidden leaves go ideal, at each fixed vector of ideal leaves the derived view is distributed as `S_shvzk(x, e)`
   (`derived_sim`), and the leaves go real again on `S_shvzk`'s side: `2·|Hid|·δ₁` at any witness.
 * `Hm96.preR_close`, where it fails: the real pre-final messages read the prover's salts at the opened positions only in
-  those leaves, so the salts move to a fresh vector over every leaf (`Hm96.prCoin_preR`); every leaf goes ideal, Lemma A
-  (`table_prefinal_indep`) holds at each fixed vector of ideal leaves, and the leaves go real again at the dummy:
-  `2·|PreLeaves|·δ₁` at any witness carrying the public region data.
+  those leaves, so the salts move to a fresh vector over every leaf (`toPre_viewR`, `prCoin_salts`); every leaf goes ideal,
+  which gives the pre-final view (`prCoin_preLeaves_ideal`), Lemma A (`table_prefinal_indep`) moves it to the dummy, and
+  the leaves go real again there: `2·|PreLeaves|·δ₁` at any witness carrying the public region data.
 * `Hm96.release_hm96`, `Flock.SecurityProofs.TableReleaseHm96`: one table, by `ZkAnyGate`.
 * `Session.release_hm96`, `Flock.SecurityProofs.SessionReleaseHm96`: a session, by `prCoin_pi_close` and `ZkAnyOutcome`,
   at witnesses fixed before the server's draws.
@@ -36,36 +35,6 @@ namespace FlockSoundness.ZK
 
 open Verity.Game
 open scoped ENNReal
-
-/-- **`hm96_commit_ideal_close` beside other randomness**: on `(ω, y)`, with the trace `X ω` and the event read from `ω`,
-the commitment to `X ω` and the ideal commitment give the event probabilities within `N·δ₁` of each other, both ways:
-`hm96_commit_ideal_close` at each `ω`, at the test "the event holds", averaged over `ω`. -/
-theorem prCoin_commit_ideal_close {Ω ι Y B Cc D : Type} [Fintype Ω] [Nonempty Ω] [Fintype ι] [DecidableEq ι]
-    [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B] (My : Y → B) (c : Y → Cc) {δ₁ : ℝ≥0∞}
-    (hT1 : Claims.Hm96Hiding My c δ₁) (H : B × Cc → D) (X : Ω → ι → B) (G : Ω → (ι → D) → Prop) :
-    prCoin (fun p : Ω × (ι → Y) => G p.1 fun i => H (X p.1 i + My (p.2 i), c (p.2 i))) ≤
-        prCoin (fun p : Ω × (ι → B × Y) => G p.1 fun i => H ((p.2 i).1, c (p.2 i).2)) + Fintype.card ι * δ₁ ∧
-      prCoin (fun p : Ω × (ι → B × Y) => G p.1 fun i => H ((p.2 i).1, c (p.2 i).2)) ≤
-        prCoin (fun p : Ω × (ι → Y) => G p.1 fun i => H (X p.1 i + My (p.2 i), c (p.2 i))) +
-          Fintype.card ι * δ₁ := by
-  classical
-  have h := fun ω => SampledGeneric.hm96_commit_ideal_close My c hT1 H (X ω)
-    (fun L => if G ω L then (1 : ℝ≥0∞) else 0) (fun L => by split_ifs <;> simp)
-  have h1 : ∀ ω, prCoin (fun y : ι → Y => G ω fun i => H (X ω i + My (y i), c (y i))) ≤
-      prCoin (fun u : ι → B × Y => G ω fun i => H ((u i).1, c (u i).2)) + Fintype.card ι * δ₁ := fun ω => (h ω).1
-  have h2 : ∀ ω, prCoin (fun u : ι → B × Y => G ω fun i => H ((u i).1, c (u i).2)) ≤
-      prCoin (fun y : ι → Y => G ω fun i => H (X ω i + My (y i), c (y i))) + Fintype.card ι * δ₁ := fun ω => (h ω).2
-  rw [prCoin_prod_split (fun ω (y : ι → Y) => G ω fun i => H (X ω i + My (y i), c (y i))),
-    prCoin_prod_split (fun ω (u : ι → B × Y) => G ω fun i => H ((u i).1, c (u i).2))]
-  constructor
-  · calc avg (fun ω => prCoin fun y : ι → Y => G ω fun i => H (X ω i + My (y i), c (y i)))
-        ≤ avg (fun ω => prCoin (fun u : ι → B × Y => G ω fun i => H ((u i).1, c (u i).2)) +
-            Fintype.card ι * δ₁) := avg_mono h1
-      _ = _ := by rw [avg_add, avg_const]
-  · calc avg (fun ω => prCoin fun u : ι → B × Y => G ω fun i => H ((u i).1, c (u i).2))
-        ≤ avg (fun ω => prCoin (fun y : ι → Y => G ω fun i => H (X ω i + My (y i), c (y i))) +
-            Fintype.card ι * δ₁) := avg_mono h2
-      _ = _ := by rw [avg_add, avg_const]
 
 /-- **Equal distributions beside an independent coin**: an event of `f ω` and an independent uniform `u` has the same
 probability as the event of `g σ` and `u`. -/
@@ -93,41 +62,7 @@ def hidWith (v : T.View) (L : T.Hid → D) : T.View :=
     leaves0 := (v.leaves0.1, fun q => L (.inl q))
     leavesP := fun r => ((v.leavesP r).1, fun k => L (.inr (r, k))) }
 
-/-- A pre-final view with every leaf `L`. -/
-def preWith (v : T.PreView) (L : T.PreLeaves → D) : T.PreView :=
-  { v with
-    leaves0 := (fun q => L (.inl (.inl q)), fun q => L (.inr (.inl q)))
-    tauCom := fun r => L (.inl (.inr (.inl r)))
-    leavesP := fun r => (fun k => L (.inl (.inr (.inr (r, k)))), fun k => L (.inr (.inr (r, k)))) }
-
-/-- The opened leaves' salts in the prover's randomness: level 0's, `y_τ`, and the pads trees'. -/
-def openOf (s : T.Seeds) : T.Opened → Salt :=
-  Sum.elim s.1 (Sum.elim s.2.2.2.2.2.2.1 fun rk => s.2.2.2.1 rk.1 rk.2)
-
-/-- Replace the opened leaves' salts. -/
-def setOpen (s : T.Seeds) (v : T.Opened → Salt) : T.Seeds :=
-  (fun q => v (.inl q), s.2.1, s.2.2.1, fun r k => v (.inr (.inr (r, k))), s.2.2.2.2.1, s.2.2.2.2.2.1,
-    fun r => v (.inr (.inl r)), s.2.2.2.2.2.2.2)
-
-omit [CharP F 2] [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt] [DecidableEq Salt] [Fintype B]
-  [DecidableEq B] [Fintype Hi] [DecidableEq Hi] [AddCommGroup Salt] [AddCommGroup B] [AddCommGroup Hi] in
-theorem openOf_setOpen (s : T.Seeds) (v : T.Opened → Salt) : T.openOf (T.setOpen s v) = v := by
-  funext i
-  rcases i with q | r | ⟨r, k⟩ <;> rfl
-
-/-- The prover's randomness with the opened leaves' salts replaced. -/
-def withOpen (ω : T.Rand) (v : T.Opened → Salt) : T.Rand :=
-  (ω.1, ω.2.1, ω.2.2.1, ω.2.2.2.1, ω.2.2.2.2.1, ω.2.2.2.2.2.1, T.setOpen ω.2.2.2.2.2.2 v)
-
 variable {T}
-
-/-- The digests the pre-final leaves commit, on witness `w` and randomness `ω`: level 0's columns at every position,
-`τ`'s digest, and each rep's pads columns at every position. -/
-noncomputable def Hm96.preDig (M : T.Hm96 C) (digT : F → B) (w : W) (ω : T.Rand) : T.PreLeaves → B
-  | .inl (.inl q) => M.dig0 ((T.view w ω).rows q, (T.view w ω).xrows q)
-  | .inl (.inr (.inl r)) => digT ((T.view w ω).tau r)
-  | .inl (.inr (.inr (r, k))) => M.digP ((T.view w ω).ch r k, (T.view w ω).cm r k)
-  | .inr i => M.dig w ω i
 
 /-- **The derived view with real hidden leaves is within `2·|Hid|·δ₁` of `S_shvzk(x, e)` with real ones**, at any
 witness: its hidden leaves go ideal, the derived view is distributed as `S_shvzk(x, e)` at each fixed vector of ideal
@@ -141,61 +76,23 @@ theorem Hm96.derived_close (M : T.Hm96 C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm9
   have : Nonempty Salt := ⟨0⟩
   have : Nonempty T.Rand := ⟨0⟩
   have : Nonempty T.SimRand := ⟨0⟩
-  have h1 := (prCoin_commit_ideal_close M.My M.cs hT1 M.H (M.dig w)
-    fun ω L => E (T.hidWith (T.psi (T.realCore w ω)) L)).1
+  have h1 := ideal_leaves_swap_fintype M.My M.cs hT1 M.H (M.dig w)
+    fun ω L => E (T.hidWith (T.psi (T.realCore w ω)) L)
   have hm := (T.derived_sim hrank hpad hW hpads hβ w w₀).prCoin_prod_eq
     fun v (u : T.Hid → B × Salt) => E (T.hidWith v fun i => M.H ((u i).1, M.cs (u i).2))
-  have h2 := (prCoin_commit_ideal_close M.My M.cs hT1 M.H (M.digS w₀)
-    fun σ L => E (T.hidWith (T.sim w₀ σ) L)).2
+  have h2 := real_leaves_swap_fintype M.My M.cs hT1 M.H (M.digS w₀)
+    fun σ L => E (T.hidWith (T.sim w₀ σ) L)
   calc _ ≤ _ := h1
     _ = _ := congrArg (· + _) hm
     _ ≤ (prCoin (fun σ : T.SimRand × (T.Hid → Salt) => E (M.simR w₀ σ.1 σ.2)) + Fintype.card T.Hid * δ₁) +
           Fintype.card T.Hid * δ₁ := add_le_add h2 le_rfl
     _ = _ := by rw [add_assoc, ← two_mul, ← mul_assoc]
 
-omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt] [DecidableEq Salt] [Fintype B]
-  [DecidableEq B] [Fintype Hi] [DecidableEq Hi] [AddCommGroup Salt] [AddCommGroup Hi] in
-/-- **The real pre-final messages, read on the salts the prover's randomness doesn't hold**: at any replacement `v` of
-the opened leaves' salts, they are the pre-final view with every leaf an hm96 leaf of its digest, under the prover's
-own opened salts and the fresh ones. -/
-theorem Hm96.preR_eq (M : T.Hm96 C) {digT : F → B} (hT : M.TauLeaf digT) (w : W) (ω : T.Rand)
-    (v : T.Opened → Salt) (ys : T.Hid → Salt) :
-    M.preR w ω ys = T.preWith (T.preView w (T.withOpen ω v)) fun i =>
-      M.H (M.preDig digT w (T.withOpen ω v) i + M.My (Sum.elim (T.openOf ω.2.2.2.2.2.2) ys i),
-        M.cs (Sum.elim (T.openOf ω.2.2.2.2.2.2) ys i)) := by
-  refine PreView.ext rfl rfl rfl rfl rfl rfl rfl rfl rfl ?_ ?_ ?_
-  · exact Prod.ext (funext fun q => M.leaf0_eq _ _) rfl
-  · exact funext fun r => hT _ _
-  · exact funext fun r => Prod.ext (funext fun k => M.leafP_eq _ _) rfl
-
-omit [DecidableEq F] [Fintype K] [DecidableEq K] [DecidableEq Salt] [DecidableEq B] [DecidableEq Hi] [AddCommGroup Hi] in
-/-- **The opened leaves' salts move to a fresh vector**: the real pre-final messages read the prover's salts at the
-opened positions only in those leaves, so every event has the probability it has with every leaf under its own fresh
-salt. -/
-theorem Hm96.prCoin_preR (M : T.Hm96 C) {digT : F → B} (hT : M.TauLeaf digT) (w : W) (E : T.PreView → Prop) :
-    prCoin (fun p : T.Rand × (T.Hid → Salt) => E (M.preR w p.1 p.2)) =
-      prCoin (fun p : T.Rand × (T.PreLeaves → Salt) =>
-        E (T.preWith (T.preView w p.1) fun i => M.H (M.preDig digT w p.1 i + M.My (p.2 i), M.cs (p.2 i)))) := by
-  have : Nonempty Salt := ⟨0⟩
-  let Φ : (T.Rand × (T.Hid → Salt)) × (T.Opened → Salt) ≃ T.Rand × (T.PreLeaves → Salt) :=
-    { toFun := fun x => (T.withOpen x.1.1 x.2, Sum.elim (T.openOf x.1.1.2.2.2.2.2.2) x.1.2)
-      invFun := fun p => ((T.withOpen p.1 (p.2 ∘ Sum.inl), p.2 ∘ Sum.inr), T.openOf p.1.2.2.2.2.2.2)
-      left_inv := fun x => Prod.ext (Prod.ext rfl rfl) (T.openOf_setOpen _ _)
-      right_inv := fun p => Prod.ext rfl
-        ((congrArg (Sum.elim · (p.2 ∘ Sum.inr)) (T.openOf_setOpen _ _)).trans (Sum.elim_comp_inl_inr p.2)) }
-  calc prCoin (fun p : T.Rand × (T.Hid → Salt) => E (M.preR w p.1 p.2))
-      = prCoin (fun x : (T.Rand × (T.Hid → Salt)) × (T.Opened → Salt) => E (M.preR w x.1.1 x.1.2)) :=
-        (prCoin_fst (E := T.Opened → Salt) fun p : T.Rand × (T.Hid → Salt) => E (M.preR w p.1 p.2)).symm
-    _ = prCoin (fun x => (fun p : T.Rand × (T.PreLeaves → Salt) =>
-          E (T.preWith (T.preView w p.1) fun i => M.H (M.preDig digT w p.1 i + M.My (p.2 i), M.cs (p.2 i)))) (Φ x)) :=
-        congrArg prCoin (funext fun x => congrArg E (M.preR_eq hT w x.1.1 x.2 x.1.2))
-    _ = _ := prCoin_congr_equiv Φ fun p : T.Rand × (T.PreLeaves → Salt) =>
-          E (T.preWith (T.preView w p.1) fun i => M.H (M.preDig digT w p.1 i + M.My (p.2 i), M.cs (p.2 i)))
-
 omit [Fintype K] [DecidableEq K] in
 /-- **The real pre-final messages are within `2·|PreLeaves|·δ₁` of the dummy's**, at any witness carrying the public
-region data: the opened leaves' salts move to a fresh vector (`prCoin_preR`), every leaf goes ideal, Lemma A holds at
-each fixed vector of ideal leaves (`table_prefinal_indep`), and the leaves go real again at the dummy. -/
+region data: the opened leaves' salts move to a fresh vector (`toPre_viewR`, `prCoin_salts`), every leaf goes ideal,
+which gives the pre-final view (`prCoin_preLeaves_ideal`), Lemma A moves it to the dummy (`table_prefinal_indep`), and
+the leaves go real again there. -/
 theorem Hm96.preR_close (M : T.Hm96 C) {digT : F → B} (hT : M.TauLeaf digT) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding M.My M.cs δ₁) (hrank : T.Rank)
     (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hβ : ∀ r, T.β r ≠ 0) (w w₀ : W)
@@ -204,17 +101,34 @@ theorem Hm96.preR_close (M : T.Hm96 C) {digT : F → B} (hT : M.TauLeaf digT) {�
       prCoin (fun p : T.Rand × (T.Hid → Salt) => E (M.preR w₀ p.1 p.2)) + 2 * Fintype.card T.PreLeaves * δ₁ := by
   have : Nonempty Salt := ⟨0⟩
   have : Nonempty T.Rand := ⟨0⟩
-  have h1 := (prCoin_commit_ideal_close M.My M.cs hT1 M.H (M.preDig digT w)
-    fun ω L => E (T.preWith (T.preView w ω) L)).1
-  have hm := (T.table_prefinal_indep hrank hW hβ w w₀ hreg hreg₀).prCoin_prod_eq
-    fun v (u : T.PreLeaves → B × Salt) => E (T.preWith v fun i => M.H ((u i).1, M.cs (u i).2))
-  have h2 := (prCoin_commit_ideal_close M.My M.cs hT1 M.H (M.preDig digT w₀)
-    fun ω L => E (T.preWith (T.preView w₀ ω) L)).2
-  rw [M.prCoin_preR hT w E, M.prCoin_preR hT w₀ E]
-  calc _ ≤ _ := h1
-    _ = _ := congrArg (· + _) hm
-    _ ≤ _ := add_le_add h2 le_rfl
-    _ = _ := by rw [add_assoc, ← two_mul, ← mul_assoc]
+  have hr : ∀ w', prCoin (fun p : T.Rand × (T.Hid → Salt) => E (M.preR w' p.1 p.2)) =
+      prCoin (fun p : T.Rand × (T.PreLeaves → Salt) =>
+        E (T.preLeaves w' p.1 fun i => M.H (M.digAll digT w' p.1 i + M.My (p.2 i), M.cs (p.2 i)))) := fun w' =>
+    (congrArg prCoin (funext fun p : T.Rand × (T.Hid → Salt) =>
+      congrArg E (T.toPre_viewR M digT hT w' p.1 p.2))).trans (T.prCoin_salts M digT w' E)
+  have hi : ∀ w', prCoin (fun p : T.Rand × (T.PreLeaves → B × Salt) =>
+        E (T.preLeaves w' p.1 fun i => M.H ((p.2 i).1, M.cs (p.2 i).2))) =
+      prCoin (fun ω => E (T.preView w' ω)) := fun w' =>
+    (congrArg prCoin (funext fun p : T.Rand × (T.PreLeaves → B × Salt) =>
+      congrArg (fun L => E (T.preLeaves w' p.1 L))
+        (funext fun i => (M.ideal_eq (p.2 i).1 (p.2 i).2).symm))).trans (T.prCoin_preLeaves_ideal w' E)
+  have h1 := ideal_leaves_swap_fintype (ι := T.PreLeaves) M.My M.cs hT1 M.H (M.digAll digT w)
+    fun ω L => E (T.preLeaves w ω L)
+  have h2 := real_leaves_swap_fintype (ι := T.PreLeaves) M.My M.cs hT1 M.H (M.digAll digT w₀)
+    fun ω L => E (T.preLeaves w₀ ω L)
+  have hA := (T.table_prefinal_indep hrank hW hβ w w₀ hreg hreg₀).prCoin_eq E
+  calc prCoin (fun p : T.Rand × (T.Hid → Salt) => E (M.preR w p.1 p.2))
+      = _ := hr w
+    _ ≤ _ := h1
+    _ = prCoin (fun ω => E (T.preView w₀ ω)) + Fintype.card T.PreLeaves * δ₁ :=
+        congrArg (· + Fintype.card T.PreLeaves * δ₁) ((hi w).trans hA)
+    _ = prCoin (fun p : T.Rand × (T.PreLeaves → B × Salt) =>
+          E (T.preLeaves w₀ p.1 fun i => M.H ((p.2 i).1, M.cs (p.2 i).2))) + Fintype.card T.PreLeaves * δ₁ :=
+        congrArg (· + Fintype.card T.PreLeaves * δ₁) (hi w₀).symm
+    _ ≤ (prCoin (fun p : T.Rand × (T.PreLeaves → Salt) =>
+          E (T.preLeaves w₀ p.1 fun i => M.H (M.digAll digT w₀ p.1 i + M.My (p.2 i), M.cs (p.2 i)))) +
+          Fintype.card T.PreLeaves * δ₁) + Fintype.card T.PreLeaves * δ₁ := add_le_add h2 le_rfl
+    _ = _ := by rw [← hr w₀, add_assoc, ← two_mul, ← mul_assoc]
 
 omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt] [DecidableEq Salt] [Fintype B]
   [DecidableEq B] [Fintype Hi] [DecidableEq Hi] in
