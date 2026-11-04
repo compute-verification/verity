@@ -12,7 +12,8 @@ of record, `NciCheck.Baseline.evaluate`, returns its verdict once θ's provenanc
 the verdict has the property (`OnExpansions`).
 
 * `DescReports`: the verdict is the definition's (`Reported`).
-* `DescWitnesses`: a verdict of compliance witnesses the policy (`Witnessed`).
+* `DescWitnesses`: a verdict of compliance witnesses the policy, on the registered compiler's inference blocks `d.𝓘`
+  when the owners are they (`Witnessed`).
 * `DescThrottles`, `DescThrottlesDark`, `DescThrottlesSlots`, `DescThrottlesDarkSlots`: a verdict of compliance carries
   the thread bounds (`Throttled`, `ThrottledDark` and their `Slots` forms), under their named assumptions
   (`WeightsIncompressible` or `WeightsIncompressibleSlots`, and `ThetaRegistered`), which the check does not see.
@@ -36,7 +37,8 @@ def DescReports : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions Reported j out
 
 /-- **A verdict of compliance of the description-sized check witnesses the policy.** On every instance with a verdict of
-`NciCheck.Desc.evaluate`, the verdict is `Witnessed` on every expansion. -/
+`NciCheck.Desc.evaluate`, the verdict is `Witnessed` on every expansion: the registered circuit complies, and when the
+owners are its inference blocks `d.𝓘`, the registered compiler's, each meets both bounds. -/
 def DescWitnesses : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions Witnessed j out
 

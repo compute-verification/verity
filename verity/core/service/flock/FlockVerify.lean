@@ -804,9 +804,10 @@ A session whose draw is by a law no soundness claim draws by is refused at setup
 work draw, whatever flags it holds, a subset draw without `--zk` or `--plain-tables` at public outputs, or a stratified
 draw under `--plain-tables`), and under `--rec-inner` so is a session of more
 than one table or whose table holds fewer instances than its population (`RecSetup.oneFull`), and one whose registered
-reads exceed the recursion's call bound: more than 4096 ports, a tree of more than 64 levels or a table of more than 65536
+reads exceed the recursion's call bound: more than 512 ports, a tree of more than 64 levels or a table of more than 4096
 instances, or whose inner shape's V* list holds more than 16 statements, the parts the recursion's soundness bound
-covers (`RecBudget`). Every session of a
+covers, or whose inner statement's public file holds more than 131072 instances or a shared-row table of more than
+131072 rows (`RecBudget`). Every session of a
 statement whose form the soundness proof does not cover (`ProvedScope.check`, then its tables' `m`,
 `ProvedScope.sizesOk`, §16.15) is refused, and
 so is a session without a draw, under `--rec-inner` a session whose draw is not every unit of its population, a
@@ -828,7 +829,9 @@ reading several input groups or a tail stage returning the outputs is; a shared-
 public input ports do not parse, that does not load over them, or two of whose ports' roots over its tables are one root
 under different domains); at more than one table a draw that does not parse or a subset draw whose `k` the tables don't
 divide; `Flock.Guarantees.SampledKSLiveV4` is over that acceptance without shared rows, and `SampledKSLiveV5` with
-them), all after every
+them), and last a statement version other than `verity/flock-circuit` and `verity/flock-circuit+plain-leaves`
+(`ProvedScope.served`: every `+seed-injection` version and every superseded one) and a plain session on seed coins
+(`--coins seed`, the default without `--zk`; `ProvedScope.servedForm`), all after every
 check has passed (so the reason is the refusal only when nothing else
 fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
@@ -1037,7 +1040,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
       -- the program,
       -- then a record not in its canonical text (S0), then under --zk files whose rows, names or port roots the
       -- sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a circuit, a
-      -- public file or a draw outside its form (`KsScope.checkOf`)
+      -- public file or a draw outside its form (`KsScope.checkOf`), then a statement version other than
+      -- `ProvedScope.served` or a plain session on seed coins (`ProvedScope.servedForm`)
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
       if draw.isNone then ProvedScope.drawLaw zk tags plainTables draw
@@ -1049,6 +1053,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       RecordText.check record
       ksFiles
       if zk && recInner.isNone then KsScope.checkOf ksParsed tags pubB count draw
+      ProvedScope.servedForm stmtTags coins
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
