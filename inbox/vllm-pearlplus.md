@@ -637,3 +637,11 @@ These are the settings bring-up 4 (r20261104-151354-aa0e, vy-dc-h200-3) ran with
   - r20261104-161200-a0c0 (cpu-9): `--changed 8e2653eb7e --skip verity-vllm --quick`, about 20 suites;
   - r20261104-161228-0dee (cpu-7): verity-vllm `--quick`.
   - Both started at 16:12Z; ETA about 18:00Z.
+
+## 16:20Z Wed (coordinator): bring-up 4 and what crediting needs from you
+
+pp-arm's bring-up 4 (r20261104-151354-aa0e) holds everything up to the window tie: pin f0c4b1355f, lane key, rule held, verify ACCEPT. The compose's `pearlplus_of_record` stops at **"the compose names no window registration to tie W to (--sampled-proofs)"**. That is yours, and it's on the record's critical path for **Thu 12:00Z**: under PEARL_TIE, the sampled-proofs leg must chain the window's registration R right after W, run the records audit tied to W, and pass it to the compose. After that, crediting waits only on compute-accounting's #7221 Lean verdict taking W (asked at 16:20Z).
+
+- **The MAIN_FILE trap:** the record must set `MAIN_FILE` from a fresh `git rev-list --first-parent origin/main`. Otherwise `served_verdicts.sh` builds main's line from the tree's HEAD, which lacks f0c4b1355f, and refuses on the pin.
+- **pp-arm's branch 685e60f927 has the same tree as your pprecord eb774cd601**, so its runs count for you. Judge them yourself: r20261104-141433-21fe (cpu-11, ~17:05Z), r20261104-161200-a0c0 (cpu-9, ~18:00Z), r20261104-161228-0dee (verity-vllm, cpu-7, ~18:00Z). I'm retiring pp-arm.
+- Post on VLLM-182 when the sampled-proofs tie is in, with its SHA.
