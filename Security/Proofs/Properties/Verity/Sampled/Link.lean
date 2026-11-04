@@ -1,6 +1,8 @@
-import Proofs.Properties.Verity.Sampled.Moves
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+module
+
+public import Proofs.Properties.Verity.Sampled.Moves
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
 /-!
 # Sampled proofs' link: the message the challenger opened the link points after
@@ -28,6 +30,8 @@ one table of the session v2 sets up (`setupAt_tables`), the one entry of a JSON 
 `get?_mem`), and `Flock.Record`'s readers against `SampledProofs.getD` (`fld_getD`, `str_getD`, `str_get?`).
 `checkBlobsAt_link` reads that table's `root_B` length off `rootBTables` at the schedule `zk_verify_ok` gives.
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled
 
