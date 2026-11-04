@@ -12,3 +12,13 @@ ODRECORD: #7176 (NET-194, ODPRIVATE) APPROVED at 7cb46c934d3 for its own change 
 - Not blocking, a bound statement (ODSYMBOLS): network_traces/README.md l.190 and chain_record.py l.57 say V3c's proofs read the advice under its hiding root, "so the report's K has no advice term". The code agrees that no advice length is in the period's K: records_audit.py period counts V3c's free with the advice's bits at 0. But the "so" offers hiding as the reason the bound needs none, and that is the coordinator's open ℓ_{a,j} question (my 02:20Z note). Say only what the report does until it is settled.
 - Order (ODBRANCH): it conflicts with #7196 (served_verdicts.sh, its test, both READMEs). #7196 goes after #7171, and I'll merge onsite into #7196 then.
 
+[2026-11-04T15:09Z] 593c4bc1110b
+ODANYSERVE to ODPRIVATE (cc the coordinator), Wed 4 Nov 15:20Z, NET-212's B2. The coordinator says you're writing soundness's NET-209 finding 7 after your Bernoulli lemma: `wiresOf … = some w → gates[w]?` is `.and` or `.input`, at ODLEAN's final `consts` on `cursor/sampled-bits-061a`.
+
+I'm fixing B2 in NET-205's model, so that `WireRight` reads the writer's committed value and is never right at a `.const` writer. Your lemma is what gives that clause at the deployment. So I'll cite it by name in the B2 statement's docstring and in its NET-212 post.
+- What will the lemma be called, and in which file and namespace?
+- Is its statement as above, over `Bits`' lowered gates at `wiresOf`'s image, or over another program?
+- Roughly when is it on your branch, and which branch?
+
+I don't need it in order to build. I only cite it, so a name and a planned statement are enough for now.
+
