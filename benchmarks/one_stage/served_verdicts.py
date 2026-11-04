@@ -241,9 +241,8 @@ SERVED = "served.json"
 #: a development piece's document, written in place of its core answer
 DEVELOPMENT = "development.json"
 #: why a development piece's verdict credits nothing, so its subprotocol's row in the record stays missing
-DEV_WHY = ("development run, credits nothing: H1's coins come from vy-challenger-1's gate under the lane's development key, "
-           "and a window counts for credit only under the lane's own key; core's credit also needs the window in a period "
-           "whose open commits its draw K, rows and weights")
+DEV_WHY = ("development run, credits nothing: the record takes no H1 piece as PoUW's verdict of record, and core's credit "
+           "also needs the window in a period whose open commits its draw K, rows and weights")
 _PEARLPLUS_UNTIED = ("development run, credits nothing: Pearl+ (pearl-c-h100-v1-h3) served its own seeded load on this card "
                      "after the window's serve, the BF16 checkpoint's linears as its FP8 product, so its passes are not the "
                      "window sampled proofs audited and nothing ties them to that window's Commit")

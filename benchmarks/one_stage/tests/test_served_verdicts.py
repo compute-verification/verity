@@ -2785,33 +2785,39 @@ FAKE_GATE = ('case "$1" in\n'
              "*) exit 2 ;;\nesac")
 
 
-@pytest.mark.parametrize("live", [True, False])
-def test_under_pouw_pearlplus_the_coins_line_says_whether_pearlpluss_epoch_coins_are_live(tmp_path, live):
+@pytest.mark.parametrize("live, tie", [(True, False), (True, True), (False, False)])
+def test_under_pouw_pearlplus_the_coins_line_says_whether_pearlpluss_epoch_coins_are_live(tmp_path, live, tie):
     """Under POUW=pearlplus the run checks the gate Pearl+'s serve reserves its session through, PEARLC_CHALLENGER_GATE
     (a lane with a period open would be refused), and the COINS line says Pearl+'s epoch's salt coin is a live session's
-    of its own there; with PEARLC_CHALLENGER_GATE empty no gate is checked, and the COINS line, the record's first,
-    leads with the coins being in-process and the record claiming no Pearl+ verdict."""
+    of its own there, its piece crediting nothing, or under PEARLPLUS_TIE, where Pearl+ serves the window itself, taken as
+    PoUW's verdict of record only where `pearlplus_of_record` holds it; with PEARLC_CHALLENGER_GATE empty no gate is
+    checked, and the COINS line, the record's first, leads with the coins being in-process and the record claiming no
+    Pearl+ verdict."""
     venv = tmp_path / "toy-venv" / "bin"
     _script(venv / "python", '[ "$1 $2" = "-m research" ] && exit 0\n[ "$1 $2" = "-m verity_vllm.pipeline.cli" ] && exit 9\n'
                              f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
     _script(gate := tmp_path / "gate", FAKE_GATE)
     (one := tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True)
     (one / "served_verdicts.py").symlink_to(HERE.parent / "served_verdicts.py")
+    env = {**(PEARL_TIED if tie else {}), "POUW": "pearlplus", "PEARLC_CHALLENGER_GATE": str(gate) if live else ""}
     rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200",
-                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", POUW="pearlplus",
-                                      PEARLC_CHALLENGER_GATE=str(gate) if live else "")
+                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **env)
     assert rc == 17 and lines[-1] == "STOP at predict (exit 17)", lines
     tail = f";{V3C_COINS} the bandwidth audit's: vy-auditor-2's bw_party, inside PoUS's piece"
     if live:
+        run, credit = PEARLPLUS_RUN, "it credits nothing"
+        if tie:
+            run = "PoUW: Pearl+ on the window's own engine, its passes the window's linears (POUW=pearlplus, PEARLPLUS_TIE)"
+            credit = "which the record takes as PoUW's verdict of record only where pearlplus_of_record holds it"
         assert lines[0] == (f"GATE ready: lane vllm's open period None; the ledger's 1 entries; pinned {'ef' * 6} (main "
                             f"{'ef' * 6}, 2026-10-26T21:35:00Z), on the verifier's first-parent line of main"), lines
-        assert lines[1] == (f"COINS sampled proofs: {LOCAL_COINS}; {PEARLPLUS_RUN}, its epoch's salt coin a live session's "
+        assert lines[1] == (f"COINS sampled proofs: {LOCAL_COINS}; {run}, its epoch's salt coin a live session's "
                             "of its own on vy-challenger-1's gate (peer vy-dc-h200, lane vllm), each pass's salt checked by "
                             "core_check.live_salt in its piece, its serve inside a Pearl-C period of that lane's own, and "
                             "its replay's draws a draw session's coin on that gate, reserved withheld once the period "
                             "closed and opened on the run's commitment, taken once before the replay, checked against the "
-                            "signed ledger in its piece and cited by store id in the POUW line's coin; a development piece "
-                            f"under the lane's development key, it credits nothing{tail}"), lines
+                            f"signed ledger in its piece and cited by store id in the POUW line's coin; a development piece, "
+                            f"{credit}{tail}"), lines
     else:
         assert lines[0] == ("COINS Pearl+'s epoch coins are in-process and the record claims no Pearl+ verdict; sampled "
                             f"proofs: {LOCAL_COINS}; {PEARLPLUS_RUN}, its epoch's coins an in-process challenger's "
