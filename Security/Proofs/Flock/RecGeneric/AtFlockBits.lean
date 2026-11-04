@@ -27,7 +27,9 @@ at most `2^{−167.7} + t·2^{−174.95}` (`ksLinkOn_tight`); where no run accep
 
 The premises are SHA-512's named collision assumptions (`StrictBirthday` at `B`; `ExpectedCR` at `B_I`, `FCI` and
 `F0I` charged as route 2C charges them, and at the link's finder at the reruns, `verModel`), the prover's calls
-`t ≥ 1` per run, and a rerun's calls beyond its draw's: at most `L ≤ |S(x_I)| + 2(n + v)` at every rerun.
+`t ≥ 1` per run, route 2C's call bounds `n` and `v`, and two facts about the deployed code that put a rerun's calls
+beyond its draw's at most `|S(x_I)| + 2(n + v)`: the inner view's run makes at most `n` calls (`n_V ≤ n`), and the calls
+`E_O`'s witnesses record number at most `v` (`w ≤ v`).
 -/
 
 @[expose] public section
@@ -547,8 +549,10 @@ theorem verModel_extras_le {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin C
 /-- **`KSLinkOn`'s bound at `M = 2^256` and `R = 2^257` is at most `κ + t·ε`** at a statement `G` admits, `ε` route
 2C's five terms with the gated link's in place of the deviation finder's (`link_bound_split_le`), where every V\*
 session's verifier accepts on an accepted run, under SHA-512's named collision assumptions at `B`, `B_I`, `FCI`,
-`F0I` and the link's finder at the reruns, and where a rerun of `E_O`'s model makes at most `L ≤ |S(x_I)| + 2(n + v)`
-calls beyond its draw's (`verModel_Ex_cost_le`). -/
+`F0I` and the link's finder at the reruns. `n` and `v` are route 2C's call bounds, the inner verifier's calls on the
+inner messages (`hn`) and the compiled verifier's own at the V\* statements (`hv`); a rerun's inner view's run makes at
+most `n` (`hV`) and the calls `E_O`'s witnesses record number at most `v` (`hW`), so a rerun of `E_O`'s model makes at
+most `|S(x_I)| + 2(n + v)` calls beyond its draw's (`verModel_extras_le`, `verModel_Ex_cost_le`). -/
 theorem ksLinkOn_bits [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Claims.Flock.Deploy Coin Col' T'} {Cp : Caps Coin} {G : Msg → Prop} (hK : KSLinkOn H D Bd DO Cp G)
     (hS : SessionAccepts (D.record Bd.IVStar)) {x : Msg} (hx : G x) {Ω : Type} [Fintype Ω] [Nonempty Ω]
@@ -566,11 +570,12 @@ theorem ksLinkOn_bits [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} 
       ExpectedCR H ((F0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x
         R).charge (setupLen (D.record Bd.IVStar) x +
           ((Inner.ofFlock Bd.deploy Bd.deploy.decode).k (xI (D.record Bd.IVStar) x) + 1) * (n + v))))
-    (L : ℕ)
-    (hL : ∀ (ω : Ω) (u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x),
-      ((compDep D Bd DO).viewCalls ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x ω u).length +
-        ((compDep D Bd DO).rerunCalls H P x ω u).length + ((compDep D Bd DO).ownAt H P x ω u).length ≤ L)
-    (hLc : L ≤ setupLen (D.record Bd.IVStar) x + 2 * (n + v))
+    (hn : ∀ cs ws, ((D.record Bd.IVStar).innerCalls H x cs ws).length ≤ n)
+    (hv : ∀ ps, (setupCalls H (D.record Bd.IVStar) ((D.record Bd.IVStar).vstar x ps)).length ≤ v)
+    (hV : ∀ (r : Fin ((compDep D Bd DO).V.k x) → Coin) ws,
+      ((compDep D Bd DO).innerLog ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H x r ws).length ≤ n)
+    (hW : ∀ (ω : Ω) (u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x) ws,
+      (compDep D Bd DO).wits H P x ω u = some ws → ((D.record Bd.IVStar).calls x ws).length ≤ v)
     (hLink : ∀ h : 0 < (linkPlan (Coin := Coin) Bd.DE.V.k (2 ^ 256)).sel ((compDep D Bd DO).xI x),
       ExpectedCR H ((linkPlan (Coin := Coin) Bd.DE.V.k (2 ^ 256)).finder
         ((compDep D Bd DO).verModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x) ((compDep D Bd DO).xI x) h)) :
@@ -590,8 +595,12 @@ theorem ksLinkOn_bits [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} 
           (2 : ℝ) ^ (-(255 - Real.logb 2 (βdev2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) Cp x *
             (cBe (D.record Bd.IVStar) x + setupLen (D.record Bd.IVStar) x + 2 * ((n + v : ℕ) : ℝ)))))) :=
   (hK x hx Ω P (2 ^ 256) (2 ^ 257)).trans
-    (link_bound_split_le H _ _ DO DO.decode Cp hS x P t ht1 hrun n v hSB hBI hFCI hF0I Bd.DE.V.k _ _ L
-      (verModel_Ex_cost_le hS x P t hrun _ L hL) (by exact_mod_cast hLc) hLink)
+    (link_bound_split_le H _ _ DO DO.decode Cp hS x P t ht1 hrun n v hSB hBI hFCI hF0I Bd.DE.V.k _ _
+      ((n + v + setupLen (D.record Bd.IVStar) x + n + v : ℕ) : ℝ)
+      (verModel_Ex_cost_le hS x P t hrun _ _ fun ω u =>
+        verModel_extras_le x P _ n v n v hn hv ω u (fun ws _ => hV u.1 ws) (hW ω u))
+      (by exact_mod_cast (by omega : n + v + setupLen (D.record Bd.IVStar) x + n + v ≤
+        setupLen (D.record Bd.IVStar) x + 2 * (n + v))) hLink)
 
 /-- **`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at every statement**, where every statement a run of the
 composite's verifier accepts is one `G` admits with `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}` (`hb`): `ksLinkOn_bits`
@@ -628,11 +637,12 @@ theorem ksLinkOn_tight [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin}
       ExpectedCR H ((F0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x
         R).charge (setupLen (D.record Bd.IVStar) x +
           ((Inner.ofFlock Bd.deploy Bd.deploy.decode).k (xI (D.record Bd.IVStar) x) + 1) * (n + v))))
-    (L : ℕ)
-    (hL : ∀ (ω : Ω) (u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x),
-      ((compDep D Bd DO).viewCalls ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x ω u).length +
-        ((compDep D Bd DO).rerunCalls H P x ω u).length + ((compDep D Bd DO).ownAt H P x ω u).length ≤ L)
-    (hLc : L ≤ setupLen (D.record Bd.IVStar) x + 2 * (n + v))
+    (hn : ∀ cs ws, ((D.record Bd.IVStar).innerCalls H x cs ws).length ≤ n)
+    (hv : ∀ ps, (setupCalls H (D.record Bd.IVStar) ((D.record Bd.IVStar).vstar x ps)).length ≤ v)
+    (hV : ∀ (r : Fin ((compDep D Bd DO).V.k x) → Coin) ws,
+      ((compDep D Bd DO).innerLog ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H x r ws).length ≤ n)
+    (hW : ∀ (ω : Ω) (u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x) ws,
+      (compDep D Bd DO).wits H P x ω u = some ws → ((D.record Bd.IVStar).calls x ws).length ≤ v)
     (hLink : ∀ h : 0 < (linkPlan (Coin := Coin) Bd.DE.V.k (2 ^ 256)).sel ((compDep D Bd DO).xI x),
       ExpectedCR H ((linkPlan (Coin := Coin) Bd.DE.V.k (2 ^ 256)).finder
         ((compDep D Bd DO).verModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x) ((compDep D Bd DO).xI x) h)) :
@@ -642,7 +652,7 @@ theorem ksLinkOn_tight [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin}
   have hpos : (0 : ℝ) ≤ 2 ^ (-(167.7 : ℝ)) + t * 2 ^ (-(174.95 : ℝ)) := by positivity
   by_cases hex : ∃ ω r, (run H P (compDep D Bd DO).V x ω r).out = .acc
   · obtain ⟨hx, hκ, hε⟩ := hb hex
-    exact (ksLinkOn_bits hK hS hx P t ht1 hrun n v hSB hBI hFCI hF0I L hL hLc hLink).trans
+    exact (ksLinkOn_bits hK hS hx P t ht1 hrun n v hSB hBI hFCI hF0I hn hv hV hW hLink).trans
       (add_le_add hκ (mul_le_mul_of_nonneg_left hε (Nat.cast_nonneg t)))
   · unfold PrBad
     refine le_trans (Pr_mono (q := fun _ => False) fun q hq => ?_) (Pr_false.le.trans hpos)
