@@ -4,5 +4,6 @@ import PouwPearlPlus.Load
 import PouwPearlPlus.Words
 import PouwPearlPlus.Rule
 import PouwPearlPlus.Tile
+import PouwPearlPlus.Credit
 import PouwPearlPlus.Check
 import PouwPearlPlus.Open

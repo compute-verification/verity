@@ -3,7 +3,8 @@
 Each case proves passes on the CPU as verify_run's tests do (`test_pearl_c_vllm.proved_pass`: the H100 record's -h3 scheme
 at k = 128 in 16 x 16 tiles, a call with filler rows and an excluded row, y committed), changes them as those tests do, and
 holds the Lean's verdict to the Python's on the same files and coin: the verdict, the reason, the refusal, the run's
-commitment and source, and every opened tile's verdict in order. `test_a_recorded_h200_run` does the same on an H200 run's
+commitment and source, every opened tile's verdict in order, and an accepted run's work (its credit at Pearl's assumption,
+`credit_at_assumption`: the credited MACs, tiles and MACs, ρ and ε). `test_a_recorded_h200_run` does the same on an H200 run's
 retained passes (r20261103-140949-ca34's, `art:4e1431256cceafc7…`) against the verdicts r20261103-160350-f592 recorded,
 where `POUW_PEARLPLUS_RECORDED` names a directory holding them (`passes/` and `verdicts/{run,control}.json`).
 
@@ -71,7 +72,8 @@ def lean(exe: Path, paths: list[Path], draws: int, source: bytes | None = SOURCE
 def answer(out: dict) -> dict:
     """`verify_passes`' (or a served verify document's) outcome in the Lean's terms."""
     return {"verdict": out["answer"]["verdict"], "reason": out["answer"]["reason"], "refused": out.get("refused"),
-            "commitment": out.get("commitment"), "source": out.get("source"), "verdicts": out.get("verdicts", [])}
+            "commitment": out.get("commitment"), "source": out.get("source"), "verdicts": out.get("verdicts", []),
+            "work": (out["answer"]["public"] or {}).get("work")}
 
 
 def same(exe: Path, paths: list[Path], draws: int = 3, source: bytes | None = SOURCE, record: Path | None = None) -> dict:
@@ -93,6 +95,7 @@ def test_an_honest_pass(exe, tmp_path):
     for draws in (3, 16):
         got = same(exe, [path], draws)
         assert got["verdict"] == "accept" and len(got["verdicts"]) == draws + 1
+        assert 0 < got["work"]["credited"] < got["work"]["macs"]
 
 
 def test_a_row_over_its_cap_and_its_give_up(exe, tmp_path):

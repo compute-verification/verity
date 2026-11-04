@@ -1,5 +1,6 @@
 import PouwPearlPlus.Load
 import PouwPearlPlus.Tile
+import PouwPearlPlus.Credit
 
 /-!
 # Pearl+'s run verdict (`verify_run.verify_passes`)
@@ -15,9 +16,9 @@ import PouwPearlPlus.Tile
 * **The verdict**: every pass loads (`load`), the run's commitment is the coin record's where there is one (`after-coin`),
   the draw over every pass's tickets names the drawn tiles, each pass adds one tile per excluded row, and the run accepts
   iff every one of them passes `checkTile`. A failing tile's reason is `pass i tile t: why`, joined by `; `.
+* **The work** an accepted run publishes: its credit at Pearl's assumption at δ = 1/100 (`creditAtAssumption`).
 
 Out of scope, refused by name in `load`: sm_120's schemes, live coins, the window record's tie (`tie`, `rounds`, `dropped`).
-The credit at Pearl's assumption (`credit_at_assumption`) is not computed here.
 -/
 
 namespace PouwCheck.PearlPlus
@@ -50,6 +51,7 @@ structure RunAnswer where
   refused : Option (String × String) := none
   plan : Option Plan := none
   verdicts : List TileVerdict := []
+  work : Option Credit := none
 
 /-- `verify_passes` up to the replay: the passes, the run's commitment, the source and the tiles to open. -/
 def plan (i : Input) : Except Refusal Plan := do
@@ -105,7 +107,8 @@ def check (i : Input) (opener : Nat → Nat → Except String TileOpening) : Run
   | .ok pl =>
     let vs := replay pl opener
     let bad := vs.filterMap fun v => v.reason.map fun r => s!"pass {v.pass} tile {v.tile}: {r}"
-    if bad.isEmpty then { accept := true, plan := some pl, verdicts := vs }
+    if bad.isEmpty then
+      { accept := true, plan := some pl, verdicts := vs, work := some (creditAtAssumption pl.passes i.draws DELTA) }
     else { accept := false, reason := some ("; ".intercalate bad), plan := some pl, verdicts := vs }
 
 end PouwCheck.PearlPlus

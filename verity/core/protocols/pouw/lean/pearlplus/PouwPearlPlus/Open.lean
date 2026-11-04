@@ -121,6 +121,10 @@ def output (ans : RunAnswer) : Json :=
     ("source", jopt (ans.plan.map (hex ·.source))),
     ("drawn", match ans.plan with | some pl => (pl.drawn : Nat) | none => .null),
     ("verdicts", .arr (ans.verdicts.map fun v => Json.mkObj [("pass", (v.pass : Nat)), ("tile", (v.tile : Nat)),
-      ("ok", .bool v.reason.isNone), ("reason", jopt v.reason)]).toArray)]
+      ("ok", .bool v.reason.isNone), ("reason", jopt v.reason)]).toArray),
+    ("work", match ans.work with
+      | some c => Json.mkObj [("credited", (c.credited : Nat)), ("credited_tiles", (c.creditedTiles : Nat)),
+          ("macs", (c.macs : Nat)), ("rho", jstr (toString c.rho)), ("epsilon", jstr (toString c.epsilon))]
+      | none => .null)]
 
 end PouwCheck.PearlPlus
