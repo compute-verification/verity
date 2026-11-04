@@ -10,8 +10,9 @@ blocks it carried (the code's *link-window*). Its protocol, its Python and its R
 `verity/core/protocols/certifier/`. The auditor's checks of what it signs are in `verity/core/protocols/network/`.
 
 This package models the proxy. The relay form, `verity/core/protocols/certifier/warden.py`, is the one
-`benchmarks/network_traces/` runs, and it has no executable Lean yet. Its analysis is in `Security/`
-(`Security/Proofs/NetworkCertifier/Warden.lean`).
+`benchmarks/network_traces/` runs; of it, this package holds only its schedule (`CertifierDevice.Relay`), and its
+analysis is in `Security/` (`Security/Proofs/NetworkCertifier/Warden.lean`, and `Properties.NetworkCertifier.Schedules`
+for the schedules it runs).
 
 ## What is in it
 
@@ -29,6 +30,7 @@ The package requires `certifier_program` (`verity/core/protocols/certifier/lean`
 | `CertifierDevice.Served` | a served link's admission rule | `served.py` |
 | `CertifierDevice.Frame` | the link's frames and the server's events | `active.py`'s framing |
 | `CertifierDevice.Issuer` | one network certificate per closed link-window, and each egress window's clock certificate | `certificate.py`'s `Issuer` |
+| `CertifierDevice.Relay` | the relay form's schedule: what it does with each connection (refused, admitted to a lane, or cut queued), each lane's admission tick and egress cells | `warden.py`'s `Warden.handle`, `_tick`, `_egress` and `run` |
 
 Each module's docstring states its rules exactly.
 

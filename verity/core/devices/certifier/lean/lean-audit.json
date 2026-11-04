@@ -65,6 +65,11 @@
    "imports": ["CertifierDevice.Driver", "Lms.Sign", "NetworkCheck.Check"],
    "except": [],
    "why": "the issuer is code: the driver's World, lms's signing and network_check's encodings and certificate; no Mathlib and nothing of Security"
+  },
+  "CertifierDevice.Relay": {
+   "imports": ["NetworkCheck.Period"],
+   "except": [],
+   "why": "the relay's schedule is code: network_check's schedule parameters only; no Mathlib and nothing of Security"
   }
  },
  "dependencies": {

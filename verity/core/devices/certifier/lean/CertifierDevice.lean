@@ -8,6 +8,7 @@ import CertifierDevice.Driver
 import CertifierDevice.Issuer
 import CertifierDevice.Difftest
 import CertifierDevice.IssuerDifftest
+import CertifierDevice.Relay
 
 /-!
 # The active network certifier device
@@ -21,5 +22,6 @@ reserves, and each egress window's clock sync, hidden under a salt of its own, i
 reuses `certifier_program` (`NetworkCertifier`: statuses, `ClockSync`, `SyncSet`, `eligible`), `network_check`
 (`NetworkCheck`: grid parameters, the record head and certificate encodings), `lms` (`Lms`: signing and verification)
 and `core_world` (`Core.World`, `Core.Conn`). Code: no Mathlib and nothing of `verity/Security/`. `Difftest` holds `step` to `active.Proxy` on generated traces, and `IssuerDifftest` holds
-`Issuer.certify` and `Issuer.clock` to `certificate.Issuer` on generated records and syncs.
+`Issuer.certify` and `Issuer.clock` to `certificate.Issuer` on generated records and syncs. `Relay` is the schedule
+of the relay form, `warden.py`'s `Warden`: its refusal, admission, egress limit and cut.
 -/
