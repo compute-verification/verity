@@ -1,5 +1,7 @@
-import NciCheck.Baseline
-import NciCheck.Count
+module
+
+public import NciCheck.Baseline
+public import NciCheck.Count
 
 /-! `nci-check [--unrolled] INSTANCE TRUSTED`: the verdict on one instance, as JSON on stdout. By default the instance is
 `NciCheck.Desc`'s (θ and the owners per root node) with θ's `provenance`, checked at the size of the description and then
@@ -10,6 +12,8 @@ check alone, without θ's provenance: a measurement of `NciCheck.Desc` (`benchma
 record. `nci-check --count INSTANCE` runs the count of `(c, k)`-inference blocks on one of `NciCheck.Count` and prints
 what it publishes, the judgment against `n` (`NciCheck.Count.check`); `--count --detail INSTANCE` prints the whole
 verdict (`NciCheck.Count.checkDetail`), for the private record only and never published. -/
+
+@[expose] public section
 
 def main (args : List String) : IO UInt32 := do
   let usage := "usage: nci-check [--unrolled] INSTANCE TRUSTED | nci-check --policy [--unrolled] INSTANCE | " ++

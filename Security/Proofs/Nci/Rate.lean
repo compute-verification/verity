@@ -1,4 +1,6 @@
-import Definitions.Nci
+module
+
+public import Definitions.Nci
 
 /-!
 # The policy at `(c, k)` complies at its rate
@@ -8,6 +10,8 @@ wide, so the partition complies at `c` gates per block and the rate `k / c` (`co
 `c > 0` the rate times `c` is `k` (`rate_mul`). Each guarantee over `Complies c k` is proved from its rate form over
 `CompliesRate`, the form the inference-only check's verdicts read.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

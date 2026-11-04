@@ -1,4 +1,6 @@
-import NciCheck.Count
+module
+
+public import NciCheck.Count
 
 /-!
 # The count mode's difftest, against the Python reference
@@ -11,6 +13,8 @@ per block Definition its Boolean gates, fresh bits and blocks, the total, the ve
 first refusal's code; and `NciCheck.Count.check`, what the count publishes, the verdict or the refusal's code and no
 other field. The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
+
+@[expose] public section
 
 namespace NciCheck.CountDifftest
 

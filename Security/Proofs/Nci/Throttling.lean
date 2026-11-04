@@ -1,7 +1,9 @@
-import Proofs.Nci.Chain
-import Proofs.Nci.Inequalities
-import Proofs.Nci.LoomisWhitney
-import Proofs.Nci.Rate
+module
+
+public import Proofs.Nci.Chain
+public import Proofs.Nci.Inequalities
+public import Proofs.Nci.LoomisWhitney
+public import Proofs.Nci.Rate
 
 /-!
 # Updated matrix multiplications are throttled
@@ -16,6 +18,8 @@ incompressibility charges (`sum_card_outputsOther_le`). The two read counts, wei
 `min{c₁, c₂} G ≤ α size(D)` for every `μ`, since the IUs' products add up to `G` (`sum_card_products`), and so
 `F · 2G ≤ size(D)`.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

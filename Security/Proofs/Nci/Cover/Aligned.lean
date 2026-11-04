@@ -1,4 +1,6 @@
-import Proofs.Nci.Cover.Training
+module
+
+public import Proofs.Nci.Cover.Training
 
 /-!
 # The width variant on whole-word activations, proved
@@ -13,6 +15,8 @@ outside `θ`) and the updated parameters `b #L ≤ k`, from the same inputs, so 
 most `k² / (b f) + k` counted products (`finished_le_of_charge_base`). Summed over a compliant division pulled back
 (`training_of_block_bound`), that is `CoverTrainingAligned`.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.LeafMap
-import Flock.KsScope
+module
+
+public import Proofs.Flock.Bridge.LeafMap
+public import Flock.KsScope
 
 /-!
 # `SampledKSLiveV5`'s shared-row file hypotheses, read off `verify --zk`'s acceptance
@@ -14,6 +16,8 @@ hypotheses `HmIn.parse`, `HmIn.loadPublic` and `RootFixesDomainL` at the file's 
 * `v5Files_of_sharedOk`: a file `KsScope.SharedOk` admits gives V5's three file hypotheses, at every `n`.
 * `v5Files_of_check`: `KsScope.check` passing at a shared-row file gives them.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

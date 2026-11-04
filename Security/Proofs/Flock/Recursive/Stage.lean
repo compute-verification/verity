@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.Transfer
-import Proofs.Flock.Recursive.Flock
-import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+module
+
+public import Proofs.Flock.Recursive.Transfer
+public import Proofs.Flock.Recursive.Flock
+public import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
 
 /-!
 # Recursion: V*'s stages, with one set of openings at every history
@@ -35,6 +37,8 @@ only the registered digests (`ValueBindingZ.cs`, from the public file). V*'s ses
   session's (`SessionFork`), or the bound with no finder budgets: the sessions' `ZkOuter.boundCR`, `r` times their
   `ZkOuter.slackCR` (`ZkOuter.slackIf_le`) and the inner error.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

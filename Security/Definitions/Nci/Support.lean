@@ -1,5 +1,7 @@
-import Definitions.Nci
-import Mathlib.Data.FinEnum
+module
+
+public import Definitions.Nci
+public import Mathlib.Data.FinEnum
 
 /-!
 # NCI's incompressibility in support form: the vocabulary
@@ -19,6 +21,8 @@ assignments, which wiring cannot change.
 * `Chain.charge R b_w b_a T`: what the draft charges for the products in `T`, `b_w` per weight entry and `b_a` per
   input entry of which `T` holds a product, other than an input entry linked to an entry whole in `R`.
 -/
+
+@[expose] public section
 
 namespace Nci
 

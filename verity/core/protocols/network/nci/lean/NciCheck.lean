@@ -1,14 +1,16 @@
-import NciCheck.Check
-import NciCheck.Difftest
-import NciCheck.Desc
-import NciCheck.DescDifftest
-import NciCheck.DescLiveness
-import NciCheck.DescFuzz
-import NciCheck.Baseline
-import NciCheck.BaselineDifftest
-import NciCheck.Protocol
-import NciCheck.Count
-import NciCheck.CountDifftest
+module
+
+public import NciCheck.Check
+public import NciCheck.Difftest
+public import NciCheck.Desc
+public import NciCheck.DescDifftest
+public import NciCheck.DescLiveness
+public import NciCheck.DescFuzz
+public import NciCheck.Baseline
+public import NciCheck.BaselineDifftest
+public import NciCheck.Protocol
+public import NciCheck.Count
+public import NciCheck.CountDifftest
 
 /-!
 # The NCI policy's check
@@ -41,3 +43,5 @@ table and its fresh bits from `NciCheck.Desc`'s summaries. It publishes only the
 the whole verdict, with the counts, is `NciCheck.Count.checkDetail`, for the private record. `NciCheck.CountDifftest`
 holds both to the Python reference.
 -/
+
+@[expose] public section

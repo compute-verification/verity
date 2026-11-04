@@ -1,8 +1,10 @@
-import Proofs.Flock.C3.RegLevels.OpensRegs
-import Proofs.Flock.C3.PubRows.Shape
-import Proofs.Flock.VBridge.Family.AccRows
-import Proofs.Flock.Recursive.Raw
-import Proofs.Flock.Recursive.Stage
+module
+
+public import Proofs.Flock.C3.RegLevels.OpensRegs
+public import Proofs.Flock.C3.PubRows.Shape
+public import Proofs.Flock.VBridge.Family.AccRows
+public import Proofs.Flock.Recursive.Raw
+public import Proofs.Flock.Recursive.Stage
 
 /-!
 # n11: `OpenKeysS`' reads-file conjuncts at a level's `acc` and `acc_out`, from `checkAcc` and `checkAccReads`
@@ -34,6 +36,8 @@ checked its statement (`checkAcc_of_checkStmt`):
   as the event's `ChecksVR` states them), its label check (`RecVStar.checkLabels`) makes that label the unit
   (`PubRows.label_of_checked`), so the read is at `accReads`' row of the unit, which `OpenKeysS` reads.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

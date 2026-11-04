@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.WholeCircuit
-import Proofs.Pouw.PearlC.TileCircuit
+module
+
+public import Definitions.Pouw.PearlC.WholeCircuit
+public import Proofs.Pouw.PearlC.TileCircuit
 
 /-!
 # A unit of a composed table is its template (proofs)
@@ -13,6 +15,8 @@ the template's one-unit partition whatever the transcript (`cut_correct`, an eva
 `RowCircuit.row8A_code`, …) therefore hold of each unit of the composed table unchanged. A port that a unit's gate
 reads is committed (`port_committed`), being an input or another unit's gate.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.WholeCircuit
 

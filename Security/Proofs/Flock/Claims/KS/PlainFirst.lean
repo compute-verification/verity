@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainEvent
-import Proofs.Flock.Claims.KS.LiveMix
+module
+
+public import Proofs.Flock.Claims.KS.PlainEvent
+public import Proofs.Flock.Claims.KS.LiveMix
 
 /-!
 # A simulation of the plain runs, and the record's draw
@@ -15,6 +17,8 @@ The plain mixture's first bound (`PlainDrawSim`'s `plain_first_of_simD`) reads a
 The record's draw is the statement's only up to key order on accepting runs (`RecordDrawEquiv`, `recordDrawEquiv`),
 and that is all the checks give (`drawEq_ne`), so the chain reads the session set up at the statement's draw.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

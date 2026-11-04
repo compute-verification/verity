@@ -1,4 +1,6 @@
-import Properties.Verity.Game
+module
+
+public import Properties.Verity.Game
 
 /-!
 # Soundness at the verifier of record, composed from its subprotocols' targets
@@ -25,6 +27,8 @@ the device's log each component read, the extractor and the finders, the gates c
 registered inputs, the wipe and the play read at its boundary, and the published certificates, thresholds, errors and
 collision terms.
 -/
+
+@[expose] public section
 
 namespace Verity
 

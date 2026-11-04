@@ -14,8 +14,12 @@ What is proved is about the unit's reference (`RecLinkRef.linkRef`), whose outpu
 That the netlist (`VStar.linkUnit`) computes `linkOut` wherever its rows hold, on the bytes of its ports' words, is
 `Proofs.Flock.VBridge.RecLink` (`laid_linkUnit`, `linkB_words`); this file doesn't compose the two.
 -/
-import Proofs.Flock.Verifier.Merkle
-import Flock.RecLinkRef
+module
+
+public import Proofs.Flock.Verifier.Merkle
+public import Flock.RecLinkRef
+
+@[expose] public section
 
 namespace Flock.RecLinkBind
 

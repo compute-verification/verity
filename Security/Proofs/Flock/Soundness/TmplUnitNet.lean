@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.TmplValueUnit
-import Proofs.Flock.Soundness.ExecCircuit
-import Flock.HmRow
+module
+
+public import Proofs.Flock.Soundness.TmplValueUnit
+public import Proofs.Flock.Soundness.ExecCircuit
+public import Flock.HmRow
 
 /-!
 # A templated file's unit, at its committed net
@@ -15,6 +17,8 @@ and are zero off `posMap`'s image (`TmplUnit.rowsSat`). With the constant at 1, 
 under one of the root's calls past the input rows, they carry its spec on its bound inputs (`TmplUnit.computes`, the
 committed net's `unit_computes`). No verifier path reads this file.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockSoundness.Audit
 

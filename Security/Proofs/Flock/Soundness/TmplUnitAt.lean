@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.ExecPlacement
-import Proofs.Flock.Soundness.TmplUnitNet
+module
+
+public import Proofs.Flock.Soundness.ExecPlacement
+public import Proofs.Flock.Soundness.TmplUnitNet
 
 /-!
 # A templated unit is its logical net placed at `posMap`
@@ -9,6 +11,8 @@ a `Built` net (`built_tmpl`), and `tu.net` is that net's rows moved to `posMap`'
 `TmplUnit.unrolled`), so the unit is its logical net placed at `upos` (`UnitAt.tmpl`). The committed net itself need not
 be `Built`: a laned copy's columns can sit before the columns it reads.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

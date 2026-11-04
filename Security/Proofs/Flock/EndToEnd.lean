@@ -1,4 +1,6 @@
-import Proofs.Flock.EndToEnd.Statement
+module
+
+public import Proofs.Flock.EndToEnd.Statement
 
 /-!
 # Proof of C-Flock's end-to-end guarantee
@@ -13,6 +15,8 @@ terms in closed form:
 `EndToEnd_refSetup` shows the statement's reference setup `y₀` is no extra condition: every draw flock-verify accepts
 gives one, at any number of tables.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

@@ -1,5 +1,7 @@
-import Proofs.Nci.Throttling
-import Definitions.Nci.Guarantees.Reads
+module
+
+public import Proofs.Nci.Throttling
+public import Definitions.Nci.Guarantees.Reads
 
 /-!
 # Updated matrix multiplications are throttled, in reads form
@@ -11,6 +13,8 @@ The proof of `UpdatedMatMul` (`Throttling.lean`) before it divides by the rate `
 most `k = α c`, which gives back `F · 2G ≤ size(D)` through `F = f(k) / (2α)` (`F_eq_readFactor`,
 `updatedMatMul_rate_of_reads`), and at `α = k / c` the policy's form (`updatedMatMul_of_reads`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

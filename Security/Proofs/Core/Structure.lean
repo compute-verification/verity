@@ -1,4 +1,6 @@
-import Definitions.Core.Structure
+module
+
+public import Definitions.Core.Structure
 
 /-!
 # Proofs about the structural vocabulary
@@ -11,6 +13,8 @@ blocks give `|C| = c · n` (`size_computed_of_exact`); the blocks before a perio
 (`TimeOrdered.ordered_of_injective`); an attained vector bounds `K*` and `n*` (`leastFresh_le`, `fewestBlocks_le`), and
 each evaluation its method's worst case (`le_worst`).
 -/
+
+@[expose] public section
 
 namespace Verity.Structure
 

@@ -1,5 +1,7 @@
-import Definitions.Core.Advice
-import Definitions.Core.RegisteredCircuit
+module
+
+public import Definitions.Core.Advice
+public import Definitions.Core.RegisteredCircuit
 
 /-!
 # Private partitions with public predicates
@@ -25,6 +27,8 @@ gate of the Call. Unit `u`'s outputs inside its Call (`localOuts`) are its gates
 another unit of the same Call reads. They depend only on the Call's own graph, so all Calls of one Definition share them,
 and every global output of `u` is a local one.
 -/
+
+@[expose] public section
 
 namespace Verity
 

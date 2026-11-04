@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VerdictAssembly
-import Proofs.Flock.Claims.KS.PlainDrawJRun
-import Proofs.Flock.VBridge.Family.Tape
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictAssembly
+public import Proofs.Flock.Claims.KS.PlainDrawJRun
+public import Proofs.Flock.VBridge.Family.Tape
 
 /-!
 # Row L at a decision: the fields the reader fixes
@@ -25,6 +27,8 @@ four hold by the reader's definition:
 `rowL_of` is the row; `rowL_at` is it at the checks where the rows are asked, with `hz` the one hypothesis left;
 `runs_assembled_L` is `runs_assembled` with `hL` replaced by the `after` check and `hz`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
