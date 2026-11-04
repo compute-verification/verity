@@ -44,7 +44,7 @@ caps aren't those; and ``verdict_line`` is the run's published line of the netwo
 verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's
 ``error``. ``of_record`` is the figure of record (`OPEN`): that K only where the verdict's public holds every check the
 tight ℓ_{a,j} rests on (``held``, `CHECKS`) and none of its premises is open (``premises``, `DISCHARGE`: each of
-`PREMISES` discharged by theorems in Security's lock that take no named assumption but a standing one, `STANDING`), and
+`PREMISES` discharged by theorems in Security's locks that take no named assumption but a standing one, `STANDING`), and
 while one of either is ``open``, by name, K plus ℓ_a + 1 bits for each audit tied to each
 execution phase's scan (``advice``: the bits each phase adds). Beside the bound, ``advice_charge``: the served run's
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
@@ -174,12 +174,13 @@ SKIP = ("PeriodLeakAccepted's k_{skip,j}: what execution phase j's draws didn't 
 #: check performs it
 CHECKS = {"free": "each tied audit's free inputs computed from its Program's descriptor, not taken as a parameter",
           "circuit": "each tied audit's circuit held fixed whatever its advice"}
-#: Security's lock in this tree (`tools/verity/lean/check.py`'s record of each guarantee's named assumptions)
-LOCK = HERE.parents[1] / "Security" / "lean-audit.json"
-#: the guarantees the tight K rests on, by their names in `LOCK`
+#: Security's locks in this tree (`tools/verity/lean/check.py`'s record of each guarantee's named assumptions): the
+#: guarantees', and the Properties' that discharge premises at the deployed code
+LOCKS = (HERE.parents[1] / "Security" / "lean-audit.json", HERE.parents[1] / "Security" / "Properties" / "lean-audit.json")
+#: the guarantees the tight K rests on, by their names in `LOCKS`
 RESTS_ON = ("NetTiming.SecurityProofs.PeriodLeakAccepted",)
 #: each premise the tight K rests on, by the name ``open`` gives it: what it says, the theorems that discharge it at the
-#: deployed code by their names in `LOCK`'s guarantees (none named yet leaves it open), and the named assumptions of
+#: deployed code by their names in `LOCKS`' guarantees (none named yet leaves it open), and the named assumptions of
 #: `RESTS_ON` it stands for, which its discharge decides
 PREMISES: dict[str, dict[str, Any]] = {
     "wires-fit": {"is": "the wires part of BoundaryGates.Fits at the tied audit's statements: the decoder link, and the "
@@ -199,9 +200,11 @@ PREMISES: dict[str, dict[str, Any]] = {
                        "discharged_by": ("Properties.NetworkPeriod.rowsHeld",), "assumes": ()},
     "circuit-held": {"is": "each tied audit's class circuit held",
                      "discharged_by": ("Properties.NetworkPeriod.rowsCircuitHeld",), "assumes": ()},
-    "sampled-leg": {"is": "the sampled facts the period takes (KS, SessionOpens, the registered reads' openings) from the "
-                          "sampled leg's guarantee, one-stage v2's, whose verifier of record is Lean, as a hypothesis on "
-                          "the layer below: never SampledCodeRuns or another premise about the deployed Python",
+    "sampled-leg": {"is": "the sampled facts the period takes (KS, SessionOpens, RegOpens: the registered reads' "
+                          "openings) from the sampled leg's guarantee, Verity.Vocab.SampledProofsSound at one-stage v2, "
+                          "whose verifier of record is Lean, through a projection lemma, as a hypothesis on the layer "
+                          "below: never SampledCodeRuns or another premise about the deployed Python. Open until that "
+                          "guarantee's proof and the lemma are in the lock",
                     "discharged_by": (), "assumes": ()},
 }
 #: the named assumptions that may stand under the figure of record, each on an auditor-trusted device
@@ -489,12 +492,12 @@ def caps(case: Mapping[str, Any]) -> list[int]:
     return [advice_bits(r) for r in json.loads(bytes.fromhex(case["commitment"]))["audits"]]
 
 
-def premises(lock: Path) -> dict[str, Any]:
-    """The tight K's premises as ``lock`` records their discharges (`DISCHARGE`): each of `PREMISES` with the theorems
-    the lock doesn't list (``missing``) and the named assumptions of those it does that don't stand (``assumes``), each
+def premises(locks: Sequence[Path]) -> dict[str, Any]:
+    """The tight K's premises as ``locks`` record their discharges (`DISCHARGE`): each of `PREMISES` with the theorems
+    no lock lists (``missing``) and the named assumptions of those one does that don't stand (``assumes``), each
     guarantee of `RESTS_ON` with its named assumptions, and ``open``: each premise not discharged, then each assumption
-    of `RESTS_ON` neither standing nor a premise's, and each of its guarantees the lock doesn't list."""
-    listed = json.loads(lock.read_text())["guarantees"]
+    of `RESTS_ON` neither standing nor a premise's, and each of its guarantees no lock lists."""
+    listed = {g: v for lock in locks for g, v in json.loads(lock.read_text())["guarantees"].items()}
     found, open_ = {}, []
     for name, p in PREMISES.items():
         missing = [t for t in p["discharged_by"] if t not in listed]
@@ -507,8 +510,8 @@ def premises(lock: Path) -> dict[str, Any]:
              for g in RESTS_ON}
     open_ += sorted({a for r in rests.values() for a in r.get("assumptions", ()) if a not in covered}
                     | {g for g, r in rests.items() if "missing" in r})
-    return {"is": DISCHARGE, "from": "Security/lean-audit.json guarantees", "premises": found, "rests_on": rests,
-            "standing": STANDING, "open": open_}
+    return {"is": DISCHARGE, "from": "Security/lean-audit.json and Security/Properties/lean-audit.json guarantees",
+            "premises": found, "rests_on": rests, "standing": STANDING, "open": open_}
 
 
 def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mapping[str, Any]) -> dict[str, Any]:
@@ -577,7 +580,7 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     except ValueError as e:
         b["connections"] = b["of_record"] = advice["cap"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
         return rec | {"periods": b["of_record"]}
-    prem = premises(LOCK)
+    prem = premises(LOCKS)
     try:
         ell = caps(case)
         b["of_record"] = of_record(answer["public"], ell, b["K"], prem)

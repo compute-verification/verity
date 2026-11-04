@@ -72,8 +72,9 @@ def discharged() -> dict:
     """``premises`` of a lock listing every discharge and each guarantee the tight K rests on, none with an assumption."""
     found = {n: {"is": p["is"], "discharged_by": list(p["discharged_by"]), "missing": [], "assumes": []}
              for n, p in OR.PREMISES.items()}
-    return {"is": OR.DISCHARGE, "from": "Security/lean-audit.json guarantees", "premises": found,
-            "rests_on": {g: {"assumptions": []} for g in OR.RESTS_ON}, "standing": OR.STANDING, "open": []}
+    return {"is": OR.DISCHARGE, "from": "Security/lean-audit.json and Security/Properties/lean-audit.json guarantees",
+            "premises": found, "rests_on": {g: {"assumptions": []} for g in OR.RESTS_ON}, "standing": OR.STANDING,
+            "open": []}
 
 
 def write_lock(f: Path, given: dict[str, list[str] | None] | None = None) -> None:
@@ -90,7 +91,7 @@ def lock(tmp_path_factory, monkeypatch) -> Path:
     monkeypatch.setitem(OR.PREMISES, "sampled-leg", dict(OR.PREMISES["sampled-leg"], discharged_by=(SAMPLED_LEG,)))
     f = tmp_path_factory.mktemp("lock") / "lean-audit.json"
     write_lock(f)
-    monkeypatch.setattr(OR, "LOCK", f)
+    monkeypatch.setattr(OR, "LOCKS", (f,))
     return f
 
 
@@ -299,6 +300,19 @@ def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_non
     assert p["free-count"]["missing"] == (["Properties.NetworkCertifier.circuitCounts"] if "free-count" in open_ else [])
     rec = OR.record(accepted(tmp_path / "free", dict(PUBLIC, held=["free"]), audits=(SERVED,)))
     assert rec["periods_tight"]["conditional_on"] == ["circuit", *open_]
+
+
+def test_a_discharge_the_properties_lock_lists_counts_as_one_the_guarantees_lock_does(tmp_path, lock, monkeypatch):
+    """The Properties' lock holds the theorems that discharge premises at the deployed code, the guarantees' lock the
+    guarantee the tight K rests on: the record reads both, and with the Properties' lock left out each premise is open."""
+    discharges = [t for p in OR.PREMISES.values() for t in p["discharged_by"]]
+    write_lock(lock, dict.fromkeys(discharges))
+    props = tmp_path / "properties-lean-audit.json"
+    props.write_text(json.dumps({"guarantees": {t: {"assumptions": []} for t in discharges}}))
+    monkeypatch.setattr(OR, "LOCKS", (lock, props))
+    assert held_both(tmp_path / "both")["bound"]["of_record"]["open"] == []
+    monkeypatch.setattr(OR, "LOCKS", (lock,))
+    assert held_both(tmp_path / "one")["bound"]["of_record"]["open"] == list(OR.PREMISES)
 
 
 def test_an_assumption_a_premise_stands_for_is_open_only_while_that_premise_is(tmp_path, lock, monkeypatch):
