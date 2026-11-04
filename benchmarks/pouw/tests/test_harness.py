@@ -381,21 +381,32 @@ def test_a_flush_precedes_every_timed_burst():
     assert dev.log == ["flush", "record", "record"] * S.MIN_REPS
 
 
-def test_with_nvtx_each_timed_items_enqueue_is_a_range_named_by_its_index_with_its_flush_outside():
-    b, dev = bench(methods=("burst",))
+def test_the_traced_pass_reps_every_entry_by_burst_inside_the_profilers_range_each_item_a_range_of_its_own():
+    """The timed items carry no NVTX range and fall outside the profiler's range; the traced pass's items, kept apart, are
+    every entry by the burst method `reps` times, each enqueue a range named by its index with its flush outside."""
+
+    b, dev = bench()
     dev.nvtx_push = lambda text: dev.log.append(("push", text))
     dev.nvtx_pop = lambda: dev.log.append("pop")
-    e = entry(dev, ("baseline", "s", "f", "k"), 1.0)
-    b.gate(e.key, lambda: (True, {}))
-    b.nvtx = True
+    dev.profiler_start = lambda: dev.log.append("start")
+    dev.profiler_stop = lambda: dev.log.append("stop")
+    es = [entry(dev, ("baseline", "s", "f", f"k{i}"), ms) for i, ms in enumerate((1.0, 2.0))]
+    for e in es:
+        b.gate(e.key, lambda: (True, {}))
+    b.capture(es, 4)
     dev.log.clear()
-    b.timed([e], 4, seed=2)
-    assert dev.log == [x for i in range(S.MIN_REPS) for x in ("flush", "record", ("push", f"item {i}"), "pop", "record")]
-    assert all(it["cpu_s"] >= 0 for it in b.items)
-    b.nvtx = False
+    b.timed(es, 4, seed=2)
+    assert not any(x in dev.log for x in ("pop", "start")) and all(it["cpu_s"] >= 0 for it in b.items)
     dev.log.clear()
-    b.timed([e], 4, seed=2)
-    assert "pop" not in dev.log
+    b.traced_pass(es, 4, seed=3)
+    assert dev.log[0] == "start" and dev.log[-1] == "stop" and dev.log.count("start") == 1
+    pushes = [x[1] for x in dev.log if isinstance(x, tuple)]
+    assert pushes == [f"item {i}" for i in range(S.MIN_REPS * len(es))]
+    i = dev.log.index(("push", "item 0"))
+    assert dev.log[i - 2:i] == ["flush", "record"] and dev.log[i + 1:i + 3] == ["pop", "record"]
+    assert len(b.items) == S.MIN_REPS * len(es) * len(H.METHODS)
+    assert sorted((tuple(it["key"]), it["rep"], it["method"]) for it in b.traced_items) == sorted(
+        (e.key, r, "burst") for e in es for r in range(S.MIN_REPS))
 
 
 def test_a_burst_cycles_the_operand_sets():
@@ -1031,6 +1042,12 @@ def test_each_librarys_fastest_is_a_finalist_beside_the_fastest_few(monkeypatch)
     assert [e.meta["library"] for e in got] == ["cutlass"] * 3 + ["lt", "lt13"]
     assert len(made) == 3 * len(ms) and all(fc.freed == (n not in final) for n, fc in made)
     assert [e.key[-1] for e in H.finalists_of(got, 1)] == ["cutlass3x_a", "lt_x", "lt13_z"]
+
+    made.clear()
+    twins = H.twin_entries(dev, SHAPE, [B.FAMILIES["fp8-e4m3"]], so, gated, got, None)
+    assert [(e.key, e.kind, e.gate_key) for e in twins] == [
+        (("twin", SHAPE.label, "fp8-e4m3", "cutlass3x_a"), "twin", ("baseline", SHAPE.label, "fp8-e4m3", "cutlass3x_a"))]
+    assert [n for n, _ in made] == ["cutlass3x_a"] * 3 and not set(map(id, twins[0].calls)) & set(map(id, got[0].calls))
 
 
 def test_a_names_file_must_name_configurations_of_the_enumerated_families(tmp_path, capsys):

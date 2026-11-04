@@ -153,6 +153,10 @@ class Device:
         if self.has_nvtx:
             L.ph_nvtx_push.restype = L.ph_nvtx_pop.restype = i32
             L.ph_nvtx_push.argtypes = [C.c_char_p]
+        #: the profiler's capture range around the traced pass (`bench.py --traced`), beside NVTX
+        self.has_profiler = self.has_nvtx and hasattr(L, "ph_profiler_start")
+        if self.has_profiler:
+            L.ph_profiler_start.restype = L.ph_profiler_stop.restype = i32
         self._side = None
         if C.sizeof(Info) != L.ph_info_size():
             raise NativeError("libpouw_harness.so's structs don't match native.py's")
@@ -272,6 +276,14 @@ class Device:
 
     def nvtx_pop(self) -> None:
         self.lib.ph_nvtx_pop()
+
+    def profiler_start(self) -> None:
+        if not self.has_profiler:
+            raise NativeError("this libpouw_harness.so has no profiler API: rebuild it (native/build.sh)")
+        self.ck(self.lib.ph_profiler_start(), "profiler start")
+
+    def profiler_stop(self) -> None:
+        self.ck(self.lib.ph_profiler_stop(), "profiler stop")
 
     def capture(self, body) -> Graph:
         """A CUDA graph of whatever `body(stream)` enqueues on the timing stream (thread-local capture mode: a sync,

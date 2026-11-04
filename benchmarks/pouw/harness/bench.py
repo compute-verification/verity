@@ -3,7 +3,7 @@
 
   python bench.py --gpu 5 --expect-uuid GPU-... [--arm module:Class ...] [--arm-path DIR] [--shapes LABEL ... | headline]
                   [--families bf16 fp8-e4m3 ...] [--reps 20] [--seed N] [--lock-mhz F]
-                  [--decode-method dependent-chain|independent] [--bridge] [--nvtx] --out run.json
+                  [--decode-method dependent-chain|independent] [--bridge] [--traced] [--twins] --out run.json
   python bench.py --plan [--shapes ...]          the shapes' operand sets, bursts and memory, without a GPU
 
 On an RTX PRO 6000 (sm_120), or an H200 (sm_90: native/build.sh with PH_ARCH=sm_90a, cuBLASLt in the library and vLLM's
@@ -14,10 +14,11 @@ The contract with arms is `arm.py`. Per run: identity (`identity.py`), the fill 
 with the negative controls at the first shape before anything is timed; the baselines' autotune; at decode shapes, the
 dependent chains (`chain.py`) and their gates; the SASS gate again on anything loaded since; a warm-up of the same schedule
 to steady state (`--warmup-s`); every entry's timed item sized to the same device time (`--item-ms`: calls, or a chain's
-replays); interleaved timing of everything, the same way, with NVML's SM clock sampled during every item; the consistency
-gate; after the timed items, each arm's transcript from poisoned buffers and its no-write control (`poison_dump`, for an arm
-with `dump`: a panel rule); the report (`report.py`), whose panel rows carry both sides' reps and clocks. Every failure
-stops what it guards and writes no timing for it.
+replays); interleaved timing of everything, the same way, with NVML's SM clock sampled during every item; with
+`--traced`, the traced pass beside it for a profiler; the consistency gate; after the timed items, each arm's transcript
+from poisoned buffers and its no-write control (`poison_dump`, for an arm with `dump`: a panel rule); the report
+(`report.py`), whose panel rows carry both sides' reps and clocks. Every failure stops what it guards and writes no timing
+for it.
 
 Exit codes: 0 ok; 2 identity or usage (also a configuration --lt-enumerate-names names that the enumeration didn't take); 3 a
 device, build or harness error; 5 a known-bad variant wasn't rejected (it passed its gate, or it couldn't run); 6 the
@@ -121,7 +122,7 @@ class Timer:
     same B calls replayed from one CUDA graph; a chain's `replays` replays of its `length` calls), an event, NVML while the
     GPU runs it (`during`), NVML once it is done. A `-wflush` method uses the write flush instead (the W5 control). Per-call
     time is the item's over its calls. `cpu_s` is the process's CPU seconds enqueueing the item; with a `mark` the enqueue
-    is an NVTX range of that text (`--nvtx`), by which nsys attributes the item's kernels."""
+    is an NVTX range of that text (the traced pass's), by which nsys attributes the item's kernels."""
 
     def __init__(self, dev, sensors):
         self.dev, self.sensors = dev, sensors
@@ -206,8 +207,9 @@ class Bench:
         self.sass: SG.Gate | None = None
         self.warmups: list[dict] = []
         self.poisoning: list[dict] = []
-        #: each timed item an NVTX range "item <its index in `items`>" (--nvtx); the stock libraries through torch (--bridge)
-        self.nvtx = False
+        #: the traced pass beside the timed one (--traced), its items apart; the stock libraries through torch (--bridge)
+        self.traced = False
+        self.traced_items: list[dict] = []
         self.bridge = None
 
     def gate(self, key: tuple, fn) -> bool:
@@ -272,10 +274,25 @@ class Bench:
             for pos, i in enumerate(order):
                 e, m = pairs[i]
                 self.ledger.require(e.gate_key or e.key)
-                t = self.timer.time(e, m, burst, f"item {len(self.items)}" if self.nvtx else None)
+                t = self.timer.time(e, m, burst)
                 self.items.append({"key": list(e.key), "method": m, "rep": r, "pos": pos, **t})
                 per[e.key][m].append(t["ms_per_call"])
         return per
+
+    def traced_pass(self, entries: list[Entry], burst: int, seed: int) -> None:
+        """The traced pass beside the timed one (`--traced`): `reps` more reps of every entry by the burst method, in a seeded
+        order, between the profiler's start and stop, each item's enqueue an NVTX range "item <its index in `traced_items`>".
+        A profiler capturing only between them (`nsys profile --capture-range=cudaProfilerApi`) never touches a timed item."""
+        self.dev.profiler_start()
+        try:
+            for r, order in enumerate(S.rep_orders(list(range(len(entries))), self.reps, seed)):
+                for pos, i in enumerate(order):
+                    e = entries[i]
+                    self.ledger.require(e.gate_key or e.key)
+                    t = self.timer.time(e, "burst", burst, f"item {len(self.traced_items)}")
+                    self.traced_items.append({"key": list(e.key), "method": "burst", "rep": r, "pos": pos, **t})
+        finally:
+            self.dev.profiler_stop()
 
     def warmup(self, entries: list[Entry], burst: int, seed: int, min_ms: float = WARMUP_MS,
                max_ms: float = WARMUP_MAX_MS) -> dict:
@@ -722,6 +739,20 @@ def tune_baselines(bench: Bench, dev, shape, fams, so, gated: dict, lt_ws, burst
     return keep
 
 
+def twin_entries(dev, shape, fams, so, gated: dict, timed: list[Entry], lt_ws) -> list[Entry]:
+    """Each family's fastest finalist again, on calls of its own and under the original's gate: timed beside it the same
+    way, the two are an A/A control, what one kernel's two timings differ by (`--twins`; verity bench overhead's stock γ)."""
+    out = []
+    for fam in fams:
+        first = next((e for e in timed if e.kind == "baseline" and e.key[2] == fam.name), None)
+        if first is None:
+            continue
+        cand = next(c for c in gated[fam.name]["gated"] if c.name == first.key[3])
+        calls = [B.BaselineCall(dev, cand, shape, so.ops(fam, s), lt_ws) for s in range(so.sets)]
+        out.append(Entry(("twin", *first.key[1:]), "twin", calls, gate_key=first.key, meta=dict(first.meta)))
+    return out
+
+
 # ---- the dependent chain -------------------------------------------------------------------------------------------------------
 
 
@@ -913,6 +944,11 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
         st.mark("arm_gates")
         entries = tune_baselines(bench, dev, shape, fams, so, gated, lt_ws, plan["burst"], args.tune_reps, args.finalists,
                                  getattr(args, "screen_keep", SCREEN_KEEP))
+        if getattr(args, "twins", False):
+            twins = twin_entries(dev, shape, fams, so, gated, entries, lt_ws)
+            kept = bench.capture(twins, plan["burst"])
+            free_entries(bench, [e for e in twins if all(e is not k for k in kept)])
+            entries += kept
         entries += bench.capture(arm_ents, plan["burst"])
         free_entries(bench, [e for e in arm_ents if e not in entries])
         st.mark("tune")
@@ -939,6 +975,9 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
         row["order_seed"] = order_seed
         per = bench.timed(entries, plan["burst"], order_seed)
         st.mark("timed")
+        if bench.traced:
+            bench.traced_pass(entries, plan["burst"], B.hash_seed(f"{args.seed}/{shape.label}/traced"))
+            st.mark("traced")
         row["poisoning"] = dump_transcripts(bench, dev, shape, arms, entries, args.out.parent, arm_sets)
         st.mark("transcripts")
         row["summary"] = summarize(per, bench.items)
@@ -1102,9 +1141,12 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--bridge", action="store_true",
                    help="also time the stock FP8 libraries served through torch (torch_baselines.py: vLLM's CUTLASS, "
                         "DeepGEMM), imported after the arms' SASS gate; the H200's CUTLASS and DeepGEMM")
-    p.add_argument("--nvtx", action="store_true",
-                   help="mark each timed item's enqueue an NVTX range 'item <index in items>', for nsys to attribute its "
-                        "kernels (verity bench overhead's busy SM-time)")
+    p.add_argument("--traced", action="store_true",
+                   help="after each shape's timed reps, a traced pass of as many burst reps between cudaProfilerStart and "
+                        "Stop, each item an NVTX range 'item <index in traced_items>', for nsys to attribute its kernels "
+                        "(verity bench overhead's busy SM-time)")
+    p.add_argument("--twins", action="store_true",
+                   help="time each family's fastest finalist twice, the second as ('twin', ...): an A/A control")
     p.add_argument("--plan", action="store_true", help="print each shape's operand sets, burst and memory, and exit")
     p.add_argument("--out", type=Path)
     a = p.parse_args(argv)
@@ -1277,9 +1319,10 @@ def main(argv: list[str] | None = None) -> int:
         out["cutlass_kernels"] = kernels
         lt_ws = dev.alloc(B.LT_WORKSPACE)
         bench = Bench(dev, nvml, args.reps, tuple(args.methods), log)
-        bench.sass, bench.bridge, bench.nvtx = sass, bridge, args.nvtx
-        if args.nvtx and not dev.has_nvtx:
-            raise RuntimeError("--nvtx needs a libpouw_harness.so with NVTX ranges (ph_nvtx_push): rebuild it")
+        bench.sass, bench.bridge, bench.traced = sass, bridge, args.traced
+        if args.traced and not dev.has_profiler:
+            raise RuntimeError("--traced needs a libpouw_harness.so with NVTX ranges and the profiler API "
+                               "(ph_profiler_start): rebuild it")
         fams = [B.FAMILIES[f] for f in args.families]
         for i, shape in enumerate(SH.select(args.shapes)):
             log(f"shape {shape.label}")
@@ -1314,6 +1357,8 @@ def main(argv: list[str] | None = None) -> int:
             out["tuning"] = bench.tuning
             out["warmup_items"] = bench.warmups
             out["items"] = bench.items
+            if bench.traced:
+                out["traced_items"] = bench.traced_items
             out.setdefault("clocks", {})["timed"] = timed_clocks(bench.items)
         out["harness"]["finished"] = now()
         out["exit"] = code

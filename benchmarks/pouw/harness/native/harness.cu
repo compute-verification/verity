@@ -5,6 +5,7 @@
 #include <cublasLt.h>
 #include <cuda_bf16.h>
 #include <cuda_fp8.h>
+#include <cuda_profiler_api.h>
 #include <cuda_runtime.h>
 #include <nvtx3/nvToolsExt.h>
 
@@ -647,5 +648,15 @@ int ph_info_size() { return int(sizeof(ph_info)); }
 // An NVTX range on the calling thread, for a profiler to cut its trace by (`bench.py --nvtx`); a no-op without one.
 int ph_nvtx_push(const char* text) { return nvtxRangePushA(text); }
 int ph_nvtx_pop() { return nvtxRangePop(); }
+
+// A profiler's capture range (`nsys profile --capture-range=cudaProfilerApi`; `bench.py --traced`); a no-op without one.
+int ph_profiler_start() {
+  CK(cudaProfilerStart());
+  return 0;
+}
+int ph_profiler_stop() {
+  CK(cudaProfilerStop());
+  return 0;
+}
 
 }  // extern "C"
