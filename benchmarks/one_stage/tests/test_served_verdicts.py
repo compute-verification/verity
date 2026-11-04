@@ -911,7 +911,7 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
 
 def _pearlplus_run(accepted: bool = True, source: str = S.LIVE_SOURCE) -> tuple[dict, dict]:
     """Pearl+'s served run, `served_passes.py`'s two documents: a warm-up pass, then three timed passes, its coins a live
-    session's (``source`` ``challenger``, as `served_step.coins_of` records them) or an in-process challenger's, and
+    session's (``source`` ``challenger``, as `pearl_c.window.coins_of` records them) or an in-process challenger's, and
     Pearl+'s verdict over all four, accepting (its credit over the timed passes beside it) or not."""
     live = source == S.LIVE_SOURCE
     served = {"arm": "pouw:pearl-c-h100-v1-h3", "spec": "s.toml", "run": "r", "served_tokens": 32, "generate_s": 2.0,
@@ -930,20 +930,14 @@ def _pearlplus_run(accepted: bool = True, source: str = S.LIVE_SOURCE) -> tuple[
 
 @pytest.fixture
 def live(monkeypatch, tmp_path):
-    """`served_verdicts.pearlplus_coins` holding every pass's salt to the live session its serve names, and
-    `pearlplus_draw` the verifier's coin record to its draw session; the gate, key pin and main's line each coins check
-    got (each draw check's record and lane after them, as ``("draw", record, lane)``), and those to give `pearlplus`."""
+    """`served_verdicts.pearlplus_coins` holding every pass's salt to the live session its serve names; the gate, key pin
+    and main's line each call got, and those to give `pearlplus` (``LIVE_ARGS``)."""
     calls = []
 
     def check(served, out, gate, key, main):
         calls.append((gate, key, main))
         return {"session": SID, "closed": served["coins"]["closed"], "passes": 4, "reason": None}
-
-    def drawn(record, out, gate, key, main, lane):
-        assert (gate, key, main) == (GATE, "ff" * 64, tmp_path / "main.txt")
-        calls.append(("draw", record, lane))
     monkeypatch.setattr(S, "pearlplus_coins", check)
-    monkeypatch.setattr(S, "pearlplus_draw", drawn)
     return calls, {"gate": GATE, "key": "ff" * 64, "main": tmp_path / "main.txt"}
 
 
@@ -1069,10 +1063,34 @@ def test_a_pearlplus_piece_names_the_rounds_its_prover_dropped_before_the_coin(t
     assert S.development_line(S.pearlplus(tmp_path / "all", served, verified, **live[1]))["dropped"] is None
 
 
-def _coin_record(source: str = "5e" * 32) -> bytes:
-    """The verifier's coin record as ``served_passes.py verify`` writes it before any replay (``DIR/coin.json``)."""
-    return (json.dumps({"schema": S.COIN_KIND, "commitment": "c1" * 64, "source": source, "passes": ["p0", "p1"]},
-                       indent=1) + "\n").encode()
+DSID = "s20261104T090000Z-dr01"
+
+
+def _draw(after: str = "c1" * 64, seed: int = 7) -> dict:
+    """A challenger draw as the coin record carries it (`bench_arm.LiveDraw`): a real draw session's commitment and its
+    coin ``pouw/draw`` 0 opened after ``after``, reserved as `DSID`."""
+    import random
+
+    from verity.core.protocols.pouw import window as Wd
+
+    ch = Wd.draw_challenger(0, random.Random(seed).randbytes)
+    opening = ch.open(Wd.DRAW, 0, bytes.fromhex(after))
+    return {"from": "challenger", "label": Wd.DRAW, "index": 0,
+            "reserved": {"session": DSID, "seq": 9, "by": "vllm", "period": None},
+            "session": {"session": DSID, "seq": 10, "root": after}, "commitment": ch.commitment.to_json(),
+            "opening": opening.to_json()}
+
+
+DRAW = _draw()
+DRAW_COIN = DRAW["opening"]["coin"]
+NODE = {"from": "node", "claim": "uniform/io-getrandombytes"}
+
+
+def _coin_record(source: str = "5e" * 32, draw: dict | None = None, commitment: str = "c1" * 64) -> bytes:
+    """The verifier's coin record as ``served_passes.py verify`` writes it before any replay (``DIR/coin.json``), its
+    draw the node's unless ``draw`` names a challenger's."""
+    return (json.dumps({"schema": S.COIN_KIND, "commitment": commitment, "source": source, "passes": ["p0", "p1"],
+                        "draw": draw or NODE}, indent=1) + "\n").encode()
 
 
 def _put(answers: dict) -> tuple:
@@ -1111,7 +1129,7 @@ def test_coin_puts_the_verifiers_coin_record_in_the_store_the_moment_it_is_drawn
                              "no store": (None, False, "research data put --preserve: FileNotFoundError: [Errno 2] No "
                                                        "such file: 'research'")}[case]
     assert got == {"sha512": hashlib.sha512(raw).hexdigest(), "commitment": "c1" * 64, "source": "5e" * 32, "run": "r1",
-                   "art": art, "preserved": preserved, "error": error}
+                   "draw": "node", "art": art, "preserved": preserved, "error": error, "custody": None}
     assert (out / S.COIN_RECORD).read_bytes() == raw and json.loads((out / S.COIN_PUT).read_text()) == got
     meta = json.dumps({"commitment": "c1" * 64, "run": "r1"})
     assert calls[0] == (["research", "data", "put", "--kind", S.COIN_KIND, "--meta", meta, "--file", str(out / "coin.json"),
@@ -1128,7 +1146,7 @@ def test_coin_refuses_a_record_not_the_verifiers_and_a_second_coin_in_one_piece(
     rec, out = tmp_path / "coin.json", tmp_path / "pieces" / "pouw"
     for bad in ({"schema": "other", "commitment": "c1", "source": "5e"}, {"schema": S.COIN_KIND, "source": "5e"}, [1]):
         rec.write_text(json.dumps(bad))
-        with pytest.raises(ValueError, match="is no verity-pouw/pearl-plus-coin/v1 record"):
+        with pytest.raises(ValueError, match="is no verity-pouw/pearl-plus-coin/v2 record"):
             S.coin(rec, out, "r1", research=["research"], put=put)
     assert not out.exists()
     rec.write_bytes(first := _coin_record())
@@ -1148,7 +1166,7 @@ def test_the_coin_command_says_where_the_verifiers_coin_went(tmp_path, capsys, m
     for i, (answers, said) in enumerate((
             ({True: (0, json.dumps({"id": "art:aa"}), "")}, "preserved in the evidence store as art:aa"),
             (NODE_PUT, "art:bb in this node's store, not preserved (research data put --preserve: StoreError: no remote "
-                       "configured): a put of the run's custody copy of coin.json as verity-pouw/pearl-plus-coin/v1 with "
+                       "configured): a put of the run's custody copy of coin.json as verity-pouw/pearl-plus-coin/v2 with "
                        "meta {run, commitment} preserves that id"),
             ({True: OSError("gone"), False: OSError("gone")},
              "in no store (research data put --preserve: OSError: gone): coin.json goes with the run's custody"))):
@@ -1158,6 +1176,25 @@ def test_the_coin_command_says_where_the_verifiers_coin_went(tmp_path, capsys, m
     rec.write_text("{}")
     assert S.main(["coin", str(tmp_path / "out9"), "--record", str(rec)]) == 1
     assert capsys.readouterr().out.startswith("COIN refused: ValueError: ")
+
+
+def test_the_coin_names_the_runs_attempt_as_its_custody_off_the_node(tmp_path, capsys, monkeypatch):
+    """Where no put preserves the coin (vy-dc-h200's workload shells hold no store key), ``coin-put.json`` names the run's
+    Attempt, which carries ``out/``, and the coin's path in it: only for a valid run id and a copy under the run's
+    ``out/``; the COIN line says so."""
+    (rec := tmp_path / "coin.json").write_bytes(_coin_record(DRAW_COIN, DRAW))
+    run_dir, run = tmp_path / "runs" / "r20261104-090000-ab12", "r20261104-090000-ab12"
+    put = _put(NODE_PUT)[0]
+    got = S.coin(rec, run_dir / "out" / "pieces" / "pouw", run, research=["research"], put=put, run_dir=run_dir)
+    assert (got["draw"], got["custody"]) == ("challenger", {"attempt": run, "path": "out/pieces/pouw/coin.json"})
+    for other, kw in ((tmp_path / "x" / "pouw", {"run_dir": run_dir}), (run_dir / "scratch", {"run_dir": run_dir}),
+                      (run_dir / "out" / "a", {"run_dir": None})):
+        assert S.coin(rec, other, run, research=["research"], put=put, **kw)["custody"] is None
+    assert S.coin(rec, run_dir / "out" / "b", "local", research=["research"], put=put, run_dir=run_dir)["custody"] is None
+    real = S.coin
+    monkeypatch.setattr(S, "coin", lambda *a, **k: real(*a, **k, put=put))
+    assert S.main(["coin", str(run_dir / "out" / "c"), "--record", str(rec), "--run", run, "--run-dir", str(run_dir)]) == 0
+    assert capsys.readouterr().out.rstrip().endswith(f"; the run's Attempt {run} carries it at out/c/coin.json")
 
 
 def test_a_pearlplus_piece_holds_its_accept_to_the_coin_it_published(tmp_path, capsys, live):
@@ -1174,9 +1211,8 @@ def test_a_pearlplus_piece_holds_its_accept_to_the_coin_it_published(tmp_path, c
     held, given = {**verified, "answer": answer}, {"coin": pub / S.COIN_PUT, **live[1]}
     doc = S.pearlplus(tmp_path / "a", served, held, **given)
     assert (doc["verdict"], doc["reasons"]) == ("accept", [])
-    assert live[0][-1] == ("draw", json.loads(_coin_record()), "vllm")
     coin = {"art": "art:bb", "preserved": False, "error": published["error"], "sha512": published["sha512"]}
-    assert doc["coin"] == {**coin, "reason": None, "draw": None} and S.development_line(doc)["coin"] == coin
+    assert doc["coin"] == {**coin, "reason": None} and S.development_line(doc)["coin"] == coin
     load = {"requests": 16, "prompt_tokens": 1024, "output_tokens": 1, "max_num_batched_tokens": 8192}
     assert doc["load"] == S.development_line(doc)["load"] == load
     for name, d in (("served.json", served), ("v.json", held)):
@@ -1304,67 +1340,6 @@ def test_a_pearlplus_piece_holds_each_pass_salt_to_the_live_session_the_gate_hol
         assert calls == []
 
 
-def test_a_live_pearlplus_accept_whose_coin_isnt_its_draw_sessions_rejects(tmp_path, monkeypatch, live):
-    """Under a live run the published coin record must be the draw session's the auditor's ledger opened on its run
-    commitment (`pearlplus_draw`): a refusal rejects the accept, naming why, and a run on in-process coins never asks."""
-    from verity_vllm.protocols.pouw.pearl_c import draw as PD
-
-    served, verified = _pearlplus_run()
-    (rec := tmp_path / "coin.json").write_bytes(_coin_record())
-    S.coin(rec, pub := tmp_path / "pub", "r1", research=["research"], put=_put(NODE_PUT)[0])
-    held = {**verified, "answer": {**verified["answer"], "commitment": "c1" * 64, "profile": {"source": "5e" * 32}}}
-    monkeypatch.setattr(S, "pearlplus_draw", lambda *a: PD.NO_DRAW)
-    doc = S.pearlplus(tmp_path / "a", served, held, coin=pub / S.COIN_PUT, **live[1])
-    assert (doc["verdict"], doc["reasons"], doc["coin"]["draw"]) == ("reject", [f"coin: its draw: {PD.NO_DRAW}"], PD.NO_DRAW)
-    monkeypatch.setattr(S, "pearlplus_draw", lambda *a: pytest.fail("no draw check on in-process coins"))
-    doc = S.pearlplus(tmp_path / "b", _pearlplus_run(source="in-process")[0], held, coin=pub / S.COIN_PUT)
-    assert (doc["verdict"], doc["coin"]["reason"], "draw" in doc["coin"]) == (S.UNCLAIMED, None, False)
-
-
-@pytest.mark.parametrize("case", ["honest", "no draw", "no gate", "other key", "gate refuses"])
-def test_pearlplus_draw_reads_the_coin_records_draw_session_through_the_gate(tmp_path, monkeypatch, case):
-    """`pearlplus_draw`: the draw session the coin record names fetched through the gate with the auditor's ledger and the
-    host's pins, its key held to the deployment's pin, and `pearl_c.draw.draw_reason` given the ledger they load, the lane
-    and that session's tree alone. A record drawn on the node, no gate, key pin or line, a key other than the pin's and a
-    gate that refuses the fetch each refuse, naming why; nothing is fetched for the first two."""
-    from verity.core.protocols.sampled_proofs import remote
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
-    from verity_vllm.protocols.pouw.pearl_c import draw as PD
-
-    calls, got = [], []
-
-    def refusing(gate: str, *words: str) -> bytes:
-        raise RuntimeError("the gate refused fetch (exit 1): no such session")
-    monkeypatch.setattr(S, "_gate_out", refusing if case == "gate refuses" else
-                        _gate(calls, {remote.KEY: json.dumps({"H": 5, "W": 4, "public": PUBLIC.hex()})}))
-    monkeypatch.setattr(PHC.Ledger, "load", staticmethod(lambda heads, key, pins, main: got.append(
-        ([Path(h).read_text() for h in heads], key.public, [Path(p).read_text() for p in pins], main)) or "ledger"))
-    monkeypatch.setattr(PD, "draw_reason", lambda record, ledger, fetch, lane: got.append(
-        (ledger, lane, fetch(SID), fetch("s-other"))) or "its refusal")
-    record = {"commitment": "c1" * 64, "source": "5e" * 32, "draw": {"session": {"session": SID}}}
-    if case == "no draw":
-        del record["draw"]
-    (main := tmp_path / "main.txt").write_text("cc" * 20 + "\n" + "aa" * 20 + "\n")
-    pin = "00" * 64 if case == "other key" else hashlib.sha512(PUBLIC).hexdigest()
-    (out := tmp_path / "pieces" / "pouw").mkdir(parents=True)
-    why = S.pearlplus_draw(record, out, None if case == "no gate" else GATE, pin, main, "vllm")
-    tree = out / "draw-session" / SID
-    if case == "honest":
-        assert why == "its refusal" and [w for _g, w in calls] == [("fetch", SID), ("ledger",), ("pins",)]
-        assert got == [([LEDGER_LINE + "\n"], PUBLIC, [PINS_LINE + "\n"], ["cc" * 20, "aa" * 20]),
-                       ("ledger", "vllm", tree, None)]
-        assert json.loads((tree / "out" / remote.KEY).read_text())["public"] == PUBLIC.hex()
-    else:
-        assert why == {"no draw": PD.NO_DRAW,
-                       "no gate": "no gate, key pin or main's first-parent line to check the draw session by (--gate, "
-                                  "--key-sha512, --main)",
-                       "other key": f"CoinError: the challenger key at {tree / 'out' / remote.KEY} is "
-                                    f"{hashlib.sha512(PUBLIC).hexdigest()[:16]}..., not the auditor's pinned "
-                                    f"{'00' * 8}...",
-                       "gate refuses": "RuntimeError: the gate refused fetch (exit 1): no such session"}[case]
-        assert got == [] and calls == ([(GATE, ("fetch", SID))] if case == "other key" else [])
-
-
 def test_a_pearlplus_piece_on_in_process_coins_claims_no_verdict(tmp_path, monkeypatch, capsys):
     """A Pearl+ run whose epoch's coins are an in-process challenger's, which the serving process holds (its serve without
     PEARLC_CHALLENGER_GATE), is held to nothing: where nothing failed its verdict is unclaimed, its row missing with
@@ -1460,23 +1435,35 @@ def test_a_tied_pearlplus_piece_rejects_a_verdict_not_held_to_w_and_an_epoch_tha
     assert doc["verdict"] == "reject" and doc["reasons"][0].startswith(reason), doc["reasons"]
 
 
-def test_a_tied_pearlplus_accepts_draw_is_checked_wherever_the_gate_is_given(tmp_path, monkeypatch):
+def test_a_tied_pearlplus_accepts_draw_is_held_to_its_draw_session_whatever_its_epochs_salt(tmp_path, monkeypatch):
     """Under PEARL_TIE the replay's coin is a draw session's on the gate whatever the epoch's salt coin (the arm's
-    in-process challenger's today), so a gate given checks the published coin against it (`pearlplus_draw`), a refusal
-    rejecting the accept; with no gate there is none to check."""
-    from verity_vllm.protocols.pouw.pearl_c import draw as PD
-
+    in-process challenger's today): a challenger draw in the published coin record is held to its session
+    (`pearlplus_draw`), a refusal rejecting the accept, while a node's draw says so in ``coins.draws`` and leaves the
+    in-process epoch's run unclaimed."""
     served, verified, w = _tied_pearlplus_run(tmp_path)
-    (rec := tmp_path / "coin.json").write_bytes(_coin_record())
-    S.coin(rec, pub := tmp_path / "pub", "r1", research=["research"], put=_put(NODE_PUT)[0])
-    held = {**verified, "answer": {**verified["answer"], "commitment": "c1" * 64, "profile": {"source": "5e" * 32}}}
+    held = {**verified, "answer": {**verified["answer"], "commitment": "c1" * 64, "profile": {"source": DRAW_COIN}}}
+    refused = "ValueError: the record's source is not its draw session's coin"
     seen = []
-    monkeypatch.setattr(S, "pearlplus_draw", lambda record, out, gate, key, main, lane: seen.append((gate, lane)) or PD.NO_DRAW)
-    doc = S.pearlplus(tmp_path / "a", served, held, gate=GATE, key="ff" * 64, main=tmp_path / "main.txt",
-                      coin=pub / S.COIN_PUT, tie=w)
-    assert (doc["verdict"], doc["reasons"], seen) == ("reject", [f"coin: its draw: {PD.NO_DRAW}"], [(GATE, "vllm")])
-    doc = S.pearlplus(tmp_path / "b", served, held, coin=pub / S.COIN_PUT, tie=w)
-    assert (doc["verdict"], doc["coin"]["reason"], "draw" in doc["coin"], len(seen)) == (S.UNCLAIMED, None, False, 1)
+
+    def drawn(record, out, gate, key, main):
+        seen.append((record, gate))
+        got = json.loads(record.read_text())["draw"]["from"]
+        return {"from": got, "session": DSID if got == "challenger" else None,
+                "reason": refused if got == "challenger" else None}
+    monkeypatch.setattr(S, "pearlplus_draw", drawn)
+    for name, draw in (("challenger", DRAW), ("node", None)):
+        (rec := tmp_path / name / "coin.json").parent.mkdir()
+        rec.write_bytes(_coin_record(DRAW_COIN, draw))
+        S.coin(rec, pub := tmp_path / name / "pub", "r1", research=["research"], put=_put(NODE_PUT)[0])
+        doc = S.pearlplus(tmp_path / name / "a", served, held, gate=GATE, key="ff" * 64, main=tmp_path / "main.txt",
+                          coin=pub / S.COIN_PUT, tie=w)
+        assert seen[-1] == (pub / S.COIN_RECORD, GATE) and doc["coin"]["reason"] is None
+        if name == "challenger":
+            assert (doc["verdict"], doc["reasons"]) == ("reject", [f"draw: {refused}"])
+            assert doc["coins"]["draws"] == S.PEARLPLUS_COINS["draws"]
+        else:
+            assert (doc["verdict"], doc["reasons"]) == (S.UNCLAIMED, [])
+            assert doc["coins"]["draws"] == S.PEARLPLUS_NODE_DRAWS
 
 
 #: served_passes.py in `_pearlplus_sh`'s toy tree: each call's arguments noted in $ORDER.passes; volunteer writes its
@@ -1631,33 +1618,49 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record")
     from verity.core.protocols.sampled_proofs import remote
 
     served, verified = _pearlplus_run()
+    draw = {"node draw": NODE, "draw off C": _draw("c2" * 64)}.get(case, DRAW)
+    source = {"node draw": "5e" * 32, "source not coin": "77" * 64}.get(case, DRAW_COIN)
     answer = {"protocol": S.PEARLPLUS_PROTOCOL, "verdict": "accept", "reason": None, "commitment": "c1" * 64,
               "public": {"work": verified["answer"]["public"]["work"], "unit": "MAC",
                          **({} if case == "untied" else {"tie": {"record": PEARL_W, "tables": 6}})},
-              "profile": {"delta": "1/100", "draws": 459, "source": "5e" * 32}}
+              "profile": {"delta": "1/100", "draws": 459, "source": source}}
     piece = tmp_path / "pieces" / "pouw"
     piece.mkdir(parents=True)
-    (rec := tmp_path / "coin.json").write_bytes(_coin_record())
+    (rec := tmp_path / "coin.json").write_bytes(_coin_record(source, draw))
     S.coin(rec, piece, "r1", research=["research"], put=_put(NODE_PUT)[0])
+    checked = {"from": draw["from"], "session": DSID if draw is not NODE else None, "reason": None}
+    monkeypatch.setattr(S, "pearlplus_draw", lambda *a, **k: dict(checked))
     doc = S.pearlplus(piece, served, {**verified, "answer": answer}, coin=piece / S.COIN_PUT, **live[1])
-    assert (doc["verdict"], doc["reasons"]) == ("accept", [])
+    assert (doc["verdict"], doc["reasons"], doc["coins"]["draw"]) == ("accept", [], checked)
     doc.update({"in-process coins": {"coin_source": "in-process"},
                 "session refused": {"coins": {**doc["coins"], "check": {**doc["coins"]["check"],
                                                                          "reason": "pass 2: coin: bad"}}},
+                "draw refused": {"coins": {**doc["coins"], "draw": {**checked,
+                                                                     "reason": "ValueError: the record's draw coin: bad"}}},
                 "unpublished coin": {"coin": None}}.get(case, {}))
     (piece / S.DEVELOPMENT).write_text(json.dumps(doc))
     (piece / S.PEARLPLUS_ANSWER).write_text(json.dumps(answer))
     (piece / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "120m"}))
-    (piece / "session" / SID / "out").mkdir(parents=True)
-    (piece / "session" / SID / "out" / remote.KEY).write_text(json.dumps({"H": 5, "W": 4, "public": PUBLIC.hex()}))
+    for sid, public in ((SID, PUBLIC), (DSID, bytes(80) if case == "draw key" else PUBLIC)):
+        (piece / "session" / sid / "out").mkdir(parents=True)
+        (piece / "session" / sid / "out" / remote.KEY).write_text(json.dumps({"H": 5, "W": 4, "public": public.hex()}))
     opens = {"no period": [], "H1 period": [{"kind": "period-open", "body": {"period": "p-h1", "lane": "vllm", "cap": 4,
                                                                             "circuit": "c1" * 64, "draw_k": 27, "rows": 64}}]}
-    ledger = opens.get(case, [{"kind": "period-open", "body": {"period": "p-pc", "lane": "vllm", "cap": 2,
+    ledger = opens.get(case, [{"kind": "period-open", "body": {"period": "p-pc", "lane": "vllm", "cap": 1,
                                                                 "circuit": "c1" * 64}}])
     by = {"reserved for": {"by": "vy-admin", "for": "vllm"}}.get(case, {"by": "vllm"})
     ledger += [] if case == "no reserve" else [{"kind": "reserve", "session": SID, "body": by}]
+    if case != "period open":
+        ledger += [{"kind": "period-close", "session": None, "body": {"period": "p-pc", "lane": "vllm"}}]
+    reserve = {"by": "vllm", "families": [["pouw/draw", 1]], **({} if case == "draw not withheld" else {"withheld": True})}
+    if case == "drawn again":
+        ledger += [{"kind": "reserve", "session": "s-first", "body": {**reserve}}]
+    ledger += [{"kind": "reserve", "session": DSID, "body": reserve},
+               {"kind": "open", "session": DSID, "body": {"window": {"root": "c1" * 64}, "withheld": True}}]
+    if case == "second open":
+        ledger += [{"kind": "open", "session": "s-other", "body": {"window": {"root": "c1" * 64}, "withheld": True}}]
     (piece / "ledger.jsonl").write_text("".join(json.dumps(e) + "\n" for e in ledger))
-    lean = {"verdict": "accept", "reason": None, "refused": None, "commitment": "c1" * 64, "source": "5e" * 32,
+    lean = {"verdict": "accept", "reason": None, "refused": None, "commitment": "c1" * 64, "source": source,
             "drawn": 459, "verdicts": [], "work": PEARL_LEAN_WORK, "tie": {"record": PEARL_W}}
     lean.update({"Lean rejects": {"verdict": "reject", "reason": "the live session's coins are out of scope"},
                  "Lean other run": {"commitment": "c2" * 64}, "Lean untied": {"tie": None},
@@ -1670,8 +1673,6 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record")
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps(
         {"format": REG.FORMAT_V2, "previous": "ab" * 64 if case == "R not after W" else PEARL_W, "registered": []}))
     (audit / S.AUDIT_SUMMARY).write_text(json.dumps({} if case == "audit untied" else {"tie": {"record": PEARL_W}}))
-    if case != "node draw":
-        monkeypatch.setattr(S, "pearlplus_live_draw", lambda record, piece_dir, key: None)
     pin = "00" * 64 if case == "other key" else None if case == "no pin" else hashlib.sha512(PUBLIC).hexdigest()
     return piece.parent, audit, pin, "kernels" if case == "other lane" else "vllm"
 
@@ -1692,6 +1693,7 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     assert row["quantity"]["work"] == PEARL_LEAN_WORK and row["quantity"]["tie"]["record"] == PEARL_W
     profile = row["answer"]["profile"]
     assert (profile["lane"], profile["key_sha512"], profile["period"], profile["session"]) == ("vllm", pin, "p-pc", SID)
+    assert profile["draw_session"] == DSID and profile["source"] == DRAW_COIN
     assert profile["lean"]["work"] == PEARL_LEAN_WORK and row["piece"]["piece"] == "pearlplus" and "development" not in row
     (tmp_path / "serve").mkdir()
     assert S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
@@ -1710,14 +1712,23 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     ("session refused", "the live session's check refused its passes: pass 2: coin: bad"),
     ("no pin", "the compose holds the coins to no key pin (--key-sha512, H1_KEY_SHA512)"),
     ("other key", "the live session's challenger key is not the compose's pin: the challenger key at "),
-    ("node draw", S.PEARLPLUS_NODE_DRAW),
-    ("unpublished coin", "the verdict is not held to the coin published at its draw: none published"),
     ("no reserve", f"the piece's ledger holds no reserve of the live session {SID}"),
     ("reserved for", "the live session was reserved by vy-admin for lane vllm, not under the lane's own gate key"),
     ("other lane", "the live session was reserved under lane vllm's gate key, not lane kernels's own"),
     ("no period", "the live session joined no period of lane vllm"),
     ("H1 period", "the live session joined period p-h1, H1's (its open commits draw_k, rows): a Pearl-C salt session is "
                   "credited in a Pearl-C period alone"),
+    ("node draw", S.PEARLPLUS_NODE_DRAW),
+    ("draw refused", "the draw session's check refused it: ValueError: the record's draw coin: bad"),
+    ("draw key", "the draw session's challenger key is not the compose's pin: the challenger key at "),
+    ("period open", "the piece's ledger doesn't close the Pearl-C period p-pc, so no draw follows it"),
+    ("drawn again", f"the draw session {DSID} is not lane vllm's first reserve after its Pearl-C period p-pc closed "
+                    "(that is s-first): a draw is taken once"),
+    ("draw not withheld", f"the draw session {DSID} was not reserved withheld with a draw session's layout alone"),
+    ("second open", f"the ledger opens ['{DSID}', 's-other'] on the run's commitment, not the draw session {DSID} alone"),
+    ("draw off C", "the record's draw coin: "),
+    ("source not coin", "the record's source is not its draw session's coin"),
+    ("unpublished coin", "the verdict is not held to the coin published at its draw: none published"),
     ("untied", "Pearl+'s verdict holds its passes to no window record W (served_passes.py verify --tie W), so nothing "
                "ties them to the window"),
     ("R not after W", f"the window's registration R is chained after {'ab' * 8}..., not right after Pearl+'s window "
@@ -1726,8 +1737,8 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
                      "(records_audit --tie W)"),
     ("no Lean", f"no Lean PouwCheck.PearlPlus verdict ({S.PEARLPLUS_LEAN}: FileNotFoundError"),
     ("Lean rejects", "the Lean PouwCheck.PearlPlus verdict is reject: the live session's coins are out of scope"),
-    ("Lean other run", f"the Lean verdict is on run {'c2' * 8}... at source {'5e' * 8}..., not Pearl+'s verdict's run "
-                       "and source"),
+    ("Lean other run", f"the Lean verdict is on run {'c2' * 8}... at source {DRAW_COIN[:16]}..., not Pearl+'s verdict's "
+                       "run and source"),
     ("Lean untied", f"the Lean verdict doesn't hold the passes to Pearl+'s window record W {PEARL_W[:16]}..."),
     ("Lean credits nothing", "the Lean verdict credits 0 MACs over 40 tiles: nothing"),
     ("Lean other epsilon", "the Lean verdict's ε '1/50' is not the reference's '1/100'"),
@@ -1745,6 +1756,129 @@ def test_pearlpluss_accepted_piece_that_fails_a_condition_of_record_stays_a_deve
                                   run="r", servers={"work": ("vy-dc-h200", "real")}, product="remote")
     assert (line["composed"], line["verdicts"]["PoUW"], line["missing"]["PoUW"]) == ("pending", S.DEV_VERDICT, row["why"])
     assert rec["legs"]["pouw"] is None
+
+
+def _draw_answers(calls: list, public: bytes = PUBLIC):
+    """The gate's answers for the run's draw session, as `pearlplus_draw` asks them: its tree for ``fetch`` (its key),
+    the ledger (its reserve and its open on the run's commitment) and the pins."""
+    def ask(*words: str) -> bytes:
+        calls.append(words)
+        if words[0] == "fetch":
+            buf = io.BytesIO()
+            with tarfile.open(fileobj=buf, mode="w:gz") as t:
+                for name, body in (("key.json", json.dumps({"H": 5, "W": 4, "public": public.hex()}).encode()),
+                                   ("record.json", b"{}"), ("releases.jsonl", b'{"event": "root"}\n'), ("close.json", b"{}")):
+                    info = tarfile.TarInfo(f"{words[1]}/out/{name}")
+                    info.size = len(body)
+                    t.addfile(info, io.BytesIO(body))
+            return buf.getvalue()
+        if words[0] == "ledger":
+            return ("".join(json.dumps(e) + "\n" for e in (
+                {"kind": "reserve", "session": DSID, "body": {"by": "vllm", "withheld": True, "families": [["pouw/draw", 1]]}},
+                {"kind": "open", "session": DSID, "body": {"window": {"root": "c1" * 64}, "withheld": True}}))).encode()
+        return (PINS_LINE + "\n").encode()
+    return ask
+
+
+@pytest.mark.parametrize("case, reason", [
+    ("honest", None),
+    ("node", None),
+    ("no gate", "ValueError: no gate, key pin or main's first-parent line to check the draw session by"),
+    ("other key", "CoinError: the challenger key at "),
+    ("untrusted", "CoinError: the auditor's ledger opens no challenger session for this window"),
+    ("not withheld", "ValueError: the run's draw session: the session the auditor's ledger opens on the window does not "
+                     "withhold"),
+    ("other commitment", "ValueError: the record's draw commitment is not the one the draw session's challenger signed"),
+    ("other root", "ValueError: the draw session's log does not show the run's commitment as the one root its draw coin "
+                   "followed"),
+    ("off C", "ValueError: the record's draw coin: "),
+    ("other source", "ValueError: the record's source is not its draw session's coin"),
+])
+def test_the_pearlplus_piece_holds_the_verifiers_draw_to_its_draw_session(tmp_path, monkeypatch, case, reason):
+    """`pearlplus_draw`: a challenger draw's session fetched through the gate with the ledger and pins, its key held to
+    the pin, the ledger opening it alone on the run's commitment C (`challenger.trusted_session_of`, its signed session),
+    withheld, its signed commitment the record's, its log showing C as its coin's one root, and the record's opening its
+    coin after C with the record's source that coin; a node's draw is checked by none of it. Each failure names why, and
+    the piece rejects on it."""
+    from verity.core.protocols.pouw import window as Wd
+    from verity.core.protocols.sampled_proofs import challenger as Ch
+
+    other = _draw(seed=8)
+    signed = {"other commitment": other["commitment"]}.get(case, DRAW["commitment"])
+    root = bytes.fromhex("c2" * 64 if case == "other root" else "c1" * 64)
+    seen = []
+
+    def trusted(ledger, window, key, pins, main, session, verify):
+        seen.append((window, key.public, pins, main))
+        if case == "untrusted":
+            raise Ch.CoinError("the auditor's ledger opens no challenger session for this window")
+        return Ch.LiveCommitment.from_json(signed), {Wd.DRAW: (root,)}
+    monkeypatch.setattr(Ch, "trusted_session_of", trusted)
+
+    def withheld_on(ledger, window):
+        assert [json.loads(x)["kind"] for x in ledger] == ["reserve", "open"] and window == "c1" * 64
+        return case != "not withheld"
+    monkeypatch.setattr(Ch, "withheld_on", withheld_on)
+    draw = {"off C": _draw("c2" * 64)}.get(case, DRAW)
+    (rec := tmp_path / "coin.json").write_bytes(_coin_record({"other source": "77" * 64}.get(case, DRAW_COIN),
+                                                             NODE if case == "node" else draw))
+    (main := tmp_path / "main.txt").write_text("aa" * 20 + "\n")
+    calls = []
+    ask = _draw_answers(calls, public=bytes(80) if case == "other key" else PUBLIC)
+    out = tmp_path / "pieces" / "pouw"
+    out.mkdir(parents=True)
+    got = S.pearlplus_draw(rec, out, None if case == "no gate" else GATE, hashlib.sha512(PUBLIC).hexdigest(), main,
+                           fetch=None if case == "no gate" else ask)
+    assert got["reason"] == reason if reason is None else got["reason"].startswith(reason), got
+    assert (got["from"], got["session"]) == (("node", None) if case == "node" else ("challenger", DSID))
+    assert calls == ([] if case in ("node", "no gate") else [("fetch", DSID), ("ledger",), ("pins",)])
+    if case in ("honest", "untrusted", "other commitment", "other root", "off C", "other source", "not withheld"):
+        assert seen == [({"root": "c1" * 64}, PUBLIC, [PINS_LINE], ["aa" * 20])]
+    if case != "no gate":
+        return
+    served, verified = _pearlplus_run()
+    monkeypatch.setattr(S, "pearlplus_coins", lambda *a: {"session": SID, "closed": None, "passes": 4, "reason": None})
+    monkeypatch.setattr(S, "_gate_out", lambda gate, *words: ask(*words))
+    answer = {**verified["answer"], "commitment": "c1" * 64, "profile": {"source": DRAW_COIN}}
+    S.coin(rec, out, "r1", research=["research"], put=_put(NODE_PUT)[0])
+    doc = S.pearlplus(out, served, {**verified, "answer": answer}, gate=GATE, key="00" * 64, main=main,
+                      coin=out / S.COIN_PUT)
+    assert doc["verdict"] == "reject" and doc["reasons"] == [f"draw: {doc['coins']['draw']['reason']}"]
+    assert doc["coins"]["draw"]["reason"].startswith("CoinError: the challenger key at ")
+    assert doc["coins"]["draws"] == S.PEARLPLUS_COINS["draws"]
+
+
+def test_the_pearlplus_period_opens_around_the_retained_serve_and_closes_before_the_draw(tmp_path, monkeypatch, capsys):
+    """``pearlplus-period open``: the lane's Pearl-C period opened at the gate with cap 1 (the serve's one salt session)
+    and circuit the SHA-512 of the piece's descriptor (Pearl+'s protocol, the scheme and the cubin's SHA-512), its answer
+    in ``period.json``; ``close`` closes it by that name. A gate that refuses is a PERIOD refused line, exit 1."""
+    calls = []
+
+    def gate_out(gate: str, *words: str) -> bytes:
+        calls.append((gate, words))
+        if "refuse" in words:
+            return b'{"refused": "lane vllm has period p0 open: close it first"}'
+        return json.dumps({"period": words[2], "verb": words[0]}).encode()
+    monkeypatch.setattr(S, "_gate_out", gate_out)
+    (cubin := tmp_path / "k.cubin").write_bytes(b"sass")
+    piece = tmp_path / "pieces" / "pouw"
+    assert S.main(["pearlplus-period", "open", str(piece), "--gate", GATE, "--name", "pearlplus-r1", "--cubin",
+                   str(cubin)]) == 0
+    raw = (piece / S.PEARLPLUS_DESCRIPTOR).read_bytes()
+    assert json.loads(raw) == {"schema": S.PEARLPLUS_DESCRIPTOR_SCHEMA, "protocol": S.PEARLPLUS_PROTOCOL,
+                               "scheme": "pearl-c-h100-v1-h3", "cubin_sha512": hashlib.sha512(b"sass").hexdigest()}
+    circuit = hashlib.sha512(raw).hexdigest()
+    assert capsys.readouterr().out == f"PERIOD opened pearlplus-r1: Pearl-C, cap 1, circuit {circuit[:16]}... " \
+                                      f"({S.PEARLPLUS_DESCRIPTOR})\n"
+    assert calls == [(GATE, ("period-open", "--name", "pearlplus-r1", "--cap", "1", "--circuit", circuit))]
+    assert S.main(["pearlplus-period", "close", str(piece), "--gate", GATE]) == 0
+    assert calls[1] == (GATE, ("period-close", "--name", "pearlplus-r1"))
+    doc = json.loads((piece / S.PERIOD).read_text())
+    assert (doc["name"], doc["cap"], doc["circuit"], doc["close"]["verb"]) == ("pearlplus-r1", 1, circuit, "period-close")
+    assert capsys.readouterr().out.startswith("PERIOD closed pearlplus-r1: ")
+    assert S.main(["pearlplus-period", "open", str(tmp_path / "other"), "--gate", GATE, "--name", "refuse"]) == 1
+    assert capsys.readouterr().out.startswith("PERIOD refused: RuntimeError: the gate refused period-open: ")
+    assert S.main(["pearlplus-period", "open", str(tmp_path / "other"), "--gate", GATE]) == 1
 
 
 def test_the_pouw_piece_fetches_the_windows_sample_session_and_gives_the_check_its_tree(tmp_path, monkeypatch):
@@ -2686,10 +2820,11 @@ def test_under_pouw_pearlplus_the_coins_line_says_whether_pearlpluss_epoch_coins
                             f"{'ef' * 6}, 2026-10-26T21:35:00Z), on the verifier's first-parent line of main"), lines
         assert lines[1] == (f"COINS sampled proofs: {LOCAL_COINS}; {PEARLPLUS_RUN}, its epoch's salt coin a live session's "
                             "of its own on vy-challenger-1's gate (peer vy-dc-h200, lane vllm), each pass's salt checked by "
-                            "core_check.live_salt in its piece, and its replay's draws a draw session's of its own there, "
-                            "opened on the run's commitment once before the replay, checked against the auditor's ledger "
-                            "by pearl_c.draw in its piece and cited by store id in the POUW line's coin; a development "
-                            f"piece under the lane's development key, it credits nothing{tail}"), lines
+                            "core_check.live_salt in its piece, its serve inside a Pearl-C period of that lane's own, and "
+                            "its replay's draws a draw session's coin on that gate, reserved withheld once the period "
+                            "closed and opened on the run's commitment, taken once before the replay, checked against the "
+                            "signed ledger in its piece and cited by store id in the POUW line's coin; a development piece "
+                            f"under the lane's development key, it credits nothing{tail}"), lines
     else:
         assert lines[0] == ("COINS Pearl+'s epoch coins are in-process and the record claims no Pearl+ verdict; sampled "
                             f"proofs: {LOCAL_COINS}; {PEARLPLUS_RUN}, its epoch's coins an in-process challenger's "
@@ -2884,8 +3019,9 @@ def test_under_pearl_tie_the_coins_line_says_the_windows_salt_coins_are_the_arms
                                       PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                       PEARLC_CHALLENGER_GATE=str(gate) if live else "", **PEARL_TIES)
     assert rc == 17 and lines[-1] == "STOP at predict (exit 17)", lines
-    draws = ("a draw session's of its own on vy-challenger-1's gate (peer vy-dc-h200, lane vllm), opened on the run's "
-             "commitment once before the replay, checked against the auditor's ledger by pearl_c.draw in its piece" if live
+    draws = ("a draw session's coin on vy-challenger-1's gate (peer vy-dc-h200, lane vllm), reserved withheld while no "
+             "period of that lane's is open and opened on the run's commitment, taken once before the replay and checked "
+             "against the signed ledger in its piece" if live
              else "the Lean verifier's IO.getRandomBytes on this node, taken once before the replay")
     assert lines[0].startswith("GATE ready: ") == live and sum(x.startswith("GATE") for x in lines) == live, lines
     assert lines[int(live)] == (

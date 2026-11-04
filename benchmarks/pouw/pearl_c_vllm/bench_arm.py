@@ -122,6 +122,53 @@ def live_coins(pouw: dict[str, Any], gate: str | None, peer: str | None, epoch: 
              "gate": PHW.gate_of(session.gate.call), "period": session.period}, session.reserved)
 
 
+class LiveDraw:
+    """`verify_run.verify_passes`' ``draw`` from a draw session of its own on the auditor host's challenger, through
+    infra's gate (``gate``, ``peer`` and ``lane`` as `_LiveSession`'s; `run` its gate's subprocess in tests): called on
+    the run's commitment C, it reserves a session withheld with the draw coin alone (``reserve --withhold``,
+    `window.DRAW_FAMILIES`, `pouw_h1_window.reserve_draw` as H1's window draws), opens it on C and takes its
+    ``pouw/draw`` coin after C (`pouw_h1_window.DrawSession`), whose full opening and commitment the session releases at
+    its close.
+    Refused (`CoinError`) before reserving while ``lane`` has a period open in the auditor's ledger, and before its open
+    when the reserve joined one, so the draw counts toward no period's sessions; and when the gate reserves it plain.
+    Returns (the coin's 64 bytes, the coin record's ``draw``: `verify_run`'s module docstring, "The coin record")."""
+
+    def __init__(self, gate: str, peer: str, lane: str, run: Any = None, at: str = "127.0.0.1:0") -> None:
+        from verity_vllm.pipeline.commit_coins import ChallengerGate
+
+        self.gate, self.peer, self.lane, self.at = ChallengerGate(gate, run), peer, lane, at
+
+    def __call__(self, root: bytes, asking: Any) -> tuple[bytes, dict[str, Any]]:
+        from verity.core.protocols.pouw import window as Wd
+        from verity.core.protocols.sampled_proofs.challenger import CoinError
+        from verity_vllm.protocols.pouw.h1 import window as PHW
+
+        period = PHW.open_period(self.gate.ledger(), self.lane)
+        if period is not None:
+            raise CoinError(f"refused before reserving the run's draw session: lane {self.lane}'s period "
+                            f"{period['period']} is open, and the draw joins no period (close it first)")
+        reserved = PHW.reserve_draw(self.gate.call, self.peer)
+        if reserved.get("period") is not None:
+            raise CoinError(f"draw session {reserved['session']} joined period {reserved['period']}: refused before its "
+                            "open, since the draw joins no period")
+        asking({"reserved": reserved})
+        session = PHW.DrawSession("pearl-plus verify", self.at, reserved, PHW.gate_of(self.gate.call))
+        opening = session.record(root)
+        return opening.coin, {"from": "challenger", "label": Wd.DRAW, "index": 0, "reserved": reserved,
+                              "session": session.session, "commitment": session.commitment.to_json(),
+                              "opening": opening.to_json()}
+
+
+def live_draw(gate: str | None, peer: str | None, lane: str, run: Any = None) -> LiveDraw | None:
+    """`LiveDraw` under ``gate`` and ``peer``, None when neither is given (the node's draw); ValueError for one alone."""
+    if (gate, peer) == (None, None):
+        return None
+    if gate is None or peer is None:
+        raise ValueError("the live draw takes PEARLC_CHALLENGER_GATE (the gate's ssh command) and PEARLC_CHALLENGER_PEER "
+                         "(this node's name in the challenger host's peers) together")
+    return LiveDraw(gate, peer, lane, run)
+
+
 class PearlCArm:
     id = "pouw-pearl-c"
     protocols: tuple[str, ...] = ()

@@ -247,10 +247,11 @@
 # a live session's of its own on vy-challenger-1: PEARLC_CHALLENGER_GATE defaults to the lane's gate command (H1_GATE's
 # default under h1), PEARLC_CHALLENGER_PEER to H1_PEER and PEARLC_CHALLENGER_LANE to H1_LANE's, `served_verdicts.py gate`
 # must find no period of that lane open, as for H1, and the piece holds each pass's salt to the session under
-# H1_KEY_SHA512 and MAIN_FILE's line, as H1's piece does. The verifier's coin is a draw session's of its own there,
-# reserved withheld under the lane's key and opened on the run's commitment, which the piece holds the coin record to
-# (`pearl_c.draw`). PEARLC_CHALLENGER_GATE set empty leaves Pearl+'s coins an in-process challenger's and its draws the
-# node's: the COINS line, the run's first, leads with that, and the piece claims no verdict.
+# H1_KEY_SHA512 and MAIN_FILE's line, as H1's piece does. The piece opens the lane's Pearl-C period around its retained
+# serve and closes it after, and the verifier's draw is a draw session's of its own on that gate, reserved once the
+# period closed and opened on the run's commitment (served_pearlplus.sh's steps 2 and 4). PEARLC_CHALLENGER_GATE set
+# empty leaves Pearl+'s coins an
+# in-process challenger's: the COINS line, the run's first, leads with that, and the piece claims no verdict.
 # With PEARL_TIE=1 (POUW then defaults to pearlplus) Pearl+ serves the window itself: serve-openai's Pearl+ arm
 # (`serve_pearl`: --protocols pouw:pearl-c-h100-v1-h3, its --protocols-config the one `served_pearlplus.sh arm` writes
 # before the lease from the cubin it builds, the PEARL-ARM lines) over the BF16 1B (REPO unsloth/Llama-3.2-1B, PRECISION
@@ -265,8 +266,9 @@
 # it keeps, and `prove_path.py window-commit --window-registration W --pearl-served` then commits the window at V3C_CLASS
 # within V3C_TIMEOUT (default 60m), its registration R chained right after W, which is held to PEARL_SCHEME (the
 # PEARL-TIE lines). PoUW's piece is Pearl+'s verdict on those passes held to W (`served_passes.py verify --tie W`, its
-# draw the gate's as above; `served_verdicts.py pearlplus --tie W`), and step 6 audits R tied to W (records_audit's --tie
-# W, V3C_LAW default stratified:1), deferred as under H1_TIE on a node short of its memory. The preflight refuses
+# draw a draw session's on the gate as above, though no Pearl-C period holds the window's serve while its salt coins
+# are the arm's; `served_verdicts.py pearlplus --tie W`), and step 6 audits R tied to W (records_audit's --tie W,
+# V3C_LAW default stratified:1), deferred as under H1_TIE on a node short of its memory. The preflight refuses
 # PEARL_TIE beside H1_TIE, with another POUW, PRECISION or row, at a V3C_CLASS CLASSES lacks or whose outputs aren't
 # WINDOW_STEPS, at a load other than the class's fixed one, or on a tree without the arm, `served_passes.py arm`,
 # retain's --window-record or window-commit's --pearl-served.
@@ -1404,7 +1406,7 @@ PEARLPLUS="PoUW: Pearl+'s own served run on this card after the window's (POUW=p
 LIVE_GATE=$H1_GATE LIVE_LANE=${H1_LANE:-vllm} LEAD=
 if [ "$POUW" = pearlplus ] && [ -n "$PEARLC_CHALLENGER_GATE" ]; then
   LIVE_GATE=$PEARLC_CHALLENGER_GATE LIVE_LANE=$PEARLC_CHALLENGER_LANE
-  H1_COINS="$PEARLPLUS, its epoch's salt coin a live session's of its own on vy-challenger-1's gate (peer $PEARLC_CHALLENGER_PEER, lane $PEARLC_CHALLENGER_LANE), each pass's salt checked by core_check.live_salt in its piece, and its replay's draws a draw session's of its own there, opened on the run's commitment once before the replay, checked against the auditor's ledger by pearl_c.draw in its piece and cited by store id in the POUW line's coin; a development piece under the lane's development key, it credits nothing"
+  H1_COINS="$PEARLPLUS, its epoch's salt coin a live session's of its own on vy-challenger-1's gate (peer $PEARLC_CHALLENGER_PEER, lane $PEARLC_CHALLENGER_LANE), each pass's salt checked by core_check.live_salt in its piece, its serve inside a Pearl-C period of that lane's own, and its replay's draws a draw session's coin on that gate, reserved withheld once the period closed and opened on the run's commitment, taken once before the replay, checked against the signed ledger in its piece and cited by store id in the POUW line's coin; a development piece under the lane's development key, it credits nothing"
 elif [ "$POUW" = pearlplus ]; then
   LEAD="Pearl+'s epoch coins are in-process and the record claims no Pearl+ verdict; "
   H1_COINS="$PEARLPLUS, its epoch's coins an in-process challenger's (PEARLC_CHALLENGER_GATE empty), which the serving process holds, and its replay's draws the Lean verifier's IO.getRandomBytes on this node, taken once before the replay and cited by store id in the POUW line's coin; a development piece, it credits nothing"
@@ -1412,7 +1414,7 @@ fi
 if [ -n "${PEARL_TIE:-}" ]; then  # the window's salt coins are the arm's, which takes no live session's yet (serve_pearl)
   LEAD="Pearl+'s epoch salt coins are in-process and the record claims no Pearl+ verdict; "
   if [ -n "$PEARLC_CHALLENGER_GATE" ]; then
-    DRAWS="a draw session's of its own on vy-challenger-1's gate (peer $PEARLC_CHALLENGER_PEER, lane $PEARLC_CHALLENGER_LANE), opened on the run's commitment once before the replay, checked against the auditor's ledger by pearl_c.draw in its piece"
+    DRAWS="a draw session's coin on vy-challenger-1's gate (peer $PEARLC_CHALLENGER_PEER, lane $PEARLC_CHALLENGER_LANE), reserved withheld while no period of that lane's is open and opened on the run's commitment, taken once before the replay and checked against the signed ledger in its piece"
   else DRAWS="the Lean verifier's IO.getRandomBytes on this node, taken once before the replay"; fi
   H1_COINS="PoUW: Pearl+ serving the window itself (PEARL_TIE: serve-openai's Pearl+ arm, one epoch the window and a round a Commit step, its verdict held to its window record W, which V3c's commit R is chained right after), its epoch's salt coin the arm's in-process challenger's (serve_pearl.in_process), which the serving process holds, and its replay's draws $DRAWS, cited by store id in the POUW line's coin; a development piece, it credits nothing"
 fi
