@@ -70,7 +70,8 @@ def GenericRecursiveZKAtFlockServer : Prop :=
     (FlockZk.Sess T).DummyReg → (FlockZk.Sess T).Causal → (FlockZk.Sess T).SwCausal vs → (FlockZk.Sess T).TapeOK →
     ∀ (L₀ L : FlockZk.Release T), L = ZKServer.LeanRelease.loop ZKServer.Loop.loopNr T L₀ →
     ∀ (wk : L.toSrv.Worker) (pc : FlockZk.PC T) (fc : FlockZk.FC T) (Xs : Msg → Finset Msg)
-      (enc : ZkView.Bits × ByteArray → Msg) {W : Type} (F : FirstPart W (Leaves.hm96 enc) (ℕ → Claims.Flock.Wit))
+      (enc : ZkView.Bits × ByteArray → Msg) {W : Type}
+      (F : FirstPart W (Leaves.hm96 enc) (ℕ → (flockServerSess rel T vs L wk pc fc t Xs).WS))
       (Ls : Sessions (flockServerSess rel T vs L wk pc fc t Xs)),
       Ls.Shaped →
         ZKOut (ZkRelease.ofSessions F Ls).N (ZkRelease.ofSessions F Ls).Ω FlockZk.sha (ZkRelease.ofSessions F Ls).k
