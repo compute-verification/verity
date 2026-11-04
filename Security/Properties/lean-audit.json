@@ -493,7 +493,10 @@
   "CoreProtocol.Site",
   "Definitions.Pouw.Dither",
   "Definitions.Pouw.Assumptions.ServedWork",
-  "PouwPearlPlus"
+  "PouwPearlPlus",
+  "Evaluate.TC.Fp8Atom",
+  "VStarRecursive.Protocol",
+  "VStarRecursive.Sampled"
  ],
  "claims": {
   "modules": ["Properties.RemoteAudit.Component"],
