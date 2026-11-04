@@ -1,8 +1,10 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Analysis.Real.Sqrt
-import Definitions.Nci.Assumptions.Cover
-import Definitions.Nci.Assumptions.CoverFanOut
-import Definitions.Nci.Assumptions.CoverPartialSum
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Analysis.Real.Sqrt
+public import Definitions.Nci.Assumptions.Cover
+public import Definitions.Nci.Assumptions.CoverFanOut
+public import Definitions.Nci.Assumptions.CoverPartialSum
 
 /-!
 # The cover theorem's partial-sum tightening: the guarantees
@@ -45,6 +47,8 @@ circuit: adders a cover leaves out (dark gates) lose the crossings' charge, and 
 `10⁻³` erases the gain over fan-out (B3). Pools overlap under `UpdateHardness`, so weights, activations and partial sums
 are each paid from the block's whole `k`, which costs the factor 2 in `2 k`.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.Guarantees
 

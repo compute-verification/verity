@@ -326,9 +326,9 @@ def test_spec_lock_proved_in_that_names_no_package_is_refused(tmp_path):
 
 #: the numerical bench's lowerings, which name a directory in a pathlib chain
 LOWERINGS = "benchmarks/numerical/python/verity_numerical/bench/lowerings.py"
-REGISTRY = 'REGISTRY = {\n    "flock_pure": "backends.flock.tool:FLOCK_PURE",\n    "pouw_vllm": "benchmarks.pouw.tool:POUW_VLLM",\n}\n'
+REGISTRY = 'REGISTRY = {\n    "flock_pure": "backends.flock.tool:FLOCK_PURE",\n    "commit_cost": "benchmarks.commitments.tool:COMMIT_COST",\n}\n'
 REGISTRY_FILES = {"backends/flock/tool.py": "FLOCK_PURE = 1\n", "backends/flock/prove.py": "",
-                  "benchmarks/pouw/tool.py": "POUW_VLLM = 1\n",
+                  "benchmarks/commitments/tool.py": "COMMIT_COST = 1\n",
                   "tools/research/src/research/store/tools_registry.py": REGISTRY,
                   LOWERINGS:
                       'DIRECTORIES = {\n    "C-Flock": REPO / "backends" / "flock" / "templates",\n}\n',
@@ -1241,3 +1241,107 @@ def test_runs_why_with_any_other_change_is_refused(tmp_path):
     why = WHY.replace("/certifier/", "/network_certifier/").replace("byte for byte", "bit for bit")
     [f] = _certifier(tmp_path, {"L/lean-audit.json": _why(why)})["refusals"]
     assert f["path"] == "L/lean-audit.json" and "changed beyond moved paths" in f["reason"] and "bit for bit" in f["hunk"]
+
+
+TERMS = 'scope = "prose"\n\n[words]\n"draw" = "sample"\n\n[[words_in]]\nfiles = ["c.py"]\nwords = { "draw_one" = "pick_one" }\n'
+TERMS_BASE = {
+    "tools/move/terms_map.toml": TERMS + '\n[rewrite]\nexclude = ["tools/move/**"]\n',
+    "a.py": '"""Each draw is fresh."""\nDRAW = b"draw"\n\n\ndef draw_one(n):\n    # a draw of n coins\n'
+            '    return f"draw {n}" + str(draw_one(n - 1))\n',
+    "b.py": "from a import draw_one\n\nX = draw_one(2)  # one draw\n",
+    "c.py": "from a import draw_one\n",
+    "notes.md": "A draw picks `draw_one()`; see [draw](draw.md).\n",
+    "P/L.lean": "/-- A draw. -/\ndef drawOne : Nat := 1\n\ndef drawTwo : Nat := 2 -- the draw\n",
+    "P/lean-audit.json": _lock(guarantees={}, reads={"L": {"digest": "dd", "definitions": {"drawOne": "ee"}}}),
+    "x.json": '{"draw": "a draw"}\n',
+}
+MOVE_MSG = "move\n\nMove: tools/move/terms_map.toml"
+
+
+def _terms(tmp_path: Path, base_extra: dict | None = None, message: str = MOVE_MSG, words: str | None = None,
+           **head: str) -> dict:
+    """The prose map's move: ``head`` edits BASE, committed with ``message``."""
+    repo, base = _repo(tmp_path, {**TERMS_BASE, **(base_extra or {})})
+    _write(repo, head)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message)
+    return MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo), words=words)
+
+
+def _refused(r: dict) -> dict[str, str]:
+    return {f["path"]: f["reason"] for f in r["refusals"]}
+
+
+def test_a_prose_move_by_rename_is_certified(tmp_path):
+    """What `tools/move/rename.py` writes with a `scope = "prose"` map: words in comments, docstrings and Markdown's text,
+    with code, strings, backticks and data files as they were."""
+    repo, base = _repo(tmp_path, TERMS_BASE)
+    assert MC._rename().main(["--map", str(repo / "tools/move/terms_map.toml"), "--root", str(repo)]) == 0
+    _git(repo, "commit", "-q", "-m", MOVE_MSG)
+    assert (repo / "a.py").read_text() == TERMS_BASE["a.py"].replace("Each draw", "Each sample").replace("a draw", "a sample")
+    assert (repo / "notes.md").read_text() == "A sample picks `draw_one()`; see [sample](draw.md).\n"
+    r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+    assert r["certified"], r["refusals"]
+    assert r["words"] == "tools/move/terms_map.toml"
+    assert {e["path"]: e["kind"] for e in r["edits"]} == dict.fromkeys(["a.py", "b.py", "notes.md", "P/L.lean"], "words")
+    assert MC.summary(r).endswith("(0 renames, 4 edits by tools/move/terms_map.toml's words)")
+
+
+def test_a_word_renamed_in_a_string_literal_or_a_data_file_is_refused(tmp_path):
+    a = TERMS_BASE["a.py"].replace('b"draw"', 'b"sample"')
+    r = _terms(tmp_path, **{"a.py": a, "x.json": '{"draw": "a sample"}\n'})
+    assert set(_refused(r)) == {"a.py", "x.json"}
+    assert all("string literal or a data file" in why for why in _refused(r).values())
+
+
+def test_a_name_renamed_to_a_fresh_name_the_same_everywhere_is_certified(tmp_path):
+    """`draw_one` becomes `sample_one` in each file that renames it, and no file spells `sample_one` at BASE; a Lean name no
+    lock records may follow its word too."""
+    r = _terms(tmp_path, **{"a.py": TERMS_BASE["a.py"].replace("draw_one", "sample_one"),
+                            "b.py": TERMS_BASE["b.py"].replace("draw_one", "sample_one"),
+                            "P/L.lean": TERMS_BASE["P/L.lean"].replace("drawTwo", "sampleTwo")})
+    assert r["certified"], r["refusals"]
+
+
+def test_a_name_renamed_onto_one_the_file_spells_is_refused(tmp_path):
+    base = TERMS_BASE["b.py"] + "sample_one = 3\n"
+    r = _terms(tmp_path, base_extra={"b.py": base}, **{"b.py": base.replace("draw_one", "sample_one")})
+    assert _refused(r) == {"b.py": "renames draw_one to sample_one, which b.py spells at BASE: the two names would merge"}
+
+
+def test_a_name_renamed_otherwise_in_another_file_is_refused(tmp_path):
+    """`c.py`'s scoped word renames `draw_one` to `pick_one`, while `b.py` renames it to `sample_one`."""
+    r = _terms(tmp_path, **{"b.py": TERMS_BASE["b.py"].replace("draw_one", "sample_one"),
+                            "c.py": TERMS_BASE["c.py"].replace("draw_one", "pick_one")})
+    assert set(_refused(r)) == {"b.py", "c.py"}
+    assert all("to different names in different files" in why for why in _refused(r).values())
+
+
+def test_a_lean_name_a_lock_records_is_refused(tmp_path):
+    r = _terms(tmp_path, **{"P/L.lean": TERMS_BASE["P/L.lean"].replace("drawOne", "sampleOne")})
+    [(path, why)] = _refused(r).items()
+    assert path == "P/L.lean" and why.startswith("renames drawOne, which a lock's records name")
+
+
+def test_an_edit_beyond_the_maps_words_is_refused(tmp_path):
+    r = _terms(tmp_path, **{"notes.md": "A sample chooses `draw_one()`; see [sample](draw.md).\n"})
+    [f] = r["refusals"]
+    assert f["path"] == "notes.md" and f["reason"] == "edit beyond the words of tools/move/terms_map.toml"
+    assert "+A sample chooses" in f["hunk"]
+
+
+def test_a_file_a_json_pin_records_is_refused(tmp_path, monkeypatch):
+    monkeypatch.setattr(MC, "json_pin_keys", lambda: {"fix/vec.json": ("inputs", "")})
+    r = _terms(tmp_path, base_extra={"fix/vec.json": '{"inputs": {"notes.md": "00"}}\n'},
+               **{"notes.md": "A sample picks `draw_one()`; see [sample](draw.md).\n"})
+    assert _refused(r)["notes.md"].startswith("the JSON pin fix/vec.json records this file's digest")
+
+
+def test_a_prose_move_is_judged_by_the_map_its_move_line_or_words_names(tmp_path):
+    """Without a `Move:` line the prose map is not read, so a prose edit is no pure move; `--words` names the map instead."""
+    notes = {"notes.md": "A sample picks `draw_one()`; see [sample](draw.md).\n"}
+    (tmp_path / "bare").mkdir()
+    assert not _terms(tmp_path / "bare", message="move", **notes)["certified"]
+    (tmp_path / "named").mkdir()
+    r = _terms(tmp_path / "named", message="move", words="tools/move/terms_map.toml", **notes)
+    assert r["certified"], r["refusals"]

@@ -1,8 +1,10 @@
-import Definitions.NetworkCertifier.SampledReg
-import Proofs.NetworkCertifier.SampledLeak
-import Proofs.NetworkCertifier.SampledAuditAccepted
-import Proofs.Flock.Claims.Sampling.KS
-import Proofs.Flock.Claims.Finder
+module
+
+public import Definitions.NetworkCertifier.SampledReg
+public import Proofs.NetworkCertifier.SampledLeak
+public import Proofs.NetworkCertifier.SampledAuditAccepted
+public import Proofs.Flock.Claims.Sampling.KS
+public import Proofs.Flock.Claims.Finder
 
 /-!
 # The leak bound at the registration's values
@@ -13,7 +15,10 @@ advice. At a registered input that is a free input:
 * in a faulty proof block, the gate is held (`FaultyGate`: an input is on its proof block's boundary), so its input
   value is never read;
 * in any other proof block, the proof block is correct on its committed values, so the trace opens the gate
-  (`val_some_of_input`) and its value there is the opened one (`traceVal_of_val`).
+  (`val_some_of_input`) and its value there is the opened one (`traceVal_of_val`);
+* in no proof block, it is an unread input (`Prog.Unread`, which `Partitions` may leave out): the run's value at every
+  gate but an unread input is the same whatever the unread inputs' values (`valOver_congr_held`), and the layout fits
+  the program, so its egress gates are returned and none is an unread input.
 
 So when the trace agrees with the registration at the registered inputs it opens, the accepted advice can be moved to
 the inputs pinned at the registration's values (`rLeak_reg_of_rAcc`), a set the statement and the registration fix. An
@@ -24,6 +29,8 @@ the registration's opening collide, and `B_reg` finds the collision (`regColl_of
 registration's values, and the count `2^#(freeInputs \ reg) · #faultySets · 2^β · Dj^k` there.
 -/
 
+@[expose] public section
+
 namespace NetTiming
 
 open Claims Claims.Sampling NetTiming.SampledAuditProof
@@ -31,11 +38,11 @@ open Claims Claims.Sampling NetTiming.SampledAuditProof
 /-! ### A registered input of a correct proof block is opened at the trace's value -/
 
 theorem val_some_of_input {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition} {w : Wit}
-    (hP : P.Partitions s.prog) {g : ℕ} (hg : s.prog.gates[g]? = some .input)
+    (hP : P.Partitions s.prog) {g : ℕ} (hg : s.prog.gates[g]? = some .input) (hr : ¬ s.prog.Unread g)
     (hnf : ¬ FaultyGate s.prog P (faulty H Cm s P w) g) : ∃ b, w.val H Cm s g = some b := by
   obtain ⟨ι, hι⟩ := correct_of_not_faulty H Cm s P w
   have hlt : g < s.prog.gates.length := (List.getElem?_eq_some_iff.1 hg).1
-  have hmem : g ∈ P.gates := hP.2.2.1 g hlt fun b h => by rw [hg] at h; cases h
+  have hmem : g ∈ P.gates := hP.2.2.1 g hlt (fun b h => by rw [hg] at h; cases h) hr
   obtain ⟨v, u, hu, hgu⟩ := exists_of_mem_gates hmem
   have hv : v ∉ faulty H Cm s P w := fun hv => hnf ⟨v, hv, u, hu, hgu, boundary_of_input hg⟩
   obtain ⟨b, hb, -⟩ := (hι v u hu hv g hgu).2 (boundary_of_input hg)
@@ -55,31 +62,37 @@ theorem inputOf_congr_at {L S : ℕ} (lay : BoundaryGates L S) (k : ℕ) (ins : 
   · rfl
   · rw [h]
 
+/-- **Inputs held or unread don't move `C`'s run**: two inputs that agree at every input `free` doesn't hold, but the
+unread ones, give one value at every gate but an unread input. -/
 theorem valOver_congr_held (C : Prog) {inp inp' : ℕ → Bool} (free : ℕ → Option Bool)
-    (h : ∀ i, C.gates[i]? = some .input → free i = none → inp i = inp' i) (g : ℕ) :
-    valOver C inp free g = valOver C inp' free g := by
+    (h : ∀ i, C.gates[i]? = some .input → free i = none → ¬ C.Unread i → inp i = inp' i) :
+    ∀ g, ¬ C.Unread g → valOver C inp free g = valOver C inp' free g := by
+  intro g
   induction g using Nat.strong_induction_on with
   | _ g ih =>
+    intro hg
     rcases hf : free g with _ | b
     · rcases hx : C.gates[g]? with _ | x
       · rw [valOver_of_none_none C inp hf hx, valOver_of_none_none C inp' hf hx]
       · rw [valOver_of_none_some C inp hf hx, valOver_of_none_some C inp' hf hx]
         have hrd : ∀ i ∈ x.reads, (if _h : i < g then some (valOver C inp free i) else some false) =
             if _h : i < g then some (valOver C inp' free i) else some false := by
-          intro i _
+          intro i hi
           split_ifs with hig
-          · rw [ih i hig]
+          · rw [ih i hig (not_unread_of_read hx hi)]
           · rfl
         rw [bgate_val_congr x _ hrd]
-        cases x <;> first | rfl | rw [h g hx hf]
+        cases x <;> first | rfl | rw [h g hx hf hg]
     · rw [valOver_of_some C inp hf, valOver_of_some C inp' hf]
 
-/-- **At the registration's values**: on a partitioned program, `RAcc δ` at a trace that opens each registered input,
-where it opens one, to the registration's value `ρ` there gives the leak relation at the inputs pinned at `ρ`. -/
+/-- **At the registration's values**: on a partitioned program that its layout fits, `RAcc δ` at a trace that opens each
+registered input, where it opens one, to the registration's value `ρ` there gives the leak relation at the inputs pinned
+at `ρ`. -/
 theorem rLeak_reg_of_rAcc {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse : Msg → Option AuditStatement}
     {partition : AuditStatement → Option Partition} {L K S : ℕ} {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {Dj : ℕ}
     (reg : AuditStatement → Finset ℕ) (ρ : AuditStatement → ℕ → Bool) {x : Msg} {w : Wit}
     (hpart : ∀ s P, parse x = some s → partition s = some P → P.Partitions s.prog)
+    (hfit : ∀ s, parse x = some s → (lay s).Fits s.prog (k s))
     (hagree : ∀ s, parse x = some s → ∀ g ∈ reg s, ∀ b, w.val H Cm s g = some b → b = ρ s g)
     (h : RAcc H Cm parse partition L K S lay k δ x w) :
     RLeak H Cm parse partition L K S lay k δ (fun s _ => AsReg s.prog (lay s) (k s) (reg s) (ρ s)) Dj x w := by
@@ -89,16 +102,16 @@ theorem rLeak_reg_of_rAcc {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse 
   set tv := traceVal s.prog (w.val H Cm s) with htv
   set G := freeInputs s.prog (lay s) (k s) with hG
   let a' : ℕ → Bool := fun g => if g ∈ G then (if g ∈ reg s then ρ s g else tv g) else false
-  have hpt : ∀ i, s.prog.gates[i]? = some .input → free i = none →
+  have hpt : ∀ i, s.prog.gates[i]? = some .input → free i = none → ¬ s.prog.Unread i →
       (fun g => if g ∈ G then tv g else false) i = a' i := by
-    intro i hi hfi
+    intro i hi hfi hri
     show (if i ∈ G then tv i else false) = if i ∈ G then (if i ∈ reg s then ρ s i else tv i) else false
     by_cases hiG : i ∈ G
     · rw [ite_eq_left hiG, ite_eq_left hiG]
       by_cases hir : i ∈ reg s
       · rw [ite_eq_left hir]
         have hnf : ¬ FaultyGate s.prog P (faulty H Cm s P w) i := fun hfg => hheld i hfg hfi
-        obtain ⟨b, hb⟩ := val_some_of_input hPart hi hnf
+        obtain ⟨b, hb⟩ := val_some_of_input hPart hi hri hnf
         rw [htv, traceVal_of_val hi hb]
         exact hagree s hs i hir b hb
       · rw [ite_eq_right hir]
@@ -110,13 +123,16 @@ theorem rLeak_reg_of_rAcc {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse 
   · intro t ht
     obtain ⟨h, hr, hst⟩ := hacc op o hC hCov t ht
     refine ⟨h, ?_, hst⟩
-    have hv : valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t) tv) free =
-        valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t) a') free :=
-      funext (valOver_congr_held s.prog free fun i hi hfi =>
+    have hv : ∀ g, ¬ s.prog.Unread g →
+        valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t) tv) free g =
+          valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t) a') free g :=
+      valOver_congr_held s.prog free fun i hi hfi hri =>
         (inputOf_restrict s.prog (lay s) (k s) _ tv hi).trans
-          (inputOf_congr_at (lay s) (k s) _ (hpt i hi hfi)))
+          (inputOf_congr_at (lay s) (k s) _ (hpt i hi hfi hri))
     rw [hr]
-    simp only [circuitProgram, hv]
+    simp only [circuitProgram]
+    funext ℓ
+    exact rowOf_congr fun σ g hg => hv g (not_unread_of_out ((hfit s hs).1 t ht ℓ σ g hg).1)
 
 /-! ### A disagreement with the registration is a collision -/
 
@@ -256,6 +272,12 @@ theorem sampledLeak_registered (hSA : Guarantees.SampledAuditAccepted) (H : Msg 
     rw [hP'] at hP₁
     obtain rfl := Option.some.inj hP₁
     exact hin.2.1
+  have hfit : ∀ st, D.parse x = some st → (lay st).Fits st.prog (k st) := by
+    intro st hs
+    obtain ⟨s₂, hs₂, hf⟩ := hx.2
+    rw [hs] at hs₂
+    obtain rfl := Option.some.inj hs₂
+    exact hf
   unfold PrBad at hacc ⊢
   calc Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x =>
         (run H P D.V x s.1 s.2.1).out = .acc ∧
@@ -273,7 +295,7 @@ theorem sampledLeak_registered (hSA : Guarantees.SampledAuditAccepted) (H : Msg 
           by_cases hA : RAcc H D.commit D.parse D.partition L K S lay k δ x w
           · refine Or.inr ?_
             by_contra hnc
-            refine hR (rLeak_reg_of_rAcc reg (fun st => regVal (ops st)) hpart (fun st hst g hg b hwb => ?_) hA)
+            refine hR (rLeak_reg_of_rAcc reg (fun st => regVal (ops st)) hpart hfit (fun st hst g hg b hwb => ?_) hA)
             by_contra hne
             exact hnc (regColl_of_disagree H D hb decode reg ops P x s hst (hreg st hst) hac hw hg hwb hne)
           · exact Or.inl ⟨hac, hA⟩

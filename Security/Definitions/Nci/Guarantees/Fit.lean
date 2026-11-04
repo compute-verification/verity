@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.Fit
+module
+
+public import Definitions.Nci.Assumptions.Fit
 
 /-!
 # NCI over windows: the fit bound
@@ -11,6 +13,8 @@ bound with weights counted in parameter slots, so that it applies to windows tha
 is its case of one slot per weight gate.
 -/
 
+@[expose] public section
+
 namespace Nci.Guarantees
 
 open Verity
@@ -20,7 +24,7 @@ open Verity
 multiplications number at most `k · reuse · N* S² / (4 w_e (N* b_w − S))`, written multiplied out. At `reuse = 2`
 (forward and backward) it reads `#windows · 2 N* S² / (4 w_e (N* b_w − S))`. -/
 def FitBound : Prop :=
-  ∀ (c : Declaration) (T : Threading c) (k : ℕ) (P : Partition c.D k) (start : Fin T.m → Fin k)
+  ∀ (c : RegisteredCircuit) (T : Threading c) (k : ℕ) (P : Partition c.D k) (start : Fin T.m → Fin k)
     (Nstar : ℕ) (S b_w w_e : ℝ),
     S < Nstar * b_w → (∀ j, (novelReads c (P.gates j) : ℝ) ≤ S) →
     Assumptions.Reach c T Nstar → Assumptions.Fits c T P start b_w w_e →
@@ -31,7 +35,7 @@ def FitBound : Prop :=
 charged once for each parameter it carries. The bound is `FitBound`'s, `k · reuse · N* S² / (4 w_e (N* b_w − S))`,
 written multiplied out. With one slot per weight gate it is `FitBound`. -/
 def FitBoundSlots : Prop :=
-  ∀ (c : Declaration) (T : Threading c) (σ : T.Slots) (k : ℕ) (P : Partition c.D k) (start : Fin T.m → Fin k)
+  ∀ (c : RegisteredCircuit) (T : Threading c) (σ : T.Slots) (k : ℕ) (P : Partition c.D k) (start : Fin T.m → Fin k)
     (Nstar : ℕ) (S b_w w_e : ℝ),
     S < Nstar * b_w → (∀ j, (novelReads c (P.gates j) : ℝ) ≤ S) →
     Assumptions.ReachSlots c T σ Nstar → Assumptions.FitsSlots c T σ P start b_w w_e →

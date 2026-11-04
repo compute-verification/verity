@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Assembled
-import Proofs.Flock.Claims.KS.PlainLeafKS
+module
+
+public import Proofs.Flock.Claims.Sampling.Assembled
+public import Proofs.Flock.Claims.KS.PlainLeafKS
 
 /-!
 # The sampling block's claims at the plain verifier, at SHA-512
@@ -7,6 +9,8 @@ import Proofs.Flock.Claims.KS.PlainLeafKS
 `sampling_assembled_plain_sha512`: `sampling_assembled_plain` at SHA-512 at the deployed relation, with Flock's plain KS
 at the trimmed record from `FlockDeploy.KS.plain_KS`, which takes no hypothesis.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

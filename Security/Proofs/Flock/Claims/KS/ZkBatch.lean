@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkSched
-import Proofs.Flock.Claims.KS.PushSched
+module
+
+public import Proofs.Flock.Claims.KS.ZkSched
+public import Proofs.Flock.Claims.KS.PushSched
 
 /-!
 # The masked slot from a schedule whose tables pause and resume
@@ -25,6 +27,8 @@ as the simulator does when it sends the table's openings after the later tables'
   strategy follows that schedule at the deployed tables' counts.
 -/
 
+@[expose] public section
+
 namespace FlockDeploy.KS
 
 local notation "𝔽" => FlockLevel3.GF128
@@ -43,7 +47,7 @@ def DeadZ (n : ℕ) (outs : List (OutZC 𝔽 D Sl)) : Prop :=
 
 /-- **The filtered conflict is `0` at a run whose table `n` opens nothing.** -/
 theorem ind_conflictAcc_nul (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H)
-    (sch : Accounting.Schedule) (n r ℓ : ℕ) (d : Model.Cap D) {b b' : List (OutZC 𝔽 D Sl)} (h : DeadZ n b) :
+    (sch : FlockSoundness.Accounting.Schedule) (n r ℓ : ℕ) (d : Model.Cap D) {b b' : List (OutZC 𝔽 D Sl)} (h : DeadZ n b) :
     ind (fun x : List (OutZC 𝔽 D Sl) × List (OutZC 𝔽 D Sl) => ∃ p,
       Rewinding.ConflictAt (opRAccZ H E Lf sch n r ℓ d) x p) (b, b') = 0 := by
   unfold ind

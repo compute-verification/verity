@@ -1,12 +1,16 @@
-import NciCheck.Check
-import NciCheck.Difftest
-import NciCheck.Desc
-import NciCheck.DescDifftest
-import NciCheck.DescLiveness
-import NciCheck.DescFuzz
-import NciCheck.Baseline
-import NciCheck.BaselineDifftest
-import NciCheck.Protocol
+module
+
+public import NciCheck.Check
+public import NciCheck.Difftest
+public import NciCheck.Desc
+public import NciCheck.DescDifftest
+public import NciCheck.DescLiveness
+public import NciCheck.DescFuzz
+public import NciCheck.Baseline
+public import NciCheck.BaselineDifftest
+public import NciCheck.Protocol
+public import NciCheck.Count
+public import NciCheck.CountDifftest
 
 /-!
 # The NCI policy's check
@@ -31,4 +35,13 @@ the inference-only policy's subprotocol of onsite and remote, on the core interf
 C-Flock's decoder doesn't check that a reference reads a leaf at the width it was committed with, which the
 Python codec refuses as it decodes (`E_REINTERPRET`), so every Program the check reads goes through
 `NciCheck.decodeProgram`, which refuses one that doesn't, with a message.
+
+`NciCheck.Count.check` (`nci-check --count`) is the count of `(c, k)`-inference blocks: that a Boolean declaration's
+computed gates divide into at most `n` proof blocks of a `(c, k)`-partition (`Nci.CompliesAtMost`), the blocks the
+activations of the block Definitions the declaration names, with each block Definition's Boolean gates from the gate
+table and its fresh bits from `NciCheck.Desc`'s summaries. It publishes only the judgment against `n`, `{complies}`;
+the whole verdict, with the counts, is `NciCheck.Count.checkDetail`, for the private record. `NciCheck.CountDifftest`
+holds both to the Python reference.
 -/
+
+@[expose] public section

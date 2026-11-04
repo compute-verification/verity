@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 
 /-!
 # The drawn units of one `--zk` session of `J` tables, at flock-verify's acceptance
@@ -14,6 +16,8 @@ file carries an event of the draw too, and bounds the drawn units' correctness:
 * `zk_session_soundJ_custody_drawn_reg`: the same at flock-verify's acceptance, at the coin server's custody, with
   `ksAvgStrictZ` for `ε_ks`. Its bound has no miss term, so it needs no A3.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# CPU preflight of served_h1 on node 2: the imports serve.py makes, the int8 pin's path, the research CLI, and one receipt
+# CPU preflight of served_h1 on an RTX PRO 6000 node: the imports serve.py makes, the int8 pin's path, the research CLI,
+# and one receipt
 set -uo pipefail
 ROOT=$PWD
 cd integrations/vllm

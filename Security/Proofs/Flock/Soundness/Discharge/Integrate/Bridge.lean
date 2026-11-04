@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Integrate.Sites
+module
+
+public import Proofs.Flock.Soundness.Discharge.Integrate.Sites
 
 /-!
 # The accepted statement `Placed.Accepted` reads is the one the refinement plays
@@ -18,6 +20,8 @@ import Proofs.Flock.Soundness.Discharge.Integrate.Sites
 `model_eq_stmtOf`: for a statement `Stmt.setupH` accepted on the untyped path, `Layout.model regs = stmtOf st hwf regs` at
 any regions. `table_stmtOf`, `tableAt_stmtOf`: a drawn table of `sitesAt` is `stmtOf` of its statement at `regionsOf`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Integrate
 

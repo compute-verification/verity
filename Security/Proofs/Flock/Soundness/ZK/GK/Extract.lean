@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ZK.CoinBinding
+module
+
+public import Proofs.Flock.Soundness.ZK.CoinBinding
 
 /-!
 # Zero knowledge: T6's extraction as an algorithm
@@ -21,6 +23,8 @@ exists (`coinPairs_coll`), so the output is a collision (`coinColl_isColl`). It 
 * `CoinTree`, `CoinOpening`, `Conflict`, `conflicts`, `bindColl`, `bindColl_isColl`: the same at the level of two views'
   lists of openings, the form the simulator's `⊥_bind` outcome takes.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.GK
 

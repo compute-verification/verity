@@ -27,7 +27,13 @@ The difftest's pieces: `challenger_coin_trees` (`coin_trees_of`) and `challenger
 (`sessions_tree_reason` over the log's trees and the request's records, each with its tables), each `{"refused": why}`
 where Python refuses.
 -/
-import SampledProofs.ChallengerDraw
+module
+
+public import SampledProofs.ChallengerDraw
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Challenger
 

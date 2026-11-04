@@ -8,7 +8,7 @@
 # NCU_VEC (the quantizers and weight editors) at NCU_VEC_SHAPES (out/ncu/, read by eps_profile.py, whose profile and TOML
 # end the run). Clocks are read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
+#   research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     -- bash benchmarks/pouw/edited_gemm/crun.sh
 set -uo pipefail
 export O=${OUT:?}

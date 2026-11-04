@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Layout
-import Proofs.Flock.Soundness.ParseUnitPre
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Layout
+public import Proofs.Flock.Soundness.ParseUnitPre
 
 /-!
 # A hidden-output statement's flat twin, and its output rows' message bits
@@ -11,6 +13,8 @@ so its flat Δ count is zero (`flat_count_msg`), and `outPairs` copies into it o
 statement's row there is a copy of `outSrc` (`msg_copy`), its flat twin's a self row (`flat_self`). So a satisfying
 witness of the hidden statement satisfies its flat twin (`sat_flat`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

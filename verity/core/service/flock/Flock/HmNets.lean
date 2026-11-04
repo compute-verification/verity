@@ -7,8 +7,12 @@ The builder works over GF(2) linear forms of committed bits: XOR and NOT are fre
 neither constant nor of one support commits a new bit, the row `out = a · b`. What the rows force is proved in the
 soundness package (`FlockSoundness.Discharge.Hm`).
 -/
-import Flock.Circuit
-import Flock.Hm96
+module
+
+public import Flock.Circuit
+public import Flock.Hm96
+
+@[expose] public section
 
 namespace Flock
 namespace HmNets

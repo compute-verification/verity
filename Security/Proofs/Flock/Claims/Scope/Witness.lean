@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Scope.Fit
+module
+
+public import Proofs.Flock.Claims.Scope.Fit
 
 /-!
 # A readable witness from the tables' model witnesses
@@ -8,6 +10,8 @@ hidden value `a·J + c`, from `z c a`). `zOf_witOf`: each table's share of it is
 the verifier parses (untyped, without public input ports), when each table's `z c` satisfies its `Layout.model`,
 `witOf` satisfies `RelS` of the readable statement: what an extractor holding the tables' decoded witnesses returns.
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 

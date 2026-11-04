@@ -1,4 +1,6 @@
-import Proofs.Accounting.TS.Session.Lanes.Range
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Range
 
 /-!
 # Rows that hold a leaf's encodings decode to it
@@ -14,6 +16,8 @@ field's bits hold the encoding of the leaf's word there, and the words are in ra
 * `decLane_eq`, `decComb_eq`: then the decodes are `laneView` and the combine's view, at the partials rows they read
   (lane `l`'s and the combine's `p<l>` are one row, `Lanes.Partials`).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

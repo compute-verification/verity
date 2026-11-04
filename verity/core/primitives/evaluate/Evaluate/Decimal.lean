@@ -1,15 +1,20 @@
-import Evaluate.Fp32
+module
+
+public import Evaluate.Fp32
 
 /-!
 # The correctly rounded transcendentals of the reference kinds
 
-`F32ExpRn_v1`, `F32ErfRn_v1` and `F32TanhRn_v1` (the vLLM integration's `ref_prims`): RN32 of the value the stated
-`decimal` algorithm computes at 100 digits (`_CTX`: precision 100, `ROUND_HALF_EVEN`). Each `decimal` operation the
-Python performs is its exact result rounded to 100 significant digits, half to even: `add`, `subtract`, `multiply` and
-`divide` (`Dec.add`, `Dec.sub`, `Dec.mul`, `Dec.div`), and `sqrt` and `exp`, which libmpdec rounds correctly too
-(`Dec.sqrt`, and `Dec.exp` by Ziv's loop on directed-rounding bounds of the Taylor series). Only values matter: a
-decimal's exponent and trailing zeros change no result here. Security: none yet.
+`F32ExpRn_v1`, `F32LogRn_v1`, `F32ErfRn_v1` and `F32TanhRn_v1` (the vLLM integration's `ref_prims`): RN32 of the value
+the stated `decimal` algorithm computes at 100 digits (`_CTX`: precision 100, `ROUND_HALF_EVEN`). Each `decimal`
+operation the Python performs is its exact result rounded to 100 significant digits, half to even: `add`, `subtract`,
+`multiply` and `divide` (`Dec.add`, `Dec.sub`, `Dec.mul`, `Dec.div`), and `sqrt`, `exp` and `ln`, which libmpdec rounds
+correctly too (`Dec.sqrt`, and `Dec.exp` and `Dec.ln` by Ziv's loop on directed-rounding bounds of the Taylor series of
+`exp` and of `atanh`). Only values matter: a decimal's exponent and trailing zeros change no result here. Security: none
+yet.
 -/
+
+@[expose] public section
 
 namespace Evaluate.Decimal
 
@@ -136,6 +141,53 @@ def Dec.exp (x : Dec) : Dec := Id.run do
     g := g + 60
   return .zero
 
+/-- Directed-rounding bounds `[lo, hi] / S`, `S = 10^g`, on `atanh(p / q)` for `0 ≤ p / q ≤ 1/3`: the series' terms
+`(p / q)^(2n+1) / (2n+1)`, floored below and ceiled above, and above a tail of at most twice the last power (the ratio
+of powers being at most 1/9). -/
+def atanhBounds (p q g : Nat) : Nat × Nat := Id.run do
+  let s := 10 ^ g
+  let p2 := p * p
+  let q2 := q * q
+  let mut lo := 0
+  let mut w := s * p / q
+  let mut n := 0
+  while w > 0 do
+    lo := lo + w / (2 * n + 1)
+    w := w * p2 / q2
+    n := n + 1
+  let mut hi := 0
+  w := (s * p + q - 1) / q
+  n := 0
+  while w > 1 do
+    hi := hi + (w + 2 * n) / (2 * n + 1)
+    w := (w * p2 + q2 - 1) / q2
+    n := n + 1
+  return (lo, hi + 2 * w)
+
+/-- `_CTX.ln` of a positive decimal: `ln x` rounded to `PREC` digits, from `x = 2^E · r` with `1 ≤ r < 2`,
+`ln x = E · ln 2 + 2 atanh((r - 1) / (r + 1))` and `ln 2 = 2 atanh(1/3)`. `ln 1 = 0`, and `ln x` of any other positive
+rational is no rounding boundary, so once both bounds round alike that is the result (Ziv's loop, as `Dec.exp`). -/
+def Dec.ln (x : Dec) : Dec := Id.run do
+  let (_, a, b) := x.q
+  if a = b then return .zero
+  let e0 : Int := (a.log2 : Int) - b.log2
+  let below := if e0 ≥ 0 then a < b * 2 ^ e0.toNat else a * 2 ^ (-e0).toNat < b
+  let e : Int := if below then e0 - 1 else e0
+  let (n, d) := if e ≥ 0 then (a, b * 2 ^ e.toNat) else (a * 2 ^ (-e).toNat, b)
+  let mut g := PREC + 30
+  for _ in [0:64] do
+    let (l2, h2) := atanhBounds 1 3 g
+    let (lz, hz) := atanhBounds (n - d) (n + d) g
+    let (lo, hi) : Int × Int :=
+      if e ≥ 0 then (2 * (e * l2 + lz), 2 * (e * h2 + hz)) else (2 * (e * h2 + lz), 2 * (e * l2 + hz))
+    let s := 10 ^ g
+    if lo > 0 ∨ hi < 0 then
+      let (rLo, rHi) := if lo > 0 then (ofQ false lo.toNat s, ofQ false hi.toNat s)
+        else (ofQ true lo.natAbs s, ofQ true hi.natAbs s)
+      if rLo == rHi then return rLo
+    g := g + 60
+  return .zero
+
 /-- `_PI_100`. -/
 def PI_100 : Dec := ⟨false, 314159265358979323846264338327950288419716939937510582097494459230781640628620899862803482534211706798214808651, -110⟩
 
@@ -182,6 +234,18 @@ def f32ExpRn (u : Nat) : Nat :=
     if !neg && n > 89 * 2 ^ 149 then 0x7F800000
     else if neg && n > 105 * 2 ^ 149 then 0
     else (ofUnits neg n).exp.toF32
+
+open Fp32 (Decoded decode F32_NAN) in
+/-- `F32LogRn_v1`, `ref_prims.f32_log_rn_bits`: NaN, `-inf` and `x < 0` give `0x7FC00000`, `±0` gives `-inf`, `+inf`
+itself, any other x the 100-digit `ln` rounded (`+0` at 1). Security: none yet. -/
+def f32LogRn (u : Nat) : Nat :=
+  match decode u with
+  | .nan => F32_NAN
+  | .inf neg => if neg then F32_NAN else 0x7F800000
+  | .fin neg n =>
+    if n = 0 then 0xFF800000
+    else if neg then F32_NAN
+    else (ofUnits false n).ln.toF32
 
 open Fp32 (Decoded decode F32_NAN) in
 /-- `F32ErfRn_v1`, `ref_prims.f32_erf_rn_bits`: NaN gives `0x7FC00000`, `±0` itself, `±inf` and `|x| ≥ 4.2` give `±1`,

@@ -1,4 +1,7 @@
-import Proofs.Flock.Claims.ZK.Statement
+module
+
+public import Proofs.Flock.Claims.ZK.Statement
+public import Definitions.Core.Compose
 
 /-!
 # A committed-coin protocol, its honest prover and its Goldreich–Kahan simulator
@@ -27,35 +30,17 @@ the last coin), `SHVZK` (at every fixed coin vector, the honest prover's message
 openings of one coin that pass `chk` and differ show a collision in `chk`'s calls).
 -/
 
+@[expose] public section
+
 namespace Claims.ZKMal
 
 open Claims
 
-/-! ## Composing oracle and simulator programs -/
+/-! ## Composing oracle programs (the simulator's, `spBind`, `ocSP` and `spRun`, are Core's) -/
 
 def ocBind {α β : Type} : OC α → (α → OC β) → OC β
   | .ret a, f => f a
   | .query q k, f => .query q fun r => ocBind (k r) f
-
-def spBind {α β : Type} : SP α → (α → SP β) → SP β
-  | .ret a, f => f a
-  | .hash q k, f => .hash q fun r => spBind (k r) f
-  | .ask as k, f => .ask as fun b => spBind (k b) f
-
-/-- An oracle program run by a simulator: its `H` calls are the simulator's. -/
-def ocSP {α : Type} : OC α → SP α
-  | .ret a => .ret a
-  | .query q k => .hash q fun r => ocSP (k r)
-
-/-- The simulator's `stepWith`: `n` rounds of the prover's next message `nxt` against the black-box verifier, from the
-history `hist`; the transcript. -/
-def spRun (nxt : List (Msg × Msg) → OC Msg) : ℕ → List (Msg × Msg) → SP (List (Msg × Out))
-  | 0, _ => .ret []
-  | n + 1, hist => spBind (ocSP (nxt hist)) fun a => .ask (hist.map Prod.fst ++ [a]) fun b =>
-      match b with
-      | .msg m => spBind (spRun nxt n (hist ++ [(a, m)])) fun τ => .ret ((a, .msg m) :: τ)
-      | .acc => .ret [(a, .acc)]
-      | .rej => .ret [(a, .rej)]
 
 /-! ## The committed-coin prover -/
 
