@@ -1040,7 +1040,7 @@ def honest_pass(tmp_path, request):
 
 
 def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None,
-                live: int | None = None):
+                live: int | None = None, spike: float | None = None):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
     salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so clear_work can't
@@ -1050,7 +1050,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     one flagged atom-word (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap).
     The calls have the epoch's indices `indices`, and every pass built here is of the one epoch (the same weights, key and
     salt coin), as passes of one install are.  With `live` the salt coin is a live session's, opened after salt epoch
-    `live`'s root over the weights' root (`live_coin`), and the manifest names that epoch (``pass_index``)."""
+    `live`'s root over the weights' root (`live_coin`), and the manifest names that epoch (``pass_index``).  With `spike`,
+    credited row 9 of the first call holds one entry `spike` times its every-8th entries' RMS (ρ's positions), off them."""
     if key is None:
         key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
     s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
@@ -1059,6 +1060,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     a0 = bf16_words(rng, 32, k)
     a0[20:] = 0
     a0[5, [1, 2, 3]] = np.float32(1e4).view(np.uint32) & 0xFFFF0000
+    if spike is not None:
+        a0[9, 1] = np.float32(spike * np.sqrt(np.mean(a0[9, ::8].view(np.float32) ** 2))).view(np.uint32) & 0xFFFF0000
     i0, i1 = indices
     acts = {i0: a0, i1: bf16_words(rng, 16, k)}
     rows = lambda x: [r.tobytes() for r in x]
@@ -1405,6 +1408,18 @@ def _replay_every_tile(p) -> dict[int, str]:
     """Every tile of pass `p` through the verifier's check (`verify_run.replay`): the failing tiles' reasons by tile id."""
     got, _ = VR.replay([p], [(0, ref.matmul, ref.id) for ref in p.verifier.refs], 1)
     return {tid: reason for _, tid, ok, reason, _ in got if not ok}
+
+
+def test_a_salt_dead_element_puts_its_row_over_the_cap(tmp_path, monkeypatch):
+    """P3's forming term in the tile rule (`pearl_c_debit.forming_elements`): credited row 9 holds one entry 300 times its
+    RMS, which keeps the per-row rules and is salt-dead, a debit of fs·|cols|/n = 64 over the row's cap of 41 at k = 128
+    with no flagged atom, so its tile, and it alone, fails; without the term every tile passes."""
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", spike=300.0)[0]
+    p = VR.load(path, published(path))
+    assert _replay_every_tile(p) == {0: "A row 9's replayed debit 64 exceeds its cap 41 (the row cap: ρ·its credited "
+                                        "cells' credit)"}
+    monkeypatch.setattr(CW.D, "forming_elements", lambda flags, dead, device=None: 0)
+    assert _replay_every_tile(p) == {}
 
 
 def test_volunteer_pass_gives_up_the_rows_over_their_caps_and_every_tile_then_passes(tmp_path):
