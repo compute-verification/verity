@@ -5,12 +5,15 @@ at k = 128 in 16 x 16 tiles, a call with filler rows and an excluded row, y comm
 holds the Lean's verdict to the Python's on the same files and coin: the verdict, the reason, the refusal, the run's
 commitment and source, every opened tile's verdict in order, and an accepted run's work (its credit at Pearl's assumption,
 `credit_at_assumption`: the credited MACs, tiles and MACs, ρ, ε and the draws over the inert-work bound) under each
-`over_cap` rule, `uncredited` (the default: a tile over its bound is credited nothing and the run goes on) and `reject`.
+`over_cap` rule, `uncredited` (the default: a tile over its bound is credited nothing and the run goes on) and `reject`,
+and the window record W it held the passes to (`verify_run.tie`, ``--tie W``).
 The passes are a test instance's, read as one (``test_instance``, ``--test-instance``), so the work credits nothing;
 read as a served run's they are refused (their tile is not 64 x 64), as passes of two salts are. A layer past `K_MAX` is
-refused at load on both sides. `test_a_recorded_h200_run` does the same on an H200 run's retained
-passes against the verdicts the Python recorded on them, where `POUW_PEARLPLUS_RECORDED` names a directory holding them
-(`passes/` and `verdicts/{run,control}.json`).
+refused at load on both sides. Passes salted by a live session's coins load under that session's commitment, and a coin
+record's challenger draw (the v2 record's ``draw``) holds only as coin ``pouw/draw`` 0 of a draw session opened after the
+run's commitment, its coin the record's source; ``--of-record`` takes no other draw. `test_a_recorded_h200_run` does the
+same on an H200 run's retained passes against the verdicts the Python recorded on them, where `POUW_PEARLPLUS_RECORDED`
+names a directory holding them (`passes/` and `verdicts/{run,control}.json`).
 
 Where the Python raises past its own verdict the Lean refuses instead, and no case here reaches it: a debit replay or a
 checked U that rejects (the Lean names it), and an opening whose leaf doesn't parse (an opening that fails). The Lean also
@@ -23,6 +26,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import random
 import shutil
 import subprocess
 import sys
@@ -52,6 +56,8 @@ def _module(name: str, path: Path):
 
 T = _module("test_pearl_c_vllm", ROOT / "benchmarks" / "pouw" / "tests" / "test_pearl_c_vllm.py")
 VR = T.VR
+Wd = T.Wd
+Ch = T.Ch
 VP = T.load("pearl_c_vllm_volunteer_pass", T.KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
 
@@ -62,12 +68,15 @@ def exe() -> Path:
 
 
 def lean(exe: Path, paths: list[Path], draws: int, source: bytes | None = SOURCE, record: Path | None = None,
-         coins: Path | None = None, over_cap: str | None = None, test_instance: bool = False) -> dict:
+         coins: Path | None = None, over_cap: str | None = None, test_instance: bool = False, tie: Path | None = None,
+         of_record: bool = False) -> dict:
     argv = [str(exe), "--coins", str(coins or paths[0].parent / "coins.json"), "--draws", str(draws)]
     argv += [] if source is None else ["--source", source.hex()]
     argv += [] if record is None else ["--record", str(record)]
     argv += [] if over_cap is None else ["--over-cap", over_cap]
     argv += ["--test-instance"] if test_instance else []
+    argv += [] if tie is None else ["--tie", str(tie)]
+    argv += ["--of-record"] if of_record else []
     p = subprocess.run([*argv, *map(str, paths)], capture_output=True, text=True)
     assert p.returncode in (0, 1) and not p.stderr, p.stderr
     got = json.loads(p.stdout)
@@ -83,19 +92,39 @@ def answer(out: dict) -> dict:
     return {"verdict": out["answer"]["verdict"], "reason": out["answer"]["reason"], "refused": out.get("refused"),
             "commitment": out.get("commitment"), "source": out.get("source"),
             "over_cap": out.get("over_cap", VR.REJECT), "verdicts": out.get("verdicts", []),
-            "work": None if work is None else {"over_cap_draws": 0, **work}}
+            "work": None if work is None else {"over_cap_draws": 0, **work}, "tie": out.get("tie")}
 
 
 def same(exe: Path, paths: list[Path], draws: int = 3, source: bytes | None = SOURCE, record: Path | None = None,
-         over_cap: str | None = None, test_instance: bool = True) -> dict:
-    """The Python's verdict on `paths`, asserted to be the Lean's; the Lean reads the record the Python wrote, if any.
-    ``over_cap`` None is each side's default; the passes are a test instance's unless ``test_instance`` is false."""
+         over_cap: str | None = None, test_instance: bool = True, tie: Path | None = None, rounds: list[int] | None = None,
+         dropped: tuple[int, ...] = (), draw=None, of_record: bool = False) -> dict:
+    """The Python's verdict on `paths` (under their coins file, held to the window record at `tie`, the passes rounds
+    `rounds` and `dropped`, drawn by `draw`), asserted to be the Lean's; the Lean reads the record the Python wrote, if
+    any, and its rounds. ``over_cap`` None is each side's default; the passes are a test instance's unless
+    ``test_instance`` is false."""
     rule = {} if over_cap is None else {"over_cap": over_cap}
-    want = answer(VR.verify_passes(paths, draws, 1, "test", T.published(paths[0]), source, record=record,
-                                   test_instance=test_instance, **rule))
-    got = lean(exe, paths, draws, source, record, over_cap=over_cap, test_instance=test_instance)
+    window = None if tie is None else json.loads(tie.read_text())
+    want = answer(VR.verify_passes(paths, draws, 1, "test", VR.epoch_coins(paths[0].parent / "coins.json"), source,
+                                   window=window, rounds=rounds, dropped=dropped, record=record,
+                                   test_instance=test_instance, **rule, **({} if draw is None else {"draw": draw})))
+    got = lean(exe, paths, draws, source, record, over_cap=over_cap, test_instance=test_instance, tie=tie,
+               of_record=of_record)
     assert got == want
     return got
+
+
+def challenger_draw(entropy: int = 7, after: bytes | None = None):
+    """`bench_arm.LiveDraw`'s draw on the run's commitment C from a seeded draw session (`window.draw_challenger`): its
+    coin ``pouw/draw`` 0, opened after C (or `after`), and the record's ``draw`` naming it."""
+    def draw(root: bytes, asking) -> tuple[bytes, dict]:
+        ch = Wd.draw_challenger(0, random.Random(entropy).randbytes)
+        session = {"session": "s20261104T120000Z-dr01", "seq": 3, "peer": "vy-dc-h200", "by": "vllm", "period": None}
+        asking({"reserved": session})
+        o = ch.open(Wd.DRAW, 0, root if after is None else after)
+        return o.coin, {"from": VR.DRAW_CHALLENGER, "label": Wd.DRAW, "index": 0, "reserved": session,
+                        "session": {"session": session["session"], "root": root.hex()},
+                        "commitment": ch.commitment.to_json(), "opening": o.to_json()}
+    return draw
 
 
 def edit(path: Path, f) -> None:
@@ -276,13 +305,17 @@ def test_an_epochs_passes(exe, tmp_path):
 
 
 def test_a_served_runs_tile_and_salt(exe, tmp_path):
-    """Read as a served run's, a test instance's pass is refused before the coin: its tile is 16 x 16, not 64 x 64. Passes
-    of two salts (other weights under the one coin), each holding calls 0 and 1, are refused, test instance or not."""
+    """Read as a served run's, a test instance's pass is refused before the coin: its instance is k_min 32 at 16 x 16 or
+    64 x 64 tiles, not the served k_min 1,024 at 64 x 64. Passes of two salts (other weights under the one coin), each
+    holding calls 0 and 1, are refused, test instance or not."""
     a = T.proved_pass(tmp_path / "a", H100)[0]
-    served = same(exe, [a], test_instance=False)
-    assert served["verdict"] == "reject" and served["source"] is None and served["verdicts"] == []
-    assert served["reason"] == ("ValueError: pass 0's tile is 16 x 16, not 64 x 64: a test instance is read only as one, "
-                                "crediting nothing")
+    wide = T.proved_pass(tmp_path / "wide", H100, tile=(64, 64))[0]
+    for path, tile in ((a, 16), (wide, 64)):
+        served = same(exe, [path], test_instance=False)
+        assert served["verdict"] == "reject" and served["source"] is None and served["verdicts"] == []
+        assert served["reason"] == (f"ValueError: pass 0's instance is k_min 32 at {tile} x {tile} tiles, not the served "
+                                    "1024 at 64 x 64: a test instance is read only as one, crediting nothing")
+    assert same(exe, [wide])["verdict"] == "accept"
     b = T.proved_pass(tmp_path / "b", H100, seed=12)[0]
     for test_instance in (False, True):
         two = same(exe, [a, b], test_instance=test_instance)
@@ -303,6 +336,118 @@ def test_a_give_up_after_the_coin(exe, tmp_path):
     late = same(exe, [path], source=None, record=py)
     assert late["refused"][0] == "after-coin" and late["source"] is None
     assert lean(exe, [path], 3, None, lr, test_instance=True) == late
+
+
+def test_a_live_epoch_and_a_challenger_draw(exe, tmp_path):
+    """Passes salted by a live session (``coins.json`` of `window.LIVE_SCHEME`, each salt coin opened after its salt
+    epoch's root) and a coin record whose draw is a draw session's coin on the run's commitment: the Lean's verdict is the
+    Python's, of record or not, and reads a v2 record the Lean wrote itself on the node's draw."""
+    a, b = (T.proved_pass(tmp_path / n, H100, ix, live=0)[0] for n, ix in (("a", (0, 1)), ("b", (2, 3))))
+    (b.parent / "coins.json").write_text((a.parent / "coins.json").read_text())
+    rec = tmp_path / "coin.json"
+    got = same(exe, [a, b], 8, None, rec, draw=challenger_draw())
+    assert got["verdict"] == "accept" and len(got["source"]) == 128
+    held = json.loads(rec.read_text())
+    assert held["schema"] == VR.COIN_SCHEMA and held["draw"]["from"] == "challenger"
+    assert lean(exe, [a, b], 8, None, rec, test_instance=True, of_record=True) == got
+    lr = tmp_path / "lean-coin.json"
+    mine = lean(exe, [a, b], 8, SOURCE, lr, test_instance=True)
+    assert mine["verdict"] == "accept" and json.loads(lr.read_text())["draw"] == {"from": "node", "claim": VR.NODE_CLAIM}
+    assert lean(exe, [a, b], 8, None, lr, test_instance=True) == mine
+    edit(b, lambda m: m.update(pass_index=1))
+    late = same(exe, [b], 3, SOURCE)
+    assert late["verdict"] == "reject" and "the salt's coin was not opened after what the verifier recorded" in late["reason"]
+
+
+def test_a_verdict_of_record_takes_only_a_challenger_draw_on_live_coins(exe, tmp_path):
+    """``--of-record`` refuses (`of-record`) the node's draw, a v1 coin record (which names no draw), no record, a source
+    given on the command line and an in-process challenger's epoch coins; without it each is the Python's verdict."""
+    live = T.proved_pass(tmp_path / "live", H100, live=0)[0]
+    plain = T.proved_pass(tmp_path / "plain", H100)[0]
+    node = tmp_path / "node.json"
+    assert same(exe, [live], record=node)["verdict"] == "accept"
+    v1 = tmp_path / "v1.json"
+    v1.write_text(json.dumps({**{k: v for k, v in json.loads(node.read_text()).items() if k != "draw"},
+                              "schema": "verity-pouw/pearl-plus-coin/v1"}))
+    drawn = tmp_path / "drawn.json"
+    assert same(exe, [plain], 3, None, drawn, draw=challenger_draw())["verdict"] == "accept"
+    for paths, source, record, why in (([live], None, node, "drawn on the serving node"),
+                                       ([live], None, v1, "not verity-pouw/pearl-plus-coin/v2"),
+                                       ([live], SOURCE, None, "the source is given on the command line"),
+                                       ([live], SOURCE, node, "the source is given on the command line"),
+                                       ([plain], None, drawn, "an in-process challenger's")):
+        got = lean(exe, paths, 3, source, record, test_instance=True, of_record=True)
+        assert (got["verdict"], got["refused"][0], got["verdicts"]) == ("reject", "of-record", []), why
+        assert why in got["reason"] and got["reason"] == f"of-record: {got['refused'][1]}"
+        assert lean(exe, paths, 3, source, record, test_instance=True)["verdict"] == "accept"
+
+
+def test_a_challenger_draw_that_is_not_the_runs_coin(exe, tmp_path):
+    """A record whose challenger draw was opened after another commitment, whose source isn't its coin, whose commitment
+    isn't a draw session's or whose opening doesn't parse: the Lean refuses it (`draw`) with the compose's words
+    (`served_verdicts.pearlplus_live_draw`), of record or not, where the Python, which leaves the draw to the compose,
+    accepts."""
+    path = T.proved_pass(tmp_path, H100, live=0)[0]
+    rec = tmp_path / "coin.json"
+    other = VR.verify_passes([path], 3, 1, "test", VR.epoch_coins(path.parent / "coins.json"), record=rec,
+                             draw=challenger_draw(after=b"\x0c" * 64), test_instance=True)
+    assert other["answer"]["verdict"] == "accept"
+    good = tmp_path / "good.json"
+    same(exe, [path], 3, None, good, draw=challenger_draw())
+    held = json.loads(good.read_text())
+    salt_only = Ch.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, random.Random(7).randbytes).commitment.to_json()
+    cases = [(json.loads(rec.read_text()), "the record's draw coin: coin was not opened after what the verifier recorded"),
+             ({**held, "source": "ab" * 64}, "the record's source is not its draw session's coin"),
+             ({**held, "draw": {**held["draw"], "commitment": salt_only}},
+              "the record's draw coin: the coin commitment's coins are not a live window's draw session's"),
+             ({**held, "draw": {**held["draw"], "opening": {"coin": "00"}}}, "the record's draw is malformed: ")]
+    for doc, why in cases:
+        (bad := tmp_path / "bad.json").write_text(json.dumps(doc))
+        for of_record in (False, True):
+            got = lean(exe, [path], 3, None, bad, test_instance=True, of_record=of_record)
+            assert (got["verdict"], got["refused"][0], got["verdicts"]) == ("reject", "draw", []), why
+            assert got["refused"][1].startswith(why) and got["reason"] == f"draw: {got['refused'][1]}"
+
+
+def test_a_run_tied_to_its_window_record(exe, tmp_path):
+    """A window record W registering each call's A rows and y: the Lean holds the passes to W as the Python does and
+    prints the same tie, W's digest and its table count, also when W lists a round dropped before the coin (the coin
+    record's rounds and dropped, which the Python wrote)."""
+    warm, a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
+    (w := tmp_path / "w.json").write_text(json.dumps(T.window_record(a, b)))
+    got = same(exe, [a, b], 8, tie=w, record=tmp_path / "coin.json")
+    assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(json.loads(w.read_text())), "tables": 8}
+    (w3 := tmp_path / "w3.json").write_text(json.dumps(T.window_record(warm, a, b)))
+    got = same(exe, [a, b], 8, tie=w3, rounds=[1, 2], dropped=(0,), record=tmp_path / "coin3.json")
+    assert got["verdict"] == "accept" and got["tie"]["tables"] == 8
+    rec = json.loads((tmp_path / "coin3.json").read_text())
+    assert (rec["rounds"], rec["dropped"]) == ([1, 2], [0])
+
+
+def test_a_pass_that_is_not_ws(exe, tmp_path):
+    """W whose entry for a call has another root, or lacks one, or registers a call the run doesn't have, or one twice,
+    or isn't a v2 record: refused before the coin (Python's `ValueError`, in its words), as the Python does."""
+    a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("a", (0, 1)), ("b", (2, 3))))
+    good = T.window_record(a, b)
+    reg = good["registered"]
+    cases = [({**good, "registered": [{**e, "root": "00" * 64} if e["value"] == "pearl-a/0/0" else e for e in reg]},
+              "ValueError: W's pearl-a/0/0: its root not the call's"),
+             ({**good, "registered": [{**e, "word_bits": 16, "leaves": 1} if e["value"] == "pearl-y/1/1" else e
+                                      for e in reg]}, "ValueError: W's pearl-y/1/1: its leaves, word_bits not the call's"),
+             ({**good, "registered": [e for e in reg if e["value"] != "pearl-y/1/0"]}, "ValueError: W registers no pearl-y/1/0"),
+             ({**good, "registered": [*reg, {**reg[0], "value": "pearl-a/2/0"}]},
+              "ValueError: W registers pearl-a/2/0, no call of the run's"),
+             ({**good, "registered": [*reg, reg[1]]}, "ValueError: W registers pearl-y/0/0 twice"),
+             ({**good, "format": "verity/registration/v1"},
+              "ValueError: W is no verity/registration/v2 record with registered values")]
+    for doc, why in cases:
+        (w := tmp_path / "w.json").write_text(json.dumps(doc))
+        got = same(exe, [a, b], tie=w)
+        assert (got["verdict"], got["reason"], got["tie"], got["commitment"]) == ("reject", why, None, None), got
+    edit(b, lambda m: m["matmuls"][1].update(root_a=m["matmuls"][1]["root_a"].upper()))
+    (w := tmp_path / "w.json").write_text(json.dumps(good))
+    got = same(exe, [a, b], tie=w)
+    assert got["reason"] == "ValueError: W's pearl-a/1/1: its root not the call's"
 
 
 @pytest.mark.skipif(not RECORDED, reason="POUW_PEARLPLUS_RECORDED names no recorded run")

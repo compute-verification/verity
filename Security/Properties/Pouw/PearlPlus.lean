@@ -19,7 +19,7 @@ SHA-512 break on the run's trees. These properties are the code's side of it:
   under `over_cap` `uncredited` (CMP-311 option A, the default), is over its inert-work bound with every other check
   passed and is credited nothing.
 * `PlanMeans`: the plan's passes are the loaded passes, all of one salt and, but on a test instance's input, of the served
-  64 × 64 tile, its commitment theirs, its source the coin record's when there is one (retention and give-up fixed before
+  instance (`k_min` 1,024, 64 × 64 tiles), its commitment theirs, its source the coin record's when there is one (retention and give-up fixed before
   the coin, `after-coin`), and its tiles the draw's over their tickets, keyed by the source and the commitment.
 * `LoadedGivesUp`: a loaded pass's records are its published root's, and V-EX's give-up is within its caps.
 * `TileAcceptMeans`: a tile that passes, or is only over its inert-work bound, opens against the pass's roots, its
@@ -68,14 +68,14 @@ def noiseOf (p : Pass) (tid : Nat) : Reject FixedNoise :=
 /-! ## The run -/
 
 /-- **What `plan` establishes**: the run's passes are `load`'s of its manifests under the epoch's coins, all of one salt
-and, unless the input is a test instance's, each at `TILE × TILE` tiles; its commitment is `runCommitment` of them, its source is the coin record's where the verifier holds one (whose commitment is this run's)
+and, unless the input is a test instance's, each at the served instance, `k_min` `K_MIN` and `TILE × TILE` tiles; its commitment is `runCommitment` of them, its source is the coin record's where the verifier holds one (whose commitment is this run's)
 and else the source given, and its tiles are the draw's, keyed by the source and the commitment, then each pass's
 exclusion tiles. -/
 def PlanMeans : Prop :=
   ∀ (i : Input) (pl : Plan), plan i = .ok pl →
     passesDistinct i.manifests = none ∧ i.manifests.mapM (load i.coins) = .ok pl.passes ∧
     (∀ p ∈ pl.passes, p.salt = pl.passes[0]!.salt) ∧
-    (i.testInstance = false → ∀ p ∈ pl.passes, p.scheme.tileM = TILE ∧ p.scheme.tileN = TILE) ∧
+    (i.testInstance = false → ∀ p ∈ pl.passes, p.scheme.kMin = K_MIN ∧ p.scheme.tileM = TILE ∧ p.scheme.tileN = TILE) ∧
     pl.root = runCommitment pl.passes ∧
     (∀ h, i.held = some h → h.commitment = pl.root ∧ pl.source = h.source ∧ (i.source = none ∨ i.source = some h.source)) ∧
     (i.held = none → i.source = some pl.source) ∧
