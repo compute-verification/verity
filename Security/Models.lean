@@ -33,6 +33,7 @@ import Definitions.Nci.Guarantees.CoverChained
 import Definitions.Nci.Guarantees.PartitionCovers
 import Definitions.Nci.Guarantees.CompliesCK
 import Definitions.Nci.Guarantees.Ldl
+import Definitions.Nci.Guarantees.Witnesses
 import Definitions.Pous.Assumptions
 import Definitions.Pous.Guarantees
 import Definitions.Pouw.Assumptions

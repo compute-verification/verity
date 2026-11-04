@@ -27,7 +27,7 @@ open Verity Finset
 
 section
 
-variable {c : Declaration} (T : Threading c)
+variable {c : RegisteredCircuit} (T : Threading c)
 
 /-- The weights thread `t` uses inside `R`: those of which `R` holds a counted multiplication of thread `t`. -/
 def threadWeights (R : Finset (Fin c.D.N)) (t : Fin T.m) : Finset (Fin c.D.N) :=
@@ -47,7 +47,7 @@ end
 versions of one slot number at most `reuse`, as `T.reuse_le` has it for one weight. A thread that uses one version of
 each parameter (a token at one optimizer step, forward and backward) meets it, and so does one whose forward and
 backward read different versions, each at most `reuse` times in all. -/
-structure Slots {c : Declaration} (T : Threading c) where
+structure Slots {c : RegisteredCircuit} (T : Threading c) where
   /-- The number of parameter slots. -/
   p : ℕ
   /-- The slot of each weight gate: the parameter it is a version of. -/
@@ -56,7 +56,7 @@ structure Slots {c : Declaration} (T : Threading c) where
 
 namespace Slots
 
-variable {c : Declaration} {T : Threading c} (σ : T.Slots)
+variable {c : RegisteredCircuit} {T : Threading c} (σ : T.Slots)
 
 /-- The slots `R` uses: those of the weights it uses. -/
 def slotsUsed (R : Finset (Fin c.D.N)) : Finset (Fin σ.p) := (T.weightsUsed R).image σ.slot
