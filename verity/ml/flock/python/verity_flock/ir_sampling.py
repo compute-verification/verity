@@ -351,7 +351,7 @@ def statement(input_set, lo: int, hi: int, logits: np.ndarray, scalars: dict, ou
     for name in leaves:
         bind[name] = bytes.fromhex(identity_digest(IF.BINDING_TAG, {"set": input_set.name, "content_digest": input_set.content_digest,
                                                                    "lo": int(lo), "hi": int(hi), "port": name, "schema": schemas[name]}))
-        doms[name] = CommitmentDomain(bind[name], IF.OWNER, RangeIndexedDomain(0, n))
+        doms[name] = CommitmentDomain(bind[name], IF.OWNER, RangeIndexedDomain(0, n), hash="sha256")
     fv = FrameV3({name: Port(doms[name], leaf) for name, leaf in leaves.items()})
     key = blake3_row_key(ROLE_X)
     digests = np.frombuffer(b"".join(blake3.blake3(np.ascontiguousarray(logits[i], dtype="<u2").tobytes(), key=key).digest()

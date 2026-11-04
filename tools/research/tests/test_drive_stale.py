@@ -206,15 +206,20 @@ def test_a_pr_drive_toml_keeps_is_never_stale_rung_or_closed(world, monkeypatch)
 
 def test_after_a_landing_the_owner_of_each_unmarked_pr_stacked_on_it_hears_once_to_merge_main(world, monkeypatch):
     """A PR whose branch contains a landed PR's head, based on `main` or on that PR's branch, needs `main`
-    merged in; one marked ready lands from `next` as it is, and a merge would cost it its mark."""
+    merged in; one marked ready lands from `next` as it is, and a merge would cost it its mark.  One based on another branch
+    that carries the landed PR (a long-lived one) takes `main` through that branch, and isn't told."""
     gh = world.gh
     gh.put(1, h1 := world.change({"a.txt": "1\n"}))
+    gh.prs[1] = dataclasses.replace(gh.prs[1], branch="cursor/w-1")
     gh.put(2, world.change({"b.txt": "2\n"}, base=h1), ready=False)                                  # stacked, unmarked
     gh.put(3, world.change({"c.txt": "3\n"}, base=h1))                                                # stacked, marked
     gh.prs[4] = PR(4, world.change({"d.txt": "4\n"}, base=h1), "change 4", "Lane `lane-4`.", base="cursor/w-1",
                    branch="cursor/w-4")                                                               # on #1's branch
     _git(world.origin, "update-ref", "refs/pull/4/head", gh.prs[4].head)
     gh.put(5, world.change({"e.txt": "5\n"}), ready=False)                                           # not stacked
+    gh.prs[6] = PR(6, world.change({"f.txt": "6\n"}, base=h1), "change 6", "Lane `lane-6`.", base="remote",
+                   branch="cursor/w-6")                                                               # on a long-lived branch
+    _git(world.origin, "update-ref", "refs/pull/6/head", gh.prs[6].head)
     h = _driven(world, monkeypatch, stale_days=0)
     h.d.reviews = lambda n, head: world.store.labels(label_target(n, head), key=vocab.REVIEWED)
     h.d.ready_by = lambda n, head: None
