@@ -17,6 +17,14 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_chain.py",
+    "tests/test_e2e.py",
+    "tests/test_e2e_compact_finish.py",
+    "tests/test_e2e_compact_token.py",
+    "tests/test_e2e_tie_report.py",
+]
 # e2e.py runs certifier-serve's rehearsals and N2's verdicts through n2_zk, and the chain the negatives
 # (`negatives.py`), which it imports from there; the chain's derived bits are `encodings/derived.py`'s (the encodings
 # suite's module, loaded by path); the claim's zero-knowledge gaps are checked against the certifier README's. The
