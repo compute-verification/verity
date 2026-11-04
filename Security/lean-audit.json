@@ -836,54 +836,55 @@
   },
   "Claims.ZKMal.RefSession.Causal": {
    "owner": "@proofs",
-   "digest": "f497436fe44d325c5dc530409ce8841ccc04f9546394b4835ea85d68aea57179"
+   "digest": "758c83ea86737855a5afcc1bfd531eb053285d3cc33bede02fa5023dcf619455"
   },
   "Claims.ZKMal.RefSession.Complete": {
    "owner": "@proofs",
-   "digest": "05337bd1efdeea44823119e2d77d1ccc273a7b8f712c40dab0d5f6a6fafe6b31"
+   "digest": "dac2cfcd24cc8cf7a32a812651740fd84c325cdf397e56eea38b5f43d62c298d"
   },
   "Claims.ZKMal.RefSession.DummyReg": {
    "owner": "@proofs",
-   "digest": "72cb83444fa4cafe7d34f51c67615a0592df127d0b20aa51e1432d58789b67d8"
+   "digest": "04c1ce9db8f787c16362b856c49d87cf4e2480f2aeb92fa87a2c2ff743061f1b"
   },
   "Claims.ZKMal.RefSession.SwCausal": {
    "owner": "@proofs",
-   "digest": "095faa48048f8e303e85dfcccf63c43247b17c83092ea358d0b99fc0ec926408"
+   "digest": "6b3d5fe008703ed714ae8f3167d6d050d5346c4416fa19b27385b893fa7f213f"
   },
   "Claims.ZKMal.RefSession.Tables": {
    "owner": "@proofs",
-   "digest": "e2e66aa22c60069fa7286f67f62a9b43d0408ec35965061cc3c0e6d0bba273af"
+   "digest": "3a6eabf9efe4dd2ff7e4a70d2ef386795199b758050d8a49582ba6265dc9fed1"
   },
   "Claims.ZKMal.RefSession.TapeOK": {
    "owner": "@proofs",
-   "digest": "ebeca6f88b735d621b835e86f590be57a0a4de888451bd55aab14793fe2760a0"
+   "digest": "c37691efde0491469d6667237a4646754ebce59c2560b100da335098c47a637c"
   },
   "Claims.ZKServer.LeanRelease.FillRoundEq": {
    "owner": "@proofs",
-   "digest": "b4776bd734da272f479ee1501075ba564c212002c9756324ad3ddc5daf093371"
+   "digest": "2d8d673be3cb22dbdd68004eb84d75121609e760e7c351169963677499482316"
   },
   "Claims.ZKServer.LeanRelease.FinishIs": {
    "owner": "@proofs",
-   "digest": "3f6eaba1c12e997be80d58cd189486d67ce33ab9460899411eedeb3e95022e97"
+   "digest": "29921d45b5b19246a44fde440c3f63d8030e943e7e4365fcb54301a5e81592eb"
   },
   "Claims.ZKServer.LeanRelease.LinkRoundEq": {
    "owner": "@proofs",
-   "digest": "d1a937094df7fbaabc2f7bc3b890f0aece0f311e393657f0d69dfd3121da6582"
+   "digest": "c3ff6afa2811e42f5e75b582e0cbde74a6bbe069d07d78ab112304cbb96bed3d"
   },
   "Claims.ZKServer.LeanRelease.LiveRoundEq": {
    "owner": "@proofs",
-   "digest": "2308dfdeea98ca4f8299677a7f029818496838c9d848563ff91f92ed165ffeed"
+   "digest": "4f55243982de1d6b848edc44cfbfeaaa514680ad34659da4cec25e873acceb3b"
   },
   "Claims.ZKServer.Loop.ReachesInner": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "digest": "c85954d73d66971ffcfdef16a3eb0c9904191418d4939daeb0bf10faff31a793"
   },
   "Claims.ZKServer.Loop.Serves": {
    "owner": "@proofs",
-   "digest": "95dc5c011d60324c9a2168b846a7f36977a1a1e7138bda71c1761e0403ff584f"
+   "digest": "25682590dff6eac6cef3081548175bdf6becff14b8a6a7167e4d8e98b93e7c2f"
   },
   "Claims.ZKServer.Loop.Src": {
    "owner": "@proofs",
-   "digest": "ad8bfedd51649a803c4c9a1837747a7ee1e1f27e13cb6d7f2eab4f12b63891d4"
+   "digest": "1d5e4b1d63a9509aabc392614d2a4117d8d0df226d09a8ce96ec9f6a08ffb8f7"
   },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
@@ -919,7 +920,7 @@
   },
   "Flock.Guarantees.LoopInnerRound0": {
    "owner": "@proofs",
-   "digest": "ca39d72d85146bf64e4da4850517ebc3d4666e3126735dd34dede10885ccf35a"
+   "digest": "f64e8082f75703d9a88c97efaf1cd075063cfe5c8110a85748cded71495bc6d2"
   },
   "Flock.Guarantees.OuterSessionsZK": {
    "owner": "@proofs",
@@ -943,35 +944,35 @@
   },
   "Flock.Guarantees.TablesAdmitUnrefused": {
    "owner": "@proofs",
-   "digest": "7c80f051f9553ab9c19430eb2b37ce44837125834d3be767a3da18c31f1a02ed"
+   "digest": "4ce825acaa133c5912a8a3e5049a8ec50e8a9ee0ad61586cde55c93c12d57289"
   },
   "Flock.SoundAtBridge.AcceptedLive": {
    "owner": "@proofs",
-   "digest": "e92eb70ac54ab3296dfab0f8ab49323eed79ec51e2f1b43c0bc5872f8f6f6839"
+   "digest": "e81385a794e456e30ea6d7612bf1e7180dd074dcce01dd740b2c0a2082958215"
   },
   "Flock.SoundAtBridge.OpenedPlurAt": {
    "owner": "@proofs",
-   "digest": "3485bec1fe25722d60a9bc00665c9dd5014bab0a292fe80634e1bc3bd5777781"
+   "digest": "057adf13947a625f5f2f7d53b84890d1ba7c3940e2020d2d5c988e4be365c26a"
   },
   "Flock.SoundAtBridge.RelOfRows": {
    "owner": "@proofs",
-   "digest": "a9f55f19ea495e2a243dbbf4cb578ce1e9180496b13e5bf1ce72eb505fa925b7"
+   "digest": "40f0fb6add8a73fb03ce6143ff58bd6742299a892a7c193e15d260c2f5afc127"
   },
   "Flock.SoundAtBridge.RowsSession.CR": {
    "owner": "@proofs",
-   "digest": "06d40293816304639ca4baa0a91497600abed13a5972694862f1de4e9a9e6b5b"
+   "digest": "48c70f311f87d965ee74ab3c51ec479077bb41073c920013737e0f2582ff7a6a"
   },
   "Flock.SoundAtBridge.RowsSession.RowsAt": {
    "owner": "@proofs",
-   "digest": "8940182b81df18bce5653a0dbef52f0b08740d94dca7339873780d8eb36c300f"
+   "digest": "d355da95d492d8c6ee86228c00bc13be93b81da3f67366e82e31abbd7d472f71"
   },
   "Flock.SoundAtBridge.RowsSession.ServedRegistered": {
    "owner": "@proofs",
-   "digest": "b2e51610946670ce39b94d2f12f1e25aad7c79ba04d46f01941baacbc9f0be22"
+   "digest": "54b1269711336699e204f98f01612178f498d3954b55cfa976cf3c647760bfb1"
   },
   "Flock.SoundAtBridge.WindowLaw": {
    "owner": "@proofs",
-   "digest": "4d36ebd51fbcf73b8db0609a4c37cb67fbb21708d4d35de0dbb03bb3b31c9def"
+   "digest": "0c7bd84fd8fb41ce532b09f79a46d96763ba1945927a580d09d5137da1cfbead"
   },
   "FlockDeploy.PlainIn": {
    "owner": "@proofs",
@@ -2676,6 +2677,7 @@
   "Accounting.SecurityProofs.RemoteWindowRunConservationRelay": "8d29d2e533802015098f254806edb1e99d0a93e33acf916a76ca12484b570e3e",
   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies": "4acf1c33f2211813d280f64d9ce420527790e62cdc0bd2120a685384914d8df5",
   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap": "ce07bb9268f9ba61b228b15986624be7a933fefcbad6c041e24f3c41e0e22c5c",
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": "25bb13b79dd739375049d34f8168300966c182117594c7a5a67767779cd0ea9c",
   "Accounting.SecurityProofs.TS.AdditiveFixed": "07df6f85c37128f9bb90686a6cd381d38849912acd984c59a901f78fe55828ca",
   "Accounting.SecurityProofs.TS.BindingOfFork": "35df2fcc55dd37402511f188176a776059b9c8e8cabacb798f5dceb4b3c5d8ff",
   "Accounting.SecurityProofs.TS.CheckedSessionSound": "59ccc77bbee7f21805538ad51557c48a566d9c08401de5ff9bc988fff15c13ad",
@@ -2719,9 +2721,14 @@
   "Flock.SecurityProofs.EndToEndRegisteredDrawn": "5af258b4edf35bdc24ef90dd56ead302a83b3ae798a0b367538a5134c6f31c23",
   "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": "88c47eba72b89cb5a868f2d7e619aa0dcbf84dd413625703e5d758884812fb48",
   "Flock.SecurityProofs.EndToEndRegisteredFlat": "74ac90d3b329af83ebb584e436936ef773a7538c4ccd6a3f49a9a9067b0f81b4",
+  "Flock.SecurityProofs.EndToEndRegisteredRows": "2663b1a7e4d37b7b0c345dbf40b33344f4e86c82f17c36de855847c1e11059d9",
+  "Flock.SecurityProofs.EndToEndRegisteredRowsFlat": "9379a1081b06f17ac700b677afa3a3917e440e7d57dee670a1cab1b230c069ce",
   "Flock.SecurityProofs.EndToEnd_refSetup": "8c16cab1cb3a82846dac85a5de468d2758e66e0a407507d41a0c262fa17efc20",
+  "Flock.SecurityProofs.IntegrityBlock": "bc19323ffca15deed7d9c8fa88a5522bedeedf1483773412e274d835920cec34",
+  "Flock.SecurityProofs.IntegrityBlockCarried": "9bfec7bb00d7b2f13e68fcb0efa8c72cbcbeb570f6b2395e2749070aa96cf2a1",
   "Flock.SecurityProofs.IntegrityBlocks": "fb2e861a74fe610166c44a14c65d9cfc6742b80e602e1c1b66a7ce70439f9824",
   "Flock.SecurityProofs.IntegrityHorizon": "1d67559b6d5a8972bf15dd6e9487a9631c08027cfe36527058dd22d76a8c3a0f",
+  "Flock.SecurityProofs.IntegrityHorizonBlocks": "5f90cfba614bcea60cda979d8dc6fdbc1cec675bdecbeafb68caca66bd8ebe5d",
   "Flock.SecurityProofs.IntegrityHorizonCarried": "89fbbeb7e268642019ee085f30b6bfc54063bc0970ba372d4c4a1a79f7e26037",
   "Flock.SecurityProofs.IntegrityPeriod": "320a3ed8346171425b3ea7537f61689dcef36bf45963401c24dbad1a97342ccc",
   "Flock.SecurityProofs.IntegrityPeriodLog": "20a8497e59180c39414fe50e1e41293894b8d2c6b974786bb7b8d58803dd58cc",
@@ -2744,6 +2751,10 @@
   "Flock.SecurityProofs.SampledKSLiveV3": "363e8e7a18f9b0417428098088fd441f7724d15f39eee5ae5f424e4559e7f84b",
   "Flock.SecurityProofs.SampledKSLiveV5": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
   "Flock.SecurityProofs.SamplingClaimsStated": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b",
+  "Flock.SecurityProofs.ServedRowsLinked": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6",
+  "Flock.SecurityProofs.SessionLoopZK": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862",
+  "Flock.SecurityProofs.SessionLoopZKDeployed": "19b9ed293bdf1729089ef8b18463bb7f832ece9b92432e1e88d38c7c4a4b9659",
+  "Flock.SecurityProofs.SoundAtBridge": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc",
   "Flock.SoundAtBridge.soundAtBridge_nonvacuous": "27f84097c41752634b3c9c05e20a4cb02b0ea09db82bc2a57a574b18975fc05d",
   "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK": "08d62e347db1b8265035f49a5c1ab74e0dd45cc0c92f9dd8c298a9963b56851b",
   "FlockSoundness.Discharge.Composed.y0_binder_16_2_1": "043e166d7fb44dd286f1296670a0a470f1f98772e22f5f5023f0a525e1a1f699",
@@ -2921,20 +2932,10 @@
   "Verity.SecurityProofs.ExpandAndSize": "03966908eadf7f2df4b6715764c0a881097cb6d8a2ea801f44df28194c7d2e60",
   "Verity.SecurityProofs.ExpandSize": "ba20fed6329ddf69ec6358b50a84b4245f08fbbd3cd9543a994231dcfd64ab9f",
   "Verity.SecurityProofs.InferenceCap": "0035c5e37498f2d808d066ae0a6d0bd50791b4ad147383f0feba37bf8362c9fc",
+  "Verity.SecurityProofs.PrivateFitsOfLocal": "64f42467cd87ee1d655ab157a39ee9412d15a923c2cbbd93d790f98f69f9029b",
   "Verity.SecurityProofs.PrivateOutBitsLe": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
   "Verity.SecurityProofs.RefineWrong": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6",
-  "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
-  "Flock.SecurityProofs.IntegrityBlockCarried": "9bfec7bb00d7b2f13e68fcb0efa8c72cbcbeb570f6b2395e2749070aa96cf2a1",
-  "Flock.SecurityProofs.IntegrityBlock": "bc19323ffca15deed7d9c8fa88a5522bedeedf1483773412e274d835920cec34",
-  "Flock.SecurityProofs.IntegrityHorizonBlocks": "5f90cfba614bcea60cda979d8dc6fdbc1cec675bdecbeafb68caca66bd8ebe5d",
-  "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": "25bb13b79dd739375049d34f8168300966c182117594c7a5a67767779cd0ea9c",
-  "Flock.SecurityProofs.EndToEndRegisteredRows": "2663b1a7e4d37b7b0c345dbf40b33344f4e86c82f17c36de855847c1e11059d9",
-  "Flock.SecurityProofs.EndToEndRegisteredRowsFlat": "9379a1081b06f17ac700b677afa3a3917e440e7d57dee670a1cab1b230c069ce",
-  "Flock.SecurityProofs.ServedRowsLinked": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6",
-  "Flock.SecurityProofs.SessionLoopZK": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862",
-  "Flock.SecurityProofs.SessionLoopZKDeployed": "19b9ed293bdf1729089ef8b18463bb7f832ece9b92432e1e88d38c7c4a4b9659",
-  "Flock.SecurityProofs.SoundAtBridge": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc",
-  "Verity.SecurityProofs.PrivateFitsOfLocal": "64f42467cd87ee1d655ab157a39ee9412d15a923c2cbbd93d790f98f69f9029b"
+  "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8"
  },
  "layers": {
   "Definitions.Core": {
@@ -6727,10 +6728,105 @@
    "type_hash": "074ca4c2e7c09cd236106bc9347f26e15625cd966d0eb466ef4d0f65c93a15b8"
   },
   "Flock.SecurityProofs.LoopInnerRound0Own_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest (hfix : Claims.ZKServer.Loop.ReachesInner) :",
+    "  Exists fun src =>",
+    "    Exists fun x =>",
+    "      Exists fun w =>",
+    "        Exists fun ρ =>",
+    "          Exists fun h =>",
+    "            Exists fun s0 =>",
+    "              Exists fun spec =>",
+    "                Exists fun sts =>",
+    "                  Exists fun q =>",
+    "                    Exists fun k =>",
+    "                      Exists fun j =>",
+    "                        Exists fun tr =>",
+    "                          Exists fun hr =>",
+    "                            And",
+    "                              (Eq (FlockDeploy.setupOf Bool.true x)",
+    "                                (Option.some { fst := s0, snd := { fst := spec, snd := sts } }))",
+    "                              (And (Eq h.length (instHAdd.hAdd q 2))",
+    "                                (And",
+    "                                  (Eq (Claims.ZKMal.CoinLayer.locate (Claims.ZKServer.Loop.roundsOf spec sts) 0 q)",
+    "                                    { fst := k, snd := instHAdd.hAdd j 1 })",
+    "                                  (And",
+    "                                    (Eq (Claims.ZKServer.Loop.realOf src x w ρ k) (Except.ok { fst := tr, snd := hr }))",
+    "                                    (And",
+    "                                      (Eq",
+    "                                        (Except.map Array.size",
+    "                                          (Claims.ZKServer.Loop.schedSoFar tr (instHMod.hMod k 2)",
+    "                                            (spec.domain",
+    "                                                (Array.instGetElem?NatLtSize.getElem! spec.tables (instHDiv.hDiv k 2))",
+    "                                                (instHMod.hMod k 2)).toUTF8",
+    "                                            (Flock.Firewall.Drive.extras",
+    "                                              (Array.instGetElem?NatLtSize.getElem! sts (instHDiv.hDiv k 2))",
+    "                                              (Flock.Firewall.Drive.linkPoints",
+    "                                                (Array.instGetElem?NatLtSize.getElem! sts (instHDiv.hDiv k 2))",
+    "                                                (Claims.ZKServer.Loop.wordsAt x",
+    "                                                  (List.map (fun p => Claims.ZKMal.CoinLayer.rd p.snd) h.tail) 0)))",
+    "                                            hr",
+    "                                            (Array.map",
+    "                                              (fun i =>",
+    "                                                Claims.ZKServer.Loop.wordsAt x",
+    "                                                  (List.map (fun p => Claims.ZKMal.CoinLayer.rd p.snd) h.tail)",
+    "                                                  (instHAdd.hAdd (instHAdd.hAdd (instHSub.hSub q (instHAdd.hAdd j 1)) i)",
+    "                                                    1))",
+    "                                              (Array.range (instHAdd.hAdd j 1)))))",
+    "                                        (Except.ok (instHAdd.hAdd j 1)))",
+    "                                      (∀",
+    "                                        (L₀ :",
+    "                                          Claims.ZKServer.LeanRelease Claims.Flock.Wit",
+    "                                            (Prod",
+    "                                              (Claims.ZKMal.CoinLayer.session Claims.ZKServer.Loop.loopNr",
+    "                                                    Claims.ZKMal.Masked.dataE).refP.Nonce",
+    "                                              (Claims.ZKMal.CoinLayer.session Claims.ZKServer.Loop.loopNr",
+    "                                                    Claims.ZKMal.Masked.dataE).refP.Rand))",
+    "                                        (fin :",
+    "                                          Claims.Msg →",
+    "                                            Claims.Flock.Wit →",
+    "                                              Prod",
+    "                                                  (Claims.ZKMal.CoinLayer.session Claims.ZKServer.Loop.loopNr",
+    "                                                        Claims.ZKMal.Masked.dataE).refP.Nonce",
+    "                                                  (Claims.ZKMal.CoinLayer.session Claims.ZKServer.Loop.loopNr",
+    "                                                        Claims.ZKMal.Masked.dataE).refP.Rand →",
+    "                                                List (Prod Claims.Msg Claims.Msg) → Array ByteArray)",
+    "                                        (vals : String → Option ByteArray),",
+    "                                        Eq",
+    "                                          ((Claims.ZKServer.LeanRelease.withInner Claims.ZKMal.Masked.dataE L₀",
+    "                                                (Claims.ZKServer.Loop.realOf src) fin).scheduled",
+    "                                            x w ρ h vals)",
+    "                                          (instHAppendOfAppend.hAppend",
+    "                                                (instHAppendOfAppend.hAppend",
+    "                                                  (instHAppendOfAppend.hAppend",
+    "                                                    (Flock.Firewall.Frame.labelFrame Flock.Zk.LABEL_INNER.toUTF8)",
+    "                                                    (Flock.Transcript.header 3 1 1))",
+    "                                                  (Flock.Firewall.Frame.wordBytes",
+    "                                                    (Flock.Firewall.Frame.words ((fin x w ρ h).getD 0 ByteArray.empty)",
+    "                                                      (instHAdd.hAdd",
+    "                                                        (Flock.Firewall.Frame.labelFrame",
+    "                                                            Flock.Zk.LABEL_INNER.toUTF8).size",
+    "                                                        16)",
+    "                                                      1)))",
+    "                                                (Flock.Transcript.header 4 1 1)).data.toList)))))"
+   ],
+   "assumptions": ["Claims.ZKServer.Loop.ReachesInner"],
+   "type_hash": "7a48fb4fdca14f29b9fc657afde3abf5920759ec5edf760f050cdc644ea3d0ef"
   },
   "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial (hfix : Claims.ZKServer.Loop.ReachesInner) :",
+    "  Exists fun src =>",
+    "    Exists fun x =>",
+    "      Exists fun w =>",
+    "        Not",
+    "          (Flock.Guarantees.LoopInnerRound0 Claims.ZKMal.Masked.dataE Claims.ZKServer.LeanRelease.silent",
+    "            (Claims.ZKServer.Loop.realOf src) x w)"
+   ],
+   "assumptions": ["Claims.ZKServer.Loop.ReachesInner"],
+   "type_hash": "8cf0ae944172f33b17bee5f4bdd0ab05d76590f21b5513a469f87be6e089b5d3"
   },
   "Flock.SecurityProofs.MaskedKS": {
    "owner": "@proofs",
@@ -13860,27 +13956,23 @@
    "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced": {
     "∀ (u : Nat), instLTNat.lt u U.layout.N → Eq (P.Wref U.layout u) (instHMul.hMul κ (w u).cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Nonempty (Accounting.PearlCCoins Q R S U w t)": "Nonempty taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.Op.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced": {
     "∀ (prog : CM.Prog) (H : Q → R) (U : Pouw.PearlC.Workload) (act : Nat → Pouw.PearlC.Codes) (σ : Pouw.PearlC.State) (s : S), Real.instLE.le 0 (CM.cost prog H U act σ s)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (u : Nat), instLTNat.lt u U.layout.N → Eq (P.Wref U.layout u) (instHMul.hMul κ (w u).cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Nonempty (Accounting.PearlCCoins Q R S U w t)": "Nonempty taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.Op.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.ComputeOfPouw": {
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (U.layout.shape u).Wmm.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Nonempty (Accounting.PouwCoins P U t)": "Nonempty taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.Op.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.ComputeOfPouwPerRun": {
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (U.layout.shape u).Wmm.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Nonempty (Accounting.PouwCoins P U t)": "Nonempty taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.Op.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.DeclaredCircuitRequirement": {
     "instLENat.le E (instHMul.hMul (instHMul.hMul 3 Accounting.Gates.p1024.squarings) es)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -13968,22 +14060,16 @@
    "Accounting.SecurityProofs.Gates.SquaringUnits": {
     "instLENat.le (instHPow.hPow (instHMul.hMul 249 (instHPow.hPow 256 s)) 2) p": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le (instHAdd.hAdd s 2) n": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → And (Accounting.Gates.InWindow C (x t)) (∀ (l : Nat), instLTNat.lt l n → Eq (Accounting.Gates.val C (x t) (out l)) (Accounting.Gates.byte (instHMod.hMod (instHPow.hPow (Accounting.Gates.nibbles s t) 2) p) l).cast)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (g : Accounting.Gates.IntGate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.IntOp.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.coin i))) → Eq (x t i) (Accounting.Gates.byte (Accounting.Gates.nibbles s t) (slot i)).cast": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (t' : Fin s → Fin 16), SetLike.instMembership.mem G t' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.registered i))) → Eq (x t i) (x t' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Accounting.Gates.Gate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.Op.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.coin i))) → Eq (x t i) (Accounting.Gates.byte (Accounting.Gates.nibbles s t) (slot i)).cast": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (t' : Fin s → Fin 16), SetLike.instMembership.mem G t' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x t i) (x t' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.coin i))) → Eq (x t i) (Accounting.Gates.byte (Accounting.Gates.nibbles s t) (slot i)).cast": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → And (Accounting.Gates.InWindow C (x t)) (∀ (l : Nat), instLTNat.lt l n → Eq (Accounting.Gates.val C (x t) (out l)) (Accounting.Gates.byte (instHMod.hMod (instHPow.hPow (Accounting.Gates.nibbles s t) 2) p) l).cast)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Gates.UnitsFooling": {
-    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → Ne s s' → Exists fun o => And (List.instMembership.mem out o) (Not ((instHPow.hPow 2 j).ModEq (Accounting.Gates.val C (x s) o) (Accounting.Gates.val C (x s') o)))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (g : Accounting.Gates.IntGate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.IntOp.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.coin i))) → (instHPow.hPow 2 j).ModEq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.registered i))) → Eq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Accounting.Gates.Gate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.Op.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.coin i))) → (instHPow.hPow 2 j).ModEq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.coin i))) → (instHPow.hPow 2 j).ModEq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → Ne s s' → Exists fun o => And (List.instMembership.mem out o) (Not ((instHPow.hPow 2 j).ModEq (Accounting.Gates.val C (x s) o) (Accounting.Gates.val C (x s') o)))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.HMu.PersistentOneWord": {
     "∀ (n : Nat) (x : W), Function.Injective fun s => step n s x": "an injectivity, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -13998,8 +14084,7 @@
     "∀ (y : ι → ZMod p), Real.instLE.le (ν y) κR": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.JointHorizonBlocksLive": {
-    "∀ (b : Fin B) (s : G.Strategy), ENNReal.instLE.le (Verity.Game.prob (fun o => And ((S.block b).accepts Accounting.Audit.pous o) (Not (S.MemoryTerm (σ b) s b o))) G s) (δPous b s)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (b : Fin B) (s : G.Strategy), ENNReal.instLE.le (Verity.Game.prob (fun o => And ((S.wipe b).accepts o) (Not ((S.wipe b).Survives fw o))) G s) (εWipe b s)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (b : Fin B) (s : G.Strategy), ENNReal.instLE.le (Verity.Game.prob (fun o => And ((S.block b).accepts Accounting.Audit.pous o) (Not (S.MemoryTerm (σ b) s b o))) G s) (δPous b s)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.JointPeriodLiveECR": {
     "∀ (a : Accounting.Audit), Monotone (loss a)": "Monotone taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -14101,21 +14186,16 @@
    },
    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn": {
     "instLTNat.lt m (instHPow.hPow 2 448)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Accounting.Remote.Draw.Coins n κ X), T.accepts ω → Real.instLE.le (D.pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Accounting.Remote.Draw.Coins n κ X), T.accepts ω → Real.instLE.le ((F.play com).pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Accounting.Remote.Draw.DrawCoins n κ X), T.accepts ω → Real.instLE.le ((F.play com).pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Accounting.Remote.Draw.DrawCoins n κ X), T.accepts ω → Real.instLE.le (D.pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (ω : Accounting.Remote.Draw.Coins n κ X), T.accepts ω → Real.instLE.le (D.pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.PooledDraw": {
     "instLTNat.lt m (instHPow.hPow 2 448)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": {
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.DrawCoins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": {
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.DrawCoins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
     "instLENat.le T.passes P": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -14525,8 +14605,7 @@
     "instLENat.le n (instHMul.hMul K₀ kd)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le W (instHPow.hPow 2 40)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le t' (instHPow.hPow 2 80)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le v (instHPow.hPow 2 80)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le p (instHDiv.hDiv 1 (instHPow.hPow 2 200))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le v (instHPow.hPow 2 80)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.EndToEnd": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -14630,11 +14709,17 @@
    "Flock.SecurityProofs.IntegrityBlock": {
     "∀ (t : Nat), SetLike.instMembership.mem (S.sessions b) t → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Flock.SecurityProofs.IntegrityBlockCarried": {
+    "∀ (t : Nat), SetLike.instMembership.mem (S.sessions b) t → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "Flock.SecurityProofs.IntegrityBlocks": {
     "∀ (t : Nat), instLTNat.lt t S.T → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.IntegrityHorizon": {
     "∀ (t : Nat), instLTNat.lt t T → Real.instLE.le q (instHDiv.hDiv (W t).kd.cast (W t).n.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Flock.SecurityProofs.IntegrityHorizonBlocks": {
+    "∀ (t : Nat), instLTNat.lt t S.T → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a per-step bound that is no plain range, on `main` before the inline rule reached this branch, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.IntegrityHorizonCarried": {
     "∀ (t : Nat), instLTNat.lt t S.T → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -15551,12 +15636,10 @@
     "∀ (i : Fin m), Real.instLE.le (instHMul.hMul q (n i).cast) (k i).cast": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakAccepted": {
-    "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Claims.Sampling.Stmt) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakRegistered": {
-    "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Claims.Sampling.Stmt) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pous.SecurityProofs.BackgroundRebuildExcluded": {
     "List.instMembership.mem (List.cons { fst := 0, snd := 111 } (List.cons { fst := 1, snd := 160 } (List.cons { fst := 2, snd := 203 } (List.cons { fst := 3, snd := 243 } List.nil)))) tk": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15748,8 +15831,7 @@
     "Finset.instPartialOrder.le U (Finset.range N)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.FleetSound": {
-    "∀ (u : Fin N) (ω : Ω), Real.instLE.le (κ u (A u ω)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (u : Fin N) (y : (Subtype fun v => Ne v u) → Fin k → Prod P.Draw P.Chk), Real.instLE.le (κ u (A u y)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (u : Fin N) (ω : Ω), Real.instLE.le (κ u (A u ω)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.FreedOfFloor": {
     "∀ (j : Pd.J) (r : G.Res), Real.instLE.le 0 (Pd.needs j r)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15771,10 +15853,7 @@
     "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm w) (Hsha w)) (Ho w)) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Exists fun r => And (Real.instLT.lt 0 (G.callUse r)) (Real.instLE.le (Pd.cap r) (instHMul.hMul Q (G.callUse r)))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin k), Set.instMembership.mem Reg (reg w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (a : P.Inst), Set.instMembership.mem Reg a → And (Real.instLT.lt 0 (Hmm a)) (And (Real.instLT.lt 0 (Hsha a)) (And (Real.instLE.le 0 (Ho a)) (And (Real.instLE.le (pubmm a) (Hmm a)) (Real.instLE.le (pubsha a) (Hsha a)))))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm (reg w)) (Hsha (reg w))) (Ho (reg w))) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.WorkSoundNoFold": {
     "∀ (w : Fin k), Real.instLE.le (pubmm w) (Hmm w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15783,10 +15862,7 @@
     "Exists fun r => And (Real.instLT.lt 0 (G.callUse r)) (Real.instLE.le (Pd.cap r) (instHMul.hMul Q (G.callUse r)))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (o : nf.Orc) (r : nf.Root) (c : Prod (Fin nf.n) (Prod (Fin nf.n') (Fin nf.nb))) (v : Pouw.Dither.Word) (p : nf.Path), nf.opens o r c v p → And (Pouw.MerkleExtract.Opens (EquivLike.toFunLike.coe eo o) E (rD r) (pl p) v) (Eq (List.map Prod.fst (pl p)) (dirs c))": "nf.opens taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin k), Set.instMembership.mem Reg (reg w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (a : (Pouw.Dither.noFoldRound nf).Inst), Set.instMembership.mem Reg a → And (Real.instLT.lt 0 (Hmm a)) (And (Real.instLT.lt 0 (Hsha a)) (And (Real.instLE.le 0 (Ho a)) (And (Real.instLE.le (pubmm a) (Hmm a)) (Real.instLE.le (pubsha a) (Hsha a)))))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm (reg w)) (Hsha (reg w))) (Ho (reg w))) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.EndToEnd": {
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (U.layout.shape u).Wmm.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -16073,30 +16149,6 @@
    "Verity.SecurityProofs.SoundMono": {
     "∀ (a : α), accept' a → accept a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : α), accept' a → E a → F a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Flock.SecurityProofs.IntegrityBlockCarried": {
-    "∀ (t : Nat), SetLike.instMembership.mem (S.sessions b) t → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Flock.SecurityProofs.IntegrityHorizonBlocks": {
-    "∀ (t : Nat), instLTNat.lt t S.T → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a per-step bound that is no plain range, on `main` before the inline rule reached this branch, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": {
-    "∀ (u : Fin B), SetLike.instMembership.mem S u → And (instLENat.le (P.gates u).card (cS u)) (instLENat.le (d.unregistered (P.gates u)).card (kS u))": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
-    "∀ (v : Fin d.D.N), SetLike.instMembership.mem J.V v → Real.instLE.le (J.ω v) ωmax": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest": {
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial": {
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest": {
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.J.V v": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial": {
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
-    "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.J.V v": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
    }
   }
  },
@@ -21147,6 +21199,9 @@
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.ClaimsStated",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursionClaimsStated",
@@ -22201,6 +22256,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -22873,6 +22930,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -23260,6 +23319,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -23517,6 +23579,9 @@
     "Claims.ZKmalRx_fails",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.ClaimsStated",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursionClaimsStated",
@@ -24149,6 +24214,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -24239,6 +24306,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -24365,6 +24434,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -24500,6 +24571,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -24631,6 +24704,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -25003,6 +25078,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -25914,6 +25991,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -25993,6 +26073,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -26292,6 +26374,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -26356,6 +26441,9 @@
    },
    "guarantees": [
     "Claims.Witness.Flock.ZK_meets",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -26383,6 +26471,9 @@
    },
    "guarantees": [
     "Claims.Witness.Flock.ZK_meets",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -26509,6 +26600,9 @@
    },
    "guarantees": [
     "Claims.Witness.Flock.ZK_meets",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -35983,6 +36077,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -36126,6 +36223,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -36341,6 +36441,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -36519,6 +36622,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -36655,6 +36761,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -36803,6 +36912,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -36925,6 +37037,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -37121,6 +37236,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -37284,6 +37402,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -37528,6 +37649,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -37667,6 +37791,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -37798,6 +37925,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -37974,6 +38104,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -38185,6 +38318,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -38198,7 +38334,7 @@
    ]
   },
   "Flock.Firewall.Coins": {
-   "digest": "48a4f5bf2481630158f1ece7912c3e67b540ea6592365ed425a4f0894d0aa8be",
+   "digest": "3c4c7d3c4d0bc75b5217321df302053221fd48e018163f0c993c8d2dac52882a",
    "definitions": {
     "Flock.Firewall.Coins.Hello": "959edda215ac07240311604c87351166341c1b8eaeeba377d1131dc51c809537",
     "Flock.Firewall.Coins.Hello.links": "72ada73a99f0699b077126af90142e22e7622d882a9d3a5efe8ae18317f1445d",
@@ -38210,16 +38346,16 @@
     "Flock.Firewall.Coins.Parts.sibs": "eba591a426bd2541fa69c110c96951d22be48aa931448baca1dae7ca9d9b0afe",
     "Flock.Firewall.Coins.Parts.tn": "ec754ff34bba30b17dff1d3c631024418f532dbd4712bce7f19da7fa169c9308",
     "Flock.Firewall.Coins.Parts.y": "e5691aa683bee332504be6d37d3fc84d0c7be2ac62111cdd6e90a6fc623f742c",
+    "Flock.Firewall.Coins.Release": "402b2155ab0a47f719d31dcbea0552cb1aff8f3c868c0753336c5dfb0970e0b9",
+    "Flock.Firewall.Coins.Release.hello": "5f1932acd910619641743d40144456a98bf88ec74ff11209b145a0653b5e2ad6",
+    "Flock.Firewall.Coins.Release.key": "6b6fe6aa63775c3b995610748b4444d62e64af6a6f03324032087788e69c43ad",
+    "Flock.Firewall.Coins.Release.open": "481b8f67f9887c7d16c43c545d06efde1634ce4acedb15bc59a0241e747d7d00",
+    "Flock.Firewall.Coins.Release.openAll": "2ecabb72d1b949f3c44d28fd613770dbb96096dc65d176c325fb65d8df6049b1",
+    "Flock.Firewall.Coins.Release.opened": "9c896f4c4d879c7ed93c3b04c85451b189fc878a9f91e0b09fcf4fe66b8a933e",
+    "Flock.Firewall.Coins.Release.root": "31deca9a949eb7f0216ecd55e227d9061e51b36acf6a28bd75defdf3c89790d1",
+    "Flock.Firewall.Coins.Release.start": "b1ea0adb0f851e930ff42ef1cb9f9382c46b44fb7087a8560627f243a99df476",
     "Flock.Firewall.Coins.SESSION": "40a602b54986b73a9c29731080e30b6dc213e21176742bcdf66e2bba05bd96d9",
     "Flock.Firewall.Coins.STOP": "9b2d64c1d64fb3e4cbef692b93195033becb7cc4402305adb5ba3c26114b2796",
-    "Flock.Firewall.Coins.Session": "5ae627130e2e9a44621919291940a73dc3ad3bff0e739a19af4658fd99e8bcc4",
-    "Flock.Firewall.Coins.Session.hello": "2b1095c5ffb49ac1d1b233ce73d91419a17c395c7d7dfb14191122134d60d984",
-    "Flock.Firewall.Coins.Session.key": "d30bdf6e5f2e8165d62aaa50ca9fdec1d1ab93ccd5ffc7b8b5a2484b458d4cfe",
-    "Flock.Firewall.Coins.Session.open": "ee1659fe29179b80d355d42f15a64f2373199252a78c6507f12cdc92d3dd45d8",
-    "Flock.Firewall.Coins.Session.openAll": "fd8d5c52f333d97e4030584cfc914dfdbf12773e6568714b228fd9036dfd5049",
-    "Flock.Firewall.Coins.Session.opened": "11753e8bbf30ec3023c3f69252f8bd5d3445557ef647cfba0ed77c30bef67c33",
-    "Flock.Firewall.Coins.Session.root": "e6efbb3fc15eecffa3f3fc6e46014933d8c5231bfee596c6b163f80399752fd3",
-    "Flock.Firewall.Coins.Session.start": "6ef238444b637fa3be74ca0df3acbe2db8c9e6eeed2041b50cd3b799ae1bdd84",
     "Flock.Firewall.Coins.answer": "fdbbb65acce3c17dc9ac1b54f8895a86ce71928d32c5ec4b322810f50890bbe7",
     "Flock.Firewall.Coins.chain": "374cc3e8e4ee06532f68443914dfa50e0d26776823bb90805f950fe7eb6d7662",
     "Flock.Firewall.Coins.check": "9e80b7cdee72cad4781664d571f6f6dabe6c3033ae18934ccfd4fda7cd3105a4",
@@ -38239,13 +38375,16 @@
    },
    "guarantees": [
     "Claims.Witness.Flock.ZK_meets",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed"
    ]
   },
   "Flock.Firewall.Contract": {
-   "digest": "31e235f2e9eb0dc7c5316a960e2cf8575c1150b0f53ddfa29bae494280da5f58",
+   "digest": "079a7d024e7e2376000d8d34d2119c86919fc53b3ec933f2204fbec37d01dcff",
    "definitions": {
     "Flock.Firewall.Contract.By": "d91fb21fc66675874eb81a58c294ef88d3b1b06b3de8d8421c92c9264583a53e",
     "Flock.Firewall.Contract.By.casesOn": "2b6107e1f89c6e2113a2dec80173ed689020034ea2d503bde43c893b99319c03",
@@ -38266,10 +38405,18 @@
     "Flock.Firewall.Contract.Item.fixed": "748c4962d89dee5328e60cf3642cd23b54e2f63150e7fde0c083d9ab633ed648",
     "Flock.Firewall.Contract.Item.masked": "28c699cfb8b27c1d79c690a1aee13cfea7c00c8c651c58313c5a338f142d19d1",
     "Flock.Firewall.Contract.Item.rec": "43040e8278453fd860e040c00cb953125840bcb80547925d0e858bd2dde6ef58",
-    "Flock.Firewall.Contract.Transcript": "2c8b285a0cfa1c9acd4aa782ce3dce13dd2d90bde8b439b1454355826063e3b9",
-    "Flock.Firewall.Contract.Transcript.items": "6d68e84eddabbf6b90cbe34315342ba48b257c14c89be01a1ec19b151976a9f7"
+    "Flock.Firewall.Contract.ReleaseLog": "b429991f47c15e3284bd6e60f7ad50a225ff0f23b4e1a5efc01ddf56809bf2a8",
+    "Flock.Firewall.Contract.ReleaseLog.items": "0d9b08df2e69d564a2bf93ecdf5763f5d297eff7cc7b478f4cad7b7b814f832a",
+    "Flock.Firewall.Contract.instInhabitedReleaseLog": "071452e05623ee749abd1ac7c1ec82d16f8f9cb5da35f5a7658e956295c59d6b",
+    "Flock.Firewall.Contract.instInhabitedReleaseLog.default": "cfb513b3856ee7a841dcfe6b81033c53a2a568630c0eeff441842b78985c64e5"
    },
-   "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.SessionLoopZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Flock.Firewall.Drive": {
    "digest": "c39309d643647d25d4eac600660b363549300ceec035551cfd7e6f172c33a41e",
@@ -38302,7 +38449,13 @@
     "Flock.Firewall.Drive.start": "84b277d3f9854bc853b4436ad5c1b27c4d7d3cc3647860818ba9307c7287e6b7",
     "Flock.Firewall.Drive.stepAsks": "1ca1757afa6a6f7a4e3bc1c043ba7a4c48f3443869a9a508fde18ebdddd44165"
    },
-   "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.SessionLoopZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Flock.Firewall.Finish": {
    "digest": "14ef8adab8eef726f328ef87a6ffe74c63c1f06ba0f29c09af439fce06fa5794",
@@ -38345,7 +38498,13 @@
     "Flock.Firewall.Finish.treeOf": "8c743713ba2d422af67feff141bdd8b4137d6c48309070aaf98c5512ae09f2da",
     "Flock.Firewall.Finish.zerocheckFw": "3ad3d324e553a6efc4250c8019889933db446e77bf5020eb016da0c96fbc1f53"
    },
-   "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.SessionLoopZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Flock.Firewall.FinishProver": {
    "digest": "f49468ae31ba3c066e4dd0364a8e102ae8901eff942383096477833c3e032f7b",
@@ -38424,14 +38583,18 @@
     "Flock.Firewall.Finish.wVec": "42a486648bd43757786b7429a11944c0cda2184e039c3818f0ab674b17a80077",
     "Flock.Firewall.Finish.xhats": "9ec4a83700ce2ea979823ca6ba12a4b0d0932be982ef64567058d6956c351e40"
    },
-   "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.SessionLoopZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Flock.Firewall.Frame": {
-   "digest": "c165c490c8a47ec2316eed64299636302530c993e4c9a3f4e094bc1d291aa721",
+   "digest": "bff49034610ba246cbaf3dbe01b3654d9777a307800f808a382384d0eb0592b1",
    "definitions": {
     "Flock.Firewall.Frame.Cfg": "bf9503846407764cd457755ef636ee64e0c349d8a0c4e1796a2a729919931930",
-    "Flock.Firewall.Frame.Cfg.check._sparseCasesOn_1": "169f9327d0c1325e95298a696c92c3f22932e68b1d41beb6ceb8cadc597cac96",
-    "Flock.Firewall.Frame.Cfg.check.match_1": "96d78e4b5e9f9364ea457650e79c4046c3e77fe41f905981b996e4d016f54bc1",
     "Flock.Firewall.Frame.Cfg.h": "37b00e39b0369196fef37e649c7bc44a58dd4010204b20b00713eec6c895d8b8",
     "Flock.Firewall.Frame.Cfg.lay": "dc89d182d4320fd29dd06a68be42a4c9ed101cc5a46f0a38424038fd18c8c0af",
     "Flock.Firewall.Frame.Cfg.lig": "32c3b5a2f17f2c32e7db94bcb08c3b3020972151f82cc3979c39543977adc8d4",
@@ -38457,12 +38620,14 @@
     "Flock.Firewall.Frame.LABEL_ZC": "87797493625e3f138063ec1272d7297a384397ea51fa46f2380411c198146f17",
     "Flock.Firewall.Frame.MaskSlot": "d762bd305ae002405e073fbd614790b65853e94a2f35d7a5e6265adcef31d6a0",
     "Flock.Firewall.Frame.MaskSlot.blocks": "e3bba1021e7bda2b9980053a677af1ab6b5771c48d4026963603913f9aa2dc4e",
+    "Flock.Firewall.Frame.MaskSlot.fill._sparseCasesOn_1": "866b8a91c27307a49c95524c96d83db81c05ba73753607810652f12e4b232975",
+    "Flock.Firewall.Frame.MaskSlot.fill.match_1": "bc3e4a1d321342663a51a34d396886c900e8cac0a19298405f958644318da5a3",
     "Flock.Firewall.Frame.MaskSlot.n": "c01efe4b3af030619fe9d9c5ea2e991b1b973c5adbadefe933971a29e7830c8c",
     "Flock.Firewall.Frame.MaskSlot.w0": "0626b63451e4f7d9e6ad14b6663995dfa4aba98b73e3fc3818379d8ef57a8eb5",
     "Flock.Firewall.Frame.MaskSlot.word": "b2ab0fe47a7eb21e1f1da0bd2b98c94032a5aac32518b6c18b566cc1260f6bbf",
     "Flock.Firewall.Frame.Masker": "284f5785c53ffb92af720bbb0d9e924b1fc63feca03ecff6c8cc2e5bb2ab5fb3",
-    "Flock.Firewall.Frame.Masker.absorb": "11f1ce49ee5e10d134f78c84946f49df5350b38bf123e3df01d6df572ec77f5a",
-    "Flock.Firewall.Frame.Masker.answer": "d4d25e997389e441347a95606a56d2765ef9cea4b1657b6ad4514930c3b0b880",
+    "Flock.Firewall.Frame.Masker.absorb": "2ba9f09728f0f750015f2bd506a712948c0a3aaabd8492070a302c450d796fb5",
+    "Flock.Firewall.Frame.Masker.answer": "4960fedb92ef7ea7db2e597a06c9ef4417a00f4da92c34844849a67c4aac605c",
     "Flock.Firewall.Frame.Masker.beta": "154f1f514baa60da5616accf26e1a0d8243e8550561d96332e7ef4758a7f2a95",
     "Flock.Firewall.Frame.Masker.coins": "6f9f8e57c361be3f50362da416dd34f3252e50b36ddb36bb1c4da62b8fd377c2",
     "Flock.Firewall.Frame.Masker.done": "71482baf8b5dc76f1247912198057590bfcaeb7760437660d53807c9343a6975",
@@ -38470,7 +38635,7 @@
     "Flock.Firewall.Frame.Masker.eps": "d9ceec2ad022d80567d48397007c2c0ec290c7619d8298c5e70dd3fee5a8aae5",
     "Flock.Firewall.Frame.Masker.inner": "9978c71e152e2c03daa4013dd49d5283032e228383bbb2fa26e1fae706d6f560",
     "Flock.Firewall.Frame.Masker.l0": "7ea21fe4ef5d02734646f553cbadbeb0dbeb887bac8a762e5560c0c4b836b858",
-    "Flock.Firewall.Frame.Masker.label": "3f9eee0f1eabb9877903e88b299c49a1ca88cdc468e2ad205ed69b939c8065e3",
+    "Flock.Firewall.Frame.Masker.label": "7e01bb338ebd0177d232002501193774d2dd38907018d40bad063c4a1772f206",
     "Flock.Firewall.Frame.Masker.on": "cb9c7d2013a86f65fd927688efda00f7deb047d10bb20b6a0b329f3a68fa54a6",
     "Flock.Firewall.Frame.Masker.owed": "080b8b7d61e6cbca8cb50b88ee3a5fe018df6e859fac416a4f69afc32da87a0c",
     "Flock.Firewall.Frame.Masker.pos": "2a413f84383913c1afc4dbe4f63b30ae9adb1a08d421637e3fa3c31b030dda27",
@@ -38478,7 +38643,7 @@
     "Flock.Firewall.Frame.Masker.rank": "67d3939d5a19f1bb65bd094c012d867be8df6c874d50cbc28fa4f58797142f43",
     "Flock.Firewall.Frame.Masker.rho": "886054f70b2e0dea9a5501073201b053396aa65e989cb2d5e3c468bb8b90e10f",
     "Flock.Firewall.Frame.Masker.stopped": "eda256c2ebb79266e44cf30b9fe00510623731b54687477a12aedb3dc9f6633b",
-    "Flock.Firewall.Frame.Masker.unfinished": "6316c031b240d2252d6aea25d2a53b332c40c2061929493163272ca698000169",
+    "Flock.Firewall.Frame.Masker.unfinished": "62434682ddbdde476e2bc128833155838ef2ea096bf6d1c7d6eca0300c62e16f",
     "Flock.Firewall.Frame.N_INNER": "f59c57efc1d1231a53bae6726323c14b2911412d8b99e46928c4e2e33c87e16b",
     "Flock.Firewall.Frame.Place": "2af68bd39483009cd181efd36b415c3fa8a89014654d5615cb4f05041f9eb783",
     "Flock.Firewall.Frame.Place.casesOn": "23d0ada78524d9c1909a962b6142b370e50f9bd315358bee52949a298ce516e0",
@@ -38524,6 +38689,7 @@
     "Flock.Firewall.Frame.inFree": "6bd0d77b66b8b690fb6acb45dceaba2e5b868eb7e9c427d40ff5a47a3e1e8bcc",
     "Flock.Firewall.Frame.innerCoins": "fac05475888064765475e06b106574afcc8c88eb67cfc83c892011f03025f688",
     "Flock.Firewall.Frame.innerOwn": "b8811fe8b0045b480956bbb25cd4f9e9c4be52d349cc8b54444589382a47e7d3",
+    "Flock.Firewall.Frame.innerSched": "195bd085183cf18fe10d8be9ae56158365403c71c879c903c90504cbe75b04b9",
     "Flock.Firewall.Frame.instInhabitedDraws": "b9824b4f4069b31f47d830ab3e4f5b521056ea9255064459c214ea624ba66c68",
     "Flock.Firewall.Frame.instInhabitedDraws.default": "1c39d596dc8a29e1bc036a7a3b0eb067db25abbb224617d1690d7ad1ddc83d94",
     "Flock.Firewall.Frame.isLabel": "3ddd882ace3c35f498b1fa382c25d2e5667b2503427f1b26c0d23f7bae5be3f0",
@@ -38531,11 +38697,12 @@
     "Flock.Firewall.Frame.lowBit": "4b1871f315bc8c5cfec7733eef1e9cc2a227ea80e9f112ec0d440b94cd5fb9d3",
     "Flock.Firewall.Frame.maskRank": "7a8daeb06f5e94c6ae5b6316f9874d36e3a3003d1a0a31f7bdc349e01a9b2b82",
     "Flock.Firewall.Frame.nLig": "bad90c7533e420b459a92b3ac74d3e2498c1e96725043a5ac0322f2d41d7c5c6",
+    "Flock.Firewall.Frame.ownRound": "85934db10697c270ec5eb7ba58b9e72ee0912e0037357e568f1cf720cf12cb51",
     "Flock.Firewall.Frame.padsRoot": "0dd3ca1129a4934d6ca1bdc29f79d452b5bde009d776e51b0239b2b5f54b41a4",
     "Flock.Firewall.Frame.passes": "1db29fe3f67b52e80579fa1944a240c46087f21b53c826f7d8926b4401f6661a",
     "Flock.Firewall.Frame.rhoCoins": "76689f816757b15661fb236b3e5ec6bb275b6131fb147db4b253a0e497f2281a",
     "Flock.Firewall.Frame.round": "8d2e781631accd9e27d7897125b190418f53d3741a4fd5346a756482f8e6f462",
-    "Flock.Firewall.Frame.roundFree": "137cbe8b532e9fdea6a94876c689adf0211181dc5c8252ea29464d00bdaadc33",
+    "Flock.Firewall.Frame.roundFree": "5e9ffcb6885b5ff8501960a4d82f24df2fba6154240154b97f7e00d536ba56a0",
     "Flock.Firewall.Frame.run": "b62c0a5491176d88f8d39816ba75be870d78edf0d6bebea85150ea72a205902a",
     "Flock.Firewall.Frame.standIn": "9fbc9030c5bca10bd8eccbd7871716cd8058c6f17df20efb45900eef631492be",
     "Flock.Firewall.Frame.step": "edf2a0be29a338f47fa4b172cf7d03a917fd63e40322df46234f9934c6b1c474",
@@ -38546,7 +38713,13 @@
     "Flock.Firewall.Frame.wordBytes": "062cf064043f8b2e410ccf5ebf9e0eb5873a9765e73392ee725a166c215423b1",
     "Flock.Firewall.Frame.words": "1cd5f4508e88922990ee947f708ba4506d48d6a94beacfafa96cca9b276fa5c4"
    },
-   "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.SessionLoopZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Flock.Firewall.Frames": {
    "digest": "0a32590741d37eec429190fa8977c1ab931219a3554159f207f3ac02fb34f22a",
@@ -38555,13 +38728,19 @@
     "Flock.Firewall.Frames.domainFrame": "cdb2ac762a0a084b9788a65976a38bf05a6ac1b81dddd779a8ecb11c45fc83be",
     "Flock.Firewall.Frames.feedOf": "bd692f9a05a890c2367a15625526e7d6e94cdd7d4169c4933534e7909aeb6e10"
    },
-   "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.SessionLoopZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Flock.Firewall.Hello": {
-   "digest": "58e190d634f29afebfa2b91eee472ba19899ad7fd08d236fe5a93e8b7ae98eaa",
+   "digest": "e16b980b4479a3dc47a871b1cab4bab5b924809a491496c6139dfab1e82b4a0f",
    "definitions": {
     "Flock.Firewall.Hello.frame": "bbfcab7c11f3a5cd976c417f3480cd7713c9b855044f4d1fae6cb931f970094e",
-    "Flock.Firewall.Hello.json": "6bcab315942da882a1fb0fd067cd84b6c11681488f456f5e0112c160ac8d50ba",
+    "Flock.Firewall.Hello.json": "1b2185c8667324cbd52be7665cd1880abe4814100dfd863644a98b8990b9551a",
     "Flock.Firewall.Hello.json._sparseCasesOn_1": "4a3c4743c5a77881d1d04de676990d44d850cceb392d9f42043fdc82c60b71a5",
     "Flock.Firewall.Hello.msg": "0b0127fa3338957e9576ff6905ce5a9134bfc5997bc4c959c5ee34828823c548"
    },
@@ -38590,7 +38769,13 @@
     "Flock.Firewall.Level0.tower": "7ceea757276a2e5e0d1c7b817b9a3dfa38d4c1d96c18c0edcee6b18894226113",
     "Flock.Firewall.Level0.up": "6a184ad0d6456f04756a8bd129be89890b61b767a538f5a3719a393f5d22fb2d"
    },
-   "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.SessionLoopZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Flock.Firewall.Link": {
    "digest": "4486553c167f5387da62cd0c848f3f904fb5e97be979de074a80afd717aec0fe",
@@ -38624,12 +38809,18 @@
     "Flock.Firewall.Link.wordsAt": "9368e568bf3306245e82bc4f7368f71331552c130000e62807c400fd0f674340",
     "Flock.Firewall.Link.xhats": "a07116b8d398a6b34c0c8233cc81a188a6bcf6ceb8165709a302fb2f6d305999"
    },
-   "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.SessionLoopZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Flock.Firewall.Session": {
-   "digest": "7f7bc6843a723c88265c6413eb52ae4ab0190e498a723cb3dacfd4cdc59e755c",
+   "digest": "9aada21a81962628249107a413c033e933c3230f0577e955a02e67e02a92ee60",
    "definitions": {
-    "Flock.Firewall.Session.State": "3652cf9dd6b84b6440fa6e13d7aa495ed5911942c824b8591bc7c1773550de65",
+    "Flock.Firewall.Session.State": "fca02b31432fd5d45b7a1106b49d705e551d5c6539f7162e9174e8d16d7d084b",
     "Flock.Firewall.Session.State.domains": "3dec0b616c0e3b3989ab0c144bab8c6328f9c346bf179e3c048ce23234e0e771",
     "Flock.Firewall.Session.State.draw": "5dd3ae9cbd0fa0a44441d608e22443b079222e50fcd48aecef417cdcb636c4be",
     "Flock.Firewall.Session.State.hello": "99d1a89ebcb4fdc8417c6aef841fde908bf8b42d7d9be0791707b1ac6ddc7c1b",
@@ -38641,7 +38832,7 @@
     "Flock.Firewall.Session.State.sendHello": "cd0b9381b61420e1c207b516cbfb1379eea03daaa577e2687a4d89f8f6a337a9",
     "Flock.Firewall.Session.State.sendHello._sparseCasesOn_3": "3324233d8fb51b2ffa39e44c54e9e47d79dbf2ba4be04b1b2a0051fee8801706",
     "Flock.Firewall.Session.State.sent": "446fbc58934d2c1ddebee61ad70fd6bb2ae821f252b46e08e7750c0cca3109cc",
-    "Flock.Firewall.Session.State.session": "47ce6e37f64400c69e23d87d1d791d6f6406fa2421186f5cd0a2f279e7417521",
+    "Flock.Firewall.Session.State.session": "01f465dacf2f980102ee0ff61ac7089cf866872684d66428c298caa2ef755fcc",
     "Flock.Firewall.Session.State.sigma": "6fc38423649ae0b7a11cf74facfee462cf3e44b3cdecc2c4b4e7380edd32b173",
     "Flock.Firewall.Session.State.stop": "5eb7b87257a0c7c81e8c3dfab4a405ac7f0f7fee8cbedc2ed29b5cb6bd8ef022",
     "Flock.Firewall.Session.State.tables": "fbac1c54bdbfd8e73d055b79f321d44b4a8b363e182a8253a79fe7ec4dacda86",
@@ -38669,6 +38860,9 @@
    },
    "guarantees": [
     "Claims.Witness.Flock.ZK_meets",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed"
@@ -38685,7 +38879,13 @@
     "Flock.Firewall.Skeleton.rounds": "a5b4b2f6ec9b283e897a6a9978408e5564ddf32b2295cf73aa2c0d8214355b1f",
     "Flock.Firewall.Skeleton.rounds._sparseCasesOn_1": "093e14d18fa4f964b3ba3be37df34f98f8a0d42d3adf42002a076af6e80d1d1d"
    },
-   "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.SessionLoopZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Flock.Hash": {
    "digest": "1a845f71801aede2e7579d5e4b224496a1f9e6a0ad41954b34673d08b6aea3a9",
@@ -38803,6 +39003,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -38966,6 +39169,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -39193,6 +39399,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -39492,6 +39701,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -39627,6 +39839,8 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
     "Flock.SecurityProofs.EndToEndRegisteredFlat",
+    "Flock.SecurityProofs.EndToEndRegisteredRows",
+    "Flock.SecurityProofs.EndToEndRegisteredRowsFlat",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.IntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlockCarried",
@@ -39640,6 +39854,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -39654,7 +39871,12 @@
     "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.SampledKSLiveV5",
     "Flock.SecurityProofs.SampledKSLiveV5Honest",
+    "Flock.SecurityProofs.ServedRowsLinked",
+    "Flock.SecurityProofs.SessionLoopZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed",
+    "Flock.SecurityProofs.SoundAtBridge",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
+    "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
     "FlockSoundness.Discharge.Composed.e2e_forces_mPts",
@@ -39856,6 +40078,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -39985,6 +40210,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -40153,6 +40381,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -40276,6 +40507,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -40414,6 +40648,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -40553,6 +40790,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -40726,6 +40966,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -40870,6 +41113,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -40997,6 +41243,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -41124,6 +41373,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -41287,6 +41539,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -41444,6 +41699,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -41803,6 +42061,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -42004,6 +42265,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -42137,6 +42401,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -42243,6 +42510,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -42430,6 +42700,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -42568,6 +42841,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -42926,6 +43202,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -43024,6 +43303,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -43189,6 +43471,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -43359,6 +43644,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -43516,6 +43804,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -43768,6 +44059,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -43879,6 +44173,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -44013,6 +44310,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -44282,6 +44582,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -44406,6 +44709,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -44492,6 +44798,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -44629,6 +44938,9 @@
     "Flock.SecurityProofs.EndToEndRegisteredFlat",
     "Flock.SecurityProofs.EndToEndRegisteredRows",
     "Flock.SecurityProofs.EndToEndRegisteredRowsFlat",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -44741,6 +45053,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -44881,6 +45196,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -45065,6 +45383,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -45185,6 +45506,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -45390,6 +45714,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -45546,6 +45873,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -45719,6 +46049,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -45844,6 +46177,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -45976,6 +46312,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -46111,6 +46450,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -46259,6 +46601,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -46405,6 +46750,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -46558,6 +46906,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -46669,6 +47020,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -46818,6 +47172,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -46973,6 +47330,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -47110,6 +47470,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -47228,6 +47591,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -47263,6 +47629,8 @@
     "Claims.Witness.Recursion.ZKStop_meets",
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.SessionLoopZKDeployed",
@@ -47364,6 +47732,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -47426,6 +47797,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -47489,6 +47863,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -47545,6 +47922,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -47727,6 +48107,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -47861,6 +48244,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -48003,6 +48389,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -48645,6 +49034,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -48759,6 +49151,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -48822,6 +49216,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -48877,6 +49273,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -48935,6 +49333,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -48995,6 +49395,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -49062,6 +49465,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -49100,6 +49505,8 @@
     "Claims.Witness.Recursion.ZKStop_meets",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -49134,6 +49541,8 @@
     "Claims.Witness.Recursion.ZKStop_meets",
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.SessionLoopZKDeployed",
@@ -49207,6 +49616,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -49253,6 +49664,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -49298,6 +49711,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -49339,6 +49754,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -49383,6 +49800,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -49441,6 +49860,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -49484,6 +49906,8 @@
     "Claims.Witness.Recursion.ZKStop_meets",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -49522,6 +49946,8 @@
     "Claims.Witness.Recursion.ZKStop_meets",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -49535,7 +49961,12 @@
    "definitions": {
     "FlockComplete.layerOf": "cf382a95a0e84126170d9f36bb68f1491bbc4ec08c0b054215fd552b2934c58f"
    },
-   "guarantees": ["Flock.SecurityProofs.MaskedZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.MaskedZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Proofs.Flock.Claims.Decode": {
    "digest": "73d9ca3804c2de5f0127c571ee4f411d786c7dda9eb07ee46a1670f55449527d",
@@ -49582,6 +50013,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -49631,6 +50064,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -49754,6 +50189,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -49827,6 +50265,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -49928,6 +50368,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -49982,6 +50425,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -50043,6 +50489,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -50092,6 +50540,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -50154,6 +50604,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -50205,6 +50657,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -50258,6 +50712,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -50324,6 +50780,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -50386,6 +50844,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -50436,6 +50896,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -50521,6 +50983,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -50569,6 +51033,8 @@
     "Claims.Witness.Recursion.ZKStop_meets",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -50681,6 +51147,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -50841,6 +51310,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -50905,6 +51376,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -50954,6 +51427,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -51003,6 +51478,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -51030,6 +51507,13 @@
     "RecDeploy.setupView": "f80c0404ac0803bc94390e66f6c7a179a7442b11f640184c789c0da005c90c45"
    },
    "guarantees": ["Flock.Guarantees.recursiveKS_nontrivial"]
+  },
+  "Proofs.Flock.Claims.Recursion.Assumptions.LoopFixture": {
+   "digest": "2d9d23be847d0db501da286972b47322c6b866079568ed114067f1b448ba7fb1",
+   "definitions": {
+    "Claims.ZKServer.Loop.ReachesInner": "c85954d73d66971ffcfdef16a3eb0c9904191418d4939daeb0bf10faff31a793"
+   },
+   "guarantees": ["Flock.SecurityProofs.LoopInnerRound0Own_honest", "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial"]
   },
   "Proofs.Flock.Claims.Recursion.Assumptions.PlainLeaves": {
    "digest": "2df0ec61ed0600e3ccaa7f06a361c7ca8afaa681e8c4ba20b1fe52ecd78a3591",
@@ -52123,6 +52607,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -52174,6 +52660,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -52237,6 +52725,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -52404,6 +52894,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -52479,6 +52971,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -52517,6 +53012,8 @@
     "Claims.Witness.Recursion.ZKStop_meets",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -52548,6 +53045,8 @@
    },
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -52585,6 +53084,8 @@
    },
    "guarantees": [
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -52734,7 +53235,12 @@
    "definitions": {
     "Claims.ZKMal.FibersEq": "2cb9b9d393b657b42b76c18307d53e4328cf479715a1abac6d8faf680c9b4be5"
    },
-   "guarantees": ["Flock.SecurityProofs.MaskedZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.MaskedZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Proofs.Flock.Claims.ZK.CoinCheck": {
    "digest": "f0ec92ea9b4c629e729322f2ed1399a3d494911836f0c5993ea1ec260da07c37",
@@ -52748,6 +53254,9 @@
    },
    "guarantees": [
     "Claims.Witness.Flock.ZK_meets",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed"
@@ -52809,6 +53318,9 @@
    },
    "guarantees": [
     "Claims.Witness.Flock.ZK_meets",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed"
@@ -52871,7 +53383,12 @@
     "FlockComplete.sessionCut": "8973da7d16d71a9a462c2f3f9078cb84b739740d0f06a968a9aa54ee1de7ad3f",
     "FlockComplete.zerocheckCut": "b26bd1f0afdfcb306ea2785fde1a663f4f1c6d9971286ea183760e70b3dbbb93"
    },
-   "guarantees": ["Flock.SecurityProofs.MaskedZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.MaskedZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Proofs.Flock.Claims.ZK.Deployed": {
    "digest": "d8f410d9ff4d69a8f185b572f00ed24b6faa7c97b79b8947ec8d33b0dd5fc8ab",
@@ -52899,6 +53416,9 @@
    },
    "guarantees": [
     "Claims.Witness.Flock.ZK_meets",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed"
@@ -52930,7 +53450,12 @@
     "Claims.ZKMal.Masked.readLanes": "eff95d9d34026fa01fdca33a7d3750a6bd119be5ab1c8d039b340dd55777eb27",
     "Claims.ZKMal.Masked.saltAt": "51370b0b5429562ba8104c67474ddfeb06ae1162f490c744f99faec024505c75"
    },
-   "guarantees": ["Flock.SecurityProofs.MaskedZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.MaskedZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Proofs.Flock.Claims.ZK.ExePlan": {
    "digest": "64f17d881375ded08806c7ad6748b03fe0fbcc3f88afb49b8d884c7547bfe682",
@@ -52958,14 +53483,19 @@
     "Claims.ZKMal.Masked.viewCut": "c72ea437fce82d5422e25dcdcbb47d0128cfe157f6e905c1e3a96d579b9efb1e",
     "Claims.ZKMal.Masked.yAt": "fc23abe56296d9386d93fde61a50388a614a172578640a1c497862f35f9347b6"
    },
-   "guarantees": ["Flock.SecurityProofs.MaskedZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.MaskedZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Proofs.Flock.Claims.ZK.FinishRound": {
    "digest": "de530225189558b5c0fdac16c7f28da5104b71362b4c49226bf6b6fd39a8a2a5",
    "definitions": {
     "Claims.ZKServer.LeanRelease.FinishIs": "29921d45b5b19246a44fde440c3f63d8030e943e7e4365fcb54301a5e81592eb"
    },
-   "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": ["Flock.SecurityProofs.SessionLoopZK"]
   },
   "Proofs.Flock.Claims.ZK.FirstRefusal": {
    "digest": "3eed2867f42cb62f2a0b34d3a25ea7628f7c6c01add2978c9840637b1d540f85",
@@ -52982,6 +53512,8 @@
     "Claims.ZKMal.Masked.withPoints": "b0e28984f7e112a529d6b088a3f8b98f69f25239f7ff9914341b0639da430287"
    },
    "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed"
@@ -52995,13 +53527,13 @@
    "guarantees": ["Flock.SecurityProofs.SessionLoopZK"]
   },
   "Proofs.Flock.Claims.ZK.FrameLoop": {
-   "digest": "afed4fe505f2a9accd0ea6b05ca3ff118349d58f2023201c7c6e7d0019d3e30d",
+   "digest": "c45be20ff10a78ad00f53489ea79ad711085cd3f1a15ff4c5f9f72c31beaefa3",
    "definitions": {
     "Claims.ZKServer.LeanRelease.ofLoop": "5c8a0d00fb23f6c3093ee5603c19fa366ca53348ceda1c56b86530b4974d59ac",
     "Claims.ZKServer.LeanRelease.withFrames": "6ba7c41177d67d4b9f31bdc0522b748b0072b0e768b45d5165c59767e4236053",
     "Claims.ZKServer.Loop.freshOf": "44f2954670c3c43fac865dc03b3ddee59f14b44e4fa81e0e6d6dc660cbf3fb2b",
     "Claims.ZKServer.Loop.freshOf._sparseCasesOn_1": "0b43f14122f26ee636638f093f551af54577f10e1b3f71fca3ea3842e5549b8a",
-    "Claims.ZKServer.Loop.ownRounds": "26c5d45cd493fdcdc0ead79f75f5482c92714f0cc41ea45b00e79bf7b7c782bf",
+    "Claims.ZKServer.Loop.ownRounds": "5caf40d4e1eb558087e9bbcf91b74351dea15cb89a6742d961d561faf63fb211",
     "Claims.ZKServer.Loop.placeholder": "7ef4dd8c7ebfe5dffd7675413d11a5026bea1e5d2fead9c83c05f03a1622008c",
     "Claims.ZKServer.Loop.progOf": "831c40e37edc9029a667edd6589b49e9c6deb97163d81969b8b133c3b30a662d",
     "Claims.ZKServer.Loop.progOf._sparseCasesOn_3": "5a6788391c1fccf9cc12728064792db30160c793d23954067d680d3b4a226b5a",
@@ -53014,14 +53546,13 @@
     "Claims.ZKServer.Loop.wordsAt": "bcb361857442d297293cc60bffe08d881a63a2f6f0b20453485acc65e434c37e",
     "Claims.ZKServer.Loop.zeros": "b2bb5c6c6244ada846ddf3287f22889e1c6965b7997978612f35fc301a87b550"
    },
-   "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
-  },
-  "Proofs.Flock.Claims.ZK.FrameOwn": {
-   "digest": "40e13b836222226bc4ba6bbe6b42777be090cb4cfb7f2f3ecfdb04ee4e8cc6e9",
-   "definitions": {
-    "Claims.ZKServer.ownRound": "7b74526e4b0039b2856ea58a31df89bce37b4cea98c45bb4483471a88192eb6e"
-   },
-   "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.SessionLoopZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Proofs.Flock.Claims.ZK.FrameState": {
    "digest": "b5d1add1a0f067daf5c60bf70381caeaa48bd550233c72c56b45a9f61468b20b",
@@ -53039,9 +53570,9 @@
    "guarantees": ["Flock.SecurityProofs.SessionLoopZKDeployed"]
   },
   "Proofs.Flock.Claims.ZK.FrameZK": {
-   "digest": "fc7b73d1e701dd43fb8f3c2caa98f8b1d4fd7aa9e921f2ae3742fd6550998c3b",
+   "digest": "34d98282574cba809353074b08c7bf2ec07cb38df1c3a71149a5fe32672ccdfc",
    "definitions": {
-    "Claims.ZKServer.Loop.Serves": "5088ad04b754aa91487bec8cd5fdea81e81074208796e85376feedcaac9a24cb"
+    "Claims.ZKServer.Loop.Serves": "25682590dff6eac6cef3081548175bdf6becff14b8a6a7167e4d8e98b93e7c2f"
    },
    "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
   },
@@ -53096,6 +53627,9 @@
    },
    "guarantees": [
     "Claims.Witness.Flock.ZK_meets",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed"
@@ -53131,14 +53665,23 @@
     "Claims.ZKMal.Masked.dataE": "482c5f1580496f35ebe6d1892c271a6e2243cf900aee578adfffe18ddbe968ab",
     "Claims.ZKMal.Masked.linkIn": "8549f74352b6ccce09914afe2a39a7e565c6b79b4558db726af6c30407fce511"
    },
-   "guarantees": ["Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Proofs.Flock.Claims.ZK.MaskTape": {
    "digest": "5bfa1775b0dd5e46824db16bb131b698a35a5a4f698e3d974b75b627c0b06e90",
    "definitions": {
     "Claims.ZKMal.Masked.wordOfBits": "9b02c146fbc2842e0c827922b8b44a33e5a5d297b8deeb284b107a5afd64d17e"
    },
-   "guarantees": ["Flock.SecurityProofs.MaskedZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.MaskedZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Proofs.Flock.Claims.ZK.Masked": {
    "digest": "ec20fec4573fa0ab4bf6290f653f32170d16481e4977ee05841b9275c7e83a69",
@@ -53159,7 +53702,12 @@
     "Claims.ZKMal.Masked.nL": "87c9c70916af370e02f864274401020f9efa05c73352b9de6f9cbd8bbbef02c4",
     "Claims.ZKMal.Masked.tableData": "a6995d7531f7566aff29bae57a4079571c003924de7420e543f14fe6b7fc91af"
    },
-   "guarantees": ["Flock.SecurityProofs.MaskedZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.MaskedZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Proofs.Flock.Claims.ZK.MaskedTables": {
    "digest": "1affb6bd9e22e28df9079abd82a07ebd456a349bf9909fe9d4780d62ac1893eb",
@@ -53179,6 +53727,8 @@
     "FlockSoundness.Discharge.ZkHidden.ZkTab.table": "036808bd017b89e567979708582f2a81cd31412a6929dcb973b57af755159959"
    },
    "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed"
@@ -53204,7 +53754,12 @@
     "Claims.ZKMal.Masked.schMax": "c7a473e50140aecf739620adf46e85bd7bebdf2ee7d48176d65dcba6d98a8173",
     "Claims.ZKMal.Masked.zMax": "c7779294885c973b659576f56bbffe616667c97bc3cd6d20b8e206613f15cee1"
    },
-   "guarantees": ["Flock.SecurityProofs.MaskedZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.MaskedZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Proofs.Flock.Claims.ZK.Pin": {
    "digest": "294843742bf34256979a08841e93ccb067b1162b5ea5c531f31a2e1f352f91b9",
@@ -53229,6 +53784,9 @@
    },
    "guarantees": [
     "Claims.Witness.Flock.ZK_meets",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed"
@@ -53296,13 +53854,16 @@
    },
    "guarantees": [
     "Claims.Witness.Flock.ZK_meets",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed"
    ]
   },
   "Proofs.Flock.Claims.ZK.Refine": {
-   "digest": "c14d31ac92ed10b9d05d7583228cead632cb4363aa6d7516eb2e079549bb6457",
+   "digest": "9e107ba62aef9910c1efd092e53bd5aec4fea61e89a6a9cc04d9ce16bf18ba5a",
    "definitions": {
     "Claims.ZKMal.RefSession.withStops": "3066cb0976ea017a962cdc054e13b1cb59912bdd26ae82a7bfe6053d4d1cbbb1",
     "Claims.ZKMal.domLen": "4c98e228e277d48cfa5e45119ad624c8877dcb02175bf4c29cfda2de95395734",
@@ -53310,8 +53871,9 @@
     "Claims.ZKServer.LeanRelease.FillRoundEq": "2d8d673be3cb22dbdd68004eb84d75121609e760e7c351169963677499482316",
     "Claims.ZKServer.LeanRelease.LinkRoundEq": "c3ff6afa2811e42f5e75b582e0cbde74a6bbe069d07d78ab112304cbb96bed3d",
     "Claims.ZKServer.LeanRelease.LiveRoundEq": "4f55243982de1d6b848edc44cfbfeaaa514680ad34659da4cec25e873acceb3b",
-    "Claims.ZKServer.LeanRelease.refuseOf": "b1b5b0db9d422c72a0ecc2315f0f1a77b7cea3cb6f01596a90be0f87b59a365d",
-    "Claims.ZKServer.LeanRelease.rfOf": "8cb2b6d91751abece60275da4711db207ee6cdd3646998ad55ac7c04a7080314"
+    "Claims.ZKServer.LeanRelease.refuseOf": "8cbac80c59c92312f06d4a53a3dbad1e44d2ed6eeca43eef11a9b2ab53230a5b",
+    "Claims.ZKServer.LeanRelease.rfOf": "a6bc29bca57bcfda35951a0609f0d707dfaed77e0eaa58d3f22656aeb712b683",
+    "Claims.ZKServer.LeanRelease.stopOf": "f6f6f5dc6ced2343a2a9c20650a7a2d19db46c9545e61db850b240cd92954b2b"
    },
    "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
   },
@@ -53323,22 +53885,24 @@
     "Claims.ZKMal.Masked.withOuter": "75ad9987ca797f88046b7d267b8dc3908d747dd3b7da19f33252498787f7e6cb"
    },
    "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed"
    ]
   },
   "Proofs.Flock.Claims.ZK.Release": {
-   "digest": "3b51fba1a78b307427697a2124150f4606b32b7d68b7b6313ad8d897a1f385ca",
+   "digest": "8b716ccb06e3391c2bb8a07689f82160e61949e6452242f38d19e5243d888bae",
    "definitions": {
-    "Claims.ZKServer.LeanRelease": "c5dabac97e1c2c9e600c7222b4ce0d13e16c38b9fa5280b8db3ad49671053322",
-    "Claims.ZKServer.LeanRelease.answered": "818477a0c0715a298155f041c5d3e8dbb54a7d59bdd1ad5ac86c219eeddebbf7",
+    "Claims.ZKServer.LeanRelease": "4ba0a6e42b0dc91c98a037dbec4938b50aefd2f9303fdc7f2ea302079347b9f1",
+    "Claims.ZKServer.LeanRelease.answered": "061d51682bd47786149d6ca46c53d296556594b4542c361320cde2f9c1e23800",
     "Claims.ZKServer.LeanRelease.cfg": "04bdc907655183a0d6b2d63f940fbe084e6c9e62889b40df72f93ae191c0a3f4",
     "Claims.ZKServer.LeanRelease.cfgAt": "3b536580165405d3d9f683a4ee150f3a72984cf1bca965dfa78497bcdcf6520e",
     "Claims.ZKServer.LeanRelease.coinRefused": "cc3d91c928825379b4e2f6b967120a3507c16899c1ab8a56d0e5f61d1415a477",
     "Claims.ZKServer.LeanRelease.coins": "758f04f0ac4a12b35550fffa2e2b5f18b3f87f756f08e173c019ed4f05d738e8",
     "Claims.ZKServer.LeanRelease.coinsOf": "8d2548ff22cd6130d22a7c330dae785848d7f450f44dc9736905288bea4def8d",
-    "Claims.ZKServer.LeanRelease.computed": "a57324b8317673d7727b0b0fe764f29319797e42117fcc7aeee5f91e35f106fa",
+    "Claims.ZKServer.LeanRelease.computed": "13e71d5d34184944c4d4dc5b9c335fe063f8291c73fa7ec2046509909825571c",
     "Claims.ZKServer.LeanRelease.cross": "5c1ca0ca7f0e9050902d88297fe97c34b593befaa9bf13fac9a3a669844a5b25",
     "Claims.ZKServer.LeanRelease.device": "b9de5d4514a3a612f6e9ca8a8c0fc0388b82fe8f9adfb8ea3c134c8406947a58",
     "Claims.ZKServer.LeanRelease.draws": "345d13834787c79a5b249850c1f03a31311325af7f4fe126dd4e4bb0a2d33e3c",
@@ -53354,13 +53918,16 @@
     "Claims.ZKServer.LeanRelease.last": "3b3cd089ec6a29e9358ac80f6a28e497971c87d22cb8a2f4880f0ea1ab057d1b",
     "Claims.ZKServer.LeanRelease.lay": "920a798f17c0146c469bdb6beea7a7f8c79acd6de6f097463a2f443e95b3c30f",
     "Claims.ZKServer.LeanRelease.link": "f37d26f752cea93a1ea4782028b81edffbc46874a6742ad5c40d81751fb29bdc",
-    "Claims.ZKServer.LeanRelease.opens": "a1feee93e5bd0c9d831d7ab34c7b8832bb9d546c080b38da81191341152e42c0",
+    "Claims.ZKServer.LeanRelease.opens": "cf15c7d892c1133f6795f978f64b0c23704021c9d304f1c8d3875f22855e6f73",
     "Claims.ZKServer.LeanRelease.opens._sparseCasesOn_1": "32af7a218b0afc3084bc427d77b4a0a1fb7ed6607e85a69ac73b7dc7fdd89f6b",
     "Claims.ZKServer.LeanRelease.ownMsg": "79c429b79b5fb8c6456c1320cf1e854323a76dce93b1fd1f14ddc87579504b1e",
     "Claims.ZKServer.LeanRelease.pass": "6bfbe43a88080ea57c9f2c38fbb80874b37f5dec59bd4a6295750c4c754aa72b",
     "Claims.ZKServer.LeanRelease.pass._sparseCasesOn_1": "ed70249c289ff96f2521fd5a3d1a5ff230e9ac785322ef1dd8746eaa2626170f",
     "Claims.ZKServer.LeanRelease.pass._sparseCasesOn_2": "fd127d0e5948df37e5cfa4f7f1ef7158cd9fc02c32069897e06e56795ca1f5ae",
     "Claims.ZKServer.LeanRelease.prog": "ec0f17d1a1038b6ace9723505a8ff0f19b78f290e768e203f9186de70c400aa4",
+    "Claims.ZKServer.LeanRelease.rankFails": "6fb0c7da23ab20c26e4f9e37f0a465468f02ee49b26b0a8ce4cff5daf4627505",
+    "Claims.ZKServer.LeanRelease.rankRefused": "70d1e6ab1493fb37fc091a647af68145d146d44234397e49863eaa064cbf6b97",
+    "Claims.ZKServer.LeanRelease.rankStop": "dca57e67d3f82a0765ba0113d6f55e5a9d114a4c4c78f31a2aa7edb2d67ada89",
     "Claims.ZKServer.LeanRelease.refusesCoins": "dbd7628f034bc5c40e7837ac98c34902b624d116ba3ed7d1f349db01af067514",
     "Claims.ZKServer.LeanRelease.refusesFinish": "e920fb5c4bf49024457e58c654426a198032fa3536f92208586122667b18687e",
     "Claims.ZKServer.LeanRelease.release": "7207883a892043e61d9e59e66715276dc4a7bdaebea155597d85bc105b8338c7",
@@ -53371,16 +53938,23 @@
     "Claims.ZKServer.LeanRelease.slot": "f0ced9c8a12bbed487a061ddb0596022c2f57b4678df9f1db6a7a78681163908",
     "Claims.ZKServer.LeanRelease.step": "117af4a120337cb0397277a939134fd2c6956742f7926d4be704a6e79e24fdd1",
     "Claims.ZKServer.LeanRelease.stop": "cc6494b9bd048a9f6a9470b856c69a1311856905a40a6a43f15d5ea546b66636",
-    "Claims.ZKServer.LeanRelease.takeAt": "d833150b29a423deed2dc1814a35e091f6cc1bcffe730ac6d8eb48d1fdc936bf",
+    "Claims.ZKServer.LeanRelease.takeAt": "df8e47f08e067272d1f54580f5ed457847f7f7eafe178db3976674d516f16d2e",
     "Claims.ZKServer.LeanRelease.takes": "b8e48c146cdbc61e6ee67af011b830c13533a6df66a48ab239a99207477b676c",
     "Claims.ZKServer.LeanRelease.toSrv": "8d709233f7f201c4e31b93ed73ea940c8fe40c7b73319694590c07b14758fc7f",
-    "Claims.ZKServer.coinVerdict": "cdc52c65d06725caeae6eb92cbbaef39a7c5d339affb871888e694cf2da2c0ce",
-    "Claims.ZKServer.computedOf": "cfa5bdaca94be81e5f5dc16ffce0588460c4a1146b2b2bb92b389724fa97e171",
+    "Claims.ZKServer.LeanRelease.tookEarlier": "520e7e8975931d64d2495a06146e42f6c067b5b64dda93898ef74fcf99bbb2ae",
+    "Claims.ZKServer.coinVerdict": "8ea7b870dc966912b7348d679abd4a33b864f5cabeee1da0ee9f1be2d72cabf2",
+    "Claims.ZKServer.computedOf": "343aa4cb894f6816e6da9a2d61a1b3834f9ab617603d9aad7bc04da284005663",
     "Claims.ZKServer.computedOf._sparseCasesOn_1": "ad83de1c0a19d644476ab64c7afd464242e16147a7f1e6170cf202da6037c6e3",
     "Claims.ZKServer.computedOf._sparseCasesOn_2": "4e69ce1384d5080905ff50df0771baa5319f3a4ee73a4df60011b2403bfe70a0",
     "Claims.ZKServer.reqsFrom": "0c07d6ff52dfa3fe7139512306004705c1b982b1f4b665f2d59f0f4ece2c8c03"
    },
-   "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.SessionLoopZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Proofs.Flock.Claims.ZK.Round0": {
    "digest": "d39f7c5257cdd52619064433e832cfbd663ef386a0c05ad3d007b0d1566c2220",
@@ -53389,7 +53963,12 @@
     "Claims.ZKMal.Masked.leafAt": "75fafb6a09d924f6df75b8a090b15d0e793c9c1d667e4a7d33cba7ec0392dc66",
     "Claims.ZKMal.Masked.lv0": "ce7bd2424ce89c3a99449dc7ced6f8b63a29c491fc577e2308de162be567bc33"
    },
-   "guarantees": ["Flock.SecurityProofs.MaskedZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.MaskedZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Proofs.Flock.Claims.ZK.SaltProver": {
    "digest": "685d0b9c5a0c60b8a7a597ddd1eeadc5c1eb0e418e81519de5a373e884d52aa9",
@@ -53404,7 +53983,12 @@
     "Claims.ZKMal.Masked.ofSalts": "ecb1c4b1f5a2e2df6edebbc46c0ff2294d4fc29550979f07e2cb83987cb8a37c",
     "Claims.ZKMal.Masked.saltBlob": "73d32fdc7453d3dae7a183cf0a3ced53f77ab9042960783b1aaeff4c206edd81"
    },
-   "guarantees": ["Flock.SecurityProofs.MaskedZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.MaskedZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Proofs.Flock.Claims.ZK.Server": {
    "digest": "3456d2dab8692e13b138a5525e3910aa8614bd9448fe84874fbb04ef8a85b17e",
@@ -53462,7 +54046,13 @@
     "Claims.ZKServer.Loop.reqOf": "86e3e52756444e8d809e00f4d2c97f84344cd869c4f8ef10251800dcad30e994",
     "Claims.ZKServer.Loop.roundsOf": "61a207a3a32e26b38b9cfb28f117a8acea0c82ee70becc3c6e0943ef56139e69"
    },
-   "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.SessionLoopZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Proofs.Flock.Claims.ZK.Split": {
    "digest": "e3228f947929adc6cb02a75cf5893c4b3ea6258f333f0c86f137724bf3125ef3",
@@ -53470,7 +54060,12 @@
     "Claims.ZKMal.Masked.PE": "90bba554af94f757311228374c2c02426753125c9c55dd27c86a0987572f95ab",
     "Claims.ZKMal.Masked.UE": "0b12accab395a067f89a60d9e2905e9fe29f14258a02ec69985c42926ab5b86c"
    },
-   "guarantees": ["Flock.SecurityProofs.MaskedZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.MaskedZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Proofs.Flock.Claims.ZK.Stopped": {
    "digest": "679db57520d2d150dc9c50a79bb5ba26a2422d743d420de9fc85530e3424cf47",
@@ -53482,6 +54077,8 @@
     "Claims.ZKMal.Masked.rankSlot": "33eabe19f83766320e534845548fd5f3fb148d48874dac15e095ba06bffa5836"
    },
    "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed"
@@ -53570,6 +54167,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -53625,6 +54224,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -53688,6 +54289,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -54128,6 +54731,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -54242,6 +54848,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -54340,6 +54949,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -54437,6 +55048,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -54541,6 +55155,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -54657,6 +55274,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -54760,6 +55380,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -54856,6 +55479,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -54952,6 +55577,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -55055,6 +55682,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -55168,6 +55797,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -56022,8 +56654,26 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec"
    ]
   },
+  "Proofs.Flock.SessionLoop.Inner": {
+   "digest": "1c9480b55fdcbfd5bd1b794685716074280178fb39f1b080dbc66cd179b167ff",
+   "definitions": {
+    "Claims.ZKServer.LeanRelease.withInner": "b9ee8d63abf7b8c937d84638b838baf82a0f27ca71418e212ccb69375fe075b5",
+    "Claims.ZKServer.Loop.innerOf": "72e54a7c4a138c483cc89d8a528412e40df70bbedae5df23eae149e97cd61677",
+    "Claims.ZKServer.Loop.innerOf._sparseCasesOn_5": "40213eeff0858bf31936ccdd687000af339330bf961923ac07bb92978e7dcca9",
+    "Claims.ZKServer.Loop.innerOf._sparseCasesOn_6": "dee1eadabd977a268fb47f103c35a70fc3d18465306604619f2ac3244f8be737",
+    "Flock.Guarantees.LoopInnerRound0Own": "cddec953854c5e9debbf39861f09943cd12d34c041339b4d337a565f75ecce0c"
+   },
+   "guarantees": ["Flock.SecurityProofs.LoopInnerRound0Own", "Flock.SecurityProofs.LoopInnerRound0Own_honest"]
+  },
+  "Proofs.Flock.SessionLoop.InnerWitness": {
+   "digest": "e98a3d8be57acafdc071667441508567e2724b223104f03cf53096218cd3f964",
+   "definitions": {
+    "Claims.ZKServer.LeanRelease.silent": "d2a4c994cdb5c917955492790f0cfdb1a56c2fe1b08026af9c90903dd67681a4"
+   },
+   "guarantees": ["Flock.SecurityProofs.LoopInnerRound0Own_nontrivial"]
+  },
   "Proofs.Flock.SessionLoop.Statement": {
-   "digest": "f4e1f2e4c819d018f47ce829d8ef3d1e893ffa4ac26a673c6b11c96e1e054077",
+   "digest": "eb449eb4cda71462f7ecf76bc475e9157f2e47998f1aa5e37461f171029a14d3",
    "definitions": {
     "Claims.ZKServer.LeanRelease.ofLoopLink": "6ea2d801cbe2cac165a76d952632b570750ff98ff40e7e4eeb7b7553f40be804",
     "Claims.ZKServer.LeanRelease.withFiles": "65872386b21258c02579b8fc6e24405802944751b115328e77e1dcf462f9cb40",
@@ -56050,9 +56700,15 @@
     "Flock.Guarantees.LoopInnerRound0": "f64e8082f75703d9a88c97efaf1cd075063cfe5c8110a85748cded71495bc6d2",
     "Flock.Guarantees.SessionLoopZK": "6a6e72455d80b20cac5fadffc668486e5eb7cdf349ba49ff30645e91a29dd38c",
     "Flock.Guarantees.SessionLoopZKAt": "a23944b0866201363e98e2f6c51f5af07e53d01bd57d3f9820e79f51e7fb2d4f",
-    "Flock.Guarantees.SessionLoopZKDeployed": "4aed645714deeecf11a43b19c2b77a1988faa63cb78ba992227f5f5270bd7484"
+    "Flock.Guarantees.SessionLoopZKDeployed": "596b6c75deb71672d2827b3c8bd9b132ffe643d140b7de63ffc2e521290cff40"
    },
-   "guarantees": ["Flock.SecurityProofs.SessionLoopZK", "Flock.SecurityProofs.SessionLoopZKDeployed"]
+   "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
+    "Flock.SecurityProofs.SessionLoopZK",
+    "Flock.SecurityProofs.SessionLoopZKDeployed"
+   ]
   },
   "Proofs.Flock.SoundAtBridge.Reduce": {
    "digest": "f892a6d7414272d45b3452d40174533bb8e6a2a6b5767f0a1d490d0ef361148b",
@@ -56202,6 +56858,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -57421,6 +58079,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -57478,6 +58139,9 @@
    },
    "guarantees": [
     "Claims.Witness.Flock.ZK_meets",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -57691,6 +58355,8 @@
     "FlockSoundness.Discharge.Composed.zpH": "bdf20f949c844c21d9bd87417fde856eb4012d03294f3cf5e6573c9084cc13a5"
    },
    "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -57706,6 +58372,8 @@
     "FlockSoundness.Discharge.Composed.MaskSetup": "37c0ec004db4e8e5357e9d008593072a20985380bcc0a4010088319e4e794c62"
    },
    "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed"
@@ -57726,6 +58394,8 @@
     "FlockSoundness.Discharge.Composed.Lincheck.roundMsg": "c186ff1311cfee81af266761fbe87b178b3984a1060acc0c8b721d77984f823f"
    },
    "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -57748,6 +58418,8 @@
     "FlockSoundness.Discharge.Composed.Zerocheck.skipAt": "b3910a5a8b83afe84ae0ba0f97aed11b76edcb466a7d31b13eb2612971cc74d8"
    },
    "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -57770,6 +58442,8 @@
     "FlockSoundness.Discharge.Composed.ZerocheckMasked.running0": "c432d507c19b66eb24731d60e93046bb63ceea790d39245e332f3b979272459f"
    },
    "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -57787,6 +58461,8 @@
     "FlockSoundness.Discharge.Composed.WholeWords": "2fba047dd1010ac2376ea288e54dccf982e392f2b93a978bc5618bdbb2b6b34d"
    },
    "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed"
@@ -58331,6 +59007,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -61699,6 +62378,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -61869,6 +62551,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -63069,6 +63753,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -63273,6 +63959,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -63346,6 +64034,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -63418,6 +64108,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -63495,6 +64187,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -63592,6 +64286,9 @@
    },
    "guarantees": [
     "Claims.Witness.Flock.ZK_meets",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -63661,6 +64358,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -63891,6 +64590,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -64156,6 +64857,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -64277,6 +64980,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -64321,6 +65026,8 @@
     "FlockSoundness.hcol": "dddc4749b5c9de35aa2de81dca4b48fe790d761752c020dfa748338065ae9d1c"
    },
    "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -64440,6 +65147,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -64502,6 +65211,8 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
@@ -64626,6 +65337,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -65106,6 +65819,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -65306,6 +66021,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -65394,6 +66111,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -65518,6 +66237,9 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -65815,6 +66537,9 @@
    },
    "guarantees": [
     "Claims.Witness.Flock.ZK_meets",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed"
@@ -65842,6 +66567,9 @@
    },
    "guarantees": [
     "Claims.Witness.Flock.ZK_meets",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed"
@@ -65878,6 +66606,8 @@
     "FlockSoundness.foldLo": "8a30f04523f730fa470c3bd23ca1e9dd61de0515521a8e0e0da4e8638db9efa1"
    },
    "guarantees": [
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -66482,6 +67212,8 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
@@ -66749,6 +67481,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -66811,6 +67546,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -66932,6 +67670,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -66996,6 +67737,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -67112,6 +67856,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -67169,6 +67916,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -67232,6 +67982,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -67286,6 +68039,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -67353,6 +68109,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -67440,6 +68199,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -67501,6 +68263,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -67578,6 +68343,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -67646,6 +68414,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
@@ -67747,6 +68518,9 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_meets",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.LoopInnerRound0Own",
+    "Flock.SecurityProofs.LoopInnerRound0Own_honest",
+    "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial",
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
