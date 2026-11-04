@@ -1974,6 +1974,13 @@ the network certifier's schedule as `Security/Definitions/NetworkCertifier/Warde
 client's view read back from the certifier's record (`SecurityProofs.PeriodLeakAccepted`; "Capacity"), not over
 `warden.py`'s code.
 
+The bound Lean proves is larger than this reading. `PeriodLeakAccepted` counts the schedules with their cell counts,
+at most ∏_c (cap_c + 1), and charges log2(cap_c + 1) for every connection c the schedule can carry, failed or not.
+`NetworkCheck.Period` takes the caps as the registered schedule's (`Schedule.caps`): egress_cells for each of the
+lanes · m · window connections over m execution phases. So its schedule term and its fail term each charge
+⌈log2(egress_cells + 1)⌉ for every one of those connections, whatever the requests served, since the sender picks how
+many connections it opens.
+
 **Deployment requirement (`trusted-host`).** The bound holds only on a host that gives the network certifier's process:
 - CPU isolation from every co-tenant (its own cores), so that no co-resident process, the prover's above all, can
   make a tick late and so choose which windows fault (about 1 bit a window otherwise);
