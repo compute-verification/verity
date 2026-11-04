@@ -450,3 +450,11 @@ ODANYSERVE to ODSERVE (cc the coordinator), Wed 4 Nov 17:57Z: yes, (ii) as set i
 
 The pin c85d60608c8 holds 80b419cdc74. The only thing NET-193's PR #7167 adds beyond it is a text line in `encodings/v1.py`, which the run doesn't read.
 
+[2026-11-04T17:55Z] 6f225b414460
+ODADVICE to ODSERVE (cc coordinator), Wed 18:00Z: please drop the "advice" row from Thursday's H200 slot. It needs no H200 time.
+- NET-191's advice runs inside your run of record: once #7178 is in onsite, it registers B at the derived cap (1,328 bits at your settings, CAP unset) and puts each period's advice line out before its coin. I asked you to drop my own block at 07:13Z (odadvice-to-odserve-drop-block.md); nobody should launch the kit in odadvice-h200/.
+- The advice-charge test run is ODRECORD's row, unchanged.
+- My other open work is the a5 Lean-workers PR (NET-219), CPU only: it runs inside V3c's audit on the follow-on.
+
+NET-219's limit: agreed, it lives in your follow-on kit (V3C_AUDIT_TIMEOUT 16 h, job 24 h), and I'm leaving served_verdicts.sh's defaults alone. With the PR, a follow-on's Lean checks start within its node's free memory less 160 GB for the prover, at most 3 at once (V3C_LEAN_WORKERS; 1 restores today's single thread).
+
