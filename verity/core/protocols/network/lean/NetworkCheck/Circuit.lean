@@ -18,8 +18,8 @@ of their description (AGENTS.md "Design rules"), never per unit:
   laid out as C-Flock's decoder lays one out, within its resolution's walk (`NciCheck.Desc`), and topological.
 * **The wires** (`SampledProofs.Wires.check`), with the templates' rows read off their Definitions (`templateOf`,
   `interface.layout`); each wire's reader row is its writer's output field bit for bit, each side in leaves of one
-  width, the widths equal or one of them a Boolean-profile port's 1 (`leavesOk`). A writer's leaf may be a constant or
-  an input its template passes through.
+  width, the widths equal or one of them a Boolean-profile port's 1 (`leavesOk`). A writer's leaf is a gate its
+  template computes or an input it passes through: a return names a parameter or a node, never a literal.
 * **The declarations** (`declRects`): the registered parameters, tables, reads, table reads and openings well formed
   for the templates (`interface.check_inputs`), and no row filled twice by a wire or a declaration (`apart`). A record
   that lists its members, declares ingress, or registers values or formats beside its reads is refused.
@@ -58,10 +58,11 @@ def inputArg (P : Flock.Program.Prog) (a : Flock.Program.Arg) : Option Nat :=
     | none => none
   | _ => none
 
-/-- **A Program's input gates**: each of its root's input nodes (`Flock.Program.inputId?`, of either binding time) gives
-its members times its width, so a `Value<w>` leaf is `w` Boolean input gates. The decoder refuses an input node
-outside the root's body, so these are all of them: `#freeInputs` at no ingress, at least `#(freeInputs \ reg)` at
-every `reg` and horizon. It reads the root's nodes, not the unrolled circuit. -/
+/-- **A Program's input gates**, in bits: each of its root's input nodes (`Flock.Program.inputId?`, of either binding
+time) gives its members times its width, so a `Value<w>` leaf counts `w`. The decoder refuses an input node outside the
+root's body, so these are all of them. For a Boolean Program this is `#freeInputs` at no ingress; the sampled circuit
+lays a wider leaf out as one gate, so then it is at least that. Either way it is at least `#(freeInputs \ reg)` at every
+`reg` and horizon. It reads the root's nodes, not the unrolled circuit. -/
 def inputGates (prog : Flock.Program.Prog) : Nat :=
   (((prog.defs[prog.root]?).map (·.body.nodes)).getD #[]).foldl (fun n x => n + match prog.defs[x.fn]? with
     | some d => if d.prim then ((Flock.Program.inputId? d.key).map (x.members * ·.2)).getD 0 else 0
@@ -670,15 +671,14 @@ def refusalWhy (e : SampledProofs.Wires.Refusal) : String :=
     | some i => s!" (wire {i})"
     | none => ""
 
-/-- **The circuit check**: record `record` read against Program `P` (`recordOf`) is its population program
+/-- **The circuit record's checks**: record `record` read against Program `P` (`recordOf`) is its population program
 (`populationOk`); its wires pass `SampledProofs.Wires.check`, each reader row its writer's output field bit for bit
 (`leavesOk`); its declarations are well formed and fill no row a
 wire or another declaration fills (`declRects`, `apart`); and `order` ranks every wire's writers below its readers
-(`ordered`). A writer leaf may be a constant or an input its template passes through: the order ranks the chain's
-writers below its readers, so it ends at a computed gate, a constant, or a free or registered input. `pins` are the
-registered parameters the verifier pinned whose window root the audit's registration records as the pin,
-`{param: root}`. On acceptance, the record's `Counts`. -/
-def check (P : Prog) (record order pins : Json) : Except String Counts := do
+(`ordered`). A writer leaf is a gate its template computes or an input it passes through: the order ranks the chain's
+writers below its readers, so it ends at a computed gate or a free or registered input. On acceptance, the record as
+read against `P` and its wires' summary, which `countsOf` counts at any held parameters (`check`). -/
+def checked (P : Prog) (record order : Json) : Except String (Stated × SampledProofs.Wires.Summary) := do
   let r ← recordOf P record
   unless populationOk P r do
     throw "the Program is not the record's population program: its root template nodes the record's templates, each a \
@@ -697,6 +697,13 @@ def check (P : Prog) (record order pins : Json) : Except String Counts := do
   match orderWhy r.wiring (← (orderOf order).mapError ("order: " ++ ·)) with
   | some e => throw s!"order: {e}"
   | none => pure ()
+  pure (r, s)
+
+/-- **The circuit check**: the record's checks (`checked`), its count holding the parameters `pins` names, the
+registered parameters the verifier pinned whose window root the audit's registration records as the pin,
+`{param: root}`. On acceptance, the record's `Counts`. -/
+def check (P : Prog) (record order pins : Json) : Except String Counts := do
+  let (r, s) ← checked P record order
   pure (countsOf r s (← heldOf pins))
 
 /-- The circuit record's digest, `interface.circuit_bytes`: SHA-512 of its canonical JSON and a newline, in hex. -/
