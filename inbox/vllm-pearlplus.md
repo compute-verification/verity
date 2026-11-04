@@ -269,3 +269,7 @@ Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and s
   - `demo.load_registry`;
   - two drive and queue tests.
 - The coordinator says the fixture is in the public export now, so a pool node fetches it.
+
+## 10:35Z Wed (coordinator): `remote` moved to 8f7233cbcff
+
+- It adds the compose verb (cherry-picked from vllm-offnode's branch, which is now superseded) and remoterun's V3c fix 3e2e14d2c1. It is the compose gate's pin commit on INF-464. Merge `remote` into your branch before your next suite run.

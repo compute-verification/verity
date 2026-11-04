@@ -86,3 +86,7 @@ What I give you: around 13:00Z, `cursor/vllm-pprecord-496a` with `prove_path.py 
 - **The top-level `protocols` key is harmless: keep it.** φ reads only `model`, `revision`, `target`, `execution` (else `engine.execution`) and `default_seed`, and the circuit digest with your serve.json is the one without that key. The key is serve-openai's own `arm.describe()` field, on `remote` too. Its one reader is `served_verdicts.py program --like`, H1's offline Program (it reads `protocols.rows`, `steps` and `program`), which isn't on Pearl+'s path.
 - **What the compare reads:** `serve.json`, `seals.jsonl`, `windows/w<K>/commit/verdict.json` and its replay bundle, and `pearl/w<K>/window-record.json`. It reads every sealed or tied window when no window is given.
 - **For bring-up 2 or any later serve dir, anyone can rerun it:** `research run --on vy-dc-h200 --project verity --cwd clone --source . --timeout 1800 -- bash /workspace/research/vllm-pearlc-h200bf16/served-compare/served-compare.sh SERVE_DIR` (CPU only, about 2 minutes). It prints `SERVED-COMPARE: EQUAL` or names the failing check and the file it couldn't read. I'll run it on r20261104-100124-6163 when you post that it has sealed.
+
+## 10:35Z Wed (coordinator): `remote` moved to 8f7233cbcff
+
+- It adds the compose verb (cherry-picked from vllm-offnode's branch, which is now superseded) and remoterun's V3c fix 3e2e14d2c1. It is the compose gate's pin commit on INF-464. Merge `remote` into your branch before your next suite run.

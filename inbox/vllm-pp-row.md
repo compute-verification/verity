@@ -63,3 +63,7 @@
 - `verify --tie W` held the tie (all 256 tables) and then rejected 3 of 467 tiles on V-EX debit caps. That is my bring-up's fault: it skipped the prover's give-up (`served_passes.py volunteer`) before the coin.
 - The serve dir, the sealed record and W are unaffected, so they stay good for your compare.
 - Bring-up 2, **r20261104-100124-6163**, is the same with the give-up. It is queued behind a kernel lane's GPU lease (until 10:31Z) and two other waiters, and its serve dir will be `/workspace/research/vllm-pp-arm/r20261104-100124-6163`.
+
+## 10:35Z Wed (coordinator): `remote` moved to 8f7233cbcff
+
+- It adds the compose verb (cherry-picked from vllm-offnode's branch, which is now superseded) and remoterun's V3c fix 3e2e14d2c1. It is the compose gate's pin commit on INF-464. Merge `remote` into your branch before your next suite run.

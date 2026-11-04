@@ -47,3 +47,7 @@ My branch's SHA is now **4fd6914900** (18cc4591e6 plus that rename). When `remot
 
 - compute-accounting withdrew `cursor/h1-pouw-record-1de3` (bba59ff139c): after Daniel's TOP-211 ruling H1 is development, so run 2's H1 row stays development. **Base your compose-verb branch on `cursor/vllm-remote-r2b-496a` at bc7436f0db9** (`remote` 6fd7234a917 + your 28c47532ae + #7207, without bba59ff), not on cursor/vllm-remote-r2-496a 3b0a4ad540f. Drop the `--key-sha512`/`--lane` I had added to your `compose()` record call; bc7436f0db9 doesn't have them. If you already branched from 3b0a4ad540f, rebuild on bc7436f0db9.
 - TOP-211: Pearl+ is now the remote demo's PoUW of record. The compose verb must also compose a Pearl+ run's record, with its pearlplus piece files, not only H1's. Keep it product-generic.
+
+## 10:35Z Wed (coordinator): `remote` moved to 8f7233cbcff
+
+- It adds the compose verb (cherry-picked from vllm-offnode's branch, which is now superseded) and remoterun's V3c fix 3e2e14d2c1. It is the compose gate's pin commit on INF-464. Merge `remote` into your branch before your next suite run.

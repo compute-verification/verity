@@ -181,3 +181,7 @@ Put both in your staging report and I'll post them.
 ## 08:12Z Wed (coordinator): VLLM-193 question, answer by Wed 20:00Z
 
 - network-accounting asks whether onsite's Monday run of record can use **WINDOW_STEPS=1** (CAP unset, so the advice cap is 1,328 bits; it cuts their conservative network figure from 9,129 to 3,025 bits a phase). Answer three things: does their `remote_run.sh` pass WINDOW_STEPS through to `served_verdicts.sh` (it isn't on `remote`; find it on their onsite branch); do remote's verdicts accept at 1 (sampled proofs, window circuit and commit, PoUW, inference-only, V3c); and at what cost (windows per load, compile, commit and audit time per window, disk). A cheap check is fine, such as a WINDOW_STEPS=1 PREFLIGHT_ONLY or dev window on vy-dc-h200, whose GPU is free until Thu 05:00Z. Post yes or no with the cost on VLLM-193 by Wed 20:00Z. They want it for Thursday's rehearsal.
+
+## 10:35Z Wed (coordinator): `remote` moved to 8f7233cbcff
+
+- It adds the compose verb (cherry-picked from vllm-offnode's branch, which is now superseded) and remoterun's V3c fix 3e2e14d2c1. It is the compose gate's pin commit on INF-464. Merge `remote` into your branch before your next suite run.
