@@ -2,7 +2,7 @@
 name: friction
 description: >
   What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask its owner or your
-  coordinator when you can't tell, take only claims and his own clicks to Daniel, record a ruling where the next agent reads
+  coordinator when you can't tell, decide rather than wait on Daniel, record a ruling where the next agent reads
   it, or leave a friction note. Holds the standing rulings AGENTS.md and the other skills don't state (what an agent may
   change without asking, protocol and claim rulings) and the friction note format. Use when you worked around something,
   a step bit you twice or keeps you waiting, you see a better abstraction, you're unsure a change is yours, you just got a
@@ -45,8 +45,9 @@ A change is near the line when it changes what other agents must do or what a ga
 in-flight files, or deletes others' work. If `AGENTS.md`, the owning skill or a standing ruling below covers the case,
 follow it. Otherwise ask the owner of what the change touches, or your coordinator when owners disagree or you can't tell
 (a handle holder: `research msg send --to @HANDLE`; a worker: its report), with the case, the change and your
-recommendation in a few lines, and prepare the change meanwhile. Only keys and access, and claims (what a guarantee says
-or rests on), go on to Daniel (`.agents/skills/asking-daniel/SKILL.md`). Spend, a short budget line included, is the call
+recommendation in a few lines, and prepare the change meanwhile. Nothing waits on Daniel: a claim (what a guarantee says
+or rests on) goes to him decided provisionally, and a click only his account can make gets a way around it where one
+exists (`.agents/skills/asking-daniel/SKILL.md`). Spend, a short budget line included, is the call
 of the lead whose line pays.
 
 For a new rule, gate or required review, price it first with `.agents/skills/process-design/SKILL.md`.
