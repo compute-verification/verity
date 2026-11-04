@@ -70,32 +70,60 @@ LINE = 'THE NETWORK CERTIFIER {"rc": 0, "verdict": "accept"}'
 CAPACITY = 1008 * 512 * 8
 #: stand-ins for the theorems that discharge the premises `PREMISES` names no discharge of yet, and those premises as
 #: they are
-TOY = {"sampled-leg-bridge": "Toy.SampledLegBridge", "session-wires": "Toy.VerdictsWired"}
+TOY = {n: f"Toy.{n}" for n, p in OR.PREMISES.items() if not p["discharged_by"]}
 UNNAMED = {n: OR.PREMISES[n] for n in TOY}
+#: the guarantees of `RESTS_ON` as they are, and those no statement of which is pinned yet
+RESTS_ON = {g: dict(r) for g, r in OR.RESTS_ON.items()}
+UNPINNED = [g for g, r in OR.RESTS_ON.items() if r["statement"] is None]
+ACCEPTED = "NetTiming.SecurityProofs.PeriodLeakAccepted"
+#: the theorem that discharges the free-input count's premise
+(COUNTED,) = OR.PREMISES["free-count"]["discharged_by"]
 
 
 def discharged() -> dict:
-    """``premises`` of a lock listing every discharge and each guarantee the tight K rests on, none with an assumption."""
-    found = {n: {"is": p["is"], "discharged_by": list(p["discharged_by"]), "missing": [], "assumes": []}
-             for n, p in OR.PREMISES.items()}
-    return {"is": OR.DISCHARGE, "from": "Security/lean-audit.json and Security/Properties/lean-audit.json guarantees",
-            "premises": found, "rests_on": {g: {"assumptions": []} for g in OR.RESTS_ON}, "standing": OR.STANDING,
-            "open": [], "unread": []}
+    """``premises`` of a lock listing every discharge and each guarantee the tight K rests on at the statement it
+    names, none with an assumption."""
+    found = {n: {"is": p["is"], "discharged_by": list(p["discharged_by"]), "missing": [], "unpinned": {}, "assumes": [],
+                 "takes": []} for n, p in OR.PREMISES.items()}
+    return {"is": OR.DISCHARGE,
+            "from": "Security/lean-audit.json and Security/Properties/lean-audit.json guarantees and reads",
+            "premises": found, "standing": OR.STANDING, "counts": OR.COUNTS, "open": [], "unread": [],
+            "rests_on": {g: {"assumptions": [], "statement": r["statement"], "takes": r["takes"]}
+                         for g, r in OR.RESTS_ON.items()}}
 
 
-def write_lock(f: Path, given: dict[str, list[str] | None] | None = None) -> None:
+def lock_doc(listed: dict[str, list[str]], stated: dict[str, str | None] | None = None) -> dict:
+    """A lock listing each guarantee of ``listed`` with its named assumptions, each of `RESTS_ON` and `DISCHARGES` at
+    the statement ``stated`` gives it, else at the one `RESTS_ON` or `DISCHARGES` pins, among its reads."""
+    pins = OR.RESTS_ON | OR.DISCHARGES
+    stated = {g: r["statement"] for g, r in pins.items()} | (stated or {})
+    guarantees = {g: {"assumptions": a} | ({"signature": [f"{g} : {g}.Stated"]} if g in stated else {})
+                  for g, a in listed.items()}
+    reads = {"Definitions.Toy": {"definitions": {f"{g}.Stated": h for g, h in stated.items() if h is not None}}}
+    return {"guarantees": guarantees, "reads": reads}
+
+
+def write_lock(f: Path, given: dict[str, list[str] | None] | None = None,
+               stated: dict[str, str | None] | None = None) -> None:
     """A lock at ``f`` listing every discharge of `PREMISES` and each guarantee the tight K rests on with no named
-    assumption, each guarantee of ``given`` instead with the assumptions given, or unlisted where None."""
+    assumption, each guarantee of ``given`` instead with the assumptions given, or unlisted where None, and each of
+    `RESTS_ON` at the statement it names unless ``stated`` gives another."""
     names = [t for p in OR.PREMISES.values() for t in p["discharged_by"]] + list(OR.RESTS_ON)
     listed = {g: [] for g in names} | (given or {})
-    f.write_text(json.dumps({"guarantees": {g: {"assumptions": a} for g, a in listed.items() if a is not None}}))
+    f.write_text(json.dumps(lock_doc({g: a for g, a in listed.items() if a is not None}, stated)))
 
 
 @pytest.fixture(autouse=True)
 def lock(tmp_path_factory, monkeypatch) -> Path:
-    """A lock in Security's lock's place discharging every premise, each of `UNNAMED` by its `TOY` stand-in."""
+    """A lock in Security's lock's place discharging every premise, each of `UNNAMED` by its `TOY` stand-in, each
+    discharge at a stand-in statement `DISCHARGES` pins, taking nothing, and listing each guarantee of `RESTS_ON` at the
+    statement it names, each of `UNPINNED` at a stand-in's."""
     for name, toy in TOY.items():
         monkeypatch.setitem(OR.PREMISES, name, dict(OR.PREMISES[name], discharged_by=(toy,)))
+    for t in (t for p in OR.PREMISES.values() for t in p["discharged_by"]):
+        monkeypatch.setitem(OR.DISCHARGES, t, {"statement": f"toy-{t}", "takes": {}})
+    for g in UNPINNED:
+        monkeypatch.setitem(OR.RESTS_ON, g, dict(OR.RESTS_ON[g], statement=f"toy-{g}"))
     f = tmp_path_factory.mktemp("lock") / "lean-audit.json"
     write_lock(f)
     monkeypatch.setattr(OR, "LOCKS", (f,))
@@ -271,21 +299,29 @@ def held_both(out: Path) -> dict:
 
 def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both_checks_are_held(
         tmp_path, lock, monkeypatch):
-    """The lock as Security's is today, listing the guarantee the tight K rests on and none of the theorems that
-    discharge its premises, and the sampled leg's bridge and the session's wires with no discharge named: every premise is open,
-    by name, so the figure of record charges ℓ_a + 1 for the tied audit, and the tight K's cells beside it are
-    conditional on each."""
+    """A lock listing the pinned guarantees the tight K rests on and none of the theorems that discharge its premises,
+    with PeriodTiedCount, not yet stated, unlisted, and the premises with no discharge named: every premise is open, by
+    name, and so is PeriodTiedCount, so the figure of record charges ℓ_a + 1 for the tied audit, and the tight K's cells
+    beside it are conditional on each."""
     for name, premise in UNNAMED.items():
         monkeypatch.setitem(OR.PREMISES, name, premise)
-    lock.write_text(json.dumps({"guarantees": {g: {"assumptions": []} for g in OR.RESTS_ON}}))
+    for g in UNPINNED:
+        monkeypatch.setitem(OR.RESTS_ON, g, RESTS_ON[g])
+    lock.write_text(json.dumps(lock_doc({g: [] for g in OR.RESTS_ON if g not in UNPINNED})))
     rec = held_both(tmp_path)
     of = rec["bound"]["of_record"]
-    assert (of["held"], of["open"], of["K"]) == (["free", "circuit"], list(OR.PREMISES), K + 2 ** 23 + 1)
+    assert UNPINNED == ["NetTiming.SecurityProofs.PeriodTiedCount"]
+    assert (of["held"], of["open"], of["K"]) == (["free", "circuit"], [*OR.PREMISES, *UNPINNED], K + 2 ** 23 + 1)
     assert [p["missing"] for p in of["premises"]["premises"].values()] == [
         list(p["discharged_by"]) for p in OR.PREMISES.values()]
-    assert [of["premises"]["premises"][n]["discharged_by"] for n in UNNAMED] == [[], []]
-    assert rec["periods_tight"]["conditional_on"] == list(OR.PREMISES) and rec["periods_tight"]["run"]["bits"] == K
-    assert all(f in OR.PREMISES["sampled-leg-bridge"]["is"] for f in ("SampledCodeRuns", "SessionKS,", "SessionRuns"))
+    assert [of["premises"]["premises"][n]["discharged_by"] for n in UNNAMED] == [[]] * len(UNNAMED)
+    assert of["premises"]["rests_on"][UNPINNED[0]] == {"missing": "not in the lock",
+                                                       "takes": RESTS_ON[UNPINNED[0]]["takes"]}
+    assert rec["periods_tight"]["conditional_on"] == [*OR.PREMISES, *UNPINNED]
+    assert of["premises"]["counts"] == OR.COUNTS and not set(OR.COUNTS) & set(of["open"])
+    assert rec["periods_tight"]["run"]["bits"] == K
+    assert all(f in OR.PREMISES["sampled-leg-bridge"]["is"]
+               for f in ("SampledCodeRuns", "SessionKS,", "SessionRuns", "ListWithin", "Binds"))
     assert "Python" in OR.DISCHARGE
     assert "no opening reaches the verifier" in OR.PREMISES["session-wires"]["is"]
 
@@ -294,16 +330,19 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     ({}, []),
     ({"Properties.NetworkPeriod.rowsHeld": ["NetTiming.Assumptions.SampledCodeRuns"]}, ["held-performed"]),
     ({"Properties.NetworkPeriod.rowsHeld": ["Verity.Assumptions.TrustedHost"]}, []),
-    ({"Properties.NetworkCertifier.circuitCounts": None}, ["free-count"]),
-    ({OR.RESTS_ON[0]: ["NetTiming.Assumptions.SampledCodeRuns"]}, ["NetTiming.Assumptions.SampledCodeRuns"]),
-    ({OR.RESTS_ON[0]: ["Verity.Assumptions.TrustedHost"]}, []),
-    ({OR.RESTS_ON[0]: None}, list(OR.RESTS_ON))])
+    ({COUNTED: None}, ["free-count"]),
+    ({ACCEPTED: ["NetTiming.Assumptions.SampledCodeRuns"]}, ["NetTiming.Assumptions.SampledCodeRuns"]),
+    ({ACCEPTED: ["Verity.Assumptions.TrustedHost"]}, []),
+    ({ACCEPTED: ["Accounting.Covered"]}, []),
+    ({ACCEPTED: ["NetTiming.TapOpens"]}, []),
+    ({ACCEPTED: None}, [ACCEPTED])])
 def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_none_but_a_standing_assumption_taken(
         tmp_path, lock, given, open_):
     """Both checks held: a premise whose discharge the lock doesn't list, or lists taking an assumption that doesn't
-    stand (SampledCodeRuns, a premise about our own Python), is open, and so is an assumption of the guarantee the tight
-    K rests on that is neither standing nor a premise's, by its name, and that guarantee where the lock doesn't list
-    it. trusted-host stands. With one check open too, the tight K is conditional on both."""
+    stand (SampledCodeRuns, a premise about our own Python), is open, and so is an assumption of a guarantee the tight
+    K rests on that is neither standing nor named in what it takes, by its name, and that guarantee where the lock
+    doesn't list it. trusted-host and certifier-coverage stand, and a premise its takes names is that premise's. With
+    one check open too, the tight K is conditional on both."""
     write_lock(lock, given)
     rec = held_both(tmp_path / "held")
     of = rec["bound"]["of_record"]
@@ -312,7 +351,7 @@ def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_non
     p = of["premises"]["premises"]
     assert p["held-performed"]["assumes"] == (["NetTiming.Assumptions.SampledCodeRuns"] if "held-performed" in open_
                                               else [])
-    assert p["free-count"]["missing"] == (["Properties.NetworkCertifier.circuitCounts"] if "free-count" in open_ else [])
+    assert p["free-count"]["missing"] == ([COUNTED] if "free-count" in open_ else [])
     rec = OR.record(accepted(tmp_path / "free", dict(PUBLIC, held=["free"])))
     assert rec["periods_tight"]["conditional_on"] == ["circuit", *open_]
 
@@ -323,7 +362,7 @@ def test_a_discharge_the_properties_lock_lists_counts_as_one_the_guarantees_lock
     discharges = [t for p in OR.PREMISES.values() for t in p["discharged_by"]]
     write_lock(lock, dict.fromkeys(discharges))
     props = tmp_path / "properties-lean-audit.json"
-    props.write_text(json.dumps({"guarantees": {t: {"assumptions": []} for t in discharges}}))
+    props.write_text(json.dumps(lock_doc({t: [] for t in discharges})))
     monkeypatch.setattr(OR, "LOCKS", (lock, props))
     assert held_both(tmp_path / "both")["bound"]["of_record"]["open"] == []
     monkeypatch.setattr(OR, "LOCKS", (lock,))
@@ -336,7 +375,7 @@ def test_a_lock_that_cant_be_read_lists_nothing_and_is_named_so_every_premise_it
     """The Properties' lock missing, not JSON, or with no guarantees: the record states it under ``unread``, by its path
     in the tree and with why, and reads the other lock, so only the premise whose discharge that lock alone would list
     is open and the figure of record charges the cap, never a crash."""
-    write_lock(lock, {"Properties.NetworkCertifier.circuitCounts": None})
+    write_lock(lock, {COUNTED: None})
     props = tmp_path / "tree" / "Security" / "Properties" / "lean-audit.json"
     props.parent.mkdir(parents=True)
     if text is not None:
@@ -351,13 +390,104 @@ def test_a_lock_that_cant_be_read_lists_nothing_and_is_named_so_every_premise_it
 
 
 def test_an_assumption_a_premise_stands_for_is_open_only_while_that_premise_is(tmp_path, lock, monkeypatch):
-    """The guarantee the tight K rests on takes the wires premise as a named hypothesis: discharged, it stays listed and
-    nothing is open; with one of its discharges missing, the premise is open, by its own name alone."""
-    monkeypatch.setitem(OR.PREMISES, "wires-fit", dict(OR.PREMISES["wires-fit"], assumes=("NetTiming.WiresFit",)))
-    write_lock(lock, {OR.RESTS_ON[0]: ["NetTiming.WiresFit"]})
+    """A guarantee the tight K rests on takes the wires premise as a named hypothesis, which the lock lists: named in
+    what it takes, by the wires premise, nothing is open while that is discharged; with one of its discharges missing,
+    the premise is open, by its own name alone; not named there, the assumption is open by its own name."""
+    takes = dict(OR.RESTS_ON[ACCEPTED]["takes"], **{"NetTiming.WiresFit": "wires-fit"})
+    monkeypatch.setitem(OR.RESTS_ON, ACCEPTED, dict(OR.RESTS_ON[ACCEPTED], takes=takes))
+    write_lock(lock, {ACCEPTED: ["NetTiming.WiresFit"]})
     assert held_both(tmp_path / "a")["bound"]["of_record"]["open"] == []
-    write_lock(lock, {OR.RESTS_ON[0]: ["NetTiming.WiresFit"], "Properties.NetworkCertifier.circuitWiresFit": None})
+    write_lock(lock, {ACCEPTED: ["NetTiming.WiresFit"], "Properties.NetworkCertifier.circuitWiresFit": None})
     assert held_both(tmp_path / "b")["bound"]["of_record"]["open"] == ["wires-fit"]
+    monkeypatch.setitem(OR.RESTS_ON, ACCEPTED, RESTS_ON[ACCEPTED])
+    write_lock(lock, {ACCEPTED: ["NetTiming.WiresFit"]})
+    assert held_both(tmp_path / "c")["bound"]["of_record"]["open"] == ["NetTiming.WiresFit"]
+
+
+def test_a_discharge_counts_only_at_the_statement_its_pin_names(tmp_path, lock, monkeypatch):
+    """The lock records no antecedent, and a Property may take a deployment's premise inline (`ScanScopeAcc` takes
+    `StmtFlattens` and `ScopeMatches`): a discharge the lock lists but `DISCHARGES` doesn't pin, or pins at another
+    statement, leaves its premise open with the lock's digest to read it at, and pinned there it discharges it."""
+    stated = "ab" * 32
+    monkeypatch.delitem(OR.DISCHARGES, COUNTED)
+    write_lock(lock, stated={COUNTED: stated})
+    of = held_both(tmp_path / "unpinned")["bound"]["of_record"]
+    assert (of["open"], of["K"], of["premises"]["premises"]["free-count"]["unpinned"]) == (
+        ["free-count"], KR, {COUNTED: stated})
+    monkeypatch.setitem(OR.DISCHARGES, COUNTED, {"statement": "ff" * 32, "takes": {}})
+    assert held_both(tmp_path / "restated")["bound"]["of_record"]["open"] == ["free-count"]
+    monkeypatch.setitem(OR.DISCHARGES, COUNTED, {"statement": stated, "takes": {}})
+    assert held_both(tmp_path / "pinned")["bound"]["of_record"]["open"] == []
+
+
+def test_a_discharge_that_takes_a_premise_discharges_only_once_that_premise_is_and_two_never_each_other(
+        tmp_path, lock, monkeypatch):
+    """The wires premise's discharge takes the deployment's scope check, a named assumption of its, by the sampled
+    leg's bridge: nothing is open while that premise is discharged, both are while it isn't, and two premises whose
+    discharges take each other stay open, each discharging nothing."""
+    wired, bridge = OR.PREMISES["wires-fit"]["discharged_by"][0], TOY["sampled-leg-bridge"]
+    scope = "Properties.NetworkScan.ScopeMatches"
+    monkeypatch.setitem(OR.DISCHARGES, wired, dict(OR.DISCHARGES[wired], takes={scope: "sampled-leg-bridge"}))
+    write_lock(lock, {wired: [scope]})
+    of = held_both(tmp_path / "a")["bound"]["of_record"]
+    assert (of["open"], of["premises"]["premises"]["wires-fit"]["takes"]) == ([], ["sampled-leg-bridge"])
+    write_lock(lock, {wired: [scope], bridge: None})
+    assert held_both(tmp_path / "b")["bound"]["of_record"]["open"] == ["wires-fit", "sampled-leg-bridge"]
+    monkeypatch.setitem(OR.DISCHARGES, bridge, dict(OR.DISCHARGES[bridge], takes={"hw": "wires-fit"}))
+    write_lock(lock, {wired: [scope]})
+    of = held_both(tmp_path / "c")["bound"]["of_record"]
+    assert (of["open"], of["K"]) == (["wires-fit", "sampled-leg-bridge"], KR)
+    assert of["premises"]["premises"]["sampled-leg-bridge"]["assumes"] == []
+
+
+@pytest.mark.parametrize("stated", ["ff" * 32, None])
+def test_a_guarantee_the_tight_K_rests_on_is_open_by_name_where_the_lock_states_it_otherwise(tmp_path, lock, stated):
+    """The lock records a guarantee's named assumptions, never its antecedents, so a statement other than the one whose
+    hypotheses and antecedents `RESTS_ON` names (another digest among the lock's reads, or none) may take one the
+    record doesn't name: that guarantee is open, by its name, with why, until it is read again and pinned."""
+    write_lock(lock, stated={ACCEPTED: stated})
+    rec = held_both(tmp_path)
+    of = rec["bound"]["of_record"]
+    assert (of["open"], of["K"]) == ([ACCEPTED], KR)
+    assert of["premises"]["rests_on"][ACCEPTED] == {"assumptions": [], "statement": stated, "restated": OR.RESTATED,
+                                                    "takes": OR.RESTS_ON[ACCEPTED]["takes"]}
+    assert rec["periods_tight"]["conditional_on"] == [ACCEPTED]
+
+
+def test_a_guarantee_the_tight_K_rests_on_with_no_statement_pinned_is_open_even_where_the_lock_lists_it(
+        tmp_path, lock, monkeypatch):
+    """PeriodTiedCount, listed before what it takes was read at its statement: open by its name, whatever the lock
+    states it as."""
+    (g,) = UNPINNED
+    monkeypatch.setitem(OR.RESTS_ON, g, RESTS_ON[g])
+    write_lock(lock, stated={g: "toy"})
+    of = held_both(tmp_path)["bound"]["of_record"]
+    assert of["open"] == [g] and of["premises"]["rests_on"][g]["restated"] == OR.RESTATED
+
+
+def test_each_guarantee_the_tight_K_rests_on_is_named_by_what_it_takes_at_its_statement_in_security_lock(monkeypatch):
+    """Security's lock records no guarantee's antecedents, so `RESTS_ON` names each hypothesis and antecedent of each
+    statement by hand, read at the statement's digest among the lock's reads: each guarantee of `RESTS_ON` the tree's
+    lock lists is there at that digest, with no named assumption it doesn't name or that doesn't stand, and each Prop it
+    takes is a premise's or standing. A hypothesis or antecedent a statement gains changes its digest, and fails here.
+    So does a discharge `DISCHARGES` pins, in either lock, and it pins only theorems `PREMISES` names."""
+    monkeypatch.undo()
+    locks = {f.relative_to(OR.ROOT): json.loads(f.read_text()) for f in OR.LOCKS}
+    assert ACCEPTED in locks[Path("Security/lean-audit.json")]["guarantees"]
+    assert set(OR.DISCHARGES) <= {t for p in OR.PREMISES.values() for t in p["discharged_by"]}
+    for g, r in (OR.RESTS_ON | OR.DISCHARGES).items():
+        pins = "RESTS_ON" if g in OR.RESTS_ON else "DISCHARGES"
+        assert set(r["takes"].values()) <= set(OR.PREMISES) | set(OR.STANDING) | set(OR.COUNTS), g
+        for name, lock in locks.items():
+            if g not in lock["guarantees"]:
+                continue
+            got = OR.statement(lock, g)
+            assert got is not None and got == r["statement"], (
+                f"{g}'s statement in {name} is {got}, not {r['statement']}, the one onsite_record.{pins} names what it "
+                f"takes at: read its hypotheses, antecedents and the conditions its good event reads again, name each in "
+                f"its takes with the premise (PREMISES), standing assumption (STANDING) or term of what K counts (COUNTS) "
+                f"that covers it, and pin {got}")
+            assert set(lock["guarantees"][g]["assumptions"]) <= set(r["takes"]) | set(OR.STANDING), g
 
 
 def test_a_scans_tied_audits_are_the_ones_it_charges_and_else_every_audit_is(tmp_path):
@@ -683,8 +813,9 @@ def test_the_record_lists_the_re_proof_inputs_and_which_of_outs_the_run_wrote(tm
 
 def test_the_serve_dirs_re_proof_inputs_are_checked_against_their_copys_listing_by_path_alone(tmp_path):
     """The serve dir's inputs, witness, are copied off the node: the record names the copy's node and path and says of
-    each input whether the listing holds every file its path names, and nothing of the listing's window names; one file
-    short is that input not copied, and a copy that isn't NODE:/PATH or a listing it can't read is the copy's error."""
+    each input whether the listing holds each file its path names and at least one under each directory it names, and
+    nothing of the listing's window names; one file short is that input not copied, and a copy that isn't NODE:/PATH
+    or a listing it can't read is the copy's error."""
     def files(path: str) -> list[str]:
         out = []
         for part in path.split(", "):
