@@ -449,7 +449,7 @@ theorem conflictPlanCost : ConflictPlanCost Coin := by
       Ex_mono fun s => by
         obtain ⟨q, ω, us⟩ := s
         exact conflictPlan_cost_le k R m x h q ω us
-    refine (h1.trans (Ex_sel_le G (((k x : ℕ) : ℝ) + 1) * c) fun q ω => ?_)).trans_eq
+    refine (h1.trans (Ex_sel_le G ((((k x : ℕ) : ℝ) + 1) * c) fun q ω => ?_)).trans_eq
       (by first | (push_cast; ring) | push_cast | norm_num | simp)
     show Ex (fun us : Fin (k x * R + 1) → (Fin n → Coin) × C => (m.cost ω (us 0) : ℝ) +
         ∑ t : Fin (k x), if m.acc ω (us 0) then
