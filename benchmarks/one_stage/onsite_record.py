@@ -194,12 +194,14 @@ PREMISES: dict[str, dict[str, Any]] = {
                   "discharged_by": ("Properties.NetworkCertifier.wiredScopeAcc",
                                     "Properties.NetworkCertifier.circuitWiresFit",
                                     "Properties.NetworkPeriod.rowsWiresChecked"), "assumes": ()},
-    "session-wires": {"is": "SessionWires: each sampled proof block's wired rows equal their writers', the period check "
-                            "running drawnOk on both openings as it reads them from the delivered session records. Its "
-                            "session half, that those are the committed rows, is SessionOpens and the binding, from the "
-                            "sampled leg (`sampled-leg`), never a named assumption",
-                      "discharged_by": ("Properties.NetworkCertifier.sessionWires_of",
-                                        "Properties.NetworkPeriod.rowsWiresDrawn"), "assumes": ()},
+    "session-wires": {"is": "SessionWires: each sampled proof block's wired inputs equal their writers' committed rows, "
+                            "proved inside its own session, whose statement reads the writer's committed leaf by path and "
+                            "whose circuit equates it with the wired input, so no opening reaches the verifier; "
+                            "OneStageZk.verdicts accepting only where each sampled reader's wire is the layout's, at the "
+                            "registered position, root and path; and SessionOpens and the binding from the sampled leg "
+                            "(`sampled-leg`), never a named assumption. Open until the theorem that "
+                            "OneStageZk.verdicts' acceptance gives it is named and in the lock",
+                      "discharged_by": (), "assumes": ()},
     "free-count": {"is": "each tied audit's free at least #(freeInputs \\ reg) at the wired layout",
                    "discharged_by": ("Properties.NetworkCertifier.circuitCounts",), "assumes": ()},
     "held-performed": {"is": "the public's held names only the checks the period check performed, each holding of it",

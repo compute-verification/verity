@@ -63,9 +63,10 @@ TREE = "ab12" * 10
 LINE = 'THE NETWORK CERTIFIER {"rc": 0, "verdict": "accept"}'
 #: SCHEDULE's egress capacity a phase: its 4 · 8 cells a bucket over 63 buckets exceed its caps' 252 · 4 = 1008 cells
 CAPACITY = 1008 * 512 * 8
-#: a stand-in for the sampled leg's guarantee, which `PREMISES` names no discharge of yet, and that premise as it is
-SAMPLED_LEG = "Toy.SampledAuditsSound"
-SAMPLED_LEG_PREMISE = OR.PREMISES["sampled-leg"]
+#: stand-ins for the theorems that discharge the premises `PREMISES` names no discharge of yet, and those premises as
+#: they are
+TOY = {"sampled-leg": "Toy.SampledAuditsSound", "session-wires": "Toy.VerdictsWired"}
+UNNAMED = {n: OR.PREMISES[n] for n in TOY}
 
 
 def discharged() -> dict:
@@ -87,8 +88,9 @@ def write_lock(f: Path, given: dict[str, list[str] | None] | None = None) -> Non
 
 @pytest.fixture(autouse=True)
 def lock(tmp_path_factory, monkeypatch) -> Path:
-    """A lock in Security's lock's place discharging every premise, the sampled leg's by `SAMPLED_LEG`."""
-    monkeypatch.setitem(OR.PREMISES, "sampled-leg", dict(OR.PREMISES["sampled-leg"], discharged_by=(SAMPLED_LEG,)))
+    """A lock in Security's lock's place discharging every premise, each of `UNNAMED` by its `TOY` stand-in."""
+    for name, toy in TOY.items():
+        monkeypatch.setitem(OR.PREMISES, name, dict(OR.PREMISES[name], discharged_by=(toy,)))
     f = tmp_path_factory.mktemp("lock") / "lean-audit.json"
     write_lock(f)
     monkeypatch.setattr(OR, "LOCKS", (f,))
@@ -261,18 +263,21 @@ def held_both(out: Path) -> dict:
 def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both_checks_are_held(
         tmp_path, lock, monkeypatch):
     """The lock as Security's is today, listing the guarantee the tight K rests on and none of the theorems that
-    discharge its premises, and the sampled leg with no discharge named: every premise is open, by name, so the figure
-    of record charges ℓ_a + 1 for the tied audit, and the tight K's cells beside it are conditional on each."""
-    monkeypatch.setitem(OR.PREMISES, "sampled-leg", SAMPLED_LEG_PREMISE)
+    discharge its premises, and the sampled leg and the session's wires with no discharge named: every premise is open,
+    by name, so the figure of record charges ℓ_a + 1 for the tied audit, and the tight K's cells beside it are
+    conditional on each."""
+    for name, premise in UNNAMED.items():
+        monkeypatch.setitem(OR.PREMISES, name, premise)
     lock.write_text(json.dumps({"guarantees": {g: {"assumptions": []} for g in OR.RESTS_ON}}))
     rec = held_both(tmp_path)
     of = rec["bound"]["of_record"]
     assert (of["held"], of["open"], of["K"]) == (["free", "circuit"], list(OR.PREMISES), K + 2 ** 23 + 1)
     assert [p["missing"] for p in of["premises"]["premises"].values()] == [
         list(p["discharged_by"]) for p in OR.PREMISES.values()]
-    assert of["premises"]["premises"]["sampled-leg"]["discharged_by"] == []
+    assert [of["premises"]["premises"][n]["discharged_by"] for n in UNNAMED] == [[], []]
     assert rec["periods_tight"]["conditional_on"] == list(OR.PREMISES) and rec["periods_tight"]["run"]["bits"] == K
     assert "SampledCodeRuns" in OR.PREMISES["sampled-leg"]["is"] and "Python" in OR.DISCHARGE
+    assert "no opening reaches the verifier" in OR.PREMISES["session-wires"]["is"]
 
 
 @pytest.mark.parametrize("given, open_", [
