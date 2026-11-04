@@ -19,7 +19,7 @@ good tile is within its cap (`TileGood`), so no premise is added.
 
 namespace Pouw.PearlC
 
-open Finset Assumptions Pouw.Fp8Atom
+open Finset _root_.Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 /-- A tile over its cap is neither good, whose cap holds, nor of a blank unit. -/
 theorem overCapTiles_disjoint {Q R S : Type} (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R)
@@ -73,12 +73,12 @@ theorem missBound_strict (t : ℕ) (εs : ℝ) (hεs : εs ≤ 1) :
     intro c hc
     rw [hS']
     by_cases h0 : drawsIn S c = 0
-    · rw [if_pos h0] at hc
+    · rw [ite_eq_left h0] at hc
       refine ⟨fun i => mem_sdiff.mpr ⟨mem_range.mpr (c i).1.isLt, fun hi => ?_⟩, hc⟩
       have h := Finset.card_eq_zero.mp h0
       rw [Finset.filter_eq_empty_iff] at h
       exact h (mem_univ i) hi
-    · rw [if_neg h0, one_mul] at hc
+    · rw [ite_eq_right h0, one_mul] at hc
       exact absurd (sum_le_sum_of_subset_of_nonneg hS fun _ _ _ => Nat.cast_nonneg _) (not_le.mpr hc)
   refine (pr_mono key).trans ?_
   have h := Pouw.Proofs.workWeightedSampling Unit w N t (fun _ => range N \ S) εs hεs
@@ -227,7 +227,7 @@ theorem gammaSampled_of_tol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype 
     rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
     exact fun i _ ho => Finset.disjoint_left.mp (overCapTiles_disjoint P TR U x.1 x.2.1 _) (hacc i) ho
   have hu0 : (if drawsIn (overCapTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 = 0 then εs else 1) = εs := by
-    rw [h0, if_pos rfl]
+    rw [h0, ite_eq_left rfl]
   refine ⟨fun i => Or.inl (hacc i), ?_⟩
   show T < (1 - γ) * (claimedWref TR U (A.transcript U x.1 x.2.1) -
     (if drawsIn (overCapTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 = 0 then εs else 1) *
