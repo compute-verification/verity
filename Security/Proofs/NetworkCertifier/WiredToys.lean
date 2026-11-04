@@ -325,17 +325,13 @@ theorem wireWrong_eq_empty {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : A
   obtain ⟨-, _, -, g, -, hg⟩ := Finset.mem_filter.1 hv
   exact hg (h g)
 
-/-- `flipProg` has no constant, so its gates are read at their committed values. -/
-theorem flip_read (val : ℕ → Option Bool) {i : ℕ} (hi : i < 4) : flipStmt.prog.read val i = val i := by
-  interval_cases i <;> simp [Prog.read, flipStmt, flipProg]
-
 theorem cycle_wireRight (H : Msg → Msg) (a : Bool) (g : ℕ) :
     WireRight flipStmt.prog cycleLay.wires ((wit4 a (!a) (!a) a).val H accCm flipStmt) g := by
   obtain ⟨h0, h1, h2, h3⟩ := wit4_val H a (!a) (!a) a
   intro w hw
   rcases cycle_wired hw with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
-  · exact ⟨a, h0, (flip_read _ (i := 3) (by decide)).trans h3⟩
-  · exact ⟨!a, h2, (flip_read _ (i := 1) (by decide)).trans h1⟩
+  · exact ⟨fun c => by simp [flipStmt, flipProg], a, h0, h3⟩
+  · exact ⟨fun c => by simp [flipStmt, flipProg], !a, h2, h1⟩
 
 /-- Under `cycleLay`'s wiring, a trace whose inputs are its writers' values has no incorrect proof block. -/
 theorem cycle_incorrect (H : Msg → Msg) (a : Bool) :
@@ -348,7 +344,7 @@ theorem pass_wireRight (H : Msg → Msg) (a : Bool) (g : ℕ) :
   obtain ⟨h0, -, h2, -⟩ := wit4_val H a (!a) a (!a)
   intro w hw
   obtain ⟨rfl, rfl⟩ := pass_wired hw
-  exact ⟨a, h2, (flip_read _ (i := 0) (by decide)).trans h0⟩
+  exact ⟨fun c => by simp [flipStmt, flipProg], a, h2, h0⟩
 
 /-- Under `passLay`'s wiring, a trace whose second input copies the first has no incorrect proof block. -/
 theorem pass_incorrect (H : Msg → Msg) (a : Bool) :
@@ -377,8 +373,8 @@ theorem flip_vals (H : Msg → Msg) {w : Wit} (h : incorrect H accCm flipStmt fl
   have hr : WireRight flipStmt.prog flipLay.wires (w.val H accCm flipStmt) 2 := by
     by_contra hn
     exact hnw ⟨[2, 3], rfl, 2, Or.inl (by simp), hn⟩
-  obtain ⟨b, h2, h1⟩ := hr 1 rfl
-  exact ⟨b, (flip_read _ (i := 1) (by decide)).symm.trans h1, by simp [h32, h2]⟩
+  obtain ⟨-, b, h2, h1⟩ := hr 1 rfl
+  exact ⟨b, h1, by simp [h32, h2]⟩
 
 /-- Under `passLay`'s wiring, a trace with no incorrect proof block has negations of one value. -/
 theorem pass_vals (H : Msg → Msg) {w : Wit} (h : incorrect H accCm flipStmt flipPart passLay.wires w = ∅) :
@@ -403,9 +399,8 @@ theorem pass_vals (H : Msg → Msg) {w : Wit} (h : incorrect H accCm flipStmt fl
   have hr : WireRight flipStmt.prog passLay.wires (w.val H accCm flipStmt) 2 := by
     by_contra hn
     exact hnw ⟨[2, 3], rfl, 2, Or.inl (by simp), hn⟩
-  obtain ⟨b, h2, h0⟩ := hr 0 rfl
-  have h0' := (flip_read _ (i := 0) (by decide)).symm.trans h0
-  exact ⟨!b, by simp [h10, h0'], by simp [h32, h2]⟩
+  obtain ⟨-, b, h2, h0⟩ := hr 0 rfl
+  exact ⟨!b, by simp [h10, h0], by simp [h32, h2]⟩
 
 /-! ## The rows the traces carry -/
 
@@ -544,9 +539,9 @@ theorem flip_excludes (H : Msg → Msg) :
     have hw : (1 : ℕ) ∈ incorrect H accCm flipStmt flipPart flipLay.wires (wit4 false true false true) :=
       Finset.mem_union_right _ (Finset.mem_filter.2 ⟨Finset.mem_range.2 (by decide),
         ⟨[2, 3], rfl, 2, Or.inl (by simp), fun hr => by
-          obtain ⟨b, hb2, hb1⟩ := hr 1 rfl
+          obtain ⟨-, b, hb2, hb1⟩ := hr 1 rfl
           rw [h2] at hb2
-          rw [flip_read _ (i := 1) (by decide), h1] at hb1
+          rw [h1] at hb1
           exact absurd ((Option.some.inj hb2).trans (Option.some.inj hb1).symm) (by decide)⟩⟩)
     have hsub : incorrect H accCm flipStmt flipPart flipLay.wires (wit4 false true false true) ⊆ Finset.range 2 :=
       Finset.union_subset (Finset.filter_subset _ _) (Finset.filter_subset _ _)

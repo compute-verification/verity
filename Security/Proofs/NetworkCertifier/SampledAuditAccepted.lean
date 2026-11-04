@@ -298,9 +298,9 @@ end Run
 
 /-- **A wired gate outside the incorrect proof blocks reads the trace's value** once the wires are resolved in more
 rounds than the wired gates ranked below it, at inputs that read the trace at every unwired input that is `Good`, where
-a wired gate's writer depends only on gates `Good` as the wired gate is: its wire is right, so the trace holds there the
-value its writer is read at, and the writer, a returned gate (a constant, an input or a computed gate) or an input, has
-the trace's value (`valOver_out`) on inputs that do, the wired ones among them ranked lower. -/
+a wired gate's writer depends only on gates `Good` as the wired gate is: its wire is right, so the trace holds there its
+writer's committed value, and the writer, a returned gate that is no constant or an input, has the trace's value
+(`valOver_out`) on inputs that do, the wired ones among them ranked lower. -/
 theorem resolveWires_eq {L S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGates L S} {k : ℕ}
     {ref : ℕ → Option Bool} {F : Finset ℕ} (hT : C.Topological) (hP : P.Partitions C) (ι : ℕ → ℕ → Bool)
     (hι : ∀ v u, P.blocks[v]? = some u → v ∉ F → C.Correct (C.refIn u ref (ι v)) u) (hwf : lay.WiresFit C k)
@@ -318,11 +318,11 @@ theorem resolveWires_eq {L S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGa
   intro g w hw hg hc hnf
   rw [resolveWires_succ hw]
   obtain ⟨hgi, -, hwo⟩ := hwf.1 g w hw
-  obtain ⟨b, hgb, hwb⟩ := hright g hgi hnf w hw
+  obtain ⟨hwc, b, hgb, hwb⟩ := hright g hgi hnf w hw
   have htg : traceVal C ref g = b := by
     rw [traceVal, read_of_not_const (fun b' h => by rw [hgi] at h; cases h), hgb, Option.getD_some]
   have htw : traceVal C ref w = b := by
-    rw [traceVal, hwb, Option.getD_some]
+    rw [traceVal, read_of_not_const hwc, hwb, Option.getD_some]
   refine (valOver_out hT hP ι hι (fun g' => Depends C g' w) ?_ ?_ hwo Relation.ReflTransGen.refl).trans
     (htw.trans htg.symm)
   · intro g' x hx hg' i hi

@@ -9,13 +9,13 @@ writer's value (`WireRight`). Where the session proves the wire itself, its stat
 leaf as the wired input, a Flock witness in its relation reveals it: revealed in the session's Flock witness, so nothing
 reaches the verifier. `RevealsWires H D opens wires` says so at an accepted run, at an opening check `opens`: for each
 wired gate of a checked unit's proof block, the reveal holds an opening at the gate, under the statement's roots, that
-`opens` accepts and whose value is its writer's (`WriterRevealed`): a constant writer's own, or another writer's,
-opened to the same value by an opening in the same reveal that `opens` accepts.
+`opens` accepts and whose value is its writer's committed one (`WriterRevealed`): the writer is no constant gate, and
+an opening in the same reveal at the writer, of the same value, is one `opens` accepts.
 
 * `WiresRevealed H D wires`: `RevealsWires` at the commitment's own check, `D.commit.Opens H`.
 * `RevealsWires.mono`: a check that accepts more keeps the wires revealed.
 * `sessionWires_of`: `SessionOpens` and `WiresRevealed` give `SessionWires`. Values agreeing with the passing openings
-  hold the opened value at the wired gate, and read its writer there (`read_of_writerRevealed`).
+  hold the opened value at the wired gate, and the same value at its writer (`val_of_writerRevealed`).
 * `ksWired_of_revealed`: sampling at the incorrect set (`KSWired`) from `KS_of`'s hypotheses with `WiresRevealed`
   beside `SessionOpens`, by `KSWired_of`.
 * `wiresRevealed_none`: with no wires there is nothing to reveal.
@@ -26,29 +26,28 @@ namespace NetTiming
 open Claims Claims.Sampling
 
 /-- **The writer `w` is revealed at the value `v`** among the openings `os`, in the session's Flock witness; nothing
-reaches the verifier. `w` is the constant `v`, or `w` is no constant and an opening among `os` under `roots`, at `w` and
-of value `v`, is one `opens` accepts. -/
+reaches the verifier. `w` is no constant gate, and an opening among `os` under `roots`, at `w` and of value `v`, is one
+`opens` accepts: the writer's committed leaf, which the session reads. -/
 def WriterRevealed (opens : List Msg → Opening Bool → Prop) (C : Prog) (roots : List Msg)
     (os : List (List Msg × Opening Bool)) (w : ℕ) (v : Bool) : Prop :=
-  C.gates[w]? = some (.const v) ∨
-    (∀ c, C.gates[w]? ≠ some (.const c)) ∧ ∃ q ∈ os, q.1 = roots ∧ q.2.pos = w ∧ q.2.val = v ∧ opens q.1 q.2
+  (∀ c, C.gates[w]? ≠ some (.const c)) ∧ ∃ q ∈ os, q.1 = roots ∧ q.2.pos = w ∧ q.2.val = v ∧ opens q.1 q.2
 
 theorem WriterRevealed.mono {opens opens' : List Msg → Opening Bool → Prop} (h : ∀ r o, opens r o → opens' r o)
     {C : Prog} {roots : List Msg} {os : List (List Msg × Opening Bool)} {w : ℕ} {v : Bool}
     (hw : WriterRevealed opens C roots os w v) : WriterRevealed opens' C roots os w v := by
-  rcases hw with hc | ⟨hnc, q, hq, hq1, hqw, hqv, hqo⟩
-  · exact Or.inl hc
-  · exact Or.inr ⟨hnc, q, hq, hq1, hqw, hqv, h _ _ hqo⟩
+  obtain ⟨hnc, q, hq, hq1, hqw, hqv, hqo⟩ := hw
+  exact ⟨hnc, q, hq, hq1, hqw, hqv, h _ _ hqo⟩
 
-/-- Values agreeing with the openings `opens` accepts under `roots` read a revealed writer at its revealed value. -/
-theorem read_of_writerRevealed {opens : List Msg → Opening Bool → Prop} {C : Prog} {roots : List Msg}
+/-- Values agreeing with the openings `opens` accepts under `roots` hold a revealed writer, no constant gate, at its
+revealed value. -/
+theorem val_of_writerRevealed {opens : List Msg → Opening Bool → Prop} {C : Prog} {roots : List Msg}
     {os : List (List Msg × Opening Bool)} {w : ℕ} {v : Bool} {val : ℕ → Option Bool}
     (hcons : ∀ q ∈ os, opens q.1 q.2 → q.1 = roots → val q.2.pos = some q.2.val)
-    (h : WriterRevealed opens C roots os w v) : C.read val w = some v := by
-  rcases h with hc | ⟨hnc, q, hq, hq1, hqw, hqv, hqo⟩
-  · exact SampledAuditProof.read_const hc
-  · rw [SampledAuditProof.read_of_not_const hnc, ← hqw, ← hqv]
-    exact hcons q hq hqo hq1
+    (h : WriterRevealed opens C roots os w v) : (∀ c, C.gates[w]? ≠ some (.const c)) ∧ val w = some v := by
+  obtain ⟨hnc, q, hq, hq1, hqw, hqv, hqo⟩ := h
+  refine ⟨hnc, ?_⟩
+  rw [← hqw, ← hqv]
+  exact hcons q hq hqo hq1
 
 section Hyps
 
@@ -84,7 +83,7 @@ def WiresRevealed (H : Msg → Msg) (D : Deploy Coin Col T) (wires : AuditStatem
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
 /-- **`SessionWires` from `SessionOpens` and the revealed wires**: values agreeing with the passing openings make the
-proof block correct (`SessionOpens`), and hold at each wired gate it holds or reads the value its writer is read at. -/
+proof block correct (`SessionOpens`), and hold at each wired gate it holds or reads its writer's committed value. -/
 theorem sessionWires_of {H : Msg → Msg} {D : Deploy Coin Col T} {iroots : Msg → Seen → ℕ → List Msg}
     {wires : AuditStatement → ℕ → Option ℕ} (hopens : SessionOpens H D iroots) (hw : WiresRevealed H D wires) :
     SessionWires H D iroots wires := by
@@ -93,11 +92,10 @@ theorem sessionWires_of {H : Msg → Msg} {D : Deploy Coin Col T} {iroots : Msg 
   refine ⟨b, hb, fun val ι hcons => ⟨hok val ι hcons, fun g hg => ?_⟩⟩
   intro w hgw
   obtain ⟨q, hq, hq1, hqg, hqo, hwr⟩ := hw x s Pt Ω P ω r u xS vS wF hs hP hin hacc hu hsess hck b hb g hg w hgw
-  refine ⟨q.2.val, ?_, read_of_writerRevealed ?_ hwr⟩
-  · rw [← hqg]
-    exact (hcons q hq hqo).1 hq1
-  · intro q' hq' ho h1
-    exact (hcons q' hq' ho).1 h1
+  obtain ⟨hnc, hwv⟩ := val_of_writerRevealed (fun q' hq' ho h1 => (hcons q' hq' ho).1 h1) hwr
+  refine ⟨hnc, q.2.val, ?_, hwv⟩
+  rw [← hqg]
+  exact (hcons q hq hqo).1 hq1
 
 set_option synthInstance.maxSize 1024 in
 /-- **Sampling at the incorrect set from sampling's hypotheses and the revealed wires**: `KSWired_of`, with

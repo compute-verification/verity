@@ -285,7 +285,8 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   `EncardIngressObsDecodableLeContentsPerWindow`.
 - **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, `KSWired`'s bound at
   `RAcc δ` on the statements whose layout fits the program: no incorrect proof block (faulty, or wire-wrong: holding or
-  reading a wired gate whose committed value is not its writer's) is sampled `all`, and the advice holding the
+  reading a wired gate whose committed value is not its writer's, or whose writer is a constant gate) is sampled `all`,
+  and the advice holding the
   incorrect proof blocks' committed gates at the trace's values makes `Accepted` every run the trace carries, each
   wired gate reading its writer (`resolveWires`). With no wires `KSWired` is `Claims.Sampling.KS` (`ksWired_none`).
   At a wired layout `ksWired_of_record` (`WiredRead.lean`) gives `KSWired` at the deployed record from the sessions' KS
