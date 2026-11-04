@@ -5,9 +5,10 @@ import Proofs.Flock.EndToEnd.Joint.V5.Session
 /-!
 # A member's session in the window's audit, played alone
 
-A strategy of the window's audit reads the sample and every earlier member's session before it plays member `k`'s, so
-member `k`'s session in the audit is its session played alone at `JointAuditV5.memberLaw`, whose coins are the sample's
-on which the draw ends and the earlier sessions' drawn together, by `JointAuditV5.memberStrat`:
+A strategy of the window's audit reads the sample and every earlier member's session before it plays member `k`'s, so,
+at a window some draw of which ends, member `k`'s session in the audit is its session played alone at
+`JointAuditV5.memberLaw`, whose coins are the sample's on which the draw ends and the earlier sessions' drawn together,
+by `JointAuditV5.memberStrat`:
 
 * `JointAuditV5.prob_member`: an event of member `k`'s part of the sample and its session's transcript has probability in
   the window's audit at most its probability in member `k`'s session played alone: a draw that runs out records no
@@ -63,7 +64,7 @@ open scoped ENNReal
 
 open Classical
 
-variable (w : JointAuditV5)
+variable (w : JointAuditV5) [Nonempty w.EΩ]
 
 /-- **Member `k`'s session in the window's audit is at most its session played alone**: an event `E` of member `k`'s
 part of the sample and its session's transcript is no likelier in the window's audit, which records no transcript when
