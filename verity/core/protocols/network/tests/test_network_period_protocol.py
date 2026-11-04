@@ -203,6 +203,30 @@ def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
         assert verdict == REJECT and "is no compute audit's output" in json.loads(out)["reason"], (n, out)
 
 
+def test_a_stray_audit_beside_the_tied_one_is_accepted_and_alone_refused(server):
+    """A composite's tie of the network certifier's compute audits to its policy's record has two rows-form fixtures
+    (`PC.audits_of`, `PC.with_audits`): a small `rows-honest` period, whose one execution phase's scan ties its one
+    audit, and the same period with another period's audit beside its own, a stray no phase's scan ties. Lean and the
+    mirror accept both alike, with the commitment registering exactly those audits' records, so the stray is the
+    composite's to refuse; and with the stray in place of the tied audit, the scan's prog is no compute audit's output
+    and both refuse it."""
+    for n in range(3):
+        tied = build("rows-honest", n, small=True)
+        (own,) = PC.audits_of(tied)
+        stray = PC.audits_of(build("rows-honest", 100 + n, small=True))[0]
+        for case, audits in ((tied, [own]), (PC.with_audits(tied, [own, stray]), [own, stray])):
+            out = reference(case)
+            assert out["verdict"] == ACCEPT, (n, out)
+            verdict, got = D.replay(PORT, case, server)
+            assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+            assert [PC.R.digest(a) for a in json.loads(bytes.fromhex(case["commitment"]))["audits"]] == [
+                PC.R.digest(a[1]) for a in audits]
+        alone = PC.with_audits(tied, [stray])
+        assert "is no compute audit's output" in reference(alone)["reason"], (n, reference(alone))
+        verdict, got = D.replay(PORT, alone, server)
+        assert verdict == REJECT and "is no compute audit's output" in json.loads(got)["reason"], (n, got)
+
+
 def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
     """The scan reads each slot's entry, read bit included, from the `SlotEntry_v1` unit of that slot's Program, lane
     j's from chunk j, so the rows form refuses, in Lean and in the mirror and by name, each way a tied link-window's
@@ -641,24 +665,26 @@ def test_the_rows_forms_bound_counts_what_it_says():
     them."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
                PC.Scan(10, 1120, 300, 512))
-    out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0, 0)])
+    out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0, 0, [])])
     (scan,) = out["scans"]
     assert at_most(20, 3) == 1351 and clog2(1351) == 11
     assert (out["schedules"], out["cells"], scan["free"], scan["faulty_sets"], scan["faulty_bits"], scan["jitter"],
-            scan["faulty_entries"], out["K"]) == (5, 5, 1120, 11, 3 * 512, 10, 0, 5 + 5 + (1120 + 11 + 3 * 512 + 10))
+            scan["faulty_entries"], scan["tied"], out["K"]) == (5, 5, 1120, 11, 3 * 512, 10, 0, [],
+                                                                5 + 5 + (1120 + 11 + 3 * 512 + 10))
     assert out["audits"] == [{"delta": "1/10", "drawn": 3, "units": 10, "wrong_units": 4}]
     drawn = dataclasses.replace(p, audits=(), cells=(), jitter=1, scan=PC.Scan(4, 0, 300, 512))
-    assert public(drawn, [], [(Facts(8, 8, Fraction(1, 100), 0), 0, 0)])["K"] == 0
+    assert public(drawn, [], [(Facts(8, 8, Fraction(1, 100), 0), 0, 0, [])])["K"] == 0
     w63 = dataclasses.replace(p, audits=(PC.Audit(8 * 1136, 0, "", 8, 1136),), cells=(), jitter=1,
                               scan=PC.Scan(32, 0, 300, 512))
-    tied = public(w63, [Facts(8, 8, Fraction(1, 100), 0)], [(Facts(64, 64, Fraction(1, 100), 0), 8 * 1136, 0)])
-    assert (tied["scans"][0]["free"], tied["K"]) == (9088, 9088)
+    tied = public(w63, [Facts(8, 8, Fraction(1, 100), 0)], [(Facts(64, 64, Fraction(1, 100), 0), 8 * 1136, 0, [0])])
+    assert (tied["scans"][0]["free"], tied["scans"][0]["tied"], tied["K"]) == (9088, [0], 9088)
     k4 = dataclasses.replace(w63, scan=PC.Scan(32, 0, 300, 512, 8 * 112))
-    part = public(k4, [Facts(16, 9, Fraction(1, 100), 2)], [(Facts(64, 64, Fraction(1, 100), 0), 9088, 8 * 112)])
-    assert (part["scans"][0]["faulty_entries"], part["K"]) == (896, 9088 + 896)
+    part = public(k4, [Facts(16, 9, Fraction(1, 100), 2)],
+                  [(Facts(64, 64, Fraction(1, 100), 0), 9088, 8 * 112, [0])])
+    assert (part["scans"][0]["faulty_entries"], part["scans"][0]["tied"], part["K"]) == (896, [0], 9088 + 896)
     two = dataclasses.replace(p, cells=(), windows=2, scan=PC.Scan(0, 0, 0, 0))
     assert public(two, [Facts(1, 1, Fraction(1, 10), 0)],
-                  [(Facts(1, 1, Fraction(1, 15), 0), 0, 0)] * 2)["eps"] == "2/15"
+                  [(Facts(1, 1, Fraction(1, 15), 0), 0, 0, [])] * 2)["eps"] == "2/15"
     one = dataclasses.replace(two, windows=1)
-    assert public(one, [Facts(2, 1, Fraction(1, 10), 0)], [(Facts(1, 1, Fraction(1, 15), 0), 0, 0)],
+    assert public(one, [Facts(2, 1, Fraction(1, 10), 0)], [(Facts(1, 1, Fraction(1, 15), 0), 0, 0, [])],
                   [Facts(2, 1, Fraction(1, 10), 0)])["eps"] == "1/6"

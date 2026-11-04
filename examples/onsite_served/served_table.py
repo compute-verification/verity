@@ -393,10 +393,11 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     k = json.loads(pick.stdout)["window"]
     lines = machine.read_text().splitlines() if machine.is_file() else []
     node = ["--node", lines[1]] if len(lines) > 1 and lines[1].strip() else []
+    v3c = out / "v3c-audit"
     p = subprocess.run([py, str(ROOT / VERDICTS_SCRIPT), "record", "--serve-run", str(serve), "--window", str(k),
-                        "--sampled-proofs", str(out / "sampled-proofs" / "served"), "--pieces", str(out / "pieces"),
-                        *node, "--out", str(state / "record" / "onsite")], cwd=ROOT, capture_output=True, text=True,
-                       check=False)
+                        "--sampled-proofs", str(v3c), "--registration", str(v3c / "registration.json"),
+                        "--pieces", str(out / "pieces"), *node, "--out", str(state / "record" / "onsite")], cwd=ROOT,
+                       capture_output=True, text=True, check=False)
     line = next((json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("RECORD ")), None)
     if line is None:
         raise Refused("record", (p.stderr or p.stdout).strip()[-800:] or "served_verdicts.py record wrote no RECORD")

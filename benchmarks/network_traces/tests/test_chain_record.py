@@ -12,9 +12,9 @@ window was drawn; the draw's bound at δ is the integrity profile's count bound,
 Lean's does; leak counts the scan's widths and terms on a network certifier run's files, and refuses a sample and a
 network certifier the scan's class doesn't serve; the job's copy of the
 gates' records into its output keeps no gate run's witness/. On the certifier-only path the report needs no scan,
-names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check
-let through as negatives; d1's K is all_protocols' monitoring-period count over the compute audits' samples and free
-inputs and the network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted`
+names what it stubs, counts the rehearsal's refused runs as negatives and refuses an endpoint whose advice isn't
+rebuilt from the certified I/O; d1's K is all_protocols' monitoring-period count over the compute audits' samples and
+free inputs and the network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted`
 (exit 0) when the honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
 on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On certifier/v0's
 period answer, an accepted report writes the block record's certifier entry by `block_certifier.block_leg`, in the
@@ -239,8 +239,8 @@ def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:
         custody=put("custody.json", {"verdict": "accepted"}),
         certs=put("certs.json", {"verdict": "accepted", "rows": [{"window": 0, "certified": True}]}),
         endpoint=put("endpoint.json", {"chain": {
-            "bits": {"bound": True, "rebuilt": True, "commit_windows": [{"bound": True, "rebuilt": True}]},
-            "tie": {"ran": True, "runs": {"honest": {"verdict": "accepted"}}}}}) if endpoint else None,
+            "bits": {"bound": True, "rebuilt": True, "commit_windows": [{"bound": True, "rebuilt": True}]}}})
+        if endpoint else None,
         n2=put("n2.json", {"ok": True, "members": {
             "honest": {"windows": [window], "network": {"accepted": True}, "ok": True},
             "tampered": {"windows": [window | {"accepted": False}], "network": {"accepted": False}, "ok": True}}}),
@@ -528,6 +528,26 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "lanes": 8}}))
     with pytest.raises(ValueError, match="lanes = 4"):
         cr.leak(run)
+    (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "egress_cells": 7}}))
+    with pytest.raises(SystemExit, match="0 of scan_zk's classes have a schedule of 7 egress cells"):
+        cr.leak(run)
+
+
+def test_leak_counts_a_w63k4_run_at_w63k4s_class(tmp_path):
+    """The gate's ``--scan-class w63k4`` schedules 5 egress cells, and K is counted at that class (KO 4, KI 32), not
+    at w63's."""
+    from dataclasses import asdict
+    sz = sys.modules.get("scan_zk") or _load("scan_zk")
+    sys.modules["scan_zk"] = sz
+    run = tmp_path / "c1"
+    (run / "out").mkdir(parents=True)
+    (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.W63K4.params)}))
+    (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 1, "requests": 4}}))
+    doc = cr.leak(run)
+    assert cr.run_class(sz.W63K4.params) == sz.W63K4.cls and cr.run_class(sz.W63.params) == sz.W63.cls
+    assert (doc["class"]["KO"], doc["class"]["KI"]) == (4, 32)
+    assert (doc["terms"]["cell"], doc["terms"]["connections_per_block"]) == (3, 128)
+    assert doc["terms"]["schedules_per_block"] == doc["terms"]["cells_per_block"] == 384
 
 
 def test_subset_bound():
@@ -546,20 +566,17 @@ def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_ta
     Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [
         {"gate_run": "c1", "request": {"where": "off-host: a pool slot", "engine": "seeded:phase1"},
          "strategies": {"honest": "accepted", "late": "refused", "extra": "refused", "token": "accepted"}}]}))
-    ep = json.loads(Path(steps.endpoint).read_text())
-    ep["chain"]["tie"]["runs"] |= {"token": {"verdict": "refused", "ok": True}, "extra": {"verdict": "n/a"},
-                                   "late": {"verdict": "refused", "ok": None}}
-    ep["negatives"] = {"late": {"own_code": "audit.status:coverage-never-established"}, "token": {"own_code": None}}
-    Path(steps.endpoint).write_text(json.dumps(ep))
     got = cr.report(steps)
     assert got["verdict"] == "accepted" and got["steps"]["scan"]["verdict"] == "not run"
     assert got["stubbed"][:3] == list(cr.STUBBED) and len(got["stubbed"]) == 5
-    assert got["negatives_refused"] == {"rehearsal/c1/late": True, "rehearsal/c1/extra": True, "tie/token": True,
-                                        "n2/tampered": True}
+    assert got["negatives_refused"] == {"rehearsal/c1/late": True, "rehearsal/c1/extra": True, "n2/tampered": True}
     assert "on the certifier-only path" in cr.markdown(got) and "Stubbed:" in cr.markdown(got)
-    ep["chain"]["tie"]["runs"]["token"] = {"verdict": "accepted", "ok": False}
+    ep = json.loads(Path(steps.endpoint).read_text())
+    ep["chain"]["bits"]["rebuilt"] = False
     Path(steps.endpoint).write_text(json.dumps(ep))
-    assert cr.report(steps)["negatives_refused"]["tie/token"] is False
+    assert cr.report(steps)["steps"]["endpoint"]["verdict"] == "refused"
+    ep["chain"]["bits"]["rebuilt"] = True
+    Path(steps.endpoint).write_text(json.dumps(ep))
     Path(steps.job).write_text(json.dumps(job | {"path": None}))
     off = cr.report(steps)
     assert off["verdict"] == "refused" and off["stubbed"] == []
