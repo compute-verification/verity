@@ -6,7 +6,7 @@ public import Definitions.Core.Partition
 public import Definitions.Core.Annotation
 public import Definitions.Core.Advice
 public import Definitions.Core.PrivatePartition
-public import Definitions.Core.Declaration
+public import Definitions.Core.RegisteredCircuit
 public import Definitions.Core.Boolean
 public import Definitions.Core.Game
 public import Definitions.Core.Draw
@@ -25,7 +25,7 @@ public import Definitions.Core.ValueSalts
 /-!
 # Core's protocol: the model every protocol states its guarantees in
 
-The developer declares a circuit `D` and its baseline `θ` (`Declaration`), runs `D` and commits the values of its
+The developer declares a circuit `D` and its baseline `θ` (`RegisteredCircuit`), runs `D` and commits the values of its
 committed wires, and the verifier draws with live coins (`Game`), which it reads from a challenger's log
 (`Challenger`), by a draw law over units (`Draw`). Every protocol package states its guarantees about
 these objects and defines none of its own: a circuit, its transcripts, a partition into units and a unit's correctness

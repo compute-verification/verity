@@ -30,15 +30,17 @@ scenarios register a policy as if it were a subprotocol.
 
 ## The Lean
 
-- **The definition**, `Security/Definitions/Nci.lean`. `Nci.Complies Γ α` states an older form: D divides into blocks
-  of at most Γ gates, each reading at most α bits of fresh input per gate it holds (`Nci.novelReads`), so at most αΓ
-  bits a block. Its link to the (c, k) form is proved: `Nci.Guarantees.CompliesCK` pads a complying partition into a
-  (Γ, ⌊αΓ⌋)-partition (`Verity.Partition.IsCK`), and `Nci.Guarantees.ExpandComplies` carries compliance through the
-  bit-level expansion at Γ·W for gates up to W bits wide.
+- **The definition**, `Security/Definitions/Nci.lean`. `Nci.Complies c k` says D has a (c, k)-partition
+  (`Verity.Partition.IsCK`): every block exactly c gates, padding included, and at most k fresh input bits
+  (`Nci.novelReads`). `Nci.CompliesRate c α` is the form the check reads: blocks of at most c gates,
+  each reading at most α fresh input bits per gate. A (c, k)-partition complies at rate α = k/c
+  (`Nci.SecurityProofs.compliesRate_of_complies`), and each guarantee is stated at (c, k). The way back is proved
+  too: `Nci.Guarantees.CompliesCK` pads a partition complying at rate α into a (c, ⌊αc⌋)-partition, and
+  `Nci.Guarantees.ExpandComplies` carries the rate through the bit-level expansion at c·W for gates up to W bits wide.
 - **The guarantees**, `Security/Definitions/Nci/Guarantees/`, each proved in `Security/Proofs/Nci/` as
   `Nci.SecurityProofs.G`. `ReadBound` turns a lower bound on fresh input into a lower bound on size, `Inference` shows
   honest inference complies, and the covering, training and threading statements are pricing arguments.
-  `Nci.Guarantees.DampenerRemote` and its relatives state the remote composition's overhead in the older form.
+  `Nci.Guarantees.DampenerRemote` and its relatives state the remote composition's overhead at (c, k).
 - **The registered information's provenance**, `Nci.Assumptions.BaselineRegistered`: every θ entry is registered
   public data, never an earlier run's output.
 
@@ -47,7 +49,7 @@ scenarios register a policy as if it were a subprotocol.
 `lean/` is the Lake package `nci_check`, code that reads Programs with C-Flock's decoder (`Flock.Program`) and imports
 nothing else but Lean core and the core interface (`core_protocol`).
 
-- `nci-check` runs `NciCheck.Baseline.check`: `NciCheck.Desc.check`, which decides `Nci.Complies Γ α` for a declared
+- `nci-check` runs `NciCheck.Baseline.check`: `NciCheck.Desc.check`, which decides `Nci.CompliesRate c α` for a declared
   division aligned to the root's Calls at the cost of the descriptor (one summary per Definition), then each θ entry's
   provenance against the deployment's registration log.
 - `nci-check --unrolled` runs the same with `NciCheck.check`, the check gate by gate, kept as the reference; its input
@@ -60,9 +62,10 @@ nothing else but Lean core and the core interface (`core_protocol`).
   `../tests/test_inference_only_protocol.py` holds `inference-only serve` to that reference behind the protocol's
   decoders.
 
-The check's agreement with `Nci.Complies` is proved: its verdict is the definition's (`DescReports`), and a compliance
-verdict witnesses the policy (`DescWitnesses`). What is open is the step from the check's accept to that verdict as a
-property (`baseline_desc` is a proof lemma), and remote doesn't run the check yet. `benchmarks/nci` holds the
+The check's agreement with `Nci.CompliesRate` is proved: its verdict is the definition's (`DescReports`), and a
+compliance verdict witnesses the policy at its rate (`DescWitnesses`); on a verdict of the unrolled check that complies,
+every block meets the (c, k) budgets at c = `gamma` and k = α·c (`refines`, a lemma of `Reports`). What is open is the step from the check's
+accept to that verdict as a property (`baseline_desc` is a proof lemma), and remote doesn't run the check yet. `benchmarks/nci` holds the
 literature index and the training algorithms' traits.
 
 ## Names
