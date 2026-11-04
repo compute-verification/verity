@@ -53,8 +53,9 @@
 #      beside the runs root, /workspace/research/quarantine/RUN on a node, kept until its owner removes it)
 # n2 runs, then scan: outer proofs go through the ZK server one at a time
 # (n2_zk.ONE_SESSION), so no two of their provers' firewalled sessions overlap.
-# Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
-# file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
+# Kept in $OUT: the steps' records and logs, the public files and everything each verifier received, the scan's class
+# circuits (joint/<template>/circuit.txt, which the period check reads) among them; never a prover's
+# file (inst-*, prover-instances.bin, instances.bin) nor a member's circuit (its pin is kept), a session's archive, a signer's
 # state, a gate run's witness/ (custody uploads all of $OUT; a network certifier run's witness is its lane key's only)
 # nor a rehearsal's request values (plan.json's and probe.json's requests, io.json's certified I/O, out-witness.jsonl's rows).
 # Custody publishes the whole run dir once this exits (out/, the runner's logs, and undeclared files, inputs/ among
@@ -190,9 +191,11 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "chain: no firewall frame"; exit 7; }
 
 # ---- n2 and scan -------------------------------------------------------------------------------------------------------
-keep() {   # keep FROM TO: the public files and what the verifier received, never a prover's file, circuit or archive
+keep() {   # keep FROM TO: the public files and what the verifier received, never a prover's file, a member's circuit or
+  # an archive; a Program's class circuits (joint/<template>/circuit.txt) the period check reads
   mkdir -p "$2"
-  (cd "$1" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name prover-instances.bin ! -name instances.bin \
+  (cd "$1" && find . -type f \( ! -name circuit.txt -o -path './joint/*/circuit.txt' ! -path './joint/*/*/circuit.txt' \) \
+    ! -name 'inst-*' ! -name prover-instances.bin ! -name instances.bin \
     ! -name signer-state.json ! -path '*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$2/")
 }
 n2() {
