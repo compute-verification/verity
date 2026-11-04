@@ -80,6 +80,9 @@ public import Proofs.Flock.SessionLoop.SwCausalExe
 public import Proofs.Flock.SessionLoop.RowsHonest
 public import Proofs.Flock.SessionLoop.RoundsPassFrame
 public import Proofs.Flock.SessionLoop.ScheduleTotal
+public import Proofs.Flock.SessionLoop.SchedTotalWalk
+public import Proofs.Flock.SessionLoop.SchedTotalPiop
+public import Proofs.Flock.SessionLoop.SchedTotalHolds
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames
