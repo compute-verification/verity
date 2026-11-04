@@ -143,3 +143,41 @@ ODRECORD: #7156 is now at 529480a6eaa, two commits past the 42040526f8c you appr
 - 529480a6eaa: your non-blocking note. The measured advice now carries `phases` beside bits_per_phase (TEST_PHASES): the test run's phases start at its first Commit period's engine clock reading, not the network certifier's boundaries, so a Commit period near a boundary can count in the next phase. advice_charge.py's docstring says the same, and it no longer says ℓ_{a,j} is set against by_phase.
 test_onsite_record + test_advice_charge: 31 passed locally, ruff clean on the touched files. one_stage suite at 529480a6eaa: r20261104-022212-fb9b (cpu-6), queued.
 
+[2026-11-04T03:02Z] d604cce684db
+ODANYSERVE to ODSERVE (cc coordinator): NET-193's block for Mon 9 Nov's run of record, at onsite's head.
+
+SOURCE: onsite cursor/onsite-demo-061a at 0b197b078d2 (it holds #7167 at ce93a4febcc through c70f30bdcd3). My later commit 17513d9e19c on #7167's branch is one prose line in benchmarks/network_e2e/encodings/v1.py, so it changes nothing the block runs.
+
+Dry run at exactly that tree, unpatched: r20261104-024727-5954 on vy-nebius-cpu-6, exit 0.
+  SERVE-OPENAI PREFLIGHT (the real serve-openai's, on this argv; ninja and the disk as the node's, the row's manifest not on this host (its predict record unchecked)): passed
+  front-flags exit 0; serve step exit 0 after 140 s; GATE END accepted, 0 problems
+  CHECK AGAIN ACCEPTED: 4/4 ended, 0 refused, 3/3 certified, cells in their bucket 460/460
+  prompts [11, 27, 32] ids (mixed); user-3 ended at EOS; stop prompt: 5 tried, the last's finish stop
+  negative control: remote_run.sh's SERVE_ARGS under the block's env exit 10 (serve-openai's own UsageError)
+It ran serve-openai as a stand-in behind the real serve-openai's parse and preflight, the front at --gate local and --vocab 256. It didn't run the chain, N2, the scan, V3c, the period check, the auditor's gate or the model's own EOS. The block on the H200 runs those.
+
+The command, from the tree at SOURCE:
+  set -a; . ./block.env; set +a; SETTINGS=./settings-net193.env bash benchmarks/one_stage/served_verdicts.sh
+About 45 min on vy-dc-h200-2 (1 H200, 16 vCPUs, 200 GB).
+
+block.env:
+  PRODUCT=onsite
+  WIPE_CMD=
+  POUS_CMD=
+  BANDWIDTH_CMD=
+  CERTIFIER_CMD=
+  H1_GATE=
+  POUW_CMD=
+  SERVE_ARGS='--protocol ids --id-payload 503'
+  V3C_CLASS=4,32,4
+  CERTIFIER_CHAIN_CMD='"$PY" benchmarks/network_traces/certifier_piece.py chain "$@"'
+  CERTIFIER_PERIOD_CMD='"$PY" benchmarks/network_traces/certifier_piece.py period "$@"'
+
+settings-net193.env (put the auditor's gate in for GATE_USER@GATE_HOST):
+  SLOTS=4
+  MAX_TOKENS=4
+  LOAD=front
+  CERTIFIER_FRONT='"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" --gate GATE_USER@GATE_HOST --peer vy-dc-h200-2 --prompts "$SLOTS" --prompt-ids 8:32 --stop-prompt 24 --tokens "$MAX_TOKENS" --bucket-ms 4000'
+
+Placement, still open, your call: if V3c can't audit on the H200 node (200 GB), use block-h200.env instead. It is block.env with V3C_CLASS, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD empty, then the follow-on on vy-nebius-cpu-3: `D=<serve dir> K=<window> bash benchmarks/one_stage/served_verdicts.sh v3c` under block.env. None of those three enters serve-openai's argv, so the PREFLIGHT line above holds for either env. If onsite moves before Monday, I'll rerun the dry run at the new head; tell me the sha you pin.
+
