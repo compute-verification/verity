@@ -43437,15 +43437,30 @@
    }
   },
   "SampledProofs.ChallengerCoins": {
-   "digest": "9001b3cf27d0d1ea1d035349adc7486c267c265f533fad8c6dba1cc65ac4733c",
+   "digest": "832efefa919c19db4a834a90134684a03129867cf856477dad856d5ac685b995",
    "definitions": {
+    "SampledProofs.Challenger.LIMITS": "9d35f8c8f93928609b185ca1c26f34ead899d97201388065d3a44804df00a9d0",
+    "SampledProofs.Challenger.Limits": "b2fbcba59235916aa2a97bac77c853c4d8b409f57f4041e3cc3f020d3e5ff964",
+    "SampledProofs.Challenger.Limits.form": "278742b24b7d61bf725f29fd4adbc7752b1aa15770d04ffa66e109ce3e8086d3",
+    "SampledProofs.Challenger.Limits.hellos": "d4c25dbb925da8998f27811ca0d0b462b3336e2b71650f74dc34cd1df6ab3c25",
+    "SampledProofs.Challenger.Limits.ledger": "42fc3293f50167782d56fe4b18444c4f9a8c1a161ec50c84f5a3a8647604e2af",
+    "SampledProofs.Challenger.Limits.log": "d35dad20dad06f4ae69806bc035f0cf8a3bda65264a1b7a4996daa19e2baf7d7",
+    "SampledProofs.Challenger.Limits.openings": "d51091dfdb3879887d2fd24554abbf62b5fee6fb63d8ebdb653ff324b485b6b8",
+    "SampledProofs.Challenger.Limits.path": "8ea7883c6bfdf7fae4a9c015c03217bfe9fe6ab8eb9f9401016137e6f83c77b2",
+    "SampledProofs.Challenger.Limits.pins": "794b604b35b589ab482b04b97d9b1036e0fae20cf903757aad07e3408e221e6b",
+    "SampledProofs.Challenger.MAX_HELLOS": "a66b125f33029783e720867abee1029e9aec968aad38dc70260e245ed234a544",
+    "SampledProofs.Challenger.MAX_LEDGER_LINES": "c3b4b355d31c960dc211443f2cfd86e163e87b7c975a5f64cecc10f2587659b0",
+    "SampledProofs.Challenger.MAX_PATH": "c9013cd2302489901d41766eb18aa03a92b9c0a3780ff844f7c6ace0a2b5bf7a",
+    "SampledProofs.Challenger.MAX_PINS": "e09bd631a942ddb0a8e8a1ef6d9534f368c2b1caf90300d677b28269f55f0586",
     "SampledProofs.Challenger.SEGMENT_FORM": "5ac1f915d9f88d71864a9a187d8c8e7499a360dd52c6fca2f4766012d03e51b7",
     "SampledProofs.Challenger.WITHHELD": "0981507444c3805f604a08914f43d1da00e0dec518c451d0d16ff2a3175b6f77",
+    "SampledProofs.Challenger.arrSize": "86efbe49c085cf1ac890e2362eb1d616ca1367ed96cd8dc3178f3ad20a00b5b9",
     "SampledProofs.Challenger.challengerStream": "0febf556954f55481fba319d754c4bd2ac99ec0c61e30fedf868b714c13430bb",
     "SampledProofs.Challenger.challengerStream._sparseCasesOn_1": "9af0c29da241258797763e2ee249dcf4ce7a4e40e212324d62f5f91c86f188f6",
     "SampledProofs.Challenger.challengerStream._sparseCasesOn_8": "20b15d55bb0a2555909fbfdba7e97028afdcb8c8c950727f6588268e6f68eebb",
     "SampledProofs.Challenger.challengerStream._sparseCasesOn_9": "84f78ac33f4312b45af97aea912c4592bbd87dd66daa8cd55d3fd5288a658e50",
-    "SampledProofs.Challenger.withheldOn": "5f9554873f4c880f872ef8bc05ab32dfb7c986c44b256649b4a1e33547f36622"
+    "SampledProofs.Challenger.withheldOn": "5f9554873f4c880f872ef8bc05ab32dfb7c986c44b256649b4a1e33547f36622",
+    "SampledProofs.Challenger.withinAt": "79d07cd5fa54918d40b11dcdd53906fb1621994470f9029d4b7baf362ae9c693"
    }
   },
   "SampledProofs.ChallengerDraw": {
@@ -43807,12 +43822,13 @@
    }
   },
   "SampledProofs.OneStageZk": {
-   "digest": "9c4a02fab16a7cca2ac68cc30057aae6766eb8f53a5f2ef74c4008a850b49863",
+   "digest": "c911cd8ddf9cd36a771b442c90e7e361a38dd692421e7494698f75f710520414",
    "definitions": {
     "SampledProofs.OneStageZk.Evidence": "6755515678a888e70097f0e8ee5f829e929704f43a546d0187be21610e396031",
     "SampledProofs.OneStageZk.Evidence.base": "f88a295c9c15075955eadf77c4082a0174b7338e8a580fe01d770c8929000895",
     "SampledProofs.OneStageZk.Evidence.pub": "e287d5199b21675132c4ce0bc9ee42a6aabcbf596320537c2e30331f7b5fada4",
     "SampledProofs.OneStageZk.Evidence.sessions": "c75dc7c0114f4e484803b7c7d950d0263b850b5e9b73bdea26f6e48526221e07",
+    "SampledProofs.OneStageZk.KEY_PARAMS": "59e3d3ecb3410114a369b3c8088a25ee55b159596baf10c3caa13166f9d50911",
     "SampledProofs.OneStageZk.NO_CHALLENGER": "a8511755d79385dfe31d999e282696b68fc0d7fc6babf62f45963f5c3e23395f",
     "SampledProofs.OneStageZk.Own": "c11ad14a9461f028770ecd35980df6c5207a6685c5696e07714826e1bf77ec4d",
     "SampledProofs.OneStageZk.Own.circuit": "5a74bb7057517d4f86bee7e1e662ebca022b49c0efcaecaacccee0bfffd96882",
@@ -43848,6 +43864,7 @@
     "SampledProofs.OneStageZk.checkIdentifier": "78b13a39766df5c85e16b73a23cc39534d62a5849549b05e88740a018d87484a",
     "SampledProofs.OneStageZk.coinKeyOf": "3a46fbb369121b81536201663de8abbb07fa453669c61b217aaa461ff693f9b9",
     "SampledProofs.OneStageZk.coinsOf": "0219b3963f355c027e5417359e1e78f4dc6d271c366d8a6a681c5114e639d30f",
+    "SampledProofs.OneStageZk.deployedKey": "a77890a2e3e66deb48f6547b42b0d87e92ff0b17a5e2c00e600252c66d48ca3e",
     "SampledProofs.OneStageZk.evidenceOf": "41193cc6dff1b9569dec7db99ab892b10073dcb4135d8db4819fab6412ffe9e8",
     "SampledProofs.OneStageZk.filesOf": "9964b8a2d69fc1cc706fc02bc281476bd4f664af7427905207a52098ea4c7d5a",
     "SampledProofs.OneStageZk.inputsOf": "22eb8d33feabded8c4c565d308dba7999f462aef3a3eab5a6fc81f3b03fac46f",
