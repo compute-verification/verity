@@ -192,7 +192,7 @@ def ChallengerClose.toJson (c : ChallengerClose) : Json :=
 characters. Its objects hold their keys in order (`sortedKeys`), as every parse's do. -/
 def event (line : String) : V Json := do
   unless line.length ≤ MAX_LOG_LINE do throw LOG_MALFORMED
-  let .ok j := Json.parse line | throw LOG_MALFORMED
+  let .ok j := Flock.JsonParse.parse line | throw LOG_MALFORMED
   let .ok text := Flock.canon j | throw LOG_MALFORMED
   unless text == line do throw LOG_MALFORMED
   unless sortedKeys j do throw LOG_MALFORMED
@@ -414,7 +414,7 @@ objects hold their keys in order (`sortedKeys`), as every parse's do. -/
 def ledgerEntry? (line : Json) : Option LedgerEntry := do
   let .str text := line | none
   guard (text.length ≤ MAX_LEDGER_LINE)
-  let e ← (Json.parse text).toOption
+  let e ← (Flock.JsonParse.parse text).toOption
   guard ((PyJson.canonical e).toOption == some text && !escapesSurrogate text && (Flock.canon e).toOption.isSome)
   guard (sortedKeys e)
   let r ← (Core.Record.ofJson e).toOption
@@ -754,7 +754,7 @@ def circuitReason (period : Option String) (circuit : Json) (descriptor : ByteAr
 `{commit, main, pinned_utc}`, two commits in 40 lowercase hex and a time `later` holds fixed. -/
 def pinOf? (line : Json) : Option String := do
   let .str text := line | none
-  let e ← (Json.parse text).toOption
+  let e ← (Flock.JsonParse.parse text).toOption
   guard ((PyJson.canonical e).toOption == some text && keys? e == some #["commit", "main", "pinned_utc"])
   guard (isDigest (getD e "commit") 40 && isDigest (getD e "main") 40)
   let .str t := getD e "pinned_utc" | none

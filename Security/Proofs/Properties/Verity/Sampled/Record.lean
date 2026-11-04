@@ -2,6 +2,7 @@ import Proofs.Properties.Verity.Sampled
 import Proofs.Flock.Claims.Sampling.Session
 import Proofs.Flock.Claims.Sampling.Deployed
 import Proofs.Flock.Bridge.LeafMap
+import Proofs.Properties.SampledProofs.Units
 import Flock.Firewall
 
 /-!
@@ -82,14 +83,12 @@ def drawn (A : Live) (src : ByteArray) : List ℕ :=
   | .error _ => List.range A.n
 
 /-- **The units a draw file proves**, as v2 credits a session's (`SampledProofs.OneStageZk.provedUnits`): the public
-file's `units.indices` of the instances the draw names, ascending; the draw file read as the session's statement reads
-it (`FlockDeploy.jsonOf`, `Flock.norm`), the public file's header as the session reads it (`A.pub`). -/
+file's `units.indices` of the instances the draw names, ascending (`Properties.SampledProofs.Units.unitsAt`); the draw
+file read as the session's statement reads it (`FlockDeploy.jsonOf`, `Flock.norm`), the public file's header as the
+session reads it (`A.pub`). -/
 def provedOf (A : Live) (d : Msg) : Option (Array ℕ) := do
   let j ← (FlockDeploy.jsonOf "draw" ⟨d.toArray⟩).toOption
-  let .arr is := _root_.SampledProofs.getD (_root_.SampledProofs.getD A.pub.header "units") "indices" | none
-  let .arr ds := _root_.SampledProofs.getD (Flock.norm j) "units" | none
-  let units ← ds.mapM fun e => _root_.SampledProofs.nat? e >>= fun i => is[i]? >>= _root_.SampledProofs.nat?
-  pure (units.qsort (· < ·))
+  _root_.Properties.SampledProofs.Units.unitsAt A.pub.header (Flock.norm j)
 
 /-- The reference draw file: `A.d₀`'s text. -/
 def d₀ (A : Live) : Msg := (Flock.Firewall.printJson A.d₀).toUTF8.data.toList
