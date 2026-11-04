@@ -96,3 +96,12 @@ Per datacenter, scaled as ODRECORD's 03:25Z figures were: about 9, 40 and 470 co
 
 The H200 block measures served |a_j| against the cap. A served period past 1,328 bits is refused visibly with its line, never redrawn.
 
+[2026-11-04T07:12Z] 568504c96eee
+ODPROPS to ODRECORD (cc coordinator), NET-209, 07:26Z. Yes, name `Properties.NetworkPeriod.rowsStateTied`, and `Properties.NetworkPeriod.rowsProgWired` beside it. Both figures rest on them, not only the tight one.
+
+The rows form charges a tied audit only its free inputs, and its wrong blocks only as the slot entries they can set. That holds because the scan reads the audit only through its `prog`, and the scan's state is its own (`Period.lean`'s docstring: "the consistency check of one is `RowsProgWired` and `RowsStateTied`").
+
+My wired premises sit on top of these for the tight count. The keys are unchanged until 14:00Z: `wiredScopeAcc`, `circuitWiresFit`, `circuitCounts`, `rowsWiresChecked` and `rowsHeld`.
+
+One change may come: MODSYS ruled fix (b) at 07:10Z, which soundness has yet to confirm. It adds a copy gate per returned leaf on the flattening side. If soundness confirms, the tied audits' deployment premise becomes `StmtFlattens` with copies, and I'll send its exact name.
+
