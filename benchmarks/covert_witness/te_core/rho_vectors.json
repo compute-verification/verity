@@ -2183,7 +2183,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 65536,
-"macs": 14481358848.0,
+"macs": 32180797440.0,
 "weight": [
 false,
 false
@@ -2192,28 +2192,7 @@ false
 16,
 16
 ],
-"wires": 3538944.0
-},
-{
-"b_y": 16,
-"beta": [
-3.2,
-16
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 65536,
-"macs": 17699438592.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 4325376.0
+"wires": 7864320.0
 },
 {
 "b_y": 16,
@@ -2244,7 +2223,7 @@ true
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 1408,
 "macs": 17699438592.0,
 "weight": [
@@ -2309,7 +2288,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 65536,
-"macs": 17699438592.0,
+"macs": 26549157888.0,
 "weight": [
 false,
 false
@@ -2318,28 +2297,7 @@ false
 16,
 16
 ],
-"wires": 4325376.0
-},
-{
-"b_y": 16,
-"beta": [
-16,
-3.2
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 65536,
-"macs": 8849719296.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 2162688.0
+"wires": 6488064.0
 },
 {
 "b_y": 16,
@@ -3234,7 +3192,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 32768,
-"macs": 3218079744.0,
+"macs": 20917518336.0,
 "weight": [
 false,
 false
@@ -3243,28 +3201,7 @@ false
 16,
 16
 ],
-"wires": 1572864.0
-},
-{
-"b_y": 16,
-"beta": [
-3.2,
-16
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 32768,
-"macs": 17699438592.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 8650752.0
+"wires": 10223616.0
 },
 {
 "b_y": 16,
@@ -3295,7 +3232,7 @@ true
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 1408,
 "macs": 17699438592.0,
 "weight": [
@@ -3360,7 +3297,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 32768,
-"macs": 5363466240.0,
+"macs": 14213185536.0,
 "weight": [
 false,
 false
@@ -3369,28 +3306,7 @@ false
 16,
 16
 ],
-"wires": 2621440.0
-},
-{
-"b_y": 16,
-"beta": [
-16,
-3.2
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 32768,
-"macs": 8849719296.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 4325376.0
+"wires": 6946816.0
 },
 {
 "b_y": 16,
@@ -5452,7 +5368,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -5494,7 +5410,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -5515,7 +5431,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -5663,7 +5579,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -5705,7 +5621,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -5726,7 +5642,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -5874,7 +5790,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -5916,7 +5832,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -5937,7 +5853,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -6085,7 +6001,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -6127,7 +6043,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -6148,7 +6064,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -6296,7 +6212,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -6338,7 +6254,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -6359,7 +6275,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -6507,7 +6423,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -6549,7 +6465,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -6570,7 +6486,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -6718,7 +6634,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -6760,7 +6676,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -6781,7 +6697,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -8206,7 +8122,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -8248,7 +8164,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -8269,7 +8185,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -8417,7 +8333,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -8459,7 +8375,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -8480,7 +8396,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -8628,7 +8544,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -8670,7 +8586,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -8691,7 +8607,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -8839,7 +8755,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -8881,7 +8797,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -8902,7 +8818,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -9050,7 +8966,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -9092,7 +9008,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -9113,7 +9029,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -9261,7 +9177,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -9303,7 +9219,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -9324,7 +9240,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -9472,7 +9388,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -9514,7 +9430,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -9535,7 +9451,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -11669,7 +11585,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -11690,7 +11606,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -11753,7 +11669,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -11774,7 +11690,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -11795,7 +11711,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -11879,7 +11795,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -12107,7 +12023,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -12128,7 +12044,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -12191,7 +12107,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -12212,7 +12128,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -12233,7 +12149,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -12317,7 +12233,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -12545,7 +12461,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -12566,7 +12482,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -12629,7 +12545,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -12650,7 +12566,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -12671,7 +12587,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -12755,7 +12671,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -12983,7 +12899,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -13004,7 +12920,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -13067,7 +12983,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -13088,7 +13004,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -13109,7 +13025,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -13193,7 +13109,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -13421,7 +13337,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -13442,7 +13358,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -13505,7 +13421,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -13526,7 +13442,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -13547,7 +13463,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -13631,7 +13547,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -13859,7 +13775,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -13880,7 +13796,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -13943,7 +13859,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -13964,7 +13880,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -13985,7 +13901,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -14069,7 +13985,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -14297,7 +14213,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -14318,7 +14234,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -14381,7 +14297,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 50282496.0,
 "weight": [
@@ -14402,7 +14318,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 50282496.0,
 "weight": [
@@ -14423,7 +14339,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -14507,7 +14423,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 25141248.0,
 "weight": [
@@ -18163,7 +18079,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 3142656.0,
 "weight": [
@@ -18184,7 +18100,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 3142656.0,
 "weight": [
@@ -18247,7 +18163,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 3142656.0,
 "weight": [
@@ -18268,7 +18184,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 3142656.0,
 "weight": [
@@ -18394,7 +18310,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 1571328.0,
 "weight": [
@@ -18478,7 +18394,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 1571328.0,
 "weight": [
@@ -18733,7 +18649,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 3142656.0,
 "weight": [
@@ -18754,7 +18670,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 3142656.0,
 "weight": [
@@ -18817,7 +18733,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 3142656.0,
 "weight": [
@@ -18838,7 +18754,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 3142656.0,
 "weight": [
@@ -18985,7 +18901,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 1571328.0,
 "weight": [
@@ -19069,7 +18985,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 1571328.0,
 "weight": [
@@ -19326,7 +19242,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 2048,
-"macs": 2618880.0,
+"macs": 5761536.0,
 "weight": [
 false,
 false
@@ -19335,28 +19251,7 @@ false
 16,
 16
 ],
-"wires": 20480.0
-},
-{
-"b_y": 16,
-"beta": [
-0.020453819,
-0.71641791
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 2048,
-"macs": 3142656.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 24576.0
+"wires": 45056.0
 },
 {
 "b_y": 16,
@@ -19368,7 +19263,7 @@ false
 "forward": false,
 "head": false,
 "k_dim": 2048,
-"macs": 1047552.0,
+"macs": 4190208.0,
 "weight": [
 false,
 false
@@ -19377,28 +19272,7 @@ false
 16,
 16
 ],
-"wires": 8192.0
-},
-{
-"b_y": 16,
-"beta": [
-0.020453819,
-1.97260274
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 2048,
-"macs": 3142656.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 24576.0
+"wires": 32768.0
 },
 {
 "b_y": 16,
@@ -19429,7 +19303,7 @@ true
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 6285312.0,
 "weight": [
@@ -19515,7 +19389,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 2048,
-"macs": 1571328.0,
+"macs": 3142656.0,
 "weight": [
 false,
 false
@@ -19524,28 +19398,7 @@ false
 16,
 16
 ],
-"wires": 12288.0
-},
-{
-"b_y": 16,
-"beta": [
-1.97260274,
-0.020453819
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 2048,
-"macs": 1571328.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 12288.0
+"wires": 24576.0
 },
 {
 "b_y": 16,
@@ -19597,7 +19450,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 1571328.0,
 "weight": [
@@ -19833,7 +19686,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 2048,
-"macs": 2618880.0,
+"macs": 5761536.0,
 "weight": [
 false,
 false
@@ -19842,28 +19695,7 @@ false
 16,
 16
 ],
-"wires": 20480.0
-},
-{
-"b_y": 16,
-"beta": [
-0.002047738,
-0.71641791
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 2048,
-"macs": 3142656.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 24576.0
+"wires": 45056.0
 },
 {
 "b_y": 16,
@@ -19875,7 +19707,7 @@ false
 "forward": false,
 "head": false,
 "k_dim": 2048,
-"macs": 1047552.0,
+"macs": 4190208.0,
 "weight": [
 false,
 false
@@ -19884,28 +19716,7 @@ false
 16,
 16
 ],
-"wires": 8192.0
-},
-{
-"b_y": 16,
-"beta": [
-0.002047738,
-1.97260274
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 2048,
-"macs": 3142656.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 24576.0
+"wires": 32768.0
 },
 {
 "b_y": 16,
@@ -19936,7 +19747,7 @@ true
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 6285312.0,
 "weight": [
@@ -20022,7 +19833,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 2048,
-"macs": 1571328.0,
+"macs": 3142656.0,
 "weight": [
 false,
 false
@@ -20031,28 +19842,7 @@ false
 16,
 16
 ],
-"wires": 12288.0
-},
-{
-"b_y": 16,
-"beta": [
-1.97260274,
-0.002047738
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 2048,
-"macs": 1571328.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 12288.0
+"wires": 24576.0
 },
 {
 "b_y": 16,
@@ -20106,7 +19896,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 2048,
-"macs": 3142656.0,
+"macs": 4713984.0,
 "weight": [
 false,
 false
@@ -20115,28 +19905,7 @@ false
 16,
 16
 ],
-"wires": 24576.0
-},
-{
-"b_y": 16,
-"beta": [
-3.037974684,
-0.002047738
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 2048,
-"macs": 1571328.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 12288.0
+"wires": 36864.0
 },
 {
 "b_y": 16,
@@ -20340,7 +20109,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 2048,
-"macs": 2618880.0,
+"macs": 5761536.0,
 "weight": [
 false,
 false
@@ -20349,28 +20118,7 @@ false
 16,
 16
 ],
-"wires": 20480.0
-},
-{
-"b_y": 16,
-"beta": [
-0.000204797,
-0.71641791
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 2048,
-"macs": 3142656.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 24576.0
+"wires": 45056.0
 },
 {
 "b_y": 16,
@@ -20382,7 +20130,7 @@ false
 "forward": false,
 "head": false,
 "k_dim": 2048,
-"macs": 1047552.0,
+"macs": 4190208.0,
 "weight": [
 false,
 false
@@ -20391,28 +20139,7 @@ false
 16,
 16
 ],
-"wires": 8192.0
-},
-{
-"b_y": 16,
-"beta": [
-0.000204797,
-1.97260274
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 2048,
-"macs": 3142656.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 24576.0
+"wires": 32768.0
 },
 {
 "b_y": 16,
@@ -20443,7 +20170,7 @@ true
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 6285312.0,
 "weight": [
@@ -20529,7 +20256,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 2048,
-"macs": 1571328.0,
+"macs": 3142656.0,
 "weight": [
 false,
 false
@@ -20538,28 +20265,7 @@ false
 16,
 16
 ],
-"wires": 12288.0
-},
-{
-"b_y": 16,
-"beta": [
-1.97260274,
-0.000204797
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 2048,
-"macs": 1571328.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 12288.0
+"wires": 24576.0
 },
 {
 "b_y": 16,
@@ -20613,7 +20319,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 2048,
-"macs": 3142656.0,
+"macs": 4713984.0,
 "weight": [
 false,
 false
@@ -20622,28 +20328,7 @@ false
 16,
 16
 ],
-"wires": 24576.0
-},
-{
-"b_y": 16,
-"beta": [
-3.037974684,
-0.000204797
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 2048,
-"macs": 1571328.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 12288.0
+"wires": 36864.0
 },
 {
 "b_y": 16,
@@ -20847,7 +20532,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 2048,
-"macs": 2618880.0,
+"macs": 5761536.0,
 "weight": [
 false,
 false
@@ -20856,28 +20541,7 @@ false
 16,
 16
 ],
-"wires": 20480.0
-},
-{
-"b_y": 16,
-"beta": [
-2.048e-05,
-0.71641791
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 2048,
-"macs": 3142656.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 24576.0
+"wires": 45056.0
 },
 {
 "b_y": 16,
@@ -20889,7 +20553,7 @@ false
 "forward": false,
 "head": false,
 "k_dim": 2048,
-"macs": 1047552.0,
+"macs": 4190208.0,
 "weight": [
 false,
 false
@@ -20898,28 +20562,7 @@ false
 16,
 16
 ],
-"wires": 8192.0
-},
-{
-"b_y": 16,
-"beta": [
-2.048e-05,
-1.97260274
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 2048,
-"macs": 3142656.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 24576.0
+"wires": 32768.0
 },
 {
 "b_y": 16,
@@ -20950,7 +20593,7 @@ true
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 6285312.0,
 "weight": [
@@ -21036,7 +20679,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 2048,
-"macs": 1571328.0,
+"macs": 3142656.0,
 "weight": [
 false,
 false
@@ -21045,28 +20688,7 @@ false
 16,
 16
 ],
-"wires": 12288.0
-},
-{
-"b_y": 16,
-"beta": [
-1.97260274,
-2.048e-05
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 2048,
-"macs": 1571328.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 12288.0
+"wires": 24576.0
 },
 {
 "b_y": 16,
@@ -21120,7 +20742,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 2048,
-"macs": 3142656.0,
+"macs": 4713984.0,
 "weight": [
 false,
 false
@@ -21129,28 +20751,7 @@ false
 16,
 16
 ],
-"wires": 24576.0
-},
-{
-"b_y": 16,
-"beta": [
-3.037974684,
-2.048e-05
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 2048,
-"macs": 1571328.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 12288.0
+"wires": 36864.0
 },
 {
 "b_y": 16,
@@ -21373,7 +20974,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 3142656.0,
 "weight": [
@@ -21394,7 +20995,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 3142656.0,
 "weight": [
@@ -21457,7 +21058,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 3142656.0,
 "weight": [
@@ -21478,7 +21079,7 @@ false
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 192,
 "macs": 3142656.0,
 "weight": [
@@ -21646,7 +21247,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 1571328.0,
 "weight": [
@@ -21730,7 +21331,7 @@ true
 ],
 "dw": true,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 2048,
 "macs": 1571328.0,
 "weight": [
@@ -22798,7 +22399,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 65536,
-"macs": 14481358848.0,
+"macs": 32180797440.0,
 "weight": [
 false,
 false
@@ -22807,28 +22408,7 @@ false
 16,
 16
 ],
-"wires": 3538944.0
-},
-{
-"b_y": 16,
-"beta": [
-3.2,
-16
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 65536,
-"macs": 17699438592.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 4325376.0
+"wires": 7864320.0
 },
 {
 "b_y": 16,
@@ -22859,7 +22439,7 @@ true
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 1408,
 "macs": 17699438592.0,
 "weight": [
@@ -22924,7 +22504,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 65536,
-"macs": 17699438592.0,
+"macs": 26549157888.0,
 "weight": [
 false,
 false
@@ -22933,28 +22513,7 @@ false
 16,
 16
 ],
-"wires": 4325376.0
-},
-{
-"b_y": 16,
-"beta": [
-16,
-3.2
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 65536,
-"macs": 8849719296.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 2162688.0
+"wires": 6488064.0
 },
 {
 "b_y": 16,
@@ -23135,7 +22694,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 32768,
-"macs": 3218079744.0,
+"macs": 20917518336.0,
 "weight": [
 false,
 false
@@ -23144,28 +22703,7 @@ false
 16,
 16
 ],
-"wires": 1572864.0
-},
-{
-"b_y": 16,
-"beta": [
-3.2,
-16
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 32768,
-"macs": 17699438592.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 8650752.0
+"wires": 10223616.0
 },
 {
 "b_y": 16,
@@ -23196,7 +22734,7 @@ true
 ],
 "dw": false,
 "forward": false,
-"head": true,
+"head": false,
 "k_dim": 1408,
 "macs": 17699438592.0,
 "weight": [
@@ -23261,7 +22799,7 @@ true
 "forward": false,
 "head": false,
 "k_dim": 32768,
-"macs": 5363466240.0,
+"macs": 14213185536.0,
 "weight": [
 false,
 false
@@ -23270,28 +22808,7 @@ false
 16,
 16
 ],
-"wires": 2621440.0
-},
-{
-"b_y": 16,
-"beta": [
-16,
-3.2
-],
-"dw": true,
-"forward": false,
-"head": true,
-"k_dim": 32768,
-"macs": 8849719296.0,
-"weight": [
-false,
-false
-],
-"width": [
-16,
-16
-],
-"wires": 4325376.0
+"wires": 6946816.0
 },
 {
 "b_y": 16,
@@ -23369,7 +22886,7 @@ true
 "capture_code": null,
 "case": "dense",
 "k": 80000000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "partial": false,
 "products_rests_on": "theorem of record on the weight gradients alone, given (H): operands are hard at \u03b2_w = 0.1394 and \u03b2_x = 0.1394 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M charges an operand the update reaches through a low-rank bottleneck at its \u03b2_eff",
 "reading": "A",
@@ -23394,7 +22911,7 @@ true
 "capture_code": null,
 "case": "dense",
 "k": 80000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "partial": false,
 "products_rests_on": "theorem of record on the weight gradients alone, given (H): operands are hard at \u03b2_w = 0.1394 and \u03b2_x = 0.1394 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M charges an operand the update reaches through a low-rank bottleneck at its \u03b2_eff",
 "reading": "A",
@@ -23419,7 +22936,7 @@ true
 "capture_code": null,
 "case": "dense",
 "k": 100000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "partial": true,
 "products_rests_on": null,
 "reading": "A",
@@ -23444,7 +22961,7 @@ true
 "capture_code": null,
 "case": "dense",
 "k": 65536.0,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "partial": false,
 "products_rests_on": "theorem of record on the weight gradients alone, given (H): operands are hard at \u03b2_w = 0.1394 and \u03b2_x = 0.1394 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M charges an operand the update reaches through a low-rank bottleneck at its \u03b2_eff",
 "reading": "A",
@@ -23469,7 +22986,7 @@ true
 "capture_code": null,
 "case": "lora",
 "k": 65536.0,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "partial": false,
 "products_rests_on": "theorem of record on M without its short contractions, given (H): operands are hard at \u03b2_w = 1.973 and \u03b2_x = 0.1394 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M charges an operand the update reaches through a low-rank bottleneck at its \u03b2_eff",
 "reading": "A",
@@ -23494,7 +23011,7 @@ true
 "capture_code": null,
 "case": "adapter-live",
 "k": 100000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "partial": false,
 "products_rests_on": null,
 "reading": "A",
@@ -23519,7 +23036,7 @@ true
 "capture_code": null,
 "case": "adapter-live",
 "k": 65536.0,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "partial": false,
 "products_rests_on": "theorem of record on the weight gradients alone, given (H): operands are hard at \u03b2_w = 0.000651 and \u03b2_x = 0.000217 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M charges an operand the update reaches through a low-rank bottleneck at its \u03b2_eff",
 "reading": "A",
@@ -23544,7 +23061,7 @@ true
 "capture_code": null,
 "case": "dense, DoRA's void products",
 "k": 65536.0,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "partial": false,
 "products_rests_on": "theorem of record on the weight gradients alone, given (H): operands are hard at \u03b2_w = 15.9 and \u03b2_x = 3.2 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M charges an operand the update reaches through a low-rank bottleneck at its \u03b2_eff",
 "reading": "A",
@@ -23569,7 +23086,7 @@ true
 "capture_code": null,
 "case": "dense, DoRA's void products",
 "k": 65536.0,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "partial": false,
 "products_rests_on": "theorem of record on the weight gradients alone, given (H): operands are hard at \u03b2_w = 15.9 and \u03b2_x = 3.2 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M charges an operand the update reaches through a low-rank bottleneck at its \u03b2_eff",
 "reading": "A",
@@ -25796,7 +25313,7 @@ true
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 11.065531262155444,
 "rho": 11.065531262155444,
 "rho_fit": 1.0,
@@ -26000,7 +25517,7 @@ true
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -26204,7 +25721,7 @@ true
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -26408,7 +25925,7 @@ true
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -26534,31 +26051,31 @@ true
 }
 },
 "fresh_products": {
-"F": 1.1547005383792517,
-"K_thr": 5608641.258192823,
-"N": 100564992.0,
-"O": 20971520.0,
-"alpha": 1752780389534.0815,
+"F": 1.0,
+"K_thr": 879337364.1185008,
+"N": 75423744.0,
+"O": 589824.0,
+"alpha": 237977724226846.0,
 "b_y": 16,
 "below_width": true,
-"beta": 0.05892327214267721,
+"beta": 0.00037584492158069665,
 "beta_code": 16.055555555555557,
 "beta_k": 2.7,
-"beta_w": 16,
+"beta_w": 0.000650974,
 "beta_x": 0.000216997,
 "capture": "4.12.9",
 "capture_code": null,
 "code_bound": false,
 "first_steps": null,
 "k_classified": 80000000.0,
-"macs_share": 0.4440104166666667,
+"macs_share": 0.3330078125,
 "r_step": null,
 "rho": 0.0,
-"subset": "M",
+"subset": "the weight gradients alone",
 "subsets": {
 "M": 0.0,
 "M without its short contractions": null,
-"the weight gradients alone": null
+"the weight gradients alone": 0.0
 }
 },
 "per_gate": {
@@ -26612,7 +26129,7 @@ true
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -26812,7 +26329,7 @@ true
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -27016,7 +26533,7 @@ true
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -27220,7 +26737,7 @@ true
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -27424,7 +26941,7 @@ true
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -27550,31 +27067,31 @@ true
 }
 },
 "fresh_products": {
-"F": 1.1547005383792517,
-"K_thr": 26399630.01142384,
-"N": 100564992.0,
-"O": 20971520.0,
-"alpha": 8249964377794.196,
+"F": 1.0,
+"K_thr": 879337364.1185008,
+"N": 75423744.0,
+"O": 589824.0,
+"alpha": 237977724226846.0,
 "b_y": 16,
 "below_width": true,
-"beta": 0.012518788102510385,
+"beta": 0.00037584492158069665,
 "beta_code": 0.7222222222222222,
 "beta_k": 2.7,
-"beta_w": 0.7222222222222222,
+"beta_w": 0.000650974,
 "beta_x": 0.000216997,
 "capture": "4.12.9",
 "capture_code": null,
-"code_bound": true,
+"code_bound": false,
 "first_steps": null,
 "k_classified": 80000000.0,
-"macs_share": 0.4440104166666667,
+"macs_share": 0.3330078125,
 "r_step": null,
 "rho": 0.0,
-"subset": "M",
+"subset": "the weight gradients alone",
 "subsets": {
 "M": 0.0,
 "M without its short contractions": null,
-"the weight gradients alone": null
+"the weight gradients alone": 0.0
 }
 },
 "per_gate": {
@@ -27628,7 +27145,7 @@ true
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -27834,7 +27351,7 @@ true
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 8.35335685982954,
 "rho": 8.35335685982954,
 "rho_fit": 1.0,
@@ -28040,7 +27557,7 @@ true
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -28246,7 +27763,7 @@ true
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -28452,7 +27969,7 @@ true
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.9996631800490919,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -28658,7 +28175,7 @@ true
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -28865,7 +28382,7 @@ true
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 2.7344655410785834,
 "rho": 2.7344655410785834,
 "rho_fit": 1.000266918292764,
@@ -29072,7 +28589,7 @@ true
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0,
 "rho_fit": 1.000266918292764,
@@ -29279,7 +28796,7 @@ true
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.9999300519868622,
 "rho": 1.000266918292764,
 "rho_fit": 1.000266918292764,
@@ -29486,7 +29003,7 @@ true
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0110508421616675,
 "rho_fit": 1.0110508421616675,
@@ -29617,8 +29134,8 @@ true
 "fresh_products": {
 "F": 1.0,
 "K_thr": 27284453.09041289,
-"N": 3142656.0,
-"O": 24576.0,
+"N": 4713984.0,
+"O": 36864.0,
 "alpha": 3803656730479.62,
 "b_y": 16,
 "below_width": true,
@@ -29632,7 +29149,7 @@ true
 "code_bound": false,
 "first_steps": null,
 "k_classified": 80000000.0,
-"macs_share": 0.0018778636043233082,
+"macs_share": 0.0028167954064849624,
 "r_step": 4,
 "rho": 0.0,
 "subset": "the weight gradients alone",
@@ -29693,7 +29210,7 @@ true
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.13.1, reading A",
+"label": "training's slowdown code 4.13.3, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0,
 "rho_fit": "inf",
@@ -29716,7 +29233,7 @@ true
 "void": {}
 }
 ],
-"version": "4.13.1",
+"version": "4.13.3",
 "void_case": {
 "case": "dense, DoRA's void products",
 "measured": "dense",

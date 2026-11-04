@@ -10,6 +10,7 @@ import json
 import math
 import os
 import re
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -174,6 +175,42 @@ def test_a_plan_read_off_eval_ctx_is_recorded_again_with_only_the_windows_halved
 def test_windows_cut_at_eval_ctx_refuse_the_windows_only_recording(starts):
     with pytest.raises(CaptureRefused, match="keep their shape"):
         recorded(starts, "--update", "inplace", "--windows", "--own-ctx", "--warm-tokens", str(2 * T))
+
+
+def test_the_stub_stream_has_the_parts_its_start_read_then_an_unread_part(starts):
+    """ref-data's ``--windows fresh``: a data v3 start's provenance names the parts it read (data.parts, by sha256), which
+    the program finds in data_v3.TRAIN's manifest and among the stream's parts and starts, and it reads only the windows
+    outside them; a start whose provenance names none is refused by the program, as on a node. prepare's data_v3.TRAIN
+    is its own again after."""
+    path = starts / "toy.start.json"
+    toy = json.loads(path.read_text())
+    parts = [{"index": 0, "sha256": "a" * 64, "tokens": 40 * CTX + 1}, {"index": 1, "sha256": "b" * 64, "tokens": 24 * CTX + 1}]
+    path.write_text(json.dumps(toy | {"tokenizer": "bpe32k", "provenance": {"data": {"parts": parts}}}))
+    log = io.StringIO()
+    g = script.record(PROGRAM, ["--batch", str(B), "--update", "inplace", "--windows", "--fresh"], step=1, starts=starts,
+                      wall=[0.1] * 8, step_tokens=T, log=log)
+    assert fwd_roles(g) == ["updated", "updated"] and g.updated_macs() == T * FWD and g.cut_bits == 32 * VALUES
+    seen = [json.loads(s) for s in log.getvalue().splitlines() if s.startswith("{")]
+    assert seen[0] == {"parts": 3, "windows": 40 + 24 + (10 ** 5 - 1) // CTX, "seen": 40 + 24}
+    assert seen[1] == {"parts": 3, "windows": 80 + 48 + (10 ** 5 - 1) // (CTX // 2), "seen": 80 + 48}
+    assert sys.modules["prepare"].data_v3.TRAIN == Path("/nonexistent/train/v3")
+    path.write_text(json.dumps(toy | {"tokenizer": "bpe32k", "provenance": {}}))
+    with pytest.raises(CaptureRefused, match="needs the start's provenance to name the data v3 parts it read"):
+        recorded(starts, "--update", "inplace", "--windows", "--fresh")
+
+
+def test_the_stub_streams_unread_part_is_as_long_as_the_run_record_reads(starts):
+    """hybrid's grow.py refuses an arm that reads more windows than its stream leaves unread (``--unread``): the unread
+    part is the record's steps times its largest step's tokens, STREAM_HEADROOM times over, at least STREAM_TOKENS."""
+    run = {"steps": [{"tokens": T}] * 2000 + [{"tokens": 0}]}
+    assert script.stream_tokens(run) == script.STREAM_HEADROOM * 2001 * T
+    assert script.stream_tokens({"steps": [{"tokens": T}]}) == script.stream_tokens({}) == script.STREAM_TOKENS
+    need = str((script.stream_tokens(run) - 1) // CTX)
+    with pytest.raises(CaptureRefused, match=rf"train: {need} windows to read, {(10 ** 5 - 1) // CTX} in the stream"):
+        recorded(starts, "--update", "inplace", "--unread", need)
+    g = script.record(PROGRAM, ["--batch", str(B), "--update", "inplace", "--unread", need], step=1, starts=starts,
+                      wall=[0.1] * 8, step_tokens=T, stream_tokens=script.stream_tokens(run))
+    assert fwd_roles(g) == ["updated", "updated"] and g.updated_macs() == T * FWD
 
 
 def test_a_boolean_mask_index_is_taken_at_its_largest():
