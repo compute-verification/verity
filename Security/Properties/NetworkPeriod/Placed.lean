@@ -26,8 +26,9 @@ bound holds (`WrongBounds`).
 * `WrongBounds s P δ b`: each possible incorrect set of `s` at `δ` holds at most `b` proof blocks. It is the sampled
   leg's: the audit's answer publishes `b` (`SampledProofs.Bound.boundOf`), and `WrongBoundsDrawn` gives it at a strata
   draw. The period check reads the answer's `bound` and not the draw, so `ScanWindowsPlaced` takes it as it stands.
-* `WrongBoundsDrawn`: at strata whose sizes and draws are the design's strata draw (`StrataDrawn`, beside
-  `OneStage.strata`), the code's count bound at `δ` (`SampledProofs.Bound.countBound`) is a `WrongBounds` bound at `δ`.
+* `WrongBoundsDrawn`: at strata whose sizes and draws, then strata drawn whole (an input class), are the design's
+  strata draw (`StrataDrawn`, beside `OneStage.strata`), the code's count bound at `δ`
+  (`SampledProofs.Bound.countBound`) is a `WrongBounds` bound at `δ`.
 
 `Proofs.Properties.NetworkPeriod` proves `ScanWindowsPlaced` (`scanWindowsPlaced`) and `WrongBoundsDrawn`
 (`wrongBoundsDrawn`).
@@ -77,13 +78,15 @@ def StmtBits {Coin Col T : Type} (D : Deploy Coin Col T) : Prop :=
 def WrongBounds (s : AuditStatement) (P : Partition) (δ : ℝ) (b : ℕ) : Prop :=
   ∀ F ∈ NetTiming.faultySets s.design P δ, F.card ≤ b
 
-/-- **The code's count bound is the audit's bound at a strata draw.** At every statement `s`, partition `P` and strata
-`strata` whose sizes and draws, in order, are `s`'s design's strata draw on `P` (`StrataDrawn`), and every
-`δ = num/den` with `0 < num` and `0 < den`, each possible incorrect set at `δ` holds at most
-`SampledProofs.Bound.countBound strata δ` proof blocks (`WrongBounds`). -/
+/-- **The code's count bound is the audit's bound at a strata draw.** At every statement `s`, partition `P`, strata
+`strata` and sizes `ns` such that `strata`'s sizes and draws, in order, then strata of sizes `ns` drawn whole (an input
+class, drawn `all`), are `s`'s design's strata draw on `P` (`StrataDrawn`), and every `δ = num/den` with `0 < num` and
+`0 < den`, each possible incorrect set at `δ` holds at most `SampledProofs.Bound.countBound strata δ` proof blocks
+(`WrongBounds`). -/
 def WrongBoundsDrawn : Prop :=
-  ∀ (s : AuditStatement) (P : Partition) (strata : Array Core.Stratum) (δ : Core.Ratio),
-    StrataDrawn s.design P (strata.toList.map fun x => (x.size, x.k)) → 0 < δ.num → 0 < δ.den →
+  ∀ (s : AuditStatement) (P : Partition) (strata : Array Core.Stratum) (ns : List ℕ) (δ : Core.Ratio),
+    StrataDrawn s.design P ((strata.toList.map fun x => (x.size, x.k)) ++ ns.map fun m => (m, m)) →
+    0 < δ.num → 0 < δ.den →
       WrongBounds s P ((δ.num : ℝ) / δ.den) (SampledProofs.Bound.countBound strata δ)
 
 /-- **An accepted scan's incorrect sets commit at most the check's `faulty_bits`.** If `scanOf` accepts the scan `j` at

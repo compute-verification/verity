@@ -270,11 +270,12 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   rw [stateWindow_skipped] at hs
   cases hs
 
-/-- **`WrongBoundsDrawn`**: at strata that are the design's strata draw, every possible incorrect set at `δ` holds at
-most `countBound strata δ` proof blocks, since `miss(countBound strata δ + 1) < δ` (`countBound_miss_design`). -/
-theorem wrongBoundsDrawn : WrongBoundsDrawn := fun _ _ strata δ h hδ hδd _ hF =>
+/-- **`WrongBoundsDrawn`**: at strata that, then strata drawn whole, are the design's strata draw, every possible
+incorrect set at `δ` holds at most `countBound strata δ` proof blocks, since `miss(countBound strata δ + 1) < δ`
+(`countBound_miss_design`). -/
+theorem wrongBoundsDrawn : WrongBoundsDrawn := fun _ _ strata ns δ h hδ hδd _ hF =>
   NetTiming.card_le_of_mem_faultySets _ _
-    (Claims.Sampling.Count.countBound_miss_design strata h δ hδ hδd).le hF
+    (Claims.Sampling.Count.countBound_miss_design strata ns h δ hδ hδd).le hF
 
 theorem scanWindowsPlaced : ScanWindowsPlaced := by
   sorry
@@ -335,33 +336,36 @@ theorem scanWindowsPlaced_nontrivial :
     have h0 : NetTiming.faultyBits oneInputStmt.prog oneInputPart {0} ≤ 0 := h.2 0 {0} oneInput_faulty
     omega
 
-/-- **`WrongBoundsDrawn`'s premise holds at a deployed law** (the two-lemma rule's `_honest`): the code's strata of a
-`subset:1` draw over two units (`SampledProofs.Bound.strataOf`) are the strata draw of the claims' `subset 1` on a
-partition of one class of two proof blocks. -/
+/-- **`WrongBoundsDrawn`'s premise holds at a deployed law** (the two-lemma rule's `_honest`): on a layout's partition of
+a population class of two proof blocks and an input class of one, the code's strata of a `subset:1` draw over the two
+units (`SampledProofs.Bound.strataOf`), then the input class drawn whole, are the strata draw of the design a `subset:1`
+draw runs: `subset 1`, then the input class `all`. -/
 theorem wrongBoundsDrawn_honest :
-    Claims.Sampling.StrataDrawn ⟨[.subset 1]⟩ ⟨[[[[0], [1]]]]⟩
-      (((SampledProofs.Bound.strataOf 2 (.subset 1)).getD #[]).toList.map fun x => (x.size, x.k)) := by
-  refine ⟨⟨rfl, fun p hp => ?_⟩, [[(2, 1)]], rfl, fun p hp => ?_, rfl⟩
-  · simp only [List.zip_cons_cons, List.zip_nil_left, List.mem_singleton] at hp
-    subst hp
-    show 1 ≤ 1 ∧ 1 ≤ ([2] : List ℕ).sum
-    decide
-  · simp only [List.zip_cons_cons, List.zip_nil_left, List.mem_singleton] at hp
-    subst hp
-    rfl
+    Claims.Sampling.StrataDrawn ⟨[.subset 1, .all]⟩ ⟨[[[[0], [1]]], [[[2]]]]⟩
+      ((((SampledProofs.Bound.strataOf 2 (.subset 1)).getD #[]).toList.map fun x => (x.size, x.k)) ++
+        [1].map fun m => (m, m)) := by
+  refine ⟨⟨rfl, fun p hp => ?_⟩, [[(2, 1)], [(1, 1)]], rfl, fun p hp => ?_, rfl⟩
+  · simp only [List.zip_cons_cons, List.zip_nil_left, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with rfl | rfl
+    · show 1 ≤ 1 ∧ 1 ≤ ([2] : List ℕ).sum
+      decide
+    · trivial
+  · simp only [List.zip_cons_cons, List.zip_nil_left, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with rfl | rfl <;> rfl
 
-/-- The code's strata of no stratum are not `oneInputStmt`'s strata draw on `oneInputPart`: its design of no rule is not
-well formed on a partition of one class. -/
-theorem oneInput_not_strataDrawn :
+/-- The code's strata of no stratum, then any strata drawn whole, are not `oneInputStmt`'s strata draw on
+`oneInputPart`: its design of no rule is not well formed on a partition of one class. -/
+theorem oneInput_not_strataDrawn (ns : List ℕ) :
     ¬ Claims.Sampling.StrataDrawn oneInputStmt.design oneInputPart
-      ((#[] : Array Core.Stratum).toList.map fun x => (x.size, x.k)) := fun h => by
+      (((#[] : Array Core.Stratum).toList.map fun x => (x.size, x.k)) ++ ns.map fun m => (m, m)) := fun h => by
   obtain ⟨⟨hl, _⟩, _⟩ := h
   exact absurd hl (by decide)
 
 /-- **`WrongBoundsDrawn`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at `oneInputStmt`, whose
 design of no rule draws nothing, its one proof block is a possible incorrect set at `δ = 1/2` (`oneInput_faulty`), so
 the code's count bound over no strata, `0`, is no `WrongBounds` bound there. Every other premise holds at
-`δ = ⟨1, 2⟩`, and the strata draw (`StrataDrawn`) fails (`oneInput_not_strataDrawn`). -/
+`δ = ⟨1, 2⟩`, and the strata draw (`StrataDrawn`) fails, whatever strata drawn whole follow
+(`oneInput_not_strataDrawn`). -/
 theorem wrongBoundsDrawn_nontrivial :
     ¬ WrongBounds oneInputStmt oneInputPart (((⟨1, 2⟩ : Core.Ratio).num : ℝ) / (⟨1, 2⟩ : Core.Ratio).den)
       (SampledProofs.Bound.countBound #[] ⟨1, 2⟩) := fun h => by
