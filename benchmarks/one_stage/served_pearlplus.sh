@@ -68,6 +68,9 @@
 #      (default 3,600), and writes its answer to PIECE_DIR/pearlplus-lean.json,
 #      the file `served_verdicts.pearlplus_of_record` reads, only where it is the Python verdict's; both verdicts, its
 #      command line and the executable's SHA-256 go to PIECE_DIR/pearlplus-lean-check.json either way;
+#   4c. where the Lean answered, `served_passes.py case` writes the parts of the run's case as remote's composite of
+#      record reads it that need no registration record, and the pass files its opened tiles read, to
+#      SERVE_DIR/private/pearlplus/case, where served_cases.py makes the case once the window's record R is made;
 #   5. `served_verdicts.py pearlplus` writes the piece (PIECE_DIR/development.json): its verdict, with each pass's salt
 #      held to the serve's live session (`pearlplus_coins`: the session fetched through PEARLC_CHALLENGER_GATE, under
 #      H1_KEY_SHA512 and MAIN_FILE's line; with in-process coins it claims no verdict) and an accept to the published
@@ -365,6 +368,12 @@ if [ -n "$GO" ] && [ -s "$P/verify.json" ]; then
   "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py lean --passes "$Q/passes" --verify "$P/verify.json" \
     --exe "${LX:-none}" --out "$P/pearlplus-lean.json" --timeout "${PEARLPLUS_LEAN_TIMEOUT:-3600}" > "$Q/lean.log" 2>&1
   say "lean: served_passes.py lean exit $? after $(took "$t"): $(tail -1 "$Q/lean.log" | cut -c1-400)"
+fi
+if [ -s "$P/pearlplus-lean.json" ]; then
+  t=$(date +%s)
+  "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py case --passes "$Q/passes" --verify "$P/verify.json" \
+    --lean "$P/pearlplus-lean.json" --out "$Q/case" > "$Q/case.log" 2>&1
+  say "case: served_passes.py case exit $? after $(took "$t"): $(tail -1 "$Q/case.log" | cut -c1-400)"
 fi
 
 UN=()
