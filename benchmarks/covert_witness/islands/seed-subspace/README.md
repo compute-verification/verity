@@ -1,25 +1,15 @@
-# Direction `seed-subspace` (class `seed`, with `e100kb` for comparison)
+# Direction `seed-subspace` (v3)
 
-Updates fully described by a seed plus a few coefficients, and the loss they buy per training FLOP. The seed-log decoder
-replays Δ = −Σ_i c_i z_i over a named tensor set S, z_i ~ N(0, 1) from a generator seeded `seed + i`; E holds one
-coefficient per direction, not per step, so a fixed set of d ≤ 24,962 (f32) or 49,951 (f16) directions can be trained for
-as many steps as the budget allows.
+Inference-shaped training: θ stays frozen and every matrix product the step runs has an operand that doesn't depend on
+θ′ (θ, a basis computed once from θ, or a basis drawn from a registered seed); only vectors train, applied elementwise.
+`train.py`'s docstring has the forward and E. The mechanisms, each a `--note` tag:
 
-`train.py` (run as `islands/seed/train.py`, a symlink, since the launcher runs `islands/CLASS/train.py`) has three modes:
+- `scale`: column and row scalings of each adapted matrix of θ (`--scale`) and the norm gains; no extra product.
+- `vera`: ΔW = Σ_d z_d b_d a_dᵀ over R seeded rank-1 directions shared by every block (`--vera R`), z = λ_b ⊙ λ_d, applied
+  as x·Aᵀ then ·Bᵀ.
+- `svf`: θ's top R singular directions of each matrix (`--svf R`), their values shifted by δ.
+- `growreg`: each block followed by a frozen copy of itself, gated at 0 through the copy's wo and w_down row scalings
+  (`--grow`), with any of the above.
 
-- `subspace`: intrinsic-dimension training. θ_S = θ0_S + Σ α_i z_i over d fixed directions, Z cached on the GPU in bf16
-  (d is what fits beside the model); the gradient is backpropagated to θ_S and projected onto Z; Adam on α. Two GEMVs a
-  step are logged as `extra`. `--redraw N` (mechanism `resub`) splits an arm into N blocks of d fresh directions each,
-  so it explores N·d ≤ the cap in the memory of d. Under the v2.1 harness only `--exact` steps are credited: Z is cached
-  in fp32 and each step's weights are built by the decoder's own sequential adds, so they are decode(θ, E_t) bit for bit
-  and the step declares E_t (`prepare.declare_step`); without it the steps read θ + bf16(αZ), ~0.3% of Δ off the decode.
-- `fit`: train S itself (AdamW), then solve the minimum-norm c with −Zᵀc = Δ over d ≥ |S| exact directions. S must be
-  small: the norm gains (6,656 on s, 13,056 on m) are the one set the seed log can carry exactly.
-- `mezo`: zeroth-order, `--pop K` seeds a step (antithetic ES with shared seeds); the `seed-mezo` direction owns MeZO.
-
-`--lrs a,b,c` runs one arm per learning rate from θ on the same data, each a share of the budget, every arm a snapshot
-(charged cumulatively); `notes.arms` has each arm's own FLOPs. `--probe` (default on a GPU) records each tensor's mean
-squared gradient at θ in `notes.probe`. The submitted model is always `prepare.decode(θ, E)`.
-
-    python benchmarks/covert_witness/launch.py seed s50 --note "fit-norms ..." -- --mode fit --perturb norms --lr 1e-3
-    python benchmarks/covert_witness/launch.py seed s50 --note "subspace ..." -- --mode subspace --perturb blocks --lr 3e-6
+    python benchmarks/covert_witness/launch.py s-t20 --note "vera ..." -- --scale --vera 512 --lr 3e-3
+    python benchmarks/covert_witness/launch.py s-t20 --note "growreg ..." -- --grow --vera 128
