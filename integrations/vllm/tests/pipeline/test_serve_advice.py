@@ -542,8 +542,8 @@ def test_a_draw_of_a_window_before_its_advice_line_fails_its_release(tmp_path):
         (tmp_path / f"w{w}.sampled_proofs.json").write_text(json.dumps({"window": w, "protocol": "sampled_proofs", "reads": []}))
     assert dd.scan() == 2
     with pytest.raises(Refused, match=r"window 0's advice line \(advice.jsonl\) isn't out: a draw comes after its advice"):
-        draws.wait(0)
-    assert draws.wait(1) == {"sampled_proofs": []}
+        draws.wait(window=0)
+    assert draws.wait(window=1) == {"sampled_proofs": []}
 
 
 def test_b_is_registered_once_as_the_verifier_recomputes_it_and_the_registration_log_names_it(tmp_path):
