@@ -70,6 +70,7 @@
   "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Verity.Soundness",
+  "Proofs.Properties.Verity.Sampled",
   "Proofs.Properties.Remote",
   "Proofs.Properties.Remote.Honest",
   "Proofs.Properties.Verity.Recursive",
@@ -78,7 +79,8 @@
   "Proofs.Properties.Verity.Recursive.Audit",
   "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Challenger",
-  "Proofs.Properties.Firewall"
+  "Proofs.Properties.Firewall",
+  "Proofs.Properties.Challenger.Coins"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
