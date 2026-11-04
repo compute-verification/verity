@@ -35,7 +35,7 @@ digest, one coin of `COIN_BYTES` bytes each. So the read meets the draw's ask (`
 * **The session's population** (`popHeld_of_checkBlobsAt`, `popOk_of_popHeld`, `n_of_popOk`, `n_of_popTied`,
   `coupled_draw_tied`, `coupled_draw_coins_tied`): v2 refuses a record whose population isn't its program's proof
   blocks in order (`popHeld`), and the session's population (`Live.hpop`) reads the same layout. So at a session whose
-  descriptor and query are v2's verifier's (`PopTied`, which `SetsUp` doesn't state) the draw's population is the
+  descriptor and query are v2's verifier's (`PopTied`, which `SetsUp`'s `params` implies) the draw's population is the
   session's, and the draw's piece asks nothing of the session but its coins.
 
 Each fact about one of the challenger's monadic functions is a Hoare triple proved by `mvcgen`, read back at an `.ok`
@@ -528,7 +528,7 @@ theorem n_of_popOk {A : Live} {v : _root_.SampledProofs.Registration.Verifier} {
     simpa only [List.length_map, List.length_range] using this
 
 /-- **The session's descriptor and query are v2's verifier's** on the parameters `θ`: the tie under which the
-session's population is the draw's (`n_of_popTied`). `SetsUp` doesn't state it. -/
+session's population is the draw's (`n_of_popTied`). `SetsUp`'s `params` implies it. -/
 def PopTied (θ : ByteArray) (A : Live) : Prop :=
   ∃ p, ParamsAt θ p ∧ _root_.SampledProofs.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program ∧
     A.qr = p.base.verifier.query
