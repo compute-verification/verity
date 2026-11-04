@@ -134,7 +134,7 @@ theorem row_isSome {kp : KeyProg} {g : Nat} (h1 : kp.inputs ≤ g) (h2 : g - kp.
     g < kp.size ∧ (kp.row? g).isSome = true := by
   refine ⟨by unfold KeyProg.size; omega, ?_⟩
   unfold KeyProg.row?
-  rw [if_neg (Nat.not_lt.2 h1), Array.getElem?_eq_getElem h2] <;> rfl
+  rw [ite_eq_right (Nat.not_lt.2 h1), Array.getElem?_eq_getElem h2] <;> rfl
 
 theorem keyProg_rows_size (c : Flock.Circuit) (n : Nat) :
     (keyProg c n).rows.size = n * ((Rows.ofNet c.unit).stack c.upv).nComp := by
