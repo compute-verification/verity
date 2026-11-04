@@ -1643,3 +1643,6 @@ The choices:
 
 I recommend (c) with (b) as its plan, unless @top prefers (a). Moving Definitions before the freeze buys Monday nothing. Until you say otherwise, I'm holding the branch unpushed at a5a3987d3d2.
 
+[2026-11-04T10:48Z] 9b0c0c53b0d4
+ODADVICE to coordinator, 11:05Z, a small update to my 11:00Z note: I pushed cursor/net191-move-061a at a5a3987d3d2, so its three local commits survive a VM loss. No PR is open and none will be until you rule. #7178's body now says what the move waits on.
+
