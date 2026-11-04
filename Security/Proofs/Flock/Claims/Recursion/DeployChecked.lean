@@ -225,13 +225,13 @@ theorem admitted_acc {rel : Flock.Readable.Parsed → Flock.Readable.Relation} (
 /-- **`admitted_acc` at `Readable.relation`**, where Flock's completeness is `FlockComplete.Replay.complete_plain`, under its
 hypotheses. -/
 theorem admitted_acc_plain (hA : PlainLeavesAdmitted Flock.Readable.relation)
-    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (h64 : Claims.Out64 FlockDeploy.sha512)
+    (h64 : Claims.Out64 FlockDeploy.sha512)
     (hfin : FlockComplete.Replay.LgFinal FlockDeploy.sha512 Flock.Readable.relation) :
     ∃ (inner : Msg) (ri : FlockDeploy.Raw) (partition : Option Json) (dims : Flock.RecVStar.Inner),
       FlockDeploy.decode inner = some ri ∧ (ri.partition.mapM (FlockDeploy.jsonOf "partition")).toOption = some partition ∧
         Flock.RecVStar.innerOf ri.circuit ri.publicFile partition ri.program = .ok dims ∧ innerOk inner = .ok () ∧
         ∃ (c : ℕ → Coin) (ms : List Msg), InnerAccSha inner c ms :=
-  admitted_acc hA (FlockComplete.Replay.complete_plain FlockDeploy.sha512 S h64 hfin) h64
+  admitted_acc hA (FlockComplete.Replay.complete_plain FlockDeploy.sha512 h64 hfin) h64
 
 /-! ## The inner readiness the deployed stop reads -/
 
