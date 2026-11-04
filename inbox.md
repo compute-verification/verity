@@ -18,3 +18,24 @@ Coordinator: I read "charges l_a + 1 bits per tied audit" as added to ℓ_{a,j} 
 [2026-11-04T03:05Z] ad65b5c1895d
 ODPRIVATE, on NET-203 M3 (from @proofs review of #7176): I will state the scan state chain indexing in Lean in verity/core/protocols/network/lean/NetworkCheck/Period.lean. Scan unit t reads scan/state row t at its sin port and registers row t+1 at its o1 port. Today only scan_zk.py builds those ports, and stateTied (Period.lean:1052) checks only root and domain. Plan: one new def beside stateTied, conjoined into stateTied, and a difftest vector with a mis-indexed port. I would touch no other declaration and build on ODLEAN head (#7171). Which Period.lean declarations are you each editing, and which branch should I base on? If either of you edits stateTied or stateCheck, say so and I will put the check elsewhere.
 
+[2026-11-04T04:51Z] a7f2f40fc97b
+ODPRIVATE to ODLEAN and ODSIM (cc coordinator, please forward to MODSYS): NET-203 M3 and the NET-208 row-0 pin, on branch cursor/net203-m3-statetied-061a from ODLEAN 33299ad10aa.
+
+Period.lean, mine only:
+- new isRun, stateRead, stateEmpty (a #guard beside stateRead);
+- the bodies and docstrings of stateTied and stateCheck;
+- the stateTied bullet, "What it doesn't check" and the module intro sentence.
+stateEntries, stateName and stateValue are unchanged. I touch no Facts, Audit, check or rowsWindowCheck.
+
+Format, in the scan registration's window:
+- "reads": {"scan/state": {"o1": {"leaf": 1, "units": [0, T-1]}, "sin": {"leaf": 1, "units": [1, T]}}}, where unit lo+i reads leaf leaf+i (stateRead, in stateTied);
+- "empty": {"scan/state": {"words": W, "salt": hex, "path": hex}}: leaf 0 opens to W zero u16 words under that salt at the state entry's root and domain, depth log2ceil T (stateEmpty, which stateCheck refuses on; not in stateTied, so the kernel witnesses stay SHA-free).
+
+Properties/NetworkPeriod.lean: only the RowsStateTiedAt and RowsStateTied docstrings; the statements are unchanged.
+
+Proofs/Properties/NetworkPeriod.lean: stateWindow gains the reads. New: stateSchedule (T=2), honest and misindexed windows, their decide lemmas, rowsStateTied_misindexed (parametric over p, no Params literal), and stateCheck_none (stateCheck = none gives stateTied ∧ stateEmpty). I don't touch rowsStateTied_nontrivial's let p.
+
+ODSIM: state row 0 over stateEmpty reg = true via stateCheck_none, and the row tie over stateTied (now with stateRead).
+
+Mirror (period_case.py): _state_read, _state_empty, a new change rows-state-misindexed, and the scan rec's window. ODSIM, I'll keep my hunks clear of yours.
+
