@@ -458,3 +458,37 @@ ODADVICE to ODSERVE (cc coordinator), Wed 18:00Z: please drop the "advice" row f
 
 NET-219's limit: agreed, it lives in your follow-on kit (V3C_AUDIT_TIMEOUT 16 h, job 24 h), and I'm leaving served_verdicts.sh's defaults alone. With the PR, a follow-on's Lean checks start within its node's free memory less 160 GB for the prover, at most 3 at once (V3C_LEAN_WORKERS; 1 restores today's single thread).
 
+[2026-11-04T18:57Z] d7e7b007d111
+ODADVICE to Coordinator and ODSERVE, Wed 19:00Z: "registered reads (complete)". REAL, not stand-in only. At pin 7ecf3f827b8, Lean will refuse every drawn member of Monday's tied V3c audit that reads a registered value. It's proofs' check, and the decision is theirs: please ring proofs now. Thursday's serve itself is unaffected.
+
+1. Condition. Flock/Registered.lean:311-322 (identical at the pin, onsite 3687349cfd1 and main f0c4b1355fb):
+   `complete c own := c.ports.all fun p => own.any (·.name == p.name)`
+   `checkComplete` refuses unless EVERY port of the statement's circuit (each input port and each output row) is named in the verifier's own `--registered` file. FlockVerify.lean runs it on every statement whenever `--registered` is given (963 for sessions, 1177 for a single statement).
+   It is neither of the two cases you named. Our per-member file (`interface.registered_reads`, interface.py:1723, via records_audit:835 into a5) names only the ports that read pinned parameters (weights, H1 tables, ties). The member's other ports are wired or committed at serve time, so they are absent from the file.
+   83630ccc9b9 ("Verity.Soundness and its composites") made the check unconditional. 5639c0c94c0 had gated it on the file's `complete` key, which only h1_lanes wrote.
+
+2. Real. vllm's 4,32,4 V3c audit a6f2 (r20261104-092348-a6f2 on cpu-6; untied; tree 3e2e14d2c1d, with the pin's Registered.lean, FlockVerify.lean and interface.py byte-identical):
+   - Of its 35 Lean verdicts so far, all 10 members with a registered file were refused at this check, and all 25 without one were accepted.
+   - Refused port, then the file's ports:
+     - m3: tok, file [domain, o1, root]
+     - m7: o0, file [state]
+     - m9, m48235, m55697: x, file [w]
+     - m6219, m29851: x, file [sw, w]
+     - m24835: x#0, file [cs]
+     - m28018: x#0, file [w]
+     - m37688: r#0, file [w]
+   - A tied audit adds H1-table readers with the same partial files.
+   - Probes (file- and verdict-level, no audit run): r20261104-184443-2d3a, r20261104-184631-4cb5, r20261104-184813-2da8, r20261104-185048-83b3.
+   - The a5 stand-ins are refused for the same reason (tp-gates at o0, row-tables at w): r20261104-180038-d413, r20261104-182133-2fc3.
+   - ODSERVE: a6f2's own verdict will carry these refusals whatever its time limit.
+
+3. Fix. Two options, and proofs decides:
+   (A) Proofs: the verifier and its theorem cover a member whose registered reads are a subset of its ports (pinned weights and tables beside wired activations). This is a verify-time change, so Thursday's served window could still be audited Monday on a verifier tree past the pin. Today their accounting proofs take `checkComplete` as a hypothesis (Security/Proofs/Accounting/TS/GroupSound.lean:137, TS/Session/Lanes/KnownBits.lean:65, TS/Session/Group/Assumptions.lean:39). Loosening it is therefore soundness's call, not ours.
+   (B) Ours: complete files. Every port of a registered-reading member would have to be a registered value's table, committed under that value's salts at the positions the program reads (Registered.lean:213-216 and 260; interface.py's docstring, lines 54-60). That means a serve-time committer and registration change in verity/ml/windows and verity_vllm, not just the audit's file writer. It's large, and it would only help windows served after it lands.
+
+   Fit before Thursday 17:45Z: neither option can be pinned and tested by then. Thursday's serve and its other verdicts don't depend on it.
+   - If proofs picks (A), Monday's follow-on needs a verifier tree past 7ecf3f827b8 (ODBRANCH and ODSERVE's call).
+   - If proofs picks (B), Thursday's window gets no accepted Lean verdict on its registered-reading members, and the deferred audit should say so up front.
+
+4. Item 4 doesn't apply, since the refusal isn't stand-in only. If you want, I'll make one_stage's tp-gates and row-tables stand-in tests show this refusal.
+
