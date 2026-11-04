@@ -17,8 +17,8 @@ establishes with no hardware of its own at the prover's site. It composes three 
 - work, by PoUW's period check (`verity/pouw/period/v1`, onsite's work subprotocol too): the GPU's time is credited
   to useful matmuls through receipts the live coins open, the period's windows all or nothing, each window's Commit
   record the one record the policy and the one-stage audit committed to;
-- the inference-only policy (`verity/inference-only/v0`): the declared circuit divides into inference blocks within
-  their gate and fresh-input budgets, checked from the declared circuit and the registered information alone.
+- the inference-only policy (`verity/inference-only/v0`): the registered circuit divides into inference blocks within
+  their gate and fresh-input budgets, checked from the registered circuit and the registered information alone.
 
 Remote accepts only when all three accept over one commitment that binds them, each having committed to the same record
 (`Core.Composition.same`); any one's rejection rejects it, whatever the others answer. It rests on live coins (flipped after
@@ -76,7 +76,7 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   through the whole remote composite; its tests (`examples/lifecycle/tests/test_lifecycle.py`) run each composite honest
   and with every deviation it lists refused. Nothing about it is proved.
 - `vllm/` (`run` `moved`, `proof` `none`): the vLLM demo, the remote protocol on a real served model. Llama-3.2-1B INT8
-  served by vLLM on one H200 through `verity_vllm`'s committing endpoint; `verity example vllm` serves one sampling block,
+  served by vLLM on one H200 through `verity_vllm`'s committing endpoint; `verity example vllm` serves one execution phase,
   commits its values, and audits it through `benchmarks/one_stage/served_verdicts.sh`: live coins sample proof blocks,
   C-Flock `--zk` proves them and the Lean verifier checks them, PoUW runs on the served model, and onsite's subprotocols
   run where each has its piece. Its run is `moved`: PoUW's verdict is a development run that credits nothing, so no run of
@@ -95,7 +95,7 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   here as a skeleton on fixture coins, not as runs, and nothing claims them.
 - `onsite_served/` (`run` `moved`, `proof` `none`): onsite's run configuration for the served window. One
   `verity run` configuration (`config.toml`) of onsite's seven subprotocols on the served int8 window: its
-  parties, channels and each component's piece, PoUS's at 320 challenges, which `verity run --on MACHINE --bindings FILE`
+  parties, channels and each subprotocol's piece, PoUS's at 320 challenges, which `verity run --on MACHINE --bindings FILE`
   executes on each machine, the hosts and addresses only in the deploy bindings. `verity run CONFIG --dry-run` resolves
   it without a GPU. It has no run of record yet.
 - `dither_full_util/` (`run` `moved`, `proof` `none`): the remote protocol's PoUW half, as PoUW's work unit. The H200 at

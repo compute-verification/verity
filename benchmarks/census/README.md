@@ -31,7 +31,7 @@ in `benchmarks/numerical/tests/bench/test_census_data.py` check that.
   target name it was known by, and `fidelity_notes` record known gaps from what serving runs. An input set's id is its dataset, slugged, for example `bench-instances-fp8-ada-v1`. Every
   other id is kebab-case, for example `dc-1ms-100gbps`.
 - The census holds workloads, subcircuit templates and subcircuits, input sets, hardware, networks, deployments and the adversary resource model. It never encodes replay or proof
-  units, which applications choose per run.
+  blocks, which applications choose per run.
 - Ids are stable. Renders cite them, and sites build history over them. A changed quantity gets a new entry with a new
   id, and an id that has been cited is never renamed or reused.
 
