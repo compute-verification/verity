@@ -44,6 +44,9 @@ public import Proofs.Flock.Recursive.FirewallJson
 public import Proofs.Flock.Recursive.PublicAudit
 public import Proofs.Flock.Recursive.PublicAuditProof
 public import Proofs.Flock.Recursive.HoloExec
+public import Proofs.Flock.Recursive.FirewallObj
+public import Proofs.Flock.Recursive.FirewallSteps
+public import Proofs.Flock.Recursive.FirewallHonest
 public import Proofs.Flock.Recursive.StageKinds
 public import Proofs.Flock.Recursive.HoloCoins
 public import Proofs.Flock.Recursive.HoloSched
