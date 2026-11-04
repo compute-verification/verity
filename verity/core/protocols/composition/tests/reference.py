@@ -8,9 +8,12 @@ certificates and one-stage's answers, `verity/core/protocols/network/tests/test_
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
 `nci_reference.check_baseline`, behind the protocol's decoders,
 `verity/core/protocols/network/tests/test_inference_only_protocol.py`), for sampled proofs (`verity/sampled-proofs/v1`)
-`sampled_proofs`: its form's split over one-stage v1's audit (`verity/sampled-proofs/one-stage/v1`), its difftest's
-`check`, `one_stage` behind the decoders `OneStage` reads (`verity/core/service/sampled_proofs/tests/test_difftest.py`),
-and the recursive form refused where the case names none of its files, the wipe's
+`sampled_proofs`: its form's split over one-stage v2's audit (`verity/sampled-proofs/one-stage/v2`, one-stage v1
+refused by name, `V1_REFUSED`), its decoders `OneStageZk` reads (behind the decoders `OneStage` reads, v1's difftest's,
+`verity/core/service/sampled_proofs/tests/test_difftest.py`) and its check: its one session's coin tree, the
+population and the public file, the session's verdict by the verifier of record (`one_stage.proofs.verify`, the
+`flock-verify` path `OneStageZk` runs inside its Lean), then v1's difftest's `check` on that verdict; and the
+recursive form refused where the case names none of its files, the wipe's
 (`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth (PoUB-P2,
 `verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each subprotocol's own difftest holds its Lean to that Python; this one holds the composition of them.
@@ -41,6 +44,7 @@ import hashlib
 import importlib.util
 import json
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
@@ -50,6 +54,8 @@ from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
 from verity.core.protocols.pouw import core_check, credit, period_check
+from verity.core.protocols.sampled_proofs import challenger as CH
+from verity.core.protocols.sampled_proofs.one_stage import partition as PART, proofs as PF, registration as REG
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 
@@ -69,8 +75,8 @@ def module(name: str, path: Path) -> ModuleType:
     return m
 
 
-#: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, and its strategies
-#: draw audits.
+#: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `decode_params_v2`
+#: and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies draw audits.
 ONE_STAGE = module("one_stage_difftest", CORE.parents[1] / "verity/core/service/sampled_proofs/tests/test_difftest.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
 POUW_PERIOD_CASES = module("pouw_period_cases", CORE / "protocols/pouw/lean/check/tests/pouw_period_cases.py")
@@ -163,10 +169,161 @@ def _recursive(rest: dict, what: str):
     raise Reject(f"the {what} name no recursive")
 
 
+#: `VStar.Recursive.Sampled.V1_REFUSED`: a one-stage statement naming no ``proofs`` is one-stage v1's.
+V1_REFUSED = ("one-stage v1 (verity/sampled-proofs/one-stage/v1) is refused: sampled proofs covers one-stage v2 "
+              "(verity/sampled-proofs/one-stage/v2), whose verdicts are its own run of the verifier on the proofs, and "
+              "the recursive audit only")
+
+
+def _keys(j: Any, keys: list[str], what: str) -> None:
+    if not isinstance(j, dict) or sorted(j) != keys:
+        raise Reject(f"the keys of {what} are not {', '.join(keys)}")
+
+
+def _one_stage_params(rest: dict) -> dict:
+    """`OneStageZk.paramsOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1: ``proofs``, exactly the circuit and
+    public files' SHA-512s and the verifier's registered file or null, then v1's params (`decode_params_v2`, which
+    refuses them naming no challenger) with a partition object."""
+    if "proofs" not in rest:
+        raise Reject(f"the parameters name no proofs: {V1_REFUSED}")
+    pr = rest["proofs"]
+    _keys(pr, ["circuit", "public", "registered"], "proofs")
+    for k in ("circuit", "public"):
+        if not (isinstance(pr[k], str) and len(pr[k]) == 128 and all(c in "0123456789abcdef" for c in pr[k])):
+            raise Reject(f"proofs: {k} is not a SHA-512 digest (128 lowercase hex)")
+    if pr["registered"] is not None and not isinstance(pr["registered"], dict):
+        raise Reject("proofs: registered is not the verifier's registered file (an object) or null")
+    p = ONE_STAGE.decode_params_v2(rest)
+    if p["partition"] is None:
+        raise Reject("partition is null: the sessions are verified against the verifier's own partition object")
+    return {**p, "proofs": pr, "descriptor": canonical(rest["program"]).encode()}
+
+
+def _one_stage_evidence(rest: dict) -> dict:
+    """`OneStageZk.evidenceOf` behind `VStar.Recursive.Sampled`'s refusal of v1: no ``verdicts``, v1's evidence with
+    none (`covered_evidence`, `OneStage.evidenceOf`), and ``proofs``, exactly the sessions: for each of v1's sessions in
+    order, its name, its record's digest and its rep files' digests. The public file is the parameters'."""
+    if "proofs" not in rest:
+        raise Reject(f"the evidence names no proofs: {V1_REFUSED}")
+    if "verdicts" in rest:
+        raise Reject("the evidence names verdicts: this audit's verdicts are its own run of the verifier on the proofs")
+    base = ONE_STAGE.covered_evidence(canonical({**{k: v for k, v in rest.items() if k != "proofs"},
+                                                 "verdicts": {}}).encode())
+    pr = rest["proofs"]
+    _keys(pr, ["sessions"], "the evidence's proofs")
+    if not isinstance(pr["sessions"], list):
+        raise Reject("proofs: sessions is not a list")
+    for s in pr["sessions"]:
+        _keys(s, ["name", "record", "reps"], "a session of the proofs")
+        if not (isinstance(s["name"], str) and isinstance(s["record"], str) and isinstance(s["reps"], dict)
+                and all(isinstance(d, str) for d in s["reps"].values())):
+            raise Reject("a session of the proofs is not a name, its record's digest and its rep files' digests")
+    if [s["name"] for s in pr["sessions"]] != base["sessions"]:
+        raise Reject("proofs: the sessions are not the evidence's sessions, in order")
+    return {**base, "proofs": pr}
+
+
+#: A case's blobs are read once for each component's answer and each count `reference` makes, and a recorded session's
+#: are tens of megabytes: each blob is decoded and hashed once.
+_unhex = functools.lru_cache(maxsize=64)(P.unhex)
+_sha512 = functools.lru_cache(maxsize=64)(lambda b: hashlib.sha512(b).hexdigest())
+
+
+@functools.cache
+def _session_verdict(circuit: bytes, public: bytes, record: bytes, reps: tuple[tuple[str, bytes], ...], program: bytes,
+                     partition: str, registered: str) -> tuple[PF.Finding | None, tuple[str, str] | None]:
+    """`one_stage.proofs.verify` (`flock-verify verify --zk`, the verifier of record, whose one-stage path
+    `OneStageZk.run` runs inside its own Lean) on one session's files, written out as its directory: once per process
+    for each set of files, since a session's verify sets up its tables (about 10 s)."""
+    with tempfile.TemporaryDirectory(prefix="composition-session-") as d:
+        session = Path(d, "session")
+        session.mkdir()
+        (session / "session.json").write_bytes(record)
+        for name, b in reps:
+            (session / name).write_bytes(b)
+        Path(d, "circuit.txt").write_bytes(circuit)
+        Path(d, "pub.bin").write_bytes(public)
+        return PF.verify(PF.Proof(Path(d, "circuit.txt"), Path(d, "pub.bin"), (session,)),
+                         circuit_sha512=hashlib.sha512(circuit).hexdigest(), program=program,
+                         partition=json.loads(partition), registered=json.loads(registered))
+
+
+def _public_header(public: bytes) -> dict:
+    """The public file's header as `OneStageZk.publicHeld` reads it: its first line, as JSON."""
+    return json.loads(public.split(b"\n", 1)[0].decode())
+
+
+def _one_stage_check(p: dict, c: tuple[dict, bytes], e: dict, blobs: list[bytes]) -> tuple:
+    """`OneStageZk.checkBlobs` on `blobs`: at the coins v1 reads from the challenger's release (`_coins_of`), the
+    evidence's one session (`oneSession`: the drawn units are proved in one session), its record on the blobs and held
+    to the coin trees that release log shows (`challenger.sessions_tree_reason`), the registration's population in the
+    program's order (`popHeld`, `partition.in_order`), the public file's header the registration's (`publicHeld`,
+    `registration.matches_public`), then the session's verdict (`run`: `_session_verdict`, refused for a program that
+    reads registered values the verifier holds no reads of or a file no blob holds, its proved units the evidence's,
+    `provedHeld`) and v1's `check` at those coins on it, an acceptance only when the session accepted."""
+    rec, _ = c
+    try:
+        if ONE_STAGE._coins_of(p, c, e) is None:
+            return REJECT, "coins: no challenger"
+    except (CH.CoinError, KeyError, TypeError):
+        return REJECT, "coins"
+    sessions = e["proofs"]["sessions"]
+    if len(sessions) != 1:
+        return REJECT, f"proofs: the evidence names {len(sessions)} sessions: the drawn units are proved in one session"
+    try:
+        trees = CH.coin_trees_of(e["coins"]["session"]["log"])
+    except (CH.CoinError, KeyError, TypeError):
+        return REJECT, "coins"
+    (s,) = sessions
+    held = {_sha512(b): b for b in blobs}
+    try:
+        record = held[s["record"]].decode()
+    except KeyError:
+        return REJECT, f"proofs: session {s['name']}'s record: no blob has its SHA-512"
+    except UnicodeDecodeError:
+        return REJECT, f"proofs: session {s['name']}'s record is not UTF-8"
+    try:
+        named = json.loads(record)
+    except ValueError:
+        named = None
+    if why := CH.sessions_tree_reason(trees, [(s["name"], named)]):
+        return REJECT, f"proofs: {why}"
+    n = rec.get("population")
+    if not ONE_STAGE._nat(n) or not PART.in_order(p["program"], p["query"], n):
+        return REJECT, "proofs: population"
+    pr = p["proofs"]
+    if pr["public"] not in held:
+        return REJECT, "proofs: public file: no blob has its SHA-512"
+    try:
+        h = _public_header(held[pr["public"]])
+        fv = h.get("frame_v3") or {}
+        if REG.matches_public(rec, h.get("scheme"), fv.get("roots"), fv.get("domain_ids"), h.get("instances")).codes:
+            return REJECT, "proofs: public file: not the registration's"
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return REJECT, "proofs: public file: its header"
+    if pr["registered"] is None and PF.reads_registered(p["descriptor"]):
+        return REJECT, "proofs: registered: the program reads registered values and the verifier holds no registered reads"
+    if pr["circuit"] not in held:
+        return REJECT, "proofs: circuit: no blob has its SHA-512"
+    reps = tuple((k, held[d]) for k, d in sorted(s["reps"].items()) if d in held)
+    got, refused = _session_verdict(held[pr["circuit"]], held[pr["public"]], held[s["record"]], reps, p["descriptor"],
+                                    canonical(p["partition"]), canonical(pr["registered"]))
+    if refused is not None:
+        return REJECT, f"proofs: {refused[1]}"
+    (f,) = got
+    if not f.accepted:
+        return REJECT, "proofs: a session's verifier did not accept"
+    if sorted(f.units) != e["proved_units"]:
+        return REJECT, "proofs: the units the sessions proved are not the evidence's proved_units"
+    verdict = {"accepted": True, "of_record": True, "session": s["name"], "why": f.why, "units": list(f.units),
+               "program_sha512": f.program, **({"registered": f.registered} if pr["registered"] is not None else {})}
+    return ONE_STAGE.check(p, c, {**e, "verdicts": {f"flock-verify/{s['name']}": verdict}})
+
+
 def _form_params(j: Any) -> dict:
     form, rest = _form(j, "parameters")
     if form == "one-stage":
-        return ONE_STAGE.decode_params(rest)
+        return _one_stage_params(rest)
     if form == "recursive":
         _recursive(rest, "parameters")
     raise Reject(f"the parameters' form {form} is not one-stage or recursive")
@@ -175,18 +332,21 @@ def _form_params(j: Any) -> dict:
 def _form_evidence(b: bytes) -> dict:
     form, rest = _form(P.canonical_json(b), "evidence")
     if form == "one-stage":
-        return ONE_STAGE.decode_evidence(canonical(rest).encode())
+        return _one_stage_evidence(rest)
     if form == "recursive":
         _recursive(rest, "evidence")
     raise Reject(f"the evidence's form {form} is not one-stage or recursive")
 
 
 def sampled_proofs(case: Any) -> dict:
-    """`VStar.Recursive.Sampled.protocol` on a case and its ``blobs``: one-stage v1 (`SampledProofs.OneStage`, its
-    difftest's `check`, the live check at the coins the evidence reads) when its params and evidence name the form
-    ``one-stage``, a refusal of any other form on the cases the mirror decides."""
+    """`VStar.Recursive.Sampled.protocol` on a case and its ``blobs``: one-stage v2 (`SampledProofs.OneStageZk`,
+    `_one_stage_check`, at the coins the challenger's release gives) when its params and evidence name the form
+    ``one-stage`` and ``proofs``, a refusal of one-stage v1 (naming no ``proofs``) by name and of any other form on the
+    cases the mirror decides."""
+    blobs = case.get("blobs", []) if isinstance(case, dict) else []
     return P.answer(SAMPLED_PROOFS_V1, case, params=_form_params, commitment=ONE_STAGE.decode_commitment,
-                    evidence=_form_evidence, digest=lambda c: c[1], check=ONE_STAGE.check)
+                    evidence=_form_evidence, digest=lambda c: c[1],
+                    check=lambda p, c, e: _one_stage_check(p, c, e, blobs))
 
 
 CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference)
@@ -201,8 +361,8 @@ def _period_answer(case: str) -> str:
 #: A period's answer is slow to make (its windows' ledger signatures and layouts), and a composition's case asks for each
 #: component's twice, so it is made once a case.
 POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(canonical(case))))
-#: Integrity: sampled proofs (`VStar.Recursive.Sampled`), one-stage v1's audit (`SampledProofs.OneStage`) or the
-#: recursive audit, as the params' form names it.
+#: Integrity: sampled proofs (`VStar.Recursive.Sampled`), one-stage v2's audit (`SampledProofs.OneStageZk`) or the
+#: recursive audit, as the params' form names it; one-stage v1 refused.
 SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, sampled_proofs, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
@@ -312,7 +472,7 @@ class Product:
         bs = case["blobs"]
         if not isinstance(bs, list) or not all(isinstance(b, str) for b in bs):
             raise Reject("the case's blobs are not a list of hex strings")
-        return {k: v for k, v in case.items() if k != "blobs"}, [P.unhex(b) for b in bs]
+        return {k: v for k, v in case.items() if k != "blobs"}, [_unhex(b) for b in bs]
 
     def answer(self, case: Any) -> dict:
         """`Core.BlobProtocol.case` of the product: the outcome of one `serve` line."""

@@ -668,7 +668,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         publics[m.key] = body(st_dir / f"pub-{m.n}.bin")
         members.append({"k": k, "m": m, "defn": defn, "header": header, "circuit": circuit, "circ": circ, "read": read,
                         "st": {"dir": st_dir, "meta": meta, "pin": made["pin"], "partition_file": out / "partition.json",
-                               "program_file": out / "program.json"},
+                               "program_file": out / "program.json",
+                               "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin")},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
     leaf_layer = CS.leaf_layer(publics)
@@ -941,11 +942,12 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
                partition: dict | None = None) -> None:
     """The audit as `SampledProofs.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
-    verifier's own partition object, which v2 verifies the sessions against), in ``out/case.json``, the current Python
-    on it (`replay.python`) in ``out/case-python.json``, and the case in sampled proofs' one-stage form
-    (`case_with_form`), which onsite's and remote's evidence carries for sampled proofs, in ``out/case-sampled.json``.
-    With ``v2`` (`v2_proof`), the case of the audit on the proofs themselves, `SampledProofs.OneStageZk`'s (`case_v2`), in
-    ``out/case-v2.json``, or why there is none in ``out/case-v2-error.txt``."""
+    verifier's own partition object, which v2 verifies the sessions against), in ``out/case.json``, and the current
+    Python on it (`replay.python`) in ``out/case-python.json``. With ``v2`` (`v2_proof`), the case of the audit on the
+    proofs themselves, `SampledProofs.OneStageZk`'s (`case_v2`), in ``out/case-v2.json``, and that case in sampled
+    proofs' one-stage form (`case_with_form`), which onsite's and remote's evidence carries for sampled proofs, in
+    ``out/case-sampled.json``; or why there is neither in ``out/case-v2-error.txt``. Sampled proofs refuses one-stage
+    v1's case, so an audit with no v2 case has no sampled proofs case."""
     try:
         import replay as RP
 
@@ -955,7 +957,6 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
         c = RP.Case("", "a5", rec["format"], "audit", "audit", program, p, rec, e, None)
         (out / "case.json").write_text(json.dumps(c.case(), sort_keys=True))
         (out / "case-python.json").write_text(json.dumps(RP.python(c), sort_keys=True, default=str))
-        (out / "case-sampled.json").write_text(json.dumps(case_with_form(c.case()), sort_keys=True))
     except Exception as x:  # noqa: BLE001 -- the case is a copy of the audit for onsite; its failure leaves the audit's verdict
         (out / "case-error.txt").write_text(f"{type(x).__name__}: {x}\n")
         return
@@ -964,17 +965,22 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     try:
         if isinstance(v2, str):
             raise ValueError(v2)
-        (out / "case-v2.json").write_text(json.dumps(case_v2(c.case(), sessions, **v2), sort_keys=True))
+        zk = case_v2(c.case(), sessions, **v2)
+        sampled = case_with_form(zk)
+        (out / "case-v2.json").write_text(json.dumps(zk, sort_keys=True))
+        (out / "case-sampled.json").write_text(json.dumps(sampled, sort_keys=True))
     except Exception as x:  # noqa: BLE001 -- as the v1 case's
         (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
 
 
-def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, registered: dict | None,
+def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public: str, registered: dict | None,
             tables: Sequence[Path]) -> dict:
-    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest and
-    the verifier's registered file), the evidence with its ``verdicts`` replaced by the proofs' files
-    (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``, the paths of the files those name and of the
-    pinned lookup tables, which onsite reads after the evidence (`compose.onsite_check`)."""
+    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest, the
+    public file's, taken when it was staged before the draw, and the verifier's registered file), the evidence with its
+    ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``,
+    the paths of the files those name and of the pinned lookup tables, which onsite reads after the evidence
+    (`compose.onsite_check`). v2 holds the public file's header to the registration (`registration.matches_public`), so
+    it refuses a windowed registration, whose ports are its members' (``<member>/<port>``)."""
     import replay as RP
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
@@ -982,17 +988,17 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, registe
     evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
     return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
             "evidence": RP.DT.canonical(evidence).encode().hex(),
-            "params": {**case["params"], "proofs": {"circuit": circuit, "registered": registered}}}
+            "params": {**case["params"], "proofs": {"circuit": circuit, "public": public, "registered": registered}}}
 
 
-#: onsite's and remote's sampled proofs component (`VStar.Recursive.Sampled`): one-stage v1's audit or the recursive audit,
-#: whichever form its params and evidence name
+#: onsite's and remote's sampled proofs component (`VStar.Recursive.Sampled`): one-stage v2's audit or the recursive audit,
+#: whichever form its params and evidence name; it refuses one-stage v1's
 SAMPLED_PROOFS = "verity/sampled-proofs/v1"
 
 
 def case_with_form(case: dict, form: str = "one-stage") -> dict:
-    """`case`, one-stage v1's or the recursive audit's, as sampled proofs' (`SAMPLED_PROOFS`): its params and its
-    evidence each with ``form``, which `VStar.Recursive.Sampled` splits off before that form's decoders read the
+    """`case`, one-stage v2's (`case_v2`) or the recursive audit's, as sampled proofs' (`SAMPLED_PROOFS`): its params and
+    its evidence each with ``form``, which `VStar.Recursive.Sampled` splits off before that form's decoders read the
     rest."""
     import replay as RP
 
@@ -1005,20 +1011,21 @@ def case_with_form(case: dict, form: str = "one-stage") -> dict:
 
 def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
     """`case_v2`'s files from the drawn members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
-    one table's `--zk` sessions on its circuit and public file."""
+    one table's one `--zk` session on its circuit and public file."""
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"
     if len(done) != 1:
-        return f"v2 verifies one table's sessions on its circuit and public file; this audit drew {len(done)} members"
+        return f"v2 verifies one table's session on its circuit and public file; this audit drew {len(done)} members"
     mm, sdir = done[0]["mm"], done[0]["sdir"]
     st, n = mm["st"], mm["m"].n
     tables = sorted(f for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
     reads = st.get("registered_file")
     return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin",
                               tuple(f.parent for f in sorted((sdir / "sessions").glob("*/session.json")))),
-            "circuit": mm["pin"], "registered": json.loads(reads.read_text()) if reads else None, "tables": tables}
+            "circuit": mm["pin"], "public": st["public"], "registered": json.loads(reads.read_text()) if reads else None,
+            "tables": tables}
 
 
 def streamed(a: argparse.Namespace) -> bool:
