@@ -1,0 +1,3 @@
+# The deflated gate and up (r20261104-112755-5cbd's, priced in all orders at ranks 8-128) at rank 1, where a flat
+# residual's split is cheapest, and at rank 256, which r20261104-083537-aba6 priced in the natural order only
+70b-defl32-gu-gap --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,5,9,33 --match gate_proj,up_proj --deflate 32 --fast --ranks 1,256 --orders none,fold,sort --workers 8
