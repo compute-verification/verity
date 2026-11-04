@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.HeadlineDc
-import Proofs.Accounting.Headline.Encoding
+module
+
+public import Definitions.Accounting.Guarantees.HeadlineDc
+public import Proofs.Accounting.Headline.Encoding
 
 /-!
 # An honest play meets every premise of the five data-centre int8 headlines
@@ -27,6 +29,8 @@ accepted on every path (`sm90Sheet_meets`, `sm90Measured_meets`, `sm90MeasuredI3
 The run's cycles are a ceiling, not honest's measured time: the witness shows that the premises hold together at an
 honest play, not where honest's own kernel reads against the bound.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.HeadlineDcMeets
 

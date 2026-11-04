@@ -33,7 +33,13 @@ The difftest's pieces (`Pieces.table`): `challenger_read` (`read_reason`) and `c
 (`coins_reason`), each `{"reason"}`, or `{"refused": why}` where Python raises; `challenger_within` (`coins_within`),
 `{"limits", "reason"}`.
 -/
-import SampledProofs.ChallengerSession
+module
+
+public import SampledProofs.ChallengerSession
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Challenger
 

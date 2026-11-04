@@ -40,11 +40,22 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 
 Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file.
 -/
-import CoreProtocol.Blobs
-import SampledProofs.OneStage
-import SampledProofs.ChallengerTrees
-import SampledProofs.Slots
-import Flock
+module
+
+public import CoreProtocol.Blobs
+public import SampledProofs.OneStage
+public import SampledProofs.ChallengerTrees
+public import SampledProofs.Slots
+public import Flock
+meta import CoreProtocol.Blobs
+meta import SampledProofs.OneStage
+meta import SampledProofs.ChallengerTrees
+meta import SampledProofs.Slots
+meta import Flock
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.OneStageZk
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.L0PinBind
-import Proofs.Flock.Claims.ZK.FrameOpenLive
-import Proofs.Flock.Claims.ZK.FrameTaken
+module
+
+public import Proofs.Flock.Claims.ZK.L0PinBind
+public import Proofs.Flock.Claims.ZK.FrameOpenLive
+public import Proofs.Flock.Claims.ZK.FrameTaken
 
 /-!
 # A live history's level-0 rounds
@@ -15,6 +17,8 @@ carries no free value, as past the algebraic phase, passing is equality byte for
 * **`LeanRelease.msg_openBind`**: at the opening's binding, the message is the binding with `z`'s squeeze
   (`release_openBind`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

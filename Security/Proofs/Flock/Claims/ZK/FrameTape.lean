@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Os
-import Proofs.Flock.Claims.Complete.Zk.Tape
+module
+
+public import Proofs.Flock.Claims.ZK.Os
+public import Proofs.Flock.Claims.Complete.Zk.Tape
 
 /-!
 # The frame's draws as the masked prover's tape
@@ -19,6 +21,8 @@ frames' bytes give the masked prover exactly the frames' pads:
   (`padsOf_os`): with `O.release L`'s frames reading the tape's streams (`OsTape`), every stream is `drawBytes` long,
   so the pads agree at every rep with a stream.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Bridge.Custody
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements
+module
+
+public import Proofs.Flock.Claims.Bridge.Custody
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements
 
 /-!
 # `Deploy.V false`'s custody checks, as the old theorems' `RecordsLiveJ`
@@ -17,6 +19,8 @@ and checks its custody with the same checks as `--zk` (`checks`, `custody`).
   records it, where one exists. It satisfies `RecordsLiveJ`, and on every run whose decision accepts at SHA-512,
   `verify` accepts what it writes for the run's outcome (`Accepts`), the event the old theorems bound.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.CustodyPlain
 

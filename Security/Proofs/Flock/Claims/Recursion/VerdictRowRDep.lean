@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.DecompBDeployed
-import Proofs.Flock.Claims.Recursion.VerdictRowECoin
-import Proofs.Flock.Claims.Recursion.VerdictLoop
+module
+
+public import Proofs.Flock.Claims.Recursion.DecompBDeployed
+public import Proofs.Flock.Claims.Recursion.VerdictRowECoin
+public import Proofs.Flock.Claims.Recursion.VerdictLoop
 
 /-!
 # Row R's leaf at the assembly's pieces
@@ -24,6 +26,8 @@ so where both cover rep `r` the groups' row ports would read the same `w` elemen
 * `targetRDep_resV`, `targetRDep_accRC`: the leaf at `vvAt := resVRead`, from the cover's other two halves
   (`ElemCover`): a piece of the group at a copy of the rep, whose elements are the rep's `w` at the group's row ports.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

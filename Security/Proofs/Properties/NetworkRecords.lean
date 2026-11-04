@@ -1,3 +1,7 @@
-import Proofs.Properties.NetworkRecords.Accept
-import Proofs.Properties.NetworkRecords.Instance
-import Proofs.Properties.NetworkRecords.NoGrid
+module
+
+public import Proofs.Properties.NetworkRecords.Accept
+public import Proofs.Properties.NetworkRecords.Instance
+public import Proofs.Properties.NetworkRecords.NoGrid
+
+@[expose] public section

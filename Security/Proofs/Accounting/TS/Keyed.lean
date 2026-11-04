@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Drawn
-import Proofs.Accounting.TS.ProofsSound
+module
+
+public import Proofs.Accounting.TS.Drawn
+public import Proofs.Accounting.TS.ProofsSound
 
 /-!
 # An honest coin-keyed proof layer meets (I8)'s premises
@@ -37,6 +39,8 @@ one deficient round, it meets every premise of `ProofsSoundOfPinned` (`lastPlay_
 all-`true` path its fixed words are `(1 − 1/S)·N_w < N_w`, the bound `ProofsSound` gives there (`lastPlay_tight`). The
 restated statement bounds this cheater; it doesn't exclude it.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.Keyed
 

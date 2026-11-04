@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Audit.Extraction
-import Proofs.Flock.Soundness.Audit.Flock
-import Proofs.Flock.Soundness.Knowledge
-import Proofs.Flock.Soundness.Lowering
+module
+
+public import Proofs.Flock.Soundness.Audit.Extraction
+public import Proofs.Flock.Soundness.Audit.Flock
+public import Proofs.Flock.Soundness.Knowledge
+public import Proofs.Flock.Soundness.Lowering
 
 /-!
 # The Flock audit at the compiled layer, one table: `ε_ks` from `table_knowledge_sound_joint_tight`
@@ -40,6 +42,8 @@ resistance (`Assumptions.SHA512CRExpected`, DESIGN.md §3).
 
 `flock_compiled_count`: `Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

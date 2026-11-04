@@ -1,7 +1,9 @@
-import Lean.Data.Json
-import Flock.Canon
-import Flock.Hash
-import CoreProtocol.Ratio
+module
+
+public import Lean.Data.Json
+public import Flock.Canon
+public import Flock.Hash
+public import CoreProtocol.Ratio
 
 /-!
 # The Site in code
@@ -19,6 +21,10 @@ The digests are parameters as in the spec (`Registration.Digests`); the deployed
 a rational written as `Core.Ratio` writes one. The views (`Site.sheetOf`, `device`, `node`, `tiers`, `boundary`, `units`,
 `registered`, `host`) are functions of the site alone, but `device`, which reads the auditor's sheet too.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core
 

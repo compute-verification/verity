@@ -1,4 +1,6 @@
-import Definitions.Flock.Game
+module
+
+public import Definitions.Flock.Game
 
 /-!
 # Public-coin interactions: the lemmas
@@ -7,6 +9,8 @@ The algebra of `Game` (`Definitions.Flock.Game`): `bind` is a monad's, no strate
 prover (`prob_le_value`), `value` is monotone and at most 1, the union bound for a uniform coin, and
 the additive composition of phases that round-by-round soundness arguments chain.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 
