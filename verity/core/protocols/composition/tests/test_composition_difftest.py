@@ -14,7 +14,9 @@ record, on that audit's own declared circuit, `policy_on`, and at remote sometim
 component dropped, unknown, repeated or out of order, a case under other params, a wrong or short commitment,
 non-canonical or malformed evidence, blobs missing or malformed) or the case itself (a field missing or not hex, not an
 object), and every field of the outcome but its reason must agree exactly. Integrity's cases are aimed at undecided at
-best (an audit that drew nothing), so no product accepts here. `product IDS serve` over each composite's subprotocols,
+best (an audit that drew nothing), so no product accepts here; remote's case on one record that reuses the window's
+registration of its tables (`reusing`) is one made case, undecided for want of sampled proofs' verifier of record.
+`product IDS serve` over each composite's subprotocols,
 the composite `verity run`'s verifier runs, is held to the same reference, and `product IDS id` names remote and onsite
 for their subprotocols and refuses every other set: the same two composites a configuration may list
 (`verity.core.deploy.config.COMPOSITES`)."""
@@ -43,6 +45,7 @@ from verity_difftest import canonical
 
 from verity.core.deploy import config as K
 from verity.core.protocols.sampled_proofs import parties as SPP
+from verity.ml.circuits.types import Array, Value
 
 PROTOCOLS = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -612,6 +615,99 @@ def test_sampled_proofs_refuses_one_stage_v1(remote_server):
             seen[br] += 1
     check()
     assert set(seen) == set(want), dict(seen)
+
+
+#: `reusing`'s R's law: a subset of none, so v2's audit of R draws nothing at its challenger's coins
+REUSING_LAW = {"k": 0, "law": "subset"}
+
+
+def reusing(made: list[dict]):
+    """A window's Commit record as `pouw_credit_cases.period_instance`'s `commit` makes it: R, the run's registration,
+    chained after W (``previous``), the serving process's registration of the window's tables in a served window's form,
+    and registering those tables under the Commit's names (`commit_names`) as output values that reuse W's entries
+    (``outputs``), of a program whose parameters they are (registered on `ONE_STAGE.PROGRAMS`). Each call appends W, R,
+    R's setup and its outputs to `made`."""
+    CC = R.POUW_PERIOD_CASES.credit_cases
+
+    def commit(true: dict[str, dict], _steps: int, circuit: str, open_root: str) -> str:
+        w = OS._json({"format": OS.R.FORMAT_V2, "previous": None, "program": circuit, "protocol": OS.R.PROTOCOL,
+                      "registered": [true[v] for v in sorted(true)],
+                      "window": {"entry": len(made), "kind": "served", "open_root": open_root, "refused": []}})
+        named = sorted((n, v) for v, n in CC.commit_names(true).items())
+        params = tuple((n, Array(true[v]["leaves"] * true[v]["words"], Value(16))) for n, v in named)
+        s = OS.RegisteredSetup(OS._registered_program("CoreRemoteReuse", 1, params, tuple(n for n, _ in named)),
+                               [{n: true[v]["words"] for n, v in named}])
+        OS.PROGRAMS[s.sha512] = s.program
+        rec = OS._json(OS.R.record(s.program, s.query, REUSING_LAW, OS.SCHEME,
+                                   [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports], OS.WINDOW,
+                                   registered=[{**true[v], "value": n} for n, v in named], leaf_layer=OS.LEAF,
+                                   anchors=[], previous=OS.R.digest(w),
+                                   partition={"program": s.sha512, "query": s.query}))
+        made.append({"w": w, "record": rec, "setup": s,
+                     "outputs": {n: {"record": OS.R.digest(w), "value": v} for n, v in named}})
+        return CC.Cr._canonical(rec).encode().hex()
+    return commit
+
+
+def reusing_audit(m: dict, outputs: bool = True) -> dict:
+    """Sampled proofs' one-stage v2 case on `reusing`'s R (`m`) over the log [W], with R's outputs unless not `outputs`:
+    its draw at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin tree) drew
+    nothing, so it has no session and no proved unit, `BLOBS` hold its circuit and public files, and its registered file
+    names R's tables, which no proof block of R's program reads. v2 is undecided on it for want of the verifier of
+    record once R1-R7 accept R."""
+    s, rec = m["setup"], m["record"]
+    ch, d, coins = OS._challenger_draw(random.Random("remote/reusing"), s, REUSING_LAW, rec, trees=0)
+    reads = {"format": "verity/registered-reads/v1", "ports": {
+        e["value"]: {k: e[k] for k in ("domain", "leaves", "root", "value", "words")} | {"reads": [None]}
+        for e in rec["registered"]}}
+    params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/10",
+              "law": REUSING_LAW, "leaf_layer": OS.LEAF, "log": [m["w"]], "parameters": s.signature,
+              "partition": {"program": s.sha512, "query": s.query}, "ports": s.ports, "program": s.desc,
+              "proofs": {"circuit": _sha(CIRCUIT), "registered": reads}, "query": s.query, "registered": s.values[0],
+              "scheme": OS.SCHEME, "window_root": ch.ledger.window["root"], "work_table": None}
+    if outputs:
+        params["outputs"] = m["outputs"]
+    evidence = {"coins": coins, "draw": d, "instances": 0, "proofs": {"public": _sha(PUBLIC), "sessions": []},
+                "proved_units": [], "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None,
+                "session_roots": None, "sessions": [], "statement": {}}
+    return form_case(OS._json({"params": params, "record": rec, "evidence": evidence}))
+
+
+def test_remote_on_one_record_that_reuses_the_windows_registration(remote_server):
+    """A period of one window whose Commit record is R, the run's registration chained after W, the window's
+    registration of its tables, reusing W's entries as R's outputs (`reusing`): the policy on the log [W] and R and the
+    period accept, and sampled proofs' one-stage v2 audit of R, at the window's open root, passes R1-R7 and is undecided
+    for want of the verifier of record (no session's proof here: a served window's case carries them), so remote is
+    undecided, the policy's record and the window's both R, in Lean as in Python. Without the outputs, R7 refuses R
+    (``R7-domain``) and remote rejects. With the same policy and audit and an honest period whose window names its own
+    Commit record, remote refuses by its `windows` tie, naming R and that record. R registers one window's tables, so a
+    period credits at most one window on it."""
+    PPC, made = R.POUW_PERIOD_CASES, []
+    period = as_component(R.POUW_PERIOD, PPC.serve(PPC.credit_cases.period_instance(
+        random.Random("remote/reusing"), windows=1, commit=reusing(made), **PPC.COVERED)))
+    audit = as_component(R.SAMPLED_PROOFS, reusing_audit(made[0]))
+    policy = policy_on(audit)
+    record = OS.R.digest(made[0]["record"])
+    assert [x.hex() for x in R.policy_record(policy["root"], policy["evidence"])] == [record]
+    assert [x.hex() for x in R.window_records(period["root"], period["evidence"])] == [record]
+    bare = reusing_audit(made[0], outputs=False)
+    assert R.SAMPLED_PROOFS.answer({**bare, "blobs": BLOBS})["reason"] == "registration: R7-domain"
+    own = as_component(R.POUW_PERIOD, PPC.serve(PPC.credit_cases.period_instance(
+        random.Random("remote/reusing"), windows=1, **PPC.COVERED)))
+    window = R.window_records(own["root"], own["evidence"])[0].hex()
+    assert window != record
+    for cases, verdicts, verdict, reason in (
+            ([policy, period, audit], [R.ACCEPT, R.ACCEPT, R.UNDECIDED], R.UNDECIDED, None),
+            ([policy, period, as_component(R.SAMPLED_PROOFS, bare)], [R.ACCEPT, R.ACCEPT, R.REJECT], R.REJECT, None),
+            ([policy, own, audit], [R.ACCEPT, R.ACCEPT, R.UNDECIDED], R.REJECT,
+             f"record: {R.INFERENCE_ONLY.id} committed {record}, {R.POUW_PERIOD.id} committed {window}")):
+        case = remote_case(cases)
+        assert R.REMOTE.verdicts(case) == verdicts, R.REMOTE.verdicts(case)
+        python, lean = R.REMOTE.answer(case), remote_server.exchange(case)
+        assert {k: v for k, v in lean.items() if k != "reason"} == {k: v for k, v in python.items() if k != "reason"}
+        for out in (python, lean):
+            assert out["verdict"] == verdict, out
+            assert reason is None or out["reason"] == reason, out
 
 
 @pytest.mark.slow

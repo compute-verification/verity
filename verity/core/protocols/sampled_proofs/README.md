@@ -138,15 +138,15 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `SampledProofs/OneStageZk.lean`, the executable
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
   circuit digest and the verifier's registered file, its evidence names the public file and each session's record and
-  rep files by SHA-512 in place of `verdicts`, and the files come in as `Core.Blobs`. Its draw's coins are always the
-  challenger's: parameters naming no `challenger` are refused, and the check reads the coins as v1 does
-  (`OneStage.coinsOf`, `Security/Properties/Challenger.lean`'s `oneStageZkReads`). The check runs
+  rep files by SHA-512 in place of `verdicts`, and the files come in as `Core.Blobs`. Its draw's coins are the
+  challenger's (parameters naming none are refused), read as v1 reads them (`OneStage.coinsOf`; `oneStageZkReads` in
+  `Security/Properties/Challenger.lean`). The check runs
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
   evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `checkAt` at those coins.
-  Each session's coins are the challenger's too: before any verdict, the check holds every session's record to the coin
-  trees the same signed release log shows the challenger sampled and opened (`SampledProofs/ChallengerTrees.lean`,
-  `challenger.sessions_tree_reason`): its `coin_tree` a logged tree, its link points and every round's coins that
-  tree's openings after its link's roots and each round's message, one tree a session and every tree a session's.
+  So are each session's: before any verdict, the check holds every session's record to the coin trees the signed
+  release log shows the challenger sampled and opened (`SampledProofs/ChallengerTrees.lean`,
+  `challenger.sessions_tree_reason`): its `coin_tree` a logged tree, its link points and round coins that tree's
+  openings after its link's roots and each round's message, one tree per session and every tree a session's.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
   to `verify`'s. Remote reads v2 as `VStar.Recursive.Sampled`'s one-stage form, and refuses v1; onsite's integrity
   component (`Core.Onsite`) is still v1 until it reads v2.
@@ -435,10 +435,7 @@ The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v
   `sessions` being the session records' SHA-512 and `verdict` the verifier's digest (a list when the drawn
   proof blocks were proved in several sessions). Its ε terms come from the soundness analysis, not from the run, so the run leaves them null.
 
-Pinned by `tests/test_one_stage.py` (`test_profile_counts_wrong_units`, `test_the_record_states_the_one_profile_in_its_recorded_bytes`,
-`test_audit_record_needs_every_check_and_verdict`, `test_audit_record_holds_the_served_draw_and_the_sessions_roots`,
-`test_the_wrong_unit_bound_matches_worst_case_and_scales`, `test_audit_record_under_the_stratified_law`,
-`test_the_subset_bound_is_now_the_exact_count`, `test_a4_under_the_stratified_rule`, `test_audit_record_under_the_work_law`).
+Pinned by `tests/test_one_stage.py` (the profile, audit record and wrong-unit bound tests, under each sampling design).
 
 ### The consumers
 
