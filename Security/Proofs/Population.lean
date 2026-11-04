@@ -1,23 +1,21 @@
 import Proofs.Population.Determinacy
-import Proofs.Population.Necessity
 import Proofs.Population.Egress
 import Proofs.Population.Pointer
 import Proofs.Population.Leakage
 import Proofs.Population.Work
-import Proofs.Population.Instance
+import Proofs.Core.Circuit
+import Definitions.Population.Partition
 import Proofs.Population.Oblivious
 import Proofs.Population.Transfer
 import Proofs.Population.Converse
-import Proofs.Population.HonestCone
-import Proofs.Population.LongValue
+import Definitions.Population.LongValue
 import Proofs.Population.NecessitySkeleton
 import Proofs.Population.NecessityMatrix
 import Proofs.Population.Exfiltration
 import Proofs.Population.ExfiltrationBound
-import Proofs.Population.ExfiltrationExamples
-import Proofs.Population.DrawPressure
-import Proofs.Population.JointPressure
-import Proofs.Population.ChiPool
+import Mathlib.Analysis.SpecialFunctions.Log.Basic
+import Definitions.Population.DrawPressure
+import Definitions.Population.ChiPool
 
 /-!
 # Populations: which object each policy needs of sampled proofs' guarantee
