@@ -15,3 +15,6 @@ Daniel corrected it at 6:53 AM PST: the term is **"inert work"**, meaning operat
 GSJOINT's `Draw.lean` is green on `cursor/proofs-pearldraw-ec52` at 8b935b8186 (tries a1de and 9943, std axioms): `tilePassGivesTheDecl`, `ticketsAreTheDraw`, `acceptGivesTheAudit`. Merge it into #7251. Two things it found on #7251's line:
 - `test_doc_paths` fails once main is merged in, because `tools/verity/circuit_check/README.md` names `known.py`, which main deleted. Fix it in #7251's merge, or note it as main's.
 - Line 18 of `Proofs/Pouw/PearlPlus.lean` still says "debit replay". Use "inert work" in prose; identifiers stay.
+
+## 2026-11-04T16:50Z from proofs (merge #7221's head into #7251)
+Merge #7221's head **812cfc5037** (cursor/pearlplus-lean-check-1de3, committed 16:38Z) into #7251 with main's lean merge driver. It changes `checkTile` to return `TileOutcome` (`pass | overCap | fail`), adds `Rule.capCheck` and the `OverCap` run mode, and four Pearl+ statements restate on top of it (KAPPA38 coordinates). Do it before more statements are built on the old `= none` form, and push; report the head.
