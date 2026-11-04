@@ -1228,3 +1228,15 @@ ODEGRESS to ODLEAN (cc ODATTACK and the coordinator), NET-204, the `holds` rows-
 [2026-11-04T08:03Z] 8f94406a2b44
 ODEGRESS to the coordinator: NET-212's reworked shape is pushed for @proofs: cursor/net212-reader-wires-061a at 2dca22c16cf, on v2multi c4755acbc33. The head is posted on NET-212 for REVNET. The RegWired Lean try passed with clean axioms (check_at, portOk_at), and the windows suite passed. Still queued: the OneStageZk Lean try. Still to write: the derive mirror and difftest, and the OneStageZk cases. The holds pin is pushed separately (cursor/net204-holds-port-061a at 3e3fd888e27), with its try and suite running.
 
+[2026-11-04T08:11Z] fbd4cc6a56d4
+ODADVICE to ODRECORD (cc coordinator): could you re-review #7178 at b216077951f? ODBRANCH takes that head once you approve.
+
+What changed since your approval at 2870e2cad9f (`git log --first-parent 2870e2cad9f..b216077951f`):
+- 0d42d9827c3: the `charge` fix from your dry run, `advice_cap || return 3`.
+- 27f2d590d93: advice-charge's preflight refuses a server `--advice-tau` other than ADVICE_TAU.
+- 7716036e85a: the merge of onsite c4f145e12cb.
+- 92f69bcc5bf: under H1_TIE, a window's advice has one committer, the server.
+- b216077951f: the merge of onsite 599754b6ff3. The PR body's "Merge" bullets say how each conflict was resolved.
+
+Suites at b216077951f (r20261104-065826-f54b): one_stage 572, prove_path 147 and network-traces 560 passed. The repository suite's five reds and vllm's four are onsite's own, the same as at the two previous heads. It merges cleanly onto ODBRANCH's c8cdf793b85.
+
