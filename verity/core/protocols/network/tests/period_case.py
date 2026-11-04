@@ -932,8 +932,8 @@ def records(link: str) -> tuple[tuple[str, Direction], ...]:
 
 def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict,
                        x: Window) -> tuple[Facts, int]:
-    """`rowsWindowCheck`: on acceptance the scan's facts and its tied audits' free inputs, the parameters' `free` of
-    each audit its `prog` is an output of (`_tied_audits`)."""
+    """`rowsWindowCheck`: on acceptance the scan's facts and its tied audits' free inputs, the input gates
+    (`input_gates`) of each audit its `prog` is an output of (`_tied_audits`)."""
     what = f"window {w}"
     if x.registrations is None:
         raise Finding(REJECT, f"{what}: a clock certificate, not registrations")
@@ -1013,21 +1013,23 @@ def _facts_json(f: Facts) -> dict:
     return {"delta": str(f.delta), "drawn": f.drawn, "units": f.units, "wrong_units": f.wrong}
 
 
-def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, entries: int | None = None) -> dict:
+def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, entries: int | None = None,
+           tied: list[int] | None = None) -> dict:
     """`AuditTerms.of` (a compute audit's, `per_unit` its Program's widest unit's committed bits) and `Scan.terms` (a
     scan's, `per_unit` the wider instance's committed bits, `entries` the slot entry bits its tied audits' incorrect
-    proof blocks can set, `faulty_entries`)."""
+    proof blocks can set, `faulty_entries`, and `tied` those audits by index, `termsJson`'s)."""
     return _facts_json(f) | {"faulty_bits": f.wrong * per_unit, "faulty_sets": clog2(at_most(f.units, f.wrong)),
                              "free": free, "jitter": clog2(jitter ** steps)} | (
-        {} if entries is None else {"faulty_entries": entries})
+        {} if entries is None else {"faulty_entries": entries}) | ({} if tied is None else {"tied": tied})
 
 
-def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | None = None,
+def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int, list[int]]] | None = None,
            charged: list[Facts] = ()) -> dict:
     """K and its terms over `PeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
-    link-windows' scans (`scans`, each its facts, its tied audits' free inputs and its `β_w`; None in the clock form),
-    where a compute audit's own terms are in none, a tied audit's free inputs are in its link-window's `free` and its
-    incorrect proof blocks in its `faulty_entries`, and the δ of a tied audit drawn in part (`charged`) is in `eps`."""
+    link-windows' scans (`scans`, each its facts, its tied audits' free inputs, its `β_w` and its tied audits by index;
+    None in the clock form), where a compute audit's own terms are in none, a tied audit's free inputs are in its
+    link-window's `free` and its incorrect proof blocks in its `faulty_entries`, and the δ of a tied audit drawn in part
+    (`charged`) is in `eps`."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
     if scans is None:
         units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
@@ -1035,7 +1037,8 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | 
         out = {"audits": units}
     else:
         s = p.scan
-        units = [_terms(s.free + tied, s.steps, max(s.ingress, s.egress), f, p.jitter, b) for f, tied, b in scans]
+        units = [_terms(s.free + t, s.steps, max(s.ingress, s.egress), f, p.jitter, b, tied)
+                 for f, t, b, tied in scans]
         schedules = cells
         out = {"audits": [_facts_json(f) for f in facts], "held": list(HELD), "scans": units}
     K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"]
@@ -1092,7 +1095,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
         return ACCEPT, public(p, facts), {"link": p.link, "windows": p.windows}
     beta = [p.scan.entries if any(i in charged and charged[i].wrong >= 1 for i in _tied_audits(c.audits, reg)) else 0
             for reg in c.windows]
-    return ACCEPT, public(p, facts, [(f, t, b) for (f, t), b in zip(scans, beta)], list(charged.values())), {
+    tied = [_tied_audits(c.audits, reg) for reg in c.windows]
+    return ACCEPT, public(p, facts, [(f, t, b, a) for (f, t), b, a in zip(scans, beta, tied)], list(charged.values())), {
         "link": p.link, "windows": p.windows}
 
 
