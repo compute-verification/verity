@@ -17,7 +17,8 @@ describes, where each of its gates sits, and each unit's gates and inputs. The s
 * `keyProg c n`: the circuit's program on Δ's source keys, for `n` units. Its input gates are the constant (gate 0), the
   zero (gate 1) and `B` source gates per unit, unit `u`'s input column `x` on its key's (`keyIdx`), or on the zero's where
   it has none. Then come the units, each the unit net's rows (`Rows.ofNet`) stacked `upv` times (`Rows.stack`), a row
-  reading earlier gates. Its outputs are the gates on the returned outputs' bits.
+  reading earlier gates, built one unit after another as the bridge's `Placed.keyProg` is (`uniform`, `KeyProg.snoc`).
+  Its outputs are the gates on the returned outputs' bits.
 * `gateSize`, `off`, `posOf`, `lower`, `prog`: that program lowered to the Boolean profile (`LGate`), gate by gate in
   order. A row `(⊕ a) ∧ (⊕ b)` is three gates, the two XORs then their AND, and an input is one, `.const b` where the
   constants `κ` fix it to `b`. Gate `g` sits at `posOf`, its last lowered gate.
@@ -195,6 +196,34 @@ def KeyProg.size (kp : KeyProg) : Nat := kp.inputs + kp.rows.size
 def KeyProg.row? (kp : KeyProg) (g : Nat) : Option (List Nat × List Nat) :=
   if g < kp.inputs then none else kp.rows[g - kp.inputs]?
 
+/-- **The program `kp` and one more unit of rows `R`** (`Lowering.Prog.snoc`, its columns `Prog.colWire`): `R`'s computed
+rows after `kp`'s gates, an input column `c` on gate `ins c`, computed column `nIn + i` on the unit's row `i`, and the
+constant on gate `one`. -/
+def KeyProg.snoc (kp : KeyProg) (R : Rows) (ins : Nat → Nat) (one : Nat) : KeyProg :=
+  let N := kp.size
+  let col := fun c => if c < R.nIn then ins c else if c < R.nIn + R.nComp then N + (c - R.nIn) else one
+  { kp with
+    units := kp.units + 1
+    rows := kp.rows ++ ((List.range R.nComp).map fun i => ((R.a.getD i []).map col, (R.b.getD i []).map col)).toArray }
+
+/-- **`n` units of rows `R` on `k` input gates** (`Placed.uniform`): unit `u`'s input column `c` on gate `ins u c`, its
+constant on gate `one`, one unit after another (`KeyProg.snoc`). -/
+def uniform (k : Nat) (R : Rows) (ins : Nat → Nat → Nat) (one : Nat) : Nat → KeyProg
+  | 0 => { inputs := k, units := 0, perUnit := R.nComp, rows := #[], outs := [] }
+  | n + 1 => (uniform k R ins one n).snoc R (ins n) one
+
+theorem uniform_inputs (k : Nat) (R : Rows) (ins : Nat → Nat → Nat) (one : Nat) :
+    ∀ n, (uniform k R ins one n).inputs = k
+  | 0 => rfl
+  | n + 1 => by simp only [uniform, KeyProg.snoc]; exact uniform_inputs k R ins one n
+
+theorem uniform_rows_size (k : Nat) (R : Rows) (ins : Nat → Nat → Nat) (one : Nat) :
+    ∀ n, (uniform k R ins one n).rows.size = n * R.nComp
+  | 0 => by simp [uniform]
+  | n + 1 => by
+    simp only [uniform, KeyProg.snoc, Array.size_append, List.size_toArray, List.length_map, List.length_range,
+      uniform_rows_size k R ins one n, Nat.add_mul, Nat.one_mul]
+
 /-- Column `16 j + t` of the unit's returned-output group, in the unit net's rows (`Layout.outCol`). -/
 def outCol (c : Flock.Circuit) (j t : Nat) : Nat := (c.unit.outGroups.getD 0 default).col * Flock.WORD + (16 * j + t)
 
@@ -216,23 +245,24 @@ def outGate (c : Flock.Circuit) (n u k j t : Nat) : Option Nat :=
 /-- **The circuit's program on Δ's source keys**, for `n` units (`Placed.keyProg`, its outputs `Layout.outsOf`): the
 constant, the zero and `B` source gates per unit, `B` the stacked rows' inputs; then unit by unit the unit net's rows
 stacked `upv` times, an input column on its key's source gate `2 + u·B + b` (the zero's where it has no key), a computed
-column on the unit's own gate, the constant on gate 0. The outputs are the gates on each instance's returned output
-leaves' bits `t < 16`. -/
+column on the unit's own gate, the constant on gate 0: `uniform` on those input gates. The outputs are the gates on each
+instance's returned output leaves' bits `t < 16`. -/
 def keyProg (c : Flock.Circuit) (n : Nat) : KeyProg :=
-  let R0 := Rows.ofNet c.unit
-  let R := R0.stack c.upv
+  let R := (Rows.ofNet c.unit).stack c.upv
   let B := R.nIn
   let keys := (Array.range B).map (keyIdx c B)
-  let inputs := 2 + n * B
-  let wire := fun (u col : Nat) =>
-    if col < R.nIn then (match keys.getD col none with | some b => 2 + u * B + b | none => 1)
-    else if col < R.nIn + R.nComp then inputs + u * R.nComp + (col - R.nIn)
-    else 0
-  let rows := ((List.range n).flatMap fun u => (List.range R.nComp).map fun i =>
-    ((R.a.getD i []).map (wire u), (R.b.getD i []).map (wire u))).toArray
+  let ins := fun (u col : Nat) => match keys.getD col none with | some b => 2 + u * B + b | none => 1
   let outs := (List.range n).flatMap fun u => (List.range c.upv).flatMap fun k =>
     (List.range (c.leavesOut.getD k #[]).size).flatMap fun j => (List.range 16).filterMap (outGate c n u k j)
-  { inputs, units := n, perUnit := R.nComp, rows, outs := (outs.mergeSort fun x y => decide (x ≤ y)).eraseDups }
+  { uniform (2 + n * B) R ins 0 n with outs := (outs.mergeSort fun x y => decide (x ≤ y)).eraseDups }
+
+theorem keyProg_inputs (c : Flock.Circuit) (n : Nat) :
+    (keyProg c n).inputs = 2 + n * ((Rows.ofNet c.unit).stack c.upv).nIn := by
+  simp only [keyProg, uniform_inputs]
+
+theorem keyProg_rows_size (c : Flock.Circuit) (n : Nat) :
+    (keyProg c n).rows.size = n * ((Rows.ofNet c.unit).stack c.upv).nComp := by
+  simp only [keyProg, uniform_rows_size]
 
 /-! ## The program lowered to the Boolean profile -/
 
@@ -801,5 +831,25 @@ private def toyPad : Flock.Circuit := { toyA with nets := #[("unit", netOf fun i
   refuses "a row of the circuit file's unit reads its input column 40"
     (readsWhy toyPad toyP.defs[0]! (unitReads toyPad) []) &&
   refuses "the circuit file's unit's read columns" (readsWhy toyA toyP.defs[0]! #[] [])
+
+/-- `keyProg`'s rows as one formula over its `n` units: unit `u`'s input column on its key's source gate (the zero's
+where it has none), its computed column on its own gate after the `2 + n·B` inputs and the units before it, the
+constant on gate 0. -/
+private def flatRows (c : Flock.Circuit) (n : Nat) : Array (List Nat × List Nat) :=
+  let R := (Rows.ofNet c.unit).stack c.upv
+  let B := R.nIn
+  let keys := (Array.range B).map (keyIdx c B)
+  let wire := fun (u col : Nat) =>
+    if col < R.nIn then (match keys.getD col none with | some b => 2 + u * B + b | none => 1)
+    else if col < R.nIn + R.nComp then 2 + n * B + u * R.nComp + (col - R.nIn)
+    else 0
+  ((List.range n).flatMap fun u => (List.range R.nComp).map fun i =>
+    ((R.a.getD i []).map (wire u), (R.b.getD i []).map (wire u))).toArray
+
+#guard [(toyA, 0), (toyA, 1), (toyA, 2), (toyB, 3), (toyX, 2), (toyCut, 2), (toyA2, 2)].all fun (c, n) =>
+  let R := (Rows.ofNet c.unit).stack c.upv
+  let kp := keyProg c n
+  kp.rows == flatRows c n && kp.inputs == 2 + n * R.nIn && kp.units == n && kp.perUnit == R.nComp &&
+    kp.rows.size == n * R.nComp
 
 end SampledProofs.Bits
