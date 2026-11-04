@@ -41,7 +41,7 @@ from . import io_bound
 SHOWN = 4
 #: ops whose result is its first argument's value, element for element and dtype for dtype
 COPIES = {"clone", "contiguous", "detach", "alias", "lift_fresh", "lift_fresh_copy"}
-#: ops that draw randomness, each of whose values `values` keeps its own
+#: ops that sample randomness, each of whose values `values` keeps its own
 RANDOM = {"normal", "normal_", "uniform_", "bernoulli", "bernoulli_", "rand", "randn", "randint", "rand_like",
           "randn_like", "randint_like", "randperm", "random_", "exponential_", "geometric_", "log_normal_", "cauchy_",
           "multinomial", "poisson", "native_dropout", "dropout", "_fused_dropout", "rrelu_with_noise"}
@@ -94,8 +94,8 @@ def values(flow) -> list[int]:
     (its storage's as of then), so the casts and the slices of one value are one array. One op on values of the same
     classes, read argument by argument, with the same constants, makes values of one class, so a recomputation is
     its original's; a copy (`COPIES`) is its argument's class; a value an op writes in place is that op's, so a
-    storage read before and after a write is two values; a graph source and every draw of randomness (`RANDOM`) are
-    their own, so a rerun of a draw (a checkpoint's replay of a dropout mask) is not its original's."""
+    storage read before and after a write is two values; a graph source and every random sample (`RANDOM`) are
+    their own, so a rerun of a random sample (a checkpoint's replay of a dropout mask) is not its original's."""
     from te_core.capture.structure import _WALK, _arg_nodes, _pk
 
     ids: dict = {}

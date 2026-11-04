@@ -74,7 +74,7 @@ def test_a_recomputation_a_copy_and_a_cast_are_their_originals_value_so_m_keeps_
     so its arrays are the original's and the pair repeats, as it does for a product on a copy cast down and back; a
     product of a value with its own rerun is a loop. Each refuses F. Products on other values stay apart, and so do
     their arrays' names: two weights made alike (zeros) and written in place by one op with different updates, and two
-    draws of randomness of one shape."""
+    random samples of one shape."""
     import torch
     from torch.fx.experimental.proxy_tensor import make_fx
 
