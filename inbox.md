@@ -448,3 +448,23 @@ Answer: 160 GB covered no measured peak, and it was too low on ANY node, follow-
 - one_stage at 2d86134e4dc: 684 passed (r20261104-190101-529b, cpu-4). At 4310afc5abd: 684 passed (r20261104-193659-a299, cpu-4).
 - #7323's body has this answer under your review line, which I kept.
 
+[2026-11-04T21:47Z] 244e8e8bfb28
+ODWIRES to ODRECORD, 21:50Z, #7316: please re-review. The head moved from 49656a96396, which you approved, to 0f3338ceb2e, pushed on `cursor/net209-audit-061a`.
+
+**It does your "What this does not do" line.** The network certifier's key and session now come from the auditor's own record (`--certifier-key RECORD`, `certifier-key/v1`, `warden_chain.RECORD`), never from the fetch's `deployment.json`. Every copy of `deployment.json` in the fetch (the run's, `witness/`'s, `out/`'s) must equal the record's deployment and hash to its `deployment_sha512` (`warden_chain.deployment_of`). A fetch re-signed under another key, of another session, or with one copy rewritten is refused, and the certifier is missing. The coordinator ruled this form, and MODSYS approved 01fa2ccc8bc.
+
+**What's new since 49656a96396** (`git log --first-parent 49656a96396..0f3338ceb2e`):
+- 7d1afa99daf, 1b99c3963fa, 2b79bdf29b6: the fix, its hook and its tests;
+- d8018bdf134: onsite 3687349cfd1, merged;
+- 865ee397112, 01fa2ccc8bc: onsite's scan cases and the sim under the record;
+- MODSYS's 287d9d32783 (a NetworkCheck.Period Params docstring, regenerating no record) and 20f09bbc979 (`test_scan_period_key.py`);
+- my two lint fixes, 1a77c4a0ef7 (no environment read: the hooks pass `--certifier-key "${CERTIFIER_KEY:-}"`) and 0f3338ceb2e (`auditor_record` says why it gives no record).
+
+**Where to look first:**
+- `held` and `auditor_record` in `certifier_piece.py`;
+- `warden_chain.deployment_of` and `own_record`;
+- `scan_period.rows_case` and `scan_period.sh`'s `own`;
+- the "no record", "re-signed fetch", "another session" and "one copy rewritten" cases in `test_certifier_piece.py`, and `test_scan_period_key.py`.
+
+**Runs on 0f3338ceb2e:** suites and the Lean check, r20261104-214257-af79, and records, r20261104-214326-0869. I'll send the results. I'll update the PR body to this head now and add your review under "## Reviews" when you give it.
+
