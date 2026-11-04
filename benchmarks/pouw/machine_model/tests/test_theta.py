@@ -69,11 +69,11 @@ def test_r_h_against_r_min_and_gamma():
     [f] = T.folds(T.theta(SM120), SM120)
     assert f.r_min == 3 and f.r_h == pytest.approx(3.2206, abs=1e-4)
     assert f.eps("sheet") == pytest.approx(f.slack["sheet"] / 1.25) and f.eps("measured") == 0
-    assert f.gamma == pytest.approx(26.1221 / (128 * 32 * 4 / 1023.8))
+    assert f.gamma == pytest.approx(26.1221 / (128 * 32 * 4 / 1023.8) - 1)
     duo, li, loop = T.folds(T.theta(SM90), SM90)
     assert duo.r_h == duo.r_min == 3 and duo.status == "provisional" and duo.gamma is None
     assert (li.fold, li.r_h, li.r_min, li.gamma) == ("li", 1, 1, None)
-    assert loop.gamma == pytest.approx(280.89 / 128.01, abs=1e-3) and loop.r_h == pytest.approx(1.0547, abs=1e-4)
+    assert loop.gamma == pytest.approx(280.89 / 128.01 - 1, abs=1e-3) and loop.r_h == pytest.approx(1.0547, abs=1e-4)
 
 
 def test_every_unit_has_a_verdict_and_the_bounded_ones_a_share():
@@ -167,7 +167,7 @@ def test_the_command_and_the_render(capsys):
     assert "4096 / 128 [2 · alu.iadd3 64] = 32.00" in out
     assert "7/8 · 4095.6 / 1995.7 = 1.7957 of naive: the level saves no tensor time" in out
     assert "r_H = 3.0000, r_min = 3" in out and "the least r_min here is li's 1" in out
-    assert "280.89 / 128.01 = 2.194" in out
+    assert "280.89 / 128.01 − 1 = 1.194" in out
     assert "texture: texture filtering: 4 texture units a SM; ≤ 16 against tensor.s8.k32: 0.39% / 0.39%" in out
     assert "c_sha ≤ 0.885" in out
     assert "    mma.sync m16n8k32 s8: 128.0 / 84.0\n" in out and "    mma.sync m16n8k4 tf32: 256.0 / 256.0*\n" in out

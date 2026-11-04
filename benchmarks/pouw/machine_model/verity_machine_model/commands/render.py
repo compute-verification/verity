@@ -244,7 +244,7 @@ def _theta(data: Path) -> str | None:
                      *(f"{100 * f.eps(rd):.2f}%" for rd in T.READINGS),
                      "(r_H − r_min) in tensor MAC-times a MAC, over the cheapest adding route's exchange"])
         body.append([f"γ, `{f.profile}`", "–", f"{f.gamma:.3f}" if f.gamma is not None else "not measured",
-                     f"measured SMSP-cycles a MMA over the lone INT8 MMA's {f.lone:.2f}"])
+                     f"measured SMSP-cycles a MMA over the lone INT8 MMA's {f.lone:.2f}, less 1"])
     out += ["### Derived (`machine-model theta` prints the arithmetic)",
             _table(["derived", "sheet", "measured", "how"], body)]
     share = lambda u, rd: "" if (s := T.share(t, u, rd)) is None else f"{100 * s:.2f}%"
