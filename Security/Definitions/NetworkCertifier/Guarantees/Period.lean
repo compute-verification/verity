@@ -139,10 +139,11 @@ registered input (`WindowGoodReg`), and with a network certifier whose code reco
   certifier in the monitoring period.
 
 Its other conditions are named too: the windows' registrations (`WindowsPlaced`), the sender's schedules among those
-at `Θ` that fit `F` (`SchedulesCovered`, a premise on the network certifier's code) and the sender's secrets recovered
-from the client's view (`SenderDecodes`, the count's own terms). `RegOpensAt` restricts which openings `ops` the first
-part speaks of, those that open the registered roots: a choice of `ops`, not a claim about the prover's honesty. Two
-different openings of one registered input are a collision `B_reg` covers. -/
+at `Θ` that fit `F` (`SchedulesCovered`, a property of the compiled Lean audit over the network certifier's signed
+records) and the sender's secrets recovered from the client's view (`SenderDecodes`, the count's own terms).
+`RegOpensAt` restricts which openings `ops` the first part speaks of, those that open the registered roots: a choice of
+`ops`, not a claim about the prover's honesty. Two different openings of one registered input are a collision `B_reg`
+covers. -/
 def PeriodLeakRegistered : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)
