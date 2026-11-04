@@ -20,6 +20,7 @@ keeps it past a run record's 7 days.
 """
 import argparse
 import json
+import math
 import os
 import re
 import shutil
@@ -345,9 +346,13 @@ def once(slot: float) -> dict:
 
 
 def loop() -> int:
+    last = -math.inf
     while True:
         now = time.time()
         slot = FIRST + max(0, -(-(now - LATE_S - FIRST) // SLOT_S)) * SLOT_S
+        # each slot once: a slot `once` skipped (the last refresh still going) isn't tried again within LATE_S
+        slot += SLOT_S * (slot <= last)
+        last = slot
         if slot >= END:
             say("done: no slot before", datetime.fromtimestamp(END, UTC).isoformat())
             return 0
