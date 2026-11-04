@@ -77,7 +77,8 @@ structure Facts (c : Flock.Circuit) (P : Flock.Program.Prog) (tmpl : String) : P
 theorem facts {c : Flock.Circuit} {P : Flock.Program.Prog} {tmpl : String} (h : check c P tmpl = none) :
     Facts c P tmpl := by
   unfold check at h
-  dsimp only at h
+  extract_lets nIn nComp gi go outs wired cut pc unwired at h
+  generalize unwired = uw at h
   split at h
   · cases h
   split at h

@@ -688,6 +688,7 @@ theorem outGate_isSome {c : Flock.Circuit} {n u k j t : ℕ} (hu : u < n) (hk : 
     (h2 : outCol c j t < (Rows.ofNet c.unit).nIn + (Rows.ofNet c.unit).nComp) :
     ∃ g, outGate c n u k j t = some g := by
   unfold outGate
+  rw [Array.getD_eq_getD_getElem?] at hj
   simp [hu, hk, hj, ht, h1, h2]
 
 /-- **A member's output copy bit is returned, and not an input,** in the members' program. -/
