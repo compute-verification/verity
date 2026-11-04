@@ -11,14 +11,14 @@
 # /usr/local/cuda-13.0 or /usr/local/cuda, else NVIDIA's redistributable archives of CUDA_REDIST (default 13.0.2: the H200's
 # toolkit is 13.0), each held to its published sha256, unpacked into a scratch directory that is deleted.
 set -euo pipefail
-HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
+HERE=$(cd "$(dirname "$0")" && pwd)
+. "$HERE/../ship.sh"
 OUT=${1:?usage: build.sh OUT}; ARCH=${ARCH:-sm_90a}
 VARIANTS=${VARIANTS:-"w2:-DP2ST_WARPS=2 w4:-DP2ST_WARPS=4 w2sb:-DP2ST_WARPS=2:-DP2ST_SCHOOLBOOK"}
 S=$(mktemp -d "${TMPDIR:-/tmp}/s8-dec-build.XXXXXX"); trap 'rm -rf "$S"' EXIT
-rm -rf "$OUT"; mkdir -p "$OUT/lib" "$OUT/p2v1"
+ship_fresh; mkdir -p "$OUT/lib" "$OUT/p2v1"
 : > "$OUT/toolchain.txt"
 
-release_ok() { "$1/bin/nvcc" --version 2>/dev/null | grep -Eq "release 12\.(8|9)|release 1[3-9]\."; }
 fetch_redist() {   # $1 version, $2 destination: the components nvcc needs to compile and link a shared library and dump SASS
   python3 - "$1" "$2" <<'EOF'
 import hashlib, json, subprocess, sys, urllib.request
@@ -40,14 +40,11 @@ EOF
   ln -sfn lib "$2/lib64"
   mkdir -p "$2/targets"; ln -sfn .. "$2/targets/x86_64-linux"
 }
-CUDA=${CUDA:-}
-if [ -z "$CUDA" ]; then
-  for home in /usr/local/cuda-13.0 /usr/local/cuda; do release_ok "$home" && { CUDA=$home; break; }; done
-fi
+ship_find_cuda /usr/local/cuda-13.0 /usr/local/cuda
 if [ -z "$CUDA" ]; then
   CUDA=$S/cuda; fetch_redist "${CUDA_REDIST:-13.0.2}" "$CUDA" >> "$OUT/toolchain.txt"
 fi
-release_ok "$CUDA" || { echo "no nvcc >= 12.8 at $CUDA" >&2; exit 1; }
+ship_cuda
 NVCC=$CUDA/bin/nvcc
 { echo "CUDA=$CUDA"; "$NVCC" --version; } >> "$OUT/toolchain.txt"
 
@@ -77,6 +74,5 @@ echo "${mk[*]}" >> "$OUT/toolchain.txt"
 "${mk[@]}" > "$S/p2v1-make.log" 2>&1 || { tail -30 "$S/p2v1-make.log" >&2; exit 1; }
 grep -E "Compiling entry|registers|spill" "$OUT/p2v1/libp2v1.so.ptxas" | head -40 > "$OUT/p2v1/ptxas-summary.txt" || true
 
-{ git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/torch_gpu/s8_dec_linear benchmarks/pous/p2_v1 benchmarks/pous/p2_gpu; } > "$OUT/source.txt"
-(cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
-du -sh "$OUT" | cut -f1 | xargs echo "ship:"
+ship_source benchmarks/torch_gpu/s8_dec_linear benchmarks/pous/p2_v1 benchmarks/pous/p2_gpu
+ship_manifest
