@@ -39,7 +39,8 @@ rows against partition, reduction-order and partial-type alternatives.  On cc 12
 with each partial rounded to bf16 before the reduction widens it; at others it launches a cutlass kernel alone, whose grid.z
 slices meet in its epilogue through the bf16 output: `CublasSerialSplitKGemm`.
 
-smollm2-135m's training step (`TRAIN_CAPTURE`) reuses these Definitions on bits for every GEMM it runs.  F.linear's three GEMMs
+smollm2-135m's training step (`TRAIN_CAPTURE`) reuses these Definitions on bits for every GEMM it runs, and the lf model's s step
+(`LF_M`, `LF_LINEARS`) for its linears'.  F.linear's three GEMMs
 at x (M, K), W (N, K) are each one row's `x @ w^T` (`TRAIN_LINEAR_ROLES`): forward x = X's row against W's rows, dX = dY's row
 against W^T's, dW = dY^T's row against X^T's.  `train_route` is the route sm_120 takes for one at the captured (M, K, N), and
 `route_gemm` binds a route, an explicit parameter: unsplit `Gemm_v3`, `CublasSplitKGemmBf16Partials_v2`,
@@ -74,7 +75,7 @@ __all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "CublasSerialSplitKGem
            "CublasSplitKGemmBf16PartialsWord", "CublasSplitKGemmF32Out", "CublasSplitKGemmF32OutWord", "CublasSplitKGemmWord",
            "GemmF32Out", "GemmF32OutWord", "HOPPER_STEP",
            "HopperBf16Dot16Step", "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstX", "HopperBf16Dot16StepX",
-           "TRAIN_BMM", "TRAIN_BMM_SHAPES", "TRAIN_CAPTURE", "TRAIN_LINEARS", "TRAIN_LINEAR_ROLES", "TRAIN_M", "TRAIN_ROUTES",
+           "LF_LINEARS", "LF_M", "TRAIN_BMM", "TRAIN_BMM_SHAPES", "TRAIN_CAPTURE", "TRAIN_LINEARS", "TRAIN_LINEAR_ROLES", "TRAIN_M", "TRAIN_ROUTES",
            "aligned_bounds", "attention_bmm", "chain_step", "conformance_cc12", "dot_step", "residue_first", "route_gemm",
            "split_bounds", "train_linear", "train_route"]
 
@@ -100,10 +101,10 @@ def conformance_cc12(launch: str) -> str:
 CONFORMANCE_CC12 = conformance_cc12("`splitKreduce_kernel` with a bf16 workspace (M 1 to 303, split counts 2 to 16)")
 CONFORMANCE_CC12_SERIAL = conformance_cc12("a cutlass kernel whose grid.z slices meet through the bf16 output, no reduction kernel "
                                            "(M 303, K 12288, 5 slices)")
-TRAIN_CAPTURE = ("a capture of the training workload's GEMMs on cc 12.0 with 188 SMs (torch 2.14.0+cu130 on "
-                 "cuBLAS 13.1.1.3, deterministic, CUBLAS_WORKSPACE_CONFIG=:4096:8) at B 1 x S 256 and B 8 x S 512, every "
-                 "launch's kernel and grid recorded, each role's sampled words fitting its route exactly on random and "
-                 "count-probe words")
+TRAIN_CAPTURE = ("captures of the training workloads' GEMMs on cc 12.0 with 188 SMs (torch 2.14.0+cu130 on "
+                 "cuBLAS 13.1.1.3, deterministic, CUBLAS_WORKSPACE_CONFIG=:4096:8), smollm2-135m's at B 1 x S 256 and "
+                 "B 8 x S 512 and the lf model's s step's linears at B 2 x S 1024, every launch's kernel and grid recorded, "
+                 "each role's sampled words fitting its route exactly on random and count-probe words")
 CONFORMANCE_ALIGNED = ("exact-model-tested: every output word of the B 8 x S 512 step's dW in a full-tensor dump of the step "
                        "(row GEMMs at K 4096: N 576 over 7 and 3 grid.z slices at TILE_K 32 and over 12 at TILE_K 64, N 1536 "
                        "over 3 at TILE_K 32), where cuBLAS launches a cutlass kernel over grid.z and `splitKreduce_kernel` with "
@@ -356,6 +357,9 @@ CublasSerialSplitKGemm.word = lambda b: bind(CublasSerialSplitKGemmWord, K=b["K"
 
 TRAIN_M = (256, 4096)
 TRAIN_LINEARS = ((576, 576), (576, 192), (576, 1536), (1536, 576), (576, 49152))
+#: the lf model's s step (d 512, SwiGLU 1408, vocabulary 32,000) at B 2 x S 1024
+LF_M = (2048,)
+LF_LINEARS = ((512, 512), (512, 1408), (1408, 512), (512, 32000))
 #: F.linear's GEMMs at x (M, K), W (N, K): role -> (x's rows, w's rows, the row GEMM's (K, N) at (M, K, N))
 TRAIN_LINEAR_ROLES: dict[str, tuple[str, str, Callable[[int, int, int], tuple[int, int]]]] = {
     "fwd": ("X", "W", lambda M, K, N: (K, N)),
@@ -385,6 +389,15 @@ TRAIN_ROUTES: dict[tuple[int, int, int, str], dict[str, Any]] = {
 _GRID_Z_DW = {(576, 576): (7, 32), (576, 192): (12, 64), (576, 1536): (3, 32), (1536, 576): (3, 32)}
 for (_K, _N), (_z, _t) in _GRID_Z_DW.items():
     TRAIN_ROUTES[(4096, _K, _N, "dW")] = {"kernel": "splitk", "SPLIT_K": _z, "partial": "bf16", "align": 8, "tile_k": _t}
+#: The s step's dW slices K 2048 over grid.z into whole k-tiles, where `aligned_bounds` is `split_bounds` and `residue_first`
+#: is (0, 0): its route is the plain bf16-workspace split-K, which also has a Definition on words.
+TRAIN_ROUTES.update({
+    **{(M, K, N, role): _NOSPLIT for M in LF_M for K, N in LF_LINEARS for role in TRAIN_LINEAR_ROLES},
+    (2048, 512, 512, "dW"): {"kernel": "splitk", "SPLIT_K": 8, "partial": "bf16"},
+    (2048, 512, 1408, "dW"): {"kernel": "splitk", "SPLIT_K": 4, "partial": "bf16"},
+    (2048, 1408, 512, "dW"): {"kernel": "splitk", "SPLIT_K": 4, "partial": "bf16"},
+    (2048, 512, 32000, "dX"): {"kernel": "serialk", "SPLIT_K": 5},
+})
 
 
 def train_route(role: str, M: int, K: int, N: int) -> dict[str, Any]:
@@ -393,7 +406,8 @@ def train_route(role: str, M: int, K: int, N: int) -> dict[str, Any]:
     if role not in TRAIN_LINEAR_ROLES:
         raise ValueError(f"train_route: role {role!r} (only {', '.join(TRAIN_LINEAR_ROLES)})")
     if (M, K, N, role) not in TRAIN_ROUTES:
-        raise ValueError(f"train_route: (M, K, N) = ({M}, {K}, {N}) is not captured (M in {TRAIN_M}, (K, N) in {TRAIN_LINEARS})")
+        raise ValueError(f"train_route: (M, K, N) = ({M}, {K}, {N}) is not captured (M in {TRAIN_M} at (K, N) in "
+                         f"{TRAIN_LINEARS}, M in {LF_M} at (K, N) in {LF_LINEARS})")
     return dict(TRAIN_ROUTES[(M, K, N, role)])
 
 

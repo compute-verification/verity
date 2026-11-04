@@ -3,7 +3,8 @@
 route's numpy model (`bf16_gemm_check.cublas_route_rows`) on spread and cancelling words, `aligned_bounds` makes the B 8 x S 512
 dW's grid.z slices, and `attention_bmm` is `BatchedGemm_v2` at each bmm's reduction and output lengths.  Each model's agreement
 with sm_120's words is the capture's (`cublas_bf16.TRAIN_CAPTURE`); the grid.z dW's is also held here on words of a full-tensor
-dump of that step that tell its k-tile layouts apart (`fixtures/cublas_dw_grid_z_sm120.npz`)."""
+dump of that step that tell its k-tile layouts apart (`fixtures/cublas_dw_grid_z_sm120.npz`), and the lf model's s step's routes
+on the capture's words that tell each from every other GEMM route (`fixtures/cublas_train_lf_sm120.npz`)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -23,6 +24,10 @@ SPLIT = {
     (256, 576, 49152, "dX"): ("CublasSplitKGemmBf16Partials_v2", 49152, 576, 17),
     (4096, 576, 49152, "dX"): ("CublasSerialSplitKGemm_v2", 49152, 576, 7),
     (4096, 576, 49152, "dW"): ("CublasSerialSplitKGemm_v2", 4096, 576, 2),
+    (2048, 512, 512, "dW"): ("CublasSplitKGemmBf16Partials_v2", 2048, 512, 8),
+    (2048, 512, 1408, "dW"): ("CublasSplitKGemmBf16Partials_v2", 2048, 512, 4),
+    (2048, 1408, 512, "dW"): ("CublasSplitKGemmBf16Partials_v2", 2048, 1408, 4),
+    (2048, 512, 32000, "dX"): ("CublasSerialSplitKGemm_v2", 32000, 512, 5),
 }
 #: the grid.z dW routes: (grid.z, the launched cutlass kernel's k-tile)
 ALIGNED = {(4096, 576, 576, "dW"): (7, 32), (4096, 576, 192, "dW"): (12, 64), (4096, 576, 1536, "dW"): (3, 32),
@@ -30,7 +35,8 @@ ALIGNED = {(4096, 576, 576, "dW"): (7, 32), (4096, 576, 192, "dW"): (12, 64), (4
 
 
 def test_train_routes_are_the_capture() -> None:
-    assert set(CB.TRAIN_ROUTES) == {(M, K, N, r) for M in CB.TRAIN_M for K, N in CB.TRAIN_LINEARS for r in ("fwd", "dX", "dW")}
+    assert set(CB.TRAIN_ROUTES) == {(M, K, N, r) for Ms, linears in ((CB.TRAIN_M, CB.TRAIN_LINEARS), (CB.LF_M, CB.LF_LINEARS))
+                                    for M in Ms for K, N in linears for r in ("fwd", "dX", "dW")}
     for key, route in CB.TRAIN_ROUTES.items():
         if key in SPLIT:
             name, K, N, z = SPLIT[key]
@@ -47,7 +53,8 @@ def test_train_routes_are_the_capture() -> None:
 
 
 def test_train_route_refuses_what_the_capture_does_not_cover() -> None:
-    for args in (("fwd", 512, 576, 576), ("dX", 256, 576, 320), ("dW", 16384, 576, 576)):
+    for args in (("fwd", 512, 576, 576), ("dX", 256, 576, 320), ("dW", 16384, 576, 576), ("fwd", 2048, 576, 576),
+                 ("dW", 4096, 512, 512)):
         with pytest.raises(ValueError, match="is not captured"):
             CB.train_linear(*args)
     with pytest.raises(ValueError, match="role 'dY'"):
@@ -73,6 +80,9 @@ def test_aligned_bounds_are_the_capture_slices() -> None:
     assert CB.aligned_bounds(1536, 8, 64) == CB.split_bounds(1536, 8)
     assert [CB.residue_first(0, n, t) for n, t in ((1368, 32), (1360, 32), (592, 32), (544, 32), (344, 64), (312, 64))] == [
         (24, 8), (16, 16), (16, 16), (0, 0), (24, 40), (56, 8)]
+    for z in (8, 4):
+        assert CB.aligned_bounds(2048, z, 8) == CB.split_bounds(2048, z), "the s step's dW is the plain bf16-workspace route"
+        assert all(CB.residue_first(lo, hi, 32) == (0, 0) for lo, hi in CB.split_bounds(2048, z))
 
 
 def test_the_grid_z_dw_is_sm120s_on_the_dump_words() -> None:
@@ -87,6 +97,26 @@ def test_the_grid_z_dw_is_sm120s_on_the_dump_words() -> None:
         whole = -(-max(hi - lo for lo, hi in CB.aligned_bounds(4096, z, 8)) // 16) * 16
         back = int(BC.cublas_aligned_splitk_rows(x, w, z, 8, whole)[0, 0])
         assert back == int(d["back"][i]) and (back != int(d["gpu"][i])) == (i < 4), i
+
+
+def test_the_s_step_routes_are_sm120s_on_its_words() -> None:
+    """Words of the lf model's s step's linears on sm_120 at B 2 x S 1024, per F.linear role: count-probe words (the all-ones row
+    against `splitk_count_probe`'s rows) and the fewest random words that rule out what the capture's random words rule out.  Each
+    role's route gives every word, and every other GEMM route at 2 to 16 slices misses one; the gemv routes are left out, since
+    cuBLAS launches cutlass GEMMs at M 2048.  A split route's model chunks K as its Definition on bits does (`split_bounds`)."""
+    d = np.load(FIXTURES / "cublas_train_lf_sm120.npz")
+    for K, N in CB.LF_LINEARS:
+        for role, (_, _, row) in CB.TRAIN_LINEAR_ROLES.items():
+            route = CB.train_route(role, 2048, K, N)
+            words = [tuple(d[f"{K}x{N}/{role}/{kind}/{a}"] for a in "xwy") for kind in ("random", "probe")]
+            assert all(np.array_equal(BC.cublas_route_rows(route, x, w), y) for x, w, y in words), (K, N, role)
+            k = row(2048, K, N)[0]
+            if "SPLIT_K" in route:
+                chunks = BC._split_cols(k, route["SPLIT_K"], "contiguous")
+                assert [(int(c[0]), int(c[-1]) + 1) for c in chunks] == CB.split_bounds(k, route["SPLIT_K"]), (K, N, role)
+            others = [r for r in BC.cublas_routes_at(list(range(2, min(16, k // 16) + 1))) if r["kernel"] != "gemv" and r != route]
+            fits = [r for r in others if all(np.array_equal(BC.cublas_route_rows(r, x, w), y) for x, w, y in words)]
+            assert not fits, (K, N, role, fits)
 
 
 def test_attention_bmm_is_batched_gemm_at_each_op() -> None:
