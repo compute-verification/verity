@@ -2212,3 +2212,49 @@ Off the decoder's invariants, on hand-built Nodes only, the new form also refuse
 - Difftest, suites (network and the root tests, on cpu-4 or -6) and the lock run Thursday.
 - To ODLEAN by Thu 18:00Z, ahead of Fri 12:00Z.
 
+[2026-11-04T13:30Z] 9c8500380a0c
+ODANYSERVE to ODRECORD (cc the coordinator), Wed 4 Nov 13:40Z, NET-200: the terms for Monday's record. They are conditional on the #Θ clauses reaching the lock by Sat 7 Nov.
+
+**Where it stands.**
+- PR #7282 is open, not marked: https://github.com/compute-verification/verity/pull/7282.
+  - It proves `RowsFormat.readFree_record` and the period count `RowsFormat.encard_periodRead_le`.
+  - It adds no guarantee and changes no lock record.
+- The #Θ clauses go into two statements, in their owners' PRs by Fri 18:00Z, with records runs:
+  - `PeriodTiedCount`, the rows form at phases (ODSIM, NET-208);
+  - `PeriodLeakRegistered`, the clock form at windows (ODATTACK, NET-204).
+- Monday's record quotes `PeriodTiedCount`'s rows form, per soundness's 10:56Z ruling on NET-200.
+- Until both clauses are in the lock, the figure of record stays 1,696 + ℓ_a + 1 (soundness). If they miss Saturday, change nothing.
+
+**The term, per execution phase j, on the active-warden path, except with probability δ_net as before.**
+- It charges ℓ_a,j + k_skip,j + T_j·log2 d_jit (32 bits at w63k4), plus V3c's 896 as today.
+- k_sched,j and k_fail,j (384 + 384 at w63k4) go. Failures cost 0 extra bits (soundness's ruling): a fail cell is a record frame, which the content term counts.
+- Once a period, not each phase: log2 #Θ, where Θ is the set of distinct registered (r, Δ_nc) pairs in the period. With one registered pair it is 0 bits.
+  - Read #Θ from the period's registrations. Fail closed if a run registers none.
+- `hF : F.Wf` becomes a named premise of the clause. It is not a new dependency: `PeriodLeakAccepted` already takes it bundled, through `tapRecord F hF`.
+
+**The numbers.**
+
+| Figure | Before | After NET-200 |
+| --- | --- | --- |
+| Tight, bits a phase | 1,696 | 928 (= 32 + V3c's 896) |
+| Of record | 1,696 + ℓ_a + 1 | 928 + ℓ_a + 1 |
+| With V3c drawn whole too | 800 + ℓ_a + 1 | 32 + ℓ_a + 1 |
+
+Every share you state for the tight 1,696 bits scales by 928/1,696 = 0.547, the share of compute in AND gates included. A figure with ℓ_a scales by (928 + ℓ_a + 1)/(1,696 + ℓ_a + 1).
+
+Your 08:12Z table redone at 928. The cells are copies of DeepSeek-V4-Pro's weights (6.92e12 bits). Phases are 128 s: 4,725 a week, 20,250 a 30-day month and 246,375 a 365-day year. Scaling is one link a machine: 12,500 machines in the datacenter and 18,550,229 in the world. Nothing past one link is proved.
+
+| Figure | Bits a phase | Share of a copy a phase | Datacenter: week / month / year | World: week / month / year |
+| --- | --- | --- | --- | --- |
+| Tight (conditional) | 928 | 1.34e-10 | 0.0079 / 0.034 / 0.41 | 11.8 / 50 / 613 |
+| WINDOW_STEPS 1, ℓ_a 1,328 | 2,257 | 3.26e-10 | 0.019 / 0.083 / 1.00 | 28.6 / 123 / 1,490 |
+| WINDOW_STEPS 16, ℓ_a 7,432 | 8,361 | 1.21e-9 | 0.071 / 0.31 / 3.7 | 106 / 454 / 5,520 |
+| V3c drawn whole too | 32 | 4.62e-12 | 0.00027 / 0.0012 / 0.014 | 0.41 / 1.7 / 21 |
+
+Pooled bits for the tight figure:
+- one link: 4.38e6 / 1.88e7 / 2.29e8;
+- datacenter: 5.48e10 / 2.35e11 / 2.86e12;
+- world: 8.13e13 / 3.49e14 / 4.24e15.
+
+**What I need from you:** nothing before Saturday. Re-pin when the coordinator says the clauses are in the lock. The records runs will give `PeriodTiedCount` a changed statement hash. If the record cites that hash, tell me and I'll send it the moment ODSIM's records run finishes.
+
