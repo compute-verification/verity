@@ -432,26 +432,19 @@ theorem noiseOf_eq {p : Pass} {tid pos : ℕ} {rows cols : List ℕ} (h : p.tile
     Properties.Pouw.PearlPlus.noiseOf p tid =
       Words.fixedNoise p.salt ((p.weightRoots.lookup p.records[pos]!.matmul.weight).getD ByteArray.empty)
         p.records[pos]!.matmul.k := by
-  first
-    | (simp only [Properties.Pouw.PearlPlus.noiseOf, h]; done)
-    | (unfold Properties.Pouw.PearlPlus.noiseOf; rw [h]; done)
-    | (unfold Properties.Pouw.PearlPlus.noiseOf; rw [h]; rfl)
+  simp only [Properties.Pouw.PearlPlus.noiseOf, h]
 
 theorem leafHashed_eq {p : Pass} {tid pos : ℕ} {rows cols : List ℕ} {o : TileOpening} {ops : Words.Ops}
     {ch : Words.Checked} (h : p.tile? tid = some (pos, rows, cols))
     (hf : Properties.Pouw.PearlPlus.formed p (Properties.Pouw.PearlPlus.noiseOf p tid) rows cols p.records[pos]!.matmul o =
       .ok (ops, ch)) :
     Bridge.leafHashed p tid o = Properties.Pouw.PearlPlus.segHashed (Bridge.leafBytes ch) := by
-  first
-    | (simp only [Bridge.leafHashed, h, hf]; done)
-    | (unfold Bridge.leafHashed; rw [h]; dsimp only; rw [hf])
+  simp only [Bridge.leafHashed, h, hf]
 
 theorem commitHashed_eq {p : Pass} {tid pos : ℕ} {rows cols : List ℕ} {c : Pouw.PearlC.Commit}
     (h : p.tile? tid = some (pos, rows, cols)) :
     Bridge.commitHashed p tid c = Properties.Pouw.PearlPlus.segHashed (Bridge.leafBytes (Bridge.commitWords c rows cols)) := by
-  first
-    | (simp only [Bridge.commitHashed, h]; done)
-    | (unfold Bridge.commitHashed; rw [h])
+  simp only [Bridge.commitHashed, h]
 
 /-! ## The leaf's bytes -/
 
@@ -627,7 +620,7 @@ theorem rowL_inj {c₁ u₁ c₂ u₂ : Array ℕ} {C : ℕ} (h1c : c₁.size = 
 theorem zip_get {ch : Words.Checked} {R : ℕ} (hc : ch.c.size = R) (hu : ch.u.size = R) (x : ℕ)
     (h : x < (ch.c.zip ch.u).toList.length) : (ch.c.zip ch.u).toList[x] = (ch.c[x]!, ch.u[x]!) := by
   have hx : x < R := by simp [hc, hu] at h; omega
-  simp [Array.getElem_toList, Array.getElem_zip, getElem!_pos ch.c x (by omega), getElem!_pos ch.u x (by omega)]
+  simp [Array.getElem_toList, getElem!_pos ch.c x (by omega), getElem!_pos ch.u x (by omega)]
 
 theorem leafBytes_shape_len {ch₁ ch₂ : Words.Checked} {R C : ℕ}
     (h1c : ch₁.c.size = R) (h1u : ch₁.u.size = R) (h2c : ch₂.c.size = R) (h2u : ch₂.u.size = R)
@@ -655,7 +648,8 @@ theorem leafBytes_words {ch₁ ch₂ : Words.Checked} {R C : ℕ}
     (h1c : ch₁.c.size = R) (h1u : ch₁.u.size = R) (h2c : ch₂.c.size = R) (h2u : ch₂.u.size = R)
     (h1 : ∀ x < R, ch₁.c[x]!.size = C ∧ ch₁.u[x]!.size = C) (h2 : ∀ x < R, ch₂.c[x]!.size = C ∧ ch₂.u[x]!.size = C)
     (he : Bridge.leafBytes ch₁ = Bridge.leafBytes ch₂) :
-    ∀ x < R, ∀ z < C, ch₁.c[x]![z]! % 2 ^ 32 = ch₂.c[x]![z]! % 2 ^ 32 ∧ ch₁.u[x]![z]! % 2 ^ 32 = ch₂.u[x]![z]! % 2 ^ 32 := by
+    ∀ x < R, ∀ z < C, (ch₁.c[x]!)[z]! % 2 ^ 32 = (ch₂.c[x]!)[z]! % 2 ^ 32 ∧
+      (ch₁.u[x]!)[z]! % 2 ^ 32 = (ch₂.u[x]!)[z]! % 2 ^ 32 := by
   intro x hx
   have he := congrArg (fun b : ByteArray => b.data.toList) he
   simp only [leafBytes_data] at he
@@ -715,8 +709,8 @@ theorem commitWords_shape (c : Pouw.PearlC.Commit) (rows cols : List ℕ) :
 
 theorem commitWords_get (c : Pouw.PearlC.Commit) {rows cols : List ℕ} {x z : ℕ} (hx : x < rows.length)
     (hz : z < cols.length) :
-    (Bridge.commitWords c rows cols).c[x]![z]! = c.ticket rows[x] cols[z] ∧
-      (Bridge.commitWords c rows cols).u[x]![z]! = c.useful rows[x] cols[z] := by
+    ((Bridge.commitWords c rows cols).c[x]!)[z]! = c.ticket rows[x] cols[z] ∧
+      ((Bridge.commitWords c rows cols).u[x]!)[z]! = c.useful rows[x] cols[z] := by
   simp only [Bridge.commitWords]
   rw [toArray_map_get! (α := Array ℕ) _ hx, toArray_map_get! (α := Array ℕ) _ hx,
     toArray_map_get! (α := ℕ) _ hz, toArray_map_get! (α := ℕ) _ hz]
@@ -740,16 +734,12 @@ theorem wordQ_mod (w : ℕ) : Pouw.Fp8Atom.wordQ (w % 2 ^ 32) = Pouw.Fp8Atom.wor
   rw [hv]
 
 theorem rows_lt {L : Pouw.PearlC.Layout} {g i : ℕ} (h : i ∈ (Pouw.PearlC.auditTiling 64 64 L).rows g) :
-    i < (L.shape ((Pouw.PearlC.auditTiling 64 64 L).unit g)).m := by
-  first
-    | exact lt_of_lt_of_le (Finset.mem_Ico.1 h).2 (min_le_right _ _)
-    | (simp only [Pouw.PearlC.auditTiling, Finset.mem_Ico] at h ⊢; omega)
+    i < (L.shape ((Pouw.PearlC.auditTiling 64 64 L).unit g)).m :=
+  lt_of_lt_of_le (Finset.mem_Ico.1 h).2 (min_le_right _ _)
 
 theorem cols_lt {L : Pouw.PearlC.Layout} {g j : ℕ} (h : j ∈ (Pouw.PearlC.auditTiling 64 64 L).cols g) :
-    j < (L.shape ((Pouw.PearlC.auditTiling 64 64 L).unit g)).n := by
-  first
-    | exact lt_of_lt_of_le (Finset.mem_Ico.1 h).2 (min_le_right _ _)
-    | (simp only [Pouw.PearlC.auditTiling, Finset.mem_Ico] at h ⊢; omega)
+    j < (L.shape ((Pouw.PearlC.auditTiling 64 64 L).unit g)).n :=
+  lt_of_lt_of_le (Finset.mem_Ico.1 h).2 (min_le_right _ _)
 
 end Pouw.PearlPlus.Assembly
 
@@ -809,10 +799,10 @@ theorem tilePassGivesTheWords (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (
     rw [hcc] at hwc
     rw [hcu] at hwu
     obtain ⟨hlt1, hlt2⟩ := hcw _ (List.getElem_mem hx) _ (List.getElem_mem hz)
-    have t1 : wordQ (c.ticket rows[x] cols[z]) = wordQ ch.c[x]![z]! := by
-      rw [← Assembly.wordQ_mod (ch.c[x]![z]!), hwc, Nat.mod_eq_of_lt hlt1]
-    have t2 : wordQ (c.useful rows[x] cols[z]) = wordQ ch.u[x]![z]! := by
-      rw [← Assembly.wordQ_mod (ch.u[x]![z]!), hwu, Nat.mod_eq_of_lt hlt2]
+    have t1 : wordQ (c.ticket rows[x] cols[z]) = wordQ ((ch.c[x]!)[z]!) := by
+      rw [← Assembly.wordQ_mod ((ch.c[x]!)[z]!), hwc, Nat.mod_eq_of_lt hlt1]
+    have t2 : wordQ (c.useful rows[x] cols[z]) = wordQ ((ch.u[x]!)[z]!) := by
+      rw [← Assembly.wordQ_mod ((ch.u[x]!)[z]!), hwu, Nat.mod_eq_of_lt hlt2]
     exact ⟨t1.trans hWx.1, t2.trans hWx.2⟩
   · right
     refine ⟨x, ?_, y, ?_, hne, hxy⟩
