@@ -2,16 +2,15 @@
 # One-stage audit, run A10, on a CPU machine: A11's kinds and A9's routed-expert launches on rank 0's committed values (a10.py),
 # on hidden_zk's builds as a11.sh runs them. Two modes:
 #   values reads the tree, so it runs from the source, on the node holding the Build's row dir:
-#     research run --on vy-glm53-cpu-2 --project verity --source . --cwd source --mem-gb 256 --timeout 4h \
-#       --env A10_MODE=values --env A10_MEM_GB=256 -- bash benchmarks/one_stage/a10.sh
+#     A10_MODE=values A10_MEM_GB=256 bash benchmarks/one_stage/a10.sh
+#     (a job run from the source tree, 256 GB, up to 4 h)
 #   It fetches rank 0's replay bundle, the Commit's records, and A11's and A9's slices from the store into $A10_CACHE (kept on
-#   the node), reads the Build's rank 0 Program and the required manifest from the Build's row dir ($A10_ROW, on
-#   vy-glm53-cpu-2), runs `a10.py values`, and keeps $OUT/compare.json, the logs and $OUT/saved-a11.tar, $OUT/saved-a9.tar
+#   the node), reads the Build's rank 0 Program and the required manifest from the Build's row dir ($A10_ROW, on the
+#   machine that built it), runs `a10.py values`, and keeps $OUT/compare.json, the logs and $OUT/saved-a11.tar, $OUT/saved-a9.tar
 #   (a11.py --load-values' directories).
 #   audit builds the sampled-proofs Lean in the tree, so it runs from a clone:
-#     research run --on vy-glm53-cpu-2 --project verity --source . --cwd clone --mem-gb 128 --mem-wait 7200 --timeout 4h \
-#       --env A10_MODE=audit --env A10_MEM_GB=128 --env A10_VALUES=art:ID --env A10_SET=a11 \
-#       --env A10_ARGS="--only K1,K2 --tamper none" -- bash benchmarks/one_stage/a10.sh
+#     A10_MODE=audit A10_MEM_GB=128 A10_VALUES=art:ID A10_SET=a11 A10_ARGS="--only K1,K2 --tamper none" bash benchmarks/one_stage/a10.sh
+#     (a job run from a clone of the tree, 128 GB, up to 4 h)
 #   It runs `a10.py audit` (a11.py with the committed window) on $A10_SET's saved directory from the values run's record
 #   (A10_VALUES), its records in $OUT/a11 as a11.sh keeps them.
 # env: A10_MODE  A10_MEM_GB (the job's --mem-gb)  A10_ARGS (more a10.py arguments)  A10_ROW  A10_CACHE  A11_CACHE (the build cache)
@@ -31,14 +30,16 @@ os.execvpe(sys.executable, [sys.executable, "-m", "research", *sys.argv[1:]], st
 R keep "$HZ_CACHE" --owner @circuits --expires 4d --priority low --root / \
   --why "A10's builds (flock-circuit, flock-verify, the venv), keyed by their inputs" >> "$OUT/job.log" 2>&1
 
-BUNDLE=art:6437727df08be44eba654589780a7d307a4e8038d70b373146eba4b83878034e    # rank 0's replay bundle, Commit r20261019-074856-7c3a
-ROWMETA=art:7d815b1d963c7e9cf42aaeff8793901b38a301d10ed8c814d2ffe292b757d9ea   # the row's records (commit/)
-BUILD=art:8be49d1e6f506b6a2105dfba80222db6aa6b9542613548c1c9012af1ebcca4f4     # the Build (build/rank0, manifest.json), without the Programs' instances
+# the record's store ids and the Build's row dir, in a10_inputs.json
+IN() { python3 -c 'import json, sys; v = json.load(open(sys.argv[1]))[sys.argv[2]]; print(" ".join(v) if isinstance(v, list) else v)' \
+  "$SRC/benchmarks/one_stage/a10_inputs.json" "$1"; }
+BUNDLE=$(IN bundle)     # rank 0's replay bundle, of the Commit of record
+ROWMETA=$(IN rowmeta)   # the row's records (commit/)
+BUILD=$(IN build)       # the Build (build/rank0, manifest.json), without the Programs' instances
 # the Build's row dir where it ran (vy-glm53-cpu-2), read in place: its rank 0 Program's instances aren't in the art
-ROWDIR=${A10_ROW:-/workspace/cp/circuits/glm-aot/r20261018-070557-2172/glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager}
-SLICES="art:2767c3a80137ce6cd7782373e1cba8b4231d4598f1b902caaa7bc1604edf09c8 art:22e7456dcc5018b85c511d507ff3c33ffa5be2b1946e3106de1ce5727f0d3106
-art:84ae2056669e502abb2751cd38d2125167728fd580193df7f7432338877551ff art:c1ec2634adc0f5b548bec6af41cca82995d11b977fdb67d716895695a0b38cf8"
-KINDS=art:9ec1d8b37286bdd5ec3cee7d39da27d97866eece6018d994c4921d068bc49abb     # A11's kinds table (kinds.json)
+ROWDIR=${A10_ROW:-$(IN row_dir)}
+SLICES=$(IN slices)
+KINDS=$(IN kinds)       # A11's kinds table (kinds.json)
 
 fetch() {   # fetch ART DEST [GLOB...]: ART's files (those matching the globs) under DEST, once per node; DEST.done marks it whole
   local art=$1 dest=$2; shift 2

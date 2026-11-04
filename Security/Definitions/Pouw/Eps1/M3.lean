@@ -1,10 +1,11 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
-# QSTAR's model M3 for Dither's words (trusted)
+# The model M3 for Dither's words (trusted)
 
-The model M3: a straight-line program over 32-bit words, each
-instruction any fixed function of at most three earlier words.
+M3: a straight-line program over 32-bit words, each instruction any fixed function of at most three earlier words.
 
 * At the zero instance the inputs are the dither words (`R i ℓ p`, bit `p` of `R_ℓ[i]`) and the columns of `U`
   (`U j p`, 32 entries in `±1..±64`); at a general instance the int8 entries of `Ã`'s rows and `B̃`'s columns, per
@@ -22,6 +23,8 @@ instruction any fixed function of at most three earlier words.
 * `Creates`: an instruction creates an incidence `(τ, p)` it holds and none of its instruction arguments holds
   (Theorem C's count).
 -/
+
+@[expose] public section
 
 namespace Pouw.Eps1
 

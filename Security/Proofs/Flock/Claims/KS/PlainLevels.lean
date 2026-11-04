@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.PlainClashL
-import Proofs.Flock.Claims.KS.Entries
-import Proofs.Flock.Claims.DeployRounds
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainClashL
+public import Proofs.Flock.Claims.KS.Entries
+public import Proofs.Flock.Claims.DeployRounds
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # Every level's queries in the plain verifier over the hash oracle
@@ -26,6 +28,8 @@ of that position against one root in the run's own log, a `PlainLevelClash` (`pl
   plain record, each an `Opening` in an accepted run's log against the rep's proof's cap, and two of them at one
   position that differ clash there.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -211,7 +215,7 @@ def plainLevelColsOf (sh : Shape) (rounds : Array Round) (bytes : ByteArray) (�
 cap on its level-`ℓ` rows at the positions of round `plainLevelRound`'s coins, and the reader's level-`ℓ` rows
 (`plainLevelColsOf`) are those positions with those rows. -/
 theorem plainLevels_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule)
-    (sess : Session) (i r : ℕ) (bytes cap : ByteArray) (hsch : fast100 st.m = some sch)
+    (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : fast100 st.m = some sch)
     (hf : ∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog)
     (hkl : st.fold.kLog = st.kLog) (h : verifyRepWith hs spec st sch sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (extras : Array Flock.Claim) (p : Proof),
@@ -280,7 +284,7 @@ theorem plainLevels_verifyWithM (hs : Hashes Flock.V) (spec : SessionSpec) (tabs
     (hf : ∀ st ∈ tabs, (∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog) ∧
       st.fold.kLog = st.kLog)
     (h : verifyWithM hs spec tabs record proofs = .ok ()) :
-    ∃ sess : Session, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
+    ∃ sess : RunRecord, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ sch : Flock.Schedule, fast100 tabs[i].m = some sch ∧ ∀ r < 2,
         ∃ (stream : StreamRec) (extras : Array Flock.Claim) (p : Proof),
           sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
@@ -313,7 +317,7 @@ theorem plainLevels_verifyWithMK (keep : Bool → Bool) (hs : Hashes Flock.V) (s
     (hf : ∀ st ∈ tabs, (∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog) ∧
       st.fold.kLog = st.kLog)
     (h : verifyWithMK keep hs spec tabs record proofs = .ok ()) :
-    ∃ sess : Session, Record.decodeWithK keep hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
+    ∃ sess : RunRecord, Record.decodeWithK keep hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ sch : Flock.Schedule, fast100 tabs[i].m = some sch ∧ ∀ r < 2,
         ∃ (stream : StreamRec) (extras : Array Flock.Claim) (p : Proof),
           sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧

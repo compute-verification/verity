@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.BoundDeploy
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundDeploy
 
 /-!
 # `IVStar`'s runs
@@ -13,6 +15,8 @@ coin, then the last message answered by the decision on all of them, whose oracl
 * the last message's representative (`Bound.rep`, one message per reading of `final`) keeps the decision
   (`Bound.final_rep`), and two last messages `final` reads alike have one representative (`Bound.rep_eq`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

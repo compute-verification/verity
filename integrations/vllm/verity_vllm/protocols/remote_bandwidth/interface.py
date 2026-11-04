@@ -19,7 +19,7 @@ pass        one read of the live store: weights, the batch's written KV, and fil
 segment     some of one region's blocks read in a pass, in read order; one reader (a fused GEMM, attention, the filler
             sweep) receipts it.  The store lays a pass's segments out as subtrees of its tree (whole leaves, a power
             of two of them, from a multiple of their number), but for a tail of the parts' last blocks
-commitment  a pass's root, the remote bandwidth driver's: frame-v3-sha512 over leaves of 16 receipts in plan order, each
+commitment  a pass's root, the PoUB driver's: frame-v3-sha512 over leaves of 16 receipts in plan order, each
             hidden as an hm96-sha512/row/v2 leaf under a salt, bound to the pass's seed and the plan's digest (over
             the plan's runs of store indices)
 opening     for a sampled (pass, position): the block's bytes as read, its receipt, its leaf's receipts and salt, the

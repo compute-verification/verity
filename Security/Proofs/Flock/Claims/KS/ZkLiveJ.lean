@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ZkBoundJ
+module
+
+public import Proofs.Flock.Claims.KS.ZkBoundJ
 
 /-!
 # Every masked table's bound from the live sessions' bound at the deployed tables
@@ -22,6 +24,8 @@ committed to table `j`'s model statement (`zkTab_committed`; together, `zk_atTab
 at every layout, and `Flock.KS` at the deployed relation follows from it at every statement some run accepts and
 `ExtendJ` (`zk_KS_of_liveJ`), at every number of tables.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

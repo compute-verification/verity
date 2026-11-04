@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Split
+module
+
+public import Proofs.Flock.Claims.ZK.Split
 
 /-!
 # The session from the cut sends the session's bodies
@@ -16,6 +18,8 @@ import Proofs.Flock.Claims.ZK.Split
 * **The session** (`simSession_of`): the schedules, the commitments from the cut's leaves (`SimCommit`), the link and
   each rep stream in turn, from its first round (`repBase`) and with rep `1`'s prior points rep `0`'s (`priorE`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.Family.Registered
+module
+
+public import Proofs.Flock.VBridge.Family.Registered
 
 /-!
 # VBridge G at V*'s family: the parts' row columns and the reads at them
@@ -17,9 +19,11 @@ what the part sessions' reads files and registered reads say there:
   unit (`OwnReads`, at a part's labels);
 * `nv_part`, `un_val`: a part's statement has two instances (`Stmt.instances`), so rep `r`'s unit is instance `r`;
 * `OwnNamesOne`, `readOne_of`: each part's reads file names each port once, so a read's port is its one entry of that
-  name, read at the unit's position (`Recursion.vRows_tie`'s and `zero_tie`'s `hone` and `hpos`);
+  name, read at the unit's position;
 * `rowColKeys_of`, `sameRow_of`: `RowColKeys` and `SameRow` from those and `HCover`.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 
@@ -138,8 +142,8 @@ def OwnNamesOne : Prop :=
     ∀ (p : ℕ) (j : Fin F.stmts.size) (nm : String) (pt : VStar.Part), F.stmts[j] = .inner p nm pt →
       ∀ reg ∈ (F.zs R ω t R₂ j).own, ∀ reg' ∈ (F.zs R ω t R₂ j).own, reg.name = reg'.name → reg = reg'
 
-/-- **`Recursion.vRows_tie`'s and `zero_tie`'s `hone` and `hpos` at a part's read** (`ReadsOwn`, `OwnNamesOne`): the
-read's port is `own`'s one entry of its name, read at the unit's position. -/
+/-- **A part's read is at its port's one entry** (`ReadsOwn`, `OwnNamesOne`): the read's port is `own`'s one entry of
+its name, read at the unit's position. -/
 theorem readOne_of (hrd : F.ReadsOwn dg N k Rw) (hnd : F.OwnNamesOne dg N k Rw) {R : Reg} {ω : L.Ω}
     {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o} (hacc : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) {p : ℕ}
     {j : Fin F.stmts.size} {nm : String} {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) {u : Fin (F.Vs j).nv}

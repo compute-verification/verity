@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.KS.PlainDrawRColsE
-import Proofs.Flock.Claims.Recursion.NextRTables
-import Proofs.Flock.Claims.Recursion.BoundRun
-import Proofs.Flock.Claims.Recursion.DeployHonest
-import Proofs.Flock.Claims.Recursion.DeployedR
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawRColsE
+public import Proofs.Flock.Claims.Recursion.NextRTables
+public import Proofs.Flock.Claims.Recursion.BoundRun
+public import Proofs.Flock.Claims.Recursion.DeployHonest
+public import Proofs.Flock.Claims.Recursion.DeployedR
 
 /-!
 # The honest prover's run passes `IVStar` at the deployed reader (`bdR`, `nextR`)
@@ -33,6 +35,8 @@ message is one that `final` reads as those rows with their salts, then the eleme
 What stays a hypothesis here: `nextR rd` accepting the honest messages (HONEST-VERDICT's). It is not a named
 assumption: it is an equation about the code at the honest run.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

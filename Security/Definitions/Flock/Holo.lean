@@ -1,5 +1,7 @@
-import Definitions.Flock.Sparse
-import Definitions.Flock.Session
+module
+
+public import Definitions.Flock.Sparse
+public import Definitions.Flock.Session
 
 /-!
 # The holographic table: two reps with hidden units, then the registered opening
@@ -19,6 +21,8 @@ order is the record's: running the sparse phase before the rep's opening would c
 The registered table stacks the types' tables `R(t, p, k)` as bit `k + 2^ν·(p + 2^pLog·t)`, so the registered claim's
 point is `(r_k, ζ_p, ρ_t)` in that order (`RegClaim.toClaim`): skip weights `eq(point[0…6], ·)`, `x = point[6 …]`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Model
 
@@ -45,7 +49,7 @@ def RegClaim.coord {sh : SparseShape} (c : RegClaim F sh) (j : ℕ) : F :=
 def RegClaim.toClaim {sh : SparseShape} (c : RegClaim F sh) : Claim F sh.mReg :=
   ⟨c.value, fun s => eqAt (fun j : Fin 6 => c.coord j.val) s.val, fun i => c.coord (i.val + 6)⟩
 
-/-- The sparse phase's public values in a rep (`rec_sparse.Coins`): the zerocheck's skip coin, the lincheck's `α`, the
+/-- The sparse phase's public values in a rep (`rec_sparse.SparsePublics`): the zerocheck's skip coin, the lincheck's `α`, the
 row point past the skip (`ρ_in`) and the column point past the skip in bit order (the column challenges reversed), and
 slot `σ`'s layout factor `U_σ = Σ_{u ∈ units σ} eq(x_hi, u)·eq(y_hi, u)`, where `x_hi`, `y_hi` are the points'
 coordinates past the template's `ℓ`. -/

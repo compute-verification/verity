@@ -142,7 +142,7 @@ def test_two_token_streams_render_byte_identically():
     """Yes, a server can make two token streams render identically, on the real vocab: ids 222, 231, 236 and 248 are
     lone UTF-8 continuation bytes, so each, then the same token, renders as a chunk of no text and then U+FFFD and the
     token's text. Four streams, one rendering: the client's text can't stand in for the ids, so only the ids' tie to
-    the committed sampled ones (today's token shim is accepted by `check`) refuses a substitution. An unmarked EOS id
+    the committed sampled ones (the token shim is accepted by `check`) refuses a substitution. An unmarked EOS id
     renders as a chunk of no text with no finish, like a held-back byte's, which is why `certified_io` refuses one."""
     stream = FIXTURE["streams"][0]
     then = stream["chunks"][0][1][0]

@@ -10,7 +10,11 @@ every other product (H2's and H3's claim chains, Φ's product tree, H4's type-se
 (`sha512.commit`) and is Karatsuba's ANDs, recombined and reduced; the type selects are a demultiplexer of `eq(r_s, σ)` by
 τ_σ's bits.
 -/
-import Flock.RecResiduals
+module
+
+public import Flock.RecResiduals
+
+@[expose] public section
 
 namespace Flock
 namespace RecSparse

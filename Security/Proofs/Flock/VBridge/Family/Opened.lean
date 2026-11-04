@@ -1,7 +1,9 @@
-import Proofs.Flock.VBridge.Family.Assembly
-import Proofs.Flock.VBridge.Family.Lig
-import Proofs.Flock.VBridge.Runs.ZcLc
-import Proofs.Flock.Soundness.Refine.Seam
+module
+
+public import Proofs.Flock.VBridge.Family.Assembly
+public import Proofs.Flock.VBridge.Family.Lig
+public import Proofs.Flock.VBridge.Runs.ZcLc
+public import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # VBridge G at V*'s family: every level's openings pass
@@ -25,6 +27,8 @@ salt per query); with salts, hm96's leaf is not V*'s. This file proves the check
   `plain`'s layout, no salts (`sl` `none` or `some 0`; `ligOf`'s `some 192` is hm96's), and `hopen_of_plain_lig`:
   `hopen` there, from `HOneOpen`, `HDirCols` and `HTopsL`.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 
@@ -200,7 +204,7 @@ theorem ligeritoRun_cs (h0 : 0 < sch.levels.size)
 /-- **The consistency contexts of a Ligerito run are its levels, in order** (RecAlgebra.lean: `ligeritoRun` pushes
 level 0's at `queryFold 0`, `levelsLoop` level `i + 1`'s at `queryFold (i + 1)` and the last level's after `query`):
 context `i` is level `i`'s, with the level's `q` positions. -/
-theorem ligerito_conss {tIn : Lin} {sws : Array Switched} {k k' : Nat} {src : Flock.RecAlgebra.Coins} {lgr : Array Lin}
+theorem ligerito_conss {tIn : Lin} {sws : Array Switched} {k k' : Nat} {src : Flock.RecAlgebra.CoinSource} {lgr : Array Lin}
     {lg : LgPts} (h : Flock.RecAlgebra.ligerito sch M tIn sws k src = .ok ((lgr, lg), k')) (h0 : 0 < sch.levels.size)
     (hq : ∀ i < sch.levels.size, ∀ c, (Flock.positions (sch.levels[i]!) c).size = (sch.levels[i]!).q) :
     lg.conss.toList.map (fun c => (c.start, c.pos.size)) =

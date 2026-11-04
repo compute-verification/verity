@@ -1,4 +1,6 @@
-import Evaluate.Fp32
+module
+
+public import Evaluate.Fp32
 
 /-!
 # The correctly rounded transcendentals of the reference kinds
@@ -10,6 +12,8 @@ Python performs is its exact result rounded to 100 significant digits, half to e
 (`Dec.sqrt`, and `Dec.exp` by Ziv's loop on directed-rounding bounds of the Taylor series). Only values matter: a
 decimal's exponent and trailing zeros change no result here. Security: none yet.
 -/
+
+@[expose] public section
 
 namespace Evaluate.Decimal
 

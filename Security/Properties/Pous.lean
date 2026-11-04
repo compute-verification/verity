@@ -1,4 +1,6 @@
-import PousCheck.SetupProtocol
+module
+
+public import PousCheck.SetupProtocol
 
 /-!
 # The PoUS setup check's properties, stated against the Lean code
@@ -25,6 +27,8 @@ All three are proved and guarantees of this package (`lean-audit.json`): `Deploy
 `AcceptsDecodes` (completeness: a `C*` that decodes to the committed `W` is accepted), with its instance, and the code's
 block decoder read as the trusted model's (`DecodeIsModel`).
 -/
+
+@[expose] public section
 
 namespace PousCheck.Properties
 
@@ -71,7 +75,7 @@ def PublishesRoot : Prop :=
   ∀ (q : P2.Params) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) (pub : SetupProtocol.Public)
     (prof : Unit), SetupProtocol.protocol.check q c C = .accept pub prof → Published q c C pub
 
-/-- The registered point (`p2/PROTOCOL.md` v1.1, `p2-p16448-c21065`, profile `p2-2054B`): valid, its prime
+/-- The registered point (P2 v4, `p2-p16448-c21065`, profile `p2-2054B`): valid, its prime
 `2^16448 − 21065`, 2,056-byte blocks of 2,054 payload bytes, `2^16` blocks per segment in 8 segments, `2^19` in all. -/
 def Deployed : Prop :=
   let q := P2.Params.deployed

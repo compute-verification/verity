@@ -1,8 +1,10 @@
-import Mathlib.Data.Rat.Floor
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Ring
+module
+
+public import Mathlib.Data.Rat.Floor
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Ring
 
 /-!
 # Rounding to nearest, ties to even
@@ -19,6 +21,8 @@ A format's value is a sign and a magnitude, `signed s m`. A magnitude nearest to
 among the signed values of every sign (`signed_near`), and when every other magnitude is strictly farther, no other
 signed value is as near (`signed_tie`): the two zeros are one value.
 -/
+
+@[expose] public section
 
 namespace Verity.Round
 

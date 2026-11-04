@@ -309,7 +309,7 @@ CATALOG: dict[str, Design] = {
 # (each challenge must follow the round polynomial it binds).  Three levers shorten a chain: fewer levels (table
 # sharding, n -> n - s), more variables per message (c), and CUTTING the chain by committing an intermediate layer so
 # the pieces above and below it are independent given the commitment (the verifier opens the committed layer at the
-# pieces' endpoints as Ligero linear functionals; the piece below starts from a random point drawn after com_1).
+# pieces' endpoints as Ligero linear functionals; the piece below starts from a random point sampled after com_1).
 
 def lookup_chain(n: int, c: int = 1, cuts: Sequence[int] = ()) -> int:
     """Critical-path messages of the R16 fractional GKR of dimension ``n`` with ``c`` variables per message and the

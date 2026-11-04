@@ -3,7 +3,7 @@ rules"), and PoUW has switched to it: the served window's checks
 are its Lean's, `lean/check` (`pouw-check`), `lean/commit` (`pouw-commit`) and `lean/window` (`pouw-window`), whose
 verdicts `benchmarks/pouw/served_zk/of_record.py` publishes. The Python beside them (`core_check`, `coins`, `window`) is kept
 as the reference, and the difftests hold it to the Lean: a disagreement fails with the Lean's verdict. A served H1
-window's statements are judged here too: `credit.window` and `credit.period_credit` take each drawn unit's outcome from
+window's statements are judged here too: `credit.window` and `credit.period_credit` take each sampled proof block's outcome from
 `lean("credit-verified", …)` (`PouwCheck.Verified`), with `credit._verified` the reference, and each round's live
 outcome from `lean("credit-live-verified", …)` (`PouwCheck.LiveVerified`), with `credit._live_verified` the reference,
 on the circuit files its period's open committed, `lean("credit-committed-files", …)` (`PouwCheck.CommittedFiles`),
@@ -123,7 +123,7 @@ def lean(fn: str, value: Any) -> Any:
 def coins(n: int) -> bytes:
     """`n` bytes of the operating system's randomness, read by the Lean verifier of record (`IO.getRandomBytes`, A3's
     `uniform/io-getrandombytes`): a served challenger's entropy. Raises `LeanError` where the Lean can't run, refuses or
-    answers other than `n` bytes: no coins, so no commitment and no draw."""
+    answers other than `n` bytes: no coins, so no commitment and no sample."""
     if not (type(n) is int and 0 <= n <= COINS_MAX):
         raise ValueError(f"coins are 0 to {COINS_MAX} bytes a request, not {n!r}")
     kind, body = _server.call("coins", n)

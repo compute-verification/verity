@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.GS.Interp
-import Proofs.Flock.Claims.GS.RR
-import Proofs.Flock.Claims.GS.Johnson
+module
+
+public import Proofs.Flock.Claims.GS.Interp
+public import Proofs.Flock.Claims.GS.RR
+public import Proofs.Flock.Claims.GS.Johnson
 
 /-!
 # The counted Guruswami–Sudan decoder for interleaved Reed–Solomon codes
@@ -39,6 +41,8 @@ of one point:
 The interpolation's Gaussian elimination dominates: `N·(k+1)(k+2)/2` constraints in as many unknowns plus one, so
 `O(N^3)` of each at `k < N`, cubed.
 -/
+
+@[expose] public section
 
 namespace Claims.GS
 

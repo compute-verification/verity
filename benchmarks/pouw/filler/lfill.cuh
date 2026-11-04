@@ -1,4 +1,4 @@
-// lfill: FILLER's register-only lane filler (note:20261017T0652Z-draft-filler §4), for the SMs a served step holds. No
+// lfill: the register-only lane filler, for the SMs a served step holds. No
 // shared memory beyond a block's 32 words of reduction, no MMA, a few registers a thread, so it co-resides with every
 // decode kernel at the lowest stream priority and takes only the issue slots and scalar pipes the step leaves. Its work
 // is verified lane chains under FILL-OPT, a lane step (lf_step: LOP3 IMAD SHF IMAD) on words fresh from the round's

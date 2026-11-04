@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Registered GEMM-coordinate sessions under C-Flock --zk on CPUs, the prover column's check (F6): per K in HZ_K, generate N
+# Registered GEMM-coordinate sessions under Flock --zk on CPUs, the prover column's check (F6): per K in HZ_K, generate N
 # instances of the sm80 bf16 gemm-coordinate template, stage them with `verity_flock.circuit` (timed apart: the template
 # shape's staging cost), and prove one loopback --zk session with job.sh's proving build at HZ_THREADS threads. Run from the
 # source tree's root (`research run --cwd source --declared-output 'out/*'`). Results: out/k<K>/{generate,stage,serve,
