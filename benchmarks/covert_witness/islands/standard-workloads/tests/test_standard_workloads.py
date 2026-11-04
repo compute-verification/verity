@@ -1,12 +1,15 @@
 """standard_workloads.py builds `training/standard-workloads`: a row per workload and measured dial setting, whose
 ρ is formalism.published's under the builder's `READING`, A (with its binding kind, what it rests on and its kinds as
-published gives them, reading B's forms among their sensitivities; null and "unmeasured" where it has no bound, never
+published gives them, a measured row's rests_on opening with algorithm_policy's TRACED where ρ is the products term's
+or its floor's, reading B's forms among their sensitivities; null and "unmeasured" where it has no bound, never
 infinite) at the console's default (rho_default and rho_console) and the registered serving block (rho_served), whose
 rho_inputs give the dial's ρ at both (page_rho) and whose input_status says which inputs te_core measured (an
-unmeasured Δ_grad's steps and whether Fit's verdict rests on it, and the fresh-products kind's input); a generation
-run's row is its rounds alone, each GEMM on the served codes priced as NVFP4; it reads traces from te_core 4.4 on; and
-the panel keeps to the panels route's limits, a cell up to 4,096 characters, and never replaces a served panel with one
-that drops its runs."""
+unmeasured Δ_grad's steps and whether Fit's verdict rests on it, and the products kind's input); a generation
+run's row is its rounds alone, each GEMM on the served codes priced as NVFP4; a workload no run measures is a modelled
+row, te_core.workloads' model priced the same way; it reads traces from te_core 4.4 on; the panel keeps to the panels
+route's limits, a cell up to 4,096 characters, never replaces a served panel with one that drops its rows, and cites
+its tables in the research run's out/; and a PUT takes a cited body only over the panel the build read, then reads it
+back."""
 import dataclasses
 import importlib.util
 import json
@@ -17,7 +20,7 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from te_core import VERSION, algorithm_policy, console, formalism, panels, policy
+from te_core import VERSION, algorithm_policy, console, formalism, panels, policy, workloads
 from te_core.gates import of_log, per_mac
 
 #: the builder, loaded from its file: on sys.path, the island's directory would hide the standard library's trace
@@ -31,6 +34,8 @@ _SPEC.loader.exec_module(SW)
 PINNED = Path(__file__).parent / "fixtures" / "distill.json"
 #: the commits a test build's source names (`commits`'s: this checkout's, the integrator's branch and its commit)
 REVS = ("c0ffee0000", "integrator", "facade0000")
+#: stored tables as a note cites them (`cite`'s: their path in a research run's out/)
+TABLES = "run:r20261103-000000-0000/out/tables"
 U, R = 16, 4
 #: a served matrix (out U, in 2U) and the GEMMs on it, the activations and a registered matrix in a round of 2 x 3
 #: tokens (2 sequences of a 3-token prompt and 2 generated tokens, the last never fed back)
@@ -51,10 +56,11 @@ PRODUCT = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m":
            "gates_per_mac": 1480.0, "cell_gates": 23682.0, "fed": [[1024, 1.0]], "P": 1.0, "gathered": [False, False]}
 
 
-def products_rows(*rows, steps: float = 1.0, p_match: tuple = (), dial: tuple = (), elementwise: tuple = (),
+def products_rows(*rows, steps: float | None = None, p_match: tuple = (), dial: tuple = (), elementwise: tuple = (),
                   capture: str = formalism.ELEMENTWISE_FROM, code: str | None = None) -> dict:
     """`rows` as a run's products (formalism.products_of_trace): a traced step's, captured by `capture` (and written
-    by the code of VERSION `code`, where the trace records it), times `steps`, with the ops that break P-match
+    by the code of VERSION `code`, where the trace records it), times `steps` (None: the step captured on its own,
+    which stands for one after the run's first ones, so M keeps it whole), with the ops that break P-match
     `p_match` and the products the step writes elementwise `elementwise`, and the same rows at each k of `dial` (a
     trace's `at`)."""
     block = {"capture": capture, "capture_code": code, "k": float(policy.CONSOLE[1]), "order": "unknown", "tokens": 8,
@@ -119,7 +125,7 @@ def test_the_pinned_row_is_its_runs_quantities_priced_as_algorithm_policy_prices
         assert kinds["sensitivity"][name] == pytest.approx(b["sensitivities"][name], rel=1e-3)
     assert details[0]["at"] == SW.finite(got) and details[0]["published"] == SW.finite(one)
     assert details[0]["bound"]["console"]["terms"] == b["terms"]
-    assert not SW.refused(p) and not SW.refused(p | {"note": SW.note(p, "art:" + "0" * 64)})
+    assert not SW.refused(p) and not SW.refused(p | {"note": SW.note(p, TABLES)})
 
 
 def test_under_reading_a_a_row_is_publisheds_rho_and_basis_as_is_with_its_terms_null_where_unmeasured(monkeypatch):
@@ -142,9 +148,16 @@ def test_under_reading_a_a_row_is_publisheds_rho_and_basis_as_is_with_its_terms_
     assert list(kinds["bound"]) == list(formalism.KINDS) and kinds["bound"]["fresh_products"] is None
     assert kinds["bound"]["token"] == pytest.approx(b["terms"]["token"], rel=1e-3)
     assert (kinds.get("partial", False), kinds.get("why")) == (one["partial"], one["why"])
-    assert "reading A, one bound over the valid kinds (null: unmeasured)" in p["note"]
-    assert (f"c = {algorithm_policy.num(policy.CONSOLE[0], 5)} gates, one full 4,096-in, 1,024-out session of the 45M "
-            f"reference with attention") in p["note"]
+    assert p["note"].startswith(f"Training's slowdown code {VERSION}, reading A. ")
+    assert ("Products term rho_HE: theorem of record, given (H), (E); fresh_old, the old term, rests on P-width "
+            "extended, false on honest circuits.") in p["note"]
+    assert ("Headline (no column yet): each workload's own 4,096-in, 1,024-out session at k = 65,536. Sensitivities: "
+            f"rho_default = rho_console, the console's default, that session of the 45M reference (c = "
+            f"{algorithm_policy.num(policy.CONSOLE[0], 5)}); rho_served, the serving block (c = "
+            f"{algorithm_policy.num(panels.SERVED[0], 5)}, k = 145,568).") in p["note"]
+    assert formalism.RESTS_ON_CELL["fresh_products"].startswith("theorem of record, given (H): ")
+    assert formalism.CELL_SENSITIVITIES[-1] == "fresh_old" and formalism.SENSITIVITIES["fresh_old"].startswith(
+        "rests on P-width extended, false on honest circuits: ")
     bare = dataclasses.replace(m, ops=None)
     _, _, cells = build(bare, fx, monkeypatch)
     assert (cells["rho_default"], cells["rho_console"], cells["rho_served"], cells["rests_on"]) == \
@@ -195,12 +208,94 @@ def test_a_step_traced_in_two_arts_is_read_from_the_newer_te_cores_trace_whateve
 
 def test_a_publish_never_drops_a_served_runs_row_nor_replaces_a_newer_te_cores():
     def panel(runs, te=VERSION):
-        return {"columns": SW.COLUMNS, "rows": [[None, None, None, f"{r} art:x (about)", *[None] * 5, te]
-                                                for r in runs]}
+        rows = [x if isinstance(x, tuple) else ("standard", x) for x in runs]
+        return {"columns": SW.COLUMNS, "rows": [[w, "45M", None, f"{r} art:x (about)", *[None] * 5, te]
+                                                for w, r in rows]}
     mine = panel(["r1", "r2"])
     assert SW.emptied(mine, None) == [] and SW.emptied(mine, panel(["r2", "r1"], "4.4")) == []
     assert SW.emptied(mine, panel(["r1", "r3"])) == ["it drops the served row of r3"]
     assert SW.emptied(mine, panel(["r1"], "9.0")) == [f"the route serves te_core 9.0, newer than {VERSION}"]
+    modelled = panel(["r1", ("rl", SW.MODELLED), ("inference", SW.MODELLED)])
+    assert SW.emptied(modelled, modelled) == [] and SW.emptied(panel(["r1", ("rl", SW.MODELLED)]), modelled) == \
+        [f"it drops the served row of inference 45M ({SW.MODELLED})"]
+
+
+def test_a_modelled_row_is_the_workload_models_products_priced_at_both_points():
+    """A workload no run measures (the rows file's RL with the updated weights between updates, and inference on an
+    unregistered model) is te_core.workloads' model at the row's dials, its products at each point's k priced as a
+    run's are: its ρ at each point workloads.rho's, its run cell `MODELLED` with what the model is, its dials every
+    argument of the model, each input the model's, no capture code, and what it rests on published's, which no trace's
+    label opens; the rows file's words for it name no code."""
+    rows = [r for r in json.loads(SW.ROWS.read_text())["rows"] if "modelled" in r]
+    assert [r["workload"] for r in rows] == ["rl", "inference"]
+    p, details = SW.build({"rows": rows}, REVS, stamp="2026-11-03T00:00:00Z")
+    for r, row, d in zip(rows, p["rows"], details, strict=True):
+        cells, model = dict(zip(SW.COLUMNS, row)), workloads.model(r["workload"], **r["dials"])
+        assert cells["run"] == f"{SW.MODELLED} ({r['modelled']})" and cells["dials"] == SW.compact(model.dials)
+        for name, (c, k) in SW.POINTS.items():
+            assert cells[f"rho_{name}"] == SW.rho_cell(workloads.rho(model, c, k)["rho"])
+        con = workloads.rho(model, *SW.POINTS["console"])
+        assert cells["rests_on"] == (con["products_rests_on"] if con["basis"] == "fresh_products" else
+                                     formalism.RESTS_ON_CELL[con["basis"]])
+        assert not cells["rests_on"].startswith(algorithm_policy.TRACED)
+        assert cells["rho_default"] == cells["rho_console"] and cells["capture_code"] is None
+        st = json.loads(cells["input_status"])
+        assert list(st) == [*SW.KEYS, "products"] and all(v.startswith("modelled: ") for v in st.values())
+        assert (d["run"], d["art"], d["modelled"], d["read"]["derived"]) == (None, None, r["modelled"], model.derived)
+    assert not SW.refused(p) and not SW.refused(p | {"note": SW.note(p, TABLES)})
+    assert [r["modelled"] for r in rows if SW.CODE.search(r["modelled"])] == []
+
+
+def test_the_note_cites_tables_in_a_research_runs_out_and_a_build_elsewhere_cites_none(tmp_path, monkeypatch):
+    run = tmp_path / "r20261104-081500-abcd"
+    for name in ("RESEARCH_RUN_DIR", "RESEARCH_RUN_ID"):
+        monkeypatch.delenv(name, raising=False)
+    assert SW.cite(run / "out") is None
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+    assert SW.cite(run / "out") == "run:r20261104-081500-abcd/out/tables"
+    assert SW.cite(run / "out" / "sw") == "run:r20261104-081500-abcd/out/sw/tables"
+    assert SW.cite(run) is None and SW.cite(tmp_path / "elsewhere") is None
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261104-081500-beef")
+    assert SW.cite(run / "out") == "run:r20261104-081500-beef/out/tables"
+    assert SW.TABLES.search(SW.note({"rows": []}, SW.cite(run / "out")))
+    for tables in (None, "art:" + "0" * 64):
+        assert not SW.TABLES.search(SW.note({"rows": []}, tables))
+
+
+def test_a_put_takes_a_cited_body_only_over_the_panel_the_build_read_and_reads_it_back(tmp_path, monkeypatch):
+    """`put` PUTs a build's console body where the route still serves the panel the build read (`--served`), the body
+    keeps its rows, the route takes it and its note cites stored tables; then the panel it GETs must be the body.
+    Where someone PUT since, nothing is PUT."""
+    fx = json.loads(PINNED.read_text())
+    p, _, _ = build(formalism.from_json(fx["measured"]), fx, monkeypatch)
+    old = json.loads(console.body(p | {"note": SW.note(p, TABLES)}))
+    route, puts = {SW.PANEL: old}, []
+
+    def put(q, status="200"):
+        puts.append(q)
+        route[SW.PANEL] = json.loads(console.body(q))
+        return status
+
+    def body(q, name="body.json"):
+        (tmp_path / name).write_bytes(console.body(q))
+        return tmp_path / name
+
+    monkeypatch.setattr(console, "served", lambda: dict(route))
+    monkeypatch.setattr(console, "put", put)
+    sent = {SW.PANEL: old}
+    with pytest.raises(SystemExit, match="cites no stored tables"):
+        SW.put(body(p), sent)
+    with pytest.raises(SystemExit, match="drops the served row of r20261103"):
+        SW.put(body(p | {"rows": [], "note": SW.note(p, "run:r20261104-081500-abcd/out/tables")}), sent)
+    with pytest.raises(SystemExit, match="someone PUT over it"):
+        SW.put(body(p), {SW.PANEL: old | {"updated_at": "2026-11-02T00:00:00Z"}})
+    assert puts == []
+    new = json.loads(console.body(p | {"note": SW.note(p, "run:r20261104-081500-abcd/out/tables")}))
+    assert SW.put(body(new), sent) == 0 and puts == [new] and route[SW.PANEL] == new
+    monkeypatch.setattr(console, "put", lambda q: "400 refused")
+    assert SW.put(body(old), {SW.PANEL: new}) == 1
+    monkeypatch.setattr(console, "put", lambda q: "200")
+    assert SW.put(body(old), {SW.PANEL: new}) == 1 and route[SW.PANEL] == new
 
 
 def test_a_row_whose_inputs_dont_give_te_cores_rho_is_refused(monkeypatch):
@@ -293,105 +388,63 @@ def test_an_unmeasured_delta_grad_names_its_steps_and_whether_fits_verdict_at_ei
         SW.status(m, read={"untraced": gaps[:2], "steps": 6})
 
 
-def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed_with_te_cores_reason():
-    """`products`, the fresh-products kind's input: measured where te_core prices a trace's product rows at the
-    console's default and at the serving block, whose k the trace keeps them at too, with its reason where the serving
-    block's k leaves them unmeasured (they were classified at the console's alone); assumed where the dominant traced
-    step's stand in for steps of another shape, or with te_core's reason where unmeasured (an op log's, a round
-    untraced, rows captured before te_core 4.12.1 that don't give all the term reads, the step's whole-making system
-    and which operands read an embedding's rows, rows captured before 4.12.9's check for matrix products written
-    elementwise, a step that writes some, a step that breaks P-match); measured but unpriced at a point where the term
-    is void there, never a measured 0, saying in plain words that the bound can't price them and why (`unpriced`): how
-    many counted products a cycle with no fixed point at the point's k feeds, and the best set of the others' figure,
-    a lower bound, with the share of the step's fresh multiplications it keeps, or that none has one, so they add
-    nothing to the row's slowdown, floored at 1; and assumed where untraced steps that update count none."""
+def test_the_products_input_is_measured_at_the_consoles_default_or_assumed_with_te_cores_reason():
+    """`products`, the products kind's input (the theorem of record's term on M): measured where te_core prices a
+    trace's product rows at the console's default and at the serving block, whose k the trace keeps them at too, with
+    its reason where the serving block's k leaves them unmeasured (they were classified at the console's alone);
+    measured where the term is the theorem's floor, 0 (a contraction too short to bound), and on a step that writes
+    matrix products elementwise or whose rows predate the check for them, which M leaves out, though the old figure
+    (fresh_old) is void or unmeasured there, its reason in the bound; assumed where the dominant traced step's stand in
+    for steps of another shape, or with te_core's reason where unmeasured (an op log's, a round untraced, rows captured
+    before te_core 4.12.1 that don't say which operands read an embedding's rows, a step that breaks P-match); and
+    assumed where untraced steps that update count none."""
     fx = json.loads(PINNED.read_text())
     m = formalism.from_json(fx["measured"])
 
     def bounds(p):
         return {name: formalism.bound(dataclasses.replace(m, products=p), c, k) for name, (c, k) in SW.POINTS.items()}
 
-    def unmeasured(p):
-        return bounds(p)["console"]["unmeasured"]["fresh_products"]
+    def unmeasured(p, kind="fresh_products"):
+        return bounds(p)["console"]["unmeasured"].get(kind)
 
     rows = products_rows(PRODUCT)
     b = bounds(rows)
     off = b["served"]["unmeasured"]["fresh_products"]
-    assert "fresh_products" not in b["console"]["unmeasured"]
+    assert unmeasured(rows) is None and b["console"]["terms"]["fresh_products"] > 0
     assert off.startswith(f"unmeasured: the products were classified at k = {policy.CONSOLE[1]:g}")
-    assert SW.products(b) == f"measured at the console's default; at the serving block, {off}"
+    measured = f"measured at the console's default; at the serving block, {off}"
+    assert SW.products(b) == measured
     both = bounds(products_rows(PRODUCT, dial=(panels.SERVED[1],)))
     assert not {*both["console"]["unmeasured"], *both["served"]["unmeasured"]} & {"fresh_products"}
     assert SW.products(both) == "measured"
     for since in (("gathered",), ("fed", "P", "gathered")):
-        old = {x: v for x, v in PRODUCT.items() if x not in since}
-        assert unmeasured(products_rows(old)) == formalism.FRESH_RETRACE
-        assert SW.products(bounds(products_rows(old))) == f"assumed: {formalism.FRESH_RETRACE}"
+        old = products_rows({x: v for x, v in PRODUCT.items() if x not in since})
+        assert unmeasured(old) == formalism.HE_RETRACE
+        assert SW.products(bounds(old)) == f"assumed: {formalism.HE_RETRACE}"
+    short = PRODUCT | {"dims": PRODUCT["dims"] | {"k": 8}, "macs": 256, "k_whole": 8, "fed": [[8, 1.0]]}
+    floor = bounds(products_rows(short))
+    assert floor["console"]["terms"]["fresh_products"] == 0 and floor["console"]["void"] == {}
+    assert floor["console"]["unmeasured"]["fresh_old"] == formalism.FRESH_VOID
+    assert SW.products(floor) == measured
     unchecked = products_rows(PRODUCT, capture=formalism.SYSTEM_FROM)
-    assert unchecked["elementwise_products"] is None and unmeasured(unchecked) == formalism.FRESH_UNCHECKED
-    assert SW.products(bounds(unchecked)) == f"assumed: {formalism.FRESH_UNCHECKED}"
     outer = {"op": "aten.mul.Tensor", "count": 2, "macs": 8192.0}
-    written = unmeasured(products_rows(PRODUCT, elementwise=[outer]))
-    assert written.startswith("unmeasured: the traced step writes matrix products as elementwise steps")
-    assert "aten.mul.Tensor (2×, 8.19e+03 multiplications)" in written
-    assert SW.products(bounds(products_rows(PRODUCT, elementwise=[outer]))) == f"assumed: {written}"
+    written = products_rows(PRODUCT, elementwise=[outer])
+    assert unchecked["elementwise_products"] is None and unmeasured(unchecked, "fresh_old") == formalism.FRESH_UNCHECKED
+    assert unmeasured(written, "fresh_old").startswith(
+        "unmeasured: the traced step writes matrix products as elementwise steps")
+    for p in (unchecked, written):
+        assert bounds(p)["console"]["terms"]["fresh_products"] == b["console"]["terms"]["fresh_products"]
+        assert SW.products(bounds(p)) == measured
     gather = {"op": "aten.embedding.default", "fan_out": 4.0, "count": 1}
     broken = unmeasured(products_rows(PRODUCT, p_match=[gather]))
     assert broken.startswith(f"unmeasured: the traced step breaks the premise that {formalism.P_MATCH}")
     assert "aten.embedding.default" in broken
     assert SW.products(bounds(products_rows(PRODUCT, p_match=[gather]))) == f"assumed: {broken}"
-    short = PRODUCT | {"dims": PRODUCT["dims"] | {"k": 8}, "macs": 256, "k_whole": 8, "fed": [[8, 1.0]]}
-    assert unmeasured(products_rows(short)) == formalism.FRESH_VOID
-    one = "the step counts 1 product whose two operands both depend on the update, and it is"
-    cycle = ("fed by a cycle of products whose outputs make other products' operands whole; at the point's block size "
-             "each pass round the cycle makes more operand entries whole than it reads, so the count compounds without "
-             "limit")
-    floor = "nothing to the row's slowdown, the largest figure the other kinds give, floored at 1"
-    alone = bounds(products_rows(short, dial=(panels.SERVED[1],)))
-    assert {alone[x]["void"]["fresh_products"] for x in SW.POINTS} == {formalism.void_reason(None, None)}
-    assert SW.products(alone) == (f"measured, but the bound can't price them at either point: {one} {cycle}; no "
-                                  f"product is left to price, so it adds {floor}")
-    assert SW.products(bounds(products_rows(short))) == (
-        f"measured, but the bound can't price them at the console's default: {one} {cycle}; no product is left to "
-        f"price, so it adds {floor}; at the serving block, {off}")
-    stuck = bounds(products_rows(PRODUCT, short))
-    void, term = stuck["console"]["inputs"]["fresh_products"]["void"], stuck["console"]["terms"]["fresh_products"]
-    assert "fresh_products" not in stuck["console"]["unmeasured"]
-    assert void["diverged_fed"] == 1 and void["kept_macs_share"] == pytest.approx(128 / 129, rel=1e-12)
-    assert term == pytest.approx(b["console"]["terms"]["fresh_products"], rel=1e-12)
-    assert SW.products(stuck) == (
-        f"measured, but the bound can't price them at the console's default: the step counts 2 products whose two "
-        f"operands both depend on the update, and 1 of them is {cycle}; the best set of the others gives "
-        f"{algorithm_policy.num(term)} on 99.2% of the step's fresh multiplications, a lower bound, which the row's "
-        f"slowdown takes where it is the largest; at the serving block, {off}")
-
-    def void_at(n: int, fed: int) -> dict:
-        return {"void": {"fresh_products": "why"}, "terms": {"fresh_products": None}, "unmeasured": {},
-                "inputs": {"fresh_products": {"products": n, "void": {"diverged_fed": fed, "kept_macs_share": None}}}}
-    three = "the step counts 3 products whose two operands both depend on the update, and"
-    assert SW.unpriced(void_at(3, 3)) == f"{three} every one of them is {cycle}; no product is left to price, so they " \
-                                          f"add {floor}"
-    assert SW.unpriced(void_at(3, 2)) == f"{three} 2 of them are {cycle}; no set of the others has a proved cap " \
-                                          f"either, so they add {floor}"
-    assert SW.unpriced(void_at(3, 0)) == f"{three} no set of them has a proved cap on how many of them a block does, " \
-                                          f"so they add {floor}"
-    assert SW.unpriced(b["console"]) is None
-    priced = {"unmeasured": {}, "void": {}, "inputs": {"fresh_products": {}}}
-    assert SW.products({"console": priced, "served": void_at(3, 2)}) == (
-        f"measured at the console's default; at the serving block, the bound can't price them: "
-        f"{SW.unpriced(void_at(3, 2))}")
-    assert SW.products({"console": void_at(3, 3), "served": void_at(3, 2)}) == (
-        f"measured, but the bound can't price them at the console's default: {SW.unpriced(void_at(3, 3))}; at the "
-        f"serving block, the bound can't price them: {SW.unpriced(void_at(3, 2))}")
     stand = rows | {"stand_in": {"structures": ["a", "c"], "step_tokens": [4, 8], "traced_tokens": 8,
                                  "why": formalism.STAND_IN}}
     shapes = ("the run's traced steps differ in shape, so the dominant traced step's products stand in for all of them, "
               "scaled by tokens (2 traced structures)")
     assert SW.products(bounds(stand)) == f"assumed: {shapes}; at the serving block, {off}"
-    shifted = void_at(3, 3)
-    shifted["inputs"]["fresh_products"]["stand_in"] = stand["stand_in"]
-    assert SW.products({"console": shifted, "served": void_at(3, 3)}) == (
-        f"assumed: {shapes}; and the bound can't price them at either point: {SW.unpriced(void_at(3, 3))}")
     last = "step 9: the program's last, its structure having no other step, not traced"
     alone = "the slowdown code counting the traced steps' products alone"
     assert SW.products(b, left=[last]) == f"assumed: none on 1 untraced step ({last}), {alone}; at the serving block, {off}"
@@ -418,35 +471,40 @@ def test_the_builders_own_words_in_a_published_string_name_no_code():
     m = formalism.Measured(parts, 0.0, 8192, formalism.even(1e6), formalism.even(1e6), 1e3, 0.0, {},
                            delta_t_bits=1e3)
     st = SW.status(m, read={"untraced": gaps, "steps": 4})
-    con = {"unmeasured": {}, "void": {}, "inputs": {"fresh_products": {"stand_in": {"structures": ["a", "c"]}}}}
-    b = {"console": con, "served": {"unmeasured": {"fresh_products": "why"}, "void": {}}}
-    void = {"void": {"fresh_products": "why"}, "terms": {"fresh_products": 63.41}, "unmeasured": {},
-            "inputs": {"fresh_products": {"products": 3, "void": {"diverged_fed": 1, "kept_macs_share": 0.595}}}}
+    con = {"unmeasured": {}, "inputs": {"fresh_products": {"stand_in": {"structures": ["a", "c"]}}}}
+    b = {"console": con, "served": {"unmeasured": {"fresh_products": "why"}}}
     said = [SW.products(b, left=gaps * 2),
             SW.products(b | {"console": con | {"unmeasured": {"fresh_products": "why"}}}, rounds=True),
-            SW.products({"console": void, "served": void}),
-            SW.products(b | {"console": void | {"terms": {"fresh_products": None}}})]
-    notes = [SW.note({"rows": [[x if c == "reading" else None for c in SW.COLUMNS]]}, "art:" + "0" * 64)
-             for x in ("A", "B")]
+            SW.products(b | {"console": {"unmeasured": {}, "inputs": {"fresh_products": {}}}})]
+    notes = [SW.note({"rows": [[x if c == "reading" else None for c in SW.COLUMNS]]}, TABLES) for x in ("A", "B")]
     words = [SW.IDLE, SW._UNTRACED, *SW.ROUNDS.values(), *gaps, *st.values(), *said, *notes]
     assert len(gaps) == 3 and [s for s in words if SW.CODE.search(s)] == []
 
 
 def test_a_binding_fresh_products_term_is_publisheds_and_the_products_input_names_the_untraced_steps_that_update(
         monkeypatch):
-    """Where the fresh-products term binds, the row's binding kind, what it rests on and the kinds cell's premises are
-    published's as it gives them; the row's products input names its untraced steps but a step whose structure
-    updates nothing (`IDLE`), which has no fresh products."""
+    """Where the products term binds, the row's binding kind and what it rests on (the theorem of record on the subset
+    of M it takes, given (H) at its β_w, a weight's, and β_x, an activation's at most β(k), and (E) at its b_y) are
+    published's as it gives them, opening with algorithm_policy's `TRACED` as algorithm_policy's rows do, and the
+    kinds cell's premises algorithm_policy's; the row's products input names its untraced steps but a step whose
+    structure updates nothing (`IDLE`), which has no products of two operands that depend on the update."""
     fx = json.loads(PINNED.read_text())
     m = dataclasses.replace(formalism.from_json(fx["measured"]), products=products_rows(PRODUCT, steps=1e9))
     last = "step 9: the program's last, its structure having no other step, not traced"
     fx |= {"read": fx["read"] | {"untraced": [f"step 0: {SW.IDLE}", last]}}
     one = formalism.published(m, *SW.POINTS["console"], SW.READING)
-    premises = formalism.RESTS_ON_CELL["fresh_products"]
-    assert one["binding_kind"] == "fresh_products" and one["rests_on"] == premises
+    he = formalism.bound(m, *SW.POINTS["console"])["inputs"]["fresh_products"]
+    assert one["binding_kind"] == "fresh_products" and one["rests_on"] == formalism.he_rests_on(he)
+    assert (he["subset"], he["beta_w"], he["beta_x"], he["b_y"]) == ("M", 16, 15.9, 16)
+    assert one["rests_on"].startswith(
+        f"theorem of record on M, given (H): operands are hard at β_w = 16 and β_x = 15.9 bits a word "
+        f"({formalism.BETA_K_LABEL}; the casts of one value count as one word), and (E): exports are wide at b_y = 16 "
+        f"bits an output")
     _, _, cells = build(m, fx, monkeypatch)
-    assert (cells["binding_kind"], cells["rests_on"]) == ("fresh_products", premises)
-    assert json.loads(cells["kinds"])["rests_on"] == {"fresh_products": premises}
+    assert (cells["binding_kind"], cells["rests_on"]) == ("fresh_products",
+                                                          f"{algorithm_policy.TRACED}; {one['rests_on']}")
+    assert cells["rests_on"] == algorithm_policy.rests_on(one)
+    assert json.loads(cells["kinds"])["rests_on"] == {"fresh_products": formalism.RESTS_ON_CELL["fresh_products"]}
     assert json.loads(cells["input_status"])["products"].startswith(f"assumed: none on 1 untraced step ({last}),")
 
 

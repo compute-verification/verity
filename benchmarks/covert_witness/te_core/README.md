@@ -186,25 +186,31 @@ uncertainty where it would give its rms in effective compute. `training/algorith
 11, a checkpoint's gain C(L1)/C(L0) on that fit, from the start's loss L0 to its own L1, so every target is below
 L0), "yes" at the run's first checkpoint reaching g, else "no" at its last, with the algorithm's inefficiency p = C/H
 (H the least |C| of any checkpoint from the start
-on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ,
-`formalism.published` at the console's default policy (`policy.CONSOLE`, the one default: `rho_default`, a number,
-and `rho_console`; `rho_served` at the registered serving block, `panels.SERVED`), so S = pρ, and the inputs the
+on the same data reaching g, traced or not, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ,
+`formalism.published` under three policies: the headline `rho_own` at the start's own session (`policy.session` on
+the start's model, 4,096 tokens in and 1,024 out, c `own_c_gates`) at k = 65,536, one 16-bit word an input token,
+beside its packed ids (`own_k_bits`, 61,440 on v3), where ρ is at least rho_own; and two sensitivities, the
+console's default (`policy.CONSOLE`, one session of the 45M reference: `rho_default`, a number, and `rho_console`)
+and the registered serving block (`rho_served`, `panels.SERVED`), so S = pρ, and the inputs the
 console's dial recomputes ρ from at any (c, k), in one JSON cell (`rho_inputs`; te_core 4.x's per-part Fit and
 ᾱ/α_max among them, u_in exact at the dial's k and the console's, and the products term over c at each k of the
 dial, `formalism.fresh_per_c`, [fresh_old/c, term/c], which the dial's port reads as c times it; the vectors'
 `dial` checks a port); `build` refuses a row whose cells miss
-`formalism.at` at a dial cell or the console's default. Beside them: its `reading` (the one bound's ρ under reading A
+`formalism.at` at a dial cell, the console's default or the start's own session. Beside them: its `reading` (the one bound's ρ under reading A
 where the row's trace has entries and an op log: Fit's c/(c − d) where it holds, else the measured max where it
 exceeds 1, partial where a kind is unmeasured, else null where a kind is unmeasured, else 1, binding none; else
 reading B's, a target), the `te_core` that priced it, `binding_kind`, `rests_on` and `kinds` (the terms its max takes
-and the sensitivities it leaves out, a measured products term with what it rests on beside it). Its coverage
-(gain target by data by decade of ρ, with the reached cells' ρ at the registered serving block beside the console's
+and the sensitivities it leaves out, a measured products term with what it rests on beside it). The figure plots p
+against rho_own, and the summary's least S reads it. Its coverage
+(gain target by data by decade of rho_default, with the reached cells' ρ at the registered serving block beside the console's
 default) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
 refuses, which no cell holds (`tables/refused.json` gives each one's reason). A row `published` marks partial (a valid
 kind unmeasured, so ρ is only a lower bound) has basis `partial`: the figure marks it with a caret up and the cut
 picks the partial rows among themselves, but none is in a cell, on the others' front or the least S. No row is
 void: every row reads the products term, max(1, ρ_HE), with its premises, and the old figure's void Λ is only its
-sensitivity fresh_old.
+sensitivity fresh_old. A run that reached with no trace yet (`frontier_fit.untraced`) is a row at each target it
+reaches, never an absence: p from its record, its checkpoints in H, every ρ column null and both bases
+`unmeasured: not yet traced`; it is in no cell, every cut keeps it, and the figure draws it as an x on its floor.
 `--publish` GETs what the route serves
 and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one with a run this
 build has no row for, both panels keep the served rows (`kept_data`, `guarded`), so a version switch never
