@@ -3,7 +3,9 @@ registered before it served, by `NciCheck.Count`'s rule. `BitAtx32_v1`'s price i
 primitive, input by input; the verdict's rule is the count rule's Python reference (`nci_reference.check_count`) on its
 rows, and the Lean instance it makes is one on which that reference counts the verdict's gates; n is the H200's sessions
 at the declared utilization over the lease, rounded up to the grid, from the class's fixed load alone; the policy is its
-session's gates and fresh bits with every weight held, and n; and on toy serve dirs over small circuit records the verdict
+session's gates and fresh bits with every weight held, and n, under an H200 int8 serve's φ or the one ``--serve`` states,
+cut at Pearl+'s linears where it says, and a BF16 checkpoint under the int8 serve's φ is refused by name; and on toy
+serve dirs over small circuit records the verdict
 accepts within (c, k, n), refuses past each, and refuses as undecided what the rule can't decide (no policy, one written
 after the serve began unless said retroactive, a primitive with no price, a closed window with no seal, a window the
 class doesn't take), its public form naming no window and publishing no count: it judges n on the exact count, which
@@ -36,6 +38,8 @@ GEMM = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
 ROPE = "RoPEHead_v1{D=16}"
 FEED = "TokenFeed_v1{NP=4,FIRST=false}"
 MODEL = "verity-int8/Llama-3.2-1B-INT8"
+#: a checkpoint served in BF16, at its revision
+BF16 = ("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da")
 #: the toy serve's start (its serve.json's clocks' time), and a policy written before and after it
 STARTED = 1_762_000_000.0
 BEFORE, AFTER = "2025-11-01T12:26:39+00:00", "2025-11-01T12:26:41+00:00"
@@ -138,7 +142,7 @@ def test_the_policy_is_the_sessions_gates_and_fresh_bits_with_the_weights_held_a
     the time it was written as given."""
     assert IO.weight_pins(["weights/a@4", "weights/a@4/table", "scan_state/s@1", "weightsx/b@2"]) == \
         {"weights/a@4": "00", "weights/a@4/table": "00"}
-    monkeypatch.setattr(IO, "class_doc", lambda serve, cls: (small, ["scan_state/s@1"]))
+    monkeypatch.setattr(IO, "class_doc", lambda serve, cls, scheme=None: (small, ["scan_state/s@1"]))
     pol = IO.policy("2,2,2", MODEL, "rev", 60, Fraction(1, 4), "the declared share", BEFORE, "abc")
     row = IO.session_row(small, {}, {})
     work = IO.session_work(IO.window_class("2,2,2"), MODEL)
@@ -148,6 +152,57 @@ def test_the_policy_is_the_sessions_gates_and_fresh_bits_with_the_weights_held_a
     i = pol["n_inputs"]
     assert i["utilization"] == [1, 4] and i["utilization_source"] == "the declared share" and i["work"]["theta_macs"] == work["theta_macs"]
     assert i["span_source"] and i["rate"]["source"] and i["work"]["source"]
+
+
+def _stated(**over) -> dict:
+    """What `prove_path.py serve-phi` states of a BF16 serve of `BF16` on an H200: its target with no int8 scope."""
+    from verity_vllm import TargetProfile
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
+
+    target = TargetProfile.default().with_overrides(compute_capability=(9, 0), num_sms=132).to_json()
+    return json.loads(json.dumps({"model": BF16[0], "revision": BF16[1], "target": target, "execution": "bi-eager",
+                                  "default_seed": DEFAULT_SEED, **over}))
+
+
+def test_a_policy_on_a_stated_phi_is_that_phis_circuit_cut_where_it_says(small, monkeypatch, tmp_path):
+    """With φ stated (``--serve``: serve-phi's statement of the serve.json a serve will write, or a serve.json, its
+    execution under its engine), the policy's session is the class's circuit under that φ, cut at a PoUW scheme's
+    linears where ``--pearl-tables`` names one, and the policy records both; a statement of another model or revision
+    is refused. With none it is an H200 int8 serve's φ, uncut."""
+    seen = []
+
+    def doc(serve, cls, scheme=None):
+        seen.append((serve, scheme))
+        return small, []
+
+    monkeypatch.setattr(IO, "class_doc", doc)
+    args = ("2,2,2", *BF16, 60, Fraction(1, 4), "the declared share", BEFORE, "abc")
+    pol = IO.policy(*args, {**_stated(), "clocks": {"time": STARTED}}, "pearl-c-h100-v1-h3")
+    assert seen == [(_stated(), "pearl-c-h100-v1-h3")] and (pol["serve"], pol["pearl_tables"]) == (_stated(), "pearl-c-h100-v1-h3")
+    engine = {k: v for k, v in _stated().items() if k != "execution"} | {"engine": {"execution": "bi-eager"}}
+    assert IO.policy(*args, engine)["serve"] == _stated() and seen[-1] == (_stated(), None)
+    pol = IO.policy("2,2,2", MODEL, "rev", 60, Fraction(1, 4), "the declared share", BEFORE, "abc")
+    assert seen[-1] == (IO.serve_facts(MODEL, "rev"), None) and pol["pearl_tables"] is None
+    for other in ({"model": MODEL}, {"revision": "rev"}):
+        with pytest.raises(ValueError, match="--serve states φ of"):
+            IO.policy(*args, _stated(**other))
+    (phi := tmp_path / "serve-phi.json").write_text(json.dumps(_stated()))
+    assert IO.main(["policy", "--class", "2,2,2", "--model", BF16[0], "--revision", BF16[1], "--lease-min", "60",
+                    "--serve", str(phi), "--pearl-tables", "pearl-c-h100-v1-h3", "--out", str(tmp_path / "p.json")]) == 0
+    pol = json.loads((tmp_path / "p.json").read_text())
+    assert (pol["serve"], pol["pearl_tables"], seen[-1]) == (_stated(), "pearl-c-h100-v1-h3", (_stated(), "pearl-c-h100-v1-h3"))
+
+
+def test_a_bf16_checkpoint_under_the_int8_serves_phi_is_refused_by_name(tmp_path, capsys):
+    """The vocabulary can't express a BF16 checkpoint on the H200 int8 serve's target, `serve_facts`' φ: the policy is
+    refused saying so, and none is written. A BF16 serve's policy states its own φ (``--serve``)."""
+    out = tmp_path / "policy.json"
+    assert IO.main(["policy", "--class", "4,32,4", "--model", BF16[0], "--revision", BF16[1], "--lease-min", "60",
+                    "--out", str(out)]) == 1
+    assert capsys.readouterr().out.startswith(
+        "INFERENCE-ONLY POLICY refused: Undecided: the class's circuit under the policy's φ: vocabulary cannot express: "
+        "a bf16 checkpoint on a target whose int8_exact is 'linears'")
+    assert not out.exists()
 
 
 def _serve(d: Path, windows: dict[int, list[dict]], unsealed: tuple[int, ...] = ()) -> Path:

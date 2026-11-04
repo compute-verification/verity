@@ -8,7 +8,8 @@
         [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
         [--copy-records-to $OUT] [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
-        [--protocols pouw:pearl-c-h100-v1-h3 --precision bfloat16 --protocols-config JSON]
+        [--protocols pouw:pearl-c-h100-v1-h3 --precision bfloat16 --protocols-config JSON
+         [--challenger-gate CMD --challenger-peer NAME --challenger-lane LANE]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
 
 It serves what the network certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
@@ -92,7 +93,9 @@ through the challenger's gate (`serve_h1.GateSessions`); without them they are i
 ``--protocols pouw:pearl-c-h100-v1-h3`` (``--precision bfloat16``) serves every linear but the LM head as Pearl+'s FP8
 product under this server's Commit, one Pearl+ epoch a Commit window, the window's circuit cut at those linears
 (`serve_pearl`): each window's passes, one an engine step, its ``coins.json`` and ``served.json`` go to ``pearl/w<k>/``, and
-its outcome is its ``windows.jsonl`` line's ``pouw_pearl``.
+its outcome is its ``windows.jsonl`` line's ``pouw_pearl``. With ``--challenger-gate``, ``--challenger-peer`` and
+``--challenger-lane`` each window's salt coin comes from a salt-only session of its own on the auditor host's challenger,
+reserved under the lane when the window opens (`serve_pearl.live`); without them it is in-process and credits nothing.
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to
 PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
 record is ``remote_session.json``, and a rejected session fails the exit.

@@ -131,6 +131,19 @@ def open_period(lines: Iterable[str], lane: str) -> dict[str, Any] | None:
     return opened
 
 
+def after_close(lines: Iterable[str], lane: str, period: str) -> tuple[bool, dict[str, Any] | None]:
+    """Whether the auditor's ledger `lines` closes period `period`, and the first ``reserve`` entry after that close
+    whose prover (``for``, else ``by``) is lane `lane`, None while there is none: the one reserve a Pearl-C run's draw
+    session may be, so a draw is taken once (`bench_arm.LiveDraw`, `served_verdicts.pearlplus_live_draw`)."""
+    closed = False
+    for e in map(json.loads, lines):
+        if not closed:
+            closed = e["kind"] == "period-close" and e["body"]["period"] == period
+        elif e["kind"] == "reserve" and (e["body"].get("for") or e["body"].get("by")) == lane:
+            return True, e
+    return closed, None
+
+
 def period_setting(raw: Any) -> dict[str, Any] | None:
     """The pouw setting ``period``: None (the lane has no period open) or its open period's ``period-open`` body
     (`open_period`); ValueError otherwise."""

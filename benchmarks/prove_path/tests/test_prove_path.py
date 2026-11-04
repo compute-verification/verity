@@ -1473,56 +1473,39 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
         tie(SimpleNamespace(outputs=4))
 
 
-def test_window_circuit_reads_h1s_tables_or_is_cut_at_pearlpluss_linears_never_both():
-    """``window-circuit``'s two tied circuits of a window are two different circuits, so ``--window-registration`` (H1's
-    tables) beside ``--pearl-scheme`` (Pearl+'s cut) is refused by name, before anything is compiled."""
-    with pytest.raises(ValueError, match="--window-registration reads H1's tables, and --pearl-scheme cuts at Pearl\\+'s "
-                                         "linears: give one"):
-        PP.window_circuit_of_advice(argparse.Namespace(window_registration="w.json", pearl_scheme="pearl-c-h100-v1-h3"))
+def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows_retained_steps(tmp_path):
+    """`pearl_tie`: with ``--pearl-passes DIR`` (serve_pearl's ``pearl/w<k>/``) and ``--window-registration`` W, Pearl+'s
+    window record, window-commit's circuit is cut at its linears under W's scheme (`window_class.PearlTables`) and reads
+    the retained passes' manifests at their rounds; `h1_tie` then stands aside. Refused by name without W, beside
+    ``--h1-key``, for a W of no Pearl-C scheme, and where the rounds retained aren't the class's outputs."""
+    from verity_vllm.program.predict.window_circuit import PearlTables
 
-
-def test_window_commits_pearl_tie_reads_ws_passes_at_the_classs_rounds(tmp_path):
-    """`pearl_tie`: with ``--window-registration`` W, Pearl+'s window record, and ``--pearl-served``, the window's
-    ``served.json``, window-commit's circuit is cut at its linears (`PearlTables` at W's scheme) and reads the manifests of
-    its passes with calls at W's rounds; none without ``--pearl-served``. Refused by name beside ``--h1-key`` or without W,
-    for a W that isn't Pearl+'s or is under no PoUW scheme, where W's rounds aren't the class's 0..O−1 (a warm-up pass
-    before the window's steps), and where the passes with calls aren't the window's steps."""
-    from verity_vllm.program.predict.window_class import PearlTables
-    from verity_vllm.protocols.pouw.pearl_c import window as PWR
-    scheme, cls = "pearl-c-h100-v1-h3", SimpleNamespace(outputs=2)
-
-    def served(units: list[int]) -> str:
-        passes = []
-        for i, n in enumerate(units):
-            (tmp_path / f"pass-{i:05d}").mkdir(exist_ok=True)
-            (m := tmp_path / f"pass-{i:05d}" / "manifest.json").write_text(json.dumps({"pass": i}))
-            passes.append({"pass": i, "timed": True, "units": n, "manifest": str(m)})
-        (f := tmp_path / f"served-{len(units)}-{sum(units)}.json").write_text(json.dumps({"passes": passes}))
-        return str(f)
-
-    def record(rounds, scheme=scheme) -> str:
-        w = {"window": {"kind": "served", "scheme": scheme}, "registered": [
-            {"value": f(s, c)} for s in rounds for c in range(2) for f in (PWR.a_value, PWR.y_value)]}
-        (f := tmp_path / f"w-{'-'.join(map(str, rounds))}-{scheme}.json").write_text(json.dumps(w))
-        return str(f)
+    d, cls = tmp_path / "q", SimpleNamespace(outputs=2)
+    d.mkdir()
+    mans = []
+    for i in range(3):
+        (m := tmp_path / f"m{i}.json").write_text(json.dumps({"salt": f"s{i}"}))
+        mans.append({"pass": 4 + i, "units": 1, "manifest": str(m)})
+    (d / "served.json").write_text(json.dumps({"passes": [{"pass": 3, "units": 0}, *mans]}))
+    (tmp_path / "w.json").write_text(json.dumps({"window": {"scheme": "pearl-c-h100-v1-h3"}, "registered": []}))
 
     def tie(cls=cls, **kw):
-        args = {"window_registration": record([0, 1]), "pearl_served": served([2, 0, 2]), "h1_key": None, **kw}
+        args = {"pearl_passes": str(d), "window_registration": str(tmp_path / "w.json"), "h1_key": None, **kw}
         return PP.pearl_tie(argparse.Namespace(**args), cls)
-    assert PP.pearl_tie(argparse.Namespace(pearl_served=None), cls) is None
-    w, manifests, tables = tie()
-    assert tables == PearlTables(scheme) and [m["pass"] for m in manifests] == [0, 2]
-    assert sorted({e["value"] for e in w["registered"]}) == ["pearl-a/0/0", "pearl-a/0/1", "pearl-a/1/0", "pearl-a/1/1",
-                                                             "pearl-y/0/0", "pearl-y/0/1", "pearl-y/1/0", "pearl-y/1/1"]
-    for kw in ({"h1_key": "key"}, {"window_registration": None}):
-        with pytest.raises(ValueError, match="give --window-registration, Pearl\\+'s window record W .* and no --h1-key"):
-            tie(**kw)
-    (h1 := tmp_path / "h1.json").write_text(json.dumps({"program": "p" * 128, "registered": []}))
-    with pytest.raises(ValueError, match="is no Pearl\\+ window record over .*KeyError"):
-        tie(window_registration=str(h1))
-    with pytest.raises(ValueError, match="is no PoUW scheme"):
-        tie(window_registration=record([0, 1], "pearl-c-nonesuch"))
-    with pytest.raises(ValueError, match="W records rounds \\[2, 3\\].*no warm-up pass"):
-        tie(window_registration=record([2, 3]), pearl_served=served([2, 2, 2, 2]))
-    with pytest.raises(ValueError, match="has 3 passes with calls, and the window is 2 steps"):
-        tie(pearl_served=served([2, 2, 2]))
+    assert PP.pearl_tie(argparse.Namespace(window_registration="w"), cls) is None
+    assert PP.h1_tie(argparse.Namespace(window_registration="w", pearl_passes=str(d)), cls) is None
+    with pytest.raises(ValueError, match=r"retained rounds \[0, 1, 2\] aren't its class's 2 outputs"):
+        tie()
+    (d / "retention.json").write_text(json.dumps({"rounds": [0, 1]}))
+    w, got, rounds, tables = tie()
+    assert [m["salt"] for m in got] == ["s0", "s1"] and rounds == [0, 1] and tables == PearlTables("pearl-c-h100-v1-h3")
+    with pytest.raises(ValueError, match="give --window-registration W"):
+        tie(window_registration=None)
+    with pytest.raises(ValueError, match="--h1-key is H1's prover key"):
+        tie(h1_key="key")
+    (tmp_path / "h1.json").write_text(json.dumps({"program": "p" * 128}))
+    with pytest.raises(ValueError, match="is no Pearl\\+ window record"):
+        tie(window_registration=str(tmp_path / "h1.json"))
+    (d / "retention.json").write_text(json.dumps({"rounds": [1, 2]}))
+    with pytest.raises(ValueError, match=r"retained rounds \[1, 2\]"):
+        tie()

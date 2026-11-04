@@ -58,8 +58,10 @@ RHO = {name: 4096 * 132 * mhz * 1e6 for name, mhz in CLOCKS_MHZ.items()}
 LLAMA32_1B = {"layers": 16, "linears": (("self_attn.qkv_proj", 3072, 2048), ("self_attn.o_proj", 2048, 2048),
                                         ("mlp.gate_up_proj", 16384, 2048), ("mlp.down_proj", 2048, 8192)),
               "heads": 32, "head_dim": 64, "hidden": 2048, "vocab": 128256}
-#: the served models' shapes: H1's int8 checkpoint and Pearl+'s FP8 one (`pearl_c_sm90/llama32_1b.py`), one model
-MODELS = {"verity-int8/Llama-3.2-1B-INT8": LLAMA32_1B, "verity-fp8/Llama-3.2-1B-FP8": LLAMA32_1B}
+#: the served models' shapes: H1's int8 checkpoint, Pearl+'s FP8 one (`pearl_c_sm90/llama32_1b.py`) and the BF16 one
+#: a window tied to Pearl+ serves (served_verdicts.sh's default REPO under the tie), one model
+MODELS = {"verity-int8/Llama-3.2-1B-INT8": LLAMA32_1B, "verity-fp8/Llama-3.2-1B-FP8": LLAMA32_1B,
+          "unsloth/Llama-3.2-1B": LLAMA32_1B}
 TERMS = ("linears", "attention", "lm_head")
 SCHEMA = "verity-bench/served-shares/v1"
 

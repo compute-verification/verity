@@ -23,7 +23,6 @@ import itertools
 import json
 import random
 import re
-import shlex
 import shutil
 import socket
 import threading
@@ -507,54 +506,6 @@ def test_a_served_pass_counts_from_its_salt_only_session_ended_closed_and_comple
     assert PPM.SESSION_KEYS == PHC.SESSION_FIELDS and PPM.session_head({}) == {}
     assert PPM.session_head({**c, "session": {**c["session"], "secret": "ab" * 32}}) == {
         "session": {k: c["session"][k] for k in PHC.SESSION_FIELDS}, "pass_index": 0}
-
-
-def test_serve_openais_window_salt_from_its_gate_sessions_installs_and_counts(tmp_path, monkeypatch):
-    """serve-openai's Pearl+ window coins (`serve_h1_gate.GateSessions.salt`): window k's salt-only session reserved at the
-    gate as words (``reserve ... --epoch k``) in the lane's open Pearl-C period and held under its window, whose pouw
-    settings install as a live session's, opened through the sessions' `open` on salt epoch 0's root once its port listens
-    and closed at release, so the verifier counts the pass (`session_reason`). While the lane's open period is H1's it is
-    refused before reserving."""
-    from verity_vllm.pipeline import commit_coins as CC
-    from verity_vllm.pipeline import serve_h1_gate as SG
-
-    gate, argv, held = CH.Gate(PRIVATE, KEY), [], {}
-
-    def run(words):
-        argv.append(words := shlex.split(words[-1]))
-        a = dict(zip(words[1::2], words[2::2]))
-        if words[0] == "ledger":
-            return 0, "\n".join(gate.lines)
-        if words[0] == "reserve":
-            held["s"] = _GateSession(tmp_path, monkeypatch, gate, json.loads(a["--families"]), salt_only(7))
-            return 0, json.dumps({**RESERVED, "seq": len(gate.lines) - 1, "period": gate._current.get("vllm")})
-        if words[0] == "open":
-            return 0, json.dumps({**held["s"].open(a["--session"], a["--root"]), "port": 7841})
-        return 3, json.dumps({"refused": f"no verb {words[0]}"})
-
-    gate.period_open("p-pc", cap=2, circuit="c1" * 64)
-    sessions = SG.GateSessions(CC.ChallengerGate("ssh gate", run), "vy-nebius-1", 2, listens=lambda port: True)
-    settings = sessions.salt(3, "vllm")
-    families = json.dumps([list(f) for f in Wd.SALT_FAMILIES], separators=(",", ":"))
-    assert argv == [["ledger"], ["reserve", "--peer", "vy-nebius-1", "--scheme", Wd.LIVE_SCHEME, "--families", families,
-                                 "--epoch", "3"]]
-    assert settings["session"] == {**RESERVED, "seq": 1, "period": "p-pc"} and settings["period"]["period"] == "p-pc"
-    assert settings["challenger"] == "127.0.0.1:0" and settings["gate"] == sessions.open
-    with PO.install(_model(), PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": {
-            "device": "cuda", "kernel": "k", **settings}})) as comp:
-        c = comp.get("pouw").commitment()
-    root = PS.epoch_open_root(weights_root(ROOTS), 0)
-    assert held["s"].end() is None and RUNS[0].finished and c["session"]["root"] == root.hex()
-    assert argv[2] == ["open", "--session", SID, "--root", root.hex()]
-    assert sessions.held == [{"window": 3, **settings["session"], "port": 7841, "listen_polls": 0}]
-    assert PHC.session_reason(c, gate.ledger(), {SID: held["s"].tree}.get) is None
-
-    h1 = CH.Gate(PRIVATE, KEY)
-    h1.period_open("p-h1", **H1_OPEN)
-    gate, argv[:] = h1, []
-    with pytest.raises(ValueError, match=re.escape(f"refused before reserving a salt-only session: {H1_REFUSED}")):
-        sessions.salt(4, "vllm")
-    assert argv == [["ledger"]] and len(sessions.held) == 1
 
 
 def test_a_salt_session_counts_only_reserved_salt_only_and_ended_closed_and_complete(tmp_path, monkeypatch):

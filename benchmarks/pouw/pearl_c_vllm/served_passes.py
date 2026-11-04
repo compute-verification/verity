@@ -84,7 +84,8 @@ reads every pass, holds the window record ``--tie W`` (``retain --window-record 
 (`verify_run.tie`: each call's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>`` entry its root and its domain recomputed from
 the salt and the call's index), takes the verifier's coin (with ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER``
 set, a draw session's on the auditor host opened on the run's commitment, `bench_arm.LiveDraw`, reserved under
-``PEARLC_CHALLENGER_LANE`` once that lane has no period open; else the node's, `verify_run.node_draw`; the format is
+``PEARLC_CHALLENGER_LANE`` once that lane has no period open, and as its first reserve after the Pearl-C period the salt
+session joined closed (``served.json``'s ``coins.reserved.period``); else the node's, `verify_run.node_draw`; the format is
 `verify_run`'s "The coin record"), and replays ``--draws`` work-weighted tiles over all of them and
 each pass's exclusion tiles.  It writes the details to ``--out``, with, where ``served.json`` says which passes the timed
 call made and no ``--manifest`` names others, the credit over those retained alone (`timed_credit`), and the core answer
@@ -524,8 +525,9 @@ def verify(args: argparse.Namespace) -> int:
     if paths is not None:
         coins = VR.epoch_coins(passes / "coins.json")
         window = json.loads(Path(args.tie).read_text()) if args.tie else None
+        period = (((served or {}).get("coins") or {}).get("reserved") or {}).get("period")
         draw = BA.live_draw(settings.PEARLC_CHALLENGER_GATE, settings.PEARLC_CHALLENGER_PEER,
-                            settings.PEARLC_CHALLENGER_LANE) or VR.node_draw
+                            settings.PEARLC_CHALLENGER_LANE, period=period) or VR.node_draw
         doc.update(VR.verify_passes(paths, args.draws, args.jobs, args.commit, coins, fast=args.fast,
                                     cross_check=args.cross_check, delta=args.delta, window=window, rounds=rounds,
                                     dropped=dropped, record=record, draw=draw))
@@ -699,6 +701,10 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--cross-check", type=int, default=256)
     v.add_argument("--coin-record", help=f"the verifier's coin record (default: DIR/{COIN} where served.json names the "
                    "passes, none with --manifest)")
+    a = sub.add_parser("arm")
+    a.add_argument("--spec", type=Path, default=SPEC)
+    a.add_argument("--arm", help=f"the spec's {ARM_PREFIX}* arm (default: its one)")
+    a.add_argument("--out", required=True)
     n = sub.add_parser("lean")
     n.add_argument("--passes", required=True)
     n.add_argument("--verify", required=True, help="verify's --out document")
@@ -706,10 +712,6 @@ def main(argv: list[str] | None = None) -> int:
     n.add_argument("--out", required=True, help="where the Lean's answer goes where it agrees with the Python's")
     n.add_argument("--check", help=f"where both verdicts go (default: {LEAN_CHECK} beside --out)")
     n.add_argument("--timeout", type=float, default=3600, help="seconds the Lean has to answer (default 3,600)")
-    a = sub.add_parser("arm")
-    a.add_argument("--spec", type=Path, default=SPEC)
-    a.add_argument("--arm", help=f"the spec's {ARM_PREFIX}* arm (default: its one)")
-    a.add_argument("--out", required=True)
     args = p.parse_args(argv)
     return {"serve": serve, "same": same, "volunteer": volunteer, "volunteer-needed": volunteer_needed, "retain": retain,
             "verify": verify, "lean": lean, "arm": arm}[args.cmd](args)
