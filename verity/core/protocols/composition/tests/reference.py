@@ -54,7 +54,7 @@ from verity_difftest import protocol as P
 
 from verity.core.protocols.pouw import core_check, credit, period_check
 from verity.core.protocols.sampled_proofs import challenger as CH
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PROOFS
+from verity.core.protocols.sampled_proofs.one_stage import partition as PARTITION, proofs as PROOFS
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 
@@ -77,6 +77,8 @@ def module(name: str, path: Path) -> ModuleType:
 #: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `decode_params_v2`
 #: and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies draw audits.
 ONE_STAGE = module("one_stage_difftest", CORE.parents[1] / "verity/core/service/sampled_proofs/tests/test_difftest.py")
+#: Sampled proofs' wires difftest: `expand` is `Wires.check`'s reference, a wiring's refusal or its wires.
+WIRES = module("wires_difftest", CORE / "service/sampled_proofs/tests/test_wires_difftest.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
 POUW_PERIOD_CASES = module("pouw_period_cases", CORE / "protocols/pouw/lean/check/tests/pouw_period_cases.py")
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
@@ -214,23 +216,39 @@ def _members(ms: Any) -> dict:
     return ms
 
 
+def _wires(w: Any) -> dict | None:
+    """`WiredReads.specOf`: the per-member form's ``wires``, null or a wiring (`Wires.Wiring.ofJson`) that `Wires.check`
+    accepts."""
+    if w is None:
+        return None
+    if not (isinstance(w, dict) and {"templates", "cuts", "wires"} <= set(w)):
+        raise Reject("proofs: wires: the wiring is not {templates, cuts, wires}")
+    got = WIRES.expand(w)
+    if got.get("ok") is False:
+        wire = "" if got["wire"] is None else f", wire {got['wire']}"
+        raise Reject(f"proofs: wires: the wiring is refused ({got['code']}{wire})")
+    return w
+
+
 def _one_stage_params(rest: dict) -> dict:
     """`OneStageZk.paramsOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1: ``proofs``, exactly the circuit file's
-    SHA-512 and the verifier's registered file or null, or the per-member form's ``members`` (`_members`), then v1's
-    params (`decode_params_v2`, which refuses them naming no challenger) with a partition object."""
+    SHA-512 and the verifier's registered file or null, or the per-member form's ``members`` (`_members`) and, if named,
+    its ``wires`` (`_wires`), then v1's params (`decode_params_v2`, which refuses them naming no challenger) with a
+    partition object."""
     if "proofs" not in rest:
         raise Reject(f"the parameters name no proofs: {V1_REFUSED}")
     pr = rest["proofs"]
-    if isinstance(pr, dict) and sorted(pr) == ["members"]:
+    if isinstance(pr, dict) and sorted(pr) in (["members"], ["members", "wires"]):
+        wires = _wires(pr.get("wires"))
         members = _members(pr["members"])
     else:
         _keys(pr, ["circuit", "registered"], "proofs")
         _circuit(pr)
-        members = None
+        members = wires = None
     p = ONE_STAGE.decode_params_v2(rest)
     if p["partition"] is None:
         raise Reject("partition is null: the sessions are verified against the verifier's own partition object")
-    return {**p, "proofs": pr, "members": members,
+    return {**p, "proofs": pr, "members": members, "wires": wires,
             "reads_registered": PROOFS.reads_registered(canonical(rest["program"]).encode())}
 
 
@@ -308,14 +326,40 @@ def _members_held(members: dict, sts: list) -> str | None:
     return None
 
 
-def _statements_check(p: dict, e: dict, held: dict) -> str | None:
+def _wired_context(p: dict, record: dict) -> str | None:
+    """`WiredReads.ctxOf`'s refusals: a template the wiring names that is not one template of the verifier's partition
+    (`partition.ranges`) or not of the wiring's units, and a registration port named twice."""
+    rs = PARTITION.ranges(p["program"], p["query"])
+    for tid, t in sorted(p["wires"]["templates"].items()):
+        counts = [n for r, _, n in rs if r == tid]
+        if len(counts) != 1:
+            return f"proofs: wires: template {tid} is not one template of the verifier's partition"
+        if counts[0] != t["units"]:
+            return f"proofs: wires: template {tid} has {t['units']} units, and the verifier's partition {counts[0]}"
+    seen = set()
+    for r in record.get("roots") if isinstance(record.get("roots"), list) else []:
+        port = r.get("port") if isinstance(r, dict) else None
+        if isinstance(port, str):
+            if port in seen:
+                return f"wired reads: the registration names port {port} twice: a port is one root"
+            seen.add(port)
+    return None
+
+
+def _statements_check(p: dict, record: dict, e: dict, held: dict) -> str | None:
     """`OneStageZk.runAll` on statements of no session: in the params' form, each statement's own refusals
-    (`_statement_check`), per member after the statements' structure holds (`_members_held`)."""
+    (`_statement_check`), per member after the wires' context (`_wired_context`) and the statements' structure
+    (`_members_held`) hold."""
     sts = e["statements"]
     if p["members"] is None:
         if len(sts) != 1 or sts[0]["member"] is not None:
             return "the evidence's proofs are per member (statements) and the parameters' one statement's"
         return _statement_check(p, p["proofs"], sts[0], held)
+    if p["wires"] is not None:
+        if any((m["registered"] or {}).get("bound") for m in p["members"].values()):
+            raise ValueError("outside the mirror: a wired member's bound ports (`WiredReads.boundHeld`)")
+        if why := _wired_context(p, record):
+            return why
     if why := _members_held(p["members"], sts):
         return why
     for st in sts:
@@ -349,7 +393,7 @@ def _one_stage_check(p: dict, c: tuple[dict, bytes], e: dict, blobs: list[bytes]
         raise ValueError("outside the mirror: sessions on the challenger's coin trees")
     if why := CH.sessions_tree_reason(trees, [(s["name"], None) for s in sessions]):
         return REJECT, f"proofs: {why}"
-    if why := _statements_check(p, e, held):
+    if why := _statements_check(p, c[0], e, held):
         return REJECT, f"proofs: {why}"
     if e["proved_units"]:
         return REJECT, "proofs: the units the sessions proved are not the evidence's proved_units"

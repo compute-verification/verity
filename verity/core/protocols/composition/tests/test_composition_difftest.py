@@ -141,14 +141,29 @@ def _v1(a: dict) -> dict:
 MEMBER = {"circuit": _sha(CIRCUIT), "registered": None, "units": [[0, 1]]}
 
 
-def _per_member(a: dict, members: dict | None = None, statements: list | None = None) -> dict:
-    """v2's audit `a` in the per-member form: the params' ``members`` (`MEMBER` as ``m0`` unless given) and the
-    evidence's ``statements`` (``m0``'s, on the public file `BLOBS` hold, of no session, unless given). With no session
-    and no proved unit it is undecided as `a` is."""
+def _per_member(a: dict, members: dict | None = None, statements: list | None = None, wires: dict | None = None) -> dict:
+    """v2's audit `a` in the per-member form: the params' ``members`` (`MEMBER` as ``m0`` unless given), its ``wires``
+    when given, and the evidence's ``statements`` (``m0``'s, on the public file `BLOBS` hold, of no session, unless
+    given). With no session and no proved unit it is undecided as `a` is."""
     members = {"m0": MEMBER} if members is None else members
     statements = [{"member": "m0", "public": _sha(PUBLIC), "sessions": []}] if statements is None else statements
-    return {**a, "params": {**a["params"], "proofs": {"members": members}},
+    proofs = {"members": members} | ({} if wires is None else {"wires": wires})
+    return {**a, "params": {**a["params"], "proofs": proofs},
             "evidence": {**a["evidence"], "proofs": {"statements": statements}}}
+
+
+def _wiring(a: dict, units: int = 0) -> dict:
+    """A wiring of no wire over one template of `a`'s partition, at its units plus `units` (none when no template is one
+    root node's alone)."""
+    rs = R.PARTITION.ranges(OS.PROGRAMS[a["params"]["partition"]["program"]], a["params"]["query"])
+    one = [(t, n) for t, _, n in rs if n and sum(r == t for r, _, _ in rs) == 1]
+    templates = {t: {"units": n + units, "rows": {"x": [1, 1]}, "outs": {"o": 1}} for t, n in one[:1]}
+    return {"templates": templates, "cuts": {}, "wires": []}
+
+
+def _wired(a: dict) -> dict:
+    """`a` in the per-member form with a wiring the verifier's partition holds (`_wiring`): undecided as `a` is."""
+    return _per_member(a, wires=_wiring(a))
 
 
 def _statement(member: str, public: bytes = PUBLIC) -> dict:
@@ -161,7 +176,8 @@ def _statement(member: str, public: bytes = PUBLIC) -> dict:
 #: a session whose coins are no tree the challenger logged, coins on another window or none; and in the per-member form
 #: (`_per_member`), a statement naming no member or a member twice, statements out of the members' order, two members'
 #: units meeting, a member's units or keys malformed, its circuit or its statement's public file in no blob, the
-#: evidence's proofs in the other form than the params', and proved units no session proved.
+#: evidence's proofs in the other form than the params', proved units no session proved, and wires the wire check
+#: refuses or naming a template outside the verifier's partition or of other units than its.
 V2_BREAKS = {
     "v1": _v1,
     "v1-evidence": lambda a: {**a, "evidence": _v1(a)["evidence"]},
@@ -190,6 +206,10 @@ V2_BREAKS = {
     "member-evidence": lambda a: {**_per_member(a), "evidence": a["evidence"]},
     "member-params": lambda a: {**_per_member(a), "params": a["params"]},
     "member-proved": lambda a: {**_per_member(a), "evidence": {**_per_member(a)["evidence"], "proved_units": [0]}},
+    "wires-refused": lambda a: _per_member(a, wires={**_wiring(a), "cuts": {"Z": {"x": 1}}}),
+    "wires-template": lambda a: _per_member(a, wires={**_wiring(a), "templates": {
+        "no-template": {"units": 1, "rows": {"x": [1, 1]}, "outs": {"o": 1}}}}),
+    "wires-units": lambda a: _per_member(a, wires=_wiring(a, units=1)),
 }
 
 
@@ -221,7 +241,8 @@ def broken_case(a: dict, br: str) -> dict:
 #: Remote's sampled proofs' cases by the verdict they aim at: v2's audit that drew nothing (undecided, for want of the
 #: verifier of record), in either form, and v2's audit with one change or one break of the form, or v1's audit with up
 #: to two changes (refused by name).
-SAMPLED_CASES = {R.UNDECIDED: st.one_of(empty_draws().map(form_case), empty_draws().map(_per_member).map(form_case)),
+SAMPLED_CASES = {R.UNDECIDED: st.one_of(empty_draws().map(form_case), empty_draws().map(_per_member).map(form_case),
+                                        empty_draws().map(_wired).map(form_case)),
                  R.REJECT: st.one_of(st.builds(broken_case, empty_draws(), st.sampled_from(list(V2_BREAKS))),
                                      st.builds(form_case, empty_draws(), st.sampled_from(FORM_BREAKS)),
                                      OS.changed_audits(most=2).map(form_case))}
