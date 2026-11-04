@@ -1,4 +1,6 @@
-import NciCheck.Count
+module
+
+public import NciCheck.Count
 
 /-!
 # The count mode's difftest, against the Python reference
@@ -10,6 +12,8 @@ fails unless `NciCheck.Count.check` gives Python's result on every instance: per
 bits and blocks, the total, the verdict and the first failure, or the first refusal's code. The Lean audit runs it (`runs`
 in `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
+
+@[expose] public section
 
 namespace NciCheck.CountDifftest
 
