@@ -9,7 +9,8 @@ and its Lean.
   and one schedule, whose caps over the one link-window are the cells, `WardenParams.caps`: `egress_cells` for each of
   the `lanes · window` connections it can carry), the link `warden_serve.LINK`, the Program the scan's registration's,
   the compute audits
-  ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
+  ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor and steps, off which
+  descriptor the period check counts its free inputs),
   the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the
   scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
   commitment the audits' registrations and the scan's; the evidence the audits' answers, then the scan's answer, the
@@ -33,7 +34,8 @@ and its Lean.
   and ``period.json``, each case's answers.
 * **V3c's audit** (``--v3c``, ``records_audit.py period``'s ``period.json``, for scans proved on V3c's trees,
   ``scan_zk.py --v3c``): the one compute audit, its Program's `SelectEntry_v1` chunks' o0 the scan's ``scan/prog<j>``
-  and its `SCAN_STATE` the scan's ``scan/state``. The honest case is then accepted at any sample of V3c's (``subset:1``
+  and its `SCAN_STATE` the scan's ``scan/state``, its registration the one the scan's ``summary.json`` names (a foreign
+  audit is refused before any check). The honest case is then accepted at any sample of V3c's (``subset:1``
   included): the period check is the consistency check, the committed I/O against the certificates, and what a
   sample of one or two proof blocks leaves unproved is covert capacity, which K charges.
 """
@@ -80,11 +82,19 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
     (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
     ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's,
-    in place of ``answers.json``'s."""
+    in place of ``answers.json``'s, and its registration must be the one whose trees the scan read (``summary.json``'s
+    ``v3c``): the period's audit, its scan's trees and the run's record are one registration, and an audit of another
+    is refused by name, never put in its place."""
+    if v3c is not None:
+        audit = json.loads(v3c.read_text())
+        read = (json.loads((scan / "summary.json").read_text()).get("v3c") or {}).get("registration")
+        if read != (got := RG.digest(audit["registration"])):
+            raise SystemExit(f"{v3c}: a foreign audit: it registers {got[:16]}…, and the scan read the trees of "
+                             f"{f'{read[:16]}…' if read else 'no V3c registration'}")
     dep = json.loads(SZ._found(run, "deployment.json").read_text())
     doc = json.loads((scan / "answers.json").read_text())
     if v3c is not None:
-        doc["audits"] = [json.loads(v3c.read_text())]
+        doc["audits"] = [audit]
     if len(doc["windows"]) != 1:
         raise SystemExit(f"{scan}: a group of {len(doc['windows'])} link-windows is one registration over all their "
                          "units, and the rows form reads one link-window's 2T: prove each with scan_zk.py --group 1")
@@ -102,7 +112,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     N, W, H = dep["key"]["params"]
     audits = doc.get("audits", [])
     caps = WardenParams(**dep["params"]).caps(1)
-    params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": caps,
+    params = {"audits": [{k: a[k] for k in ("program", "steps")} for a in audits], "cells": caps,
               "first": x["window"], "jitter": LB.JITTER_BOUND, "key": dep["key"]["public"], "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),

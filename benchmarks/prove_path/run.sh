@@ -21,11 +21,13 @@
 #     advice, requests and engine from the run dir, its Commit from the window's sealed row dir; PP_TARGET=F the
 #     serving device's target profile where serve.json records none. The honest and forged partitions are PP_PARTITION and
 #     PP_FORGED_PARTITION (default the Llama ones above), forged at PP_FORGE (default 0:0). The window's compiler lists its
-#     model's transfer gates of record (prove_path.GATES_OF_RECORD, which PP_TRANSFER_GATES may only restate), and its advice is
+#     model's transfer gates of record (dense_generic.gates_of_record, which PP_TRANSFER_GATES may only restate), and its advice is
 #     registered under that compiler (`verity-vllm advice --compiler-name/--compiler-digest`, the inner name and digest
 #     `prove_path.py compiler` prints). With PP_RECORDS=1 (a served window, PP_SERVE_RUN or PP_SERVE_STANDIN), each window is
 #     audited from its records alone (records_audit.py: circuit.json, the registration and the values, the advice's opening),
-#     its registered compiler run as a command (prove_path.py circuit), instead of by prove_path.py audit.
+#     its registered compiler run as a command (prove_path.py circuit), instead of by prove_path.py audit. That audit opens
+#     the advice to the verifier, so it is a development check, never a served run's audit of record (V3c's class window,
+#     whose circuit is the class's, reads no advice): no record, case or period reads it (`served_integrity.opened`).
 #   PP_LLAMA, PP_SERVE_RUN and PP_SERVE_ROWS name directories on this node, the serve directory's; an art: id is refused,
 #     since a published row dir's sealed bundle and a published run's requests.jsonl hold request values.
 #   PP_VLLM_PYTHON=PY: ignored (prove_path.py audit's and circuit's --vllm-python): a TP1 or served window's verifier writes its

@@ -32,8 +32,9 @@ advice input is exactly ℓ_w gates wide, so the charge is ℓ_w.
   decisions. The chain is `code_v1`'s whole charge only where a window's hits and order are 0 as well.
   - Hits are 0 on 8eb1, which serves without prefix caching: its trace header says so (``enable_prefix_caching``
     false, `test_served_window.py`).
-  - Order is 0 only under release-order serving, and 8eb1 wasn't served in release order. The order's charge is the
-    I/O tie's (`io_tie`, a draft), outside the slice's proof.
+  - Order is 0 only under release-order serving, and 8eb1 wasn't served in release order. The order's charge is
+    outside the slice's proof, and no check reads the order: the scan takes each request's ordinal off its ingress
+    cells.
 
 **What binds the charge's inputs** (the phase-14 attack: `ChargeCount_v1` on its own is faithful, but its enables, its bits
 and its carry are witness until the slice binds them):
@@ -62,8 +63,8 @@ order. w212 (requests 308–310, 21 proof blocks, 14 decisions) is padded into i
 (`verity/core/protocols/certifier/tests/fixtures/compile_slice_w212_class_async.json`: an empty arrival slot, 18
 decisions past the count with en 0, and 33 idle steps). The seal's rows are in ``srv`` (`served_rows.step_rows`), each
 held to its request's slot through ``map``.
-- It proves w212's charge of its decisions. Its order's charge is the I/O tie's, outside this proof (What a proof of
-  the slice covers, above).
+- It proves w212's charge of its decisions. Its order's charge is outside this proof (What a proof of the slice covers,
+  above).
 - `compile_slice_zk` refuses a w212 fixture whose engine isn't the trace header's. `replay_vectors --slice` replays a
   window at the trace's own scheduler unless asked for the sync class (`--AS 0`).
 - The proof block is 1,021,302 ANDs, 123,120 of them the map's ([served-shape.md](served-shape.md)). Of them,

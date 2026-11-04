@@ -3,10 +3,11 @@
 # windows (`--serve-run DIR --window K`): `verity-vllm serve-openai --scheme rows-sha512 --seal` (the bench workload's Commit of record's
 # committer and acquire sources, built from its Build of record's manifest PRED/manifest.json and taps HIDDEN_SO, NORM_TAP_SO:
 # hm96-sha512 rows in frame-v3-sha512 trees) on one leased RTX PRO 6000, a short varied load in bursts (each burst one window,
-# closed at the engine's idle), `verity-vllm advice` per closed window under PROVE-PATH's registered compiler for a served run
-# (`prove_path.py compiler --serve-run`: the server's, listing its model's transfer gates of record, the one serve_check holds
-# each registration to),
-# a registered cap (--cap) and the committer's weights registration (`prove_path.py weights-registration`: each weight
+# closed at the engine's idle), each closed window's advice committed by the server as it serves (`--advice`, `serve_advice`:
+# B, capped at CAP bits, registered before its first window in advice_registration.json, held here to PROVE-PATH's
+# registered compiler for a served run, `prove_path.py compiler --serve-run`: the server's, listing its model's transfer
+# gates of record, the one serve_check holds each registration to; each window's line in advice.jsonl) under the
+# committer's weights registration (`prove_path.py weights-registration`: each weight
 # committed under salts sampled from the committer's key, $D/private/weights.key, which never leaves the node, once its shards
 # check against the checkpoint's manifest; each window's registration records its roots, one a weight parameter, so the window
 # circuit's weight reads count registered at the pins the verifier holds before the first window's coins, `window-circuit
@@ -15,7 +16,8 @@
 # workload dir opened as PROVE-PATH opens it (`deferred_rows.of_record`, `opening.CommittedStore`) with what the workload's Programs
 # read looked up (identities.txt). The endpoint serves until UNTIL (UTC HH:MM) or `touch $D/stop`, or until its filesystem has under
 # DISK_FLOOR_GB free (default 300, checked before serving and every 10 s). The serve dir's public records (serve.json,
-# windows.jsonl, seals.jsonl, pauses.jsonl, summary.json) are copied into $OUT every 10 s, at the end and on SIGTERM, so custody
+# windows.jsonl, seals.jsonl, pauses.jsonl, summary.json, advice_registration.json, advice.jsonl) are copied into $OUT every
+# 10 s, at the end and on SIGTERM, so custody
 # keeps them; requests.jsonl and the step traces, which hold request values, stay in the serve dir.
 # VARIED=N (with ADMIT=release-order; VARIED_RUNS=3, VARIED_RATE=4, VARIED_JITTER_MS=400): before READY, VARIED_RUNS runs of N
 # varied requests (network-accounting's traffic, `serve_load.py --varied`), each numbered under a fresh release run and
@@ -35,8 +37,8 @@
 # ($D/predicted): its request Programs, GP-01's workload and the manifest. `predict compare ROW --predicted PRED` holds it to
 # ROW, the Commit of record's traced workload dir, the cross-check, and the endpoint serves only when they agree (else exit 17
 # or 18).
-# READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under that registered compiler, and window K's
-# request Programs and manifest.json.
+# READVICE=DIR (WINDOW=K, default 5) serves nothing: the advice of DIR, served without --advice, under that registered
+# compiler, and window K's request Programs and manifest.json.
 # Needs on the node: vLLM's venv, the checkpoint in HF_HOME and CUDA (the collector's JIT build). The serve dir D (workload dirs, bundles) stays on the node under `research keep`; $OUT keeps the records and logs.
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
@@ -90,7 +92,7 @@ fi
 DISK_FLOOR_GB=${DISK_FLOOR_GB:-300}; floor=$((DISK_FLOOR_GB * 1048576))
 under_floor() { [ "$(df --output=avail -k "$ROOT" | tail -1)" -lt "$floor" ]; }
 keep_records() {
-  for f in serve.json windows.jsonl seals.jsonl pauses.jsonl summary.json; do
+  for f in serve.json windows.jsonl seals.jsonl pauses.jsonl summary.json advice_registration.json advice.jsonl; do
     [ -f "$D/$f" ] && cp "$D/$f" "$OUT/.$f.tmp" 2>/dev/null && mv "$OUT/.$f.tmp" "$OUT/$f"
   done
 }
@@ -116,6 +118,7 @@ echo "PREDICT-COMPARE $(tail -1 "$OUT/predict_compare.log")" | tee -a "$OUT/step
   --seal-hold-gb "${SEAL_HOLD_GB:-64}" --seal-warm-gb "${SEAL_WARM_GB:-0}" ${MAX_NUM_SEQS:+--max-num-seqs "$MAX_NUM_SEQS"} \
   ${WINDOW_REQUESTS:+--window-requests "$WINDOW_REQUESTS"} ${PROTOCOL:+--protocol "$PROTOCOL"} \
   ${MAX_NUM_BATCHED_TOKENS:+--max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS"} \
+  --advice --advice-cap "$CAP" --advice-weights "$D/weights_registration.json" \
   --copy-records-to "$OUT" > "$OUT/serve.log" 2>&1 &
 SRV=$!
 echo "$SRV" > "$D/serve.pid"
@@ -132,40 +135,17 @@ for _ in $(seq 1 600); do
 done
 grep "SERVE-OPENAI listening" "$OUT/serve.log" || { tail -40 "$OUT/serve.log"; echo "SERVER NOT LISTENING"; kill "$SRV"; exit 11; }
 cp "$D/serve.json" "$OUT/" 2>/dev/null
-CA=$(compiler_args "$D") && [ -n "$CA" ] || { echo "no registered compiler for $D (prove_path.py compiler)"; kill -TERM "$SRV"; wait "$SRV"; exit 16; }
-echo "registered compiler: $CA" | tee "$OUT/compiler.txt"
-WA=$(weights_args "$D" "$D/weights_registration.json") || no_weights "$D"
+# the server's B, registered before its first window, is PROVE-PATH's registered compiler for this served run
+(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP") > "$OUT/compiler.json" \
+  && "$PY" -c 'import json, sys; a, b = (json.load(open(f)) for f in sys.argv[1:]); sys.exit(a["compiler"]["digest"] != b["digest"])' \
+    "$D/advice_registration.json" "$OUT/compiler.json" \
+  || { echo "the server's B ($D/advice_registration.json) isn't PROVE-PATH's registered compiler (prove_path.py compiler)"
+       kill -TERM "$SRV"; wait "$SRV"; exit 16; }
+echo "registered compiler: $("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["digest"])' "$OUT/compiler.json")" \
+  | tee "$OUT/compiler.txt"
+weights_args "$D" "$D/weights_registration.json" > /dev/null || no_weights "$D"
 cp "$D/weights_registration.json" "$OUT/" 2>/dev/null
-
-# Each window's advice committed once, at serve time, as its windows.jsonl line lands: `advice --window K` into advice/.w<K>,
-# moved to advice/w<K>, and advice/windows.json the union of every window's index (committed and refused), its registration
-# recording each weight's registered root (`--weights-of-record`, `prove_path.py weights-registration`).
-closed() { "$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/windows.jsonl" 2>/dev/null; }
-advice_pass() {
-  for k in $(closed); do
-    [ -f "$D/advice/.w$k/windows.json" ] && continue
-    # shellcheck disable=SC2086
-    vv advice "$D" --window "$k" --cap "$CAP" $CA $WA --out "$D/advice/.w$k" >> "$OUT/advice.log" 2>&1; rc=$?
-    [ -f "$D/advice/.w$k/windows.json" ] || continue        # not yet in the step trace, or pending (rc 3) on a record: next pass
-    [ -d "$D/advice/.w$k/w$k" ] && mv "$D/advice/.w$k/w$k" "$D/advice/w$k"
-    "$PY" - "$D/advice" "$k" "$rc" <<'EOF' | tee -a "$OUT/advice_windows.jsonl"
-import json, sys, time
-from pathlib import Path
-a, k, rc = Path(sys.argv[1]), sys.argv[2], int(sys.argv[3])
-idx = {"windows": {}, "refused": {}}
-for p in sorted(a.glob(".w*/windows.json")):
-    d = json.loads(p.read_text())
-    idx = {**d, "windows": {**idx["windows"], **d["windows"]}, "refused": {**idx["refused"], **d["refused"]}}
-idx.pop("open", None)
-(a / "windows.json").write_text(json.dumps(idx, indent=1) + "\n")
-w = idx["windows"].get(k)
-print(json.dumps({"window": int(k), "at": time.strftime("%H:%M:%SZ", time.gmtime()), "rc": rc,
-                  "root": w and w["root"], "bits": w and w["bits"], "refused": idx["refused"].get(k)}))
-EOF
-  done
-}
-( while kill -0 "$SRV" 2>/dev/null; do advice_pass; sleep 10; done; advice_pass ) &
-ADV=$!
+count() { cat "$1" 2>/dev/null | grep -c .; }
 
 if [ "$ADMIT" = release-order ]; then   # releases 1 then 0 of a fresh release run, a second apart: 0 must reach the engine first
   "$PY" - "$PORT" "$REPO" "$D" <<'EOF2' 2>&1 | tee "$OUT/admit_smoke.txt"
@@ -245,9 +225,8 @@ fi
 "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --bursts "$BURSTS" --per-burst "$PER_BURST" --out "$D/load.jsonl" \
   2>&1 | tee "$OUT/load.log"
 sleep 5
-for _ in $(seq 1 120); do                                   # the load's windows' advice, before they compile
-  pending=0; for k in $(closed); do [ -f "$D/advice/.w$k/windows.json" ] || pending=1; done
-  [ "$pending" = 0 ] && break; sleep 5
+for _ in $(seq 1 120); do                                   # every closed window's advice line, before they compile
+  [ "$(count "$D/advice.jsonl")" -ge "$(count "$D/windows.jsonl")" ] && break; sleep 5
 done
 cp "$D/windows.jsonl" "$D/advice/windows.json" "$OUT/" 2>/dev/null
 WS=$("$PY" -c "import json,sys; print(' '.join(sorted(json.load(open('$D/advice/windows.json'))['windows'], key=int)))" 2>/dev/null)
@@ -331,7 +310,6 @@ end=$(date -u -d "today $UNTIL" +%s); [ "$end" -lt "$(date -u +%s)" ] && end=$((
 while [ "$(date -u +%s)" -lt "$end" ] && [ ! -e "$D/stop" ] && kill -0 "$SRV" 2>/dev/null; do sleep 30; done
 trap - TERM INT
 kill -TERM "$SRV" 2>/dev/null; wait "$SRV"; rc=$?
-wait "$ADV"
 keep_records
 "$PY" tools/admit_rows_check.py "$D" --json "$OUT/admit_rows_final.json" > "$OUT/admit_rows_final.txt" 2>&1; tail -1 "$OUT/admit_rows_final.txt"
 tail -3 "$OUT/serve.log"

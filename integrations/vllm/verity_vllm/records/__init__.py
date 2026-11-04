@@ -31,4 +31,7 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
 * `predicted_row` -- a predicted row's record (`verity-vllm/predicted-row/v1`, ``predicted.json``): the Build of record the
   ahead-of-time compiler wrote and its manifest's sha256, as ``predict compare --predicted`` reads it; its `of` refuses an
   unknown field and `dump` writes it back.
+* `served_advice` -- serve-openai's registration of B (`verity-vllm/served-advice-registration/v1`,
+  ``advice_registration.json``), as the next run's ``--advice-log`` reads its log back; its `of` refuses an unknown field and
+  `dump` writes it.
 """

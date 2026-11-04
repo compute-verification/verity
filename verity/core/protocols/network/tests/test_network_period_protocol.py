@@ -29,6 +29,9 @@ from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.certificate import Certificate
 from verity.core.protocols.certifier.schedule import SyncSet
 from verity.core.protocols.certifier.warden import WardenParams
+from verity.ml.circuits import codec
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.program import Program
 
 __all__ = ["EXPECT", "MUTATIONS", "build", "reference"]
 
@@ -200,6 +203,30 @@ def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
         assert verdict == REJECT and "is no compute audit's output" in json.loads(out)["reason"], (n, out)
 
 
+def test_a_stray_audit_beside_the_tied_one_is_accepted_and_alone_refused(server):
+    """A composite's tie of the network certifier's compute audits to its policy's record has two rows-form fixtures
+    (`PC.audits_of`, `PC.with_audits`): a small `rows-honest` period, whose one execution phase's scan ties its one
+    audit, and the same period with another period's audit beside its own, a stray no phase's scan ties. Lean and the
+    mirror accept both alike, with the commitment registering exactly those audits' records, so the stray is the
+    composite's to refuse; and with the stray in place of the tied audit, the scan's prog is no compute audit's output
+    and both refuse it."""
+    for n in range(3):
+        tied = build("rows-honest", n, small=True)
+        (own,) = PC.audits_of(tied)
+        stray = PC.audits_of(build("rows-honest", 100 + n, small=True))[0]
+        for case, audits in ((tied, [own]), (PC.with_audits(tied, [own, stray]), [own, stray])):
+            out = reference(case)
+            assert out["verdict"] == ACCEPT, (n, out)
+            verdict, got = D.replay(PORT, case, server)
+            assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+            assert [PC.R.digest(a) for a in json.loads(bytes.fromhex(case["commitment"]))["audits"]] == [
+                PC.R.digest(a[1]) for a in audits]
+        alone = PC.with_audits(tied, [stray])
+        assert "is no compute audit's output" in reference(alone)["reason"], (n, reference(alone))
+        verdict, got = D.replay(PORT, alone, server)
+        assert verdict == REJECT and "is no compute audit's output" in json.loads(got)["reason"], (n, got)
+
+
 def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
     """The scan reads each slot's entry, read bit included, from the `SlotEntry_v1` unit of that slot's Program, lane
     j's from chunk j, so the rows form refuses, in Lean and in the mirror and by name, each way a tied link-window's
@@ -259,8 +286,8 @@ def test_a_template_named_slot_entry_with_another_body_is_refused(server, monkey
 def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
     """The egress renders the outputs of the audit the scan's `prog` is tied to, so the bits the prover chose of that
     audit's inputs are the link-window's: over honest rows periods, which Lean and the mirror accept with one public,
-    each scan's `free` is the parameters' `free` of the audits whose registration holds its `prog`'s root (the scan's
-    own is 0), some of them nonzero."""
+    each scan's `free` is the input gates of the Programs of the audits whose registration holds its `prog`'s root
+    (`input_gates`; the scan's own is 0), some of them nonzero, and its `tied` names those audits by index."""
     charged = 0
     for n in range(8):
         case = build("rows-honest", n, small=n % 2 == 0)
@@ -272,9 +299,9 @@ def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
         for reg, t in zip(c["windows"], out["public"]["scans"]):
             roots = {e["root"] for e in reg.get("roots", []) + reg.get("registered", [])
                      if PC.prog_port(e.get("port")) or PC.prog_port(e.get("value"))}
-            want = sum(a["free"] for a, r in zip(case["params"]["audits"], c["audits"])
-                       if any(o.get("root") in roots for o in r["roots"]))
-            assert t["free"] == want, (n, t, want)
+            tied = [i for i, r in enumerate(c["audits"]) if any(o.get("root") in roots for o in r["roots"])]
+            want = sum(PC.input_gates(case["params"]["audits"][i]["program"]) for i in tied)
+            assert (t["free"], t["tied"]) == (want, tied) and tied, (n, t, want, tied)
         charged += any(t["free"] for t in out["public"]["scans"])
     assert charged
 
@@ -607,6 +634,26 @@ def test_the_bound_counts_what_it_says():
     assert public(dataclasses.replace(p, audits=()), [])["eps"] == "0"
 
 
+def test_an_audits_free_inputs_are_its_programs_input_gates():
+    """`auditOf` counts an audit's free inputs off its descriptor (`inputGates`, `input_gates`), never from the
+    parameters: each template's instances times its parameters' bits, from the templates' signatures, over the stand-in
+    unit, the slot entries' and the select entries' templates and mixes of them; a parameter bound at registration
+    counts as one bound per run does; and parameters stating a `free` are refused."""
+    for units, entries, select in [(((3, 2),), (), False), (((1, 1), (2, 40)), (4,), False), (((2, 5),), (3,), True)]:
+        desc = json.loads(PC.audit_descriptor(units, entries, select=select))
+        entry = PC.select_entry() if select else PC.slot_entry()
+        templates = [(bind(PC.AUDIT_UNIT, OUT=out), n) for n, out in units] + [(entry, n) for n in entries]
+        want = sum(n * sum(sum(t.leaf_widths()) for _, t in d.signature()[0]) for d, n in templates)
+        assert PC.input_gates(desc) == want > 0, (units, entries, select)
+    run, reg = (json.loads(D.canonical(codec.encode_program(Program(bind(PC.AUDIT_UNIT, OUT=2), registered=r))))
+                for r in ((), ("x",)))
+    assert run != reg and PC.input_gates(run) == PC.input_gates(reg) == 16
+    case = next(c for n in range(8) if (c := build("rows-honest", n))["params"]["audits"])
+    p = case["params"]
+    stated = p | {"audits": [a | {"free": PC.input_gates(a["program"])} for a in p["audits"]]}
+    assert reference(case)["verdict"] == ACCEPT and reference(case | {"params": stated})["verdict"] == REJECT
+
+
 def test_the_rows_forms_bound_counts_what_it_says():
     """The rows form's K worked by hand (Lean's `rowsTerms` `#guard`s): 7 cells on one connection and 2 on another, 5
     bits for the schedules and 5 again for the fail cells, an audit whose own terms are in none, and over 1 link-window
@@ -618,24 +665,26 @@ def test_the_rows_forms_bound_counts_what_it_says():
     them."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
                PC.Scan(10, 1120, 300, 512))
-    out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0, 0)])
+    out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0, 0, [])])
     (scan,) = out["scans"]
     assert at_most(20, 3) == 1351 and clog2(1351) == 11
     assert (out["schedules"], out["cells"], scan["free"], scan["faulty_sets"], scan["faulty_bits"], scan["jitter"],
-            scan["faulty_entries"], out["K"]) == (5, 5, 1120, 11, 3 * 512, 10, 0, 5 + 5 + (1120 + 11 + 3 * 512 + 10))
+            scan["faulty_entries"], scan["tied"], out["K"]) == (5, 5, 1120, 11, 3 * 512, 10, 0, [],
+                                                                5 + 5 + (1120 + 11 + 3 * 512 + 10))
     assert out["audits"] == [{"delta": "1/10", "drawn": 3, "units": 10, "wrong_units": 4}]
     drawn = dataclasses.replace(p, audits=(), cells=(), jitter=1, scan=PC.Scan(4, 0, 300, 512))
-    assert public(drawn, [], [(Facts(8, 8, Fraction(1, 100), 0), 0, 0)])["K"] == 0
+    assert public(drawn, [], [(Facts(8, 8, Fraction(1, 100), 0), 0, 0, [])])["K"] == 0
     w63 = dataclasses.replace(p, audits=(PC.Audit(8 * 1136, 0, "", 8, 1136),), cells=(), jitter=1,
                               scan=PC.Scan(32, 0, 300, 512))
-    tied = public(w63, [Facts(8, 8, Fraction(1, 100), 0)], [(Facts(64, 64, Fraction(1, 100), 0), 8 * 1136, 0)])
-    assert (tied["scans"][0]["free"], tied["K"]) == (9088, 9088)
+    tied = public(w63, [Facts(8, 8, Fraction(1, 100), 0)], [(Facts(64, 64, Fraction(1, 100), 0), 8 * 1136, 0, [0])])
+    assert (tied["scans"][0]["free"], tied["scans"][0]["tied"], tied["K"]) == (9088, [0], 9088)
     k4 = dataclasses.replace(w63, scan=PC.Scan(32, 0, 300, 512, 8 * 112))
-    part = public(k4, [Facts(16, 9, Fraction(1, 100), 2)], [(Facts(64, 64, Fraction(1, 100), 0), 9088, 8 * 112)])
-    assert (part["scans"][0]["faulty_entries"], part["K"]) == (896, 9088 + 896)
+    part = public(k4, [Facts(16, 9, Fraction(1, 100), 2)],
+                  [(Facts(64, 64, Fraction(1, 100), 0), 9088, 8 * 112, [0])])
+    assert (part["scans"][0]["faulty_entries"], part["scans"][0]["tied"], part["K"]) == (896, [0], 9088 + 896)
     two = dataclasses.replace(p, cells=(), windows=2, scan=PC.Scan(0, 0, 0, 0))
     assert public(two, [Facts(1, 1, Fraction(1, 10), 0)],
-                  [(Facts(1, 1, Fraction(1, 15), 0), 0, 0)] * 2)["eps"] == "2/15"
+                  [(Facts(1, 1, Fraction(1, 15), 0), 0, 0, [])] * 2)["eps"] == "2/15"
     one = dataclasses.replace(two, windows=1)
-    assert public(one, [Facts(2, 1, Fraction(1, 10), 0)], [(Facts(1, 1, Fraction(1, 15), 0), 0, 0)],
+    assert public(one, [Facts(2, 1, Fraction(1, 10), 0)], [(Facts(1, 1, Fraction(1, 15), 0), 0, 0, [])],
                   [Facts(2, 1, Fraction(1, 10), 0)])["eps"] == "1/6"

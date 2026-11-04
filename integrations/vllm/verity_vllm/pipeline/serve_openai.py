@@ -9,6 +9,8 @@
         [--copy-records-to $OUT] [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
+        [--advice [--advice-cap BITS] [--advice-composite onsite|remote] [--advice-day 0 [--advice-log JSON]] [--advice-tau 0.1]
+                  [--advice-weights JSON]]
 
 It serves what the network certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
@@ -88,6 +90,9 @@ it is written before the pending seals too, and its ``final`` is true only once 
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
 ``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
 through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
+``--advice`` registers the served compiler B, capped at ``--advice-cap``, before the engine loop runs, as day
+``--advice-day``'s one program in the registration log (``--advice-log``'s, extended; ``advice_registration.json``), and
+commits each Commit period's advice as it serves, its public line in ``advice.jsonl`` before any draw of it (`serve_advice`).
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to
 PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
 record is ``remote_session.json``, and a rejected session fails the exit.
@@ -115,8 +120,8 @@ from typing import Any
 
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
-from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_release as RL,
-                                   serve_remote as SR, serve_row as RW, serve_seal as SS)
+from verity_vllm.pipeline import (seal_process as SP, serve_advice as SA, serve_guard as SG, serve_h1 as SH, serve_learn as SL,
+                                   serve_release as RL, serve_remote as SR, serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
                                                records_mirror, served_statics, user_of)
@@ -223,6 +228,7 @@ class Options:
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
     retention: RL.RetentionOptions = group(RL.RetentionOptions)
     learning: SL.LearnOptions = group(SL.LearnOptions)
+    advising: SA.AdviceOptions = group(SA.AdviceOptions)
 
 
 # ---------------------------------------------------------------------------------------------------------------- engine loop
@@ -631,7 +637,7 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
-    if why := SH.refusal(opts) or SR.refusal(opts) or SL.refusal(opts):
+    if why := SH.refusal(opts) or SR.refusal(opts) or SL.refusal(opts) or SA.refusal(opts):
         raise UsageError(why)
     if opts.commit and which("ninja") is None:
         raise UsageError("the Commit JIT-builds its kernels with ninja, which is not on PATH: put the environment's bin (where its "
@@ -674,10 +680,14 @@ def main(opts: Options) -> int:
     mirror = records_mirror(out, opts.copy_records_to)
     windows = sealer = warmed = arm = None
     draws, draws_dir = RL.release_of(opts, out, com)
+    advice = SA.ServedAdvice(out, trace, weights=opts.advising.advice_weights, tau=opts.advising.advice_tau) \
+        if opts.advising.advice and com is not None else None
+    if draws_dir is not None and advice is not None:
+        draws_dir.advised = advice.committed
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
-        arm = SH.arm_of(opts, llm, com, out)
+        arm = SH.arm_of(opts, llm, com, out, flush=advice.drain if advice is not None else trace.drain)
         sealer = SP.sealer_of(opts)                      # its process spawned before the pool grows
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
@@ -686,7 +696,7 @@ def main(opts: Options) -> int:
                                 seal=SS.seal_of(opts) if opts.seal else None,
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
                                 window_bytes=int(opts.window_gb * SS.GB) or None, disk=SG.disk_floor_of(opts), mirror=mirror,
-                                request_cap=opts.window_requests, arm=arm, release=draws)
+                                request_cap=opts.window_requests, arm=arm, release=draws, advice=advice)
         if arm is not None:
             arm.drawing(draws)
     if draws_dir is not None:
@@ -743,10 +753,14 @@ def main(opts: Options) -> int:
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
               "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model, opts.async_scheduling)}
     (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
-    if mirror is not None:
-        mirror()
-    print(f"SERVE-OPENAI listening on {bound[0][0]}:{bound[0][1]} model={served} commit={opts.commit} protocol={proto.name}", flush=True)
     try:
+        if advice is not None:                           # B, from serve.json as the verifier reads it, before the first window
+            advice.register(json.loads((out / "serve.json").read_text()), opts.advising.advice_cap, opts.advising.advice_composite,
+                            opts.advising.advice_day, opts.advising.advice_log)
+        if mirror is not None:
+            mirror()
+        print(f"SERVE-OPENAI listening on {bound[0][0]}:{bound[0][1]} model={served} commit={opts.commit} protocol={proto.name}"
+              + (f" advice={advice.compiler.digest[:16]}…" if advice is not None else ""), flush=True)
         loop.run()
     finally:
         http.shutdown()
@@ -757,6 +771,7 @@ def main(opts: Options) -> int:
                    "commit": windows.summary() if windows is not None else None, "admit": order and order.summary(),
                    "sealer": sealer.summary() if sealer is not None else None, "pauses": watchdog.summary(),
                    "release": draws.summary() if draws is not None else None,
+                   "advice": (advice.stop() if final else advice.summary()) if advice is not None else None,
                    "mirror_errors": mirror.errors[:10] if mirror else None,
                    "remote_session": session.end() if session is not None else None}
             (out / "summary.json").write_text(json.dumps(got, indent=1))
@@ -781,5 +796,5 @@ def main(opts: Options) -> int:
             rows.uninstall()
         if com is not None:
             com.close()
-    passed = windows is None or windows.summary()["passed"] or not server.served
+    passed = (windows is None or windows.summary()["passed"] or not server.served) and (advice is None or advice.summary()["passed"])
     return 0 if loop.error is None and passed and SR.accepted(session) else 1
