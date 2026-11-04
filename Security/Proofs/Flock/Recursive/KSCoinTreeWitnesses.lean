@@ -142,11 +142,11 @@ open RecDeploy.VStarHonest
 open RecDeploy.HonestHalf
 
 /-- **`RecursiveKSDeployed`'s honest lemma**: at `HonestFixture`'s run, the deployed recursive run at the deployed
-brings at `x` under `deployedB`, every V\* part accepts (`honest_half_tops`, as `honest_half_fixture`); the statement is
-dense, where `RecursiveKSDeployed` reads it (`DenseAt`); the reference prover, reading neither the root nor the openings,
-is accepted at the run's tape and coins committed in every coin tree (`Claims.Bridge.runCM_ofProver`); the deployed
-inner and outer decoders meet the list-decoding spec; and hm96 leaves under the pinned key hide at its hiding gap, a
-finite `δ₁`, with no premise (`CROnly.hm96Hiding_gap`). -/
+brings at `x` under `deployedB` with the deployed inner prover `IrDep x`, every V\* part accepts (`honest_half_tops`,
+as `honest_half_fixture`); the statement is dense, where `RecursiveKSDeployed` reads it (`DenseAt`); the reference
+prover, reading neither the root nor the openings, is accepted at the run's tape and coins committed in every coin tree
+(`Claims.Bridge.runCM_ofProver`); the deployed inner and outer decoders meet the list-decoding spec; and hm96 leaves
+under the pinned key hide at its hiding gap, a finite `δ₁`, with no premise (`CROnly.hm96Hiding_gap`). -/
 theorem recursiveKSDeployed_honest (h : HonestFixture) :
     ∃ (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) (x : Msg) (aux : Msg → ℕ → Flock.RecRecord.Round)
       (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
@@ -172,9 +172,9 @@ theorem recursiveKSDeployed_honest (h : HonestFixture) :
           FlockSoundness.Discharge.ZkView.saltHash)) ∧
       ENNReal.ofReal (FlockSoundness.CROnly.hidingGap FlockSoundness.Discharge.ZkView.My
         FlockSoundness.Discharge.ZkView.saltHash) ≠ ⊤ := by
-  obtain ⟨mask, Ir, b0, x, aux, nOf, hd, recRest, decI, w, st, ω, r, hR, hW, hN, hI, hT⟩ := h
-  refine ⟨mask, Ir, b0, x, aux, nOf, hd, recRest, decI, w, ω, r,
-    HonestHalfTops.honest_half_tops mask Ir b0 x aux nOf hd recRest decI ω r hR hW hN hI hT, fun s hs => ?_,
+  obtain ⟨mask, b0, x, aux, nOf, hd, recRest, decI, w, st, ω, r, hR, hW, hN, hT⟩ := h
+  refine ⟨mask, IrDep x, b0, x, aux, nOf, hd, recRest, decI, w, ω, r,
+    HonestHalfTops.honest_half_tops mask b0 x aux nOf hd recRest decI ω r hR hW hN hT, fun s hs => ?_,
     fun _ C τ => ?_, FlockDeploy.listWithin_plainTrim _root_.Flock.Readable.relation,
     Claims.GS.listWithin_zkDecodeRD id fun _ _ => rfl, FlockSoundness.CROnly.hm96Hiding_gap _ _,
     ENNReal.ofReal_ne_top⟩
