@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -121,3 +122,19 @@ def test_an_audit_at_one_percent_is_the_exact_ratio(tmp_path):
     rec = {**record(True), "wrong_units": {"delta": 0.01, "of": 1024, "bound": 69}}
     a = I.answer(write(tmp_path / "a", {"checks_before_draw": {"registration": True}}, rec), REG)
     assert a["profile"]["delta"] == "1/100" and str(CC.integrity(a["profile"])["delta"]) == "1/100"
+
+
+def test_an_audit_at_2_to_the_minus_64_keeps_it_exact_where_a_nearby_ratio_would_be_0(tmp_path):
+    rec = {**record(True), "wrong_units": {"delta": 2.0 ** -64, "of": 1024, "bound": 1023}}
+    a = I.answer(write(tmp_path / "a", {"checks_before_draw": {"registration": True}}, rec), REG)
+    assert a["profile"]["delta"] == f"1/{2 ** 64}" and CC.integrity(a["profile"])["delta"] == Fraction(1, 2 ** 64)
+    assert Fraction(2.0 ** -64).limit_denominator(10 ** 12) == 0
+
+
+@pytest.mark.parametrize("given, want", [
+    (0.5, Fraction(1, 2)), (0.01, Fraction(1, 100)), (1e-12, Fraction(1, 10 ** 12)), (2.0 ** -64, Fraction(1, 2 ** 64)),
+    (5.421010862427522e-20, Fraction(1, 2 ** 64)), (f"1/{2 ** 64}", Fraction(1, 2 ** 64)), ("0.01", Fraction(1, 100)),
+    (Fraction(1, 2 ** 128), Fraction(1, 2 ** 128)),
+])
+def test_exact_delta_is_the_ratio_given_never_a_nearby_one(given, want):
+    assert I.exact_delta(given) == want

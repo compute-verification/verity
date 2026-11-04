@@ -35,7 +35,8 @@
 #      an art: id, or a directory; refused on the active-warden path)
 #      CR_N2_ROUNDS (n2_zk.py's --rounds)
 #      CR_N2_CMD (replaces the above; run with HONEST, CLIENT, BIN, LEAN, E2E and N2OUT set, writing N2OUT/summary.json)
-#      CR_WARDEN_RUN (the network certifier rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more
+#      CR_WARDEN_RUN (the network certifier rehearsal's run, a path under the unpacked gates)  CR_SCAN_DELTA (scan_zk.py's
+#      --delta, e.g. served_verdicts.sh's 2^-64)  CR_SCAN_ARGS (more
 # scan_zk.py      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
 #      CR_PATH=certifier-only (the records are the certifier rehearsal's alone, with no active network certifier's rows:
 # the scan isn't run      or required, and the report names what that path stubs, chain_record.STUBBED)
@@ -224,7 +225,7 @@ scan() {
   log "chain: scan ${CR_SCAN_CMD:+(CR_SCAN_CMD) }${wr:-on the synthetic warden run of scan_zk}"
   if [ -n "${CR_SCAN_CMD:-}" ]; then bash -c "$CR_SCAN_CMD"
   else "$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$SCANOUT" $wr \
-    ${CR_SCAN_ARGS:-}; fi > "$OUT/scan.log" 2>&1
+    ${CR_SCAN_DELTA:+--delta "$CR_SCAN_DELTA"} ${CR_SCAN_ARGS:-}; fi > "$OUT/scan.log" 2>&1
   echo $? > "$W/scan.rc"; keep "$SCANOUT" "$OUT/scan"; log "chain: scan done, rc $(cat "$W/scan.rc")"
   [ "$(cat "$W/scan.rc")" = 0 ] || tail -n 1 "$OUT/scan.log" | cut -c1-600 > "$W/scan.why"
   [ -n "$wr" ] && echo "$WARDEN" > "$W/scan.warden"

@@ -1586,6 +1586,17 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), read("order"), read("limits")
 
 
+@pytest.mark.parametrize("given", [None, "0.25"])
+def test_the_certifiers_chain_proves_its_scan_at_2_to_the_minus_64_unless_the_run_sets_cr_scan_delta(tmp_path, given):
+    """The split certifier's chain gets CR_SCAN_DELTA, which chain_record.sh hands scan_zk.py as --delta: by default
+    2^-64 exactly (every scan block is drawn, so no δ costs proving), else the run's own."""
+    chain = CHAIN + '; printf "%s" "$CR_SCAN_DELTA" > "$ORDER.delta"'
+    rc, lines, _, _ = _v3c(tmp_path, CERTIFIER_CHAIN_CMD=chain, CR_SCAN_DELTA=given)
+    assert rc == 0, lines
+    got = (tmp_path / "order.delta").read_text()
+    assert got == given if given else Fraction(float(got)) == Fraction(1, 2 ** 64)
+
+
 def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_the_period_json_after(tmp_path):
     """The window commit, then the split certifier's chain (it reads the commit's scan state) beside V3c's audit and its
     period.json, and the certifier's period check on it once both are done, each within its own limit; the check gets
@@ -2095,12 +2106,13 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     run = _deferred(tmp_path)
     assert run.returncode == 0, run.stderr
     d, dd, out = tmp_path / "serve", tmp_path / "serve" / "private" / "deferred", tmp_path / "served-out"
-    names = "K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE"
+    names = "K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE CR_SCAN_DELTA"
     said = subprocess.run(["bash", "-c", f'. "$1"; for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done', "_",
                            str(dd / "deferred.env")], check=True, capture_output=True, text=True).stdout
     assert dict(x.split("=", 1) for x in said.splitlines()) == {
         "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": "stratified:1", "H1_TIE": "1", "COMPOSITE": "1",
-        "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200", "DEFERRED_TREE": SHA}
+        "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200", "DEFERRED_TREE": SHA,
+        "CR_SCAN_DELTA": "5.421010862427522e-20"}
     listed = (dd / "inputs.txt").read_text().splitlines()
     window = [f"v3c-w7-{VTAG}/window/{f}" for f in ("circuit.json", "registration.json", "values/a.bin")]
     own = ["private/deferred/deferred.env", "private/deferred/pieces/pouw/answer.json"]
