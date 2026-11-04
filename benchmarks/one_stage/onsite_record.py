@@ -35,11 +35,12 @@ caps aren't those; and ``verdict_line`` is the run's published line of the netwo
 verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's
 ``error``. ``of_record`` is the figure of record (`OPEN`): that K only where the verdict's public holds every check the
 tight ℓ_{a,j} rests on (``held``, `CHECKS`), and while one is ``open``, K plus ℓ_a + 1 bits for each audit tied to each
-execution phase's scan (``advice``: each audit's ℓ_a, its registered advice length in the case's commitment, and the
-bits each phase adds). Beside the bound, ``advice_charge``: the served run's realized advice charge stays out of the
-record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is ℓ_{a,j} as the bound charges each
-execution phase, with its share of K and its source (`CHARGED`: the tied compute audits' unregistered inputs, read off
-the period's parameters, with no advice length and no cap in them); and
+execution phase's scan (``advice``: the bits each phase adds). Beside the bound, ``advice_charge``: the served run's
+realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
+ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
+audits' unregistered inputs, read off the period's parameters, with no advice length and no cap in them); ``cap`` is
+each audit's ℓ_a, its registered advice length in the case's commitment, stated as a cap and in no term of K (`CAP`);
+and
 ``measured`` is honest serving's |a_j| a Commit period, of which an execution phase holds several, and their sum over
 each execution phase (``bits_per_phase``, missing where the test run's advice places no Commit period on the engine
 clock; ``phases`` says where those phases start, `TEST_PHASES`), measured on a test run with public inputs
@@ -139,10 +140,13 @@ CHECKS = {"free": "each tied audit's free inputs computed from its Program's des
           "circuit": "each tied audit's circuit held fixed whatever its advice"}
 OPEN = ("the figure of record: K as the period's check states it, the tight form, only where its Lean verdict performed "
         "every check of `CHECKS` (the public's held). While one is open it is K plus ℓ_a + 1 bits for each audit tied "
-        "to each execution phase's scan, beside that phase's ℓ_{a,j}: an advice of at most ℓ_a bits is one of fewer than "
-        "2^(ℓ_a + 1) strings. ℓ_a is the audit's registered advice length (its registration's window.advice.bits in the "
-        "case's commitment, the compiler's cap once the advice is padded; 0 for no advice), and the tight K's cells go "
-        "beside the figure of record's, conditional on the open checks (periods_tight)")
+        "to each execution phase's scan, beside that phase's ℓ_{a,j}: an advice of at most ℓ_a bits (`CAP`) is one of "
+        "fewer than 2^(ℓ_a + 1) strings. The tight K's cells go beside the figure of record's, conditional on the open "
+        "checks (periods_tight)")
+CAP = ("ℓ_a, each audit's registered advice length in the case's commitment (its registration's window.advice.bits; 0 "
+       "for no advice): the compiler's cap, the length each Commit period's advice is padded to before it is committed. "
+       "A cap, in no term of PeriodLeakAccepted's K: it enters the figure of record only while a check of `CHECKS` is "
+       "open, as ℓ_a + 1 bits for each tied audit (`OPEN`)")
 TIED_ALL = ("every audit of the case's commitment: the public names no scan's tied audits (scans[j].tied), so each is "
             "charged to every execution phase, exact with one audit")
 #: each scaled cell's rule, by the name it gives; `rules` adds each one's sources
@@ -365,17 +369,21 @@ def advice_bits(reg: Mapping[str, Any]) -> int:
     return int(adv["bits"]) if isinstance(adv, Mapping) else 0
 
 
-def of_record(public: Mapping[str, Any], case: Mapping[str, Any], K: int) -> dict[str, Any]:
-    """The figure of record (`OPEN`) from the period's public and its case's commitment: ``K``, the checks the public
-    holds and those open, and the advice ℓ_a + 1 charges, each audit's ℓ_a and its sum over each phase's tied audits
-    (the public's ``scans[j].tied``, else every audit: `TIED_ALL`)."""
+def caps(case: Mapping[str, Any]) -> list[int]:
+    """Each audit's ℓ_a (`CAP`), in the order of the case's commitment."""
+    return [advice_bits(r) for r in json.loads(bytes.fromhex(case["commitment"]))["audits"]]
+
+
+def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int) -> dict[str, Any]:
+    """The figure of record (`OPEN`) from the period's public and the audits' caps ``ell``: ``K``, the checks the public
+    holds and those open, and the advice ℓ_a + 1 charges, summed over each phase's tied audits (the public's
+    ``scans[j].tied``, else every audit: `TIED_ALL`)."""
     held = [c for c in CHECKS if c in (public.get("held") or ())]
     open_ = [c for c in CHECKS if c not in held]
-    ell = [advice_bits(r) for r in json.loads(bytes.fromhex(case["commitment"]))["audits"]]
     tied = [s.get("tied") for s in public["scans"]]
     per = [sum(ell[int(i)] + 1 for i in (t if t is not None else range(len(ell)))) for t in tied]
     return {"K": K + (sum(per) if open_ else 0), "held": held, "open": open_, "is": OPEN,
-            "advice": {"ell_a": ell, "bits_per_phase": per,
+            "advice": {"bits_per_phase": per,
                        "tied": "scans[j].tied" if all(t is not None for t in tied) else TIED_ALL}}
 
 
@@ -384,7 +392,8 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     report = json.loads((out / "record" / "verdicts.json").read_text())
     if report.get("format") != EXTENDS:
         raise ValueError(f"record/verdicts.json is {report.get('format')!r}, not {EXTENDS}")
-    advice = {"served": ADVICE, "charged": {"missing": "no bound"}, "measured": measured(advice_charge)}
+    advice = {"served": ADVICE, "charged": {"missing": "no bound"}, "cap": {"missing": "no bound"},
+              "measured": measured(advice_charge)}
     rows = report.get("protocols") or {}
     found = composites(out)
     v = {name: row_verdict(rows, ROWS[name]) for name in ("sampled proofs", "PoUW")}
@@ -424,15 +433,17 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
         case = json.loads((out / CASE).read_text())
     except FileNotFoundError:
         b["connections"] = {"missing": f"no {CASE}: they are its params' caps"}
-        b["of_record"] = {"missing": f"no {CASE}: its commitment holds the tied audits' registrations"}
+        b["of_record"] = advice["cap"] = {"missing": f"no {CASE}: its commitment holds the tied audits' registrations"}
         return rec | {"periods": {"missing": f"no {CASE}: the execution phase's length is its params' schedule"}}
     except ValueError as e:
-        b["connections"] = b["of_record"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
+        b["connections"] = b["of_record"] = advice["cap"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
         return rec | {"periods": b["of_record"]}
     try:
-        b["of_record"] = of_record(answer["public"], case, b["K"])
+        ell = caps(case)
+        b["of_record"] = of_record(answer["public"], ell, b["K"])
+        advice["cap"] = {"ell_a": ell, "is": CAP}
     except (IndexError, KeyError, TypeError, ValueError) as e:
-        b["of_record"] = {"error": f"{CASE} commitment: {type(e).__name__}: {e}"}
+        b["of_record"] = advice["cap"] = {"error": f"{CASE} commitment: {type(e).__name__}: {e}"}
     try:
         phase_s, connections = schedule(case, b["phases"])
     except (KeyError, TypeError, ValueError) as e:

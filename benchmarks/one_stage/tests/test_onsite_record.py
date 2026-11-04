@@ -149,7 +149,7 @@ def test_a_rehearsal_records_each_missing_part_with_its_why_and_no_figure(tmp_pa
                                        "certifier in front of the serving endpoint): only its accepted answer certifies K"}
     assert rec["periods"] == {"missing": "no bound"}
     assert rec["advice_charge"] == {"served": OR.ADVICE, "charged": {"missing": "no bound"},
-                                    "measured": {"missing": OR.NO_MEASUREMENT}}
+                                    "cap": {"missing": "no bound"}, "measured": {"missing": OR.NO_MEASUREMENT}}
     assert numbers({k: rec[k] for k in ("bound", "periods", "verdicts", "advice_charge")}) == []
     assert "window" not in rec and rec["tree"] is None
     line = capsys.readouterr().out.strip()
@@ -179,7 +179,9 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
                                                "lean": "scans[j].free"}
     assert "no cap and no advice length" in OR.CHARGED and "audits[].free" in OR.CHARGED
     assert b["of_record"] == {"K": KR, "held": [], "open": ["free", "circuit"], "is": OR.OPEN,
-                              "advice": {"ell_a": [0], "bits_per_phase": [1], "tied": OR.TIED_ALL}}
+                              "advice": {"bits_per_phase": [1], "tied": OR.TIED_ALL}}
+    assert rec["advice_charge"]["cap"] == {"ell_a": [0], "is": OR.CAP}
+    assert "A cap, in no term" in OR.CAP and "`CAP`" in OR.OPEN
     assert rec["periods"]["run"]["bits"] == KR and rec["periods_tight"]["run"]["bits"] == K
     assert rec["periods_tight"]["conditional_on"] == ["free", "circuit"]
 
@@ -192,15 +194,17 @@ def test_the_served_audits_cap_is_charged_while_a_check_is_open_and_the_tight_K_
     assert OR.main([str(out)]) == 0
     rec = json.loads((out / "record" / "onsite.json").read_text())
     of = rec["bound"]["of_record"]
-    assert (of["K"], of["open"], of["advice"]["ell_a"], of["advice"]["bits_per_phase"]) == (
+    assert (of["K"], of["open"], rec["advice_charge"]["cap"]["ell_a"], of["advice"]["bits_per_phase"]) == (
         K + 2 ** 23 + 1, ["free", "circuit"], [2 ** 23], [2 ** 23 + 1])
+    assert rec["advice_charge"]["charged"]["bits_per_phase"] == [9088]
     assert rec["bound"]["K"] == K and rec["periods"]["year"]["datacenter"]["bits"] > \
         rec["periods_tight"]["year"]["datacenter"]["bits"]
     line = json.loads(capsys.readouterr().out.strip()[7:])
     assert (line["K"], line["K_tight"], line["open"]) == (K + 2 ** 23 + 1, K, ["free", "circuit"])
 
 
-@pytest.mark.parametrize("held, open_", [(["free", "circuit"], []), (["free"], ["circuit"]), (["circuit", "x"], ["free"])])
+@pytest.mark.parametrize("held, open_", [(["free", "circuit"], []), (["circuit", "free"], []), (["free"], ["circuit"]),
+                                         (["circuit", "x"], ["free"])])
 def test_the_figure_of_record_is_the_tight_K_only_where_the_verdict_held_both_checks(tmp_path, held, open_):
     rec = OR.record(accepted(tmp_path, dict(PUBLIC, held=held), audits=(SERVED,)))
     of = rec["bound"]["of_record"]
@@ -214,8 +218,8 @@ def test_a_scans_tied_audits_are_the_ones_it_charges_and_else_every_audit_is(tmp
     scans[j].tied, each phase only its own."""
     two = dict(PUBLIC, K=PUBLIC["K"] + 9088 + 63, windows=2, scans=[SCAN, SCAN])
     rec = OR.record(accepted(tmp_path / "all", two, windows=2, audits=(SERVED, NO_ADVICE)))
-    assert rec["bound"]["of_record"]["advice"] == {"ell_a": [2 ** 23, 0], "bits_per_phase": [2 ** 23 + 2] * 2,
-                                                   "tied": OR.TIED_ALL}
+    assert rec["bound"]["of_record"]["advice"] == {"bits_per_phase": [2 ** 23 + 2] * 2, "tied": OR.TIED_ALL}
+    assert rec["advice_charge"]["cap"]["ell_a"] == [2 ** 23, 0]
     tied = dict(two, scans=[dict(SCAN, tied=[0]), dict(SCAN, tied=[1])])
     of = OR.record(accepted(tmp_path / "tied", tied, windows=2, audits=(SERVED, NO_ADVICE)))["bound"]["of_record"]
     assert (of["advice"]["bits_per_phase"], of["advice"]["tied"], of["K"]) == (
@@ -228,6 +232,7 @@ def test_a_commitment_the_record_cant_read_leaves_no_figure_of_record_and_no_per
     (out / OR.CASE).write_text(json.dumps(dict(case, commitment="00")))
     rec = OR.record(out)
     assert rec["bound"]["of_record"]["error"].startswith(f"{OR.CASE} commitment: JSONDecodeError")
+    assert rec["advice_charge"]["cap"] == rec["bound"]["of_record"]
     assert rec["periods"]["missing"].startswith("no figure of record") and "periods_tight" not in rec
     assert rec["bound"]["K"] == K and rec["bound"]["connections"]["count"] == 252
 
