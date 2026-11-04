@@ -15,6 +15,7 @@ import random
 import pytest
 
 from verity.core.protocols.sampled_proofs import challenger as C
+from verity.ml.commitments.merkle import merkle_depth
 from verity.ml.crypto import lms
 
 LABEL = "commit"
@@ -203,6 +204,14 @@ def test_a_layout_is_checked(scheme, epoch, families, why):
     if type(families) is tuple:
         with pytest.raises(C.CoinError, match=f"^{why}"):
             C.LiveChallenger(scheme, epoch, families, entropy("l"))
+
+
+def test_an_openings_path_is_its_layouts_depth_at_most_max_path():
+    """v2 refuses an opening's path past `MAX_PATH` digests (`coins.LIMITS`): a path is its layout's depth, and a layout
+    holds at most `MAX_COINS` coins (`layout_problem`), whose depth is `MAX_PATH`."""
+    assert merkle_depth(C.MAX_COINS) == C.MAX_PATH
+    ch = C.LiveChallenger("verity/test/coins/v1", 0, [("a", 5), ("b", 4)], entropy("p"))
+    assert {len(ch.open(label, 0, b"r" * 64).path) for label in ("a", "b")} == {merkle_depth(9)} == {4}
 
 
 def test_a_label_may_name_its_client():
