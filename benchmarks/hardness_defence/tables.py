@@ -86,6 +86,7 @@ SOURCES = [
     ("r20261104-105910-69ec", "70b-*", "70b", {"orders": True}),
     ("r20261104-111402-81ab", "70b-*", "70b", {"orders": True}),
     ("r20261104-112755-5cbd", "70b-*", "70b", {"deflate": 32, "orders": True}),
+    ("r20261104-114043-136c", "70b-*", "70b", {"orders": True}),
 ]
 
 
@@ -319,7 +320,7 @@ DEFENCES = {
     "2 and 4, 70B's four exact: clip up to 5% where it clears, else at a margin": operating(0.05, "margin",
                                                                                           exact=True),
 }
-RECOMMENDED = "2 and 4, 70B's four exact: clip up to 5% where it clears, else at a margin"
+RECOMMENDED = "4, 70B's four exact: every broken matrix at a margin; L0 q, k, v and L1 v uncredited"
 
 NEAR = 0.07  # the most a reorder took off a split's residual, over the leaf (r20261104-093237-c694 against natural)
 
