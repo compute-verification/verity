@@ -18,7 +18,7 @@ REPO = Path("/agent/repos/verity")
 #: later runs win: A0 (cancelled), D, C, B, A, E, then the rerun
 RUNS = [("r20261103-222317-f7eb", "A0"), ("r20261103-222541-89f3", "D"), ("r20261103-222532-6526", "C"),
         ("r20261103-223644-ff12", "B"), ("r20261103-223617-52f6", "A"), ("r20261103-224800-304d", "E"),
-        ("r20261104-065505-8e93", "R")]
+        ("r20261104-070723-ab3a", "R")]
 
 #: failing file (suffix) -> (origin PR, fix, lines, how the fix was checked)
 CATALOG = {

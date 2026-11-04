@@ -21,6 +21,7 @@ RUNS = {
     "r20261103-222541-89f3": "vy-nebius-cpu-11",  # D
     "r20261103-224800-304d": "vy-nebius-cpu-3",  # E
     "r20261103-222317-f7eb": "vy-nebius-cpu-12",  # A (cancelled; non-Security packages only)
+    "r20261104-070723-ab3a": "vy-nebius-cpu-3",  # R: the 52 B, C and D didn't build
 }
 RES = Path("/tmp/portchk/results")
 BIN = "/agent/repos/verity/.git/verity-auth/bin:/agent/repos/verity/.venv/bin"
