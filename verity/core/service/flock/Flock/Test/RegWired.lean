@@ -2,7 +2,8 @@
 `RegWired.check`: a statement's wired port `x`, its two instances reading writer `m/c0/o0`'s output rows 0 and 1, whose
 `b ‖ c` they share (each wired row committed under its writer row's salt). The verifier's reads give each session
 instance's writer root and position; the header gives one path per row of the population. Every instance's row opens its
-writer's root, with or without row tables, and in a drawn session only the drawn instances' rows are read; a swapped
+writer's root, with or without row tables, and in a drawn session only the drawn instances' rows are read, a drawn
+instance whose row is not its writer's refused; a swapped
 position, another writer's root, a wrong path, a path or read short, a missing entry, a header port the verifier doesn't
 read, a registered port, a `row/v1` port or a port of no circuit is refused; without the verifier's reads the check is a
 no-op.
@@ -71,6 +72,12 @@ def why (ps : Array RegWired.Port := ports) (p : Public := pub) (c : Circuit := 
 #guard why (ports (reads [1] [writer])) (drawnPub (tables := true)) == ""
 #guard why (ports (reads [0] [writer])) (drawnPub) ==
   "wired reads: port x: instance 0's row does not open m/c0/o0's root at position 0"
+
+-- a drawn instance whose row is not its writer's row
+#guard why (ports (reads [1] [writer])) ({ drawnPub with digests := #[others[1]!] }) ==
+  "wired reads: port x: instance 0's row does not open m/c0/o0's root at position 1"
+#guard why (ports (reads [1] [writer])) ({ drawnPub (tables := true) with digests := #[bcs[0]!, others[1]!] }) ==
+  "wired reads: port x: instance 0's row does not open m/c0/o0's root at position 1"
 
 -- the positions swapped: each row opens the root only at its own
 #guard why (ports (reads [1, 0])) == "wired reads: port x: instance 0's row does not open m/c0/o0's root at position 1"
