@@ -104,32 +104,46 @@ def test_each_vectors_term_solves_its_cap():
             assert term["proved_rho"] <= term["numerical_rho"]
     # both forms, a linear form that drops a product, and a best subset that drops one
     assert forms["linear"] and forms["root"] and subsets and dropped
-    void = [v for v in json.loads(iob.VECTORS.read_text())["vectors"] if v["cap"]["lam_proved"] is None]
-    assert [v["cap"]["whole_chain"] for v in void] == [None]
+    vs = {v["name"]: v for v in json.loads(iob.VECTORS.read_text())["vectors"]}
+    void = [v for v in vs.values() if v["cap"]["lam_proved"] is None]
+    assert [(v["cap"]["whole_chain"], v["term"]["diverged_fed"]) for v in void] == [(None, [0]), (None, [1])]
+    assert all(v["term"]["converged"] is None for v in vs.values() if not v["term"]["diverged_fed"])
+    one, conv = vs["one product, square, console"]["term"], void[1]["term"]["converged"]
+    assert (conv["rho"], conv["rho_no_cell"]) == (one["proved_rho"], one["proved_rho_no_cell"])
+    assert conv["subset_no_cell"]["kept"] == [0] and void[0]["term"]["converged"]["rho"] is None
 
 
-def test_a_short_chain_product_drops_from_the_proved_bound_and_never_voids_it():
-    """A product whose whole-making chain is too short for Λ (a rank-1 adapter's, r = k/(3K²b) past 1/4) beside
-    products whose chains are long enough, or none: the proved bound is the others' alone at the same |C|, and the
-    subset names what it dropped; with only short chains no subset has a proved Λ, and the figures are None, never 0
-    (nothing counted is 0)."""
+def test_a_product_whose_chain_has_no_bound_voids_the_step_with_the_rest_beside_it():
+    """A product whose whole-making chain is too short for Λ (a rank-1 adapter's, r = k/(3K²b) past 1/4) is never
+    dropped to escape the void (coordinator 19:30Z): beside products whose chains are long enough, or none, the
+    proved figures are None, never 0, and `converged` is the others' alone at the same |C|, its subset naming what it
+    left out; adding a product no chain feeds to a void step leaves it void. A short chain with a bound (K = 128)
+    still drops where its factor costs more than its work gives."""
     c, k = iob.CONSOLE
     bf16 = {"b_a": 16, "b_b": 16, "b_c": 32, "gates_per_mac": 23682 / 16, "cell_gates": 23682.0}
     square = {"macs": 5e14, "outputs": 5e14 / 512, "k_dim": 512, "k_whole": 512} | bf16
     free = {"macs": 1e14, "outputs": 1e14 / 1024, "k_dim": 1024, "k_whole": None} | bf16
     adapter = {"macs": 5e11, "outputs": 5e11, "k_dim": 1, "k_whole": 1} | bf16
     C = 1e18
-    alone = iob.bound([square, free], c, k, C)["proved"]
-    got = iob.bound([square, free, adapter], c, k, C)["proved"]
+    alone = iob.bound([square, free], c, k, C)
+    got = iob.bound([square, free, adapter], c, k, C)
+    assert alone["diverged_fed"] == [] and alone["converged"] is None and alone["proved"]["subset"]["dropped"] == 0
+    assert got["diverged_fed"] == [2] and all(got["proved"][x] is None for x in FIGURES)
+    assert got["proved"]["subset"] is None and got["proved"]["subset_no_cell"] is None
     share = adapter["macs"] / (square["macs"] + free["macs"] + adapter["macs"])
     for fig, sub in (("rho", "subset"), ("rho_no_cell", "subset_no_cell")):
-        assert got[fig] == pytest.approx(alone[fig], rel=1e-12) and got[fig] > 0
-        assert (got[sub]["k_whole_min"], got[sub]["kept"], got[sub]["dropped"]) == (512, [0, 1], 1)
-        assert got[sub]["dropped_macs_share"] == pytest.approx(share, rel=1e-12)
-    assert alone["subset"]["dropped"] == 0
-    void = iob.bound([adapter, square | {"k_whole": 64}], c, k, C)["proved"]
-    assert all(void[x] is None for x in FIGURES) and void["subset"] is None
-    assert iob.bound([adapter, free], c, k, C)["proved"]["subset"]["kept"] == [1]
+        conv = got["converged"]
+        assert conv[fig] == pytest.approx(alone["proved"][fig], rel=1e-12) and conv[fig] > 0
+        assert (conv[sub]["k_whole_min"], conv[sub]["kept"], conv[sub]["dropped"]) == (512, [0, 1], 1)
+        assert conv[sub]["dropped_macs_share"] == pytest.approx(share, rel=1e-12)
+    void = iob.bound([adapter, square | {"k_whole": 64}], c, k, C)
+    assert all(void["proved"][x] is None for x in FIGURES) and void["proved"]["subset"] is None
+    assert void["diverged_fed"] == [0, 1] and all(void["converged"][x] is None for x in FIGURES)
+    unfed = iob.bound([adapter, free], c, k, C)
+    assert unfed["proved"]["rho"] is None and unfed["converged"]["subset"]["kept"] == [1]
+    mid = square | {"macs": 5e11, "outputs": 5e11 / 128, "k_dim": 128, "k_whole": 128}
+    kept = iob.bound([square, mid], c, k, C)
+    assert kept["diverged_fed"] == [] and kept["converged"] is None and kept["proved"]["subset"]["kept"] == [0]
     assert iob.bound([], c, k, C)["proved"]["rho"] == 0
 
 
@@ -340,13 +354,16 @@ def test_dense_counts_its_block_products_but_not_the_first_layers_or_newton_schu
     assert 0.5 < m["tiny"]["kinds"]["fresh"]["share"] < 1 and m["tiny"]["bound"]["proved"]["rho"] > 0
     # at the console's k a block holds a whole 64 × 64 weight: layer 0's q, k, v come whole from the embedding's rows
     # (64 < 3^{3/2}·√(k/32)), so later layers' operands are cheap too, and 64-long chains make operands whole faster
-    # than a block reads them (r = 1/3): Λ is void on every product, so the proved bound is the products whose
-    # chains are at least d_ff = 192 long (and those with none), the rest still in |C|
+    # than a block reads them (r = 1/3): Λ is void on every product those chains feed, which no subset drops, so the
+    # proved bound is void, and beside it the products whose chains are at least d_ff = 192 long (and those with
+    # none), the rest still in |C|
     assert m["console"]["kinds"]["expansion"]["share"] > m["tiny"]["kinds"]["expansion"]["share"]
-    proved = m["console"]["bound"]["proved"]
-    assert m["console"]["bound"]["whole_chain"] is None and proved["lam"] is not None and proved["rho_no_cell"] > 0
+    b = m["console"]["bound"]
+    assert b["whole_chain"] is None and b["proved"]["lam"] is None and b["proved"]["rho_no_cell"] is None
+    assert b["diverged_fed"] and b["converged"]["lam"] is not None and b["converged"]["rho_no_cell"] > 0
     for sub in ("subset", "subset_no_cell"):
-        assert proved[sub]["k_whole_min"] == 192 and 0 < proved[sub]["dropped_macs_share"] < 1
+        assert b["converged"][sub]["k_whole_min"] == 192 and 0 < b["converged"][sub]["dropped_macs_share"] < 1
+    assert m["tiny"]["bound"]["diverged_fed"] == []
 
 
 def test_lora_counts_only_its_adapters():
@@ -570,12 +587,45 @@ def test_the_whole_making_system_is_exact_in_feeding_order_and_void_only_where_a
         assert w["e"] is None and math.isinf(w["whole_chain"])
 
 
+def test_a_cycle_whose_classes_are_fed_more_than_they_read_keeps_its_fixed_point():
+    """A settled cycle is raised to a post-fixed point along (I − J)⁻¹·1, since a uniform raise isn't one where a class
+    is fed more than it reads and would void a step that has a fixed point. A system shaped like a width-8,192 step's
+    (128-wide heads, a 4,096-token context, every read term and feed 1) at k = 1.6e6: the 128-long class's μ ≈ 2.04
+    feeds the 4,096-long class twice its read term, and the least fixed point gives e ≈ 0.0202; it is void from about
+    9.14e6, where J's spectral radius reaches 1. The 45M dense step's system has one up to 249,364 bits."""
+    from te_core import formalism
+
+    third = 1 / 3
+    wide = {"classes": {8192: {"c": 1.0, "P": 1.0, "feeds": {4096: 1.0, 8192: 1.0, 22528: 1.0, 32000: 1.0}},
+                        128: {"c": third, "P": 1.0, "feeds": {8192: 1.0}},
+                        4096: {"c": third, "P": 1.0, "feeds": {128: 1.0, 8192: 1.0}},
+                        22528: {"c": 1.0, "P": 1.0, "feeds": {8192: 1.0}},
+                        32000: {"c": third, "P": 1.0, "feeds": {8192: 1.0}}},
+            "counted": {4096: 1.0, 8192: 1.0, 22528: 1.0, 32000: 1.0}, "b": 16}
+    w = iob.whole_chain_of(wide, 1.6e6)
+    assert w["diverged"] == [] and w["cycles"] == [[128, 4096, 8192, 22528, 32000]]
+    assert w["e"] == pytest.approx(0.0201712, rel=1e-5) and w["mu"][128] == pytest.approx(2.04082, rel=1e-5)
+    for K, e in wide["classes"].items():
+        rhs = w["r"][K] * (e["P"] + sum(v * w["mu"][i] for i, v in e["feeds"].items())) ** 2
+        assert rhs <= w["mu"][K] and rhs == pytest.approx(w["mu"][K], rel=1e-6)
+    up = {K: m * (1 + 1e-6) for K, m in w["mu"].items()}
+    assert w["mu"][128] + w["mu"][8192] > 2 * wide["classes"][4096]["P"]
+    assert w["r"][4096] * (1 + up[128] + up[8192]) ** 2 > up[4096]
+    assert iob.whole_chain_of(wide, 9.13e6)["e"] is not None and iob.whole_chain_of(wide, 9.15e6)["e"] is None
+
+    system = formalism.products_of_trace(json.loads(FIXTURE_45M.read_text()))["system"]
+    assert formalism.whole_chain(system, 200_000)["e"] == pytest.approx(0.45490, rel=1e-4)
+    assert formalism.whole_chain(system, 249_000)["e"] is not None and formalism.whole_chain(system, 250_000)["e"] is None
+
+
 def test_each_subset_takes_the_whole_making_factor_of_the_classes_that_feed_it():
     """With the system's made-whole shares (`made_whole`) and each product's `fed`, a subset's Λ reads only the classes
-    that feed its products: where an adapter's class makes e large (μ 10³) or has no fixed point (∞), the best subset
-    drops the product it feeds, so the term is the others' alone, never below what the products no class feeds give;
-    the step's one factor would make it all but 0. The subset says which rule kept it, its e and the classes only its
-    dropped products read. A product without `fed` can't take its own factor."""
+    that feed its products: where an adapter's class makes e large (μ 10³), the best subset drops the product it
+    feeds, so the term is the others' alone, never below what the products no class feeds give; the step's one factor
+    would make it all but 0. Where that class has no fixed point (∞) the product is never dropped (coordinator
+    19:30Z): the proved figures are None and the others' alone are beside them (`converged`). The subset says which
+    rule kept it, its e and the classes only its dropped products read. A product without `fed` can't take its own
+    factor."""
     c, k = iob.CONSOLE
     bf16 = {"b_a": 16, "b_b": 16, "b_c": 32, "gates_per_mac": 23682 / 16, "cell_gates": 23682.0}
     square = {"macs": 5e14, "outputs": 5e14 / 512, "k_dim": 512, "k_whole": 512, "fed": [[512, 1.0]]} | bf16
@@ -588,8 +638,11 @@ def test_each_subset_takes_the_whole_making_factor_of_the_classes_that_feed_it()
         alone = iob.bound([square, free], c, k, C, made_whole=made)["proved"]
         unfed = iob.bound([free], c, k, C, made_whole=made)["proved"]
         assert got["whole_chain"] == (pytest.approx((1 + big + 0.02) ** 1.5) if math.isfinite(big) else None)
+        assert got["diverged_fed"] == ([] if math.isfinite(big) else [2])
+        if math.isinf(big):
+            assert all(got["proved"][x] is None for x in FIGURES) and got["proved"]["subset"] is None
         for fig, sub in (("rho", "subset"), ("rho_no_cell", "subset_no_cell")):
-            p = got["proved"]
+            p = got["proved"] if math.isfinite(big) else got["converged"]
             assert p[fig] == pytest.approx(alone[fig], rel=1e-12) and p[fig] >= unfed[fig] > 0
             assert (p[sub]["kept"], p[sub]["dropped_fed"]) == ([0, 1], [16]) and p[sub]["rule"] in ("e", "mu")
             assert p[sub]["e"] == pytest.approx(0.01) and p[sub]["lam"] == pytest.approx(iob.SHARE * 1.01 ** 1.5 *

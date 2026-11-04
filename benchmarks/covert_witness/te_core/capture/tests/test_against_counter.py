@@ -58,6 +58,35 @@ def lora_new():
     return m, {n for n, p in m.named_parameters() if p.requires_grad}
 
 
+def test_a_trace_is_of_its_runs_program_where_its_product_shapes_are_the_counters():
+    """te_core.formalism.other_program on the counter's op log as a ledger row keeps it (te_core.ledger's macs_log)
+    and the capture's product rows of the same program (coordinator 20:42Z): LoRA at rank 2, trained from scratch,
+    and the whole model trained run the same matrix-product shapes in both, so their terms are priced, while a capture
+    at rank 3 runs shapes the rank-2 run never ran (each adapter's factors and their gradients), so its term isn't."""
+    from te_core.capture.products import rows
+    from te_core.formalism import other_program
+    from te_core.ledger import _macs_log
+
+    def both(make, rank=None):
+        torch.manual_seed(0)
+        model, new = make()
+        opt = lambda: torch.optim.AdamW([p for p in model.parameters() if p.requires_grad])  # noqa: E731
+        g0 = capture_step(model, opt(), models.lm_loss, BATCH, updated=new)
+        return _macs_log(counted(model, opt(), new), None), rows(g0.with_updated(g0.trained | new))["rows"]
+
+    for make in (full, lora_new):
+        log, got = both(make)
+        assert got and other_program(got, log) is None, make
+    log = both(lora_new)[0]
+    torch.manual_seed(0)
+    model = models.lora(models.TinyLM(), 3)
+    new = {n for n, p in model.named_parameters() if p.requires_grad}
+    g0 = capture_step(model, torch.optim.AdamW([p for p in model.parameters() if p.requires_grad]), models.lm_loss,
+                      BATCH, updated=new)
+    o = other_program(rows(g0.with_updated(g0.trained | new))["rows"], log)
+    assert o is not None and o["unmatched"] > 0 and all(3 in s for s in o["largest"]), o
+
+
 @pytest.mark.parametrize("make", [full, top, lora_new])
 def test_the_capture_and_the_counter_agree_step_for_step(make):
     torch.manual_seed(0)
