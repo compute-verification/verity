@@ -545,7 +545,8 @@ def test_committed_outputs_that_dont_render_the_network_certifiers_egress_leave_
 @pytest.mark.slow
 def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
     """`scan_period.rows_case` of one link-window in the rows form's formats (`NetworkCheck.Period`; its Lean checks the
-    case on a node: scan_period.sh): the deployment's key, session and schedule, the schedule's caps as its cells (one
+    case on a node: scan_period.sh): the key, session and schedule of the auditor's record of the run's deployment
+    (`warden_chain.RECORD`), the schedule's caps as its cells (one
     of `egress_cells` a connection the link-window can carry, never none), the registered Program and its
     descriptor (``joint/program.json``, the generator form, `scan_zk.scan_root`, whose one-stage reads are each unit's
     slot entries) as the scan, the block's audit (its descriptor, free inputs and no steps; its registration, whose
@@ -554,7 +555,9 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     and two row registrations, each named by the registration's roots. The period's mirror reads the block's
     `SlotEntry_v1` template's entries off its descriptor, a stand-in whose closure digest is no pinned Definition's
     (`period_case.SLOT_ENTRY_PINS`), and refuses the honest case at the wiring (`period_case.UNWIRED`); with that digest
-    pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, accepts it
+    pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, while the run
+    re-signed under another key is refused at the record, and, its deployment.json rewritten to the record's, at the
+    certificates, none of them the record's key's; it accepts it
     with the block's audit as V3c's ``period.json`` (`rows_case`'s ``v3c``) sampled at one or two proof blocks
     (``subset:1``, ``subset:2``, the demo's sample: the consistency check holds at any sample), and refuses the
     forged case (a certificate's signature changed) at the certificates, the tampered case (another Program's
@@ -623,7 +626,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     (scan / "summary.json").write_text(json.dumps({"rounds": {r: {"audit": {"why": {"x": "y"}}}
                                                               for r in ("tampered", "chain")}}))
     dep, regs = json.loads((run / "deployment.json").read_text()), _cells(run)
-    case = SP.rows_case(run, scan)
+    record = SP.WC.own_record(run)
+    case = SP.rows_case(run, scan, record=record)
     p = case["params"]
     assert sorted(p) == PC.ROWS_PARAMS_KEYS
     assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], dep["params"],
@@ -657,41 +661,48 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     monkeypatch.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, digest))
     out = PC.reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
+    resigned = published(tmp_path / "resigned", sz.TEST, seed=b"another network certifier", windows=1)
+    with pytest.raises(SystemExit, match="deployment.json names another key than the auditor's record's$"):
+        SP.rows_case(resigned, scan, record=record)
+    (resigned / "deployment.json").write_bytes((run / "deployment.json").read_bytes())
+    got = PC.reference(SP.rows_case(resigned, scan, record=record))
+    assert (got["verdict"], got["reason"]) == ("reject", "window 0: certificates (none of a window in which the network "
+                                                         "certifier refused a connection)"), got
     summary = json.loads((scan / "summary.json").read_text())
     for k in (1, 2):
         (v3c := tmp_path / f"period-subset-{k}.json").write_text(json.dumps(sampled := block_audit(progs, sampled=k)))
         (scan / "summary.json").write_text(json.dumps({**summary, "v3c": {
             "registration": R.digest(sampled["registration"])}}))
-        got = PC.reference(SP.rows_case(run, scan, v3c=v3c))
+        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, record=record))
         assert (got["verdict"], got["public"]["audits"][0]["drawn"], got["public"]["audits"][0]["units"]) == (
             "accept", k, E), got
-    refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}
+    refused = {r: PC.reference(SP.rows_case(run, scan, r, record=record)) for r in ("forged", "tampered", "chain")}
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
         "forged": ("reject", "window 0: certificates (none of a window in which the network certifier refused a "
                    "connection)"), "tampered": ("reject", "window 0: registration"),
         "chain": ("reject", "window 0: service: the scan's chain round refused: {'x': 'y'}")}
     elsewhere = [{**o, "root": "dd" * 64} for o in progs]
     (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(elsewhere)]}))
-    got = PC.reference(SP.rows_case(run, scan))
+    got = PC.reference(SP.rows_case(run, scan, record=record))
     assert (got["verdict"], got["reason"]) == ("reject", "window 0: the scan's prog is no compute audit's output")
     at_o1 = [q[:-1] + "1" for q in entries]
     for unwired in ([*progs[1:], progs[0]], [progs[0], {**progs[1], "root": "dd" * 64}], progs[:1]):
         (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(unwired, entries[:len(unwired)])]}))
-        got = PC.reference(SP.rows_case(run, scan))
+        got = PC.reference(SP.rows_case(run, scan, record=record))
         assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNWIRED}"), got
     (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(progs, at_o1)]}))
-    got = PC.reference(SP.rows_case(run, scan))
+    got = PC.reference(SP.rows_case(run, scan, record=record))
     assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNWIRED}"), got
     rows = [sz._bits(st, t) for t in range(T)]
     skipped = sz.tree("state", rows[:sz.TEST.A + 1] + rows[sz.TEST.A + 2:] + rows[-1:],
                       [w.head for w in h.at.sides["ingress"]], h.at.session)
     for scan_state in ({**state, "root": skipped.root.hex()}, None):
         (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(progs, scan_state=scan_state)]}))
-        got = PC.reference(SP.rows_case(run, scan))
+        got = PC.reference(SP.rows_case(run, scan, record=record))
         assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNSTATED}"), got
     (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [{"window": w} for w in (0, 1)]}))
     with pytest.raises(SystemExit, match="a group of 2 link-windows .* scan_zk.py --group 1"):
-        SP.rows_case(run, scan)
+        SP.rows_case(run, scan, record=record)
 
 
 def test_the_scan_leaves_out_each_members_refs_which_the_statement_fixes_and_still_scans_its_b_c(tmp_path):

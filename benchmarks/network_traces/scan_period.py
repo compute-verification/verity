@@ -3,10 +3,13 @@ and the scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), 
 and its Lean.
 
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
-        [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
+        [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT,RECORD[,tampered|chain|forged] ...
 
-* **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
-  and one schedule, whose caps over the one link-window are the cells, `WardenParams.caps`: `egress_cells` for each of
+* **The case** (`rows_case`) of link-window W: the parameters the deployment RECORD names, the auditor's record of the
+  warden run (`warden_chain.RECORD`, ``CERTIFIER_KEY``'s form: the gate's own ``out/deployment.json`` of the run as the
+  auditor read it off the gate, which every ``deployment.json`` the run holds must be, `warden_chain.deployment_of`;
+  ``own`` for a run the job made itself, scan_period.sh's, the job being its own auditor): its key, session
+  and one schedule (whose caps over the one link-window are the cells, `WardenParams.caps`: `egress_cells` for each of
   the `lanes · window` connections it can carry), the link `warden_serve.LINK`, the Program the scan's registration's,
   the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor and steps, off which
@@ -54,6 +57,7 @@ sys.path.insert(0, str(HERE))
 
 import leak_bounds as LB  # noqa: E402
 import scan_zk as SZ  # noqa: E402
+import warden_chain as WC  # noqa: E402
 import warden_serve as WS  # noqa: E402
 from verity.core.protocols.certifier.warden import WardenParams  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registration as RG  # noqa: E402
@@ -77,21 +81,23 @@ def certificates(run: Path, w: int) -> list[dict]:
     return out
 
 
-def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None) -> dict:
+def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None, *, record: dict) -> dict:
     """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
     (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
     ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's,
     in place of ``answers.json``'s, and its registration must be the one whose trees the scan read (``summary.json``'s
     ``v3c``): the period's audit, its scan's trees and the run's record are one registration, and an audit of another
-    is refused by name, never put in its place."""
+    is refused by name, never put in its place. The network certifier's key, session and schedule are ``record``'s,
+    the auditor's record of the run's deployment (`warden_chain.RECORD`), and a run whose deployment.json isn't the
+    record's is refused by name (`warden_chain.deployment_of`)."""
     if v3c is not None:
         audit = json.loads(v3c.read_text())
         read = (json.loads((scan / "summary.json").read_text()).get("v3c") or {}).get("registration")
         if read != (got := RG.digest(audit["registration"])):
             raise SystemExit(f"{v3c}: a foreign audit: it registers {got[:16]}…, and the scan read the trees of "
                              f"{f'{read[:16]}…' if read else 'no V3c registration'}")
-    dep = json.loads(SZ._found(run, "deployment.json").read_text())
+    dep, _ = WC.deployment_of(run, record)
     doc = json.loads((scan / "answers.json").read_text())
     if v3c is not None:
         doc["audits"] = [audit]
@@ -155,15 +161,17 @@ def main(argv=None) -> int:
     ap.add_argument("--v3c", type=Path, metavar="PERIOD",
                     help="V3c's period.json (records_audit.py period): the one compute audit, for scans proved on its "
                          "trees (scan_zk.py --v3c)")
-    ap.add_argument("cases", nargs="+", help="NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged]")
+    ap.add_argument("cases", nargs="+", help="NAME=WARDEN_RUN,SCAN_OUT,RECORD[,tampered|chain|forged], RECORD a "
+                                             f"{WC.RECORD} file, or own for a run the job made itself")
     a = ap.parse_args(argv)
     m = mirror(a.mirror)
     a.out.mkdir(parents=True, exist_ok=True)
     got, ok = {}, True
     for spec in a.cases:
         name, _, rest = spec.partition("=")
-        run, scan, *round_ = rest.split(",")
-        case = rows_case(Path(run), Path(scan), *round_, v3c=a.v3c)
+        run, scan, record, *round_ = rest.split(",")
+        record = WC.own_record(Path(run)) if record == "own" else json.loads(Path(record).read_text())
+        case = rows_case(Path(run), Path(scan), *round_, v3c=a.v3c, record=record)
         (a.out / name).mkdir(exist_ok=True)
         (a.out / name / "case.json").write_text(json.dumps(case, indent=1, sort_keys=True))
         py, lean = m.reference(case), lean_check(a.lean, case, a.out / name)
