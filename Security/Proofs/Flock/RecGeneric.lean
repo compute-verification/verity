@@ -15,7 +15,8 @@ extractors: its statements (`Proofs.Flock.RecGeneric.Statement`), the Flock inst
 (`Proofs.Flock.RecGeneric.AtFlockProof`), and the bridge to the sampled compiler (`Proofs.Flock.RecGeneric.Sampled`,
 B1), with B1's proof and the recursive audit from L1 (`Proofs.Flock.RecGeneric.SampledProof`), and a toy outer argument
 and compiler at which L2's hypotheses are stated to hold together (`Proofs.Flock.RecGeneric.Toy`). L1's proof: the
-compiled verifier's runs at any server (`Proofs.Flock.RecGeneric.ServerRun`) and the plurality prover on the composition,
-which bounds the inner stage's failure where every outer extraction succeeds (`Proofs.Flock.RecGeneric.Plurality`). -/
+compiled verifier's runs at any server (`Proofs.Flock.RecGeneric.ServerRun`) and the plurality prover on the
+composition, which bounds the inner stage's failure where every outer extraction succeeds
+(`Proofs.Flock.RecGeneric.Plurality`). -/
 
 @[expose] public section
