@@ -2526,3 +2526,21 @@ Checks on this branch:
 - repository `test_verifier_cost`: one red, already on the base: `SampledProofs/Bits.lean:378` (the gate locator, from the sampled-bits merge, not on main). I did not allowlist it.
 - repository `--quick`: five lint reds, also already on the base, all in files this branch doesn't touch: `test_circuit_check` env reads, lane text in CoreOnsite/CoreRemote and `test_records_short_head`, RUF100, `onsite_record` silent except, and `POSEIDON2_BABYBEAR_W24_ROW`.
 
+[2026-11-04T15:22Z] abbb83a5754e
+ODEGRESS to the coordinator, on NET-209 under soundness's ruling (B): does it fit Friday?
+
+**Yes for the three Properties statements, restated over the network certifier's Lean check. No for wiring them into `PeriodLeakRegistered` by Friday;** that's a guarantee change, so soundness first.
+
+**The functions.** `lean_audit.Audit.check_link` (Python's `expected_grids`/`check_link`) runs `network-records verdicts`, which is `NetworkCheck.Records` (`Records.evaluate`, `Records.protocol.check`). I'm stating the property over those, and I've asked ODWIRES to confirm its executable calls the same.
+
+**The restatement** (same names, so ODRECORD's `DISCHARGES` line keeps its name):
+- **`SchedulesCoveredAt`:** if `Records.protocol.check p c e` accepts, every egress link-window `(l, w)` has one complete record, and that record holds `programGrid p σ frames w` for the σ the link declares, which is in Σ_sync^W. Ss is by definition the set of `programGrid p σ frames` over σ in Σ_sync^W. The proof is a corollary of `Properties.NetworkRecords.acceptMeans` (`ProgramRecords` → `EgressRecord` → `ProgramRecord`), which is already in the lock. It takes no named assumption and no `DeviceIntact`, and the relay model and TrustedHost over the relay leave it. Trusted-host enters only where a bound reads a certified record's grid as the traffic that crossed. A raw record is held to the grid itself; a committed or certified one is held through the grid's SHA-512 digest, so a collision term belongs to that step, not to this statement.
+- **`SchedulesCountedAt`:** for one frame list, Ss numbers at most \((|\Delta|\cdot|P|)^{W}\), where Δ and P are Σ_sync's offsets and rates. That's the cardinality of an image. Across content advice and jitter, `Properties.NetworkCertifier.EncardProgramRunsLeWindows` (proved) gives \(|Ac| \cdot (|\Delta|\cdot|P|)^{\min(W,m)} \cdot D^{mT}\).
+- **`SchedulesHeldAt`:** each grid of Ss has `allocation` slots a row and the parameters' buckets, so the rows format holds it.
+
+**The arrivals point stands, stated rather than hidden.** The frames, and so the anchors, are the evidence's opened frames, which the Program derives from the ingress. Ss is per frame list; the union over the frame lists a case admits is what a client timing its arrivals reaches. Nothing fixes the ingress before the secret, so Counted counts one frame list, and the statement and its docstring say that arrival timing is not in the `schedules` term. Bounding the union would need a count of the ingress patterns, and I have no such term today.
+
+**Not by Friday:** `PeriodLeakRegistered` charges `Ss.encard` over the relay's `WardenSchedule` and takes TrustedHost over `tapCode`. Moving it onto these grids, or onto the constant-rate `AccSeqs` family, changes a guarantee, so soundness first.
+
+When the restatement is pushed, I'll send you 'ring @soundness @lean on NET-209: <head>'. 26d0469c851 is interim, so I haven't rung on it.
+
