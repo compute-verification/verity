@@ -609,7 +609,10 @@
    "nontrivial": "Properties.NetworkScan.scanScopeAcc_nontrivial"
   },
   "Properties.NetworkCertifier.schedulesCoveredAt": {
-   "honest": ["Properties.NetworkCertifier.schedulesCoveredAt_honest", "Properties.NetworkCertifier.schedulesCoveredAt_honestLane"],
+   "honest": [
+    "Properties.NetworkCertifier.schedulesCoveredAt_honest",
+    "Properties.NetworkCertifier.schedulesCoveredAt_honestLane"
+   ],
    "nontrivial": "Properties.NetworkCertifier.schedulesCoveredAt_nontrivial"
   },
   "Properties.RemoteAudit.codeLayoutTiles": {
@@ -963,11 +966,7 @@
    "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
   },
   "Properties.NetworkCertifier.Schedules": {
-   "imports": [
-    "Mathlib",
-    "NetworkCertifier.Rows",
-    "Definitions.NetworkCertifier.RecordRows"
-   ],
+   "imports": ["Mathlib", "NetworkCertifier.Rows", "Definitions.NetworkCertifier.RecordRows"],
    "except": [],
    "why": "the schedule's property is stated against the certifier program's rows audit at its parameters, over the definitions' schedules and rows format, in Mathlib's sets, never a proof"
   },
@@ -2909,16 +2908,105 @@
    "type_hash": "85902942cc3dbf037e927cde2de8d79125f28d06c78d5eafdc3fa83578d150b1"
   },
   "Properties.NetworkCertifier.schedulesCoveredAt": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkCertifier.schedulesCoveredAt : Properties.NetworkCertifier.SchedulesCoveredAt"],
+   "assumptions": [],
+   "type_hash": "bca0b9ce08bfa5d6e223e923cadaa56d781aadaee83b72471335d06ada2e517a"
   },
   "Properties.NetworkCertifier.schedulesCoveredAt_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkCertifier.schedulesCoveredAt_honest :",
+    "  Exists fun F =>",
+    "    And F.Wf",
+    "      (And (Eq F.T 600)",
+    "        (Eq",
+    "          (NetworkCertifier.Rows.audit",
+    "            { cellBytes := 256, slots := 4, delay := 10, lanes := 16, window := 600, egressCells := 4096 }",
+    "            (List.cons { status := Option.none, grid := Array.replicate 600 (Array.replicate 64 Option.none) }",
+    "                List.nil).toArray",
+    "            (List.cons { status := Option.none, grid := Array.replicate 600 (Array.replicate 64 Option.none) }",
+    "                List.nil).toArray",
+    "            (List.cons { status := Option.none, grid := Array.replicate 600 (Array.replicate 16 Option.none) }",
+    "                List.nil).toArray)",
+    "          (Except.ok",
+    "            { schedule := { adm := List.nil.toArray, cells := List.nil.toArray }, ingressCells := 0,",
+    "              egressCells := 0 })))"
+   ],
+   "assumptions": [],
+   "type_hash": "f39fe77c6ab5c04a79b1ddd01889b418caaaa9ef47266380c352f7d1cbb88182"
   },
   "Properties.NetworkCertifier.schedulesCoveredAt_honestLane": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkCertifier.schedulesCoveredAt_honestLane :",
+    "  Exists fun F =>",
+    "    And F.Wf",
+    "      (And (Eq F.T 2)",
+    "        (Eq",
+    "          (NetworkCertifier.Rows.audit",
+    "            { cellBytes := 10, slots := 1, delay := 1, lanes := 1, window := 2, egressCells := 1 }",
+    "            (List.cons",
+    "                { status := Option.none,",
+    "                  grid :=",
+    "                    (List.cons",
+    "                        (List.cons",
+    "                            (Option.some",
+    "                              (NetworkCertifier.Rows.Cell.encode 10",
+    "                                { kind := NetworkCertifier.Rows.Kind.fin, conn := 1, payload := ByteArray.empty }))",
+    "                            List.nil).toArray",
+    "                        (List.cons (List.cons Option.none List.nil).toArray List.nil)).toArray }",
+    "                List.nil).toArray",
+    "            (List.cons",
+    "                { status := Option.none,",
+    "                  grid :=",
+    "                    (List.cons",
+    "                        (List.cons",
+    "                            (Option.some (NetworkCertifier.Rows.Cell.encode 10 (NetworkCertifier.Rows.Cell.pad 1)))",
+    "                            List.nil).toArray",
+    "                        (List.cons",
+    "                          (List.cons",
+    "                              (Option.some",
+    "                                (NetworkCertifier.Rows.Cell.encode 10",
+    "                                  { kind := NetworkCertifier.Rows.Kind.fin, conn := 1, payload := ByteArray.empty }))",
+    "                              List.nil).toArray",
+    "                          List.nil)).toArray }",
+    "                List.nil).toArray",
+    "            (List.cons",
+    "                { status := Option.none,",
+    "                  grid :=",
+    "                    (List.cons (List.cons Option.none List.nil).toArray",
+    "                        (List.cons (List.cons Option.none List.nil).toArray List.nil)).toArray }",
+    "                List.nil).toArray)",
+    "          (Except.ok",
+    "            { schedule := { adm := (List.cons 0 List.nil).toArray, cells := (List.cons 1 List.nil).toArray },",
+    "              ingressCells := 1, egressCells := 2 })))"
+   ],
+   "assumptions": [],
+   "type_hash": "fbc27c6bc605359b6d91b2fe09a54549e657b5797ccfc88fa98798530c7bccd0"
   },
   "Properties.NetworkCertifier.schedulesCoveredAt_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkCertifier.schedulesCoveredAt_nontrivial :",
+    "  Not",
+    "    (Set.instMembership.mem",
+    "      (Set.ofPred fun s =>",
+    "        And (Set.instMembership.mem (Set.instSingletonSet.singleton { fst := 4, snd := 10 }) { fst := s.r, snd := s.D })",
+    "          ({",
+    "                conns :=",
+    "                  List.finRange",
+    "                    (Properties.NetworkCertifier.periodConns",
+    "                      { cellBytes := 256, slots := 4, delay := 10, lanes := 16, window := 600, egressCells := 4096 } 1),",
+    "                enc := fun x => List.nil, dec := fun x => Option.none, link := 0, T := 600,",
+    "                jitter := fun x x_1 x_2 => 0, status := fun x x_1 x_2 x_3 => NetTiming.Status.complete }.Fits",
+    "            64 1 s))",
+    "      (Properties.NetworkCertifier.wardenOf",
+    "        { cellBytes := 256, slots := 4, delay := 10, lanes := 16, window := 600, egressCells := 4096 } 1",
+    "        { adm := Array.replicate 17 0, cells := Array.replicate 17 4 }))"
+   ],
+   "assumptions": [],
+   "type_hash": "52750fdbb4d7b20de3b6c80ec1494a798241fad97ee8d04fdd173f10160edbb5"
   },
   "Properties.NetworkCertifier.malformedEvidenceRejects": {
    "owner": "@network-accounting",
@@ -10756,7 +10844,11 @@
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Proofs.NetworkCertifier.encardProgramRunsLeWindows",
     "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest",
-    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial"
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial",
+    "Properties.NetworkCertifier.schedulesCoveredAt",
+    "Properties.NetworkCertifier.schedulesCoveredAt_honest",
+    "Properties.NetworkCertifier.schedulesCoveredAt_honestLane",
+    "Properties.NetworkCertifier.schedulesCoveredAt_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.SampledAudit": {
@@ -24861,6 +24953,138 @@
     "Verity.soundness_of_subprotocols",
     "Verity.soundness_of_subprotocols_honest",
     "Verity.soundness_of_subprotocols_nontrivial"
+   ]
+  },
+  "Definitions.NetworkCertifier.RecordRows": {
+   "digest": "b3aabb1ab22a0943d611b3b025fe5cbd48870d8b060a62bbf10846fdbade5e8d",
+   "definitions": {
+    "NetTiming.RowsFormat": "0feff417211e829248f82a4c090fbfccacb6149d9ff17a695e268b5cd28bd5b0",
+    "NetTiming.RowsFormat.Fits": "b395ea85d5dbe8453b3c5dc2c0f5ffdef09bd53303739394363159ceaeb701c6",
+    "NetTiming.RowsFormat.T": "a5884cff09cd2218efb52d74350530e24649c12997d1f0b0ccf44e86e45c1c1a",
+    "NetTiming.RowsFormat.Wf": "8c44e4c800f3d66fea030082c526ca92ef3802df4ff667584ebb23cd151c1f2e",
+    "NetTiming.RowsFormat.conns": "0d31e867cb3b2f7082c317a80284b43428e2e183ef0a364b7f1ecbf11359ca52",
+    "NetTiming.RowsFormat.dec": "55fc5abf71d28b777cf781277234274a68766c034e5775dd9973895861cb5c01",
+    "NetTiming.RowsFormat.enc": "c6ef01cf73d6d7ba661a168f64da2d5b5b846ba3b7492bd85041e26fba14d2d4",
+    "NetTiming.laneLoad": "b349519e1a0b20a7c72a227a35826bceced88d9e48790a3c82cf4745d722d38b",
+    "NetTiming.tailPads": "d85fe31df5f90986c15da34aa41903bce451a77db761b9d4d4377436c9a1ded9"
+   },
+   "guarantees": [
+    "Properties.NetworkCertifier.schedulesCoveredAt",
+    "Properties.NetworkCertifier.schedulesCoveredAt_honest",
+    "Properties.NetworkCertifier.schedulesCoveredAt_honestLane",
+    "Properties.NetworkCertifier.schedulesCoveredAt_nontrivial"
+   ]
+  },
+  "Definitions.NetworkCertifier.Warden": {
+   "digest": "3f51501a820da846684ee65ecd80463ec3b044e87f3a78d5860ab3b852ff1565",
+   "definitions": {
+    "NetTiming.Arrivals": "a9855f1bf335813d6e9e14389bc8ab6a12f280930f67aa9b05a90a5a61349651",
+    "NetTiming.CellView": "3a34aa0796a8f300a192ccfcccdf919b49d79e9b5f84677f63b2b6df7f32165d",
+    "NetTiming.CellView.data": "18a876d450ecca9b40059bf145040aaf84898393b339fd2c0d3531a0f865866c",
+    "NetTiming.CellView.fail": "515a3655259e4d93419efd8142ce0f4c535df44a77a2519c13539e0172cb650b",
+    "NetTiming.CellView.pad": "97f36790f87b13e6d3933331f3fd77a067668562d8a8e939dc6e367f4ed6e1ae",
+    "NetTiming.WardenSchedule": "0594721fc552a82a6bed7582412823279ec82a1909ddbb414c6c4fdccded6959",
+    "NetTiming.WardenSchedule.D": "a218dd7a11661b14d49161b2ffe854f147b79b40769719ae73cbf0c3e752373c",
+    "NetTiming.WardenSchedule.adm": "5a30fe3ffcae51310b781b92592b4c917b3a884e1f3b3c0e4454698599f465ed",
+    "NetTiming.WardenSchedule.bucket": "e0ce0ff6f053a2e4387e402d84e7a74bf9ea9602b7b00d476186ed8e2fc8820d",
+    "NetTiming.WardenSchedule.cells": "f2d947c4b4976dc66943a86b6225976ddc342fbc55ca6ce51caa06937c74aa68",
+    "NetTiming.WardenSchedule.r": "945a3aa14d2585cf9cfcdd40e7a5c7699431cb29efe7115d4943315d0b7b8e2f"
+   },
+   "guarantees": [
+    "Properties.NetworkCertifier.schedulesCoveredAt",
+    "Properties.NetworkCertifier.schedulesCoveredAt_honest",
+    "Properties.NetworkCertifier.schedulesCoveredAt_honestLane",
+    "Properties.NetworkCertifier.schedulesCoveredAt_nontrivial"
+   ]
+  },
+  "NetworkCertifier.Rows": {
+   "digest": "408f9b70b1c7c8b7b1f42c86e5d0f8e6de34d59bc835dffdb768028124c85e90",
+   "definitions": {
+    "NetworkCertifier.Rows.Cell": "229128a356a7a7578ba393b5d3b4a37f4c477a57dff9d015668395c0c01bcdb0",
+    "NetworkCertifier.Rows.Cell.casesOn": "ffca979195868d56f6df99d636fc175f0b5517e75dc8e360191af2af7219ca64",
+    "NetworkCertifier.Rows.Cell.conn": "3f1e0c5c6b3353049e2c03d9f25d939349014d9916cb22b9ee3d3c24f2558184",
+    "NetworkCertifier.Rows.Cell.encode": "72899a5c8b296d1a427ed646c9698c0422e7b04a955ff648cf94e820ed05345e",
+    "NetworkCertifier.Rows.Cell.kind": "9ada4d51d596b59ff454f6557c34c535080410d6f3aa2138b7db449bb97ce16d",
+    "NetworkCertifier.Rows.Cell.pad": "43da25f02165255fc86282e92464f0d95ee39ef8eedc8bd8e305d8d8bd4cd81e",
+    "NetworkCertifier.Rows.Cell.payload": "649af31b7d7b42c0e43a1e0bb5601a70b9d83d212522be8734503c0eff6dd7d8",
+    "NetworkCertifier.Rows.Cell.rec": "1a14fa94b18a4065041fe5eb2c05a9b6f2432a2b929c74798ea66f22248bae07",
+    "NetworkCertifier.Rows.Kind": "639c73ca154e9ee03457ccba3b1850160956c2c155be922f9767b654381d37e6",
+    "NetworkCertifier.Rows.Kind.casesOn": "05f552e280ba168b3944458ea54658013717c06b8452055af3c58cabf19b5ad1",
+    "NetworkCertifier.Rows.Kind.code": "2dc3ab2f06bf0cd9bc582b8389f310a4369a7b2cc6dbe922871c4cce9509a071",
+    "NetworkCertifier.Rows.Kind.ctorIdx": "fa2aaedbe5e86f98dac5c10800a04228b72a3aec61dbcf87f59d17727f119df7",
+    "NetworkCertifier.Rows.Kind.data": "3715153dcf919b11f8c8fd53e192b484b2f353ce0b7d90726ea86c4291130d72",
+    "NetworkCertifier.Rows.Kind.fail": "a44e7d2b5e8b3a983fa34a3b21c46b82151341eb4d2f24cc9ea0ca553e762e92",
+    "NetworkCertifier.Rows.Kind.fin": "f2eefb8ab10d3148de2c28fb5be6f7ca8595ac2dadd69791d266ad90cd6dac8f",
+    "NetworkCertifier.Rows.Kind.name": "c4748708f537cf9d2dd6c6aab9768a5d1ffeb5351c4f1c2f697382d913cffbd8",
+    "NetworkCertifier.Rows.Kind.ofCode?": "221dc0427949a419384f16ff357d703ad96c924e5987171caecf2f45757688c1",
+    "NetworkCertifier.Rows.Kind.pad": "0ca0032acb51e99359998178b3add31e57090210929d10af0140eb6c6cf8bc4a",
+    "NetworkCertifier.Rows.Kind.rec": "034af9da63f9c742dfec23f56370c10d270fab42a127a6cb07ba5243d8545ab1",
+    "NetworkCertifier.Rows.Kind.refused": "0caa967b8fce39a58706ae9406774b2ff230ac7e92ee5bd44d1fd3e4b9a374d9",
+    "NetworkCertifier.Rows.Params": "f3533b841670794139021b46f9568e814182db14019dd41d52030b69cc3d1ae5",
+    "NetworkCertifier.Rows.Params.cellBytes": "0623e71e3e3ae6e34758711373634f0ae62ef9f89e5c3067b2393c11c2251c99",
+    "NetworkCertifier.Rows.Params.delay": "5eec85a2468e30ba18701fc987e20966b22d002129b30eb173a86c8d2e4973c3",
+    "NetworkCertifier.Rows.Params.egressCells": "231ee6443c839061c0444f279e6330ecf4553a3493727adac964052161565a1f",
+    "NetworkCertifier.Rows.Params.lanes": "8cbd771cab7f061cf56451d9aa8ddad0567e543f9a65d9bc1f8fa9367c59a2dc",
+    "NetworkCertifier.Rows.Params.slots": "8d5c2d11b4519feb287f0db55c1703a14caed6e1733c9fa9f4e136eb713ccf89",
+    "NetworkCertifier.Rows.Params.window": "8daf3e4015d661e6886e539f5dcb8713aa90c129b3f230b49f76c82725d0231a",
+    "NetworkCertifier.Rows.Record": "75d9e8d6da1fa6bd4862fc6ee847e38e2f278a6ed376034fbf9160efa413810f",
+    "NetworkCertifier.Rows.Record.grid": "335d6ecccc6fee5ee7d97ac13eed673c66526d9d182e93946af4393bb7b1b06c",
+    "NetworkCertifier.Rows.Record.status": "295d4d5b3511af711a88d4f9e6d79c1094690ec21387ca8f7a3311e119a29058",
+    "NetworkCertifier.Rows.Schedule": "de13e36f968f35aede9341b7fca162936d0f609cd5311b008bee738966d4fafa",
+    "NetworkCertifier.Rows.Schedule.adm": "a7cb07b96affcf2fc2ab6f0f7d3ea5288c6a57890fc0189440d457f6ba4efc92",
+    "NetworkCertifier.Rows.Schedule.cells": "c7201ef5d31a8698cb46d381f5db497c7a5d6b78f1ea6d86f0527c4e792f3db7",
+    "NetworkCertifier.Rows.Summary": "3696a23f1a01facd65732ac7d5ee12075845a789df2315b31163570fe34981c1",
+    "NetworkCertifier.Rows.Summary.schedule": "c217fed3809e522f49921c31759e11d7b3a79e5c8ac237eca9bf25be1694e15f",
+    "NetworkCertifier.Rows.audit": "bd61791e8d9dbf0f2a00b2815a24d8d1c31cd70b9f15d27a0d5cc0b73d4f5b72",
+    "NetworkCertifier.Rows.beAt": "c48fb5dc1d4886846123819da6db947b64b9b44d28e13fde1a6507823c971ff9",
+    "NetworkCertifier.Rows.beBytes": "c9b4c492743918386ec950ae81263e08398a529de75db07c07d748eed0f43741",
+    "NetworkCertifier.Rows.cellsOf": "77ff2675991630af5e26e32a25a3ba39c060b8f92a44fd25449377c0d1834262",
+    "NetworkCertifier.Rows.connsOf": "29246f682a61dc17e07c020b45d1b227a69e726c95ae4034dba43d644641dbb9",
+    "NetworkCertifier.Rows.egressOf": "9ce58e5f59eb89cb5e0fde9ffba701c1494ed5face7608e7b47f37de9fca5fa3",
+    "NetworkCertifier.Rows.expectedRows": "195c25717fc5746f4b38f55dd0c3565da1655104d19bbb3bdf7dca1dbb549620",
+    "NetworkCertifier.Rows.framesOf": "43678551cf539a7cb4a0514c22ab284d3bcd1ff54acd4e39174e9511365ea8e6",
+    "NetworkCertifier.Rows.headerBytes": "764ec7f9b55ba314717258b30df3e71b0e2de3e9283e126ef7384038a1e9f5cc",
+    "NetworkCertifier.Rows.ingressGroup": "b964cc01e59fca61b3bf7c97e0cbb5357a78eb8a874231d3e2c2a748e1d2322b",
+    "NetworkCertifier.Rows.ingressGroup._sparseCasesOn_1": "a578c9ab180b6c30299fd7d46822d61e6b5446caf002412e6507e9a90ca0f486",
+    "NetworkCertifier.Rows.ingressHolds": "e1cf1732228f7c8e1177c41e9cf8fed578d49586bbc96de97645e2ab8de86446",
+    "NetworkCertifier.Rows.instDecidableEqCell": "b8390acbfcc774897a5b43bbc3c46d7d53caadd48713c2f7afa6d5552bbd1ea7",
+    "NetworkCertifier.Rows.instDecidableEqCell.decEq": "01616a47fcac880347dadf61c12dca9df0362cab55ddf461cb9f81b61d1953ed",
+    "NetworkCertifier.Rows.instDecidableEqKind": "3b9b9738614f06579ff69d14c11b28bfda5e744482f8c83ecba86f8e70ffc194",
+    "NetworkCertifier.Rows.instInhabitedCell": "97b8d0a6968b78108063ff3d348f2815655a70daf92fff0e4dfbb3cc1a3c10dd",
+    "NetworkCertifier.Rows.instInhabitedCell.default": "0fe7a445f6fea632f0dd7adef989d376802b292742059d8241c0e4fb91a7648d",
+    "NetworkCertifier.Rows.instInhabitedKind": "b13ef462d6d4b1d11e769264c2cec83435d9ef9595f90681a156ae703e19cb91",
+    "NetworkCertifier.Rows.instInhabitedKind.default": "39a0d4cb52f36e16c0a2a1b3f7132a1cf32d2c045c7506c41f8e7bd113c9f98f",
+    "NetworkCertifier.Rows.instReprKind.repr.match_1": "2047a8e2462060092e73cc1fba62a7b70a69eb47d5c0ff3d9e0a4bfff209a5ac",
+    "NetworkCertifier.Rows.laneCells": "efdb3555194f031fb78bf4ad2a5a686c30f38bf5a7a8bb793fd6333bc9e00521",
+    "NetworkCertifier.Rows.laneFrames": "bfa41cbf556176d7ef8c39694e2b43fc288ab65fd4819cdcd1f22f7ac39a789a",
+    "NetworkCertifier.Rows.laneOf": "59d01a927352862a6607571d0238670f89fb649cfbde134f0977c5bc5c3bb480",
+    "NetworkCertifier.Rows.noFails": "5cbd60998e29d1a0278d9868c27ea223cb8bcccdc5456132713a3f38f87cba12",
+    "NetworkCertifier.Rows.readCell": "e72e5dce728fbeb4bd36311fa64c00320c829f5e229df64be8e8e34c53378007",
+    "NetworkCertifier.Rows.readCell._sparseCasesOn_1": "4c4c7c39d41cf4316cac08067decb7c7ee8b2c6e46d426c7019a6b5f2565c1fa",
+    "NetworkCertifier.Rows.readCell._sparseCasesOn_4": "e895e29e7c6ac4e5acc5bad5bcc65e00bd69493cf9038150fdd4c09bf435f778",
+    "NetworkCertifier.Rows.readReason": "204913273931c0d67a255ca9dd16266bb560a5293734ee099e1da5c7fa1d6460",
+    "NetworkCertifier.Rows.reasons": "85d23f24536389e5f771574026c3b0f33d484cb74306fc82cd991cc335b5699e",
+    "NetworkCertifier.Rows.scheduleOf": "69557f1bd87d207462f09b1b885585c95837fc6a4ad052d9c9b3a835ffaa6464"
+   },
+   "guarantees": [
+    "Properties.NetworkCertifier.schedulesCoveredAt",
+    "Properties.NetworkCertifier.schedulesCoveredAt_honest",
+    "Properties.NetworkCertifier.schedulesCoveredAt_honestLane",
+    "Properties.NetworkCertifier.schedulesCoveredAt_nontrivial"
+   ]
+  },
+  "Properties.NetworkCertifier.Schedules": {
+   "digest": "723b9c50df065cc2ee2f910867f79e1c802b70a804922fafdaaeba1bed169f66",
+   "definitions": {
+    "Properties.NetworkCertifier.SchedulesCoveredAt": "958a107702d3bc7cb527be5fd7d4781050418dc80e333279659718e19d0878f9",
+    "Properties.NetworkCertifier.periodConns": "db0f9b0198e3e51d4586ed1988a0a5a7d604a91011b374804bb4439fc1a241df",
+    "Properties.NetworkCertifier.wardenOf": "8173fd2cc95cb00dd1e730dfdf0cfe183d28a3192de0f679f895b6189394730e"
+   },
+   "guarantees": [
+    "Properties.NetworkCertifier.schedulesCoveredAt",
+    "Properties.NetworkCertifier.schedulesCoveredAt_honest",
+    "Properties.NetworkCertifier.schedulesCoveredAt_honestLane",
+    "Properties.NetworkCertifier.schedulesCoveredAt_nontrivial"
    ]
   }
  },
