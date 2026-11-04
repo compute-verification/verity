@@ -497,7 +497,8 @@ def test_a_v3c_audit_refused_before_staging_commits_to_the_registration_it_is_gi
     import served_integrity as SI
 
     for registered, want in ((reg, "accept"), ({**reg, "window": {"circuit": "ab" * 64}}, "error")):
-        monkeypatch.setattr(SI, "answer", lambda _d, _r, c=R.digest(registered): {**_accepted()["answer"], "commitment": c})
+        answered = {**_accepted()["answer"], "commitment": R.digest(registered)}
+        monkeypatch.setattr(SI, "answer", lambda _d, _r, a=answered: a)
         row = S.sampled_proofs_row(audit, None, tmp_path / "v3c" / "registration.json")
         assert row["verdict"] == want and (want == "accept" or "commits to another registration" in row["reason"])
     seen = []
