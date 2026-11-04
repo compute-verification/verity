@@ -21,7 +21,7 @@ premise `TTOutTilePearlCH100Rev1` reads. Four parts:
 * (a) `Atom`: the evaluator's FP8 atom is the Definitions' step.
 * (b) `Noise` and `Words`: -h3's noise is `NoiseSha512`'s, and a tile's checked words are the reference values.
 * (c) `Rules`, `Keys` and `Debit`: the per-row rules are `RowOK`, and a word's replayed inert work is the game's (`Keys`:
-  the replay's keys, bisection and carried add; `Debit`: the replay itself).
+  the replay's keys, bisection and carried add; `Debit`: the replay itself, and that it reads the semantics' codes).
 * (d) `Assembly`: a passed tile whose openings are its unit's commitment has good words, or SHA-512 collides.
 
 `Draw` reads the run's draw and acceptance as `TileDraw`'s game draws and audits: a passed tile's declaration is

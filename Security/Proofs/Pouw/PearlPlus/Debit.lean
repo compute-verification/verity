@@ -1,5 +1,6 @@
 import Proofs.Pouw.PearlPlus.Rules
 import Proofs.Pouw.PearlPlus.Keys
+import Proofs.Pouw.PearlPlus.Semantics
 import Proofs.Pouw.PearlC.Freeze
 import Proofs.Pouw.PearlC.AccumProofs
 
@@ -14,6 +15,11 @@ holds, since a key in the band is a total the later promotions carry to the word
 atoms are `Skip.unitFlags`'; and the later promotions into a +0 total are `laterZeroPromos`' at the H100 record. It reads
 the keys' three statements (`Keys`); a group of finite atoms has a word below 2⁴⁶ in magnitude (`Freeze.tame_inWord`),
 the range `carried` is the rounded add on, and an atom the replay steps finitely is finite.
+
+`replayReadsTheCodes` puts the replay on the semantics' codes. Where a word's rows are whole promotion groups and pass the
+rules, the check's A′ and B̃ rows are `pc8Sem`'s codes at the H100 atom bit for bit (`formRow_quant8`: the forming reads
+a −0 word as +0 and its atom never steps to −0), and these are `unitChain`'s at `semH3`'s noise. Elsewhere `word_debit`
+refuses both words alike.
 -/
 
 namespace Pouw.PearlPlus.Bridge
@@ -927,5 +933,150 @@ theorem debitIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC :
 /-- **(c) The inert-work replay is the game's.** -/
 theorem debitIsTheReplay : DebitIsTheReplay :=
   debitIsTheReplayOf keyIsTheValue leastIsTheThreshold carriedIsTheAdd
+
+namespace DebitSim
+
+/-! ## The check's codes -/
+
+/-- `word_debit` refuses a word whose first row is not whole promotion groups. -/
+theorem wordDebit_ungrouped {a b : Array ℕ} (h : a.size % 128 ≠ 0) :
+    Rule.wordDebit a b = .error "a word's rows are whole promotion groups" := by
+  have hG : PouwCheck.PearlPlus.G = 4 := rfl
+  unfold Rule.wordDebit
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', range_size, hG, Nat.reduceMul]
+  split
+  · rfl
+  · rename_i hcond
+    exact (hcond (by simp [h])).elim
+
+/-- `semH3`'s noisy codes are `pc8Sem`'s `quant8A` and `quant8B` at its noise. -/
+theorem unitChain_h3 {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S) (U : Workload)
+    (u : ℕ) (act : Codes) :
+    ((semH3 saltOf rootOf : PearlCSem Q R S).unitChain H s U u act).1 =
+        WholeCircuit.quant8A RowCircuit.coreOps hopperE4m3K32
+          ((semH3 saltOf rootOf : PearlCSem Q R S).noise H s U u act) act ∧
+      ((semH3 saltOf rootOf : PearlCSem Q R S).unitChain H s U u act).2 =
+        WholeCircuit.quant8B RowCircuit.coreOps hopperE4m3K32
+          ((semH3 saltOf rootOf : PearlCSem Q R S).noise H s U u act) (U.weight (U.layout.wid u)) :=
+  ⟨rfl, rfl⟩
+
+/-- **A word's codes**: over a noise `z` whose lines and bases are the check's (`hEA`, `hEB`, `hFA`, `hFB`), where the
+check's fixed noise and operands are values, entry `x`'s A′ row and entry `y`'s B̃ row have `k` codes, and where `8 ∣ k`
+on rows that are `Row8OK` they are `pc8Sem`'s codes at the H100 atom. -/
+theorem encode_codes {m n k u : ℕ} {act wt : Codes} {z : Noise m n k Params.pi.r} {salt rootB : ByteArray}
+    {wn : Words.FixedNoise} {rows cols : List ℕ} {ops : Words.Ops}
+    (hkK : k ≤ 2 ^ 16) (hact : ∀ i ∈ rows, ∀ l < k, act i l < 2 ^ 32) (hwt : ∀ j ∈ cols, ∀ l < k, wt j l < 2 ^ 32)
+    (hFA : ∀ l (hl : l < k) (t : Fin Params.pi.r), (wn.fa[l]!)[t.val]! = (z.FA ⟨l, hl⟩ t).val)
+    (hFB : ∀ l (hl : l < k) (t : Fin Params.pi.r), (wn.fb[l]!)[t.val]! = (z.FB ⟨l, hl⟩ t).val)
+    (hEA : ∀ (i : Fin m) (e : Array ℕ),
+      Words.sampleLine (Words.lineKey (Words.rowSeed salt rootB u i.val (rowBytesOf act k i.val))) 0 0 0 Words.NORM_E =
+        .ok e → e.size = 32 ∧ ∀ t : Fin Params.pi.r, e[t.val]! = (z.EA i t).val)
+    (hEB : ∀ (j : Fin n) (e : Array ℕ), Words.sampleLine (Words.lineKey wn.seedB) 1 0 j.val Words.NORM_E = .ok e →
+        e.size = 32 ∧ ∀ t : Fin Params.pi.r, e[t.val]! = (z.EB j t).val)
+    (hwn : Words.fixedNoise salt rootB k = .ok wn)
+    (henc : Words.encode salt rootB wn u k rows (rows.map (rowBytesOf act k)) cols (cols.map (rowBytesOf wt k)) = .ok ops)
+    {x y : ℕ} (i : Fin m) (j : Fin n) (hx : x < rows.length) (hxi : rows[x]! = i.val) (hy : y < cols.length)
+    (hyj : cols[y]! = j.val) :
+    (ops.a.codes[x]!).size = k ∧ (ops.b.codes[y]!).size = k ∧
+      (8 ∣ k → WholeCircuit.Row8OK RowCircuit.coreOps k (act i) → WholeCircuit.Row8OK RowCircuit.coreOps k (wt j) →
+        ops.a.codes[x]! = Array.ofFn (fun l => (WholeCircuit.quant8A RowCircuit.coreOps hopperE4m3K32 z act i l).val) ∧
+        ops.b.codes[y]! = Array.ofFn (fun l => (WholeCircuit.quant8B RowCircuit.coreOps hopperE4m3K32 z wt j l).val)) := by
+  obtain ⟨hfR, -⟩ := SemSim.fixedNoise_ok hwn
+  unfold Words.encode at henc
+  obtain ⟨ea, hea, henc⟩ := WordsSim.bind_ok henc
+  obtain ⟨va, hva, henc⟩ := WordsSim.bind_ok henc
+  obtain ⟨a, ha, henc⟩ := WordsSim.bind_ok henc
+  try dsimp only at henc
+  obtain ⟨eb, heb, henc⟩ := WordsSim.bind_ok henc
+  obtain ⟨vb, hvb, henc⟩ := WordsSim.bind_ok henc
+  obtain ⟨b, hb, henc⟩ := WordsSim.bind_ok henc
+  obtain ⟨pas, -, henc⟩ := WordsSim.bind_ok henc
+  obtain ⟨pbs, -, henc⟩ := WordsSim.bind_ok henc
+  obtain rfl := WordsSim.pure_ok henc
+  try dsimp only
+  have hmx : i.val ∈ rows := by rw [← hxi]; exact SemSim.get!_mem hx
+  have hmy : j.val ∈ cols := by rw [← hyj]; exact SemSim.get!_mem hy
+  obtain ⟨hvaS, hvaA⟩ := WordsSim.mapM_ok hva
+  obtain ⟨heaS, heaA⟩ := WordsSim.mapM_ok hea
+  obtain ⟨hvbS, hvbA⟩ := WordsSim.mapM_ok hvb
+  obtain ⟨hebS, hebA⟩ := WordsSim.mapM_ok heb
+  simp only [List.size_toArray, List.length_zip, List.length_map, Nat.min_self] at hvaS heaS hvbS hebS
+  obtain ⟨-, -, haR⟩ := SemSim.formV1_ok ha (by rw [hvaS, heaS])
+  obtain ⟨-, -, hbR⟩ := SemSim.formV1_ok hb (by rw [hvbS, hebS])
+  obtain ⟨s, ρw, αw, βw, hs, hep, hcodes⟩ := haR x (by omega)
+  obtain ⟨s', ρw', αw', βw', hs', hep', hcodes'⟩ := hbR y (by omega)
+  have hvx := hvaA x (by simpa using hx)
+  rw [List.getElem!_toArray, SemSim.lmap_get! hx, hxi] at hvx
+  obtain ⟨hvxS, hvxW⟩ := WordsSim.parseRow_ok (hact _ hmx) hvx
+  have hvy := hvbA y (by simpa using hy)
+  rw [List.getElem!_toArray, SemSim.lmap_get! hy, hyj] at hvy
+  obtain ⟨hvyS, hvyW⟩ := WordsSim.parseRow_ok (hwt _ hmy) hvy
+  have hkx : (a.codes[x]!).size = k := by rw [(WordsSim.mapM_ok hcodes).1, Array.size_range, hvxS]
+  have hky : (b.codes[y]!).size = k := by rw [(WordsSim.mapM_ok hcodes').1, Array.size_range, hvyS]
+  refine ⟨hkx, hky, fun hk8 hRA hRB => ?_⟩
+  have hex := heaA x (by simpa using hx)
+  rw [SemSim.zipL_get! hx] at hex
+  try dsimp only at hex
+  rw [hxi] at hex
+  obtain ⟨heS, heA⟩ := hEA i ea[x]! hex
+  have hey := hebA y (by simpa using hy)
+  rw [List.getElem!_toArray, hyj] at hey
+  obtain ⟨heS', heA'⟩ := hEB j eb[y]! hey
+  have hk0 : 0 < k := by have := SemSim.s5Stats_pos hs; omega
+  have hk27 : k ≤ 2 ^ 27 := le_trans hkK (by norm_num)
+  obtain ⟨-, -, -, hcodA⟩ := formRow_quant8 (E := z.EA i) (F := z.FA) hk0 hk8 hk27 hvxS hvxW (hact _ hmx) hRA heS heA
+    (fun t => (hfR t.val t.isLt).1) (fun t q => hFA t.val t.isLt q) hs hep hcodes
+  obtain ⟨-, -, -, hcodB⟩ := formRow_quant8 (E := z.EB j) (F := z.FB) hk0 hk8 hk27 hvyS hvyW (hwt _ hmy) hRB heS' heA'
+    (fun t => (hfR t.val t.isLt).2) (fun t q => hFB t.val t.isLt q) hs' hep' hcodes'
+  refine ⟨Array.ext (by rw [Array.size_ofFn]; exact hkx) fun t h1 _ => ?_,
+    Array.ext (by rw [Array.size_ofFn]; exact hky) fun t h1 _ => ?_⟩
+  · rw [Array.getElem_ofFn]
+    exact (getElem!_pos (a.codes[x]!) t h1).symm.trans (hcodA ⟨t, h1.trans_eq hkx⟩)
+  · rw [Array.getElem_ofFn]
+    exact (getElem!_pos (b.codes[y]!) t h1).symm.trans (hcodB ⟨t, h1.trans_eq hky⟩)
+
+end DebitSim
+
+open DebitSim in
+/-- **(c) The replay reads the semantics' codes.** The check's A′ and B̃ rows of a word have `k` codes; where `k` is
+whole promotion groups, on rows that pass the rules (`row8OK_of_floor`), they are `pc8Sem`'s codes at `semH3`'s noise,
+whose lines and bases are the check's (`seedsAreTheSpec`, `lineIsTheSpec`, `fixedNoiseIsTheSpec`), and so
+`unitChain`'s; where it isn't, `word_debit` refuses both words. -/
+theorem replayReadsTheCodes : ReplayReadsTheCodes := by
+  intro Q R S saltOf rootOf H s U u act salt rootB wn rows cols ops hsalt hroot hk _ _ hact hwt hW hwn henc x y i j
+    hxi hyj hR
+  obtain ⟨hx, hxi'⟩ := List.getElem?_eq_some_iff.1 hxi
+  obtain ⟨hy, hyj'⟩ := List.getElem?_eq_some_iff.1 hyj
+  have hWj := hW _ (List.mem_of_getElem? hyj)
+  obtain ⟨hseed, -, -, hF⟩ := fixedNoiseIsTheSpec salt rootB _ wn hwn
+  have hsd : bytesNat wn.seedB = NoiseSha512.seedB (saltOf s) (rootOf (U.layout.wid u)) := by
+    rw [hseed, hsalt, hroot]
+  obtain ⟨hAS, -, hAB⟩ := encode_codes (z := (semH3 saltOf rootOf : PearlCSem Q R S).noise H s U u act)
+    (wt := U.weight (U.layout.wid u)) hk hact hwt
+    (fun l hl t => by rw [(hF l hl t).1, hsd]; rfl) (fun l hl t => by rw [(hF l hl t).2, hsd]; rfl)
+    (fun i e he => by
+      obtain ⟨h1, h2⟩ := lineIsTheSpec _ 0 0 0 Words.NORM_E 256 e (by norm_num) (by norm_num) (Or.inl ⟨rfl, rfl⟩) he
+      refine ⟨h1, fun t => ?_⟩
+      rw [h2 t, (seedsAreTheSpec).2.2, hsalt, hroot, WordsSim.bytesNat_rowBytesOf]
+      rfl)
+    (fun j e he => by
+      obtain ⟨h1, h2⟩ := lineIsTheSpec _ 1 0 j.val Words.NORM_E 256 e (by norm_num) (by norm_num) (Or.inl ⟨rfl, rfl⟩) he
+      refine ⟨h1, fun t => ?_⟩
+      rw [h2 t, hsd]
+      rfl)
+    hwn henc i j hx (by rw [getElem!_pos rows x hx]; exact hxi') hy (by rw [getElem!_pos cols y hy]; exact hyj')
+  by_cases hk128 : (U.layout.shape u).k % 128 = 0
+  · obtain ⟨hA, hB⟩ := hAB (Nat.dvd_of_mod_eq_zero (by omega))
+      (WholeCircuit.row8OK_of_floor CoreOps.pc8OpsAgree_coreOps hopperE4m3K32
+        (semH3 saltOf rootOf : PearlCSem Q R S).noise i.isLt hR.1 (hR.2 i.isLt).2)
+      (WholeCircuit.row8OK_of_floor CoreOps.pc8OpsAgree_coreOps hopperE4m3K32
+        (semH3 saltOf rootOf : PearlCSem Q R S).noise j.isLt hWj.1 (hWj.2 j.isLt).2)
+    obtain ⟨hU1, hU2⟩ := unitChain_h3 saltOf rootOf H s U u act
+    rw [hA, hB, hU1, hU2]
+  · have h1 : (ops.a.codes[x]!).size % 128 ≠ 0 := by rw [hAS]; exact hk128
+    have h2 : (Array.ofFn fun l => (((semH3 saltOf rootOf : PearlCSem Q R S).unitChain H s U u act).1 i l).val).size %
+        128 ≠ 0 := by
+      rw [Array.size_ofFn]; exact hk128
+    rw [wordDebit_ungrouped h1, wordDebit_ungrouped h2]
 
 end Pouw.PearlPlus.Bridge
