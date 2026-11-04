@@ -6,7 +6,7 @@ import Definitions.NetworkCertifier.TapRows
 
 Definitions only. The statements over a monitoring period of sampled audits take these conditions, each named once:
 
-* the network certifier registers its observations at every window (`TapsOpen`);
+* the network certifier registers its observations at every window (`CertifiersOpen`);
 * each window's statement has its partition, and each of its possible faulty sets commits a bounded number of bits
   (`WindowsPlaced`);
 * the network certifier's record format holds each schedule of `Ss`, which caps each connection's cells
@@ -27,8 +27,8 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 /-- **The network certifier registers its observations at every window**: for each secret `z` of `Zs` and window
 `i`, at the statement `x z i` parses to, its openings `tops s` register the observations `obs z i` at the window's
 operator `op i` under the statement's roots (`TapOpens`). -/
-def TapsOpen {L K S n : ℕ} {Z : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (lay : AuditStatement → BoundaryGates L S)
-    (k : AuditStatement → ℕ) (op : Fin n → ℕ → List (Obs L K S) → List Bool)
+def CertifiersOpen {L K S n : ℕ} {Z : Type} (H : Msg → Msg) (D : Deploy Coin Col T)
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (op : Fin n → ℕ → List (Obs L K S) → List Bool)
     (tops : AuditStatement → List (Opening Bool)) (Zs : Set Z) (x : Z → Fin n → Msg)
     (obs : Z → Fin n → List (Obs L K S)) : Prop :=
   ∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → TapOpens H D.commit (lay s) (k s) (op i) s (tops s) (obs z i)

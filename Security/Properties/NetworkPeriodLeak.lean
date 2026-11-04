@@ -19,7 +19,7 @@ roots (`RegOpens`), with the rows format's read-back of the client's view from t
   `Claims.Sampling.KSBy` at the wired check `wiredOk`, and the collisions between the extracted trace's openings and
   the network certifier's, `B_tap`, and the registration's, `B_reg`, under `CommitmentScheme.Binds`);
 * where at every window's statement the network certifier registers its observations at that window's operator
-  (`TapsOpen`), a covert sender's secrets whose every window meets `WindowGoodReg` number at most
+  (`CertifiersOpen`), a covert sender's secrets whose every window meets `WindowGoodReg` number at most
   `#Θ · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`: the sender moves at most
   `log2 #Θ + Σ_i (#(freeInputs_i \ reg_i) + log2 #faultySets_i(δ) + β_i + k_i·log2 Dj)` bits through the network
   certifier in the monitoring period.
@@ -71,7 +71,7 @@ them:
   `Pr[acc ∧ ¬RLeakTap δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap] + Pr[B_reg]` with the registered inputs at the registration's
   values;
 * where at every window's statement the network certifier registers its observations at that window's operator
-  (`TapsOpen`), a covert sender's secrets whose every window meets `WindowGoodReg`, on schedules among those whose
+  (`CertifiersOpen`), a covert sender's secrets whose every window meets `WindowGoodReg`, on schedules among those whose
   `(r, D)` is in the registered set `Θ` and which fit the format (`SchedulesCovered`), recovered from the client's view
   (`SenderDecodes`), number at most `#Θ · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`.
 
@@ -96,17 +96,17 @@ def PeriodLeakRegistered : Prop :=
       (arr : Srv → Fin N → Arrivals (FrameCell (s.cellBytes - 9))) (link : Fin L)
       (jitter : WardenSchedule (Fin N) → (Fin N → Arrivals (FrameCell (s.cellBytes - 9))) → ℕ → ℕ)
       (status : WardenSchedule (Fin N) → (Fin N → Arrivals (FrameCell (s.cellBytes - 9))) → ℕ → Fin K → Status)
-      (tap : Dev)
+      (cert : Dev)
       (run : Dev → WardenSchedule (Fin N) × Srv →
         (Fin N → List (ℕ × CellView (FrameCell (s.cellBytes - 9)))) × (Fin p.windows → List (Obs L K S)))
-      (htrust : Verity.Assumptions.TrustedHost tap run fun q =>
+      (htrust : Verity.Assumptions.TrustedHost cert run fun q =>
         (wardenCode q.1 (arr q.2), (cellRows s.cellBytes N link s.window jitter status).record S p.windows q.1 (arr q.2)
           (wardenCode q.1 (arr q.2))))
       (Θ : Set (ℕ × ℕ)) (Zs : Set Z) (schedOf : Z → WardenSchedule (Fin N)) (srvOf : Z → Srv)
       (hcov : SchedulesCovered
         {σ | (σ.r, σ.D) ∈ Θ ∧ (cellRows s.cellBytes N link s.window jitter status).Fits S p.windows σ} Zs schedOf)
       (dec : (Fin N → List (ℕ × CellView (FrameCell (s.cellBytes - 9)))) → Z)
-      (hdz : SenderDecodes run tap Zs schedOf srvOf dec)
+      (hdz : SenderDecodes run cert Zs schedOf srvOf dec)
       (x : Z → Fin p.windows → Claims.Msg) (wit : Z → Fin p.windows → Wit) (tops : AuditStatement → List (Opening Bool))
       (hb : D.commit.Binds H),
       (∀ m, ScopeAcc D lay k m → RegOpensAt H D reg ops m →
@@ -118,9 +118,9 @@ def PeriodLeakRegistered : Prop :=
           κ D δ m + Real.sqrt (γ D m * Claims.PrB H D.V P m) + (Bext H D.V (E D decode) Ω P m).Pr H +
             (Btap H D.V (E D decode) D.commit D.parse tops Ω P m).Pr H +
             (Breg H D.V (E D decode) D.commit D.parse ops Ω P m).Pr H) ∧
-        (TapsOpen H D lay k op tops Zs x (fun z => (run tap (schedOf z, srvOf z)).2) →
+        (CertifiersOpen H D lay k op tops Zs x (fun z => (run cert (schedOf z, srvOf z)).2) →
           {z | z ∈ Zs ∧ ∀ i, WindowGoodReg H D L K S lay k δ reg ops Dj (sw i) (ρ i) tops (x z i) (wit z i)
-              ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
+              ((run cert (schedOf z, srvOf z)).2 i)}.encard ≤
             Θ.encard * ((∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
               reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞))
 

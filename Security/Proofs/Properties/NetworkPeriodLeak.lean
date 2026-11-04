@@ -32,11 +32,11 @@ acceptance gives `rowsWf` (`rowsWf_of_accept`), so the network certifier's frame
 (`cellRows_wf_of_rowsWf`), and `NetTiming.periodLeak_registered` bounds the leak at that format. -/
 theorem periodLeakRegistered : PeriodLeakRegistered := by
   intro p c e pub prof h s sd scan hform Coin Col T _ _ _ _ _ H D L K S lay hks k δ decode hδ hdec reg ops Dj sw Pw ρ
-    op β hplaced N hN Srv Dev Sec arr link jitter status tap run htrust Θ Zs schedOf srvOf hcov dec hdz x wit tops hb
+    op β hplaced N hN Srv Dev Sec arr link jitter status cert run htrust Θ Zs schedOf srvOf hcov dec hdz x wit tops hb
   subst hN
   exact NetTiming.periodLeak_registered H D L K S lay hks k δ decode hδ hdec reg ops Dj sw Pw ρ op β hplaced arr _
     (Properties.NetworkPeriod.cellRows_wf_of_rowsWf (Properties.NetworkPeriod.rowsWf_of_accept h hform) link s.window
-      jitter status) tap run htrust Θ Zs schedOf srvOf hcov dec hdz x wit tops hb
+      jitter status) cert run htrust Θ Zs schedOf srvOf hcov dec hdz x wit tops hb
 
 /-- **The client's arrivals as its strategy**: `PeriodLeakRegistered` with the schedule the network certifier runs for
 the secret `z`, each connection's admission and cells, the client's strategy `strategy` at what it saw, `view z`: a
@@ -60,10 +60,10 @@ theorem periodLeakRegistered_strategy (p : NetworkCheck.Period.Params) (c : Netw
     (arr : Srv → Fin N → Arrivals (FrameCell (s.cellBytes - 9))) (link : Fin L)
     (jitter : WardenSchedule (Fin N) → (Fin N → Arrivals (FrameCell (s.cellBytes - 9))) → ℕ → ℕ)
     (status : WardenSchedule (Fin N) → (Fin N → Arrivals (FrameCell (s.cellBytes - 9))) → ℕ → Fin K → Status)
-    (tap : Dev)
+    (cert : Dev)
     (run : Dev → WardenSchedule (Fin N) × Srv →
       (Fin N → List (ℕ × CellView (FrameCell (s.cellBytes - 9)))) × (Fin p.windows → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun q =>
+    (htrust : Verity.Assumptions.TrustedHost cert run fun q =>
       (wardenCode q.1 (arr q.2), (cellRows s.cellBytes N link s.window jitter status).record S p.windows q.1 (arr q.2)
         (wardenCode q.1 (arr q.2))))
     (Θ : Set (ℕ × ℕ)) (Zs : Set Sec) (view : Sec → V) (strategy : V → WardenSchedule (Fin N)) (srvOf : Sec → Srv)
@@ -71,7 +71,7 @@ theorem periodLeakRegistered_strategy (p : NetworkCheck.Period.Params) (c : Netw
       {σ | (σ.r, σ.D) ∈ Θ ∧ (cellRows s.cellBytes N link s.window jitter status).Fits S p.windows σ} Zs
       fun z => strategy (view z))
     (dec : (Fin N → List (ℕ × CellView (FrameCell (s.cellBytes - 9)))) → Sec)
-    (hdz : SenderDecodes run tap Zs (fun z => strategy (view z)) srvOf dec)
+    (hdz : SenderDecodes run cert Zs (fun z => strategy (view z)) srvOf dec)
     (x : Sec → Fin p.windows → Claims.Msg) (wit : Sec → Fin p.windows → Wit)
     (tops : AuditStatement → List (Opening Bool))
     (hb : D.commit.Binds H) :
@@ -84,13 +84,13 @@ theorem periodLeakRegistered_strategy (p : NetworkCheck.Period.Params) (c : Netw
         κ D δ m + Real.sqrt (γ D m * Claims.PrB H D.V P m) + (Bext H D.V (E D decode) Ω P m).Pr H +
           (Btap H D.V (E D decode) D.commit D.parse tops Ω P m).Pr H +
           (Breg H D.V (E D decode) D.commit D.parse ops Ω P m).Pr H) ∧
-      (TapsOpen H D lay k op tops Zs x (fun z => (run tap (strategy (view z), srvOf z)).2) →
+      (CertifiersOpen H D lay k op tops Zs x (fun z => (run cert (strategy (view z), srvOf z)).2) →
         {z | z ∈ Zs ∧ ∀ i, WindowGoodReg H D L K S lay k δ reg ops Dj (sw i) (ρ i) tops (x z i) (wit z i)
-            ((run tap (strategy (view z), srvOf z)).2 i)}.encard ≤
+            ((run cert (strategy (view z), srvOf z)).2 i)}.encard ≤
           Θ.encard * ((∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
             reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞)) :=
   periodLeakRegistered p c e pub prof h s sd scan hform H D L K S lay hks k δ decode hδ hdec reg ops Dj sw Pw ρ op β
-    hplaced hN arr link jitter status tap run htrust Θ Zs (fun z => strategy (view z)) srvOf hcov dec hdz x wit tops hb
+    hplaced hN arr link jitter status cert run htrust Θ Zs (fun z => strategy (view z)) srvOf hcov dec hdz x wit tops hb
 
 /-- **The served schedule passes `rowsWf`**: `w63`'s, 4 lanes of 32-bucket link-windows and 512-byte cells, over any
 period of fewer than 2^25 link-windows, so the period check doesn't refuse it there (`rowsWfCheck`) and the network
