@@ -15,6 +15,7 @@
   "Properties.Pouw.Lead.Commit",
   "Properties.Pouw.Lead.V2",
   "Properties.Pouw.PearlPlus",
+  "Properties.Pouw.PearlPlusDraw",
   "Properties.Nci",
   "Properties.Nci.Threads",
   "Properties.Nci.Baseline",
@@ -876,7 +877,8 @@
     "Properties.Pouw.ServedWork",
     "Properties.Pouw.ServedValues",
     "Properties.Pouw.Lead.V2",
-    "Properties.Pouw.PearlPlus"
+    "Properties.Pouw.PearlPlus",
+    "Properties.Pouw.PearlPlusDraw"
    ],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -884,6 +886,16 @@
    "imports": ["PouwPearlPlus", "Definitions.Pouw.PearlC.Unscale", "Definitions.Core.Fp32", "Properties.Pouw.Commit"],
    "except": [],
    "why": "the properties are stated against Pearl+'s verdict's own functions (`pouw_pearlplus`), on Lean core, the trees' messages against the commitments' (`Properties.Pouw.Commit.pathFrames`), and the served y against its Definition (`Pouw.PearlC.unscale`, on `security`'s FP32 words, which import nothing): nothing of Mathlib"
+  },
+  "Properties.Pouw.PearlPlusDraw": {
+   "imports": [
+    "PouwPearlPlus",
+    "Definitions.Pouw.Game.Defs",
+    "Properties.SampledProofs.Draw",
+    "Mathlib.Algebra.BigOperators.Fin"
+   ],
+   "except": [],
+   "why": "the run draw is stated against Pearl+'s own draw (`pouw_pearlplus`) as the law `MissBound` reads (`Definitions.Pouw.Game.Defs`'s `Ticket` and `pr`), tickets numbered in `finSigmaFinEquiv`'s order (`Mathlib.Algebra.BigOperators.Fin`), over streams read as sampled proofs' are (`Properties.SampledProofs.bytesOf`), never a proof"
   },
   "Properties.Pouw.Commit": {
    "imports": ["PouwCommit"],
