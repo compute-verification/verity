@@ -241,8 +241,7 @@ def test_the_certifiers_chain_files_that_count_requests_move_to_the_serve_dirs_p
     """`served_verdicts.sh private-pieces` moves CERTIFIER_PRIVATE out of $OUT/pieces/certifier into the serve dir's
     private/, 0700, and leaves the piece's answer, case and verdict where the record and its reader find them."""
     piece, d = tmp_path / "out" / "pieces" / "certifier", tmp_path / "serve"
-    moved = ["chain/certs.json", "chain/report/report.json", "chain/tie/summary.json", "chain/n2/summary.json", "piece.log",
-             "chain.log", "period.log"]
+    moved = ["chain/certs.json", "chain/report/report.json", "chain/n2/summary.json", "piece.log", "chain.log", "period.log"]
     kept = ["answer.json", "case.json", "chain/scan/answers.json"]
     for f in moved + kept:
         (piece / f).parent.mkdir(parents=True, exist_ok=True)
@@ -254,7 +253,7 @@ def test_the_certifiers_chain_files_that_count_requests_move_to_the_serve_dirs_p
     assert sorted(str(p.relative_to(piece)) for p in piece.rglob("*") if p.is_file()) == sorted(kept)
     private = d / "private" / "pieces" / "certifier"
     assert sorted(str(p.relative_to(private)) for p in private.rglob("*") if p.is_file()) == sorted(moved)
-    assert (private / "chain/tie/summary.json").read_text() == "chain/tie/summary.json"
+    assert (private / "chain/n2/summary.json").read_text() == "chain/n2/summary.json"
     assert all((d / p).stat().st_mode & 0o777 == 0o700 for p in ("private", "private/pieces", "private/pieces/certifier"))
 
 
