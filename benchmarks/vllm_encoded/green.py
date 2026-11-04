@@ -1,11 +1,11 @@
 """The SM partition (`topup.cu`'s `sq_green`, green contexts): the filler's F SMs and the step's rest, made before the
-engine starts, for `serve.py --partition` and the bandwidth arms' `topup_sms` (`vllm_encoded/bench_arm.py`).
+engine starts, for the bandwidth arms' `topup_sms` (`bench_arm.py`).
 
 The step's stream is torch's current stream from then on, so vLLM launches its eager kernels there; every CUDA graph is
 captured on a stream of the step's context, whatever stream its caller names (vLLM captures on one it makes itself, on
 the device's context), and replays on the step's; and the device's SM count reads as the step's
 (`multi_processor_count`, which sizes the stack's and vLLM's grids). `spread_checks` checks the confinement. This module
-imports nothing of its directory's, so a caller that has the encoded stack's `bench` on its path can import it.
+imports nothing of its directory's.
 """
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-// The filler reader with receipts, `verity/kv-filler/fill-sk16/v0` (`fill_ref.py` is the reference): a small fixed
+// The filler reader with receipts, `verity/kv-filler/fill-sk16/v0`: a small fixed
 // grid of CTAs that streams registered blocks at a bounded number of bytes in flight, so that beside a running step it
 // takes the DRAM time the step leaves and little of the step's own, and needs no shared memory, so that it co-resides
 // with the step's GEMM and attention CTAs.
@@ -303,7 +303,7 @@ __global__ void __launch_bounds__(W * 32) fill_kernel(const Regions R, uint64_t 
   }
 }
 
-// fill-sk16/v2 (`fill_ref.epoch`), sketch-then-SHA-512: every kernel of a run takes units from one sequence `next`;
+// fill-sk16/v2, sketch-then-SHA-512: every kernel of a run takes units from one sequence `next`;
 // unit s is plan unit s mod P in pass p = s div P, and lands in epoch s >> shift of a ring of `epochs` (a power of 2).
 // Pass p's signs are its own: string byte 64 i + b is byte b of SHA-512(TAG_SGN ‖ run seed ‖ u64be p ‖ u64be i),
 // i < 128 (one compression each). Block j's (its plan index) word is the first 4 bytes, big-endian, of

@@ -1,13 +1,13 @@
 // Read kernels on the RTX PRO 6000 (sm_120): which reader gets closest to the card's read capacity, and so what R is.
 // η can be no lower than the best reader's shortfall from R, so R is the best of every reader here, measured in the
-// same run (`fill.py read`).
+// same run.
 //
 //   ld<U>     grid-stride, each thread U independent 16-byte loads in flight (ld.global.nc.L1::no_allocate), XOR-folded
 //   ldef<U>   the same with an L2 evict-first policy
 //   bulk<S>   cp.async.bulk (TMA) into S stages of BULK_BYTES of shared memory per CTA, one elected thread issuing,
 //             every thread folding each stage once it lands
 //
-// Built as libreaders.so (fill_run.sh). C ABI at the end.
+// `topup.cu` includes it. C ABI at the end.
 #include <cuda_runtime.h>
 #include <stdint.h>
 

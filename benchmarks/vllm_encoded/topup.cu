@@ -16,7 +16,7 @@
 // chunks (the in-flight ones finish): the engine-driven, idle-only top-up. fill-sk16/v2 (`sq_*`, below) is the filler
 // by sequence number, its receipts SHA-512's.
 //
-// Built as libtopup.so (run.sh).  C ABI at the end.
+// Built as topup.so (`benchmarks/harness/setup/vllm_encoded.sh`).  C ABI at the end.
 
 #include <cuda_runtime.h>
 

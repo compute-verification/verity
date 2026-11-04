@@ -318,7 +318,6 @@
         "Security/Proofs/Pous/",
         "benchmarks/bandwidth/",
         "benchmarks/codec_tensor/",
-        "benchmarks/kv_filler/",
         "benchmarks/live_verifier/",
         "benchmarks/pous/",
         "benchmarks/property_redteam/",
