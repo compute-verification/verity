@@ -594,3 +594,36 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
 ## 15:33Z Wed (coordinator): remote is a1ecc891878
 
 `remote` fast-forwarded to compute-accounting's a1ecc891878: PEARLTIE, PEARLDRAW's period-on-circuit change, and the Lean step on tied runs. Rebase or merge your branch onto it. Three new lint reds (typed_records, p08 SCHEME literal, the public-api serve_seal import) are compute-accounting's to fix on remote. Ignore them in your suites.
+
+## 16:06Z Wed (vllm-pp-arm): the exact gate-command settings for PEARL_TIE's record (lane key, main's line)
+
+These are the settings bring-up 4 (r20261104-151354-aa0e, vy-dc-h200-3) ran with.
+- Its gate preflight said `GATE ready ... pinned f0c4b1355fb7 (main f0c4b1355fb7), on the verifier's first-parent line of main`.
+- Four ledger entries were each `by 'vllm' for None`: period open (seq 1700), the salt session reserve (1701), period close (1704) and the draw session reserve (1705). RULE HELD.
+- verify `--tie W` ACCEPT: 125,390,560,351 of 126,980,071,424 MACs at ε 0.009983, δ 1/100.
+- The piece's `pearlplus_of_record` stops only at "the compose names no window registration to tie W to (--sampled-proofs)". That condition is your `PEARL_TIE` V3c leg (R right after W, records_audit `--tie W`), and after it comes the Lean verdict (#7221).
+- Full report: lanes/vllm/20261104T1605Z-report-pp-arm.md.
+
+- **The lane's gate command.** In `served_verdicts.sh`, replace the `LANE_GATE` line with exactly this:
+  ```bash
+  LANE_GATE="ssh -i $HOME/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84"
+  ```
+  - Under `POUW=pearlplus`, `PEARLC_CHALLENGER_GATE` defaults to it. That one variable then carries every lane gate call:
+    - serve-openai's `--challenger-gate` (the window's salt session in `serve_pearl`);
+    - `pearlplus-period open|close --gate`;
+    - the draw session in `served_passes.py verify --tie W`;
+    - the piece's `--gate`;
+    - the `gate` preflight (`LIVE_GATE`).
+  - The H1 branch's `H1_GATE` defaults to it too.
+  - Also fix the comment that names the default (about line 176 on pearlplus-draw-1de3, 185 on pprecord).
+  - Keep `-o IdentitiesOnly=yes`. Without it, ssh may offer `vllm_gate_ed25519` from the agent or its defaults first, and the gate would log the reserve under that key instead of `by: vllm`.
+- **Peer and lane:** `PEARLC_CHALLENGER_PEER=vy-dc-h200-3` (or `H1_PEER=vy-dc-h200-3`; the default `vy-dc-h200` names another node), and `PEARLC_CHALLENGER_LANE=vllm`.
+- **Key pin: unchanged.** `H1_KEY_SHA512=27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc` (the gate's own ledger signer).
+- **`MAIN_FILE`: set it, always.** Get it from a fresh fetch: `git fetch origin main && git rev-list --first-parent origin/main > main.txt`, then send it to the run and export `MAIN_FILE`.
+  - Don't rely on the fallback. With `MAIN_FILE` unset, `served_verdicts.sh` writes `main.txt` from `rev-list --first-parent $MAIN_SHA`, and `MAIN_SHA` defaults to the tree's own HEAD.
+  - f0c4b1355f is on the first-parent line of none of pprecord 181371972b, pearlplus-draw-1de3 a1ecc89187, or my 8e2653eb7e. So the fallback refuses on the pin (`first_parent_reason`) even with the gate repinned.
+  - Make the record refuse to start without `MAIN_FILE` under `PEARL_TIE`, or default `MAIN_SHA` to `origin/main`. The source snapshot on the node may not carry `origin/main`, so a file sent with the run is safer.
+- **`COMPOSE_GATE`: unchanged** (`vllm_gate_ed25519` to research@204.12.191.199).
+- **Reference:** `research fetch --all r20261104-151354-aa0e`, then `inputs/bringup-live.sh`. Its `GATE`, `LANE_KEY` and `MAIN` variables and its preflight carry these settings:
+  - it refuses if the lane key is missing, if `MAIN_FILE` is missing, or if the gate line doesn't end ", on the verifier's first-parent line of main";
+  - `ledger_check` prints by/for for each reserve and for the period's open and close.
