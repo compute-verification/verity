@@ -86,14 +86,22 @@ it a writer row, so no unit copies rows together: a template's port is read at o
 cut that many ways. Every wire and read is stated per node as a pattern (a node's heads, KV groups and slices as digits of
 one) and `interface.coalesce`d, and each allocation's slots sit side by side in its template, so the slots' copies of a
 pattern are one and the circuit's description grows with the class Program's nodes, not its slots or units; so does the
-lowering's own state (a node's output rows are runs).
+lowering's own state (a node's output rows are runs). Each coalesced wire is then placed inside one writer entry and one
+reader entry (`window_builder.placed`): cut where it crosses entries, and a digit that spans two of an entry's digits
+refined into two, the same rows.
 
 The circuit's blocks (`interface.Blocks`) carry its inference block: a unit's slot is its slot (its class Program; the blocks'
 slots are the class's S) and its step its position, T the class's positions. An embedding opens its position, the stack, LM head
 and token select with its collector after it are that position's (the last's with the entry), and a slot's `ScanSlots_v2`
-unit its first position's. An allocation's units are one entry, its slots' runs at one step side by side (the slot
-digit, then the run), and like entries that follow on merge, at one step and then at consecutive steps
-(`window_builder.inference`).
+unit its first position's. A unit's time is its class Program node and its place on the longest path through the node's
+units that read one another (`window_builder._Builder.timed`: an embedding read is allocated before the feed it reads, a
+select's combine before its ``x0``). An allocation's units are one entry, its slots' runs at one step and time side by side
+(the slot digit, then the run), and like entries that follow on merge where their times step evenly: at one step under a
+``-`` digit until none merges (a layer's quantizers a digit, its layers another), then at consecutive steps
+(`window_builder.entries`). So an entry's time is affine in its digits, and a layer is a digit of its own. The entries
+ranked by their units' time are the circuit's wire-order certificate (`window_builder.order`, `Lowered.order`, which a
+window writes as ``order.json`` beside its ``circuit.json``): every wire's writer units rank below its reader units, so the
+wiring is acyclic, and the lowering refuses a wire it doesn't order.
 
 Refused by name (`Unexpressible`): a window past its class's slots (more requests than slots, more anchored at a boundary than
 its lanes, an anchor that is no boundary, a prompt past the cap, more outputs than the cap), a request whose Program would read

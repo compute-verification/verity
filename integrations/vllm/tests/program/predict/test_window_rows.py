@@ -8,6 +8,7 @@ TINY's slots and the class of record's.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -210,6 +211,24 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
             node = np.asarray(evaluate_batch(end, l, o)).reshape(4, -1).astype(np.uint16)
             assert np.array_equal(node, rows.outs[et][0][eu:eu + 4])
             assert np.array_equal(node.reshape(-1), WR._words(s.values[j])) and node.any()
+
+
+#: the SHA-512 of every unit's output rows on `window`'s values, each template's descriptor id in the circuit's order then
+#: its outputs' bytes: the honest witness's outputs, which restating the circuit's wires (`window_builder.placed`) leaves
+#: as they are
+OUTS = ("09566f9cfac4eeaf192a15ac37452df0b3570c49a2195ae3805d9950beb184852bac1b131122bbf815d059a290a1172eeec63e21868bb45d9be0"
+        "9bd9040f1437")
+
+
+def test_the_honest_witness_outputs_are_the_pinned_ones(window):
+    """Every unit's output rows on the window's values (`Rows.outs`) are the ones `OUTS` pins."""
+    low, _f, values, _w, slots = window
+    rows, h = WR.Rows(low, slots, values), hashlib.sha512()
+    for fn, _ in low.circuit.templates:
+        h.update(descriptor_id(fn).encode())
+        for o in rows.outs[descriptor_id(fn)]:
+            h.update(np.ascontiguousarray(o).tobytes())
+    assert h.hexdigest() == OUTS
 
 
 def test_a_slots_row_is_its_lanes_of_the_scan_state_row_at_its_anchor(window):

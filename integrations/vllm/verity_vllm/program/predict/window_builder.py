@@ -1,10 +1,12 @@
 """The window circuit's units as `window_circuit` lowers a class Program into them: each template's units, allocated a slot
-at a time with each allocation's slots side by side (`_Builder.unit`), the rows each unit's ports read (`_Feed`), the
-registered reads (the weights' and the scan state's), and `settle`: each port read as m writer rows cut m ways, a row of
-its reader a writer row, and every feed wired as `interface.Wire` patterns, one a run of rows from one writer's output at a
-constant unit step. No unit copies rows together: a reader reads each writer's row as it is. A unit holds at most
-``Grain.rows`` rows in and out. Each template's units are the circuit's inference entries by their (slot, step)
-(`inference`).
+at a time with each allocation's slots side by side (`_Builder.unit`) and timed by their class Program node and their place
+among the node's units that read one another (`_Builder.timed`), the rows each unit's ports read (`_Feed`), the registered
+reads (the weights' and the scan state's), and `settle`: each port read as m writer rows cut m ways, a row of its reader a
+writer row, and every feed wired as `interface.Wire` patterns, one a run of rows from one writer's output at a constant
+unit step. No unit copies rows together: a reader reads each writer's row as it is. A unit holds at most ``Grain.rows``
+rows in and out. Each template's units are the circuit's inference entries by their (slot, step) and time (`entries`),
+each wire is placed inside one writer entry and one reader entry (`placed`), and the entries ranked by their units' time
+are the circuit's wire-order certificate (`order`): every writer unit ranks below its reader unit.
 """
 from __future__ import annotations
 
