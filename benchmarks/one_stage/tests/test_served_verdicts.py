@@ -23,7 +23,9 @@ commit refused; its V3c then audits the commit H1 bound and makes none, and has 
 another, its audit tied to W at stratified:1 on a port for each proof block of R's sample; its preflight refuses H1_TIE
 without H1's prover state, without V3c, on a tree whose window-commit takes no --window-registration or whose records_audit
 takes no --tie, at a sampling design other than stratified:K, past the sample session's time, or for onsite on a node short
-of V3c's audit's memory. There
+of V3c's audit's memory. Under DAY its serve gives serve-openai the day's declaration and its V3c audit the day and the
+registration log, and nothing of either without DAY; its preflight refuses a DAY without its log or program, on a tree
+without them, or with a deferral. There
 step 6 defers the audit and the composite, leaving the follow-on's settings and its every input, listed and hashed, and
 nothing in $OUT but a line; the follow-on holds the copy to those sums, refuses another setting, a node short of the
 memory or another tree, and audits, records about the served node and composes, each saying it composed elsewhere, as
@@ -2267,6 +2269,57 @@ def test_under_h1_tie_v3cs_audit_is_tied_to_h1s_w_at_a_stratum_of_each_tables_re
                                   else {"--law": "subset:1", "--tie": None, "--tie-prefix": None, "--ports": ports})
 
 
+DAYS = ("--day", "--day-log", "--day-params")
+
+
+def _day_tree(tmp_path: Path) -> str:
+    """A toy tree with serve-openai's --day (`serve_day`), and its records_audit.py, which takes --day."""
+    p = tmp_path / "tree" / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "serve_day.py"
+    p.parent.mkdir(parents=True)
+    p.write_text("")
+    return FAKE_RECORDS_AUDIT + '# "--day"\n'
+
+
+@pytest.mark.parametrize("extra, flags", [
+    ({}, {"--day": None, "--day-log": None, "--day-params": None}),
+    ({"DAY": "3", "DAY_LOG": "/l.json", "DAY_PROGRAM": "5d" * 64}, {"--day": "3", "--day-log": "/l.json", "--day-params": None}),
+    ({"DAY": "3", "DAY_LOG": "/l.json", "DAY_PROGRAM": "5d" * 64, "DAY_PARAMS": "/p.json"},
+     {"--day": "3", "--day-log": "/l.json", "--day-params": "/p.json"}),
+], ids=["off", "day", "day-params"])
+def test_under_day_v3cs_audit_holds_the_window_to_the_days_declaration(tmp_path, extra, flags):
+    """DAY hands V3c's audit the day and the registration log (records_audit's --day, --day-log, --day-params), whose
+    declarations R2 holds the window's registration to; without DAY the audit gets none of them."""
+    rc, lines, order, _limits = _v3c(tmp_path, records_audit=_day_tree(tmp_path), **extra)
+    assert rc == 0 and "audit" in order, (lines, order)
+    assert _audited(tmp_path, DAYS) == flags
+
+
+NO_DAY = ("PREFLIGHT: DAY=N declares day N's circuit: it needs DAY_LOG (the deployment's registration log) and DAY_PROGRAM "
+          "(the SHA-512, lowercase hex, of the program its windows register)")
+
+
+@pytest.mark.parametrize("extra, tree, line", [
+    ({"DAY": "3", "DAY_PROGRAM": "5d" * 64}, True, NO_DAY),
+    ({"DAY": "3", "DAY_LOG": "/l.json", "DAY_PROGRAM": "5D" * 64}, True, NO_DAY),
+    ({"DAY": "x", "DAY_LOG": "/l.json", "DAY_PROGRAM": "5d" * 64}, True, NO_DAY),
+    ({"DAY": "3", "DAY_LOG": "/l.json", "DAY_PROGRAM": "5d" * 64}, False,
+     "PREFLIGHT: DAY needs serve-openai's --day and records_audit's --day, which this tree hasn't"),
+], ids=["no-log", "upper-hex", "not-a-day", "old-tree"])
+def test_the_preflight_refuses_a_day_it_cant_declare_or_audit(tmp_path, extra, tree, line):
+    rc, lines, order, _limits = _v3c(tmp_path, records_audit=_day_tree(tmp_path) if tree else FAKE_RECORDS_AUDIT, **extra)
+    assert (rc, lines, order) == (3, [line], [])
+
+
+def test_the_preflight_refuses_a_day_whose_audit_a_deferral_would_take_off_the_node(tmp_path):
+    """A deferral's follow-on runs elsewhere, without DAY_LOG, so DAY on a node short of V3c's audit's memory is refused
+    rather than audited without its day."""
+    rc, lines, order, _limits = _v3c(tmp_path, (), records_audit=_day_tree(tmp_path),
+                                     PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", HOST="vy-dc-h200-2",
+                                     PREFLIGHT_ONLY="1", DAY="3", DAY_LOG="/l.json", DAY_PROGRAM="5d" * 64, **SHORT_REMOTE)
+    assert (rc, lines, order) == (3, [f"PREFLIGHT: DAY's audit reads DAY_LOG on this node, and {SHORT} defers it to a "
+                                      "follow-on that doesn't carry the log: a node with the memory, or no DAY"], [])
+
+
 @pytest.mark.parametrize("extra, law", [({}, "subset:1"), ({"V3C_LAW": "stratified:1"}, "stratified:1")])
 def test_an_untied_v3c_registers_its_window_at_the_sampling_design_its_audit_samples_by(tmp_path, extra, law):
     """Untied, window-commit registers the window at V3C_LAW's sampling design and the audit samples by that one: R1 holds
@@ -4005,6 +4058,24 @@ def test_the_engine_gets_one_token_budget_with_or_without_h1(tmp_path, env, budg
     assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
     assert argv.count("--max-num-batched-tokens") == 1 and argv[argv.index("--max-num-batched-tokens") + 1] == budget
     assert ("--protocols" in argv) == bool(env["H1_GATE"]) and "--h1-window-commit" not in argv
+
+
+DAY_PROGRAM = "5d" * 64
+
+
+@pytest.mark.parametrize("env, flags", [
+    ({}, []),
+    ({"DAY": "3", "DAY_LOG": "/l.json", "DAY_PROGRAM": DAY_PROGRAM},
+     ["--day", "3", "--day-log", "/l.json", "--day-program", DAY_PROGRAM]),
+    ({"DAY": "3", "DAY_LOG": "/l.json", "DAY_PROGRAM": DAY_PROGRAM, "DAY_BLOCKS": "a,b", "DAY_PARAMS": "/p.json"},
+     ["--day", "3", "--day-log", "/l.json", "--day-program", DAY_PROGRAM, "--day-blocks", "a,b", "--day-params", "/p.json"]),
+], ids=["off", "day", "day-blocks-params"])
+def test_serve_openai_declares_the_day_only_under_day(tmp_path, env, flags):
+    """DAY unset (the default) gives serve-openai no day option, so it writes what it wrote before; DAY gives it the day,
+    the log, the program and, where set, the blocks and the log's parameters."""
+    rc, argv = _serve_argv(tmp_path, {"H1_GATE": "", **env})
+    assert rc == 10 and [x for x in argv if x.startswith("--day")] == flags[::2], (rc, argv)
+    assert all(argv[argv.index(f) + 1] == v for f, v in zip(flags[::2], flags[1::2]))
 
 
 class _Response:
