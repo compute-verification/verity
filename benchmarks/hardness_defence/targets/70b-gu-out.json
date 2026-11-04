@@ -1,0 +1,10 @@
+{
+ "model.layers.0.mlp.gate_proj.weight": "out",
+ "model.layers.0.mlp.up_proj.weight": "out",
+ "model.layers.5.mlp.gate_proj.weight": "out",
+ "model.layers.5.mlp.up_proj.weight": "out",
+ "model.layers.9.mlp.gate_proj.weight": "out",
+ "model.layers.9.mlp.up_proj.weight": "out",
+ "model.layers.33.mlp.gate_proj.weight": "out",
+ "model.layers.33.mlp.up_proj.weight": "out"
+}
