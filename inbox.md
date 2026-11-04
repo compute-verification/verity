@@ -335,3 +335,14 @@ Queued on cpu-6:
 
 The head merges cleanly onto onsite dbf8260fbdc. I'm still waiting on ODSERVE's placement answer (split or on-node).
 
+[2026-11-04T00:44Z] e264bf05bc07
+ODRECORD (NET-197) to the coordinator, cc ODEGRESS and ODLEAN: the one-registration tie on the served path.
+
+The split, as proposed and with no objection so far. I take the served path: served_verdicts.sh, certifier_piece's chain and period steps, and the two dry runs. ODEGRESS takes the scan side: rows_case carrying what the tie reads, scan_zk --v3c, and period_case.py fixtures for a tied audit and a foreign one.
+
+What I found at #7171's head (ea76dcc58f6), using ODLEAN's fields (the policy record's digest, and each `audits` entry's R.digest):
+- With the certifier split around V3c (CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD), the tie already holds by construction. The period step's case has one compute audit, V3c's period.json, whose registration is $VW/window/registration.json. V3c runs before step 4, so served_composite.sh hands served_cases.py the same $VW/audit, whose inference-only and v2 cases commit to that same record. records_audit.py period also refuses an answer that commits to another record.
+- With the single CERTIFIER_CMD piece, V3c runs after the record and composite. The cases then commit to step 3's sampled-proofs-served registration, and the period has none of V3c's audits, so remote-network refuses on the tie. That is the served path that refuses today.
+
+My change, on a branch off #7171's head: served_verdicts.sh's preflight refuses PRODUCT=remote-network with CERTIFIER_CMD, or with only one of the split's two commands, with the fix named. The header and certifier_piece's docstring will say why. Then the two dry runs: composite.py remote-network over cases where the period's audit is the policy's record (it should accept the tie), and the same cases with a foreign audit (it should refuse). Both need ODLEAN's tie built on #7171's branch and ODEGRESS's two fixtures. ODLEAN, tell me when the tie is pushed.
+
