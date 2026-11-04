@@ -233,7 +233,7 @@ RESTS_ON: dict[str, dict[str, Any]] = {
                   "NetTiming.RowsTiesOrdered": "rows-ties-ordered", "NetTiming.CircuitCounts": "free-count",
                   "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.TiedExposed": "tied-exposed",
                   "NetTiming.SchedulesHeld": "schedules-held", "NetTiming.SchedulesCovered": "schedules-covered",
-                  "NetTiming.SenderDecodes": "client-decodes", "NetTiming.PhaseParsed": "phase-parsed",
+                  "NetTiming.SenderDecodes": "client-decodes", "NetTiming.PhaseParsed": "sampled-leg-bridge",
                   "NetTiming.RowsStateHeld": "rows-state-held", "NetTiming.RowsProgWired": "rows-prog-wired",
                   "NetTiming.RegOpensAt": "reg-opens-at", "NetTiming.TapsOpen": "taps-open",
                   "NetTiming.ScopeAcc": "wires-fit"}},
@@ -260,8 +260,6 @@ PREMISES: dict[str, dict[str, Any]] = {
                    "discharged_by": ("Properties.NetworkPeriod.phaseCounts",)},
     "held-performed": {"is": "the public's held names only the checks the period check performed, each holding of it",
                        "discharged_by": ("Properties.NetworkPeriod.rowsHeld",)},
-    "circuit-held": {"is": "RowsCircuitHeld: each tied audit's Program the class circuit the period registers",
-                     "discharged_by": ("Properties.NetworkPeriod.phaseCircuitHeld",)},
     "rows-state-held": {"is": "RowsStateHeld: each tied audit's state read at row a ≥ 1 committed where the scan's o1 of "
                               "unit a − 1 is, under the scan's state root, and so the scan's own state read at unit a",
                         "discharged_by": ("Properties.NetworkPeriod.phaseStateHeld",)},
@@ -276,10 +274,6 @@ PREMISES: dict[str, dict[str, Any]] = {
                                   "position under one root open to one value, or their H calls collide; the sampled "
                                   "leg's bridge proves it of the deployed parse. Open until that theorem is named",
                             "discharged_by": ()},
-    "phase-parsed": {"is": "PhaseParsed, an antecedent of PeriodTiedCount's tie: at the deployment, the phase's "
-                           "statements' bytes parse to its registered statements, the scan's first, with one trace each. "
-                           "Open until the theorem that gives it of the deployed parse is named",
-                     "discharged_by": ()},
     "reg-opens-at": {"is": "RegOpensAt: at each window's statement the registration's openings open its registered "
                            "inputs under the statement's roots (RegOpens). The run's reg holds per-window values (the "
                            "window's tied activations and the scan's state) and pinned ones (the weights, at their "
@@ -304,6 +298,11 @@ PREMISES: dict[str, dict[str, Any]] = {
                            "(Phase.exposed); the scan's half is `windows-placed`. Open until it is stated of the period "
                            "check's acceptance and a theorem gives it",
                      "discharged_by": ()},
+    "wrong-bounds": {"is": "WrongBounds, which scanWindowsPlaced takes: each possible incorrect set of a scan statement "
+                           "at its partition and δ holds at most b proof blocks, b the bound the audit's answer publishes "
+                           "(countBound at the code's strata and δ), from the design's miss at a well-formed design whose "
+                           "rules are strata draws. Open until a theorem stating it at the deployed draw is in the lock",
+                     "discharged_by": ("Claims.Sampling.Count.countBound_miss_design",)},
     "schedules-held": {"is": "SchedulesHeld, PeriodLeakAccepted's hcap and hfit: each schedule the network certifier may "
                              "run gives each connection at most its cap of cells, and its record format holds it "
                              "(TapRecord.fits, the rows format's). Open until the theorem that gives it of the network "
@@ -320,10 +319,12 @@ PREMISES: dict[str, dict[str, Any]] = {
                                  "ListWithin, the decoder's list at Flock's radius; Binds, the trace commitment's "
                                  "binding; at the per-member record, the only form with wires, SessionKS, the sessions' "
                                  "KS, which SessionKS_of can't give there, its SessionRuns failing at more than one "
-                                 "session; SessionOpens; RegOpens: the registered reads' openings), proved of the Lean "
-                                 "verifier and taken as theorem hypotheses on the layer below, never SampledCodeRuns or "
-                                 "another premise about the deployed Python. Open until the bridge's theorem is in the "
-                                 "lock",
+                                 "session; SessionOpens; RegOpens: the registered reads' openings; RWired, the sampling "
+                                 "relation each extracted trace meets; PhaseParsed, a phase's statements what its bytes "
+                                 "parse to, since the sampled verifier accepts none it can't parse, one trace each), "
+                                 "proved of the Lean verifier and taken as theorem hypotheses on the layer below, never "
+                                 "SampledCodeRuns or another premise about the deployed Python. Open until the bridge's "
+                                 "theorem is in the lock",
                            "discharged_by": ()},
 }
 #: each theorem of `PREMISES`' ``discharged_by`` that has been read, by its name in `LOCKS`, as `RESTS_ON` gives a
