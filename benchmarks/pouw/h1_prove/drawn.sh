@@ -37,7 +37,8 @@
 # when the prover's cap is below its 62 GB resident peak, so a K 2048 window wants H1_DRAWN_MEM_GB >= 88 + 48 + 62 = 198
 # (H1_DRAWN_MEM_GB=400: the prover's cap is 264). A larger K's lane is measured again before it runs.
 # Out: PIECE_DIR/drawn/ (statements.json and job.log, and sessions/<statement>/: the live verifier's log, the prover's
-# LIVE verdict lines and both sides' wall seconds, peak RSS and CPU seconds, kept whether the session passed or failed;
+# LIVE verdict lines, both sides' wall seconds, peak RSS and CPU seconds, and the job cgroup's CPU seconds over the
+# session (cgroup.json, the ZK server's Lean processes among them), kept whether the session passed or failed;
 # serve is the verifier, so none of it is witness), then served_verdicts.py pouw's files in PIECE_DIR. The staging (stage/: the plan
 # and each statement's witness files and session) and job.sh's other logs, the prover's stderr among them, go to a
 # `mktemp -d` scratch directory removed on exit (kept with H1_DRAWN_WORK): PIECE_DIR is under the run's $OUT, and a staged
@@ -96,9 +97,13 @@ $TIME "$OUT/stage.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $J/../h1_prove/d
 keep() {   # keep O NAME: the session's verifier-side log, its verdict lines and timings, none of them witness
   local K=$P/drawn/sessions/$2 f
   mkdir -p "$K"
-  for f in serve.log serve.time prove.time sessions.du; do [ -e "$1/$f" ] && cp "$1/$f" "$K/"; done
+  for f in serve.log serve.time prove.time sessions.du cgroup.json; do [ -e "$1/$f" ] && cp "$1/$f" "$K/"; done
   grep '^LIVE' "$1/prove.out" > "$K/verdicts.txt" 2>/dev/null
 }
+# the job's cgroup's CPU microseconds: a session's ZK server processes are its prover's children that it never waits for,
+# so timed.py's cpu_s leaves them out, and cgroup.json's cgroup_cpu_s (verifier, prover and ZK server) counts them
+CG=/sys/fs/cgroup$(awk -F: '$1 == "0" {print $3}' /proc/self/cgroup)
+cg_cpu() { awk '$1 == "usage_usec" {print $2}' "$CG/cpu.stat" 2>/dev/null; }
 for d in $("$PY" -c 'import json, sys; p = json.load(open(sys.argv[1])); print(" ".join(f"{c["dir"]}:{c["instances"]}" for c in [*p["calls"], *p.get("leaves", [])]))' "$WK/plan.json"); do
   D=${d%:*} N=${d##*:} O=$OUT/$(basename "${d%:*}")
   mkdir -p "$O" && rm -rf "$D/sessions"
@@ -109,10 +114,13 @@ for d in $("$PY" -c 'import json, sys; p = json.load(open(sys.argv[1])); print("
     export FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_STATEMENT=verity/flock-circuit
     export FC_FIREWALL_HELLO_ARGS="--partition $D/partition.json --program $D/program.json"
   fi
+  c0=$(cg_cpu)
   session "$D" "$O"; rc=$?
+  c1=$(cg_cpu)
+  [ -n "$c0" ] && [ -n "$c1" ] && echo "{\"cgroup_cpu_s\": $(( (c1 - c0) / 1000000 ))}" > "$O/cgroup.json"
   keep "$O" "$(basename "$D")"
   log "drawn: $(basename "$D"): serve {$(grep -o '"wall_s": [^}]*' "$O/serve.time" 2>/dev/null)}" \
-      "prove {$(grep -o '"wall_s": [^}]*' "$O/prove.time" 2>/dev/null)}"
+      "prove {$(grep -o '"wall_s": [^}]*' "$O/prove.time" 2>/dev/null)} $(cat "$O/cgroup.json" 2>/dev/null)"
   [ "$rc" = 0 ] && grep -q '"accepted":true' "$O/prove.out" \
     || { log "drawn: $(basename "$D"): --zk session FAILED: $(tail -1 "$O/prove.out") $(tail -1 "$O/serve.log")"; exit 1; }
 done
