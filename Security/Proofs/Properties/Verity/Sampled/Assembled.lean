@@ -53,7 +53,7 @@ noncomputable def srcCoinsAt (m : ℕ) (A : Live) : A.Ω → Fin m → Fin 512 �
 /-- **The sample's coins are uniform** where the session reads `m` frames' bytes (`avg_srcCoins`). -/
 theorem avg_srcCoinsAt {m : ℕ} {A : Live} (hL : A.Lb 0 = m * 64) (H : (Fin m → Fin 512 → Bool) → ℝ≥0∞) :
     avg (fun ω => H (srcCoinsAt m A ω)) = avg H := by
-  rw [srcCoinsAt, dif_pos hL]
+  rw [srcCoinsAt, dite_eq_left hL]
   exact avg_srcCoins A hL H
 
 /-! ## The sample under the binding's read -/
