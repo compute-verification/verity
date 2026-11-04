@@ -413,6 +413,39 @@ def _is_input(x: dict, j: dict) -> bool:
     return j["definitions"][fid]["form"] == "primitive" and bool(INPUT_ID.match(fid))
 
 
+def _vu_strata(j: dict) -> dict[str, list[tuple[int, int]]]:
+    """`vuStrata`: the template query (`TemplatePartition`) over every template the root instantiates, its non-input
+    root nodes' Definitions (each call one unit, each batch member one, in node then member order), its ranges a
+    template at a time with adjacent ones merged (`Flock.Draw.strataOf`)."""
+    callees, nodes = j["callees"], j["definitions"][j["root"]]["body"]["nodes"]
+    tids = [t for x in nodes if not INPUT_ID.match(t := callees[x["fn"]])]
+    strata: dict[str, list[tuple[int, int]]] = {}
+    units, at = set(), 0
+    for k, x in enumerate(nodes):
+        if INPUT_ID.match(tid := callees[x["fn"]]):
+            continue
+        if x["form"] not in ("call", "batch"):
+            raise D.Reject(f"scan: query-refused: root node {k} is a {x['form']} of '{tid}': an instance is a call or "
+                           f"batch of one of {tids!r}")
+        n = x["n"] if x["form"] == "batch" else 1
+        rs = strata.setdefault(tid, [])
+        if rs and rs[-1][1] == at:
+            rs[-1] = (rs[-1][0], at + n)
+        else:
+            rs.append((at, at + n))
+        if n:
+            units.add(tid)
+        at += n
+    if missing := [t for t in tids if t not in units]:
+        raise D.Reject(f"scan: query-refused: the program has no instance of {missing!r}")
+    return strata
+
+
+def _apart(a: list[tuple[int, int]], b: list[tuple[int, int]]) -> bool:
+    """`apart`: ranges `a` and `b`, each `[lo, hi)`, share no unit."""
+    return all(min(hi, hj) <= max(lo, lj) for lo, hi in a for lj, hj in b)
+
+
 def _refs(arg: dict, nodes: list) -> list[tuple[str, int, int]]:
     """`Seq.toArray`: an argument's references in order, each `(space, collection, leaf)`, the space `p` or `n`."""
     out = []
@@ -577,8 +610,9 @@ def _record_count(a: dict, ctx: str) -> tuple[int, int, tuple[str, tuple[tuple[s
 
 def _scan(j, program: str, s: WardenParams) -> Scan:
     """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
-    form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), an egress template
-    with a row among its parameters (the checker form) refused first. Then what `NetTiming.BoundaryGates.Fits` asks: the
+    form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), its egress template's
+    VUs apart from every other template's (`_vu_strata`, `_apart`) first, then an egress template with a row among its
+    parameters (the checker form) refused. Then what `NetTiming.BoundaryGates.Fits` asks: the
     walk within `FUEL` (`_walkable`), the root returning every egress leaf, the egress template returning only gates it
     computes (`_own_returns`), each ingress row and every template's row, state and egress argument one input node's
     leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `⌊t / every⌋` of lane j's
@@ -596,6 +630,10 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     if not templates:
         raise D.Reject("scan: no template")
     (xf, bf), later, (xe, be) = templates[0], templates[1:-1], templates[-1]
+    vus = _vu_strata(j)
+    if not all(_apart(vus.get(callees[x["fn"]], []), vus.get(callees[xe["fn"]], [])) for x, _ in templates[:-1]):
+        raise D.Reject("scan: the egress template's VUs are not apart from the ingress templates' (vuStrata), so a "
+                       "drawn unit would be both an egress and an ingress bucket's")
     if any(k == "row" or t == row for k, t in be["params"]):
         raise D.Reject("scan: the egress template takes its row as an input (the checker form)")
     if len(templates) not in (2, 3):
@@ -1563,13 +1601,14 @@ def _scan_root(members: list[tuple], lanes: int, nb: int, every: int, prog: int,
 @lru_cache(maxsize=None)
 def scan_descriptor(T: int, row: int, widths: tuple[int, int, int, int], counts: tuple[int, ...] | None = None,
                     names: tuple[tuple[str, ...], ...] | None = None, checker: bool = False, lanes: int = 1,
-                    every: int = 1, skew: int = 0, shared: bool = False) -> str:
+                    every: int = 1, skew: int = 0, shared: bool = False, egress: int = 2) -> str:
     """The canonical descriptor of a scan's Program in the generator form: bucket 0's stand-in instance, `T − 1` later
     ingress instances (no template when there are none) and `T` egress instances (or `counts`), each ingress template's
     row `row` bytes, the ingress buckets' state, entry and view bits and the egress bucket's state words `widths`, and
     `lanes` entry ports a bucket, bucket t's `prog<j>` row `⌊t / every⌋` of lane j's input `prog<j>` of the slot
-    entries (`_scan_root`), or `skew` rows on, cyclically, or lane 0's input (`shared`); `checker`: in the checker form
-    instead, `T` ingress and `T` egress instances (or `counts`) that take their rows."""
+    entries (`_scan_root`), or `skew` rows on, cyclically, or lane 0's input (`shared`); `egress`: the template the
+    egress instances are, bucket 0's (0), the later ingress buckets' (1) or the egress bucket's (2); `checker`: in the
+    checker form instead, `T` ingress and `T` egress instances (or `counts`) that take their rows."""
     state, prog, view, words = widths
     ingress = {"ROW": row, "STATE": state, "PROG": prog, "VIEW": view}
     names = names or (first_params(lanes), ingress_params(lanes), EGRESS_PARAMS)
@@ -1580,7 +1619,9 @@ def scan_descriptor(T: int, row: int, widths: tuple[int, int, int, int], counts:
         return D.canonical(codec.encode_program(program))
     templates = (bind(FIRST_BUCKET, NAMES=names[0], **ingress), bind(INGRESS_BUCKET, NAMES=names[1], **ingress),
                  bind(EGRESS_BUCKET, NAMES=names[2], WORDS=words, ROW=row))
-    kept = [(t, n, f) for t, n, f in zip(templates, counts or (1, T - 1, T), (1, 2, len(names[2]))) if n]
+    fixed = (1, 2, len(names[2]))
+    kept = [(t, n, f) for t, n, f in zip((*templates[:2], templates[egress]), counts or (1, T - 1, T),
+                                         (*fixed[:2], fixed[egress])) if n]
     return D.canonical(codec.encode_program(_scan_root(kept, lanes, T // every, every, prog, skew, shared)))
 
 
@@ -2512,8 +2553,10 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     template returning its `state`'s first 16 leaves as its u16; `row`, bucket 0's row bound to a constant primitive's
     gates (an input node like it appended, keeping the input count); `argument`, egress member 0's first state leaf the
     last ingress template's first output leaf (a later step's ingress when `T > 1`); `ingress`, the egress state the
-    last ingress template's row input node (resized, the state's node resized to keep the count); and `topological`,
-    the last ingress template's row input node moved after the templates, so the template names a later node."""
+    last ingress template's row input node (resized, the state's node resized to keep the count); `topological`, the
+    last ingress template's row input node moved after the templates, so the template names a later node; and `apart`,
+    the egress instances bucket 0's template's, so one stratum holds bucket 0's VU and the egress buckets' (`vuStrata`),
+    refused before any other check."""
     desc = p["scan"]
 
     def parts() -> tuple[dict, list, list[int]]:
@@ -2602,6 +2645,11 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     r["ret"] = moved(r["ret"])
     nodes.append(nodes.pop(kr))
     out["topological"] = own(d), "a body names a later node"
+
+    s = p["schedule"]
+    out["apart"] = own(json.loads(scan_descriptor(
+        s["window"], s["lanes"] * s["slots"] * s["cell_bytes"], _scan_widths(desc), lanes=s["lanes"], every=s["every"],
+        egress=0))), "the egress template's VUs are not apart from the ingress templates'"
     return out
 
 
