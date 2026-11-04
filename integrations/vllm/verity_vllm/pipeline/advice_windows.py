@@ -253,7 +253,8 @@ class Traced:
 
 CAPPED = "verity/prove-path/capped-compiler/v1"
 #: ℓ when a registration names none, the public cap on the advice's encoding in bits: 1 MiB, far above a session's few hundred
-#: requests (I1 spends tens of bits a row)
+#: requests (I1 spends tens of bits a row); a served run's is the least that pads every window within its limits (`least_cap`
+#: of `window_advice.max_bits`)
 CAP_BITS = 1 << 23
 
 
@@ -262,6 +263,13 @@ def pad(data: bytes, bits: int) -> bytes:
     if bits % 8 or 8 * len(data) + 8 > bits:
         raise ValueError(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {bits} bits less its 8-bit end mark")
     return bytes(data) + b"\x80" + bytes(bits // 8 - len(data) - 1)
+
+
+def least_cap(bits: int) -> int:
+    """The least ℓ at which `pad` takes an encoding of ``bits`` bits: its whole bytes and the 8-bit end mark."""
+    if isinstance(bits, bool) or not isinstance(bits, int) or bits < 0:
+        raise ValueError(f"an encoding's length is a natural number of bits, not {bits!r}")
+    return 8 * -(-bits // 8) + 8
 
 
 def unpad(data: bytes, bits: int) -> bytes:

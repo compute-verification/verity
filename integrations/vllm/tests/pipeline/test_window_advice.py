@@ -117,6 +117,33 @@ def test_a_window_built_of_i1_records_is_the_window_of_its_own():
     assert type(WA.decode(WA.encode(STOPPED)).requests[0]) is WA.RequestAdvice
 
 
+def _limits(a: WA.Advice) -> dict:
+    lens = [x for q in a.requests for x in (q.prompt_len, q.output_len)]
+    lens += [x for s in a.steps for r in s.rows for x in (r.start + r.n, r.cache_hit)]
+    lens += [x for c in a.carried for x in (c.C, c.computed, c.kept, *(y for run in c.made for y in run))]
+    return {"requests": len(a.requests), "steps": len(a.steps), "max_model_len": max(lens),
+            "id_bytes": max(len(q.id.encode()) for q in a.requests), "release_bits": max(a.release, default=0).bit_length(),
+            "runs": max((len(c.made) for c in a.carried), default=1)}
+
+
+def test_max_bits_is_reached_by_a_window_at_every_limit_and_bounds_every_window_within_them():
+    # 4 requests carried in, a 24-byte id each, one aborted, each kept output's row at position 512: one step's every field
+    # at its widest, at 4 requests, one step, 512 positions and 24-byte ids
+    reqs = tuple(WA.RequestAdvice(f"{k}" * 24, 512, 2, "abort" if k == 0 else "length") for k in range(4))
+    at = WA.Carried(0, 512, 1, ((0, 512),))
+    widest = WA.Advice(reqs, (WA.StepAdvice(tuple(_row(k, 512, 1, 512) for k in range(4))),), (0,) * 4, (at,) * 4)
+    assert widest.version == WA.ABORTS and WA.decode(WA.encode(widest)) == widest
+    assert WA.total_bits(widest) == WA.max_bits(4, 1, 512, 24) == 1317
+    assert WA.max_bits(4, 1, 511, 24) < WA.max_bits(4, 1, 512, 24) < WA.max_bits(4, 1, 512, 25) < WA.max_bits(5, 1, 512, 24)
+    for a in (W1, W2, ABORTED, STOPPED, widest):
+        assert WA.total_bits(a) <= WA.max_bits(**_limits(a))
+    two = WA.max_bits(4, 2, 512, 24, release_bits=0)
+    assert two == 1317 + 1 + 2 + 4 * 34                    # a second step: its count a bit wider, then its 4 rows
+    assert WA.max_bits(4, 2, 512, 24) == two + 2 * 4 * 63  # past one step, each output's bucket in up to 63 bits
+    with pytest.raises(WA.MalformedAdvice, match="release_bits is a width"):
+        WA.max_bits(4, 2, 512, 24, release_bits=64)
+
+
 def test_decode_refuses_a_version_2_string_that_aborts_nothing_and_a_finish_of_3(monkeypatch):
     monkeypatch.setattr(WA.Advice, "version", property(lambda self: WA.ABORTS))
     alone, carried = WA.encode(STOPPED), WA.encode(W2)
