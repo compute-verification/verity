@@ -1,0 +1,6 @@
+# The last knees on matrices credited in full: 70B L11 and L43 k (1.0503 at rank 72 and 1.0502 at 56, priced every
+# 8), at the ranks 4 either side; 70B L7 and L12 q (1.058 at rank 128, priced at 64 and 256, where q at layers 5, 8
+# and 9 were 0.002-0.0034 cheaper at 160-192, r20261104-163633-f732); 8B L1 q (1.056 at 128, priced at 96 and 192)
+70b-k-fine --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 11,43 --match k_proj --fast --ranks 52,60,68,76 --orders none,fold,sort --workers 2
+70b-q-fine --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 7,12 --match q_proj --fast --ranks 96,112,160,192 --orders none,fold,sort --workers 2
+8b-q1-fine --hf unsloth/Meta-Llama-3.1-8B --target 0.02 --layers 1 --match q_proj --fast --ranks 112,160 --orders none,fold,sort --workers 1
