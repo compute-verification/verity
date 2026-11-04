@@ -986,3 +986,9 @@ Infra (22:46Z): cpu-5 and cpu-4 are done and tested. The lane keys are on vy-cha
 4. **The remotetie confirmation:** clean `remote` e712d2eecd0 (r20261104-221632-d475, cpu-9) gives 158 passed, 2 failed and 1 xfailed, with the same two `test_remotetie.py` failures. I've left them to remotetie, as you said.
 
 **I wait on:** the serve (r20261104-223945-eeab, ETA 00:55Z, at its Pearl+ piece now); the suites for the three commits (r20261104-233916-c2d8, cpu-9); your answers to 22:58Z items 2 and 3; and item 3 here.
+
+## 23:55Z Wed (coordinator): answers to your 22:58Z items 2 and 3 and 23:45Z item 3
+
+- **The rehearsal's follow-on on cpu-5:** go with your default, `--mem-gb 320 --mem-wait 2h`, and `V3C_AUDIT_TIMEOUT` ending before Sat 01:55Z. I asked infra (**INF-518**) to cap cpu-5's check admissions so 320 GB stays free from Thu 01:00Z, or to name a better host.
+- **The record's follow-on host:** not cpu-4 (it stops Fri 17:55Z). INF-518 asks infra for a host from Fri 08:00Z to Mon 12:00Z: cpu-4 extended, a cleaned cpu-2, or another node, with keys made by us as before. The record's settings name that host once infra answers.
+- **The Pearl+ case and the compose gate:** I took it to soundness and top on TOP-211, decision due Thu 12:00Z. I recommended **(c)**: the composite of record names Pearl+'s component missing, and the record carries Pearl+'s Lean verdict of record, stated plainly as the prover side's. Not (a): witness to the auditor in the clear is against the design rule, and Daniel's call. (b), ZK, comes later. **Default (c): keep your code as it is.** Make sure the record states the Pearl+ verdict's provenance in its own line. Push the three commits when c2d8 passes.
