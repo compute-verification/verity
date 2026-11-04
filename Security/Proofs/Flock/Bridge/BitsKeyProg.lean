@@ -16,7 +16,7 @@ import Proofs.Flock.Bridge.Statement
 * `laysOut_keyProg`, `unitsOut_keyProg`: `LaysOut` and `UnitsOut` at a circuit file's program. Each row reads its
   columns' gates (`keyWire_colVal`, through `keyIdx_eq`), and the outputs are the gates on returned outputs' columns,
   ascending (`outs_keyProg`).
-* `constsOf_eq_consts`, `progOf_keyProg`, `blockOf_keyProg`: the circuit's constants (`constsOf`) are Bits'
+* `constsOf_eq_consts`, `progOf_keyProg`, `blockOf_bitsKeyProg`: the circuit's constants (`constsOf`) are Bits'
   (`SampledProofs.Bits.consts`), so the bridge's program and proof blocks are Bits'.
 -/
 
@@ -503,7 +503,7 @@ theorem posOf_keyProg (hu : c.unit.unitLog ≤ 32)
   (laysOut_keyProg hu).posOf_eq g
 
 /-- **The bridge's proof blocks of a circuit file are Bits'**, at the circuit's constants. -/
-theorem blockOf_keyProg (hu : c.unit.unitLog ≤ 32)
+theorem blockOf_bitsKeyProg (hu : c.unit.unitLog ≤ 32)
     (u : Fin n) : blockOf ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) (constsOf c hU n) u =
       SampledProofs.Bits.blockOf (SampledProofs.Bits.keyProg c n) (SampledProofs.Bits.consts c n) u.val :=
   blockOf_eq (laysOut_keyProg hu) (unitsOut_keyProg hu) (constsOf_eq_consts hu) u
