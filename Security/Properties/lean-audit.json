@@ -32,6 +32,7 @@
   "Properties.NetworkScan",
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
+  "Properties.SampledProofs.Bits",
   "Properties.SampledProofs.Halt",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
