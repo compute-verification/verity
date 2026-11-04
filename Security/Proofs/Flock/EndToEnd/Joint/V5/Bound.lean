@@ -12,7 +12,8 @@ The proofs of `JointSampledV5`, `JointShareV5` and `JointHorizonV5` (`Joint/V5/S
   sample, and an accepted run accepted the session of member `m`, which has that proof block in its part
   (`forall₂_getElem?`), so a union over the members (`ZkSession.prob_exists_le`) of
   `JointAuditV5.member_accepted_drawnWrong_le` bounds it; a run whose draw runs out records no transcript, so it accepts
-  no member's session;
+  no member's session; at a window none of whose draws ends there is no incorrect proof block
+  (`JointAuditV5.wrongSet_none`), so the event can't occur;
 * `JointAuditV5.drawMiss_le`: the sample misses a set `B` with probability at most the law's own miss `P_a(B)`, under
   A3 (`Bridge.execSel_escape_le`);
 * `Flock.SecurityProofs.JointSampledV5`: an accepted run with every proof block of `W` incorrect either has a sampled
@@ -45,30 +46,51 @@ open Classical
 
 variable (w : JointAuditV5)
 
+/-- At a window some draw of which ends, its incorrect proof blocks are its members'. -/
+theorem wrongSet_of [h : Nonempty w.EΩ] (τ : Strategy w.game) :
+    w.wrongSet τ = Finset.univ.biUnion fun k => (w.memberWrong τ k).image (w.ms.get k).emb := by
+  rw [wrongSet, dite_eq_left h]
+
+/-- At a window none of whose draws ends, it has no incorrect proof block. -/
+theorem wrongSet_none (h : ¬ Nonempty w.EΩ) (τ : Strategy w.game) : w.wrongSet τ = ∅ := by
+  rw [wrongSet, dite_eq_right h]
+
+/-- At a window some draw of which ends, its `ε` terms are its members'. -/
+theorem eps_of [h : Nonempty w.EΩ] :
+    w.eps = ∑ k, ((w.ms.get k).epsKs (w.design k) + (w.ms.get k).link (w.design k)) := by
+  rw [eps, dite_eq_left h]
+
 /-- **The window's audit accepts with a sampled proof block incorrect** at the strategy `τ` that plays it: at most
-`Σ_m (ε_ks,m + ε_bind,m)`, under `cr/sha-512` and `ecr/sha-512` at each member's session played alone. -/
+`Σ_m (ε_ks,m + ε_bind,m)`, under `cr/sha-512` and `ecr/sha-512` at each member's session played alone, where some draw
+ends; at a window none of whose draws ends there is no incorrect proof block. -/
 theorem accepted_drawnWrong_le (τ : Strategy w.game)
-    (hCR : ∀ k ω j, TableCRZ execArith hs512
+    (hCR : ∀ [Nonempty w.EΩ] k ω j, TableCRZ execArith hs512
       (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberLaw τ k).draw ω) (reg (w.memberSim τ k))) j
       (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim τ k) ω))
       (w.ms.get k).qF (w.ms.get k).qS)
-    (hA2 : ∀ k, LinkCRZC execArith hs512 (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
+    (hA2 : ∀ [Nonempty w.EΩ] k, LinkCRZC execArith hs512 (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
       (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (reg (w.memberSim τ k)) (cont (w.memberSim τ k))
       (w.ms.get k).k (w.ms.get k).Rw (w.ms.get k).M (w.ms.get k).t') :
     prob (fun o => w.Accepts o ∧ ∃ u ∈ o.2.1, u ∈ w.wrongSet τ) w.game τ ≤ w.eps := by
-  refine (prob_mono (q := fun o : w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript =>
-      ∃ k ∈ Finset.univ, (o.2.2[k.1]?).elim False (fun t => AcceptsZKP (w.ms.get k).I (w.ms.get k).own t ∧
-        ∃ u ∈ (w.ms.get k).part o.2.1, u ∈ w.memberWrong τ k)) (fun o ho => ?_) _ _).trans
-    ((FlockSoundness.Discharge.ZkSession.prob_exists_le _ _ _ _).trans
-      (Finset.sum_le_sum fun k _ => w.member_accepted_drawnWrong_le τ k (hCR k) (hA2 k)))
-  obtain ⟨hacc, u, hu, hw⟩ := ho
-  obtain ⟨k, -, hk⟩ := Finset.mem_biUnion.1 hw
-  obtain ⟨v, hv, rfl⟩ := Finset.mem_image.1 hk
-  obtain ⟨t, ht, hacc'⟩ := forall₂_getElem? hacc k
-  have hv' : v ∈ (w.ms.get k).part o.2.1 := Finset.mem_filter.2 ⟨Finset.mem_univ _, hu⟩
-  refine ⟨k, Finset.mem_univ _, ?_⟩
-  rw [ht]
-  exact And.intro (hacc' ⟨v, hv'⟩) ⟨v, hv', hv⟩
+  by_cases hE : Nonempty w.EΩ
+  · rw [w.wrongSet_of τ, w.eps_of]
+    refine (prob_mono (q := fun o : w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript =>
+        ∃ k ∈ Finset.univ, (o.2.2[k.1]?).elim False (fun t => AcceptsZKP (w.ms.get k).I (w.ms.get k).own t ∧
+          ∃ u ∈ (w.ms.get k).part o.2.1, u ∈ w.memberWrong τ k)) (fun o ho => ?_) _ _).trans
+      ((FlockSoundness.Discharge.ZkSession.prob_exists_le _ _ _ _).trans
+        (Finset.sum_le_sum fun k _ => w.member_accepted_drawnWrong_le τ k (hCR k) (hA2 k)))
+    obtain ⟨hacc, u, hu, hw⟩ := ho
+    obtain ⟨k, -, hk⟩ := Finset.mem_biUnion.1 hw
+    obtain ⟨v, hv, rfl⟩ := Finset.mem_image.1 hk
+    obtain ⟨t, ht, hacc'⟩ := forall₂_getElem? hacc k
+    have hv' : v ∈ (w.ms.get k).part o.2.1 := Finset.mem_filter.2 ⟨Finset.mem_univ _, hu⟩
+    refine ⟨k, Finset.mem_univ _, ?_⟩
+    rw [ht]
+    exact And.intro (hacc' ⟨v, hv'⟩) ⟨v, hv', hv⟩
+  · rw [w.wrongSet_none hE τ]
+    refine ((prob_mono (q := fun _ => False) (fun _ ho => ?_) _ _).trans_eq (prob_false _ _)).trans zero_le
+    obtain ⟨-, _, -, hu⟩ := ho
+    simp at hu
 
 private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s : Strategy g) :
     prob (fun _ => Q) g s = if Q then 1 else 0 := by
@@ -176,11 +198,12 @@ theorem JointHorizonV5 : Flock.Guarantees.JointHorizonV5 := by
   intro W T δ ands bits hA3 s hT hL
   classical
   let cr : (t : ℕ) → Strategy (W t).game → Prop := fun t τ =>
-    (∀ k ω j, Assumptions.TableCRZAt execArith hs512
+    (∀ [Nonempty (W t).EΩ] k ω j, Assumptions.TableCRZAt execArith hs512
       (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberLaw τ k).draw ω) (reg ((W t).memberSim τ k))) j
       (zcStrat execArith hs512 (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀) (cont ((W t).memberSim τ k) ω))
       ((W t).ms.get k).qF ((W t).ms.get k).qS) ∧
-    ∀ k, Assumptions.LinkCRZCAt execArith hs512 ((W t).ms.get k).P (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
+    ∀ [Nonempty (W t).EΩ] k, Assumptions.LinkCRZCAt execArith hs512 ((W t).ms.get k).P
+      (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
       (tabZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀) ((W t).ms.get k).vb (reg ((W t).memberSim τ k))
       (cont ((W t).memberSim τ k)) ((W t).ms.get k).k ((W t).ms.get k).Rw ((W t).ms.get k).M ((W t).ms.get k).t'
   have hs : PeriodGood (fun t => (W t).game) (fun t τ => t < T ∧ cr t τ) 0 T s :=
