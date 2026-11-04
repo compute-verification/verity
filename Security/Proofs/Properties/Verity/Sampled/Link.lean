@@ -13,7 +13,10 @@ session's tables (`SampledProofs.Challenger.LINK_TABLES`), so the two read one m
 
 * `checkBlobsAt_link`: where v2's check accepts, the challenger's log shows one coin tree, and the challenger opened
   its `session` round 0 after the SHA-512 of `linkMsg record spec.tables`, the link's message in the record v2
-  verified at the session it set up (`V2Verified`): the record's `root_F`, then its one table's `root_B`.
+  verified at the session it set up (`V2Verified`): the statement's `Σ` (S6/D1's `root_F`), then the one `root_B`
+  `Flock.Record.decode` read. `root_B` is a cap of `2^cap₀` nodes, not one 64-byte root, and is the message's only
+  part of the prover's choosing, after a `Σ` the statement fixes, so the message determines it
+  (`ByteArray.append_right_inj`) without a length prefix.
 
 The steps: what v2's check held of its one session's record (`checkBlobsAt_trees`, `treesHeld_one`,
 `sessionsTreeReason_one`), what a record `sessionTreeReason` accepts shows of its link (`sessionTreeReason_link`), the
@@ -259,18 +262,21 @@ theorem setupAt_tables {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.One
 
 /-- **Where v2's check accepts, the challenger opened the link points after the SHA-512 of the record's link
 message.** v2's check at the coins `ξ` accepts the evidence `e` on the blobs `bs`; then it verified the session's
-record `record` and proof files at the session `(spec, tabs)` it set up (`V2Verified`), the challenger's log shows one
-coin tree `t`, and the challenger opened `t`'s `session` round 0, the link points, after the SHA-512 of the link's
-message `m = linkMsg record spec.tables`: the record's `root_F`, then its one table's `root_B`, as `Flock.Record.decode`
-reads them. So the prover fixed that table's `root_B` before the link's coins. -/
+record `record` and proof files at the session `(spec, tabs)` it set up (`V2Verified`), `Flock.Record.decode` read the
+record as `sess` with one table's `root_B`, `rb`, the challenger's log shows one coin tree `t`, and the challenger
+opened `t`'s `session` round 0, the link points, after the SHA-512 of the link's message
+`linkMsg record spec.tables`: the statement's `Σ`, then `rb`. So the prover fixed that table's `root_B` before the
+link's coins. -/
 theorem checkBlobsAt_link {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.SampledProofs.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.SampledProofs.OneStage.Public} {prof : _root_.Core.Integrity}
     (h : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
-    ∃ record spec tabs rest proofs t o m, V2Verified p e bs record spec tabs rest proofs ∧
+    ∃ record spec tabs rest proofs sess t o rb, V2Verified p e bs record spec tabs rest proofs ∧
+      Flock.Record.decode spec record = .ok sess ∧ sess.rootB = #[rb] ∧
       _root_.SampledProofs.OneStageZk.treesOf p e = .ok #[t] ∧
-      t.opening _root_.SampledProofs.Challenger.TREE_SESSION 0 = some o ∧ linkMsg record spec.tables = some m ∧
-      o.after = Flock.hexOf ⟨(sha512Msg m).toArray⟩ := by
+      t.opening _root_.SampledProofs.Challenger.TREE_SESSION 0 = some o ∧
+      linkMsg record spec.tables = some (spec.sigma ++ rb).data.toList ∧
+      o.after = Flock.hexOf ⟨(sha512Msg (spec.sigma ++ rb).data.toList).toArray⟩ := by
   obtain ⟨record, spec, tabs, rest, proofs, hv⟩ := checkBlobsAt_verified h
   obtain ⟨rs, tags0, circuitB, pubB, rd, hs, ht, -, -, -, hrec, hst, -, hver⟩ := id hv
   obtain ⟨recB, hb, hr⟩ : ∃ recB, bs.get rs.record s!"session {rs.name}'s record" = .ok recB ∧
@@ -294,7 +300,7 @@ theorem checkBlobsAt_link {p : _root_.SampledProofs.OneStageZk.Params} {c : _roo
     rw [Array.mem_singleton.1 htm]
   obtain ⟨-, sess, -, hd, -⟩ := FlockSoundness.Discharge.ZkExec.zk_verify_ok _ _ _ _ hver
   obtain ⟨j, l, -, hp, hl, -, hroot, -, -⟩ := decode_ok hd
-  obtain ⟨j', l', s0, hp', hl', hs0, hu0, -⟩ := decode_rootF hd
+  obtain ⟨j', l', s0, hp', hl', hs0, hu0, hsig⟩ := decode_rootF hd
   rw [hp] at hp'
   cases hp'
   rw [hl] at hl'
@@ -303,7 +309,10 @@ theorem checkBlobsAt_link {p : _root_.SampledProofs.OneStageZk.Params} {c : _roo
   rw [hJ, fld_getD hl] at hrb hrf
   obtain ⟨y, hy⟩ := setupAt_tables rfl hst
   rw [hy] at hroot
-  obtain ⟨_, _, ⟨v, s', hv1, hv2, hv3⟩, -, -⟩ := List.forall₂_cons_left_iff.1 hroot
+  obtain ⟨b, u, ⟨v, s', hv1, hv2, hv3⟩, hu, hbu⟩ := List.forall₂_cons_left_iff.1 hroot
+  rw [List.forall₂_nil_left_iff] at hu
+  subst hu
+  have hB : sess.rootB = #[b] := Array.toList_inj.1 hbu
   rw [fld_getD hv1] at hrb
   subst hrb
   have hmem := get?_mem (str_get? hv2)
@@ -311,6 +320,9 @@ theorem checkBlobsAt_link {p : _root_.SampledProofs.OneStageZk.Params} {c : _roo
   obtain ⟨rfl, hss⟩ := hmem
   injection hss with hss
   subst hss
+  rw [hus] at hv3
+  injection hv3 with hv3
+  subst hv3
   rw [str_getD hs0] at hrf
   injection hrf with hrf
   subst hrf
@@ -321,7 +333,8 @@ theorem checkBlobsAt_link {p : _root_.SampledProofs.OneStageZk.Params} {c : _roo
     simp only [linkMsg, hp, hl, hs0, hu0, ok_toOption, Option.bind_some, ok_bind, qsort_single,
       mapM_single (rootBAt_of ⟨_, _, hv1, hv2, hus⟩), Option.map_some]
     rfl
-  refine ⟨record, spec, tabs, rest, proofs, t, o, _, hv, hts1 ▸ hts, ho, hm, ?_⟩
+  rw [hsig] at hm hafter
+  refine ⟨record, spec, tabs, rest, proofs, sess, t, o, rb, hv, hd, hB, hts1 ▸ hts, ho, hm, ?_⟩
   have he : ∀ b : ByteArray, (⟨b.data.toList.toArray⟩ : ByteArray) = b := fun _ => rfl
   rw [hafter, sha512Msg, he, he]
 
