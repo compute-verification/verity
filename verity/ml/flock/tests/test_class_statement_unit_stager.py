@@ -236,6 +236,58 @@ def test_the_stagers_circuit_renders_the_units_netlist_once_and_is_the_uncached_
     assert CS.UnitStager(*args).text == st.text
 
 
+def _bound_toy() -> tuple:
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+
+    args, rows, _kw = _toy(2)
+    obj = P.partition(P.mixed_population_program([(TOY, 3), (TOY, 5)]), P.template_instances_query([TOY]))
+    return args, rows, {"bind": {"partition": P.digest(obj), "program": obj["program"]}}, {"indices": range(3, 8)}
+
+
+def _slots() -> tuple:
+    from test_read_slots import EDGES, ROWS, _flat, _sigmoid_def
+
+    rng = np.random.default_rng(5)
+    a = np.array(EDGES[:8] + [int(v) for v in rng.integers(0, 1 << 32, 8, dtype=np.uint64)], np.uint64)
+    rows = {"ab": _flat(a, rng.integers(0, 1 << 32, len(a), dtype=np.uint64)).astype(np.uint16),
+            "w": rng.integers(0, 1 << 16, (len(a), 128), dtype=np.uint16)}
+    return (_sigmoid_def(3), "unit/read-slots-3", ROWS, [(V2, (0, 1, 2))]), rows, {"reads": "slots"}, {}
+
+
+def _toy_as(name: str = "unit/stager-toy", **kw) -> tuple:
+    (d, _name, in_rows, out_rows), rows, _kw = _toy(3)
+    return (d, name, in_rows, out_rows), rows, kw, {}
+
+
+#: (stager arguments, rows, stager keywords, round keywords) of `test_a_stager_writes_its_circuit_as_it_composes_it`
+WRITTEN = {"toy": _toy_as, "bound": _bound_toy, "non-ascii": lambda: _toy_as("unit/stager-toÿ"),
+           "templated": lambda: _toy_as(layout="iv/hybrid/4"), "structural": lambda: _toy_as(layout="iv/hybrid/4", structural=True),
+           "anchor": lambda: (*_anchor(), {}), "pc4": lambda: (*_tile("pc4"), {}), "slots": _slots}
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("which", list(WRITTEN))
+def test_a_stager_writes_its_circuit_as_it_composes_it(which, tmp_path, monkeypatch):
+    """A stager given ``circuit`` writes it as it composes it (`circuit.compose_to`), the unit's netlist never rendered whole
+    (here in pieces of 7 rows), into the bytes, by SHA-512, of the text a stager without one holds written whole, as
+    `UnitStager` wrote ``circuit`` before (UTF-8): flat (unbound, bound, a non-ASCII name, the anchors' public inputs, a PoUW
+    tile, a unit with read slots, whose tail stages follow the unit), templated from the flat unit and structural. Its pin,
+    class, META and text are that stager's, no partial file is left beside it, and a round's files and values are the same."""
+    args, rows, kw, round_kw = WRITTEN[which]()
+    whole = CS.UnitStager(*args, **kw)
+    (tmp_path / "whole.txt").write_text(whole.text, encoding="utf-8")
+    netlist = IL.netlist
+    monkeypatch.setattr(IL, "netlist", lambda lay, name, *a: pytest.fail(f"{name} rendered whole") if name == args[1] else netlist(lay, name, *a))
+    monkeypatch.setattr(IL, "NETLIST_ROWS", 7)
+    st = CS.UnitStager(*args, **kw, circuit=tmp_path / "streamed" / "circuit.txt")
+    assert hashlib.sha512(st.circuit.read_bytes()).hexdigest() == hashlib.sha512((tmp_path / "whole.txt").read_bytes()).hexdigest()
+    assert (st.pin, st.class_sha512, st.meta) == (whole.pin, whole.class_sha512, whole.meta) and st.text == whole.text
+    assert [p.name for p in st.circuit.parent.iterdir()] == ["circuit.txt"]
+    monkeypatch.setattr(IL, "netlist", netlist)
+    _same(tmp_path / "whole", whole.stage(rows, tmp_path / "whole", b"k" * 32, **round_kw), tmp_path / "streamed",
+          st.stage(rows, tmp_path / "streamed", b"k" * 32, **round_kw), st.circuit)
+
+
 def test_a_unit_lowering_drops_its_circuit_once_laid_out(monkeypatch):
     """`unit_lowering` keeps no circuit (a GLM-5.3 norm unit's is 51 GiB, which nothing reads after the layout), and its compact
     circuit (`_UnitCircuit`) lays out a plain `gf2.Circuit`'s netlist; `Lowering.domain` then reads the layout's assertions."""

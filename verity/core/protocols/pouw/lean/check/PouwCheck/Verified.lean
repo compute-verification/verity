@@ -90,9 +90,9 @@ structure Ask where
 
 /-- `credit._asks`: the verifier runs in statement order up to the first statement a check before the verifier refuses,
 and that refusal (none when every statement passes them), each run's partition object `partitionOf` the descriptor's.
-Over the window's descriptor `descriptor`, its layout `layout` (`layoutOf` of it), its registered `entries`, open root
-`window`, drawn `units`, `steps` rounds and Program salt `salt`. -/
-def asks (statements files : Json) (descriptor : ByteArray) (layout entries : Json) (window : String)
+Over the window's circuit (its descriptor's SHA-512 `program`, and `shape` and `layout`, `shapeOf` and `layoutOf` of
+its Program), its registered `entries`, open root `window`, drawn `units`, `steps` rounds and Program salt `salt`. -/
+def asks (statements files : Json) (program : String) (shape : Shape) (layout entries : Json) (window : String)
     (units : List Nat) (steps : Nat) (salt : String) : R (Array Ask × Option (String × String)) := do
   unless isObj files && (fields files).all (fun (_, v) => (digest? v).isSome) do throw ("circuit", FILES_FORM)
   let some ss := (match statements with
@@ -102,8 +102,6 @@ def asks (statements files : Json) (descriptor : ByteArray) (layout entries : Js
   if ss.any (·.2 ≥ sizes.length) then throw ("proof", STATEMENTS_FORM)
   let starts := startsOf sizes
   let drawn := units.map fun u => (starts.filter (· ≤ u)).length - 1
-  let program := Flock.hexOf (Flock.Sha512.hash descriptor)
-  let shape := shapeOf descriptor
   let roots := rootsOf entries
   let lins : List (String × Nat) := (arrOf (get layout "linears")).filterMap fun x =>
     match arrOf x with
@@ -156,9 +154,9 @@ def finding (f : Json) : R Finding := do
 caller ran them): each drawn unit's outcome `{unit, verdict, program, registered}`, else the refusal of the first answer
 that credits nothing, then `asks`' own refusal. An answer is `{"error": why}` (the verifier could not run),
 `{"refused": [code, why]}` (it refused the statement) or `{"findings": [...]}` (`finding`, one a session). -/
-def judge (statements files : Json) (descriptor : ByteArray) (layout entries : Json) (window : String)
+def judge (statements files : Json) (program : String) (shape : Shape) (layout entries : Json) (window : String)
     (units : List Nat) (steps : Nat) (salt : String) (runs : Array Json) : R (Array Json) := do
-  let (as, refused) ← asks statements files descriptor layout entries window units steps salt
+  let (as, refused) ← asks statements files program shape layout entries window units steps salt
   let sizes := (callWork layout).map (·.1)
   let starts := startsOf sizes
   let mut out : Array Json := #[]
@@ -212,7 +210,10 @@ def verified (j : Json) : R Json := do
   let some descriptor := (match get j "descriptor" with
     | .str s => if isHexBytes s then hex? (.str s) else none
     | _ => none) | layoutRefuse DESCRIPTOR_HEX
-  let layout ← layoutOf descriptor
+  let P ← programOf descriptor
+  let layout ← layoutOf P
+  let program := Flock.hexOf (Flock.Sha512.hash descriptor)
+  let shape := shapeOf P
   let some units := (Json.getArr? (get j "units")).toOption.bind (·.toList.mapM nat?)
     | throw ("error", "credit-verified: the drawn units are not a list of natural numbers")
   let (some steps, some window, some salt) := (nat? (get j "steps"), str? (get j "window"), str? (get j "salt"))
@@ -220,14 +221,14 @@ def verified (j : Json) : R Json := do
   let (statements, files, entries) := (get j "statements", get j "files", get j "entries")
   match get j "runs" with
   | .null =>
-    let (as, refused) ← asks statements files descriptor layout entries window units steps salt
+    let (as, refused) ← asks statements files program shape layout entries window units steps salt
     if as.isEmpty then
       if let some why := refused then throw why
       return Json.mkObj [("outcomes", Json.arr #[])]
-    let partition := partitionOf (Flock.hexOf (Flock.Sha512.hash descriptor)) (shapeOf descriptor)
+    let partition := partitionOf program shape
     return Json.mkObj [("run", Json.arr (as.map (·.toJson partition)))]
   | .arr runs =>
-    let out ← judge statements files descriptor layout entries window units steps salt runs
+    let out ← judge statements files program shape layout entries window units steps salt runs
     return Json.mkObj [("outcomes", Json.arr out)]
   | _ => throw ("error", "credit-verified: the verifier's answers are neither null nor a list")
 

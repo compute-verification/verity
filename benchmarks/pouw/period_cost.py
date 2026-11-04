@@ -2,7 +2,7 @@
 
     uv run benchmarks/pouw/period_cost.py [--json OUT] [--md OUT]
 
-**The bound.** An accepted period of n windows (#2722's `ComposePeriod`) has ε(n) = ε_♭ + Λ·ln(1/δ_s)/(u·n), with Λ the
+**The bound.** An accepted period of n windows (`ComposePeriod`) has ε(n) = ε_♭ + Λ·ln(1/δ_s)/(u·n), with Λ the
 sharp split rate (`SplitRateExp`) at K_d draws a window, M rounds and credit ratio r:
 
     x = K_d/(r·M),  Λ = max(a/(M·(−ln(p + (1 − p)e^{−x}))), b/(M·(−ln(p0 + (1 − p0)e^{−x})))),
@@ -10,19 +10,19 @@ sharp split rate (`SplitRateExp`) at K_d draws a window, M rounds and credit rat
 at the lucks a = 0.218, b = 0.998, p = 7/8, p0 = ½, δ_s = 2^-40 and ε_♭ = 0.571% (sm_120 sheet, H1 + fx1). u is the
 period's admitted rows over its declared rows, so the first period at ε < 1% is n = ⌈Λ·ln(1/δ_s)/(u·(1% − ε_♭))⌉ windows.
 At small x, Λ ≈ b·r/((1 − p0)·K_d): what counts is the period's total draws n·K_d, and M past 18 buys nothing.
-A period's credit is (1 − ε(j))₊ of its accepted prefix's live words, at the realized prefix j (RT4-INT-8), so a prefix
+A period's credit is (1 − ε(j))₊ of its accepted prefix's live words, at the realized prefix j, so a prefix
 earns nothing until ε(j) < 1 (`first_credit`: 202 windows today). A window that skips every drawn tile passes with
 p0^K_d, which past 1 − b (K_d ≤ 8) would out-earn an honest window if credited without that discount (`all_skip_pays`).
 
-**The served window** (r20261018-234409-19cd, SERVE-H1 on vy-nebius-2): 18 rounds, 16 served steps and 2 empty, 64 rows a
+**The served window** (served_h1 on an RTX PRO 6000 node): 18 rounds, 16 served steps and 2 empty, 64 rows a
 step; 2,304 GEMM calls and 1,548,288 units of 32×32 outputs (86,016 a step: qkv 384, o 256, gate_up 1,792 at K = 4,096
 and down 256 at K = 14,336, a layer, 32 layers). 5 sequences fill 119 of its 1,152 row slots (u = 119/1152; 731,136 units
 live). Its 485.5 s serve is 439.1 s of receipts (284 µs a unit, launch-bound torch, on a node at load 500 to 615), 1.7 s of
 empty steps and about 45 s of eager int8 serving; the receipt trees add 12.6 s. The period counts 439.1 s a window,
 and 32 times that at 4×8 units unless the receipts are fused into the kernel.
 
-**A window's certification** is its K_d drawn units, proved by C-Flock (`--zk`, live coins) and checked by the Lean
-verifier (`flock-verify`). A drawn unit costs its outputs × K in lanes of the measured H1 tile (`PouwH1Tile_v1`, 4×8
+**A window's certification** is its K_d sampled proof blocks, proved by Flock (`--zk`, live coins) and checked by the Lean
+verifier (`flock-verify`). A sampled proof block costs its outputs × K in lanes of the measured H1 tile (`PouwH1Tile_v1`, 4×8
 outputs at K = 4,096: 46.7 M ANDs, `k_log` 27, the most `Stmt.InRange` admits): 32 at K = 4,096, 39.6 at the served mean
 K. down's units need a narrower lane to fit a block (a 4×8 tile at K = 14,336 is 164 M ANDs). A statement holds at most
 256 instances (`m = k_log + nbl ≤ 35`), each a lane, and no more than its prover's memory allows on one node. Its cost is
@@ -31,15 +31,15 @@ circuit file and its teardown, and Lean's session check) plus a part a lane. `RA
 
 **Node-days** are memory-packed: a node runs ⌊node GB / process GB⌋ provers (prover and session verifier) or Lean checks
 at once, and a window's node-seconds are its prove seconds over the prove slots plus its Lean seconds over the Lean
-slots. Process-days are the same seconds unpacked (INT-PERIOD's node-days). Windows certify in parallel on N nodes, but
-one stream serves the period (#2722: disjoint periods, one stream each), and a window's draw comes only once it is
+slots. Process-days are the same seconds unpacked (node-days). Windows certify in parallel on N nodes, but
+one stream serves the period (disjoint periods, one stream each), and a window's draw comes only once it is
 served, so the period takes max(serving, certifying its first n − 1 windows on N nodes) plus its last window's
 certification: its statements in parallel, but no sooner than one statement's prove and check.
 
 **One window long enough on its own** (`long_window`) is n = 1: Compose's `CircuitWork`, with no period statement and
 no record check. It needs Λ·ln(1/δ_s)/u under the budget, and Λ falls with M only to `lam_limit`, so a K_d below
 r·max(a/(1 − p), b/(1 − p0))·ln(1/δ_s)/(u·budget) never gets there. Its certification starts when its serving ends,
-and it holds custody of M/18 served windows' values until its draw.
+and it holds custody of M/18 served windows' values until its sample.
 
 **Levers** (`LEVERS`): one change each, with its owner and a work class (1 a parameter, 2 one module, 3 a new path in one
 component, 4 a new circuit or proof form), applied alone to today's configuration and in sequence along `route`. δ_s is
@@ -80,13 +80,13 @@ SPEND = "certifying nodes 2 → 8"
 
 
 def k_factor(units: dict[str, tuple[int, int]] = SERVED_UNITS_PER_LAYER) -> float:
-    """A uniformly drawn served unit's mean K over the measured tile's 4,096."""
+    """A uniformly sampled served unit's mean K over the measured tile's 4,096."""
     n = sum(c for c, _ in units.values())
     return sum(c * k for c, k in units.values()) / n / LANE_K
 
 
 def lanes_per_unit(unit_outputs: int = UNIT_ROWS * UNIT_COLS, k: float | None = None) -> float:
-    """A drawn unit's lanes of the measured tile: its outputs over the tile's, times its K over 4,096."""
+    """A sampled proof block's lanes of the measured tile: its outputs over the tile's, times its K over 4,096."""
     return unit_outputs / LANE_OUTPUTS * (k_factor() if k is None else k)
 
 
@@ -204,7 +204,7 @@ def eps(n: int, c: Config) -> float:
 
 
 def windows(c: Config) -> int:
-    """The least n with ε(n) < 1% (INT-PERIOD's n_min)."""
+    """The least n with ε(n) < 1% (the period's n_min)."""
     budget = TARGET - c.eps_flat
     if budget <= 0:
         raise ValueError(f"ε_♭ = {c.eps_flat:.3%} leaves no logical budget under {TARGET:.0%}")
@@ -212,7 +212,7 @@ def windows(c: Config) -> int:
 
 
 def credit(j: int, c: Config) -> float:
-    """The share of an accepted prefix of j windows' live words credited, (1 − ε(j))₊ (RT4-INT-8)."""
+    """The share of an accepted prefix of j windows' live words credited, (1 − ε(j))₊."""
     return max(0.0, 1.0 - eps(j, c))
 
 
@@ -223,7 +223,7 @@ def first_credit(c: Config) -> int:
 
 def all_skip_pays(c: Config) -> bool:
     """Whether a window that skips every drawn tile whole passes (p0^K_d) more often than its credit is wrong (1 − b), so
-    that, credited without ε's discount, it out-earns an honest window (RT4-INT-8: at K_d = 8, 1.95×)."""
+    that, credited without ε's discount, it out-earns an honest window (at K_d = 8, 1.95×)."""
     return P0 ** c.draws > 1 - B
 
 
@@ -380,7 +380,7 @@ NEAR_TERM = ("u: every row slot of a served step filled", "r → 1: units of equ
 
 def near_term(base: Config = TODAY) -> list[Config]:
     """`NEAR_TERM`'s levers, which need no new receipt kernel, served unit or proof form, in order, each on the last;
-    then the last on eight nodes (the spend lever), its draws tuned again."""
+    then the last on eight nodes (the spend lever), its samples tuned again."""
     out, c = [], base
     for name in NEAR_TERM:
         c = apply(lever(name), c)
@@ -390,7 +390,7 @@ def near_term(base: Config = TODAY) -> list[Config]:
 
 
 def configurations(base: Config = TODAY) -> list[Config]:
-    """INT-PERIOD's line, `base`, and `route`'s steps, each on the last."""
+    """The period's line, `base`, and `route`'s steps, each on the last."""
     line = Config("INT-PERIOD's line: per-draw rates, W2's tile a draw", rates="int-period", unit_outputs=LANE_OUTPUTS,
                   k=1.0, receipts_per_unit=False)
     return [line, base, *route(base)]

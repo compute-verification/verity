@@ -24,7 +24,7 @@ the same blob in every build; and ``program-digests/<census id>.json``, an entry
 - ``counts``: ``{record: {report, target, sha512}, variants: {statics: {gates, lowered, units_per_instance, ands, rows,
   reason?}}}``, copied from its circuit-check record and never recomputed: the target's entry in the circuit-check report
   ``report`` (a ``circuit-check-report/v1`` artifact, also ``refs.circuit_check``), whose canonical JSON's SHA-512 is
-  ``sha512``; per statics circuit-check checked, the Definition's word gates, and its C-Flock lowering's units per instance
+  ``sha512``; per statics circuit-check checked, the Definition's word gates, and its Flock lowering's units per instance
   with each unit's ANDs and rows;
 - ``missing``: ``{program_digests?, export?, counts?}``, the reason for each that the entry lacks (a model-only reference has
   no program, so no ``descriptor_id``, digests or export); an entry is never dropped.
@@ -117,7 +117,7 @@ def build(out: Path, report: dict, report_art: str, ids: Iterable[str] | None = 
           export: Callable[[Any, list[dict]], bytes] = export, log: Callable[[str], None] | None = None) -> dict:
     """Write the payload tree under ``out`` and return the meta, citing ``report`` (a circuit-check report, stored as
     ``report_art``) for the counts."""
-    from verity.ml.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import descriptor_id
     from verity_flock import circuit as FC
 
     from . import templates as TM
@@ -158,7 +158,7 @@ def build(out: Path, report: dict, report_art: str, ids: Iterable[str] | None = 
                 (out / path).write_bytes(data)
                 e["program_digests_file"] = {"path": path, "sha256": hashlib.sha256(data).hexdigest()}
             try:
-                _spec_id(sub.definition(**dflt))
+                descriptor_id(sub.definition(**dflt))
             except Exception as x:  # noqa: BLE001  (a silicon reference: no core Definition to export)
                 missing["export"] = (f"no Boolean export: no core Definition wraps it (a silicon reference, "
                                      f"{e['descriptor_id']}): {type(x).__name__}: {x}")[:500]

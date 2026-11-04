@@ -28,6 +28,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -44,7 +45,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 BPS = 1 << 16
 WIDTH, C0, PAYLOAD = 16_448, 21_065, 2_054
 NB = WIDTH // 8
-DIGEST = 64
+DIGEST = hashlib.sha512().digest_size
 
 
 def quantiles(xs: list[float]) -> dict[str, float]:
@@ -693,7 +694,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--scratch", required=True)
     p.add_argument("--log2", default="19,25")
     p.add_argument("--store-seed", type=int, default=20261012,
-                   help="the synthetic store's blocks (the memory challenger draws its own coins)")
+                   help="the synthetic store's blocks (the memory challenger flips its own coins)")
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--audits", type=int, default=20)
     p.add_argument("--pings", type=int, default=5000)

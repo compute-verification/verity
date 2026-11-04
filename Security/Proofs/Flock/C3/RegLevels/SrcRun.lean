@@ -52,7 +52,7 @@ theorem schedOf_holoAt {st : Flock.Stmt} {hp : HoloParams} {cl : ℕ} {sh : Floc
 /-- **R's opening's algebra** is its claims' ring switches, then Ligerito from the absorbed `T` on their output, then
 the absorbed `T` minus the batched sum. -/
 theorem opening_parts {sh : Flock.Shape} {M : Flock.RecAlgebra.Messages Flock.F128}
-    {a : Array (Flock.RecAlgebra.AClaim Flock.F128)} {k₀ k₁ : ℕ} {src : Flock.RecAlgebra.Coins}
+    {a : Array (Flock.RecAlgebra.AClaim Flock.F128)} {k₀ k₁ : ℕ} {src : Flock.RecAlgebra.CoinSource}
     {res : Array Flock.F128} (h : Flock.RecOpening.run sh M a k₀ src = .ok (res, k₁)) :
     ∃ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ) (lgr : Array Flock.F128)
       (lg : Flock.RecAlgebra.LgPts),
@@ -73,7 +73,7 @@ frames, consuming `c`'s rounds from `k₂` on. -/
 theorem ligRun_of_lig {m : ℕ} {sch : Flock.Schedule} {M : Flock.RecAlgebra.Messages Flock.F128} {tIn : Flock.F128}
     {sws : Array Flock.Switched} {c : Array (Array Flock.F128)} {k₂ k₃ : ℕ} {lgr : Array Flock.F128}
     {lg : Flock.RecAlgebra.LgPts} (hf : Flock.fast100 m = some sch)
-    (hlg : Flock.RecAlgebra.ligerito sch M tIn sws k₂ (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((lgr, lg), k₃))
+    (hlg : Flock.RecAlgebra.ligerito sch M tIn sws k₂ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((lgr, lg), k₃))
     (hz : ∀ x ∈ lgr, x = 0) (hne : Flock.RecAlgebra.NoEmpty c)
     {msId : String} {cap : Array ByteArray} {p : Flock.LigeritoProof}
     (hpm : p.messages = M.msgs.map fun mm => (Flock.RecAlgebra.kv mm.1, Flock.RecAlgebra.kv mm.2))
@@ -130,7 +130,7 @@ theorem levelTie_of_lig {cap₀ : Cap Dig} {e : ExecHolo} {u : C3Run e} {m : ℕ
     {M : Flock.RecAlgebra.Messages Flock.F128} {tIn : Flock.F128} {sws : Array Flock.Switched}
     {c : Array (Array Flock.F128)} {k₂ k₃ : ℕ} {lgr : Array Flock.F128} {lg : Flock.RecAlgebra.LgPts}
     (hf : Flock.fast100 m = some sch) (hsch : Refine.schedOf sch = e.rsch.sch)
-    (hlg : Flock.RecAlgebra.ligerito sch M tIn sws k₂ (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((lgr, lg), k₃))
+    (hlg : Flock.RecAlgebra.ligerito sch M tIn sws k₂ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((lgr, lg), k₃))
     (hz : ∀ x ∈ lgr, x = 0) (hne : Flock.RecAlgebra.NoEmpty c)
     {msId : String} {cap : Array ByteArray} {p : Flock.LigeritoProof} (hcap : capDig cap = cap₀)
     (hpm : p.messages = M.msgs.map fun mm => (Flock.RecAlgebra.kv mm.1, Flock.RecAlgebra.kv mm.2))
@@ -157,7 +157,7 @@ theorem lgSteps_of_lig {e : ExecHolo} {u : C3Run e} {m : ℕ} {sch : Flock.Sched
     {M : Flock.RecAlgebra.Messages Flock.F128} {tIn : Flock.F128} {sws : Array Flock.Switched}
     {c : Array (Array Flock.F128)} {k₂ k₃ : ℕ} {lgr : Array Flock.F128} {lg : Flock.RecAlgebra.LgPts}
     (hf : Flock.fast100 m = some sch) (hsch : Refine.schedOf sch = e.rsch.sch)
-    (hlg : Flock.RecAlgebra.ligerito sch M tIn sws k₂ (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((lgr, lg), k₃))
+    (hlg : Flock.RecAlgebra.ligerito sch M tIn sws k₂ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((lgr, lg), k₃))
     (hz : ∀ x ∈ lgr, x = 0) (hne : Flock.RecAlgebra.NoEmpty c)
     {msId : String} {cap : Array ByteArray} {p : Flock.LigeritoProof}
     (hpm : p.messages = M.msgs.map fun mm => (Flock.RecAlgebra.kv mm.1, Flock.RecAlgebra.kv mm.2))
@@ -208,7 +208,7 @@ theorem levelTie_of_run {st : Flock.Stmt} {hp : HoloParams} {cap₀ : Cap Dig} {
     {c : Array (Array Flock.F128)} {k₀ k₁ : ℕ} {res : Array Flock.F128}
     (hell : hp.EllOk (execClassAt st).cls.kLog)
     (hsh : Flock.RecOpening.shape? (holoAt st hp).cls.shape.mReg cl = some sh)
-    (hrun : Flock.RecOpening.run sh M a k₀ (Flock.RecAlgebra.Coins.ofRounds c) = .ok (res, k₁))
+    (hrun : Flock.RecOpening.run sh M a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok (res, k₁))
     (hz : ∀ x ∈ res, x = 0) (hne : Flock.RecAlgebra.NoEmpty c)
     {msId : String} {cap : Array ByteArray} {p : Flock.LigeritoProof} (hcap : capDig cap = cap₀)
     (hpm : p.messages = M.msgs.map fun mm => (Flock.RecAlgebra.kv mm.1, Flock.RecAlgebra.kv mm.2))
@@ -217,8 +217,8 @@ theorem levelTie_of_run {st : Flock.Stmt} {hp : HoloParams} {cap₀ : Cap Dig} {
     (hcbn : p.claimNonces.size = M.ood.size + sh.sched.levels.size)
     (hR : ∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ) (lgr : Array Flock.F128)
       (lg : Flock.RecAlgebra.LgPts),
-      Flock.RecAlgebra.ringSwitch M a k₀ (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((rsr, rs), k₂) →
-      Flock.RecAlgebra.ligerito sh.sched M rs.T rs.sws k₂ (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((lgr, lg), k₁) →
+      Flock.RecAlgebra.ringSwitch M a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
+      Flock.RecAlgebra.ligerito sh.sched M rs.T rs.sws k₂ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((lgr, lg), k₁) →
       (∀ cs ∈ lg.conss.toList, Flock.RecAlgebra.Opened (Flock.MerkleScheme.sha512 msId) sh.sched cap p M cs) ∧
       (∃ nc, OpenRel sh.sched.m nc rs.T rs.sws u.opened) ∧
       u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf))

@@ -22,9 +22,9 @@ A session's coins are `coins[0 … W − 1]`, window `t`'s challenge at `t` (`re
 
 So the code gives `Live` once the events up to window `t`'s draw are fixed by the coins below `W + t`, and that is
 what it cannot give: the order the deployment releases coins in, the challenger releasing `coins[W + t]` only to
-`close t`'s draw and the prover seeing nothing of it before but the coin commitment's root, which the guarantees fix
-(`Live` at every fixed commitment, `Accounting.Remote.Draw.Committed`, what the root reveals charged as the hiding
-terms `Committed.hide`). `ReleaseOrder` names it, a premise of the deployment's,
+`close t`'s draw and the prover seeing nothing of it before (the coin commitment's root comes only with the outcome,
+`audit.Session.disclose`, so the guarantees take `Live` of the session the prover plays). `ReleaseOrder` names it, a
+premise of the deployment's,
 which no property here takes. `LiveUnder` is `Live` as the code states it, on the events a session sees on its
 coins: two sessions on coins that agree below `W + t`, wherever each has drawn window `t`, see the same record and
 the same openable receipts. `Proofs.Properties.RemoteAudit.Order` derives it from the three properties and

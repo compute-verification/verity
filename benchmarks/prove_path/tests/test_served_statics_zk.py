@@ -2,7 +2,7 @@
 and each case, every unit's served rows are its leaf as the Lean verifier's registered reads open it, the honest blocks
 (idle ones included) are accepted and each case gets its flag; a record of another G than the statics' is refused; an
 ``srb`` row shorter than the scan's piece is found whole; the shared-row public file is read by its refs; and at the
-served class the largest block that fits C-Flock's 2^27 is 64 steps."""
+served class the largest block that fits Flock's 2^27 is 64 steps."""
 from __future__ import annotations
 
 import json

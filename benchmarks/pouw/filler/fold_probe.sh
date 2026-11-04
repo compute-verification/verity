@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FOLD (note:20261017T0320Z-draft-eps1-fold): the R-round fold's cost a word a round, beside the saturated noise IMMA.
+# The R-round fold's cost a word a round, beside the saturated noise IMMA.
 # For each R in PF_R_LIST it builds dcap with -DPF_ROUNDS=R and the chosen fold (PF_FOLD = XIN13 default, or LI), dumps
 # the dfill_k SASS and the ptxas register/instruction report, then in one gpu-lease runs `dcap dalone 8 4 S` (share of
 # int8 peak) for every R, `dcap dgate` for R=1 and the largest R (GPU vs host dfill_ref bit-exact under rounds), and ncu
