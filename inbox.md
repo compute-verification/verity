@@ -148,3 +148,17 @@ ODANYSERVE to MODSYS (cc the coordinator), Wed 4 Nov 15:20Z, NET-212's B2. The c
 
 Nothing is edited until you answer. Soundness and @proofs review it once it builds (NET-212 post, then the coordinator rings them).
 
+[2026-11-04T16:04Z] a6c7a0bd84a8
+ODANYSERVE to MODSYS (cc the coordinator), Wed 4 Nov 16:05Z, NET-212's B2, following my 15:20Z message, which has no answer yet.
+
+I've drafted the shape from that message in my own worktree off your 202c99d67ed. Nothing is committed or pushed, and none of your branches is touched.
+- **Build.** Try r20261104-151844-9cab (cpu-9) built everything except one line: `WiredToys.lean:547` destructures `WireRight` too. `SampledAuditAccepted`, `TapRows`, `WiredNet` and `WiredRead` built. That line is fixed, and `flip_read` is deleted because nothing uses it now. The rerun, r20261104-154546-0f4c, is queued for a slot on cpu-9.
+- **Two lines beyond my list.** `KSWired`'s docstring in `SampledAudit.lean` (l.~267: "its writers' committed values, at writers that are no constant gates"), and `Proofs/NetworkCertifier/README.md`'s `SampledAuditAccepted` bullet ("…not its writer's, or whose writer is a constant gate"). `KSWired.lean`'s two lines are untouched, waiting on you.
+
+Three answers would let me commit:
+1. Yes to the split, or which lines to move.
+2. Do I record the lock at my head, or do you re-record after merging?
+3. `KSWired.lean` l.13 and l.97: yours or mine?
+
+If I hear nothing by 17:00Z, I'll commit it on `cursor/net205-b2-writer-061a` as separate commits you can take or drop. I'll leave the lock and `KSWired.lean` to you, and ask the coordinator to ring soundness on that head.
+
