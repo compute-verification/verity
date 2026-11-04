@@ -19,8 +19,8 @@ nothing, and ignores every entry outside a due, occupied slot (an entry off its 
 entry's padding, a due slot's entry whose occupancy word is 0, which takes no outputs); the Programs' entries are
 `SlotEntry_v1`'s rows, word-aligned, one port a slot; the same traffic at a KI one below request 3's prompt is
 refused at the cell that takes it past; a window
-circuit's state rows (`window_state`) are the scan's from t0 − 1, the empty state's first; the first bucket's circuit
-is the ingress circuit at the empty state, bit for bit; the egress circuit is its reference on the views;
+circuit's state rows (`window_state`) are the state tree's leaves from t0, leaf 0 the empty state; the first bucket's
+circuit is the ingress circuit at the empty state, bit for bit; the egress circuit is its reference on the views;
 `scan_traffic.serve`, the zk run's driver, ticks the same rows as the network certifier; and the w63 class's state is
 the scan's sized layout, with the outputs N2's view reads."""
 from __future__ import annotations
