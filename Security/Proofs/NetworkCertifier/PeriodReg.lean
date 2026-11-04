@@ -162,11 +162,12 @@ end Deploy
 /-- **The leak through the network certifier over a monitoring period, at the registration's values**:
 `Guarantees.PeriodLeakRegistered`, from `sampledLeak_tapReg` and `encard_period_le`. -/
 theorem periodLeak_registered : Guarantees.PeriodLeakRegistered := by
-  intro Coin Col T _ _ _ _ _ H D hks L K S lay k δ decode hδ hdec reg ops Dj n sw Pw hPw ρ op β hβ Conn Cell Srv Dev Z _
-    arr f tap run htrust cap Ss hcap hfit Zs schedOf srvOf hs dec hdz x wit tops hb
+  intro Coin Col T _ _ _ _ _ H D hks L K S lay k δ decode hδ hdec reg ops Dj n sw Pw ρ op β ⟨hPw, hβ⟩ Conn Cell Srv Dev
+    Z _ arr f tap run htrust cap Ss hheld Zs schedOf srvOf dec hdz x wit tops hb
   exact ⟨fun m hm hreg Ω _ _ P =>
       sampledLeak_tapReg H D hks hb L K S lay k δ decode hδ hdec reg ops Dj tops m hm hreg Ω P,
-    fun htap => encard_period_le L K S lay k δ reg Dj sw Pw ρ op β hβ arr f tap run htrust cap Ss hfit Zs schedOf
-      srvOf hs dec hdz _ fun z hz hg i => mem_accSeqsSampled_of_windowGoodReg (hPw i) (htap z hz i) (hg i)⟩
+    fun htap => encard_period_le L K S lay k δ reg Dj sw Pw ρ op β hβ arr f tap run htrust cap Ss
+      (fun s hs => (hheld s hs).2) Zs schedOf srvOf (fun z hz => (hdz z hz).1) dec (fun z hz => (hdz z hz).2) _
+      fun z hz hg i => mem_accSeqsSampled_of_windowGoodReg (hPw i) (htap z hz i) (hg i)⟩
 
 end NetTiming
