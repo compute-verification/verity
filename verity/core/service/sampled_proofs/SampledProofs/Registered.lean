@@ -293,20 +293,22 @@ theorem statementClash_none {rootAt : String → Option (ByteArray × ByteArray)
     {registered : Array String} {pub : Flock.Public} {ports : Array String}
     (h : statementClash rootAt member registered pub ports = none) :
     ∀ q ∈ ports, q ∉ registered → ∃ r d, rootAt s!"{member}/{q}" = some (r, d) ∧
-      (pub.fv3Bytes "roots" q).toOption = some r ∧ (pub.fv3Bytes "domain_ids" q).toOption = some d := by
+      ((pub.fv3Bytes "roots" q).toOption == some r) = true ∧
+      ((pub.fv3Bytes "domain_ids" q).toOption == some d) = true := by
   intro q hq hr
   have h1 := Array.findSome?_eq_none_iff.mp h q hq
-  have hc : registered.contains q = false := Bool.eq_false_iff.mpr fun ht => hr (Array.contains_iff_mem.mp ht)
-  rw [if_neg (by simp [hc])] at h1
+  have hc : ¬registered.contains q = true := fun ht => hr (Array.contains_iff_mem.mp ht)
+  rw [if_neg hc] at h1
   cases hx : rootAt s!"{member}/{q}" with
   | none => rw [hx] at h1; cases h1
   | some rd =>
     obtain ⟨r, d⟩ := rd
     rw [hx] at h1
+    dsimp only at h1
     refine ⟨r, d, rfl, ?_⟩
     by_cases he : ((pub.fv3Bytes "roots" q).toOption == some r &&
         (pub.fv3Bytes "domain_ids" q).toOption == some d) = true
-    · simpa only [Bool.and_eq_true, beq_iff_eq] using he
+    · simpa only [Bool.and_eq_true] using he
     · rw [if_neg he] at h1; cases h1
 
 /-- **A statement's other ports are the window's committed ones** (`statementClash`): every port of the circuit `c` that
@@ -331,7 +333,8 @@ theorem statementHeld_ok {rootAt : String → Option (ByteArray × ByteArray)} {
     {own : Option (Array Flock.Registered.Port)} {c : Flock.Circuit} {pub : Flock.Public}
     (h : statementHeld rootAt member own c pub = .ok ()) :
     ∀ q ∈ c.ports, (∀ o ∈ own.getD #[], o.name ≠ q.name) → ∃ r d, rootAt s!"{member}/{q.name}" = some (r, d) ∧
-      (pub.fv3Bytes "roots" q.name).toOption = some r ∧ (pub.fv3Bytes "domain_ids" q.name).toOption = some d := by
+      ((pub.fv3Bytes "roots" q.name).toOption == some r) = true ∧
+      ((pub.fv3Bytes "domain_ids" q.name).toOption == some d) = true := by
   intro q hq hn
   unfold statementHeld at h
   split at h
