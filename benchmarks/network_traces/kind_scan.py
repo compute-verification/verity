@@ -11,8 +11,8 @@ every served run and refuses on a finding, releasing nothing): `DOCS`' files, th
 and evidence hex, `certifier_piece.write_case`, as the composite reads it) or as the three files ``network-period`` reads
 (DIR/period). Each file's JSON is walked to its leaves, the commitment's and evidence's bytes decoded as JSON, and each
 leaf's key path (a list's items ``[]``) must match one its file declares: ``*`` is any one key (a Definition's, a port's,
-a stratum's, a δ's), and ``**`` everything below, a Program's descriptor (`DESCRIPTOR`, the circuit, which is structure)
-or a development check's field. A list's length and an object's keys are the shape of the leaves they hold. So a field
+a stratum's, a δ's), ``**`` everything below, a Program's descriptor (`DESCRIPTOR`, the circuit, which is structure)
+or a development check's field, and a tuple of kinds a list's items by position (``[i]``, an opening's, `OPENINGS`). A list's length and an object's keys are the shape of the leaves they hold. So a field
 no declaration names, one a change adds included, is a finding until its kind is declared here: a window's own number, a
 count of its requests, the advice's length.
 
@@ -112,12 +112,25 @@ ROWS = {
 }
 #: a record's certificate (`scan_period.CERTIFICATE_KEYS`), the network certifier's in the clear
 CERTIFICATE_DOC = dict.fromkeys(("digest", "direction", "key_id", "link", "signature", "window"), X)
-#: `NetworkCheck.Period`'s rows form: the commitment, the evidence and the parameters (`scan_period.rows_case`)
+#: a stated circuit record (`interface.circuit_record` with a cap): the circuit, every field of it structure but its run
+#: root and its context (the live coin commitment's root), hiding commitments
+CIRCUIT_RECORD = {**{f"{k}.**": S for k in ("format", "name", "templates", "query", "program", "partition", "work_table",
+                                            "external", "row_tables", "statements", "cap", "wires", "cuts", "registered",
+                                            "ingress", "boundary", "blocks")},
+                  "run": M, "context": M}
+#: a circuit-form audit's openings (`interface.openings`), each a tuple: the template, port and row structure, the unit
+#: the verifier's draw (a drawn unit, or the writer the wire names for it), the row's ``b || c`` and its path hiding
+#: commitments
+OPENINGS = {"reads[]": (S, C, S, S, M, M), "writes[]": (S, C, S, M, M)}
+#: `NetworkCheck.Period`'s rows form: the commitment, the evidence and the parameters (`scan_period.rows_case`), an audit
+#: in the program-only form or the circuit form (`scan_period.CIRCUIT_FORM`)
 COMMITMENT = {**under("audits[]", REGISTRATION), **under("windows[]", REGISTRATION)}
-EVIDENCE = {**under("audits[]", ONE_STAGE), **under("windows[].answer", ONE_STAGE),
+EVIDENCE = {**under("audits[]", ONE_STAGE), **under("audits[].answer", ONE_STAGE), **under("audits[].openings", OPENINGS),
+            **under("windows[].answer", ONE_STAGE),
             **under("windows[].certificates[]", CERTIFICATE_DOC), **under("windows[].registrations[]", ROWS)}
 PARAMS = {
-    "audits[].free": S, "audits[].steps": S, **under("audits[].program", DESCRIPTOR), **under("scan", DESCRIPTOR),
+    "audits[].steps": S, **under("audits[].program", DESCRIPTOR), **under("scan", DESCRIPTOR),
+    **under("audits[].circuit", CIRCUIT_RECORD), "audits[].order.**": S, "audits[].pins.*": M,
     "cells[]": S, "first": S, "jitter": S, "key": S, "link": S, "program": S, "windows": S,
     **{f"lms.{k}": S for k in ("H", "N", "W", "toy")},
     **{f"schedule.{f.name}": S for f in dataclasses.fields(WardenParams)},
@@ -199,15 +212,19 @@ def _trie(table: Mapping[str, Any]) -> dict:
 
 
 def _name(path: tuple[str, ...]) -> str:
-    return "".join(s if s == "[]" or not i else f".{s}" for i, s in enumerate(path))
+    return "".join(s if s.startswith("[") or not i else f".{s}" for i, s in enumerate(path))
 
 
 def _leaves(value: Any, nodes: list[dict], path: tuple[str, ...] = ()) -> Iterator[tuple[tuple[str, ...], list, Any]]:
     """Each leaf of ``value`` (a scalar, or a subtree a ``**`` declares) with the kinds the trie nodes ``nodes`` declare at
-    its key path."""
+    its key path; a list declared as a tuple of kinds, each item its position's kind (its key path's ``[i]``)."""
     whole = [n["**"][_KIND] for n in nodes if "**" in n]
+    tuples = [n[_KIND] for n in nodes if isinstance(n.get(_KIND), tuple)]
     if whole:
         yield path, whole, None
+    elif isinstance(value, list) and tuples:
+        for i, v in enumerate(value):
+            yield (*path, f"[{i}]"), [] if isinstance(v, (dict, list)) else [t[i] for t in tuples if i < len(t)], v
     elif isinstance(value, dict):
         for k, v in value.items():
             yield from _leaves(v, [c for n in nodes for c in (n.get(k), n.get("*")) if c is not None], (*path, k))
@@ -216,7 +233,7 @@ def _leaves(value: Any, nodes: list[dict], path: tuple[str, ...] = ()) -> Iterat
         for v in value:
             yield from _leaves(v, inner, (*path, "[]"))
     else:
-        yield path, [n[_KIND] for n in nodes if _KIND in n], value
+        yield path, [n[_KIND] for n in nodes if _KIND in n and not isinstance(n[_KIND], tuple)], value
 
 
 def scan_doc(rel: str, doc: Any, kinds: Counter) -> list[Finding]:

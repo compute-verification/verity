@@ -35,7 +35,9 @@ and its Lean.
 * **V3c's audit** (``--v3c``, ``records_audit.py period``'s ``period.json``, for scans proved on V3c's trees,
   ``scan_zk.py --v3c``): the one compute audit, its Program's `SelectEntry_v1` chunks' o0 the scan's ``scan/prog<j>``
   and its `SCAN_STATE` the scan's ``scan/state``, its registration the one the scan's ``summary.json`` names (a foreign
-  audit is refused before any check). The honest case is then accepted at any sample of V3c's (``subset:1``
+  audit is refused before any check). It is in the circuit form (`CIRCUIT_FORM`): its parameters its stated circuit
+  record, wire-order certificate, pins, Program and steps, and its evidence its answer with the openings of its drawn
+  units' wired rows and their writers' (`records_audit.period`). The honest case is then accepted at any sample of V3c's (``subset:1``
   included): the period check is the consistency check, the committed I/O against the certificates, and what a
   sample of one or two proof blocks leaves unproved is covert capacity, which K charges.
 """
@@ -60,6 +62,8 @@ from verity.core.protocols.sampled_proofs.one_stage import registration as RG  #
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 
 CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "window")
+#: a circuit-form compute audit's parameters (`records_audit.period`'s); a program-only audit's are its Program and steps
+CIRCUIT_FORM = ("circuit", "order", "pins", "program", "steps")
 
 
 def certificates(run: Path, w: int) -> list[dict]:
@@ -112,13 +116,15 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     N, W, H = dep["key"]["params"]
     audits = doc.get("audits", [])
     caps = WardenParams(**dep["params"]).caps(1)
-    params = {"audits": [{k: a[k] for k in ("program", "steps")} for a in audits], "cells": caps,
+    params = {"audits": [{k: a[k] for k in (CIRCUIT_FORM if "circuit" in a else ("program", "steps"))} for a in audits],
+              "cells": caps,
               "first": x["window"], "jitter": LB.JITTER_BOUND, "key": dep["key"]["public"], "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),
               "session": dep["session"], "windows": 1}
     commitment = canonical_json({"audits": [a["registration"] for a in audits], "windows": [reg]})
-    evidence = canonical_json({"audits": [a["answer"] for a in audits], "windows": [
+    evidence = canonical_json({"audits": [{"answer": a["answer"], "openings": a["openings"]} if "circuit" in a
+                                          else a["answer"] for a in audits], "windows": [
         {"answer": answer, "certificates": certs, "registrations": x["registrations"]}]})
     return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
 

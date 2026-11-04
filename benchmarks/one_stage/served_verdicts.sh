@@ -112,8 +112,8 @@
 #     registration's members (V3C_LAW, default subset:1, stratified:1 under H1_TIE) on the run's coins (Coins, below) and
 #     proves them, its composes made before it with V3C_WARM_JOBS (at `v3c_audit`); then
 #     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
-#     and a copy in $OUT/v3c-audit: the registration, the Program, its answer and its free inputs), and V3c fails where it
-#     writes none. The record reads that audit ($D/v3c-w<K>-<class>/audit, on the window commit's registration). Under
+#     and a copy in $OUT/v3c-audit: the registration, the Program, its answer, the circuit record, its wire-order
+#     certificate, the pins and the drawn units' wired rows' openings), and V3c fails where it writes none. The record reads that audit ($D/v3c-w<K>-<class>/audit, on the window commit's registration). Under
 #     H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close, its registration held to the
 #     record H1 bound, none is made here, and the audit is tied to H1's W, unless this node has less memory than the audit
 #     needs (below: the audit and the composite are then deferred to a follow-on, and the record here has sampled proofs

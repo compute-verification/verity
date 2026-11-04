@@ -1,7 +1,8 @@
 """kind_scan: what the network certifier's piece releases holds only fields of the four public kinds and the network
 certifier's certificates. A rows-form period (`period_case`'s accept, its registrations' provenance the scan's and V3c's
 committed window's, as `scan_zk` and `prove_path.py window-commit` write them) and its answer with the piece's placement
-scan clean as DIR/case.json and as the hold's three period files. A field no declaration names is a finding wherever it
+scan clean as DIR/case.json and as the hold's three period files, and so does its compute audit in the circuit form,
+each opening's items by position. A field no declaration names is a finding wherever it
 lies: the window's own number in V3c's provenance, a count of requests in an answer, an advice length beside the
 parameters, and a file DIR doesn't declare; the logs aren't read. What either development check would feed the record
 is a finding naming the check: an advice binding in an audit's registration (what `records_audit.py audit --opening`
@@ -92,6 +93,43 @@ def test_the_pieces_period_and_answer_are_of_the_public_kinds_in_either_layout(t
         found, kinds = KS.scan(_dir(tmp_path / str(hold), case, answer, hold))
         assert found == [] and all(kinds[k] for k in KS.KINDS), kinds
     assert KS.main([str(tmp_path / "False")]) == 0
+
+
+#: a circuit-form compute audit's fields beside its Program and steps (`records_audit.period`'s), stand-ins of their kinds
+CIRCUIT_FORM = {
+    "circuit": {"format": "verity/window-circuit/v1", "name": "w", "templates": [["t", 2]], "query": {"q": 1},
+                "program": "01" * 64, "partition": "02" * 64, "run": "ab" * 64, "context": "", "work_table": None,
+                "external": [], "row_tables": [], "statements": {}, "cap": 2,
+                "wires": [{"reader": "t", "port": "x", "writer": "t", "out": "o0", "at": 1, "radix": [1], "base": 0,
+                           "step": [1]}], "cuts": {}, "registered": {"params": {"scan/state": 40}}, "blocks": {"proof": {}}},
+    "order": {"format": "verity/wire-order/v1", "segments": [{"template": "t", "at": 0, "radix": [2], "c": 0, "r": [1]}],
+              "wires": [[0, 0]]},
+    "pins": {"scan/state": "cd" * 64}}
+OPENED = {"reads": [["t", 1, "x", 0, "ab" * 128, "ef" * 64]], "writes": [["t", 0, "o0", "ab" * 128, "ef" * 64]]}
+
+
+def _circuit_form(case: dict, opened: dict = OPENED) -> dict:
+    """``case`` with each compute audit in the circuit form: `CIRCUIT_FORM` in its parameters, its evidence its answer
+    with ``opened``."""
+    ev = json.loads(bytes.fromhex(case["evidence"]))
+    ev["audits"] = [{"answer": a, "openings": opened} for a in ev["audits"]]
+    return {**case, "evidence": canonical_json(ev).hex(),
+            "params": {**case["params"], "audits": [a | CIRCUIT_FORM for a in case["params"]["audits"]]}}
+
+
+def test_a_circuit_form_audit_is_of_the_public_kinds_each_openings_item_by_its_position(tmp_path, period):
+    """A compute audit in the circuit form (`records_audit.period`): its circuit record structure but its run root and
+    context, its wire-order certificate structure, its pins hiding commitments, and each opening a tuple whose template,
+    port and row are structure, its unit a draw, and its leaf and path hiding commitments. An opening with an item past
+    its tuple, or an object where its tuple holds a scalar, is a finding at that position."""
+    case, answer = _case(period)
+    found, kinds = KS.scan(_dir(tmp_path / "ok", _circuit_form(case), answer))
+    plain = KS.scan(_dir(tmp_path / "plain", case, answer))[1][KS.C]
+    assert found == [] and kinds[KS.C] == plain + 2 * len(case["params"]["audits"]) > plain, kinds
+    (read,), (write,) = OPENED["reads"], OPENED["writes"]
+    bad = {"reads": [[*read, 7]], "writes": [[*write[:3], {"b": 1}, write[4]]]}
+    assert sorted(_paths(KS.scan(_dir(tmp_path / "bad", _circuit_form(case, bad), answer))[0])) == [
+        ("case.json", "evidence.audits[].openings.reads[][6]"), ("case.json", "evidence.audits[].openings.writes[][3]")]
 
 
 def test_a_field_no_declaration_names_is_a_finding_wherever_it_lies(tmp_path, period):

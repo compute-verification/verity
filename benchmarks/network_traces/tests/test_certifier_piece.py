@@ -564,10 +564,13 @@ def _lean(tmp_path: Path, answer: dict) -> list[str]:
     return ["--lean", str(_stub_lean(tmp_path, answer))]
 
 
-#: V3c's period.json as `records_audit.py period` writes it (its values stand-ins of the kinds `kind_scan` declares: the
-#: period check here is a stub)
-PERIOD = {"answer": {"verdict": "accept"}, "free": 5, "program": {"v3c": 1}, "registration": {"program": "cd" * 64},
-          "steps": 0}
+#: V3c's period.json as `records_audit.py period` writes it, in the circuit form (its values stand-ins of the kinds
+#: `kind_scan` declares: the period check here is a stub)
+PERIOD = {"answer": {"verdict": "accept"}, "circuit": {"format": "verity/window-circuit/v1", "cap": 2, "wires": [],
+                                                       "run": "ab" * 64},
+          "openings": {"reads": [["t", 1, "x", 0, "ab" * 128, "ef" * 64]], "writes": [["t", 0, "o0", "ab" * 128, ""]]},
+          "order": {"format": "verity/wire-order/v1", "segments": [], "wires": []}, "pins": {"scan/state": "cd" * 64},
+          "program": {"v3c": 1}, "registration": {"program": "cd" * 64}, "steps": 0}
 
 
 def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_path, warden, period, capsys,
@@ -589,7 +592,9 @@ def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_pa
     (v3c / "period.json").write_text(json.dumps(PERIOD))
     assert _hook("period", d, piece, v3c, *_lean(tmp_path, accept)) == 0, (piece / "period.log").read_text()
     params = json.loads((tmp_path / "seen" / "params.json").read_text())
-    assert params["audits"] == [{k: PERIOD[k] for k in ("program", "steps")}]
+    assert params["audits"] == [{k: PERIOD[k] for k in ("circuit", "order", "pins", "program", "steps")}]
+    assert json.loads((tmp_path / "seen" / "evidence.json").read_text())["audits"] == [
+        {k: PERIOD[k] for k in ("answer", "openings")}]
     assert json.loads(bytes.fromhex(json.loads((piece / CP.CASE).read_text())["commitment"]))["audits"] == [
         PERIOD["registration"]]
     got = S.pieces(d, K, tmp_path / "pieces", env=dict(os.environ, CERTIFIER_CMD="true"))

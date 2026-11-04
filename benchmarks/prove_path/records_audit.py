@@ -80,17 +80,21 @@ quotes the warm's beside it.
         [--compose-cache DIR]
     records_audit.py warm --window DIR --law L [--template-sets DIR] --compose-cache DIR [--jobs N]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
-    records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
+    records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...] [--order FILE]
 
-``period``: a window's audit as one compute audit of the network certifier's period (`NetworkCheck.Period`'s rows form),
-the ``audits`` entry `scan_period.rows_case` reads (`scan_zk.answers` writes the block round's in that shape): the window's
-registration (``--window``'s ``registration.json``), the population Program's descriptor the audit sampled (``--audit``'s
-``window/program.json``, the one the registration names), the audit's one-stage answer (`served_integrity.answer`), and its
-terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's own
-values pinned, its untied ones free) but for the scan's state (`TIED`): the period refuses an audit whose state isn't
-the scan's state tree (``stateTied``), so its reads count registered. The period check takes no ``free``: it counts an
-audit's off its Program (`NetworkCheck.Period.inputGates`, every input gate free), so ``free`` here is the tighter count
-beside it, which `scan_period` doesn't pass. Refused where the window commits no scan state.
+``period``: a window's audit as one compute audit of the network certifier's period (`NetworkCheck.Period`'s rows form)
+in its circuit form, the ``audits`` entry `scan_period.rows_case` reads (`scan_zk.answers` writes the block round's in the
+program-only form): the window's registration (``--window``'s ``registration.json``), the population Program's descriptor
+the audit sampled (``--audit``'s ``window/program.json``, the one the registration names), the audit's one-stage answer
+(`served_integrity.answer`), ``steps`` 0, and what the period counts the audit's free inputs from: the stated circuit
+record (``circuit.json``, the one the registration binds), its wire-order certificate (`ORDER`, ``--order``, default the
+window's `ORDER_FILE`), the pins (the verifier's and the window's own values, its untied ones but the scan's state
+(`TIED`) left out, each a registered parameter of the record whose window root is the pin: the period refuses an audit
+whose state isn't the scan's state tree, ``stateTied``, so the state's reads count registered), and the openings, the
+prover's after the draw: each drawn unit's wired rows and their writers' output rows, each at its unit's position in its
+member against the root the registration records for its port (`interface.openings`, read off the window's
+``m<k>-public.bin``), which the period check holds equal before it counts a wired row as its writer's. Refused where the
+window commits no scan state or there is no certificate.
 
 ``count``: a record that declares its inputs, counted before the committer writes its members' rows (`declared_count`): a
 stated one (cuts, registered reads, ingress: `interface.Circuit.declared`) from its description alone, and one that lists
@@ -677,12 +681,19 @@ def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[
 TIED = SCAN_STATE
 
 
-def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]:
-    """The window's audit as one compute audit of the network certifier's period (module docstring's ``period``):
-    ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`). ValueError where the
-    circuit isn't the one the registration binds, the window commits no `TIED` value its circuit reads, the audit wrote no
-    Program or another than the registration names, or its answer commits to another registration; RuntimeError where
-    the audit opened the advice (`served_integrity.opened`: ``--opening``, a development check no period reads)."""
+#: the wire-order certificate's format and file, `window-commit`'s, beside the window's ``circuit.json``
+ORDER, ORDER_FILE = "verity/wire-order/v1", "order.json"
+
+
+def period(window: Path, audit: Path, pins: Mapping[str, str], order: Path | None = None) -> dict[str, Any]:
+    """The window's audit as one compute audit of the network certifier's period, in the circuit form (module docstring's
+    ``period``): ``{answer, circuit, openings, order, pins, program, registration, steps}``. ``pins`` are the verifier's
+    (`pins_of`); ``order`` the wire-order certificate's file (default the window's `ORDER_FILE`). ValueError where the
+    circuit isn't the one the registration binds, the window commits no `TIED` value its circuit reads, there is no
+    certificate, the audit wrote no Program or another than the registration names, its answer commits to another
+    registration, or a drawn unit's wired rows don't open against the registration's roots (`interface.openings`);
+    RuntimeError where the audit opened the advice (`served_integrity.opened`: ``--opening``, a development check no
+    period reads)."""
     import served_integrity as SI
 
     rec = json.loads((window / "registration.json").read_text())
@@ -693,8 +704,16 @@ def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]
     ties, untied = window_pins(own, doc, catalog_resolve)
     if TIED not in ties | untied:
         raise ValueError(f"the window commits no {TIED} its circuit reads: the period has no state to tie to its scan's")
-    count = declared_count(doc, 0, catalog_resolve, pins={**pins, **pin_roots({**ties, **untied})},
-                           roots=window_roots(own), untied=set(untied) - {TIED})
+    order = order or window / ORDER_FILE
+    try:
+        certificate = json.loads(order.read_text())
+    except OSError:
+        raise ValueError(f"no wire-order certificate at {order} ({ORDER}, window-commit's {ORDER_FILE}): give "
+                         "--order") from None
+    if not isinstance(certificate, dict) or certificate.get("format") != ORDER:
+        raise ValueError(f"{order} is no {ORDER} certificate")
+    given = {p: r for p, r in {**pins, **pin_roots({**ties, **untied})}.items() if p not in set(untied) - {TIED}}
+    held = IF.held_params(given, window_roots(own)) & set((doc.get("registered") or {}).get("params") or {})
     try:
         program = json.loads((audit / "window" / "program.json").read_text())
     except OSError:
@@ -704,7 +723,17 @@ def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]
     answer = SI.answer(audit, rec)
     if answer["commitment"] != R.digest(rec):
         raise ValueError("the audit's answer commits to another registration than the window's")
-    return {"answer": answer, "free": count["free"], "program": program, "registration": rec, "steps": 0}
+
+    def public(k: int) -> bytes:
+        try:
+            return (window / f"m{k}-public.bin").read_bytes()
+        except OSError as e:
+            raise ValueError(f"the window has no public body of member {k}: {e}") from None
+
+    mine = IF.window_of_record(doc, rec.get("law") or {}, catalog_resolve)
+    opened = IF.openings(mine, doc, public, rec.get("roots") or [], (answer.get("public") or {}).get("drawn", []))
+    return {"answer": answer, "circuit": doc, "openings": opened, "order": certificate,
+            "pins": {p: given[p] for p in sorted(held)}, "program": program, "registration": rec, "steps": 0}
 
 
 def verifier_window(window_dir: Path, law: Mapping[str, Any], template_sets: Path | None) -> tuple[Any, dict, dict]:
@@ -1024,16 +1053,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", required=True, type=Path, help="the period's audit entry, JSON")
     p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT", help="as count's")
     p.add_argument("--pins", action="append", default=[], metavar="FILE", help="as count's")
+    p.add_argument("--order", type=Path, help=f"the window's wire-order certificate ({ORDER}; default the window's "
+                   f"{ORDER_FILE}, window-commit's)")
     a = ap.parse_args(argv)
     if a.cmd == "period":
         try:
-            got = period(a.window, a.audit, pins_of(a.pin, a.pins))
+            got = period(a.window, a.audit, pins_of(a.pin, a.pins), a.order)
         except (ValueError, RuntimeError) as e:
             print(f"records_audit.py period: {e}", file=sys.stderr)
             return 1
         a.out.write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
         print("PERIOD " + json.dumps({"verdict": got["answer"]["verdict"], "reason": got["answer"]["reason"],
-                                      "free": got["free"], "commitment": got["answer"]["commitment"],
+                                      "openings": {k: len(v) for k, v in got["openings"].items()},
+                                      "pins": sorted(got["pins"]), "commitment": got["answer"]["commitment"],
                                       "program": got["registration"]["program"]}, sort_keys=True))
         return 0
     if a.cmd == "count":
