@@ -89,8 +89,8 @@ theorem periodLeakRegistered_strategy (p : NetworkCheck.Period.Params) (c : Netw
             ((run tap (strategy (view z), srvOf z)).2 i)}.encard ≤
           Θ.encard * ((∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
             reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞)) :=
-  periodLeakRegistered p c e pub prof h s sd scan H D L K S lay hks k δ decode hδ hdec reg ops Dj sw Pw ρ op β hplaced
-    hN arr link jitter status tap run htrust Θ Zs (fun z => strategy (view z)) srvOf hcov dec hdz x wit tops hb
+  periodLeakRegistered p c e pub prof h s sd scan hform H D L K S lay hks k δ decode hδ hdec reg ops Dj sw Pw ρ op β
+    hplaced hN arr link jitter status tap run htrust Θ Zs (fun z => strategy (view z)) srvOf hcov dec hdz x wit tops hb
 
 /-- **The served schedule passes `rowsWf`**: `w63`'s, 4 lanes of 32-bucket link-windows and 512-byte cells, over any
 period of fewer than 2^25 link-windows, so the period check doesn't refuse it there (`rowsWfCheck`) and the network
