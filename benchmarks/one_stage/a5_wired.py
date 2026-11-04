@@ -5,7 +5,8 @@ registered circuit record, and audited by `a5.audit` as rank 0 of a one-rank ste
 ``stratified:1``, one unit of each template: each template's circuit composed by Flock's `UnitStager` on its rows
 (`interface.unit_rows`), M0's `--zk` session of each drawn member behind the ZK server, the Lean verifier of record, the
 stream's outcome and the negatives. Then v2's per-member verdicts on the audit's case (``rank0/case-v2.json``, its
-``proofs.wires`` the window's wiring from its registered circuit record, `a5.held_wiring`) by
+``proofs.wires`` the window's wiring from its registered circuit record, `a5.held_wiring`, and its challenger and coins
+the audit's draw's, `a5.drawn_by`) by
 ``sampled-proofs-one-stage-zk verdicts --check`` (``--v2``), four ways:
 
 * ``wired``: the case as the audit made it: every session accepted, each verdict naming the wiring's SHA-512;

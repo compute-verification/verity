@@ -927,10 +927,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             return summary, False
         result["coins"] = {"source": "challenger", "segment": segment, "read": read.hex(),
                            "outcome": summary["coins"]["outcome"]}
+        drawn = drawn_by(AC.evidence(a.coins.evidence(), segment), a.window_root)
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=given["served"], v2=v2_proof(done, not plain(a), members, iface), partition=part, tied=tie(a))
+                   served=given["served"], v2=v2_proof(done, not plain(a), members, iface, drawn), partition=part,
+                   tied=tie(a))
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
@@ -1056,13 +1058,15 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
 
 
 def case_v2(case: dict, sessions: Sequence[str], *, proofs: dict, statements: Sequence[tuple[str | None, Any]],
-            tables: Sequence[Path], interfaces: Sequence[Path] = ()) -> dict:
+            tables: Sequence[Path], interfaces: Sequence[Path] = (), drawn: dict | None = None) -> dict:
     """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (`v2_proof`'s), the evidence with
     its ``verdicts`` replaced by the ``statements``' files under the evidence's ``sessions`` (`proofs.evidence_v2` on the
     one statement, named None; `proofs.statements_v2` on a statement a drawn member, named by it), and ``blobs``, the
     paths of the files those name, of the window's registered circuit records ``interfaces`` that ``proofs`` names by
     SHA-512 and of the pinned lookup tables, each file once, which onsite reads after the evidence
-    (`compose.onsite_check`)."""
+    (`compose.onsite_check`). With ``drawn`` (`drawn_by`), the params name the auditor's challenger and its window root
+    and the evidence carries the draw's coins; without, the case names no challenger, which v2 refuses
+    (`OneStageZk.NO_CHALLENGER`)."""
     import replay as RP
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
@@ -1070,9 +1074,23 @@ def case_v2(case: dict, sessions: Sequence[str], *, proofs: dict, statements: Se
         pr, blobs = PF.evidence_v2(statements[0][1], sessions)
     else:
         pr, blobs = PF.statements_v2(statements, sessions)
-    evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
+    drawn = drawn or {"params": {}, "evidence": {}}
+    evidence = ({k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"}
+                | drawn["evidence"] | {"proofs": pr})
     return {"blobs": [str(b) for b in _once([*blobs, *tables, *interfaces])], "commitment": case["commitment"],
-            "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {**case["params"], "proofs": proofs}}
+            "evidence": RP.DT.canonical(evidence).encode().hex(),
+            "params": {**case["params"], **drawn["params"], "proofs": proofs}}
+
+
+def drawn_by(ev: dict | None, window_root: str) -> dict | None:
+    """The draw's coins as v2's case names them (`case_v2`): the params' ``challenger``, the key of the auditor's
+    challenger the coins' evidence ``ev`` (`a5_coins.evidence`) is under and the family every rank's draw reads
+    (`a5_coins.FAMILY`), with the ``window_root`` the session opened on; and the evidence's ``coins``, ``ev`` less its
+    key. None when the challenger's session gave no evidence."""
+    if ev is None:
+        return None
+    return {"params": {"challenger": {"key": ev["key"], "label": AC.FAMILY}, "window_root": window_root},
+            "evidence": {"coins": {k: v for k, v in ev.items() if k != "key"}}}
 
 
 def _once(paths: Sequence[Path]) -> list[Path]:
@@ -1137,9 +1155,11 @@ def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
         for mm, (_, g), b in zip(members, ms, bounds) if b is not None and LP.nbl(g, b[0]) != LP.nbl(g, b[1])]}
 
 
-def v2_proof(done: Sequence[dict], zk: bool, members: Sequence[dict], record: Path | None = None) -> dict | str:
-    """`case_v2`'s inputs from the window's ``members`` and the drawn ones' sessions (`member_checks`'s), or why the audit
-    has no v2 case. v2 verifies a drawn member's `--zk` sessions on its circuit, public file and registered file: a window
+def v2_proof(done: Sequence[dict], zk: bool, members: Sequence[dict], record: Path | None = None,
+             drawn: dict | None = None) -> dict | str:
+    """`case_v2`'s inputs from the window's ``members``, the drawn ones' sessions (`member_checks`'s) and the draw's
+    coins ``drawn`` (`drawn_by`), or why the audit has no v2 case. v2 verifies a drawn member's `--zk` sessions on its
+    circuit, public file and registered file, on a draw from the auditor's challenger's coins: a window
     of one member in the one-statement form, of several, or of one whose held circuit record ``record`` states wires
     (`held_wiring`), in the per-member form (`v2_members`), each member and statement named by the member's key and the
     sessions reading the wires, which v2 refuses until the guarantee for a sample over several members' statements is in
@@ -1151,6 +1171,8 @@ def v2_proof(done: Sequence[dict], zk: bool, members: Sequence[dict], record: Pa
         return "v2 verifies --zk sessions; this audit's are plain"
     if not done:
         return "v2 verifies the drawn members' sessions; this audit drew none"
+    if drawn is None:
+        return "v2's draw reads the auditor's challenger's coins (OneStageZk.NO_CHALLENGER); this audit has none of record"
     try:
         wires = held_wiring(record)
     except (OSError, KeyError, ValueError) as e:
@@ -1173,11 +1195,11 @@ def v2_proof(done: Sequence[dict], zk: bool, members: Sequence[dict], record: Pa
     interfaces = [i for mm in members if (i := interface(mm))]
     if len(members) == 1 and wires is None:
         return {"proofs": own(members[0]), "statements": [(None, proof(done[0]))], "tables": tables,
-                "interfaces": interfaces}
+                "interfaces": interfaces, "drawn": drawn}
     return {"proofs": v2_members([(mm["m"].key, mm["m"].base, mm["m"].n, int(mm["st"]["meta"]["vus_per_block"]), own(mm))
                                   for mm in members], wires),
             "statements": [(got["mm"]["m"].key, proof(got)) for got in done], "tables": tables,
-            "interfaces": interfaces}
+            "interfaces": interfaces, "drawn": drawn}
 
 
 def streamed(a: argparse.Namespace) -> bool:

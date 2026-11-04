@@ -26,6 +26,11 @@ from verity.ml.circuits.ops import gemm as G  # noqa: E402
 WRITER, READER = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE), bind(G.Gemm, K=16, N=32, **G.GEMM_AMPERE)
 WID, RID = descriptor_id(WRITER), descriptor_id(READER)
 
+#: a challenger's coins' evidence as `a5_coins.evidence` gives it: its key, then the draw's coins
+EV = {"key": {"H": 5, "W": 4, "public": "00" * 80}, "ledger": {"entries": []}, "main": ["ab"], "pins": {},
+      "segment": {"label": "draw", "openings": []}, "session": {"log": []}}
+DRAWN = a5.drawn_by(EV, "0f" * 64)
+
 _spec = importlib.util.spec_from_file_location("one_stage_replay", HERE.parent / "replay.py")
 REPLAY = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = REPLAY
@@ -76,6 +81,21 @@ def test_case_v2_names_the_proofs_files_in_place_of_verdicts(tmp_path, RP):
                       tables=[table], interfaces=[iface, iface])
     assert held["params"]["proofs"] == proofs
     assert held["blobs"] == [*got["blobs"], str(iface)]
+    live = a5.case_v2(case, evidence["sessions"], proofs={"circuit": "cc" * 64, "registered": None},
+                      statements=[(None, PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)))], tables=[table],
+                      drawn=DRAWN)
+    assert live["params"] == {**got["params"], **DRAWN["params"]}
+    assert json.loads(bytes.fromhex(live["evidence"])) == {**e, **DRAWN["evidence"]}
+    assert live["blobs"] == got["blobs"]
+
+
+def test_the_v2_case_names_the_auditors_challenger_and_carries_the_draws_coins():
+    """`a5.drawn_by`: the params' challenger, the coins' key under the family every rank draws from, with the window root
+    the session opened on, and the evidence's coins, the coins' evidence less its key, in `Challenger.drawCoins`'s form;
+    none where the challenger's session gave no evidence."""
+    assert DRAWN == {"params": {"challenger": {"key": EV["key"], "label": a5.AC.FAMILY}, "window_root": "0f" * 64},
+                     "evidence": {"coins": {k: EV[k] for k in ("ledger", "main", "pins", "segment", "session")}}}
+    assert a5.drawn_by(None, "0f" * 64) is None
 
 
 def test_the_per_member_case_names_each_statements_member_and_sessions_and_each_file_once(tmp_path, RP):
@@ -116,20 +136,21 @@ def test_v2_fixes_its_form_by_the_windows_members_never_by_the_draw(tmp_path):
     pin, units a proof block and registered file, and a statement a drawn member, even when only one was drawn."""
     ms = [_member(tmp_path, 0, 0, 2), _member(tmp_path, 1, 2, 3, {"ports": {}})]
     done = [{"mm": ms[1], "sdir": _session(tmp_path, 1)}]
-    got = a5.v2_proof(done, True, ms)
+    got = a5.v2_proof(done, True, ms, drawn=DRAWN)
+    assert got["drawn"] == DRAWN
     assert got["proofs"] == {"members": {
         "t/c0": {"circuit": "0" * 128, "registered": None, "units": [[0, 2]], "vus_per_block": 1},
         "t/c1": {"circuit": "1" * 128, "registered": {"ports": {}}, "units": [[2, 5]], "vus_per_block": 2}}}
     assert [(m, p.circuit, p.public, p.sessions) for m, p in got["statements"]] == [
         ("t/c1", tmp_path / "m1" / "circuit.txt", tmp_path / "m1" / "pub-3.bin", (done[0]["sdir"] / "sessions" / "a",))]
-    one = a5.v2_proof(done, True, ms[1:])
-    assert one["proofs"] == {"circuit": "1" * 128, "registered": {"ports": {}}}
+    one = a5.v2_proof(done, True, ms[1:], drawn=DRAWN)
+    assert one["proofs"] == {"circuit": "1" * 128, "registered": {"ports": {}}} and one["drawn"] == DRAWN
     assert [m for m, _ in one["statements"]] == [None]
     iface = tmp_path / "circuit.json"
     iface.write_bytes(b'{"format": "verity/window-circuit/v1"}')
     for mm in ms:
         mm["st"]["interface_file"] = iface
-    got = a5.v2_proof(done, True, ms)
+    got = a5.v2_proof(done, True, ms, drawn=DRAWN)
     assert got["proofs"]["members"]["t/c1"]["interface"] == sha(iface) and "interface" not in got["proofs"]["members"]["t/c0"]
     assert got["interfaces"] == [iface]
 
@@ -170,20 +191,21 @@ def test_v2_reads_the_wires_of_the_circuit_record_the_audit_holds(tmp_path):
                     "cuts": {}, "wires": [{"reader": RID, "port": "x", "writer": WID, "out": "o0", "at": 0, "radix": [2],
                                            "base": 0, "step": [1]}]}
     assert IF.wiring_of_record(record) == want
-    assert a5.v2_proof(done, True, ms, iface)["proofs"]["wires"] == want
-    one = a5.v2_proof(done, True, ms[1:], iface)
+    assert a5.v2_proof(done, True, ms, iface, DRAWN)["proofs"]["wires"] == want
+    one = a5.v2_proof(done, True, ms[1:], iface, DRAWN)
     assert one["proofs"]["wires"] == want and list(one["proofs"]["members"]) == ["t/c1"]
     assert [m for m, _ in one["statements"]] == ["t/c1"]
-    assert "wires" not in a5.v2_proof(done, True, ms)["proofs"]
+    assert "wires" not in a5.v2_proof(done, True, ms, drawn=DRAWN)["proofs"]
     iface.write_bytes(IF.circuit_bytes({**record, "wires": []}))
-    assert "wires" not in a5.v2_proof(done, True, ms, iface)["proofs"]
+    assert "wires" not in a5.v2_proof(done, True, ms, iface, DRAWN)["proofs"]
     iface.write_bytes(IF.circuit_bytes({**record, "wires": [{"reader": RID}]}))
-    assert "gives none: ValueError" in a5.v2_proof(done, True, ms, iface)
+    assert "gives none: ValueError" in a5.v2_proof(done, True, ms, iface, DRAWN)
 
 
 def test_v2_says_why_an_audit_has_no_case():
     assert "plain" in a5.v2_proof([{}], zk=False, members=[{}])
     assert "drew none" in a5.v2_proof([], zk=True, members=[{}])
+    assert "NO_CHALLENGER" in a5.v2_proof([{}], zk=True, members=[{}])
 
 
 def test_a_v2_refusal_is_written_beside_the_v1_case(tmp_path, monkeypatch, RP):
