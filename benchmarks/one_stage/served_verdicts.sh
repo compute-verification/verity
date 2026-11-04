@@ -9,7 +9,8 @@
 #     under `gpu-lease`, `--scheme rows-sha512 --seal --admit release-order --window-requests SLOTS`, its committer built from
 #     B's manifest (PRED/manifest.json) and taps (HIDDEN_SO, NORM_TAP_SO), T tokens a step (--max-num-batched-tokens; T defaults
 #     to H1_T, else 512, with or without H1); B-OF-RECORD says each sealed sampling block's record names B's manifest, and its
-#     Program digest predict's. Each closed window is sealed as a
+#     Program digest and manifest digest predict's (a record sealed before the seal recorded the manifest digest: the Program
+#     digest alone). Each closed window is sealed as a
 #     rows-sha512 row dir, and the seal opens each one's replay bundle (`deferred_rows.of_record`). Once it listens, before
 #     the first request, the committer registers its weights (`prove_path.py weights-registration`: each weight parameter of
 #     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, and the rotary table at the words the engine serves,
@@ -1269,7 +1270,8 @@ import json, os, sys
 from pathlib import Path
 from verity_vllm.pipeline import deferred_rows as DR
 d, pred, held = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
-b_of_record = (str((pred / "manifest.json").resolve()), json.loads((pred / "predicted.json").read_text())["program_digest"])
+predicted = json.loads((pred / "predicted.json").read_text())
+b_of_record = (str((pred / "manifest.json").resolve()), predicted["program_digest"])
 serve = json.loads((d / "serve.json").read_text())
 seals = [json.loads(x) for x in (d / "seals.jsonl").read_text().splitlines() if x.strip()] if (d / "seals.jsonl").exists() else []
 sealed_ok = bound_ok = bool(seals)
@@ -1297,6 +1299,15 @@ for s in seals:
     good = good and v.get("commit_scheme") == c.get("commit_scheme") == store == "rows-sha512" and len(rr) == 128
     bound = r.ctx["served_window"].get("required_manifest", {}) if good else {}
     b = (bound.get("path"), bound.get("program_digest")) == b_of_record
+    # a seal before serve_seal.manifest_refusal recorded the manifest's digest as "digest", always None: its path and
+    # Program digest bind it alone
+    if "manifest_digest" in bound:
+        b &= bound["manifest_digest"] == predicted["manifest_digest"]
+        by = f", manifest digest {str(bound['manifest_digest'])[:16]}…"
+    elif "digest" in bound and bound["digest"] is None:
+        by = " (sealed before the seal recorded the manifest's digest: its path and Program digest bind it)"
+    else:
+        b, by = False, ", and no manifest digest"
     sealed_ok &= good
     bound_ok &= b
     committers.add(str(c.get("committer")))
@@ -1308,14 +1319,14 @@ for s in seals:
                  f"({len(rr) // 2} bytes); bundle {opened}: {'PASS' if good else 'FAIL'}")
     whose = "predict row's Build of record (its predicted.json's)" if b else f"not predict row's {b_of_record[0]}"
     lines.append(f"B-OF-RECORD w{k}: the sealed record binds {bound.get('path')}, program digest "
-                 f"{str(bound.get('program_digest'))[:16]}…: {whose}: {'PASS' if b else 'FAIL'}")
+                 f"{str(bound.get('program_digest'))[:16]}…{by}: {whose}: {'PASS' if b else 'FAIL'}")
 ok = sealed_ok and bound_ok and serve.get("scheme") == "rows-sha512"
 os.umask(0o077)
 held.write_text("".join(x + "\n" for x in lines))
 print(f"SEALED: every closed window's row dir committed under rows-sha512 (committer {', '.join(sorted(committers)) or 'none'}) "
       f"and its replay bundle opened: {'PASS' if sealed_ok else 'FAIL'}")
 print(f"B-OF-RECORD: every sealed record binds predict row's Build of record ({b_of_record[0]}, program digest "
-      f"{b_of_record[1][:16]}…): {'PASS' if bound_ok else 'FAIL'}")
+      f"{b_of_record[1][:16]}…, manifest digest {predicted['manifest_digest'][:16]}…): {'PASS' if bound_ok else 'FAIL'}")
 print(f"SERVED-SEAL VERDICT: {'PASS' if ok else 'FAIL'} (scheme {serve.get('scheme')}, precision {serve.get('precision')}"
       + (f"; {'; '.join(sorted(why))}" if why else "") + "; each window's lines in the serve dir's private/seal.txt)")
 sys.exit(0 if ok else 1)
