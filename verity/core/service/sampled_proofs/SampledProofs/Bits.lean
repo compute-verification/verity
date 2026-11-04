@@ -18,9 +18,10 @@ describes, where each of its gates sits, and each unit's gates and inputs. The s
   zero (gate 1) and `B` source gates per unit, unit `u`'s input column `x` on its key's (`keyIdx`), or on the zero's where
   it has none. Then come the units, each the unit net's rows (`Rows.ofNet`) stacked `upv` times (`Rows.stack`), a row
   reading earlier gates. Its outputs are the gates on the returned outputs' bits.
-* `gateSize`, `off`, `posOf`, `lower`, `prog`: that program lowered to the Boolean profile (`LGate`), gate by gate in
-  order. A row `(⊕ a) ∧ (⊕ b)` is three gates, the two XORs then their AND, and an input is one, `.const b` where the
-  constants `κ` fix it to `b`. Gate `g` sits at `posOf`, its last lowered gate.
+* `gateSize`, `off`, `posOf`, `lower`, `prog`, `consts`: that program lowered to the Boolean profile (`LGate`), gate by
+  gate in order. A row `(⊕ a) ∧ (⊕ b)` is three gates, the two XORs then their AND, and an input is one, `.const b`
+  where the constants `κ` fix it to `b`; the key program's are `consts`, its constant and its zero. Gate `g` sits at
+  `posOf`, its last lowered gate.
 * `unitOf`, `unitGates`, `owner`, `insOf`, `blockOf`: unit `u`'s lowered gates, the input gates it owns (the unfixed
   inputs whose first reader it is) and its proof block, the first then the second's positions.
 * `inBit`, `outBit`: the claims position of a bit of an instance's input port or returned output leaf, the instance
@@ -253,6 +254,9 @@ def lower (kp : KeyProg) (κ : Nat → Option Bool) (g : Nat) : List LGate :=
 def prog (kp : KeyProg) (κ : Nat → Option Bool) : List LGate × List Nat :=
   ((List.range kp.size).flatMap (lower kp κ), kp.outs.map (posOf kp))
 
+/-- **The key program's constants**: gate 0, the constant, set, and gate 1, the zero, clear; no other gate fixed. -/
+def consts (g : Nat) : Option Bool := if g == 0 then some true else if g == 1 then some false else none
+
 /-! ## Units and proof blocks -/
 
 /-- **Gate `g`'s unit**: none for an input, else the unit whose rows hold it. -/
@@ -405,12 +409,13 @@ def defWidth (d : Flock.Program.Defn) : Nat :=
 (its descriptor id, as a circuit record names it) is no Definition of `P`, no template instance makes a unit, a port of
 the unit's first input or output group is not one 16-bit word (`srcAt` and `outCol` place a port's bits in one), the
 leaf maps are not one per template instance over the unit's ports (a typed template's block, whose wiring is derived,
-has none), an instance's input port past its leaf ports is not wired exactly once, by a leaf cut or a wire into the unit
-(`HmRow.check`'s wiring, so `srcAt` never reaches `.lit 0`), two instances return one output word (`writers` would hold
-two claims positions at one commitment position), the unit net's constant sits among its input words (`Rows.ofNet` and
-`srcKey` split the inputs at different columns), a net other than the unit returns the outputs (`keyProg`'s outputs are
-the unit net's), or a returned output bit sits on no computed row, so that every writer is a copy row and none an input
-or a constant. It reads only the unit net's header (`Rows.ofNet`'s `nIn` and `nComp`), never its rows. -/
+has none), a wire runs into a unit's leaf port, a leaf cut is outside the unit's cut inputs or the rows, an instance's
+input port past its leaf ports is not wired exactly once, by a leaf cut or a wire into the unit (the three are
+`HmRow.check`'s wiring rule, so `srcAt` never reaches `.lit 0`), two instances return one output word (`writers` would
+hold two claims positions at one commitment position), the unit net's constant sits among its input words (`Rows.ofNet`
+and `srcKey` split the inputs at different columns), a net other than the unit returns the outputs (`keyProg`'s outputs
+are the unit net's), or a returned output bit sits on no computed row, so that every writer is a copy row and none an
+input or a constant. It reads only the unit net's header (`Rows.ofNet`'s `nIn` and `nComp`), never its rows. -/
 def check (c : Flock.Circuit) (P : Flock.Program.Prog) (tmpl : String) : Option String :=
   let nIn := min (c.unit.inWords * Flock.WORD) c.unit.constPos
   let nComp := c.unit.constPos - nIn
@@ -422,8 +427,9 @@ def check (c : Flock.Circuit) (P : Flock.Program.Prog) (tmpl : String) : Option 
       if w.dst.1 == c.unitNet then some (w.dst.2.1, w.dst.2.2) else none).foldl
       (fun m kp => m.insert kp (m.getD kp 0 + 1)) {}
   let cut := gi.size
+  let pc := Flock.portCols c.unit.inGroups
   let unwired := ((List.range c.upv).flatMap fun k =>
-    (List.range ((Flock.portCols c.unit.inGroups).size - cut)).map fun i => (k, cut + i)).find?
+    (List.range (pc.size - cut)).map fun i => (k, cut + i)).find?
     fun kp => wired.getD kp 0 != 1
   if !P.defs.any (·.key == tmpl) then some s!"the circuit file's template {tmpl} is no Definition of the Program"
   else if c.upv == 0 then some "the circuit file's unit holds no template instance"
@@ -432,6 +438,10 @@ def check (c : Flock.Circuit) (P : Flock.Program.Prog) (tmpl : String) : Option 
   else if c.leavesIn.size != c.upv || c.leavesOut.size != c.upv || (List.range c.upv).any fun k =>
       (c.leavesIn.getD k #[]).size != gi.size || (c.leavesOut.getD k #[]).size != go.size then
     some "the circuit file's leaf maps are not one per template instance over its unit's ports"
+  else if c.wires.any fun w => w.dst.1 == c.unitNet && w.dst.2.2 < cut then some "a wire into a unit's leaf port"
+  else if c.leafCuts.any fun (k, p, w) =>
+      c.upv ≤ k || p < cut || pc.size ≤ p || (pc.getD p (0, 0)).2 < 16 || c.inWords ≤ w then
+    some "a leaf cut outside the unit's cut inputs or the rows"
   else if let some (k, p) := unwired then
     some s!"input port {p} of the circuit file's unit, template instance {k}, is not wired exactly once by a leaf cut \
       or a wire"
@@ -454,17 +464,15 @@ private def toy : KeyProg :=
     rows := #[([2], [0]), ([4, 2], [0]), ([3], [0]), ([6], [3])]
     outs := [5, 7] }
 
-private def toyκ (g : Nat) : Option Bool := if g == 0 then some true else if g == 1 then some false else none
-
 #guard (List.range toy.size).map (posOf toy) == [0, 1, 2, 3, 6, 9, 12, 15]
-#guard (prog toy toyκ).1.length == (List.range toy.size).foldl (fun s g => s + gateSize toy g) 0
-#guard lower toy toyκ 0 == [.const true]
-#guard lower toy toyκ 2 == [.input]
-#guard lower toy toyκ 5 == [.xor [6, 2], .xor [0], .and [7, 8]]
-#guard (prog toy toyκ).2 == [9, 15]
-#guard let gs := (prog toy toyκ).1; (List.range gs.length).all fun i => (gs[i]!).reads.all (· < i)
-#guard blockOf toy toyκ 0 == [4, 5, 6, 7, 8, 9, 2]
-#guard blockOf toy toyκ 1 == [10, 11, 12, 13, 14, 15, 3]
+#guard (prog toy consts).1.length == (List.range toy.size).foldl (fun s g => s + gateSize toy g) 0
+#guard lower toy consts 0 == [.const true]
+#guard lower toy consts 2 == [.input]
+#guard lower toy consts 5 == [.xor [6, 2], .xor [0], .and [7, 8]]
+#guard (prog toy consts).2 == [9, 15]
+#guard let gs := (prog toy consts).1; (List.range gs.length).all fun i => (gs[i]!).reads.all (· < i)
+#guard blockOf toy consts 0 == [4, 5, 6, 7, 8, 9, 2]
+#guard blockOf toy consts 1 == [10, 11, 12, 13, 14, 15, 3]
 #guard owner toy 0 == some 0 && owner toy 1 == none && owner toy 3 == some 1
 
 /-- Two 16-bit inputs and three 1-bit inputs into one 32-bit primitive: leaves of widths 16, 16, 1, 1, 1 and 32. -/
@@ -524,7 +532,7 @@ private def toyMs : Members := [(toyA, #[0, 1]), (toyB, #[0, 1])]
 #guard rowBit toyA 2 149 == some (RowPos.mk "y" 1 3) && rowBit toyA 2 40 == none && rowBit toyA 2 1 == none
 #guard outBit toyA 2 0 0 0 0 == some 263 && outBit toyA 2 1 0 0 5 == some 329 && outBit toyB 2 0 0 0 0 == none
 #guard outRowBit toyA 1 0 0 4 == some (RowPos.mk "o" 1 4)
-#guard let gs := (prog (keyProg toyA 2) toyκ).1
+#guard let gs := (prog (keyProg toyA 2) consts).1
   (writers [(toyA, #[0, 1])]).all fun (x, _) => match gs[x]? with | some (.and _) => true | _ => false
 #guard lastLe #[0, 1, 2] 0 == 0 && lastLe #[0, 1, 2] 5 == 2 && lastLe #[0, 4] 3 == 0
 #guard srcAt toyA (Index.of toyA) 0 1 3 == .msg 1 0 3 && srcAt toyA (Index.of toyA) 0 1 9 == .msg 1 1 1
@@ -564,7 +572,11 @@ private def toyCut : Flock.Circuit := { toyA with nets := #[("unit", cutNet)], l
       refuses "input port 2 of the circuit file's unit, template instance 0"
         (check { toyCut with leafCuts := #[(0, 2, 0), (0, 2, 1)] } P "TMix_v1") &&
       refuses "input port 2 of the circuit file's unit, template instance 0"
-        (check { toyCut with wires := #[⟨(0, 0, 2), (0, 0, 0)⟩] } P "TMix_v1")
+        (check { toyCut with wires := #[⟨(0, 0, 2), (0, 0, 0)⟩] } P "TMix_v1") &&
+      refuses "a wire into a unit's leaf port" (check { toyCut with wires := #[⟨(0, 0, 1), (0, 0, 0)⟩] } P "TMix_v1") &&
+      [(0, 1, 0), (1, 2, 0), (0, 3, 0), (0, 2, 3)].all fun e =>
+        refuses "a leaf cut outside the unit's cut inputs or the rows"
+          (check { toyCut with leafCuts := #[e] } P "TMix_v1")
   | .error _ => false
 
 end SampledProofs.Bits
