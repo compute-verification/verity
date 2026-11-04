@@ -33,6 +33,10 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `matches_public`: the verifier's own public file against the record (`Record.matchesPublic`);
 * `session_registered`: the registered roots the verifiers of record report (`Record.sessionRegistered`), and with a
   registration only its own values' (`Record.ownRegistered`);
+* `registered_ports`: the v2 audit's checks of the verifier's registered file (`OneStageZk.readsOf`, `portsHeld`): a port
+  name repeated (`Flock.Registered.dupName?`, which `Flock.Registered.ofJson` refuses), two ports of one root registering
+  it differently (`Flock.Registered.rootClash`) and a port differing from the record's entry for its value
+  (`Registered.entryClash`);
 * `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`;
 * `check_public`: the proof system's public-items rule on a registration record (`Service.checkPublic`);
 * `check_verdicts`: the verdicts' share of a proof system outcome (`Service.checkVerdicts`);
@@ -604,6 +608,37 @@ def run (j : Json) : V Json := do
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
             served := getD j "served", sessionRoots := getD j "session_roots", coins := getD j "coins" }
 
+/-- `kvs` as one object holding each entry in order, a key repeated as often as listed: a tree no `Json.mkObj` builds
+(it keeps a key's last value), as `Json`'s type admits it. -/
+def rawObj (kvs : Array (String × Json)) : Json :=
+  let t : Std.DTreeMap.Internal.Impl String (fun _ => Json) × Nat :=
+    kvs.foldr (fun (k, v) (t, n) => (.inner (n + 1) k v .leaf t, n + 1)) (.leaf, 0)
+  .obj ⟨⟨t.1⟩⟩
+
+/-- `{"format", "ports", "record", "schemas"}`: the verifier's registered file `{"format", "ports"}`, its ports a list of
+`[name, port]` in order, a name repeated as often as listed (`rawObj`), read as `Flock.Registered.portsOf` reads them, to
+the v2 audit's checks of them: the first name a later port repeats (`names`, `Flock.Registered.dupName?`) and whether
+`Flock.Registered.ofJson` accepts the file (`ok`), the first two ports of one root registering it differently (`roots`,
+`Flock.Registered.rootClash`), and the first port differing from the registration `record`'s entry for its value, with
+the field (`entry`, `Registered.entryClash` under the verifier's `schemas`, `{value: schema}`). Refused where `portsOf`
+refuses the file. -/
+def registeredPorts (j : Json) : V Json := do
+  let .arr ps := getD j "ports" | throw "ports is not a list"
+  let kvs ← ps.mapM fun p => match p with
+    | .arr #[.str n, e] => pure (n, e)
+    | _ => throw "a port is not [name, port]"
+  let file := Json.mkObj [("format", getD j "format"), ("ports", rawObj kvs)]
+  let own ← Flock.Registered.portsOf file
+  let schemas ← (entries (getD j "schemas")).mapM fun (v, s) => match s with
+    | .str s => pure (v, s)
+    | _ => throw s!"schema of {v} is not a string"
+  let pair := fun (x y : String) => Json.arr #[.str x, .str y]
+  return Json.mkObj [
+    ("names", ((Flock.Registered.dupName? own.toList).map Json.str).getD .null),
+    ("ok", .bool (Flock.Registered.ofJson file).toBool),
+    ("roots", ((Flock.Registered.rootClash own).map fun (a, b) => pair a.name b.name).getD .null),
+    ("entry", ((Registered.entryClash schemas (getD j "record") own).map fun (q, k) => pair q.name k).getD .null)]
+
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
    ("registered", registered),
@@ -612,8 +647,8 @@ def table : List (String × (Json → V Json)) :=
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
-   ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
-   ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check),
+   ("session_registered", sessionRegistered), ("registered_ports", registeredPorts), ("record", record),
+   ("check_public", checkPublic), ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check),
    ("pop_order", popOrder),
    ("challenger_commitment", Challenger.commitmentPiece),
    ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),
