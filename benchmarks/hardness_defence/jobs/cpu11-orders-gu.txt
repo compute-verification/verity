@@ -1,0 +1,2 @@
+# 70B gate and up on the four layers whose top 32 directions hold 41-90% of ||q||^2, with the split, in all three orders
+70b-gu-o2 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,5,9,33 --match gate_proj,up_proj --fast --ranks 8,16,32,64 --orders none,fold,sort --workers 8
