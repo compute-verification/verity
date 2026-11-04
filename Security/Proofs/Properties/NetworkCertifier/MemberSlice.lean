@@ -14,6 +14,10 @@ wire between two members of one template needs.
 * `step_slice`: `WalkProof.step_below`, with that reference where a step leaves the activation;
 * `run_slice`: resolution from below the activation ends in its gates, or at the resolution of such a reference;
 * `memberSliceReads`: with `WalkProof.gate_below`, the lemma;
+* `input_gate`, `arg_gate`: leaf `t` of a batch input node `q` is gate `offsets[q] + t`, a primitive returning one
+  leaf, so the members' slices of such a node are disjoint gates;
+* `lands_member`: an out leaf of a member of a batch resolves into `InM` at that member;
+* `act_node`, `act_not_input`: a member's activation lies in its node's gates, so no input node's gate is in it;
 * `InM`, `closure_member`, `depends_member`: at a batch whose every argument is one input node's leaves
   (`NetworkCheck.Period.inputArg`), the gates of member `m`'s activation and those its own references resolve to hold
   what they read in a flattening (`Properties.NetworkScan.Flattens`), so whatever such a gate depends on is among them.
@@ -93,6 +97,34 @@ theorem get_upIdx {nd : Node} (h : nd.form = .prim ∨ nd.form = .call) (m i j :
 theorem memberIdx_slice {a : Arg} {d L : ℕ} (hd : a.dims = some (d, L)) {m j : ℕ} (hj : j < L) :
     Resolve.memberIdx a m j = m * L + j := by
   simp only [Resolve.memberIdx, hd, Nat.div_eq_of_lt hj, Nat.mod_eq_of_lt hj, Nat.zero_mul, Nat.zero_add]
+
+/-- **Leaf `t` of a batch input node `q` is its gate `offsets[q] + t`**, its primitive returning one leaf. -/
+theorem input_gate (P : Prog) {q t : ℕ} (hq1 : (P.defs[((P.defs[P.root]!).body.nodes[q]!).fn]!).outLeaves = 1)
+    (hprim : (P.defs[((P.defs[P.root]!).body.nodes[q]!).fn]!).prim = true)
+    (hf : ((P.defs[P.root]!).body.nodes[q]!).form = .batch) :
+    ∀ n a, Flock.Steps.run "scope resolution" (resolveStep P) n (P.rootScope, ⟨false, q, t⟩) = .ok a →
+      a = (P.defs[P.root]!).body.offsets[q]! + t := by
+  intro n a h
+  cases n with
+  | zero => simp [Flock.Steps.run, throw, throwThe, MonadExceptOf.throw] at h
+  | succ n =>
+    rw [Flock.Steps.run.eq_2, Resolve.rs_batch P P.rootScope q t hf] at h
+    simp only [rootScope_d, rootScope_off, Nat.zero_add] at h
+    simp only [hprim, ite_true, hq1, Nat.div_one, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
+    exact h.symm
+
+/-- **A reference at `t` of an argument `inputArg` reads, to a batch input node `q`, resolves to gate
+`offsets[q] + t`.** -/
+theorem arg_gate (P : Prog) {k i t q a : ℕ} (hq : inputArg P (((P.defs[P.root]!).body.nodes[k]!).args[i]!) = some q)
+    (hq1 : (P.defs[((P.defs[P.root]!).body.nodes[q]!).fn]!).outLeaves = 1)
+    (hqb : ((P.defs[P.root]!).body.nodes[q]!).form = .batch)
+    (h : resolve P P.rootScope ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get t) = .ok a) :
+    a = (P.defs[P.root]!).body.offsets[q]! + t := by
+  obtain ⟨⟨c, hparts⟩, -, hin⟩ := inputArg_some hq
+  have hprim : (P.defs[((P.defs[P.root]!).body.nodes[q]!).fn]!).prim = true := by
+    simp only [NciCheck.Desc.isInputNode, Bool.and_eq_true] at hin; exact hin.1
+  rw [seq_get_one hparts t] at h
+  rw [input_gate P (t := 0 + t) hq1 hprim hqb _ a h, Nat.zero_add]
 
 section
 variable (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
@@ -291,6 +323,73 @@ theorem closure_member {bytes : ByteArray} (hdec : decode bytes = .ok P) (hov : 
     have := gate_input P hroot hL hqK hin hx1 hx2 (hinp q hqK hin) hgate
     rw [this] at hyo
     simp at hyo
+
+/-- **An out leaf of a member lands in `InM`**: leaf `j` of root node `ke`, a batch of a composite, resolves only to a
+gate of `InM` at member `j / L`, `L` the callee's out leaves. -/
+theorem lands_member {ke j a : ℕ} (hk : ke < (P.defs[P.root]!).body.nodes.size)
+    (hcomp : (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).prim = false)
+    (hbatch : ((P.defs[P.root]!).body.nodes[ke]!).form = .batch)
+    (hj : j < ((P.defs[P.root]!).body.nodes[ke]!).out.leaves)
+    (ha : resolve P P.rootScope ⟨false, ke, j⟩ = .ok a) :
+    InM P ke (j / (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).outLeaves) a := by
+  have hBr : Resolve.BodyOk P P.root := hB P.rootScope (good_root P)
+  obtain ⟨-, -, -, hdown, -⟩ := hBr.1 ke hk
+  have hdn := hdown j hj
+  simp only [hbatch] at hdn
+  obtain ⟨hdn1, -, hdn3⟩ := hdn
+  have hm : j / (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).outLeaves <
+      ((P.defs[P.root]!).body.nodes[ke]!).members := by
+    rw [Resolve.bs_members _ (Or.inl hbatch)]; exact hdn1
+  have hgA : Resolve.Good P (P.child P.rootScope ke
+      (j / (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).outLeaves)) :=
+    Resolve.good_child P (good_root P) hk rfl hcomp hm rfl
+  have hinv' := Resolve.down_ok P hroot hB hL _ _ hgA (le_refl _) _ (hdn3 hcomp)
+  have hstep := Resolve.rs_batch P P.rootScope ke j hbatch
+  simp only [rootScope_d, hcomp, Bool.false_eq_true, ite_false] at hstep
+  unfold Flock.Program.resolve at ha
+  rw [fuel_succ] at ha
+  generalize hfu : Flock.Steps.FUEL - 1 = fuel at ha
+  replace ha := ReadsExact.run_inr hstep ha
+  have hf : ((P.defs[P.root]!).body.nodes[ke]!).form ≠ .scan := fun h => by rw [hbatch] at h; cases h
+  rcases run_slice P hroot hB hL (k := ke)
+      (m := j / (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).outLeaves) rfl hf _ _ a hinv' Below.self ha with
+    h | ⟨i, t, hi, ht, n', hn', h⟩
+  · exact Or.inl h
+  · exact Or.inr ⟨i, t, hi, ht, Flock.Steps.run_mono (m := Flock.Steps.FUEL) (by omega) h⟩
+
+omit hB in
+/-- **Member `m`'s activation lies in its node's gates.** -/
+theorem act_node {k m x : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
+    (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members) (hx1 : (P.child P.rootScope k m).off ≤ x)
+    (hx2 : x < (P.child P.rootScope k m).off + (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).gates) :
+    (P.defs[P.root]!).body.offsets[k]! ≤ x ∧ x < (P.defs[P.root]!).body.offsets[k + 1]! := by
+  obtain ⟨-, -, hnodes⟩ := hL P.root hroot.1 hroot.2
+  have hn := hnodes k hk
+  rw [child_off] at hx1 hx2
+  have hle : (m + 1) * (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).gates ≤
+      ((P.defs[P.root]!).body.nodes[k]!).members * (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).gates :=
+    Nat.mul_le_mul_right _ hm
+  rw [Nat.add_mul, Nat.one_mul] at hle
+  exact ⟨by omega, by omega⟩
+
+omit hB in
+/-- **No gate of a composite's activation is an input node's.** -/
+theorem act_not_input {k m q x : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
+    (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members)
+    (hcomp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
+    (hq : q < (P.defs[P.root]!).body.nodes.size)
+    (hin : NciCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[q]!) = true)
+    (hx1 : (P.child P.rootScope k m).off ≤ x)
+    (hx2 : x < (P.child P.rootScope k m).off + (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).gates)
+    (hxq : (P.defs[P.root]!).body.offsets[q]! ≤ x ∧ x < (P.defs[P.root]!).body.offsets[q + 1]!) : False := by
+  have hmono := Resolve.offsets_mono P P.root (hL _ hroot.1) hroot.2
+  have hkq : k = q := DescAgree.node_unique _ _ (fun k' hk' => hmono k' (k' + 1) (by omega) (by omega)) hk hq
+    (act_node P hroot hL hk hm hx1 hx2) hxq
+  subst hkq
+  have hprim : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = true := by
+    simp only [NciCheck.Desc.isInputNode, Bool.and_eq_true] at hin; exact hin.1
+  rw [hcomp] at hprim
+  cases hprim
 
 /-- **What a gate of `InM` depends on is in `InM`.** -/
 theorem depends_member {bytes : ByteArray} (hdec : decode bytes = .ok P) (hov : P.orderViolation = none)
