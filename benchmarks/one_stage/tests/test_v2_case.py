@@ -75,24 +75,25 @@ def _window(w: Path, RP, members: list[dict], drawn: list[int], pins: dict | Non
 
 def test_a_window_of_several_members_is_the_per_member_case(tmp_path, RP):
     """A window whose summary lists several members gets a5's per-member case (`a5.v2_proof`): every member, the
-    undrawn too, with its units, its template's pin, its template's units a proof block (the summary's, else its
-    circuit file's META) and its kept registered file; a statement a drawn member on its template's circuit file, kept
-    in the template's first member's directory, under the evidence's sessions in order."""
+    undrawn too, named by its key, with its units, its template's pin, its template's units a proof block (the
+    summary's, else its circuit file's META) and its kept registered file; a statement a drawn member on its template's
+    circuit file, kept in the template's first member's directory, under the evidence's sessions in order."""
     w = tmp_path / "window"
-    members = [{"k": 0, "template": "t", "n": 2, "base": 0}, {"k": 1, "template": "t", "n": 3, "base": 2},
-               {"k": 2, "template": "u", "n": 1, "base": 5}]
+    members = [{"k": 0, "key": "t/c0", "template": "t", "n": 2, "base": 0},
+               {"k": 1, "key": "t/c1", "template": "t", "n": 3, "base": 2},
+               {"k": 2, "key": "u/c0", "template": "u", "n": 1, "base": 5}]
     pins = {"t": "aa" * 64, "u": "bb" * 64}
     names = _window(w, RP, members, [1, 2], pins, per_block={"t": 4})
     (w / "m2" / "registered.json").write_text('{"ports": {}}')
     v2, how, n = V.case(w, tmp_path / "scratch")
     assert (how, n) == ("m0: kept; m2: kept", 2)
     assert v2["params"] == {"partition": {"rule": "r"}, "proofs": {"members": {
-        "m0": {"circuit": pins["t"], "registered": None, "units": [[0, 2]], "vus_per_block": 4},
-        "m1": {"circuit": pins["t"], "registered": None, "units": [[2, 5]], "vus_per_block": 4},
-        "m2": {"circuit": pins["u"], "registered": {"ports": {}}, "units": [[5, 6]], "vus_per_block": 2}}}}
+        "t/c0": {"circuit": pins["t"], "registered": None, "units": [[0, 2]], "vus_per_block": 4},
+        "t/c1": {"circuit": pins["t"], "registered": None, "units": [[2, 5]], "vus_per_block": 4},
+        "u/c0": {"circuit": pins["u"], "registered": {"ports": {}}, "units": [[5, 6]], "vus_per_block": 2}}}}
     e = json.loads(bytes.fromhex(v2["evidence"]))
     assert [(st["member"], [x["name"] for x in st["sessions"]]) for st in e["proofs"]["statements"]] == [
-        ("m1", names[:1]), ("m2", names[1:])]
+        ("t/c1", names[:1]), ("u/c0", names[1:])]
     assert v2["blobs"] == [str(w / f) for f in ("m0/circuit.txt", "m1/pub-3.bin", "session-m1/sessions/a/session.json",
                                                 "m2/circuit.txt", "m2/pub-1.bin", "session-m2/sessions/a/session.json")]
 

@@ -666,7 +666,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         return summary, False
     want = CS.expected_ports(mine)
     summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": law, "delta": a.delta, "firewall": a.firewall,
-                    "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
+                    "members": [{"k": k, "key": m.key, "template": m.template, "n": m.n, "base": m.base}
+                                for k, m in enumerate(mine.members)]})
     if plain(a):
         summary.update(firewall=None, plain={"scope": PLAIN_SCOPE, "coins": "os", "firewall": PLAIN_FIREWALL})
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
@@ -1084,13 +1085,13 @@ def _once(paths: Sequence[Path]) -> list[Path]:
     return out
 
 
-def v2_members(members: Sequence[tuple[int, int, int, int, Any]]) -> dict:
-    """The per-member form's parameters (`OneStageZk.Form`) for the window's members ``(k, base, n, g, own)``: each
-    member ``m<k>``'s units ``[base, base + n)``, its circuit's ``g`` units a proof block (META ``vus_per_block``, whose
-    link points the registration checks) and its statement's ``own`` inputs, its circuit digest, registered file and
-    registered circuit record, all fixed before the draw."""
-    return {"members": {f"m{k}": {**own, "units": [[base, base + n]], "vus_per_block": g}
-                        for k, base, n, g, own in members}}
+def v2_members(members: Sequence[tuple[str, int, int, int, Any]]) -> dict:
+    """The per-member form's parameters (`OneStageZk.Form`) for the window's members ``(key, base, n, g, own)``: each
+    member, named by its key (the registration's ``<key>/<port>``, whose root and domain its statement's public file must
+    name for each port it doesn't register: `Registered.statementHeld`), its units ``[base, base + n)``, its circuit's
+    ``g`` units a proof block (META ``vus_per_block``, whose link points the registration checks) and its statement's
+    ``own`` inputs, its circuit digest, registered file and registered circuit record, all fixed before the draw."""
+    return {"members": {key: {**own, "units": [[base, base + n]], "vus_per_block": g} for key, base, n, g, own in members}}
 
 
 def draw_ran_out(law: dict, population: int, read: bytes) -> bool | str:
@@ -1120,7 +1121,7 @@ def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
     except ValueError as e:
         return {"members": len(ms), "error": str(e)}
     return {"members": len(ms), "refused": [
-        {"member": f"m{mm['k']}", "template": mm["m"].template, "n": mm["m"].n, "vus_per_block": g, "fewest": b[0],
+        {"member": mm["m"].key, "template": mm["m"].template, "n": mm["m"].n, "vus_per_block": g, "fewest": b[0],
          "most": b[1]}
         for i, (mm, (_, g), b) in enumerate(zip(members, ms, bounds)) if i in refused]}
 
@@ -1128,8 +1129,9 @@ def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
 def v2_proof(done: Sequence[dict], zk: bool, members: Sequence[dict]) -> dict | str:
     """`case_v2`'s inputs from the window's ``members`` and the drawn ones' sessions (`member_checks`'s), or why the audit
     has no v2 case. v2 verifies a drawn member's `--zk` sessions on its circuit, public file and registered file: a window
-    of one member in the one-statement form, of several in the per-member form (`v2_members`), which v2 refuses until
-    the guarantee for a sample over several members' statements is in the lock (`OneStageZk.MULTI_REFUSED`)."""
+    of one member in the one-statement form, of several in the per-member form (`v2_members`), each member and statement
+    named by the member's key, which v2 refuses until the guarantee for a sample over several members' statements is in
+    the lock (`OneStageZk.MULTI_REFUSED`)."""
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
     if not zk:
@@ -1155,9 +1157,9 @@ def v2_proof(done: Sequence[dict], zk: bool, members: Sequence[dict]) -> dict | 
     if len(members) == 1:
         return {"proofs": own(members[0]), "statements": [(None, proof(done[0]))], "tables": tables,
                 "interfaces": interfaces}
-    return {"proofs": v2_members([(mm["k"], mm["m"].base, mm["m"].n, int(mm["st"]["meta"]["vus_per_block"]), own(mm))
+    return {"proofs": v2_members([(mm["m"].key, mm["m"].base, mm["m"].n, int(mm["st"]["meta"]["vus_per_block"]), own(mm))
                                   for mm in members]),
-            "statements": [(f"m{got['mm']['k']}", proof(got)) for got in done], "tables": tables,
+            "statements": [(got["mm"]["m"].key, proof(got)) for got in done], "tables": tables,
             "interfaces": interfaces}
 
 

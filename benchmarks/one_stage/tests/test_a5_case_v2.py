@@ -89,7 +89,7 @@ def test_the_per_member_case_names_each_statements_member_and_sessions_and_each_
     evidence = {"draw": {"units": [1, 2]}, "sessions": names, "verdicts": {"m0": {"accepted": True}}}
     case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {"delta": "1/100"}}
     own = [{"circuit": "cc" * 64, "registered": None}, {"circuit": "cc" * 64, "registered": {"ports": {}}}]
-    proofs = a5.v2_members([(0, 0, 2, 1, own[0]), (1, 2, 2, 1, own[1])])
+    proofs = a5.v2_members([("m0", 0, 2, 1, own[0]), ("m1", 2, 2, 1, own[1])])
     statements = [(f"m{k}", PF.Proof(d / "circuit.txt", d / "pub-2.bin", (s,))) for k, (d, s) in enumerate(((m0, s0), (m1, s1)))]
     got = a5.case_v2(case, names, proofs=proofs, statements=statements, tables=[])
     assert got["params"] == {"delta": "1/100", "proofs": {"members": {
@@ -106,8 +106,8 @@ def test_the_per_member_case_names_each_statements_member_and_sessions_and_each_
 
 def test_v2_fixes_its_form_by_the_windows_members_never_by_the_draw(tmp_path):
     """`v2_proof`'s parameters are the window's, fixed before the draw: a window of one member is the one-statement
-    form; a window of several is the per-member form, naming every member, the undrawn too, with its units, pin, units
-    a proof block and registered file, and a statement a drawn member, even when only one was drawn."""
+    form; a window of several is the per-member form, naming every member by its key, the undrawn too, with its units,
+    pin, units a proof block and registered file, and a statement a drawn member, even when only one was drawn."""
     def member(k: int, base: int, n: int, reads: dict | None = None) -> dict:
         d = tmp_path / f"m{k}"
         d.mkdir()
@@ -115,7 +115,7 @@ def test_v2_fixes_its_form_by_the_windows_members_never_by_the_draw(tmp_path):
         if reads is not None:
             st["registered_file"] = d / "registered.json"
             st["registered_file"].write_text(json.dumps(reads))
-        return {"k": k, "m": SimpleNamespace(base=base, n=n), "pin": str(k) * 128, "st": st}
+        return {"k": k, "m": SimpleNamespace(key=f"t/c{k}", base=base, n=n), "pin": str(k) * 128, "st": st}
 
     ms = [member(0, 0, 2), member(1, 2, 3, {"ports": {}})]
     sdir = tmp_path / "session-m1"
@@ -124,10 +124,10 @@ def test_v2_fixes_its_form_by_the_windows_members_never_by_the_draw(tmp_path):
     done = [{"mm": ms[1], "sdir": sdir}]
     got = a5.v2_proof(done, True, ms)
     assert got["proofs"] == {"members": {
-        "m0": {"circuit": "0" * 128, "registered": None, "units": [[0, 2]], "vus_per_block": 1},
-        "m1": {"circuit": "1" * 128, "registered": {"ports": {}}, "units": [[2, 5]], "vus_per_block": 2}}}
+        "t/c0": {"circuit": "0" * 128, "registered": None, "units": [[0, 2]], "vus_per_block": 1},
+        "t/c1": {"circuit": "1" * 128, "registered": {"ports": {}}, "units": [[2, 5]], "vus_per_block": 2}}}
     assert [(m, p.circuit, p.public, p.sessions) for m, p in got["statements"]] == [
-        ("m1", tmp_path / "m1" / "circuit.txt", tmp_path / "m1" / "pub-3.bin", (sdir / "sessions" / "a",))]
+        ("t/c1", tmp_path / "m1" / "circuit.txt", tmp_path / "m1" / "pub-3.bin", (sdir / "sessions" / "a",))]
     one = a5.v2_proof(done, True, ms[1:])
     assert one["proofs"] == {"circuit": "1" * 128, "registered": {"ports": {}}}
     assert [m for m, _ in one["statements"]] == [None]
@@ -136,7 +136,7 @@ def test_v2_fixes_its_form_by_the_windows_members_never_by_the_draw(tmp_path):
     for mm in ms:
         mm["st"]["interface_file"] = iface
     got = a5.v2_proof(done, True, ms)
-    assert got["proofs"]["members"]["m1"]["interface"] == sha(iface) and "interface" not in got["proofs"]["members"]["m0"]
+    assert got["proofs"]["members"]["t/c1"]["interface"] == sha(iface) and "interface" not in got["proofs"]["members"]["t/c0"]
     assert got["interfaces"] == [iface]
 
 
@@ -202,11 +202,12 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     that ends holds at most 2 of it, so it is not refused (one that runs out of coins fails the window:
     `a5.draw_ran_out`). A law that doesn't apply refuses every member, recorded with why."""
     def member(k: int, template: str, base: int, n: int, g: int) -> dict:
-        return {"k": k, "m": SimpleNamespace(template=template, base=base, n=n), "st": {"meta": {"vus_per_block": g}}}
+        return {"k": k, "m": SimpleNamespace(key=f"{template}/c0", template=template, base=base, n=n),
+                "st": {"meta": {"vus_per_block": g}}}
 
     ms = [member(0, "t", 0, 28, 1), member(1, "u", 28, 8, 1), member(2, "v", 36, 4, 2)]
     assert a5.link_points({"k": 20, "law": "subset"}, 40, ms) == {"members": 3, "refused": [
-        {"member": "m0", "template": "t", "n": 28, "vus_per_block": 1, "fewest": 8, "most": 20}]}
+        {"member": "t/c0", "template": "t", "n": 28, "vus_per_block": 1, "fewest": 8, "most": 20}]}
     assert a5.link_points({"k": 20, "law": "subset"}, 40, [member(0, "t", 0, 28, 4)]) == {"members": 1, "refused": []}
     assert a5.link_points({"k": 2, "law": "subset"}, 40, ms) == {"members": 3, "refused": []}
     got = a5.link_points({"k": 41, "law": "subset"}, 40, ms)

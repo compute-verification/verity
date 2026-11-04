@@ -10,9 +10,10 @@ case (``case.json``), the verifier's partition (``partition.json``), a5's ``summ
 reading registered values, the verifier's ``registered.json``), each drawn member's ``session-m<k>/sessions/*/`` with
 each session's ``session.json`` and ``*.bin``, and the window's registered circuit record ``circuit.json`` where the run
 kept it. The case is a5.py's `case_v2` of those, in a5's form (`a5.v2_proof`): a window of one member, v1's params with
-the partition and ``proofs: {circuit, registered}``; of several, the per-member form, every member's units, its
-template's pin, units a proof block (the summary's, else its circuit file's META) and registered file, and a statement
-a drawn member, which v2 refuses until its guarantee is in the lock
+the partition and ``proofs: {circuit, registered}``; of several, the per-member form, every member (named by the
+summary's ``key``, ``m<k>`` in a summary that states none) with its units, its template's pin, units a proof block (the
+summary's, else its circuit file's META) and registered file, and a statement a drawn member, which v2 refuses until its
+guarantee is in the lock
 (`OneStageZk.MULTI_REFUSED`). A member reading registered values names ``circuit.json`` as its ``interface`` when its
 SHA-512 is the summary's ``circuit``, as a5 does. Then v1's commitment, the evidence with the sessions' proofs and the
 blobs' paths. A window without ``summary.json`` is ``m0`` alone, its pin its ``compose.log``'s.
@@ -121,15 +122,16 @@ def case(window: Path, scratch: Path) -> tuple[dict, str, int]:
     own, statements, n, interfaces = [], [], 0, []
     for m in members:
         k, t, d = m["k"], m["template"], window / f"m{m['k']}"
+        key = m.get("key") or f"m{k}"
         reads = json.loads((d / "registered.json").read_text()) if (d / "registered.json").is_file() else None
         named = reads is not None and iface is not None
         interfaces += [iface] if named else []
-        own.append((k, m["base"], m["n"], None if one else per_block(t), {"circuit": pin(t), "registered": reads}
+        own.append((key, m["base"], m["n"], None if one else per_block(t), {"circuit": pin(t), "registered": reads}
                     | ({"interface": PF.file_sha512(iface)} if named else {})))
         sessions = tuple(sorted(f.parent for f in (window / f"session-m{k}/sessions").glob("*/session.json")))
         if sessions or one:
             pub = next(iter(sorted(d.glob("pub-*.bin"))))
-            statements.append((None if one else f"m{k}", PF.Proof(circuit(t), pub, sessions)))
+            statements.append((None if one else key, PF.Proof(circuit(t), pub, sessions)))
             n += len(sessions)
     tables = [f for c, _ in circuits.values() if (c.parent / "tables").is_dir()
               for f in sorted((c.parent / "tables").glob("*")) if f.is_file()]
