@@ -210,7 +210,8 @@ picks the partial rows among themselves, but none is in a cell, on the others' f
 void: every row reads the products term, max(1, ρ_HE), with its premises, and the old figure's void Λ is only its
 sensitivity fresh_old. A run that reached with no trace yet (`frontier_fit.untraced`) is a row at each target it
 reaches, never an absence: p from its record, its checkpoints in H, every ρ column null and both bases
-`unmeasured: not yet traced`; it is in no cell, every cut keeps it, and the figure draws it as an x on its floor.
+`unmeasured: not yet traced`; it is in no cell, the stored table keeps every one and each cut the least-p one per
+data, start and target, and the figure draws it as an x on its floor.
 `--publish` GETs what the route serves
 and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one with a run this
 build has no row for, both panels keep the served rows (`kept_data`, `guarded`), so a version switch never

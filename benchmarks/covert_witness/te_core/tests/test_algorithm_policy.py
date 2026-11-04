@@ -538,15 +538,18 @@ def test_a_reached_run_with_no_trace_yet_is_a_row_with_its_records_p_and_no_rho_
                                                                                                monkeypatch):
     """A run with no trace yet (te_core.frontier_fit's `untraced`; coordinator 10:56Z) has a row at each target it
     reaches, at its first checkpoint reaching it, with C and p from its record and every ρ column null under basis
-    `unmeasured: not yet traced`; its checkpoints count in H, no decade holds it, every cut keeps it, and the figure
-    draws it on its floor and never reads "none reached" where it reached. leap reaches gain 1.1 at a tenth of C0,
-    half lora's, and gain 11, which no traced run reaches; a row whose start has no shape is none of them."""
+    `unmeasured: not yet traced`; its checkpoints count in H, no decade holds it, every cut keeps the least-p one per
+    start and target, and the figure draws it on its floor and never reads "none reached" where it reached. leap
+    reaches gain 1.1 at a tenth of C0, half lora's, and gain 11, which no traced run reaches; late, of leap's start and
+    family, reaches gain 1.1 at five times leap's C, so the table and the figure hold it and no cut does; a row whose
+    start has no shape is none of them."""
     leap = [("s1", "leap", "ref-optim/adamw", "full", 9e8, 3e9, None, 0.0, [(1, 0.1, 1.19), (2, 2.0, 1.04)])]
+    late = [("s1", "late", "ref-optim/adamw", "full", 9e8, 3e9, None, 0.0, [(1, 0.5, 1.19)])]
     shapes = {"s1": SHAPE, "s2": SHAPE2}
     lost = ledger_rows(leap)[0] | {"id": "lost-1", "run_id": "lost", "start": "zz"}
-    waiting = FF.untraced(ledger_rows(leap) + [lost], shapes)
-    assert [r["id"] for r in waiting] == ["leap-1", "leap-2"]
-    assert [r["gates"] for r in waiting] == pytest.approx([0.1 * C0, 2.0 * C0])
+    waiting = FF.untraced(ledger_rows(leap + late) + [lost], shapes)
+    assert [r["id"] for r in waiting] == ["leap-1", "leap-2", "late-1"]
+    assert [r["gates"] for r in waiting] == pytest.approx([0.1 * C0, 2.0 * C0, 0.5 * C0])
     p = AP.build(info(), "test", untraced=waiting)
     ds = plots.frame(p)
     mine = {(d["record"], d["gain_target"]): d for d in ds if d["record"].startswith("leap@")}
@@ -560,13 +563,15 @@ def test_a_reached_run_with_no_trace_yet_is_a_row_with_its_records_p_and_no_rho_
     assert mine[("leap@1", 1.1)]["p"] == 1 and by[("lora@1", 1.1)]["H_gates"] == pytest.approx(0.1 * C0)
     assert by[("lora@1", 1.1)]["p"] == pytest.approx(2) and mine[("leap@2", 2)]["p"] == pytest.approx(2.0 / 1.5)
     assert mine[("leap@2", 11)]["p"] == 1 and by[("ref@3", 11)]["p"] == pytest.approx(1.5 / 2.0)
+    assert [k for k in by if k[0].startswith("late@")] == [("late@1", 1.1)]
+    assert by[("late@1", 1.1)]["p"] == pytest.approx(5) and by[("late@1", 1.1)]["basis_own"] == AP.UNTRACED
     cov = AP.coverage(p)
-    assert AP.unmeasured_rows(p, AP.UNTRACED) == 3 and sum(c["rows"] for c in cov) == len(ds) - 3
-    assert not any((c.get("record") or "").startswith("leap@") for c in cov)
+    assert AP.unmeasured_rows(p, AP.UNTRACED) == 4 and sum(c["rows"] for c in cov) == len(ds) - 4
+    assert not any((c.get("record") or "").startswith(("leap@", "late@")) for c in cov)
     rec, g = AP.COLUMNS.index("record"), AP.COLUMNS.index("gain_target")
     for tier in AP.TIERS:
-        assert set(mine) <= {(r[rec], r[g]) for r in AP.kept(p["rows"], tier, {c["row"] for c in cov
-                                                                                if c["row"] is not None})}
+        cut = {(r[rec], r[g]) for r in AP.kept(p["rows"], tier, {c["row"] for c in cov if c["row"] is not None})}
+        assert set(mine) <= cut and ("late@1", 1.1) not in cut
     assert {f"leap@{s}" for s in (1, 2)} <= {r[AP.CONSOLE_COLUMNS.index("record")] for r in AP.cut(p)["rows"]}
     fits = {"v3": None, "v2.3-pilot": LAW}
     assert (f"3 reached rows with p from the record and rho null, basis_default {AP.UNTRACED}, in no decade."
@@ -586,9 +591,9 @@ def test_a_reached_run_with_no_trace_yet_is_a_row_with_its_records_p_and_no_rho_
     monkeypatch.setattr(AP.plt.Axes, "plot", plot)
     monkeypatch.setattr(AP.plt.Axes, "set_title", set_title)
     AP.figure(p, tmp_path)
-    assert all((d["p"], AP.FLOOR, "x") in calls for d in mine.values())
+    assert all((d["p"], AP.FLOOR, "x") in calls for d in [*mine.values(), by[("late@1", 1.1)]])
     assert len(titles) == len(AP.GAINS) and not any("none of" in t for t in titles)
-    assert titles[0].startswith("gain 1.1: ") and "(1 not yet traced)" in titles[0]
+    assert titles[0].startswith("gain 1.1: ") and "(2 not yet traced)" in titles[0]
     assert titles[2].startswith("gain 11: 1 reached (1 not yet traced)") and "no reached run is traced yet" in titles[2]
 
 
