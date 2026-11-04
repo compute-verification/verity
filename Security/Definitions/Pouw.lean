@@ -28,6 +28,7 @@ import Definitions.Pouw.Fp8Atom.Vectors.Add
 import Definitions.Pouw.Fp8Atom.Vectors.C00
 import Definitions.Pouw.Fp8Atom.Vectors.C01
 import Definitions.Pouw.FpG1
+import Definitions.Pouw.Game.ClopperPearson
 import Definitions.Pouw.Game.Deadline
 import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.Game.Params
@@ -97,6 +98,7 @@ import Definitions.Pouw.PearlC.TileCheck
 import Definitions.Pouw.PearlC.TileCheck8
 import Definitions.Pouw.PearlC.TileCheck4
 import Definitions.Pouw.PearlC.TileCircuit
+import Definitions.Pouw.PearlC.Unscale
 import Definitions.Pouw.PearlC.W1
 import Definitions.Pouw.PearlC.W1Stop
 import Definitions.Pouw.PearlC.WholeCircuit

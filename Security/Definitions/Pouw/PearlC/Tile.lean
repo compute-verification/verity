@@ -132,6 +132,30 @@ def GγSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMod
           T < (1 - γ) * (claimedWref TR U (A.transcript U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + η q U.layout.N
 
+open Classical in
+/-- The tiles of the units `τ` commits whose replayed debit exceeds the cap: the tolerant audit accepts a sampled one and
+credits it nothing. -/
+noncomputable def overCapTiles (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) : Finset ℕ :=
+  (range (TR.tiling U.layout).NT).filter fun g =>
+    ∃ c, τ ((TR.tiling U.layout).unit g) = some c ∧ ¬ TR.capOK H s U g c.act
+
+/-- **The γ-gap property under the tolerant sampled audit.** As `GγSampled`, for every miss-bound table `u` at `δ`
+(`MissBound`): the audit accepts (every sampled tile is good, of a blank unit, or over its cap) while `T` is below
+`1 − γ` of the claimed work less `u(X_O)` of the layout's, where `X_O` is the number of samples on tiles over their
+cap, with probability at most `δ + η(q, N)`. `GγSampled` is its case `u 0 = ε_s`, `u x = 1` otherwise. -/
+def GγSampledTol [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
+    (TR : TileRules Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
+  ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
+    ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
+    ∀ (t : ℕ) (u : ℕ → ℝ) (δ : ℝ), MissBound t u δ →
+      pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
+          AuditAcceptsTol (goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
+              blankTiles TR U (A.transcript U x.1 x.2.1))
+            (overCapTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          T < (1 - γ) * (claimedWref TR U (A.transcript U x.1 x.2.1) -
+            u (drawsIn (overCapTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2) * tileWrefTotal TR U.layout))
+        ≤ δ + η q U.layout.N
+
 /-! ## Pearl-C's tiles -/
 
 open Classical in

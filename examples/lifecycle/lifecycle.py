@@ -891,8 +891,11 @@ def frame_commitment(data: bytes, salt: bytes) -> str:
 IDS = {**parties.IDS, "pouw-period": period_check.ID, "wipe": wipe_period.PROTOCOL,
        **{n: parties.SUBPROTOCOLS["verity/onsite/v0"][n] for n in ("bandwidth", "sampled-proofs")}}
 """Each subprotocol's id as the composites run it (`products`): integrity is sampled proofs (`VStar.Recursive.Sampled`,
-`verity/sampled-proofs/v1`, one-stage v2's audit or the recursive audit) in both, so is the work, PoUW's period,
-onsite's PoUB is the one over PoUS's P2 store, and onsite's memory challenger also runs a wipe."""
+`verity/sampled-proofs/v1`, one-stage v2's audit or the recursive audit) in both, the work PoUW's period, onsite's
+PoUB is the one over PoUS's P2 store, and onsite's memory challenger also runs a wipe."""
+SAMPLED = {"onsite": parties.SUBPROTOCOLS["verity/onsite/v0"]["sampled-proofs"], "remote": parties.COMPOSED}
+"""Each composite's integrity subprotocol, under whose id sampled proofs' answer goes: sampled proofs
+(`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`, one-stage v2's audit or the recursive audit) in both."""
 
 
 def label(seed: str, i: int) -> str:

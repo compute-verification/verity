@@ -8,9 +8,10 @@ probability δ, at most so many proof blocks are incorrect, a proof block being 
 applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
-Sampled proofs (`verity/sampled-proofs/v1`) is a subprotocol of both composite protocols: remote (`verity/remote/v0`,
-`verity/core/protocols/remote/`) composes it with PoUW's period (`verity/pouw/period/v1`) and the inference-only
-policy, and onsite (`verity/core/protocols/onsite/`) with the other subprotocols. Each composite's verifier runs
+Sampled proofs (`verity/sampled-proofs/v1`) is a subprotocol of both composite protocols: remote (`verity/remote/v1`,
+`verity/core/protocols/remote/`) composes it with Pearl+'s run (`verity/pouw/pearl-plus/v1`; H1's development
+executable `verity/remote/v0`, with PoUW's period `verity/pouw/period/v1`) and the inference-only policy, and onsite
+(`verity/core/protocols/onsite/`) with the other subprotocols. Each composite's verifier runs
 `VStar.Recursive.Sampled`'s Lean check in the form its params name: one-stage v2 (`verity/sampled-proofs/one-stage/v2`,
 the audit on the proofs) or the recursive audit (`verity/sampled-proofs/recursive/v1`). One-stage v1, whose verdicts
 are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form naming no `proofs`). The composite accepts only
