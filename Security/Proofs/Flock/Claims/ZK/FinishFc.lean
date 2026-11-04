@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishSrc
-import Proofs.Flock.Claims.ZK.CutPrefix
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSrc
+public import Proofs.Flock.Claims.ZK.CutPrefix
 
 /-!
 # The rep from a source that misses the firewall at `final_c`
@@ -16,6 +18,8 @@ the source's `masked lay.fc` (`repCut_fw_inner`).
 * `innerCut_first`: the inner proof stopped at its first round sends `InZ.t₁`'s frame.
 * `repCut_fw_inner`: the rep from the source stopped at the inner proof's first round.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

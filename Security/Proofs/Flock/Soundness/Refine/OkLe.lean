@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Rep
+module
+
+public import Proofs.Flock.Soundness.Refine.Rep
 
 /-!
 # Two runs of one executable, where one returns what the other returns
@@ -10,6 +12,8 @@ on one scrutinee, a `for` loop over one collection, a `let`) is taken on both, a
 to it uses. It leaves the goals where the two sides differ otherwise. It runs only inside the elaborator, and the kernel
 checks every proof it builds.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 
