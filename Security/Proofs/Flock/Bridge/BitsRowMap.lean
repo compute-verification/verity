@@ -1,5 +1,6 @@
 import Proofs.Flock.Bridge.BitsKeys
 import Proofs.Flock.Bridge.BitsRows
+import Proofs.Flock.Bridge.LeafMap
 import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
 import Proofs.Flock.Soundness.Discharge.Hidden.Rows
 import Proofs.Flock.Soundness.Discharge.Hidden.Delta
@@ -12,6 +13,7 @@ unit `u`'s instance `k` commits bit `t` of its returned output leaf `j`. The bri
 an input gate and `HiddenExec.outBitRow` at a returned output's bit; `rowPosOf` reads one as Bits' position: the port's
 name, the unit's leaf and the bit.
 
+* `rowPosOf_leaf`: at a public file without shared rows, that leaf is the bridge's leaf map's (`LeafMap.ofPublic`).
 * `keyIdx_self`, `keyIdx_lt`: a key is its own key, below the inputs, so the gate a unit's input column reads is a
   source gate `rowBit` places.
 * `wire_inGate`: a column of a unit's own instance on a source gate is an input column of the unit, and the gate's
@@ -37,6 +39,15 @@ variable (c) in
 /-- **A bridge row bit as Bits' commitment position**: bit `k` of unit `u`'s leaf of row port `q`. -/
 def rowPosOf (r : Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)) : SampledProofs.Bits.RowPos :=
   ⟨c.ports[r.2.1].name, r.1.val, r.2.2.val⟩
+
+/-- **Bits' leaf is the bridge's leaf map's** at a public file without shared rows (`LeafMap.ident`): unit `u` reads its
+own leaf `u` of every port. A shared-rows file's leaf map reads row `refs[u·np + q]` (`LeafMap.ofTables`), which Bits
+doesn't place. -/
+theorem rowPosOf_leaf {pub : Flock.Public} (ht : pub.tables = none) (nl : ℕ)
+    (r : Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)) :
+    (rowPosOf c r).leaf = (LeafMap.ofPublic c pub nl).ref r.2.1.val r.1.val := by
+  rw [LeafMap.ofPublic_none nl ht]
+  rfl
 
 /-! ## Source gates -/
 
