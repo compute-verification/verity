@@ -3318,9 +3318,15 @@ def _tree(repo: Path, commit: str) -> str:
 
 #: the invariant tests the preflight runs on the merged tree, from the root, each a common way a train breaks: a module string
 #: naming a module only an unlanded PR adds, stale Lake pins, a doc path, a workspace member without its REAL_ROOTS entry, and
-#: `check`'s preflight-lints on test_repository.py (a skill over the Markdown cap, a report-genre name); about 5 s
+#: `check`'s preflight-lints on test_repository.py (a skill over the Markdown cap, a report-genre name); about 16 s on one core
+#: of the control pod, less `PREFLIGHT_DESELECT`
 PREFLIGHT_TEST_PATHS = ("tests/test_module_strings.py", "tests/test_pins.py", "tests/test_doc_paths.py",
                         "tests/test_repository.py", "tools/research/tests/test_pythonpath.py")
+#: tests of `PREFLIGHT_TEST_PATHS` the sync's preflight (`Preflight.onto`) leaves to the after-landing check: no merge makes
+#: what they find that neither side has, and they take long enough to run the rest out of its budget.  The secret-like literal
+#: scan takes about 14 s of the other tests' 16 s, so four preflights at once on the control pod's 4 vCPUs reached the 45 s
+#: budget before `tests/test_doc_paths.py` reported, and doc paths a merge broke entered `next`
+PREFLIGHT_DESELECT = ("tests/test_repository.py::test_no_secret_like_literals",)
 #: what the sync's preflight runs rather than judges: `PREFLIGHT_TEST_PATHS` and what they load from the tree (pytest's settings
 #: for the two directories they run in, the conftest of `tools/research/tests` (one added beside the root's tests belongs here
 #: too), `waits.py`, `pins.py` and the `suites.py` the module strings take the members' packages from, under
@@ -3341,6 +3347,8 @@ def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]
 
 #: `PREFLIGHT_TEST_PATHS` by the directory pytest runs in
 PREFLIGHT_TESTS = _by_suite(PREFLIGHT_TEST_PATHS)
+#: `PREFLIGHT_DESELECT` by the directory pytest runs in
+PREFLIGHT_DESELECTS = dict(_by_suite(PREFLIGHT_DESELECT))
 #: lints the preflight runs on the merged tree only when the change reaches what they judge (a path starting with, or holding
 #: a directory, of the prefix): they take about 20 s and 40 s, and a train that fails one of them loses its hour-long check
 PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("integrations/vllm/tests/lint", ("integrations/vllm/",)))
@@ -3354,7 +3362,8 @@ PREFLIGHT_PYTEST = ("uv", "run", "-q", "--no-project", "--with", "pytest", "pyth
 #: what the sync's preflight leaves to others, said under "checks skipped" for each PR
 ONTO_SKIPS = ("the merged tree's environment and Lean build (`uv sync --locked`, the touched suites' `pytest --collect-only`, "
               "the lints, the Lean modules it reaches): the mark's preflight ran them at the head, the Lean checks of `next` "
-              "build its Lean, and the after-landing run tests it all")
+              "build its Lean, and the after-landing run tests it all, " + ", ".join(f"`{n}`" for n in PREFLIGHT_DESELECT)
+              + " among it")
 #: what the merged tree's checks may take together; what hasn't finished by then is named and refuses nothing.  Every suite's
 #: collection but circuit-check's takes about 18 s on 4 workers of a 4-core VM; `PREFLIGHT_LINTS` add up to a minute
 PREFLIGHT_BUDGET_S = 120.0
@@ -4309,7 +4318,8 @@ class Preflight:
         """{check: {what failed: its line}} for the checks of (b) on the tree checked out in ``wt`` (``only`` those named), each
         that ran by ``deadline``; why each other didn't run goes to ``notes``.  ``fixtures`` gets each collected suite's fetched
         fixtures on the first pass (``only`` None), and a later pass fetches them again.  ``quick``: `pins.py --stale` and
-        `PREFLIGHT_TESTS` alone, the tests run by ``python`` or `PREFLIGHT_PYTEST` with the tree's `research` on PYTHONPATH."""
+        `PREFLIGHT_TESTS` less `PREFLIGHT_DESELECT` alone, the tests run by ``python`` or `PREFLIGHT_PYTEST` with the tree's
+        `research` on PYTHONPATH."""
         want = (lambda name: True) if only is None else (lambda name: name in only)
         out: dict[str, dict[str, str]] = {}
 
@@ -4330,7 +4340,9 @@ class Preflight:
             bare = lambda argv, cwd: self._run(argv, cwd, deadline, path)             # noqa: E731
             for d, files in PREFLIGHT_TESTS:
                 if want(f"tests:{d}") and (present := [f for f in files if (wt / d / f).is_file()]):
-                    got(f"tests:{d}", pytest_failures(bare, self.python or PREFLIGHT_PYTEST, wt / d, present))
+                    off = [a for n in PREFLIGHT_DESELECTS.get(d, ()) if n.partition("::")[0] in present
+                           for a in ("--deselect", n)]
+                    got(f"tests:{d}", pytest_failures(bare, self.python or PREFLIGHT_PYTEST, wt / d, [*present, *off]))
             return out
         if self.sync is not None:
             r, why = self._run(list(self.sync), wt, deadline)

@@ -2978,6 +2978,26 @@ def test_the_syncs_preflight_runs_no_environment_sync_and_no_lean_build_says_so_
     assert not any((world.tmp / "pre").iterdir()) and len(_git(q.workdir, "worktree", "list").splitlines()) == 1
 
 
+def test_the_syncs_preflight_leaves_the_secret_literal_scan_to_the_after_landing_check(world):
+    """The sync's preflight deselects `PREFLIGHT_DESELECT`, the secret-like literal scan: no merge fails it that neither side
+    does, and it took four preflights at once on the control pod past their 45 s before the doc paths reported.  A merge that
+    trips only the scan enters `next`, saying the scan was skipped; one that breaks another test of the same file is refused."""
+    repository = (_invariant("REPORT_GENRE_NAME", 1) + "\n\ndef test_no_secret_like_literals():\n"
+                  "    assert not (Path(__file__).resolve().parents[1] / 'SECRET_LIKE').exists()\n")
+    _preflight_main(world, {"tests/test_repository.py": repository})
+    world.gh.put(2, world.change({"SECRET_LIKE": "", "n2.txt": "x\n"}))
+    world.gh.put(3, world.change({"REPORT_GENRE_NAME": "", "n3.txt": "x\n"}))
+    q = world.queue()
+    q.preflight = _preflight(world, repo=q.workdir).onto
+    world.logs.clear()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 2], world.logs
+    said = next(s for s in world.logs if "preflight: #2 at" in s)
+    assert "`tests/test_repository.py::test_no_secret_like_literals` among it" in said, said
+    assert "the checks that ran passed" in said and "tests:. not checked" not in said, said
+    assert entries[3].state == "refused" and "the invariant tests in . fail on the merged tree" in entries[3].why, entries[3].why
+
+
 def test_ready_mark_from_an_agent_vm_builds_the_lean_it_reaches_on_a_node_refuses_what_none_can_and_skips_a_timeout(
         world, monkeypatch, capsys):
     """`ready --mark` from a VM without a warm Lean tree used to skip the Lean step, so a head whose merge onto `next` broke 5
