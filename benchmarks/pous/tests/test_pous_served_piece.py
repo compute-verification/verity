@@ -417,7 +417,7 @@ def test_a_serve_dir_without_serve_json_makes_no_answer(served, tmp_path, capsys
 
 @pytest.fixture(scope="module")
 def case_exe() -> Path:
-    """`remote-audit-p2-protocol`, built in the remote audit's package under the difftest's build lock."""
+    """`remote-audit-p2-protocol`, built in PoUB's package under the difftest's build lock."""
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
     p2_lean.BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)

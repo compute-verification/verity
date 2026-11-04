@@ -72,7 +72,7 @@ def stream() -> int:
 
 def new_stream() -> torch.cuda.Stream:
     """The stack's side streams (the deferred append's, the lm_head's graph capture). A stream is in the context it was
-    made in, and so is a graph captured on it: an SM partition (kv_filler's `serve.py --partition`) replaces this with
+    made in, and so is a graph captured on it: an SM partition (`bench_arm.py`'s `topup_sms`) replaces this with
     one that makes them on the step's green context."""
     return torch.cuda.Stream()
 

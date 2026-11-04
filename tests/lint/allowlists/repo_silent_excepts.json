@@ -26,8 +26,6 @@
     {"file": "benchmarks/hash/overlap/summary.py", "count": 1},
     {"file": "benchmarks/hash/structure/rank.py", "count": 1},
     {"file": "benchmarks/hash/structure/summary.py", "count": 1},
-    {"file": "benchmarks/kv_filler/fill.py", "count": 1},
-    {"file": "benchmarks/kv_filler/serve.py", "count": 1},
     {"file": "benchmarks/live_challenger/auditor.py", "count": 13},
     {"file": "benchmarks/live_challenger/models.py", "count": 1},
     {"file": "benchmarks/live_verifier/host.py", "count": 4},

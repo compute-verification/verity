@@ -47,7 +47,7 @@ def relay(r: Run, page_seed: bytes, plan: Plan) -> audit.Pass:
 
 def test_a_page_appended_after_a_pass_s_seed_relays_none_of_its_receipts() -> None:
     """The attack's order: pass 0 over the registered store, then a page holding pass 1's sketches of the registered
-    blocks under a pass-1 seed that binds no append, H(σ_0, 1, root_(0,0)), appended at N, then pass 1 over all N + 1
+    blocks under a pass-1 seed that binds no append, H(chal_0, 1, root_(0,0)), appended at N, then pass 1 over all N + 1
     blocks.  Under that seed the page relays all N registered receipts, which a session whose seeds didn't bind its
     appends would accept.  Pass 1's seed binds the page, so the relayed receipts are none of the pass's, a pass sent
     under the unbound seed fails its receipts' paths, and the honest pass over the page is accepted."""
@@ -80,10 +80,10 @@ def test_a_page_appended_after_a_pass_s_seed_relays_none_of_its_receipts() -> No
 
 def test_a_page_appended_before_the_root_it_chains_from_relays_nothing_either() -> None:
     """Why the rule is the seed's and not the order of arrival: the prover computes pass 0 and holds its root,
-    builds the page from H(σ_0, 1, root_(0,0)), appends it, and only then sends root_(0,0), so the page arrives before
-    the root pass 1 chains from.  Every seed whose root comes after the append binds it, pass 0's too: the prover's
-    pass 0, computed before the page existed, fails, and one that bound the page would need the page before its own
-    root."""
+    builds the page from H(chal_0, 1, root_(0,0)), appends it, and only then sends root_(0,0), so the page arrives
+    before the root pass 1 chains from.  Every seed whose root comes after the append binds it, pass 0's too: the
+    prover's pass 0, computed before the page existed, fails, and one that bound the page would need the page before its
+    own root."""
     r = Run(store(), windows=1)
     pass0 = r.prover.run(r.challenges[0], 0, r.previous)
     unbound = receipts.seed(coins.coin(r.challenges[0]), 1, pass0.root)
