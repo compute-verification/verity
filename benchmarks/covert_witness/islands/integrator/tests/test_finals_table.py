@@ -32,6 +32,8 @@ POINTS = [("r-honest", "ref-optim", ["own", "101"], None, "f-a", {4: 1.18, 9: 1.
 #: the scorer's search rows: (record, gain target, reached, rho_own, rho_default)
 SEARCH = [("r-honest@40", 1.1, "yes", 1.5, 2.0), ("r-honest@90", 2, "yes", 1.5, 2.0), ("r-honest@90", 11, "no", 1.5, 2.0),
           ("r-covert@10", 1.1, "yes", 3.0, 4.0), ("r-covert@90", 2, "no", 3.0, 4.0), ("r-covert@90", 11, "no", 3.0, 4.0)]
+#: an honest point cheaper in search than r-honest at 1.1x, whose finals seed never launched
+CHEAP = ("r-cheap@5", 1.1, "yes", 1.0, 1.0)
 
 
 def record(bpb: dict[int, float], commit: str) -> dict:
@@ -47,14 +49,18 @@ def record(bpb: dict[int, float], commit: str) -> dict:
             "checkpoints": [{"step": s, "val_bpb": b, "e_bytes": 30, "source": "submit"} for s, b in bpb.items()]}
 
 
-def fixture(tmp_path: Path, rho_own: bool = True) -> list[str]:
+def fixture(tmp_path: Path, rho_own: bool = True, cheap: bool = False) -> list[str]:
     """FINALS.json, the finals job's launch file, the two reruns' records, the scorer's tables and a starts manifest;
-    and `build`'s arguments over them. The covert point's first launch was superseded by its step check."""
+    and `build`'s arguments over them. The covert point's first launch was superseded by its step check. With
+    `cheap`, the `CHEAP` point too."""
     pin = frontier.pinned()[0]
     finals = {"points": [{"point": f"{run} point", "run": run, "start": "s1", "island": island,
                           "mechanism": f"{island}/m",
                           "reruns": [s if isinstance(s, dict) else {"seed": s} for s in seeds]}
                          | ({"label": label} if label else {}) for run, island, seeds, label, *_ in POINTS]}
+    if cheap:
+        finals["points"].append({"point": "r-cheap point", "run": "r-cheap", "start": "s1", "island": "ref-data",
+                                 "mechanism": "ref-data/m", "reruns": [{"seed": "own"}]})
     (tmp_path / "FINALS.json").write_text(json.dumps(finals))
     launches = [{"key": "r-honest seed own", "node": "n1", "run": "f-a", "rc": 0},
                 {"key": "r-covert seed own", "node": "n1", "run": "f-b-old", "rc": 0},
@@ -69,10 +75,10 @@ def fixture(tmp_path: Path, rho_own: bool = True) -> list[str]:
                                                    "theta_digest": "d"}))
         (out / "witness.json").write_text(json.dumps({"curve": [{"step": s, "train_flops": 1e9 * (s + 1), "bpb": b}
                                                                 for s, b in bpb.items()]}))
-    cols = ["record", "gain_target", "reached", "start_loss", "rho_default", "basis_default", "te_core"]
+    cols = ["record", "gain_target", "reached", "C_gates", "start_loss", "rho_default", "basis_default", "te_core"]
     cols += ["rho_own", "basis_own"] if rho_own else []
-    rows = [[rec, g, hit, POOL_L0, default, "A", "4.13.1"] + ([own, "A"] if rho_own else [])
-            for rec, g, hit, own, default in SEARCH]
+    rows = [[rec, g, hit, 1e8 * int(rec.rpartition("@")[2]), POOL_L0, default, "A", "4.13.1"]
+            + ([own, "A"] if rho_own else []) for rec, g, hit, own, default in SEARCH + ([CHEAP] if cheap else [])]
     pol = tmp_path / "tables"
     pol.mkdir()
     (pol / "algorithm-policy.json").write_text(json.dumps({"columns": cols, "rows": rows, "source": "test",
@@ -86,8 +92,8 @@ def fixture(tmp_path: Path, rho_own: bool = True) -> list[str]:
             str(tmp_path / "starts.json"), "--policy-art", "art:test", "--out", str(tmp_path / "out")]
 
 
-def table(tmp_path: Path, rho_own: bool = True) -> tuple[dict, str]:
-    assert FT.main(fixture(tmp_path, rho_own)) == 0
+def table(tmp_path: Path, rho_own: bool = True, cheap: bool = False) -> tuple[dict, str]:
+    assert FT.main(fixture(tmp_path, rho_own, cheap)) == 0
     return (json.loads((tmp_path / "out" / "finals-table.json").read_text()),
             (tmp_path / "out" / "finals-table.md").read_text())
 
@@ -119,6 +125,19 @@ def test_two_reruns_give_p_against_the_honest_h_with_the_search_runs_rho(tmp_pat
     assert pts["r-covert"]["seeds"]["own"]["rerun"] == "f-b"  # the superseded launch is not the rerun
     assert t["inputs"]["policy"].startswith("art:test") and t["te_core"] == FT.VERSION
     assert "## s1 at 1.1x" in md and FT.RHO_LABEL in md and "honest H: r-honest point" in md
+    assert all(tb["H_caveat"] is None for tb in t["tables"]) and "CAVEAT" not in md
+
+
+def test_a_cheaper_honest_search_point_without_a_finished_seed_is_a_caveat_on_h(tmp_path):
+    """At 1.1x the search's honest H is r-cheap, whose finals seed never launched: H stays the honest point with a
+    reached seed, and the table says p reads against a dearer H until r-cheap's seeds are in."""
+    t, md = table(tmp_path, cheap=True)
+    by = {tb["gain"]: tb for tb in t["tables"]}
+    assert by[1.1]["H"]["run"] == "r-honest"
+    assert by[1.1]["H_caveat"].startswith("the search's honest H at 1.1x, r-cheap point (r-cheap@5, C 5e+08 gates)")
+    assert "(0 of 1 finished)" in by[1.1]["H_caveat"] and "dearer H" in by[1.1]["H_caveat"]
+    assert by[2]["H_caveat"] is None  # r-honest is the search's H there, and it reached
+    assert "- CAVEAT: the search's honest H at 1.1x" in md
 
 
 def test_every_point_the_table_leaves_out_or_seed_it_lacks_says_why(tmp_path):

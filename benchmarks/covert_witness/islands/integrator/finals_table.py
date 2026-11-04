@@ -26,7 +26,9 @@ unavailable. `build` reads te_core and changes nothing in it:
 - H at (start, gain) is the honest point (`honest`: its island a reference direction, te_core.frontier's
   `REF_DIRECTIONS`) with the least mean C, with its own spread, and p = C/H; `H_any`, the
   least mean C over every point, covert routes included (te_core.frontier's `target`, the 19:50Z ruling, and
-  te_core.algorithm_policy's H), and `p_any` beside it;
+  te_core.algorithm_policy's H), and `p_any` beside it; where the search's honest H (the least C_gates among the
+  honest points' reached rows in the scorer's table) has no finished seed reaching it, `H_caveat` says so, since p
+  then reads against a dearer H;
 - ρ is the search run's at its first checkpoint reaching g in the scorer's stored table (`--policy`'s
   algorithm-policy.json): ρ is a property of the computation, not of the data (`RHO_LABEL`); where the search run
   didn't reach g it is its last checkpoint's, labelled so, and S = p·ρ on the headline rho_own (rho_default, so
@@ -292,7 +294,16 @@ def build(finals: dict, runs: dict[str, dict[str, str]], records: Path, fits: di
                 row["S"] = row["p"] * rho if row["p"] is not None and rho is not None else None
                 rows.append(row)
             rows.sort(key=lambda r: (not r["honest"], r["p"] if r["p"] is not None else math.inf, r["point"]))
-            tables.append({"start": start, "gain": g, "data": mine[0]["data"],
+            searched_h = min(((row["C_gates"], p, row) for p in mine if p["honest"]
+                              and (row := prows.get((p["run"], float(g)))) and row.get("reached") == "yes"
+                              and row.get("C_gates")), key=lambda x: x[0], default=None)
+            caveat = None
+            if searched_h and all(p is not searched_h[1] for p in got):
+                cs, sp, srow = searched_h
+                caveat = (f"the search's honest H at {g:g}x, {sp['point']} ({srow['record']}, C {cs:.3g} gates), has no "
+                          f"finished seed reaching it on the final set ({sp['at'][k]['finished']} of "
+                          f"{sp['at'][k]['planned']} finished): until it has, p here reads against a dearer H")
+            tables.append({"start": start, "gain": g, "data": mine[0]["data"], "H_caveat": caveat,
                            "H": h and {"point": h["point"], "run": h["run"], "island": h["island"],
                                        "C": h["at"][k]["C"]},
                            "H_any": h_any and {"point": h_any["point"], "run": h_any["run"],
@@ -320,6 +331,8 @@ def markdown(t: dict) -> str:
                              ("H over every route (the scorer's rule)", tb["H_any"], tb["H_any_why"])):
             lines.append(f"- {name}: " + (f"{h['point']} ({h['island']}, {h['run']}), C {g3(h['C']['mean'])} gates, "
                                           f"sd {g3(h['C']['sd'])} over {h['C']['n']} seeds" if h else why))
+        if tb.get("H_caveat"):
+            lines.append(f"- CAVEAT: {tb['H_caveat']}")
         lines += ["", "| point | island | seeds reached | C gates, mean (sd) | counted FLOPs, mean | p [range] | p_any | "
                   "rho (which, basis) | S = p rho | label |", "|---|---|---|---|---|---|---|---|---|---|"] if tb["rows"] else [
             "", "No point shown."]
