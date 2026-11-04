@@ -51,8 +51,8 @@ execution phase's scan (``advice``: the bits each phase adds). Beside the bound,
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
 ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
 audits' unregistered inputs, read off the period's parameters, with no advice length and no cap in them); ``cap`` is
-each audit's ℓ_a, its registered advice length in the case's commitment, stated as a cap and in no term of K (`CAP`);
-and
+each audit's ℓ_a, the cap of the advice the run registered (its published advice registration's, `REGISTRATION`), stated
+as a cap and in no term of K (`CAP`), and the figure of record's ``missing`` where the run published none; and
 ``measured`` is honest serving's |a_j| a Commit period, of which an execution phase holds several, and their sum over
 each execution phase (``bits_per_phase``, missing where the test run's advice places no Commit period on the engine
 clock; ``phases`` says where those phases start, `TEST_PHASES`), measured on a test run with public inputs
@@ -109,6 +109,8 @@ VERDICTS = ("sampled proofs", "PoUW", "inference-only", "remote", "the network c
 ROWS = {"sampled proofs": "integrity", "PoUW": "work", "the network certifier": "communication"}
 #: where the certifier piece leaves its period's case (`certifier_piece.CASE`), whose params carry the schedule and caps
 CASE = Path("pieces") / "certifier" / "case.json"
+#: the run's advice registration as it publishes it (`served_verdicts.py public-registration`), its compiler's cap ℓ_a
+REGISTRATION = "registration.json"
 #: K's terms over the period, each a symbol of the notation table and the rows form's public fields it sums
 TERMS = {"k_{sched}": ("schedules",), "k_{fail}": ("cells",)}
 #: K's terms of each execution phase j, each summing its scan's public fields
@@ -227,10 +229,14 @@ OPEN = ("the figure of record: K as the period's check states it, the tight form
         "either is open it is K plus ℓ_a + 1 bits for each audit tied to each execution phase's scan, beside that "
         "phase's ℓ_{a,j}: an advice of at most ℓ_a bits (`CAP`) is one of fewer than 2^(ℓ_a + 1) strings. The tight K's "
         "cells go beside the figure of record's, conditional on what is open (periods_tight)")
-CAP = ("ℓ_a, each audit's registered advice length in the case's commitment (its registration's window.advice.bits; 0 "
-       "for no advice): the compiler's cap, the length each Commit period's advice is padded to before it is committed. "
-       "A cap, in no term of PeriodLeakAccepted's K: it enters the figure of record only while a check of `CHECKS` or "
-       "a premise is open, as ℓ_a + 1 bits for each tied audit (`OPEN`)")
+CAP = ("ℓ_a, the cap of the advice the run registered: its published advice registration's compiler cap_bits "
+       "(`REGISTRATION`, its advice's length padded to it), the length each Commit period's advice is padded to before "
+       "it is committed, the same for each tied audit, whose own registration in the case's commitment binds no advice "
+       "or compiler (`records_audit.py period` refuses one that does). A cap, in no term of PeriodLeakAccepted's K: it "
+       "enters the figure of record only while a check of `CHECKS` or a premise is open, as ℓ_a + 1 bits for each tied "
+       "audit (`OPEN`)")
+NO_REGISTRATION = (f"the run published no advice registration ({REGISTRATION}), whose compiler's cap is the ℓ_a the "
+                   "figure of record charges each tied audit while a check or a premise is open")
 TIED_ALL = ("every audit of the case's commitment: the public names no scan's tied audits (scans[j].tied), so each is "
             "charged to every execution phase, exact with one audit")
 #: each scaled cell's rule, by the name it gives; `rules` adds each one's sources
@@ -495,15 +501,24 @@ def charged(b: Mapping[str, Any]) -> dict[str, Any]:
             "lean": "scans[j].free"}
 
 
-def advice_bits(reg: Mapping[str, Any]) -> int:
-    """ℓ_a of a compute audit's registration: its window's registered advice length, 0 where it names no advice."""
-    adv = (reg.get("window") or {}).get("advice")
-    return int(adv["bits"]) if isinstance(adv, Mapping) else 0
+def advice_cap(reg: Mapping[str, Any]) -> int:
+    """ℓ_a (`CAP`) of the run's published advice registration: its compiler's cap_bits. ValueError where its advice's
+    length isn't padded to it."""
+    cap, bits = int(reg["compiler"]["cap_bits"]), int(reg["binding"]["advice"]["bits"])
+    if bits != cap:
+        raise ValueError(f"its advice's length {bits} isn't padded to its compiler's cap {cap}")
+    return cap
 
 
-def caps(case: Mapping[str, Any]) -> list[int]:
-    """Each audit's ℓ_a (`CAP`), in the order of the case's commitment."""
-    return [advice_bits(r) for r in json.loads(bytes.fromhex(case["commitment"]))["audits"]]
+def caps(case: Mapping[str, Any], cap: int) -> list[int]:
+    """Each audit's ℓ_a (`CAP`), the run's ``cap``, in the order of the case's commitment. ValueError where an audit's
+    registration binds an advice or a compiler, whose bits no term of K charges."""
+    audits = json.loads(bytes.fromhex(case["commitment"]))["audits"]
+    if bound := [i for i, r in enumerate(audits)
+                 if any((r.get("window") or {}).get(k) is not None for k in ("advice", "compiler"))]:
+        raise ValueError(f"the registrations of audits {bound} bind an advice or a compiler, whose bits no term of K "
+                         "charges (records_audit.py period refuses them)")
+    return [cap] * len(audits)
 
 
 def premises(locks: Sequence[Path]) -> dict[str, Any]:
@@ -547,6 +562,23 @@ def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mappi
     return {"K": K + (sum(per) if open_ else 0), "held": held, "open": open_, "is": OPEN, "premises": prem,
             "advice": {"bits_per_phase": per,
                        "tied": "scans[j].tied" if all(t is not None for t in tied) else TIED_ALL}}
+
+
+def figure(out: Path, case: Mapping[str, Any], public: Mapping[str, Any], K: int,
+           prem: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The figure of record (`of_record`) and ``advice_charge``'s ``cap`` from OUT's advice registration
+    (`REGISTRATION`) and the case's commitment: both the one ``missing`` or ``error`` where either can't be read."""
+    try:
+        cap = advice_cap(json.loads((out / REGISTRATION).read_text()))
+    except FileNotFoundError:
+        return (why := {"missing": NO_REGISTRATION}), why
+    except (KeyError, TypeError, ValueError) as e:
+        return (why := {"error": f"{REGISTRATION}: {type(e).__name__}: {e}"}), why
+    try:
+        ell = caps(case, cap)
+        return of_record(public, ell, K, prem), {"ell_a": ell, "is": CAP}
+    except (IndexError, KeyError, TypeError, ValueError) as e:
+        return (why := {"error": f"{CASE} commitment: {type(e).__name__}: {e}"}), why
 
 
 def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
@@ -601,13 +633,7 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     except ValueError as e:
         b["connections"] = b["of_record"] = advice["cap"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
         return rec | {"periods": b["of_record"]}
-    prem = premises(LOCKS)
-    try:
-        ell = caps(case)
-        b["of_record"] = of_record(answer["public"], ell, b["K"], prem)
-        advice["cap"] = {"ell_a": ell, "is": CAP}
-    except (IndexError, KeyError, TypeError, ValueError) as e:
-        b["of_record"] = advice["cap"] = {"error": f"{CASE} commitment: {type(e).__name__}: {e}"}
+    b["of_record"], advice["cap"] = figure(out, case, answer["public"], b["K"], premises(LOCKS))
     try:
         phase_s, connections, capacity = schedule(case, b["phases"])
     except (KeyError, TypeError, ValueError) as e:
@@ -616,7 +642,8 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     b["connections"] = {"count": connections, "from": CONNECTIONS}
     b["period_s"] = str(b["phases"] * phase_s)
     if "K" not in b["of_record"]:
-        return rec | {"periods": {"missing": "no figure of record: " + b["of_record"]["error"]}}
+        why = b["of_record"].get("error") or b["of_record"]["missing"]
+        return rec | {"periods": {"missing": f"no figure of record: {why}"}}
     eps, m, K = eps_of(b), b["phases"], b["of_record"]["K"]
     rec["periods"] = periods(K, eps, m, phase_s, connections, capacity)
     if K != b["K"]:
