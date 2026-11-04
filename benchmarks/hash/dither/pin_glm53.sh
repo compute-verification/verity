@@ -6,10 +6,10 @@
 #         the base's exact FP8 dequant ($OUT/error-report.json) from a scratch copy of the manifests holding that entry;
 #   make  re-make the registered pin and check every file's sha256 against checkpoints-int8.json.
 #
-# Both outputs stay on the node (about 705 GB of base and 757 GB of pin), recorded with `research keep`. cwd = the source tree.
+# Both outputs stay on the node (about 705 GB of base and 757 GB of pin), recorded with `research keep` under pin_glm53.toml's
+# owner until its expiries; the pin entry's resolved_by is its `by`. cwd = the source tree.
 #
-#   research run --on vy-nebius-cpu-1 --pool research --as vllm-dither-requant --project verity --source . --cwd source \
-#     --timeout 8h -- bash benchmarks/hash/dither/pin_glm53.sh pin|make
+#   bash benchmarks/hash/dither/pin_glm53.sh pin|make      (on the CPU host whose HF cache serves it, up to 8 hours)
 set -euo pipefail
 MODE=${1:?usage: pin_glm53.sh pin|make}
 ROLE=GLM53_INT8 REPO=verity-int8/GLM-5.3-INT8-V3 RECIPE=verity-int8-channel127/v3 JOBS=${JOBS:-10}
@@ -21,6 +21,13 @@ stamp() { echo "[$(date -u +%H:%M:%SZ)] $*"; }
 stamp "uv sync"
 uv sync -q --all-packages --extra torch-cpu
 VV=(uv run --no-sync verity-vllm int8-checkpoint)
+pin_data() { uv run --no-sync python -c 'import functools, sys, tomllib
+print(functools.reduce(dict.__getitem__, sys.argv[2:], tomllib.load(open(sys.argv[1], "rb"))))' \
+  benchmarks/hash/dither/pin_glm53.toml "$@"; }
+OWNER=$(pin_data owner)
+BY=$(pin_data by)
+BASE_EXPIRES=$(pin_data expires base)
+PIN_EXPIRES=$(pin_data expires pin)
 
 stamp "base download"
 base_dir=$(uv run --no-project -q --with 'huggingface_hub[hf_xet]' python - <<'EOF'
@@ -31,16 +38,16 @@ print(snapshot_download(base["repo"], revision=base["revision"], allow_patterns=
                         cache_dir=os.environ["HF_HOME"] + "/hub", max_workers=16))
 EOF
 )
-research keep "$HF_HOME/hub/models--zai-org--GLM-5.3" --owner @vllm --expires 2026-11-06T00:00:00Z --priority low \
+research keep "$HF_HOME/hub/models--zai-org--GLM-5.3" --owner "$OWNER" --expires "$BASE_EXPIRES" --priority low \
   --regenerate "huggingface_hub snapshot_download zai-org/GLM-5.3 at checkpoints.json's GLM53 revision" \
-  --why "the FP8-block base of GLM53_INT8 (VLLM-74), read by int8-checkpoint make and report" || echo "warning: research keep failed: the path stays unrecorded (never deleted by gc)"
+  --why "the FP8-block base of GLM53_INT8, read by int8-checkpoint make and report" || echo "warning: research keep failed: the path stays unrecorded (never deleted by gc)"
 stamp "base at $base_dir"
 
 pin_dir="$HF_HOME/hub/models--${REPO/\//--}"
 mkdir -p "$pin_dir"
-research keep "$pin_dir" --owner @vllm --expires 2026-11-20T00:00:00Z --priority normal \
+research keep "$pin_dir" --owner "$OWNER" --expires "$PIN_EXPIRES" --priority normal \
   --regenerate "verity-vllm int8-checkpoint make --role $ROLE --hf-home $HF_HOME --jobs $JOBS" \
-  --why "GLM-5.3 int8 ($RECIPE, VLLM-74) for the Dither leg's serve" || echo "warning: research keep failed: the path stays unrecorded (never deleted by gc)"
+  --why "GLM-5.3 int8 ($RECIPE) for the Dither leg's serve" || echo "warning: research keep failed: the path stays unrecorded (never deleted by gc)"
 
 if [ "$MODE" = make ]; then
   stamp "make $ROLE"
@@ -51,7 +58,7 @@ fi
 
 stamp "pin $ROLE"
 "${VV[@]}" pin --base-role GLM53 --role "$ROLE" --repo "$REPO" --recipe "$RECIPE" --hf-home "$HF_HOME" \
-  --by vllm-dither-requant --at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --jobs "$JOBS" > "$OUT/entry.json"
+  --by "$BY" --at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --jobs "$JOBS" > "$OUT/entry.json"
 du -sb "$pin_dir"/snapshots/* | tee "$OUT/pin-size.txt"
 
 stamp "report"

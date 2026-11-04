@@ -1,5 +1,5 @@
-"""The cost of `int8_fused.scaled_mm_zy`'s record epilogue (`verity_int8::scaled_mm_zy`, CA's z/y records of 21 Oct 04:32Z)
-at kernel level, after vllm's tests of it and a gate in the same run (a failed gate times nothing, exit 4):
+"""The cost of `int8_fused.scaled_mm_zy`'s record epilogue (`verity_int8::scaled_mm_zy`, the per-unit z/y records)
+at kernel level, after the vLLM integration's tests of it and a gate in the same run (a failed gate times nothing, exit 4):
 
     tests   pytest on `tests/engine/test_int8_zy.py` and `test_int8_ops.py` (their GPU tests run here), junit in OUT
     gate    per shape, into 0xA5-poisoned y and records at the picked config: y bit for bit `scaled_mm`'s, the records the
@@ -16,8 +16,9 @@ at kernel level, after vllm's tests of it and a gate in the same run (a failed g
 Reported per shape: median microseconds a call per arm, zy over scaled_mm, the epilogue's added microseconds and the record
 bytes a call; and Llama-3.1-8B's decode step at M = 32 (32 layers of qkv, o, gate_up, down) per arm.
 
-    research run --on vy-nebius-2 --project verity --campaign exactlin --source . --cwd source \
-      --env GPU_LEASE_WHO=kernels-zyop --env KSCRIPT=zybench.py -- bash benchmarks/hash/exactlin/kbench.sh [--reps 15]
+On an RTX PRO 6000 under a GPU lease:
+
+    RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO KSCRIPT=zybench.py bash benchmarks/hash/exactlin/kbench.sh [--reps 15]
 """
 from __future__ import annotations
 

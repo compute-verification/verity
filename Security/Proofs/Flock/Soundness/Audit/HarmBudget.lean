@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Audit.Work
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
+module
+
+public import Proofs.Flock.Soundness.Audit.Work
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
 # The cumulative harm budget over adaptive rounds
@@ -33,6 +35,8 @@ number of wrong steps reaches `K` with probability at most `(1 − q)^K + Σ err
 `k*(p) = ln(1/(1−p)) / (−ln(1−q))` wrong steps with at most `1 − p + Σ err`. It is tight: one round
 that accepts exactly when its draw misses `B` meets `(1 − q)^{|B|}` (`harm_count_tight`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 
@@ -437,7 +441,7 @@ theorem oneShot_drawn (L : Law n) (B : Finset (Fin n)) : (oneShot L B).Drawn (fu
 
 theorem oneShot_prEv (L : Law n) (B : Finset (Fin n)) :
     (oneShot L B).prEv (fun _ => 1) (fun acc x => acc = true ∧ (B.card : ℝ) ≤ x) 0 = L.escape B := by
-  rw [oneShot, prEv_round, Law.escape, ← avg_ite_eq_prCoin]
+  rw [oneShot, prEv_round, Verity.Law.escape, ← avg_ite_eq_prCoin]
   refine congrArg avg (funext fun ω => ?_)
   by_cases hd : Disjoint (L.draw ω) B
   · have hE : decide (Disjoint (L.draw ω) B) = true ∧ (B.card : ℝ) ≤ 0 + ∑ u ∈ B, (1 : ℝ) :=

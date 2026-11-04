@@ -8,7 +8,7 @@ derives the window's units from its own copy of the Program under the `Q_templat
   down_proj's calls, at K the intermediate size, instantiate their own template in the same Program. The tile's
   architecture (`h1_tile`'s ``arch``, sm_120 unless given) is its `h1device` record, which binds its exact accumulator and
   bounds its K; sm_90's binds the same step, so its Program is sm_120's.
-* **The unit** reads its rows and its z/y record and proves the record (`h1zy`, RT4-INT-33): the H1 tile (`h1_tile`) on the
+* **The unit** reads its rows and its z/y record and proves the record (`h1zy`): the H1 tile (`h1_tile`) on the
   rows' codes gives z and the receipt, and the unit returns the receipt and ``ok``, 1 exactly when the record is z and its
   dequant y = RN_bf16(RN32(RN32(RN32(z) s_a) s_w)) at each cell's row scale s_a and column scale s_w, which ride on the
   rows (`h1zy.ROW`: an A row is its K codes then its f32 s_a, a B row its K weight codes then their f32 s_w). The record
@@ -18,8 +18,8 @@ derives the window's units from its own copy of the Program under the `Q_templat
   window registers in one read, A row i of K's units under ``a_k<K>[i]`` (a lone row, R or C = 1, under the parameter's
   name, `row_key`), each port with its own width and domain, and that row's circuit port is ``a_k<K>_<i>``
   (`window_ports`; B row j's ``b_k<K>_<j>``), every K's ports distinct.
-* **K's circuit file** is C-Flock's statement of K's template on the rows `statement_rows` gives (its A and B rows, the
-  record and the public row, each a ``row/v2`` row), which the auditor's lowering builds from this module and C-Flock's
+* **K's circuit file** is Flock's statement of K's template on the rows `statement_rows` gives (its A and B rows, the
+  record and the public row, each a ``row/v2`` row), which the auditor's lowering builds from this module and Flock's
   Python alone (numpy, no torch): flat, or templated (``flock-circuit/tmpl``) under a layout mode.
 * **Linears and calls.** ``linears`` are the window's weights ``(name, K, n)``, each once, and ``calls`` its calls
   ``(linear, block)`` in order: a step's call of a linear reads A block ``block`` of its K and the linear's B rows.
@@ -44,12 +44,14 @@ derives the window's units from its own copy of the Program under the `Q_templat
   verifier derives from the layout (`call_blocks`). Every K's unit is in one form, and `tile_unit` binds none of J10-R's.
 * **Units** are the tiles, call by call and row block major. Tile ``(c, ti, tj)`` is the unit on rows
   ``block M + [R ti, R ti + R)`` of ``a/<K>``, on rows ``[C tj, C tj + C)`` of its linear's in ``b/<K>`` and on row u of
-  ``zy``, at position u, its number. The Program's result is each call's tiles' outputs in turn (their widths depend on
-  K), and unit u's outputs are row u of the window's ``receipt`` and ``ok``. `unit_reads` gives, from the Program's own
-  references, the row of each parameter that each of a unit's template parameters reads.
-* **Ports.** ``salt`` is the units' coin (`In(kind="coin")`), ``position`` their positions (`In(kind="position")`), and each
-  unit's receipt a sink of the result (`Out(sink=True)`, `_ports`): the window is no seed, so the port rules follow the coin
-  into every tile, and a unit that returns no sink is refused.
+  ``zy``, at position u, its number. Each call's tiles are one batch of K's template (`_body`), its A rows one repeated
+  run a row block and its B rows the linear's run repeated, so the descriptor, its build and its digest grow with the
+  calls and their row blocks, never with the tiles. The Program's result is each call's tiles' outputs in turn (their
+  widths depend on K), and unit u's outputs are row u of the window's ``receipt`` and ``ok``. `unit_reads` gives, from
+  the Program's own references, the row of each parameter that each of a unit's template parameters reads.
+* **Ports.** ``salt`` is the units' coin (`In(kind="coin")`), ``position`` their positions (`In(kind="position")`), and the
+  whole result a sink (`Out(sink=True)`, `_ports`), as the Program's outputs: the window is no seed, so the port rules
+  follow the coin into every tile.
 * **Names.** Every parameter is named ``prefix`` and its role (`roles`), so a served path can name each after the
   registered value its tree commits.
 * **Tables.** A served round commits each of its calls' A rows and records before the round's coin (`TABLES`, `table`):
@@ -61,15 +63,15 @@ derives the window's units from its own copy of the Program under the `Q_templat
   after their readers' coins. Each call's receipts (`RECEIPTS`, ``receipt@<c>``, one a unit in its tile order), which
   hang on nothing past the salt, its rows and the roots, are committed whole under its round's root too, and a
   statement then reads its units' receipts there as its output row o0 (`RECEIPT_PORT`).
-* **A drawn leaf's statements** (`pouw.leaf_lanes`): a drawn unit is proved as its lanes and their
+* **A drawn leaf's statements** (`pouw.leaf_lanes`): a sampled proof block is proved as its lanes and their
   combine, derived from the window's own template at its K (`leaf_unit`: `h1zy.lane` and `h1zy.combine` over the tile
   of its zy unit), so the window binds nothing more. Each runs under a one-call Program of its wrapper
   (`PouwH1WindowLane`, `PouwH1WindowCombine`; `leaf_program`), one unit, the same all period. Its reads are its leaf-local
   rows past the leaf's `place` in each value (`leaf_reads`, `leaf_reads_file`): the tile's own rows, its call's z table
-  and receipts, and the leaf's partials, produced after the draw. A J10-R window's leaf (over `PouwH1Tile_v5`) is
+  and receipts, and the leaf's partials, produced after the sample. A J10-R window's leaf (over `PouwH1Tile_v5`) is
   `h1zy`'s v2 statements, at a chunked K each lane's `h1zy.lane_chunk`s (`leaf_unit`'s ``ch``), and the combine that
   folds their oks; its chunks read the A and B tables' chunk rows, and its carries and ok rows are produced after the
-  draw like the partials (`leaf_lanes`' J10-R leaf). v1's leaf is staged at whole rows only.
+  sample like the partials (`leaf_lanes`' J10-R leaf). v1's leaf is staged at whole rows only.
 """
 from __future__ import annotations
 
@@ -78,11 +80,11 @@ import functools
 import weakref
 from typing import Any, Callable, Iterable, Sequence
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.ports import In, Leaves, Out, Ports, forward, port_types
+from verity.ml.circuits.ports import In, Out, Ports, forward
 from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.refs import coll_concat, runs
+from verity.ml.circuits.refs import Affine, Coll, Strided, coll_concat, concat, runs
 from verity.ml.circuits.types import Array, Tuple
 
 from verity.core.protocols.pouw import core_check as CC
@@ -156,16 +158,20 @@ def _template_signature(S: Any) -> tuple:
     return tuple(zip(template_params(S.K, len(params) == len(TILE_PARAMS_J10R)), (t for _name, t in params))), ret
 
 
-def _template_ports(S: Any) -> Any:
+def _template_ports(S: Any) -> Ports:
+    """The unit's parameters' ports, and the whole return a sink: wherever the template is (the window's batches, a
+    statement's one-call Program) its result is the Program's outputs, and one fact for all of it keeps a call's batch
+    one run of port facts, not two a tile."""
     decl = S.UNIT.defn.ports
-    return decl(S.UNIT.S()) if callable(decl) else decl
+    decl = decl(S.UNIT.S()) if callable(decl) else decl
+    return Ports(params=decl.params if decl is not None else {}, ret=Out(sink=True))
 
 
 PouwH1WindowTile = CompositeDefinition(
     "PouwH1WindowTile", 1, ("UNIT", "K"), _template_signature, lambda B, S, *args: B.call(S.UNIT, *args), register=False,
     ports=_template_ports,
-    doc="A window's template at contraction K: one call of the tile unit UNIT, its parameters and ports, with its A and B "
-        "rows named a_kK and b_kK.")
+    doc="A window's template at contraction K: one call of the tile unit UNIT, its parameters and their ports, with its A "
+        "and B rows named a_kK and b_kK, and its whole return a sink.")
 
 
 def template(k: int, unit: Any) -> Any:
@@ -183,7 +189,7 @@ RECEIPT_PORT = "o0"
 
 
 def statement_rows(template: Any, ports: dict[str, str] | None = None) -> list[tuple[str, str, int, list[str]]]:
-    """The input rows of K's statement (``template`` `template`'s at K), each ``(port, schema, bits, params)`` as C-Flock's
+    """The input rows of K's statement (``template`` `template`'s at K), each ``(port, schema, bits, params)`` as Flock's
     unit stager takes them (``a_k<K>[0]`` row 0 of ``a_k<K>``, `row_key`), in order: each A row and B row its own row, then the record
     ``zy`` and the public row ``pub`` (`PUBLIC`, a J10-R template's `PUBLIC_J10R`), every one a ``row/v2`` row of its
     leaves' bits (an A or B row 8 K/n + 32, `h1zy.ROW` of a chunk, n `weights.chunks` (K); the record 48 R C,
@@ -250,43 +256,44 @@ def _signature(S: Any) -> tuple:
     return tuple((S.PREFIX + role, t) for role, t in params), ret
 
 
+def _repeat(rows: Any, lo: int, hi: int, times: int, t: Any) -> Any:
+    """Rows [lo, hi) of ``rows`` ``times`` times over, as a ``t``: one `Strided` part, whose size is no function of
+    ``times``."""
+    run = rows[lo:hi].refs
+    if times > 1 and isinstance(run, Affine):
+        run = Strided(run.space, run.idx, run.base, run.count, 0, 1, run.count * times)
+    elif times > 1:
+        run = concat([run] * times)
+    return Coll(t, run)
+
+
 def _body(B: Any, S: Any, *params: Any) -> Any:
     j10r = is_j10r(S)
     got = dict(zip(roles((k for k, _t in S.TILES), j10r), params))
     ks, tiles, b0, n_of = _k(S), dict(S.TILES), _b0(S), {name: n for name, _k, n in S.LINEARS}
-    (r, c), outs = _rc(S), []
-    for lin, blk in S.CALLS:
-        k = ks[lin]
-        a, b, n = got[f"a/{k}"], got[f"b/{k}"], W.chunks(k)
-        for ti in range(S.M // r):
-            a0 = blk * S.M + r * ti
-            for tj in range(n_of[lin] // c):
-                j0 = b0[lin] + c * tj
-                u = len(outs)
-                outs.append(B.call(tiles[k], a[n * a0:n * (a0 + r)], b[n * j0:n * (j0 + c)], got["zy"][u], got["salt"],
-                                   got["position"][u], got["roots"], *((got[name][u] for name in J10R) if j10r else ())))
+    (r, c), outs, u0 = _rc(S), [], 0
+    for (lin, blk), units in zip(S.CALLS, _tiles(S)):
+        k, cols = ks[lin], n_of[lin] // c
+        a, b, n, t = got[f"a/{k}"], got[f"b/{k}"], W.chunks(k), tiles[k]
+        (_, at), (_, bt) = t.signature()[0][:2]
+        rows_a = [_repeat(a, n * (blk * S.M + r * ti), n * (blk * S.M + r * ti + r), cols, Array(cols, at))
+                  for ti in range(S.M // r)]
+        a_t = Coll(Array(units, at), concat([x.refs for x in rows_a]))
+        b_t = _repeat(b, n * b0[lin], n * (b0[lin] + n_of[lin]), S.M // r, Array(units, bt))
+        mine = [got[name][u0:u0 + units] for name in ("zy", "position") + (J10R if j10r else ())]
+        outs.append(B.batch(t, a_t, b_t, mine[0], got["salt"], mine[1], got["roots"], *mine[2:],
+                            axes=(0, 0, 0, None, 0, None) + ((0, 0) if j10r else ())))
+        u0 += units
     return coll_concat(_signature(S)[1], outs)
 
 
 def _ports(S: Any) -> Ports:
-    """The salt is the units' coin and ``position`` their positions, and every leaf a unit's template returns as a sink (its
-    receipt) is a sink of the window's result. A Definition with a coin and a position port and no sink in its return is a
-    seed, whose body no port rule follows (`ports._coin_role`), so without them the tiles' coin flow would go unchecked."""
-    ks, at, sinks = _k(S), 0, []
-    of = {k: (t.signature()[1].leaves, _sinks(t)) for k, t in S.TILES}
-    for (lin, _blk), n in zip(S.CALLS, _tiles(S)):
-        width, own = of[ks[lin]]
-        for _ in range(n):
-            sinks += [(at + lo, at + hi, Out(sink=True)) for lo, hi in own]
-            at += width
+    """The salt is the units' coin and ``position`` their positions, and the window's whole result is a sink: it is the
+    Program's outputs, the one place a sink may reach besides a receipt port. A Definition with a coin and a position port
+    and no sink in its return is a seed, whose body no port rule follows (`ports._coin_role`), so without it the tiles'
+    coin flow would go unchecked."""
     return Ports(params={S.PREFIX + "salt": In(kind="coin"), S.PREFIX + "position": In(kind="position")},
-                 ret=Leaves(tuple(sinks)))
-
-
-def _sinks(unit: Any) -> list[tuple[int, int]]:
-    """The leaf ranges of ``unit``'s return it declares sinks (`Out(sink=True)`, its receipt)."""
-    pt = port_types(unit)
-    return [(lo, hi) for lo, hi, o, _w in (pt.ret if pt is not None else ()) if o.sink]
+                 ret=Out(sink=True))
 
 
 PouwH1Window = CompositeDefinition(
@@ -299,14 +306,21 @@ PouwH1Window = CompositeDefinition(
 
 def program(linears: Sequence[tuple[str, int, int]], calls: Sequence[tuple[str, int]], m: int, tile: tuple[int, int],
             prefix: str = "", unit: Callable[[int], Any] | None = None) -> Program:
-    """The window's Program: its ``linears`` ``(name, K, n)``, each weight once, its ``calls`` ``(linear, A block)`` in
-    order, its A slot ``m`` and its R × C ``tile``, over the tile unit at each K (`tile_unit`, or ``unit(K)``), its
-    parameters named ``prefix`` and their roles. Refused (ValueError): no linear or no call, a linear named twice or that no
-    call reads, a call of no linear, a linear whose n is not whole blocks of C, a slot that is no power of two of at least
-    R, an A block of a K that no call reads, a K `weights.chunks` refuses, or a unit whose rows aren't n R × n C chunk
-    rows of K/n codes and their row's scale (`h1zy.ROW`, n = `weights.chunks` (K); a bare `h1zy.PouwH1TileZy` at n > 1
-    is wrapped in `h1zy.unit_chunks`' `h1zy.PouwH1TileZyChunks`, v2 over a J10-R tile), whose record isn't z and y (`h1zy.RECORD`: a port carrying z alone leaves y unproved), that returns
-    other than its receipt and ``ok``, or whose shared parameters differ by K."""
+    """The Program of the window `window` makes."""
+    return Program(window(linears, calls, m, tile, prefix, unit))
+
+
+def window(linears: Sequence[tuple[str, int, int]], calls: Sequence[tuple[str, int]], m: int, tile: tuple[int, int],
+           prefix: str = "", unit: Callable[[int], Any] | None = None) -> SpecializedDefinition:
+    """The window's program function, unbuilt: its ``linears`` ``(name, K, n)``, each weight once, its ``calls``
+    ``(linear, A block)`` in order, its A slot ``m`` and its R × C ``tile``, over the tile unit at each K (`tile_unit`, or
+    ``unit(K)``), its parameters named ``prefix`` and their roles. Refused (ValueError): no linear or no call, a linear
+    named twice or that no call reads, a call of no linear, a linear whose n is not whole blocks of C, a slot that is no
+    power of two of at least R, an A block of a K that no call reads, a K `weights.chunks` refuses, or a unit whose rows
+    aren't n R × n C chunk rows of K/n codes and their row's scale (`h1zy.ROW`, n = `weights.chunks` (K); a bare
+    `h1zy.PouwH1TileZy` at n > 1 is wrapped in `h1zy.unit_chunks`' `h1zy.PouwH1TileZyChunks`, v2 over a J10-R tile), whose
+    record isn't z and y (`h1zy.RECORD`: a port carrying z alone leaves y unproved), that returns other than its receipt and
+    ``ok``, or whose shared parameters differ by K."""
     linears = tuple((str(name), int(k), int(n)) for name, k, n in linears)
     calls = tuple((str(lin), int(blk)) for lin, blk in calls)
     r, c = (int(x) for x in tile)
@@ -344,12 +358,9 @@ def program(linears: Sequence[tuple[str, int, int]], calls: Sequence[tuple[str, 
             raise ValueError(f"the tile unit at K = {k} returns {ret}, not {OUTPUTS}")
         if shared is not None and tuple(sig[2:]) != shared:
             raise ValueError(f"the tile unit at K = {k} takes other {SHARED} (or {J10R}) than at K = {units[0][0]}")
-        if not _sinks(t):
-            raise ValueError(f"the tile unit at K = {k} returns no sink (Out(sink=True), its receipt): the window, with the "
-                             "salt and the positions as its coin and position ports, would be a seed no port rule follows")
         shared = tuple(sig[2:])
     tiles = tuple((k, template(k, t)) for k, t in units)
-    return Program(bind(PouwH1Window, TILES=tiles, LINEARS=linears, CALLS=calls, M=int(m), PREFIX=str(prefix)))
+    return bind(PouwH1Window, TILES=tiles, LINEARS=linears, CALLS=calls, M=int(m), PREFIX=str(prefix))
 
 
 def _chunked(k: int, unit: Any) -> Any:
@@ -413,9 +424,10 @@ def unit_reads(program: Program, tp: Any, u: int) -> dict[str, tuple[str, int]]:
     ``position``, ``roots``; `registered.reads`' keys, `row_key`), the window's parameter and the row of it, one whole row
     of its elements; and for each of its outputs (``receipt``, ``ok``, after the Program's prefix), row ``u`` of the
     window's. From the unit's call alone, so a unit costs its parameters at any K."""
-    k, _m = tp.locate(u)
+    k, m = tp.locate(u)
     (inputs, params), node, out = _scan(program), program.root.body.nodes[k], {}
-    for pi, ((name, t), arg) in enumerate(zip(node.fn.signature()[0], node.args)):
+    args = node.args if node.form == "call" else [a if ax is None else a[m] for a, ax in zip(node.args, node.axes)]
+    for pi, ((name, t), arg) in enumerate(zip(node.fn.signature()[0], args)):
         rows = [(row_key(name, t.n, i), arg[i]) for i in range(t.n)] if pi < 2 else [(name, arg)]
         for key, coll in rows:
             rs = runs(coll.refs)
@@ -430,7 +442,7 @@ def unit_reads(program: Program, tp: Any, u: int) -> dict[str, tuple[str, int]]:
     return {**out, **{field: (prefix + field, u) for field in OUTPUTS}}
 
 
-#: the tables a call's rows are committed in under its round's root before the round's coin (#3053's ``tables``): ``a``,
+#: the tables a call's rows are committed in under its round's root before the round's coin: ``a``,
 #: its step's A table of its K, and ``zy``, its z table
 TABLES = ("a", "zy")
 #: the table a call's receipts are committed in under its round's root before the round's coin: one receipt a unit of the
@@ -633,7 +645,7 @@ def public_table(prog: str, value: str, salt: str, window: str, u0: int, n: int,
 @functools.lru_cache(maxsize=8)
 def ok_table(prog: str, value: str, window: str, population: int) -> tuple[list[list[int]], list[bytes], G.Registered]:
     """The window's ok rows ``value`` (``<prefix>ok``, `OUTPUTS`) over its ``population`` units, their salts and their
-    registration (h1_prove's `register_ok`, #3124): row u the one word 1 (`core_check.OK_ROW`) under
+    registration (h1_prove's `register_ok`): row u the one word 1 (`core_check.OK_ROW`) under
     `core_check.ok_salt` of the window's open root ``window`` and u, registered under the window Program's digest
     ``prog`` binding ``window``."""
     rows = [list(CC.OK_ROW) for _u in range(population)]
@@ -725,7 +737,7 @@ _LEAVES: "weakref.WeakKeyDictionary[Program, dict[tuple, tuple[Program, dict[str
 def leaf_program(program: Program, k: int, kind: str, ch: int | None = None) -> tuple[Program, dict[str, Any]]:
     """The Program and partition query every drawn leaf's statement ``kind`` (a chunk's ``ch``) at K runs under: the
     one-call Program of `leaf_template` and the instance query of its unit, a population of one unit, so the statement's
-    draw is its whole population. Both are functions of the window's descriptor alone, so a period has one of each a K,
+    sample is its whole population. Both are functions of the window's descriptor alone, so a period has one of each a K,
     kind and chunk."""
     memo = _LEAVES.setdefault(program, {})
     key = (int(k), kind, None if ch is None else int(ch))
@@ -735,7 +747,7 @@ def leaf_program(program: Program, k: int, kind: str, ch: int | None = None) -> 
     return memo[key]
 
 
-def place(program: Program, u: int, steps: int) -> dict[str, tuple[str, int]]:
+def place(program: Program, u: int, steps: int, *, served: bool = False) -> dict[str, tuple[str, int]]:
     """Where unit ``u``'s leaf is in each value its statements read (proofs' ``place`` in `PouwWindow.Lanes.ownOf`): the
     table and the leaf's first row in it, so a statement's read of row i of the leaf's value (`leaf_lanes.reads`) is that
     row plus i. For u tile t = (ti, tj) of call c (its linear's tiles row block major), c the j-th of its step's calls of
@@ -744,7 +756,8 @@ def place(program: Program, u: int, steps: int) -> dict[str, tuple[str, int]]:
     leaf's own (`leaf_lanes.PARTIALS`, `one_stage.produced`) from row 0. The rows are the tile's own (`table_reads`). At a
     chunked K (`weights.chunks` n > 1) ``a`` and ``b`` are leaf indices, n times the first row (the chunk lanes' base).
     A J10-R window's leaf's other after-draw values, its carries and ok rows (`leaf_lanes.produced_values`), are its own
-    from row 0 too."""
+    from row 0 too. ``served``: each after-draw value is the leaf's own in the window, ``<prefix><value>@<u>``
+    (`leaf_lanes.served`), as credit's lanes form reads it; else its bare name, a one-leaf world's."""
     S = program.fn.S()
     c, t = call_of(program, u)
     lin = S.CALLS[c][0]
@@ -755,7 +768,7 @@ def place(program: Program, u: int, steps: int) -> dict[str, tuple[str, int]]:
     return {LL.A: (table(program, "a", c, steps), n * (step_of(program, c, steps)[2] + r * ti)),
             LL.B: (f"{S.PREFIX}b/{_k(S)[lin]}", n * (_b0(S)[lin] + cc * tj)),
             LL.ZY: (table(program, "zy", c), t), LL.RECEIPT: (table(program, RECEIPTS, c), t),
-            **{v: (v, 0) for v in produced}}
+            **{v: (LL.served(S.PREFIX, v, u) if served else v, 0) for v in produced}}
 
 
 def _leaf_k(program: Program, u: int) -> int | None:
@@ -770,12 +783,12 @@ def _leaf_k(program: Program, u: int) -> int | None:
 
 
 def leaf_reads(program: Program, u: int, kind: str, ln: int | None = None, ch: int | None = None, *,
-               steps: int) -> dict[str, tuple[str, int]]:
+               steps: int, served: bool = False) -> dict[str, tuple[str, int]]:
     """Each registered port of unit ``u``'s statement ``kind`` (lane ``ln``, a J10-R lane's chunk ``ch``, or the
     combine) with the table and the row the verifier reads it at: `leaf_lanes.reads`' row of its value past the value's
-    `place`. Refused at a chunked K but under J10-R, whose chunk lanes read chunk rows."""
+    `place` (``served``: its served names). Refused at a chunked K but under J10-R, whose chunk lanes read chunk rows."""
     j10r = _leaf_k(program, u)
-    at = place(program, u, steps)
+    at = place(program, u, steps, served=served)
     return {port: (at[v][0], at[v][1] + row)
             for port, (v, row) in LL.reads(*_rc(program.fn.S()), kind, ln, ch, j10r=j10r).items()}
 
@@ -798,10 +811,28 @@ def leaf_known_rows(program: Program, kind: str, ln: int | None = None, ch: int 
                          roots=roots, **j10r)
 
 
+def leaf_known_ports(program: Program, kind: str, ln: int | None = None, ch: int | None = None, *, u: int,
+                     registration: str, salt: bytes, roots: Sequence[bytes], prog: str | None = None,
+                     admit: Sequence[int] | None = None) -> tuple[dict[str, Any], dict[str, list[tuple[int, str]]]]:
+    """Drawn leaf ``u``'s known ports in a served window, each `leaf_known_rows`' row (at position ``u``, the window's
+    Program ``salt`` and the call's ``roots``) committed as the one row of its served value (`leaf_lanes.served`) under
+    `leaf_lanes.known_salt` of the window's draw root ``registration`` and that name (`produced.known_port`, under the
+    window's descriptor digest ``prog``): the ports and each value's opening ``[(0, b || c hex)]``, what credit's lanes form
+    registers and `produced.shared` holds the sessions to."""
+    prog = prog or P.program_digest(program)
+    rows = leaf_known_rows(program, kind, ln, ch, salt=salt, position=u, roots=roots, admit=admit, u=u)
+    ports, openings = {}, {}
+    for port, (value, row) in rows.items():
+        name = LL.served(program.fn.S().PREFIX, value, u)
+        ports[port], op = PR.known_port(prog, name, row, LL.known_salt(registration, name), registration)
+        openings[name] = [op]
+    return ports, openings
+
+
 def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: dict[str, str],
                     partials: dict[str, Any], known_ports: dict[str, Any], prog: str | None = None,
                     window: str | None = None, *, steps: int, ch: int | None = None,
-                    produced: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
+                    produced: dict[str, dict[str, Any]] | None = None, served: bool = False) -> dict[str, Any]:
     """The verifier's ``--registered`` file of unit ``u``'s statement ``kind`` (lane ``ln``, a J10-R lane's chunk ``ch``,
     or the combine), in `leaf_lanes.registered_file`'s form: each of its `leaf_reads` at its table's row under ``roots``
     ``{value: root}`` (the call's tables' roots as the round log names them, the weights' and the produced record's
@@ -810,7 +841,9 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
     weights' ``b/<K>``), ``partials``' entry ``partials`` and a J10-R leaf's carries' and ok rows' theirs in
     ``produced`` (each `produced.entry` under the window's registration). A read of an A row, a B row, a partials row,
     a carry or an ok row is marked `READ_IN_FULL` (`leaf_lanes.read_in_full`), never an ``o0``. Then ``known_ports``
-    (`produced.known_port` of `leaf_known_rows`), and ``complete``."""
+    (`produced.known_port` of `leaf_known_rows`; a served window's `leaf_known_ports`). ``served``: the
+    after-draw values are the leaf's own (`place`'s served names), ``roots`` keyed by those; ``partials`` and
+    ``produced`` stay keyed by the bare value."""
     S = program.fn.S()
     c = call_of(program, u)[0]
     shape, b = _shapes(program, c, steps), f"{S.PREFIX}b/{_k(S)[S.CALLS[c][0]]}"
@@ -820,13 +853,13 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
     after = {LL.PARTIALS: partials, **(produced or {})}
     mine = LL.produced_values(*_rc(S), _k(S)[S.CALLS[c][0]], j10r=j10r is not None)
     out = {}
-    for port, (value, row) in leaf_reads(program, u, kind, ln, ch, steps=steps).items():
+    for port, (value, row) in leaf_reads(program, u, kind, ln, ch, steps=steps, served=served).items():
         if value not in roots:
             raise ValueError(f"port {port!r} reads {value!r}, whose root the verifier does not hold")
-        if value in mine:
-            if value not in after:
+        if logical[port][0] in mine:
+            if logical[port][0] not in after:
                 raise ValueError(f"port {port!r} reads {value!r}, whose entry the verifier does not hold")
-            e = after[value]
+            e = after[logical[port][0]]
         else:
             leaves, words = shape[value]
             e = {"leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
@@ -836,4 +869,4 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
             out[port][READ_IN_FULL] = True
     if both := sorted(set(out) & set(known_ports)):
         raise ValueError(f"ports {both} are both reads and known")
-    return {"format": G.READS, "ports": {**out, **known_ports}, LL.COMPLETE: True}
+    return {"format": G.READS, "ports": {**out, **known_ports}}

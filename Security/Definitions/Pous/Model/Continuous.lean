@@ -1,6 +1,8 @@
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
-import Mathlib.Order.ConditionallyCompleteLattice.Indexed
-import Definitions.Pous.Model.Audit
+module
+
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+public import Mathlib.Order.ConditionallyCompleteLattice.Indexed
+public import Definitions.Pous.Model.Audit
 
 /-!
 # The continuous audit: a memory challenger, and a responder that runs on its clock
@@ -98,6 +100,8 @@ machine did before. No cap like the graded audit's `D_late ≤ 12` (`audit.LATE_
   memory challenger that rejects the run on either, or past a cap on the audit's duration (`audit_cap`), accepts fewer
   runs, so the bound covers it too.
 -/
+
+@[expose] public section
 
 namespace Pous
 
@@ -223,7 +227,7 @@ noncomputable def epsProof (sch : Scheme M) (β : ℕ) : ℝ :=
 
 /-! ## Arrivals drawn by the memory challenger, and the memory at every time
 
-Added on 3 Oct 2026, with `Pous.Guarantees.ContinuousTimeAverage`. Red team: needed.
+Its statement is `Pous.Guarantees.ContinuousTimeAverage`. Red team: needed.
 
 The memory challenger draws the arrivals itself. Time is cut into `T` slots of one unit each, the unit of `Prog.depth`
 and of `arr` above. At slot `t` the memory challenger draws `x t = (c, i) ∈ Fin b × Fin B`, uniform and independent of

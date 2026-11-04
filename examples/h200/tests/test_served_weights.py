@@ -1,4 +1,4 @@
-"""The seeded weights and their registration root (`e2e_h200.served_weights`, CMP-95 interface 1)."""
+"""The seeded weights and their registration root (`e2e_h200.served_weights`)."""
 from __future__ import annotations
 
 import dataclasses
@@ -127,7 +127,7 @@ def test_root_opens_under_the_verifiers_entries():
 
 
 def test_tok_is_one_coordinate_a_row():
-    """``tok`` is (H, V) in ``hm96-sha512/row/v2`` (CMP-95 option (a)): row j, coordinate j over the tokens, opens whole by
+    """``tok`` is (H, V) in ``hm96-sha512/row/v2``: row j, coordinate j over the tokens, opens whole by
     an ordinary registered read at position j and at no other, and the unit that reads it selects token t's coordinate
     j, the generator's element t of tok's generation row j."""
     s, prog = W.TINY, reading_program(W.TINY, ["tok", "l0.wq"])

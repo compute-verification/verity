@@ -1,11 +1,11 @@
-"""Advice v1: `decode(encode(a)) == a` on the replay's step traces and a TRACE-CORPUS trace, under the uniform codebook
+"""Advice v1: `decode(encode(a)) == a` on the replay's step traces and a trace-corpus trace, under the uniform codebook
 and a fitted one; the engine's arrival order is sent as its deviations from the warden's release order and recovered
 from the advice's rows; the hits past the pool bound are sent and held to the replay's; the KV pool is the
-registration's, never the string's; each value is charged to A5's window, and the certifier's state chain carries
-the decisions charged before their step's window; the strings are prefix-free (so the charge
-meets LEAK-LEAN's `BitsCount`); and `decode` is total, refusing by name everything but a canonical string. REDTEAM's
-phase 7 probes of v1 (prefix-freeness on long strings, totality on adversarial frames, the pool field, what the book
-changes, a shortened shortfall) are among them."""
+registration's, never the string's; each value is charged to A5's window, and the certifier's state chain carries the
+decisions charged before their step's window; the strings are prefix-free (so the charge meets the sampled leak bound's
+`hAs`); and `decode` is total, refusing by name everything but a canonical string. REDTEAM's phase 7 probes of v1
+(prefix-freeness on long strings, totality on adversarial frames, the pool field, what the book changes, a shortened
+shortfall) are among them."""
 
 from __future__ import annotations
 
@@ -91,8 +91,8 @@ def test_the_case_set_covers_hits_resumes_and_async():
 
 
 def _corpus(tmp_path: Path) -> Path:
-    """ENC-DERIVED's TRACE-CORPUS fixture (4 s at 12/s on 100 KV blocks, prefix caching, preemptions) with each batch in
-    Model Runner V2's order (the scheduler's, sorted stably by n) and each stop-id finish marked `eos`."""
+    """The derived rules' trace-corpus fixture (4 s at 12/s on 100 KV blocks, prefix caching, preemptions) with each
+    batch in Model Runner V2's order (the scheduler's, sorted stably by n) and each stop-id finish marked `eos`."""
     src = FIXTURES / "corpus-smallkv"
     for f in ("meta.json", "server.log"):
         shutil.copy(src / f, tmp_path / f)
@@ -114,7 +114,7 @@ def _corpus(tmp_path: Path) -> Path:
 
 @pytest.fixture(scope="module")
 def smallkv(tmp_path_factory):
-    """The TRACE-CORPUS fixture's trace, record, advice and registration: sync scheduling on 100 blocks, where the pool
+    """The trace-corpus fixture's trace, record, advice and registration: sync scheduling on 100 blocks, where the pool
     bound fails and the replay evicts."""
     t = R.read_corpus_trace(_corpus(tmp_path_factory.mktemp("smallkv")), ingress="warden")
     rec = V.record_of(t, STOPS)
@@ -147,7 +147,7 @@ def _ordinals(t, rec) -> list[int]:
 def test_the_order_is_sent_as_its_deviations_from_release_order():
     """Two requests released in one bucket that the engine took the other way round: the record's release order puts
     the later arrival first, so v1 sends one order entry, (its position, rank 1), and decodes back the advice, the
-    engine's arrival order and each I1 request's warden ordinal (`streams`, IO-TIE's tie). Another rank decodes to
+    engine's arrival order and each I1 request's warden ordinal (`streams`, the I/O tie). Another rank decodes to
     another advice or is refused, and a rank or position past the requests left is refused."""
     t = step_trace("async-light")
     c = t.certified(0.1)
@@ -223,7 +223,7 @@ def test_hits_past_the_bound_are_sent_and_held_to_the_replay(smallkv):
 
 
 def test_the_pool_is_registered_never_sent(smallkv):
-    """REDTEAM phase 7 (3): the KV pool's size was a header field the prover set, about 20 bits, and a bigger declared
+    """The KV pool's size was a header field the prover set, about 20 bits, and a bigger declared
     pool bought derived hits. Now the registration holds it (no `pinned`, no header): the string is code_v1's encoding
     of the residual alone, nothing in it moves the pool, and the same string under another registered pool decodes to
     another advice or is refused."""
@@ -241,7 +241,7 @@ def test_the_pool_is_registered_never_sent(smallkv):
 
 
 def test_the_book_changes_only_the_length():
-    """REDTEAM phase 7 (4), on the book that replaced the contexts: the registered book is public and fixed before the
+    """On the book that replaced the contexts: the registered book is public and fixed before the
     run, and changes only a string's length, never which advice it decodes to."""
     t, rec, reg, adv = case("async-prefix-cache", T=20)
     charges = set()
@@ -314,7 +314,7 @@ def test_the_replay_chain_carries_what_a5_charges_early(name, n, early):
     assert sum(c < r for c, r in zip(charged, read)) == early
     steps = [sum(1 for w in window if w == v) for v in range(W)]
     S = RC.Shape(R=7, W=2, A=3, L=1024, NB=96, IW=4, Q=14, D=n, P=max(steps), K=14)
-    cur, last, ends = RC.empty(S), RC.Window(), []
+    cur, last, ends = RC.empty(S), RC.QueueRow(), []
     loads, advances, s = [], [], 0
     for v in range(W):
         loaded = RC.load(S, cur, last, (), [int(b) for b in wins[v].arrived], steps[v])
@@ -370,9 +370,9 @@ def _tiny(windows: int):
 @pytest.mark.parametrize("w", (1, 2))
 def test_the_strings_are_prefix_free(w):
     """Every bit string of up to 16 bits through `decode_bits`: no accepted one is a proper prefix of another, so
-    #{accepted strings of at most c bits} ≤ 2^c (Kraft), LEAK-LEAN's `BitsCount` for the charge `bits_by_window`; and
-    each accepted one is the encoding of the advice it decodes to, a well-formed I1 v0 (`advice.decode`'s refusals, which
-    ADV-SPEC's validity circuit makes)."""
+    #{accepted strings of at most c bits} ≤ 2^c (Kraft), the sampled leak bound's `hAs` for the charge
+    `bits_by_window`; and each accepted one is the encoding of the advice it decodes to, a well-formed I1 v0
+    (`advice.decode`'s refusals, which ADV-SPEC's validity circuit makes)."""
     rec, reg = _tiny(w)
     accepted = {}
     for n in range(17):
@@ -412,7 +412,7 @@ def test_truncated_and_extended_strings_are_refused():
 
 
 def test_decode_is_total():
-    """Random strings, every one-bit change of an encoding, REDTEAM phase 7 (2)'s adversarial frames (empty, all zeros,
+    """Random strings, every one-bit change of an encoding, adversarial frames (empty, all zeros,
     all ones, truncations, splices and extensions of an encoding), and the codes of edited residuals (a decision
     flipped, an order entry added): `V1Error` and nothing else, or an advice whose encoding they are."""
     rng = random.Random(5)
@@ -449,7 +449,7 @@ def test_decode_is_total():
 
 @pytest.mark.parametrize("book", ("uniform", "fit"))
 def test_long_strings_are_prefix_free_and_self_delimiting(book):
-    """REDTEAM phase 7 (1), past the exhaustive 16 bits: each case's string under T = 4 (hundreds of bits, many
+    """Past the exhaustive 16 bits: each case's string under T = 4 (hundreds of bits, many
     windows) decodes to its advice, and is refused cut at any window's end but the last, cut by one bit, or extended
     by a byte; and no case's string is a proper prefix of another's that decodes under the other's record."""
     fit = _fit_cases() if book == "fit" else None

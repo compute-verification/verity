@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# overlap.py on one leased H200 (cwd = the source tree's root): the serve-time commit beside e2e_h200's served step at the
-# frozen shape, alone, in today's loop, and overlapped at both priorities. Circuits' shared-row Layout JSON (fetched as
-# below) is sent; today's families layout is e2e_h200's own.
+# overlap.py on one H200 (cwd = the source tree's root): the serve-time commit beside e2e_h200's served step at the
+# frozen shape, alone, in the serving loop, and overlapped at both priorities. Circuits' shared-row Layout JSON, a
+# fetched fixture (fixtures/artifacts.json), is read from IN; the families layout is e2e_h200's own.
 #
-#   research data fetch art:f6eb8ebda6ebef5a2cab7bfcfd37e8266660d8241e46a5037fe615a2040b695f --to DIR
-#   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
-#     --env GPU_LEASE_WHO=LANE --send DIR/families-shared.layout.json -- bash benchmarks/torch_gpu/commit_slots/overlap.sh \
-#     [overlap.py's options]
+#   uv run research data fetch-fixtures benchmarks/torch_gpu/commit_slots/fixtures/families-shared.layout.json
+#   OUT=DIR IN=benchmarks/torch_gpu/commit_slots/fixtures \
+#     bash benchmarks/torch_gpu/commit_slots/overlap.sh [overlap.py's options]
 #
-# Before the lease: uv sync, attn_ref's cubin, the SHA-512 engine's build. Then one GPU lease of at most LEASE_MIN (30)
-# minutes for overlap.py, its JSON and summary into $OUT. Exit: overlap.py's (0 every run ran and every overlapped root is
-# today's loop's), 3 the setup failed, else the lease's.
+# The fetch reads the public export. Needs uv, CUDA 13's nvcc and `gpu-lease` on PATH. Before the lease: uv sync,
+# attn_ref's cubin, the SHA-512 engine's build. Then one GPU lease of at most LEASE_MIN (30) minutes for overlap.py, its
+# JSON and summary into OUT. Exit: overlap.py's (0 every run ran and every overlapped root is the serving loop's), 3 the
+# setup failed, else the lease's. OUT and IN default to a run directory's out/ and inputs/ (RESEARCH_RUN_DIR).
 set -uo pipefail
-D=${RESEARCH_RUN_DIR:?run under research run}; OUT=$D/out; IN=$D/inputs; mkdir -p "$OUT"
+OUT=${OUT:-${RESEARCH_RUN_DIR:?set OUT}/out}; IN=${IN:-${RESEARCH_RUN_DIR:?set IN}/inputs}; mkdir -p "$OUT"
 fail() { tail -20 "$2"; echo "$1 3" | tee "$OUT/status.txt"; exit 3; }
 uv sync -q --all-packages --extra torch > "$OUT/sync.txt" 2>&1 || fail sync "$OUT/sync.txt"
 for c in /usr/local/cuda-13.0 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && export CUDA=$c && break; done

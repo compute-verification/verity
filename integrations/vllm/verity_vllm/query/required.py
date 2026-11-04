@@ -4,7 +4,7 @@ What this module DECIDES (structure + correspondence, no by-name table):
 
 * WHICH Values are required: `verity_vllm.query.units.required_values(P, Q_module_body_v1, policy)` -- every Value that crosses a
   module-body boundary in the Program's own dataflow, plus the policy below.  v1's "promotion" of interior rows whose output another
-  module reads (F-r19-int-20) is not a pass here: such a Value crosses the boundary and is required by definition.  A literal (a Call
+  module reads is not a pass here: such a Value crosses the boundary and is required by definition.  A literal (a Call
   that reads no Value, `module_body.literal_calls`) is the descriptor's: never a boundary Value, never protocol-required.
 * WHERE a Value lives: the producing Call's recorded owning module (correspondence), mapped to the implementation's path; a
   collective SITE's at its enclosing module, invocation k (`collective_sites`); at `<module>/<fx node>` when another fx node of the
@@ -29,7 +29,7 @@ The POLICY (`Policy`, explicit, listed in the header as `query.policy`):
   runtime tensor (its fx node does not return it; `Correspondence.tensorless`) whose Values no Call reads and the Program does not
   return: the DSA indexer's MQA logits and top-k while every key is selected.  Switch (b)+(c) off (`return_slots=False`) to see the
   pure-dataflow population;
-* TP-04, a RANK Program only (result.json `tp.world` >= 2): every collective's output and its rank-local partial, with every other port
+* the rank policy, a RANK Program only (result.json `tp.world` >= 2): every collective's output and its rank-local partial, with every other port
   of the partial's producer (`Population`); the row's rank manifests merge by `compose.merge_ranks` (rows keep their rank's digest,
   `tp_peer_binding` binds every output to each peer's partial).
 
@@ -40,9 +40,10 @@ the manifest lists each of its outputs under `unreturned`, spelt as a required o
 The identity ENCODINGS, each one constant the manifest and the committing tap share: a collective's rank-local operand as
 `part_rank<r>` / `shard_rank<r>` beside its output; a narrowed linear's rows as `<member>@<width>` beside the whole rows' `<member>`; a
 collective SITE at (enclosing module, k) and a norm's collective under the norm (`collective_names`); the sampler rows under the fixed
-path `runner.sampler`; the token ids under the consuming module as `in`; the attention hidden stream under `fa2.m1/L<k>`; the weights
-as `<field>/weight`.  Kernel geometry (the FA hidden stream, the MoE block planes) and the identity constants (`SCHEMA`,
-`IDENTITY_KEY`, the row order, the digest) are the manifest format's (`verity_vllm.query.manifest.format`).  A row carries its Call's
+path `runner.sampler`; the token ids under the consuming module as `in`; the weights as `<field>/weight`.  Kernel geometry (the MoE
+block planes) and the identity constants (`SCHEMA`, `IDENTITY_KEY`, the row order, the digest) are the manifest format's
+(`verity_vllm.query.manifest.format`).  A FlashAttention launch's M1 stream (`fa2.m1/L<k>`, `fa3.m1/L<k>`: its scores, probabilities and
+key blocks' running state) is no Value of the Program, no unit's boundary and no proof block's read, so the manifest never requires it.  A row carries its Call's
 `spec`, `port` and `position` (Program order) for the binding, a narrowed one the member it narrows and its columns of those rows
 (`narrowed_of`, `columns`), and one whose Values start at row r0 > 0 of their runtime tensor those rows (`runtime_rows`), outside the digest.
 """
@@ -69,7 +70,7 @@ from verity_vllm.query.module_body import (Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT,
                                            module_body_boundary)
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
 
-__all__ = ["SAMPLING_EVENTS", "STOCHASTIC_SAMPLING_EVENTS", "FLASH_ATTENTION_LAUNCHES", "collective_kind",
+__all__ = ["SAMPLING_EVENTS", "STOCHASTIC_SAMPLING_EVENTS", "collective_kind",
            "member_name", "shared_instances", "collective_sites", "request_manifest", "BridgeResult", "under",
            "CallMember", "Population", "population", "Q_WORD_ID", "Q_WORD_TEXT", "QUERY_OF_RECORD", "QUERIES", "partition_of"]
 
@@ -97,10 +98,6 @@ def partition_of(program_digest: str) -> dict[str, Any]:
 SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) | {"ArgmaxTokenSelect_v1"}
 #: the sampling events that consume a registered runtime input (seed / splits) beside the logits
 STOCHASTIC_SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) - set(GREEDY_SELECTS)
-#: Definitions implemented by ONE FlashAttention launch per (layer, step) whose M1 stream the protocol requires; their binding record
-#: carries the launch geometry (T, NH, KVH, D)
-FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention_v3", "Attention_v4", "Attention_v5", "Attention_v10", "Attention_v11", "Attention_v18",
-                                      "AttentionSoftcap_v1", "AttentionSoftcap_v2", "AttentionN_v1", "AttentionTP2_v1"})
 #: the parameters of a `registered_values` Program's supplied inputs (`Population.supplied`): `values`, and `run` / `run_<i>` per request
 SUPPLIED_PARAM = re.compile(r"^(values|run(_\d+)?)$")
 
@@ -234,7 +231,7 @@ class Population:
     the Commit's replay (`sampled_replay.ProgramIndex`) addresses a Call's committed output by the same members, so the rows a manifest
     counts and the rows the replay reads are one computation.
 
-    A RANK Program (`tp` = {"world": W >= 2, "rank": r}, result.json's) adds the TP-04 policy: every collective's output is
+    A RANK Program (`tp` = {"world": W >= 2, "rank": r}, result.json's) adds the rank policy: every collective's output is
     protocol-required, and so is its rank-local PARTIAL -- the one Value of this rank the collective reads (its other operands are
     `peers_<k>` Program inputs read by collectives only: the peer ranks' partials, received).  A partial produced in the collective's own
     module body is that producer's required Value, spelt `part_rank<r>` / `shard_rank<r>`, and so is every other port of the producer
@@ -320,13 +317,13 @@ class Population:
         for c in P.calls:
             if c.id in literals:            # never protocol-required, whatever node / hint it is named under (a pad guard's `<node>/eos` beside its I32Eq rows)
                 continue
-            if c.family in SAMPLING_EVENTS or c.id in self.collectives:         # TP-04: a collective's output is required on every rank
+            if c.family in SAMPLING_EVENTS or c.id in self.collectives:         # a collective's output is required on every rank
                 protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
             elif return_slots and c.id not in self.unreturned:
                 n = corr.name(c.id)
                 if n.hint or (step_of(c.id), n.module, n.node) in returned_nodes:      # RETURN-SLOT (recorded) / TENSOR-RETURN (structural)
                     protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
-        # TP-04: the rank-local partials, each with every other port of its producer (a row-parallel linear that reduces in its own body
+        # the rank-local partials, each with every other port of its producer (a row-parallel linear that reduces in its own body
         # returns its quantised input and scales beside the partial: `DeepGemmFp8Linear_v1`)
         protocol.update(ValueRef(v.call, p.name) for v in self.partial_of for p in P.call(v.call).port_table)
         self.unreturned = frozenset(cid for cid in dead if not any(ValueRef(cid, p.name) in protocol for p in P.call(cid).port_table))
@@ -347,7 +344,7 @@ class Population:
         self._ports_of: dict[int, list[str]] | None = None
 
     def _rank_partials(self) -> None:
-        """TP-04 on a rank Program: the collectives, their rank-local operands (the partial is the operand's producer's Value when that
+        """The rank policy on a rank Program: the collectives, their rank-local operands (the partial is the operand's producer's Value when that
         producer is in the collective's body) and the received peer partials (non-record Program inputs every reader of which is a collective)."""
         P, corr = self.P, self.corr
         kinds: dict[str, str | None] = {}
@@ -515,14 +512,13 @@ class Population:
 
 def population(P: ProgramView, corr: Correspondence, *, return_slots: bool = True, tp: Mapping[str, Any] | None = None,
                query: str = QUERY_OF_RECORD) -> Population:
-    """`Population(P, corr)`: the required values of one request Program under `query` + the policy (+ TP-04 on a rank Program)."""
+    """`Population(P, corr)`: the required values of one request Program under `query` + the policy (+ the rank policy on a rank Program)."""
     return Population(P, corr, return_slots=return_slots, tp=tp, query=query)
 
 
-def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | None, dict]:
-    attn_obs = res.get("attention_impls_observed") or {}
+def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | None]:
     fa = None
-    for v in attn_obs.values():
+    for v in (res.get("attention_impls_observed") or {}).values():
         fa = v.get("vllm_flash_attn_version")
         break
     if profile is None:
@@ -531,18 +527,10 @@ def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | No
         cc = ((res.get("target") or {}).get("declared") or {}).get("compute_capability") or [8, 9]
         fa3 = TargetProfile(compute_capability=(int(cc[0]), int(cc[1]))).effective_flash_attn_version() == 3
         profile = "hopper" if (fa == 3 or (fa is None and fa3)) else "ampere"
-    return profile, fa, attn_obs
+    return profile, fa
 
 
-def hidden_family_of(P: ProgramView, profile: str) -> str | None:
-    """The attention hidden-stream family the Program's flash-attention launches put in the manifest under `profile`; None when it has
-    none (MLA / DSA sparse MLA: no `varlen_fwd`, so no hidden tap fires)."""
-    if not any(c.family in FLASH_ATTENTION_LAUNCHES for c in P.calls):
-        return None
-    return "fa3_hidden_m1_stream" if profile == "hopper" else "fa2_hidden_m1_stream"
-
-
-def query_header(profile: str, hidden_family: str | None, *, return_slots: bool, query: str = QUERY_OF_RECORD,
+def query_header(profile: str, *, return_slots: bool, query: str = QUERY_OF_RECORD,
                  partition: Mapping[str, Any] | None = None, call_boundaries: bool = False) -> dict[str, Any]:
     """The manifest's query header; under Q_word, `partition` (`partition_of`) is the Program's `verity/partition/v1` object and digest,
     and `call_boundaries` says the manifest requires Values two Calls of one module body exchange."""
@@ -551,12 +539,11 @@ def query_header(profile: str, hidden_family: str | None, *, return_slots: bool,
         (" + recorded return slots + returned tensors (every Value of an fx node's output at a step once any of them crosses the module body boundary)"
          ", neither of which is a Call lowered to no runtime tensor whose Values nothing reads" if return_slots else "") + \
         "; unreturned = the Calls whose Values nothing reads, the Program does not return and the policy does not require, listed by identity" + \
-        f"; hidden = {hidden_family or 'none'}; profile = {profile}"
+        f"; profile = {profile}"
     return {"query_id": query, "query_id_digest": hashlib.sha256(text.encode()).hexdigest(), "query_text": text,
             **({"partition": dict(partition)} if word and partition else {}),
             "engine": "q-word" if word else "v2-query", "boundary": "call" if word else "module-body", "profile": profile,
-            "attention_hidden_family": hidden_family,
-            "required_families": ["input_token_ids", "instance_outputs", "sampled_token_ids", "weights"] + ([hidden_family] if hidden_family else []) +
+            "required_families": ["input_token_ids", "instance_outputs", "sampled_token_ids", "weights"] +
                                  (["call_boundaries"] if call_boundaries else []),
             "policy": {"prescribed_inputs": "every field of the Program's record-typed parameters",
                        "protocol_required": ["sampling-event outputs"] +
@@ -622,8 +609,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
                      rank: int = 0, ranks: int = 1, profile: str | None = None, return_slots: bool = True, norm_scales: Any = None, taps: Sequence[Any] = (), query: str = QUERY_OF_RECORD, program_digest: str | None = None) -> BridgeResult:
     """The v1-shaped manifest of ONE request Program (B=1 component) under `query` (+ `norm_scales`, + `taps`: `query.router_softmax` / `vocab_range` POLICY; + its partition given `program_digest`)."""
     pdig = (artifact or {}).get("program_digest") or res["program"]["digest"]
-    profile, fa, attn_obs = _profile(res, profile)
-    hidden_family = hidden_family_of(P, profile)
+    profile, fa = _profile(res, profile)
     tpinfo = res.get("tp") if isinstance(res.get("tp"), dict) else {}
     prog_world, prog_rank = int(tpinfo.get("world") or 1), int(tpinfo.get("rank") or 0)
     if (prog_world > 1 or ranks > 1) and (int(ranks) != prog_world or int(rank) != prog_rank):
@@ -721,32 +707,6 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     for (step, mod), rows in sorted(ids_rows.items()):
         add("input_token_ids", step, 0, impl(mod), "in", 0, rows, rows=rows, width=1, dtype="i32")
 
-    # --- the attention hidden stream: one launch per (attention body, step) ------------------------------------------------------
-    attn_bodies: list[str] = []
-    attn: dict[tuple[int, str], dict[str, Any]] = {}
-    for c in P.calls:
-        if c.family in FLASH_ATTENTION_LAUNCHES:
-            m = corr.module_of(c.id)
-            if m not in attn_bodies:
-                attn_bodies.append(m)
-            st = c.statics
-            a = attn.setdefault((step_of(c.id), m), {"rows": 0, "end": 0, "T_max": 0, "NH": int(st.get("NH", 0)), "KVH": int(st.get("KVH", st.get("NH", 0))), "D": int(st.get("D", 0))})
-            a["rows"] += 1
-            a["end"] = max(a["end"], corr.rows.get(c.id, -1) + 1)     # the launch runs the query rows `dead_free` dropped (`runtime_rows`)
-            a["T_max"] = max(a["T_max"], int(st.get("T", 0)))
-    tap = "fa3.m1" if (hidden_family or "")[:3] == "fa3" else "fa2.m1"
-    for (step, mod), a in sorted(attn.items(), key=lambda kv: (kv[0][0], attn_bodies.index(kv[0][1]))):
-        layer, rows = attn_bodies.index(mod), max(a["rows"], a["end"])
-        if hidden_family[:3] == "fa3":
-            geo = fmt.fa3_geometry(a["T_max"], rows, a["NH"], a["KVH"], a["D"], n_seq)
-        else:
-            win = (attn_obs.get(impl(mod)) or attn_obs.get(mod) or {}).get("sliding_window")
-            w0 = win[0] if isinstance(win, (list, tuple)) and win else (win if isinstance(win, int) else -1)
-            geo = fmt.fa2_geometry(a["T_max"], rows, a["NH"], a["KVH"], a["D"], n_seq, windowed=(w0 is not None and int(w0) >= 0))
-        HB, M, NB, BN, gname = geo
-        add(hidden_family, step, 0, f"{tap}/L{layer}", gname, 0, fmt.mat_total_words(HB, M, NB, BN, a["D"]), dtype="u32",
-            geometry={"HB": HB, "M": M, "NB": NB, "BN": BN, "D": a["D"], "seqlen_k": a["T_max"], "rows": rows}, attention_module=impl(mod))
-
     # --- MoE block planes (kernel geometry, v1's): per (MoE body, step) ----------------------------------------------------------------
     moe_layers: set[int] = set()
     lo = 0
@@ -766,7 +726,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     scales = norm_scales.kernel_rows(pop, add, impl, aliases) if norm_scales else None     # the norm-scale tap's rows: interior to the kernel norms
     tapped = [(t, t.kernel_rows(pop, add, impl, aliases)) for t in taps]                   # the other taps' rows: interior to their Calls
     identities.sort(key=fmt.row_key)
-    q = query_header(profile, hidden_family, return_slots=return_slots, query=query, partition=partition_of(program_digest) if program_digest and query == Q_WORD_ID else None, call_boundaries=bool(fam_counts.get("call_boundaries")))
+    q = query_header(profile, return_slots=return_slots, query=query, partition=partition_of(program_digest) if program_digest and query == Q_WORD_ID else None, call_boundaries=bool(fam_counts.get("call_boundaries")))
     if prog_world > 1:
         q["required_families"].append("tp_rank_partials")
         q["policy"]["protocol_required"].append(f"TP-04 (world {prog_world}): every collective output and its rank-local partial, with every "
@@ -792,7 +752,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
            "flash_attn_version": fa, "ranks": ranks, "rank": rank,
            "steps": list(range(len(events))), "engine_steps": [arrive + s for s in range(len(events))], "requests": [request_id],
            "populations": {"identities": len(identities), "by_family": dict(fam_counts), "steps": len(events),
-                           "attention_layers": len(attn_bodies), "units": len(B.units), "boundary_values": len(B.values),
+                           "units": len(B.units), "boundary_values": len(B.values),
                            "required_values": len(req.values), "literal_calls": len(literals), "unreturned_calls": len(pop.unreturned)},
            "complete": not unmodelled, "unmodelled": dict(unmodelled),
            "manifest_digest": fmt.manifest_digest(identities), "identities": identities, **fmt.unreturned_block(unreturned)}

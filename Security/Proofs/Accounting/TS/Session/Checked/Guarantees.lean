@@ -1,4 +1,6 @@
-import Proofs.Accounting.TS.Session.Checked.Layer
+module
+
+public import Proofs.Accounting.TS.Session.Checked.Layer
 
 /-!
 # A checked unit's proof layer is sound through its C-Flock sessions (the statement)
@@ -24,6 +26,8 @@ Definition with `ok = 1` (each cell `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_b]
 circuit's checks are `Accounting.Guarantees.TS.HeldSessionSound`'s.
 -/
 
+@[expose] public section
+
 namespace Accounting.Guarantees.TS
 
 open Accounting.TS Accounting.TS.Checked Flock.SoundAtBridge
@@ -31,7 +35,7 @@ open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
 /-- **A checked unit's proof layer is sound at `δ` through its C-Flock sessions, fully checked.** For any window whose
-proof `i` of round `w` on the path `x` is the C-Flock session `sess x w i` (#2909's `RowsSession`) with outcome
+proof `i` of round `w` on the path `x` is the C-Flock session `sess x w i` (a `RowsSession`) with outcome
 `out x w i`, and the checked layer `checkedLayer sess out ok right` (accepted where flock-verify `--zk --registered`
 accepts, opening the committed rows at the registered reads, its relation the unit's Definition with the port `ok`
 registered): given `Flock.Guarantees.EndToEndRegisteredRows`' named assumptions at every session and every unit's

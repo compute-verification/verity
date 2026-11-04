@@ -1,7 +1,9 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Proofs.Nci.Cover.Area
-import Proofs.Nci.Cover.FanOutWalk
-import Definitions.Nci.Guarantees.CoverPartialSum
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Proofs.Nci.Cover.Area
+public import Proofs.Nci.Cover.FanOutWalk
+public import Definitions.Nci.Guarantees.CoverPartialSum
 
 /-!
 # The partial-sum bounds: partial sums are read
@@ -13,6 +15,8 @@ that the reader's block is handed, and distinct gates give distinct pairs of a b
 number at most one more than those pairs. `PartialSumsRead` assigns each counted product to the label of its output gate
 and adds the pairs over the entries, whose accumulations are disjoint.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

@@ -29,8 +29,7 @@ def fold_pins(gm: dict) -> dict | list | None:
     """The sha256 pins of the fold record GM-01 read.  `impl.fold_load` is keyed by the fold DIRECTORY, an absolute path on the machine
     that ran it ({"/workspace/.../match": {"source", "operand_refs_form", "program_sha256", "instances_sha256"}}), so the pins are one level
     down and the path does not enter: a candidate that read the same record elsewhere pins the same bytes.  One fold dir (what GM-01
-    writes) -> its pins; several -> the sorted list of them.  (Until 2026-09-23 the lift filtered the TOP level for `*sha256` keys; those
-    keys are paths, so it was None on every row and the candidate-mode comparison of pins was vacuous.)"""
+    writes) -> its pins; several -> the sorted list of them.  The TOP level's keys are paths: no `*sha256` key is there."""
     fl = (gm.get("impl") or {}).get("fold_load") or {}
     pins = [p for p in ({k: v for k, v in n.items() if k.endswith("sha256")} for n in fl.values() if isinstance(n, dict)) if p]
     pins.sort(key=lambda p: json.dumps(p, sort_keys=True))

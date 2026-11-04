@@ -9,9 +9,8 @@ specializations from one dispatcher call), `reshape_and_cache_flash` moves k *an
 (slices, copies) that the fold must still execute.  `resolver.resolve_step` accepts a single `Resolution` per root, so
 this module carries the extra members on the primary resolution (`ComputeGroup.before / .also`,
 `TransparentGroup.before / .also`); `members(r)` yields the fold's execution order `before, primary, also`.  Only the
-primary carries `consumed` (the whole subtree); the other members have `consumed=()`.  This is a lane-local extension
-of the contract — proposed to the integrator as `Resolution.followers` / a `Multi` resolution (see the L3 report);
-`resolver.resolve_step` and `ResolutionReport.add` see only the primary until it is lifted.
+primary carries `consumed` (the whole subtree); the other members have `consumed=()`.
+`resolver.resolve_step` and `ResolutionReport.add` see only the primary.
 """
 
 from __future__ import annotations

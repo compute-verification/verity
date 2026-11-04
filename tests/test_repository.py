@@ -24,13 +24,13 @@ ROOT = Path(__file__).resolve().parents[1]
 #: notes store (cite it from here by ``note:<id>``).
 ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "PROTOCOL.md", "DESIGN.md", "SKILL.md",
                                   "DISCREPANCIES.md", "CHANGELOG.md"})
-#: The Glossary's second file, at the root only: no directory holds a glossary (Daniel, 26 Oct).
+#: The Glossary's second file, at the root only: no directory holds a glossary.
 ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
-#: Layout/spec documents left in place by the 2026-09-22 migration; a human folds them into PROTOCOL.md / README.md.
+#: Layout/spec documents left in place by the layout migration; a human folds them into PROTOCOL.md / README.md.
 ALLOWED_EXTRA = (
     "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
 )
-#: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. C-Flock
+#: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. Flock
 #: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and the network certifier's sections (``protocol/<topic>.md``, each
 #: keeping its heading in ``PROTOCOL.md`` with a one-line pointer).
 SPLIT_DOCUMENT_DIRS = {"Security/Proofs/Flock/Soundness/assumption-notes/": "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
@@ -50,8 +50,8 @@ PROTOCOL_SIZE_CAP = 256 * 1024
 #: A skill is loaded into an agent's context whole, so it states the current procedure and rules, never their history
 #: (`.agents/skills/authoring-skills/`).
 SKILL_SIZE_CAP = 16 * 1024
-#: Skills over SKILL_SIZE_CAP on 20 Oct, each capped at its size then (the largest at any open PR's head, rounded up, plus
-#: 1 KiB for PRs queued against it). An entry only shrinks, and goes once its skill is under SKILL_SIZE_CAP; its owner
+#: Skills over SKILL_SIZE_CAP when it was set, each capped at its size then (the largest at any open PR's head, rounded up,
+#: plus 1 KiB for PRs queued against it). An entry only shrinks, and goes once its skill is under SKILL_SIZE_CAP; its owner
 #: compacts it.
 OVERSIZE_SKILLS: dict[str, int] = {}
 BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES), ALLOWLIST and audit records
@@ -74,7 +74,7 @@ AUDIT_RECORD = "lean-audit.json"
 AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
 #: Tracked data (everything but CODE_SUFFIXES and audit records) in the whole tree, so that many small files cannot
 #: add up to what one large one may not be. Audit records are left out: they must stay in Git and each has its own
-#: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget. 48 MiB since 26 Oct:
+#: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget. 48 MiB:
 #: the E2E demo's fixtures took the tree to 40.1 MiB; register the next large one rather than raising it again.
 DATA_BUDGET = 48 * 1024 * 1024
 REGISTRY = "fixtures/artifacts.json"
@@ -120,7 +120,7 @@ def test_generated_output_patterns() -> None:
     assert generated_output("lanes/x/evidence/run.log") == "under evidence/"
     assert generated_output("benchmarks/numerical/plot_overhead.png") == "a .png render"
     assert generated_output("integrations/vllm/20260929T0300Z-tables.json") == "a stamped render or note"
-    assert generated_output("benchmarks/numerical/python/verity_numerical/bench/tables.py") is None
+    assert generated_output("benchmarks/numerical/python/verity_numerical/bench/contract.py") is None
     assert generated_output("tools/research/tests/fixtures/run_v0.2/out/result.json") is None
 
 
@@ -153,7 +153,7 @@ def markdown_over_cap(path: str, size: int) -> str | None:
         return None
     if os.path.basename(path) == "SKILL.md":
         return (f"{path}: {size / 1024:.0f} KB > {cap // 1024} KB, {size - cap} bytes over; compact it: keep the current "
-                "procedure and rules, drop what AGENTS.md or another skill states, and move dates and history to Daniel's "
+                "procedure and rules, drop what AGENTS.md or another skill states, and move dates and history to the "
                 "decisions log or a note (.agents/skills/authoring-skills/SKILL.md)")
     where = f"one file per entry under {d}" if (d := split_dir(path)) else "the notes store (cite it by note:<id>)"
     return f"{path}: {size / 1024:.0f} KB > {cap // 1024} KB, {size - cap} bytes over; move detail to {where}"
@@ -202,6 +202,8 @@ def test_markdown_size_caps() -> None:
 
 #: Test files that need torch, a GPU or cargo, and were never part of `check`.
 UNSUITED_TEST_DIRS = ("verity/ml/kernels/",)
+#: what pytest collects from a module: a function or a class of its own named as a test
+_DEFINES_A_TEST = re.compile(r"^(?:async\s+)?def\s+test|^class\s+Test", re.M)
 
 
 def _testpaths(tracked: list[str]) -> list[str]:
@@ -217,11 +219,13 @@ def _testpaths(tracked: list[str]) -> list[str]:
 
 def test_every_test_file_is_in_a_suite() -> None:
     """`tools/verity/check/suites.py` runs suites, so a test file outside every suite's testpaths would never run. A suite is a
-    directory whose pyproject.toml configures pytest; give a new package one, or put the test in the package it tests."""
+    directory whose pyproject.toml configures pytest; give a new package one, or put the test in the package it tests. A module
+    named as a test file that defines no test (the graph's `test-file` family's lister and runner) is none."""
     tracked = _tracked()
     testpaths = _testpaths(tracked)
     tests = [p for p in tracked if p.endswith(".py") and (os.path.basename(p).startswith("test_") or p.endswith("_test.py"))]
-    offenders = [p for p in tests if not any(t == "." or p.startswith(t + "/") for t in testpaths) and not p.startswith(UNSUITED_TEST_DIRS)]
+    offenders = [p for p in tests if not any(t == "." or p.startswith(t + "/") for t in testpaths) and not p.startswith(UNSUITED_TEST_DIRS)
+                 and (ROOT / p).is_file() and _DEFINES_A_TEST.search((ROOT / p).read_text(encoding="utf-8", errors="replace"))]
     assert not offenders, "test files that no suite runs:\n" + "\n".join(offenders)
 
 

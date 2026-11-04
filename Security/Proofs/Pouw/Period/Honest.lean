@@ -1,6 +1,8 @@
-import Proofs.Pouw.Period
-import Proofs.Pouw.Period.Accept
-import Proofs.Accounting.ComposePeriod.Honest
+module
+
+public import Proofs.Pouw.Period
+public import Proofs.Pouw.Period.Accept
+public import Proofs.Accounting.ComposePeriod.Honest
 
 /-!
 # An honest live-salt period meets `H1CheckedCreditPeriod`'s premises
@@ -8,12 +10,12 @@ import Proofs.Accounting.ComposePeriod.Honest
 The positive twin of `Properties.Pouw.Period.H1CheckedCreditPeriod`, as
 `Accounting.SecurityProofs.ComposePeriod.Honest` is of `CircuitWorkPeriod`: a period of `n ≥ 1` windows at H1's
 instance's own numbers, whose every window the deployed check (`PouwCheck.protocol.check`) accepts at the
-all-protocols leg's parameters (`Accept.h1Params`, #4351), and which meets every premise of the instance
+all-protocols leg's parameters (`Accept.h1Params`), and which meets every premise of the instance
 (`h1_meets`).
 
-The leg's first real verdict agrees with these numbers: in #4420's run r20261025-194214-ae66, `verity/pouw/v1`
-accepted the loop's honest window with 128 real tiles of `N = 144`, all 24 drawn tiles proved, at `ε = 1/2` and
-`δ = 10⁻⁶`. So the `N_p = 144` and `K_d = 24` that `DrawIsCoin` and this witness use are the leg's actual check's.
+The leg's check takes these numbers: `verity/pouw/v1` accepts the loop's honest window with 128 real tiles of `N = 144`,
+all 24 drawn tiles proved, at `ε = 1/2` and `δ = 10⁻⁶`. So the `N_p = 144` and `K_d = 24` that `DrawIsCoin` and this
+witness use are the leg's actual check's.
 
 * The circuit (`circuit`): 128 committed words, one a unit (H1's 128 real tiles a window), no operands, so no unit
   writes another late (`reaches_iff`) and each real tile's late cone is its own word; one round, live. The
@@ -33,6 +35,8 @@ The conclusion then speaks of the whole period: its accepted prefix is all `n` w
 credited live words are `128·n` (`checkedLive_all`), so `h1_credit` is `H1CheckedCreditPeriod`'s bound at `128·n` live
 words, not at none.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Period.SecurityProofs.HonestH1
 
@@ -165,7 +169,7 @@ def stages : SplitStages Bool (Fin 144) 1 :=
   .stage (fun _ _ => .paid) (fun _ _ => True) (fun _ _ => True) fun _ => .done
 
 /-- The honest period of `n` windows: every tile live, each window's stages `stages`, whatever the past. -/
-def period : (n : ℕ) → Period Bool Ω1 (Fin 144) circuit.rounds n
+def period : (n : ℕ) → WindowPlay Bool Ω1 (Fin 144) circuit.rounds n
   | 0 => .done
   | n + 1 => .window (fun _ => true) stages fun _ => period n
 
@@ -181,7 +185,7 @@ noncomputable def unitsOf (β : Equiv.Perm (Fin 144) × Unit) : Array ℕ :=
 
 /-- The period's windows as the check reads them: the honest registration, and the service's answer accepting the
 units of the window's draw. -/
-noncomputable def windows (n : ℕ) : Windows Ω1 n where
+noncomputable def windows (n : ℕ) : Executions Ω1 n where
   reg := fun _ _ => reg
   ev := fun x w => h1Evidence reg (unitsOf (coinAt x w).2)
 
@@ -200,7 +204,7 @@ def staged : ByteArray → Fin 144 → (ℕ → Unit) → Prop := fun _ _ _ => T
 def flat : ByteArray → Fin 144 → (ℕ → Unit) → Prop := fun _ _ _ => True
 
 /-- The period's proofs under the check. -/
-noncomputable def run (n : ℕ) : PeriodRun Bool (Equiv.Perm (Fin 144) × Unit) circuit.rounds 24 144 n Unit :=
+noncomputable def run (n : ℕ) : Outcomes Bool (Equiv.Perm (Fin 144) × Unit) circuit.rounds 24 144 n Unit :=
   checkedRun hK24 prm (windows n) opened (stagedAt salt staged) (flatAtCoin hr1 enc flat)
 
 noncomputable def layer (n : ℕ) :
@@ -263,7 +267,7 @@ theorem serviceSound (n : ℕ) : ServiceSound prm (windows n) opened (stagedAt s
 
 theorem prefixLen_all (n : ℕ) (x : Paths Ω1 n) : (windows n).prefixLen prm x = n := by
   classical
-  unfold Windows.prefixLen
+  unfold Executions.prefixLen
   rw [Finset.filter_true_of_mem fun w _ => acceptedUpTo_all n x w, Finset.card_univ, Fintype.card_fin]
 
 /-! ## The honest windows' claims -/

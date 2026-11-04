@@ -5,7 +5,7 @@ provenance and the service's trusted input (the deployment's registration log, t
 gate by gate where the policy check gives a verdict, and `scripts/nci_reference.py`'s `check_baseline` on each. `check`
 runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/BaselineDifftestMain.lean`
 fails unless `NciCheck.Baseline.check` gives Python's result on every case and `NciCheck.Baseline.checkUnrolled` the same
-on every expansion. As for the other two NCI difftests, the audit checks the data against the record's SHA-256 and caches
+on every expansion. As for the inference-only check's other two difftests, the audit checks the data against the record's SHA-256 and caches
 its pass on the Lean package's files alone, so the first test is what says the data is still what the generator and the
 reference write. The second checks that the random cases reach every refusal code and an acceptance, the third that each
 pinned case gets the code it was built for, gate by gate as well, the fourth that an entry of the `output` kind is
@@ -95,7 +95,7 @@ def test_an_output_entry_is_refused_as_an_unknown_kind():
 
 
 def test_theta_cites_the_first_record_of_the_deployments_log():
-    """One registration log is one deployment, and θ cites its first record (compute-accounting, 21 Oct). The two pinned
+    """One registration log is one deployment, and θ cites its first record. The two pinned
     acceptances cite it from the deployment's first run, whose own record it is, and from its third. The pinned
     `theta-not-at-deployment-start` case cites, from the third run, the second record, which registers the same value
     under the same root and precedes the run's own, so the rule it replaces (a record before the run's own) took it; cited

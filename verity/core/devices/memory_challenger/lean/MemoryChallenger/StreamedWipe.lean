@@ -1,4 +1,6 @@
-import MemoryChallenger.Verdict
+module
+
+public import MemoryChallenger.Verdict
 
 /-!
 # The streamed-label wipe's verdict
@@ -13,6 +15,10 @@ record (`to_bytes`'s `OverflowError`) leaves the session with no message, so its
 check reads it as it is. The verdict refuses a reveal of more than one index a batch (`Params.covered`), which the
 guarantee (`Pous.Guarantees.StreamedWipe`) doesn't cover.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace MemoryChallenger.StreamedWipe
 
@@ -140,13 +146,20 @@ def Signed.message (s : Signed) : E ByteArray :=
 /-- `egress_units`: the egress in whole MiB, rounded up (Python's floor division), saturating at `EGRESS_MAX_UNITS`. -/
 def egressUnits (egressBits : Int) : Int := min (-(Int.fdiv (-egressBits) EGRESS_UNIT_BITS)) EGRESS_MAX_UNITS
 
-/-- Whether the signed session passes, and its egress in MiB. `reasons` are witness; `accepted` and `egressMib` are what
-`Verdict.public()` publishes. -/
-structure Verdict where
-  accepted : Bool
+/-- What the check found besides its verdict: the reasons it rejects (empty when it passes), which are witness, and the
+egress in MiB. -/
+structure Findings where
   reasons : Array String
   egressMib : Int
   deriving BEq, Inhabited
+
+/-- Whether the signed session passes, as `Core.Verdict` (`accept` exactly when there is no reason, never `undecided`),
+with its findings. The verdict and `egressMib` are what `Verdict.public()` publishes. -/
+abbrev Verdict := Findings × Core.Verdict
+
+def Verdict.accepted (v : Verdict) : Bool := v.2 == Core.Verdict.accept
+def Verdict.reasons (v : Verdict) : Array String := v.1.reasons
+def Verdict.egressMib (v : Verdict) : Int := v.1.egressMib
 
 /-- `verdict(signed, commitment, trusted=trusted, schemes=schemes)`. It fails closed: an unknown scheme, an untrusted key
 or a bad signature rejects whatever the batches say, and a commitment whose batch size the guarantee doesn't cover
@@ -177,6 +190,6 @@ def verdict (schemes : Schemes) (trusted : List ByteArray) (s : Signed) (c : Com
     if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ (p.limitNs : Int)) then
       reasons := reasons.push s!"batch {b} is past its deadline of {p.limitNs} ns"
     if b == 0 && r.sendNs < s.fillEndNs then reasons := reasons.push "the first batch was sent before the fill completed"
-  return ⟨reasons.isEmpty, reasons, egressUnits s.egressBits⟩
+  return (Findings.mk reasons (egressUnits s.egressBits), acceptIf reasons.isEmpty)
 
 end MemoryChallenger.StreamedWipe

@@ -1,5 +1,7 @@
-import Definitions.Accounting.RateAuditPartial
-import Definitions.Accounting.Assumptions.RateAudit
+module
+
+public import Definitions.Accounting.RateAuditPartial
+public import Definitions.Accounting.Assumptions.RateAudit
 
 /-!
 # The rate audit with partial completion: what an accepted device held and read (trusted)
@@ -26,9 +28,9 @@ work).
 statements' `k` is `RateAudit`'s, the `⌈(1 − ε_s)·N⌉` words the sample needs.
 
 **At one round (`rounds = 1`) these say nothing about a deployed codec.** They hold at every `rounds`, but their
-hypothesis `WorkHardness b 1 c_root cost` is false for Sloth at one round with the payload known, at every width (the
-red team's F27: a 2-dimensional lattice completes a word's bottom third at 0.003–0.025 of a root against the per-bit
-0.32–0.33). They carry a deployed codec at `k ≥ 2` rounds, where `WorkHardness` is the residual conjecture.
+hypothesis `WorkHardness b 1 c_root cost` is false for Sloth at one round with the payload known, at every width (a
+2-dimensional lattice completes a word's bottom third at 0.003–0.025 of a root against the per-bit 0.32–0.33). They
+carry a deployed codec at `k ≥ 2` rounds, where `WorkHardness` is the residual conjecture.
 
 **The price is a parameter, and `k = 3` is the stated instance** (`WorkHardness b 3 c_root cost`), the deployed codec's:
 Sloth over `p = 2^1024 − 105`, masked with a public XOR `σ_K` between rounds (as
@@ -36,6 +38,8 @@ ruled), its price justified by no completion skipping the inner root. The mask c
 `WorkHardness` reads the codec only through `b`, `rounds` and `c_root`. Unmasked at `k = 2`, 512 bits rest on the
 reduction's operation-count floor, an estimate, not a measurement.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 
@@ -60,8 +64,8 @@ is at most `RateAudit`'s error
 **The reading.** `RateAudit`'s, with `μ_rebuild = (F − tagging)/(N·c_word)`: a device that keeps the top `b − x` bits of
 a word and completes the bottom `x` pays `cost x ≥ (x/b)·c_word` for them, so per bit completed it pays what a whole
 rebuild pays per bit, and partial completion buys it nothing over rebuilding. At the stated three rounds of Sloth over
-`p = 2^512 − 569`, `c_word = 3·c_root` and a completed bit costs `3·c_root/512` (at two rounds `2·c_root/512`, the red
-team's price); at one round the hypothesis is false (F27) and the bound is about no deployed codec.
+`p = 2^512 − 569`, `c_word = 3·c_root` and a completed bit costs `3·c_root/512` (at two rounds `2·c_root/512`); at one
+round the hypothesis is false and the bound is about no deployed codec.
 
 **The proof** (`Accounting.SecurityProofs.RateAuditPartial`) is `RateAudit`'s with completions in place of rebuilds. The
 compression encodes, for a completion of `x` bits, those `x` bits (`RateAudit`'s encodes `b` per rebuilt word), so a

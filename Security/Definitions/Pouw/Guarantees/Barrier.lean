@@ -1,4 +1,6 @@
-import Definitions.Pouw.Barrier.Pinned
+module
+
+public import Definitions.Pouw.Barrier.Pinned
 
 /-!
 # The degenerate-input barrier's guarantee (trusted)
@@ -8,6 +10,8 @@ hypotheses (`Pouw.Assumptions`). Its proof is the theorem `Pouw.SecurityProofs.B
 The generic barrier (`Definitions.Pouw.Barrier.Pinned`). Each keeps the text, the docstring and the `open`s of the
 statement it was in its source module.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.Barrier
 

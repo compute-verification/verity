@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.DeclaredCircuit
-import Proofs.Accounting.RateAudit.SketchHonest
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.DeclaredCircuit
+public import Proofs.Accounting.RateAudit.SketchHonest
 
 /-!
 # An honest run meets every hypothesis of `DeclaredCircuitRequirement`
@@ -34,6 +36,8 @@ is at least its `N` tiles' bits (`credit_ge`), and the session's credit is at le
 * **The gate model's circuit** `Wc` is the empty list, restricted and within any nonnegative caps. That `Wc` and `W`
   are one circuit is the code's to hold, not `G`'s, and the run's carriers are empty whatever `Wc` is.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.DeclaredCircuitWitness
 
@@ -628,7 +632,7 @@ theorem circuitCarriers {n P N ρ S Lk q X L B εnum εden T M : ℕ} {ι Y : Ty
     (store : RateSketch.SketchPrefix n P N 128 ρ 512 16 1 2773 → Y → RateSketch.SketchStore N 128)
     (layout : RateSketch.SketchPrefix n P N 128 ρ 512 16 1 2773 → Y → Fin N ↪ Fin T × Fin M)
     (joined : Y × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 1 2773) → Fin T → ℕ)
-    (Wc : Gates.Dag ι) (Aud : Gates.Audit) :
+    (Wc : Gates.IntDag ι) (Aud : Gates.Audit) :
     Assumptions.CircuitCarriers (fun c y => (honestSession n P N ρ S Lk q hL hq).session (steer c y)) store layout
       joined X L B εnum εden Wc Aud := by
   intro _ c g y
@@ -658,20 +662,20 @@ theorem lifetimeCapped {n P N ρ L : ℕ} {Ω Ca : Type} (hL : 0 < L) :
   rw [h1]
   omega
 
-theorem restricted (B : ℕ) : Gates.Restricted B ([] : Gates.Dag Unit) :=
+theorem restricted (B : ℕ) : Gates.Restricted B ([] : Gates.IntDag Unit) :=
   ⟨fun i h => absurd h (Nat.not_lt_zero i), fun g hg => by cases hg⟩
 
 theorem property (caps : Gates.Caps)
     (hc : 0 ≤ caps.rounding ∧ 0 ≤ caps.compareSelect ∧ 0 ≤ caps.gather ∧ 0 ≤ caps.fold ∧ 0 ≤ caps.products)
     (Aud : Gates.Audit) :
-    Gates.Property caps Aud ([] : Gates.Dag Unit) := by
+    Gates.Property caps Aud ([] : Gates.IntDag Unit) := by
   obtain ⟨h1, h2, h3, h4, h7⟩ := hc
   refine ⟨fun g hg => (by cases hg), fun w _ => ?_, fun i h => absurd h (Nat.not_lt_zero i)⟩
-  have hu : ∀ b, Gates.unitsAt ([] : Gates.Dag Unit) (fun t => Aud.win t = w) b = 0 := fun b => by
+  have hu : ∀ b, Gates.unitsAt ([] : Gates.IntDag Unit) (fun t => Aud.win t = w) b = 0 := fun b => by
     simp [Gates.unitsAt]
-  have hc0 : ∀ f, Gates.countAt ([] : Gates.Dag Unit) (fun t => Aud.win t = w) f = 0 := fun f => by
+  have hc0 : ∀ f, Gates.countAt ([] : Gates.IntDag Unit) (fun t => Aud.win t = w) f = 0 := fun f => by
     simp [Gates.countAt]
-  have ht : Gates.productsAt ([] : Gates.Dag Unit) (fun t => Aud.win t = w) = 0 := by
+  have ht : Gates.productsAt ([] : Gates.IntDag Unit) (fun t => Aud.win t = w) = 0 := by
     simp [Gates.productsAt]
   intro c
   have e1 : c.rounding = 0 := hu .rounding
@@ -679,7 +683,7 @@ theorem property (caps : Gates.Caps)
   have e3 : c.gather = 0 := hu .gather
   have e4 : c.fold = 0 := hu .fold
   have e5 : c.neutral = 0 := hu .neutral
-  have e6 : c.runBits = 0 := hc0 (Gates.Gate.inputBits .run)
+  have e6 : c.runBits = 0 := hc0 (Gates.IntGate.inputBits .run)
   rw [e1, e2, e3, e4, e5, e6, ht, Nat.cast_zero]
   exact ⟨mul_nonneg h1 (Nat.cast_nonneg _), mul_nonneg h2 (Nat.cast_nonneg _), mul_nonneg h3 (Nat.cast_nonneg _),
     mul_nonneg h4 (Nat.cast_nonneg _), rfl, Nat.zero_le _, mul_nonneg h7 (Nat.cast_nonneg _)⟩
@@ -704,10 +708,10 @@ theorem meets (n P N ρ S q Xr Lr qr τ L B εnum εden : ℕ) {Ω Ca Ch : Type}
     Assumptions.CircuitCarriers (fun c y => (honestSession n P N ρ S (Lr * τ) q hlink hq).session
         (steer0 n P N ρ Ω Ca c y))
       (RateSketch.steeredStore enc choose (passLayout n P N ρ Ω Ca)) (passLayout n P N ρ Ω Ca)
-      (joined n P N ρ Ω Ca) (Xr * τ) L B εnum εden ([] : Gates.Dag Unit) (aud n P N) ∧
+      (joined n P N ρ Ω Ca) (Xr * τ) L B εnum εden ([] : Gates.IntDag Unit) (aud n P N) ∧
     Assumptions.SteeredLayout (passLayout n P N ρ Ω Ca) (steer0 n P N ρ Ω Ca) ∧
     RateSketch.LifetimeCapped (passLayout n P N ρ Ω Ca) (joined n P N ρ Ω Ca) L ∧
-    Gates.Restricted B ([] : Gates.Dag Unit) ∧ Gates.Property caps (aud n P N) ([] : Gates.Dag Unit) ∧
+    Gates.Restricted B ([] : Gates.IntDag Unit) ∧ Gates.Property caps (aud n P N) ([] : Gates.IntDag Unit) ∧
     (∀ v < (aud n P N).windows, (aud n P N).reads v ≤ P * N * 4096) ∧
     (∀ x : RateSketch.StackedCoins Ω Ca (1 + n * P * (N + 2)) n P N ρ 1,
       (placement n P N τ val).Deadlines (passBind n P N) τ ∧
@@ -782,7 +786,7 @@ theorem applies (hG : Guarantees.DeclaredCircuitRequirement) (n P N ρ S q Xr Lr
   intro T G a Aud layout steer A W p ℓ grp bind addr
   obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8⟩ :=
     meets n P N ρ S q Xr Lr qr τ L B εnum εden enc choose caps hcaps val hval hL hlink hq hqr
-  exact hG n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T 1 ε δ ([] : Gates.Dag Unit) caps Aud enc choose layout
+  exact hG n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T 1 ε δ ([] : Gates.IntDag Unit) caps Aud enc choose layout
     steer (joined n P N ρ Ω Ca) A W p ℓ grp bind (fun _ => kvStore n P N val) (fun _ => kvPlan n P N) addr
     hn hP hN hE hrank hkey hsq hcs hEle hfloor h1 h2 h3 h4 h5 h6 h7 h8
 
@@ -841,12 +845,12 @@ theorem sum_ge {n P c : ℕ} (f : Fin n → Fin P → ℕ) (h : ∀ w j, c ≤ f
 /-! ## Where `G` bounds something
 
 The run credits the whole store, so `G`'s session threshold `Σ credit − (0.0015 + γ)·n·P·N·32768` is positive while
-`0.0015 + γ < 1` (`threshold_pos`), and each window's while `0.01 + γ < 1` (`window_pos`). The carriers' share of `γ`
-is linear in the life `L`: `C/(N·32768) ≤ (8·L·R + 1)/(N·32768) + 128·L·P·c/E` (`carrier_le`), `R` a window's
-run-input bytes and `c` the caps' total. At DCR-RT's inputs (the 18 Oct numbers: `P = 984` passes a 60 s window,
-`E = 364,497`, 100 KB/s of run inputs, the pass's other resources `γ₀ ≤ 0.835%`, here `N ≥ 2^24` tiles) both thresholds
-are positive up to `L = 6` for 8B (`c = 0.442`, `bounds_8b`); for 70B TP8 (`c = 0.0918`) the session's up to `L = 31`
-and every window's up to `L = 30` (`bounds_70b`). -/
+`0.0015 + γ < 1` (`threshold_pos`), and each window's while `0.01 + γ < 1` (`window_pos`). The carriers' share of `γ` is
+linear in the life `L`: `C/(N·32768) ≤ (8·L·R + 1)/(N·32768) + 128·L·P·c/E` (`carrier_le`), `R` a window's run-input
+bytes and `c` the caps' total. At the reference inputs (`P = 984` passes a 60 s window, `E = 364,497`, 100 KB/s of run
+inputs, the pass's other resources `γ₀ ≤ 0.835%`, here `N ≥ 2^24` tiles) both thresholds are positive up to `L = 6` for
+8B (`c = 0.442`, `bounds_8b`); for 70B TP8 (`c = 0.0918`) the session's up to `L = 31` and every window's up to `L = 30`
+(`bounds_70b`). -/
 
 /-- The run's credit at step `t`, as `G` reads it. -/
 def credit (n P N τ : ℕ) (val : ℕ → ℕ → ℕ) (t : ℕ) : ℕ :=
@@ -982,7 +986,7 @@ theorem gamma_bound {N ρ S Lr τ Xr k L P E L₀ P₀ E₀ N₀ R₀ : ℕ} (ca
     exact div_le_div₀ (mul_nonneg (by positivity) (hc0.trans hc₀)) s3 (by positivity) hEr
   linarith
 
-/-- **8B**: at DCR-RT's inputs (`c ≤ 0.442`, at most 984 passes and 6,000,000 run-input bytes a 60 s window,
+/-- **8B**: at the reference inputs (`c ≤ 0.442`, at most 984 passes and 6,000,000 run-input bytes a 60 s window,
 `E ≥ 364,497`, `γ₀ ≤ 0.835%`, `N ≥ 2^24`), both of `G`'s thresholds are positive at a carrier life of `L ≤ 6`. -/
 theorem bounds_8b {N ρ S Lr τ Xr k L P E : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit)
     (hN : 16777216 ≤ N) (hL : L ≤ 6) (hP : P ≤ 984) (hE : 364497 ≤ E) (hc : 0 ≤ caps.total)
@@ -1002,8 +1006,8 @@ theorem bounds_8b {N ρ S Lr τ Xr k L P E : ℕ} (caps : Gates.Caps) (Aud : Gat
   norm_num at hγ
   constructor <;> linarith
 
-/-- **70B TP8**: at DCR-RT's inputs with `c ≤ 0.0918`, the session threshold is positive at a carrier life of `L ≤ 31`,
-and every window's at `L ≤ 30`. -/
+/-- **70B TP8**: at the reference inputs with `c ≤ 0.0918`, the session threshold is positive at a carrier life of
+`L ≤ 31`, and every window's at `L ≤ 30`. -/
 theorem bounds_70b {N ρ S Lr τ Xr k L P E : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit)
     (hN : 16777216 ≤ N) (hP : P ≤ 984) (hE : 364497 ≤ E) (hc : 0 ≤ caps.total)
     (hc₀ : caps.total ≤ 459 / 5000) (hR : ∀ v, caps.runBytes v ≤ 6000000)

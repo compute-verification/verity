@@ -121,7 +121,7 @@ if [ -s $T/scr ]; then
   done
 fi
 
-# Lean dependencies in source trees (Daniel's card 23a10e51, 3:33 PM PDT 2 Oct, at any age): WarmDeps.take moves or copies
+# Lean dependencies in source trees (at any age): WarmDeps.take moves or copies
 # check's Lean packages into a tree's .lake/packages, and a failed audit never gives them back; the next run on the tree drops
 # them before its own take. Only .lake/packages of the verifier's Lake packages goes, only in a tree nothing live names
 # (REFS_PY, by sha); each is renamed aside, the tree checked once more, put back if named, and deleted.

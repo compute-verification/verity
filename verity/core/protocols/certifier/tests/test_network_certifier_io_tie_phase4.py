@@ -1,5 +1,5 @@
-"""Red-team cases against the I/O tie (`io_tie`) from the advice red team, kept as regressions of the fix that closed
-them, beside the author's `test_network_certifier_io_tie{,_adversarial}.py`.
+"""Adversarial cases against the I/O tie (`io_tie`), kept as regressions of the fix that closed them, beside
+`test_network_certifier_io_tie{,_adversarial}.py`.
 
 v3 tied the cells to a table the prover supplied, and every author tamper was single-sided: the cells changed against
 the honest table, or the table against the honest cells. A prover who forged the cells and a matching table passed, so
@@ -11,7 +11,7 @@ Commit registered. These cases forge everything the prover controls together and
   prover's map isn't the verifier's, and its rows open only under their own tree's root.
 - A fabricated response, with a matching map and port, or with port rows of its ids: the verifier's map has no output
   there, whatever the port says.
-- The in-bucket order channel ADV-SPEC flagged (log2 n_t!): the map fixes each slot's stream and kind and each data
+- The in-bucket order channel (log2 n_t!): the map fixes each slot's stream and kind and each data
   cell's entry, so the only orders left free are byte-identical cells (a connection's pads, or a response's repeated
   token id in one bucket), which commit to one value: zero bits."""
 
@@ -106,7 +106,7 @@ def test_a_fabricated_response_with_a_witness_forged_to_match_is_refused() -> No
 
 
 def test_the_only_free_in_bucket_order_is_byte_identical_cells() -> None:
-    """ADV-SPEC's log2 n_t! channel: the map fixes each slot's stream and kind and each data cell's entry, so a cell's
+    """The log2 n_t! channel: the map fixes each slot's stream and kind and each data cell's entry, so a cell's
     place names its output. With r = 2, connection 1 emits the same id twice in bucket 1 and connection 2 two distinct
     ids: the two cells of connection 1 swap freely, but they are byte-identical, so they commit to one value; so do
     each connection's two pads in bucket 0. Every other order is refused."""

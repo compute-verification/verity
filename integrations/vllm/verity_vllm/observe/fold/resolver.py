@@ -107,7 +107,7 @@ class Collective:
     an unwritten row is Unresolved, never a root) and the PEER rank's partial row = a leaf range of the fold's `peers_<request>` root
     PARAMETER (root class `collective_received`: the other rank's committed partial, bound by the rank Program's `tp_links.json`).
     The fold numbers the collective (step, k) itself -- k = issue ordinal within the step -- and takes rank/world from
-    `RunHeader.notes.tp2`; the pattern only names the kind and the issuing module (`site`, the locator of the cross-rank leg).
+    `RunHeader.notes.tp2`; the pattern only names the kind and the issuing module (`site`, the locator of the cross-rank check).
     The RECEIVED value is therefore never a free prescribed input: it is the Compute's OUTPUT, `AllReduce2_v1{N}` /
     `AllGather2_v1{N}(parts)`, written to the result storage the rank's next kernel reads."""
 
@@ -147,7 +147,7 @@ class WeightField:
 
 
 @dataclass(frozen=True)
-class Witness:
+class WitnessParam:
     """Row i consumes the next leaves, as many as its parameter has, of request `keys[i]`'s `name` witness parameter
     (`Profile.witnesses`), allocated in issue order: a value of the run no input states and the circuit checks rather than computes
     (the Marlin align's key per pair, the GPU's sorted position).  No device view."""
@@ -156,7 +156,7 @@ class Witness:
     keys: tuple[str, ...]
 
 
-Operand = Shared | PerRow | Gather | GatherMany | Pieces | Const | Param | Collective | Supplied | WeightField | Witness
+Operand = Shared | PerRow | Gather | GatherMany | Pieces | Const | Param | Collective | Supplied | WeightField | WitnessParam
 
 
 def scratch_view(near: ViewDesc, event: int, k: int, n: int) -> ViewDesc:
@@ -169,13 +169,13 @@ def scratch_view(near: ViewDesc, event: int, k: int, n: int) -> ViewDesc:
 
 def operand_rows(op: Operand) -> int | None:
     """How many rows an operand can serve (None for one every row shares)."""
-    if isinstance(op, (Param, Witness)):
+    if isinstance(op, (Param, WitnessParam)):
         return len(op.keys)
     if isinstance(op, Pieces):
         return len(op.rows)
     if isinstance(op, PerRow):
         return op.view.shape[0] if op.view.shape else 1
-    if isinstance(op, Collective):          # [R17 D90] one row per own-partial row
+    if isinstance(op, Collective):          # one row per own-partial row
         return 1 if op.flat or not op.own.shape else op.own.shape[0]
     if isinstance(op, (Gather, GatherMany)):
         return len(op.indices)
@@ -184,13 +184,13 @@ def operand_rows(op: Operand) -> int | None:
 
 def operand_view(op: Operand, i: int) -> ViewDesc | None:
     """Row i's device view of an operand; None for a Program constant, a declared parameter or several pieces."""
-    if isinstance(op, (Const, Param, Supplied, Pieces, WeightField, Witness)):
+    if isinstance(op, (Const, Param, Supplied, Pieces, WeightField, WitnessParam)):
         return None
     if isinstance(op, Shared):
         return op.view
     if isinstance(op, PerRow):
         return row_view(op.view, i)
-    if isinstance(op, Collective):          # [R17 D90] the device view is the OWN partial row; the peer part has none (a parameter)
+    if isinstance(op, Collective):          # the device view is the OWN partial row; the peer part has none (a parameter)
         return op.own if op.flat else row_view(op.own, i)
     if isinstance(op, Gather):
         return row_view(op.view, op.indices[i])
@@ -222,7 +222,7 @@ class Compute:
     kernels: tuple[str, ...] = ()              # device kernel name substrings this compute accounts for (census)
     attribution: tuple[tuple[str, int], ...] = ()   # optional per-row (request_id, position)
     pattern: str = ""
-    # [R15 fp8] optional per-operand parameter (Root) name -- the weight name of EACH weight operand when a Compute reads more than one
+    # optional per-operand parameter (Root) name -- the weight name of EACH weight operand when a Compute reads more than one
     # (the block-scaled FP8 GEMM reads `weight` and `weight_scale_inv`); the fold records it as `operand_roots` in instances.jsonl and
     # cb_a.compare names each weight range by it (the hint can only name one).  Empty = unchanged single-weight behaviour.
     roots: tuple[str | None, ...] = ()
@@ -350,7 +350,7 @@ class Profile:
     registered_values: bool = False
     # the `weights` Record `weight_field` paths index, when the profile states it (else `analytic.weights_type` over `config`)
     weights_type: Any = None
-    # the witness parameters `Witness` operands read, one per request and name (the Marlin align's `schedule`)
+    # the witness parameters `WitnessParam` operands read, one per request and name (the Marlin align's `schedule`)
     witnesses: tuple[str, ...] = ()
 
 

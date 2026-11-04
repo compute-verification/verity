@@ -1,8 +1,8 @@
-"""The firewall's record as it grows (`verity_flock.firewall`): a call reads only what was appended since the index
+"""The ZK server's record as it grows (`verity_flock.firewall`): a call reads only what was appended since the index
 (``index-py/``) last read the record, never the whole record, whichever object or process makes it; and each call's
-result or refusal, and the record it leaves, are a firewall's that reads its whole record at every call (`_Whole`). They
+result or refusal, and the record it leaves, are a ZK server's that reads its whole record at every call (`_Whole`). They
 are compared on fixed streams of ops, with the record damaged (blank lines, a torn line and its repair, a line without
-its newline, a line the firewall doesn't write, the record replaced as it was or by one of its length whose first open
+its newline, a line the ZK server doesn't write, the record replaced as it was or by one of its length whose first open
 is another event, rewritten, cut shorter, its last lines edited in place, halved) and the index removed or torn between
 them."""
 from __future__ import annotations
@@ -22,14 +22,14 @@ PARTS = (["L0", "L1", "alg"], ["L0"], ["L0", "L1"])
 
 
 class _Whole(FW.Firewall):
-    """A firewall that reads its whole record at every call, each rule's read a scan of it."""
+    """A ZK server that reads its whole record at every call, each rule's read a scan of it."""
 
     def _read(self, sessions=(), streams=()):
         return FW._Scan(self._events())
 
 
 class _Json:
-    """`json` as the firewall module sees it, counting the record's lines it parses (``loads``; the index's files are read
+    """`json` as the ZK server module sees it, counting the record's lines it parses (``loads``; the index's files are read
     with ``load``)."""
 
     def __init__(self) -> None:
@@ -49,7 +49,7 @@ def _lines(state: Path) -> int:
 
 
 def _appended(state: Path, ev: dict) -> None:
-    """An event appended as another process writes it (the Lean firewall's release side, say), outside this module's
+    """An event appended as another process writes it (the Lean ZK server's release side, say), outside this module's
     calls: its line, with its seq."""
     with open(state / "record.jsonl", "ab") as f:
         f.write((json.dumps({"seq": _lines(state), **ev}, sort_keys=True) + "\n").encode())
@@ -88,7 +88,7 @@ class _Work:
 def test_a_call_reads_only_what_was_appended_since_the_index_last_read(tmp_path, monkeypatch):
     """300 recursive sessions. Each one's inner side (open, finish) and its first statement's outer session (slot, admit,
     release) are this module's calls, each by a new `Firewall` (a process of its own); its other statements' outer
-    sessions are appended as the Lean firewall writes them, and every fifth stops at its second statement, so its third
+    sessions are appended as the Lean ZK server writes them, and every fifth stops at its second statement, so its third
     is refused. Each call parses only the lines appended outside since the index last read the record, never the whole
     record, and the index answers it; a round's work (lines parsed, files of the index read, calls) is the same in the
     last round as in the first of its kind. The record read whole parses all of it."""
@@ -271,7 +271,7 @@ def test_every_result_and_the_record_are_the_whole_records(tmp_path):
     """On fixed streams of 1,500 ops (opens on two streams, one with a budget, finishes, admits, releases, stops, outer
     sessions in the slot and holders that end before their outcome, events another process appends) by three objects,
     between which the record and the index are damaged and repaired, every result, refusal and error, and the record
-    after each op, are those of the firewall that reads its whole record; the index answered most of the reads, the rest
+    after each op, are those of the ZK server that reads its whole record; the index answered most of the reads, the rest
     being those of a damaged record. With names past `KEY_MAX`, the same."""
     for seed, long in ((20261016, False), (7, False), (11, True)):
         got, (fast, reads) = _drive(FW.Firewall, tmp_path / f"new-{seed}", seed, 1500, long)

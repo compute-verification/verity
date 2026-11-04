@@ -1,4 +1,4 @@
-"""Lane PAD-IMPL: the torch-frontend authoring of `Serve@3` (`tests/program/serve3_authored.py`)
+"""The torch-frontend authoring of `Serve@3` (`tests/program/serve3_authored.py`)
 against the registered definitions (`verity/ml/definitions/registry/serve3.py`) — `check_identity` at export, and
 digest equality / graph-and-reference correspondence per program, exactly as `test_b1_authored.py` checks
 `Serve@1/@2`.  Needs torch; skips without it."""

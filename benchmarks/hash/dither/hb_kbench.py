@@ -21,7 +21,7 @@ Gates, on the device before any timing of a (linear, M), for every honest arm (a
 C and R filled with 0xA5 and the arm run once: C equal to torch._int_mm's product of the same operands, and R on --gate-rows
 sampled rows (first, last, spread; the first and last tile rows included) equal to kb_ref_rows (the receipt by its
 definition, computed from X and W); then the no-write control (WRITE = false, same poison) must be rejected. After the
-lease, `verify.py` checks two of those rows against CA's numpy twin (dc/dgemm_ref.py) from the regenerated inputs.
+lease, `verify.py` checks two of those rows against the numpy twin (dc/dgemm_ref.py) from the regenerated inputs.
 
 Writes OUT/kbench.json: per (linear, M) the gates, per-arm per-rep µs a call with the SM clock of each item, medians, and
 ratios of each honest arm over cutlass, lt and int_mm.

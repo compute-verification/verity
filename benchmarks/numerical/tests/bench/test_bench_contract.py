@@ -558,7 +558,7 @@ def test_compare_instances_conflicts_and_warnings(conforming: dict) -> None:
 
 
 def test_no_writer_hardcodes_the_domain_and_new_fingerprints_use_the_vocab() -> None:
-    """red-team-flock-3's M0 (coordinator 2026-09-27 13:45Z): every cell recorded ``domain: finite`` whatever it proved.  A
+    """red-team-flock-3's M0: every cell recorded ``domain: finite`` whatever it proved.  A
     fingerprint's domain is now its statement's, one of the vocab's; the old hardcode is refused on new writes, still read on
     old results (as ``finite-only``, so identity comparisons with them hold)."""
     import re
@@ -581,3 +581,12 @@ def test_no_writer_hardcodes_the_domain_and_new_fingerprints_use_the_vocab() -> 
     assert contract.validate_fingerprint(old) == [] and contract.identity(old)["domain"] == "finite-only"
     assert contract.incomparable(old, {**old, "domain": "finite-only"}) == []
     assert [f for f, _, _ in contract.incomparable(old, {**old, "domain": "total"})] == ["domain"]
+
+
+def test_the_store_vocabulary_copies_the_contracts_closed_sets() -> None:
+    """``research.store.vocab`` copies the proof classes (plus the ledger's ``COMPONENT``) and authentication modes, since the store
+    imports no bench package."""
+    from research.store import vocab
+
+    assert set(vocab.PROOF_CLASSES) == set(contract.PROOF_CLASSES) | {"COMPONENT"}
+    assert set(vocab.AUTHENTICATION_VALUES) == set(contract.AUTHENTICATION)

@@ -1,7 +1,9 @@
-import PouwCheck.CreditDifftest
-import PouwCheck.Verified
-import PouwCheck.LiveVerified
-import PouwCheck.CommittedFiles
+module
+
+public import PouwCheck.CreditDifftest
+public import PouwCheck.Verified
+public import PouwCheck.LiveVerified
+public import PouwCheck.CommittedFiles
 
 /-!
 # The difftest's functions for a served window's statements (`PouwCheck.Verified`, `PouwCheck.LiveVerified`,
@@ -18,6 +20,8 @@ Beside `PouwCheck.CreditDifftest`'s, behind the same `pouw-check-difftest` (`Pou
 * `credit-committed-files` (`ledger`, `name`, as `credit._lean_committed_files` sends them):
   `CommittedFiles.filesOf`'s `{"files": …}`, or `{"refused": [code, why]}`, the circuit files a period's open committed.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.VerifiedDifftest
 

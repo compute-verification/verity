@@ -36,7 +36,7 @@ max_model_len = 8384
 resident_gpu_memory_utilization = 0.40
 block_gpu_memory_utilization = 0.80
 max_num_batched_tokens = 16384
-# Every isolated (block-mode) engine of one arm group gets the same exact KV pool (the kv-pool gate checks it).
+# Every isolated (`blocks`) engine of one arm group gets the same exact KV pool (the kv-pool gate checks it).
 block_kv_cache_memory_bytes = 60129542144
 
 [admission]

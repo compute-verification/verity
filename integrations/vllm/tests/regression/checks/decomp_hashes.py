@@ -8,8 +8,8 @@ a missed weight-only value, a request-relative step cut elsewhere -- each moves 
 
 Inputs: `match/program.json` (0.3-1.4 GB) + `match/instances.jsonl` (0.6-5.8 GB) -- pinned by sha256 in `global_match.json.impl.fold_load`
 and checked here as read (`fold_record_pins`) -- the row's request Programs (`build_request*/instances.json.gz`), and `match/capture/log.jsonl.gz`
-when it is beside the record (the R19 rows archived it to the vault, F-r19-int-14: without it the rows channel and the meta-vs-rows cross-check
-are unavailable and the result says so; every row of an R19 record is stamped, so attribution itself does not need it).  100-500 s, 10-40 GB
+when it is beside the record (the reference rows archived it to the vault: without it the rows channel and the meta-vs-rows cross-check
+are unavailable and the result says so; every row of a reference record is stamped, so attribution itself does not need it).  100-500 s, 10-40 GB
 RAM: a pod.  No B=1 row has a decomposition (`match_decomp.json` absent on #11, #39).
 """
 from __future__ import annotations

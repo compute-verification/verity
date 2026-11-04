@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Audit.Extraction
+module
+
+public import Proofs.Flock.Soundness.Audit.Extraction
 
 /-!
 # The stratified draw law
@@ -18,6 +20,8 @@ stratified law draws an independent uniform `k s`-subset inside each stratum (`L
   `extraction_audit_whole_stratum` (compiled layer): an audit accepts while a whole floored stratum is wrong with
   probability at most the per-unit terms.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 
@@ -76,7 +80,7 @@ theorem stratified_escape (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s
       ∏ s, (((stratum σ s).card - (B.filter (σ · = s)).card).choose (k s) : ℝ≥0∞) /
         ((stratum σ s).card.choose (k s) : ℝ≥0∞) := by
   classical
-  unfold escape
+  unfold Verity.Law.escape
   have hd : (fun ω : (stratified σ k hk).Ω => Disjoint ((stratified σ k hk).draw ω) B) =
       fun ω => ∀ s ∈ (univ : Finset (Fin m)), Disjoint (ω s).1 B := by
     funext ω

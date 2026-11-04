@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
-import Proofs.Flock.Claims.Recursion.KSLin2
-import Proofs.Flock.Claims.Recursion.LastBindsEC
-import Proofs.Flock.Claims.Recursion.CallsAgree
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Claims.Recursion.SetupCalls
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
+public import Proofs.Flock.Claims.Recursion.KSLin2
+public import Proofs.Flock.Claims.Recursion.LastBindsEC
+public import Proofs.Flock.Claims.Recursion.CallsAgree
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Claims.Recursion.SetupCalls
 
 /-!
 # `KSLin2` at the deployment (route 2C)
@@ -16,6 +18,8 @@ statements (`KSLin2On … DenseAt`), from V*'s facts at the dense shape only: th
 (`E_eval_C`), and of the bound's terms only the composite finders read an inner view, through `accAtI`, which decides
 alike at the two records (`accAtI_C`, from `innerView_C`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -300,8 +304,8 @@ theorem vstarAcceptsV_bound {W Col T : Type} (H : Msg → Msg) (I : Claims.Recur
       rw [Claims.Recursion.VStarB.LayoutB.msgs_getD L x ws hi,
         Claims.Recursion.VStarB.LayoutB.msg_of_pieces hfx hne]
       exact Claims.Recursion.VStarB.LayoutB.assembled_piece hsw hl hp
-    · intro i hi1 _ _
-      exact (hrd i (by omega)).trans (hshs.2 i hi1).symm
+    · exact Claims.Recursion.VStarB.LayoutB.cmtAgrees_of_eq fun i hi1 _ =>
+        (hrd i (by omega)).trans (hshs.2 i hi1).symm
     · exact hRows x ws htrue s ws[s] (List.getElem?_eq_getElem hsw)
   rcases hDec x st hst hf (Claims.coinSeq r) ws ho.1 htrue hchk with hd | hd
   · exact Or.inl hd

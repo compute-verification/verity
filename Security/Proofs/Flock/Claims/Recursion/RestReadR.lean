@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.RestRead
-import Proofs.Flock.Claims.Recursion.DeployedR
+module
+
+public import Proofs.Flock.Claims.Recursion.RestRead
+public import Proofs.Flock.Claims.Recursion.DeployedR
 
 /-!
 # `ReadsAt` at the deployed readers: the last step reads the opened messages
@@ -11,9 +13,11 @@ rows read back, round 0 carries the link's nodes, the rounds after it the reps' 
 record value `decR` builds reads as custody's (`DecLive`).
 
 The fits are the one part that reads the rows' contents. `FitsLift` is what they need: a fit at some rows gives a fit
-at every rows of the same byte sizes. The honest proof fits the honest rows (`RepFits`), so with `FitsLift`, every
-rows the layout reads at the honest rows' sizes fit.
+at every rows of the same byte sizes, at a setup that folds at its own `k_log` (`RestFitsLift.fitsLift` proves it).
+The honest proof fits the honest rows (`RepFits`), so every rows the layout reads at the honest rows' sizes fit.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.RestRead
 
@@ -111,9 +115,11 @@ theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : 
   subst e
   exact hlive x ms cs d hlen hd (by rw [hdd]; exact hck)
 
-/-- **A fit lifts to every rows of its rows' byte sizes**: rows the same sizes as fitting ones have a fit. -/
+/-- **A fit lifts to every rows of its rows' byte sizes**, at a setup that folds at its own `k_log`: rows the same
+sizes as fitting ones have a fit. -/
 def FitsLift : Prop :=
-  ∀ (c : FlockDeploy.RepCtx) (rows rows' : List (List ByteArray)) (p' : Flock.Proof) (T' : F128),
+  ∀ (c : FlockDeploy.RepCtx), c.st.fold.kLog = c.st.kLog → ∀ (rows rows' : List (List ByteArray)) (p' : Flock.Proof)
+    (T' : F128),
     FitsRep c rows' p' T' → rows.map (·.map ByteArray.size) = rows'.map (·.map ByteArray.size) →
       ∃ pT : Flock.Proof × F128, FitsRep c rows pT.1 pT.2
 

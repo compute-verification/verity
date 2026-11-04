@@ -1,4 +1,6 @@
-import Definitions.Pous.Game.Prob
+module
+
+public import Definitions.Pous.Game.Prob
 
 /-!
 # The rate audit in the random-oracle model (trusted)
@@ -24,7 +26,7 @@ stream (`stream i` returns bit `i` of `R`), and rebuilding words (`rebuild j` re
 at an address the chip picks, so it answers any function of the store and of what the chip sent, and sending is free;
 it reaches the oracle only through what the chip sends it, so it relays no tag the chip did not query. Side-source and
 stream bits both come in over the side link, which carries at most `L` bits per window: in the actual-circuit model
-(`note:console/20261012T0645Z-draft-actual-circuit-model`, v2.4's B3 at `e = 0`), `L` is `c = β_side·(T + RTT)`, the
+(B3 at `e = 0`), `L` is `c = β_side·(T + RTT)`, the
 side links' signals over the deadline and a round trip, timing included, with no `2^e` factor for what the chip sent.
 The certified stream's `ρ` bits (certified ingress) must come in too, because a tag absorbs all of `R`, so at most
 `L − ρ` bits of the link are free for anything else. The audited location is the chip: device memory is what HBM held
@@ -53,10 +55,12 @@ with; the claims registry names the measurement that falsifies each for a deploy
 `bandwidth-side-cap`, and `rate-codec-work` for `c_enc`). Treating the stored words as uniform is
 `bandwidth-instantiation`; reading the deployed tag as the random oracle is `random-oracle`.
 
-**Windows.** `n` windows on one store (`Windows`) each draw fresh coins (a stream, an oracle and a sample). Window
-`i`'s device, its layout included, may be any function of the other windows' coins, earlier or later, and never of its
-own.
+**Windows.** `n` windows on one store each draw fresh coins (a stream, an oracle and a sample), each played by its own
+device (`Devices`). Window `i`'s device, its layout included, may be any function of the other windows' coins, earlier
+or later, and never of its own.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 
@@ -203,12 +207,12 @@ capacity the certified stream leaves free and `(F − k·c_tag)/c_enc` the words
 tagging `k` words. -/
 def floor (b ρ S L F cTag cEnc k lam : ℕ) : ℕ := k * b * cEnc - ((S + (L - ρ) + lam) * cEnc + (F - k * cTag) * b)
 
-/-- `n` windows on one store: window `i`'s device, a function of every other window's coins. -/
-abbrev Windows (n N b h ρ S L q s : ℕ) : Type :=
+/-- **The devices of `n` windows on one store**: window `i`'s device, a function of every other window's coins. -/
+abbrev Devices (n N b h ρ S L q s : ℕ) : Type :=
   (i : Fin n) → ({j : Fin n // j ≠ i} → Coins N b h ρ s) → Device N b h ρ S L q
 
 /-- Window `i`'s device at the windows' coins `ω`: it reads every coin but its own. -/
-def Windows.dev {n N b h ρ S L q s : ℕ} (A : Windows n N b h ρ S L q s) (i : Fin n) (ω : Fin n → Coins N b h ρ s) :
+def Devices.dev {n N b h ρ S L q s : ℕ} (A : Devices n N b h ρ S L q s) (i : Fin n) (ω : Fin n → Coins N b h ρ s) :
     Device N b h ρ S L q :=
   A i (fun j => ω j.1)
 

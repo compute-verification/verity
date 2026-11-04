@@ -1,4 +1,4 @@
-// Verity R8 lane B-kernel: stable-ABI torch library registration for the
+// Verity: stable-ABI torch library registration for the
 // rebuilt FA2 forward.  Mirrors the pinned csrc/flash_attn/flash_api_torch_lib.cpp
 // (vllm-project/flash-attention @ 506341a1) for `varlen_fwd` only (identical
 // schema), plus the lane's tap-configuration op (only when VERITY_TAP > 0).
@@ -67,11 +67,11 @@ void verity_set_tap(int64_t mode, std::optional<Tensor> acc, std::optional<Tenso
         t.diag_ptr = reinterpret_cast<float *>(diag.value().data_ptr());
     }
     t.H = static_cast<int>(H); t.M = static_cast<int>(M); t.N = static_cast<int>(N); t.NB = static_cast<int>(NB);
-    t.BN = 128; t.D = 64;     // legacy (R9 v7) declaration: the hdim-64 align kernel's layout
+    t.BN = 128; t.D = 64;     // legacy (v7) declaration: the hdim-64 align kernel's layout
     g_verity_tap = t;
 }
 
-// R13 lane fa2 (v8): one call per launch declaring the FULL stream geometry the host committed to -- slabs HB, rows M, key blocks NB,
+// v8: one call per launch declaring the FULL stream geometry the host committed to -- slabs HB, rows M, key blocks NB,
 // AND the kernel tile the layout is arithmetic in: BN = kBlockN (128 for hdim 64, 64 for hdim 96/128/256 on the num_splits==1 align
 // kernel) and D = head_dim (O plane width) -- plus the per-launch tag.  The launch template arms the tap only if the selected kernel's
 // (kBlockN, kHeadDim) equals (BN, D); otherwise the launch is counted in verity_tap_skipped() and nothing is written (fail closed).
@@ -86,7 +86,7 @@ void verity_set_tap_v8(int64_t mode, std::optional<Tensor> diag, int64_t HB, int
     g_verity_tap = t;
 }
 
-// R13 lane fa2 (v8): bitmask of the bf16 head dims whose split-KV kernels are compiled into this build (1<<(hd/32)): 64 -> 4, 96 -> 8, 128 -> 16, 256 -> 256.
+// v8: bitmask of the bf16 head dims whose split-KV kernels are compiled into this build (1<<(hd/32)): 64 -> 4, 96 -> 8, 128 -> 16, 256 -> 256.
 int64_t verity_tap_hdims() {
     int64_t m = 0;
 #ifdef VERITY_HAVE_SPLIT_HDIM64_BF16
@@ -103,7 +103,7 @@ int64_t verity_tap_hdims() {
 #endif
     return m;
 }
-// R13 lane fa2 (v8): the tap layout version compiled in (8 = parametric (BN, D) layout; the R9 build has no such op).
+// v8: the tap layout version compiled in (8 = parametric (BN, D) layout; the v7 build has no such op).
 int64_t verity_tap_layout_version() { return 8; }
 // What word 3 of a ROW entry holds: 0 = never written, 1 = GuardNegInfZero(row_max) after a row's first key block (VERITY_ROW_GUARD=1).
 #ifndef VERITY_ROW_GUARD
@@ -114,9 +114,9 @@ int64_t verity_tap_row3() { return VERITY_ROW_GUARD; }
 // Number of launches on which the tap had to be disabled (num_splits > 1 or capacity).
 int64_t verity_tap_skipped() { return g_verity_tap_skipped; }
 
-// R9 cmt-hidden: per-launch tag (layer / step id) bound into every SHA leaf header and kept alongside the M1 stream.
+// v7: per-launch tag (layer / step id) bound into every SHA leaf header and kept alongside the M1 stream.
 void verity_set_tap_tag(int64_t tag) { g_verity_tap.tag = static_cast<int>(tag); }
-// R9 cmt-hidden: which build this is (VERITY_TAP) and which classes it consumes (the compile-time bitmask).
+// v7: which build this is (VERITY_TAP) and which classes it consumes (the compile-time bitmask).
 #ifndef VERITY_MAT_SRC
 #define VERITY_MAT_SRC 63
 #endif
@@ -128,7 +128,7 @@ void verity_set_tap_tag(int64_t tag) { g_verity_tap.tag = static_cast<int>(tag);
 #endif
 int64_t verity_tap_mode() { return VERITY_TAP; }
 int64_t verity_tap_src() { return VERITY_TAP == 3 ? VERITY_MAT_SRC : (VERITY_TAP == 4 ? VERITY_SHA_SRC : VERITY_P1_SRC); }
-// R9 cmt-hidden: point the tap at another buffer without touching the caps (per-launch base pointer for the M1 stream).
+// v7: point the tap at another buffer without touching the caps (per-launch base pointer for the M1 stream).
 void verity_set_tap_buffers(std::optional<Tensor> acc, std::optional<Tensor> diag) {
     g_verity_tap.acc_ptr = acc.has_value() ? acc.value().data_ptr() : nullptr;
     g_verity_tap.acc_cap_words = acc.has_value() ? acc.value().numel() : 0;

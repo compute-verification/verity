@@ -1,10 +1,10 @@
-"""The `dither-1s-hb` arm: kernels-dither-rtx's served linear in one stream (`dither_one`, CA's H1V3 with the exact wrap
-correction) with this lane's one-stream unit, h1u.cu's `kh_one` (the h1u walk, its receipts, and z = O' - sum_d 128^d D_d
+"""The `dither-1s-hb` arm: the served linear in one stream (`dither_one`, H1V3 with the exact wrap correction) with
+the one-stream unit h1u.cu's `kh_one` (the h1u walk, its receipts, and z = O' - sum_d 128^d D_d
 + 256 X (wb+ - wb-)^T and y = dequant(z) from the same MMAs), in place of h1o.cu's `h1o_units`.
 
-`patch(path)` replaces `dither_one.Window.launch` before the engine is built (vLLM captures its graphs inside `LLM()`, so
+`patch(path)` replaces `dither_one.DitherState.launch` before the engine is built (vLLM captures its graphs inside `LLM()`, so
 an install after it would be too late). A call keeps dither-1s's A slot and A table: on dither-rtx's 007a40aac1 and later
-(the Window has `apre`) one `h1c_a_call` (the slot rows and the table, with `h1c_a_step` once a step in the Window's own
+(the DitherState has `apre`) one `h1c_a_call` (the slot rows and the table, with `h1c_a_step` once a step in the DitherState's own
 step hook), before it h1o_slot and h1c_build. Then h1r's seeds (version 0) and `kh_one` on the A slot (xq's rows < m and
 zero rows above) and the layer's B, into the window's z slot, the plan's seeds and receipts at the call's offsets, and
 the op's z and y. The step (m, flags) is read from the window's step on the device, as h1o reads it, and the flags mean
@@ -15,9 +15,9 @@ reads xq); dither-1s arms' tokens are reported, not gated.
 
 The workspace (`kh_unit_ws`' noise, the largest linear's `kh_ws_bytes` at T rows) is allocated at the window's first
 call, vLLM's eager profile run; each call's J is set for the row tiles its M can hold live (M is fixed per captured
-graph). The library is h1u.cu built by job.sh on this lane's branch (`HB_H1U`), sent to the run with --send.
+graph). The library is h1u.cu built by job.sh (`HB_H1U`), in the run's inputs.
 
-`patch(path, peel=True)` is the `dither-1s-hbp` arm: `kh_one_peel` (CA's peel, 11:02Z) in kh_one's place, the same
+`patch(path, peel=True)` is the `dither-1s-hbp` arm: `kh_one_peel` (the peel) in kh_one's place, the same
 receipts and z = A B^T, so y is today's; its gate is hb_peel.py's.
 """
 from __future__ import annotations
@@ -33,7 +33,7 @@ from hb_side import auto_j
 class One:
     """`kh_one` over the window's calls: per linear its seed and receipt offsets in the window's plan."""
 
-    def __init__(self, path: str, win: DO.Window, peel: bool = False):
+    def __init__(self, path: str, win: DO.DitherState, peel: bool = False):
         h = self.h = C.CDLL(path)
         vp, u32 = C.c_void_p, C.c_uint
         h.kh_one.argtypes = [vp, vp, u32, u32, u32, vp, vp, vp, vp, u32, vp, vp, vp, vp, vp, vp, vp, u32, vp]
@@ -67,7 +67,7 @@ class One:
         self.ks1 = [(C.c_int * 1)(k) for _, k in win.nk]
         self.calls = 0
 
-    def units(self, win: DO.Window, w: int, xq: torch.Tensor, s_a: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
+    def units(self, win: DO.DitherState, w: int, xq: torch.Tensor, s_a: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
               z: torch.Tensor, st: int) -> int:
         n, k = win.nk[w]
         M = int(xq.shape[0])
@@ -81,7 +81,7 @@ class One:
                        s_w.data_ptr(), win.S.data_ptr(), M, st)
 
 
-def launch(self: DO.Window, w: int, xq: torch.Tensor, s_a: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
+def launch(self: DO.DitherState, w: int, xq: torch.Tensor, s_a: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
            z: torch.Tensor) -> None:
     one = getattr(self, "hb_one", None)
     if one is None:
@@ -113,4 +113,4 @@ PEEL: list[bool] = [False]
 def patch(path: str, peel: bool = False) -> None:
     PATH[:] = [path]
     PEEL[:] = [peel]
-    DO.Window.launch = launch
+    DO.DitherState.launch = launch

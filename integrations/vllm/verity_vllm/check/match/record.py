@@ -12,7 +12,7 @@ _TAG_RE = re.compile(r'^\{"\$e":\s*"(\w+)"')
 def read_record(log_path: str) -> dict:
     """RunHeader + per engine step: rows, input tokens, logits rows, sampled tokens; StepLinks."""
     header, steps, samples, links = None, {}, {}, []
-    sampler_batch: dict[int, int] = {}   # [M-0169 derived S] engine step -> rows of the sampler's logits tensor (SampleEnd.logits_view shape[0])
+    sampler_batch: dict[int, int] = {}   # engine step -> rows of the sampler's logits tensor (SampleEnd.logits_view shape[0])
 
     def step_start(d: dict) -> None:
         s = int(d["step"])

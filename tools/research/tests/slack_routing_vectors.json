@@ -560,7 +560,7 @@
       ]
     },
     {
-      "name": "a reply under an announcement that names no one wakes no one, whatever PRs it names (reach PR 7)",
+      "name": "a reply under an announcement that names no one wakes no one, whatever PRs it names",
       "msg": {
         "ts": "1700000040.000010",
         "thread_ts": "1700000040.000001",

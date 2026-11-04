@@ -1,4 +1,4 @@
-"""The decoder shapes the skeleton runs: ALLP-IFACE's `served_weights.Shape` (CMP-95 item 1), whose tensors and
+"""The decoder shapes the skeleton runs: `served_weights.Shape`, whose tensors and
 weights stream the store holds. `FROZEN` is the H200 demo's frozen shape (the toy); the others are small instances of the same
 MQA architecture (one KV head, query heads covering the width) for CPU runs and tests.
 
@@ -40,7 +40,7 @@ class Forms:
     codes (`QuantChunkS8_v1{8192}`, and the s8 coordinates' R = K / 8192 rows); ``amax_part``: the widest `RowAbsMax_v1` (16,384;
     a wider row is parts and a combine over the last part and the partials); under the ``norm`` fusion, ``norm_part``: an
     amax part (`RmsNormAbsMax_v1{2048}`) and ``norm_codes``: a code block's words (`RmsNormQuantCodes_v1{512}`), the widest
-    C-Flock's stager lowers in under 20 GB."""
+    Flock's stager lowers in under 20 GB."""
     chunk: int = 128
     sums_row: int = 32
     group_chunks: int = 64

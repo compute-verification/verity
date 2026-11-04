@@ -1,12 +1,14 @@
-import Proofs.Flock.Claims.Complete.Runs
-import Proofs.Flock.Soundness.Refine.Setup
-import Proofs.Flock.Soundness.Refine.Arith
+module
+
+public import Proofs.Flock.Claims.Complete.Runs
+public import Proofs.Flock.Soundness.Refine.Setup
+public import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # The honest reps return
 
-`proverRuns`: the hypothesis `ProverRuns` holds, so `sessionRuns_goal` proves the goal `SessionRuns` from `JsonSpec`
-alone (`sessionRuns_of`).
+`proverRuns`: the hypothesis `ProverRuns` holds, so `sessionRuns_goal` proves the goal `SessionRuns` with no premise
+(`sessionRuns_of`).
 No coin makes a rep throw. The one refusal on the rep's path is the lincheck's fold (`Stmt.fold`), and what it asks is
 the statement's: `ρ` of `k_log − 6` coins (the zerocheck's has `m − 6`, `zerocheckP_tot`), 64 weights
 (`skipWeights_size`), and each range's slot type its fold's (`SlotOk`), which `HmRow.check` establishes
@@ -17,6 +19,8 @@ through `Hashes.ofSha512` (`commitP_ok`), and every other step is a draw, an abs
 returning lifts, and lifted over a state (`Total.st`). `totS` is it on `PS` from any sends; `totT` and `totL` add the
 transcript and Ligerito's state. The walks apply the steps whose postcondition is `True` (`Total.bind'`, …).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -364,13 +368,7 @@ theorem circuitOf_check {tags : Tags} {file : ByteArray} {tables : List (String 
     ∃ ls, HmRow.check c tags ls = .ok () := by
   unfold ProvedScope.circuitOf at h
   split at h
-  · unfold HmOut.parse at h
-    simp only [ht, Bool.not_false, ↓reduceIte] at h
-    obtain ⟨c', hc', h⟩ := ebind_ok h
-    obtain ⟨_, -, h⟩ := ebind_ok h
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    exact hm_parse_check hc'
+  · exact FlockSoundness.Discharge.Hidden.parseCommit_check ht h
   · exact hm_parse_check h
 
 theorem slotBase_ok (st : Stmt) (α : F128) (lw ρ : Array F128) {r : Range} (hr : SlotOk st.c r) :
@@ -447,9 +445,9 @@ theorem proverRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Re
     salt nonce (Transcript.init #[] d) l
   exact ⟨pt, l', e'⟩
 
-/-- **The session runs**: the goal `SessionRuns`, under `JsonSpec`. -/
-theorem sessionRuns_goal {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (S : Claims.JsonSpec printJ Flock.canon) : SessionRuns H rel :=
-  sessionRuns_of S (proverRuns H rel)
+/-- **The session runs**: the goal `SessionRuns`. -/
+theorem sessionRuns_goal {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} :
+    SessionRuns H rel :=
+  sessionRuns_of (proverRuns H rel)
 
 end FlockComplete.JsonRT

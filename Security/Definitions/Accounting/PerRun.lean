@@ -1,6 +1,8 @@
-import Definitions.Accounting.Joint
-import Definitions.Pouw.Game.Defs
-import Definitions.Pouw.PearlC.Game
+module
+
+public import Definitions.Accounting.Joint
+public import Definitions.Pouw.Game.Defs
+public import Definitions.Pouw.PearlC.Game
 
 /-!
 # Per-run audits, and what makes PoUW's cost model truncate (trusted)
@@ -31,6 +33,8 @@ the work and the bits separately. Pearl-C's game is a game of its own, with its 
 truncation for it, and `RealizesPearlCPriced` is a run whose compute audit is Pearl-C's audit, its cost covered by the
 priced sum.
 -/
+
+@[expose] public section
 
 namespace Accounting
 
@@ -102,7 +106,7 @@ namespace Run
 variable {ι : Type} {d : Device ι} {α ΩW ΩQ ΩS : Type} [Fintype α] (r : Run d α ΩW ΩQ ΩS)
 
 /-- PoUW's reads (`read_pouw`): the bits the compute account read from device memory over the compute window, the
-PoUW run's bandwidth charge (decision 9). -/
+PoUW run's bandwidth charge. -/
 def pouwRead (ω : ΩW × ΩQ × ΩS) : ℕ := (r.schedule ω).read (r.win .compute) (r.acct .compute)
 
 /-- The bits every account read from device memory over the bandwidth window (`read_total`). -/

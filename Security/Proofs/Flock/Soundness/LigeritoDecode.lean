@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.LigeritoRes
-import Proofs.Flock.Soundness.LigeritoLevels
-import Proofs.Flock.Soundness.ListSize
+module
+
+public import Proofs.Flock.Soundness.LigeritoRes
+public import Proofs.Flock.Soundness.LigeritoLevels
+public import Proofs.Flock.Soundness.ListSize
 
 /-!
 # Decoding a fold near a codeword (PROTOCOL.md §13.4, §13.5)
@@ -13,6 +15,8 @@ fold of a message `δ`-close to the table (`decode`). Three facts carry it: ever
 the limbs `K = F ⊕ F·u` (`poly_limbs`) and the novel basis spanning (`xP_span`); and the `K`
 encoding is injective on that many positions (`encK_eq_zero`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

@@ -19,10 +19,8 @@ setup = "benchmarks/harness/setup/vllm_encoded.sh"
 FLASHINFER_CUDA_ARCH_LIST = "12.0f"
 VERITY_VLLM_BENCH_KV_RECEIPTS = "on"
 
-# A content-bound checkpoint on vy-nebius-2 (a point refuses files that hash otherwise). It was
-# chosen when verity_vllm.LLM didn't take the KV pin, so a revision-pinned model's arms got different pools
-# and the kv-pool gate failed; LLM now takes it
-# (`kv_cache_memory_bytes`), and `runner.engine_args` pins both paths.
+# A node-local checkpoint bound by its `model_digest` (a point refuses files that hash otherwise). The KV pin holds
+# on both paths, a local checkpoint's and a revision-pinned one's (`kv_cache_memory_bytes`, `runner.engine_args`).
 [preset]
 id = "llama31-8b-fp8-1gpu-bandwidth"
 model = "/workspace/pouw/mvp-e2e/models/llama-3.1-8b-instruct"
@@ -39,7 +37,7 @@ max_model_len = 8384
 resident_gpu_memory_utilization = 0.40
 block_gpu_memory_utilization = 0.80
 max_num_batched_tokens = 16384
-# Every isolated (block-mode) engine of one arm group gets the same exact KV pool (llama31-8b-fp8-1gpu's).
+# Every isolated (`blocks`) engine of one arm group gets the same exact KV pool (llama31-8b-fp8-1gpu's).
 block_kv_cache_memory_bytes = 60129542144
 
 [admission]

@@ -1,21 +1,22 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Basic.Real.Basic
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.List.Chain
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.List.Chain
+public import Mathlib.Tactic.Linarith
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
 
 /-!
 # B2: Fisch's stacking lemma, proved
 
 Source: B. Fisch, ePrint 2018/702, Appendix B, Claim 12. The definitions and the statement of `b2_stacking` are
-copied verbatim from `B2StackingDraft.lean` (the statement under red-team review); its header lists the modelling
-choices. Only the `sorry` is replaced.
+copies of the trusted ones (`Security/Definitions/Pous/Model/Pebbling.lean`, `Pous.Guarantees.B2Stacking`).
 
 The combinatorial core is kept in general lemmas, so it survives a restatement:
 
@@ -30,6 +31,8 @@ layer `V_t`. Downward induction gives `|G_i| ≥ n − ρ_i − δn`, where `ρ_
 every `|G_i| < αn`, the `ρ_i` sum past `ℓ(1 − α − δ)n ≥ n`. So some `|G_i| ≥ αn`, and depth robustness gives a path
 of `βn` nodes in `G_i`, which the green path from its end extends to `V_t`.
 -/
+
+@[expose] public section
 
 namespace PousB2
 

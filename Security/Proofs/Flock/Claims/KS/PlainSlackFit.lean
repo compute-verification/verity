@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.ForkCoupling
-import Proofs.Flock.Claims.KS.PlainSimW
-import Proofs.Flock.Level3.ArithFacts
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.ForkCoupling
+public import Proofs.Flock.Claims.KS.PlainSimW
+public import Proofs.Flock.Level3.ArithFacts
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The slack fits the plain weight at the coupling's chances
@@ -25,6 +27,8 @@ message's coin being revealed to nobody. The plain fork rounds are before the la
   accepting fork with a collision there (`plainForkEv`) and the slack at those chances, as `PlainSimWrPAtD` asks
   (`forkCoinCoupling_plain`, `slack_of_coupling`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

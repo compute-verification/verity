@@ -27,7 +27,7 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   `RECANCEL_S`, so a run that hangs again is left for a person;
 - **stalled** when it reads RUNNING and has streamed nothing at all, its subagents' progress included, for `STALL_S`, and the
   agent's own `updatedAt` (which moves while it works; a run's doesn't) hasn't moved for as long: a hung tool call or a
-  suspended VM, which the API doesn't show (Daniel, 19 Oct, after proofs sat 7 h). It is cancelled and continued as a held
+  suspended VM, which the API doesn't show. It is cancelled and continued as a held
   run is, under the same once-an-hour limit; a quiet stream alone, while the agent's `updatedAt` moves, is a broken stream,
   not a stall. A followed background wait is stalled the same way after `STUCK` (2 h) with nothing streamed and the agent's
   `updatedAt` still: cancelling a wait may take its local subagents, but a suspended VM has lost them already (compute-accounting's
@@ -227,7 +227,7 @@ RESUME = ("resume: {runs} ended and nothing has run on you since (the agent watc
 WORKER_RELAUNCH = (
     "You are a fresh launch of Verity worker {old} ({short}, lane {lane}, a worker of the @{handle} coordinator), which the "
     "agent watch found idle with its task unfinished ({why}) after {runs} ended, with nobody resuming it within {mins} min, so "
-    "it launched you in its place (Daniel, 19 Oct: fast failure detection). You are a worker, not a coordinator: you hold no "
+    "it launched you in its place (fast failure detection). You are a worker, not a coordinator: you hold no "
     "handle, and @{handle}'s coordinator still owns the lane and your task. Read origin/main's AGENTS.md, its team skill "
     "(`.agents/skills/team/SKILL.md`) and the lane contract first. Report to your coordinator in its inbox thread, your checkpoints, your final report and any question: "
     "`research msg send --as {handle} --thread {inbox} --text '...'`. End your turn while a research run goes on: when it ends, "
@@ -237,7 +237,7 @@ WORKER_RELAUNCH = (
     "stopped, and name both {old} and your own id in your notes' origin.\n"
     "--- newest note ---\n{text}")
 HANDOVER = (
-    "The agent watch relaunched you (Daniel, 19 Oct: fast failure detection): your predecessor {old} {why}, at {at}, and the "
+    "The agent watch relaunched you (fast failure detection): your predecessor {old} {why}, at {at}, and the "
     "watch could not resume it. It is left as it was: once you hold the inbox, ask @top to archive it. Its newest handover "
     "note ({note}) follows.\n\n{text}")
 NOTE_CHARS = 30_000             # a note given to a relaunched agent is cut to this many characters
@@ -252,6 +252,12 @@ BELLS_STALE_S = 30 * 60
 # person's stop or the watch's own; ERROR is `restart`'s
 IDLE_DONE = {"FINISHED", "EXPIRED", "WAITING_FOR_BACKGROUND_WORK"}
 AGENT_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
+SHORT_AGENT_RE = re.compile(r"\b(bc-[0-9a-f]{8})\b(?!-[0-9a-f]{4}-)")
+
+
+def short_id(agent: str) -> str:
+    """An agent id as notes often write it: `bc-` and its first 8 hex digits."""
+    return agent[:11]
 WAKE = ("wake: your timer or your inbox subscription seems not to have fired ({why}; the agent watch started this run). Read "
         "your doorbell (`research msg read --as {handle}`), run your duties, and set again whichever lapsed.")
 SCHEMA = "verity/agent-watch-status/v1"
@@ -430,13 +436,14 @@ def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: 
 def note_times(notes: Path | None, t: float) -> tuple[dict[str, float], dict[str, set[str]], dict[str, float]]:
     """(agent id -> its newest note's mtime, agent id -> the branches its notes' origins name, lane -> its newest note's mtime),
     over the notes `recent_notes` gives: a note is an agent's when its `origin:` names it (`ZKS10, bc-...; code
-    cursor/zk-frame-c7a9`), and its lane's by its directory under `lanes/` and its `lane:`."""
+    cursor/zk-frame-c7a9`), by its full id or its short one (`bc-` and 8 hex digits, keyed as given: `short_id`), and its lane's by
+    its directory under `lanes/` and its `lane:`."""
     heard: dict[str, float] = {}
     named: dict[str, set[str]] = {}
     lanes: dict[str, float] = {}
     for p, mtime, fm in recent_notes(notes, t):
         origin = fm.get("origin", "")
-        for agent in AGENT_RE.findall(origin):
+        for agent in set(AGENT_RE.findall(origin)) | set(SHORT_AGENT_RE.findall(origin)):
             heard[agent] = max(heard.get(agent, mtime), mtime)
             named.setdefault(agent, set()).update(BRANCH_RE.findall(origin))
         for lane in {p.parent.name, fm.get("lane", "")} - {""}:
@@ -1409,11 +1416,13 @@ class Watch:
         heads = self.heads.get("heads") or {}
         for agent, k in sorted(known.items()):
             coord = agent in self.coords
-            mine = {*k["branches"], *named.get(agent, ()), *(b for b in heads if b.endswith("-" + agent[-4:]))}
+            mine = {*k["branches"], *named.get(agent, ()), *named.get(short_id(agent), ()),
+                    *(b for b in heads if b.endswith("-" + agent[-4:]))}
             pushed = max((heads[b][1] for b in mine if b in heads), default=None)
             # a coordinator signs its notes with its lane, not its id (top, 27 Oct: four false silent rings in 70 min)
             lane_note = max((lanes[x] for x in (k["handle"], k["lane"]) if x and x in lanes), default=None) if coord else None
-            last = max(x for x in (k["since"], heard.get(agent), lane_note, pushed, self.heads["t0"]) if x is not None)
+            last = max(x for x in (k["since"], heard.get(agent), heard.get(short_id(agent)), lane_note, pushed, self.heads["t0"])
+                       if x is not None)
             s = self.silent.get(agent)
             if s and s["from"] != last:
                 self.silent.pop(agent)
@@ -1425,7 +1434,8 @@ class Watch:
                     s["no_step"] = True
                     changed = True
                     self.record("no_step", Run(agent, k["run"], k["name"]), since=iso(still), hours=int((t - still) // 3600),
-                                lane=k["lane"], **({"handle": k["handle"]} if k["handle"] else {}), owner="top")
+                                lane=k["lane"], **({"handle": k["handle"]} if k["handle"] else {}), owner="top",
+                                role="coordinator" if coord else "worker")
                 continue
             if t - last < (COORD_SILENT_S if coord else SILENT_S) * (n + 1):
                 continue
@@ -1827,7 +1837,7 @@ class Watch:
         start refused continue runs, then judge every followed run."""
         t = self.clock()
         live, agents = {}, list(self.api.agents())
-        # the key sees every agent on the account (Daniel's own too: 'Open calendar for Calendly', restarted 02:21Z 19 Oct);
+        # the key sees every agent on the account (its owner's own too);
         # only Verity's are followed, restarted or woken, and only they are status rows
         listed, agents = {a["id"] for a in agents}, [a for a in agents if verity(a)]
         self.coords = coords = holders(self.registry, self.routes)

@@ -1,5 +1,5 @@
 """The bandwidth leg's store, the period's records (`period.records`, PoUS's own): every copy of the auditor's ledger in
-them cut to the entries their window cites (MEM-103). PoUW's reader of the ledger (`challenger.audited_session`) checks
+them cut to the entries their window cites. PoUW's reader of the ledger (`challenger.audited_session`) checks
 every entry, chained from seq 0, so it takes the window's whole ledger, which stays on disk, and refuses the cut copy
 rather than credit from it; a copy that doesn't open the cited session is refused when the records are written; and the
 bandwidth session accepts the cut store as it accepts the whole."""
@@ -10,7 +10,8 @@ import json
 
 import pytest
 
-from test_verifier_party import COINS, Clock, Entropy
+from remote_bandwidth_fakes import Clock, Entropy
+from test_verifier_party import COINS
 from verity.core.protocols.pous import period as pous_period
 from verity.core.protocols.remote_bandwidth import period as P
 from verity.core.protocols.sampled_proofs import challenger as C
@@ -50,7 +51,7 @@ class Ledger:
             at[f"reserve {s}"] = self.add("reserve", s, reserve)
             at[f"open {s}"] = self.add("open", s, {
                 **reserve, "reserve": at[f"reserve {s}"], "opened_by": LANE, "window": {"root": root(s)},
-                "host": "vy-challenger-1", "pinned": "ab" * 20, "key_sha512": self.key_sha512})
+                "host": "challenger-host", "pinned": "ab" * 20, "key_sha512": self.key_sha512})
             self.leaf += 1
             at[f"end {s}"] = self.add("end", s, {
                 "closed": True, "complete": True, "files": {f: "00" * 64 for f in C.SEALED_FILES},
@@ -125,7 +126,7 @@ def test_the_bandwidth_session_accepts_the_cut_store_as_the_whole(tmp_path):
         (p.relative_to(tmp_path).as_posix(), p.read_bytes()) for p in sorted(tmp_path.rglob("*")) if p.is_file()))
     blocks = {}
     for name, store in (("whole", whole), ("cut", P.records(tmp_path))):
-        c = Clock()
+        c = Clock(10 ** 9, 1_000)
         got = P.run("n0", store, COINS, clock=c, sleep_until=c.sleep_until, entropy=Entropy(name.encode()))
         assert got.verdict == "accept", got.answer
         blocks[name] = len(P.payloads(store))

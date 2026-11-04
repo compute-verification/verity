@@ -1,11 +1,13 @@
-import Proofs.Flock.Claims.DecodeFlock
-import Proofs.Flock.Claims.NumbersGamma
+module
+
+public import Proofs.Flock.Claims.DecodeFlock
+public import Proofs.Flock.Claims.NumbersGamma
 
 /-!
 # `nMin` at the deployed parameters
 
-Ruling 2 (16 Oct) asked a decoder to list a trace only from at least `nMin` opened columns at distinct positions (the
-spec's `nMin` form, since replaced by its radius form, `Flock.ListWithin`, for what follows), the
+The list-decoding spec once asked a decoder to list a trace only from at least `nMin` opened columns at distinct
+positions (the spec's `nMin` form, since replaced by its radius form, `Flock.ListWithin`, for what follows), the
 Johnson count `johnsonCount k agree = ⌊(k+1)/agree²⌋ + 1` of the trace's code (`Claims.johnsonCount`,
 `listComplete_flockLevelZero`). Flock's first committed codeword is level 0 of its `fast100` schedule, of dimension
 `k = 2^c` (`c = level₀.logCols`) and length `N₀ = 2^{c+1}` (rate `1/2`). At the analysis' threshold
@@ -25,6 +27,8 @@ Johnson count `johnsonCount k agree = ⌊(k+1)/agree²⌋ + 1` of the trace's co
   number, while the masked rate `ρ' = (2^c + t)/2^{c+1}` runs from `0.568` (`m = 25`) to `0.500` (`m = 35`), which is
   why the radius form reads its radius per trace (`Deploy.θ`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock.Numbers
 

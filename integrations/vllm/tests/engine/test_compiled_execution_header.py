@@ -1,8 +1,8 @@
-"""[R15 compiled] The run header attests the EXECUTION the engine was built with, and a mislabelled engine is refused (torch required for the
+"""The run header attests the EXECUTION the engine was built with, and a mislabelled engine is refused (torch required for the
 adapter import; no GPU: the engine is a fake carrying a vllm_config-shaped object).
 
   * `compilation_facts` reads mode / cudagraph_mode / capture sizes / partition / enforce_eager back from the built engine's vllm_config in
-    the form GP-01/GM-01 compare (enum NAMES, not the IntEnum's str())
+    the form the global Program and the global match compare (enum NAMES, not the IntEnum's str())
   * `target_mismatches`: an eager profile against a compiled engine, and a `piecewise` profile against an eager engine or a
     FULL_AND_PIECEWISE engine, are refused by name; the matching pair is accepted
 """
@@ -46,7 +46,7 @@ def test_compilation_facts_are_read_back_in_the_declared_form():
     assert A.compilation_facts(_llm(False, emulate=True))["emulate_precision_casts"] is True
     e = A.compilation_facts(_llm(True, _CG.NONE))
     assert e["enforce_eager"] is True and e["mode"] == "NONE"
-    # the declared facts of the `piecewise` profile are a subset of the read-back (what GM-01 G1 compares key by key)
+    # the declared facts of the `piecewise` profile are a subset of the read-back (what the global match's G1 compares key by key)
     decl = TargetProfile(compilation="piecewise").modelled_engine()["compilation"]
     assert all(f[k] == decl[k] for k in ("mode", "cudagraph_mode", "use_inductor_graph_partition", "emulate_precision_casts"))
 
@@ -69,7 +69,7 @@ def test_target_mismatches_refuse_a_mislabelled_execution(monkeypatch):
     assert any("enforce_eager=True" in b for b in bad) and any("cudagraph_mode 'PIECEWISE'" in b and "'NONE'" in b for b in bad)
     bad = A.target_mismatches(_engine(compiled, _llm(False, _CG.FULL_AND_PIECEWISE)))
     assert bad == ["profile declares cudagraph_mode 'PIECEWISE', engine runs 'FULL_AND_PIECEWISE'"]
-    # [M-0380] the emulated compiled engine is a DIFFERENT declared specialization (`piecewise-emu`): refused under the default `piecewise` profile
+    # the emulated compiled engine is a DIFFERENT declared specialization (`piecewise-emu`): refused under the default `piecewise` profile
     bad = A.target_mismatches(_engine(compiled, _llm(False, emulate=True)))
     assert len(bad) == 1 and "emulate_precision_casts=False" in bad[0] and "compiled with True" in bad[0]
     assert A.target_mismatches(_engine(dev.with_overrides(compilation="piecewise-emu"), _llm(False, emulate=True))) == []
@@ -95,7 +95,7 @@ def call(args):
 
 
 def test_generated_kernels_pin_is_non_null_for_compiled_output_code_and_null_without(tmp_path, monkeypatch):
-    """rev-pm M-0266/M-0268 (b): the record path pins the Inductor output code it compiled (kernel_set / call_set digests) -- positive
+    """The record path pins the Inductor output code it compiled (kernel_set / call_set digests) -- positive
     evidence an eager run cannot produce -- and reports the absence of output code as an error with a null pin (never a silent placeholder)."""
     d = tmp_path / "inductor_cache" / "ab"
     d.mkdir(parents=True)
@@ -141,7 +141,7 @@ def test_prepare_compiled_process_cache_gives_a_fresh_marked_dir_and_disables_th
 
 @pytest.mark.parametrize("resolved,expected", [(True, True), (False, False), (None, None)])
 def test_async_scheduling_is_the_resolved_scheduler_value_not_the_cli_default(resolved, expected):
-    """[R16 sys int-3, coord M-0213 RULING 21] vLLM's CLI default is None and is resolved at VllmConfig.__post_init__; the header attests
+    """vLLM's CLI default is None and is resolved at VllmConfig.__post_init__; the header attests
     the resolved bool read back from scheduler_config (None = unattested, distinct from False), and an engine without the attribute is None."""
     sc = types.SimpleNamespace(async_scheduling=resolved)
     llm = types.SimpleNamespace(llm_engine=types.SimpleNamespace(vllm_config=types.SimpleNamespace(scheduler_config=sc)))

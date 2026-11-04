@@ -1,4 +1,6 @@
-import Definitions.Flock.Merkle
+module
+
+public import Definitions.Flock.Merkle
 
 /-!
 # Merkle binding
@@ -12,6 +14,8 @@ directly; VCVio proves the same fact for its inductive trees
 
 `opening_bindingL` is `opening_binding` for any leaf scheme (`Leaf`), salted ones included.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Merkle
 

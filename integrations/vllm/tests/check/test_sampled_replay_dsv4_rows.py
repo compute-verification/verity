@@ -21,7 +21,7 @@ from verity.ml.definitions.registry import (dsa_norm, dsv4_compressor, dsv4_deco
 from verity.ml.definitions.registry.hopper import HopperBF16WgmmaDot16
 from verity_vllm.query.manifest import format as RM
 
-#: the 19 families the per-rank no-evaluator rule failed DeepSeek-V4-Pro B1's deferred replay r20261021-114900-5d55 on
+#: the 19 families the per-rank no-evaluator rule failed DeepSeek-V4-Pro B1's deferred replay on
 DSV4_B1_FAMILIES = ("SiluMulClamp_v1", "TritonBlockRMSNorm_v1", "MhcPostPreTf32_v1", "FlashMlaGatherRow_v1", "Dsv4QNormRopeKvInsert_v1",
                     "MoeRouterSqrtSoftplus_v1", "FlashMlaPrefill_v1", "GatherI32x129280_v1", "MhcFusedPostPre_v1",
                     "Dsv4MlaCompressC4_v1", "FlashMlaDecode_v1", "MoeRouterHash_v1", "MhcPreBroadcast_v1", "MhcResidualBroadcast_v1",
@@ -69,7 +69,7 @@ CASES = [
     (HEAD_SPEC, bind(dsv4_indexer.Dsv4InvRopeQuantHead, CHUNKS=4, QG=128, ROPE=64)),
 ]
 
-#: the families whose operands are drawn with their twin's sampler (indices, lengths, e4m3 / e8m0 bytes and edge words a uniform draw
+#: the families whose operands are sampled with their twin's sampler (indices, lengths, e4m3 / e8m0 bytes and edge words a uniform draw
 #: rarely makes)
 DRAWN = ("FlashMlaDecode_v1", "FlashMlaPrefill_v1", "FlashMlaGatherRow_v1", "Dsv4QNormRopeKvInsert_v1", "MoeRouterSqrtSoftplus_v1",
          "MoeRouterHash_v1", "SiluMulClamp_v1", "Dsv4CompressorScore_v1", "Dsv4InvRopeQuantHead_v1")

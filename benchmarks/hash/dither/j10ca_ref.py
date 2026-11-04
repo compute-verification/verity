@@ -34,7 +34,7 @@ def main() -> int:
     with ProcessPoolExecutor(workers) as pool:
         out = list(pool.map(one, units))
     open(sys.argv[2], "w").write(json.dumps({"banded": BD.__file__, "peeled": True, "units": out,
-                                             "noise": "j10-banded (CA #2866 @ 1a4d1de024)"}))
+                                             "noise": "j10-banded (credit's banded reference @ 1a4d1de024)"}))
     return 0
 
 

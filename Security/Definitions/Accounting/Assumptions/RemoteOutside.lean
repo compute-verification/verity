@@ -1,9 +1,11 @@
-import Definitions.Accounting.Remote.Outside
+module
+
+public import Definitions.Accounting.Remote.Outside
 
 /-!
 # No device outside the node computes on the store: statement C in full (trusted)
 
-A relay prover (red team round 4, RD-14) forwards each window's coin from a thin node to a helper outside it, which
+A relay prover forwards each window's coin from a thin node to a helper outside it, which
 holds the encoded store and computes the receipts. No block crosses the node's boundary links, so `Identity` holds and
 the links' charge (`Links`) is untouched, yet the node holds nothing. What excludes it is where the receipts'
 computation ran. `SketchBound` used to carry that inside its derivation (the sketch model's `Present`); here it is split
@@ -34,6 +36,8 @@ The two give `SketchBound` (`Accounting.SecurityProofs.Remote.sketchBound_of_noO
   `outside`), so it holds wherever the grinding ran. What C adds is where the computation on a block's sectors (the
   block clause) and on its receipts (the receipts clause) ran.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Held.Assumptions
 

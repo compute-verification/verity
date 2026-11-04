@@ -1,4 +1,6 @@
-import Definitions.Accounting.Gates.Codec
+module
+
+public import Definitions.Accounting.Gates.Codec
 
 /-!
 # The encode bound's former conjecture, falsified: a word's encoding costs budgeted units per squaring (trusted)
@@ -15,6 +17,8 @@ encode bound now rests on its two parts in the model's nonlinear units (`Gates.n
   parity) on more than `ε` of the draws costs `E` budgeted units a word, less `E/(n−1)` for each bit of run input, at
   `ε ≥ 2^−64`, `k ≥ 1` and a field with `p ≥ 2^66` and `p ≡ 3 mod 4`, and claims nothing outside that floor.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions
 
@@ -35,8 +39,8 @@ bits of run input (the word itself, sent after the draw).
 
 **The floor.** It is claimed at `ε ≥ 2^−64` (`εden ≤ 2^64 · εnum`), `k ≥ 1`, `p ≥ 2^66` and `p ≡ 3 mod 4`, and says
 nothing outside them; every reader carries them. Below each, a circuit with no budgeted gate computes a word, so the
-bound fails at every `E ≥ 1` (the red team's counterexamples; the examples
-after `EncodeCost` in `Proofs/Accounting/Gates.lean` put them outside the floor):
+bound fails at every `E ≥ 1` (known counterexamples; the examples after `EncodeCost` in `Proofs/Accounting/Gates.lean`
+put them outside the floor):
 
 * at `ε = 0`, the constant bytes of one draw's target are right on that draw;
 * at `k = 0` the encoding is the payload word itself, registered before the draw;
@@ -67,13 +71,13 @@ exponentiation (as Sloth's sequentiality) and no amortization across words. At `
 
 **The restriction is `B`.** It is false without one: a budgeted gate that reads a word's bits computes a byte of its
 root, so a word costs about `k·n/32 + n/8` gates (224 at p1024, `k = 3`). property/v1's listed primitives read at most
-96 operand bits; the falsification test's constructions (ripple carries, the red team's IMMA plus `I32Div`/`I32Rem`,
-and look-ahead carries) are within `B = 128`, and spend at least `L − d(0)` units a squaring. Which `B` is safe is
-open: a test at toy `n` with `B/n` fixed would settle the trend.
+96 operand bits; the falsification test's constructions (ripple carries, IMMA plus `I32Div`/`I32Rem`, and look-ahead
+carries) are within `B = 128`, and spend at least `L − d(0)` units a squaring. Which `B` is safe is open: a test at toy
+`n` with `B/n` fixed would settle the trend.
 
 **Units, and why a gather over run-time values pays one.** A gate that reads only registered values and constants is
 free (it computes one value on every draw), and a gather pays its fresh index bits, `⌈log₂ (V + 1)⌉` for a column
-of `V` words and the `0` outside it, `n` for a table read of its index's low `n` bits (`Gate.indexBits`), each kind
+of `V` words and the `0` outside it, `n` for a table read of its index's low `n` bits (`IntGate.indexBits`), each kind
 counted apart as property/v1 counts them: a one-word gather of a run-time index is the comparison
 `[i ≤ 0]`, and were it free, thresholds and affine maps would carry a square's column sums back to bytes and the
 chain would cost nothing. Without the extra unit for a
@@ -85,7 +89,7 @@ would compute any function of the draw (`(k + 2)·n` bits) for about that many u
 `{x, p − x}` with that sign rule, and what the conjecture charges is the pair's root, not the sign. -/
 def EncodeChainHardness (F : Field) (k B E εnum εden : ℕ) : Prop :=
   εden ≤ 2 ^ 64 * εnum → 0 < k → 2 ^ 66 ≤ F.p → F.p % 4 = 3 →
-  ∀ {ι : Type} (C : Dag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
+  ∀ {ι : Type} (C : IntDag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
     Restricted B C → CodecInputs F C (draws F k) m x → words.Nodup → (∀ i ∈ words, i < F.p) →
     ComputesWords F k C x m words out εnum εden →
     words.length * E * (F.n - 1) ≤ budgeted C * (F.n - 1) + runBits C * E

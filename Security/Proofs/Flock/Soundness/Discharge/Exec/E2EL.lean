@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.FlockPublicL
-import Proofs.Flock.Soundness.E2E
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockPublicL
+public import Proofs.Flock.Soundness.E2E
 
 /-!
 # The end-to-end theorem: a skeleton, every gap a named hypothesis
@@ -10,7 +12,7 @@ circuit and values, 1 on the constants and 0 on the zero, which are public:
 * `flock_e2e_drawnL`: `Pr[accept ∧ a drawn unit wrong] ≤ ε_ks(σ) + δ_link`.
 
 "Wrong" is measured on the audit's circuit `C`, at the committed values: the circuit the statement's rows make, each unit
-its template's rows (`Prog.circuit`; Daniel, Sep 30: the circuit is chosen on the untrusted side, and the lowering does
+its template's rows (`Prog.circuit`: the circuit is chosen on the untrusted side, and the lowering does
 no optimizing). `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn` state it there, with each drawn unit's place from its
 table's statement (`ProgPlaces`). What a correct unit computes is the certificate's: rows that are `GateRows.rows` of a
 gate circuit `G` compute `G`, so a correct unit's committed values compute `G` (`IsRowsUnit.computes_of_cert`,
@@ -43,6 +45,8 @@ checklist `assumption-notes/e2e-checklist.md` gives each one's owner and how it 
   committed transcript is 0 there, so the profile is about the zero padding at 0. This is the zero's binding;
 * `vb : ValueBinding`: the binding of wires to registered commit strings, already named on `main`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

@@ -1,11 +1,13 @@
-import Proofs.Accounting.TS.Session.Held.Assumptions
-import Proofs.Accounting.TS.Session.Checked.Guarantees
+module
+
+public import Proofs.Accounting.TS.Session.Held.Assumptions
+public import Proofs.Accounting.TS.Session.Checked.Guarantees
 
 /-!
 # A checked unit's proof layer with its served checks is sound through its C-Flock sessions (the statement)
 
 `Accounting.Guarantees.TS.HeldSessionSound`: `Accounting.Guarantees.TS.CheckedSessionSound`'s window, with the layer
-`Accounting.TS.Held.heldLayer` in place of `checkedLayer`. Its relation concludes the served checks (RT4-LOGIC-29):
+`Accounting.TS.Held.heldLayer` in place of `checkedLayer`. Its relation concludes the served checks:
 
 * (a) the `ok` rows are the verifier's, proved from flock-verify's known-content refusal (`Registered.checkKnownAll`)
   and `FlockC3.RegLevels.knownColl_spec`, not a premise. The service names the `ok` port's known content in the
@@ -17,6 +19,8 @@ The bound is `CheckedSessionSound`'s `δ`: an accepted proof whose rows meet `Ch
 so the held layer's unsound event is inside the checked layer's. `CheckedSessionSound`'s statement is unchanged. It sits
 in the proofs package because the sessions do (`reads_exempt`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

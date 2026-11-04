@@ -18,6 +18,7 @@ Definition where it exists, else the lane's reference), until the replay lane ad
   equal); ``ScaledMmS8ResidualCoordinateRows_v1{K, R, DOT}``: that, then ``Bf16Add_v2`` with the residual stream's word;
 * ``QkSoftmaxRowPad_v1{T, D}``: ``GemmCoordinate_v2{K = D}`` a key and `softmax_row` over the slot's n = position + 1 keys,
   +0 past them; ``PvRow_v1{T, K, D, DOT}``: ``GemmCoordinatePad_v1{T, K}`` a dimension, absent keys' V rows all-zero;
+  ``QkSoftmaxPvPad_v1{T, K, D, DOT}`` (``fused`` ``pv``): the first's row, then the second's of it;
 * ``Bf16AddRow_v2{N}``: ``Bf16Add_v2`` a word; ``Argmax_v2{V}``: `argmax_row`;
 * ``AllGather_v1{WORLD, N}``: the copy of its parts' rows. Its parts and its output are the same table bytes here, so its
   replay only restates them; the commit holds both, and a drawn gather opens its own rows against the step's root.
@@ -27,7 +28,7 @@ weights (`weights.Weights`, from the generator, not the store, so a wrong decode
 slot ``slots[b]`` at its own position p; its attention reads the slot's K and V rows committed at positions 0 .. p, each at
 the step and row the slot ran it (`Replayer.history`), never the live cache.
 
-A `Subcircuit` joins the step's integrity registration as one more sampling block, drawn with the step's families: PoUW's
+A `Subcircuit` joins the step's integrity registration as one more execution phase, drawn with the step's families: PoUW's
 per-call-noise tiles (`percall`) plug in as ``MODULE:FACTORY`` (`load_subcircuit`, ``run.py --subcircuit``).
 """
 from __future__ import annotations
@@ -184,7 +185,7 @@ def _pv(t: int) -> RP.Template:
 
 class Subcircuit(Protocol):
     """A subcircuit of the step's integrity registration besides the model's units: ``serve`` runs after each served step
-    (with the driver's resident weights, ``driver.params``), ``families`` gives its units at a step for the draw, and
+    (with the driver's resident weights, ``driver.params``), ``families`` gives its units at a step for the sample, and
     ``manifest`` what the registration records of it. Optionally ``call(driver, st, op, lo, codes, w, acc)``, which the driver
     calls on each served linear call: rows ``lo ..`` of linear ``op``'s A codes, its weight and its s32 sums."""
     name: str
@@ -283,13 +284,13 @@ class Replayer:
                  "RmsNormOutSums_v1": self._norm, "RowAbsMax_v1": self._amax, "QuantChunkS8_v1": self._quant,
                  "RmsNormAbsMax_v1": self._normed, "RmsNormQuantCodes_v1": self._normed, "QuantScaleS8_v1": self._scale,
                  "ScaledMmS8CoordinateRows_v1": self._linear, "ScaledMmS8ResidualCoordinateRows_v1": self._linear,
-                 "QkSoftmaxRowPad_v1": self._softmax, "PvRow_v1": self._pv, "Bf16AddRow_v2": self._add,
-                 "Argmax_v2": self._argmax}
+                 "QkSoftmaxRowPad_v1": self._softmax, "PvRow_v1": self._pv, "QkSoftmaxPvPad_v1": self._head,
+                 "Bf16AddRow_v2": self._add, "Argmax_v2": self._argmax}
         return [Family(u.name, u.key, u.status, u.count, build[u.template](step, u))
                 for g in self.map.groups() for _, us in g for u in us]
 
     def registration(self, step: int) -> dict:
-        """The step's sampling blocks: the model's families by template, then each subcircuit's."""
+        """The step's execution phases: the model's families by template, then each subcircuit's."""
         fams = self.model_families(step)
         return {"blocks": [{"name": "model", "families": len(fams), "templates": sorted({f.template for f in fams})}]
                 + [{"name": sub.name, **sub.manifest()} for sub in self.subcircuits]}
@@ -432,6 +433,19 @@ class Replayer:
             return [p, padded], self.out(step, u, b, head).view(np.uint16), pv_row(p, padded)
         return replay
 
+    def _head(self, step: int, u: Units) -> Replay:
+        """The ``pv`` fusion's head: `qk_softmax_pad` of q and the slot's keys, then `pv_row` of that row and its values."""
+        layer, d = int(u.table[1:].split(".")[0]), self.shape.head_dim
+
+        def replay(b: int, head: int):
+            q = self.u16(step, f"l{layer}.wq", b)[head * d:(head + 1) * d]
+            keys, values = self.kv(step, layer, b)
+            k, v = np.zeros((PV_K, d), np.uint16), np.zeros((PV_K, d), np.uint16)
+            k[:len(keys)], v[:len(values)] = keys, values
+            want = pv_row(qk_softmax_pad(q, keys), v)
+            return [q, k, v, np.array([len(keys)], np.uint16)], self.out(step, u, b, head).view(np.uint16), want
+        return replay
+
     def _add(self, step: int, u: Units) -> Replay:
         a_op, b_op = self.src[u.table]
         c = u.nbytes // 2
@@ -447,7 +461,7 @@ class Replayer:
             return [logits], self.out(step, u, b, 0).view(np.uint16), argmax_row(logits[None])
         return replay
 
-    # -- the draw
+    # -- the sample
 
     def unit(self, fam: Family, step: int, row: int, index: int) -> Unit:
         inputs, got, want = fam.replay(row, index)

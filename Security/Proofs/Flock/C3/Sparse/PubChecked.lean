@@ -1,7 +1,9 @@
-import Proofs.Flock.C3.Sparse.PubLift
-import Proofs.Flock.C3.Opening.SessionCoins
-import Proofs.Flock.C3.VStarList.Range
-import Proofs.Flock.C3.RegLevels.LevelsChecked
+module
+
+public import Proofs.Flock.C3.Sparse.PubLift
+public import Proofs.Flock.C3.Opening.SessionCoins
+public import Proofs.Flock.C3.VStarList.Range
+public import Proofs.Flock.C3.RegLevels.LevelsChecked
 
 /-!
 # `SparsePubRead` from check 5's acceptance
@@ -19,6 +21,8 @@ import Proofs.Flock.C3.RegLevels.LevelsChecked
   `m`, `k_log` and unit range, which are the class's where its class checks pass, so the custody left is that the files'
   statement is the class's and rep `i`'s rounds `d`'s.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

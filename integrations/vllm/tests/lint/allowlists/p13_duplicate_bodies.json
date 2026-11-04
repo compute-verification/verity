@@ -1,7 +1,6 @@
 {
   "rule": "P13 (no duplicate function bodies)",
   "entries": [
-    {"file": "verity_vllm/program/compact.py", "kind": "duplicate-body", "symbol": "lean_root.get.static_of", "detail": "verity.ml"},
     {"file": "verity_vllm/program/frontend/rules/profile.py", "kind": "duplicate-body", "symbol": "_row_tensor", "detail": "verity_vllm"},
     {"file": "verity_vllm/program/frontend/rules/vllm_bindings/operands.py", "kind": "duplicate-body", "symbol": "_row_value", "detail": "verity_vllm"},
     {"file": "verity/ml/definitions/numerics/fa2_relation.py", "kind": "duplicate-body", "symbol": "_const", "detail": "verity_vllm"},

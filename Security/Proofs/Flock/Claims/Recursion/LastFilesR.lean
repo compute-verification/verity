@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.LastSharedR
-import Proofs.Flock.Claims.Recursion.LastBindsR
+module
+
+public import Proofs.Flock.Claims.Recursion.LastSharedR
+public import Proofs.Flock.Claims.Recursion.LastBindsR
 
 /-!
 # The columns half of the deployed reader's last-message binding (`RecDeploy.RColsBind`)
@@ -16,6 +18,8 @@ messages (`nextR_shared`), and each verdict reads the proofs' files `filesAt` at
 
 So `RColsBind` holds at SHA-512 with no premise (`RecDeploy.rColsBind_sha512`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -67,7 +71,7 @@ theorem filesJ_tied {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claim
   have hms0 : (tabsOf sts)[k / 2].merkle = MerkleScheme.hm96Sha512 ∨
       (tabsOf sts)[k / 2].merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := by
     rw [tabsOf_getElem hi]
-    rcases checksAtJ_leaf hck hsu (k / 2) hsts with e | ⟨-, e⟩
+    rcases checksAtJ_leafL hck hsu (k / 2) hsts with e | ⟨-, e⟩
     · exact Or.inl e
     · exact Or.inr e
   generalize hst : (tabsOf sts)[k / 2] = st at hsch hr₁ hr₂ hms0
@@ -88,7 +92,7 @@ theorem filesJ_tied {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claim
   have hr₂s : verifyRepWith (hashesIn (L₂.map Prod.fst)) spec st sch sess (k / 2) (k % 2) F'[k]! = .ok c' := by
     rw [With.verifyRepWith_erase With.Sim.liftMap_V _ spec st sch _ hy hy' hyy hP (by rw [hB])]
     exact hr₂
-  have hpure : ∀ {L : List Claims.Msg} {sess₀ : Session} {bs c₀ : ByteArray},
+  have hpure : ∀ {L : List Claims.Msg} {sess₀ : RunRecord} {bs c₀ : ByteArray},
       verifyRepWith (hashesIn L) spec st sch sess₀ (k / 2) (k % 2) bs = .ok c₀ →
         verifyRep spec st sch sess₀ (k / 2) (k % 2) bs = .ok c₀ := by
     intro L sess₀ bs c₀ h

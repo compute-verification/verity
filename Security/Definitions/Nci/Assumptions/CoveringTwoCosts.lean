@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.Covering
+module
+
+public import Definitions.Nci.Assumptions.Covering
 
 /-!
 # The covering bound's two assumptions at two costs: `c_w` a weight, `c_a` an activation
@@ -10,7 +12,7 @@ activation-chaining at an activation cost `c_a` (`ActivationChainedAt`), over th
 
 **Why two costs.** One shared `c` is at most both what an
 updated weight costs to rebuild and an activation's width, `c_a ≤ 16` at bf16, 8 at FP8, 4 at FP4. An updated weight
-compresses far below that, so one `c` charges every activation the weights' entropy. In training's fine-tuning numbers the
+compresses far below that, so one `c` charges every activation the weights' entropy. At fine-tuning's measured costs the
 slowdown bound is `ρ` about 45 with two costs against 1.1 with one.
 
 **What an updated weight is.** The weight index is abstract, so each reading is an instance; it only decides which `c_w`
@@ -19,6 +21,8 @@ slot and `c_w = H(θ'_{t0} | θ)`, what training added since the commitment, whi
 training step's version, `c_w` is at most one step's increment entropy: on an exact Pythia resume about 1.1-1.7 bits a
 weight at bf16, 0.2-0.3 at FP8, 0.03-0.05 at FP4.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

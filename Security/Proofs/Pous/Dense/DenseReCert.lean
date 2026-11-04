@@ -1,5 +1,7 @@
-import Mathlib.Data.Nat.Bitwise
-import Proofs.Pous.Dense.DenseMeets
+module
+
+public import Mathlib.Data.Nat.Bitwise
+public import Proofs.Pous.Dense.DenseMeets
 
 /-!
 # Dense scheme re-certificate at the 64 KB operating point, and the multi-segment lemma
@@ -20,6 +22,8 @@ Everything is in the random-oracle model. The multi-segment lemma (`dense_meets_
 distinct-tagged segments; it is structured so the concrete overwrite-chain `H` (`ChainExPostFacto`, `sponge-dense`) can
 replace the random oracle segment-by-segment without touching the composition.
 -/
+
+@[expose] public section
 
 namespace PousDenseReCert
 
@@ -286,7 +290,7 @@ theorem seg_hard_needs_hD :
   revert hc
   decide
 
-/-! ### Piece 3: alignment with the implementation's per-segment tagged domains (PR #166, D1–D5)
+/-! ### Piece 3: alignment with the implementation's per-segment tagged domains
 
 The reference codec domain-separates each segment `s` by `tag_s = salt ‖ u64 s` — a **192-bit** salt then `u64 s`, exactly
 `chainDense`'s 256-bit salt slot (`chainDense B ℓ 512 (dom tag_s)`, `PROTOCOL.md`) — whereas `segScheme` keys the oracle by

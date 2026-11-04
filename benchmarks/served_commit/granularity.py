@@ -84,13 +84,14 @@ def layer_of(module: str) -> tuple[str | None, str]:
 
 
 def analyze(build_dir: str, rates: dict[int, float]) -> dict:
+    from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.refs import runs
-    from verity_vllm.query.program_view import _spec_id, ports_of_type
+    from verity_vllm.query.program_view import ports_of_type
 
     calls, names, K, ret, source = load(build_dir)
     n = len(calls)
     reads = [[(r[1] - K, r[2], r[3]) for a in c.args for r in runs(a.refs) if r[0] == "n" and r[1] >= K] for c in calls]
-    family = [_spec_id(c.fn).split("{")[0] for c in calls]
+    family = [descriptor_id(c.fn).split("{")[0] for c in calls]
     module = [nm.module for nm in names]
     layer, child = zip(*(layer_of(m) for m in module)) if n else ((), ())
 
@@ -265,8 +266,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("builds", nargs="+", help="request Program dirs of a Build (each holds descriptor.json.gz)")
     ap.add_argument("--json")
-    ap.add_argument("--rate-256", type=float, default=66.12, help="GB/s, rows_floor minb2 at 256-byte rows (r20261017-234343-61c6)")
-    ap.add_argument("--rate-4k", type=float, default=230.61, help="GB/s, rows_floor minb2 at 4 KiB rows (r20261017-234343-61c6)")
+    ap.add_argument("--rate-256", type=float, default=66.12, help="GB/s, rows_floor minb2 at 256-byte rows")
+    ap.add_argument("--rate-4k", type=float, default=230.61, help="GB/s, rows_floor minb2 at 4 KiB rows")
     a = ap.parse_args()
     res = []
     for b in a.builds:

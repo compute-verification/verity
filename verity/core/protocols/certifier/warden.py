@@ -1,7 +1,7 @@
 """The active warden: the network certifier as a relay that knows bytes only and retransmits everything on a fixed
 schedule, so it rebuilds the framing of every connection it carries.
 
-The warden runs on an auditor host (`trusted-host`; co-located with the server for tonight's demo, a named
+The warden runs on an auditor host (`trusted-host`; co-located with the server for the demo, a named
 assumption). It terminates each client's TCP connection, opens one to the server for it, and forwards each direction's
 bytes unchanged in content: no tokenizer, API, request or stop string is the warden's. The one addition is the release
 order on the server's copy of an HTTP request (`release`): what the warden decides is the framing and the timing, both
@@ -14,16 +14,17 @@ exactly P bytes, `END` the last 0 … P of a direction, `PAD` none (marked paddi
 closed, for whatever reason), and `REFUSED` none (a connection the warden doesn't take). Both directions are cut
 the same way: byte k of a direction is in its cell ⌊k/P⌋, so a cell's content is fixed by the bytes and never by how
 they were read. The client speaks cells both ways through a thin, workload-blind shim (`cells`, `Shim`); the server
-gets the ingress payloads as bytes (co-located tonight; deployed, its own shim strips the cells as the client's does).
+gets the ingress payloads as bytes (co-located in the demo; deployed, its own shim strips the cells as the client's
+does).
 
 **Admission.** The k-th connection to arrive, from 0, has ordinal k + 1, as the active certifier's `Requests` streams
 it: ordinal 0 is no connection's. At most `lanes` connections are served at once; one that arrives with every lane
 taken waits in a FIFO queue of at most `queue`, else it gets one `REFUSED` cell, on ordinal 0, and is closed.
 The queue's head is admitted at the first bucket with a free lane, and holds that lane, r cells a bucket each way,
 until its last bucket. Nothing admitted is dropped or reordered. A refusal is traffic past what the window's Programs
-can hold (`every`: a timestep of `every` buckets has `program_slots` = `lanes` Program slots, the scan's
+can hold (`every`: a slot stride of `every` buckets has `program_slots` = `lanes` Program slots, the scan's
 `ingress_scan.Class`), so the warden certifies no record of a window in which it refused a connection: `withhold`
-gets that window's three records in place of `publish`, and the period check refuses a link-window missing any
+gets that window's three records in place of `publish`, and the period check refuses an execution phase missing any
 record's certificate.
 
 **The schedule.** Connection q, admitted at bucket s on the warden's own schedule, carries r = `slots` cells a bucket
@@ -121,7 +122,7 @@ class WardenParams:
     ingress_cells: int = 64
     ingress_buckets: int = 50
     egress_cells: int = 4096
-    every: int = 1  # a timestep's buckets: the Programs' boundaries are every `every` buckets of a window
+    every: int = 1  # a slot stride's buckets: the Programs' boundaries are every `every` buckets of a window
 
     def __post_init__(self) -> None:
         for name, value in asdict(self).items():
@@ -134,12 +135,13 @@ class WardenParams:
 
     @property
     def program_slots(self) -> int:
-        """A timestep's Program slots, one a lane (`ingress_scan.Class.SLOTS`, for a class that serves the warden)."""
+        """A slot stride's Program slots, one a lane (`ingress_scan.Class.SLOTS`, for a class that serves the
+        warden)."""
         return self.lanes
 
     @property
     def window_programs(self) -> int:
-        """A window's Program slots: `window / every` timesteps of `program_slots`."""
+        """A window's Program slots: `window / every` slot strides of `program_slots`."""
         return self.window // self.every * self.program_slots
 
     @property
@@ -292,7 +294,7 @@ class Warden:
       that tick's `publish`: a publisher in another process builds each record from them as it fills, so that the
       tick never hands it a whole window at once;
     - `requests_released` counts the `END`s released, each connection's N its count before (`log`'s `release`), and
-      `run_id`, `RUN_ID_BYTES` drawn from `run_nonce` at construction, names the run on the server's side;
+      `run_id`, `RUN_ID_BYTES` sampled from `run_nonce` at construction, names the run on the server's side;
     - with `paced`, seconds past `slack` (off by default), each tick hands its bucket to the pacer (`pacer.Pacer`;
       the module docstring's "The pacer"), which releases it `paced` after its boundary on the host's monotonic clock,
       `origin`'s clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each

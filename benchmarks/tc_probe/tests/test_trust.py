@@ -326,7 +326,7 @@ def test_open_d_entry_blocks_trusted(store, repo):
 
 def test_red_team_downgrade_label_blocks_trusted(store, repo):
     trusted(store)
-    art = hw(store, elements=1000, extra_labels=(("trust_downgrade", "red-team-3: verifier rejected an honest run"),))
+    art = hw(store, elements=1000, extra_labels=(("trust_downgrade", "verifier rejected an honest run"),))
     rep = assess("FP8_ADA_MMA", store, repo=repo)
     assert rep.level == "PINNED"
     assert not crit(rep, "Tf").passed and any(art in m for m in rep.missing_to_next)

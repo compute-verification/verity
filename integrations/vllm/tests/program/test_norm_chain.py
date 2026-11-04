@@ -1,4 +1,4 @@
-"""R15 dense (F-dense-05) — the unfused norm chain (`ir.ops.rms_norm` / `ir.ops.fused_add_rms_norm` as ATen on an f32 copy, vLLM
+"""The unfused norm chain (`ir.ops.rms_norm` / `ir.ops.fused_add_rms_norm` as ATen on an f32 copy, vLLM
 `GemmaRMSNorm.forward_native`) derived by the op-shaped rules of `vllm_bindings` into the promoted `verity.ml.definitions.registry.dense` kinds of
 the pinned `b1-eager-v3` vocabulary — the SAME specialization ids, in the SAME order, as the eager Match fold resolves the chain to
 (`verity_vllm/observe/fold/profiles/gen_dense_gemma2_patterns.py`), so `cb_a.compare` can be canonical-equal.
@@ -334,7 +334,7 @@ class Variance(nn.Module):
 
 
 class LlamaStyleNorm(GemmaNorm):
-    """`w * x/rms(x)` (RMSNorm) in place of Gemma's `(1 + w) * x/rms(x)`: the weight-semantics gap of F-dense-05."""
+    """`w * x/rms(x)` (RMSNorm) in place of Gemma's `(1 + w) * x/rms(x)`: a weight-semantics perturbation the comparison must catch."""
 
     def forward(self, x):
         x32 = x.to(torch.float32)

@@ -1,11 +1,13 @@
-import Definitions.Pouw.NCP.Protocol
-import Mathlib.Algebra.BigOperators.Intervals
+module
+
+public import Definitions.Pouw.NCP.Protocol
+public import Mathlib.Algebra.BigOperators.Intervals
 
 /-!
 # NCP's checked values on route U (trusted)
 
-`internal/pouw/new-crypto/route-u-checkpoints.md` in the project store (proposed). Route U runs the stacked product
-as u8 × s8: the left operand is biased by a parameter `β`, and the bias correction is the accumulator's initial value.
+Route U (proposed) runs the stacked product as u8 × s8: the left operand is biased by a
+parameter `β`, and the bias correction is the accumulator's initial value.
 With `X = stackX k A E₁ R` (`m × 3k`), `Y = stackY k B R F₁` (`3k × n`) and `T = 3k/16`:
 
 ~~~text
@@ -27,6 +29,8 @@ protocol whose checked values are route U's accumulator is `Params.toProtocolU �
 `Y`, `refChecked` and `refOut` read from `mmWU β`. Route U's honest reference with `f` forming units per position
 costs `wrefU f = 3·m·k·n + f·m·k` (ncp-v1: `f = 24` at `β = 128`; C2: `f = 20` at `β = 129`).
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP
 

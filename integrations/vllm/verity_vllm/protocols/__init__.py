@@ -49,7 +49,7 @@ import dataclasses
 import hashlib
 import importlib
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -125,7 +125,7 @@ def circuit_registry(name: str) -> ModuleType | None:
 
 def traced_as(entry: str, m: int, k: int, n: int) -> Any:
     """The circuit sampled proofs traces for one executed call of ``entry`` (``pouw:ncp-v2``) of shape m × k → n: its
-    Definition, partition query, served outputs and draw layout.  None when the scheme has no circuit; a shape outside the
+    Definition, partition query, served outputs and sampling layout.  None when the scheme has no circuit; a shape outside the
     circuit raises the protocol package's ``DomainError``."""
     name, _, scheme = entry.partition(":")
     reg = circuit_registry(name)
@@ -254,16 +254,24 @@ class Composition:
             raise ValueError(f"no bindable option {name!r} in {list(self.entries)}")
         opt.commits.update(commitment)
 
+    def unhook(self) -> None:
+        """Every option's hooks off the model, newest first, each release left to `close` (which may run on another thread,
+        the model touched no more).  The first error is raised once every option's hooks were tried."""
+        self._each(lambda opt: opt.hooks.uninstall())
+
     def close(self) -> None:
         """Close every option, newest first.  Idempotent; an option whose close raises does not keep the older ones
         installed (the first error is raised once all are closed)."""
         if self.closed:
             return
         self.closed = True
+        self._each(lambda opt: opt.close())
+
+    def _each(self, act: Callable[[Any], Any]) -> None:
         err: BaseException | None = None
         for opt in reversed(self.installed):
             try:
-                opt.close()
+                act(opt)
             except BaseException as e:  # noqa: BLE001
                 err = err or e
         if err is not None:

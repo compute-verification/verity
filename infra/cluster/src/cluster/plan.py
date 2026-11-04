@@ -17,8 +17,7 @@ The rules, each enforced here and checked by `tests/test_simulation.py` on rando
    CUDA context still holds its GPU), CPU-only ones frozen and thawed afterwards; only a `quiet_safe` service keeps running.
    A quiet job blocked by an allocation it may not displace waits, and holds the node's reservation. A quiet job asking
    for some but not all of its node's GPUs (a 1-GPU `gpu-lease --timed`) still clears the rest of the node, but starts
-   beside what it may not displace when it fits, as `gpu-lease` starts it: a design divergence kept until the 7 Oct clamp
-   (infra's and PoUW's rulings).
+   beside what it may not displace when it fits, as `gpu-lease` starts it: a design divergence kept until the clamp.
 4. **Reservation and backfill.** The highest-ranked blocked job with a known start (the ends of the allocations it may not
    displace) reserves its node from then. Lower jobs start ahead of it only if they end before then or it may evict them,
    so a whole-node request is never starved and GPUs never idle behind it.

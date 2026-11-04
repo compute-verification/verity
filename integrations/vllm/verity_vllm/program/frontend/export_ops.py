@@ -1,12 +1,11 @@
-"""[P4 step 2] Tensor-parallel construction scaffolding for Bet A: the collectives of ONE rank's forward as explicit
+"""Tensor-parallel construction scaffolding for Bet A: the collectives of ONE rank's forward as explicit
 Verity ops over (this rank's partial, the peer rank's partial), so that `derive_step --tp 2 --rank r` exports a TP-aware Program.
 
-Established first (tp step 1, `out/gen/sweep/evidence/tp/tp2_semantics/RESULT.md`): under the admitted BI profile at TP2 the
-row-parallel linears compute two K/2-sharded `Gemm_v1` partials whose bf16 outputs are summed by ONE bf16 addition (the pynccl
-all-reduce, `bf16(f32(a)+f32(b))`, order-free for two ranks) — a different exact computation from TP1's single GEMM; column-parallel
+Under the admitted BI profile at TP2 the row-parallel linears compute two K/2-sharded `Gemm_v1` partials whose bf16 outputs are
+summed by ONE bf16 addition (the pynccl all-reduce, `bf16(f32(a)+f32(b))`, order-free for two ranks) — a different exact computation from TP1's single GEMM; column-parallel
 GEMMs, the vocab-parallel embedding (masked shard lookup + the same sum) and the lm_head all-gather (a concatenation) are
 bit-identical slices of the TP1 definitions.  The registered Definitions for these are `verity.ml.definitions.registry.b1_tp2.{AllReduce2,
-AllGather2, EmbeddingShard}` (exact-model-tested on B1 TP2 by the GEN tp2 lane; re-confirmed bit-exactly on Llama by step 1).
+AllGather2, EmbeddingShard}` (exact-model-tested on B1 TP2, and bit-exact on Llama).
 
 Mechanism (no vLLM source is modified; generic — nothing here names a model):
   * `TPStub` replaces vLLM's `_TP` GroupCoordinator for the meta instantiation + export of rank r at world size TP: the parallel
@@ -57,7 +56,7 @@ def ensure_ops() -> None:
     def _(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         return torch.empty(tuple(a.shape[:-1]) + (a.shape[-1] + b.shape[-1],), dtype=a.dtype, device=a.device)
 
-    # [lane vllm-tp-n] the WORLD-ary collectives (world > 2): `parts` in RANK order; bound by `AllReduceRule` / `AllGatherRule` to
+    # the WORLD-ary collectives (world > 2): `parts` in RANK order; bound by `AllReduceRule` / `AllGatherRule` to
     # `AllReduce_v2{WORLD,N}` / `AllGather_v1{WORLD,N}`.  World 2 keeps the binary ops above (recorded identities).
     @torch.library.custom_op("verity_tp::all_reduce", mutates_args=())
     def all_reduce(parts: list[torch.Tensor]) -> torch.Tensor:
@@ -132,7 +131,7 @@ class CollectiveBus:
         return [r for r in range(self.world) if r != self.rank]
 
     def _peers_of(self, kind: str, x: torch.Tensor, out_shape: tuple) -> list[torch.Tensor] | None:
-        """Collective k's `world-1` peer partials (the other ranks', in rank order), or None in probe mode.  [lane vllm-tp-n] the flat peer
+        """Collective k's `world-1` peer partials (the other ranks', in rank order), or None in probe mode.  The flat peer
         input list is `k*(world-1) + j`: at world 2 exactly the old one-peer-per-collective layout (`peers_<k>`), so world-2 Program
         parameter names and digests are unchanged."""
         k = self.cursor

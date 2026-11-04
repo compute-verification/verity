@@ -1,13 +1,15 @@
-import Proofs.Accounting.TS.Session.Lanes.Layout
-import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
-import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
-import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Layout
+public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+public import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
 
 /-!
 # The leaf's decodes, over its statements' port layout
 
 `Accounting.Guarantees.TS.LeafLanesSound` reads a session's registered rows through a decode per statement (`decL` for
-a lane's, `decC` for the combine's). These are the decodes, from INT-TIE's layout (`PouwWindow.Lanes`) and the
+a lane's, `decC` for the combine's). These are the decodes, from the statements' layout (`PouwWindow.Lanes`) and the
 session's own circuit:
 
 * `portBit s v name k`: bit `k` of the row of the port named `name`, at unit 0, in a layer value `v` (the registered reads
@@ -30,6 +32,8 @@ reads them at lane 0's ports.
 them decode alike. The leaf `LeafLanesSound` opens is the one the data ports' rows decode to (`Lanes.Committed`); the
 known values' content is flock-verify's to check (`Lanes.KnownRead`).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

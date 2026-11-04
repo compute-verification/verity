@@ -11,7 +11,7 @@
 
    For each job line "a0 a1 w0 w1 w2 w3" on stdin this prints
      S a0 a1 w0 w1 w2 w3 |K_1| .. |K_rmax| pxn g3bad degenerate
-   (|K_R| counts w itself; pxn = 1 iff K_1 is exactly w's orbit under FOLD §3's P/X/N group; g3bad counts words in the
+   (|K_R| counts w itself; pxn = 1 iff K_1 is exactly w's orbit under the P/X/N group; g3bad counts words in the
    union of the K_R that break (G3) against w; degenerate = 1 if some join passed `cap` candidates and was cut short),
    and one line "E a0 a1 w0 w1 w2 w3 R d0 d1 d2 d3" for each word of K_R outside K_1 (R >= 2) or of K_1 outside the
    orbit (R = 1). With -a it also prints "K a0 a1 R d0 d1 d2 d3" for every w' != w in K_R, as fold_kernel.c does.
@@ -58,7 +58,7 @@ static uint32_t inv2(uint32_t a) {  /* a^-1 mod 2^32 for odd a, by Newton */
 static int word_cmp(const void *p, const void *q) { return memcmp(p, q, sizeof(word_t)); }
 static int word_eq(const word_t *p, const word_t *q) { return memcmp(p, q, sizeof(word_t)) == 0; }
 
-/* FOLD §3's P/X/N group at width n: P0, P1, X and N generate it; its orbit of w (16 words when they are distinct). */
+/* The P/X/N group at width n: P0, P1, X and N generate it; its orbit of w (16 words when they are distinct). */
 static int pxn_orbit(const job_t *j, word_t *out) {
     int cnt = 1;
     out[0] = (word_t){{j->w[0], j->w[1], j->w[2], j->w[3]}};

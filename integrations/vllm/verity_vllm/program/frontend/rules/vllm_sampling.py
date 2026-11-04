@@ -1,4 +1,4 @@
-"""[R15 stoch] The frontend rule for the STOCHASTIC token select: `vllm_iface.gumbel_topp_token_select(logits, seed, temperature, top_p,
+"""The frontend rule for the STOCHASTIC token select: `vllm_iface.gumbel_topp_token_select(logits, seed, temperature, top_p,
 pos, splits)` -> one `GumbelTopPTokenSelect_v1{V}(logits_row, top_p, seed, pos, temp, splits)` per logits row (verity.ml.definitions.registry.sampling).
 
 What the op stands for (vLLM d9105ea80 `Sampler.sample` for a request whose `SamplingParams` are temperature T > 0, top_p < 1, top_k 0,
@@ -59,7 +59,7 @@ class GumbelTopPTokenSelectRule(OpRule):
                                    "pos >= 0 static", "splits is a 1-element 32-bit value collection (the request's derived-S Input entry for the event), "
                                    "or splits is None and S a static split count in {1, 2, 4, 8, 16, 32} (the registered split count)"),
                     evidence_domain="structural; numerics: GumbelTopPTokenSelect_v1{V} (exact-model-tested: difftest vs vLLM d9105ea80 "
-                                    "_temperature_kernel / _topp_sb_* / _gumbel_sample_kernel on L40S, 72/72 rows bit-exact; R16 GPU fixture "
+                                    "_temperature_kernel / _topp_sb_* / _gumbel_sample_kernel on L40S, 72/72 rows bit-exact; a GPU fixture "
                                     "at every split count S = 1..32, tests/program/test_topp_split_geometry.py)")
 
     def targets(self):

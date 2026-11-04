@@ -213,6 +213,9 @@ have):
 - a descriptor outside the canonical JSON domain (§1);
 - a primitive keyed other than by its `id`; a composite whose `id` is not `Name_vN`, or whose key is not its `id` and binding
   record (§4.3);
+- a binding record of a composite the registry holds that names a static the registered composite lacks, or that its `refuse`
+  names a reason against: the record `defs.bind` refuses, judged with each function reference the registry's own where it
+  holds it;
 - a primitive id that a family materialised by id matches only in part, or spells otherwise than its member's id (§5.2, §9);
 - a root that is not a composite without parameters;
 - an input node (§5.2) in a definition other than the root;
@@ -432,8 +435,8 @@ are refused (`ValueError`).
 **Elements.** An *element* of a Boolean type is an innermost `Array<w, Value<1>>`, whose leaf j is bit j of a w-bit word (least
 significant first), or a `Value<1>` that is not inside one. `elements(T)` lists the element widths in leaf order;
 `word_type(T)` replaces every element by `Value<w>`. The *word view* of a Boolean Definition is its signature under
-`word_type`: the signature of the word Definition it computes. A port's number format is an annotation, outside every digest;
-the word view does not read it.
+`word_type`: the signature of the word Definition it computes. A port's number format is metadata
+(`verity/metadata/v0`), outside every digest; the word view does not read it.
 
 Vectors (`verity/ml/circuits/tests/boolean_vectors.json`, written by `python verity/ml/circuits/tests/test_boolean.py --write`): `gates` (id,
 kind, parameters, return type, truth table), `constants`, `gate_ids` (id, its kind and inputs, or null), `constant_ids` (id,
@@ -447,7 +450,7 @@ descriptor, digest, gate table and truth table on words.
 conventions and v1's Calls, proof blocks, owners and committed sets. It differs from v1 in one rule of the cut check: a value computed in
 two proof blocks (a recomputed pair whose gates have two owners) is reported in `verify`'s detail (`recomputed_across`), not refused
 (`gate-recomputed`). Every other code and the width rule are v1's, and `validate_unit_cut` and `cut.check_cut` refuse by default.
-v2's proof blocks may compute a common value, so a count of v2 proof blocks or gates bounds the faulty proof blocks' size from
+v2's proof blocks may compute a common value, so a count of v2 proof blocks or gates bounds the incorrect proof blocks' size from
 above but counts a shared value more than once, and a consumer that credits size (PoUW) does not take `Q_word` v2.
 
 Vectors: `qword_vectors.json` → `v2`: v1's recompute-free evaluation and every verify refusal at v2, and the program v1 refuses
@@ -468,7 +471,7 @@ What carries over from §8 and §10:
 - **Calls.** §8's Calls (the root's non-input nodes, in body order). Each is cut as its Definition's activation in a one-Call
   Program, every returned leaf a designated output, so activations of one Definition share their cut.
 - **Recomputes.** §10's report: a value computed in two proof blocks is `verify`'s `detail["recomputed_across"]`, never a code. The
-  §10 caveat holds: a count of proof blocks bounds the faulty ones' size but counts a shared value more than once, so a
+  §10 caveat holds: a count of proof blocks bounds the incorrect ones' size but counts a shared value more than once, so a
   consumer that credits size (PoUW) does not take `Q_call` v1.
 
 What changes:
@@ -555,7 +558,7 @@ Definition with a receipt port (`"receipt": true`) declares `"sink": true` on it
 `"transfer": true` is a primitive's only (a composite's `ports` never carries it), and never beside a return `interval`: the
 primitive's return interval follows from its operands' by its *transfer* (`Ports(transfer=f)`), a function its registered
 evaluator comes with, as an exact integer step's sum follows from its operands' ranges. Like a primitive's declared interval it
-is a fact about its evaluator, which circuit-check tests on drawn operand intervals within the declared bounds (its `ports`
+is a fact about its evaluator, which circuit-check tests on sampled operand intervals within the declared bounds (its `ports`
 check), and the decoder takes it from the registry, whose `ports` the entry's must equal.
 
 **Facts.** Every leaf of a Program has a fact: an interval (or none: it spans its width), an origin, whether it is a sink, and
@@ -614,7 +617,7 @@ as declared, so a composite over exact steps declares the intervals its operands
   only an untyped input or constant takes the type its reader's port declares. A limb split of a runtime word is a
   registered `LimbSplit` Definition of its own, which reads the word as its producer's type and computes the limbs and the
   carry into each limb past the first (the stacking property budgets those carries at its nodes). Below word types, a leaf
-  read at another width is the Builder's refusal (`E_REINTERPRET`, §4.4).
+  read at another width is `defs.Builder`'s refusal (`E_REINTERPRET`, §4.4).
 - **`E_COIN_FLOW`** (coin flow): a primitive node reads a leaf of origin `coin` at a port that is not `"kind": "coin"`, or a
   Definition, the root included, returns one. A primitive with a coin port is a *noise primitive* when its return is not all
   sinks (it derives noise, or adds it to an operand it takes) and a *receipt fold* when it is (the coin is its key). A

@@ -1,24 +1,30 @@
-import Proofs.Flock.Claims.Recursion.SameJAt
-import Proofs.Flock.Claims.Recursion.VerdictFramed
-import Proofs.Flock.Claims.Recursion.VerdictFramedJson
-import Proofs.Flock.Claims.Recursion.VerdictPublics
-import Proofs.Flock.Claims.Recursion.VerdictRowG
-import Proofs.Flock.Claims.Recursion.VerdictParts
-import Proofs.Flock.Claims.Recursion.InnerForm
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.SchedCount
-import Proofs.Flock.Claims.Complete.Json.Stmt
-import Proofs.Flock.Recursive.HoloRepCoins
-import Proofs.Flock.C3.Compose.HoloStreamSizes
-import Proofs.Flock.VBridge.Family.Lig
-import Proofs.Flock.VBridge.Family.Encode
+module
+
+public import Proofs.Flock.Claims.Recursion.SameJAt
+public import Proofs.Flock.Claims.Recursion.VerdictFramed
+public import Proofs.Flock.Claims.Recursion.VerdictFramedJson
+public import Proofs.Flock.Claims.Recursion.VerdictPublics
+public import Proofs.Flock.Claims.Recursion.VerdictRowG
+public import Proofs.Flock.Claims.Recursion.VerdictParts
+public import Proofs.Flock.Claims.Recursion.InnerForm
+public import Proofs.Flock.Claims.Recursion.SchedDense
+public import Proofs.Flock.Claims.Recursion.SchedCount
+public import Proofs.Flock.Claims.Complete.Json.Stmt
+public import Proofs.Flock.Recursive.HoloRepCoins
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.VBridge.Family.Lig
+public import Proofs.Flock.VBridge.Family.Encode
+import all Lean.Data.Json.Basic
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The record the verdict reads decodes, at a decision of `nextR`
 
 At a dense inner statement where the last step reads and the base checks hold, the record value the verdict reads
-(`jAt`) decodes at the setup SHA-512 gives (`decode_at`, RECINT's `TargetDecode` with `At` unfolded), under the JSON
-library's specification (`Claims.JsonSpec`). `jAt` is the reader's record (`recJ`) with its digests and coins
+(`jAt`) decodes at the setup SHA-512 gives (`decode_at`, `TargetDecode` with `At` unfolded), with no JSON
+premise: the verifier keeps the public header and the draw normalized, so both are well-formed (`unitDraw_of`,
+`draw_wf`), and the statement's coin tree is its coins' (`setupOne_stmt`), none at `.os` or `.seed` (`tree?_none`). `jAt` is the reader's record (`recJ`) with its digests and coins
 substituted, so it is alike the honest record whose rounds hold the fill's coins (`same_coinSubJ`, with the fill finding
 a coin wherever `liveOf` reads, `fill_of_live`), and an honest record of a one-table statement decodes
 (`decodeJ_same`). What `decodeJ_same` asks:
@@ -30,6 +36,8 @@ a coin wherever `liveOf` reads, `fill_of_live`), and an honest record of a one-t
 * **The streams** (`repSchedAt_bounds`): rep `k`'s rounds are its schedule's, which has a round, each of between 1
   and 65536 coins.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.DecodeAt
 
@@ -78,7 +86,7 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
     | none => simp [filesOf, hq] at hheld
     | some p => exact ⟨p, rfl⟩
   have hfs : filesOf r = some (.files ⟨r.innerRaw.circuit, r.innerRaw.publicFile, p, "", none,
-      some (innerFormOf r.innerRaw)⟩) := by rw [filesOf, hp]; rfl
+      some (innerFormOf r.innerRaw), r.innerRaw.program⟩) := by rw [filesOf, hp]; rfl
   rw [hfs] at hsh
   obtain ⟨spec', st', hstm, -, -, -, -, hform⟩ := checkShape_files hsh
   obtain ⟨hs1, hs2, -, b, d, D, hb, hjd, -, -⟩ := checkForm_ok hform
@@ -96,17 +104,16 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
     · cases hw
     change r.innerRaw.ins.toOption = some s at hw
     exact ⟨not_not.1 hz, toOption_eq_some hw⟩
-  obtain ⟨-, -, -, -, -, -, -, -, z9, -⟩ := ins_plainLeaves hw.2 hw.1 hs1 hs2
-  obtain ⟨dr, hz9, he⟩ := z9
-  rw [hb] at hz9
-  simp only [Option.mapM_some, hjd, Functor.map, Except.map, Except.ok.injEq] at hz9
-  rw [he, ← hz9]
+  obtain ⟨-, -, -, -, -, -, -, -, ⟨dr, hm, hd9⟩, -⟩ := ins_plainLeaves hw.2 hw.1 hs1 hs2
+  rw [hb] at hm
+  simp only [Option.mapM_some, hjd, Functor.map, Except.map, Except.ok.injEq] at hm
+  rw [hd9, ← hm]
   rfl
 
 /-- **What the record needs of a dense inner statement**: the plain verifier sets it up as one table, with no coin
 tree, a non-empty Σ, a printable draw that decodes to its instances, two link points, at most 1024 regions and a
 `fast100` schedule. -/
-theorem dense_stmt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {xo : Msg} {sto : Claims.Recursion.Stmt}
+theorem dense_stmt {xo : Msg} {sto : Claims.Recursion.CompiledStatement}
     (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form) {s : FlockDeploy.Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : FlockDeploy.setupOf false (xIOf xo) = some (s, spec, sts)) :
     ∃ st t, sts = #[st] ∧ spec.tables = #[t] ∧ spec.coinTree = none ∧ 0 < spec.sigma.size ∧ DrawOk spec ∧
@@ -131,7 +138,7 @@ theorem dense_stmt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {xo : 
     have h1' := h1
     rw [FlockSoundness.Discharge.HiddenExec.setupOne_hidden hhid] at h1'
     exact FlockVBridge.Family.spec_regions_le (FlockSoundness.Discharge.Hidden.setupHidden_spec' h1')
-  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, hhello⟩ := FlockComplete.JsonRT.setupOne_stmt h1
+  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, -, hct⟩ := FlockComplete.JsonRT.setupOne_stmt h1
   obtain ⟨w, hwz, hw⟩ := FlockComplete.JsonRT.insOf_false hins
   obtain ⟨hzk, hcoins, hdraw⟩ := FlockComplete.JsonRT.Raw.ins_read hw
   have hz : s.read.zk = false := hzk.trans hwz
@@ -139,7 +146,7 @@ theorem dense_stmt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {xo : 
   rw [hx] at hset2
   have hds := inner_drawn hr ha hset2
   obtain ⟨d, hdd⟩ := Option.isSome_iff_exists.1 hds
-  have hu := FlockComplete.JsonRT.unitDraw_of S hl (hd d hdd)
+  have hu := FlockComplete.JsonRT.unitDraw_of hl (hd d hdd)
   have hU : st.spec.unitDraw = some d := by simp [Stmt.spec, hu, Except.toOption]
   obtain ⟨D, hD, hn⟩ := hinst d hu
   have hdl := FlockComplete.JsonRT.Ins.setup_drawLaw hsu hds
@@ -149,17 +156,18 @@ theorem dense_stmt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {xo : 
     cases e : ProvedScope.lawWhy false s.read.tags false D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
-  have hwf := FlockComplete.JsonRT.draw_wf hdraw hdd
   have hg : Good d := by
     rcases FlockComplete.JsonRT.law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
-    · exact FlockComplete.JsonRT.good_stratified hwf hD hK
-    · exact FlockComplete.JsonRT.good_subset hwf hD hk
+    · exact FlockComplete.JsonRT.good_stratified (FlockComplete.JsonRT.draw_wf hdraw hdd) hD hK
+    · exact FlockComplete.JsonRT.good_subset (FlockComplete.JsonRT.draw_wf hdraw hdd) hD hk
   have hnn : d ≠ Json.null := by
     intro hn'
     rw [hn'] at hD
     cases hD
   refine ⟨st, st.tags.table, rfl, rfl, ?_, hsig, ?_, ?_, rfl, hreg, by simp [hsch]⟩
-  · refine FlockComplete.JsonRT.ofHello_helloOf S ?_ hhello
+  · change st.coinTree = none
+    rw [hct]
+    refine FlockComplete.JsonRT.tree?_none ?_
     simp only [Readable.Read.coins, hz, Bool.false_eq_true, ↓reduceIte]
     exact hcoins hwz
   · unfold DrawOk
@@ -218,8 +226,8 @@ theorem repSchedAt_bounds {spec : SessionSpec} {st : Stmt} (hf : (fast100 st.m).
 
 /-- **The record the verdict reads decodes** at a decision at a dense inner statement where the last step reads and
 the base checks hold, at the setup SHA-512 gives. -/
-theorem decode_jAt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {rd : Msg → Option FinalP} {x : Msg}
-    {ms : List Msg} {cs : List Coin} {xo : Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem decode_jAt {rd : Msg → Option FinalP} {x : Msg}
+    {ms : List Msg} {cs : List Coin} {xo : Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hr : ReadOkR rd x ms cs)
     (hb : ∀ b ∈ VerdictP.bases, holdsR FlockDeploy.sha512 rd b x ms cs) {d : FlockDeploy.DecR}
     (hd : FlockDeploy.decR rd x ms cs = some d) {spec : SessionSpec} {sts : Array Stmt}
@@ -247,7 +255,7 @@ theorem decode_jAt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {rd : 
   have hs0 := hs
   rw [FlockDeploy.hOf_sha512, FlockDeploy.setupWith_sha512, FlockDeploy.Ins.setup_read hsu] at hs
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hs)
-  obtain ⟨st, t, hsts, ht, hct, hsig, hdraw, hdg, hpts2, hreg, hfast⟩ := dense_stmt S hst hf hsv
+  obtain ⟨st, t, hsts, ht, hct, hsig, hdraw, hdg, hpts2, hreg, hfast⟩ := dense_stmt hst hf hsv
   have hnames : FlockDeploy.NamesDistinct d.spec := by
     have h := hb .names (by simp [VerdictP.bases])
     unfold holdsR at h
@@ -335,25 +343,24 @@ theorem decode_jAt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {rd : 
   rw [hj, FlockDeploy.recJ, hlk] at hlv
   unfold FlockDeploy.jAt
   rw [hj, FlockDeploy.recJ, hlk]
-  refine ⟨_, FlockComplete.JsonRT.decodeJ_same S h64 ht hct hdraw hsig hrb hpts hpm (hss _) (hrs _) _
+  refine ⟨_, FlockComplete.JsonRT.decodeJ_same h64 ht hct hdraw hsig hrb hpts hpm (hss _) (hrs _) _
     (same_coinSubJ ht _ _ _ _ _ _ hdg ?_)⟩
   intro i hi hS k hk
   rw [streamOffset_shaSubJ]
   exact fill_of_live hnd hlv i hi hS k hk
 
-/-- **`TargetDecode`** (RECINT's, `At` unfolded): at a dense inner statement where the last step reads and the base
-checks hold, a decision's record value the verdict reads decodes at the setup SHA-512 gives, under the JSON library's
-specification. -/
-theorem decode_at (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (rd : Msg → Option FinalP)
+/-- **`TargetDecode`** (`At` unfolded): at a dense inner statement where the last step reads and the base
+checks hold, a decision's record value the verdict reads decodes at the setup SHA-512 gives. -/
+theorem decode_at (rd : Msg → Option FinalP)
     (P : Msg → List Msg → List Coin → Prop) :
     ∀ (x : Msg) (ms : List Msg) (cs : List Coin),
-      ((∃ (xo : Msg) (sto : Claims.Recursion.Stmt), parse xo = some sto ∧ Claims.Recursion.Form.Dense sto.form ∧
+      ((∃ (xo : Msg) (sto : Claims.Recursion.CompiledStatement), parse xo = some sto ∧ Claims.Recursion.Form.Dense sto.form ∧
         x = xIOf xo) ∧ ReadOkR rd x ms cs ∧ (∀ b ∈ VerdictP.bases, holdsR FlockDeploy.sha512 rd b x ms cs) ∧
         P x ms cs) →
       ∀ d : FlockDeploy.DecR, FlockDeploy.decR rd x ms cs = some d → ∀ (spec : SessionSpec) (sts : Array Stmt),
         FlockDeploy.setupWith (Claims.hOf FlockDeploy.sha512) d.s.read = .ok (spec, sts) →
         ∃ sess, Record.decodeJWith (Flock.Hashes.ofSha512 (Claims.hOf FlockDeploy.sha512) : Flock.Hashes Flock.V)
           spec (FlockDeploy.jAt FlockDeploy.sha512 spec sts d.c₁ d.mids d.f) = .ok sess :=
-  fun _ _ _ ⟨⟨_, _, hst, hf, hx⟩, hr, hb, _⟩ _ hd _ _ hs => decode_jAt S hst hf hx hr hb hd hs
+  fun _ _ _ ⟨⟨_, _, hst, hf, hx⟩, hr, hb, _⟩ _ hd _ _ hs => decode_jAt hst hf hx hr hb hd hs
 
 end RecDeploy.DecodeAt

@@ -1,5 +1,5 @@
 """Why the matmul chain ran 9–14% faster beside the PoUS harness in a process of its own (the ``separate`` round, during the
-audit and after it) than inside it or alone in the sweep (runs r20261012-003617-f349 and r20261012-005734-9db8, at one SM
+audit and after it) than inside it or alone in the sweep (two runs, at one SM
 clock and one affinity mask): the shape's native chains at its smallest batch, every condition of a phase in turn rep by
 rep, each item timed on the host (`chain.Native.item`), on the device by events, and from its start to its last launch on
 the host, with the CPU its thread ended on and that CPU's frequency.
@@ -18,7 +18,7 @@ the host, with the CPU its thread ended on and that CPU's frequency.
   responder spin;
 * ``after``: as ``alone`` once they have exited.
 
-Run r20261012-023723-e009 found every ``beside`` phase fast and ``after`` fast for its first 3–4 reps only, at one SM and
+A run found every ``beside`` phase fast and ``after`` fast for its first 3–4 reps only, at one SM and
 memory clock; the ``course`` then times the native chains back to back on the default stream around one co-tenant at a
 time (`COURSE`: a process that sleeps, `SPINNERS` that spin, one holding an idle CUDA context), `COURSE_S` seconds before it
 starts, after it is ready and after it exits, so the onset and the offset of the fast state are seen and each kind of
@@ -27,13 +27,13 @@ co-tenant is seen alone.
 nvidia-smi reads the clocks before and after each phase (pynvml is not in the harness's venv).
 
 ``decay`` (`python probe.py decay`, run.sh ``DECAY=1``) asks why joint v1's tag passes ran at 1.17–1.32 ms (the tag kernel)
-after the chain's GEMMs and at 0.84 ms after a long idle (runs r20261012-051020-03ac, r20261012-035705-85d4): in one process,
+after the chain's GEMMs and at 0.84 ms after a long idle: in one process,
 on a store of its own in the tagger's memory, it times (d)'s pass from a scrubbed L2, then a raw read of the store and an
 op on an L2-resident tensor, `DECAY_PRE` times before each burst of `DECAY` and at `DECAY_AT_MS` after its last kernel,
 with nvidia-smi sampling the clocks beside it.  ``steps`` (run.sh ``DECAY=steps``) times `STEP_PASSES` passes after each
 step of `STEPS`: before any torch work, after torch's operands, the L2 op and GEMMs, after an idle, and after setting the
 context's L1/shared-memory split preference, each followed by GEMMs (whose time a launch it records), since a kernel with
-no preference keeps the split the last kernel left (CU_FUNC_CACHE_PREFER_NONE).  Run r20261012-055226-416b found the pass
+no preference keeps the split the last kernel left (CU_FUNC_CACHE_PREFER_NONE).  A run of it found the pass
 at 0.84 ms before any torch work, 1.1–1.4 after torch's kernels of any kind, idle or not, and 0.83 once the context
 prefers L1, the GEMMs' time a launch unchanged (`joint.prefer_l1`).
 """
@@ -203,8 +203,8 @@ def course(natives: dict, chains: dict[str, int], script: str, args: list[str], 
 
 
 class Sidecar:
-    """An idle CUDA context in a process of its own (`SECOND` idle) while the ``with`` lasts.  The course of run
-    r20261012-031720-786d found every native chain faster from the moment one is ready (3.5% BF16, 11.5% FP8 at o, B = 1)
+    """An idle CUDA context in a process of its own (`SECOND` idle) while the ``with`` lasts.  The course of a
+    run found every native chain faster from the moment one is ready (3.5% BF16, 11.5% FP8 at o, B = 1)
     and still faster 10 s after it exits, at one SM and memory clock: an arm measured beside it runs at that speed."""
 
     def __enter__(self) -> dict:

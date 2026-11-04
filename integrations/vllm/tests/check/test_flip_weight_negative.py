@@ -1,4 +1,4 @@
-"""[R16 pin, BRIEF 4A "substituted weight input" as a LIVE canary negative] commit_delta --flip-weight x canary.sh flipweight.
+"""A substituted weight input as a LIVE canary negative: commit_delta --flip-weight x canary.sh flipweight.
 
 The canary (verity_vllm/ops/canary.sh) runs `negative flipweight exit3 <regex> ... --flip-weight model.layers.0.self_attn.qkv_proj.weight:7`
 on the SmolLM2 positive's derived weights_of_record.json and grades the attack DETECTED when commit_delta exits 3 with a first_fail_reason
@@ -8,7 +8,7 @@ matching <regex>.  Two facts have to stay in lock-step and neither is exercised 
      the honest one and the pin would compare honest digests: a negative that cannot fail), and records the flip in verdict.json
      (negatives.flip_weight) so an attack record is never mistaken for a row Commit.
   2. the verdict text a pin FAIL produces on the dense path -- `commit_verdict` names the FAILING value_correspondence component:
-     "weights_pin: 1 served weight(s) differ from the checkpoint of record: <served name>" (manbind M-0684 measured on int-5), or
+     "weights_pin: 1 served weight(s) differ from the checkpoint of record: <served name>", or
      "weights of record: ..." when only the verdict's own pin rule fires -- matches the canary's regex; a rename of either side turns the
      live negative into a FAIL of the canary (harness gap), never into a silent PASS.
 

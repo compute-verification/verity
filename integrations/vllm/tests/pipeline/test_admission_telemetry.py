@@ -1,4 +1,4 @@
-"""verity_vllm.pipeline.telemetry.admission — synthetic-interval unit tests + the R17 comparison as a regression fixture."""
+"""verity_vllm.pipeline.telemetry.admission — synthetic-interval unit tests + recorded attempts as a regression fixture."""
 from __future__ import annotations
 
 import json
@@ -43,7 +43,7 @@ def test_same_name_twice_is_two_allocations():
 def _cfg(**kw):
     base = {"model": "llama32-1b", "requests": 8, "prompt_tokens": 3819, "decode_rows": 494, "steps": 129, "max_context": 1152, "pairs": 3, "host_limit_bytes": 119_209 * MiB}
     base.update(kw)
-    return adm.RowConfig(**base)
+    return adm.RowScale(**base)
 
 
 def test_predict_names_every_term_and_has_no_multiplier():
@@ -63,8 +63,8 @@ def test_commit_peak_is_pair0_replay_and_pool_persists_under_retain_host():
     assert p["peak_point"] == "p0.replay"
     pool = next(t for t in p["terms"] if t["name"] == "commit.pinned_pool")
     assert pool["live"] == ["warmup", "exit"]
-    # [R19 admit, F-dA-15 correction] --retain none on the unbounded windowed path allocates the same pool for the whole run (R18 #60: the
-    # 112 GiB pool under `--retain none`); it is named on the term, never 0 MiB / released at the pair's end by name
+    # --retain none on the unbounded windowed path allocates the same pool for the whole run; it is named on the term, never 0 MiB /
+    # released at the pair's end by name
     q = adm.predict(_cfg(retain="none"))["commit"]
     pool_n = next(t for t in q["terms"] if t["name"] == "commit.pinned_pool")
     assert pool_n["live"] == ["warmup", "exit"] and pool_n["bytes"] == pool["bytes"] and "regardless of retention" in pool_n["basis"]
@@ -80,7 +80,7 @@ def test_heap_residual_only_with_more_than_one_pair_and_programs_once_under_repl
 
 
 def test_replay_workers_term_f_r17_24():
-    """The pre-R19 model of the forked pool (fork_gc_freeze=False: the R17/R18 records)."""
+    """The forked pool without gc.freeze (fork_gc_freeze=False, as the recorded attempts ran)."""
     # 32 forked workers: two may hold the largest VU (2.9 x largest tensor) + 30 x 250 MiB
     p = adm.predict(_cfg(replay_workers=32, fork_gc_freeze=False))["commit"]
     w = next(t for t in p["terms"] if t["name"] == "commit.c2.replay_workers")
@@ -90,14 +90,14 @@ def test_replay_workers_term_f_r17_24():
     s = adm.predict(_cfg(replay_workers=1, fork_gc_freeze=False))["commit"]
     assert not [t for t in s["terms"] if t["name"] == "commit.c2.replay_workers"]
     assert next(t for t in s["terms"] if t["name"] == "commit.c2.largest_vu_eval")["bytes"] == int(2.9 * lt)
-    # R18 candidate (b) (largest strata in the parent): forked workers are 250 MiB workers
+    # largest strata in the parent: forked workers are 250 MiB workers
     f = adm.predict(_cfg(replay_workers=32, largest_vu_in_parent=True, fork_gc_freeze=False))["commit"]
     assert next(t for t in f["terms"] if t["name"] == "commit.c2.replay_workers")["bytes"] == 32 * 250 * MiB
     assert f["replay_workers_admissible"] >= p["replay_workers_admissible"]
 
 
 def test_r19_fork_gc_freeze_is_the_default_and_makes_every_worker_a_250_mib_worker():
-    """[R19 admit, F-r18-admit-1 fix (c)] the shipped code freezes the parent's heap before the fork; the planner's default models it: 32
+    """The shipped code freezes the parent's heap before the fork; the planner's default models it: 32
     workers x 250 MiB, no largest-VU child, no parent largest-VU term (a VU's working set is its own rows), the note names the mechanism."""
     p = adm.predict(_cfg(replay_workers=32))["commit"]
     assert p["fork_gc_freeze"] is True
@@ -110,14 +110,14 @@ def test_r19_fork_gc_freeze_is_the_default_and_makes_every_worker_a_250_mib_work
 
 
 def test_r19_retain_windowed_pool_terms():
-    """[R19 admit, F-r18-admit-1 fix (a)] bounded staging + --retain host --retain-exclude hidden_m1: the pool is (raw - hidden M1) + raw x 0.25 (levels over every leaf);
+    """Bounded staging + --retain host --retain-exclude hidden_m1: the pool is (raw - hidden M1) + raw x 0.25 (levels over every leaf);
     bounded + a non-host retention keeps the levels only; bounded without the exclusion (or an unrelated family) keeps the full pool."""
     full = adm.predict(_cfg())["commit"]
     raw, hid = adm.predict(_cfg())["derived"]["raw_bytes"], adm.predict(_cfg())["derived"]["hidden_bytes"]
     assert 0 < hid < raw and hid > 0.5 * raw
     kept = adm.predict(_cfg(bounded_staging=True, retain_exclude=["fa2_hidden_m1", "fa3_hidden_m1"]))["commit"]
     assert kept["pinned_pool"]["bytes"] == raw - hid + int(raw * 0.25) == next(t["bytes"] for t in kept["terms"] if t["name"] == "commit.pinned_pool")
-    assert kept["pinned_pool"]["kept_raw_bytes"] == raw - hid and "fix (a)" in kept["pinned_pool"]["basis"]
+    assert kept["pinned_pool"]["kept_raw_bytes"] == raw - hid and "- hidden M1" in kept["pinned_pool"]["basis"]
     assert kept["reserved_bytes"] < full["reserved_bytes"] and kept["pinned_pool"]["retain_exclude"] == ["fa2_hidden_m1", "fa3_hidden_m1"]
     assert adm.predict(_cfg(bounded_staging=True))["commit"]["pinned_pool"]["bytes"] == full["pinned_pool"]["bytes"]
     assert adm.predict(_cfg(bounded_staging=True, retain_exclude=["gemm_qkv"]))["commit"]["pinned_pool"]["bytes"] == full["pinned_pool"]["bytes"]
@@ -132,16 +132,16 @@ def test_r19_retain_windowed_pool_terms():
 def test_largest_tensor_law_matches_the_ledger():
     # 'largest tensor bound': llama B1 392, B8 3140, B32 12560, B64 25120 MiB; r11 (LP 4096, T 512) 6274 MiB
     for b, mib in ((1, 392), (8, 3140), (32, 12560), (64, 25120)):
-        c = adm.RowConfig(model="llama32-1b", requests=b, prompt_tokens=1024 * b, decode_rows=128 * b, max_context=1152, largest_request_rows=128, largest_request_ctx=1152)
+        c = adm.RowScale(model="llama32-1b", requests=b, prompt_tokens=1024 * b, decode_rows=128 * b, max_context=1152, largest_request_rows=128, largest_request_ctx=1152)
         assert abs(c.largest_tensor() / MiB - mib) / mib < 0.05
-    c = adm.RowConfig(model="llama32-1b", requests=1, prompt_tokens=4096, decode_rows=512, max_context=4608)
+    c = adm.RowScale(model="llama32-1b", requests=1, prompt_tokens=4096, decode_rows=512, max_context=4608)
     assert abs(c.largest_tensor() / MiB - 6274) / 6274 < 0.05
 
 
 def test_instances_law():
     assert abs(_cfg().instances() - 698_398) / 698_398 < 0.01
-    assert abs(adm.RowConfig(model="phi3-mini", requests=8, prompt_tokens=3630, decode_rows=460).instances() - 1_315_324) / 1_315_324 < 0.01
-    assert abs(adm.RowConfig(model="olmoe-1b-7b", requests=32, prompt_tokens=8659, decode_rows=1308).instances() - 5_745_046) / 5_745_046 < 0.01
+    assert abs(adm.RowScale(model="phi3-mini", requests=8, prompt_tokens=3630, decode_rows=460).instances() - 1_315_324) / 1_315_324 < 0.01
+    assert abs(adm.RowScale(model="olmoe-1b-7b", requests=32, prompt_tokens=8659, decode_rows=1308).instances() - 5_745_046) / 5_745_046 < 0.01
 
 
 def test_admission_decision_flips_on_the_limit():
@@ -158,7 +158,7 @@ def test_admission_decision_flips_on_the_limit():
 
 def test_under_fitted_capture_models_are_flagged_not_silently_admitted():
     llama = adm.predict(_cfg())["match"]
-    mistral = adm.predict(adm.RowConfig(model="mistral-7b", requests=8, prompt_tokens=3070, decode_rows=688, max_context=1152, host_limit_bytes=359_535 * MiB))["match"]
+    mistral = adm.predict(adm.RowScale(model="mistral-7b", requests=8, prompt_tokens=3070, decode_rows=688, max_context=1152, host_limit_bytes=359_535 * MiB))["match"]
     assert llama["lower_bound_terms"] == []
     assert mistral["lower_bound_terms"] == ["match.capture.hidden_values", "match.capture.instance_records", "match.capture.token_values"]
     assert any("#60" in t["basis"] for t in mistral["terms"] if t["name"].startswith("match.capture."))
@@ -185,7 +185,7 @@ def test_observe_increment_a_named_allocs(tmp_path):
     assert any("never freed" in n for n in obs["notes"])
 
 
-# ---- the R17 comparison as a regression fixture ---------------------------------------------------------------------------
+# ---- recorded attempts as a regression fixture -----------------------------------------------------------------------------
 EXPECT = {
     # attempt: (stage, predicted admit, outcome the model must reproduce, |residual_parent| bound in % when the observation is a peak)
     "b1_llama_l40s": ("commit", True, "PASS", 20),
@@ -198,7 +198,7 @@ EXPECT = {
 }
 
 
-@pytest.mark.skipif(not FIXTURE.exists(), reason="R17 fixture not present")
+@pytest.mark.skipif(not FIXTURE.exists(), reason="attempt fixture not present")
 @pytest.mark.parametrize("attempt", sorted(EXPECT))
 def test_r17_regression(attempt):
     stage, admit, outcome, tol = EXPECT[attempt]
@@ -213,7 +213,7 @@ def test_r17_regression(attempt):
         assert s["predicted_mib"] >= s["observed_mib"] and s["predicted_mib"] > s["limit_mib"]
 
 
-@pytest.mark.skipif(not FIXTURE.exists(), reason="R17 fixture not present")
+@pytest.mark.skipif(not FIXTURE.exists(), reason="attempt fixture not present")
 def test_r17_f_r17_24_explains_23_and_67():
     r23 = adm.compare(str(FIXTURE / "r23_b64_commit2"))
     pts = r23["points"]["commit/p0.replay"]
@@ -223,12 +223,12 @@ def test_r17_f_r17_24_explains_23_and_67():
     r67 = adm.compare(str(FIXTURE / "r67_olmoe_b32"))
     s = r67["stages"]["commit"]
     assert s["predicted_admit"] is False and s["predicted_mib"] > s["limit_mib"]
-    # the F-dA-15 pool alone was 89 GB; the model's parent at the kill is within 20% of the recorded 154 GB
+    # the pool alone was 89 GB; the model's parent at the kill is within 20% of the recorded 154 GB
     assert abs(s["residual_parent_pct"]) <= 20
 
 
-# ---- S-r18-3 C1 (rev M-0053): a lower-bound reservation never reads as a plain admit ---------------------------------------
-@pytest.mark.skipif(not FIXTURE.exists(), reason="R17 fixture not present")
+# ---- a lower-bound reservation never reads as a plain admit ---------------------------------------------------------------
+@pytest.mark.skipif(not FIXTURE.exists(), reason="attempt fixture not present")
 def test_c1_lower_bound_stage_is_not_admitted_on_the_60_fixture():
     d = FIXTURE / "r60_mistral_b8"
     r = adm.compare(str(d))

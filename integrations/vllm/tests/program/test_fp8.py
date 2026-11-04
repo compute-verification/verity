@@ -1,4 +1,4 @@
-"""CPU tests of the FP8 registry (`verity/ml/definitions/registry/fp8.py`, lane QZ) on saved H100 operands.
+"""CPU tests of the FP8 registry (`verity/ml/definitions/registry/fp8.py`) on saved H100 operands.
 
 Data (`tests/program/data/`, recorded on an H100):
 * `fp8_saved_operands.npz` — `_C.cutlass_scaled_mm` on random e4m3 operands at three B1 shapes (K=1536/N=2048 with bias,
@@ -51,7 +51,7 @@ def _evaluate(program: Program, arrays: list[np.ndarray]) -> list[list[int]]:
 
 
 def _evaluate_returns(program: Program, arrays: list[np.ndarray]) -> list[int]:
-    """[R15 fp8] Like `_evaluate`, but returns the program function's OWN return words (its body's `ret` refs resolved to root gates),
+    """Like `_evaluate`, but returns the program function's OWN return words (its body's `ret` refs resolved to root gates),
     whatever the root-call order of its children."""
     from verity.ml.circuits.layout import resolve
     circ = program.circuit
@@ -159,7 +159,7 @@ def test_hopper_e4m3_step_is_not_ieee() -> None:
 
 
 # ------------------------------------------------------------------------------------------------------------
-# [R15 fp8] the BLOCK-SCALED linear (Qwen3-4B-Instruct-2507-FP8 on Hopper): `_C.per_token_group_fp8_quant` + blockwise
+# the BLOCK-SCALED linear (Qwen3-4B-Instruct-2507-FP8 on Hopper): `_C.per_token_group_fp8_quant` + blockwise
 # `_C.cutlass_scaled_mm`, on complete operand sets recorded on the H100:
 # "p" = (M=1, K=256, N=256) -> the swap_ab Pingpong variant, "c" = (M=4, K=384, N=256) -> the Cooperative variant.
 # ------------------------------------------------------------------------------------------------------------
@@ -203,7 +203,7 @@ def test_scaled_mm_fp8_block_wrong_scale_fails() -> None:
 
 
 def test_fp8_block_promotion_is_ffma_ascending() -> None:
-    """The adversarial operands of out/gen/sweep/evidence/fp8/adversarial_cases.py: the H100 words agree with FFMA(temp, FMUL(sfa, sfb), acc)
+    """The adversarial operands of the H100 FP8 capture's adversarial cases: the H100 words agree with FFMA(temp, FMUL(sfa, sfb), acc)
     in ascending k and disagree with mul+add / descending k (cases_run.json: 160/160, 160/160, 240/240) — here the Definition itself is
     checked to separate the hypotheses on one such case (tile 0 puts acc on a bf16 midpoint, tile 1 adds ~half an f32 ulp)."""
     one, onehalf = 0x38, 0x3C

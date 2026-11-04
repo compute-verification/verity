@@ -1,10 +1,12 @@
-import Proofs.Accounting.TS.Session.Lanes.Layer
-import PouwWindow.Lanes
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Layer
+public import PouwWindow.Lanes
 
 /-!
 # A leaf's 33 statements' ports at the served tile
 
-`PouwWindow.Lanes` (INT-TIE's layout, held to `h1zy.statement_ports` by its difftest) states, at a leaf's tile and
+`PouwWindow.Lanes` (the statements' layout, held to `h1zy.statement_ports` by its difftest) states, at a leaf's tile and
 contraction, which port of each of the 33 statements holds each of the Definition's inputs and its output, at which
 bits of the port's row, and where the verifier opens that row (`Source`). At the served 32 × 32 leaf (`servedTile K`):
 
@@ -21,6 +23,8 @@ The leaf and the receipt are the ones the registrants' rows of `a`, `b`, `zy` an
 decode it alike (`Lanes.Partials`' `read_bits`). The known values' content is flock-verify's known-content and
 known-read checks' (`Lanes.KnownRead`).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

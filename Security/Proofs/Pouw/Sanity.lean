@@ -1,7 +1,9 @@
-import Proofs.Pouw.Witness
-import Proofs.Pouw.Copy
-import Mathlib.Data.Set.Finite.List
-import Mathlib.Data.Fintype.Pigeonhole
+module
+
+public import Proofs.Pouw.Witness
+public import Proofs.Pouw.Copy
+public import Mathlib.Data.Set.Finite.List
+public import Mathlib.Data.Fintype.Pigeonhole
 
 /-!
 # Sanity: degenerate instances and side conditions
@@ -28,6 +30,8 @@ the pinned statements excludes it or makes it harmless.
 | R_copy with zero noise | `copy_zero_noise`: Nz fails and R_copy's bound fails |
 | (d′)'s hypotheses together | `milestone_hypotheses_consistent` (at `W_ref = m1Wref`, `Ω_max = Ω_M1`) |
 -/
+
+@[expose] public section
 
 namespace Pouw.Sanity
 
@@ -275,13 +279,13 @@ theorem tt_false_of_gamma0_ge_one [Fintype Q] [DecidableEq Q] [Fintype R] [Finty
   linarith
 
 /-- **`γ ≥ 1`**: every budget is beaten by one correct unit of positive work, so `G_γ` cannot hold with `η < 1`
-against the honest reference (red-team A15; the pinned statements assume `γ < 1` or `γ₀ < 1`). -/
+against the honest reference (the pinned statements assume `γ < 1` or `γ₀ < 1`). -/
 theorem wins_of_gamma_ge_one (P : Protocol Q R S) (U : Workload) {γ T : ℝ} (hγ : 1 ≤ γ) (hT : 0 ≤ T)
     (τ : Transcript) (H : Q → R) (s : S) (hpos : 0 < ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ)) :
     Wins P U γ T τ H s :=
   lt_of_le_of_lt (div_nonpos_of_nonneg_of_nonpos hT (by linarith)) hpos
 
-/-! ## Unbounded `N` (red-team B1) -/
+/-! ## Unbounded `N` -/
 
 /-- With a finite query type and `c` queries per unit, some two indices get the same queries. -/
 theorem index_collision [Finite Q] (P : D1.Params Q R S) (c : ℕ) (hc : P.QueryBound c) (s : S) (A : Mat)

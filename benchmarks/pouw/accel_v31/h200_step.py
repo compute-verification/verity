@@ -9,8 +9,9 @@ A step's calls by (N, K):
             gate and up fused (28,672, 4,096) and down (4,096, 14,336) back to back
 The split is the protocol's GEMM (`gemm`: X W'^T, the peel's tail stages, the T_s stores and the epilogue: the tensor
 side), its hashing (`coins`, the SHA-512 coin streams, and `commit`, the leaves and the tree) and its other CUDA-core work
-(`form` and `wrap`). The residual is 1 - W / (step ρ), W the step's MACs and ρ the H200's data-sheet rate (4,096 MACs an SM a
-clock, 132 SMs, 1,830 MHz).
+(`form` and `wrap`). The residual is 1 - W / (step ρ), W the step's MACs and ρ the H200's rate (4,096 MACs an SM a clock,
+132 SMs) at each reading of its clock in `CLOCKS_MHZ`, side by side: the tensor clock (1,830 MHz, the data sheet's dense
+INT8 rate) and the boost clock nvidia-smi reports (1,980 MHz).
 
 `v31 fill-bench`'s lines (Dither's no-fold call, `"fill": true`) give a step per (L', L, ROW, served or filler, variant).
 Its arm of record is the one a call of the protocol runs: a served call's seeds are per call (`dither.seeds(coin, receipt,
@@ -32,7 +33,10 @@ CALLS = {(16384, 16384): 2 * LAYERS, (128, 16384): LAYERS, (65536, 16384): LAYER
          (256, 16384): 1}
 MODELS = {"mqa16k52": CALLS, "8b": {(6144, 4096): 32, (4096, 4096): 32, (28672, 4096): 32, (4096, 14336): 32}}
 WGMMA = {"mqa16k52": 3.06}
-RHO = 4096 * 132 * 1.83e9
+#: the H200's SM clock under each reading; one constant until the card file states the tensor clock
+CLOCKS_MHZ = {"tensor": 1830, "boost": 1980}
+RHO = {name: 4096 * 132 * mhz * 1e6 for name, mhz in CLOCKS_MHZ.items()}
+MHZ = " / ".join(f"{m:,}" for m in CLOCKS_MHZ.values())
 ARMS = ("lt", "plain", "coins", "form", "wrap", "gemm", "commit", "call", "ovl")
 FILL_ARMS = ("lt", "coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit", "call", "ovl", "ovl_w", "ovl_pad", "wgl")
 
@@ -91,6 +95,11 @@ def steps(lines: list[dict], m: int = 16384, calls: dict[tuple[int, int], int] =
     return out
 
 
+def residual(macs: int, step: float | None) -> str:
+    """1 - W / (step ρ) at each reading of the clock, in `CLOCKS_MHZ`'s order."""
+    return " / ".join(f"{1 - macs / (step * rho):.3f}" for rho in RHO.values()) if step else "-"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("files", nargs="+")
@@ -103,7 +112,7 @@ def main() -> int:
             continue
         found, ref = True, wg.get(model)
         print(f"\n{model}\n\n| L' | t | L | ROW | variant | ovl s | gamma_u ovl | gamma_lt ovl | call s | gemm s | "
-              "coins + commit s | form + wrap s | plain s | cuBLASLt s | residual (ovl) | SM MHz (ovl) |")
+              f"coins + commit s | form + wrap s | plain s | cuBLASLt s | residual (ovl) at {MHZ} MHz | SM MHz (ovl) |")
         print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
         for (lp, t, row, var), v in st.items():
             s = v["s"]
@@ -111,7 +120,7 @@ def main() -> int:
             gu = f"{s['ovl'] / ref:.3f}" if ref else "-"
             print(f"| {lp} | {t} | {lp * t} | {row} | {var} | {s['ovl']:.3f} | {gu} | {s['ovl'] / s['lt']:.3f} | "
                   f"{s['call']:.3f} | {s['gemm']:.3f} | {s['coins'] + s['commit']:.3f} | {s['form'] + s['wrap']:.3f} | "
-                  f"{s['plain']:.3f} | {s['lt']:.3f} | {1 - v['macs'] / (s['ovl'] * RHO):.3f} | {mhz} |")
+                  f"{s['plain']:.3f} | {s['lt']:.3f} | {residual(v['macs'], s['ovl'])} | {mhz} |")
         for (lp, t, row, var), v in st.items():
             s = v["s"]
             vs = f"gamma_u {s['ovl'] / ref:.3f} against wgmma's {ref} s, " if ref else ""
@@ -125,7 +134,7 @@ def main() -> int:
         found, ref = True, wg.get(model)
         print(f"\n{model}, Dither's no-fold call\n\n| L' | L | ROW | kind | variant | step s | arm | gamma_u | gamma_lt | "
               "ovl s | ovl_w s | ovl_pad s | call s | tensor s | hashing s | other s | hashing share | cuBLASLt s | "
-              "residual | SM MHz |")
+              f"residual at {MHZ} MHz | SM MHz |")
         print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
         f = lambda x: "-" if x is None else f"{x:.3f}"  # noqa: E731
         for (lp, L, row, o, var), v in st.items():
@@ -137,7 +146,7 @@ def main() -> int:
             print(f"| {lp} | {L} | {row} | {'served' if o else 'filler'} | {var} | {f(step)} | {v['record']} | {gu} | "
                   f"{f(step / s['lt'] if step else None)} | {f(s['ovl'])} | {f(s['ovl_w'])} | {f(s['ovl_pad'])} | "
                   f"{f(s['call'])} | {v['tensor']:.3f} | {v['hashing']:.3f} | {v['other']:.3f} | "
-                  f"{v['hashing'] / split:.1%} | {s['lt']:.3f} | {f(1 - v['macs'] / (step * RHO) if step else None)} | "
+                  f"{v['hashing'] / split:.1%} | {s['lt']:.3f} | {residual(v['macs'], step)} | "
                   f"{mhz} |")
         for (lp, L, row, o, var), v in st.items():
             step, lt, wl = v["step"], v["s"]["lt"], v["s"]["wgl"]

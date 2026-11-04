@@ -1,4 +1,4 @@
-"""Iteration 5: the one-stream form of H1 + fx1 (h1u.cu's kh_one, CA's PouwH1Tile_v3 with the exact wrap correction) on one
+"""The one-stream form of H1 + fx1 (h1u.cu's kh_one, PouwH1Tile_v3 with the exact wrap correction) on one
 H200 or B200. The call's served z and y come from the MMAs whose words its receipts fold, so the call costs this kernel
 alone (seeds, noise, unit), against the plain int8 GEMM it replaces: gamma = os / plain. Each build's receipts-only
 kh_unit_ws is timed beside it (arm NAME-ws, a second product: gamma 1 + ws / plain), and so is H1's noise floor.
@@ -6,13 +6,13 @@ kh_unit_ws is timed beside it (arm NAME-ws, a second product: gamma 1 + ws / pla
     python h1zbench.py --lib h1u.so [--variant NAME=h1u_x.so ...] --ref-lib h1zref.so [--noise-lib h1noise.so]
                        --out OUT [--reps 5] [--ms ...] [--linears ...] [--fused] [--no-ws] [--peel] [--j10r ARM]
 
---peel adds arm NAME-osp per build: kh_one_peel, CA's peel (11:02Z), whose z is A B^T (y today's) from the same stream
+--peel adds arm NAME-osp per build: kh_one_peel, the peel, whose z is A B^T (y today's) from the same stream
 (z - X c^T - b B^T + 256 xa B^T, xa where X = A + b wraps). Its gates are the os arms' with z held to A B^T instead: the
 anchors' z against the exact A B^T on the CPU (receipts v3's), every shape's z on the selected row tiles against A B^T
 in float64, and both faults unchanged (a perturbed word and a flipped wb bit still move only their own z, y and receipt).
 
 --j10r ARM adds arm ARM-j10r (label arm=ARM-j10r:j10r-unsound, noise=j10r): build ARM's one-stream unit on J10-R's
-call-scale noise (kh_one_j10; CA's RT-ALGO r3), measured only, never served or credited. Its gate is gate_one's on
+call-scale noise (kh_one_j10; the form j10r_ca.py twins), measured only, never served or credited. Its gate is gate_one's on
 j10r_ca.py's CPU twin (receipts and z on three units a shape, the noise and z checks of `gate_j10`) after anchors on
 every unit of two small calls.
 
@@ -22,7 +22,7 @@ Gates before any timing (a failed gate exits 4 and its build is not timed):
     32 x 32 x 4608 call (m = 3), z and receipt, B over all of int8 (-128 included); the reference kernel (h1zref.cu)
     against the same z;
   * every timed shape, 0xA5 poison over receipts, z, zo, y and the workspace first:
-    - the receipts on sampled units against served_h1/receipts.py's call_receipts, the seeds against seeds.py;
+    - the receipts on sampled units against `pouw_h1_receipts.call_receipts`, the seeds against seeds.py;
     - z against h1zref (X (B + c)^T by dp4a from full compressions) on every cell of the selected row tiles (all of
       them up to 8, else the first, the last and 6 random), no poison left in z, zo = z's rows < M, and y =
       int8_exact.dequantize(z) bit for bit;
@@ -31,7 +31,7 @@ Gates before any timing (a failed gate exits 4 and its build is not timed):
       receipt and no other, nothing else in z, and y = dequantize(z);
     - F_FAULT_WB (unit 0's column-0 wb+ at k = 0 flipped) must move exactly the cells (i, 0) of unit 0 with X[i][0] != 0,
       each by 256 dWB X[i][0], no receipt, nothing else in z, and y = dequantize(z);
-    - the peeled arms only, F_FAULT_XA (unit 0's xa at row 0, k = 0 flipped; CA's flipped-xa fault, 12:03Z) must move
+    - the peeled arms only, F_FAULT_XA (unit 0's xa at row 0, k = 0 flipped) must move
       exactly the cells (0, j) of unit 0 with B[j][0] != 0, each by 256 dxa B[j][0], no receipt, nothing else in z, and
       y = dequantize(z).
 The wrap bits' density (wb+ and wb- over the checked units' entries, from h1zref) is recorded per shape, never assumed.
@@ -628,7 +628,7 @@ def main() -> int:
     rng = random.Random(0x4831F5)
     doc = {"schema": "dither-hb/h1z/v1", "device": clock.name, "sms": props.multi_processor_count, "l2_bytes": l2,
            "torch": torch.__version__, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-           "reference": f"h1v3_ca.py ({V3.SOURCE}), served_h1/receipts.py, h1zref.cu", "noise": "per-unit",
+           "reference": f"h1v3_ca.py ({V3.SOURCE}), verity_vllm.protocols.pouw.h1.receipts, h1zref.cu", "noise": "per-unit",
            "libs": paths, "ref_lib": args.ref_lib, "noise_lib": args.noise_lib, "fault_shift": shift, "shapes": []}
     doc["anchors"] = anchors(libs, ref, rng)
     print(json.dumps({"anchors": doc["anchors"]}), flush=True)

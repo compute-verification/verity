@@ -49,10 +49,12 @@ _RECORDED = {"twice", "early-root", "never", "after", "root", "foreign-epoch", "
              "openings-form", "swapped", "rewritten", "tampered-log"}
 _LEFT = {"early"}
 #: a small LMS parameter set: the ledger's entries up to the session's open from leaf 0, the record at `RECORD_LEAF`, the
-#: close at the next leaf, the ledger's later entries from the one after
-PARAMS = lms.Params(64, 4, 5)
+#: close at the next leaf, the ledger's later entries from the one after; a credit case's draw session (`Session.drawn`)
+#: signs its record at `DRAW_LEAF` and its close at the next, and the ledger's entries after its open from the one after
+PARAMS = lms.Params(64, 4, 6)
 RECORD_LEAF = 8
-HOST = "vy-challenger-test"
+DRAW_LEAF = 40
+HOST = "challenger-test"
 LANE = "pouw"
 #: the verifier's copy of main's first-parent history, newest first
 MAIN = [hashlib.sha1(b"main %d" % i).hexdigest() for i in range(6)]
@@ -85,7 +87,7 @@ def _record(ch: Ch.LiveChallenger, roots: list[bytes]) -> list[dict]:
 
 class Session:
     """A challenger's session over `ch`'s coins as its host leaves it, its record and close signed under key `seed`: its
-    salt coin opened after root `salt` (none when None), then round coins after `roots`, then its draw coin after the
+    salt coin opened after root `salt` (none when None), then round coins after `roots`, then its sampling coin after the
     root `draw` makes of the round coins' record (none when None); its record signed at leaf `leaf` and its close at the
     next."""
 
@@ -93,6 +95,10 @@ class Session:
                  sid: str = "s-1", draw: Callable[[Ch.LiveRecord | None], bytes] | None = None,
                  leaf: int = RECORD_LEAF) -> None:
         self.ch, self.k, self.sid, self.leaf = ch, _key(seed), sid, leaf
+        #: a credit case's window session's draw session (`ledger_events` opens it after this one's end), and as a draw
+        #: session, the root its ledger open names (``on``) and whether that open marks it withheld (``withheld``)
+        self.drawn: Session | None = None
+        self.on, self.withheld = "", True
         self.pub = lms.public_key(self.k)
         ch.sign_record(HOST, self.pub, lambda m: lms.sign_at(self.k, leaf, m).encode())
         clock = itertools.count(rng.choice([0, 1, 10 ** 12])).__next__
@@ -142,9 +148,14 @@ def _open(rng: random.Random, window: dict, public: bytes) -> dict:
 
 def leaves_of(events: list[tuple[str, str | None, dict]], sid: str = "s-1") -> list[int]:
     """The leaves `ledger_lines` signs `events` at: 0, 1, … up to session `sid`'s open, then `RECORD_LEAF` + 2 on, so the
-    session's record and close (at `RECORD_LEAF` and the next) fall between its open and its end."""
-    j = next((i for i, e in enumerate(events) if e[:2] == ("open", sid)), len(events))
-    return [i if i <= j else RECORD_LEAF + 2 + i - j - 1 for i in range(len(events))]
+    session's record and close (at `RECORD_LEAF` and the next) fall between its open and its end; likewise from a draw
+    session's open (one whose end names `DRAW_LEAF`), `DRAW_LEAF` + 2 on."""
+    records = {sid: RECORD_LEAF, **{t: DRAW_LEAF for k, t, b in events if k == "end" and b.get("record_leaf") == DRAW_LEAF}}
+    out, q = [], 0
+    for kind, t, _ in events:
+        out.append(q)
+        q = max(q + 1, records[t] + 2) if kind == "open" and t in records else q + 1
+    return out
 
 
 def ledger_lines(events: list[tuple[str, str | None, dict]], k: lms.PrivateKey, leaves: list[int] | None = None,
@@ -197,6 +208,10 @@ def ledger_events(rng: random.Random, window: dict, s: Session, *, reserved: boo
     other: the period counts its windows at their reserves."""
     o = {k: v for k, v in {**_open(rng, window, s.pub), **(opened or {})}.items() if v is not None}
     named = (_reserved(rng, s.sid, o) if reserved else [("open", s.sid, o)]) + [("end", s.sid, _end(s, **end))]
+    if (ds := s.drawn) is not None:
+        o = {k: v for k, v in {**_open(rng, {"root": ds.on}, s.pub), **({"withheld": True} if ds.withheld else {}),
+                               **(opened or {})}.items() if v is not None}
+        named += (_reserved(rng, ds.sid, o) if reserved else [("open", ds.sid, o)]) + [("end", ds.sid, _end(ds))]
     others = []
     for i in range(rng.randint(0, 1 if reserved else 2)):
         sid = session_id(rng) if reserved else f"o-{i}"
@@ -304,8 +319,8 @@ def _mutate(d: dict, s: Session, name: str, rng: random.Random) -> None:
             scheme, layout = rng.choice([
                 ("verity/vllm/commit-coins/v1", Wd.live_families(len(roots) + 1)),
                 (Wd.LIVE_SCHEME, ((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, len(roots) + 1))),
-                (Wd.LIVE_SCHEME, ((Wd.SALT, 1), (Wd.ROUND, len(roots) + 1))),
-                (Wd.LIVE_SCHEME, ((Wd.SALT, 1), (Wd.DRAW, 1), ("pouw/rounds", len(roots) + 1)))])
+                (Wd.LIVE_SCHEME, ((Wd.SALT, 1), (Wd.ROUND, len(roots) + 1), (Wd.DRAW, 1))),
+                (Wd.LIVE_SCHEME, ((Wd.SALT, 1), ("pouw/rounds", len(roots) + 1)))])
             other = Session(rng, Ch.LiveChallenger(scheme, c.epoch, layout, rng.randbytes), [], salt=None)
             d["session"], s.sealed, s.ch = other.files(), other.lines, other.ch
             d["roots"], d["openings"] = [], []
@@ -541,7 +556,7 @@ def _mutate_salt(d: dict, s: Session, name: str, rng: random.Random) -> Session:
         case "after":
             d["opening"] = {**op, "after": _flip(op["after"])}
         case "label":
-            d["opening"] = s.ch.open(Wd.DRAW, 0, root).to_json()
+            d["opening"] = {**op, "label": Wd.ROUND}
         case "foreign":
             d["opening"] = _salted(rng, c, s.sid, root).salt[0].to_json()
         case "foreign-epoch":

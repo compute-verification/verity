@@ -4,7 +4,7 @@
 # small shapes, every tile config, poisoned outputs) under a short lease, checked by ref.py after it; only if every check
 # passes, the interleaved timing of FG_ARMS at the served shapes and ncu under a second lease. Clocks are read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-12 --source . --cwd clone --env GPU_LEASE_WHO=T1 \
+#   research run --on MACHINE --project verity --source . --cwd clone --env GPU_LEASE_WHO=LANE \
 #     --send benchmarks/pouw/floored_gemm/tb_run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/tb_run.sh"'
 # STAGE=build|gate|all (default all); REPS (default 15); SHAPES, NCU_SHAPES (name:m:n:k:C); FG_ARMS.
 set -uo pipefail

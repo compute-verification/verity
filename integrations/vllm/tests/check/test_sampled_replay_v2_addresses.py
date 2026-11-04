@@ -1,5 +1,5 @@
 """The replay's address rule: `ProgramIndex` names a row's members from the v2 query's population (`required.Population.members_of`),
-the rows `request_manifest` counts.  An interior row whose output crosses a module boundary (F-r19-int-20) is addressed and the manifest's
+the rows `request_manifest` counts.  An interior row whose output crosses a module boundary is addressed and the manifest's
 identity has its rows; every identity with Program rows is produced by the addressed rows, on a request Program and on a TP rank Program."""
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def _reconciles(man: dict, pi: IX.ProgramIndex, rank: int = 0) -> None:
 
 
 def test_the_crossing_interior_row_is_addressed_as_the_module_output_it_crosses_as():
-    """F-r19-int-20 (#57's shape): the root body's `embed * normalizer` has no module-output name of its own but crosses into layer 0 --
+    """The gemma2-2b shape: the root body's `embed * normalizer` has no module-output name of its own but crosses into layer 0 --
     the v2 query requires it as (model, out) and the rule addresses exactly those rows, with the manifest's row count."""
     inst, _woff = _program(scale=True)
     man = _v2_manifest(inst)

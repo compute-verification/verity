@@ -7,6 +7,7 @@ and V*'s list, the recursion's parts (each level's RecOpen, the algebra's parts,
 0's cap), at every `fast100` m of the deployed class's claims."""
 from __future__ import annotations
 
+import pytest
 from verity_flock import rec_algebra as A
 from verity_flock import rec_budget as RB
 from verity_flock import rec_residuals as RR
@@ -51,6 +52,7 @@ def test_the_caps_sit_far_above_every_deployed_v_star_session():
     assert 60 * (RR.MAX_REGIONS + 2) <= RB.MAX_PORTS
 
 
+@pytest.mark.slow
 def test_the_statement_cap_sits_far_above_every_deployed_v_star_list():
     counts = {}
     for shape in [(m, 22, 8) for m in range(22, 36)] + [(22, 6, 16)]:

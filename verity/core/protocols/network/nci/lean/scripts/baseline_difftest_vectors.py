@@ -101,7 +101,7 @@ def build(rng, text: str, params: list, theta_pick, bad: str | None, run_at: int
     """A case on the declaration `text`: θ the registered input nodes `theta_pick` chooses, its provenance and the trusted
     input, the run's own record at position `run_at` of the log (0 to 3 at random when None), broken as `bad` names
     (None: not broken; "output": one entry a port of the log's first record under the cited root and the run's rows, in
-    the `output` form the check took until 21 Oct). Returns the case with what it was made from."""
+    the `output` form the check once took). Returns the case with what it was made from."""
     desc = json.loads(text)
     program = codec.decode_program(desc, reference.declared(desc))
     typed = [(n, type_from_json(t)) for n, t in params]

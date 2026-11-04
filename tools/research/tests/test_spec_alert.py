@@ -86,7 +86,7 @@ def test_an_assumption_no_reads_record_holds_is_shown_when_its_digest_changes_or
 
 
 def test_an_entry_added_to_the_frozen_shape_list_is_shown_with_its_reason_and_one_removed_is_not():
-    """Adding to `shape.frozen` exempts a guarantee from the shape rule: a claims change Daniel sees, as he ruled (9 Oct)."""
+    """Adding to `shape.frozen` exempts a guarantee from the shape rule: a claims change, so the DM shows it."""
     base = _doc({"P.t": _g("P.t : A", H1)})
     frozen = base | {"shape": {"frozen": {"P.t": "RESTATE: split the iff."}}}
     assert spec.changes(base, frozen) == ["• frozen `P.t` (doesn't have the shape yet): RESTATE: split the iff."]
@@ -304,7 +304,7 @@ def test_a_push_to_main_alerts_on_what_it_moved_main_across(tmp_path, monkeypatc
     new = _commit(repo, "lean-audit.json", _doc({"P.t": _g("P.t : C", H3)}), "Merge #9 (abc)")
     seen = []
     monkeypatch.setattr(spec, "alert", lambda repo, was, now, **kw: seen.append((was, now)) or True)
-    monkeypatch.setattr(merge, "_sweep_after", lambda *a: None)
+    monkeypatch.setattr(merge, "_sweep_after", lambda *a, **k: None)
     monkeypatch.setattr(merge, "report_landings", lambda *a, **kw: True)     # it asks GitHub (`gh pr list`) and posts to Slack
     assert merge._push_and_sweep(repo, "main", "origin", True) == 0
     assert seen == [(mid, new)]

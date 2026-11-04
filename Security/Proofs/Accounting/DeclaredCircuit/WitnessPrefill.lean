@@ -1,5 +1,7 @@
-import Mathlib
-import Proofs.Accounting.DeclaredCircuit.Witness
+module
+
+public import Mathlib
+public import Proofs.Accounting.DeclaredCircuit.Witness
 
 /-!
 # An honest run with a prefill meets every hypothesis of `DeclaredCircuitRequirement`
@@ -29,10 +31,12 @@ It meets every hypothesis of `G` but the world's (`meets`), so `G` bounds it (`a
   joins the window of its request (`joined`), so the lifetime cap holds at every `L ≥ 1`.
 * **The devices and the gate model** are `Witness.lean`'s: the honest pass device, one grinding candidate, a `0`-bit
   summary, no carrier, and the empty `Wc`.
-* **At the 30 s life** (#3786: `L = max(2, ⌊30/T⌋)` windows of `T` seconds, `L = 30` at 1 s, `L = 2` for a prover
-  that defers residency at windows of 15 to 60 s) both of `G`'s thresholds are positive for 8B and for 70B TP8
-  (`life30_8b`, `life30_70b`).
+* **At the 30 s life** (`L = max(2, ⌊30/T⌋)` windows of `T` seconds, `L = 30` at 1 s, `L = 2` for a prover that defers
+  residency at windows of 15 to 60 s) both of `G`'s thresholds are positive for 8B and for 70B TP8 (`life30_8b`,
+  `life30_70b`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.DeclaredCircuitWitnessPrefill
 
@@ -577,10 +581,10 @@ theorem meets (n P N ρ S q Xr Lr qr τ L B εnum εden : ℕ) {Ω Ca Ch : Type}
     Assumptions.CircuitCarriers (fun c y => (honestSession n P N ρ S (Lr * τ) q hlink hq).session
         (steer0 n P N ρ Ω Ca c y))
       (RateSketch.steeredStore enc choose (passLayout n P N ρ Ω Ca)) (passLayout n P N ρ Ω Ca)
-      (joined n P N ρ Ω Ca) (Xr * τ) L B εnum εden ([] : Gates.Dag Unit) (aud n P N) ∧
+      (joined n P N ρ Ω Ca) (Xr * τ) L B εnum εden ([] : Gates.IntDag Unit) (aud n P N) ∧
     Assumptions.SteeredLayout (passLayout n P N ρ Ω Ca) (steer0 n P N ρ Ω Ca) ∧
     RateSketch.LifetimeCapped (passLayout n P N ρ Ω Ca) (joined n P N ρ Ω Ca) L ∧
-    Gates.Restricted B ([] : Gates.Dag Unit) ∧ Gates.Property caps (aud n P N) ([] : Gates.Dag Unit) ∧
+    Gates.Restricted B ([] : Gates.IntDag Unit) ∧ Gates.Property caps (aud n P N) ([] : Gates.IntDag Unit) ∧
     (∀ v < (aud n P N).windows, (aud n P N).reads v ≤ P * N * 4096) ∧
     (∀ x : RateSketch.StackedCoins Ω Ca (1 + n * P * (N + 4)) n P N ρ 1,
       (placement n P N τ val).Deadlines (passBind n P N) τ ∧
@@ -656,7 +660,7 @@ theorem applies (hG : Guarantees.DeclaredCircuitRequirement) (n P N ρ S q Xr Lr
   intro T G a Aud layout steer A W p ℓ grp bind addr
   obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8⟩ :=
     meets n P N ρ S q Xr Lr qr τ L B εnum εden enc choose caps hcaps val hval hL hlink hq hqr
-  exact hG n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T 1 ε δ ([] : Gates.Dag Unit) caps Aud enc choose layout
+  exact hG n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T 1 ε δ ([] : Gates.IntDag Unit) caps Aud enc choose layout
     steer (joined n P N ρ Ω Ca) A W p ℓ grp bind (fun _ => kvStore n P N val) (fun _ => kvPlan n P N) addr
     hn hP hN hE hrank hkey hsq hcs hEle hfloor h1 h2 h3 h4 h5 h6 h7 h8
 
@@ -821,12 +825,12 @@ theorem window_pos {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) {γ : ℝ} (w : 
 
 /-! ## At the 30 s life
 
-#3786's carrier life is 30 s, in `L = max(2, ⌊30/T⌋)` windows of `T` seconds. `γ` reads the life through the passes
-and run-input bytes it spans, `L·P` and `L·R` (`gamma_prod`), at DCR-RT's 61 ms passes (`P ≤ ⌈T/0.061⌉`) and
-100 KB/s of run input (`R = T·100,000`). At every window of 1 to 15 s, `L = 30` one-second windows among them, the
-life spans at most 510 passes and 3,000,000 bytes (`L·P` peaks at `30·17`); at windows of 15 to 60 s, which only a
-prover that defers residency takes, `L = 2` and at most 1,968 passes and 12,000,000 bytes. The run's credit is its
-tiles' bits, so `G` bounds something exactly when its `ε` is below 1. -/
+The carrier life is 30 s, in `L = max(2, ⌊30/T⌋)` windows of `T` seconds. `γ` reads the life through the passes and
+run-input bytes it spans, `L·P` and `L·R` (`gamma_prod`), at 61 ms passes (`P ≤ ⌈T/0.061⌉`) and 100 KB/s of run input
+(`R = T·100,000`). At every window of 1 to 15 s, `L = 30` one-second windows among them, the life spans at most 510
+passes and 3,000,000 bytes (`L·P` peaks at `30·17`); at windows of 15 to 60 s, which only a prover that defers residency
+takes, `L = 2` and at most 1,968 passes and 12,000,000 bytes. The run's credit is its tiles' bits, so `G` bounds
+something exactly when its `ε` is below 1. -/
 
 /-- `gamma_bound` with a life of `L` windows spanning at most `LP` passes and `LR` run-input bytes. -/
 theorem gamma_prod {N ρ S Lr τ Xr k L P E E₀ N₀ R LP LR : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit) (γ₀ c₀ : ℝ)

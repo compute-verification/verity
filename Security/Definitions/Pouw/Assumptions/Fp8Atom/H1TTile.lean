@@ -1,10 +1,12 @@
-import Mathlib.Data.Set.Card
-import Definitions.Pouw.Assumptions.Fp8Atom.H1TGamma
+module
+
+public import Mathlib.Data.Set.Card
+public import Definitions.Pouw.Assumptions.Fp8Atom.H1TGamma
 
 /-!
 # H-1T's tiles (trusted statements)
 
-The per-tile count statement `TTH1T` (`H1TTileAssumptions`; `internal/pouw-fp8/lean-atom-m2-plan.md` §0.5, X-SPC-3)
+The per-tile count statement `TTH1T` (`H1TTileAssumptions`)
 reads a tiling of the units' outputs and a program's fixed output slots, defined here.
 
 * **`Tiling`**: every output `(i, j)` of unit `u` lies in one tile; every tile holds an output, lies in one unit, and
@@ -17,6 +19,8 @@ reads a tiling of the units' outputs and a program's fixed output slots, defined
 * **`TTH1TAllRight`** (M5's sanity statement): a program right on every tile at every salt is never in `TTH1T`'s event
   at `γ = 0`. It is `H1TGamma` for such a program, so it holds under `H1TRunningWords` (`tth1tAllRight`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T
 

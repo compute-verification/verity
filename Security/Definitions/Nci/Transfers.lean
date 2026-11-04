@@ -1,5 +1,7 @@
-import Definitions.Core.Partition
-import Definitions.Nci.Covering
+module
+
+public import Definitions.Core.Partition
+public import Definitions.Nci.Covering
 
 /-!
 # Transfer gates: what one machine sends another
@@ -12,7 +14,7 @@ computes it and `b` takes it as an input. Everything else `R_b` reads from outsi
 input gate of `C` (`inputsRead`), since a gate outside every machine is an input gate. So
 `in(R_b) = transfersInto b ∪ inputsRead b`, two disjoint sets: what reaches `b` over the wire, and the inputs it reads.
 A transfer gate's value reaches `b` once, in `w g` bits, so `width (transfersInto b)` is the bits on the wire into `b`,
-and in the Boolean profile (`w = 1`, `Verity.Boolean`) `|transfersInto b|` is.
+and in the Boolean profile (`w = 1`, `FlockSoundness.Audit.Circuit.toCircuit`) `|transfersInto b|` is.
 
 The machines are a partition rather than a family of `Covering.Subcircuit`s for two reasons. A machine's gates are what
 compute credit counts, each computed gate credited to the one machine that computes it, so the credits add up to
@@ -24,6 +26,8 @@ subcircuit holds as inputs (`Covering.sources`). In the subcircuits' terms, the 
 a computed gate that reads nothing) is an input of `machine a`, not an inner gate, but `transfers` counts it, since `b`
 reads it from `a` and `novelReads` charges `b` for it.
 -/
+
+@[expose] public section
 
 namespace Nci
 

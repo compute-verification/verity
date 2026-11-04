@@ -1,6 +1,6 @@
 """GLM-5.3 TP8's row evaluators (`kernels.glm53_rows`, and `kernels.cublas_gemm_rows` for the cuBLAS split-K pair) as the sampled
-replay calls them.  Every family the per-rank no-evaluator rule named on the TP8 B1 Commit r20261016-213336-6c35, and on B8 greedy's
-replay r20261021-213033-aa93, has one.  The replay hands a row kernel the statics `spec_statics` parses from
+replay calls them.  Every family the per-rank no-evaluator rule named on the TP8 B1 Commit, and on B8 greedy's
+replay, has one.  The replay hands a row kernel the statics `spec_statics` parses from
 the Program's spec text (`{"f64":...}` floats, `true` / `False`, `{"fn":...}` or bare step ids, quoted kernel names), not the Python
 values the kernel self-check binds, so each family is checked here on those spellings against its Definition's word reference."""
 from __future__ import annotations
@@ -119,7 +119,7 @@ def test_the_split_k_gate_cites_the_h200_capture_at_every_split_k_m_it_runs():
 
     p = rows.EVALUATOR_PROVENANCE["LlBf16SplitKGemm_v1"]
     assert p is glm53_rows.PROVENANCE["LlBf16SplitKGemm_v1"]
-    same = ("property", "run", "record", "record_served_default", "art", "variants", "captured_utc")
+    same = ("property", "record", "record_served_default", "art", "variants", "captured_utc")
     assert {k: p[k] for k in same} == {k: batched_gemm_rows.PROVENANCE[k] for k in same}
     assert set(p["cases"]) == {f"{m}/router/mlp.gate" for m in X.MODELS}
     for name, m in X.MODELS.items():
@@ -132,7 +132,7 @@ def test_the_split_k_gate_cites_the_h200_capture_at_every_split_k_m_it_runs():
         assert c["mismatch"] == 0 and c["words"] == m.experts * sum(split)
     d = ll_bf16.LlBf16SplitKGemmWord
     assert status_of(d.conformance) == "exact-model-tested"
-    assert p["run"] in d.conformance and p["record"][:16] in d.conformance and p["art"]["record"] in d.conformance
+    assert p["record"][:16] in d.conformance and p["art"]["record"] in d.conformance
 
 
 @pytest.mark.parametrize("spec,d", CASES, ids=[s.split("{")[0] + f"-{i}" for i, (s, _) in enumerate(CASES)])

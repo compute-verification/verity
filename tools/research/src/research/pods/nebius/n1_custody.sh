@@ -135,7 +135,7 @@ fi
 # text or JSON written by hand.
 job() {
   kube delete job "$1" --ignore-not-found > /dev/null || return 1
-  PYTHONDONTWRITEBYTECODE=1 python3 - "${VY_DISPATCH_IMAGE:-us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216}" \
+  PYTHONDONTWRITEBYTECODE=1 python3 - "${VY_DISPATCH_IMAGE:-verity-sky-gpu:3dbe60044f88c462}" \
     "$SRC" "$PY" "$GRACE_S" "$@" << 'EOF' | kube create -f - > /dev/null
 import json, re, sys
 

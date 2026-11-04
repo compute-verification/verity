@@ -26,6 +26,9 @@ from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
 from verity_vllm.pipeline import serve_seal as ss
 from verity_vllm.pipeline.serve_admit import Admission
+from verity_vllm.records.predicted_row import FILE
+
+from tests.pipeline import predicted
 
 CERTIFIER_BODY = {"model": "m", "prompt": [128000, 791, 4062], "max_tokens": 4, "min_tokens": 4, "stream": True,
                   "ignore_eos": True, "temperature": 0}
@@ -151,7 +154,7 @@ def test_every_precision_registers_the_verity_int8_method_before_the_engine(prec
 
 
 def test_preflight_refuses_a_gpu_tree_without_ninja_before_the_model_loads(tmp_path):
-    (man := tmp_path / "manifest.json").write_text("{}")
+    man = predicted.row(tmp_path)
     opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man)], environ={})
     with pytest.raises(cli.UsageError, match=r"ninja is\) on PATH$"):
         so.preflight(opts, which=lambda _: None)
@@ -163,7 +166,7 @@ def test_preflight_refuses_a_gpu_tree_without_ninja_before_the_model_loads(tmp_p
 
 
 def test_the_served_commit_is_rows_sha512_unless_a_recorded_sha256_run_is_served_again(tmp_path):
-    """rows-sha512 is the default (VLLM-17): a committing run that names no scheme is refused before the model loads until it
+    """rows-sha512 is the default: a committing run that names no scheme is refused before the model loads until it
     names its bench row's manifest, and is never served under SHA-256. vllm-v1 is served only by name, to serve again a recorded
     vllm-v1 run of the same model (``--of-record``: its serve.json says vllm-v1, or predates the field); the committer refuses
     it too, before it builds anything."""
@@ -182,12 +185,12 @@ def test_the_served_commit_is_rows_sha512_unless_a_recorded_sha256_run_is_served
         (d / "serve.json").write_text(json.dumps({"model": "m", "revision": "r", "commit": True, **rec}))
         return str(d)
 
-    (man := tmp_path / "manifest.json").write_text("{}")
+    man = predicted.row(tmp_path)
     assert parse().scheme == ss.ROWS == ss.SCHEMES[0] == "rows-sha512" and ss.V1 in ss.SCHEMES
-    assert "(the default)" in refusal(parse()) and "--required-manifest ROW_DIR/manifest.json" in refusal(parse())
+    assert "(the default)" in refusal(parse()) and "--required-manifest DIR/manifest.json" in refusal(parse())
     assert "drop --no-gpu-tree" in refusal(parse("--no-gpu-tree", "--required-manifest", str(man)))
     assert refusal(parse("--required-manifest", str(man))) is None and refusal(parse("--no-commit")) is None
-    with pytest.raises(cli.UsageError, match="--required-manifest ROW_DIR/manifest.json"):
+    with pytest.raises(cli.UsageError, match="--required-manifest DIR/manifest.json"):
         ss.committer(parse(), llm=None)
 
     v1, old = ("--scheme", "vllm-v1"), record("v1", scheme="vllm-v1")
@@ -205,11 +208,49 @@ def test_the_served_commit_is_rows_sha512_unless_a_recorded_sha256_run_is_served
     assert "not under --scheme rows-sha512" in refusal(parse("--required-manifest", str(man), "--of-record", old))
 
 
+def test_the_served_commit_binds_only_the_build_of_record_predict_wrote(tmp_path):
+    """The row's manifest is the one the ahead-of-time compiler wrote with the row's Build of record (`predict row`): a manifest
+    with no record of predict's beside it (a traced Build's), another schema's, or a record naming other bytes is refused
+    before the model loads, committing or not, and by the committer; the Build is the manifest's own dir (no --programs-root)."""
+    def parse(*more: str) -> so.Options:
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", *more], environ={})
+
+    def refusal(*more: str) -> str | None:
+        try:
+            so.preflight(parse(*more), which=lambda _: "/v/bin/ninja")
+        except cli.UsageError as e:
+            return str(e)
+        return None
+
+    (traced := tmp_path / "traced").mkdir()
+    (traced / "manifest.json").write_text("{}")
+    (traced / "build_summary.json").write_text("{}")
+    for more in ((), ("--no-commit",)):
+        why = refusal("--required-manifest", str(traced / "manifest.json"), *more)
+        assert "no record of predict's beside it" in why and "`verity-vllm predict row --row ROW --out DIR`" in why, more
+    assert refusal("--required-manifest", str(tmp_path / "none" / "manifest.json")).endswith("manifest.json: no such file")
+    (row := tmp_path / "row").mkdir()
+    man = predicted.row(row, {"manifest_digest": "m"})
+    assert refusal("--required-manifest", str(man)) is None
+    rec = json.loads((row / FILE).read_text())
+    (row / FILE).write_text(json.dumps(rec | {"schema": "verity-vllm/aot-comparison/v1"}))
+    assert "'schema' is 'verity-vllm/aot-comparison/v1'" in refusal("--required-manifest", str(man))
+    (row / FILE).write_text(json.dumps(rec))
+    man.write_text(json.dumps({"manifest_digest": "m2"}))
+    assert "so predict didn't write it" in refusal("--required-manifest", str(man), "--no-commit")
+    with pytest.raises(cli.UsageError, match="so predict didn't write it"):
+        ss.committer(parse("--required-manifest", str(man)), llm=None)
+    opts = parse("--required-manifest", str(predicted.row(row)))
+    assert ss.programs_root_of(opts) == str(row.resolve()) == ss.committer_args(opts).programs_root
+    with pytest.raises(SystemExit):
+        parse("--required-manifest", str(man), "--programs-root", str(traced))
+
+
 def test_retain_exclude_takes_the_attention_interiors_only_under_the_rows_sha512_commit(tmp_path):
     """``--retain-exclude`` (default off, and $VERITY_RETAIN_EXCLUDE's value when set) names the attention interiors only, the
     values no reader of a sealed window opens; anything else, and a run with no rows-sha512 Commit, is refused before the model
     loads, and by the committer before it builds anything."""
-    (man := tmp_path / "manifest.json").write_text("{}")
+    man = predicted.row(tmp_path)
     rows = ("--model", "m", "--revision", "r", "--required-manifest", str(man))
 
     def refusal(*more: str, environ: dict[str, str] | None = None) -> str | None:
@@ -312,7 +353,7 @@ class Engine:
 
 class Committer:
     """`NativeHostCommitter` as `CommitWindows` uses it: its patches of the runner begin a step at ``execute_model`` and
-    commit the embedding's input ids there, and the sampled ids at ``sample``, where its sources bind the draw's inputs
+    commit the embedding's input ids there, and the sampled ids at ``sample``, where its sources bind the sample's inputs
     (`served_record.SamplerInputsSource`), all host-retained; ``flip`` changes one committed sampled id, at (step, row) of
     the first window that reaches that step."""
 
@@ -471,7 +512,7 @@ def test_errors_and_whole_response(tmp_path):
 
 
 def id_request(payload: int = proto.ID_PAYLOAD) -> bytes:
-    """The warden's id request in cells of P + 9 bytes (`active.id_request`, offset 0)."""
+    """The network certifier's id request in cells of P + 9 bytes (`active.id_request`, offset 0)."""
     return A.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=payload + A.HEADER.size,
                         offset=0)
 
@@ -498,8 +539,8 @@ def dechunked(raw: bytes) -> tuple[bytes, bytes]:
 
 
 def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
-    """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the warden's release headers
-    (`release.with_release`); its base for anything else, the shim's rebuilt POST, an id request in other cells, or
+    """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the network certifier's release
+    headers (`release.with_release`); its base for anything else, the shim's rebuilt POST, an id request in other cells, or
     bytes that aren't a request."""
     p = proto.IdsProtocol(payload=proto.ID_PAYLOAD, base=proto.PlainProtocol())
     assert p.of(id_request()) is p and p.of(REL.with_release(id_request(), 3, b"run")) is p
@@ -509,10 +550,10 @@ def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
 
 
 def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_path):
-    """``--protocol ids`` on the warden's own id request (`active.id_request` in its P + 9-byte cells, offset 0, with the
-    release headers the warden adds) with the usage forced: the server sends no HTTP head, no chunking and no usage,
+    """``--protocol ids`` on the network certifier's own id request (`active.id_request` in its P + 9-byte cells, offset 0, with the
+    release headers the certifier adds) with the usage forced: the server sends no HTTP head, no chunking and no usage,
     each sampled id one event of P bytes, then ``data: [DONE]``, every byte as `TWO_IDS_AT_140` at P = 140. At the
-    scan's P = 503 every P bytes are one id event, the cells the warden makes of them, and the whole is what
+    scan's P = 503 every P bytes are one id event, the cells the certifier makes of them, and the whole is what
     warden_serve's id-form parser (`parse_id_response`) takes: `io_tie.id_event`s, then `io_tie.TRAILER`. A whole
     response under ids is still the JSON one."""
     for payload in (140, proto.ID_PAYLOAD):
@@ -532,7 +573,7 @@ def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_pa
 
 
 def test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json(tmp_path):
-    """The same endpoint under ``--protocol ids`` for the network certifier's leg (certifier_serve, straight to the
+    """The same endpoint under ``--protocol ids`` for the network certifier (certifier_serve, straight to the
     endpoint): ``/v1/models`` and ``/tokenize`` as ever, its shim's streamed POST (the id request's fields with
     ``return_token_ids``) an HTTP response, chunked, of vLLM's JSON chunks carrying the token ids, and its probe's
     (urllib) the same."""
@@ -769,7 +810,7 @@ def test_top_p_below_one_is_refused_naming_the_gap(tmp_path, top_p):
         status, raw = s.post("/v1/completions", dict(CERTIFIER_BODY, top_p=top_p))
         ok, _ = s.post("/v1/completions", dict(CERTIFIER_BODY, top_p=1))
     err = json.loads(raw)["error"]
-    assert status == 400 and err["param"] == "top_p" and "CIR-87" in err["message"] and f"top_p={top_p}" in err["message"]
+    assert status == 400 and err["param"] == "top_p" and "split count" in err["message"] and f"top_p={top_p}" in err["message"]
     assert "split count" in err["message"] and ok == 200
     assert len(records(tmp_path, "requests.jsonl")) == 1          # the refused request never reached the engine
 
@@ -800,7 +841,7 @@ def served_run(out: Path, statics: dict, marks: Any = None) -> tuple[list[dict],
 
 
 def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp_path):
-    """At each close, before the close is announced (and so before anything can draw over the window), its windows.jsonl
+    """At each close, before the close is announced (and so before anything can sample over the window), its windows.jsonl
     line holds the public record of the rows it ran, bound to its run root: exactly step_trace.jsonl's rows under the
     requests' arrival ids, as `served_rows.register` commits them, each slice window's registered row the slice's ``srv``
     row, its b‖c a leaf of the published root. The record holds no row or salt."""

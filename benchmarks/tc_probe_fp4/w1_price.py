@@ -2,7 +2,7 @@
 
     python benchmarks/tc_probe_fp4/w1_price.py --out $RESEARCH_RUN_DIR --expect-uuid GPU-... [--rows nvf4,mxf4,...] [--reps 10]
     python benchmarks/tc_probe_fp4/w1_price.py --out /tmp/w1 --sass-only          # build + SASS gate, no device
-    python benchmarks/tc_probe_fp4/w1_price.py --out /tmp/w1 --fake-silicon       # CPU dry run of the driver (never under a research run)
+    python benchmarks/tc_probe_fp4/w1_price.py --out /tmp/w1 --fake-silicon       # CPU dry run (refused with RESEARCH_RUN_ID set)
 
 Each row is one ``mma.sync`` of ``rows_fp4.cuh`` (the mnemonic the probe's capture gates), timed by ``w1_price.cu``:
 
@@ -382,7 +382,7 @@ class W1Device:
 
 class FakeW1:
     """CPU stand-in for the driver's dry run: a 188-SM part at 2,000 MHz issuing one MMA per SM per 8 clocks (K=64) or 4 (K=32).
-    Its numbers are invented; ``--fake-silicon`` never runs under a research run."""
+    Its numbers are invented; ``--fake-silicon`` never runs with ``RESEARCH_RUN_ID`` set."""
 
     tcgen05 = False
     SMS, MHZ = 188, 2000.0
@@ -482,7 +482,7 @@ def main(argv: list[str] | None = None) -> int:
     if bad:
         ap.error(f"unknown rows or ops {bad}")
     if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     scale_update = not args.no_scale_update
     plan = variants(rows, scale_update)
     items = [("mma", r, m) for r, m in plan] + [("op", o, None) for o in ops]

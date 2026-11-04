@@ -43,26 +43,45 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
 ## Landing
 
-PRs land on an eyeball review, and the full check runs after landing. ci's `research queue drive` lands them
+`main` holds only fully checked commits: reviewed PRs land on `checked`, drive runs the full check on its tip, and
+`main` moves only to a commit whose check passed every step on the merge gate. ci's `research queue drive` lands them
 (`research.drive`'s docstring has the rules; `tools/verity/check/drive.toml` the settings):
 
-- The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F --by
-  LANE` with `Lane LANE` in the body, and marks it ready at its head, `research queue ready N --mark --by LANE`. A push
-  makes a new head, which needs a new mark and a new review. `research queue status` says what each PR waits for. A
-  `hold` label, a conflict on `next` or a Markdown file over its cap keeps a PR out.
+- The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F
+  --issue KEY --by LANE` with `Lane LANE` in the body; `--issue` is required, its Linear issue (written as `Refs KEY` and
+  linked through the Linear app, since Linear's GitHub integration is off here; a failed link prints its retry, `research
+  queue link N --issue KEY`), or `none:REASON`. It marks it ready at its head, `research queue ready N --mark --by LANE`. A
+  push makes a new head, which needs a new mark and a new review. `research queue status` says what each PR waits for and
+  lists the PRs naming no issue. A `hold` label, a conflict on `next` or a Markdown file over its cap keeps a PR out, and a
+  PR from a fork, or by an author outside the organization but for the team's Apps and Daniel, is refused at its mark and at
+  admission.
 - Before marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on
   auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
   --changed $(git rev-parse origin/main) --quick"`, plus a suite's slow tier when you changed its core. Prefer small PRs.
   You hear back only if yours is held, ejected or reverted.
 - Drive stacks admitted PRs on `next`, non-Lean changes first. Reviewers ci staffs, never the owner, record a verdict at
   the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists. Drive
-  fast-forwards `main` to the longest reviewed prefix whose merges are clean and whose `.py` files compile. A change to a
-  `lean-audit.json` lock or to Lean that runs as code (a `.lean` outside `Security/`) also waits for a `lean-audit` that
-  passed at or above it; Lean proofs alone land on the verdict.
-- One run checks `main`'s tip after each landing. A red suite's culprit is rung and reverted 60 min later unless a fix is
-  marked. Citations and tables read only commits whose after-landing run passed.
-- A pure move that `verity check move BASE HEAD` certifies lands alone, ahead of the queue, through the lander. Only
-  drive's App pushes `main` and `next`.
+  fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; each sync
+  moves reviewed members below those awaiting a verdict (above any Lean check's prefix), so a PR waiting for review holds only itself; a
+  held PR, and any PR containing it, goes to the top of `next` at each sync, so a hold holds only itself too. A change to a
+  `lean-audit.json` lock, to the spec (Lean under `Security/Definitions/`, `Security/Models.lean` and `Security/`'s Lake
+  files) or to Lean that runs as code (a `.lean` outside `Security/`) also waits for a `lean-audit` that passed at or above
+  it, whatever its title says ("two demos" included); `Security/` proofs alone land on the verdict. A PR whose merge onto `checked` changes nothing drive.toml's
+  `lowrisk_excludes` names (Lean, locks, Lake files, `verity/core/`, the soundness-path Python) lands on its ready mark alone,
+  with no verdict (the low-risk lane: up to `lowrisk_per_tick` a tick, the Lean checks of `next` moved to its rebuild).
+- One run checks `checked`'s tip after each landing; when it passes every step on the merge gate (not circuit-check), drive fast-forwards `main` there. A red
+  suite's culprit is rung and reverted on `checked` 60 min later unless a fix is marked, and `main` doesn't move. A marked
+  low-risk fix of a red lands even while a Lean check of `next` runs, and the next run waits for it up to 45 min after its mark. A red
+  circuit-check's culprit is reverted at once, and until circuit-check passes on `checked` no PR touching its inputs lands
+  (a PR whose body says `fixes step circuit-check` does).
+  Citations and tables read only commits whose after-landing run passed: `main`'s.
+- A layout move lands from `next` with no pause in landing: its PR's body says `Move: tools/move/MAP.toml`, and it needs a
+  mark and a land verdict like any PR. Where the sync puts it, drive regenerates it on the tip below it (`rename.py --map
+  MAP`, one commit) and leaves it out, telling its owner, unless `move_check.py` certifies it; both scripts, and the
+  restack, are `checked`'s, as the landing gates are, and a member below the move that changes `tools/move/`'s scripts holds
+  it back until that member lands. Members above it are restacked across it, and only a conflict of their own refuses them.
+  Drive closes the PR once `main` reaches it. Only drive's App pushes `main`, `checked` and `next`: on a `checked` tip drive
+  didn't write, drive holds and rings @ci and @top until it is reset or ci accepts it (`drive.sh queue accept-checked SHA`).
 - `check.py --record --on M --pool NAME`, from a checkout, records `check` as an Attempt of the clean commit in M's NAME
   pool.
 - When a changed lock record lands on `main`, Daniel gets a DM showing it; that DM is the check, and nothing waits on it.
@@ -130,13 +149,20 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   fails: fix it at the source, or take it to its owner that day with its numbers (minutes a wait, waits a day). Push
   back the same way, through your coordinator, on a rule that costs velocity, Daniel's included. A slow loop's owner
   fixes it ahead of other work.
-- **Make every decision yourself except keys and claims.** Access, keys, and what a guarantee says or rests on go to
-  Daniel through your coordinator, with your recommendation; spend is its lead's call. A change that crosses owners goes
+- **Make every decision yourself except claims and Daniel's own clicks.** What a guarantee says or rests on, and what
+  only an account he holds can do (the GitHub organization's admin, billing, the Nebius and Cloudflare consoles), go to
+  Daniel through your coordinator, with your recommendation. Keys and access between our own machines and accounts are
+  the lanes' call, set up with the machine's owner and no ask: this is a simulation, so it needn't be perfect. Spend is
+  its lead's call. A change that crosses owners goes
   to the other owner, and the coordinator settles a disagreement. Fix what's in your way at the source when the fix is
   yours, and record each ruling you get (the friction skill).
 - **Each lead owns its areas' size.** top's hourly consolidation reading tracks `main`'s size. A PR that adds code says
   in its body what it deletes or unifies, or why nothing can go.
 - **Parked work gets done.** A lead starts each Backlog or Todo issue worth doing on its own worker and closes the rest
   with a reason. Being busy is no reason to park one. Set more goals, not fewer.
+- **An issue tracks an ask; only its outcome answers it.** Daniel's asks carry `asker:daniel`, have a worker within the
+  hour, and only he parks them (the coordinating skill); the Linear audit rings each that breaks this, hourly, with @top.
+  A hand operation done twice, and each incident, gets a class-fix issue filed `--asker daniel` (his standing ask) with
+  a worker that hour: the lead builds or staffs the fix rather than repeating the operation.
 - **A ruling rolls out in the change that records it**, as AGENTS.md says; when code must change first, the ruling's
   relay names the owner and the PR that changes the docs with it.

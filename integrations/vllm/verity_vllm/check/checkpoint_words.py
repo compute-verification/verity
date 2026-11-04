@@ -13,13 +13,12 @@ from verity.ml.circuits.types import Type
 
 
 def load_safetensors_words(paths: Iterable[Path]) -> tuple[dict[str, np.ndarray], dict[str, str]]:
-    """[SHARED-CODE lane cov-ln] `correspondence.load_safetensors` for checkpoints that are not bf16: memory-mapped raw uint16
-    views of every BF16 / F16 tensor across the shards plus the stored dtype per tensor (Pythia's checkpoint is F16; vLLM loads
-    it into bf16 parameters, see `fold_compare._f16_words_to_bf16`).  F32 tensors get raw uint32 views ([ADAPTER lane
-    glm47-flash]: an f32 Record field such as GLM-4.7-Flash's `e_score_correction_bias`).  Tensors of any other dtype are listed
-    in the dtype map but get no words view (asking for one raises KeyError).  Pythia's checkpoint also carries the HF-era
-    buffers `attention.bias` (U8 causal mask), `attention.masked_bias` and `rotary_emb.inv_freq`, which vLLM's `load_weights`
-    skips and no Record field names."""
+    """`correspondence.load_safetensors` for checkpoints that are not bf16: memory-mapped raw uint16 views of every BF16 / F16
+    tensor across the shards plus the stored dtype per tensor (Pythia's checkpoint is F16; vLLM loads it into bf16 parameters,
+    see `fold_compare._f16_words_to_bf16`).  F32 tensors get raw uint32 views (an f32 Record field such as GLM-4.7-Flash's
+    `e_score_correction_bias`).  Tensors of any other dtype are listed in the dtype map but get no words view (asking for one
+    raises KeyError).  Pythia's checkpoint also carries the HF-era buffers `attention.bias` (U8 causal mask),
+    `attention.masked_bias` and `rotary_emb.inv_freq`, which vLLM's `load_weights` skips and no Record field names."""
     out: dict[str, np.ndarray] = {}
     dtypes: dict[str, str] = {}
     for p in paths:
@@ -39,7 +38,7 @@ def load_safetensors_words(paths: Iterable[Path]) -> tuple[dict[str, np.ndarray]
     return out, dtypes
 
 
-#: [ADAPTER lane glm47-flash] checkpoint sources of `analytic.mla_weights_type`'s layer fields (`arch` mla-moe: GLM-4.7-Flash,
+#: checkpoint sources of `analytic.mla_weights_type`'s layer fields (`arch` mla-moe: GLM-4.7-Flash,
 #: `Glm4MoeLite*`): the layers below FIRST_DENSE are `dense_layers[d]` = `model.layers.{d}`, the MoE layers `layers[i]` =
 #: `model.layers.{i + FIRST_DENSE}`.  vLLM fuses `q_a_proj` | `kv_a_proj_with_mqa` into `fused_qkv_a_proj` and `gate_proj` |
 #: `up_proj` into each `gate_up_proj` (rows in that order); the router gate is a bf16 checkpoint tensor loaded into an f32

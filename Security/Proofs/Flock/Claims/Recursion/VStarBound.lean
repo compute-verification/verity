@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VStar
-import Flock.HmNets
+module
+
+public import Proofs.Flock.Claims.Recursion.VStar
+public import Flock.HmNets
 
 /-!
 # V*'s parts at the representation V* binds (option (d)): the layout and part facts, restated
@@ -29,9 +31,9 @@ So the restated facts constrain every round:
   fixed by the statement (with no pieces), held whole by some part, or assembled from parts' pieces; no part holds the
   last round whole. The bound layout has no public round.
 * `PartChecksB`: `PartChecks`, where the messages it quantifies over also agree with the part's pieces of the
-  assembled rounds, at their offsets, and with the commit strings its statement shows at the rounds read whole off the
-  run (`LayoutB.CmtAgrees`). A part's check can read its own pieces of the last message, and the rounds it reads are
-  the ones its statement commits to.
+  assembled rounds, at their offsets, and with the commit strings its statement shows at every round it doesn't fix
+  before the last, on the bytes the readers read (`LayoutB.CmtAgrees`). A part's check can read its own pieces of the
+  last message, and the rounds it reads are the ones its statement commits to.
 * `PartOpensB`: `PartOpens`, where what a part holds of a round before the last is the commit string itself, so it is
   the string the part's statement shows, and each piece it holds of such a round sits in that string at its offset.
 * `VstarShowsB`: `VstarShows`, the staging shows the coins and, at each round before the last, the run's commit string.
@@ -42,8 +44,8 @@ So the restated facts constrain every round:
   commit string, the readers take the first holder's; a holder that opens it otherwise shows a collision among the
   calls they record, so that is the escape.
 
-`FinalOpens` gives way to `Claims.Recursion.Bound.LastBinds`: the view's last message isn't the run's, and two accepted
-views that differ only there collide among `IVStar`'s calls.
+`FinalOpens` gives way to `Claims.Recursion.Bound.LastBindsEC`: the view's last message isn't the run's, and two
+accepted views that differ there in what `E*` reads collide among `IVStar`'s calls.
 
 `LayoutB` is its own record here, the deployed layout's fields with the pieces added (segments of constant bytes and
 hidden values, the statement's fixed rounds), so the statement builds on `VStar.Layout` as it stands. It reads each
@@ -54,6 +56,8 @@ at positions is one at forms (`segsAt`, `readSegs_segsAt`).
 
 Statements only. The proofs that V*'s parts meet them, and the route from them to `KSBound`, are to come.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStarB
 
@@ -322,31 +326,43 @@ A fixed round's pieces would be read by the parts' checks (`PartChecksB`) but no
 statement's message), and a holder of the last round has no commit string to agree on (`PartOpensB`). Either would let a
 part's check hold only off the readers' messages, which leaves `DecompB` empty. -/
 def HeldB (D : Deploy Coin) (I : Inner Coin W) (L : LayoutB) (shape : Form → Prop) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form →
     I.V.k (xI D x) = L.rounds x ∧ (∀ i < I.V.k (xI D x),
       ((L.fixedAt x i).isSome ∨ (∃ s < D.nS x, (L.msgAt x s i).isSome) ∨
         (L.pieceAt x i ≠ [] ∧ ∀ p ∈ L.pieceAt x i, p.1 < D.nS x)) ∧
       ((L.fixedAt x i).isSome → L.pieceAt x i = [])) ∧
     ∀ s, L.msgAt x s (I.V.k (xI D x) - 1) = none
 
+/-- The bytes round `i`'s pieces span. -/
+def LayoutB.piecesLen (L : LayoutB) (x : Msg) (i : ℕ) : ℕ := ((L.pieceAt x i).map fun p => pieceLen p.2).sum
+
 /-- **The readers' messages are the commit strings `xO` shows**, at each round before the last that the statement
-doesn't fix and that has no pieces: the rounds the readers read whole off the run, where `VstarShowsB` makes `cmt` the
-run's commit string. A part reads such a round through its own statement (a row it opens against the commit string
-`xO` shows) whether or not it holds the round whole, so its check speaks of the readers' message only through this. -/
+doesn't fix, where `VstarShowsB` makes `cmt` the run's commit string: the whole string at a round with no pieces, and
+the bytes the pieces span at an assembled round, which is all of it the readers read there (`LayoutB.pick`). A part
+reads such a round through its own statement (a row it opens against the commit string `xO` shows) whether or not it
+holds the round or a piece of it, so its check speaks of the readers' message only through this; and every part's
+statement shows one string there, so the parts' statements agree on every assembled round's pieces. -/
 def LayoutB.CmtAgrees (L : LayoutB) (cmt : Msg → ℕ → Msg → Msg) (x xO : Msg) (ms : List Msg) : Prop :=
-  ∀ i, i + 1 < L.rounds x → L.fixedAt x i = none → L.pieceAt x i = [] → ms.getD i [] = cmt x i xO
+  ∀ i, i + 1 < L.rounds x → L.fixedAt x i = none →
+    (L.pieceAt x i = [] → ms.getD i [] = cmt x i xO) ∧
+      (ms.getD i []).take (L.piecesLen x i) = (cmt x i xO).take (L.piecesLen x i)
+
+/-- `CmtAgrees` where the readers' message is the whole commit string at every round it asks about. -/
+theorem LayoutB.cmtAgrees_of_eq {L : LayoutB} {cmt : Msg → ℕ → Msg → Msg} {x xO : Msg} {ms : List Msg}
+    (h : ∀ i, i + 1 < L.rounds x → L.fixedAt x i = none → ms.getD i [] = cmt x i xO) : L.CmtAgrees cmt x xO ms :=
+  fun i hi hf => ⟨fun _ => h i hi hf, by rw [h i hi hf]⟩
 
 /-- **V\* part `s`'s circuit checks the inner check `chk s` at every round it reads** (restating `PartChecks` for option
 (d)). It is `PartChecks`, except that the messages it quantifies over agree with the part in four ways: with its
 holdings at the rounds it holds whole, with its pieces at the assembled rounds, each at its offset, with the commit
-strings its statement shows at the rounds read whole off the run (`LayoutB.CmtAgrees`), and with the shared rows it
-holds where the messages carry them (`LayoutB.RowsRead`). So a part's check can read its own pieces of the last
+strings its statement shows at every round it doesn't fix before the last (`LayoutB.CmtAgrees`), and with the shared
+rows it holds where the messages carry them (`LayoutB.RowsRead`). So a part's check can read its own pieces of the last
 message, which no part held whole before, a round it reads but doesn't hold is the one its statement commits to, and a
 shared row it reads off its own witness is the one the messages carry. Or two of its recorded calls collide. -/
 def PartChecksB (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
     (∀ (c : ℕ → Coin), shows s x xO c → ∀ ms : List Msg,
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) →
@@ -362,7 +378,7 @@ commits is then the row the verifier recomputes the commitment of (`row_tie`). -
 def PartChecksBV (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
     (∀ (c : ℕ → Coin), shows s x xO c → ∀ ms : List Msg,
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) →
@@ -391,7 +407,7 @@ piece's offset: a piece is a commit string the part's gadgets compute, one of th
 of its recorded calls collide. -/
 def PartOpensB (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
     (∀ (c : ℕ → Coin), shows s x xO c → ∀ i, i + 1 < L.rounds x →
       (∀ m, L.held x s w i = some m → m = cmt x i xO) ∧
@@ -407,7 +423,7 @@ is never sent in the run (`ReadersRunPlayed`), so no commit string is asked of i
 `cmt` to the run: at an accepted run each part's statement shows the run's coins and the run's commit strings. -/
 def VstarShowsB (D : Deploy Coin) (I : Inner Coin W) (L : LayoutB) (shape : Form → Prop) (decC : Msg → Msg → Coin)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ ps : List (Msg × Out),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ ps : List (Msg × Out),
     ps.length = I.V.k (xI D x) + D.kS x → ∀ c : ℕ → Coin,
       (∀ i < ps.length, ∃ m, (ps.getD i ([], .rej)).2 = .msg m ∧ decC x m = c i) →
         ∀ s < D.nS x, shows s x ((D.vstar x ps).getD s []) c ∧
@@ -422,7 +438,7 @@ message, and a holder that opens the string otherwise shows a collision among th
 last round are the parts', not free. -/
 def DecompB (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (L : LayoutB) (shape : Form → Prop)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ws : List Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ws : List Flock.Wit),
     ws.length = D.nS x → (∀ e ∈ L.allCalls x ws, H e.1 = e.2) → (∀ s < D.nS x, chk s x c (L.msgs x ws)) →
       (run H (replay (L.msgs x ws)) IV (xI D x) () fun i => c i.val).out = .acc ∨
         (findColl (L.allCalls x ws)).isSome

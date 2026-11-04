@@ -1,7 +1,9 @@
-import Mathlib.LinearAlgebra.Matrix.Rank
-import Definitions.Accounting.RateAuditSketch
-import Definitions.Accounting.RateAuditSketchInteractive
-import Definitions.Accounting.RateAuditSketchLayout
+module
+
+public import Mathlib.LinearAlgebra.Matrix.Rank
+public import Definitions.Accounting.RateAuditSketch
+public import Definitions.Accounting.RateAuditSketchInteractive
+public import Definitions.Accounting.RateAuditSketchLayout
 
 /-!
 # The rate audit with a sketch-then-hash tag (trusted)
@@ -25,6 +27,8 @@ the claims registry carries the class to a deployed device (`rate-sketch-verbati
   digest of at most `2^d` values has a device accepted on every coin that reads `d` bits per tile.
 * `RateTensorSketchTable`: the same at the deployed tag, `32·k_s` bits per tile, at any number of rows `k_s`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 
@@ -57,12 +61,12 @@ signs' chance of not binding is the per-window `Pr_σ[g < fib_σ]`, once, not pe
 **The proof** (`Accounting.SecurityProofs.RateAuditSketch`) follows `RateAudit`'s. A sampled tile passes because the
 device queried the oracle at its digest under the stream, or by a guessed tag (`2^-h` per sampled tile); the sample
 misses the tiles never queried with chance `((k − 1)/N)^s`. A correct query for a tile one of whose sectors, or one of
-the stream's, the run never obtained (held, read, taken in or rebuilt) is a guess: resampling that sector leaves the
-run as it is, so at most `g` of its `|X|` values make the query right (`q·g/|X|` over the queries). Otherwise the `k`
+the stream's, the run never obtained (held, read, taken in or rebuilt) is a guess: resampling that sector leaves the run
+as it is, so at most `g` of its `|X|` values make the query right (`q·g/|X|` over the queries). Otherwise the `k`
 queried tiles and the stream are `k·m + ρ` sectors the run obtained: at most `S/w` held, `footprint/w` read, `L/w` over
-the link, and the rest rebuilt at `c_enc` each from the `F − k·c_tag` that tagging leaves. As in `RateAudit`, a
-rebuild is all-or-nothing, a whole sector at `c_enc`: partial completion (the red team's F27) is outside the game, and
-`rate-codec-work`, stated for codecs with `k ≥ 2` rounds, carries it.
+the link, and the rest rebuilt at `c_enc` each from the `F − k·c_tag` that tagging leaves. As in `RateAudit`, a rebuild
+is all-or-nothing, a whole sector at `c_enc`: partial completion is outside the game, and `rate-codec-work`, stated for
+codecs with `k ≥ 2` rounds, carries it.
 
 Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
 the rate audit's code computes. -/

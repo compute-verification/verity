@@ -1,12 +1,17 @@
-import Definitions.Pous.Model.PubEncoder
-import Definitions.Pous.Accounting.Params
+module
+
+public import Definitions.Pous.Model.PubEncoder
+public import Definitions.Pous.Accounting.Params
 
 /-!
-# The requirement with a public encoder (staged: enters only with the public-encoder band pins)
+# The requirement with a public encoder
 
-`PubMeets`, copied verbatim from `lean/submissions/public-encoder/PubEncoderModel.lean`: `Meets`'s clauses, the
-check's completeness, and the public-encoder audit bound at the problem statement's parameters.
+`PubMeets`, copied verbatim from the module `PubEncoderModel`, whose other declarations are in its section of
+`Security/Proofs/Pous/Chain/Flat.lean`: `Meets`'s clauses, the check's completeness, and the public-encoder audit
+bound at the problem statement's parameters.
 -/
+
+@[expose] public section
 
 namespace Pous
 

@@ -1,6 +1,6 @@
 """The H200 walking skeleton: steps of the frozen MQA shape (or a small one) on the plain INT8 weights loaded once
 into the device's memory (``--weights staged`` decodes them from the store into staging), every op's output committed per step,
-drawn units replayed bit for bit, each subprotocol run or named, and the replay bundle and block record written to ``--out``.
+sampled proof blocks replayed bit for bit, each subprotocol run or named, and the replay bundle and block record written to ``--out``.
 
     python examples/h200/run.py --out OUT [--shape tiny|small|slice|h200] [--seed test|demo|TEXT] [--batch B]
         [--steps T] [--prompt-bytes P] [--requests N --generate G --admit A] [--device cpu|cuda] [--weights resident|staged] [--micro-batch M]
@@ -15,12 +15,12 @@ and the run keeps every step's tables and replays from them.
 ``--weights-file W`` serves W itself (the file network's load sink writes) through `store.FileStore`: before the first step
 every tensor's sha256 is checked against the manifest ``M`` (`SW.manifest`'s), and the run refuses (exit 5) on any mismatch.
 
-Under ``--commit slots`` (kernels' per-slot tree) a lockstep run keeps no step's tables: ``--open K`` slots drawn by a fixture coin
+Under ``--commit slots`` (kernels' per-slot tree) a lockstep run keeps no step's tables: ``--open K`` slots sampled by a fixture coin
 are replayed alone and their slot roots compared with the committed ones (`e2e_h200.opening`), then ``--draw K`` units a
 family of the replayed step are replayed against the Definitions and opened against the step's root. The by-table backends
 keep every step's tables and replay from them.
 
-Exit 0 when every drawn unit replays to its committed word, every opened slot to its committed root and every subcircuit's
+Exit 0 when every sampled proof block replays to its committed word, every opened slot to its committed root and every subcircuit's
 own check holds (a PoUW unit's z the served sums, `e2e_h200.percall`), 3 when one doesn't (``--tamper OP`` flips bit 0 of
 OP's committed words at every step: replay or opening must find it), 4 when a leg's fixture check fails, 5 when
 ``--weights-file`` isn't its manifest's W.
@@ -105,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pous-reads", type=int, default=16)
     ap.add_argument("--tamper", default="")
     ap.add_argument("--run-id", default="e2e-h200-fixture")
-    ap.add_argument("--seed", default="test", help="test (ALLP-IFACE's TEST_SEED), demo (DEMO_SEED) or a text seed")
+    ap.add_argument("--seed", default="test", help="test (TEST_SEED), demo (DEMO_SEED) or a text seed")
     a = ap.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -160,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
                 u.opened = opn.open(op, step, u)
             opened_docs.append(op.doc() | {"reference_slot_root_equal": opn.reference_equal(op, step)})
             units += got
-        opening = {"slots": opened_docs, "draw": f"fixture coin, {a.open} slots of the batch (PRF-170's plan replaces it)",
+        opening = {"slots": opened_docs, "draw": f"fixture coin, {a.open} slots of the batch (the sampling plan's live coins replace it)",
                    "mismatches": sum(not d["slot_roots_equal"] for d in opened_docs),
                    "units_opened": sum(u.opened is not None for u in units),
                    "units_unverified": sum(u.opened is not None and not u.opened["verified"] for u in units),
@@ -173,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
     t_replay = time.perf_counter() - t0
     REC.write_bundle(out, units, results[step].root, step, results[step].slots, results[step].positions)
     replay = REC.replay_summary(units) | {"step": step, "seconds": t_replay, "opening": opening,
-                                          "draw": f"fixture coin, {a.draw} a family (PRF-170's plan replaces it)"}
+                                          "draw": f"fixture coin, {a.draw} a family (the sampling plan's live coins replace it)"}
     if a.requests:
         outputs = np.array([list(f.generated) for f in sorted(driver.finished, key=lambda f: f.seq)], np.uint8)
         serving = {"requests": a.requests, "prompt": a.prompt_bytes, "generate": a.generate, "admit": driver.kv.admit,
@@ -189,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:
         "wipe": L.wipe_reload(store, lambda: drive([r.salt_key for r in results],
                                                    Params(shape, store, a.device, a.weights == "resident"))[1][-1].root,
                               results[-1].root),
-        "pouw": L.not_run("pouw", "H200-PERCALL's per-call-noise tiles (CMP-126), a --subcircuit of the registration")
+        "pouw": L.not_run("pouw", "per-call-noise tiles, a --subcircuit of the registration")
         if not subs else L._entry("pouw", "fixture", subcircuits={s.name: s.manifest() for s in subs},
                                   mismatches=sum(getattr(s, "mismatches", 0) for s in subs)),
     }
@@ -199,11 +199,11 @@ def main(argv: list[str] | None = None) -> int:
         weights={**weights.manifest(), **params.describe(), "registration_digest_test_key":
                  weights.registration_digest() if weights.nbytes <= DIGEST_BYTES else None},
         store={**store.describe(), "seconds": t_store,
-               "stands_in_for": None if store.kind == "p2-v4" else "MEM-69's P2-encoded store and its decode call"},
+               "stands_in_for": None if store.kind == "p2-v4" else "memory-accounting's P2-encoded store and its decode call"},
         commit={**committer.describe(), "context": "fixture"},
         results=results, prompts=prompts, outputs=outputs, replay=replay, legs=legs,
         extra={"serving": serving, "tamper": a.tamper or None, "registration": registration, "micro_batch": a.micro_batch or a.batch,
-               "attention": driver.attn.kind + (" (kernels' attn_ref, #4466, and softmax_t)" if driver.attn.kind == "attn_ref"
+               "attention": driver.attn.kind + (" (kernels' attn_ref and softmax_t)" if driver.attn.kind == "attn_ref"
                                                 else " (the Definitions' numpy kernels on the CPU)"),
                "gemm": "torch._int_mm + torch epilogue" if a.device.startswith("cuda") else "exact f64 matmul + torch epilogue",
                "cuda_peak_allocated_bytes": torch.cuda.max_memory_allocated() if a.device.startswith("cuda") else None})

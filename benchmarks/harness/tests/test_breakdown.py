@@ -200,8 +200,8 @@ def test_the_breakdown_takes_each_points_newest_passing_run_that_times_every_arm
 
 
 def test_the_served_table_puts_a_records_breakdown_beside_the_protocols_row(tmp_path):
-    """`served_table.BREAKDOWNS` reads the breakdown at each run its record art names, not the newest run, and passes
-    over a record run without the spans arms."""
+    """`served_table.BREAKDOWNS` reads the breakdown at each run of its labelled record art, not the newest run, and
+    passes over a record run without the spans arms."""
 
     from verity_bench import served_table
 
@@ -211,13 +211,14 @@ def test_the_served_table_puts_a_records_breakdown_beside_the_protocols_row(tmp_
     producer.ran("r20261024-030000-0003", B.SPEC, "b8-p512-mixed", _result("b8-p512-mixed", span_scale=2.0))
     record = producer.table({"b8-p512-mixed": "r20261024-020000-0001", "b32-p512-mixed": "r20261024-020000-0002"},
                             "split")
-    breakdowns = (served_table.Breakdown("PoUS bandwidth audit", (record,)),)
+    producer.label(record, "run_of_record", "split", "2026-10-24T05:00:00Z")
+    breakdowns = (served_table.Breakdown("PoUS bandwidth audit", "split"),)
 
     def never(spec):
         raise AssertionError("a table of records pulls no catalog")
 
     table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=never, protocols=(),
-                               factors=served_table.Protocol("factor", (), served_table.SERVED, "stock-fp8"), live=(),
+                               factors=served_table.Protocol("factor", (), served_table.SERVED, "stock-fp8"),
                                breakdowns=breakdowns)
 
     [b8] = table["breakdowns"]

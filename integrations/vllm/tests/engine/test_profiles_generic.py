@@ -1,4 +1,4 @@
-"""[P6, 2026-09-23] `profiles.generic`: every checkpoint role's κ profile from its HF config.json and the family facts table -- no per-model
+"""`profiles.generic`: every checkpoint role's κ profile from its HF config.json and the family facts table -- no per-model
 module, no role -> module table.  Every shipped config.json builds a profile or is refused with its reason."""
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ def test_module_name_grammar():
     assert G.module_name("B1") == "derived_B1" and G.module_name("B1", 2) == "derived_B1_tp2"
     assert G.parse_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2") == ("QWEN3_30B_A3B", 2)
     assert G.parse_module("derived_LLAMA32_1B") == ("LLAMA32_1B", 1)
-    assert G.parse_module("dense_MISTRAL7B") == ("MISTRAL7B", 1)                  # the X-07 name recorded runs cite
+    assert G.parse_module("dense_MISTRAL7B") == ("MISTRAL7B", 1)                  # the name recorded runs cite
     assert G.parse_module("gen_llama_llama32_1b") is None and G.parse_module("vllm_d9105ea80_sm89_eager") is None
 
 

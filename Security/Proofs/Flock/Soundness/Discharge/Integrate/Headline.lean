@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
-import Proofs.Flock.Soundness.Discharge.Hm.Site
-import Proofs.Flock.Soundness.Discharge.Layout.Scope
+module
+
+public import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+public import Proofs.Flock.Soundness.Discharge.Hm.Site
+public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
 /-!
 # The headline at the executable, with every open guarantee named
@@ -23,6 +25,8 @@ session's inputs (`planAt`, `Sites.lean`), with:
 Its hypotheses on the statement's form (`ht`, `hc`, `hU`, `hpub`, `hpt`, `hscope`) are ones flock-verify refuses a statement
 failing (PROTOCOL.md §16.15), and `FailClosed.flock_headline_exec` takes none of them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Integrate
 
@@ -101,7 +105,7 @@ constraints and the region pins, not by an edge of the program. The proof coins 
 (A6): seed-derived coins are outside the headline, so a circuit-prover session counts only under `FC_COINS=os`. The tag
 is whatever the verifier passes as `--statement`: a session counts when
 `flock-verify verify --statement verity/flock-circuit@967b8d06 --coins os` accepts it with one table, so the headline
-covers only public-output `@967b8d06` sessions, from builds before #757. Since #757, main's prover always writes the
+covers only public-output `@967b8d06` sessions, from older builds. Main's prover now always writes the
 hidden-output statement (`verity/flock-circuit`, the default `--statement`, `hiddenOutputs = true`), under which
 `setupTables` calls `setupHidden`, which this headline does not cover: `HiddenExec.flock_headline_exec_hidden`
 does, and `FailClosed.flock_verify_sound` states both. Sessions of more than one table are outside it (the circuit

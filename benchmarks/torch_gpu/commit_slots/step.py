@@ -60,13 +60,13 @@ TARGET_S, TARGET_SLOTS = 0.95, 4096
 
 # --- layouts -----------------------------------------------------------------------------------------------------------
 
-def uniform(row_bytes: int, units: int) -> S.Layout:
+def uniform(row_bytes: int, units: int) -> S.CommitShape:
     """``units`` one-row units of ``row_bytes`` each, the next bytes of one tensor: what a row of that size costs alone."""
     rows = tuple((S.Row((S.Part(0, i * row_bytes, row_bytes),)),) for i in range(units))
-    return S.Layout(f"commit-slots/step/uniform-{units}x{row_bytes}b/v1", (S.Group((units * row_bytes,), rows),))
+    return S.CommitShape(f"commit-slots/step/uniform-{units}x{row_bytes}b/v1", (S.Group((units * row_bytes,), rows),))
 
 
-def describe(layout: S.Layout) -> dict[str, Any]:
+def describe(layout: S.CommitShape) -> dict[str, Any]:
     """Counts a slot: units, rows, bytes, and rows by size."""
     sizes = collections.Counter(r.nbytes for u in layout.units for r in u)
     shapes = collections.Counter(len(u) for u in layout.units)
@@ -79,7 +79,7 @@ def describe(layout: S.Layout) -> dict[str, Any]:
             "units_by_rows": {str(k): v for k, v in sorted(shapes.items())}}
 
 
-def compressions(layout: S.Layout) -> dict[str, int]:
+def compressions(layout: S.CommitShape) -> dict[str, int]:
     """A slot's SHA-512 compressions by phase, as the engine hashes them (tests/test_cost.py):
 
     - a row's digest, one a chunk after its midstated P(l);
@@ -183,7 +183,7 @@ def best_enqueue_s(doc: dict[str, Any], graphs: bool) -> float:
 
 def verdict(name: str, doc: dict[str, Any]) -> str:
     s, slots, ref = best_s(doc), doc["slots"], doc["reference"]
-    against = f", {s / TARGET_S:.2f}x the <={TARGET_S} s target (CMP-149)" if slots == TARGET_SLOTS else ""
+    against = f", {s / TARGET_S:.2f}x the <={TARGET_S} s target" if slots == TARGET_SLOTS else ""
     modes = {st["graphs"] for st in doc["steps"]}
     host = "; ".join(f"{'on graphs' if g else 'eager'} {best_s(doc, g):.3f} s with the host enqueueing {best_enqueue_s(doc, g):.3f} s"
                      for g in sorted(modes))

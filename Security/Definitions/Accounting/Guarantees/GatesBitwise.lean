@@ -1,4 +1,6 @@
-import Definitions.Accounting.Assumptions.EncodeChain
+module
+
+public import Definitions.Accounting.Assumptions.EncodeChain
 
 /-!
 # Bits for free: the encode chain's conjecture fails in the circuit model (trusted statement)
@@ -15,11 +17,13 @@ that doesn't grow with the number of words: every word's tweak is `i·t_1 mod p`
   `E ≥ 1` and every `B`, at a field whose width is whole bytes with room below `p` for more distinct words than the
   units' bound, p1024 at `k = 3` among them.
 
-The units bound here (`9` a bit read, `72` a key byte) is crude; the red team's port of the model counts `8` a key
-byte, `8·(k + 2)·n/8 = 5,120` at p1024 and `k = 3` (`benchmarks/property_redteam/bitwise_codec.py`, measured at
-`⟨8, 5⟩` and `⟨16, 17⟩`). Its proof is `Accounting.SecurityProofs.Gates.EncodeChainRefuted`, in
+The units bound here (`9` a bit read, `72` a key byte) is crude; a port of the model counts `8` a key byte,
+`8·(k + 2)·n/8 = 5,120` at p1024 and `k = 3` (`benchmarks/property_redteam/bitwise_codec.py`, measured at `⟨8, 5⟩` and
+`⟨16, 17⟩`). Its proof is `Accounting.SecurityProofs.Gates.EncodeChainRefuted`, in
 `Security/Proofs/Accounting/Gates/Bitwise.lean`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Gates
 

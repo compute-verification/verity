@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Shvzk
-import Proofs.Flock.Claims.ZK.Flock
-import Proofs.Flock.Claims.ZK.Pin
+module
+
+public import Proofs.Flock.Claims.ZK.Shvzk
+public import Proofs.Flock.Claims.ZK.Flock
+public import Proofs.Flock.Claims.ZK.Pin
 
 /-!
 # What Flock's zero knowledge against a malicious verifier still assumes of the masked prover
@@ -36,6 +38,8 @@ Five Props say what the models must satisfy; `Claims.Hm96Hiding` stays the one n
 (`OffModel.size`). `Flock.zk_deployZk_of_models` is `Claims.Flock.ZK` at the masked record `zkOf`, whose reference prover
 is `ZkTables.honestPR`, where `G`'s messages are `ZkTables.honestPR`'s (`Proto.Honest`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
