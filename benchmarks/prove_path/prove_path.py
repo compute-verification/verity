@@ -123,7 +123,9 @@ Two kinds of committed run:
   the certifier front kept the network certifier's run under the serve dir, slot k is instead the request whose Program
   the network certifier's scan of that run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's
   records for ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the
-  verifier's own ``window-circuit`` record is the circuit it holds it to. The registration's provenance names the class
+  verifier's own ``window-circuit`` record is the circuit it holds it to. Beside its ``circuit.json`` is the circuit's
+  wire-order certificate ``order.json`` (`window_circuit.Lowered.order`), each wire's writer units ranked below its reader
+  units, which the prover states and nothing trusts: no digest covers it. The registration's provenance names the class
   and the scan state, never the window's number, which counts the run's windows: the registration reaches the network
   certifier's verifier whole, in its period's commitment (`kind_scan`).
 
@@ -1418,10 +1420,11 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     Program the scan starts there, its row the scan's (`place_slots`, refused where the scan starts a request in two
     slots, a served request in none or one that wasn't served, or the scan's prompt or ``max_tokens`` isn't the served
     one); else slot k holds the advice's k-th request and the scan state is a stand-in, the rows its slots' rows and
-    ``max_tokens`` give (`window_rows.standin_state`). Refused for a registration of another model. -> the window's run
-    root, its circuit record's SHA-512, its population and members, the scan state's kind (``scanned`` or ``stand-in``),
-    the registered weights whose root the window's is (``held``) and those it isn't, whose reads are free (``free``), and
-    the seconds each part took."""
+    ``max_tokens`` give (`window_rows.standin_state`). Its wire-order certificate (`window_circuit.Lowered.order`) is written
+    beside its ``circuit.json`` as ``order.json``. Refused for a registration of another model. -> the window's run root,
+    the SHA-512 of its circuit record and of its certificate, its population and members, the scan state's kind
+    (``scanned`` or ``stand-in``), the registered weights whose root the window's is (``held``) and those it isn't, whose
+    reads are free (``free``), and the seconds each part took."""
     import numpy as np
     from verity_vllm.check import weights_of_record as WR
     from verity_vllm.check.oracle_compare import OpenedReader
@@ -1510,11 +1513,12 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every]},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
     win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)))
+    (Path(a.out) / "order.json").write_bytes(IF.circuit_bytes(low.order))
     scan_state_opening(values[SS.SCAN_STATE], Path(a.out))
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
-    return {"run": run, "circuit": hashlib.sha512((Path(a.out) / "circuit.json").read_bytes()).hexdigest(),
-            "population": sum(filled.n.values()), "members": len(win.window.members), "sources": sources,
+    sha = {f: hashlib.sha512((Path(a.out) / f"{f}.json").read_bytes()).hexdigest() for f in ("circuit", "order")}
+    return {"run": run, **sha, "population": sum(filled.n.values()), "members": len(win.window.members), "sources": sources,
             "scan_state": "stand-in" if state is None else "scanned",
             "registration": {"held": len(held), "free": sorted(set(reg.values) - set(held)), "unrooted": sorted(reg.unrooted)},
             "seconds": seconds}

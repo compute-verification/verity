@@ -5,8 +5,9 @@ end `AttnHeadEnd_v1` at FA3's dot and reciprocal, and past one key block (TINY's
 projection's slices, a key a row, so past 126 keys a block holds more than a unit's 256 rows and is refused by name. An
 attention version with no cut (`Attention_v2`, which `fa3_construction = "guard-every-block"` binds) is a unit a head of its
 own head Definition, reading the same rows, refused by name past the grain's rows. With ``VERITY_VLLM_FA3_LLAMA_1B=1``,
-int8 Llama-3.2-1B on sm_90 at 4,32,4 lowers with every reader wired and every unit a proof block C-Flock's composer takes.
-Pinned on `test_window_circuit`'s TINY class, windows and grain.
+int8 Llama-3.2-1B on sm_90 at 4,32,4 lowers with every reader wired and every unit a proof block C-Flock's composer takes,
+its wire-order certificate taken and its function the pinned one. Pinned on `test_window_circuit`'s TINY class, windows
+and grain.
 """
 from __future__ import annotations
 
@@ -24,7 +25,7 @@ from tests.program.predict.test_window_circuit import (CLASS, GRAIN, OTHER, WIND
                                                        _source, held)
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict.build import Unexpressible
-from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit, window_circuit
+from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit, lower, window_circuit
 
 from verity.ml.windows import interface as IF
 
@@ -127,6 +128,11 @@ def test_a_head_with_no_cut_past_the_grains_rows_is_refused_by_name():
         class_circuit(_registered(GUARDED), CLASS, None, Grain(gemm_words=1024, rows=10, select=128))
 
 
+#: int8 Llama-3.2-1B's function on the H200 at 4,32,4 (`test_wire_order._function`): its digest and its wired rows
+LLAMA_1B_FUNCTION = ("738385c325d6f91706fc5b251bf1932a27ae69bc1c0c165f4994a949d3ff326893d718e36a50daf2fb1b787f07db8f8d86f1"
+                     "1521aa5953c6d72d366ff4f67330", 12_668_152)
+
+
 @pytest.mark.skipif(not os.environ.get("VERITY_VLLM_FA3_LLAMA_1B"),
                     reason="int8 Llama-3.2-1B on sm_90 at 4,32,4, minutes on a pod; set VERITY_VLLM_FA3_LLAMA_1B=1")
 def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
@@ -137,11 +143,19 @@ def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
     composer takes (`interface.check_proof_block`, which the lowering runs): at 4 outputs a collector's rows and an entry's
     are under 112 bytes, so each is its position's combine's (`SelectCollect_v1`, the last's `SelectEntry_v1`), which reads
     its group units' bests and indices as rows of 334 and 668 bytes. Its heads are `Attention_v20`'s Calls (no whole `AttentionHead_v4`, no guarded full
-    block). Its numbers (units, templates, registered reads, the heads' census, the most rows and k_log of a proof block,
-    peak RSS) are printed as a JSON line."""
+    block). Its wire-order certificate is taken by the period check's closed form (`test_wire_order.check`), and its function
+    (`test_wire_order._function`: its templates, cuts and registered reads, and every wired row's writer row) is the one
+    `LLAMA_1B_FUNCTION` pins. Its numbers (units, templates, registered reads, the heads' census, the most rows and k_log of
+    a proof block, its wires and entries, the certificate's greatest rank and tightest reach, peak RSS) are printed as a
+    JSON line."""
+    # test_wire_order imports this module
+    from tests.program.predict.test_wire_order import _function, check
+
     config = {**json.loads(LLAMA_1B.read_text()), "quantization_config": dict(INT8_EXACT_QUANT)}
     reg, cls = _registered({**H200, "int8_exact": "linears"}, config), WindowClass(4, 32, 4)
-    circuit = class_circuit(reg, cls)
+    low = lower(reg, cls)
+    circuit, desc = low.circuit, json.loads(json.dumps(low.circuit.description()))
+    reach = check(desc, json.loads(json.dumps(low.order)))
     heads, n = Counter(), {_label(fn): k for fn, k in circuit.templates}
     for fn, k in circuit.templates:
         if fn.id.startswith(("Attention", "AttnBlock", "AttnHeadEnd")):
@@ -149,10 +163,13 @@ def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
     cuts = [circuit.cuts.get(IF.descriptor_id(fn)) for fn, _ in circuit.templates]
     rows = max(sum(map(len, IF.unit_rows(fn, c))) for (fn, _), c in zip(circuit.templates, cuts))
     k_log = max(IF.check_proof_block(fn, c) for (fn, _), c in zip(circuit.templates, cuts))
+    ranks = [s["c"] + sum(max(0, x * (r - 1)) for x, r in zip(s["r"], s["radix"])) for s in low.order["segments"]]
     print(json.dumps({"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "positions": cls.positions,
                       "units": sum(n.values()), "templates": len(n), "reads": len(circuit.registered.reads),
-                      "heads": dict(heads), "rows": rows, "k_log": k_log,
+                      "heads": dict(heads), "rows": rows, "k_log": k_log, "wires": len(circuit.wires),
+                      "entries": len(circuit.blocks.inference), "rank": max(ranks), "reach": max(reach),
                       "max_rss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 1)}, sort_keys=True), flush=True)
+    assert _function(desc) == LLAMA_1B_FUNCTION
     assert rows <= IF.MAX_ROWS and k_log <= IF.K_MAX
     assert {lab.split("{")[0] for lab in n} >= {"SelectCollect_v1", "SelectEntry_v1"}
     assert not {lab.split("{")[0] for lab in n} & {"TokenSelectCombine_v2", "OutCollect_v1", "SlotEntry_v1"}
