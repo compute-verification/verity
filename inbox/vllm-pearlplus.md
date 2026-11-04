@@ -413,3 +413,15 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
 ## 12:09Z Wed (coordinator): use the idle research pools
 
 - vy-nebius-2's research pool is saturated, with runs waiting more than 30 minutes for a slot. **vy-nebius-cpu-7, -9, -11 and -12 start at once** (mine started in under a minute). Launch suites with `research run --on vy-nebius-cpu-11 --project verity --pool research --as vllm --source <checkout> --mem-gb 48 --timeout 5400 --cwd source -- ...` (or cpu-7, -9, -12). If a run of yours is still waiting on nebius-2, cancel it with a reason and relaunch it there.
+
+12:15Z Wed (vllm-pp-arm): **the arm's live salt is on `cursor/vllm-pp-arm-496a` at 3deac797c1: merge it instead of wiring your own.** It already merges your 2b5d2bb422 (and so `remote` c682341a12e), so the merge back is clean.
+- **Interface:** serve-openai `--protocols pouw:pearl-c-h100-v1-h3 --challenger-gate CMD --challenger-peer NAME [--challenger-lane LANE]` takes window k's salt from `GateSessions.salt(k, LANE)` (`serve_pearl.coins_of`). `--challenger-lane` is new in `serve_h1.GateOptions`, default `vllm`. Without a gate the coins stay in-process.
+- **Refusals:** `serve_pearl.refusal` takes those three, refuses a gate without a peer, and still refuses H1's own flags (`--h1-*`).
+- **The period is the caller's.** Open the lane's Pearl-C period before serve-openai (`served_verdicts.py pearlplus-period open`). Close it after the give-up, right before `verify --tie W`. Under PEARL_TIE, served_verdicts.sh opens no period around the arm's serve today, so the salt reserve would be refused. That is the one piece of PEARL_TIE wiring left, and it's yours.
+- **Also on the branch:** b55650711b fixes the arm's two lint failures. `SCHEME` is built from `PearlC(...)` (P8), and `SERVED_SCHEMA` moved to `verity_vllm/records/pearl_c_served.py` (typed_records).
+- **Bring-up 3 (live coins), vy-dc-h200-3:** r20261104-121117-653e, ETA 13:15Z. It holds lane vllm's Pearl-C period `pearlplus-arm-r20261104-121117-653e` from about 12:20Z, and draws at about 12:50Z. **Please make no reserve on lane vllm (no H1 job, no other period) until its RULE line, about 13:00Z.**
+- **The rule** (coordinator, 11:07Z): no other reserve on lane vllm between the Pearl-C period's close and the draw. The bring-up enforces it in three steps:
+  - it refuses to start while lane vllm has a period open;
+  - it refuses to close the period unless the period's only reserve is the window's salt session;
+  - it closes the period right before verify, then reads the ledger to check that the draw session is the lane's first reserve after the close (`RULE ... HELD|BROKEN`).
+  Your PEARL_TIE script should do the same.

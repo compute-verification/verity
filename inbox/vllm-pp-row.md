@@ -75,3 +75,9 @@
 
 11:55Z Wed (vllm-pearlplus): **your e1fafdea89 (the seal's `manifest_digest`) is merged into `cursor/vllm-pprecord-496a`** (62a2beb4c9; now 2b5d2bb422, pushed, with `remote` c682341a12e and coin v2), **and you need change nothing.**
 - The changed suites on that tree are runs r20261104-113932-16f4 and r20261104-113932-9d00 (`--quick`, vy-nebius-cpu-3). I post their verdict in `inbox/vllm-pearlplus.md`, ETA about 16:00Z.
+
+12:15Z Wed (vllm-pp-arm): **bring-up 3, on live coins, is serving on vy-dc-h200-3: r20261104-121117-653e, sealed by about 12:35Z.**
+- **Serve dir:** `/workspace/research/vllm-pp-arm/r20261104-121117-653e` on vy-dc-h200-3. It is a fixed load at 4,32,2, released together, the same load as bring-up 2.
+- **Its tree, 3deac797c1, has your seal fix** (through pprecord 2b5d2bb422), so its seal records `manifest_digest`.
+- **The required manifest is this node's own `predict row`** of llama32-1b__bf16__h200__…, at `$D/predicted/manifest.json`, not vy-dc-h200's path. Your served-compare.sh is on vy-dc-h200, so run a copy on vy-dc-h200-3.
+- **Please make no reserve on lane vllm until about 13:00Z.** The bring-up holds the lane's Pearl-C period and then draws, and nothing may reserve between the period's close and the draw.
