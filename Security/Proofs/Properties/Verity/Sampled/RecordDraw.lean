@@ -27,6 +27,11 @@ Clause (i) of `MovesOf`: the record v2 reads in an accepted play decodes (`Exec.
 * **What the sample's fill reads of the play**: the walk and the fill a node at a time (`walk_send_of`, `fill_coin_of`),
   an output reached from the walk's stop is reached from the node (`playReaches_walk`), readings that pick only openings
   (`PicksOpenings`), and the family and digest v2 reads the sample's coins at (`SampleNamed`).
+* **The record's draw from the sample's coins** (`recordDraw_of_coins`): in an accepted play whose log v2 read is the
+  device's, wherever the play's coins of the sample's family and the sample's coins agree (`CoinsAgree`: one list
+  starts the other), the record decodes to the session's draw file at the sample. v2's coins start the play's
+  (`logged_draw_v2`) and fit the sample's (`coins_size_le`), so they start the sample's bytes, and the sample is v2's
+  units (`draw_of_drew`).
 -/
 
 namespace Verity.Game
@@ -379,5 +384,72 @@ theorem coins_size_le {bs : Core.Blobs} {a b e : ByteArray} {p : _root_.SampledP
   rw [challengerStream_ok hstream, ← zipIdx_filter_length, hr, List.length_range']
   rw [hop] at hops
   exact Nat.mul_le_mul (le_refl _) hops
+
+/-! ## The record's draw from the sample's coins -/
+
+theorem length_bitsOf (b : ByteArray) : (bitsOf b).length = 8 * b.size := by
+  have key : ∀ l : List UInt8, (l.flatMap byteBits).length = 8 * l.length := by
+    intro l
+    induction l with
+    | nil => rfl
+    | cons x l ih =>
+      have h8 : (byteBits x).length = 8 := by simp [byteBits]
+      rw [List.flatMap_cons, List.length_append, ih, h8, List.length_cons]
+      omega
+  rw [bitsOf_eq, key, Array.length_toList]
+  rfl
+
+theorem length_fillCoins : ∀ {m : ℕ} (κ : Fin m → Fin 512 → Bool), (fillCoins κ).flatten.length = m * 512
+  | 0, _ => by simp
+  | m + 1, κ => by
+    rw [fillCoins_succ, List.flatten_cons, List.length_append, List.length_ofFn, length_fillCoins (Fin.tail κ),
+      Nat.add_mul, Nat.one_mul]
+    omega
+
+theorem prefix_flatten {a b : List (List Bool)} (h : a <+: b) : a.flatten <+: b.flatten := by
+  obtain ⟨t, rfl⟩ := h
+  exact ⟨t.flatten, by rw [List.flatten_append]⟩
+
+variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+
+/-- **The record's draw is the session's draw file at the sample**, wherever the play's coins of the sample's family
+agree with the sample's coins (`CoinsAgree`): in a play at the parameters `θ` of a session v2 sets up and tied to v2's
+verifier, whose sampled verdict accepts, whose log v2 read is the device's, and where v2 reads the coins of the family
+`label` answering `after`, the record decodes to the session's draw file at the sample of the device's coins `ω`, whose
+bytes are the coins `κ`. Where the play holds more of the family's coins than `κ`, v2's still fit `κ`'s
+(`coins_size_le`, `hm`). -/
+theorem recordDraw_of_coins {V : Vocab d α} {k : Verity.Registration.Composite} {A : Live} {θ : ByteArray}
+    {F : Array ByteArray} (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : DrawReadAll k coinsRead) (hH : DrawHeld k)
+    (hfix : ∀ S, Flock.norm (A.dj S) = A.dj S) {m : ℕ} (hm : _root_.SampledProofs.Challenger.MAX_COINS ≤ m)
+    {κ : Fin m → Fin 512 → Bool} {ω : A.Ω}
+    (hsrc : _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
+      _root_.Properties.SampledProofs.bytesOf (coinBytes m 64 κ 0))
+    {o : Verity.Exchange} (hθ : o.params = θ) (hv : V.Verdict k .sampled o) (hl : Binding.Logged Binding.readsV2 o)
+    {label : String} {after : ByteArray} (hN : SampleNamed k o.sent label after)
+    (hc : CoinsAgree (freshCoins label after o.log) (fillCoins κ)) {record : String}
+    (hr : sentRecord o.sent = some record) :
+    FlockSoundness.Discharge.Exec.recordDraw record = some (A.dj (A.L.draw ω)) := by
+  obtain ⟨p₀, hp₀, -⟩ := hA.params
+  obtain ⟨dr, L, n, ξ, units, hd, hs⟩ := logged_draw_v2 hR (by rw [hθ]; exact hp₀) hv hl
+  have hn := n_of_popTied ht hv.2.1 hθ hd
+  have hL := law_of_setsUp hA hv.2.1 hθ hd hn
+  obtain ⟨a, b, e, p, c, ev, hcase, hacc, -⟩ := id hd
+  obtain ⟨hlab, haft⟩ := hN a b e p c ev ξ dr hcase hacc
+  have hξ := coins_size_le hacc
+  unfold ShowsDraw at hs
+  rw [hlab, haft] at hs
+  have e₀ : bitsOf (_root_.Properties.SampledProofs.bytesOf (coinBytes m 64 κ 0)) = (fillCoins κ).flatten :=
+    bitsOf_streamOf_coinBytes (B := 64) κ
+  have hpre : bitsOf ξ <+: bitsOf (_root_.Properties.SampledProofs.bytesOf (A.src ω 0)) := by
+    rw [hsrc, e₀]
+    rcases hc with hc | hc
+    · exact hs.trans (prefix_flatten hc)
+    · refine List.prefix_of_prefix_length_le hs (prefix_flatten hc) ?_
+      have h64 : _root_.SampledProofs.Challenger.COIN_BYTES = 64 := rfl
+      rw [h64] at hξ
+      rw [length_bitsOf, length_fillCoins]
+      omega
+  rw [draw_of_drew hd A ω hL hn hpre]
+  exact recordDraw_of_drew hH hd A hL hn hfix hr
 
 end Verity.Sampled
