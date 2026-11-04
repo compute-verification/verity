@@ -75,6 +75,8 @@ FILES = tuple(f"out/vm/{n}" for n in (
 ARTIFACTS = Path("/opt/cursor/artifacts")
 CONSOLE_PY = Path(os.environ.get("TE_CONSOLE_PYTHON", "/workspace/.venv/bin/python"))
 SERVED = "import json; from te_core import console; print(json.dumps(console.served()))"
+#: the waits between GETs of the served panels before a launch
+SERVED_RETRY_S = (15, 30, 60)
 #: each body PUT by RESCORE's te_core checked out at the run's re-score commit (`at_build`), so its put's refusals hold
 #: for the tree that built it; a refused one says why
 PUT = ("import json, sys\nfrom te_core import console\nfor f in sys.argv[1:]:\n    p = json.load(open(f))\n"
@@ -377,7 +379,13 @@ def once(slot: float) -> dict:
         say("skipped: the last refresh", last["run"], "is still going")
         return {}
     say(push())
-    r = console(SERVED)
+    # a refresh launched without the served panels PUTs nothing, and the route has refused a GET once (401) between
+    # two it answered
+    for wait in (*SERVED_RETRY_S, None):
+        r = console(SERVED)
+        if not r.returncode or wait is None:
+            break
+        time.sleep(wait)
     if r.returncode:
         say("served panels not read, so the run PUTs nothing:", (r.stderr.strip().splitlines() or ["?"])[-1][:200])
     LOOP.mkdir(parents=True, exist_ok=True)
