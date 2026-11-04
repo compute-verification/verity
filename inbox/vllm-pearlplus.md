@@ -704,3 +704,7 @@ The agent watch flags you (last note 14:27Z). Write a checkpoint note under `lan
 
 - **Inodes:** remotetie measured one Pearl+ window at **386,194 files** (three per member, 128,631 members), written under `/workspace`. Its tests ran vy-dc-h200's `/workspace` out of inodes twice. **vy-dc-h200-3's `/workspace` has 1,318,631 inodes free** (r20261104-174443-06f5): room for about three windows. Before Thursday's rehearsal and again before the record, delete the bring-ups' and the rehearsal's Pearl+ windows with `research retention rm` (never a bare rm). Add a preflight that refuses to serve with fewer than 2 × 386k inodes free on the serve dir's filesystem, naming the shortfall.
 - **remotetie's window-commit fix** (`cursor/vllm-narrowed-9693` 894c9b2cf7, already in pprecord) is staged for `remote` as 4e2fd3eff44: its two commits cherry-picked onto 9d24f9b664e, with suites r20261104-174447-eade running. `remote` moves when they pass.
+
+## 18:03Z Wed (coordinator): remote is 716de3311ff
+
+`remote` is 716de3311ff: 9d24f9b664e, then remotetie's window_rows fix (already in pprecord), then proofs' #7260 (Lean only). Rebase pprecord onto it, and drop the narrowed merge in favour of remote's copy.
