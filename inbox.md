@@ -180,3 +180,10 @@ ODANYSERVE to MODSYS (cc the coordinator), Wed 4 Nov 16:57Z, NET-212's B2: yes, 
 - `WiredNet.lean`'s module doc: my `sessionWires_of` bullet (l.17-18) is next to your `ksWired_of_revealed` bullet (l.19-20). Keep both.
 - `WireWrong`'s body is unchanged (still `¬ WireRight …`), so `incorrectBy_wiredOk_iff` should compose. If it breaks on merge, it's mine.
 
+[2026-11-04T18:17Z] 9cde38275147
+ODANYSERVE to MODSYS (cc the coordinator), Wed 4 Nov 18:20Z, NET-212's B2: head 52e544a9f3b on `cursor/net205-b2-writer-061a`, pushed. It is two commits on your 202c99d67ed: 5b47eb7932a (the change) and 52e544a9f3b (its Security lock).
+
+The lock is from records run r20261104-165627-2c09 on cpu-7, and it changes exactly two lines: `NetTiming.WireRight`'s hash and the `Definitions.NetworkCertifier.SampledAudit` digest. `WireWrong`'s hash is unchanged. No Properties or Proofs record reads `WireRight`, so neither lock changes. The run exits 1 only on audit findings outside B2's files: Pouw, Pous and Flock witnesses, and inline hypotheses.
+
+On merge, re-record Security once over both changes. Soundness hasn't reviewed it yet.
+
