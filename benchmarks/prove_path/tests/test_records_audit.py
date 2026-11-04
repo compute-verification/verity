@@ -866,7 +866,7 @@ def test_a_period_counts_an_io_shell_window_in_a_process_that_loaded_no_registry
     which `interface.resolve`'s own walk doesn't import, so the period resolves the circuit's templates in Verity's
     whole catalog (`catalog_resolve`): it counts the shell's state rows free beside the coordinates' own, where
     `interface.resolve` alone refuses the window ("names no Definition in Verity's catalog"). Its circuits are the two
-    templates', in the order the population's units take them."""
+    templates', in its root's node order."""
     got = _io_shell_window(tmp_path / "w")
     audit = _audited(got.dir, tmp_path / "a")
     p = subprocess.run([sys.executable, str(HERE.parent / "records_audit.py"), "period", "--window", str(got.dir),
@@ -878,6 +878,32 @@ def test_a_period_counts_an_io_shell_window_in_a_process_that_loaded_no_registry
     assert period["free"] == 8 * coord - 8 * 8 * K + 3 * state and period["answer"]["verdict"] == "accept"
     assert [c["template"] for c in period["circuits"]] == [TID, descriptor_id(got.shell)]
     assert sorted(f.name for f in (tmp_path / "c").iterdir()) == sorted(f"{c['sha512']}.txt" for c in period["circuits"])
+
+
+def test_a_periods_circuits_are_a_file_for_each_root_template_node_in_the_roots_order(tmp_path):
+    """`period_circuits` names a circuit file for each root template node of the audit's Program, in its root body's
+    order, as the period check reads them (``templateNodes``, which refuses a partial list or another order): a template
+    the root calls twice is named twice, by its one composed file, and a node calling a primitive not at all. A root
+    template the audit composed no file for is refused by name."""
+    w, pins = tmp_path / "window", {}
+    for k, t in ((0, "B_v1"), (1, "A_v1")):
+        text = f"flock-ir-unit/v2 stand-in of {t}\n".encode()
+        (w / f"m{k}").mkdir(parents=True)
+        (w / f"m{k}" / "circuit.txt").write_bytes(text)
+        pins[t] = hashlib.sha512(text).hexdigest()
+    members = [{"k": 0, "template": "B_v1", "n": 2, "base": 4}, {"k": 1, "template": "A_v1", "n": 4, "base": 0}]
+    (w / "summary.json").write_text(json.dumps({"members": members, "circuits": {t: {"pin": p} for t, p in pins.items()}}))
+    program = {"root": "Root_v1", "callees": ["A_v1", "add", "B_v1", "C_v1"],
+               "definitions": {"Root_v1": {"form": "composite", "body": {"nodes": [{"fn": f} for f in (0, 1, 2, 0)]}},
+                               "A_v1": {"form": "composite"}, "B_v1": {"form": "composite"}, "C_v1": {"form": "composite"},
+                               "add": {"form": "primitive"}}}
+    assert RA.root_templates(program) == ["A_v1", "B_v1", "A_v1"]
+    got = RA.period_circuits(tmp_path, program)
+    assert [(t, pin) for t, pin, _f in got] == [("A_v1", pins["A_v1"]), ("B_v1", pins["B_v1"]), ("A_v1", pins["A_v1"])]
+    assert [f for _t, _pin, f in got] == [w / "m1" / "circuit.txt", w / "m0" / "circuit.txt", w / "m1" / "circuit.txt"]
+    program["definitions"]["Root_v1"]["body"]["nodes"].append({"fn": 3})
+    with pytest.raises(ValueError, match="composed no circuit for template C_v1"):
+        RA.period_circuits(tmp_path, program)
 
 
 def test_a_windows_committed_activations_are_held_to_domains_binding_its_run():
