@@ -1241,6 +1241,16 @@ def pearlplus_live_draw(record: Mapping[str, Any], piece_dir: Path, key: str) ->
     return PEARLPLUS_NODE_DRAW
 
 
+#: a rational as JSON carries ε: an integer, a fraction with a nonzero denominator, or a decimal
+_RATIONAL = re.compile(r"[+-]?\d+/0*[1-9]\d*|[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
+
+
+def _rational(x: Any) -> Fraction | None:
+    """``x`` as a `Fraction` when its text is a rational (`_RATIONAL`), else None."""
+    s = str(x).strip()
+    return Fraction(s) if not isinstance(x, bool) and _RATIONAL.fullmatch(s) else None
+
+
 def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, sampled_proofs: Path | None, key: str | None,
                         lane: str | None) -> tuple[dict[str, Any] | None, str | None]:
     """Whether Pearl+'s accepted development piece `doc` (`pearlplus`'s, in `piece_dir`) is PoUW's verdict of record: its
@@ -1347,11 +1357,8 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, sampled_proofs:
     credited, tiles = work.get("credited"), work.get("credited_tiles")
     if not (type(credited) is int and credited > 0 and type(tiles) is int and tiles > 0):
         return None, f"the Lean verdict credits {credited!r} MACs over {tiles!r} tiles: nothing"
-    try:
-        same_eps = Fraction(str(work.get("epsilon"))) == Fraction(str(ref.get("epsilon")))
-    except (ValueError, ZeroDivisionError):
-        same_eps = False
-    if not same_eps:
+    eps = _rational(work.get("epsilon"))
+    if eps is None or eps != _rational(ref.get("epsilon")):
         return None, f"the Lean verdict's ε {work.get('epsilon')!r} is not the reference's {ref.get('epsilon')!r}"
     return {**answer, "public": {**answer["public"], "work": {k: work.get(k) for k in
                                                               ("credited", "credited_tiles", "macs", "rho", "epsilon")}},
