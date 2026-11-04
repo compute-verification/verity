@@ -1031,13 +1031,16 @@ def main() -> int:
             variants[name] = str(e)[:300]
     what = "final table" if final else "refresh"
     fr = json.loads((rs / "frontier.json").read_text())
-    scored = [json.loads(line) for line in (rs / "formalism.jsonl").open()]
-    runs, n2 = {r["run_id"] for r in scored}, night2_runs()
+    # each row carries its checkpoint's trace: 1.5 GB at 00:30Z, which parsed whole took the refresh past this VM's
+    # memory (killed at 6.9 GB), so a row's run and start are all that's kept
+    with (rs / "formalism.jsonl").open() as f:
+        scored = [(x["run_id"], x["start"]) for x in map(json.loads, f)]
+    runs, n2 = {run for run, _ in scored}, night2_runs()
     left = "not_analysed" if final else "not_measured"
     v3 = v3_starts(commit)
     by_start = {}
-    for r in scored:
-        by_start.setdefault(r["start"], set()).add(r["run_id"])
+    for run, start in scored:
+        by_start.setdefault(start, set()).add(run)
     meta = {"stamp": stamp, "te_core": commit, "te_core_version": te_version(commit), "te_core_chosen": chosen,
             "capture": trace_version, "over": [capture_version(p) for p in over],
             "integrator_te_core": newest, "pins": PINS,
@@ -1046,7 +1049,7 @@ def main() -> int:
                            "trace40.py)"),
             "formalism": "v2, the frozen tail always charged", "checkpoints": len(scored), "records": len(runs),
             "night2_records": len(runs & n2), left: len(fr.get(left) or []),
-            "v3": {s: {"records": len(by_start.get(s, ())), "checkpoints": sum(r["start"] == s for r in scored)}
+            "v3": {s: {"records": len(by_start.get(s, ())), "checkpoints": sum(start == s for _, start in scored)}
                    for s in v3},
             "pilot_start": sum(v == "pilot-start" for v in (fr.get("skipped") or {}).values()),
             "rule": "H and W* over every checkpoint (19:50Z)"}
@@ -1082,14 +1085,14 @@ def main() -> int:
         t.mkdir(parents=True, exist_ok=True)
     for name in ("frontier.md", "frontier.json", "formalism.jsonl", "rescore.log", "compare.md", "compare.json"):
         if (rs / name).exists():
-            (trees["tables"] / name).write_bytes((rs / name).read_bytes())
+            shutil.copyfile(rs / name, trees["tables"] / name)
     if traced and (trace40.cache() / "traced.json").exists():
-        (trees["tables"] / "trace40-traced.json").write_bytes((trace40.cache() / "traced.json").read_bytes())
+        shutil.copyfile(trace40.cache() / "traced.json", trees["tables"] / "trace40-traced.json")
     for v in variants:
         for name in ("frontier.md", "frontier.json", "rescore.log", "formalism.jsonl"):
             if (rs / v / name).exists():
                 (trees["tables"] / v).mkdir(exist_ok=True)
-                (trees["tables"] / v / name).write_bytes((rs / v / name).read_bytes())
+                shutil.copyfile(rs / v / name, trees["tables"] / v / name)
     for name in ("algorithm-policy", FIT):
         if (out / name).is_dir():
             shutil.copytree(out / name, trees["tables"] / name, dirs_exist_ok=True)
