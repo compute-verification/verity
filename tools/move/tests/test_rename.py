@@ -51,6 +51,8 @@ def test_a_phrase_a_line_break_splits_keeps_the_break():
     assert s("/-- the warden's records\n  -- and the prover\n  -- gateway -/") == \
         "/-- the network certificates\n  -- and the firewall -/"
     assert s("the prover\n\ngateway") == "the prover\n\nfirewall"
+    assert s('f"{n}: the warden\'s "\n        f"records {x}"') == 'f"{n}: the network "\n        f"certificates {x}"'
+    assert s('"a prover "\n    f"gateway {x}"') == '"a prover "\n    f"gateway {x}"'
 
 
 def test_a_phrase_that_starts_with_an_apostrophe_follows_a_possessive():
@@ -77,6 +79,15 @@ def test_keep_paths_holds_a_path_and_not_the_files_text():
     assert words.path("pkg/firewall/tests/test_firewall.py") == "pkg/firewall/tests/test_firewall.py"
     assert words.path("pkg/other/firewall.py") == "pkg/other/zk_server.py"
     assert words.sub("the firewall serves", "pkg/firewall/tests/test_firewall.py") == "the zk_server serves"
+
+
+def test_a_held_file_is_named_where_it_stands():
+    words = M.Words({"words": {"firewall": "zk_server", "draw": "sample"},
+                     "keep_paths": {"pkg/firewall/**": ["firewall"]}, "keep_in": {"a/draw.py": ["draw"]}})
+    files = ["pkg/firewall/tests/test_firewall.py", "pkg/firewall/README.md", "a/draw.py", "b/draw.py", "doc.md"]
+    assert words.hold(files) == ["pkg/firewall/tests/test_firewall.py", "pkg/firewall/README.md", "a/draw.py"]
+    assert words.sub("see pkg/firewall/tests/test_firewall.py, test_firewall.py, a/draw.py and b/draw.py", "doc.md") == \
+        "see pkg/firewall/tests/test_firewall.py, test_firewall.py, a/draw.py and b/sample.py"
 
 
 def test_a_name_in_all_follows_what_it_exports_where_a_quoted_key_stands():

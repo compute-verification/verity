@@ -12,8 +12,8 @@ What it does, on the tree as it is (so it reruns on a later main, and `restack.p
 branch across it):
 1. renames each [words] entry in every tracked text file the map doesn't exclude, except inside what [keep] keeps (a domain
    tag, a format id, an id; a name in a Python module's `__all__` only as it keeps the name, never as a quoted string,
-   since `__all__` names what the module exports) and, in the files
-   a [keep_in] glob matches, the words it lists;
+   since `__all__` names what the module exports; the name of a file the second step leaves in place, `Words.hold`) and,
+   in the files a [keep_in] glob matches, the words it lists;
 2. moves each tracked file whose path the same words rename, with `layout.py`'s machinery (`layout.Run.move`), but for the
    words a [keep_in] or [keep_paths] glob lists for it ([keep_paths] holds a path and not the file's text); a module's
    name is its path's, so the first step has already renamed every import of it;
@@ -56,7 +56,8 @@ PINS_PY = "tools/verity/check/pins.py"              # the pins of Lean sources, 
 MANIFEST = "lake-manifest.json"
 MOVES = L.MOVES                                     # research's record of each move's renamed paths
 EXPORTS = re.compile(r"^__all__\s*\+?=\s*[\[(][^\])]*[\])]", re.M)   # a Python module's `__all__`: names, never data
-GAP = r"(?: |\n[ \t]*(?:(?:///?|--|#|\*) )?)"       # a space of a phrase: one, or a line break and what starts the next line
+# a space of a phrase: one, a line break and what starts the next line, or a break between two string literals Python joins
+GAP = r"""(?: ["']\n[ \t]*[rbfRBF]{0,2}["']|["']\n[ \t]*[rbfRBF]{0,2}["'] | |\n[ \t]*(?:(?:///?|--|#|\*) )?)"""
 
 
 def _match(path: str, glob: str) -> bool:
@@ -82,14 +83,20 @@ def _word(w: str, whole: bool = False) -> str:
     return left + re.escape(w).replace(r"\ ", GAP) + right
 
 
+def _suffixes(p: str) -> list[str]:
+    parts = p.split("/")
+    return ["/".join(parts[i:]) for i in range(len(parts))]
+
+
 def _rewrapped(old: str, new: str) -> str:
     """`new` for a phrase `old` that a line break splits: the break, and what starts the next line, at the same space of
-    `new`, or at its last."""
+    `new`, or at its last; a one-word `new` joins the lines, but where they are two string literals `old` stands, since
+    joining them could move words into a literal of another kind (an f-string's)."""
     gaps = re.findall(GAP, old)
     k = next(i for i, g in enumerate(gaps) if "\n" in g)
     parts = new.split(" ")
     if len(parts) == 1:
-        return new
+        return old if re.search("[\"']", gaps[k]) else new
     j = min(k, len(parts) - 2)
     return " ".join(parts[:j + 1]) + gaps[k] + " ".join(parts[j + 1:])
 
@@ -156,17 +163,30 @@ class Words:
         def one(m: re.Match) -> str:
             w = m.group(0)
             i = bisect.bisect_left(starts, m.end()) - 1               # the last span starting before the match ends
-            if w in skip or (i >= 0 and reach[i] > m.start()):
+            to = _rewrapped(w, new[m.lastindex - 1]) if "\n" in w else new[m.lastindex - 1]
+            if to == w or w in skip or (i >= 0 and reach[i] > m.start()):
                 if kept is not None:
                     kept[re.sub(GAP, " ", w)] += 1
                 return w
             if counts is not None:
                 counts[re.sub(GAP, " ", w), new[m.lastindex - 1]] += 1
-            return _rewrapped(w, new[m.lastindex - 1]) if "\n" in w else new[m.lastindex - 1]
+            return to
         return pattern.sub(one, text)
 
     def path(self, p: str) -> str:
         return self.sub(p, p, protect=False)
+
+    def hold(self, files: list[str]) -> list[str]:
+        """Keep, in every file, the names of the files among `files` that [keep_in] or [keep_paths] hold where they are
+        and the words would otherwise move: each one's path, and each shorter suffix of it (its name included) that
+        names no other file. Returns those paths."""
+        held = [p for p in files if not self.excluded(p) and self.path(p) == p and self.sub(p, protect=False) != p]
+        named = Counter(s for p in files for s in _suffixes(p))
+        names = [s for p in held for s in _suffixes(p) if s == p or named[s] == 1 and self.sub(s, protect=False) != s]
+        if names:
+            self.keep.append(re.compile(r"(?<![\w./-])(?:" + "|".join(map(re.escape, sorted(names, key=len, reverse=True)))
+                                        + r")(?![\w/-])"))
+        return held
 
     def name(self, n: str, path: str = "") -> str:
         """A Lean or Python dotted name, as it is renamed where it stands in file `path`: not where [keep] keeps it (a
@@ -348,6 +368,7 @@ def main(argv: list[str] | None = None) -> int:
     root = (a.root or Path(L.git(HERE, "rev-parse", "--show-toplevel").strip())).resolve()
     words = Words(tomllib.loads(a.map.read_text()))
     files = [p for p in L.git(root, "ls-files", "-z").split("\0") if p]
+    words.hold(files)
     if a.moves:
         print(json.dumps(lock_moves(root, words, files), indent=1))
         return 0
