@@ -288,8 +288,9 @@ exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_r
 # (names under it are renamed here, so `check.py --moved` reads each back only if the prefix is renamed in a move of its
 # own); `law` where it touches a name (GLOSSARY.md keeps `law` identifiers); the other senses of law and draw (a power
 # law, the law of large numbers, nvidia-smi's `power.draw`, a game's coin `Game.draw` (a coin is flipped, not sampled), its bare uses (`← draw F`,
-# `draw C >>= f`, `(draw C)`, `@draw`), its helpers `drawFin`, `drawK`, `drawKs` and `drawStrat`, and `Plays.drawVec`, which
-# beside Flock's `Transcript.sample` would be ambiguous), the `round_digest` strings and the label `replay_set=warden/re-verify`;
+# `draw C >>= f`, `(draw C)`, `@draw`; a binder's `← draw.mapM` renames), its helpers `drawFin`, `drawK`, `drawKs` and `drawStrat`, and `Plays.drawVec`, which
+# beside Flock's `Transcript.sample` would be ambiguous), the deployment's coin sources' `draw(n)` and the calls that name it
+# from other modules, the `round_digest` strings and the label `replay_set=warden/re-verify`;
 # and what PoUB's kept `draw` names or shares with the rest of the tree: its modules (`Accounting.Remote.Draw`,
 # `RemoteDraw`, `RemoteHeld.Draw`), `draw_salt` (PoUS's and the bandwidth audit's) and the guarantee `drawIsSubset`
 # (`--moves` renames a guarantee by its lock's path, not its file's)
@@ -322,7 +323,8 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
             'T proof units per registration, unit t the link-window\x27s bucket row t',
             '\bRemote\.Draw\b', '\bRemoteDraw\b', '\bRemote(?:Held|Audit)[./]Draw(?:Meets)?\b', '\b(?:to)?DrawnLayer\b',
             '\bGame\.draw\b', '\bdrawVec\b',
-            '(?<=← )draw\b|@draw\b|\bdraw(?= [A-Z] >>=)|(?<=\()draw(?= [A-Z]\)| \(Fin\b)|\bdraw(?:Fin|Ks?|Strat)\b', '\bCoinsDraw\b',
+            '(?<=← )draw(?= )|@draw\b|\bdraw(?= [A-Z] >>=)|(?<=\()draw(?= [A-Z]\)| \(Fin\b)|\bdraw(?:Fin|Ks?|Strat)\b', '\bCoinsDraw\b',
+            '\bdef draw(?=\(self, n: int\) -> bytes:)|\bself\.draw(?=\(msg\.message\.fields\[)|\b(?:seeded|SeededCoins)\([^()\n]*\)\.draw\b',
             '(?<=\.update\()(?:draw|draws|drawn|firewall)(?==)', '\b(draw|draws|drawn)(?==\w+\[\x22\1\x22\])',
             '(?<=\]\}, )draw(?==union_draw\[)', '\bdrawn(?==draws, exclusion_tiles)', '(?<=subcircuit=sub\.id, )draws(?==)',
             '(?<=rounds=len\(got\), )draws(?==)',
