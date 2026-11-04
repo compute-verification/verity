@@ -18,7 +18,7 @@ returns every unit's output copy bits, the key program's outputs.
 * `RowsRead P fs`: each of those files' units reads no input padding and every bit of its template's `row` parameter
   (`SampledProofs.Bits.readsWhy`).
 * `PaddingUnread P fs`: each of those files' units reads no input padding (`SampledProofs.Bits.readsWhy`, at no
-  parameter), which the period check holds a scan's files to and not yet a tied audit's.
+  parameter), which `RowsRead` asks with more.
 * `MembersOf P fs rs ms`: the members hold each unit of the template query's population once (its ranges `rs`, as
   `Flock.TemplateQuery.evaluate` gives them, a unit an instance), each member one template's circuit file over units
   the code locates at that template's node (`Flock.TemplateQuery.locate`).
@@ -79,9 +79,7 @@ def RowsRead (P : Flock.Program.Prog) (fs : List Flock.Circuit) : Prop :=
 /-- **The circuit files `fs` of `P`'s templates read no input padding**: at each, `SampledProofs.Bits.readsWhy` at no
 parameter finds nothing wrong with the unit's read input columns (`SampledProofs.Bits.unitReads`) against its
 template's Definition. Its unit reads no input column that no port holds (input padding, a source with no commitment
-position), so every input gate a unit reads is a bit of its template's parameters. `RowsRead` asks this and more; the
-period check reads a tied audit's circuit files to their headers only, so it doesn't hold them to this yet, and a
-count at a tied audit takes it as a premise of its own. -/
+position), so every input gate a unit reads is a bit of its template's parameters. `RowsRead` asks this and more. -/
 def PaddingUnread (P : Flock.Program.Prog) (fs : List Flock.Circuit) : Prop :=
   ∀ i < fs.length, SampledProofs.Bits.readsWhy (fs.getD i default) (templateDef P ((templateNodes P).getD i 0))
     (SampledProofs.Bits.unitReads (fs.getD i default)) [] = none
