@@ -2570,7 +2570,6 @@
    "Claims.SamplingGeneric.CompilerBits": "a closed statement, proved of every proof system and compiled verifier and stated by the guarantee `Claims.SamplingGeneric.compilerBits`, which `witnesses` holds to its honest and nontrivial lemmas",
    "Claims.SamplingGeneric.CompilerEfficient": "a closed statement, proved of every proof system and compiled verifier and stated by the guarantee `Claims.SamplingGeneric.compilerEfficient`, which `witnesses` holds to its honest and nontrivial lemmas",
    "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier",
-   "Claims.ZKOutLeak": "a corollary of `ZKOut`, proved of every `ZKOut` (`Claims.zkOutLeak`), not of a deployment",
    "Claims.SamplingGeneric.CompilerZK": "a closed statement, proved of every zero-knowledge proof system and masked compiled verifier and stated by the guarantee `Claims.SamplingGeneric.compilerZK`, which `witnesses` holds to its honest and nontrivial lemmas"
   }
  },
@@ -2645,10 +2644,6 @@
   "Claims.SamplingGeneric.compilerZK": {
    "honest": ["Claims.SamplingGeneric.compilerZK_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerZK_nontrivial"
-  },
-  "Claims.zkOutLeak": {
-   "honest": ["Claims.zkOutLeak_honest"],
-   "nontrivial": "Claims.zkOutLeak_nontrivial"
   }
  },
  "unwitnessed": {
@@ -12643,9 +12638,6 @@
   "Claims.SamplingGeneric.compilerZK": {
    "owner": "@proofs"
   },
-  "Claims.zkOutLeak": {
-   "owner": "@proofs"
-  },
   "Claims.SamplingGeneric.compilerKS_honest": {
    "owner": "@proofs"
   },
@@ -12671,12 +12663,6 @@
    "owner": "@proofs"
   },
   "Claims.SamplingGeneric.compilerZK_nontrivial": {
-   "owner": "@proofs"
-  },
-  "Claims.zkOutLeak_honest": {
-   "owner": "@proofs"
-  },
-  "Claims.zkOutLeak_nontrivial": {
    "owner": "@proofs"
   }
  },
