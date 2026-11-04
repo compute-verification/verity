@@ -129,6 +129,10 @@ def main() -> int:
         print(f"portchk: #{n}: rc {rec.get('rc')} in {rec['seconds']} s "
               f"failed {len((rec.get('doc') or {}).get('failed', {}))} {rec.get('error', '')[:200]}", flush=True)
     git("checkout", "-q", "-f", "--detach", base, check=False)
+    if man.get("delete_tree"):
+        shutil.rmtree(tree, ignore_errors=True)
+        print(f"portchk: deleted {tree}", flush=True)
+    shutil.rmtree(work, ignore_errors=True)
     return 0
 
 

@@ -1,0 +1,2824 @@
+[
+ {
+  "pr": 7166,
+  "title": "Sampled audit: the link finders output only what they're charged (outOf's second opening; the link at t' + v per run); no stated bound moves",
+  "goal": "proofs/finders-charged",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 3,
+  "hand": [],
+  "mech": [
+   "lean-audit.json"
+  ],
+  "dels": [],
+  "stale": [
+   "lean.py(del)",
+   "test_lean.py(del)"
+  ],
+  "run": "E",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 7164,
+  "title": "Bridge: V5 at the law the verifier draws under, LawOn proved at PopMatches (NotBernoulli stays a premise)",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 7,
+  "hand": [
+   "ExecStrataOf.lean"
+  ],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [
+   "InputSlot.lean"
+  ],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "E",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 7160,
+  "title": "Recursive audit: the chasing finder Dep.chaseAt under ecr/sha-512 at its own cost; the error is the min of both finders' terms (stacked on #7159)",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "E",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Composition.lean",
+    "origin": 6677,
+    "fix": "`import all Init.Data.String.Defs` (String.toUTF8 in msg_inj)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Nci/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all` of the Json modules Baseline.evaluate reduces through",
+    "lines": 2,
+    "how": "estimate",
+    "own": false
+   },
+   {
+    "file": "VStarRecursive/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all Lean.Data.Json.Basic` + Init.Data.Ord.String (getD of mkObj)",
+    "lines": 2,
+    "how": "core repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 7159,
+  "title": "Recursive audit: the binding term at the deployment's sizes, BindDeployed (stacked on #7144)",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "E",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Composition.lean",
+    "origin": 6677,
+    "fix": "`import all Init.Data.String.Defs` (String.toUTF8 in msg_inj)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Nci/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all` of the Json modules Baseline.evaluate reduces through",
+    "lines": 2,
+    "how": "estimate",
+    "own": false
+   },
+   {
+    "file": "VStarRecursive/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all Lean.Data.Json.Basic` + Init.Data.Ord.String (getD of mkObj)",
+    "lines": 2,
+    "how": "core repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 7158,
+  "title": "Recursion: Fdev's link output reads only what linkCost charges (gated on the first draw); the KS bound is unchanged",
+  "goal": "proofs/finders-charged",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "run": "E",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Test/RegBudget.lean",
+    "origin": 7150,
+    "fix": "not the port: fails on main's toolchain too (structure-instance field column); fixed at #7150's head 13076c1ddc",
+    "lines": 0,
+    "how": "plain v4.34 repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 7153,
+  "title": "tests/lint: a ratchet that refuses new uses of the terms GLOSSARY.md's older names retire",
+  "goal": "proofs/terminology-clean",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 3,
+  "hand": [],
+  "mech": [
+   "lean-audit.json"
+  ],
+  "dels": [],
+  "stale": [
+   "lean.py(del)",
+   "test_lean.py(del)"
+  ],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 7150,
+  "title": "Recursive verifier: caps at the deployed sizes, so Pr[acc and not R] <= 2^-167.7 + t*2^-174.95 at every session it accepts",
+  "goal": "proofs/recursion-knowledge-sound",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "run": "A",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Test/RegBudget.lean",
+    "origin": 7150,
+    "fix": "not the port: fails on main's toolchain too (structure-instance field column); fixed at #7150's head 13076c1ddc",
+    "lines": 0,
+    "how": "plain v4.34 repro",
+    "own": true
+   }
+  ]
+ },
+ {
+  "pr": 7144,
+  "title": "Recursive audit: binding term \u221a(min(W, 2n)\u00b7K) and \u03bb = 135.7 (supersedes #7139)",
+  "goal": "~sampled-audits-sound (#7159, stacked on it)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "A",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Composition.lean",
+    "origin": 6677,
+    "fix": "`import all Init.Data.String.Defs` (String.toUTF8 in msg_inj)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Nci/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all` of the Json modules Baseline.evaluate reduces through",
+    "lines": 2,
+    "how": "estimate",
+    "own": false
+   },
+   {
+    "file": "VStarRecursive/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all Lean.Data.Json.Basic` + Init.Data.Ord.String (getD of mkObj)",
+    "lines": 2,
+    "how": "core repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 7134,
+  "title": "Sampled proofs: every JSON read through Flock.JsonParse.parse, v2's headerOf included; test_flock_json scans sampled_proofs (on #6980 and #5105)",
+  "goal": "accounting/sampled-draw-from-log",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "A",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 7133,
+  "title": "Recursive audit: the knowledge-soundness term is min(\u03ba + t'\u00b7\u03b5, t'\u00b72^-135.7) at the deployment's tables, \u03ba \u2264 2^-167.7, \u03b5 \u2264 2^-166.95",
+  "goal": "proofs/zkp-system-done",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "A",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Composition.lean",
+    "origin": 6677,
+    "fix": "`import all Init.Data.String.Defs` (String.toUTF8 in msg_inj)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Nci/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all` of the Json modules Baseline.evaluate reduces through",
+    "lines": 2,
+    "how": "estimate",
+    "own": false
+   },
+   {
+    "file": "VStarRecursive/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all Lean.Data.Json.Basic` + Init.Data.Ord.String (getD of mkObj)",
+    "lines": 2,
+    "how": "core repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 7127,
+  "title": "RecursiveBitsKDeployed: recursiveBitsK_deployed at Hello-committed coins, witnessed at the deployment's sizes (SizesAt)",
+  "goal": "proofs/zkp-system-done",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 7123,
+  "title": "Flock (b\u2032): the session loop's ZK at SwCausalOn on Loop.SwOk, with its stop at an outer coin 1; #7064's recursive guarantees restated",
+  "goal": "proofs/zero-knowledge",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 4,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "run": "E",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Flock/Recursive/FirewallAny.lean",
+    "origin": 7064,
+    "fix": "`import all Lean.Data.Json.Basic` + Init.Data.Ord.String (roundSpec at Json.null)",
+    "lines": 2,
+    "how": "estimate",
+    "own": false
+   },
+   {
+    "file": "Flock/Recursive/FirewallJson.lean",
+    "origin": 7026,
+    "fix": "`import all Init.Data.Repr` (Nat.digitChar)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Flock/Recursive/FirewallWire.lean",
+    "origin": 7026,
+    "fix": "`import all Init.Data.String.Defs` (fromUTF8, toUTF8)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 7121,
+  "title": "Flock: RecursiveZKLoop and RecursiveZKLoopAnySum listed with honest and nontrivial lemmas, and AnySum at the deployed tables",
+  "goal": "proofs/zero-knowledge",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 4,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 7119,
+  "title": "Sampling claims at the one-class layout over the circuit file (carries #7019's Slots.layout over FilePart.ofCircuit)",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 7,
+  "hand": [
+   "ExecStrataOf.lean"
+  ],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [
+   "InputSlot.lean"
+  ],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "E",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 7118,
+  "title": "Sampled proofs: the composites' one-stage form is v2 (OneStageZk), v1 refused by name",
+  "goal": "accounting/sampled-draw-from-log",
+  "now": "next",
+  "side": "below",
+  "moved": false,
+  "n_conf": 6,
+  "hand": [
+   "ExecStrataOf.lean"
+  ],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "A",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Flock/Soundness/ExecStrataOf.lean",
+    "origin": 7098,
+    "fix": "keep the port's qsort_perm beside #7098's chain_covers (my first resolution took #7098's qsort_perm)",
+    "lines": 3,
+    "how": "E run passes",
+    "own": false
+   },
+   {
+    "file": "Properties/Composition.lean",
+    "origin": 6677,
+    "fix": "`import all Init.Data.String.Defs` (String.toUTF8 in msg_inj)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Nci/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all` of the Json modules Baseline.evaluate reduces through",
+    "lines": 2,
+    "how": "estimate",
+    "own": false
+   },
+   {
+    "file": "VStarRecursive/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all Lean.Data.Json.Basic` + Init.Data.Ord.String (getD of mkObj)",
+    "lines": 2,
+    "how": "core repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 7116,
+  "title": "rec-links port: pod 85's REC_LINKS path on #6996, wired own-row staging, and the re-recorded rec-links fixture",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "A",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 7107,
+  "title": "Verity.Sampled: the session's registration, draw file, digest and writer are the ones the period's registration fixes; SetsUp ties the descriptor and query; coinsRead reads the log as v2 does",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 6,
+  "hand": [
+   "ExecStrataOf.lean"
+  ],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "B",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Flock/Soundness/ExecStrataOf.lean",
+    "origin": 7098,
+    "fix": "keep the port's qsort_perm beside #7098's chain_covers (my first resolution took #7098's qsort_perm)",
+    "lines": 3,
+    "how": "E run passes",
+    "own": false
+   },
+   {
+    "file": "Properties/Nci/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all` of the Json modules Baseline.evaluate reduces through",
+    "lines": 2,
+    "how": "estimate",
+    "own": false
+   },
+   {
+    "file": "SampledProofs/Json.lean",
+    "origin": 7092,
+    "fix": "`import all Lean.Data.Json.Basic` + Init.Data.Ord.String (jsonStrIs of mkObj)",
+    "lines": 2,
+    "how": "core repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 7104,
+  "title": "Flock: the recursive verifier refuses more than 16 V* parts, the count its soundness bound covers; SizesAt reads the cap",
+  "goal": "proofs/zkp-system-done",
+  "now": "next",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "run": "A",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 7099,
+  "title": "Claims: Partitions leaves unread inputs out (Prog.Unread), as it leaves constants",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "next",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 7098,
+  "title": "Bridge: V5 under the registration's law on its layout's strata, \u03b4 the law's own miss, All as subset n",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "next",
+  "side": "below",
+  "moved": false,
+  "n_conf": 6,
+  "hand": [
+   "ExecStrataOf.lean"
+  ],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "A",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Soundness/ExecStrataOf.lean",
+    "origin": 7098,
+    "fix": "keep the port's qsort_perm beside #7098's chain_covers (my first resolution took #7098's qsort_perm)",
+    "lines": 3,
+    "how": "E run passes",
+    "own": true
+   }
+  ]
+ },
+ {
+  "pr": 7095,
+  "title": "Supersede Claims.Recursion.lam: state the recursion's error as \u03ba + t\u00b7\u03b5",
+  "goal": "proofs/zkp-system-done",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "B",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Composition.lean",
+    "origin": 6677,
+    "fix": "`import all Init.Data.String.Defs` (String.toUTF8 in msg_inj)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "VStarRecursive/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all Lean.Data.Json.Basic` + Init.Data.Ord.String (getD of mkObj)",
+    "lines": 2,
+    "how": "core repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 7093,
+  "title": "sampled_proofs tests: outputs reuse takes a Pearl+ tree's domain verbatim (Python, Lean difftest, flock-verify)",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 7088,
+  "title": "Bridge: FilePartTarget proved at unitLog \u2264 32, and RelDeployTarget at the code's partition",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 6,
+  "hand": [
+   "ExecStrataOf.lean"
+  ],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "A",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Soundness/ExecStrataOf.lean",
+    "origin": 7098,
+    "fix": "keep the port's qsort_perm beside #7098's chain_covers (my first resolution took #7098's qsort_perm)",
+    "lines": 3,
+    "how": "E run passes",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 7084,
+  "title": "Verity.Sampled: the sampled-proofs leg's statement at the session v2 sets up (stacked on #7059 and #6980)",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 6,
+  "hand": [
+   "ExecStrataOf.lean"
+  ],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "E",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Composition.lean",
+    "origin": 6677,
+    "fix": "`import all Init.Data.String.Defs` (String.toUTF8 in msg_inj)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Nci/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all` of the Json modules Baseline.evaluate reduces through",
+    "lines": 2,
+    "how": "estimate",
+    "own": false
+   },
+   {
+    "file": "Properties/Verity/Sampled/Deployed.lean",
+    "origin": 7137,
+    "fix": "`import all Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson` (open private of its lemmas)",
+    "lines": 1,
+    "how": "estimate",
+    "own": false
+   },
+   {
+    "file": "VStarRecursive/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all Lean.Data.Json.Basic` + Init.Data.Ord.String (getD of mkObj)",
+    "lines": 2,
+    "how": "core repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 7081,
+  "title": "Sampled proofs: the recursive audit holds rec_live's inner coin records to the challenger's release log (innerTreesReason), with its difftest",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "A",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Composition.lean",
+    "origin": 6677,
+    "fix": "`import all Init.Data.String.Defs` (String.toUTF8 in msg_inj)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Nci/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all` of the Json modules Baseline.evaluate reduces through",
+    "lines": 2,
+    "how": "estimate",
+    "own": false
+   },
+   {
+    "file": "VStarRecursive/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all Lean.Data.Json.Basic` + Init.Data.Ord.String (getD of mkObj)",
+    "lines": 2,
+    "how": "core repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 7064,
+  "title": "RecursiveZKLoopAnySum: RecursiveZKLoop at any worker that reads its answers, released at one of 1 + \u03a3_p (M_p + 1) stops (proved, unlisted)",
+  "goal": "proofs/zero-knowledge",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 4,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 7051,
+  "title": "Sampled proofs v2: refuse a public file whose units are not the registration's population in order",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 6,
+  "hand": [
+   "ExecStrataOf.lean"
+  ],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "A",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Soundness/ExecStrataOf.lean",
+    "origin": 7098,
+    "fix": "keep the port's qsort_perm beside #7098's chain_covers (my first resolution took #7098's qsort_perm)",
+    "lines": 3,
+    "how": "E run passes",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 7045,
+  "title": "T1 when each digest reads the salts before it: ideal_leaves_salted and recursiveZK_salted",
+  "goal": "proofs/zero-knowledge",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 4,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 7037,
+  "title": "Sampled proofs: refuse varying-count bernoulli and closure maps, which soundness doesn't cover (All stays accepted)",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "B",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Properties/Composition.lean",
+    "origin": 6677,
+    "fix": "`import all Init.Data.String.Defs` (String.toUTF8 in msg_inj)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 7030,
+  "title": "vstar recursive tests: fetch the kept recursion data on demand (VERITY_VSTAR_RECURSIVE_DATA=fetch)",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 7026,
+  "title": "Firewall: pins by canonical form, copies by position, Commit's tables in the schedule's order, the load check and the honest worker's encoders, proved over the new step (PRF-310)",
+  "goal": "proofs/zero-knowledge",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 1,
+  "hand": [],
+  "mech": [
+   "lean-audit.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 7010,
+  "title": "RecursiveZK released at a public stop; RecursiveZKLoop at the session loop (proved, unlisted) and outerViewZK_loop",
+  "goal": "proofs/zero-knowledge",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 4,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "run": "A",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 7003,
+  "title": "Bridge.sampledKSLiveV5Accepted: SampledKSLiveV5 with its file and population-order hypotheses read off acceptance",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "run": "C",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6998,
+  "title": "Registered values' domain binding on the SHA-512 identity frame (registered-domain/v1)",
+  "goal": "~sampled-audits-sound",
+  "now": "next",
+  "side": "below",
+  "moved": false,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "B",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6996,
+  "title": "Recursive session through both Lean ZK servers: pod 85 and recursion_e2e RELEASE=1, the inner held to the challenger's log, PRF-282 item 4's figures",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "E",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 6995,
+  "title": "Flock: SessionLoopZKDeployed takes, of the tables' side, only SwCausal (TablesSide discharges the rest)",
+  "goal": "proofs/zero-knowledge",
+  "now": "next",
+  "side": "below",
+  "moved": false,
+  "n_conf": 1,
+  "hand": [],
+  "mech": [
+   "lean-audit.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6980,
+  "title": "One-stage v2: the parameters name the public file, held to the registration before the session is verified; one session; provedHeld",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "next",
+  "side": "below",
+  "moved": false,
+  "n_conf": 4,
+  "hand": [],
+  "mech": [
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6976,
+  "title": "Properties: require core_firewall by path",
+  "goal": "proofs/zero-knowledge",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 3,
+  "hand": [],
+  "mech": [
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6961,
+  "title": "Flock.Firewall.Session: nothing reaches the auditor after a stop; each request leaves once, at its place (F5)",
+  "goal": "proofs/zk-leaks-closed",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 1,
+  "hand": [],
+  "mech": [
+   "lean-audit.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6955,
+  "title": "Inner phase in Lean: rec_live relays Lean's flock-firewall live as the inner send check; FirewallSends from the firewall's code; the live check is run's",
+  "goal": "proofs/zero-knowledge",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 1,
+  "hand": [],
+  "mech": [
+   "lean-audit.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6935,
+  "title": "Proofs' prose without lane text (TOP-153)",
+  "goal": "\u2014 (cleanup/no-lane-text)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "run": "C",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6934,
+  "title": "live_challenger: an open whose label isn't ASCII is refused in ASCII, so its close is written",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6929,
+  "title": "Flock: Pr[acc \u2227 \u00acR] \u2264 2^-140.4 + t\u00b72^-138.3 at the deployed reader, caps and call bounds from an accepted run (recursiveBitsK_tight)",
+  "goal": "proofs/recursion-knowledge-sound",
+  "now": "next",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "run": "A",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6923,
+  "title": "Frames.roundStep: an inner round the loop's finish has not computed stops the rep in the frame, where the loop refused it",
+  "goal": "proofs/zero-knowledge",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 1,
+  "hand": [],
+  "mech": [
+   "lean-audit.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "run": "C",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/SessionLoop/FinPiopRet.lean",
+    "origin": 6842,
+    "fix": "`import all Init.Data.Range.Basic` (decide +kernel over Zk.schedule)",
+    "lines": 1,
+    "how": "flock repro",
+    "own": false
+   },
+   {
+    "file": "Flock/SessionLoop/LiveInner.lean",
+    "origin": 6912,
+    "fix": "`import all Init.Data.String.Defs` (toByteArray = toUTF8 by rfl)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 6915,
+  "title": "Flock ZK: the workers' values read every table's seen randomness, level 0's salts included; the worker's view by phase",
+  "goal": "proofs/zk-leaks-closed",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 1,
+  "hand": [],
+  "mech": [
+   "lean-audit.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6912,
+  "title": "SessionLoop.LiveInnerAt: LiveInner at withInner, the frame's own inner rounds as the switched session's, round by round on the worker premises",
+  "goal": "proofs/zero-knowledge",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 1,
+  "hand": [],
+  "mech": [
+   "lean-audit.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "run": "C",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/SessionLoop/FinPiopRet.lean",
+    "origin": 6842,
+    "fix": "`import all Init.Data.Range.Basic` (decide +kernel over Zk.schedule)",
+    "lines": 1,
+    "how": "flock repro",
+    "own": false
+   },
+   {
+    "file": "Flock/SessionLoop/LiveInner.lean",
+    "origin": 6912,
+    "fix": "`import all Init.Data.String.Defs` (toByteArray = toUTF8 by rfl)",
+    "lines": 1,
+    "how": "core repro",
+    "own": true
+   }
+  ]
+ },
+ {
+  "pr": 6882,
+  "title": "Lean: a table's clear values read level 0's hiding (Table.Vis); pad-blind workers at any split, and SessionLoopZKDeployed at every worker",
+  "goal": "proofs/zk-leaks-closed",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6871,
+  "title": "Claims.ZK: the opening's rank stop is a coin refusal (rankStop in takeAt; rfOf reads the slot)",
+  "goal": "proofs/zero-knowledge",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6855,
+  "title": "SessionLoop.Fill: FillRoundEq at the honest worker from HonestRoundsPass (on the sticky coin stop)",
+  "goal": "proofs/zero-knowledge",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 1,
+  "hand": [],
+  "mech": [
+   "lean-audit.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6854,
+  "title": "Proofs.Flock.SessionLoop.TakenVals: the worker premises over vs, their non-vacuity, and LiveRoundEq's split",
+  "goal": "~zero-knowledge-any-worker",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6852,
+  "title": "Flock ZK server: the worker never receives the pads or Hello's answer; the loop draws the mask slot and salts for levels \u2265 1 after the algebraic phase",
+  "goal": "proofs/zk-leaks-closed",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 1,
+  "hand": [],
+  "mech": [
+   "lean-audit.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "run": "A",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6844,
+  "title": "Claims.ZK: the release's coin stop is sticky, as the session loop's (refusesCoins_of_take; rfOf reads stopOf)",
+  "goal": "~zero-knowledge",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 1,
+  "hand": [],
+  "mech": [
+   "lean-audit.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "run": "C",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/SessionLoop/FinPiopRet.lean",
+    "origin": 6842,
+    "fix": "`import all Init.Data.Range.Basic` (decide +kernel over Zk.schedule)",
+    "lines": 1,
+    "how": "flock repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 6842,
+  "title": "Flock: SessionLoopZKDeployed takes no FinishIs (Loop.finishIs, its 36 modules restored)",
+  "goal": "proofs/zero-knowledge",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6841,
+  "title": "Flock session loop: the frame releases the inner proof's rounds itself, and LoopInnerRound0 holds at withInner",
+  "goal": "proofs/zero-knowledge",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 4,
+  "hand": [
+   "Assumptions.lean*",
+   "Finish.lean*",
+   "Frames.lean*",
+   "Session.lean*"
+  ],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6837,
+  "title": "SwCausal holds at the deployed session's honest values (swCausal_honestVals_dataE)",
+  "goal": "proofs/zero-knowledge",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6836,
+  "title": "Prove the tables' side of SessionLoopZKDeployed at Masked.dataE: Tables, Complete, DummyReg, Causal, TapeOK",
+  "goal": "proofs/zero-knowledge",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6822,
+  "title": "C-Flock pods and benchmarks on the challenger's coin tree; two plain fixtures re-recorded on it (PRF-302)",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "A",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6803,
+  "title": "C-Flock: serve --tree-from: each --zk session's coin tree sampled and opened by the challenger (PRF-302)",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 4,
+  "hand": [],
+  "mech": [
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6801,
+  "title": "sampled proofs: R7 takes a window circuit's registered parameters; the audit record holds each read's root, domain and shape",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "E",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6789,
+  "title": "sampled_proofs: the verifier process loads each program once and every later call of a session names it",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6770,
+  "title": "sampled_proofs: Slots.popOk from the ranges (@[csimp] popOk_eq_popOkRanges), no input class built",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6768,
+  "title": "sampled_proofs: unitGates, inputGates and inputNodes off one gate table (@[csimp]), gate counts once per Definition and range",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6735,
+  "title": "Flock: route 2C's Pr[acc \u2227 \u00acR] \u2264 \u03ba + t\u00b7\u03b5, at most 2^-167.7 + t\u00b72^-174.95 at the deployment's sizes; \u03bb\u2082 \u2265 135.7 at the deployed caps",
+  "goal": "proofs/recursion-knowledge-sound",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6727,
+  "title": "RecursiveKSDeployed: RecursiveKS at Hello-committed coins, plus 2\u00b7k(x)\u00b7\u03b4\u2081 under Hm96Hiding",
+  "goal": "~recursion-knowledge-sound",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6716,
+  "title": "C-Flock: F32Fmaxf_v1 and F32Fminf_v1 commit their result, so a fold's nonzeros are linear in K",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6714,
+  "title": "Sampled proofs recursive/v1 as onsite's and remote's component, at one-stage v1; RecursiveAuditC3 restated over it at every composite (supersedes #6664, on #6699)",
+  "goal": "~recursion-knowledge-sound (PRF-282: zkp-system-done)",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "B",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Composition.lean",
+    "origin": 6677,
+    "fix": "`import all Init.Data.String.Defs` (String.toUTF8 in msg_inj)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Nci/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all` of the Json modules Baseline.evaluate reduces through",
+    "lines": 2,
+    "how": "estimate",
+    "own": false
+   },
+   {
+    "file": "VStarRecursive/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all Lean.Data.Json.Basic` + Init.Data.Ord.String (getD of mkObj)",
+    "lines": 2,
+    "how": "core repro",
+    "own": false
+   }
+  ]
+ },
+ {
+  "pr": 6681,
+  "title": "domains: the rec-v1 salt tags in both tables",
+  "goal": "~recursion-knowledge-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "run": "C",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6676,
+  "title": "Flock verifier: retire PROTOCOL.md; the README is the outline over the Lean verifier",
+  "goal": "proofs/zero-knowledge",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "E",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6667,
+  "title": "Recursion on the coin tree: inner statements on Coins.tree, the recursion proofs restated, the prover's tree mode and the pod path (PRF-302)",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 1,
+  "hand": [],
+  "mech": [
+   "lean-audit.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6655,
+  "title": "sampled proofs: the challenger samples each --zk session's coin tree and opens its rounds, and one-stage v2 holds every session's coins to its signed release log",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 4,
+  "hand": [],
+  "mech": [
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6632,
+  "title": "Recursion end to end: integration of the recursion stack",
+  "goal": "proofs/recursion-knowledge-sound",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 1,
+  "hand": [],
+  "mech": [
+   "TRUSTED.sha256"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6624,
+  "title": "Recursion: KSLin2 at the linked relation by a union bound, and RecursiveKSLinkAt from RecursiveKS and the links' binding, as Proofs lemmas (PRF-282 G6)",
+  "goal": "proofs/recursion-knowledge-sound",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6591,
+  "title": "Supplied values' salts: SHA-512 in counter mode, not SHAKE256",
+  "goal": "~zero-knowledge (PRF-281: zkp-system-done)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "run": "D",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6533,
+  "title": "one_stage: the Lean draws that read coins draw on a development challenger's (a0.challenger_draw); the verifier has none of its own",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "run": "D",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6532,
+  "title": "certifier period_draw: K windows only on the challenger's coins; the verifier has none of its own",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 4,
+  "hand": [],
+  "mech": [
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "run": "C",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6529,
+  "title": "flock-verify draw: no coins of its own; without the challenger's bytes only a draw of every unit",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "run": "D",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6513,
+  "title": "Advice: Registration becomes Committed, in Lean and its Python mirror (vocabulary guard KNOWN)",
+  "goal": "\u2014 (vocabulary)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6511,
+  "title": "requirement: Store.Placement becomes Store.Packing",
+  "goal": "\u2014 (vocabulary)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "run": "D",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6509,
+  "title": "Slots.SlotOrder and Flock.BlockLayout: Lean homonyms take the names of what they are (vocabulary guard)",
+  "goal": "\u2014 (vocabulary)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "run": "D",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6503,
+  "title": "Security/Proofs: delete 446 declarations nothing reaches, uses or names (0.20 MB)",
+  "goal": "\u2014 (tree cut)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 4,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6497,
+  "title": "Flock: Firewall.Contract.Verdict becomes ReleaseDecision, HmLinks.Node becomes NodeUnits (vocabulary guard)",
+  "goal": "\u2014 (vocabulary)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "run": "D",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6495,
+  "title": "verity.ml.circuits: units.Placement becomes UnitPosition (vocabulary guard KNOWN)",
+  "goal": "\u2014 (vocabulary)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6493,
+  "title": "verity_flock: firewall_transcript.Session becomes InnerRun (vocabulary guard KNOWN)",
+  "goal": "\u2014 (vocabulary)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6486,
+  "title": "verity.settings: Registry becomes EnvSettings (vocabulary guard KNOWN)",
+  "goal": "\u2014 (vocabulary)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6484,
+  "title": "verity.ml.windows: interface.Opening becomes TableOpening (vocabulary guard KNOWN)",
+  "goal": "\u2014 (vocabulary)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6479,
+  "title": "sampled proofs: service.Session becomes ProofRun (vocabulary KNOWN)",
+  "goal": "proofs/terminology-clean",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6478,
+  "title": "sampled proofs: remote.Session becomes ChallengePhase (vocabulary KNOWN)",
+  "goal": "\u2014 (vocabulary)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6477,
+  "title": "sampled proofs: optimize.Commitment becomes TensorCommit (vocabulary KNOWN)",
+  "goal": "\u2014 (vocabulary)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6476,
+  "title": "verity.ml.circuits: defs.Node, defs.Registry and stacking.Window take the names of what they are (vocabulary KNOWN)",
+  "goal": "\u2014 (vocabulary)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 2,
+  "hand": [
+   "pyproject.toml*"
+  ],
+  "mech": [
+   "TRUSTED.sha256"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6471,
+  "title": "Security/Proofs/Flock: ten proof-internal declarations take the names of what they are (vocabulary KNOWN)",
+  "goal": "\u2014 (vocabulary)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6460,
+  "title": "LeafGroupSound: a leaf's group of L lanes of n chunks and a combine, at (L n + 1) \u03b4",
+  "goal": "~sampled-audits-sound",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6426,
+  "title": "Security/Proofs: delete 174 unreached Lean files (1.56 MB)",
+  "goal": "\u2014 (tree cut)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 80,
+  "hand": [],
+  "mech": [],
+  "dels": [
+   "Defs.lean",
+   "MemoryShare.lean",
+   "Annotation.lean",
+   "Fp32.lean",
+   "HongKung.lean",
+   "Ampere.lean",
+   "Proofs.lean",
+   "UnionBound.lean",
+   "RoundSel.lean",
+   "Bridge.lean",
+   "ErrorTerms.lean",
+   "Complete.lean",
+   "Replay.lean",
+   "Walk.lean",
+   "GS.lean",
+   "KS.lean",
+   "Game.lean",
+   "PlainUntrim.lean",
+   "ZkAccepts.lean",
+   "ZkAcceptsAt.lean",
+   "ZkAcceptsRun.lean",
+   "Recursion.lean",
+   "DecRRecJ.lean",
+   "Finders.lean",
+   "FlockKSOnAcc.lean",
+   "RestVerdictDraw.lean",
+   "SeqCap.lean",
+   "SeqDeploy.lean",
+   "SeqDeployStop.lean",
+   "SeqKey.lean",
+   "SeqStop.lean",
+   "VStarPartsSparseDeploy.lean",
+   "RootFind.lean",
+   "Raise.lean",
+   "Reference.lean",
+   "Select.lean",
+   "ZK.lean",
+   "PadsRoot.lean",
+   "Round1Enc.lean",
+   "Round2.lean",
+   "Stop.lean",
+   "Joint.lean",
+   "Partitioning.lean",
+   "Binding.lean",
+   "CROnly.lean",
+   "Aliased.lean",
+   "Geometry.lean",
+   "Const.lean",
+   "Typed.lean",
+   "DecodeZL.lean",
+   "DecodeZLJ.lean",
+   "Exec.lean",
+   "FailClosed.lean",
+   "General.lean",
+   "Instances.lean",
+   "HdecCor.lean",
+   "HiddenDec.lean",
+   "Integrate.lean",
+   "PlainHJ.lean",
+   "PlainJ.lean",
+   "PlainReg.lean",
+   "PlaysCoin.lean",
+   "Tables.lean",
+   "Zero.lean",
+   "Flat.lean",
+   "Typed.lean",
+   "ZkBind.lean",
+   "AtM1.lean",
+   "ZkEveryCoin.lean",
+   "ZkExec.lean",
+   "ZkLink.lean",
+   "ZkView.lean",
+   "Registered.lean",
+   "TmplScope.lean",
+   "GK.lean",
+   "H100CiteProofs.lean",
+   "H100DenseProofs.lean",
+   "H100FragProofs.lean",
+   "Fp8Depth.lean",
+   "WinogradStrassen.lean"
+  ],
+  "stale": [],
+  "run": "D",
+  "try": "pass",
+  "fails": []
+ },
+ {
+  "pr": 6422,
+  "title": "sampling_plan: a statement's cap prices C-Flock's block by the composer's occupancy, not ANDs",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 2,
+  "hand": [
+   "pyproject.toml*"
+  ],
+  "mech": [
+   "TRUSTED.sha256"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6418,
+  "title": "NetworkCheck: Check.Link and Period.Layout take the names of what they are (vocabulary KNOWN)",
+  "goal": "\u2014 (vocabulary)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6404,
+  "title": "Partitioning: the granularity optimum with serving's commitment (ServedGranularityOptimum, ServedGranularityChoice: s* = \u221a(w\u03b2hC/(o\u039b)))",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6403,
+  "title": "Security: one game library \u2014 Core's game vocabulary in Definitions/Core, Flock's exports it",
+  "goal": "\u2014 (vocabulary)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6401,
+  "title": "PRF-161: HmLinks.check reads units from the root body's nodes, over the units the draw proves",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "run": "D",
+  "try": "empty patch (in the port already)",
+  "fails": []
+ },
+ {
+  "pr": 6378,
+  "title": "sampled_proofs optimize: two modes (proving only; proving plus w x serve-time commitment) and the served window rerun (PRF-298)",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 2,
+  "hand": [
+   "pyproject.toml*"
+  ],
+  "mech": [
+   "TRUSTED.sha256"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6298,
+  "title": "sampled proofs: Verdict and Window homonyms renamed (vocabulary KNOWN)",
+  "goal": "\u2014 (vocabulary)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 2,
+  "hand": [
+   "pyproject.toml*"
+  ],
+  "mech": [
+   "TRUSTED.sha256"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6280,
+  "title": "Flock verifier: refuse seed-coin statements and the 13 superseded statement versions",
+  "goal": "~sampled-audits-sound",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 6140,
+  "title": "deploy, sampled_proofs: the runtime runs the parties; verity run runs a table's pieces",
+  "goal": "\u2014 (cleanup)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6075,
+  "title": "proof service: delete the Sequential selection rule, which a Stream only refused",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 5,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "CoreProduct.lean(del)"
+  ],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6072,
+  "title": "sampled proofs: residue out of the challenger, remote and service prose",
+  "goal": "\u2014 (cleanup/no-lane-text)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 7,
+  "hand": [],
+  "mech": [
+   "lean-audit.json",
+   "TRUSTED.sha256",
+   "exfiltration_lean.json",
+   "randomness_lean.json"
+  ],
+  "dels": [],
+  "stale": [
+   "lean.py(del)",
+   "test_lean.py(del)",
+   "CoreProduct.lean(del)"
+  ],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 6068,
+  "title": "two demos: Flock.Desc.tmpl, and V5's knowledge soundness over templated statements",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 5978,
+  "title": "two demos: circuits and blocks: Flock.Annot evaluates two-axis members",
+  "goal": "~sampled-audits-sound",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 5969,
+  "title": "two demos: circuits and blocks: Flock.Annot reads table, group and label as query_ast writes them",
+  "goal": "~sampled-audits-sound",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 5953,
+  "title": "two demos: C-Flock verifier: links leave flock-verify; each proof block's statement verified alone",
+  "goal": "~sampled-audits-sound",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 5,
+  "hand": [
+   "HmRow.lean*",
+   "Setup.lean*",
+   "SetupEq.lean*",
+   "SimSetup.lean*",
+   "PROTOCOL.md*"
+  ],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 5924,
+  "title": "two demos: live scope check: templated registered statements",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": true,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 5864,
+  "title": "two demos: verification loop: Core.Draw is Core.SamplingDesign",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 5825,
+  "title": "two demos: C-Flock verifier: templated registered statements",
+  "goal": "proofs/sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 5796,
+  "title": "two demos: circuits and blocks: GateSelection is a query_ast GateSet",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 5774,
+  "title": "two demos: circuits and blocks: Flock.Annot, the description-level annotation check",
+  "goal": "~sampled-audits-sound",
+  "now": "main",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 5766,
+  "title": "C-Flock verifier refuses legacy statement versions; a3.py on --coins os (carries #5767; seed-coin refusal is #6280's)",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 1,
+  "hand": [],
+  "mech": [
+   "TRUSTED.sha256"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 5747,
+  "title": "two demos: circuits and blocks: refinement is each-nesting: validate_refinement's interval sweep goes",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 5746,
+  "title": "two demos: circuits and blocks: sampled proofs' plan.py goes: gate classes are the proof blocks' strata, rates the sampling design",
+  "goal": "accounting/pouw-lead-on-main",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 5674,
+  "title": "two demos: verification loop: one frame hash, tree builder and hm96 salt stream for merkle and windows.rows",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 5664,
+  "title": "two demos: verification loop: Core.Draw gains PoUW's work sampling design",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 5617,
+  "title": "test_lean_witness: the f1-gate's sessions proved again after F1; the PRF-208 skip removed",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 5534,
+  "title": "Security/Proofs/Flock: no outcome codenames, rulings, card ids, PR history or worker lanes in comments",
+  "goal": "\u2014 (cleanup/no-lane-text)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 5512,
+  "title": "Lock why-notes of difftest, evaluate, identity and composition: the layout rule as itself",
+  "goal": "\u2014 (cleanup/no-lane-text)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "no Lean",
+  "fails": []
+ },
+ {
+  "pr": 5489,
+  "title": "ZkColsSession: name its sessions by the declared zk-sessions fixture, not an art id",
+  "goal": "~zero-knowledge",
+  "now": "next",
+  "side": "below",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 5483,
+  "title": "verity-flock, V*, A3 note: prose without lane names, run ids or PR ids; RecursiveKS is proved (PRF-260 F1 follow-up)",
+  "goal": "\u2014 (cleanup/no-lane-text)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 5370,
+  "title": "two demos: Flock soundness, pinned outputs' bits are 0 at the hidden-output sites",
+  "goal": "~sampled-audits-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 5302,
+  "title": "PRF-210: IrDep, the deployed inner prover; HonestFixture at IrDep x without IrShaped, with its difftest",
+  "goal": "proofs/recursion-knowledge-sound",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 1,
+  "hand": [],
+  "mech": [
+   "TRUSTED.sha256"
+  ],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ },
+ {
+  "pr": 5280,
+  "title": "TC relation docs: the Lean relation is the definition of record",
+  "goal": "\u2014 (docs)",
+  "now": "open",
+  "side": "above",
+  "moved": false,
+  "n_conf": 0,
+  "hand": [],
+  "mech": [],
+  "dels": [],
+  "stale": [],
+  "try": "pending",
+  "fails": []
+ }
+]

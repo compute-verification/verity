@@ -1,0 +1,227 @@
+{
+ "7118": [
+  {
+   "file": "Security/Proofs/Flock/Claims/Complete/Json/RoundTrip.lean",
+   "line": 28,
+   "decl": "?",
+   "text": "open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic",
+   "who": "next",
+   "commit": "d37c3947ab",
+   "msg": "Unknown constant `_private.Init.Data.Array.QSort.Basic.0.Array.qsort.sort`"
+  },
+  {
+   "file": "Security/Proofs/Flock/Soundness/ExecStrataOf.lean",
+   "line": 129,
+   "decl": "theorem qsort_perm",
+   "text": "unfold Array.qsort",
+   "who": "main (in the port's base)",
+   "commit": "8d4166e240",
+   "msg": "Tactic `unfold` failed to unfold `Array.qsort` in"
+  },
+  {
+   "file": "Security/Proofs/Properties/Composition.lean",
+   "line": 645,
+   "decl": "theorem msg_inj",
+   "text": "exact String.toByteArray_inj.1 (ByteArray.ext (Array.ext' e2))",
+   "who": "own",
+   "commit": "83630ccc9b",
+   "msg": "Application type mismatch: The argument"
+  },
+  {
+   "file": "Security/Proofs/Properties/Nci/Protocol.lean",
+   "line": 37,
+   "decl": "theorem unparsed_refused",
+   "text": "decide +kernel",
+   "who": "own",
+   "commit": "83630ccc9b",
+   "msg": "Tactic `decide` failed for proposition"
+  },
+  {
+   "file": "verity/core/service/vstar/recursive/VStarRecursive/Protocol.lean",
+   "line": 534,
+   "decl": "theorem verdictJson_accepted",
+   "text": "cases programSha <;> rfl",
+   "who": "next",
+   "commit": "a21bd76981",
+   "msg": "Tactic `rfl` failed: The left-hand side"
+  }
+ ],
+ "7123": [
+  {
+   "file": "Security/Proofs/Flock/Claims/Complete/Json/RoundTrip.lean",
+   "line": 28,
+   "decl": "?",
+   "text": "open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic",
+   "who": "next",
+   "commit": "d37c3947ab",
+   "msg": "Unknown constant `_private.Init.Data.Array.QSort.Basic.0.Array.qsort.sort`"
+  },
+  {
+   "file": "Security/Proofs/Flock/Recursive/FirewallAny.lean",
+   "line": 106,
+   "decl": "theorem roundT_null",
+   "text": "rfl",
+   "who": "next",
+   "commit": "b5e93960a3",
+   "msg": "Tactic `rfl` failed: The left-hand side"
+  },
+  {
+   "file": "Security/Proofs/Flock/Recursive/FirewallJson.lean",
+   "line": 75,
+   "decl": "theorem digitChar_digit",
+   "text": "decide",
+   "who": "next",
+   "commit": "968903331c",
+   "msg": "Tactic `decide` failed for proposition"
+  },
+  {
+   "file": "Security/Proofs/Flock/Recursive/FirewallWire.lean",
+   "line": 131,
+   "decl": "theorem fromUTF8?_toUTF8",
+   "text": "rfl",
+   "who": "next",
+   "commit": "8e46747098",
+   "msg": "Tactic `rfl` failed: The left-hand side"
+  }
+ ],
+ "7150": [
+  {
+   "file": "verity/core/service/flock/Flock/Test/RegBudget.lean",
+   "line": 72,
+   "decl": "def innerSt",
+   "text": "{ (default : Stmt) with n := n, pub := { (default : Public) with n := n,",
+   "who": "own",
+   "commit": "9dc6bcf5b3",
+   "msg": "unexpected identifier; expected '}'"
+  }
+ ],
+ "7107": [
+  {
+   "file": "Security/Proofs/Flock/Claims/Complete/Json/RoundTrip.lean",
+   "line": 28,
+   "decl": "?",
+   "text": "open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic",
+   "who": "next",
+   "commit": "d37c3947ab",
+   "msg": "Unknown constant `_private.Init.Data.Array.QSort.Basic.0.Array.qsort.sort`"
+  },
+  {
+   "file": "Security/Proofs/Flock/Soundness/ExecStrataOf.lean",
+   "line": 129,
+   "decl": "theorem qsort_perm",
+   "text": "unfold Array.qsort",
+   "who": "main (in the port's base)",
+   "commit": "8d4166e240",
+   "msg": "Tactic `unfold` failed to unfold `Array.qsort` in"
+  },
+  {
+   "file": "Security/Proofs/Properties/Nci/Protocol.lean",
+   "line": 37,
+   "decl": "theorem unparsed_refused",
+   "text": "decide +kernel",
+   "who": "own",
+   "commit": "83630ccc9b",
+   "msg": "Tactic `decide` failed for proposition"
+  },
+  {
+   "file": "verity/core/service/sampled_proofs/SampledProofs/Json.lean",
+   "line": 61,
+   "decl": "example :",
+   "text": "example : jsonStrIs (getD (Json.mkObj [(\"label\", .str \"draw\")]) \"label\") \"draw\" = true := by decide",
+   "who": "next",
+   "commit": "5722b5c32d",
+   "msg": "Tactic `decide` failed for proposition"
+  }
+ ],
+ "6923": [
+  {
+   "file": "Security/Proofs/Flock/SessionLoop/FinPiopRet.lean",
+   "line": 38,
+   "decl": "theorem JsonRT.zkSchedule_cap0_lt",
+   "text": "decide +kernel",
+   "who": "next",
+   "commit": "6f8de3ac1c",
+   "msg": "Tactic `decide` failed for proposition"
+  },
+  {
+   "file": "Security/Proofs/Flock/SessionLoop/LiveInner.lean",
+   "line": 415,
+   "decl": "theorem label_inner_out",
+   "text": "rfl",
+   "who": "own",
+   "commit": "83d3495dc3",
+   "msg": "Tactic `rfl` failed: The left-hand side"
+  }
+ ],
+ "6844": [
+  {
+   "file": "Security/Proofs/Flock/SessionLoop/FinPiopRet.lean",
+   "line": 38,
+   "decl": "theorem JsonRT.zkSchedule_cap0_lt",
+   "text": "decide +kernel",
+   "who": "own",
+   "commit": "6f8de3ac1c",
+   "msg": "Tactic `decide` failed for proposition"
+  }
+ ],
+ "7037": [
+  {
+   "file": "Security/Proofs/Properties/Composition.lean",
+   "line": 612,
+   "decl": "theorem msg_inj",
+   "text": "exact String.toByteArray_inj.1 (ByteArray.ext (Array.ext' e2))",
+   "who": "next",
+   "commit": "83630ccc9b",
+   "msg": "Application type mismatch: The argument"
+  }
+ ],
+ "7081": [
+  {
+   "file": "Security/Proofs/Flock/Claims/Complete/Json/RoundTrip.lean",
+   "line": 28,
+   "decl": "?",
+   "text": "open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic",
+   "who": "next",
+   "commit": "d37c3947ab",
+   "msg": "Unknown constant `_private.Init.Data.Array.QSort.Basic.0.Array.qsort.sort`"
+  },
+  {
+   "file": "Security/Proofs/Properties/Composition.lean",
+   "line": 645,
+   "decl": "theorem msg_inj",
+   "text": "exact String.toByteArray_inj.1 (ByteArray.ext (Array.ext' e2))",
+   "who": "own",
+   "commit": "83630ccc9b",
+   "msg": "Application type mismatch: The argument"
+  },
+  {
+   "file": "Security/Proofs/Properties/Nci/Protocol.lean",
+   "line": 37,
+   "decl": "theorem unparsed_refused",
+   "text": "decide +kernel",
+   "who": "own",
+   "commit": "83630ccc9b",
+   "msg": "Tactic `decide` failed for proposition"
+  },
+  {
+   "file": "verity/core/service/vstar/recursive/VStarRecursive/Protocol.lean",
+   "line": 541,
+   "decl": "theorem verdictJson_accepted",
+   "text": "cases programSha <;> rfl",
+   "who": "next",
+   "commit": "a21bd76981",
+   "msg": "Tactic `rfl` failed: The left-hand side"
+  }
+ ],
+ "6996": [
+  {
+   "file": "Security/Proofs/Flock/Claims/Complete/Json/RoundTrip.lean",
+   "line": 28,
+   "decl": "?",
+   "text": "open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic",
+   "who": "next",
+   "commit": "d37c3947ab",
+   "msg": "Unknown constant `_private.Init.Data.Array.QSort.Basic.0.Array.qsort.sort`"
+  }
+ ]
+}

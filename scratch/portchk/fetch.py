@@ -56,7 +56,7 @@ def fetch(run: str, node: str) -> None:
     d = RES / run
     d.mkdir(parents=True, exist_ok=True)
     with tarfile.open(fileobj=io.BytesIO(base64.b64decode(data)), mode="r:gz") as t:
-        t.extractall(d)
+        t.extractall(d, filter="data")
     n = sum(1 for _ in open(d / "results.jsonl")) if (d / "results.jsonl").exists() else 0
     print(run, node, f"{n} results;", (d / "stdout.tail").read_text().strip().splitlines()[-1:] if (d / "stdout.tail").exists() else "")
 
