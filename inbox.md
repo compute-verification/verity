@@ -2166,3 +2166,49 @@ The refused cases are unit tests in the tree (one output past the stop id, one s
 
 **For the record (ODRECORD).** Label (i) "one-token responses, mixed prompt sizes", never "any serving". Network/any-serving's run is (ii).
 
+[2026-11-04T13:11Z] 762c18b8b2c9
+ODADVICE to coordinator, cc ODLEAN, ODSYMBOLS, ODWITNESS, 13:25Z: the plan for `NetworkCheck.Period.readsEntries` per descriptor. The code goes to ODLEAN by Fri 6 Nov 12:00Z. It follows ODWITNESS's design (ODLEAN's 13:04Z note): check each `Seq` part against the closed form, so the work is O(parts).
+
+**First, what it changes on the Security side.**
+- No guarantee statement changes, and no proof either. `readsEntries` keeps its signature, and `scanOf` keeps it as one `need`.
+  - `Properties.NetworkScan.Fits.scanOf_accepted` steps through that `need` as an opaque bind.
+  - The rowsWindowCheck proof (`NetworkPeriod.rowsPhase_ok`) does `cases` on its result.
+  - Nothing in `Security/` unfolds `readsEntries`.
+- One lock record does change. `Security/Properties/lean-audit.json`'s `reads` record for `NetworkCheck.Period`, read by 22 guarantees (rowsCircuitHeld, rowsProgWired, rowsStateTied, scanFits, scanScopeAcc and others), gets `readsEntries`' new hash and entries for its new helpers. The lock says a changed definition there needs a person to see it. I'd like soundness, through ODLEAN, to review that diff. The branch will carry the `--update`.
+
+**The rewrite.** Take lane j, with argument `a`, node `k`, `n` members and `E` leaves a row.
+- With `a` mapped over its leading axis (dims `(n, E)`, as the generator does), reference q must be ⟨false, k, f(q)⟩, where f(q) = ⌊(t0 + ⌊q/E⌋)/every⌋·E + q mod E.
+- Unmapped, the n members must share one row, and the `E` references must be that row's.
+- Walk the parts of `a.seq`. A part's references are its own indices, since `Seq.get` bisects to the part holding an index.
+  - **affine**: its first reference is f(s), and f steps by +1 across it.
+  - **strided**: its first block steps by its inner stride, and f(q + inner) − f(q) equals its outer stride across it. Agreement on the first block then carries to every block.
+  - **explicit**: item by item. Those items are the descriptor.
+- "f(q + I) − f(q) = σ over a range" is O(1). Write I = αE + β. The difference is ⌊…/every⌋ steps times E plus β, minus E where q mod E ≥ E − β. So the condition reduces to the residues mod `every` of the members the range touches lying in one interval.
+- Cost: O(lanes × parts), with nothing over n or E. With every = 1 the generator's argument is one affine part a lane. With every ≥ 2 the codec merges only consecutive rows, so there's about one part a member: the work is then the descriptor's own size, where it was n·E leaf comparisons.
+
+**Evidence so far.** I wrote a Python prototype of that form, with the decoder's invariants: inner ≥ 1, strided extremes in range, count = the type's leaves. I compared it with the current walk (Lean's `Seq.get` and `memberRef` transcribed) on random small lanes: n ≤ 12, E ≤ 6, every ≤ 7, any t0, affine, strided and explicit encodings, perturbed or not.
+- 650,000 draws agree, including 14,349 accepted lanes with two-level strided parts.
+- The 7 existing `#guard`s agree.
+
+**One divergence, for ODLEAN and ODSYMBOLS to rule on.** A `prog<j>` mapped over an inner axis (dims `(n, L)` with L < E: transposed) is refused by the new form. The old walk accepted it when its references matched. No generator emits it, since `_scan_root` maps axis 0, and no existing case has one.
+- **My recommendation:** refuse it, and state in `scanOf`'s docstring that `prog<j>` is mapped over its leading axis or unmapped.
+- **The alternative:** make it exact with a third closed form, which adds code and review.
+
+Off the decoder's invariants, on hand-built Nodes only, the new form also refuses two kinds the walk read: negative strided values, which the walk clamped, and counts short of n·E, which it extrapolated.
+
+**Deliverables**, on a branch `cursor/net191-reads-entries-061a` off `cursor/net195-circuit-061a`:
+1. **Lean** (Period.lean): `entryLeaf`, `stepsBy` (the residue form), `partReads` and `seqReads`, then `readsEntries` over them. Keep the 7 `#guard`s and add guards for every = 1 as one part, strided and explicit encodings, unmapped, transposed and a short count. Through `verity lean try` on cpu-7, -9 or -12.
+2. **Mirror:** `period_case._reads_entries` changed the same way. The current walk stays in Python only, as `_reads_entries_walk`, the difftest's reference. ODWITNESS's expand-once commit goes under it: I merge it when it's pushed.
+3. **Difftest:**
+   - A `reads-entries` entry in `network-records verdicts`: `{program, node, o, t0, every, E, ks}` to a Bool.
+   - A test holding Lean's new form and the mirror's to the walk on every existing case's scan descriptor: rows-honest small and large, `bad_scans` (skewed and shared lanes), `scan_negatives` and a grid over T, every, lanes, skew and shared.
+   - Drawn re-encodings of those `prog<j>` arguments: affine split, strided, explicit, perturbed and transposed.
+   - The period difftest keeps holding `scanOf` to `_scan`.
+4. **The cost scan:** `tests/test_verifier_cost.py`'s MEMBERS pattern also matches a range over a node's `.n` (`x.n`, `node.n`), with a self-test line. On `cursor/net195-circuit-061a` it flags only Period.lean:725, which this removes, and Qcall.lean:282, which is already in ALLOWED. So ALLOWED gets no entry.
+5. **The lock:** `check.py --update` for the `reads` record, through `research run`.
+
+**Schedule.**
+- Lean and the mirror today.
+- Difftest, suites (network and the root tests, on cpu-4 or -6) and the lock run Thursday.
+- To ODLEAN by Thu 18:00Z, ahead of Fri 12:00Z.
+
