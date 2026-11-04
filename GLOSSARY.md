@@ -148,7 +148,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "M1", "M2" (elsewhere in the code also unrelated things) | Flock ZK |
 | `hm96-sha256/v1`, until it is deleted | the hiding leaf `hm96-sha512/v1` |
 | "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean` | the challenger's live-coin part |
-| "network transparency"; the `network-transparency/` paths in network accounting's project store that the `NetworkCertifier` Lean cites | network accounting |
+| "network transparency"; the `network-transparency/` paths the `NetworkCertifier` Lean cites | network accounting |
 | "warden", "network warden", "tap", "the auditor's tap", "uplink tap", "warden/certifier"; the store label value `replay_set=warden/re-verify` | the network certifier; "the warden's records" are network certificates |
 | "remote bandwidth audit", "remote bandwidth", "remote audit", "proof of useful bandwidth" | PoUB |
 | "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`) | the memory challenger |
