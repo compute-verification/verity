@@ -3,8 +3,8 @@
   "pr": 7166,
   "title": "Sampled audit: the link finders output only what they're charged (outOf's second opening; the link at t' + v per run); no stated bound moves",
   "goal": "proofs/finders-charged",
-  "now": "open",
-  "side": "above",
+  "now": "next",
+  "side": "below",
   "moved": true,
   "n_conf": 3,
   "hand": [],
@@ -26,7 +26,7 @@
   "goal": "proofs/sampled-audits-sound",
   "now": "open",
   "side": "above",
-  "moved": false,
+  "moved": true,
   "n_conf": 7,
   "hand": [
    "ExecStrataOf.lean"
@@ -163,9 +163,9 @@
   "pr": 7158,
   "title": "Recursion: Fdev's link output reads only what linkCost charges (gated on the first draw); the KS bound is unchanged",
   "goal": "proofs/finders-charged",
-  "now": "open",
-  "side": "above",
-  "moved": false,
+  "now": "next",
+  "side": "below",
+  "moved": true,
   "n_conf": 0,
   "hand": [],
   "mech": [],
@@ -208,8 +208,8 @@
   "pr": 7150,
   "title": "Recursive verifier: caps at the deployed sizes, so Pr[acc and not R] <= 2^-167.7 + t*2^-174.95 at every session it accepts",
   "goal": "proofs/recursion-knowledge-sound",
-  "now": "open",
-  "side": "above",
+  "now": "next",
+  "side": "below",
   "moved": true,
   "n_conf": 0,
   "hand": [],
@@ -233,8 +233,8 @@
   "pr": 7144,
   "title": "Recursive audit: binding term \u221a(min(W, 2n)\u00b7K) and \u03bb = 135.7 (supersedes #7139)",
   "goal": "~sampled-audits-sound (#7159, stacked on it)",
-  "now": "open",
-  "side": "above",
+  "now": "next",
+  "side": "below",
   "moved": false,
   "n_conf": 5,
   "hand": [],
@@ -291,7 +291,7 @@
   "goal": "accounting/sampled-draw-from-log",
   "now": "open",
   "side": "above",
-  "moved": false,
+  "moved": true,
   "n_conf": 5,
   "hand": [],
   "mech": [
@@ -312,8 +312,8 @@
   "pr": 7133,
   "title": "Recursive audit: the knowledge-soundness term is min(\u03ba + t'\u00b7\u03b5, t'\u00b72^-135.7) at the deployment's tables, \u03ba \u2264 2^-167.7, \u03b5 \u2264 2^-166.95",
   "goal": "proofs/zkp-system-done",
-  "now": "open",
-  "side": "above",
+  "now": "next",
+  "side": "below",
   "moved": false,
   "n_conf": 5,
   "hand": [],
@@ -376,8 +376,18 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
-  "fails": []
+  "run": "R",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Recursive/KSLinked.lean",
+    "origin": 7127,
+    "fix": "not the port: #7127 moves `nS x \u2264 16` into the PartIn premise, and main's KSLinked (added after #7127 forked) reads the old shape; update its two uses",
+    "lines": 6,
+    "how": "read",
+    "own": true
+   }
+  ]
  },
  {
   "pr": 7123,
@@ -450,8 +460,42 @@
   ],
   "dels": [],
   "stale": [],
-  "try": "pending",
-  "fails": []
+  "run": "R",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Flock/Recursive/FirewallAny.lean",
+    "origin": 7064,
+    "fix": "`import all Lean.Data.Json.Basic` + Init.Data.Ord.String (roundSpec at Json.null)",
+    "lines": 2,
+    "how": "estimate",
+    "own": false
+   },
+   {
+    "file": "Flock/Recursive/FirewallJson.lean",
+    "origin": 7026,
+    "fix": "`import all Init.Data.Repr` (Nat.digitChar)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Flock/Recursive/FirewallWire.lean",
+    "origin": 7026,
+    "fix": "`import all Init.Data.String.Defs` (fromUTF8, toUTF8)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   }
+  ]
  },
  {
   "pr": 7119,
@@ -459,7 +503,7 @@
   "goal": "proofs/sampled-audits-sound",
   "now": "open",
   "side": "above",
-  "moved": false,
+  "moved": true,
   "n_conf": 7,
   "hand": [
    "ExecStrataOf.lean"
@@ -640,7 +684,7 @@
   "pr": 7104,
   "title": "Flock: the recursive verifier refuses more than 16 V* parts, the count its soundness bound covers; SizesAt reads the cap",
   "goal": "proofs/zkp-system-done",
-  "now": "next",
+  "now": "main",
   "side": "below",
   "moved": false,
   "n_conf": 0,
@@ -656,7 +700,7 @@
   "pr": 7099,
   "title": "Claims: Partitions leaves unread inputs out (Prog.Unread), as it leaves constants",
   "goal": "proofs/sampled-audits-sound",
-  "now": "next",
+  "now": "main",
   "side": "below",
   "moved": false,
   "n_conf": 0,
@@ -664,14 +708,15 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
   "pr": 7098,
   "title": "Bridge: V5 under the registration's law on its layout's strata, \u03b4 the law's own miss, All as subset n",
   "goal": "proofs/sampled-audits-sound",
-  "now": "next",
+  "now": "main",
   "side": "below",
   "moved": false,
   "n_conf": 6,
@@ -707,7 +752,7 @@
   "goal": "proofs/zkp-system-done",
   "now": "open",
   "side": "above",
-  "moved": false,
+  "moved": true,
   "n_conf": 5,
   "hand": [],
   "mech": [
@@ -753,8 +798,8 @@
   "pr": 7093,
   "title": "sampled_proofs tests: outputs reuse takes a Pearl+ tree's domain verbatim (Python, Lean difftest, flock-verify)",
   "goal": "~sampled-audits-sound",
-  "now": "open",
-  "side": "above",
+  "now": "next",
+  "side": "below",
   "moved": true,
   "n_conf": 0,
   "hand": [],
@@ -802,8 +847,8 @@
   "pr": 7084,
   "title": "Verity.Sampled: the sampled-proofs leg's statement at the session v2 sets up (stacked on #7059 and #6980)",
   "goal": "proofs/sampled-audits-sound",
-  "now": "open",
-  "side": "above",
+  "now": "next",
+  "side": "below",
   "moved": false,
   "n_conf": 6,
   "hand": [
@@ -937,15 +982,49 @@
   ],
   "dels": [],
   "stale": [],
-  "try": "pending",
-  "fails": []
+  "run": "R",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Flock/Recursive/FirewallAny.lean",
+    "origin": 7064,
+    "fix": "`import all Lean.Data.Json.Basic` + Init.Data.Ord.String (roundSpec at Json.null)",
+    "lines": 2,
+    "how": "estimate",
+    "own": true
+   },
+   {
+    "file": "Flock/Recursive/FirewallJson.lean",
+    "origin": 7026,
+    "fix": "`import all Init.Data.Repr` (Nat.digitChar)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Flock/Recursive/FirewallWire.lean",
+    "origin": 7026,
+    "fix": "`import all Init.Data.String.Defs` (fromUTF8, toUTF8)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   }
+  ]
  },
  {
   "pr": 7051,
   "title": "Sampled proofs v2: refuse a public file whose units are not the registration's population in order",
   "goal": "proofs/sampled-audits-sound",
-  "now": "open",
-  "side": "above",
+  "now": "next",
+  "side": "below",
   "moved": true,
   "n_conf": 6,
   "hand": [
@@ -991,7 +1070,8 @@
   ],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -1045,8 +1125,26 @@
   "stale": [
    "CoreProduct.lean(del)"
   ],
-  "try": "pending",
-  "fails": []
+  "run": "R",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Properties/Composition.lean",
+    "origin": 6677,
+    "fix": "`import all Init.Data.String.Defs` (String.toUTF8 in msg_inj)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Properties/Nci/Protocol.lean",
+    "origin": 6677,
+    "fix": "`import all` of the Json modules Baseline.evaluate reduces through",
+    "lines": 2,
+    "how": "estimate",
+    "own": false
+   }
+  ]
  },
  {
   "pr": 7026,
@@ -1062,8 +1160,34 @@
   ],
   "dels": [],
   "stale": [],
-  "try": "pending",
-  "fails": []
+  "run": "R",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   },
+   {
+    "file": "Flock/Recursive/FirewallJson.lean",
+    "origin": 7026,
+    "fix": "`import all Init.Data.Repr` (Nat.digitChar)",
+    "lines": 1,
+    "how": "core repro",
+    "own": true
+   },
+   {
+    "file": "Flock/Recursive/FirewallWire.lean",
+    "origin": 7026,
+    "fix": "`import all Init.Data.String.Defs` (fromUTF8, toUTF8)",
+    "lines": 1,
+    "how": "core repro",
+    "own": true
+   }
+  ]
  },
  {
   "pr": 7010,
@@ -1090,8 +1214,8 @@
   "pr": 7003,
   "title": "Bridge.sampledKSLiveV5Accepted: SampledKSLiveV5 with its file and population-order hypotheses read off acceptance",
   "goal": "proofs/sampled-audits-sound",
-  "now": "open",
-  "side": "above",
+  "now": "main",
+  "side": "below",
   "moved": false,
   "n_conf": 0,
   "hand": [],
@@ -1171,8 +1295,18 @@
   ],
   "dels": [],
   "stale": [],
-  "try": "pending",
-  "fails": []
+  "run": "R",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/SessionLoop/FinPiopRet.lean",
+    "origin": 6842,
+    "fix": "`import all Init.Data.Range.Basic` (decide +kernel over Zk.schedule)",
+    "lines": 1,
+    "how": "flock repro",
+    "own": false
+   }
+  ]
  },
  {
   "pr": 6980,
@@ -1192,7 +1326,8 @@
   "stale": [
    "CoreProduct.lean(del)"
   ],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -1228,7 +1363,8 @@
   ],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -1245,8 +1381,18 @@
   ],
   "dels": [],
   "stale": [],
-  "try": "pending",
-  "fails": []
+  "run": "R",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   }
+  ]
  },
  {
   "pr": 6935,
@@ -1254,7 +1400,7 @@
   "goal": "\u2014 (cleanup/no-lane-text)",
   "now": "open",
   "side": "above",
-  "moved": false,
+  "moved": true,
   "n_conf": 0,
   "hand": [],
   "mech": [],
@@ -1283,7 +1429,7 @@
   "pr": 6929,
   "title": "Flock: Pr[acc \u2227 \u00acR] \u2264 2^-140.4 + t\u00b72^-138.3 at the deployed reader, caps and call bounds from an accepted run (recursiveBitsK_tight)",
   "goal": "proofs/recursion-knowledge-sound",
-  "now": "next",
+  "now": "main",
   "side": "below",
   "moved": false,
   "n_conf": 0,
@@ -1344,8 +1490,18 @@
   ],
   "dels": [],
   "stale": [],
-  "try": "pending",
-  "fails": []
+  "run": "R",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/SessionLoop/FinPiopRet.lean",
+    "origin": 6842,
+    "fix": "`import all Init.Data.Range.Basic` (decide +kernel over Zk.schedule)",
+    "lines": 1,
+    "how": "flock repro",
+    "own": false
+   }
+  ]
  },
  {
   "pr": 6912,
@@ -1394,8 +1550,18 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
-  "fails": []
+  "run": "R",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/SessionLoop/FinPiopRet.lean",
+    "origin": 6842,
+    "fix": "`import all Init.Data.Range.Basic` (decide +kernel over Zk.schedule)",
+    "lines": 1,
+    "how": "flock repro",
+    "own": false
+   }
+  ]
  },
  {
   "pr": 6871,
@@ -1426,8 +1592,18 @@
   ],
   "dels": [],
   "stale": [],
-  "try": "pending",
-  "fails": []
+  "run": "R",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/SessionLoop/FinPiopRet.lean",
+    "origin": 6842,
+    "fix": "`import all Init.Data.Range.Basic` (decide +kernel over Zk.schedule)",
+    "lines": 1,
+    "how": "flock repro",
+    "own": false
+   }
+  ]
  },
  {
   "pr": 6854,
@@ -1558,7 +1734,7 @@
   "pr": 6822,
   "title": "C-Flock pods and benchmarks on the challenger's coin tree; two plain fixtures re-recorded on it (PRF-302)",
   "goal": "proofs/sampled-audits-sound",
-  "now": "open",
+  "now": "closed",
   "side": "above",
   "moved": false,
   "n_conf": 5,
@@ -1633,7 +1809,8 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -1648,7 +1825,8 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -1663,7 +1841,8 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -1693,7 +1872,8 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -1787,8 +1967,8 @@
   "pr": 6676,
   "title": "Flock verifier: retire PROTOCOL.md; the README is the outline over the Lean verifier",
   "goal": "proofs/zero-knowledge",
-  "now": "open",
-  "side": "above",
+  "now": "next",
+  "side": "below",
   "moved": true,
   "n_conf": 5,
   "hand": [],
@@ -1820,7 +2000,8 @@
   ],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -1841,7 +2022,8 @@
   "stale": [
    "CoreProduct.lean(del)"
   ],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -2010,8 +2192,18 @@
   ],
   "dels": [],
   "stale": [],
-  "try": "pending",
-  "fails": []
+  "run": "R",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Flock/Claims/Complete/Json/RoundTrip.lean",
+    "origin": 5105,
+    "fix": "`import all` Init.Data.Array.QSort.Basic, Init.Data.Repr, Init.Data.Int.Repr, Lean.Data.Json.Basic",
+    "lines": 4,
+    "how": "core repro",
+    "own": false
+   }
+  ]
  },
  {
   "pr": 6497,
@@ -2172,7 +2364,8 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -2318,7 +2511,8 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -2333,29 +2527,31 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
   "pr": 6403,
   "title": "Security: one game library \u2014 Core's game vocabulary in Definitions/Core, Flock's exports it",
   "goal": "\u2014 (vocabulary)",
-  "now": "open",
-  "side": "above",
+  "now": "next",
+  "side": "below",
   "moved": false,
   "n_conf": 0,
   "hand": [],
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
   "pr": 6401,
   "title": "PRF-161: HmLinks.check reads units from the root body's nodes, over the units the draw proves",
   "goal": "~sampled-audits-sound",
-  "now": "open",
+  "now": "closed",
   "side": "above",
   "moved": false,
   "n_conf": 0,
@@ -2493,8 +2689,18 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
-  "fails": []
+  "run": "R",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Soundness/Discharge/ZkReg/SoundHJSt.lean",
+    "origin": 5825,
+    "fix": "`import all Init.Data.Array.Basic` (Array.idxOf)",
+    "lines": 1,
+    "how": "core repro",
+    "own": false
+   }
+  ]
  },
  {
   "pr": 5978,
@@ -2565,32 +2771,43 @@
  {
   "pr": 5864,
   "title": "two demos: verification loop: Core.Draw is Core.SamplingDesign",
-  "goal": "~sampled-audits-sound",
+  "goal": "proofs/sampled-audits-sound",
   "now": "open",
   "side": "above",
-  "moved": false,
+  "moved": true,
   "n_conf": 0,
   "hand": [],
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
   "pr": 5825,
   "title": "two demos: C-Flock verifier: templated registered statements",
   "goal": "proofs/sampled-audits-sound",
-  "now": "open",
-  "side": "above",
+  "now": "next",
+  "side": "below",
   "moved": false,
   "n_conf": 0,
   "hand": [],
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
-  "fails": []
+  "run": "R",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Soundness/Discharge/ZkReg/SoundHJSt.lean",
+    "origin": 5825,
+    "fix": "`import all Init.Data.Array.Basic` (Array.idxOf)",
+    "lines": 1,
+    "how": "core repro",
+    "own": true
+   }
+  ]
  },
  {
   "pr": 5796,
@@ -2636,7 +2853,8 @@
   ],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -2666,7 +2884,8 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -2681,22 +2900,24 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
   "pr": 5664,
   "title": "two demos: verification loop: Core.Draw gains PoUW's work sampling design",
-  "goal": "~sampled-audits-sound",
+  "goal": "proofs/sampled-audits-sound",
   "now": "open",
   "side": "above",
-  "moved": false,
+  "moved": true,
   "n_conf": 0,
   "hand": [],
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -2718,15 +2939,16 @@
   "pr": 5534,
   "title": "Security/Proofs/Flock: no outcome codenames, rulings, card ids, PR history or worker lanes in comments",
   "goal": "\u2014 (cleanup/no-lane-text)",
-  "now": "open",
-  "side": "above",
+  "now": "next",
+  "side": "below",
   "moved": false,
   "n_conf": 0,
   "hand": [],
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -2756,7 +2978,8 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -2771,7 +2994,8 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -2786,7 +3010,8 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  },
  {
@@ -2803,8 +3028,18 @@
   ],
   "dels": [],
   "stale": [],
-  "try": "pending",
-  "fails": []
+  "run": "R",
+  "try": "fail",
+  "fails": [
+   {
+    "file": "Claims/Recursion/IrDep.lean",
+    "origin": 5302,
+    "fix": "not the port: OpenLower.statements_dense changed shape on main since #5302 forked (29 Oct); rebind its witness before `rw [hh] at hA`",
+    "lines": 2,
+    "how": "read",
+    "own": true
+   }
+  ]
  },
  {
   "pr": 5280,
@@ -2818,7 +3053,8 @@
   "mech": [],
   "dels": [],
   "stale": [],
-  "try": "pending",
+  "run": "R",
+  "try": "pass",
   "fails": []
  }
 ]

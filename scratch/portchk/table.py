@@ -44,6 +44,13 @@ CATALOG = {
                                                 "(open private of its lemmas)", 1, "estimate"),
     "Flock/Test/RegBudget.lean": (7150, "not the port: fails on main's toolchain too (structure-instance field column); "
                                   "fixed at #7150's head 13076c1ddc", 0, "plain v4.34 repro"),
+    "Soundness/Discharge/ZkReg/SoundHJSt.lean": (5825, "`import all Init.Data.Array.Basic` (Array.idxOf)", 1,
+                                                 "core repro"),
+    "Flock/Recursive/KSLinked.lean": (7127, "not the port: #7127 moves `nS x ≤ 16` into the PartIn premise, and main's "
+                                      "KSLinked (added after #7127 forked) reads the old shape; update its two uses", 6,
+                                      "read"),
+    "Claims/Recursion/IrDep.lean": (5302, "not the port: OpenLower.statements_dense changed shape on main since #5302 "
+                                    "forked (29 Oct); rebind its witness before `rw [hh] at hA`", 2, "read"),
     "Flock/Soundness/ExecStrataOf.lean": (7098, "keep the port's qsort_perm beside #7098's chain_covers (my first "
                                           "resolution took #7098's qsort_perm)", 3, "E run passes"),
 }
@@ -142,8 +149,10 @@ def main() -> None:
 
 
 #: where each failure's origin PR is now
-ORIGIN_NOW = {5105: "main", 7026: "main", 7064: "main", 6677: "main", 6842: "main", 6912: "main", 7092: "next",
-              7137: "next", 7150: "open", 7098: "next"}
+_PRS = json.loads((D / "prs.json").read_text())
+_Q = json.loads((D / "next_queue.json").read_text())
+ORIGIN_NOW = {o: where(o, _PRS, _Q) for o in (5105, 7026, 7064, 6677, 6842, 6912, 7092, 7137, 7150, 7098, 5825, 7127,
+                                                5302)}
 
 
 def short(key: str) -> str:
@@ -157,6 +166,11 @@ def fix_cell(row: dict) -> tuple[str, int, str]:
         base = short(f["file"])
         if f["origin"] == "?":
             own.append(f"{base}: unattributed")
+        elif f["origin"] in (7127, 5302) and f["origin"] == row["pr"]:
+            own.append(f"{base}: {f['fix']}")
+            size += f["lines"]
+        elif f["origin"] in (7127, 5302):
+            inh.append(f"{base} (#{f['origin']}'s own, not the port)")
         elif f["origin"] == 7150:
             own.append(f"{base}: #7150's own parse error, not the port (fails on main's toolchain too); fixed at "
                        "#7150's head 13076c1ddc" + ("" if row["pr"] == 7150 else ", stacked here"))
