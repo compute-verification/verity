@@ -70,6 +70,7 @@
   "Proofs.Properties.Composition",
   "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Challenger",
+  "Proofs.Properties.Challenger.Limits",
   "Proofs.Properties.Firewall",
   "Proofs.Properties.Challenger.Coins",
   "Proofs.Properties.Core.Site",

@@ -5979,12 +5979,13 @@
    ]
   },
   "SampledProofs.OneStageZk": {
-   "digest": "23dc8c7c4f0c1a0f5a5e6522f60528f2a7022270653c3ec3cc38dcf16bfd08a7",
+   "digest": "8328d1eee4ab232e4fa38a5ee212585d15085a18e9304baa0387f8bfe92d8017",
    "definitions": {
     "SampledProofs.OneStageZk.Evidence": "c6225844065026f039f99bb073a172ebd1caf057aa99df9629dc83c3b72b4444",
     "SampledProofs.OneStageZk.Evidence.base": "f88a295c9c15075955eadf77c4082a0174b7338e8a580fe01d770c8929000895",
     "SampledProofs.OneStageZk.Evidence.pub": "e287d5199b21675132c4ce0bc9ee42a6aabcbf596320537c2e30331f7b5fada4",
     "SampledProofs.OneStageZk.Evidence.sessions": "c3269990d1ced0410fb26306d5a79409de791ffa46ad3a258452beea840a0911",
+    "SampledProofs.OneStageZk.KEY_PARAMS": "59e3d3ecb3410114a369b3c8088a25ee55b159596baf10c3caa13166f9d50911",
     "SampledProofs.OneStageZk.NO_CHALLENGER": "a8511755d79385dfe31d999e282696b68fc0d7fc6babf62f45963f5c3e23395f",
     "SampledProofs.OneStageZk.Own": "b72f939e1c1558b5424361ceec991bf2f47e79b4f47d99a8750ad0cadbb7393f",
     "SampledProofs.OneStageZk.Own.circuit": "5a74bb7057517d4f86bee7e1e662ebca022b49c0efcaecaacccee0bfffd96882",
@@ -6020,6 +6021,7 @@
     "SampledProofs.OneStageZk.checkIdentifier": "78b13a39766df5c85e16b73a23cc39534d62a5849549b05e88740a018d87484a",
     "SampledProofs.OneStageZk.coinKeyOf": "3a46fbb369121b81536201663de8abbb07fa453669c61b217aaa461ff693f9b9",
     "SampledProofs.OneStageZk.coinsOf": "0219b3963f355c027e5417359e1e78f4dc6d271c366d8a6a681c5114e639d30f",
+    "SampledProofs.OneStageZk.deployedKey": "a77890a2e3e66deb48f6547b42b0d87e92ff0b17a5e2c00e600252c66d48ca3e",
     "SampledProofs.OneStageZk.evidenceOf": "2d7f4f33322d51822779bf270639ba8963babf0759ed9607912ba766d769aad0",
     "SampledProofs.OneStageZk.filesOf": "9964b8a2d69fc1cc706fc02bc281476bd4f664af7427905207a52098ea4c7d5a",
     "SampledProofs.OneStageZk.inputsOf": "22eb8d33feabded8c4c565d308dba7999f462aef3a3eab5a6fc81f3b03fac46f",
