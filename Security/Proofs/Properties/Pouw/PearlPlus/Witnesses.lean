@@ -585,9 +585,44 @@ theorem test_opensLeaf : (testOpening.leaf.position != 0 || !opens (transcriptDo
     Flock.Hm96.Default512.treeLeaf, Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq]
   decide +kernel
 
+/-- `Words.encode` with its steps as parameters: the E line (`S`), the line key (`L`), the row seed (`RS`), the row's
+parse (`P`), the forming (`F`) and the peels (`PA`, `PB`). -/
+def encodeWith (S : ByteArray → Nat → Nat → Nat → Nat → Words.Reject (Array Nat)) (L : ByteArray → ByteArray)
+    (RS : ByteArray → ByteArray → Nat → Nat → ByteArray → ByteArray) (P : ByteArray → Nat → Words.Reject (Array Nat))
+    (F : Array (Array Nat) → Array (Array Nat) → Array (Array Nat) → Words.Reject Words.Formed)
+    (PA PB : Words.FixedNoise → Words.Formed → Words.Reject (Array (Array Nat)))
+    (salt rootB : ByteArray) (wn : Words.FixedNoise) (index k : Nat) (rows : List Nat) (aRows : List ByteArray)
+    (cols : List Nat) (bRows : List ByteArray) : Words.Reject Words.Ops := do
+  let ea ← (rows.zip aRows).toArray.mapM fun (i, r) => S (L (RS salt rootB index i r)) 0 0 0 Words.NORM_E
+  let a ← F (← aRows.toArray.mapM (P · k)) ea wn.fa
+  let keyB := L wn.seedB
+  let eb ← cols.toArray.mapM fun j => S keyB 1 0 j Words.NORM_E
+  let b ← F (← bRows.toArray.mapM (P · k)) eb wn.fb
+  return ⟨a, b, ← PA wn a, ← PB wn b⟩
+
+theorem encode_eq_encodeWith (salt rootB : ByteArray) (wn : Words.FixedNoise) (index k : Nat) (rows : List Nat)
+    (aRows : List ByteArray) (cols : List Nat) (bRows : List ByteArray) :
+    Words.encode salt rootB wn index k rows aRows cols bRows = encodeWith Words.sampleLine Words.lineKey Words.rowSeed
+      Words.parseRow Words.formV1 Words.peelA Words.peelB salt rootB wn index k rows aRows cols bRows := rfl
+
+/-- `encodeWith` of one A row and one B row, at any steps. -/
+theorem encodeWith_one {S : ByteArray → Nat → Nat → Nat → Nat → Words.Reject (Array Nat)} {L : ByteArray → ByteArray}
+    {RS : ByteArray → ByteArray → Nat → Nat → ByteArray → ByteArray} {P : ByteArray → Nat → Words.Reject (Array Nat)}
+    {F : Array (Array Nat) → Array (Array Nat) → Array (Array Nat) → Words.Reject Words.Formed}
+    {PA PB : Words.FixedNoise → Words.Formed → Words.Reject (Array (Array Nat))}
+    {salt rootB : ByteArray} {wn : Words.FixedNoise} {index k i j : Nat} {ra rb : ByteArray}
+    {ea eb xa xb : Array Nat} {a b : Words.Formed} {pa pb : Array (Array Nat)}
+    (hea : S (L (RS salt rootB index i ra)) 0 0 0 Words.NORM_E = .ok ea) (hxa : P ra k = .ok xa)
+    (hfa : F #[xa] #[ea] wn.fa = .ok a) (heb : S (L wn.seedB) 1 0 j Words.NORM_E = .ok eb) (hxb : P rb k = .ok xb)
+    (hfb : F #[xb] #[eb] wn.fb = .ok b) (hpa : PA wn a = .ok pa) (hpb : PB wn b = .ok pb) :
+    encodeWith S L RS P F PA PB salt rootB wn index k [i] [ra] [j] [rb] = .ok ⟨a, b, pa, pb⟩ := by
+  simp only [encodeWith, List.zip_cons_cons, List.zip_nil_left, Array.mapM_eq_mapM_toList, List.mapM_cons,
+    List.mapM_nil, hea, hxa, heb, hxb, hfa, hfb, hpa, hpb, bind, Except.bind, pure, Except.pure, Functor.map, Except.map]
+
 /-- `encode` of one A row and one B row: each side's E line, its parsed row and its formed side, then the peel factors.
-Each hypothesis is one computation the kernel does on its own. The computations are variables in the unfolded block
-(`generalize`): with them in place, the kernel's check of the block's rewriting recurses too deep. -/
+Each hypothesis is one computation the kernel does on its own. It is `encodeWith_one` at `encode`'s own steps
+(`encode_eq_encodeWith`): a proof that unfolds `encode` at its steps has the kernel reduce a match on an E line
+(`Words.sampleLine`) of an unknown row, which evaluates SHA-512 as far as the row lets it. -/
 theorem encode_one {salt rootB : ByteArray} {wn : Words.FixedNoise} {index k i j : Nat} {ra rb : ByteArray}
     {ea eb xa xb : Array Nat} {a b : Words.Formed} {pa pb : Array (Array Nat)}
     (hea : Words.sampleLine (Words.lineKey (Words.rowSeed salt rootB index i ra)) 0 0 0 Words.NORM_E = .ok ea)
@@ -596,14 +631,8 @@ theorem encode_one {salt rootB : ByteArray} {wn : Words.FixedNoise} {index k i j
     (hxb : Words.parseRow rb k = .ok xb) (hfb : Words.formV1 #[xb] #[eb] wn.fb = .ok b)
     (hpa : Words.peelA wn a = .ok pa) (hpb : Words.peelB wn b = .ok pb) :
     Words.encode salt rootB wn index k [i] [ra] [j] [rb] = .ok ⟨a, b, pa, pb⟩ := by
-  unfold Words.encode
-  generalize Words.sampleLine = S at hea heb ⊢
-  generalize Words.parseRow = P at hxa hxb ⊢
-  generalize Words.formV1 = F at hfa hfb ⊢
-  generalize Words.peelA = PA at hpa ⊢
-  generalize Words.peelB = PB at hpb ⊢
-  simp only [List.zip_cons_cons, List.zip_nil_left, Array.mapM_eq_mapM_toList, List.mapM_cons, List.mapM_nil, hea, hxa,
-    heb, hxb, hfa, hfb, hpa, hpb, bind, Except.bind, pure, Except.pure, Functor.map, Except.map]
+  rw [encode_eq_encodeWith]
+  exact encodeWith_one hea hxa hfa heb hxb hfb hpa hpb
 
 theorem size_testRowA : testRowA.size = 512 := by decide +kernel
 
