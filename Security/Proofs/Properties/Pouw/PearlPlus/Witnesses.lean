@@ -14,9 +14,11 @@ three different SHA-512 digests, neither open one value nor collide (`openingBin
 the kernel, one declaration each, once the hm96 mask of their zero salt is known to be zero (`Witness.mask_zero`), since
 the mask's tables are too large for it to build.
 
-`YIsTheUnscale` and `RefusedBeforeTheCoin` have both witnesses. `PlanMeans`, `AcceptMeans`, `LoadedGivesUp` and
-`TileAcceptMeans` have their `nontrivial` ones: their `honest` ones need a run that loads, whose manifest's salt, roots and
-coin opening are SHA-512 digests the kernel would check.
+`YIsTheUnscale`, `RefusedBeforeTheCoin` and `TileKeepsTheCap` have both witnesses. `PlanMeans`, `AcceptMeans`,
+`LoadedGivesUp` and `TileAcceptMeans` have their `nontrivial` ones. The first three's `honest` ones need a manifest that
+`load` provably accepts, and none does: `load` and `CoinCommitment.ofJson` compare JSON values with `Lean.Json`'s `BEq`, a
+`partial def` the kernel can't reduce (`PouwCheck.jsonStrIs` compares by a match instead). `TileAcceptMeans`'s needs a tile
+the kernel replays whole: its openings, its noise lines and its forming.
 -/
 
 namespace Properties.Pouw.PearlPlus
@@ -355,5 +357,24 @@ theorem tileAcceptMeans_nontrivial :
     ∀ pos rows cols (_ops : Ops) (_ch : Checked), ¬ (noCallsPass.tile? 0 = some (pos, rows, cols)) := by
   intro pos rows cols _ _ h
   cases h
+
+/-- The rule passes the tile of one 1 × 128 × 1 call whose two rows are credited: both rows keep the per-row rules, and each
+of the word's four atoms changes its total, so none is flagged and the replayed debit is 0. -/
+theorem tileKeepsTheCap_honest :
+    Rule.checkOpened capScheme capRecord [0] [0] capOps = none ∧ (capRecord.credited [0] [0]).1 ≠ [] ∧
+      (capRecord.credited [0] [0]).2 ≠ [] := by
+  refine ⟨by decide +kernel, by decide, by decide⟩
+
+/-- A rule that accepts every tile passes the tile of `capRecord` whose word has 32 codes, less than one promotion group,
+on which the debit replay refuses, so no debit is replayed for its credited cell. -/
+theorem tileKeepsTheCap_nontrivial :
+    ∀ words, ¬ ((capRecord.credited [0] [0]).1.mapM (fun i => (capRecord.credited [0] [0]).2.mapM fun j =>
+      Rule.wordDebit shortOps.a.codes[[0].idxOf i]! shortOps.b.codes[[0].idxOf j]!) = .ok words) := by
+  intro words h
+  have : ((capRecord.credited [0] [0]).1.mapM (fun i => (capRecord.credited [0] [0]).2.mapM fun j =>
+      Rule.wordDebit shortOps.a.codes[[0].idxOf i]! shortOps.b.codes[[0].idxOf j]!)).toOption = none := by
+    decide +kernel
+  rw [h] at this
+  cases this
 
 end Properties.Pouw.PearlPlus

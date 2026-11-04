@@ -48,4 +48,23 @@ def acceptAllRecord : UnitRecord := { matmul := ⟨0, 1, 1, 1, 0⟩, realRows :=
 /-- A pass with no calls, so no tiles. -/
 def noCallsPass : Pass := default
 
+/-- A test instance of the scheme, as a manifest's `instance` sets it: `k_min` 128 and 1 × 1 tiles. -/
+def capScheme : Scheme := { kMin := 128, tileM := 1, tileN := 1 }
+
+/-- One 1 × 128 × 1 call, its one tile `[0] × [0]`: its A row real, both rows kept whole and credited. -/
+def capRecord : UnitRecord := { matmul := ⟨0, 1, 128, 1, 0⟩, realRows := 1, kKept := 128 }
+
+/-- One formed row of 128 words: each word 1.0 and each code E4M3 1.0, with ρ = α = 1.0. -/
+def capSide : Words.Formed :=
+  ⟨#[Array.replicate 128 0x38], #[0x3F800000], #[0x3F800000], #[#[]], #[Array.replicate 128 0x3F800000]⟩
+
+/-- `capRecord`'s tile formed: both rows `capSide`. -/
+def capOps : Words.Ops := ⟨capSide, capSide, #[], #[]⟩
+
+/-- `capSide` with 32 codes, less than one promotion group of 128, so the debit replay refuses its words. -/
+def shortSide : Words.Formed := { capSide with codes := #[Array.replicate 32 0x38] }
+
+/-- `capRecord`'s tile with `shortSide`'s codes. -/
+def shortOps : Words.Ops := ⟨shortSide, shortSide, #[], #[]⟩
+
 end Properties.Pouw.PearlPlus
