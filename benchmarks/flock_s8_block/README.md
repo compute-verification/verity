@@ -31,9 +31,10 @@ On a served window instead (the sampled audit's one-stage proof blocks over the 
 `rec_inner.py stage-window` stages every proof block of the member as the statement `served` (hm96 leaves, today's `--zk`
 statement) and `served-plain` (plain SHA-512 leaves). With `SERVE_RUN`, staging first checks that the window's run root is the
 one the served run published. `DRAW=all` has each verifier sample every block, as a deployed one must: a `--zk` one by
-`--draw subset:N`, a plain one by the staged full draw. The step `lean` (add it to `STEPS`) verifies every kept session
-of the two statements with Lean's `flock-verify`, the verifier of record: `--zk` sets as `verity/flock-circuit`, and
-`served-plain`'s plain sets as `verity/flock-circuit+plain-leaves` (hm96 leaves without `--zk` are outside its plain scope).
+`--draw subset:N`, a plain one by the staged sample of every block (`draw.json`). The step `lean` (add it to `STEPS`)
+verifies every kept session of the two statements with Lean's `flock-verify`, the verifier of record: `--zk` sets as
+`verity/flock-circuit`, and `served-plain`'s plain sets as `verity/flock-circuit+plain-leaves` (hm96 leaves without `--zk`
+are outside its plain scope).
 The job's `FLOCK_WORK` then holds the prover's values, so it is a directory the job makes and deletes:
 
 ~~~text
