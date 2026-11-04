@@ -59,6 +59,8 @@
 #      in passes/coin.json before the replay, leaves the passes the moment it is drawn (`served_verdicts.py coin`:
 #      PIECE_DIR/coin.json, put in the evidence store, preserved where the node holds a store key and else in the node's own store under the same
 #      id, its answer in PIECE_DIR/coin-put.json, which names the run's Attempt carrying out/'s copy as its custody);
+#      the RULE line then reads the ledger again: whether the draw session was the lane's first reserve after the
+#      period's close (`served_verdicts.py pearlplus-period rule`, kept as period.json's rule);
 #   4b. once verify wrote its document, `served_passes.py lean` takes the Lean verdict of record, PouwCheck.PearlPlus's
 #      pouw-pearlplus (PEARLPLUS_LEAN_EXE, else built here as served_pouw.sh builds pouw-period, its log
 #      pouw-pearlplus-build.log; one that doesn't build answers nothing), on the same passes, epoch coins, draws and coin
@@ -78,7 +80,9 @@
 # s), and goes no further unless that served.json says ok; steps 3 and 4 read and write there, `retain` writing Pearl+'s
 # window record W (`--window-record`, private/pearlplus/window-record.json, rounds dropped as above) and then, before the coin,
 # PEARLPLUS_TIE_CMD (`served_verdicts.sh pearl-tie SERVE_DIR WINDOW W PASSES`) committing the window tied to W, its
-# registration R chained right after W; step 4 is `verify --tie W`, which holds the passes to W. Its salt coin is the
+# registration R chained right after W; step 4 is `verify --tie W`, which holds the passes to W, and under the gate it
+# draws only after the window serve's Pearl-C period (SERVE_DIR/pearlplus/period.json, the one its RULE line reads)
+# closed with the lane's reserves since its open the window's salt sessions alone. Its salt coin is the
 # arm's: a live salt-only session of the window's own under the gate (`serve_pearl.live`), which step 5 holds each pass
 # to as above, else in-process, and the piece then claims no verdict. Step 5 gets W (`--tie W`): the piece is then the
 # window's own epoch, and why it credits nothing by itself names the Pearl-C period its salt session joined
@@ -308,6 +312,15 @@ if [ -n "$GO" ] && [ -n "$TIE" ]; then
   fi
 fi
 
+PD=$P
+[ -z "$TIE" ] || PD=$SD/pearlplus
+if [ -n "$GO" ] && [ -n "$TIE" ] && [ -n "${PEARLC_CHALLENGER_GATE:-}" ]; then  # the window serve closed the period
+  held=$("$TPY" -c 'import json, sys
+print("ok" if (json.load(open(sys.argv[1])).get("reserves") or {}).get("ok") is True else "")' "$PD/period.json" 2>/dev/null)
+  [ "$held" = ok ] || { say "draw: refused before it: the window serve's Pearl-C period didn't close with the lane's" \
+    "reserves since its open the window's salt sessions alone (served_verdicts.sh's PEARLPLUS-PERIOD line), so no draw" \
+    "follows it"; GO=; }
+fi
 if [ -n "$GO" ]; then
   period close
   t=$(date +%s)
@@ -323,6 +336,11 @@ if [ -n "$GO" ]; then
     "$TPY" benchmarks/one_stage/served_verdicts.py coin "$P" --record "$Q/passes/coin.json" --run "${RESEARCH_RUN_ID:-}" \
       ${RESEARCH_RUN_DIR:+--run-dir "$RESEARCH_RUN_DIR"} > "$Q/coin.log" 2>&1
     say "coin: $(tail -1 "$Q/coin.log" | cut -c1-400)"
+    if [ -n "${PEARLC_CHALLENGER_GATE:-}" ] && [ -s "$PD/period.json" ]; then
+      "$TPY" benchmarks/one_stage/served_verdicts.py pearlplus-period rule "$PD" --gate "$PEARLC_CHALLENGER_GATE" \
+        --lane "${PEARLC_CHALLENGER_LANE:-vllm}" --coin "$Q/passes/coin.json" >> "$Q/period.log" 2>&1
+      say "$(tail -1 "$Q/period.log" | cut -c1-400)"
+    fi
   else
     say "coin: served_passes.py verify drew none (it refused the run before its coin)"
   fi

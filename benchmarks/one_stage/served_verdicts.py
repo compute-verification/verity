@@ -14,7 +14,8 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py pearlplus DIR --served FILE --verify FILE [--unretained FILE] [--gate CMD] [--key-sha512 HEX]
                                  [--main FILE] [--coin COIN_PUT]
     served_verdicts.py pearlplus-period open DIR --gate CMD --name P [--scheme S] [--cubin FILE | --circuit-record FILE]
-    served_verdicts.py pearlplus-period close DIR --gate CMD
+    served_verdicts.py pearlplus-period close DIR --gate CMD [--lane L --windows PEARL_DIR]
+    served_verdicts.py pearlplus-period rule DIR --gate CMD --lane L --coin COIN_RECORD
     served_verdicts.py coin DIR --record FILE [--run RUN_ID] [--run-dir DIR]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
                               [--product P] [--deferred WHY] [--steps LO,HI] [--off-node]
@@ -127,7 +128,12 @@ served window's circuit record (served_verdicts.sh's PEARLPLUS-CIRCUIT, the circ
 window-circuit writes), byte for byte; without it, `pearlplus_descriptor` (Pearl+'s protocol, ``--scheme`` and
 ``--cubin``'s SHA-512), which names no model. Its answer goes in ``DIR/period.json``; ``pearlplus-period close`` closes it
 once the serve's session has ended (the untied piece's right before the verifier's draw), and the draw, which joins no
-period, must be the lane's first reserve after the close. ``coin``: the verifier's coin record published the moment it is
+period, must be the lane's first reserve after the close. With ``--lane`` and ``--windows`` (the serve dir's ``pearl/``,
+under PEARLPLUS_TIE) the close first reads the ledger and records whether the lane's reserves since the open are the
+windows' salt sessions alone (`pearlplus_period_close`), its line saying held or REFUSED; it closes either way, and the
+tied piece draws only after a period whose reserves held. ``pearlplus-period rule``, once the coin is drawn, prints the
+``RULE`` line: whether the coin record ``--coin``'s draw session is lane ``--lane``'s first reserve after the close
+(`pearlplus_period_rule`; exit 1 when BROKEN). ``coin``: the verifier's coin record published the moment it is
 drawn (`coin`), ``--run-dir`` naming the run's Attempt as its custody where no put preserves it.
 
 ``record``: sampled proofs' answer from the records audit kept under ``--sampled-proofs`` (`prove_path/run.sh`'s with
@@ -879,6 +885,97 @@ def pearlplus_period_open(piece_dir: Path, gate: str, name: str, scheme: str, cu
            "open": _gate_json(gate, ["period-open", "--name", name, "--cap", "1", "--circuit", circuit])}
     (piece_dir / PERIOD).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     return doc
+
+
+def period_reserves(lines: Sequence[str], lane: str, period: str) -> list[str] | None:
+    """The sessions lane `lane` reserved (its prover ``for``, else ``by``) in the auditor's ledger `lines` while period
+    `period` was open, in ledger order: since its open, and before its close where the ledger closes it; None where the
+    ledger opens no such period."""
+    got: list[str] | None = None
+    for e in map(json.loads, lines):
+        b = e.get("body") or {}
+        if e.get("kind") == "period-open" and b.get("period") == period:
+            got = []
+        elif got is not None and e.get("kind") == "period-close" and b.get("period") == period:
+            break
+        elif got is not None and e.get("kind") == "reserve" and (b.get("for") or b.get("by")) == lane:
+            got.append(str(e.get("session")))
+    return got
+
+
+def window_salt_sessions(pearl: Path) -> list[str]:
+    """The salt sessions serve-openai's Pearl+ arm reserved, in window order: each ``pearl/w<k>/served.json``'s
+    ``coins.reserved.session`` (`serve_pearl.live`'s reserve answer), where one names it."""
+    got = []
+    for d in sorted((p for p in pearl.glob("w*") if p.name[1:].isdigit()), key=lambda p: int(p.name[1:])):
+        try:
+            sid = (((json.loads((d / "served.json").read_text()).get("coins") or {}).get("reserved") or {})
+                   .get("session"))
+        except (OSError, ValueError, AttributeError):
+            continue
+        if sid:
+            got.append(str(sid))
+    return got
+
+
+def pearlplus_period_close(piece_dir: Path, gate: str, lane: str | None = None,
+                           windows: Path | None = None) -> dict[str, Any]:
+    """``pearlplus-period close``: the period `pearlplus_period_open` opened in `piece_dir` closed (`period_close`). With
+    `lane` and `windows` (the serve dir's ``pearl/``, under PEARLPLUS_TIE) the gate's ledger is read first, and the PERIOD
+    document records ``reserves``, ``{lane, since_open, salt_sessions, ok}`` (``error`` in place of ``since_open`` where
+    the ledger can't be read): ok when the sessions lane `lane` reserved since the open are the windows' salt sessions
+    (`window_salt_sessions`), at least one, in order, as the gate's cap of 1 holds them. It closes either way, since an
+    open period refuses the lane's every other reserve; the tied piece draws only after one whose reserves were ok."""
+    if lane is not None and windows is not None:
+        doc = json.loads((piece_dir / PERIOD).read_text())
+        salt = window_salt_sessions(windows)
+        try:
+            got = period_reserves([x for x in _gate_out(gate, "ledger").decode().splitlines() if x.strip()], lane,
+                                  doc["name"])
+            doc["reserves"] = {"lane": lane, "since_open": got, "salt_sessions": salt, "ok": bool(salt) and got == salt}
+        except (RuntimeError, ValueError) as e:
+            doc["reserves"] = {"lane": lane, "error": f"{type(e).__name__}: {e}"[:600], "salt_sessions": salt, "ok": False}
+        (piece_dir / PERIOD).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    return period_close(piece_dir, gate)
+
+
+def period_reserves_said(doc: Mapping[str, Any]) -> str:
+    """What `pearlplus_period_close` found of the period's reserves, as its line says it: nothing where it read none, and
+    no session or count of them, which would count the windows."""
+    r = doc.get("reserves")
+    if r is None:
+        return ""
+    if r.get("ok"):
+        return f", its reserves held (lane {r['lane']}'s since its open the windows' salt sessions alone)"
+    why = (f"the ledger can't be read: {r['error']}" if r.get("error") else
+           f"the ledger opens no period {doc.get('name')}" if r.get("since_open") is None else
+           "no window's served.json names a salt session" if not r.get("salt_sessions") else
+           f"lane {r['lane']} reserved in it other sessions than the windows' salt sessions")
+    return f", its reserves REFUSED ({why}; {PERIOD}'s reserves), so no draw follows it"
+
+
+def pearlplus_period_rule(piece_dir: Path, gate: str, lane: str, record: Path) -> tuple[bool, str]:
+    """The rule the verifier's draw keeps, read in the gate's ledger once its coin is drawn: the draw session of the coin
+    record `record` (``draw.reserved.session``) is lane `lane`'s first reserve after the period in ``piece_dir/PERIOD``
+    closed (`pouw_h1_window.after_close`, which `bench_arm.LiveDraw` held it to before asking its coin, and
+    `pearlplus_live_draw` holds the record to). Whether it held, and its ``RULE`` line; kept as the PERIOD document's
+    ``rule``."""
+    from verity_vllm.protocols.pouw.h1 import window as PHW
+
+    doc = json.loads((piece_dir / PERIOD).read_text())
+    name = doc["name"]
+    draw = ((json.loads(record.read_text()).get("draw") or {}).get("reserved") or {}).get("session")
+    closed, after = PHW.after_close([x for x in _gate_out(gate, "ledger").decode().splitlines() if x.strip()], lane, name)
+    first = None if after is None else after.get("session")
+    held = closed and draw is not None and first == draw
+    doc["rule"] = {"lane": lane, "closed": closed, "first_after": first, "draw": draw, "held": held}
+    (piece_dir / PERIOD).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    why = (f"the draw session {draw} is the lane's first reserve after the close" if held else
+           f"the ledger doesn't close period {name}" if not closed else
+           "the verifier's coin record names no draw session" if draw is None else
+           f"the lane's first reserve after the close is {first}, not the draw session {draw}")
+    return held, (f"RULE no other reserve on lane {lane} between period {name}'s close and the draw: "
+                  f"{'HELD' if held else 'BROKEN'} ({why})")
 
 
 def credit_inputs(serve_dir: Path, statements: Path | None = None, live: Path | None = None) -> dict[str, str]:
@@ -1975,7 +2072,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     cn.add_argument("--run-dir", type=Path, help="that run's directory (RESEARCH_RUN_DIR): its Attempt carries out/, the "
                                                  "coin's custody where no put preserves it")
     ppe = sub.add_parser("pearlplus-period")
-    ppe.add_argument("verb", choices=("open", "close"))
+    ppe.add_argument("verb", choices=("open", "close", "rule"))
     ppe.add_argument("piece_dir", type=Path)
     ppe.add_argument("--gate", required=True)
     ppe.add_argument("--name")
@@ -1984,6 +2081,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     described.add_argument("--cubin", type=Path)
     described.add_argument("--circuit-record", type=Path, help="the served window's circuit record (PEARLPLUS-CIRCUIT's), "
                                                                "whose bytes are the period's descriptor")
+    ppe.add_argument("--lane", help="close, rule: the lane whose gate key reserves the run's sessions (PEARLC_CHALLENGER_LANE)")
+    ppe.add_argument("--windows", type=Path, help="close, with --lane: the serve dir's pearl/, whose w<k>/served.json name "
+                                                  "each window's salt session, the period's reserves held to them first")
+    ppe.add_argument("--coin", type=Path, help="rule: the verifier's coin record (served_passes.py verify's coin.json)")
     rg = sub.add_parser("public-registration")
     rg.add_argument("registration", type=Path)
     pl = sub.add_parser("public-lines")
@@ -2151,16 +2252,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "pearlplus-period":
         try:
+            if a.verb == "rule":
+                if not (a.lane and a.coin):
+                    raise ValueError("pearlplus-period rule needs --lane and --coin")
+                held, line = pearlplus_period_rule(a.piece_dir, a.gate, a.lane, a.coin)
+                print(line, flush=True)
+                return 0 if held else 1
             if a.verb == "close":
-                doc = period_close(a.piece_dir, a.gate)
-                print(f"PERIOD closed {doc['name']}: {json.dumps(public_json(doc['close']), sort_keys=True)[:600]}",
-                      flush=True)
+                if (a.lane is None) != (a.windows is None):
+                    raise ValueError("pearlplus-period close takes --lane and --windows together")
+                doc = pearlplus_period_close(a.piece_dir, a.gate, a.lane, a.windows)
+                print(f"PERIOD closed {doc['name']}{period_reserves_said(doc)}: "
+                      f"{json.dumps(public_json(doc['close']), sort_keys=True)[:600]}", flush=True)
                 return 0
             if not a.name:
                 raise ValueError("pearlplus-period open needs --name")
             doc = pearlplus_period_open(a.piece_dir, a.gate, a.name, a.scheme, a.cubin, a.circuit_record)
         except (OSError, RuntimeError, ValueError, KeyError) as e:
-            print(f"PERIOD refused: {type(e).__name__}: {e}"[:1200], flush=True)
+            said = "RULE not read" if a.verb == "rule" else "PERIOD refused"
+            print(f"{said}: {type(e).__name__}: {e}"[:1200], flush=True)
             return 1
         of = f"the window's circuit record {a.circuit_record}" if a.circuit_record else PEARLPLUS_DESCRIPTOR
         print(f"PERIOD opened {doc['name']}: Pearl-C, cap 1, circuit {doc['circuit'][:16]}... ({of})", flush=True)
