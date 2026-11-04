@@ -14,8 +14,9 @@ import PouwCommit.Rows
 3. the tile's words from the opened values (`Words.encode`, `Words.checked`; a non-finite value is `inadmissible inputs`),
    and their leaf is the opened leaf (`checked values`);
 4. the tile rule by the record (`Rule.checkOpened`);
-5. on a call that commits y, the tile's real rows open against the call's y root at their positions (`y opening`), and
-   each word is the unscale of the tile's U (`Rule.yReason`).
+5. on a call that commits y, the prover's files open the tile's real rows of it (`the prover's files don't open its y`),
+   they open against the call's y root at their positions (`y opening`), and each word is the unscale of the tile's U
+   (`Rule.yReason`).
 
 `wn` is the fixed operand's noise (`Words.fixedNoise`), once per pass and weight; its failure is the tile's
 `inadmissible inputs`, where Python's `encode` meets it.
@@ -33,12 +34,12 @@ structure LeafOpening where
   deriving Inhabited
 
 /-- A tile's openings (`clear_audit.TileOpening`, and `Opened.open_y`'s y rows: the tile's rows below the call's real rows,
-empty on a call without y). -/
+empty on a call without y, or why the prover's files don't open them). -/
 structure TileOpening where
   a : List LeafOpening
   b : List LeafOpening
   leaf : LeafOpening
-  y : List LeafOpening := []
+  y : Except String (List LeafOpening) := .ok []
   deriving Inhabited
 
 def HM96 : String := "hm96-sha512"
@@ -84,9 +85,12 @@ def checkTile (p : Pass) (wn : Except String FixedNoise) (tid : Nat) (o : TileOp
   if leaf ch != openedValue o.leaf.value then return some "checked values"
   if let some why := Rule.checkOpened p.scheme r rows cols ops then return some why
   let some yRoot := p.yRoots[pos]! | return none
+  let ys ← match o.y with
+    | .ok ys => pure ys
+    | .error e => return some s!"the prover's files don't open its y: {e}"
   let real := rows.filter (· < r.realRows)
   let dy := rowsDomain (yBinding p.salt u.index) u.index r.realRows HM96 false
-  if o.y.map (·.position) != real || !o.y.all (opens dy yRoot ROW_SCHEMA) then return some "y opening"
-  Rule.yReason rows cols ops ch (o.y.map fun y => words32 (openedValue y.value))
+  if ys.map (·.position) != real || !ys.all (opens dy yRoot ROW_SCHEMA) then return some "y opening"
+  Rule.yReason rows cols ops ch (ys.map fun y => words32 (openedValue y.value))
 
 end PouwCheck.PearlPlus

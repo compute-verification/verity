@@ -14,6 +14,7 @@ holds a y opening to the tile's real rows' positions, which the Python's own ope
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -112,12 +113,13 @@ def test_a_row_over_its_cap_and_its_give_up(exe, tmp_path):
 
 
 def test_openings_that_fail(exe, tmp_path):
-    """A weight row, an activation row or a transcript leaf that isn't what the pass committed, and records that leave out
-    the excluded row."""
+    """A weight row, an activation row or a transcript leaf that isn't what the pass committed; a file whose size or
+    SHA-256 isn't its manifest entry's; and records that leave out the excluded row."""
     path = T.proved_pass(tmp_path, H100)[0]
     man = json.loads(path.read_text())
+    leaves = man["leaves"]
     for spec, why in ((man["weights"]["0"]["rows"], "weight opening"), (man["matmuls"][0]["rows"], "activation opening"),
-                      (man["leaves"], "transcript opening")):
+                      (leaves, "leaves: its SHA-256 is not the manifest's")):
         f = path.parent / spec["path"]
         good = f.read_bytes()
         bad = bytearray(good)
@@ -127,6 +129,17 @@ def test_openings_that_fail(exe, tmp_path):
         got = same(exe, [path], 8)
         assert got["verdict"] == "reject" and why in got["reason"], got["reason"]
         f.write_bytes(good)
+    assert "sha256" in leaves
+    f = path.parent / leaves["path"]
+    good = f.read_bytes()
+    bad = bytes(b ^ 0x01 if j % 256 == 0 else b for j, b in enumerate(good))
+    f.write_bytes(bad)
+    edit(path, lambda m: m["leaves"].update(sha256=hashlib.sha256(bad).hexdigest()))
+    assert "transcript opening" in same(exe, [path], 8)["reason"]
+    f.write_bytes(good + b"\0")
+    edit(path, lambda m: m["leaves"].update(sha256=leaves["sha256"]))
+    assert f"leaves: {len(good) + 1} bytes; the manifest says {len(good)}" in same(exe, [path], 8)["reason"]
+    f.write_bytes(good)
     edit(path, lambda m: m["matmuls"][0].update(excluded_a=[]))
     assert "records are not the ones" in same(exe, [path])["reason"]
 
@@ -146,6 +159,10 @@ def test_a_served_y_that_is_not_the_unscale_of_its_u(exe, tmp_path):
         u["y"]["root"] = root
     path.write_text(json.dumps(man))
     assert "y opening" in same(exe, [path])["reason"]
+    for u in man["matmuls"]:
+        f = path.parent / u["y"]["rows"]["path"]
+        f.write_bytes(f.read_bytes() + b"\0")
+    assert "the prover's files don't open its y: ValueError: " in same(exe, [path])["reason"]
 
 
 def test_calls_refused_before_anything_is_opened(exe, tmp_path):

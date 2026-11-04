@@ -1,12 +1,15 @@
 import PouwPearlPlus.Check
+import Flock.Bytes
 
 /-!
 # The prover's openings from a pass's files (`verify_run.Opened`), and the verdict as JSON
 
-`opening` reads each opened tile's rows, leaf and y rows from the pass's files as `verify_run.Opened` does: rows are BF16
+`opening` reads each opened tile's rows, leaf and y rows from the pass's files as `verify_run.Opened` does: each file is
+held to its manifest entry's size and, where the entry has one, its SHA-256 (`verify_run.Files`); rows are BF16
 widened to the committed FP32 words, each followed by its hm96 salt under the manifest's salt key (nonces: the call's
 index for A, 2^62 + the weight for B, 2^63 for the transcript, 2^61 + the call's index for y), and a path is read from a
 tree file laid out as the device writes it (level 0 padded to a power of two, then each level above it, 64 bytes a node).
+A y file that fails is the y opening's failure (`Opened.open_y`), met only once the tile has passed.
 -/
 
 namespace PouwCheck.PearlPlus
@@ -53,20 +56,30 @@ def unhex (s : String) : Option ByteArray := Id.run do
     out := out.push (16 * h + l).toUInt8
   return some out
 
-/-- The files tile `tid` of pass `p` (manifest `man`) opens from, by their manifest paths. -/
-def filesOf (man : Json) (p : Pass) (tid : Nat) : List String := Id.run do
+/-- The manifest entries of the files tile `tid` of pass `p` (manifest `man`) opens from. -/
+def filesOf (man : Json) (p : Pass) (tid : Nat) : List Json := Id.run do
   let some (pos, _, _) := p.tile? tid | return []
   let some (.arr us) := get? man "matmuls" | return []
   let u := us[pos]!
   let w := p.records[pos]!.matmul.weight
   let wt := ((get? man "weights").bind (get? · (toString w))).getD .null
-  let spec (j : Json) (k : String) : List String := ((get? j k).bind (str? · "path")).toList
+  let spec (j : Json) (k : String) : List Json := (get? j k).toList
   let y := (get? u "y").getD .null
   return spec u "rows" ++ spec u "tree" ++ spec wt "rows" ++ spec wt "tree" ++ spec man "leaves" ++ spec man "tree_t" ++
     spec y "rows" ++ spec y "tree"
 
-/-- `Opened.open` and `open_y` on the pass's files `file`. -/
-def opening (man : Json) (p : Pass) (file : String → Except String ByteArray) (tid : Nat) : Except String TileOpening := do
+/-- `verify_run.Files`: the bytes `data` read at manifest entry `spec`'s path, held to its `bytes` and, where it has one,
+its `sha256`. -/
+def held (spec : Json) (data : ByteArray) : Except String ByteArray := do
+  let key := (str? spec "path").getD ""
+  let .ok n := spec.getObjValAs? Nat "bytes" | throw "KeyError: 'bytes'"
+  if data.size != n then throw s!"ValueError: {key}: {data.size} bytes; the manifest says {n}"
+  if let some d := str? spec "sha256" then
+    if Flock.hexOf (Flock.Sha256.hash data) != d then throw s!"ValueError: {key}: its SHA-256 is not the manifest's"
+  pure data
+
+/-- `Opened.open` and `open_y` on the pass's files: `file spec` is the file at manifest entry `spec`, `held` to it. -/
+def opening (man : Json) (p : Pass) (file : Json → Except String ByteArray) (tid : Nat) : Except String TileOpening := do
   let some (pos, rows, cols) := p.tile? tid | throw "KeyError: no such tile"
   let some (.arr us) := get? man "matmuls" | throw "KeyError: 'matmuls'"
   let uj := us[pos]!
@@ -74,24 +87,24 @@ def opening (man : Json) (p : Pass) (file : String → Except String ByteArray) 
   let u := r.matmul
   let wt := ((get? man "weights").bind (get? · (toString u.weight))).getD .null
   let some key := (str? man "hm96_salt_key").bind unhex | throw "KeyError: 'hm96_salt_key'"
-  let path (j : Json) (k : String) : Except String String :=
-    match (get? j k).bind (str? · "path") with
-    | some s => pure s
+  let read (j : Json) (k : String) : Except String ByteArray :=
+    match get? j k with
+    | some spec => if (str? spec "path").isSome then file spec else throw "KeyError: 'path'"
     | none => throw s!"KeyError: '{k}'"
-  let aRows ← file (← path uj "rows")
-  let aTree ← file (← path uj "tree")
-  let bRows ← file (← path wt "rows")
-  let bTree ← file (← path wt "tree")
-  let leaves ← file (← path man "leaves")
-  let treeT ← file (← path man "tree_t")
+  let aRows ← read uj "rows"
+  let aTree ← read uj "tree"
+  let bRows ← read wt "rows"
+  let bTree ← read wt "tree"
+  let leaves ← read man "leaves"
+  let treeT ← read man "tree_t"
   let a := rows.map fun i => (⟨i, f32Row aRows u.k i ++ hm96Salt key u.index i, pathOf aTree u.m i⟩ : LeafOpening)
   let b := cols.map fun j => (⟨j, f32Row bRows u.k j ++ hm96Salt key (2 ^ 62 + u.weight) j, pathOf bTree u.n j⟩ : LeafOpening)
   let leaf : LeafOpening := ⟨tid, leaves.extract (64 * tid) (64 * tid + 64) ++ hm96Salt key (2 ^ 63) tid, pathOf treeT p.count tid⟩
-  let y ← match get? uj "y" with
+  let y : Except String (List LeafOpening) := match get? uj "y" with
     | none => pure []
     | some yj => do
-      let yRows ← file (← path yj "rows")
-      let yTree ← file (← path yj "tree")
+      let yRows ← read yj "rows"
+      let yTree ← read yj "tree"
       pure ((rows.filter (· < r.realRows)).map fun i =>
         (⟨i, f32Row yRows u.n i ++ hm96Salt key (2 ^ 61 + u.index) i, pathOf yTree r.realRows i⟩ : LeafOpening))
   pure ⟨a, b, leaf, y⟩

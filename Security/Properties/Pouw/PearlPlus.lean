@@ -107,10 +107,10 @@ def TileAcceptMeans : Prop :=
       opens (transcriptDomain p.salt p.weightsRoot p.count HM96) p.transcriptRoot TILE_SCHEMA o.leaf ∧
       formed p wn rows cols u o = .ok (ops, ch) ∧ leaf ch = openedValue o.leaf.value ∧
       Rule.checkOpened p.scheme r rows cols ops = none ∧
-      ∀ yRoot, p.yRoots[pos]! = some yRoot →
-        o.y.map (·.position) = rows.filter (· < r.realRows) ∧
-        o.y.all (opens (rowsDomain (yBinding p.salt u.index) u.index r.realRows HM96 false) yRoot ROW_SCHEMA) ∧
-        Rule.yReason rows cols ops ch (o.y.map fun y => words32 (openedValue y.value)) = none
+      ∀ yRoot, p.yRoots[pos]! = some yRoot → ∃ ys, o.y = .ok ys ∧
+        ys.map (·.position) = rows.filter (· < r.realRows) ∧
+        ys.all (opens (rowsDomain (yBinding p.salt u.index) u.index r.realRows HM96 false) yRoot ROW_SCHEMA) ∧
+        Rule.yReason rows cols ops ch (ys.map fun y => words32 (openedValue y.value)) = none
 
 /-- **The cap a passed tile keeps** (`Rule.checkOpened`'s `capFailure`): on its credited rows `cr` and columns `cc`, the
 replayed debit, 40 per flagged atom-word and 32 per later +0 promotion, is at most ρ = 1/400 of `creditOf(1, |K|, n)/n` per

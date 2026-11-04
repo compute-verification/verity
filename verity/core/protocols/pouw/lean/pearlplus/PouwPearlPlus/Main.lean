@@ -60,26 +60,32 @@ def main (argv : List String) : IO UInt32 := do
     | none => pure none
   let input : Input := { coins, manifests := mans, draws := a.draws, source, held }
   let mut cache : Std.HashMap String ByteArray := {}
+  let mut checked : Std.HashMap (String × String) (Except String ByteArray) := {}
   if let .ok pl := plan input then
     if let (some r, none) := (a.record, held) then
       IO.FS.writeFile r ((Json.mkObj [("schema", jstr COIN_SCHEMA), ("commitment", jstr (hex pl.root)),
         ("source", jstr (hex pl.source))]).pretty ++ "\n")
     for (i, tid) in pl.todo do
       let dir := (System.FilePath.mk a.manifests[i]!).parent.getD "."
-      for f in filesOf mans[i]! pl.passes[i]! tid do
+      for spec in filesOf mans[i]! pl.passes[i]! tid do
+        let some f := str? spec "path" | continue
         let full := (dir / f).toString
         if !cache.contains full then
           try cache := cache.insert full (← IO.FS.readBinFile full) catch _ => pure ()
-  let files := cache
+        if !checked.contains (full, spec.compress) then
+          checked := checked.insert (full, spec.compress) (match cache.get? full with
+            | some b => PouwCheck.PearlPlus.held spec b
+            | none => throw s!"FileNotFoundError: {f}")
+  let files := checked
   let pl? := (plan input).toOption
   let opener (i tid : Nat) : Except String TileOpening :=
     match pl? with
     | none => throw "no plan"
     | some pl =>
       let dir := (System.FilePath.mk a.manifests[i]!).parent.getD "."
-      opening mans[i]! pl.passes[i]! (fun f => match files.get? (dir / f).toString with
-        | some b => pure b
-        | none => throw s!"FileNotFoundError: {f}") tid
+      opening mans[i]! pl.passes[i]! (fun spec =>
+        let f := (str? spec "path").getD ""
+        (files.get? ((dir / f).toString, spec.compress)).getD (throw s!"FileNotFoundError: {f}")) tid
   let ans := check input opener
   IO.println (output ans).compress
   return if ans.accept then 0 else 1
