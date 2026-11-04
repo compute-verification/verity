@@ -640,7 +640,7 @@ theorem mem_outs_jointOf_iff (ms : Members) (y : ℕ) :
     obtain ⟨g, hg, rfl⟩ := ho
     obtain ⟨u, k, j, t, h⟩ := (mem_outs_keyProg _ _ g).1 hg
     exact ⟨m, hm, u, k, j, t, posOf (keyProg (ms.getD m default).1 (ms.getD m default).2.size) g,
-      by simp [outBit, h], rfl⟩
+      by unfold outBit; rw [h]; rfl, rfl⟩
   · rintro ⟨m, hm, u, k, j, t, x, hx, rfl⟩
     simp only [outBit, Option.map_eq_some_iff] at hx
     obtain ⟨g, hg, rfl⟩ := hx
