@@ -40,7 +40,8 @@ formalism.jsonl, te_core.formalism's `measure`) and priced at each policy by `pu
 policy is the table's own on every row (`check`). A record keeps its products at the dial's k alone, so at a policy's k
 off it the products term is unmeasured. Each priced row has the table's basis (`basis`): a row that is unmeasured,
 rests on a stub or is partial is never the least S. The row is the eligible one with the least S, else null S with
-why: no attack run at this size, none reached, or none with a full ρ at the policy.
+why: no attack run at this size, none reached, or none with a full ρ at the policy, with the commonest reason the
+products term has no figure (`unpriced`: products not classified at the policy's k, where it is off the dial).
 """
 from __future__ import annotations
 
@@ -284,14 +285,20 @@ def standard(m: formalism.Measured | None, path: Path, c: float, k: float, run: 
 
 
 def unpriced(cands: list[dict], priced: dict, measured: dict, pol: str, c: float, k: float) -> tuple[str, int] | None:
-    """The commonest reason the products term has no figure among the candidates `cands` at (c, k), to its first
-    clause, and on how many; None where it has one on each."""
+    """The commonest reason the products term has no figure among the candidates `cands` at (c, k), and on how many;
+    None where it has one on each. A record whose products were classified at another k alone (a record keeps them at
+    the dial's k) says so; any other reason is te_core.formalism's, to its first clause."""
     off: dict[str, int] = {}
     for x in cands:
         key = checkpoint(x["record"])
         if key in measured and priced[(key, pol)][0]["terms"].get("fresh_products") is None:
             b = formalism.bound(measured[key], c, k)
-            why = b["unmeasured"]["fresh_products"].split(";")[0]
+            got = b["inputs"]["fresh_products"]
+            at = got.get("k_classified")
+            if at is not None and "other_program" not in got and not math.isclose(at, k, rel_tol=1e-12):
+                why = f"products not classified at k = {f'{k:.3g}'.replace('e+0', 'e').replace('e+', 'e')}"
+            else:
+                why = "the products term is " + b["unmeasured"]["fresh_products"].split(";")[0]
             off[why] = off.get(why, 0) + 1
     return max(off.items(), key=lambda kv: kv[1]) if off else None
 
@@ -383,8 +390,8 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
                     count = ", ".join(f"{n} {b}" for b, n in sorted(bases.items(), key=lambda kv: -kv[1]))
                     off = unpriced(cands, priced, measured, pol, c, k)
                     row = {"route": "none with a full rho", "rests_on": (
-                        f"{len(cands)} reached ({count})" + (f"; on {off[1]} the products term is {off[0]}" if off
-                                                             else "") +
+                        (f"{off[0]} on {off[1]} of the {len(cands)} reached ({count})" if off
+                         else f"{len(cands)} reached ({count})") +
                         ": a row that is unmeasured, rests on a stub or is partial is never the least S")}
                 rows.append(labelled(at | row, label))
     p = {"id": PANEL, "title": "Red teaming by model size: standard training's rho and the frontier's least S = p*rho",
