@@ -40,9 +40,11 @@ K = PUBLIC["K"]
 #: T = 63 buckets of 20 ms: an execution phase of 63/50 s
 SCHEDULE = {"bucket_ms": 20, "cell_bytes": 512, "delay": 4, "egress_cells": 4, "every": 63, "ingress_buckets": 63,
             "ingress_cells": 4, "lanes": 4, "queue": 16, "slots": 8, "window": 63}
-MEASURED = {"format": "verity/advice-charge/v1", "label": "measured on test run toy-test: …", "run": "toy-test",
+MEASURED = {"format": "verity/advice-charge/v2", "label": "measured on test run toy-test: …", "run": "toy-test",
             "commit_periods": [{"period": 0, "bits": 480}, {"period": 1, "bits": 2390}],
             "bits": {"count": 2, "min": 480, "median": 1435, "mean": 1435.0, "max": 2390, "total": 2870},
+            "by_phase": [{"phase": 0, "bits": 2870, "commit_periods": 2}],
+            "phase_bits": {"count": 1, "min": 2870, "median": 2870, "mean": 2870.0, "max": 2870, "total": 2870},
             "prompt_len": {"count": 5}, "output_len": {"count": 5}, "finishes": {"eos": 3, "length": 2, "abort": 0}}
 TREE = "ab12" * 10
 #: the certifier's published verdict line, after an earlier attempt's
@@ -163,17 +165,21 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
         "share": 9088 / K, "lean": "scans[i].free"}
 
 
-def test_w63k4_at_a_4_s_tick_charges_768_bits_a_link_window_for_its_128_connections_whatever_the_traffic(tmp_path):
+def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever_the_traffic(tmp_path):
     """Three execution phases of w63k4's schedule at a 4 s tick: its 4 lanes over T = 32 buckets carry at most 128
     connections a phase, each capped at 5 egress cells, so k_sched and k_fail charge 128 · ⌈log2 6⌉ = 384 bits a phase
-    each, the period's check's terms however few connections were served."""
+    each, the period's check's terms however few connections were served; with the jitter T_j log2 d_jit = 32 at
+    d_jit = 2, a phase's terms but ℓ_{a,j} and k_{skip,j} are 800 bits."""
     sys.path.insert(0, str(HERE.parent.parent / "network_traces"))
     import scan_zk as SZ
     schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
-    public = dict(PUBLIC, K=3 * (768 + 9088 + 63), cells=3 * 384, schedules=3 * 384, windows=3, scans=[SCAN] * 3)
+    scan = dict(SCAN, jitter=schedule["window"])
+    public = dict(PUBLIC, K=3 * (768 + 9088 + 32), cells=3 * 384, schedules=3 * 384, windows=3, scans=[scan] * 3)
     rec = OR.record(accepted(tmp_path, public, windows=3, schedule=schedule))
     b = rec["bound"]
     assert [t["bits"] for t in b["terms"] if t.get("phase") is None] == [1152, 1152]
+    jitter = [t["bits"] for t in b["terms"] if t["symbol"] == "T_j \\log_2 d_{jit}"]
+    assert jitter == [32] * 3 and (1152 + 1152) // 3 + jitter[0] == 800
     assert [t.get("times") for t in b["delta_net"]["terms"]] == [None, 3, 3, 3]
     assert rec["periods"]["run"]["delta_net"] == OR.delta_net(Fraction(1, 2 ** 20), 3)
     assert b["connections"] == {"count": 3 * 128, "from": OR.CONNECTIONS}
@@ -291,6 +297,7 @@ def test_the_published_form_which_drops_windows_gives_the_same_record(tmp_path):
     (dict(PUBLIC, scans=[{k: v for k, v in SCAN.items() if k != "faulty_entries"}]),
      "the rows form's public lacks a term: KeyError: 'faulty_entries'"),
     (dict(PUBLIC, windows=2), "1 scans for the period's 2 execution phases"),
+    (dict(PUBLIC, K=756 + 756, scans=[], windows=0), "the rows form's public has no scan"),
 ])
 def test_a_public_that_isnt_the_rows_forms_sum_is_the_bounds_error(tmp_path, public, why):
     rec = OR.record(accepted(tmp_path, public))
@@ -305,13 +312,18 @@ def test_a_test_runs_measured_advice_charge_is_beside_the_bound_as_that_runs(tmp
     rec = json.loads((out / "record" / "onsite.json").read_text())
     assert rec["advice_charge"]["measured"] == {
         "label": MEASURED["label"], "run": "toy-test", "from": str(f), "bits_per_commit_period": MEASURED["bits"],
-        "commit_periods_measured": 2, "finishes": MEASURED["finishes"], "prompt_len": MEASURED["prompt_len"],
-        "output_len": MEASURED["output_len"]}
+        "bits_per_phase": MEASURED["phase_bits"], "commit_periods_measured": 2, "finishes": MEASURED["finishes"],
+        "prompt_len": MEASURED["prompt_len"], "output_len": MEASURED["output_len"]}
     assert (rec["advice_charge"]["served"], rec["advice_charge"]["registered"]["bits_per_phase"]) == (OR.ADVICE, [9088])
     assert json.loads(capsys.readouterr().out.strip()[7:])["advice_measured_on"] == "toy-test"
+    f.write_text(json.dumps(MEASURED | {"phase_bits": None, "by_phase": {"missing": "no clock"}}))
+    assert OR.main([str(out), "--advice-charge", str(f)]) == 0
+    rec = json.loads((out / "record" / "onsite.json").read_text())
+    assert rec["advice_charge"]["measured"]["bits_per_phase"] == {"missing": "no clock"}
+    capsys.readouterr()
     f.write_text(json.dumps(MEASURED | {"format": "verity/other/v1"}))
     assert OR.main([str(out), "--advice-charge", str(f)]) == 1
-    assert "not verity/advice-charge/v1" in capsys.readouterr().err
+    assert "not verity/advice-charge/v2" in capsys.readouterr().err
 
 
 def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path):

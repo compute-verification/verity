@@ -155,9 +155,11 @@
 # `served_verdicts.sh advice-charge`, with PRODUCT=remote, measures honest serving's advice charge on a test run whose
 # inputs and counts are public, never on a served run: steps 0 to 2 at the run of record's serving (T, WINDOW_STEPS, the
 # front's tick), H1_GATE empty and so no H1 option in SERVE_ARGS (serve-openai refuses one without H1's --protocols),
-# then every closed window's advice under the prove path's registered compiler, unpadded, at ADVICE_T buckets of
-# ADVICE_TAU seconds (default `verity-vllm advice`'s 600 and 0.1; the network certifier's link-window, its buckets and
-# tick, charges each execution phase) in the serve dir, and `advice_charge.py`'s record of it, $OUT/advice-charge.json,
+# then every closed window's advice: the server's own where it committed each as it served (`--advice`, whose
+# `--advice-tau` must be ADVICE_TAU), else `verity-vllm advice`'s under the prove path's registered compiler at ADVICE_T
+# buckets of ADVICE_TAU seconds (default 600 and 0.1; an execution phase is ADVICE_T buckets of the network certifier's
+# tick) in the serve dir; and `advice_charge.py`'s record of it, each window's unpadded length and their sum over each
+# execution phase, $OUT/advice-charge.json,
 # which names each window and counts its requests: its inputs being public, the run publishes $OUT as it is, with no
 # `publish`. Its record is what a served run's ADVICE_CHARGE names. `served_verdicts.sh charge`, in TREE with D and OUT,
 # is its last step alone, on a serve dir D already served.
@@ -504,18 +506,23 @@ private_pieces() {
   done
 }
 
-advice_charge() {  # the test run's every closed window's advice, unpadded, and advice_charge.py's record of it (the header's)
-  local ca rc
-  ca=$(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP" \
-    | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])")
-  [ -n "$ca" ] || { say "ADVICE-CHARGE: no registered compiler (prove_path.py compiler)"; return 13; }
-  # shellcheck disable=SC2086
-  (cd "$TREE/integrations/vllm" && vv advice "$D" --cap "$CAP" $ca --T "${ADVICE_T:-600}" --tau "${ADVICE_TAU:-0.1}" \
-    --out "$D/advice-charge") > "$OUT/advice.log" 2>&1
-  rc=$?
-  say "ADVICE (verity-vllm advice exit $rc): $(tail -1 "$OUT/advice.log" | cut -c1-400)"
-  "$PY" "$TREE/benchmarks/one_stage/advice_charge.py" "$D/advice-charge" --run "${RESEARCH_RUN_ID:-local}" \
-    --tau "${ADVICE_TAU:-0.1}" --to "$OUT/advice-charge.json" 2>&1 | publish_lines
+advice_charge() {  # the test run's every closed window's advice and advice_charge.py's record of it (the header's)
+  local ca rc=0 adv="$D/advice-charge"
+  if [ -f "$D/advice.jsonl" ]; then  # serve-openai --advice committed each window's advice as it served, and only once
+    adv="$D/advice"
+    say "ADVICE: the server's own, each window's committed as it served"
+  else
+    ca=$(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP" \
+      | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])")
+    [ -n "$ca" ] || { say "ADVICE-CHARGE: no registered compiler (prove_path.py compiler)"; return 13; }
+    # shellcheck disable=SC2086
+    (cd "$TREE/integrations/vllm" && vv advice "$D" --cap "$CAP" $ca --T "${ADVICE_T:-600}" --tau "${ADVICE_TAU:-0.1}" \
+      --out "$adv") > "$OUT/advice.log" 2>&1
+    rc=$?
+    say "ADVICE (verity-vllm advice exit $rc): $(tail -1 "$OUT/advice.log" | cut -c1-400)"
+  fi
+  "$PY" "$TREE/benchmarks/one_stage/advice_charge.py" "$adv" --run "${RESEARCH_RUN_ID:-local}" \
+    --tau "${ADVICE_TAU:-0.1}" --T "${ADVICE_T:-600}" --to "$OUT/advice-charge.json" 2>&1 | publish_lines
   [ "${PIPESTATUS[0]}" = 0 ] && [ "$rc" = 0 ]
 }
 
