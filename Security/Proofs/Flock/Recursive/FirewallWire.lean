@@ -1,6 +1,7 @@
 module
 
 public import Flock.Firewall
+import all Init.Data.String.Defs
 
 /-!
 # The honest worker's bytes read back as it meant them
