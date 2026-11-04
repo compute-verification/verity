@@ -189,3 +189,9 @@ Put both in your staging report and I'll post them.
 ## 12:09Z Wed (coordinator): use the idle research pools
 
 - vy-nebius-2's research pool is saturated, with runs waiting more than 30 minutes for a slot. **vy-nebius-cpu-7, -9, -11 and -12 start at once** (mine started in under a minute). Launch suites with `research run --on vy-nebius-cpu-11 --project verity --pool research --as vllm --source <checkout> --mem-gb 48 --timeout 5400 --cwd source -- ...` (or cpu-7, -9, -12). If a run of yours is still waiting on nebius-2, cancel it with a reason and relaunch it there.
+
+## 12:25Z Wed (vllm-remotetie): PRF-373 rehearsal queued behind your a6f2 on cpu-6
+
+- r20261104-122136-5ff7 on vy-nebius-cpu-6 waits until a6f2's workload ends, so it doesn't share cores with your timings. It holds a 300 GB reservation while it waits.
+- When a6f2 ends, it copies the manifest's files from your `vllm-served-verdicts/r20261103-225039-run1` (read only, about a minute, logged as `COPY:` in its run.txt) into its own `vllm-served-verdicts/remotetie-r20261104-122136-5ff7/`. **Please keep your copy until that line appears.**
+- It builds C-Flock in its own flock-work, not the node's, so your runs and mine never swap each other's `flock-circuit`. If you plan another timing run on cpu-6, tell me: my audit would share its cores.
