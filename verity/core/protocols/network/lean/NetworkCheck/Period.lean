@@ -2042,13 +2042,16 @@ def toyListed : Listed where
 
 #guard (fun (a : Audit) => a.units == 3 + 4 && a.bits == 2 * 16 * 5 + 2 && a.free == 7 + 3 * 80 + 4 * 112 &&
     a.stateFree == 5 + 3 * 80 + 4 * 112)
-  (toyListed.charge { free := 7, steps := 0, program := "", units := 10, bits := vuBits 1 5, entries := #[],
-    record := none, stateFree := 5 } #[(2, 80), (1, 112)])
+  (toyListed.charge
+    { free := 7, steps := 0, program := "", units := 10, bits := vuBits 1 5, entries := #[], record := none,
+      stateFree := 5 } #[(2, 80), (1, 112)])
 
-/-- A unit of two input words, ports of 16 at word 0 and two of 16 at word 1: 256 input columns, 208 of them padding. -/
-#guard padCols { (default : Flock.Circuit) with
-  nets := #[("unit", { (default : Flock.Net) with inWords := 2, constPos := 2 * Flock.WORD + 4,
-    inGroups := #[⟨0, 1, #[16]⟩, ⟨1, 1, #[16, 16]⟩] })], unitNet := 0 } == 2 * Flock.WORD - 48
+/- A unit of two input words, ports of 16 at word 0 and two of 16 at word 1: 256 input columns, 208 of them padding. -/
+#guard
+  let n : Flock.Net :=
+    { (default : Flock.Net) with
+      inWords := 2, constPos := 2 * Flock.WORD + 4, inGroups := #[⟨0, 1, #[16]⟩, ⟨1, 1, #[16, 16]⟩] }
+  padCols { (default : Flock.Circuit) with nets := #[("unit", n)], unitNet := 0 } == 2 * Flock.WORD - 48
 #guard (circuitsWhy { audits := #[some toyListed] } #[]).isSome
 #guard (circuitsWhy { audits := #[none, some toyListed] } #[(.empty, default), (.empty, default)]) ==
   some s!"audit 1's circuit file for T: its SHA-512 is not its listing's"

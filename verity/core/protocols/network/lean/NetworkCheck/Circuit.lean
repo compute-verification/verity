@@ -717,8 +717,9 @@ def check (P : Prog) (record order pins : Json) : Except String Counts := do
 
 /- A decoded Program's keys are its descriptor's `definitions` keys, so none repeats; a Program built with one twice is
 refused before its record is read. -/
-#guard match checked { defs := #[{ (default : Defn) with key := "A_v1" }, { (default : Defn) with key := "A_v1" }],
-    index := {}, root := 0, programFn := "", sha512 := .empty } .null .null with
+#guard
+  let a : Defn := { (default : Defn) with key := "A_v1" }
+  match checked { (default : Prog) with defs := #[a, a] } .null .null with
   | .error e => e == "the Program has two definitions of one key, which a lookup by key reads as one"
   | .ok _ => false
 
