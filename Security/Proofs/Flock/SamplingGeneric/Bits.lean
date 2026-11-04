@@ -2,7 +2,7 @@ module
 
 public import Definitions.Claims.SamplingGeneric
 public import Proofs.Flock.Claims.Sampling.Bext
-public import Proofs.Flock.SamplingGeneric.Wait
+public import Proofs.Flock.SamplingGeneric.Fails
 
 /-!
 # The sampled compiler's bits
