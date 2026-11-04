@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.RecGeneric.Plurality
+public import Proofs.Flock.RecGeneric.Coupling
 public import Proofs.Flock.Claims.Recursion.PlurLin
 public import Proofs.Flock.Claims.Recursion.Hybrid
 public import Proofs.Flock.Claims.Recursion.Gap
@@ -19,6 +19,10 @@ so either their round messages differ (`ForksBind`) or one commit string opens t
 their classes differ, so their views differ at some round (`Server.run_ivstar_lastCoin`, from `Proto.LastCoinFree`),
 and `ForksBind` there. So `Pr[BadO] ≤ k_Π·(Pr[link] + 1/(M+1) + PrOut)` (`Comp.Pr_badO_le_link`), at any compiled
 verifier, outer extraction and server.
+
+A judged rerun whose witnesses are in `R_O` and whose inner view rejects shows a collision among its own evaluations
+(`accepts`), which `forkPlan` searches at its first run: `Pr[InnerRejectsO] ≤ Pr[B_I]`
+(`Comp.Pr_innerRejects_le_fork`).
 -/
 
 @[expose] public section
@@ -172,7 +176,7 @@ theorem binds_tied {H : Msg → Msg} {S : Server} (hB : S.Binds) {a : Msg} {o₁
     TiedColl H L := by
   obtain ⟨i, hi₁, hi₂, hdi⟩ : ∃ i, ∃ (hi₁ : i < o₁.length) (hi₂ : i < o₂.length), o₁[i].1 ≠ o₂[i].1 := by
     by_contra hc
-    push_neg at hc
+    push Not at hc
     exact hne (List.ext_getElem (by simp [hl]) fun i h1 h2 => by
       simp only [List.getElem_map]
       exact hc i (by simpa using h1) (by simpa using h2))
@@ -204,12 +208,12 @@ theorem linkLoop_exec {Coin Ω C : Type} {n : ℕ} (m : RunModel Coin Ω n C) (�
       funext fun t => congrArg us (by simp only [Fin.val_succ]; omega)
     simp only [firstPick, Fin.val_zero, Nat.add_zero, htail] at h
     by_cases ha : m.acc ω (fork (m.cut j) (us 0).1 (us i).1, (us i).2)
-    · rw [ite_eq_left ha] at h
+    · simp only [ha, ↓reduceIte] at h
       have hv := Option.some_injective _ h
       subst hv
       refine ⟨.fork j (.fresh 0) (.fresh i), ?_, rfl⟩
       simp only [linkLoop, Plan.exec, RunModel.named, decide_eq_true_eq, ha, ↓reduceIte]
-    · rw [ite_eq_right ha] at h
+    · simp only [ha, ↓reduceIte] at h
       obtain ⟨e, he, hn⟩ := linkLoop_exec m ω us j first N (i + 1) v h
       refine ⟨e, ?_, hn⟩
       simp only [linkLoop, Plan.exec, RunModel.named, decide_eq_true_eq, ha, ↓reduceIte]
@@ -217,12 +221,12 @@ theorem linkLoop_exec {Coin Ω C : Type} {n : ℕ} (m : RunModel Coin Ω n C) (�
 
 /-- The link's slots, read as its first run's coins, its first fork and the loop's draws, are uniform. -/
 theorem unifMap_link {A B : Type} [Fintype A] [Fintype B] [Nonempty B] (M : ℕ) :
-    UnifMap (fun sl : Fin (M + 1 + 1) → A × B => ((sl 0).1, Fin.tail sl 0, Fin.tail (Fin.tail sl))) := fun G =>
-  (Ex_splitFirst (U := A × B) (M := M + 1) (fun a vs => G (a.1, vs 0, Fin.tail vs))).trans <|
-    (congrArg Ex (funext fun a => (Ex_splitFirst (U := A × B) (M := M) (fun u vs => G (a.1, u, vs))).trans
-      (Ex_prod (fun p : (A × B) × (Fin M → A × B) => G (a.1, p))).symm)).trans <|
-    (UnifMap.fst (A := A) (B := B) (fun a₁ => Ex fun p : (A × B) × (Fin M → A × B) => G (a₁, p))).trans
-      (Ex_prod G).symm
+    UnifMap (fun sl : Fin (M + 1 + 1) → A × B => ((sl 0).1, Fin.tail sl 0, Fin.tail (Fin.tail sl))) := by
+  have h1 : UnifMap (fun sl : Fin (M + 1 + 1) → A × B => (sl 0, Fin.tail sl)) :=
+    UnifMap.equiv (splitFirst (U := A × B) (M + 1))
+  have h2 : UnifMap (fun p : (A × B) × (Fin (M + 1) → A × B) => (p.1.1, p.2 0, Fin.tail p.2)) :=
+    UnifMap.prod (φ := fun q : A × B => q.1) (ψ := splitFirst (U := A × B) M) UnifMap.fst (UnifMap.equiv _)
+  exact h1.comp h2
 
 open Classical in
 /-- **A loop over `gR`'s draws, read through `gv ⊇ gR`**: where the first `gR` draw differs, the first `gv` draw is a `gR`
@@ -247,10 +251,9 @@ theorem firstDiffers_split {U : Type} {gR gv o : U → Prop} {f : U → Msg} {a 
         · exact Or.inr (Or.inr ⟨hv, h'⟩)
 
 open Classical in
-/-- **Wald's bound on the loop's first `gv` draw**: a `gR` draw, then a loop whose first `gv` draw is in `o ⊆ gv`, has
-probability at most `Pr[o]`: `Pr[gR]·Pr[o]·G_M ≤ Pr[o]·(1 − (1 − Pr[gv])^M)`. -/
-theorem Pr_firstLoop_le {U : Type} [Fintype U] [Nonempty U] (gR gv o : U → Prop) (hR : ∀ u, gR u → gv u)
-    (ho : ∀ u, o u → gv u) (M : ℕ) :
+/-- **Wald's bound on the loop's first `gv` draw**: a `gR` draw, then a loop whose first `gv` draw is in `o`, has
+probability at most `Pr[o]`: `Pr[gR]·Pr[gv ∧ o]·G_M ≤ Pr[o]·(1 − (1 − Pr[gv])^M)`. -/
+theorem Pr_firstLoop_le {U : Type} [Fintype U] [Nonempty U] (gR gv o : U → Prop) (hR : ∀ u, gR u → gv u) (M : ℕ) :
     Pr (fun p : U × (Fin M → U) => gR p.1 ∧ firstDiffers gv (fun u => if o u then [0] else []) [] M p.2) ≤
       Pr o := by
   have hO0 : 0 ≤ Pr o := Pr_nonneg _
@@ -287,30 +290,42 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] {Ω C : Type} [Fintype Ω]
   [Nonempty C] {N : ℕ}
 
 open Classical in
-/-- **The loop's first giving fork outside `R_O` costs `PrOut`**: over a tape, a prefix, a `gR` fork and `M` more forks
-at `j`, the first `gv` fork in `o` has probability at most `Pr[o]` over one draw. -/
-theorem Pr_outLoop_le (j M : ℕ) (gR gv o : Ω → (Fin N → Coin) × C → Prop) (hR : ∀ ω d, gR ω d → gv ω d)
-    (ho : ∀ ω d, o ω d → gv ω d) :
+/-- **The loop's first giving fork in `o` costs `Pr[o]`**: over a tape, a prefix, a `gR` fork and `M` more forks at `j`,
+the first `gv` fork in `o` has probability at most `Pr[o]` over one draw. -/
+theorem Pr_outLoop_le (j M : ℕ) (gR gv o : Ω → (Fin N → Coin) × C → Prop) (hR : ∀ ω d, gR ω d → gv ω d) :
     Pr (fun t : Ω × (Fin N → Coin) × ((Fin N → Coin) × C) × (Fin M → (Fin N → Coin) × C) =>
       gR t.1 (fork j t.2.1 t.2.2.1.1, t.2.2.1.2) ∧
         firstDiffers (fun u : (Fin N → Coin) × C => gv t.1 (fork j t.2.1 u.1, u.2))
           (fun u => if o t.1 (fork j t.2.1 u.1, u.2) then [0] else []) [] M t.2.2.2) ≤
       Pr (fun t : Ω × (Fin N → Coin) × C => o t.1 t.2) := by
   have hoff : PrefixDet (k := N) (Coin := Coin) fun _ => j := fun _ _ _ => rfl
-  have hR' : Pr (fun t : Ω × (Fin N → Coin) × C => o t.1 t.2) =
-      Ex fun ω => Ex fun r : Fin N → Coin => Pr fun u : (Fin N → Coin) × C => o ω (fork j r u.1, u.2) := by
+  let a : Ω → (Fin N → Coin) → ℝ := fun ω r => Pr fun u : (Fin N → Coin) × C => o ω (fork j r u.1, u.2)
+  let b : Ω → (Fin N → Coin) → ℝ := fun ω r =>
+    Pr fun p : ((Fin N → Coin) × C) × (Fin M → (Fin N → Coin) × C) =>
+      gR ω (fork j r p.1.1, p.1.2) ∧
+        firstDiffers (fun u : (Fin N → Coin) × C => gv ω (fork j r u.1, u.2))
+          (fun u => if o ω (fork j r u.1, u.2) then [0] else []) [] M p.2
+  have hL : Pr (fun t : Ω × (Fin N → Coin) × ((Fin N → Coin) × C) × (Fin M → (Fin N → Coin) × C) =>
+      gR t.1 (fork j t.2.1 t.2.2.1.1, t.2.2.1.2) ∧
+        firstDiffers (fun u : (Fin N → Coin) × C => gv t.1 (fork j t.2.1 u.1, u.2))
+          (fun u => if o t.1 (fork j t.2.1 u.1, u.2) then [0] else []) [] M t.2.2.2) =
+      Ex fun ω => Ex fun r => b ω r := by
+    rw [Claims.Recursion.Pr_prod]
+    refine congrArg Ex (funext fun ω => ?_)
+    rw [Claims.Recursion.Pr_prod]
+  have hRt : Pr (fun t : Ω × (Fin N → Coin) × C => o t.1 t.2) = Ex fun ω => Ex fun r => a ω r := by
     rw [Claims.Recursion.Pr_prod]
     refine congrArg Ex (funext fun ω => ?_)
     rw [Claims.Recursion.Pr_prod, ← Ex_fork hoff (fun r => Pr fun c : C => o ω (r, c)), Ex_prod]
     refine congrArg Ex (funext fun r => ?_)
+    show _ = Pr (fun u : (Fin N → Coin) × C => o ω (fork j r u.1, u.2))
     rw [Claims.Recursion.Pr_prod (fun u : (Fin N → Coin) × C => o ω (fork j r u.1, u.2))]
-  rw [hR', Claims.Recursion.Pr_prod]
-  refine Ex_mono fun ω => ?_
-  rw [Claims.Recursion.Pr_prod]
-  refine Ex_mono fun r => ?_
-  exact Pr_firstLoop_le (fun u => gR ω (fork j r u.1, u.2)) (fun u => gv ω (fork j r u.1, u.2))
-    (fun u => o ω (fork j r u.1, u.2)) (fun u => hR ω _) (fun u => ho ω _) M
+  rw [hL, hRt]
+  exact Ex_mono fun ω => Ex_mono fun r =>
+    Pr_firstLoop_le (fun u => gR ω (fork j r u.1, u.2)) (fun u => gv ω (fork j r u.1, u.2))
+      (fun u => o ω (fork j r u.1, u.2)) (fun u => hR ω _) M
 
+omit [Nonempty Coin] [Nonempty Ω] [Nonempty C] in
 open Classical in
 /-- **The link through `gv ⊇ gR`**: the link's success at `j` splits into its first `gv` fork being a `gR` fork that
 reads differently, or a `gv` fork outside `gR`, there in `o`. -/
@@ -345,27 +360,26 @@ namespace Comp
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 variable {K : Comp Coin} {I : Proto Coin W} {S : Server} {H : Msg → Msg} {Ω : Type} {P : Prover Ω} {x : Msg}
 
+omit [Fintype Coin] [Nonempty Coin] in
 theorem rerunCalls_some {ω : Ω} {d : (Fin (K.V.k x) → Coin) × K.EO.C x} {w : K.WO}
     (hw : K.wits H P x ω d = some w) : K.rerunCalls H P x ω d = K.calls H x d.1 w := by
   unfold Comp.rerunCalls
   rw [hw]
   rfl
 
+omit [Fintype Coin] [Nonempty Coin] in
 theorem isSome_of_givesRO {ω : Ω} {d : (Fin (K.V.k x) → Coin) × K.EO.C x} (h : K.GivesRO H P x ω d) :
     (K.wits H P x ω d).isSome = true := by
   obtain ⟨w, hw, -⟩ := h
   exact Option.isSome_iff_exists.2 ⟨w, hw⟩
 
-theorem isSome_of_outRO {ω : Ω} {d : (Fin (K.V.k x) → Coin) × K.EO.C x} (h : K.OutRO H P x ω d) :
-    (K.wits H P x ω d).isSome = true := by
-  obtain ⟨w, hw, -⟩ := h
-  exact Option.isSome_iff_exists.2 ⟨w, hw⟩
-
+omit [Fintype Coin] [Nonempty Coin] in
 theorem outRO_of_isSome {ω : Ω} {d : (Fin (K.V.k x) → Coin) × K.EO.C x} (h : (K.wits H P x ω d).isSome = true)
     (hn : ¬ K.GivesRO H P x ω d) : K.OutRO H P x ω d := by
   obtain ⟨w, hw⟩ := Option.isSome_iff_exists.1 h
   exact ⟨w, hw, fun hR => hn ⟨w, hw, hR⟩⟩
 
+omit [Fintype Coin] [Nonempty Coin] in
 theorem view_raw {r : Fin (K.V.k x) → Coin} {w : K.WO} {i : ℕ} (hi : i < I.V.k (K.xI x)) :
     ((K.view (S.IVStar I.V I.ans) H x r w).msgs.map Prod.fst).getD i [] = (K.msgs x w).getD i [] :=
   Server.run_ivstar_raw S I.V I.ans H (K.xI x) (K.msgs x w) (fun i => coinSeq r i.val) hi
@@ -466,7 +480,7 @@ theorem pair_core (hB : S.Binds) (hCF : I.LastCoinFree H)
       apply hcls
       rw [hc₁, hc₂]
       exact congrArg (fun t : Trace => (I.opens (S.openView t.seen), t.vLog.toFinset)) hrun
-    · push_neg at hall
+    · push Not at hall
       obtain ⟨i, hi, hri⟩ := hall
       have hfi : fork i d₁.1 d₂.1 = d₂.1 := fork_of_le (by omega) hf
       have hG₂' : K.Gives H P x ω (fork i d₁.1 d₂.1) d₂.2 w₂ := by rw [hfi]; exact hG₂
@@ -623,9 +637,9 @@ theorem Pr_badO_le_link (hB : S.Binds) (hCF : I.LastCoinFree H)
       (fun ω d => K.fAt I S H P x ω j.val d) (fun _ _ h => isSome_of_givesRO h) (fun _ _ h hn => outRO_of_isSome h hn)
     have ho' := (Pr_outLoop_le j.val M (fun ω d => K.GivesRO H P x ω d)
       (fun ω d => (K.wits H P x ω d).isSome = true) (fun ω d => K.OutRO H P x ω d)
-      (fun _ _ h => isSome_of_givesRO h) (fun _ _ h => isSome_of_outRO h)).trans_eq
+      (fun _ _ h => isSome_of_givesRO h)).trans_eq
         (rfl : Pr (fun t : Ω × (Fin (K.V.k x) → Coin) × K.EO.C x => K.OutRO H P x t.1 t.2) = K.PrOut H P x)
-    have hl := Pr_linkPick_le hB hCF hK M hk' j
+    have hl := Pr_linkPick_le (Ω := Ω) (P := P) hB hCF hK M hk' j
     refine (le_of_eq (Pr_congr fun t => ?_)).trans (hp.trans ?_)
     · simp only [Comp.opAtO, fork_preCoins]
     · exact (add_le_add (hs.trans (add_le_add hl ho')) le_rfl).trans_eq (by ring)
@@ -657,6 +671,72 @@ theorem Pr_badO_le_link (hB : S.Binds) (hCF : I.LastCoinFree H)
         rw [Finset.sum_add_distrib, Finset.sum_add_distrib, ← hF, Finset.sum_const, Finset.sum_const,
           Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, nsmul_eq_mul]
         ring
+
+/-! ## A rejecting judged rerun -/
+
+/-- Every evaluation `B_I` and the link search at a rerun is true. -/
+theorem verModel_log_true (hK : K.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x) (ω : Ω)
+    (u : (Fin (K.V.k x) → Coin) × K.EO.C x) :
+    ∀ p ∈ (K.verModel (S.IVStar I.V I.ans) H P x).log ω u, H p.1 = p.2 := by
+  intro p hp
+  rcases List.mem_append.1 hp with hp | hp
+  · exact rerunCalls_true hK.replays hK.callsTrue ω u p hp
+  · exact hK.ownTrue Ω P ω u.1 p hp
+
+/-- **A rejecting judged rerun is `B_I`'s success**: where `E_O` gives witnesses in `R_O` on an accepted run and the
+inner view rejects, the rerun's evaluations collide (`accepts`), and `forkPlan` searches them at its first run, at
+every round it guesses. -/
+theorem Pr_innerRejects_le_fork
+    (hK : K.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x) [Fintype Ω] [Nonempty Ω] :
+    Pr (K.InnerRejectsO I S H P x) ≤
+      (forkPlan (Coin := Coin) I.V.k).PrAt H (K.verModel (S.IVStar I.V I.ans) H P x) (K.xI x) := by
+  by_cases hk : 0 < I.V.k (K.xI x)
+  swap
+  · have h0 : Pr (K.InnerRejectsO I S H P x) = 0 := by
+      refine le_antisymm ((Pr_mono fun t ht => ?_).trans_eq Pr_false) (Pr_nonneg _)
+      obtain ⟨w, hG, -, -⟩ := ht
+      exact hk (hK.margin Ω P t.1 t.2.1 hG.1).1
+    have hk' : ¬ 0 < (forkPlan (Coin := Coin) I.V.k).sel (K.xI x) := hk
+    have hP0 : (forkPlan (Coin := Coin) I.V.k).PrAt H (K.verModel (S.IVStar I.V I.ans) H P x) (K.xI x) = 0 := by
+      rw [RunFinder.PrAt, dite_eq_right hk']
+    exact h0.trans_le hP0.symm.le
+  have hk' : 0 < (forkPlan (Coin := Coin) I.V.k).sel (K.xI x) := hk
+  have hP : (forkPlan (Coin := Coin) I.V.k).PrAt H (K.verModel (S.IVStar I.V I.ans) H P x) (K.xI x) =
+      Ex fun j : Fin (I.V.k (K.xI x)) => Pr fun s : Ω × (Fin (1 + 1) → (Fin (K.V.k x) → Coin) × K.EO.C x) =>
+        ∃ a b, ((forkPlan (Coin := Coin) I.V.k).finder (K.verModel (S.IVStar I.V I.ans) H P x) (K.xI x) hk').out
+          (j, s) = some (a, b) ∧ Collision H a b := by
+    rw [RunFinder.PrAt, dite_eq_left hk']
+    exact Claims.Recursion.Pr_prod _
+  haveI : Nonempty (Fin (I.V.k (K.xI x))) := ⟨⟨0, hk⟩⟩
+  rw [hP]
+  refine (Ex_const (α := Fin (I.V.k (K.xI x))) _).symm.trans_le (Ex_mono fun j => ?_)
+  have hU : UnifMap (fun s : Ω × (Fin (1 + 1) → (Fin (K.V.k x) → Coin) × K.EO.C x) => (s.1, s.2 0)) :=
+    UnifMap.prod UnifMap.self
+      ((UnifMap.equiv (splitFirst (U := (Fin (K.V.k x) → Coin) × K.EO.C x) 1)).comp UnifMap.fst)
+  refine (hU.Pr _).symm.trans_le (Pr_mono fun s hs => ?_)
+  obtain ⟨w, hG, hR, hrej⟩ := hs
+  have hAcc : AccAt H K.V x := ⟨Ω, P, s.1, (s.2 0).1, hG.1⟩
+  obtain ⟨a, b, hab, -⟩ := (hK.accepts hAcc Ω P s.1 (s.2 0).1 (s.2 0).2 w hG hR).resolve_left hrej
+  have hw : K.wits H P x s.1 (s.2 0) = some w := hG.2
+  have hu0 : slotRuns s.2 0 = s.2 0 := congrArg s.2 (Fin.ext (by simp))
+  have hT : ∀ p ∈ ((((forkPlan (Coin := Coin) I.V.k).plan (K.xI x) j).exec (K.verModel (S.IVStar I.V I.ans) H P x)
+      s.1 (slotRuns s.2)).2.2.flatMap fun e =>
+        (K.verModel (S.IVStar I.V I.ans) H P x).log s.1 ((K.verModel (S.IVStar I.V I.ans) H P x).named (slotRuns s.2) e)),
+      H p.1 = p.2 := by
+    intro p hp
+    obtain ⟨e, -, hpe⟩ := List.mem_flatMap.1 hp
+    exact verModel_log_true hK s.1 _ p hpe
+  have hsub : ∀ p ∈ K.calls H x (s.2 0).1 w ++ K.own H x (run H P K.V x s.1 (s.2 0).1).msgs,
+      p ∈ ((((forkPlan (Coin := Coin) I.V.k).plan (K.xI x) j).exec (K.verModel (S.IVStar I.V I.ans) H P x)
+        s.1 (slotRuns s.2)).2.2.flatMap fun e =>
+          (K.verModel (S.IVStar I.V I.ans) H P x).log s.1
+            ((K.verModel (S.IVStar I.V I.ans) H P x).named (slotRuns s.2) e)) := by
+    intro p hp
+    refine List.mem_flatMap.2 ⟨.fresh 0, List.mem_cons.2 (Or.inl rfl), ?_⟩
+    show p ∈ K.rerunCalls H P x s.1 (slotRuns s.2 0) ++ K.ownAt H P x s.1 (slotRuns s.2 0)
+    rw [hu0, rerunCalls_some hw]
+    exact hp
+  exact coll_of_isSome hT (findColl_isSome_of_sub H hT hsub (Option.isSome_iff_exists.2 ⟨_, hab⟩))
 
 end Comp
 
