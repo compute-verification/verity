@@ -1538,6 +1538,34 @@
    "owner": "@compute-accounting",
    "digest": "9c96012ae81b0ff1a9f66f26485d7cd844a7b00cd5e99fd4e72ecc0d6fc3035a"
   },
+  "Nci.Cut.Arrays": {
+   "owner": "@training",
+   "digest": "111c92d12e00ac259139b85416c77ad9033a63a45e5f4a7a197c6cce64836ef1"
+  },
+  "Nci.Cut.Assumptions.Exports": {
+   "owner": "@training",
+   "digest": "45a66575def5bbb4d3ab2a6da56b3ea9c3cddd5d096fbf156665d789e887c161"
+  },
+  "Nci.Cut.Assumptions.Hardness": {
+   "owner": "@training",
+   "digest": "f09fae736063873c46856fdfc4975fbee382c2a39f5fe5fab0a90ce3ef2927f6"
+  },
+  "Nci.Cut.CostsAtLeast": {
+   "owner": "@training",
+   "digest": "833c86670586107ebd1803a89f8cdfe1e8f2d927cb74028c4d42e0067709a1bc"
+  },
+  "Nci.Cut.NoSharedPair": {
+   "owner": "@training",
+   "digest": "edf10dcc2cffac840222ebbf36dbd8337aee14933243ad99695e0ab6f31214b1"
+  },
+  "Nci.Cut.ReadsAtMost": {
+   "owner": "@training",
+   "digest": "cbd09eb6c29f2035f8f306634a0e4bc34f1a33c731cb6697a11cd8f972d2cf06"
+  },
+  "Nci.Cut.ValuesInjective": {
+   "owner": "@training",
+   "digest": "379541f687acf8cc5048159a958e0b31a92a647beb56237022b8aec67cefa275"
+  },
   "Nci.Ldl.Assumptions.ActivationRate": {
    "owner": "@training",
    "digest": "4e0b2de3da3ef0ceea8c956390d617153e1415d39250c160da01d9e8f2074c1f"
@@ -2273,34 +2301,6 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
-  },
-  "Nci.Cut.Arrays": {
-   "owner": "@training",
-   "digest": "111c92d12e00ac259139b85416c77ad9033a63a45e5f4a7a197c6cce64836ef1"
-  },
-  "Nci.Cut.Assumptions.Exports": {
-   "owner": "@training",
-   "digest": "45a66575def5bbb4d3ab2a6da56b3ea9c3cddd5d096fbf156665d789e887c161"
-  },
-  "Nci.Cut.Assumptions.Hardness": {
-   "owner": "@training",
-   "digest": "f09fae736063873c46856fdfc4975fbee382c2a39f5fe5fab0a90ce3ef2927f6"
-  },
-  "Nci.Cut.CostsAtLeast": {
-   "owner": "@training",
-   "digest": "833c86670586107ebd1803a89f8cdfe1e8f2d927cb74028c4d42e0067709a1bc"
-  },
-  "Nci.Cut.NoSharedPair": {
-   "owner": "@training",
-   "digest": "edf10dcc2cffac840222ebbf36dbd8337aee14933243ad99695e0ab6f31214b1"
-  },
-  "Nci.Cut.ReadsAtMost": {
-   "owner": "@training",
-   "digest": "cbd09eb6c29f2035f8f306634a0e4bc34f1a33c731cb6697a11cd8f972d2cf06"
-  },
-  "Nci.Cut.ValuesInjective": {
-   "owner": "@training",
-   "digest": "379541f687acf8cc5048159a958e0b31a92a647beb56237022b8aec67cefa275"
   }
  },
  "meaning": [
