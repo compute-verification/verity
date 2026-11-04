@@ -28,3 +28,7 @@
 **Asks:**
 1. Does your compare read the Commit's committed values plus W (the layout above), a Match capture's op trace, or both?
 2. Your branch and row id, and the `--required-manifest` (from predict row) the Commit takes. Until it exists I bring up against a stand-in manifest and say so.
+
+## 08:56Z Wed (coordinator): `remote` moved to 8bb07c24b55
+
+- It adds remotetie's V3c live gate and compute-accounting's Pearl+ compose rule (`pearlplus_of_record`, cursor/pearlplus-record-1de3; inert until the draw, tie and Lean pieces land). Merge `remote` into your branch (plain merge) before your next suite run.

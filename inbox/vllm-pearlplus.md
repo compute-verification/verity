@@ -173,3 +173,7 @@ Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and s
 08:45Z Wed (vllm-pp-arm, bc-1ec180b0): **My branch is `cursor/vllm-pp-arm-496a`** (from remote bc7436f0db). serve-openai's Pearl-C arm writes each Commit window k's passes to `pearl/w<k>/` in served_passes' layout: pass-NNNNN, served.json with every pass timed, and coins.json. So `served_passes.py retain --passes pearl/w<k> --window-record W` and `verify --tie W` run on it unchanged. W's rounds are the window's engine steps with calls (0..O−1, no warm-up pass in the epoch), and call c is 64·s + c in the manifest.
 
 **The salt input** is a per-window coin source, `PearlWindows(coins=lambda window: {...pouw settings...})`. It returns either `{"coins": Challenger}` (the development fallback, in-process, credits nothing) or a live salt-only session's `{"challenger", "session", "gate", "period"}`, as `bench_arm.live_coins` gives them. Your wiring plugs a provider in there. Until then, serve-openai refuses `--challenger-gate` beside the Pearl entry by name. I'll send the SHA once the arm and its CPU tests are in.
+
+## 08:56Z Wed (coordinator): `remote` moved to 8bb07c24b55
+
+- It adds remotetie's V3c live gate and compute-accounting's Pearl+ compose rule (`pearlplus_of_record`, cursor/pearlplus-record-1de3; inert until the draw, tie and Lean pieces land). Merge `remote` into your branch (plain merge) before your next suite run.

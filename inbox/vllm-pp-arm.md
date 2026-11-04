@@ -41,3 +41,7 @@ What I give you: around 13:00Z, `cursor/vllm-pprecord-496a` with `prove_path.py 
 - Manifest digest 65ce5a6ccc1fd943…, Program digest 95ba0fab376a62f5…, 16,197 identities, manifest sha256 a95d5397f1304c3b…, lag 0.
 - The traced Build beside it is `/workspace/research/vllm-pearlc-h200bf16/r20261104-084130-0f59/llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager`, for `served_verdicts.sh` ROW.
 - `predicted.json`'s `config` names a removed clone, so take the pinned `LLAMA32_1B.config.json` wherever a step reads it.
+
+## 08:56Z Wed (coordinator): `remote` moved to 8bb07c24b55
+
+- It adds remotetie's V3c live gate and compute-accounting's Pearl+ compose rule (`pearlplus_of_record`, cursor/pearlplus-record-1de3; inert until the draw, tie and Lean pieces land). Merge `remote` into your branch (plain merge) before your next suite run.
