@@ -130,7 +130,6 @@ theorem served_eval (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Type
   rw [hview _ fun t ht _ => (L.place_of_not_mem R r' ht).trans (hR t ht), L.coinsOf_place hcard]
   rfl
 
-omit [Fintype Coin] [Nonempty Coin] in
 /-- **The block is found where `A`'s extractor finds a witness** against the session's prover, at the session's coins
 of `R` and the block's coins cast to the session's shape. -/
 theorem found_of (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Type} (P : Prover Ω) (ω : Ω)
@@ -421,7 +420,6 @@ noncomputable def selMiss (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P
   Pr fun c : L.SlotEC x => (run H P L.V x ω R).out = .acc ∧
     ∃ i u, L.selSlot x sel R = some (i, u) ∧ ¬ L.Found H x (run H P L.V x ω) u R (c i u)
 
-omit [Fintype Coin] [Nonempty Coin] in
 theorem selMiss_none (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (sel : List ℕ → Option (Fin (L.nPU x))) {R : Fin (L.V.k x) → Coin} (h : L.selSlot x sel R = none) :
     L.selMiss H P x ω sel R = 0 := by
