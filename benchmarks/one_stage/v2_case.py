@@ -22,7 +22,8 @@ and domains give (`registration.record`, a ``stand-in`` window, the law ``subset
   the challenger's key and family, the window root, and ``proofs``: the circuit and public files' SHA-512s, no registered
   file), the record, the evidence (the draw, its coins as `Challenger.drawCoins` reads them, and ``proofs``: the session's
   record and rep files by SHA-512) and the blobs (the circuit, public, record, rep and table files), as the difftests'
-  `serve` reads a case. `--zk-check serve` decides it; ``out/case.json`` is the case and ``out/verdict.json`` the answer.
+  `serve` reads a case. `--zk-check serve` decides it; ``case/case.json`` under `--out` is the case and
+  ``case/verdict.json`` the answer.
 """
 from __future__ import annotations
 
