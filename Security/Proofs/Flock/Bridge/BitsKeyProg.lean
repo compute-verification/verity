@@ -38,10 +38,6 @@ theorem gates_mono (k : ℕ) (R : Rows) {u n : ℕ} (h : u ≤ n) : Placed.gates
   rw [gates_val, gates_val]
   exact Nat.add_le_add_left (Nat.mul_le_mul_right _ h) _
 
-theorem uniform_succ (n : ℕ) : Placed.uniform k R ins one hone (n + 1) =
-    Prog.snoc (Placed.uniform k R ins one hone n) R (fun c => Fin.castLE (Placed.le_gates k R n) (ins n c))
-      (Fin.castLE (Placed.le_gates k R n) one) (fun c h => hone n c (Fin.castLE_injective _ h)) := rfl
-
 variable (k R ins one) in
 /-- **Unit `u`'s column `c`'s gate** in `uniform`: input `c`'s gate `ins u c`, computed row `c − nIn`'s gate after the
 units before it, or the constant's `one`. -/
@@ -63,53 +59,72 @@ private theorem lt_gates_of_lt {n u : ℕ} (hun : u < n) (i : Fin R.nComp) :
   have := i.isLt
   omega
 
+private theorem map_val_map {N M : ℕ} (f : Fin N → Fin M) (l : List (Fin N)) :
+    (l.map f).map Fin.val = l.map fun c => (f c).val := by
+  rw [List.map_map]
+  rfl
+
+private theorem colWire_val_colVal (u : ℕ) (c : Fin R.w) :
+    (Prog.colWire R (fun c => Fin.castLE (Placed.le_gates k R u) (ins u c)) (Fin.castLE (Placed.le_gates k R u) one)
+      c).val = colVal k R ins one u c := by
+  simp only [Prog.colWire_val, colVal, Fin.val_castLE]
+
+private theorem colWire_val_comp {N : ℕ} (R : Rows) (ins : Fin R.nIn → Fin N) (one : Fin N) (c : Fin R.w)
+    (h1 : R.nIn ≤ c.val) (h2 : c.val < R.nIn + R.nComp) : (Prog.colWire R ins one c).val = N + (c.val - R.nIn) := by
+  simp only [Prog.colWire_val, show ¬ c.val < R.nIn by omega, h2, ↓reduceDIte, ↓reduceIte]
+
 /-- **Unit `u`'s computed row `i` is gate `gates k R u + i`** of `uniform`, a row reading its columns' gates. -/
 theorem uniform_op_row : ∀ (n u : ℕ), u < n → ∀ (i : Fin R.nComp) (g : Fin (Placed.gates k R n)),
     g.val = Placed.gates k R u + i.val → ∃ A B, (Placed.uniform k R ins one hone n).op g = .row A B ∧
       A.map Fin.val = (R.a i).map (colVal k R ins one u) ∧ B.map Fin.val = (R.b i).map (colVal k R ins one u)
   | 0, _, hu, _, _, _ => absurd hu (Nat.not_lt_zero _)
   | n + 1, u, hu, i, g, hg => by
-    rw [uniform_succ]
+    have hN : Placed.gates k R (n + 1) = Placed.gates k R n + R.nComp := rfl
     by_cases hun : u < n
     · have hlt : g.val < Placed.gates k R n := hg ▸ lt_gates_of_lt hun i
       obtain ⟨A, B, hop, hA, hB⟩ := uniform_op_row n u hun i ⟨g.val, hlt⟩ hg
-      refine ⟨A.map (Fin.castAdd R.nComp), B.map (Fin.castAdd R.nComp), ?_, ?_, ?_⟩
-      · rw [show g = Fin.castAdd R.nComp ⟨g.val, hlt⟩ from Fin.ext rfl, Prog.op_castAdd, hop]
-        rfl
-      · rw [List.map_map]
-        exact hA
-      · rw [List.map_map]
-        exact hB
-    · have hun' : u = n := by omega
-      rw [hun'] at hg ⊢
-      refine ⟨(R.a i).map (Prog.colWire R (fun c => Fin.castLE (Placed.le_gates k R n) (ins n c))
-          (Fin.castLE (Placed.le_gates k R n) one)),
-        (R.b i).map (Prog.colWire R (fun c => Fin.castLE (Placed.le_gates k R n) (ins n c))
-          (Fin.castLE (Placed.le_gates k R n) one)), ?_, ?_, ?_⟩
-      · rw [show g = ⟨Placed.gates k R n + i.val, by have := i.isLt; omega⟩ from Fin.ext hg]
-        exact Prog.op_new _ R _ _ _ i
-      · rw [List.map_map]
-        refine List.map_congr_left fun c _ => ?_
-        simp only [Function.comp_apply, Prog.colWire_val, colVal, Fin.coe_castLE]
-      · rw [List.map_map]
-        refine List.map_congr_left fun c _ => ?_
-        simp only [Function.comp_apply, Prog.colWire_val, colVal, Fin.coe_castLE]
+      refine ⟨A.map (Fin.castAdd R.nComp), B.map (Fin.castAdd R.nComp), ?_, (map_val_map _ A).trans hA,
+        (map_val_map _ B).trans hB⟩
+      change (Prog.snoc (Placed.uniform k R ins one hone n) R _ _ _).op g = _
+      simp only [Prog.op, hlt, ↓reduceDIte, hop, Audit.Op.lift]
+      rfl
+    · obtain rfl : u = n := by omega
+      have hi : g.val - Placed.gates k R u < R.nComp := by have := g.isLt; omega
+      have e : (⟨g.val - Placed.gates k R u, hi⟩ : Fin R.nComp) = i := Fin.ext (by simp only; omega)
+      refine ⟨_, _, ?_, (map_val_map _ (R.a i)).trans (List.map_congr_left fun c _ => colWire_val_colVal u c),
+        (map_val_map _ (R.b i)).trans (List.map_congr_left fun c _ => colWire_val_colVal u c)⟩
+      change (Prog.snoc (Placed.uniform k R ins one hone u) R _ _ _).op g = _
+      simp only [Prog.op, show ¬ g.val < Placed.gates k R u by omega, ↓reduceDIte, e]
+      rfl
 
 /-- **Gate `gates k R u + i` is unit `u`'s** in `uniform`. -/
 theorem uniform_unit_row : ∀ (n u : ℕ) (hu : u < n) (i : Fin R.nComp) (g : Fin (Placed.gates k R n)),
     g.val = Placed.gates k R u + i.val → (Placed.uniform k R ins one hone n).unit g = some ⟨u, hu⟩
   | 0, _, hu, _, _, _ => absurd hu (Nat.not_lt_zero _)
   | n + 1, u, hu, i, g, hg => by
-    rw [uniform_succ]
+    change (Prog.snoc (Placed.uniform k R ins one hone n) R _ _ _).unit g = _
     by_cases hun : u < n
     · have hlt : g.val < Placed.gates k R n := hg ▸ lt_gates_of_lt hun i
-      rw [show g = Fin.castAdd R.nComp ⟨g.val, hlt⟩ from Fin.ext rfl, Prog.unit_castAdd,
-        uniform_unit_row n u hun i ⟨g.val, hlt⟩ hg]
+      simp only [Prog.unit, hlt, ↓reduceDIte, uniform_unit_row n u hun i ⟨g.val, hlt⟩ hg]
       rfl
-    · have hun' : u = n := by omega
-      rw [show g = ⟨Placed.gates k R n + i.val, by have := i.isLt; omega⟩ from Fin.ext (by rw [hg, hun']),
-        Prog.unit_new]
-      exact congrArg some (Fin.ext hun'.symm)
+    · obtain rfl : u = n := by omega
+      simp only [Prog.unit, show ¬ g.val < Placed.gates k R u by omega, ↓reduceDIte]
+      rfl
+
+private theorem rowsWireC_last_val {N₀ n₀ : ℕ} (p : Prog N₀ n₀) (R : Rows) (ins : Fin R.nIn → Fin N₀)
+    (one : Fin N₀) (hone : ∀ c, ins c ≠ one) (x : Fin ((Prog.snoc p R ins one hone).rows (Fin.last n₀)).w) :
+    ((Const.Prog.rowsWireC (Prog.snoc p R ins one hone) (Fin.last n₀)).wire x).val =
+      (Prog.colWire R ins one (Fin.cast (by rw [Const.Prog.rows_last]) x)).val := by
+  rw [Const.Prog.rowsWireC_last, Const.Prog.castW_wire]
+  rfl
+
+private theorem rowsWireC_castSucc_val {N₀ n₀ : ℕ} (p : Prog N₀ n₀) (R : Rows) (ins : Fin R.nIn → Fin N₀)
+    (one : Fin N₀) (hone : ∀ c, ins c ≠ one) (v : Fin n₀)
+    (x : Fin ((Prog.snoc p R ins one hone).rows v.castSucc).w) :
+    ((Const.Prog.rowsWireC (Prog.snoc p R ins one hone) v.castSucc).wire x).val =
+      ((Const.Prog.rowsWireC p v).wire (Fin.cast (by rw [Const.Prog.rows_castSucc]) x)).val := by
+  rw [Const.Prog.rowsWireC_castSucc, Const.Prog.castW_wire]
+  rfl
 
 /-- **Unit `u`'s computed column `x` is on gate `gates k R u + (x − nIn)`** in `uniform`'s own wiring. -/
 theorem rowsWireC_uniform_comp : ∀ (n : ℕ) (u : Fin n) (x : Fin ((Placed.uniform k R ins one hone n).rows u).w),
@@ -120,16 +135,11 @@ theorem rowsWireC_uniform_comp : ∀ (n : ℕ) (u : Fin n) (x : Fin ((Placed.uni
   | n + 1, u, x, h1, h2 => by
     induction u using Fin.lastCases with
     | last =>
-      change ((Const.Prog.rowsWireC (Prog.snoc (Placed.uniform k R ins one hone n) R _ _ _) (Fin.last n)).wire
-        x).val = _
-      rw [Const.Prog.rowsWireC_last, Const.Prog.castW_wire, Prog.colWire_val]
-      simp only [Fin.coe_cast, Fin.val_last]
-      split_ifs <;> first | omega | rfl
+      exact (rowsWireC_last_val (Placed.uniform k R ins one hone n) R _ _ _ x).trans
+        (colWire_val_comp R _ _ _ h1 h2)
     | cast v =>
-      change ((Const.Prog.rowsWireC (Prog.snoc (Placed.uniform k R ins one hone n) R _ _ _) v.castSucc).wire
-        x).val = _
-      rw [Const.Prog.rowsWireC_castSucc, Const.Prog.castW_wire]
-      exact rowsWireC_uniform_comp n v _ h1 h2
+      exact (rowsWireC_castSucc_val (Placed.uniform k R ins one hone n) R _ _ _ v x).trans
+        (rowsWireC_uniform_comp n v _ h1 h2)
 
 end uniform
 
@@ -234,7 +244,7 @@ theorem rowsWireC_keyProg_comp (u : Fin n) (x : Fin ((Placed.keyProg c hU n).row
   have h := rowsWireC_uniform_comp (k := Placed.inGates n (Placed.circuitRows c hU).nIn)
     (R := Placed.circuitRows c hU) (ins := Placed.insOf n _ (Aliased.keyIdx c (Placed.circuitRows c hU).nIn))
     (one := Placed.oneGate n _) (hone := Placed.insOf_ne_one n _ _) n u x h1 h2
-  rw [gates_val] at h
+  rw [gates_val _ _ u.val] at h
   exact h
 
 theorem keyProg_op_input (g : Fin (Layout.keyN c hU n)) (hg : g.val < 2 + n * (Placed.circuitRows c hU).nIn) :
@@ -260,14 +270,14 @@ theorem keyProg_op_row {u : ℕ} (hu : u < n) (i : Fin (Placed.circuitRows c hU)
         (Placed.oneGate n _) u) :=
   uniform_op_row (k := Placed.inGates n (Placed.circuitRows c hU).nIn) (R := Placed.circuitRows c hU)
     (ins := Placed.insOf n _ (Aliased.keyIdx c (Placed.circuitRows c hU).nIn)) (one := Placed.oneGate n _)
-    (hone := Placed.insOf_ne_one n _ _) n u hu i g (by rw [gates_val]; exact hg)
+    (hone := Placed.insOf_ne_one n _ _) n u hu i g (by rw [gates_val _ _ u]; exact hg)
 
 theorem keyProg_unit_row {u : ℕ} (hu : u < n) (i : Fin (Placed.circuitRows c hU).nComp) (g : Fin (Layout.keyN c hU n))
     (hg : g.val = 2 + n * (Placed.circuitRows c hU).nIn + u * (Placed.circuitRows c hU).nComp + i.val) :
     (Placed.keyProg c hU n).unit g = some ⟨u, hu⟩ :=
   uniform_unit_row (k := Placed.inGates n (Placed.circuitRows c hU).nIn) (R := Placed.circuitRows c hU)
     (ins := Placed.insOf n _ (Aliased.keyIdx c (Placed.circuitRows c hU).nIn)) (one := Placed.oneGate n _)
-    (hone := Placed.insOf_ne_one n _ _) n u hu i g (by rw [gates_val]; exact hg)
+    (hone := Placed.insOf_ne_one n _ _) n u hu i g (by rw [gates_val _ _ u]; exact hg)
 
 /-- **Bits' gate of unit `u`'s column `col` is the bridge's.** -/
 theorem keyWire_colVal (hR : RowsAgree (bitsRows c) (Placed.circuitRows c hU)) {u : ℕ} (hu : u < n)
@@ -307,7 +317,7 @@ theorem keyProg_laysOut_gates (hu : c.unit.unitLog ≤ 32) :
   · have hge : 2 + n * (bitsRows c).nIn ≤ g.val := by
       by_contra hlt
       rw [keyProg_row?_input c n (by omega)] at hg
-      exact Option.noConfusion hg
+      cases hg
     obtain ⟨u, i, hu, hi, he⟩ := hrow g hge
     rw [he, keyProg_row?_row c n hu hi, Option.some.injEq, Prod.mk.injEq] at hg
     obtain ⟨rfl, rfl⟩ := hg
@@ -349,7 +359,7 @@ private theorem outGate_eq_some {u k j t a : ℕ} : SampledProofs.Bits.outGate c
   · simp only [Option.some.injEq, and_assoc] at h ⊢
     exact ⟨fun he => ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1, h.2.2.2.2.1, h.2.2.2.2.2, he⟩, fun h' => h'.2.2.2.2.2.2⟩
   · simp only [and_assoc] at h
-    exact ⟨fun he => Option.noConfusion he,
+    exact ⟨fun he => he.elim,
       fun h' => absurd ⟨h'.1, h'.2.1, h'.2.2.1, h'.2.2.2.1, h'.2.2.2.2.1, h'.2.2.2.2.2.1⟩ h⟩
 
 /-- **Bits' gate on bit `t` of unit `u`'s instance `k`'s returned output leaf `j` is a bridge output.** -/
@@ -373,13 +383,13 @@ private theorem outGate_mem (hu : c.unit.unitLog ≤ 32) {u k j t a : ℕ}
   have hw : ((Placed.keyProg c hU n).rows ⟨u, hun⟩).w = (Placed.circuitRows c hU).w :=
     congrArg Rows.w (Placed.rows_circuitProg c hU n _ _ ⟨u, hun⟩)
   have hxw : xv < ((Placed.keyProg c hU n).rows ⟨u, hun⟩).w := by rw [hw]; simp only [Rows.w]; omega
-  refine ⟨⟨a, by omega⟩, ?_, rfl⟩
-  unfold Layout.outsOf
-  rw [Finset.mem_filter]
-  refine ⟨Finset.mem_univ _, ⟨u, hun⟩, ⟨xv, hxw⟩, Fin.ext ?_, k, j, t, hk, hj, ht, h1, h2, hxv⟩
+  refine ⟨⟨a, by omega⟩, (@Finset.mem_filter _ _ (Classical.decPred _) _ _).2
+    ⟨Finset.mem_univ _, ⟨u, hun⟩, ⟨xv, hxw⟩, Fin.ext ?_, k, j, t, hk, hj, ht, h1, h2, hxv⟩, rfl⟩
   rw [rowsWireC_keyProg_comp ⟨u, hun⟩ ⟨xv, hxw⟩ hx1 hx2]
   dsimp only
-  rw [← hR.1, ← hR.2.1]
+  have e1 : n * (bitsRows c).nIn = n * (Placed.circuitRows c hU).nIn := by rw [hR.1]
+  have e2 : u * (bitsRows c).nComp = u * (Placed.circuitRows c hU).nComp := by rw [hR.2.1]
+  have := hR.1
   omega
 
 /-- **A bridge output is Bits' gate on some bit of some unit's instance's returned output leaf.** -/
@@ -387,9 +397,7 @@ private theorem outGate_of_mem (hu : c.unit.unitLog ≤ 32) {g : Fin (Layout.key
     (hg : g ∈ Layout.outsOf c hU n) : ∃ u < n, ∃ k < c.upv, ∃ j < (c.leavesOut.getD k #[]).size, ∃ t < 16,
       SampledProofs.Bits.outGate c n u k j t = some g.val := by
   have hR : RowsAgree (bitsRows c) (Placed.circuitRows c hU) := rowsAgree_circuitRows c hU hu
-  unfold Layout.outsOf at hg
-  rw [Finset.mem_filter] at hg
-  obtain ⟨-, u, x, hx, k, j, t, hk, hj, ht, h1, h2, hxe⟩ := hg
+  obtain ⟨-, u, x, hx, k, j, t, hk, hj, ht, h1, h2, hxe⟩ := (@Finset.mem_filter _ _ (Classical.decPred _) _ _).1 hg
   have h1' : (SampledProofs.Bits.Rows.ofNet c.unit).nIn ≤ SampledProofs.Bits.outCol c j t := h1
   have h2' : SampledProofs.Bits.outCol c j t <
       (SampledProofs.Bits.Rows.ofNet c.unit).nIn + (SampledProofs.Bits.Rows.ofNet c.unit).nComp := h2
@@ -400,11 +408,14 @@ private theorem outGate_of_mem (hu : c.unit.unitLog ≤ 32) {g : Fin (Layout.key
   have bM : (bitsRows c).nComp = c.upv * ((SampledProofs.Bits.Rows.ofNet c.unit).nComp + 1) := rfl
   have hkM := Nat.mul_le_mul_right ((SampledProofs.Bits.Rows.ofNet c.unit).nComp + 1) (show k + 1 ≤ c.upv from hk)
   rw [Nat.succ_mul] at hkM
-  have hx1 : (Placed.circuitRows c hU).nIn ≤ x.val := by rw [← hR.1]; omega
-  have hx2 : x.val < (Placed.circuitRows c hU).nIn + (Placed.circuitRows c hU).nComp := by
-    rw [← hR.1, ← hR.2.1]; omega
+  have := hR.1
+  have := hR.2.1
+  have hx1 : (Placed.circuitRows c hU).nIn ≤ x.val := by omega
+  have hx2 : x.val < (Placed.circuitRows c hU).nIn + (Placed.circuitRows c hU).nComp := by omega
   refine ⟨u.val, u.isLt, k, hk, j, hj, t, ht, (outGate_eq_some c n).2 ⟨u.isLt, hk, hj, ht, h1', h2', ?_⟩⟩
-  rw [← hx, rowsWireC_keyProg_comp u x hx1 hx2, ← hR.1, ← hR.2.1]
+  have e1 : n * (bitsRows c).nIn = n * (Placed.circuitRows c hU).nIn := by rw [hR.1]
+  have e2 : u.val * (bitsRows c).nComp = u.val * (Placed.circuitRows c hU).nComp := by rw [hR.2.1]
+  rw [← hx, rowsWireC_keyProg_comp u x hx1 hx2]
   omega
 
 /-- **Bits' key program's outputs are the bridge's**, ascending. -/
