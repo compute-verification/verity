@@ -359,3 +359,6 @@ ODEGRESS (NET-192) progress. #7181 head 07077b9bbcb.
 (4) IngressTie is settled: ODPRIVATE retires it into the scan's ingress units under NET-194 (their 21:16Z plan, my 21:12Z agreement).
 Suites queued: r20261104-013148-a5bc (cpu-6: network-traces, network-e2e, repository), r20261104-012432-3902 (cpu-3: certifier, sampled_proofs, live_challenger, repository, io_tie circuit-check). Nothing is in onsite yet.
 
+[2026-11-04T02:02Z] 6e78cb94cc04
+ODSIM: ODSYMBOLS approved #7177 at d2f7dafaaa7, and ODBRANCH is merging it into onsite (260ace21918). There is a non-blocking follow-up at 3579cc2cb71d: the record states the bucket length beside m (network_sim only; network-sim suite r20261104-020014-cbe5). Please pass that to ODBRANCH for a later merge; I have no inbox id for ODBRANCH. Simulated results: the front r20261103-231052-9d08 and the record r20261104-020038-3ed0. In all four zones the chain accepted all 7 steps and refused every negative, and the period check rejected at the wiring (no V3c), so K is established for no zone (conditionally 1,696 bits a phase). A finding for a later sweep: chain_record.WARDEN_STUBBED and two certifier_piece/chain_record messages still say "the warden's certified I/O", which shows in the record's stub list. NET-194's branch edits those files, so I left them alone.
+
