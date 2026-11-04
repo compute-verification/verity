@@ -365,7 +365,8 @@ def public_doc(text: str) -> str:
 
 def publish(out: Path, private: Path) -> list[str]:
     """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
-    `PUBLISH_MAX` or its encoding keeps from being read as text, held whole, and one whose text names or counts a window
+    `PUBLISH_MAX` keeps from being read, held whole (one not UTF-8 stays, named on stderr), and one whose text
+    names or counts a window
     (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. Binary
     files stay. The paths held, in order."""
     held: list[str] = []
@@ -383,7 +384,9 @@ def publish(out: Path, private: Path) -> list[str]:
             continue
         try:
             text = data.decode()
-        except UnicodeDecodeError:
+        except UnicodeDecodeError as e:
+            print(f"PUBLISH: {rel} stays as it is, unscanned: not UTF-8 text ({e.reason} at byte {e.start})",
+                  file=sys.stderr, flush=True)
             continue
         pub = public_doc(text)
         if pub != text:
