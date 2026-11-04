@@ -907,6 +907,13 @@ definitionally equal reduces their `match` and evaluates `drawUnits`. -/
 theorem draw_extend (A : Live) (S : Widening) (ω : (A.extend S).L.Ω) : (A.extend S).L.draw ω = A.L.draw ω.1 := by
   dsimp only [Live.L, Live.extend]
 
+/-- A mean over a widened sample is the mean over the sample of the mean over the widening. At any widening `S`, not
+`avg_prod` at `A.Ω × CoinTape …`: there the summand is left to unification, which unfolds `Pos.resample` and
+evaluates the period's game. -/
+theorem avg_extend (A : Live) (S : Widening) (f : (A.extend S).L.Ω → ℝ≥0∞) :
+    avg f = avg fun ω₁ : A.Ω => avg fun t : S.T => f (ω₁, t) :=
+  avg_prod f
+
 /-- The projection's first stop is the walk from the start's tape to the first stop. -/
 theorem firstStop_eq (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (ω : (A.extend M.widening).L.Ω) :
@@ -932,11 +939,9 @@ theorem drawMap_fresh (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game 
         Pos.walk (V.game θ F c) σ (roundCuts V θ F c rd)
           (fill (freshSel label after) (V.game θ F c) σ (roundCuts V θ F c rd) m (κ ω.1) ω.2) id := fun ω => by
     rw [firstStop_eq, drawMap_start_eq]
-  simp only [draw_extend, hs]
-  exact (avg_prod (C := A.Ω) (D := CoinTape (V.game θ F c) σ) _).trans (Eq.trans
-    (congrArg avg (funext fun ω₁ => avg_walk_fill (freshSel label after) (G (A.L.draw ω₁)) (V.game θ F c) σ
-      (roundCuts V θ F c rd) m (κ ω₁) id))
-    (avg_prod (C := A.Ω) (D := CoinTape (V.game θ F c) σ) _).symm)
+  simp only [draw_extend, hs, avg_extend]
+  exact congrArg avg (funext fun ω₁ => avg_walk_fill (freshSel label after) (G (A.L.draw ω₁)) (V.game θ F c) σ
+    (roundCuts V θ F c rd) m (κ ω₁) id)
 
 /-- **The draw-coupled start is the uniform tape** wherever the draw's coins are uniform (`avg_srcCoins`). -/
 theorem drawMap_start (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (label : String)
