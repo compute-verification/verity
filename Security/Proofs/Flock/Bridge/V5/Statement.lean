@@ -204,7 +204,8 @@ it is `C(n − K₀, kd)/C(n, kd)` (`Bridge.pa_subset_range`), and under `All`, 
 `B` holding a proof block (`Bridge.pa_all`). Its named assumptions are V2's, with `live-verifier` at `own` and the law
 (`RecordCustodyZKJPLaw`). The law is the one the verifier draws under from the registration's law object and work table
 (`Bridge.DrawsUnder`), on its layout's strata at `PopMatches` (`Bridge.lawOn_drawsUnder`), and no Bernoulli law
-(`Bridge.NotBernoulli`), though `Draw.flockLaw` parses one. -/
+(`Bridge.NotBernoulli`), though `Draw.flockLaw` parses one. The link finders are charged `t'` per run (`cTZC`), one
+run's SHA-512 evaluations, the prover's and the verifier's: V2's `t' + v`. -/
 def SampledKSLiveV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
