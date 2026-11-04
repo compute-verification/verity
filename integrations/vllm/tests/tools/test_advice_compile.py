@@ -91,3 +91,16 @@ def test_a_carry_with_no_advice_before_it_is_refused(tmp_path):
         AC.carry_of(run, 1, WA.encode(W2))
     with pytest.raises(ValueError, match="no window ran before it"):
         AC.carry_of(run, 0, WA.encode(W2))
+
+
+def test_a_last_window_whose_advice_cant_be_read_at_its_registrations_width_is_refused(tmp_path):
+    """`advice_of` reads the last window's advice at its registration's ℓ: with no registration, or one naming no cap, the
+    carry is refused by name (advice-compile's exit 2), never a crash."""
+    run = _windows(tmp_path, [0, 1, 2], [1], {0: W1})
+    reg = run / "advice" / "w0" / "registration.json"
+    for body in (None, {"compiler": {}}):
+        reg.unlink(missing_ok=True)
+        if body is not None:
+            reg.write_text(json.dumps(body))
+        with pytest.raises(ValueError, match=r"advice/w0: no advice to read at its registration's ℓ"):
+            AC.carry_of(run, 2, WA.encode(W2))
