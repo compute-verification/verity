@@ -1999,7 +1999,8 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     for naming verdicts; refused, before any tree is read, with them replaced by proofs naming no session or two (the
     drawn units are proved in one session, `oneSession`); rejected by the session's own verdict when its files are not
     a statement's; refused before the session is verified when its coins are not a tree the challenger logged or its
-    link was opened after other keys than its one table (`LINK_TABLES`), or the public file is not the registration's
+    link was opened after other keys than its one table (`LINK_TABLES`; the `root_B` length a statement fixes,
+    `LINK_ROOT_LEN`, these files set up none to hold), or the public file is not the registration's
     (`publicHeld`, its codes Python's `matches_public`'s); refused when a file it names is in no blob, as the public
     file the parameters name is when the blobs hold another, or its sessions are not the evidence's. The public file is
     the parameters', committed before any coin: evidence naming one of its own, or parameters naming none, are refused.

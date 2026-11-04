@@ -20,8 +20,11 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 * **trees** (`treesOf`, `treesHeld`): the coin trees that same session's signed release log shows the challenger sampled
   and opened (`Challenger.trustedTreesOf`). Each session's coins must be one tree's, a tree no other session's, its
   record's `coin_tree`, link points and every round's coins as the challenger logged them, its link's `root_b` naming
-  exactly the session's tables (`sessionTables`), the roots the link points are opened after, and every tree logged
-  must be a session's (`Challenger.sessionsTreeReason`); else the check refuses, before any session is verified;
+  exactly the session's tables (`sessionTables`), the roots the link points are opened after, each entry the length
+  its table's statement fixes, `2^cap₀` digests (`rootBTables`, `Challenger.LINK_ROOT_LEN`), refused before the link's
+  message is hashed, which is what makes that message parse one way, and every tree logged must be a session's
+  (`Challenger.sessionsTreeReason`); else the check refuses, before any session is verified. A session whose statement
+  sets up no table has no length to hold, and its own verdict rejects;
 * **population** (`popHeld`): the registration's population held to the verifier's program: under its query, the
   program's proof blocks read stratum by stratum must be the record's `population` units in order (`Slots.popOk`), as
   the service's run refuses at registration (`Run.run`, `population-order`), else the check refuses, before any session
@@ -449,16 +452,35 @@ def treesOf (p : Params) (e : Evidence) : V (Array Challenger.LoggedTree) :=
 statement is unknown, which `run` refuses. -/
 def sessionTables : Array String := ((Flock.Tags.find? STATEMENT).map (·.tableNames 1)).getD #[]
 
+/-- The byte length of table `st`'s `root_B`: the level-0 cap a `--zk` proof's reader reads (`Flock.ZkProof.reader`),
+`2^cap₀` digests of the table's Merkle scheme, `cap₀` the first stratum of `Flock.Zk.schedule` at the table's `m`.
+`Zk.verify` holds `root_B` to that cap (S16/R1), so the statement fixes it. -/
+def rootBLen (st : Flock.Setup) : V Nat := do
+  let (sch, _) ← Flock.Zk.schedule st.m
+  pure (2 ^ (sch.levels.getD 0 default).cap * st.merkle.digestLen)
+
+/-- The session's tables (`sessionTables`), each with its `root_B`'s byte length (`rootBLen`) at the session `record`
+sets up: `setupAt` at the record's draw on the verifier's own files `p`, as `run` sets it up. None where it sets up no
+table, and then `run` sets up none either, so the session's own verdict rejects. -/
+def rootBTables (p : Own) (bs : Core.Blobs) (record : String) : Array (String × Option Nat) :=
+  let tabs : Option (Array Flock.Setup) := (do
+    let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
+    let I := inputsOf tags0 p (← bs.get p.circuit "circuit") (← bs.get p.pub "public file") bs
+    let (_, tabs, _) ← setupAt I (← readsOf p.registered) (Flock.Witness.recordDraw record)
+    pure tabs : V (Array Flock.Setup)).toOption
+  sessionTables.mapIdx fun i t => (t, tabs.bind fun ts => ts[i]?.bind fun st => (rootBLen st).toOption)
+
 /-- The evidence's sessions held to the challenger's trees `ts` (module docstring, **trees**): each session's record
 on the blobs, refused as `verdicts` refuses it when no blob holds it or it isn't UTF-8, read as `Flock.Record.decode`
-reads it (`Flock.JsonParse.parse`), then `Challenger.sessionsTreeReason` at the session's tables (`sessionTables`). -/
-def treesHeld (ts : Array Challenger.LoggedTree) (e : Evidence) (bs : Core.Blobs) : V Unit := do
-  let mut named : Array (String × Json) := #[]
+reads it (`Flock.JsonParse.parse`), then `Challenger.sessionsTreeReason`, each session at its tables with the `root_B`
+lengths its statement fixes on the verifier's own files `p` (`rootBTables`). -/
+def treesHeld (p : Own) (ts : Array Challenger.LoggedTree) (e : Evidence) (bs : Core.Blobs) : V Unit := do
+  let mut named : Array (String × Array (String × Option Nat) × Json) := #[]
   for s in e.sessions do
     let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
       | throw s!"session {s.name}'s record is not UTF-8"
-    named := named.push (s.name, (Flock.JsonParse.parse record).toOption.getD Json.null)
-  if let some why := Challenger.sessionsTreeReason ts sessionTables named then throw why
+    named := named.push (s.name, rootBTables p bs record, (Flock.JsonParse.parse record).toOption.getD Json.null)
+  if let some why := Challenger.sessionsTreeReason ts named then throw why
 
 /-- The evidence's one session (module docstring, **evidence**): evidence naming none or several refuses. -/
 def oneSession (sessions : Array RunFiles) : V Unit :=
@@ -486,7 +508,7 @@ def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Ev
     Core.Outcome OneStage.Public Core.Integrity :=
   let r : V Run := do
     oneSession e.sessions
-    treesHeld (← treesOf p e) e bs
+    treesHeld p.own (← treesOf p e) e bs
     popHeld p.base.verifier c.record
     publicHeld c.record (← bs.get p.own.pub "public file")
     run p.own e.sessions (some e.base.provedUnits) bs
@@ -585,5 +607,8 @@ private def refusal : V Unit → String
   "{\"frame_v3\":{\"domain_ids\":{\"x\":\"de\"},\"roots\":{\"x\":\"aa\",\"y\":\"bb\"}},\"instances\":3,\"scheme\":\"s\"}".toUTF8) ==
   "public file: not the registration's: roots, domains, population"
 #guard (refusal (publicHeld heldRecord "not a public file".toUTF8)).startsWith "the public file's header is not JSON: "
+
+#guard (rootBLen { (default : Flock.Setup) with m := 25, merkle := Flock.MerkleScheme.hm96Sha512 }).toOption == some 16384
+#guard (rootBLen { (default : Flock.Setup) with m := 26, merkle := Flock.MerkleScheme.hm96Sha512 }).toOption == some 8192
 
 end SampledProofs.OneStageZk
