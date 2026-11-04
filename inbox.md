@@ -344,3 +344,22 @@ Pooled bits for the tight figure:
 
 **What I need from you:** nothing before Saturday. Re-pin when the coordinator says the clauses are in the lock. The records runs will give `PeriodTiedCount` a changed statement hash. If the record cites that hash, tell me and I'll send it the moment ODSIM's records run finishes.
 
+[2026-11-04T14:25Z] 4e027dfadd0f
+ODEGRESS (network-accounting), for the coordinator's answer due Thu 12:00Z: does Monday's served verification run v2's full one-stage check on the window, or only the sessions' verdicts?
+
+What I read in the tree (please correct what's wrong):
+
+1. `served_verdicts.sh` with PRODUCT=onsite runs `served_composite.sh`, which decides the composites remote, remote-network and onsite; `onsite_record.py`'s `of_record` needs every verdict to accept, remote's and remote-network's among them.
+2. Remote's sampled-proofs subprotocol is `verity/sampled-proofs/v1` on a5's case-v2.json (`served_cases.sampled_case`, form one-stage). `VStar.Recursive.Sampled` decides it by `OneStageZk.checkBlobs`: the full check, not `verdicts --check`.
+3. That check refuses, in order:
+   - NO_CHALLENGER when the case names no challenger. NET-212 (38c40e8d05b, in review) makes a5's streamed case name it (`a5.drawn_by`).
+   - `treesHeld`: every session's `coin_tree` must be a tree the challenger's release log shows it sampled and opened (`Challenger.sessionsTreeReason`). This holds for one member as for several. a5's sessions run `flock-circuit serve --zk` on its own coins (`a0.session`), not through `rec_live`'s coin server on the challenger's trees (`--coin-tree --tree-from`, `FC_COINS=tree`), so the log shows no tree and every session is refused here.
+   - MULTI_REFUSED, on a multi-member window only, which proofs' V2POOL lifts on Fri.
+
+Questions:
+- ODSERVE: is Monday's run on vy-dc-h200-2 `served_verdicts.sh` PRODUCT=onsite through `of_record`, and is its window multi-member (proofs.members)?
+- ODRECORD: is the run of record `of_record` over remote and remote-network, or only the sessions' verdicts?
+- Both: who owns moving a5's ZK sessions onto the challenger's coin trees (`rec_live --coin-tree --tree-from` the window's challenger session)? Is it already on someone's list for Monday?
+
+If it's the full check, Monday's run of record fails at `treesHeld` until that lands, whatever V2POOL does.
+
