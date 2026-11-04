@@ -57,18 +57,28 @@ theorem finHonest_getD2 (L : LeanRelease Flock.Wit Tp) (x : Msg) (w : Flock.Wit)
     (finHonest L x w ρ h).getD 2 .empty = inner2 (vsTauAt finS.honestVals L x w ρ h) :=
   rfl
 
+theorem ownRound_zero_congr (c : Cfg) (s : Masker) (w t t' : ByteArray) (n : ℕ) :
+    ownRound c s w t n 0 = ownRound c s w t' n 0 :=
+  rfl
+
+theorem ownRound_two_congr (c : Cfg) (s : Masker) (w w' t : ByteArray) (n : ℕ) :
+    ownRound c s w t n 2 = ownRound c s w' t n 2 :=
+  rfl
+
 /-- **The frame's own inner round reads the finish's rounds only at its own index**: round 0 reads round 0's, round 2
 round 2's, and rounds 1 and 3 neither. -/
 theorem innerSched_congr (c : Cfg) (s : Masker) (n : ℕ) {fin fin' : Array ByteArray} :
     ∀ k, (k = 0 → fin.getD 0 .empty = fin'.getD 0 .empty) → (k = 2 → fin.getD 2 .empty = fin'.getD 2 .empty) →
       innerSched c s fin n k = innerSched c s fin' n k
   | 0, h0, _ => by
-    dsimp only [innerSched, ownRound]
+    unfold innerSched
     rw [h0 rfl]
+    exact ownRound_zero_congr _ _ _ _ _ _
   | 1, _, _ => rfl
   | 2, _, h2 => by
-    dsimp only [innerSched, ownRound]
+    unfold innerSched
     rw [h2 rfl]
+    exact ownRound_two_congr _ _ _ _ _ _
   | _ + 3, _, _ => rfl
 
 /-- **The frame's own inner round 0 on `finHonest`** is the inner proof's label and the honest `final_c` under the
