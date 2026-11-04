@@ -305,7 +305,7 @@ def terms(k: dict, period: str) -> dict:
     (row,) = [r for r in k["rows"] if (r["period"], r["scope"], r["prog"]) == (period, "link", READING)]
     m, requests = row["link_windows"], row["requests"]
     got = {"m": m, "requests": requests, "k_sched": m * t["schedules_per_block"],
-           "k_fail": m * t["cells_per_block"], "ell_a": m * t["free"][READING]["link_window"],
+           "k_fail": m * t["cells_per_block"], "ell_a": m * t["free_per_block"][READING],
            "k_skip": 0, "jitter": m * t["jitter_per_block"]}
     if not math.isclose(sum(got[x] for x in TERMS), row["per_period"], rel_tol=1e-12):
         raise SystemExit(f"{period}: the terms sum to {sum(got[x] for x in TERMS)}, not leak's {row['per_period']}")
@@ -333,7 +333,7 @@ def zone_record(zd: Path) -> dict:
         "scan_class": scan_class(session), "params": k["params"], "run": k["run"],
         "per_phase": {"connections": k["terms"]["connections_per_block"], "cell": k["terms"]["cell"],
                       "k_sched": k["terms"]["schedules_per_block"], "k_fail": k["terms"]["cells_per_block"],
-                      "ell_a": k["terms"]["free"][READING]["link_window"], "k_skip": 0, "T_j": T,
+                      "ell_a": k["terms"]["free_per_block"][READING], "k_skip": 0, "T_j": T,
                       "d_jit": k["terms"]["jitter_bound"], "jitter": k["terms"]["jitter_per_block"],
                       "K": next(r["per_link_window"] for r in k["rows"] if r["prog"] == READING)},
         "periods": {p: terms(k, p) for p in LB.PERIODS},
@@ -458,8 +458,8 @@ def markdown(doc: dict) -> str:
             z["verdict"], f"the period check answered {z['verdict']}")
         status = "established" if k["established"] else f"not established: {why}"
         lines += [f"**{b}** ({status}) at scan class {k['scan_class']}, "
-                  f"{k['run']['requests_per_link_window']:g} requests a phase of T_j = {w['T_j']} buckets: "
-                  f"k_sched = k_fail = {w['k_sched']:,} ({w['connections']} connections the schedule can carry, "
+                  f"{k['run']['requests_per_link_window']:g} requests served in a phase of T_j = {w['T_j']} buckets. "
+                  f"Its terms a phase, whatever the requests served: k_sched = k_fail = {w['k_sched']:,} ({w['connections']} connections the schedule can carry, "
                   f"{w['cell']} bits each), ℓ_a,j = {w['ell_a']:,}, k_skip,j = 0, T_j·log2 d_jit = {w['jitter']} "
                   f"(d_jit = {w['d_jit']}); K a phase = {w['K']:,.0f}.", "",
                   "| period | m | k_sched | k_fail | Σ_j ℓ_a,j | Σ_j T_j·log2 d_jit | K per period (share) | "
