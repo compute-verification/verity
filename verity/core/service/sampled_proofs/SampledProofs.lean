@@ -3,6 +3,7 @@ import SampledProofs.Program
 import SampledProofs.Partition
 import SampledProofs.PartitionRef
 import SampledProofs.Draw
+import SampledProofs.LinkPoints
 import SampledProofs.Supplied
 import SampledProofs.Registration
 import SampledProofs.Produced

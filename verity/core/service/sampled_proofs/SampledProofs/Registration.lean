@@ -37,9 +37,15 @@ digest, whose leaf count must be the value's rows (`R7-output` otherwise). One m
 registered value (`Earlier.value`): its entry has the domain and root of that value's entry in the `registered` of the
 log's record with that digest, whose leaves, words and word bits must be the value's own (`R7-output` otherwise), so
 nothing is registered afresh.
+
+A verifier of the per-member form (`OneStageZk`) names its members (`members`: each its units and its circuit's units a
+proof block, META `vus_per_block`), and after R7 the check refuses a member whose fewest and most drawn units under the
+law the draw runs on give different link points, or a law it can't draw on (`link-points`, `linkRefused`): every draw
+then gives each member its statement's count.
 -/
 import Flock.WindowRecord
 import SampledProofs.Draw
+import SampledProofs.LinkPoints
 import SampledProofs.Registered
 import SampledProofs.Supplied
 import Std.Data.HashMap
@@ -108,6 +114,9 @@ structure Verifier where
   windowRoot : Option String := none
   /-- of `registered`, values it holds across windows, whose domain leaves `windowRoot` out -/
   held : Array String := #[]
+  /-- the per-member form's members, each its units as `[lo, hi)` ranges and its circuit's units a proof block, whose
+  link points `link-points` holds to one count (`linkRefused`); none in the one-statement form -/
+  members : Array (Array (Nat × Nat) × Nat) := #[]
 
 private def optStr : Option String → Json
   | some s => Json.str s
@@ -289,7 +298,16 @@ def PortIndex.find (ix : PortIndex) (p : String) : Option Json :=
 
 def PortIndex.has (ix : PortIndex) (p : String) : Bool := (ix.find p).isSome
 
-/-- `registration.check`'s failure codes, R1–R7 in order: empty when the record holds. -/
+/-- `registration.link_refused`: the verifier names members, and the law the draw runs on doesn't derive or some
+member's fewest and most drawn units under it give different link points (`LinkPoints.refused`). -/
+def linkRefused (v : Verifier) : Bool :=
+  !v.members.isEmpty &&
+    match LinkPoints.lawOf v.program v.query v.law v.workTable >>= fun (l, n) => LinkPoints.refused l n v.members with
+    | .ok rs => !rs.isEmpty
+    | .error _ => true
+
+/-- `registration.check`'s failure codes, R1–R7 in order, then `link-points` (`linkRefused`): empty when the record
+holds. -/
 def check (rec : Json) (v : Verifier) : Array String := Id.run do
   let v2 := !v.registered.isEmpty
   if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
@@ -350,7 +368,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
       v.outputs v.log
-  return c
+  return if linkRefused v then addCode c "link-points" else c
 
 /-- `check` as first written, R3 quadratic in the ports: each root's port compared, re-canonicalized, with every port
 before it and every verifier port with every root. The reference `check` is proved equal to (`check_eq_checkRef`). -/
@@ -416,7 +434,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
       v.outputs v.log
-  return c
+  return if linkRefused v then addCode c "link-points" else c
 
 /-! ## `check` is `checkRef` -/
 
