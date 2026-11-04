@@ -1,5 +1,5 @@
 {
- "roots": ["PouwPearlPlus"],
+ "roots": ["PouwPearlPlus", "PouwPearlPlus.Main"],
  "exempt": {},
  "layers": {
   "PouwPearlPlus": {
