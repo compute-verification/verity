@@ -157,11 +157,13 @@ def TileKeepsTheCap : Prop :=
     cr ≠ [] → cc ≠ [] →
     ∃ (words : List (List (Array Bool × Nat))) (elems : List Nat),
       cr.mapM (fun i => cc.mapM fun j => Rule.wordFlags ops.a.codes[rows.idxOf i]! ops.b.codes[cols.idxOf j]!) = .ok words ∧
-      (cr.zip words).mapM (fun (i, ws) => Rule.rowElements ops.a.alpha[rows.idxOf i]! ops.a.beta[rows.idxOf i]!
-        ops.a.x[rows.idxOf i]! (ws.map (·.1))) = .ok elems ∧
+      (cr.zip words).mapM (fun (iw : Nat × List (Array Bool × Nat)) =>
+        Rule.rowElements ops.a.alpha[rows.idxOf iw.1]! ops.a.beta[rows.idxOf iw.1]! ops.a.x[rows.idxOf iw.1]!
+          (iw.2.map Prod.fst)) = .ok elems ∧
       let credit := creditOf 1 r.kKept r.matmul.n
-      let rowDebit := (words.zip elems).map fun (ws, e) =>
-        Rule.debitUnits r.matmul.n cc.length (ws.foldl (fun t w => t + (w.1.filter id).size) 0) (ws.foldl (· + ·.2) 0) e
+      let rowDebit := (words.zip elems).map fun (we : List (Array Bool × Nat) × Nat) =>
+        Rule.debitUnits r.matmul.n cc.length (we.1.foldl (fun t w => t + (w.1.filter id).size) 0)
+          (we.1.foldl (fun t w => t + w.2) 0) we.2
       rowDebit.foldl (· + ·) 0 * Rule.CAP_DEN ≤ Rule.CAP_NUM * credit * cr.length * cc.length ∧
       ∀ d ∈ rowDebit, d * Rule.CAP_DEN ≤
         Rule.CAP_NUM * credit * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1)
