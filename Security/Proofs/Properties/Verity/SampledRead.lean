@@ -557,7 +557,7 @@ theorem sampleLinkFirst_snoc_fresh {label : String} {after : ByteArray} {pre : L
     exact hs (hO.2 h) ⟨rfl, ha ▸ h2⟩
   · rw [hr] at h
     cases h
-  · simp [helloSpecs_append, helloSpecs, hr]
+  · simp [helloSpecs, hr]
   · rw [hO]
     constructor
     · rintro ⟨q, hq, i, s, n, h⟩
