@@ -176,8 +176,8 @@
   "art:98ccdf6cfe3a5a632e5babed1245d0600d6ef38d67672113d25a32ffa026ef4f": "integrations/vllm/tests/commit/serving_row_leaf_vector.json",
   "art:7a85c5c4238b971371cf46c2153b94548a11988891cc4018b196535c3cb92bbb": "verity/ml/flock/tests/fixtures/f1-gate",
   "art:ff28796246bdf4ea6df75289ccd8d1fddee94ecd17d21ef7b3c009f35bbcc863": "verity/ml/flock/tests/fixtures/rec-links",
-  "art:b5cc490d082157f2b73cee3b1c06ece31da51ffcb752660d10377d7889ce4dd6": "benchmarks/one_stage/tests/fixtures/a5-wired-v2",
-  "art:a211fc50b5aa9aa58a6d9f48d1da5452fb460a0fc1252e0e6888affd85dc295c": "benchmarks/one_stage/tests/fixtures/a5-wired-circuits",
+  "art:477c9a59d918edccac5c828d83aae9e7e09285a2c21606ef79e100819de4bef7": "benchmarks/one_stage/tests/fixtures/a5-wired-v2",
+  "art:548f14f0733916255e7bdde99067bd92290b78f93ad01acb30429d33206e6fb9": "benchmarks/one_stage/tests/fixtures/a5-wired-circuits",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"

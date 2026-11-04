@@ -1,13 +1,14 @@
 """One-stage audit, run A5, on a wired stand-in, and v2's wired reads on its sessions. The window: a writer
-``Gemm_v2{K=16, N=16}`` and a reader ``Gemm_v2{K=16, N=32}``, four units each, reader unit i's ``x`` the writer unit i's
-``o0`` (one template-level wire, `interface.Wire`), committed by `interface.Window` under ``<ROOT>/rank0`` with its
-registered circuit record, and audited by `a5.audit` as rank 0 of a one-rank step on a local challenger's coins under
-``stratified:1``, one unit of each template: each template's circuit composed by Flock's `UnitStager` on its rows
-(`interface.unit_rows`), M0's `--zk` session of each drawn member behind the ZK server, the Lean verifier of record, the
-stream's outcome and the negatives. Then v2's per-member verdicts on the audit's case (``rank0/case-v2.json``, its
-``proofs.wires`` the window's wiring from its registered circuit record, `a5.held_wiring`, and its challenger and coins
-the audit's draw's, `a5.drawn_by`) by
-``sampled-proofs-one-stage-zk verdicts --check`` (``--v2``), five ways:
+``Bf16AddRow_v1{N=64}`` (its ``a`` external, its ``b`` free) and a reader ``ArgmaxChunkBest_v1{C=64}``, four units each,
+reader unit i's ``x`` the writer unit i's ``o0`` (one template-level wire, `interface.Wire`): small circuits, so that the
+case and circuits this run keeps are a small test fixture (`tests/test_a5_wired.py`). Committed by `interface.Window` under
+``<ROOT>/rank0`` with its registered circuit record, and audited by `a5.audit` as rank 0 of a one-rank step on a local
+challenger's coins under ``stratified:1``, one unit of each template: each template's circuit composed by Flock's
+`UnitStager` on its rows (`interface.unit_rows`), M0's `--zk` session of each drawn member behind the ZK server, the
+Lean verifier of record, the stream's outcome and the negatives. Then v2's per-member verdicts on the audit's case
+(``rank0/case-v2.json``, its ``proofs.wires`` the window's wiring from its registered circuit record, `a5.held_wiring`,
+and its challenger and coins the audit's draw's, `a5.drawn_by`) by ``sampled-proofs-one-stage-zk verdicts --check``
+(``--v2``), five ways:
 
 * ``wired``: the case as the audit made it: every session accepted, each verdict naming the wiring's SHA-512;
 * ``unwired``: its parameters without ``wires``: every session accepted, no verdict naming a wiring;
@@ -52,14 +53,16 @@ from verity.core.protocols.sampled_proofs.one_stage import draw as D, registrati
 from verity.ml.circuits.codec import canonical_json, descriptor_id  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.evaluation import evaluate_batch  # noqa: E402
-from verity.ml.circuits.ops import gemm as G  # noqa: E402
+from verity.ml.circuits.ops import argmax as AX, rows as RW  # noqa: E402
 from verity.ml.windows import interface as IF, rows as CS, wiring as WI  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
 ROOT = hashlib.sha512(b"verity/a5/wired-stand-in/v1").hexdigest()
 RULE = "stratified:1"
 UNITS = 4
-WRITER, READER = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE), bind(G.Gemm, K=16, N=32, **G.GEMM_AMPERE)
+#: rows of 64 words: the composer needs a row of each unit past one SHA-512 block (`verity_flock.circuit.Port.comps`)
+WIDTH = 64
+WRITER, READER = bind(RW.Bf16AddRow, N=WIDTH), bind(AX.ArgmaxChunkBest, C=WIDTH)
 WID, RID = descriptor_id(WRITER), descriptor_id(READER)
 OF = {"stand-in": "benchmarks/one_stage/a5_wired.py", "writer": WID, "reader": RID, "units": UNITS}
 #: a reader's refusal by its wired reads: its row doesn't open its writer's root (`RegWired.check`)
@@ -72,24 +75,23 @@ HELD = "the statement's port o0 has another frame-v3-sha512 root or domain in th
 def circuit() -> IF.Circuit:
     """The writer's units, then the reader's, each reader unit's ``x`` its writer unit's ``o0``: writers before their
     readers in the partition, as v2's wired reads hold them (`WiredReads.ordered`)."""
-    return IF.Circuit("a5-wired", ((WRITER, UNITS), (READER, UNITS)), external=(f"{WID}/x",),
+    return IF.Circuit("a5-wired", ((WRITER, UNITS), (READER, UNITS)), external=(f"{WID}/a",),
                       wires=(IF.Wire(RID, "x", WID, "o0", at=0, radix=(UNITS,), base=0, step=(1,)),))
 
 
 def values(seed: int = 0) -> tuple[list[np.ndarray], list[np.ndarray], list[np.ndarray], list[np.ndarray]]:
-    """The writer's inputs (x, w) and output, then the reader's, its ``x`` the writer's output: bf16 words."""
+    """The writer's inputs (a, b) and output, then the reader's, its ``x`` the writer's output: bf16 words."""
     rng = np.random.default_rng(seed)
 
     def bf16(a: np.ndarray) -> np.ndarray:
         return (np.asarray(a, np.float32).view(np.uint32) >> 16).astype(np.uint16)
 
-    def out(fn: Any, x: np.ndarray, w: np.ndarray, n: int) -> np.ndarray:
-        return np.asarray(evaluate_batch(fn, x, w, kernel="reference"), dtype=np.uint16).reshape(UNITS, n)
+    def out(fn: Any, *xs: np.ndarray) -> np.ndarray:
+        return np.asarray(evaluate_batch(fn, *xs, kernel="reference"), dtype=np.uint16).reshape(UNITS, -1)
 
-    x, w0, w1 = bf16(rng.standard_normal((UNITS, 16))), bf16(rng.standard_normal((UNITS, 16, 16)) / 4), \
-        bf16(rng.standard_normal((UNITS, 32, 16)) / 4)
-    y0 = out(WRITER, x, w0, 16)
-    return [x, w0], [y0], [y0, w1], [out(READER, y0, w1, 32)]
+    a, b = bf16(rng.standard_normal((UNITS, WIDTH))), bf16(rng.standard_normal((UNITS, WIDTH)))
+    y0 = out(WRITER, a, b)
+    return [a, b], [y0], [y0], [out(READER, y0)]
 
 
 def commit(out: Path) -> tuple[CS.Binding, str]:
