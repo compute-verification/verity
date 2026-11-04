@@ -23,6 +23,8 @@ from te_core.gates import of_log, per_mac
 #: a distillation run's row as the builder measured it from the store: the rows file's row, the run's quantities at its
 #: last checkpoint (formalism.Measured), its start's shape, what it read, and the panel's cells it gave
 PINNED = Path(__file__).parent / "standard_workloads" / "distill.json"
+#: the commits a test build's source names (`commits`'s: this checkout's, the integrator's branch and its commit)
+REVS = ("c0ffee0000", "integrator", "facade0000")
 U, R = 16, 4
 #: a served matrix (out U, in 2U) and the GEMMs on it, the activations and a registered matrix in a round of 2 x 3
 #: tokens (2 sequences of a 3-token prompt and 2 generated tokens, the last never fed back)
@@ -44,12 +46,13 @@ PRODUCT = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m":
 
 
 def products_rows(*rows, steps: float = 1.0, p_match: tuple = (), dial: tuple = (), elementwise: tuple = (),
-                  capture: str = formalism.ELEMENTWISE_FROM) -> dict:
-    """`rows` as a run's products (formalism.products_of_trace): a traced step's, captured by `capture`, times
-    `steps`, with the ops that break P-match `p_match` and the products the step writes elementwise `elementwise`,
-    and the same rows at each k of `dial` (a trace's `at`)."""
-    block = {"capture": capture, "k": float(policy.CONSOLE[1]), "order": "unknown", "tokens": 8, "gates": None,
-             "rows": list(rows), "p_match": list(p_match), "elementwise_products": list(elementwise)}
+                  capture: str = formalism.ELEMENTWISE_FROM, code: str | None = None) -> dict:
+    """`rows` as a run's products (formalism.products_of_trace): a traced step's, captured by `capture` (and written
+    by the code of VERSION `code`, where the trace records it), times `steps`, with the ops that break P-match
+    `p_match` and the products the step writes elementwise `elementwise`, and the same rows at each k of `dial` (a
+    trace's `at`)."""
+    block = {"capture": capture, "capture_code": code, "k": float(policy.CONSOLE[1]), "order": "unknown", "tokens": 8,
+             "gates": None, "rows": list(rows), "p_match": list(p_match), "elementwise_products": list(elementwise)}
     at = {f"{k:.0f}": {"k": float(k), "rows": list(rows), "p_match": list(p_match)} for k in dial}
     return formalism.products_of_trace(block | ({"at": at} if at else {}), steps)
 
@@ -70,7 +73,7 @@ def record(round_tokens: int = 6, round_log=ROUND_LOG) -> dict:
 def build(m: formalism.Measured, fx: dict, monkeypatch) -> tuple[dict, list, dict]:
     monkeypatch.setattr(SW, "traces", lambda arts: {})
     monkeypatch.setattr(SW, "measured", lambda row, traced: (m, fx["shape"], fx["read"]))
-    p, details = SW.build({"rows": [fx["row"]]}, stamp="2026-11-03T00:00:00Z")
+    p, details = SW.build({"rows": [fx["row"]]}, REVS, stamp="2026-11-03T00:00:00Z")
     (row,) = p["rows"]
     return p, details, dict(zip(SW.COLUMNS, row))
 
@@ -86,7 +89,8 @@ def test_the_pinned_row_is_its_runs_quantities_priced_as_algorithm_policy_prices
     pinned = dict(zip(SW.COLUMNS, fx["cells"]))
     assert {k: v for k, v in cells.items() if k != "te_core"} == {k: v for k, v in pinned.items() if k != "te_core"}
     assert cells["te_core"] == VERSION
-    assert p["source"] == f"python -m te_core.standard_workloads (te_core {VERSION}; islands/standard-workloads)"
+    assert p["source"] == (f"python -m te_core.standard_workloads at c0ffee0000 (te_core {VERSION}, on integrator at "
+                           f"facade0000; islands/standard-workloads)")
     inputs, st = json.loads(cells["rho_inputs"]), json.loads(cells["input_status"])
     assert [k for k in inputs if k != panels.FRESH] == list(SW.KEYS) and list(st) == [*SW.KEYS, "products"]
     assert inputs[panels.FRESH] == formalism.fresh_per_c(m) is None
@@ -166,6 +170,21 @@ def test_traces_from_te_core_4_4_to_this_one_are_read_and_others_refused(tmp_pat
         monkeypatch.setattr(SW, "version_at", lambda commit, v=v: v)
         with pytest.raises(SystemExit, match=f"traced by te_core {v}, not {SW.TRACED_SINCE} to {VERSION}"):
             SW.traces(["art:t"])
+
+
+def test_a_step_traced_in_two_arts_is_read_from_the_newer_te_cores_trace_whatever_their_order(tmp_path, monkeypatch):
+    """A run retraced on a newer te_core keeps its older art in the rows file beside the new one: each step is read from
+    the newer te_core's trace in either order, and of two traces by one te_core, from the later art's."""
+    for art, v in (("old", "4.12.11"), ("new", "4.12.13"), ("again", "4.12.13")):
+        (tmp_path / art / "traces").mkdir(parents=True)
+        (tmp_path / art / "manifest.json").write_text(json.dumps({"te_commit": v}))
+        (tmp_path / art / "traces" / "r1-1.json").write_text(json.dumps({"run": "r1", "step": 1, "trace": {"by": art}}))
+    monkeypatch.setattr(SW, "fetch", lambda art, *paths: tmp_path / art)
+    monkeypatch.setattr(SW, "version_at", lambda commit: commit)
+    for arts in (["old", "new"], ["new", "old"]):
+        assert SW.traces(arts)["r1"][1] == {"run": "r1", "step": 1, "trace": {"by": "new"}, "from": "new",
+                                            "te_core": "4.12.13"}
+    assert SW.traces(["new", "again"])["r1"][1]["from"] == "again"
 
 
 def test_a_publish_never_drops_a_served_runs_row_nor_replaces_a_newer_te_cores():
@@ -275,11 +294,11 @@ def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed
     step's stand in for steps of another shape, or with te_core's reason where unmeasured (an op log's, a round
     untraced, rows captured before te_core 4.12.1 that don't give all the term reads, the step's whole-making system
     and which operands read an embedding's rows, rows captured before 4.12.9's check for matrix products written
-    elementwise, a step that writes some, a step that breaks P-match, and a void, never a measured 0: a counted product
-    fed by a cycle with no fixed point at the k, which no subset drops, with the best set of the products no such
-    cycle feeds beside it where there are any, their figure alone and the share of the step's counted fresh
-    multiplications they are, and where every counted product is so fed, that none is); and assumed where untraced
-    steps that update count none."""
+    elementwise, a step that writes some, a step that breaks P-match); measured but unpriced at a point where the term
+    is void there, never a measured 0, saying in plain words that the bound can't price them and why (`unpriced`): how
+    many counted products a cycle with no fixed point at the point's k feeds, and the best set of the others' figure,
+    a lower bound, with the share of the step's fresh multiplications it keeps, or that none has one, so they add
+    nothing to the row's slowdown, floored at 1; and assumed where untraced steps that update count none."""
     fx = json.loads(PINNED.read_text())
     m = formalism.from_json(fx["measured"])
 
@@ -317,24 +336,56 @@ def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed
     assert SW.products(bounds(products_rows(PRODUCT, p_match=[gather]))) == f"assumed: {broken}"
     short = PRODUCT | {"dims": PRODUCT["dims"] | {"k": 8}, "macs": 256, "k_whole": 8, "fed": [[8, 1.0]]}
     assert unmeasured(products_rows(short)) == formalism.FRESH_VOID
-    alone = bounds(products_rows(short))
-    assert alone["console"]["inputs"]["fresh_products"]["converged"]["term"] is None
-    assert SW.products(alone) == (f"assumed: {formalism.FRESH_VOID}; every counted product is fed by such a cycle, so "
-                                  "no set is beside it")
+    one = "the step counts 1 product whose two operands both depend on the update, and it is"
+    cycle = ("fed by a cycle of products whose outputs make other products' operands whole; at the point's block size "
+             "each pass round the cycle makes more operand entries whole than it reads, so the count compounds without "
+             "limit")
+    floor = "nothing to the row's slowdown, the largest figure the other kinds give, floored at 1"
+    alone = bounds(products_rows(short, dial=(panels.SERVED[1],)))
+    assert {alone[x]["void"]["fresh_products"] for x in SW.POINTS} == {formalism.void_reason(None, None)}
+    assert SW.products(alone) == (f"measured, but the bound can't price them at either point: {one} {cycle}; no "
+                                  f"product is left to price, so it adds {floor}")
+    assert SW.products(bounds(products_rows(short))) == (
+        f"measured, but the bound can't price them at the console's default: {one} {cycle}; no product is left to "
+        f"price, so it adds {floor}; at the serving block, {off}")
     stuck = bounds(products_rows(PRODUCT, short))
-    conv = stuck["console"]["inputs"]["fresh_products"]["converged"]
-    assert stuck["console"]["unmeasured"]["fresh_products"] == formalism.FRESH_VOID
-    assert conv["diverged_fed"] == 1 and conv["kept_macs_share"] == pytest.approx(128 / 129, rel=1e-12)
-    assert conv["term"] == pytest.approx(b["console"]["terms"]["fresh_products"], rel=1e-12)
-    assert stuck["console"]["sensitivities"]["fresh_converged"] == conv["term"]
-    assert SW.products(stuck) == (f"assumed: {formalism.FRESH_VOID}; beside it, the best set of the products no such "
-                                  f"cycle feeds gives {algorithm_policy.num(conv['term'])} (the kinds cell's "
-                                  f"fresh_converged) on 99.2% of the step's counted fresh multiplications")
+    void, term = stuck["console"]["inputs"]["fresh_products"]["void"], stuck["console"]["terms"]["fresh_products"]
+    assert "fresh_products" not in stuck["console"]["unmeasured"]
+    assert void["diverged_fed"] == 1 and void["kept_macs_share"] == pytest.approx(128 / 129, rel=1e-12)
+    assert term == pytest.approx(b["console"]["terms"]["fresh_products"], rel=1e-12)
+    assert SW.products(stuck) == (
+        f"measured, but the bound can't price them at the console's default: the step counts 2 products whose two "
+        f"operands both depend on the update, and 1 of them is {cycle}; the best set of the others gives "
+        f"{algorithm_policy.num(term)} on 99.2% of the step's fresh multiplications, a lower bound, which the row's "
+        f"slowdown takes where it is the largest; at the serving block, {off}")
+
+    def void_at(n: int, fed: int) -> dict:
+        return {"void": {"fresh_products": "why"}, "terms": {"fresh_products": None}, "unmeasured": {},
+                "inputs": {"fresh_products": {"products": n, "void": {"diverged_fed": fed, "kept_macs_share": None}}}}
+    three = "the step counts 3 products whose two operands both depend on the update, and"
+    assert SW.unpriced(void_at(3, 3)) == f"{three} every one of them is {cycle}; no product is left to price, so they " \
+                                          f"add {floor}"
+    assert SW.unpriced(void_at(3, 2)) == f"{three} 2 of them are {cycle}; no set of the others has a proved cap " \
+                                          f"either, so they add {floor}"
+    assert SW.unpriced(void_at(3, 0)) == f"{three} no set of them has a proved cap on how many of them a block does, " \
+                                          f"so they add {floor}"
+    assert SW.unpriced(b["console"]) is None
+    priced = {"unmeasured": {}, "void": {}, "inputs": {"fresh_products": {}}}
+    assert SW.products({"console": priced, "served": void_at(3, 2)}) == (
+        f"measured at the console's default; at the serving block, the bound can't price them: "
+        f"{SW.unpriced(void_at(3, 2))}")
+    assert SW.products({"console": void_at(3, 3), "served": void_at(3, 2)}) == (
+        f"measured, but the bound can't price them at the console's default: {SW.unpriced(void_at(3, 3))}; at the "
+        f"serving block, the bound can't price them: {SW.unpriced(void_at(3, 2))}")
     stand = rows | {"stand_in": {"structures": ["a", "c"], "step_tokens": [4, 8], "traced_tokens": 8,
                                  "why": formalism.STAND_IN}}
     shapes = ("the run's traced steps differ in shape, so the dominant traced step's products stand in for all of them, "
               "scaled by tokens (2 traced structures)")
     assert SW.products(bounds(stand)) == f"assumed: {shapes}; at the serving block, {off}"
+    shifted = void_at(3, 3)
+    shifted["inputs"]["fresh_products"]["stand_in"] = stand["stand_in"]
+    assert SW.products({"console": shifted, "served": void_at(3, 3)}) == (
+        f"assumed: {shapes}; and the bound can't price them at either point: {SW.unpriced(void_at(3, 3))}")
     last = "step 9: the program's last, its structure having no other step, not traced"
     alone = "the slowdown code counting the traced steps' products alone"
     assert SW.products(b, left=[last]) == f"assumed: none on 1 untraced step ({last}), {alone}; at the serving block, {off}"
@@ -361,12 +412,14 @@ def test_the_builders_own_words_in_a_published_string_name_no_code():
     m = formalism.Measured(parts, 0.0, 8192, formalism.even(1e6), formalism.even(1e6), 1e3, 0.0, {},
                            delta_t_bits=1e3)
     st = SW.status(m, read={"untraced": gaps, "steps": 4})
-    con = {"unmeasured": {}, "inputs": {"fresh_products": {"stand_in": {"structures": ["a", "c"]}}}}
-    b = {"console": con, "served": {"unmeasured": {"fresh_products": "why"}}}
-    conv = {"fresh_products": {"converged": {"term": 63.41, "kept_macs_share": 0.595}}}
+    con = {"unmeasured": {}, "void": {}, "inputs": {"fresh_products": {"stand_in": {"structures": ["a", "c"]}}}}
+    b = {"console": con, "served": {"unmeasured": {"fresh_products": "why"}, "void": {}}}
+    void = {"void": {"fresh_products": "why"}, "terms": {"fresh_products": 63.41}, "unmeasured": {},
+            "inputs": {"fresh_products": {"products": 3, "void": {"diverged_fed": 1, "kept_macs_share": 0.595}}}}
     said = [SW.products(b, left=gaps * 2),
             SW.products(b | {"console": con | {"unmeasured": {"fresh_products": "why"}}}, rounds=True),
-            SW.products(b | {"console": {"unmeasured": {"fresh_products": "why"}, "inputs": conv}})]
+            SW.products({"console": void, "served": void}),
+            SW.products(b | {"console": void | {"terms": {"fresh_products": None}}})]
     notes = [SW.note({"rows": [[x if c == "reading" else None for c in SW.COLUMNS]]}, "art:" + "0" * 64)
              for x in ("A", "B")]
     words = [SW.IDLE, SW._UNTRACED, *SW.ROUNDS.values(), *gaps, *st.values(), *said, *notes]
@@ -389,6 +442,18 @@ def test_a_binding_fresh_products_term_is_publisheds_and_the_products_input_name
     assert (cells["binding_kind"], cells["rests_on"]) == ("fresh_products", premises)
     assert json.loads(cells["kinds"])["rests_on"] == {"fresh_products": premises}
     assert json.loads(cells["input_status"])["products"].startswith(f"assumed: none on 1 untraced step ({last}),")
+
+
+def test_a_row_names_the_capture_code_its_trace_records_and_null_where_it_records_none(monkeypatch):
+    """`capture_code` is published's: the VERSION of the code that wrote the row's trace, which a trace records from
+    te_core 4.12.14 on, null for an older trace (the pinned row's, which has no product rows, is null too)."""
+    fx = json.loads(PINNED.read_text())
+    m = formalism.from_json(fx["measured"])
+    for code in (None, formalism.CAPTURE_CODE_SINCE):
+        traced = dataclasses.replace(m, products=products_rows(PRODUCT, dial=(panels.SERVED[1],), code=code))
+        one = formalism.published(traced, *SW.POINTS["console"], SW.READING)
+        _, _, cells = build(traced, fx, monkeypatch)
+        assert cells["capture_code"] == one["capture_code"] == code
 
 
 def test_a_generation_runs_record_is_its_rounds_with_gemms_on_served_codes_priced_as_nvfp4():
