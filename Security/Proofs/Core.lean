@@ -17,6 +17,7 @@ import Proofs.Core.Game.Batch
 import Proofs.Core.Game.BatchInduced
 import Proofs.Core.Game.Rewinding
 import Proofs.Core.Game.Unambiguous
+import Proofs.Core.Game.Tape
 import Proofs.Core.Game.TwoRun
 import Proofs.Core.Game.InterleaveBridge
 import Proofs.Core.Challenger
@@ -40,6 +41,7 @@ import Proofs.Core.HongKung
 import Proofs.Core.Blocks
 import Proofs.Core.DeviceFigures
 import Proofs.Core.Site
+import Proofs.Core.QSort
 
 /-!
 # Proofs of core's guarantees
