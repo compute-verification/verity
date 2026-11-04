@@ -1,6 +1,5 @@
 import Proofs.NetworkCertifier.WiredNet
 import Proofs.Flock.Claims.Witnesses.BindingMeets
-import Proofs.Flock.Claims.KS.ZkExtend
 
 /-!
 # The revealed wires at the deployed sampling record
@@ -18,10 +17,11 @@ record's facts.
   executable's tree leaf of the commit string, `hm96Leaf_bytes`); `opens_of_read` is the half the wires use.
 * `WiredReads rel c wires`: `RevealsWires` at the record and SHA-512, at the check `ReadOpens c`.
 * `wiresRevealed_deployed`: at the record and SHA-512, `WiresRevealed` is `WiredReads`.
-* `ksWired_deployed`: **sampling at the incorrect set at the deployed record** (`KSWired`), at SHA-512 at the deployed
-  relation, where Flock's KS holds with no premise (`FlockDeploy.KS.zk_KS_untrim`). Its hypotheses are the facts of the
-  record's run that `sampling_deployed_sha512`'s KS reads, with `WiredReads` beside `SessionOpens`; binding, the draw
-  law and refusal are discharged as `sampling_assembled_of` discharges them.
+* `ksWired_deployed`: **sampling at the incorrect set at the deployed record** (`KSWired`), at SHA-512, from the
+  sessions' KS (`SessionKS`), the slots, the sessions' openings under interior roots the run fixes, the scope checks
+  and `WiredReads`; binding, the draw law and refusal are discharged as `sampling_assembled_of` discharges them. It
+  reads the sessions' KS itself, not `SessionRuns` (each checked unit's session decides the run): a run of one session
+  can meet that, but a wired layout runs one session per member, and no one of two checked sessions decides a run.
 -/
 
 namespace NetTiming
@@ -29,7 +29,6 @@ namespace NetTiming
 open Claims Claims.Sampling
 open FlockSoundness.Refine FlockSoundness.Binding
 
-local notation "relD" => _root_.Flock.Readable.relation
 local notation "shaD" => FlockDeploy.sha512
 
 /-- **The hm96 leaf's bytes are the executable's tree leaf of the commit string** of the row and the salt
@@ -82,24 +81,23 @@ theorem wiresRevealed_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Fl
     fun h => RevealsWires.mono (fun r o ho => (opens_iff_read rel c r o).2 ho) h⟩
 
 set_option synthInstance.maxSize 1024 in
-/-- **Sampling at the incorrect set at the deployed record**, at SHA-512 at the deployed relation:
-`ksWired_of_revealed` at `deploy relD c`, its binding from the hm96 leaves under the registered path check
-(`Binding_of_hm96`), the sessions' KS from Flock's (`SessionKS_of` at `FlockDeploy.KS.zk_KS_untrim`), the draw law from
-the slots and refusal from the scope checks, as `sampling_assembled_of` has them, and the wires revealed from
-`WiredReads` (`wiresRevealed_deployed`). -/
-theorem ksWired_deployed (c : SamplingDeploy.Code) (wires : AuditStatement → ℕ → Option ℕ)
-    (hfixed : DrawFixed (SamplingDeploy.deploy relD c)) (hsessions : SessionRuns shaD (SamplingDeploy.deploy relD c))
-    (hnum : SamplingDeploy.SessionsIn c) (hslots : DrawSlots (SamplingDeploy.deploy relD c))
-    (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens shaD (SamplingDeploy.deploy relD c) iroots)
-    (hfix : InteriorFixed shaD (SamplingDeploy.deploy relD c) iroots)
-    (hprog : ProgramScope (SamplingDeploy.deploy relD c)) (hchecks : ChecksScope shaD (SamplingDeploy.deploy relD c))
-    (hw : WiredReads relD c wires) : KSWired shaD (SamplingDeploy.deploy relD c) wires :=
+/-- **Sampling at the incorrect set at the deployed record**, at SHA-512: `ksWired_of_revealed` at `deploy rel c`, its
+binding from the hm96 leaves under the registered path check (`Binding_of_hm96`), the draw law from the slots and
+refusal from the scope checks, as `sampling_assembled_of` has them, and the wires revealed from `WiredReads`
+(`wiresRevealed_deployed`). The sessions' KS is a hypothesis as it stands (`SessionKS`), not `SessionKS_of`'s
+`SessionRuns`: a wired layout runs one session per member, and at two checked sessions no one session decides the
+run, since a prover's later session may answer an earlier one's coins. -/
+theorem ksWired_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (c : SamplingDeploy.Code) (wires : AuditStatement → ℕ → Option ℕ)
+    (hsess : SessionKS shaD (SamplingDeploy.deploy rel c)) (hslots : DrawSlots (SamplingDeploy.deploy rel c))
+    (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens shaD (SamplingDeploy.deploy rel c) iroots)
+    (hfix : InteriorFixed shaD (SamplingDeploy.deploy rel c) iroots)
+    (hprog : ProgramScope (SamplingDeploy.deploy rel c)) (hchecks : ChecksScope shaD (SamplingDeploy.deploy rel c))
+    (hw : WiredReads rel c wires) : KSWired shaD (SamplingDeploy.deploy rel c) wires :=
   ksWired_of_revealed wires iroots
     (Binding_of_hm96 _ c.own c.at_ (SamplingDeploy.row c.place c.bits) c.salt c.π c.layer
-      (SamplingDeploy.deploy_commit relD c) (SamplingDeploy.row_places c.place c.bits) shaD)
-    (SessionKS_of (H := shaD) (D := SamplingDeploy.deploy relD c) FlockDeploy.KS.zk_KS_untrim hfixed hsessions
-      (SamplingDeploy.innerNumbers_deploy relD c hnum) (SamplingDeploy.deploy_εtable_nonneg relD c))
-    hopens ((wiresRevealed_deployed relD c wires).2 hw) hfix (drawLaw_of_slots _ hslots)
-    (refuses_of shaD _ (scopeMatches_of _ hslots hprog) hchecks) (SamplingDeploy.deploy_εtable_nonneg relD c)
+      (SamplingDeploy.deploy_commit rel c) (SamplingDeploy.row_places c.place c.bits) shaD)
+    hsess hopens ((wiresRevealed_deployed rel c wires).2 hw) hfix (drawLaw_of_slots _ hslots)
+    (refuses_of shaD _ (scopeMatches_of _ hslots hprog) hchecks) (SamplingDeploy.deploy_εtable_nonneg rel c)
 
 end NetTiming
