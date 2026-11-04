@@ -155,35 +155,41 @@ theorem decode_encode_of_fits {w : Raw} (hw : w.Fits) : decode w.encode = some w
 
 /-! ## The verifier's two fixed nets, as a circuit file's text carries them -/
 
-open Properties.Flock.Nets (Builds built FixedNetsBuild)
+open Properties.Flock.Nets (Builds built sparseOf FixedNetsBuild)
 open RecDeploy.VStarNets (netLs)
 
-/-- **A net that builds reads back from its text**, at the header fields it builds at. -/
+/-- A net that builds reads back from its text, at the header fields it builds at. -/
 theorem parse_builds {name : String} {l : HmNets.Laid} {useful : ℕ} {ig og : Group} {w : ℕ} (hw : ConcreteNet.Tok name)
     (hb : Builds name l useful ig og w) :
-    ∃ a b, HmNets.netOf name l = .ok (built name useful ig og w a b) ∧
-      Net.parse (netLs name l).toArray = .ok (built name useful ig og w a b) := by
-  obtain ⟨hra, hrb, a, b, h⟩ := hb
-  have h' : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (built name useful ig og w a b) := h
+    Net.parse (netLs name l).toArray = .ok (built name useful ig og w (sparseOf l.ra) (sparseOf l.rb)) := by
+  obtain ⟨hra, hrb, h⟩ := hb
+  have h' : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb =
+      .ok (built name useful ig og w (sparseOf l.ra) (sparseOf l.rb)) := h
   have hu : useful = l.useful := (Net.ofRows_ok h').2.2.2.1
-  exact ⟨a, b, h, ConcreteNet.parse_netLs hw (hra.trans hu) (hrb.trans hu) h⟩
+  exact ConcreteNet.parse_netLs hw (hra.trans hu) (hrb.trans hu) h
 
 theorem sha_tok : ConcreteNet.Tok "sha512x3" := ⟨by decide, by unfold FlockVBridge.Names.NoWs; decide⟩
 
 theorem hm_tok : ConcreteNet.Tok "hm96" := ⟨by decide, by unfold FlockVBridge.Names.NoWs; decide⟩
 
+/-- The verifier's `sha512x3` net, as `FixedNetsBuild` has it build. -/
+def shaNet : Net :=
+  built "sha512x3" 256001 ⟨0, 64, HmNets.SHA_IN⟩ ⟨1984, 16, HmNets.SHA_OUT⟩ 64 (sparseOf (HmNets.shaLaid ()).ra)
+    (sparseOf (HmNets.shaLaid ()).rb)
+
+/-- The verifier's `hm96` net, as `FixedNetsBuild` has it build. -/
+def hmNet : Net :=
+  built "hm96" 246785 ⟨0, 32, HmNets.HM_IN⟩ ⟨1920, 8, HmNets.HM_OUT⟩ 32 (sparseOf (HmNets.hmLaid ()).ra)
+    (sparseOf (HmNets.hmLaid ()).rb)
+
 /-- **The verifier's two nets read back from their text**, at the open guarantee that they build: the `sha512x3` and
 `hm96` sections every circuit file with hm96 rows carries parse to the nets `HmNets.check` compares them with. -/
 theorem fixedNets_parse (hn : FixedNetsBuild) :
-    (∃ a b, HmNets.netOf "sha512x3" (HmNets.shaLaid ()) =
-        .ok (built "sha512x3" 256001 ⟨0, 64, HmNets.SHA_IN⟩ ⟨1984, 16, HmNets.SHA_OUT⟩ 64 a b) ∧
-      Net.parse (netLs "sha512x3" (HmNets.shaLaid ())).toArray =
-        .ok (built "sha512x3" 256001 ⟨0, 64, HmNets.SHA_IN⟩ ⟨1984, 16, HmNets.SHA_OUT⟩ 64 a b)) ∧
-    ∃ a b, HmNets.netOf "hm96" (HmNets.hmLaid ()) =
-        .ok (built "hm96" 246785 ⟨0, 32, HmNets.HM_IN⟩ ⟨1920, 8, HmNets.HM_OUT⟩ 32 a b) ∧
-      Net.parse (netLs "hm96" (HmNets.hmLaid ())).toArray =
-        .ok (built "hm96" 246785 ⟨0, 32, HmNets.HM_IN⟩ ⟨1920, 8, HmNets.HM_OUT⟩ 32 a b) :=
-  ⟨parse_builds sha_tok hn.1, parse_builds hm_tok hn.2⟩
+    (HmNets.netOf "sha512x3" (HmNets.shaLaid ()) = .ok shaNet ∧
+      Net.parse (netLs "sha512x3" (HmNets.shaLaid ())).toArray = .ok shaNet) ∧
+    HmNets.netOf "hm96" (HmNets.hmLaid ()) = .ok hmNet ∧
+      Net.parse (netLs "hm96" (HmNets.hmLaid ())).toArray = .ok hmNet :=
+  ⟨⟨hn.1.2.2, parse_builds sha_tok hn.1⟩, hn.2.2.2, parse_builds hm_tok hn.2⟩
 
 end FlockDeploy
 
