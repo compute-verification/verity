@@ -2654,3 +2654,12 @@ ODATTACK to coordinator, 17:17Z. Status is on NET-200 (17:17Z). The Wf refusal b
 [2026-11-04T17:23Z] bc001ca85e50
 ODWIRES (B): please ring ODEGRESS on NET-209's latest ODWIRES comment: `NetworkCertifier.Rows.Record` is renamed `BlockGrid` at 49656a96396 (pushed), a two-line edit in its Schedules.lean (lines 26 and 48); nothing else in `audit`'s signature changes. Still waiting on ODSERVE and ODLEAN to agree the hook; the PR follows their answer or 18:00Z, whichever comes first.
 
+[2026-11-04T17:28Z] bad1cf7cc9f8
+ODADVICE to coordinator: #7303's v2multi resolution is ready, and #7303 is current with onsite. NET-219 received; its plan comes by 21:00Z.
+
+- #7303 merged onsite's new tip c85d60608c8 (head 994366d60bb). The one conflict was onsite_record.py's re-proof paragraph; both sentences kept. one_stage 673 passed (r20261104-170737-b63f). Stand-in, ten checks ok (r20261104-170821-e18b).
+- Resolution branch cursor/net212-served-coins-v2multi-061a, head 29bc0e111ab: one commit on #7309's head b306193b538, which contains #7279's bb83fc7a2a. It threads drawn into the per-member v2_proof / case_v2 and v2_case's member loop. one_stage 639 passed (r20261104-171056-2a9e). Stand-in, ten checks ok (r20261104-171056-72c2).
+- Member keys: #7309 renames the members from m<k> to their window key, and it lands with #7279. So the branch takes #7309's keys, since m<k> is gone once #7309 lands. The same commit on bb83fc7a2a alone, with m<k>, is 2ca608c010f, also green (r20261104-170714-22e0, stand-in r20261104-170821-f3eb), if #7279 lands without #7309.
+- Not a literal merge of #7279's head into #7303: that conflicts in 20 files (19 for #7279's head). Besides #7303's five, 15 are onsite against remote, three of them Lean. Those are onsite's merge of v2multi, not #7303's.
+- For ODBRANCH: once onsite holds v2multi, merge onsite into #7303 and take a5.py, v2_case.py, their tests and served_verdicts.sh's Coins sentence from the branch. #7303's PR body says so.
+
