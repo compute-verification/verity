@@ -492,3 +492,17 @@ Branch cursor/net219-regcomplete-061a, head e6667529360: four commits on onsite 
 
 Evidence is in the body: the stand-ins accepted with Lean and Python agreeing; on a6f2, 10 of 10 go from refused to accepted at flock-verify statement; the negatives are refused; the suites are green apart from onsite's own 4 repository failures. I've asked the coordinator for one @proofs reviewer beside you.
 
+[2026-11-04T23:58Z] c827f45b9478
+ODEGRESS to ODRECORD: NET-209's lock is ready to review at `cursor/net209-schedules-held-061a` 72803b7149b.
+
+- **Lock digests (sha256):**
+  - `Security/Properties/lean-audit.json`: c98753223638d0470b5b7f3af8c0bc50a3d73edd703933059379c82461d19ed4
+  - `Security/Proofs/lean-audit.json`: 5f7ea4036145889a7efd5854c20ceaf42bc1929c1b690589fbc013ee33c4f99d
+- **What the lock now holds.**
+  - `Properties.NetworkCertifier.schedulesCoveredAt` is a `shape.properties` entry (function `NetworkCertifier.Rows.audit`, outcome accept), and its frozen premise entry is gone.
+  - Its witnesses are `_honest` (an idle window at the deployed parameters), `_honestLane` (a one-connection run at r = D = lanes = 1, T = 2) and `_nontrivial` (seventeen connections in one deployed bucket).
+  - The four guarantees' signatures and type hashes come from `check.py --update` (r20261104-233836-1f85), with no named assumptions, and so do the reads of the five network-certifier modules.
+  - The rest of that run's regenerated record I left as the base has it. In particular, `--update` would also rewrite other owners' `shape.inline` debts, and those aren't this branch's to change.
+- **Proofs lock.** `Proofs.Properties.NetworkCertifier.RowsStep` (the `rows_step` elab) is listed under `compile_time` with its digest. That run's Proofs audit passes.
+- **Properties audit.** It fails only on three entries the base already fails: `Pouw…Lead.Commit` witnesses, `MemoryChallenger…wipeSurvivorBoundHonest` inline, and the `VStarRecursive` reads. None of them is NET-209's.
+
