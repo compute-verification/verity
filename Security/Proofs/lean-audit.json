@@ -71,6 +71,8 @@
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Verity.Soundness",
   "Proofs.Properties.Verity.Sampled",
+  "Proofs.Properties.Verity.Sampled.Binding",
+  "Proofs.Properties.Challenger.Window",
   "Proofs.Properties.Remote",
   "Proofs.Properties.Remote.Honest",
   "Proofs.Properties.Verity.Recursive",
@@ -81,6 +83,7 @@
   "Proofs.Properties.Challenger",
   "Proofs.Properties.Challenger.Limits",
   "Proofs.Properties.Firewall",
+  "Proofs.Properties.Challenger.Session",
   "Proofs.Properties.Challenger.Coins"
  ],
  "exempt": {
