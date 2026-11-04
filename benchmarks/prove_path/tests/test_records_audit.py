@@ -379,38 +379,50 @@ def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entri
             RA.window_roots(bad)
 
 
-def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge(tmp_path, monkeypatch, capsys):
-    """``prove_path.py window-circuit`` on the synthetic serve-openai run of `test_prove_path` (I2's window circuit stubbed,
-    one whose every input is registered): it writes the circuit's record from its description (members stated at its cap,
-    no run) or, ``--description``, the description, prints the length the registration charges with the count, and exits
-    `records_audit.REFUSED` where I2's circuit refuses the advice. ``records_audit.py count`` over the record finds the
-    charge. Each count holds the pin to the window's root its advice registration records: where it records another root,
-    or none, every registered read is free."""
+def test_the_window_circuit_command_writes_the_class_circuit_from_what_the_run_publishes(tmp_path, monkeypatch, capsys):
+    """``prove_path.py window-circuit``, the verifier's, on what the synthetic serve-openai run of `test_prove_path`
+    publishes (its registered compiler, `compiler_doc`, and the window's advice registration in its public form, its
+    length padded to the cap), I2's class circuit stubbed, one whose every input is registered: it builds the circuit
+    from the class and the compiler's φ, default seed and ℓ alone, reading no serve dir, advice or row dir; writes the
+    circuit's record from its description (members stated at its cap, no run) or, ``--description``, the description;
+    and prints its count, which states no length of the advice. It exits `records_audit.REFUSED` where I2 refuses the
+    class, and where the compiler isn't the one the registration binds: another compiler's document, a field its digest
+    doesn't recompute from, or another server's code. ``records_audit.py count`` over the record finds the charge at the
+    registration's padded length. Each count holds the pin to the window's root its advice registration records: where
+    it records another root, or none, every registered read is free."""
     import prove_path as PP
+    import served_verdicts as SV
     from test_prove_path import _served
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict.build import Unexpressible
 
     s, circuit, refuse = _served(tmp_path, monkeypatch), _registered_circuit(), []
+    doc = PP.compiler_doc(str(s.run), None, None, PP.CAP_BITS)
+    assert {"name": doc["name"], "digest": doc["digest"]} == s.bound["compiler"]
 
-    def lower(registered, compiled, cls):
-        assert cls == WC.CLASS_OF_RECORD and compiled.requests
+    def lower(registered, cls):
+        assert cls == WC.CLASS_OF_RECORD and registered.phi.to_json() == doc["phi"] and not registered.phi.workload
+        assert (registered.default_seed, registered.cap_bits) == (doc["default_seed"], PP.CAP_BITS)
         if refuse:
-            raise Unexpressible("a family the window's lowering doesn't take")
+            raise Unexpressible("a family the class's lowering doesn't take")
         return circuit
 
-    monkeypatch.setattr(WC, "window_circuit", lower)
-    (tmp_path / "advice.bin").write_bytes(s.data)
-    bits = s.bound["advice"]["bits"]
-    reg_file = s.run / "advice" / "w0" / "registration.json"
-    served = json.loads(reg_file.read_text())
+    monkeypatch.setattr(WC, "class_circuit", lower)
+    served = SV.public_registration({**json.loads((s.run / "advice" / "w0" / "registration.json").read_text()),
+                                     "row_bits": 4096})
+    bits = served["binding"]["advice"]["bits"]
+    assert bits == PP.CAP_BITS != s.bound["advice"]["bits"]
+    for d in (s.run, Path(s.a.row_dir)):
+        shutil.rmtree(d)
+    compiler, reg_file = tmp_path / "compiler.json", tmp_path / "registration.json"
+    compiler.write_text(json.dumps(doc))
     reg_file.write_text(json.dumps({**served, "registered_roots": PIN_A}))
-    base = ["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
-            str(tmp_path / "advice.bin"), "--cap", "4", "--pin", "a=" + PIN_A["a"]]
+    base = ["window-circuit", "--compiler", str(compiler), "--registration", str(reg_file), "--cap", "4",
+            "--pin", "a=" + PIN_A["a"]]
     capsys.readouterr()
     assert PP.main([*base, "--out", str(tmp_path / "c.json")]) == 0
     got = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
-    assert (got["bits"], got["count"]) == (bits, IF.input_count(circuit.description(), pins=PIN_A, roots=PIN_A))
+    assert got["count"] == IF.input_count(circuit.description(), pins=PIN_A, roots=PIN_A) and set(got) == {"count", "seconds"}
     assert got["count"]["free"] == 0
     rec = json.loads((tmp_path / "c.json").read_text())
     assert rec == IF.descriptor_record(circuit, 4) and (rec["cap"], rec["registered"]) == (4, circuit.registered.doc())
@@ -426,9 +438,22 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
         assert PP.main([*base, "--out", str(tmp_path / "c.json")]) == 0
         got = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
         assert (got["count"]["registered"], got["count"]["free"]) == (0, got["count"]["inputs"])
+    reg_file.write_text(json.dumps(served))
+    other = {"name": doc["name"], "digest": "00" * 64}
+    for bad, why in [({**doc, **other}, "not one compiler"), ({**doc, "default_seed": doc["default_seed"] + 1}, "not one compiler"),
+                     ({**doc, "cap_bits": 2 * PP.CAP_BITS}, "not one compiler"),
+                     ({**doc, "served": {**doc["served"], "digest": "00" * 64}}, "the verifier's tree must hold the server's")]:
+        compiler.write_text(json.dumps(bad))
+        assert PP.main([*base, "--out", str(tmp_path / "e.json")]) == RA.REFUSED
+        assert why in capsys.readouterr().err
+    compiler.write_text(json.dumps(doc))
+    reg_file.write_text(json.dumps({**served, "binding": {**served["binding"], "compiler": other}}))
+    assert PP.main([*base, "--out", str(tmp_path / "e.json")]) == RA.REFUSED
+    assert "not one compiler" in capsys.readouterr().err
+    reg_file.write_text(json.dumps(served))
     refuse.append(True)
     assert PP.main([*base, "--out", str(tmp_path / "e.json")]) == RA.REFUSED
-    assert "prove_path.py window-circuit: I2's window circuit refuses the advice" in capsys.readouterr().err
+    assert "prove_path.py window-circuit: I2's class circuit refuses the class" in capsys.readouterr().err
 
 
 def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = False,

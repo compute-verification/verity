@@ -122,7 +122,12 @@ piece would release, the case's commitment and evidence decoded, to one of the f
 certifier's certificates, and refuses the piece on any other field (a window's own number, a count of its requests, the
 advice's length), naming the check where a development check fed it: an audit that opened the advice (an advice binding
 in its registration, `records_audit.py audit --opening`) or the chain's endpoint rebuild (an `endpoint` step,
-`CR_ENDPOINT`). The leak guard (`--public`) moves any file the piece doesn't declare out of its directory. Split in two
+`CR_ENDPOINT`). Once a served run ends, `kind_scan.py --received OUT` holds everything a verifier on another machine
+receives of it the same way: the piece, V3c's audit, the registered compiler, the advice and weights registrations and
+the window circuit's counts, a log among them a finding (the steps' logs stay on the node). An advice length, a compile,
+or a φ carrying the requests is a finding too, and on any finding the run fails with those files kept on the node
+(`served_verdicts.sh`'s RECEIVED-SCAN). The leak guard (`--public`) moves any file the piece doesn't declare out of its
+directory. Split in two
 around V3c (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's
 committed window (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its
 `period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of
