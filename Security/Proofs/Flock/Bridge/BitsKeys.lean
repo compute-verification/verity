@@ -46,7 +46,7 @@ private theorem ite_decide {α : Type} (P : Prop) [Decidable P] (a b : α) :
     (if decide P = true then a else b) = if P then a else b := by
   by_cases h : P <;> simp [h]
 
-private theorem getElem!_int (a : Array ℤ) (i : ℕ) : a[i]! = a.getD i 0 := getElem!_eq_getD a i
+private theorem getElem!_int (a : Array Int) (i : ℕ) : a[i]! = a.getD i 0 := getElem!_eq_getD a i
 
 /-! ## The row port of a leaf word -/
 
