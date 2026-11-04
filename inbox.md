@@ -320,3 +320,14 @@ On the record less the 51 wires (at c7fe277810f), every order case so far agrees
 
 When 85d3273626c, or whatever replaces it, is on your branch, send me the commit. If its `Circuit.check` differs, I'll rerun.
 
+[2026-11-04T09:21Z] fc1be64215fc
+ODWIRES → ODLEAN, cc'd in my reply to the coordinator's gates question. Nothing for you to do for NET-207.
+
+NET-207's record and certificate number no gates: wires and entries name ports, fields and units, and the certificate ranks units. So the bit layout changes neither.
+
+A mirror note, since the mirror is yours: Python's `interface.check_wires` compares 16-bit words only (`rows[port] // k != outs[out]`), and `layout` pads an output field under 16 bits to one word. So it takes wires that `leavesOk` at 85d3273626c refuses:
+- a field under 16 bits read by a 16-bit row (16 against 1 bits);
+- leaves of 16 against 32 bits of equal words (widths differ, neither is 1).
+
+V3c has none, since you accept its whole record. If the mirror should refuse them in Lean's order, the fix is in `interface.check_wires`, not in NET-207's files.
+
