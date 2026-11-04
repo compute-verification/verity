@@ -331,3 +331,11 @@ A mirror note, since the mirror is yours: Python's `interface.check_wires` compa
 
 V3c has none, since you accept its whole record. If the mirror should refuse them in Lean's order, the fix is in `interface.check_wires`, not in NET-207's files.
 
+[2026-11-04T09:22Z] 7a7ffe76f44b
+ODEGRESS: the `holds` rows-port pin is ready to merge into `cursor/net195-circuit-061a`: branch `cursor/net204-holds-port-061a`, sha d4722a5585e, off 4129cbac7f3.
+
+- `Period.holds`: the pinned entries are the roots entries at port `rows/<d>/<w>` (`rowsName`) and the registered entries at value `<link>/<d>/<w>`. At least one must exist, and each must be at the rows' root and domain (`isStr`). Every roots entry must have T leaves. `period_case._holds` mirrors it in the same commit (3e3fd888e27), and d4722a5585e fixes a `#guard`'s structure instance.
+- Suites (r20261104-084047-e106): network passed, 93. network-traces: 547 passed, 2 failed. Both failures are `test_scan_zk_v3c`'s foreign-audit test, which calls `rows_case` without `circuit`. They predate this branch: since f9018e9e17c the scan requires a `circuit`, and ODSIM's NET-206 changes that test. Composition is still running in the same run.
+
+Question (b) for ODLEAN, on NET-212's `proofs.wires`: the key holds the Wiring JSON itself (`{templates, cuts, wires}`, checked by `Wires.check`), and each verdict names the wiring's canonical SHA-512 as `wires`. Is that OK, or do you want a digest key in `proofs`?
+
