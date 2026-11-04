@@ -345,8 +345,10 @@ def _statements_check(p: dict, e: dict, held: dict) -> str | None:
 
 def _one_stage_check(p: dict, c: tuple[dict, bytes], e: dict, blobs: list[bytes]) -> tuple:
     """`OneStageZk.checkBlobs` on `blobs`: at the coins v1 reads from the challenger's release (`_coins_of`), in the
-    per-member form a draw that runs out of them failing the window (`OneStageZk.RAN_OUT`, `_ran_out`), the sessions'
-    records held to the coin trees that release log shows (`challenger.sessions_tree_reason`), each statement's circuit
+    per-member form a draw that runs out of them failing the window (`OneStageZk.RAN_OUT`, `_ran_out`), that release
+    log in order, the sample, then the link, then the other rounds (`OneStageZk.orderHeld`,
+    `challenger.sample_link_first`), the sessions' records held to the coin trees it shows
+    (`challenger.sessions_tree_reason`), each statement's circuit
     and public files on the blobs (`_statements_check`), and v1's `check` at those coins on the verdicts of no session,
     what it would accept refused in the per-member form (`OneStageZk.MULTI_REFUSED`). A session whose coins a tree the
     challenger logged holds is verified by `flock-verify`, outside the mirror."""
@@ -362,6 +364,8 @@ def _one_stage_check(p: dict, c: tuple[dict, bytes], e: dict, blobs: list[bytes]
         trees = CH.coin_trees_of(e["coins"]["session"]["log"])
     except (CH.CoinError, KeyError, TypeError):
         return REJECT, "coins"
+    if not CH.sample_link_first(p["challenger"]["label"], c[1], e["coins"]["session"]["log"][1:]):
+        return REJECT, f"proofs: coins: {CH.SAMPLE_LINK_FIRST}"
     held = {hashlib.sha512(b).hexdigest(): b for b in blobs}
     sessions = [s for st in e["statements"] for s in st["sessions"]]
     for s in sessions:
