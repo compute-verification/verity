@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The scorer's refresh as a research run on a CPU node (the agent VM only edits); node_loop.py launches it:
 #   research run --on vy-nebius-cpu-7 --pool research --cwd source --store-read [--send served.json --send vm-put.log]
-#       -- bash benchmarks/covert_witness/scorer/refresh-node.sh
+#       [--send ledger.tar] -- bash benchmarks/covert_witness/scorer/refresh-node.sh
 # Its state is kept on the node in K ($TE_NODE_STATE): repo.git, the bare repository node_loop.py pushes the VM's refs
 # into (the records' commits, origin's branches); wt/, its worktrees (TE40_WT, the re-score's, the ingest's and the pin's
 # with files, the capture layers without); state/, ledger/ and v1/, the scorer's state, its ledger and the refreshes;
@@ -70,6 +70,13 @@ if [ -n "${TE_VM_PUT_FOR:-}" ] && [ -f "$IN/vm-put.log" ] && [ -d "$K/v1/$TE_VM_
 fi
 PY=$K/venv/bin/python
 RP=$SRC/tools/research/src
+if [ -f "$IN/ledger.tar" ]; then
+  # the VM's ledger records K/ledger lacks (node_loop.py's ledger_tar), and the index trace scope and the re-score read
+  say "ledger"
+  tar -xf "$IN/ledger.tar" -C "$K/ledger" --skip-old-files
+  (cd "$K/wt/te-core/benchmarks/covert_witness" && $PY -m te_core.ledger --root "$K/ledger" index) \
+    > "$OUT/vm/ledger.out" 2>&1 || say "ledger index failed: $(tail -1 "$OUT/vm/ledger.out")"
+fi
 cd "$SC"
 say "collect"
 PYTHONPATH=$RP $PY scorer.py collect > "$OUT/vm/collect.out" 2>&1 || say "collect failed: $(tail -1 "$OUT/vm/collect.out")"

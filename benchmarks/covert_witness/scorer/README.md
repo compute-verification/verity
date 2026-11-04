@@ -18,8 +18,9 @@ python node_loop.py init|once|loop|finish RUN          # the refresh (v1cycle.py
 ~~~
 
 The refresh runs on a CPU node (`refresh-node.sh`, its state kept there; the agent VM only edits): `node_loop.py` on
-the VM pushes the records' commits into the node's repository, launches each run, and PUTs the console bodies and posts
-the board lines it leaves in `out/vm/`, since a node holds no console token and no push to origin. The runs named in
+the VM pushes the records' commits into the node's repository, sends the te_core ledger records the node's copy lacks
+(the launchers ingest into the VM's), launches each run, and PUTs the console bodies and posts the board lines it leaves
+in `out/vm/`, since a node holds no console token and no push to origin. The runs named in
 its `first.txt` (one per line) are traced ahead of every other (v1cycle's `TE_TRACE_FIRST`).
 
 The nodes launch.py and promote.py take are the coordinator's shared list `/tmp/te-nodes.txt` (11:55Z) when it exists

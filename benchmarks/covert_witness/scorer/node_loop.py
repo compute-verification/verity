@@ -9,8 +9,9 @@ write key and no push to origin.
 
 For each refresh run the VM pushes into the node's repository origin's branches, this VM's cursor/te-* and
 covert-witness branches and every commit the scorer's records name that it holds (`push`); GETs the panels the route
-serves for training (served.json, the rows the run's algorithm-policy keeps); launches refresh-node.sh with them and
-the last refresh's PUT statuses (vm-put.log); and once it has ended and custody has stored its record, fetches
+serves for training (served.json, the rows the run's algorithm-policy keeps); launches refresh-node.sh with them, the
+last refresh's PUT statuses (vm-put.log) and the te_core ledger's records the node lacks (ledger.tar: the harness's
+launchers ingest every run into this VM's ledger, `launch.py --collect`); and once it has ended and custody has stored its record, fetches
 out/vm/'s small files, PUTs its console bodies, frontier-fit then algorithm-policy as te_core.algorithm_policy does,
 where the route still serves what the run read, posts post.json's lines with those statuses in place of
 v1cycle.VM_PUT, pushes merge.bundle to RESCORE_AHEAD, copies the panels and the efficiency table to the artifacts and
@@ -44,6 +45,9 @@ BORROW = "/workspace/research/git/verity.git/objects"
 LOOP = Path(os.environ.get("TE_NODE_LOOP", "/tmp/scorer/node"))
 #: the runs a refresh traces ahead of every other, one per line in order (v1cycle's TE_TRACE_FIRST), read at each launch
 FIRST_RUNS = LOOP / "first.txt"
+#: the te_core ledger the launchers ingest into on this VM, which K/ledger (refresh-node.sh's TE_LEDGER) mirrors: the
+#: store holds other machines' ledgers' records too, so the node's isn't rebuilt from it
+LEDGER = Path(os.environ.get("TE_LEDGER", Path.home() / ".research" / "te-ledger"))
 #: the VM's checkout of the re-score's te_core, whose console GETs and PUTs (the token is this VM's)
 RESCORE = Path(os.environ.get("TE_RESCORE_WT", "/tmp/scorer/rescore"))
 FIRST = datetime(2026, 11, 2, 21, 30, tzinfo=UTC).timestamp()
@@ -128,6 +132,22 @@ def push() -> str:
     if r.returncode:
         raise SystemExit(f"node_loop: push to {NODE}:{K}/repo.git: rc {r.returncode}: {r.stderr[-600:]}")
     return f"pushed {len(refs) - 3} commits and the branches"
+
+
+def ledger_tar() -> Path | None:
+    """LEDGER's record files (each record and its .art) that the node's K/ledger lacks, as LOOP/ledger.tar, None when it
+    lacks none. A record is written once and never rewritten, so a name the node has is the same file."""
+    have = set(on_node(f"cd {K}/ledger && find records -type f", timeout=300).split())
+    new = [x for p in sorted((LEDGER / "records").glob("*/*")) if p.suffix in (".json", ".art")
+           and (x := str(p.relative_to(LEDGER))) not in have]
+    tar = LOOP / "ledger.tar"
+    tar.unlink(missing_ok=True)
+    if not new:
+        return None
+    subprocess.run(["tar", "-cf", str(tar), "-C", str(LEDGER), "-T", "-"], input="\n".join(new) + "\n", text=True,
+                   check=True)
+    say("ledger:", len(new), "record files the node lacks")
+    return tar
 
 
 def launch(env: dict[str, str], send: list[Path], mem_gb: float, timeout: str) -> str:
@@ -285,6 +305,8 @@ def once(slot: float) -> dict:
     if not r.returncode:
         served.write_text(r.stdout)
         send.append(served)
+    if tar := ledger_tar():
+        send.append(tar)
     # a refresh off the slots' grid (`once` by hand) stops its shards before the next slot, which then runs
     after = FIRST + ((slot - FIRST) // SLOT_S + 1) * SLOT_S
     env = {"TE_HERE_UNTIL": f"{min(slot + UNTIL_S, after - LATE_S, END):.0f}"}
