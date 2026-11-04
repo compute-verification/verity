@@ -296,7 +296,7 @@ only inside a proof (`one_stage.registered`).
 - A registered value is a root parameter of the program, as rows of `words` leaves in the parameter's leaf order, each
   leaf `word_bits` bits: its leaf width rounded up to whole u16 words, 16 or 32 (`width`). Row `r` is committed as the
   circuit statement commits that port's row: `hm96-sha512/row/v1` over `sha512/row/v1` of its u16 words (`row_words`:
-  each leaf `word_bits / 16` words, low first, zero-padded to whole 64-word SHA-512 chunks, as a Flock port row and
+  each leaf `word_bits / 16` words, low first, zero-padded to whole 64-word SHA-512 chunks, as a C-Flock port row and
   its `values` row are laid out; u16 LE, role x), with a 192-byte salt drawn once from the operating system and never
   used for another row. Its root is the frame-v3-sha512 root over the rows under `CommitmentDomain(B, -2,
   RangeIndexedDomain(0, rows), hash="sha512")`, `B` the bytes of `identity_digest("verity/one-stage/registered-domain/v0",
