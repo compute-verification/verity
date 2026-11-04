@@ -223,6 +223,20 @@ def test_a_boolean_version_made_on_demand_is_a_call_by_its_id(monkeypatch):
     assert TG.is_call("Const32[0x00000000]_v2") and TG.is_call("GatherI32x16_v2")
 
 
+def test_the_boolean_versions_made_on_demand_are_made_in_sorted_order(monkeypatch):
+    """Making a Boolean version on demand registers it, so `on_demand_boolean_families` makes them in sorted order: the
+    registry's order, which a slice's shared part notes (`units.slices`' ``families``), is not a set's."""
+    from verity.ml.definitions import boolean
+
+    asked: list[str] = []
+    monkeypatch.setattr(boolean, "made_on_demand", asked.append)
+    words = ["GatherI32x16_v1", "Const32[0x00000000]_v1", "GatherI32x129280_v1", "F32Add_v1"]
+    for order in (words, words[::-1]):
+        asked.clear()
+        assert TG.on_demand_boolean_families(set(order)) == set()
+        assert asked == sorted(words), asked
+
+
 #: one Definition target for each way `is_call` decides: a vocabulary kind's family, a template's, a Boolean version one of their
 #: bindings certifies, a word composite and a Boolean one outside the Boolean table's bound, and a primitive
 DECIDED = {"TokenSelect_v1{V=16}": "words", "RoPEHead_v1{D=8}": "words", "RoPEHead_v2{D=8}": "certified",
@@ -248,7 +262,8 @@ def test_a_targeted_run_without_the_catalog_reports_what_one_with_it_does(monkey
             "not a candidate" if TG.family(TG.definition(t)) not in short["candidates"] else "?" for t in DECIDED} == DECIDED
 
     def strip(rep):
-        return {**rep, "targets": [{k: v for k, v in t.items() if k not in ("seconds", "seconds_by_check")} for t in rep["targets"]]}
+        return {**{k: v for k, v in rep.items() if k != "prologue_s"},
+                "targets": [{k: v for k, v in t.items() if k not in ("seconds", "seconds_by_check")} for t in rep["targets"]]}
 
     assert strip(fast) == strip(full)
     assert [t["partition"]["applies"] for t in full["targets"]] == [v != "not a candidate" for v in DECIDED.values()]
