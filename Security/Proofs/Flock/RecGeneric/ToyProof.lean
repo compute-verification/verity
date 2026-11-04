@@ -146,7 +146,11 @@ theorem run_echoV {Coin : Type} [Fintype Coin] [Inhabited Coin] [DecidableEq Coi
         if ((P.next x [] ω).eval H).1 = x ∨ coinSeq c 0 = default then .acc else .rej⟩ ∧
     (run H P (echoArg Coin).V x ω c).vLog = [] := by
   simp [run, stepWith, echoArg, echoV, OC.eval, Trace.seen]
-  split_ifs <;> simp
+  split_ifs with h
+  · simp
+    exact (ite_eq_left h).symm
+  · simp
+    exact (ite_eq_right h).symm
 
 /-- **`echoArg` is knowledge sound** at `κ = 1/|Coin|`, `γ = 0`. -/
 theorem echoArg_KS {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
