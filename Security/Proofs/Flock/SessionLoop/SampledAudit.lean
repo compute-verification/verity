@@ -53,9 +53,9 @@ messages, the probability that the loop admits the record and the audit shows `s
 average over the sample and the simulators' coins of `E` on an ideal record of `v₀` with the simulators' messages, plus
 the PRF gap there, plus `N·2δ₁`), plus the forge term, plus the sessions' errors at `s`. -/
 def _root_.Flock.Guarantees.SampledAuditAnyDeployed : Prop :=
-  ∀ {K S V O T R Xs Θ D : Type} [Fintype K] [Fintype S] [Fintype T] [Fintype R] [Fintype Xs] {N : ℕ} {CB : ℕ → Type}
-    [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] (sv : Service K S (Fin N → ZkView.Salt) V O T R)
-    (Hc : ZkView.Bits × ByteArray → D) (dig : V → Fin N → ZkView.Bits) (g : (Fin N → D) → O),
+  ∀ {K S V O T R Xs Θ D : Type} [Fintype K] [Fintype S] [Fintype T] [Fintype R] [Nonempty S] [Nonempty T] [Nonempty R]
+    [Fintype Xs] {N : ℕ} {CB : ℕ → Type} [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]
+    (sv : Service K S (Fin N → ZkView.Salt) V O T R) (Hc : ZkView.Bits × ByteArray → D) (dig : V → Fin N → ZkView.Bits) (g : (Fin N → D) → O),
     (∀ v y, sv.out v y = g fun i => Hc (dig v i + ZkView.My (y i), ZkView.saltHash (y i))) →
     ∀ (n m : ℕ) (v v₀ : V) (st : Stack K V S O T R m) (k₀ : K) (ℓ t : ℕ), 0 < t →
     ∀ (Rl : Rel Claims.Flock.Wit), (CoinLayer.session Loop.loopNr Masked.dataE).Complete Rl →
@@ -111,8 +111,8 @@ def _root_.Flock.Guarantees.SampledAuditAnyDeployed : Prop :=
           sv.forgeAdvantage n m v (st k₀ v) + Tup.errs εS ℓ s
 
 theorem SampledAuditAnyDeployed : Flock.Guarantees.SampledAuditAnyDeployed := by
-  intro K S V O T R Xs Θ D _ _ _ _ _ N CB _ _ sv Hc dig g hout n m v v₀ st k₀ ℓ t ht Rl hV L₀ src Q eC εS hown hok hR
-    hk hε s E
+  intro K S V O T R Xs Θ D _ _ _ _ _ _ _ _ N CB _ _ sv Hc dig g hout n m v v₀ st k₀ ℓ t ht Rl hV L₀ src Q eC εS hown
+    hok hR hk hε s E
   exact sampledAudit_zkOut
     (ok := fun i : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals ×
         (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)).toSrv.Worker =>
