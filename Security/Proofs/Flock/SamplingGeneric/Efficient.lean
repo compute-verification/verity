@@ -399,7 +399,6 @@ theorem served_seen (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Type
   rw [hview _ fun t ht _ => (L.place_of_not_mem r d ht).trans (hr t ht), L.coinsOf_place hcard]
   rfl
 
-omit [Fintype Coin] [Nonempty Coin] in
 /-- **A sampled proof block's extraction reruns as `A`'s extractor** against `runs`' session prover `P'`, at the
 session's coins of the run and the block's coins cast to the session's shape: each served rerun is one rerun, and
 checking what a witness reveals reruns nothing. -/
@@ -421,7 +420,6 @@ theorem unitExt_runs_eq (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : 
   · rw [checkRevealed_runs, Nat.add_zero]
     rfl
 
-omit [Fintype Coin] [Nonempty Coin] in
 /-- **A sampled proof block's extraction's own SHA-512 calls** are `A`'s extractor's against `runs`' session prover
 `P'`, and its reveal's checks, at most `openCalls`. -/
 theorem unitExt_own_le (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Type} (P : Prover Ω) (ω : Ω) {u : ℕ}
@@ -460,7 +458,6 @@ theorem E_eq_Esamp (L : Compiled Coin A) : L.E = L.Esamp L.SlotY L.slotStep := r
 
 variable {H : Msg → Msg} {L : Compiled Coin A}
 
-omit [Nonempty Coin] in
 theorem runExt_runs_le (hS : L.Sessions H) {ρ : A.Sh → ℕ} (hρ : A.RerunsLe H ρ) {x : Msg} {Ω : Type}
     (P : Prover Ω) (ω : Ω) (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
     ((L.runExt x s r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).2.2 ≤ L.nPU x * L.ρs ρ x := by
@@ -479,7 +476,6 @@ theorem runExt_runs_le (hS : L.Sessions H) {ρ : A.Sh → ℕ} (hρ : A.RerunsLe
     exact le_maxBelowN (fun u => ρ (L.sh x u)) hu
   · exact Nat.zero_le _
 
-omit [Nonempty Coin] in
 theorem runExt_own_le (hS : L.Sessions H) {h : A.Sh → ℕ} (hh : A.OwnLe H h) (hopen : L.OpenCallsLe H) {x : Msg}
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin)
     (c : L.SlotEC x) :
@@ -507,7 +503,6 @@ noncomputable def slotRuns (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s 
   (((L.checked x r)[i.val]?).map fun u =>
     if hu : u < L.nPU x then (((L.unitExt x s u r (run' r).seen (ρ ⟨u, hu⟩)).eval H run').2.2 : ℝ) else 0).getD 0
 
-omit [Fintype Coin] [Nonempty Coin] in
 theorem runExt_runs_eq (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Trace) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
     (((L.runExt x s r (run' r).seen c).eval H run').2.2 : ℝ) = ∑ i, L.slotRuns H x s run' i r (c i) := by
@@ -521,7 +516,6 @@ theorem runExt_runs_eq (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : Au
   · rfl
   · exact Nat.cast_zero
 
-omit [Fintype Coin] [Nonempty Coin] in
 theorem slotRuns_nonneg (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Trace) (i : Fin (L.nPU x)) (r : Fin (L.V.k x) → Coin) (ρ : L.BlockEC x) :
     0 ≤ L.slotRuns H x s run' i r ρ := by
@@ -537,7 +531,6 @@ theorem slotRuns_nonneg (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : A
 /-- Slot `i`, as a selection of the sample's slots (`Compiled.selSlot`). -/
 def slotSel (L : Compiled Coin A) (x : Msg) (i : Fin (L.nPU x)) : List ℕ → Option (Fin (L.nPU x)) := fun _ => some i
 
-omit [Fintype Coin] [Nonempty Coin] in
 theorem slotRuns_none (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Trace) (i : Fin (L.nPU x)) {r : Fin (L.V.k x) → Coin}
     (h : L.selSlot x (L.slotSel x i) r = none) (ρ : L.BlockEC x) : L.slotRuns H x s run' i r ρ = 0 := by
@@ -552,7 +545,6 @@ theorem slotRuns_none (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : Aud
       exact (Option.some_ne_none _ hs.symm).elim
     · rw [Option.map_some, Option.getD_some, dite_eq_right hu]
 
-omit [Fintype Coin] [Nonempty Coin] in
 theorem slotRuns_some (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Trace) {i u : Fin (L.nPU x)} {r : Fin (L.V.k x) → Coin}
     (h : (L.checked x r)[i.val]? = some u.val) (ρ : L.BlockEC x) :
@@ -561,7 +553,6 @@ theorem slotRuns_some (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : Aud
   rw [h, Option.map_some, Option.getD_some]
   exact dite_eq_left u.isLt
 
-omit [Nonempty Coin] in
 /-- **Slot `i`'s expected reruns given acceptance**: over the second stage `d` at `r`, acceptance times slot `i`'s
 expected reruns is at most `e_s`. Resampling its block's session's rounds keeps the block (`fixed`), and on them the
 block's extraction is `A`'s extractor against one prover `P'` at uniform coins, which reruns at most `e` of the block's
@@ -638,7 +629,6 @@ theorem slot_exp_le (hS : L.Sessions H) {e : A.Sh → ℝ} (he : A.RerunsExpLe H
       _ = e (L.sh x u) := by rw [hshape]
       _ ≤ L.es e x := le_maxBelow (fun v => e (L.sh x v)) u.isLt
 
-omit [Fintype Coin] [Nonempty Coin] in
 theorem Ex_slotStep (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Trace) (j l : Fin (L.k x)) (r : Fin (L.V.k x) → Coin) :
     Ex (fun c : L.SlotY x => (((L.slotStep x s c j l r (run' r).seen).eval H run').2.2 : ℝ)) =

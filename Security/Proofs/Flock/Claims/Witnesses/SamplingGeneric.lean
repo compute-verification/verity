@@ -656,13 +656,13 @@ theorem twoL_silent (H : Msg → Msg) (r : Fin ((twoL Coin).V.k []) → Coin) :
 
 omit [Inhabited Coin] in
 /-- `twoA`'s extractor: the replay, then its witness if the replay accepted. -/
-theorem twoA_ext (x : Msg) (r₀ : Fin ((twoA Coin).V.k x) → Coin) (c : (twoA Coin).EC ((twoA Coin).shape x)) :
-    (twoA Coin).ext x r₀ c = .rerun r₀ fun v₀ => if v₀.out = .acc then .ret (some ()) else .ret none := rfl
+theorem twoA_ext (x : Msg) (r₀ : Fin ((twoA Coin).V.k x) → Coin) (c : (twoA Coin).E.C x) :
+    (twoA Coin).E.ext x r₀ c = .rerun r₀ fun v₀ => if v₀.out = .acc then .ret (some ()) else .ret none := rfl
 
 omit [Inhabited Coin] in
 theorem twoA_eval_runs (H : Msg → Msg) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (r₀ : Fin ((twoA Coin).V.k x) → Coin) (c : (twoA Coin).E.C x) : ((twoA Coin).E.eval H P x ω r₀ c).2.2 = 1 := by
-  show (((twoA Coin).ext x r₀ c).eval H (run H P (twoA Coin).V x ω)).2.2 = 1
+  show (((twoA Coin).E.ext x r₀ c).eval H (run H P (twoA Coin).V x ω)).2.2 = 1
   rw [twoA_ext]
   by_cases h : (run H P (twoA Coin).V x ω r₀).seen.out = .acc <;> simp [RP.eval, h]
 
@@ -682,7 +682,7 @@ theorem twoA_runsExp (H : Msg → Msg) : (twoA Coin).RerunsExpLe H (fun _ => 1) 
 omit [Inhabited Coin] in
 /-- `twoA`'s extractor makes no SHA-512 call of its own. -/
 theorem twoA_own (H : Msg → Msg) : (twoA Coin).OwnLe H (fun _ => 0) := fun x _ P ω r₀ c => by
-  show (ownLog H (run H P (twoA Coin).V x ω) ((twoA Coin).ext x r₀ c)).length ≤ 0
+  show (ownLog H (run H P (twoA Coin).V x ω) ((twoA Coin).E.ext x r₀ c)).length ≤ 0
   rw [twoA_ext]
   by_cases h : (run H P (twoA Coin).V x ω r₀).seen.out = .acc <;> simp [ownLog, h]
 

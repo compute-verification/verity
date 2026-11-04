@@ -20,6 +20,7 @@ extractor's own calls are `k²` (`ownLog_E₀`), against the bound `k²·0` at `
 namespace Claims.SamplingGeneric
 
 open Claims Claims.Sampling
+open Claims.Recursion (serve viewing)
 
 theorem ownLog_flatMapRP_const {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) (m : ℕ)
     (l : List β) (h : ∀ b ∈ l, (ownLog H run (f b)).length = m) :
@@ -101,6 +102,9 @@ def A₀ : Arg Unit where
 /-- `A₀`'s extractor: the replay, then its witness if the replay accepted. -/
 theorem A₀_ext (x : Msg) (r₀ : Fin (A₀.V.k x) → Unit) (c : A₀.EC (A₀.shape x)) :
     A₀.ext x r₀ c = .rerun r₀ fun v₀ => if v₀.out = .acc then .ret (some ()) else .ret none := rfl
+
+theorem A₀_Eext (x : Msg) (r₀ : Fin (A₀.V.k x) → Unit) (c : A₀.E.C x) :
+    A₀.E.ext x r₀ c = .rerun r₀ fun v₀ => if v₀.out = .acc then .ret (some ()) else .ret none := rfl
 
 /-- **The compiled verifier**: `V₁`, the statement `s₀` and partition `P₀` at every message, a sample of `n` copies of
 the one proof block, each session the whole run at its own statement, a reveal of one opening, and `openCalls = oc`. -/
@@ -212,8 +216,8 @@ theorem sessions₀ (H : Msg → Msg) (oc : ℕ) : (L₀ 1 oc).Sessions H where
 /-- `A₀`'s extractor reruns once, its replay. -/
 theorem A₀_eval_runs (H : Msg → Msg) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (r₀ : Fin (A₀.V.k x) → Unit)
     (c : A₀.E.C x) : (A₀.E.eval H P x ω r₀ c).2.2 = 1 := by
-  show ((A₀.ext x r₀ c).eval H (run H P A₀.V x ω)).2.2 = 1
-  rw [A₀_ext]
+  show ((A₀.E.ext x r₀ c).eval H (run H P A₀.V x ω)).2.2 = 1
+  rw [A₀_Eext]
   by_cases h : (run H P A₀.V x ω r₀).seen.out = .acc <;> simp [RP.eval, h]
 
 /-- **The proof system costs its replay**: one rerun, strict and expected, and no SHA-512 call of its own. -/
@@ -227,8 +231,8 @@ theorem A₀_runsExp (H : Msg → Msg) : A₀.RerunsExpLe H (fun _ => 1) := by
   simp only [h1, Ex_const, le_refl]
 
 theorem A₀_own (H : Msg → Msg) : A₀.OwnLe H (fun _ => 0) := fun x _ P ω r₀ c => by
-  show (ownLog H (run H P A₀.V x ω) (A₀.ext x r₀ c)).length ≤ 0
-  rw [A₀_ext]
+  show (ownLog H (run H P A₀.V x ω) (A₀.E.ext x r₀ c)).length ≤ 0
+  rw [A₀_Eext]
   by_cases h : (run H P A₀.V x ω r₀).seen.out = .acc <;> simp [ownLog, h]
 
 /-! ## Its extractor's own calls -/
