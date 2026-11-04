@@ -3,9 +3,11 @@ allows, where ci.toml's `[[plan]]`s are written by hand (they stay, as fallbacks
 
 Its tasks are the check's parts with the test steps split by suite: each suite of pytest and of lean-suites (`pytest:SUITE`,
 `lean-suites:SUITE`), each Lake package's audit (`lean-audit:PKG`), circuit-check's `circuit-check:K/M` (its ci.toml
-`shards`), and every other job whole (the builds, lean-changed, ratchet-gate).  Each costs its measured seconds (`priced`, from
-recorded verdicts and runs); one with none costs the median of its kind's measured tasks, else of every measured task, else
-`DEFAULT_S`.
+`shards`), and every other job whole (the builds, lean-changed, ratchet-gate).  A suite measured past `SPLIT_S` is split by test
+file into M = ceil(seconds / `SPLIT_S`) parts (`split_m`, at most one per file), `pytest:SUITE:K/M`, each `suites.py SUITE:K/M`
+(`suites.partition`: its files packed longest first by their recorded seconds) and priced at its share of the suite's seconds.
+Each costs its measured seconds (`priced`, from recorded verdicts and runs); one with none costs the median of its kind's
+measured tasks, else of every measured task, else `DEFAULT_S`.
 
 A part whose job `needs` or runs `after` another (lean-unit-cut, lean-agreement and lean-suites read lean-build's binaries,
 flock-rust-tests flock-circuit-build's crates) runs on a shard that runs that build, and so does a spec package's audit, which
@@ -24,6 +26,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+import re
 import statistics
 from dataclasses import dataclass
 
@@ -38,6 +42,24 @@ CHEAP_S = 300.0
 DEFAULT_S = 60.0
 #: the jobs split by suite
 SUITE_JOBS = ("pytest", "lean-suites")
+#: a suite measured past this many seconds is split by test file into ceil(seconds / SPLIT_S) parts (`tasks.py list --split-s`,
+#: `check.py --shard-plan --split-s`)
+SPLIT_S = 900.0
+
+
+def split_m(seconds: float | None, files: int, split_s: float = SPLIT_S) -> int:
+    """How many parts a suite of ``files`` test files measured at ``seconds`` runs in: ceil(seconds / ``split_s``) past it, at most
+    one part per file, else 1."""
+    if seconds is None or seconds <= split_s or files < 2:
+        return 1
+    return max(1, min(files, math.ceil(seconds / split_s)))
+
+
+def suite_part(part: str) -> tuple[str, str, str | None]:
+    """A suite part's (job, suite, its K/M or None): `pytest:SUITE`, `pytest:SUITE:K/M`."""
+    job, _, x = part.partition(":")
+    name, _, spec = x.rpartition(":")
+    return (job, name, spec) if name and re.fullmatch(r"[1-9]\d*/[1-9]\d*", spec) else (job, x, None)
 
 
 @dataclass(frozen=True)
@@ -54,24 +76,33 @@ def kind(part: str) -> str:
     return "suite" if job in SUITE_JOBS else job
 
 
-def parts(all_parts: list[str], suites: list[str], after_lean: list[str], lean: bool) -> list[str]:
+def parts(all_parts: list[str], suites: list[str], after_lean: list[str], lean: bool,
+          splits: dict[str, int] | None = None) -> list[str]:
     """The auto plan's parts from a check's (`declaration.all_parts`): `pytest` as `pytest:SUITE` for each suite (but those of
-    ``after_lean`` when the tree has the Lean verifier, ``lean``), `lean-suites` as `lean-suites:SUITE` for those."""
+    ``after_lean`` when the tree has the Lean verifier, ``lean``), `lean-suites` as `lean-suites:SUITE` for those; a suite
+    ``splits`` puts in M > 1 parts as `JOB:SUITE:K/M`, K = 1..M."""
+    splits = splits or {}
+
+    def each(job: str, s: str) -> list[str]:
+        m = splits.get(s, 1)
+        return [f"{job}:{s}:{k}/{m}" for k in range(1, m + 1)] if m > 1 else [f"{job}:{s}"]
+
     out = []
     for p in all_parts:
         if p == "pytest":
-            out += [f"pytest:{s}" for s in suites if not (lean and s in after_lean)]
+            out += [x for s in suites if not (lean and s in after_lean) for x in each("pytest", s)]
         elif p == "lean-suites":
-            out += [f"lean-suites:{s}" for s in suites if lean and s in after_lean]
+            out += [x for s in suites if lean and s in after_lean for x in each("lean-suites", s)]
         else:
             out.append(p)
     return out
 
 
-def priced(names: list[str], suites: dict[str, float], audits: dict[str, float], steps: dict[str, float]) -> dict[str, float]:
-    """The measured seconds of each part of ``names`` that has some: a suite's (``suites``, by name), a package's audit
-    (``audits``), a part a recorded step ran alone (``steps``, by part), else its whole step's (``steps``, by job), spread
-    evenly over a split job's parts (circuit-check's shards)."""
+def priced(names: list[str], suites: dict[str, float], audits: dict[str, float], steps: dict[str, float],
+           shares: dict[str, float] | None = None) -> dict[str, float]:
+    """The measured seconds of each part of ``names`` that has some: a suite's (``suites``, by name), a suite part's its share of
+    them (``shares``, by part, `suites.Part.share`), a package's audit (``audits``), a part a recorded step ran alone (``steps``,
+    by part), else its whole step's (``steps``, by job), spread evenly over a split job's parts (circuit-check's shards)."""
     split: dict[str, int] = {}
     for p in names:
         if ":" in p:
@@ -79,7 +110,9 @@ def priced(names: list[str], suites: dict[str, float], audits: dict[str, float],
     out = {}
     for p in names:
         job, _, x = p.partition(":")
-        if job in SUITE_JOBS and x:
+        if job in SUITE_JOBS and (spec := suite_part(p))[2]:
+            got = steps.get(p, suites[spec[1]] * shares[p] if spec[1] in suites and p in (shares or {}) else None)
+        elif job in SUITE_JOBS and x:
             got = suites.get(x)
         elif job == "lean-audit" and x:
             got = audits.get(x)
@@ -181,10 +214,12 @@ def choose(ts: list[Task], needs: dict[str, list[str]], max_shards: int) -> int:
     return next((n for n, s in spans.items() if s <= best * (1 + SLACK)), min(spans, key=lambda n: (spans[n], n)))
 
 
-def plan(ts: list[Task], needs: dict[str, list[str]], max_shards: int = MAX_SHARDS, n: int | None = None) -> dict:
+def plan(ts: list[Task], needs: dict[str, list[str]], max_shards: int = MAX_SHARDS, n: int | None = None,
+         splits: dict[str, dict] | None = None) -> dict:
     """The auto plan (`KIND`) of ``ts``: N (``n``, else `choose`'s), each shard's parts, builds and predicted seconds, the
-    floor and its chain, the predicted wall time (the makespan), the total, and a digest of the shards' parts and builds,
-    which every shard of one plan names."""
+    floor and its chain, the predicted wall time (the makespan), the total, the suites split by file (``splits``: each one's M,
+    the digest of its partition and the timing record that makes it, which its shards partition by), and a digest of the
+    shards' parts and builds and the partitions, which every shard of one plan names."""
     if not ts:
         raise ValueError("an auto plan of no parts")
     if max_shards < 1 or (n is not None and n < 1):
@@ -195,11 +230,15 @@ def plan(ts: list[Task], needs: dict[str, list[str]], max_shards: int = MAX_SHAR
     return {"kind": KIND, "n": n, "max_shards": max_shards, "floor_s": round(low, 1), "floor": chain,
             "total_s": round(sum(t.seconds for t in ts), 1), "predicted_s": max(s["seconds"] for s in shards),
             "all": [t.part for t in ts], "shards": shards,
-            "tasks": {t.part: [round(t.seconds, 1), t.source] for t in ts}, "digest": digest(shards)}
+            "tasks": {t.part: [round(t.seconds, 1), t.source] for t in ts}, **({"splits": splits} if splits else {}),
+            "digest": digest(shards, splits)}
 
 
-def digest(shards: list[dict]) -> str:
-    return hashlib.sha256(json.dumps([[s["parts"], s["builds"]] for s in shards], separators=(",", ":")).encode()).hexdigest()
+def digest(shards: list[dict], splits: dict[str, dict] | None = None) -> str:
+    doc = [[s["parts"], s["builds"]] for s in shards]
+    if splits:
+        doc.append({name: [v["m"], v["digest"]] for name, v in sorted(splits.items())})
+    return hashlib.sha256(json.dumps(doc, separators=(",", ":")).encode()).hexdigest()
 
 
 def check(doc: dict, n: int, want: list[str]) -> str | None:
@@ -220,7 +259,7 @@ def check(doc: dict, n: int, want: list[str]) -> str | None:
         missing, extra = sorted(set(want) - set(flat)), sorted(set(flat) - set(want))
         return ("its parts aren't this tree's: " + (f"missing {', '.join(missing[:5])}" if missing else "")
                 + ("; " if missing and extra else "") + (f"unknown {', '.join(extra[:5])}" if extra else ""))
-    if doc.get("digest") != digest(shards):
+    if doc.get("digest") != digest(shards, doc.get("splits")):
         return "its digest isn't its shards'"
     return None
 

@@ -10,7 +10,8 @@ import hashlib
 
 import pytest
 
-from test_appends import N, Entropy, Run, pages, salts, store
+from remote_bandwidth_fakes import Entropy
+from test_appends import N, Run, pages, salts, store
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 

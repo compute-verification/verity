@@ -73,7 +73,7 @@ def stages : SplitStages Bool (Fin 1) 1 :=
   .stage (fun _ _ => .paid) (fun _ _ => True) (fun _ _ => True) fun _ => .done
 
 /-- The honest period of `n` windows: every tile live, each window's stages `stages`, whatever the past. -/
-def period : (n : ℕ) → Period Bool (Paths Bool 1 × (Equiv.Perm (Fin 1) × Unit)) (Fin 1) 1 n
+def period : (n : ℕ) → WindowPlay Bool (Paths Bool 1 × (Equiv.Perm (Fin 1) × Unit)) (Fin 1) 1 n
   | 0 => .done
   | n + 1 => .window (fun _ => true) stages fun _ => period n
 
@@ -316,7 +316,7 @@ theorem honest_credit (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
 /-! ## A period with a dead tile and a refused window -/
 
 /-- A period of `n + 1` windows whose first window's tile is dead, then `period n`. -/
-def periodR (n : ℕ) : Period Bool (Paths Bool 1 × (Equiv.Perm (Fin 1) × Unit)) (Fin 1) 1 (n + 1) :=
+def periodR (n : ℕ) : WindowPlay Bool (Paths Bool 1 × (Equiv.Perm (Fin 1) × Unit)) (Fin 1) 1 (n + 1) :=
   .window (fun _ => false) stages fun _ => period n
 
 /-- Its proofs' run: window `w`'s proof is accepted iff its round's coin is `true`, so the accepted prefix ends at the

@@ -211,6 +211,11 @@ def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch
     assert argv[argv.index("--upstream") + 1] == f"abc={out / 'flock-agreement' / 'upstream' / 'upstream-abc'}"
     assert argv[argv.index("--inputs") + 1].endswith("flock-agreement/inputs") and argv[argv.index("--fuzz") + 1] == "2"
     assert int(argv[argv.index("--session-jobs") + 1]) == CHECK.session_jobs() >= 1
+    assert argv[argv.index("--lean") + 1] == str(CHECK.FLOCK_LEAN / ".lake" / "build" / "bin" / "flock-verify")
+    out, sent = _pinned(tmp_path / "given", monkeypatch)
+    assert CHECK.main(["--lean-agreement", str(out), str(sent / "a.tar.gz"), str(sent / "b.tar.gz"), str(tmp_path / "fv")]) == 0
+    argv = json.loads((out / "flock-agreement" / "argv.json").read_text())
+    assert argv[argv.index("--lean") + 1] == str(tmp_path / "fv")
     out, sent = _pinned(tmp_path / "t", monkeypatch, binary=b"tampered")
     assert CHECK.lean_agreement(out, sent / "a.tar.gz", sent / "b.tar.gz") == 1
 
@@ -484,6 +489,10 @@ def test_the_ratchet_gate_step_fails_when_its_base_is_head_or_above_it(tmp_path,
         argv = gate(at)
         assert not isinstance(argv, str) and argv[4] == at, argv
     assert gate("0" * 40) == f"skipped: no base: {'0' * 40} names no commit here"
+    (out / "inputs" / CHECK.RATCHET_BASE_FILE).write_text(f"{below}\n")    # --ratchet-base: the gate's, over --base's
+    argv = CHECK.ratchet_gate(out, True)
+    assert not isinstance(argv, str) and argv[4] == below, argv
+    (out / "inputs" / CHECK.RATCHET_BASE_FILE).unlink()
     (out / "inputs" / CHECK.BASE_FILE).unlink()
     assert CHECK.ratchet_gate(out, True) == "skipped: no base: origin/main names no commit here"
 
@@ -535,8 +544,8 @@ def test_record_sends_the_verdicts_it_gathers_with_a_pack_given_added_unless_no_
     launched.clear()
     assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 3
     head = launched[0][:launched[0].index("--")]
-    assert [head[i + 1] for i, x in enumerate(head) if x == "--declared-output"] == list(CHECK.PACK_FILES), \
-        "custody uploads the packs however the run ends, never trimming them as undeclared"
+    assert [head[i + 1] for i, x in enumerate(head) if x == "--declared-output"] == [*CHECK.PACK_FILES, "check-live.json"], \
+        "custody uploads the packs and the live record however the run ends, never trimming them as undeclared"
 
 
 def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path, monkeypatch, capsys):
@@ -1570,6 +1579,20 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
     assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
     p = train("--base", "main")
     assert p.returncode == 2 and "train: --base refused without --deferred" in p.stderr, p.stderr
+    p = train("--ratchet-base", "main")
+    assert p.returncode == 2 and "train: --ratchet-base refused without --deferred" in p.stderr, p.stderr
+
+
+def test_train_sh_copied_out_of_the_tree_finds_the_trees_settings(tmp_path):
+    """Drive launches a copy of train.sh from its own directory (`drive.detach`) with the tree as its working directory: the
+    settings check reads the tree's settings.py, so the copy reaches the store-key check rather than refusing every launch."""
+    import shutil
+    import subprocess
+
+    copy = shutil.copy(ROOT / "tools" / "verity" / "check" / "train.sh", tmp_path / "train.sh")
+    p = subprocess.run(["bash", str(copy), "abc", "vy-x", "--deferred", "pytest"], capture_output=True, text=True, cwd=ROOT,
+                       env={"PATH": "/usr/bin:/bin"})
+    assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
 
 
 @pytest.mark.parametrize("twins", [False, True])
@@ -1692,6 +1715,53 @@ def test_train_sh_runs_with_priority_and_posts_a_launch_that_registers_no_run(tm
     assert p.returncode == 1 and "git fetch origin failed" in (tmp_path / "posted").read_text()
 
 
+def test_train_sh_launches_the_records_step_alone_and_hands_a_shard_its_artifact(tmp_path):
+    """Drive's sharded after-landing run: `--cc-records` launches circuit-check's records step alone, in a worktree of its own,
+    and `--cc-records-from ART@SHA256` reaches a shard's check.py; either is refused where it doesn't belong."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "landing")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x", "--cc-records")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--keep-going"):] == ["--keep-going", "--cc-records"], (p.stderr, args)
+    assert f"train-{git('rev-parse', 'HEAD')[:12]}-records.log" in p.stdout, p.stdout
+    art = f"art:{'a' * 64}@{'b' * 64}"
+    p = train("HEAD", "vy-x", "--deferred", "pytest,circuit-check", "--shard", "1/4", "--cc-records-from", art)
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--cc-records-from"):args.index("--cc-records-from") + 2] == ["--cc-records-from", art]
+    argv.unlink()
+    for flags, why in ((["--cc-records", "--deferred", "pytest"], "--cc-records refused with another flag"),
+                       (["--cc-records", "--agreement"], "--cc-records refused with another flag"),
+                       (["--deferred", "pytest", "--cc-records-from", art], "--cc-records-from refused without --shard"),
+                       (["--deferred", "pytest", "--shard", "1/4", "--cc-records-from", "art:x"], "--cc-records-from needs ART@SHA256")):
+        p = train("HEAD", "vy-x", *flags)
+        assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
+
+
+def test_train_sh_hands_an_auto_shard_its_plan_and_refuses_one_without_it(tmp_path):
+    """Drive's `after_landing_shards = "auto"`: each shard is `--shard auto:K/N --shard-plan-file PLAN`, the one plan drive
+    made for all N, which reaches check.py --record as given; an auto shard without a plan, a plan without an auto shard, and
+    a plan by a relative path (train.sh runs check.py from its own worktree) are refused before anything launches."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "landing")
+    git("push", "-q", "origin", "HEAD:main")
+    plan = tmp_path / "check-shard-plan.json"
+    plan.write_text("{}\n")
+    p = train("HEAD", "vy-x", "--deferred", "pytest,circuit-check", "--shard", "auto:2/3", "--shard-plan-file", str(plan))
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[-4:] == ["--shard", "auto:2/3", "--shard-plan-file", str(plan)], (p.stderr, args)
+    assert "shard auto:2/3" in p.stdout and f"train-{git('rev-parse', 'HEAD')[:12]}-auto-2of3.log" in p.stdout, p.stdout
+    argv.unlink()
+    for flags, why in ((["--shard", "auto:2/3"], "--shard auto:K/N takes --shard-plan-file PLAN"),
+                       (["--shard", "2/3", "--shard-plan-file", str(plan)], "--shard auto:K/N takes --shard-plan-file PLAN"),
+                       (["--shard", "auto:2/3", "--shard-plan-file", plan.name], "--shard-plan-file needs a plan's absolute"),
+                       (["--shard", "auto:0/3", "--shard-plan-file", str(plan)], "--shard needs K/N or auto:K/N")):
+        p = train("HEAD", "vy-x", "--deferred", "pytest", *flags)
+        assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
+
+
 def test_train_sh_replaces_a_tree_git_no_longer_lists_as_a_worktree(tmp_path):
     """On the control pod's NFS TMPDIR a train's tree can be left half removed and no longer a worktree, which `worktree remove`
     skips and `worktree add` refuses: every relaunch of that commit registered no run."""
@@ -1723,6 +1793,13 @@ def test_train_sh_hands_check_the_base_below_the_tip_that_drive_sends(tmp_path):
     argv.unlink()
     p = train("HEAD", "vy-x", "--deferred", "ratchet-gate", "--base", "nope")
     assert p.returncode == 1 and "--base nope: no such commit" in p.stderr and not argv.exists(), p.stderr
+    # ratchet-gate's own base (`--ratchet-base`: the tip of drive's last run whose gate gave a verdict), beside `--base`
+    p = train("HEAD", "vy-x", "--deferred", "ratchet-gate", "--base", "HEAD~1", "--ratchet-base", "HEAD~1")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--base"):] == ["--base", verified, "--ratchet-base", verified], (p.stderr, args)
+    argv.unlink()
+    p = train("HEAD", "vy-x", "--deferred", "ratchet-gate", "--ratchet-base", "nope")
+    assert p.returncode == 1 and "--ratchet-base nope: no such commit" in p.stderr and not argv.exists(), p.stderr
 
 
 def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):

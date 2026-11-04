@@ -47,10 +47,14 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 `main` moves only to a commit whose check passed every step on the merge gate. ci's `research queue drive` lands them
 (`research.drive`'s docstring has the rules; `tools/verity/check/drive.toml` the settings):
 
-- The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F --by
-  LANE` with `Lane LANE` in the body, and marks it ready at its head, `research queue ready N --mark --by LANE`. A push
-  makes a new head, which needs a new mark and a new review. `research queue status` says what each PR waits for. A
-  `hold` label, a conflict on `next` or a Markdown file over its cap keeps a PR out.
+- The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F
+  --issue KEY --by LANE` with `Lane LANE` in the body; `--issue` is required, its Linear issue (written as `Refs KEY` and
+  linked through the Linear app, since Linear's GitHub integration is off here; a failed link prints its retry, `research
+  queue link N --issue KEY`), or `none:REASON`. It marks it ready at its head, `research queue ready N --mark --by LANE`. A
+  push makes a new head, which needs a new mark and a new review. `research queue status` says what each PR waits for and
+  lists the PRs naming no issue. A `hold` label, a conflict on `next` or a Markdown file over its cap keeps a PR out, and a
+  PR from a fork, or by an author outside the organization but for the team's Apps and Daniel, is refused at its mark and at
+  admission.
 - Before marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on
   auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
   --changed $(git rev-parse origin/main) --quick"`, plus a suite's slow tier when you changed its core. Prefer small PRs.
@@ -71,8 +75,13 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   circuit-check's culprit is reverted at once, and until circuit-check passes on `checked` no PR touching its inputs lands
   (a PR whose body says `fixes step circuit-check` does).
   Citations and tables read only commits whose after-landing run passed: `main`'s.
-- A pure move that `verity check move BASE HEAD` certifies lands alone on `main`, ahead of the queue, through the lander;
-  drive merges it into `checked`. Only drive's App pushes `main`, `checked` and `next`.
+- A layout move lands from `next` with no pause in landing: its PR's body says `Move: tools/move/MAP.toml`, and it needs a
+  mark and a land verdict like any PR. Where the sync puts it, drive regenerates it on the tip below it (`rename.py --map
+  MAP`, one commit) and leaves it out, telling its owner, unless `move_check.py` certifies it; both scripts, and the
+  restack, are `checked`'s, as the landing gates are, and a member below the move that changes `tools/move/`'s scripts holds
+  it back until that member lands. Members above it are restacked across it, and only a conflict of their own refuses them.
+  Drive closes the PR once `main` reaches it. Only drive's App pushes `main`, `checked` and `next`: on a `checked` tip drive
+  didn't write, drive holds and rings @ci and @top until it is reset or ci accepts it (`drive.sh queue accept-checked SHA`).
 - `check.py --record --on M --pool NAME`, from a checkout, records `check` as an Attempt of the clean commit in M's NAME
   pool.
 - When a changed lock record lands on `main`, Daniel gets a DM showing it; that DM is the check, and nothing waits on it.

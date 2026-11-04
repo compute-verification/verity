@@ -55,8 +55,9 @@ theorem _root_.Flock.Bridge.constsOf_isInput {c : Flock.Circuit} {hU : Built c.u
 
 /-- **The assembly, with canonical openings** (`Bridge.AssemblyTargetC`). -/
 theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
-  intro hT hF _ hC hE n Reg I ht D hD hU pub hpub hpt hscope hv2 hdup hroots desc _ _ kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω
-    _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ tv q L P vb σ Xr δ Cc rows roots Cd κ hTab hLink
+  intro hT hF _ hC hE n Reg I ht D hD hU pub hpub hpt hscope hv2 hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg
+    N Ω _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ tv q L P vb σ Xr δ Cc rows roots Cd κ hTab
+    hLink
   by_cases hk0 : kd = 0
   · refine (FlockSoundness.Game.prob_le_one _ _ τ).trans (le_trans (le_of_eq ?_) (le_self_add.trans le_self_add))
     rw [hk0]
@@ -67,8 +68,10 @@ theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
     hCust τ
   have hκin : ∀ g b, κ g = some b → (Cc.op g).isInput = true := fun g b h =>
     Bridge.constsOf_isInput (Discharge.Layout.outsOf D.unroll hU n) h
-  have hsub : (Claims.Sampling.faulty Claims.Sampling.sha512Msg Cd (Bridge.stmtOf P κ kd desc q roots)
-      (Bridge.partOf P κ) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr)).filter (· < n) ⊆
+  have hns := Bridge.nsOf_sum hpop
+  have hsub : (Claims.Sampling.faulty Claims.Sampling.sha512Msg Cd (Bridge.stmtOf P κ (.subset kd) desc q roots)
+      (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr)).filter
+        (· < n) ⊆
       (wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb
         (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2) (reg σ) Xr).map
         Fin.valEmbedding := by
@@ -81,15 +84,15 @@ theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
     refine hF P vb.pos (fun o g => vb.bit (vb.val o) g) id vb.com (vb.cs (reg σ))
       (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2)
       Claims.Sampling.sha512Msg Cd roots Xr κ ⟨v, hlt⟩ hκin ⟨op, hop⟩
-      (fun g hg hn o ho hc => hTu ⟨v, hlt⟩ g hg hn o ho (hc.2 hn)) ?_ kd desc q hv
+      (fun g hg hn o ho hc => hTu ⟨v, hlt⟩ g hg hn o ho (hc.2 hn)) ?_ _ (.subset kd) desc q hns hv
     intro g hg b hb
     obtain ⟨-, hbit, hcan⟩ := hop g hg
     exact hbit.symm.trans (hcan.1 b hb)
-  have hcard : ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots)
-      (Bridge.partOf P κ) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr) →
+  have hcard : ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
+      (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr) →
       min K₀ (n - kd + 1) ≤ (wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb
         (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2) (reg σ) Xr).card := fun hrel =>
-    (hC P kd K₀ hkd1 hkd _ _ κ desc q roots _ hrel).trans
+    (hC P _ hns kd K₀ hkd1 hkd _ _ κ desc q roots _ hrel).trans
       ((Finset.card_le_card hsub).trans (Finset.card_map _).le)
   have hE' := hE n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust
     k Rw M hk hRw hM ρ hρ hr t' ht' (min K₀ (n - kd + 1)) ((min_le_left _ _).trans hK₀) τ (2 * (t' + tv)) (t' + tv)

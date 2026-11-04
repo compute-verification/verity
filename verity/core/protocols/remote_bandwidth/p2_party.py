@@ -3,8 +3,10 @@ so they run on a host the prover doesn't control (`trusted-host`) while the prov
 
 The channel is a pair of byte streams carrying one JSON object of one key a line: the ssh session that starts this side
 (`--stdio`, as a gate's verb starts it) or a TCP connection (`--listen`). The session has no round-trip floor, so ssh's
-latency changes nothing in its verdict. The verifier holds its own registration (`--registration FILE`, the auditor's
-record of PoUS's setup, `registration_json`), never the prover's word for it, and draws its coins from its own host's OS.
+latency changes nothing in its verdict. The verifier holds its own registration, never the prover's word for it: the
+memory challenger's own record of a PoUS session's setup on this host (`--pous-record DIR --pous-session SID`,
+`pous_record`: the store PoUS's session SID bound, its whole store the plan), or the auditor's registration file
+(`--registration FILE`, `registration_json`); and it draws its coins from its own host's OS.
 The record's `plan` is the units every pass reads (`plan_of`): the units holding a tensor's block, so not the store's
 padding past the last tensor, which is PoUS's and which the decode never reads; without one, every unit.
 
@@ -39,8 +41,9 @@ event beside it and can only veto (`Twin`): an event, a held store or an answer 
 Lean answers with an error, rejects the session `disagreement` at that window, and no event follows it. What the
 Lean takes as given is the clock's readings and the coins the challenger (`coins.local`, on this host) releases.
 
-`python -m verity.core.protocols.remote_bandwidth.p2_party --registration FILE (--stdio | --listen HOST:PORT [--sessions
-N]) [--answer FILE | --device DIR] [--lean-exe EXE]` is the verifier's side (`main`), each session with fresh coins, the
+`python -m verity.core.protocols.remote_bandwidth.p2_party (--registration FILE | --pous-record DIR --pous-session SID)
+(--stdio | --listen HOST:PORT [--sessions N]) [--answer FILE | --device DIR] [--lean-exe EXE]` is the verifier's side
+(`main`), each session with fresh coins, the
 Lean built in its package (`lake build remote-audit-verifier`) unless `--lean-exe` names a built one, or, without `lake`
 on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
 session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
@@ -78,10 +81,11 @@ from .receipts import Plan
 MODULE = "verity.core.protocols.remote_bandwidth.p2_party"
 PROTOCOL = "verity/remote-bandwidth/p2/v0"
 REQUEST_KEYS = ("deadline_ns", "node", "passes", "samples", "window_ns", "windows")
-SESSION = {"deadline_ns": 10**9, "passes": 1, "samples": 1024, "window_ns": 10**9, "windows": 2}
+SESSION = {"deadline_ns": 10**9, "passes": 4, "samples": 1024, "window_ns": 20 * 10**9, "windows": 6}
 """The auditor's session parameters, which a request must carry as they are (`params_of`): the served bandwidth piece's
-(`benchmarks/one_stage/served_bandwidth.sh`), two windows of at least 1 s, one pass each, 1,024 openings a window and
-an allowance of 1 s."""
+(`benchmarks/pous/held_bandwidth.py`'s defaults, over the store the PoUS piece holds), six windows of at least 20 s,
+four passes each, 1,024 openings a window and an allowance of 1 s. At δ = 2^-40 an accepted session's ε is
+δ + 6,144/2^64 (`EPS_TERMS`), about 9.1e-13."""
 REFUSED = {"refused": True}
 DISAGREEMENT = "disagreement"
 #: The draws a thread of the Lean checks at once (`P2Session.checkOpeningsChunked`).
@@ -176,6 +180,35 @@ def registration_of(doc: Mapping[str, Any]) -> p2.Registration:
     if "digest" in doc and _unhex(doc["digest"]) != reg.digest:
         raise ValueError("the registration's digest is not its fields'")
     return reg
+
+
+def registration_of_setup(record: Mapping[str, Any]) -> p2.Registration:
+    """The registration of the PoUS setup the memory challenger kept for one session (`challenger_party.keep`): the
+    request's node, the setup's P2 parameters, commitment and salt, and the session's binding as the vk root, at
+    sketch-sha512's rows; ValueError for a record without a setup, or one `challenger_party.setup_of` refuses."""
+    from verity.core.protocols.pous import challenger_party as CP
+
+    request = record["request"]
+    s = CP.setup_of(request)
+    if s is None:
+        raise ValueError("the challenger's record of the session has no setup")
+    q = s["params"]
+    params = P2Params(q["w"], q["c0"], q["blocks_per_segment"], q["segments"], q["expander"])
+    return p2.Registration(request["node"].encode(), p2.codec_of(params), _unhex(s["commitment"]), _unhex(s["salt"]),
+                           _unhex(request["binding"]))
+
+
+def pous_record(directory: Path, session_id: str) -> bytes:
+    """The registration file's bytes (`registration_json`, every unit its plan) of the setup the memory challenger whose
+    device is `directory` kept for the session `session_id` (64 lowercase hex), on this host (`registration_of_setup`)."""
+    from verity.core.protocols.pous import challenger_party as CP
+
+    if not re.fullmatch(r"[0-9a-f]{64}", session_id):
+        raise ValueError("a session id is 64 lowercase hex digits")
+    doc = json.loads((directory / CP.SETUPS / f"{session_id}.json").read_text())
+    if doc.get("session_id") != session_id:
+        raise ValueError(f"the record names the session {doc.get('session_id')}, not {session_id}")
+    return json.dumps(registration_json(registration_of_setup(doc)), sort_keys=True).encode()
 
 
 def opening_json(o: p2.Opening) -> dict[str, Any]:
@@ -701,7 +734,11 @@ def _keep(path: Path, case: Mapping[str, Any]) -> None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
-    ap.add_argument("--registration", type=Path, required=True, help="the auditor's registration with its plan (registration_json)")
+    held = ap.add_mutually_exclusive_group(required=True)
+    held.add_argument("--registration", type=Path, help="the auditor's registration with its plan (registration_json)")
+    held.add_argument("--pous-record", type=Path, help="the memory challenger's device on this host, whose record of "
+                                                       "--pous-session's setup is the registration (pous_record)")
+    ap.add_argument("--pous-session", help="with --pous-record: the PoUS session id (64 hex) whose setup is the store")
     where = ap.add_mutually_exclusive_group(required=True)
     where.add_argument("--stdio", action="store_true", help="the channel is this process's stdin and stdout")
     where.add_argument("--listen", help="HOST:PORT to accept provers on (port 0: any, printed as {\"listening\"})")
@@ -719,7 +756,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                   "in its Lake package, or without lake on the PATH, the one built "
                                                   "there)")
     a = ap.parse_args(argv)
-    data = a.registration.read_bytes()
+    if (a.pous_record is None) != (a.pous_session is None):
+        ap.error("--pous-record and --pous-session go together")
+    data = a.registration.read_bytes() if a.registration is not None else pous_record(a.pous_record, a.pous_session)
     cases = None
     if a.device is not None:
         a.device.mkdir(parents=True, exist_ok=True)
@@ -772,8 +811,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 __all__ = ["Books", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "Prover", "Twin", "answer", "core_answer", "held_json",
-           "hold", "main", "message", "opening_json", "opening_of", "params_of", "plan_of", "prove", "registration_json",
-           "registration_of", "released_of", "request_of", "session", "verdict_json"]
+           "hold", "main", "message", "opening_json", "opening_of", "params_of", "plan_of", "pous_record", "prove",
+           "registration_json", "registration_of", "registration_of_setup", "released_of", "request_of", "session",
+           "verdict_json"]
 
 if __name__ == "__main__":
     sys.exit(main())

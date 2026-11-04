@@ -58,7 +58,7 @@ session() {  # NAME EXPECT [bandwidth.py session options]
 }
 
 rc=0
-AUDITOR=(--windows 2 --passes 1 --samples 1024 --window-s 1 --deadline-s 1)  # p2_party.SESSION, the gate's party's
+AUDITOR=(--windows 6 --passes 4 --samples 1024 --window-s 20 --deadline-s 1)  # p2_party.SESSION, the gate's party's
 session honest accept "${AUDITOR[@]}" || rc=1
 session cheat reject "${AUDITOR[@]}" --skip-layer 1 || rc=1
 "${SSH[@]}" cat "$R/party/answers.jsonl" > "$O/party-answers.jsonl" || rc=1

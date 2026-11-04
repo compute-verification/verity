@@ -25,7 +25,8 @@ merged record no longer lists, a group left without readers or definitions dropp
 both sides changed differently), and names each in one line on stderr. Whether a guarantee is listed is
 not the build's: one side's removal applies over the other's change to its record. What only a person writes still
 refuses when both sides changed it differently: an `owner`, a `shape` or `frozen` entry (a `shape.inline` entry is one
-premise of a guarantee, so two sides that each add or drop premises of one guarantee merge: `DEEPER`), a dependency's
+premise of a guarantee, so two sides that each add or drop premises of one guarantee merge: `DEEPER`; a premise both
+sides give different reasons keeps ours', since the check asks only that one be given), a dependency's
 revision, a policy entry (a layer's field, a `compile_time` digest). A `shape.inline` premise one side dropped while the
 other has it as the base had it stays, while the merged record lists its guarantee (`held`): a side whose `--update` ran on
 an older tree drops a text the other side's tree still prints, and the Lean check fails on a missing entry but not on one
@@ -43,8 +44,11 @@ against `main`.
 The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`
 and `except` as lists, `why` as a list of its `; ` clauses (`layers`). Every list of names (the roots, `meaning`, `proved_in`,
 `claims.modules`, `shape.premises`...), which two branches that each add a module both change, merges as a list (`items`). For a `.lean` file (`--lean`, `lean-imports` in
-`.gitattributes`), git's own merge runs and only a conflict all of whose sides are `import` lines is merged, as a list: two branches
-that each add a guarantee's module to `Guarantees.lean` merge, and any other conflict stays git's. For a `lakefile.toml`
+`.gitattributes`), git's own merge runs and only a conflict all of whose sides are import lines (each one import in any form
+`headers.py` reads: `public import`, `meta import`, `import all`) is merged, as a list: two branches
+that each add a guarantee's module to `Guarantees.lean` merge, and any other conflict stays git's. When one side's file is on
+the module system and the other's isn't (a branch made before the port), the one that isn't is ported first (`modules.py`), as
+rerunning the codemod on that branch would. For a `lakefile.toml`
 (`--lakefile`, `lakefile-lists`), a conflict all of whose sides are `[[require]]` blocks merges as a set of blocks, and one all
 of whose sides are a string array's items (`roots`) merges as a list, wrapped as ours wraps it: two branches that each require a
 package or add a root to `Security/Properties` merge. Any other conflict, and a result that is not TOML, stays git's. In
@@ -57,6 +61,7 @@ comment lines takes theirs'; any other conflict stays git's.
 from __future__ import annotations
 
 import argparse
+import functools
 import importlib.util
 import json
 import os
@@ -127,18 +132,25 @@ def names(o, a, b) -> bool:
     return ok(a) and ok(b) and (o is MISSING or ok(o))
 
 
-def entries(path: str, o: dict, a: dict, b: dict, why: list[str], depth: int = 1) -> dict:
+def entries(path: str, o: dict, a: dict, b: dict, why: list[str], depth: int = 1,
+            candidate: list[str] | None = None) -> dict:
     """Maps merged entry by entry; ``depth`` > 1 merges entries that are maps entry by entry too (one level more under a
-    `DEEPER` path), and lists of names merge as lists."""
+    `DEEPER` path), and lists of names merge as lists. A `shape.inline` premise both sides give different reasons keeps
+    ours' reason, named in ``candidate``: the check asks only that a reason be given."""
     out = {}
     for k in keys(path, a, b):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
         if depth > 1 and isinstance(y, dict) and isinstance(z, dict) and (x is MISSING or isinstance(x, dict)):
             sub = f"{path}[{k}]"
-            v = entries(sub, {} if x is MISSING else x, y, z, why, depth - 1 + (sub in DEEPER))
+            v = entries(sub, {} if x is MISSING else x, y, z, why, depth - 1 + (sub in DEEPER), candidate)
             v = MISSING if path in DEEPER and not v else v
         elif depth > 1 and names(x, y, z):
             v = items([] if x is MISSING else x, y, z)
+        elif (path.startswith("shape[inline][") and isinstance(y, str) and isinstance(z, str) and y != z
+              and x not in (y, z) and (x is MISSING or isinstance(x, str))):
+            v = y
+            if candidate is not None:
+                candidate.append(f"{path}[{k}] (ours' reason)")
         else:
             v = one(f"{path}[{k}]", x, y, z, why)
         if v is not MISSING:
@@ -398,7 +410,7 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
         elif names(o, a, b):
             v = items([] if o is MISSING else o, a, b)
         elif isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
-            v = entries(k, {} if o is MISSING else o, a, b, why, 2 if k in NESTED else 1)
+            v = entries(k, {} if o is MISSING else o, a, b, why, 2 if k in NESTED else 1, candidate)
         else:
             v = one(k, o, a, b, why)
         if v is not MISSING:
@@ -455,12 +467,53 @@ def kept(o: set, a: set, b: set) -> set:
     return (a & b) | (a - o) | (b - o)
 
 
+@functools.cache
+def _headers():
+    """`headers.py`, loaded only to merge a `.lean` file: the record driver runs where `merge.py` and `check.py` are alone."""
+    return A.sibling("headers")
+
+
+def _import(line: str) -> bool:
+    """Whether ``line`` is one import and nothing else, in any form a header takes (`headers.py`: `public import`...)."""
+    H = _headers()
+    h = H.header(line)
+    return h is not None and len(h.imports) == 1 and not h.module and not h.prelude and H.skip(line, h.end) == len(line)
+
+
 def _imports(lines: list[str]) -> bool:
-    return all(s.startswith("import ") or not s.strip() for s in lines)
+    return all(_import(s) or not s.strip() for s in lines)
+
+
+@functools.cache
+def _modules():
+    """`modules.py`, loaded only to merge a `.lean` file: the record driver runs where `merge.py` and `check.py` are alone."""
+    return A.sibling("modules")
+
+
+def _ported(sides: tuple[Path, Path, Path], tmp: Path) -> tuple[Path, Path, Path]:
+    """A `.lean` file's three sides, each that isn't on the module system ported (`modules.py`, its copy under ``tmp``) when
+    ours or theirs is: what a branch made before the port takes by rerunning the codemod.  Unported, the port's change to
+    every header line conflicts with that branch's imports, and an import either side removed is still in the other's
+    spelling.  A side the codemod refuses stays as it is."""
+    M = _modules()
+    texts = [p.read_text() for p in sides]
+    if not any(M.is_module(t) for t in texts[1:]):
+        return sides
+    out = []
+    for name, p, t in zip(("base", "ours", "theirs"), sides, texts):
+        try:
+            new = M.port(t)
+        except ValueError as e:
+            print(f"merge.py --lean: the {name} side stays off the module system: {e}", file=sys.stderr)
+            new = t
+        if new != t:
+            (p := tmp / name).write_text(new)
+        out.append(p)
+    return out[0], out[1], out[2]
 
 
 def _import_names(text: str) -> set[str]:
-    return {s.strip() for s in text.splitlines() if s.startswith("import ")}
+    return {s.strip() for s in text.splitlines() if _import(s)}
 
 
 def _blocks(lines: list[str]) -> list[str] | None:
@@ -657,23 +710,26 @@ def lean(base: Path, ours: Path, theirs: Path, resolvers=None) -> tuple[str, int
     """(the merged text, the number of conflicts left) of a `.lean` file: git's own merge (`git merge-file`), then each conflict
     whose three sides are only `import` lines merged as lists of imports (`items`), so two branches that each add a module to
     an import list merge.  Every import outside a conflict left is then held to the whole files' imports (`kept`), once
-    each: one side removed stays removed wherever git's hunks put it.  Any other conflict is left as git writes it.
-    ``resolvers`` (each `(base, ours, theirs)` lines to the merged lines, or None) replace the imports rule, and with them
-    no import is filtered."""
+    each: one side removed stays removed wherever git's hunks put it.  Any other conflict is left as git writes it.  When
+    ours or theirs is on the module system, the sides that aren't are ported first (`_ported`), so the merge is of what
+    each side changed beyond the port.  ``resolvers`` (each `(base, ours, theirs)` lines to the merged lines, or None)
+    replace the imports rule, and with them no side is ported and no import is filtered."""
     keep = None
-    if resolvers is None:
-        keep = kept(*(_import_names(p.read_text()) for p in (base, ours, theirs)))
-        resolvers = (lambda o, a, b: [s for s in items([s for s in o if s.strip()], [s for s in a if s.strip()],
-                                                       [s for s in b if s.strip()])]
-                     if _imports(a) and _imports(o) and _imports(b) else None,)
-    p = subprocess.run(["git", "merge-file", "-p", "--diff3", "-L", "ours", "-L", "base", "-L", "theirs", str(ours), str(base),
-                        str(theirs)], capture_output=True, text=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        if resolvers is None:
+            base, ours, theirs = _ported((base, ours, theirs), Path(tmp))
+            keep = kept(*(_import_names(p.read_text()) for p in (base, ours, theirs)))
+            resolvers = (lambda o, a, b: [s for s in items([s for s in o if s.strip()], [s for s in a if s.strip()],
+                                                           [s for s in b if s.strip()])]
+                         if _imports(a) and _imports(o) and _imports(b) else None,)
+        p = subprocess.run(["git", "merge-file", "-p", "--diff3", "-L", "ours", "-L", "base", "-L", "theirs", str(ours),
+                            str(base), str(theirs)], capture_output=True, text=True)
     if p.returncode < 0 or p.returncode > 127:
         raise ValueError(f"git merge-file failed: {p.stderr.strip()}")
     out, left, lines, n, seen = [], 0, p.stdout.splitlines(keepends=True), 0, set()
 
     def emit(s: str):
-        if keep is not None and s.startswith("import "):
+        if keep is not None and _import(s):
             if s.strip() not in keep or s.strip() in seen:
                 return
             seen.add(s.strip())
