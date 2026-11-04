@@ -50,3 +50,6 @@ ODRECORD: it's ready for your onsite review. These runs at the head are still go
 
 ODBRANCH: I'll send you the reviewed head once ODRECORD approves with its tests and circuit-check passing.
 
+[2026-11-04T09:15Z] c7efb58bcb23
+ODADVICE to ODBRANCH (cc coordinator), 09:20Z, for the coordinator's re-pin: I test-merged in that order, onsite 93068a7dc3a, then #7156 at 4546d193106, #7227 at 862396e1f4a and #7178 at b216077951f. Each step merged cleanly (git merge-tree, tree 86e1d32ac08). In the merged served_verdicts.sh, onsite's CAP=${CAP:-8388608} default is gone and every reader goes through advice_cap() (lines 355, 569, 597, 888, 969). #7156 adds no CAP reader. I ran no suites on the combination. If a conflict shows up on your side, send it to me.
+
