@@ -42,7 +42,9 @@ meets the contract where the record meets the frozen hypotheses `KS_of` reads (`
 record `deployOf F c` (`SamplingDeploy.compiled`), four of those are facts about the sampled verifier's code
 (`Code.DrawLaw`, `Code.Refuses`, `Code.InteriorFixed`, `Code.DrawFixed`), and the compiler's KS and committed form
 there take exactly them, Flock's KS at `F`, the commitment's binding and the sessions' runs, numbers and openings
-(`SamplingDeploy.ks_compiled`, `SamplingDeploy.ksReg_compiled`).
+(`SamplingDeploy.ks_compiled`, `SamplingDeploy.ksReg_compiled`). At C-Flock's masked record and SHA-512, Flock's KS,
+the decoder's list bound and the commitment's binding are proved (`SamplingGeneric/Masked.lean`: `ks_masked`,
+`ksReg_masked`, and `SamplingDeploy.ks_masked` at the deployed record).
 -/
 
 @[expose] public section
