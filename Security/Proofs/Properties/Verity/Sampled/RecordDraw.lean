@@ -24,12 +24,134 @@ Clause (i) of `MovesOf`: the record v2 reads in an accepted play decodes (`Exec.
 * **v2's coins fit `MAX_COINS` frames** (`coins_size_le`): v2's evidence holds its segment's openings within `LIMITS`
   (`Properties.Challenger.Limits.evidenceOf_within`), and the coins v2 reads are one frame per opening
   (`challengerStream_ok`).
+* **What the sample's fill reads of the play**: the walk and the fill a node at a time (`walk_send_of`, `fill_coin_of`),
+  an output reached from the walk's stop is reached from the node (`playReaches_walk`), readings that pick only openings
+  (`PicksOpenings`), and the family and digest v2 reads the sample's coins at (`SampleNamed`).
 -/
+
+namespace Verity.Game
+
+variable {α V ι : Type}
+
+/-! ## The walk and the fill, a node at a time -/
+
+/-- **The walk only descends**: an output a play reaches from the walk's stop, it reaches from the node. -/
+theorem playReaches_walk {g : Game α} {σ : Strategy g} :
+    ∀ (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCut V g') (x : CoinTape g' s')
+      (back : CoinTape g' s' → CoinTape g σ) (o : α),
+      PlayReaches (Pos.walk g' s' Ks x back).g' (Pos.walk g' s' Ks x back).s' o → PlayReaches g' s' o
+  | .ret _, _, _, _, _, _, h => h
+  | .send _ k, s', Ks, x, back, o, h => by
+    by_cases hK : ∃ i, (Ks i).isHere
+    · rw [Pos.walk, if_pos hK] at h
+      exact h
+    · rw [Pos.walk, if_neg hK] at h
+      exact playReaches_walk (k s'.1) s'.2 _ x back o h
+  | @Game.coin _ _ _ _ k, s', Ks, x, back, o, h => by
+    by_cases hK : ∃ i, (Ks i).isHere
+    · rw [Pos.walk, if_pos hK] at h
+      exact h
+    · rw [Pos.walk, if_neg hK] at h
+      exact ⟨x.1, playReaches_walk (k x.1) (s' x.1) _ (x.2 x.1) _ o h⟩
+
+theorem walk_send_of {g : Game α} {σ : Strategy g} {M : Type} {k : M → Game α} {s' : Strategy (.send M k)}
+    {Ks : ι → DigestCut V (.send M k)} (hK : ∀ i, (Ks i).isHere = false) (x : CoinTape (.send M k) s')
+    (back : CoinTape (.send M k) s' → CoinTape g σ) :
+    Pos.walk (.send M k) s' Ks x back = Pos.walk (k s'.1) s'.2 (fun i => (Ks i).atSend s'.1) x back := by
+  rw [Pos.walk]
+  split_ifs with h
+  · exact absurd h (by simp [hK])
+  · rfl
+
+theorem walk_coin_of {g : Game α} {σ : Strategy g} {C : Type} {iF : Fintype C} {iN : Nonempty C}
+    {k : C → Game α} {s' : Strategy (@Game.coin _ C iF iN k)} {Ks : ι → DigestCut V (@Game.coin _ C iF iN k)}
+    (hK : ∀ i, (Ks i).isHere = false) (x : CoinTape (@Game.coin _ C iF iN k) s')
+    (back : CoinTape (@Game.coin _ C iF iN k) s' → CoinTape g σ) :
+    Pos.walk (@Game.coin _ C iF iN k) s' Ks x back = Pos.walk (k x.1) (s' x.1) (fun i => (Ks i).atCoin x.1) (x.2 x.1)
+      (fun y => back (x.1, Function.update x.2 x.1 y)) := by
+  rw [Pos.walk]
+  split_ifs with h
+  · exact absurd h (by simp [hK])
+  · rfl
+
+theorem fill_send_of {Q : Type} (sel : FillSel α Q) {M : Type} {k : M → Game α} {s' : Strategy (.send M k)}
+    {Ks : ι → DigestCut V (.send M k)} (hK : ∀ i, (Ks i).isHere = false) (m : ℕ) (κ : Fin m → Q)
+    (z : CoinTape (.send M k) s') :
+    fill sel (.send M k) s' Ks m κ z = fill sel (k s'.1) s'.2 (fun i => (Ks i).atSend s'.1) m κ z := by
+  rw [fill]
+  exact if_neg (by simp [hK])
+
+theorem fill_coin_of {Q : Type} (sel : FillSel α Q) {C : Type} {iF : Fintype C} {iN : Nonempty C}
+    {k : C → Game α} {s' : Strategy (@Game.coin _ C iF iN k)} {Ks : ι → DigestCut V (@Game.coin _ C iF iN k)}
+    (hK : ∀ i, (Ks i).isHere = false) (m : ℕ) (κ : Fin m → Q) (z : CoinTape (@Game.coin _ C iF iN k) s') :
+    fill sel (@Game.coin _ C iF iN k) s' Ks m κ z =
+      fillAt (T := fun c => CoinTape (k c) (s' c))
+        (fun c m κ y => fill sel (k c) (s' c) (fun i => (Ks i).atCoin c) m κ y) (@sel C iF iN k) m κ z := by
+  rw [fill]
+  exact if_neg (by simp [hK])
+
+end Verity.Game
 
 namespace Verity.Sampled
 
+open Verity.Game
 open Lean (Json)
 open Properties.Challenger (bitsOf Draws)
+
+/-! ## The sample's family and the readings -/
+
+/-- **The readings pick only openings**: each round's cut is fixed only at a frame that opens a coin tree's round. -/
+def PicksOpenings {R : ℕ} (rd : Reading R) : Prop :=
+  ∀ j pre f, rd.round j pre f → ∃ i s n, f = .opening i s n
+
+/-- **v2 reads the sample's coins of the family `label` answering `after`** in what the prover sent composite `k`:
+wherever v2's case accepts at coins it read under the challenger `dr`, `dr` names that family and digest. -/
+def SampleNamed (k : Verity.Registration.Composite) (s : Verity.Sent) (label : String) (after : ByteArray) : Prop :=
+  ∀ a b e p c ev ξ dr, V2Case k s a b e → V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr →
+    dr.label = label ∧ dr.after = after
+
+/-- **The log after a stop**: nothing, or an opening first. -/
+def StopTail (log : List Release) : Prop :=
+  log = [] ∨ ∃ r rest i s n, log = r :: rest ∧ r.frame = .opening i s n
+
+/-- The coins `κ` as lists of bits, in order. -/
+abbrev fillCoins {m : ℕ} (κ : Fin m → Fin 512 → Bool) : List (List Bool) := List.ofFn fun j => List.ofFn (κ j)
+
+/-- **One list of coins starts the other.** -/
+def CoinsAgree (a b : List (List Bool)) : Prop := a <+: b ∨ b <+: a
+
+theorem CoinsAgree.cons {a b : List (List Bool)} (x : List Bool) (h : CoinsAgree a b) :
+    CoinsAgree (x :: a) (x :: b) :=
+  h.imp (fun h => List.cons_prefix_cons.2 ⟨rfl, h⟩) (fun h => List.cons_prefix_cons.2 ⟨rfl, h⟩)
+
+theorem fillCoins_succ {m : ℕ} (κ : Fin (m + 1) → Fin 512 → Bool) :
+    fillCoins κ = List.ofFn (κ 0) :: fillCoins (Fin.tail κ) :=
+  List.ofFn_succ
+
+theorem freshCoins_cons_of {label : String} {after : ByteArray} {r : Release} (L : List Release)
+    (h : ¬ (r.frame = .fresh label ∧ r.answers = after)) :
+    freshCoins label after (r :: L) = freshCoins label after L := by
+  rcases r with ⟨fr, a, cs⟩
+  cases fr with
+  | fresh l =>
+    have : ¬ (l = label ∧ a = after) := fun ⟨h1, h2⟩ => h ⟨by rw [h1], h2⟩
+    simp [freshCoins, this]
+  | hello _ => simp [freshCoins]
+  | opening _ _ _ => simp [freshCoins]
+
+theorem freshCoins_cons_fresh (label : String) (after : ByteArray) (cs : List Bool) (L : List Release) :
+    freshCoins label after (⟨.fresh label, after, cs⟩ :: L) = cs :: freshCoins label after L := by
+  simp [freshCoins]
+
+theorem not_picks_fresh {R : ℕ} {rd : Reading R} (h : PicksOpenings rd) (j : Fin R) (pre : List Release)
+    (l : String) : ¬ rd.round j pre (.fresh l) := fun hp => by
+  obtain ⟨_, _, _, he⟩ := h j pre _ hp
+  cases he
+
+theorem not_picks_hello {R : ℕ} {rd : Reading R} (h : PicksOpenings rd) (j : Fin R) (pre : List Release)
+    (spec : Flock.CoinTree.Spec) : ¬ rd.round j pre (.hello spec) := fun hp => by
+  obtain ⟨_, _, _, he⟩ := h j pre _ hp
+  cases he
 
 /-! ## The record's draw -/
 
