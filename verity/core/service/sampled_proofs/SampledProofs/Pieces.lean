@@ -45,7 +45,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_day`, `challenger_head`,
   `challenger_session`, `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its
   close as `from_json` reads it, with `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the
-  auditor's ledger; `declared_day`, a window's day and its lane's declarations before it; `ledger_head`, infra's
+  auditor's ledger; `declared_day`, a window's day and its lane's declarations before it; `ledger_head`, the ledger's
   published heads; `trusted_session_of` and `credited_session`, a window counted toward its
   period's circuit, each over `pinned_session`: a session from a commit the host's pins log records and the auditor's
   first-parent list of main holds.
