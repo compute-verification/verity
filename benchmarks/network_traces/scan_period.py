@@ -176,7 +176,8 @@ def main(argv=None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--v3c", type=Path, metavar="PERIOD",
                     help="V3c's period.json (records_audit.py period): the one compute audit, for scans proved on its "
-                         "trees (scan_zk.py --v3c)")
+                         "trees (scan_zk.py --v3c); without it each case's audit is held to its own Program, which "
+                         "Lean refuses at the wiring")
     ap.add_argument("--circuit", type=Path, metavar="RECORD",
                     help="the verifier's own window-circuit record of V3c's class (prove_path.py window-circuit): its "
                          "program is the class circuit V3c's audit is held to; required with --v3c")
