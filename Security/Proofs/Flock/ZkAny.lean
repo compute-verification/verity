@@ -31,6 +31,8 @@ public import Proofs.Flock.ZkAny.RelayNext
 public import Proofs.Flock.ZkAny.RelayCarry
 public import Proofs.Flock.ZkAny.RelayFollow
 public import Proofs.Flock.ZkAny.RelaySwitch
+public import Proofs.Flock.ZkAny.RelayProg
+public import Proofs.Flock.ZkAny.RelayPlace
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -50,6 +52,9 @@ loop ran it, its reads and puts of the loop's frames with only the updates betwe
 them; and the loop's mark of a stream's first round, the schedule's; and `EnvPre` from any invariant of the relay's
 requests that each slot's step keeps; and a rep's frame at the session's next round, its run one round on, at the
 model's masking state for that round but for `stopped`, which the rep's next round reads, not its stream's first;
-and at a rep switch the model's state the next rep's start, rep 0's frame starting there. -/
+and at a rep switch the model's state the next rep's start, rep 0's frame starting there; and from one round of a
+rep past its first to the same rep's next, at the model's configuration and state for the round, the frame the
+session's next round finds at the model's state for that round; and past a stream's first round the readied
+frame `placeOf`'s, its round in the place its schedule so far gives and the frame after it keeping that schedule. -/
 
 @[expose] public section
