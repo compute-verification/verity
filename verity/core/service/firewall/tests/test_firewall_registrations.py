@@ -16,6 +16,7 @@ import shutil
 import socket
 import struct
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -30,6 +31,8 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 SCHEMAS = ["hm96-sha512/row/v1", "hm96-sha512/row/v2", "hm96-sha512/row-seg/v1"]
 REG_LABEL = hashlib.sha512(b"verity/zk-server/registration/v1\0").digest()
 NOT_OPENED = "is none the current epoch opened: a session registers once, in the epoch that opened it"
+ONE_SESSION = ("the current epoch's session is not yet registered: an epoch opens one commit session (`register S` registers "
+               "it, and the next commit opens the next epoch's)")
 NO_HOLDER = ("its root is no value commitment of the ZK server's (no registration on its record holds a table of its "
              "domain, leaf count, schema and root)")
 CUT = "the prover ended the session before its Finish"
@@ -116,11 +119,10 @@ def test_values_numbers_each_registration_on_the_record(exe, tmp_path):
     state, key = tmp_path / "state", tmp_path / "salt.key"
     v = Values(exe, state, key)
     k = key.read_bytes()
-    (s0, _), (s1, _), (s2, g2) = v.commit(), v.commit(), v.commit(TREES[:1])
-    recs = [reference(k, 0, 3, s2, g2, TREES[:1])]
-    assert v.register(s2) == (3, recs[0])
-    for s in (s0, s1, s2):
-        assert v.register(s) == f"the session {s.hex()} {NOT_OPENED}"
+    s2, g2 = v.commit(TREES[:1])
+    recs = [reference(k, 0, 1, s2, g2, TREES[:1])]
+    assert v.register(s2) == (1, recs[0])
+    assert v.register(s2) == f"the session {s2.hex()} {NOT_OPENED}"
     s3, g3 = v.commit()
     recs.append(reference(k, 1, 1, s3, g3))
     assert v.register(s3) == (1, recs[1])
@@ -141,6 +143,33 @@ def test_values_numbers_each_registration_on_the_record(exe, tmp_path):
     assert isinstance(why, str) and why.startswith("the ZK server's record took no registration: "), why
     assert again.register(s5) == f"the session {s5.hex()} {NOT_OPENED}"
     again.close()
+
+
+def test_an_epoch_opens_one_session(exe, tmp_path):
+    """The service of record fixes each record's session count at 1, so the stack chooses no count and no session: a
+    commit while the epoch's session is not yet registered is refused, its answer the refusal's line alone, and of eight
+    commits that run together into an epoch with none, one opens it. Once the session registers, a commit opens the next
+    epoch's. (`flock-firewall values`, which registers nothing, opens any number: `test_lean_salts.py`.)"""
+    state, key = tmp_path / "state", tmp_path / "salt.key"
+    v = Values(exe, state, key)
+    k = key.read_bytes()
+    line = f"commit {len(TREES)}" + "".join(f" {d.hex()} {LEAVES} {sc}" for _, d, sc in TREES)
+
+    def commit(_: int = 0) -> bytes:
+        return v.request(line, os.urandom(64 * LEAVES * len(TREES)))
+
+    s0, g0 = v.commit()
+    assert commit() == f"err {ONE_SESSION}\n".encode()
+    assert v.register(s0) == (1, reference(k, 0, 1, s0, g0))
+    with ThreadPoolExecutor(8) as pool:
+        outs = list(pool.map(commit, range(8)))
+    took = [o for o in outs if o.startswith(b"ok ")]
+    assert len(took) == 1 and outs.count(f"err {ONE_SESSION}\n".encode()) == 7, outs
+    s1 = bytes.fromhex(took[0].partition(b"\n")[0][3:].decode())
+    m, rec = v.register(s1)
+    assert m == 1 and rec[:16] == struct.pack(">QQ", 1, 1)
+    assert [e["n"] for e in FW.Firewall(state).record() if e["event"] == "register"] == [0, 1]
+    v.close()
 
 
 def test_values_without_its_state_is_refused(exe, tmp_path):

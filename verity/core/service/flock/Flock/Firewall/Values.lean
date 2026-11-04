@@ -9,18 +9,21 @@ line and then its body up to the end of what the client sends (it shuts its side
   (`Salts.parseCommit`, `Salts.commitBody`). Only once it holds the whole request does the service draw the session `s`
   from the operating system, and the session joins the epoch (`Salts.Epoch`). It answers `ok S`, then each table's
   `ok ROOT TAG N` followed by its `N` leaves' `b ‖ c` (`Salts.commitAnswer`). A body of any other length, a salt beside
-  each digest among them, is refused, and nothing is drawn for it.
+  each digest among them, is refused, and nothing is drawn for it. Where the service numbers registrations
+  (`core-firewall values`), an epoch opens one session: a commit while the current epoch's session is not yet registered
+  is refused, nothing of it answered, so every record counts one session and the stack chooses none to register.
 * `salts`, the body a refs file (`Salts.parseRefs`): `ok LEN` and the `LEN` bytes of its rows' salts, every table ref's
   tag checked (`Salts.saltsAnswer`).
 * `register S`, no body: the registration of the epoch's session `S`, whole. It closes the epoch, so no session of it
   registers after, takes the next number on the ZK server's record (`Numbering`: `core-firewall values` appends the
   registration there, its record whole), and answers `ok M LEN` and the `LEN` bytes of its record (`Salts.recordOf`),
-  `be64 n` first, `M` the number of sessions the epoch opened. A session the current epoch did not open is refused, and
-  so is every registration where the service has no record to number it on (`flock-firewall values`), or where its
+  `be64 n` first, `M` the number of sessions the epoch opened, 1. A session the current epoch did not open is refused,
+  and so is every registration where the service has no record to number it on (`flock-firewall values`), or where its
   record can't take it (its epoch is closed all the same).
 
 Anything else is answered `err WHY`. `answer` is the whole of it but the socket. The epoch lives only in the process:
-one started again opens a new epoch, in which no earlier session registers.
+one started again opens a new epoch, in which no earlier session registers. Only the ZK server, under its own OS user,
+starts the service (`zk-server-own-user`).
 -/
 import Flock.Firewall.Salts
 import Flock.Witness
@@ -38,8 +41,9 @@ abbrev Numbering := (Nat → ByteArray) → IO (Except String ByteArray)
 
 /-- **The answer to one request** `req` (its line, then its body) under the key `k` and the epoch `epoch`, `draw` the
 operating system's bytes, read for a commit's session only once the request is whole and well formed, and `number` the
-ZK server's record, if the service has one. Each request changes the epoch in one step (`IO.Ref.modify`,
-`IO.Ref.modifyGet`), whatever other requests run beside it. -/
+ZK server's record, if the service has one: then an epoch opens one session. Each request changes the epoch in one step
+(`IO.Ref.modifyGet`), whatever other requests run beside it, so of commits that run together into an epoch with no
+session, one opens it. -/
 def answer (k : ByteArray) (draw : Nat → IO ByteArray) (epoch : IO.Ref Salts.Epoch) (number : Option Numbering)
     (req : ByteArray) : IO ByteArray := do
   let line : String → ByteArray := fun s => (s ++ "\n").toUTF8
@@ -56,7 +60,10 @@ def answer (k : ByteArray) (draw : Nat → IO ByteArray) (epoch : IO.Ref Salts.E
       let s ← draw Salts.SESSION_BYTES
       let ans := Salts.commitAnswer k s ts body
       let opened : Salts.Opened := { s, tables := (Array.range ts.size).map fun j => (ts[j]!, ans[j]!.1) }
-      epoch.modify fun e => { e with opened := e.opened.push opened }
+      let took ← epoch.modifyGet fun e =>
+        if number.isSome && !e.opened.isEmpty then (false, e) else (true, { e with opened := e.opened.push opened })
+      if !took then
+        return line "err the current epoch's session is not yet registered: an epoch opens one commit session (`register S` registers it, and the next commit opens the next epoch's)"
       return ans.foldl
         (fun acc (root, tag, bcs) => acc ++ line s!"ok {hexOf root} {hexOf tag} {bcs.size / Salts.BC_BYTES}" ++ bcs)
         (line s!"ok {hexOf s}")

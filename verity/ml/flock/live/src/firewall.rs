@@ -856,7 +856,8 @@ pub fn refs_rows(refs: &[u8]) -> Result<usize, String> {
 }
 
 /// Registers the commit session `s` through the value service at `addr` (`register S`): the registration's number on the
-/// ZK server's record, the number of sessions the service's epoch opened, and its record (`Flock.Firewall.Salts.recordOf`:
+/// ZK server's record, the number of sessions the service's epoch opened (1: the service opens one an epoch, refusing a
+/// commit while its session is not yet registered), and its record (`Flock.Firewall.Salts.recordOf`:
 /// `be64 n ‖ be64 m ‖ be32 T ‖` the session's table refs `‖` its record tag), which the service appended to the ZK server's
 /// record whole, where the session loop admits it (`core-firewall session --salt-key`).
 #[cfg(feature = "sha512")]

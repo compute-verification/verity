@@ -5591,8 +5591,8 @@ fn worker_pads_case(gpu: bool) -> Value {
 ///
 /// And the service itself refuses a commit whose body carries a salt beside each digest, a short refs file and a refs file
 /// with a forged tag; the salts it answers open every one of its commitments; the record is number 0, counts one session
-/// and holds the session's table refs; a session registers once, and in the epoch that opened it only: of two sessions
-/// committed after, the second's record is number 1 and counts two, and the first no longer registers.
+/// and holds the session's table refs; a session registers once, and in the epoch that opened it only; and an epoch opens
+/// one session: a second commit before its session registers is refused, so the next record, number 1, counts one too.
 fn value_salts_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let name = "zk_value_salts";
     if gpu {
@@ -5697,12 +5697,12 @@ fn value_salts_run(st: &Stmt, inst: &Instances, core: &std::path::Path, dir: &st
     forged[8 + 205] ^= 1;
     let forged_tag = lean_salts(values.addr(), &forged).err().unwrap_or_default();
     // the registration: number 0, its record holds the session's table refs; the session registers once, and a stack that
-    // commits its values twice more and registers the second has registration 1, whose record says two
+    // commits its values twice more has the second refused, so registration 1's record says one
     let holds = record.len() == 20 + trefs.iter().map(Vec::len).sum::<usize>() + 64 && record[20..record.len() - 64] == trefs.concat()[..];
     let again = lean_register(values.addr(), &s).err().unwrap_or_default();
     let (s2, _) = lean_commit(values.addr(), &tables)?;
-    let (s3, _) = lean_commit(values.addr(), &tables)?;
-    let (n3, m3, _) = lean_register(values.addr(), &s3)?;
+    let second = lean_commit(values.addr(), &tables).err().unwrap_or_default();
+    let (n2, m2, _) = lean_register(values.addr(), &s2)?;
     let closed = lean_register(values.addr(), &s2).err().unwrap_or_default();
     let numbered: Vec<Value> = firewall_events(&state).into_iter().filter(|e| e["event"] == "register")
         .map(|e| json!([e["n"], e["record"].as_str().is_some_and(|r| r == hex(&record))])).collect();
@@ -5711,11 +5711,12 @@ fn value_salts_run(st: &Stmt, inst: &Instances, core: &std::path::Path, dir: &st
         "commit_with_salts": with_salts.trim_end(),
         "short_refs": short,
         "forged_tag": forged_tag,
-        "registered": {"number": n, "sessions": m, "holds_its_table_refs": holds, "again": again, "of_two_sessions": [n3, m3],
-                       "closed_epoch": closed, "on_the_record": numbered},
+        "registered": {"number": n, "sessions": m, "holds_its_table_refs": holds, "again": again, "second_commit": second,
+                       "next": [n2, m2], "closed_epoch": closed, "on_the_record": numbered},
         "ok": opens && with_salts.starts_with("err a commit body of") && short.contains("a refs file of")
             && forged_tag.contains("its tag is not the ZK server's")
-            && (n, m, n3, m3) == (0, 1, 1, 2) && holds && numbered == [json!([0, true]), json!([1, false])]
+            && (n, m, n2, m2) == (0, 1, 1, 1) && holds && numbered == [json!([0, true]), json!([1, false])]
+            && second.contains("the current epoch's session is not yet registered")
             && [&again, &closed].iter().all(|w| w.contains("is none the current epoch opened")),
     });
     // the sessions, each an outer session at L0 of its own recursive session on the record
@@ -5754,8 +5755,8 @@ fn value_salts_run(st: &Stmt, inst: &Instances, core: &std::path::Path, dir: &st
                                                  accepted; the stack's kept, registration 0 served again unadmitted, rejected at the opening; \
                                                  the stack's own commitments refused at admission, its recursive session's stop; a salt in a \
                                                  commit, a short refs file and a forged tag refused by the service; registrations numbered \
-                                                 0 and 1 on the record, each counting its epoch's sessions, each session registered once and \
-                                                 in its own epoch",
+                                                 0 and 1 on the record, each counting its epoch's one session, a second commit in an epoch \
+                                                 refused, each session registered once and in its own epoch",
               "service": service, "sessions": sessions, "pass": pass}))
 }
 

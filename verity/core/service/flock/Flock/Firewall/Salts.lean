@@ -17,7 +17,8 @@ Every salt message is 205 bytes and every tag message 333, under different const
 * `Epoch`, `recordOf`: the commit sessions the service opened since its last registration, and a registration's
   record: its number `n` on the ZK server's record, the number `m` of sessions its epoch opened, the registered
   session's table refs and a record tag under `k` over all three (`recordTagOf`). A registration closes the epoch, so the
-  stack registers one session of the `m` it had and no other. The number is the record's: registrations are numbered
+  stack registers one session of the `m` it had and no other; the service of record opens one an epoch, so `m` is 1
+  (`Values.answer`). The number is the record's: registrations are numbered
   0, 1, 2, … in the order the ZK server's record holds them, with no gap (`core-firewall values`).
 * `treesOfFile`, `readsOf`: a statement's hm96 trees, and the registrations they read: for each tree, the first
   registration on the record that holds a table at its domain, leaf count, schema and root, its record tag checked. The
@@ -32,11 +33,12 @@ side refuses it. A prover's witness salts must then be the server's for its proo
 SHA-512 of its salt.
 
 **Grinding.** A stack that commits its values in `m` sessions and registers the one whose public roots it likes chooses
-among `m` outcomes, so it leaks at most `log₂ m` bits through the choice. The record makes `m` public, so the term is
-computable from what the verifier sees (`Verity.ValueSalts`, `Verity.Guarantees.RegisteredLeakage`). A stack that
-registers more than once and passes over a registration chooses which ones it uses: each one passed over is a failure on
-its stream's budget, so across a stream the choice is among the patterns of at most `b` passed over
-(`Verity.Guarantees.RegisteredStreamLeakage`).
+among `m` outcomes, so it leaks at most `log₂ m` bits through the choice (`Verity.ValueSalts`,
+`Verity.Guarantees.RegisteredLeakage`). The service of record fixes `m` at 1: it refuses a commit while its epoch's
+session is not yet registered, so the stack chooses neither `m` nor a session, the record's `m` says so, and the term is
+0. A stack that registers more than once and passes over a registration chooses which ones it uses: each one passed over
+is a failure on its stream's budget, so across a stream the choice is among the patterns of at most `b` passed over
+(`Verity.Guarantees.RegisteredStreamLeakage`, every `m i` 1).
 
 **The key is the ZK server's alone** (`zk-server-own-user`, `Verity.Assumptions.ZkServerOwnUser`): the value service and
 the session loop run under the ZK server's own OS user, which no worker and no serving stack shares, so nothing the stack
@@ -203,7 +205,8 @@ structure Opened where
   deriving Inhabited
 
 /-- **The value service's epoch**: the commit sessions it opened since its last registration, or since it started, in the
-order it drew them. A registration closes it, so a session registers only in the epoch that opened it, and only once. -/
+order it drew them, one at most where it numbers registrations (`Values.answer`). A registration closes it, so a session
+registers only in the epoch that opened it, and only once. -/
 structure Epoch where
   opened : Array Opened := #[]
   deriving Inhabited
