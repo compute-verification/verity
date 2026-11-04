@@ -733,7 +733,7 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     registration, the Program the audit sampled (the one the registration names), the audit's answer, ``steps`` 0 and
     ``free``: the audit's count, but with the state's reads registered (the period ties them to its scan's state tree),
     where the audit's own count leaves them free. ``records_audit.py period`` writes the same and says it in one line.
-    Refused by name: a registration binding a compiler or an advice (the period has no term to charge its bits), a window
+    Refused by name: a registration binding a compiler or an advice (bound at a root, it falls in no term of K), a window
     that commits no scan state, a circuit the registration doesn't bind, an audit that wrote no Program or another than the
     registration names, an answer committing to another registration, and an audit that opened the advice
     (``--opening``, a development check)."""

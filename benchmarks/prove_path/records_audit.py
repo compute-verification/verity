@@ -85,12 +85,13 @@ quotes the warm's beside it.
 ``period``: a window's audit as one compute audit of the network certifier's period (`NetworkCheck.Period`'s rows form),
 the ``audits`` entry `scan_period.rows_case` reads (`scan_zk.answers` writes the block round's in that shape): the window's
 registration (``--window``'s ``registration.json``), the population Program's descriptor the audit sampled (``--audit``'s
-    ``window/program.json``, the one the registration names), the audit's one-stage answer (`served_integrity.answer`), and its
-terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's own
-values pinned, its untied ones free) but for the scan's state (`TIED`): the period refuses an audit whose state isn't
+``window/program.json``, the one the registration names), the audit's one-stage answer (`served_integrity.answer`), and
+its terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's
+own values pinned, its untied ones free) but for the scan's state (`TIED`): the period refuses an audit whose state isn't
 the scan's state tree (``stateTied``), so its reads count registered. Refused where the window commits no scan state, and
-where its registration binds a compiler or an advice: the period's terms have no advice term (ℓ_{a,j}), so it takes only a
-circuit the verifier registered, which reads no advice.
+where its registration binds a compiler or an advice: an advice bound at a root counts as registered there, so it falls
+in no term of K (``free``, ℓ_{a,j}, counts only the circuit's free inputs), and the period takes only a circuit the
+verifier registered, which reads no advice.
 
 ``count``: a record that declares its inputs, counted before the committer writes its members' rows (`declared_count`): a
 stated one (cuts, registered reads, ingress: `interface.Circuit.declared`) from its description alone, and one that lists
@@ -690,8 +691,8 @@ def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]
     body, own = (window / "circuit.json").read_bytes(), rec.get("window") or {}
     if bound := sorted(k for k in ("compiler", "advice") if own.get(k) is not None):
         raise ValueError(f"the registration binds {' and '.join(bound)}: a circuit compiled from run-time choices, whose "
-                         "advice bits the period has no term to charge (ℓ_{a,j}); it takes a circuit the verifier "
-                         "registered, which reads no advice")
+                         "advice, bound at a root, counts as registered and so falls in no term of K (free, ℓ_{a,j}, "
+                         "counts only free inputs); it takes a circuit the verifier registered, which reads no advice")
     if hashlib.sha512(body).hexdigest() != own.get("circuit"):
         raise ValueError(f"{window / 'circuit.json'} is not the circuit record the registration binds")
     doc = json.loads(body)

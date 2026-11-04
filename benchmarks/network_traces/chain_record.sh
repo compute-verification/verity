@@ -21,11 +21,12 @@
 #   guard    on every exit, before custody publishes the run dir, the record's leak guard (leak_guard.py): each file in it
 #            or in the hold holding a gate run's witness moved to the quarantine, the run refused by name (exit 3;
 #            $OUT/leak-guard.json), and the rest of the hold released to $OUT
-# CR_PATH=warden is the network certifier path: every step reads the active warden's own run (CR_WARDEN_RUN, or the one gate run
-# holding a certified.jsonl) and nothing of a certifier rehearsal's, which in CR_GATES is refused by name: certs
-# --warden-run, n2_zk.py prove --warden-run and the scan; the report requires every one (chain_record.WARDEN). It opens
-# no endpoint records or advice, so CR_ENDPOINT is refused there: the window's compute audit is V3c's class window,
-# whose circuit is the class's and reads no advice.
+# CR_PATH=warden is the network certifier path, the active network certifier's (the README's relay path), as against
+# CR_PATH=certifier-only, a proxy rehearsal's: every step reads the active network certifier's own run (CR_WARDEN_RUN,
+# or the one gate run holding a certified.jsonl) and nothing of a certifier rehearsal's, which in CR_GATES is refused by
+# name: certs --warden-run, n2_zk.py prove --warden-run and the scan; the report requires every one
+# (chain_record.WARDEN). It opens no endpoint records or advice, so CR_ENDPOINT is refused there: the window's compute
+# audit is V3c's class window, whose circuit is the class's and reads no advice.
 # env: CR_MEM_GB (what job.sh's stages may take, within the slot's)
 #      CR_GATES (space-separated: a tarball's name under the run's inputs/, an art: id, or a directory)
 #      CR_CLIENT (the client's kept files, a path under the unpacked gates; by default the certifier rehearsal's
@@ -138,11 +139,12 @@ if [ "${CR_PATH:-}" = warden ]; then
     "active.Proxy), and ${PROXY#$G/} is one's"; exit 3; }
   if [ -n "${CR_WARDEN_RUN:-}" ]; then WARDEN=$(find "$G" -path "*$CR_WARDEN_RUN" -print -quit)
   else WARDEN=$(find "$G" -name certified.jsonl -printf '%h\n' -quit); WARDEN=${WARDEN%/witness}; fi
-  [ -n "$WARDEN" ] || { log "chain: the network certifier path: no warden run (a certified.jsonl) in $CR_GATES"; exit 3; }
+  [ -n "$WARDEN" ] || { log "chain: the network certifier path: no active network certifier's run (a certified.jsonl) in" \
+    "$CR_GATES"; exit 3; }
   [ -z "${CR_ENDPOINT:-}" ] || { log "chain: the network certifier path opens no endpoint records or advice (V3c's class" \
     "window reads none), and CR_ENDPOINT names $CR_ENDPOINT: unset it"; exit 3; }
   HONEST= CLIENT= PROFILE=
-  log "chain: the network certifier path, warden run ${WARDEN#$G/}"
+  log "chain: the network certifier path, the active network certifier's run ${WARDEN#$G/}"
 else
   HONEST=$(find "$G" -path '*/out/honest/plan.json' -print -quit); HONEST=${HONEST%/plan.json}
   [ -n "$HONEST" ] || { log "chain: no certifier rehearsal (out/honest/plan.json) in $CR_GATES"; exit 3; }

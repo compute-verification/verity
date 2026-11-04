@@ -89,12 +89,13 @@ staging at its default, which that exclusion needs. Its `requests.jsonl` and `ad
 no endpoint records or advice, since the window's compute audit is V3c's class window, whose circuit is the class's and
 reads no advice. The session's fetch, with `witness/`, stays in a 0700 directory outside the run dir, and
 `$OUT` gets only the bundle less `witness/` and the session's outcome. `chain` runs the chain's network certifier path
-on the kept fetch, and only from a tree with the record's leak guard. `session --gate local` is the dry rehearsal: this
+(the relay path below, the active network certifier's, never the certifier-only path's proxy rehearsal) on the kept
+fetch, and only from a tree with the record's leak guard. `session --gate local` is the dry rehearsal: this
 tree's gate on a scratch host, with `demo_stub.py serve` as the endpoint. `chain --coins gate` draws the scan's units on
 the gate's coins on the auditor's side, the node the chain runs on, which the challenger's coin link reaches through
 that node's own line of `/etc/vy/coin-ports` (ports 7821-7830). It refuses the served node as the draw's peer, since the
-gate key and the warden run's witness never go on the prover's machine. Without the gate's coins the chain draws on the
-verifier's (`--coins verifier`, the default).
+gate key and the active network certifier's witness never go on the prover's machine. Without the gate's coins the chain
+draws on the verifier's (`--coins verifier`, the default).
 
 `certifier_piece.py` is the network certifier's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
 (`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's
@@ -105,9 +106,9 @@ network certifier at the schedule of that class's scan (`--scan-class w63k4`, 5 
 `scan_zk.py prove --class w63k4` takes), so the engine closes it into the run's earliest window, the one the run audits,
 and the gate's fetch is kept in the serve dir's `private/certifier`. A request's answer must be whole D·τ after its
 admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` runs the scan at a longer tick, up to
-4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's network certifier path on that fetch, which opens no endpoint
-records or advice, its run dir and quarantine private beside the fetch, and answers with `network-period check` on the
-rows form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the chain accepted,
+4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's network certifier path on that fetch, which opens no
+endpoint records or advice, its run dir and quarantine private beside the fetch, and answers with `network-period check`
+on the rows form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the chain accepted,
 every request of the audited Commit period is a certified one inside that execution phase and carries the network
 certifier's run in its release, every certified request is exactly one served request, and the Lean check accepts;
 beside that answer goes its case, `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a
