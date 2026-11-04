@@ -26,7 +26,7 @@ namespace Claims.RecGeneric
 
 open Claims Claims.Recursion
 
-/-! ## Loops and slots -/
+/-! ## Forks, loops and slots -/
 
 section Pick
 
