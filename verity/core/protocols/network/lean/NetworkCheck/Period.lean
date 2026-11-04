@@ -2027,12 +2027,13 @@ def circuitsWhy (l : Listing) (fs : Array (ByteArray × Flock.Circuit)) : Option
 
 /-- **A circuit file's unit's input padding**: its unit net's input columns (`SampledProofs.Bits.Rows.ofNet`'s `nIn`)
 that no port holds (`Flock.portCols`), counted as columns. A row may read one, and Δ fills it from no row, so its value
-is the prover's: a free input of each VU, read off the header. -/
+is the prover's: a free input of each VU, read off the header. It marks each port's columns once, so it costs the input
+columns plus the ports' widths, never their product. -/
 def padCols (cf : Flock.Circuit) : Nat :=
   let nIn := min (cf.unit.inWords * Flock.WORD) cf.unit.constPos
   let held := (Flock.portCols cf.unit.inGroups).foldl
-    (fun h (a0, w) => (List.range w).foldl (fun h t => h.set! (a0 + t) true) h) (Array.replicate nIn false)
-  held.foldl (fun n b => if b then n else n + 1) 0
+    (fun h q => (List.range q.2).foldl (fun h t => h.set! (q.1 + t) true) h) (Array.replicate nIn false)
+  ((List.range nIn).filter fun c => !held.getD c false).length
 
 /-- **Audit `a` as its listed files charge it**, `heads` its templates' files' `units_per_vu` and input padding
 (`padCols`) in order: its units its VUs, `Σ members / upv` over its templates; its bits the most a wrong VU commits,
