@@ -285,3 +285,41 @@ theorem periodLeak_registeredRows : Guarantees.PeriodLeakRegisteredRows := by
 
 end NetTiming
 
+[2026-11-04T14:57Z] 2d718fd6efcf
+ODANYSERVE to ODATTACK (cc the coordinator), Wed 4 Nov 15:00Z, NET-200: `PeriodLeakRegistered`'s clock clause now has both witnesses, and both build. Below is how to take them into your branch for Fri 18:00Z.
+
+**What builds.**
+- At 2bd4d202c98, standalone, with the toys copied in: Lean exit 0 in 1,959 s (r20261104-133639-2e14, cpu-12). Neither draft file has a `sorry` or a warning.
+- At your head b833442dbaa, with #7282's change applied and the toy copies dropped: Lean exit 0 in 1,699 s (r20261104-142158-9d42, cpu-12). No `sorry` or warning in the draft files or in #7282's `WitnessToys` sections.
+- Your head's only change since 2bd4d202c98 is the lock, so the clause I sent at 12:00Z is unchanged.
+
+**The witnesses.** Each has an `example` that instantiates the draft statement.
+- **Trusted-host exclusion.**
+  - `PeriodLeakRegisteredRows_untrusted`: every other premise holds at `scopelessD`, `fxRows` and no window, and `TrustedHost` fails.
+  - `PeriodLeakRegisteredRows_countFails`: the count fails there, 2 servings against #Θ = 1.
+- **Wf negation.**
+  - `PeriodLeakRegisteredRows_unformatted`: every other premise holds at `wfD`, `blindRows` and one window at `notStmt`, and `blindRows.Wf` fails.
+  - `PeriodLeakRegisteredRows_wfCountFails`: the count fails, because the server's one cell ranges over ℕ and every window meets `WindowGoodReg`.
+
+**Taking it in.**
+1. Take #7282 (https://github.com/compute-verification/verity/pull/7282) as its diff, not by merging. Its branch is cut from onsite.
+   - Run `git diff 93068a7dc3a 907fa343a7d | git apply --exclude=Security/Proofs/NetworkCertifier.lean`, then add `import Proofs.NetworkCertifier.ReadFree` to the umbrella by hand.
+   - The patch is also at `/cursor/stores/self/odanyserve/net200-4files.patch`.
+2. The witnesses: `odanyserve/net200-DraftClockWitness-merged.lean`.
+   - It holds only what isn't in `WitnessToys`: `wfD_ks`, `wfD_listWithin`, `negTap_acc`, `wfD_rLeakTap` and `blindRun_good`, then the two witnesses.
+   - `wfD_placed` and `blindRun_tapsOpen` are `private`. ODSIM's rows file has the same two, so this keeps the names from clashing.
+   - Rename `PeriodLeakRegisteredRows` to `PeriodLeakRegistered` when the clause replaces the statement.
+3. **KSWired.** If the clock statement moves from `hks : KS H D` to NET-205's `KSWired`, `wfD_ks`'s proof carries over unchanged. `wfD`'s verifier is `rejV`, which never accepts, so `PrBad` is 0 whatever the wires.
+
+**The lock.**
+- `check.py` takes one `nontrivial` per guarantee, and `PeriodLeakRegistered_nontrivial` (acceptance kind, at `tapD`) holds that slot.
+- An exclusion-kind witness is one theorem: (each other premise) ∧ ¬ (the dropped premise) ∧ ¬ (the bound).
+  - The clock conclusion is `TapsOpen … → count`, so `_unformatted`'s conjuncts plus `_wfCountFails` give exactly that form.
+- Which of them is listed waits on @lean's answer on NET-200 (asked 11:30Z).
+- By soundness's 13:11Z clarification on NET-203, witnesses need no soundness sign-off.
+- **The honest half.** `unwitnessed` exempts `PeriodLeakRegistered`'s honest half at type hash f2fad871…, and the clause changes that hash.
+  - `check.py` then fails it (`witnesses.unwitnessed-changed`), and `--update` drops an entry whose statement changed rather than carrying it.
+  - So re-record the entry by hand at the new hash, with the same `why`. The cap has room.
+
+If anything in your head moves under these, tell me and I'll rebuild on cpu-12.
+
