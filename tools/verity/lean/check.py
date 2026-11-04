@@ -1745,6 +1745,13 @@ def assumed_module(module: str, policy: dict) -> bool:
     return "Assumptions" in module.split(".") or under((policy.get("shape") or {}).get("premises", []), module)
 
 
+def stated_premises(pin: dict) -> list[dict]:
+    """The premises of a guarantee (`Facts.lean`'s `premises`) its witnesses and inline hypotheses are held to: all but
+    the antecedents a conclusion takes whose head the package defines (`antecedent`), which its record names, with an
+    owner and a digest, and nothing concludes."""
+    return [p for p in pin.get("premises") or [] if not p.get("antecedent")]
+
+
 def honest_premises(pin: dict, policy: dict, own: set[str]) -> list[str]:
     """The premises of a guarantee (`Facts.lean`'s `premises`) that its honest lemmas conclude at the deployed instance:
     each headed by a constant of a module this repository builds (``own``) outside `assumed_module` and not under
@@ -1752,7 +1759,7 @@ def honest_premises(pin: dict, policy: dict, own: set[str]) -> list[str]:
     honest lemma shows that it can."""
     taken = policy.get("witnesses_assumed")
     taken = taken if isinstance(taken, dict) else {}
-    return sorted({p["head"] for p in pin.get("premises") or [] if p.get("head") and p["head"] not in taken
+    return sorted({p["head"] for p in stated_premises(pin) if p.get("head") and p["head"] not in taken
                    and (m := p.get("module") or "") in own and not assumed_module(m, policy)})
 
 
@@ -1769,7 +1776,7 @@ def assumed_failures(policy: dict, facts: dict, records: dict) -> list[Failure]:
         return [Failure("witnesses.assumed-form", None, "witnesses: `witnesses_assumed` is {named assumption: why a witness "
                         "takes it rather than concluding it}, each reason one sentence")]
     premised = {p.get("head") for g in policy.get("guarantees") or {}
-                for p in (facts["pins"].get(g) or {}).get("premises") or []}
+                for p in stated_premises(facts["pins"].get(g) or {})}
     fails = []
     for a in sorted(taken):
         if a not in premised:
@@ -1789,7 +1796,7 @@ def assumes(pin: dict, policy: dict, own: set[str]) -> list[str]:
     listed, taken = policy.get("assumptions") or {}, policy.get("witnesses_assumed")
     taken = set(taken) if isinstance(taken, dict) else set()
     heads: dict[str, set[str]] = {}
-    for p in pin.get("premises") or []:
+    for p in stated_premises(pin):
         heads.setdefault(p.get("binder"), set()).add(p.get("head"))
     out = []
     for h in pin.get("hypotheses") or []:
@@ -1805,7 +1812,7 @@ def assumes(pin: dict, policy: dict, own: set[str]) -> list[str]:
 def premise_names(pin: dict) -> set[str]:
     """The named assumptions and premise heads a statement takes (`Facts.lean`'s `hypotheses` and `premises`)."""
     return {h["named"] for h in pin.get("hypotheses") or [] if h.get("named")} | \
-        {p["head"] for p in pin.get("premises") or [] if p.get("head")}
+        {p["head"] for p in stated_premises(pin) if p.get("head")}
 
 
 def witness_shapes(name: str, pin: dict, policy: dict, own: set[str]) -> str:
@@ -1996,7 +2003,7 @@ def exclusion_failures(n: str, g: str, read: dict, np_: dict, pin: dict, heads: 
     with the named assumptions ``n`` takes, conclude each other premise of ``g``. A bare `¬ bound` reads no premise."""
     cs, out = read.get("conclusion") or [], []
     negs = {k.get("inner") for k in cs if k.get("negated") and k.get("inner")}
-    premises = {p["head"] for p in pin.get("premises") or [] if p.get("head")} | \
+    premises = {p["head"] for p in stated_premises(pin) if p.get("head")} | \
         {h["named"] for h in pin.get("hypotheses") or [] if h.get("named")}
     if not negs & set(heads):
         out.append(Failure("witnesses.nontrivial-form", n, f"witnesses: {n} does not state that {g}'s bound fails at an "
@@ -2168,8 +2175,8 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
             if old:
                 kept[g] = old
             continue
-        unfolds = {k: v for p in pin.get("premises") or [] for k, v in (p.get("unfolds") or {}).items()}
-        premised = {p["head"] for p in pin.get("premises") or [] if p.get("head") and (
+        unfolds = {k: v for p in stated_premises(pin) for k, v in (p.get("unfolds") or {}).items()}
+        premised = {p["head"] for p in stated_premises(pin) if p.get("head") and (
             "Assumptions" in (m := p.get("module") or "").split(".") or m in own)}
 
         def named(h: str | None) -> bool:

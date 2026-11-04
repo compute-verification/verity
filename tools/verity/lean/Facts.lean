@@ -763,7 +763,7 @@ definition's step), only the assumptions and the constants of a module under `pr
 hypotheses mention, and the heads (`packedHeads`) of its hypotheses that are constants of a module this repository builds
 (`built`) outside an assumptions module (`only`): an antecedent the package states, a condition (`TapOpens … → bound`)
 or a scope (`∀ m, ScopeAcc … m → bound`), is named and recorded like an assumption, so a change to it fails under its
-own name, while one headed by the toolchain's or a dependency's constants (`x ∈ S`, `a = b`) is what the conclusion
+own name (`antecedent`: the record names it, and no witness is held to it), while one headed by the toolchain's or a dependency's constants (`x ∈ S`, `a = b`) is what the conclusion
 means. A predicate that constant takes as data, an event it measures (`Likely (fun o => A o → bad o)` with `Likely E`
 holding when `prob E ≤ ε`), is what the conclusion means too: `A` there is part of the event, not something the
 statement rests on. -/
@@ -776,14 +776,17 @@ partial def premisesOf (env : Environment) (meaning premises : Array Name) (buil
       let mut ps := #[]
       for x in xs do
         let t ← inferType x
-        let hs ← if !(← isProp t) then fieldPremises env meaning premises moduleOf true t
-          else if only then do pure ((← mentioned env premises moduleOf t) ++ (← packedHeads moduleOf t).filter mine)
-          else do pure ((← packedHeads moduleOf t) ++ (← mentioned env premises moduleOf t))
-        let hs := (hs.foldl (init := (({} : NameSet), #[])) fun (s, out) h =>
-          if s.contains h then (s, out) else (s.insert h, out.push h)).2
-        for h in hs do
-          ps := ps.push <| Json.mkObj [("binder", toJson (← x.fvarId!.getDecl).userName.toString),
-            ("head", toJson h.toString), ("module", toJson ((moduleOf h).map toString))]
+        let (hs, ants) ← if !(← isProp t) then pure (← fieldPremises env meaning premises moduleOf true t, #[])
+          else if only then do
+            let ms ← mentioned env premises moduleOf t
+            pure (ms, (← packedHeads moduleOf t).filter fun h => mine h && !ms.contains h)
+          else do pure ((← packedHeads moduleOf t) ++ (← mentioned env premises moduleOf t), #[])
+        let hs := ((hs.map (·, false) ++ ants.map (·, true)).foldl (init := (({} : NameSet), #[])) fun (s, out) (h, a) =>
+          if s.contains h then (s, out) else (s.insert h, out.push (h, a))).2
+        for (h, a) in hs do
+          ps := ps.push <| Json.mkObj ([("binder", toJson (← x.fvarId!.getDecl).userName.toString),
+            ("head", toJson h.toString), ("module", toJson ((moduleOf h).map toString))] ++
+            if a then [("antecedent", toJson true)] else [])
       if body.isAppOfArity ``And 2 || body.isAppOfArity ``Or 2 || body.isAppOfArity ``ite 5 then
         for b in body.getAppArgs.extract (body.getAppNumArgs - 2) body.getAppNumArgs do
           ps := ps ++ (← premisesOf env meaning premises built moduleOf true b)

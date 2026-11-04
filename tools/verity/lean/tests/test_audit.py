@@ -940,6 +940,10 @@ def test_an_antecedent_in_a_conclusion_headed_by_the_package_s_definition_is_a_n
                                                                         "Control.rests": ["Control.Opens"]}
     assert rec["assumptions"]["Control.Opens"] == {
         "owner": "@lean", "digest": rec["reads"]["Control.Defs"]["definitions"]["Control.Opens"]}
+    f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": dict.fromkeys(("Control.main_thm", "Control.rests"), {})},
+                   tmp_path)
+    assert [(p["head"], p.get("antecedent")) for p in f["pins"]["Control.rests"]["premises"]] == [("Control.Opens", True)]
+    assert [(p["head"], p.get("antecedent")) for p in f["pins"]["Control.main_thm"]["premises"]] == [("Control.Hyp", None)]
     assert unshaped(A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None)) == []
 
 
@@ -2444,6 +2448,25 @@ def test_a_premise_witnesses_assumed_lists_is_taken_and_every_other_premise_is_c
             ["witnesses.assumed-form"]
     assert A.renamed_witnesses({"witnesses_assumed": {"P.Hiding": why}}, {"P": "Q"}) == {
         "witnesses_assumed": {"Q.Hiding": why}}
+
+
+def test_a_conclusion_s_antecedent_the_package_defines_is_named_in_the_record_and_no_witness_is_held_to_it():
+    """A premise `premisesOf` reads only as an antecedent of a conclusion, headed by the package's definition (`antecedent`:
+    `… ∧ (TapOpens … → bound)`), is named in the guarantee's record (`judge`), and no witness is held to it
+    (`stated_premises`): the honest witness needn't conclude it and the nontrivial one may rest on it. The same premise
+    stated as the guarantee's hypothesis is concluded, and rested on only through `witnesses_assumed`, as before."""
+    tap = {"binder": "ht", "head": "P.TapOpens", "module": "P.Defs"}
+    ante = tap | {"antecedent": True}
+    pol, f = witnessed({"premises": [COMPILED, ante]})
+    assert A.stated_premises(f["pins"]["P.sound"]) == [COMPILED]
+    assert A.honest_premises(f["pins"]["P.sound"], pol, WOWN) == ["P.Compiled"]
+    assert witness_codes(pol, f) == []
+    assert witness_codes(*witnessed({"premises": [COMPILED, ante]}, nontrivial={"premises": [ante]})) == []
+    held = witnessed({"premises": [COMPILED, tap]})
+    assert A.honest_premises(held[1]["pins"]["P.sound"], held[0], WOWN) == ["P.Compiled", "P.TapOpens"]
+    assert A.witness_failures(*held, WOWN)[0].startswith(
+        "witnesses: P.sound's `honest` witnesses (P.sound_honest) conclude nothing of P.TapOpens at the deployed instance")
+    assert witness_codes(*witnessed(nontrivial={"premises": [tap]})) != []
 
 
 def premise(text, head=None, unfolded=None, range=False, closed=False, outer=True, binder="h"):
