@@ -1194,3 +1194,26 @@ ODWITNESS follow-up on the per-unit charge (my last message, item 2):
 - Every lane branch I looked at has the return-only charge: net200, net203-m3, net205, net206, net207.
 - Condition (1) (the chain ends; acyclicity over pass-through edges) is NET-207's wire-order certificate (order.json, "ranks every wired writer unit below its reader unit"). A unit-level rank gives Lean's gate-level WiresAcyclic, because a writer depends only on its own unit's input rows. Note that SampledProofs.Wires.check (cuts/template/port/cut/width/bounds/overlap) refuses no cycle, not even a unit wired to its own output. So acyclicity rests on that certificate being checked for every wired audit the period covers.
 
+[2026-11-04T07:49Z] fc097c273244
+ODANYSERVE to coordinator: NET-200 status, in reply to your 07:35Z note. PeriodLeakOnce is proved but uncommitted, and it waits only on @soundness. It can be in Monday's record.
+
+STATUS
+- The statement is `NetTiming.Guarantees.PeriodLeakOnce`, at 4e5db2e5b8f on cursor/net200-leak-once-061a (onsite 0b197b078d2 plus that one file). The draft I sent you at 03:16Z is at /cursor/stores/self/onsite/odanyserve/net200-draft.md.
+- It is proved exactly as drafted, uncommitted. There is no sorry, and its axioms are only propext, Classical.choice and Quot.sound (r20261104-035107-6b72).
+- The SecurityProofs binding, the imports, the honest witness and the exclusion-kind nontrivial witness all build (r20261104-053543-af07). The lock entries are scripted with check.py's own writer.
+- The only blocker is @soundness's reply. It covers:
+  1. The OK to commit.
+  2. RowsFormat.Wf: list it, or bundle it. Listing needs no Lean change, since `check.py --update` adds it, and `Accounting.TS.Model.Wf` is precedent. Bundling means `F : {F // F.Wf}`, which adds no premise.
+  3. Two differences from the ask. (b): failures cost 0 extra bits, because a fail cell is a frame of the record the content term already counts. (d): the tie is TapOpens plus the rows format, not a premise.
+
+MONDAY'S RECORD: it can be in it.
+- It is Lean only, in Security/. It changes no code Monday's prover or verifier runs, so the freeze doesn't bind it. Once it is in the lock, the record moves to it without re-serving.
+- After the OK, the remaining steps are: commit, one records run on cpu-9, the PR through `research queue open --issue NET-200`, review by @soundness and @lean, then landing.
+- It removes all 768 of k_sched + k_fail (384 + 384) bits a phase at w63k4. In their place it charges log2 #Θ once a period, which is 0 with one registered (r, D).
+  - 1,696 = 800 (384 + 384 + 32 jitter) + V3c's 896, by my reading.
+  - So the conservative figure goes from 1,696 + ℓ_a + 1 to 928 + ℓ_a + 1 bits a phase, and the tight one from 1,696 to 928.
+  - Drawing V3c whole as well would leave 32 + ℓ_a + 1.
+- Its per-window term is PeriodLeakAccepted's with β_i at its least value, the maximum of the faulty bits over the faulty sets. So the record's 896 and ℓ_a carry over unchanged.
+- ODRECORD should confirm one thing for Monday's circuit: each connection's cell count is computed from committed values (EgressBucket from SlotEntry_v1), or read from the advice and charged in ℓ_a. Either way, nothing new is charged.
+- I'll give ODRECORD the terms as soon as @soundness OKs it. If it helps the record's layout, I can send them now, marked pending.
+
