@@ -3,12 +3,12 @@ import Proofs.Pouw.PearlC.CoreOps
 import Proofs.Pouw.PearlPlus.Words
 
 /-!
-# Pearl+'s bridge, part (c): the check's per-row rules and debit replay are the game's
+# Pearl+'s bridge, part (c): the check's per-row rules and inert-work replay are the game's
 
-`Rule.checkOpened` decides each opened row by `row_passes` (the floor on the exact product ρ·α, and `live_row` on the exact
-statistic), and the cap by `word_debit`, a word's flagged atoms and its later promotions into a +0 total. The game reads
-`PearlCSem.RowOK` (the FMA floor `ρ·α − 1 ≥ 0` and `LiveRow` at δ = 1 under `Stat.every8`) and the tile debit
-`tileDebitRev1`, on `Skip.unitFlags` and `laterZeroPromos`.
+`Rule.rowsFailure` decides each opened row by `row_passes` (the floor on the exact product ρ·α, and `live_row` on the
+exact statistic), and `Rule.capCheck` the inert-work bound by `word_debit`, a word's flagged atoms and its later
+promotions into a +0 total. The game reads `PearlCSem.RowOK` (the FMA floor `ρ·α − 1 ≥ 0` and `LiveRow` at δ = 1 under
+`Stat.every8`) and the tile's inert work `tileDebitRev1`, on `Skip.unitFlags` and `laterZeroPromos`.
 
 `rowsAreTheRules` proves the rules from the row statistics (`StatsAreTheRow`) and ρ's finiteness (`StatsRhoIsFinite`);
 `rowPasses_iff` is the rules on one row given both. The floor agrees because ρ and α are finite FP32 words with
@@ -49,6 +49,28 @@ def DebitIsTheReplay : Prop :=
     Rule.wordDebit (Array.ofFn fun l => (A i l).val) (Array.ofFn fun l => (B j l).val) = .ok (f, z) →
       f = ((Finset.range (k / 32)).filter fun t => Pouw.PearlC.Skip.unitFlags A B i j t = true).card ∧
         z = Pouw.PearlC.laterZeroPromos Pouw.PearlC.devH100 A B i j
+
+/-- **(c) The replay reads the semantics' codes**: under `WordsAreTheSemantics`' hypotheses, `word_debit` on the check's
+A′ and B̃ codes of a word whose row passes the rules is `word_debit` on the semantics' noisy codes of that word
+(`unitChain`). The check's code for a zero may be `0x80` where the semantics' is `0x00`, so this is stated on
+`word_debit`'s result, not on the codes. -/
+def ReplayReadsTheCodes : Prop :=
+  ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S) (U : Pouw.PearlC.Workload) (u : ℕ)
+    (act : Codes) (salt rootB : ByteArray) (wn : Words.FixedNoise) (rows cols : List ℕ) (ops : Words.Ops),
+    bytesNat salt = saltOf s → bytesNat rootB = rootOf (U.layout.wid u) → (U.layout.shape u).k ≤ 2 ^ 16 →
+    (∀ i ∈ rows, i < (U.layout.shape u).m) → (∀ j ∈ cols, j < (U.layout.shape u).n) →
+    (∀ i ∈ rows, ∀ l < (U.layout.shape u).k, act i l < 2 ^ 32) →
+    (∀ j ∈ cols, ∀ l < (U.layout.shape u).k, U.weight (U.layout.wid u) j l < 2 ^ 32) →
+    (∀ j ∈ cols, (semH3 saltOf rootOf : PearlCSem Q R S).RowOK (U.layout.shape u).n (U.layout.shape u).k
+      (U.weight (U.layout.wid u)) j) →
+    Words.fixedNoise salt rootB (U.layout.shape u).k = .ok wn →
+    Words.encode salt rootB wn u (U.layout.shape u).k rows (rows.map (rowBytesOf act (U.layout.shape u).k)) cols
+      (cols.map (rowBytesOf (U.weight (U.layout.wid u)) (U.layout.shape u).k)) = .ok ops →
+    ∀ (x z : ℕ) (i : Fin (U.layout.shape u).m) (j : Fin (U.layout.shape u).n), rows[x]? = some i.val →
+      cols[z]? = some j.val → (semH3 saltOf rootOf : PearlCSem Q R S).RowOK (U.layout.shape u).m (U.layout.shape u).k act i →
+      Rule.wordDebit ops.a.codes[x]! ops.b.codes[z]! =
+        Rule.wordDebit (Array.ofFn fun l => (((semH3 saltOf rootOf : PearlCSem Q R S).unitChain H s U u act).1 i l).val)
+          (Array.ofFn fun l => (((semH3 saltOf rootOf : PearlCSem Q R S).unitChain H s U u act).2 j l).val)
 
 /-! ## A word's fields, as `parts` reads them -/
 
