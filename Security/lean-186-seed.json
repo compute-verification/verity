@@ -1,0 +1,201 @@
+{
+ "issue": "LEAN-186",
+ "due": "2026-11-30",
+ "modules": {
+  "Definitions.NetworkCertifier.SampledAudit": "@network-accounting"
+ },
+ "domain": {
+  "Claims.Flock.ListWithin": {
+   "owner": "@proofs",
+   "why": "The decoder's specification: a statement quantifies over every decoder within Flock's radius, and the deployed decoders meet it. (met by `Claims.Flock.decoder_meets_zk`, `decoder_meets_plain`)"
+  },
+  "Claims.Flock.R": {
+   "owner": "@proofs",
+   "why": "Zero knowledge is stated for a witness in the relation."
+  },
+  "Claims.Flock.Scope": {
+   "owner": "@proofs",
+   "why": "The statements in Flock's scope; the verifier refuses the rest."
+  },
+  "Claims.Sampling.CommitmentScheme.Binds": {
+   "owner": "@proofs",
+   "why": "Binding as a deterministic reduction to an explicit collision, a property of the scheme; the deployed scheme meets it. (met by `NetTiming.binds_deployOf`)"
+  },
+  "Claims.ZKServer.LeanRelease.FinishIs": {
+   "owner": "@proofs",
+   "why": "A hypothesis of the generic `SessionLoopZK`; at the deployed loop it follows from `SessionLoopZKDeployed`'s other premises, which is why that statement doesn't take it. (met by `Loop.finishIs`)"
+  },
+  "Claims.ZKServer.LeanRelease.LinkRoundEq": {
+   "owner": "@proofs",
+   "why": "A hypothesis of the generic `SessionLoopZK`; proved at the deployed loop's link. (met by `LeanRelease.linkRoundEq_ofLoopLink`)"
+  },
+  "Claims.ZKServer.Loop.Serves": {
+   "owner": "@proofs",
+   "why": "The statements the session loop serves; at any other it refuses `Hello` and releases nothing."
+  },
+  "Flock.Guarantees.TablesAdmitUnrefused": {
+   "owner": "@proofs",
+   "why": "A hypothesis of the generic `SessionLoopZK` on its tables; the deployed tables meet it. (met by `LeanRelease.tablesAdmitUnrefused_dataE`)"
+  },
+  "Flock.SoundAtBridge.RowsSession.RowsAt": {
+   "owner": "@proofs",
+   "why": "A sampled proof block's rows are right (`ServedRowsLinked`)."
+  },
+  "FlockDeploy.PlainIn": {
+   "owner": "@proofs",
+   "why": "A plain session in scope (completeness and parameter lemmas)."
+  },
+  "FlockDeploy.ZkIn": {
+   "owner": "@proofs",
+   "why": "A masked session in scope (`Complete_meets_zk`)."
+  },
+  "FlockSoundness.Accounting.Stmt.InRange": {
+   "owner": "@proofs",
+   "why": "The statement shapes the fast100 numbers cover."
+  },
+  "FlockSoundness.Audit.Adaptive.Play.Drawn": {
+   "owner": "@proofs",
+   "why": "The adaptive audit's lemmas take each round's sampled-block bound, the layer below's guarantee."
+  },
+  "FlockSoundness.Audit.Adaptive.Play.Laws": {
+   "owner": "@proofs",
+   "why": "Each round's law meets the design `S`."
+  },
+  "FlockSoundness.Audit.Analysis.KnowledgeSound": {
+   "owner": "@proofs",
+   "why": "ε_ks of the layer below: the audit's lemmas are proved over it, as the modular rule says."
+  },
+  "FlockSoundness.Audit.Analysis.LinkSound": {
+   "owner": "@proofs",
+   "why": "δ_link of the layer below, as `KnowledgeSound`."
+  },
+  "FlockSoundness.Audit.Analysis₂.KnowledgeSound": {
+   "owner": "@proofs",
+   "why": "The two-stage form of `KnowledgeSound`."
+  },
+  "FlockSoundness.Audit.Analysis₂.LinkSound": {
+   "owner": "@proofs",
+   "why": "The two-stage form of `LinkSound`."
+  },
+  "FlockSoundness.Audit.IsHarmBound": {
+   "owner": "@proofs",
+   "why": "`harm_bound`'s specification, which the lemma is about."
+  },
+  "FlockSoundness.Audit.Law.Design": {
+   "owner": "@proofs",
+   "why": "A law's design condition, which the lemma is about."
+  },
+  "FlockSoundness.Audit.Partition.AnchorsSound": {
+   "owner": "@proofs",
+   "why": "δ_in, the input proof block's term."
+  },
+  "FlockSoundness.Audit.Partition.AnchorsSound₂": {
+   "owner": "@proofs",
+   "why": "The two-stage form of `AnchorsSound`."
+  },
+  "FlockSoundness.Audit.Partition.Separates": {
+   "owner": "@proofs",
+   "why": "A separator, the subject of the influence lemma."
+  },
+  "FlockSoundness.Audit.Partitioning.MeetsTarget": {
+   "owner": "@proofs",
+   "why": "The free-compute target, the subject of the partitioning theorems (and their conclusion elsewhere)."
+  },
+  "FlockSoundness.Discharge.Hm.LaidRows": {
+   "owner": "@proofs",
+   "why": "A laid-out net holds at the column values."
+  },
+  "FlockSoundness.Discharge.ZkExec.AcceptsZK": {
+   "owner": "@proofs",
+   "why": "The verifier accepts: the event a lemma conditions on."
+  },
+  "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": {
+   "owner": "@proofs",
+   "why": "`flock-verify --zk --registered` accepts."
+  },
+  "FlockSoundness.Model.Arith.Correct": {
+   "owner": "@proofs",
+   "why": "Facts about the field arithmetic `table_sound` is generic in; proved for the deployed GHASH instance (its docstring: \"they are not assumptions\"). (met by `execArith_correct`)"
+  },
+  "FlockVBridge.ColsHold": {
+   "owner": "@proofs",
+   "why": "The columns hold the bytes."
+  },
+  "Hash.EmbeddingRead.ok": {
+   "owner": "@proofs",
+   "why": "The read's verdict, the event `EmbeddingReadBinding` bounds."
+  },
+  "Nci.Cut.Arrays": {
+   "owner": "@training",
+   "why": "The circuits the bound covers: the matmuls read shared arrays along the edges of a graph with no (ω+1)-clique."
+  },
+  "Nci.Cut.CostsAtLeast": {
+   "owner": "@training",
+   "why": "The circuits the bound covers: each matmul's pair of arrays costs at least q a pair of values."
+  },
+  "Nci.Cut.NoSharedPair": {
+   "owner": "@training",
+   "why": "The circuits the bound covers: no two matmuls share both a w- and an x-value."
+  },
+  "Nci.Cut.ReadsAtMost": {
+   "owner": "@training",
+   "why": "The partitions the bound covers: every block reads at most k gates outside θ (`RegisteredCircuit.unregistered`)."
+  },
+  "Nci.Cut.ValuesInjective": {
+   "owner": "@training",
+   "why": "The circuits the bound covers: the casts of one value carry one, and a matmul's distinct words carry distinct values."
+  },
+  "RecDeploy.PartIn": {
+   "owner": "@proofs",
+   "why": "A V* part in scope (the recursion's security-level lemmas)."
+  },
+  "Verity.Assumptions.GemmAmpereStep": {
+   "owner": "@proofs",
+   "why": "As `GemmHopperStep`, at Ampere (`AmpereStepHw`)."
+  },
+  "Verity.Assumptions.GemmHopperStep": {
+   "owner": "@proofs",
+   "why": "That the hardware's step computes `tc_dot_total`: the hypothesis of a completeness statement (`HopperStepHw`). AGENTS.md: completeness, never an assumption; it should leave `Verity.Assumptions`."
+  },
+  "Verity.Assumptions.StepInputs": {
+   "owner": "@proofs",
+   "why": "The domain of `tc_dot_total`: an FP32 accumulator and k BF16 words."
+  },
+  "Verity.Circuit.InputsAgree": {
+   "owner": "@proofs",
+   "why": "The committed inputs agree with `a` (`Compose`)."
+  },
+  "Verity.Commits": {
+   "owner": "@proofs",
+   "why": "`r` commits to `root`, the subject of `CommittedMeets`."
+  },
+  "Verity.Partition.Fits": {
+   "owner": "@proofs",
+   "why": "The partition meets the width rule (`PrivateOutBitsLe`)."
+  },
+  "Verity.Partition.FitsLocally": {
+   "owner": "@proofs",
+   "why": "The width rule per Definition (`PrivateFitsOfLocal`)."
+  },
+  "Verity.Sound": {
+   "owner": "@proofs",
+   "why": "Lemmas about `Sound` itself (`SoundAnd`, `SoundBind`, `SoundMono`, ...)."
+  },
+  "Verity.TC.Proofs.Admissible": {
+   "owner": "@proofs",
+   "why": "The values a group takes as its accumulator."
+  },
+  "Verity.TC.Relation.ChainHolds": {
+   "owner": "@proofs",
+   "why": "The tensor-core relation holds along a chain."
+  },
+  "Verity.TC.Relation.StepHolds": {
+   "owner": "@proofs",
+   "why": "`check_step` accepts."
+  },
+  "Verity.TC.Relation.packHolds": {
+   "owner": "@proofs",
+   "why": "The final pack's relation holds."
+  }
+ }
+}
