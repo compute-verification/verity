@@ -144,15 +144,14 @@ def _free_ports(n: int = 8) -> range:
     on its open's port, and another run's may still hold the first."""
     import socket
     A = _auditor()
-    for start in range(A.PORTS.start, A.PORTS.stop - n):
-        try:
-            for port in range(start, start + n):
-                with socket.socket() as s:
-                    s.bind(("127.0.0.1", port))
-        except OSError:
-            continue
-        return range(start, start + n)
-    raise RuntimeError(f"no {n} free ports in {A.PORTS}")
+    def listened(port: int) -> bool:
+        with socket.socket() as s:
+            return s.connect_ex(("127.0.0.1", port)) == 0
+
+    start = next((s for s in range(A.PORTS.start, A.PORTS.stop - n) if not any(map(listened, range(s, s + n)))), None)
+    if start is None:
+        raise RuntimeError(f"no {n} free ports in {A.PORTS}")
+    return range(start, start + n)
 
 
 def _stop(root: Path) -> None:
@@ -160,24 +159,15 @@ def _stop(root: Path) -> None:
     import signal
     for f in root.glob("*.pid"):
         pid = int(f.read_text())
-        children = [int(p.name) for p in Path("/proc").iterdir() if p.name.isdigit() and _ppid(p) == pid]
-        for p in (*children, pid):
+        kids = Path(f"/proc/{pid}/task/{pid}/children")
+        for p in (*(map(int, kids.read_text().split()) if kids.exists() else ()), pid):
             if _alive_pid(p):
                 os.kill(p, signal.SIGTERM)
 
 
-def _ppid(proc: Path) -> int | None:
-    try:
-        return int((proc / "stat").read_text().rsplit(")", 1)[1].split()[1])
-    except (OSError, ValueError, IndexError):
-        return None
-
-
 def _alive_pid(pid: int) -> bool:
-    try:
-        return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0] != "Z"
-    except (OSError, IndexError):
-        return False
+    stat = Path(f"/proc/{pid}/stat")
+    return stat.exists() and stat.read_text().rsplit(")", 1)[1].split()[0] != "Z"
 
 
 def run(out: Path) -> int:
