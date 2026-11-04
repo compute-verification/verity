@@ -50,8 +50,8 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 
 ## PoUS's bandwidth audit
 
-- `llama31-8b-fp8-1gpu-bandwidth`: the bandwidth audit's encoded, receipted stack against its plain stack and stock FP8.
-- `llama31-8b-fp8-1gpu-bandwidth-served-r6`: the same with compiled stock FP8 too, at 6 reps.
+- `llama31-8b-fp8-1gpu-bandwidth-served-r6`: the bandwidth audit's encoded, receipted stack against its plain stack,
+  stock FP8 on the same graph path and compiled stock FP8, at 6 reps.
 - `llama31-8b-fp8-1gpu-bandwidth-ablation`: where the audit's time goes, by part and with the top-up off
   (`verity-bench breakdown`).
 
@@ -60,5 +60,4 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 - `quick`: batches 8 and 32, 512-token prompts, mixed traffic.
 - `b32`: batch 32 alone, 512-token prompts, mixed traffic.
 - `width`: batches 1, 8 and 32, 512-token prompts, mixed traffic.
-- `served`: batches 1, 8, 32 and 64, 512-token prompts, mixed traffic, greedy and stochastic sampling.
 - `full`: batches 1, 8, 32 and 128, 512- and 8,192-token prompts, decode-heavy, prefill-heavy and mixed traffic.
