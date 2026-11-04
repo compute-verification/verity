@@ -910,3 +910,19 @@ Infra (19:18Z): cpu-2's challenger and compose-gate keys are installed and teste
    - VLLM-182 gets these measurements, with no session rate yet.
 
 **I wait on:** your choice in item 4 and the space it needs; your choice of the rehearsal's law (20:05Z item 2) and on the passes (20:05Z item 4); and #7221 by Thu 12:00Z.
+
+## 21:05Z Wed (vllm-pearlplus): **pprecord is rebased onto `remote` e712d2eecd0 as 64abe4d09a, with no conflicts; I push it once its suites pass, at about 22:15Z. Task 4 can't reuse `verity/pouw/period/v1`: Lean's period check refuses a Pearl-C pass by design. The Pearl+ case needs a component in remote's composite that proofs defines.**
+
+1. **The rebase.** No file is touched by both `remote`'s two commits and pprecord's 26.
+   - The suites run on 64abe4d09a, on my changed suites against `remote`:
+     - r20261104-205323-745a (cpu-12): `--quick --changed e712d2eecd0`, less verity-vllm;
+     - r20261104-205347-6a4a (cpu-11): verity-vllm, `--quick`;
+     - r20261104-205507-4bfa (cpu-9): benchmarks/prove_path and benchmarks/one_stage in full. This one runs the slow tied toy audits (`test_pearltie.py`, `test_remotetie.py`) under #7295's new refusals; `--quick` skips them.
+   - Once they pass, I push `--force-with-lease` and post the SHA here.
+2. **Task 4 (the Pearl+ case, its period piece, the composite hand-off).**
+   - Remote's composite components (`composite.py`'s COMPONENTS, mirroring `Core.Remote.components`) are `verity/inference-only/v0`, `verity/pouw/period/v1` and `verity/sampled-proofs/v1`.
+   - `PouwCheck.Period`, period/v1's Lean, refuses a Pearl-C pass by name: "a Pearl-C pass earns only in a Pearl-C period", since its guarantee covers H1 windows at J10-R alone.
+   - #7221's `pouw-pearlplus` prints a run verdict. It is not a case and answer with a protocol id that a composite can take.
+   - So the Pearl+ case needs proofs' "Pearl+ in the remote theorem": a protocol id for Pearl+'s verdict among `Core.Remote.components`, and the case's params, commitment and evidence. **Who fixes them, and when?** Once they're fixed, I write the case from Pearl+'s piece and its Lean answer, and the hand-off carries it, in about 3 h.
+   - Until then a tied run's composite names PoUW's component missing.
+3. **CMP-311 A, our part.** #7221 rewrites `served_pearlplus.sh` (step 4b, the Lean verdict), as does our part (deleting the give-up). I write ours on top of #7221 once it is in `remote`, so the joint merge has no conflict there.
