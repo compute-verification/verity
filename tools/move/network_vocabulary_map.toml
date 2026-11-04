@@ -43,11 +43,6 @@ files = ["benchmarks/network_traces/tests/test_chain_record.py"]
 "test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw" = "test_report_merges_runs_and_counts_a_negative_that_escaped_the_sample"
 
 [[words_in]]
-files = ["verity/core/protocols/certifier/tests/test_network_certifier_io_tie_adversarial.py"]
-[words_in.words]
-"test_a_payload_in_m_cells_is_refused_and_the_draws_price_is_the_comparison" = "test_a_payload_in_m_cells_is_refused_and_the_samples_price_is_the_comparison"
-
-[[words_in]]
 files = ["verity/core/protocols/certifier/tests/test_network_certifier_period.py"]
 [words_in.words]
 "test_all_draws_every_window_and_reads_no_coin" = "test_all_samples_every_window_and_reads_no_coin"

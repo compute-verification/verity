@@ -228,6 +228,22 @@ def test_each_commit_windows_advice_is_committed_and_compiles_to_the_steps_it_se
             assert len(reqs[engine_of[u.id]]["streamed_ids"]) == body["max_tokens"]
 
 
+def test_a_windows_advice_names_its_commit_from_its_seal_while_its_line_waits_for_its_h1_release(tmp_path):
+    """Under ``--h1-window-commit`` a window's windows.jsonl line waits for its PoUW H1 release, which reads its advice
+    (`serve_tie`), and its seal's line comes first: its registration names its Commit from seals.jsonl."""
+    out = _served(tmp_path)
+    wins = [w for w in records(out, "windows.jsonl") if not w.get("empty")]
+    held = wins[-1]
+    (out / "seals.jsonl").write_text(json.dumps({"window": held["window"], "run_id": held["run_id"],
+                                                 "run_root": held["run_root"], "row_dir": "windows/w"}) + "\n")
+    (out / "windows.jsonl").write_text("".join(json.dumps(w) + "\n" for w in records(out, "windows.jsonl")
+                                               if w["window"] != held["window"]))
+    rep = ADV.write(out, compiler=C, window=held["window"])
+    assert rep["refused"] == {} and rep["pending"] == {} and list(rep["windows"]) == [str(held["window"])]
+    reg = json.loads((out / "advice" / f"w{held['window']}" / "registration.json").read_text())
+    assert reg["commit"] == {"run_id": held["run_id"], "run_root": held["run_root"]}
+
+
 def test_advice_leaves_a_window_still_open_for_a_later_call(tmp_path):
     out = _served(tmp_path)
     recs = ST.load(out / ST.SERVED)
@@ -595,6 +611,28 @@ def test_a_window_is_committed_once_whole_and_waits_on_a_record_or_a_step_still_
     trace.records.append(recs[last])
     sa._poll(final=False)
     assert sa.error is None and sorted(sa.lines) == [w for w in sorted(stepped) if w <= k2] and sa.summary()["waiting"] == []
+
+
+def test_the_h1_ties_flush_drains_the_trace_and_commits_each_whole_window_so_its_command_reads_the_servers_advice(tmp_path):
+    """Under ``--h1-window-commit`` the tie's flush is `ServedAdvice.drain`: the trace drained, which records a window's last
+    step after its close under async scheduling, and every window then whole committed on the tie's thread before its
+    command runs. On a fixed trace (`_one_after_another`) whose decode step only the drain records, window 1 waits on the
+    committer's own pass and is committed by the drain, its advice under ``advice/w1/`` for the tie's command to read."""
+    recs, reqs, lines = _one_after_another(tmp_path, ["u"])
+    last = max(i for i, r in enumerate(recs) if r["kind"] == "step")
+    trace = SimpleNamespace(records=[r for i, r in enumerate(recs) if i != last])
+    trace.drain = lambda: trace.records.append(recs[last])
+    sa = SA.ServedAdvice(tmp_path, trace, wall=lambda: 0.0)
+    sa.compiler = C
+    for line in lines:
+        sa.closed(line)
+    for r in reqs:
+        sa.recorded(r)
+    sa._poll(final=False)
+    assert sa.error is None and sorted(sa.lines) == [0] and sa.summary()["waiting"] == [1]
+    sa.drain()
+    assert sa.error is None and sorted(sa.lines) == [0, 1] and sa.summary()["waiting"] == []
+    assert {p.name for p in (tmp_path / "advice" / "w1").iterdir()} == {"registration.json", "private"}
 
 
 def test_a_draw_of_a_window_before_its_advice_line_fails_its_release(tmp_path):
