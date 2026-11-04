@@ -17894,6 +17894,33 @@
   }
  },
  "reads": {
+  "Definitions.Core.Boolean": {
+   "digest": "bdca6f202be5ce821c537817148d69f8f173b88caf12b8a5fcade6c8ea044d2f",
+   "definitions": {
+    "FlockSoundness.Audit.Circuit": "eae3834eb80d05abdb52d58e58d3c548f90ac029f7714633011254b9b86ce639",
+    "FlockSoundness.Audit.Circuit.N": "2b5691665b0fbb60db49cdf4b0747640b7040dfa5bf45633080d74aba0ad1b78",
+    "FlockSoundness.Audit.Circuit.eval": "57422ea01448b310290b329076d199020ceed1cd3a4cd2802406443810c88dfc",
+    "FlockSoundness.Audit.Circuit.op": "97912b36c50d00a1dbe0dfc71e4078501f7f6ac4ff029f43397ff23629d59ecc",
+    "FlockSoundness.Audit.Circuit.outputs": "97687faac62607feefae89c9d9802053cfade7d48f155c95c6e3c7abe73a0412",
+    "FlockSoundness.Audit.Circuit.run": "7344d2539a14645ea847e2a24c10d5564626bb33c215b1677fbefd5757aaea11",
+    "FlockSoundness.Audit.Circuit.toCircuit": "264018d87c2fa38dd29c5b4d302428631280bad2c4ec0485897fbbeea116233b",
+    "FlockSoundness.Audit.Op": "75bebd7c162b9b7f27418d44dc50b25f09902fd3c7d8b106af390c8d6bb286c7",
+    "FlockSoundness.Audit.Op.and": "2826c574c26cf547071a45321935d27f979852961bdd8e252b4ef119a8de4ebf",
+    "FlockSoundness.Audit.Op.apply": "b1a23bed7333e4c0e0f9a7249959457f155f4ad3098ed5ea931016eef927160d",
+    "FlockSoundness.Audit.Op.args": "feaa0258468060300851a397170ccae05cdd531573e161570b64bdec262f1133",
+    "FlockSoundness.Audit.Op.casesOn": "68e61a592345106f03f09201521cec67e0aa7e72b8a6a1313d24322199973c55",
+    "FlockSoundness.Audit.Op.ctorIdx": "5c683427c86ede41231aec4d579cffa127c580ca9e923da6770cbfa363425a3d",
+    "FlockSoundness.Audit.Op.input": "93946cf1d6220a01fb4a02480fcf835edb8ea1a9245ceca8b900ac67c242b11e",
+    "FlockSoundness.Audit.Op.isInput": "e015c7679e24eb27509d6d17561f98222fcf9154a5e01328c30b070b971f502c",
+    "FlockSoundness.Audit.Op.isInput._sparseCasesOn_1": "87b2063dd85c18f50211e1c0c44fa4f049e2190f5e1b601badd9c1c01a128931",
+    "FlockSoundness.Audit.Op.not": "2bcdf9f429225986c3dd1d04b1be42f03676ab4e9bd9e34241f9d5a62301b0aa",
+    "FlockSoundness.Audit.Op.rec": "3c718220fecd306c81da0f7a18c687f3e0cdee3f9a83fd60e8333a0b11c5408e",
+    "FlockSoundness.Audit.Op.row": "c98f343a7b497c5240dc00c014258c27ab9436f94261c13bab71a8cac1250c07",
+    "FlockSoundness.Audit.Op.xor": "5c1dec09723d8ee00d06d1262a7a375eca9ee8f1487a265808a68457a7ed8a38",
+    "FlockSoundness.Audit.xorSum": "c627186d879d69d17638b56c9e47172a64d74159228eebeebe6104754ad393a8"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub"]
+  },
   "Definitions.Core.Compiler": {
    "digest": "0a40b9f155d5f6e2d83fd76eaa99050fff8fb56f295cbdb08eef747fcbd90750",
    "definitions": {
