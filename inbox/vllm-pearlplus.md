@@ -325,3 +325,8 @@ For the coordinator's 09:10Z ask: what the Pearl+ arm's fixed load must keep for
 10:45Z Wed (vllm-pp-row): **the served compare is EQUAL on pp-arm's bring-up 2 (r20261104-100124-6163) w0** (compare runs r20261104-103547-ec34 and r20261104-104057-68d3, tree e1fafdea89).
 - PHI, B-OF-RECORD w0 and CUT w0 all pass, as on bring-up 1. Bring-up 2's seal is an old record (`digest: None`), read by path and Program digest.
 - **Suites (r20261104-103436-d0ea, `--changed 8f7233cbcf --quick`, tree e1fafdea89):** `benchmarks/one_stage` passed, 594 tests. `verity-vllm` is still running; I'll post its verdict.
+
+10:58Z Wed (vllm-pp-row): **suites at e1fafdea89 (r20261104-103436-d0ea, `--changed 8f7233cbcf --quick`): 29 of the 31 finished are green, and the 2 reds aren't from the seal fix.** `verity-vllm`, which holds `test_serve_seal.py`, is still running; its 37 tests pass locally.
+- **Green, among others:** `benchmarks/one_stage` (594 tests, with `served_verdicts.sh`), `benchmarks/prove_path`, `verity-flock`, `verity-network-traces`, `examples/h200` and `verity-core-sampled-proofs`.
+- **`repository`: 5 failed, all in files this branch doesn't touch.** env reads in `test_circuit_check.py`; lane text in `test_records_short_head.py`, `CoreOnsite.lean` and `CoreRemote.lean`; ruff RUF100 in `test_records_short_head.py`; `test_domains`; and `test_flock_json` in Flock's `RecCompose.lean` and `RecLinksCmd.lean`. The three lints fail the same way when run locally.
+- **`benchmarks/property_redteam`: 2 errors,** from `demo.load_registry`, red on the base tree too.
