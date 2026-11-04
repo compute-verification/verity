@@ -14,6 +14,15 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_attest.py",
+    "tests/test_formats.py",
+    "tests/test_protocol.py",
+    "tests/test_verdict.py",
+    "tests/test_wipe_protocol.py",
+    "tests/test_wipe_verdict.py",
+]
 # Test-only: `lake` builds this package and, through its path requires, C-Flock's verifier's Lean, core's randomness, LMS,
 # the auditor parties' period checks, the protocol interface and the difftest server; the sessions are signed by the PoUS
 # tests' test signer, read by path.
