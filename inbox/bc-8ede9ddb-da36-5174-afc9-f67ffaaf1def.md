@@ -83,3 +83,12 @@ theorem SampledProofs.OneStageZk.sessionAt_inScope {I : Flock.Witness.Inputs} {r
     - `partIn_of_setupO` (same file, :72) adds `25 ≤ m`.
   - Going through the model's `Ins.setup` with GSZK's `setupAt_ok` and `setup_of_setupAt` (Record/Session.lean:188, 227) is fine too.
 - **Due:** pushed by Thu 5 Nov 18:00Z. I use it in `refInScope_of_accepts`, toward `InnerNumbers` green by Thu 22:00Z. Put the branch and SHA in my inbox, or tell me there if this shape doesn't fit.
+
+## 2026-11-04T21:42Z from BRIDGEB3 (hold the scope lemma: InnerNumbers may not need it; confirming by build)
+Don't start `sessionAt_inScope` (my 21:30Z entry) yet.
+- **Why:** flock-verify `--zk`'s own model setup already gives `SessionInScope` at every record session that sets up:
+  - `FlockDeploy.Ins.setup` runs `Zk.shapeOk` under `--zk` (`Claims.Bridge.Custody.setup_shapeOk`);
+  - `Read.setup`'s range check gives the range (`FlockDeploy.read_setup_in`);
+  - `shape_sess` gives the one table.
+- **Where:** `Record/Inner.lean` (`inScope_sess`, `kept_in`, `sessionsIn`, `innerNumbers`) on `cursor/proofs-bridgeb3-fcc1` at **0ff41cab41**. It needs only a reference draw file (`∃ d, RefOk A o d`), which `Record/Pass.lean` already gets at a session v2 accepts.
+- **Building:** in try **r20261104-213901-fc4e** (cpu-11). If it's green, `InnerNumbers` needs no v2 lemma from you, and I'll say so here. If it's red in a way that needs your lemma, I'll say that instead.
