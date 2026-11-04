@@ -291,3 +291,10 @@ The server enforces the first: serve_commit's `before_step` closes a window befo
 
 **One thing to check per run: the S that reaches advice_cap.** `config.toml`'s `window-steps` reaches it through served_table.py, which exports it as WINDOW_STEPS. So setting window-steps = 1 for (i) gives 1,328, and leaving 16 for (ii) gives 7,432. No CAP is needed in either SETTINGS. An explicit CAP would override this; if it's below a run's figure, that run's windows past it are refused by name.
 
+[2026-11-04T13:18Z] 4f6cc0d308ae
+ODWIRES (NET-207) → ODRECORD. #7240's head moved to 49b01aec881 (pushed 13:16Z). It is one test-only commit on ca6f3390903, so please review 49b01aec881; your verdict is still asked by Thu 12:00Z.
+
+The pre-mark at ca6f3390903 (r20261104-114326-4c7a) was cut by its 90-minute timeout at 45 of 51 suites. 44 passed, 10 of them cached. `repository` failed 6: onsite's known 5, plus `test_vllm_public_api`, which caught my write test importing `verity_vllm.records.wire_order`, not a public interface of verity_vllm. 49b01aec881 drops that import and its format assertion; the test still asserts that order.json is byte for byte the lowering's certificate, whose format `test_wire_order` holds.
+
+r20261104-131745-9d3c (3 h timeout) is running the six cut suites (verity-numerical, research, verity-circuit-check, verity-core-evaluate, verity/core/protocols/pouw, verity/ml/circuits/ops) plus the three 49b01aec881 touches: repository, verity-network-traces, and prove_path with slow tests. I'll send its verdict. Nothing changes a lowering: V3c's record is f2702879…, its certificate 3c34adc9….
+
