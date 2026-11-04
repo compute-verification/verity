@@ -132,7 +132,9 @@ or a φ carrying the requests is a finding too, and on any finding the run fails
 directory. Split in two around V3c (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with
 the scan on V3c's committed window (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog
 trees), and its `period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of
-V3c's; each step releases through its own hold.
+V3c's; each step releases through its own hold. Only the split's period is on the run's registration record, as remote
+with the network certifier's `egress` tie requires of every compute audit, so a `PRODUCT=remote-network` run takes the
+split.
 
 `attacks.py` lists what the served path must refuse or charge (`table`): each attack with its case, the check that
 refuses it or the leak bound's term that charges it, and the reason its verdict names. Its `relay` is the prover's

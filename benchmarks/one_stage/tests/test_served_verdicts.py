@@ -1876,11 +1876,16 @@ def test_pp_main_comes_before_main_file_as_the_line_v3cs_session_pins_on(tmp_pat
     ((), {"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None},
      "PREFLIGHT: sampled proofs' audit of record is V3c's (and the split certifier reads its period.json), and "
      "V3C_CLASS is empty"),
+    ((), {"CERTIFIER_PERIOD_CMD": None},
+     "PREFLIGHT: the split certifier runs its chain and its period check, and CERTIFIER_PERIOD_CMD is unset"),
+    (("v3c",), {"CERTIFIER_CHAIN_CMD": None, "PRODUCT": "remote-network"},
+     "PREFLIGHT: the split certifier runs its chain and its period check, and CERTIFIER_CHAIN_CMD is unset"),
 ])
 def test_the_split_certifier_needs_v3c_and_no_whole_piece_beside_it(tmp_path, args, extra, line):
     """The split's period check writes the certifier's answer from V3c's period.json, so the preflight refuses it beside
-    CERTIFIER_CMD, the whole piece's command; and V3c's audit is sampled proofs' of record, so it refuses a run that leaves
-    V3c out, split or not, before anything runs."""
+    CERTIFIER_CMD, the whole piece's command, and with either of its two commands unset (a chain with no period check
+    answers nothing, and a period check with no chain refuses); and V3c's audit is sampled proofs' of record, so it
+    refuses a run that leaves V3c out, split or not, before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, args, **extra)
     assert (rc, lines, order) == (3, [line], [])
 
@@ -2618,6 +2623,11 @@ SPLIT_NO_FRONT = ("PREFLIGHT: PRODUCT=remote runs the split certifier's CERTIFIE
     ("remote-network", {"CERTIFIER_CHAIN_CMD": "true", "CERTIFIER_PERIOD_CMD": "true"}, None),
     ("remote-network", {"POUS_CMD": "true"},
      "PREFLIGHT: PRODUCT=remote-network runs no onsite piece but the network certifier's, and POUS_CMD is set: unset it"),
+    ("remote-network", {"CERTIFIER_CMD": "true"},
+     "PREFLIGHT: PRODUCT=remote-network holds every compute audit of the network certifier's period to the run's "
+     "registration, which only the split certifier's (V3c's) is: set CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD in "
+     "place of CERTIFIER_CMD"),
+    ("onsite", {"CERTIFIER_CMD": "true"}, None),
     ("onsite", {}, None),
     ("offsite", {}, "PREFLIGHT: PRODUCT is onsite, remote or remote-network, not offsite"),
 ])
@@ -2626,7 +2636,9 @@ def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_comma
     the preflight refuses any onsite piece's command set, before anything runs. The certifier's front is how a run's
     requests are served, not a piece, so remote takes it, and with it the split certifier's chain and period, which
     write the period case the onsite record reads; without the front, remote refuses them. PRODUCT=remote-network takes
-    the network certifier's commands and refuses the other onsite pieces' as remote does."""
+    the split certifier's commands and refuses the other onsite pieces' as remote does, and the whole certifier piece's
+    too: its egress tie holds every compute audit of the certifier's period to the run's registration, and the whole
+    piece's are its scan's own."""
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     _script(tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh", "exit 0")
     (tree / "benchmarks" / "network_traces").mkdir(parents=True)

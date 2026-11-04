@@ -105,8 +105,10 @@
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
 #     alone, its other pieces dropped (not run, no default command, the wipe's and the certifier's included; the
 #     preflight refuses any onsite command set), its record composing their verdicts alone and its composite remote's;
-#     remote-network remote's pieces and the network certifier's (CERTIFIER_CMD or the split's), the wipe's, PoUS's and
-#     bandwidth's dropped as remote drops them, its composites remote's and remote-network's.
+#     remote-network remote's pieces and the network certifier's, the wipe's, PoUS's and bandwidth's dropped as remote
+#     drops them, its composites remote's and remote-network's. Remote-network's egress tie refuses a certifier's period
+#     with a compute audit on any registration but the run's, so the preflight refuses CERTIFIER_CMD there: the whole
+#     piece's audits are its scan's own, and only the split's one audit, V3c's of the served window, is the run's.
 #     CERTIFIER_FRONT is remote's too: the network certifier in front of the endpoint is how its requests are served, not
 #     a piece, so its session stays in the serve dir's private/ and its exit is the CERTIFIER-FRONT line's, which remote's
 #     record doesn't read. Behind the front remote also takes the split certifier's CERTIFIER_CHAIN_CMD and
@@ -138,7 +140,7 @@
 #     record here has sampled proofs missing).
 #     `served_verdicts.sh v3c` runs only that step on an
 #     existing serve dir (D and its window K set), the build first, its limits 120m and 180m.
-#     With the network certifier's piece split in two, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD (CERTIFIER_CMD then
+#     With the network certifier's piece split in two, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD (both set, CERTIFIER_CMD
 #     unset, and V3C_CLASS the certifier's scan class, which CLASSES holds), the certifier's answer reads V3c's
 #     period.json: the chain after the window commit, beside V3c's audit and period.json on a node that holds both
 #     (NODE_MEM_GB at least V3C_AUDIT_MEM_GB plus CERTIFIER_CHAIN_MEM_GB, default 96), else after them, which a
@@ -374,7 +376,8 @@ case $PRODUCT in
   remote-network)
     for v in WIPE_CMD POUS_CMD BANDWIDTH_CMD; do
       [ -z "${!v:-}" ] || { say "PREFLIGHT: PRODUCT=remote-network runs no onsite piece but the network certifier's, and $v is set: unset it"; exit 3; }
-    done ;;
+    done
+    [ -z "${CERTIFIER_CMD:-}" ] || { say "PREFLIGHT: PRODUCT=remote-network holds every compute audit of the network certifier's period to the run's registration, which only the split certifier's (V3c's) is: set CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD in place of CERTIFIER_CMD"; exit 3; } ;;
   *) say "PREFLIGHT: PRODUCT is onsite, remote or remote-network, not $PRODUCT"; exit 3 ;;
 esac
 # ℓ_a, unless CAP gives it: the least width that pads every Commit period's advice this server commits (advice_windows.least_cap
@@ -1028,6 +1031,9 @@ advice_cap || exit 3
 SPLIT= DEFER=
 if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split certifier: its period check writes its answer
   [ -z "${CERTIFIER_CMD:-}" ] || { say "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"; exit 3; }
+  for v in CERTIFIER_CHAIN_CMD CERTIFIER_PERIOD_CMD; do
+    [ -n "${!v:-}" ] || { say "PREFLIGHT: the split certifier runs its chain and its period check, and $v is unset"; exit 3; }
+  done
   SPLIT=1
 fi
 if [ -n "${V3C_WARM_JOBS:-}" ]; then  # V3c's composes made before its audit
