@@ -478,8 +478,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes a reading of it (compute-accounting)",
     "Security/Definitions/Accounting/Wipe.lean::Accounting.Wipe.Strategy":
         "homonym, a device's play in the wipe (its fill, egress and spot-read answers): rename (lean)",
-    "Security/Definitions/Claims.lean::Claims.Circuit":
-        "duplicate of `Verity.Circuit`: becomes it (the claims layer's AND/XOR wire circuit) (lean)",
     "Security/Definitions/Claims.lean::Claims.Flock.Stmt": "duplicate of `Flock.Stmt`: becomes its spec, in Core (lean)",
     "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (lean)",
@@ -521,8 +519,6 @@ KNOWN: dict[str, str] = {
         "homonym, a committed Program's egress prediction: rename (network-accounting)",
     "Security/Definitions/NetworkCertifier/WindowCharge.lean::NetTiming.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
-    "Security/Definitions/Population/DrawPressure.lean::Population.Exfil.Draw":
-        "duplicate of `Verity.Draw`: becomes it (k of n units, without replacement) (lean)",
     "Security/Definitions/Population/Exfiltration.lean::Population.Exfil.Strategy":
         "homonym, an adaptive exfiltration strategy, each window's leak and escaping coins from the earlier coins: rename (lean)",
     "Security/Definitions/Pous/Game/Oracle.lean::Pous.Prog":
@@ -626,16 +622,8 @@ KNOWN: dict[str, str] = {
     # Security/Properties/
     "Security/Properties/Attest.lean::MemoryChallenger.Attest.Properties.Device":
         "homonym, the memory challengers a property ranges over: rename (lean)",
-    "Security/Properties/Challenger.lean::Properties.Challenger.Device":
-        "homonym, the devices the challenger property ranges over: rename (soundness)",
-    "Security/Properties/Challenger.lean::Properties.Challenger.Session":
-        "homonym, the old word for a run, here the challenger property's: rename (soundness)",
-    "Security/Properties/Challenger.lean::Properties.Challenger.Witness":
-        "duplicate of `Verity.TC.Relation.Witness`: becomes it (soundness)",
     "Security/Properties/Pous/Period.lean::Pous.Period.Strategy":
         "homonym, a PoUS prover in the ring model (what survives setup, and each round's answer): rename (lean)",
-    "Security/Properties/Pous/WipeSigned.lean::MemoryChallenger.Properties.Challenger":
-        "homonym, the keys' signing sessions in the wipe-signing property: rename (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Node":
         "duplicate of the Site (`Verity.Site`): becomes what `Accounting.Remote.Node` becomes (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Record":
@@ -647,27 +635,10 @@ KNOWN: dict[str, str] = {
         "homonym, an op's site in a Definition: rename (training)",
     "benchmarks/datacenter/datacenter/logical.py::Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes a reading of it (network-accounting)",
-    "benchmarks/datacenter/datacenter/memory.py::Store":
-        "duplicate of `CircuitRequirement.Store`: becomes a client of it (network-accounting)",
-    "benchmarks/datacenter/datacenter/observe.py::Answer":
-        "homonym, the challenger's record of one request: rename (network-accounting)",
-    "benchmarks/datacenter/datacenter/observe.py::Record":
-        "duplicate of `NetworkCheck.Check.Certificate`: becomes its certified record (network-accounting)",
     "benchmarks/datacenter/datacenter/observe.py::Trace":
         "homonym, what a datacenter run leaves behind, all of it witness: rename (network-accounting)",
-    "benchmarks/datacenter/datacenter/physical.py::Block":
-        "duplicate of the Site (`Verity.Site`): becomes a zone of it (the old word for one) (network-accounting)",
-    "benchmarks/datacenter/datacenter/physical.py::Device":
-        "duplicate of the Site (`Verity.Site`): becomes its device entry (network-accounting)",
-    "benchmarks/datacenter/datacenter/physical.py::Link":
-        "duplicate of the Site (`Verity.Site`): becomes its link (network-accounting)",
     "benchmarks/harness/verity_bench/served_table.py::Protocol":
         "homonym, a protocol's served benchmark rows: rename (benchmarks)",
-    "benchmarks/hash/dither/dither_fused.py::Window": "homonym, a Dither kernel's device state: rename (kernels)",
-    "benchmarks/hash/dither/dither_one.py::Window": "homonym, a Dither kernel's device state: rename (kernels)",
-    "benchmarks/hash/lib/vclib.py::Opening": "homonym, one vc_open_launch record: rename (kernels)",
-    "benchmarks/network_e2e/encodings/code_v1.py::Window":
-        "homonym, one certifier window's charge: rename (network-accounting)",
     "benchmarks/network_e2e/encodings/replay.py::Trace":
         "homonym, a served run's step trace (`verity-vllm/step-trace/v1`): rename (network-accounting)",
     "benchmarks/network_e2e/encodings/v1.py::Record":
@@ -737,16 +708,6 @@ KNOWN: dict[str, str] = {
     "benchmarks/property_redteam/squaring.py::Gate":
         "homonym, a red-team model's gate over its own ops: rename (memory-accounting)",
     "benchmarks/property_redteam/squaring.py::Op": "homonym, a red-team model's op: rename (memory-accounting)",
-    "benchmarks/prove_path/window_cost.py::Registration":
-        "homonym, a size model of one window's registration: rename (network-accounting)",
-    "benchmarks/remote_session/challengers.py::Gate":
-        "homonym, infra's challenger gate (an SSH host): rename (memory-accounting)",
-    "benchmarks/remote_session/device.py::Device":
-        "homonym, the prover's backend in a remote session: rename (memory-accounting)",
-    "benchmarks/remote_session/gate_whatif.py::Record":
-        "homonym, a session's replayed times: rename (memory-accounting)",
-    "benchmarks/remote_session/lean_verifier.py::Transcript":
-        "homonym, a remote session's difftest case: rename (memory-accounting)",
     "benchmarks/remote_session/serve.py::Trace":
         "homonym, the engine's steps as a remote session runs them: rename (memory-accounting)",
     "benchmarks/resource_accounting/joint.py::Challenger":
