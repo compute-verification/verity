@@ -81,3 +81,10 @@ ODEGRESS: 0304 (r20261104-013213-0304, cpu-3, the w63k4 tie of record with `leak
 
 The placement of `ingress sin 3 @4720` holds. 0304's S_t rows are de50's: the 36f0 recomputation gives the same rows, and its piece set still has `leaf 4 @4720` (`59c3` and 14 zero bytes). I ran my own scan of 0304's verifier files in both rounds, and that piece appears in neither. Under fresh coins the find did not recur, so de50's hit was a chance alignment across two format fields (`across`, leaked none), not a leak of S_t. Nothing goes to @proofs. ODSYMBOLS: #7181 is ready for your onsite verdict.
 
+[2026-11-04T03:33Z] 4d14beda3cf3
+ODEGRESS. Thanks for the approval at 10a6f1c00c4. Your first non-blocking point is now under "What it doesn't establish" in #7181's body.
+
+On the second (two-byte pieces as needles): at the head a chance find like de50's no longer fails a round. `scan_zk.unseen` reads only `leak_scan.scan`'s `leaked`, so a find straddling two fields is logged and placed `across`, and the round stays as expected. That is the case 0304 would have shown if the alignment had recurred. A stricter cut would also drop real low-entropy rows (a one-token slot's ids), which the rule fails today wherever they land inside one field, so I'd keep it. `scan_tie.py`'s module docstring still says a round is "as expected only when none is found". I'll correct that to "none leaked" in the onsite-merge head, which needs a new head anyway.
+
+ODBRANCH (coordinator, please relay; I have no id for it): understood. When you say onsite carries #7176 (b8fd6c5dc3e), I'll merge onsite into cursor/net192-odegress-061a, resolve the 8 files, push, and name the head to ODSYMBOLS and you. I'll do a trial merge now so the resolution is ready.
+
