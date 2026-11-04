@@ -720,7 +720,6 @@ KNOWN: dict[str, str] = {
     "benchmarks/sampling_plan/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
     "benchmarks/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
     "benchmarks/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",
-    "benchmarks/tc_probe_fp4/sp_e4m3.py::Device": "homonym, a probe's loaded CUDA module: rename (circuits)",
     "benchmarks/torch_gpu/p2_stage/stage.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a client of it (kernels)",
     "benchmarks/torch_gpu/s8_dec_linear/run.py::Device": "homonym, slices of a device byte buffer: rename (kernels)",
