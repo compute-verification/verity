@@ -8,7 +8,7 @@ import hashlib
 import json
 import shlex
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -21,7 +21,7 @@ sys.path.insert(0, str(HERE.parent))
 import auditor as A  # noqa: E402
 
 P = lms.Params(64, 4, 5)
-T0 = datetime(2026, 10, 20, 9, 30, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 20, 9, 30, 0, tzinfo=UTC)
 DAY0 = 20746
 PIN = "c" * 40
 FAMILIES = [["pouw/salt", 1], ["pouw/round", 3]]
@@ -163,9 +163,9 @@ def test_once_a_lane_has_declared_it_opens_only_on_a_day_it_declared_and_a_lane_
 
 
 def test_an_open_at_the_last_second_of_a_declared_day_is_admitted_and_one_at_the_next_midnight_refused(host, signer):
-    eve = datetime(2026, 10, 20, 23, 59, 30, tzinfo=timezone.utc)
-    last = datetime(2026, 10, 20, 23, 59, 59, tzinfo=timezone.utc)
-    midnight = datetime(2026, 10, 21, 0, 0, 0, tzinfo=timezone.utc)
+    eve = datetime(2026, 10, 20, 23, 59, 30, tzinfo=UTC)
+    last = datetime(2026, 10, 20, 23, 59, 59, tzinfo=UTC)
+    midnight = datetime(2026, 10, 21, 0, 0, 0, tzinfo=UTC)
     ok(declare(host, signer, "hash", now=eve))
     a = reserve(host, signer, "hash", token="0001", now=eve)
     b = reserve(host, signer, "hash", token="0002", now=eve)

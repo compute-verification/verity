@@ -280,7 +280,7 @@ import threading
 import time
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
@@ -1967,8 +1967,8 @@ def declare(host: Host, args: list[str], *, signer, pinned: str, now: datetime) 
     _, lane, by, program, text, day = args
     try:
         blocks = json.loads(text)
-    except ValueError:
-        blocks = None
+    except ValueError as e:
+        raise Refused(f"declare: {args}") from e
     if (not (NAME.fullmatch(lane) and NAME.fullmatch(by) and ROOT.fullmatch(program)) or type(blocks) is not list
             or not all(type(k) is str and BLOCK.fullmatch(k) for k in blocks)
             or not (day == READ_ONLY or DAY.fullmatch(day))):
@@ -2437,8 +2437,7 @@ def main(argv: list[str] | None = None) -> int:
                        active=unit_active)
             print(json.dumps(e))
         elif argv[:1] == ["declare"]:
-            print(json.dumps(declare(host, argv, signer=key_signer(host), pinned=pinned_commit(),
-                                     now=datetime.now(timezone.utc))))
+            print(json.dumps(declare(host, argv, signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(UTC))))
         elif argv[:1] == ["run"] and len(argv) == 2:
             e = run(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=lambda: datetime.now(timezone.utc))
             print(json.dumps({"seq": e["seq"], "session": e["session"], "rc": e["body"]["rc"]}))
