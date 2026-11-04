@@ -9,10 +9,12 @@ public import Proofs.Flock.RecGeneric.Plurality
 `echoHolds` proves `EchoHolds`: at every oracle, inner protocol, server and statement, the echo argument and the echo
 compiler at `Open(Π, S)` meet L2's hypotheses on them.
 
-* `echoArg` is knowledge sound at `κ = 1/|Coin|`, `γ = 0` (`echoArg_KS`): its extractor gives the judged run's one
-  message, so an accepted run whose message is not the statement was accepted on its coin, which is `default` with
-  probability `1/|Coin|` (`Pr_coinAt`).
-* The compiler's contract for `E_O` (`echo_sessions`): session `s` is round `k+3+s` of `echoCV`; a fork there shows
+* `echoArg` is knowledge sound at `κ = 1/|Coin|`, `γ = 0` (`echoArg_KS`): the prover's one message reads no coin, so
+  where it is the statement the fresh rerun accepts it and `E^rep` gives it (`echoArg_ext_eval`); an accepted run whose
+  message is not the statement was accepted on its coin, which is `default` with probability `1/|Coin|`
+  (`Pr_coinAt`).
+* The compiler's contract for `E_O` (`echo_sessions`): each session's bounds are `echoArg`'s errors; session `s` is
+  round `k+3+s` of `echoCV`; a fork there shows
   the prover's message after the run's earlier ones, answered as `echoV` answers it at the staged statement
   (`echo_fork`, from `run_fork_get`), and a refused session round ends the fork's run refused (`echo_runs`).
 * The composition's contract (`echo_contract`): `E_O`'s witnesses are paired with the staged statements
@@ -152,7 +154,20 @@ theorem run_echoV {Coin : Type} [Fintype Coin] [Inhabited Coin] [DecidableEq Coi
   · simp
     exact (ite_eq_right h).symm
 
-/-- **`echoArg` is knowledge sound** at `κ = 1/|Coin|`, `γ = 0`. -/
+/-- **`echoArg`'s extractor where every run shows the statement accepted**: the judged run and the fresh rerun accept,
+and the candidate is the rerun's message, the statement. -/
+theorem echoArg_ext_eval {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
+    (H : Msg → Msg) (x : Msg) (r : Fin ((echoArg Coin).V.k x) → Coin) (c : (echoArg Coin).EC ((echoArg Coin).shape x))
+    (rn : (Fin ((echoArg Coin).V.k x) → Coin) → Trace) (hrn : ∀ r', (rn r').seen = ⟨[(x, .acc)], .acc⟩) :
+    (((echoArg Coin).ext x r c).eval H rn).1 = some x := by
+  simp [Claims.SamplingGeneric.Arg.ext, ERep, RP.eval, firstWait, waitAcc, RP.bind, hrn, echoArg,
+    List.finRange_succ]
+  erw [hrn]
+  rfl
+
+/-- **`echoArg` is knowledge sound** at `κ = 1/|Coin|`, `γ = 0`: the prover's message reads no coin, so where it is
+the statement the rerun accepts it and the extractor gives it (`echoArg_ext_eval`); where it is not, the judged run
+accepted on its coin. -/
 theorem echoArg_KS {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
     (H : Msg → Msg) : (echoArg Coin).KS H := by
   intro x Ω _ _ P
@@ -163,14 +178,15 @@ theorem echoArg_KS {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
       (Pr_coinAt (Ω := Ω) (E := (echoArg Coin).E.C x) ⟨0, h0⟩ default).le
   obtain ⟨hacc, hbad⟩ := hs
   have hr := run_echoV H P x s.1 s.2.1
-  have hE : ((echoArg Coin).E.eval H P x s.1 s.2.1 s.2.2).1 = some ((P.next x [] s.1).eval H).1 := by
-    show ((run H P (echoArg Coin).V x s.1 s.2.1).seen.msgs.head?.map Prod.fst) = _
-    rw [hr.1]
-    rfl
   have hout : (run H P (echoArg Coin).V x s.1 s.2.1).out =
       if ((P.next x [] s.1).eval H).1 = x ∨ coinSeq s.2.1 0 = default then .acc else .rej :=
     congrArg Seen.out hr.1
-  have hne : ¬ ((P.next x [] s.1).eval H).1 = x := fun h => hbad (by rw [hE]; exact h)
+  have hne : ¬ ((P.next x [] s.1).eval H).1 = x := fun h => hbad (by
+    have hE : ((echoArg Coin).E.eval H P x s.1 s.2.1 s.2.2).1 = some x :=
+      echoArg_ext_eval H x s.2.1 s.2.2 (run H P (echoArg Coin).V x s.1) fun r' => by
+        simp [(run_echoV H P x s.1 r').1, h]
+    rw [hE]
+    exact rfl)
   have hc : coinSeq s.2.1 0 = default := by
     by_contra hc
     simp [hout, hne, hc] at hacc
@@ -337,6 +353,8 @@ theorem echo_sessions {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Co
     show (ms.take (IV.k x)).map Prod.fst = ((ms.take (IV.k x + 3)).take (IV.k x)).map Prod.fst
     rw [List.take_take, Nat.min_eq_left (by omega)]
   shapes _ _ _ _ _ _ _ := rfl
+  bounded _ _ := ⟨show (0 : ℝ) ≤ 1 / (Fintype.card Coin : ℝ) by positivity, le_rfl,
+    fun _ _ _ _ _ => ⟨le_rfl, le_rfl⟩⟩
   fits x := by
     rw [off_echo]
     show IV.k x + 3 + IV.k x ≤ 2 * IV.k x + 4
@@ -422,7 +440,6 @@ theorem echo_contract {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Co
 /-- **T1: the toy meets L2's hypotheses together.** -/
 theorem echoHolds : EchoHolds := by
   intro Coin W _ _ _ _ H I S
-  exact ⟨fun _ => rfl, fun _ => show (0 : ℝ) ≤ 1 / (Fintype.card Coin : ℝ) by positivity, fun _ => le_rfl,
-    echoArg_KS H, echo_sessions (S.IVStar I.V I.ans) H, fun x => echo_contract H (S.IVStar I.V I.ans) _ x⟩
+  exact ⟨echoArg_KS H, echo_sessions (S.IVStar I.V I.ans) H, fun x => echo_contract H (S.IVStar I.V I.ans) _ x⟩
 
 end Claims.RecGeneric

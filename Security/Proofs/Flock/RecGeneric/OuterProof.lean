@@ -14,18 +14,19 @@ public import Proofs.Flock.Claims.Aggregate
 /-!
 # O1 and L2, proved
 
-`outerSessionsKS` proves `OuterSessionsKS` (O1): `E_O` meets `Claims.KS` at `κ_O = Σ_s κ_A(sh_s)`,
-`γ_O = (Σ_s √(γ_A(sh_s)·k(x)))²` wherever `A` is knowledge sound and the compiler meets `Compiled.Sessions`.
+`outerSessionsKS` proves `OuterSessionsKS` (O1): `E_O` meets `Claims.KS` at `κ_O = Σ_s κb_s`,
+`γ_O = (Σ_s √(γb_s·k(x)))²` wherever `A`'s counted extractor is knowledge sound and the compiler meets
+`Compiled.Sessions`.
 
 * `E_O` fails only where some session's extraction fails on the accepted run (`Compiled.eo_bad_session`: `collect`
   gives none at a session that gives none, and witnesses outside `R_O` come from a session whose witness is outside
   `A`'s relation), so its failure is at most the sum over sessions (`Compiled.PrBad_le_sum`).
 * A session's extraction, on the forks of a draw at the session's first round, is `A`'s extractor against the session
   prover after the draw's earlier messages (`Compiled.sessionProg_eval`, from `Runs`), at the statement the draw's
-  staging rounds fix, whose shape is the session's (`Shapes`); so it fails at most as `A`'s does there
-  (`Compiled.prefix_bad_le`, the fork's coins and `E_O`'s coins read uniformly).
+  staging rounds fix, whose shape is the session's (`Shapes`); so it fails at most as `A`'s does there, within the
+  session's bounds (`Bounded`; `Compiled.prefix_bad_le`, the fork's coins and `E_O`'s coins read uniformly).
 * Averaged over prefixes, Jensen moves the average under the root; the session's round guesses are among the compiled
-  verifier's `k(x)` (`Compiled.Ex_sPrB_le`), so session `s` costs `κ_A(sh_s) + √(γ_A(sh_s)·k(x)·Pr[B])`
+  verifier's `k(x)` (`Compiled.Ex_sPrB_le`), so session `s` costs `κb_s + √(γb_s·k(x)·Pr[B])`
   (`Compiled.sessKS`), and the sum of the roots is `√(γ_O·Pr[B])`.
 
 `Flock.SecurityProofs.GenericRecursiveKSCompiled` is L2: L1 at `compile(Π, A, S)` with O1 for its `E_O`.
@@ -69,13 +70,6 @@ def stmtAt (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (
 def proverAt (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (s : ℕ)
     (r : Fin (L.V.k x) → Coin) : Prover Unit :=
   sessProver P x ω ((run H P L.V x ω r).msgs.take (L.off x s))
-
-/-- **Session `s`'s extraction fails** on the judged run `r₀`: the run accepted, and the session gives no witness in
-`A`'s relation at its staged statement. -/
-abbrev SessBad (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (s : Fin (L.nS x)) (ω : Ω)
-    (r₀ : Fin (L.V.k x) → Coin) (c : A.EC (L.sh x s)) : Prop :=
-  (run H P L.V x ω r₀).out = .acc ∧
-    ¬ ∃ p, ((L.sessionProg x r₀ s (L.stmtAt H P x ω s r₀) c).eval H (run H P L.V x ω)).1 = some p ∧ A.R p.1 p.2
 
 /-! ## Offsets and coins -/
 
@@ -150,9 +144,18 @@ theorem runs_fork (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) {�
 
 /-! ## Session `s`'s extraction is `A`'s at the session prover -/
 
+variable [Fintype Coin] [Nonempty Coin]
+
+/-- **Session `s`'s extraction fails** on the judged run `r₀`: the run accepted, and the session gives no witness in
+`A`'s relation at its staged statement. -/
+abbrev SessBad (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (s : Fin (L.nS x)) (ω : Ω)
+    (r₀ : Fin (L.V.k x) → Coin) (c : A.EC (L.sh x s)) : Prop :=
+  (run H P L.V x ω r₀).out = .acc ∧
+    ¬ ∃ p, ((L.sessionProg x r₀ s (L.stmtAt H P x ω s r₀) c).eval H (run H P L.V x ω)).1 = some p ∧ A.R p.1 p.2
+
 /-- **On an accepted fork at the session's first round, session `s`'s extraction is `A`'s extractor** at the
 session prover and statement, on the fork's coins from that round on, its witness paired with the statement. -/
-theorem sessionProg_eval (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) (hWF : A.WF) {Ω : Type}
+theorem sessionProg_eval (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) {Ω : Type}
     (P : Prover Ω) (x : Msg) (ω : Ω) (s : Fin (L.nS x)) (r d : Fin (L.V.k x) → Coin) (c : A.EC (L.sh x s))
     (hacc : (run H P L.V x ω (fork (L.off x s) r d)).out = .acc)
     (hsh : A.shape (L.stmtAt H P x ω s r) = L.sh x s) :
@@ -162,7 +165,7 @@ theorem sessionProg_eval (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Session
         (run H (L.proverAt H P x ω s r) A.V (L.stmtAt H P x ω s r) ())).1.map
           fun w => (L.stmtAt H P x ω s r, w) := by
   have hle : L.off x s + A.V.k (L.stmtAt H P x ω s r) ≤ L.V.k x := by
-    rw [hWF, hsh]
+    rw [A.wf, hsh]
     exact L.off_add_le hS.fits x s
   rw [L.stmtAt_fork H hS.stages]
   unfold sessionProg
@@ -179,7 +182,7 @@ theorem sessionProg_eval (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Session
 /-- **Session `s`'s failure at a fork is `A`'s at the session prover**: on an accepted fork at the session's first
 round where session `s`'s extraction fails, the session prover's run at the fork's coins from that round on accepts,
 and `A`'s extractor at the session's statement fails on `E_O`'s coins for the session. -/
-theorem bad_session (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) (hWF : A.WF) {Ω : Type}
+theorem bad_session (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) {Ω : Type}
     (P : Prover Ω) (x : Msg) (ω : Ω) (s : Fin (L.nS x)) (r d : Fin (L.V.k x) → Coin) (c : A.EC (L.sh x s))
     (hsh : A.shape (L.stmtAt H P x ω s r) = L.sh x s) (h : L.SessBad H P x s ω (fork (L.off x s) r d) c) :
     (run H (L.proverAt H P x ω s r) A.V (L.stmtAt H P x ω s r) () (sessCoins (L.off x s) d _)).out = .acc ∧
@@ -193,7 +196,7 @@ theorem bad_session (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) 
       (hS.accepts x s (run H P L.V x ω (fork (L.off x s) r d)).seen s.isLt hacc)
   refine ⟨hacc', fun hF => hbad ?_⟩
   obtain ⟨w, hw, hR⟩ := rel_ext_some hF
-  rw [L.sessionProg_eval H hS hWF P x ω s r d c hacc hsh]
+  rw [L.sessionProg_eval H hS P x ω s r d c hacc hsh]
   have hw' : ((A.ext (L.stmtAt H P x ω s r) (sessCoins (L.off x s) d _) (cast (congrArg A.EC hsh.symm) c)).eval H
       (run H (L.proverAt H P x ω s r) A.V (L.stmtAt H P x ω s r) ())).1 = some w := hw
   exact ⟨(L.stmtAt H P x ω s r, w), Option.map_eq_some_iff.2 ⟨w, hw', rfl⟩, hR⟩
@@ -227,9 +230,6 @@ theorem eo_bad_session (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : 
     obtain rfl : q = q' := Option.some.inj (hpq.symm.trans hq')
     exact hR'
 
-variable [Fintype Coin] [Nonempty Coin]
-
-omit [Nonempty Coin] in
 /-- **`E_O`'s failure is at most the sum of its sessions'**, each over its own coins (`E_O`'s coins at the
 session, read uniformly). -/
 theorem PrBad_le_sum (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg) :
@@ -267,30 +267,33 @@ theorem sPrB_nonneg (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Pro
   · exact PrB_nonneg _ _ _ _
   · exact le_rfl
 
-theorem sPrB_eq_zero (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) (hWF : A.WF) {Ω : Type}
+theorem sPrB_eq_zero (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) {Ω : Type}
     (P : Prover Ω) (x : Msg) (s : Fin (L.nS x)) (ω : Ω) (r : Fin (L.V.k x) → Coin) (h0 : A.rounds (L.sh x s) = 0) :
     L.sPrB H P x s ω r = 0 := by
   unfold sPrB
   split_ifs with hA
   · obtain ⟨d₁, hacc⟩ := hA
-    have hk : A.V.k (L.stmtAt H P x ω s r) = 0 := by rw [hWF, L.shape_stmtAt H hS P x ω s r d₁ hacc, h0]
+    have hk : A.V.k (L.stmtAt H P x ω s r) = 0 := by rw [A.wf, L.shape_stmtAt H hS P x ω s r d₁ hacc, h0]
     simp [PrB, hk]
   · rfl
 
 /-- **One prefix**: over the forks of `r` at session `s`'s first round and the session's coins, its extraction fails
 at most as often as `A`'s extractor at the session prover (`bad_session`, the coins read uniformly), which `A`'s KS
-bounds at the session's shape; it never fails where no fork accepts. -/
-theorem prefix_bad_le (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) (hWF : A.WF)
-    (hκ : ∀ s, 0 ≤ A.κ s) (hKS : A.KS H) {Ω : Type} (P : Prover Ω) (x : Msg) (s : Fin (L.nS x)) (ω : Ω)
-    (r : Fin (L.V.k x) → Coin) :
+bounds at the session's staged statement, within the session's bounds (`Bounded`, at an accepted fork); it never
+fails where no fork accepts. -/
+theorem prefix_bad_le (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) (hKS : A.KS H) {Ω : Type}
+    (P : Prover Ω) (x : Msg) (s : Fin (L.nS x)) (ω : Ω) (r : Fin (L.V.k x) → Coin) :
     Pr (fun q : (Fin (L.V.k x) → Coin) × A.EC (L.sh x s) => L.SessBad H P x s ω (fork (L.off x s) r q.1) q.2) ≤
-      A.κ (L.sh x s) + Real.sqrt (A.γ (L.sh x s) * L.sPrB H P x s ω r) := by
+      L.κb x s + Real.sqrt (L.γb x s * L.sPrB H P x s ω r) := by
   unfold sPrB
   split_ifs with hA
   · obtain ⟨d₁, hacc₁⟩ := hA
     have hsh := L.shape_stmtAt H hS P x ω s r d₁ hacc₁
+    have hbd : A.κ (L.stmtAt H P x ω s r) ≤ L.κb x s ∧ A.γ (L.stmtAt H P x ω s r) ≤ L.γb x s := by
+      rw [← L.stmtAt_fork H hS.stages P x ω s r d₁]
+      exact (hS.bounded x s).2.2 Ω P ω _ hacc₁
     have hle : L.off x s + A.V.k (L.stmtAt H P x ω s r) ≤ L.V.k x := by
-      rw [hWF, hsh]
+      rw [A.wf, hsh]
       exact L.off_add_le hS.fits x s
     have hφ : UnifMap (fun q : (Fin (L.V.k x) → Coin) × A.EC (L.sh x s) =>
         ((), sessCoins (L.off x s) q.1 (A.V.k (L.stmtAt H P x ω s r)), cast (congrArg A.EC hsh.symm) q.2)) :=
@@ -303,28 +306,28 @@ theorem prefix_bad_le (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H
               (A.E.eval H (L.proverAt H P x ω s r) (L.stmtAt H P x ω s r) ()
                 (sessCoins (L.off x s) q.1 (A.V.k (L.stmtAt H P x ω s r)))
                 (cast (congrArg A.EC hsh.symm) q.2)).1) :=
-          Pr_mono fun q hq => L.bad_session H hS hWF P x ω s r q.1 q.2 hsh hq
+          Pr_mono fun q hq => L.bad_session H hS P x ω s r q.1 q.2 hsh hq
       _ = PrBad H A.V A.R A.E (L.stmtAt H P x ω s r) (L.proverAt H P x ω s r) :=
           hφ.Pr fun t : Unit × (Fin (A.V.k (L.stmtAt H P x ω s r)) → Coin) × A.E.C (L.stmtAt H P x ω s r) =>
             (run H (L.proverAt H P x ω s r) A.V (L.stmtAt H P x ω s r) t.1 t.2.1).out = .acc ∧
               ¬ A.R.ext (L.stmtAt H P x ω s r)
                 (A.E.eval H (L.proverAt H P x ω s r) (L.stmtAt H P x ω s r) t.1 t.2.1 t.2.2).1
-      _ ≤ A.κ (A.shape (L.stmtAt H P x ω s r)) + Real.sqrt (A.γ (A.shape (L.stmtAt H P x ω s r)) *
+      _ ≤ A.κ (L.stmtAt H P x ω s r) + Real.sqrt (A.γ (L.stmtAt H P x ω s r) *
             PrB H A.V (L.proverAt H P x ω s r) (L.stmtAt H P x ω s r)) :=
           hKS (L.stmtAt H P x ω s r) Unit (L.proverAt H P x ω s r)
-      _ = _ := by rw [hsh]
+      _ ≤ _ := add_le_add hbd.1 (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_right hbd.2 (PrB_nonneg _ _ _ _)))
   · rw [mul_zero, Real.sqrt_zero, add_zero]
     calc _ ≤ Pr (fun _ : (Fin (L.V.k x) → Coin) × A.EC (L.sh x s) => False) :=
           Pr_mono fun q hq => hA ⟨q.1, hq.1⟩
       _ = 0 := Pr_false
-      _ ≤ _ := hκ _
+      _ ≤ _ := (hS.bounded x s).1
 
 /-! ## The collision term: the session's forks are the compiled verifier's -/
 
 /-- **The session's forks are the compiled verifier's**: at a prefix some continuation of which accepts, `A`'s fork at
 round `j` of the session prover collides only where the compiled verifier's fork at round `off + j` does, on the same
 coins from the session's first round on. -/
-theorem sPrB_mul_le (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) (hWF : A.WF) {Ω : Type}
+theorem sPrB_mul_le (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) {Ω : Type}
     (P : Prover Ω) (x : Msg) (s : Fin (L.nS x)) (ω : Ω) (r : Fin (L.V.k x) → Coin) :
     L.sPrB H P x s ω r * A.rounds (L.sh x s) ≤
       ∑ j ∈ Finset.range (A.rounds (L.sh x s)), Pr fun p : (Fin (L.V.k x) → Coin) × (Fin (L.V.k x) → Coin) =>
@@ -333,7 +336,7 @@ theorem sPrB_mul_le (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) 
   split_ifs with hA
   · obtain ⟨d₁, hacc⟩ := hA
     have hk' : A.V.k (L.stmtAt H P x ω s r) = A.rounds (L.sh x s) := by
-      rw [hWF, L.shape_stmtAt H hS P x ω s r d₁ hacc]
+      rw [A.wf, L.shape_stmtAt H hS P x ω s r d₁ hacc]
     have hle : L.off x s + A.V.k (L.stmtAt H P x ω s r) ≤ L.V.k x := by
       rw [hk']
       exact L.off_add_le hS.fits x s
@@ -362,7 +365,7 @@ theorem sPrB_mul_le (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) 
 /-- **The collision term, averaged**: `𝔼[Pr[B] at the session prover]·k_s ≤ k(x)·Pr[B]`. A draw's prefix is a fork of
 a draw (`Ex_fork`), so the session's forks at rounds `off + j`, `j < k_s`, are among the compiled verifier's `k(x)`
 round guesses (`Fits`). -/
-theorem Ex_sPrB_le (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) (hWF : A.WF) {Ω : Type} [Fintype Ω]
+theorem Ex_sPrB_le (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) (x : Msg) (s : Fin (L.nS x)) :
     Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => L.sPrB H P x s p.1 p.2) * A.rounds (L.sh x s) ≤
       PrB H L.V P x * L.V.k x := by
@@ -378,7 +381,7 @@ theorem Ex_sPrB_le (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) (
         ≤ Ex fun r : Fin (L.V.k x) → Coin => ∑ j ∈ Finset.range (A.rounds (L.sh x s)),
             Pr fun p : (Fin (L.V.k x) → Coin) × (Fin (L.V.k x) → Coin) =>
               vForkColl H L.V P x ω (L.off x s + j) (fork (L.off x s) r p.1) p.2 :=
-          Ex_mono fun r => L.sPrB_mul_le H hS hWF P x s ω r
+          Ex_mono fun r => L.sPrB_mul_le H hS P x s ω r
       _ = Ex fun p : (Fin (L.V.k x) → Coin) × (Fin (L.V.k x) → Coin) => G (fork (L.off x s) p.1 p.2) := by
           rw [Ex_prod]
           congr 1
@@ -403,21 +406,21 @@ theorem Ex_sPrB_le (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) (
 
 /-! ## Each session, from `A`'s KS -/
 
-/-- **Session `s` fails at most at `κ_A(sh_s) + √(γ_A(sh_s)·k(x)·Pr[B])`**: each prefix's failure is `A`'s at the
-session prover (`prefix_bad_le`); Jensen moves the average under the root, and the session's round guesses are among
-the compiled verifier's `k(x)` (`Ex_sPrB_le`). -/
-theorem sessKS (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) (hWF : A.WF) (hκ : ∀ s, 0 ≤ A.κ s)
-    (hγ : ∀ s, 0 ≤ A.γ s) (hKS : A.KS H) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg)
-    (s : Fin (L.nS x)) :
+/-- **Session `s` fails at most at `κb_s + √(γb_s·k(x)·Pr[B])`**: each prefix's failure is `A`'s at the session
+prover, within the session's bounds (`prefix_bad_le`); Jensen moves the average under the root, and the session's round
+guesses are among the compiled verifier's `k(x)` (`Ex_sPrB_le`). -/
+theorem sessKS (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) (hKS : A.KS H) {Ω : Type} [Fintype Ω]
+    [Nonempty Ω] (P : Prover Ω) (x : Msg) (s : Fin (L.nS x)) :
     Pr (fun t : Ω × (Fin (L.V.k x) → Coin) × A.EC (L.sh x s) => L.SessBad H P x s t.1 t.2.1 t.2.2) ≤
-      A.κ (L.sh x s) + Real.sqrt (A.γ (L.sh x s) * L.V.k x * PrB H L.V P x) := by
+      L.κb x s + Real.sqrt (L.γb x s * L.V.k x * PrB H L.V P x) := by
   have hoff : PrefixDet (k := L.V.k x) (Coin := Coin) fun _ => L.off x s := fun _ _ _ => rfl
+  have hγ : 0 ≤ L.γb x s := (hS.bounded x s).2.1
   have hZ0 : ∀ p : Ω × (Fin (L.V.k x) → Coin), 0 ≤ L.sPrB H P x s p.1 p.2 := fun p =>
     L.sPrB_nonneg H P x s p.1 p.2
   have hZ : Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => L.sPrB H P x s p.1 p.2) ≤ L.V.k x * PrB H L.V P x := by
     rcases Nat.eq_zero_or_pos (A.rounds (L.sh x s)) with h0 | hpos
     · have hz : ∀ p : Ω × (Fin (L.V.k x) → Coin), L.sPrB H P x s p.1 p.2 = 0 := fun p =>
-        L.sPrB_eq_zero H hS hWF P x s p.1 p.2 h0
+        L.sPrB_eq_zero H hS P x s p.1 p.2 h0
       calc Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => L.sPrB H P x s p.1 p.2)
           = Ex (fun _ : Ω × (Fin (L.V.k x) → Coin) => (0 : ℝ)) := congrArg Ex (funext hz)
         _ = 0 := Ex_const 0
@@ -426,7 +429,7 @@ theorem sessKS (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) (hWF 
       calc Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => L.sPrB H P x s p.1 p.2)
           ≤ Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => L.sPrB H P x s p.1 p.2) * A.rounds (L.sh x s) :=
             le_mul_of_one_le_right (Ex_nonneg hZ0) h1
-        _ ≤ PrB H L.V P x * L.V.k x := L.Ex_sPrB_le H hS hWF P x s
+        _ ≤ PrB H L.V P x * L.V.k x := L.Ex_sPrB_le H hS P x s
         _ = L.V.k x * PrB H L.V P x := mul_comm _ _
   have hL : Pr (fun t : Ω × (Fin (L.V.k x) → Coin) × A.EC (L.sh x s) => L.SessBad H P x s t.1 t.2.1 t.2.2) =
       Ex fun ω : Ω => Ex fun r : Fin (L.V.k x) → Coin => Pr fun q : (Fin (L.V.k x) → Coin) × A.EC (L.sh x s) =>
@@ -440,47 +443,47 @@ theorem sessKS (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) (hWF 
       L.SessBad H P x s ω (fork (L.off x s) r q.1) q.2)]
   have hb : ∀ (ω : Ω) (r : Fin (L.V.k x) → Coin),
       Pr (fun q : (Fin (L.V.k x) → Coin) × A.EC (L.sh x s) => L.SessBad H P x s ω (fork (L.off x s) r q.1) q.2) ≤
-        A.κ (L.sh x s) + Real.sqrt (A.γ (L.sh x s) * L.sPrB H P x s ω r) := fun ω r =>
-    L.prefix_bad_le H hS hWF hκ hKS P x s ω r
+        L.κb x s + Real.sqrt (L.γb x s * L.sPrB H P x s ω r) := fun ω r =>
+    L.prefix_bad_le H hS hKS P x s ω r
   rw [hL]
   calc (Ex fun ω : Ω => Ex fun r : Fin (L.V.k x) → Coin =>
           Pr fun q : (Fin (L.V.k x) → Coin) × A.EC (L.sh x s) => L.SessBad H P x s ω (fork (L.off x s) r q.1) q.2)
       ≤ Ex fun ω : Ω => Ex fun r : Fin (L.V.k x) → Coin =>
-          A.κ (L.sh x s) + Real.sqrt (A.γ (L.sh x s) * L.sPrB H P x s ω r) :=
+          L.κb x s + Real.sqrt (L.γb x s * L.sPrB H P x s ω r) :=
         Ex_mono fun ω => Ex_mono fun r => hb ω r
     _ = Ex fun p : Ω × (Fin (L.V.k x) → Coin) =>
-          A.κ (L.sh x s) + Real.sqrt (A.γ (L.sh x s) * L.sPrB H P x s p.1 p.2) :=
+          L.κb x s + Real.sqrt (L.γb x s * L.sPrB H P x s p.1 p.2) :=
         (Ex_prod fun p : Ω × (Fin (L.V.k x) → Coin) =>
-          A.κ (L.sh x s) + Real.sqrt (A.γ (L.sh x s) * L.sPrB H P x s p.1 p.2)).symm
-    _ = A.κ (L.sh x s) + Ex fun p : Ω × (Fin (L.V.k x) → Coin) =>
-          Real.sqrt (A.γ (L.sh x s) * L.sPrB H P x s p.1 p.2) := by
+          L.κb x s + Real.sqrt (L.γb x s * L.sPrB H P x s p.1 p.2)).symm
+    _ = L.κb x s + Ex fun p : Ω × (Fin (L.V.k x) → Coin) =>
+          Real.sqrt (L.γb x s * L.sPrB H P x s p.1 p.2) := by
         rw [Ex_add, Ex_const]
-    _ ≤ A.κ (L.sh x s) + Real.sqrt (Ex fun p : Ω × (Fin (L.V.k x) → Coin) =>
-          A.γ (L.sh x s) * L.sPrB H P x s p.1 p.2) :=
-        add_le_add le_rfl (Ex_sqrt_le _ fun p => mul_nonneg (hγ _) (hZ0 p))
-    _ ≤ A.κ (L.sh x s) + Real.sqrt (A.γ (L.sh x s) * L.V.k x * PrB H L.V P x) := by
+    _ ≤ L.κb x s + Real.sqrt (Ex fun p : Ω × (Fin (L.V.k x) → Coin) =>
+          L.γb x s * L.sPrB H P x s p.1 p.2) :=
+        add_le_add le_rfl (Ex_sqrt_le _ fun p => mul_nonneg hγ (hZ0 p))
+    _ ≤ L.κb x s + Real.sqrt (L.γb x s * L.V.k x * PrB H L.V P x) := by
         rw [Ex_mul_left, mul_assoc]
-        exact add_le_add le_rfl (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left hZ (hγ _)))
+        exact add_le_add le_rfl (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left hZ hγ))
 
 end Compiled
 
 /-- **O1** (`OuterSessionsKS`): `E_O` fails at most at the sum of its sessions' failures (`Compiled.PrBad_le_sum`),
-session `s` at most at `κ_A(sh_s) + √(γ_A(sh_s)·k(x))·√Pr[B]` (`Compiled.sessKS`), and the sum of the roots is
+session `s` at most at `κb_s + √(γb_s·k(x))·√Pr[B]` (`Compiled.sessKS`), and the sum of the roots is
 `√(γ_O·Pr[B])`. -/
 theorem outerSessionsKS : OuterSessionsKS := by
-  intro Coin _ _ _ H A L hWF hκ hγ hKS hS x Ω _ _ P
-  have hk : ∀ s : Fin (L.nS x), Real.sqrt (A.γ (L.sh x s) * L.V.k x * PrB H L.V P x) =
-      Real.sqrt (A.γ (L.sh x s) * L.V.k x) * Real.sqrt (PrB H L.V P x) := fun s =>
-    Real.sqrt_mul (mul_nonneg (hγ _) (Nat.cast_nonneg _)) _
+  intro Coin _ _ _ H A L hKS hS x Ω _ _ P
+  have hk : ∀ s : Fin (L.nS x), Real.sqrt (L.γb x s * L.V.k x * PrB H L.V P x) =
+      Real.sqrt (L.γb x s * L.V.k x) * Real.sqrt (PrB H L.V P x) := fun s =>
+    Real.sqrt_mul (mul_nonneg (hS.bounded x s).2.1 (Nat.cast_nonneg _)) _
   have hO : Real.sqrt (L.toComp.γO x * PrB H L.V P x) =
-      (∑ s : Fin (L.nS x), Real.sqrt (A.γ (L.sh x s) * L.V.k x)) * Real.sqrt (PrB H L.V P x) := by
-    show Real.sqrt ((∑ s : Fin (L.nS x), Real.sqrt (A.γ (L.sh x s) * L.V.k x)) ^ 2 * PrB H L.V P x) = _
+      (∑ s : Fin (L.nS x), Real.sqrt (L.γb x s * L.V.k x)) * Real.sqrt (PrB H L.V P x) := by
+    show Real.sqrt ((∑ s : Fin (L.nS x), Real.sqrt (L.γb x s * L.V.k x)) ^ 2 * PrB H L.V P x) = _
     rw [Real.sqrt_mul (sq_nonneg _), Real.sqrt_sq (Finset.sum_nonneg fun s _ => Real.sqrt_nonneg _)]
   calc PrBad H L.V L.toComp.RO L.toComp.EO x P
       ≤ ∑ s : Fin (L.nS x), Pr (fun t : Ω × (Fin (L.V.k x) → Coin) × A.EC (L.sh x s) =>
           L.SessBad H P x s t.1 t.2.1 t.2.2) := L.PrBad_le_sum H P x
-    _ ≤ ∑ s : Fin (L.nS x), (A.κ (L.sh x s) + Real.sqrt (A.γ (L.sh x s) * L.V.k x * PrB H L.V P x)) :=
-        Finset.sum_le_sum fun s _ => L.sessKS H hS hWF hκ hγ hKS P x s
+    _ ≤ ∑ s : Fin (L.nS x), (L.κb x s + Real.sqrt (L.γb x s * L.V.k x * PrB H L.V P x)) :=
+        Finset.sum_le_sum fun s _ => L.sessKS H hS hKS P x s
     _ = L.toComp.κO x + Real.sqrt (L.toComp.γO x * PrB H L.V P x) := by
         rw [hO, Finset.sum_add_distrib, Finset.sum_mul]
         simp only [hk]
@@ -490,13 +493,13 @@ end Claims.RecGeneric
 
 open Claims Claims.RecGeneric in
 /-- **L2** (`Flock.Guarantees.GenericRecursiveKSCompiled`): L1 at `compile(Π, A, S)`, whose `E_O` is knowledge sound by
-O1 (`Claims.RecGeneric.outerSessionsKS`) at nonnegative `κ_O`, `γ_O`. -/
+O1 (`Claims.RecGeneric.outerSessionsKS`) at `κ_O`, `γ_O`, nonnegative by the sessions' bounds. -/
 theorem Flock.SecurityProofs.GenericRecursiveKSCompiled : Flock.Guarantees.GenericRecursiveKSCompiled := by
-  intro Coin W _ _ _ H I S A C hWF hKS hCF hB hAWF hκ hγ hAKS hSess x hK Ω _ _ P m M
+  intro Coin W _ _ _ H I S A C hWF hKS hCF hB hAKS hSess x hK Ω _ _ P m M
   exact Flock.SecurityProofs.GenericRecursiveKS Coin W H I S (compile C I S).toComp hWF hKS hCF hB x
-    (fun Ω _ _ P => outerSessionsKS Coin H A (compile C I S) hAWF hκ hγ hAKS hSess x Ω P)
-    (show (0 : ℝ) ≤ ∑ s : Fin ((compile C I S).nS x), A.κ ((compile C I S).sh x s) from
-      Finset.sum_nonneg fun s _ => hκ _)
+    (fun Ω _ _ P => outerSessionsKS Coin H A (compile C I S) hAKS hSess x Ω P)
+    (show (0 : ℝ) ≤ ∑ s : Fin ((compile C I S).nS x), (compile C I S).κb x s from
+      Finset.sum_nonneg fun s _ => (hSess.bounded x s).1)
     (show (0 : ℝ) ≤ (∑ s : Fin ((compile C I S).nS x),
-        Real.sqrt (A.γ ((compile C I S).sh x s) * (compile C I S).V.k x)) ^ 2 from sq_nonneg _)
+        Real.sqrt ((compile C I S).γb x s * (compile C I S).V.k x)) ^ 2 from sq_nonneg _)
     hK Ω P m M

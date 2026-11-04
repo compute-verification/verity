@@ -9,24 +9,27 @@ public import Definitions.Claims.SamplingGeneric
 # The outer argument, abstract, and the compiler over it
 
 The outer argument is a proof system for proof blocks as the sampled audit reads it (`Claims.SamplingGeneric.Arg`): a
-public-coin verifier over byte strings, its relation, and an extractor whose coins and errors are functions of the
-statement's public shape (`shape`). The compiled verifier stages each outer session's statement during its run, so only
-its shape is fixed by the compiled statement: the extractor's coins must be a type the shape fixes, and its errors
-numbers the shape fixes.
+public-coin verifier over byte strings, its relation, its errors per statement, and its extractor, `E^rep` at its
+counted parts (`Arg.ext`: replay the judged run, then waits over fresh coins, each rerun's view opened by `opens` and a
+wait's openings assembled by `assemble`, a counted program, and checked). Its coins (`Arg.EC`) are a type the
+statement's public shape (`shape`) fixes. The compiled verifier stages each outer session's statement during its run,
+so only its shape is fixed by the compiled statement: the extractor's coins are the shape's, and the compiled verifier
+bounds each session's errors by numbers the compiled statement fixes (`κb`, `γb`).
 
 The extractor's interface is stated, not assumed: `Arg.KS` is its knowledge soundness in `Claims.KS`'s form (`κ` plus
 `√(γ·Pr[B])`, `B` the outer verifier's fork finder); `Arg.RerunsLe` and `Arg.RerunsExpLe` bound its reruns, strictly
 or in expectation; and `Arg.OwnLe` bounds the SHA-512 calls it makes itself, beside its reruns'. Running time is reruns
-and calls; the pure computation between them is not counted (`Claims.ExtractRunsLe`).
+and calls, and `assemble`'s steps, which it returns beside its candidate.
 
 `Compiled Coin A` is a compiled verifier that runs, after its inner and staging rounds (`pre`), `nS` sessions of `A`'s
-verifier at the statements its staging rounds fix (`stmts`), session `s` at the public shape `sh x s`, in order. A
-compiler (`Compiler`) makes one from the inner verifier its sessions prove; `compile C Π S` is it at `Open(Π, S)`.
+verifier at the statements its staging rounds fix (`stmts`), session `s` at the public shape `sh x s` with its errors
+within `κb x s`, `γb x s`, in order. A compiler (`Compiler`) makes one from the inner verifier its sessions prove;
+`compile C Π S` is it at `Open(Π, S)`.
 
 `Compiled.EO` is the outer extraction: replay the judged run and, at each session in order, `A`'s extractor at the
 session's staged statement, its reruns forks of the judged run at the session's first round, each seen as the session's
-view. `Compiled.toComp` is the composition's input (`Comp`), with `κ_O = Σ_s κ_A(sh_s)` and
-`γ_O = (Σ_s √(γ_A(sh_s)·k(x)))²`. `Compiled.Sessions` is what the compiler must give for it; `OuterSessionsKS` is that
+view. `Compiled.toComp` is the composition's input (`Comp`), with `κ_O = Σ_s κb_s` and
+`γ_O = (Σ_s √(γb_s·k(x)))²`. `Compiled.Sessions` is what the compiler must give for it; `OuterSessionsKS` is that
 `E_O` then meets `Claims.KS` (lemma O1, the generic form of `Claims.Recursion.outerKS_of_flockKS`).
 
 Statements only: definitions, no proofs.
@@ -41,10 +44,11 @@ open Claims.SamplingGeneric (Arg)
 
 /-- **A compiled verifier over the outer argument `A`**: the verifier; whether a statement parses into the relation's
 form and its inner statement; the rounds before the sessions (`pre`, the inner rounds and the staging rounds); the
-sessions' count and public shapes (`sh x s`); the sessions' statements the run's messages stage (`stmts`); session `s`'s
-view of a run (`session`); the inner messages a run's sessions' statements and witnesses give (`msgs`); the SHA-512
-evaluations a finder searches at a rerun (`calls`, as `Comp.calls`); and the compiled verifier's own at a run's messages
-(`own`). -/
+sessions' count and public shapes (`sh x s`) and the bounds on their errors (`κb x s`, `γb x s`: on `A`'s `κ` and `γ`
+at the session's staged statement, `Bounded`); the sessions' statements the run's messages stage (`stmts`); session
+`s`'s view of a run (`session`); the inner messages a run's sessions' statements and witnesses give (`msgs`); the
+SHA-512 evaluations a finder searches at a rerun (`calls`, as `Comp.calls`); and the compiled verifier's own at a run's
+messages (`own`). -/
 structure Compiled (Coin : Type) (A : Arg Coin) where
   V : Verifier Coin
   parses : Msg → Prop
@@ -52,6 +56,8 @@ structure Compiled (Coin : Type) (A : Arg Coin) where
   pre : Msg → ℕ
   nS : Msg → ℕ
   sh : Msg → ℕ → A.Sh
+  κb : Msg → ℕ → ℝ
+  γb : Msg → ℕ → ℝ
   stmts : Msg → List (Msg × Out) → List Msg
   session : Msg → ℕ → Seen → Seen
   msgs : Msg → List (Msg × A.W) → List Msg
@@ -101,8 +107,8 @@ noncomputable def EO (L : Compiled Coin A) : Extractor Coin (List (Msg × A.W)) 
     else .ret none
 
 /-- **The composition's input** at `L`: `E_O` (`EO`) for the relation "every session's witness is in `A`'s relation at
-its statement", with `κ_O = Σ_s κ_A(sh_s)` and `γ_O = (Σ_s √(γ_A(sh_s)·k(x)))²` (a session's fork finder guesses one of
-the compiled verifier's `k(x)` rounds). -/
+its statement", with `κ_O = Σ_s κb_s` and `γ_O = (Σ_s √(γb_s·k(x)))²`, the sessions' bounds on `A`'s errors (a
+session's fork finder guesses one of the compiled verifier's `k(x)` rounds). -/
 noncomputable def toComp (L : Compiled Coin A) : Comp Coin where
   V := L.V
   xI := L.xI
@@ -113,8 +119,8 @@ noncomputable def toComp (L : Compiled Coin A) : Comp Coin where
   msgs := L.msgs
   calls := L.calls
   own := L.own
-  κO x := ∑ s : Fin (L.nS x), A.κ (L.sh x s)
-  γO x := (∑ s : Fin (L.nS x), Real.sqrt (A.γ (L.sh x s) * L.V.k x)) ^ 2
+  κO x := ∑ s : Fin (L.nS x), L.κb x s
+  γO x := (∑ s : Fin (L.nS x), Real.sqrt (L.γb x s * L.V.k x)) ^ 2
 
 /-! ## The compiler's contract for the outer extraction (code facts) -/
 
@@ -125,6 +131,14 @@ def Stages (L : Compiled Coin A) : Prop := ∀ x ms, L.stmts x ms = L.stmts x (m
 def Shapes (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
   ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin), (run H P L.V x ω r).out = .acc →
     ∀ s : Fin (L.nS x), A.shape ((L.stmts x (run H P L.V x ω r).msgs).getD s []) = L.sh x s
+
+/-- **The sessions' errors are within their bounds**: the bounds are nonnegative, and on an accepted run `A`'s errors
+at each session's staged statement are at most the session's (`κb`, `γb`). -/
+def Bounded (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
+  ∀ (x : Msg) (s : Fin (L.nS x)), 0 ≤ L.κb x s ∧ 0 ≤ L.γb x s ∧
+    ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin), (run H P L.V x ω r).out = .acc →
+      A.κ ((L.stmts x (run H P L.V x ω r).msgs).getD s []) ≤ L.κb x s ∧
+        A.γ ((L.stmts x (run H P L.V x ω r).msgs).getD s []) ≤ L.γb x s
 
 /-- The sessions end by the compiled verifier's last round. -/
 def Fits (L : Compiled Coin A) : Prop := ∀ x, L.off x (L.nS x) ≤ L.V.k x
@@ -152,6 +166,7 @@ def Runs (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
 structure Sessions (H : Msg → Msg) (L : Compiled Coin A) : Prop where
   stages : L.Stages
   shapes : L.Shapes H
+  bounded : L.Bounded H
   fits : L.Fits
   accepts : L.Accepts
   runs : L.Runs H
@@ -159,14 +174,15 @@ structure Sessions (H : Msg → Msg) (L : Compiled Coin A) : Prop where
 end Compiled
 
 /-- **O1: the outer extraction is knowledge sound, from the outer argument's** (the generic form of
-`Claims.Recursion.outerKS_of_flockKS`): where `A` is knowledge sound at nonnegative errors and the compiler meets
-`Sessions`, `E_O` meets `Claims.KS` at `κ_O`, `γ_O`. Per session: the session's prover after the run's earlier messages
-(`sessProver`) on the judged run's coins before the session; `A`'s KS at its staged statement, whose shape is the
-session's; Jensen over the earlier coins; its fork finder is the compiled verifier's `B` at a round guess among `k(x)`;
-a union over sessions (`collect`). -/
+`Claims.Recursion.outerKS_of_flockKS`): where `A`'s counted extractor is knowledge sound and the compiler meets
+`Sessions`, `E_O` meets `Claims.KS` at `κ_O`, `γ_O`, from the sessions' bounds (`Bounded`). Per session: the session's
+prover after the run's earlier messages (`sessProver`) on the judged run's coins before the session; `A`'s KS at its
+staged statement, whose shape is the session's and whose errors are within the session's bounds; Jensen over the
+earlier coins; its fork finder is the compiled verifier's `B` at a round guess among `k(x)`; a union over sessions
+(`collect`). -/
 def OuterSessionsKS : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) (A : Arg Coin)
-    (L : Compiled Coin A), A.WF → (∀ s, 0 ≤ A.κ s) → (∀ s, 0 ≤ A.γ s) → A.KS H → L.Sessions H →
+    (L : Compiled Coin A), A.KS H → L.Sessions H →
       Claims.KS H L.V L.toComp.RO L.toComp.EO L.toComp.κO L.toComp.γO
 
 /-- **The composite extractor's cost** (lemma O2): `E*` (`Comp.E` at `L.toComp`) reruns the prover at most
@@ -179,7 +195,7 @@ most `h` (`Arg.OwnLe`) and `Open(Π, S)` at most `n` on any witnesses' inner mes
 def ExtractCost : Prop :=
   ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) (A : Arg Coin)
     (L : Compiled Coin A) (I : Proto Coin W) (S : Server) (ρ h : A.Sh → ℕ) (e : A.Sh → ℝ) (n : Msg → ℕ),
-    A.WF → L.Sessions H →
+    L.Sessions H →
       (A.RerunsLe H ρ → ExtractRunsLe H (L.toComp.E I S) fun x =>
         (1 + I.waits (L.xI x) * I.cap (L.xI x)) * (1 + ∑ s : Fin (L.nS x), ρ (L.sh x s))) ∧
       (A.RerunsExpLe H e → ExtractRunsExpLe H (L.toComp.E I S) fun x =>
