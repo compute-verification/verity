@@ -1,6 +1,6 @@
-"""The sibling check `verity lean try --siblings` runs once FILE elaborates. Two modules of one package can each elaborate
-and declare the same name, and only an import of both refuses it (`environment already contains 'N' from M`): the
-package's root does, an hour into a records run. So `try` compiles FILE as it elaborates it (`lean -R SRC -o`, into a
+"""The sibling check that `verity lean try --siblings` runs once FILE elaborates. Two modules of one package can each
+elaborate and declare the same name, and only an import of both refuses it (`environment already contains 'N' from M`):
+the package's root does, an hour into a records run. So `try` compiles FILE as it elaborates it (`lean -R SRC -o`, into a
 scratch directory under `.lake/axiom-probe/`), then elaborates a stub there that imports that build of FILE and every
 module of FILE's package that is built and imports FILE neither directly nor through others. Lean refuses a duplicate
 name as it imports, before it elaborates anything, and its refusal names both modules.
@@ -10,8 +10,13 @@ from LEAN_PATH. It is a `module` with `public import`s, as a package root is, wh
 else a plain file. A package's modules are its `[[lean_lib]]`s' files (the library's name or under it) and its
 `[[lean_exe]]`s' roots, under its `srcDir` (`modules.package_modules`); a module counts as built when its `.olean` is
 newer than its source and than the sources of the package's modules it imports, directly or through others (an import
-from another package is taken as built). One that isn't is listed as unchecked. Stdlib only: the CLI's local
-`verity lean try` and `lean_changed.py --try` both load it."""
+from another package is taken as built). One that isn't is listed as unchecked.
+
+It is opt-in because of what it costs. On Security/Proofs' warm tree on vy-nebius-cpu-1 (4 Nov), the stub imported 3243
+modules in 18 s at a peak of 8.7 GB, and a duplicate of `Pouw.PearlC.ex_mono` failed in 13 s at 7.5 GB. A try on an agent
+VM has about a minute and 1 GB, so there the check runs only with `--siblings`, and on Security it belongs on a node
+(`--on`). Records runs still catch what it isn't asked for. Stdlib only: the CLI's local `verity lean try` and
+`lean_changed.py --try` both load it."""
 from __future__ import annotations
 
 import contextlib

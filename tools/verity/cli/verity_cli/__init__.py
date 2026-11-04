@@ -23,7 +23,8 @@
                                     workload on its placement
     verity example --status         every example's protocol, workload, run and proof, and each one's next missing evidence
     verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that
-                                    holds it, exiting with lean's status (on a project machine with --on NODE [--pool P])
+                                    holds it, exiting with lean's status (on a project machine with --on NODE [--pool P]);
+                                    --siblings: then fail on a name another module of its package declares too
 """
 from __future__ import annotations
 
