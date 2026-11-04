@@ -125,9 +125,6 @@ PENDING: dict[str, str] = {
     "examples/h200/README.md": "#6115 on next rewrites this file; its rename follows in the next sweep",
     "integrations/vllm/README.md": "#6165 on next rewrites this file; its rename follows in the next sweep",
     "verity/README.md": "#5988 on next rewrites this file; its rename follows in the next sweep",
-    "verity/core/protocols/certifier/boundary.py": "#6676 on next rewrites this file; its rename follows in the next sweep",
-    "verity/core/protocols/certifier/egress.py": "#6676 on next rewrites this file; its rename follows in the next sweep",
-    "verity/core/protocols/certifier/tests/test_network_certifier_egress.py": ("#6676 on next rewrites this file; its rename follows in "
                                                                                "the next sweep"),
     "verity/core/protocols/network/tests/period_case.py": _LEAN_REFUSAL,
     "verity/core/protocols/network/tests/test_network_period_protocol.py": _LEAN_REFUSAL,
@@ -138,7 +135,6 @@ PENDING: dict[str, str] = {
     "AGENTS.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "ARCHITECTURE.md": "#6057 and #6676 on next rewrite this file; its rename follows in the next sweep",
     "benchmarks/prove_path/e2e_chains/README.md": "#7118 on next rewrites this file; its rename follows in the next sweep",
-    "Security/Proofs/Flock/Soundness/Audit/README.md": "#6676 on next rewrites this file; its rename follows in the next sweep",
     "benchmarks/network_traces/README.md": "#6676 on next rewrites this file; its rename follows in the next sweep",
     "benchmarks/one_stage/README.md": "#6998 on next rewrites this file; its rename follows in the next sweep",
     "examples/lifecycle/README.md": "#6057 on next rewrites this file; its rename follows in the next sweep",
@@ -153,7 +149,6 @@ PENDING: dict[str, str] = {
     "verity/ml/flock/live/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/ml/flock/verifier/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/ml/flock/verifier/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/ml/flock/README.md": "#6676 on next rewrites this file; its rename follows in the next sweep",
 }
 
 
