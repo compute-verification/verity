@@ -40,7 +40,7 @@ hypotheses of V2, V3 and Pub at the deployed session, from the named premise tha
 (`Bridge.Assumptions.ServedFilesParse`). `RelDeploy`: `RelDeployTarget`, proved (`Flock.Bridge.relDeploy`), and its
 leaf-map form at V5's layout (`Flock.Bridge.relDeployL`). `Partitions`: `partOf` partitions `progOf`
 (`Flock.Bridge.partOf_partitions`) when no output is an input, every unit holds a gate and every block fits a class.
-`KeyPartitions`: those conditions at the key program of a circuit file whose units commit at most `unitClassMax` bits
+`KeyPartitions`: those conditions at the key program of a circuit file whose units output at most `unitClassMax` bits
 (`Flock.Bridge.keyPart_partitions`). `Code`: the sampled verifier's parse, scope check and partition over a registered
 circuit file (`Flock.Bridge.parseOf`, `scopeOf`, `partitionOf`), and at that code `ProgramScope`, `RegMatches`,
 `StmtIsFile` and `RelDeployTarget` with its partition hypothesis discharged (`Flock.Bridge.programScope_code`,

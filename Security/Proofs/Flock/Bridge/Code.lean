@@ -26,7 +26,7 @@ At such a code:
 
 * `programScope_code`: `ProgramScope`. A statement it parses is `progOf`, topologically ordered
   (`progOf_topological`), and its partition is `partOf` (`partitionOf_parse`, from `partOf_ofCircuit`), which
-  partitions it (`keyPart_partitions`) because the class check bounds each unit's committed bits (`le_of_classWhy`).
+  partitions it (`keyPart_partitions`) because the class check bounds each unit's output bits (`le_of_classWhy`).
 * `regMatches_code`: `SamplingDeploy.RegMatches`, wherever the statement's registration is `g`'s.
 * `stmtIsFile_code`: `StmtIsFile`, every statement it parses carries the registration's descriptor and the circuit
   file's key program lowered (`progOf`), in place of `StmtFlattens`.
@@ -153,7 +153,7 @@ theorem codeIs_codeOf (g : FileReg) (c : SamplingDeploy.Code) : CodeIs g (codeOf
 
 /-! ## The deployed checks -/
 
-/-- **A unit the class check lets through commits at most `unitClassMax` bits.** -/
+/-- **A unit the class check lets through outputs at most `unitClassMax` bits.** -/
 theorem le_of_classWhy {bits : ℕ} (h : SampledProofs.FilePart.classWhy bits = none) :
     bits ≤ Claims.Sampling.unitClassMax := by
   unfold SampledProofs.FilePart.classWhy at h
@@ -179,12 +179,12 @@ theorem le_of_classWhy {bits : ℕ} (h : SampledProofs.FilePart.classWhy bits = 
 theorem checkFile_ok {program : ByteArray} {query : Lean.Json} {pub : ByteArray} {c : Flock.Circuit}
     (h : SampledProofs.FilePart.checkFile program query pub (.ok c) = .ok ()) :
     SampledProofs.FilePart.check program query pub = .ok () ∧
-      SampledProofs.FilePart.classWhy (SampledProofs.FilePart.unitBits c) = none := by
+      SampledProofs.FilePart.classWhy (SampledProofs.FilePart.outBits c) = none := by
   unfold SampledProofs.FilePart.checkFile SampledProofs.FilePart.checkClass at h
   cases hc : SampledProofs.FilePart.check program query pub with
   | error e => simp [hc, bind, Except.bind] at h
   | ok u =>
-    cases hw : SampledProofs.FilePart.classWhy (SampledProofs.FilePart.unitBits c) with
+    cases hw : SampledProofs.FilePart.classWhy (SampledProofs.FilePart.outBits c) with
     | some w => simp [hc, hw, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
     | none => exact ⟨rfl, rfl⟩
 
@@ -300,8 +300,7 @@ theorem programScope_code (hcd : CodeIs g cd) : Claims.Sampling.ProgramScope (Sa
     obtain ⟨s, hx⟩ := Option.isSome_iff_exists.1 (show (parseOf g x).isSome = true from h)
     obtain ⟨_, _, ns, _, -, hn, -, hscope, hchk, rfl⟩ := parseOf_eq_some hx
     refine ⟨_, _, hx, partitionOf_parse hn hscope _, progOf_topological, ?_⟩
-    exact keyPart_partitions g.reg.circuit g.built ns.toList.sum (unitLog_le_of_scopeOkH hscope) g.upv
-      (le_of_classWhy (checkFile_ok hchk).2) rfl
+    exact keyPart_partitions g.reg.circuit g.built ns.toList.sum g.upv (le_of_classWhy (checkFile_ok hchk).2) rfl
   · rintro ⟨s, -, hx, -⟩
     exact Option.isSome_iff_exists.2 ⟨s, hx⟩
 

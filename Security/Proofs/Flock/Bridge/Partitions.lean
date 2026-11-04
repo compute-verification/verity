@@ -4,7 +4,7 @@ import Proofs.Flock.Bridge.Lowers
 # The bridge's partition partitions its program
 
 `partOf_partitions`: at strata that sum to `n`, `partOf P κ ns` partitions `progOf C κ` (`Partition.Partitions`) when
-no output of `C` is an input, every unit holds a gate, and every proof block commits at most `unitClassMax` bits.
+no output of `C` is an input, every unit holds a gate, and every proof block outputs at most `unitClassMax` bits.
 
 * No gate is in two blocks: a block's gates are lowered gates of the wires its unit holds and the positions of the
   inputs it owns (`wire_of_mem_blockOf`), and a gate is one wire's (`block_inj`), which one unit holds or owns
@@ -12,7 +12,7 @@ no output of `C` is an input, every unit holds a gate, and every proof block com
 * Every gate but a constant and an unread input is in a block (`mem_blockOf_of`): a held wire's gates are in its unit's
   block, an input the constants don't fix in its owner's, and an input nobody owns that `C` doesn't return is
   `Prog.Unread` (`unread_posOf`).
-* A block that commits at most `unitClassMax` bits has a class that holds them (`unitClass_of_le`).
+* A block that outputs at most `unitClassMax` bits has a class that holds them (`unitClass_of_le`).
 -/
 
 namespace Flock.Bridge
@@ -25,11 +25,11 @@ theorem unitClassMax_mem : unitClassMax ∈ unitClasses := by
   rw [h, Nat.log2_two_pow]
   exact List.mem_map.2 ⟨14, List.mem_range.2 (by norm_num), by norm_num [unitClassMax]⟩
 
-/-- **A block that commits at most `unitClassMax` bits has a size class** that holds them. -/
-theorem unitClass_of_le {Cp : Claims.Sampling.Prog} {u : List ℕ} (h : committed Cp u ≤ unitClassMax) :
-    ∃ w, unitClass Cp u = some w ∧ committed Cp u ≤ w := by
+/-- **A block that outputs at most `unitClassMax` bits has a size class** that holds them. -/
+theorem unitClass_of_le {Cp : Claims.Sampling.Prog} {u : List ℕ} (h : outputs Cp u ≤ unitClassMax) :
+    ∃ w, unitClass Cp u = some w ∧ outputs Cp u ≤ w := by
   unfold unitClass
-  cases hf : unitClasses.find? (fun w => decide (committed Cp u ≤ w)) with
+  cases hf : unitClasses.find? (fun w => decide (outputs Cp u ≤ w)) with
   | none => exact absurd (decide_eq_true h) (List.find?_eq_none.1 hf _ unitClassMax_mem)
   | some w => exact ⟨w, rfl, by simpa using List.find?_some hf⟩
 
@@ -163,10 +163,10 @@ theorem blockOf_ne_nil {n : ℕ} {P : Partition C n} {u : Fin n} (h : ∃ g, P.u
   exact List.ne_nil_of_mem (mem_blockOf.2 (Or.inl (mem_unitGates.2 ⟨g, hg, 0, one_le_gateSize _, rfl⟩)))
 
 /-- **`partOf P κ ns` partitions `progOf C κ`**, at strata that sum to `n`, when no output of `C` is an input, every
-unit holds a gate, and every proof block commits at most `unitClassMax` bits. -/
+unit holds a gate, and every proof block outputs at most `unitClassMax` bits. -/
 theorem partOf_partitions {n : ℕ} (P : Partition C n) {ns : List ℕ} (hns : ns.sum = n)
     (hout : ∀ g ∈ C.outputs, C.op g ≠ .input) (hne : ∀ u, ∃ g, P.unit g = some u)
-    (hcls : ∀ u, committed (progOf C κ) (blockOf P κ u) ≤ unitClassMax) :
+    (hcls : ∀ u, outputs (progOf C κ) (blockOf P κ u) ≤ unitClassMax) :
     (partOf P κ ns).Partitions (progOf C κ) := by
   have hb := blocks_partOf (κ := κ) P hns
   have hmem : ∀ {i}, i ∈ (partOf P κ ns).gates ↔ ∃ u, i ∈ blockOf P κ u := by
@@ -191,7 +191,7 @@ theorem partOf_partitions {n : ℕ} (P : Partition C n) {ns : List ℕ} (hns : n
     obtain ⟨u, -, rfl⟩ := List.mem_map.1 hb'
     exact unitClass_of_le (hcls u)
 
-/-! ## What a block commits -/
+/-! ## What a block outputs -/
 
 theorem lower_ne_input {g : Fin C.N} (hni : (C.op g).isInput = false) : ∀ x ∈ lower C κ g, x ≠ .input := by
   unfold lower
@@ -247,23 +247,28 @@ theorem output_of_boundary {n : ℕ} {P : Partition C n} {u : Fin n}
             (by omega) he
           omega
 
-/-- **A block commits at most its unit's returned wires and its owned inputs**, when no unit reads another unit's
-gate (`output_of_boundary`). -/
-theorem committed_blockOf_le {n : ℕ} {P : Partition C n} (u : Fin n)
+/-- **A block outputs at most its unit's returned wires**, when no unit reads another unit's gate
+(`output_of_boundary`): the inputs it owns are input gates, which `outputs` leaves out. -/
+theorem outputs_blockOf_le {n : ℕ} {P : Partition C n} (u : Fin n)
     (hread : ∀ (h g : Fin C.N) (v v' : Fin n), P.unit h = some v → g ∈ (C.op h).args → P.unit g = some v' → v' = v) :
-    committed (progOf C κ) (blockOf P κ u) ≤
-      (Finset.univ.filter fun g => P.unit g = some u ∧ g ∈ C.outputs).card + (insOf P κ u).length := by
-  have hf : (blockOf P κ u).filter (fun i => (progOf C κ).Boundary (blockOf P κ u) i) =
-      (blockOf P κ u).filter (fun i => (progOf C κ).Boundary (unitGates P u) i) :=
+    outputs (progOf C κ) (blockOf P κ u) ≤
+      (Finset.univ.filter fun g => P.unit g = some u ∧ g ∈ C.outputs).card := by
+  have hf : (blockOf P κ u).filter (fun i => (progOf C κ).Boundary (blockOf P κ u) i &&
+        decide ((progOf C κ).gates[i]? ≠ some .input)) =
+      (blockOf P κ u).filter (fun i => (progOf C κ).Boundary (unitGates P u) i &&
+        decide ((progOf C κ).gates[i]? ≠ some .input)) :=
     List.filter_congr fun i _ => by rw [blockOf, boundary_append_inputs inputs_blockOf]
-  unfold committed
-  rw [hf, blockOf, List.filter_append, List.length_append]
-  refine Nat.add_le_add ?_ ((List.length_filter_le _ _).trans (by simp))
-  have hsub : (unitGates P u).filter (fun i => (progOf C κ).Boundary (unitGates P u) i) ⊆
+  have hins : ((insOf P κ u).map (posOf C)).filter (fun i => (progOf C κ).Boundary (unitGates P u) i &&
+        decide ((progOf C κ).gates[i]? ≠ some .input)) = [] :=
+    List.filter_eq_nil_iff.2 fun i hi => by simp [inputs_blockOf i hi]
+  unfold outputs
+  rw [hf, blockOf, List.filter_append, hins, List.append_nil]
+  have hsub : (unitGates P u).filter (fun i => (progOf C κ).Boundary (unitGates P u) i &&
+        decide ((progOf C κ).gates[i]? ≠ some .input)) ⊆
       (Finset.univ.filter fun g => P.unit g = some u ∧ g ∈ C.outputs).toList.map (posOf C) := by
     intro i hi
-    rw [List.mem_filter] at hi
-    obtain ⟨g, hu, ho, rfl⟩ := output_of_boundary hread hi.1 hi.2
+    rw [List.mem_filter, Bool.and_eq_true] at hi
+    obtain ⟨g, hu, ho, rfl⟩ := output_of_boundary hread hi.1 hi.2.1
     exact List.mem_map.2 ⟨g, by simp [hu, ho], rfl⟩
   exact (((nodup_unitGates P u).filter _).length_le_of_subset hsub).trans (by simp)
 

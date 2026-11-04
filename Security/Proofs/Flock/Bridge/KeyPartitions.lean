@@ -5,20 +5,20 @@ import Proofs.Flock.Soundness.Discharge.Layout.Outs
 /-!
 # The key program's partition partitions its program
 
-`keyPart_partitions`: at a circuit file `c` with `unitLog ≤ 32` and `upv > 0`, whose units commit at most
-`unitClassMax` bits each (`SampledProofs.FilePart.unitBits`, what the code's class check bounds), `partOf` of the key
-program's partition at the returned outputs' bits partitions its lowered program, at any strata that sum to `n`. It is
-`partOf_partitions` with its three conditions discharged:
+`keyPart_partitions`: at a circuit file `c` with `upv > 0`, whose units output at most `unitClassMax` bits each
+(`SampledProofs.FilePart.outBits`, what the code's class check bounds), `partOf` of the key program's partition at the
+returned outputs' bits partitions its lowered program, at any strata that sum to `n`. It is `partOf_partitions` with its
+three conditions discharged:
 
 * No returned output is an input (`keyProg_outputs_not_input`): it is a computed column of the instance that puts it on
   a returned output's column, which that instance's unit holds (`unit_of_outCol`).
 * Every unit holds a gate (`exists_unit_keyProg`): its rows' lowered gates are `3 · nComp` consecutive gates
   (`unitGates_keyProg`), and `nComp > 0` at `upv > 0`.
-* Every block commits at most `unitBits c` (`committed_keyProg_le`): no unit reads another unit's gate
-  (`keyProg_hread`, from `Layout.keyProg_reads`), so a block commits at most its returned outputs' bits and the sources
-  it owns (`committed_blockOf_le`). Those are at most `outBits c` (`card_outs_le`: a unit's returned outputs are
-  distinct computed columns of its instance on returned outputs' columns, at most `outBitsAt`'s count of them,
-  `card_outCols_le`) and `(ofCircuit c n).srcs.size` (`insOf_length_keyProg`, from `blockOf_keyProg`).
+* Every block outputs at most `outBits c` (`outputs_keyProg_le`): no unit reads another unit's gate
+  (`keyProg_hread`, from `Layout.keyProg_reads`), so a block outputs at most its returned outputs' bits
+  (`outputs_blockOf_le`), and those are at most `outBits c` (`card_outs_le`: a unit's returned outputs are distinct
+  computed columns of its instance on returned outputs' columns, at most `outBitsAt`'s count of them,
+  `card_outCols_le`).
 -/
 
 namespace Flock.Bridge
@@ -210,34 +210,21 @@ theorem exists_unit_keyProg (outs : Finset (Fin (Layout.keyN c hU n))) (hupv : 0
   obtain ⟨g, hg, -⟩ := mem_unitGates.1 hmem
   exact ⟨g, hg⟩
 
-/-- **A unit owns the code's sources**: its block's inputs are `(ofCircuit c n).srcs.size`, at `unitLog ≤ 32`. -/
-theorem insOf_length_keyProg (hlog : c.unit.unitLog ≤ 32) (outs : Finset (Fin (Layout.keyN c hU n))) (u : Fin n) :
-    (insOf ((Placed.keyProg c hU n).partition outs) (fun g => constsOf c hU n g) u).length =
-      (SampledProofs.FilePart.ofCircuit c n).srcs.size := by
-  have h := congrArg List.length (blockOf_keyProg c hU hlog n outs u)
-  rw [SampledProofs.FilePart.block_toList, blockOf, unitGates_keyProg c hU n outs u] at h
-  simp only [List.length_append, List.length_map, List.length_range, Array.length_toList] at h
-  have hm : (SampledProofs.FilePart.ofCircuit c n).m = (Placed.circuitRows c hU).nComp := rfl
-  omega
-
-/-- **A block commits at most `unitBits c`**, at `unitLog ≤ 32`. -/
-theorem committed_keyProg_le (hlog : c.unit.unitLog ≤ 32) (u : Fin n) :
-    Claims.Sampling.committed
+/-- **A block outputs at most `outBits c`.** -/
+theorem outputs_keyProg_le (u : Fin n) :
+    Claims.Sampling.outputs
         (progOf ((Placed.keyProg c hU n).circuit (Layout.outsOf c hU n)) (fun g => constsOf c hU n g))
         (blockOf ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) (fun g => constsOf c hU n g) u) ≤
-      SampledProofs.FilePart.unitBits c := by
-  refine le_trans (committed_blockOf_le u (keyProg_hread c hU n _)) ?_
-  rw [insOf_length_keyProg c hU n hlog, SampledProofs.FilePart.unitBits,
-    Nat.add_comm (SampledProofs.FilePart.ofCircuit c 0).srcs.size]
-  exact Nat.add_le_add (card_outs_le c hU n u fun _ hg => hg) (Nat.le_of_eq rfl)
+      SampledProofs.FilePart.outBits c :=
+  (outputs_blockOf_le u (keyProg_hread c hU n _)).trans (card_outs_le c hU n u fun _ hg => hg)
 
-/-- **The key program's partition partitions its program**, at a circuit file with `unitLog ≤ 32` and `upv > 0` whose
-units commit at most `unitClassMax` bits, at strata that sum to `n`. -/
-theorem keyPart_partitions (hlog : c.unit.unitLog ≤ 32) (hupv : 0 < c.upv)
-    (hcls : SampledProofs.FilePart.unitBits c ≤ Claims.Sampling.unitClassMax) {ns : List ℕ} (hns : ns.sum = n) :
+/-- **The key program's partition partitions its program**, at a circuit file with `upv > 0` whose units output at
+most `unitClassMax` bits, at strata that sum to `n`. -/
+theorem keyPart_partitions (hupv : 0 < c.upv)
+    (hcls : SampledProofs.FilePart.outBits c ≤ Claims.Sampling.unitClassMax) {ns : List ℕ} (hns : ns.sum = n) :
     (partOf ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) (fun g => constsOf c hU n g) ns).Partitions
       (progOf ((Placed.keyProg c hU n).circuit (Layout.outsOf c hU n)) (fun g => constsOf c hU n g)) :=
   partOf_partitions _ hns (keyProg_outputs_not_input c hU n) (exists_unit_keyProg c hU n _ hupv)
-    fun u => (committed_keyProg_le c hU n hlog u).trans hcls
+    fun u => (outputs_keyProg_le c hU n u).trans hcls
 
 end Flock.Bridge
