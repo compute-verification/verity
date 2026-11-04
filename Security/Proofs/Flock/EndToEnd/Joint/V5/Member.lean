@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Game.Tape
+import Proofs.Flock.Soundness.TmplUnitAt
 import Proofs.Flock.EndToEnd.Joint.V5.Session
 
 /-!
@@ -16,7 +17,19 @@ and the earlier sessions' drawn together, by `JointAuditV5.memberStrat`:
 * `JointAuditV5.member_accepted_drawnWrong_le`: member `k`'s session in the window's audit accepts with a sampled proof
   block of its part incorrect with probability at most `ε_ks,k + ε_bind,k` at `design k`
   (`MemberV5.accepted_drawnWrong_le` at `memberLaw`).
+
+`JointAuditV5.hcls_of_bounds` gives `JointAuditV5.hcls` from the registration check's refusal of a member whose fewest
+and most drawn proof blocks have different link points (`mPtsOf_mono`).
 -/
+
+namespace FlockSoundness.Discharge.Exec
+
+/-- `m_pts` grows with the number of proved units. -/
+theorem mPtsOf_mono (g : ℕ) {a b : ℕ} (h : a ≤ b) : mPtsOf g a ≤ mPtsOf g b := by
+  have hd : (a + g - 1) / g ≤ (b + g - 1) / g := Nat.div_le_div_right (by omega)
+  exact Nat.add_le_add_left (max_le_max (le_refl 3) (log2ceil_mono (max_le_max hd (le_refl 1)))) _
+
+end FlockSoundness.Discharge.Exec
 
 namespace Flock.Guarantees.JointAuditV5
 
@@ -120,5 +133,27 @@ theorem member_accepted_drawnWrong_le (τ : Strategy w.game) (k : Fin w.ms.lengt
     ∃ u ∈ S, u ∈ w.memberWrong τ k).trans_le ?_
   rw [← w.epsKs_memberLaw τ k, ← w.link_memberLaw τ k]
   exact (w.ms.get k).accepted_drawnWrong_le (w.memberLaw τ k) (w.oneClass_memberLaw τ k) (w.memberStrat τ k) hCR hA2
+
+/-- **`hcls` from the registration's refusal**: if at every draw member `k`'s part holds between `lo k` and `hi k` of its
+proof blocks, its record's count `kd / nTab I` lies between them too, and `lo k` and `hi k` give the same link points
+(the registration check refuses a member whose fewest and most drawn proof blocks don't), then every draw's part has the
+record's link points. -/
+theorem hcls_of_bounds {Reg : Type} {nJ : ℕ} (ms : List (MemberV5 Reg nJ)) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (law : Flock.Draw.Law)
+    (lo hi : Fin ms.length → ℕ)
+    (hdraw : ∀ k ω, lo k ≤ ((ms.get k).part ((Bridge.execSel (n := nJ) src law nJ).draw ω)).card ∧
+      ((ms.get k).part ((Bridge.execSel (n := nJ) src law nJ).draw ω)).card ≤ hi k)
+    (hrec : ∀ k, lo k ≤ (ms.get k).kd / nTab (ms.get k).I ∧ (ms.get k).kd / nTab (ms.get k).I ≤ hi k)
+    (hends : ∀ k, mPtsOf (ms.get k).D.unroll.g (lo k) = mPtsOf (ms.get k).D.unroll.g (hi k)) :
+    ∀ (k : Fin ms.length) (ω : Ω),
+      mPtsOf (ms.get k).D.unroll.g ((ms.get k).part ((Bridge.execSel (n := nJ) src law nJ).draw ω)).card =
+        mPtsOf (ms.get k).D.unroll.g ((ms.get k).kd / nTab (ms.get k).I) := by
+  intro k ω
+  have h1 := mPtsOf_mono (ms.get k).D.unroll.g (hdraw k ω).1
+  have h2 := mPtsOf_mono (ms.get k).D.unroll.g (hdraw k ω).2
+  have h3 := mPtsOf_mono (ms.get k).D.unroll.g (hrec k).1
+  have h4 := mPtsOf_mono (ms.get k).D.unroll.g (hrec k).2
+  have h5 := hends k
+  omega
 
 end Flock.Guarantees.JointAuditV5
