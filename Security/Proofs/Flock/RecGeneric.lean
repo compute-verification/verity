@@ -25,6 +25,10 @@ public import Proofs.Flock.RecGeneric.Lift
 public import Proofs.Flock.RecGeneric.BadDev
 public import Proofs.Flock.RecGeneric.StatementProof
 public import Proofs.Flock.RecGeneric.OuterProof
+public import Proofs.Flock.RecGeneric.Cost
+public import Proofs.Flock.RecGeneric.AtFlockCompiled
+public import Proofs.Flock.RecGeneric.AtFlockCompiledSessions
+public import Proofs.Flock.RecGeneric.AtFlockCompiledKS
 
 /-! The recursion as a compiler, generic in the outer argument and the server, over inner protocols with repetition
 extractors: its statements (`Proofs.Flock.RecGeneric.Statement`), the Flock instance's
@@ -50,6 +54,10 @@ composition, which bounds the inner stage's failure where every outer extraction
 (`Proofs.Flock.RecGeneric.Lift`), the plurality prover's bad draws bounded by the link
 (`Proofs.Flock.RecGeneric.BadDev`), and L1 with the recursive audit from it (`Proofs.Flock.RecGeneric.StatementProof`).
 `E_O`'s knowledge soundness from the outer argument's (O1), and L2 from L1 and O1
-(`Proofs.Flock.RecGeneric.OuterProof`). -/
+(`Proofs.Flock.RecGeneric.OuterProof`). The plans' expected cost from one run's average
+(`Proofs.Flock.RecGeneric.Cost`), and L2 at Flock: today's compiled record as a compiler over Flock as the outer
+argument, with its targets and bound (`Proofs.Flock.RecGeneric.AtFlockCompiled`), the compiler's contract for `E_O`
+at the deployment (`Proofs.Flock.RecGeneric.AtFlockCompiledSessions`), and the bound at every statement from the
+compiler's contract at the dense ones (`Proofs.Flock.RecGeneric.AtFlockCompiledKS`). -/
 
 @[expose] public section
