@@ -34,6 +34,11 @@
    "except": [],
    "why": "a compute audit's circuit check is code: C-Flock's program decoder (the population program and its gates), NCI's description-sized layout checks, the sampled audit's wires and canonical JSON (the record's digest), no Mathlib and nothing of Security"
   },
+  "NetworkCheck.Members": {
+   "imports": ["NetworkCheck.Circuit", "Std.Data.HashMap"],
+   "except": [],
+   "why": "a stated record's members are code: the circuit check's stated record and Lean's hash map, no Mathlib and nothing of Security"
+  },
   "NetworkCheck.Period": {
    "imports": [
     "NetworkCheck.Check",
