@@ -15,8 +15,13 @@ the epoch's coin commitment (`CoinCommitment.ofJson`), the number of draws, and 
 on this run's commitment (`CoinRecord`), which pins the source (`after-coin`): a bare source, which `check` also takes, is
 no input here, so the coin is always the one drawn on the run.
 
-**Commitment**, canonical JSON: the retained passes' manifests, a nonempty list. Its digest is SHA-512(`commitmentTag` ‖ 0
-‖ the commitment's bytes).
+**Commitment**, canonical JSON with exactly these keys:
+
+    {"manifests": [manifest, …], "record": hex}
+
+the retained passes' manifests, a nonempty list, and the SHA-512 digest (lowercase hex) of the registration record the
+run is on: the record the policy and sampled proofs commit to, which remote ties it to (`Core.Remote.V1.run`); the
+check doesn't read it. Its digest is SHA-512(`commitmentTag` ‖ 0 ‖ the commitment's bytes).
 
 **Evidence**, canonical JSON `{"files": [files, …]}`, one object per pass in the commitment's order: each manifest path
 the pass's openings read, mapped to the SHA-512 (lowercase hex) of the blob holding its bytes. A file is the blob under
@@ -41,6 +46,7 @@ def protocolId : String := PROTOCOL
 def commitmentTag : String := "verity/pouw/pearl-plus/manifests/v1"
 def paramsKeys : List String := ["coins", "draws", "record"]
 def recordKeys : List String := ["commitment", "source"]
+def commitmentKeys : List String := ["manifests", "record"]
 def evidenceKeys : List String := ["files"]
 
 structure Params where
@@ -50,6 +56,7 @@ structure Params where
 
 structure Commitment where
   manifests : List Json
+  record : ByteArray
   bytes : ByteArray
 
 structure Evidence where
@@ -83,9 +90,12 @@ def paramsOf (j : Json) : V Params := do
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b
-  let .arr ms := j | throw "the retained passes' manifests are not a list"
+  unless keys? j == some commitmentKeys do throw s!"keys are not {", ".intercalate commitmentKeys}"
+  let some (.arr ms) := get? j "manifests" | throw "the retained passes' manifests are not a list"
   if ms.isEmpty then throw "the run holds no pass"
-  pure { manifests := ms.toList, bytes := b }
+  let record ← bytesOf j "record"
+  unless record.size == 64 do throw "record is not a SHA-512 digest"
+  pure { manifests := ms.toList, record, bytes := b }
 
 def Commitment.digest (c : Commitment) : ByteArray :=
   Flock.Sha512.hash (commitmentTag.toUTF8 ++ ByteArray.mk #[0] ++ c.bytes)
@@ -154,18 +164,23 @@ private def record : String :=
   "{\"commitment\":\"" ++ String.ofList (List.replicate 128 '0') ++ "\",\"source\":\"" ++
     String.ofList (List.replicate 64 '0') ++ "\"}"
 private def reasonOf (p c e : ByteArray) : Option String := (protocol.answer p c e #[]).reason
+private def run (manifests : String) : ByteArray :=
+  ("{\"manifests\":" ++ manifests ++ ",\"record\":\"" ++ String.ofList (List.replicate 128 '0') ++ "\"}").toUTF8
 
 -- every input gets a verdict: parameters, a commitment or evidence of another shape is refused, naming the input
 #guard protocolId == "verity/pouw/pearl-plus/v1"
 #guard reasonOf "{}".toUTF8 "[]".toUTF8 "{}".toUTF8 == some "params: keys are not coins, draws, record"
 #guard reasonOf (params "{\"source\":\"00\"}") "[]".toUTF8 "{}".toUTF8 == some "params: record: keys are not commitment, source"
-#guard reasonOf (params record) "[]".toUTF8 "{}".toUTF8 == some "commitment: the run holds no pass"
-#guard reasonOf (params record) "{}".toUTF8 "{}".toUTF8 ==
+#guard reasonOf (params record) "[{}]".toUTF8 "{}".toUTF8 == some "commitment: keys are not manifests, record"
+#guard reasonOf (params record) (run "[]") "{}".toUTF8 == some "commitment: the run holds no pass"
+#guard reasonOf (params record) (run "{}") "{}".toUTF8 ==
   some "commitment: the retained passes' manifests are not a list"
-#guard reasonOf (params record) "[{}]".toUTF8 "{}".toUTF8 == some "evidence: keys are not files"
-#guard reasonOf (params record) "[{}]".toUTF8 "{\"files\":[]}".toUTF8 == some "evidence: 0 passes' files for 1 passes"
+#guard reasonOf (params record) "{\"manifests\":[{}],\"record\":\"00\"}".toUTF8 "{}".toUTF8 ==
+  some "commitment: record is not a SHA-512 digest"
+#guard reasonOf (params record) (run "[{}]") "{}".toUTF8 == some "evidence: keys are not files"
+#guard reasonOf (params record) (run "[{}]") "{\"files\":[]}".toUTF8 == some "evidence: 0 passes' files for 1 passes"
 -- well-formed inputs reach the run's verdict, whose refusal is the run's
-#guard (reasonOf (params record) "[{}]".toUTF8 "{\"files\":[{}]}".toUTF8).isSome
-#guard (protocol.answer (params record) "[{}]".toUTF8 "{\"files\":[{}]}".toUTF8 #[]).verdict == .reject
+#guard (reasonOf (params record) (run "[{}]") "{\"files\":[{}]}".toUTF8).isSome
+#guard (protocol.answer (params record) (run "[{}]") "{\"files\":[{}]}".toUTF8 #[]).verdict == .reject
 
 end PouwCheck.PearlPlus.Protocol
