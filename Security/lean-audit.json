@@ -2623,19 +2623,21 @@
    "Claims.Recursion.DrawRecord.Full": "a V* session's draw record that takes every unit, a clause of the readable scope (`InScope`), no claim",
    "Claims.SamplingGeneric.Compiled.Scope": "a helper the claims read: the sampling scope on the statement's bytes, which `KS`, `KSCount` and `KSReg` read",
    "Claims.SamplingGeneric.Compiled.Sessions": "a helper the claims read: the compiler's contract, the code facts the compiler's statements take of a compiled verifier",
-   "Claims.SamplingGeneric.CompilerKS": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerKS`)",
-   "Claims.SamplingGeneric.CompilerKSCount": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerKSCount`)",
-   "Claims.SamplingGeneric.CompilerKSReg": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerKSReg`)",
    "Claims.SamplingGeneric.FlockArgKS": "proved of every Flock record and decoder (`Claims.SamplingGeneric.flockArgKS`)",
    "Claims.SamplingGeneric.FlockKS": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKS`)",
    "Claims.SamplingGeneric.FlockKSReg": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKSReg`)",
    "Claims.SamplingGeneric.Compiled.OpenCallsLe": "a helper the claims read: the opening checks' count, which `CompilerBits` and `CompilerEfficient` read",
-   "Claims.SamplingGeneric.CompilerBits": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerBits`)",
-   "Claims.SamplingGeneric.CompilerEfficient": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerEfficient`)",
    "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier",
-   "Claims.ZKOutLeak": "a corollary of `ZKOut`, proved of every `ZKOut` (`Claims.zkOutLeak`), not of a deployment",
-   "Claims.SamplingGeneric.CompilerZK": "proved of every zero-knowledge proof system and masked compiled verifier (`Claims.SamplingGeneric.compilerZK`)",
    "Claims.Sampling.Prog.Unread": "a helper the claims read: an input no gate reads and the program doesn't return, which `Partition.Partitions` leaves out"
+  },
+  "generic": {
+   "Claims.SamplingGeneric.CompilerKS": "Claims.SamplingGeneric.compilerKS",
+   "Claims.SamplingGeneric.CompilerKSCount": "Claims.SamplingGeneric.compilerKSCount",
+   "Claims.SamplingGeneric.CompilerKSReg": "Claims.SamplingGeneric.compilerKSReg",
+   "Claims.SamplingGeneric.CompilerBits": "Claims.SamplingGeneric.compilerBits",
+   "Claims.SamplingGeneric.CompilerEfficient": "Claims.SamplingGeneric.compilerEfficient",
+   "Claims.SamplingGeneric.CompilerZK": "Claims.SamplingGeneric.compilerZK",
+   "Claims.ZKOutLeak": "Claims.zkOutLeak"
   }
  },
  "witnesses": {
@@ -2741,6 +2743,34 @@
   "Flock.SecurityProofs.RecursiveKSDeployed": {
    "honest": ["RecDeploy.HonestHalfFixture.recursiveKSDeployed_honest"],
    "nontrivial": "Flock.Guarantees.recursiveKSDeployed_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKS": {
+   "honest": ["Claims.SamplingGeneric.compilerKS_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKS_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSReg": {
+   "honest": ["Claims.SamplingGeneric.compilerKS_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSReg_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSCount": {
+   "honest": ["Claims.SamplingGeneric.compilerKS_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSCount_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerBits": {
+   "honest": ["Claims.SamplingGeneric.compilerKS_honest", "Claims.SamplingGeneric.compilerBits_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerBits_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerEfficient": {
+   "honest": ["Claims.SamplingGeneric.compilerKS_honest", "Claims.SamplingGeneric.compilerBits_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerEfficient_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerZK": {
+   "honest": ["Claims.SamplingGeneric.compilerZK_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerZK_nontrivial"
+  },
+  "Claims.zkOutLeak": {
+   "honest": ["Claims.Witness.SamplingGeneric.zkOutLeak_honest"],
+   "nontrivial": "Claims.Witness.SamplingGeneric.zkOutLeak_nontrivial"
   }
  },
  "unwitnessed": {
@@ -13084,6 +13114,60 @@
    "signature": ["Verity.SecurityProofs.ToCircuitAnd : Verity.Guarantees.ToCircuitAnd"],
    "assumptions": [],
    "type_hash": "d7a46674efa40159e39bed4221c853818c160c91fe491f6e0746b33d2e6b02ab"
+  },
+  "Claims.SamplingGeneric.compilerKS": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerKSReg": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerKSCount": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerBits": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerEfficient": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerZK": {
+   "owner": "@proofs"
+  },
+  "Claims.zkOutLeak": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerBits_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerBits_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerEfficient_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerKSCount_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerKSReg_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerKS_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerKS_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerZK_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerZK_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.SamplingGeneric.zkOutLeak_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.SamplingGeneric.zkOutLeak_nontrivial": {
+   "owner": "@proofs"
   }
  },
  "shape": {
