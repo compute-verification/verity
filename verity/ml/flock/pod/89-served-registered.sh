@@ -115,7 +115,8 @@ done
 
 # the fixture: the verifier's files, the served tree and the session (no prover file: it holds the values)
 X=$S/fixture; mkdir -p $X/stage $X/session
-cp $D/circuit.txt $D/pub-$N.bin $D/program.json $D/partition.json $D/served.json $D/registered.json $X/stage/ && cp -r $D/tables $X/stage/
+cp $D/circuit.txt $D/pub-$N.bin $D/program.json $D/partition.json $D/served.json $D/served-x.json $D/out-port.json \
+  $D/registered.json $X/stage/ && cp -r $D/tables $X/stage/ || exit 1
 cp -r $SESS/. $X/session/
 cp $O/live.json $X/live.json
 if [ "${ZK:-1}" = 0 ]; then

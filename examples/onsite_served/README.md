@@ -1,8 +1,8 @@
 # The served window's onsite run
 
-`config.toml` is one deployment configuration (`verity/config/v0`, `verity.core.deploy.config`) of onsite's five
-components, sampled proofs, PoUW, PoUS, PoUB (`bandwidth`) and the network certifier (`verity/onsite/v0`), with the wipe
-beside them outside the product, on the `served-window` workload: one window of Llama-3.2-1B in int8 served through the
+`config.toml` is one deployment configuration (`verity/config/v0`, `verity.core.deploy.config`) of onsite's seven
+subprotocols (`verity/onsite/v0`): sampled proofs, PoUW, the inference-only policy, PoUS, PoUB (`bandwidth`), the network
+certifier and the wipe, on the `served-window` workload: one window of Llama-3.2-1B in int8 served through the
 vLLM integration's committing endpoint. `verity run` executes it, reading `served_table.py` (`verity_cli.run.REGISTRY`).
 The file is `served_table.configuration` rendered by `verity.core.deploy.config.render`, and
 `tools/verity/cli/tests/test_onsite_served.py` holds it to that byte for byte. It names no host and no address: those are
@@ -51,6 +51,8 @@ deploy bindings:
 | `OUT` | the run | `STATE/out`, the served window's public record |
 
 `BANDWIDTH_CMD` has no piece in the tree yet, so the record names PoUB's row missing and composes `pending` while it is.
+The inference-only policy has no hook: no served window produces the declared division yet, so the record has no row
+for it, and the onsite check's verdict stays `undecided` while a listed subprotocol has no row.
 The serve dir stays where the runner keeps it on the node (`D`, `SERVE_ROOT` and the runner's other variables pass
 through from the environment).
 

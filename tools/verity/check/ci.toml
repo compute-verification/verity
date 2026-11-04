@@ -1,4 +1,5 @@
-# The jobs `check` runs, written as data: who owns each, which group it runs in, and what its failure means for the run.
+# The jobs `check` runs, written as data: who owns each, which group it runs in, and what its failure means for the run. Which
+# of them gate a merge, and what may stay red, is drive's policy (policy.toml), not this file's.
 # `declaration.py` reads this file without running any of the commit's code. check.py takes its groups, their order and
 # what halts the run from here, builds each job's command, and refuses a job this file doesn't declare. This file is the
 # first step of the CI job API (owners declare their jobs, CI runs them).
@@ -28,12 +29,8 @@ group = 2
 # `circuit-check --all` whole; one that holds some runs `--all --shard K/4` for each, and `check.py --combine` joins the shards
 # (`circuit-check --combine`), whose verdict is the unsharded run's
 shards = 4
-# Off the merge gate: a recorded check, whole or a shard, skips it (the plans keep it, so putting it back is deleting this line),
-# `research merge` requires it of no check, and drive moves `main` without it. It runs after landing, in drive's after-landing
-# run on `checked`'s tip (`--deferred`, every job), where a red reverts its culprit at once and lands no PR touching its
-# inputs until it passes. It returns to
-# the gate once `circuit-check --all` fits inside the rest of the check (under 30 minutes).
-gate = false
+# Off the merge gate by drive's policy (policy.toml's `off_gate`): the plans keep it, so putting it back is one line there. Its red
+# in drive's after-landing run reverts its culprit at once and lands no PR touching its inputs until it passes.
 
 [[job]]
 name = "flock-rust-tests"
@@ -100,10 +97,9 @@ name = "ratchet-gate"
 owner = "vllm"
 part = "tests"
 group = 7
-# Off the merge gate and out of the plans: it reports and blocks no merge. It runs in drive's after-landing run on `main`'s
-# tip (`--deferred`, every job, its base the last verified `main`; sharded, in its last shard), where a red reverts the
-# landing whose merge it names.
-gate = false
+# Off the merge gate by drive's policy (policy.toml's `off_gate`) and out of the plans. It runs in drive's after-landing run
+# (`--deferred`, every job, its base the last verified commit; sharded, in its last shard), where a red reverts the landing
+# whose merge it names.
 
 # The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
 # choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research merge` re-reads the
