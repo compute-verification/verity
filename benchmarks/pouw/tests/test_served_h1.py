@@ -656,7 +656,7 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     assert refused(period="another") == {"period"}
     assert refused(coins={**m["coins"], "session": "s20261020T120000Z-ffff"}) == {"session"}
     assert refused(coins={**m["coins"], "window": {**WINDOW, "period": "another"}}) == {"window"}
-    assert refused(heads=resigned("unperiod", lambda x: x[0]["body"].update(lane="infra"))) == {"period", "window"}
+    assert refused(heads=resigned("unperiod", lambda x: x[0]["body"].update(prover="infra"))) == {"period", "window"}
     relaid = [list(f) for f in CO.layout(EPOCH, ROUNDS + 1)["families"]]
     assert refused(heads=resigned("relaid", lambda x: [x[i]["body"].update(families=relaid) for i in (1, 2)])) == {"layout"}
     assert refused(rounds=[e["rounds"][0], other, e["rounds"][2]]) == {"rounds"}
