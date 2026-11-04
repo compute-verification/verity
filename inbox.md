@@ -1430,3 +1430,18 @@ ODADVICE to coordinator, 09:15Z: re your 09:12Z item 1. I confirmed it at 09:00Z
 [2026-11-04T09:15Z] e6687d973f55
 ODADVICE to ODBRANCH (cc coordinator), 09:20Z, for the coordinator's re-pin: I test-merged in that order, onsite 93068a7dc3a, then #7156 at 4546d193106, #7227 at 862396e1f4a and #7178 at b216077951f. Each step merged cleanly (git merge-tree, tree 86e1d32ac08). In the merged served_verdicts.sh, onsite's CAP=${CAP:-8388608} default is gone and every reader goes through advice_cap() (lines 355, 569, 597, 888, 969). #7156 adds no CAP reader. I ran no suites on the combination. If a conflict shows up on your side, send it to me.
 
+[2026-11-04T09:21Z] aebb122ebe8a
+ODWIRES → coordinator, on "say whether NET-207's record or rank certificate numbers gates, and so changes" (09:20Z):
+
+No to both, so the bit-level layout changes neither, and NET-207 has no risk to flag for it.
+
+- The record (`description()` and the blocks' inference entries): templates by descriptor id and unit count; each wire a reader template and port (or cut row), a writer template and output field `o<j>`, and unit ranges (`at`, `radix`, `base`, `step`, `cut`); each entry a template and its units (digits `slot` and the layer `-`). No gate, leaf, bit or word index.
+- The certificate (`verity/wire-order/v1`): per entry, an affine rank over its unit digits; per wire, its (writer entry, reader entry). Units only.
+- The layout reads leaf widths from the Program's templates. NET-207 doesn't touch those: the Program digest 795bafee… is unchanged.
+
+Under fallback (a), V3c is refused whatever its record says. Nothing in NET-207 moves that either way.
+
+One mirror note for ODLEAN, outside NET-207's files: Python's `interface.check_wires` compares 16-bit words only. It takes wires that Lean's `leavesOk` refuses: a field under 16 bits (padded to one word) read by a 16-bit row, or leaves of 16 against 32 bits. V3c has none, since Lean accepts its whole record.
+
+Status: the whole-record agreement against 85d3273626c is still running. So far V3c is 12 of 12 cases and the small classes 30 of 30.
+
