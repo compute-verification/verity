@@ -561,11 +561,11 @@ exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_r
 # `RemoteDraw`, `RemoteHeld.Draw`), `draw_salt` (PoUS's and the bandwidth audit's) and the guarantee `drawIsSubset`
 # (`--moves` renames a guarantee by its lock's path, not its file's); in PoUW's words, the certifier window, the windows
 # and epochs of other senses (a promotion, partial, device, row, product, carry or token window, a launch's epoch,
-# A'F_B's windows), the run name `pouw-window` and the tag part `epoch-salt`, an existing output cell and a numbered
+# A'F_B's windows), the run name `pouw-window` and the tag part `epoch-salt`, an output cell in either case and a numbered
 # compound (`128-cell`), the periods that aren't credit's (`noise period` too, which its own row renames first), a
 # credited period, a period-open, and a quoted `"window"`, `"epoch"`, `"period"` or `"cell"` (a record key)
 patterns = ['(?i:\bcertifier windows?\b)', '(?i:\b(?:promotion|partial|device|row|product|carry|token|sliding|non-overlapping)[ -]windows?\b)',
-            '\blaunch\x27s epoch\b', '\bA\x27F_B\x27s windows\b', '\bpouw-window\b', '\bepoch-salt\b', '\boutput cells?\b',
+            '\blaunch\x27s epoch\b', '\bA\x27F_B\x27s windows\b', '\bpouw-window\b', '\bepoch-salt\b', '(?i:\boutput cells?\b)',
             '\b\d+-cells?\b', '(?i:\b(?:credit|credited|monitoring|commit|verification|sampling|integrity|certifier|served|promotion) periods?\b)',
             '\bperiod-(?:open|close)s?\b', '[\x22\x27](?:window|epoch|period|cell)s?[\x22\x27]',
             '[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
