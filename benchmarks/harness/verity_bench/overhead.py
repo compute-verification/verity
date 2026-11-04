@@ -104,9 +104,11 @@ class Scheme:
     epsilon: str | None = None
 
 
+#: Pearl+'s useful output is rowwise-scaled E4M3, so its stock, and stock's own A/A control, are that family's
 SCHEMES = {s.id: s for s in (
-    Scheme("stock", "fp8-blk128"),
-    Scheme("pearl-plus", "fp8-blk128", "overhead_arm:PearlPlus", "benchmarks/pouw/pearl_c_sm90", "overhead_arm:epsilon"),
+    Scheme("stock", "fp8-e4m3-rowwise"),
+    Scheme("pearl-plus", "fp8-e4m3-rowwise", "overhead_arm:PearlPlus", "benchmarks/pouw/pearl_c_sm90",
+           "overhead_arm:epsilon"),
 )}
 
 

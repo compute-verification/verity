@@ -228,7 +228,8 @@ def scheme(tmp_path, monkeypatch):
     arm_dir.mkdir()
     (arm_dir / "overhead_eps_standin.py").write_text(
         "def epsilon(m, n, k, card):\n    return {'epsilon': 2.0 ** -40 * n / 8192, 'delta': 1e-9, 'basis': 'stand-in'}\n")
-    sch = O.Scheme("pearl-plus", "fp8-blk128", "overhead_arm:PearlPlus", str(arm_dir), "overhead_eps_standin:epsilon")
+    sch = O.Scheme("pearl-plus", O.SCHEMES["pearl-plus"].family, "overhead_arm:PearlPlus", str(arm_dir),
+                   "overhead_eps_standin:epsilon")
     monkeypatch.setitem(O.SCHEMES, "pearl-plus", sch)
     monkeypatch.setattr(sys, "path", list(sys.path))
     return sch
@@ -474,7 +475,7 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
     assert prof[:len(overhead_node.NSYS_PROFILE) + 1] == ["nsys", *overhead_node.NSYS_PROFILE]
     assert "--capture-range=cudaProfilerApi" in prof
     bench = prof[prof.index("-o") + 2:]
-    assert {"--traced", "--twins", "--bridge"} <= set(bench) and between(bench, "--families") == ["fp8-blk128"]
+    assert {"--traced", "--twins", "--bridge"} <= set(bench) and between(bench, "--families") == ["fp8-e4m3-rowwise"]
     assert between(bench, "--methods") == ["graph", "burst"] and between(bench, "--arm") == [scheme.arm]
     assert len(exports) == 1 + 2 * len(LINEARS) == len(doc["reports"]) and all(e["exit"] == 0 for e in doc["reports"])
     assert doc["reports"][0] == {"report": "prof.1.nsys-rep", "exit": 0, "items": 0, "stray_kernels": 0}

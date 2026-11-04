@@ -85,8 +85,10 @@ every total is scaled from it, not proved.
 ## A scheme's arm
 
 A scheme registers in `overhead.SCHEMES`: Pearl+ is `pearl-plus`, its arm `overhead_arm:PearlPlus` and its ε
-`overhead_arm:epsilon`, both in `benchmarks/pouw/pearl_c_sm90/`. The arm keeps the harness's arm contract
-(`benchmarks/pouw/harness/arm.py`):
+`overhead_arm:epsilon`, both in `benchmarks/pouw/pearl_c_sm90/`. Its useful output is rowwise-scaled E4M3, so it is timed
+against stock `fp8-e4m3-rowwise`, as `stock`'s A/A control is. A run of record times the arm's serial schedule: a
+concurrent schedule's overlapping lanes share SMs and need their own accounting, so it stays development only until that
+exists. The arm keeps the harness's arm contract (`benchmarks/pouw/harness/arm.py`):
 
 - its cubin: `run --cubin ART` fetches the art (one file) where the door runs and sends it with the run, and the arm loads
   the file `$VERITY_BENCH_CUBIN` names and lists it in its build record's `binaries`, so the SASS gate passes it before
@@ -97,4 +99,6 @@ A scheme registers in `overhead.SCHEMES`: Pearl+ is `pearl-plus`, its arm `overh
 
 `overhead.json` keeps the cubin's art and sha256, the binaries the gate passed and the verifier beside γ.
 `epsilon(m, n, k, card)` returns `{"epsilon", "delta", "basis"}` at one linear of the layer, and `overhead.json` records it
-at each point beside γ.
+at each point beside γ. PoUW's ε belongs to a window's sample, so a PoUW arm returns the window's ε at the stated sample of
+record (`window.eps_at` at the remote run's sample), its `basis` naming that window and sample; where there is no window,
+it refuses with its reason, which the record keeps.
