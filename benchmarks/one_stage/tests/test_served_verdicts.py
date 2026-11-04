@@ -2514,6 +2514,7 @@ def _key(tmp_path: Path) -> Path:
     ({"PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200", "PP_CHALLENGER_KEY": KEYED}, STEP3_LOCAL, f" V3c's audit: {V3C_LIVE};"),
     (NO_V3C, LOCAL_COINS, ""),
     ({**NO_V3C, "PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200"}, LIVE_COINS, ""),
+    ({**NO_V3C, "DEVELOPMENT": None, "PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200"}, LIVE_COINS, ""),
 ])
 def test_the_coins_line_says_whose_coins_each_sample_is_on(tmp_path, extra, coins, v3c):
     """Before step 0 the run says whose coins each sample is on: sampled proofs' (run.sh's local development session
@@ -2614,6 +2615,19 @@ def test_the_preflight_refuses_v3c_on_a_development_session_outside_a_developmen
     no peer for its session to listen on or no key record to hold it to; each before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, **extra)
     assert (rc, lines, order) == (3, [line], [])
+
+
+@pytest.mark.parametrize("challenger", [None, "loopback:127.0.0.1:7000"])
+def test_without_v3c_the_preflight_refuses_step_3s_development_session_outside_a_development_run(tmp_path, challenger):
+    """With V3c off step 3's audit is the sampled-proofs audit of record, whose sampled proofs the compose gate's Lean
+    holds to a challenger, so its local or loopback session is refused unless the run is a development run, before
+    anything runs."""
+    rc, lines, order, _limits = _v3c(tmp_path, (), HOST="vy-dc-h200", DEVELOPMENT=None, PP_CHALLENGER=challenger,
+                                     PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **NO_V3C)
+    assert (rc, lines, order) == (3, [
+        "PREFLIGHT: with V3c off (V3C_CLASS empty) step 3's audit is the sampled-proofs audit of record, and PP_CHALLENGER "
+        f"is {challenger or 'local'}, a development session, which only a development run takes: set "
+        "PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, or DEVELOPMENT=1"], [])
 
 
 @pytest.mark.parametrize("extra, other", [
