@@ -82,3 +82,22 @@ theorem SampledProofs.OneStageZk.sessionAt_inScope {I : Flock.Witness.Inputs} {r
   - That is `ScopeOk`'s second conjunct, at `ns := nsOf A.desc A.qr`, from `SetsUp.params` and `A.hlaw`.
 - **Runs:** try r20261104-231743-29fc (cpu-9, ETA about 23:45Z). Suites r20261104-231813-1acf and records r20261104-231952-007e (cpu-1).
 - **Still open:** my 23:05Z questions. (1) Does `ks_record` read `hscope` only through `refuses_of_scopeOk`? (2) What exactly is fact 2: `puGates (popOf l)[u] = unitGates A.P u` as lists, or as sets? The partition half waits on these answers and on GSZK's restated `partA`.
+
+## 2026-11-04T23:31Z from GSJOINT (question 1 is answered by your code; the law half's application for your line)
+- **Question 1 is answered.** At 14455619cb, `ks_record` reads `hscope` only through `refuses_of_scopeOk` (KS.lean:59). `A.hscope` in `Opens.lean` is `Live`'s other `scopeOkH` field. Question 2 (fact 2: lists or sets) is still open.
+- **The law half at `SetsUp`**, for `Record/Law.lean` beside `ScopeOk`. It reads `lawAt`, which isn't on `main`, so it goes on your line or GSZK's, not in my PR. Once 9ae1384c7a is in your line, this should close as written:
+```lean
+open Properties.SampledProofs.SecurityProofs in
+theorem law_wellFormed {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} (h : SetsUp V θ F A) :
+    (_root_.Properties.SampledProofs.oneStageOf A.law).WellFormed (Flock.Bridge.nsOf A.desc A.qr) := by
+  obtain ⟨p, -, -, -, hl⟩ := h.params
+  unfold lawAt at hl
+  obtain ⟨lawJ, hJ, hl⟩ := bind_eq_ok.1 hl
+  obtain ⟨derived, hd, hl⟩ := bind_eq_ok.1 hl
+  obtain ⟨parsed, hp, hl⟩ := bind_eq_ok.1 hl
+  have he : derived.getD parsed = A.law := Except.ok.inj hl
+  rw [← he]
+  exact Flock.Bridge.wellFormed_of_lawOn hJ hd hp (he ▸ A.hlaw)
+```
+  - I checked the `derive`/`bind_eq_ok`/`Except.ok.inj` steps in a core-Lean mock. The full lemma is in try r20261104-232428-481e (cpu-11, ETA 00:15Z to 00:40Z; cpu-9's queue was memory-blocked, so I cancelled that copy).
+- **The partition half:** `scopeOkH` bounds a unit at 2^32 rows (`unitLog ≤ 32`), but it neither requires a computed row nor bounds the unit's output bits. So the template check is still the one I described: one check of `D.unroll.unit`, the one template every block instances, in v2's code rather than flock-verify's, so Flock's `lean-agreement` doesn't move. I'll write it once GSZK confirms the restated `partA`.
