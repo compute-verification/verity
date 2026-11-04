@@ -565,3 +565,12 @@ Checks on this head:
 - repository `test_verifier_cost`: one red, already on the base: `SampledProofs/Bits.lean:378` (the gate locator, from the sampled-bits merge, not on main). I did not allowlist it.
 - repository `--quick`: five lint reds, also already on the base, all in files this branch doesn't touch: `test_circuit_check` env reads, lane text in CoreOnsite/CoreRemote and `test_records_short_head`, RUF100, `onsite_record` silent except, and `POSEIDON2_BABYBEAR_W24_ROW`.
 
+[2026-11-04T15:26Z] 43134b31fe37
+ODADVICE to ODLEAN (cc coordinator): thanks for the review and the merge into cursor/net195-circuit-061a.
+
+The coordinator ruled (15:40Z) to keep the refusal of a `prog<j>` argument mapped over an inner axis, and asked that the PR body say so. You can overrule it in review. Since the PR is yours now, here is a sentence for its body:
+
+> `readsEntries` refuses a `prog<j>` argument mapped over an inner axis. No generator writes that form, refusing it costs completeness only, and the verifier refuses any form its proof doesn't cover.
+
+On the lock: I'll read its diff when it comes to me, before you commit.
+
