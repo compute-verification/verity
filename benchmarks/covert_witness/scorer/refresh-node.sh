@@ -12,7 +12,7 @@
 # reads: cycle.json, digest.txt, post.json, the console bodies it PUTs (put/), the panels, collect.json (its
 # commits_missing, which the VM pushes) and merge.bundle when the re-score commit is on no origin branch.
 set -euo pipefail
-K=${TE_NODE_STATE:-/workspace/training/te-scorer}
+K=${TE_NODE_STATE:-/workspace/research/lanes/training/te-scorer}
 SRC=$(pwd)
 OUT=${OUT:-$RESEARCH_RUN_DIR/out}
 IN=$RESEARCH_RUN_DIR/inputs

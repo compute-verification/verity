@@ -38,7 +38,7 @@ import v1cycle as V  # noqa: E402
 
 NODE = os.environ.get("TE_NODE", "vy-nebius-cpu-9")
 #: the refresh's state on the node (refresh-node.sh's K) and the research repository whose objects its first push borrows
-K = os.environ.get("TE_NODE_STATE", "/workspace/training/te-scorer")
+K = os.environ.get("TE_NODE_STATE", "/workspace/research/lanes/training/te-scorer")
 BORROW = "/workspace/research/git/verity.git/objects"
 #: this loop's own small files: each run's served.json, the last refresh's PUT statuses, the commits to push, its log
 LOOP = Path(os.environ.get("TE_NODE_LOOP", "/tmp/scorer/node"))
