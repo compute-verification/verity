@@ -216,7 +216,7 @@ def test_the_tile_digest_is_pearl_cs_leaf(tm, tn):
     rng = random.Random(tm * 100 + tn)
     c, u = ([[rng.getrandbits(32) for _ in range(tn)] for _ in range(tm)] for _ in range(2))
     got = evaluate(L.tile_digest(tm, tn), [v for r in c for v in r], [v for r in u for v in r])
-    assert L.digest_bytes(got) == C.leaf(types.SimpleNamespace(c=c, u=u))
+    assert L.digest_bytes(got) == C.leaf(types.SimpleNamespace(c=c, u=u), hashing="h0")
 
 
 def test_out_of_schema_rows_are_refused():

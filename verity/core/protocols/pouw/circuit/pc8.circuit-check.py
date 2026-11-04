@@ -20,7 +20,7 @@ def _pouw_roots() -> list[Any]:
     out = [*pc8.templates(128, tile8.tile, "h100").values(), *pc8.templates(128, tile8.tile, "sm120").values(),
            pc8.weight(tile8), pc8.call(tile8), pc8.check(tile8)]
     h8 = replace(tile8, hidden=True)
-    out += [t for t in [*pc8.templates(128, h8.tile, "sm120", True).values(), pc8.weight(h8), pc8.call(h8), pc8.check(h8)]
+    out += [t for t in [*pc8.templates(128, h8.tile, "sm120", True, "h0").values(), pc8.weight(h8), pc8.call(h8), pc8.check(h8)]
             if t not in out]
     out += [pc8.templates(128, h8.tile, "sm120", True, "h3")["tile"], pc8.side_tile(128, h8.tile, "sm120")]
     split = pc8.Shape(1, 256, 1, tile=(1, 1), dev="sm120", hidden=True, cap=True)

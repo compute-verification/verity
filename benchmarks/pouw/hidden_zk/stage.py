@@ -97,7 +97,7 @@ def main() -> None:
         rec["binding"] = "core3 scratch"
         shape = pc4.Shape(N, K, 1, tile=(1, 1)) if ROLE == "row_a" else pc4.Shape(1, K, N, tile=(1, 1))
         ctx = Context(part("salt"), Matmul(3, Shape(shape.m, shape.k, shape.n), 9), part("root_a"), part("root_b"))
-        ta = TileAnchors.of(F.PearlC4("nvfp4"), ctx, shape)
+        ta = TileAnchors.of(F.PearlC4("nvfp4", hashing="h0"), ctx, shape)
         d = pc4.templates(K)[ROLE]
         ports = public_ports(shape, ROLE)
         sr = L.statement_rows(pc4.PORTS[ROLE], K)
