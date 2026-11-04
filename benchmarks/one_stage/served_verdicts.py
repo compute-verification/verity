@@ -114,7 +114,10 @@ with each one's server) and from it the block record (``block-record.json``, `bl
 an answer that names no server isn't carried. An accepted answer whose outputs are not its leg's certificate
 (`block_record.leg`) is its subprotocol's error. `block_record` carries only an accepted subprotocol's certificate, so
 where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written; it is
-``accept`` only when every subprotocol accepted here.
+``accept`` only when every subprotocol accepted here. PoUW's accepted development piece is its verdict of record where
+`pouw_of_record` holds it to the challenger's pin (``--key-sha512``, H1_KEY_SHA512), the lane's own gate key
+(``--lane``, H1_LANE, default vllm), its period's open and the Lean answer on the period's case; else its row stays
+missing, naming the condition it fails.
 Those are the subprotocols of ``--product`` (default onsite; `block_record.PRODUCTS`): each one the
 product drops is ``dropped`` in the report (`dropped_row`, whatever its piece left), not run and composed into no
 verdict, so remote's verdict is ``accept`` when sampled proofs and PoUW accepted here, whatever the onsite pieces.
