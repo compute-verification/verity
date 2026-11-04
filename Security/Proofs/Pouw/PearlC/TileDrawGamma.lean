@@ -82,6 +82,7 @@ theorem ticketsOf_cast (NT : ℕ) (v : ℕ → ℚ) {g : ℕ} (hg : g < NT) (hv 
 
 theorem goodDeclTiles_subset {Q R S : Type} (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R)
     (s : S) (τ : Transcript) (dec : ℕ → Decl) : goodDeclTiles P TR U H s τ dec ⊆ goodTiles P TR U H s τ := by
+  classical
   intro g hg
   unfold goodDeclTiles at hg
   exact (mem_filter.mp hg).1
