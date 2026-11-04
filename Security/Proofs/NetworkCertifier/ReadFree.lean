@@ -1,5 +1,6 @@
 import Definitions.Core.Assumptions
 import Proofs.NetworkCertifier.RecordRows
+import Mathlib.Data.Set.Card
 
 /-!
 # The network certifier's rows read back its lanes from `(r, D)` alone, and the count that gives
