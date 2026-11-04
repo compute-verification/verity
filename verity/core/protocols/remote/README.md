@@ -63,10 +63,12 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 | PoUW, development (v0 only) | the period's credited work, in live words, is the registered work's: its windows credited all or nothing | `PouwCheck.Period.protocol` (`verity/core/protocols/pouw/lean/check`), onsite's work subprotocol too | `verity/pouw/period/v1` |
 | The inference-only policy ([README](../network/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `NciCheck.Protocol.protocol` (`verity/core/protocols/network/nci/lean`) | `verity/inference-only/v0` |
 
-The code is `CoreRemote.lean`. The composite of record is `V1.protocol = tiedSameB "verity/remote/v1" tied [] components`
-over `[NciCheck.Protocol.protocol, PouwCheck.PearlPlus.Protocol.protocol, VStar.Recursive.Sampled.protocol]`, the one
-`Verity.SoundnessOf` reads at remote; Pearl+'s commitment is the run's retained manifests, which name no record, so
-nothing yet ties its run to the record (its executable is `remote-v1`, `RemoteV1Main.lean`). The development composite,
+The code is `CoreRemote.lean`. The composite of record is `V1.protocol = tiedSameB "verity/remote/v1" tied [run]
+components` over `[NciCheck.Protocol.protocol, PouwCheck.PearlPlus.Protocol.protocol, VStar.Recursive.Sampled.protocol]`,
+the one `Verity.SoundnessOf` reads at remote (its executable is `remote-v1`, `RemoteV1Main.lean`). Pearl+'s commitment
+is the run's retained manifests and the digest of the record its run is on, and the tie `V1.run` holds that digest to the
+policy's record (`runRecord`), so a run naming another record rejects v1 unless it rejects already. Pearl+'s check
+doesn't read the record it names, so that the passes' tiles are the ones the record registers is not yet checked. The development composite,
 v0, is `protocol = tiedSameB "verity/remote/v0" tied [windows] components` over `components =
 [NciCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol]`, and no soundness theorem
 covers it. The policy and sampled

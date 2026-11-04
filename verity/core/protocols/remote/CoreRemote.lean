@@ -16,8 +16,10 @@ Pearl's assumption at δ, published as Pearl+'s `Credit`; a caller that read a v
 credit as a Pearl+ run's. The cases each takes are different too (v1's work case is `verity/pouw/pearl-plus/v1`'s), so
 neither accepts the other's input.
 
-v1 has no window tie: Pearl+'s commitment is the run's retained manifests, which name no registration record, so nothing
-yet ties the run Pearl+ credits to the record the policy and sampled proofs commit to (`V1.ties` is empty).
+v1 ties the run Pearl+ credits to the run's record (`V1.run`): Pearl+'s commitment names the digest of the registration
+record its run is on, which must be the record the policy and sampled proofs commit to, so a run naming another record
+rejects v1 whatever the subprotocols answer. Pearl+'s check doesn't read the record it names: that the passes' tiles are
+the ones the record registers is not yet checked.
 
 v0's subprotocols are the inference-only policy (`NciCheck.Protocol.protocol`, `verity/inference-only/v0`: the declared
 circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the declared circuit
@@ -171,8 +173,15 @@ def components : List BlobProtocol :=
 /-- The subprotocols that must commit to one record: the policy and sampled proofs, as in v0. -/
 def tied : List String := [NciCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
 
-/-- No tie beyond the one record: Pearl+'s commitment names no registration record. -/
-def ties : List Tie := []
+/-- The record Pearl+'s case names: its commitment's `record`, as Pearl+ decodes it. -/
+def runRecord (k : Case) : Option (List ByteArray) :=
+  (PouwCheck.PearlPlus.Protocol.commitmentOf k.commitment).toOption.map fun c => [c.record]
+
+/-- Pearl+'s run on the policy's record. -/
+def run : Tie :=
+  ⟨"record", [(NciCheck.Protocol.protocolId, policyRecord), (PouwCheck.PearlPlus.Protocol.protocolId, runRecord)]⟩
+
+def ties : List Tie := [run]
 
 def protocol : BlobProtocol := tiedSameB "verity/remote/v1" tied ties components
 
@@ -211,6 +220,26 @@ private def recordsOfV1 (policy sampled : String) : Answer :=
 #guard (recordsOfV1 (record 1) (record 0)).verdict == .reject
 #guard (recordsOfV1 (record 1) (record 0)).reason.map
   (·.startsWith "record: verity/inference-only/v0 committed ") == some true
+
+-- Pearl+'s run names a record by its digest, the policy's and sampled proofs' digest of it; a run naming another
+-- record is a stray
+#guard run.names.all fun n => (components.map (·.id)).contains n.1
+private def digestOf (r : String) : ByteArray :=
+  ((policyRecord (committing NciCheck.Protocol.protocol r)).bind (·.head?)).getD ByteArray.empty
+private def pearlOn (r : String) : Case :=
+  { refused PouwCheck.PearlPlus.Protocol.protocol with
+    commitment := ("{\"manifests\":[{}],\"record\":\"" ++ Flock.hexOf (digestOf r) ++ "\"}").toUTF8 }
+private def runStray (policy run : String) : Option String :=
+  V1.run.strays [committing NciCheck.Protocol.protocol policy, pearlOn run]
+#guard (digestOf (record 0)).size == 64
+#guard runRecord (pearlOn (record 0)) == policyRecord (committing NciCheck.Protocol.protocol (record 0))
+#guard runStray (record 0) (record 0) == none
+#guard (runStray (record 1) (record 0)).map (·.startsWith "record: verity/inference-only/v0 committed ") == some true
+#guard (runStray (record 1) (record 0)).map (contains · ", verity/pouw/pearl-plus/v1 committed ") == some true
+-- a run whose commitment doesn't decode leaves Pearl+ to refuse it
+#guard runStray (record 0) "{}" == none
+#guard V1.run.strays [committing NciCheck.Protocol.protocol (record 0), refused PouwCheck.PearlPlus.Protocol.protocol] ==
+  none
 
 end V1
 
