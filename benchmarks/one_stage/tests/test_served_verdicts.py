@@ -2911,8 +2911,9 @@ def test_the_preflight_refuses_pearlplus_tie_without_pearls_piece_beside_h1s_tie
 TOY_GATES = 'GATES_OF_RECORD: dict = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}\n'
 TG_PARTITION = {"templates": ["RoPEHead_v1{D=64}", "SiluMul_v2{I=8192}"], "law": "work:2",
                 "scope": {"op_path_prefix": "model.layers.0.", "steps": [1, 2]}}
-#: PEARLPLUS_TIE with V3c after step 4, the certifier unsplit
-PEARL_TIED = {**PEARL_TIES, "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}
+#: PEARLPLUS_TIE with V3c after step 4, the certifier unsplit, on the BF16 row
+PEARL_TIED = {**PEARL_TIES, "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None,
+              "ROW_ID": "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"}
 
 
 def _no_transfer_gates(part: str, law: str, templates: list[str]) -> str:
@@ -2961,6 +2962,30 @@ def test_the_preflight_refuses_a_step_3_partition_it_cant_read_where_the_compile
     assert (rc, order) == (3, []) and len(lines) == 1, lines
     assert lines[0].startswith("PREFLIGHT: step 3's partition PP_PARTITION benchmarks/prove_path/llama32_1b_tg_l0_step1.json "
                                "can't be read: FileNotFoundError"), lines
+
+
+@pytest.mark.parametrize("extra, line", [
+    ({"PRECISION": "verity_int8"}, "PREFLIGHT: PEARLPLUS_TIE serves the BF16 checkpoint's linears as Pearl+'s FP8 product, "
+                                   "and PRECISION is verity_int8: set it bfloat16"),
+    ({"ROW_ID": None}, "PREFLIGHT: PEARLPLUS_TIE serves the BF16 checkpoint, and ROW_ID row is no BF16 row's (its id names "
+                       "__bf16__): set ROW to the BF16 row's dir"),
+    ({"CLASSES": "4,32,4"}, f"PREFLIGHT: PEARLPLUS_TIE commits the window at V3C_CLASS {W63K4}, whose window circuit "
+                            "CLASSES (4,32,4) doesn't count: add it"),
+    ({"SERVE_ARGS": "--prefix-caching"}, "PREFLIGHT: under PEARLPLUS_TIE each request's prefill computes every row of its "
+     "prompt, at which the cut circuit reads Pearl+'s tables, and SERVE_ARGS turns vLLM's prefix cache on "
+     "(--prefix-caching): drop it"),
+    ({"CERTIFIER_FRONT": "true"}, "PREFLIGHT: under PEARLPLUS_TIE the window is V3C_CLASS's fixed load, and "
+     "CERTIFIER_FRONT's group closes into a window of its own, which the run's pick takes on a tie in requests: unset "
+     "CERTIFIER_FRONT"),
+])
+def test_the_preflight_refuses_pearlplus_tie_off_the_bf16_row_its_class_uncounted_with_the_prefix_cache_or_a_front(
+        tmp_path, extra, line):
+    """PEARLPLUS_TIE serves the BF16 checkpoint, whose linears Pearl+'s FP8 product reads, and V3c's commit is held to
+    V3C_CLASS's window circuit; the cut circuit reads Pearl+'s tables at every row of the class's fixed load. So another
+    PRECISION or row, a V3C_CLASS CLASSES doesn't count, vLLM's prefix cache (a hit leaves a prompt's rows uncomputed) and
+    a certifier front's window of its own are each refused before anything runs."""
+    rc, lines, order, _limits = _v3c(tmp_path, (), **{**PEARL_TIED, **extra})
+    assert (rc, lines, order) == (3, [line], [])
 
 
 TIES = {"H1_TIE": "1", "H1_GATE": GATE, "H1_CIRCUITS": "circuits"}
