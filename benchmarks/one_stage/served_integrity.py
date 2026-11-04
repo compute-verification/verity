@@ -42,6 +42,13 @@ def _only(doc: Mapping[str, Any], keys: Mapping[str, Any]) -> dict[str, Any]:
             for k, sub in keys.items() if k in doc}
 
 
+def _object(path: Path) -> Mapping[str, Any]:
+    doc = json.loads(path.read_text())
+    if not isinstance(doc, Mapping):
+        raise ValueError(f"{path}: not a JSON object")
+    return doc
+
+
 def _checks(checks: Any) -> Any:
     """Each check's outcome (``ok``, ``codes``), and the proved check's units (`unproved`), not its other detail."""
     if not isinstance(checks, Mapping):
@@ -57,19 +64,17 @@ def _checks(checks: Any) -> Any:
 def public_copy(out: Path, dst: Path) -> None:
     """What `answer` reads of the audit under ``out`` (`SUMMARY`, `RECORD`) written under ``dst``: its ``summary.json``
     and, where the sample ran, ``window/audit.json``. A missing summary or record is left missing, as `answer` reads it,
-    and so is a ``compile`` that is None (`opened` reads the two alike)."""
+    and so is a ``compile`` that is None (`opened` reads the two alike); one that isn't a JSON object raises."""
     dst.mkdir(parents=True, exist_ok=True)
-    try:
-        summary = _only(json.loads((out / "summary.json").read_text()), SUMMARY)
-    except (OSError, ValueError, TypeError, AttributeError):
+    if not (out / "summary.json").is_file():
         return
+    summary = _only(_object(out / "summary.json"), SUMMARY)
     if summary.get("compile") is None:
         summary.pop("compile", None)
     (dst / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str) + "\n")
-    try:
-        rec = _only(json.loads((out / "window" / "audit.json").read_text()), RECORD)
-    except (OSError, ValueError, TypeError, AttributeError):
+    if not (out / "window" / "audit.json").is_file():
         return
+    rec = _only(_object(out / "window" / "audit.json"), RECORD)
     if "checks" in rec:
         rec["checks"] = _checks(rec["checks"])
     (dst / "window").mkdir(exist_ok=True)

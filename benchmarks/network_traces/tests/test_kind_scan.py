@@ -227,7 +227,7 @@ def _out(tmp_path: Path, period) -> Path:
         "checks": {"draw": {"ok": True, "codes": []},
                    "proved": {"ok": True, "codes": [], "detail": {"units": {"drawn": units, "statement": units}}}},
         "draw": {"law": "subset", "k": 2, "population": reg["population"], "units": units},
-        "wrong_units": {"delta": 1e-6, "of": reg["population"], "bound": 9, "rule": "at most `bound` wrong units"}}))
+        "wrong_units": {"delta": 1e-6, "of": reg["population"], "bound": 9, "rule": "at most `bound` incorrect proof blocks"}}))
     (v3c / "registration.json").write_text(json.dumps(reg))
     (v3c / "period.json").write_text(json.dumps({"answer": ev["audits"][0], "registration": reg,
                                                  **{k: case["params"]["audits"][0][k] for k in ("free", "steps", "program")}}))

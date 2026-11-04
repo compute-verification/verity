@@ -183,11 +183,16 @@ def test_the_public_copy_is_what_answer_reads_and_answers_as_the_audit_does(tmp_
 
 
 def test_the_public_copy_of_no_audit_is_none_and_its_cli_writes_it(tmp_path, capsys):
-    """An audit that left no summary leaves no copy, which `answer` reads as the same error; the CLI writes the copy."""
+    """An audit that left no summary leaves no copy, which `answer` reads as the same error, and one whose summary isn't
+    a JSON object raises rather than leave none; the CLI writes the copy."""
     I.public_copy(tmp_path / "none", tmp_path / "copy")
     assert list((tmp_path / "copy").iterdir()) == []
     with pytest.raises(RuntimeError, match="no summary"):
         I.answer(tmp_path / "copy", REG)
+    (tmp_path / "bad").mkdir()
+    (tmp_path / "bad" / "summary.json").write_text("[]")
+    with pytest.raises(ValueError, match="not a JSON object"):
+        I.public_copy(tmp_path / "bad", tmp_path / "bad-copy")
     out = write(tmp_path / "a", {"checks_before_draw": {"registration": True}}, record(True))
     assert I.main(["public-copy", str(out), str(tmp_path / "cli")]) == 0
     assert I.answer(tmp_path / "cli", REG) == I.answer(out, REG)

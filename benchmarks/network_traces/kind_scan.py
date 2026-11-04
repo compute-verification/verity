@@ -190,7 +190,7 @@ SUMMARY_DOC = {
 }
 #: what it reads of the audit record ``window/audit.json`` (`served_integrity.RECORD`): its verdict and each check's
 #: outcome, the units drawn and those the proved statement covers, the draw and the units proved (the verifier's draws),
-#: the registration it audited, and the bound on wrong units over the population at δ
+#: the registration it audited, and the bound on incorrect proof blocks over the population at δ
 AUDIT_RECORD = {
     "accepted": O, "checks.*": O, "checks.*.ok": O, "checks.*.codes[]": O,
     "checks.proved.detail.units.drawn[]": C, "checks.proved.detail.units.statement[]": C,
