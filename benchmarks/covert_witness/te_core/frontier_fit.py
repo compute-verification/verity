@@ -6,7 +6,8 @@ unconstrained frontier, through which te_core.algorithm_policy maps a loss to ef
 
 A data's unconstrained frontier is the least held-out loss (bits per byte) reached at each total training compute C
 (gates) by anything on that data (`points`): from scratch, every start at (C0, l0) and every scored checkpoint from a
-start at C0 + |C|, as te_core.panels draws it. From scratch on the pilot is learning_frontier's dense AdamW
+start at C0 + |C|, as te_core.panels draws it: the best of the attacks run so far, as the note says (`FRONTIER`),
+not the least loss reachable. From scratch on the pilot is learning_frontier's dense AdamW
 pretraining runs, their loss converted as te_core.panels converts it (`panels.scratch`); on v3 it is the ladder's
 runs: `--ladder-points` reads the ladder report's annealed runs (its F.json or report.json, each at its counted MACs)
 and the compute-optimal points of its FIT.json, which `--ladder-fit` names as well once the ladder has three sizes
@@ -68,6 +69,8 @@ PER_DECADE = 20
 FIT_MIN, FIT_SPAN = 3, 10.0
 #: the from-scratch points a fit is to read (coordinator 07:58Z: the target, not a gate); a fit on fewer is provisional
 FIT_TARGET = 5
+#: what the note calls the frontier: the least loss found, not the least reachable
+FRONTIER = "frontier, the best of the attacks run so far at this size"
 #: the data whose fit reads its from-scratch points alone (method key `panels.SCRATCH`), v3's the ladder's starts
 #: (coordinator 07:57Z): pooled, its starts' continuations take the starts' bins and, past their compute-optimal
 #: range, pull E to its bound 0, so a start's own gain leaves 1; they still set H
@@ -392,10 +395,10 @@ def note(fits: dict | None = None, read: dict | None = None, pts: dict | None = 
     """The panel's note, and each provisional fit's points (`provisional`); over the route's `console.NOTE_MAX`
     without the ladder's runs off the fit."""
     def text(off: bool) -> str:
-        out = ("Per data, held-out bpb L at training gates C: E + A*C^-gamma, least squares in relative loss over its "
-               "frontier (least L per C: from scratch, starts at C0, checkpoints at C0 + |C|; "
-               f"{', '.join(FROM_SCRATCH)} from scratch only) from the least C0, a point per 1/{PER_DECADE} decade. "
-               "C_eff = (A/(L - E))^(1/gamma); gain C_eff(L)/C at a point, C(L)/C(l0) at a target.")
+        out = (f"Per data, held-out bpb L at gates C: E+A*C^-gamma, fit in relative loss to its {FRONTIER}: least L "
+               f"per C (from scratch, starts at C0, checkpoints at C0 + |C|; {', '.join(FROM_SCRATCH)} from scratch "
+               f"only), a point per 1/{PER_DECADE} decade. C_eff=(A/(L-E))^(1/gamma); gain C_eff(L)/C at a point, "
+               "C(L)/C(l0) at a target.")
         for d, f in (fits or {}).items():
             if f and f.get("provisional"):
                 out += " " + provisional(d, f, read[d], pts[d], off)
