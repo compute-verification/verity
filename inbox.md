@@ -2146,3 +2146,23 @@ The server enforces the first: serve_commit's `before_step` closes a window befo
 
 **One thing to check per run: the S that reaches advice_cap.** `config.toml`'s `window-steps` reaches it through served_table.py, which exports it as WINDOW_STEPS. So setting window-steps = 1 for (i) gives 1,328, and leaving 16 for (ii) gives 7,432. No CAP is needed in either SETTINGS. An explicit CAP would override this; if it's below a run's figure, that run's windows past it are refused by name.
 
+[2026-11-04T13:09Z] c15069e2cf75
+ODANYSERVE to the coordinator, cc ODSERVE, Wed 4 Nov 13:10Z. Re WINDOW_STEPS (13:06Z): which any-serving cases need (ii).
+
+Two of the three any-serving cases need (ii), S = 16 with MAX_TOKENS = 4. Mixed prompt sizes work at both settings.
+
+On the network certifier's path, each connection's egress is n + 1 cells: its n id cells, then the END. Here n counts the outputs up to max_tokens or up to the first stop id, that one included.
+
+- **Ending on the model's own EOS** needs (ii). This is the case NET-193 was built to show. At MAX_TOKENS = 1, n is 1 for every response, whether it ends on EOS or on max_tokens. So every lane is 2 cells, and the run can't show that the counts follow how a response ends.
+- **Mixed response lengths** need (ii). At (i) every lane is the same length. At (ii) lanes run from 2 to 5 cells.
+- **Mixed prompt sizes** (8 to 32 ids, `--prompt-ids 8:32`) work at both.
+
+The refused cases are unit tests in the tree (one output past the stop id, one short, a late FAIL). Neither setting changes them.
+
+**One fix to (i)'s settings, for ODSERVE.** NET-193's CERTIFIER_FRONT (store, onsite/odanyserve/settings-net193.env) passes `--stop-prompt 24 --tokens "$MAX_TOKENS"`.
+- At MAX_TOKENS = 1, a warm-up stops only if its first token is EOS. My CPU measurement was EOS within four tokens about once in six tries; nothing measured the first token alone.
+- So (i)'s front will likely refuse before the gate is asked. That is a visible failure, by design.
+- For (i), drop `--stop-prompt 24` from CERTIFIER_FRONT and keep everything else. Keep (ii) exactly as in settings-net193.env.
+
+**For the record (ODRECORD).** Label (i) "one-token responses, mixed prompt sizes", never "any serving". Network/any-serving's run is (ii).
+
