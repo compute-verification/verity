@@ -3389,6 +3389,9 @@ LEAN_FIXTURES = "tools/verity/lean/"
 #: the temporary worktrees' prefix (`merged_worktree`), `<tmp>/research-merged-<pid>-*`: one whose process is gone is swept (a kill
 #: skips `finally`)
 MERGED_PREFIX = "research-merged-"
+#: where a merged worktree goes when its caller names no root (`merged_worktree`): `main` sets it from --preflight-root, so
+#: drive's other merged trees (`ported`'s codemod) leave its network-volume TMPDIR too, where each add and remove takes minutes
+MERGED_ROOT: Path | None = None
 #: prints, as JSON, the paths of the suites `suites.py`'s `touched` selects for the change from commit argv[1] to tree argv[2]
 #: (`suites`) and, for each, the fetched registry entries under its inputs (`fixtures`), as `suites.py` picks what to fetch before
 #: it runs them: the repository's own suite reads tracked files only, so it needs none
@@ -3477,9 +3480,9 @@ def worktrees_locked(repo: Path):
 
 @contextlib.contextmanager
 def merged_worktree(repo: Path, commit: str, root: Path | None = None):
-    """A detached worktree of ``repo`` at ``commit`` in a temporary directory under ``root`` (`MERGED_PREFIX`), removed with it
-    whatever happens; one a dead process left is swept first."""
-    root = Path(root or tempfile.gettempdir())
+    """A detached worktree of ``repo`` at ``commit`` in a temporary directory under ``root`` (else `MERGED_ROOT`, else the
+    temporary directory; `MERGED_PREFIX`), removed with it whatever happens; one a dead process left is swept first."""
+    root = Path(root or MERGED_ROOT or tempfile.gettempdir())
     root.mkdir(parents=True, exist_ok=True)
     for d in root.glob(f"{MERGED_PREFIX}*"):
         pid = d.name.removeprefix(MERGED_PREFIX).split("-", 1)[0]
@@ -5559,9 +5562,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--again", action="store_true", help="ready: mark a head that was ejected (only when the ejection was wrong); "
                                                           "lean-check: rerun a commit whose recorded Lean check passed")
     ap.add_argument("--preflight-root", type=Path, default=None, metavar="DIR",
-                    help="ready, drive: where the preflight's merged trees go (default: the temporary directory); a tree must "
-                         "share a filesystem with uv's cache for its sync to hardlink (drive on the control pod, whose TMPDIR is a "
-                         "network volume, passes the container disk)")
+                    help="ready, drive: where merged trees go, the preflight's and every other (default: the temporary "
+                         "directory); a tree must share a filesystem with uv's cache for its sync to hardlink (drive on the "
+                         "control pod, whose TMPDIR is a network volume, passes the container disk)")
     ap.add_argument("--no-preflight", action="store_true",
                     help="ready: skip the preflight (the lander's): the head merged onto a fresh `next` must merge cleanly, contain "
                          "no open PR that isn't admitted, and pass `pins.py --stale`, the invariant tests (module strings, pins, "
@@ -5624,6 +5627,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--hours", type=float, default=24.0, help="stats: the window's length (default 24)")
     ap.add_argument("--until", metavar="YYYY-MM-DDTHH:MM:SSZ", help="stats: the window's end (default now)")
     a = ap.parse_args(argv)
+    global MERGED_ROOT
+    MERGED_ROOT = a.preflight_root or MERGED_ROOT
     if a.command == "stats":
         if a.log is None:
             ap.error("stats needs --log FILE (drive's log)")

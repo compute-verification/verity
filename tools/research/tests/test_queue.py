@@ -1096,6 +1096,26 @@ def test_a_landing_gate_left_in_its_directory_still_judges(tmp_path, monkeypatch
     assert rc == 1 and json.loads(out)["failures"][0]["why"] == "touches bad.txt", out
 
 
+def test_a_merged_tree_whose_caller_names_no_root_goes_under_merged_root_not_tmpdir(tmp_path, monkeypatch):
+    """`ported`'s codemod names no root: on drive's control pod its tree went to TMPDIR, a network volume where each worktree add
+    and remove took minutes; --preflight-root (`MERGED_ROOT`) now takes it to the container disk like the preflight's."""
+    import tempfile
+
+    from research import queue
+
+    repo, tmp, fast = tmp_path / "repo", tmp_path / "tmp", tmp_path / "fast"
+    tmp.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp))
+    monkeypatch.setattr(queue, "MERGED_ROOT", fast)
+    _git(tmp_path, "init", "-q", "-b", "main", str(repo))
+    (repo / "f.txt").write_text("x\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "f")
+    with queue.merged_worktree(repo, _git(repo, "rev-parse", "HEAD")) as wt:
+        assert wt.is_relative_to(fast) and (wt / "f.txt").read_text() == "x\n"
+    assert not list(fast.glob(f"{queue.MERGED_PREFIX}*")) and not list(tmp.iterdir())
+
+
 def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_the_members_a_sync_merges_are_judged(world, monkeypatch):
     """A landing gate judges a PR as the sync merges it onto `next`, never at landing, where ejecting a
     member low on `next` rebuilds it and cancels the Lean check running there.  A member the sync keeps isn't judged again; one
