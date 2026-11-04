@@ -21,8 +21,9 @@ naming the bundle, ``commit/runs.jsonl`` with the window's run, and ``commit/bin
 each committed value as the row's Programs read it (`served_binder`: a Linear's ``out``, RoPE's ``query`` / ``key``, a norm's
 ``norm_scale``, ``fa2.m1/*``, and the port's ids and positions as the identities the Programs read them under,
 `port_identities`), with no second tensor under an identity the port is (`copies_beside_port`) and no port position other
-than its rows ran (`positions_off`), and the context carries the manifest's ``op_path_aliases``, which the opened store resolves a
-shared module's layer-N path through, the window's served-rows record (`serve_commit.CommitWindows`' ``served_rows``) and the
+than its rows ran (`positions_off`), and the context carries the row's required manifest by its path, its Program digest and its
+``manifest_digest`` (a manifest naming no digest is refused, `manifest_refusal`), the manifest's ``op_path_aliases``, which the
+opened store resolves a shared module's layer-N path through, the window's served-rows record (`serve_commit.CommitWindows`' ``served_rows``) and the
 step-input port (`port_of`; `port_layout` is where the window's streams put it). The window's requests are named by the body's ``user`` (the id the advice names them
 by), and the bundle names no Programs: a served window's Programs are the registered compiler's for its advice, made after
 the window closed. With ``--retain-exclude hidden_m1`` (`serve_release.RetentionOptions`) the attention interiors (``fa2.m1/*``, ``fa3.m1/*``)
@@ -117,7 +118,21 @@ def manifest_of_record(opts: Any) -> dict[str, Any]:
     loads it."""
     from verity_vllm.commit.partition import require_partition
 
-    return require_partition(json.loads(Path(opts.required_manifest).read_text()), programs_root_of(opts), None)
+    man = require_partition(json.loads(Path(opts.required_manifest).read_text()), programs_root_of(opts), None)
+    if why := manifest_refusal(opts.required_manifest, man):
+        raise UsageError(why)
+    return man
+
+
+def manifest_refusal(path: str | None, manifest: Mapping[str, Any]) -> str | None:
+    """Why a sealed window can't record the row's required manifest ``manifest``, read from ``path`` (None: it can): its context
+    binds the manifest by its Program digest and its own digest, ``manifest_digest`` over its identities, both of which predict
+    row writes into it."""
+    if missing := [k for k in ("program_digest", "manifest_digest") if not isinstance(manifest.get(k), str) or not manifest[k]]:
+        return (f"the row's manifest {path} names no {' and no '.join(missing)}, and a sealed window binds its manifest by "
+                "it: pass the row's Build of record (`verity-vllm predict row --row ROW --out DIR`, --required-manifest "
+                "DIR/manifest.json)")
+    return None
 
 
 def parts_missing(com: Any, manifest: Mapping[str, Any], hidden_required: bool | None) -> list[str]:
@@ -423,6 +438,8 @@ def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]]
     out.mkdir(parents=True, exist_ok=True)
     pd = v.program_digest.hex()
     manifest = v.manifest
+    if manifest is not None and (why := manifest_refusal(v.manifest_path, manifest)):
+        raise ValueError(why)
     port = v.port
     with gc_paused():
         binder = served_binder_of(manifest, sorted(v.layouts), v.ports, v.has_port) if manifest is not None else None
@@ -441,8 +458,8 @@ def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]]
         drop(bmap["entries"])
     t_map = time.perf_counter()
     of_record = {} if manifest is None else {
-        "required_manifest": {"path": v.manifest_path, "program_digest": manifest.get("program_digest"),
-                              "digest": manifest.get("digest")},
+        "required_manifest": {"path": v.manifest_path, "program_digest": manifest["program_digest"],
+                              "manifest_digest": manifest["manifest_digest"]},
         "op_path_aliases": dict(manifest.get("op_path_aliases") or {})}
     hashed: dict[str, str] = {}
     unretained = {RB.NOT_RETAINED: nr} if (nr := v.unretained()) else {}
