@@ -17,7 +17,8 @@
 # Run from the verity tree (research run --cwd source). Outputs under out/: host.txt, stage.json, statement.txt,
 # schedule.json, tree-source.txt, session.log, time-prove.txt, prove.txt/.err, inner/ (schedule.json, public.json,
 # private.json, session/, prover/), replay.txt, vstar.json, points.json, fold.json, check-fold.json, vstage.json, lean.log,
-# summary.json, and rec-c3-inner/ (the fixture test_lean_rec_inner_streams and test_lean_rec_record read: public.json,
+# summary.json, with STACKED circuit-registration.json and circuit-meta.txt (the staged circuit.txt's first two lines, its
+# META), and rec-c3-inner/ (the fixture test_lean_rec_inner_streams and test_lean_rec_record read: public.json,
 # private.json, session/ and prover/'s session.json, points.json, fold.json, circuit-meta.txt, the staged circuit's header,
 # and with STACKED circuit-registration.json). Exits 1 unless the session, replay, rec_vstar, the fold check, the staging and
 # Lean's reading all pass.
@@ -71,7 +72,7 @@ FP=$!
 python3 verity/ml/flock/pod/rec_inner.py stage --n $N --sets $S/sets --out $D --plain-leaves $REG > $O/stage.json 2> $O/stage.err \
   || { tail -20 $O/stage.err; exit 1; }
 cat $O/stage.json
-[ -n "${STACKED:-}" ] && cp $D/circuit-registration.json $O/
+[ -n "${STACKED:-}" ] && cp $D/circuit-registration.json $O/ && head -2 $D/circuit.txt > $O/circuit-meta.txt
 
 env $INNER_COINS $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/statement.txt 2>&1 || { tail -5 $O/statement.txt; exit 1; }
 python3 -m verity_flock.rec_live --schedule-for $O/statement.txt --holo $SPA ${MR:+--stacked $MR} > $O/schedule.json || exit 1
