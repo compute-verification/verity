@@ -197,8 +197,22 @@ theorem stateChecks_getElem? {p : Params} {c : Commitment} {s : Schedule} {sd : 
     (stateChecks p c)[i]? = some (stateCheck p s c.audits (p.first + i) reg) := by
   simp [stateChecks, hform, Array.getElem?_zipIdx, hreg]
 
-theorem rowsStateTied : RowsStateTied := by
-  intro p c e pub prof h s sd scan hform i reg hreg
+/-- A link-window's state finding is none only when its scan's state is tied (`stateTied`) and its row 0 opened to the
+empty state (`stateEmpty`). -/
+theorem stateCheck_none {p : Params} {s : Schedule} {audits : Array Lean.Json} {w : ℕ} {reg : Lean.Json}
+    (h : stateCheck p s audits w reg = none) : stateTied p.audits s audits reg = true ∧ stateEmpty s reg = true := by
+  unfold stateCheck at h
+  split at h
+  · split at h
+    · exact ⟨by assumption, by assumption⟩
+    · cases h
+  · cases h
+
+/-- An accepted rows-form period's link-window has no state finding. -/
+theorem stateCheck_of_accept {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile}
+    (h : check p c e = .accept pub prof) {s : Schedule} {sd : ByteArray} {scan : Scan}
+    (hform : p.form = .rows s sd scan) {i : ℕ} {reg : Lean.Json} (hreg : c.windows[i]? = some reg) :
+    stateCheck p s c.audits (p.first + i) reg = none := by
   have hmem := Array.mem_of_getElem? (stateChecks_getElem? hform hreg)
   unfold check at h
   split at h
@@ -214,11 +228,11 @@ theorem rowsStateTied : RowsStateTied := by
   · cases h
   · cases h
   · rename_i hF
-    have h0 := firstFinding_none hF _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))
-    unfold stateCheck at h0
-    split at h0
-    · assumption
-    · cases h0
+    exact firstFinding_none hF _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))
+
+theorem rowsStateTied : RowsStateTied := by
+  intro p c e pub prof h s sd scan hform i reg hreg
+  exact stateCheck_none (stateCheck_of_accept h hform hreg)
 
 /-- The slot audit's registration with its `SCAN_STATE` registered at the root `root` and the domain `e`, beside its
 entries port at `r` and `d`. -/
@@ -284,20 +298,9 @@ theorem rowsStateTied_misindexed {p : Params} {sd : ByteArray} {scan : Scan} (e 
     check p ⟨#[stateReg "s"], #[misindexedWindow], .empty⟩ e ≠ .accept pub prof := by
   intro hacc
   have hs : stateTied p.audits stateSchedule #[stateReg "s"] misindexedWindow = true :=
-    rowsStateTied p _ e pub prof hacc stateSchedule sd scan hform 0 misindexedWindow rfl
+    (rowsStateTied p _ e pub prof hacc stateSchedule sd scan hform 0 misindexedWindow rfl).1
   rw [ha, misindexedWindow_untied] at hs
   cases hs
-
-/-- A link-window's state finding is none only when its scan's state is tied (`stateTied`) and its row 0 opened to the
-empty state (`stateEmpty`). -/
-theorem stateCheck_none {p : Params} {s : Schedule} {audits : Array Lean.Json} {w : ℕ} {reg : Lean.Json}
-    (h : stateCheck p s audits w reg = none) : stateTied p.audits s audits reg = true ∧ stateEmpty s reg = true := by
-  unfold stateCheck at h
-  split at h
-  · split at h
-    · exact ⟨by assumption, by assumption⟩
-    · cases h
-  · cases h
 
 /-- **No period check that accepts every period has `RowsStateTied`'s property** (its nontrivial lemma): such a check
 accepts a rows-form period of one link-window whose scan's `prog` is wired to the slot audit, and whose state is not
@@ -307,8 +310,8 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   let p : Params :=
     ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
   have hs : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateWindow = true :=
-    h p ⟨#[stateReg "t"], #[stateWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
-      stateWindow rfl
+    (h p ⟨#[stateReg "t"], #[stateWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
+      stateWindow rfl).1
   rw [stateWindow_skipped] at hs
   cases hs
 

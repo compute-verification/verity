@@ -32,7 +32,8 @@ state is the scan's own. The check accepts a tied audit at any sample; the consi
 and `RowsStateTied`. `RowsProgWired` says it accepts no link-window whose scan's `prog` is not a compute audit's slot
 entries, a lane's tree the entries port of its chunk of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's
 own Program. `RowsStateTied` says it accepts no link-window whose scan's state is not the `SCAN_STATE` of an audit its
-`prog` is wired to, so a state that skips or alters one of the scan's transitions is no Program's input. Each
+`prog` is wired to, read where the scan's units chain it from row 0, the empty state, so a state that skips or alters
+one of the scan's transitions, or starts from a state the prover chose, is no Program's input. Each
 says its conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`) of every period `check` accepts, and so is, by definition,
 its property of any period check at `check` (`RowsProgWiredOf`, `RowsStateTiedOf`), which the nontrivial lemmas state
 false at `acceptAllRows`, a check that accepts every period. Each guarantee writes its acceptance of `check` out rather
@@ -93,11 +94,12 @@ def RowsProgWired : Prop :=
     check p c e = .accept pub prof → RowsProgWiredAt p c
 
 /-- What `RowsStateTied` says of a period its check accepted: in the rows form, each link-window's scan's registration
-states its units' state reads as the scan's transitions chain them, its state entries are at one root and domain, and
-an audit wired to it has its own there (`stateTied`). -/
+states its units' state reads as the scan's transitions chain them, its state entries are at one root and domain, an
+audit wired to it has its own there (`stateTied`), and it opens the state's row 0 to the empty state (`stateEmpty`). -/
 def RowsStateTiedAt (p : Params) (c : Commitment) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
-    ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → stateTied p.audits s c.audits reg = true
+    ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg →
+      stateTied p.audits s c.audits reg = true ∧ stateEmpty s reg = true
 
 /-- `RowsStateTied` of the period check `chk`: `RowsStateTiedAt` of every period `chk` accepts. -/
 def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
@@ -109,10 +111,13 @@ accepts a period in the rows form, each link-window's scan's registration has a 
 port `scan/state` or a `registered` value `verity/certifier/scan-state/v1`), every one at one root and domain, and an
 audit whose slot entries are the scan's `prog` (`wired`) has one, every one at that root and domain; and its `window`'s
 `reads` of `scan/state` state ingress unit `t`'s `sin` at leaf `t`, `t` from 1, and its `o1` at leaf `t + 1`, `t` below
-`T − 1`, one run a port (`stateRead`), the reads the scan's verifier of record holds each unit's ports to. So the
-scan's units read their state at that root where the unit before registered it, the state a slot's Program reads is
-the scan's, and a `SCAN_STATE` that skips or alters a transition, at another root or domain, or a registration whose
-units read their state off the chain (a `sin` at leaf `t + 1`, an `o1` at leaf `t`), is refused. -/
+`T − 1`, one run a port (`stateRead`), the reads the scan's verifier of record holds each unit's ports to; and its
+`window`'s `empty` of `scan/state` opens leaf 0 of that root and domain to `W` zero u16 words, `W` at least 1, under a
+salt of 192 bytes through one sibling a level of the `T` leaves (`stateEmpty`). So the scan's units read their state
+at that root where the unit before registered it, from row 0, which no unit computes and the Programs anchored at
+bucket 0 read, opened to the empty state; the state a slot's Program reads is the scan's, and a `SCAN_STATE` that
+skips or alters a transition, at another root or domain, a registration whose units read their state off the chain
+(a `sin` at leaf `t + 1`, an `o1` at leaf `t`), or one that opens no leaf 0 to the empty state, is refused. -/
 def RowsStateTied : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateTiedAt p c
