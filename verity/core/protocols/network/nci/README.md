@@ -41,6 +41,9 @@ scenarios register a policy as if it were a subprotocol.
   `Nci.SecurityProofs.G`. `ReadBound` turns a lower bound on fresh input into a lower bound on size, `Inference` shows
   honest inference complies, and the covering, training and threading statements are pricing arguments.
   `Nci.Guarantees.DampenerRemote` and its relatives state the remote composition's overhead at (c, k).
+- **The count of (c, k)-inference blocks**, `Nci.CompliesAtMost c k n` (`Security/Definitions/Nci.lean`): D's
+  computed gates divide into at most n proof blocks of a (c, k)-partition (`Verity.Partition.IsCK`,
+  `Security/Definitions/Core/Formalism.lean`).
 - **The registered information's provenance**, `Nci.Assumptions.BaselineRegistered`: every θ entry is registered
   public data, never an earlier run's output.
 
@@ -52,6 +55,13 @@ nothing else but Lean core and the core interface (`core_protocol`).
 - `nci-check` runs `NciCheck.Baseline.check`: `NciCheck.Desc.check`, which decides `Nci.CompliesRate c α` for a declared
   division aligned to the root's Calls at the cost of the descriptor (one summary per Definition), then each θ entry's
   provenance against the deployment's registration log.
+- `nci-check --count` runs `NciCheck.Count.check`, the count of (c, k)-inference blocks: the declaration names its block
+  Definitions by descriptor key, and the check gives each one's Boolean gates (from a per-primitive gate table), its
+  fresh input bits outside θ and its blocks, multiplied through batches and scans, and the root's total against n.
+  `NciCheck.Properties.DescCountsCK` (`Security/Properties/Nci/Count.lean`) states that an accepted count means
+  `Nci.CompliesAtMost c k n`; it is not yet proved, and the lock lists it as an open piece. `nci-count-difftest` holds
+  it to the Python reference's `check_count` (`lean/scripts/nci_reference.py`), run by
+  `../tests/test_nci_count_difftest.py`.
 - `nci-check --unrolled` runs the same with `NciCheck.check`, the check gate by gate, kept as the reference; its input
   format is in `NciCheck.Check`'s docstring. `nci-check --policy` runs the policy's check alone, without θ's
   provenance, which is what `benchmarks/verifier_cost` measures.
