@@ -39,19 +39,9 @@ A spec-level reference for network accounting's timing channel:
   the committed decisions and `compile_steps`' Programs, and is held step for step to the replay
   (`benchmarks/network_e2e/encodings/replay_vectors.py`); it is in no proof-system Spec yet. It takes the circuits
   and their evaluator from `verity`;
-- the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
-  served through the network certifier's egress, every cell of an egress execution phase is opened, each a pad, the
-  canonical event of one token id or the response's end on the stream the network certifier set, and each is the cell
-  the advice's map names at its place (`window_map`, from the advice's outputs, release buckets and advice v1's order
-  permutation, each request on its ingress ordinal's stream from 1, accepted on TRACE-CORPUS's heavy trace; the verifier
-  computes it in the clear from the opened advice, the named gap, until the map is read in the proof under the advice's
-  hiding root), with the id the Commit sampled for it (the port: one hiding row of ids a step, read under the Commit's
-  root). The cells are the network certifier's (`warden`): a connection's r slots a bucket, a `PAD` on its stream before
-  its first cell and after its `END`, one id event a `DATA` cell. The network certifier commits each bucket's cells as
-  one hiding row. It has the reference and the proof block's Boolean Definition, one a bucket row (`IoTieBucket`: the
-  row and the port's rows read as registered rows, the network certifier's and the Commit's (`port_reads`), then
-  `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš routing of the port's entries `IoTieRoute`,
-  `IoTieMatch`);
+- what the network certifier's ties share (`io_tie`, `PROTOCOL.md`, "The I/O tie"): the id form's cells and their one
+  reading (`parse_cell`), a Commit's rows read as registered rows (`port_reads`) and the Beneš routing (`IoTieRoute`),
+  on which the ingress tie, the ingress-ids tie and the egress tie build;
 - the ingress tie (`io_request`, `PROTOCOL.md`, "The ingress tie") on the network certifier's own ingress (`serve`): one
   proof block a registered bucket row (`warden_rows.bucket_port`), each live connection's lane of r slots read as the
   network certifier's cells (a `PAD` on its ordinal, a `DATA` of exactly B − 9 bytes, its `END`), each request cell a
