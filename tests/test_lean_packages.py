@@ -51,11 +51,12 @@ def test_one_mathlib():
 
 #: the size of each lock's `unwitnessed`: the guarantees stating what an acceptance means, or an exclusion's bound, that
 #: had no `honest` and `nontrivial` witnesses when the witness rule came (`check.py`'s `witness_failures`), with those the
-#: PRs on `next` then brought, the exclusion bounds that read a partition once a derived circuit's registration built
+#: PRs on `next` then brought, NCI's `ActivationsChain`, `ReferenceThreaded` and `ThreadedOfLayered`,
+#: which read a verifier through `trees`' `except` once stated over a registered circuit, the exclusion
+#: bounds that read a partition once a derived circuit's registration built
 #: its one-block partition (`RegisteredCircuit.ofCircuit`), the six C-Flock statements whose claim or verifier read
-#: lies in a module of `trees`' `except`, once the rule read through those, NCI's three bounds that read that partition
-#: once stated over a registered circuit (`ActivationsChain`, `ReferenceThreaded`, `ThreadedOfLayered`), and C-Flock's
-#: `LoopInnerRound0Own`, which reads a claim, from a PR on `next`
+#: lies in a module of `trees`' `except`, once the rule read through those, and C-Flock's `LoopInnerRound0Own`, which
+#: reads a claim, from a PR on `next`
 UNWITNESSED = {"Security": 602, "Security/Properties": 234, "verity/core/service/flock": 8}
 
 
