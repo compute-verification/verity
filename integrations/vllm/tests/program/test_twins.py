@@ -47,7 +47,7 @@ def test_twin_matches_gates_on_random_small_statics(base):
     rng = np.random.default_rng(zlib.crc32(base.encode()))
     rnd = TW.check_instances(cls, cls.small_statics, rng, 8, TW.RANDOM_KINDS)
     assert rnd["status"] == "pass" and rnd["mismatches"] == [] and rnd["n"] >= 6, rnd
-    assert len(rnd["statics"]) >= 2, rnd["statics"]                       # several structural variants were drawn
+    assert len(rnd["statics"]) >= 2, rnd["statics"]                       # several structural variants were sampled
     edge = TW.check_instances(cls, cls.small_statics, rng, 8, TW.EDGE_KINDS)
     assert edge["mismatches"] == [], edge
     assert edge["n"] >= 2, edge                                            # NaN / inf / subnormal / boundary words

@@ -7,8 +7,9 @@ import Proofs.Flock.Claims.Recursion.LayoutBCap
 asks for a part holding the round whole (`TopsHeld`). None does: such a round's message is the salted tops it commits,
 one string a node, then one row where it absorbs a message (`nAtSched`), and the row is another part's. V*'s list now
 holds every later level's tops at fixed rows: the later levels' caps (`VStar.levelCapStatements`, `rec-cap/n<N>-l<l>`),
-the list's statements just before level 0's RecCap, the `g`-th over both reps' nodes of the reps' schedule's `g`-th
-top (`RecVStar.checkTopsListed`), instance `rep · n + t` reading node `t` of rep `rep`'s top as its port `top`.
+the list's statements just before the link table's part (`linkParts`) and level 0's RecCap, the `g`-th over both reps'
+nodes of the reps' schedule's `g`-th top (`RecVStar.checkTopsListed`), instance `rep · n + t` reading node `t` of rep
+`rep`'s top as its port `top`.
 `layoutBTops` is `layoutBCap` with each tops round assembled from pieces instead:
 
 * **The tops** (`topsPiecesAt`): the round's `e`-th top, the schedule's `g`-th, at the list's `g`-th later cap
@@ -43,9 +44,18 @@ open FlockDeploy (Coin)
 /-- The tops the schedule `rs` commits before its round `k`, one entry a top. -/
 def topsBefore (rs : Array RecVStar.SchedRound) (k : ℕ) : ℕ := ((rs.toList.take k).flatMap (·.2.1.toList)).length
 
-/-- **Where the later levels' caps start in V\*'s list**: its last `1 + (topSizes rs).length` statements are the caps,
-level 0's last. -/
-def capsFrom (r : XR) (rs : Array RecVStar.SchedRound) : ℕ := r.w.parts.length - 1 - (RecVStar.topSizes rs).length
+/-- The link table's parts in V\*'s list: one where the inner shape links (`RecVStar.linkStatements`), else none. -/
+def linkParts (r : XR) : ℕ := if r.shape.links.isSome then 1 else 0
+
+theorem linkParts_size {r : XR} {L : Array VStar.Stmt} (h : RecVStar.linkStatements r.shape = .ok L) :
+    L.size = linkParts r := by
+  unfold linkParts
+  rcases FlockC3.VStarList.linkStatements_ok h with ⟨hl, rfl⟩ | ⟨l, hl, rfl⟩ <;> simp [hl]
+
+/-- **Where the later levels' caps start in V\*'s list**: its last `(topSizes rs).length + linkParts r + 1` statements
+are the later caps, the link table's part where the inner shape links, and level 0's cap, last. -/
+def capsFrom (r : XR) (rs : Array RecVStar.SchedRound) : ℕ :=
+  r.w.parts.length - 1 - linkParts r - (RecVStar.topSizes rs).length
 
 /-- **A top as its cap's part holds it**: at part `s`, the commit strings of rep `rep`'s `n` instances (`rep · n + t`)
 in order, each port `top`'s hm96 slot's output `b ‖ c`. At a part with no circuit or no port `top` it is read at the
@@ -312,7 +322,7 @@ many later caps as the schedule's tops (`topsListed_size`). -/
 theorem topsLen_readX {x : Msg} {r : XR} {rs : Array RecVStar.SchedRound} (h : readX x = some r)
     (hrs : repSched r.shape = some rs) : (RecVStar.topSizes rs).length ≤ r.w.parts.length - 1 := by
   obtain ⟨vs, hvs, hlen⟩ := readX_statements h
-  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, N, -, hT, rfl⟩ := FlockC3.Reps.list_ok hvs
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, L, N, -, hT, -, rfl⟩ := FlockC3.Reps.list_ok hvs
   rw [hlen, ← topsListed_size hT hrs]
   simp only [Array.size_append, Array.size_singleton]
   omega

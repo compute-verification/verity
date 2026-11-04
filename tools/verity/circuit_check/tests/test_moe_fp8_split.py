@@ -25,7 +25,7 @@ import pytest
 
 FIXTURE = Path(__file__).parent / "fixtures" / "moe_fp8_split.json"
 FAMILY = ("moe", "moe_pad", "moe_difftest", "boolean_moe", "fp8", "fp8_moe", "boolean_fp8", "boolean_fp8_moe", "nvfp4", "boolean_gather")
-#: the difftest stayed in the integration when the registry moved to `verity.ml.definitions` (tools/move/defs_map.toml)
+#: the difftest stays in the integration; the registry is `verity.ml.definitions`
 MODULES = tuple("verity_vllm.program.moe_difftest" if m == "moe_difftest" else f"verity.ml.definitions.registry.{m}" for m in FAMILY)
 
 
@@ -59,17 +59,13 @@ def _found(catalog) -> dict:
     """Every Definition circuit-check's catalog reaches that the family could own (`_owned`), by descriptor id (scalar references
     have no descriptor): each one whose family the family's modules name, or whose registered Definition they hold, or that no
     module registers."""
+    from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition, SpecializedDefinition
 
     families = {f for f, _gates in catalog.reached.values()}
     could = {f for f in families if f in _named_bases() or f not in REGISTRY.defs or _home(REGISTRY.defs[f]) in MODULES}
     made = (catalog.make(fid) for fid, (f, _gates) in catalog.reached.items() if f in could)
-    return {fn_id(fn): fn for fn in made if isinstance(fn, (PrimitiveDefinition, SpecializedDefinition))}
-
-
-def fn_id(fn) -> str:
-    from verity.ml.circuits.codec import descriptor_id
-    return descriptor_id(fn)
+    return {descriptor_id(fn): fn for fn in made if isinstance(fn, (PrimitiveDefinition, SpecializedDefinition))}
 
 
 def family_digests(found: dict) -> dict[str, str]:
@@ -134,6 +130,8 @@ def _extra(digests: dict[str, str], found: dict) -> dict[str, str]:
     import re
     import subprocess
 
+    from verity.ml.circuits.codec import descriptor_id
+
     repo = Path(__file__).resolve().parents[4]
     bases = sorted({i.split("{", 1)[0] for i in digests} | _named_bases(), key=len, reverse=True)
     names = sorted({b.rsplit("_v", 1)[0] for b in bases}, key=len, reverse=True)
@@ -157,7 +155,7 @@ def _extra(digests: dict[str, str], found: dict) -> dict[str, str]:
     for i in sorted(found - set(digests)):
         try:
             fn = _resolve(i, found)
-            fid, d = fn_id(fn), _digest(fn)
+            fid, d = descriptor_id(fn), _digest(fn)
         except Exception:  # noqa: BLE001  (symbolic or partial statics such as `{E, K}`, or an id that does not parse back)
             continue
         if fid not in digests:

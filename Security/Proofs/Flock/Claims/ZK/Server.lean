@@ -41,10 +41,10 @@ filled with the commit strings of fixed digests under its own salts, kinds `fixe
   for the masked checks (`zk_server_own`). At a masked table that prover is `Worker`'s switched prover
   (`Table.swView`), whose final message has `S_shvzk`'s distribution at any values that don't read the pads
   (`Table.worker_shvzk`).
-* The workers never see the pads: the server runs a pad-blind worker (`BWorker`), handed the shared part of the tape
-  and the verifier's answers, never the server's draws or its released messages (`lift`; every `Blind` worker is one,
-  `Blind.eq_lift`), so the values its reference reads (`srcOf_lift`) and its copy (`copy_lift`) are functions of those
-  alone.
+* The workers never see the pads: the server runs a pad-blind worker (`BWorker`), handed its part of the tape (`π`)
+  and the verifier's answers as read (`rd`), never the server's draws or its released messages (`lift`; every `Blind`
+  worker is one, `Blind.eq_lift`), so the values its reference reads (`srcOf_lift`) and its copy (`copy_lift`) are
+  functions of those alone.
 * The stop's leak: `Pr_choice_le`, an event at a stop pattern the worker chooses is within the sum over the patterns
   of the event at each fixed one; `stream_leak`, on a stream of `m` sessions of which at most `b` stop, each in one of
   `r` forms, there are at most `∑_{i ≤ b} C(m, i)·r^i` patterns (`card_pattern_le`), so at most that many times the
@@ -659,43 +659,57 @@ theorem zk_server_own {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [
 
 /-! ## Workers never see the pads -/
 
-/-- **A pad-blind worker** on the server's tape `Rw × Rp`, `Rp` the server's own draws (the pads, their masks, the
-salts): a function of the statement, the witness, the part `Rw` of the tape the workers are given, and the verifier's
-answers so far, to each slot's value. -/
-abbrev BWorker {W Rw Rp : Type} (S : ZkServer W (Rw × Rp)) : Type := Msg → W → Rw → List Msg → ℕ → Option S.Val
+/-- **A pad-blind worker** handed `Rw`, the part of the server's tape the workers are given, never the server's own
+draws (the pads, their masks, the salts the workers don't see), and the verifier's answers so far read as `C`: a
+function of the statement, the witness, those, to each slot's value. -/
+abbrev BWorker {W R : Type} (S : ZkServer W R) (Rw C : Type) : Type := Msg → W → Rw → List C → ℕ → Option S.Val
 
-/-- **The worker the server runs** at a pad-blind one: it is handed `ρ.1` and the answers `h.map Prod.snd`, never the
-server's draws `ρ.2` or its released messages. -/
-def lift {W Rw Rp : Type} (S : ZkServer W (Rw × Rp)) (bw : S.BWorker) : S.Worker :=
-  fun x w ρ h s => bw x w ρ.1 (h.map Prod.snd) s
+/-- **The worker the server runs** at a pad-blind one: it is handed its part `π ρ` of the tape and the answers read by
+`rd`, never the rest of the tape or the server's released messages. -/
+def lift {W R Rw C : Type} (S : ZkServer W R) (π : R → Rw) (rd : Msg → C) (bw : S.BWorker Rw C) : S.Worker :=
+  fun x w ρ h s => bw x w (π ρ) (h.map fun m => rd m.2) s
 
-/-- **A worker never sees the server's draws**: what it returns is the same at two tapes with the same shared part and
-two histories with the same answers. -/
-def Blind {W Rw Rp : Type} (S : ZkServer W (Rw × Rp)) (wk : S.Worker) : Prop :=
-  ∀ x w (ρ ρ' : Rw × Rp) (h h' : List (Msg × Msg)) s, ρ.1 = ρ'.1 → h.map Prod.snd = h'.map Prod.snd →
+/-- **A worker never sees the server's draws**: what it returns is the same at two tapes with the same part `π` and
+two histories whose answers read the same by `rd`. -/
+def Blind {W R Rw C : Type} (S : ZkServer W R) (π : R → Rw) (rd : Msg → C) (wk : S.Worker) : Prop :=
+  ∀ x w (ρ ρ' : R) (h h' : List (Msg × Msg)) s, π ρ = π ρ' → h.map (fun m => rd m.2) = h'.map (fun m => rd m.2) →
     wk x w ρ h s = wk x w ρ' h' s
 
-theorem lift_blind {W Rw Rp : Type} (S : ZkServer W (Rw × Rp)) (bw : S.BWorker) : S.Blind (S.lift bw) :=
+theorem lift_blind {W R Rw C : Type} (S : ZkServer W R) (π : R → Rw) (rd : Msg → C) (bw : S.BWorker Rw C) :
+    S.Blind π rd (S.lift π rd bw) :=
   fun _ _ _ _ _ _ _ hρ hh => by simp only [lift, hρ, hh]
 
-/-- **Every pad-blind worker is one the server runs**, at any fixed draws `rp`. -/
-theorem Blind.eq_lift {W Rw Rp : Type} {S : ZkServer W (Rw × Rp)} {wk : S.Worker} (hb : S.Blind wk) (rp : Rp) :
-    wk = S.lift fun x w r as s => wk x w (r, rp) (as.map fun a => (([] : Msg), a)) s := by
+/-- **Every pad-blind worker is one the server runs**, at any tapes `σ r` with part `r` and answers `ε a` read as `a`. -/
+theorem Blind.eq_lift {W R Rw C : Type} {S : ZkServer W R} {π : R → Rw} {rd : Msg → C} {wk : S.Worker}
+    (hb : S.Blind π rd wk) (σ : Rw → R) (hσ : ∀ r, π (σ r) = r) (ε : C → Msg) (hε : ∀ a, rd (ε a) = a) :
+    wk = S.lift π rd fun x w r as s => wk x w (σ r) (as.map fun a => (([] : Msg), ε a)) s := by
   funext x w ρ h s
-  refine hb x w ρ (ρ.1, rp) h _ s rfl ?_
+  refine hb x w ρ (σ (π ρ)) h _ s (hσ _).symm ?_
+  simp only [List.map_map, Function.comp_def, hε]
+
+/-- **Every pad-blind worker is one the server runs** wherever every part is some tape's. -/
+theorem Blind.exists_lift {W R Rw C : Type} {S : ZkServer W R} {π : R → Rw} {rd : Msg → C} {wk : S.Worker}
+    (hb : S.Blind π rd wk) (hπ : Function.Surjective π) : ∃ bw : S.BWorker Rw C, S.lift π rd bw = wk := by
+  refine ⟨fun x w r as s => wk x w (Function.surjInv hπ r) (as.map fun a => (([] : Msg), Function.invFun rd a)) s, ?_⟩
+  funext x w ρ h s
+  show wk x w (Function.surjInv hπ (π ρ)) ((h.map fun m => rd m.2).map fun a => (([] : Msg), Function.invFun rd a)) s =
+    wk x w ρ h s
+  refine hb x w _ ρ _ h s (Function.surjInv_eq hπ (π ρ)) ?_
   simp only [List.map_map, Function.comp_def]
+  exact List.map_congr_left fun m _ => Function.invFun_eq ⟨m.2, rfl⟩
 
 /-- **The values the server's reference reads never read its draws**: at a pad-blind worker, `srcOf` at round `j` is
-the worker's value from `x`, `w`, `ρ.1` and the answers alone. -/
-theorem srcOf_lift {W Rw Rp : Type} (S : ZkServer W (Rw × Rp)) (bw : S.BWorker) (x : Msg) (j s : ℕ) (w : W)
-    (ρ : Rw × Rp) (h : List (Msg × Msg)) :
-    S.srcOf (S.lift bw) x j s w ρ h = (bw x w ρ.1 (h.map Prod.snd) s).getD (S.cst x j s) :=
+the worker's value from `x`, `w`, `π ρ` and the answers alone. -/
+theorem srcOf_lift {W R Rw C : Type} (S : ZkServer W R) (π : R → Rw) (rd : Msg → C) (bw : S.BWorker Rw C) (x : Msg)
+    (j s : ℕ) (w : W) (ρ : R) (h : List (Msg × Msg)) :
+    S.srcOf (S.lift π rd bw) x j s w ρ h = (bw x w (π ρ) (h.map fun m => rd m.2) s).getD (S.cst x j s) :=
   rfl
 
 /-- **The server's copy never reads its draws** at a pad-blind worker. -/
-theorem copy_lift {W Rw Rp : Type} (S : ZkServer W (Rw × Rp)) (bw : S.BWorker) (x : Msg) (w : W)
-    (ρ ρ' : Rw × Rp) (h h' : List (Msg × Msg)) (hρ : ρ.1 = ρ'.1) (hh : h.map Prod.snd = h'.map Prod.snd) :
-    S.copy (S.lift bw) x w ρ h = S.copy (S.lift bw) x w ρ' h' := by
+theorem copy_lift {W R Rw C : Type} (S : ZkServer W R) (π : R → Rw) (rd : Msg → C) (bw : S.BWorker Rw C) (x : Msg)
+    (w : W) (ρ ρ' : R) (h h' : List (Msg × Msg)) (hρ : π ρ = π ρ')
+    (hh : h.map (fun m => rd m.2) = h'.map (fun m => rd m.2)) :
+    S.copy (S.lift π rd bw) x w ρ h = S.copy (S.lift π rd bw) x w ρ' h' := by
   have hl : h.length = h'.length := by simpa only [List.length_map] using congrArg List.length hh
   funext i s
   simp only [copy, lift, hl, hρ, List.map_take, hh]

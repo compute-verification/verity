@@ -488,7 +488,8 @@ def test_the_charge_circuit_is_the_reference():
 
 
 def test_build_charge_inline():
-    """`build_charge`, the call a caller's circuit makes, is the unit: its public inputs split by `charge_fields`."""
+    """`build_charge`, the call a caller's circuit makes, is the proof block: its public inputs split by
+    `charge_fields`."""
     from verity.ml.circuits.boolean.forms import Circuit
     N, rng = 3, random.Random(3)
     cases = [_random_charge(rng, N) for _ in range(40)]
@@ -553,7 +554,7 @@ def test_size_counts_the_gates():
 
 @pytest.mark.parametrize("part, key", [(AE.ArithEncodeFinish, ()), (AE.ArithEncodeStep, (3, 1))])
 def test_a_parts_build_is_called_as_the_lowering_calls_it(part, key):
-    """C-Flock's lowering (`ir_lower._boolean_activation`) passes the statics to ``build`` only when the part has some, so a
+    """Flock's lowering (`ir_lower._boolean_activation`) passes the statics to ``build`` only when the part has some, so a
     part without any, ArithEncodeFinish_v1, takes the elements alone."""
     from verity.ml.circuits.boolean.trace import trace
 
