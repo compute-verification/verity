@@ -43,7 +43,11 @@ link-window whose scan's state is not its
 wired audit's `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions,
 at another root or domain, or none, `UNSTATES`). The tied audits run one class circuit, a Program drawn once, whose
 SHA-512 is the parameters' `circuit` (`_held`), and a phase whose tied audit runs another, or under another
-`circuit`, is refused (`circuit-swapped`, `UNHOLDS`). `case(kind, seed, form)` is a small period of the form aimed at a
+`circuit`, is refused (`circuit-swapped`, `UNHOLDS`). In the clock form an audit may be in the record form
+(`audit-record`): its window's circuit record, wire order and the verifier's pins beside its Program (`record_audit`), its
+registration's window binding the record and recording each pin's root; refused where the window binds another record
+(`audit-record-circuit`) or records no pin's root (`audit-record-pin`), or a pin is of `SCAN_STATE`
+(`audit-record-state`). `case(kind, seed, form)` is a small period of the form aimed at a
 verdict, or at a decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with
 its answer, as a composition's difftest takes a real component's cases.
 
@@ -75,12 +79,14 @@ from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
 from verity.ml.circuits import boolean as BL, codec, metadata as AN, population
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.defs import REGISTRY
+from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import array_of, coll_concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
 from verity.ml.definitions.registry.sampling import bit_at
+from verity.ml.windows import interface as IF
 
 ID = "verity/certifier/v0"
 COMMITMENT_TAG = "verity-network-certifier/period/v0"
@@ -151,13 +157,15 @@ class Audit:
     """`Audit`: a compute audit's layout terms (its free inputs, its Program's input gates, and its monitoring period)
     and what its Program gives: its SHA-512, its units (its root's template instances), the most bits one of them
     commits, and its slot entries' templates (`entries`: each root template node calling `SlotEntry_v1` or
-    `SelectEntry_v1`, by descriptor id, members and closure digest, `slot_entry_digest`)."""
+    `SelectEntry_v1`, by descriptor id, members and closure digest, `slot_entry_digest`); with its window's circuit
+    record (`record`), the record's digest and the pins its count held, as (param, root) pairs."""
     free: int
     steps: int
     program: str
     units: int
     bits: int
     entries: tuple[tuple[str, int, str], ...] = ()
+    record: tuple[str, tuple[tuple[str, str], ...]] | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -485,13 +493,18 @@ def input_gates(j: dict) -> int:
                if defs[k := callees[x["fn"]]]["form"] == "primitive" and (m := INPUT_ID.fullmatch(k)))
 
 
+AUDIT_FORMS = (["program", "steps"], ["circuit", "order", "pins", "program", "steps"])
+
+
 def _audit(a, ctx: str) -> Audit:
     """`auditOf`: the layout terms and the Program's descriptor, whose root's template instances are the audit's units,
     each committing its template's return; a root with no template refused; its free inputs the Program's input gates
-    (`input_gates`), never a parameter; its slot entries' templates (`ENTRY_IDS`) with their closure digests. It reads
+    (`input_gates`), never a parameter, or, with its window's circuit record, wire order and the verifier's pins, the
+    record's count (`_record_count`); its slot entries' templates (`ENTRY_IDS`) with their closure digests. It reads
     the descriptor's root nodes, signatures and the slot entries' Definitions; C-Flock's decoder, which Lean runs on it,
     refuses no descriptor this module writes."""
-    _exactly(a, ["program", "steps"], ctx)
+    if not isinstance(a, dict) or sorted(a) not in AUDIT_FORMS:
+        raise D.Reject(f"{ctx}: an object whose keys are {AUDIT_FORMS[0]} or {AUDIT_FORMS[1]}")
     steps, j = _nat(a["steps"], ctx), a["program"]
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
         raise D.Reject(f"{ctx}: program: not a Program's descriptor")
@@ -503,7 +516,25 @@ def _audit(a, ctx: str) -> Audit:
         raise D.Reject(f"{ctx}: program: no template")
     entries = tuple((k, _members(x), slot_entry_digest(j, k)) for x in nodes
                     if (d := defs[k := callees[x["fn"]]])["form"] != "primitive" and d.get("id") in ENTRY_IDS)
-    return Audit(input_gates(j), steps, program_sha512(j), sum(n for n, _ in units), max(b for _, b in units), entries)
+    free, record = (input_gates(j), None) if "circuit" not in a else _record_count(a, f"{ctx}: circuit")
+    return Audit(free, steps, program_sha512(j), sum(n for n, _ in units), max(b for _, b in units), entries, record)
+
+
+def _record_count(a: dict, ctx: str) -> tuple[int, tuple[str, tuple[tuple[str, str], ...]]]:
+    """`auditOf`'s record form: a pin of the scan's state refused (no value the verifier fixes before the run), then the
+    free inputs `NetworkCheck.Circuit.check` counts on the record, every pin's parameter held: `interface.input_count`'s,
+    which is its count on a record it accepts. Its checks of the record against the Program and of the order are Lean's
+    alone: this module writes no record either refuses. With the record's digest (`interface.circuit_bytes`) and the
+    pins."""
+    pins = a["pins"]
+    if not isinstance(pins, dict) or not all(isinstance(r, str) for r in pins.values()):
+        raise D.Reject(f"{ctx}: pins are {{param: root}}")
+    if SCAN_STATE in pins:
+        raise D.Reject(f"{ctx}: a pin of {SCAN_STATE}: the scan's state is no value the verifier fixes before the run, "
+                       "so its reads count free")
+    count = IF.input_count(a["circuit"], pins=pins, roots=pins)
+    digest = hashlib.sha512(IF.circuit_bytes(a["circuit"])).hexdigest()
+    return count["free"], (digest, tuple(sorted(pins.items())))
 
 
 def _scan(j, program: str, s: WardenParams) -> Scan:
@@ -977,11 +1008,23 @@ def _facts(what: str, prof: dict, pub) -> Facts:
 
 
 def _audit_check(i: int, audit: Audit, reg: dict, a: dict) -> Facts:
-    """`auditCheck`: the registration names the audit's Program and the answer's proof blocks are the Program's, at
-    any sample."""
+    """`auditCheck`: the registration names the audit's Program, with a circuit record its window binds that record and
+    records each pin as its parameter's registered root (`pinHeld`, the hex without case), and the answer's proof blocks
+    are the Program's, at any sample."""
     what = f"audit {i}"
     if reg.get("program") != audit.program:
         raise Finding(REJECT, f"{what}: registration: not its Program")
+    if audit.record is not None:
+        digest, pins = audit.record
+        window = reg.get("window") if isinstance(reg.get("window"), dict) else {}
+        if window.get("circuit") != digest:
+            raise Finding(REJECT, f"{what}: registration: its window binds another circuit record than the one its "
+                                  "free inputs are counted on")
+        roots = window.get("registered_roots") if isinstance(window.get("registered_roots"), dict) else {}
+        for p, r in pins:
+            if not isinstance(roots.get(p), str) or roots[p].lower() != r.lower():
+                raise Finding(REJECT, f"{what}: registration: the pin of {p} is not its window's registered root for "
+                                      f"{p}, so the count would hold the reads of a value the prover chose")
     prof, pub = _answered(what, reg, a)
     f = _facts(what, prof, pub)
     if f.units != audit.units:
@@ -1133,6 +1176,7 @@ EXPECT = {
     "answer-profile": REJECT,
     "audit-other": REJECT, "audit-reject": REJECT, "audit-undecided": UNDECIDED, "audit-profile": REJECT,
     "audit-bound": REJECT, "audit-program": REJECT, "audit-units": REJECT,
+    "audit-record": ACCEPT, "audit-record-circuit": REJECT, "audit-record-pin": REJECT, "audit-record-state": REJECT,
     "undecided-and-reject": REJECT, "form": REJECT,
     "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
@@ -1421,6 +1465,27 @@ def audit_descriptor(units: tuple[tuple[int, int], ...], entries: tuple[int, ...
     program = population.population_program(*templates[0]) if len(templates) == 1 else \
         population.mixed_population_program(templates)
     return D.canonical(codec.encode_program(program))
+
+
+RECORD_GEMM = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
+RECORD_UNITS = 8
+
+
+@lru_cache(maxsize=None)
+def record_audit() -> tuple[str, str, str]:
+    """A record-form audit's Program, circuit record and wire order, each canonical JSON: two requests' two steps through
+    two layers of one `Gemm_v2{K=16, N=16}` template (`RECORD_GEMM`), unit (layer, step, request) at 4·layer + 2·step +
+    request, layer 1 reading layer 0's output and layer 0 at step 1 layer 1's at step 0, layer 0's input at step 0
+    external; the record `interface.descriptor_record`'s and the Program its population program, and the order one
+    segment ranking each unit at 2·layer + 4·step + request, so every wire's writer ranks below its reader."""
+    gid = codec.descriptor_id(RECORD_GEMM)
+    c = IF.Circuit("period-record", ((RECORD_GEMM, RECORD_UNITS),), external=(f"{gid}/x",), wires=(
+        IF.Wire(gid, "x", gid, "o0", at=4, radix=(2, 2), base=0, step=(2, 1)),
+        IF.Wire(gid, "x", gid, "o0", at=2, radix=(1, 2), base=4, step=(2, 1))))
+    order = {"format": "verity/wire-order/v1", "segments": [
+        {"template": gid, "at": 0, "radix": [2, 2, 2], "c": 0, "r": [2, 4, 1]}], "wires": [[0, 0], [0, 0]]}
+    return (D.canonical(codec.encode_program(c.program()[0])), D.canonical(IF.descriptor_record(c, 2)),
+            D.canonical(order))
 
 
 def templates_of(desc: dict) -> list[tuple[str, str, int]]:
@@ -1850,6 +1915,9 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             split = r.randint(1, n_prog - 1) if n_prog > 1 and r.random() < 0.3 else None
             outs = r.sample(UNIT_BYTES, 1 if split is None else 2)
         desc = json.loads(audit_descriptor(shape_of(n_prog, split, outs), entries, renamed, i in selects, scan_slots))
+        recorded = i == a and m.startswith("audit-record")
+        if recorded:
+            desc, units = json.loads(record_audit()[0]), RECORD_UNITS
         prog = program_sha512(desc)
         if not in_class:
             untied.append(prog)
@@ -1881,6 +1949,20 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                     got.append(got[0] | {"root": rp.randbytes(64).hex()})
                 rec[there] = rec.get(there, []) + got
                 rp.shuffle(rec[there])
+        record = {}
+        if recorded:
+            _, doc, order = record_audit()
+            pins = {"w": rp.randbytes(64).hex()} if r.random() < 0.5 or m == "audit-record-pin" else {}
+            if m == "audit-record-state":
+                pins[SCAN_STATE] = rp.randbytes(64).hex()
+            roots = {p: v.upper() if r.random() < 0.5 else v for p, v in pins.items()}
+            if m == "audit-record-pin":
+                roots = r.choice([{}, {"w": rp.randbytes(64).hex()}, {"v": pins["w"]}])
+            held = hashlib.sha512(IF.circuit_bytes(json.loads(doc))).hexdigest()
+            if m == "audit-record-circuit":
+                held = r.choice([hashlib.sha512(b"another circuit record").hexdigest(), held.upper(), None])
+            rec["window"] |= {"circuit": held} | ({"registered_roots": roots} if roots else {})
+            record = {"circuit": json.loads(doc), "order": json.loads(order), "pins": pins}
         if i == a and m == "audit-program":
             if r.random() < 0.5:
                 rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), prog.upper(), None])
@@ -1905,7 +1987,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             elif m == "audit-bound":
                 answer["public"] = r.choice([{"drawn": []}, answer["public"] | {"bound": -1},
                                              answer["public"] | {"bound": "3"}, []])
-        audit_params.append({"program": desc, "steps": r.randint(0, 4)})
+        audit_params.append({"program": desc, "steps": r.randint(0, 4)} | record)
         audit_regs.append(rec)
         audits.append(answer)
 
@@ -1985,14 +2067,18 @@ def bad_caps(p: dict) -> list[dict]:
 
 def bad_audits(p: dict) -> list[dict]:
     """Parameters whose audits `auditOf` refuses, each one change to `p`: an audit without its monitoring period, one
-    stating its free inputs (the check counts them off its Program), a negative monitoring period, not a list, and an
+    stating its free inputs (the check counts them off its Program), a negative monitoring period, not a list, an
     audit whose Program isn't a descriptor, is of another schema, or has no template in its root (the stand-in unit
-    alone)."""
+    alone), and in the record form (`record_audit`) one without its order and pins, or whose pins aren't
+    `{param: root}`."""
     good = json.loads(audit_descriptor(((1, 2),)))
     bare = json.loads(D.canonical(codec.encode_program(Program(bind(AUDIT_UNIT, OUT=2)))))
     one = lambda **kw: p | {"audits": [{"program": good, "steps": 0} | kw]}  # noqa: E731
+    prog, doc, order = (json.loads(x) for x in record_audit())
+    held = {"circuit": doc, "order": order, "program": prog}
     return [p | {"audits": [{"program": good}]}, one(free=0), one(steps=-1), p | {"audits": "x"}, one(program="x"),
-            one(program=good | {"schema": "verity-ir/v0"}), one(program=bare)]
+            one(program=good | {"schema": "verity-ir/v0"}), one(program=bare), one(circuit=doc, program=prog),
+            one(**held, pins=[]), one(**held, pins={"w": 1})]
 
 
 def _scan_widths(desc: dict) -> tuple[int, int, int, int]:
