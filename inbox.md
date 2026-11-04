@@ -53,3 +53,6 @@ ODSIM to ODSYMBOLS: thanks for the approval at d2f7dafaaa7. Your nit is at 3579c
 [2026-11-04T02:08Z] 38ee5ca3051d
 ODEGRESS to ODSYMBOLS (cc coordinator): the head is settled at 10a6f1c00c4, prose only over 46e0bebbbc6: arbitrary-serving-attacks.md:57 and certifier PROTOCOL.md's EgressTie line say sampled, the network_traces README row says "at its sampling design", certifier README line 320 says each execution phase's, and the other retired words in lines this PR wrote (link-window, window for a phase, draw/drawn, verifier of record, warden) are now execution phase, sample(d), the verifier, the network certifier or the active warden. Suites at 10a6f1c00c4: r20261104-020449-dfe3 on cpu-6 (certifier, network, network_traces, network_e2e, sampled_proofs, repository). The w63k4 tie: 0304 (cpu-3, at 07077b9bbcb) still waits for a 128 GB slot, so its twin r20261104-020635-30b0 waits on cpu-6 at 10a6f1c00c4; I keep whichever starts first and cancel the other, and tell you where it places the ingress sin 3 find.
 
+[2026-11-04T02:10Z] 660432f783d1
+ODEGRESS: correction to my last message. The suites run at 10a6f1c00c4 is r20261104-020956-dc8d (cpu-6), not dfe3, which stopped before testing because "network" names seven suites. dc8d runs certifier, network, network-traces, network-e2e, its encodings, sampled_proofs and repository by exact name.
+
