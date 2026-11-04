@@ -149,7 +149,9 @@ WitnessToys.lean  the instances the count and period witnesses are stated at, ea
 KsToy.lean      a deployment where `Claims.Sampling.KS` holds (`ksNotD_KS`): the negation under a commitment that
                                          passes one value at each position, its one proof block checked on every run;
                                          there, a registration that doesn't open breaks PeriodLeakRegistered's
-                                         per-window part (`not_windowLeakAtAnyOps`), which is why it reads `RegOpensAt`
+                                         per-window part (`not_windowLeakAtAnyOps`), which is why it reads `RegOpensAt`;
+                                         and a rows format that encodes every frame as the empty list (`blindRows`),
+                                         whose record of two servings is one
 CountWitnesses.lean  the thirteen counts' pairs: seven egress (four over `AccSeqs`, one under a sampled
                                          audit, two through the wire) and six ingress. The honest run is
                                          accepted at the reference schedule (`fxRate`) or at `sampProg`, or has every
@@ -160,7 +162,8 @@ PeriodWitnesses.lean  the monitoring period's lemmas in the lock's `witnesses`, 
                                          instance: PooledLeakAccepted's pair and PeriodLeakAccepted's and
                                          PeriodLeakRegistered's nontrivial, whose honest halves `unwitnessed` exempts,
                                          and, unlisted, PeriodLeakRegistered's exclusion of trusted-host
-                                         (not_periodLeakRegisteredUntrusted)
+                                         (not_periodLeakRegisteredUntrusted) and why it reads RowsFormat.Wf
+                                         (not_periodLeakRegisteredAnyFormat, at blindRows)
 WiredToys.lean  three toys for the wired sampled audit: dropping the wire-wrong blocks from the incorrect set
                                          (the wire flip, flip_excludes), the wires' acyclicity (the two-cycle,
                                          cycle_excludes) or a wire-writing free input from freeInputs (the
