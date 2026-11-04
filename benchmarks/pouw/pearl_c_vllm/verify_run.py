@@ -116,6 +116,7 @@ from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Matmul, Shape, Tile, tagged
 from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+from verity.core.protocols.pouw.schemes.pearl_c import TILE
 from verity.core.protocols.pouw.window import LIVE_SCHEME
 from verity.core.protocols.sampled_proofs.challenger import LiveCommitment
 from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as REG
@@ -598,7 +599,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                   source: bytes | None = None,
                   fast: bool = False, cross_check: int = 0, delta: Fraction = DELTA, window: dict | None = None,
                   rounds: list[int] | None = None, dropped: tuple[int, ...] = (), record: Path | None = None,
-                  draw: Any = node_draw, over_cap: str = UNCREDITED) -> dict:
+                  draw: Any = node_draw, over_cap: str = UNCREDITED, test_instance: bool = False) -> dict:
     """One served run's verdict over all its passes, in core's answer form (`core_check.answer_of`): every pass is read
     and held to what it published, and to the window record `window` where there is one (`tie`), then one source of the
     verifier's coins (`pouw.verifier.coins`), drawn after, keys `draws` work-weighted tiles over every pass's tickets
@@ -609,6 +610,10 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     ``uncredited`` (CMP-311 option A, the default) accepts it with its bound's reason and credits it nothing, the credit
     taking X_O, the draws that landed on such tiles; ``reject`` rejects the run.  The verdict records the rule it ran under
     (``over_cap``, and the profile's).
+
+    The passes are all of one salt, and each one's tile is the served `TILE` × `TILE`: a pass of another tile is a test
+    instance's, read only with ``test_instance``, whose verdict credits nothing (``credited`` 0), as ``--recorded``'s
+    salt claims nothing.
 
     ``paths`` are the passes the prover retained, pass i the served run's round ``rounds[i]`` (default i), the rounds
     ``dropped`` left out before the coin: they credit nothing, and W may register them (`tie`).  ``record`` is the
@@ -622,6 +627,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
         raise ValueError(f"over_cap {over_cap!r} is none of {', '.join(OVER_CAP)}")
     named = [read(x)[2] for x in paths]
     out = {"passes": named, "verifier_commit": commit, "draws": draws, "delta": str(delta), "over_cap": over_cap,
+           **({"test_instance": True} if test_instance else {}),
            **({"rounds": list(rounds), "dropped": list(dropped)} if rounds is not None else {})}
 
     def reject(reason: str) -> dict:
@@ -638,6 +644,12 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
         passes = [load(x, coins) for x in paths]
         if len({p.scheme.name for p in passes}) != 1:
             raise ValueError("the passes are not all of one scheme")
+        if len({p.epoch.salt for p in passes}) != 1:
+            raise ValueError("the passes are not all of one salt")
+        if not test_instance and (odd := next(((i, p.scheme.tile) for i, p in enumerate(passes)
+                                               if tuple(p.scheme.tile) != (TILE, TILE)), None)):
+            raise ValueError(f"pass {odd[0]}'s tile is {odd[1][0]} x {odd[1][1]}, not {TILE} x {TILE}: "
+                             "a test instance is read only as one, crediting nothing")
         tied = None if window is None else tie(window, passes, rounds, dropped)
     except Exception as ex:  # noqa: BLE001 - a run that can't be checked is rejected, with the reason
         return reject(f"{type(ex).__name__}: {ex}")
@@ -697,6 +709,8 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     bad += [f"pass {i} tile {t}: the batch replay's verdict is not the scalar one's" for i, t, *_, same in verdicts if same is False]
     over_draws = sum(1 for v, d in zip(verdicts, picked, strict=True) if d and v[4])
     credit = credit_at_assumption(passes, draws, delta, over_draws)
+    if test_instance:
+        credit["credited"] = 0
     out.update(scheme=scheme.name, source=source.hex(), commitment=root.hex(), replay="batch" if fast else "scalar",
                verdicts=[{"pass": i, "tile": t, "ok": g or (over and uncredited), "reason": r}
                          for i, t, g, r, over, _ in verdicts])
@@ -708,7 +722,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
               **({"tie": tied} if tied is not None else {}),
               **({"rounds": list(rounds), "dropped": list(dropped)} if rounds is not None else {})}
     profile = {"delta": str(delta), "draws": draws, "draw": "work-weighted, with replacement", "source": source.hex(),
-               "source_from": out["draw"], "over_cap": over_cap,
+               "source_from": out["draw"], "over_cap": over_cap, **({"test_instance": True} if test_instance else {}),
                "exclusion_tiles": excluded, "tiles": [[i, t] for i, t, *_ in verdicts]}
     ys = [r for p in passes for r in y_roots(p)]
     tie_clause = "" if tied is None else f", tied to W {tied['record'][:16]} on its {tied['tables']} tables"
@@ -716,6 +730,8 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
         tie_clause += f", {len(dropped)} passes dropped before the coin (rounds {', '.join(map(str, dropped))})"
     if over_draws:
         tie_clause += f", {over_draws} draws on tiles over their inert-work bound credited nothing"
+    if test_instance:
+        tie_clause += ", a test instance's, credited nothing"
     out.update(answer={"protocol": PROTOCOL, "verdict": "accept", "reason": None, "commitment": root.hex(), "public": public,
                        "profile": profile},
                line=(f"ACCEPT {PROTOCOL} {scheme.name}: {len(todo) - excluded} drawn and {excluded} exclusion tiles over "

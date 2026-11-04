@@ -88,7 +88,8 @@ set, a draw session's on the auditor host opened on the run's commitment, `bench
 `verify_run`'s "The coin record"), and replays ``--draws`` work-weighted tiles over all of them and
 each pass's exclusion tiles.  A tile that passes every check but its inert-work bound is credited nothing under
 ``--over-cap uncredited`` (the default, CMP-311 option A; the credit takes the draws on such tiles, X_O) and rejects the run
-under ``--over-cap reject``; the verdict records which (``over_cap``).  It writes the details to ``--out``, with, where
+under ``--over-cap reject``; the verdict records which (``over_cap``).  The passes are of one salt and, but under
+``--test-instance`` (a test instance's passes, whose verdict credits nothing), of the served 64 x 64 tile.  It writes the details to ``--out``, with, where
 ``served.json`` says which passes the timed call made and no ``--manifest`` names others, the credit over those retained
 alone (`timed_credit`), and the core answer (`answer_of`'s form, ``public.work.credited`` the MACs credited at Pearl's Assumption 1 at ``--delta``) to ``--answer``
 (default ``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints one line
@@ -97,7 +98,7 @@ PouwCheck).
 
 ``lean`` is the Lean verdict of record on the run `verify` judged (`PouwCheck.PearlPlus`, ``--exe`` its ``pouw-pearlplus``):
 the passes ``verify --out``'s document (``--verify``) names, read as `verify` reads them and held to the names and SHA-256s
-that document gives them, the epoch's ``DIR/coins.json``, that document's draws and over-cap rule, and the verifier's coin
+that document gives them, the epoch's ``DIR/coins.json``, that document's draws, over-cap rule and test instance, and the verifier's coin
 record it wrote (``DIR/coin.json``), which pins the Lean's source to the Python's (`lean_argv`, the one place the Lean's command line is
 written). It holds the Lean's printout to the Python's verdict on every field both give (`LEAN_HELD`: the verdict, its
 reason and refusal, the run's commitment and source, the over-cap rule, each opened tile's verdict, and an accepted run's
@@ -532,7 +533,8 @@ def verify(args: argparse.Namespace) -> int:
         doc.update(VR.verify_passes(paths, args.draws, args.jobs, args.commit, coins, fast=args.fast,
                                     cross_check=args.cross_check, delta=args.delta, window=window, rounds=rounds,
                                     dropped=dropped, record=record, draw=draw,
-                                    over_cap=over_cap_rule(VR.verify_passes, args.over_cap)))
+                                    over_cap=over_cap_rule(VR.verify_passes, args.over_cap),
+                                    test_instance=args.test_instance))
         if served is not None and not args.manifest and doc["answer"]["verdict"] == "accept":
             doc["timed"] = timed_credit(served, doc["answer"]["public"]["work"], coins, rounds)
     out = Path(args.out)
@@ -560,13 +562,13 @@ def arm(args: argparse.Namespace) -> int:
 
 
 def lean_argv(exe: Path, coins: Path, draws: int, record: Path, manifests: list[Path], tie: Path | None,
-              over_cap: str = OVER_CAP[1]) -> list[str]:
+              over_cap: str = OVER_CAP[1], test_instance: bool = False) -> list[str]:
     """``pouw-pearlplus``'s command line on the run's retained passes (`manifests`, in order), the epoch's coin commitment,
     the draws, the verifier's coin record, which pins the Lean's source to the one the Python drew, and the over-cap rule
-    the Python ran under (PR #7221's ``--coins COINS --draws T --record RECORD --over-cap RULE MANIFEST...``). W (`tie`) is
-    not passed: #7221's executable takes none yet."""
+    and test instance the Python ran under (PR #7221's ``--coins COINS --draws T --record RECORD --over-cap RULE
+    [--test-instance] MANIFEST...``). W (`tie`) is not passed: #7221's executable takes none yet."""
     return [str(exe), "--coins", str(coins), "--draws", str(draws), "--record", str(record), "--over-cap", over_cap,
-            *map(str, manifests)]
+            *(["--test-instance"] if test_instance else []), *map(str, manifests)]
 
 
 def lean_answer(got: dict) -> dict:
@@ -623,7 +625,8 @@ def lean(args: argparse.Namespace) -> int:
         return done(f"no Lean executable at {exe}", 2)
     rec["exe_sha256"] = hashlib.sha256(exe.read_bytes()).hexdigest()
     rec["argv"] = lean_argv(exe, passes / "coins.json", doc["draws"], record, paths,
-                            Path(doc["tie_record"]) if doc.get("tie_record") else None, doc.get("over_cap", OVER_CAP[0]))
+                            Path(doc["tie_record"]) if doc.get("tie_record") else None, doc.get("over_cap", OVER_CAP[0]),
+                            doc.get("test_instance", False))
     try:
         p = subprocess.run(rec["argv"], capture_output=True, text=True, timeout=args.timeout, check=False)
     except subprocess.TimeoutExpired:
@@ -709,6 +712,8 @@ def main(argv: list[str] | None = None) -> int:
                    "passes, none with --manifest)")
     v.add_argument("--over-cap", choices=OVER_CAP, help="the rule on a drawn tile over its inert-work bound: uncredited "
                    "credits it nothing, reject rejects the run (default: verify_run.verify_passes' own, uncredited)")
+    v.add_argument("--test-instance", action="store_true", help="the passes are a test instance's: their tile may be "
+                   "other than 64 x 64, and the verdict credits nothing")
     a = sub.add_parser("arm")
     a.add_argument("--spec", type=Path, default=SPEC)
     a.add_argument("--arm", help=f"the spec's {ARM_PREFIX}* arm (default: its one)")
