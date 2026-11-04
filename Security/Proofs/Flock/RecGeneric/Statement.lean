@@ -86,22 +86,20 @@ def GenericRecursiveKS : Prop :=
 
 /-- **L2: the recursion as a compiler, generic in the outer argument and the server, over inner protocols with
 repetition extractors.** For every
-`Π` as in L1, server `S` that binds, outer argument `A` that is well formed and knowledge sound at nonnegative errors (`Arg.WF`, `Arg.KS`; the
-sampled audit's proof system for proof blocks, `Claims.SamplingGeneric.Arg`), server `S` and compiler
-`C` whose compiled verifier `compile(Π, A, S)` meets the outer sessions' contract (`Compiled.Sessions`), and statement
-`x` where it meets the composition's (`Comp.Contract`): on every prover and at every loop bound,
-`Pr[run = acc ∧ ¬R(x, E*(x))] ≤ Comp.err` at `compile(Π, A, S)`, with `κ_O = Σ_s κ_A(sh_s)` and
-`γ_O = (Σ_s √(γ_A(sh_s)·k(x)))²`. `E*` is the inner `E^rep` served by `E_O`, and `E_O` replays the judged run and runs
-`A`'s extractor at each session in order (`Compiled.EO`): their costs compose as `ExtractCost` says. It is L1 with
-`OuterSessionsKS`. As in L1, `A`'s extractor is any rerun program, so the witness is the committed one only at a
-counted one. The contract is met with any number of sequential sessions: `Compiled.Accepts` is one-way, and
-`Compiled.Runs` reads each session's own verdict, not the compiled run's (`EchoHolds` at an inner verifier of `k ≥ 2`
-rounds runs `k` sessions). -/
+`Π` as in L1, server `S` that binds, outer argument `A` whose counted extractor is knowledge sound (`Arg.KS`; the
+sampled audit's proof system for proof blocks, `Claims.SamplingGeneric.Arg`, its extractor `E^rep` at its counted
+parts), and compiler `C` whose compiled verifier `compile(Π, A, S)` meets the outer sessions' contract
+(`Compiled.Sessions`, among it each session's errors within its bounds), and statement `x` where it meets the
+composition's (`Comp.Contract`): on every prover and at every loop bound, `Pr[run = acc ∧ ¬R(x, E*(x))] ≤ Comp.err`
+at `compile(Π, A, S)`, with `κ_O = Σ_s κb_s` and `γ_O = (Σ_s √(γb_s·k(x)))²`. `E*` is the inner `E^rep` served by
+`E_O`, and `E_O` replays the judged run and runs `A`'s extractor at each session in order (`Compiled.EO`): their costs
+compose as `ExtractCost` says. It is L1 with `OuterSessionsKS`. The contract is met with any number of sequential
+sessions: `Compiled.Accepts` is one-way, and `Compiled.Runs` reads each session's own verdict, not the compiled run's
+(`EchoHolds` at an inner verifier of `k ≥ 2` rounds runs `k` sessions). -/
 def GenericRecursiveKSCompiled : Prop :=
   ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) (I : Proto Coin W) (S : Server)
     (A : Arg Coin) (C : Compiler Coin A),
-    I.WF → I.KSAbortLin H → I.LastCoinFree H → S.Binds → A.WF → (∀ s, 0 ≤ A.κ s) → (∀ s, 0 ≤ A.γ s) → A.KS H →
-    (compile C I S).Sessions H →
+    I.WF → I.KSAbortLin H → I.LastCoinFree H → S.Binds → A.KS H → (compile C I S).Sessions H →
     ∀ x : Msg, (compile C I S).toComp.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x →
     ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (m : Fin I.nT → ℕ) (M : ℕ),
       PrBad H (compile C I S).V ((compile C I S).toComp.R I) ((compile C I S).toComp.E I S) x P ≤
