@@ -2679,8 +2679,11 @@ def test_a_pearl_tie_whose_commit_is_refused_or_not_chained_right_after_w_fails(
 def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(tmp_path):
     """Under PEARLPLUS_TIE serve-openai serves Pearl-C's arm on the window's own engine (`serve_pearl`), its
     --protocols-config the cubin and kernel PEARLPLUS-CUBIN built, at the arm's precision bfloat16 on Llama 3.2 1B's BF16
-    checkpoint, one fixed window of the class's outputs, no H1 and no gate: the arm draws each epoch's coins in-process."""
-    rc, argv = _serve_argv(tmp_path, {**PEARL_TIES, "PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": "/c/pearl_c_sm90.cubin"})
+    checkpoint, one fixed window of the class's outputs, no H1. Each window's salt coin is a live salt-only session's
+    (`serve_pearl.live`): the gate, peer and lane go to serve-openai, the lane's gate by default; with
+    PEARLC_CHALLENGER_GATE empty none goes, and the arm's coins are in-process."""
+    cubin = {"PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": "/c/pearl_c_sm90.cubin"}
+    rc, argv = _serve_argv(tmp_path, {**PEARL_TIES, **cubin})
     assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
     at = {f: argv[argv.index(f) + 1] for f in ("--protocols", "--protocols-config", "--model", "--revision", "--precision",
                                                "--window-steps")}
@@ -2689,9 +2692,17 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
                   "--protocols-config": json.dumps({"pouw": {"device": "cuda", "kernel": "pearl_c_sm90",
                                                              "cubin": "/c/pearl_c_sm90.cubin"}})}
     assert argv.count("--protocols") == 1 and "--h1-prover" not in argv and "--h1-window-commit" not in argv
-    assert not {"--challenger-gate", "--challenger-peer", "--pearl-lane"} & set(argv)
-    _rc, unset = _serve_argv(tmp_path / "default", {k: v for k, v in PEARL_TIES.items() if k != "PEARLC_CHALLENGER_GATE"})
-    assert "--challenger-gate" not in unset
+    assert not {"--challenger-gate", "--challenger-peer", "--challenger-lane"} & set(argv)
+    live = {"PEARLC_CHALLENGER_GATE": GATE, "PEARLC_CHALLENGER_PEER": "vy-dc-h200", "PEARLC_CHALLENGER_LANE": "compute-accounting"}
+    _rc, gated = _serve_argv(tmp_path / "gated", {**PEARL_TIES, **cubin, **live})
+    assert {f: gated[gated.index(f) + 1] for f in ("--challenger-gate", "--challenger-peer", "--challenger-lane")} == {
+        "--challenger-gate": GATE, "--challenger-peer": "vy-dc-h200", "--challenger-lane": "compute-accounting"}
+    assert gated.count("--protocols") == 1 and "--h1-prover" not in gated
+    _rc, default = _serve_argv(tmp_path / "default", {k: v for k, v in {**PEARL_TIES, **cubin}.items()
+                                                      if k != "PEARLC_CHALLENGER_GATE"})
+    assert default[default.index("--challenger-gate") + 1].endswith("research@204.12.178.84")
+    assert (default[default.index("--challenger-peer") + 1], default[default.index("--challenger-lane") + 1]) == (
+        "vy-dc-h200", "vllm")
 
 
 def _pearl_tied_commit(tmp_path: Path, chained: bool = True) -> None:
@@ -2752,15 +2763,12 @@ def test_under_pearlplus_tie_v3c_audits_no_commit_not_chained_right_after_w(tmp_
     ({"CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None, "SLOTS": "4"},
      "PREFLIGHT: under PEARLPLUS_TIE the circuit cut at Pearl+'s linears reads its tables at the class's fixed load, its "
      "slots' requests of its prompt's ids each: SLOTS 8 (not 4) and PROMPTS 32:32 (not 32:32)"),
-    ({"CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None, "PEARLC_CHALLENGER_GATE": GATE},
-     "PREFLIGHT: under PEARLPLUS_TIE serve-openai's Pearl+ arm (serve_pearl) draws each window's coins in-process and "
-     f"takes no gate: set PEARLC_CHALLENGER_GATE empty (it is {GATE})"),
 ])
 def test_the_preflight_refuses_pearlplus_tie_without_pearls_piece_beside_h1s_tie_or_the_split_or_off_one_fixed_window(
         tmp_path, extra, line):
     """PEARLPLUS_TIE ties the window to the W Pearl+'s piece writes, so it needs that piece (POUW=pearlplus) and not H1's
-    tie, V3c after step 4 (not the split certifier's, before it), one fixed window whose s-th step is the class's s-th
-    output, and no gate, which serve_pearl doesn't take: each refused before anything runs."""
+    tie, V3c after step 4 (not the split certifier's, before it), and one fixed window whose s-th step is the class's s-th
+    output at the class's load: each refused before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), **{**PEARL_TIES, **extra})
     assert (rc, lines, order) == (3, [line], [])
 

@@ -66,8 +66,9 @@
 # s), and goes no further unless that served.json says ok; steps 3 and 4 read and write there, `retain` writing Pearl+'s
 # window record W (`--window-record`, private/pearlplus/window-record.json, rounds dropped as above) and then, before the coin,
 # PEARLPLUS_TIE_CMD (`served_verdicts.sh pearl-tie SERVE_DIR WINDOW W PASSES`) committing the window tied to W, its
-# registration R chained right after W; step 4 is `verify --tie W`, which holds the passes to W. Its coins are the arm's
-# in-process ones (serve_pearl takes no gate), so the piece claims no verdict.
+# registration R chained right after W; step 4 is `verify --tie W`, which holds the passes to W. Its salt coin is the
+# arm's: a live salt-only session of the window's own under the gate (`serve_pearl.live`), which step 5 holds each pass
+# to as above, else in-process, and the piece then claims no verdict.
 # The passes hold the run's activations, so they stay in SERVE_DIR/private, under served_verdicts.sh's `research keep`,
 # and the piece runs under umask 077, so every file it or a step writes there is 0600.
 # env: served_verdicts.sh's (VENV, HF_HOME, CUDA_HOME), PEARLPLUS_* above. Its lines name no window. Exit 0 once step 5
