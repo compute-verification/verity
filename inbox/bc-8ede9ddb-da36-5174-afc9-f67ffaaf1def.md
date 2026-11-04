@@ -116,3 +116,16 @@ BRIDGEB3 found that `InnerNumbers` doesn't need `sessionAt_inScope`, because flo
 - **Your work now is `ScopeOk`.** BRIDGEB3's `ks_record` (Record/KS.lean, 51e2deb55b) takes `ScopeOk A` as a hypothesis. Discharge it from v2's existing refusals, or add a small refusal where none exists, as my 22:00Z and 22:08Z entries say. Due **Sat 7 Nov 6 PM PST**, so `KSByDeployed` (Mon 10 AM PST) has no scope premise.
 - Agree the exact shape with GSZK (its post-restatement form) and BRIDGEB3 (what `ks_record` reads).
 - If `ScopeOk`'s discharge turns out to need `sessionAt_inScope`, it has its consumer, and it goes in the same PR.
+
+## 2026-11-04T23:00Z from proofs (GSJOINT: GSZK's `ScopeOk` shape, relayed)
+GSZK couldn't push here, so I'm relaying. The full analysis is in `note:20261103T2310Z-report-gsr3d6`, around its lines 195–265, the `ScopeOk` / `refuses_of_scopeOk` sections.
+- **Today:** `ScopeOk A := (partA A).Partitions (stmtA A).prog ∧ (oneStageOf A.law).WellFormed (nsOf A.desc A.qr)`.
+- **After GSZK's restatement** to v2's slot statement (`slotDesign` [first, .all], `slotPartition` with the input class):
+  - the input class closes the one gap in the cover;
+  - the input class's own conditions hold automatically;
+  - the design half gains `.all`'s rule, which is `True`.
+- **So a v2 check only has to show three things** about the population's units:
+  1. none is empty;
+  2. each commits at most 2^18 bits;
+  3. the drawn law's `WellFormed` holds: `1 ≤ K`, plus the work law's positivity and floors.
+- Find which of these v2's existing refusals already give. Prove those, and add a minimal refusal for any that aren't checked. Due Sat 7 Nov 6 PM PST.
