@@ -80,7 +80,7 @@ def test_each_fingerprint_rule(conforming: dict, field: str, value, fragment: st
 
 
 def test_authentication_included_hash_is_a_recognised_column(conforming: dict) -> None:
-    """``authentication = included-hash`` (the operands hashed inside the proof, lane hash-relation) validates and is a
+    """``authentication = included-hash`` (the operands hashed inside the proof) validates and is a
     different identity from ``excluded`` (the judge never compares the two columns as one)."""
     fp = conforming["workload_fingerprint"]
     hashed = {**conforming, "workload_fingerprint": {**fp, "authentication": "included-hash"}}

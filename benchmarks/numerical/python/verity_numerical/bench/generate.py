@@ -125,7 +125,7 @@ def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: i
     return summary
 
 
-#: Named suites: (template, parameters, n).  ``101``: row #101's captured subcircuits (Llama-3.2-1B), plus its GEMMs on Hopper wgmma.
+#: Named suites: (template, parameters, n).  ``101``: row 101's captured subcircuits (Llama-3.2-1B), plus its GEMMs on Hopper wgmma.
 SUITES: dict[str, list[tuple[str, dict[str, Any], int]]] = {
     "101": [("gemm-coordinate", {"K": 2048, "semantics": "sm80.mma.m16n8k16.bf16"}, 4096),
             ("gemm-coordinate", {"K": 8192, "semantics": "sm80.mma.m16n8k16.bf16"}, 4096),
@@ -137,7 +137,7 @@ SUITES: dict[str, list[tuple[str, dict[str, Any], int]]] = {
             ("rmsnorm-triton", {"N": 2048, "EPS": 1e-5}, 256),
             ("silu-mul", {"I": 8192}, 256),
             ("gumbel-top-p-token-select", {"V": 128256}, 32)],
-    #: The FP8 GEMM lines at vLLM's reduction lengths: the captured #101 sizes (6,272 at K = 2048, 1,920 at K = 8192) and the
+    #: The FP8 GEMM lines at vLLM's reduction lengths: the captured row 101 sizes (6,272 at K = 2048, 1,920 at K = 8192) and the
     #: largest batches the RTX 4090's 24 GB carried (16,384 and 8,192); each smaller set is the larger one's prefix.
     "fp8": [("gemm-coordinate", {"K": K, "semantics": sem}, n)
             for sem in ("sm89.mma.m16n8k32.e4m3", "sm90.wgmma.m64n8k32.e4m3")

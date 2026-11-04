@@ -21,7 +21,7 @@ The unit is ``(a: r rows of X, b: c rows of W, salt, position, roots) -> {z, rec
 * **Receipt** (CP-W): each lane folds its sets from its keys with fx1 (`PouwFx1Absorb_v2`); after set s, receipt word 2 s is
   the XOR over lanes and chains of y, and word 2 s + 1 of z (`PouwXinFinal_v2` on each half of the state, `PouwXor32_v2`
   across lanes): 2 (KS + m) words. A lane's own words before that XOR are its partial (`fold`, `lane_partials`), which a
-  lane sub-statement returns (`h1zy.PouwH1LaneZy`).
+  lane's sub-statement returns (`h1zy.PouwH1LaneZy`).
 * **z** is each cell's exact product, the served Call's own Definition on the cell's rows of A and B, which no noise reaches.
 
 **The one-stream unit**, `PouwH1Tile_v3` (`SCHEME_V3`, `eps1-sm120-h1fx1-os`), is v1 with z taken from the words the
@@ -536,7 +536,7 @@ def _xor_words(ws: Sequence[int]) -> int:
 def lane_partials(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: bytes, position: int,
                   roots: tuple[bytes, bytes], gated: Sequence[int] | None = None) -> list[list[int]]:
     """Each lane's partial (`fold`) of the unit's receipt on words, lane by lane, for A's r rows and B's c rows: the words
-    whose XOR is `reference`'s receipt, the rows a lane sub-statement checks (`h1zy.PouwH1LaneZy`). `gated`: the tile's r
+    whose XOR is `reference`'s receipt, the rows a lane's sub-statement checks (`h1zy.PouwH1LaneZy`). `gated`: the tile's r
     admit bits (v4's): a dead tile's partials, every bit 0, are zero words, whose XOR is its zero receipt."""
     lay = Layout(len(a), len(b), len(a[0]))
     if gated is not None:
