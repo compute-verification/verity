@@ -101,6 +101,8 @@ structure MemberV5 (Reg : Type) (nJ : ℕ) where
 
 namespace MemberV5
 
+open Classical
+
 variable {Reg : Type} {nJ : ℕ} (m : MemberV5 Reg nJ)
 
 /-- **The member's part of a sample** `S` of the window's population: its proof blocks that `S` holds. -/
@@ -189,6 +191,8 @@ structure JointAuditV5 where
 attribute [instance] JointAuditV5.fintypeΩ JointAuditV5.nonemptyΩ
 
 namespace JointAuditV5
+
+open Classical
 
 variable (w : JointAuditV5)
 
