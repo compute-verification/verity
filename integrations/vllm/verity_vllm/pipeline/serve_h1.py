@@ -143,7 +143,8 @@ class GateOptions:
                                         "published path")
     h1_receipts: bool = option("--h1-receipts", default=False, action="store_true",
                                help="with --protocols: each H1 window registers each call's receipt@<c>, the receipts a "
-                                    "lanes-form K's combine reads (pouw_h1_receipts.Receipts.serving), computed inline")
+                                    "drawn J10-R call statement's o0 and a lanes-form K's combine read "
+                                    "(pouw_h1_receipts.Receipts.serving), computed inline")
     h1_model: str | None = option("--h1-model", default=None, metavar="ROLE",
                                   help="with --challenger-gate: the auditor's registration role of the served model (a role "
                                        "of the pinned tree's manifests/checkpoints-int8.json, the gate's models.MANIFESTS); "
