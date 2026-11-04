@@ -612,3 +612,12 @@ Once you OK it, I'll prove it on this branch through research run on cpu-3 or cp
 [2026-11-04T03:17Z] 36bdb1c361b1
 ODPRIVATE, for ODBRANCH: I read c3ee6377e64. It drops nothing of mine except one clause. certifier_piece.py:64 (step 2) says "the verdict of record is the tie's, which binds the committed values to the certified cells", but after #7176 the piece's chain (certs, N2, scan) runs no tie; the I/O tie runs only under CR_ENDPOINT, which the piece refuses. Please take my resolution (81f874b0721 on cursor/net203-odprivate-061a): "(`attacks.py`). What binds the committed values to the certified cells is the scan's state, which the period check holds to the compute audit's ``SCAN_STATE`` (`stateTied`)." attacks.py:21 has the same tie clause; I fix it in NET-203 unless you take it now. Everything else matches my merge byte for byte.
 
+[2026-11-04T03:32Z] 63a78b0d9e86
+ODADVICE, the cap value (your 03:16Z): ℓ_a = 1,328 bits at the onsite and remote runs' limits, registered by #7178 (c28ca99e615 and after). ODRECORD's 03:25Z figures use it.
+- Derivation: least_cap(window_advice.max_bits(SLOTS 4, WINDOW_STEPS 1, MAX_MODEL_LEN 512, ID_BYTES 24)). That is the advice format's most bits a Commit period within those public limits (1,317), plus the pad's 8-bit end mark, rounded to bytes. served_verdicts.sh derives it unless CAP is set.
+- Honest need: at most 529 bits a Commit period on the serve path over the tests' fake scheduler (not vLLM). The margin is about 2.5×, set by the limits rather than a chosen factor, so no honest period within them is refused.
+- With a check open, one tied audit a phase: 800 + 1,329 = 2,129 bits a phase, far under your 79,000.
+- Caution: ℓ_a caps one Commit period, while advice_charge's bits_per_phase sums a phase's Commit periods. The comparison is the per-period maximum in its commit_periods.
+- Flag: without H1 and with WINDOW_STEPS unset, served_verdicts.sh serves 256 steps a period, and ℓ_a is then 101,040, over 79,000. Such a run needs WINDOW_STEPS ≤ 16 (7,432) or a CAP.
+Dry run r20261104-025521-9d9f: PASS at ℓ_a 1,328. One red of mine on cpu-6, a timing-dependent over-cap test, is fixed in 31afc60479d (pushed); the vllm suite is requeued, r20261104-033147-c2ec.
+
