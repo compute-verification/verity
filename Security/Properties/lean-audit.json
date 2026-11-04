@@ -24,6 +24,7 @@
   "Properties.Pous",
   "Properties.NetworkCertifier",
   "Properties.NetworkCertifier.LinkWindow",
+  "Properties.NetworkCertifier.Schedules",
   "Properties.CertifierNetwork",
   "Properties.CertifierNetwork.Runs",
   "Properties.Identity",
@@ -955,8 +956,13 @@
   },
   "Properties.NetworkCertifier": {
    "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "Properties.Identity", "Lms.Sign"],
-   "except": [],
+   "except": ["Properties.NetworkCertifier.Schedules"],
    "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
+  },
+  "Properties.NetworkCertifier.Schedules": {
+   "imports": ["Mathlib", "CertifierDevice.Relay", "Definitions.Core.Assumptions", "Definitions.NetworkCertifier.PeriodConditions", "Definitions.NetworkCertifier.RecordRows"],
+   "except": [],
+   "why": "the schedules' properties are stated against the relay's schedule code at the auditor's parameters, over the definitions' schedules, rows format, period conditions and trusted-host, never a proof"
   },
   "Properties.Evaluate": {
    "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
