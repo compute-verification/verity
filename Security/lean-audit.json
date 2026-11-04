@@ -2613,6 +2613,7 @@
    "Claims.Sampling.Faulty": "a helper the claims read: a faulty unit, which the sampling relation reads",
    "Claims.Sampling.FaultyBoundary": "proved of every program (`Claims.Sampling.faultyBoundary`), not of a deployment",
    "Claims.Sampling.InScope": "a helper the claims read: the programs and partitions the sampling scope takes",
+   "Claims.Sampling.IncorrectBy": "a helper the claims read: an incorrect unit at a check on a proof block, which the sampling relation at that check (`RBy`) reads",
    "Claims.Sampling.LogColl": "a helper the claims read: a collision in a log of `H` calls",
    "Claims.Sampling.OneStage.WellFormed": "a helper the claims read: a well-formed one-stage design",
    "Claims.Sampling.Partition.Partitions": "a helper the claims read: a partition of a program's gates into proof units",
