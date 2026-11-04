@@ -41,8 +41,8 @@ theorem ind_congr_iff {α β : Type} {p : α → Prop} {q : β → Prop} {a : α
 /-- **`jointOf`'s verdict is the judged session's**: it accepts as often as the session, `E`'s coins unread. -/
 theorem jointOf_judged (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W) (E : Claims.Extractor Coin W V)
     (stmt : Finset (Fin n) → Reg → Msg) (B : FlockSoundness.SampledGeneric.Binding Reg Hc)
-    (reads : Fin n → Finset B.Pos) (opens : Finset (Fin n) → Reg → Fin n → W → B.Pos → B.Opening)
-    (t : Finset (Fin n) → Reg → ℝ) : (jointOf H V Rl E stmt B reads opens t).Judged := by
+    (reads : Fin n → Finset B.Pos) (opens : Finset (Fin n) → Reg → Fin n → W → B.Pos → B.Opening) :
+    (jointOf H V Rl E stmt B reads opens).Judged := by
   intro S R τ
   simp only [jointOf, proofSystemOf, sessionOf, prob, proverOf]
   refine Finset.sum_congr rfl fun r₀ _ => ?_
@@ -57,9 +57,9 @@ theorem jointOf_judged (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W) (E : C
 theorem jointOf_knowledgeSound (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W) (E : Claims.Extractor Coin W V)
     (stmt : Finset (Fin n) → Reg → Msg) (B : FlockSoundness.SampledGeneric.Binding Reg Hc)
     (reads : Fin n → Finset B.Pos) (opens : Finset (Fin n) → Reg → Fin n → W → B.Pos → B.Opening)
-    (t : Finset (Fin n) → Reg → ℝ) (err : Msg → Prover Unit → ℝ)
+    (err : Msg → Prover Unit → ℝ)
     (hks : ∀ S R (P : Prover Unit), PrBad H V Rl E (stmt S R) P ≤ err (stmt S R) P) :
-    (jointOf H V Rl E stmt B reads opens t).KnowledgeSound
+    (jointOf H V Rl E stmt B reads opens).KnowledgeSound
       (fun S R τ _ => ENNReal.ofReal (err (stmt S R) (proverOf τ))) := by
   intro S R τ u hu
   rw [← ENNReal.ofReal_toReal (ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _))]
@@ -72,31 +72,32 @@ theorem jointOf_knowledgeSound (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W
   refine Finset.sum_congr rfl fun r₀ _ => ?_
   congr 1
   refine Finset.sum_congr rfl fun c _ => ind_congr_iff ?_
-  simp only [FlockSoundness.SampledGeneric.JointExtractor.Fails, hu, ↓reduceIte, rel_ext_iff, proverOf]
+  simp only [FlockSoundness.SampledGeneric.JointExtractor.Fails, hu, ↓reduceIte, rel_ext_iff, proverOf,
+    Option.some.injEq, exists_eq_left']
   exact and_congr ⟨of_decide_eq_true, decide_eq_true⟩ Iff.rfl
 
 end Claims.RecGeneric
 
 open Claims Claims.RecGeneric FlockSoundness FlockSoundness.Game in
 /-- **B1** (`Flock.Guarantees.GenericSampledKSClaims`): `GenericSampledKSJoint` at `jointOf`, judged and knowledge
-sound at `err`. -/
+sound at `err`, its cost a count. -/
 theorem Flock.SecurityProofs.GenericSampledKSClaims : Flock.Guarantees.GenericSampledKSClaims := by
-  intro Coin W _ _ _ V Rl E H err n Reg Dh Hc L B Correct stmt reads opens t M hks hS ht hM σ hCR
+  intro Coin W _ _ _ V Rl E H err n Reg Dh Hc L B Correct stmt reads opens M hks hS hM σ hCR
   exact Flock.SecurityProofs.GenericSampledKSJoint n Reg Dh Hc L (proofSystemOf H V stmt) B Correct
-    (jointOf H V Rl E stmt B reads opens t) (fun S R τ _ => ENNReal.ofReal (err (stmt S R) (proverOf τ))) M
-    (jointOf_judged H V Rl E stmt B reads opens t) hS (fun S R _ => ht S R)
-    (jointOf_knowledgeSound H V Rl E stmt B reads opens t err hks) hM σ hCR
+    (jointOf H V Rl E stmt B reads opens) (fun S R τ _ => ENNReal.ofReal (err (stmt S R) (proverOf τ))) M
+    (jointOf_judged H V Rl E stmt B reads opens) hS (fun _ _ _ => Nat.cast_nonneg _)
+    (jointOf_knowledgeSound H V Rl E stmt B reads opens err hks) hM σ hCR
 
 namespace Claims.RecGeneric
 
 /-- **The recursive audit through the sampled compiler, from L1**: L1 at every sampled statement bounds `PrBad` at
 `Comp.err` on every claims prover, which is B1's hypothesis. -/
 theorem recursiveSampledKS_of_L1 (hL1 : Flock.Guarantees.GenericRecursiveKS) : Flock.Guarantees.RecursiveSampledKS := by
-  intro Coin W _ _ _ H I Sv K mI Mo n Reg Dh Hc L B Correct stmt reads opens t M hWF hKS hLC hBd hAt hS ht hM σ hCR
+  intro Coin W _ _ _ H I Sv K mI Mo n Reg Dh Hc L B Correct stmt reads opens M hWF hKS hLC hBd hAt hS hM σ hCR
   exact Flock.SecurityProofs.GenericSampledKSClaims Coin W K.V (K.R I) (K.E I Sv) H
-    (fun x P => K.err I Sv H P x mI Mo) n Reg Dh Hc L B Correct stmt reads opens t M
+    (fun x P => K.err I Sv H P x mI Mo) n Reg Dh Hc L B Correct stmt reads opens M
     (fun S R P => hL1 Coin W H I Sv K hWF hKS hLC hBd (stmt S R) (hAt S R).1 (hAt S R).2.1 (hAt S R).2.2.1
       (hAt S R).2.2.2 Unit P mI Mo)
-    hS ht hM σ hCR
+    hS hM σ hCR
 
 end Claims.RecGeneric
