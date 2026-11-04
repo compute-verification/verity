@@ -39,7 +39,7 @@ def test_the_window_is_the_one_commit_window_holding_the_fronts_requests(onsite,
     lines(tmp_path / "requests.jsonl", [{"user": f"user-{i}", "windows": [3]} for i in range(4)])
     assert onsite.window(tmp_path) == 3
     lines(tmp_path / "requests.jsonl", [{"user": "user-0", "windows": [0]}, {"user": "user-1", "windows": [0, 1]}])
-    with pytest.raises(SystemExit, match="lie in 2 Commit windows, not one"):
+    with pytest.raises(SystemExit, match="lie in 2 Commit periods, not one"):
         onsite.window(tmp_path)
 
 
@@ -125,31 +125,45 @@ def test_the_record_is_each_zones_verdicts_and_K_in_the_bounds_terms_labelled_si
     cell = math.ceil(math.log2(W63K4_CELLS + 1))
     k = b0["K"]
     assert k["per_request"] == {"k_sched": cell, "k_fail": cell}
-    assert {x: k["per_window"][x] for x in ("ell_a", "k_skip", "k_i", "d_jit", "jitter")} == {
-        "ell_a": ell_a, "k_skip": 0, "k_i": T, "d_jit": 2, "jitter": T}
-    assert k["per_window"]["K"] == 4 * 2 * cell + ell_a + T
+    assert {x: k["per_phase"][x] for x in ("ell_a", "k_skip", "T_j", "d_jit", "jitter")} == {
+        "ell_a": ell_a, "k_skip": 0, "T_j": T, "d_jit": 2, "jitter": T}
+    assert k["per_phase"]["K"] == 4 * 2 * cell + ell_a + T
     one = LB.link(cls, Fraction(4, 1) / (T * Fraction(1, 10)), T=T, tau=Fraction(1, 10), egress_cells=W63K4_CELLS)
     for period, t in k["periods"].items():
         m = Fraction(LB.PERIODS[period]) / (T * Fraction(1, 10))
         assert t["m"] == pytest.approx(float(m)) and t["bound"] == pytest.approx(one.bits(period, "registered"))
         assert sum(t[x] for x in onsite.TERMS) == pytest.approx(t["bound"], rel=1e-12)
-        assert Fraction(t["delta_net"]) == m * LB.SCAN_DELTA and t["vacuous"] == (m * LB.SCAN_DELTA >= 1)
+        assert Fraction(t["eps"]) == m * LB.SCAN_DELTA and t["vacuous"] == (m * LB.SCAN_DELTA >= 1)
+        assert t["delta_net"] == [{"symbol": "eps", "value": t["eps"]},
+                                  *({"symbol": s, "times": t["m"]} for s in ("ε_ks", "ε_bind", "ε_tap"))]
         assert t["pooled"]["1e-06"]["k_skip"] == pytest.approx(one.bits(period, "registered", Fraction(1, 10**6))
                                                                - one.bits(period, "registered"))
     assert (k["periods"]["week"]["vacuous"], k["periods"]["year"]["vacuous"]) == (False, True)
     assert doc["lab"]["links"] == 3 and doc["lab"]["week"]["per_period"] == pytest.approx(
         3 * k["periods"]["week"]["bound"])
+    week = k["periods"]["week"]["m"]
+    assert doc["lab"]["week"]["m"] == pytest.approx(3 * week)
+    assert doc["lab"]["week"]["delta_net"][1:] == [{"symbol": s, "times": doc["lab"]["week"]["m"]}
+                                                   for s in ("ε_ks", "ε_bind", "ε_tap")]
+    dc = next(r for r in k["scopes"] if (r["period"], r["scope"]) == ("week", "datacenter"))
+    assert dc["delta_net"][0] == {"symbol": "eps", "value": dc["eps"]} and dc["delta_net"][1]["times"] == pytest.approx(
+        12_500 * week)
     md = (out / "record.md").read_text()
     assert md.startswith("# The onsite network path on the mock datacenter: SIMULATED, never served")
-    assert "| b0 | accepted, 4 requests in 1 link-window(s) | accepted (scan accepted, tie accepted) | reject: " in md
-    assert "| b1 | accepted, 4 requests in 1 link-window(s) | not run | refused: the chain wrote no report" in md
+    assert "| b0 | accepted, 4 requests in 1 phase(s) | accepted (scan accepted, tie accepted) | reject: " in md
+    assert "| b1 | accepted, 4 requests in 1 phase(s) | not run | refused: the chain wrote no report" in md
     assert "- the weights' load isn't certified\n" in md
     assert "Its tampered negatives refused: n2/tampered, scan/tampered; NOT refused: b2: n2/tampered." in md
     assert "K is established for b2 here" in md
     assert "**b0** (not established: the period check answered reject)" in md and "**b2** (established)" in md
-    assert "| week | zone b0 | 1 | no |" in md and "| week | zone b2 | 1 | yes |" in md
-    assert "| week | the lab | 3 | no |" in md and "| week | datacenter | 12,500 | no (scaled) |" in md
-    assert "(vacuous)" in md and "known overcount" in md and "D_j" not in md
+    f = onsite.fmt
+    assert f"| week | zone b0 | 1 | {f(week)} | no |" in md and f"| week | zone b2 | 1 | {f(week)} | yes |" in md
+    assert f"| week | the lab | 3 | {f(3 * week)} | no |" in md
+    assert f"| week | datacenter | 12,500 | {f(12_500 * week)} | no (scaled) |" in md
+    assert "δ_net = eps + m·(ε_ks + ε_bind + ε_tap)" in md and "δ_net has no number here" in md
+    assert "(vacuous)" in md and "known overcount" in md and "Σ_j (ℓ_a,j + k_skip,j + T_j·log2 d_jit)" in md
+    for retired in ("D_j", "k_i", "link-window", "delta_net", "J is", "brief", "NET-"):
+        assert retired not in md, retired
     assert onsite.short("word " * 50).endswith(" …") and len(onsite.short("word " * 50)) <= 162
 
 

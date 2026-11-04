@@ -14,7 +14,7 @@ active-warden path):
   and OUT/<zone>/front gets the front's public outcome (`session.json`, `bundle.tgz`);
 - **the piece**: `certifier_piece.py piece SERVE_DIR WINDOW OUT/<zone>/piece`, the verdict path. It runs the chain on
   the kept run (certs, endpoint, N2, tie and the scan at the run's class), then the period check (`network-period`),
-  whose answer is the zone's verdict. WINDOW is the endpoint's Commit window holding the front's requests (`window`).
+  whose answer is the zone's verdict. WINDOW is the endpoint's Commit period holding the front's requests (`window`).
 
 `front` runs every zone at once on a lab that is up in its shape and idle (`mockdc.py up`), and writes OUT/front.json.
 `piece` copies the front's outcome from ``--front`` (the front's OUT) into its own OUT, runs each zone's piece in turn
@@ -66,7 +66,12 @@ GATE_CLASS = "w63"
 READING = "registered"
 #: `NetTiming.Guarantees.PeriodLeakAccepted`'s terms, in the order the bound adds them
 TERMS = ("k_sched", "k_fail", "ell_a", "k_skip", "jitter")
-BOUND = "k_exfil(Y) <= k_sched + k_fail + sum_{i=1}^{m} (ell_a,i + k_skip,i + k_i log2 d_jit)"
+BOUND = "k_exfil(Y) ≤ k_sched + k_fail + Σ_j (ℓ_a,j + k_skip,j + T_j·log2 d_jit)"
+#: δ_net's terms beside the period check's eps, each once an execution phase, as `PeriodLeakAccepted` bounds a phase's
+#: failure by δ + ε_ks + ε_bind + ε_tap: the knowledge error (`Claims.Sampling.KS`, its hypothesis), the binding error
+#: (`Claims.Sampling.Bext`) and the collisions with the network certifier's openings (`NetTiming.Btap`). No check
+#: computes them, so δ_net has no number.
+ERRORS = ("ε_ks", "ε_bind", "ε_tap")
 #: what the lab leaves unmet of the onsite demo's placement, each a reason the record is simulated and never served
 SIMULATED = (
     "one host: every zone, its network certifier and the fabric are network namespaces of one Linux host "
@@ -182,7 +187,7 @@ def front(args) -> int:
         for b, p in fronts.items():
             zones[b]["exit"] = {"front": p.wait()}
     finally:
-        # The endpoint first: at SIGTERM it closes its open Commit window, which the piece reads.
+        # The endpoint first: at SIGTERM it closes its open Commit period, which the piece reads.
         for b, z in zones.items():
             for ns, p in zip((z["zone"], z["certifier"]), procs.get(b, ())):
                 mockdc.terminate(ns)
@@ -196,7 +201,7 @@ def front(args) -> int:
         g = z["gate"]
         print(f"{b}: front exit {z['exit']['front']}, the gate's check "
               + ("ACCEPTED" if g["accepted"] else f"NOT accepted ({g.get('why') or g.get('failed')})")
-              + (f": {g['requests']} requests in {g['windows']} link-window(s), {g['problems']} problems"
+              + (f": {g['requests']} requests in {g['windows']} phase(s), {g['problems']} problems"
                  if g.get("requests") is not None else ""), flush=True)
     doc = {"label": "simulated", "simulated": list(SIMULATED), "host": host, "declaration": dc.name, "zones": zones}
     (out / "front.json").write_text(json.dumps(doc, indent=1) + "\n")
@@ -206,11 +211,11 @@ def front(args) -> int:
 # ---------------------------------------------------------------------------------------------------------------- piece
 
 def window(serve_dir: Path) -> int:
-    """The endpoint's Commit window holding the front's requests: every request the endpoint served, since the front's
+    """The endpoint's Commit period holding the front's requests: every request the endpoint served, since the front's
     group is its one load, in one window."""
     held = Counter(w for r in CP._lines(serve_dir / "requests.jsonl") for w in r.get("windows") or ())
     if len(held) != 1:
-        raise SystemExit(f"{serve_dir}: the front's requests lie in {len(held)} Commit windows, not one")
+        raise SystemExit(f"{serve_dir}: the front's requests lie in {len(held)} Commit periods, not one")
     return next(iter(held))
 
 
@@ -287,6 +292,12 @@ def load(k: dict) -> LB.LinkLoad:
     return LB.link(IS.Class(**k["class"]), rate, T=p["window"], tau=tau, egress_cells=p["egress_cells"])
 
 
+def delta_net(eps: str, phases: float) -> list[dict]:
+    """δ_net over ``phases`` execution phases, term by term: the period check's eps, only its δ part, and each of
+    `ERRORS` once a phase. Never eps alone."""
+    return [{"symbol": "eps", "value": str(eps)}, *({"symbol": s, "times": phases} for s in ERRORS)]
+
+
 def terms(k: dict, period: str) -> dict:
     """One zone's bound over ``period`` in `PeriodLeakAccepted`'s terms, from `chain_record.leak`'s doc ``k``, beside the
     pooled form's at each δ, whose incorrect proof blocks are its k_skip."""
@@ -298,8 +309,8 @@ def terms(k: dict, period: str) -> dict:
            "k_skip": 0, "jitter": m * t["jitter_per_block"]}
     if not math.isclose(sum(got[x] for x in TERMS), row["per_period"], rel_tol=1e-12):
         raise SystemExit(f"{period}: the terms sum to {sum(got[x] for x in TERMS)}, not leak's {row['per_period']}")
-    return got | {"bound": row["per_period"], "share": row["per_period_share"], "delta_net": row["eps"],
-                  "vacuous": Fraction(row["eps"]) >= 1,
+    return got | {"bound": row["per_period"], "share": row["per_period_share"], "eps": row["eps"],
+                  "delta_net": delta_net(row["eps"], m), "vacuous": Fraction(row["eps"]) >= 1,
                   "pooled": {d: {"bound": b, "k_skip": b - row["per_period"], "share": row["pooled_share"][d]}
                              for d, b in row["pooled"].items()}}
 
@@ -321,12 +332,14 @@ def zone_record(zd: Path) -> dict:
         "reading": READING, "class": k["class"],
         "scan_class": scan_class(session), "params": k["params"], "run": k["run"],
         "per_request": {"k_sched": k["terms"]["schedules_per_request"], "k_fail": k["terms"]["cells_per_request"]},
-        "per_window": {"ell_a": k["terms"]["free"][READING]["link_window"], "k_skip": 0, "k_i": T,
-                       "d_jit": k["terms"]["jitter_bound"], "jitter": k["terms"]["jitter_per_block"],
-                       "K": next(r["per_link_window"] for r in k["rows"] if r["prog"] == READING)},
+        "per_phase": {"ell_a": k["terms"]["free"][READING]["link_window"], "k_skip": 0, "T_j": T,
+                      "d_jit": k["terms"]["jitter_bound"], "jitter": k["terms"]["jitter_per_block"],
+                      "K": next(r["per_link_window"] for r in k["rows"] if r["prog"] == READING)},
         "periods": {p: terms(k, p) for p in LB.PERIODS},
-        "scopes": [{key: r[key] for key in ("period", "scope", "links", "per_period", "per_period_share", "eps",
-                                            "pooled", "pooled_share")} for r in k["rows"] if r["prog"] == READING],
+        "scopes": [{key: r[key] for key in ("period", "scope", "links", "link_windows", "per_period",
+                                            "per_period_share", "eps", "pooled", "pooled_share")}
+                   | {"delta_net": delta_net(r["eps"], r["link_windows"])}
+                   for r in k["rows"] if r["prog"] == READING],
         "load": k}
     return entry
 
@@ -336,8 +349,9 @@ def lab_sum(zones: dict[str, dict]) -> dict | None:
     links = [load(z["K"]["load"]) for z in zones.values() if z["K"]]
     if not links:
         return None
-    return {p: {"per_period": (per := LB.datacenter(links, p, READING)).bits, "share": per.share,
-                "delta_net": str(per.eps), "vacuous": per.eps >= 1,
+    phases = {p: sum(z["K"]["periods"][p]["m"] for z in zones.values() if z["K"]) for p in LB.PERIODS}
+    return {p: {"per_period": (per := LB.datacenter(links, p, READING)).bits, "share": per.share, "m": phases[p],
+                "eps": str(per.eps), "delta_net": delta_net(per.eps, phases[p]), "vacuous": per.eps >= 1,
                 "pooled": {f"{float(d):g}": LB.datacenter(links, p, READING, d).bits for d in LB.DELTAS}}
             for p in LB.PERIODS} | {"links": len(links), "of": len(zones),
                                     "established": all(z["K"] and z["K"]["established"] for z in zones.values())}
@@ -345,8 +359,8 @@ def lab_sum(zones: dict[str, dict]) -> dict | None:
 
 #: what each scope's figures rest on
 BASIS = {
-    "zone": "PeriodLeakAccepted's terms at the zone's own run: its gate's check covered one link-window, so the period "
-            "is that window's load scaled to m windows",
+    "zone": "PeriodLeakAccepted's terms at the zone's own run: its gate's check covered one execution phase, so a "
+            "period is that phase's load scaled to the period's m phases",
     "lab": "the lab's zones summed, each at its own run's load: our composition (leak_bounds.datacenter), which no Lean "
            "statement covers, scaled to the period",
     "datacenter": "the census's reference datacenter, every link at a zone's load: our composition, scaled",
@@ -361,18 +375,19 @@ def notes() -> list[str]:
         "sum is established only where every zone's is, and the datacenter's and the world's never are, their links "
         "being no run's",
         "k_sched and k_fail both charge each connection's cell count, log2(cap + 1) with cap its lane's egress cells: "
-        "PeriodLeakAccepted's terms as proved, a known overcount (charging each bit once is NET-200's bound)",
-        "ell_a is the registered width of a window's free inputs (the tied audit's slot entries, NR*T/EVERY entries), "
-        "not the realized advice length |a_j|, which is private and not in this record",
-        "k_skip is 0 in the per-period form, every proof block being drawn; the pooled form's k_skip at delta is "
-        "F*log2(N + 1) + b*F (leak_bounds), and that form is conditional (hesc and hleak await SampledKSLive and P2)",
-        f"the jitter is charged at d_jit = {LB.JITTER_BOUND}, k_i = T steps a window: J is assumed at d_jit = "
-        f"{LB.JITTER_BOUND}, and at d_jit = 1 it isn't met (the next bucket's host-state channel), so the brief's 0, "
-        "which holds only under J at d_jit = 1, isn't charged",
+        "PeriodLeakAccepted's terms as proved, a known overcount: a bound charging each bit once would be tighter",
+        "ℓ_a,j is phase j's registered advice width (the tied audit's slot entries, NR·T_j/EVERY of them), not the "
+        "realized advice length |a_j|, which is private and not in this record",
+        "k_skip,j is 0 in the per-period form, every proof block being drawn; the pooled form's k_skip at δ is "
+        "F·log2(N + 1) + b·F (leak_bounds), and that form is conditional (hesc and hleak await SampledKSLive and P2)",
+        f"the jitter is T_j·log2 d_jit at d_jit = {LB.JITTER_BOUND}, T_j bits a phase: JitterBounded holds only at "
+        f"d_jit = {LB.JITTER_BOUND}, since at d_jit = 1 the next bucket's host-state channel breaks it",
         "no sync term on the active-warden path",
-        "delta_net is the scans' delta summed over the period's windows, m*delta_scan, beside the scans' knowledge and "
-        "collision errors; where it reaches 1 the row is vacuous, a bound that holds with no probability",
-        "each zone's figures scale one link-window's run to the period; nothing over a week, a month or a year was run",
+        "δ_net = eps + m·(ε_ks + ε_bind + ε_tap) over a row's m phases (PeriodLeakAccepted's failure a phase, "
+        "δ + ε_ks + ε_bind + ε_tap): eps, the period check's, is only its δ part (m·δ, each phase's scan at its δ), and no check computes ε_ks, ε_bind or ε_tap, "
+        "so δ_net has no number here; a row whose eps alone reaches 1 is vacuous, a bound that holds with no "
+        "probability",
+        "each zone's figures scale one phase's run to the period; nothing over a week, a month or a year was run",
     ]
 
 
@@ -384,7 +399,8 @@ def fmt(x: float) -> str:
 
 
 def delta(eps: str) -> str:
-    """δ_net as the tables print it: vacuous where it reaches 1, where the bound holds with no probability."""
+    """eps, δ_net's δ part, as the tables print it: vacuous where it alone reaches 1, where the bound holds with no
+    probability."""
     e = Fraction(eps)
     return f"{float(e):.3g}" + (" (vacuous)" if e >= 1 else "")
 
@@ -407,7 +423,7 @@ def markdown(doc: dict) -> str:
     for b, z in zones.items():
         g, c, p = z["gate"], z["chain"], z["period"]
         gate = ("accepted" if g["accepted"] else f"not accepted: {g.get('why') or g.get('failed')}") + (
-            f", {g['requests']} requests in {g['windows']} link-window(s)" if g.get("requests") is not None else "")
+            f", {g['requests']} requests in {g['windows']} phase(s)" if g.get("requests") is not None else "")
         chain = "not run" if c is None else c["verdict"] + " (" + ", ".join(f"{k} {s['verdict']}"
                                                                           for k, s in c["steps"].items()) + ")"
         period = "not run" if p is None else f"{p['verdict']}: {short(p.get('reason') or '')}"
@@ -426,47 +442,49 @@ def markdown(doc: dict) -> str:
               f"`{LB.STATEMENTS['per_period']}`: {BOUND}, in the registered reading, shares of one copy of the weights "
               f"({LB.WEIGHTS.label}). It bounds a zone only over a period its period check accepted: K is established "
               f"for {', '.join(accepted) or 'no zone'} here. A zone's figures without that accept are the bound its "
-              "run's load would have had, had its period check accepted.", ""]
+              "run's load would have had, had its period check accepted.", "",
+              "Each bound holds except at δ_net = eps + m·(ε_ks + ε_bind + ε_tap) over its row's m phases. The tables "
+              "give eps, the period check's δ part of δ_net; no check computes ε_ks, ε_bind or ε_tap, so δ_net has "
+              "no number here.", ""]
     for b, z in zones.items():
         if not z["K"]:
             lines.append(f"{b}: no K (the gate's check didn't accept)")
             continue
-        k, w = z["K"], z["K"]["per_window"]
+        k, w = z["K"], z["K"]["per_phase"]
         why = {"not run": "the period check didn't run", "refused": "the piece refused to run"}.get(
             z["verdict"], f"the period check answered {z['verdict']}")
         status = "established" if k["established"] else f"not established: {why}"
-        lines += [f"**{b}** ({status}) at scan class {k['scan_class']}, T = {w['k_i']}, "
-                  f"{k['run']['requests_per_link_window']:g} "
-                  f"requests a link-window: a window's ell_a = {w['ell_a']:,}, k_skip = 0, k_i log2 d_jit = "
-                  f"{w['jitter']} (d_jit = {w['d_jit']}), a request's k_sched = k_fail = {k['per_request']['k_sched']}; "
-                  f"K a link-window = {w['K']:,.0f}.", "",
-                  "| period | m | k_sched | k_fail | sum ell_a | sum jitter | K per period (share) | delta_net | "
-                  "K pooled, delta = 1e-6 (k_skip) |", "|---|---|---|---|---|---|---|---|---|"]
+        lines += [f"**{b}** ({status}) at scan class {k['scan_class']}, "
+                  f"{k['run']['requests_per_link_window']:g} requests a phase of T_j = {w['T_j']} buckets: "
+                  f"ℓ_a,j = {w['ell_a']:,}, k_skip,j = 0, T_j·log2 d_jit = {w['jitter']} (d_jit = {w['d_jit']}), "
+                  f"a request's k_sched = k_fail = {k['per_request']['k_sched']}; K a phase = {w['K']:,.0f}.", "",
+                  "| period | m | k_sched | k_fail | Σ_j ℓ_a,j | Σ_j T_j·log2 d_jit | K per period (share) | "
+                  "eps (δ part) | K pooled, δ = 1e-6 (k_skip) |", "|---|---|---|---|---|---|---|---|---|"]
         for p, t in k["periods"].items():
             pooled = t["pooled"]["1e-06"]
             lines.append(f"| {p} | {fmt(t['m'])} | {fmt(t['k_sched'])} | {fmt(t['k_fail'])} | {fmt(t['ell_a'])} | "
-                         f"{fmt(t['jitter'])} | {fmt(t['bound'])} ({t['share']:.3g}) | {delta(t['delta_net'])} | "
+                         f"{fmt(t['jitter'])} | {fmt(t['bound'])} ({t['share']:.3g}) | {delta(t['eps'])} | "
                          f"{fmt(pooled['bound'])} ({fmt(pooled['k_skip'])}) |")
         lines.append("")
     if doc["lab"]:
         first = next(z["K"] for z in zones.values() if z["K"])
         lab = held(doc["lab"]["established"])
-        lines += ["## Over all compute", "", "| period | scope | links | established | K per period (share) | delta_net | "
-                  "K pooled, delta = 1e-6 | basis |", "|---|---|---|---|---|---|---|---|"]
+        lines += ["## Over all compute", "", "| period | scope | links | m | established | K per period (share) | "
+                  "eps (δ part) | K pooled, δ = 1e-6 | basis |", "|---|---|---|---|---|---|---|---|---|"]
         for p in LB.PERIODS:
             for b, z in zones.items():
                 if z["K"]:
                     t = z["K"]["periods"][p]
-                    lines.append(f"| {p} | zone {b} | 1 | {held(z['K']['established'])} | {fmt(t['bound'])} "
-                                 f"({t['share']:.3g}) | {delta(t['delta_net'])} | "
+                    lines.append(f"| {p} | zone {b} | 1 | {fmt(t['m'])} | {held(z['K']['established'])} | "
+                                 f"{fmt(t['bound'])} ({t['share']:.3g}) | {delta(t['eps'])} | "
                                  f"{fmt(t['pooled']['1e-06']['bound'])} | zone |")
             s = doc["lab"][p]
-            lines.append(f"| {p} | the lab | {doc['lab']['links']} | {lab} | {fmt(s['per_period'])} "
-                         f"({s['share']:.3g}) | {delta(s['delta_net'])} | {fmt(s['pooled']['1e-06'])} | lab |")
+            lines.append(f"| {p} | the lab | {doc['lab']['links']} | {fmt(s['m'])} | {lab} | {fmt(s['per_period'])} "
+                         f"({s['share']:.3g}) | {delta(s['eps'])} | {fmt(s['pooled']['1e-06'])} | lab |")
             for r in first["scopes"]:
                 if r["period"] == p and r["scope"] in ("datacenter", "world"):
-                    lines.append(f"| {p} | {r['scope']} | {r['links']:,} | no (scaled) | {fmt(r['per_period'])} "
-                                 f"({r['per_period_share']:.3g}) | {delta(r['eps'])} | "
+                    lines.append(f"| {p} | {r['scope']} | {r['links']:,} | {fmt(r['link_windows'])} | no (scaled) | "
+                                 f"{fmt(r['per_period'])} ({r['per_period_share']:.3g}) | {delta(r['eps'])} | "
                                  f"{fmt(r['pooled']['1e-06'])} | {r['scope']} |")
         lines += ["", *(f"- **{k}**: {v}" for k, v in BASIS.items())]
     lines += ["", "## Notes", "", *(f"- {n}" for n in doc["notes"]), ""]
