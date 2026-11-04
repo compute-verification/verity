@@ -571,8 +571,10 @@ def test_each_lanes_prog_is_its_own_chunk():
 
 def test_the_scan_is_read_off_its_program(server):
     """The rows form's scan terms are its registered Program's, in the generator form: T, no free input (its `prog` a
-    compute audit's output), an ingress and an egress instance's committed bits (their returns: a u16 with the state
-    and view, or with the row), and its slot entries' bits (lanes · T / every entries of its `prog` ports' width); and
+    compute audit's output), an ingress and an egress instance's committed bits (their parameters: the row, a later
+    bucket's state when T > 1 and the lanes' `prog` ports, or the egress state's words; and their returns: a u16 with
+    the state and view, or with the row), and its slot entries' bits (lanes · T / every entries of its `prog` ports'
+    width); and
     Lean and the mirror refuse, as parameters, a scan that isn't a descriptor, another Program's, one in the checker
     form (its egress row an input), one whose templates have other parameters or other than 1, T − 1 and T instances,
     or rows other than the schedule's, one whose lane reads another row of its input than its bucket's or another
@@ -581,9 +583,10 @@ def test_the_scan_is_read_off_its_program(server):
     for n in range(3):
         case = build("rows-honest", n, small=n % 2 == 0)
         p, desc = PC.params(case["params"]), case["params"]["scan"]
-        state, prog, view, _words = PC._scan_widths(desc)
+        state, prog, view, words = PC._scan_widths(desc)
         s, T, row = p.schedule, p.schedule.window, WR.row_bytes(p.schedule)
-        assert p.scan == PC.Scan(T, 0, 16 + state + view, 16 + 8 * row, s.lanes * (T // s.every) * prog), (n, p.scan)
+        ingress = 8 * row + (state if T > 1 else 0) + s.lanes * prog + 16 + state + view
+        assert p.scan == PC.Scan(T, 0, ingress, 16 * words + 16 + 8 * row, s.lanes * (T // s.every) * prog), (n, p.scan)
         for bad in PC.bad_scans(case["params"]):
             broken = case | {"params": bad}
             assert reference(broken)["reason"].startswith("params: scan:"), (n, reference(broken))
