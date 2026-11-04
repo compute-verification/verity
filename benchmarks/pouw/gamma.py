@@ -91,12 +91,13 @@ class Row:
     wref: int
     credited: int
     omega: str
-    gamma: str | None
+    gamma: str | None                     # the gap g and its floor, under verity-pouw/gamma/v1's keys
     gamma_floor: str
     overhead_vs_plain_gemm: str
     hashed_bytes_per_useful_mac: float
     hash_units_per_useful_mac: float | None
     terms: list[dict]
+    eps: str | None = None                # the advantage ε = g/(1 − g)
 
 
 def pct(x: Fraction) -> str:
@@ -105,7 +106,7 @@ def pct(x: Fraction) -> str:
 
 def row(scheme: str, m: int, k: int, n: int) -> Row:
     if scheme == "ncp-v1" and GAMMA0_NCP * 3 * k < D:
-        raise ValueError(f"ncp-v1 at k = {k}: γ_0 = {GAMMA0_NCP} is under d/(3k) = {Fraction(D, 3 * k)}, where TT_NCP is "
+        raise ValueError(f"ncp-v1 at k = {k}: g₀ = {GAMMA0_NCP} is under d/(3k) = {Fraction(D, 3 * k)}, where TT_NCP is "
                          "not claimed (Lean `TTNCP`'s premise; the one-segment adversary wins below it)")
     if scheme == "ncp-v1":
         terms, credited, plain = ncp_terms(m, k, n), 3 * m * k * n, m * k * n * MAC_INT8
@@ -119,7 +120,8 @@ def row(scheme: str, m: int, k: int, n: int) -> Row:
     omega = Fraction(wref, credited)
     gamma = 1 - (1 - GAMMA0_NCP) / omega if scheme == "ncp-v1" else None
     return Row(scheme, (m, k, n), wref, credited, f"{float(omega):.5f}", None if gamma is None else pct(gamma),
-               pct(Fraction(skippable, wref)), f"{wref / plain:.4f}", hashed / (m * k * n), hash_units, [asdict(t) for t in terms])
+               pct(Fraction(skippable, wref)), f"{wref / plain:.4f}", hashed / (m * k * n), hash_units, [asdict(t) for t in terms],
+               None if gamma is None else pct(gamma / (1 - gamma)))
 
 
 def uncovered_fraction(model: dict) -> float:
@@ -142,10 +144,10 @@ def main() -> None:
            "model": model["id"], "uncovered_lm_head_fraction": uncovered_fraction(model)}
     if args.json:
         args.json.write_text(json.dumps(out, indent=1))
-    print(f"{'scheme':14} {'(m, k, n)':22} {'Ω':>8} {'γ':>9} {'γ floor':>9} {'W1 vs plain':>11} {'hash B/MAC':>10}")
+    print(f"{'scheme':14} {'(m, k, n)':22} {'Ω':>8} {'ε':>9} {'gap':>9} {'gap floor':>9} {'W1 vs plain':>11} {'hash B/MAC':>10}")
     for r in rows:
-        print(f"{r.scheme:14} {str(r.shape):22} {r.omega:>8} {r.gamma or '—':>9} {r.gamma_floor:>9} {r.overhead_vs_plain_gemm:>11} "
-              f"{r.hashed_bytes_per_useful_mac:10.4f}")
+        print(f"{r.scheme:14} {str(r.shape):22} {r.omega:>8} {r.eps or '—':>9} {r.gamma or '—':>9} {r.gamma_floor:>9} "
+              f"{r.overhead_vs_plain_gemm:>11} {r.hashed_bytes_per_useful_mac:10.4f}")
     print(f"{model['id']}: lm_head is {out['uncovered_lm_head_fraction']:.1%} of a decode token's GEMM MACs (uncovered)")
 
 

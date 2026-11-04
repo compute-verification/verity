@@ -26,7 +26,7 @@ Arms, each one linear's call on a BF16 x of M rows:
 A stock arm that can't be built (not importable, refused, or outside 0.08 rel RMS of x·Wᵀ) is recorded with its error and
 left out.  Each rep times every arm once, in an order rotated each rep, each sample `INNER` calls back to back between CUDA
 events on the current stream, so a host-bound call's gaps count.  The slowdown is ``pearlc`` over the fastest stock arm's
-median, at each (n, k, M), beside γ at both FADD readings (`glm53.gamma`); ``slowdowns`` gives each pearlc arm's.  Every
+median, at each (n, k, M), beside the gap at both FADD readings (`glm53.gamma`); ``slowdowns`` gives each pearlc arm's.  Every
 hashing pearlc arm's passes must commit what ``pearlc``'s commit (`COMMITMENT`) and serve y's bytes, and so must one pass of
 each from poisoned outputs (``agree``).  Writes ``timing.json`` in DIR, one row a point; exits non-zero when any arm differs.
 
