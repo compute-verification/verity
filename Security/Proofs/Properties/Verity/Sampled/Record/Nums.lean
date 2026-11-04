@@ -100,9 +100,6 @@ theorem getD_of_arr {j : Json} {k ctx : String} {a : Array Json} (h : Flock.J.ar
     cases v <;> first
       | (cases h; rfl)
       | cases h
-      | (simp only [Lean.Json.getArr?, pure, Except.pure, Except.ok.injEq] at h; subst h; rfl)
-      | (simp [Lean.Json.getArr?] at h; subst h; rfl)
-      | simp [Lean.Json.getArr?, throw, throwThe, MonadExceptOf.throw] at h
   rw [← hva]
   simp only [_root_.SampledProofs.getD, _root_.SampledProofs.field?, hg, Except.toOption, Option.getD_some]
 
@@ -117,13 +114,9 @@ theorem unitsAt_size {h j : Json} {xs : Array ℕ} {D : Flock.Draw.UnitDraw}
   split at hu
   · rw [hga] at hu
     try dsimp only at hu
-    first
-      | (obtain ⟨us, hus, hX⟩ := Option.bind_eq_some_iff.1 hu
-         cases hX
-         rw [_root_.Properties.SampledProofs.size_qsort, size_mapM_option hus, size_mapM_except hm])
-      | (simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hu
-         obtain ⟨us, hus, rfl⟩ := hu
-         rw [_root_.Properties.SampledProofs.size_qsort, size_mapM_option hus, size_mapM_except hm])
+    obtain ⟨us, hus, hX⟩ := Option.bind_eq_some_iff.1 hu
+    cases hX
+    rw [_root_.Properties.SampledProofs.size_qsort, size_mapM_option hus, size_mapM_except hm]
   · cases hu
 
 /-- **The coins draw `A.kd` units** where the draw ends: `A`'s law is on its strata and draws `A.kd` (`Live.hlaw`). -/

@@ -380,7 +380,6 @@ theorem lengths_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt 
   unfold _root_.SampledProofs.OneStageZk.fitsWhy at hf'
   try rw [hW] at hf'
   split_ifs at hf' with h1 h2 h3 h4 h5 h6 h7
-  all_goals first | (cases hf'; done) | skip
   refine ⟨Nat.lt_of_not_le h1, Nat.lt_of_not_le h2, Nat.lt_of_not_le h3, ?_, ?_, ?_, ?_⟩
   · intro t ht
     have hno : ¬ (decide (2 ^ 64 ≤ t.1.utf8ByteSize) || decide (2 ^ 64 ≤ t.2.size)) = true :=
