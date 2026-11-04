@@ -521,13 +521,20 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     || say "V3C-AUDIT: no RECORDS line; $(tail -3 "$VLOG/audit.err" | tr '\n' ' ' | cut -c1-800)"
   return $rc
 }
-v3c_period() {  # V3c's audit as one compute audit of the network certifier's period: $VW/period.json and $VW/circuits
+# V3c's audit as one compute audit of the network certifier's period: $VW/period.json and $VW/circuits, each circuit file
+# copied into $OUT/v3c-audit/circuits but one over CIRCUIT_OUT_MAX bytes (default 1 GB), which stays in V3c's dir on the
+# node, never in $OUT or custody: period.json names it by its SHA-512, recomposable from the registration and its template
+v3c_period() {
   (cd "$TREE" && env -u PYTHONPATH "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py period --window "$VW/window" \
     --audit "$VW/audit" --pins "$WREG" --out "$VW/period.json" --circuits "$VW/circuits") > "$VLOG/period.log" 2>&1
-  local rc=$?
-  [ "$rc" = 0 ] && cp "$VW/period.json" "$OUT/v3c-audit/" && rm -rf "$OUT/v3c-audit/circuits" \
-    && cp -r "$VW/circuits" "$OUT/v3c-audit/"
-  say "V3C-PERIOD (records_audit.py period exit $rc): $(tail -1 "$VLOG/period.log" | cut -c1-800)"
+  local rc=$? max=${CIRCUIT_OUT_MAX:-1000000000} big=0
+  if [ "$rc" = 0 ]; then
+    cp "$VW/period.json" "$OUT/v3c-audit/" && rm -rf "$OUT/v3c-audit/circuits" && mkdir "$OUT/v3c-audit/circuits" \
+      && find "$VW/circuits" -maxdepth 1 -type f -name '*.txt' -size "-$((max + 1))c" -exec cp -t "$OUT/v3c-audit/circuits" {} + \
+      && big=$(find "$VW/circuits" -maxdepth 1 -type f -name '*.txt' -size "+${max}c" | wc -l)
+  fi
+  say "V3C-PERIOD (records_audit.py period exit $rc): $(tail -1 "$VLOG/period.log" | cut -c1-800)$([ "$big" = 0 ] \
+    || echo "; its circuit files over $max bytes, $big, stay on the node, period.json naming each")"
   return $rc
 }
 certifier_step() {  # $1 chain|period: the split network certifier's step on V3c's window (step 6), if its command is set
