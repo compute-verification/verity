@@ -148,6 +148,11 @@ class Device:
             L.ph_derive.restype = L.ph_stream_wait_event.restype = i32
             L.ph_derive.argtypes = [i32, vp, i32, i32, i32, vp, vp, i32, vp]
             L.ph_stream_wait_event.argtypes = [vp, vp]
+        #: NVTX ranges (nsys attributes each timed item's kernels by them); a library built before them has none
+        self.has_nvtx = hasattr(L, "ph_nvtx_push")
+        if self.has_nvtx:
+            L.ph_nvtx_push.restype = L.ph_nvtx_pop.restype = i32
+            L.ph_nvtx_push.argtypes = [C.c_char_p]
         self._side = None
         if C.sizeof(Info) != L.ph_info_size():
             raise NativeError("libpouw_harness.so's structs don't match native.py's")
@@ -259,6 +264,14 @@ class Device:
         ms = C.c_float()
         self.ck(self.lib.ph_event_ms(C.byref(ms), vp(a), vp(b)))
         return ms.value
+
+    def nvtx_push(self, text: str) -> None:
+        if not self.has_nvtx:
+            raise NativeError("this libpouw_harness.so has no NVTX ranges: rebuild it (native/build.sh)")
+        self.lib.ph_nvtx_push(text.encode())
+
+    def nvtx_pop(self) -> None:
+        self.lib.ph_nvtx_pop()
 
     def capture(self, body) -> Graph:
         """A CUDA graph of whatever `body(stream)` enqueues on the timing stream (thread-local capture mode: a sync,

@@ -381,6 +381,23 @@ def test_a_flush_precedes_every_timed_burst():
     assert dev.log == ["flush", "record", "record"] * S.MIN_REPS
 
 
+def test_with_nvtx_each_timed_items_enqueue_is_a_range_named_by_its_index_with_its_flush_outside():
+    b, dev = bench(methods=("burst",))
+    dev.nvtx_push = lambda text: dev.log.append(("push", text))
+    dev.nvtx_pop = lambda: dev.log.append("pop")
+    e = entry(dev, ("baseline", "s", "f", "k"), 1.0)
+    b.gate(e.key, lambda: (True, {}))
+    b.nvtx = True
+    dev.log.clear()
+    b.timed([e], 4, seed=2)
+    assert dev.log == [x for i in range(S.MIN_REPS) for x in ("flush", "record", ("push", f"item {i}"), "pop", "record")]
+    assert all(it["cpu_s"] >= 0 for it in b.items)
+    b.nvtx = False
+    dev.log.clear()
+    b.timed([e], 4, seed=2)
+    assert "pop" not in dev.log
+
+
 def test_a_burst_cycles_the_operand_sets():
     dev = FakeDevice()
     calls = [FakeCall(dev, 1.0) for _ in range(3)]
@@ -638,9 +655,11 @@ def test_a_queue_job_accepts_any_listed_gpu_and_records_it():
         I.check({**ENV, "CUDA_VISIBLE_DEVICES": "0"}, 0, 1, table[6], node + ",GPU-nope")
 
 
-def test_the_card_must_be_an_rtx_pro_6000_sm120_with_188_sms():
-    I.check_card("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "595.91.07")
-    for bad in (("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1"), ("NVIDIA RTX PRO 6000", "12.0", 188, "570.86")):
+def test_the_card_must_be_an_rtx_pro_6000_sm120_with_188_sms_or_an_h200_sm90_with_132():
+    assert I.check_card("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "595.91.07")["arch"] == "sm_120a"
+    assert I.check_card("NVIDIA H200", "9.0", 132, "570.133.20")["arch"] == "sm_90a"
+    for bad in (("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1"), ("NVIDIA RTX PRO 6000", "12.0", 188, "570.86"),
+                ("NVIDIA H200", "9.0", 114, "570.1"), ("NVIDIA H100 80GB HBM3", "9.0", 132, "570.1")):
         with pytest.raises(I.IdentityError, match="not the card"):
             I.check_card(*bad)
 
@@ -698,7 +717,16 @@ def test_the_shapes_hold_both_panel_headlines_once():
     assert SH.ALIASES["llama3.1-70b-o-decode"] == "m32-n8192-k8192"
     assert SH.phase_of(SH.select(["llama3.1-70b-o-decode"])[0]) == "decode"
     with pytest.raises(KeyError):
-        SH.select(["m1-n1-k1"])
+        SH.select(["m1-n1"])
+
+
+def test_any_shape_is_selected_by_its_key_after_the_named_ones():
+    got = SH.select(["m16-n10240-k8192", "m8192-n8192-k8192", "m16-n10240-k8192", "m1-n57344-k8192"])
+    assert [(s.label, s.m, s.k, s.n) for s in got] == [("m8192-n8192-k8192", 8192, 8192, 8192),
+                                                        ("m16-n10240-k8192", 16, 8192, 10240),
+                                                        ("m1-n57344-k8192", 1, 8192, 57344)]
+    with pytest.raises(KeyError):
+        SH.select(["m0-n1-k1"])
 
 
 def test_scale_tensors_cover_every_block():
@@ -846,7 +874,8 @@ def test_a_verity_registry_entry_is_its_own_source_in_one_tile_order_with_a_work
     assert {(n, int(k)) for n, k, _ in entries} >= {("verity_nvf4_256x128_o_ew", 5), ("verity_fp8_256x128_o_ew", 1)}
     assert {q for *_, q in entries} == {"query", "query_fp8"}  # the (m, n, k) form: query_fixed
     registry = (native / "cutlass_registry.cu").read_text()
-    assert re.search(r"#endif\s+phc_table_nvf4, phc_table_fp8\}", registry)  # in a no-CUTLASS build too
+    # in a no-CUTLASS build too; an sm_90a build (-DPH_NO_PLAIN) has none
+    assert re.search(r"#endif\s+#ifndef PH_NO_PLAIN\s+phc_table_nvf4, phc_table_fp8,\s+#endif\s+phc_table_none\}", registry)
     assert '"$PLAIN - nvf4_plain 0"' in (native / "build.sh").read_text()
 
     kernels = [{"index": 0, "name": "cutlass3x_nvfp4_256x128x128_coop", "kind": 5, "swap": 0},

@@ -3,8 +3,11 @@
 
   python bench.py --gpu 5 --expect-uuid GPU-... [--arm module:Class ...] [--arm-path DIR] [--shapes LABEL ... | headline]
                   [--families bf16 fp8-e4m3 ...] [--reps 20] [--seed N] [--lock-mhz F]
-                  [--decode-method dependent-chain|independent] --out run.json
+                  [--decode-method dependent-chain|independent] [--bridge] [--nvtx] --out run.json
   python bench.py --plan [--shapes ...]          the shapes' operand sets, bursts and memory, without a GPU
+
+On an RTX PRO 6000 (sm_120), or an H200 (sm_90: native/build.sh with PH_ARCH=sm_90a, cuBLASLt in the library and vLLM's
+CUTLASS and DeepGEMM through torch with --bridge). A shape is any panel or model label, or any `m{m}-n{n}-k{k}`.
 
 The contract with arms is `arm.py`. Per run: identity (`identity.py`), the fill and derive preflights; the SASS gate
 (`sass_gate.py`) on every arm's declared binaries and every mapped library with device code; per shape: operand sets; gates,
@@ -117,7 +120,8 @@ class Timer:
     """Times an entry: a read-only L2 flush, NVML, an event, the burst (`burst`: B calls enqueued from Python; `graph`: the
     same B calls replayed from one CUDA graph; a chain's `replays` replays of its `length` calls), an event, NVML while the
     GPU runs it (`during`), NVML once it is done. A `-wflush` method uses the write flush instead (the W5 control). Per-call
-    time is the item's over its calls."""
+    time is the item's over its calls. `cpu_s` is the process's CPU seconds enqueueing the item; with a `mark` the enqueue
+    is an NVTX range of that text (`--nvtx`), by which nsys attributes the item's kernels."""
 
     def __init__(self, dev, sensors):
         self.dev, self.sensors = dev, sensors
@@ -137,22 +141,28 @@ class Timer:
             self.dev.graph_destroy(e.graph)
             e.graph = None
 
-    def time(self, e: Entry, method: str, burst: int) -> dict:
+    def time(self, e: Entry, method: str, burst: int, mark: str | None = None) -> dict:
         d = self.dev
         unit = self.unit(e, burst)
         (d.write_flush if method.endswith("-wflush") else d.flush)()
         before = self.sensors.sample()
         d.record(self.e0)
+        if mark is not None:
+            d.nvtx_push(mark)
+        cpu = time.process_time()
         for _ in range(e.replays):
             if method.startswith("graph"):
                 d.graph_launch(e.graph)
             else:
                 e.enqueue(d.stream, unit)
+        cpu = time.process_time() - cpu
+        if mark is not None:
+            d.nvtx_pop()
         d.record(self.e1)
         during = self.sensors.sample()
         ms = d.elapsed_ms(self.e0, self.e1)
         calls = unit * e.replays
-        return {"ms_per_call": ms / calls, "burst_ms": ms, "burst": calls,
+        return {"ms_per_call": ms / calls, "burst_ms": ms, "burst": calls, "cpu_s": cpu,
                 "sensors": {"before": before, "during": during, "after": self.sensors.sample()}}
 
 
@@ -196,6 +206,9 @@ class Bench:
         self.sass: SG.Gate | None = None
         self.warmups: list[dict] = []
         self.poisoning: list[dict] = []
+        #: each timed item an NVTX range "item <its index in `items`>" (--nvtx); the stock libraries through torch (--bridge)
+        self.nvtx = False
+        self.bridge = None
 
     def gate(self, key: tuple, fn) -> bool:
         """Runs a gate (`fn() -> (ok, detail)`) and records it; a gate that raises has failed."""
@@ -259,7 +272,7 @@ class Bench:
             for pos, i in enumerate(order):
                 e, m = pairs[i]
                 self.ledger.require(e.gate_key or e.key)
-                t = self.timer.time(e, m, burst)
+                t = self.timer.time(e, m, burst, f"item {len(self.items)}" if self.nvtx else None)
                 self.items.append({"key": list(e.key), "method": m, "rep": r, "pos": pos, **t})
                 per[e.key][m].append(t["ms_per_call"])
         return per
@@ -578,6 +591,8 @@ def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bo
             if missing:
                 raise NamesNotTaken(names_not_taken(fam.name, shape.label, missing, enumeration, pick))
         cuts, unimpl = B.cutlass_candidates(dev, fam, shape, kernels, fam.name in sched_fams)
+        bridged, bridge_refused = bench.bridge.candidates(fam, shape) if bench.bridge is not None else ([], [])
+        cuts += bridged
         gated = []
         for c in lts + cuts:
             key = ("baseline", shape.label, fam.name, c.name)
@@ -593,7 +608,7 @@ def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bo
                 gated.append(c)
         out[fam.name] = {"gated": gated, "all": lts + cuts,
                          "tried": [{"name": c.name, "source": c.source, "config": c.config} for c in lts + cuts],
-                         "cublaslt_refused": refused, "cutlass_unimplementable": unimpl,
+                         "cublaslt_refused": refused, "cutlass_unimplementable": unimpl, "bridge_refused": bridge_refused,
                          "cublaslt_libraries": [{"prefix": t.prefix, "version": t.version} for t in dev.lts],
                          "cublaslt_enumeration": enumeration or None, "cublaslt_enumeration_missing": missing}
         if not lts + cuts:
@@ -1084,6 +1099,12 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--item-ms", type=float, default=ITEM_MS,
                    help="every timed item (entry, method, rep) is sized to about the same device time, at least this")
     p.add_argument("--lock-mhz", type=int, help="lock this GPU's graphics clock (nvidia-smi -i UUID -lgc F,F); reset at exit")
+    p.add_argument("--bridge", action="store_true",
+                   help="also time the stock FP8 libraries served through torch (torch_baselines.py: vLLM's CUTLASS, "
+                        "DeepGEMM), imported after the arms' SASS gate; the H200's CUTLASS and DeepGEMM")
+    p.add_argument("--nvtx", action="store_true",
+                   help="mark each timed item's enqueue an NVTX range 'item <index in items>', for nsys to attribute its "
+                        "kernels (verity bench overhead's busy SM-time)")
     p.add_argument("--plan", action="store_true", help="print each shape's operand sets, burst and memory, and exit")
     p.add_argument("--out", type=Path)
     a = p.parse_args(argv)
@@ -1235,7 +1256,7 @@ def main(argv: list[str] | None = None) -> int:
         sass = SG.Gate(log)
         for a in arms:
             A.check_arm(a, set(B.FAMILIES))
-            build = a.build({"device": dev, "arch": "sm_120a", "out_dir": str(args.out.parent),
+            build = a.build({"device": dev, "arch": card["arch"], "out_dir": str(args.out.parent),
                              "transcripts_dir": str(args.out.parent / "transcripts")})
             verifier = A.check_verifier(a.name, build)
             if verifier is None:
@@ -1245,11 +1266,20 @@ def main(argv: list[str] | None = None) -> int:
                                    "verifier": verifier}
             sass.check(SG.declared(a.name, build), f"arm:{a.name}")
         sass.check(sass.discover(), "mapped")
+        bridge = None
+        if args.bridge:
+            import torch_baselines as TB
+
+            bridge = TB.Bridge.load()
+            TB.exempt(sass, sass.discover())
+            out["bridge"] = bridge.record()
         kernels = B.cutlass_kernels(dev)
         out["cutlass_kernels"] = kernels
         lt_ws = dev.alloc(B.LT_WORKSPACE)
         bench = Bench(dev, nvml, args.reps, tuple(args.methods), log)
-        bench.sass = sass
+        bench.sass, bench.bridge, bench.nvtx = sass, bridge, args.nvtx
+        if args.nvtx and not dev.has_nvtx:
+            raise RuntimeError("--nvtx needs a libpouw_harness.so with NVTX ranges (ph_nvtx_push): rebuild it")
         fams = [B.FAMILIES[f] for f in args.families]
         for i, shape in enumerate(SH.select(args.shapes)):
             log(f"shape {shape.label}")

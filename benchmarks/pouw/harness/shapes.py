@@ -5,6 +5,8 @@ labelled like the panel (`m{m}-n{n}-k{k}`); every shape's `key` is that form."""
 
 from __future__ import annotations
 
+import re
+
 from arm import Shape
 
 SQUARE = (2048, 4096, 8192, 16384, 32768)
@@ -53,9 +55,13 @@ def phase_of(shape: Shape) -> str | None:
     return next((p for p, label in HEADLINE.items() if key(shape.m, shape.k, shape.n) == label), None)
 
 
+KEY_RE = re.compile(r"m([1-9]\d*)-n([1-9]\d*)-k([1-9]\d*)")
+
+
 def select(labels: list[str] | None) -> list[Shape]:
-    """The shapes whose labels are given (all when none are; `headline` names both headlines), in the bench's order; an
-    unknown label is an error."""
+    """The shapes whose labels are given (all when none are; `headline` names both headlines), in the bench's order, then any
+    other shape given by its key (`m{m}-n{n}-k{k}`, as `verity bench overhead` sweeps m), in the order given; any other
+    label is an error."""
     shapes = all_shapes()
     if not labels:
         return shapes
@@ -63,7 +69,12 @@ def select(labels: list[str] | None) -> list[Shape]:
     if "headline" in want:
         want = (want - {"headline"}) | set(HEADLINE.values())
     known = {s.label for s in shapes}
-    unknown = sorted(want - known)
+    keyed = [x for x in dict.fromkeys(labels) if x in want - known and KEY_RE.fullmatch(x)]
+    unknown = sorted(want - known - set(keyed))
     if unknown:
         raise KeyError(f"unknown shapes {unknown}")
-    return [s for s in shapes if s.label in want]
+    extra = []
+    for x in keyed:
+        m, n, k = map(int, KEY_RE.fullmatch(x).groups())
+        extra.append(Shape(x, m, k, n))
+    return [s for s in shapes if s.label in want] + extra
