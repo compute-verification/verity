@@ -313,7 +313,8 @@ def test_a_test_runs_measured_advice_charge_is_beside_the_bound_as_that_runs(tmp
     rec = json.loads((out / "record" / "onsite.json").read_text())
     assert rec["advice_charge"]["measured"] == {
         "label": MEASURED["label"], "run": "toy-test", "from": str(f), "bits_per_commit_period": MEASURED["bits"],
-        "bits_per_phase": MEASURED["phase_bits"], "commit_periods_measured": 2, "finishes": MEASURED["finishes"],
+        "bits_per_phase": MEASURED["phase_bits"], "phases": OR.TEST_PHASES, "commit_periods_measured": 2,
+        "finishes": MEASURED["finishes"],
         "prompt_len": MEASURED["prompt_len"], "output_len": MEASURED["output_len"]}
     assert (rec["advice_charge"]["served"], rec["advice_charge"]["charged"]["bits_per_phase"]) == (OR.ADVICE, [9088])
     assert json.loads(capsys.readouterr().out.strip()[7:])["advice_measured_on"] == "toy-test"

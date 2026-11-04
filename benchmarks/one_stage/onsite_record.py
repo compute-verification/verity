@@ -39,7 +39,8 @@ execution phase, with its share of K and its source (`CHARGED`: the tied compute
 the period's parameters, with no advice length and no cap in them); and
 ``measured`` is honest serving's |a_j| a Commit period, of which an execution phase holds several, and their sum over
 each execution phase (``bits_per_phase``, missing where the test run's advice places no Commit period on the engine
-clock), measured on a test run with public inputs (`advice_charge.py`'s record, ``--advice-charge``) and labelled as
+clock; ``phases`` says where those phases start, `TEST_PHASES`), measured on a test run with public inputs
+(`advice_charge.py`'s record, ``--advice-charge``) and labelled as
 that run's, never a figure of this one. ``tree`` is the commit the run served from (machine.txt's), None where machine.txt names none.
 
 **Periods**: the run's own certification period (``run``), proved, and each monitoring period of `leak_bounds.PERIODS`
@@ -146,6 +147,8 @@ STATEMENTS = {"run": LB.STATEMENTS["per_period"], "node": LB.STATEMENTS["per_per
               "datacenter": LB.STATEMENTS["datacenter"], "world": LB.STATEMENTS["datacenter"]}
 NO_MEASUREMENT = ("no test run's measurement given (--advice-charge: `advice_charge.py`'s record of honest serving on "
                   "public inputs)")
+TEST_PHASES = ("the test run's own: T buckets of τ from its first Commit period's engine clock reading, not the network "
+               "certifier's phase boundaries, so a Commit period near a boundary can count in the next phase")
 
 
 def missing(why: str, src: str | None = None) -> dict[str, Any]:
@@ -319,7 +322,7 @@ def measured(path: Path | None) -> dict[str, Any]:
     if doc.get("format") != AC.FORMAT:
         raise ValueError(f"{path} is {doc.get('format')!r}, not {AC.FORMAT}")
     return {"label": doc["label"], "run": doc["run"], "from": str(path), "bits_per_commit_period": doc["bits"],
-            "bits_per_phase": doc["phase_bits"] or doc["by_phase"],
+            "bits_per_phase": doc["phase_bits"] or doc["by_phase"], "phases": TEST_PHASES,
             "commit_periods_measured": len(doc["commit_periods"]), "finishes": doc["finishes"],
             "prompt_len": doc["prompt_len"], "output_len": doc["output_len"]}
 
