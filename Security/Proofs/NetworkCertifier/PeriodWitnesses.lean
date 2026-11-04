@@ -1,12 +1,13 @@
 import Proofs.NetworkCertifier.Witnesses
 import Proofs.NetworkCertifier.WitnessToys
 import Proofs.NetworkCertifier.Assumptions.SampledCode
+import Definitions.NetworkCertifier.Guarantees.PeriodOnce
 
 /-!
 # The monitoring period's honest and nontrivial lemmas
 
-`PeriodLeakAccepted` and `PooledLeakAccepted` each have an `honest` and a `nontrivial` lemma, listed in the lock's
-`witnesses`, and neither takes a binder over its instance:
+`PeriodLeakAccepted` and `PooledLeakAccepted` each have an `honest` and a `nontrivial` lemma, and `PeriodLeakOnce` a
+`nontrivial` one, listed in the lock's `witnesses`; none takes a binder over its instance:
 
 * `PeriodLeakAccepted_honest`: under `SampledCodeRuns`, the one named assumption, the premises that are no named
   assumption hold at the deployed instance: `Claims.Sampling.KS` at SHA-512 at the deployed sampling record
@@ -17,6 +18,10 @@ import Proofs.NetworkCertifier.Assumptions.SampledCode
   (`trusted-host`), a named assumption.
 * `PeriodLeakAccepted_nontrivial`: the per-window bound fails at the accepting verifier `tapD` at SHA-512, at
   `δ = 1/8` (`tapD_bound_fails`).
+* `PeriodLeakOnce_nontrivial`: its conclusion fails at `scopelessD`, whose verifier accepts everything, with the rows
+  format `fxRows`, no window and `Θ = {(1, 0)}`. The device `leakyRun` shows the client a cell its record doesn't hold
+  on one of two servings, so the two are told apart against the count `#Θ = 1`. `PeriodLeakOnce_untrusted`, beside it
+  and unlisted, makes it an exclusion: at that instance every premise but `TrustedHost` holds, and `TrustedHost` fails.
 * `PooledLeakAccepted_honest`: its premises on the schedules, at `fxQueue`'s alone: each fits the format (`hfit`) and
   sends at most 6 cells a connection (`hcap`). Stated as their conjunction, not as `fits` alone: the witnesses rule
   reads a statement that is one definition applied by unfolding it once, and `fits` is a field.
@@ -67,6 +72,52 @@ theorem PeriodLeakAccepted_nontrivial :
         (Btap shaD (tapD Unit).V (Claims.Sampling.E (tapD Unit) fun _ => [()]) (tapD Unit).commit (tapD Unit).parse
           (fun _ => tapOps) Unit silentP []).Pr shaD :=
   tapD_bound_fails shaD
+
+/-- **`PeriodLeakOnce`'s conclusion fails** at `scopelessD`, whose verifier accepts everything, the rows format
+`fxRows`, no window and `Θ = {(1, 0)}`: the device `leakyRun`, which shows the client a cell its record doesn't hold on
+one of two servings, tells the two apart, so `2` servings are counted against `#Θ = 1`. -/
+theorem PeriodLeakOnce_nontrivial :
+    ¬ ((∀ m, ScopeAcc (scopelessD Unit) (fun _ => notLay) (fun _ => 1) m →
+        ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
+        PrBad shaD (scopelessD Unit).V
+            (RLeakTap shaD (scopelessD Unit).commit (scopelessD Unit).parse (scopelessD Unit).partition 1 1 1
+              (fun _ => notLay) (fun _ => 1) 0 (fun s => AsReg s.prog notLay 1 ∅) 1 (fun _ => []))
+            (Claims.Sampling.E (scopelessD Unit) fun _ => [()]) m P ≤
+          Claims.Sampling.κ (scopelessD Unit) 0 m +
+              Real.sqrt (Claims.Sampling.γ (scopelessD Unit) m * PrB shaD (scopelessD Unit).V P m) +
+            (Bext shaD (scopelessD Unit).V (Claims.Sampling.E (scopelessD Unit) fun _ => [()]) Ω P m).Pr shaD +
+            (Btap shaD (scopelessD Unit).V (Claims.Sampling.E (scopelessD Unit) fun _ => [()])
+              (scopelessD Unit).commit (scopelessD Unit).parse (fun _ => []) Ω P m).Pr shaD) ∧
+      ((∀ z ∈ (Set.univ : Set Bool), ∀ (i : Fin 0) s, (scopelessD Unit).parse (Fin.elim0 i) = some s →
+          TapOpens shaD (scopelessD Unit).commit notLay 1 (fun _ _ => []) s [] ((leakyRun () (emptySched, z)).2 i)) →
+        {z : Bool | z ∈ Set.univ ∧ (emptySched.r, emptySched.D) ∈ ({(1, 0)} : Set (ℕ × ℕ)) ∧
+            fxRows.Fits 1 0 emptySched ∧ leakyDec (leakyRun () (emptySched, z)).1 = z ∧
+            ∀ i : Fin 0, WindowGood shaD (scopelessD Unit) 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅) 1
+              (Fin.elim0 i) (fun _ => false) (fun _ => []) (Fin.elim0 i) (Fin.elim0 i)
+              ((leakyRun () (emptySched, z)).2 i)}.encard ≤
+          ({(1, 0)} : Set (ℕ × ℕ)).encard *
+            ((∏ i : Fin 0, (2 ^ (freeInputs (Fin.elim0 i : AuditStatement).prog notLay 1 \ ∅).card *
+              (faultySets (Fin.elim0 i : AuditStatement).design ((scopelessD Unit).part (Fin.elim0 i)) 0).card *
+              2 ^ ((faultySets (Fin.elim0 i : AuditStatement).design ((scopelessD Unit).part (Fin.elim0 i)) 0).sup
+                (faultyBits (Fin.elim0 i : AuditStatement).prog ((scopelessD Unit).part (Fin.elim0 i)))) *
+              1 ^ 1) : ℕ) : ℕ∞))) := by
+  rintro ⟨-, hc⟩
+  have h2 := (Set.encard_pair (show true ≠ false by decide)).symm.le.trans
+    ((Set.encard_le_encard fun z _ => Set.mem_ofPred.2
+      ⟨Set.mem_univ z, rfl, emptySched_fits, leakyDec_run z, fun i => i.elim0⟩).trans (hc fun _ _ i => i.elim0))
+  simp at h2
+
+/-- **`PeriodLeakOnce_nontrivial`'s instance drops trusted-host alone**: `KS`, binding and the decoder's radius hold
+at `scopelessD` (no statement is in its scope), `fxRows` is well formed, `0 ≤ δ` at `δ = 0`, and `leakyRun` doesn't
+run the network certifier's code. So without `TrustedHost` the count fails where every other premise holds. -/
+theorem PeriodLeakOnce_untrusted :
+    Claims.Sampling.KS shaD (scopelessD Unit) ∧
+      Claims.Flock.ListWithin (scopelessD Unit).flock.len (scopelessD Unit).flock.enc (scopelessD Unit).flock.θ
+        (fun _ => [()]) ∧
+      (scopelessD Unit).commit.Binds shaD ∧ fxRows.Wf ∧ (0 : ℝ) ≤ 0 ∧
+      ¬ Verity.Assumptions.TrustedHost () leakyRun (fun p =>
+        (wardenCode p.1 (noArr p.2), fxRows.record 1 0 p.1 (noArr p.2) (wardenCode p.1 (noArr p.2)))) :=
+  ⟨scopelessD_ks shaD, scopelessD_listWithin, scopelessD_binds shaD, fxRows_wf, le_rfl, leakyRun_untrusted⟩
 
 /-- **`PooledLeakAccepted`'s schedule premises at the deployed instance**, its schedules the fixture `fxQueue`'s alone:
 each fits its rows format (`hfit`), and sends at most 6 cells on each connection (`hcap`). -/
