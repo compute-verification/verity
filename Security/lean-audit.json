@@ -914,9 +914,6 @@
    "owner": "@proofs",
    "digest": "5a7d5592f9380c093278345fa04d22f36b3df8fcd73f96f321b5b923cfc0ce59"
   },
-  "Flock.Bridge.Assumptions.StatementParses": {
-   "owner": "@proofs"
-  },
   "Flock.Bridge.RootFixesDomainL": {
    "owner": "@proofs",
    "digest": "4179b593d8cf637861117774e87e259638f7a715249ab6ceb8e20ce826d44e7d"
