@@ -201,8 +201,8 @@ PREMISES: dict[str, dict[str, Any]] = {
                             "proved inside its own session, whose statement reads the writer's committed leaf by path and "
                             "whose circuit equates it with the wired input, so no opening reaches the verifier; "
                             "OneStageZk.verdicts accepting only where each sampled reader's wire is the layout's, at the "
-                            "registered position, root and path; and SessionOpens and the binding from the sampled leg "
-                            "(`sampled-leg`), never a named assumption. Open until the theorem that "
+                            "registered position, root and path; and SessionOpens and the binding from the sampled leg's "
+                            "bridge (`sampled-leg-bridge`), never a named assumption. Open until the theorem that "
                             "OneStageZk.verdicts' acceptance gives it is named and in the lock",
                       "discharged_by": (), "assumes": ()},
     "free-count": {"is": "each tied audit's free at least #(freeInputs \\ reg) at the wired layout",
@@ -211,12 +211,12 @@ PREMISES: dict[str, dict[str, Any]] = {
                        "discharged_by": ("Properties.NetworkPeriod.rowsHeld",), "assumes": ()},
     "circuit-held": {"is": "each tied audit's class circuit held",
                      "discharged_by": ("Properties.NetworkPeriod.rowsCircuitHeld",), "assumes": ()},
-    "sampled-leg": {"is": "the sampled facts the period takes (KS, SessionOpens, RegOpens: the registered reads' "
-                          "openings) from the sampled leg's guarantee, Verity.Vocab.SampledProofsSound at one-stage v2, "
-                          "whose verifier of record is Lean, through a projection lemma, as a hypothesis on the layer "
-                          "below: never SampledCodeRuns or another premise about the deployed Python. Open until that "
-                          "guarantee's proof and the lemma are in the lock",
-                    "discharged_by": (), "assumes": ()},
+    "sampled-leg-bridge": {"is": "the sampled leg's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
+                                 "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KS, "
+                                 "SessionOpens, RegOpens: the registered reads' openings), proved of the Lean verifier "
+                                 "and taken as theorem hypotheses on the layer below, never SampledCodeRuns or another "
+                                 "premise about the deployed Python. Open until the bridge's theorem is in the lock",
+                           "discharged_by": (), "assumes": ()},
 }
 #: the named assumptions that may stand under the figure of record, each on an auditor-trusted device
 STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifier and its host are the auditor's"}

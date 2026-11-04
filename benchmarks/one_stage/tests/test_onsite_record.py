@@ -68,7 +68,7 @@ LINE = 'THE NETWORK CERTIFIER {"rc": 0, "verdict": "accept"}'
 CAPACITY = 1008 * 512 * 8
 #: stand-ins for the theorems that discharge the premises `PREMISES` names no discharge of yet, and those premises as
 #: they are
-TOY = {"sampled-leg": "Toy.SampledAuditsSound", "session-wires": "Toy.VerdictsWired"}
+TOY = {"sampled-leg-bridge": "Toy.SampledLegBridge", "session-wires": "Toy.VerdictsWired"}
 UNNAMED = {n: OR.PREMISES[n] for n in TOY}
 
 
@@ -270,7 +270,7 @@ def held_both(out: Path) -> dict:
 def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both_checks_are_held(
         tmp_path, lock, monkeypatch):
     """The lock as Security's is today, listing the guarantee the tight K rests on and none of the theorems that
-    discharge its premises, and the sampled leg and the session's wires with no discharge named: every premise is open,
+    discharge its premises, and the sampled leg's bridge and the session's wires with no discharge named: every premise is open,
     by name, so the figure of record charges ℓ_a + 1 for the tied audit, and the tight K's cells beside it are
     conditional on each."""
     for name, premise in UNNAMED.items():
@@ -283,7 +283,7 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
         list(p["discharged_by"]) for p in OR.PREMISES.values()]
     assert [of["premises"]["premises"][n]["discharged_by"] for n in UNNAMED] == [[], []]
     assert rec["periods_tight"]["conditional_on"] == list(OR.PREMISES) and rec["periods_tight"]["run"]["bits"] == K
-    assert "SampledCodeRuns" in OR.PREMISES["sampled-leg"]["is"] and "Python" in OR.DISCHARGE
+    assert "SampledCodeRuns" in OR.PREMISES["sampled-leg-bridge"]["is"] and "Python" in OR.DISCHARGE
     assert "no opening reaches the verifier" in OR.PREMISES["session-wires"]["is"]
 
 
