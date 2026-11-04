@@ -433,16 +433,16 @@ def products(b: dict[str, dict], rounds: bool = False, left: list[str] = ()) -> 
 
 
 def modelled_status(m: formalism.Measured, b: dict[str, dict]) -> dict[str, str]:
-    """A modelled row's input sources: each of `KEYS` the workload model's, with te_core's label for it (w_fwd, which
-    has none, a token's forward on the model's shape), and the products the model's matrix products, with what
-    `products` says of them as the one bound `b` read them."""
+    """A modelled row's input sources: each of `KEYS` the workload model's, with te_core's labels for the quantities it
+    reads (w_fwd, which has none, a token's forward on the model's shape), and the products the model's matrix
+    products, with what `products` says of them as the one bound `b` read them."""
     out = {}
     for key in KEYS:
         keys = LABELLED["delta_bits"] if key == "delta_t_bits" and m.delta_t_bits is None else LABELLED[key]
-        said = next((m.labels[k] for k in keys if m.labels.get(k)), None) or (
+        said = "; ".join(dict.fromkeys(m.labels[k].removeprefix("model: ") for k in keys if m.labels.get(k))) or (
             "a token's forward on the model's shape, at the slowdown code's gate prices" if key == "w_fwd_gates" else
             "no label from the slowdown code")
-        out[key] = f"modelled: {said.removeprefix('model: ')}"
+        out[key] = f"modelled: {said}"
     got = products(b)
     rest = got.removeprefix("measured") if got.startswith("measured") else f"; {got.removeprefix('assumed: ')}"
     return out | {"products": f"modelled: the workload model's matrix products{rest}"}
