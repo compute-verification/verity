@@ -4,9 +4,9 @@ import SampledProofs.Bits
 /-!
 # Bits' source keys are the bridge's (`SampledProofs.Bits.srcKey`, `keyIdx`)
 
-`SampledProofs.Bits.srcAt` and `Aliased.srcAt` name the same column Δ copies into a unit input, but for one: a unit input
-bit with no leaf, cut or wire is its own free source in Bits (`Src.free k p t`) and the one fixed column 0 in the bridge
-(`Src.lit 0`). `srcOf` maps Bits' sources to the bridge's, a free one to `.lit 0`:
+`SampledProofs.Bits.srcAt` and `Aliased.srcAt` name the same column Δ copies into a unit input, but for one: a unit
+input bit with no leaf, cut or wire is its own free source in Bits (`Src.free k p t`) and the one fixed column 0 in the
+bridge (`Src.lit 0`). `srcOf` maps Bits' sources to the bridge's, a free one to `.lit 0`:
 
 * `srcAt_eq`, `srcKey_eq`: the bridge's source is `srcOf` of Bits'.
 * `keyIdx_eq`: at an input whose Bits source isn't free, Bits' key is the bridge's. Other inputs' sources don't enter:
@@ -79,8 +79,8 @@ theorem keyIdx_eq (c : Flock.Circuit) {B x : ℕ} (hx : x < B)
   by_cases h0 : SampledProofs.Bits.srcKey c x = .zero
   · rw [ite_eq_left_of_eq_true _ _ (eq_true h0), ite_eq_left_of_eq_true _ _ (eq_true (hz.2 h0))]
     rfl
-  · rw [ite_eq_right_of_eq_false _ _ (eq_false h0), ite_eq_right_of_eq_false _ _ (eq_false (mt hz.1 h0)), ← finRange_map_val,
-      List.find?_map]
+  · rw [ite_eq_right_of_eq_false _ _ (eq_false h0), ite_eq_right_of_eq_false _ _ (eq_false (mt hz.1 h0)),
+      ← finRange_map_val, List.find?_map]
     congr 1
     refine List.find?_congr fun i _ => ?_
     simp only [Function.comp_apply, srcKey_eq c, srcOf_eq_iff hs]

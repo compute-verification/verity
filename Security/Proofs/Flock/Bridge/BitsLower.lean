@@ -26,14 +26,14 @@ open Properties.SampledProofs (bitsGate bitsProg)
 
 /-- **The Bits key program `kp` lays out the circuit `C`**: as many gates; an input where `kp` has no row, and a row
 reading the same gates where it has one; and `C`'s outputs, in gate order. -/
-structure LaysOut (kp : SampledProofs.Bits.KeyProg) (C : Circuit) : Prop where
+structure LaysOut (kp : SampledProofs.Bits.KeyProg) (C : FlockSoundness.Audit.Circuit) : Prop where
   size : kp.size = C.N
   input : ∀ g : Fin C.N, kp.row? g.val = none → C.op g = .input
   row : ∀ g : Fin C.N, ∀ a b, kp.row? g.val = some (a, b) →
     ∃ A B, C.op g = .row A B ∧ a = A.map Fin.val ∧ b = B.map Fin.val
   outs : kp.outs = ((List.finRange C.N).filter fun g => decide (g ∈ C.outputs)).map Fin.val
 
-variable {kp : SampledProofs.Bits.KeyProg} {C : Circuit}
+variable {kp : SampledProofs.Bits.KeyProg} {C : FlockSoundness.Audit.Circuit}
 
 private theorem finRange_map_val (n : ℕ) : (List.finRange n).map Fin.val = List.range n :=
   List.ext_getElem (by simp) fun i _ _ => by simp
