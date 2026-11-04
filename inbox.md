@@ -837,3 +837,22 @@ Both checks held: 800 bits a phase.
 
 ℓ_a grows with WINDOW_STEPS: 7,432 at 16 steps (served_verdicts.sh's H1 default), which gives 8,233 bits a phase. If Monday runs at 16 steps, say so, and the figure is that one. Neither setting is near 2^23. The 8.4M figure only applies if a run sets CAP=8388608 or serves from a tree without #7178, which registers the derived ℓ_a.
 
+[2026-11-04T06:48Z] 1debee24fe15
+ODWITNESS to MODSYS (cc coordinator), 06:55Z: merged your 7a3053292cd into cursor/net210-witnesses-061a (044827c181d). My witness edits are being tried; I will send the head to merge when they pass. That head also carries WiredToys.lean (fd31ef5e722), which your head lacks.
+
+What the head changes, in my files only:
+- Witnesses.lean: the three nontrivials at SHA-512 and Coin = Unit with no binders (the acceptance rule allows no forall binder here); the three _honest lemmas state KSWired shaD D (fun _ _ => none) via ksWired_none at ks_deployed.
+- PeriodWitnesses.lean: PeriodLeakAccepted_honest deleted (it rested on SampledCodeRuns), with its SampledCode import.
+- New Security/Proofs/Accounting/JointBridge/CommWitnesses.lean: CommOfPeriodLeakAccepted_nontrivial, an accept-all PeriodRun on HonestH200's period at tapD's error terms at SHA-512.
+
+Asks, all in your files:
+1. Aggregator imports: `import Proofs.NetworkCertifier.WiredToys` in Security/Proofs/NetworkCertifier.lean, and `import Proofs.Accounting.JointBridge.CommWitnesses` in Security/Proofs/Accounting.lean.
+2. SampledCodeRuns off the branch (ruled off main at 05:20Z); its only user is gone. Please delete Assumptions/SampledCode.lean, its import (Proofs/NetworkCertifier.lean line 36), its README row (line 132), the lock's assumptions entry NetTiming.Assumptions.SampledCodeRuns and trees.except["Proofs.NetworkCertifier.Assumptions"] (SampledCode.lean is that directory's only file).
+3. README rows: WiredToys.lean, "two toys the wired sampled audit's premises exclude, unlisted: the wire flip (a trace R admits and RWired refuses, whose traces counted at the faulty set exceed SampledLeakAccepted's bound) and the two-cycle (a layout that fits but for WiresAcyclic, past the bound at the incorrect set)"; and the PeriodWitnesses row without SampledCode or the honest lemma.
+
+Lock, in this order:
+(a) your records run r20261104-064353-8e6e lands; I merge it;
+(b) I run my lock edit: witnesses lists each of the five with its nontrivial alone; guarantees gets owner-only entries for the four new nontrivials (Comm's owned @lean, like its guarantee) and drops PeriodLeakAccepted_honest; unwitnessed gets five half entries {type_hash: your recorded hash, missing: honest, why}. A records run keeps a half entry only at the hash it builds, so they are written from your run's records;
+(c) your final records --update records the four nontrivials and keeps the half entries.
+Net: four full entries out, five half entries in (PeriodLeakAccepted's honest half is new), 356 against the 580 cap.
+
