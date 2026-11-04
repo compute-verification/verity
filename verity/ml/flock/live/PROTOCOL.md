@@ -650,8 +650,10 @@ root`, §10.1). Its cost is reported per statement as `FIREWALL` lines (`t.firew
 Lean process's), beside the device's
 `t.encoding_commitment`.
 
-Through the Lean session loop (§10.4) level 0's hiding and the mask slot's words are the loop's, not the host's: for each
-table behind the ZK server the prover sends the loop its packed witness (`firewall::lean_level0`), and the loop samples the
+Through the Lean session loop (§10.4) level 0's hiding and the mask slot's words are the loop's, not the host's: the
+prover sends the loop every table's packed witness in one request (`firewall::lean_level0`), and only once it holds them
+all does the loop draw anything, so no table's witness can depend on any of the session's draws, as the analysis's
+model fixes the witness before the server's randomness (`FlockSoundness.ZK.Table.view`). For each table it samples the
 mask slot's words from the OS and writes them into the witness's mask slot (`Frames.Sessions.maskOf`,
 `Frame.MaskSlot.fill`: the slot of the session's own statement for the table, at its `m`), samples the four extra lanes,
 every lane's padding and the level-0 salts, commits level 0 on them and keeps the table's `Flock.Firewall.Level0` (its `m`,
@@ -796,7 +798,9 @@ whatever the loop decided of it: once the prover has its verdict or refusal the 
 both connections, so no `Finish` and no proof leaves twice. The reps' frames are the loop's own, and the loop drives
 them (`Frames`): it prints `FRAMES 127.0.0.1:PORT` after its `LISTENING` line, and a connection there whose first
 line is `rep SESSION I R` starts table `I`'s rep `R`'s frame for the live session named `SESSION` (`Frames.startRep`,
-`firewall::LoopRep::start`), at the statement's start (`Drive.start`), and is answered `ok 64` and the pads' root alone:
+`firewall::LoopRep::start`), at the statement's start (`Drive.start`), once the session's level 0 is drawn (a rep
+before it is refused, so the pads' root, too, reaches the prover only after every table's witness is in), and is
+answered `ok 64` and the pads' root alone:
 the samples the loop made for the rep (the pads `h`, `μ`, their padding, `τ`'s salt and the pads tree's salts) never
 leave it. Its frame masks the rep's rounds with them, and its finish proves the rep with them (`Finish.drawsOf`). Every
 request the frame takes is the loop's,
@@ -814,14 +818,21 @@ receives them (`Frames.feedOf`, `Frames.coins`), and the session's `Finish` leav
 place (`place SESSION I R`: `alg N`, `open N` or `own`, by which it ends a failed rep's rounds) and, at the rep's end, the
 values the frame took (`vals SESSION I R`, `ok N` and the words in absorbed order, for its end check), and it passes every
 device round through, unmasked, to the loop (`firewall::Gate`).
-A connection there whose first line is `level0 SESSION TABLE M LEN`, followed by a table's `LEN`-byte packed witness, is
-table `TABLE`'s level 0 (`Session.level0`, §10.2) for the live session named `SESSION`: the hex of the loop's id for it,
-the four words the prover received for its `Hello`'s answer (`Level0.nameOf`, `firewall::level0_session`). It is answered `ok N R` and
-the `N` bytes of the mask slot's words, the extra lanes, the paddings and the salts the loop sampled, then its `R`-byte
-root, or `err WHY`; the loop wrote the words into the witness's mask slot before it committed level 0, whatever the
-witness held there. A session the loop isn't serving is refused, and so is a table the session lacks, an `M` other than
-the table's statement's, a witness of other than that `M`'s words, or a second request for a table: the loop draws each
-table's level 0 once (`Level0.Slots.draw`), so the prover can't draw again until a root suits it. The
+A connection there whose first line is `level0 SESSION M₀ LEN₀ … M_{J−1} LEN_{J−1}`, a pair for each of the session's
+`J` tables in table order, followed by each table's `LEN_j`-byte packed witness in that order, is the session's level 0
+(`Session.level0`, §10.2) for the live session named `SESSION`: the hex of the loop's id for it, the four words the
+prover received for its `Hello`'s answer (`Level0.nameOf`, `firewall::level0_session`). The loop reads every witness
+before it draws anything, then answers each table in order `ok N R` and the `N` bytes of the mask slot's words, the
+extra lanes, the paddings and the salts the loop sampled, then its `R`-byte root, or the request `err WHY`, nothing drawn
+kept; the loop wrote the words into each witness's mask slot before it committed level 0, whatever the witness held
+there. A session the loop isn't serving is refused, and so is a request whose witnesses are not one for each of the
+session's tables, an `M` other than the table's statement's, a witness of other than that `M`'s words, or any request
+after the session's level 0 is drawn, a witness after a draw among them: the loop draws a session's level 0 once, on
+every table's witness (`Level0.Slots.draw`), so the prover can't draw again until a root suits it, nor hand a witness
+that reads a draw. The selftest's `zk_worker_level0` holds a worker to that beside an honest session:
+`FC_LEVEL0_TAMPER=second` asks again, every table's witness once the loop answered, and `past` asks first with one
+witness more than the session has tables; the loop refuses each, and the session goes on on its one draw and is
+accepted. The
 session's `Commit` leaves only when its roots are its tables', in order, root `i` the one the loop drew for that
 session's table `i` at its statement's `m` (`Level0.commit`; a root drawn at a smaller `m` would pad too few positions).
 Every `Level0` drawn for a session, committed or not, is freed when it ends (`Level0.Slots.close`).
