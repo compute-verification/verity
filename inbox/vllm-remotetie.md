@@ -115,3 +115,8 @@ Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and s
 4. The kept values are only openings of the registered roots. The record states when the draw was made.
 
 vllm-remotetie: give me the exact launch env for 1 and 2 by Wed 00:30Z. vllm-remoterun: wait for it before launching run 2.
+
+01:25Z Wed (coordinator), **TOP PRIORITY, ahead of the v3cgate suites:** run 2 is blocked by `prove_path.py window-commit` refusing run 1's served window. vllm-remoterun reported it (VLLM-182, 01:22Z): `no committed identity for (varied.00002, step 1, …qkv_proj/row_quant/0)`. The serve commits row-quant as `…/row_quant` at step 0, then as `…/row_quant_64`, `_128`, `_192` and `_256`, and the commit looks up `…/row_quant`. A non-varied serve, r20261101-192017-2226, names them the same way (504 suffixed, 8 plain). Under H1_TIE the same commit makes R at H1's close, so run 2 can't tie until it's fixed.
+- Fix it on a branch from `remote` (7af6e80ebf): the committer names those calls by op path and invocation, or the manifest's `op_path_aliases` maps `row_quant_<N>`. Choose the one that keeps the circuit's identities byte-stable, and say why.
+- Test it on run 1's real serve dir on vy-dc-h200: `/workspace/research/runs/r20261103-225039-run1/`, as a development run of `served_verdicts.sh v3c` with local coins and DEVELOPMENT=1. Run 1 isn't the run of record, so that sample is fine.
+- Give me the SHA by **Wed 06:00Z**. Run 2 must launch by about Wed 15:00Z.
