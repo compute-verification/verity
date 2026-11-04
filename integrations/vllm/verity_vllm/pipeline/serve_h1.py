@@ -127,15 +127,21 @@ def worker(name: str) -> ThreadPoolExecutor:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class GateOptions:
-    """serve-openai's ``--challenger-gate`` and ``--challenger-peer`` (its ``gate`` group, `sessions_of`)."""
+    """serve-openai's ``--challenger-gate``, ``--challenger-peer`` and ``--challenger-lane`` (its ``gate`` group,
+    `sessions_of`, `serve_pearl.live`)."""
     challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD",
                                          help="with --protocols: the auditor host's challenger gate, its command as one string "
                                               "(e.g. 'ssh -i KEY -o BatchMode=yes research@HOST'); each H1 window reserves a "
-                                              "session of its own there and draws its coins from it (serve_h1.GateSessions); "
+                                              "session of its own there and draws its coins from it (serve_h1.GateSessions), "
+                                              "each Pearl+ window a salt-only session (serve_pearl.live); "
                                               "without it they are in-process and credit nothing")
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME",
                                          help="with --challenger-gate: this machine's name in the auditor host's peers, where its "
                                               "challenger reaches the server (ssh -R)")
+    challenger_lane: str | None = option("--challenger-lane", default=None, metavar="LANE",
+                                         help="with --challenger-gate under Pearl+'s arm: the lane whose gate key the gate's "
+                                              "command holds, whose open period in the auditor's ledger each window's "
+                                              "salt-only session joins (pouw_h1_window.reserve_salt); PoUW H1's take none")
     h1_prover: str | None = option("--h1-prover", default=None, metavar="DIR",
                                    help="with --protocols: keep each H1 window's prover state (its salt key and each call's "
                                         "rows, pouw_h1_prover) and its live@<s> rows (pouw_h1_live.dump) in DIR/w<k>/, "
@@ -214,6 +220,10 @@ def refusal(opts: Any) -> str | None:
     if bool(gate) != bool(peer):
         return ("--challenger-gate and --challenger-peer go together: the gate's command and this machine's name in the "
                 "auditor host's peers, where its challenger reaches the server (ssh -R)")
+    if opts.gate.challenger_lane:
+        from verity_vllm.pipeline.serve_pearl import ENTRY as PEARL
+
+        return f"--challenger-lane is Pearl+'s (--protocols {PEARL}, serve_pearl): PoUW H1's windows take none"
     if gate and not opts.protocols:
         return f"--challenger-gate draws PoUW H1's coins: it needs --protocols {ENTRY}"
     if (opts.gate.h1_prover or opts.gate.h1_receipts or opts.gate.h1_window_commit) and not opts.protocols:

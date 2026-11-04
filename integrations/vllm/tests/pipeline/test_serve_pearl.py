@@ -16,12 +16,15 @@ from __future__ import annotations
 
 import json
 import random
+import shlex
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 import torch
 from verity.core.protocols.pouw import verifier
+from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import HM96, Workload, activation_binding, commit_rows, weights_root
 from verity.core.protocols.pouw.coins import Challenger
 from verity.core.protocols.pouw.protocol import Matmul, Shape
@@ -32,6 +35,7 @@ from verity_vllm.pipeline import serve_pearl as SPL
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import pearl_c as PPD
+from verity_vllm.protocols.pouw.h1 import window as PHW
 from verity_vllm.protocols.pouw.pearl_c import passes as PP
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 from verity_vllm.protocols.pouw.pearl_c import window as PWR
@@ -276,10 +280,79 @@ def test_serve_openai_refuses_what_the_pearl_arm_cant_serve_before_the_model_loa
     assert so.engine_options(opts)["dtype"] == "bfloat16" and "quantization" not in so.engine_options(opts)
     assert "it needs --precision bfloat16, not verity_int8" in refusal(*arm[:2], *arm[4:])
     assert "--commit, --scheme rows-sha512 and the row's --required-manifest" in refusal(*arm, "--no-commit")
-    assert "--challenger-gate, --challenger-peer: PoUW H1's, not Pearl+'s" in refusal(
-        *arm, "--challenger-gate", "g", "--challenger-peer", "p")
+    live = ("--challenger-gate", "g", "--challenger-peer", "p", "--challenger-lane", "l")
+    assert refusal(*arm, *live) is None
+    for short in (live[:4], live[2:], (*live[:2], *live[4:])):
+        assert "--challenger-lane go together under Pearl+" in refusal(*arm, *short)
+    assert "--h1-model: PoUW H1's, not Pearl+'s" in refusal(*arm, *live, "--h1-model", "m")
+    assert "--challenger-lane is Pearl+'s" in refusal("--challenger-lane", "l")
     assert "not Pearl+'s to give" in refusal(*arm[:4], "--protocols-config", json.dumps({"pouw": {"transcript_dir": "/t"}}))
     assert "are not Pearl+'s (pouw)" in refusal(*arm[:4], "--protocols-config", json.dumps({"pous": {}}))
     after = cli.parse("serve-openai", [*base, *arm, "--release-after", SPL.DRAWER], environ={})
     assert SPL.refusal(after).startswith(f"--release-after {SPL.DRAWER} waits for PoUW H1's draw")
     assert SPL.refusal(cli.parse("serve-openai", base, environ={})) is None
+
+
+
+GATE, PEER, LANE = "ssh -i KEY -o BatchMode=yes research@gate", "vy-dc-h200", "compute-accounting"
+
+
+def _gate(ledger, asked):
+    """The gate's subprocess: its ledger ``ledger``, and each reserve answered with a session named for its epoch, joining
+    the lane's open period there."""
+    def run(argv):
+        assert argv[:-1] == shlex.split(GATE)
+        asked.append(shlex.split(argv[-1]))
+        if asked[-1][0] == "ledger":
+            return 0, "".join(json.dumps(e) + "\n" for e in ledger)
+        return 0, json.dumps(_reserved(asked[-1][-1], ledger[-1]["body"]["period"] if ledger else None))
+    return run
+
+
+def _reserved(epoch, period):
+    return {"session": f"s-{epoch}", "seq": 7, "peer": PEER, "by": LANE, "period": period,
+            "expires_utc": "2026-11-04T16:00:00Z"}
+
+
+def test_live_coins_reserve_each_window_a_salt_only_session_under_the_lane_which_the_install_takes(tmp_path, monkeypatch):
+    """`serve_pearl.live`: window k's coins are a salt-only session the gate reserves when the window opens, under the
+    lane's open period (``ledger``, then ``reserve --peer P --scheme S --families [["pouw/salt",1]] --epoch k``), as the
+    pouw settings ``challenger``, ``session``, ``gate`` and ``period``, which the window's composition takes; `arm_of`
+    gives them under ``--challenger-gate``. A reserve refused (the lane's open period H1's) is that window's visible
+    failure, before any epoch is opened."""
+    asked: list = []
+    period = {"period": "p7", "lane": LANE}
+    coins = SPL.live(GATE, PEER, LANE, _gate([{"kind": "period-open", "session": None, "body": period}], asked))
+    families = json.dumps([list(f) for f in Wd.SALT_FAMILIES], separators=(",", ":"))
+    for k in (0, 1):
+        got = coins(k)
+        assert {x: got[x] for x in ("challenger", "session", "period")} == {
+            "challenger": SPL.AT, "session": _reserved(str(k), "p7"), "period": period}
+        assert asked[-2:] == [["ledger"], ["reserve", "--peer", PEER, "--scheme", Wd.LIVE_SCHEME, "--families", families,
+                                           "--epoch", str(k)]]
+        settings = pouw.Settings.of(SPL.context(CONFIG, {"transcript_dir": str(tmp_path), **got}).settings["pouw"])
+        assert (settings.coins, settings.challenger, settings.session["session"], settings.period) == (
+            None, SPL.AT, f"s-{k}", period)
+
+    made: dict = {}
+
+    def windows(*a, **kw):
+        made["coins"] = kw["coins"]
+        return SimpleNamespace(ready=lambda: None)
+
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--protocols", SPL.ENTRY, "--precision", "bfloat16",
+                                      "--protocols-config", json.dumps(CONFIG), "--challenger-gate", GATE,
+                                      "--challenger-peer", PEER, "--challenger-lane", LANE], environ={})
+    with monkeypatch.context() as m:
+        m.setattr(SPL, "live", lambda *a: ("live", *a))
+        m.setattr(SPL, "PearlWindows", windows)
+        m.setattr("verity_vllm.engine.handle.model_runner", lambda v: None)
+        SPL.arm_of(opts, SimpleNamespace(model=None, vllm=None), None, tmp_path)
+    assert made["coins"] == ("live", GATE, PEER, LANE)
+
+    h1 = {"kind": "period-open", "session": None, "body": {"period": "p8", "lane": LANE, **dict.fromkeys(PHW.H1_PERIOD, 1)}}
+    with _serving(tmp_path, Forward(Model()), SPL.live(GATE, PEER, LANE, _gate([h1], []))) as s:
+        _serve(s, PROMPTS[:1])
+    assert records(tmp_path, "windows.jsonl")[0]["pouw_pearl"]["error"].startswith(
+        "open: ValueError: refused before reserving a salt-only session: the lane's open period p8 is H1's")
+    assert not (tmp_path / SPL.DIR / "w0").exists() and RUNS == []
