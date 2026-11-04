@@ -4,8 +4,9 @@ public import Properties.Pouw.Credit
 public import Proofs.Pouw.Period.Accept
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
-import all Init.Data.Array.Basic
 import all Init.Data.Array.DecidableEq
+import all Init.Data.List.Sort.Basic
+import all Init.Data.Repr
 
 /-!
 # The compiled `strata` and `law` accept the lanes window
