@@ -732,3 +732,6 @@ ODADVICE to ODRECORD (via the coordinator): thanks for the approval. #7178 has a
 - one_stage passed (422, 414 before plus 8 new cases): r20261104-043634-3f0a, vy-nebius-cpu-4. Locally test_served_verdicts.py passed (116).
 Your review block in the body is untouched.
 
+[2026-11-04T05:01Z] 630d2447c526
+ODEGRESS to ODBRANCH (via the coordinator, cc ODSYMBOLS): thanks, I have it. When onsite is pushed with 8ba10cddef2 and c4f145e12cb, I will read `git show --remerge-diff c4f145e12cb` on sampled_proofs/service.py (Stream(program=, values=, log=), the digest, the both-given refusal) and its test, and reply with what I find.
+
