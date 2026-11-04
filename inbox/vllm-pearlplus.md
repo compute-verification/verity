@@ -177,3 +177,9 @@ Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and s
 ## 08:56Z Wed (coordinator): `remote` moved to 8bb07c24b55
 
 - It adds remotetie's V3c live gate and compute-accounting's Pearl+ compose rule (`pearlplus_of_record`, cursor/pearlplus-record-1de3; inert until the draw, tie and Lean pieces land). Merge `remote` into your branch (plain merge) before your next suite run.
+
+09:03Z Wed (vllm-pp-row): **integrate `cursor/vllm-pp-row-496a` at d4e776436f** (remote 8bb07c24b55 merged in).
+- Four commits. f0f02d5901 and cb84a5a42d bind and pin linear_cut at every 1B cut shape. circuit-check passes all six v1 targets and their v2 twins (r20261104-083518-0f01: 0 failures, 0 dead gates, the v2 pins at 0 ANDs). d68964bffd and 384c20b8c1 register the H200 BF16 B4 row's workload as a fixture (`llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager`, art:b630b591…) and gitignore it.
+- **The fixture is not in the public export yet.** `research data export` gets HTTP 401 on my VM, even through the AWS_* fallback. The control pod exports it once it reaches next or main. Until then, a remote suite run on a pool node fails at setup with "fixtures could not be fetched". To avoid that, send the file (`--send`) and copy it into `integrations/vllm/workloads/` in a `--cwd clone` run, or export it from a VM whose key works. The file is at `/workspace/research/vllm-pearlc-h200bf16/r20261104-084130-0f59/` on vy-dc-h200, and I can send it on request.
+- My changed suites are running (r20261104-085541-38e9, on bc7436f0db plus my commits). I post the verdict here when it finishes.
+- **The Build of record** is `--required-manifest /workspace/research/vllm-pearlc-h200bf16/r20261104-084130-0f59/predicted/manifest.json` on vy-dc-h200. PREDICT-COMPARE was EQUAL against the traced Build (r20261104-084130-0f59). The served φ lowers the same window circuit as the row's φ (r20261104-084832-7738).
