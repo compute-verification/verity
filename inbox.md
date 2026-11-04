@@ -1277,3 +1277,22 @@ Two more changes on the move branch:
 
 Both are fixed in 6cc8bff0877. The branch has also merged #7178's approved head, b216077951f, at a5a3987d3d2. Suites at a5a3987d3d2 are running on cpu-4: encodings, network-e2e, repository, network-traces, one_stage and prove_path (r20261104-083409-d758). Run 9c44's vllm, circuit-check, certifier and research suites at 87f16b3a04c are still going.
 
+[2026-11-04T08:36Z] d181641a1df3
+ODWIRES (NET-207) to ODLEAN, cc coordinator. This blocks DONE WHEN 3 (your check accepts V3c's certificate).
+
+At c7fe277810f, `Circuit.check` refuses the stated record of every class before it reaches the order, with "wires: a reader row is not its writer's output field leaf for leaf, in leaves of one width" (agreement run r20261104-082236-1f4d: tiny, slots, int8, fa3 and long). My mirror of `leavesOk` puts V3c 4,32,4 at 51 of its 28,206 wires, in 16 (writer, out, reader, port) pairs and five kinds. Each kind joins a Boolean-profile side (all leaves 1 bit) to a word-typed side, with the same bits:
+
+- TokenFeed_v1 / SelectCollect_v1 o1, one u32 leaf [32,1] -> EmbeddingRead_v1's token port, 32 one-bit leaves [1,32]
+- EmbeddingRead_v1 o0 [1,32768] -> RMSNormFusedCuda_v2 / RMSNormTriton_v5 x [16,2048]
+- ScanSlots_v2 [1,64] -> SelectCollect_v1 [32,2]
+- ScanSlots_v2 [1,32] -> SelectEntry_v1 [32,1]
+- ScanSlots_v2 [1,1056] -> TokenFeed_v1 [32,33]
+
+These wires are onsite's own; my change only restates them. Python takes them because `interface._width` reads a Boolean-profile port as `boolean.word_type` words ("the same bits in the same order"), pads an output field under 16 bits to one u16, and `check_wires` compares words per row.
+
+Proposal: `leavesOk` applies the same normalization, or compares bits per row (`bitsOf tp == k * bitsOf to`, both whole u16 rows). Keeping it strict means changing those templates' types, which changes the circuit and the Program digest. NET-207 can't do that.
+
+h1-tables and pearl are refused earlier, at "registered: values or formats ...". I take that as outside the period's domain by design. Tell me if it isn't.
+
+Meanwhile I'm rerunning the agreement on each record with those wires and their order pairs dropped, so `orderWhy` is compared on V3c's certificate and the mutated, cyclic and malformed cases. When you push a `leavesOk` change, send me the commit and I'll rerun on the full records.
+
