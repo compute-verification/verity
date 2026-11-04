@@ -24568,8 +24568,7 @@
     "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
     "Properties.Pouw.PearlPlus.tileKeepsTheCap",
-    "Properties.Pouw.PearlPlus.yIsTheUnscale",
-    "Verity.remote_soundness_of_subprotocols"
+    "Properties.Pouw.PearlPlus.yIsTheUnscale"
    ]
   },
   "Properties.Pouw.Period": {
@@ -25321,9 +25320,9 @@
    ]
   },
   "Properties.Verity.Soundness": {
-   "digest": "24ce44aa64d561a4a9f959b136a747ad2677ed243170f5ab1fa55ac0e5fca957",
+   "digest": "d44692711bb66e915210f8c720f3e8e0ea56ebbf8734a859c8fa8af69736eaf4",
    "definitions": {
-    "Verity.RemoteSoundness": "77efcf4f2a6743bef47a0db0d95ea25ff54e225c7f5af5c7bf54caa1d1397fb9",
+    "Verity.RemoteSoundness": "0ec6aef67f633dfbc0a7d68f7910d41409555192ac9af18170449b9afdefa904",
     "Verity.Soundness": "527c85d6f9030fb46239b87be99850604afe2989993788ae59c9331405368cf5",
     "Verity.SoundnessOf": "3abf7fc71d4cd416ddc449573787ec1779a9ce603411ea3dfaa949b52eb6ce1a"
    },
