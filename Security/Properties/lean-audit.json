@@ -762,6 +762,11 @@
   "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial": "aeb0e3753dce706751cb8042d5bf851959cd4ef89bd7357d993df497631c23fd",
   "Properties.NetworkPeriod.rowsUntiedRefused": "a6422e99a7badb1dc8a3922255ccfe6783a66bdba2511039bf21dc30042d5a24",
   "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial": "aa00cfe5835bf525712d992edb7d9e6ab94b7914b335d01ade734f3611ede2f5",
+  "Properties.NetworkPeriodLeak.periodLeakRegistered": {
+   "type_hash": "44cdb5237c228e784efc929c72eef7cc3d6073213057570e63f333529806d1c0",
+   "missing": "honest",
+   "why": "its premises at the network certifier's rows are the sampled leg's (KSBy at the wired check at the layout's wires and CommitmentScheme.Binds at each deployment), whose honest lemmas at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest at layouts with no wiring, NetTiming.ksWired_of_record at a wired one) take the assembled record's hypotheses, which are no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record. Its rows format's Wf is no premise: the period check refuses a schedule whose frames don't read back (NetworkCheck.Period.rowsWf), so its acceptance gives rowsWf (Properties.NetworkPeriod.rowsWf_of_accept) and with it Wf at the network certifier's frames (Properties.NetworkPeriod.cellRows_wf_of_rowsWf), and the served schedule w63 passes rowsWf over every period of fewer than 2^25 link-windows (Properties.NetworkPeriodLeak.rowsWf_served)"
+  },
   "Properties.NetworkRecords.acceptMeans": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
   "Properties.NetworkRecords.answerAcceptMeans": "c5c91cdf640198af01ce5e2e90ba3ba4e42c21fc97c0610eb0ad09a01671615c",
   "Properties.NetworkRecords.noGridAcceptsMore": "34f6be27c3079d33abff38adbc90f5aeb66dd7446e7a2efada385c63921aa1c3",
@@ -4851,6 +4856,7 @@
  "shape": {
   "premises": [
    "Definitions.NetworkCertifier.Premises",
+   "Definitions.NetworkCertifier.PeriodConditions",
    "Definitions.Accounting.Assumptions",
    "Properties.RemoteAudit.Line.Premises"
   ],
