@@ -68,11 +68,11 @@ theorem recursiveBitsKBoundAt_of (b : Brings) (aux : Msg → ℕ → _root_.Floc
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (h : RecursiveBitsKAt b aux nOf hd recRest) : RecursiveBitsKBoundAt b aux nOf hd recRest := by
   refine Claims.Recursion.bitsKAt_of h (fun _ hx => hx.1) ?_
-  rintro decI x n v ⟨-, ⟨s, spec, sts, hin, h1⟩, hO, hn, hS⟩ hU hV
+  rintro decI x n v ⟨-, ⟨s, spec, sts, hin, h1⟩, hO, hS⟩ hU hV
   exact kappa_eps_deployed _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd recRest }
     (DeployedR.layR OpenRows.elemR) (FlockDeploy.nextR DeployedR.rdR)
     (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation DeployedR.rdR).cols DeployedR.wER
-    FlockDeploy.joinR rowInDeployed DeployedR.finalR DeployedR.wR decI hin h1 hO hn hS hU hV
+    FlockDeploy.joinR rowInDeployed DeployedR.finalR DeployedR.wR decI hin h1 hO hS hU hV
 
 /-- **`Pr[acc ∧ ¬R] ≤ κ + t·ε` at the deployed reader**, at the deployment's dense statements: `RecursiveKS` through
 `recursiveBitsKAt_of`. -/
