@@ -1,7 +1,11 @@
+module
+
 /-!
 The deployed P2 parameters (P2 v4, profile `p2-2054B`): the prime, the block geometry, the audit's
 challenge count and its deadline.
 -/
+
+@[expose] public section
 
 namespace PousCheck
 

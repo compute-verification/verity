@@ -1,5 +1,7 @@
-import Definitions.Accounting.JointBridge.CreditedWords
-import Definitions.Accounting.Assumptions.CreditedWords
+module
+
+public import Definitions.Accounting.JointBridge.CreditedWords
+public import Definitions.Accounting.Assumptions.CreditedWords
 
 /-!
 # The joint period's PoUW guarantee from a credit in words, at any price
@@ -22,6 +24,8 @@ H1's instance is `Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod`
 `WorkOfH1CheckedCreditPeriodH200`. Any other source that credits words, a period of v5/v6 tiles among them, takes the
 bridge unchanged.
 -/
+
+@[expose] public section
 
 namespace Properties.Accounting.JointBridge
 

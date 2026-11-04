@@ -1,4 +1,7 @@
-import Proofs.Flock.C3.RegLevels.LgCoins
+module
+
+public import Proofs.Flock.C3.RegLevels.LgCoins
+import all Init.Data.Repr
 
 /-!
 # R's rounds in the history's order are the ones META's shape gives R's held stream
@@ -19,6 +22,8 @@ verifier holds of `stacked/rep0`:
 The covers check is `AcceptsC3`'s conjunct at the commits the verifier holds, so `hcov` is its instance (`ChecksC3`
 carries the same check at the checked sessions' acceptances, `FlockC3.Reps.covers_checked`).
 -/
+
+@[expose] public section
 
 deriving instance ReflBEq, LawfulBEq for Flock.RecVStar.StackedShape
 

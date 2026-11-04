@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Hash.Basic
+module
+
+public import Mathlib
+public import Definitions.Hash.Basic
 
 /-!
 # `hm96-sha512/v1` over a hash (trusted)
@@ -16,6 +18,8 @@ Bit `t` of a byte string is bit `t mod 8` of byte `⌊t/8⌋`. The key is the ve
 `H(key)` in its prefix, never an opening's. `Hm96.hashed` lists the two messages the verifier hashes for an opening
 beyond the inner digest: the salt's and the leaf's (`H(key)` is the same for every opening under that key).
 -/
+
+@[expose] public section
 
 namespace Hash.Hm96
 

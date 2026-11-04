@@ -1,5 +1,7 @@
-import Definitions.Core.Partition
-import Definitions.Population.Dataflow
+module
+
+public import Definitions.Core.Partition
+public import Definitions.Population.Dataflow
 
 /-!
 # A partition as a population
@@ -17,6 +19,8 @@ gate's width.
 in the same unit or a later one, so every unit is an interval of gates and the units are numbered in layout order, as
 `Q_call` v1 cuts them.
 -/
+
+@[expose] public section
 
 namespace Verity.Partition
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.DeployE
+module
+
+public import Proofs.Flock.Claims.DeployE
 
 /-!
 # The deployed plain verifier and the element-level one as one verifier over `keep` (`FlockDeploy.VK`)
@@ -13,6 +15,8 @@ case split (`act false`), its coins' answers, its setup and its custody checks a
 So a statement proved at `VK keep` for every `keep` holds at both. `Flock.verifyWithK keep h` is `verifyWith h` at
 `keep := id` and `verifyWithE h` at `keep := fun _ => true`, both by `rfl`.
 -/
+
+@[expose] public section
 
 namespace Flock
 

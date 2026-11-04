@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.Joint
-import Proofs.Flock.Claims.Bridge.Custody
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+module
+
+public import Proofs.Flock.Claims.KS.Joint
+public import Proofs.Flock.Claims.Bridge.Custody
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
 /-!
 # Accepted runs open full-width columns
@@ -14,6 +16,8 @@ import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 `ConflictTied` and one table at every accepted statement for `Flock.KS` at SHA-512 (`plain_KS_sha512`, `zk_KS_sha512`);
 `KS.ConflictTied` proves the second.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

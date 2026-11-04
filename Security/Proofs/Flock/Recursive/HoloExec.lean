@@ -1,11 +1,13 @@
-import Flock.RecVStar
-import Flock.RecCoins
-import Flock.Firewall
-import Definitions.Flock.Recursive.Holo
-import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Recursive.Compile
-import Proofs.Flock.Recursive.ExecClass
-import Definitions.Flock.HoloCompiled
+module
+
+public import Flock.RecVStar
+public import Flock.RecCoins
+public import Flock.Firewall
+public import Definitions.Flock.Recursive.Holo
+public import Proofs.Flock.Soundness.Defs
+public import Proofs.Flock.Recursive.Compile
+public import Proofs.Flock.Recursive.ExecClass
+public import Definitions.Flock.HoloCompiled
 
 /-!
 # Recursion: candidate 3's inner protocol as the executable runs it
@@ -42,6 +44,8 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
 * `vstarCount ish`: the length of V*'s statement list as the verifier builds it (`RecVStar.statements`), zero where it
   refuses.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

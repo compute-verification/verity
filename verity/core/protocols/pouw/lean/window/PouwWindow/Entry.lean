@@ -1,8 +1,10 @@
-import PouwWindow.Grid
-import Flock.Hash
-import Flock.Hm96
-import Flock.HmRow
-import PouwCommit.Frame
+module
+
+public import PouwWindow.Grid
+public import Flock.Hash
+public import Flock.Hm96
+public import Flock.HmRow
+public import PouwCommit.Frame
 
 /-!
 # The entry row (`window.py`, "The entry row")
@@ -15,6 +17,10 @@ functions of an entry agree on the entries that encode. `layoutProblem` holds an
 and `tileRead?` map a drawn index to its rows and its word in the pass's -h3 leaf; `entryDigest`, `entryBc` and `entryLeaf`
 commit the row as an `hm96-sha512/row/v2` row.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwWindow
 

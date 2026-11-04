@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.Guarantees
-import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
+module
+
+public import Proofs.Flock.Recursive.Guarantees
+public import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
 
 /-!
 # The recursive audit's zero knowledge at the operating system's salts
@@ -13,6 +15,8 @@ The firewall reads each commitment's salt from the operating system, 192 bytes (
   and at the pinned key's hiding gap `hidingGap(My, saltHash)` (`CROnly.hm96Hiding_gap`) with no premise but A3 per
   test. The bound gains `η`.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

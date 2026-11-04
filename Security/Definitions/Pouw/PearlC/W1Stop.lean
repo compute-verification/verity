@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.W1
+module
+
+public import Definitions.Pouw.PearlC.W1
 
 /-!
 # The machine stops a run at its budget (trusted; definitions only)
@@ -15,6 +17,8 @@ the run goes, since it reads neither the oracle nor the outcome, so the device c
 cost is at most `T`, and wins there. The γ-gap property over `CM.withStop` is equivalent to it
 (`Proofs.Pouw.PearlC.W1Stop.gγ_withStop_iff`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

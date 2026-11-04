@@ -4,7 +4,12 @@ first rows must be `ports` at their widths, `h` (512 words) first and `v` last (
 their words in order. Each is refused before the net is built; the honest rows and leaves, as `rec_sparse.statement`
 composes them, pass both checks, at one copy or two.
 -/
-import Flock.RecSparse
+module
+
+public import Flock.RecSparse
+meta import Flock.RecSparse
+
+@[expose] public section
 
 namespace Flock.Test.RecSparseRows
 

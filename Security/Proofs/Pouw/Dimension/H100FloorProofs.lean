@@ -1,12 +1,16 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Floor
-import Proofs.Pouw.Dimension.H100WProofs
-import Proofs.Pouw.Dimension.H100LoopFreeProofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100Floor
+public import Proofs.Pouw.Dimension.H100WProofs
+public import Proofs.Pouw.Dimension.H100LoopFreeProofs
 
 /-!
 # `MH100`'s floor table and the hardware citations: proofs
 
 `h32Floor` is by `decide`. The two bounds are `distinctWritesMH100On` with `h32LoopFree` and `h32Floor`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

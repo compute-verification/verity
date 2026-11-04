@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.Fork.OracleTable
-import Proofs.Flock.C3.Fork.Coupling
-import Proofs.Flock.Recursive.CompileRuns
+module
+
+public import Proofs.Flock.C3.Fork.OracleTable
+public import Proofs.Flock.C3.Fork.Coupling
+public import Proofs.Flock.Recursive.CompileRuns
 
 /-!
 # Piece (a), the assembly: candidate 3's table on one prover's runs
@@ -19,6 +21,8 @@ simulation (`sched_prob_le_value`) reads the compiled table's value there. That 
 No registrant's openings are read: a clash may be a run opening R's level 0 off the word (`RegClash`), which the
 knowledge form reads against another of the prover's runs (`Recursive/RegExtract.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

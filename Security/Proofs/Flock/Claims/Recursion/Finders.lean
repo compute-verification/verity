@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.Cost
-import Proofs.Flock.Claims.Recursion.Transport
+module
+
+public import Proofs.Flock.Claims.Recursion.Cost
+public import Proofs.Flock.Claims.Recursion.Transport
 
 /-!
 # The recursion's extraction-based finder
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.Recursion.Transport
 the two outer witnesses record (`Be_eq_forkExt`), so under `ExpectedCR` it finds one with probability at most two runs'
 calls and two extractions' over `2^256` (`PrBe_le`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

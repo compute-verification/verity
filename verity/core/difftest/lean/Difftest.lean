@@ -1,5 +1,7 @@
-import Lean.Data.Json
-import Flock.Canon
+module
+
+public import Lean.Data.Json
+public import Flock.Canon
 
 /-!
 # The difftest server: a port's Lean functions behind a line protocol
@@ -16,6 +18,10 @@ request per line on stdin, `{"fn": NAME, "input": JSON}`, until end of input, an
 Every line written is canonical JSON. The Python half (`verity_difftest`) keeps one process open for a whole run, so a
 port's functions must be pure: nothing else may be written to stdout (use stderr).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Difftest
 
