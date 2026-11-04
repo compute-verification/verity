@@ -904,14 +904,17 @@ def period_reserves(lines: Sequence[str], lane: str, period: str) -> list[str] |
 
 def window_salt_sessions(pearl: Path) -> list[str]:
     """The salt sessions serve-openai's Pearl+ arm reserved, in window order: each ``pearl/w<k>/served.json``'s
-    ``coins.reserved.session`` (`serve_pearl.live`'s reserve answer), where one names it."""
+    ``coins.reserved.session`` (`serve_pearl.live`'s reserve answer), where one names it. A window with no
+    ``served.json`` names none; one whose ``served.json`` can't be read raises ValueError naming it."""
     got = []
     for d in sorted((p for p in pearl.glob("w*") if p.name[1:].isdigit()), key=lambda p: int(p.name[1:])):
-        try:
-            sid = (((json.loads((d / "served.json").read_text()).get("coins") or {}).get("reserved") or {})
-                   .get("session"))
-        except (OSError, ValueError, AttributeError):
+        served = d / "served.json"
+        if not served.is_file():
             continue
+        try:
+            sid = ((json.loads(served.read_text()).get("coins") or {}).get("reserved") or {}).get("session")
+        except (OSError, ValueError, AttributeError) as e:
+            raise ValueError(f"{d.name}/served.json: {type(e).__name__}: {e}") from e
         if sid:
             got.append(str(sid))
     return got
@@ -922,13 +925,15 @@ def pearlplus_period_close(piece_dir: Path, gate: str, lane: str | None = None,
     """``pearlplus-period close``: the period `pearlplus_period_open` opened in `piece_dir` closed (`period_close`). With
     `lane` and `windows` (the serve dir's ``pearl/``, under PEARLPLUS_TIE) the gate's ledger is read first, and the PERIOD
     document records ``reserves``, ``{lane, since_open, salt_sessions, ok}`` (``error`` in place of ``since_open`` where
-    the ledger can't be read): ok when the sessions lane `lane` reserved since the open are the windows' salt sessions
-    (`window_salt_sessions`), at least one, in order, as the gate's cap of 1 holds them. It closes either way, since an
-    open period refuses the lane's every other reserve; the tied piece draws only after one whose reserves were ok."""
+    the ledger or a window's ``served.json`` can't be read): ok when the sessions lane `lane` reserved since the open are
+    the windows' salt sessions (`window_salt_sessions`), at least one, in order, as the gate's cap of 1 holds them. It
+    closes either way, since an open period refuses the lane's every other reserve; the tied piece draws only after one
+    whose reserves were ok."""
     if lane is not None and windows is not None:
         doc = json.loads((piece_dir / PERIOD).read_text())
-        salt = window_salt_sessions(windows)
+        salt: list[str] = []
         try:
+            salt = window_salt_sessions(windows)
             got = period_reserves([x for x in _gate_out(gate, "ledger").decode().splitlines() if x.strip()], lane,
                                   doc["name"])
             doc["reserves"] = {"lane": lane, "since_open": got, "salt_sessions": salt, "ok": bool(salt) and got == salt}
@@ -946,7 +951,7 @@ def period_reserves_said(doc: Mapping[str, Any]) -> str:
         return ""
     if r.get("ok"):
         return f", its reserves held (lane {r['lane']}'s since its open the windows' salt sessions alone)"
-    why = (f"the ledger can't be read: {r['error']}" if r.get("error") else
+    why = (f"the ledger or a window's served.json can't be read: {r['error']}" if r.get("error") else
            f"the ledger opens no period {doc.get('name')}" if r.get("since_open") is None else
            "no window's served.json names a salt session" if not r.get("salt_sessions") else
            f"lane {r['lane']} reserved in it other sessions than the windows' salt sessions")

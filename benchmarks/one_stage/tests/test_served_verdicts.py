@@ -1770,12 +1770,13 @@ def test_the_pearlplus_period_opens_around_the_retained_serve_and_closes_before_
                 str(record), "--cubin", str(cubin)])
 
 
-@pytest.mark.parametrize("case", ["held", "stray", "unread", "unsalted"])
+@pytest.mark.parametrize("case", ["held", "stray", "unread", "unsalted", "unparsed"])
 def test_the_tied_period_closes_holding_its_reserves_to_the_windows_salt_sessions(tmp_path, monkeypatch, capsys, case):
     """``pearlplus-period close --lane L --windows PEARL_DIR`` (PEARLPLUS_TIE's, in serve()): the ledger read before the
     close, the sessions lane L reserved (``for``, else ``by``) since the period's open held to the windows' salt sessions
     (each pearl/w<k>/served.json's ``coins.reserved.session``, in window order), kept as period.json's ``reserves`` and
-    said held or REFUSED in a line that names no session and counts none; the period closes either way."""
+    said held or REFUSED in a line that names no session and counts none; a window's served.json that doesn't parse
+    refuses them, naming it; the period closes either way."""
     calls = []
     ledger = [{"kind": "reserve", "session": "s-before", "body": {"by": "vllm"}},
               {"kind": "period-open", "session": None, "body": {"period": "pp-r1", "lane": "vllm"}},
@@ -1799,20 +1800,25 @@ def test_the_tied_period_closes_holding_its_reserves_to_the_windows_salt_session
         (serve / "pearl" / f"w{k}").mkdir(parents=True)
         if case != "unsalted":
             (serve / "pearl" / f"w{k}" / "served.json").write_text(json.dumps({"coins": {"reserved": reserved}}))
+    if case == "unparsed":
+        (serve / "pearl" / "w1" / "served.json").write_text("{")
     assert S.main(["pearlplus-period", "close", str(tied), "--gate", GATE, "--lane", "vllm", "--windows",
                    str(serve / "pearl")]) == 0
-    assert calls == ["ledger", "period-close"]
+    assert calls == (["period-close"] if case == "unparsed" else ["ledger", "period-close"])
     doc, out = json.loads((tied / S.PERIOD).read_text()), capsys.readouterr().out
-    salt = [] if case == "unsalted" else ["s-salt"]
+    salt = [] if case in ("unsalted", "unparsed") else ["s-salt"]
     assert doc["close"]["verb"] == "period-close" and doc["reserves"]["salt_sessions"] == salt
     assert doc["reserves"]["ok"] is (case == "held") and not any(f"s-{s}" in out for s in ("salt", "stray", "other"))
     said = {"held": "its reserves held (lane vllm's since its open the windows' salt sessions alone)",
             "stray": "its reserves REFUSED (lane vllm reserved in it other sessions than the windows' salt sessions; "
                      "period.json's reserves), so no draw follows it",
-            "unread": "its reserves REFUSED (the ledger can't be read: RuntimeError: the gate refused ledger (exit 255)",
-            "unsalted": "its reserves REFUSED (no window's served.json names a salt session; "}[case]
+            "unread": "its reserves REFUSED (the ledger or a window's served.json can't be read: RuntimeError: the gate "
+                      "refused ledger (exit 255)",
+            "unsalted": "its reserves REFUSED (no window's served.json names a salt session; ",
+            "unparsed": "its reserves REFUSED (the ledger or a window's served.json can't be read: ValueError: "
+                        "w1/served.json: JSONDecodeError: "}[case]
     assert out.startswith(f"PERIOD closed pp-r1, {said}"), out
-    if case != "unread":
+    if case not in ("unread", "unparsed"):
         assert doc["reserves"]["since_open"] == (["s-stray", "s-salt"] if case == "stray" else ["s-salt"])
     assert S.main(["pearlplus-period", "close", str(tied), "--gate", GATE, "--lane", "vllm"]) == 1
     assert capsys.readouterr().out.startswith(
