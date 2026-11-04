@@ -40,8 +40,8 @@ nothing is registered afresh.
 
 A verifier of the per-member form (`OneStageZk`) names its members (`members`: each its units and its circuit's units a
 proof block, META `vus_per_block`), and after R7 the check refuses a member whose fewest and most drawn units under the
-law the draw runs on give different link points, or a law it can't draw on (`link-points`, `linkRefused`): every draw
-then gives each member its statement's count.
+law the draw runs on, over the draws that end, give different link points, or a law it can't draw on (`link-points`,
+`linkRefused`): a draw that ends then gives each member one count, and one that runs out of coins its whole file's.
 -/
 import Flock.WindowRecord
 import SampledProofs.Draw
@@ -299,7 +299,8 @@ def PortIndex.find (ix : PortIndex) (p : String) : Option Json :=
 def PortIndex.has (ix : PortIndex) (p : String) : Bool := (ix.find p).isSome
 
 /-- `registration.link_refused`: the verifier names members, and the law the draw runs on doesn't derive or some
-member's fewest and most drawn units under it give different link points (`LinkPoints.refused`). -/
+member's fewest and most drawn units under it, over the draws that end, give different link points
+(`LinkPoints.refused`). -/
 def linkRefused (v : Verifier) : Bool :=
   !v.members.isEmpty &&
     match LinkPoints.lawOf v.program v.query v.law v.workTable >>= fun (l, n) => LinkPoints.refused l n v.members with

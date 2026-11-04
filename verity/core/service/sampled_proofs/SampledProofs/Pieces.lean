@@ -62,8 +62,9 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   wired row's public string its writer's) and on the reference's entries whose unit is drawn.
 * `public_units`: whether a public file's `units.indices` are exactly given units, ascending (`PublicUnits.exactly`),
   which the per-member form holds each statement's file to.
-* `link_points`: each member's fewest and most drawn units under a law and the members whose link points differ
-  between them (`LinkPoints.bounds`, `LinkPoints.refused`), which the per-member form's registration refuses.
+* `link_points`: each member's fewest and most drawn units under a law over the draws that end, and the members whose
+  link points differ between them (`LinkPoints.bounds`, `LinkPoints.refused`), which the per-member form's registration
+  refuses.
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,

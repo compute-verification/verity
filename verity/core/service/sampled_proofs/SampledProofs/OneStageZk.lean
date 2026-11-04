@@ -11,8 +11,8 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   `{"units", "vus_per_block", "circuit", "registered"}`, or with `interface`: its units as `[lo, hi)` ranges, no unit
   in two members' ranges, its circuit's units a proof block (META `vus_per_block`, positive), and its statement's
   circuit digest, registered file and registered circuit record, as the one-statement form's. The members go to v1's
-  registration check, which refuses a member whose fewest and most drawn units give different link points
-  (`Registration.linkRefused`). The partition must not be null: the sessions are verified against the verifier's own partition object; and
+  registration check, which refuses a member whose fewest and most drawn units over the draws that end give different
+  link points (`Registration.linkRefused`). The partition must not be null: the sessions are verified against the verifier's own partition object; and
   v1's `challenger`, with its `window_root`, must be named (`NO_CHALLENGER`);
 * **commitment**: v1's (the registration record);
 * **evidence**: v1's without `verdicts`, plus `proofs`: in the one-statement form exactly `{"public", "sessions"}`, the
