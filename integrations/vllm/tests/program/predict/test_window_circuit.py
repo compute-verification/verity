@@ -402,13 +402,14 @@ def test_every_weight_read_is_whole_rows_of_its_own_weight_at_its_ports_width(wi
 
 @pytest.mark.slow
 def test_the_window_forms_its_members_each_read_port_a_table_of_its_weights_rows(window):
-    """`interface.members` forms the window's members (as the record's verifier does, `window_of_record`): every read covers
-    whole members and reads whole rows, so a GEMM slice's ``w`` is a shared-row table of its weight's rows. Slow (about 70 s
-    on one core) for the population Program `members` builds, `EmbeddingRead_v1`'s Merkle path traced once; the cheap
-    check of the same rows is `test_every_weight_read_is_whole_rows_of_its_own_weight_at_its_ports_width`."""
+    """`interface.members` forms the window's members (as the record's verifier does, `window_of_record`), its units cut at
+    every wire's and read's ends, each wire inside one writer entry and one reader entry (`window_builder.placed`): every
+    read covers whole members and reads whole rows, so a GEMM slice's ``w`` is a shared-row table of its weight's rows. Slow
+    (about 70 s on one core) for the population Program `members` builds, `EmbeddingRead_v1`'s Merkle path traced once; the
+    cheap check of the same rows is `test_every_weight_read_is_whole_rows_of_its_own_weight_at_its_ports_width`."""
     circuit, ids = window
     ms = IF.members(circuit, 64)
-    assert sum(m.n for m in ms) == sum(n for _, n in circuit.templates) and len(ms) == 113
+    assert sum(m.n for m in ms) == sum(n for _, n in circuit.templates) and len(ms) == 132
     gemm = [m for m in ms if m.template == ids["Gemm_v2{K=64,N=8}"]]
     assert gemm and all(dict(m.tables)["w"] <= m.n for m in gemm)
 
