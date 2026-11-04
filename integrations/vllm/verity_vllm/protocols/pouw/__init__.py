@@ -509,8 +509,9 @@ class _CircuitRun:
 #: The live `ncp-v2` runs by entry, with their sites (the collector's path of each linear -> its ordinal), for the Commit's
 #: replay (`check.replay.pouw_circuit.around`) before the composition closes.
 _CIRCUIT_RUNS: dict[str, tuple[_CircuitRun, dict[str, int]]] = {}
-# The prover's hm96 salt key per entry: its weight trees' salts, drawn afresh by each `commit_weights` (so each install's W,
-# and its salt session, is its own) and read by `install`, never in the record (published commitments without it fail its root check).
+# The prover's hm96 salt key per entry: its weight trees' salts, read by `install`, never in the record (published commitments
+# without it fail its root check). Pearl-C's is drawn afresh by each `commit_weights` (so each install's W, and its salt
+# session, is its own); NCP's once a process, so a salt's later windows commit the weights under the root its salt follows.
 _SALT_KEYS: dict[str, bytes] = {}
 
 
@@ -613,8 +614,7 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
         roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)}, scheme,
                                  salt_key=key)
         return {"weight_roots": {str(w): r.hex() for w, r in roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
-    key, roots = os.urandom(32), {}
-    _SALT_KEYS[f"{NAME}:{scheme}"] = key
+    key, roots = _SALT_KEYS.setdefault(f"{NAME}:{scheme}", os.urandom(32)), {}
     for w, layer in enumerate(layers):
         b, _ = quantize(_host(layer.weight))
         roots[str(w)] = commit_rows(weight_binding(w), -2, [b[j].tobytes() for j in range(b.shape[0])], HM96, key,
