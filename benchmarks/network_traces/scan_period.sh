@@ -47,7 +47,7 @@ done
 NP=$P/verity/core/protocols/network/lean/.lake/build/bin/network-period
 PYTHONPATH=$PYTHONPATH:$SRC/verity/core/difftest/python "$PY" benchmarks/network_traces/scan_period.py \
   --mirror "$P/verity/core/protocols/network/tests/period_case.py" --lean "$NP" --out "$OUT/period" \
-  "honest=$OUT/honest/warden,$OUT/honest/sczk" "late=$OUT/late/warden,$OUT/late/sczk" \
+  --rehearsed "honest=$OUT/honest/warden,$OUT/honest/sczk" "late=$OUT/late/warden,$OUT/late/sczk" \
   "tampered=$OUT/honest/warden,$OUT/honest/sczk,tampered" "chain=$OUT/honest/warden,$OUT/honest/sczk,chain" \
   "forged=$OUT/honest/warden,$OUT/honest/sczk,forged" 2>&1 | tee -a "$OUT/period.log"
 p=${PIPESTATUS[0]}

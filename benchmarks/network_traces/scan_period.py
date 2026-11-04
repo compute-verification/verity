@@ -3,10 +3,17 @@ and the scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), 
 and its Lean.
 
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
-        [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
+        (--certifier-key RECORD | --rehearsed) [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
-* **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
-  and one schedule, whose caps over the one link-window are the cells, `WardenParams.caps`: `egress_cells` for each of
+* **The certifier's key** is the auditor's: its own record of the network certifier's deployment (`auditor_key`,
+  ``certifier-key/v1``, the follow-on's CERTIFIER_KEY, which it reads off the certifier's host and never off the
+  prover's node), whose key, session, LMS parameters and schedule are the case's. The warden run, the prover's copy,
+  must carry that deployment byte for byte (its ``deployment.json``'s SHA-512 the record's), so a run under another
+  key or session, such as a fetch re-signed under the prover's own key, is refused by name before any check.
+  ``--rehearsed`` is for runs this job's own certifier served (scan_period.sh's rehearsals): each run's
+  ``deployment.json`` is then the auditor's record (`key_record`).
+* **The case** (`rows_case`) of link-window W: the parameters the auditor's record's (its key, session and one
+  schedule, whose caps over the one link-window are the cells, `WardenParams.caps`: `egress_cells` for each of
   the `lanes · window` connections it can carry), the link `warden_serve.LINK`, the Program the scan's registration's,
   the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor and steps, off which
@@ -42,6 +49,7 @@ and its Lean.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -60,6 +68,42 @@ from verity.core.protocols.sampled_proofs.one_stage import registration as RG  #
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 
 CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "window")
+KEY_SCHEMA = "certifier-key/v1"
+
+
+def key_record(deployment: bytes, **about) -> dict:
+    """The ``certifier-key/v1`` record of a network certifier deployment, ``deployment`` its ``deployment.json``'s bytes
+    as the certifier's host holds them: the fields the period reads (`auditor_key`), with ``about`` (its host, run, …)."""
+    dep = json.loads(deployment)
+    return {**about, "schema": KEY_SCHEMA, "key": dep["key"], "session": dep["session"], "deployment": dep,
+            "deployment_sha512": hashlib.sha512(deployment).hexdigest()}
+
+
+def auditor_key(path: Path) -> dict:
+    """The auditor's record of the network certifier's deployment at ``path`` (``certifier-key/v1``), refused by name
+    unless its key and session are its deployment's and it names the deployment's SHA-512."""
+    try:
+        rec = json.loads(Path(path).read_text())
+    except (OSError, ValueError) as e:
+        raise SystemExit(f"{path}: no auditor's record of the network certifier: {type(e).__name__}: {e}") from None
+    dep = rec.get("deployment") if isinstance(rec, dict) else None
+    sha = rec.get("deployment_sha512") if isinstance(rec, dict) else None
+    held = isinstance(dep, dict) and all(rec.get(k) is not None and rec.get(k) == dep.get(k) for k in ("key", "session"))
+    if not (held and rec.get("schema") == KEY_SCHEMA and isinstance(sha, str) and len(sha) == 128):
+        raise SystemExit(f"{path}: not a {KEY_SCHEMA} record whose key and session are its deployment's, beside the "
+                         "deployment's SHA-512")
+    return rec
+
+
+def deployment_of(run: Path, key: dict) -> dict:
+    """The deployment the auditor's record ``key`` holds, once the warden run ``run`` (the prover's copy) carries it
+    byte for byte; a run whose ``deployment.json`` is another, under another key or session, is refused by name."""
+    got = hashlib.sha512(SZ._found(run, "deployment.json").read_bytes()).hexdigest()
+    if got != key["deployment_sha512"]:
+        raise SystemExit(f"{run}: its deployment.json (SHA-512 {got[:16]}…) isn't the network certifier's deployment "
+                         f"the auditor recorded ({key['deployment_sha512'][:16]}…, run {key.get('run', '?')} on "
+                         f"{key.get('host', '?')}): the key and session are the auditor's, never the run's")
+    return key["deployment"]
 
 
 def certificates(run: Path, w: int) -> list[dict]:
@@ -77,21 +121,22 @@ def certificates(run: Path, w: int) -> list[dict]:
     return out
 
 
-def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None) -> dict:
+def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None, *, key: dict) -> dict:
     """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
-    ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
-    (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
-    ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's,
-    in place of ``answers.json``'s, and its registration must be the one whose trees the scan read (``summary.json``'s
-    ``v3c``): the period's audit, its scan's trees and the run's record are one registration, and an audit of another
-    is refused by name, never put in its place."""
+    ``scan``, under the auditor's record ``key`` of the network certifier's deployment (`auditor_key`), which ``run``
+    must carry (`deployment_of`): honest, ``answers.json``'s; forged, the honest one with a certificate's signature
+    changed; a refused round (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's
+    ``period.json``, ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one
+    compute audit is V3c's, in place of ``answers.json``'s, and its registration must be the one whose trees the scan
+    read (``summary.json``'s ``v3c``): the period's audit, its scan's trees and the run's record are one registration,
+    and an audit of another is refused by name, never put in its place."""
     if v3c is not None:
         audit = json.loads(v3c.read_text())
         read = (json.loads((scan / "summary.json").read_text()).get("v3c") or {}).get("registration")
         if read != (got := RG.digest(audit["registration"])):
             raise SystemExit(f"{v3c}: a foreign audit: it registers {got[:16]}…, and the scan read the trees of "
                              f"{f'{read[:16]}…' if read else 'no V3c registration'}")
-    dep = json.loads(SZ._found(run, "deployment.json").read_text())
+    dep = deployment_of(run, key)
     doc = json.loads((scan / "answers.json").read_text())
     if v3c is not None:
         doc["audits"] = [audit]
@@ -154,15 +199,23 @@ def main(argv=None) -> int:
     ap.add_argument("--v3c", type=Path, metavar="PERIOD",
                     help="V3c's period.json (records_audit.py period): the one compute audit, for scans proved on its "
                          "trees (scan_zk.py --v3c)")
+    by = ap.add_mutually_exclusive_group(required=True)
+    by.add_argument("--certifier-key", type=Path, metavar="RECORD",
+                    help="the auditor's record of the network certifier's deployment (certifier-key/v1), which every "
+                         "case's warden run must carry")
+    by.add_argument("--rehearsed", action="store_true",
+                    help="each warden run is one this job's own certifier served, its deployment.json the auditor's")
     ap.add_argument("cases", nargs="+", help="NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged]")
     a = ap.parse_args(argv)
     m = mirror(a.mirror)
+    key = auditor_key(a.certifier_key) if a.certifier_key else None
     a.out.mkdir(parents=True, exist_ok=True)
     got, ok = {}, True
     for spec in a.cases:
         name, _, rest = spec.partition("=")
         run, scan, *round_ = rest.split(",")
-        case = rows_case(Path(run), Path(scan), *round_, v3c=a.v3c)
+        own = key or key_record(SZ._found(Path(run), "deployment.json").read_bytes(), run=run)
+        case = rows_case(Path(run), Path(scan), *round_, v3c=a.v3c, key=own)
         (a.out / name).mkdir(exist_ok=True)
         (a.out / name / "case.json").write_text(json.dumps(case, indent=1, sort_keys=True))
         py, lean = m.reference(case), lean_check(a.lean, case, a.out / name)
