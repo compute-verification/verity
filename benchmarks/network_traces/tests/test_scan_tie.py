@@ -21,6 +21,9 @@ sys.path.insert(0, str(HERE / "tests"))
 from test_warden_zk import needs_lean, statement  # noqa: E402
 
 from verity.ml.commitments import hm96  # noqa: E402
+from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
+from verity.ml.commitments.merkle import CommitmentDomain, tree_levels  # noqa: E402
+from verity.ml.commitments.rowleaf import row_leaf  # noqa: E402
 
 
 def _load():
@@ -104,13 +107,28 @@ def _tables(m: dict) -> tuple[bytes, bytes, dict[str, int], dict[str, list[int]]
     return head, body, start, refs
 
 
+def _rerooted(head: bytes, body: bytes, start: dict[str, int], port: str) -> bytes:
+    """The header line with `port`'s frame-v3-sha512 root over the body's table rows, as the prover that wrote the
+    public file computes it."""
+    fv, count = (h := json.loads(head))["frame_v3"], h["shared_rows"][port]
+    dom = CommitmentDomain(bytes.fromhex(fv["bindings"][port]), fv["owner"], RangeIndexedDomain(0, count), hash="sha512")
+    assert dom.domain_id.hex() == fv["domain_ids"][port]
+    bc, inst = hm96.SHA512.proven_bytes, hm96.SHA512
+    leaves = [row_leaf(dom, r, inst.tree_leaf(inst.default_key, body[(start[port] + r) * bc:(start[port] + r + 1) * bc]),
+                       fv["schemas"][port]) for r in range(count)]
+    old, new = fv["roots"][port].encode(), tree_levels(dom, leaves)[-1][0].hex().encode()
+    assert head.count(old) == 1
+    return head.replace(old, new)
+
+
 @pytest.mark.slow
 @needs_lean
 def test_lean_refuses_an_ingress_statement_whose_s_t_chain_is_broken_in_its_public_file(rounds, tmp_path):
     """The honest ingress statement's public file with block t's ``o1`` (S_t, which reads state leaf t + 1) replaced by
-    its ``sin`` (S_{t−1}, state leaf t), a block that claims the state it read as the state it computed: Lean's statement
-    setup refuses it at that ``o1`` row, so the S_t chain is the registered reads' alone. Honestly staged, each block's
-    ``o1`` is the next block's ``sin``, the one leaf both read."""
+    its ``sin`` (S_{t−1}, state leaf t), a block that claims the state it read as the state it computed, and the
+    header's ``o1`` root recomputed over the edited rows, as a prover that writes its own public file would: Lean's
+    statement setup refuses it at that ``o1`` row's registered read, so the S_t chain is the registered reads' alone.
+    Honestly staged, each block's ``o1`` is the next block's ``sin``, the one leaf both read."""
     m = rounds[1]["honest"].staged["ingress"]
     head, body, start, refs = _tables(m)
     bc, n = hm96.SHA512.proven_bytes, m["n"]
@@ -126,7 +144,8 @@ def test_lean_refuses_an_ingress_statement_whose_s_t_chain_is_broken_in_its_publ
     broken = tmp_path / "chain-break"
     broken.mkdir()
     os.symlink(m["dir"] / "circuit.txt", broken / "circuit.txt")
-    (broken / f"pub-{n}.bin").write_bytes(head + b"\n" + body[:at("o1", i)] + bcs("sin", i) + body[at("o1", i) + bc:])
+    edited = body[:at("o1", i)] + bcs("sin", i) + body[at("o1", i) + bc:]
+    (broken / f"pub-{n}.bin").write_bytes(_rerooted(head, edited, start, "o1") + b"\n" + edited)
     rc, line = statement({**m, "dir": broken}, tmp_path)
     assert rc == 1 and line.startswith(f"setup: registered reads: port o1: table row {refs['o1'][i]} does not "
                                        "open"), line
