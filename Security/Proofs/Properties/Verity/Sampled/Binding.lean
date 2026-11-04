@@ -263,7 +263,9 @@ theorem accepted_case {k : Verity.Registration.Composite} (hk : ReadsV2 k) {s : 
   have e1 : ps' = ps := Except.ok.inj (hps'.symm.trans hps)
   have e2 : ev' = ev := Except.ok.inj (hev'.symm.trans hev)
   subst ps' ev'
-  obtain ⟨ps₀, hps₀, n, hn, hnid, hnp⟩ := hp
+  obtain ⟨ps₀, hps₀, n, hnf, hnp⟩ := hp
+  have hn : n ∈ ps₀ := List.mem_of_find?_eq_some hnf
+  have hnid : n.id = VStar.Recursive.Sampled.PROTOCOL := beq_iff_eq.1 (List.find?_some hnf)
   have e3 : ps₀ = ps := Except.ok.inj (hps₀.symm.trans hps)
   subst ps₀
   have hcs : (s.components k).map (·.id) = (componentsOf k).map (·.id) := by
@@ -363,8 +365,7 @@ theorem caseOf_params {s : Sent} {p : SampledProofs.OneStageZk.Params} {c : Samp
                   rw [he, ok_bind] at h
                   rcases r with e' | _
                   · obtain rfl : p' = p := congrArg Prod.fst (Except.ok.inj h)
-                    have hid := List.find?_some hx
-                    exact ⟨ps, hps, x, List.mem_of_find?_eq_some hx, beq_iff_eq.1 hid, hnp⟩
+                    exact ⟨ps, hps, x, hx, hnp⟩
                   · cases h
             · cases h
 
