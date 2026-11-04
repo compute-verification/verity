@@ -1,8 +1,7 @@
 # The Boolean Build's cost against the word Build's
 
-`run.py` takes one workload's Calls as their word specializations (`ROWS`: Qwen3-0.6B's B1 / 256-token prompt / 32-token output
-workload,
-`qwen3-06b`, or the `small` case), and their Boolean versions (`verity.ml.definitions.boolean.boolean_version`, as the Boolean Build's lift
+`run.py` takes one workload's Calls as their word specializations (`WORKLOADS`: Qwen3-0.6B's B1 / 256-token prompt / 32-token
+output workload, `qwen3-06b`, or the `small` case), and their Boolean versions (`verity.ml.definitions.boolean.boolean_version`, as the Boolean Build's lift
 calls them). For each of the two, word and Boolean (`--ir`), it measures:
 
 - `descriptor`: the descriptor of one Program calling every specialization once, which writes each Definition once, as a
@@ -19,7 +18,7 @@ A Boolean head is tens of millions of bit gates, so run the `rules` part on a ma
 
 ~~~text
 uv sync --all-packages --extra torch-cpu
-uv run benchmarks/bool_build_cost/run.py --row qwen3-06b --jobs 16 --out DIR
+uv run benchmarks/bool_build_cost/run.py --workload qwen3-06b --jobs 16 --out DIR
 ~~~
 
 `--t 1,52,65` keeps only the attention specializations of those key lengths. `--part descriptor` is light enough for a VM.

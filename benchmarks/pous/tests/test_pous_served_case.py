@@ -168,7 +168,7 @@ def test_weights_that_are_not_the_pins_make_no_pous_case(served, tmp_path, monke
 
 def test_a_pous_window_whose_session_did_not_complete_has_no_case(served, tmp_path):
     SPT.SP.run(served.serve, 3, served.out, hf_home=served.hf, device="cpu", node=SPT.NODE, private=served.private,
-               party=SPT.CP.Party(SPT.AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
+               party=SPT.Side(SPT.AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
                pins=served.pins, schemes=ts.SCHEMES, protocol=SPT.TEST_PROTOCOL)
     with pytest.raises(SC.Refused, match="names no private directory: the run's session didn't complete"):
         SC.pous_piece(served.out, schemes=ts.SCHEMES, hf_home=served.hf, device="cpu", pins=served.pins)

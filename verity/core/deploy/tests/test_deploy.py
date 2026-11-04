@@ -17,7 +17,7 @@ import deploy_example as X
 from verity.core.deploy import manifest as M
 from verity.core.deploy.channels import Playback, dial
 from verity.core.deploy.runtime import ARRIVED, RUNTIME, run
-from verity.core.deploy.transcript import Transcript
+from verity.core.deploy.transcript import PartyLog
 from verity.core.wire import PUBLIC, REFUSALS, Message, Refused, handshake
 
 SEED = b"deploy-core worked example"
@@ -29,7 +29,7 @@ def simulated(state, protocol=X.PROTOCOL, conf=None, **kw):
                verify=X.verify, seed=SEED, **kw)
 
 
-def stamps(t: Transcript) -> list[int]:
+def stamps(t: PartyLog) -> list[int]:
     return [ARRIVED.decode(e.data).fields["ns"] for e in t if e.dir == "arrived"]
 
 
@@ -75,7 +75,7 @@ def test_over_tcp_to_a_local_process(tmp_path):
     assert r.outcomes["responder"] == {"outcome": {"ok": True, "elapsed_ns": 1000}, "refused": None}
     # The answer is stamped on the challenger's own clock, which its first reading stepped and the stamp doesn't.
     assert stamps(r.transcripts["challenger"]) == [1000]
-    child = Transcript.read(tmp_path / "runs/1/process-responder/runs/1/responder.transcript")
+    child = PartyLog.read(tmp_path / "runs/1/process-responder/runs/1/responder.transcript")
     assert [e.dir for e in child][-1] == "finish"
     sim = simulated(tmp_path / "sim")
     challenge = [e.data for e in r.transcripts["challenger"].on("responder") if e.dir == "out"][0]
@@ -282,10 +282,10 @@ def test_the_record_is_the_public_projection(tmp_path):
 
 
 def test_a_frame_past_the_transcripts_bound_is_kept_as_its_digest():
-    t = Transcript("challenger", keep=8)
+    t = PartyLog("challenger", keep=8)
     e = t.append("out", "responder", "private", b"x" * 9)
     assert (e.elided, len(e.data), e.holds(b"x" * 9), e.holds(b"y" * 9)) == (True, 64, True, False)
-    assert Transcript.of("challenger", t.to_bytes()).entries == t.entries
+    assert PartyLog.of("challenger", t.to_bytes()).entries == t.entries
     with pytest.raises(Refused) as err:
         Playback(t, "responder")
     assert err.value.name == "elided"

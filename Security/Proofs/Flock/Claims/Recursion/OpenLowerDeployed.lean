@@ -65,7 +65,7 @@ def Joint (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (L : LayoutB)
 recorded calls is `DecompB`'s own second outcome, so `Joint` may assume none. -/
 theorem decompB_of_joint {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {IV : Claims.Verifier Coin}
     {L : LayoutB} {shape : Claims.Recursion.Form → Prop} {chk chk' : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
-    (hle : ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+    (hle : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
       ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit), Joint H D L chk' x c ws →
         ∀ s < D.nS x, chk s x c (L.msgs x ws))
     (hD : DecompB H D IV L shape chk) : DecompB H D IV L shape chk' := by
@@ -91,10 +91,10 @@ theorem decompB_lastSplitP_sharesJ (ownB : Msg → VerdictR → Option ℕ) (own
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) {Col' T' : Type}
     (DO : Claims.Flock.Deploy Coin Col' T') (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ r ∈ (lastSplitP H rd pieces pholds hpieces).checks (Claims.Recursion.xI (recBound rel' b L IV) x), ∀ s,
         ownP ownB ownQ x r = some s → s < (recBound rel' b L IV).nS x)
-    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ q ∈ ivChecks (bdDeployed rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w)
           (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
             (lastSplitP H rd pieces pholds hpieces).toLast)
@@ -112,7 +112,7 @@ theorem decompB_lastSplitP_sharesJ (ownB : Msg → VerdictR → Option ℕ) (own
         (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
           (lastSplitP H rd pieces pholds hpieces).toLast)
         (ownHolders (recBound rel' b L IV) L (ownDeploy (ownJ (recBound rel' b L IV) L (ownP ownB ownQ)))) s x c ms)
-    (hlowP : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hlowP : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
         Joint H (recBound rel' b L IV) L (PartAccepts H (recBound rel' b L IV) DO L shape shows cmt) x c ws →
         ∀ s < (recBound rel' b L IV).nS x,
@@ -258,11 +258,13 @@ def sideAtR (rd : Msg → Option FinalP) (x : Msg) (ms : List Msg) (q : OpenPiec
 /-! ## The level's shape, from the verifier's list -/
 
 /-- **The verifier's list at an inner shape with no RecSparse phase**: V\*'s statements at the inner shape's own
-`m`, `k_log` and claims (`statementsOf`), then the caps; candidate 3 has none (`candidate3_ok`). -/
+`m`, `k_log` and claims (`statementsOf`), then the later levels' caps, the link table's part where the inner shape
+names one (`linkStatements`) and level 0's cap; candidate 3 has none (`candidate3_ok`). -/
 theorem statements_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
     (h : _root_.Flock.RecVStar.statements i = .ok ss) (hsp : i.sparse = none) :
-    ∃ A K n, VStar.statementsOf ⟨i.m, i.kLog, i.claims⟩ i.holo = .ok A ∧
-      VStar.levelCapStatements ⟨i.m, i.kLog, i.claims⟩ = .ok K ∧ ss = A ++ (K ++ #[.cap 0 n]) := by
+    ∃ A K L n, VStar.statementsOf ⟨i.m, i.kLog, i.claims⟩ i.holo = .ok A ∧
+      VStar.levelCapStatements ⟨i.m, i.kLog, i.claims⟩ = .ok K ∧ _root_.Flock.RecVStar.linkStatements i = .ok L ∧
+      ss = A ++ (K ++ L ++ #[.cap 0 n]) := by
   unfold _root_.Flock.RecVStar.statements at h
   dsimp only at h
   split at h
@@ -280,6 +282,7 @@ theorem statements_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stm
   obtain ⟨t, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨A, hA, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨C, hC, h⟩ := FlockC3.VStarList.eok_bind h
+  obtain ⟨L, hL, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨K0, hK0, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨n, rfl⟩ := FlockC3.VStarList.capStatement_ok hK0
   obtain ⟨u, -, h⟩ := FlockC3.VStarList.eok_bind h
@@ -287,17 +290,18 @@ theorem statements_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stm
   obtain ⟨u'', -, h⟩ := FlockC3.VStarList.eok_bind h
   cases h
   obtain rfl := (FlockC3.VStarList.candidate3_ok hC).1 hsp
-  exact ⟨A, K, n, hA, hK, by simp⟩
+  exact ⟨A, K, L, n, hA, hK, hL, by simp⟩
 
 /-- **A level statement of a public dense inner shape is its level's**: where the verifier's list at a public inner
 shape with no RecSparse phase has `.recOpen lv LANES HH n` at index `s`, it is V\*'s level `s` (`statements_eq`, the
-rest being inner parts and caps), at `fast100`'s schedule at the shape's `m`, over its two reps' queries. -/
+rest being inner parts, caps and the link table's part), at `fast100`'s schedule at the shape's `m`, over its two reps'
+queries. -/
 theorem recOpen_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
     (h : _root_.Flock.RecVStar.statements i = .ok ss) (hsp : i.sparse = none) (hh : i.holo = false)
     {s lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n)) :
     ∃ sch, fast100 i.m = some sch ∧ lv = s ∧ LANES = 2 ^ (sch.levels[s]!).lanes ∧
       HH = (sch.levels[s]!).d - (sch.levels[s]!).cap ∧ n = 2 * (sch.levels[s]!).q := by
-  obtain ⟨A, K, n0, hA, hK, rfl⟩ := statements_dense h hsp
+  obtain ⟨A, K, L, n0, hA, hK, hL, rfl⟩ := statements_dense h hsp
   rw [hh] at hA
   obtain ⟨sch, sp, ps, hsch, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
   refine ⟨sch, FlockVBridge.Family.sched_fast100 hsch, ?_⟩
@@ -313,13 +317,12 @@ theorem recOpen_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
     rw [Array.append_assoc, Array.getElem?_append_right (Nat.le_of_not_lt h1)] at hsv
     rcases Array.mem_append.1 (Array.mem_of_getElem? hsv) with hm | hm
     · simp at hm
-    · obtain ⟨l, N, hlN⟩ := FlockC3.VStarList.caps_cap hK n0 _ hm
-      cases hlN
+    · rcases FlockC3.VStarList.tail_cases hK hL n0 _ hm with ⟨_, _, hlN⟩ | ⟨_, _, _, hlN⟩ <;> cases hlN
 
 /-- **The inner table's `m` is the inner shape's**, at a statement the reader reads: Flock's plain verifier sets the
 inner statement up as one table (`innerSetup_files`), whose `m` the setup's checks hold to the shape's
 (`checkShape_files`). -/
-theorem inner_m {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) {r : XR} (hr : readX x = some r) :
+theorem inner_m {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) {r : XR} (hr : readX x = some r) :
     ∃ s spec t, setupOf false (xIOf x) = some (s, spec, #[t]) ∧ t.m = r.shape.m := by
   obtain ⟨r', hr', ha, rfl⟩ := parse_read hst
   rw [hr] at hr'
@@ -339,7 +342,7 @@ theorem inner_m {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
 /-- **`OpenCopy`'s level shape at a dense statement**: where the reader reads `x` at the dense form and its V\* list
 has `.recOpen lv LANES HH n` at `s`, the statement is level `s`'s, `LANES`, `HH` are table 0's schedule's (`schAt`)
 level `s`'s lanes and depth, and `n` is its two reps' queries (`recOpen_dense`, `inner_m`). -/
-theorem levelMatch {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+theorem levelMatch {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) {s lv LANES HH n : ℕ}
     (hsv : ss[s]? = some (.recOpen lv LANES HH n)) :
@@ -420,7 +423,7 @@ statement and witness, and a piece `ownQR` gives it. `Fact` is asked there, at t
 abbrev AtPieces (pieces : Msg → List OpenPiece)
     (Fact : Msg → (ℕ → Coin) → List Claims.Flock.Wit → ℕ → ℕ → ℕ → (xO : Msg) → Claims.Flock.Wit →
       (p : _root_.Flock.Readable.Parsed) → 0 < p.sts.size → OpenPiece → Prop) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     Joint H D L (PartAccepts H D (deployZkRec _root_.Flock.Readable.relation) L shape (showsPart untr b) cmt) x c ws →
     ∀ (r : XR) (ss : Array VStar.Stmt) (s lv LANES HH n : ℕ), readX x = some r →
@@ -527,7 +530,7 @@ theorem openTieR_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin
 `ownQR` gives piece `q` the level part `s` (`.recOpen lv LANES HH n`), the side's schedule's level `q.level` has
 `LANES` lanes and `HH` siblings below its cap (`levelMatch`), wherever the side reads the table's schedule. -/
 theorem sideLevel (hP : ∀ x, D.parse x = parse x) (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f)
-    {x : Msg} {st : Claims.Recursion.Stmt} (hx : D.parse x = some st) (hf : shape st.form) {r : XR}
+    {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : D.parse x = some st) (hf : shape st.form) {r : XR}
     {ss : Array VStar.Stmt} {s lv LANES HH n : ℕ} (hr : readX x = some r)
     (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) (hsv : ss[s]? = some (.recOpen lv LANES HH n))
     {q : OpenPiece} (ho : ownQR x q = some s) {ms : List Msg}
@@ -586,7 +589,7 @@ theorem piecesInRangeR_rowDPieces (key : ℕ → ℕ → ℕ → ℕ → ℕ × 
 /-- **The staged level circuit holds its statement's instances** (`StagedFitsR`): at a level part `.recOpen lv LANES
 HH n` and its staged statement, the parsed table has a VU and a copy, and its blocks' VUs hold all `n` instances. -/
 def StagedFitsR : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ms : List Msg) (r : XR) (ss : Array VStar.Stmt) (s lv LANES HH n : ℕ), readX x = some r →
       _root_.Flock.RecVStar.statements r.shape = .ok ss → ss[s]? = some (.recOpen lv LANES HH n) →
     ∀ (xO : Msg) (w : Claims.Flock.Wit) (p : _root_.Flock.Readable.Parsed),
@@ -764,7 +767,7 @@ piece `ownQR` gives part `s` holds (`openHolds` at `side` and `posAt`), from `Op
 part that is no level part is given no piece. -/
 theorem openPieces_deployed (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hC : OpenCopyR H D shape untr b cmt L Bd side pieces) (hT : OpenTieR H D shape untr b cmt L Bd side pieces posAt)
-    {x : Msg} {st : Claims.Recursion.Stmt} (hx : D.parse x = some st) (hf : shape st.form) {c : ℕ → Coin}
+    {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : D.parse x = some st) (hf : shape st.form) {c : ℕ → Coin}
     {ws : List Claims.Flock.Wit}
     (hJ : Joint H D L (PartAccepts H D (deployZkRec _root_.Flock.Readable.relation) L shape (showsPart untr b) cmt)
       x c ws) {s : ℕ} (hs : s < D.nS x) :

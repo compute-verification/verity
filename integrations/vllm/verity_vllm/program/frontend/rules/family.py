@@ -31,7 +31,7 @@ from verity.ml.circuits.defs import Body, CompositeDefinition, SpecializedDefini
 from verity.ml.circuits.defs import bind as ir_bind
 from verity.ml.circuits.refs import Affine, Refs, concat
 from verity.ml.circuits.refs import runs as _runs  # pure (was `..derive._runs`): this module must import without torch (capture fold M4 comparison)
-from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Type
+from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Type
 from verity_vllm.program.frontend.rules.base import FamilyRule, RuleInfo
 
 Run = tuple[str, int, int, int]  # (space, idx, lo, hi)
@@ -154,7 +154,7 @@ class _IntervalMap:
 
 def _field_intervals(t: Type, prefix: str, base: int = 0) -> list[tuple[int, int, str]]:
     """Leaf-typed fields of a (nested) record type as (lo, hi, name)."""
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         out, off = [], base
         for k, ft in t.fields:
             out += _field_intervals(ft, f"{prefix}.{k}" if prefix else k, off)
@@ -166,7 +166,7 @@ def _field_intervals(t: Type, prefix: str, base: int = 0) -> list[tuple[int, int
             out += _field_intervals(ft, f"{prefix}.{i}", off)
             off += ft.leaves
         return out
-    if isinstance(t, Array) and isinstance(t.elem, (Record, TupleT)):
+    if isinstance(t, Array) and isinstance(t.elem, (RecordType, TupleT)):
         out, off = [], base
         for i in range(t.n):
             out += _field_intervals(t.elem, f"{prefix}[{i}]", off)
@@ -518,10 +518,10 @@ SERVE_V3_FAMILY = RegisteredFamily("Family[Serve_v3]", 1, _serve3.ServeV3, _serv
                                    "structural: verified isomorphism to Serve_v3{C3,LP,D_MAX,GEMM,ATTENTION,NORM} (the padded circuit, serve3-spec)")
 
 
-def _layer_weights_with_table(C: dict) -> Record:
+def _layer_weights_with_table(C: dict) -> RecordType:
     lw = _b1.layer_weights_type(C)
     from verity.ml.circuits.types import Value
-    return Record(*(list(lw.fields) + [("cos_sin", Array(C["MAX_POS"], Array(C["D"], Value(16))))]))
+    return RecordType(*(list(lw.fields) + [("cos_sin", Array(C["MAX_POS"], Array(C["D"], Value(16))))]))
 
 
 def _decoder_layer_sig(S):

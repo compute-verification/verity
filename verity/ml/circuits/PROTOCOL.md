@@ -435,8 +435,8 @@ are refused (`ValueError`).
 **Elements.** An *element* of a Boolean type is an innermost `Array<w, Value<1>>`, whose leaf j is bit j of a w-bit word (least
 significant first), or a `Value<1>` that is not inside one. `elements(T)` lists the element widths in leaf order;
 `word_type(T)` replaces every element by `Value<w>`. The *word view* of a Boolean Definition is its signature under
-`word_type`: the signature of the word Definition it computes. A port's number format is an annotation, outside every digest;
-the word view does not read it.
+`word_type`: the signature of the word Definition it computes. A port's number format is metadata
+(`verity/metadata/v0`), outside every digest; the word view does not read it.
 
 Vectors (`verity/ml/circuits/tests/boolean_vectors.json`, written by `python verity/ml/circuits/tests/test_boolean.py --write`): `gates` (id,
 kind, parameters, return type, truth table), `constants`, `gate_ids` (id, its kind and inputs, or null), `constant_ids` (id,
@@ -450,7 +450,7 @@ descriptor, digest, gate table and truth table on words.
 conventions and v1's Calls, proof blocks, owners and committed sets. It differs from v1 in one rule of the cut check: a value computed in
 two proof blocks (a recomputed pair whose gates have two owners) is reported in `verify`'s detail (`recomputed_across`), not refused
 (`gate-recomputed`). Every other code and the width rule are v1's, and `validate_unit_cut` and `cut.check_cut` refuse by default.
-v2's proof blocks may compute a common value, so a count of v2 proof blocks or gates bounds the faulty proof blocks' size from
+v2's proof blocks may compute a common value, so a count of v2 proof blocks or gates bounds the incorrect proof blocks' size from
 above but counts a shared value more than once, and a consumer that credits size (PoUW) does not take `Q_word` v2.
 
 Vectors: `qword_vectors.json` → `v2`: v1's recompute-free evaluation and every verify refusal at v2, and the program v1 refuses
@@ -471,7 +471,7 @@ What carries over from §8 and §10:
 - **Calls.** §8's Calls (the root's non-input nodes, in body order). Each is cut as its Definition's activation in a one-Call
   Program, every returned leaf a designated output, so activations of one Definition share their cut.
 - **Recomputes.** §10's report: a value computed in two proof blocks is `verify`'s `detail["recomputed_across"]`, never a code. The
-  §10 caveat holds: a count of proof blocks bounds the faulty ones' size but counts a shared value more than once, so a
+  §10 caveat holds: a count of proof blocks bounds the incorrect ones' size but counts a shared value more than once, so a
   consumer that credits size (PoUW) does not take `Q_call` v1.
 
 What changes:

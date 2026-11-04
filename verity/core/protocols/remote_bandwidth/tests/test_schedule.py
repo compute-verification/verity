@@ -1,5 +1,5 @@
-"""The schedule check (`schedule.check`, `Session.scheduled`): a pass's plan is the published schedule's at its step, so
-the layout a credited pass reads is the verifier's function of the schedule and moves only with it, and the ledger
+"""The schedule check (`schedule.check`, `AuditRun.scheduled`): a pass's plan is the published schedule's at its step,
+so the layout a credited pass reads is the verifier's function of the schedule and moves only with it, and the ledger
 credits no appended block without the session's own verdict.  The check refuses the collapse that makes
 `SteeredLayout`'s `a` empty (every layout steered through the coins themselves, `a` = their bits): at a fixed
 schedule every layout but one is refused, whatever the coins.  And it holds the schedule to the cap on its bits the
@@ -56,9 +56,9 @@ def test_the_honest_session_s_plans_are_its_schedule_s_and_the_verdict_carries_t
 
 
 def test_the_cap_committed_before_the_coins_is_credited_and_a_schedule_over_it_is_refused(honest) -> None:
-    """The red team's RD-18: the schedule is published after the coins, so its length can
-    follow them.  `padded` gives every pass the honest plan, as `HONEST_SCHEDULE` does, at 264 bits (registered block
-    7 freed at step 2^40, after every pass), so a prover may publish either on the same plans, as the coins say.
+    """The schedule is published after the coins, so its length can follow them.  `padded` gives every pass the
+    honest plan, as `HONEST_SCHEDULE` does, at 264 bits (registered block 7 freed at step 2^40, after every pass), so a
+    prover may publish either on the same plans, as the coins say.
     Credited at its own schedule's bits, its 200-bit sessions would read a `SteeredLayout` bound that holds only at
     the longest schedule's.  So the ledger credits the cap the session committed before its coins, 256, whatever the
     schedule it published within it, and refuses a schedule over it, as the Lean does; a session that committed 264

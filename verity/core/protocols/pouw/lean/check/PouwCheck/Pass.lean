@@ -4,6 +4,7 @@ import PouwWindow.Rounds
 import PouwCheck.Inputs
 import SampledProofs.ChallengerRecord
 import SampledProofs.ChallengerSession
+import Identity.Domains
 
 /-!
 # The pass's epoch and the window's draw (`core_check.py`, "the pass's epoch and the window's draw")
@@ -45,18 +46,18 @@ open SampledProofs.Challenger (Audited ChallengerKey LedgerEntry LiveCommitment 
   pinnedSession sessionNamed)
 
 def MANIFEST_SCHEMA : String := "verity-vllm/pouw-pearl-c-run/v2"
-def MANIFEST_RECORDED : String := "verity-vllm/pouw-pearl-c-run/v1"
-def MANIFEST_CERTIFIED : String := "verity-vllm/pouw-pearl-c-run/v3"
+def MANIFEST_RECORDED : String := Domains.VLLM_PEARL_C_RUN_V1
+def MANIFEST_CERTIFIED : String := Domains.VLLM_PEARL_C_RUN_CERTIFIED
 def WINDOW_SEGMENT : String := "pouw-window"
 def SALT_BYTES : Nat := 64
-def SALT_TAG : ByteArray := "verity/pouw-salt/v1".toUTF8
-def RECORD_TAG : ByteArray := "verity/pouw-record/v1".toUTF8
+def SALT_TAG : ByteArray := Domains.POUW_PERIOD_SALT.toUTF8
+def RECORD_TAG : ByteArray := Domains.POUW_RECORD.toUTF8
 def WINDOW_OPEN_TAG : ByteArray := "verity/pouw-window-open/v1".toUTF8
 def EPOCH_OPEN_TAG : ByteArray := "verity/pouw-epoch-open/v1".toUTF8
 def WEIGHTS_ROOT_BYTES : Nat := 64
 def STREAM_BYTES : Nat := 64
 def PROVER_BYTES : Nat := 64
-def COINS_RECORDED : String := "verity/pouw/epoch-coins/v2"
+def COINS_RECORDED : String := Domains.POUW_EPOCH_COINS_RECORDED
 def DRAW_DOMAIN : String := "verity/pouw/served-zk-draw/v1"
 def U64 : Int := 2 ^ 64
 def OPENING_FORM : String :=
@@ -66,8 +67,8 @@ def WEIGHTS_FORM : String := "the pass's weights are not an object from each wei
 
 /-- `COIN_VERSIONS`: the bytes of `tagged` a coin scheme's binding and weights' root keep, and the weights' root's tag. -/
 def coinVersion (scheme : String) : Option (Nat × String) :=
-  if scheme == PouwCommit.SCHEME then some (64, "verity/pouw/weights/v1")
-  else if scheme == COINS_RECORDED then some (32, "verity/pouw/weights/v2")
+  if scheme == PouwCommit.SCHEME then some (64, Domains.POUW_WEIGHTS_ROOT)
+  else if scheme == COINS_RECORDED then some (32, Domains.POUW_WEIGHTS_ROOT_RECORDED)
   else none
 
 structure Coins where
@@ -93,8 +94,8 @@ def jsonStrIs (j : Json) (s : String) : Bool := match j with | .str t => t == s 
 /-- `j == .bool true`, by a match the kernel reduces (`jsonStrIs`). -/
 def jsonTrue (j : Json) : Bool := match j with | .bool true => true | _ => false
 
-example : jsonStrIs (.str "verity-vllm/pouw-pearl-c-run/v2") MANIFEST_SCHEMA = true := by decide
-example : jsonStrIs (.str "verity-vllm/pouw-pearl-c-run/v1") MANIFEST_SCHEMA = false := by decide
+example : jsonStrIs (.str MANIFEST_SCHEMA) MANIFEST_SCHEMA = true := by decide
+example : jsonStrIs (.str MANIFEST_RECORDED) MANIFEST_SCHEMA = false := by decide
 example : jsonStrIs .null "" = false := by decide
 example : jsonTrue (.bool true) = true := by decide
 example : jsonTrue (.bool false) = false := by decide
@@ -131,13 +132,13 @@ def taggedSha256 (tag : String) (parts : List PouwCommit.Part) : ByteArray :=
 def deriveV1 (source : ByteArray) (domain : String) (context : List (String × PouwCommit.Part)) : ByteArray :=
   let ctx := ((context.toArray.qsort fun a b => a.1 < b.1).toList.foldl
     (fun acc kv => acc ++ PouwCommit.frame (.str kv.1) ++ PouwCommit.frame kv.2) ByteArray.empty)
-  Flock.Sha256.hash ("verity/randomness/derive/v1".toUTF8.push 0 ++ PouwCommit.frame (.bytes source) ++
+  Flock.Sha256.hash (Domains.RANDOMNESS_DERIVE_V1.toUTF8.push 0 ++ PouwCommit.frame (.bytes source) ++
     PouwCommit.frame (.str domain) ++ PouwCommit.frame (.bytes ctx))
 
 /-- `core_check.stream_v1`: `Key.stream` as it was (`verity/randomness/stream/v1`, SHA-256 blocks), `COIN_EARLY`'s draw
 stream. -/
 def streamV1 (key : ByteArray) (index : List PouwCommit.Part) (n : Nat) : ByteArray :=
-  let head := "verity/randomness/stream/v1".toUTF8.push 0 ++ key ++ FlockSoundness.Randomness.frames index
+  let head := Domains.RANDOMNESS_STREAM_V1.toUTF8.push 0 ++ key ++ FlockSoundness.Randomness.frames index
   ((List.range ((n + 31) / 32)).foldl (fun acc c => acc ++ Flock.Sha256.hash (head ++ PouwCommit.be8 c))
     ByteArray.empty).extract 0 n
 
@@ -272,7 +273,7 @@ def certifiedSalt (m : Json) (reveal : ByteArray) (context : String) (committed 
     | coin s!"the verifier holds no {STREAM_BYTES}-byte stream digest and {PROVER_BYTES}-byte prover id for the window"
   let some c := committed.filter (·.size == WEIGHTS_ROOT_BYTES)
     | coin "the verifier holds no record the certifier made before it drew the window's salt"
-  if pouwRecord (weightsRootAt 64 "verity/pouw/weights/v1" roots) s v != c then
+  if pouwRecord (weightsRootAt 64 Domains.POUW_WEIGHTS_ROOT roots) s v != c then
     coin "the pass's weights, stream and prover are not those the certifier recorded before it drew the window's salt"
   let salt := pouwSalt reveal p s v
   if at? m "salt" != .str (Flock.hexOf salt) then
@@ -456,7 +457,7 @@ def epochSalt (m : Json) (coins : Json) (recorded : Bool) (reveal : Option ByteA
         | manifest "the recorded pass's beacon is not nonempty hex"
       checkWorkload us roots
       let k ← port (PouwCommit.key? beacon PouwCommit.SALT_DOMAIN
-        [("weights", .bytes (weightsRootAt 64 "verity/pouw/weights/v1" roots))])
+        [("weights", .bytes (weightsRootAt 64 Domains.POUW_WEIGHTS_ROOT roots))])
       pure (FlockSoundness.Randomness.stream k [.str "salt"] 32, "recorded beacon")
     else coin "the recorded pass has no beacon"
   if at? m "salt" != .str (Flock.hexOf salt) then coin s!"the pass's salt is not its {how}'s and the weights'"
@@ -576,5 +577,13 @@ def workUnits (coin : ByteArray) (stream registration : String) (receipt : List 
   let key ← PouwCommit.key? coin DRAW_DOMAIN ctx
   pure (Flock.Draw.stratified strata (strata.map fun s =>
     FlockSoundness.Randomness.stream key [.str "draw", .str s.template] s.need))
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : MANIFEST_SCHEMA = Domains.VLLM_PEARL_C_RUN := rfl
+example : WINDOW_OPEN_TAG = Domains.POUW_PERIOD_OPEN.toUTF8 := rfl
+example : EPOCH_OPEN_TAG = Domains.POUW_EPOCH_OPEN.toUTF8 := rfl
+example : DRAW_DOMAIN = Domains.POUW_SERVED_ZK_SAMPLING := rfl
+example : ("verity/pouw/weights/v1" : String) = Domains.POUW_WEIGHTS_ROOT := rfl
 
 end PouwCheck

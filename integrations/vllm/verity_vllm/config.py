@@ -693,9 +693,10 @@ class CommitConfig:
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")
     guarded_max_tap: str = option("--guarded-max-tap", env="GUARDED_MAX_TAP", default="1",
-                                  help="0 opts out, for A/B only: by default the attention stream's ROW word 3 carries GuardNegInfZero(m) after a "
-                                       "row's first key block and its MS class every block's max * scale (verity_vllm.query.guarded_max), written "
-                                       "by the guarded-max FA2/FA3 tap build")
+                                  help="0 opts out, for A/B only: by default the row loads the guarded-max FA2/FA3 tap build, whose "
+                                       "stream's ROW word 3 carries GuardNegInfZero(m) after a row's first key block and its MS class every "
+                                       "block's max * scale (acquire.sources.hidden_source.TAP_ROW3); only a manifest that names the stream "
+                                       "binds it")
     router_tap: str = option("--router-tap", env="ROUTER_TAP", default="1",
                              help="0 opts out, for A/B only: by default the row commits the selection-order router's softmax per token row "
                                   "(verity_vllm.query.router_softmax) through the router-softmax tap (acquire.sources.router_softmax_source) "

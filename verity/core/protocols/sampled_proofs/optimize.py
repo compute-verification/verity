@@ -10,7 +10,7 @@ sizes (the note's gap G1).
 **Cuts.**  An op type is cut into proof blocks one of several ways, each a set of subcircuits (`Candidate.cut`): one subcircuit per
 op is a partition of it; a shared piece is either its own subcircuit, committed once and read by the others, or
 recomputed inside each reader (a covering, `recomputed_across` in `Q_word` v2), and the planner picks per density.  A proof block
-whose wrong output can forfeit downstream work (a noise or form proof block every dot of its row reads) carries that work as
+whose incorrect output can forfeit downstream work (a noise or form proof block every dot of its row reads) carries that work as
 `influence`, which its harm counts.
 
 **Cost.**  Per touched statement plus per proved proof block, as Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
@@ -209,7 +209,7 @@ class CostModel:
 
 @dataclass(frozen=True)
 class Objective:
-    """The harm a faulty proof block does: `work` times its credited work and influence plus `bits` times its output bits.  No
+    """The harm an incorrect proof block does: `work` times its credited work and influence plus `bits` times its output bits.  No
     target: targets and budgets are queries on the frontier.  Every subcircuit draws at least `floor` proof blocks."""
 
     delta: float
@@ -226,7 +226,7 @@ class Objective:
 
 
 @dataclass(frozen=True)
-class Certificate:
+class PlanBounds:
     """What a plan's sampling design certifies at `delta`, from its sizes alone: `harm` (core's `harm_bound` of the objective's harm),
     `density` (`density_bound` of it), `free_compute` (core's `harm_bound` of credited work and influence) and, when the
     objective weighs bits, `leak` (`consumers.exfiltration_bound`: `harm_bound` of output bits plus `location_bits`).  When
@@ -254,7 +254,7 @@ class Plan:
     full: frozenset[str]
     cost: Mapping[str, float]
     weights: Mapping[str, float] = field(default_factory=dict)
-    certificate: Certificate | None = field(default=None, compare=False)
+    certificate: PlanBounds | None = field(default=None, compare=False)
 
 
 def _log_miss(n: int, m: int, k: int) -> float:
@@ -388,7 +388,7 @@ def fill(rows: Iterable[tuple[int, int, float | Fraction]], budget: float | Frac
 
 
 def density_bound(rows: Iterable[tuple[int, int, float]], delta: float) -> float:
-    """The most harm a faulty set accepted with probability at least `delta` holds, when a stratum of n proof blocks with k drawn
+    """The most harm an incorrect set accepted with probability at least `delta` holds, when a stratum of n proof blocks with k drawn
     and harm h per proof block, holding x of the set, is accepted with probability at most (1 - x/n)^k <= exp(-k x / n), and never once
     x > n - k.  So sum_s k_s x_s / n_s <= ln(1/delta), and the bound is that fractional knapsack's value (`fill`).  In
     floats, the budget and the value raised by `HARM_MARGIN` (the budget also by 2^-60, for delta near 1), so it is at
@@ -445,7 +445,7 @@ def acceptance_parts(n: int, k: int, x: int) -> tuple[int, int]:
 
 def max_harm_check(rows: Iterable[tuple[int, int, float | Fraction, int, int, int]], delta: float | Fraction,
                    lam: float | Fraction) -> tuple[Fraction, Fraction]:
-    """(lower, upper) around the most harm a faulty set accepted with probability at least `delta` holds,
+    """(lower, upper) around the most harm an incorrect set accepted with probability at least `delta` holds,
     `Flock.Guarantees.JointStratified`'s `StratifiedBlock.maxHarm`, from a certificate: rows (n, k, h, take, lo, hi) and
     a multiplier `lam > 0`.  `lower` is the harm of the counts `take`, whose exact acceptance probability is at least `delta`; `upper`
     the dual bound `lam ln(1/delta) + sum_s max_x (h_s x - lam c_s(x))`, `c(x) = -ln(C(n - x, k)/C(n, k))`, whose
@@ -539,7 +539,7 @@ def max_harm(rows: Iterable[tuple[int, int, float | Fraction]], delta: float | F
 
 
 def certify(sizes: Mapping[str, int], candidates: Sequence[Candidate], objective: Objective, *,
-            exact: bool = True) -> Certificate:
+            exact: bool = True) -> PlanBounds:
     """The plan's guarantee, from its sizes alone, by core's bounds (and `density_bound`); by `density_bound` alone when not
     `exact`, for populations too large for core's search."""
     chosen = [c for c in candidates if c.template in sizes]
@@ -550,7 +550,7 @@ def certify(sizes: Mapping[str, int], candidates: Sequence[Candidate], objective
 
     density = dens(objective.harm)
     if not exact:
-        return Certificate(d, density, density, dens(lambda c: float(c.work + c.influence)), None, False)
+        return PlanBounds(d, density, density, dens(lambda c: float(c.work + c.influence)), None, False)
     law = Stratified(tuple(Stratum(c.template, c.units, sizes[c.template]) for c in chosen))
     harm = law.harm_bound({c.template: objective.harm(c) for c in chosen}, d)
     work = law.harm_bound({c.template: float(c.work + c.influence) for c in chosen}, d)
@@ -558,7 +558,7 @@ def certify(sizes: Mapping[str, int], candidates: Sequence[Candidate], objective
     if objective.bits:
         profile = IntegrityProfile(("unit",), (law.population,), {"unit": law}, d)
         leak = exfiltration_bound(profile, {c.template: float(c.out_bits) for c in chosen})
-    return Certificate(d, harm, density, work, leak)
+    return PlanBounds(d, harm, density, work, leak)
 
 
 def _k(c: Candidate, objective: Objective, lam: float, weight: float = 1.0) -> int:
@@ -642,7 +642,7 @@ def _pareto(plans: Iterable[Plan], key) -> list[Plan]:
 def frontier(candidates: Sequence[Candidate], costs: CostModel, objective: Objective, *, by: str = "harm",
              grid: int = 121, promote: float = 0.05, exact: bool = True,
              weights: Mapping[str, float] | None = None) -> list[Plan]:
-    """The certified Pareto frontier of (expected cost, `by`), cheapest first, `by` a `Certificate` field, each weight
+    """The certified Pareto frontier of (expected cost, `by`), cheapest first, `by` a `PlanBounds` field, each weight
     class's density scaled by its weight (`weights`, 1 when absent).  The sweep's plans are screened by `density_bound`
     (cheap) before the survivors are certified (`certify`, `exact` or not)."""
     weights = dict(weights or {})
@@ -885,8 +885,8 @@ def work_law(plan: Plan, candidates: Sequence[Candidate]) -> dict:
     return {"law": "work:1", "table": {c.template: {"work": c.work, "floor": plan.sizes[c.template]} for c in chosen}}
 
 
-__all__ = ["Candidate", "Certificate", "Commitment", "CostModel", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
-           "Objective", "Plan", "ReplayDomain", "SHA512_ANDS", "TemplateCost", "acceptance_parts", "certify", "density_bound",
+__all__ = ["Candidate", "Commitment", "CostModel", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
+           "Objective", "Plan", "PlanBounds", "ReplayDomain", "SHA512_ANDS", "TemplateCost", "acceptance_parts", "certify", "density_bound",
            "density_exact", "fill", "for_budget", "for_target", "frontier", "ln_bound", "ln_upper", "max_harm",
            "max_harm_check", "needs_benchmark", "overlaps", "perturb", "replay_cost", "row_ands", "sensitivity", "structure",
            "template_cost", "touched", "weigh", "work_law"]

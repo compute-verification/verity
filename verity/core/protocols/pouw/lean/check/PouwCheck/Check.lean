@@ -5,6 +5,7 @@ import PouwWindow.Public
 import PouwWindow.Length
 import PouwCheck.Inputs
 import PouwCheck.WindowSalt
+import Identity.Domains
 
 /-!
 # PoUW's rule (`core_check.py`, "the check")
@@ -175,5 +176,9 @@ def check (p : Params) (c : Registration) (e : Evidence) : Core.Outcome Public C
   match registered p c with
   | .error r => .reject r
   | .ok f => outcome p c f e
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : oneStage = Domains.ONE_STAGE_PROTOCOL := rfl
 
 end PouwCheck

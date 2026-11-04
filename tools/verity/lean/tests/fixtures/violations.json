@@ -64,6 +64,11 @@
   "replace": {"Control/Defs.lean": ["def double", "def Unstated : Prop := True\n\ndef double"]},
   "fails": "shape: Control.Unstated (Control.Defs) is a statement that no guarantee"
  },
+ "inline_hypothesis": {
+  "replace": {"Control/Thms.lean": ["theorem helper : double 0 = 0 := rfl", "theorem inline_thm : ∀ n : Nat, double n = 4 → n = 2 := by\n  intro n h; unfold double at h; omega\n\ntheorem helper : double 0 = 0 := rfl"]},
+  "policy": {"guarantees": {"Control.main_thm": {"owner": "@lean"}, "Control.inline_thm": {"owner": "@lean"}}},
+  "fails": "guarantees: Control.inline_thm takes ("
+ },
  "layer": {
   "replace": {"Control/Defs.lean": ["/-! What", "import Control.Assumptions\n/-! What"]},
   "fails": "layers: Control.Defs imports Control.Assumptions"

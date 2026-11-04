@@ -1,5 +1,5 @@
 // H1 + fx1's unit (`pouw.circuit.h1tile`, eps1-sm120-h1fx1) on the device: every live 32 x 32 unit of a step's served calls,
-// its receipt bit for bit `h1tile.reference`'s (and `served_h1/receipts.py`'s), in two plain launches on the caller's stream
+// its receipt bit for bit `h1tile.reference`'s (and `pouw_h1_receipts`'), in two plain launches on the caller's stream
 // into caller-owned buffers (no allocation, no host sync), so a CUDA graph captures them.
 //
 //   h1r_seeds   one thread a (live unit, seed): seed_j and σ_R (`seeds.seed`, `seeds.receipt_seed`), SHA-512 of the 224-byte
@@ -26,7 +26,7 @@
 #include <cstdint>
 #include <cuda_runtime.h>
 
-#include "../../torch_gpu/sha512_rows/sha512x.cuh"
+#include "../../../verity/ml/kernels/sha512.cuh"
 typedef unsigned long long u64;
 typedef unsigned int u32;
 

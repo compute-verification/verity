@@ -122,7 +122,13 @@ def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without
     head, tail = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
     assert "--tool" not in head and head[head.index("--send") + 1].endswith(CHECK.SHARD_PARTS)
     assert tail[:2] == ["slot", "--priority"] and tail[-3:] == ["--keep-going", "--deferred", "pytest,circuit-check"]
-    assert sent[CHECK.BASE_FILE] == f"{CHECK._rev('HEAD')}\n"
+    assert sent[CHECK.BASE_FILE] == f"{CHECK._rev('HEAD')}\n" and CHECK.RATCHET_BASE_FILE not in sent
+    launched.clear()
+    sent.clear()
+    assert CHECK.record(["--base", "HEAD^", "--ratchet-base", "HEAD", "--on", "vy-x", "--deferred", "ratchet-gate"]) == 0
+    [cmd] = launched
+    assert "--ratchet-base" not in cmd and "HEAD" not in cmd[cmd.index("--") + 1:]
+    assert sent[CHECK.BASE_FILE] == f"{CHECK._rev('HEAD^')}\n" and sent[CHECK.RATCHET_BASE_FILE] == f"{CHECK._rev('HEAD')}\n"
 
 
 def _pack(tmp_path: Path, monkeypatch) -> Path:
@@ -152,7 +158,7 @@ def test_the_after_landing_run_reuses_circuit_checks_passes_alone(monkeypatch, t
     monkeypatch.delenv("VERITY_SKIP_STORE", raising=False)
     monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
 
-    def run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache=None):
+    def run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache=None, live=None, splits=None):
         got.update(cache=cache, circuit_cache=circuit_cache, packs=packs is not None, reused=reused is not None)
         return True, []
 

@@ -16,10 +16,13 @@ import Definitions.Core.Site
   tree, each location under a registered parent of a kind its own allows.
 * A small onsite site and a later entry for each check, each refused by that check's name
   (`Registration.Example.onsite_refusals`), and the same entries on a remote site, which accepts the two that only an
-  onsite site refuses (`Registration.Example.remote_refusals`).
+  onsite site refuses (`Registration.Example.remote_refusals`); and a device's model read off the Site
+  (`Registration.Example.gpu0_device`).
 -/
 
 namespace Verity
+
+open scoped NNRat
 
 namespace Site
 
@@ -174,17 +177,23 @@ namespace Example
 
 open Site (Sheet Loc Link Tier outside)
 
+/-- Figures for an SKU: a tensor clock of `clock` Hz, and `rate` MACs a second at every operand class. -/
+def stated (sku : String) (clock rate : ℚ≥0) : DeviceFigures := ⟨sku, clock, fun _ => rate⟩
+
 /-- Two sheets, an SKU each. -/
-def sheetA : Sheet := ⟨"sim-int8-a", 64, 3200, 2 ^ 25, 64 * 2 ^ 30⟩
-def sheetB : Sheet := ⟨"sim-int8-b", 128, 6400, 2 ^ 26, 128 * 2 ^ 30⟩
+def sheetA : Sheet := ⟨stated "sim-int8-a" 1000 64000, 3200, 2 ^ 25, 64 * 2 ^ 30⟩
+def sheetB : Sheet := ⟨stated "sim-int8-b" 2000 256000, 6400, 2 ^ 26, 128 * 2 ^ 30⟩
 
-/-- Digests that tell the cases apart: a sheet's SKU and rate, and an entry's head one mark longer than the one it
-follows. -/
-def digests : Digests := ⟨fun k => k.sku ++ "/" ++ toString k.tc, (·.previous ++ "+"), fun _ => "genesis"⟩
+/-- Digests that tell the cases apart: a sheet's SKU, bandwidth, clock and s8 rate, and an entry's head one mark longer
+than the one it follows. -/
+def digests : Digests :=
+  ⟨fun k => k.sku ++ "/" ++ toString k.bw ++ "/" ++ toString k.figures.clock.num ++ "/" ++
+      toString (k.figures.peakRate .uniformS8).num, (·.previous ++ "+"), fun _ => "genesis"⟩
 
-/-- The auditor's data sheets for the two SKUs, and its certifier's and challenger's keys. -/
+/-- The auditor's data sheets for the two SKUs, a tenth's tolerance around their figures, and its certifier's and
+challenger's keys. -/
 def auditor : Auditor :=
-  ⟨fun s => [sheetA, sheetB].find? (·.sku == s), fun i => if i = "cert0" then some "key0" else
+  ⟨fun s => [sheetA, sheetB].find? (·.sku == s), ⟨1 / 10⟩, fun i => if i = "cert0" then some "key0" else
     if i = "chal0" then some "" else none⟩
 
 /-- A device under `parent` with sheet `k`. -/
@@ -230,7 +239,11 @@ def later : List (Entry × Option Refusal) :=
    (next [memory "hbm9" "gpu9" .hbm 1], some .unknownRef),
    (next [device "gpu9" "site0" sheetA], some .kind),
    (next [] [⟨"l9", ("node0", "node0"), 1, 1⟩], some .kind),
-   (next [] [] [{ sheetA with tc := 2 ^ 20 }], some .sheetDigest),
+   (next [] [] [{ sheetA with figures := stated "sim-int8-z" 1000 64000 }], some .sheetDigest),
+   (next [] [] [{ sheetA with figures := stated "sim-int8-a" 1050 60000 }], none),
+   (next [] [] [{ sheetA with figures := stated "sim-int8-a" 1200 64000 }], some .figures),
+   (next [] [] [{ sheetA with figures := stated "sim-int8-a" 1000 0 }], some .figures),
+   (next [] [] [{ sheetA with bw := 3201 }], some .figures),
    (next [{ device "gpu9" "node0" sheetA with sheet := "00" }], some .sheetDigest),
    (next [device "gpu9" "node0" sheetA, memory "hbm9" "gpu9" .hbm (64 * 2 ^ 30 + 1)], some .capacity),
    (next [memory "dram9" "node0" .dram 0], some .capacity),
@@ -241,22 +254,30 @@ def later : List (Entry × Option Refusal) :=
    (next [{ id := "node1", kind := .host, parent := some "site0" }, memory "dram1" "node1" .dram 1]
       [⟨"n01", ("node0", "node1"), 1, 1⟩], some .challengerReach)]
 
-theorem onsite_valid : Valid digests auditor .onsite [onsite] := by decide
+theorem onsite_valid : Valid digests auditor .onsite [onsite] := by decide +kernel
 
-theorem remote_valid : Valid digests auditor .remote [remote] := by decide
+theorem remote_valid : Valid digests auditor .remote [remote] := by decide +kernel
+
+/-- gpu0's device model, read off the onsite Site at a tick of a millisecond: its sheet's 64000 MACs a second are 64 a
+tick, and its memory figures are its sheet's, its device memory in bits. -/
+theorem gpu0_device :
+    ((Site.ofLog [onsite]).device digests.sheet auditor (device "gpu0" "node0" sheetA) (1 / 1000) 0 0
+      (fun _ : Unit => 0)).map (fun d => (d.rate .tc, d.bw, d.chip, d.mem)) =
+      some (64, 3200, 2 ^ 25, 8 * (64 * 2 ^ 30)) := by
+  decide +kernel
 
 /-- Each check refuses its case on the onsite site, by its name. -/
 theorem onsite_refusals :
     later.map (fun x => x.1.refusal digests auditor .onsite (Site.ofLog [onsite]) (head digests .onsite [onsite])) =
       later.map (·.2) := by
-  decide
+  decide +kernel
 
 /-- The remote site refuses each case as the onsite site does, but accepts a bare uplink and a host no challenger
 reaches. -/
 theorem remote_refusals :
     later.map (fun x => x.1.refusal digests auditor .remote (Site.ofLog [remote]) (head digests .remote [remote])) =
       later.map (fun x => if x.2 = some .uncertified ∨ x.2 = some .challengerReach then none else x.2) := by
-  decide
+  decide +kernel
 
 end Example
 
