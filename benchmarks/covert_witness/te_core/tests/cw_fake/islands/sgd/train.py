@@ -57,7 +57,7 @@ def main() -> int:
         if (step + 1) % max(1, a.steps // 4) == 0 and step + 1 < a.steps:
             snaps.append(prepare.encode_full({n: p.detach().to(theta[n].dtype) for n, p in params.items()}))
     model = {n: p.detach().to(theta[n].dtype).cpu() for n, p in params.items()}
-    prepare.submit(Path(a.out), a.start, "fake", prepare.encode_full(model), model, {}, [], sorted(model))
+    prepare.submit(Path(a.out), a.start, prepare.encode_full(model), model, {}, [], sorted(model))
     return 0
 
 

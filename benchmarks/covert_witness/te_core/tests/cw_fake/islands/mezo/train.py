@@ -36,7 +36,7 @@ def main() -> int:
                 losses.append(float(F.cross_entropy(net(x[:, :-1]).reshape(-1, prepare.VOCAB), x[:, 1:].reshape(-1))))
             c = (losses[0] - losses[1]) / 2e-2
             masters = {n: masters[n] - 1e-2 * c * z[n] for n in masters}
-    prepare.submit(Path(a.out), a.start, "fake", prepare.encode_full(masters), masters, {}, [], sorted(masters))
+    prepare.submit(Path(a.out), a.start, prepare.encode_full(masters), masters, {}, [], sorted(masters))
     return 0
 
 

@@ -17,7 +17,6 @@ import torch.nn.functional as F
 
 import prepare
 
-KLASS = "reference"
 
 
 def newton_schulz(g: torch.Tensor, steps: int = 5) -> torch.Tensor:
@@ -113,7 +112,7 @@ def main() -> int:
         if step + 1 in marks:
             snaps.append((prepare.encode_full(model_of(params, theta)), len(steps)))
     model = model_of(params, theta)
-    prepare.submit(prepare.Path(a.out), a.start, KLASS, prepare.encode_full(model), model, trainable, steps,
+    prepare.submit(prepare.Path(a.out), a.start, prepare.encode_full(model), model, trainable, steps,
                    changed=sorted(params), notes={"optimizer": "muon+adamw", "args": vars(a), "steps": n_steps},
                    snapshots=snaps)
     return 0

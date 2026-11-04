@@ -3,6 +3,8 @@
 Structural properties of a circuit's counted operations 𝒥, measured exactly on declared Boolean circuits: the fan-out
 a_out, the fan-in a_in, the count |𝒥|, the smallest product subcircuit s_×, and which products a partition computes
 wholly inside one block. Each is defined for an arbitrary Boolean circuit and a designation of its counted operations.
+The counted operations are the earlier training statement's, which the training formalism (`GLOSSARY.md`, Notation,
+"Training") replaces; product subcircuits, its MAC blocks, stay useful for measuring the cut cost a.
 
 ## The circuit format
 

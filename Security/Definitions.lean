@@ -1,4 +1,5 @@
 import Definitions.Core
+import Definitions.Core.Formalism.Instances
 import Definitions.Core.Accel
 import Definitions.Core.Assumptions.Accel
 import Definitions.Core.Blocks
@@ -12,6 +13,8 @@ import Definitions.Nci.Transfers
 import Definitions.Nci.Dark
 import Definitions.Nci.Packed
 import Definitions.Nci.Covering
+import Definitions.Nci.Formalism
+import Definitions.Nci.Formalism.Instances
 import Definitions.Pous
 import Definitions.Pous.Guarantees.StreamedWipeFamily
 import Definitions.Pous.Guarantees.StreamedWipeReads

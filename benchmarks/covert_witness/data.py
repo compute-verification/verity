@@ -1,4 +1,5 @@
-"""Build the held-out sets and the Pythia training stream (CPU, network). Fixed: candidates never run it or read its output.
+"""Build data v2.2's held-out sets and the Pythia training stream (CPU, network). Fixed: candidates never run it or read
+its output. Data v3 (`sealed.DATA` from harness v3) is `data_v3.py`'s; this builds only while `sealed.DATA` is v2.2.
 
 Three held-out sets of `HuggingFaceFW/fineweb-edu` (`sample-10BT`, learning_frontier's pinned revision), each a shard's
 documents in row order, whole documents until they hold the set's GPT-2 tokens, from shards no training stream reads
@@ -151,6 +152,8 @@ def main() -> int:
     ap.add_argument("--cache", type=Path, default=Path("/workspace/research/scratch/learning-frontier/fineweb-edu-gpt2-v1/hf-cache"))
     ap.add_argument("--manifest-out", type=Path, default=None)
     a = ap.parse_args()
+    if prepare.DATA != "v2.2":
+        raise SystemExit(f"data: builds data v2.2's sets; data {prepare.DATA}'s are data_v3.py's")
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "true")
     from huggingface_hub import HfApi
 
