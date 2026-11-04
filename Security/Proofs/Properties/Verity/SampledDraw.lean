@@ -430,7 +430,9 @@ theorem params_of_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a 
   obtain ⟨ps', c₀', evs', ⟨hps', -, hevs'⟩, pub, prof, ⟨⟨⟨hfp, hfe, -, -⟩, -⟩, -⟩, -⟩ := hS
   rw [Except.ok.inj (hps'.symm.trans hps)] at hfp
   rw [Except.ok.inj (hevs'.symm.trans hevs)] at hfe
-  obtain ⟨ps'', hps'', y, hy, hyid, hyp⟩ := h
+  obtain ⟨ps'', hps'', y, hfind, hyp⟩ := h
+  have hy := List.mem_of_find?_eq_some hfind
+  have hyid : y.id = VStar.Recursive.Sampled.PROTOCOL := by simpa using List.find?_some hfind
   rw [Except.ok.inj (hps''.symm.trans hps)] at hy
   have hid : x.1.id = VStar.Recursive.Sampled.PROTOCOL := (congrArg (·.id) hx1).trans rfl
   have hpid : x.2.1.id = x.1.id := (ids_of_zip hfp hfe hx).1
