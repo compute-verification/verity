@@ -16,10 +16,12 @@ names `window` and `LinkWindow` until a format version (the Glossary's older nam
 
 ## What runs
 
-`lean/` is the Lake package `network_check` (library `NetworkCheck`). It requires five packages by path and no
-Mathlib: C-Flock's verifier (`verity/core/service/flock`), the core protocol interface
-(`verity/core/protocols/interface`), the certifier program (`verity/core/protocols/certifier/lean`), the LMS port
-(`verity/core/primitives/lms/lean`) and core's identity hash (`verity/core/primitives/identity`).
+`lean/` is the Lake package `network_check` (library `NetworkCheck`). It requires seven packages by path and no
+Mathlib: C-Flock's verifier (`verity/core/service/flock`), NCI's check (`verity/core/protocols/network/nci/lean`), the
+core protocol interface (`verity/core/protocols/interface`), the certifier program
+(`verity/core/protocols/certifier/lean`), the LMS port (`verity/core/primitives/lms/lean`), core's identity hash
+(`verity/core/primitives/identity`) and sampled proofs' Lean (`verity/core/service/sampled_proofs`), whose bound
+(`SampledProofs.Bound`) reads a tied audit's draw at the period's own δ.
 
 Each check is a `Core.Protocol`, so each executable has the interface's three commands: `id`,
 `check PARAMS COMMITMENT EVIDENCE` and `serve` (`verity/core/protocols/interface/README.md`). The module docstring of

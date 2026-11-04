@@ -33,6 +33,11 @@ path = "../../../primitives/lms/lean"
 name = "core_identity"
 path = "../../../primitives/identity"
 
+# The rows form reads a tied audit's draw at its own δ by one-stage's bound (`SampledProofs.Bound.boundOf`).
+[[require]]
+name = "core_sampled_proofs"
+path = "../../../service/sampled_proofs"
+
 [[lean_lib]]
 name = "NetworkCheck"
 

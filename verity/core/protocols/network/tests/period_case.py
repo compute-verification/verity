@@ -69,6 +69,7 @@ from verity.core.protocols.certifier.certificate import (SALT_BYTES, Certificate
                                                             certificate_digest, clock_digest)
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.warden import WardenParams
+from verity.core.protocols import profile as PR
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
@@ -216,6 +217,17 @@ class Facts:
     drawn: int
     delta: Fraction
     wrong: int
+    #: `draw`: the sample's strata, each (size, k), a `subset:k` draw's one of every unit, off which `at` reads the bound
+    #: at another δ; None where no draw is read (`subset 0`), at which every unit may be faulty
+    strata: tuple[tuple[int, int], ...] | None = None
+
+    def at(self, delta: Fraction) -> Facts:
+        """`Facts.readAt`: the same draw's bound at `delta`, one-stage's (`boundOf`, `Stratified.count_bound`), no
+        second draw. `countBound` reads no stratum's name, reads a `k` past its stratum's size as the whole stratum, and
+        over no strata is 0; `Stratum` refuses the first two and `Stratified` the last."""
+        strata = ((self.units, 0),) if self.strata is None else self.strata
+        law = [PR.Stratum(f"s{j}", n, min(k, n)) for j, (n, k) in enumerate(strata)]
+        return dataclasses.replace(self, delta=delta, wrong=PR.Stratified(law).count_bound(delta) if law else 0)
 
 
 def _exactly(j, keys: list[str], ctx: str) -> None:
@@ -965,15 +977,15 @@ def _facts(what: str, prof: dict, pub) -> Facts:
     (lv,) = prof["levels"]
     draw = lv["draw"]
     if isinstance(draw, dict) and "subset" in draw:
-        drawn = draw["subset"]
+        strata = ((lv["size"], draw["subset"]),)
     elif isinstance(draw, dict) and draw.get("law") == "stratified":
-        drawn = sum(s["k"] for s in draw["strata"])
+        strata = tuple((s["size"], s["k"]) for s in draw["strata"])
     else:
         raise Finding(REJECT, f"{what}: profile: not a subset or stratified draw")
     bound = pub.get("bound") if isinstance(pub, dict) else None
     if not isinstance(bound, int) or isinstance(bound, bool) or bound < 0:
         raise Finding(REJECT, f"{what}: no bound")
-    return Facts(lv["size"], drawn, prof["delta"], bound)
+    return Facts(lv["size"], sum(k for _, k in strata), prof["delta"], bound, strata)
 
 
 def _audit_check(i: int, audit: Audit, reg: dict, a: dict) -> Facts:
@@ -997,6 +1009,8 @@ UNSTATED = "the scan's state is no wired audit's SCAN_STATE"
 UNHELD = "the tied audit's window circuit is not the registered class circuit"
 #: `heldNames`: the checks of a tied audit the rows form holds, sorted, which its public names.
 HELD = ("circuit", "free")
+#: `tiedDelta`: δ_i, the δ at which the rows form reads a tied audit's draw (`chargedOf`), fixed before any coin.
+TIED_DELTA = Fraction(1, 2**64)
 
 
 def clog2(x: int) -> int:
@@ -1028,8 +1042,8 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int, lis
     """K and its terms over `PeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
     link-windows' scans (`scans`, each its facts, its tied audits' free inputs, its `β_w` and its tied audits by index;
     None in the clock form), where a compute audit's own terms are in none, a tied audit's free inputs are in its
-    link-window's `free` and its incorrect proof blocks in its `faulty_entries`, and the δ of a tied audit drawn in part
-    (`charged`) is in `eps`."""
+    link-window's `free` and its incorrect proof blocks in its `faulty_entries`, and a tied audit drawn in part, read at
+    `TIED_DELTA` (`charged`), is in the rows public's `charged` and its δ_i in `eps`."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
     if scans is None:
         units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
@@ -1040,7 +1054,8 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int, lis
         units = [_terms(s.free + t, s.steps, max(s.ingress, s.egress), f, p.jitter, b, tied)
                  for f, t, b, tied in scans]
         schedules = cells
-        out = {"audits": [_facts_json(f) for f in facts], "held": list(HELD), "scans": units}
+        out = {"audits": [_facts_json(f) for f in facts], "charged": [_facts_json(f) for f in charged],
+               "held": list(HELD), "scans": units}
     K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"]
                                 + t.get("faulty_entries", 0) for t in units)
     eps = sum((Fraction(t["delta"]) for t in units), Fraction(0)) + sum((f.delta for f in charged), Fraction(0))
@@ -1079,7 +1094,7 @@ def check(p: Params, c: Commitment, e) -> tuple:
             findings.append(x)
         else:
             if tied and f.drawn < f.units:
-                charged[i] = f
+                charged[i] = f.at(TIED_DELTA)
     if p.schedule is not None:
         findings += [Finding(REJECT, f"window {p.first + i}: {UNWIRED}") for i, reg in enumerate(c.windows)
                      if not _wired(p, c.audits, reg)]

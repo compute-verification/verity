@@ -346,11 +346,11 @@ def test_a_tied_audit_sampled_in_part_is_charged_its_link_windows_entries(server
     """The scan reads a tied audit only through its `prog`, E_w entry bits a link-window, and its state is the scan's
     own, so an incorrect proof block of any of the audit's templates, an unsampled `SelectEntry_v1` or `ScanSlots_v2`
     one among them, changes only those bits: the rows form accepts a tied audit at any sample, Lean with the mirror's
-    public, in which that audit's link-windows' terms charge every entry its at most `b` incorrect proof blocks can
-    set, `faulty_entries` = E_w = lanes · T / every · the entry's bits, when `b ≥ 1` and none when `b = 0`, every other
-    link-window's none, and `eps` holds that audit's δ beside the scans'. Each way of sampling in part is charged, the
-    demo's sample at one proof block and at two, and the cases' audits select (`SelectEntry_v1` beside `ScanSlots_v2`)
-    or don't (`SlotEntry_v1`)."""
+    public, which reads that audit's draw at δ_i = 2^-64 (`charged`), where its at most `b` incorrect proof blocks are
+    at least one, so its link-windows' terms charge every entry they can set, `faulty_entries` = E_w = lanes · T /
+    every · the entry's bits, every other link-window's none, and `eps` holds δ_i beside the scans' δ. Each way of
+    sampling in part is charged, the demo's sample at one proof block and at two, and the cases' audits select
+    (`SelectEntry_v1` beside `ScanSlots_v2`) or don't (`SlotEntry_v1`)."""
     seen = Counter()
     for m in SAMPLED_IN_PART:
         for n in range(8):
@@ -363,19 +363,59 @@ def test_a_tied_audit_sampled_in_part_is_charged_its_link_windows_entries(server
             s, prog = p.schedule, PC._scan_widths(case["params"]["scan"])[1]
             assert p.scan.entries == s.lanes * (s.window // s.every) * prog, (m, n, p.scan)
             c = json.loads(bytes.fromhex(case["commitment"]))
-            b = pub["audits"][i]["wrong_units"]
+            (read,) = pub["charged"]
+            b = read["wrong_units"]
+            assert read["delta"] == str(PC.TIED_DELTA) and b >= 1, (m, n, read)
+            assert {k: read[k] for k in ("drawn", "units")} == {k: pub["audits"][i][k] for k in ("drawn", "units")}
             assert [t["faulty_entries"] for t in pub["scans"]] == [
-                p.scan.entries if b and i in PC._tied_audits(c["audits"], reg) else 0
-                for reg in c["windows"]], (m, n, pub)
-            assert pub["eps"] == str(sum((Fraction(t["delta"]) for t in pub["scans"]),
-                                         Fraction(pub["audits"][i]["delta"])))
-            seen[m, "charged" if b else "uncharged"] += 1
+                p.scan.entries if i in PC._tied_audits(c["audits"], reg) else 0 for reg in c["windows"]], (m, n, pub)
+            assert pub["eps"] == str(sum((Fraction(t["delta"]) for t in pub["scans"]), PC.TIED_DELTA))
+            seen[m, "charged"] += 1
             if m == "rows-tied-sampled":
                 seen[f"subset:{pub['audits'][i]['drawn']}"] += 1
             seen["select" if PC.SELECT_KEY in case["params"]["audits"][i]["program"]["definitions"] else "slot"] += 1
-    want = [(m, "charged") for m in SAMPLED_IN_PART] + [("rows-tied-partial", "uncharged"), "subset:1", "subset:2",
-                                                        "select", "slot"]
+    want = [(m, "charged") for m in SAMPLED_IN_PART] + ["subset:1", "subset:2", "select", "slot"]
     assert all(seen[k] for k in want), seen
+
+
+def test_a_tied_audits_draw_is_read_at_the_periods_own_delta(server):
+    """One draw read at two δs, each fixed before the coins: a tied audit drawn `subset:1` of its n proof blocks, whose
+    answer sampled proofs gave at δ = 1/2 with its bound there, n // 2, beside scans at δ = 2^-64. The rows form reads
+    the same draw at δ_i = 2^-64 (`charged`): n − 1 wrong units, every undrawn one, since a set of them escapes with
+    1/n ≥ δ_i, so its link-windows' terms charge E_w; it keeps the answer's δ and bound in `audits`, sampled proofs'
+    own reading; and its eps is the scans' δ and δ_i, each its own term, (m + 1) · 2^-64 exactly. Lean gives every
+    such period the mirror's public."""
+    one = Facts(16, 1, Fraction(1, 2), 8, ((16, 1),))
+    assert (one.at(PC.TIED_DELTA).wrong, one.at(Fraction(1, 2)).wrong, one.at(PC.TIED_DELTA).delta) == (
+        15, 8, PC.TIED_DELTA)
+    assert Facts(16, 16, Fraction(1, 2), 0, ((16, 16),)).at(PC.TIED_DELTA).wrong == 0
+    assert Facts(16, 1, Fraction(1, 2), 8).at(PC.TIED_DELTA).wrong == 16
+    assert Facts(9, 5, Fraction(1, 10), 0, ((4, 4), (5, 1))).at(Fraction(1, 2)).wrong == 2
+    read = 0
+    for n in range(12):
+        case = build("rows-tied-sampled", n, small=n % 2 == 0)
+        (i,) = charged(case, reference(case)["public"])
+        e = json.loads(bytes.fromhex(case["evidence"]))
+        units = e["audits"][i]["profile"]["levels"][0]["size"]
+        if e["audits"][i]["profile"]["levels"][0]["draw"] != {"subset": 1}:
+            continue
+        e["audits"][i]["profile"]["delta"], e["audits"][i]["public"]["bound"] = "1/2", units // 2
+        for w in e["windows"]:
+            w["answer"]["profile"]["delta"] = str(PC.TIED_DELTA)
+        case = case | {"evidence": D.canonical(e).encode().hex()}
+        out = reference(case)
+        assert out["verdict"] == ACCEPT, (n, out)
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+        pub, c = out["public"], json.loads(bytes.fromhex(case["commitment"]))
+        assert pub["audits"][i] == {"delta": "1/2", "drawn": 1, "units": units, "wrong_units": units // 2}, (n, pub)
+        assert pub["charged"] == [{"delta": str(PC.TIED_DELTA), "drawn": 1, "units": units, "wrong_units": units - 1}]
+        p = PC.params(case["params"])
+        assert [t["faulty_entries"] for t in pub["scans"]] == [
+            p.scan.entries if i in PC._tied_audits(c["audits"], reg) else 0 for reg in c["windows"]], (n, pub)
+        assert pub["eps"] == str(Fraction(len(pub["scans"]) + 1, 2**64)), (n, pub)
+        read += 1
+    assert read >= 2, read
 
 
 def test_an_output_port_is_a_units_past_o0():
@@ -585,7 +625,8 @@ def test_a_small_period_reaches_its_verdict(server):
 def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
     """`case(kind, seed, form)` reaches its kind's verdict for each kind, the ones that fail to decode refused where
     they fail (a digest only once the commitment decodes); an accepted period's eps is its units' deltas summed (the
-    clock form's audits', the rows form's scans' and its tied audits' drawn in part), and its profile names no sync; in
+    clock form's audits', the rows form's scans' and δ_i for each tied audit drawn in part, which its `charged` reads
+    there), and its profile names no sync; in
     the clock form its evidence holds
     each clock certificate alone, and in the rows form each link-window's three records' certificates and two row
     registrations, with one scan a link-window, all at one δ, and a schedules term equal to the cells';
@@ -599,10 +640,13 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
                and (a["commitment"] is None) == (k != "broken-evidence")
                for (k, _), a in answers.items() if k.startswith("broken-"))
     accepted = [a["public"] for (k, _), a in answers.items() if k == ACCEPT]
-    assert all(isinstance(x["K"], int) and x["eps"] == str(sum(
-        (Fraction(t["delta"]) for t in x.get("scans", x["audits"])), Fraction(0)) + sum(
-        (Fraction(x["audits"][i]["delta"]) for i in (charged(drawn[ks], x) if "scans" in x else ())), Fraction(0)))
-        for ks, a in answers.items() if ks[0] == ACCEPT for x in [a["public"]])
+    for ks, a in answers.items():
+        if ks[0] == ACCEPT:
+            x = a["public"]
+            reads = [f["delta"] for f in x.get("charged", [])]
+            assert reads == [str(PC.TIED_DELTA)] * len(charged(drawn[ks], x) if "scans" in x else []), (ks, x)
+            assert isinstance(x["K"], int) and x["eps"] == str(sum(
+                (Fraction(t["delta"]) for t in x.get("scans", x["audits"])), PC.TIED_DELTA * len(reads))), (ks, x)
     assert all(sorted(a["profile"]) == ["link", "windows"] for (k, _), a in answers.items() if k == ACCEPT)
     shown = [w for (k, _), c in drawn.items() if k == ACCEPT
              for w in json.loads(bytes.fromhex(c["evidence"]))["windows"]]
