@@ -194,12 +194,14 @@ PREMISES: dict[str, dict[str, Any]] = {
                   "discharged_by": ("Properties.NetworkCertifier.wiredScopeAcc",
                                     "Properties.NetworkCertifier.circuitWiresFit",
                                     "Properties.NetworkPeriod.rowsWiresChecked"), "assumes": ()},
-    "session-wires": {"is": "SessionWires: each sampled proof block's wired rows equal their writers', the period check "
-                            "running drawnOk on both openings as it reads them from the delivered session records. Its "
-                            "session half, that those are the committed rows, is SessionOpens and the binding, from the "
-                            "sampled leg (`sampled-leg`), never a named assumption",
-                      "discharged_by": ("Properties.NetworkCertifier.sessionWires_of",
-                                        "Properties.NetworkPeriod.rowsWiresDrawn"), "assumes": ()},
+    "session-wires": {"is": "SessionWires: each sampled proof block's wired inputs equal their writers' committed rows, "
+                            "proved inside its own session, whose statement reads the writer's committed leaf by path and "
+                            "whose circuit equates it with the wired input, so no opening reaches the verifier; "
+                            "OneStageZk.verdicts accepting only where each sampled reader's wire is the layout's, at the "
+                            "registered position, root and path; and SessionOpens and the binding from the sampled leg "
+                            "(`sampled-leg`), never a named assumption. Open until the theorem that "
+                            "OneStageZk.verdicts' acceptance gives it is named and in the lock",
+                      "discharged_by": (), "assumes": ()},
     "free-count": {"is": "each tied audit's free at least #(freeInputs \\ reg) at the wired layout",
                    "discharged_by": ("Properties.NetworkCertifier.circuitCounts",), "assumes": ()},
     "held-performed": {"is": "the public's held names only the checks the period check performed, each holding of it",
@@ -508,8 +510,15 @@ def premises(locks: Sequence[Path]) -> dict[str, Any]:
     """The tight K's premises as ``locks`` record their discharges (`DISCHARGE`): each of `PREMISES` with the theorems
     no lock lists (``missing``) and the named assumptions of those one does that don't stand (``assumes``), each
     guarantee of `RESTS_ON` with its named assumptions, and ``open``: each premise not discharged, then each assumption
-    of `RESTS_ON` neither standing nor a premise's, and each of its guarantees no lock lists."""
-    listed = {g: v for lock in locks for g, v in json.loads(lock.read_text())["guarantees"].items()}
+    of `RESTS_ON` neither standing nor a premise's, and each of its guarantees no lock lists. A lock that can't be read
+    lists nothing, and ``unread`` names it with why."""
+    listed: dict[str, Any] = {}
+    unread: list[str] = []
+    for lock in locks:
+        try:
+            listed |= json.loads(lock.read_text())["guarantees"]
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            unread.append(f"{lock}: {type(e).__name__}: {e}")
     found, open_ = {}, []
     for name, p in PREMISES.items():
         missing = [t for t in p["discharged_by"] if t not in listed]
@@ -523,7 +532,7 @@ def premises(locks: Sequence[Path]) -> dict[str, Any]:
     open_ += sorted({a for r in rests.values() for a in r.get("assumptions", ()) if a not in covered}
                     | {g for g, r in rests.items() if "missing" in r})
     return {"is": DISCHARGE, "from": "Security/lean-audit.json and Security/Properties/lean-audit.json guarantees",
-            "premises": found, "rests_on": rests, "standing": STANDING, "open": open_}
+            "premises": found, "rests_on": rests, "standing": STANDING, "open": open_, "unread": unread}
 
 
 def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mapping[str, Any]) -> dict[str, Any]:
