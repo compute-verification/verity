@@ -78,9 +78,9 @@
    "why": "the description-sized check is code, as NciCheck.Check is: Lean core, C-Flock's program decoder and the check's instance format and verdict"
   },
   "NciCheck.Baseline": {
-   "imports": ["Std", "Flock.Program", "NciCheck.Check", "NciCheck.Desc"],
+   "imports": ["Std", "Flock.Program", "Flock.WindowRecord", "NciCheck.Check", "NciCheck.Desc"],
    "except": [],
-   "why": "θ's provenance check is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder (with the canonical JSON and SHA-512 it imports) and the policy check it runs first"
+   "why": "θ's provenance check is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder (with the canonical JSON and SHA-512 it imports), the window record's one digest and the policy check it runs first"
   },
   "NciCheck.Protocol": {
    "imports": ["NciCheck.Baseline", "CoreProtocol.Protocol"],
