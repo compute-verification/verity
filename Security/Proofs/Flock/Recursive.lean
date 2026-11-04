@@ -38,12 +38,12 @@ import Proofs.Flock.Recursive.FirewallLive
 import Proofs.Flock.Recursive.FirewallAccepts
 import Proofs.Flock.Recursive.FirewallWire
 import Proofs.Flock.Recursive.FirewallJson
-import Proofs.Flock.Recursive.FirewallObj
-import Proofs.Flock.Recursive.FirewallSteps
-import Proofs.Flock.Recursive.FirewallHonest
 import Proofs.Flock.Recursive.PublicAudit
 import Proofs.Flock.Recursive.PublicAuditProof
 import Proofs.Flock.Recursive.HoloExec
+import Proofs.Flock.Recursive.FirewallObj
+import Proofs.Flock.Recursive.FirewallSteps
+import Proofs.Flock.Recursive.FirewallHonest
 import Proofs.Flock.Recursive.StageKinds
 import Proofs.Flock.Recursive.HoloCoins
 import Proofs.Flock.Recursive.HoloSched
@@ -99,14 +99,11 @@ and V*'s, with no zero knowledge of V*'s sessions taken (`Firewall`), its proof 
 statements' `_hOuter` (`OuterSessionsZK`) at V*'s sessions on V*'s staging (`OuterSessionZK`), what the firewall's code
 sends at every salt list fixed by one run (`FirewallRun`), a finished session's sends the schedule's transcript
 (`FirewallTemplate`), `flock-firewall live`, the deployed send check, sending what the firewall's run sends
-(`FirewallLive`), and `FirewallSends` from them with the honest worker's half an obligation (`FirewallAccepts`,
+(`FirewallLive`), and `FirewallSends` from them with the honest worker's half left an obligation (`FirewallAccepts`,
 with (ii) from it and the live send check's sends from it), the honest worker's requests and rounds read back by
 `decode`, `frames` and `split` as it meant them (`FirewallWire`), a plain value's text parsing back to its canonical
-form with no fraction or exponent (`FirewallJson`), the schedule's Hello with Σ in its link and objects built from
-members (`FirewallObj`), the firewall's steps on requests it takes (`FirewallSteps`), the honest worker's half from
-them (`FirewallHonest`: the firewall finishes on its requests, committing its rows; `honestReqs_accepts`), and the
-recursive audit at public units, the inner statement the verifier's own from its partition object and program
-(`PublicAudit`), its proof
+form with no fraction or exponent (`FirewallJson`), and the recursive audit at public units, the inner
+statement the verifier's own from its partition object and program (`PublicAudit`), its proof
 (`PublicAuditProof`), the same audit at candidate 3's table (`HoloExec`, its coins `HoloCoins`, its schedule and the
 verifier's map of its records `HoloSched` and `HoloMap`, `AuditC3`, its proof `AuditC3Proof` from the
 pieces under `Proofs.Flock.C3` and gap 2 at the word the prover's runs open, `RegExtract`), and
