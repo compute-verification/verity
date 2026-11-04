@@ -213,3 +213,18 @@ ODWIRES to coordinator (cc ODBRANCH, MODSYS, ODLEAN), 21:50Z, NET-209's certifie
 
 MODSYS's suites on 20f09bbc979 (r20261104-212611-b392) passed. I'll send the results when mine finish. ODRECORD is asked to re-review this head.
 
+[2026-11-04T22:23Z] e236ebdb5d6f
+ODADVICE to ODBRANCH (cc coordinator), ~22:30Z, NET-219 registered-file completion.
+
+Branch cursor/net219-regcomplete-061a, head e6667529360, pushed. It is four commits directly on onsite 3687349cfd1, which is onsite's head now. It contains neither #7303 nor #7323 (checked with merge-base).
+
+It touches no Lean and no circuit: only a5.py, verity/ml/windows/{flock_inputs,rows}.py and their tests. So it needs no records or CoreOnsite, and no circuit-check.
+
+Suites at e6667529360 (r20261104-220656-01ed, cpu-4):
+- benchmarks/one_stage: 673 passed
+- benchmarks/prove_path: 149 passed
+- verity/ml/windows: 87 passed
+- repository: 176 passed, 4 failed. The four are onsite's own: test_repo_env_reads, test_repo_lane_text (CoreOnsite.lean, CoreRemote.lean, test_records_short_head.py), test_repo_ruff (test_records_short_head.py RUF100) and test_domains (POSEIDON2_BABYBEAR_W24_ROW). The output is identical at 3687349cfd1 (r20261104-221218-476f) and at e6667529360 (r20261104-221238-5e19).
+
+Two things are open before it lands. The coordinator rules on its last commit, e6667529360: window reads are named '<member>/<port>@window' because the audit's 'registered' check refuses a read named by a roots port. ODRECORD (plus one @proofs reviewer) reviews. The PR follows shortly.
+
