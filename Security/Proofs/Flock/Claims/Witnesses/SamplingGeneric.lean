@@ -85,7 +85,6 @@ section NoSessions
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-omit [Fintype Coin] [Nonempty Coin] in
 /-- At a compiled verifier with no sessions, a run's extractions make no call of their own. -/
 theorem noHash_runExt (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v = none) (x : Msg) (s : AuditStatement)
     (r : Fin (L.V.k x) → Coin) (v : Seen) (c : L.SlotEC x) : NoHash (L.runExt x s r v c) := by
@@ -133,7 +132,6 @@ theorem finder_pr_none (H : Msg → Msg) (F : Finder) (h : ∀ s, F.out s = none
   rw [Pr_congr fun s => iff_false_intro (by simp [h s])]
   exact Pr_false
 
-omit [Nonempty Coin] in
 /-- At a compiled verifier with no sessions, `B_conf` finds nothing. -/
 theorem bconf_pr (H : Msg → Msg) (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v = none) (Ω : Type)
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) : (Compiled.Bconf H L Ω P x).Pr H = 0 := by
@@ -207,7 +205,6 @@ theorem sksL_bound_fails (H : Msg → Msg) (Rx : Rel Claims.Sampling.Wit) (κ' :
   rw [hp, hb, mul_zero, Real.sqrt_zero, add_zero, sksL_bext, mul_zero, add_zero] at h
   linarith
 
-omit [Fintype Coin] [Nonempty Coin] in
 theorem sksL_opensAt (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r : Fin ((sksL Coin).V.k x) → Coin)
     (c : (sksL Coin).SlotEC x) (g : ℕ) : (sksL Coin).opensAt H P x ω r c g = none := by
   have hp : (sksL Coin).parse x = some toyStmt := rfl
@@ -215,13 +212,11 @@ theorem sksL_opensAt (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω
   simp only [Compiled.opensAt, hp]
   simp [Claims.Sampling.Wit.val, Claims.Sampling.CommitmentScheme.Opens, hc, rejCm, OC.eval]
 
-omit [Nonempty Coin] in
 /-- `sksL`'s committed trace opens nothing. -/
 theorem sksL_regVal (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (g : ℕ) :
     (sksL Coin).regVal H P x ω g = none := by
   simp [Compiled.regVal, sksL_opensAt, Pr_false]
 
-omit [Nonempty Coin] in
 open Classical in
 /-- So its incorrect set holds the proof block. -/
 theorem sksL_Freg (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) : 0 ∈ (sksL Coin).Freg H P x ω := by
@@ -238,7 +233,6 @@ theorem sksL_Freg (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : 
   rw [hv 0 Nat.one_pos, sksL_regVal] at hc
   cases hc
 
-omit [Nonempty Coin] in
 /-- Whose acceptance probability is `0`: the incorrect set is outside `M_0`. -/
 theorem sksL_notM (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) :
     (sksL Coin).Freg H P x ω ∉ toyStmt.design.M ((sksL Coin).part toyStmt) 0 := by
@@ -485,7 +479,7 @@ theorem twoA_KS (H : Msg → Msg) : (twoA Coin).KS H := by
     apply hR
     have hacc' : (run H P (twoA Coin).V x s.1 s.2.1).seen.out = .acc := hacc
     have hfin : List.finRange 1 = [(0 : Fin 1)] := rfl
-    simp only [Extractor.eval, Arg.E, Arg.ext, ERep, RP.eval, hacc', if_true]
+    simp only [Extractor.eval, Arg.E, Arg.ext, ERep, RP.eval, hacc', ite_true]
     simp [twoA, hfin, firstWait, waitAcc, RP.bind, RP.eval, Rel.ext]
   have h0 : PrBad H (twoA Coin).V (twoA Coin).R (twoA Coin).E x P = 0 := by
     unfold PrBad
@@ -515,7 +509,7 @@ theorem twoL_sessions (H : Msg → Msg) : (twoL Coin).Sessions H where
       rw [h1]
       exact Pr_le_one _
     · obtain ⟨v, hv⟩ := Finset.nonempty_iff_ne_empty.2 h0
-      have hv2 := Finset.mem_range.1 (hB hv)
+      have hv2 : v < 2 := Finset.mem_range.1 (hB hv)
       have hn : ∀ d : Fin ((twoL Coin).V.k x) → Coin,
           ¬ ∀ u ∈ (twoL Coin).checked x (forkOn ((twoL Coin).stage2 x) r d), u ∉ B := by
         intro d hall
@@ -536,7 +530,7 @@ theorem twoL_sessions (H : Msg → Msg) : (twoL Coin).Sessions H where
       omega
     refine ⟨[], twoP H P x ω u, rfl, le_rfl, le_rfl, ?_, fun r' _ hacc => ?_, fun r' _ => ⟨?_, ?_⟩⟩
     · show 1 = (if h : u < 2 then ({⟨u, h⟩} : Finset (Fin 2)) else ∅).card
-      rw [dif_pos hu2, Finset.card_singleton]
+      simp [hu2]
     · have ho : twoOut (twoMsg H P x ω 0) (twoMsg H P x ω 1) = .acc :=
         (congrArg Seen.out (twoL_run H P x ω r')).symm.trans hacc
       have hm : twoMsg H P x ω 0 = [] ∧ twoMsg H P x ω 1 = [] := by simpa [twoOut] using ho
