@@ -604,7 +604,8 @@ theorem ksLinkOn_bits [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} 
 
 /-- **`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at every statement**, where every statement a run of the
 composite's verifier accepts is one `G` admits with `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}` (`hb`): `ksLinkOn_bits`
-there, and where no run accepts, `Pr[acc ∧ ¬R] = 0`. -/
+there, and where no run accepts, `Pr[acc ∧ ¬R] = 0`. So `w ≤ v` (`hW`) is needed only where a run accepts, which at
+the deployment's layout holds at every `v ≥ 2^32` (`calls_le_layR_of_acc`). -/
 theorem ksLinkOn_tight [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Claims.Flock.Deploy Coin Col' T'} {Cp : Caps Coin} {G : Msg → Prop} (hK : KSLinkOn H D Bd DO Cp G)
     (hS : SessionAccepts (D.record Bd.IVStar)) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
@@ -641,8 +642,9 @@ theorem ksLinkOn_tight [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin}
     (hv : ∀ ps, (setupCalls H (D.record Bd.IVStar) ((D.record Bd.IVStar).vstar x ps)).length ≤ v)
     (hV : ∀ (r : Fin ((compDep D Bd DO).V.k x) → Coin) ws,
       ((compDep D Bd DO).innerLog ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H x r ws).length ≤ n)
-    (hW : ∀ (ω : Ω) (u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x) ws,
-      (compDep D Bd DO).wits H P x ω u = some ws → ((D.record Bd.IVStar).calls x ws).length ≤ v)
+    (hW : (∃ ω r, (run H P (compDep D Bd DO).V x ω r).out = .acc) →
+      ∀ (ω : Ω) (u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x) ws,
+        (compDep D Bd DO).wits H P x ω u = some ws → ((D.record Bd.IVStar).calls x ws).length ≤ v)
     (hLink : ∀ h : 0 < (linkPlan (Coin := Coin) Bd.DE.V.k (2 ^ 256)).sel ((compDep D Bd DO).xI x),
       ExpectedCR H ((linkPlan (Coin := Coin) Bd.DE.V.k (2 ^ 256)).finder
         ((compDep D Bd DO).verModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x) ((compDep D Bd DO).xI x) h)) :
@@ -652,7 +654,7 @@ theorem ksLinkOn_tight [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin}
   have hpos : (0 : ℝ) ≤ 2 ^ (-(167.7 : ℝ)) + t * 2 ^ (-(174.95 : ℝ)) := by positivity
   by_cases hex : ∃ ω r, (run H P (compDep D Bd DO).V x ω r).out = .acc
   · obtain ⟨hx, hκ, hε⟩ := hb hex
-    exact (ksLinkOn_bits hK hS hx P t ht1 hrun n v hSB hBI hFCI hF0I hn hv hV hW hLink).trans
+    exact (ksLinkOn_bits hK hS hx P t ht1 hrun n v hSB hBI hFCI hF0I hn hv hV (hW hex) hLink).trans
       (add_le_add hκ (mul_le_mul_of_nonneg_left hε (Nat.cast_nonneg t)))
   · unfold PrBad
     refine le_trans (Pr_mono (q := fun _ => False) fun q hq => ?_) (Pr_false.le.trans hpos)

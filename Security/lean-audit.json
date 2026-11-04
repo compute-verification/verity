@@ -2200,6 +2200,7 @@
   "Properties.Flock.Circuit",
   "Randomness",
   "Proofs.Flock.Recursive",
+  "Proofs.Flock.RecGeneric",
   "Proofs.Properties.Verity.Recursive",
   "Proofs.Flock.Claims",
   "Proofs.Flock.VBridge",
@@ -2771,6 +2772,10 @@
   "Claims.zkOutLeak": {
    "honest": ["Claims.Witness.SamplingGeneric.zkOutLeak_honest"],
    "nontrivial": "Claims.Witness.SamplingGeneric.zkOutLeak_nontrivial"
+  },
+  "Flock.SecurityProofs.RecursiveKSEvery": {
+   "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
+   "nontrivial": "Flock.Guarantees.recursiveKSEvery_nontrivial"
   }
  },
  "unwitnessed": {
@@ -3511,7 +3516,8 @@
    "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod": "the integrity bridge's realization reads C-Flock's integrity audit over a period (Flock.Guarantees.IntegrityHorizon, its SamplingBlock and Period.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock": "the block integrity bridge's realization reads C-Flock's integrity audit of a server-time block (Flock.Guarantees.IntegrityBlockCarried, its CarriedBlocks, SamplingBlock and CarriedBlocks.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Pouw.OnsiteFreed": "OnsiteFreed's witnesses read the toy instance's floor, certifier check and quiet prover (`twF`, `twNet`, `quiet`), proof-only beside it",
-   "Proofs.Properties.Verity.Recursive": "the recursive audit (RecursiveAuditC3) states sampled proofs at the recursive configuration over the recursion's deployed record (`Dep`, `RecDeploy`), its session in the game (`SessionIn`) and verdict (`RecVerdict`), which read C-Flock's recursive model in Proofs; C-Flock is excepted until proofs extracts its spec"
+   "Proofs.Properties.Verity.Recursive": "the recursive audit (RecursiveAuditC3) states sampled proofs at the recursive configuration over the recursion's deployed record (`Dep`, `RecDeploy`), its session in the game (`SessionIn`) and verdict (`RecVerdict`), which read C-Flock's recursive model in Proofs; C-Flock is excepted until proofs extracts its spec",
+   "Proofs.Flock.RecGeneric": "the generic recursion's statements and their instance at Flock, on the recursive audit's model and C-Flock's; C-Flock is excepted until its spec is extracted"
   }
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
@@ -7056,6 +7062,9 @@
    "assumptions": ["RecDeploy.KSFixture"],
    "type_hash": "d9b8e7b73eac9ecfe5a11f3aac654fa4c7271ac81a31d054620e4857781dd60f"
   },
+  "Flock.Guarantees.recursiveKSEvery_nontrivial": {
+   "owner": "@proofs"
+  },
   "Flock.Guarantees.recursiveKS_nontrivial": {
    "owner": "@proofs",
    "signature": [
@@ -7342,6 +7351,9 @@
    "signature": ["Flock.SecurityProofs.RecursiveKSDeployed : Flock.Guarantees.RecursiveKSDeployed"],
    "assumptions": [],
    "type_hash": "a593b5f16de693fd90b73a64aabe94764151f7633be9ae62bffeb85d6b825bb2"
+  },
+  "Flock.SecurityProofs.RecursiveKSEvery": {
+   "owner": "@proofs"
   },
   "Flock.SecurityProofs.RecursiveRanRegistered": {
    "owner": "@proofs",
@@ -14479,7 +14491,9 @@
    "Nci.SecurityProofs.OperandCapJointNontrivial": "completeness: OperandCapJoint's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), its other premises hold as in its honest witness (prices of one bit, r = aout = 1, the proof block holding slots and operands priced at most two bits together, proved), the premise on Q fails at Q = 0, since min(rxy, aout y) is 1 at x = y = 1 on the budget, and the proof block completes one product, above Q, so OperandCapJoint's conclusion is not a tautology and needs its premise on Q.",
    "Flock.SecurityProofs.RecursiveKSDeployed": "restatable: a probability statement (KSLin2OnC, through RecursiveKSDeployedAt at the deployed record) bounding the recursive verifier's acceptance at Hello-committed coins by the extractor's success at the simulating prover and RecursiveKS's bound there; KSLin2OnC's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
    "Accounting.SecurityProofs.TS.LeafGroupSound": "frozen (no-function): a leaf proved as a group of one-unit C-Flock statements, any shape (Accounting.TS.Group.Ix L n: L = T.lanes lanes of n chunks each and one combine, G = L n + 1 sessions), realizes one unit's proof layer (groupLayer, accepted where the leaf verifier's check of the tile and its chunks, PouwWindow.Lanes.checkChunks, passes and flock-verify accepts all G sessions with their known-content, complete and known-read checks at known content ending in the o0 row 1, and pouw-leaf-own's checks of each file, draw and reads pass; its relation any relation of the opened value, or LeafColl, or LeafKnownColl) over every window of fully checked C-Flock sessions, not a Lean function. Its premises are named and on the premises list (Proofs.Accounting.TS.Session.Group.Premises): SessionsCR (RowsSession.CR at every session), WindowLaws (WindowLaw at every statement) and GroupRealizes (accounting-ts-group-realizes: the group's circuits realize the relation at the rows its sessions open, past the group check; proved at the 32 x 32 leaf with one chunk a lane from LaneLowers and CombineLowers, groupRealizes_lanes32, and assumed at other shapes, whose Definitions no Lean states yet). Port uniqueness and the ok port (the known-read check's names), full checking and a unit (the draw check) and registered served roots (the reads built from own and the one-read check) are proved, not assumed. Proved by Accounting.TS.Group.group_soundAt, the argument LeafLanesSound shares: CheckedSessionSound's SoundAt at each session, the unwritten outcomes at probability 0 under WindowLaw, the complete check's registration of every port row and a union bound over the group, at (L n + 1) delta.",
-   "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (Security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text."
+   "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (Security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text.",
+   "Flock.SecurityProofs.RecursiveKSEvery": "restatable: a probability statement (KSLinkOn, through RecursiveKSEveryAtRec at the deployed record) whose event is the recursive verifier's acceptance and then the composite extractor recovering no witness, at every statement; KSLinkOn's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
+   "Flock.Guarantees.recursiveKSEvery_nontrivial": "completeness: RecursiveKSEvery's nontrivial lemma (its witnesses entry): under the named assumption KSFixture, the statement is false at the accept-all verifier (not RecursiveKSEveryAtRec at the record that accepts every message), a counterexample for another verifier, not a property of the deployed one."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
