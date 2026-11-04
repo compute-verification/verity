@@ -9,6 +9,12 @@
 # variables, stored labels, domain tags and format ids. A uv workspace member's directory stays where it is ([keep_in]):
 # moving it is a `uv.lock` edit, which is its own layout move's. Declarations keep their place in the locks' records:
 # `rename.py --moves` prints the renames that `tools/verity/lean/check.py --update --moved` takes.
+#
+# This move renames prose only (`scope = "prose"`): a word in a comment, a docstring or Markdown's text, never in code, a
+# string, backticks or a data file, nor a name (`firewall_state`, `DrawnUnit`), so it moves no path, renames no
+# declaration, leaves every lock and pin as it is, and `move_check.py` certifies it without a build. The identifier rows
+# take effect only in a move without the scope, which runs `check.py --update --moved` and the pins' commands.
+scope = "prose"
 
 [words]
 # --- Flock (was C-Flock); its stored label `C-Flock` stays ([keep])
@@ -119,9 +125,15 @@
 "coins are drawn" = "coins are flipped"
 "coins were drawn" = "coins were flipped"
 "coin is drawn" = "coin is flipped"
+"coin was drawn" = "coin was flipped"
+"coins, drawn" = "coins, flipped"
+"coin, drawn" = "coin, flipped"
+"coins drawn" = "coins flipped"
+"coin drawn" = "coin flipped"
 "draws coins" = "flips coins"
 "draws its coins" = "flips its coins"
 "draws its coin" = "flips its coin"
+"draws the same coins" = "flips the same coins"
 "drew the coins" = "flipped the coins"
 "drew its coins" = "flipped its coins"
 "draw fresh coins" = "flip fresh coins"
@@ -129,6 +141,67 @@
 "draws fresh coins" = "flips fresh coins"
 "Draw a coin" = "Flip a coin"
 "drawn coins" = "flipped coins"
+"draws the period's weight-side coins" = "flips the period's weight-side coins"
+"draws a stream round's coins" = "flips a stream round's coins"
+"draws the ten batching coins" = "flips the ten batching coins"
+"draw the judged run's coins" = "flip the judged run's coins"
+"draw their in-process coins" = "flip their in-process coins"
+"drawing exactly their coins" = "flipping exactly their coins"
+"draws level 0's query coins" = "flips level 0's query coins"
+"drew independent pair coins" = "flipped independent pair coins"
+"draws every window's coins" = "flips every window's coins"
+"draws its schedule's coins" = "flips its schedule's coins"
+"draws every append's coin" = "flips every append's coin"
+"draws each round's coins" = "flips each round's coins"
+"draws its own live coins" = "flips its own live coins"
+"draws the window's coins" = "flips the window's coins"
+"draws a fresh skip coin" = "flips a fresh skip coin"
+"draws its phase's coins" = "flips its phase's coins"
+"draws its round's coins" = "flips its round's coins"
+"draws the model's coins" = "flips the model's coins"
+"Draw c's openings coin" = "Flip c's openings coin"
+"draw c's openings coin" = "flip c's openings coin"
+"draw d's openings coin" = "flip d's openings coin"
+"draw the append's coin" = "flip the append's coin"
+"draw the model's coins" = "flip the model's coins"
+"draws a stream's coins" = "flips a stream's coins"
+"draws the round's coin" = "flips the round's coin"
+"drawing a run's coins" = "flipping a run's coins"
+"draws its first coins" = "flips its first coins"
+"draws the other coins" = "flips the other coins"
+"draws a uniform coin" = "flips a uniform coin"
+"draws b's check coin" = "flips b's check coin"
+"draws the inner coin" = "flips the inner coin"
+"draws two live coins" = "flips two live coins"
+"draws a random coin" = "flips a random coin"
+"draws its own coins" = "flips its own coins"
+"draws its salt coin" = "flips its salt coin"
+"draw plain's coins" = "flip plain's coins"
+"draw a check coin" = "flip a check coin"
+"draws a live coin" = "flips a live coin"
+"draws three coins" = "flips three coins"
+"drawing no coins" = "flipping no coins"
+"draws every coin" = "flips every coin"
+"draws live coins" = "flips live coins"
+"draw every coin" = "flip every coin"
+"draw their coin" = "flip their coin"
+"draws each coin" = "flips each coin"
+"draws the coins" = "flips the coins"
+"draws no coins" = "flips no coins"
+"draws one coin" = "flips one coin"
+"draws the coin" = "flips the coin"
+"draws no coin" = "flips no coin"
+"draws a coin" = "flips a coin"
+"draw a coin" = "flip a coin"
+"that draw coins" = "that flip coins"
+"redraws the live coins" = "flips the live coins again"
+"redraws the last coin" = "flips the last coin again"
+"redraws the coins" = "flips the coins again"
+# a coin family's role (`the window's draw coin`) is a noun
+"draw coins" = "sampling coins"
+"Draw coins" = "Sampling coins"
+"draw coin" = "sampling coin"
+"Draw coin" = "Sampling coin"
 "undrawn" = "unsampled"
 "Undrawn" = "Unsampled"
 "redraws" = "resamples"
@@ -215,6 +288,8 @@
 "verifier of record" = "verifier"
 
 # --- after-landing run (was post-landing run, postland)
+"a post-landing run" = "an after-landing run"
+"A post-landing run" = "An after-landing run"
 "post-landing runs" = "after-landing runs"
 "post-landing run" = "after-landing run"
 "Post-landing run" = "After-landing run"
@@ -247,6 +322,13 @@ words = { "Flock.Draw" = "Flock.Sample" }
 [[words_in]]
 files = ["benchmarks/pouw/budget.py"]
 words = { "Sample" = "PlanPoint" }
+
+# Dither's noise period L′ is its noise repeat length. PoUW's other terms (the execution phase, its salt and coins, the
+# credit period, the output cell) need the sense a word stands in, which a word map can't read, so they are renamed by
+# hand
+[[words_in]]
+files = ["verity/core/protocols/pouw/**", "benchmarks/pouw/**"]
+words = { "noise periods" = "noise repeat lengths", "noise period" = "noise repeat length", "Noise period" = "Noise repeat length" }
 
 [rewrite]
 # Never rewritten: the term source and the lints and tables that spell the old words on purpose (the ratchet, the older
