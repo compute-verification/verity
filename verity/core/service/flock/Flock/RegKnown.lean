@@ -6,7 +6,11 @@ registered root from it and refuses a file whose stated root is another (`checkK
 one of those rows, or SHA-512 collides. h1_prove's `ok` rows are such a value: row `u` the one word `1` under the public
 `ok_salt(window, u)` (`h1unit.register_ok`).
 -/
-import Flock.Registered
+module
+
+public import Flock.Registered
+
+@[expose] public section
 
 namespace Flock
 namespace Registered

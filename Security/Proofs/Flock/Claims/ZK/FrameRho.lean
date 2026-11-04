@@ -1,4 +1,8 @@
-import Proofs.Flock.Claims.ZK.FrameRankFault
+module
+
+public import Proofs.Flock.Claims.ZK.FrameRankFault
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The frames refuse dependent `ρ₀, ρ₁` (`FrameUnrefused`'s `ρ` fault)
@@ -24,6 +28,8 @@ switch's:
   are independent.
 * **`LeanRelease.rho_unrefused`**: the fault, at the rep's inner round 2 (`betaSlot`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Count
 

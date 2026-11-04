@@ -1,4 +1,6 @@
-import Proofs.Properties.Nci.BodiesOk.Basic
+module
+
+public import Proofs.Properties.Nci.BodiesOk.Basic
 
 /-!
 # What `buildNode` checks of a node
@@ -7,6 +9,8 @@ import Proofs.Properties.Nci.BodiesOk.Basic
 the callee's parameters. `buildNode_spec` reads off what it accepted: per form, the arguments' types against the
 callee's parameters, the batch axes and scan `xs` all of length `n`, and the output type it computed.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 

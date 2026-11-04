@@ -19,7 +19,13 @@ logged tree a session's, so no session's coins are flipped twice.
 The difftest's piece: `challenger_inner_trees` (`tree_held_reason`), `{"refused": why}` where `coin_trees_of` refuses
 the log.
 -/
-import SampledProofs.ChallengerTrees
+module
+
+public import SampledProofs.ChallengerTrees
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Challenger
 

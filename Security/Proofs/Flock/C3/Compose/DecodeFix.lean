@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Compose.Decoder
+module
+
+public import Proofs.Flock.C3.Compose.Decoder
 
 /-!
 # n7: `SrcOK`'s decode fixed point
@@ -13,6 +15,8 @@ The outputs are needed, not only the plays: `decodeRun` copies each play's outpu
 game reads it. A sparse phase that plays on the run's own steps to `x` decodes to the claim `x`
 (`claim_of_decodeRun`), so `SrcSparseOK`'s `∃ x` gives the fixed point only where `x` is the run's claim.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

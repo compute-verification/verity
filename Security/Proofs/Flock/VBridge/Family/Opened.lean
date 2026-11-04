@@ -1,7 +1,9 @@
-import Proofs.Flock.VBridge.Family.Assembly
-import Proofs.Flock.VBridge.Family.Lig
-import Proofs.Flock.VBridge.Runs.ZcLc
-import Proofs.Flock.Soundness.Refine.Seam
+module
+
+public import Proofs.Flock.VBridge.Family.Assembly
+public import Proofs.Flock.VBridge.Family.Lig
+public import Proofs.Flock.VBridge.Runs.ZcLc
+public import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # VBridge G at V*'s family: every level's openings pass
@@ -25,6 +27,8 @@ salt per query); with salts, hm96's leaf is not V*'s. This file proves the check
   `plain`'s layout, no salts (`sl` `none` or `some 0`; `ligOf`'s `some 192` is hm96's), and `hopen_of_plain_lig`:
   `hopen` there, from `HOneOpen`, `HDirCols` and `HTopsL`.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

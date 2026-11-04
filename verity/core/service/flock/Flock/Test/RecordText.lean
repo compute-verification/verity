@@ -4,8 +4,14 @@ S0 (`Flock.RecordText`): `RecordText.printT` prints what `Json.compress` prints,
 `RecordText.check` accepts exactly the canonical text: reordered keys, whitespace, a number not in `JsonNumber.toString`'s
 form, a duplicate key and a text that isn't JSON are each refused.
 -/
-import Flock.RecordText
-import Flock.JsonParse
+module
+
+public import Flock.RecordText
+public import Flock.JsonParse
+meta import Flock.RecordText
+meta import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.Test.RecordText
 

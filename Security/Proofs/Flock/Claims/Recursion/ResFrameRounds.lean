@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.ResFrames
-import Proofs.Flock.Claims.Recursion.RestOpenedSized
-import Proofs.Flock.Claims.Recursion.OutTopRows
+module
+
+public import Proofs.Flock.Claims.Recursion.ResFrames
+public import Proofs.Flock.Claims.Recursion.RestOpenedSized
+public import Proofs.Flock.Claims.Recursion.OutTopRows
 
 /-!
 # A committing round's elements are its chunk's values
@@ -11,6 +13,8 @@ round of `rounds` reads, element by element, the values of chunk `t`, the `kk`-t
 `rounds`' sizes are V\*'s (`rounds_sizes_alg`), whose rounds are `schedV`'s nonzero counts (`Cnt.schedV_filter`), and
 chunk `t` absorbs `schedV`'s `t`-th count (`Cnt.cntPat_repFrames`), so the flattened lists cut the same way.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResFrames
 

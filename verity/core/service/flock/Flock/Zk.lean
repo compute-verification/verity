@@ -4,9 +4,15 @@ replayed on masked values, every check an affine constraint on the committed pad
 claims' ring-switch checks and level 0's lane phase become constraints too; the inner proof shows that the pads satisfy every
 constraint at once (`verifyInner`). The session around the reps is `Flock.verify`'s, with the keyed coin tree.
 -/
-import Flock.Verify
-import Flock.ZkLigerito
-import Flock.JsonParse
+module
+
+public import Flock.Verify
+public import Flock.ZkLigerito
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Zk
 

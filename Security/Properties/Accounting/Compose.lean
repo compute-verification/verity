@@ -1,5 +1,7 @@
-import Definitions.Accounting.Compose
-import Properties.SampledProofs.Draw
+module
+
+public import Definitions.Accounting.Compose
+public import Properties.SampledProofs.Draw
 
 /-!
 # A declared circuit's proof units, commit coins, seed preimages and draw are the service's (`SampledProofs.Slots.layout`, `Select.select`)
@@ -39,6 +41,8 @@ its leaf under the weights' or the transcript's root is the extractor's too. The
 and could be proved first (`Select.select`'s subset draw from bytes, `Draw.drawUnits`), beside
 `Properties.SampledProofs.DrawMisses`.
 -/
+
+@[expose] public section
 
 open Lean (Json)
 open Pouw.RelativeSecurity (prob)

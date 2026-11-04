@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.DeploySessions
-import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
-import Proofs.Flock.Claims.ZkDecodeFlock
-import Proofs.Flock.Claims.Scope.Setup
+module
+
+public import Proofs.Flock.Claims.Recursion.DeploySessions
+public import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
+public import Proofs.Flock.Claims.ZkDecodeFlock
+public import Proofs.Flock.Claims.Scope.Setup
 
 /-!
 # The compiled verifier's margin over the inner rounds
@@ -21,6 +23,8 @@ the staging round (`kS`) sits between the inner rounds and them, so it only adds
 * The inner protocol's round is its verifier's: at Flock's deployed verifier every statement takes one
   (`V_k_pos_flock`, as `FlockDeploy.Assembled.V_k_pos`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

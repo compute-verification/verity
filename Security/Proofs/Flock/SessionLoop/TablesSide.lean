@@ -1,5 +1,7 @@
-import Proofs.Flock.SessionLoop.Statement
-import Proofs.Flock.Claims.ZK.CausalExe
+module
+
+public import Proofs.Flock.SessionLoop.Statement
+public import Proofs.Flock.Claims.ZK.CausalExe
 
 /-!
 # The tables' side of `SessionLoopZKDeployed` at the deployed tables
@@ -18,6 +20,8 @@ of the tables, each at the deployed prover `Masked.PE`, its stopped round plan a
 `SwCausal` reads it at every coin vector. It holds at the honest values (`swCausal_honestVals_dataE`, from
 `RefSession.swCausal_vals`), so the statement applies to an honest worker.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

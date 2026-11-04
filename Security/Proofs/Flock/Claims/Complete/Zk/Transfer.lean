@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Replay.Steps
-import Flock.With.ZkEq
-import Flock.With.SimWalk
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Steps
+public import Flock.With.ZkEq
+public import Flock.With.SimWalk
 
 /-!
 # A replay that returns on the prover's rounds returns on rounds that carry them
@@ -16,6 +18,8 @@ prover's, whatever the hashes.
   result, ending where it carries the first's end. The squeezes (`squeezeWith_xfer`) and the transcript actions that
   read only the pending bytes (`tm_xfer`) are related, so the replay is (`replayWith_xfer`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

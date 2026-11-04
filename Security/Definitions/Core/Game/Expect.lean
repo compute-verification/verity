@@ -1,5 +1,7 @@
-import Definitions.Core.Game
-import Definitions.Core.Rewinding
+module
+
+public import Definitions.Core.Game
+public import Definitions.Core.Rewinding
 
 /-!
 # Expectations against a strategy
@@ -9,6 +11,8 @@ import Definitions.Core.Rewinding
 `Rewinding.IsPlurality` for a strategy's run distribution. The lemmas, the rewinding lemma for any run distribution
 among them (`expect_bad_le`), are in `Proofs.Core.Game.Expect`.
 -/
+
+@[expose] public section
 
 namespace Verity
 

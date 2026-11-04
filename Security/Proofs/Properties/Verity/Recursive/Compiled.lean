@@ -1,6 +1,8 @@
-import Proofs.Properties.Challenger
-import Proofs.Properties.SampledProofs
-import VStarRecursive
+module
+
+public import Proofs.Properties.Challenger
+public import Proofs.Properties.SampledProofs
+public import VStarRecursive
 
 /-!
 # A step of `acc_of_accepts`: what the compiled recursive component's acceptance unfolds to
@@ -19,6 +21,8 @@ The verdict of record says accepted exactly when every part's verdict does (`ver
 accepts only verdicts that say accepted (`Properties.SampledProofs.acceptMeans`, `VerdictsAccept`), so no part's verdict
 is a refusal. Nothing here reads the model.
 -/
+
+@[expose] public section
 
 open Lean (Json)
 open SampledProofs

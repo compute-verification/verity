@@ -1,4 +1,6 @@
-import Definitions.Pous.Claims.StreamedWipeServer
+module
+
+public import Definitions.Pous.Claims.StreamedWipeServer
 
 /-!
 # The streamed-label wipe per server, against its assumed memory capacity, and the 5 GB point
@@ -23,6 +25,8 @@ prover, `StreamedWipe.wipeDistinguisher P`.
 and every tier counted, C5 and C6 are the game's shape, which the challenger's deployment must make true. **What they
 cover:** the sequential reveal (batch size 1), the only one the verdict accepts.
 -/
+
+@[expose] public section
 
 namespace Pous.Guarantees
 

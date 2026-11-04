@@ -1,7 +1,9 @@
-import Mathlib.Basic.Countable.Basic
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.List.OfFn
-import Definitions.Core.Advice
+module
+
+public import Mathlib.Basic.Countable.Basic
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.List.OfFn
+public import Definitions.Core.Advice
 
 /-!
 # The advice tree binds its rows, up to a collision among the strings it hashes
@@ -12,6 +14,8 @@ equal parts, since the framing is separated and digests have one length. At the 
 digests, so equal salts (or a collision), so equal masks, so equal row digests, so equal rows (or a collision). Two trees
 of different depths collide at the root, whose messages differ in level or kind.
 -/
+
+@[expose] public section
 
 namespace Verity.Advice
 

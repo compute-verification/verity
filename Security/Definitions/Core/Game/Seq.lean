@@ -1,4 +1,6 @@
-import Definitions.Core.Game.Expect
+module
+
+public import Definitions.Core.Game.Expect
 
 /-!
 # Sequencing strategies, and runs as a game
@@ -8,6 +10,8 @@ itself a game with a fixed strategy: `Strategy.bind` plays `s` in `g` and then `
 `g` ends with `a`. `runsG g n` plays `g` `n` times in a row, and `runsStrat g s n` plays `s` in
 each run. Their expectations (`expect_bind`, `expect_runsG`) are in `Proofs.Core.Game.Seq`.
 -/
+
+@[expose] public section
 
 namespace Verity
 

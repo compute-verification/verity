@@ -1,10 +1,12 @@
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Tactic.GCongr
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Tactic.GCongr
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
 
 /-!
 # Refutation of the forward-only (`q_inv = 0`) P3 lemma
@@ -15,6 +17,8 @@ statement below bounds it by `8·56⁴·2^-512 ≈ 2^-485.8` (`bound_lt`). Refut
 `Pous.Guarantees.InvExPostFactoTwoLayer`, the `q_inv = 0` case of the N10 draft's
 `inv_ex_post_facto_bounded_inv` (`ForwardOnlyBound`), and the draft's placeholder `ForwardBound`.
 -/
+
+@[expose] public section
 
 namespace PousP3Forward
 
