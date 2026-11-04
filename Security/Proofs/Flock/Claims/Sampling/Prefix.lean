@@ -243,8 +243,10 @@ theorem run_pre (hS : PrefixAt H V FV x p n ok stmt) {Ω : Type} (P : Prover Ω)
     have hfst : (R.msgs.take p).map Prod.fst = t'.msgs.map Prod.fst ++ [pa] := by
       rw [htk]
       simp
-    refine ⟨hlen, ?_, fun h => ?_, fun _ => ⟨{ t' with msgs := t'.msgs ++ [(pa, .msg [])],
-      pLog := t'.pLog ++ ((P.next x (t'.msgs.map histOf) ω).eval H).2, vLog := t'.vLog ++ lo }, htk.symm, ?_⟩⟩
+    refine ⟨hlen, ?_, fun h => ?_, fun _ =>
+      ⟨{ t' with msgs := t'.msgs ++ [(pa, .msg [])],
+          pLog := t'.pLog ++ ((P.next x (t'.msgs.map histOf) ω).eval H).2, vLog := t'.vLog ++ lo },
+        htk.symm, ?_⟩⟩
     · (rw [hget, hgd, hfst, hb]) <;> rfl
     · rw [hfst, hb] at h
       cases h
@@ -387,8 +389,8 @@ theorem sessionRuns_prefix {Col T : Type} [DecidableEq Col] [Zero Col] (H : Msg 
     rw [hrounds x u t]
     constructor
     · intro ht
-      have := t.isLt
-      rw [hS.k] at this
+      have h1 := t.isLt
+      have h2 := hS.k
       exact ⟨⟨t.val - p x, by omega⟩, Fin.ext (show p x + (t.val - p x) = t.val by omega)⟩
     · rintro ⟨i, rfl⟩
       exact Nat.le_add_right _ _
@@ -447,11 +449,12 @@ theorem sessionRuns_prefix {Col T : Type} [DecidableEq Col] [Zero Col] (H : Msg 
       rw [ho]
       constructor
       · intro h
-        rw [if_pos h]
+        simp [h]
       · intro h
-        split_ifs at h with hacc
+        by_cases hacc : (run H P D.V x ω r').out = Out.acc
         · exact hacc
-        · unfold RecDeploy.segOut at h
+        · simp only [hacc, ↓reduceIte] at h
+          unfold RecDeploy.segOut at h
           split at h
           · rename_i a hl
             apply run_acc_of_mem H P x ω D.V r' (a := a)
