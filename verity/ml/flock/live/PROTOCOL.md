@@ -678,10 +678,14 @@ registration (`register S`, `Salts.Epoch`). The service numbers the registration
 0, 1, 2, … with no gap, and appends its record there whole in the step that numbers it (a `register` event, under
 `record.lock`: `Core.Firewall.register`). The record is `be64 n ‖ be64 m ‖ be32 T ‖` the session's `T` table refs `‖` a
 record tag, SHA-512 under `k` of `n`, `m` and the table refs (`Salts.recordOf`), and the service answers it (`ok M LEN`,
-then the record). It then opens a new epoch: a session registers once, and only in the epoch that opened it, and a
-service started again opens a new one. A registration the record did not take is refused (`err the ZK server's record
-took no registration: …`), its epoch closed all the same, and `flock-firewall values`, which keeps no record, refuses
-every registration. `n` and `m` are public. `n` is protocol structure, and `m` is the number of sessions the epoch
+then the record). It then opens a new epoch: a session registers once, and only in the epoch that opened it. The
+service keeps the epoch's session in `DIR/epoch` (its request's SHA-512 and its table refs), a file its owner alone may
+read and write, before it answers the commit, and starts again in it: a restart mid-epoch opens no new epoch, the same
+commit request again is answered at the kept session (one cut short before its answer), and a kept session the record
+already holds (one cut short after numbering it) is dropped. A registration the record did not take is refused (`err
+the ZK server's record took no registration: …`), its epoch closed all the same, and `flock-firewall values`, which
+keeps no record, refuses every registration. `n` and `m` are public. `n` is protocol structure, and `m` is the number of
+sessions the epoch
 opened: a stack that commits its values in `m` sessions and registers the one whose roots it likes leaks at most
 `log₂ m` bits through the choice (`Verity.Guarantees.RegisteredLeakage`), and one that chose `m` from its values would
 leak through `m` too. So the service of record fixes `m` at 1, protocol structure: an epoch opens one session, and a
@@ -705,12 +709,9 @@ read: across a stream of `r` registrations with at most `b` passed over, at most
 `log₂ Σ_{i≤b} C(r, i)` (`Verity.Guarantees.RegisteredStreamLeakage`), counted in the stream's bound beside its stops
 (§10.5).
 
-Three limits. Without `--salt-key` the loop checks no statement's value commitments and admits no registration: nothing
+Two limits. Without `--salt-key` the loop checks no statement's value commitments and admits no registration: nothing
 yet requires the key of a deployment's loop. The ZK server numbers one sequence of registrations for all its
-streams: a skip counts on the stream of the statement that passed it over. And the epoch is the service's process's: a
-service started again opens a new epoch, in which the session of the one it cut short never registers, so each restart
-of the service mid-epoch, the ZK server's own act (`zk-server-own-user`), gives a stack one more session for that
-registration.
+streams: a skip counts on the stream of the statement that passed it over.
 
 The tags, the record tags and the count mean what they say only while nothing the stack runs reads the key or the
 epoch: the key file is created its owner's alone, and the service and the loop run under the ZK server's own OS user,

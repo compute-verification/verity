@@ -115,7 +115,7 @@ def public(path: Path, roots: list[bytes], trees=TREES) -> Path:
 def test_values_numbers_each_registration_on_the_record(exe, tmp_path):
     """Each registration takes the next number on the record, with no gap, across a restart of the service, and is
     appended there whole as Python's `Firewall.register` appends it; its record is the reference's, its number first and
-    its record tag over it. The epoch is the process's: a session registers once, in the epoch that opened it."""
+    its record tag over it. A session registers once, in the epoch that opened it."""
     state, key = tmp_path / "state", tmp_path / "salt.key"
     v = Values(exe, state, key)
     k = key.read_bytes()
@@ -170,6 +170,34 @@ def test_an_epoch_opens_one_session(exe, tmp_path):
     assert m == 1 and rec[:16] == struct.pack(">QQ", 1, 1)
     assert [e["n"] for e in FW.Firewall(state).record() if e["event"] == "register"] == [0, 1]
     v.close()
+
+
+def test_the_epoch_outlives_the_service(exe, tmp_path):
+    """The service keeps its epoch's session in `DIR/epoch`, its owner's alone, before it answers the commit, and starts
+    again in that epoch: after a restart mid-epoch another commit is refused, the same one again is answered at the kept
+    session byte for byte, and the kept session registers. A kept session the record already holds (the service cut short
+    after numbering it) is dropped, and the next registration is the next number."""
+    state, key = tmp_path / "state", tmp_path / "salt.key"
+    line = f"commit {len(TREES)}" + "".join(f" {d.hex()} {LEAVES} {sc}" for _, d, sc in TREES)
+    body = os.urandom(64 * LEAVES * len(TREES))
+    v = Values(exe, state, key)
+    k, first = key.read_bytes(), v.request(line, body)
+    s0 = bytes.fromhex(first.partition(b"\n")[0][3:].decode())
+    assert (state / "epoch").stat().st_mode & 0o777 == 0o600
+    v.close()
+    again = Values(exe, state, key)
+    assert again.request(line, os.urandom(len(body))) == f"err {ONE_SESSION}\n".encode()
+    assert again.request(line, body) == first
+    kept = (state / "epoch").read_bytes()
+    m, rec = again.register(s0)
+    assert (m, rec[:16]) == (1, struct.pack(">QQ", 0, 1)) and not (state / "epoch").exists()
+    again.close()
+    (state / "epoch").write_bytes(kept)
+    third = Values(exe, state, key)
+    assert third.register(s0) == f"the session {s0.hex()} {NOT_OPENED}" and not (state / "epoch").exists()
+    s1, g1 = third.commit()
+    assert third.register(s1) == (1, reference(k, 1, 1, s1, g1))
+    third.close()
 
 
 def test_values_without_its_state_is_refused(exe, tmp_path):

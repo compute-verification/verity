@@ -140,14 +140,19 @@ def main (args : List String) : IO UInt32 := do
     | some kf => return (← readsOf kf S.I.publicFile).map fun f => hold dir s part (some f)
 
 /-- `core-firewall values --state DIR --salt-key FILE [--listen PORT]`: the ZK server's value service
-(`Flock.Firewall.Values.serve`), each registration numbered on the record in `DIR` and appended there (`register`). -/
+(`Flock.Firewall.Values.serve`), each registration numbered on the record in `DIR` and appended there (`register`), its
+epoch's session kept in `DIR/epoch`. -/
 def values (args : List String) : IO UInt32 := do
   let usage := "usage: core-firewall values --state DIR --salt-key FILE [--listen PORT]"
   let some dir := Flock.Witness.argOf args "--state" | IO.eprintln usage; return 2
   IO.FS.createDirAll dir
-  Flock.Firewall.Values.serve usage args <| some fun rec => do
-    try
-      return .ok (← withRecord dir fun r => r.op fun evs => let ((_, b), evs) := register evs rec; (b, evs))
-    catch e => return .error s!"{e}"
+  Flock.Firewall.Values.serve usage args <| some {
+    number := fun rec => do
+      try
+        return .ok (← withRecord dir fun r => r.op fun evs => let ((_, b), evs) := register evs rec; (b, evs))
+      catch e => return .error s!"{e}"
+    epoch := dir / "epoch"
+    holds := fun s => withRecord dir fun r => r.op fun evs => ((registrations evs).any fun b =>
+      (Flock.Firewall.Salts.RegistrationRecord.parse b).toOption.any (·.tables.any (·.s == s)), evs) }
 
 end Core.Firewall.Loop

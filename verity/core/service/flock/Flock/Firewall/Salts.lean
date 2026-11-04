@@ -18,8 +18,8 @@ Every salt message is 205 bytes and every tag message 333, under different const
   record: its number `n` on the ZK server's record, the number `m` of sessions its epoch opened, the registered
   session's table refs and a record tag under `k` over all three (`recordTagOf`). A registration closes the epoch, so the
   stack registers one session of the `m` it had and no other; the service of record opens one an epoch, so `m` is 1
-  (`Values.answer`). The number is the record's: registrations are numbered
-  0, 1, 2, … in the order the ZK server's record holds them, with no gap (`core-firewall values`).
+  (`Values.answer`), and keeps it across a restart (`Opened.bytes`). The number is the record's: registrations are
+  numbered 0, 1, 2, … in the order the ZK server's record holds them, with no gap (`core-firewall values`).
 * `treesOfFile`, `readsOf`: a statement's hm96 trees, and the registrations they read: for each tree, the first
   registration on the record that holds a table at its domain, leaf count, schema and root, its record tag checked. The
   release side admits each registration once, oldest first, at the first statement that reads it, and a statement none of
@@ -198,18 +198,39 @@ def RECORD_TAG_BYTES : Nat := 64
 def TableRef.bytes (r : TableRef) : ByteArray :=
   r.s ++ be32 r.j.toUInt32 ++ r.t.dom ++ be64 r.t.n.toUInt64 ++ ByteArray.mk #[r.t.schema.toUInt8] ++ r.root ++ r.tag
 
-/-- A commit session the service opened: its draw, and each of its tables with the root it answered, in table order. -/
+/-- A commit session the service opened: its draw, each of its tables with the root it answered, in table order, and the
+SHA-512 of the request that opened it. -/
 structure Opened where
   s : ByteArray
   tables : Array (Table × ByteArray)
+  req : ByteArray := .empty
   deriving Inhabited
 
 /-- **The value service's epoch**: the commit sessions it opened since its last registration, or since it started, in the
-order it drew them, one at most where it numbers registrations (`Values.answer`). A registration closes it, so a session
-registers only in the epoch that opened it, and only once. -/
+order it drew them, one at most where it numbers registrations (`Values.answer`), and whether a registration of it is
+being numbered (`closing`). A registration closes it, so a session registers only in the epoch that opened it, and only
+once. -/
 structure Epoch where
   opened : Array Opened := #[]
+  closing : Bool := false
   deriving Inhabited
+
+/-- **An epoch's session as the service of record keeps it** under the key `k` (`Values.Record`): its request's SHA-512,
+then `be32 T ‖` its `T` table refs, each with its tag. -/
+def Opened.bytes (k : ByteArray) (o : Opened) : ByteArray :=
+  (Array.range o.tables.size).foldl (fun acc j => let (t, root) := o.tables[j]!
+    acc ++ ({ s := o.s, j, t, root, tag := tagOf k o.s j t root } : TableRef).bytes) (o.req ++ be32 o.tables.size.toUInt32)
+
+/-- The session `Opened.bytes` kept under the key `k`; refused where its bytes are not one session's table refs, in table
+order, each tagged under `k`. -/
+def Opened.parse (k b : ByteArray) : Except String Opened := do
+  if b.size < 68 then throw s!"{b.size} bytes, shorter than a kept session's head"
+  let T := beAt b 64 4
+  if T == 0 || b.size != 68 + TABLE_REF_BYTES * T then throw s!"{b.size} bytes, where a kept session of {T} tables takes {68 + TABLE_REF_BYTES * T}"
+  let rs ← (Array.range T).mapM fun j => TableRef.parse b (68 + TABLE_REF_BYTES * j)
+  unless (Array.range T).all fun j => rs[j]!.j == j && rs[j]!.s == rs[0]!.s && rs[j]!.valid k do
+    throw "table refs that are not one session's, in table order, each tagged under the ZK server's key"
+  return { s := rs[0]!.s, tables := rs.map fun r => (r.t, r.root), req := b.extract 0 64 }
 
 /-- **The record tag** of registration `n`, whose epoch opened `m` commit sessions, over its `T` table refs' bytes
 `trefs`, under the key `k`. -/
