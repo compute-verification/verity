@@ -438,16 +438,290 @@ theorem acceptMeans_nontrivial : ∀ pl, ¬ ((acceptAllCheck emptyRun noOpening)
 
 /-! ## A tile: `TileAcceptMeans` and `TileKeepsTheCap` -/
 
+namespace Witness
+
+/-- `checkTile` passes a tile on which each of its checks passes, at a call that commits no y: the tile is the
+verifier's own, the openings cover it and open against their roots, the words formed from the opened rows at the noise
+`wn'` are `ch`, their leaf is the opened one, and the rule passes. Each hypothesis is one computation the kernel does on
+its own. -/
+theorem checkTile_eq_none {p : Pass} {wn : Except String Words.FixedNoise} {tid : Nat} {o : TileOpening} {pos : Nat}
+    {rows cols : List Nat} {wn' : Words.FixedNoise} {ops : Words.Ops} {ch : Words.Checked}
+    (ht : p.tile? tid = some (pos, rows, cols))
+    (hc : (o.a.map (·.position) != rows || o.b.map (·.position) != cols) = false)
+    (ha : o.a.all (opens (rowsDomain (activationBinding p.salt p.records[pos]!.matmul.index)
+      p.records[pos]!.matmul.index p.records[pos]!.matmul.m HM96 false) p.rootsA[pos]! ROW_SCHEMA) = true)
+    (hb : o.b.all (opens (rowsDomain (weightBinding p.records[pos]!.matmul.weight) (-2) p.records[pos]!.matmul.n HM96
+      false) ((p.weightRoots.lookup p.records[pos]!.matmul.weight).getD ByteArray.empty) ROW_SCHEMA) = true)
+    (hl : (o.leaf.position != tid || !opens (transcriptDomain p.salt p.weightsRoot p.count HM96) p.transcriptRoot
+      TILE_SCHEMA o.leaf) = false)
+    (hwn : wn = .ok wn')
+    (he : Words.encode p.salt ((p.weightRoots.lookup p.records[pos]!.matmul.weight).getD ByteArray.empty) wn'
+      p.records[pos]!.matmul.index p.records[pos]!.matmul.k rows (o.a.map (openedValue ·.value)) cols
+      (o.b.map (openedValue ·.value)) = .ok ops)
+    (hch : Words.checked ops = .ok ch)
+    (hleaf : (Words.leaf ch != openedValue o.leaf.value) = false)
+    (hr : Rule.checkOpened p.scheme p.records[pos]! rows cols ops = none)
+    (hy : p.yRoots[pos]! = none) :
+    checkTile p wn tid o = none := by
+  subst hwn
+  simp only [checkTile, ht, hc, ha, hb, hl, bind, Except.bind, he, hch, pure, Except.pure, hleaf, hr, hy,
+    Bool.not_true, Bool.false_eq_true, ↓reduceIte]
+  rfl
+
+deriving instance DecidableEq for Words.Formed, Words.Ops, Words.Checked
+
+/-- The test tile's formed operands and peel factors as the Python forms them (`PearlC.encode`): A's and B's codes,
+α, ρ, E′ and FP32 words, and P_A's and P_B's rows of BF16 words. -/
+def testOps : Words.Ops where
+  a :=
+    { codes := #[
+          #[0x6a, 0xe3, 0xe5, 0xf0, 0xe4, 0xe1, 0x69, 0x5d, 0x70, 0x72, 0x6a, 0xf0, 0xd9, 0xe2, 0xec, 0x54,
+            0xe0, 0x60, 0xb3, 0x56, 0xee, 0x6a, 0x60, 0x6d, 0x41, 0xe0, 0xe0, 0x76, 0x6a, 0x76, 0x7a, 0xea,
+            0x6c, 0x67, 0x73, 0x5a, 0xd8, 0x6d, 0xf2, 0x66, 0xe6, 0xe0, 0xea, 0x55, 0x2f, 0xe6, 0x60, 0x5b,
+            0xf0, 0x59, 0xed, 0x56, 0x62, 0x64, 0xe1, 0x62, 0xe5, 0xe1, 0x5e, 0xe5, 0x70, 0xdf, 0xe3, 0xee,
+            0x71, 0x73, 0xf4, 0x69, 0xf1, 0x74, 0xea, 0x72, 0x64, 0xec, 0x6e, 0x72, 0x68, 0x69, 0xe1, 0xe7,
+            0xd2, 0x30, 0x64, 0x5f, 0x53, 0xef, 0xed, 0x6b, 0x6e, 0x75, 0xeb, 0x73, 0xdb, 0xf0, 0x5c, 0xf6,
+            0x67, 0xe5, 0x3e, 0x41, 0xf1, 0xe3, 0xe2, 0x6f, 0x5d, 0x60, 0x59, 0xed, 0x69, 0x69, 0xeb, 0x61,
+            0x65, 0xee, 0xf6, 0x66, 0x4e, 0x5a, 0x6a, 0x75, 0xe2, 0x70, 0x67, 0x72, 0x6f, 0xe4, 0x6b, 0x72]],
+      alpha := #[0x42a5f708], rho := #[0x3f4584ca],
+      ep := #[
+          #[0xc9, 0xba, 0xb8, 0x45, 0x43, 0xcd, 0xc6, 0xcb, 0xca, 0x40, 0x4b, 0x48, 0x23, 0x3a, 0x4a, 0x4d,
+            0xc6, 0xb5, 0x48, 0x43, 0x3b, 0xcb, 0x4b, 0xbe, 0xc6, 0xb9, 0x4d, 0xc6, 0xc2, 0x4a, 0x45, 0x4b]],
+      x := #[
+          #[0xbed60000, 0x3ea70000, 0xc0080000, 0xbfb90000, 0x3f4b0000, 0xbf170000, 0x3f140000, 0x3f0a0000,
+            0x3fa90000, 0x3f4f0000, 0x3f820000, 0xbde40000, 0xbf320000, 0xbf3b0000, 0xbef90000, 0xbf900000,
+            0xbf0c0000, 0xbdbd0000, 0x3e800000, 0xbead0000, 0xbff60000, 0xbd940000, 0x3e660000, 0x3f8a0000,
+            0x3f130000, 0xbf240000, 0xbf390000, 0x40000000, 0x3f410000, 0x3fea0000, 0x40080000, 0xbf510000,
+            0x3ec50000, 0x3eea0000, 0x3f0f0000, 0x3f0a0000, 0x3e4e0000, 0x3e320000, 0xbfc00000, 0xbe290000,
+            0xbf3f0000, 0x3e010000, 0xbeef0000, 0x3f1e0000, 0x3f510000, 0x3e9e0000, 0x3ea10000, 0x3dbe0000,
+            0xbee50000, 0xbe280000, 0xbefd0000, 0x3ec60000, 0x3c670000, 0x3f140000, 0xbfaa0000, 0x3f630000,
+            0xbf430000, 0xbf3b0000, 0xbe4a0000, 0xbf100000, 0x3e950000, 0xbf120000, 0xbf880000, 0xbf580000,
+            0x3fa70000, 0x3d350000, 0xbf950000, 0x3c090000, 0xbfc70000, 0x3fe50000, 0xbfc30000, 0x3ef50000,
+            0x3f0b0000, 0xbfb90000, 0x3e990000, 0x3f7f0000, 0x3eef0000, 0x3e850000, 0x3f720000, 0x3e240000,
+            0x3eac0000, 0xbe010000, 0x3f210000, 0xbf700000, 0x3f4a0000, 0xbf010000, 0xbf8b0000, 0x3ebb0000,
+            0x3fd80000, 0x3f760000, 0xbf040000, 0x3f320000, 0xbee80000, 0xbdfd0000, 0x3db70000, 0xc0140000,
+            0x3e440000, 0xbf830000, 0xbf320000, 0xbfbc0000, 0xbfc20000, 0xbf710000, 0x3f530000, 0x3fd50000,
+            0xbcce0000, 0x3f8b0000, 0xbe870000, 0xbff40000, 0x3e190000, 0x3ee40000, 0xbedb0000, 0x3e9a0000,
+            0x3f120000, 0xbf5d0000, 0xbfbd0000, 0xbe620000, 0xbe580000, 0xbeb40000, 0x3f7c0000, 0x3fdc0000,
+            0xbed50000, 0x3f320000, 0x3f700000, 0x3f360000, 0x3f860000, 0xbec70000, 0x3f3d0000, 0x40010000]] }
+  b :=
+    { codes := #[
+          #[0x49, 0xd1, 0x6f, 0x56, 0xd4, 0xce, 0x5d, 0xe9, 0x69, 0xf5, 0x6b, 0xea, 0x5e, 0xdf, 0xeb, 0x2e,
+            0x72, 0x5a, 0xf3, 0x64, 0xe9, 0xf2, 0xe1, 0xe0, 0xee, 0xe3, 0xdf, 0xf1, 0xe7, 0xd9, 0x60, 0xe7,
+            0xea, 0x6d, 0x5a, 0xdc, 0x65, 0x67, 0xe6, 0xd3, 0x68, 0xe9, 0x6a, 0xf2, 0x66, 0xc5, 0xe8, 0xec,
+            0x52, 0xe8, 0xd3, 0x73, 0xed, 0x67, 0x70, 0xef, 0xe2, 0xdb, 0xf4, 0x4c, 0x65, 0x5b, 0x6b, 0xde,
+            0x5c, 0xee, 0xd0, 0x39, 0x67, 0xed, 0xd8, 0x56, 0xdf, 0x59, 0x4e, 0x6a, 0xf2, 0x68, 0x6e, 0x67,
+            0xeb, 0x67, 0xf4, 0xe6, 0xc8, 0xed, 0xe8, 0xe1, 0x44, 0x6b, 0x70, 0xf2, 0xe2, 0x72, 0x74, 0x6f,
+            0x5b, 0x67, 0xe6, 0xe4, 0x53, 0x3d, 0x6d, 0x57, 0x3e, 0xf1, 0x6c, 0x64, 0x55, 0xee, 0x75, 0x6e,
+            0x72, 0xe6, 0xdc, 0xef, 0x6b, 0x74, 0xea, 0x62, 0x6b, 0xeb, 0x4d, 0xcf, 0xe1, 0x6f, 0xce, 0xad]],
+      alpha := #[0x429201a5], rho := #[0x3f64bff6],
+      ep := #[
+          #[0x32, 0xca, 0xca, 0xbc, 0x44, 0xbb, 0x4b, 0x41, 0xcc, 0xc4, 0xcc, 0x44, 0x98, 0xbe, 0x41, 0xc9,
+            0x4c, 0xc6, 0xc6, 0xca, 0x40, 0xc6, 0x44, 0xce, 0x4d, 0xbd, 0xc1, 0xa4, 0xbb, 0xc9, 0xcb, 0xcd]],
+      x := #[
+          #[0x3d0c0000, 0x3fae0000, 0x3f9c0000, 0xbf020000, 0xbe980000, 0xbf070000, 0x3f110000, 0xbd650000,
+            0x3f3f0000, 0xbfec0000, 0x3fc80000, 0xbdc50000, 0x3f2e0000, 0xbe0b0000, 0xbec20000, 0x3eed0000,
+            0x3f530000, 0xbe4f0000, 0xbe1c0000, 0x3f2f0000, 0xbf5e0000, 0xbfc10000, 0x3eca0000, 0xbf2b0000,
+            0xbff50000, 0xbf500000, 0xbeef0000, 0xbf980000, 0xbfbf0000, 0x3d160000, 0x3f650000, 0xbe6e0000,
+            0xbf3e0000, 0x3ec50000, 0x3f370000, 0xbe990000, 0x3f0b0000, 0x3f850000, 0xbe530000, 0xbf500000,
+            0x3eb10000, 0x3e7d0000, 0x3f8c0000, 0xbfa40000, 0xbf290000, 0xbf560000, 0xbfdd0000, 0x3e010000,
+            0x3f070000, 0xbf3d0000, 0x3fb10000, 0x3f520000, 0x3f200000, 0x3ecd0000, 0x3f740000, 0xbfaa0000,
+            0x3f1d0000, 0x3f1a0000, 0xbfe20000, 0x3eb10000, 0xbe800000, 0x3f480000, 0xbee00000, 0xbc950000,
+            0x3eaf0000, 0xbf600000, 0x3f190000, 0xbdd60000, 0x3efc0000, 0xbf050000, 0x3f8b0000, 0x3f1a0000,
+            0xbe360000, 0x3f210000, 0x3fa10000, 0x3fe50000, 0xbfc90000, 0x3f620000, 0x3eee0000, 0xbdc00000,
+            0xbf800000, 0x3fa00000, 0xbfa10000, 0x3f110000, 0x3fa60000, 0xbfcc0000, 0xbe9a0000, 0xbfa70000,
+            0x3e790000, 0x3fc10000, 0x40010000, 0xbfe30000, 0xbf130000, 0x3f340000, 0x3fca0000, 0x3ed70000,
+            0xbf3f0000, 0x3e980000, 0xbc880000, 0xbe500000, 0xbf3c0000, 0x3ec60000, 0x3e9d0000, 0xbdbe0000,
+            0xbe630000, 0xbfa40000, 0xbef80000, 0x3f9a0000, 0xbe430000, 0xbfb80000, 0x3faa0000, 0x3f070000,
+            0x40060000, 0x3d800000, 0xbeec0000, 0xbfb90000, 0x3fa90000, 0x40240000, 0xbf520000, 0xbf250000,
+            0x3f180000, 0xbf540000, 0xbe8a0000, 0xbeb30000, 0x3e440000, 0x3f8c0000, 0x3cb40000, 0x3f6b0000]] }
+  pa := #[
+    #[0xc090, 0xbfa0, 0xbf80, 0x4050, 0x4030, 0xc0d0, 0xc060, 0xc0b0, 0xc0a0, 0x4000, 0x40b0, 0x4080,
+      0x3e30, 0x3fa0, 0x40a0, 0x40d0, 0xc060, 0xbf50, 0x4080, 0x4030, 0x3fb0, 0xc0b0, 0x40b0, 0xbfe0,
+      0xc060, 0xbf90, 0x40d0, 0xc060, 0xc020, 0x40a0, 0x4050, 0x40b0, 0xc4d8, 0x452d, 0xc336, 0xc599,
+      0x4419, 0x45d4, 0x42bf, 0xc496, 0x452d, 0x455d, 0x447e, 0xc55d, 0x4494, 0xc585, 0x44b2, 0x4452,
+      0x4553, 0x4505, 0x44bb, 0xc50b, 0xc48f, 0x4539, 0xc3da, 0x4396, 0xc472, 0xc4be, 0x456c, 0x44d0,
+      0xc541, 0xc52d, 0x4512, 0x45a0]]
+  pb := #[
+    #[0xc47a, 0x4347, 0x4460, 0xc443, 0xc35f, 0xc395, 0x44ac, 0x4565, 0xc584, 0xc37d, 0x4530, 0x43f1,
+      0x451e, 0x450b, 0xc472, 0xc48b, 0xc40c, 0x43c0, 0xc40f, 0xc417, 0x44e4, 0xc568, 0xc51c, 0xc504,
+      0xc507, 0x42b0, 0xc552, 0xc21f, 0xc51c, 0x4580, 0xc52f, 0xc544, 0xbf20, 0x40a0, 0x40a0, 0x3fc0,
+      0xc040, 0x3fb0, 0xc0b0, 0xc010, 0x40c0, 0x4040, 0x40c0, 0xc040, 0x3d80, 0x3fe0, 0xc010, 0x4090,
+      0xc0c0, 0x4060, 0x4060, 0x40a0, 0xc000, 0x4060, 0xc040, 0x40e0, 0xc0d0, 0x3fd0, 0x4010, 0x3e40,
+      0x3fb0, 0x4090, 0x40b0, 0x40d0]]
+
+/-- The test tile's checked words, C̃ and U (`PearlC.checked`). -/
+def testChecked : Words.Checked where
+  c := #[
+    #[0xc8374000]]
+  u := #[
+    #[0xc7b318d0]]
+
+/-! The test tile's checks, one kernel computation each. `opens` hands `RowsDomain.leaf` to the tree's check unapplied, so
+the unfolding reaches its hm96 leaf with `unfoldPartialApp`. -/
+
+theorem test_tile : testPass.tile? 0 = some (0, [0], [0]) := by decide +kernel
+
+theorem test_covers : (testOpening.a.map (·.position) != [0] || testOpening.b.map (·.position) != [0]) = false := by
+  decide +kernel
+
+theorem test_opensA : testOpening.a.all (opens (rowsDomain (activationBinding testPass.salt
+    testPass.records[0]!.matmul.index) testPass.records[0]!.matmul.index testPass.records[0]!.matmul.m HM96 false)
+    testPass.rootsA[0]! ROW_SCHEMA) = true := by
+  simp +unfoldPartialApp only [opens, RowsDomain.verify, RowsDomain.leaf, Flock.Hm96.Default512.leaf,
+    Flock.Hm96.Default512.treeLeaf, Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq]
+  decide +kernel
+
+theorem test_opensB : testOpening.b.all (opens (rowsDomain (weightBinding testPass.records[0]!.matmul.weight) (-2)
+    testPass.records[0]!.matmul.n HM96 false)
+    ((testPass.weightRoots.lookup testPass.records[0]!.matmul.weight).getD ByteArray.empty) ROW_SCHEMA) = true := by
+  simp +unfoldPartialApp only [opens, RowsDomain.verify, RowsDomain.leaf, Flock.Hm96.Default512.leaf,
+    Flock.Hm96.Default512.treeLeaf, Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq]
+  decide +kernel
+
+theorem test_opensLeaf : (testOpening.leaf.position != 0 || !opens (transcriptDomain testPass.salt testPass.weightsRoot
+    testPass.count HM96) testPass.transcriptRoot TILE_SCHEMA testOpening.leaf) = false := by
+  simp +unfoldPartialApp only [opens, RowsDomain.verify, RowsDomain.leaf, Flock.Hm96.Default512.leaf,
+    Flock.Hm96.Default512.treeLeaf, Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq]
+  decide +kernel
+
+/-- `encode` of one A row and one B row: each side's E line, its parsed row and its formed side, then the peel factors.
+Each hypothesis is one computation the kernel does on its own. The computations are variables in the unfolded block
+(`generalize`): with them in place, the kernel's check of the block's rewriting recurses too deep. -/
+theorem encode_one {salt rootB : ByteArray} {wn : Words.FixedNoise} {index k i j : Nat} {ra rb : ByteArray}
+    {ea eb xa xb : Array Nat} {a b : Words.Formed} {pa pb : Array (Array Nat)}
+    (hea : Words.sampleLine (Words.lineKey (Words.rowSeed salt rootB index i ra)) 0 0 0 Words.NORM_E = .ok ea)
+    (hxa : Words.parseRow ra k = .ok xa) (hfa : Words.formV1 #[xa] #[ea] wn.fa = .ok a)
+    (heb : Words.sampleLine (Words.lineKey wn.seedB) 1 0 j Words.NORM_E = .ok eb)
+    (hxb : Words.parseRow rb k = .ok xb) (hfb : Words.formV1 #[xb] #[eb] wn.fb = .ok b)
+    (hpa : Words.peelA wn a = .ok pa) (hpb : Words.peelB wn b = .ok pb) :
+    Words.encode salt rootB wn index k [i] [ra] [j] [rb] = .ok ⟨a, b, pa, pb⟩ := by
+  unfold Words.encode
+  generalize Words.sampleLine = S at hea heb ⊢
+  generalize Words.parseRow = P at hxa hxb ⊢
+  generalize Words.formV1 = F at hfa hfb ⊢
+  generalize Words.peelA = PA at hpa ⊢
+  generalize Words.peelB = PB at hpb ⊢
+  simp only [List.zip_cons_cons, List.zip_nil_left, Array.mapM_eq_mapM_toList, List.mapM_cons, List.mapM_nil, hea, hxa,
+    heb, hxb, hfa, hfb, hpa, hpb, bind, Except.bind, pure, Except.pure, Functor.map, Except.map]
+
+theorem size_testRowA : testRowA.size = 512 := by decide +kernel
+
+theorem size_testRowB : testRowB.size = 512 := by decide +kernel
+
+theorem size_zeroSalt : zeroSalt.size = HM96_SALT := by decide +kernel
+
+/-- A row opened from `row ++ zeroSalt` is `row`: the opening drops the salt's 192 bytes. -/
+theorem openedValue_salted (row : ByteArray) : openedValue (row ++ zeroSalt) = row :=
+  ByteArray.extract_append_eq_left (by rw [ByteArray.size_append, size_zeroSalt, Nat.add_sub_cancel])
+
+/-- Row A's `sha512/row-seg/v1` digest, the inner digest of its hm96 leaf and the key of its seed. -/
+def rowDigestA : ByteArray :=
+  beBytes 64 [0x140f6a9bd2d2b0d00682751661f9065654e014ac6608062bbd2fe6acd5bf29619737d459f93ea07519da2b55ab13234cd5298b6acbad448a0322ba066a66ae7c]
+
+/-- Row A's seed (`Words.rowSeed`). -/
+def rowSeedA : ByteArray :=
+  beBytes 32 [0x84d7543fc5fbc6240cb86e24c7120d81495306013292f0b083d66d9149c1b666]
+
+/-- The key of row A's E line (`Words.lineKey` of its seed). -/
+def lineKeyA : ByteArray :=
+  beBytes 32 [0x9f31bc07d278c3502ee6ffab08f73ce847b175833166316570371968113900d7]
+
+/-- The key of B's E lines (`Words.lineKey` of seed_B). -/
+def lineKeyB : ByteArray :=
+  beBytes 32 [0xdec3da263f57eff0219219320eca345ad8292b1475b9b5c621d864115e2ece4e]
+
+/-- Row A's E line: 32 E4M3 codes at norm 256. -/
+def eA : Array Nat := #[
+  0xe5, 0xd6, 0xd3, 0x61, 0x60, 0xe9, 0xe2, 0xe8, 0xe6, 0x5b, 0x67, 0x64, 0x3f, 0x56, 0x66, 0x69,
+  0xe2, 0xd1, 0x63, 0x60, 0x58, 0xe8, 0x68, 0xda, 0xe2, 0xd5, 0x69, 0xe2, 0xde, 0x66, 0x61, 0x67]
+
+/-- Column 0's E line of B: 32 E4M3 codes at norm 256. -/
+def eB : Array Nat := #[
+  0x4e, 0xe6, 0xe6, 0xd8, 0x60, 0xd7, 0x67, 0x5c, 0xe8, 0xe0, 0xe8, 0x60, 0xb3, 0xda, 0x5c, 0xe5,
+  0x68, 0xe2, 0xe2, 0xe6, 0x5b, 0xe2, 0x60, 0xea, 0x69, 0xd9, 0xdc, 0xc0, 0xd7, 0xe4, 0xe7, 0xe9]
+
+theorem test_digestA : Flock.HmRow.segDigest (8 * testRowA.size) testRowA = rowDigestA := by decide +kernel
+
+theorem test_seedA : Words.rowSeed testSalt testRootB 0 0 testRowA = rowSeedA := by
+  rw [Words.rowSeed, test_digestA]
+  decide +kernel
+
+theorem test_keyA : Words.lineKey rowSeedA = lineKeyA := by decide +kernel
+
+theorem test_lineA : Words.sampleLine (Words.lineKey (Words.rowSeed testSalt testRootB 0 0 testRowA)) 0 0 0
+    Words.NORM_E = .ok eA := by
+  rw [test_seedA, test_keyA]
+  apply eq_ok_of_toOption
+  decide +kernel
+
+theorem test_parseA : Words.parseRow testRowA 128 = .ok testOps.a.x[0]! := by
+  apply eq_ok_of_toOption
+  decide +kernel
+
+theorem test_formA : Words.formV1 #[testOps.a.x[0]!] #[eA] testNoise.fa = .ok testOps.a := by
+  apply eq_ok_of_toOption
+  decide +kernel
+
+theorem test_keyB : Words.lineKey testNoise.seedB = lineKeyB := by decide +kernel
+
+theorem test_lineB : Words.sampleLine (Words.lineKey testNoise.seedB) 1 0 0 Words.NORM_E = .ok eB := by
+  rw [test_keyB]
+  apply eq_ok_of_toOption
+  decide +kernel
+
+theorem test_parseB : Words.parseRow testRowB 128 = .ok testOps.b.x[0]! := by
+  apply eq_ok_of_toOption
+  decide +kernel
+
+theorem test_formB : Words.formV1 #[testOps.b.x[0]!] #[eB] testNoise.fb = .ok testOps.b := by
+  apply eq_ok_of_toOption
+  decide +kernel
+
+theorem test_peelA : Words.peelA testNoise testOps.a = .ok testOps.pa := by
+  apply eq_ok_of_toOption
+  decide +kernel
+
+theorem test_peelB : Words.peelB testNoise testOps.b = .ok testOps.pb := by
+  apply eq_ok_of_toOption
+  decide +kernel
+
+theorem test_encode : Words.encode testPass.salt
+    ((testPass.weightRoots.lookup testPass.records[0]!.matmul.weight).getD ByteArray.empty) testNoise
+    testPass.records[0]!.matmul.index testPass.records[0]!.matmul.k [0] (testOpening.a.map (openedValue ·.value)) [0]
+    (testOpening.b.map (openedValue ·.value)) = .ok testOps := by
+  have hs : testPass.salt = testSalt := rfl
+  have hr : (testPass.weightRoots.lookup testPass.records[0]!.matmul.weight).getD ByteArray.empty = testRootB := rfl
+  have hi : testPass.records[0]!.matmul.index = 0 := rfl
+  have hk : testPass.records[0]!.matmul.k = 128 := rfl
+  have ha : testOpening.a.map (openedValue ·.value) = [testRowA] := by
+    simp only [testOpening, List.map_cons, List.map_nil, openedValue_salted]
+  have hb : testOpening.b.map (openedValue ·.value) = [testRowB] := by
+    simp only [testOpening, List.map_cons, List.map_nil, openedValue_salted]
+  rw [hs, hr, hi, hk, ha, hb]
+  exact encode_one test_lineA test_parseA test_formA test_lineB test_parseB test_formB test_peelA test_peelB
+
+theorem test_checked : Words.checked testOps = .ok testChecked := by
+  apply eq_ok_of_toOption
+  decide +kernel
+
+theorem test_leaf : (Words.leaf testChecked != openedValue testOpening.leaf.value) = false := by decide +kernel
+
+theorem test_rule : Rule.checkOpened testPass.scheme testPass.records[0]! [0] [0] testOps = none := by decide +kernel
+
+theorem test_y : testPass.yRoots[0]! = none := rfl
+
+end Witness
+
 /-- The test tile passes `checkTile` at the test noise: its A row, its B row and its leaf open against the test pass's
 roots, the words formed from its rows are its leaf's, and the rule keeps its cap. `TileAcceptMeans` ranges over every
 noise `wn`: the deployed check's is `fixedNoise` of the pass's salt and B's root (`noiseOf`), one instance, and this is
 another, the test noise `testNoise`, given rather than derived (deriving it is 2k = 256 noise lines and 32 × 32 FP32
-chains of k = 128). `opens` hands `RowsDomain.leaf` to the tree's check unapplied, so the unfolding reaches its hm96 leaf
-with `unfoldPartialApp`. -/
-theorem tileAcceptMeans_honest : checkTile testPass (.ok testNoise) 0 testOpening = none := by
-  simp +unfoldPartialApp only [checkTile, opens, RowsDomain.verify, RowsDomain.leaf, Flock.Hm96.Default512.leaf,
-    Flock.Hm96.Default512.treeLeaf, Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq]
-  decide +kernel
+chains of k = 128). Each check is its own kernel computation (`Witness.checkTile_eq_none`), the formed words and the
+checked words given as the Python computes them (`Witness.testOps`, `Witness.testChecked`). -/
+theorem tileAcceptMeans_honest : checkTile testPass (.ok testNoise) 0 testOpening = none :=
+  checkTile_eq_none test_tile test_covers test_opensA test_opensB test_opensLeaf rfl test_encode test_checked test_leaf
+    test_rule test_y
 
 /-- A tile check that accepts every tile passes tile 0 of a pass with no calls, which is no tile of the verifier's own. -/
 theorem tileAcceptMeans_nontrivial :
