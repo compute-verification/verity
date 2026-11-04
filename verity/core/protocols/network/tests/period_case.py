@@ -1042,7 +1042,7 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int, lis
     """K and its terms over `PeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
     link-windows' scans (`scans`, each its facts, its tied audits' free inputs, its `β_w` and its tied audits by index;
     None in the clock form), where a compute audit's own terms are in none, a tied audit's free inputs are in its
-    link-window's `free` and its incorrect proof blocks in its `faulty_entries`, and a tied audit drawn in part, read at
+    phase's `free` and its incorrect proof blocks in its `faulty_entries`, and a tied audit drawn in part, read at
     `TIED_DELTA` (`charged`), is in the rows public's `charged` and its δ_i in `eps`."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
     if scans is None:

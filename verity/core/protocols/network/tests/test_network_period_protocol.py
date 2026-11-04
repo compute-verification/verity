@@ -371,8 +371,8 @@ def test_a_tied_audit_sampled_in_part_is_charged_its_link_windows_entries(server
     own, so an incorrect proof block of any of the audit's templates, an unsampled `SelectEntry_v1` or `ScanSlots_v2`
     one among them, changes only those bits: the rows form accepts a tied audit at any sample, Lean with the mirror's
     public, which reads that audit's draw at δ_i = 2^-64 (`charged`), where its at most `b` incorrect proof blocks are
-    at least one, so its link-windows' terms charge every entry they can set, `faulty_entries` = E_w = lanes · T /
-    every · the entry's bits, every other link-window's none, and `eps` holds δ_i beside the scans' δ. Each way of
+    at least one, so its phases' terms charge every entry they can set, `faulty_entries` = E_w = lanes · T /
+    every · the entry's bits, every other phase's none, and `eps` holds δ_i beside the scans' δ. Each way of
     sampling in part is charged, the demo's sample at one proof block and at two, and the cases' audits select
     (`SelectEntry_v1` beside `ScanSlots_v2`) or don't (`SlotEntry_v1`)."""
     seen = Counter()
@@ -406,7 +406,7 @@ def test_a_tied_audits_draw_is_read_at_the_periods_own_delta(server):
     """One draw read at two δs, each fixed before the coins: a tied audit drawn `subset:1` of its n proof blocks, whose
     answer sampled proofs gave at δ = 1/2 with its bound there, n // 2, beside scans at δ = 2^-64. The rows form reads
     the same draw at δ_i = 2^-64 (`charged`): n − 1 wrong units, every undrawn one, since a set of them escapes with
-    1/n ≥ δ_i, so its link-windows' terms charge E_w; it keeps the answer's δ and bound in `audits`, sampled proofs'
+    1/n ≥ δ_i, so its phases' terms charge E_w; it keeps the answer's δ and bound in `audits`, sampled proofs'
     own reading; and its eps is the scans' δ and δ_i, each its own term, (m + 1) · 2^-64 exactly. Lean gives every
     such period the mirror's public."""
     one = Facts(16, 1, Fraction(1, 2), 8, ((16, 1),))

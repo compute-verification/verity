@@ -204,8 +204,8 @@ slot's entry, a `ScanSlots_v2` one setting the `occ` and prompts its slots' Prog
 read, changes at most those `E_w` bits; the scan reads an entry only where its own state has the slot due and occupied,
 and refuses one there whose `read` is 0, so no `occ` the audit computes drops a request. The check accepts a tied audit
 at any sample; sampled in part, the period reads its draw at its own `δ_i` = 2^-64 (`tiedDelta`, fixed before any coin),
-where its at most `b` incorrect proof blocks can set any of its link-window's entries, so that link-window's term
-charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · E_w`) when `b ≥ 1`, and `δ_i` is in `eps`:
+where its at most `b` incorrect proof blocks can set any of its phase's entries, so that phase's term charges
+every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · E_w`) when `b ≥ 1`, and `δ_i` is in `eps`:
 
     {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c,
      "charged": [{"delta": δ_i, "drawn", "units", "wrong_units"}, …], "eps": m · δ + Σ δ_i,
@@ -1358,7 +1358,7 @@ answer's, in `audits`). -/
 def tiedDelta : Core.Ratio := ⟨1, 2 ^ 64⟩
 
 /-- Audit `i`'s facts when the rows form charges it: accepted, tied to a link-window's scan (`tiedOf`) and drawn in
-part, read at `tiedDelta` (`Facts.readAt`), so its at most `b` wrong units at `δ_i` are in its link-windows' terms
+part, read at `tiedDelta` (`Facts.readAt`), so its at most `b` wrong units at `δ_i` are in its phases' terms
 (`faultyEntries`) and `δ_i` in `eps`. -/
 def chargedOf (p : Params) (c : Commitment) (as : Array (Found Facts)) (i : Nat) : Option Facts :=
   match as[i]? with
@@ -1638,7 +1638,7 @@ def clocksFn (j : Json) : Except String Json := do
     ⟨9, 5, ⟨1, 10⟩, 0, .stratified #[{ name := "a", size := 4, k := 4 }, { name := "b", size := 5, k := 1 }]⟩
     ⟨1, 2⟩).wrong == 2
 -- w63k4's tied audit of 16 proof blocks sampled at one (`subset:1`), its answer's bound 8 at δ = 1/2: charged, read at
--- δ_i = 2^-64 with a bound of 15, its link-window's β_w every one of the scan's E_w = 896 entry bits; sampled whole,
+-- δ_i = 2^-64 with a bound of 15, its phase's β_w every one of the scan's E_w = 896 entry bits; sampled whole,
 -- uncharged and β_w = 0. The public keeps the answer's δ and bound in `audits` and the period's reading in `charged`,
 -- and its eps is the scan's δ = 2^-64 and δ_i: 2^-63
 #guard
