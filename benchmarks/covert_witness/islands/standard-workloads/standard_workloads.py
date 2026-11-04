@@ -25,8 +25,11 @@ checkpoint as te_core.ledger.ingest writes it (into a scratch ledger) with the r
 formalism.published under `READING` at `POINTS`, algorithm_policy's: `rho_default` and `rho_console` are both its ρ
 at the console's default policy (`CONSOLE`, te_core.policy's: one full session of the 45M reference, attention
 included), with `binding_kind`, `rests_on` and `kinds` there, and `rho_served` its ρ at the registered serving block
-(te_core.panels' `SERVED`). ρ, its binding kind and what it rests on are published's as it gives them (null where it
-has no bound, resting on "unmeasured"); reading A's ρ is never infinite, so `build` refuses one. `kinds` is
+(te_core.panels' `SERVED`), both sensitivities beside the headline policy, each workload's own session at the
+console's k, which no column holds yet (the note says so). ρ, its binding kind and what it rests on are published's
+as it gives them (null where it has no bound, resting on "unmeasured"), a measured row's `rests_on` opening with
+algorithm_policy's `TRACED` where ρ is the products term's or its floor's, as algorithm_policy's rows do
+(algorithm_policy.rests_on); reading A's ρ is never infinite, so `build` refuses one. `kinds` is
 algorithm_policy's cell of the terms the max takes (the products term the theorem of record's ρ_HE, given (H) and (E)),
 its `partial` and `why` where published sets them, and, beside them, the sensitivities `SENSITIVITIES`: published's
 (reduction, update and fresh_old, the old products figure, which rests on P-width extended, false on honest circuits)
@@ -513,7 +516,7 @@ def build(spec: dict, revs: tuple[str, str, str], stamp: str | None = None) -> t
         con = one["console"]
         rows.append([r["workload"], r["model"], compact(dials), run, cell, compact(st),
                      rho_cell(con["rho"]), rho_cell(con["rho"]), con["reading"], VERSION, con["capture_code"],
-                     con["binding_kind"], con["rests_on"],
+                     con["binding_kind"], con["rests_on"] if "modelled" in r else algorithm_policy.rests_on(con),
                      kinds(con, bound["console"]),
                      rho_cell(one["served"]["rho"])])
         details.append(finite({"workload": r["workload"], "run": r.get("run"), "art": r.get("art"),
@@ -529,16 +532,17 @@ def build(spec: dict, revs: tuple[str, str, str], stamp: str | None = None) -> t
 
 def note(p: dict, tables: str | None = None) -> str:
     """The panel's note: its readings as its rows have them, the products term the theorem of record's ρ_HE and the old
-    figure beside it (published's `fresh_old`), the points, and `tables` the stored tables (`cite`'s)."""
+    figure beside it (published's `fresh_old`), the headline policy, which no column holds yet, the points, both
+    sensitivities, and `tables` the stored tables (`cite`'s)."""
     (c, k), (cs, ks), (into, out) = POINTS["console"], POINTS["served"], policy.CONSOLE_SESSION
     got = {r[COLUMNS.index("reading")] for r in p["rows"]}
-    how = ("reading B, a target, not a bound (tables: reading A's)" if got <= {"B"} else
-           "reading A, one bound over the valid kinds (null: unmeasured)")
-    return (f"Training's slowdown code {VERSION}: {how}. Products term: rho_HE (theorem of record, given (H), (E)); "
-            f"kinds' fresh_old, the old term, rests on P-width extended, false on honest circuits. All but rho_served "
-            f"at the console's default: c = {algorithm_policy.num(c, 5)} gates, one {into:,}-in, {out:,}-out session "
-            f"of the {policy.REFERENCE_PARAMS / 1e6:.0f}M reference with attention; k = {k:,.0f}. rho_served at the "
-            f"serving block (c = {algorithm_policy.num(cs, 5)}, k = {ks:,})." + (f" Tables {tables}." if tables else ""))
+    how = "reading B, a target, not a bound (tables: reading A's)" if got <= {"B"} else "reading A"
+    return (f"Training's slowdown code {VERSION}, {how}. Products term rho_HE: theorem of record, given (H), (E); "
+            f"fresh_old, the old term, rests on P-width extended, false on honest circuits. Headline (no column yet): "
+            f"each workload's own {into:,}-in, {out:,}-out session at k = {k:,.0f}. Sensitivities: rho_default = "
+            f"rho_console, the console's default, that session of the {policy.REFERENCE_PARAMS / 1e6:.0f}M reference "
+            f"(c = {algorithm_policy.num(c, 5)}); rho_served, the serving block (c = {algorithm_policy.num(cs, 5)}, "
+            f"k = {ks:,})." + (f" Tables {tables}." if tables else ""))
 
 
 def refused(p: dict) -> list[str]:
