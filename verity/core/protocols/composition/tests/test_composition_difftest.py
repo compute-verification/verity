@@ -4,7 +4,8 @@ core interface and the subprotocols' own Python). Hypothesis draws each subproto
 undecided or fail to decode (from its own difftest's generator: PoUW's periods, made once from
 `pouw_period_cases`, the network certifier's period `build`, the inference-only policy's `drawn`, which is
 never undecided, remote's sampled proofs' audits under the form ``one-stage``, `form_case`: one-stage v2's over
-`empty_draws` (an audit that drew nothing at its challenger's coins) with one of `V2_BREAKS` or the form's breaks, and
+`empty_draws` (an audit that drew nothing at its challenger's coins), in the one-statement form or the per-member form
+(`_per_member`), with one of `V2_BREAKS` or the form's breaks, and
 one-stage v1's `changed_audits`, which the form refuses by name, onsite's one-stage audits, `v1_empty_draws` and
 `changed_audits`, the wipe's signed wipes, `wipe_protocol_case.case`; space's and bandwidth's from the small periods of
 their hooks, `periods.py`, all on one committed `C*` but PoUS's run on another store, `periods.OTHER_STORE`), often
@@ -136,10 +137,31 @@ def _v1(a: dict) -> dict:
             "evidence": {**_without(a["evidence"], "proofs"), "verdicts": {}}}
 
 
+#: The per-member form's one member over `empty_draws`' files: one unit, the circuit file `BLOBS` hold, no registered file.
+MEMBER = {"circuit": _sha(CIRCUIT), "registered": None, "units": [[0, 1]]}
+
+
+def _per_member(a: dict, members: dict | None = None, statements: list | None = None) -> dict:
+    """v2's audit `a` in the per-member form: the params' ``members`` (`MEMBER` as ``m0`` unless given) and the
+    evidence's ``statements`` (``m0``'s, on the public file `BLOBS` hold, of no session, unless given). With no session
+    and no proved unit it is undecided as `a` is."""
+    members = {"m0": MEMBER} if members is None else members
+    statements = [{"member": "m0", "public": _sha(PUBLIC), "sessions": []}] if statements is None else statements
+    return {**a, "params": {**a["params"], "proofs": {"members": members}},
+            "evidence": {**a["evidence"], "proofs": {"statements": statements}}}
+
+
+def _statement(member: str, public: bytes = PUBLIC) -> dict:
+    return {"member": member, "public": _sha(public), "sessions": []}
+
+
 #: One change to v2's audit (`empty_draws`) that sampled proofs refuses or rejects: the audit as v1's (refused by name
 #: at the params), v1's evidence under v2's params (refused by name at the evidence), v2's evidence naming verdicts,
 #: params naming no challenger or no partition, a circuit or public file no blob holds, proved units no session proved,
-#: a session whose coins are no tree the challenger logged, coins on another window or none.
+#: a session whose coins are no tree the challenger logged, coins on another window or none; and in the per-member form
+#: (`_per_member`), a statement naming no member or a member twice, two members' units meeting, a member's units or keys
+#: malformed, its circuit or its statement's public file in no blob, the evidence's proofs in the other form than the
+#: params', and proved units no session proved.
 V2_BREAKS = {
     "v1": _v1,
     "v1-evidence": lambda a: {**a, "evidence": _v1(a)["evidence"]},
@@ -155,6 +177,17 @@ V2_BREAKS = {
         "public": _sha(PUBLIC), "sessions": [{"name": "s", "record": _sha(CIRCUIT), "reps": {}}]}}},
     "other-window": lambda a: {**a, "params": {**a["params"], "window_root": "ab" * 64}},
     "no-coins": lambda a: {**a, "evidence": _without(a["evidence"], "coins")},
+    "member-unknown": lambda a: _per_member(a, statements=[_statement("m1")]),
+    "member-twice": lambda a: _per_member(a, statements=[_statement("m0"), _statement("m0")]),
+    "members-meet": lambda a: _per_member(a, members={"m0": MEMBER, "m1": {**MEMBER, "units": [[0, 2]]}}),
+    "member-units": lambda a: _per_member(a, members={"m0": {**MEMBER, "units": [[1, 1]]}}),
+    "member-keys": lambda a: _per_member(a, members={"m0": _without(MEMBER, "units")}),
+    "no-members": lambda a: _per_member(a, members={}),
+    "member-circuit": lambda a: _per_member(a, members={"m0": {**MEMBER, "circuit": _sha(b"another circuit")}}),
+    "member-public": lambda a: _per_member(a, statements=[_statement("m0", b"another public file")]),
+    "member-evidence": lambda a: {**_per_member(a), "evidence": a["evidence"]},
+    "member-params": lambda a: {**_per_member(a), "params": a["params"]},
+    "member-proved": lambda a: {**_per_member(a), "evidence": {**_per_member(a)["evidence"], "proved_units": [0]}},
 }
 
 
@@ -184,9 +217,9 @@ def broken_case(a: dict, br: str) -> dict:
 
 
 #: Remote's sampled proofs' cases by the verdict they aim at: v2's audit that drew nothing (undecided, for want of the
-#: verifier of record), and v2's audit with one change or one break of the form, or v1's audit with up to two changes
-#: (refused by name).
-SAMPLED_CASES = {R.UNDECIDED: empty_draws().map(form_case),
+#: verifier of record), in either form, and v2's audit with one change or one break of the form, or v1's audit with up
+#: to two changes (refused by name).
+SAMPLED_CASES = {R.UNDECIDED: st.one_of(empty_draws().map(form_case), empty_draws().map(_per_member).map(form_case)),
                  R.REJECT: st.one_of(st.builds(broken_case, empty_draws(), st.sampled_from(list(V2_BREAKS))),
                                      st.builds(form_case, empty_draws(), st.sampled_from(FORM_BREAKS)),
                                      OS.changed_audits(most=2).map(form_case))}

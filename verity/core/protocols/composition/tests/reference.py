@@ -172,6 +172,9 @@ def _recursive(rest: dict, what: str):
 V1_REFUSED = ("one-stage v1 (verity/sampled-proofs/one-stage/v1) is refused: sampled proofs covers one-stage v2 "
               "(verity/sampled-proofs/one-stage/v2), whose verdicts are its own run of the verifier on the proofs, and "
               "the recursive audit only")
+#: `OneStageZk.MULTI_REFUSED`: what the per-member form would accept, refused.
+MULTI_REFUSED = ("the per-member form (proofs.members) is refused until the guarantee for a sample over several members' "
+                 "statements under one draw is in the lock: verify one statement (proofs {circuit, registered})")
 
 
 def _keys(j: Any, keys: list[str], what: str) -> None:
@@ -179,36 +182,61 @@ def _keys(j: Any, keys: list[str], what: str) -> None:
         raise Reject(f"the keys of {what} are not {', '.join(keys)}")
 
 
-def _one_stage_params(rest: dict) -> dict:
-    """`OneStageZk.paramsOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1: ``proofs``, exactly the circuit file's
-    SHA-512 and the verifier's registered file or null, then v1's params (`decode_params_v2`, which refuses them naming
-    no challenger) with a partition object."""
-    if "proofs" not in rest:
-        raise Reject(f"the parameters name no proofs: {V1_REFUSED}")
-    pr = rest["proofs"]
-    _keys(pr, ["circuit", "registered"], "proofs")
+def _circuit(pr: dict) -> None:
+    """`OneStageZk.circuitOf`: the circuit file's SHA-512 and the verifier's registered file or null."""
     if not (isinstance(pr["circuit"], str) and len(pr["circuit"]) == 128
             and all(c in "0123456789abcdef" for c in pr["circuit"])):
         raise Reject("proofs: circuit is not a SHA-512 digest (128 lowercase hex)")
     if pr["registered"] is not None and not isinstance(pr["registered"], dict):
         raise Reject("proofs: registered is not the verifier's registered file (an object) or null")
+
+
+def _members(ms: Any) -> dict:
+    """`OneStageZk.membersOf`: the per-member form's members by name, each a nonempty name, exactly its keys, its
+    circuit (`_circuit`) and its units `[lo, hi)` ranges of naturals, no unit in two members' ranges."""
+    if not isinstance(ms, dict):
+        raise Reject("proofs: members is not an object from a member's name to its units, circuit and registered")
+    for name in sorted(ms):
+        if not name:
+            raise Reject("proofs: a member's name is empty")
+        _keys(ms[name], ["circuit", "registered", "units"], f"member {name}")
+        _circuit(ms[name])
+        rs = ms[name]["units"]
+        if not (isinstance(rs, list) and rs and all(isinstance(r, list) and len(r) == 2 and all(type(x) is int for x in r)
+                                                    and 0 <= r[0] < r[1] for r in rs)):
+            raise Reject(f"proofs: member {name}'s units are not a nonempty list of [lo, hi] with 0 <= lo < hi")
+    if not ms:
+        raise Reject("proofs: members names no member")
+    rs = sorted((r for m in ms.values() for r in m["units"]), key=lambda r: r[0])
+    for a, b in zip(rs, rs[1:]):
+        if b[0] < a[1]:
+            raise Reject(f"proofs: unit {b[0]} is in two members' units: a unit is one member's")
+    return ms
+
+
+def _one_stage_params(rest: dict) -> dict:
+    """`OneStageZk.paramsOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1: ``proofs``, exactly the circuit file's
+    SHA-512 and the verifier's registered file or null, or the per-member form's ``members`` (`_members`), then v1's
+    params (`decode_params_v2`, which refuses them naming no challenger) with a partition object."""
+    if "proofs" not in rest:
+        raise Reject(f"the parameters name no proofs: {V1_REFUSED}")
+    pr = rest["proofs"]
+    if isinstance(pr, dict) and sorted(pr) == ["members"]:
+        members = _members(pr["members"])
+    else:
+        _keys(pr, ["circuit", "registered"], "proofs")
+        _circuit(pr)
+        members = None
     p = ONE_STAGE.decode_params_v2(rest)
     if p["partition"] is None:
         raise Reject("partition is null: the sessions are verified against the verifier's own partition object")
-    return {**p, "proofs": pr, "reads_registered": PROOFS.reads_registered(canonical(rest["program"]).encode())}
+    return {**p, "proofs": pr, "members": members,
+            "reads_registered": PROOFS.reads_registered(canonical(rest["program"]).encode())}
 
 
-def _one_stage_evidence(rest: dict) -> dict:
-    """`OneStageZk.evidenceOf` behind `VStar.Recursive.Sampled`'s refusal of v1: no ``verdicts``, v1's evidence with
-    none (`covered_evidence`, `OneStage.evidenceOf`), and ``proofs``, exactly the public file's digest and, for each of
-    v1's sessions in order, its name, its record's digest and its rep files' digests."""
-    if "proofs" not in rest:
-        raise Reject(f"the evidence names no proofs: {V1_REFUSED}")
-    if "verdicts" in rest:
-        raise Reject("the evidence names verdicts: this audit's verdicts are its own run of the verifier on the proofs")
-    base = ONE_STAGE.covered_evidence(canonical({**{k: v for k, v in rest.items() if k != "proofs"},
-                                                 "verdicts": {}}).encode())
-    pr = rest["proofs"]
+def _statement(pr: Any, member: str | None) -> dict:
+    """`OneStageZk.proofsOf`: a statement's public file's digest and its sessions, each its name, its record's digest
+    and its rep files' digests."""
     _keys(pr, ["public", "sessions"], "the evidence's proofs")
     if not isinstance(pr["public"], str) or not isinstance(pr["sessions"], list):
         raise Reject("proofs: public is not a SHA-512 digest or sessions not a list")
@@ -217,16 +245,75 @@ def _one_stage_evidence(rest: dict) -> dict:
         if not (isinstance(s["name"], str) and isinstance(s["record"], str) and isinstance(s["reps"], dict)
                 and all(isinstance(d, str) for d in s["reps"].values())):
             raise Reject("a session of the proofs is not a name, its record's digest and its rep files' digests")
-    if [s["name"] for s in pr["sessions"]] != base["sessions"]:
+    return {"member": member, "public": pr["public"], "sessions": pr["sessions"]}
+
+
+def _one_stage_evidence(rest: dict) -> dict:
+    """`OneStageZk.evidenceOf` behind `VStar.Recursive.Sampled`'s refusal of v1: no ``verdicts``, v1's evidence with
+    none (`covered_evidence`, `OneStage.evidenceOf`), and ``proofs``: one statement (`_statement`), or the per-member
+    form's ``statements``, each naming its member; their sessions, statement by statement, v1's in order."""
+    if "proofs" not in rest:
+        raise Reject(f"the evidence names no proofs: {V1_REFUSED}")
+    if "verdicts" in rest:
+        raise Reject("the evidence names verdicts: this audit's verdicts are its own run of the verifier on the proofs")
+    base = ONE_STAGE.covered_evidence(canonical({**{k: v for k, v in rest.items() if k != "proofs"},
+                                                 "verdicts": {}}).encode())
+    pr = rest["proofs"]
+    if not (isinstance(pr, dict) and sorted(pr) == ["statements"]):
+        statements = [_statement(pr, None)]
+    elif not isinstance(pr["statements"], list):
+        raise Reject("proofs: statements is not a list")
+    else:
+        statements = []
+        for s in pr["statements"]:
+            _keys(s, ["member", "public", "sessions"], "a statement of the proofs")
+            if not (isinstance(s["member"], str) and s["member"]):
+                raise Reject("proofs: a statement's member is not a member's name")
+            statements.append(_statement({k: v for k, v in s.items() if k != "member"}, s["member"]))
+    if [x["name"] for s in statements for x in s["sessions"]] != base["sessions"]:
         raise Reject("proofs: the sessions are not the evidence's sessions, in order")
-    return {**base, "proofs": pr}
+    return {**base, "proofs": pr, "statements": statements}
+
+
+def _statement_check(p: dict, own: dict, st: dict, held: dict) -> str | None:
+    """`OneStageZk.runFrom`'s refusals before a statement's sessions: registered values read without the verifier's
+    registered file, then a circuit or public file no blob holds."""
+    if own["registered"] is None and p["reads_registered"]:
+        return "registered: the program reads registered values and the verifier holds no registered reads"
+    if own["circuit"] not in held or st["public"] not in held:
+        return "the circuit or the public file: no blob has its SHA-512"
+    return None
+
+
+def _statements_check(p: dict, e: dict, held: dict) -> str | None:
+    """`OneStageZk.runAll` on statements of no session: in the params' form, each statement's own refusals
+    (`_statement_check`), per member after its name is one of the params' members and no earlier statement's."""
+    sts = e["statements"]
+    if p["members"] is None:
+        if len(sts) != 1 or sts[0]["member"] is not None:
+            return "the evidence's proofs are per member (statements) and the parameters' one statement's"
+        return _statement_check(p, p["proofs"], sts[0], held)
+    seen = set()
+    for st in sts:
+        name = st["member"]
+        if name is None:
+            return "the evidence's proofs are one statement's (public, sessions) and the parameters' per member (members)"
+        if name not in p["members"]:
+            return f"member {name}: the parameters name no such member"
+        if name in seen:
+            return f"member {name}: a second statement: a member's units are one statement's"
+        seen.add(name)
+        if why := _statement_check(p, p["members"][name], st, held):
+            return f"member {name}: {why}"
+    return None
 
 
 def _one_stage_check(p: dict, c: tuple[dict, bytes], e: dict, blobs: list[bytes]) -> tuple:
     """`OneStageZk.checkBlobs` on `blobs`: at the coins v1 reads from the challenger's release (`_coins_of`), the
-    sessions' records held to the coin trees that release log shows (`challenger.sessions_tree_reason`), the circuit
-    and public files on the blobs, and v1's `check` at those coins on the verdicts of no session. A session whose coins
-    a tree the challenger logged holds is verified by `flock-verify`, outside the mirror."""
+    sessions' records held to the coin trees that release log shows (`challenger.sessions_tree_reason`), each
+    statement's circuit and public files on the blobs (`_statements_check`), and v1's `check` at those coins on the
+    verdicts of no session, what it would accept refused in the per-member form (`OneStageZk.MULTI_REFUSED`). A session
+    whose coins a tree the challenger logged holds is verified by `flock-verify`, outside the mirror."""
     try:
         if ONE_STAGE._coins_of(p, c, e) is None:
             return REJECT, "coins: no challenger"
@@ -234,7 +321,7 @@ def _one_stage_check(p: dict, c: tuple[dict, bytes], e: dict, blobs: list[bytes]
     except (CH.CoinError, KeyError, TypeError):
         return REJECT, "coins"
     held = {hashlib.sha512(b).hexdigest(): b for b in blobs}
-    sessions = e["proofs"]["sessions"]
+    sessions = [s for st in e["statements"] for s in st["sessions"]]
     for s in sessions:
         try:
             held[s["record"]].decode()
@@ -246,13 +333,12 @@ def _one_stage_check(p: dict, c: tuple[dict, bytes], e: dict, blobs: list[bytes]
         raise ValueError("outside the mirror: sessions on the challenger's coin trees")
     if why := CH.sessions_tree_reason(trees, [(s["name"], None) for s in sessions]):
         return REJECT, f"proofs: {why}"
-    if p["proofs"]["registered"] is None and p["reads_registered"]:
-        return REJECT, "proofs: registered: the program reads registered values and the verifier holds no registered reads"
-    if p["proofs"]["circuit"] not in held or e["proofs"]["public"] not in held:
-        return REJECT, "proofs: the circuit or the public file: no blob has its SHA-512"
+    if why := _statements_check(p, e, held):
+        return REJECT, f"proofs: {why}"
     if e["proved_units"]:
         return REJECT, "proofs: the units the sessions proved are not the evidence's proved_units"
-    return ONE_STAGE.check(p, c, {**e, "verdicts": {}})
+    out = ONE_STAGE.check(p, c, {**e, "verdicts": {}})
+    return (REJECT, f"proofs: {MULTI_REFUSED}") if out[0] == ACCEPT and p["members"] is not None else out
 
 
 def _form_params(j: Any) -> dict:

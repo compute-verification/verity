@@ -1965,6 +1965,9 @@ def _sha(b: bytes) -> str:
 #: `OneStageZk.NO_CHALLENGER`
 NO_CHALLENGER = ("the parameters name no challenger: the draw's coins are the auditor's challenger's signed release "
                  "(challenger, with window_root), never the prover's record")
+#: `OneStageZk.MULTI_REFUSED`
+MULTI_REFUSED = ("the per-member form (proofs.members) is refused until the guarantee for a sample over several members' "
+                 "statements under one draw is in the lock: verify one statement (proofs {circuit, registered})")
 
 
 def decode_params_v2(j) -> dict:
@@ -2003,6 +2006,25 @@ def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: 
     return d, draw_first(OwnRandomness(source), mine, s.population), coins
 
 
+def _challenger_audit(server, rng: random.Random, s: Setup, law: dict, rec: dict,
+                      trees: int) -> tuple[Drawn, dict, dict, dict]:
+    """An audit v1 accepts on the verdict its evidence hands in and the coins of a challenger sampling `trees` coin
+    trees (`_challenger_draw`): the challenger's session, v1's evidence, that evidence without its verdicts, and v1's
+    parameters naming the challenger, v2's without its `proofs`."""
+    ch, d, coins = _challenger_draw(rng, s, law, rec, trees)
+    proved = DR.proved(d)
+    evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
+                "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+    params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
+              "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
+              "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
+              "window_root": ch.ledger.window["root"], "work_table": None}
+    v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
+    assert D.replay(ONE_STAGE, v1, server)[0] == "accept"
+    return ch, evidence, {k: v for k, v in evidence.items() if k != "verdicts"}, params
+
+
 def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     """v2 (`SampledProofs.OneStageZk`, `one_stage.proofs.check_v2`) is v1 with the verdicts its own run of the verifier
     on the proofs. An audit v1 accepts on the verdict its evidence hands in and its challenger's coins is, in v2: refused
@@ -2020,18 +2042,7 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     circuit, public = b"not a circuit file", b"not a public file"
 
     def audit(trees: int) -> tuple[Drawn, dict, dict, dict]:
-        ch, d, coins = _challenger_draw(rng, s, law, rec, trees)
-        proved = DR.proved(d)
-        evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
-                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
-                    "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
-        params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
-                  "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
-                  "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
-                  "window_root": ch.ledger.window["root"], "work_table": None}
-        v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
-        assert D.replay(ONE_STAGE, v1, server)[0] == "accept"
-        base = {k: v for k, v in evidence.items() if k != "verdicts"}
+        ch, evidence, base, params = _challenger_audit(server, rng, s, law, rec, trees)
         return ch, evidence, base, params | {"proofs": {"circuit": _sha(circuit), "registered": None}}
 
     ch, evidence, base, p2 = audit(1)
@@ -2067,6 +2078,89 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         "reject", "evidence: proofs: the sessions are not the evidence's sessions, in order")
     got = run(base | {"proofs": proofs([])}, p={k: v for k, v in p2.items() if k != "proofs"})
     assert got[0] == "reject" and got[1].startswith("params: the parameters name no proofs"), got
+
+
+def test_v2_per_member_runs_each_statement_on_its_members_inputs(server, server_v2):
+    """v2's per-member form (`OneStageZk.runMembers`): parameters naming each member's units, circuit and registered
+    file, evidence naming one statement per drawn member, its sessions the evidence's in statement order. Parameters
+    whose members' units meet, that name no member, or a member with empty units, an empty name or other keys are
+    refused, and so is evidence whose statement names no member or has other keys. The audit v1 accepts is, with its
+    proofs per member: rejected by the coin trees' check across statements (a tree no statement's session used, or one
+    serving two members' statements), by the session's own verdict on its member's circuit (another member's circuit no
+    blob holds is not read), and for a statement naming a member the parameters don't, a member an earlier statement
+    named, a circuit no blob holds, proofs in the other form than the parameters', or proved units the statements didn't
+    prove. A unit proved outside its member's units and the refusal of what would accept (`MULTI_REFUSED`) need an
+    accepted session: `within`'s guards hold the first, `stage_zk_one_statement` proves the second."""
+    s, law = SETUPS[3], {"k": 2, "law": "subset"}
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF)
+    rng = random.Random("v2-members")
+    circuits, public = {"m0": b"not a circuit file", "m1": b"not another circuit file"}, b"not a public file"
+    members = {"m0": {"circuit": _sha(circuits["m0"]), "registered": None, "units": [[0, 2]]},
+               "m1": {"circuit": _sha(circuits["m1"]), "registered": None, "units": [[2, 5]]}}
+    ch, _, base, p1 = _challenger_audit(server, rng, s, law, rec, 1)
+    _, _, base0, p0 = _challenger_audit(server, rng, s, law, rec, 0)
+    p1, p0 = (p | {"proofs": {"members": members}} for p in (p1, p0))
+    record = D.canonical(ch.trees[0].record).encode()
+    blobs = [circuits["m0"].hex(), circuits["m1"].hex(), public.hex(), record.hex()]
+
+    def run(e, p=p1, blobs_=blobs):
+        case = {"blobs": list(blobs_), "commitment": _hex(rec), "evidence": _hex(e), "params": p}
+        out = server_v2.exchange(_json(case))
+        return out["verdict"], out["reason"]
+
+    def sessions(names):
+        return [{"name": n, "record": _sha(record), "reps": {}} for n in names]
+
+    def statements(*sts):
+        return {"statements": [{"member": m, "public": _sha(public), "sessions": sessions(ns)} for m, ns in sts]}
+
+    def per_member(*sts, b=base):
+        return b | {"proofs": statements(*sts), "sessions": [n for _, ns in sts for n in ns]}
+
+    assert run(per_member()) == (
+        "reject", f"proofs: the challenger's release log shows 1 coin trees and the sessions use 0: {UNUSED_TREE}")
+    assert run(per_member(("m0", ["s"]))) == ("reject", "verdict flock-verify/s did not accept")
+    assert run(per_member(("m0", ["s"])), blobs_=blobs[:1] + blobs[2:]) == (
+        "reject", "verdict flock-verify/s did not accept")
+    got = run(per_member(("m1", ["s"])), blobs_=blobs[:1] + blobs[2:])
+    assert got[0] == "reject" and got[1].startswith("proofs: member m1: circuit: no blob has the SHA-512"), got
+    assert run(per_member(("m0", ["s"]), ("m1", ["t"]))) == (
+        "reject", f"proofs: session t's coins are not the challenger's: {SHARED_TREE}")
+    assert run(per_member(("m2", ["s"]))) == ("reject", "proofs: member m2: the parameters name no such member")
+    assert run(per_member(("m0", []), ("m0", []), b=base0), p=p0) == (
+        "reject", "proofs: member m0: a second statement: a member's units are one statement's")
+    for sts in ((), (("m0", []),), (("m0", []), ("m1", []))):
+        assert run(per_member(*sts, b=base0), p=p0) == (
+            "reject", "proofs: the units the sessions proved are not the evidence's proved_units"), sts
+    assert run(base | {"proofs": {"public": _sha(public), "sessions": sessions(["s"])}, "sessions": ["s"]}) == (
+        "reject", "proofs: the evidence's proofs are one statement's (public, sessions) and the parameters' per member "
+                  "(members)")
+    assert run(per_member(("m0", ["s"])), p=p1 | {"proofs": {"circuit": members["m0"]["circuit"], "registered": None}}) == (
+        "reject", "proofs: the evidence's proofs are per member (statements) and the parameters' one statement's "
+                  "(circuit, registered)")
+    assert run(per_member(("m0", ["s"]), ("m1", ["t"])) | {"sessions": ["t", "s"]}) == (
+        "reject", "evidence: proofs: the sessions are not the evidence's sessions, in order")
+    one = {"public": _sha(public), "sessions": []}
+    for proofs_, why in (({"statements": [one | {"member": ""}]}, "proofs: a statement's member is not a member's name"),
+                         ({"statements": [one]}, "the keys of a statement of the proofs are not member, public, sessions"),
+                         ({"statements": {}}, "proofs: statements is not a list")):
+        assert run(base0 | {"proofs": proofs_}, p=p0) == ("reject", f"evidence: {why}"), proofs_
+    m0 = members["m0"]
+    for proofs_, why in (({"members": {**members, "m1": m0 | {"units": [[1, 5]]}}},
+                          "proofs: unit 1 is in two members' units: a unit is one member's"),
+                         ({"members": {"m0": m0 | {"units": [[0, 2], [1, 2]]}}},
+                          "proofs: unit 1 is in two members' units: a unit is one member's"),
+                         ({"members": {}}, "proofs: members names no member"),
+                         ({"members": {"m0": m0 | {"units": []}}},
+                          "proofs: member m0's units are not a nonempty list of [lo, hi] with 0 <= lo < hi"),
+                         ({"members": {"m0": m0 | {"units": [[2, 2]]}}},
+                          "proofs: member m0's units are not a nonempty list of [lo, hi] with 0 <= lo < hi"),
+                         ({"members": {"": m0}}, "proofs: a member's name is empty"),
+                         ({"members": {"m0": m0 | {"pin": None}}},
+                          "the keys of member m0 are not circuit, registered, units"),
+                         ({"members": members, "circuit": m0["circuit"]}, "the keys of proofs are not circuit, registered")):
+        assert run(per_member(), p=p1 | {"proofs": proofs_}) == ("reject", f"params: {why}"), proofs_
 
 
 def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
