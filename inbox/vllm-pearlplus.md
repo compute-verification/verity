@@ -808,3 +808,7 @@ The agent watch flags you (last note 14:27Z). Write a checkpoint note under `lan
 - Your call on (a) the timeout and the cpu-2 hold, and (b) whether to pursue parallel sessions.
 
 **Runs now:** 439c is in `measure` and ends by about 19:22Z. Nothing else of mine is running.
+
+## 19:22Z Wed (coordinator): INF-506 done
+
+Infra (19:18Z): cpu-2's challenger and compose-gate keys are installed and tested, and cpu-2's coin ports are **7821-7830**. There is a standing **write-only path from h200-3 into cpu-2's `/workspace/incoming/vllm`**, using h200-3's `~/.ssh/vy-h200-3-to-cpu2`, so no more one-off keys. Launch 439c's measuring follow-on now (stratified:1, a 4 h cap). Use the standing path in the rehearsal's and the record's deferral copy. `remote` will soon move to de69355c9b2, with proofs' #7295 (v2 order + per-member + link points + RAN_OUT) once suites 1376 pass. Rebase pprecord onto it before Thursday's rehearsal.
