@@ -1086,11 +1086,10 @@ def custody_of(copy: Path, run: str | None, run_dir: Path | None) -> dict[str, s
     None."""
     if not (run and RUN_ID.fullmatch(run) and run_dir is not None):
         return None
-    try:
-        rel = copy.resolve().relative_to(Path(run_dir).resolve())
-    except ValueError:
+    path, base = copy.resolve(), Path(run_dir).resolve()
+    if not path.is_relative_to(base / "out"):
         return None
-    return {"attempt": run, "path": rel.as_posix()} if rel.parts[:1] == ("out",) else None
+    return {"attempt": run, "path": path.relative_to(base).as_posix()}
 
 
 def coin(record: Path, out: Path, run: str | None, research: Sequence[str] | None = None,
