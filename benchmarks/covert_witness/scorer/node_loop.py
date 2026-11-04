@@ -42,6 +42,8 @@ K = os.environ.get("TE_NODE_STATE", "/workspace/research/lanes/training/te-score
 BORROW = "/workspace/research/git/verity.git/objects"
 #: this loop's own small files: each run's served.json, the last refresh's PUT statuses, the commits to push, its log
 LOOP = Path(os.environ.get("TE_NODE_LOOP", "/tmp/scorer/node"))
+#: the runs a refresh traces ahead of every other, one per line in order (v1cycle's TE_TRACE_FIRST), read at each launch
+FIRST_RUNS = LOOP / "first.txt"
 #: the VM's checkout of the re-score's te_core, whose console GETs and PUTs (the token is this VM's)
 RESCORE = Path(os.environ.get("TE_RESCORE_WT", "/tmp/scorer/rescore"))
 FIRST = datetime(2026, 11, 2, 21, 30, tzinfo=UTC).timestamp()
@@ -286,6 +288,8 @@ def once(slot: float) -> dict:
     # a refresh off the slots' grid (`once` by hand) stops its shards before the next slot, which then runs
     after = FIRST + ((slot - FIRST) // SLOT_S + 1) * SLOT_S
     env = {"TE_HERE_UNTIL": f"{min(slot + UNTIL_S, after - LATE_S, END):.0f}"}
+    if FIRST_RUNS.exists() and (lead := FIRST_RUNS.read_text().split()):
+        env["TE_TRACE_FIRST"] = ",".join(lead)
     if last.get("vm_put") and last.get("stamp"):
         log.write_text(last["vm_put"])
         send.append(log)

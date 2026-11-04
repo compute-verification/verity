@@ -444,8 +444,9 @@ def run_tiers() -> dict[str, str | None]:
 
 
 def to_trace(te: Path, busy: set[str]) -> list[tuple[int, str]]:
-    """The runs in scope with no trace in `te`'s cache and no node run tracing them, each with its rank: v3's first
-    (`retrace_order`), then the pilot's under CAPTURE_FINAL's capture or when TE_TRACE_PILOT is set. A tier's layer
+    """The runs in scope with no trace in `te`'s cache and no node run tracing them, each with its rank: TE_TRACE_FIRST's
+    (comma-separated) in its order ahead of every other, then v3's (`retrace_order`), then the pilot's under
+    CAPTURE_FINAL's capture or when TE_TRACE_PILOT is set. A tier's layer
     takes only that tier's records, and a layer before TIER_FROM's none of them; a fix layer only the runs its layer's
     traces list elementwise products for (`listed`)."""
     v3, done = v3_scope(), trace40.done(trace40.cache(te)) | busy
@@ -461,6 +462,8 @@ def to_trace(te: Path, busy: set[str]) -> list[tuple[int, str]]:
     runs = [r["run_id"] for r in trace40.scope() if r["run_id"] not in done and (r["run_id"] in v3 or pilot)
             and here(r["run_id"])]
     first = retrace_order(v3)
+    lead = [r for r in os.environ.get("TE_TRACE_FIRST", "").split(",") if r]
+    first |= {r: i - len(lead) - 1 for i, r in enumerate(lead)}
     return sorted(((first[r] if first.get(r, 1) <= 0 else 2 * (r not in v3) + first.get(r, 2), r) for r in runs),
                   key=lambda x: x[0])
 
