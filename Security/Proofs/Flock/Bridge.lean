@@ -18,6 +18,10 @@ import Proofs.Flock.Bridge.PublicDeployed
 import Proofs.Flock.Bridge.Honest
 import Proofs.Flock.Bridge.V5
 import Proofs.Flock.Bridge.Public
+import Proofs.Flock.Bridge.BitsRows
+import Proofs.Flock.Bridge.BitsLower
+import Proofs.Flock.Bridge.BitsKeys
+import Proofs.Flock.Bridge.BitsKeyProg
 import Proofs.Flock.Bridge.RelDeploy
 import Proofs.Flock.Bridge.Partitions
 import Proofs.Flock.Bridge.KeyPartitions
@@ -44,7 +48,13 @@ leaf-map form at V5's layout (`Flock.Bridge.relDeployL`). `Partitions`: `partOf`
 (`Flock.Bridge.keyPart_partitions`). `Code`: the sampled verifier's parse, scope check and partition over a registered
 circuit file (`Flock.Bridge.parseOf`, `scopeOf`, `partitionOf`), and at that code `ProgramScope`, `RegMatches`,
 `StmtIsFile` and `RelDeployTarget` with its partition hypothesis discharged (`Flock.Bridge.programScope_code`,
-`regMatches_code`, `stmtIsFile_code`, `relDeploy_code`, `relDeployL_code`). -/
+`regMatches_code`, `stmtIsFile_code`, `relDeploy_code`, `relDeployL_code`). `BitsRows`: `SampledProofs.Bits`' stacked
+unit rows are a circuit's template instance rows (`Flock.Bridge.rowsAgree_circuitRows`). `BitsLower`: where a Bits key
+program lays out a circuit and its units, the bridge's lowering, positions and proof blocks are Bits'
+(`Flock.Bridge.LaysOut.progOf_eq`, `Flock.Bridge.blockOf_eq`). `BitsKeys`: Bits' source keys are the bridge's
+(`Flock.Bridge.keyIdx_eq`). `BitsKeyProg`: Bits' key program lays out a circuit file's and its units, so the bridge's
+program, positions and proof blocks are Bits' (`Flock.Bridge.progOf_keyProg`, `Flock.Bridge.posOf_keyProg`,
+`Flock.Bridge.blockOf_bitsKeyProg`). -/
 
 /-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
 theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl
