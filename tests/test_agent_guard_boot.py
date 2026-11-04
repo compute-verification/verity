@@ -3,7 +3,8 @@ it clones infra to INFRA and runs infra's boot.sh, which installs the guard in D
 INFRA's earlier checkout, else Verity's last guard, and leaves one retry behind, which takes the same steps once the fetch
 works. A branch without `.cursor/hooks.json` gets one that runs DEST's hook fail-closed, and no path ends with a hook in DEST
 that lets `env` through. The tracked hooks file runs DEST's hooks through `hook.sh`, which names the Slack registry for them:
-Verity's last Task hook, taken from this checkout's history, finds none beside it in DEST. Infra's boot.sh is infra's to
+Verity's last Task hook, taken from this checkout's history, finds none beside it in DEST. When DEST has no hook, `hook.sh`
+runs Verity's last guard from origin/main's history, and with none there the hook fails closed. Infra's boot.sh is infra's to
 test: here it is a stub that installs the hook beside it. Here the retry waits no time between tries, and a git on PATH
 fails infra's fetch as many times as a test asks."""
 import fcntl
@@ -248,6 +249,30 @@ def hook_env(tmp_path) -> dict:
         "AGENT_GUARD_TASK_LOG": str(tmp_path / "task.jsonl")}
 
 
+def shim(tmp_path, *history: dict) -> tuple[dict, Path]:
+    """WORKSPACE: a clone whose origin/main has this hook.sh, then each commit of ``history`` (a file None deletes); DEST and
+    the cache empty."""
+    env = hook_env(tmp_path)
+    ws = tmp_path / "ws"
+    git(env, tmp_path, "init", "-q", "--bare", "-b", "main", "origin.git")
+    git(env, tmp_path, "clone", "-q", "origin.git", "ws")
+    commit(env, ws, {"tools/agent-guard/hook.sh": (ROOT / "tools/agent-guard/hook.sh").read_text()}, "the shim")
+    for i, files in enumerate(history):
+        commit(env, ws, files, f"guard {i}")
+    return env, ws
+
+
+def shell_hook(env, ws) -> subprocess.CompletedProcess:
+    """The tracked shell hook, as Cursor runs it in WORKSPACE, on `env | cut -d= -f1`."""
+    (entry,) = json.loads((ROOT / ".cursor/hooks.json").read_text())["hooks"]["beforeShellExecution"]
+    return subprocess.run(shlex.split(entry["command"]), cwd=ws, input=ENV_EVENT, capture_output=True, text=True, env=env)
+
+
+def named(name: str) -> str:
+    """A shell hook that answers with its name and the registry it was given."""
+    return f'import json, os\nprint(json.dumps({{"hook": "{name}", "registry": os.environ["AGENT_GUARD_REGISTRY"]}}))\n'
+
+
 def last_guard(name: str) -> str:
     """NAME in Verity's last guard, the tree boot.sh falls back to, found as boot.sh finds it in origin/main's history but in
     HEAD's, which is origin/main's once this lands: the last first-parent commit that touched the shell hook, or its parent
@@ -266,9 +291,25 @@ def test_tracked_hooks_run_the_installed_guard_through_hook_sh_fail_closed(tmp_p
     assert entry == {"command": "sh tools/agent-guard/hook.sh shell_hook.py", "timeout": 10, "failClosed": True}
     assert {e["command"] for e in hooks["preToolUse"]} == {"sh tools/agent-guard/hook.sh task_hook.py"}
     assert sorted(e["matcher"] for e in hooks["preToolUse"]) == ["CallDynamicTool", "Task", "^MCP:"]
-    p = subprocess.run(shlex.split(entry["command"]), cwd=ROOT, input=ENV_EVENT, capture_output=True, text=True,
-                       env=hook_env(tmp_path))
+    p = shell_hook(*shim(tmp_path))
     assert p.returncode != 0 and p.stdout == "", (p.stdout, p.stderr)
+
+
+def test_with_no_hook_in_dest_hook_sh_runs_the_shell_hook_origin_main_had_before_it_was_deleted(tmp_path):
+    """A VM that hasn't booted the guard since it moved has no DEST. Its shell hook is the one origin/main had before the
+    commit that deleted it, extracted once into the cache under that commit, where a later call finds it with no history to
+    read. Once DEST has the hook, DEST's runs."""
+    env, ws = shim(tmp_path, {"tools/agent-guard/shell_hook.py": named("last")}, {"tools/agent-guard/shell_hook.py": None})
+    p = shell_hook(env, ws)
+    assert p.returncode == 0 and json.loads(p.stdout) == {"hook": "last", "registry": f"{ws.resolve()}/{REGISTRY}"}, p.stderr
+    assert (tmp_path / "cache/last").resolve() == (tmp_path / "cache" / git(env, ws, "rev-parse", "HEAD^")).resolve()
+    git(env, ws, "update-ref", "-d", "refs/remotes/origin/main")
+    p = shell_hook(env, ws)
+    assert p.returncode == 0 and json.loads(p.stdout)["hook"] == "last", (p.stdout, p.stderr)
+    (tmp_path / "opt").mkdir()
+    (tmp_path / "opt/shell_hook.py").write_text(named("dest"))
+    p = shell_hook(env, ws)
+    assert p.returncode == 0 and json.loads(p.stdout)["hook"] == "dest", (p.stdout, p.stderr)
 
 
 def test_verity_s_last_task_hook_refuses_a_holder_s_foreground_task_through_the_hooks_file(tmp_path):
