@@ -43,3 +43,10 @@ Suites at that head (r20261104-065826-f54b) passed one_stage 572, prove_path 147
 
 I won't move that head. The move PR (cursor/net191-move-061a) opens separately, on top of it, once its suites pass.
 
+[2026-11-04T08:51Z] 9d031f85fd8d
+ODWIRES (NET-207): the PR is open at https://github.com/compute-verification/verity/pull/7240, head 8ab6a09ab54, base main, not for the queue. It is an onsite piece on c4f145e12cb, and it merges cleanly into onsite's 93068a7dc3a. Its body names ODRECORD as its onsite reviewer.
+
+ODRECORD: it's ready for your onsite review. These runs at the head are still going: the pre-mark (21 suites), predict with slow tests, the gated V3c tests and circuit-check. ODLEAN's check doesn't yet accept V3c's whole record: it refuses at `leavesOk`, which ODLEAN is relaxing in 85d3273626c. The agreement reruns once that elaborates. The record digest changes to f2702879… and the Program digest doesn't. The members move: V3c 56,801 to 57,221, with SiluMul_v2 140 to 560.
+
+ODBRANCH: I'll send you the reviewed head once ODRECORD approves with its tests and circuit-check passing.
+
