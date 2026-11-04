@@ -81,6 +81,7 @@ public import Flock.Extract
 public import Flock.Qcall
 public import Flock.Fuel
 public import Flock.Firewall
+public import Flock.Firewall.Honest
 public import Flock.Firewall.Contract
 public import Flock.Firewall.Assumptions
 public import Flock.Firewall.Released

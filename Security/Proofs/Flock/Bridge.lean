@@ -11,6 +11,7 @@ public import Proofs.Flock.Bridge.OpeningsCanon
 public import Proofs.Flock.Bridge.Assembly
 public import Proofs.Flock.Bridge.EndToEndHiddenC
 public import Proofs.Flock.Bridge.FaultyRightC
+public import Proofs.Flock.Bridge.RelSGuards
 public import Proofs.Flock.Bridge.Refused
 public import Proofs.Flock.Bridge.KSLive
 public import Proofs.Flock.Bridge.PublicDeployed

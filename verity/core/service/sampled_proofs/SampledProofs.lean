@@ -28,10 +28,12 @@ public import SampledProofs.ChallengerRecord
 public import SampledProofs.ChallengerSession
 public import SampledProofs.ChallengerCoins
 public import SampledProofs.ChallengerDraw
+public import SampledProofs.ChallengerTrees
 public import SampledProofs.Wires
 public import SampledProofs.WiresSpan
 public import SampledProofs.WiresSound
 public import SampledProofs.WiresComplete
 public import SampledProofs.WiresDrawn
+public import SampledProofs.SiteDifftest
 
 @[expose] public section

@@ -7,6 +7,7 @@ module
 
 public import Flock.With.Hashes
 public import Flock.Record
+public import Flock.JsonParse
 
 @[expose] public section
 
@@ -76,7 +77,7 @@ def decodeJWith (hs : Hashes M) (spec : SessionSpec) (j : Json) : M RunRecord :=
   match spec.coinTree with
   | none => check ((← str j "hello") == spec.hello) "S2/R7: the session parameters are not the verifier's"
   | some ct =>
-    let some own := (Json.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
+    let some own := (JsonParse.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
     let nonce ← CoinTree.checkHello own (← str j "hello")
     let _ ← CoinTree.checkRecord ct nonce (← fld j "coin_tree")
   -- S3
@@ -162,13 +163,13 @@ def decodeJWith (hs : Hashes M) (spec : SessionSpec) (j : Json) : M RunRecord :=
 
 /-- `Record.decode` with the record's digests through the oracle: the parse, then `decodeJWith` at its value. -/
 def decodeWith (hs : Hashes M) (spec : SessionSpec) (text : String) : M RunRecord := do
-  let j ← match Json.parse text with
+  let j ← match JsonParse.parse text with
     | .ok j => pure j
     | .error e => throw s!"record: not JSON: {e}"
   decodeJWith hs spec j
 
 theorem decodeWith_of_parse [LawfulMonad M] (hs : Hashes M) (spec : SessionSpec) {text : String} {j : Json}
-    (h : Json.parse text = .ok j) : decodeWith hs spec text = decodeJWith hs spec j := by
+    (h : JsonParse.parse text = .ok j) : decodeWith hs spec text = decodeJWith hs spec j := by
   simp only [decodeWith, h, pure_bind]
 
 end Record
