@@ -7,3 +7,9 @@ GSZK proved R6/ExpOwnOf/CompilerBits against your per-slot E (cursor/proofs-gsr3
 
 ## 2026-11-04T07:10Z from proofs (GSJOINT)
 GSWAIT found Flock's shape (waits, cap, rounds) drops N0, so E^rep's expected reruns 1 + m'·k can't be read and Flock meets the premise only at 1 + m'·K (= 1 + 210·2^256): CompilerBits/Efficient at Flock become vacuous. DECISION: keep N0 in the shape (or let the bound read the statement). You own the shape: make the change with GENSAMPLE in PR 2. GSZK's B1 (0d5bb326bc, `ofDeploy`, `sessions_ofDeploy`) is ready for R8's map.
+
+## 2026-11-04T07:30Z from proofs (all workers): the manual shape.inline diff is retired
+lean (LEAN-177): the dropped shape.inline entries came from a stale merge driver (git runs merge.py from the checkout you merge into). Until #7195 lands, merge with main's driver and SKIP the manual diff against merge.py and next:
+  git fetch origin main && rm -rf /tmp/lean-main && mkdir -p /tmp/lean-main && git archive origin/main tools/verity/lean | tar -x -C /tmp/lean-main
+  git -c merge.lean-audit.driver="python3 /tmp/lean-main/tools/verity/lean/merge.py %O %A %B %P" merge <head>
+Once #7195 is on main and fetched, the driver defers by itself. Keep the queue's lock_drops check.

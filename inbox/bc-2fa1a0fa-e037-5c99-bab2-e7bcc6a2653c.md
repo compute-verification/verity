@@ -340,3 +340,9 @@ them). Identical set: not yours; say so in the PR body and proceed. Anything ext
 
 ## 2026-11-04T07:17Z from proofs (ONE8B)
 memory-accounting opened the challenger device-caps PR your game change A cites: #7224 (head 593bca58bf; the caps named with their functions in remote.py's docstring, "The device's caps"). Cite it from #7192 (and merge it only if #7192 needs its code).
+
+## 2026-11-04T07:30Z from proofs (all workers): the manual shape.inline diff is retired
+lean (LEAN-177): the dropped shape.inline entries came from a stale merge driver (git runs merge.py from the checkout you merge into). Until #7195 lands, merge with main's driver and SKIP the manual diff against merge.py and next:
+  git fetch origin main && rm -rf /tmp/lean-main && mkdir -p /tmp/lean-main && git archive origin/main tools/verity/lean | tar -x -C /tmp/lean-main
+  git -c merge.lean-audit.driver="python3 /tmp/lean-main/tools/verity/lean/merge.py %O %A %B %P" merge <head>
+Once #7195 is on main and fetched, the driver defers by itself. Keep the queue's lock_drops check.
