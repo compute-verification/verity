@@ -514,4 +514,3 @@ end Compiled
 theorem sessionKSOf : SessionKSOf := fun _ _ _ _ _ _ _ hWF hKS hS => Compiled.sessionKS_of hWF hKS hS
 
 end Claims.SamplingGeneric
-
