@@ -266,14 +266,46 @@ def test_the_ports_are_exactly_the_verifiers(staged):
 
 
 def test_every_port_of_the_circuit_is_a_registered_port(staged):
-    """`Registered.checkComplete`, which `--registered` always runs: a statement that commits a port's rows afresh is
-    refused when the verifier's registered reads leave that port out too (each side agreeing, `check` alone would pass),
-    an input port (`x`) or an output row (`out`), so no output's cone reads a row only the public file states."""
+    """`Registered.checkComplete`, which `--registered` runs when the file binds no port (`RegBound.check`): a statement
+    that commits a port's rows afresh is refused when the verifier's registered reads leave that port out too (each side
+    agreeing, `check` alone would pass), an input port (`x`) or an output row (`out`), so no output's cone reads a row only
+    the public file states."""
     for port in ("x", "out"):
         public = _stage(staged, f"{port}-unregistered", afresh=(port,))
         code, out = _statement(staged, public, _own(staged, f"own-no-{port}", lambda ps, port=port: ps.pop(port)))
         assert code == 1 and (f"registered reads (complete): the statement's port {port} is no port of the verifier's "
                               "registered reads") in out, (port, out)
+
+
+def _bound(s, name: str, drop: tuple[str, ...], public: Path, bound: tuple[str, ...], root: str | None = None) -> Path:
+    """The verifier's reads as a v1 file without the ports `drop`, binding the ports `bound` (`G.BOUND`) at the public
+    header's frame-v3-sha512 root and domain of their rows (the window's registration's, which the audit holds the header's
+    to before any coin), or at `root`."""
+    fv = json.loads(public.read_bytes().split(b"\n", 1)[0])["frame_v3"]
+    doc = {**s.own, "format": G.READS_V1, "ports": {p: e for p, e in s.own["ports"].items() if p not in drop},
+           G.BOUND: {p: {"root": root or fv["roots"][p], "domain": fv["domain_ids"][p]} for p in bound}}
+    (s.dir / f"{name}.json").write_text(json.dumps(doc))
+    return s.dir / f"{name}.json"
+
+
+def test_a_port_the_reads_leave_out_is_bound_to_the_windows_committed_root(staged):
+    """`Flock.RegBound`: a statement that commits a port's rows afresh passes when the verifier's file binds that port at
+    the frame-v3-sha512 root and domain of its rows, and is refused when it binds it at another root, binds a registered
+    port too, or leaves another port committed afresh neither registered nor bound."""
+    public = _stage(staged, "x-bound", afresh=("x",))
+    code, out = _statement(staged, public, _bound(staged, "own-x-bound", ("x",), public, ("x",)))
+    assert code == 0, out
+    code, out = _statement(staged, public, _bound(staged, "own-x-other", ("x",), public, ("x",), "00" * 64))
+    assert code == 1 and ("registered reads (bound): port x's frame-v3-sha512 root or domain in the public file is not the "
+                          "window's committed one") in out, out
+    code, out = _statement(staged, public, _bound(staged, "own-x-cs-bound", ("x",), public, ("x", "cs")))
+    assert code == 1 and "registered reads (bound): port cs is a registered port and bound" in out, out
+    both = _stage(staged, "x-out-afresh", afresh=("x", "out"))
+    code, out = _statement(staged, both, _bound(staged, "own-out-neither", ("x", "out"), both, ("x",)))
+    assert code == 1 and ("registered reads (complete): the statement's port out is neither a port of the verifier's "
+                          "registered reads nor bound") in out, out
+    code, out = _statement(staged, both, _bound(staged, "own-x-out-bound", ("x", "out"), both, ("x", "out")))
+    assert code == 0, out
 
 
 def test_a_v1_files_reads_start_at_its_first_unit(staged):

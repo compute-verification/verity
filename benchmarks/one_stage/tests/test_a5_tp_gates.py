@@ -206,3 +206,28 @@ def test_a5s_registered_read_negatives_alter_one_of_a_chunks_two_ports_and_keep_
     assert seen == {"chunk-without-registered-reads": None,
                     "registered-read-against-another-root": {**ports, "part0": {**ports["part0"], "root": "00" * 64}},
                     "registered-reads-another-row": {**ports, "part0": {**ports["part0"], "reads": [*range(1, T), 0]}}}
+
+
+def test_a5s_bound_port_negatives_bind_one_port_at_another_root_or_leave_it_out(tmp_path, monkeypatch) -> None:
+    """Where a chunk's file binds its other ports to the registration's roots (`registered.bind_ports`), a5's negatives add
+    its first bound port at another root and that port left out, each with every other port as honest: Lean is to refuse
+    the one port the negative changes, by its reason."""
+    import a5
+
+    ports = {f"part{j}": {"value": AT.value_name(j, 0, 0), "root": f"{j}" * 128, "leaves": T, "reads": list(range(T))}
+             for j in AT.RANKS}
+    bound = {p: {"root": f"{i + 4}" * 128, "domain": f"{i + 6}" * 128} for i, p in enumerate(("o0", "o1"))}
+    honest = {"format": "verity/registered-reads/v1", "ports": ports, "bound": bound}
+    (tmp_path / "registered.json").write_text(json.dumps(honest))
+    seen = {}
+
+    def lean_verify(lean, st, n, sdir, zk, log):
+        seen[log] = json.loads(st["registered_file"].read_text()) if "registered_file" in st else None
+        return {"accepted": False, "digest": "d", "why": "setup: registered reads: none"}
+
+    monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
+    a5.registered_negatives(SimpleNamespace(lean="lean"), {"st": {"registered_file": tmp_path / "registered.json"},
+                                                            "m": SimpleNamespace(n=T)}, tmp_path)
+    assert seen["bound-port-at-another-root"] == {**honest, "bound": {**bound, "o0": {**bound["o0"], "root": "00" * 64}}}
+    assert seen["bound-port-left-out"] == {**honest, "bound": {"o1": bound["o1"]}}
+    assert seen["registered-read-against-another-root"]["bound"] == bound

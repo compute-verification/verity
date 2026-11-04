@@ -480,22 +480,30 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[st
     """A drawn chunk's honest session, a chunk that reads a row table or an outside registered value, re-verified by Lean against
     registered reads it must refuse: none (its header names registered reads the verifier holds no root for), its first port's
     value's root replaced, and (a value of more than one row) every unit reading that value's next row, each with its other
-    ports' reads as registered."""
+    ports' reads as registered; and where the file binds its other ports (`REG.BOUND`), its first bound port bound at another
+    root, or left out."""
     st, n = mm["st"], mm["m"].n
     honest = json.loads(st["registered_file"].read_text())
     port = next(iter(honest["ports"]))
     p = honest["ports"][port]
+    at = lambda change: {**honest, "ports": {**honest["ports"], port: {**p, **change}}}  # noqa: E731
     cases = {"chunk-without-registered-reads": (None, "holds no registered roots"),
-             "registered-read-against-another-root": ({"root": "00" * 64}, "does not open")}
+             "registered-read-against-another-root": (at({"root": "00" * 64}), "does not open")}
     if p["leaves"] > 1:
-        cases["registered-reads-another-row"] = ({"reads": [(r + 1) % p["leaves"] for r in p["reads"]]}, "the verifier's program reads")
+        cases["registered-reads-another-row"] = (at({"reads": [(r + 1) % p["leaves"] for r in p["reads"]]}), "the verifier's program reads")
+    if honest.get(REG.BOUND):
+        b, *rest = sorted(honest[REG.BOUND])
+        bound = honest[REG.BOUND]
+        cases["bound-port-at-another-root"] = ({**honest, REG.BOUND: {**bound, b: {**bound[b], "root": "00" * 64}}},
+                                               "is not the window's committed one")
+        left = {k: v for k, v in honest.items() if k != REG.BOUND} | ({REG.BOUND: {k: bound[k] for k in rest}} if rest else {})
+        cases["bound-port-left-out"] = (left, f"registered reads (complete): the statement's port {b} is")
     out = {}
-    for name, (change, why) in cases.items():
+    for name, (doc, why) in cases.items():
         alt = {x: y for x, y in st.items() if x != "registered_file"}
-        if change is not None:
+        if doc is not None:
             alt["registered_file"] = sdir / f"{name}.json"
-            alt["registered_file"].write_text(json.dumps({**honest, "ports": {**honest["ports"], port: {**honest["ports"][port], **change}}},
-                                                         sort_keys=True))
+            alt["registered_file"].write_text(json.dumps(doc, sort_keys=True))
         v = a0.lean_verify(a.lean, alt, n, sdir, zk=True, log=name)
         out[name] = {"refused": a0.lean_refused(v, why), "why": v.get("why")}
     return out
@@ -729,12 +737,17 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         print("A5 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str))
         return summary, False
     # each row-table chunk's Lean verify reads its x rows against its table's root, which the checks above tied to the registration;
-    # a member reading an outside registered value, against the root its owner signed
+    # a member reading an outside registered value, against the root its owner signed; each of its other ports bound to the
+    # registration's root and domain of its rows, which the checks above held its header's to (`REG.bind_ports`)
     reads = {**(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}), **(registered or {})}
     for mm in members:
         if mm["m"].key in reads:
+            m = mm["m"]
+            fv_roots = mm["header"]["frame_v3"]["roots"]
+            own = REG.bind_ports(reads[m.key], fv_roots, {p: {"root": roots[m.port(p)]["root"], "domain": want[m.port(p)]["domain"]}
+                                                         for p in fv_roots})
             mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
-            mm["st"]["registered_file"].write_text(json.dumps(reads[mm["m"].key], sort_keys=True))
+            mm["st"]["registered_file"].write_text(json.dumps(own, sort_keys=True))
 
     # one sample over the whole population; each member serves its share under --zk
     if not streamed(a):
