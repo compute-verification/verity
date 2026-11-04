@@ -30,7 +30,8 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    else    te_core.frontier_fit's own (its LADDER, built from ladder-v3's manifest), which PUTs training/algorithm-policy and training/frontier-fit,
    its rows labelled first (POLICY, v1labels: a void row unpriced, a frozen embedding's price under review) and the
    coverage line saying which of its points are priced (`v1labels.priced`), before te_core 4.13; from 4.13 unwrapped
-   (POLICY_IO, `UNWRAPPED`), and a void row holds both PUTs; then `python -m
+   (POLICY_IO, `UNWRAPPED`), and a void row holds both PUTs; a refused run's rows and a reached run's whose trace
+   failed read why, never 'not yet traced' (REFUSED_ROWS, `trace_failed`); then `python -m
    te_core.panels frontier-branches` (Daniel, coordinator 23:56Z; the integrator's builder, 23:59Z), stored only
    since algorithm-policy carries gain, gain_target and start_compute_gates (FB_RETIRED; 05:22Z, 07:48Z), so a
    refresh whose algorithm-policy isn't PUT PUTs no frontier either. A refused PUT is reported, not fatal. te_core's
@@ -510,6 +511,43 @@ def reached_left(te: Path) -> list[str]:
     return sorted(r for r, k in retrace_order(v3_scope()).items() if k <= 0 and r in scope and r not in done)
 
 
+#: a reached run whose trace failed is no 'not yet traced' row (coordinator 21:47Z): one a capture refused for what its
+#: program does is a refused row, the error's category and why (`trace_failed`); one that failed for anything else
+#: reads TRACE_FAILED and the error, in no decade and cut as a refused row is (REFUSED_ROWS)
+TRACE_REFUSED = (
+    (re.compile(r"CaptureRefused: batch_dependent"),
+     "batch-dependent program (the step's graph changes with the token axes, CaptureRefused batch_dependent)"),
+    (re.compile(r"TypeError: '[<>=]+' not supported between instances of 'complex'"),
+     ("data-dependent program (it branches on a read-back float: the trace's variance goes negative, so the comparison "
+      "is complex)")))
+TRACE_FAILED = "unmeasured: trace failed"
+
+
+def trace_failed(tes: list[Path]) -> dict[str, str]:
+    """Each run whose trace failed in the newest of `tes` (oldest first) that tried it and that none of them traced,
+    with its rows' basis: 'refused: ' and the category where TRACE_REFUSED names the error, else TRACE_FAILED and the
+    error's last line; a retry pending (in a layer's pending.json) is said."""
+    ok, err, flying = set(), {}, set()
+    for te in tes:
+        c = trace40.cache(te)
+        for k, v in (json.loads((c / "traced.json").read_text()) if (c / "traced.json").exists() else {}).items():
+            if v.get("error"):
+                err[k] = v["error"]
+            else:
+                ok.add(k)
+        if (c / "pending.json").exists():
+            flying |= {r for runs in json.loads((c / "pending.json").read_text()).values() for r in runs}
+    out = {}
+    for run, e in err.items():
+        if run in ok:
+            continue
+        kind = next((w for p, w in TRACE_REFUSED if p.search(e)), None)
+        last = next((x.strip() for x in reversed(e.strip().splitlines()) if x.strip()), "")
+        out[run] = (f"refused: {kind}" if kind else
+                    f"{TRACE_FAILED} ({last[:160]}){'; retrying' if run in flying else ''}")
+    return out
+
+
 def ledger_args(out: Path, root: Path | None = None) -> list[str]:
     ledger = str(root or os.environ.get("TE_LEDGER", str(Path.home() / ".research" / "te-ledger")))
     return ["--out", str(out), "--root", ledger, "--scorer", str(S.STATE), *(x for p in PINS for x in ("--pin", p))]
@@ -895,15 +933,19 @@ sys.exit(v1labels.run(algorithm_policy, Path(sys.argv.pop(1))))
 #: a refused run is a row at each target it reaches, never an absence, as an untraced run is (coordinator 16:19Z): C and p
 #: from its record (its formalism block's counts, the trace left out), pooled into H, every ρ column null and
 #: basis_default and basis_own REFUSED_ROW and why; in no decade, every cut keeping the least-p one per group among the
-#: refused rows alone. te_core.formalism's refusals stay in refused.json, and the board line counts the rows
+#: refused rows alone. te_core.formalism's refusals stay in refused.json, and the board line counts the rows. A reached
+#: row 'not yet traced' whose run's trace failed (TE_TRACE_FAILED, `trace_failed`) reads that basis instead, cut and
+#: counted the same way, a trace failure's apart from a refusal's
 REFUSED_ROWS = """
+import json, os
 from te_core import formalism, frontier_fit
-OF, ROWS = "refused: ", []
+OF, FAILED, ROWS, FAILS = "refused: ", "unmeasured: trace failed", [], []
+FAILED_TRACE = json.load(open(os.environ["TE_TRACE_FAILED"])) if os.environ.get("TE_TRACE_FAILED") else {}
 def label(why):
     kind, _, events = why.partition(": not measured ")
     return OF + (f"data-dependent program {events}" if kind == "data-dependent" and events else why)
 def refused(basis):
-    return isinstance(basis, str) and basis.startswith(OF)
+    return isinstance(basis, str) and basis.startswith((OF, FAILED))
 def scored_rows(a, scored_rows=frontier_fit.scored_rows):
     d, scored = scored_rows(a)
     family = {run: f for (run, _), (_, f) in d["blocks"].items()}
@@ -928,6 +970,9 @@ def build(info, source, stamp=None, untraced=(), build=algorithm_policy.build):
         if row[b] == algorithm_policy.UNTRACED and row[at] in why:
             row[b] = row[o] = why[row[at]]
             ROWS.append(row[at])
+        elif row[b] == algorithm_policy.UNTRACED and (run := row[at].rsplit("@", 1)[0]) in FAILED_TRACE:
+            row[b] = row[o] = FAILED_TRACE[run]
+            (ROWS if row[b].startswith(OF) else FAILS).append(row[at])
     return p
 def kept(rows, tier, cov, kept=algorithm_policy.kept):
     ix = {c: i for i, c in enumerate(algorithm_policy.COLUMNS)}
@@ -937,7 +982,8 @@ def kept(rows, tier, cov, kept=algorithm_policy.kept):
     least = {}
     for r in rows:
         if refused(r[b]):
-            g = (r[ix["data"]], r[ix["start"]], r[ix["gain_target"]]) + ((r[ix["family"]],) if tier == "family" else ())
+            g = (r[b].startswith(OF), r[ix["data"]], r[ix["start"]], r[ix["gain_target"]]) + (
+                (r[ix["family"]],) if tier == "family" else ())
             k = (r[ix["p"]] is None, r[ix["p"]] or 0, r[ix["C_gates"]])
             if g not in least or k < least[g][0]:
                 least[g] = (k, id(r))
@@ -946,9 +992,11 @@ def kept(rows, tier, cov, kept=algorithm_policy.kept):
 def decade(rho, basis=None, decade=algorithm_policy.decade):
     return None if refused(basis) else decade(rho, basis)
 def said(text, sep=" "):
-    n = len(ROWS)
+    n, f = len(ROWS), len(FAILS)
     return text + (f"{sep}{n} reached {'row' if n == 1 else 'rows'} refused (p the record's, rho null, basis_default "
-                   f"'{OF}' and why), in no decade." if n else "")
+                   f"'{OF}' and why), in no decade." if n else "") + (
+        f"{sep}{f} reached {'row' if f == 1 else 'rows'} {FAILED} (p the record's, rho null, basis_default "
+        f"'{FAILED} (why)'), in no decade." if f else "")
 coverage_md, board_line = algorithm_policy.coverage_md, algorithm_policy.board_line
 frontier_fit.scored_rows, algorithm_policy.build, algorithm_policy.kept, algorithm_policy.decade = (
     scored_rows, build, kept, decade)
@@ -1305,6 +1353,9 @@ def main() -> int:
     last = rescore(rs, args.gates, final, root)
     on = nxt or trace40.TE40_WT
     untraced = [] if final or not same_capture(capture_version(on), CAPTURE_FINAL) else reached_left(on)
+    if not final:
+        (out / "trace-failed.json").write_text(json.dumps(trace_failed([trace40.TE40_WT, *over]), indent=1) + "\n")
+        os.environ["TE_TRACE_FAILED"] = str(out / "trace-failed.json")
     hold = ("the VM read no served panels for this refresh on the node (TE_SERVED)"
             if HERE_DIR and not os.environ.get("TE_SERVED") else None)
     policy = {} if final else policy_panels(out, commit, not args.no_put and not hold, root, args.gates)

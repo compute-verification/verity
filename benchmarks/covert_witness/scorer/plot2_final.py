@@ -26,8 +26,8 @@ tables/algorithm-policy.json: the one the finals table read, or a later refresh'
 - C is its reaching seeds' mean |C| and H H_any's; gain, start_loss and end_loss are their means. A point whose
   finished seeds all miss g is a "no" row at their last checkpoints' mean |C|, p = C/H_any a lower bound;
 - every ρ column is the search row's for its run and g, ρ from the search run's trace: S = p·rho_own is null where
-  rho_own is unmeasured (`UNTRACED`, or a refused run's row, `REFUSED`; drawn in the strip under its panel) and only a
-  lower bound on a partial row.
+  rho_own is unmeasured (`UNTRACED`, a refused run's row, `REFUSED`, or a failed trace's, `FAILED`; drawn in the strip
+  under its panel) and only a lower bound on a partial row.
 
 `build` writes DIR/tables/ (algorithm-policy.json uncut, the finals table it read and final.json: each (data, start,
 g)'s split and why and its overlay rows), DIR/console/algorithm-policy.json (the cut, its note naming no art) and
@@ -67,13 +67,15 @@ OVERLAY = f"{SEARCH}, 1 seed"
 DETAIL = ("rho_inputs", "rests_on", "kinds")
 #: the finals table's p_any_basis where its p reads the final set (islands/integrator/finals_table.py's FINAL_SET)
 FINAL_SET = "final set"
-#: how a refused run's row's basis_own opens (v1cycle's REFUSED_ROWS): a row with p from its record and no ρ
-REFUSED = "refused: "
+#: how a refused run's row's basis_own opens, and a reached run's whose trace failed (v1cycle's REFUSED_ROWS): a row
+#: with p from its record and no ρ
+REFUSED, FAILED = "refused: ", "unmeasured: trace failed"
 #: the figure's inches per decade, on both axes, so an iso-S line S = p·rho_own runs at 45 degrees
 DECADE_IN = 1.5
 #: the figure's strip under each panel, the rows with p and no finite rho_own, each kind's marker
-STRIP_IN, NO_RHO = 0.4, {"untraced": ("x", "reached, not yet traced"), "refused": ("+", "refused (data-dependent)"),
-                         "none": ("|", "rho_own infinite or unmeasured")}
+STRIP_IN, NO_RHO = 0.4, {"untraced": ("x", "reached, not yet traced"),
+                         "refused": ("+", "refused (data- or batch-dependent program)"),
+                         "failed": ("1", "reached, trace failed"), "none": ("|", "rho_own infinite or unmeasured")}
 
 
 def run_of(row: list) -> str:
@@ -100,7 +102,7 @@ def template(by_run: dict[str, dict[float, list]], run: str, g: float) -> list |
     for c in RHO:
         out[IX[c]] = None
     why = out[IX["basis_own"]]
-    out[IX["basis_default"]] = out[IX["basis_own"]] = why if str(why).startswith(REFUSED) else ap.UNTRACED
+    out[IX["basis_default"]] = out[IX["basis_own"]] = why if str(why).startswith((REFUSED, FAILED)) else ap.UNTRACED
     out[IX["gain_target"]] = g
     return out
 
@@ -294,7 +296,8 @@ def colour_key(d: dict) -> str:
 
 def no_rho(d: dict) -> str:
     return ("untraced" if d["basis_own"] == ap.UNTRACED else
-            "refused" if str(d["basis_own"]).startswith(REFUSED) else "none")
+            "refused" if str(d["basis_own"]).startswith(REFUSED) else
+            "failed" if str(d["basis_own"]).startswith(FAILED) else "none")
 
 
 def bounds(xs: list[float], *also: float) -> tuple[float, float]:
