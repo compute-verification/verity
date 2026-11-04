@@ -243,12 +243,21 @@ def _session(x: dict, program: bytes, part: dict, reg: bytes, openings: dict | N
          **({} if openings is None else {"openings": openings})}))
 
 
+def _bound(x: dict, program: bytes, part: dict) -> None:
+    """Staged statement `x`'s program.json and partition.json, which the ZK server's Hello is set up on, are the Program
+    and partition object credit verifies it under."""
+    c = Path(x["dir"])
+    assert (c / "program.json").read_bytes() == program
+    assert json.loads((c / "partition.json").read_text()) == part
+
+
 def _prove(plan: dict, d: Path) -> None:
     """Each staged call proved (`_session`) on the window's Program and partition and the ``--registered`` file stage wrote
     beside it."""
     raw = gzip.decompress((d / "h1" / SH.PROGRAM).read_bytes())
     part = CR.partition_of(hashlib.sha512(raw).hexdigest(), CR.shape_of(raw))
     for x in plan["calls"]:
+        _bound(x, raw, part)
         _session(x, raw, part, (Path(x["dir"]) / "registered.json").read_bytes())
 
 
@@ -266,6 +275,7 @@ def _prove_leaves(plan: dict, win: dict) -> None:
         assert (Path(x["dir"]) / "registered.json").read_text() == json.dumps(reg)
         leaf = bytes.fromhex(plan["leaf_programs"][f"{st[0]}{k}"])
         part = CR.leaf_partition_of(hashlib.sha512(leaf).hexdigest(), CR.leaf_unit_id(win["shape"], k, st[0]))
+        _bound(x, leaf, part)
         held = {v: dict(map(tuple, rows)) for v, rows in {**plan["produced"]["openings"], **known}.items()}
         openings = {p: [[e["reads"][0], held[e["value"]][e["reads"][0]]]] for p, e in reg["ports"].items()
                     if e["value"] in held}
