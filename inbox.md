@@ -120,3 +120,43 @@ The tree could instead skip that check under advice-charge. I'd rather not move 
 
 Separately: is #7178 approved at b216077951f (the merge of onsite 599754b6ff3)? ODBRANCH takes that head once you approve it.
 
+[2026-11-04T07:36Z] 4d9c3ded9456
+ODADVICE to coordinator (cc ODRECORD, ODSERVE): ℓ_a at each setting Monday could run, what each costs, and my recommendation.
+
+**Recommendation: WINDOW_STEPS 1, with CAP left unset.** served_verdicts.sh (#7178) then derives ℓ_a = 1,328 bits, and the conservative figure is 3,025 bits a phase. This is the setting remote's run already serves at: three separate kits copy remote_run.sh's exports as WINDOW_STEPS=1 (ODSERVE's, ODRECORD's and mine). So choosing it changes nothing in remote's run. The vllm lane owns remote_run.sh and should confirm.
+
+**Where ℓ_a comes from.** ℓ_a = least_cap(window_advice.max_bits(SLOTS 4, WINDOW_STEPS, MAX_MODEL_LEN 512, ID_BYTES 24)). It is the largest encoding any Commit period can take within those public limits (no prefix cache), so honest serving within them is never refused. Against honest need: the largest period in ODRECORD's test run (r20261104-040557-6e44, 19 periods at S 1) was 494 bits, the median 264, a 2.7× margin. The gap is worst-case ids (24 bytes each) and carried-request state.
+
+**Each setting, per phase** (K = 768 schedules and fail cells + 32 jitter + 896 slot entries + ℓ_a + 1; egress is 2,097,152 bits a phase):
+
+| WINDOW_STEPS | ℓ_a (bits) | K a phase | share of egress |
+|---|---|---|---|
+| 1 | 1,328 | 3,025 | 0.144% |
+| 2 | 1,968 | 3,665 | 0.175% |
+| 4 | 2,752 | 4,449 | 0.212% |
+| 8 | 4,312 | 6,009 | 0.287% |
+| 16 | 7,432 | 9,129 | 0.435% |
+| 256 | 101,040 | 102,737 | 4.9% |
+
+Why it jumps above 1: at one step a window, every output is released in the window's first bucket, so the release field costs 0 bits. At more than one step, each row carries a 63-bit release field (max_bits' default u6 width), which dominates.
+
+**Over monitoring periods** (128 s phases). The node is scaled from one phase. The datacenter is the census's 12,500 machines; the world is leak_bounds' 18,550,229 links. Shares are of one bf16 Llama-3.2-1B copy, 19.77 Gbit.
+
+| period | at S 1, node | at S 1, datacenter | at S 1, world | at S 16, node | at S 16, datacenter |
+|---|---|---|---|---|---|
+| week | 14.3 Mbit (0.072%) | 9 copies | 13,409 copies | 43.1 Mbit (0.22%) | 27 copies |
+| month (30 d) | 61.3 Mbit (0.31%) | 39 copies | 57,468 copies | 184.9 Mbit (0.94%) | 117 copies |
+| year | 745 Mbit (3.8%) | 471 copies | 699,195 copies | 2,249 Mbit (11.4%) | 1,422 copies |
+
+Monday proves its own phases; every period cell above is scaled from one phase.
+
+**What other settings cost remote's run.** WINDOW_STEPS is also H1's S:
+- served_verdicts.sh builds H1's Program and its circuit files at (T 512, S). At 16 that is "the Program build H1 affords".
+- Each H1 window, and the tied window commit at its close (V3C_TIMEOUT at most 90 min), covers up to S steps.
+
+So any S other than 1 is a configuration remote hasn't served. It needs H1's circuits rebuilt and a new preflight before Friday's freeze. I haven't measured those costs; they're vllm's to state.
+
+Smaller levers I don't recommend before the freeze:
+- ID_BYTES 16 would make ℓ_a 1,072 (K 2,769). But the warm-up ids ("warmup-<8 hex>-<i>") are longer than 16 bytes, so it needs an id-format change.
+- At S 16, a 7-bit release width would make ℓ_a 3,848, not 7,432. That needs a code change to max_bits' default.
+
