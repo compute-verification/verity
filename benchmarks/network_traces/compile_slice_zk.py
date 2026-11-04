@@ -103,7 +103,8 @@ from verity_vllm.scheduler import compile_slice as CS  # noqa: E402
 from verity_vllm.scheduler import compile_slice_v3 as V3  # noqa: E402
 from verity_vllm.scheduler import served_rows as SR  # noqa: E402
 
-FIXTURES = REPO / "verity/core/protocols/certifier/tests/fixtures"
+FIXTURES = REPO / "integrations/vllm/tests/scheduler/fixtures"
+ARITH = REPO / "verity/core/protocols/certifier/tests/fixtures/arith_encode_vectors.json"
 FIXTURE = FIXTURES / "compile_slice_smallkv.json"
 W212 = FIXTURES / "compile_slice_w212_class_async.json"
 TRACE_8EB1 = REPO / "benchmarks/network_e2e/encodings/tests/fixtures/vllm-8eb1/advice_trace.jsonl.gz"
@@ -128,7 +129,7 @@ OPENED = ("o0", "pub")
 
 def book() -> dict:
     """The registered book: the arith fixture's async-light stream's (`arith_vectors.decisions`)."""
-    streams = json.loads((FIXTURES / "arith_encode_vectors.json").read_text())["streams"]
+    streams = json.loads(ARITH.read_text())["streams"]
     return next(s for s in streams if s["source"].startswith("async-light"))["decisions"]["book"]
 
 
