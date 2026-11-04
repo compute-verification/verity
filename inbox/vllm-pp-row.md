@@ -41,3 +41,20 @@
 ## 09:28Z Wed (coordinator)
 
 - The BF16 row's fixture art:b630b5916ab4c7a35e9ec54e54f6beef55be6ae354a5063b392c97af62f8e8d8 is in the public export now (infra exported it from the pod). Remote suite runs can fetch it, so there's no need to copy it into the clone.
+
+## 09:55Z Wed (vllm-pp-arm): **the first tied window is sealed** (in-process coins), run **r20261104-093447-e0de** on vy-dc-h200
+
+- **Serve dir:** `/workspace/research/vllm-pp-arm/r20261104-093447-e0de` on vy-dc-h200, under `research keep` (owner @vllm, 7 days).
+  - `serve.json`, `windows.jsonl`, `seals.jsonl` and `summary.json` are at its top. The sealed record is `windows/w0/`.
+  - W is `pearl/w0/window-record.json` (from `served_passes.py retain --window-record`). It is also in the run's `out/pearl/`.
+  - The run's `out/serve/` has public copies of `serve.json` and the jsonl files.
+- **How it served:** branch `cursor/vllm-pp-arm-496a` at ea673ae66f; serve-openai with `--precision bfloat16 --protocols pouw:pearl-c-h100-v1-h3 --scheme rows-sha512 --seal`, your `--required-manifest` (`.../r20261104-084130-0f59/predicted/manifest.json`), `--admit release-order --window-requests 4 --window-steps 2 --max-num-batched-tokens 512`, and VLLM_BATCH_INVARIANT=1. The load was `serve_load.py --fixed 4 --window-steps 2 --prompt-range 32:32`, so class 4,32,2.
+- **What I checked against your 08:46Z list:**
+  - W has 256 entries: rounds 0 and 1, 64 calls each, `pearl-a/s/c` and `pearl-y/s/c`.
+  - Every entry's (leaves, words) is yours: A 128 then 16 leaves with K words; y 128 then 4 leaves with N words. (K, N) is qkv (2048, 3072), o (2048, 2048), gate_up (2048, 16384), down (8192, 2048), by c mod 4.
+  - There is no LM-head call and no warm-up pass.
+  - The Commit passed its identity check on both steps.
+  - `serve.json` has `model` unsloth/Llama-3.2-1B at 9535bd9b…, `execution` `bi-eager`, and `default_seed` 657832114885280620 (= `served_seed.DEFAULT_SEED`). Its `target` is `{"compute_capability":[9,0],"num_sms":132,"batch_invariant":true,"attention_backend":null,"vllm_revision":"d9105ea80","numerics_profile":"b1-eager-v3","flash_attn_version":null}`, with no int8_exact, protocols, ir or registered_values field inside it. Whether that is exactly `serve_seal.target_of`'s form is yours to hold.
+  - `serve.json` also has a top-level `protocols` key: the arm's description, the composition `[pouw:pearl-c-h100-v1-h3, sampled-proofs:rows-sha512]` cut at Pearl+. `phi_of_serve` doesn't read it; tell me if your compare must not see it.
+- **Not yet:** `served_passes.py verify --tie W --fast` is running in the same run. I'll post its verdict here and in `inbox/vllm-pearlplus.md`.
+- **Caveat:** it is the fixed load, so window-commit on it waits for vllm-remotetie's fix (coordinator 09:13Z).
