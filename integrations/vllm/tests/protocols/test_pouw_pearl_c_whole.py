@@ -390,6 +390,20 @@ def test_a_graph_screens_its_filler_rows_call_only_inside_a_whole_capture_where_
     assert run._graph_key(7, sh, 20)[1] is False              # nothing to screen without hashing
 
 
+def test_a_deferred_a_capture_never_replays_a_call_graph_made_without_splitting_a():
+    """A capture deferring A's trees keys its call graphs apart, so one made earlier under other options (its pipeline
+    unsplit, A's tree inside the commit launch) isn't what it replays."""
+    torch = pytest.importorskip("torch")
+    run = Calls(torch)
+    sh = SimpleNamespace(m16=32)
+    run.whole_defer = True
+    unsplit = run._graph_key(7, sh, 32)
+    run.whole_defer_a = True
+    assert run._graph_key(7, sh, 32)[0] != unsplit[0] and run._graph_key(7, sh, 32)[1] == unsplit[1]
+    run.hashing = False                                       # nothing deferred without hashing
+    assert run._graph_key(7, sh, 32)[0][-1] is False
+
+
 def test_a_pass_replays_whole_only_when_graphed_and_serial_and_its_key_says_whether_it_is_retained():
     torch = pytest.importorskip("torch")
     run = Calls(torch)
@@ -734,7 +748,10 @@ def test_a_deferred_a_capture_runs_each_calls_a_tree_beside_its_forming_and_gemm
         *(x for w in shapes for x in ("main waits for tree", f"{w}:rows staged on main", f"{w}:tree staged on main",
                                       f"{w}:y staged on main"))]
     log.clear()
+    split = {w: run._graphs[run._graph_key(w, sh, 32)[0]] for w, sh in shapes.items()}
     run.whole_defer_a = False                                 # the same graphs, the tree on the capturing stream
+    assert all(run._graph_key(w, sh, 32)[0] not in run._graphs for w, sh in shapes.items())   # not replayed unasked
+    run._graphs.update({run._graph_key(w, sh, 32)[0]: split[w] for w, sh in shapes.items()})
     forward(False)
     assert "tree waits for main" not in log and log[:4] == main(7, "rows_a", "tree_seed_a", "forming", "gemm")
 
@@ -929,8 +946,45 @@ def test_a_tree_sm_capture_launches_the_steps_beside_each_calls_a_tree_with_the_
     assert pipe.beside == 0
     run.whole_tree_sm = False
     assert [b for _, b in forward()] == [0] * 6
+    g = run._graphs[run._graph_key(7, sh, 32)[0]]
     run.whole_tree_sm, run.whole_defer_a = True, False         # A's tree on the capturing stream: nothing beside the GEMM
+    run._graphs[run._graph_key(7, sh, 32)[0]] = g
     assert [b for _, b in forward()] == [0] * 6
+
+
+def test_a_pd_shared_capture_launches_every_step_with_the_pipelines_pd_shared_set(monkeypatch):
+    """Under ``whole_pd_shared`` (with hashing) every step a call launches into a whole capture, deferred or not, sees the
+    pipeline's ``pd_shared`` set, so its pd_commit and pd_tree take half an SM's shared memory, and the pipeline is left
+    without it; the capture's key carries ``pd_shared``, its call graphs' don't.  Without the option, or without hashing,
+    no step sees it and no key carries it."""
+    torch = pytest.importorskip("torch")
+    run, log = Calls(torch), []
+    run.whole_defer, run.whole_defer_a, run.whole_pd_shared, run.device, run._graphs = True, True, True, "cuda", {}
+    run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
+    _lanes(monkeypatch, torch, log)
+    monkeypatch.setattr(PG, "_capturing", lambda: True)
+    sh, pipe, seen = SimpleNamespace(m16=32, k=8, n=16), SimpleNamespace(b={}, size={"tree_a": 64}, pd_shared=False), []
+    names = ("rows_a", "tree_seed_a", "eprime_a", "gemm", "hash_leaf", "scatter")
+    steps = [lambda x=x: seen.append((x, pipe.pd_shared)) for x in names]
+    g = PG._Graph(torch.zeros(1), torch.zeros(1), "graph", steps, (2, 4), 1)
+    run._graphs[run._graph_key(7, sh, 32)[0]] = g
+
+    def forward():
+        seen.clear()
+        run.whole_capture_begin(run.whole_key(False))
+        run._graph_call(7, sh, pipe, 1, 4, 32, 0, None)
+        run.whole_capture_end()
+        return seen
+
+    assert forward() == [(x, True) for x in names] and not pipe.pd_shared and "pd_shared" in run.whole_key(False)
+    assert "pd_shared" not in run._graph_key(7, sh, 32)[0]
+    run.whole_defer = run.whole_defer_a = False               # the steps in order on the capturing stream
+    run._graphs[run._graph_key(7, sh, 32)[0]] = g
+    assert forward() == [(x, True) for x in names] and not pipe.pd_shared
+    run.whole_pd_shared = False
+    assert forward() == [(x, False) for x in names] and "pd_shared" not in run.whole_key(False)
+    run.whole_pd_shared, run.hashing = True, False
+    assert "pd_shared" not in run.whole_key(False) and not run._pd_shared()
 
 
 def test_a_calls_steps_split_after_its_a_tree_and_before_its_tile_hashing():

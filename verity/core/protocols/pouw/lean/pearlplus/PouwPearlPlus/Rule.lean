@@ -161,9 +161,9 @@ inductive Kind where
 def Kind.name : Kind → String
   | .filler => "filler" | .excluded => "excluded" | .voluntary => "voluntary" | .credited => "credited"
 
-/-- `check_opened` on a tile whose openings and digest passed: `ops` its formed operands, the rows' words theirs.
-`none`, or the reason it fails. -/
-def checkOpened (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops) : Option String := Id.run do
+/-- `check_opened`'s rows (`clear_work.rows_failure`) on a tile whose openings and digest passed: `ops` its formed
+operands, the rows' words theirs. `none`, or the reason a row fails. -/
+def rowsFailure (r : UnitRecord) (rows cols : List Nat) (ops : Ops) : Option String := Id.run do
   let kinds := (rows.zipIdx.map fun (i, p) =>
       ("A", i, ops.a, p, if i ≥ r.realRows then Kind.filler else if r.excludedA.contains i then .excluded
         else if r.voluntaryA.contains i then .voluntary else .credited)) ++
@@ -181,33 +181,46 @@ def checkOpened (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops)
     let ok := rowPasses f.rho[p]! f.alpha[p]! words
     if (kind == .credited && !ok) || (kind == .excluded && ok) then
       return some s!"{side} row {index} is {kind.name} but {if kind == .credited then "fails" else "passes"} the per-row rules"
-  capFailure s r rows cols ops
-where
-  capFailure (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops) : Option String := Id.run do
-    let (cr, cc) := r.credited rows cols
-    if cr.isEmpty || cc.isEmpty then return none
-    let posA := fun i => rows.idxOf i
-    let posB := fun j => cols.idxOf j
-    let words : Except String (List (List (Nat × Nat))) := cr.mapM fun i => cc.mapM fun j =>
-      wordDebit ops.a.codes[posA i]! ops.b.codes[posB j]!
-    match words with
-    | .error e => return some s!"the debit replay: {e}"
-    | .ok words =>
-      let u := r.matmul
-      let credit := creditOf 1 r.kKept u.n
-      let den := CAP_DEN * u.n
-      let rowDebit := words.map fun ws => debitUnits (ws.foldl (· + ·.1) 0) (ws.foldl (· + ·.2) 0)
-      let debit := rowDebit.foldl (· + ·) 0
-      let capNum := CAP_NUM * credit * cr.length * cc.length
-      if debit * den > capNum then
-        return some s!"the replayed debit {debit} exceeds the cap {roundHalfEven capNum den} (ρ·the credited cells' credit)"
-      let widen := if s.censusKs.contains u.k then 4 else 1
-      for (i, d) in cr.zip rowDebit do
-        let capNum := CAP_NUM * credit * cc.length * widen
-        if d * den > capNum then
-          return some (s!"A row {i}'s replayed debit {d} exceeds its cap {roundHalfEven capNum den} (the row cap: " ++
-            s!"{if widen == 1 then "" else toString widen}ρ·its credited cells' credit)")
-      return none
+  return none
+
+/-- The inert-work bound (`clear_work.cap_failure`) on the tile's credited rows × columns: `.ok none` within it,
+`.ok (some why)` over it (as a tile, or on one credited A row), `.error why` where the debit replay fails. -/
+def capCheck (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops) : Except String (Option String) := do
+  let (cr, cc) := r.credited rows cols
+  if cr.isEmpty || cc.isEmpty then return none
+  let posA := fun i => rows.idxOf i
+  let posB := fun j => cols.idxOf j
+  let words : Except String (List (List (Nat × Nat))) := cr.mapM fun i => cc.mapM fun j =>
+    wordDebit ops.a.codes[posA i]! ops.b.codes[posB j]!
+  match words with
+  | .error e => throw s!"the debit replay: {e}"
+  | .ok words =>
+    let u := r.matmul
+    let credit := creditOf 1 r.kKept u.n
+    let den := CAP_DEN * u.n
+    let rowDebit := words.map fun ws => debitUnits (ws.foldl (· + ·.1) 0) (ws.foldl (· + ·.2) 0)
+    let debit := rowDebit.foldl (· + ·) 0
+    let capNum := CAP_NUM * credit * cr.length * cc.length
+    if debit * den > capNum then
+      return some s!"the replayed debit {debit} exceeds the cap {roundHalfEven capNum den} (ρ·the credited cells' credit)"
+    let widen := if s.censusKs.contains u.k then 4 else 1
+    for (i, d) in cr.zip rowDebit do
+      let capNum := CAP_NUM * credit * cc.length * widen
+      if d * den > capNum then
+        return some (s!"A row {i}'s replayed debit {d} exceeds its cap {roundHalfEven capNum den} (the row cap: " ++
+          s!"{if widen == 1 then "" else toString widen}ρ·its credited cells' credit)")
+    return none
+
+/-- `cap_failure`: `capCheck`'s reason, over the bound or the replay's. -/
+def capFailure (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops) : Option String :=
+  match capCheck s r rows cols ops with
+  | .ok why => why
+  | .error why => some why
+
+/-- `check_opened` on a tile whose openings and digest passed: the rows, then the inert-work bound. `none`, or the reason
+it fails. -/
+def checkOpened (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops) : Option String :=
+  (rowsFailure r rows cols ops).orElse fun _ => capFailure s r rows cols ops
 
 /-- The FP32 word of 1.0. Must equal `Pouw.PearlC.UNSCALE_ONE`. -/
 def UNSCALE_ONE : Nat := 0x3F800000

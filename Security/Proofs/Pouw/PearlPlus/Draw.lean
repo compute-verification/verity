@@ -9,9 +9,9 @@ import Definitions.Pouw.PearlC.TileDraw
 its unit's record makes before the coin (`drawTickets`), and an audit that accepts a drawn tile that is good and whose
 declaration is consistent with it (`goodDeclTiles`). This file reads the code's draw and acceptance in those terms.
 
-* (c) A passed tile's declaration is consistent: a tile that `checkTile` passes has `declOK` under its record's
-  declaration (`declOf`). Its kept width is within `k` (`LoadedGivesUp`), and each credited A row it declares passes
-  `RowOK`: `checkOpened` holds the row to `row_passes`, on the words its opening parses to and their `s5_stats`, which
+* (c) A passed tile's declaration is consistent: a tile that `checkTile` passes, or finds only over its inert-work
+  bound, has `declOK` under its record's declaration (`declOf`). Its kept width is within `k` (`LoadedGivesUp`), and
+  each credited A row it declares passes `RowOK`: `rowsFailure` holds the row to `row_passes`, on the words its opening parses to and their `s5_stats`, which
   `RowsAreTheRules` reads as `RowOK` at the committed activations.
 * (d) The code's tickets are `drawTickets` (`ticketsAreTheDraw`): on a run laid out as the game's workload, an
   injective map from `tickets`' entries to the game's tiles, onto every tile with a ticket, takes each entry to its
@@ -414,11 +414,11 @@ theorem forIn_some {α : Type} {L : List α}
   · rw [hn] at h; cases h
   · rw [hm] at h; exact ⟨m, (Option.some.inj h).symm⟩
 
-theorem checkOpened_credited {s : Scheme} {r : UnitRecord} {rows cols : List ℕ} {ops : Words.Ops}
-    (h : Rule.checkOpened s r rows cols ops = none) {x : ℕ} (hx : x < rows.length)
+theorem rowsFailure_credited {r : UnitRecord} {rows cols : List ℕ} {ops : Words.Ops}
+    (h : Rule.rowsFailure r rows cols ops = none) {x : ℕ} (hx : x < rows.length)
     (hc : (decide (rows[x] < r.realRows) && !r.excludedA.contains rows[x] && !r.voluntaryA.contains rows[x]) = true) :
     Rule.rowPasses ops.a.rho[x]! ops.a.alpha[x]! ops.a.x[x]! = true := by
-  unfold Rule.checkOpened at h
+  unfold Rule.rowsFailure at h
   dsimp only [Id.run, bind, pure] at h
   split at h
   · rename_i r' heq
@@ -824,7 +824,7 @@ def declOf (r : UnitRecord) : Decl where
 
 /-- **(c) A passed tile's declaration is consistent**: a tile of a pass `load` gives, which is audit tile `g` of `U`,
 whose unit `τ` commits as `c` and declares by its record (`declOf`), whose openings are `c`, and that `checkTile` passes
-on its weight's noise, has `declOK` at the deployed rules: its kept width is within `k`, and every credited row it
+on its weight's noise or finds only over its inert-work bound, has `declOK` at the deployed rules: its kept width is within `k`, and every credited row it
 declares in the tile passes `RowOK` at `c`'s activations. -/
 def TilePassGivesTheDecl : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (coins : PouwCommit.CoinCommitment)
@@ -833,7 +833,8 @@ def TilePassGivesTheDecl : Prop :=
     PouwCheck.PearlPlus.load coins man = .ok p → TileOf p tid U g →
     τ ((auditTiling 64 64 U.layout).unit g) = some c → (∀ r ∈ p.records, dec r.matmul.index = declOf r) →
     OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c →
-    checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = none →
+    (checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .pass ∨
+      ∃ why, checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .overCap why) →
       declOK (tilesH3 saltOf rootOf ρ : TileRules Q R S) U τ dec g
 
 /-- **(c)** from what a passed tile establishes (`TileAcceptMeans`), what a loaded pass's records keep (`LoadedGivesUp`)
@@ -842,11 +843,13 @@ theorem tilePassGivesTheDecl (hT : Properties.Pouw.PearlPlus.TileAcceptMeans)
     (hL : Properties.Pouw.PearlPlus.LoadedGivesUp) (hR : RowsAreTheRules) : TilePassGivesTheDecl := by
   intro Q R S saltOf rootOf ρ coins man p tid o U g τ c dec hload hof hτ hdec hopen hpass
   obtain ⟨pos, rows, cols, htile, -, hunit, -, hk, -, -, hrows, -⟩ := hof
-  obtain ⟨pos', rows', cols', ops, ch, htile', hrest⟩ := hT p _ tid o hpass
+  obtain ⟨bound, hb⟩ := Assembly.passOrOver_bound hpass
+  obtain ⟨pos', rows', cols', ops, ch, htile', hrest⟩ :=
+    hT p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o bound (by cases bound <;> exact hb)
   simp only [htile, Option.some.injEq, Prod.mk.injEq] at htile'
   obtain ⟨rfl, rfl, rfl⟩ := htile'
   try dsimp only at hrest
-  obtain ⟨-, -, -, -, -, -, hform, -, hchk, -⟩ := hrest
+  obtain ⟨-, -, -, -, -, -, hform, -, hchk, -, -⟩ := hrest
   obtain ⟨hp, -⟩ := Draw.tile?_some htile
   have hrec : p.records[pos]! ∈ p.records := by rw [getElem!_pos p.records pos hp]; exact List.getElem_mem hp
   obtain ⟨-, -, hkept0, hkept⟩ := Draw.reason_none ((hL coins man p hload).1 _ hrec).1
@@ -864,7 +867,7 @@ theorem tilePassGivesTheDecl (hT : Properties.Pouw.PearlPlus.TileAcceptMeans)
     obtain ⟨x, hx, rfl⟩ := List.getElem_of_mem hi
     rw [hd] at hdi
     simp only [declOf, Finset.mem_filter, Finset.mem_range] at hdi
-    have hrp := Draw.checkOpened_credited hchk hx hdi.2
+    have hrp := Draw.rowsFailure_credited hchk hx hdi.2
     obtain ⟨wn', -, henc, -⟩ := Assembly.formed_ok hform
     obtain ⟨hoa, -, -, hact, -, -⟩ := hopen pos rows cols htile
     rw [hoa] at henc
@@ -1194,7 +1197,7 @@ theorem acceptGivesTheAudit (hA : Properties.Pouw.PearlPlus.AcceptMeans)
     (hP : Properties.Pouw.PearlPlus.PlanMeans) (hD : TilePassGivesTheDecl) (hW : TilePassGivesTheWords) :
     AcceptGivesTheAudit := by
   intro Q R S saltOf rootOf ρ P TR H s i opener pl U τ w t c hT hrow hPt hPu hPw hacc hplan hL hc
-  obtain ⟨pl', hpl', -, -, -, hopen⟩ := hA i opener hacc
+  obtain ⟨pl', hpl', -, -, -, -, hopen⟩ := hA i opener hacc
   rw [hplan, Except.ok.injEq] at hpl'
   subst hpl'
   have hload := (hP i pl hplan).2.1
@@ -1207,7 +1210,8 @@ theorem acceptGivesTheAudit (hA : Properties.Pouw.PearlPlus.AcceptMeans)
   intro j
   obtain ⟨pi, tid, hd⟩ := hc j
   generalize ((c j).1 : ℕ) = g at hd ⊢
-  obtain ⟨p, o, hp, ho, hpass⟩ := hopen pi tid hd.todo
+  obtain ⟨p, o, hp, ho, hpass'⟩ := hopen pi tid hd.todo
+  have hpass := hpass'.imp id fun h => h.2
   have hp! : pl.passes[pi]! = p := by
     obtain ⟨hl, he⟩ := List.getElem?_eq_some_iff.1 hp
     rw [getElem!_pos pl.passes pi hl, he]
