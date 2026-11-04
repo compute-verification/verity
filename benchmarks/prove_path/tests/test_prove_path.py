@@ -1436,3 +1436,41 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
         tie(window_registration=str(tmp_path / "other.json"))
     with pytest.raises(ValueError, match="H1's windows are 2 rounds, and the class's 4 outputs"):
         tie(SimpleNamespace(outputs=4))
+
+
+def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows_retained_steps(tmp_path):
+    """`pearl_tie`: with ``--pearl-passes DIR`` (``served_passes.py window``'s) and ``--window-registration`` W, Pearl+'s
+    window record, window-commit's circuit is cut at its linears under W's scheme (`window_class.PearlTables`) and reads
+    the retained passes' manifests at their rounds; `h1_tie` then stands aside. Refused by name without W, beside
+    ``--h1-key``, for a W of no Pearl-C scheme, and where the rounds retained aren't the class's outputs."""
+    from verity_vllm.program.predict.window_circuit import PearlTables
+
+    d, cls = tmp_path / "q", SimpleNamespace(outputs=2)
+    d.mkdir()
+    mans = []
+    for i in range(3):
+        (m := tmp_path / f"m{i}.json").write_text(json.dumps({"salt": f"s{i}"}))
+        mans.append({"pass": 4 + i, "units": 1, "manifest": str(m)})
+    (d / "served.json").write_text(json.dumps({"passes": [{"pass": 3, "units": 0}, *mans]}))
+    (tmp_path / "w.json").write_text(json.dumps({"window": {"scheme": "pearl-c-h100-v1-h3"}, "registered": []}))
+
+    def tie(cls=cls, **kw):
+        args = {"pearl_passes": str(d), "window_registration": str(tmp_path / "w.json"), "h1_key": None, **kw}
+        return PP.pearl_tie(argparse.Namespace(**args), cls)
+    assert PP.pearl_tie(argparse.Namespace(window_registration="w"), cls) is None
+    assert PP.h1_tie(argparse.Namespace(window_registration="w", pearl_passes=str(d)), cls) is None
+    with pytest.raises(ValueError, match=r"retained rounds \[0, 1, 2\] aren't its class's 2 outputs"):
+        tie()
+    (d / "retention.json").write_text(json.dumps({"rounds": [0, 1]}))
+    w, got, rounds, tables = tie()
+    assert [m["salt"] for m in got] == ["s0", "s1"] and rounds == [0, 1] and tables == PearlTables("pearl-c-h100-v1-h3")
+    with pytest.raises(ValueError, match="give --window-registration W"):
+        tie(window_registration=None)
+    with pytest.raises(ValueError, match="--h1-key is H1's prover key"):
+        tie(h1_key="key")
+    (tmp_path / "h1.json").write_text(json.dumps({"program": "p" * 128}))
+    with pytest.raises(ValueError, match="is no Pearl\\+ window record"):
+        tie(window_registration=str(tmp_path / "h1.json"))
+    (d / "retention.json").write_text(json.dumps({"rounds": [1, 2]}))
+    with pytest.raises(ValueError, match=r"retained rounds \[1, 2\]"):
+        tie()
