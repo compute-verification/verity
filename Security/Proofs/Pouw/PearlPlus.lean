@@ -3,6 +3,7 @@ import Proofs.Pouw.PearlPlus.Noise
 import Proofs.Pouw.PearlPlus.Words
 import Proofs.Pouw.PearlPlus.Rules
 import Proofs.Pouw.PearlPlus.Rho
+import Proofs.Pouw.PearlPlus.Stats
 import Proofs.Pouw.PearlPlus.Assembly
 
 /-!
