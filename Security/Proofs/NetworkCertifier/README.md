@@ -84,7 +84,9 @@ RecordRows.lean  the rows format reads back the code's cells on every schedule t
                                          certifier's egress records
 ReadFree.lean   the rows format reads back the code's cells from the record and the schedule's (r, D) alone
                                          (readFree_record), so the secrets decoded from the client's view number at most
-                                         #Θ · ∏_i #A_i, Θ their schedules' (r, D) (encard_readFree_le)
+                                         #Θ · ∏_i #A_i, Θ their schedules' (r, D) (encard_readFree_le); a period's
+                                         count over any good event, at its windows' or phases' sets
+                                         (encard_periodRead_le)
 TapRows.lean    the leak bound at the network certifier's rows: the sampling relation at a trace that agrees
                                          with its openings gives the leak relation at them (rLeakTap_of_r, through the
                                          trace filled in with its values), and a disagreement is a collision
