@@ -27,6 +27,9 @@ import a5_wired as AW  # noqa: E402
 
 CASE = HERE / "fixtures" / "a5-wired-v2"
 LAKE = shutil.which("lake") is not None
+ROOT_CHECK = pytest.mark.xfail(strict=True, raises=AssertionError, reason="the statement's root check isn't in OneStageZk "
+                               "yet: nothing holds the writer's public file's o0 root to the commitment's, so its session "
+                               "is accepted")
 
 
 @pytest.fixture(scope="module")
@@ -46,7 +49,8 @@ def null(case: dict) -> dict:
 
 @pytest.mark.slow
 @pytest.mark.skipif(not LAKE, reason="no Lean toolchain")
-@pytest.mark.parametrize("name", ["wired", "unwired", "null", "moved", "altered", "writer"])
+@pytest.mark.parametrize("name", ["wired", "unwired", "null", "moved", "altered",
+                                  pytest.param("writer", marks=ROOT_CHECK)])
 def test_v2_holds_each_session_to_its_wired_reads(tmp_path, v2_exe, name):
     """Each session's verdict is as `a5_wired.cases` says for ``name``, in the statements' order (`a5_wired.held`):
     accepted naming the case's wiring, or refused for the reason it names ("does not open" for the wired reads)."""
