@@ -4,7 +4,7 @@ public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 public import Proofs.Flock.Soundness.Game.Expect
 public import Randomness
 public import Definitions.Flock.Arith
-public import Definitions.Claims.Hm96
+public import Definitions.Core.Hm96
 
 /-!
 # Named assumptions
@@ -224,7 +224,7 @@ def HmRowComputes {W : Type} (H : List UInt8 → List UInt8) (saltPrefix : List 
 theorem prENNReal_eq_prCoin {α : Type} [Fintype α] (p : α → Prop) : Claims.PrENNReal p = prCoin p := rfl
 
 /-- **Zero knowledge's T1 (`hash-derived-key`), read in `prCoin`'s terms**: the spec's `Claims.Hm96Hiding`
-(`Definitions/Claims/Hm96.lean`; `docs/zk-proof-public.md` §1.2, §1.5 HDK, §4.1 T1), applied to one test.
+(`Definitions/Core/Hm96.lean`; `docs/zk-proof-public.md` §1.2, §1.5 HDK, §4.1 T1), applied to one test.
 
 `My y` is `M(K*)·y` for the pinned key `K*`, and `c y` the salt's own hash `H(sp ‖ y)`. An ideal leaf replaces `b` by a
 fresh uniform `U`. It is a statement about uniform salts, and it needs no computational property of SHA-512. At
