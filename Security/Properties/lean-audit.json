@@ -1103,9 +1103,15 @@
    "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Accounting.JointPeriod`), its realization (`Definitions.Accounting.JointBridge.CreditedWords`) and its named premises (`Definitions.Accounting.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
   },
   "Properties.NetworkPeriod": {
-   "imports": ["NetworkCheck.Period", "Mathlib.Algebra.BigOperators.Fin"],
+   "imports": [
+    "NetworkCheck.Period",
+    "Mathlib.Algebra.BigOperators.Fin",
+    "SampledProofs.Bits",
+    "Definitions.NetworkCertifier.PeriodConditions",
+    "Definitions.NetworkCertifier.Tied"
+   ],
    "except": [],
-   "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, never a proof"
+   "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, and what its scan's `faulty_bits` charges against the sampled statement's layout as the code lays it out (`SampledProofs.Bits`) and the period's premise it meets (`NetTiming.WindowsPlaced`), never a proof"
   },
   "Properties.Composition": {
    "imports": ["CoreComposition.Product", "CoreComposition.Registered", "CoreComposition.Tie"],
