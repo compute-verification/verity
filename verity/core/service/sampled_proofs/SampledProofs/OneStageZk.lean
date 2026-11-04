@@ -667,7 +667,7 @@ def ownHeld (schemas : Array (String × String)) (record : Json) (f : Option Jso
   let some own := (← readsOf f).registered | pure ()
   match Registered.entryClash schemas record own with
   | some (q, k) =>
-    throw s!"registered: port {q.name} reads {q.value} at another {k} than the registration record's entry for it"
+    throw s!"registered: port {q.name} of {q.value} differs in {k} from the registration record's entry for {q.value}"
   | none => pure ()
 
 /-- What `ownHeld` accepts: no port of the registered reads differs from the record's entry for its value. -/

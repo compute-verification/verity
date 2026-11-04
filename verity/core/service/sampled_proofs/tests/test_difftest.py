@@ -2430,6 +2430,42 @@ def test_v2_per_member_fails_a_window_whose_draw_ran_out(server, server_v2):
     assert twin(short_base, short_p) and not twin(base, p)
 
 
+def test_v2_refuses_a_registered_port_unlike_the_records_entry(server_v2):
+    """A port of the verifier's registered file whose value the registration record has an entry for is held to that
+    entry (`OneStageZk.portsHeld`): at another leaf count, words, word bits or domain the audit is refused before any
+    session is verified, naming the port and the field; agreeing with it, or of a value the record has no entry for, it
+    goes on to the sessions. The `registered_ports` port holds the check to `registered.entry_clash`."""
+    s, law = SETUPS[3], {"k": 2, "law": "subset"}
+    entry = {"value": "W", "root": "a1" * 64, "leaves": 4, "words": 6, "domain": "d1" * 64}
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF) | {"registered": [entry]}
+    ch, d, coins = _challenger_draw(random.Random("v2-ports"), s, law, rec)
+    circuit, public, record = b"not a circuit file", b"not a public file", D.canonical(ch.trees[0].record).encode()
+    proved = DR.proved(d)
+    evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
+                "proofs": {"public": _sha(public), "sessions": [{"name": "s", "record": _sha(record), "reps": {}}]},
+                "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                "sessions": ["s"], "statement": {}}
+    params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20", "law": law,
+              "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query), "ports": s.ports,
+              "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
+              "window_root": ch.ledger.window["root"], "work_table": None}
+
+    def reason(port: dict) -> str:
+        own = {"format": G.READS_V1, "ports": {"w": {**port, "reads": [0]}}}
+        case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec), "evidence": _hex(evidence),
+                "params": params | {"proofs": {"circuit": _sha(circuit), "registered": own}}}
+        out = server_v2.exchange(_json(case))
+        assert out["verdict"] == "reject", out
+        return out["reason"]
+
+    for k, v in (("leaves", 5), ("words", 7), (G.WIDTH_KEY, 32), ("domain", "e3" * 64)):
+        assert reason({**entry, k: v}) == (
+            f"proofs: registered: port w of W differs in {k} from the registration record's entry for W")
+    for port in (entry, {**entry, G.WIDTH_KEY: 16}, {**entry, "value": "U", "leaves": 5}):
+        assert not reason(port).startswith("proofs: registered: port w"), port
+
+
 def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     """v2 reads its draw's coins as v1 does (`OneStageZk.coinsOf`, v1's `coinsOf`), and only from the auditor's
     challenger: parameters naming none, or one without a window, are refused (`NO_CHALLENGER`), and evidence whose coins
