@@ -26,18 +26,19 @@ notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields
 the public's ``scans[i]``), ℓ_{a,i} (``free``), k_{skip,i} (``faulty_sets``, ``faulty_bits`` and ``faulty_entries``) and
 the jitter (``jitter``). They sum to K, by which `NetTiming.Guarantees.PeriodLeakAccepted` bounds what the serving node
 sends past its committed program except with δ_net over ``period_s`` seconds, the run's m execution phases of T buckets
-of τ (the certifier's case's ``schedule``). δ_net is the answer's ``eps``, only its δ part (m · δ and each charged
-audit's δ), plus ``beside_eps``, m · (ε_ks + ε_bind + Pr[B_tap]): each phase's knowledge, binding and collision errors,
-which no check computes (`BESIDE_EPS`). K is that statement's count as proved, a known overcount (`OVERCOUNT`; both
-are ``notes``); ``connections`` is how many connections k_sched and k_fail
-count, every one the schedule can carry (`CONNECTIONS`), its ``error`` where the case's caps aren't those; and
-``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in verdicts.txt), None where it
-has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's ``error``. Beside the bound,
-``advice_charge``: the served run's realized advice charge stays out of the record (`ADVICE`, which says what hides it
-and what doesn't yet); ``registered`` is ℓ_{a,i}, the registered width each execution phase's term charges, an upper
-bound on the honest charge (`REGISTERED`), with its share of K; and ``measured`` is honest serving's |a_j| a Commit
-period, of which an execution phase holds several, measured on a test run with public inputs (`advice_charge.py`'s
-record, ``--advice-charge``) and labelled as that run's, never a figure of this one. ``tree`` is the commit the run served from (machine.txt's), None where machine.txt names none.
+of τ (the certifier's case's ``schedule``). ``delta_net`` gives it term by term, each with its source: the answer's
+``eps``, only its δ part (m · δ and each charged audit's δ, `EPS`), and m times each phase's knowledge, binding and
+collision errors ε_ks, ε_bind and ε_tap (`ERRORS`), which no check computes, so δ_net has no number here (`UNVALUED`).
+K is that statement's count as proved, a known overcount (``notes``, `OVERCOUNT`); ``connections`` is how many
+connections k_sched and k_fail count, every one the schedule can carry (`CONNECTIONS`), its ``error`` where the case's
+caps aren't those; and ``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in
+verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's
+``error``. Beside the bound, ``advice_charge``: the served run's realized advice charge stays out of the record
+(`ADVICE`, which says what hides it and what doesn't yet); ``registered`` is ℓ_{a,i}, the registered width each
+execution phase's term charges, an upper bound on the honest charge (`REGISTERED`), with its share of K; and
+``measured`` is honest serving's |a_j| a Commit period, of which an execution phase holds several, measured on a test
+run with public inputs (`advice_charge.py`'s record, ``--advice-charge``) and labelled as that run's, never a figure of
+this one. ``tree`` is the commit the run served from (machine.txt's), None where machine.txt names none.
 
 **Periods**: the run's own certification period (``run``), proved, and each monitoring period of `leak_bounds.PERIODS`
 for the serving node, the census's reference datacenter and the world. A node's cell is proved where the run's period
@@ -45,9 +46,9 @@ covers the monitoring period's seconds (its m execution phases), and otherwise s
 datacenter's and the world's are scaled from the node's. Each scaled cell names its rule, which ``rules`` states with
 its sources (`RULES`): the bound, the case's schedule, and each census line it reads with its SHA-512 (`census`). Each
 cell gives K in bits (the least integer at or above a scaled one), its share of one copy of the weights
-(`leak_bounds.WEIGHTS`), its ``eps`` and ``beside_eps`` over the execution phases it counts, whether eps alone is
-already vacuous (at least 1) and the statement it rests on; beside that pooled
-total, ``per_phase`` is the same over one execution phase, proved only where m is 1.
+(`leak_bounds.WEIGHTS`), its δ_net's terms over the execution phases it counts (``delta_net``), whether eps alone is
+already vacuous (at least 1) and the statement it rests on; beside that pooled total, ``per_phase`` is the same over
+one execution phase, proved only where m is 1.
 
 The record's counts and indices are the certification period's (m and each phase i), public in the Lean answer's
 profile; it names no Commit window, whose count `publish` holds.
@@ -101,10 +102,20 @@ CONNECTIONS = ("the caps of the certifier's case's params (``cells``), one a con
                "but its schedule's (`NetworkCheck.Period.Schedule.caps`), egress_cells for each of the lanes · m · T "
                "connections the network certifier can carry over the period's m execution phases, so this counts the "
                "connections the schedule can carry, not those served")
-BESIDE_EPS = ("δ_net is eps plus beside_eps: eps is only its δ part, m · δ and each charged audit's δ, and each execution "
-              "phase adds its audit's knowledge error ε_ks, binding error ε_bind and Pr[B_tap], the collisions between "
-              "the extracted trace's openings and the network certifier's, as PeriodLeakAccepted states them; no "
-              "check computes those")
+EPS = {"is": "δ_net's δ part alone: m · δ and each charged audit's δ",
+       "source": "the network-period check's public eps (NetworkCheck.Period)"}
+#: δ_net's terms that eps doesn't count, each once an execution phase: `PeriodLeakAccepted` bounds each phase's audit's
+#: failure by δ + ε_ks + ε_bind + ε_tap
+ERRORS = {
+    "ε_ks": {"is": "the knowledge error, κ(δ) − δ + √(γ·Pr[B])",
+             "source": "Claims.Sampling.KS at the deployment, PeriodLeakAccepted's hypothesis"},
+    "ε_bind": {"is": "the binding error, Pr[B_ext]: an accepted extraction that disagrees with the committed trace",
+               "source": "Claims.Sampling.Bext, a SHA-512 collision in the run (CommitmentScheme.Binds)"},
+    "ε_tap": {"is": "Pr[B_tap]: the extracted trace's openings colliding with the network certifier's",
+              "source": "NetTiming.Btap, a SHA-512 collision in the run (CommitmentScheme.Binds)"},
+}
+UNVALUED = ("δ_net is eps plus each execution phase's ε_ks, ε_bind and ε_tap, never eps alone; no check computes those "
+            "three, so δ_net has no number here")
 #: the run's published line of the network certifier's verdict (`served_verdicts.pieces`)
 LINE = "THE NETWORK CERTIFIER "
 REGISTERED = "registered width, an upper bound on the honest charge"
@@ -203,13 +214,19 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
     m = len(public["scans"])
     if "windows" in public and int(public["windows"]) != m:
         raise ValueError(f"{m} scans for the period's {public['windows']} execution phases")
-    return {"statement": LB.STATEMENTS["per_period"], "K": K, "phases": m, "eps": str(eps),
-            "beside_eps": beside_eps(m), "notes": [OVERCOUNT, BESIDE_EPS], "terms": terms}
+    sources = [EPS, *ERRORS.values()]
+    return {"statement": LB.STATEMENTS["per_period"], "K": K, "phases": m, "notes": [OVERCOUNT], "terms": terms,
+            "delta_net": {"terms": [t | s for t, s in zip(delta_net(eps, m), sources)], "note": UNVALUED}}
 
 
-def beside_eps(phases: int) -> str:
-    """δ_net's errors that ``eps`` doesn't count, over ``phases`` execution phases (`BESIDE_EPS`)."""
-    return f"{phases} · (ε_ks + ε_bind + Pr[B_tap])"
+def delta_net(eps: Fraction, phases: int) -> list[dict[str, Any]]:
+    """δ_net over ``phases`` execution phases, term by term: eps, and each of `ERRORS` that many times."""
+    return [{"symbol": "eps", "value": str(eps)}, *({"symbol": s, "times": phases} for s in ERRORS)]
+
+
+def eps_of(b: Mapping[str, Any]) -> Fraction:
+    """The bound's eps, its δ_net's first term."""
+    return Fraction(b["delta_net"]["terms"][0]["value"])
 
 
 def schedule(case: Mapping[str, Any], phases: int) -> tuple[Fraction, int]:
@@ -251,8 +268,8 @@ def census() -> dict[str, Any]:
 
 def cell(bits: Fraction, eps: Fraction, phases: int, where: str, rule: str | None = None) -> dict[str, Any]:
     """A cell over ``phases`` execution phases, proved, or scaled by ``rule`` (`RULES`)."""
-    return {"bits": math.ceil(bits), "share": float(bits / LB.WEIGHTS.bits), "eps": str(eps),
-            "beside_eps": beside_eps(phases), "vacuous": eps >= 1,
+    return {"bits": math.ceil(bits), "share": float(bits / LB.WEIGHTS.bits), "delta_net": delta_net(eps, phases),
+            "vacuous": eps >= 1,
             "statement": STATEMENTS[where]} | ({"how": "scaled", "rule": rule} if rule else {"how": "proved"})
 
 
@@ -362,20 +379,19 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
         return rec | {"periods": {"error": f"{CASE}: {type(e).__name__}: {e}"}}
     b["connections"] = {"count": connections, "from": CONNECTIONS}
     b["period_s"] = str(b["phases"] * phase_s)
-    return rec | {"periods": periods(b["K"], Fraction(b["eps"]), b["phases"], phase_s, connections)}
+    return rec | {"periods": periods(b["K"], eps_of(b), b["phases"], phase_s, connections)}
 
 
 def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
-    """The ``ONSITE`` line: each verdict, whether the run is of record, K, its eps and beside_eps and connections, the
+    """The ``ONSITE`` line: each verdict, whether the run is of record, K, its δ_net's terms and connections, the
     year's datacenter cell, and the measured advice charge's test run."""
     b, p = rec.get("bound") or {}, rec.get("periods") or {}
     year = (p.get("year") or {}).get("datacenter")
     m = rec["advice_charge"]["measured"]
     return {"verdicts": {k: x["verdict"] for k, x in rec["verdicts"].items()}, "of_record": rec["of_record"]["holds"],
-            "K": b.get("K"), "eps": b.get("eps"), "beside_eps": b.get("beside_eps"),
+            "K": b.get("K"), "delta_net": None if "delta_net" not in b else delta_net(eps_of(b), b["phases"]),
             "connections": (b.get("connections") or {}).get("count"),
-            "year_datacenter": None if year is None else {
-                k: year[k] for k in ("bits", "share", "eps", "beside_eps", "how")},
+            "year_datacenter": None if year is None else {k: year[k] for k in ("bits", "share", "delta_net", "how")},
             "advice_measured_on": m.get("run"), **{k: b[k] for k in ("missing", "error") if k in b}}
 
 
