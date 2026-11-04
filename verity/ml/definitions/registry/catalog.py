@@ -1,30 +1,56 @@
-"""The integration's registry, every module loaded: the one registry each consumer of a Program reads.
+"""The integration's registry, every module loaded: the one registry each consumer of a Program reads, and the one loader of
+Verity's Definitions by package.
 
-GP-01, the Match, the query views and the manifest with its word check all resolve Definitions and primitives through `load`, so a
-Definition or primitive a new registry module registers resolves everywhere, not only where someone imported its module.
+The workload Program's driver, the Match, the query views and the manifest with its word check all resolve Definitions and
+primitives through `load`, so a Definition or primitive a new registry module registers resolves everywhere, not only where someone
+imported its module.  A reader of Definitions beyond the registry names their packages as `load`'s scope (`SCOPES`).
 """
 from __future__ import annotations
 
-_LOADED: list = []
+#: the packages `load` imports, by scope
+SCOPES = {"registry": "verity.ml.definitions.registry", "ops": "verity.ml.circuits.ops"}
+_LOADED: dict[str, list[str]] = {}
 
 
-def load():
-    """(REGISTRY, import errors) with every module of `verity.ml.definitions.registry` imported (`quarantine` and this module aside).
-    A module that fails to import is named in the errors, never read as "not registered"."""
-    if not _LOADED:
-        import importlib
-        import pkgutil
+def load(scope: str | tuple[str, ...] = "registry", _package=None, _errors: list[str] | None = None):
+    """(REGISTRY, import errors) with every module of each package `scope` names (`SCOPES`) imported, its subpackages' too, in
+    `pkgutil.walk_packages` order (`quarantine`, `tests` and this module aside), each package once a process.  A module that fails
+    to import is named in the errors, never read as "not registered".
 
-        from verity.ml.circuits.defs import REGISTRY
-        errors = []
-        package = importlib.import_module(__name__.rsplit(".", 1)[0])
-        for m in sorted(pkgutil.iter_modules(package.__path__), key=lambda m: m.name):
-            if m.name in ("quarantine", "catalog"):
+    ``_package`` and ``_errors`` are its own descent into a subpackage, which imports that package's modules in name order, each
+    subpackage's right after it, and returns nothing: the descent stays in `load`, so circuit-check's cache holds what it lists by
+    the modules' names (`cache._ENUMERATORS`), and each name a listing yields is only compared, imported or written into an
+    error."""
+    import importlib
+    import pkgutil
+
+    if _package is not None:
+        errors = _errors
+        for m in sorted(pkgutil.iter_modules(_package.__path__), key=lambda m: m.name):
+            if m.name in ("quarantine", "tests") or f"{_package.__name__}.{m.name}" == __name__:
                 continue
             try:
                 # the literal prefix is how tests/dead_code_census.py sees every registry module reached from here
-                importlib.import_module(f"verity.ml.definitions.registry.{m.name}")
+                child = importlib.import_module(f"verity.ml.definitions.registry.{m.name}" if _package.__name__ == SCOPES["registry"]
+                                                else f"{_package.__name__}.{m.name}")
             except Exception as e:  # noqa: BLE001  (recorded: the error names the module a lookup then misses)
-                errors.append(f"{package.__name__}.{m.name}: {type(e).__name__}: {e}")
-        _LOADED.append((REGISTRY, errors))
-    return _LOADED[0]
+                errors.append(f"{_package.__name__}.{m.name}: {type(e).__name__}: {e}")
+                continue
+            if hasattr(child, "__path__"):
+                load(scope, child, errors)
+        return None
+
+    from verity.ml.circuits.defs import REGISTRY
+    out: list[str] = []
+    for s in (scope,) if isinstance(scope, str) else scope:
+        if s not in _LOADED:
+            found: list[str] = []
+            try:
+                package = importlib.import_module(SCOPES[s])
+            except Exception as e:  # noqa: BLE001  (recorded, as above)
+                found.append(f"{SCOPES[s]}: {type(e).__name__}: {e}")
+            else:
+                load(s, package, found)
+            _LOADED[s] = found
+        out += _LOADED[s]
+    return REGISTRY, out

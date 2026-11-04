@@ -17,6 +17,7 @@ import Proofs.Core.Game.Batch
 import Proofs.Core.Game.BatchInduced
 import Proofs.Core.Game.Rewinding
 import Proofs.Core.Game.Unambiguous
+import Proofs.Core.Game.TwoRun
 import Proofs.Core.Challenger
 import Proofs.Core.UnionBound
 import Proofs.Core.Scalar.Vectors
@@ -37,6 +38,7 @@ import Proofs.Core.Bilinear
 import Proofs.Core.HongKung
 import Proofs.Core.Blocks
 import Proofs.Core.DeviceFigures
+import Proofs.Core.CapacityWithinEstimate
 import Proofs.Core.Site
 
 /-!

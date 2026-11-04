@@ -42,6 +42,8 @@ def test_a_disk_short_of_inodes_or_bytes_blocks_every_slot(monkeypatch, tmp_path
     """A check that starts on a disk at 97-99% of its inodes dies mid-build with ENOSPC, so no slot starts one there."""
     slot = SLOT.parse("a 0-1")[0]
     monkeypatch.setattr(SLOT, "DISK", tmp_path)
+    monkeypatch.setattr(SLOT, "DISK_MIN_INODES", 0)
+    monkeypatch.setattr(SLOT, "DISK_MIN_GB", 0)
     assert SLOT.blocked(slot, NOW) is None
     monkeypatch.setattr(SLOT, "DISK_MIN_INODES", 2**62)
     assert SLOT.blocked(slot, NOW).startswith(f"{tmp_path} has ") and "inodes free" in SLOT.blocked(slot, NOW)

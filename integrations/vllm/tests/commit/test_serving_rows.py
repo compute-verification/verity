@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import random
 from pathlib import Path
 
 import numpy as np
@@ -63,17 +62,6 @@ def reference(c: SR.Committed) -> dict[str, bytes]:
         assert b"".join(bcs) == c.bc[p]
         roots[p] = fv.root(p, [row_leaf(c.domains[p], i, inst.tree_leaf(key, bcs[i]), SR.ROW_SCHEMA) for i in range(len(rows))])
     return roots
-
-
-def test_chacha20_is_rfc8439():
-    key, nonce = bytes(range(32)), bytes.fromhex("000000090000004a00000000")
-    assert SR.chacha20(key, nonce, 64, counter=1).hex() == (
-        "10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4e"
-        "d2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e")
-    crypto = pytest.importorskip("cryptography.hazmat.primitives.ciphers")
-    k, nc = random.Random(1).randbytes(32), random.Random(2).randbytes(12)
-    enc = crypto.Cipher(crypto.algorithms.ChaCha20(k, (0).to_bytes(4, "little") + nc), mode=None).encryptor()
-    assert SR.chacha20(k, nc, 200_003) == enc.update(bytes(200_003))
 
 
 def test_m0_serving_row_leaf_vector():

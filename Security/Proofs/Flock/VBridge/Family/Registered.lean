@@ -106,8 +106,8 @@ def RowsRegistered : Prop :=
 row-port column `rowColOf` of part `p`'s unit is an input column whose Δ key (`Aliased.srcKey`, copy 0) is message bit
 `k` of a row port `q'`, within its row, and the session's reads file names `q'`. A fact about V*'s `InnerRepCheck`
 circuit (its row ports are the inputs from column 0, `rowCol`) and its reads file (`rec_vstage.py:356-357`: each row
-port is a read of `regs[nm]`); established from the parse of the part's circuit (`keyProg_parse`, the lane that proves
-`HStruct`) and the session's `own` (the lane that proves `HFiles`). -/
+port is a read of `regs[nm]`); established from the parse of the part's circuit (`keyProg_parse`, as for
+`HStruct`) and the session's `own` (as for `HFiles`). -/
 def RowColKeys : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ p, p < (partsOf F.sh).size →
     ∀ q < 128 * (nsOf F.sh p).sum, rowColOf F.sh p q < (Rows.ofNet (F.Vs (F.sess p)).hU).nIn ∧
@@ -130,8 +130,8 @@ parts `p` and `p'` hold the same element of `w` at positions `a` and `a'`, the k
 same bit `b` of rows `q`, `q'`, and where both rows are registered reads at rep `r`'s units, they are at one registered
 root and one position.
 V*'s part sessions read element `i` of `w` as row `r` of one registration `regs[nm]` (`rec_vstage.py:356-357`);
-established from the parse of the parts' circuits (the bit, the lane that proves `HStruct`) and the sessions' reads
-files with `OwnReads` (the root and the position, the lane that proves `HFiles`). -/
+established from the parse of the parts' circuits (the bit, as for `HStruct`) and the sessions' reads
+files with `OwnReads` (the root and the position, as for `HFiles`). -/
 def SameRow : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ (r : Fin 2) (p p' a a' e : ℕ),
     p < (partsOf F.sh).size → p' < (partsOf F.sh).size → ∀ (ha : a < (wIOf F.sh p).size)

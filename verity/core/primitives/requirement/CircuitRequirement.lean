@@ -46,12 +46,12 @@ structure Instance where
   step : Array (Option Nat)
   /-- each value, as its bits (`Execution.value`) -/
   value : Array Nat
-  /-- each value's block, a store index (`Layout.block`) -/
+  /-- each value's block, a store index (`Store.Placement.block`) -/
   block : Array Nat
-  /-- each value's first bit in its block (`Layout.offset`) -/
+  /-- each value's first bit in its block (`Store.Placement.offset`) -/
   offset : Array Nat
-  /-- each block's first encoded read, by store index (`Layout.encoded`): 0, as past its end, for a block encoded once
-  complete -/
+  /-- each block's first encoded read, by store index (`Store.Placement.encoded`): 0, as past its end, for a block
+  encoded once complete -/
   encoded : Array Nat := #[]
 
 /-- The audit's store (`Accounting.Requirement.Store`): the registered blocks, the fresh indices each step wrote and those

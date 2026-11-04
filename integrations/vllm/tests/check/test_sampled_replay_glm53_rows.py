@@ -113,7 +113,7 @@ def test_the_split_k_gate_cites_the_h200_capture_at_every_split_k_m_it_runs():
     `splitk_rows`: at both gates, every M the capture runs that the dispatch table sends to the split-K kernel, at the table's
     SPLIT_K, TILE_K and WARPS, N words a token row; and the Definition's conformance cites the same record."""
     from tests.properties import glm53_bf16_gemm_capture_gpu as X
-    from verity_vllm.program.frontend.conformance import status_of
+    from verity.ml.circuits.defs import conformance_label
     from verity.ml.definitions.numerics import batched_gemm_rows, glm53_rows
     from verity.ml.definitions.registry import bf16_gemm_check as BC
 
@@ -131,7 +131,7 @@ def test_the_split_k_gate_cites_the_h200_capture_at_every_split_k_m_it_runs():
         assert all((c["TILE_K"], c["WARPS"]) == (st["TILE_K"], st["WARPS"]) for st in split.values())
         assert c["mismatch"] == 0 and c["words"] == m.experts * sum(split)
     d = ll_bf16.LlBf16SplitKGemmWord
-    assert status_of(d.conformance) == "exact-model-tested"
+    assert conformance_label(d.conformance) == "exact-model-tested"
     assert p["record"][:16] in d.conformance and p["art"]["record"] in d.conformance
 
 
