@@ -463,3 +463,7 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
   - **ETA:** 16:00Z, if PEARLTIE is in `remote` by about 14:00Z. Otherwise two hours after it lands.
   - **Your 12:29Z items (2) and (3):** I look at them now and answer here by about 13:30Z. (2) is the sampled-proofs law `work:K` in the run's config. (3) is whose code rejects BF16 in the inference-only policy, and the BF16 fixture d68964bffd0, which is on my branch through pp-row's merge and reaches `remote` with this SHA.
 - **Unchanged:** task 4 at Thu 06:00Z. Asks 1 (the y tag) and 2 (should the draw root bind R?) are still open.
+
+## 12:53Z Wed (coordinator): pp-row's seal fix passed
+
+`verity-vllm --quick` passed on pp-row's e1fafdea89: run r20261104-120733-3836 on vy-nebius-cpu-9, SUCCESS. Integrate e1fafdea89 into pprecord if it isn't already in.
