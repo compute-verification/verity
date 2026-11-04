@@ -90,6 +90,28 @@ theorem run_acc_of_mem {C : Type} [Inhabited C] (V : Verifier C) (r : Fin (V.k x
   exact stepWith_acc_out H P x ω (fun as => V.next x as ((List.range as.length).map (coinSeq r))) (V.k x) i [] []
     ⟨[], [], [], .rej⟩ a h2
 
+/-- **A run ends accepted or refused.** -/
+theorem stepWith_out_dec (vn : List Msg → Claims.OC Out) :
+    ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+      (stepWith H P x ω vn f hist as t).out = .acc ∨ (stepWith H P x ω vn f hist as t).out = .rej
+  | 0, _, _, _ => by simp [stepWith]
+  | f + 1, hist, as, t => by
+    rcases hvb : (vn (as ++ [((P.next x hist ω).eval H).1])).eval H with ⟨o, lo⟩
+    cases o with
+    | msg _ =>
+      rw [RecDeploy.stepWith_succ_msg H P x ω vn f hist as t hvb]
+      exact stepWith_out_dec vn f _ _ _
+    | acc =>
+      rw [RecDeploy.stepWith_succ_acc H P x ω vn f hist as t hvb]
+      exact Or.inl rfl
+    | rej =>
+      rw [RecDeploy.stepWith_succ_rej H P x ω vn f hist as t hvb]
+      exact Or.inr rfl
+
+theorem run_out_dec {C : Type} [Inhabited C] (V : Verifier C) (r : Fin (V.k x) → C) :
+    (run H P V x ω r).out = .acc ∨ (run H P V x ω r).out = .rej :=
+  stepWith_out_dec H P x ω _ (V.k x) [] [] ⟨[], [], [], .rej⟩
+
 end Steps
 
 /-- The first `m` coins of two coin vectors that agree below `p ≥ m`. -/
@@ -328,6 +350,31 @@ theorem run_session (hS : PrefixAt H V FV x p n ok stmt) (hF : FlockAt H FV) {Ω
   rw [← hk]
   exact key.1
 
+/-- **`sview`'s view of a run is its rounds from the `p`-th on, with its decision**: the run plays at most `p + n`
+rounds, and where it refuses, none of its rounds accepted (`run_acc_of_mem`). -/
+theorem sview_run (hS : PrefixAt H V FV x p n ok stmt) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (V.k x) → Coin) :
+    sview true p n (run H P V x ω r).seen = ⟨(run H P V x ω r).msgs.drop p, (run H P V x ω r).out⟩ := by
+  have hl := Claims.Recursion.run_length_le H P V x ω r
+  have hk := hS.k
+  have ht : ((run H P V x ω r).msgs.drop p).take n = (run H P V x ω r).msgs.drop p :=
+    List.take_of_length_le (by rw [List.length_drop]; omega)
+  unfold sview
+  simp only [Trace.seen, RecDeploy.fixLast_true, ht]
+  rcases run_out_dec H P x ω V r with h | h
+  · simp [h]
+  · have hseg : RecDeploy.segOut ((run H P V x ω r).msgs.drop p) = .rej := by
+      unfold RecDeploy.segOut
+      rcases hlast : ((run H P V x ω r).msgs.drop p).getLast? with _ | ⟨a, o⟩
+      · rfl
+      · cases o with
+        | acc =>
+          have := run_acc_of_mem H P x ω V r (a := a) ((List.drop_subset _ _) (List.mem_of_getLast? hlast))
+          rw [h] at this
+          cases this
+        | msg _ => rfl
+        | rej => rfl
+    simp [h, hseg]
+
 end Prefix
 
 /-! ## The refused session -/
@@ -356,9 +403,10 @@ theorem twoP_run {H : Msg → Msg} {FV : Verifier Coin} (hF : FlockAt H FV) (xS 
 
 /-- **`SessionRuns` at a prefix-then-session record**: at each statement with units the sampled verifier runs `p x`
 rounds of its own, then one session of its Flock verifier (`PrefixAt`), every unit's rounds are those from `p x` on,
-and `session` reads a view whose `p x`-th round passed at the message `d` (with `okD x d`, which a passed round has)
-as the statement `stmt x d` and `sview` of the view, and one whose `p x`-th round refused as `xS₀ x` and the view of
-the prover that sends `[2]`. -/
+and `session`, at each statement with units, reads a view whose `p x`-th round passed at the message `d` (with
+`okD x d`, which a passed round has) as the statement `stmt x d` and the view's rounds from the `p x`-th on with its
+decision (at a run, `sview`'s view: `sview_run`), and one whose `p x`-th round refused as `xS₀ x` and the view of the
+prover that sends `[2]`. -/
 theorem sessionRuns_prefix {Col T : Type} [DecidableEq Col] [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T)
     (hF : FlockAt H D.flock.V) (p n : Msg → ℕ) (ok : Msg → List Msg → List Coin → Bool) (stmt : Msg → Msg → Msg)
     (okD : Msg → Msg → Prop) (xS₀ : Msg → Msg)
@@ -366,9 +414,9 @@ theorem sessionRuns_prefix {Col T : Type} [DecidableEq Col] [Zero Col] (H : Msg 
     (hokD : ∀ x as cs, ok x as cs = true → okD x (as.getD (p x - 1) []))
     (hn₀ : ∀ x, D.flock.V.k (xS₀ x) = n x)
     (hrounds : ∀ x u (t : Fin (D.V.k x)), t ∈ D.rounds x u ↔ p x ≤ t.val)
-    (hpass : ∀ x u (v : Seen) d, v.msgs[p x - 1]? = some (d, .msg []) → okD x d →
-      D.session x u v = some (stmt x d, sview true (p x) (n x) v))
-    (hrefuse : ∀ x u (v : Seen) d, v.msgs[p x - 1]? = some (d, .rej) →
+    (hpass : ∀ x u, 0 < nPU D x → ∀ (v : Seen) d, v.msgs[p x - 1]? = some (d, .msg []) → okD x d →
+      D.session x u v = some (stmt x d, ⟨v.msgs.drop (p x), v.out⟩))
+    (hrefuse : ∀ x u, 0 < nPU D x → ∀ (v : Seen) d, v.msgs[p x - 1]? = some (d, .rej) →
       D.session x u v = some (xS₀ x, ⟨[([2], .rej)], .rej⟩)) :
     SessionRuns H D := by
   intro x Ω P ω r u hu
@@ -426,7 +474,7 @@ theorem sessionRuns_prefix {Col T : Type} [DecidableEq Col] [Zero Col] (H : Msg 
       obtain ⟨h2, h3⟩ := twoP_run hF (xS₀ x) fun i => r' ⟨p x + i.val, hemb _ (hn₀ x) i⟩
       refine ⟨?_, fun q hq => ?_⟩
       · rw [h2]
-        exact hrefuse x u (run H P D.V x ω r').seen _ hlast'
+        exact hrefuse x u hx (run H P D.V x ω r').seen _ hlast'
       · rw [h3] at hq
         cases hq
   | true =>
@@ -467,11 +515,11 @@ theorem sessionRuns_prefix {Col T : Type} [DecidableEq Col] [Zero Col] (H : Msg 
       obtain ⟨hs, hlog⟩ := run_session hS hF P ω r r' hr hok
       rw [hcoins r'] at hs hlog
       refine ⟨?_, hlog⟩
-      rw [hs]
+      rw [hs, sview_run hS P ω r']
       obtain ⟨-, hlast', -, -⟩ := run_pre hS P ω r'
       rw [run_take_agree H P D.V x ω r r' (p x) hr, coins_agree hr (le_refl _), hok] at hlast'
       simp only [↓reduceIte] at hlast'
-      exact hpass x u (run H P D.V x ω r').seen _ hlast' (hokD x _ _ hok)
+      exact hpass x u hx (run H P D.V x ω r').seen _ hlast' (hokD x _ _ hok)
 
 /-! ## At flock-verify `--zk` -/
 
