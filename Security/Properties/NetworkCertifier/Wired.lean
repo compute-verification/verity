@@ -28,14 +28,16 @@ table over one, the rows `countsOf` counts as `registered`, leaf for leaf the sa
 * `CircuitCounts`: an accepted record's `free` is at least the circuit's free inputs outside its registered rows.
 * `WiredScopeAcc`: `CircuitWiresFit` at the statements of a deployment whose statements are their descriptors' circuits
   (`StmtFlattensCopied`): the wires part of `NetTiming.ScopeAcc`'s `Fits`.
-* `Properties.NetworkPeriod.RowsWiresChecked`: the period check (`NetworkCheck.Period`) charges an audit with a circuit
-  record the free inputs `Circuit.check` counted on that record, which its registration binds by digest, with each pin
-  its registered root.
+* `Properties.NetworkPeriod.RowsWiresChecked`: the period check (`NetworkCheck.Period`) charges each audit the free
+  inputs it counted off its registered Program, and with a circuit record those `Circuit.check` counted on that record,
+  which its registration binds by digest, with each pin its registered root.
+* `Properties.NetworkPeriod.RowsHeld`: an accepted rows-form public's `held` names `circuit` and `free`, and each holds:
+  `RowsCircuitHeldAt` and `RowsWiresCheckedAt`.
 
 Each of `CircuitWiresFit` and `CircuitCounts` says its conclusion (`…At`) of every record `check` accepts, and so is its
 property of any circuit check `chk` (`…Of`), which the nontrivial lemmas state false at `acceptAllCircuit`, a check that
-accepts every record; `RowsWiresChecked` likewise of the period's decoder and check. `Proofs.Properties.NetworkCertifier`
-proves them.
+accepts every record; `RowsWiresChecked` and `RowsHeld` likewise of the period's decoder and check.
+`Proofs.Properties.NetworkCertifier` proves them.
 -/
 
 namespace Properties.NetworkCertifier
@@ -198,23 +200,26 @@ open Lean (Json)
 open NetworkCheck.Period
 
 /-- What `RowsWiresChecked` says of a period its check accepted under the parameters `j` decoded to `p`: each compute
-audit `i` whose parameters carry a circuit record (`Audit.record`: its digest `d` and its pins) is, in `j`'s `audits`,
-an audit whose `program` decodes through its canonical bytes to a Program `prog`, and whose `circuit`, `order` and
-`pins` `NetworkCheck.Circuit.check` accepted against `prog`, counting the audit's free inputs (`free`); `d` is the
-record's digest and the pins are `pins`'; and audit `i`'s registration names `prog`, binds the record by its digest
-(`window.circuit`) and records each pin as its parameter's registered root (`pinHeld`). -/
+audit `i` is, in `j`'s `audits`, an audit whose `program` decodes through its canonical bytes to a Program `prog`, which
+its registration names, and its free inputs (`free`) are what the check counted off `prog`: its input gates
+(`inputGates`) where its parameters carry no circuit record, and where they carry one (`Audit.record`: its digest `d`
+and its pins), the count `NetworkCheck.Circuit.check` made accepting their `circuit`, `order` and `pins` against `prog`,
+`d` that record's digest and the pins `pins`', with its registration binding the record by its digest
+(`window.circuit`) and recording each pin as its parameter's registered root (`pinHeld`). -/
 def RowsWiresCheckedAt (j : Json) (p : Params) (c : Commitment) : Prop :=
-  ∀ (i : ℕ) (au : Audit) (reg : Json) (d : String) (pins : List (String × String)),
-    p.audits[i]? = some au → c.audits[i]? = some reg → au.record = some (d, pins) →
-    ∃ (xs : Array Json) (a pj record order pinsJ : Json) (s : String) (prog : Flock.Program.Prog)
-      (cnt : NetworkCheck.Circuit.Counts),
+  ∀ (i : ℕ) (au : Audit) (reg : Json), p.audits[i]? = some au → c.audits[i]? = some reg →
+    ∃ (xs : Array Json) (a pj : Json) (s : String) (prog : Flock.Program.Prog),
       Flock.J.arr j "audits" "the object" = .ok xs ∧ xs[i]? = some a ∧
       a.getObjVal? "program" = .ok pj ∧ Flock.canon pj = .ok s ∧ Flock.Program.decode s.toUTF8 = .ok prog ∧
-      a.getObjVal? "circuit" = .ok record ∧ a.getObjVal? "order" = .ok order ∧ a.getObjVal? "pins" = .ok pinsJ ∧
-      NetworkCheck.Circuit.check prog record order pinsJ = .ok cnt ∧ au.free = cnt.free ∧
-      NetworkCheck.Circuit.digest record = .ok d ∧ NetworkCheck.Circuit.pinsOf pinsJ = .ok pins ∧
       reg.getObjValD "program" = .str (Flock.hexOf prog.sha512) ∧
-      (reg.getObjValD "window").getObjValD "circuit" = .str d ∧ ∀ q ∈ pins, pinHeld reg q = true
+      match au.record with
+      | none => au.free = inputGates prog
+      | some (d, pins) =>
+        ∃ (record order pinsJ : Json) (cnt : NetworkCheck.Circuit.Counts),
+          a.getObjVal? "circuit" = .ok record ∧ a.getObjVal? "order" = .ok order ∧ a.getObjVal? "pins" = .ok pinsJ ∧
+          NetworkCheck.Circuit.check prog record order pinsJ = .ok cnt ∧ au.free = cnt.free ∧
+          NetworkCheck.Circuit.digest record = .ok d ∧ NetworkCheck.Circuit.pinsOf pinsJ = .ok pins ∧
+          (reg.getObjValD "window").getObjValD "circuit" = .str d ∧ ∀ q ∈ pins, pinHeld reg q = true
 
 /-- `RowsWiresChecked` of the parameters' decoder `dec` and the period check `chk`: `RowsWiresCheckedAt` of every
 period `chk` accepts under parameters `dec` decoded. -/
@@ -223,15 +228,42 @@ def RowsWiresCheckedOf (dec : Json → Except String Params)
   ∀ (j : Json) (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     dec j = .ok p → chk p c e = .accept pub prof → RowsWiresCheckedAt j p c
 
-/-- **The period check charges no audit a count of a circuit record it didn't check.** If the parameters `j` decode to
-`p` (`paramsOf`) and the check accepts a period under them, every compute audit whose parameters carry its window's
-circuit record has that record, its wire order and its pins accepted by `NetworkCheck.Circuit.check` against the
-Program its descriptor decodes to, whose count is the audit's free inputs (`free`), the number its term charges; and
-its registration names that Program, binds that record by its digest (`window.circuit`) and records each pin as its
-parameter's registered root (`pinHeld`), so the count leaves out only the reads of values the verifier fixed before the
-run. -/
+/-- **The period check charges each audit the free inputs it counted off its registered Program.** If the parameters
+`j` decode to `p` (`paramsOf`) and the check accepts a period under them, every compute audit's registration names the
+Program its descriptor decodes to, and its free inputs (`free`), the number its term charges, are that Program's input
+gates (`inputGates`), or, where its parameters carry its window's circuit record, the count of
+`NetworkCheck.Circuit.check`, which accepted that record, its wire order and its pins against the Program; its
+registration then binds that record by its digest (`window.circuit`) and records each pin as its parameter's registered
+root (`pinHeld`), so the count leaves out only the rows its wires fill and the reads of values the verifier fixed before
+the run. -/
 def RowsWiresChecked : Prop :=
   ∀ (j : Json) (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     paramsOf j = .ok p → check p c e = .accept pub prof → RowsWiresCheckedAt j p c
+
+/-- What `RowsHeld` says of a period its check accepted under the parameters `j` decoded to `p`, publishing `pub`: in
+the rows form, its public names the checks `heldNames` names (`held`), and each holds of it: `circuit`, each phase's tied
+audits run the class circuit (`RowsCircuitHeldAt`), and `free`, each audit's free inputs are the count the check made
+off its registered Program (`RowsWiresCheckedAt`). -/
+def RowsHeldAt (j : Json) (p : Params) (c : Commitment) (pub : Public) : Prop :=
+  ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+    (publicJson pub).getObjValD "held" = Lean.toJson heldNames ∧ heldNames = #["circuit", "free"] ∧
+      RowsCircuitHeldAt p c ∧ RowsWiresCheckedAt j p c
+
+/-- `RowsHeld` of the parameters' decoder `dec` and the period check `chk`: `RowsHeldAt` of every period `chk` accepts
+under parameters `dec` decoded, at its public. -/
+def RowsHeldOf (dec : Json → Except String Params)
+    (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (j : Json) (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    dec j = .ok p → chk p c e = .accept pub prof → RowsHeldAt j p c pub
+
+/-- **An accepted rows-form public names only checks the period check held.** If the parameters `j` decode to `p`
+(`paramsOf`) and the check accepts a rows-form period under them, its public's `held` is `heldNames`, `circuit` and
+`free`, and each holds of the period: every phase's tied audits run the class circuit (`RowsCircuitHeldAt`), and every
+audit's free inputs are the count the check made off its registered Program, with its circuit record the count
+`NetworkCheck.Circuit.check` made (`RowsWiresCheckedAt`). A reader of `K` charges a tied audit its counted free inputs
+on the strength of that `held`. -/
+def RowsHeld : Prop :=
+  ∀ (j : Json) (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    paramsOf j = .ok p → check p c e = .accept pub prof → RowsHeldAt j p c pub
 
 end Properties.NetworkPeriod
