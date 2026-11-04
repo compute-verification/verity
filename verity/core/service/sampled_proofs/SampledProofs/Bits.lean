@@ -18,16 +18,17 @@ describes, where each of its gates sits, and each unit's gates and inputs. The s
   zero (gate 1) and `B` source gates per unit, unit `u`'s input column `x` on its key's (`keyIdx`), or on the zero's where
   it has none. Then come the units, each the unit net's rows (`Rows.ofNet`) stacked `upv` times (`Rows.stack`), a row
   reading earlier gates. Its outputs are the gates on the returned outputs' bits.
-* `gateSize`, `off`, `posOf`, `lower`, `prog`, `consts`: that program lowered to the Boolean profile (`LGate`), gate by
-  gate in order. A row `(⊕ a) ∧ (⊕ b)` is three gates, the two XORs then their AND, and an input is one, `.const b`
-  where the constants `κ` fix it to `b`; the key program's are `consts`, its constant and its zero. Gate `g` sits at
-  `posOf`, its last lowered gate.
+* `gateSize`, `off`, `posOf`, `lower`, `prog`: that program lowered to the Boolean profile (`LGate`), gate by gate in
+  order. A row `(⊕ a) ∧ (⊕ b)` is three gates, the two XORs then their AND, and an input is one, `.const b` where the
+  constants `κ` fix it to `b`. Gate `g` sits at `posOf`, its last lowered gate.
 * `unitOf`, `unitGates`, `owner`, `insOf`, `blockOf`: unit `u`'s lowered gates, the input gates it owns (the unfixed
   inputs whose first reader it is) and its proof block, the first then the second's positions.
 * `inBit`, `outBit`: the claims position of a bit of an instance's input port or returned output leaf, the instance
   `(u, k)` being unit `u`'s template instance `k < upv`.
 * `RowPos`, `rowBit`, `outRowBit`: a commitment position (a registered row, its leaf and a bit), where a source gate
   reads and where an output bit is committed.
+* `consts`: the key program's constants, its constant set, and its zero and every input gate with no commitment
+  position clear.
 * `Members`, `base`, `wiresOf`: an audit's members, each a statement on a circuit file over some of the partition's VUs,
   side by side, and each source bit's wire to the first claims position at its commitment position, compared at the
   partition's VUs: the writer's output bit, else the first copy.
@@ -254,9 +255,6 @@ def lower (kp : KeyProg) (κ : Nat → Option Bool) (g : Nat) : List LGate :=
 def prog (kp : KeyProg) (κ : Nat → Option Bool) : List LGate × List Nat :=
   ((List.range kp.size).flatMap (lower kp κ), kp.outs.map (posOf kp))
 
-/-- **The key program's constants**: gate 0, the constant, set, and gate 1, the zero, clear; no other gate fixed. -/
-def consts (g : Nat) : Option Bool := if g == 0 then some true else if g == 1 then some false else none
-
 /-! ## Units and proof blocks -/
 
 /-- **Gate `g`'s unit**: none for an input, else the unit whose rows hold it. -/
@@ -333,6 +331,14 @@ def rowBit (c : Flock.Circuit) (n g : Nat) : Option RowPos :=
   let B := ((Rows.ofNet c.unit).stack c.upv).nIn
   if g < 2 || B == 0 || 2 + n * B ≤ g || keyIdx c B ((g - 2) % B) != some ((g - 2) % B) then none
   else srcPos c ((g - 2) / B) (srcKey c (Index.of c) ((g - 2) % B))
+
+/-- **The key program's constants**, for `n` units: gate 0, the constant, set; gate 1, the zero, and every other input
+gate with no commitment position (`rowBit`), clear; no other gate fixed. No row reads a key's duplicate, and where no
+row reads input padding and no wire runs into the unit, no row reads any gate it clears past gate 1. -/
+def consts (c : Flock.Circuit) (n g : Nat) : Option Bool :=
+  if g == 0 then some true
+  else if g == 1 || (g < (keyProg c n).inputs && rowBit c n g == none) then some false
+  else none
 
 /-- **Where unit `u` commits output word `x`'s bit `t`**: bit `16 (x − at) + t` of its leaf of the output row whose run
 of output ports holds the word (`HmOut.outGroup`, `at` the run's first word). -/
@@ -464,15 +470,17 @@ private def toy : KeyProg :=
     rows := #[([2], [0]), ([4, 2], [0]), ([3], [0]), ([6], [3])]
     outs := [5, 7] }
 
+private def toyκ (g : Nat) : Option Bool := if g == 0 then some true else if g == 1 then some false else none
+
 #guard (List.range toy.size).map (posOf toy) == [0, 1, 2, 3, 6, 9, 12, 15]
-#guard (prog toy consts).1.length == (List.range toy.size).foldl (fun s g => s + gateSize toy g) 0
-#guard lower toy consts 0 == [.const true]
-#guard lower toy consts 2 == [.input]
-#guard lower toy consts 5 == [.xor [6, 2], .xor [0], .and [7, 8]]
-#guard (prog toy consts).2 == [9, 15]
-#guard let gs := (prog toy consts).1; (List.range gs.length).all fun i => (gs[i]!).reads.all (· < i)
-#guard blockOf toy consts 0 == [4, 5, 6, 7, 8, 9, 2]
-#guard blockOf toy consts 1 == [10, 11, 12, 13, 14, 15, 3]
+#guard (prog toy toyκ).1.length == (List.range toy.size).foldl (fun s g => s + gateSize toy g) 0
+#guard lower toy toyκ 0 == [.const true]
+#guard lower toy toyκ 2 == [.input]
+#guard lower toy toyκ 5 == [.xor [6, 2], .xor [0], .and [7, 8]]
+#guard (prog toy toyκ).2 == [9, 15]
+#guard let gs := (prog toy toyκ).1; (List.range gs.length).all fun i => (gs[i]!).reads.all (· < i)
+#guard blockOf toy toyκ 0 == [4, 5, 6, 7, 8, 9, 2]
+#guard blockOf toy toyκ 1 == [10, 11, 12, 13, 14, 15, 3]
 #guard owner toy 0 == some 0 && owner toy 1 == none && owner toy 3 == some 1
 
 /-- Two 16-bit inputs and three 1-bit inputs into one 32-bit primitive: leaves of widths 16, 16, 1, 1, 1 and 32. -/
@@ -532,8 +540,10 @@ private def toyMs : Members := [(toyA, #[0, 1]), (toyB, #[0, 1])]
 #guard rowBit toyA 2 149 == some (RowPos.mk "y" 1 3) && rowBit toyA 2 40 == none && rowBit toyA 2 1 == none
 #guard outBit toyA 2 0 0 0 0 == some 263 && outBit toyA 2 1 0 0 5 == some 329 && outBit toyB 2 0 0 0 0 == none
 #guard outRowBit toyA 1 0 0 4 == some (RowPos.mk "o" 1 4)
-#guard let gs := (prog (keyProg toyA 2) consts).1
+#guard let gs := (prog (keyProg toyA 2) (consts toyA 2)).1
   (writers [(toyA, #[0, 1])]).all fun (x, _) => match gs[x]? with | some (.and _) => true | _ => false
+#guard consts toyA 2 0 == some true && consts toyA 2 1 == some false && consts toyA 2 149 == none &&
+  consts toyA 2 40 == some false && consts toyA 2 258 == none
 #guard lastLe #[0, 1, 2] 0 == 0 && lastLe #[0, 1, 2] 5 == 2 && lastLe #[0, 4] 3 == 0
 #guard srcAt toyA (Index.of toyA) 0 1 3 == .msg 1 0 3 && srcAt toyA (Index.of toyA) 0 1 9 == .msg 1 1 1
 #guard srcKey toyA (Index.of toyA) 19 == .msg 1 0 3 && srcKey toyA (Index.of toyA) 40 == .pad 0 40
