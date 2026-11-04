@@ -12,7 +12,8 @@ Two kinds of local copy can go, and only these:
 * **run-directory files** (`~/.research/runs/<run>/...`, `evict_runs`): the big files of a finished run that appear, with the same
   size (and the same sha256 when the file is <= `hash_max` bytes), in a PRESERVED tree artifact of its attempt: `run_record` /
   `run_files`, or a typed output its `outputs.json` declares, laid out under that output's `tree` path (a Build's `outputs/build`).
-  Oldest run first.  A run touched in the last `quiet_s` seconds, or whose status is not terminal, is left alone.
+  Oldest run first.  A run touched in the last `quiet_s` seconds (a day by default: an agent VM's runs are read for hours
+  after they end, and a node's evictor passes its own shorter window), or whose status is not terminal, is left alone.
   `run-files.evicted.json` in the run dir lists what went and the `research data fetch`es that bring it back.
   A sealed run dir (store.sealed) is the root helper's to change: `sudo -n vy-seal-runs evict` removes the files its
   `.custody` lists at the size it recorded and unchanged since (`evict_custody`'s rule), as root.
@@ -70,7 +71,7 @@ MIN_BYTES = 1 << 20          # blobs / files below this are not worth an evictio
 #: theirs for most of an hour), so eviction leaves it; `LocalStore.fetch` refreshes an entry's mtime on every fetch
 TREE_KEEP_S = 24 * 3600
 HASH_MAX = 64 << 20          # run files up to this size are sha256-checked against the artifact before eviction
-QUIET_S = 30 * 60            # a run directory touched more recently than this is still being worked on
+QUIET_S = 24 * 3600          # a run directory touched more recently than this may still be read (collected, inspected)
 TERMINAL_STATES = ("done", "failed", "dead", "timed_out", "exited", "cancelled")
 EVICTED_SCHEMA = "research/run-files-evicted/v0.1"
 EVICTED_FILE = "run-files.evicted.json"

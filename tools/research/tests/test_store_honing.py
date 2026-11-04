@@ -167,6 +167,13 @@ def test_evict_runs_only_preserved_terminal_quiet_runs_and_leaves_a_restore_reco
     store.put_attempt(_attempt(run_id="r20260922-105909-0004", outputs={"run_files": art}))
     assert [p["run"] for p in EV.plan_runs(store, runs, min_bytes=1000)] == [RUN], "a run dir touched in the last 30 min is skipped"
     assert fresh.exists()
+    for p in fresh.rglob("*"):
+        os.utime(p, (1_700_000_000, 1_700_000_000))
+    capsys.readouterr()
+    EV.plan_runs(store, runs, min_bytes=1000, now=1_700_000_000 + 2 * 3600, log=print)
+    assert "r20260922-105909-0004: touched 120 min ago" in capsys.readouterr().out, "by default a run ended 2 h ago is still being collected"
+    EV.plan_runs(store, runs, min_bytes=1000, quiet_s=30 * 60, now=1_700_000_000 + 2 * 3600, log=print)
+    assert "r20260922-105909-0004: touched" not in capsys.readouterr().out, "a node's evictor passes its 30 min window"
 
     free = {"n": 0}
     rep = EV.evict_runs(store, runs, target_free_bytes=5000, dry_run=True, min_bytes=1000, free_fn=lambda: free["n"])

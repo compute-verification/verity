@@ -346,7 +346,7 @@ def cmd_evict(argv: list[str]) -> int:
                     help="keep every blob an artifact of this registry holds (fixtures/artifacts.json's form: its `art:` keys); repeatable")
     ap.add_argument("--runs", action="store_true", help="also evict preserved big files from finished run directories (writes run-files.evicted.json)")
     ap.add_argument("--runs-dir", default=None, metavar="DIR", help="runs root for --runs (default $RESEARCH_RUNS or ~/.research/runs)")
-    ap.add_argument("--quiet-min", type=float, default=EV.QUIET_S / 60, metavar="M", help="--runs: skip run dirs touched in the last M minutes (default 30)")
+    ap.add_argument("--quiet-min", type=float, default=EV.QUIET_S / 60, metavar="M", help="--runs: skip run dirs touched in the last M minutes (default 1440, a day)")
     ap.add_argument("--verify-remote", action="store_true",
                     help="--runs on an agent VM: a run's tree the local catalog records no verified replica of counts once its manifest "
                          "and blobs are on the remote at their sizes (HEADs, no read-back; evict.py `on_remote`)")
