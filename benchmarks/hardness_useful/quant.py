@@ -140,21 +140,30 @@ class Served:
 
     In a8 and e2 the sink row (position 0) is served exact. Linears that read the same input tensor (q, k and v; gate and
     up) are one call and share its codes and E. E is drawn from one generator per GPU, seeded seed + 1000·index, which
-    `reseed` restarts; a model on one GPU draws from seed itself."""
+    `reseed` restarts; a model on one GPU draws from seed itself.
 
-    def __init__(self, mode: str = "a16"):
+    With wnoise f (HT-DEFENCE's candidate 3), q, k and v are served as q + F, F live integer weight noise uniform on
+    [−f, f] drawn on every call, clipped to ±127 (`hardness_public/rotated.py --live-noise`), from generators of their
+    own, so E's draws are the same as without it."""
+
+    def __init__(self, mode: str = "a16", wnoise: int = 0):
         assert mode in ("a16", "a8", "e2"), mode
-        self.mode, self.seed, self.gens, self._last = mode, 0, {}, None
+        self.mode, self.wnoise, self.seed, self.gens, self._last = mode, wnoise, 0, {}, None
 
     def reseed(self, seed: int, device=None):
         self.seed, self.gens, self._last = seed, {}, None
 
-    def gen(self, device) -> torch.Generator:
-        g = self.gens.get(device)
+    def gen(self, device, stream: int = 0) -> torch.Generator:
+        g = self.gens.get((device, stream))
         if g is None:
-            g = self.gens[device] = torch.Generator(device=device)
-            g.manual_seed(self.seed + 1000 * (device.index or 0))
+            g = self.gens[(device, stream)] = torch.Generator(device=device)
+            g.manual_seed(self.seed + 1000 * (device.index or 0) + 1_000_000 * stream)
         return g
+
+    def noised(self, q: torch.Tensor) -> torch.Tensor:
+        f = self.wnoise
+        n = torch.randint(-f, f + 1, q.shape, device=q.device, dtype=q.dtype, generator=self.gen(q.device, 1))
+        return (q + n).clamp(-127, 127)
 
     def act(self, x, rot):
         if self._last is not None and self._last[0] is x and self._last[1] is rot:
@@ -183,7 +192,7 @@ class QLinear(nn.Module):
         self.weight = lin.weight
         self.c = c
         self.rot = rot
-        self.served, self.exact = None, False
+        self.served, self.exact, self.noised = None, False, False
         self._frozen = None
 
     def train(self, mode: bool = True):
@@ -211,6 +220,8 @@ class QLinear(nn.Module):
                 x = self.rot(x)
             return F.linear(x, q).float() * s
         v, sx, off = self.served.act(x, self.rot)
+        if self.served.wnoise and self.noised:
+            q = self.served.noised(q)
         y = F.linear(v, q).float()
         if off is not None:
             y = y + off * q.float().sum(1)
@@ -225,7 +236,7 @@ class FrozenQLinear(QLinear):
         nn.Module.__init__(self)
         self.register_buffer("q", q)
         self.register_buffer("s", s)
-        self.c, self.rot, self.served, self.exact = c, rot, None, False
+        self.c, self.rot, self.served, self.exact, self.noised = c, rot, None, False, False
 
     def train(self, mode: bool = True):
         assert not mode, "a FrozenQLinear has no latent weight to train"
@@ -298,14 +309,18 @@ def wrap(model, target: float | None, rotate: bool = False, log=print, targets: 
 
 
 def set_served(model, spec: str) -> Served:
-    """Serve every QLinear as spec, MODE[:X+X...] (`Served`), each X a projection (q_proj) or one matrix
-    (layers.0.self_attn.q_proj), served exact: its activations in bf16, no noise."""
-    mode, _, exact = spec.partition(":")
+    """Serve every QLinear as spec, MODE[/wF][:X+X...] (`Served`): /wF adds live weight noise uniform on [−F, F] to q,
+    k and v, and each X is a projection (q_proj) or one matrix (layers.0.self_attn.q_proj), served exact: its
+    activations in bf16, no noise."""
+    head, _, exact = spec.partition(":")
+    mode, _, w = head.partition("/")
+    assert not w or w.startswith("w"), spec
     ex = set(exact.split("+")) - {""}
-    sv = Served(mode)
+    sv = Served(mode, int(w[1:]) if w else 0)
     for name, parent, attr in block_linears(model):
         m = getattr(parent, attr)
         m.served, m.exact = sv, attr in ex or name.removeprefix("model.").removesuffix(".weight") in ex
+        m.noised = attr in ("q_proj", "k_proj", "v_proj")
     return sv
 
 

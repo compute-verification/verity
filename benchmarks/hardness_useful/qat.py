@@ -199,7 +199,7 @@ def main(argv=None) -> int:
     ap.add_argument("--device-map", default=None, help="auto: load in bf16 across the visible GPUs, codes frozen "
                     "(`quant.FrozenQLinear`); evaluation only (--tokens 0)")
     ap.add_argument("--serve", default="a16", help="how activations are served in training, the headline evals and "
-                    "zero-shot: MODE[:PROJ+...] (`quant.Served`, `quant.set_served`)")
+                    "zero-shot: MODE[/wF][:PROJ+...] (`quant.Served`, `quant.set_served`)")
     ap.add_argument("--eval-modes", default=EVAL_MODES, help="more serving specs to measure perplexity under")
     ap.add_argument("--tokens", type=int, default=100_000_000, help="training tokens; 0 = no training")
     ap.add_argument("--seq", type=int, default=2048)
