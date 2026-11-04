@@ -289,6 +289,7 @@ section Loop
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C]
   [Nonempty C] {N : ℕ}
 
+omit [Nonempty Ω] in
 open Classical in
 /-- **The loop's first giving fork in `o` costs `Pr[o]`**: over a tape, a prefix, a `gR` fork and `M` more forks at `j`,
 the first `gv` fork in `o` has probability at most `Pr[o]` over one draw. -/
@@ -305,6 +306,9 @@ theorem Pr_outLoop_le (j M : ℕ) (gR gv o : Ω → (Fin N → Coin) × C → Pr
       gR ω (fork j r p.1.1, p.1.2) ∧
         firstDiffers (fun u : (Fin N → Coin) × C => gv ω (fork j r u.1, u.2))
           (fun u => if o ω (fork j r u.1, u.2) then [0] else []) [] M p.2
+  have hb : ∀ ω r, b ω r ≤ a ω r := fun ω r =>
+    Pr_firstLoop_le (U := (Fin N → Coin) × C) (fun u => gR ω (fork j r u.1, u.2)) (fun u => gv ω (fork j r u.1, u.2))
+      (fun u => o ω (fork j r u.1, u.2)) (fun u => hR ω _) M
   have hL : Pr (fun t : Ω × (Fin N → Coin) × ((Fin N → Coin) × C) × (Fin M → (Fin N → Coin) × C) =>
       gR t.1 (fork j t.2.1 t.2.2.1.1, t.2.2.1.2) ∧
         firstDiffers (fun u : (Fin N → Coin) × C => gv t.1 (fork j t.2.1 u.1, u.2))
@@ -321,9 +325,7 @@ theorem Pr_outLoop_le (j M : ℕ) (gR gv o : Ω → (Fin N → Coin) × C → Pr
     show _ = Pr (fun u : (Fin N → Coin) × C => o ω (fork j r u.1, u.2))
     rw [Claims.Recursion.Pr_prod (fun u : (Fin N → Coin) × C => o ω (fork j r u.1, u.2))]
   rw [hL, hRt]
-  exact Ex_mono fun ω => Ex_mono fun r =>
-    Pr_firstLoop_le (fun u => gR ω (fork j r u.1, u.2)) (fun u => gv ω (fork j r u.1, u.2))
-      (fun u => o ω (fork j r u.1, u.2)) (fun u => hR ω _) M
+  exact Ex_mono fun ω => Ex_mono fun r => hb ω r
 
 omit [Nonempty Coin] [Nonempty Ω] [Nonempty C] in
 open Classical in
@@ -594,7 +596,7 @@ theorem Pr_linkPick_le (hB : S.Binds) (hCF : I.LastCoinFree H)
   have h0 : slotRuns s.2 0 = s.2 0 := congrArg s.2 (Fin.ext (by simp))
   have h1 : slotRuns s.2 1 = Fin.tail s.2 0 := congrArg s.2 (Fin.ext (by simp))
   have h2 : (fun t : Fin M => slotRuns s.2 (2 + t.val)) = Fin.tail (Fin.tail s.2) :=
-    funext fun t => congrArg s.2 (Fin.ext (by have := t.isLt; simp <;> omega))
+    funext fun t => congrArg s.2 (Fin.ext (by have := t.isLt; simp; omega))
   exact link_out hB hCF hK j s.1 (slotRuns s.2) (by rw [h0, h1]; exact hg) (by rw [h2, h0]; exact hv)
     (by rw [h0]; exact hgv) (by rw [h0, h1]; exact hne)
 
@@ -638,7 +640,7 @@ theorem Pr_badO_le_link (hB : S.Binds) (hCF : I.LastCoinFree H)
     have ho' := (Pr_outLoop_le j.val M (fun ω d => K.GivesRO H P x ω d)
       (fun ω d => (K.wits H P x ω d).isSome = true) (fun ω d => K.OutRO H P x ω d)
       (fun _ _ h => isSome_of_givesRO h)).trans_eq
-        (rfl : Pr (fun t : Ω × (Fin (K.V.k x) → Coin) × K.EO.C x => K.OutRO H P x t.1 t.2) = K.PrOut H P x)
+        (show Pr (fun t : Ω × (Fin (K.V.k x) → Coin) × K.EO.C x => K.OutRO H P x t.1 t.2) = K.PrOut H P x from rfl)
     have hl := Pr_linkPick_le (Ω := Ω) (P := P) hB hCF hK M hk' j
     refine (le_of_eq (Pr_congr fun t => ?_)).trans (hp.trans ?_)
     · simp only [Comp.opAtO, fork_preCoins]
@@ -674,6 +676,7 @@ theorem Pr_badO_le_link (hB : S.Binds) (hCF : I.LastCoinFree H)
 
 /-! ## A rejecting judged rerun -/
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- Every evaluation `B_I` and the link search at a rerun is true. -/
 theorem verModel_log_true (hK : K.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x) (ω : Ω)
     (u : (Fin (K.V.k x) → Coin) × K.EO.C x) :
@@ -707,7 +710,7 @@ theorem Pr_innerRejects_le_fork
           (j, s) = some (a, b) ∧ Collision H a b := by
     rw [RunFinder.PrAt, dite_eq_left hk']
     exact Claims.Recursion.Pr_prod _
-  haveI : Nonempty (Fin (I.V.k (K.xI x))) := ⟨⟨0, hk⟩⟩
+  have : Nonempty (Fin (I.V.k (K.xI x))) := ⟨⟨0, hk⟩⟩
   rw [hP]
   refine (Ex_const (α := Fin (I.V.k (K.xI x))) _).symm.trans_le (Ex_mono fun j => ?_)
   have hU : UnifMap (fun s : Ω × (Fin (1 + 1) → (Fin (K.V.k x) → Coin) × K.EO.C x) => (s.1, s.2 0)) :=
