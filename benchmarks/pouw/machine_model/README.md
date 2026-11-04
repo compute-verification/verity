@@ -292,7 +292,7 @@ record, never to compare designs. `solve` prints τ, the price vectors' real-tim
 - **ε_mand**: the fold or the filler done in fewer instructions than honest's. The design's `[mand.PART]`: 0 for duo.
 - **ε_machine = ε_cert + ε_route**: the cheater's best mix over Π at q*, from the LP below. ε_cert = 1 − π*·n(H)/B(H) is
   honest's own free compute at the certificate π*; ε_route is what the cheater's routes add.
-- **ε_luck**: the sampling bound inside the same LP. Every check is one draw, so an accepted cheater leaves d̄ =
+- **ε_luck**: the sampling bound inside the same LP. Every check is one sample, so an accepted cheater leaves d̄ =
   ln(1/δ)/((1 − p)·S) of the words wrong over S spot checks, still folded, each filler's blocks at their own p. The
   design's `[luck]`.
 - **ε_sched**: honest's measured time above its model time; 0 unmeasured. `[measured]` in `data/honest/NAME.toml`.

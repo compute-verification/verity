@@ -108,7 +108,7 @@ parsed on the host (`vclib.parse_openings`).
 ## Where the code comes from
 
 SHA-512's compression is the GPU's one SHA-512 header (`verity/ml/kernels/sha512.cuh`), and frame-v3-sha512's leaf, pad and
-node, the hm96-sha512 leaf and the builders of their constants are its one row commitment (`verity/ml/kernels/row_commit.cuh`),
+node, the hm96-sha512 leaf and the code that builds their constants are its one row commitment (`verity/ml/kernels/row_commit.cuh`),
 both included by path through `vc_device.cuh`, which names them over libvc's plan. The rest is vendored into `vc.cu`, each piece taking its parameters as `__grid_constant__` kernel parameters rather than `__constant__` memory;
 the head of `vc.cu` names where each piece came from. Row-seg's segments run a thread each from their header's state,
 then a fold a unit, as `benchmarks/pouw/pearl_c_sm120/hash_fast.cuh` does; rows (up to 768 segments) take one launch with
