@@ -12,8 +12,9 @@ on its one coin. The circuit file's digest in the parameters is the parameters' 
 the commit phase's check exactly when one of them is the parameters.
 
 `vocab δ W` publishes the error `δ` for every subprotocol, the work certificate `W`, and no collision, forgery or loss
-term. At `unbounded` (`δ = ⊤`) every subprotocol's error is `⊤`, so every target holds. At `exact` (`δ = 0`, `W = 1`)
-every error is `0` while PoUW's claim, a gate computed, fails on every play.
+term; Pearl+'s run verdict credits one MAC on every play, and no play computes one. At `unbounded` (`δ = ⊤`) every
+subprotocol's error is `⊤`, so every target holds. At `exact` (`δ = 0`, `W = 1`) every error is `0` while PoUW's claim
+fails on every play: at onsite a gate computed, at remote the MAC credited.
 -/
 
 namespace Verity.Idle
@@ -98,6 +99,8 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   signatures _ := 0
   forger_signed _ _ _ _ _ := Nat.zero_le _
   computed _ _ _ _ _ := ∅
+  credited _ := 1
+  macs _ _ _ _ _ := 0
   world _ _ _ _ _ := world
   window _ := ⟨0, 0⟩
   capacity _ := ()

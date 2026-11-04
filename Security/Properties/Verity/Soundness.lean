@@ -14,8 +14,9 @@ collision (`Vocab.error`).
 `SoundnessOf` is the one statement, at every composite: each of its subprotocols' targets gives `Vocab.SoundnessAt`,
 with the errors summed over its subprotocols. `Soundness` is it at onsite, from its seven targets
 (`Vocab.SampledProofsSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
-`NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` the same statement at remote, whose subprotocols are a subset
-of onsite's, from its three (sampled proofs, PoUW and the inference-only policy). They are proved by
+`NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` the same statement at remote's composite of record
+(`Core.Remote.V1.protocol`, `verity/remote/v1`), from its three (sampled proofs, PoUW, which at remote is Pearl+'s run
+verdict and its claim in MACs, and the inference-only policy). They are proved by
 `Properties.Composition` (a composite's acceptance is its components' and its record's) and the union bound over one
 strategy in one game.
 
@@ -52,8 +53,9 @@ def Soundness : Prop :=
       V.BandwidthAuditSound .onsite → V.NetworkCertifierSound .onsite → V.WipeSound .onsite → V.SoundnessAt .onsite
 
 /-- **Soundness at remote's verifier of record: onsite's statement restricted to remote's subprotocols.** If sampled
-proofs, PoUW and the inference-only policy each meet their target at remote, then the probability that remote's
-compiled verifier accepts files that passed the commit phase's check while one of their claims fails is at most their
+proofs, PoUW (Pearl+'s run verdict: the MACs it credits at most the MACs computed on the run's tiles) and the
+inference-only policy each meet their target at remote, then the probability that remote's compiled verifier
+(`verity/remote/v1`) accepts files that passed the commit phase's check while one of their claims fails is at most their
 three errors at that strategy summed. -/
 def RemoteSoundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
