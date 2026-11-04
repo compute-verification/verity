@@ -505,16 +505,16 @@ theorem population_of_setupHidden {tags : Tags} {cf pf : ByteArray} {coins : Coi
     rw [drawn_population (hsome d rfl)]
     rfl
 
-/-- **A raw session that passes the statement check sets up a first table**, whatever the record's draw: its circuit is
-the inputs' (`setup_zero_c`, `ScopeZR.parseH`) and its population is `(pubZ I).n` (`population_of_setupHidden`,
-`ScopeZR.loadH`; at several tables, table 0's tags differ from the session's in the identity alone, which
-`HmOut.loadPublic` does not read). -/
+/-- **A raw session that passes the statement check at untemplated tags sets up a first table**, whatever the record's
+draw: its circuit is the inputs' (`setup_zero_c`, `ScopeZR.parseHF`) and its population is `(pubZ I).n`
+(`population_of_setupHidden`, `ScopeZR.loadH`; at several tables, table 0's tags differ from the session's in the
+identity alone, which `HmOut.loadPublic` does not read). -/
 theorem setup_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : Exec.Transcript)
     {spec : Flock.SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf (zkInputs x.I) t.record = .ok (spec, sts))
-    (hck : ScopeZR x.I) :
+    (hck : ScopeZR x.I) (hi : x.I.tags.isTmpl = false) :
     ∃ h0 : 0 < sts.size, sts[0].c = circZ x.I ∧ RecVStar.population sts[0] = (pubZ x.I).n := by
   have hh' : (zkTags x.I).hiddenOutputs = true := (zkTags_hiddenOutputs x.I).trans x.hTags.1
-  obtain ⟨h0, hc0⟩ := setup_zero_c hck.typed x.hTags.1 (hck.parseH x.hTags.1) hs
+  obtain ⟨h0, hc0⟩ := setup_zero_c hck.typed x.hTags.1 (hck.parseHF x.hTags.1 hi) hs
   refine ⟨h0, hc0, ?_⟩
   rcases HiddenExec.setupTables_okH hh' hs with ⟨-, st, hst, -, rfl⟩ | ⟨-, -, hj, -, -⟩
   · obtain ⟨pop, hl, hp⟩ := population_of_setupHidden hst
@@ -542,11 +542,19 @@ theorem vstarFile_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : 
         (pubZ x.I).n = s.instances ∧ RecVStar.circuitFile s f i.holo = .ok x.I.circuitFile ∧
         RecVStar.checkOwn s x.own = .ok () := by
   obtain ⟨-, spec, sts, hs, hv⟩ := hacc
-  obtain ⟨h0, hcst, hpop⟩ := setup_of_accepts x t hs hck
+  have h0 := setup_size_pos x.hTags.1 hs
   have hck1 := array_forM_ok hv 0 h0
   obtain ⟨htag, htab, ss, s, hss, hj, hname, hn, hf, ho, -⟩ := checkStmt_ok hck1
+  obtain ⟨_, hcst, hpop⟩ := setup_of_accepts x t hs hck (isTmpl_of_name htag)
   rw [hcst] at hname
   exact ⟨htag, htab, ss, s, hss, hj, hname, hpop ▸ hn, hf, ho⟩
+
+/-- **A raw session that `AcceptsZKV` accepts is at untemplated tags**: refusal (5) names its tags as `Tags.circuit`
+(`vstarFile_of_accepts`), and `Tags.isTmpl` reads the name alone (`isTmpl_of_name`). -/
+theorem flat_of_acceptsV {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : Exec.Transcript)
+    {i : RecVStar.Inner} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
+    (hacc : AcceptsZKV i j f rows x.I x.own t) (hck : ScopeZR x.I) : x.I.tags.isTmpl = false :=
+  isTmpl_of_name (vstarFile_of_accepts x t hacc hck).1
 
 /-- **`checkStmt` at an inner shape passes only at a circuit in `ProvedScope.scopeOk`**: under `--rec-inner` it refuses
 a V* statement whose circuit has a row outside `sha512/row/v1`. -/
@@ -577,8 +585,9 @@ so that circuit is in `ProvedScope.scopeOk` (`checkStmt_scope`), which is `Layou
 theorem scope_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : Exec.Transcript)
     {i : RecVStar.Inner} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
     (hacc : AcceptsZKV i j f rows x.I x.own t) (hck : ScopeZR x.I) : Layout.scopeOk (circZ x.I) = true := by
+  have hi := flat_of_acceptsV x t hacc hck
   obtain ⟨-, spec, sts, hs, hv⟩ := hacc
-  obtain ⟨h0, hcst, -⟩ := setup_of_accepts x t hs hck
+  obtain ⟨h0, hcst, -⟩ := setup_of_accepts x t hs hck hi
   rw [← hcst, ← FlockSoundness.Discharge.FailClosed.scopeOk_eq]
   exact checkStmt_scope (array_forM_ok hv 0 h0)
 

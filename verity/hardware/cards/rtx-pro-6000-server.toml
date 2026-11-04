@@ -1,0 +1,77 @@
+# The NVIDIA RTX PRO 6000 Blackwell Server Edition: the one source of its numbers (verity/hardware/README.md).
+# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU and firmware exceeds it, what the
+# model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
+# (neither, open). Per-SM rates are a SM-clock's. Security/Definitions/Core/Accel/Sm120.lean is held to this file.
+
+sku = "rtx-pro-6000-server"
+name = "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+die = "GB202"
+arch = "sm_120a"
+board = "900-2G153-0000-000"
+vbios = "98.02.8D.00.01"
+lean = "Security/Definitions/Core/Accel/Sm120.lean"
+nodes = "an RTX PRO 6000 node: eight cards, all this SKU and vBIOS (art:0620926423e6; the SKU first read in art:f8da67c39f76)"
+
+[sm]
+count = { value = 188, unit = "SM", mark = "ceiling", source = "NVIDIA RTX PRO Blackwell GPU Architecture whitepaper v1.1, Appendix A, Table 4: 188 SMs (the Workstation Edition, the same GB202)" }
+
+[clock]
+sm = { value = 2430, unit = "MHz", mark = "ceiling", source = "art:0620926423e6 (nvidia-smi -q, all eight cards: max, application, default application and max customer boost clocks 2430 MHz); art:529e118ea9ea (NVML: SM and memory clock offset ranges [0, 0], supported graphics clocks top at 2430); art:198a12d9c2e8 (every lock, application clock and offset above 2430 MHz refused or clamped)" }
+memory = { value = 12481, unit = "MHz", mark = "ceiling", source = "art:0620926423e6 (max and application memory clock 12481 MHz); art:529e118ea9ea (supported memory clocks [12481, 405], offset range [0, 0])" }
+
+# The stores. Registers in 32-bit words an SM; the rest in bytes.
+[store]
+reg = { value = 65536, unit = "word/SM", mark = "ceiling", source = "whitepaper v1.1: a 256 KB register file an SM, 64 Ki 32-bit registers" }
+reg_extra = { value = 3371, unit = "word/SM", mark = "ceiling", source = "the uniform registers (63 a warp at 48 warps, 3024 words), the predicates (7 bits a thread at 1536 threads, 336 words) and the uniform predicates (7 bits a warp, 11 words)" }
+smem = { value = 131072, unit = "B/SM", mark = "ceiling", source = "whitepaper v1.1: 128 KB of L1 and shared memory an SM" }
+l2 = { value = 134217728, unit = "B", mark = "ceiling", source = "whitepaper v1.1, Table 4: L2 128 MB, taken as 128 MiB" }
+dram = { value = 103079215104, unit = "B", mark = "ceiling", source = "product page, 'GPU Memory 96 GB GDDR7', taken as 96 GiB" }
+
+# The resources' rates, each a SM-clock (the Lean's rho is SMs x this x the SM clock).
+[rate]
+tensor = { value = 1024, unit = "s8 MAC/SM-clock", mark = "ceiling", source = "whitepaper v1.1, Table 4: FP8 1007.6 dense TFLOPS over 2 x 188 SMs at its 2617 MHz boost is 1024 MACs a SM-clock; IMMA.16832 runs s8 at the same rate, 4096 MACs in 16 tensor cycles of a sub-partition (measured 1023.8, art:ecfc88319554)" }
+issue = { value = 4, unit = "warp instruction/SM-clock", mark = "ceiling", source = "whitepaper v1.1: four sub-partitions, one warp scheduler each, one warp instruction a clock" }
+alu = { value = 64, unit = "lane/SM-clock", mark = "measurement", source = "the DS-120 SASS census: LOP3 at two cycles a warp instruction on a sub-partition; CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 12.0, gives 32-bit integer add 128 (IADD3 at 128 is open in Security/Definitions/Core/Accel/README.md)" }
+imad = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 12.0: 32-bit integer multiply and multiply-add 64 (the DS-120 census measures IMAD at 64)" }
+shfl = { value = 32, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7: warp shuffle 32" }
+f64 = { value = 2, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 12.0: 64-bit floating-point multiply-add 2" }
+sfu = { value = 16, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7: reciprocal, square root, logarithm, exponential, sine and cosine 16" }
+smem = { value = 32, unit = "bank word/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9, 'Shared Memory': 32 banks of one 32-bit word a clock" }
+l2 = { value = 5, unit = "word/SM-clock", mark = "measurement", source = "measured 18.6 bytes an SM-clock of one read pattern at 2092 MHz, art:310019b34831, rounded up to 5 words; open until a ceiling with its argument replaces it" }
+
+[memory]
+bus = { value = 512, unit = "bit", mark = "ceiling", source = "product page: 512-bit GDDR7" }
+transfers = { value = 2, unit = "transfer/clock", mark = "ceiling", source = "the product page's 1597 GB/s over 512 bits is 24.96 Gb/s a pin: two transfers a clock of the 12481 MHz nvidia-smi reports" }
+bandwidth = { value = 1.597568e12, unit = "B/s", mark = "ceiling", source = "clock.memory x memory.transfers x memory.bus / 8; the product page's 'Memory Bandwidth 1597 GB/s'" }
+
+# The tensor units a MAC of each operand format uses (rate.tensor counts s8 MACs).
+[weight]
+s8 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "rate.tensor's unit (IMMA.16832)" }
+u8 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "IMMA.16832 runs u8 as s8" }
+b1 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "the card has no b1 MMA (ptxas emulates every form at 99-436 SMSP-cycles, art:368173101443): an op the card lacks only adds programs to the model" }
+e4m3 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "whitepaper v1.1, Table 4: FP8 1007.6 dense TFLOPS, the s8 rate (QMMA.16832, kind::f8f6f4)" }
+e5m2 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e4m3 (QMMA.16832, kind::f8f6f4)" }
+e2m1 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "kind::f8f6f4 runs e2m1 at the FP8 rate (QMMA.16832)" }
+f16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "whitepaper v1.1, Table 4: FP16 503.8 dense TFLOPS, half the FP8 rate" }
+bf16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "whitepaper v1.1, Table 4: BF16 503.8 dense TFLOPS" }
+tf32 = { value = 4, unit = "tensor unit/MAC", mark = "ceiling", source = "whitepaper v1.1, Table 4: TF32 251.9 dense TFLOPS" }
+nvf4 = { value = 0.5, unit = "tensor unit/MAC", mark = "ceiling", source = "whitepaper v1.1, Table 4: FP4 2015.2 dense TFLOPS, twice the FP8 rate (OMMA.SF.16864, 8192 MACs in 16 cycles)" }
+mxf4 = { value = 0.5, unit = "tensor unit/MAC", mark = "ceiling", source = "as nvf4 (OMMA.SF.16864)" }
+f64 = { value = 32, unit = "tensor unit/MAC", mark = "measurement", source = "no document gives sm_120's DMMA rate; measured 1.75 MACs a SM-clock (DMMA.8x8x4, art:ecfc88319554), and the 32 MACs a SM-clock this weight allows is 18 times that" }
+
+# The model's own ranges (Accel.Card's exact and text).
+[model]
+exact = { value = 31, unit = "bit", mark = "ceiling", source = "PTX ISA 9.0 mma: integer MMAs accumulate in .s32, so a dot is exact at most while |C| + sum |a*b| < 2^31 (P1, Card.Exact); captured exact within it (models.BLACKWELL_SM120_S8_M16N8K32, _WRAP)" }
+instruction_bytes = { value = 16, unit = "B/instruction", mark = "ceiling", source = "an instruction is 128 bits from Volta on (CUDA Binary Utilities 12.9), so code fits in store.dram / 16 instructions" }
+
+# The node's host CPUs (benchmarks/rho's host_ops): the server's, not the card's.
+[host]
+cpu = "Intel Xeon 6776P (Granite Rapids)"
+source = "lscpu on an RTX PRO 6000 node, art:1f22137354a4: the VM sees 2 x 48 cores of the physical 2 x 64"
+sockets = { value = 2, unit = "socket", mark = "measurement", source = "lscpu on an RTX PRO 6000 node's VM, art:1f22137354a4; the server's own socket count is not attested" }
+cores = { value = 64, unit = "core/socket", mark = "ceiling", source = "Intel ARK 243691 (Xeon 6776P: 64 cores)" }
+amx = { value = 1024, unit = "INT8 MAC/cycle/core", mark = "ceiling", source = "Intel Optimization Reference Manual 248966-049 section 20.3 Table 20-2 (TDPBSSD, 16,384 MACs, 16-cycle throughput); measured 1,024.1, art:1f22137354a4" }
+turbo = { value = 3.9, unit = "GHz", mark = "ceiling", source = "Intel ARK 243691: max turbo 3.9 GHz (all-core turbo 3.6); Intel publishes no AMX clock, so the ceiling takes max turbo on every core" }
+priority_turbo = { value = 4.6, unit = "GHz", mark = "ceiling", source = "Intel ARK 243691: Priority Core Turbo 4.6 GHz, which the operator may enable in the BIOS" }
+priority_cores = { value = 8, unit = "core/socket", mark = "ceiling", source = "Intel ARK 243691: Priority Core Turbo on at most 8 cores a socket" }
+ops = { value = 1.0452992e15, unit = "op/s", mark = "ceiling", source = "2 ops a MAC x amx x sockets x (priority_cores x priority_turbo + (cores - priority_cores) x turbo), 1.0453e15 (1.0224e15 without Priority Core Turbo)" }
