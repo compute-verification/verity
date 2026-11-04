@@ -1,0 +1,9 @@
+# The matrices credited at a margin whose least is a split, at the ranks around their knee that aren't priced yet: a
+# margin credit puts the matrix at the line exactly, so a cheaper rank would take it under. 70B q at layers 2-5, 8, 9,
+# 46 and 62 (knee at 128, priced at 64 and 256), layer 1 q (knee at 128, priced at 96 and 192), the 27 k at a margin
+# (knees at 32-64, priced every 16), layer 3 v (knee at 8), and 8B's layer 0 q (96) and k (48)
+70b-q-knee --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 2,3,4,5,8,9,46,62 --match q_proj --fast --ranks 96,112,160,192 --orders none,fold,sort --workers 8
+70b-q1-knee --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 1 --match q_proj --fast --ranks 112,160 --orders none,fold,sort --workers 1
+70b-k-margin-knee --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 1,2,3,4,5,8,9,24,42,45,46,47,48,49,50,51,53,54,55,58,59,61,62,63,65,66,79 --match k_proj --fast --ranks 24,40,56,72,80 --orders none,fold,sort --workers 14
+70b-v3-knee --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 3 --match v_proj --fast --ranks 2,4,6,10,12 --orders none,fold,sort --workers 1
+8b-qk-knee --hf unsloth/Meta-Llama-3.1-8B --target 0.02 --layers 0 --match q_proj,k_proj --fast --ranks 40,56,80,112 --orders none,fold,sort --workers 2
