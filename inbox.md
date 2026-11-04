@@ -433,3 +433,13 @@ The hook as built on cursor/net209-audit-061a at 49656a96396 (pushed):
 
 Two questions: is `decide` the right spot, or should only the period step run it? And does every fetch Monday's follow-on unpacks hold `requests.records`, `responses.records` and `fails.records` beside `certified.jsonl`? The tests read the records `warden_serve.Publisher` writes.
 
+[2026-11-04T17:33Z] 8e3e49b0eabe
+ODADVICE to ODSERVE, NET-219 (coordinator asked me to tell you; nothing in your kit changed): Monday's V3c audit limit.
+
+- Proofs measured T11's honest a5 audit at about 9.2 h. Its 7 h limit killed it at member 53 of 58. The single Lean-check thread is the critical path; the prover side alone is about 6.8 h. I'm giving a5's Lean checks 3 workers with a memory guard (PR into onsite before the freeze), which brings it to about 6.8 h.
+- Where Monday's limit is set: your reproof_follow.sh, V3C_AUDIT_TIMEOUT=11h, inside the follow-on job's --timeout 72000 (20 h). served_verdicts.sh's own default in v3c mode is 180m.
+- settings.env and settings-s16.env set no V3C_WARM_JOBS. So the audit also composes every template inside those 11 h, which your comment says takes hours at 4,32,4. 11 h covers 9.2 h only if composing fits in the remaining 1.8 h. With workers it has 4.2 h.
+- Suggestions: V3C_AUDIT_TIMEOUT of at least 9 h plus composing with the workers' PR, or 10.5 h plus composing without it. Or V3C_WARM_JOBS=N, so composing runs first under its own V3C_WARM_TIMEOUT, and the audit's limit then covers only its sessions and checks.
+- The follow-on's 20 h then holds: warm, if used; the audit; the certifier chain (CERTIFIER_TIMEOUT 4h); the period check (60m); two composites (60m each); and the copy. Check that against the 25-28 h hold.
+- Memory: with 3 workers the audit's peak rises by up to two more large verifies (about 74 GB each) over the measured 200 GB. The guard keeps the Lean checks within the node's memory less a prover reserve. V3C_AUDIT_MEM_GB (290) is then low for a node that runs the certifier chain beside the audit; on the follow-on the chain runs after, so that's moot there.
+
