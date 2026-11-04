@@ -636,12 +636,18 @@ def selectEntryPins : List String :=
 /-- The entries' Definitions the check takes, by closure digest: `slotEntryPins` and `selectEntryPins`. -/
 def entryPins : List String := slotEntryPins ++ selectEntryPins
 
+/-- The value a window circuit registers the scan's state rows as (`ingress_scan`'s `SCAN_STATE`), row a the state
+before bucket a: the entry of an audit's `registered`, or of the scan's, whose value it is. -/
+def stateValue : String := "verity/certifier/scan-state/v1"
+
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
 canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
 template is refused. Its free inputs are counted here and never read from the parameters: the Program's input gates
 (`inputGates`), or, where the audit carries its window's circuit record, the order of its wires and the verifier's
 pins, what `NetworkCheck.Circuit.check` counts free after checking the record against the Program (its input gates
-less the rows its wires and its pinned parameters' registered reads fill). Its slot entries' templates are its root's
+less the rows its wires and its pinned parameters' registered reads fill). A pin of `stateValue` is refused: the scan's
+state is no value the verifier fixes before the run, and nothing yet holds an audit's reads of it to its scan's state
+rows, so they count free. Its slot entries' templates are its root's
 template nodes whose Definition is `SlotEntry_v1` or `SelectEntry_v1` (`entryIds`), each with its closure digest
 (`slotEntryDigest`). -/
 def auditOf (a : Json) (ctx : String) : V Audit := do
@@ -666,9 +672,12 @@ def auditOf (a : Json) (ctx : String) : V Audit := do
     | .ok c => do
       let why := (s!"{ctx}: circuit: " ++ ·)
       let pins ← Flock.J.get a "pins" ctx
+      let held ← (NetworkCheck.Circuit.pinsOf pins).mapError why
+      if held.any (·.1 == stateValue) then
+        throw (why s!"a pin of {stateValue}: the scan's state is no value the verifier fixes before the run, so its \
+          reads count free")
       let counts ← (NetworkCheck.Circuit.check prog c (← Flock.J.get a "order" ctx) pins).mapError why
-      pure (counts.free,
-        some (← (NetworkCheck.Circuit.digest c).mapError why, ← (NetworkCheck.Circuit.pinsOf pins).mapError why))
+      pure (counts.free, some (← (NetworkCheck.Circuit.digest c).mapError why, held))
     | .error _ => pure (inputGates prog, none)
   pure { free, steps := ← Flock.J.nat a "steps" ctx, program := Flock.hexOf prog.sha512,
          units := templates.foldl (· + ·.1) 0, bits := templates.foldl (fun b t => max b t.2) 0, entries, record }
@@ -1089,10 +1098,6 @@ def wired (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json)
 
 /-- The scan's state in a registration: the entry of its `roots` whose port is `scan/state`. -/
 def stateName : String := "scan/state"
-
-/-- The value a window circuit registers the scan's state rows as (`ingress_scan`'s `SCAN_STATE`), row a the state
-before bucket a: the entry of an audit's `registered`, or of the scan's, whose value it is. -/
-def stateValue : String := "verity/certifier/scan-state/v1"
 
 /-- A registration's state entries: those of its `roots` whose port is `stateName` and of its `registered` whose value
 is `stateValue`. -/
