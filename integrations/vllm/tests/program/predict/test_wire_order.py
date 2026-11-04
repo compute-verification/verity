@@ -353,15 +353,17 @@ def test_a_certificate_of_other_keys_format_or_lists_is_none():
             check(TOY, bad)
 
 
-def _looped(name: str) -> tuple[dict, dict, int]:
-    """``name``'s description with its first uncut wire whose reader has an output as wide as a row of the wire's port
-    made to read that output of its own reader unit, unit for unit: a cyclic wiring that `interface.check_wires` takes.
-    With it, the class's certificate with the reader's segment as the wire's writer segment too, and the wire's index."""
-    low, desc = _lowered(name)
+def _looped(low: WC.Lowered, desc: dict) -> tuple[dict, dict, int]:
+    """``low``'s description ``desc`` with its first uncut wire whose reader has an output as wide as a row of the wire's
+    port, in elements of the port's width, made to read that output of its own reader unit, unit for unit: a cyclic wiring
+    that every check of the wires takes (`interface.check_wires`, and the period's, leaf for leaf). With it, ``low``'s
+    certificate with the reader's segment as the wire's writer segment too, and the wire's index."""
     lays = low.circuit.layouts
     for i, w in enumerate(desc["wires"]):
         lay, k = lays[w["reader"]][0], low.circuit.cuts.get(w["reader"], {}).get(w["port"], 1)
-        out = next((o for o, words in lay.outs if words == dict(lay.rows)[w["port"]] // k), None)
+        p = [q for q, _ in lay.rows].index(w["port"])
+        out = next((o for j, (o, words) in enumerate(lay.outs)
+                    if words == lay.rows[p][1] // k and lay.widths[len(lay.rows) + j] == lay.widths[p]), None)
         if w["writer"] != w["reader"] and "cut" not in w and out is not None:
             wires = list(desc["wires"])
             wires[i] = {**w, "writer": w["reader"], "out": out, "base": w["at"], "step": _places(w["radix"])}
@@ -369,7 +371,7 @@ def _looped(name: str) -> tuple[dict, dict, int]:
             pairs = [list(p) for p in low.order["wires"]]
             pairs[i] = [pairs[i][1], pairs[i][1]]
             return {**desc, "wires": wires}, {**low.order, "wires": pairs}, i
-    raise AssertionError(f"{name}: no wire to loop")
+    raise AssertionError("no wire to loop")
 
 
 def test_a_cyclic_wiring_has_no_certificate():
@@ -383,7 +385,7 @@ def test_a_cyclic_wiring_has_no_certificate():
     for c in range(-4, 5):
         with pytest.raises(Refused, match=re.escape("wire 0: rank(writer) - rank(reader) reaches 0 >= 0")):
             check({"templates": [["A", 1]], "wires": [_wire("A", "A")]}, _order(("A", 0, [1], c, [0]), wires=([0, 0],)))
-    looped, order, i = _looped("tiny")
+    looped, order, i = _looped(*_lowered("tiny"))
     with pytest.raises(Refused, match=f"^{re.escape(f'wire {i}: rank(writer) - rank(reader) reaches 0 >= 0')}$"):
         check(looped, order)
 
