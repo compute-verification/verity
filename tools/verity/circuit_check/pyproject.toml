@@ -95,6 +95,8 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/core/protocols/certifier/ingress_scan.circuit-check.json",
           "verity/core/protocols/certifier/head_check.py", "verity/core/protocols/certifier/head_check.circuit-check.py",
           "verity/core/protocols/certifier/head_check.circuit-check.json",
+          # the scheduler replay's package, which importing any of its sidecars' modules reads
+          "integrations/vllm/verity_vllm/scheduler/__init__.py",
           "integrations/vllm/verity_vllm/scheduler/replay_step.py", "integrations/vllm/verity_vllm/scheduler/replay_step.circuit-check.py",
           "integrations/vllm/verity_vllm/scheduler/replay_step.circuit-check.json",
           "verity/core/protocols/certifier/served.py", "verity/core/protocols/certifier/served.circuit-check.py",
