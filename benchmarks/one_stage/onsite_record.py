@@ -45,7 +45,8 @@ caps aren't those; and ``verdict_line`` is the run's published line of the netwo
 verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's
 ``error``. ``of_record`` is the figure of record (`OPEN`): that K only where the verdict's public holds every check the
 tight ℓ_{a,j} rests on (``held``, `CHECKS`) and none of its premises is open (``premises``, `DISCHARGE`: each of
-`PREMISES` discharged by theorems in Security's locks that take no named assumption but a standing one, `STANDING`), and
+`PREMISES` discharged by theorems in Security's locks that take no named assumption but a standing one, `STANDING`, and
+each guarantee it rests on in the lock at the statement whose hypotheses and antecedents `RESTS_ON` names), and
 while one of either is ``open``, by name, K plus ℓ_a + 1 bits for each audit tied to each
 execution phase's scan (``advice``: the bits each phase adds). Beside the bound, ``advice_charge``: the served run's
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
@@ -82,8 +83,8 @@ that write what it reads, the registration, the live draw and its receipt, and t
 serve dir's by their paths there, naming no window) and what it holds, with whether the run wrote each of OUT's and how
 each must be kept (``kept``, `REPROOF_KEPT`). The serve dir's are witness, kept off OUT and custody in a copy off the
 served node (``--reproof-copy`` NODE:/PATH, ``--reproof-listing``, a listing of it kept off OUT): ``copy`` names its node
-and path, and each serve-dir input says whether the listing holds every file its path names, never their bytes or
-digests; with no copy given, ``copy`` is missing with why.
+and path, and each serve-dir input says whether the listing holds each file its path names and at least one file under
+each directory it names, never their bytes or digests; with no copy given, ``copy`` is missing with why.
 
 The record's counts and indices are the certification period's (m and each phase j), public in the Lean answer's
 profile; it names no Commit window, whose count `publish` holds.
@@ -194,21 +195,50 @@ SKIP = ("PeriodLeakAccepted's k_{skip,j}: what execution phase j's draws didn't 
 #: check performs it
 CHECKS = {"free": "each tied audit's free inputs computed from its Program's descriptor, not taken as a parameter",
           "circuit": "each tied audit's circuit held fixed whatever its advice"}
-#: Security's locks in this tree (`tools/verity/lean/check.py`'s record of each guarantee's named assumptions): the
-#: guarantees', and the Properties' that discharge premises at the deployed code
+#: Security's locks in this tree (`tools/verity/lean/check.py`'s record of each guarantee's named assumptions and of
+#: the definitions it reads): the guarantees', and the Properties' that discharge premises at the deployed code
 ROOT = HERE.parents[1]
 LOCKS = (ROOT / "Security" / "lean-audit.json", ROOT / "Security" / "Properties" / "lean-audit.json")
-#: the guarantees the tight K rests on, by their names in `LOCKS`
-RESTS_ON = ("NetTiming.SecurityProofs.PeriodLeakAccepted",)
-#: each premise the tight K rests on, by the name ``open`` gives it: what it says, the theorems that discharge it at the
-#: deployed code by their names in `LOCKS`' guarantees (none named yet leaves it open), and the named assumptions of
-#: `RESTS_ON` it stands for, which its discharge decides
+#: the guarantees the tight K rests on, by their names in `LOCKS`: PeriodLeakRegistered's count, at the values the
+#: registration opens at its registered inputs, is K's; PeriodLeakAccepted's is the same count at the trace's values
+#: there; PeriodLeakTied's counts a phase's tied audits with the scan as one Program, as ℓ_{a,j} does. The lock records
+#: a guarantee's named assumptions, never the antecedents its statement takes, so each gives ``statement``, the digest
+#: of its statement among the lock's reads (`statement`) at which it was read, None where none was, and ``takes``, each
+#: hypothesis, antecedent and condition its good event reads that the deployed code must meet, by its Prop's name or,
+#: stated inline, its binder's, with the premise (`PREMISES`) or standing assumption (`STANDING`) that names it.
+#: Parameters the record states (δ ≥ 0) aren't listed
+RESTS_ON: dict[str, dict[str, Any]] = {
+    "NetTiming.SecurityProofs.PeriodLeakAccepted": {
+        "statement": "0db3f3a734d201ea45375c21d5f216e32657736e057303e8cb3291e0732a3531",
+        "takes": {"Claims.Sampling.KS": "sampled-leg-bridge", "Claims.Flock.ListWithin": "sampled-leg-bridge",
+                  "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
+                  "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
+                  "hPw": "windows-placed", "hβ": "windows-placed", "hcap": "schedules-held",
+                  "hfit": "schedules-held", "hs": "sender-decodes", "hdz": "sender-decodes",
+                  "NetTiming.ScopeAcc": "wires-fit", "NetTiming.TapOpens": "taps-open"}},
+    "NetTiming.SecurityProofs.PeriodLeakRegistered": {
+        "statement": "79ebe236812c4d1257a7dd6dfc7dbc9816c7d1846745f64dce1596c5ebd20034",
+        "takes": {"Claims.Sampling.KS": "sampled-leg-bridge", "Claims.Flock.ListWithin": "sampled-leg-bridge",
+                  "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
+                  "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
+                  "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.SchedulesHeld": "schedules-held",
+                  "NetTiming.SenderDecodes": "sender-decodes", "NetTiming.ScopeAcc": "wires-fit",
+                  "NetTiming.RegOpensAt": "reg-opens-at", "NetTiming.TapsOpen": "taps-open"}},
+    "NetTiming.SecurityProofs.PeriodLeakTied": {
+        "statement": None,
+        "takes": {"NetTiming.RowsStateHeld": "rows-state-held", "NetTiming.RowsProgWired": "rows-prog-wired",
+                  "NetTiming.RowsCircuitHeld": "circuit-held", "NetTiming.RowsTiesOrdered": "rows-ties-ordered",
+                  "NetTiming.CircuitCounts": "free-count",
+                  "NetTiming.Assumptions.SharedRootsParsed": "shared-roots-parsed"}},
+}
+#: each premise the tight K rests on, by the name ``open`` gives it: what it says, and the theorems that discharge it at
+#: the deployed code by their names in `LOCKS`' guarantees (none named yet leaves it open)
 PREMISES: dict[str, dict[str, Any]] = {
-    "wires-fit": {"is": "the wires part of BoundaryGates.Fits at the tied audit's statements: the decoder link, and the "
-                        "period check running Circuit.check",
+    "wires-fit": {"is": "ScopeAcc's wires part, BoundaryGates.Fits at the tied audit's statements: the decoder link, and "
+                        "the period check running Circuit.check",
                   "discharged_by": ("Properties.NetworkCertifier.wiredScopeAcc",
                                     "Properties.NetworkCertifier.circuitWiresFit",
-                                    "Properties.NetworkPeriod.rowsWiresChecked"), "assumes": ()},
+                                    "Properties.NetworkPeriod.rowsWiresChecked")},
     "session-wires": {"is": "SessionWires: each sampled proof block's wired inputs equal their writers' committed rows, "
                             "proved inside its own session, whose statement reads the writer's committed leaf by path and "
                             "whose circuit equates it with the wired input, so no opening reaches the verifier; "
@@ -216,29 +246,81 @@ PREMISES: dict[str, dict[str, Any]] = {
                             "registered position, root and path; and SessionOpens and the binding from the sampled leg's "
                             "bridge (`sampled-leg-bridge`), never a named assumption. Open until the theorem that "
                             "OneStageZk.verdicts' acceptance gives it is named and in the lock",
-                      "discharged_by": (), "assumes": ()},
-    "free-count": {"is": "each tied audit's free at least #(freeInputs \\ reg) at the wired layout",
-                   "discharged_by": ("Properties.NetworkCertifier.circuitCounts",), "assumes": ()},
+                      "discharged_by": ()},
+    "free-count": {"is": "CircuitCounts: each tied audit's free at least #(freeInputs \\ reg) at the wired layout",
+                   "discharged_by": ("Properties.NetworkCertifier.circuitCounts",)},
     "held-performed": {"is": "the public's held names only the checks the period check performed, each holding of it",
-                       "discharged_by": ("Properties.NetworkPeriod.rowsHeld",), "assumes": ()},
-    "circuit-held": {"is": "each tied audit's class circuit held",
-                     "discharged_by": ("Properties.NetworkPeriod.rowsCircuitHeld",), "assumes": ()},
+                       "discharged_by": ("Properties.NetworkPeriod.rowsHeld",)},
+    "circuit-held": {"is": "RowsCircuitHeld: each tied audit's Program the class circuit the period registers",
+                     "discharged_by": ("Properties.NetworkPeriod.rowsCircuitHeld",)},
+    "rows-state-held": {"is": "RowsStateHeld: each tied audit's state read at row a ≥ 1 committed where the scan's o1 of "
+                              "unit a − 1 is, under the scan's state root, and so the scan's own state read at unit a. "
+                              "Open until the theorem that the period check's acceptance gives it is named",
+                        "discharged_by": ()},
+    "rows-prog-wired": {"is": "RowsProgWired: the scan's prog read at lane l, leaf b committed where its tied audit's slot "
+                              "entry of chunk l, leaf b is, under that audit's entries root. Open until the theorem that "
+                              "the period check's acceptance gives it is named",
+                        "discharged_by": ()},
+    "rows-ties-ordered": {"is": "RowsTiesOrdered: the phase's layout, each statement's wires and the ties, fits its joint "
+                                "Program (BoundaryGates.Fits): acyclic, and no step's egress depending on a later step's "
+                                "ingress. Open until the theorem that the period check's acceptance gives it is named",
+                          "discharged_by": ()},
+    "shared-roots-parsed": {"is": "SharedRootsParsed: at the deployment, two gates the registrations commit at one "
+                                  "position under one root open to one value, or their H calls collide; the sampled "
+                                  "leg's bridge proves it of the deployed parse. Open until that theorem is named",
+                            "discharged_by": ()},
+    "reg-opens-at": {"is": "RegOpensAt: at each window's statement the registration's openings open its registered "
+                           "inputs under the statement's roots (RegOpens). The run's reg holds per-window values (the "
+                           "window's tied activations and the scan's state) and pinned ones (the weights, at their "
+                           "registration's roots): the per-window part by a restatement of the finder per window, the "
+                           "pinned part by the sampled leg's bridge with a coverage Property of the registration check at "
+                           "OneStageZk's record. Open until both are named",
+                     "discharged_by": ()},
+    "taps-open": {"is": "TapsOpen, PeriodLeakAccepted's TapOpens antecedent: at every window's statement the network "
+                        "certifier's openings register its observations at the window's operator. The period check's "
+                        "half: on an accepted rows-form execution phase the scan's rows/<d> root and domain are those the "
+                        "network certifier signed for its link, d and window; the device's, under trusted-host: its "
+                        "rows at the transfer gates are its observations, its ingress values its operator on the earlier "
+                        "ones",
+                  "discharged_by": ("Properties.NetworkCertifier.tapsOpen",)},
+    "windows-placed": {"is": "WindowsPlaced, PeriodLeakAccepted's hPw and hβ: each window's statement has the partition "
+                             "the period read, and each of its faulty sets at δ commits at most the bits β the period "
+                             "charges it. Open until the theorem that the period check's acceptance gives it is named",
+                       "discharged_by": ()},
+    "schedules-held": {"is": "SchedulesHeld, PeriodLeakAccepted's hcap and hfit: each schedule the network certifier may "
+                             "run gives each connection at most its cap of cells, and its record format holds it "
+                             "(TapRecord.fits, the rows format's). Open until the theorem that gives it of the network "
+                             "certifier's code is named",
+                       "discharged_by": ()},
+    "sender-decodes": {"is": "SenderDecodes, PeriodLeakAccepted's hs and hdz: each secret K counts runs on a schedule the "
+                             "network certifier may run, and a decoder recovers it from the client's view of the server "
+                             "side. Open until a theorem gives it or it is stated as what K counts",
+                       "discharged_by": ()},
     "sampled-leg-bridge": {"is": "the sampled leg's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
-                                 "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KS; at "
-                                 "the per-member record, the only form with wires, SessionKS, the sessions' KS, which "
-                                 "SessionKS_of can't give there, its SessionRuns failing at more than one session; "
-                                 "SessionOpens; RegOpens: the registered reads' openings), proved of the Lean verifier "
-                                 "and taken as theorem hypotheses on the layer below, never SampledCodeRuns or another "
-                                 "premise about the deployed Python. Open until the bridge's theorem is in the lock",
-                           "discharged_by": (), "assumes": ()},
+                                 "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KS; "
+                                 "ListWithin, the decoder's list at Flock's radius; Binds, the trace commitment's "
+                                 "binding; at the per-member record, the only form with wires, SessionKS, the sessions' "
+                                 "KS, which SessionKS_of can't give there, its SessionRuns failing at more than one "
+                                 "session; SessionOpens; RegOpens: the registered reads' openings), proved of the Lean "
+                                 "verifier and taken as theorem hypotheses on the layer below, never SampledCodeRuns or "
+                                 "another premise about the deployed Python. Open until the bridge's theorem is in the "
+                                 "lock",
+                           "discharged_by": ()},
 }
-#: the named assumptions that may stand under the figure of record, each on an auditor-trusted device
-STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifier and its host are the auditor's"}
+#: the named assumptions that may stand under the figure of record, each on an auditor-trusted device or the auditor's
+#: placement of one, named beside the bound
+STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifier and its host are the auditor's",
+            "Accounting.Covered": "certifier-coverage: the links in the room are the registered ones, each through the "
+                                  "network certifier (a listed physical premise, the auditor's placement)"}
 DISCHARGE = ("the tight K's premises (`PREMISES`), each open until every theorem that discharges it at the deployed code "
              "is in Security's lock with no named assumption but a standing one (`STANDING`), and open while none is "
-             "named; and each named assumption of a guarantee of `RESTS_ON` that is neither standing nor a premise's, by "
-             "its own name, with each such guarantee the lock doesn't list. No premise about our own Python stands: "
-             "soundness is in Lean or rests on an auditor-trusted device")
+             "named; each guarantee of `RESTS_ON` the lock doesn't list, or lists at a statement other than the one "
+             "whose hypotheses and antecedents it names (``takes``); and each named assumption the lock gives such a "
+             "guarantee that is neither standing nor named there, by its own name. No premise about our own Python "
+             "stands: soundness is in Lean or rests on an auditor-trusted device")
+#: why a guarantee of `RESTS_ON` is open at a statement other than the one it names
+RESTATED = ("its statement in the lock isn't the one whose hypotheses and antecedents `RESTS_ON` names: read them again, "
+            "name each in its takes, and pin the lock's digest")
 OPEN = ("the figure of record: K as the period's check states it, the tight form, only where its Lean verdict performed "
         "every check of `CHECKS` (the public's held) and no premise of it is open (`DISCHARGE`). While "
         "either is open it is K plus ℓ_a + 1 bits for each audit tied to each execution phase's scan, beside that "
@@ -325,8 +407,8 @@ REPROOF = {
 REPROOF_KEPT = ("each retained past the week after the run, never only on the served node: OUT's in custody with the "
                 "run's public files; the serve dir's, witness, never in OUT or custody, which are public, but copied off "
                 "the served node to a private path keeping the serve dir's layout (`copy`: its node and path, and of "
-                "each serve-dir input whether the copy's listing holds every file its path names, never their bytes or "
-                "digests); a re-proof holds each to the public registration and the audit's summary")
+                "each serve-dir input whether the copy's listing holds each file its path names and at least one file under "
+                "each directory it names, never their bytes or digests); a re-proof holds each to the public registration and the audit's summary")
 NO_COPY = ("no copy of the serve dir's inputs is given (--reproof-copy NODE:/PATH and --reproof-listing): they are on "
            "the served node only")
 
@@ -592,18 +674,31 @@ def caps(case: Mapping[str, Any], cap: int) -> list[int]:
     return [cap] * len(audits)
 
 
+def statement(lock: Mapping[str, Any], g: str) -> str | None:
+    """The digest ``lock`` gives the statement of its guarantee ``g``: its signature's type, a definition among the
+    lock's reads. None where the lock lists no such definition."""
+    stated = " ".join((lock.get("guarantees", {}).get(g) or {}).get("signature") or ()).partition(" : ")[2].strip()
+    return next((r["definitions"][stated] for r in lock.get("reads", {}).values()
+                 if stated in (r.get("definitions") or {})), None)
+
+
 def premises(locks: Sequence[Path], root: Path = ROOT) -> dict[str, Any]:
     """The tight K's premises as ``locks`` record their discharges (`DISCHARGE`): each of `PREMISES` with the theorems
     no lock lists (``missing``) and the named assumptions of those one does that don't stand (``assumes``), each
-    guarantee of `RESTS_ON` with its named assumptions, and ``open``: each premise not discharged, then each assumption
-    of `RESTS_ON` neither standing nor a premise's, and each of its guarantees no lock lists. A lock that can't be read
-    lists nothing, and ``unread`` names it, by its path under ``root`` (the tree) where it is one, with why."""
+    guarantee of `RESTS_ON` with its named assumptions, its statement's digest and what it takes (``restated`` where
+    that digest isn't the one `RESTS_ON` read, `RESTATED`), and ``open``: each premise not discharged, then each named
+    assumption of a guarantee of `RESTS_ON` neither standing nor taken by name, and each such guarantee no lock lists or
+    one lists restated. A lock that can't be read lists nothing, and ``unread`` names it, by its path under ``root``
+    (the tree) where it is one, with why."""
     listed: dict[str, Any] = {}
+    stated: dict[str, str | None] = {}
     unread: list[str] = []
     for lock in locks:
         try:
-            listed |= json.loads(lock.read_text())["guarantees"]
-        except (OSError, ValueError, KeyError, TypeError) as e:
+            doc = json.loads(lock.read_text())
+            listed |= doc["guarantees"]
+            stated |= {g: statement(doc, g) for g in RESTS_ON if g in doc["guarantees"]}
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
             name = lock.relative_to(root) if lock.is_relative_to(root) else lock
             unread.append(f"{name}: {type(e).__name__}: {e.strerror if isinstance(e, OSError) else e}")
     found, open_ = {}, []
@@ -613,12 +708,19 @@ def premises(locks: Sequence[Path], root: Path = ROOT) -> dict[str, Any]:
         found[name] = {"is": p["is"], "discharged_by": list(p["discharged_by"]), "missing": missing, "assumes": assumes}
         if missing or assumes or not p["discharged_by"]:
             open_.append(name)
-    covered = set(STANDING) | {a for p in PREMISES.values() for a in p["assumes"]}
-    rests = {g: {"assumptions": list(listed[g]["assumptions"])} if g in listed else {"missing": "not in the lock"}
-             for g in RESTS_ON}
-    open_ += sorted({a for r in rests.values() for a in r.get("assumptions", ()) if a not in covered}
-                    | {g for g, r in rests.items() if "missing" in r})
-    return {"is": DISCHARGE, "from": "Security/lean-audit.json and Security/Properties/lean-audit.json guarantees",
+    rests: dict[str, Any] = {}
+    for g, r in RESTS_ON.items():
+        if g not in listed:
+            rests[g] = {"missing": "not in the lock", "takes": r["takes"]}
+            continue
+        rests[g] = {"assumptions": list(listed[g]["assumptions"]), "statement": stated.get(g), "takes": r["takes"]}
+        if r["statement"] is None or stated.get(g) != r["statement"]:
+            rests[g]["restated"] = RESTATED
+    open_ += sorted({a for g, x in rests.items() for a in x.get("assumptions", ())
+                     if a not in RESTS_ON[g]["takes"] and a not in STANDING}
+                    | {g for g, x in rests.items() if "missing" in x or "restated" in x})
+    return {"is": DISCHARGE, "from": "Security/lean-audit.json and Security/Properties/lean-audit.json guarantees "
+                                     "and reads",
             "premises": found, "rests_on": rests, "standing": STANDING, "open": open_, "unread": unread}
 
 
@@ -668,7 +770,8 @@ def named(path: str) -> list[re.Pattern[str]]:
 def reproof(out: Path, copy: str | None = None, listing: Path | None = None) -> dict[str, Any]:
     """The re-proof inputs (`REPROOF`), each with where it is and what it holds; of OUT's whether the run wrote it, and of
     the serve dir's, where ``copy`` (NODE:/PATH) and ``listing`` (each file under PATH, one path relative to it a line)
-    are given, whether the copy holds every file its path names."""
+    are given, whether the copy's listing holds each file its path names and at least one under each directory it
+    names."""
     files = None
     if copy is None or listing is None:
         kept: dict[str, Any] = {"missing": NO_COPY}
