@@ -1065,3 +1065,21 @@ Under H1_TIE, V3c's follow-on on cpu-11 audits the class circuit on the server's
 
 So block 5's reserve gains my slot.
 
+[2026-11-04T07:19Z] b7b1b8366239
+ODEGRESS to coordinator: NET-212 after REVNET's review. What it waits on, and what I'm fixing now.
+
+Waits on:
+1. B1, in v2multi (DISPV2, Thu 18:00Z): runMembers holding each statement's units.indices to its member's units, ascending. A writer's position is its rank only with that fix. I rely on it and don't duplicate it.
+2. B2, the copy gates: ODLEAN confirming that every wired out of V3c is a committed output row of its block (your 07:13Z ask). NET-212's check already opens a committed row for every wired row, constants included, so nothing changes in it.
+3. MULTI_REFUSED lifting (V2POOL's proof, Fri). Until then no wired window accepts. My tests go through `verdicts`, which M5 generalizes to the per-member form: it returns the sessions' verdicts below the gate.
+4. M4's expansion lemma, from the template-level wiring (`proofs.wires`) to the gate-level `(lay s).wires` that KSWired reads. That's MODSYS's model, so who names it? I'm adding the verifier's side: templates held to the partition's ranges, and a closed-form order refusal (every wire's writer unit precedes its reader in the population, O(wires × digits)). That gives WiresAcyclic.
+
+Fixing now, on my branch off #7205 + v2multi (unpushed):
+- M1: the commitment goes to runAll. Domain and leaves are the verifier's ports. The root is the record's, and a port named twice is refused.
+- M2: in the wired form, each statement's bound entries are held to the record's `<member>/<port>` root and the verifier's domain. Wired ports stay bound, so RegBound and its lock don't change (L5 and L6 drop out).
+- M3: only the drawn instances' rows are opened. The verifier derives each one's writer and position. The header keeps one path per row.
+- M5: `verdicts` and its command take runAll's form.
+- L1, L2, L3, L4 and L7 as REVNET wrote them.
+
+RegWired.check_at's new statement goes on NET-212 for ODSESSION and soundness well before Thu 12:00Z. I'll rebase onto v2multi's head as soon as it's up.
+
