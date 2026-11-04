@@ -248,7 +248,7 @@ def piece(args) -> int:
         d.mkdir(parents=True, exist_ok=True)
         cls = scan_class(_json(out / b / "front" / "session.json"))
         argv = [sys.executable, "-B", "-u", str(TRACES / "certifier_piece.py"), "piece", str(serve),
-                str(window(serve)), str(d), "--eos-ids", str(VOCAB), *(["--lean", args.lean] if args.lean else []),
+                str(window(serve)), str(d), *(["--lean", args.lean] if args.lean else []),
                 f"CR_SCAN_ARGS=--class {cls}", *args.set]
         print(f"{b}: the piece at the scan class {cls}", flush=True)
         with open(d / "piece.log", "w") as log:
