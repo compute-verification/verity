@@ -250,7 +250,10 @@ theorem ownLog_unitExt₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin 
   simp only [hs]
   rw [dite_eq_left (show A₀.shape x = (L₀ n oc).sh x u from rfl), A₀_ext]
   simp only [serve, viewing, RP.bind, ownLog, hv, hacc, ite_true]
-  simp [checkRevealed, flatMapRP, Cm₀, ownLog, ownLog_bind, ofOC]
+  have hr : (L₀ n oc).reveal s u v () = [([], ⟨0, true, []⟩)] := rfl
+  have hc : (L₀ n oc).commit = Cm₀ := rfl
+  simp only [checkRevealed, hr, hc]
+  rfl
 
 theorem ownLog_innerBody₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin ((L₀ n oc).V.k x) → Unit) → Trace)
     (hrun : ∀ r, (run' r).out = .acc) (s : AuditStatement) (c : (L₀ n oc).ECoins x) (j : Fin ((L₀ n oc).k x))
