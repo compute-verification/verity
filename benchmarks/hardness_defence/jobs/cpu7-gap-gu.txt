@@ -1,0 +1,4 @@
+# The split in all orders at the ranks priced only in the natural order where that price is within a reorder's
+# allowance (tables.NEAR) of the line or of the matrix's least, which sets its margin: 70B's concentrated gate and up
+# at ranks 128 and 256 (HT-PUBLIC v2 and r20261104-085532-5d0f priced them in the natural order only)
+70b-gu-gap --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,1,2,3,4,5,8,9,33 --match gate_proj,up_proj --fast --ranks 128,256 --orders none,fold,sort --workers 12

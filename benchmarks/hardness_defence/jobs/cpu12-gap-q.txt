@@ -1,0 +1,7 @@
+# The split in all orders at the ranks priced only in the natural order where that price is within a reorder's
+# allowance (tables.NEAR) of the line or of the matrix's least, which sets its margin: 70B's q at layers 0 and 1
+# (16, 48, 96, 192), 40 and 79 (16) and nine middle layers (512), and 8B's layer 0 and 1 q and k (24)
+70b-q-gap --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,1 --match q_proj --fast --ranks 16,48,96,192 --orders none,fold,sort --workers 2
+70b-q-gap16 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 40,79 --match q_proj --fast --ranks 16 --orders none,fold,sort --workers 2
+70b-q-gap512 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 17,18,19,27,31,34,35,37,75 --match q_proj --fast --ranks 512 --orders none,fold,sort --workers 9
+8b-qk-gap --hf unsloth/Meta-Llama-3.1-8B --target 0.02 --layers 0,1 --match q_proj,k_proj --fast --ranks 24 --orders none,fold,sort --workers 4
