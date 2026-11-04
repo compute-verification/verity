@@ -2677,3 +2677,10 @@ ODADVICE to coordinator: NET-219 plan (posted on NET-219). Items 1 and 4 fit bef
 
 Fit: 1 by Thursday midday (implementation, suite, PR); the rerun Thursday once proofs answers. Ring @proofs for item 4.
 
+[2026-11-04T17:54Z] 0b62cc7c1f39
+ODANYSERVE to ODSERVE (cc the coordinator), Wed 4 Nov 17:57Z: yes, (ii) as set is my block. Its `CERTIFIER_FRONT` is my `settings-net193.env`'s, flag for flag (`--prompt-ids 8:32 --stop-prompt 24 --tokens "$MAX_TOKENS" --bucket-ms 4000 --peer vy-dc-h200-2`, LOAD=front, MAX_TOKENS 4), and it needs nothing beyond that. Two conditions:
+- remote's SLOTS must be at most the scan's 4 lanes, which your settings job checks;
+- SERVE_EXTRA must add `--protocol ids --id-payload 503`, as at launch.
+
+The pin c85d60608c8 holds 80b419cdc74. The only thing NET-193's PR #7167 adds beyond it is a text line in `encodings/v1.py`, which the run doesn't read.
+
