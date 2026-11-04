@@ -12,7 +12,8 @@ cpu=CPU_POOL` for a node `prep.sh` has prepared. The candidate runs as `research
 per GPU; candidate.sh leases the GPU with gpu-lease) and records its node (`CW_NODE`): candidate.sh runs the program in a
 sandboxed training job that writes only its E files and step log, and scores them in a separate evaluation job. When it
 ends, its `out/` (the scored run.json, the witness record, the island and its record, the process tree, the step log, E
-when at most 1 MB, logs) is fetched and put in the evidence store as `evidence/v1`, preserved; the run is ingested into
+when at most 1 MB, logs) is fetched, once its runner has exited on the node (`fetch_all`: a fetch that fails is tried
+once more), and put in the evidence store as `evidence/v1`, preserved; the run is ingested into
 the te_core ledger as agent D (`python -m te_core.ledger --agent D --publish ingest`, one submission record per
 checkpoint, each put in the store), and the frontier of the local ledger goes to stderr. The art id, the ledger ids and
 the witness summary are printed as one JSON line, and appended to `$CW_LEDGER` (default ~/.research/covert-witness.jsonl).
@@ -40,6 +41,7 @@ import fcntl
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -68,6 +70,8 @@ TIMEOUT = "110m"
 POOL_WAIT = 7200
 LONG_TIMEOUT = "1260m"
 LONG_CUSTODY_TTL = "24h"
+#: how long the closing fetch waits for a run's runner to exit on its machine (`runner_exited`)
+RUNNER_EXIT_S = 600
 
 
 def research(*args: str, check: bool = True, stdout_only: bool = False) -> str:
@@ -242,9 +246,46 @@ def ingest(run: str, out: Path, direction: str, mechanism: str, reference: bool)
             "rho": recs[-1].get("rho") if recs else None}
 
 
+def runner_exited(run: str) -> None:
+    """Return once the runner `research run` started on the run's machine (launch.json's runner_pid) has exited, or
+    after RUNNER_EXIT_S. The runner records the run's end in status.json before it stops its sampler and runs its
+    classifier, so a fetch in between tars files that still change. Returns at once where the records don't name the
+    runner or it ran in another pid namespace than the machine's (launch.json's hostname isn't the machine's)."""
+    def read(name: str) -> dict:
+        p = RUNS / run / name
+        return json.loads(p.read_text()) if p.exists() else {}
+
+    rec, started = read("remote.json"), read("launch.json")
+    pid, host = started.get("runner_pid"), started.get("hostname")
+    if not rec.get("host") or not isinstance(pid, int) or not host:
+        return
+    script = f'[ "$(hostname)" = {shlex.quote(host)} ] || exit 0; while [ -e /proc/{pid} ]; do sleep 2; done'
+    try:
+        from research import remote
+
+        remote.ssh_run(remote.ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["sh", "-c", script],
+                       timeout=RUNNER_EXIT_S)
+    except subprocess.TimeoutExpired:
+        print(f"launch: {run}'s runner (pid {pid}) is still up after {RUNNER_EXIT_S} s; fetching", file=sys.stderr)
+    except Exception as e:  # noqa: BLE001  (the wait only spares the fetch a race; the fetch reports its own failure)
+        print(f"launch: couldn't wait for {run}'s runner: {type(e).__name__}: {e}", file=sys.stderr)
+
+
+def fetch_all(run: str) -> None:
+    """The closing fetch, `research fetch RUN --all`, once the run's runner has exited, and once more where it fails: it
+    tars the whole run dir, so a file that changes as it reads fails it ("tar: file changed as we read it")."""
+    research("fetch", run, check=False)
+    runner_exited(run)
+    first = subprocess.run(["research", "fetch", run, "--all"], capture_output=True, text=True, cwd=REPO)
+    if first.returncode:
+        print(f"launch: {run}'s closing fetch failed ({first.returncode}): {first.stderr.strip()[-300:]}; once more",
+              file=sys.stderr)
+        research("fetch", run, "--all")
+
+
 def collect(run: str, start: str, note: str, direction: str, mechanism: str, final: bool = False,
             reference: bool = False) -> int:
-    research("fetch", run, "--all")
+    fetch_all(run)
     out = RUNS / run / "out"
     w = json.loads((out / "witness.json").read_text()) if (out / "witness.json").exists() else None
     remote = RUNS / run / "remote.json"
