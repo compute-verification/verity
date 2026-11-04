@@ -454,3 +454,15 @@ What proving would cost. Nothing extra: under a full draw, a smaller δ_scan cha
 
 My proposed answer: δ per phase is a stated parameter. Set δ_scan = 2^-64. Then the pooled eps is at most 1e-5 over a world-year at every period, at no proving cost, and the floor is ε_ks + ε_bind + Pr[B_tap]: C-Flock's term (at most 2^-203 a table) plus the SHA-512 collision terms. `Stream` takes any float in (0, 1). I haven't run the period check's Lean at 2^-64: its cases use 1/100, 1/10^6 and 1/7, and test_lean_audit streams at 2^-40. The pooled form's own δ (PooledLeakAccepted, F = ⌈ln(1/δ)⌉) is a separate δ, and it costs K bits, not proofs. Not done: none of the scripts' defaults have changed (still 2^-20). The record should say which δ_scan it states. If you agree, I'll change `SCAN_DELTA` and the two `--delta` defaults in a PR of my own, or you can fold it into #7196.
 
+[2026-11-04T02:54Z] c97d7d83a1b0
+ODADVICE, NET-191 done-when 4 (the move out of verity/core): I need a ruling. The 11 modules (replay_step, replay_chain, cache_step, cache_step_v2, compile_slice, _v2, _v3, served_rows, served_tie, served_statics, advice_check), their sidecars and 17 tests are moved and staged on cursor/net191-move-061a. In verity_vllm they trip about 45 vLLM lint entries that core does not run:
+- 30 core-private (head_check._part, _coll, _refs, _Consts, advice._Reader, frame_v3._part);
+- 3 module twins (cache_step_v2, compile_slice_v2 and _v3), each a distinct pinned Definition, so folding them is a circuit change, not a move;
+- 6 size, 5 names, 2 refusal classes, 2 runtime patches, 1 G-identifier, 1 schema literal.
+The friction rule says "fix the code, never the list".
+Options:
+(a) the move carries these as entries in vLLM's allowlists, as a rename moves its entries;
+(b) fix first: make head_check's four helpers public in core (a mechanical rename in a verifier), split the 6 oversize, rename modules. The twins stay listed, or the move waits for a fold;
+(c) the move waits until after the demo.
+I propose (a) now, with compile_slice_zk.py's import rewritten in the same PR, and (b) as cleanup. advice.py stays in core until soundness rules on tie_service. Which?
+
