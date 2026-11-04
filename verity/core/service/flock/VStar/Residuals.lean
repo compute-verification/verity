@@ -1,4 +1,6 @@
-import Flock.HmNets
+module
+
+public import Flock.HmNets
 
 /-!
 # Sums of GF(2^128) products over GF(2) forms
@@ -14,6 +16,8 @@ committed (`sha512.commit`), and the sums are recombined (`recomb`) and reduced 
 once. Forms are canonical (ascending supports), so a sum's form does not depend on the order of its terms: `recomb` and
 `reduceG` give the forms `rec_residuals._recombine`'s leaf sets and `gf2k.reduce_forms` give.
 -/
+
+@[expose] public section
 
 namespace VStar
 

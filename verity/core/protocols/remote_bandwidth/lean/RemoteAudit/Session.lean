@@ -1,4 +1,6 @@
-import RemoteAudit.Window
+module
+
+public import RemoteAudit.Window
 
 /-!
 # A session's bookkeeping: `audit.py`'s `Session`
@@ -25,6 +27,10 @@ its openings coin at W + t, and the append coins in the order drawn). Each event
 A call `Session` refuses with `SessionError` (out of turn, after the session ended, before a window's roots are final)
 is `refused`. After a rejection every later call but `start` is refused, as `_live` raises.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.Session
 

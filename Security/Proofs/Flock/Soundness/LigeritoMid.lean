@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.LigeritoPhases
+module
+
+public import Proofs.Flock.Soundness.LigeritoPhases
 
 /-!
 # From one level to the next (PROTOCOL.md §13.3 steps 5–8)
@@ -14,6 +16,8 @@ the level, this leaves `PreFold` on the next level except with probability
 `phaseA` takes the level's doom at any radius `δ` within its own (`PostFoldAt`): its queries then
 miss a `δ`-far fold with probability at most `(1 − δ)^Q`, which costs `ε` beyond `queryError`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

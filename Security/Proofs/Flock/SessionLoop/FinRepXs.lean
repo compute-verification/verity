@@ -1,5 +1,7 @@
-import Proofs.Flock.SessionLoop.FinRepView
-import Proofs.Flock.SessionLoop.FinPoints
+module
+
+public import Proofs.Flock.SessionLoop.FinRepView
+public import Proofs.Flock.SessionLoop.FinPoints
 
 /-!
 # (c.3)'s `FinRepXs`: the extra claims' coordinates
@@ -12,6 +14,8 @@ import Proofs.Flock.SessionLoop.FinPoints
   (`Masked.live_links`).
 * **`Loop.finRepXs`**: so `FinRepXs` holds there.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

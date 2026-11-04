@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Faithful
-import Proofs.Flock.Claims.Complete.Zk.Coins
-import Proofs.Flock.Claims.Complete.Runs
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Faithful
+public import Proofs.Flock.Claims.Complete.Zk.Coins
+public import Proofs.Flock.Claims.Complete.Runs
 
 /-!
 # The masked verifier's error at any number of tables
@@ -28,6 +30,8 @@ the masked verifier's union bound at every number of tables.
   where `readyZk` holds, `ready` holds (`ready_of_readyZk`, `Complete.Ready`: at one table the honest record is
   `honestPZk`'s), and there `δc H` is `δcZk H` (`δc_eq_δcZk`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

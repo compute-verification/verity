@@ -13,9 +13,9 @@ kept `.lake/build` follows it (`lean_audit.py`'s docstring has the key, `--expla
 
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data (`Facts.lean`
 imports with initializers disabled and no environment extension loaded), and the kernel replay (`Replay.lean`) loads them
-the same way. The only package code that runs is the build's and, after the facts and the replay, the tests' under `runs`
-(each deciding only its own pass), in a sandbox where the machine allows one; a test's data generator is the repository's
-code and runs outside it.
+the same way, a `module`'s from the private part holding its proofs. The only package code that runs is the build's and,
+after the facts and the replay, the tests' under `runs` (each deciding only its own pass), in a sandbox where the machine
+allows one; a test's data generator is the repository's code and runs outside it.
 
 ~~~text
 bash tools/verity/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when
@@ -62,7 +62,7 @@ Every declaration of the package's audited modules (not a list of theorems), fro
 - nor does the source of a module the package imports from a fetched package (`.lake/packages/*`: Mathlib, ArkLib and
   what they require), or the lakefile of a package it imports from, unless `dependency_unchecked` lists the module with
   the reason. The imported modules are the ones the `dependencies` record covers, and their sources are there once the
-  package is built, so the scan builds nothing: soundness's 3,900 imported dependency modules take about a second. The
+  package is built, so the scan builds nothing. The
   toolchain, which defines these options, is trusted, and a path dependency is a package of the repository, audited on
   its own. Among the pinned dependencies only doc-gen4's loader names one, and no audited package
   imports it;
@@ -134,8 +134,8 @@ another floor (0: none). Lake runs as many `lean` at once as `LEAN_NUM_THREADS`,
 or ArkLib runs at most one per `BUILD_GIB_PER_JOB` (8 GiB) of the memory its cgroup allows (`build_threads`, from the
 process's own cgroup, so a queued run's scope counts); a `LEAN_NUM_THREADS` already set wins. Its kernel
 replay runs at most one thread per `REPLAY_GIB_PER_THREAD` (4 GiB), one such replay at a time (`replay_threads`). An audit of a spec beside the ArkLib package that proves its guarantees (`Security`)
-is refused below `SPEC_FLOOR_GIB` (160 GiB): the replay's resident base is about 120 GiB whatever its threads (it died
-at 128 GiB with 16), and the refusal names `--kind lean-audit`, a 280 GiB shape.
+is refused below `SPEC_FLOOR_GIB` (160 GiB): the replay's resident base is about 120 GiB whatever its threads, and
+the refusal names `--kind lean-audit`, a 280 GiB shape.
 
 **The replay cache and the import closure.** Without `--closure` the replay trusts the package's dependencies (the
 toolchain's library, Mathlib, ArkLib) as their `.olean` files state them: a dependency module holding a theorem that
@@ -168,9 +168,9 @@ and `upstream.py --fetch` against ArkLib's head weekly, each as a recorded run o
 `.olean` files.
 
 `--all` first runs the controls (`--no-controls` skips them; `check`'s audit does, and the `tools/verity/lean` suite runs them, only
-when `tools/verity/lean/` changes): `tests/fixtures/control`, built with each audited package's toolchain (`--build`
-installs it first, so a machine without elan works), must pass clean and fail once for each violation in
-`tests/fixtures/violations.json`. Among them:
+when `tools/verity/lean/` changes): `tests/fixtures/control` and `tests/fixtures/modules`, built with each audited package's
+toolchain (`--build` installs it first, so a machine without elan works), must pass clean and fail once for each violation
+in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
 
 - a false theorem added through `debug.skipKernelTC`, spelled so that no scan finds it, which must pass every check but
   the replay and fail the replay;
@@ -456,12 +456,12 @@ hit is a theorem whose statement mentions all of them, and the status comes from
 has no entry, since no upstream theorem can mention them, and neither has one about a single number, whose entry could
 mention only `Nat.Prime` and would match every theorem about primes.
 
-The audit runs the no-build pass (seconds) for every package with an `upstream` section, so a bump that brings a proof
-about a watched statement fails until someone has checked whether it discharges the assumption or replaces the hand proof
-and recorded it with `--ack`: the list says what has been looked at, not what was used. Run the exact pass (`--lean`) at
-a bump; its first build of all of ArkLib takes a while, later ones about half a minute. `upstream.py PKG --fetch --rev
-origin/main` shows what upstream has proved since the pinned revision, and a weekly `research run` of it tells us when a
-bump would gain something. A document's "status upstream" line cites this output instead of asserting a status.
+The audit runs the no-build pass for every package with an `upstream` section, so a bump that brings a proof about a
+watched statement fails until someone has checked whether it discharges the assumption or replaces the hand proof and
+recorded it with `--ack`: the list says what has been looked at, not what was used. Run the exact pass (`--lean`) at a
+bump; its first run builds all of ArkLib. `upstream.py PKG --fetch --rev origin/main` shows what upstream has proved
+since the pinned revision, and a weekly `research run` of it tells us when a bump would gain something. A document's
+"status upstream" line cites this output instead of asserting a status.
 
 ## The build cache: `cache.py`
 

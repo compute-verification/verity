@@ -1,8 +1,12 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Measured
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100Measured
 
 /-!
 # `MH100`'s measured table satisfies `H32`: proof
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

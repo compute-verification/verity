@@ -1,5 +1,7 @@
-import Proofs.Flock.SoundAtBridge.Served
-import Proofs.Flock.C3.Compose.RowsReg
+module
+
+public import Proofs.Flock.SoundAtBridge.Served
+public import Proofs.Flock.C3.Compose.RowsReg
 
 /-!
 # A session's registered reads built from `own`, its registrants' openings as data
@@ -15,6 +17,8 @@ read at `own`'s root). Every other field of `s` is kept.
 every unit of `canon s op` has its served roots registered (`ServedRegistered`). A read's position at any draw is that
 port's position at the unit's index, and with one read only index `0` has one.
 -/
+
+@[expose] public section
 
 namespace Flock.SoundAtBridge.RowsSession
 

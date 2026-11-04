@@ -1,5 +1,7 @@
-import Mathlib.Data.Rat.Defs
-import Definitions.Pous.Game.Oracle
+module
+
+public import Mathlib.Data.Rat.Defs
+public import Definitions.Pous.Game.Oracle
 
 /-!
 # Encoding schemes
@@ -10,6 +12,8 @@ it, as a trapdoor would let it), and its coins are erased after encoding. The de
 through queries and never sees the coins. There is no verifier key: responses are checked against the true blocks
 (`Model/Audit.lean`), which idealizes the per-block tags.
 -/
+
+@[expose] public section
 
 namespace Pous
 

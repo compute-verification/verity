@@ -1,5 +1,7 @@
-import Definitions.Accounting.Bridge
-import Proofs.Accounting.Actual.Physical
+module
+
+public import Definitions.Accounting.Bridge
+public import Proofs.Accounting.Actual.Physical
 
 /-!
 # The actual circuit's schedule fits the device
@@ -19,6 +21,8 @@ work's pricing is `p` on each op class and nothing on gates of none, an account'
 `work p` (the window's gates split by tick, `sum_fiberwise_of_maps_to`). State needs nothing more: the device is
 `chip ∪ mem`, whose states the schedule charges.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Actual
 

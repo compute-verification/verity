@@ -1,4 +1,6 @@
-import Mathlib.Data.Nat.Notation
+module
+
+public import Mathlib.Data.Nat.Notation
 
 /-!
 # SHA-512 (FIPS 180-4) on byte lists (trusted; definitions only)
@@ -15,6 +17,8 @@ import; this one is written for the kernel: 64-bit words as naturals below `2^64
 - `digest msg`: the 64-byte digest, big-endian (§6.4).
 - `blocks len`: the compressions `digest` takes on a message of `len` bytes.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Sha512
 

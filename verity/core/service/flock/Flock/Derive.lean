@@ -14,7 +14,11 @@ The v2 rule, for a flat type (AND items only):
 A wire's column is its input bit's place or its AND item's row. A form's entries are its wires' columns, then the
 constant's column if its constant is 1. A forced-zero row has none. Placed calls, exported inputs and reads come later.
 -/
-import Flock.CircuitType
+module
+
+public import Flock.CircuitType
+
+@[expose] public section
 
 namespace Flock.Derive
 

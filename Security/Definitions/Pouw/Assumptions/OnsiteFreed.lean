@@ -1,4 +1,6 @@
-import Definitions.Pouw.OnsiteFreed
+module
+
+public import Definitions.Pouw.OnsiteFreed
 
 /-!
 # The onsite PoUW protocol's freed compute: its named premises (trusted)
@@ -19,6 +21,8 @@ P1, P2) and the period's dual price:
 `RemoteWorkFloor`, which rests on them, is false there at any useful `F`. A guarantee that takes it says something only
 on a model that charges those reductions.
 -/
+
+@[expose] public section
 
 namespace Pouw.Assumptions
 

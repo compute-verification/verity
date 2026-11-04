@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.Dampener
-import Definitions.Nci.Assumptions.Remote
+module
+
+public import Definitions.Nci.Guarantees.Dampener
+public import Definitions.Nci.Assumptions.Remote
 
 /-!
 # The compute dampener, remote protocol: the guarantees
@@ -23,6 +25,8 @@ hypothesis derived, and the two that sampled proofs and PoUW's deficit add:
   `1 − s = C/(C + U)` is tiers' (`evaluate` counts the residual over `C + U`); it only raises `ρ` over the form above,
   as `0 ≤ s ≤ 1`. With every proof block proved (T1–T4), `q = 1` and the escape term's probability is 0 at any `θ > 0`.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 
