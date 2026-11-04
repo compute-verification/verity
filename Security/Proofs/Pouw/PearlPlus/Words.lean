@@ -17,7 +17,7 @@ Pearl-C at `pc8`'s row arithmetic on core's primitives and the H100 atom, with -
 (`sha512Sem`). `WordsAreTheSemantics` says the check's words are those values on every word of a credited row.
 
 It composes the noise (`Noise.lean`), the row statistics (`StatsAreTheRow`), the forming, the chain (the H100 chain is
-`chainWordP? hopperE4m3K32 4`, whose value `TileValues.chainWordP_value` gives), the peel factor rows (`PeelARow`,
+`chainWordP? hopperE4m3K32 4`, whose value `TileCircuit.chainWordP_value` gives), the peel factor rows (`PeelARow`,
 `PeelBRow`) and the peel (`peelExactP` at the H100). The proof is `Semantics.lean`'s, since it reads `Stats.lean` and
 `Peel.lean`, which import this file. The check reads a row's raw words and the semantics their values re-encoded
 (`wordsVal`, `encRow`), so a `−0` word and an A′ or B̃ code `0x80` agree with the semantics' `+0` in value only; every
