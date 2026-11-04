@@ -868,8 +868,72 @@ if os.environ.get("TE_SERVED"):
     put = lambda p: os.environ["TE_VM_PUT"]
 sys.exit(v1labels.run(algorithm_policy, Path(sys.argv.pop(1))))
 """
+#: a refused run is a row at each target it reaches, never an absence, as an untraced run is (coordinator 16:19Z): C and p
+#: from its record (its formalism block's counts, the trace left out), pooled into H, every ρ column null and
+#: basis_default and basis_own REFUSED_ROW and why; in no decade, every cut keeping the least-p one per group among the
+#: refused rows alone. te_core.formalism's refusals stay in refused.json, and the board line counts the rows
+REFUSED_ROWS = """
+from te_core import formalism, frontier_fit
+OF, ROWS = "refused: ", []
+def label(why):
+    kind, _, events = why.partition(": not measured ")
+    return OF + (f"data-dependent program {events}" if kind == "data-dependent" and events else why)
+def refused(basis):
+    return isinstance(basis, str) and basis.startswith(OF)
+def scored_rows(a, scored_rows=frontier_fit.scored_rows):
+    d, scored = scored_rows(a)
+    family = {run: f for (run, _), (_, f) in d["blocks"].items()}
+    for r in d["rows"]:
+        why, shape = d["refused"].get(r["id"]), d["shapes"].get(r["start"])
+        if why is None or shape is None or r.get("val_bpb") is None:
+            continue
+        try:
+            gates = formalism.complete({k: v for k, v in (r.get("formalism") or {}).items() if k != "trace"}, r,
+                                       shape).gates
+        except ValueError as e:
+            print(f"refused {r['id']}: no |C| from its record ({e}), so no row", file=sys.stderr)
+            continue
+        d["untraced"].append(r | {"gates": gates, "family": r.get("family") or family.get(r.get("run_id")),
+                                  "refused": label(why)})
+    return d, scored
+def build(info, source, stamp=None, untraced=(), build=algorithm_policy.build):
+    p = build(info, source, stamp, untraced)
+    why = {f"{r.get('run_id') or r['id']}@{r.get('checkpoint_step')}": r["refused"] for r in untraced if "refused" in r}
+    b, o, at = (algorithm_policy.COLUMNS.index(c) for c in ("basis_default", "basis_own", "record"))
+    for row in p["rows"]:
+        if row[b] == algorithm_policy.UNTRACED and row[at] in why:
+            row[b] = row[o] = why[row[at]]
+            ROWS.append(row[at])
+    return p
+def kept(rows, tier, cov, kept=algorithm_policy.kept):
+    ix = {c: i for i, c in enumerate(algorithm_policy.COLUMNS)}
+    b = ix["basis_default"]
+    on = {id(r) for r in kept([r[:b] + [algorithm_policy.STUB] + r[b + 1:] if refused(r[b]) else r for r in rows],
+                              tier, cov)}
+    least = {}
+    for r in rows:
+        if refused(r[b]):
+            g = (r[ix["data"]], r[ix["start"]], r[ix["gain_target"]]) + ((r[ix["family"]],) if tier == "family" else ())
+            k = (r[ix["p"]] is None, r[ix["p"]] or 0, r[ix["C_gates"]])
+            if g not in least or k < least[g][0]:
+                least[g] = (k, id(r))
+    on |= {i for _, i in least.values()}
+    return [r for r in rows if id(r) in on]
+def decade(rho, basis=None, decade=algorithm_policy.decade):
+    return None if refused(basis) else decade(rho, basis)
+def said(text, sep=" "):
+    n = len(ROWS)
+    return text + (f"{sep}{n} reached {'row' if n == 1 else 'rows'} refused (p the record's, rho null, basis_default "
+                   f"'{OF}' and why), in no decade." if n else "")
+coverage_md, board_line = algorithm_policy.coverage_md, algorithm_policy.board_line
+frontier_fit.scored_rows, algorithm_policy.build, algorithm_policy.kept, algorithm_policy.decade = (
+    scored_rows, build, kept, decade)
+algorithm_policy.coverage_md = lambda *a, **k: said(coverage_md(*a, **k).rstrip("\\n"), "\\n") + "\\n"
+algorithm_policy.board_line = lambda *a, **k: said(board_line(*a, **k))
+"""
 #: te_core.algorithm_policy's main from `UNWRAPPED` on, whose console.put refuses any wrapped te_core object: nothing is
-#: wrapped but a node refresh's I/O (TE_SERVED), which holds no console token and no store write key, as POLICY's
+#: wrapped but a node refresh's I/O (TE_SERVED), which holds no console token and no store write key, as POLICY's, and
+#: the refused runs' rows (REFUSED_ROWS)
 POLICY_IO = """
 import json, os, sys
 from te_core import algorithm_policy, console
@@ -877,6 +941,7 @@ if os.environ.get("TE_SERVED"):
     console.served = lambda producer="training": json.load(open(os.environ["TE_SERVED"]))
     algorithm_policy.store = lambda path, meta: os.environ["TE_TABLES_CITE"]
     console.put = lambda p: os.environ["TE_VM_PUT"]
+""" + REFUSED_ROWS + """
 sys.exit(algorithm_policy.main(sys.argv[1:]))
 """
 #: the te_core from which algorithm-policy runs unwrapped (POLICY_IO) and marks no row void: every row reads
