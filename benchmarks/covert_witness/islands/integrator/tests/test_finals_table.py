@@ -127,7 +127,8 @@ def test_every_point_the_table_leaves_out_or_seed_it_lacks_says_why(tmp_path):
     assert [r["run"] for r in two["rows"]] == ["r-honest"] and two["rows"][0]["p"] == 1
     assert two["not_shown"] == {"neither the search run nor any of its 1 finished seeds reached 2x": 1}
     eleven = by[("s1", 11)]
-    assert eleven["rows"] == [] and eleven["H"] is None and eleven["H_why"]
+    assert eleven["rows"] == [] and eleven["H"] is None and eleven["H_any"] is None
+    assert "- H over every route (the scorer's rule): no point has a finished seed reaching it" in md
     assert sum(eleven["not_shown"].values()) == 2
     pts = {p["run"]: p for p in t["points"]}
     assert pts["r-covert"]["at"]["2"]["seeds"]["own"]["reached"] is False

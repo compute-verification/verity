@@ -292,6 +292,7 @@ def build(finals: dict, runs: dict[str, dict[str, str]], records: Path, fits: di
                            "H_any": h_any and {"point": h_any["point"], "run": h_any["run"],
                                                "island": h_any["island"], "C": h_any["at"][k]["C"]},
                            "H_why": None if h else "no honest point has a finished seed reaching it",
+                           "H_any_why": None if h_any else "no point has a finished seed reaching it",
                            "rows": rows, "not_shown": left})
     return {"points": points, "tables": tables}
 
@@ -309,10 +310,10 @@ def markdown(t: dict) -> str:
         f = t["fits"].get(tb["data"]) or {}
         lines += [f"## {tb['start']} at {tb['gain']:g}x ({tb['data']}; fit E {g3(f.get('E'))}, gamma {g3(f.get('gamma'))})",
                   ""]
-        for name, h in (("honest H", tb["H"]), ("H over every route (the scorer's rule)", tb["H_any"])):
+        for name, h, why in (("honest H", tb["H"], tb["H_why"]),
+                             ("H over every route (the scorer's rule)", tb["H_any"], tb["H_any_why"])):
             lines.append(f"- {name}: " + (f"{h['point']} ({h['island']}, {h['run']}), C {g3(h['C']['mean'])} gates, "
-                                          f"sd {g3(h['C']['sd'])} over {h['C']['n']} seeds" if h else
-                                          tb["H_why"] or "none"))
+                                          f"sd {g3(h['C']['sd'])} over {h['C']['n']} seeds" if h else why))
         lines += ["", "| point | island | seeds reached | C gates, mean (sd) | counted FLOPs, mean | p [range] | p_any | "
                   "rho (which, basis) | S = p rho | label |", "|---|---|---|---|---|---|---|---|---|---|"] if tb["rows"] else [
             "", "No point shown."]
