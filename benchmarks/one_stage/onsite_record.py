@@ -20,6 +20,12 @@ run wrote no answer, ``missing`` and ``why``:
 ``of_record`` holds when every one of them accepted, the condition for the demo's run of record; ``placement`` is the
 network certifier's answer's, which host ran each party.
 
+**The composite's error** (``composite_error``, `COMPOSITE`): the sum over the onsite composite's four subprotocols of
+each one's error, each subprotocol's δ with where the run states it: sampled proofs' and PoUW's from their rows (their
+answers' integrity-profile δ), the network certifier's from its bound (its eps), and inference-only's missing
+(`NO_NCI_DELTA`). ``stated`` sums the δs the run states, a lower bound on the error, which is ``vacuous`` at 1 or
+more; the rest is ``unvalued`` (`COMPOSITE_UNVALUED`).
+
 **The bound** is the network certifier's accepted answer's public in its rows form: K and each of its terms in the
 notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields it sums (``lean``): k_sched
 (``schedules``), k_fail (``cells``) and, for each execution phase j of the certification period (the code's link-window,
@@ -128,6 +134,15 @@ ERRORS = {
 }
 UNVALUED = ("δ_net is eps plus each execution phase's ε_ks, ε_bind and ε_tap, never eps alone; no check computes those "
             "three, so δ_net has no number here")
+COMPOSITE = (f"{ONSITE}'s error, Verity.Game's SoundnessFor at its compiled verifier: it accepts while the claim of one of "
+             "its four subprotocols fails with probability at most the sum of their errors, each its published δ at the "
+             "strategy's SHA-512 calls plus ε_forge(t, Q) plus its loss at its finder's collision probability "
+             "(`Verity.Vocab.error`). Each subprotocol's δ is a term of its own, so one draw read at two δs, a tied "
+             "audit's at sampled proofs' δ and at the network period's, counts in both")
+COMPOSITE_UNVALUED = ("each subprotocol's ε_forge(t, Q) and its loss at its finder's collision probability, and the "
+                      "network certifier's m(ε_ks + ε_bind + ε_tap) (`ERRORS`): no check computes them, so the composite's "
+                      "error has no number here, and ``stated`` is the sum of the δs the run states, a lower bound on it")
+NO_NCI_DELTA = "no published file states it: remote's composite publishes each case's params by their SHA-512 alone"
 DELTA = ("what sets eps: each one-stage answer's stated δ, its integrity profile's, a sampling-design parameter in "
          "(0, 1) and not C-Flock's soundness error, which is in ε_ks. eps is m · δ_scan, every phase's scan at one δ, "
          "plus the δ of each tied audit drawn in part (`charged`, NetworkCheck.Period's chargedOf). A scan with every "
@@ -273,6 +288,28 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
 def delta_net(eps: Fraction, phases: int) -> list[dict[str, Any]]:
     """δ_net over ``phases`` execution phases, term by term: eps, and each of `ERRORS` that many times."""
     return [{"symbol": "eps", "value": str(eps)}, *({"symbol": s, "times": phases} for s in ERRORS)]
+
+
+def composite_error(rows: Mapping[str, Any], eps: Fraction | None, why: str = "no accepted bound") -> dict[str, Any]:
+    """The composite's error term by term (`COMPOSITE`): each subprotocol's δ with where the run states it, or why it
+    doesn't (the network certifier's eps from its bound, else ``why``); ``stated`` sums those stated (None where none
+    is), ``vacuous`` at 1 or more."""
+    terms: list[dict[str, Any]] = []
+    for name in ("sampled proofs", "PoUW"):
+        t = {"subprotocol": name, "from": f"record/verdicts.json protocols.{ROWS[name]}.delta: its answer's "
+                                          "integrity-profile δ"}
+        d = (rows.get(ROWS[name]) or {}).get("delta")
+        try:
+            terms.append(t | ({"missing": "its row states no δ"} if d is None else {"delta": str(Fraction(str(d)))}))
+        except ValueError:
+            terms.append(t | {"error": f"its row's δ {d!r} isn't a number"})
+    terms.append({"subprotocol": "inference-only", "missing": NO_NCI_DELTA})
+    terms.append({"subprotocol": "the network certifier", "from": f"{EPS['source']}: its eps (`EPS`)"}
+                 | ({"missing": why} if eps is None else {"delta": str(eps)}))
+    given = [Fraction(t["delta"]) for t in terms if "delta" in t]
+    stated = sum(given, Fraction(0)) if given else None
+    return {"is": COMPOSITE, "terms": terms, "stated": None if stated is None else str(stated),
+            "vacuous": stated is not None and stated >= 1, "unvalued": COMPOSITE_UNVALUED}
 
 
 def eps_of(b: Mapping[str, Any]) -> Fraction:
@@ -430,7 +467,7 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
         "of_record": {"holds": all(x["verdict"] == "accept" for x in v.values()),
                       "missing": [k for k, x in v.items() if x["verdict"] == "missing"],
                       "not_accepting": [k for k, x in v.items() if x["verdict"] not in ("accept", "missing")]},
-        "placement": profile.get("placement"), "advice_charge": advice}
+        "placement": profile.get("placement"), "advice_charge": advice, "composite_error": composite_error(rows, None)}
     nv = v["the network certifier"]
     if nv["verdict"] != "accept":
         why = (f"the network certifier's verdict is {nv['verdict']}"
@@ -444,6 +481,7 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     except ValueError as e:
         return rec | {"bound": {"error": str(e)}, "periods": {"missing": "no bound"}}
     b["verdict_line"] = next((x for x in reversed(lines(out, "verdicts.txt")) if x.startswith(LINE)), None)
+    rec["composite_error"] = composite_error(rows, eps_of(b))
     advice["charged"] = charged(b)
     b["period_s"] = None
     try:
@@ -479,8 +517,8 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
 
 def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     """The ``ONSITE`` line: each verdict, whether the run is of record, K of record, the tight K and the checks it is
-    conditional on, its δ_net's terms and connections, the year's datacenter cell, and the measured advice charge's
-    test run."""
+    conditional on, its δ_net's terms, eps's split and connections, the composite's stated error, the year's datacenter
+    cell, and the measured advice charge's test run."""
     b, p = rec.get("bound") or {}, rec.get("periods") or {}
     year = (p.get("year") or {}).get("datacenter")
     m, fig = rec["advice_charge"]["measured"], b.get("of_record") or {}
@@ -488,6 +526,7 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
             "K": fig.get("K"), "K_tight": b.get("K"), "open": fig.get("open"),
             "delta_net": None if "delta_net" not in b else delta_net(eps_of(b), b["phases"]),
             "delta": None if "delta" not in b else {k: b["delta"][k] for k in ("scan", "charged")},
+            "composite_error": {k: rec["composite_error"][k] for k in ("stated", "vacuous")},
             "connections": (b.get("connections") or {}).get("count"),
             "year_datacenter": None if year is None else {k: year[k] for k in ("bits", "share", "delta_net", "how")},
             "advice_measured_on": m.get("run"), **{k: b[k] for k in ("missing", "error") if k in b}}

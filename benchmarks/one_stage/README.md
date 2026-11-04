@@ -213,7 +213,8 @@ negatives.
   table's symbols, with its overcount, the seconds it covers, the connections it counts and δ_net term by term with
   each term's source (the check's `eps`, only its δ part, and each phase's knowledge, binding and collision errors,
   which no check computes), `eps` split into the scans' δ and the charged tied audits' with what sets each and what a
-  smaller one costs, and that bound over the
+  smaller one costs, the onsite composite's error as the sum of its four subprotocols' errors, each δ with where the
+  run states it and the terms no check computes named, and that bound over the
   run's own certification period (proved) and each monitoring period for the node (proved where the run's period
   covers it, else scaled), the census's reference datacenter and the world (scaled), each scaled cell naming its rule,
   whose sources the record states, beside its figure over one execution phase. The cells are the figure of record's:

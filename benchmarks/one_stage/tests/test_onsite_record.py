@@ -151,6 +151,9 @@ def test_a_rehearsal_records_each_missing_part_with_its_why_and_no_figure(tmp_pa
     assert rec["advice_charge"] == {"served": OR.ADVICE, "charged": {"missing": "no bound"},
                                     "cap": {"missing": "no bound"}, "measured": {"missing": OR.NO_MEASUREMENT}}
     assert numbers({k: rec[k] for k in ("bound", "periods", "verdicts", "advice_charge")}) == []
+    assert (rec["composite_error"]["stated"], rec["composite_error"]["vacuous"]) == (None, False)
+    assert rec["composite_error"]["terms"][3] == {"subprotocol": "the network certifier", "missing": "no accepted bound",
+                                                  "from": f"{OR.EPS['source']}: its eps (`EPS`)"}
     assert "window" not in rec and rec["tree"] is None
     line = capsys.readouterr().out.strip()
     assert line.startswith("ONSITE ") and json.loads(line[7:])["K"] is None
@@ -331,6 +334,43 @@ def test_scans_at_two_deltas_are_the_bounds_error(tmp_path):
                scans=[SCAN, dict(SCAN, delta="1/524288")])
     rec = OR.record(accepted(tmp_path, two, windows=2))
     assert rec["bound"]["error"].startswith("eps 3/1048576 isn't m · δ_scan plus the charged audits' δ")
+
+
+def with_deltas(out: Path, **deltas: object) -> Path:
+    """``out`` with its window report's rows (by key) stating each given δ."""
+    f = out / "record" / "verdicts.json"
+    doc = json.loads(f.read_text())
+    for key, d in deltas.items():
+        doc["protocols"][key]["delta"] = d
+    f.write_text(json.dumps(doc))
+    return out
+
+
+@pytest.mark.parametrize("eps, stated, vacuous", [("1/1048576", "262145/524288", False),
+                                                  ("524289/1048576", "524289/524288", True)])
+def test_the_composites_error_sums_each_subprotocols_delta_with_its_source(tmp_path, eps, stated, vacuous):
+    """Sampled proofs at its served δ = 1/2 and PoUW at 2^-20 from their rows, and the network certifier's eps from its
+    bound: one tied audit's draw read at sampled proofs' 1/2 and again inside the network's eps is two terms. Their sum is
+    stated as a lower bound on the error, inference-only's δ missing and the rest unvalued."""
+    public = dict(PUBLIC, eps=eps, audits=[{"delta": str(Fraction(eps) - Fraction(1, 2 ** 20)), "drawn": 1,
+                                            "units": 16, "wrong_units": 8}])
+    rec = OR.record(with_deltas(accepted(tmp_path, public), integrity="1/2", work=2.0 ** -20))
+    ce = rec["composite_error"]
+    assert [(t["subprotocol"], t.get("delta")) for t in ce["terms"]] == [
+        ("sampled proofs", "1/2"), ("PoUW", "1/1048576"), ("inference-only", None), ("the network certifier", eps)]
+    assert ce["terms"][0]["from"] == "record/verdicts.json protocols.integrity.delta: its answer's integrity-profile δ"
+    assert ce["terms"][2] == {"subprotocol": "inference-only", "missing": OR.NO_NCI_DELTA}
+    assert ce["terms"][3]["from"].startswith(OR.EPS["source"])
+    assert (ce["stated"], ce["vacuous"], ce["is"], ce["unvalued"]) == (stated, vacuous, OR.COMPOSITE, OR.COMPOSITE_UNVALUED)
+    assert "counts in both" in OR.COMPOSITE and "lower bound" in OR.COMPOSITE_UNVALUED
+    assert OR.summary(rec)["composite_error"] == {"stated": stated, "vacuous": vacuous}
+
+
+def test_a_composite_term_the_run_doesnt_state_is_missing_and_one_that_isnt_a_number_its_error(tmp_path):
+    rec = OR.record(with_deltas(accepted(tmp_path), integrity="half"))
+    sampled, pouw, _nci, net = rec["composite_error"]["terms"]
+    assert sampled["error"] == "its row's δ 'half' isn't a number" and pouw["missing"] == "its row states no δ"
+    assert rec["composite_error"]["stated"] == net["delta"] == PUBLIC["eps"]
 
 
 def test_a_node_cell_is_proved_where_the_runs_period_covers_its_monitoring_period(tmp_path):
