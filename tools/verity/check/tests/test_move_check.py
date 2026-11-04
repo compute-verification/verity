@@ -1284,6 +1284,7 @@ def test_a_prose_move_by_rename_is_certified(tmp_path):
     assert r["certified"], r["refusals"]
     assert r["words"] == "tools/move/terms_map.toml"
     assert {e["path"]: e["kind"] for e in r["edits"]} == dict.fromkeys(["a.py", "b.py", "notes.md", "P/L.lean"], "words")
+    assert MC.summary(r).endswith("(0 renames, 4 edits by tools/move/terms_map.toml's words)")
 
 
 def test_a_word_renamed_in_a_string_literal_or_a_data_file_is_refused(tmp_path):
