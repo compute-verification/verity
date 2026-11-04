@@ -19,6 +19,8 @@ decoder can carry) or with a list index, and single entries with an entropy-code
 - `lora`: LoRA with each candidate matrix's rank allocated greedily by the probe gradient's σ² per byte;
 - `qlora`: `lora` with `--bits`-bit factors (CWQUAN1: A one f16 scale per row, B one per 64 rows), so a rank costs
   (d_in + d_out) · bits / 8 bytes; the forward reads the codes, the factors train through them (straight-through);
+  `--alloc uniform` gives every candidate one rank instead, the largest up to `--max-rank` whose E fits `--cap`
+  (sized on random codes, so nothing is read from a gradient and no probe runs);
 - `signrows`: whole rows of the block matrices as `--bits`-bit codes of a delta (1 bit: a sign times the row's f16 scale),
   rows chosen by the selection energy per byte; E is a CWQUAN1 delta over each touched matrix whose other rows have
   scale 0, which the entropy coder all but drops, so the mask costs next to nothing;
@@ -680,8 +682,8 @@ def main() -> int:
                          "first-order gain), W², or uniform noise")
     ap.add_argument("--max-rank", type=int, default=64)
     ap.add_argument("--alloc", default="grad", choices=("grad", "uniform"),
-                    help="lora: ranks by the probe gradient's σ² per byte, or one rank on every candidate (the largest "
-                         "that fits; the control)")
+                    help="lora, qlora: ranks by the probe gradient's σ² per byte, or one rank on every candidate (the "
+                         "largest that fits; qlora's is at most --max-rank and needs no probe)")
     ap.add_argument("--regrow", type=float, default=1.0,
                     help="lora: the share of the byte budget placed at θ; the rest goes, after --regrow-at of the "
                          "steps, to the rank units with the most σ² per byte of a fresh probe's gradient (a learned mask)")
@@ -757,7 +759,8 @@ def main() -> int:
     vote = a.grad_code == "vote"
     if vote and (not entries or a.batch % a.micro or a.batch > 32767):
         raise SystemExit("sparse: --grad-code vote takes --mech entries, and --micro dividing --batch (at most 32,767)")
-    need_g = a.mech in ("lora", "qlora") or a.mech in ("lines", "signrows", "entries") and a.select in ("grad", "fisher", "adam")
+    need_g = a.mech == "lora" or a.mech == "qlora" and a.alloc == "grad" or \
+        a.mech in ("lines", "signrows", "entries") and a.select in ("grad", "fisher", "adam")
     if need_g and not a.probe:
         raise SystemExit("sparse: --mech lora|qlora and a gradient selection need --probe > 0")
     norms = norm_names(theta, a.norms, a.layers, L)
@@ -822,6 +825,15 @@ def main() -> int:
                 avail -= trim
                 plan = replan()
         energy = None
+    elif a.mech == "qlora" and a.alloc == "uniform":
+        if a.regrow < 1 or a.embed_rank < 0:
+            raise SystemExit("sparse: --mech qlora --alloc uniform allocates once (--regrow 1, --embed-rank >= 0)")
+        fixed = {"embed": a.embed_rank} if a.embed_rank > 0 else {}
+        lo, hi = 0, a.max_rank
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            lo, hi = (mid, hi) if size_of(fixed | {n: mid for n in cands}) <= cap - HEADER_SLACK else (lo, mid - 1)
+        plan = fixed | ({n: lo for n in cands} if lo else {})
     elif a.mech == "qlora":
         if a.regrow < 1 or a.alloc != "grad":
             raise SystemExit("sparse: --mech qlora allocates by the gradient once (--regrow 1, --alloc grad)")
