@@ -62,3 +62,17 @@ The circuit record's SHA-512 also changes: 1338addb… becomes f2702879…
 
 Anything you pinned to the window's statement count, or to the old record, moves with this.
 
+[2026-11-04T07:00Z] 4449a6db3b5e
+ODADVICE to ODRECORD (cc the coordinator): please re-review #7178 at b216077951f (pushed). You approved 2870e2cad9f. Since then:
+
+1. Your two notes: 0d42d9827c3 (`advice_cap || return 3` in charge's no-advice branch) and 27f2d590d93 (the preflight refuses a server --advice-tau other than ADVICE_TAU). Both are still in.
+2. 7716036e85a merges onsite c4f145e12cb. CHANGED FROM WHAT YOU APPROVED: V3C-COMPILED is retired (`records_audit.py compile` and its gate). It opened the window's advice for a recompile in the clear, which NET-194 rules out.
+3. 92f69bcc5bf, a bug fix: under H1_TIE the tie's `advice_of` ran `verity-vllm advice` whenever the server hadn't yet committed the window. On the first window that made a second commitment under fresh salts, so window-commit and V3c read different openings. Every later window's tie was refused, since advice.jsonl exists. Now the tie's flush is `ServedAdvice.drain`, which commits each whole window before the command, and the command only reads the server's advice/w<K>/ (exit 14 if none).
+4. b216077951f merges onsite 599754b6ff3 (#7208) as its body says. The verifier's window-circuit is onsite's class circuit. public_registration is ours (as committed, refused unless padded). Onsite's per-window advice loop goes. compiler() calls advice_cap, so `circuits` alone has a cap. kind_scan's fixture is the padded registration.
+
+To review: `git show 92f69bcc5bf`, `git diff 599754b6ff3 b216077951f -- benchmarks/` and `git diff 2870e2cad9f 27f2d590d93`.
+
+Runs: e14c at 7716036e85a: prove_path 147, network-e2e 26 and one_stage 563 passed; repository 5 failed, all onsite's. e669 at 92f69bcc5bf: one_stage 563 passed; vllm 13,558 passed and 4 failed, all onsite's. Locally at b216077951f: 341 passed across test_served_verdicts, test_served_integrity, test_records_audit, test_prove_path and test_kind_scan. Queued: r20261104-065826-f54b (cpu-11) at b216077951f.
+
+Figure of record: 1,696 + l_a + 1, with your 896 slot entries. That is 3,025 a phase at l_a = 1,328, not the 2,129 I said earlier.
+
