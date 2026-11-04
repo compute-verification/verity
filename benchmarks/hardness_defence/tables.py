@@ -251,19 +251,30 @@ def deflated(book, model, t):
     return ok[0] if ok else None
 
 
-def operating(down="margin"):
-    """Clip where a clip clears the line, else deflation where it clears, else uncredited; 70B's down_proj at its
-    whole K credited at a margin, or in K chunks."""
+# The four matrices whose design-U service carries 70B's quality loss (quality.py: served exact, they take WikiText-2
+# from +11.2% to +4.3% over bf16), and that no clip tried brings over the line
+EXACT = {"70b": {tensor_name(0, "q_proj"), tensor_name(0, "k_proj"), tensor_name(0, "v_proj"),
+                 tensor_name(1, "v_proj")}}
+
+
+def operating(cap=1.0, rest="out", down="margin", exact=False, deflate=False):
+    """The least clip of at most cap that clears the line; where none does, with deflate the least deflation that
+    clears, else `rest` (uncredited, or credited at a margin as design U); 70B's down_proj at its whole K at a margin,
+    or in K chunks; with exact, EXACT uncredited (served exact)."""
     def choose(book, model, t):
+        if exact and t in EXACT.get(model, ()):
+            return None, 0.0
         if model == "70b" and kind(t) == "down_proj":
             if down == "chunks":
                 return present(book, model, t, U[:4] + (4,)), 1.0
             return margin(book, model, t)
-        var, ok = clip_choice(book, model, t)
+        var, ok = clip_choice(book, model, t, cap)
         if var is None or ok:
             return var, 1.0
-        d = deflated(book, model, t)
-        return (d, 1.0) if d else (None, 0.0)
+        d = deflated(book, model, t) if deflate else None
+        if d:
+            return d, 1.0
+        return margin(book, model, t) if rest == "margin" else (None, 0.0)
     return choose
 
 
@@ -293,9 +304,18 @@ DEFENCES = {
     "4: every broken matrix at a margin": margin,
     "4: q, k, v uncredited": qkv_out,
     "4: every broken matrix uncredited": broken_out,
-    "operating point (down_proj at a margin)": operating("margin"),
-    "operating point (down_proj in K chunks)": operating("chunks"),
+    "2 and 4: clip up to 30% where it clears, else uncredited; down_proj at a margin": operating(),
+    "2 and 4: the same, down_proj in K chunks": operating(down="chunks"),
+    "4, 70B's four exact: every broken matrix at a margin; L0 q, k, v and L1 v uncredited": operating(
+        0.02, "margin", exact=True),
+    "4, 70B's four exact, gate/up deflated by 32 where that clears": operating(0.02, "margin", exact=True,
+                                                                               deflate=True),
+    "2 and 4, 70B's four exact: clip up to 10% where it clears, else at a margin": operating(0.1, "margin",
+                                                                                           exact=True),
+    "2 and 4, 70B's four exact: clip up to 5% where it clears, else at a margin": operating(0.05, "margin",
+                                                                                          exact=True),
 }
+RECOMMENDED = "2 and 4, 70B's four exact: clip up to 5% where it clears, else at a margin"
 
 NEAR = 0.07  # the most a reorder took off a split's residual, over the leaf (r20261104-093237-c694 against natural)
 
@@ -352,12 +372,12 @@ def main():
                   f"{len(natural)} / {len(unsplit)} |")
     if args.matrices:
         print()
-        print("The operating point (down_proj in K chunks) on every matrix the split breaks at 2% or that it serves "
-              "otherwise:")
+        print(f"{RECOMMENDED}, on every matrix the split breaks at 2% or that it serves otherwise:")
         print()
-        print("| model | matrix | 2% least (sm_120 / H200 at 0.84) | its route | served | its least | priced in |")
-        print("|---|---|---|---|---|---|---|")
-        choose = operating("chunks")
+        print("| model | matrix | 2% least (sm_120 / H200 at 0.84) | its route | served | credited | its least | "
+              "priced in |")
+        print("|---|---|---|---|---|---|---|---|")
+        choose = DEFENCES[RECOMMENDED]
         for model in MODELS:
             for t in all_tensors(model):
                 var, credit = choose(book, model, t)
@@ -366,13 +386,14 @@ def main():
                     continue
                 k0 = min(KEYS, key=lambda k: s[k][0])
                 if credit == 0:
-                    served, its = "uncredited", "–"
+                    served, its = "exact" if t in EXACT.get(model, ()) else "2% clip", "–"
                 elif var is None:
                     served, its = "not priced yet", "–"
                 else:
                     served = (f"{var[4]} K chunks" if var[4] > 1 else f"deflated by {var[2]}" if var[2]
                               else f"{var[0]:.0%} clip")
                     its = f"{least_of(book.v[model][t][var]):.3f}"
+                served += f" | {credit:.1%}"
                 key = (model, t, var)
                 searched = ("all orders" if key in book.orders else "natural order" if key in book.split
                             else "no split")
