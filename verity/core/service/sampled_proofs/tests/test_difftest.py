@@ -1977,10 +1977,10 @@ POPULATION_ORDER = ("population-order: the program's proof blocks under the quer
 
 
 def decode_params_v2(j) -> dict:
-    """`OneStageZk.paramsOfJson`'s refusals of v1's part of the parameters: v1's (`decode_params`), then parameters
-    naming no challenger (`NO_CHALLENGER`)."""
+    """`OneStageZk.paramsOfJson`'s refusals of v1's part of the parameters: v1's (`covered_params`,
+    `OneStage.paramsOfJson`), then parameters naming no challenger (`NO_CHALLENGER`)."""
     rest = {k: v for k, v in j.items() if k != "proofs"}
-    p = decode_params(rest)
+    p = covered_params(rest)
     if "challenger" not in rest:
         raise D.Reject(NO_CHALLENGER)
     return p
