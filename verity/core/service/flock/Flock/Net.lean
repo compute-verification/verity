@@ -6,6 +6,7 @@ module
 
 public import Lean.Data.Json
 public import Flock.Comp
+public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -243,7 +244,7 @@ def parse (lines : Array String) : V Net := do
   -- after the rows: an optional `LEAVES <json>` line (bound by the pin, not read), and nothing else
   let mut at_ := 1 + useful
   if (lines.getD at_ "").startsWith "LEAVES " then
-    match Json.parse ((lines.getD at_ "").drop 7).toString with
+    match JsonParse.parse ((lines.getD at_ "").drop 7).toString with
     | .ok _ => at_ := at_ + 1
     | .error e => throw s!"flock-ir-unit/v2: the LEAVES line is not JSON: {e}"
   if (lines.getD at_ "").startsWith "CUT " then
@@ -350,7 +351,7 @@ def parseWith (t : Array Row) (base : Nat) (lines : Array String) : V Net := do
     rb := rb.push (v.extract (2 + na) (2 + na + nb))
   let mut at_ := 1 + useful
   if (lines.getD at_ "").startsWith "LEAVES " then
-    match Json.parse ((lines.getD at_ "").drop 7).toString with
+    match JsonParse.parse ((lines.getD at_ "").drop 7).toString with
     | .ok _ => at_ := at_ + 1
     | .error e => throw s!"flock-ir-unit/v2: the LEAVES line is not JSON: {e}"
   if (lines.getD at_ "").startsWith "CUT " then

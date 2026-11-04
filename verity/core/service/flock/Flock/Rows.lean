@@ -10,6 +10,7 @@ module
 
 public import Flock.Derive
 public import Flock.DeriveCheck
+public import Flock.JsonParse
 
 @[expose] public section
 
@@ -36,7 +37,7 @@ def readLine? (f : Option String) : IO (Option String) :=
 rows pass `deriveChecked`'s check, or `ok` when they do. -/
 def archiveCmd (path part : String) : IO UInt32 := do
   let run := fun j => if part == "check" then DeriveAll.archiveCheck j else DeriveAll.archivePart j part
-  match Json.parse (← IO.FS.readFile path) >>= run with
+  match JsonParse.parse (← IO.FS.readFile path) >>= run with
   | .ok s => IO.print s; return 0
   | .error e => IO.eprintln s!"flock-rows: {e}"; return 1
 
@@ -45,7 +46,7 @@ def cmd (args : List String) : IO UInt32 := do
   if let (some path, some part) := (argOf args "--archive", argOf args "--part") then return ← archiveCmd path part
   let some path := args.head? | IO.eprintln usage; return 2
   let (some root, some name) := (argOf args "--root", argOf args "--name") | IO.eprintln usage; return 2
-  match Json.parse (← IO.FS.readFile path) >>= fun j => j.getObjValAs? (Array Json) "types" with
+  match JsonParse.parse (← IO.FS.readFile path) >>= fun j => j.getObjValAs? (Array Json) "types" with
   | .error e => IO.eprintln s!"flock-rows: not a types file: {e}"; return 1
   | .ok ts =>
     let mut known : Array (String × CircuitType) := #[]

@@ -5,6 +5,7 @@ public import VStar.Holo
 public import VStar.Json
 public import VStar.Menu.Pinned
 public import VStar.Stage
+public import Flock.JsonParse
 
 /-!
 # The `vstar` command: write V*'s circuit files
@@ -31,7 +32,7 @@ namespace VStar.Cli
 open Lean (Json)
 
 def readJson (path : String) : IO Json := do
-  match Json.parse (← IO.FS.readFile path) with
+  match Flock.JsonParse.parse (← IO.FS.readFile path) with
   | .ok j => pure j
   | .error e => throw (IO.userError s!"{path}: not JSON: {e}")
 

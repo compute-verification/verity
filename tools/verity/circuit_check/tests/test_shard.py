@@ -17,7 +17,6 @@ import pytest
 
 from circuit_check import cache as CC
 from circuit_check import cli
-from circuit_check import known as KN
 from circuit_check import shard as SH
 from circuit_check import targets as TG
 from test_cache import REPO, _bindings, _edit, _tree
@@ -59,13 +58,12 @@ def _result(failures=(), warnings=(), **more) -> dict:
     return {"failures": list(failures), "warnings": list(warnings), **more}
 
 
-#: the stub targets: a pass, a new and a known failure, a warning, a Boolean Call recomputing across units, a by-calls root whose
-#: callee (another shard's at N = 3) fails with a known failure, so only the joined report fails the root, and three heavy ones
+#: the stub targets: a pass, a failure, a warning, a Boolean Call recomputing across units, a by-calls root whose callee (another
+#: shard's at N = 3) fails, so only the joined report fails the root, and three heavy ones
 CALLEE, ROOT = "SynCallee_v1", "SynRoot_v1"
 TARGETS = {
     "SynPass_v1": lambda: _result(),
     "SynNew_v1": lambda: _result([_fail("SynNew_v1", "lowering-mismatch")]),
-    "SynKnown_v1": lambda: _result([_fail("SynKnown_v1", "dead")]),
     "SynWarn_v1": lambda: _result(warnings=[{**_fail("SynWarn_v1", "and", "redundant"), "count": 3}]),
     "SynAcross_v1": lambda: _result(partition={"q_word": 2, "recomputed_across": 5}),
     ROOT: lambda: _result(mode="by-calls", by_calls={"callees": [{"callee": "c0", "binding": CALLEE}]}),
@@ -74,8 +72,6 @@ TARGETS = {
     "SynHeavyB_v1": lambda: _result(),
     "SynHeavyC_v1": lambda: _result(),
 }
-KNOWN = {"lowering/dead SynKnown_v1": "a known failure", f"lowering/dead {CALLEE}": "the callee's known failure",
-         "lowering/dead SynGone_v1": "no longer fails: --all drops it"}
 HEAVY = {"SynHeavyA_v1": 30, "SynHeavyB_v1": 20, "SynHeavyC_v1": 40}
 
 
@@ -95,8 +91,6 @@ def stub(monkeypatch):
             yield i, (i, cli._one(*cli._TASKS[i][:3]), None, [], None), 1.0, 0.5
 
     monkeypatch.setattr(cli, "parallel", parallel)
-    monkeypatch.setattr(KN, "KNOWN", dict(KNOWN))
-    monkeypatch.setattr(KN, "KNOWN_PIECES", {})
     return types.SimpleNamespace(tasks=tasks, order=order)
 
 
@@ -121,15 +115,15 @@ def _shards(capsys, tmp_path: Path, n: int, base: list[str]) -> tuple[list[Path]
 def test_combining_three_shards_gives_the_unsharded_run_s_report_verdict_and_output(stub, tmp_path, capsys):
     """Each shard runs only the targets its hash gives it, heaviest first, and writes its records unjoined; ``--combine`` of
     the three, in any order, prints what the unsharded ``--all`` prints, byte for byte, writes its report (its summary byte
-    for byte, every record but its timings) and exits as it does: here 1, on a new failure, a by-calls root whose callee is
-    another shard's and a known entry that no longer fails."""
+    for byte, every record but its timings) and exits as it does: here 1, on its failures, among them a by-calls root whose
+    callee is another shard's."""
     out = tmp_path / "r.json"
     base = ["--all", "--no-cache", "-q", "-j", "2"]
     whole = cli.main([*base, "--out", str(out)])
     said = capsys.readouterr().out
     rep = json.loads(out.read_text())
-    assert whole == 1 and "lowering/dead SynGone_v1" in said
-    assert f"by-calls/callee-failed {ROOT}" in " ".join(rep["summary"]["new_failures"])
+    assert whole == 1 and f"FAIL lowering/dead {CALLEE}" in said
+    assert f"by-calls/callee-failed {ROOT}" in " ".join(rep["summary"]["failure_names"])
     out.unlink()
 
     dirs, codes = _shards(capsys, tmp_path, 3, base)
@@ -144,7 +138,7 @@ def test_combining_three_shards_gives_the_unsharded_run_s_report_verdict_and_out
     for o in stub.order[1:]:                                                    # each shard's heavy targets first, heaviest first
         heavy = [t for t in o if t in HEAVY]
         assert o[:len(heavy)] == heavy == sorted(heavy, key=lambda t: -HEAVY[t])
-    assert [SH.shard_of("definition", t, 3) for t in (CALLEE, ROOT, "SynNew_v1")] == [1, 2, 3] and codes == [0, 0, 1]
+    assert [SH.shard_of("definition", t, 3) for t in (CALLEE, ROOT, "SynNew_v1")] == [1, 2, 3] and codes == [1, 0, 1]
 
     random.Random(3).shuffle(dirs)
     combined = cli.main(["--combine", *map(str, dirs), "-q", "--out", str(out)])
@@ -156,22 +150,21 @@ def test_combining_three_shards_gives_the_unsharded_run_s_report_verdict_and_out
     assert all(0 <= w["prologue_s"] <= w["wall_s"] for w in got["combined"]["walls"]), got["combined"]["walls"]
 
 
-def test_a_shard_fails_on_its_own_new_failures_and_only_the_combine_on_the_joined_ones(stub, tmp_path, capsys, monkeypatch):
-    """Without a new failure of its own, every shard passes, while the combined run fails as the unsharded one does: on the
-    by-calls root whose callee is in another shard, and on the known entry that no longer fails, which only the whole list
-    shows."""
+def test_a_shard_fails_on_its_own_failures_and_only_the_combine_on_the_joined_ones(stub, tmp_path, capsys):
+    """A shard fails on its own targets' failures alone: the by-calls root whose callee is in another shard passes in its own
+    shard, and the combined run fails it as the unsharded one does, which only the whole list shows."""
     stub.tasks[:] = [t for t in stub.tasks if t[1] != "SynNew_v1"]
     base = ["--all", "--no-cache", "-q", "-j", "2"]
     whole = cli.main(base)
     said = capsys.readouterr().out
-    dirs, codes = _shards(capsys, tmp_path, 3, base)
-    assert codes == [0, 0, 0] and whole == 1
+    assert whole == 1 and f"by-calls/callee-failed {ROOT}" in said
+    dirs, codes, shards = [], [], []
+    for k in (1, 2, 3):
+        dirs.append(tmp_path / f"shard{k}")
+        codes.append(cli.main([*base, "--shard", f"{k}/3", "--shard-dir", str(dirs[-1])]))
+        shards.append(capsys.readouterr().out)
+    assert codes == [1, 0, 0] and not any(f"by-calls/callee-failed {ROOT}" in o for o in shards)
     assert (cli.main(["--combine", *map(str, dirs), "-q"]), capsys.readouterr().out) == (whole, said)
-    monkeypatch.setitem(KN.KNOWN, f"by-calls/callee-failed {ROOT}", "the root's known join")
-    monkeypatch.delitem(KN.KNOWN, "lowering/dead SynGone_v1")
-    assert cli.main(base) == 0
-    said = capsys.readouterr().out
-    assert (cli.main(["--combine", *map(str, dirs), "-q"]), capsys.readouterr().out) == (0, said)
 
 
 def _refused(capsys, dirs, why: str) -> None:
