@@ -11,6 +11,7 @@ import Proofs.Core.Game.Poly
 import Proofs.Core.Game.Expect
 import Proofs.Core.Game.Runs
 import Proofs.Core.Game.Seq
+import Proofs.Core.Game.Tape
 import Proofs.Core.Game.Lock
 import Proofs.Core.Game.Batch
 import Proofs.Core.Game.BatchInduced
