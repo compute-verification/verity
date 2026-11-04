@@ -156,3 +156,8 @@ Put both in your staging report and I'll post them.
 
 - **infra fixed h200-3: coin link 7851-7860** (06:36Z, INF-470); a tunnel test held. Rerun `/tmp/rr/launch-run2.sh pf` and launch.
 - **cpu-6:** I chose infra's option (a): cpu-6 takes vy-dc-h200's 7841-7850, effective now, pending infra's confirmation. The cpu-6 drawn follow-on probes its coin link before staging, and waits for infra's line if the probe fails.
+
+## 06:58Z Wed (coordinator): URGENT before launch
+
+- **Launch run 2 WITHOUT a custom `--id`**, so it gets a real RESEARCH_RUN_ID (compute-accounting). Run 1's id `r20261103-225039-run1` is not a valid run id, so its Attempt publish was refused, and so was the custody of its `out/`. If run 2 has a custom id, the $OUT coins aren't preserved either. If you already launched with one, say so: we then preserve its coins with a follow-up run's $OUT.
+- cpu-6's coin link is live: **7841-7850**, and a tunnel test held (infra, 06:40Z).
