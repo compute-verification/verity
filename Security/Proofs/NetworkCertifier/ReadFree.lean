@@ -1,16 +1,22 @@
-import Definitions.NetworkCertifier.Guarantees.PeriodOnce
+import Definitions.Core.Assumptions
 import Proofs.NetworkCertifier.Period
 import Proofs.NetworkCertifier.RecordRows
 
 /-!
-# The network certifier's rows read back its lanes from `(r, D)` alone
+# The network certifier's rows read back its lanes from `(r, D)` alone, and the count that gives
 
-`Definitions.NetworkCertifier.Guarantees.PeriodOnce`. Connection `c`'s frames over the monitoring period's buckets, in
-bucket order (`RowsFormat.framesOf`), are its padding frames, `r` a bucket from its admission to `adm c + D`, then its
-lane's cells, which are in buckets from `adm c + D` on (`flatMap_range_append`). The padding numbers `r·D` whenever the
-lane has a cell in the monitoring period, and at most that otherwise (`length_flatMap_pad`), and a lane's cells in
-bucket order are the lane (`flatMap_range_filter`). So the lane is `c`'s frames past the first `r·D`
-(`RowsFormat.readFree_record`), whatever its admission and its number of cells.
+In the rows format (`Definitions.NetworkCertifier.RecordRows`) connection `c`'s frames over the monitoring period's
+buckets, in bucket order (`RowsFormat.framesOf`), are its padding frames, `r` a bucket from its admission to
+`adm c + D`, then its lane's cells, which are in buckets from `adm c + D` on (`flatMap_range_append`). The padding
+numbers `r·D` whenever the lane has a cell in the monitoring period, and at most that otherwise (`length_flatMap_pad`),
+and a lane's cells in bucket order are the lane (`flatMap_range_filter`). So the lane is `c`'s frames past the first
+`r·D` (`RowsFormat.readFree_record`), whatever its admission and its number of cells: a well-formed format reads the
+client's view back from the record and the schedule's `(r, D)` alone, where `RowsFormat.read` needs the whole schedule.
+
+So a period's count charges the schedule only for its `(r, D)` (`RowsFormat.encard_readFree_le`): the secrets a decoder
+recovers from the client's view, on schedules whose `(r, D)` is in `Θ` and which fit the format, with every window's
+observations in `A i`, number at most `#Θ · ∏_i #A_i`, in place of `#Ss · ∏_c (cap_c + 1) · ∏_i #A_i`. Each cell count
+and fail cell is then charged once, in the observations the window's content term counts.
 -/
 
 namespace NetTiming
@@ -163,103 +169,37 @@ theorem readFree_record [DecidableEq κ] (F : RowsFormat κ Cell L K) (hF : F.Wf
     congr 1
     omega
 
-end RowsFormat
-
-open Claims Claims.Sampling Finset
-
-section Deploy
-
-variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-/-- A window that meets `WindowGood` has its partition at its registration. -/
-theorem partition_of_windowGood {H : Msg → Msg} {D : Deploy Coin Col T} {L K S : ℕ}
-    {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ}
-    {Dj : ℕ} {s₀ : AuditStatement} {ρ : ℕ → Bool} {tops : AuditStatement → List (Opening Bool)} {x : Msg} {w : Wit}
-    {o : List (Obs L K S)} (h : WindowGood H D L K S lay k δ reg Dj s₀ ρ tops x w o) :
-    D.partition s₀ = some (D.part s₀) := by
-  obtain ⟨⟨s₁, P₁, hs₁, hP₁, -⟩, -, s, hs, ⟨-, -, -, -, -, hpart⟩, -⟩ := h
-  rw [Option.some_injective _ (hs₁.symm.trans hs)] at hP₁
-  rw [Deploy.part, ← hpart, hP₁]
-  rfl
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem encard_periodOnce_le (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (reg : AuditStatement → Finset ℕ)
-    (Dj : ℕ) {n : ℕ} (sw : Fin n → AuditStatement) (ρ : Fin n → ℕ → Bool)
-    (op : Fin n → ℕ → List (Obs L K S) → List Bool)
-    {Conn Cell Srv Dev Z : Type} (arr : Srv → Conn → Arrivals Cell) (F : RowsFormat Conn Cell L K) (hF : F.Wf)
-    (tap : Dev)
-    (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
+/-- **The count the read-back gives**: secrets on schedules whose `(r, D)` is in `Θ` and which fit the format, each
+recovered by `dec` from the client's view of the network certifier's run, whose code runs by `trusted-host` and records
+in `F`, and whose every window's observations are in `A i`, number at most `#Θ · ∏_i #A_i`: each secret's view is
+`readFree` of its schedule's `(r, D)` and its observations (`readFree_record`). -/
+theorem encard_readFree_le [DecidableEq κ] (F : RowsFormat κ Cell L K) (hF : F.Wf) {S n : ℕ} {Srv Dev Z : Type}
+    (arr : Srv → κ → Arrivals Cell) (tap : Dev)
+    (run : Dev → WardenSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
     (htrust : Verity.Assumptions.TrustedHost tap run fun p =>
       (wardenCode p.1 (arr p.2), F.record S n p.1 (arr p.2) (wardenCode p.1 (arr p.2))))
-    (Θ : Set (ℕ × ℕ)) (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv)
-    (dec : (Conn → List (ℕ × CellView Cell)) → Z)
-    (x : Z → Fin n → Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
-    (htap : ∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → TapOpens H D.commit (lay s) (k s) (op i) s (tops s)
-      ((run tap (schedOf z, srvOf z)).2 i)) :
-    {z | z ∈ Zs ∧ ((schedOf z).r, (schedOf z).D) ∈ Θ ∧ F.Fits S n (schedOf z) ∧
-        dec (run tap (schedOf z, srvOf z)).1 = z ∧
-        ∀ i, WindowGood H D L K S lay k δ reg Dj (sw i) (ρ i) tops (x z i) (wit z i)
-          ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
-      Θ.encard * ((∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card *
-        (faultySets (sw i).design (D.part (sw i)) δ).card *
-        2 ^ ((faultySets (sw i).design (D.part (sw i)) δ).sup (faultyBits (sw i).prog (D.part (sw i)))) *
-        Dj ^ k (sw i)) : ℕ) : ℕ∞) := by
+    (Θ : Set (ℕ × ℕ)) (schedOf : Z → WardenSchedule κ) (srvOf : Z → Srv) (dec : (κ → List (ℕ × CellView Cell)) → Z)
+    (A : Fin n → Set (List (Obs L K S))) (G : Set Z)
+    (hG : ∀ z ∈ G, ((schedOf z).r, (schedOf z).D) ∈ Θ ∧ F.Fits S n (schedOf z) ∧
+      dec (run tap (schedOf z, srvOf z)).1 = z ∧ ∀ i, (run tap (schedOf z, srvOf z)).2 i ∈ A i) :
+    G.encard ≤ Θ.encard * ∏ i, (A i).encard := by
   classical
-  set G := {z | z ∈ Zs ∧ ((schedOf z).r, (schedOf z).D) ∈ Θ ∧ F.Fits S n (schedOf z) ∧
-    dec (run tap (schedOf z, srvOf z)).1 = z ∧
-    ∀ i, WindowGood H D L K S lay k δ reg Dj (sw i) (ρ i) tops (x z i) (wit z i)
-      ((run tap (schedOf z, srvOf z)).2 i)} with hG
-  rcases G.eq_empty_or_nonempty with he | ⟨z₀, hz₀⟩
-  · rw [he, Set.encard_empty]
-    exact zero_le
-  have hP : ∀ i, D.partition (sw i) = some (D.part (sw i)) := fun i => partition_of_windowGood (hz₀.2.2.2.2 i)
-  let A : ∀ i : Fin n, Set (List (Obs L K S)) := fun i =>
-    AccSeqsSampled (sw i).prog (D.part (sw i)) (sw i).design (lay (sw i)) (k (sw i))
-      (AsReg (sw i).prog (lay (sw i)) (k (sw i)) (reg (sw i)) (ρ i)) δ (op i) Dj
-  have hgood : ∀ z ∈ G, ∀ i, (run tap (schedOf z, srvOf z)).2 i ∈ A i := fun z hz i =>
-    (mem_accSeqsSampled_of_windowGood (hP i) (htap z hz.1 i) (hz.2.2.2.2 i)).2
-  have hfits : ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)) := fun i =>
-    (mem_accSeqsSampled_of_windowGood (hP i) (htap z₀ hz₀.1 i) (hz₀.2.2.2.2 i)).1
   have hview : ∀ z ∈ G, (run tap (schedOf z, srvOf z)).1 =
       F.readFree ((schedOf z).r, (schedOf z).D) (run tap (schedOf z, srvOf z)).2 := fun z hz => by
     rw [htrust (schedOf z, srvOf z)]
     funext c
-    exact (F.readFree_record hF S n (schedOf z) hz.2.2.1 (arr (srvOf z)) c).symm
-  let V : Set (Conn → List (ℕ × CellView Cell)) :=
+    exact (F.readFree_record hF S n (schedOf z) (hG z hz).2.1 (arr (srvOf z)) c).symm
+  let V : Set (κ → List (ℕ × CellView Cell)) :=
     (fun p : (ℕ × ℕ) × (Fin n → List (Obs L K S)) => F.readFree p.1 p.2) '' (Θ ×ˢ Set.pi Set.univ A)
   have hsub : G ⊆ dec '' V := fun z hz =>
     ⟨(run tap (schedOf z, srvOf z)).1, ⟨(((schedOf z).r, (schedOf z).D), (run tap (schedOf z, srvOf z)).2),
-      ⟨hz.2.1, fun i _ => hgood z hz i⟩, (hview z hz).symm⟩, hz.2.2.2.1⟩
-  have hA : (Set.pi Set.univ A).encard ≤ ((∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
-      reg (sw i)).card * (faultySets (sw i).design (D.part (sw i)) δ).card *
-      2 ^ ((faultySets (sw i).design (D.part (sw i)) δ).sup (faultyBits (sw i).prog (D.part (sw i)))) *
-      Dj ^ k (sw i)) : ℕ) : ℕ∞) := by
-    calc (Set.pi Set.univ A).encard = ∏ i, (A i).encard := Set.encard_pi_eq_prod_encard
-      _ ≤ ∏ i, ((2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card *
-          (faultySets (sw i).design (D.part (sw i)) δ).card *
-          2 ^ ((faultySets (sw i).design (D.part (sw i)) δ).sup (faultyBits (sw i).prog (D.part (sw i)))) *
-          Dj ^ k (sw i) : ℕ) : ℕ∞) :=
-        Finset.prod_le_prod fun i _ => encard_accSeqsSampled_le _ _ _ _ _ (hfits i) δ _ _
-          (encard_asReg_le _ _ _ _ _) _ (fun _ hF => Finset.le_sup hF) (op i) Dj
-      _ = _ := (Nat.cast_prod _ _).symm
+      ⟨(hG z hz).1, fun i _ => (hG z hz).2.2.2 i⟩, (hview z hz).symm⟩, (hG z hz).2.2.1⟩
   calc G.encard ≤ (dec '' V).encard := Set.encard_le_encard hsub
     _ ≤ V.encard := Set.encard_image_le _ _
     _ ≤ (Θ ×ˢ Set.pi Set.univ A).encard := Set.encard_image_le _ _
     _ = Θ.encard * (Set.pi Set.univ A).encard := Set.encard_prod
-    _ ≤ _ := by gcongr
+    _ = Θ.encard * ∏ i, (A i).encard := by rw [Set.encard_pi_eq_prod_encard]
 
-/-- **The leak through the network certifier over a monitoring period, each bit charged once**:
-`Guarantees.PeriodLeakOnce`, from `sampledLeak_tap` with the registered inputs pinned (`adviceIn_asReg`), and
-`encard_periodOnce_le`. -/
-theorem periodLeakOnce : Guarantees.PeriodLeakOnce := by
-  intro Coin Col T _ _ _ _ _ H D hks L K S lay k δ decode hδ hdec reg Dj n sw ρ op Conn Cell Srv Dev Z arr F hF tap
-    run htrust Θ Zs schedOf srvOf dec x wit tops hb
-  exact ⟨fun m hm Ω _ _ P => TapProof.sampledLeak_tap H D hks hb L K S lay k δ decode hδ hdec _ Dj
-    (fun _ _ _ _ => adviceIn_asReg K _ _ _ _ _ _ _ _) tops m hm Ω P,
-    encard_periodOnce_le H D L K S lay k δ reg Dj sw ρ op arr F hF tap run htrust Θ Zs schedOf srvOf dec x wit tops⟩
-
-end Deploy
+end RowsFormat
 
 end NetTiming

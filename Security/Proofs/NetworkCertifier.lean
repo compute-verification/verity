@@ -1,7 +1,6 @@
 import Definitions.NetworkCertifier.Guarantees
 import Definitions.NetworkCertifier.Guarantees.Pooled
 import Definitions.NetworkCertifier.Guarantees.Period
-import Definitions.NetworkCertifier.Guarantees.PeriodOnce
 import Definitions.NetworkCertifier.Guarantees.PooledLeak
 import Proofs.NetworkCertifier.Lemmas
 import Proofs.NetworkCertifier.Occupancy
@@ -18,7 +17,7 @@ import Proofs.NetworkCertifier.PeriodSum
 import Proofs.NetworkCertifier.Pooled
 import Proofs.NetworkCertifier.TapRows
 import Proofs.NetworkCertifier.Period
-import Proofs.NetworkCertifier.PeriodOnce
+import Proofs.NetworkCertifier.ReadFree
 import Proofs.NetworkCertifier.PooledLeak
 import Proofs.NetworkCertifier.Schedule
 import Proofs.NetworkCertifier.PerWindow
@@ -122,7 +121,6 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
       (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ decode hδ hdec reg β Dj hβ).2 x hx s P hs hP op _⟩
 
 theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
-theorem PeriodLeakOnce : NetTiming.Guarantees.PeriodLeakOnce := NetTiming.periodLeakOnce
 theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe := NetTiming.horizonIncorrectBlocks
 theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.horizonLeak
 
