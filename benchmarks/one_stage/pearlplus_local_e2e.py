@@ -64,11 +64,8 @@ def _host(root: Path):
 
 
 def _alive(root: Path, session: str) -> bool:
-    try:
-        pid = int((root / f"{session}.pid").read_text())
-        return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0] != "Z"
-    except (OSError, ValueError, IndexError):
-        return False
+    pid = root / f"{session}.pid"
+    return pid.exists() and _alive_pid(int(pid.read_text()))
 
 
 def gate(root: Path, words: str) -> int:
@@ -142,11 +139,53 @@ def _logs(root: Path, out: Path) -> None:
         shutil.copytree(d, dest / "sessions" / d.parent.name, dirs_exist_ok=True)
 
 
+def _free_ports(n: int = 8) -> range:
+    """`n` consecutive ports of `auditor.PORTS` that nothing on this machine listens on: a session's challenger listens
+    on its open's port, and another run's may still hold the first."""
+    import socket
+    A = _auditor()
+    for start in range(A.PORTS.start, A.PORTS.stop - n):
+        try:
+            for port in range(start, start + n):
+                with socket.socket() as s:
+                    s.bind(("127.0.0.1", port))
+        except OSError:
+            continue
+        return range(start, start + n)
+    raise RuntimeError(f"no {n} free ports in {A.PORTS}")
+
+
+def _stop(root: Path) -> None:
+    """SIGTERM to each challenger this run started (its ``serve`` process and serve.py, its child) still running."""
+    import signal
+    for f in root.glob("*.pid"):
+        pid = int(f.read_text())
+        children = [int(p.name) for p in Path("/proc").iterdir() if p.name.isdigit() and _ppid(p) == pid]
+        for p in (*children, pid):
+            if _alive_pid(p):
+                os.kill(p, signal.SIGTERM)
+
+
+def _ppid(proc: Path) -> int | None:
+    try:
+        return int((proc / "stat").read_text().rsplit(")", 1)[1].split()[1])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _alive_pid(pid: int) -> bool:
+    try:
+        return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0] != "Z"
+    except (OSError, IndexError):
+        return False
+
+
 def run(out: Path) -> int:
     root = Path(tempfile.mkdtemp(prefix="pp-auditor-"))
     try:
         return _run(out, root)
     finally:
+        _stop(root)
         _logs(root, out)
 
 
@@ -169,7 +208,8 @@ def _run(out: Path, root: Path) -> int:
     host = A.Host(root=root / "var", peers=root / "peers", name=HOST, pins=root / "pins.jsonl")
     (root / "var" / "sessions").mkdir(parents=True)
     (root / "peers").write_text(f"{HOST} research@127.0.0.1\n{PEER} research@127.0.0.1\n")
-    (root / "coin-ports").write_text(f"{PEER} {A.PORTS.start}-{A.PORTS.stop - 1}\n")
+    ports = _free_ports()
+    (root / "coin-ports").write_text(f"{PEER} {ports.start}-{ports.stop - 1}\n")
     head = subprocess.run(["git", "-C", str(TREE), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     pin = head if len(head) == 40 else "e2" * 20
     (root / "pin").write_text(pin + "\n")
