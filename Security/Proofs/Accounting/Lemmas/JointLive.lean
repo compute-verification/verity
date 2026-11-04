@@ -1,4 +1,6 @@
-import Definitions.Accounting.Guarantees.JointLive
+module
+
+public import Definitions.Accounting.Guarantees.JointLive
 
 /-!
 # The joint guarantee over a causal game: a period, a horizon of periods, and server-time blocks: lemmas
@@ -7,6 +9,8 @@ The statements of `Definitions.Accounting.Guarantees.JointLive` that are steps o
 guarantees. Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same
 name, and audited with the proofs: no record pins it.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

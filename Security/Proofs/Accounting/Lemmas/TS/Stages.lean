@@ -1,4 +1,6 @@
-import Definitions.Accounting.Guarantees.TS.Stages
+module
+
+public import Definitions.Accounting.Guarantees.TS.Stages
 
 /-!
 # Sampled proofs under per-stage coins: lemmas
@@ -12,6 +14,8 @@ name, and audited with the proofs: no record pins it.
   (`RoundGame.BudgetAt`). The saving may depend on the coins before the draws, the luck's correlation across units is
   arbitrary, and no closure, LIN-STEER, STEER-1 or menu is read.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

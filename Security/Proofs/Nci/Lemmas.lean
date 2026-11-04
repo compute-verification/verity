@@ -1,9 +1,11 @@
-import Definitions.Nci.Assumptions
-import Definitions.Nci.Threads
-import Definitions.Core.Circuit
-import Definitions.Core.RegisteredCircuit
-import Definitions.Core.Partition
-import Definitions.Nci
+module
+
+public import Definitions.Nci.Assumptions
+public import Definitions.Nci.Threads
+public import Definitions.Core.Circuit
+public import Definitions.Core.RegisteredCircuit
+public import Definitions.Core.Partition
+public import Definitions.Nci
 
 /-!
 # The inference-only policy's lemmas
@@ -13,6 +15,8 @@ These are steps of proofs, not guarantees: they sit with the proofs, and no reco
 Each is a `def G : Prop` over `Protocol`'s definitions and the assumptions, proved as
 `Nci.SecurityProofs.G : Nci.Guarantees.G`.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

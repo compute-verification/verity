@@ -1,4 +1,6 @@
-import Definitions.Accounting.Guarantees.Sheet
+module
+
+public import Definitions.Accounting.Guarantees.Sheet
 
 /-!
 # What the data-sheet axioms give: lemmas
@@ -10,6 +12,8 @@ name, and audited with the proofs: no record pins it.
 * `SheetFacetCeilings`: (I1) on the data-sheet machine, from A1–A5.
 * `SheetScalarRouteHalf`: (I3) at the ½ floor (`q, q_T ≤ ½`, `b_T ≤ 0`), from A6 and the labelling's split.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

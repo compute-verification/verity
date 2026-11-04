@@ -1,4 +1,6 @@
-import Definitions.Nci.Guarantees.Activations
+module
+
+public import Definitions.Nci.Guarantees.Activations
 
 /-!
 # NCI's activations bound over all of training ([ACTIVATIONS-BOUND]): lemmas
@@ -7,6 +9,8 @@ The statements of `Definitions.Nci.Guarantees.Activations` that are steps of its
 guarantees. Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same
 name, and audited with the proofs: no record pins it.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

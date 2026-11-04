@@ -1,4 +1,6 @@
-import Definitions.Pouw.Guarantees.Game
+module
+
+public import Definitions.Pouw.Guarantees.Game
 
 /-!
 # The game's guarantees: lemmas
@@ -7,6 +9,8 @@ The statements of `Definitions.Pouw.Guarantees.Game` that are steps of its guara
 Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same name, and
 audited with the proofs: no record pins it.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees
 

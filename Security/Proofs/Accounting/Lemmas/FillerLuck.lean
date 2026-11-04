@@ -1,4 +1,6 @@
-import Definitions.Accounting.Guarantees.FillerLuck
+module
+
+public import Definitions.Accounting.Guarantees.FillerLuck
 
 /-!
 # The filler's per-check luck: lemmas
@@ -12,6 +14,8 @@ name, and audited with the proofs: no record pins it.
 * `FillerParityBalanced`: those four columns have uniform parity, so the statements below, stated at any balanced
   column, hold at each of them.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.FillerLuck
 

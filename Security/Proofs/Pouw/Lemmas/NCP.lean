@@ -1,4 +1,6 @@
-import Definitions.Pouw.Guarantees.NCP
+module
+
+public import Definitions.Pouw.Guarantees.NCP
 
 /-!
 # NCP's guarantees: lemmas
@@ -7,6 +9,8 @@ The statements of `Definitions.Pouw.Guarantees.NCP` that are steps of its guaran
 Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same name, and
 audited with the proofs: no record pins it.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.NCP
 

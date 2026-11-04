@@ -1,4 +1,6 @@
-import Definitions.Accounting.Guarantees.ServingBlocks.Witnesses
+module
+
+public import Definitions.Accounting.Guarantees.ServingBlocks.Witnesses
 
 /-!
 # The serving-block bound: honest and nontrivial lemmas: lemmas
@@ -7,6 +9,8 @@ The statements of `Definitions.Accounting.Guarantees.ServingBlocks.Witnesses` th
 rather than guarantees. Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem
 of the same name, and audited with the proofs: no record pins it.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.ServingBlocks
 

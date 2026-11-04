@@ -1,4 +1,6 @@
-import Definitions.Pouw.Guarantees.Receipt
+module
+
+public import Definitions.Pouw.Guarantees.Receipt
 
 /-!
 # The receipt folds duo's, fx1's and li's binding: lemmas
@@ -11,6 +13,8 @@ audited with the proofs: no record pins it.
 * `DuoPairAtStateNotInjective`: at width 32 with the keys of the served chain 0's first two words, one start state and
   two word pairs give one state.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.Receipt
 

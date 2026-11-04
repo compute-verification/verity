@@ -1,4 +1,6 @@
-import Definitions.Pouw.Guarantees.Dither
+module
+
+public import Definitions.Pouw.Guarantees.Dither
 
 /-!
 # The no-fold Dither protocol's work-soundness over a monitoring period: lemmas
@@ -10,6 +12,8 @@ audited with the proofs: no record pins it.
 * `FreedOfFloor`: the rounds' floor at the period's dual price bounds freed compute by `ε C` (weak duality); the step
   from the floor to `WorkSound`'s conclusion.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.Dither
 

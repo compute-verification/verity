@@ -1,4 +1,6 @@
-import Definitions.Accounting.Guarantees.HMu
+module
+
+public import Definitions.Accounting.Guarantees.HMu
 
 /-!
 # (H-μ⁺) from the coins: Lemma B, the point mass of fresh noise, and Lemma B′ for persistent patterns: lemmas
@@ -14,6 +16,8 @@ name, and audited with the proofs: no record pins it.
   state and in the word, if the pattern's first word is its only word before a committed checkpoint, the checkpoint's
   state is injective in the skipped value: (Inj) with `Z = 1`, and no differential term.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.HMu
 

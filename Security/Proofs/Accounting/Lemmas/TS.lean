@@ -1,4 +1,6 @@
-import Definitions.Accounting.Guarantees.TS
+module
+
+public import Definitions.Accounting.Guarantees.TS
 
 /-!
 # The tensor–scalar model's guarantee statements: lemmas
@@ -23,6 +25,8 @@ name, and audited with the proofs: no record pins it.
   `q ≥ 32(α + β·φ_del)/(β·ω)`.
 * `RoutesOffD2`: Corollary D2, routes off the binding facet.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

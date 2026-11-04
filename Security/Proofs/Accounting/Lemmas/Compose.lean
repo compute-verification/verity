@@ -1,4 +1,6 @@
-import Definitions.Accounting.Guarantees.Compose
+module
+
+public import Definitions.Accounting.Guarantees.Compose
 
 /-!
 # PoUW's credit on an arbitrary declared circuit: lemmas
@@ -20,6 +22,8 @@ name, and audited with the proofs: no record pins it.
 * `WholeLuckOfEntropy`: `SeedLuckAt`'s whole half from `WholeEntropyAt` (the optional entropy premise), at any rate
   whose per-tile moment at that entropy is at most `1`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Compose
 

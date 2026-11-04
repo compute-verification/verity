@@ -1,4 +1,6 @@
-import Definitions.Accounting.Guarantees.ComposePeriod
+module
+
+public import Definitions.Accounting.Guarantees.ComposePeriod
 
 /-!
 # PoUW's work over a monitoring period of `n` windows: lemmas
@@ -17,6 +19,8 @@ name, and audited with the proofs: no record pins it.
   (`Proofs.Accounting.ComposePeriod`): by induction on the game, conditioning on the first round's coins as
   `expect_weight_le` does, with the bound for every threshold `D` in the induction.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.ComposePeriod
 

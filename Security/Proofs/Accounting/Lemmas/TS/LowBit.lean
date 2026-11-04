@@ -1,4 +1,6 @@
-import Definitions.Accounting.Guarantees.TS.LowBit
+module
+
+public import Definitions.Accounting.Guarantees.TS.LowBit
 
 /-!
 # A one-register fold's low bit: lemmas
@@ -10,6 +12,8 @@ name, and audited with the proofs: no record pins it.
 * `OneRegisterLowBit`: a fold of binding steps on one register, each step's bit 0 a function of the state's and the
   word's bits 0 (as every T-function's is), has bit 0 the XOR of the start's and the words' bits 0 and a constant.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 
