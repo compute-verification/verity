@@ -61,8 +61,10 @@ theorem roundFree_close_ok (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) 
       obtain ⟨p1, p2, p3, p4⟩ := Ranked.close_other
       cases hl0 : s.l0
       · simp [Masker.label, Ranked.isLabel_self, p1, p2, p3, p4, hl0] at hq
+        cases hq
       · obtain ⟨hpos, hrho⟩ := hp hl0
         simp [Masker.label, Ranked.isLabel_self, p1, p2, p3, p4, hl0, hpos, hrho] at hq
+        cases hq
   have hm' : ∀ f ∈ Frame.label _root_.Flock.Zk.LABEL_CLOSE.toUTF8 :: fs, midFrame f := by
     intro f hf
     rcases List.mem_cons.1 hf with rfl | hf
@@ -404,6 +406,7 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
   rw [hst] at hts' hxs
   have hsch : tph.sch = (Masked.zkTab x j).sch := (Prod.mk.inj (Except.ok.inj (htp.symm.trans hz))).1
   have hk0P : tph.sch.k0 = (Masked.zkTab x j).sch.k0 := by rw [hsch]
+  have hlvP : tph.sch.levels.size = (Masked.zkTab x j).sch.levels.size := by rw [hsch]
   have htm : tph.st.m = (Masked.stAt x j).m := by rw [hts']; rfl
   have htk : tph.st.fold.kLog = (Masked.stAt x j).c.kLog := by rw [hts']; rfl
   have hdg : tph.st.digest.size < 2 ^ 64 := by
@@ -537,7 +540,7 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
     rw [show a + 1 = alg.size + (xs.size + 2) + 1 + (tph.sch.k0 + 3) + 1 by omega] at hA''
     obtain ⟨-, -, -, hps, hrh⟩ := RhoKeep.repState_closeIn hcc hal (by rw [htm]; omega) hdg (placeholder_cap hph0)
       hdomP hmkt (by rw [hxs]; exact hXb) htp' hlay hc' hord
-      (by rw [Array.size_map, Array.size_range]; omega) hA''
+      (by rw [Array.size_map, Array.size_range]) hA''
     exact ⟨hps, hrh⟩
   -- the frame takes it
   refine schedTaken_of hA hin ?_
