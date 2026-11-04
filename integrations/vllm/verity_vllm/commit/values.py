@@ -123,15 +123,15 @@ class Committed:
         return (self.session + struct.pack(">I", self.index) + self.domain + struct.pack(">Q", self.n)
                 + bytes([SCHEMAS.index(self.schema)]) + self.root + self.tag)
 
-    def path(self, i: int) -> bytes:
-        """Leaf ``i``'s frame-v3 path: its siblings, leaf level first, 64 bytes each."""
+    def path(self, i: int) -> tuple[bytes, ...]:
+        """Leaf ``i``'s frame-v3 path: its siblings, leaf level first."""
         if not 0 <= i < self.n or not self.levels:
             raise IndexError(f"leaf {i} of a table of {self.n} whose levels this side holds" if self.levels else "no levels held")
-        out = b""
+        out = []
         for level in self.levels[:-1]:
-            out += level[i ^ 1]
+            out.append(level[i ^ 1])
             i >>= 1
-        return out
+        return tuple(out)
 
 
 @dataclass(frozen=True)

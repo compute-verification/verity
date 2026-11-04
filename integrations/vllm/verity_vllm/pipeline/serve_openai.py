@@ -58,7 +58,7 @@ listens, under bounded staging, the committer learns its declared static shape's
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds, and the public
 record of the step rows it ran, committed at its close under its run root for the compile slice, `serve_commit.commit_served`,
-whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
+whose rows and salts, or under ``FC_FIREWALL_VALUES`` the value service's ``b ‖ c``, go to ``served_rows/w<k>.json``), ``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
 body's ``user``, its release and its place among the engine's adds, the runner's ids, the prompt ids, the streamed ids, its
 ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
 `serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
