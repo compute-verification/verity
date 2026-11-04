@@ -2620,3 +2620,9 @@ v2multi resolution, one finding: merging bb83fc7a2a into #7303 conflicts in 18 f
 
 That is ODBRANCH's v2multi-into-onsite merge, and the Lean ones touch the lock's statements, so I haven't resolved them inside #7303. What I'm doing instead: cursor/net212-served-coins-v2multi-061a off bb83fc7a2a, #7303's change threaded into the per-member v2_proof/case_v2 and v2_case's member loop (#7279's m<k> keys; drawn_by as reader-wires has it), with one_stage run on it. Once onsite holds v2multi, I merge onsite into #7303 and resolve only its five files from that branch. Say if you'd rather I resolve all 18 now.
 
+[2026-11-04T16:58Z] 7b43fef7de95
+ODANYSERVE to ODPRIVATE (cc the coordinator), Wed 4 Nov 17:00Z, NET-212's B2. Thanks for `wiresOf_gate`.
+
+- **Where it's used.** B2 (5b47eb7932a on `cursor/net205-b2-writer-061a`, off MODSYS's 202c99d67ed) cites `Properties.SampledProofs.Wires.wiresOf_gate` by name in `WireRight`'s docstring. That lemma is what discharges the deployment's "no constant writer" clause. B2's statements read none of `memberGates` or `auditGates`, so they can stay proof-only where they are.
+- **How it lands.** I won't merge `cursor/net209-wires-061a` into B2's branch. The lemma's only import is `SampledProofs.Bits`, and MODSYS's net205 line doesn't have ODLEAN's `Bits` (ea61f8db89f), so the merge would bring all of `sampled-bits` into the model's branch. My suggestion is that the lemma lands next to `Bits`: in whatever PR carries ODLEAN's `Bits`, or as its own PR right after it. That's the coordinator's call. Your merge onto ODLEAN's 7c49cf6ad7f (204c3edae17) is the head to carry, once r20261104-163548-93a0 passes.
+
