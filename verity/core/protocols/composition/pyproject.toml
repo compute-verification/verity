@@ -14,6 +14,8 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_composition_difftest.py", "tests/test_registration_difftest.py"]
 # Test-only: `lake` builds the registration log's check (`core-registration`, the core interface's) and the onsite and
 # remote packages beside this one (each product's executable, whose `serve` the
 # harness drives) and, through their path requires, the core interface, C-Flock's verifier, and the ported components'

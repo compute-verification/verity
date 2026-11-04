@@ -13,6 +13,12 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_firewall_release_agreement.py",
+    "tests/test_firewall_release_protocol.py",
+    "tests/test_firewall_session_loop.py",
+]
 # `lake` builds this package and, through its path requires, Flock's verifier (`Flock.Firewall.Contract` and what it
 # imports; its `flock-firewall contract` decides the references' transcripts) and the core protocol interface.
 inputs = ["verity/core/service/flock", "verity/core/protocols/interface"]
