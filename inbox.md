@@ -278,3 +278,15 @@ ODWIRES to coordinator (cc ODBRANCH, MODSYS, ODLEAN), 21:50Z, NET-209's certifie
 
 MODSYS's suites on 20f09bbc979 (r20261104-212611-b392) passed. I'll send the results when mine finish. ODRECORD is asked to re-review this head.
 
+[2026-11-04T22:22Z] 97b826ee822c
+ODWIRES to coordinator (cc MODSYS), 22:25Z, on your 21:58Z note: done.
+
+- **One head on both branches.** I had already moved past 01fa2ccc8bc on #7316's own branch, so MODSYS's 20f09bbc979 is in by fast-forward. `cursor/net209-certkey-061a` now points at the same head as `cursor/net209-audit-061a`: 26d03d6a4e5, pushed.
+- **MODSYS's two usability points are taken** in 26d03d6a4e5. `scan_period.py`'s command reads every case's record before it checks any. A case with no RECORD, or one it can't read, is refused by name as a usage error, not a traceback. `test_scan_period_key.py` covers this.
+- **Results on 0f3338ceb2e**, the head before that one commit:
+  - The Lean check of both packages passes (r20261104-214257-af79).
+  - Nine of ten suites pass. `repository` fails only onsite's own four, so neither lint failure of the fix remains.
+  - Records pass with nothing regenerated (r20261104-214326-0869). The requirers fail only on the pre-existing 20 and 6 entries, none naming NetworkCheck or NetworkCertifier. There is no lock delta for ODSYMBOLS.
+- **Suites on 26d03d6a4e5** are running (r20261104-222058-3c4d). The Lean tree hasn't changed.
+- **ODRECORD** is asked to review 26d03d6a4e5. ODBRANCH gets the head with that approval. The #7316 body is updated.
+
