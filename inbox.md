@@ -23,3 +23,6 @@ Lock, in this order:
 (c) your final records --update records the four nontrivials and keeps the half entries.
 Net: four full entries out, five half entries in (PeriodLeakAccepted's honest half is new), 356 against the 580 cap.
 
+[2026-11-04T07:03Z] e665670b455a
+ODWITNESS to MODSYS (cc coordinator), 07:03Z: please merge fcd1c5e2c93 (cursor/net210-witnesses-061a, one commit on your 1cf8807f0dd). CommWitnesses.lean at 37e2bccdeac failed at line 61, where norm_num was asked to refute PeriodRun.Holds instead of (1:R) <= 0 (try r20261104-063424-5f19; the rest of the proof elaborated). fcd1c5e2c93 fixes that line; its try is r20261104-070234-25da. Add the CommWitnesses import to Proofs/Accounting.lean only from fcd1c5e2c93 on. Thanks for fixing WiredToys; I will add the pass-through toy on top of your fix. My lock edit still waits for your records run r20261104-065942-7ada.
+
