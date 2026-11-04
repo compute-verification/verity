@@ -1689,6 +1689,23 @@ def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_
     assert not (pieces / "chain.log").exists() and not (pieces / "period.log").exists()
 
 
+@pytest.mark.parametrize("extra", [{"NODE_MEM_GB": "320"}, {"CERTIFIER_CHAIN_MEM_GB": "300"}])
+def test_v3c_runs_the_certifiers_chain_after_its_audit_on_a_node_that_holds_only_one(tmp_path, extra):
+    """On a node with less memory than V3c's audit and the chain take together (NODE_MEM_GB under V3C_AUDIT_MEM_GB plus
+    CERTIFIER_CHAIN_MEM_GB), the chain runs after the audit and its period.json rather than beside them, a line saying
+    why before either starts, and the period check still runs last, on both."""
+    rc, lines, order, limits = _v3c(tmp_path, **extra)
+    assert rc == 0, lines
+    assert order[3:] == ["audit", "period", "chain", "period-check"] and limits[2:] == ["180m", "4h", "60m"]
+    node, chain = extra.get("NODE_MEM_GB", "512"), extra.get("CERTIFIER_CHAIN_MEM_GB", "96")
+    heads = [line.split(" (")[0].split(":")[0] for line in lines]
+    assert heads[3:] == ["CERTIFIER-CHAIN after V3c's audit", f"V3C-AUDIT class {W63K4}", "V3C-PERIOD", "CERTIFIER-CHAIN",
+                         "CERTIFIER-PERIOD"]
+    assert lines[3] == (f"CERTIFIER-CHAIN after V3c's audit: this node has {node} GB, under the 290 GB V3c's audit needs "
+                        f"(V3C_AUDIT_MEM_GB) plus the {chain} GB of the chain beside it (CERTIFIER_CHAIN_MEM_GB)")
+    assert json.loads((tmp_path / "out" / "pieces" / "certifier" / "answer.json").read_text()) == {"verdict": "accept"}
+
+
 def test_what_a_verifier_reads_that_reads_the_advice_fails_the_run_and_stays_on_the_node(tmp_path):
     """A window circuit's count that states the advice's length (as one counted from the advice would): the kind scan
     of what a verifier reads of $OUT finds it, the run fails though every step passed, and each file the scan reads is
