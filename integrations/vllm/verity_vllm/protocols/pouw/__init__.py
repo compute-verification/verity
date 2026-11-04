@@ -173,7 +173,8 @@ class Settings:
     #: ``decode_query_len`` orders a step's rows, `pouw_h1_requests.batch_order`), whose ``execute_model`` gets each step's
     #: scheduler output, the requests it admits and schedules among it; and the window's round coins, a `LiveRecord` over a
     #: live challenger's round family (`verity.core.protocols.pouw.window.live_challenger`), which opens round s's coin
-    #: after round s's root
+    #: after round s's root.  Pearl-C's device path ends each pass at that ``execute_model`` too
+    #: (`pearl_c.passes.hook_steps`), for a caller whose committer patched it before the option's install
     runner: Any = None
     rounds: Any = None
     #: H1's salt and round coins (``ncp-v2``'s and Pearl-C's salt) from the auditor host's challenger, ``HOST:PORT``
@@ -694,7 +695,7 @@ def install(scheme: str, target: Target) -> Option:
         for w, layer in enumerate(layers):
             h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
         if device:
-            PP.hook_steps(h, run, PPD.CALL_CAPACITY, settings.transcript_dir)
+            PP.hook_steps(h, run, PPD.CALL_CAPACITY, settings.transcript_dir, settings.runner)
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, end_pass=run.end_pass if device else None,
                   release=run.finish if session is None else lambda: PHW.finish(run, session))
 
