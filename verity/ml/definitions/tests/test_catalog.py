@@ -92,6 +92,10 @@ COUNT += 1  # `ref_prims`' F32LogRn_v1, a line of its own so it merges with any 
 
 COUNT += 3  # `boolean_scalar`'s F32MaxRef_v2, F32Sqrt_v2 and I64ToI32_v2, a line of its own so it merges with any other change
 
+COUNT += 1  # ops' `HopperBF16WgmmaDot16_v3`, a line of its own so it merges with any other change to the count
+
+COUNT += 4  # `cublas_bf16`'s `HOPPER_STEP_V3`, the four `HopperBf16Dot16Step*_v2`
+
 
 def test_the_catalog_loads_every_definition_and_no_other():
     got = fresh()
