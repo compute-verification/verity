@@ -617,6 +617,10 @@
    "honest": ["Properties.NetworkPeriod.wrongBoundsDrawn_honest"],
    "nontrivial": "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial"
   },
+  "Properties.SampledProofs.SecurityProofs.strataDerived": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.strataDerived_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.strataDerived_nontrivial"
+  },
   "Properties.RemoteAudit.codeLayoutTiles": {
    "honest": ["Properties.RemoteAudit.codeLayoutTiles_honest"],
    "nontrivial": "Properties.RemoteAudit.codeLayoutTiles_nontrivial"
@@ -4406,6 +4410,15 @@
    "assumptions": [],
    "type_hash": "303f59f6e5d086c022bcd5f65d8494f0da4a42aa9cb9b2d7b80aaba186bfc119"
   },
+  "Properties.SampledProofs.SecurityProofs.strataDerived": {
+   "owner": "@network-accounting"
+  },
+  "Properties.SampledProofs.SecurityProofs.strataDerived_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.SampledProofs.SecurityProofs.strataDerived_nontrivial": {
+   "owner": "@network-accounting"
+  },
   "Properties.SampledProofs.acceptMeans": {
    "owner": "@proofs",
    "signature": ["Properties.SampledProofs.acceptMeans : Properties.SampledProofs.AcceptMeans"],
@@ -5539,6 +5552,12 @@
    },
    "Properties.SampledProofs.SecurityProofs.drawMisses": {
     "function": "SampledProofs.Slots.select",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.strataDerived": {
+    "function": ["SampledProofs.Slots.layout", "Properties.SampledProofs.slotDesign", "SampledProofs.Partition.units",
+     "SampledProofs.Select.Rule.lawOver", "SampledProofs.Draw.derive", "SampledProofs.Record.profileDraw",
+     "SampledProofs.Bound.strataOf"],
     "outcome": "accept"
    },
    "Properties.Requirement.topological": {

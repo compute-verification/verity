@@ -1,4 +1,6 @@
 import Definitions.Claims.Sampling
+import Definitions.Claims.Sampling.Strata
+import SampledProofs.Record
 import SampledProofs.Slots
 
 /-!
@@ -19,6 +21,11 @@ and its bytes, and every input is in it, the `L` bytes included, however few.
 
 `DesignWellFormed`: that design is well formed on that partition (the claims' `Design.WellFormed`), so its `P_a` is a
 probability, wherever both are given; the draw's own refusals make it so, and it takes no premise either.
+
+`StrataDerived`: where the one-stage audit reads the law the draw ran as strata (`Bound.strataOf` of the profile's draw,
+`Record.profileDraw`, of the law `Draw.derive` expands, as `OneStage.check` reads them for its bound), that design draws
+those strata on that partition, the input class drawn whole after them (the claims' `StrataDrawn`): the strata whose
+count bound the audit publishes (`Bound.boundOf`) are the ones the draw ran. It takes no premise either.
 -/
 
 open Lean (Json)
@@ -92,5 +99,19 @@ def DesignWellFormed : Prop :=
   ∀ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (l : Slots.SlotOrder)
     (D : Claims.Sampling.Design),
     Slots.layout d query = .ok l → slotDesign rule d query table = .ok D → D.WellFormed (slotPartition l)
+
+/-- **The strata the audit publishes are the ones the draw ran**: wherever `Slots.layout` lays out `d` under `query`,
+`slotDesign` gives the design `D`, and the one-stage audit reads the rule's law over the population `n` as strata (the
+law `Draw.derive` expands, the profile's draw of it, `Record.profileDraw`, and that draw's strata, `Bound.strataOf`, as
+`OneStage.check` reads them for its bound), `D` draws those strata on the layout's partition, with the input class's
+`|inputGates|` proof blocks drawn whole after them (the claims' `StrataDrawn`). -/
+def StrataDerived : Prop :=
+  ∀ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (l : Slots.SlotOrder)
+    (D : Claims.Sampling.Design) (n : ℕ) (named law : Json) (draw : Core.SamplingDesign) (strata : Array Core.Stratum),
+    Slots.layout d query = .ok l → slotDesign rule d query table = .ok D → Partition.units d query = .ok n →
+    rule.lawOver n = .ok named → Draw.derive d query named table = .ok law → Record.profileDraw law = some draw →
+    Bound.strataOf n draw = some strata →
+    Claims.Sampling.StrataDrawn D (slotPartition l)
+      ((strata.toList.map fun x => (x.size, x.k)) ++ [(Slots.inputGates d.desc).size].map fun m => (m, m))
 
 end Properties.SampledProofs
