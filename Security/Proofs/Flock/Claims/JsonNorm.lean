@@ -3,14 +3,13 @@ module
 public import Flock.Canon
 public import Flock.Norm
 public import Std.Data.TreeMap.Raw.WF
-public import Definitions.Claims.Json
+public import Proofs.Flock.Claims.Complete.Json.Value
 public import Proofs.Flock.Claims.JsonEq
 
 /-!
 # The rebuilt draw: one value per equivalence class
 
-`Json.parse` builds an object's tree in the order its keys arrived, and no proof sees into it (`parse` is a `partial
-def`), so two draws that `drawEq` passes on (`JsonEquiv`: the same fields, whatever their order) can be different terms
+`Flock.JsonParse.parse` builds an object's tree in the order its keys arrived, so two draws that `drawEq` passes on (`JsonEquiv`: the same fields, whatever their order) can be different terms
 (`FlockDeploy.KS.drawEq_ne`). Where the verifier keeps a draw, the record's (`Exec.recordDraw`) and the statement's
 (`Raw.ins`), it keeps `Flock.norm` of what it parsed: every object rebuilt by inserting its fields into an empty map,
 and that map's fields into another. So:

@@ -26,6 +26,7 @@ public import Flock.DeriveCheck
 public import Flock.Layout
 public import Flock.Net
 public import Flock.Tags
+public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -51,7 +52,7 @@ def split (tags : Tags) (bytes : ByteArray) : V (Array String × String × Json)
   let name := (head.drop (tags.fileFormat.length + 1)).toString
   let metaLine := (lines.getD 1 "").trimAsciiEnd.toString
   if !metaLine.startsWith "META " then throw "circuit: no META line"
-  let mj ← match Json.parse (metaLine.drop 5).toString with
+  let mj ← match JsonParse.parse (metaLine.drop 5).toString with
     | .ok j => pure j
     | .error e => throw s!"META: {e}"
   let mut at_ := 2
