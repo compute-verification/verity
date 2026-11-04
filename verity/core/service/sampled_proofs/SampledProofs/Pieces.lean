@@ -24,6 +24,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `file_part`: the circuit file's summary at `n` units (`FilePart.ofCircuit`), served the same way (`filePartWith`);
 * `file_population`: why the registration's population over a program and query is not a public file's units in order
   (`FilePart.why`);
+* `file_unit_class`: the bits each of a circuit file's units commits, from its owned sources and its unit net's returned
+  output columns, and why they fit no public size class (`FilePart.classWhy`);
 * `bound`: the exact bounds on wrong units at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
@@ -585,6 +587,7 @@ def table : List (String × (Json → V Json)) :=
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select),
    ("file_population", FilePart.piece),
+   ("file_unit_class", FilePart.classPiece),
    ("check_proved", checkProved),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),

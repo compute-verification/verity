@@ -23,6 +23,10 @@ soundness (`SampledKSLiveV3`, and `SampledKSLiveV5` at a shared-row public file)
 
 `population_why` mirrors the v2 audit's check that the public file's units are the registration's population in order
 (`SampledProofs.FilePart.why`), which `verify` applies to the one-stage audit's statement when handed its strata.
+`unit_class_why` mirrors the v2 audit's check that each of the circuit file's units fits a public size class
+(`SampledProofs.FilePart.classWhy`), on the sources a unit owns and the returned output bits it holds (`file_out_bits`).
+`verify` doesn't apply it: the sources a unit owns are read off the unit's rows, which only Lean parses here, so the v2
+audit refuses such a circuit file alone, and its difftest (`file_unit_class`) holds the two to each other.
 
 The verifier reads the whole circuit file once a call, in time and memory linear in it (about six times the file at
 peak), then O(proof) a session: so a protocol verifies one statement a stratum, every sampled proof block of it an instance.
@@ -48,10 +52,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from .partition import UNIT_CLASS_MAX, unit_class
 from .verifier import BUILD_LOCK, CORE
 from .verifier import PACKAGE as V2_PACKAGE
 
 PACKAGE = CORE.parents[1] / "verity/core/service/flock"
+#: `Flock.WORD`: a circuit slot's columns a word
+WORD = 128
 EXE = "flock-verify"
 #: the statement every sampled proof block's session proves
 STATEMENT = "verity/flock-circuit"
@@ -189,6 +196,27 @@ def population_why(indices: Sequence[int], strata: Sequence[tuple[str, Sequence[
     if list(indices) != list(range(at)):
         return f"partition: the public file's {len(indices)} units are not the registration's {at}, in order"
     return None
+
+
+def file_out_bits(in_words: int, const_pos: int, out_col: int, outs: Sequence[int]) -> int:
+    """`SampledProofs.FilePart.outBitsAt`: the returned output bits each of a circuit file's units holds, at its unit
+    net's ``in_words``, ``const_pos`` and returned-output group's first word ``out_col``, its copies returning ``outs``
+    output leaves each: a copy's columns ``out_col · WORD + 16 j + t`` (``j`` below its count, ``t < 16``) that are
+    computed rows, from ``min(in_words · WORD, const_pos)`` to ``const_pos``."""
+    n_in = min(in_words * WORD, const_pos)
+    lo = out_col * WORD
+    return sum(max(0, min(lo + 16 * k, const_pos) - max(lo, n_in)) for k in outs)
+
+
+def unit_class_why(srcs: int, out_bits: int) -> str | None:
+    """`SampledProofs.FilePart.classWhy` at `unitBits`: why each of a circuit file's units, committing the ``srcs``
+    sources it owns and the ``out_bits`` returned output bits it holds (`file_out_bits`), fits no public size class
+    (`partition.unit_class`); None when it fits."""
+    bits = srcs + out_bits
+    if unit_class(bits) is not None:
+        return None
+    return (f"partition: each of the circuit file's units commits {bits} bits, more than the widest class, "
+            f"{UNIT_CLASS_MAX}")
 
 
 def proved_units(public: Path, session: Path) -> tuple[int, ...]:
@@ -367,6 +395,7 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
         raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
 
 
-__all__ = ["EXE", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "Finding", "LeanError", "Proof",
-           "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "population_why", "proved_units",
-           "reads_registered", "v2_executable", "verdicts_v2", "verify"]
+__all__ = ["EXE", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "WORD", "Finding", "LeanError",
+           "Proof", "check_v2", "evidence_v2", "executable", "file_out_bits", "file_sha512", "ks_form_why",
+           "population_why", "proved_units", "reads_registered", "unit_class_why", "v2_executable", "verdicts_v2",
+           "verify"]
