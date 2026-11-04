@@ -1410,6 +1410,30 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     assert rec["legs"]["pouw"]["quantity"] == {"symbol": "W_cert", "value": 5400, "unit": "work", "tiles": 40}
 
 
+def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_tie(tmp_path, monkeypatch, capsys, live):
+    """Sampled proofs' records audit (``--sampled-proofs``) is the step units' audit, chained after no W; the window tied
+    to W, its registration chained right after W and its audit tied to W, is another (``--window-tie``), which the record
+    reads Pearl+'s tie from. Without ``--window-tie`` it reads the step units' and composes pending, naming the chain."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    pieces, tied, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
+    (steps := tmp_path / "steps" / "windows" / "rank0").mkdir(parents=True)
+    (steps / "registration.json").write_text(json.dumps({"format": REG.FORMAT_V2, "previous": None, "registered": []}))
+    (tmp_path / "steps" / S.AUDIT_SUMMARY).write_text(json.dumps({}))
+    (tmp_path / "serve").mkdir()
+    base = ["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
+            str(tmp_path / "steps"), "--pieces", str(pieces), "--node", "vy-dc-h200", "--product", "remote",
+            "--key-sha512", pin, "--lane", lane]
+    S.main([*base, "--out", str(tmp_path / "untied")])
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    assert (line["composed"], line["verdicts"]["PoUW"]) == ("pending", S.DEV_VERDICT)
+    assert "the window's registration R is chained after None..." in line["missing"]["PoUW"]
+    assert S.main([*base, "--out", str(tmp_path / "tied"), "--window-tie", str(tied)]) == 0
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    assert (line["composed"], line["verdicts"]["PoUW"], line["check"]) == ("accept", "accept", {})
+
+
 @pytest.mark.parametrize("case, why", [
     ("in-process coins", "its epoch's coins come from 'in-process', not a live session on the auditor host's challenger"),
     ("session refused", "the live session's check refused its passes: pass 2: coin: bad"),
