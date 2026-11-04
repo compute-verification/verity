@@ -695,3 +695,7 @@ Name its verdict line in the record. I'm retiring pp-row.
 ## 17:34Z Wed (coordinator): remote is 9d24f9b664e
 
 `remote` is 9d24f9b664e: 13b5e6bdba2 plus compute-accounting's lint fixes. verity-vllm has no reds now. Rebase pprecord onto it.
+
+## 17:38Z Wed (coordinator): checkpoint note now
+
+The agent watch flags you (last note 14:27Z). Write a checkpoint note under `lanes/vllm/` now with pprecord's head and the sampled-proofs tie's state, sync it (`research notes sync --path lanes/vllm`), and keep one at least hourly.
