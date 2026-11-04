@@ -440,12 +440,12 @@ def public_doc(text: str, form: Callable[[Any], Any] = public_json) -> str:
 
 
 def publish(out: Path, private: Path, received_scanned: bool = False) -> list[str]:
-    """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
-    `PUBLISH_MAX` keeps from being read, held whole, and one whose text names or counts a window (`public_doc`) held in
-    full, under ``private`` at its path under ``out``, its public form left in its place. A file that isn't UTF-8 text
-    stays. What a verifier reads (`RECEIVED`) is held whole unless ``received_scanned`` (the kind scan found every
-    field of it one of the public kinds), and then keeps every key and value but its text's (`public_strings`), which a
-    digest or the record reads as written. The paths held, in order."""
+    """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, that
+    `PUBLISH_MAX` keeps from being read, or that isn't UTF-8 text (named on stderr), held whole, so nothing unscanned
+    stays in ``out``, and one whose text names or counts a window (`public_doc`) held in full, under ``private`` at its
+    path under ``out``, its public form left in its place. What a verifier reads (`RECEIVED`) is held whole unless
+    ``received_scanned`` (the kind scan found every field of it one of the public kinds), and then keeps every key and
+    value but its text's (`public_strings`), which a digest or the record reads as written. The paths held, in order."""
     held: list[str] = []
     for p in sorted(out.rglob("*")):
         if p.is_symlink() or not p.is_file():
@@ -462,6 +462,9 @@ def publish(out: Path, private: Path, received_scanned: bool = False) -> list[st
             continue
         text = data.decode(errors="replace")
         if text.encode() != data:
+            shutil.move(p, dst)
+            held.append(rel)
+            print(f"PUBLISH: {rel} held whole, unscanned: not UTF-8 text", file=sys.stderr, flush=True)
             continue
         pub = public_doc(text, public_strings if received else public_json)
         if pub != text:

@@ -197,11 +197,12 @@ def test_a_published_line_names_no_window_and_counts_none_of_a_windows_own(tmp_p
 def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_public_form(tmp_path, capsys, scanned):
     """`publish`, once the run is done: a file whose path names a window is held whole in the serve dir's private/out, one
     whose text or JSON names or counts a window is held there in full with its public form left in out/, and the rest,
-    the bench Build's requests by name, a window named ``all`` and a binary file among them, stay byte for byte. What a
-    verifier reads (`RECEIVED`: the advice registration, the certifier's answer and case, and V3c's period audit) is held
-    whole unless the kind scan found it clean (``--received-scanned``), and then keeps every key and value, the period's
-    ``steps`` and the case's ``windows`` among them, only its text in public form. Then out/ names no window, counts none
-    of a window's own but what a verifier reads, and a second pass holds nothing."""
+    the bench Build's requests by name and a window named ``all`` among them, stay byte for byte; a binary file, which no
+    scan reads, is held whole. What a verifier reads (`RECEIVED`: the advice registration, the certifier's answer and
+    case, and V3c's period audit) is held whole unless the kind scan found it clean (``--received-scanned``), and then
+    keeps every key and value, the period's ``steps`` and the case's ``windows`` among them, only its text in public form.
+    Then out/ names no window, counts none of a window's own but what a verifier reads, and a second pass holds
+    nothing."""
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
     case = {"params": {"windows": 4, "link": "certified"}, "commitment": "ab" * 8}
     files = {
@@ -250,7 +251,8 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
     assert json.loads((out / "serve" / "period.json").read_text()) == {"close": {"body": {}}, "rows": 512}
     assert (out / "verdicts.txt").read_text() == ("SERVE stopped (exit 0): window(s) closed, sealed\n"
                                                   "COMPOSITE CASE verity/pous/p2/v4/run accept\n")
-    assert gzip.decompress((out / "serve" / "h1" / "window-program.json.gz").read_bytes()) == b'{"rows": 512}'
+    assert gzip.decompress((private / "serve" / "h1" / "window-program.json.gz").read_bytes()) == b'{"rows": 512}'
+    assert not (out / "serve" / "h1" / "window-program.json.gz").exists()
     assert S.publish(out, private, scanned) == []
 
 
@@ -389,6 +391,18 @@ def _accepted() -> dict:
 
 def _rows(integrity: dict, pieces: Path) -> dict:
     return {"integrity": integrity, **{k: S.piece_row(k, pieces) for k in S.PIECES}, "wipe": S.piece_row("wipe", pieces)}
+
+
+def test_publish_holds_whole_each_file_it_cant_scan_because_it_isnt_text_and_names_it_on_stderr(tmp_path, capsys):
+    """A file that isn't UTF-8 text, which no scan reads, leaves out/: it is held whole in private at its path, listed
+    among the held, and `publish` says so on stderr, with why."""
+    out, private = tmp_path / "out", tmp_path / "private"
+    (out / "serve").mkdir(parents=True)
+    (out / "serve" / "program.json.gz").write_bytes(gzip.compress(b'{"rows": 512}'))
+    assert S.publish(out, private) == ["serve/program.json.gz"]
+    assert gzip.decompress((private / "serve" / "program.json.gz").read_bytes()) == b'{"rows": 512}'
+    assert not (out / "serve" / "program.json.gz").exists()
+    assert capsys.readouterr().err == "PUBLISH: serve/program.json.gz held whole, unscanned: not UTF-8 text\n"
 
 
 def test_sampled_proofs_alone_composes_to_a_pending_block_record(tmp_path):

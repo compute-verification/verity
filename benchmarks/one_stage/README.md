@@ -215,12 +215,24 @@ negatives.
   with its why where the run has no answer. Beside them are the network certifier's bound term by term in the notation
   table's symbols, with its overcount, the seconds it covers, the connections it counts and δ_net term by term with
   each term's source (the check's `eps`, only its δ part, and each phase's knowledge, binding and collision errors,
-  which no check computes), and that bound over the
+  which no check computes), `eps` split into the scans' δ and the charged tied audits' with what sets each and what a
+  smaller one costs, k_{skip,j}'s slot entries (every one of a tied audit sampled in part; sampled whole, it adds none
+  and proves each of its proof blocks), the onsite composite's error as the sum of its four subprotocols' errors, each δ with where the
+  run states it and the terms no check computes named, and that bound over the
   run's own certification period (proved) and each monitoring period for the node (proved where the run's period
   covers it, else scaled), the census's reference datacenter and the world (scaled), each scaled cell naming its rule,
-  whose sources the record states, beside its figure over one execution phase. The realized advice charge is private:
-  the record carries the registered width as its upper bound, and `--advice-charge` states a test run's measurement
-  beside the bound as that run's.
+  whose sources the record states, beside its figure over one execution phase, and its share of a weights copy and of
+  the schedule's egress capacity (the served egress is in no published file, and the record says so). The cells are
+  the figure of record's: K as the period's check states it only where its Lean verdict held both checks the tight
+  ℓ_{a,j} rests on (each tied audit's free inputs computed from its descriptor, and its circuit held fixed whatever its
+  advice) and none of its premises is open: each is discharged by theorems `Security/lean-audit.json` or
+  `Security/Properties/lean-audit.json` lists, taking no named assumption but a standing one (an auditor-trusted
+  device's), and no premise about our own Python stands. While
+  one of those is open, it is K plus ℓ_a + 1 bits for each tied audit of each phase, with the tight K's cells beside
+  them, conditional on what is open, by name. The realized advice charge is private: the record states ℓ_{a,j} with its source,
+  the tied compute audits' free inputs (no advice length and no cap is in them), beside it each audit's registered
+  advice length ℓ_a as a cap, in no term of K, and `--advice-charge` states a test
+  run's measurement beside the bound as that run's.
 - `advice_charge.py ADVICE --run RUN --to FILE`: honest serving's advice charge from `verity-vllm advice`'s output
   over a test run with public inputs: each Commit period's advice bits, unpadded, beside its requests' prompt and
   output lengths and finishes, labelled as that run's. `served_verdicts.sh advice-charge` serves such a run
