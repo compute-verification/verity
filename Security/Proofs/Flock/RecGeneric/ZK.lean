@@ -118,8 +118,9 @@ def refusal : Msg := [1]
   workers' values for the round (`msg`, from the history so far; `[]` past its end) under its salt;
 * the outer phase: `ko x` rounds at the statement `xo x pre` that the first part's transcript `pre` fixes, by the
   outer prover `PO` on its tape `NO x × ΩO x`, at the witness `wo` (the workers' values and the salts), where that
-  witness is in the outer relation `RO`; its outcome `outO` (its verdict and where it stopped) at its statement and
-  transcript;
+  witness is in the outer relation `RO x`; its outcome `outO x` (its verdict and where it stopped) at its statement
+  and transcript. The tape, the relation and the outcome are `x`'s, so the outer phase's layout (its sessions) may be
+  fixed by the compiled statement;
 * the outer simulator (`progO`, on coins `CO x`), given the outer statement and outcome, fixed before the witness and
   the verifier. -/
 structure ZkRelease (W : Type) (Lv : Leaves) where
@@ -134,7 +135,7 @@ structure ZkRelease (W : Type) (Lv : Leaves) where
   xo : Msg → List (Msg × Out) → Msg
   WO : Type
   wo : W → (x : Msg) → Ωp x → (Fin (∑ i ∈ Finset.range (nh x), nl x i) → Lv.Salt) → List (Msg × Out) → WO
-  RO : Rel WO
+  RO : Msg → Rel WO
   NO : Msg → Type
   ΩO : Msg → Type
   [nFin : ∀ x, Fintype (NO x)]
@@ -143,7 +144,7 @@ structure ZkRelease (W : Type) (Lv : Leaves) where
   [oNe : ∀ x, Nonempty (ΩO x)]
   PO : WO → (x : Msg) → Prover (NO x × ΩO x)
   St : Type
-  outO : Msg → List (Msg × Out) → St
+  outO : Msg → Msg → List (Msg × Out) → St
   CO : Msg → Type
   [cFin : ∀ x, Fintype (CO x)]
   [cNe : ∀ x, Nonempty (CO x)]
@@ -182,7 +183,7 @@ def k (Zs : ZkRelease W Lv) (x : Msg) : ℕ := Zs.nh x + Zs.ko x
 /-- **The server releases**: the workers' values and the salts give a witness in the outer relation at the statement
 the first part's transcript `pre` fixes. -/
 def ok (Zs : ZkRelease W Lv) (w : W) (x : Msg) (t : Zs.N x) (pre : List (Msg × Out)) : Prop :=
-  Zs.RO (Zs.xo x pre) (Zs.wo w x t.1 t.2 pre)
+  Zs.RO x (Zs.xo x pre) (Zs.wo w x t.1 t.2 pre)
 
 open Classical in
 /-- **The compiled prover** at the witness `w` and the statement `x`: the first part's rounds, each its frame at its
@@ -204,7 +205,7 @@ noncomputable def prover (Zs : ZkRelease W Lv) (w : W) (x : Msg) : Prover (Zs.N 
 and otherwise the outer phase's outcome at its statement and its untagged transcript. -/
 def outcome (Zs : ZkRelease W Lv) (x : Msg) (ms : List (Msg × Out)) : Option Zs.St :=
   if ms.length ≤ Zs.nh x ∨ (ms.drop (Zs.nh x)).head?.map Prod.fst = some refusal then none
-  else some (Zs.outO (Zs.xo x (ms.take (Zs.nh x))) ((ms.drop (Zs.nh x)).map fun p => (untagOuter p.1, p.2)))
+  else some (Zs.outO x (Zs.xo x (ms.take (Zs.nh x))) ((ms.drop (Zs.nh x)).map fun p => (untagOuter p.1, p.2)))
 
 /-- The outer simulator at the compiled statement `x`, on the coins `CO x` at every outer statement. -/
 def simO (Zs : ZkRelease W Lv) (x : Msg) : SimOut Zs.St where
@@ -216,8 +217,8 @@ the tape `NO x × ΩO x`, against every verifier of the outer phase's `ko x` rou
 relation, at the outer simulator `simO x` and the error `εO x`. -/
 def OuterZK (Zs : ZkRelease W Lv) (H : Msg → Msg)
     (εO : (x : Msg) → Msg → Zs.WO → (Θ : Type) → VStar Θ → Θ → Zs.St → ℝ) : Prop :=
-  ∀ x, ZKOut (fun _ => Zs.NO x) (fun _ => Zs.ΩO x) H (fun _ => Zs.ko x) (fun wo _ => Zs.PO wo x) Zs.RO Zs.outO
-    (Zs.simO x) (εO x)
+  ∀ x, ZKOut (fun _ => Zs.NO x) (fun _ => Zs.ΩO x) H (fun _ => Zs.ko x) (fun wo _ => Zs.PO wo x) (Zs.RO x)
+    (Zs.outO x) (Zs.simO x) (εO x)
 
 /-- The first part's transcript against `V*` at `θ`, on the nonce `t`: the compiled run cut at `nh x` rounds. -/
 noncomputable def preRun (Zs : ZkRelease W Lv) (H : Msg → Msg) (w : W) (x : Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ)

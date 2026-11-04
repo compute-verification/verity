@@ -386,7 +386,7 @@ theorem outcome_refused (x : Msg) (ask : List Msg → Out) {τ : List (Msg × Ou
 
 theorem outcome_outer_cons (x : Msg) {τ : List (Msg × Out)} (hτ : τ.length = Zs.nh x) {τO : List (Msg × Out)}
     (hne : τO ≠ []) :
-    Zs.outcome x (τ ++ τO.map fun p => (tagOuter p.1, p.2)) = some (Zs.outO (Zs.xo x τ) τO) := by
+    Zs.outcome x (τ ++ τO.map fun p => (tagOuter p.1, p.2)) = some (Zs.outO x (Zs.xo x τ) τO) := by
   obtain ⟨q, τO', rfl⟩ := List.exists_cons_of_ne_nil hne
   have hc : ¬ ((τ ++ (q :: τO').map fun p => (tagOuter p.1, p.2)).length ≤ Zs.nh x ∨
       ((τ ++ (q :: τO').map fun p => (tagOuter p.1, p.2)).drop (Zs.nh x)).head?.map Prod.fst = some refusal) := by
@@ -429,7 +429,7 @@ server releases after a first part that goes on, the outer outcome is `o`, and t
 def someEv (H : Msg → Msg) (w : W) (x : Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (ask : List Msg → Out) (o : Zs.St)
     (Ev : List (Msg × Out) → Prop) (t : Zs.N x) (ρ : Zs.Ω x) : Prop :=
   (ZKMal.goesOn (Zs.nh x) (Zs.preOf H x ask w t) = true ∧ Zs.ok w x t (Zs.preOf H x ask w t)) ∧
-    Zs.outO (Zs.xo x (Zs.preOf H x ask w t)) (Zs.outerRun H w x Vs θ t ρ (Zs.preOf H x ask w t)) = o ∧
+    Zs.outO x (Zs.xo x (Zs.preOf H x ask w t)) (Zs.outerRun H w x Vs θ t ρ (Zs.preOf H x ask w t)) = o ∧
     Ev (Zs.preOf H x ask w t ++
       (Zs.outerRun H w x Vs θ t ρ (Zs.preOf H x ask w t)).map fun p => (tagOuter p.1, p.2))
 
