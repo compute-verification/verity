@@ -29,10 +29,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.ml.circuits.codec import canonical_json, encode_program
+from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.ml.windows import interface as IF
 
 HERE = Path(__file__).resolve().parents[1]
 PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
@@ -72,6 +73,16 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
     assert last.ports["o1"]["root"] != st.root.hex() and last.ports["o1"]["reads"] == [0]
     assert last.made["o1"] == [at.chain.states[T]] and last.buckets == [T - 1] and last.framed == ["o0", "o1"]
     assert first.ports["o1"]["root"] == ing.ports["sin"]["root"] == last.ports["sin"]["root"] == st.root.hex()
+    # the registration's window states those reads, one run a port, and opens leaf 0, the empty state, under its salt
+    runs = {"o1": {"leaf": 1, "units": [0, T - 1]}, "sin": {"leaf": 1, "units": [1, T]}}
+    assert sz.state_reads([m.ports for m in honest.values()]) == sz.state_reads(
+        [m.ports for m in chain.values()]) == runs
+    with pytest.raises(SystemExit, match="no one run"):
+        sz.state_reads([{"sin": {**ing.ports["sin"], "reads": ing.ports["sin"]["reads"][::-1]}}])
+    e, path = sz.state_empty(st), bytes.fromhex(sz.state_empty(st)["path"])
+    opened = sz.ADV.Opening(0, bytes(2 * e["words"]), bytes.fromhex(e["salt"]),
+                            tuple(path[i:i + 64] for i in range(0, len(path), 64)))
+    assert e["words"] * 16 == st.n_bits and sz.ADV.verify(st.root, T, st.n_bits, st.binding, opened)
     # the slot entries: lane j's tree, leaf b slot j's entry of the Programs' row at boundary b; the block a member a
     # lane (block-c<j>), its unit j·nb + b's o0 (no public word) lane j's leaf b, each lane's tree under its member's
     # o0 frame binding
@@ -166,11 +177,11 @@ def test_a_state_tree_that_skips_or_alters_a_transition_is_refused_where_its_uni
     assert all(m.refused is None for m in honest) and sz.wired(honest) == []
 
 
-def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path):
-    """The I/O tie's group (``--group G``) at the test class: link-windows 0 and 1 in one registration, the state and
-    view trees G·T leaves (the state tree the group's window state, from bucket 0) and the slot entries NR a boundary of
-    the group, each member's warden port its own link-window's registration, the group's last ingress unit a member of
-    its own, and the chains running across the windows."""
+def test_a_group_of_execution_phases_is_one_registration_a_member_a_phase(tmp_path):
+    """The egress tie's group (``--group G``) at the test class: execution phases 0 and 1 in one registration, the state
+    and view trees G·T leaves (the state tree the group's state, from bucket 0) and the slot entries NR a boundary of the
+    group, each member's network certifier port its own phase's registration, the group's last ingress unit a member of
+    its own, and the chains running across the phases."""
     G, T = 2, sz.TEST.params.window
     h = sz.host(tmp_path, setup=sz.TEST, group=G)
     at = h.at
@@ -520,6 +531,23 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
     assert sz.wired(h.rounds["honest"]) == []
 
 
+def test_committed_outputs_that_dont_render_the_network_certifiers_egress_leave_its_buckets_unrendered(tmp_path):
+    """With the compute's committed outputs (`link(outputs=…)`) the scan's chain renders them: the ids the network
+    certifier's egress carries render its every row, while one id other than the egress carries (a relay that rewrote
+    it), one fewer (a relay that added an id cell before the trailer) or none for a connection (one the relay answered
+    itself) leaves `unrendered` the buckets where the egress isn't the rendering, where an egress tie on them is
+    refused."""
+    at = sz.link(tmp_path / "own", setup=sz.TEST)
+    assert at.unrendered == [] and sz.link(tmp_path / "same", setup=sz.TEST, outputs=at.outputs).unrendered == []
+    q, xs = next((q, xs) for q, xs in sorted(at.outputs.items()) if len(xs) > 1)
+    rest = {k: v for k, v in at.outputs.items() if k != q}
+    for name, outputs in (("token", {**rest, q: (xs[0] ^ 1, *xs[1:])}), ("pad", {**rest, q: xs[:-1]}),
+                          ("extra", rest)):
+        off = sz.link(tmp_path / name, setup=sz.TEST, outputs=outputs)
+        assert off.unrendered and set(off.unrendered) <= set(range(at.T)) and off.void == [], (name, off.unrendered)
+        assert off.outputs == {k: tuple(v) for k, v in outputs.items()}, name
+
+
 @pytest.mark.slow
 def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
     """`scan_period.rows_case` of one link-window in the rows form's formats (`NetworkCheck.Period`; its Lean checks the
@@ -540,7 +568,10 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     whose entries are at other roots by name, and at the wiring (`period_case.UNWIRED`) one whose lanes' chunks are
     swapped, one lane's chunk at another root or missing, or whose roots are at its o1, no `SlotEntry_v1` template's
     entries, and a block whose ``scan/state`` is a state tree that skips a transition, or
-    that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows is refused by name. Slow
+    that names none, at the state tie (`period_case.UNSTATED`), and a registration whose window states its units' ``sin``
+    off the chain (`period_case.MISREAD`), or opens leaf 0 under another leaf's salt (`period_case.UNPINNED`), each
+    with its own answer; the honest registration's window states the members' reads (`state_reads`) and row 0's
+    opening (`state_empty`). A group of two link-windows is refused by name. Slow
     (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no stand-in
     can stand for."""
     import scan_period as SP
@@ -565,8 +596,10 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     roots = sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]]) + [
         *({"port": PC.prog_name(j), **o} for j, o in enumerate(progs)), {"port": "scan/state", **state}]
     law = sz.DR.parse_law(f"stratified:{2 * T}")
-    reg, chain = (R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer=x * 64)
-                  for x in ("ee", "ff"))
+    reads, empty = sz.state_reads([m.ports for m in h.rounds["honest"]]), sz.state_empty(st)
+    assert reads == {"o1": {"leaf": 1, "units": [0, T - 1]}, "sin": {"leaf": 1, "units": [1, T]}}
+    win = {"kind": "stand-in", "reads": {"scan/state": reads}, "empty": {"scan/state": empty}}
+    reg, chain = (R.record(program, query, law, sz.S.SCHEME, roots, win, leaf_layer=x * 64) for x in ("ee", "ff"))
     other = {**reg, "program": "ab" * 64}
     for name, r in (("tampered", other), ("chain", chain)):
         (scan / name).mkdir()
@@ -635,11 +668,22 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     monkeypatch.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, digest))
     out = PC.reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
+    assert p["circuit"] == audit["registration"]["program"]
+    record = tmp_path / "window-circuit.json"
+    record.write_text(json.dumps({"format": IF.CIRCUIT, "program": program_digest(encode_program(block))}))
+    summary = json.loads((scan / "summary.json").read_text())
     for k in (1, 2):
-        (v3c := tmp_path / f"period-subset-{k}.json").write_text(json.dumps(block_audit(progs, sampled=k)))
-        got = PC.reference(SP.rows_case(run, scan, v3c=v3c))
+        (v3c := tmp_path / f"period-subset-{k}.json").write_text(json.dumps(sampled := block_audit(progs, sampled=k)))
+        (scan / "summary.json").write_text(json.dumps({**summary, "v3c": {
+            "registration": R.digest(sampled["registration"])}}))
+        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(record)))
         assert (got["verdict"], got["public"]["audits"][0]["drawn"], got["public"]["audits"][0]["units"]) == (
             "accept", k, E), got
+        assert got["public"]["held"] == ["circuit", "free"], got
+        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit="ab" * 64))
+        assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNHELD}"), got
+    with pytest.raises(SystemExit, match="held to the verifier's own window-circuit record"):
+        SP.rows_case(run, scan, v3c=v3c)
     refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
         "forged": ("reject", "window 0: certificates (none of a window in which the network certifier refused a "
@@ -664,6 +708,15 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(progs, scan_state=scan_state)]}))
         got = PC.reference(SP.rows_case(run, scan))
         assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNSTATED}"), got
+    off = {**win, "reads": {"scan/state": {**reads, "sin": {**reads["sin"], "leaf": 2}}}}
+    unpinned = {**win, "empty": {"scan/state": {**empty, "salt": st.salts[1].hex()}}}
+    for window, why in ((off, PC.MISREAD), (unpinned, PC.UNPINNED)):
+        r = R.record(program, query, law, sz.S.SCHEME, roots, window, leaf_layer="ee" * 64)
+        a = sz.window_answer(r, {**record, "registration": r}, sz.Fraction(1, 100), "unused")
+        (scan / "answers.json").write_text(json.dumps({**doc, "registration": r, "windows": [
+            {"window": 0, "answer": a, "registrations": registrations}]}))
+        got = PC.reference(SP.rows_case(run, scan))
+        assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {why}"), got
     (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [{"window": w} for w in (0, 1)]}))
     with pytest.raises(SystemExit, match="a group of 2 link-windows .* scan_zk.py --group 1"):
         SP.rows_case(run, scan)
@@ -752,6 +805,28 @@ def test_a_row_shorter_than_a_piece_is_found_whole_and_held_to_the_pieces_rule(t
     control.write_bytes(state)
     rec = sz.received(_a8(), vdir, control, blobs, set(blobs), b"")
     assert rec["whole_rows"]["control"]["missing"] == ["ingress-0 prog0 0"] and not sz.unseen(rec)
+
+
+def test_a_found_piece_fails_the_round_only_where_the_drivers_rule_reads_it_leaked(tmp_path):
+    """`received` judges each found piece by the zero-knowledge drivers' one rule (`leak_scan.scan`) and places it: one
+    in a file whose format isn't read is ``leaked`` and fails the round (`unseen`), while one found only in a public row
+    file (``pub-1.bin``, which the statement fixes) is ``structured`` and doesn't."""
+    state = hashlib.sha512(b"state").digest()[:32]
+    blobs = {"ingress-0 o1 0": state}
+    control = tmp_path / "inst.bin"
+    control.write_bytes(state)
+    vdir = tmp_path / "verifier"
+    vdir.mkdir()
+    (vdir / "proof.bin").write_bytes(b"\xff" + state[:16])
+    rec = sz.received(_a8(), vdir, control, blobs, set(blobs), b"")
+    assert rec["verifier_found"] == rec["leaked"] == ["ingress-0 o1 0 @0"] and not sz.unseen(rec)
+    assert rec["placed"] == {"ingress-0 o1 0 @0": [("proof.bin", 1, "file")]}
+    assert "leaked ['ingress-0 o1 0 @0']" in sz.finds(rec)
+    (vdir / "proof.bin").unlink()
+    (vdir / "pub-1.bin").write_bytes(state[:16])
+    rec = sz.received(_a8(), vdir, control, blobs, set(blobs), b"")
+    assert rec["verifier_found"] == ["ingress-0 o1 0 @0"] and rec["structured"] == {"ingress-0 o1 0 @0": "public"}
+    assert not rec["leaked"] and sz.unseen(rec)
 
 
 @pytest.mark.parametrize("name", sorted(sz.SETUPS))
