@@ -123,9 +123,13 @@ noncomputable def game (L : Law m.n) : Game (Reg × Finset (Fin m.n) × Discharg
 /-- The member's program's partition into proof blocks. -/
 noncomputable def P := (keyProgP m.D.unroll m.pi m.hU m.n).partition (Discharge.Layout.outsOfP m.D.unroll m.hU m.n m.pi)
 
+/-- The member's descriptor read as a statement (`Desc.parseStmt`), from its flat parse. -/
+theorem hDS : Flock.Desc.parseStmt (zkTags m.I) m.I.circuitFile m.I.tables = .ok m.D :=
+  Flock.Desc.parseStmt_of_parse m.hD
+
 /-- The member's circuit file read as its statement circuit (`HmOut.parseStmt`), from its descriptor's flat parse. -/
 theorem hcS : HmOut.parseStmt (zkTags m.I) m.I.circuitFile m.I.tables = .ok m.D.unroll :=
-  Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse m.hD)
+  Flock.Desc.parseStmt_stmt m.hDS
 
 /-- The member's public file's commitments. -/
 noncomputable def vb :=
