@@ -894,20 +894,26 @@ def _expanded(lay: IL.LoweredUnit, name: str) -> str:
 
 
 
-def _commit_strings(ports: list[Port], rows: dict, salts: dict) -> dict[str, list[bytes]]:
-    """Each row's ``b || c`` (``hm96.SHA512`` over its row digest, ``sha512/row/v1``, ``/v2`` or ``row-seg/v1`` of the leaves' first
-    ``Port.bytes`` bytes, and its salt). Refuses a bit row whose leaves have a bit set past its length."""
-    from verity.ml.commitments import hm96
-
-    inst = hm96.SHA512
+def _row_digests(ports: list[Port], rows: dict) -> dict[str, list[bytes]]:
+    """Each row's unsalted digest (``sha512/row/v1``, ``/v2`` or ``row-seg/v1`` of the leaves' first ``Port.bytes`` bytes). Refuses a
+    bit row whose leaves have a bit set past its length."""
     out = {}
     for p in ports:
         r = np.ascontiguousarray(rows[p.name], dtype="<u2")
         if p.bits is not None and 16 * p.words > p.bits:
             if np.any(r[:, -1] >> np.uint16(p.bits - 16 * (p.words - 1))):
                 raise ValueError(f"port {p.name}: a row of {p.bits} bits has a bit set past its length")
-        out[p.name] = [inst.commit_string(inst.default_key, p.digest(r[i].tobytes()[:p.bytes]), salts[p.name][i]) for i in range(len(r))]
+        out[p.name] = [p.digest(r[i].tobytes()[:p.bytes]) for i in range(len(r))]
     return out
+
+
+def _commit_strings(ports: list[Port], rows: dict, salts: dict) -> dict[str, list[bytes]]:
+    """Each row's ``b || c`` (``hm96.SHA512`` over its row digest, `_row_digests`, and its salt)."""
+    from verity.ml.commitments import hm96
+
+    inst = hm96.SHA512
+    return {nm: [inst.commit_string(inst.default_key, x, salts[nm][i]) for i, x in enumerate(xs)]
+            for nm, xs in _row_digests(ports, rows).items()}
 
 
 def _dummy(low: IL.Lowering, in_ports: list[tuple[str, int]], ins: list[Port], out_ports: list, orows: list[Port], sub=None,
@@ -948,11 +954,12 @@ def digest(text: str) -> str:
 
 # --- instance files -----------------------------------------------------------------------------------------------------------
 
-def statement(ports: list[Port], input_set, lo: int, hi: int, rows: dict, salts: dict):
+def statement(ports: list[Port], input_set, lo: int, hi: int, rows: dict, salts: dict | None, committed=None):
     """The frame-v3-sha512 roots over instances [lo, hi): an ``hm96-sha512/row/v1`` tree per row (``hm96-sha512/row/v2`` for a
     bit row; the input rows, then the output rows; over ``rows[port]``: the instances' rows, or a shared-row file's table),
     each under a domain bound to the set, the range, the port and its schema. Returns the header's ``frame_v3`` entry and
-    every row's ``b || c``."""
+    every row's ``b || c``: under ``salts``, or ``committed``'s answer (`write`'s) for the ports' tables, each ``(domain id,
+    schema, the rows' digests concatenated)`` in port order."""
     from verity.ml.commitments import hm96
     from verity.ml.commitments.frame_v3 import BitRowLeaf, FrameV3
     from verity.ml.commitments.frame_v3 import Port as FPort
@@ -970,7 +977,14 @@ def statement(ports: list[Port], input_set, lo: int, hi: int, rows: dict, salts:
         doms[p.name] = CommitmentDomain(bind[p.name], OWNER, RangeIndexedDomain(0, len(rows[p.name])), hash="sha512")
     # the roots read only the domains: a segmented row's port is configured with its bit row's leaf, which binds no schema here
     fv = FrameV3({p.name: FPort(doms[p.name], BitRowLeaf(p.bits) if p.seg else p.leaf()) for p in ports})
-    bcs = _commit_strings(ports, rows, salts)
+    if committed is None:
+        bcs = _commit_strings(ports, rows, salts)
+    else:
+        xs = _row_digests(ports, rows)
+        got = committed([(doms[p.name].domain_id, p.schema, b"".join(xs[p.name])) for p in ports])
+        if len(got) != len(ports) or any(len(g) != len(xs[p.name]) or any(len(bc) != BC_BYTES for bc in g) for p, g in zip(ports, got)):
+            raise ValueError("committed: one 128-byte b || c per row of each port's table, in port order")
+        bcs = {p.name: [bytes(bc) for bc in g] for p, g in zip(ports, got)}
     roots = {}
     for p in ports:
         leaves = [row_leaf(doms[p.name], i, inst.tree_leaf(inst.default_key, bc), p.schema) for i, bc in enumerate(bcs[p.name])]
@@ -1086,7 +1100,7 @@ def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, sa
           share_rows: bool = False, rows: dict | None = None, outs: dict | None = None, tables: dict | None = None,
           refs: dict | None = None, salts: dict | None = None, registered: dict | None = None,
           public_words: dict | None = None, identifier: dict | None = None, digests: tuple[str, str] | None = None,
-          meta: dict | None = None) -> dict:
+          meta: dict | None = None, committed=None) -> dict:
     """``flock-circuit-inputs``: one JSON header line (the set's name, the range, each block's unit indices, the composite
     circuit's sha512, the frame-v3-sha512 statement; never the set's content digest, an unsalted hash of its values), then, for
     the prover only, every instance's rows (its input rows, then its output rows: ports in order, u16 LE) and every row's salt
@@ -1105,6 +1119,11 @@ def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, sa
     in their order and with no dedupe (a value-independent layout: equal rows stay separate rows, each with its own salt).
     ``salts`` (``{port: [192-byte salt, ...]}``, every row port's, one per table row, or per instance without tables): the
     committer's own salts.
+
+    ``committed`` (instead of salts): the ZK server's value service commits the rows and chooses their salts. It is called once
+    with every port's table, ``[(domain id, schema, the rows' digests concatenated)]`` in port order (rows in the order the
+    public file holds each port's ``b || c``), and returns each table's ``b || c`` per row; the prover's file stages zero
+    salts, and the prover gets the real ones from the server (``flock-circuit --salt-refs``).
 
     ``registered`` (``{port: {"value", "positions", "paths"}}``, with ``tables``): the rows whose table rows are rows of a
     registered value, committed with the registration's salts (``salts``), each table row's position and frame-v3 path to the
@@ -1149,6 +1168,9 @@ def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, sa
         outs = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.outputs}
     if (tables is None) != (refs is None) or (tables is not None and not share_rows):
         raise ValueError("tables and refs are given together, with share_rows")
+    if committed is not None and (salts is not None or salt_key is not None or registered is not None):
+        raise ValueError("committed: the value service chooses every salt, so no salts, salt key or registered reads (whose "
+                         "rows carry their registration's salts) beside it")
     if registered is not None:
         names = [p.name for p in ports]
         if len(set(names)) != len(names):
@@ -1181,11 +1203,13 @@ def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, sa
     if refs is not None:
         refs.update({p.name: np.arange(n) for p in orows})
     check_shared_reads(meta, n, {p.name: len(rows[p.name]) for p in ins} if refs is not None else None, refs)
-    if salts is None:
+    if committed is not None:
+        salts = {p.name: [bytes(SALT_BYTES)] * len(rows[p.name]) for p in ports}
+    elif salts is None:
         salts = stage_salts(input_set, lo, hi, ports, salt_key, {p.name: len(rows[p.name]) for p in ports} if share_rows else None)
     elif any(len(salts[p.name]) != len(rows[p.name]) or any(len(s) != SALT_BYTES for s in salts[p.name]) for p in ports):
         raise ValueError("salts: one 192-byte salt per row")
-    fv, bcs = statement(ports, input_set, lo, hi, rows, salts)
+    fv, bcs = statement(ports, input_set, lo, hi, rows, None if committed is not None else salts, committed)
     G = meta["vus_per_block"]
     indices = list(range(lo, hi)) if indices is None else [int(u) for u in indices]
     if len(indices) != n or any(a >= b for a, b in zip(indices, indices[1:])) or min(indices, default=0) < 0:

@@ -1153,10 +1153,11 @@ class UnitStager:
 
     def stage(self, rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None,
               indices: Sequence[int] | None = None, set_name: str | None = None, tables: dict | None = None,
-              refs: dict | None = None, registered: dict | None = None) -> dict:
+              refs: dict | None = None, registered: dict | None = None, committed=None) -> dict:
         """A round's statement: ``rows`` each input row's words per instance ``(n, words)`` u16, and each public input's
         (``rows[param]``). The outputs are the lowering's, checked against the IR reference (`reference_check`); the salts are
-        ``salts``' where given, else `circuit.stage_salts`'. Writes ``inst.bin`` and ``pub.bin`` (and ``circuit.txt`` without the
+        ``salts``' where given, else `circuit.stage_salts`', or (``committed``, with no salts or salt key: `circuit.write`'s) the
+        value service's, which the stager never holds (its returned ``salts`` None). Writes ``inst.bin`` and ``pub.bin`` (and ``circuit.txt`` without the
         stager's ``circuit``) under ``out_dir``; returns META, the outputs per port, every row's salts, and the unit's ANDs and
         matrix entries. ``indices``: each instance's global unit index, which a bound stager needs and an unbound one refuses
         (its units are ``0 .. n``). ``set_name``: the round's input set (the header's ``set``), else the stager's, which its
@@ -1180,8 +1181,12 @@ class UnitStager:
             for r, *_ in self.in_rows:
                 if not np.array_equal(np.asarray(tables[r], dtype=np.uint16)[np.asarray(refs[r])], np.asarray(rows[r], dtype=np.uint16)):
                     raise ValueError(f"{self.name}: port {r}'s table rows at the instances' refs are not their rows")
-        table_rows = None if tables is None else {p.name: len(tables[p.name]) if p.name in tables else n for p in self.ports}
-        salts = {**FC.stage_salts(iset, 0, n, self.ports, salt_key, table_rows), **(salts or {})}
+        if committed is not None:
+            if salts is not None or salt_key is not None:
+                raise ValueError(f"{self.name}: committed: the value service chooses every salt, so no salts or salt key beside it")
+        else:
+            table_rows = None if tables is None else {p.name: len(tables[p.name]) if p.name in tables else n for p in self.ports}
+            salts = {**FC.stage_salts(iset, 0, n, self.ports, salt_key, table_rows), **(salts or {})}
         out_dir.mkdir(parents=True, exist_ok=True)
         if self.circuit is None:
             (out_dir / "circuit.txt").write_text(self.text)
@@ -1189,7 +1194,7 @@ class UnitStager:
                  rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in self.in_rows}, outs=outs, salts=salts,
                  public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in self.public_inputs},
                  digests=(self.pin, self.class_sha512), indices=None if indices is None else [int(u) for u in indices],
-                 share_rows=tables is not None, tables=tables, refs=refs, registered=registered, meta=self.meta)
+                 share_rows=tables is not None, tables=tables, refs=refs, registered=registered, meta=self.meta, committed=committed)
         counts = getattr(self.low, "counts", None) or self.low.layout.counts
         return {"meta": FC.meta_of(self._head), "outs": outs, "salts": salts, "ands": counts["ands"],
                 "unit_nnz": counts["nnz_a"] + counts["nnz_b"], "circuit_sha512": self.pin}
