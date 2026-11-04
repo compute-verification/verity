@@ -473,22 +473,20 @@ def popHeld (v : Registration.Verifier) (record : Json) : V Unit :=
   | none => throw "the record names no population"
   | some n => if Slots.popOk v.program v.query n then pure () else throw POPULATION_ORDER
 
-/-- The session's run, after what it is held to: the evidence's one session (`oneSession`), its coins held to the trees
-the challenger logged (`treesOf`, `treesHeld`), the registration's population held to the program (`popHeld`), the
-parameters' public file held to the registration (`publicHeld`), then the session's verdict on the blobs (`run`). -/
-def heldRun (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) : V Run := do
-  oneSession e.sessions
-  treesHeld (← treesOf p.base e.base) e bs
-  popHeld p.base.verifier c.record
-  publicHeld c.record (← bs.get p.own.pub "public file")
-  run p.own e.sessions (some e.base.provedUnits) bs
-
-/-- The check at the coins `ξ` (module docstring, **check**): the session's run after what it is held to (`heldRun`),
-then v1's `checkAt` at `ξ` on its verdict. v1 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own
+/-- The check at the coins `ξ` (module docstring, **check**): the evidence's one session (`oneSession`), its coins held
+to the trees the challenger logged (`treesOf`, `treesHeld`), the registration's population held to the program
+(`popHeld`), the parameters' public file held to the registration (`publicHeld`), then the session's verdict on the
+blobs, then v1's `checkAt` at `ξ` on it. v1 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own
 `all` says it again, so an acceptance reads the run rather than the verdicts' JSON. -/
 def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
-  match heldRun p c e bs with
+  let r : V Run := do
+    oneSession e.sessions
+    treesHeld (← treesOf p.base e.base) e bs
+    popHeld p.base.verifier c.record
+    publicHeld c.record (← bs.get p.own.pub "public file")
+    run p.own e.sessions (some e.base.provedUnits) bs
+  match r with
   | .error err => .reject s!"proofs: {err}"
   | .ok r =>
     match OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } with
