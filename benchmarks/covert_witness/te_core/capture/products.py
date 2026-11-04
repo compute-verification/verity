@@ -35,7 +35,9 @@ from te_core import io_bound
 from te_core.capture.structure import _GATHERS, _WALK, _closure, _dtype_name, _Flow, _gemms, _macs, _phases, _pk, _shape
 
 #: the capture's version of these rows (te_core's VERSION when they were last changed), so a trace that has them is
-#: distinguishable from one traced before them
+#: distinguishable from one traced before them. A recorded program's trace also carries the te_core VERSION whose code
+#: wrote it (`capture_code`, te_core.capture.script's `record`, from 4.12.14 on; a trace without it was written by 4.12.9
+#: to 4.12.13's code, which differ only in that 4.12.12's and 4.12.13's list fewer elementwise products)
 CAPTURE = "4.12.9"
 ORDER = "unknown"
 #: the console's dial's k levels in bits (te_core.panels' `K_LEVELS`, which a test holds this to): each of its block

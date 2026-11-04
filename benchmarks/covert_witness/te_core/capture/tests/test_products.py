@@ -13,7 +13,7 @@ import torch
 import torch.nn.functional as tF
 from torch import nn
 
-from te_core import formalism, io_bound, policy
+from te_core import VERSION, formalism, io_bound, policy
 from te_core.capture import capture_fn, capture_step, products, script
 
 PROGRAM = Path(__file__).parent / "recorded" / "islands" / "toy" / "train.py"
@@ -48,7 +48,8 @@ def recorded(tmp_path, monkeypatch):
 def test_a_recorded_steps_rows_are_the_captured_steps_and_io_bounds(recorded):
     """The forward's head product is fresh and its fc product an expansion (io_bound's rule pays a lookup at the token
     ids at no rate); in the backward three products are fresh and one an expansion. The trace keeps the rows with the
-    capture's version, and the order is unknown, and at each other k of the console's dial the rows there."""
+    capture's version and the te_core VERSION whose code wrote them (`capture_code`), and the order is unknown, and at
+    each other k of the console's dial the rows there."""
     k = policy.CONSOLE[1]
     model = Toy()
     ref = capture_step(model, torch.optim.SGD(model.parameters(), lr=1e-3),
@@ -58,7 +59,9 @@ def test_a_recorded_steps_rows_are_the_captured_steps_and_io_bounds(recorded):
     assert comparable(got) == comparable(want)
     kept = dict(recorded.formalism["products"])
     at = kept.pop("at")
+    assert kept.pop("capture_code") == VERSION and "capture_code" not in got
     assert kept == got and (got["capture"], got["order"]) == (products.CAPTURE, "unknown")
+    assert formalism.products_of_trace(recorded.formalism["products"])["capture_code"] == VERSION
     assert sorted(map(int, at)) == sorted(set(products.DIAL_K) - {k})
     for x, block in at.items():
         there = products.rows(recorded, float(x))
@@ -269,7 +272,9 @@ def test_products_written_with_elementwise_ops_are_found_and_never_priced(form, 
     the class of K = 512, with nothing written elementwise. Written as broadcast multiplications and sums, or as
     gathers, multiplications and index_adds, the adapters' products are no rows, so none is fresh and the system has
     no class; the capture finds each (their multiplications, each broadcasting both operands, in the forward and the
-    backward), and the fresh-products term is unmeasured naming them, never priced as elementwise work. A sparse
+    backward), and the fresh-products term is unmeasured naming them, never priced as elementwise work; on a trace
+    that records no capture code the reason adds that later code lists fewer and a retrace may clear it, and the
+    term's inputs name the capture code where the trace records one. A sparse
     product whose gather reads each entry once is found at its sum by index, in the forward and the backward; the
     first layer's reads the frozen input, so its product is θ's and not one."""
     torch.manual_seed(0)
@@ -295,11 +300,15 @@ def test_products_written_with_elementwise_ops_are_found_and_never_priced(form, 
     m_ = formalism.Measured(parts=(formalism.Part(gates=got["gates"], tokens=8 * 256, token_gates=got["gates"],
                                                   affected_gates=got["gates"]),), tau_bits=0.0, a_bits=0.0, u=0.0,
                             u_in=0.0, delta_bits=0.0, products=p)
-    for q in (p, formalism.products_of_trace(got)):
+    unrecorded = "this trace records no capture code"
+    for q, says, code in ((p, False, None), (formalism.products_of_trace(got), True, None),
+                          (formalism.products_of_trace(got | {"capture_code": VERSION}), False, VERSION)):
         term, why, inputs = formalism.fresh_products(dataclasses.replace(m_, products=q), *policy.CONSOLE)
+        assert inputs.get("capture_code") == code
         if flagged:
             assert term is None and why.startswith("unmeasured: the traced step writes matrix products as elementwise")
             assert all(f"{op} (" in why for op in flagged) and inputs["elementwise_products"] == found
+            assert (unrecorded in why) == says and ("or later may clear it" in why) == says
         else:
             assert "elementwise" not in (why or "")
 

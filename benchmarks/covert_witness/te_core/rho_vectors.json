@@ -36,7 +36,7 @@
 80000000,
 800000000
 ],
-"rule": "term(c, k) = c \u00d7 fresh_per_c[k][0] (without P-cell), fresh_cell = c \u00d7 fresh_per_c[k][1] (with it); null where fresh_per_c[k] is null or k is off the dial",
+"rule": "fresh_no_cell(c, k) = c \u00d7 fresh_per_c[k][0] (without whole cells), fresh_cell(c, k) = c \u00d7 fresh_per_c[k][1] (with them), and the term is fresh_cell (p_cell true); [null, null] where the term is void with no subset figure, which is computed, so rho's floor reads it as 1 where no other kind exceeds 1; null where fresh_per_c[k] is null (unmeasured) or k is off the dial",
 "vectors": [
 {
 "C_gates": 30480169048499.0,
@@ -44,6 +44,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
@@ -51,6 +52,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
@@ -58,6 +60,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
@@ -65,6 +68,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
@@ -72,6 +76,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
@@ -79,6 +84,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
@@ -86,6 +92,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
@@ -93,6 +100,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
@@ -100,6 +108,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
@@ -107,6 +116,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
@@ -114,6 +124,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
@@ -121,6 +132,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
@@ -128,6 +140,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
@@ -135,6 +148,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
@@ -142,6 +156,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
@@ -149,6 +164,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
@@ -156,6 +172,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
@@ -163,6 +180,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
@@ -170,6 +188,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
@@ -177,6 +196,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
@@ -184,6 +204,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
@@ -227,6 +248,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
@@ -234,6 +256,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
@@ -241,6 +264,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
@@ -248,6 +272,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
@@ -255,6 +280,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
@@ -262,6 +288,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
@@ -269,6 +296,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
@@ -276,6 +304,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
@@ -283,6 +312,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
@@ -290,6 +320,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
@@ -297,6 +328,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
@@ -304,6 +336,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
@@ -311,6 +344,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
@@ -318,6 +352,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
@@ -325,6 +360,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
@@ -332,6 +368,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
@@ -339,6 +376,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
@@ -346,6 +384,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
@@ -353,6 +392,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
@@ -360,6 +400,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
@@ -367,6 +408,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
@@ -410,6 +452,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
@@ -417,6 +460,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
@@ -424,6 +468,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
@@ -431,6 +476,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
@@ -438,6 +484,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
@@ -445,6 +492,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
@@ -452,6 +500,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
@@ -459,6 +508,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
@@ -466,6 +516,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
@@ -473,6 +524,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
@@ -480,6 +532,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
@@ -487,6 +540,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
@@ -494,6 +548,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
@@ -501,6 +556,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
@@ -508,6 +564,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
@@ -515,6 +572,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
@@ -522,6 +580,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
@@ -529,6 +588,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
@@ -536,6 +596,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
@@ -543,6 +604,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
@@ -550,6 +612,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
@@ -593,6 +656,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
@@ -600,6 +664,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
@@ -607,6 +672,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 65536,
 "term": 0.0,
 "why": null
@@ -614,6 +680,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
@@ -621,6 +688,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
@@ -628,6 +696,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000,
 "term": 0.0,
 "why": null
@@ -635,6 +704,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
@@ -642,6 +712,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
@@ -649,6 +720,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 145568,
 "term": 0.0,
 "why": null
@@ -656,6 +728,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
@@ -663,6 +736,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
@@ -670,6 +744,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000,
 "term": 0.0,
 "why": null
@@ -677,6 +752,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
@@ -684,6 +760,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
@@ -691,6 +768,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 8000000,
 "term": 0.0,
 "why": null
@@ -698,6 +776,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
@@ -705,6 +784,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
@@ -712,6 +792,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 80000000,
 "term": 0.0,
 "why": null
@@ -719,6 +800,7 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
@@ -726,6 +808,7 @@
 {
 "c": 4925098176.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
@@ -733,6 +816,7 @@
 {
 "c": 20173202128896.0,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "k": 800000000,
 "term": 0.0,
 "why": null
@@ -776,149 +860,170 @@
 {
 "c": 536681984163840.0,
 "fresh_cell": 2869160.606477064,
+"fresh_no_cell": 163340.7608721462,
 "k": 65536,
-"term": 163340.7608721462,
+"term": 2869160.606477064,
 "why": null
 },
 {
 "c": 4925098176.0,
 "fresh_cell": 26.330113710873732,
+"fresh_no_cell": 1.4989683037175858,
 "k": 65536,
-"term": 1.4989683037175858,
+"term": 26.330113710873732,
 "why": null
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": 107848.1457597388,
+"fresh_no_cell": 6139.7741720272315,
 "k": 65536,
-"term": 6139.7741720272315,
+"term": 107848.1457597388,
 "why": null
 },
 {
 "c": 536681984163840.0,
 "fresh_cell": 2089282.2873691695,
+"fresh_no_cell": 130996.04587493495,
 "k": 80000,
-"term": 130996.04587493495,
+"term": 2089282.2873691695,
 "why": null
 },
 {
 "c": 4925098176.0,
 "fresh_cell": 19.173217447764493,
+"fresh_no_cell": 1.2021428064276056,
 "k": 80000,
-"term": 1.2021428064276056,
+"term": 19.173217447764493,
 "why": null
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": 78533.49866604336,
+"fresh_no_cell": 4923.976935127473,
 "k": 80000,
-"term": 4923.976935127473,
+"term": 78533.49866604336,
 "why": null
 },
 {
 "c": 536681984163840.0,
 "fresh_cell": 778359.9495315672,
+"fresh_no_cell": 64339.656057094755,
 "k": 145568,
-"term": 64339.656057094755,
+"term": 778359.9495315672,
 "why": null
 },
 {
 "c": 4925098176.0,
 "fresh_cell": 7.142962277151958,
+"fresh_no_cell": 0.5904411402685111,
 "k": 145568,
-"term": 0.5904411402685111,
+"term": 7.142962277151958,
 "why": null
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": 29257.57348721442,
+"fresh_no_cell": 2418.4469105398216,
 "k": 145568,
-"term": 2418.4469105398216,
+"term": 29257.57348721442,
 "why": null
 },
 {
 "c": 536681984163840.0,
 "fresh_cell": null,
+"fresh_no_cell": null,
 "k": 800000,
 "term": null,
-"why": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max"
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
 },
 {
 "c": 4925098176.0,
 "fresh_cell": null,
+"fresh_no_cell": null,
 "k": 800000,
 "term": null,
-"why": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max"
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": null,
+"fresh_no_cell": null,
 "k": 800000,
 "term": null,
-"why": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max"
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
 },
 {
 "c": 536681984163840.0,
 "fresh_cell": null,
+"fresh_no_cell": null,
 "k": 8000000,
 "term": null,
-"why": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max"
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
 },
 {
 "c": 4925098176.0,
 "fresh_cell": null,
+"fresh_no_cell": null,
 "k": 8000000,
 "term": null,
-"why": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max"
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": null,
+"fresh_no_cell": null,
 "k": 8000000,
 "term": null,
-"why": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max"
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
 },
 {
 "c": 536681984163840.0,
 "fresh_cell": null,
+"fresh_no_cell": null,
 "k": 80000000,
 "term": null,
-"why": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max"
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
 },
 {
 "c": 4925098176.0,
 "fresh_cell": null,
+"fresh_no_cell": null,
 "k": 80000000,
 "term": null,
-"why": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max"
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": null,
+"fresh_no_cell": null,
 "k": 80000000,
 "term": null,
-"why": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max"
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
 },
 {
 "c": 536681984163840.0,
 "fresh_cell": null,
+"fresh_no_cell": null,
 "k": 800000000,
 "term": null,
-"why": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max"
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
 },
 {
 "c": 4925098176.0,
 "fresh_cell": null,
+"fresh_no_cell": null,
 "k": 800000000,
 "term": null,
-"why": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max"
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": null,
+"fresh_no_cell": null,
 "k": 800000000,
 "term": null,
-"why": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max"
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
 }
 ],
 "fresh_per_c": {
@@ -934,25 +1039,37 @@
 2.440850442912279e-10,
 3.892961472564257e-09
 ],
-"800000": null,
-"8000000": null,
-"80000000": null,
-"800000000": null
+"800000": [
+null,
+null
+],
+"8000000": [
+null,
+null
+],
+"80000000": [
+null,
+null
+],
+"800000000": [
+null,
+null
+]
 },
 "name": "the 45M start's dense step"
 }
 ]
 },
 "fresh": {
-"fresh_cell": "sensitivity, assuming that blocks hold whole multiply cells (P-cell): the fresh-products term's figure where every block does, a premise on the partition, which the attacker chooses; the term is the figure without it",
-"fresh_converged": "sensitivity, where the fresh-products term is void because a counted product is fed by a cycle of the step's whole-making system with no fixed point: the term's figure on the best set of the products no such cycle feeds, with the share of the step's counted fresh multiplications that set keeps; still a lower bound, published beside the void term and never in the max, since a product so fed is never dropped to escape the void",
+"fresh_cell": "sensitivity, assuming that blocks hold whole multiply cells (P-cell): the fresh-products figure where every block does, a premise on the partition, which the attacker chooses; the term takes this premise",
+"fresh_no_cell": "sensitivity, without assuming that blocks hold whole multiply cells (P-cell): the fresh-products figure where a block may split a multiply cell, as a partition the attacker chooses may; the term assumes whole cells",
 "order": "chain",
-"p_cell": false,
-"rests_on": "theorem for this circuit (Loomis-Whitney), given that every value a block reads costs its full width (P-width, extended to what makes operands whole), elementwise steps don't fan out (P-match) and each output is summed along one chain (P-chain), without assuming that blocks hold whole multiply cells (P-cell)",
+"p_cell": true,
+"rests_on": "theorem for this circuit (Loomis-Whitney), given that every value a block reads costs its full width (P-width, extended to what makes operands whole), elementwise steps don't fan out (P-match) and each output is summed along one chain (P-chain), given that blocks hold whole multiply cells (P-cell)",
 "vectors": [
 {
-"converged": null,
 "fresh_cell": 4138401.093369211,
+"fresh_no_cell": 219441.14652435452,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -979,12 +1096,13 @@
 "order": "chain",
 "share": 0.7400625,
 "subset": null,
-"term": 219441.14652435452,
+"term": 4138401.093369211,
+"void": null,
 "why": null
 },
 {
-"converged": null,
 "fresh_cell": 1436346.2975317435,
+"fresh_no_cell": 83822.25466981716,
 "inputs": {
 "C_gates": 1e+18,
 "c": 254500000000000.0,
@@ -1011,12 +1129,13 @@
 "order": "chain",
 "share": 0.7400625,
 "subset": null,
-"term": 83822.25466981716,
+"term": 1436346.2975317435,
+"void": null,
 "why": null
 },
 {
-"converged": null,
 "fresh_cell": 330723.09063973086,
+"fresh_no_cell": 111674.98646481277,
 "inputs": {
 "C_gates": 1e+17,
 "c": 536681984163840.0,
@@ -1043,12 +1162,13 @@
 "order": "chain",
 "share": 0.7400625,
 "subset": null,
-"term": 111674.98646481277,
+"term": 330723.09063973086,
+"void": null,
 "why": null
 },
 {
-"converged": null,
 "fresh_cell": 4138401.093369211,
+"fresh_no_cell": 219441.14652435452,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1086,12 +1206,13 @@
 "order": "chain",
 "share": 0.81406875,
 "subset": null,
-"term": 219441.14652435452,
+"term": 4138401.093369211,
+"void": null,
 "why": null
 },
 {
-"converged": null,
 "fresh_cell": 3555338.03053515,
+"fresh_no_cell": 214429.8079620056,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1118,18 +1239,13 @@
 "order": "chain",
 "share": 0.7400625,
 "subset": null,
-"term": 214429.8079620056,
+"term": 3555338.03053515,
+"void": null,
 "why": null
 },
 {
-"converged": {
-"diverged_fed": 1,
 "fresh_cell": null,
-"kept_macs_share": null,
-"subset": null,
-"term": null
-},
-"fresh_cell": null,
+"fresh_no_cell": null,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1157,22 +1273,16 @@
 "share": 0.7400625,
 "subset": null,
 "term": null,
-"why": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max"
+"void": {
+"diverged_fed": 1,
+"kept_macs_share": null,
+"reason": "the products count diverges; no subset has a proved bound"
+},
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
 },
 {
-"converged": {
-"diverged_fed": 1,
 "fresh_cell": 4138401.093369211,
-"kept_macs_share": 0.999000999000999,
-"subset": {
-"dropped": 1,
-"dropped_macs_share": 0.0009990009990009652,
-"k_whole_min": 512,
-"of": 2
-},
-"term": 219441.14652435452
-},
-"fresh_cell": null,
+"fresh_no_cell": 219441.14652435452,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1209,13 +1319,23 @@
 "name": "a rank-1 adapter's product beside a square one: void, never dropped, the square one's figure beside it",
 "order": "chain",
 "share": 0.7408025625,
-"subset": null,
-"term": null,
-"why": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max"
+"subset": {
+"dropped": 1,
+"dropped_macs_share": 0.0009990009990009652,
+"k_whole_min": 512,
+"of": 2
+},
+"term": 4138401.093369211,
+"void": {
+"diverged_fed": 1,
+"kept_macs_share": 0.999000999000999,
+"reason": "the products count diverges; best subset 4.14e+06, keeping 99.9% of the step's fresh multiplications"
+},
+"why": null
 },
 {
-"converged": null,
 "fresh_cell": 4138401.093369211,
+"fresh_no_cell": 219441.14652435452,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1258,12 +1378,13 @@
 "k_whole_min": 512,
 "of": 2
 },
-"term": 219441.14652435452,
+"term": 4138401.093369211,
+"void": null,
 "why": null
 },
 {
-"converged": null,
 "fresh_cell": 3613969.8081843527,
+"fresh_no_cell": 193089.97127249016,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1301,12 +1422,13 @@
 "order": "chain",
 "share": 0.6491,
 "subset": null,
-"term": 193089.97127249016,
+"term": 3613969.8081843527,
+"void": null,
 "why": null
 },
 {
-"converged": null,
 "fresh_cell": 605705.8016963864,
+"fresh_no_cell": 234337.0524437246,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1333,12 +1455,13 @@
 "order": "chain",
 "share": 0.63185,
 "subset": null,
-"term": 234337.0524437246,
+"term": 605705.8016963864,
+"void": null,
 "why": null
 },
 {
-"converged": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -1354,17 +1477,19 @@
 "share": 0.0,
 "subset": null,
 "term": 0.0,
+"void": null,
 "why": null
 },
 {
-"converged": null,
 "fresh_cell": 2869160.606477064,
+"fresh_no_cell": 163340.7608721462,
 "inputs": {
 "C_gates": 277159456773655.0,
 "c": 536681984163840.0,
 "k": 65536.0,
 "products": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -1865,39 +1990,32 @@
 "name": "the 45M start's dense step, its trace's order unknown",
 "order": "chain",
 "share": 0.5504273850862195,
-"subset": null,
-"term": 163340.7608721462,
+"subset": {
+"dropped": 4,
+"dropped_fed": [
+256.0
+],
+"dropped_macs_share": 0.05837021211658777,
+"e": 0.019641161329022126,
+"k_whole_min": 512.0,
+"of": 19,
+"rule": "k_whole",
+"threshold": 512.0
+},
+"term": 2869160.606477064,
+"void": null,
 "why": null
 },
 {
-"converged": {
-"diverged_fed": 28,
 "fresh_cell": 4.484850111667032,
-"kept_macs_share": 6.979990693345428e-05,
-"subset": {
-"dropped": 28,
-"dropped_fed": [
-16.0,
-512.0,
-1024.0,
-1408.0
-],
-"dropped_macs_share": 0.9999302000930665,
-"e": 0,
-"k_whole_min": null,
-"of": 30,
-"rule": "e",
-"threshold": 0
-},
-"term": 0.16952209465946383
-},
-"fresh_cell": null,
+"fresh_no_cell": 0.16952209465946383,
 "inputs": {
 "C_gates": 2.2928562232493144e+16,
 "c": 536681984163840.0,
 "k": 65536.0,
 "products": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 6,
@@ -2610,39 +2728,39 @@
 "name": "the s-t20 start's DoRA rank-16 step on all 42 matrices (void: its two small unfed fp32 products beside it)",
 "order": "chain",
 "share": 0.007636901756856479,
-"subset": null,
-"term": null,
-"why": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max"
-},
-{
-"converged": {
-"diverged_fed": 10,
-"fresh_cell": 93.67109467503943,
-"kept_macs_share": 0.05641025641025643,
 "subset": {
-"dropped": 10,
+"dropped": 28,
 "dropped_fed": [
 16.0,
 512.0,
 1024.0,
 1408.0
 ],
-"dropped_macs_share": 0.9435897435897436,
+"dropped_macs_share": 0.9999302000930665,
 "e": 0,
 "k_whole_min": null,
-"of": 11,
+"of": 30,
 "rule": "e",
 "threshold": 0
 },
-"term": 31.645193708778624
+"term": 4.484850111667032,
+"void": {
+"diverged_fed": 28,
+"kept_macs_share": 6.979990693345428e-05,
+"reason": "the products count diverges; best subset 4.48, keeping 0.00698% of the step's fresh multiplications"
 },
-"fresh_cell": null,
+"why": null
+},
+{
+"fresh_cell": 93.67109467503943,
+"fresh_no_cell": 31.645193708778624,
 "inputs": {
 "C_gates": 2.0812759310870224e+16,
 "c": 536681984163840.0,
 "k": 65536.0,
 "products": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -3009,13 +3127,32 @@
 "name": "the s-t20 start's LoRA rank-16 step on every block's MLP (void: the one unfed product beside it)",
 "order": "chain",
 "share": 0.0037189376675900113,
-"subset": null,
-"term": null,
-"why": "unmeasured: a counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any set of products that keeps it, and the bound never drops a product so fed to escape that; a void is never a measured 0, and where the products no such cycle feeds have a proved bound, their best set's figure is beside the term as a sensitivity, never in the max"
+"subset": {
+"dropped": 10,
+"dropped_fed": [
+16.0,
+512.0,
+1024.0,
+1408.0
+],
+"dropped_macs_share": 0.9435897435897436,
+"e": 0,
+"k_whole_min": null,
+"of": 11,
+"rule": "e",
+"threshold": 0
+},
+"term": 93.67109467503943,
+"void": {
+"diverged_fed": 10,
+"kept_macs_share": 0.05641025641025643,
+"reason": "the products count diverges; best subset 93.7, keeping 5.64% of the step's fresh multiplications"
+},
+"why": null
 },
 {
-"converged": null,
 "fresh_cell": 4138401.093369211,
+"fresh_no_cell": 219441.14652435452,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -3042,12 +3179,13 @@
 "order": "chain",
 "share": 0.7400625,
 "subset": null,
-"term": 219441.14652435452,
+"term": 4138401.093369211,
+"void": null,
 "why": null
 },
 {
-"converged": null,
 "fresh_cell": null,
+"fresh_no_cell": null,
 "inputs": {
 "C_gates": 1e+18,
 "c": 536681984163840.0,
@@ -3075,7 +3213,303 @@
 "share": 0.7400625,
 "subset": null,
 "term": null,
+"void": null,
 "why": "unmeasured: the circuit declares its products summed in a tree, and the bound has the chain constant only (its premise that each output is summed along one chain (P-chain)); the chain figure is in the inputs, never the bound"
+}
+],
+"void": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+},
+"grid": {
+"k": [
+16384,
+32768,
+65536,
+131072,
+145568,
+262144,
+524288
+],
+"rule": "fresh_no_cell(c, k) = c \u00d7 fresh_per_c[k][0] (without whole cells), fresh_cell(c, k) = c \u00d7 fresh_per_c[k][1] (with them), and the term is fresh_cell (p_cell true); [null, null] where the term is void with no subset figure, which is computed, so rho's floor reads it as 1 where no other kind exceeds 1; null where fresh_per_c[k] is null (unmeasured) or k is off the dial; at each k of the console's grid (a session's input ids at 16 bits) and the serving block's, and at the console's c and the k's own (the 45M reference's session of k/16 input tokens and 1,024 output tokens; the serving block's c at its k)",
+"vectors": [
+{
+"C_gates": 277159456773655.0,
+"cells": [
+{
+"c": 536681984163840.0,
+"fresh_cell": 25843304.50285298,
+"fresh_no_cell": 709375.2325394077,
+"k": 16384,
+"term": 25843304.50285298,
+"why": null
+},
+{
+"c": 160322480898048.0,
+"fresh_cell": 7720144.9177698055,
+"fresh_no_cell": 211910.9650113168,
+"k": 16384,
+"term": 7720144.9177698055,
+"why": null
+},
+{
+"c": 536681984163840.0,
+"fresh_cell": 8790057.372587621,
+"fresh_no_cell": 343662.3401171426,
+"k": 32768,
+"term": 8790057.372587621,
+"why": null
+},
+{
+"c": 266704383246336.0,
+"fresh_cell": 4368223.453426378,
+"fresh_no_cell": 170783.17359345898,
+"k": 32768,
+"term": 4368223.453426378,
+"why": null
+},
+{
+"c": 536681984163840.0,
+"fresh_cell": 2869160.606477064,
+"fresh_no_cell": 163340.7608721462,
+"k": 65536,
+"term": 2869160.606477064,
+"why": null
+},
+{
+"c": 536681984163840.0,
+"fresh_cell": 931230.5826627061,
+"fresh_no_cell": 73558.58446712031,
+"k": 131072,
+"term": 931230.5826627061,
+"why": null
+},
+{
+"c": 1305492370882560.0,
+"fresh_cell": 2265241.720555961,
+"fresh_no_cell": 178933.09943012646,
+"k": 131072,
+"term": 2265241.720555961,
+"why": null
+},
+{
+"c": 536681984163840.0,
+"fresh_cell": 778359.9495315672,
+"fresh_no_cell": 64339.656057094755,
+"k": 145568,
+"term": 778359.9495315672,
+"why": null
+},
+{
+"c": 30087822237972,
+"fresh_cell": 43636.933024964696,
+"fresh_no_cell": 3607.052577541239,
+"k": 145568,
+"term": 43636.933024964696,
+"why": null
+},
+{
+"c": 536681984163840.0,
+"fresh_cell": null,
+"fresh_no_cell": null,
+"k": 262144,
+"term": null,
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+},
+{
+"c": 3758533883854848.0,
+"fresh_cell": null,
+"fresh_no_cell": null,
+"k": 262144,
+"term": null,
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+},
+{
+"c": 536681984163840.0,
+"fresh_cell": null,
+"fresh_no_cell": null,
+"k": 524288,
+"term": null,
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+},
+{
+"c": 1.2326299867938816e+16,
+"fresh_cell": null,
+"fresh_no_cell": null,
+"k": 524288,
+"term": null,
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+}
+],
+"fresh_per_c": {
+"131072": [
+1.3706177333626332e-10,
+1.7351627409546453e-09
+],
+"145568": [
+1.198841361469159e-10,
+1.45031875952435e-09
+],
+"16384": [
+1.3217794773652163e-09,
+4.815385137833032e-08
+],
+"262144": [
+null,
+null
+],
+"32768": [
+6.403463322000172e-10,
+1.637852141856911e-08
+],
+"524288": [
+null,
+null
+],
+"65536": [
+3.043529794029401e-10,
+5.346109411418509e-09
+]
+},
+"name": "the 45M start's dense step"
+},
+{
+"C_gates": 4.977290950238882e+16,
+"cells": [
+{
+"c": 536681984163840.0,
+"fresh_cell": 39795651.46215308,
+"fresh_no_cell": 1083179.948224779,
+"k": 16384,
+"term": 39795651.46215308,
+"why": null
+},
+{
+"c": 160322480898048.0,
+"fresh_cell": 11888115.792272737,
+"fresh_no_cell": 323577.2798093421,
+"k": 16384,
+"term": 11888115.792272737,
+"why": null
+},
+{
+"c": 536681984163840.0,
+"fresh_cell": 13837635.414574308,
+"fresh_no_cell": 530550.3286830583,
+"k": 32768,
+"term": 13837635.414574308,
+"why": null
+},
+{
+"c": 266704383246336.0,
+"fresh_cell": 6876619.912221671,
+"fresh_no_cell": 263657.2539564852,
+"k": 32768,
+"term": 6876619.912221671,
+"why": null
+},
+{
+"c": 536681984163840.0,
+"fresh_cell": 4749660.270885498,
+"fresh_no_cell": 257407.36342872275,
+"k": 65536,
+"term": 4749660.270885498,
+"why": null
+},
+{
+"c": 536681984163840.0,
+"fresh_cell": 1583811.61908288,
+"fresh_no_cell": 122897.07699696475,
+"k": 131072,
+"term": 1583811.61908288,
+"why": null
+},
+{
+"c": 1305492370882560.0,
+"fresh_cell": 3852661.439435677,
+"fresh_no_cell": 298950.21848604485,
+"k": 131072,
+"term": 3852661.439435677,
+"why": null
+},
+{
+"c": 536681984163840.0,
+"fresh_cell": 1334784.986389111,
+"fresh_no_cell": 109642.80242549404,
+"k": 145568,
+"term": 1334784.986389111,
+"why": null
+},
+{
+"c": 30087822237972,
+"fresh_cell": 74831.60341027776,
+"fresh_no_cell": 6146.867691471169,
+"k": 145568,
+"term": 74831.60341027776,
+"why": null
+},
+{
+"c": 536681984163840.0,
+"fresh_cell": 483259.17110697256,
+"fresh_no_cell": 56555.968123601284,
+"k": 262144,
+"term": 483259.17110697256,
+"why": null
+},
+{
+"c": 3758533883854848.0,
+"fresh_cell": 3384398.9977026395,
+"fresh_no_cell": 396077.2464869564,
+"k": 262144,
+"term": 3384398.9977026395,
+"why": null
+},
+{
+"c": 536681984163840.0,
+"fresh_cell": null,
+"fresh_no_cell": null,
+"k": 524288,
+"term": null,
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+},
+{
+"c": 1.2326299867938816e+16,
+"fresh_cell": null,
+"fresh_no_cell": null,
+"k": 524288,
+"term": null,
+"why": "void: the products count diverges at this k: a counted product is fed by a cycle of the step's whole-making system that has no fixed point (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or no set of the products has a proved bound, so the bound has no figure on the whole step. The term is the best figure on a set of the products no such cycle feeds, a valid lower bound since that set keeps only products whose feeding classes converge; with no such set it has no figure, and the row's slowdown is floored at 1 with this reason"
+}
+],
+"fresh_per_c": {
+"131072": [
+2.289942286556173e-10,
+2.9511175441271546e-09
+],
+"145568": [
+2.042975275130941e-10,
+2.4871060064904723e-09
+],
+"16384": [
+2.01829012373574e-09,
+7.415127139800567e-08
+],
+"262144": [
+1.0538078376474009e-10,
+9.00457226750212e-10
+],
+"32768": [
+9.885748810995865e-10,
+2.5783677900299912e-08
+],
+"524288": [
+null,
+null
+],
+"65536": [
+4.7962736038134e-10,
+8.850046044093605e-09
+]
+},
+"name": "s-t20's dense step at full size"
 }
 ]
 },
@@ -4305,6 +4739,7 @@
 "at": {
 "145568": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -4376,6 +4811,7 @@
 },
 "80000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -4447,6 +4883,7 @@
 },
 "800000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -4518,6 +4955,7 @@
 },
 "8000000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -4589,6 +5027,7 @@
 },
 "80000000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -4660,6 +5099,7 @@
 },
 "800000000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -4731,6 +5171,7 @@
 }
 },
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -6079,6 +6520,7 @@
 "at": {
 "145568": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -6150,6 +6592,7 @@
 },
 "80000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -6221,6 +6664,7 @@
 },
 "800000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -6292,6 +6736,7 @@
 },
 "8000000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -6363,6 +6808,7 @@
 },
 "80000000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -6434,6 +6880,7 @@
 },
 "800000000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -6505,6 +6952,7 @@
 }
 },
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -8562,6 +9010,7 @@
 "at": {
 "145568": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -8671,6 +9120,7 @@
 },
 "80000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -8780,6 +9230,7 @@
 },
 "800000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -8889,6 +9340,7 @@
 },
 "8000000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -8998,6 +9450,7 @@
 },
 "80000000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -9107,6 +9560,7 @@
 },
 "800000000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -9216,6 +9670,7 @@
 }
 },
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -12753,6 +13208,7 @@
 "at": {
 "145568": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -12889,6 +13345,7 @@
 },
 "80000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -13025,6 +13482,7 @@
 },
 "800000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -13161,6 +13619,7 @@
 },
 "8000000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -13297,6 +13756,7 @@
 },
 "80000000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -13433,6 +13893,7 @@
 },
 "800000000": {
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -13569,6 +14030,7 @@
 }
 },
 "capture": "4.12.9",
+"capture_code": null,
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -13992,18 +14454,17 @@
 {
 "binding_kind": "fit",
 "c": 4925098176.0,
+"capture_code": null,
 "case": "dense",
-"fresh_converged_share": null,
 "fresh_subset": null,
 "k": 80000000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "Fit's construction",
 "rho": 1.0,
 "sensitivities": {
-"fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "reduction": 0.042688096126554144,
 "update": 5.1338660404755435e-06
 },
@@ -14012,23 +14473,23 @@
 "fresh_products": 0.0,
 "token": 0.999663180049092
 },
+"void": null,
 "why": null
 },
 {
 "binding_kind": "token",
 "c": 20173202128896.0,
+"capture_code": null,
 "case": "dense",
-"fresh_converged_share": null,
 "fresh_subset": null,
 "k": 80000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
 "rho": 8.35335685982954,
 "sensitivities": {
-"fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "reduction": 42.05663060357565,
 "update": 21.028315301787824
 },
@@ -14037,23 +14498,23 @@
 "fresh_products": 0.0,
 "token": 8.35335685982954
 },
+"void": null,
 "why": null
 },
 {
 "binding_kind": "token",
 "c": 20173202128896.0,
+"capture_code": null,
 "case": "dense",
-"fresh_converged_share": null,
 "fresh_subset": null,
 "k": 100000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "partial": true,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
 "rho": 6.866429960025952,
 "sensitivities": {
-"fresh_cell": null,
-"fresh_converged": null,
+"fresh_no_cell": null,
 "reduction": 33.645304482860524,
 "update": 16.822652241430262
 },
@@ -14062,23 +14523,23 @@
 "fresh_products": null,
 "token": 6.866429960025952
 },
+"void": null,
 "why": null
 },
 {
 "binding_kind": "token",
 "c": 536681984163840.0,
+"capture_code": null,
 "case": "dense",
-"fresh_converged_share": null,
 "fresh_subset": null,
 "k": 65536.0,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
 "rho": 263.4961717397754,
 "sensitivities": {
-"fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "reduction": 0.0,
 "update": 0.0
 },
@@ -14087,23 +14548,23 @@
 "fresh_products": 0.0,
 "token": 263.4961717397754
 },
+"void": null,
 "why": null
 },
 {
 "binding_kind": "token",
 "c": 536681984163840.0,
+"capture_code": null,
 "case": "lora",
-"fresh_converged_share": null,
 "fresh_subset": null,
 "k": 65536.0,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
 "rho": 95.68434260057813,
 "sensitivities": {
-"fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "reduction": 0.0,
 "update": 0.0
 },
@@ -14112,23 +14573,23 @@
 "fresh_products": 0.0,
 "token": 95.68434260057813
 },
+"void": null,
 "why": null
 },
 {
 "binding_kind": "unmeasured",
 "c": 20173202128896.0,
+"capture_code": null,
 "case": "adapter-live",
-"fresh_converged_share": null,
 "fresh_subset": null,
 "k": 100000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "unmeasured",
 "rho": null,
 "sensitivities": {
-"fresh_cell": null,
-"fresh_converged": null,
+"fresh_no_cell": null,
 "reduction": 7.821017076702145,
 "update": 7.821017076702145
 },
@@ -14137,23 +14598,23 @@
 "fresh_products": null,
 "token": 0.6520858971202714
 },
+"void": null,
 "why": "the measured kinds give at most 1; fresh products unmeasured"
 },
 {
 "binding_kind": "none",
 "c": 20173202128896.0,
+"capture_code": null,
 "case": "adapter-live",
-"fresh_converged_share": null,
 "fresh_subset": null,
 "k": 65536.0,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "no kind exceeds 1",
 "rho": 1.0,
 "sensitivities": {
-"fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "reduction": 11.933924982760843,
 "update": 11.933924982760843
 },
@@ -14162,21 +14623,100 @@
 "fresh_products": 0.0,
 "token": 0.6520858971202714
 },
+"void": null,
 "why": null
+},
+{
+"binding_kind": "fresh_products",
+"c": 536681984163840.0,
+"capture_code": null,
+"case": "dense, DoRA's void products",
+"fresh_subset": {
+"dropped": 28,
+"dropped_fed": [
+16.0,
+512.0,
+1024.0,
+1408.0
+],
+"dropped_macs_share": 0.9999302000930665,
+"e": 0,
+"k_whole_min": null,
+"of": 30,
+"rule": "e",
+"threshold": 0
+},
+"k": 65536.0,
+"label": "training's slowdown code 4.12.14, reading A",
+"partial": false,
+"reading": "A",
+"rests_on": "theorem for this circuit (Loomis-Whitney), given that every value a block reads costs its full width (P-width, extended to what makes operands whole), elementwise steps don't fan out (P-match) and each output is summed along one chain (P-chain), given that blocks hold whole multiply cells (P-cell)",
+"rho": 2510.258141059264,
+"sensitivities": {
+"fresh_no_cell": 94.88482504717693,
+"reduction": 0.0,
+"update": 0.0
+},
+"terms": {
+"decoding": 263.4961717397754,
+"fresh_products": 2510.258141059264,
+"token": 263.4961717397754
+},
+"void": "the products count diverges; best subset 2.51e+03, keeping 0.00698% of the step's fresh multiplications",
+"why": "the products count diverges; best subset 2.51e+03, keeping 0.00698% of the step's fresh multiplications"
+},
+{
+"binding_kind": "none",
+"c": 4925098176.0,
+"capture_code": null,
+"case": "dense, DoRA's void products",
+"fresh_subset": {
+"dropped": 28,
+"dropped_fed": [
+16.0,
+512.0,
+1024.0,
+1408.0
+],
+"dropped_macs_share": 0.9999302000930665,
+"e": 0,
+"k_whole_min": null,
+"of": 30,
+"rule": "e",
+"threshold": 0
+},
+"k": 65536.0,
+"label": "training's slowdown code 4.12.14, reading A",
+"partial": false,
+"reading": "A",
+"rests_on": "no kind exceeds 1",
+"rho": 1.0,
+"sensitivities": {
+"fresh_no_cell": 0.0008707523124667924,
+"reduction": 52.10949234198504,
+"update": 0.006266926318939873
+},
+"terms": {
+"decoding": 0.999663180049092,
+"fresh_products": 0.023036487448115702,
+"token": 0.999663180049092
+},
+"void": "the products count diverges; best subset 0.023, keeping 0.00698% of the step's fresh multiplications",
+"why": "the products count diverges; best subset 0.023, keeping 0.00698% of the step's fresh multiplications"
 }
 ],
-"published_rule": "Fit holds: rho_fit, binding fit. Else, where a measured kind's term exceeds 1: the max, binding that kind, partial where a kind is unmeasured. Else, where a kind is unmeasured: null, binding unmeasured, why naming it. Else: 1, binding none.",
+"published_rule": "Fit holds: rho_fit, binding fit. Else, where a kind's term exceeds 1: the max, binding that kind, partial where a kind is unmeasured. Else, where a kind is unmeasured (no figure and not void): null, binding unmeasured, why naming it. Else: 1, binding none. A void fresh-products term is computed, its figure its best subset's (null where none has one), and void and why carry its reason.",
 "rests_on": {
 "decoding": "assumption (D): a block reading the update code runs the whole decoder, so it holds at most c - d gates; with A1 (reading A) and the token kind's witness family",
-"fresh_products": "theorem for this circuit: the Loomis-Whitney cap on the multiplications a block does of products whose two operands both depend on the update (fresh operands), amortized over the partition, on the best subset of those products (every product still counted in |C|), each operand and partial sum at its passed width, given these premises on the reference circuit: every value a block reads costs its full width (P-width), extended to every value a block reads while making operands whole (attention's and the optimizer's included); elementwise steps don't fan out (P-match): an entry's fan-out is at most its fan-in, checked on the traced step; each output is summed along one chain (P-chain), a chain of whole multiply cells, as training's slowdown code prices a matrix product; products share arrays only as a layer's forward, input-gradient and weight-gradient products do (P-share); and the standard multiplication algorithm; without assuming that blocks hold whole multiply cells (P-cell), a premise on the partition, which the attacker chooses (the figure with it is published beside the term)",
+"fresh_products": "theorem for this circuit: the Loomis-Whitney cap on the multiplications a block does of products whose two operands both depend on the update (fresh operands), amortized over the partition, on the best subset of those products (every product still counted in |C|), each operand and partial sum at its passed width, given these premises on the reference circuit: every value a block reads costs its full width (P-width), extended to every value a block reads while making operands whole (attention's and the optimizer's included); elementwise steps don't fan out (P-match): an entry's fan-out is at most its fan-in, checked on the traced step; each output is summed along one chain (P-chain), a chain of whole multiply cells, as training's slowdown code prices a matrix product; products share arrays only as a layer's forward, input-gradient and weight-gradient products do (P-share); and the standard multiplication algorithm; given that blocks hold whole multiply cells (P-cell), a premise on the partition",
 "token": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them; a block's work is a union of them, each part reading at most its k bits, so it holds at most the best run block plus every product's tile at k plus every gate no tile places; a block reading the update code at c gates"
 },
-"rule": "rho = rho_fit where Fit holds, else max(1, the max over the kinds' measured terms); null where no kind is measured. Sensitivities are never in the max.",
+"rule": "rho = rho_fit where Fit holds, else max(1, the max over the kinds' terms); 1 where every kind is computed and none has a figure (a void term with no subset figure is computed: it is in void); null where a kind isn't computed and none has a figure. Sensitivities are never in the max.",
 "schema": "te-core/rho-vectors/v3",
 "sensitivities": {
 "decoding_form": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole decoder, so it holds at most max(c - d, min(c, \u03b1 (x0 s + s*))) affected gates, \u03b1 the most affected gates a token has in any part, x0 and s* from the uncapped profiles; reading B isn't A1's approved reading",
-"fresh_cell": "sensitivity, assuming that blocks hold whole multiply cells (P-cell): the fresh-products term's figure where every block does, a premise on the partition, which the attacker chooses; the term is the figure without it",
-"fresh_converged": "sensitivity, where the fresh-products term is void because a counted product is fed by a cycle of the step's whole-making system with no fixed point: the term's figure on the best set of the products no such cycle feeds, with the share of the step's counted fresh multiplications that set keeps; still a lower bound, published beside the void term and never in the max, since a product so fed is never dropped to escape the void",
+"fresh_cell": "sensitivity, assuming that blocks hold whole multiply cells (P-cell): the fresh-products figure where every block does, a premise on the partition, which the attacker chooses; the term takes this premise",
+"fresh_no_cell": "sensitivity, without assuming that blocks hold whole multiply cells (P-cell): the fresh-products figure where a block may split a multiply cell, as a partition the attacker chooses may; the term assumes whole cells",
 "per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate at the best witness that holds it; a block holding one gate of a product beside another product's tile or the best run holds more, for a few bits of that gate's own operands",
 "reduction": "sensitivity, assumption (R): each block holding a step's token work passes one partial gradient at its passed width (the trace's partial cut), and the step's token work fills at least ceil(N w / c) blocks; it holds only for partitions split by tokens (a block holding only frozen layers passes no partial)",
 "token_form": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* the largest x(k - u(x))/a over x and x0 from the input profile, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading",
@@ -14191,7 +14731,847 @@
 "out_tokens": 1024,
 "params": 45029888
 },
+"dial": {
+"about": "each k of the console's grid (te_core.policy's K_GRID): a session of in_tokens = k/16 input tokens and out_tokens output tokens, c its gates (te_core.policy.session_gates), the products term's c at k, and k_bits its input ids at the model's own vocabulary (k at 50,304, 15/16 of it at 32,000)",
+"in_tokens": [
+1024,
+2048,
+4096,
+8192,
+16384,
+32768
+],
+"k": [
+16384,
+32768,
+65536,
+131072,
+262144,
+524288
+],
+"out_tokens": 1024
+},
 "rule": "c = (tokens\u00b7n_layer\u00b7(4\u00b7d_model\u00b2 + 3\u00b7d_model\u00b7d_ff) + tokens\u00b7d_model\u00b7vocab + 2\u00b7n_layer\u00b7d_model\u00b7attended) x gates_per_mac, tokens = in + out, attended = in\u00b2 + out\u00b7in + out\u00b7(out + 1)/2 (a prompt token over the whole prompt, the j-th output token over the prompt and the output tokens up to itself); k = in x ceil(log2 vocab)",
+"sizes": [
+{
+"c": 241931371315200.0,
+"dial": [
+{
+"c": 74126584872960.0,
+"in_tokens": 1024,
+"k": 16384,
+"k_bits": 16384
+},
+{
+"c": 122115153100800.0,
+"in_tokens": 2048,
+"k": 32768,
+"k_bits": 32768
+},
+{
+"c": 241931371315200.0,
+"in_tokens": 4096,
+"k": 65536,
+"k_bits": 65536
+},
+{
+"c": 576920134778880.0,
+"in_tokens": 8192,
+"k": 131072,
+"k_bits": 131072
+},
+{
+"c": 1628322969845760.0,
+"in_tokens": 16384,
+"k": 262144,
+"k_bits": 262144
+},
+{
+"c": 5256829872537600.0,
+"in_tokens": 32768,
+"k": 524288,
+"k_bits": 524288
+}
+],
+"k_bits": 65536,
+"name": "20M",
+"params": 21179200,
+"shape": {
+"d_ff": 896,
+"d_model": 320,
+"n_head": 5,
+"n_layer": 4,
+"vocab": 50304
+}
+},
+{
+"c": 536681984163840.0,
+"dial": [
+{
+"c": 160322480898048.0,
+"in_tokens": 1024,
+"k": 16384,
+"k_bits": 16384
+},
+{
+"c": 266704383246336.0,
+"in_tokens": 2048,
+"k": 32768,
+"k_bits": 32768
+},
+{
+"c": 536681984163840.0,
+"in_tokens": 4096,
+"k": 65536,
+"k_bits": 65536
+},
+{
+"c": 1305492370882560.0,
+"in_tokens": 8192,
+"k": 131072,
+"k_bits": 131072
+},
+{
+"c": 3758533883854848.0,
+"in_tokens": 16384,
+"k": 262144,
+"k_bits": 262144
+},
+{
+"c": 1.2326299867938816e+16,
+"in_tokens": 32768,
+"k": 524288,
+"k_bits": 524288
+}
+],
+"k_bits": 65536,
+"name": "45M",
+"params": 45029888,
+"shape": {
+"d_ff": 1408,
+"d_model": 512,
+"n_head": 8,
+"n_layer": 6,
+"vocab": 50304
+}
+},
+{
+"c": 1112847447490560.0,
+"dial": [
+{
+"c": 336438353461248.0,
+"in_tokens": 1024,
+"k": 16384,
+"k_bits": 16384
+},
+{
+"c": 557098853990400.0,
+"in_tokens": 2048,
+"k": 32768,
+"k_bits": 32768
+},
+{
+"c": 1112847447490560.0,
+"in_tokens": 4096,
+"k": 65536,
+"k_bits": 65536
+},
+{
+"c": 2682055004258304.0,
+"in_tokens": 8192,
+"k": 131072,
+"k_bits": 131072
+},
+{
+"c": 7651311596863488.0,
+"in_tokens": 16384,
+"k": 262144,
+"k_bits": 262144
+},
+{
+"c": 2.491319069835264e+16,
+"in_tokens": 32768,
+"k": 524288,
+"k_bits": 524288
+}
+],
+"k_bits": 65536,
+"name": "95M",
+"params": 95269632,
+"shape": {
+"d_ff": 2048,
+"d_model": 768,
+"n_head": 12,
+"n_layer": 8,
+"vocab": 50304
+}
+},
+{
+"c": 2340420475944960.0,
+"dial": [
+{
+"c": 718766939308032.0,
+"in_tokens": 1024,
+"k": 16384,
+"k_bits": 16384
+},
+{
+"c": 1183033056559104.0,
+"in_tokens": 2048,
+"k": 32768,
+"k_bits": 32768
+},
+{
+"c": 2340420475944960.0,
+"in_tokens": 4096,
+"k": 65536,
+"k_bits": 65536
+},
+{
+"c": 5570616054251520.0,
+"in_tokens": 8192,
+"k": 131072,
+"k_bits": 131072
+},
+{
+"c": 1.5692690169004032e+16,
+"in_tokens": 16384,
+"k": 262144,
+"k_bits": 262144
+},
+{
+"c": 5.058357023106662e+16,
+"in_tokens": 32768,
+"k": 524288,
+"k_bits": 524288
+}
+],
+"k_bits": 65536,
+"name": "200M",
+"params": 205677568,
+"shape": {
+"d_ff": 2816,
+"d_model": 1024,
+"n_head": 16,
+"n_layer": 12,
+"vocab": 50304
+}
+},
+{
+"c": 4317884239011840.0,
+"dial": [
+{
+"c": 1370479768068096.0,
+"in_tokens": 1024,
+"k": 16384,
+"k_bits": 16384
+},
+{
+"c": 2227792745816064.0,
+"in_tokens": 2048,
+"k": 32768,
+"k_bits": 32768
+},
+{
+"c": 4317884239011840.0,
+"in_tokens": 4096,
+"k": 65536,
+"k_bits": 65536
+},
+{
+"c": 9999929376202752.0,
+"in_tokens": 8192,
+"k": 131072,
+"k_bits": 131072
+},
+{
+"c": 2.7371468253782016e+16,
+"in_tokens": 16384,
+"k": 262144,
+"k_bits": 262144
+},
+{
+"c": 8.61443404217303e+16,
+"in_tokens": 32768,
+"k": 524288,
+"k_bits": 524288
+}
+],
+"k_bits": 65536,
+"name": "400M",
+"params": 400532160,
+"shape": {
+"d_ff": 3712,
+"d_model": 1344,
+"n_head": 21,
+"n_layer": 15,
+"vocab": 50304
+}
+},
+{
+"c": 1.032201539186688e+16,
+"dial": [
+{
+"c": 3364504883453952.0,
+"in_tokens": 1024,
+"k": 16384,
+"k_bits": 16384
+},
+{
+"c": 5415485383139328.0,
+"in_tokens": 2048,
+"k": 32768,
+"k_bits": 32768
+},
+{
+"c": 1.032201539186688e+16,
+"in_tokens": 4096,
+"k": 65536,
+"k_bits": 65536
+},
+{
+"c": 2.3353351446749184e+16,
+"in_tokens": 8192,
+"k": 131072,
+"k_bits": 131072
+},
+{
+"c": 6.228912770622259e+16,
+"in_tokens": 16384,
+"k": 262144,
+"k_bits": 262144
+},
+{
+"c": 1.916530968240046e+17,
+"in_tokens": 32768,
+"k": 524288,
+"k_bits": 524288
+}
+],
+"k_bits": 65536,
+"name": "1B",
+"params": 999397440,
+"shape": {
+"d_ff": 4736,
+"d_model": 1728,
+"n_head": 27,
+"n_layer": 25,
+"vocab": 50304
+}
+}
+],
+"starts": [
+{
+"c": 536681984163840.0,
+"dial": [
+{
+"c": 160322480898048.0,
+"in_tokens": 1024,
+"k": 16384,
+"k_bits": 16384
+},
+{
+"c": 266704383246336.0,
+"in_tokens": 2048,
+"k": 32768,
+"k_bits": 32768
+},
+{
+"c": 536681984163840.0,
+"in_tokens": 4096,
+"k": 65536,
+"k_bits": 65536
+},
+{
+"c": 1305492370882560.0,
+"in_tokens": 8192,
+"k": 131072,
+"k_bits": 131072
+},
+{
+"c": 3758533883854848.0,
+"in_tokens": 16384,
+"k": 262144,
+"k_bits": 262144
+},
+{
+"c": 1.2326299867938816e+16,
+"in_tokens": 32768,
+"k": 524288,
+"k_bits": 524288
+}
+],
+"k_bits": 65536,
+"name": "s50",
+"params": 45029888,
+"shape": {
+"d_ff": 1408,
+"d_model": 512,
+"n_head": 8,
+"n_layer": 6,
+"vocab": 50304
+}
+},
+{
+"c": 536681984163840.0,
+"dial": [
+{
+"c": 160322480898048.0,
+"in_tokens": 1024,
+"k": 16384,
+"k_bits": 16384
+},
+{
+"c": 266704383246336.0,
+"in_tokens": 2048,
+"k": 32768,
+"k_bits": 32768
+},
+{
+"c": 536681984163840.0,
+"in_tokens": 4096,
+"k": 65536,
+"k_bits": 65536
+},
+{
+"c": 1305492370882560.0,
+"in_tokens": 8192,
+"k": 131072,
+"k_bits": 131072
+},
+{
+"c": 3758533883854848.0,
+"in_tokens": 16384,
+"k": 262144,
+"k_bits": 262144
+},
+{
+"c": 1.2326299867938816e+16,
+"in_tokens": 32768,
+"k": 524288,
+"k_bits": 524288
+}
+],
+"k_bits": 65536,
+"name": "s100",
+"params": 45029888,
+"shape": {
+"d_ff": 1408,
+"d_model": 512,
+"n_head": 8,
+"n_layer": 6,
+"vocab": 50304
+}
+},
+{
+"c": 1112847447490560.0,
+"dial": [
+{
+"c": 336438353461248.0,
+"in_tokens": 1024,
+"k": 16384,
+"k_bits": 16384
+},
+{
+"c": 557098853990400.0,
+"in_tokens": 2048,
+"k": 32768,
+"k_bits": 32768
+},
+{
+"c": 1112847447490560.0,
+"in_tokens": 4096,
+"k": 65536,
+"k_bits": 65536
+},
+{
+"c": 2682055004258304.0,
+"in_tokens": 8192,
+"k": 131072,
+"k_bits": 131072
+},
+{
+"c": 7651311596863488.0,
+"in_tokens": 16384,
+"k": 262144,
+"k_bits": 262144
+},
+{
+"c": 2.491319069835264e+16,
+"in_tokens": 32768,
+"k": 524288,
+"k_bits": 524288
+}
+],
+"k_bits": 65536,
+"name": "m50",
+"params": 95269632,
+"shape": {
+"d_ff": 2048,
+"d_model": 768,
+"n_head": 12,
+"n_layer": 8,
+"vocab": 50304
+}
+},
+{
+"c": 1112847447490560.0,
+"dial": [
+{
+"c": 336438353461248.0,
+"in_tokens": 1024,
+"k": 16384,
+"k_bits": 16384
+},
+{
+"c": 557098853990400.0,
+"in_tokens": 2048,
+"k": 32768,
+"k_bits": 32768
+},
+{
+"c": 1112847447490560.0,
+"in_tokens": 4096,
+"k": 65536,
+"k_bits": 65536
+},
+{
+"c": 2682055004258304.0,
+"in_tokens": 8192,
+"k": 131072,
+"k_bits": 131072
+},
+{
+"c": 7651311596863488.0,
+"in_tokens": 16384,
+"k": 262144,
+"k_bits": 262144
+},
+{
+"c": 2.491319069835264e+16,
+"in_tokens": 32768,
+"k": 524288,
+"k_bits": 524288
+}
+],
+"k_bits": 65536,
+"name": "m100",
+"params": 95269632,
+"shape": {
+"d_ff": 2048,
+"d_model": 768,
+"n_head": 12,
+"n_layer": 8,
+"vocab": 50304
+}
+},
+{
+"c": 465661386424320.0,
+"dial": [
+{
+"c": 131914241802240.0,
+"in_tokens": 1024,
+"k": 16384,
+"k_bits": 15360
+},
+{
+"c": 224092024602624.0,
+"in_tokens": 2048,
+"k": 32768,
+"k_bits": 30720
+},
+{
+"c": 465661386424320.0,
+"in_tokens": 4096,
+"k": 65536,
+"k_bits": 61440
+},
+{
+"c": 1177655294951424.0,
+"in_tokens": 8192,
+"k": 131072,
+"k_bits": 122880
+},
+{
+"c": 3517063851540480.0,
+"in_tokens": 16384,
+"k": 262144,
+"k_bits": 245760
+},
+{
+"c": 1.1857563922857984e+16,
+"in_tokens": 32768,
+"k": 524288,
+"k_bits": 491520
+}
+],
+"k_bits": 61440,
+"name": "s-t20",
+"params": 35658240,
+"shape": {
+"d_ff": 1408,
+"d_model": 512,
+"n_head": 8,
+"n_layer": 6,
+"vocab": 32000
+}
+},
+{
+"c": 465661386424320.0,
+"dial": [
+{
+"c": 131914241802240.0,
+"in_tokens": 1024,
+"k": 16384,
+"k_bits": 15360
+},
+{
+"c": 224092024602624.0,
+"in_tokens": 2048,
+"k": 32768,
+"k_bits": 30720
+},
+{
+"c": 465661386424320.0,
+"in_tokens": 4096,
+"k": 65536,
+"k_bits": 61440
+},
+{
+"c": 1177655294951424.0,
+"in_tokens": 8192,
+"k": 131072,
+"k_bits": 122880
+},
+{
+"c": 3517063851540480.0,
+"in_tokens": 16384,
+"k": 262144,
+"k_bits": 245760
+},
+{
+"c": 1.1857563922857984e+16,
+"in_tokens": 32768,
+"k": 524288,
+"k_bits": 491520
+}
+],
+"k_bits": 61440,
+"name": "s-t200",
+"params": 35658240,
+"shape": {
+"d_ff": 1408,
+"d_model": 512,
+"n_head": 8,
+"n_layer": 6,
+"vocab": 32000
+}
+},
+{
+"c": 1006316550881280.0,
+"dial": [
+{
+"c": 293825994817536.0,
+"in_tokens": 1024,
+"k": 16384,
+"k_bits": 15360
+},
+{
+"c": 493180316024832.0,
+"in_tokens": 2048,
+"k": 32768,
+"k_bits": 30720
+},
+{
+"c": 1006316550881280.0,
+"in_tokens": 4096,
+"k": 65536,
+"k_bits": 61440
+},
+{
+"c": 2490299390361600.0,
+"in_tokens": 8192,
+"k": 131072,
+"k_bits": 122880
+},
+{
+"c": 7289106548391936.0,
+"in_tokens": 16384,
+"k": 262144,
+"k_bits": 245760
+},
+{
+"c": 2.421008678073139e+16,
+"in_tokens": 32768,
+"k": 524288,
+"k_bits": 491520
+}
+],
+"k_bits": 61440,
+"name": "m-t20",
+"params": 81212160,
+"shape": {
+"d_ff": 2048,
+"d_model": 768,
+"n_head": 12,
+"n_layer": 8,
+"vocab": 32000
+}
+},
+{
+"c": 1006316550881280.0,
+"dial": [
+{
+"c": 293825994817536.0,
+"in_tokens": 1024,
+"k": 16384,
+"k_bits": 15360
+},
+{
+"c": 493180316024832.0,
+"in_tokens": 2048,
+"k": 32768,
+"k_bits": 30720
+},
+{
+"c": 1006316550881280.0,
+"in_tokens": 4096,
+"k": 65536,
+"k_bits": 61440
+},
+{
+"c": 2490299390361600.0,
+"in_tokens": 8192,
+"k": 131072,
+"k_bits": 122880
+},
+{
+"c": 7289106548391936.0,
+"in_tokens": 16384,
+"k": 262144,
+"k_bits": 245760
+},
+{
+"c": 2.421008678073139e+16,
+"in_tokens": 32768,
+"k": 524288,
+"k_bits": 491520
+}
+],
+"k_bits": 61440,
+"name": "m-t200",
+"params": 81212160,
+"shape": {
+"d_ff": 2048,
+"d_model": 768,
+"n_head": 12,
+"n_layer": 8,
+"vocab": 32000
+}
+},
+{
+"c": 2848397784514560.0,
+"dial": [
+{
+"c": 849490779045888.0,
+"in_tokens": 1024,
+"k": 16384,
+"k_bits": 15360
+},
+{
+"c": 1414079698698240.0,
+"in_tokens": 2048,
+"k": 32768,
+"k_bits": 30720
+},
+{
+"c": 2848397784514560.0,
+"in_tokens": 4096,
+"k": 65536,
+"k_bits": 61440
+},
+{
+"c": 6937594942193664.0,
+"in_tokens": 8192,
+"k": 131072,
+"k_bits": 122880
+},
+{
+"c": 1.999823320173773e+16,
+"in_tokens": 16384,
+"k": 262144,
+"k_bits": 245760
+},
+{
+"c": 6.564848549756928e+16,
+"in_tokens": 32768,
+"k": 524288,
+"k_bits": 491520
+}
+],
+"k_bits": 61440,
+"name": "l16-t20",
+"params": 238322688,
+"shape": {
+"d_ff": 2816,
+"d_model": 1024,
+"n_head": 16,
+"n_layer": 16,
+"vocab": 32000
+}
+},
+{
+"c": 7024532317470720.0,
+"dial": [
+{
+"c": 2239134642929664.0,
+"in_tokens": 1024,
+"k": 16384,
+"k_bits": 15360
+},
+{
+"c": 3634018914336768.0,
+"in_tokens": 2048,
+"k": 32768,
+"k_bits": 30720
+},
+{
+"c": 7024532317470720.0,
+"in_tokens": 4096,
+"k": 65536,
+"k_bits": 61440
+},
+{
+"c": 1.62085385650176e+16,
+"in_tokens": 8192,
+"k": 131072,
+"k_bits": 122880
+},
+{
+"c": 4.418846882522726e+16,
+"in_tokens": 16384,
+"k": 262144,
+"k_bits": 245760
+},
+{
+"c": 1.385960004061102e+17,
+"in_tokens": 32768,
+"k": 524288,
+"k_bits": 491520
+}
+],
+"k_bits": 61440,
+"name": "xl-t20",
+"params": 656146944,
+"shape": {
+"d_ff": 4224,
+"d_model": 1536,
+"n_head": 24,
+"n_layer": 21,
+"vocab": 32000
+}
+}
+],
 "vectors": [
 {
 "attended": 21496320,
@@ -14882,6 +16262,466 @@
 "vocab": 32000
 },
 "tokens": 2
+},
+{
+"attended": 21496320,
+"gates": 241931371315200.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 4096,
+"k_bits": 65536,
+"macs": {
+"attention": 55030579200,
+"lm_head": 82418073600,
+"matrices": 26004684800
+},
+"out_tokens": 1024,
+"params": 21179200,
+"precision": "bf16",
+"shape": {
+"d_ff": 896,
+"d_model": 320,
+"n_head": 5,
+"n_layer": 4,
+"vocab": 50304
+},
+"tokens": 5120
+},
+{
+"attended": 15205888,
+"gates": 218096169615360.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 2048,
+"k_bits": 32768,
+"macs": {
+"attention": 38927073280,
+"lm_head": 82418073600,
+"matrices": 26004684800
+},
+"out_tokens": 3072,
+"params": 21179200,
+"precision": "bf16",
+"shape": {
+"d_ff": 896,
+"d_model": 320,
+"n_head": 5,
+"n_layer": 4,
+"vocab": 50304
+},
+"tokens": 5120
+},
+{
+"attended": 285737472,
+"gates": 1628322969845760.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 16384,
+"k_bits": 262144,
+"macs": {
+"attention": 731487928320,
+"lm_head": 280221450240,
+"matrices": 88415928320
+},
+"out_tokens": 1024,
+"params": 21179200,
+"precision": "bf16",
+"shape": {
+"d_ff": 896,
+"d_model": 320,
+"n_head": 5,
+"n_layer": 4,
+"vocab": 50304
+},
+"tokens": 17408
+},
+{
+"attended": 1048576,
+"gates": 36069027348480.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 1024,
+"k_bits": 16384,
+"macs": {
+"attention": 2684354560,
+"lm_head": 16483614720,
+"matrices": 5200936960
+},
+"out_tokens": 0,
+"params": 21179200,
+"precision": "bf16",
+"shape": {
+"d_ff": 896,
+"d_model": 320,
+"n_head": 5,
+"n_layer": 4,
+"vocab": 50304
+},
+"tokens": 1024
+},
+{
+"attended": 3,
+"gates": 62698568640.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 1,
+"k_bits": 16,
+"macs": {
+"attention": 7680,
+"lm_head": 32194560,
+"matrices": 10158080
+},
+"out_tokens": 1,
+"params": 21179200,
+"precision": "bf16",
+"shape": {
+"d_ff": 896,
+"d_model": 320,
+"n_head": 5,
+"n_layer": 4,
+"vocab": 50304
+},
+"tokens": 2
+},
+{
+"attended": 21496320,
+"gates": 2340420475944960.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 4096,
+"k_bits": 65536,
+"macs": {
+"attention": 528293560320,
+"lm_head": 263737835520,
+"matrices": 789200240640
+},
+"out_tokens": 1024,
+"params": 205677568,
+"precision": "bf16",
+"shape": {
+"d_ff": 2816,
+"d_model": 1024,
+"n_head": 16,
+"n_layer": 12,
+"vocab": 50304
+},
+"tokens": 5120
+},
+{
+"attended": 15205888,
+"gates": 2111602539626496.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 2048,
+"k_bits": 32768,
+"macs": {
+"attention": 373699903488,
+"lm_head": 263737835520,
+"matrices": 789200240640
+},
+"out_tokens": 3072,
+"params": 205677568,
+"precision": "bf16",
+"shape": {
+"d_ff": 2816,
+"d_model": 1024,
+"n_head": 16,
+"n_layer": 12,
+"vocab": 50304
+},
+"tokens": 5120
+},
+{
+"attended": 285737472,
+"gates": 1.5692690169004032e+16,
+"gates_per_mac": 1480.125,
+"in_tokens": 16384,
+"k_bits": 262144,
+"macs": {
+"attention": 7022284111872,
+"lm_head": 896708640768,
+"matrices": 2683280818176
+},
+"out_tokens": 1024,
+"params": 205677568,
+"precision": "bf16",
+"shape": {
+"d_ff": 2816,
+"d_model": 1024,
+"n_head": 16,
+"n_layer": 12,
+"vocab": 50304
+},
+"tokens": 17408
+},
+{
+"attended": 1048576,
+"gates": 349838524809216.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 1024,
+"k_bits": 16384,
+"macs": {
+"attention": 25769803776,
+"lm_head": 52747567104,
+"matrices": 157840048128
+},
+"out_tokens": 0,
+"params": 205677568,
+"precision": "bf16",
+"shape": {
+"d_ff": 2816,
+"d_model": 1024,
+"n_head": 16,
+"n_layer": 12,
+"vocab": 50304
+},
+"tokens": 1024
+},
+{
+"attended": 3,
+"gates": 608890364928.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 1,
+"k_bits": 16,
+"macs": {
+"attention": 73728,
+"lm_head": 103022592,
+"matrices": 308281344
+},
+"out_tokens": 1,
+"params": 205677568,
+"precision": "bf16",
+"shape": {
+"d_ff": 2816,
+"d_model": 1024,
+"n_head": 16,
+"n_layer": 12,
+"vocab": 50304
+},
+"tokens": 2
+},
+{
+"attended": 21496320,
+"gates": 4317884239011840.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 4096,
+"k_bits": 65536,
+"macs": {
+"attention": 866731622400,
+"lm_head": 346155909120,
+"matrices": 1704355430400
+},
+"out_tokens": 1024,
+"params": 400532160,
+"precision": "bf16",
+"shape": {
+"d_ff": 3712,
+"d_model": 1344,
+"n_head": 21,
+"n_layer": 15,
+"vocab": 50304
+},
+"tokens": 5120
+},
+{
+"attended": 15205888,
+"gates": 3942479812239360.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 2048,
+"k_bits": 32768,
+"macs": {
+"attention": 613101404160,
+"lm_head": 346155909120,
+"matrices": 1704355430400
+},
+"out_tokens": 3072,
+"params": 400532160,
+"precision": "bf16",
+"shape": {
+"d_ff": 3712,
+"d_model": 1344,
+"n_head": 21,
+"n_layer": 15,
+"vocab": 50304
+},
+"tokens": 5120
+},
+{
+"attended": 285737472,
+"gates": 2.7371468253782016e+16,
+"gates_per_mac": 1480.125,
+"in_tokens": 16384,
+"k_bits": 262144,
+"macs": {
+"attention": 11520934871040,
+"lm_head": 1176930091008,
+"matrices": 5794808463360
+},
+"out_tokens": 1024,
+"params": 400532160,
+"precision": "bf16",
+"shape": {
+"d_ff": 3712,
+"d_model": 1344,
+"n_head": 21,
+"n_layer": 15,
+"vocab": 50304
+},
+"tokens": 17408
+},
+{
+"attended": 1048576,
+"gates": 669580208898048.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 1024,
+"k_bits": 16384,
+"macs": {
+"attention": 42278584320,
+"lm_head": 69231181824,
+"matrices": 340871086080
+},
+"out_tokens": 0,
+"params": 400532160,
+"precision": "bf16",
+"shape": {
+"d_ff": 3712,
+"d_model": 1344,
+"n_head": 21,
+"n_layer": 15,
+"vocab": 50304
+},
+"tokens": 1024
+},
+{
+"attended": 3,
+"gates": 1185731026704.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 1,
+"k_bits": 16,
+"macs": {
+"attention": 120960,
+"lm_head": 135217152,
+"matrices": 665763840
+},
+"out_tokens": 1,
+"params": 400532160,
+"precision": "bf16",
+"shape": {
+"d_ff": 3712,
+"d_model": 1344,
+"n_head": 21,
+"n_layer": 15,
+"vocab": 50304
+},
+"tokens": 2
+},
+{
+"attended": 21496320,
+"gates": 1.032201539186688e+16,
+"gates_per_mac": 1480.125,
+"in_tokens": 4096,
+"k_bits": 65536,
+"macs": {
+"attention": 1857282048000,
+"lm_head": 445057597440,
+"matrices": 4671406080000
+},
+"out_tokens": 1024,
+"params": 999397440,
+"precision": "bf16",
+"shape": {
+"d_ff": 4736,
+"d_model": 1728,
+"n_head": 27,
+"n_layer": 25,
+"vocab": 50304
+},
+"tokens": 5120
+},
+{
+"attended": 15205888,
+"gates": 9517577334497280.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 2048,
+"k_bits": 32768,
+"macs": {
+"attention": 1313788723200,
+"lm_head": 445057597440,
+"matrices": 4671406080000
+},
+"out_tokens": 3072,
+"params": 999397440,
+"precision": "bf16",
+"shape": {
+"d_ff": 4736,
+"d_model": 1728,
+"n_head": 27,
+"n_layer": 25,
+"vocab": 50304
+},
+"tokens": 5120
+},
+{
+"attended": 285737472,
+"gates": 6.228912770622259e+16,
+"gates_per_mac": 1480.125,
+"in_tokens": 16384,
+"k_bits": 262144,
+"macs": {
+"attention": 24687717580800,
+"lm_head": 1513195831296,
+"matrices": 15882780672000
+},
+"out_tokens": 1024,
+"params": 999397440,
+"precision": "bf16",
+"shape": {
+"d_ff": 4736,
+"d_model": 1728,
+"n_head": 27,
+"n_layer": 25,
+"vocab": 50304
+},
+"tokens": 17408
+},
+{
+"attended": 1048576,
+"gates": 1648695995006976.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 1024,
+"k_bits": 16384,
+"macs": {
+"attention": 90596966400,
+"lm_head": 89011519488,
+"matrices": 934281216000
+},
+"out_tokens": 0,
+"params": 999397440,
+"precision": "bf16",
+"shape": {
+"d_ff": 4736,
+"d_model": 1728,
+"n_head": 27,
+"n_layer": 25,
+"vocab": 50304
+},
+"tokens": 1024
+},
+{
+"attended": 3,
+"gates": 2958589039248.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 1,
+"k_bits": 16,
+"macs": {
+"attention": 259200,
+"lm_head": 173850624,
+"matrices": 1824768000
+},
+"out_tokens": 1,
+"params": 999397440,
+"precision": "bf16",
+"shape": {
+"d_ff": 4736,
+"d_model": 1728,
+"n_head": 27,
+"n_layer": 25,
+"vocab": 50304
+},
+"tokens": 2
 }
 ]
 },
@@ -14921,7 +16761,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -15042,14 +16884,14 @@
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 11.065531262155444,
 "rho": 11.065531262155444,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 501.0542637591155,
 "reduction": 9.776271345877682,
 "token_form": 0.5483513212839408,
@@ -15061,7 +16903,8 @@
 "token": 11.065531262155444
 },
 "tokens_per_block": 4096,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -15090,7 +16933,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -15215,14 +17060,14 @@
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 0.6520858971202714,
 "reduction": 0.9776271345877682,
 "token_form": 0.0,
@@ -15234,7 +17079,8 @@
 "token": 0.6520858971202714
 },
 "tokens_per_block": 4096,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -15263,7 +17109,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -15388,14 +17236,14 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 0.6520858971202714,
 "reduction": 0.09776271345877682,
 "token_form": 0.0,
@@ -15407,7 +17255,8 @@
 "token": 0.6520858971202714
 },
 "tokens_per_block": 4096,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -15436,7 +17285,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -15561,14 +17412,14 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 0.6520858971202717,
 "reduction": 0.14559388478968227,
 "token_form": 0.0,
@@ -15580,7 +17431,8 @@
 "token": 0.6520858971202714
 },
 "tokens_per_block": 100,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -15609,7 +17461,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -15734,14 +17588,14 @@
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 0.6520858971202714,
 "reduction": 0.014767038773668266,
 "token_form": 0.0,
@@ -15753,7 +17607,8 @@
 "token": 0.6520858971202714
 },
 "tokens_per_block": 1,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -15782,7 +17637,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -15903,14 +17760,14 @@
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 0.6520858971202714,
 "reduction": 9.776271345877682,
 "token_form": 0.0,
@@ -15922,7 +17779,8 @@
 "token": 0.6520858971202714
 },
 "tokens_per_block": 4096,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -15951,7 +17809,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -16076,14 +17936,14 @@
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 0.6520858971202714,
 "reduction": 0.9776271345877682,
 "token_form": 0.0,
@@ -16095,7 +17955,8 @@
 "token": 0.6520858971202714
 },
 "tokens_per_block": 4096,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -16124,7 +17985,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -16249,14 +18112,14 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 0.6520858971202714,
 "reduction": 0.09776271345877682,
 "token_form": 0.0,
@@ -16268,7 +18131,8 @@
 "token": 0.6520858971202714
 },
 "tokens_per_block": 4096,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -16297,7 +18161,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -16422,14 +18288,14 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 0.6520858971202717,
 "reduction": 0.14559388478968227,
 "token_form": 0.0,
@@ -16441,7 +18307,8 @@
 "token": 0.6520858971202714
 },
 "tokens_per_block": 100,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -16470,7 +18337,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -16595,14 +18464,14 @@
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.6520858971202714,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 0.6520858971202714,
 "reduction": 0.014767038773668266,
 "token_form": 0.0,
@@ -16614,7 +18483,8 @@
 "token": 0.6520858971202714
 },
 "tokens_per_block": 1,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -16643,7 +18513,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -16770,14 +18642,14 @@
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 8.35335685982954,
 "rho": 8.35335685982954,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.9996631800490918,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 146.76517300380573,
 "reduction": 42.05663060357565,
 "token_form": 13.115530738562539,
@@ -16789,7 +18661,8 @@
 "token": 8.35335685982954
 },
 "tokens_per_block": 4096,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -16818,7 +18691,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -16945,14 +18820,14 @@
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.9996631800490918,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 14.306487096221096,
 "reduction": 4.2056630603575655,
 "token_form": 1.1988162915313898,
@@ -16964,7 +18839,8 @@
 "token": 0.999663180049092
 },
 "tokens_per_block": 4096,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -16993,7 +18869,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -17120,14 +18998,14 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.9996631800490918,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 0.999663180049092,
 "reduction": 0.4205663060357565,
 "token_form": 0.0,
@@ -17139,7 +19017,8 @@
 "token": 0.999663180049092
 },
 "tokens_per_block": 4096,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -17168,7 +19047,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -17295,14 +19176,14 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.9996631800490919,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.9996631800490919,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 0.9996631800490918,
 "reduction": 0.42611088135947006,
 "token_form": 0.0,
@@ -17314,7 +19195,8 @@
 "token": 0.9996631800490919
 },
 "tokens_per_block": 100,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -17343,7 +19225,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -17470,14 +19354,14 @@
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
 "sensitivities": {
 "decoding_form": 0.9996631800490918,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 0.999663180049092,
 "reduction": 0.042688096126554144,
 "token_form": 0.0,
@@ -17489,7 +19373,8 @@
 "token": 0.999663180049092
 },
 "tokens_per_block": 1,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -17518,7 +19403,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -17646,14 +19533,14 @@
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 2.7344655410785834,
 "rho": 2.7344655410785834,
 "rho_fit": 1.000266918292764,
 "sensitivities": {
 "decoding_form": 1.000196951609222,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 134.7778543633552,
 "reduction": 4.15717585271444,
 "token_form": 11.857120347569653,
@@ -17665,7 +19552,8 @@
 "token": 2.7344655410785834
 },
 "tokens_per_block": 4096,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -17694,7 +19582,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -17822,14 +19712,14 @@
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0,
 "rho_fit": 1.000266918292764,
 "sensitivities": {
 "decoding_form": 0.9999300519868622,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 0.9999300519868621,
 "reduction": 0.41571758527144403,
 "token_form": 0.0,
@@ -17841,7 +19731,8 @@
 "token": 0.9999300519868622
 },
 "tokens_per_block": 4096,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -17870,7 +19761,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -17998,14 +19891,14 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.9999300519868622,
 "rho": 1.000266918292764,
 "rho_fit": 1.000266918292764,
 "sensitivities": {
 "decoding_form": 0.9999300519868622,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 0.9999300519868621,
 "reduction": 0.041571758527144405,
 "token_form": 0.0,
@@ -18017,7 +19910,8 @@
 "token": 0.9999300519868622
 },
 "tokens_per_block": 4096,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -18046,7 +19940,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -18174,14 +20070,14 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0110508421616675,
 "rho_fit": 1.0110508421616675,
 "sensitivities": {
 "decoding_form": 0.9999300519868621,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 0.9999300519868621,
 "reduction": 0.041612355947581066,
 "token_form": 0.0,
@@ -18193,7 +20089,8 @@
 "token": 0.9999300519868622
 },
 "tokens_per_block": 100,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 },
 {
 "binding": "token",
@@ -18222,7 +20119,9 @@
 },
 "fresh_products": {
 "capture": "4.12.9",
+"capture_code": null,
 "fresh_cell": 0.0,
+"fresh_no_cell": 0.0,
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -18350,14 +20249,14 @@
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.13, reading A",
+"label": "training's slowdown code 4.12.14, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0,
 "rho_fit": "inf",
 "sensitivities": {
 "decoding_form": 0.9999300519868622,
 "fresh_cell": 0.0,
-"fresh_converged": null,
+"fresh_no_cell": 0.0,
 "per_gate": 0.9999300519868621,
 "reduction": 0.004197773273151105,
 "token_form": 0.0,
@@ -18369,9 +20268,15 @@
 "token": 0.9999300519868622
 },
 "tokens_per_block": 1,
-"unmeasured": {}
+"unmeasured": {},
+"void": {}
 }
 ],
-"version": "4.12.13",
+"version": "4.12.14",
+"void_case": {
+"case": "dense, DoRA's void products",
+"measured": "dense",
+"products": "the s-t20 start's DoRA rank-16 step on all 42 matrices (void: its two small unfed fp32 products beside it)"
+},
 "w_fwd_gates": 4925098176.0
 }
