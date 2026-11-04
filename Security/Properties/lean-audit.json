@@ -15,6 +15,7 @@
   "Properties.Pouw.Lead.Commit",
   "Properties.Pouw.Lead.V2",
   "Properties.Pouw.PearlPlus",
+  "Properties.Pouw.PearlPlus.Witnesses",
   "Properties.Nci",
   "Properties.Nci.Threads",
   "Properties.Nci.Baseline",
@@ -876,7 +877,8 @@
     "Properties.Pouw.ServedWork",
     "Properties.Pouw.ServedValues",
     "Properties.Pouw.Lead.V2",
-    "Properties.Pouw.PearlPlus"
+    "Properties.Pouw.PearlPlus",
+    "Properties.Pouw.PearlPlus.Witnesses"
    ],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
