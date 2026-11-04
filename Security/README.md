@@ -476,7 +476,7 @@ policy and the one-stage audit commit to one record and every window of the peri
   not in Lean yet (above), so the two compose by hand. Remote's sampled-proofs subprotocol's one-stage form is v2,
   which runs `flock-verify --zk` on the sessions' files itself and reads the challenger's signed coins; one-stage v1,
   which takes the sessions' verdicts as evidence, is refused. No Lean statement yet carries v2's acceptance to
-  `SampledKSLiveV3`'s event. Onsite's sampled-proofs subprotocol is still one-stage v1.
+  `SampledKSLiveV3`'s event.
 - **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`,
   `LinkCRZC`, `TileServiceSound`, `TileDrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
   `SharedNoiseLucks`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,

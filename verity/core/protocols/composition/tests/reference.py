@@ -7,13 +7,12 @@ certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Py
 certificates and one-stage's answers, `verity/core/protocols/network/tests/test_network_period_protocol.py`), the
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
 `nci_reference.check_baseline`, behind the protocol's decoders,
-`verity/core/protocols/network/tests/test_inference_only_protocol.py`), for remote's sampled proofs
-(`verity/sampled-proofs/v1`) `sampled_proofs`: its form's split over one-stage v2's audit
-(`verity/sampled-proofs/one-stage/v2`, one-stage v1 refused by name, `V1_REFUSED`), its decoders `OneStageZk` reads and
-its check on the cases whose challenger sampled no coin tree, v1's difftest's `check` at the challenger's coins on the
-verdicts of no session, and the recursive form refused where the case names none of its files; for onsite's
-sampled proofs' one-stage audit (`verity/sampled-proofs/one-stage/v1`) its difftest's `answer`, `one_stage` behind the
-decoders `OneStage` reads (`verity/core/service/sampled_proofs/tests/test_difftest.py`); the wipe's
+`verity/core/protocols/network/tests/test_inference_only_protocol.py`), for sampled proofs (`verity/sampled-proofs/v1`)
+`sampled_proofs`: its form's split over one-stage v2's audit (`verity/sampled-proofs/one-stage/v2`, one-stage v1
+refused by name, `V1_REFUSED`), its decoders `OneStageZk` reads and its check on the cases whose challenger sampled no
+coin tree, v1's difftest's `check` at the challenger's coins on the verdicts of no session (`one_stage` behind the
+decoders `OneStage` reads, `verity/core/service/sampled_proofs/tests/test_difftest.py`), and the recursive form refused
+where the case names none of its files, the wipe's
 (`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth (PoUB-P2,
 `verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each subprotocol's own difftest holds its Lean to that Python; this one holds the composition of them.
@@ -299,11 +298,9 @@ def _period_answer(case: str) -> str:
 #: A period's answer is slow to make (its windows' ledger signatures and layouts), and a composition's case asks for each
 #: component's twice, so it is made once a case.
 POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(canonical(case))))
-#: Remote's integrity: sampled proofs (`VStar.Recursive.Sampled`), one-stage v2's audit (`SampledProofs.OneStageZk`) or
-#: the recursive audit, as the params' form names it; one-stage v1 refused.
+#: Integrity: sampled proofs (`VStar.Recursive.Sampled`), one-stage v2's audit (`SampledProofs.OneStageZk`) or the
+#: recursive audit, as the params' form names it; one-stage v1 refused.
 SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, sampled_proofs, blobs=True)
-#: Onsite's integrity: the one-stage audit (`SampledProofs.OneStage`).
-ONE_STAGE_V1 = Ported("verity/sampled-proofs/one-stage/v1", ONE_STAGE.answer)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
 BANDWIDTH = Recorded("verity/remote-bandwidth/p2/v0")
@@ -575,5 +572,5 @@ class TiedSame(Same):
 #: record, and onsite's PoUS and PoUB-P2 on one store.
 REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SAMPLED_PROOFS), (INFERENCE_ONLY.id, SAMPLED_PROOFS.id),
                   (WINDOWS,))
-ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, ONE_STAGE_V1, WIPE),
-                  (INFERENCE_ONLY.id, ONE_STAGE_V1.id), (STORE,))
+ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE),
+                  (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (STORE,))

@@ -46,6 +46,10 @@ name = "core_memory_challenger"
 path = "../../verity/core/devices/memory_challenger/lean"
 
 [[require]]
+name = "core_firewall"
+path = "../../verity/core/service/firewall"
+
+[[require]]
 name = "network_check"
 path = "../../verity/core/protocols/network/lean"
 
@@ -101,4 +105,4 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Accounting.JointBridge.ServiceSoundOfSessions",
   "Properties.Flock.Circuit", "Properties.Nci.Protocol", "Properties.Verity.Soundness", "Properties.Verity.Game",
   "Properties.Verity.Idle", "Properties.Verity.Subprotocols", "Properties.Remote", "Properties.Pous.WipeSigned",
-  "Properties.Challenger", "Properties.Core.Site"]
+  "Properties.Challenger", "Properties.Firewall", "Properties.Core.Site"]

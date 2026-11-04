@@ -106,7 +106,8 @@ def CaseHeld (k : Case) : Prop :=
 the form), and the record it decodes to names, by its SHA-512, the program the named form verifies the sessions against
 (`Properties.SampledProofs.R2`): in the one-stage form, the program of one-stage v2's own verifier (the v1 part of its
 params, `SampledProofs.OneStageZk.Params.base`); in the recursive form, the program of the inner statement's verifier
-(`VStar.Recursive.Params.base`), the statement whose one verdict of record V*'s compiled check computes. -/
+(`VStar.Recursive.Params.base`), the statement whose one verdict of record V*'s compiled check computes and whose
+soundness the recursive audit (`RecursiveAuditC3`) states. -/
 def StageHeld (k : Case) : Prop :=
   (∃ (p : SampledProofs.OneStageZk.Params) (c : SampledProofs.OneStage.Commitment),
     (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p) ∧

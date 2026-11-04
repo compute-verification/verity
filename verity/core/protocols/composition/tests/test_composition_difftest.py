@@ -3,21 +3,20 @@ Python reference (`reference.py`: the trial's composition rule with reject domin
 core interface and the subprotocols' own Python). Hypothesis draws each subprotocol's case to accept, reject, be
 undecided or fail to decode (from its own difftest's generator: PoUW's periods, made once from
 `pouw_period_cases`, the network certifier's period `build`, the inference-only policy's `drawn`, which is
-never undecided, remote's sampled proofs' audits under the form ``one-stage``, `form_case`: one-stage v2's over
-`empty_draws` (an audit that drew nothing at its challenger's coins) with one of `V2_BREAKS` or the form's breaks, and
-one-stage v1's `changed_audits`, which the form refuses by name, onsite's one-stage audits, `v1_empty_draws` and
-`changed_audits`, the wipe's signed wipes, `wipe_protocol_case.case`; space's and bandwidth's from the small periods of
-their hooks, `periods.py`, all on one committed `C*` but PoUS's run on another store, `periods.OTHER_STORE`), often
-recommits the subprotocols each composite ties to one record (`one_record`: the policy to integrity's registration
-record, on that audit's own declared circuit, `policy_on`, and at remote sometimes every window of the period too,
-`windows_on`), hands every subprotocol the same blobs (`BLOBS`), then often breaks the composition's own inputs (a
-component dropped, unknown, repeated or out of order, a case under other params, a wrong or short commitment,
-non-canonical or malformed evidence, blobs missing or malformed) or the case itself (a field missing or not hex, not an
-object), and every field of the outcome but its reason must agree exactly. Integrity's cases are aimed at undecided at
-best (an audit that drew nothing), so no product accepts here. `product IDS serve` over each composite's subprotocols,
-the composite `verity run`'s verifier runs, is held to the same reference, and `product IDS id` names remote and onsite
-for their subprotocols and refuses every other set: the same two composites a configuration may list
-(`verity.core.deploy.config.COMPOSITES`)."""
+never undecided, sampled proofs' audits under the form ``one-stage``, `form_case`: one-stage v2's over `empty_draws`
+(an audit that drew nothing at its challenger's coins) with one of `V2_BREAKS` or the form's breaks, and one-stage v1's
+`changed_audits`, which the form refuses by name, the wipe's signed wipes, `wipe_protocol_case.case`; space's and
+bandwidth's from the small periods of their hooks, `periods.py`, all on one committed `C*` but PoUS's run on another
+store, `periods.OTHER_STORE`), often recommits the subprotocols each composite ties to one record (`one_record`: the
+policy to sampled proofs' registration record, on that audit's own declared circuit, `policy_on`, and at remote
+sometimes every window of the period too, `windows_on`), hands every subprotocol the same blobs (`BLOBS`), then often
+breaks the composition's own inputs (a component dropped, unknown, repeated or out of order, a case under other params,
+a wrong or short commitment, non-canonical or malformed evidence, blobs missing or malformed) or the case itself (a
+field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly. Sampled
+proofs' cases are aimed at undecided at best (an audit that drew nothing), so no product accepts here. `product IDS
+serve` over each composite's subprotocols, the composite `verity run`'s verifier runs, is held to the same reference,
+and `product IDS id` names remote and onsite for their subprotocols and refuses every other set: the same two
+composites a configuration may list (`verity.core.deploy.config.COMPOSITES`)."""
 
 from __future__ import annotations
 
@@ -65,30 +64,6 @@ OS = R.ONE_STAGE
 #: The files every product case hands its components as blobs.
 CIRCUIT, PUBLIC = b"not a circuit file", b"not a public file"
 BLOBS = [CIRCUIT, PUBLIC]
-
-
-@st.composite
-def v1_empty_draws(draw) -> dict:
-    """A valid one-stage v1 audit of a program that reads no registered value, whose draw drew no unit (a subset of none,
-    or Bernoulli at 0): with no session and no proved unit, v1 is undecided on it for want of the verifier of record."""
-    s = draw(st.sampled_from(OS.SETUPS))
-    law = draw(st.sampled_from([{"k": 0, "law": "subset"}, {"law": "bernoulli", "p": "0/1"}]))
-    part = {"program": s.sha512, "query": s.query}
-    rec = OS.R.record(s.program, s.query, law, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
-                      OS.WINDOW, leaf_layer=OS.LEAF, partition=part)
-    d = {**OS.DR.derive(s.program, s.query, law, None), "population": s.population, "units": []}
-    evidence = {"draw": d, "instances": 0, "proved_units": [], "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED),
-                "served": None, "session_roots": None, "sessions": [], "statement": {}, "verdicts": {}}
-    params = {"anchors": [], "delta": draw(st.sampled_from(["1/1000", "1/10", "1/2"])), "law": law, "leaf_layer": OS.LEAF,
-              "log": [], "partition": part, "ports": s.ports, "program": s.desc, "query": s.query, "registered": None,
-              "scheme": OS.SCHEME, "work_table": None}
-    return OS._json({"params": params, "record": rec, "evidence": evidence})
-
-
-#: Onsite's one-stage audit's cases by the verdict they aim at: an audit that drew nothing (undecided, for want of the
-#: verifier of record), and an audit with one or two changes.
-ONE_STAGE_CASES = {R.UNDECIDED: v1_empty_draws().map(OS._case),
-                   R.REJECT: OS.changed_audits(most=2, least=1).map(OS._case)}
 
 
 def _sha(b: bytes) -> str:
@@ -183,9 +158,9 @@ def broken_case(a: dict, br: str) -> dict:
     return form_case(V2_BREAKS[br](a))
 
 
-#: Remote's sampled proofs' cases by the verdict they aim at: v2's audit that drew nothing (undecided, for want of the
-#: verifier of record), and v2's audit with one change or one break of the form, or v1's audit with up to two changes
-#: (refused by name).
+#: Sampled proofs' cases by the verdict they aim at: v2's audit that drew nothing (undecided, for want of the verifier
+#: of record), and v2's audit with one change or one break of the form, or v1's audit with up to two changes (refused
+#: by name).
 SAMPLED_CASES = {R.UNDECIDED: empty_draws().map(form_case),
                  R.REJECT: st.one_of(st.builds(broken_case, empty_draws(), st.sampled_from(list(V2_BREAKS))),
                                      st.builds(form_case, empty_draws(), st.sampled_from(FORM_BREAKS)),
@@ -211,8 +186,6 @@ def kinds(C) -> list[str]:
         return list(INFERENCE_CASES)
     if C is R.SAMPLED_PROOFS:
         return list(SAMPLED_CASES)
-    if C is R.ONE_STAGE_V1:
-        return list(ONE_STAGE_CASES)
     if C is R.WIPE:
         return list(R.WIPE_CASES.KINDS)
     if C is R.POUW_PERIOD:
@@ -239,8 +212,7 @@ def component_case(draw, C, kind: str | None) -> dict:
     elif C is R.WIPE:
         case = R.WIPE_CASES.case(kind, draw(st.integers(0, 1)))
     else:
-        cases = SAMPLED_CASES if C is R.SAMPLED_PROOFS else ONE_STAGE_CASES
-        case = draw(cases[R.UNDECIDED if kind == R.ACCEPT else kind])
+        case = draw(SAMPLED_CASES[R.UNDECIDED if kind == R.ACCEPT else kind])
     return as_component(C, case)
 
 
@@ -272,7 +244,7 @@ def _declaration(program: str) -> tuple[dict, dict] | None:
 
 
 def policy_on(anchor: dict) -> dict | None:
-    """The policy's case, as `component_case` gives it, on the record and log of integrity's case `anchor`, declaring the
+    """The policy's case, as `component_case` gives it, on the record and log of sampled proofs' case `anchor`, declaring the
     audit's own circuit (`_declaration`), which the policy accepts when the record chains; None when the audit's params
     name no program it knows."""
     p = anchor["params"]
@@ -300,13 +272,13 @@ def windows_on(evidence: bytes, commit: bytes) -> bytes:
 
 
 def one_record(product: R.Same, cases: list[dict], windows: bool = False) -> list[dict]:
-    """The cases with every subprotocol of ``product.same`` committing to integrity's registration record (remote's
-    sampled proofs', onsite's one-stage audit's), each with its digest as its Python reads it on `BLOBS`, and the
-    policy's case on the audit's own declared circuit where it can be (`policy_on`): cases that pass `Core.Composition.strays` and leave the verdict to the subprotocols.
+    """The cases with every subprotocol of ``product.same`` committing to sampled proofs' registration record, each
+    with its digest as its Python reads it on `BLOBS`, and the policy's case on the audit's own declared circuit
+    where it can be (`policy_on`): cases that pass `Core.Composition.strays` and leave the verdict to the subprotocols.
     With ``windows``, every window of remote's PoUW period names that record too (`windows_on`), so that remote's
     `windows` tie holds; the period then refuses, since a window's Commit record registers its own tables. Without it,
     an honest period's windows name their own records, and the tie refuses."""
-    first = next(c for c in cases if c["id"] in (R.SAMPLED_PROOFS.id, R.ONE_STAGE_V1.id))
+    first = next(c for c in cases if c["id"] == R.SAMPLED_PROOFS.id)
     by_id = {C.id: C for C in product.components}
 
     def recommit(c: dict, root: bytes, evidence: bytes) -> dict:
@@ -443,14 +415,14 @@ def reference(product: R.Product, seen: collections.Counter):
 
 
 class UndecidedPort(D.ProtocolPort):
-    """A product port whose best verdict is undecided: integrity's best case is undecided (`ONE_STAGE_CASES`,
-    `SAMPLED_CASES`), so the run's non-vacuity bar is a case every component left undecided or accepted."""
+    """A product port whose best verdict is undecided: sampled proofs' best case is undecided (`SAMPLED_CASES`), so the
+    run's non-vacuity bar is a case every subprotocol left undecided or accepted."""
     accepted = R.UNDECIDED
 
 
 class RejectingPort(D.ProtocolPort):
-    """A product port whose sampled cases reject: every window of its PoUW period must name the policy's record, the
-    sampled proofs', and a period accepts only when each window names its own Commit record, so the sampled cases
+    """A product port whose sampled cases reject: every window of its PoUW period must name the policy's record, sampled
+    proofs', and a period accepts only when each window names its own Commit record, so the sampled cases
     don't reach undecided. Its bar is the two ways its subprotocols' records meet, counted in `seen`."""
     accepted = R.REJECT
 
@@ -507,7 +479,7 @@ def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int,
            kinds: tuple[str, ...] = (R.REJECT, R.UNDECIDED, "reject, a component undecided",
                                      "reject, no component rejected")) -> None:
     """Lean and Python agree on every case, and the cases reach each of `kinds` (by default each verdict but
-    acceptance: integrity's cases are aimed at undecided at best, so no product accepts)."""
+    acceptance: sampled proofs' cases are aimed at undecided at best, so no product accepts)."""
     seen.clear()
     stats = D.run(p, examples=examples, seed=0, server=server)
     print(f"{p.label}: {stats}, verdicts {dict(seen)}")

@@ -25,10 +25,9 @@ acceptance is `NciCheck.Baseline.evaluate`'s with the record naming the circuit 
 `Verity.Circuit.expand_boolean` give the padded `(c, k)`-partitions. The parse, declaration and division an acceptance
 exhibits come from `DescAgrees` (the verdict is the gate-by-gate check's on an expansion) and `Decodes` (that check's
 verdicts are about a parse, a layout, a baseline and a division). Sampled proofs' acceptance is one-stage v1's check
-(`OneStage.check`) at its params' form: in the one-stage form v2's, at the coins it read (`OneStage.checkAt`) on the
-verdicts its own run of the verifier computed (`stage_zk_registered`), in the recursive form v1's check on the inner
-statement's params after V*'s compiled check (`recursive_check`), so its record keeps R2 in either
-(`stage_registered_check`).
+at the coins it read (`OneStage.checkAt`) at its params' form: in the one-stage form v2's, on the verdicts its own run of
+the verifier computed (`stage_zk_registered`), in the recursive form v1's live check on the inner statement's params
+after V*'s compiled check (`recursive_live`), so its record keeps R2 in either (`stage_registered_at`).
 
 The policy's existence clause is neither empty nor trivial: `policyMet_honest` exhibits a declaration and a division into
 nonempty inference blocks that meet the policy, and `policyMet_nontrivial` one the policy refuses at every `α`. Both
@@ -249,14 +248,6 @@ theorem policyHeld {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Commitm
   exact ⟨P, hP, names_program hn hP, NciCheck.Properties.SecurityProofs.BaselineProvenance _ _ _ hb,
     ⟨j', i, d, n, U, hx, hpi, hL, hθ, hD, policy_met hd hc hP j' i d n U hx hpi hL hθ hD⟩, policy_met hd hc hP⟩
 
-/-- What one-stage v1's check gives on acceptance: its record keeps R2 against the audit's own verifier. -/
-theorem stage_registered_check {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : SampledProofs.OneStage.Evidence} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
-    (h : SampledProofs.OneStage.check p c e = .accept pub prof) :
-    Properties.SampledProofs.R2 c.record p.verifier := by
-  obtain ⟨law, d, n, hreg, -⟩ := Properties.SampledProofs.acceptMeans _ _ _ _ _ h
-  exact hreg.2.1
-
 /-- What one-stage v1's check at any coins gives on acceptance: its record keeps R2 against the audit's own
 verifier. -/
 theorem stage_registered_at {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
@@ -266,7 +257,18 @@ theorem stage_registered_at {p : SampledProofs.OneStage.Params} {c : SampledProo
   unfold SampledProofs.OneStage.checkAt at h
   split at h
   · cases h
-  · exact stage_registered_check h
+  · obtain ⟨law, d, n, hreg, -⟩ := Properties.SampledProofs.acceptMeans _ _ _ _ _ h
+    exact hreg.2.1
+
+/-- What one-stage v1's live check gives on acceptance: its record keeps R2 against the audit's own verifier. -/
+theorem stage_registered {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
+    {e : SampledProofs.OneStage.Evidence} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
+    (h : SampledProofs.OneStage.checkLive p c e = .accept pub prof) :
+    Properties.SampledProofs.R2 c.record p.verifier := by
+  unfold SampledProofs.OneStage.checkLive Core.atCoins at h
+  split at h
+  · exact stage_registered_at h
+  · cases h
 
 /-- One-stage v2's check at the coins it read accepts only where v1's check accepts at them, on the verdicts its own
 run of the verifier computed. -/
@@ -301,12 +303,12 @@ theorem stage_zk_registered {p : SampledProofs.OneStageZk.Params} {c : SampledPr
     exact stage_registered_at hr
   · cases h
 
-/-- The recursive audit accepts only where one-stage v1's check accepts on the inner statement's params, with the
-verdicts V*'s compiled check computes. -/
-theorem recursive_check {q : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
+/-- The recursive audit accepts only where one-stage v1 accepts on the inner statement's params, with the verdicts
+V*'s compiled check computes. -/
+theorem recursive_live {q : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
     {e : VStar.Recursive.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
     (h : VStar.Recursive.checkBlobs q c e bs = .accept pub prof) :
-    ∃ e₀, SampledProofs.OneStage.check q.base c e₀ = .accept pub prof := by
+    ∃ e₀, SampledProofs.OneStage.checkLive q.base c e₀ = .accept pub prof := by
   unfold VStar.Recursive.checkBlobs at h
   split at h
   · cases h
@@ -451,9 +453,9 @@ theorem stage_held {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params
       stage_zk_registered (show SampledProofs.OneStageZk.checkBlobs p c e bs = .accept pub prof from hchk')⟩
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
-  · obtain ⟨e₀, he₀⟩ := recursive_check
+  · obtain ⟨e₀, he₀⟩ := recursive_live
       (show VStar.Recursive.checkBlobs q c e bs = .accept pub prof from hchk')
-    exact Or.inr ⟨q, c, hp'', hc', stage_registered_check he₀⟩
+    exact Or.inr ⟨q, c, hp'', hc', stage_registered he₀⟩
 
 /-- What remote's acceptance gives: the three cases in order, one digest for the policy's and sampled proofs'
 records, which every Commit record the period's windows name has, and the policy's case decoding to what the policy's
