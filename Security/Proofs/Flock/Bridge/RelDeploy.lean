@@ -21,8 +21,9 @@ open Claims Claims.Sampling
 /-- **The faulty set reads the commitment only through its opening check.** -/
 theorem faulty_eq_of_opens {H : Msg → Msg} {Cm Cm' : CommitmentScheme Bool} (h : Cm.opens = Cm'.opens)
     (s : AuditStatement) (Pt : Partition) (w : Wit) : faulty H Cm s Pt w = faulty H Cm' s Pt w := by
-  have hv : ∀ s' w' g, Wit.val H Cm s' w' g = Wit.val H Cm' s' w' g := by
-    intro s' w' g
+  have hv : ∀ s' w', Wit.val H Cm s' w' = Wit.val H Cm' s' w' := by
+    intro s' w'
+    funext g
     simp only [Wit.val, CommitmentScheme.Opens, h]
   have hF : Faulty H Cm s Pt w = Faulty H Cm' s Pt w := by
     funext v
