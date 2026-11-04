@@ -56,8 +56,9 @@ theorem mem_accSeqsSampled_of_windowGood {H : Msg → Msg} {D : Deploy Coin Col 
 
 /-- **The count over any good event that puts each window's observations among `AccSeqsSampled`'s sequences**, with
 the registered inputs pinned at `ρ i`: the secrets whose observations the network certifier's one run gives number at
-most `#Ss` times the size of the product of those sets. `periodLeak` counts over `WindowGood`, and
-`periodLeak_registered` over `WindowGoodReg`. -/
+most `#Ss` times the size of the product of those sets. `periodLeak` counts over `WindowGood`;
+`periodLeak_registered` counts over `WindowGoodReg` from the rows format's read-back instead
+(`RowsFormat.encard_periodRead_le`). -/
 theorem encard_period_le (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ)
     (reg : AuditStatement → Finset ℕ) (Dj : ℕ) {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition)
     (ρ : Fin n → ℕ → Bool) (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ)

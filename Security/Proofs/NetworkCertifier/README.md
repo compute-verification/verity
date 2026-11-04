@@ -121,8 +121,8 @@ Period.lean     the leak through the network certifier over a monitoring period:
 PeriodReg.lean  the same at the registration's values: a trace that agrees with the network certifier's openings
                                          and the registration's gives the leak relation with the registered inputs
                                          at the registration's values (rLeakTapReg_of_r), a disagreement with either
-                                         being a collision (sampledLeak_tapReg), counted over WindowGoodReg
-                                         (periodLeak_registered)
+                                         being a collision (sampledLeak_tapReg), counted over WindowGoodReg from the
+                                         rows format's read-back, #Θ for the schedules (periodLeak_registered)
 PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
                                          period's windows by a union bound (Pr_exists_mem_le_sum, periodLeak_le_sum)
 Pooled.lean     the incorrect proof blocks over a monitoring period: a uniform draw misses `f` blocks with
@@ -154,7 +154,9 @@ CountWitnesses.lean  the thirteen counts' pairs: seven egress (four over `AccSeq
                                          the empty prefix. In the lock's `witnesses`
 PeriodWitnesses.lean  the monitoring period's lemmas in the lock's `witnesses`, none with a binder over the
                                          instance: PooledLeakAccepted's pair and PeriodLeakAccepted's and
-                                         PeriodLeakRegistered's nontrivial, whose honest halves `unwitnessed` exempts
+                                         PeriodLeakRegistered's nontrivial, whose honest halves `unwitnessed` exempts,
+                                         and, unlisted, PeriodLeakRegistered's exclusion of trusted-host
+                                         (not_periodLeakRegisteredUntrusted)
 WiredToys.lean  three toys for the wired sampled audit: dropping the wire-wrong blocks from the incorrect set
                                          (the wire flip, flip_excludes), the wires' acyclicity (the two-cycle,
                                          cycle_excludes) or a wire-writing free input from freeInputs (the

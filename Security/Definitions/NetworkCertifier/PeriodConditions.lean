@@ -49,8 +49,9 @@ def SchedulesHeld {Conn Cell Ob : Type} (f : TapRecord Conn Cell Ob) (cap : Conn
   ∀ s ∈ Ss, (∀ c, s.cells c ≤ cap c) ∧ f.fits s
 
 /-- **The schedules a covert sender's secrets run on are counted**: the schedule the network certifier runs for each
-secret `z` of `Zs` (`schedOf z`) is one of `Ss`. The sender doesn't choose `Ss`: the count charges `log2 #Ss`, and
-`SchedulesHeld` is stated over it. So this holds of every covert sender where `Ss` holds every schedule the deployed
+secret `z` of `Zs` (`schedOf z`) is one of `Ss`. The sender doesn't choose `Ss`: the count charges for it, `log2 #Ss`
+where `SchedulesHeld` is stated over it, or `log2 #Θ` where `Ss` is the schedules whose `(r, D)` is in the registered
+set `Θ` and which fit the rows format. So this holds of every covert sender where `Ss` holds every schedule the deployed
 network certifier can run, through its admission and its caps at the deployment's parameters: a property of the
 network certifier's code, resting only on `trusted-host`, and not an assumption. -/
 def SchedulesCovered {Conn Z : Type} (Ss : Set (WardenSchedule Conn)) (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) :
