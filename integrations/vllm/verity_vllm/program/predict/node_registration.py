@@ -27,7 +27,10 @@ rank's weights (95 GB a GLM-5.3 B1 rank), and another reads the descriptor befor
 registration record), `trusted.json` (nci-check's trusted input), `provenance.json` (the instance's θ provenance) and
 `registration.json` (digests, the checkpoint's pin, per-rank counts and timings).
 Under --salts: each value's row salts, `<value>.salts`, the prover's, which nothing public carries, so --salts is refused inside
---out. Exit 0 written, 2 refused.
+--out. With ``FC_FIREWALL_VALUES`` set the ZK server's value service commits every θ value instead (`registered_rows.table`),
+all of them in one session, registered once: --salts is refused, each value's row digests are staged under --bcs while the
+service commits them, each value's `b ‖ c` goes to `<bcs>/<value>.bc`, and `values.json` under --out holds the session, its
+registration and each value's table ref. Exit 0 written, 2 refused.
 """
 from __future__ import annotations
 
@@ -36,6 +39,7 @@ import json
 import multiprocessing
 import os
 import sys
+import tempfile
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -65,7 +69,10 @@ class Options:
     revision: str | None = option("--revision", default=None, help="the checkpoint's revision")
     window: str = option("--window", help="the registration's window, a JSON object (the record's `window`)")
     out: str = option("--out", help="where the record, trusted input, provenance and summary go")
-    salts: str = option("--salts", help="where each value's row salts go (private: never under --out)")
+    salts: str | None = option("--salts", default=None, help="where each value's row salts go (private: never under --out); "
+                               "required unless FC_FIREWALL_VALUES names the value service, and refused then")
+    bcs: str | None = option("--bcs", default=None, help="with FC_FIREWALL_VALUES: where each value's b || c go, the row "
+                             "digests staged there while the service commits them (never under --out)")
     workers: int = option("--workers", type=int, default=8, help="ranks registered at once, a spawned process each (1: in this process)")
     cmd: str = field(default="node-registration", init=False)
 
@@ -179,14 +186,17 @@ def rank_job(o: Options, out: Path, pair: int, c: dict[str, Any], dd: dict[str, 
                       f"(first {first[:1]} vs {names[:1]}): the fields are not one weights record")
     weights_root = ((c.get("per_rank") or {}).get(str(rank)) or {}).get("weight_registration", {}).get("root")
     return {"rank": rank, "world": world, "bundle": b["path"], "manifest_sha256": b["manifest_sha256"], "root": weights_root,
-            "roles": CPU.registered_roles(dirs, prefix), "prefix": prefix, "program": digest, "salts": o.salts,
+            "roles": CPU.registered_roles(dirs, prefix), "prefix": prefix, "program": digest,
+            **({"salts": o.salts} if o.salts is not None else {}),
             "fields": [(f"rank{rank}.weights[{i}]", n, t.to_json()) for i, (n, t) in enumerate(P.leaves[rank])],
             "checkpoint_dir": o.checkpoint_dir, "checkpoints_manifest": o.checkpoints_manifest, "pin": pin}
 
 
 def register_rank(job: dict[str, Any]) -> dict[str, Any]:
     """Rank `job["rank"]`'s θ parameters committed (`registered_rows.commit`) one tensor at a time, each opened against the rank's
-    committed weights root, its salts written to `<salts>/<value>.salts`: the entries, without salts."""
+    committed weights root, its salts written to `<salts>/<value>.salts`: the entries, without salts. A job with ``digests``
+    (a directory) instead stages each value's row digests at `<digests>/<value>.digests` for the value service
+    (`registered_rows.table`): the entries without their roots."""
     from verity.ml.circuits.types import type_from_json
     from verity_vllm.check import weights_of_record as WR
     from verity_vllm.commit import registered_rows as RR
@@ -215,12 +225,32 @@ def register_rank(job: dict[str, Any]) -> dict[str, Any]:
         words = raw.view(CPU.WORDS[dt][1])
         if words.size != t.leaves:
             raise Refused(f"rank {r}: {name} is {words.size} words, {param} holds {t.leaves} leaves")
-        c = RR.commit(job["program"], param, words, RL.word_bits(t))
-        Path(job["salts"], f"{param}.salts").write_bytes(c.salts)
-        entries[param] = c.entry
+        if "digests" in job:
+            entries[param] = RR.table(job["program"], param, words, RL.word_bits(t), Path(job["digests"], f"{param}.digests"))
+        else:
+            c = RR.commit(job["program"], param, words, RL.word_bits(t))
+            Path(job["salts"], f"{param}.salts").write_bytes(c.salts)
+            entries[param] = c.entry
         by[src] += 1
     return {"rank": r, "entries": entries, "opened_by_source": by, "manifest_sha256": job["manifest_sha256"], "weights_root": job["root"],
             "prefix": job["prefix"], "wall_s": round(time.perf_counter() - t0, 3)}
+
+
+def commit_values(service: str, specs: dict[str, dict[str, Any]], digests: Path, bcs: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Every θ value staged by `register_rank` committed by the value service at ``service`` in one session, then registered:
+    each value's entry under the service's root, its `b ‖ c` written to `<bcs>/<value>.bc` as the answer streams in, and
+    ``values.json``'s document (the session, its registration and each value's table ref)."""
+    from verity.core.protocols.sampled_proofs.one_stage import registered as G
+    from verity_vllm.commit import registered_rows as RR
+    from verity_vllm.commit import values as V
+
+    names = list(specs)
+    tables = [V.Table(bytes.fromhex(specs[p]["domain"]), G.SCHEMA, digests / f"{p}.digests") for p in names]
+    s = V.Session(service)
+    got = s.commit(tables, lambda c: Path(bcs, f"{names[c.index]}.bc").write_bytes(b"".join(c.bcs)))
+    entries = {p: RR.entry(specs[p], c.root) for p, c in zip(names, got)}
+    reg = s.register()
+    return entries, {"session": s.id.hex(), "registration": reg.entry(), "tables": {p: c.ref().hex() for p, c in zip(names, got)}}
 
 
 def each_rank(jobs: list[dict[str, Any]], workers: int) -> Iterator[dict[str, Any]]:
@@ -239,10 +269,20 @@ def register(o: Options) -> dict[str, Any]:
     from verity_vllm.program.predict import aot as A
     from verity_vllm.program.predict.node import node_parameters
 
+    from verity_vllm.commit import values as V
+
     t0 = time.perf_counter()
-    out, salts = Path(o.out).resolve(), Path(o.salts).resolve()
-    if salts == out or salts.is_relative_to(out):
-        raise UsageError(f"--salts {o.salts} is under --out {o.out}: the salts are the prover's, and --out is what is published")
+    service = V.address()
+    out = Path(o.out).resolve()
+    if service is not None and (o.salts is not None or o.bcs is None):
+        raise UsageError(f"with {V.ENV} set the value service chooses every salt: no --salts, and --bcs for the b || c it answers")
+    if service is None and (o.salts is None or o.bcs is not None):
+        raise UsageError(f"--salts is required, and --bcs is the value service's ({V.ENV})")
+    private = Path(o.salts if service is None else o.bcs).resolve()
+    if private == out or private.is_relative_to(out):
+        raise UsageError(f"--salts {o.salts} is under --out {o.out}: the salts are the prover's, and --out is what is published"
+                         if service is None else f"--bcs {o.bcs} is under --out {o.out}: the unsalted row digests are staged "
+                         "there while the service commits them, and --out is what is published")
     window = json.loads(o.window)
     if not isinstance(window, dict):
         raise UsageError("--window is a JSON object")
@@ -273,21 +313,30 @@ def register(o: Options) -> dict[str, Any]:
     del ck
     t_jobs = time.perf_counter()
     out.mkdir(parents=True, exist_ok=True)
-    salts.mkdir(parents=True, exist_ok=True)
+    private.mkdir(parents=True, exist_ok=True)
+    scratch = None if service is None else tempfile.TemporaryDirectory(prefix=".digests-", dir=private)
+    if scratch is not None:
+        jobs = [{**j, "digests": scratch.name} for j in jobs]
     ranks = []
     for rk in each_rank(jobs, o.workers):
         ranks.append(rk)
-        print(f"[node-registration] rank {rk['rank']}: {len(rk['entries'])} values committed ({rk['opened_by_source']}) in "
-              f"{rk['wall_s']} s", flush=True)
+        print(f"[node-registration] rank {rk['rank']}: {len(rk['entries'])} values {'staged' if scratch else 'committed'} "
+              f"({rk['opened_by_source']}) in {rk['wall_s']} s", flush=True)
     ranks.sort(key=lambda rk: rk["rank"])
     entries = {k: v for rk in ranks for k, v in rk.pop("entries").items()}
+    values = None
+    if scratch is not None:
+        with scratch:
+            entries, values = commit_values(service, entries, Path(scratch.name), private)
+        (out / "values.json").write_text(json.dumps(values, separators=(",", ":")) + "\n")
     reg = RL.record(digest, P.params, theta, entries, window)
     for name in ("record", "trusted", "provenance"):
         (out / f"{name}.json").write_text(json.dumps(reg[name], separators=(",", ":")) + "\n")
     doc = {"schema": "verity-vllm/node-registration/v1", "program_digest": digest, "record_digest": reg["digest"], "row": o.row,
            "wrapper": o.wrapper, "shape": shape, "commit_out": str(commit_out), "pair": pair, "window": window,
            "theta_parameters": len(P.theta), "theta_nodes": len(theta), "rows": sum(e["leaves"] for e in entries.values()),
-           "checkpoint": checkpoint, "ranks": ranks, "salts": str(salts),
+           "checkpoint": checkpoint, "ranks": ranks,
+           **({"salts": str(private)} if values is None else {"bcs": str(private), "values": values["registration"]}),
            "timings": {"descriptor_s": round(t_desc - t0, 3), "checkpoint_index_s": round(t_ck - t_desc, 3),
                        "ranks_checked_s": round(t_jobs - t_ck, 3), "commit_s": round(time.perf_counter() - t_jobs, 3),
                        "total_s": round(time.perf_counter() - t0, 3)}}

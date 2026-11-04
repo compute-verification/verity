@@ -7,11 +7,16 @@ whole SHA-512 blocks (`registered.row_words`), hashed as `registered.row_digest`
 (`hm96.SHA512.commit_string`) and framed as `registered.leaf` frames it, under `registered.domain`. The salts are the
 prover's: sampled from the operating system, one per row, unless given, and returned beside the entry, which is all a
 registration names. Only `hm96-sha512/row/v1` rows, the format of a value no bit-row port reads.
+
+`table` makes the same rows a value-service table instead (`verity_vllm.commit.values`, under ``FC_FIREWALL_VALUES``): their
+digests, for the ZK server to salt and commit, and the entry but its root, which is the server's (`entry`).
 """
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -48,11 +53,8 @@ class Committed:
         return self.entry["root"]
 
 
-def commit(program: str, value: str, leaves: np.ndarray, word_bits: int, words: int | None = None,
-           salts: bytes | None = None) -> Committed:
-    """`value`'s leaves under `program`'s digest, in rows of `words` leaves (default `row_width`), each `word_bits` bits (16
-    or 32: the parameter's leaf width rounded up to whole u16 words, `registered.width`). `salts`: `rows * salt_bytes`
-    bytes, row order, never reused."""
+def _rows(value: str, leaves: np.ndarray, word_bits: int, words: int | None) -> tuple[np.ndarray, int]:
+    """The leaves as rows of `words` (default `row_width`): ``(rows, words)`` array and the width, refused unless they fit."""
     a = np.ascontiguousarray(leaves).reshape(-1)
     G.width_entry(word_bits)
     if a.dtype.kind != "u" or a.dtype.itemsize * 8 > 32:
@@ -62,25 +64,55 @@ def commit(program: str, value: str, leaves: np.ndarray, word_bits: int, words: 
     words = row_width(a.size) if words is None else int(words)
     if words < 1 or a.size % words:
         raise ValueError(f"{value}: {a.size} leaves are not rows of {words}")
-    rows, k, n = a.size // words, word_bits // 16, _INST.salt_bytes
+    return a.reshape(a.size // words, words), words
+
+
+def _digests(m: np.ndarray, word_bits: int) -> Iterator[bytes]:
+    """Each row's `registered.row_digest`, row order."""
+    rows, words = m.shape
+    k = word_bits // 16
+    pad = -(words * k) % G.BLOCK
+    layout = sha512_row_layout(ROLE_X, 16, words * k + pad)
+    for r0 in range(0, rows, BLOCK_ROWS):
+        u16 = np.ascontiguousarray(m[r0:r0 + BLOCK_ROWS].astype("<u4" if k == 2 else "<u2")).view("<u2")
+        if pad:
+            u16 = np.concatenate([u16, np.zeros((u16.shape[0], pad), "<u2")], axis=1)
+        for row in u16:
+            yield layout.digest(row.tobytes())
+
+
+def entry(spec: dict[str, Any], root: bytes) -> dict[str, Any]:
+    """A `table` spec's registration entry under the root the value service committed it to."""
+    return {"value": spec["value"], "root": root.hex(), **{k: v for k, v in spec.items() if k != "value"}}
+
+
+def commit(program: str, value: str, leaves: np.ndarray, word_bits: int, words: int | None = None,
+           salts: bytes | None = None) -> Committed:
+    """`value`'s leaves under `program`'s digest, in rows of `words` leaves (default `row_width`), each `word_bits` bits (16
+    or 32: the parameter's leaf width rounded up to whole u16 words, `registered.width`). `salts`: `rows * salt_bytes`
+    bytes, row order, never reused."""
+    m, words = _rows(value, leaves, word_bits, words)
+    rows, n = len(m), _INST.salt_bytes
     if salts is None:
         salts = os.urandom(rows * n)
     if len(salts) != rows * n:
         raise ValueError(f"{value}: one {n}-byte salt per row: {rows * n} bytes, not {len(salts)}")
     if len({salts[i:i + n] for i in range(0, len(salts), n)}) != rows:
         raise ValueError(f"{value}: a salt is never reused: equal salts on two rows reveal the XOR of their digests")
-    pad = -(words * k) % G.BLOCK
-    layout = sha512_row_layout(ROLE_X, 16, words * k + pad)
     dom = G.domain(program, value, words, rows, word_bits)
-    out: list[bytes] = []
-    m = a.reshape(rows, words)
-    for r0 in range(0, rows, BLOCK_ROWS):
-        u16 = np.ascontiguousarray(m[r0:r0 + BLOCK_ROWS].astype("<u4" if k == 2 else "<u2")).view("<u2")
-        if pad:
-            u16 = np.concatenate([u16, np.zeros((u16.shape[0], pad), "<u2")], axis=1)
-        for i, row in enumerate(u16, r0):
-            bc = _INST.commit_string(_INST.default_key, layout.digest(row.tobytes()), salts[i * n:(i + 1) * n])
-            out.append(G.leaf(dom, i, bc))
+    out = [G.leaf(dom, i, _INST.commit_string(_INST.default_key, x, salts[i * n:(i + 1) * n]))
+           for i, x in enumerate(_digests(m, word_bits))]
     root = tree_levels(dom, out)[-1][0]
     return Committed({"value": value, "root": root.hex(), "leaves": rows, "words": words, **G.width_entry(word_bits),
                       "domain": dom.domain_id.hex()}, salts)
+
+
+def table(program: str, value: str, leaves: np.ndarray, word_bits: int, path: Path, words: int | None = None) -> dict[str, Any]:
+    """`commit`'s rows as a value-service table: each row's digest written to `path` (64 bytes a row, row order), for the ZK
+    server to salt; returns the entry without its root (`entry` adds the server's), the table's domain id its ``domain``."""
+    m, words = _rows(value, leaves, word_bits, words)
+    dom = G.domain(program, value, words, len(m), word_bits)
+    with open(path, "wb") as f:
+        for x in _digests(m, word_bits):
+            f.write(x)
+    return {"value": value, "leaves": len(m), "words": words, **G.width_entry(word_bits), "domain": dom.domain_id.hex()}
