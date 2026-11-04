@@ -20,6 +20,7 @@ import Proofs.Flock.Bridge.BitsRows
 import Proofs.Flock.Bridge.BitsLower
 import Proofs.Flock.Bridge.BitsKeys
 import Proofs.Flock.Bridge.BitsKeyProg
+import Proofs.Flock.Bridge.BitsRowMap
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
@@ -39,7 +40,9 @@ instance rows (`Flock.Bridge.rowsAgree_circuitRows`). `BitsLower`: where a Bits 
 units, the bridge's lowering, positions and proof blocks are Bits' (`Flock.Bridge.LaysOut.progOf_eq`,
 `Flock.Bridge.blockOf_eq`). `BitsKeys`: Bits' source keys are the bridge's (`Flock.Bridge.keyIdx_eq`). `BitsKeyProg`:
 Bits' key program lays out a circuit file's and its units, so the bridge's program, positions and proof blocks are
-Bits' (`Flock.Bridge.progOf_keyProg`, `Flock.Bridge.posOf_keyProg`, `Flock.Bridge.blockOf_keyProg`). -/
+Bits' (`Flock.Bridge.progOf_keyProg`, `Flock.Bridge.posOf_keyProg`, `Flock.Bridge.blockOf_keyProg`). `BitsRowMap`:
+Bits' row map is the bridge's: at an input gate (`Flock.Bridge.rowBit_keyRowOf`, `Flock.Bridge.rowBit_wire`) and at a
+returned output's bit (`Flock.Bridge.outRowBit_outBitRow`, `Flock.Bridge.outRowBit_outRowOf`). -/
 
 /-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
 theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl
