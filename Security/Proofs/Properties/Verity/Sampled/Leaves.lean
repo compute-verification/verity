@@ -20,7 +20,8 @@ def treeLeaves (spec : Flock.CoinTree.Spec) : ℕ := spec.streams.size * 2 ^ spe
 /-- A tree the device samples holds at most `maxTreeCoins` leaves: a leaf is a round, of a coin or more. -/
 theorem treeLeaves_le {spec : Flock.CoinTree.Spec} (h : TreeSpecOk spec) : treeLeaves spec ≤ maxTreeCoins := by
   obtain ⟨h1, h2⟩ := h
-  exact (Nat.le_mul_of_pos_right _ h1).trans h2
+  have h3 : treeLeaves spec ≤ treeCoins spec := Nat.le_mul_of_pos_right _ (by omega)
+  exact h3.trans h2
 
 /-- The leaves of the coin tree a frame has the device sample: a `Hello`'s tree's, and none at a coin or an opening. -/
 def frameLeaves : Frame → ℕ
@@ -85,45 +86,43 @@ theorem treeLines_set_bump : ∀ {ts : List OpenTree} {i : ℕ} {T : OpenTree}, 
 /-- **The device's releases write at most the coin-tree lines its log has left**: every run of `releases k fs ts`
 writes at most `maxTreeLines - treeLines ts` coin-tree lines, and each of its releases samples at most `maxTreeCoins`
 leaves a line it writes. -/
-theorem releases_lines_le (k : ℕ) : ∀ (fs : List (String × ℕ)) (ts : List OpenTree) {log : List Release},
+theorem releases_lines_le : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (log : List Release),
     Game.Reaches (releases k fs ts) log →
       logTreeLines log ≤ maxTreeLines - treeLines ts ∧
-        ∀ r ∈ log, frameLeaves r.frame ≤ maxTreeCoins * frameLines r.frame := by
-  induction k with
-  | zero =>
-    intro fs ts log h
-    have e : ([] : List Release) = log := h
-    subst e
+        ∀ r ∈ log, frameLeaves r.frame ≤ maxTreeCoins * frameLines r.frame
+  | 0, _, _, log, h => by
+    cases h
     simp [logTreeLines]
-  | succ k ih =>
-    intro fs ts log h
+  | k + 1, fs, ts, log, h => by
     obtain ⟨m, hm⟩ := h
-    rcases m with _ | ⟨⟨l⟩ | ⟨spec⟩ | ⟨i, s, n⟩, b⟩
-    · have e : ([] : List Release) = log := hm
-      subst e
+    rcases m with _ | ⟨_ | _ | _, b⟩
+    · cases hm
       simp [logTreeLines]
-    · dsimp only at hm
-      split at hm
-      · have e : ([] : List Release) = log := hm
-        subst e
+    · rename_i l
+      cases hc : takeCoin l fs with
+      | none =>
+        simp only [hc] at hm
+        cases hm
         simp [logTreeLines]
-      · rename_i fs' _
+      | some fs' =>
+        simp only [hc] at hm
         obtain ⟨x, hx⟩ := hm
-        obtain ⟨log', h', hlog⟩ := Game.reaches_bind hx
-        cases hlog
-        obtain ⟨h1, h2⟩ := ih fs' ts h'
+        obtain ⟨log', h', hret⟩ := Game.reaches_bind hx
+        cases hret
+        obtain ⟨h1, h2⟩ := releases_lines_le k fs' ts log' h'
         refine ⟨by simpa [logTreeLines, frameLines] using h1, fun r hr => ?_⟩
         rcases List.mem_cons.1 hr with rfl | hr
         · simp [frameLeaves, frameLines]
         · exact h2 r hr
-    · dsimp only at hm
+    · rename_i spec
+      simp only at hm
       split at hm
       · rename_i hc
         obtain ⟨hc1, hc2⟩ := hc
         obtain ⟨t, ht⟩ := hm
-        obtain ⟨log', h', hlog⟩ := Game.reaches_bind ht
-        cases hlog
-        obtain ⟨h1, h2⟩ := ih fs _ h'
+        obtain ⟨log', h', hret⟩ := Game.reaches_bind ht
+        cases hret
+        obtain ⟨h1, h2⟩ := releases_lines_le k fs _ log' h'
         rw [treeLines_append_hello] at h1
         refine ⟨?_, fun r hr => ?_⟩
         · simp only [logTreeLines, List.map_cons, List.sum_cons, frameLines] at h1 ⊢
@@ -131,26 +130,24 @@ theorem releases_lines_le (k : ℕ) : ∀ (fs : List (String × ℕ)) (ts : List
         · rcases List.mem_cons.1 hr with rfl | hr
           · simpa [frameLeaves, frameLines] using treeLeaves_le hc2
           · exact h2 r hr
-      · have e : ([] : List Release) = log := hm
-        subst e
+      · cases hm
         simp [logTreeLines]
-    · dsimp only at hm
+    · rename_i i s n
+      simp only at hm
       split at hm
       · rename_i hc
         split at hm
-        · have e : ([] : List Release) = log := hm
-          subst e
+        · cases hm
           simp [logTreeLines]
         · rename_i T hT
           split at hm
-          · have e : ([] : List Release) = log := hm
-            subst e
+          · cases hm
             simp [logTreeLines]
-          · rename_i s' ro _
+          · rename_i s' _ _
             obtain ⟨d, hd⟩ := hm
-            obtain ⟨log', h', hlog⟩ := Game.reaches_bind hd
-            cases hlog
-            obtain ⟨h1, h2⟩ := ih fs _ h'
+            obtain ⟨log', h', hret⟩ := Game.reaches_bind hd
+            cases hret
+            obtain ⟨h1, h2⟩ := releases_lines_le k fs _ log' h'
             rw [treeLines_set_bump hT] at h1
             refine ⟨?_, fun r hr => ?_⟩
             · simp only [logTreeLines, List.map_cons, List.sum_cons, frameLines] at h1 ⊢
@@ -158,17 +155,17 @@ theorem releases_lines_le (k : ℕ) : ∀ (fs : List (String × ℕ)) (ts : List
             · rcases List.mem_cons.1 hr with rfl | hr
               · simp [frameLeaves, frameLines]
               · exact h2 r hr
-      · have e : ([] : List Release) = log := hm
-        subst e
+      · cases hm
         simp [logTreeLines]
 
 /-- **The device's releases sample at most `maxLeaves` leaves**: every run of `releases k fs []`, from no coin tree
 open, samples coin trees of at most `maxLeaves` leaves in all. -/
 theorem releases_leaves_le (k : ℕ) (fs : List (String × ℕ)) {log : List Release}
     (h : Game.Reaches (releases k fs []) log) : logLeaves log ≤ maxLeaves := by
-  obtain ⟨h1, h2⟩ := releases_lines_le k fs [] h
+  obtain ⟨h1, h2⟩ := releases_lines_le k fs [] log h
+  have h3 : logTreeLines log ≤ maxTreeLines := by simpa [treeLines] using h1
   calc logLeaves log ≤ maxTreeCoins * logTreeLines log := logLeaves_le h2
-    _ ≤ maxTreeCoins * maxTreeLines := Nat.mul_le_mul_left _ (by simpa [treeLines] using h1)
+    _ ≤ maxTreeCoins * maxTreeLines := Nat.mul_le_mul_left _ h3
     _ = maxLeaves := Nat.mul_comm _ _
 
 /-- **A play writes at most `maxTreeLines` coin-tree lines**: every run of the play after `θ`, `F` and `c` ends with a
@@ -176,16 +173,17 @@ log of at most `maxTreeLines` coin-tree lines, a tree sampled or a round opened 
 theorem play_lines_le {fs : List (String × ℕ)} {D : Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {o : Exchange} (h : Game.Reaches (play fs D θ F c) o) : logTreeLines o.log ≤ maxTreeLines := by
   obtain ⟨_, ha⟩ := h
-  obtain ⟨log, hlog, b, ρ, e, he⟩ := Game.reaches_bind ha
+  obtain ⟨log, hlog, _, _, _, he⟩ := Game.reaches_bind ha
   cases he
-  simpa [treeLines] using (releases_lines_le _ _ [] hlog).1
+  have h1 := (releases_lines_le _ _ [] log hlog).1
+  simpa [treeLines] using h1
 
 /-- **A play's coin trees hold at most `maxLeaves` leaves**: every run of the play after `θ`, `F` and `c` ends with a
 log whose `Hello`s sampled coin trees of at most `maxLeaves` (`2^46`) leaves in all. -/
 theorem play_leaves_le {fs : List (String × ℕ)} {D : Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {o : Exchange} (h : Game.Reaches (play fs D θ F c) o) : logLeaves o.log ≤ maxLeaves := by
   obtain ⟨_, ha⟩ := h
-  obtain ⟨log, hlog, b, ρ, e, he⟩ := Game.reaches_bind ha
+  obtain ⟨log, hlog, _, _, _, he⟩ := Game.reaches_bind ha
   cases he
   exact releases_leaves_le _ _ hlog
 
