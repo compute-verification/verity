@@ -664,6 +664,38 @@ into its own witness's mask slot (`z`, `a` and `b`, whose circuit is the identit
 commits the codeword the loop did; the loop's root is the root of record. A worker that keeps words of its own in the slot
 commits another codeword, and the session stops at its `Finish` (`zk_worker_level0`'s `own-mask`).
 
+**The value commitments' salts are the ZK server's.** A statement's hm96 trees (its public file's `frame_v3` roots under
+an hm96 row schema) are committed by the ZK server's value service (`flock-firewall values --salt-key FILE`,
+`Flock.Firewall.Values`), which holds the server's 64-byte salt key `k` and derives each leaf's salt from it: leaf `i` of
+table `j` of the commit session `s` takes `y = SHA-512(k ‖ L ‖ s ‖ be32 j ‖ be64 i ‖ ctr)` for `ctr` 0, 1 and 2
+(`Salts.saltOf`, `L` the SHA-512 of `verity/zk-server/value-salt/v1\0`). The serving stack sends each row's unsalted
+64-byte digest and nothing else (`commit J D₀ N₀ S₀ …`, its body the digests, table-major; a body of any other length, a
+salt beside each digest among them, is refused). Only once the request is whole does the service draw `s` from the OS, and
+it answers each leaf's `b ‖ c`, each table's frame-v3-sha512 root and a tag: SHA-512 under `k` of the table's session,
+index, domain id, leaf count, schema and root (`Salts.tagOf`), by which the server knows a table it committed. The prover
+takes its witness's salts from the service with a refs file naming the tables (each `s ‖ be32 j ‖ D ‖ be64 N ‖ u8 schema ‖
+root ‖ tag`) and the rows (each `be32 t ‖ be64 i`), every tag checked (`salts`, `Salts.saltsAnswer`), in place of the staged
+file's (`flock-circuit --salt-refs REFS`, the service's address in `FC_FIREWALL_VALUES`).
+
+The stack registers one commit session of the service's current epoch, the sessions it opened since its last
+registration (`register S`, `Salts.Epoch`). The service answers the registration's record, `be64 m ‖ be32 T ‖` the
+session's `T` table refs `‖` a record tag, SHA-512 under `k` of `m` and the table refs (`Salts.recordOf`), and opens a new
+epoch: a session registers once, and only in the epoch that opened it, and a service started again opens a new one. `m`
+is the number of sessions the epoch opened, so it is public: a stack that commits its values in `m` sessions and
+registers the one whose roots it likes leaks at most `log₂ m` bits through the choice, a term of the guarantee
+(`Verity.Guarantees.RegisteredLeakage`), as PoUW's noise seeds' grinding is. Given the key and a records file of
+registrations (`--salt-key`, `--commitments`; `FC_FIREWALL_SALT_KEY`, `FC_FIREWALL_COMMITMENTS`), the session loop serves
+no statement any of whose hm96 trees is not a table of a record carrying the server's record tag, at its domain, leaf
+count, schema and root (`Salts.checkStatement`: `refused WHY` before any session). Each leaf's `c` is the SHA-512 of its
+salt, so a witness passes only on the server's salts: one on salts of the stack's own is rejected at its opening, where
+the value commitments' claims are checked (`zk_value_salts`'s `kept`), and a statement the stack committed under its own
+salts is refused by the loop (`own`).
+
+The tags, the record tags and the count mean what they say only while nothing the stack runs reads the key or the
+epoch: the key file is created its owner's alone, and the service and the loop run under the ZK server's own OS user,
+which no worker and no serving stack shares (`zk-server-own-user`, `Verity.Assumptions.ZkServerOwnUser`; the selftest
+runs them all under one).
+
 ### 10.3 The rule, inner phase (`rec_live`)
 
 | item | rule | why the M0 prover has no free choice |
