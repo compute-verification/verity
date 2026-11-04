@@ -2,10 +2,10 @@
 `Q_word_v1{16,32}` proof-block rules the manifest computes for them (`verity.ml.definitions.word`'s prefetch, then its check, one rule per
 distinct Definition), timed per Definition.
 
-    uv run benchmarks/bool_build_cost/run.py [--row qwen3-06b|small] [--ir word,boolean] [--part descriptor,rules]
+    uv run benchmarks/bool_build_cost/run.py [--workload qwen3-06b|small] [--ir word,boolean] [--part descriptor,rules]
                                              [--jobs N] [--t T,T,...] --out DIR
 
-A workload is its Calls' word specializations (`ROWS`); the Boolean ones are `verity.ml.definitions.boolean.boolean_version` of each, as the Boolean
+A workload is its Calls' word specializations (`WORKLOADS`); the Boolean ones are `verity.ml.definitions.boolean.boolean_version` of each, as the Boolean
 Build's lift calls them.  `--t` keeps the attention specializations of those key lengths only.  Writes `DIR/<ir>.json` (descriptor
 bytes, Program digest, the largest Definitions, rule seconds and the verdict per specialization, a digest of every rule) and
 `DIR/rules-<ir>.jsonl` (one line per rule as it finishes, so a run cut short keeps what it measured).
@@ -48,7 +48,7 @@ def small() -> list[str]:
     return [_attention(1, 0), _attention(65, 0), "RoPE_v1{NHEADS=8,D=128}", "SiluMul_v2{I=3072}"]
 
 
-ROWS = {"qwen3-06b": qwen3_06b, "small": small}
+WORKLOADS = {"qwen3-06b": qwen3_06b, "small": small}
 
 
 def definitions(specs: list[str], ir: str) -> list:
@@ -156,7 +156,7 @@ def rules(fns: list, jobs: int, log: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     a = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    a.add_argument("--row", default="small", choices=sorted(ROWS))
+    a.add_argument("--workload", default="small", choices=sorted(WORKLOADS))
     a.add_argument("--ir", default="word,boolean")
     a.add_argument("--part", default="descriptor,rules")
     a.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
@@ -165,14 +165,14 @@ def main(argv: list[str] | None = None) -> int:
     o = a.parse_args(argv)
     out = Path(o.out)
     out.mkdir(parents=True, exist_ok=True)
-    specs = ROWS[o.row]()
+    specs = WORKLOADS[o.workload]()
     if o.t:
         keep = {f"T={t}," for t in o.t.split(",")}
         specs = [s for s in specs if not s.startswith("Attention_") or any(k in s for k in keep)]
     for ir in o.ir.split(","):
         t = time.time()
         fns = definitions(specs, ir)
-        res: dict = {"row": o.row, "ir": ir, "specs": len(specs), "build_secs": round(time.time() - t, 2)}
+        res: dict = {"workload": o.workload, "ir": ir, "specs": len(specs), "build_secs": round(time.time() - t, 2)}
         if "descriptor" in o.part:
             res["descriptor"] = descriptor(fns)
             print(f"[{ir}] descriptor {res['descriptor']['bytes']:,} B digest {res['descriptor']['digest'][:16]} "

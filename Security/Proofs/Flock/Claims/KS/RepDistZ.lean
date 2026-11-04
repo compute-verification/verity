@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.RepDist
-import Proofs.Flock.Claims.KS.SlotLead
-import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
+module
+
+public import Proofs.Flock.Claims.KS.RepDist
+public import Proofs.Flock.Claims.KS.SlotLead
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
 
 /-!
 # A masked rep's level caps, at a distance fixed by the statement and the schedule
@@ -22,6 +24,8 @@ opening rejects goes to the inner proof and meets no cap.
 * `noSlot_lockRecZ_ge`, `noSlot_lockLigTailZ_ge`, `noSlot_lockLigPadZ_ge`, `noSlot_lockRestZ_ge`,
   `noSlot_lockMaskedZ_ge`, `noSlot_lockRepZ_ge`: past the last level there is no cap.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

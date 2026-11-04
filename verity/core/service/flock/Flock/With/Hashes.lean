@@ -9,7 +9,11 @@ once from the key label with SHA-512 itself.
 Here: the oracle, and `Flock.Merkle`'s Merkle checks over it. A registered scheme's node and leaf go through the oracle
 (`MerkleScheme.opsWith`, by the registry's ids alone); a scheme the registry doesn't name keeps its own closures.
 -/
-import Flock.Merkle
+module
+
+public import Flock.Merkle
+
+@[expose] public section
 
 namespace Flock
 

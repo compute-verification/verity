@@ -2,10 +2,16 @@
 `Flock.Statement`: sparse F2 matrices, and Flock's BLAKE3 compression circuit as a pinned file (`flock-r1cs-rows/v1`)
 whose statement digest `D_b3` the verifier recomputes and compares with the pinned value.
 -/
-import Lean.Data.Json
-import Flock.Canon
-import Flock.Hash
-import Flock.JsonParse
+module
+
+public import Lean.Data.Json
+public import Flock.Canon
+public import Flock.Hash
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 

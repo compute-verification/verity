@@ -1,8 +1,8 @@
 # benchmarks/hash
 
 Prover-side GPU code for the served path's commitments and for PoUW's served linear, each held bit for bit to its CPU
-reference or Definition before anything is timed. The commitments' hash is SHA-512 with its whole output (hm96 leaves in
-frame-v3-sha512 trees, "One hash" in AGENTS.md); nothing here changes a committed format, and nothing a verifier runs
+reference or Definition before anything is timed. The commitments' hash is SHA-512 with its whole output (hm96 leaves or keyed
+leaves in frame-v3-sha512 trees, "One hash" in AGENTS.md); nothing here changes a committed format, and nothing a verifier runs
 reads this code.
 
 | Directory | What it holds |

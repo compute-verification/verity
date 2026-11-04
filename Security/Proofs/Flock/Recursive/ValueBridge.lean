@@ -1,7 +1,9 @@
-import Proofs.Flock.Recursive.ForkInnerC
-import Proofs.Flock.Recursive.ValueFinder
-import Proofs.Flock.Recursive.LeafFinder
-import Proofs.Flock.Recursive.SaltFinder
+module
+
+public import Proofs.Flock.Recursive.ForkInnerC
+public import Proofs.Flock.Recursive.ValueFinder
+public import Proofs.Flock.Recursive.LeafFinder
+public import Proofs.Flock.Recursive.SaltFinder
 
 /-!
 # Recursion: gap 2 off a registrant's row off a verifier's value
@@ -16,6 +18,8 @@ row under the held salts and a held top other than the registered one let the di
 probability `0` (`prob_valueColl_le`, `prob_leafColl_le`, `prob_saltColl_le`, `prob_topCollAt_le`, `prob_regColl_le` at
 no budget).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

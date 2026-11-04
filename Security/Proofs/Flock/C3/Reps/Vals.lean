@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Reps.Tie
-import Proofs.Flock.VBridge.Family.Runs
+module
+
+public import Proofs.Flock.C3.Reps.Tie
+public import Proofs.Flock.VBridge.Family.Runs
 
 /-!
 # The reps' value stubs `ProofOfVals` and `SetupOfVals`, from G's facts at holo
@@ -20,6 +22,8 @@ no frame and so hold at a holo shape:
   rep's extras at well-formed link points (`RepExtrasAt`, as G's `rep_extras`), the comb port (`CombFolds`) and the
   class checks, which make the schedule's model the executable's (`sched_holoAt`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

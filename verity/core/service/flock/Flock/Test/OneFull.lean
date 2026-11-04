@@ -3,7 +3,12 @@
 population of four, four instances); a table drawn short of its population (three of four, as a sampled RecCap table
 would be) is refused, and so are two tables and none. Without an inner shape it passes whatever the tables are.
 -/
-import Flock.RecSetup
+module
+
+public import Flock.RecSetup
+meta import Flock.RecSetup
+
+@[expose] public section
 
 namespace Flock.Test.OneFull
 

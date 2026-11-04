@@ -1,9 +1,9 @@
 """circuit-check over every registered Definition and subcircuit template, a served workload's request Program, and the checks' own
 negatives (each check fires by name on a circuit built to break it).
 
-A failure is a correctness or invariant violation.  The ones `main` already has are listed in `circuit_check.known` with their
-cause; a test whose only failures are known is an expected failure, and `test_known_failures_are_current` fails once a known one
-is fixed, so the entry is dropped.  Redundant and dead gates are warnings: counted in the report, never a test failure here.
+A failure is a correctness or invariant violation, and fails its test: whether one may stay red is drive's policy
+(`research.policy`), never the checker's.  Redundant and dead gates are warnings: counted in the report, never a test failure
+here.
 The per-target tests are marked `circuit_suite` and collected only under `-m circuit_suite` (see conftest.py): `check` runs the
 same checks as `circuit-check --all`.
 
@@ -24,7 +24,6 @@ import numpy as np
 import pytest
 
 from circuit_check import checks as CK
-from circuit_check import known as KN
 from circuit_check import targets as TG
 from circuit_check import vectors as VX
 
@@ -34,15 +33,9 @@ MEMO: dict = {}
 PINS = CK.load_pins()
 TEMPLATES = {label: (sub, sts) for label, sub, sts in TG.templates()}
 
-_known = KN.known
-
 
 def _clean(entry: dict) -> None:
-    new = [f["name"] for f in entry["failures"] if _known(f) is None]
-    assert not new, "\n".join(new)
-    known = sorted({_known(f) for f in entry["failures"]} - {None})
-    if known:
-        pytest.xfail(" | ".join(known))
+    assert not entry["failures"], "\n".join(f["name"] for f in entry["failures"])
 
 
 # --- coverage -----------------------------------------------------------------------------------------------------------------
@@ -362,13 +355,6 @@ def test_a_call_output_no_commitment_holds_is_named(tmp_path):
         [f["name"] for f in r["failures"]]
 
 
-@pytest.mark.circuit_suite
-def test_known_failures_are_current(suite):
-    """Each known entry still fails somewhere: a fixed one is dropped from `circuit_check.known`."""
-    fails = [f for fid in sorted(suite) for f in CK.check_definition(suite[fid], OPTS, memo=MEMO, pins=PINS)["failures"]]
-    assert not KN.stale(fails), KN.stale(fails)
-
-
 # --- the vectors ----------------------------------------------------------------------------------------------------------------
 
 def test_the_vectors_start_with_every_edge():
@@ -602,6 +588,37 @@ def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
     rec, failed = _partition(fn, 2)
     assert failed == [f"partition/unit-too-wide {fn.id} (1 gate(s))"], failed
     assert rec["recomputed_across"] == 1120 and rec["whole"]["q_word_v2"]["codes"] == ["unit-too-wide"]
+
+
+def test_the_partition_cuts_a_call_once(monkeypatch):
+    """`partition` checks the cut `word.unit_rule` made of the whole Definition (its ``graphs``) rather than cutting it again: one
+    `word.Graph` of it, and the record and failures of cutting it twice; a Definition cut member by member (`word.separable`) is
+    cut whole once, by `partition` alone."""
+    from verity.ml.circuits.types import Value
+    from verity.ml.definitions import word as W
+    from verity.ml.definitions.registry import prims as P
+
+    real_rule, cuts = W.unit_rule, []
+
+    class Counted(W.Graph):
+        def __init__(self, fn, *a, **k):
+            cuts.append(fn.id)
+            super().__init__(fn, *a, **k)
+
+    monkeypatch.setattr(W, "Graph", Counted)
+    chained = _composite("CircuitCheckCutOnce", (_f32x2(), Value(32)),
+                         lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])))
+    rope = TG.definition(BOOL_RECOMPUTE)
+    assert W.separable(chained) is None and W.separable(rope) is not None
+    for fn, q_word, twice in ((chained, 1, 2), (rope, 2, 1), (rope, 1, 1)):
+        cuts.clear()
+        once = _partition(fn, q_word)
+        assert cuts.count(fn.id) == 1, fn.id
+        with monkeypatch.context() as m:
+            m.setattr(W, "unit_rule", lambda *a, graphs=None, **k: real_rule(*a, **k))
+            cuts.clear()
+            assert _partition(fn, q_word) == once and cuts.count(fn.id) == twice, fn.id
+    assert once[1] == [f"partition/gate-recomputed {rope.id} (1120 gate(s))"]
 
 
 def test_q_call_is_recorded_per_call_and_refuses_a_gate_wider_than_32_bits():
@@ -888,8 +905,23 @@ def test_a_proof_blocks_export_counts_its_circuit_types():
         C.output("out0", [C.AND(x, y) for x, y in zip(a, b)])
         return C
 
-    assert CK._export_counts(build, "test unit") == {"and": 4, "xor": 0, "not": 0, "subcircuit_types": 1, "flat_ands": 4,
-                                                      "shared_across_types": 0}
+    want = {"and": 4, "xor": 0, "not": 0, "subcircuit_types": 1, "flat_ands": 4, "shared_across_types": 0}
+    assert CK._export_counts(build, "test unit") == want == CK._export_counts(build, "test unit", build())
+
+
+def test_a_proof_blocks_export_is_evaluated_against_the_circuit_it_is_handed():
+    """`checks._export_counts` given the circuit ``build`` made (`template_lowering` hands it `_traced`'s) evaluates the
+    export's types against that circuit: one that computes something else is refused."""
+    from verity_flock import gf2
+
+    def build(xor: bool = False):
+        C = gf2.Circuit(cse=True)
+        a, b = C.input("a", 4), C.input("b", 4)
+        C.output("out0", [x ^ y if xor else C.AND(x, y) for x, y in zip(a, b)])
+        return C
+
+    with pytest.raises(AssertionError, match="disagree with its circuit"):
+        CK._export_counts(build, "test unit", build(xor=True))
 
 
 def _lowering_pin(e: dict) -> dict:
@@ -1073,10 +1105,8 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     assert not real["lowered"] and real["reason"].endswith("over the whole-Definition budget (1)")
     capsys.readouterr()
     fp8 = "ScaledMmFp8Block_v1{K=128,N=128,G=128}"
-    assert cli.main([fp8, *call]) == 0                                           # a known failure: named, not failing
-    assert f"known partition/gate-recomputed {fp8}" in capsys.readouterr().out
-    assert cli.main([fp8, *call, "--strict"]) == 1
-    capsys.readouterr()
+    assert cli.main([fp8, *call]) == 1                       # a failure drive's policy allows is still its real verdict
+    assert f"FAIL partition/gate-recomputed {fp8}" in capsys.readouterr().out
     assert cli.main([BOOL_RECOMPUTE, *call]) == 0
     assert "1 Boolean Call(s) recomputing 1120 gate(s) across units (Q_word v2)" in capsys.readouterr().out
 

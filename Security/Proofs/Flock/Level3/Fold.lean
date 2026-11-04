@@ -4,9 +4,13 @@ Level 3, L3-A (`verity/ml/flock/verifier/README.md` stage 1d): the lincheck fold
 with `e_lo = lw ⊗ eq(ρ_lo)`, `ρ_lo` the first `sl − 6` coordinates and `ρ_hi` the rest. That is why `Stmt.fold` folds
 each slot type once on `e_lo` and scales it per slot by `eqTable ρ_hi`.
 -/
-import Proofs.Flock.Level3.Assembly
-import Proofs.Flock.Level3.Nodes
-import Flock.Statement
+module
+
+public import Proofs.Flock.Level3.Assembly
+public import Proofs.Flock.Level3.Nodes
+public import Flock.Statement
+
+@[expose] public section
 
 open Flock
 

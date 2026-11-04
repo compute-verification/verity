@@ -1,6 +1,12 @@
 /-
 The fields.
 -/
+module
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
+
 namespace Flock
 
 /-- GF(2^128) = F2[x]/(x^128 + x^7 + x^2 + x + 1). Bit `i` of `hi·2^64 + lo` is the coefficient of `x^i`. -/

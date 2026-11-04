@@ -1,3 +1,5 @@
+module
+
 /-!
 # The tile templates the verifier pins
 
@@ -12,6 +14,8 @@ change here before the verifier accepts its proofs.
 A salted template (`salted`, `core_check.Salted`) is one whose unit reads the window's certified salt: its pinned circuit's
 first ports are R A rows, C B rows and the public row `pub`, and only a certified window opens its units (`opening`).
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.DeployFacts
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployFacts
 
 /-!
 # The compiled verifier runs each V* session as the outer verifier (`SessionRuns`)
@@ -30,6 +32,8 @@ At an oracle where the outer verifier can accept before its last round, the comp
 the session's own run accepts, so `sessionRuns` takes `OuterAtEnd`, which `nextO_acc_length` gives wherever Flock's
 setup at `H` has its recursive setup's rounds (`hr`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

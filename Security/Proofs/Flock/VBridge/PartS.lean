@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Renumber
-import Proofs.Flock.VBridge.Verifier
-import Flock.RecResiduals
+module
+
+public import Proofs.Flock.VBridge.Renumber
+public import Proofs.Flock.VBridge.Verifier
+public import Flock.RecResiduals
 
 /-!
 # The verifier's part of S keeps S's residuals
@@ -12,6 +14,8 @@ part's index says: its `w` element `k` is the whole `w`'s element `wIdx[k]`, its
 The maps `renS` renumbers by are the verifier's own lookups (`fw`, `fv`, `fo`), and `PartAgrees` follows from their
 checks alone: the grouping that chose `R`, `P` and `V` is not read.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.PartS
 

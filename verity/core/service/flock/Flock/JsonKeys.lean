@@ -3,8 +3,12 @@ A key named twice in one JSON object. `JsonParse.parse` keeps one value per key,
 (a `--registered` file's port, or a port's key) would read as naming it once; `FlockVerify.registeredInput` refuses
 such a file by `dupKey`, on the text `JsonParse.parse` accepted.
 -/
-import Lean.Data.Json
-import Flock.JsonParse
+module
+
+public import Lean.Data.Json
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.JsonKeys
 

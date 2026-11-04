@@ -1,21 +1,23 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Fintype.Option
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Data.Fintype.Sum
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
-import Proofs.Pous.Audit.SampledAudit
-import Proofs.Pous.B5.ExPostFacto
-import Proofs.Pous.Thm1.Theorem1iTimed
-import Proofs.Pous.Thm1.Theorem1iiSeq
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Fintype.Option
+public import Mathlib.Data.Fintype.Powerset
+public import Mathlib.Data.Fintype.Sum
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.GCongr
+public import Mathlib.Tactic.Linarith
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
+public import Proofs.Pous.Audit.SampledAudit
+public import Proofs.Pous.B5.ExPostFacto
+public import Proofs.Pous.Thm1.Theorem1iTimed
+public import Proofs.Pous.Thm1.Theorem1iiSeq
 
 /-!
 # The dense single-layer scheme meets the requirement: `PousDense.dense_meets`
@@ -39,6 +41,8 @@ The proof composes five pieces:
 It imports the Theorem 1 library (`PousThm1`, with `theorem1_ii_seq`) and the B5 proof (`PousB5`); the scheme and
 the proof are `PousDense`.
 -/
+
+@[expose] public section
 
 namespace PousThm1
 

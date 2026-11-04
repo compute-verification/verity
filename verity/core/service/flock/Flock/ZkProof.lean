@@ -4,7 +4,11 @@ The pair is `Flock.Proof`'s with three differences: `matrix_evals` is empty, eve
 a pair per rep), and the Ligerito proof ends with level 0's hiding messages (`zk_level0`, an `Option`). The inner proof
 follows the pair. A byte after it is refused, as after `Flock.Proof`'s pair (`Reader.runAll`).
 -/
-import Flock.Proof
+module
+
+public import Flock.Proof
+
+@[expose] public section
 
 namespace Flock.Zk
 

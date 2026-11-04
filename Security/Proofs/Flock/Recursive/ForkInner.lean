@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.Registrants
-import Proofs.Flock.Recursive.ForkRuns
+module
+
+public import Proofs.Flock.Recursive.Registrants
+public import Proofs.Flock.Recursive.ForkRuns
 
 /-!
 # Recursion: the inner protocol's soundness in fork form, through the recursive audit
@@ -21,6 +23,8 @@ the relabelled transcript is accepted and that some outer outcome the leaf reach
 * `innerAtLeavesV_of_forkOn`: `InnerSoundForkOn` gives `InnerAtLeaves` at V*'s outer proof unless the recursive prover
   has an inner fork (the body of `InnerForkRec`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

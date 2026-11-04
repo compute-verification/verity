@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.ExecParse
-import Properties.Flock.Circuit.Keys
+module
+
+public import Proofs.Flock.Soundness.ExecParse
+public import Properties.Flock.Circuit.Keys
 
 /-!
 # A typed template's Δ, and the rows it makes copies
@@ -17,6 +19,8 @@ with `i = col g r` and `col` the unit column's block position (`Typed.col`).
 - `CopyRow S r src` and `ZeroRow S r`: the block rows at `r` read exactly `src`, or nothing, in `A` and `B`. A
   satisfying witness then carries at `r` what it carries at `src` (`CopyRow.block_eq`), or 0 (`ZeroRow.block_eq`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

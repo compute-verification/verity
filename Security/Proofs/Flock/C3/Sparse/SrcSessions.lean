@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Sparse.MsgsLayers
+module
+
+public import Proofs.Flock.C3.Sparse.MsgsLayers
 
 /-!
 # The sparse tie at the tied source, from V*'s sessions
@@ -13,6 +15,8 @@ stage conjunct holds at its tied source by definition, and its tied reps are `st
 public values being the coins' (`pubOf`, check 5's `rec-sparse-v`) and its `h` w's first 64 elements (RecSparse's `h`
 registered as the table's h round, `RecVStar.ownPorts`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

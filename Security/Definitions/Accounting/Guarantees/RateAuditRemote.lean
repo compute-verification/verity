@@ -1,6 +1,8 @@
-import Definitions.Accounting.RateAudit
-import Definitions.Accounting.RateAuditInteractive
-import Definitions.Accounting.RateAuditRemote
+module
+
+public import Definitions.Accounting.RateAudit
+public import Definitions.Accounting.RateAuditInteractive
+public import Definitions.Accounting.RateAuditRemote
 
 /-!
 # The remote rate audit: conservation over tiers, and chained passes (trusted)
@@ -27,6 +29,8 @@ rebuild work per word is `c_enc`, a parameter of every statement here, so the co
   pass and summed over a window's passes, with no sample: the remote audit's route `Paid`.
 * `RateGrindPaidRO`, `RateGrindPaid`: the same for a prover that grinds its roots against the Fiat–Shamir seed.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

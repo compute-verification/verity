@@ -1,5 +1,7 @@
-import Definitions.Pouw.Fp8Atom.H1TLemmas
-import Proofs.Pouw.Fp8Atom.Fp32Proofs
+module
+
+public import Definitions.Pouw.Fp8Atom.H1TLemmas
+public import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
 /-!
 # H-1T: the statements `H1TRunningWords` still needs (staging, unpinned)
@@ -22,6 +24,8 @@ proved or pinned, and no pin reads them.
   ulp at `|R| ≥ 2^32`. `H1TCrossLateStaging` proves it where block 2 adds exactly on the 512 grid and the last two
   slices are quiet (`Exact512`), a regime that is empty for `k ≤ 19,430`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T
 

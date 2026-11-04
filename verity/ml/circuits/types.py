@@ -263,3 +263,14 @@ def remove_axis(t: Type, axis: int) -> tuple[int, Type]:
         raise TypeError(f"axis {axis} requires nested Arrays, got {t!r}")
     n, inner = remove_axis(t.elem, axis - 1)
     return n, Array(t.n, inner)
+
+
+def axis_runs(t: Array, axis: int) -> tuple[int, int, int]:
+    """Array axis `axis` of `t` as (outer, n, L): its member m (`remove_axis`'s member type) is, for each of the `outer` indices
+    over the axes before it, the run of `L` leaves at m of `n`, so leaf l of member m is leaf ``(l // L) * n * L + m * L + l % L``
+    of `t`."""
+    outer = 1
+    for _ in range(axis):
+        outer *= t.n
+        t = t.elem  # type: ignore[assignment]
+    return outer, t.n, t.elem.leaves

@@ -1,7 +1,9 @@
-import Flock.RecVStar
-import Proofs.Flock.Recursive.Universal
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+module
+
+public import Flock.RecVStar
+public import Proofs.Flock.Recursive.Universal
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
 /-!
 # Recursion: the class, regions and schedule of an executable statement
@@ -34,6 +36,8 @@ function of it (`execClassAt`), so the class's fields are no hypotheses and the 
   fixed bits (`regionsOf_layout`); two statements of one shape differ only in the regions' bytes (`execClassAt_shape`).
   When the checks pass, the schedule is `fast100`'s (`execClassAt_sch_of_fast100`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

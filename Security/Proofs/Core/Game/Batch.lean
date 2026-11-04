@@ -1,5 +1,7 @@
-import Proofs.Core.Game.Lock
-import Definitions.Core.Game.Batch
+module
+
+public import Proofs.Core.Game.Lock
+public import Definitions.Core.Game.Batch
 
 /-!
 # One lockstep among identical games
@@ -15,6 +17,8 @@ prover, as the same event in that position's game alone.
 
 The definitions are in `Definitions.Core.Game.Batch`.
 -/
+
+@[expose] public section
 
 namespace Verity
 
