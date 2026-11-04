@@ -566,19 +566,21 @@ RECORD_REFUSALS = {
 
 def test_an_audit_in_the_record_form_is_counted_on_its_record(server):
     """An audit carrying its window's circuit record, wire order and pins (`record_audit`) is accepted with the mirror's
-    public, its free inputs `interface.input_count`'s on the record, not its Program's input gates; and one whose
+    public, its free inputs `interface.input_count`'s on the record, not its Program's input gates, a wire from a
+    Boolean-profile writer's one-bit leaves to a reader's 16-bit leaves included (`audit-record-bits`); and one whose
     registration's window binds another record, or records no pin's root, or that pins the scan's state, is refused at
     that check by Lean and the mirror."""
-    prog, doc, _ = (json.loads(x) for x in PC.record_audit())
-    free = IF.input_count(doc)["free"]
-    assert 0 < free < PC.input_gates(prog)
-    for n in range(4):
-        case = build("audit-record", n, small=n % 2 == 0)
-        out = reference(case)
-        assert out["verdict"] == ACCEPT, (n, out)
-        assert [PC._audit(a, "").free for a in case["params"]["audits"] if "circuit" in a] == [free]
-        verdict, got = D.replay(PORT, case, server)
-        assert verdict == ACCEPT and json.loads(got).get("public") == out.get("public"), (n, got)
+    for m, bits in (("audit-record", False), ("audit-record-bits", True)):
+        prog, doc, _ = (json.loads(x) for x in PC.record_audit(bits))
+        free = IF.input_count(doc)["free"]
+        assert 0 < free < PC.input_gates(prog)
+        for n in range(4):
+            case = build(m, n, small=n % 2 == 0)
+            out = reference(case)
+            assert out["verdict"] == ACCEPT, (m, n, out)
+            assert [PC._audit(a, "").free for a in case["params"]["audits"] if "circuit" in a] == [free]
+            verdict, got = D.replay(PORT, case, server)
+            assert verdict == ACCEPT and json.loads(got).get("public") == out.get("public"), (m, n, got)
     for m, (lean, mirror) in RECORD_REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)
@@ -588,9 +590,10 @@ def test_an_audit_in_the_record_form_is_counted_on_its_record(server):
 
 
 def test_the_record_forms_circuit_check_refuses_what_it_must(server):
-    """Lean refuses as parameters a record-form audit whose record `NetworkCheck.Circuit.check` refuses, checks the
-    mirror leaves to it (`period_case._record_count`): an order ranking a wire's readers below its writers, one of
-    another format, a record over another Program, one that lists its members, and one that declares ingress."""
+    """Lean alone refuses as parameters a record-form audit whose record `NetworkCheck.Circuit.check` refuses, checks
+    the mirror leaves to it (`period_case._record_count`), so Lean's answer is read without the mirror's: an order
+    ranking a wire's readers below its writers, one of another format, a record over another Program, one that lists
+    its members, and one that declares ingress."""
     case = build("audit-record", 0, small=True)
     i, a = next((i, a) for i, a in enumerate(case["params"]["audits"]) if "circuit" in a)
     order, doc = a["order"], a["circuit"]
@@ -603,7 +606,7 @@ def test_the_record_forms_circuit_check_refuses_what_it_must(server):
         ({"circuit": doc | {"ingress": [{}]}}, "declares ingress"),
     ]:
         audits = [*case["params"]["audits"][:i], a | edit, *case["params"]["audits"][i + 1:]]
-        verdict, out = D.replay(PORT, case | {"params": case["params"] | {"audits": audits}}, server)
+        verdict, out = PORT.lean(server, case | {"params": case["params"] | {"audits": audits}})
         reason = json.loads(out)["reason"]
         assert verdict == REJECT and reason.startswith("params: an audit: circuit: ") and why in reason, (why, out)
 
