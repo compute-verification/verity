@@ -22,9 +22,9 @@ silent prover is accepted, and its bound fails, at every hash, with `KSWired` (`
 radius, binding and the scope all holding. The registration `goodReg`, which opens the input `false`, meets
 `RegOpensAt` (`ksNotD_regOpens`).
 
-The rows format `blindRows` encodes every frame as the empty list (`blindRows_not_wf`): on the schedule `oneSched`,
-which fits it, the record of either of two servings is `obs1` (`blindRun_obs`), which the circuit accepts at `goodReg`
-(`frameTops_acc`), while the client's cell tells the servings apart (`boolDec_run`).
+`WitnessToys`' rows format `blindRows` encodes every frame as the empty list (`blindRows_not_wf`): on the schedule
+`oneSched`, which fits it, the record of every serving `z` is `obs1` (`blindRun_obs`), which the circuit accepts at
+`goodReg` (`frameTops_acc`), while the client's cell tells the servings apart (`cellDec_run`).
 -/
 
 namespace NetTiming.Witness
@@ -505,49 +505,7 @@ theorem not_windowLeakAtAnyOps : ¬ WindowLeakAtAnyOps := fun h =>
       (fun _ => 1) 0 (fun _ => [()]) le_rfl (Claims.Witness.Flock.listWithin_unit _ _ _) (fun _ => {0})
       (fun _ => badReg) 1 (fun _ => frameTops) (notCm_binds _) [] (ksNotD_scopeAcc []) Unit silentP)
 
-/-! ## A rows format that doesn't read back -/
-
-/-- **A rows format whose frames don't read back**: one connection, every frame encoded as the empty list and decoded
-as nothing, one bucket a window. -/
-def blindRows : RowsFormat Unit Bool 1 1 where
-  conns := [()]
-  enc _ := []
-  dec _ := none
-  link := 0
-  T := 1
-  jitter _ _ _ := 0
-  status _ _ _ _ := .complete
-
-theorem blindRows_not_wf : ¬ blindRows.Wf := fun h => by
-  have h' := h.2.2 ((), .pad)
-  simp [blindRows] at h'
-
-/-- One cell a bucket, no latency, the connection admitted at bucket `0`, one cell: its one cell in bucket `0`. -/
-def oneSched : WardenSchedule Unit := ⟨1, 0, fun _ => 0, fun _ => 1⟩
-
-theorem oneSched_fits : blindRows.Fits 1 1 oneSched := by
-  refine ⟨fun c j hj => by simpa [blindRows, oneSched, WardenSchedule.bucket] using hj, fun b => ?_⟩
-  have hadm : ¬ (oneSched.adm () ≤ b ∧ b < oneSched.adm () + oneSched.D) := fun h => by simp [oneSched] at h
-  have h : laneLoad oneSched () b ≤ 1 := by
-    simp only [laneLoad, hadm, ↓reduceIte, zero_add]
-    exact (List.length_filter_le _ _).trans (by simp [oneSched])
-  simpa [blindRows] using h
-
-/-- The serving `z`'s arrivals: the one cell `z`, there from the start. -/
-def boolArr (z : Bool) : Unit → Arrivals Bool := fun _ => ⟨[z], fun _ => 0⟩
-
-/-- **The network certifier's code, recorded in `blindRows`**: the client's cells and the record of one window. -/
-def blindRun : Unit → WardenSchedule Unit × Bool → (Unit → List (ℕ × CellView Bool)) × (Fin 1 → List (Obs 1 1 1)) :=
-  fun _ p => (wardenCode p.1 (boolArr p.2), blindRows.record 1 1 p.1 (boolArr p.2) (wardenCode p.1 (boolArr p.2)))
-
-/-- The first cell's data, as the client receives it. -/
-def boolDec (v : Unit → List (ℕ × CellView Bool)) : Bool :=
-  match v () with
-  | (_, .data b) :: _ => b
-  | _ => false
-
-theorem boolDec_run (z : Bool) : boolDec (blindRun () (oneSched, z)).1 = z := by
-  cases z <;> rfl
+/-! ## `WitnessToys`' rows format that doesn't read back, at `freeLay` -/
 
 theorem obs_eq_obs1 {o : Obs 1 1 1} (hr : ∀ ℓ σ, o.rows ℓ σ = some []) (hj : o.jitter = 0)
     (hs : ∀ κ, o.status κ = .complete) : o = obs1 := by
@@ -558,24 +516,19 @@ theorem obs_eq_obs1 {o : Obs 1 1 1} (hr : ∀ ℓ σ, o.rows ℓ σ = some []) (
   subst h1 h3
   rfl
 
-/-- **The record doesn't tell the servings apart**: on either, its one window is `obs1`, the frame encoded as the empty
-list. -/
-theorem blindRun_obs (z : Bool) (i : Fin 1) : (blindRun () (oneSched, z)).2 i = [obs1] := by
+/-- **The record doesn't tell the servings apart**: on every serving `z`, its one window is `obs1`, the frame encoded
+as the empty list. -/
+theorem blindRun_obs (z : ℕ) (i : Fin 1) : (blindRun () (oneSched, z)).2 i = [obs1] := by
   fin_cases i
   show [_] = [obs1]
   congr 1
   exact obs_eq_obs1 (fun ℓ σ => by
     fin_cases ℓ
     fin_cases σ
-    first | rfl | (cases z <;> rfl)) rfl fun _ => rfl
-
-theorem empty_mem_notFaulty : (∅ : Finset ℕ) ∈ faultySets notStmt.design notPart 0 := by
-  classical
-  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset]
-  refine ⟨Finset.empty_subset _, ?_, Finset.disjoint_empty_left _⟩
-  show (0 : ℝ) < notStmt.design.Pa notPart ∅
-  rw [notPa]
-  simp [Claims.Sampling.window]
+    first
+      | rfl
+      | simp [blindRun, RowsFormat.record, blindRows, bucketFrames, laneFrames, oneSched, cellArr, wardenCode,
+          wardenLane, WardenSchedule.bucket, streamCell, rowOf]) rfl fun _ => rfl
 
 /-- **`frameTops` registers only what the circuit accepts at `goodReg`**: a sequence the network certifier registers
 at `frameTops` is accepted with the empty faulty set and the input `false`, whose negation `true` holds the frame. -/

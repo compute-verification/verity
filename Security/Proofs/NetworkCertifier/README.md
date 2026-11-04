@@ -150,8 +150,8 @@ KsToy.lean      a deployment where `Claims.Sampling.KS` holds (`ksNotD_KS`): the
                                          passes one value at each position, its one proof block checked on every run;
                                          there, a registration that doesn't open breaks PeriodLeakRegistered's
                                          per-window part (`not_windowLeakAtAnyOps`), which is why it reads `RegOpensAt`;
-                                         and a rows format that encodes every frame as the empty list (`blindRows`),
-                                         whose record of two servings is one
+                                         and there WitnessToys' `blindRows`, which encodes every frame as the empty
+                                         list, records every serving as one window the circuit accepts
 CountWitnesses.lean  the thirteen counts' pairs: seven egress (four over `AccSeqs`, one under a sampled
                                          audit, two through the wire) and six ingress. The honest run is
                                          accepted at the reference schedule (`fxRate`) or at `sampProg`, or has every

@@ -23,9 +23,9 @@ a `nontrivial` one each, listed in the lock's `witnesses`, and none takes a bind
   `leakyRun` tells two servings apart against `#Θ = 1`.
 * `not_periodLeakRegisteredAnyFormat`, unlisted, why it reads `RowsFormat.Wf`: the statement with `hF` dropped and
   every other premise kept, `TrustedHost` included (`PeriodLeakRegisteredAnyFormat`), is false, at `ksNotD` (where
-  `KS` holds, `KsToy`), the rows format `blindRows`, which encodes every frame as the empty list, one window and
-  `Θ = {(1, 0)}`, where the network certifier's code, recorded in `blindRows`, registers one record on two servings
-  whose client cells differ, against a count of `1`.
+  `KS` holds, `KsToy`), `WitnessToys`' rows format `blindRows`, which encodes every frame as the empty list, one
+  window and `Θ = {(1, 0)}`, where the network certifier's code, recorded in `blindRows`, registers one record on
+  every serving while the client's cell is the serving's, against a count of `1`.
 * `PooledLeakAccepted_honest`: its premises on the schedules, at `fxQueue`'s alone: each fits the format (`hfit`) and
   sends at most 6 cells a connection (`hcap`). Stated as their conjunction, not as `fits` alone: the witnesses rule
   reads a statement that is one definition applied by unfolding it once, and `fits` is a field.
@@ -166,9 +166,9 @@ def PeriodLeakRegisteredAnyFormat : Prop :=
 /-- **Without `RowsFormat.Wf`, `PeriodLeakRegistered` is false**: at `ksNotD`, where `KS` holds (`ksNotD_KS`) and so
 `KSWired` (`freeLay` has no wires), the registration `goodReg`, which opens (`ksNotD_regOpens`), one window at
 `δ = 0` and `Θ = {(1, 0)}`, the network certifier's code recorded in `blindRows` (which doesn't read back,
-`blindRows_not_wf`) on the schedule `oneSched` (which fits) registers `obs1` on both servings `z`, the client's cell
-being `z` (`boolDec_run`). The circuit accepts `obs1` at `goodReg` (`frameTops_acc`), so both secrets meet
-`WindowGoodReg`: `2` against a count of `#Θ · 2^0 · 1 · 2^0 · 1^1 = 1`. -/
+`blindRows_not_wf`) on the schedule `oneSched` (which fits) registers `obs1` on every serving `z`, the client's cell
+being `z` (`cellDec_run`). The circuit accepts `obs1` at `goodReg` (`frameTops_acc`), so every secret meets
+`WindowGoodReg`, `0` and `1` among them: `2` against a count of `#Θ · 2^0 · 1 · 2^0 · 1^1 = 1`. -/
 theorem not_periodLeakRegisteredAnyFormat : ¬ PeriodLeakRegisteredAnyFormat := fun h => by
   have hgood : ∀ o : List (Obs 1 1 1), o = [obs1] →
       WindowGoodReg shaD (ksNotD Unit) 1 1 1 (fun _ => freeLay) (fun _ => 1) 0 (fun _ => {0}) (fun _ => goodReg) 1
@@ -185,13 +185,13 @@ theorem not_periodLeakRegisteredAnyFormat : ¬ PeriodLeakRegisteredAnyFormat := 
     (fun _ => 1) 0 (fun _ => [()]) le_rfl (Claims.Witness.Flock.listWithin_unit _ _ _) (fun _ => {0})
     (fun _ => goodReg) 1 (n := 1) (fun _ => notStmt) (fun _ => notPart) (fun _ => regVal goodReg)
     (fun _ _ _ => []) (fun _ => 0) ⟨fun _ => rfl, fun _ F hF => by obtain rfl := notFaulty_empty hF; simp [faultyBits]⟩
-    boolArr blindRows () blindRun (fun _ => rfl) {(1, 0)} Set.univ (fun _ => oneSched) id
-    (fun _ _ => ⟨rfl, oneSched_fits⟩) boolDec (fun z _ => boolDec_run z) (fun _ _ => []) (fun _ _ => ⟨[]⟩)
+    cellArr blindRows () blindRun (fun _ => rfl) {(1, 0)} Set.univ (fun _ => oneSched) id
+    (fun _ _ => ⟨rfl, oneSched_fits⟩) cellDec (fun z _ => cellDec_run z) (fun _ _ => []) (fun _ _ => ⟨[]⟩)
     (fun _ => frameTops) (notCm_binds shaD)).2 fun z _ i s hs => by
       obtain rfl : notStmt = s := Option.some.inj hs
       exact hopens _ (blindRun_obs z i)
-  have h2 := (Set.encard_pair (show true ≠ false by decide)).symm.le.trans
-    ((Set.encard_le_encard (s := ({true, false} : Set Bool)) fun z _ =>
+  have h2 := (Set.encard_pair (show (0 : ℕ) ≠ 1 by decide)).symm.le.trans
+    ((Set.encard_le_encard (s := ({0, 1} : Set ℕ)) fun z _ =>
       Set.mem_ofPred.2 ⟨Set.mem_univ z, fun i => hgood _ (blindRun_obs z i)⟩).trans hc)
   have hF1 : faultySets notStmt.design notPart 0 = {∅} :=
     Finset.eq_singleton_iff_unique_mem.2 ⟨empty_mem_notFaulty, fun _ hF => notFaulty_empty hF⟩
