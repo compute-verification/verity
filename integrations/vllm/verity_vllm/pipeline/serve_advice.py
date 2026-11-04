@@ -22,9 +22,11 @@ window's advice committed by the server, its public line out before any coin of 
   ``advice/windows.json``, and the committer goes on to the next window, which opens on nothing carried; one with no step
   a line naming it empty, so every closed window has its line.
 * **Coins.** A draw of a window through ``--draws-dir`` before its line is out is refused, and the window's release with it
-  (`serve_release.DrawDir`): no coin of a window is drawn before its advice is committed. At the stop the windows left are
-  committed (`stop`), a request with no Commit record refused as `write_served` refuses it, before ``summary.json``'s
-  ``final``.
+  (`serve_release.DrawDir`): no coin of a window is drawn before its advice is committed. Under ``--h1-window-commit`` the
+  tie's flush is `ServedAdvice.drain`: the trace drained and every whole window committed on the tie's thread before its
+  command runs, which reads the server's ``advice/w<k>/`` and commits none of its own, so a window's advice has one
+  commitment. At the stop the windows left are committed (`stop`), a request with no Commit record refused as
+  `write_served` refuses it, before ``summary.json``'s ``final``.
 """
 from __future__ import annotations
 
@@ -212,6 +214,7 @@ class ServedAdvice:
         self.error: str | None = None
         self._closed: set[int] = set()                   # the index's closed windows as of its last extend, for `summary`
         self._lock = threading.Lock()                    # io, commits and the settled windows, which the sealer's threads add to
+        self._committing = threading.Lock()              # one commit pass at a time: the committer's thread, `drain` or `stop`
         self._wake = threading.Event()
         self._stopping = False
         self._thread: threading.Thread | None = None
@@ -261,6 +264,13 @@ class ServedAdvice:
         with self._lock:
             return int(window) in self.lines
 
+    def drain(self) -> None:
+        """The trace drained and every window now whole committed, on the caller's thread: the H1 tie's flush, so its
+        command finds the server's commitment of a window that is whole."""
+        self.trace.drain()
+        if self.compiler is not None:
+            self._poll(final=False)
+
     # -- the committer
     def _run(self) -> None:
         while True:
@@ -281,10 +291,11 @@ class ServedAdvice:
         return self.summary()
 
     def _poll(self, final: bool) -> None:
-        try:
-            self._commit_ready(final)
-        except Exception as e:  # noqa: BLE001  (a committer that fails is the run's visible failure; the server goes on)
-            self.error = self.error or f"{type(e).__name__}: {e}"[:500]
+        with self._committing:
+            try:
+                self._commit_ready(final)
+            except Exception as e:  # noqa: BLE001  (a committer that fails is the run's visible failure; the server goes on)
+                self.error = self.error or f"{type(e).__name__}: {e}"[:500]
 
     def _commit_ready(self, final: bool) -> None:
         recs = self.trace.records

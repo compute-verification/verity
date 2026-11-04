@@ -1772,27 +1772,14 @@ def test_the_split_certifier_needs_v3c_and_no_whole_piece_beside_it(tmp_path, ar
     assert (rc, lines, order) == (3, [line], [])
 
 
-FAKE_ADVICE = '''import json, os, sys
-from pathlib import Path
-a = sys.argv[1:]
-open(os.environ["ORDER"], "a").write("advice\\n")
-k, out = a[a.index("--window") + 1], Path(a[a.index("--out") + 1])
-assert a[a.index("--compiler-name") + 1] == "toy" and "--weights-of-record" in a
-if os.environ.get("ADVICE_RC") == "3":
-    print(f"[advice] commit window {k}: pending: request r1 of window {k} has no Commit record yet")
-    sys.exit(3)
-(out / f"w{k}" / "private").mkdir(parents=True)
-(out / f"w{k}" / "registration.json").write_text("{}")
-(out / f"w{k}" / "private" / "advice.bin").write_bytes(b"\\x01")
-(out / "windows.json").write_text("{}")
-'''
 W_OF_7 = {"format": "verity/registration/v2", "window": 7, "previous": None}
 
 
-def _tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProcess, list[str]]:
+def _tie(tmp_path: Path, committed: bool = True, **extra: str) -> tuple[subprocess.CompletedProcess, list[str]]:
     """The ``--h1-window-commit`` that `served_verdicts.sh serve` gives serve-openai under H1_TIE, run as `serve_tie` runs
     it at window 7's close (``bash -c CMD _ SERVE_DIR K W_FILE R_FILE PROVER_DIR``, from elsewhere), in a toy tree whose
-    prove_path.py and advice note each step they run (``extra`` adds to the environment): the run and the steps in order."""
+    prove_path.py notes each step it runs, on a serve dir where the server committed window 7's advice (unless not
+    ``committed``; ``extra`` adds to the environment): the run and the steps in order."""
     rc, argv = _serve_argv(tmp_path, {"H1_GATE": GATE, "H1_CIRCUITS": str(tmp_path / "circuits"), "H1_TIE": "1"})
     assert rc == 10 and "--h1-prover" in argv and argv.count("--h1-window-commit") == 1, (rc, argv)
     cmd = argv[argv.index("--h1-window-commit") + 1]
@@ -1800,9 +1787,11 @@ def _tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProcess, lis
     (tree / "benchmarks" / "prove_path").mkdir(parents=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
     (tree / "benchmarks" / "one_stage").symlink_to(HERE.parent, target_is_directory=True)
-    (tmp_path / "advice.py").write_text(FAKE_ADVICE)
-    _script(venv / "python", f'[ "$1 $2 $3" = "-m verity_vllm.pipeline.cli advice" ] && {{ shift 3; exec {sys.executable} '
-                             f'{tmp_path}/advice.py "$@"; }}\nunset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
+    _script(venv / "python", f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
+    if committed:
+        (d / "advice" / "w7" / "private").mkdir(parents=True)
+        (d / "advice" / "w7" / "registration.json").write_text("{}")
+        (d / "advice" / "w7" / "private" / "advice.bin").write_bytes(b"\x01")
     for p in (d / "h1" / "w7", d / "private" / "h1" / "w7"):
         p.mkdir(parents=True, exist_ok=True)
     (d / "weights_registration.json").write_text("{}")
@@ -1815,13 +1804,14 @@ def _tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProcess, lis
     return run, (tmp_path / "order").read_text().split() if (tmp_path / "order").exists() else []
 
 
-def test_under_h1_tie_each_h1_windows_close_writes_its_advice_and_commits_it_chained_after_its_w_as_its_record_r(tmp_path):
-    """serve-openai's tie command, from any directory, writes the window's advice where step 3 reads it, then runs
-    window-commit at V3C_CLASS on W, the window's H1 prover key and V3c's law, and copies the registration it wrote to R.
-    It says nothing in $OUT (its window is H1's, which no published line names); its commit's answer stays in the serve dir."""
+def test_under_h1_tie_each_h1_windows_close_commits_it_on_the_servers_advice_chained_after_its_w_as_its_record_r(tmp_path):
+    """serve-openai's tie command, from any directory, runs window-commit on the window's advice as the server committed
+    it, at V3C_CLASS on W, the window's H1 prover key and V3c's law, and copies the registration it wrote to R. It commits
+    no advice of its own, so the window's advice has one commitment, and says nothing in $OUT (its window is H1's, which no
+    published line names); its commit's answer stays in the serve dir."""
     run, order = _tie(tmp_path)
     d = tmp_path / "serve"
-    assert run.returncode == 0 and order == ["compiler", "advice", "window-commit"], (run.stdout, run.stderr, order)
+    assert run.returncode == 0 and order == ["window-commit"], (run.stdout, run.stderr, order)
     assert run.stdout.splitlines()[-1] == f"TIE: window-commit class {W63K4}: its registration is the window's record R"
     vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
     assert json.loads((d / "h1" / "w7" / "record.json").read_text()) == json.loads((vw / "registration.json").read_text()) \
@@ -1829,22 +1819,25 @@ def test_under_h1_tie_each_h1_windows_close_writes_its_advice_and_commits_it_cha
     assert (tmp_path / "order.commit").read_text().split() == [
         "--window-registration", str(d / "h1" / "w7" / "registration.json"), "--h1-key", str(d / "private" / "h1" / "w7" / "key"),
         "--law", "stratified:1"]
-    assert (d / "advice" / "w7" / "private" / "advice.bin").exists() and (d / "advice" / ".w7" / "windows.json").exists()
+    assert sorted(p.relative_to(d / "advice").as_posix() for p in (d / "advice").rglob("*")) == [
+        "w7", "w7/private", "w7/private/advice.bin", "w7/registration.json"]
     assert json.loads((d / "h1" / "w7" / "window-commit.json").read_text())["population"] == 37
     assert not (tmp_path / "tie-out" / "verdicts.txt").exists()
 
 
-@pytest.mark.parametrize("extra, rc, steps, said", [
-    ({"ADVICE_RC": "3"}, 14, ["compiler", "advice"],
-     "TIE: the window's advice is pending: a request of it runs on past its close, with no Commit record yet"),
-    ({"FAIL_COMMIT": "1"}, 16, ["compiler", "advice", "window-commit"],
+@pytest.mark.parametrize("committed, extra, rc, steps, said", [
+    (False, {}, 14, [], "TIE: the server committed no advice for the window (advice.jsonl): it refused it, or a request of "
+     "it runs on past its close"),
+    (True, {"FAIL_COMMIT": "1"}, 16, ["window-commit"],
      f"TIE: window-commit class {W63K4} refused (exit 2): prove_path.py window-commit: the row dir holds no window 7"),
 ])
-def test_a_tie_whose_advice_is_pending_or_whose_commit_is_refused_writes_no_record_r(tmp_path, extra, rc, steps, said):
-    """A request carried past the window's close has no Commit record until a later close, so its advice can't be written
-    before the window's sample coin: the tie fails at once, never polls; a refused window-commit fails it too. Either way
-    no R, so `serve_tie` refuses the window's record and H1 draws no sample coin."""
-    run, order = _tie(tmp_path, **extra)
+def test_a_tie_on_a_window_the_server_committed_no_advice_for_or_whose_commit_is_refused_writes_no_record_r(
+        tmp_path, committed, extra, rc, steps, said):
+    """The server commits a window's advice once it is whole, and `serve_tie`'s flush commits every whole window before the
+    command runs. A window it committed none for (it refused it, or a request carried past the close has no Commit record
+    until a later close) fails the tie at once, which never polls and commits no advice of its own; a refused
+    window-commit fails it too. Either way no R, so `serve_tie` refuses the window's record and H1 draws no sample coin."""
+    run, order = _tie(tmp_path, committed, **extra)
     assert (run.returncode, order, run.stdout.splitlines()[-1]) == (rc, steps, said), run.stderr
     assert not (tmp_path / "serve" / "h1" / "w7" / "record.json").exists()
 

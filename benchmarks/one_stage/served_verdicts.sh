@@ -169,7 +169,8 @@
 # With H1_TIE set too (and H1_CIRCUITS, V3C_CLASS not empty), V3c's window commit moves into the serve's close: at each H1
 # window's close, once it is sealed and before its sample coin, serve-openai's `--h1-window-commit` runs
 # `served_verdicts.sh tie` on the served node, under the serve's lease (LEASE_MIN then defaults to 150 and LEASE_MEM_GB to
-# 160, the serve's 128 and window-commit's peak): the window's advice, the one step 3 then reads, and `prove_path.py window-commit --window-registration W --h1-key
+# 160, the serve's 128 and window-commit's peak): on the window's advice as the server committed it (serve-openai commits
+# every whole window before the tie runs, and the tie commits none: a window it finds none for is refused), `prove_path.py window-commit --window-registration W --h1-key
 # PROVER/key --law V3C_LAW` within V3C_TIMEOUT (then default 60m, at most 90m), whose registration R, chained right after
 # H1's W, H1 names as the window's Commit record (`serve_tie`). Its output stays in the serve dir's h1/w<k>/. H1's sessions
 # are reserved for the gate's default 120 minutes, the window's sample session at the serve's start, and the sample coin
@@ -547,36 +548,18 @@ v3c_proved() {  # V3c's window committed, the build done: the certifier's chain 
   elif [ -n "${CERTIFIER_PERIOD_CMD:-}" ]; then say "CERTIFIER-PERIOD: not run: V3c wrote no period.json"; fi
   return $((rc ? rc : prc))
 }
-compiler_args() {  # the prove path's registered compiler, as verity-vllm advice takes it
-  (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP") \
-    | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])"
-}
-advice_of() {  # window $1's advice under the compiler $2 in $D/advice/w$1, unless it is there already (the tie wrote it):
-  # verity-vllm advice's exit, 3 while the window waits on a Commit record the running server hasn't written
-  [ -f "$D/advice/w$1/registration.json" ] && return 0
-  local wa=() rc
-  [ -f "$WREG" ] && wa=(--weights-of-record "$WREG")
-  # shellcheck disable=SC2086
-  (cd "$TREE/integrations/vllm" && vv advice "$D" --window "$1" --cap "$CAP" $2 "${wa[@]}" --out "$D/advice/.w$1") \
-    >> "$D/advice.log" 2>&1
-  rc=$?
-  [ -d "$D/advice/.w$1/w$1" ] && mv "$D/advice/.w$1/w$1" "$D/advice/w$1"
-  return "$rc"
-}
 tie() {  # serve-openai's --h1-window-commit (`serve_tie`) at window $2's close, before its sample coin: $1 the serve dir, $3
   # the window's registration W, $4 where its record R goes, $5 its H1 prover dir. It says nothing in $OUT, whose lines
   # name no window: what it says goes to the serve dir's h1/w<k>/window-commit.log, and step 6 says the picked window's
   K=$2 VW=$D/v3c-w$2-$vtag
-  local ca rc why
+  local why
   [ "$1" -ef "$D" ] || { echo "TIE: serve-openai's serve dir $1 isn't D, $D"; return 3; }
   [ -n "$V3C" ] && [ -n "$5" ] || { echo "TIE: V3C_CLASS is empty or the window has no H1 prover dir"; return 3; }
   [ -f "$WREG" ] || { echo "TIE: $NO_WEIGHTS"; return 13; }
-  ca=$(compiler_args) && [ -n "$ca" ] || { echo "TIE: no registered compiler (prove_path.py compiler)"; return 13; }
-  advice_of "$K" "$ca"; rc=$?
-  if [ "$rc" = 3 ]; then
-    echo "TIE: the window's advice is pending: a request of it runs on past its close, with no Commit record yet"; return 14
-  fi
-  [ -f "$D/advice/w$K/private/advice.bin" ] || { echo "TIE: no advice (verity-vllm advice exit $rc; the serve dir's advice.log)"; return 14; }
+  # the server's committer is the window's one: serve_tie's flush committed every whole window before this ran
+  [ -f "$D/advice/w$K/registration.json" ] && [ -f "$D/advice/w$K/private/advice.bin" ] || {
+    echo "TIE: the server committed no advice for the window (advice.jsonl): it refused it, or a request of it runs on past its close"
+    return 14; }
   why=$(window_commit "$D/h1/w$K/window-commit.json" "$D/h1/w$K/window-commit.err" --window-registration "$3" \
     --h1-key "$5/key" --law "${V3C_LAW:-subset:1}") || { echo "TIE: window-commit class $V3C $why"; return 16; }
   cp "$VW/window/registration.json" "$4" || { echo "TIE: window-commit class $V3C wrote no registration"; return 16; }
@@ -595,7 +578,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   [ -n "$H1_GATE" ] && [ -n "${H1_CIRCUITS:-}" ] && h1+=(--h1-prover "$D/private/h1")
   local polls=450
   if [ -n "${H1_TIE:-}" ]; then  # a window's line waits for its release, which waits for its window commit
-    h1+=(--h1-window-commit "cd $(printf %q "$TREE") && CAP=$CAP bash benchmarks/one_stage/served_verdicts.sh tie \"\$@\"")
+    h1+=(--h1-window-commit "cd $(printf %q "$TREE") && bash benchmarks/one_stage/served_verdicts.sh tie \"\$@\"")
     polls=$((polls + 30 * (${V3C_TIMEOUT%m} + 5)))
   fi
   if [ -n "${WIPE_CMD:-}" ]; then  # the wipe of this card, before its engine loads

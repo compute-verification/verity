@@ -613,6 +613,28 @@ def test_a_window_is_committed_once_whole_and_waits_on_a_record_or_a_step_still_
     assert sa.error is None and sorted(sa.lines) == [w for w in sorted(stepped) if w <= k2] and sa.summary()["waiting"] == []
 
 
+def test_the_h1_ties_flush_drains_the_trace_and_commits_each_whole_window_so_its_command_reads_the_servers_advice(tmp_path):
+    """Under ``--h1-window-commit`` the tie's flush is `ServedAdvice.drain`: the trace drained, which records a window's last
+    step after its close under async scheduling, and every window then whole committed on the tie's thread before its
+    command runs. On a fixed trace (`_one_after_another`) whose decode step only the drain records, window 1 waits on the
+    committer's own pass and is committed by the drain, its advice under ``advice/w1/`` for the tie's command to read."""
+    recs, reqs, lines = _one_after_another(tmp_path, ["u"])
+    last = max(i for i, r in enumerate(recs) if r["kind"] == "step")
+    trace = SimpleNamespace(records=[r for i, r in enumerate(recs) if i != last])
+    trace.drain = lambda: trace.records.append(recs[last])
+    sa = SA.ServedAdvice(tmp_path, trace, wall=lambda: 0.0)
+    sa.compiler = C
+    for line in lines:
+        sa.closed(line)
+    for r in reqs:
+        sa.recorded(r)
+    sa._poll(final=False)
+    assert sa.error is None and sorted(sa.lines) == [0] and sa.summary()["waiting"] == [1]
+    sa.drain()
+    assert sa.error is None and sorted(sa.lines) == [0, 1] and sa.summary()["waiting"] == []
+    assert {p.name for p in (tmp_path / "advice" / "w1").iterdir()} == {"registration.json", "private"}
+
+
 def test_a_draw_of_a_window_before_its_advice_line_fails_its_release(tmp_path):
     """Under ``--advice`` a draw file of a window whose advice line isn't out is refused, and the window's release with it,
     by name; a draw after the line is put as before."""
