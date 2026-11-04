@@ -1,6 +1,6 @@
 {
  "id": "te_core.workloads",
- "te_core": "4.13",
+ "te_core": "4.13.1",
  "reading": "A",
  "spec": "note:training-20261103T0600Z-draft-workload-models",
  "io_bound": "cursor/te-io-bound-4207 at 3c2afa62aa",
@@ -17,10 +17,10 @@
   "k": 145568,
   "defaults": {
    "standard": {
-    "rho": 6716.897,
+    "rho": 9446.806,
     "basis": "fresh_products",
     "binding_kind": "fresh_products",
-    "terms": {"fresh_products": 6716.897, "token": null, "decoding": null},
+    "terms": {"fresh_products": 9446.806, "token": null, "decoding": null},
     "partial": true,
     "whole_making": {"e": 0.02273521, "whole_chain": 1.034296, "diverged": []},
     "target": {"rho": 10.44411, "basis": "target"},
@@ -39,10 +39,10 @@
     "b": [510]
    },
    "diloco": {
-    "rho": 6527.916,
+    "rho": 9147.476,
     "basis": "fresh_products",
     "binding_kind": "fresh_products",
-    "terms": {"fresh_products": 6527.916, "token": null, "decoding": null},
+    "terms": {"fresh_products": 9147.476, "token": null, "decoding": null},
     "partial": true,
     "whole_making": {"e": 0.02273521, "whole_chain": 1.034296, "diverged": []},
     "target": {"rho": 10.43482, "basis": "target"},
@@ -61,10 +61,10 @@
     "b": [510]
    },
    "rl": {
-    "rho": 6199.531,
+    "rho": 8719.169,
     "basis": "fresh_products",
     "binding_kind": "fresh_products",
-    "terms": {"fresh_products": 6199.531, "token": null, "decoding": null},
+    "terms": {"fresh_products": 8719.169, "token": null, "decoding": null},
     "partial": true,
     "whole_making": {"e": null, "whole_chain": null, "diverged": [64.0, 256.0, 512.0, 1024.0, 1408.0, 50304.0, 65536.0]},
     "target": {"rho": 10.43819, "basis": "target"},
@@ -75,10 +75,10 @@
     "b": [64912, 510]
    },
    "inference": {
-    "rho": 508.1496,
+    "rho": 834.0852,
     "basis": "fresh_products",
     "binding_kind": "fresh_products",
-    "terms": {"fresh_products": 508.1496, "token": null, "decoding": null},
+    "terms": {"fresh_products": 834.0852, "token": null, "decoding": null},
     "partial": true,
     "whole_making": {"e": 0.06229481, "whole_chain": 1.094883, "diverged": []},
     "target": {"rho": 42.12958, "basis": "target"},
@@ -89,11 +89,11 @@
     "b": [1606652]
    },
    "lora": {
-    "rho": null,
-    "basis": "unmeasured",
-    "binding_kind": null,
-    "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
-    "partial": false,
+    "rho": 8.830376,
+    "basis": "fresh_products",
+    "binding_kind": "fresh_products",
+    "terms": {"fresh_products": 8.830376, "token": null, "decoding": null},
+    "partial": true,
     "whole_making": {"e": null, "whole_chain": null, "diverged": [8.0, 64.0, 512.0, 1024.0, 1408.0, 65536.0]},
     "target": {"rho": 1.0, "basis": "target"},
     "sensitivities": {"reduction": 103.9381, "update": 0.284762, "token_form": 0.4681401, "decoding_form": 0.9999956, "per_gate": null, "fresh_old": null, "fresh_no_cell": null},
@@ -103,10 +103,10 @@
     "b": [366]
    },
    "distill": {
-    "rho": 1590.792,
+    "rho": 2237.327,
     "basis": "fresh_products",
     "binding_kind": "fresh_products",
-    "terms": {"fresh_products": 1590.792, "token": null, "decoding": null},
+    "terms": {"fresh_products": 2237.327, "token": null, "decoding": null},
     "partial": true,
     "whole_making": {"e": 0.02273521, "whole_chain": 1.034296, "diverged": []},
     "target": {"rho": 2.473524, "basis": "target"},
@@ -138,7 +138,7 @@
  },
  "target": "target: A1 at reading B, not a bound: te_core.formalism.published at reading B, Fit's c/(c - d) where it holds, else Slowdown's token form (sensitivity, assumption (A1, reading B): Slowdown's token form, s* the largest x(k - u(x))/a over x and x0 from the input profile, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading)",
  "rests_on": {
-  "fresh_products": "theorem of record for this circuit: every partition into blocks of at most c gates, each reading at most k bits outside \u03b8, does N \u2264 m(k + \u03b1) + F\u00b7(k/2)\u00b7\u221a(mO)/\u03b2 of M's N MACs in its m blocks, \u03b1 = F\u00b7\u00bd\u00b7\u221a(k\u00b3/(\u03b2\u00b2\u00b7b_y)), so \u03c1 \u2265 (c/|C|)\u00b7(N/(k + \u03b1) \u2212 F\u00b7(k/2)\u00b7\u221a(ON)/\u03b2/(k + \u03b1)^1.5), floored at 1, O M's output wires; given these premises on M, each refuted by a single counterexample: (H) operands are hard: every set of M's words with a cut of at most k bits from the unregistered inputs has a cut of at least \u03b2 bits a word, \u03b2 the least width M charges an operand: its width as the circuit passes it (a coded width where the capture records one), or \u03b2_eff = \u03b2/(1 + (K*/r)\u00b2), K* = \u00bd\u221a(k/\u03b2), for an operand the update reaches only through a bottleneck of rank r a row or column (an adapter's Ax, a broadcast vector, a frozen edge), with a product whose operand is below the \u03b2 M takes left out of M; (E) exports are wide: every gate set's cut to the outputs it alone feeds is at least b_y bits an output, b_y M's least output width; and the structure, which the product rows don't record: M's matmuls have distinct words, W and X disjoint, no two share both a w- and an x-word, and no four arrays are pairwise multiplied (a layer's forward, input-gradient and weight-gradient products share three: F = 2/\u221a3 where M holds a backward or optimizer product, else 1). M is the grader's: the products whose two operands both depend on the update, less one array times itself, a product reading a gather's rows, the positions sequences share, and the steps before the run's first update, which read registered weights; on a model, M is its products of two operands both paid at their passed widths at k, attention's uncounted, every one sharing arrays (F = 2/\u221a3), and a LoRA's operands the update reaches only through its adapters at their \u03b2_eff (te_core.formalism.he_of_products); the old figure beside it (fresh_old)",
+  "fresh_products": "theorem of record for this circuit: every partition into blocks of at most c gates, each reading at most k bits outside \u03b8, does N \u2264 m(k + \u03b1) + F\u00b7(k/2)\u00b7\u221a(mO/(\u03b2_w\u00b7\u03b2_x)) of M's N MACs in its m blocks, \u03b1 = F\u00b7\u00bd\u00b7\u221a(k\u00b3/(\u03b2_w\u00b7\u03b2_x\u00b7b_y)), so \u03c1 \u2265 (c/|C|)\u00b7(N/(k + \u03b1) \u2212 F\u00b7(k/2)\u00b7\u221a(ON/(\u03b2_w\u00b7\u03b2_x))/(k + \u03b1)^1.5), floored at 1, O M's output wires; given these premises on M, each refuted by a single counterexample: (H) operands are hard: every set of M's words with a cut of at most k bits from the unregistered inputs has a cut of at least each word's \u03b2, the casts of one value counting as one word: a weight's (an operand no token indexes) its width as the circuit passes it, at most the run record's code bits a trained weight (\u03b2_w from the run record's code size), an activation's at most a uniform \u03b2(k) (\u03b2(k) per io-bound's red-team of (H): 15.9 up to k = 145,568, 15.3 at 8e5, 10.8 at 8e6, 2.7 at 8e7, 0.37 at 8e8, linear in log k, none past it), and \u03b2_eff = \u03b2/(1 + (K*/r)\u00b2), K* = \u00bd\u221a(k/\u03b2), for an operand the update reaches only through a bottleneck of rank r a row or column (an adapter's Ax, a broadcast vector, a frozen edge); each product of M has \u03b2_w\u00b7\u03b2_x at most its two operands' product, and a product below it is left out of M; (E) exports are wide: every gate set's cut to the outputs it alone feeds is at least b_y bits an output, b_y M's least output width; and the structure, which the product rows don't record: M's matmuls have distinct words, W and X disjoint, no two share both a w- and an x-word, and no four arrays are pairwise multiplied (a layer's forward, input-gradient and weight-gradient products share three: F = 2/\u221a3 where M holds a backward product, else 1, and 1 on weight gradients alone). M is the grader's, the best of three: the products whose two operands both depend on the update, less one array times itself, a product reading a gather's rows (the lowest layer's q, k and v), attention's products, the optimizer's (Newton-Schulz's B\u00b7X), from k = 8e7 the head's input and weight gradients, the positions sequences share, and the steps before the run's first update and the \u230ak/(\u03c4T)\u230b after it (T a step's tokens), whose weights a block's k bits can rebuild; that M less the products whose contraction K is below the K where the outputs' term outweighs the main one; and the weight gradients alone; on a model, M is its products of two operands both paid at their passed widths at k, attention's uncounted, every one sharing arrays (F = 2/\u221a3), and a LoRA's operands the update reaches only through its adapters at their \u03b2_eff (te_core.formalism.he_of_products); the old figure beside it (fresh_old)",
   "token": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them; a block's work is a union of them, each part reading at most its k bits, so it holds at most the best run block plus every product's tile at k plus every gate no tile places; a block reading the update code at c gates; unmeasured: te_core 4.5's packer reads a trace's entries and op log (its runs and matrix-product tiles), which a model hasn't and the records here don't carry",
   "decoding": "assumption (D): a block reading the update code runs the whole decoder, so it holds at most c - d gates; with A1 (reading A) and the token kind's witness family; unmeasured: te_core 4.5's packer reads a trace's entries and op log (its runs and matrix-product tiles), which a model hasn't and the records here don't carry",
   "fit": "Fit's construction (te_core.formalism): every block reads \u0394 and its tokens' ids, and runs the decoder",
@@ -157,7 +157,7 @@
   "partial_bits": "assumed: one block's partial at 32 bits a trained value, a worker's in DiLoCo (the island's traces measure exactly this as partial_cut_bits: r20261103-053241-99bf, r20261103-064814-40d6, r20261103-053921-7400, r20261103-053912-3133, r20261103-064849-6854)",
   "op_update_bits": "assumed: the widest op's weight or factor at the width its ops read it (Shape.op_bits, Adapter.op_bits): reading A's test, no trace's entries"
  },
- "fresh_fields": ["kind", "macs", "entries", "layers", "count", "positions", "inputs", "tau", "sequence", "attention", "paid"],
+ "fresh_fields": ["kind", "macs", "entries", "layers", "count", "positions", "inputs", "tau", "sequence", "attention", "paid", "role"],
  "part_fields": ["steps", "tokens", "token_gates", "partial_bits", "grad_bits"],
  "records": "workloads_records.json",
  "widths": {"gemm/bf16": [16.0, 16.0, 32.0], "gemm/e4m3": [8.0, 8.0, 32.0], "gemm/fp4": [4.5, 4.5, 32.0]},
@@ -272,30 +272,30 @@
       "decoder_gates": 0.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/bf16", 3080192.0, 5120.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 900597800.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 524288.0, 8192.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 524288.0, 512.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 45023230.0, 27392.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 44236800.0, 675.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, []],
-       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, []]
+       ["gemm/bf16", 3080192.0, 5120.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 900597800.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 45023230.0, 27392.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, [], "dx"],
+       ["gemm/bf16", 44236800.0, 675.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, [], "dw"],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, [], "dx"],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, [], "dx"]
       ],
       "parts": [{"steps": 13742, "tokens": 900597800.0, "token_gates": 2.107065e+20, "partial_bits": 1440956416, "grad_bits": 1440956416}],
       "op_update_bits": 824180700.0
      },
      "rho": {
       "default": {
-       "rho": 591935.2,
+       "rho": 586012.6,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 591935.2, "token": null, "decoding": null},
+       "terms": {"fresh_products": 586012.6, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+       "products_rests_on": "theorem of record on M, given (H): operands are hard at \u03b2_w = 15.9 and \u03b2_x = 15.9 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with operands below that \u03b2_w\u00b7\u03b2_x",
        "whole_making": {"e": 0.008337705, "whole_chain": 1.012533, "diverged": []},
        "fresh": {"order": "chain", "lam": 1.653459, "share": 0.8442932, "numerical": 7225763.0, "attention_share": 0.1193699},
        "target": {"rho": 413.8229, "basis": "target"},
@@ -374,14 +374,14 @@
       "decoder_gates": 0.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/e4m3", 3080192.0, 5120.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/e4m3", 25755650.0, 50304.0, 1.0, 900597800.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 524288.0, 8192.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 524288.0, 512.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/e4m3", 45023230.0, 27392.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, []],
-       ["gemm/e4m3", 44236800.0, 675.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, []],
-       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, []]
+       ["gemm/e4m3", 3080192.0, 5120.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/e4m3", 25755650.0, 50304.0, 1.0, 900597800.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/e4m3", 45023230.0, 27392.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, [], "dx"],
+       ["gemm/e4m3", 44236800.0, 675.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, [], "dw"],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, [], "dx"],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, [], "dx"]
       ],
       "parts": [{"steps": 13742, "tokens": 900597800.0, "token_gates": 1.353943e+20, "partial_bits": 1440956416, "grad_bits": 1440956416}],
       "op_update_bits": 824180700.0
@@ -397,7 +397,7 @@
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 8 bits a word, and (E): exports are wide at b_y = 8 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+       "products_rests_on": "theorem of record on M, given (H): operands are hard at \u03b2_w = 8 and \u03b2_x = 8 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 8 bits an output, premises a single counterexample refutes; M leaves out every product with operands below that \u03b2_w\u00b7\u03b2_x",
        "whole_making": {"e": 0.01969506, "whole_chain": 1.029688, "diverged": []},
        "fresh": {"order": "chain", "lam": 1.372917, "share": 0.7642779, "numerical": 5461228.0, "attention_share": 0.185738},
        "target": {"rho": 643.8972, "basis": "target"},
@@ -476,30 +476,30 @@
       "decoder_gates": 0.0,
       "d_model": 3621.343,
       "fresh": [
-       ["gemm/bf16", 159721000.0, 37768.1, 42.43762, 140000000000.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 182168100.0, 50304.0, 1.0, 140000000000.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 3708256.0, 57941.49, 42.43762, 140000000000.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 3708256.0, 3621.343, 42.43762, 140000000000.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 6999689000.0, 1348332.0, 1.0, 140000000000.0, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 6960347000.0, 106206.5, 1.0, 140000000000.0, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 157369500.0, 2458899.0, 1.0, 140000000000.0, 1024, 1024, 16.0, true, true, []],
-       ["gemm/bf16", 472108600.0, 461043.5, 1.0, 140000000000.0, 1024, 1024, 16.0, true, true, []]
+       ["gemm/bf16", 159721000.0, 37768.1, 42.43762, 140000000000.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 182168100.0, 50304.0, 1.0, 140000000000.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 3708256.0, 57941.49, 42.43762, 140000000000.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 3708256.0, 3621.343, 42.43762, 140000000000.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 6999689000.0, 1348332.0, 1.0, 140000000000.0, 1024, 1024, 16.0, true, false, [], "dx"],
+       ["gemm/bf16", 6960347000.0, 106206.5, 1.0, 140000000000.0, 1024, 1024, 16.0, true, false, [], "dw"],
+       ["gemm/bf16", 157369500.0, 2458899.0, 1.0, 140000000000.0, 1024, 1024, 16.0, true, true, [], "dx"],
+       ["gemm/bf16", 472108600.0, 461043.5, 1.0, 140000000000.0, 1024, 1024, 16.0, true, true, [], "dx"]
       ],
       "parts": [{"steps": 2136230, "tokens": 140000000000.0, "token_gates": 4.668485e+24, "partial_bits": 224000000000.0, "grad_bits": 224000000000.0}],
       "op_update_bits": 5829378000.0
      },
      "rho": {
       "default": {
-       "rho": 1167730.0,
+       "rho": 1161064.0,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 1167730.0, "token": null, "decoding": null},
+       "terms": {"fresh_products": 1161064.0, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+       "products_rests_on": "theorem of record on M, given (H): operands are hard at \u03b2_w = 15.9 and \u03b2_x = 15.9 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with operands below that \u03b2_w\u00b7\u03b2_x",
        "whole_making": {"e": 0.002434349, "whole_chain": 1.003654, "diverged": []},
        "fresh": {"order": "chain", "lam": 1.63896, "share": 0.928281, "numerical": 8129999.0, "attention_share": 0.04189688},
        "target": {"rho": 20.53651, "basis": "target"},
@@ -598,10 +598,10 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 597252.0,
+        "rho": 591276.2,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 597252.0, "token": null, "decoding": null},
+        "terms": {"fresh_products": 591276.2, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.008337705, "whole_chain": 1.012533, "diverged": []},
         "target": {"rho": 415.5739, "basis": "target"},
@@ -620,10 +620,10 @@
         "b": [29]
        },
        "model": {
-        "rho": 591935.2,
+        "rho": 586012.6,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 591935.2, "token": null, "decoding": null},
+        "terms": {"fresh_products": 586012.6, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.008337705, "whole_chain": 1.012533, "diverged": []},
         "target": {"rho": 413.8229, "basis": "target"},
@@ -706,10 +706,10 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 591718.4,
+        "rho": 585667.4,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 591718.4, "token": null, "decoding": null},
+        "terms": {"fresh_products": 585667.4, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.0208278, "whole_chain": 1.031404, "diverged": []},
         "target": {"rho": 410.3227, "basis": "target"},
@@ -728,10 +728,10 @@
         "b": [29]
        },
        "model": {
-        "rho": 584981.3,
+        "rho": 578999.2,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 584981.3, "token": null, "decoding": null},
+        "terms": {"fresh_products": 578999.2, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.0208278, "whole_chain": 1.031404, "diverged": []},
         "target": {"rho": 408.8702, "basis": "target"},
@@ -822,10 +822,10 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 546748.3,
+        "rho": 540969.4,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 546748.3, "token": null, "decoding": null},
+        "terms": {"fresh_products": 540969.4, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.02082839, "whole_chain": 1.031405, "diverged": []},
         "target": {"rho": 473.9488, "basis": "target"},
@@ -844,10 +844,10 @@
         "b": [47, 48, 8]
        },
        "model": {
-        "rho": 548456.4,
+        "rho": 542659.4,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 548456.4, "token": null, "decoding": null},
+        "terms": {"fresh_products": 542659.4, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.02082839, "whole_chain": 1.031405, "diverged": []},
         "target": {"rho": 502.614, "basis": "target"},
@@ -949,10 +949,10 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 671222.3,
+        "rho": 661542.4,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 671222.3, "token": null, "decoding": null},
+        "terms": {"fresh_products": 661542.4, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.01037844, "whole_chain": 1.015608, "diverged": []},
         "target": {"rho": 318.6908, "basis": "target"},
@@ -971,10 +971,10 @@
         "b": [53, 53]
        },
        "model": {
-        "rho": 675683.5,
+        "rho": 665939.3,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 675683.5, "token": null, "decoding": null},
+        "terms": {"fresh_products": 665939.3, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.01037844, "whole_chain": 1.015608, "diverged": []},
         "target": {"rho": 330.8567, "basis": "target"},
@@ -1134,30 +1134,30 @@
       "decoder_gates": 0.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/bf16", 3080192.0, 5120.0, 6.0, 917504000, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 917504000.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 524288.0, 8192.0, 6.0, 917504000, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 524288.0, 512.0, 6.0, 917504000, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 45023230.0, 27392.0, 1.0, 917504000, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 44236800.0, 2700.0, 1.0, 917504000, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 917504000, 1024, 1024, 16.0, true, true, []],
-       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 917504000, 1024, 1024, 16.0, true, true, []]
+       ["gemm/bf16", 3080192.0, 5120.0, 6.0, 917504000, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 917504000.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 917504000, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 917504000, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 45023230.0, 27392.0, 1.0, 917504000, 1024, 1024, 16.0, true, false, [], "dx"],
+       ["gemm/bf16", 44236800.0, 2700.0, 1.0, 917504000, 1024, 1024, 16.0, true, false, [], "dw"],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 917504000, 1024, 1024, 16.0, true, true, [], "dx"],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 917504000, 1024, 1024, 16.0, true, true, [], "dx"]
       ],
       "parts": [{"steps": 14000, "tokens": 917504000, "token_gates": 2.14662e+20, "partial_bits": 1440956416, "grad_bits": 5763825664}],
       "op_update_bits": 824180700.0
      },
      "rho": {
       "default": {
-       "rho": 583843.6,
+       "rho": 577928.6,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 583843.6, "token": null, "decoding": null},
+       "terms": {"fresh_products": 577928.6, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+       "products_rests_on": "theorem of record on M, given (H): operands are hard at \u03b2_w = 15.9 and \u03b2_x = 15.9 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with operands below that \u03b2_w\u00b7\u03b2_x",
        "whole_making": {"e": 0.008337705, "whole_chain": 1.012533, "diverged": []},
        "fresh": {"order": "chain", "lam": 1.653459, "share": 0.843542, "numerical": 7215511.0, "attention_share": 0.1192637},
        "target": {"rho": 413.4547, "basis": "target"},
@@ -1248,30 +1248,30 @@
       "decoder_gates": 0.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/bf16", 3080192.0, 5120.0, 6.0, 917504000, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 917504000.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 524288.0, 8192.0, 6.0, 917504000, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 524288.0, 512.0, 6.0, 917504000, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 45023230.0, 27392.0, 1.0, 917504000, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 44236800.0, 2700.0, 1.0, 917504000, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 917504000, 1024, 1024, 16.0, true, true, []],
-       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 917504000, 1024, 1024, 16.0, true, true, []]
+       ["gemm/bf16", 3080192.0, 5120.0, 6.0, 917504000, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 917504000.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 917504000, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 917504000, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 45023230.0, 27392.0, 1.0, 917504000, 1024, 1024, 16.0, true, false, [], "dx"],
+       ["gemm/bf16", 44236800.0, 2700.0, 1.0, 917504000, 1024, 1024, 16.0, true, false, [], "dw"],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 917504000, 1024, 1024, 16.0, true, true, [], "dx"],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 917504000, 1024, 1024, 16.0, true, true, [], "dx"]
       ],
       "parts": [{"steps": 14000, "tokens": 917504000, "token_gates": 2.14662e+20, "partial_bits": 1440956416, "grad_bits": 5763825664}],
       "op_update_bits": 824180700.0
      },
      "rho": {
       "default": {
-       "rho": 583843.6,
+       "rho": 577928.6,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 583843.6, "token": null, "decoding": null},
+       "terms": {"fresh_products": 577928.6, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+       "products_rests_on": "theorem of record on M, given (H): operands are hard at \u03b2_w = 15.9 and \u03b2_x = 15.9 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with operands below that \u03b2_w\u00b7\u03b2_x",
        "whole_making": {"e": 0.008337705, "whole_chain": 1.012533, "diverged": []},
        "fresh": {"order": "chain", "lam": 1.653459, "share": 0.843542, "numerical": 7215511.0, "attention_share": 0.1192637},
        "target": {"rho": 413.4547, "basis": "target"},
@@ -1362,14 +1362,14 @@
       "decoder_gates": 119789000000000.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/bf16", 18481150.0, 30720.0, 1.0, 8192, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 8192.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 8192, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 3145728.0, 3072.0, 1.0, 8192, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 45023230.0, 27392.0, 1.0, 8192, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 44236800.0, 691200.0, 1.0, 8192, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 8192, 1024, 1024, 16.0, true, true, []],
-       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 8192, 1024, 1024, 16.0, true, true, []]
+       ["gemm/bf16", 18481150.0, 30720.0, 1.0, 8192, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 8192.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 8192, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 3145728.0, 3072.0, 1.0, 8192, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 45023230.0, 27392.0, 1.0, 8192, 1024, 1024, 16.0, true, false, [], "dx"],
+       ["gemm/bf16", 44236800.0, 691200.0, 1.0, 8192, 1024, 1024, 16.0, true, false, [], "dw"],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 8192, 1024, 1024, 16.0, true, true, [], "dx"],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 8192, 1024, 1024, 16.0, true, true, [], "dx"]
       ],
       "parts": [{"steps": 32, "tokens": 8192, "token_gates": 1916625000000000.0, "partial_bits": 1440956416, "grad_bits": 5763825664}],
       "op_update_bits": 824180700.0
@@ -1385,7 +1385,7 @@
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at the \u03b2 the row's products term takes, and (E): exports are wide at its b_y, premises a single counterexample refutes",
+       "products_rests_on": "theorem of record, given (H): operands are hard at the \u03b2_w and \u03b2_x the row's products term takes, and (E): exports are wide at its b_y, premises a single counterexample refutes",
        "whole_making": {"e": 0.008344941, "whole_chain": 1.012543, "diverged": []},
        "fresh": {"order": "chain", "lam": 0.0, "share": 0.0, "numerical": 0.0, "attention_share": 0.09090451},
        "target": {"rho": 1.287338, "basis": "fit"},
@@ -1489,10 +1489,10 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 541570.5,
+        "rho": 535884.5,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 541570.5, "token": null, "decoding": null},
+        "terms": {"fresh_products": 535884.5, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.008338516, "whole_chain": 1.012534, "diverged": []},
         "target": {"rho": 475.9997, "basis": "target"},
@@ -1511,10 +1511,10 @@
         "b": [0, 24, 24, 0]
        },
        "model": {
-        "rho": 543536.5,
+        "rho": 537829.9,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 543536.5, "token": null, "decoding": null},
+        "terms": {"fresh_products": 537829.9, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.008338516, "whole_chain": 1.012534, "diverged": []},
         "target": {"rho": 505.8288, "basis": "target"},
@@ -1619,10 +1619,10 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 680611.4,
+        "rho": 674757.2,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 680611.4, "token": null, "decoding": null},
+        "terms": {"fresh_products": 674757.2, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.004975139, "whole_chain": 1.007472, "diverged": []},
         "target": {"rho": 329.6702, "basis": "target"},
@@ -1641,10 +1641,10 @@
         "b": [0, 53, 53, 0]
        },
        "model": {
-        "rho": 682202.4,
+        "rho": 676334.6,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 682202.4, "token": null, "decoding": null},
+        "terms": {"fresh_products": 676334.6, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.004975139, "whole_chain": 1.007472, "diverged": []},
         "target": {"rho": 340.2834, "basis": "target"},
@@ -1812,18 +1812,18 @@
       "decoder_gates": 0.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/fp4", 3080192.0, 5120.0, 6.0, 100000000.0, 1023, 256, 16.0, false, false, []],
-       ["gemm/fp4", 25755650.0, 50304.0, 1.0, 75073310.0, 1023, 256, 16.0, false, false, []],
-       ["gemm/bf16", 278528.0, 4352.0, 6.0, 100000000.0, 1023, 256, 16.0, false, true, []],
-       ["gemm/bf16", 278528.0, 512.0, 6.0, 100000000.0, 1023, 256, 16.0, false, true, []],
-       ["gemm/bf16", 3080192.0, 5120.0, 6.0, 100000000.0, 1024, 256, 16.0, false, false, []],
-       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 100000000.0, 1024, 256, 16.0, false, false, []],
-       ["gemm/bf16", 524288.0, 8192.0, 6.0, 100000000.0, 1024, 256, 16.0, false, true, []],
-       ["gemm/bf16", 524288.0, 512.0, 6.0, 100000000.0, 1024, 256, 16.0, false, true, []],
-       ["gemm/bf16", 45023230.0, 27392.0, 1.0, 100000000.0, 1024, 256, 16.0, true, false, []],
-       ["gemm/bf16", 44236800.0, 675.0, 1.0, 100000000.0, 1024, 256, 16.0, true, false, []],
-       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 100000000.0, 1024, 256, 16.0, true, true, []],
-       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 100000000.0, 1024, 256, 16.0, true, true, []]
+       ["gemm/fp4", 3080192.0, 5120.0, 6.0, 100000000.0, 1023, 256, 16.0, false, false, [], "forward"],
+       ["gemm/fp4", 25755650.0, 50304.0, 1.0, 75073310.0, 1023, 256, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 278528.0, 4352.0, 6.0, 100000000.0, 1023, 256, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 278528.0, 512.0, 6.0, 100000000.0, 1023, 256, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 3080192.0, 5120.0, 6.0, 100000000.0, 1024, 256, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 100000000.0, 1024, 256, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 100000000.0, 1024, 256, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 100000000.0, 1024, 256, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 45023230.0, 27392.0, 1.0, 100000000.0, 1024, 256, 16.0, true, false, [], "dx"],
+       ["gemm/bf16", 44236800.0, 675.0, 1.0, 100000000.0, 1024, 256, 16.0, true, false, [], "dw"],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 100000000.0, 1024, 256, 16.0, true, true, [], "dx"],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 100000000.0, 1024, 256, 16.0, true, true, [], "dx"]
       ],
       "parts": [
        {"steps": 1, "tokens": 100000000.0, "token_gates": 1.953059e+18, "partial_bits": 0.0, "grad_bits": 0.0},
@@ -1833,16 +1833,16 @@
      },
      "rho": {
       "default": {
-       "rho": 546341.7,
+       "rho": 540875.2,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 546341.7, "token": null, "decoding": null},
+       "terms": {"fresh_products": 540875.2, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+       "products_rests_on": "theorem of record on M, given (H): operands are hard at \u03b2_w = 15.9 and \u03b2_x = 15.9 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with operands below that \u03b2_w\u00b7\u03b2_x",
        "whole_making": {"e": 0.4665727, "whole_chain": 1.776051, "diverged": []},
        "fresh": {"order": "chain", "lam": 2.900279, "share": 0.8291986, "numerical": 7012704.0, "attention_share": 0.1296857},
        "target": {"rho": 413.7225, "basis": "target"},
@@ -1942,26 +1942,52 @@
       "decoder_gates": 4382720000000.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/bf16", 24576.0, 48.0, 6.0, 100000000.0, 1023, 256, 16.0, false, false, [0.0, 49201.2, 147603.6, 442810.8, 1328432.0, 3985297.0]],
-       ["gemm/bf16", 86016.0, 5376.0, 6.0, 100000000.0, 1023, 256, 16.0, false, false, []],
-       ["gemm/bf16", 24576.0, 48.0, 6.0, 100000000.0, 1023, 256, 16.0, false, false, [49201.2, 147603.6, 442810.8, 1328432.0, 3985297.0, 11955890.0]],
-       ["gemm/bf16", 22528.0, 16.0, 6.0, 100000000.0, 1023, 256, 16.0, false, false, [16400.4, 16400.4, 16400.4, 16400.4, 16400.4, 16400.4]],
-       ["gemm/bf16", 557056.0, 4864.0, 6.0, 100000000.0, 1023, 256, 16.0, false, true, []],
-       ["gemm/bf16", 24576.0, 48.0, 6.0, 100000000.0, 1024, 256, 16.0, false, false, [0.0, 49201.2, 147603.6, 442810.8, 1328432.0, 3985297.0]],
-       ["gemm/bf16", 86016.0, 5376.0, 6.0, 100000000.0, 1024, 256, 16.0, false, false, []],
-       ["gemm/bf16", 40960.0, 80.0, 6.0, 100000000.0, 1024, 256, 16.0, true, false, [11955890.0, 11955890.0, 11955890.0, 11955890.0, 11955890.0, 11955890.0]],
-       ["gemm/bf16", 40960.0, 0.625, 6.0, 100000000.0, 1024, 256, 16.0, true, false, [11955890.0, 11955890.0, 11955890.0, 11955890.0, 11955890.0, 11955890.0]],
-       ["gemm/bf16", 24576.0, 1536.0, 6.0, 100000000.0, 1024, 256, 16.0, true, false, [0.0, null, null, null, null, null]],
-       ["gemm/bf16", 24576.0, 0.375, 6.0, 100000000.0, 1024, 256, 16.0, true, false, [0.0, 49201.2, 147603.6, 442810.8, 1328432.0, 3985297.0]],
-       ["gemm/bf16", 24576.0, 48.0, 6.0, 100000000.0, 1024, 256, 16.0, false, false, [49201.2, 147603.6, 442810.8, 1328432.0, 3985297.0, 11955890.0]],
-       ["gemm/bf16", 47104.0, 2944.0, 6.0, 100000000.0, 1024, 256, 16.0, true, false, []],
-       ["gemm/bf16", 24576.0, 0.375, 6.0, 100000000.0, 1024, 256, 16.0, true, false, [49201.2, 147603.6, 442810.8, 1328432.0, 3985297.0, 11955890.0]],
-       ["gemm/bf16", 45056.0, 32.0, 6.0, 100000000.0, 1024, 256, 16.0, true, false, [16384.0, 16384.0, 16384.0, 16384.0, 16384.0, 16384.0]],
-       ["gemm/bf16", 45056.0, 0.6875, 6.0, 100000000.0, 1024, 256, 16.0, true, false, [16384.0, 16384.0, 16384.0, 16384.0, 16384.0, 16384.0]],
-       ["gemm/bf16", 22528.0, 16.0, 6.0, 100000000.0, 1024, 256, 16.0, false, false, [16400.4, 16400.4, 16400.4, 16400.4, 16400.4, 16400.4]],
-       ["gemm/bf16", 22528.0, 0.34375, 6.0, 100000000.0, 1024, 256, 16.0, true, false, [16400.4, 16400.4, 16400.4, 16400.4, 16400.4, 16400.4]],
-       ["gemm/bf16", 1048576.0, 8704.0, 6.0, 100000000.0, 1024, 256, 16.0, false, true, []],
-       ["gemm/bf16", 2097152.0, 9728.0, 6.0, 100000000.0, 1024, 256, 16.0, true, true, []]
+       ["gemm/bf16", 24576.0, 48.0, 6.0, 100000000.0, 1023, 256, 16.0, false, false, [0.0, 49201.2, 147603.6, 442810.8, 1328432.0, 3985297.0], "forward"],
+       ["gemm/bf16", 86016.0, 5376.0, 6.0, 100000000.0, 1023, 256, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 24576.0, 48.0, 6.0, 100000000.0, 1023, 256, 16.0, false, false, [49201.2, 147603.6, 442810.8, 1328432.0, 3985297.0, 11955890.0], "forward"],
+       ["gemm/bf16", 22528.0, 16.0, 6.0, 100000000.0, 1023, 256, 16.0, false, false, [16400.4, 16400.4, 16400.4, 16400.4, 16400.4, 16400.4], "forward"],
+       ["gemm/bf16", 557056.0, 4864.0, 6.0, 100000000.0, 1023, 256, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 24576.0, 48.0, 6.0, 100000000.0, 1024, 256, 16.0, false, false, [0.0, 49201.2, 147603.6, 442810.8, 1328432.0, 3985297.0], "forward"],
+       ["gemm/bf16", 86016.0, 5376.0, 6.0, 100000000.0, 1024, 256, 16.0, false, false, [], "forward"],
+       [
+        "gemm/bf16",
+        40960.0,
+        80.0,
+        6.0,
+        100000000.0,
+        1024,
+        256,
+        16.0,
+        true,
+        false,
+        [11955890.0, 11955890.0, 11955890.0, 11955890.0, 11955890.0, 11955890.0],
+        "dx"
+       ],
+       [
+        "gemm/bf16",
+        40960.0,
+        0.625,
+        6.0,
+        100000000.0,
+        1024,
+        256,
+        16.0,
+        true,
+        false,
+        [11955890.0, 11955890.0, 11955890.0, 11955890.0, 11955890.0, 11955890.0],
+        "dw"
+       ],
+       ["gemm/bf16", 24576.0, 1536.0, 6.0, 100000000.0, 1024, 256, 16.0, true, false, [0.0, null, null, null, null, null], "dx"],
+       ["gemm/bf16", 24576.0, 0.375, 6.0, 100000000.0, 1024, 256, 16.0, true, false, [0.0, 49201.2, 147603.6, 442810.8, 1328432.0, 3985297.0], "dw"],
+       ["gemm/bf16", 24576.0, 48.0, 6.0, 100000000.0, 1024, 256, 16.0, false, false, [49201.2, 147603.6, 442810.8, 1328432.0, 3985297.0, 11955890.0], "forward"],
+       ["gemm/bf16", 47104.0, 2944.0, 6.0, 100000000.0, 1024, 256, 16.0, true, false, [], "dx"],
+       ["gemm/bf16", 24576.0, 0.375, 6.0, 100000000.0, 1024, 256, 16.0, true, false, [49201.2, 147603.6, 442810.8, 1328432.0, 3985297.0, 11955890.0], "dw"],
+       ["gemm/bf16", 45056.0, 32.0, 6.0, 100000000.0, 1024, 256, 16.0, true, false, [16384.0, 16384.0, 16384.0, 16384.0, 16384.0, 16384.0], "dx"],
+       ["gemm/bf16", 45056.0, 0.6875, 6.0, 100000000.0, 1024, 256, 16.0, true, false, [16384.0, 16384.0, 16384.0, 16384.0, 16384.0, 16384.0], "dw"],
+       ["gemm/bf16", 22528.0, 16.0, 6.0, 100000000.0, 1024, 256, 16.0, false, false, [16400.4, 16400.4, 16400.4, 16400.4, 16400.4, 16400.4], "forward"],
+       ["gemm/bf16", 22528.0, 0.34375, 6.0, 100000000.0, 1024, 256, 16.0, true, false, [16400.4, 16400.4, 16400.4, 16400.4, 16400.4, 16400.4], "dw"],
+       ["gemm/bf16", 1048576.0, 8704.0, 6.0, 100000000.0, 1024, 256, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 2097152.0, 9728.0, 6.0, 100000000.0, 1024, 256, 16.0, true, true, [], "forward"]
       ],
       "parts": [
        {"steps": 1, "tokens": 100000000.0, "token_gates": 2.09684e+18, "partial_bits": 0.0, "grad_bits": 0.0},
@@ -1971,16 +1997,16 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 3215.587,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "terms": {"fresh_products": 3215.587, "token": null, "decoding": null},
+       "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+       "products_rests_on": "theorem of record on the weight gradients alone, given (H): operands are hard at \u03b2_w = 15.9 and \u03b2_x = 3.2 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M charges an operand the update reaches through a low-rank bottleneck at its \u03b2_eff",
        "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 256.0, 512.0, 1024.0, 1408.0, 65536.0]},
        "fresh": {"order": "chain", "lam": null, "share": 0.02011237, "numerical": null, "attention_share": 0.1723373},
        "target": {"rho": 37.48825, "basis": "target"},
@@ -2080,17 +2106,17 @@
       "decoder_gates": 9938141000.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/bf16", 512.0, 1.0, 1.0, 100000000.0, 1023, 256, 16.0, false, false, [0.0]],
-       ["gemm/bf16", 512.0, 512.0, 1.0, 100000000.0, 1023, 256, 16.0, false, false, []],
-       ["gemm/bf16", 557056.0, 4864.0, 1.0, 100000000.0, 1023, 256, 16.0, false, true, []],
-       ["gemm/bf16", 512.0, 1.0, 1.0, 100000000.0, 1024, 256, 16.0, false, false, [0.0]],
-       ["gemm/bf16", 512.0, 512.0, 1.0, 100000000.0, 1024, 256, 16.0, false, false, []],
-       ["gemm/bf16", 512.0, 1.0, 1.0, 100000000.0, 1024, 256, 16.0, true, false, [64.06406]],
-       ["gemm/bf16", 512.0, 0.0078125, 1.0, 100000000.0, 1024, 256, 16.0, true, false, [64.06406]],
-       ["gemm/bf16", 512.0, 512.0, 1.0, 100000000.0, 1024, 256, 16.0, true, false, [0.0]],
-       ["gemm/bf16", 512.0, 0.0078125, 1.0, 100000000.0, 1024, 256, 16.0, true, false, [0.0]],
-       ["gemm/bf16", 1048576.0, 8704.0, 1.0, 100000000.0, 1024, 256, 16.0, false, true, []],
-       ["gemm/bf16", 2097152.0, 9728.0, 1.0, 100000000.0, 1024, 256, 16.0, true, true, []]
+       ["gemm/bf16", 512.0, 1.0, 1.0, 100000000.0, 1023, 256, 16.0, false, false, [0.0], "forward"],
+       ["gemm/bf16", 512.0, 512.0, 1.0, 100000000.0, 1023, 256, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 557056.0, 4864.0, 1.0, 100000000.0, 1023, 256, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 512.0, 1.0, 1.0, 100000000.0, 1024, 256, 16.0, false, false, [0.0], "forward"],
+       ["gemm/bf16", 512.0, 512.0, 1.0, 100000000.0, 1024, 256, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 512.0, 1.0, 1.0, 100000000.0, 1024, 256, 16.0, true, false, [64.06406], "dx"],
+       ["gemm/bf16", 512.0, 0.0078125, 1.0, 100000000.0, 1024, 256, 16.0, true, false, [64.06406], "dw"],
+       ["gemm/bf16", 512.0, 512.0, 1.0, 100000000.0, 1024, 256, 16.0, true, false, [0.0], "dx"],
+       ["gemm/bf16", 512.0, 0.0078125, 1.0, 100000000.0, 1024, 256, 16.0, true, false, [0.0], "dw"],
+       ["gemm/bf16", 1048576.0, 8704.0, 1.0, 100000000.0, 1024, 256, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 2097152.0, 9728.0, 1.0, 100000000.0, 1024, 256, 16.0, true, true, [], "forward"]
       ],
       "parts": [
        {"steps": 1, "tokens": 100000000.0, "token_gates": 1.953215e+18, "partial_bits": 0.0, "grad_bits": 0.0},
@@ -2109,7 +2135,7 @@
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at the \u03b2 the row's products term takes, and (E): exports are wide at its b_y, premises a single counterexample refutes",
+       "products_rests_on": "theorem of record, given (H): operands are hard at the \u03b2_w and \u03b2_x the row's products term takes, and (E): exports are wide at its b_y, premises a single counterexample refutes",
        "whole_making": {"e": 0, "whole_chain": 1.0, "diverged": []},
        "fresh": {"order": "chain", "lam": 0.0, "share": 0.0, "numerical": 0.0, "attention_share": 0.03786783},
        "target": {"rho": 1.0, "basis": "target"},
@@ -2340,10 +2366,10 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 237294.6,
+        "rho": 319223.7,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 237294.6, "token": null, "decoding": null},
+        "terms": {"fresh_products": 319223.7, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.4382844, "whole_chain": 1.724913, "diverged": []},
         "target": {"rho": 42669640.0, "basis": "target"},
@@ -2362,10 +2388,10 @@
         "b": [2]
        },
        "model": {
-        "rho": 238963.7,
+        "rho": 321469.1,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 238963.7, "token": null, "decoding": null},
+        "terms": {"fresh_products": 321469.1, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.4382844, "whole_chain": 1.724913, "diverged": []},
         "target": {"rho": 12955.63, "basis": "target"},
@@ -2466,10 +2492,10 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 388781.2,
+        "rho": 487953.5,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 388781.2, "token": null, "decoding": null},
+        "terms": {"fresh_products": 487953.5, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.388312, "whole_chain": 1.635802, "diverged": []},
         "target": {"rho": 71327920.0, "basis": "target"},
@@ -2488,10 +2514,10 @@
         "b": [2]
        },
        "model": {
-        "rho": 386511.8,
+        "rho": 485105.2,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 386511.8, "token": null, "decoding": null},
+        "terms": {"fresh_products": 485105.2, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.388312, "whole_chain": 1.635802, "diverged": []},
         "target": {"rho": 11733.26, "basis": "target"},
@@ -2717,26 +2743,26 @@
       "decoder_gates": 0.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/fp4", 3080192.0, 5120.0, 6.0, 1000000000.0, 5119, 4096, 16.0, false, false, []],
-       ["gemm/fp4", 25755650.0, 50304.0, 1.0, 200039100.0, 5119, 4096, 16.0, false, false, []],
-       ["gemm/bf16", 2149581.0, 33587.2, 6.0, 1000000000.0, 5119, 4096, 16.0, false, true, []],
-       ["gemm/bf16", 2149581.0, 512.0, 6.0, 1000000000.0, 5119, 4096, 16.0, false, true, []]
+       ["gemm/fp4", 3080192.0, 5120.0, 6.0, 1000000000.0, 5119, 4096, 16.0, false, false, [], "forward"],
+       ["gemm/fp4", 25755650.0, 50304.0, 1.0, 200039100.0, 5119, 4096, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 2149581.0, 33587.2, 6.0, 1000000000.0, 5119, 4096, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 2149581.0, 512.0, 6.0, 1000000000.0, 5119, 4096, 16.0, false, true, [], "forward"]
       ],
       "parts": [{"steps": 1, "tokens": 1000000000.0, "token_gates": 4.834065e+19, "partial_bits": 0.0, "grad_bits": 0.0}],
       "op_update_bits": 115900400.0
      },
      "rho": {
       "default": {
-       "rho": 62568.27,
+       "rho": 83648.95,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 62568.27, "token": null, "decoding": null},
+       "terms": {"fresh_products": 83648.95, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 4 bits a word, and (E): exports are wide at b_y = 4 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+       "products_rests_on": "theorem of record on M, given (H): operands are hard at \u03b2_w = 4 and \u03b2_x = 4 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 4 bits an output, premises a single counterexample refutes; M leaves out every product with operands below that \u03b2_w\u00b7\u03b2_x",
        "whole_making": {"e": 0.02340635, "whole_chain": 1.035314, "diverged": []},
        "fresh": {"order": "chain", "lam": 1.289586, "share": 0.1636943, "numerical": 1418393.0, "attention_share": 0.7898069},
        "target": {"rho": 1669.825, "basis": "target"},
@@ -2806,26 +2832,26 @@
       "decoder_gates": 0.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/bf16", 3080192.0, 5120.0, 6.0, 1000000000.0, 5119, 4096, 16.0, false, false, []],
-       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 200039100.0, 5119, 4096, 16.0, false, false, []],
-       ["gemm/bf16", 2149581.0, 33587.2, 6.0, 1000000000.0, 5119, 4096, 16.0, false, true, []],
-       ["gemm/bf16", 2149581.0, 512.0, 6.0, 1000000000.0, 5119, 4096, 16.0, false, true, []]
+       ["gemm/bf16", 3080192.0, 5120.0, 6.0, 1000000000.0, 5119, 4096, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 200039100.0, 5119, 4096, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 2149581.0, 33587.2, 6.0, 1000000000.0, 5119, 4096, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 2149581.0, 512.0, 6.0, 1000000000.0, 5119, 4096, 16.0, false, true, [], "forward"]
       ],
       "parts": [{"steps": 1, "tokens": 1000000000.0, "token_gates": 7.631611e+19, "partial_bits": 0.0, "grad_bits": 0.0}],
       "op_update_bits": 412090400.0
      },
      "rho": {
       "default": {
-       "rho": 119722.9,
+       "rho": 194792.5,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 119722.9, "token": null, "decoding": null},
+       "terms": {"fresh_products": 194792.5, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+       "products_rests_on": "theorem of record on M, given (H): operands are hard at \u03b2_w = 16 and \u03b2_x = 15.9 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with operands below that \u03b2_w\u00b7\u03b2_x",
        "whole_making": {"e": 0.006114801, "whole_chain": 1.009186, "diverged": []},
        "fresh": {"order": "chain", "lam": 1.647994, "share": 0.4583596, "numerical": 3798397.0, "attention_share": 0.5002847},
        "target": {"rho": 1670.214, "basis": "target"},
@@ -2895,26 +2921,26 @@
       "decoder_gates": 0.0,
       "d_model": 3621.343,
       "fresh": [
-       ["gemm/fp4", 159721000.0, 37768.1, 42.43762, 1000000000.0, 5119, 4096, 16.0, false, false, []],
-       ["gemm/fp4", 182168100.0, 50304.0, 1.0, 200039100.0, 5119, 4096, 16.0, false, false, []],
-       ["gemm/bf16", 15203850.0, 237560.1, 42.43762, 1000000000.0, 5119, 4096, 16.0, false, true, []],
-       ["gemm/bf16", 15203850.0, 3621.343, 42.43762, 1000000000.0, 5119, 4096, 16.0, false, true, []]
+       ["gemm/fp4", 159721000.0, 37768.1, 42.43762, 1000000000.0, 5119, 4096, 16.0, false, false, [], "forward"],
+       ["gemm/fp4", 182168100.0, 50304.0, 1.0, 200039100.0, 5119, 4096, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 15203850.0, 237560.1, 42.43762, 1000000000.0, 5119, 4096, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 15203850.0, 3621.343, 42.43762, 1000000000.0, 5119, 4096, 16.0, false, true, [], "forward"]
       ],
       "parts": [{"steps": 1, "tokens": 1000000000.0, "token_gates": 4.526473e+21, "partial_bits": 0.0, "grad_bits": 0.0}],
       "op_update_bits": 819756200.0
      },
      "rho": {
       "default": {
-       "rho": 469960.3,
+       "rho": 552038.6,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 469960.3, "token": null, "decoding": null},
+       "terms": {"fresh_products": 552038.6, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 4 bits a word, and (E): exports are wide at b_y = 4 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+       "products_rests_on": "theorem of record on M, given (H): operands are hard at \u03b2_w = 4 and \u03b2_x = 4 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 4 bits an output, premises a single counterexample refutes; M leaves out every product with operands below that \u03b2_w\u00b7\u03b2_x",
        "whole_making": {"e": 0.001803746, "whole_chain": 1.002707, "diverged": []},
        "fresh": {"order": "chain", "lam": 1.24897, "share": 0.5040848, "numerical": 5359126.0, "attention_share": 0.4219617},
        "target": {"rho": 212.6351, "basis": "target"},
@@ -2996,10 +3022,10 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 175965.9,
+        "rho": 234632.0,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 175965.9, "token": null, "decoding": null},
+        "terms": {"fresh_products": 234632.0, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.06548631, "whole_chain": 1.099821, "diverged": []},
         "target": {"rho": 40983030.0, "basis": "target"},
@@ -3018,10 +3044,10 @@
         "b": [2]
        },
        "model": {
-        "rho": 178651.8,
+        "rho": 238213.3,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 178651.8, "token": null, "decoding": null},
+        "terms": {"fresh_products": 238213.3, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.06548631, "whole_chain": 1.099821, "diverged": []},
         "target": {"rho": 8138.254, "basis": "target"},
@@ -3105,10 +3131,10 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 295045.1,
+        "rho": 369679.9,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 295045.1, "token": null, "decoding": null},
+        "terms": {"fresh_products": 369679.9, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.04628527, "whole_chain": 1.070225, "diverged": []},
         "target": {"rho": 60155300.0, "basis": "target"},
@@ -3127,10 +3153,10 @@
         "b": [5]
        },
        "model": {
-        "rho": 294114.0,
+        "rho": 368513.2,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 294114.0, "token": null, "decoding": null},
+        "terms": {"fresh_products": 368513.2, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.04628527, "whole_chain": 1.070225, "diverged": []},
         "target": {"rho": 5978.385, "basis": "target"},
@@ -3258,37 +3284,37 @@
       "decoder_gates": 2434845000000.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/bf16", 12288.0, 24.0, 6.0, 100000000.0, 1024, 1024, 16.0, false, false, [0.0, 12300.3, 36900.9, 110702.7, 332108.1, 996324.3]],
-       ["gemm/bf16", 43008.0, 5376.0, 6.0, 100000000.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 20480.0, 40.0, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [2988973.0, 2988973.0, 2988973.0, 2988973.0, 2988973.0, 2988973.0]],
-       ["gemm/bf16", 20480.0, 0.3125, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [2988973.0, 2988973.0, 2988973.0, 2988973.0, 2988973.0, 2988973.0]],
-       ["gemm/bf16", 12288.0, 1536.0, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0, null, null, null, null, null]],
-       ["gemm/bf16", 12288.0, 0.1875, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0, 12300.3, 36900.9, 110702.7, 332108.1, 996324.3]],
-       ["gemm/bf16", 12288.0, 24.0, 6.0, 100000000.0, 1024, 1024, 16.0, false, false, [12300.3, 36900.9, 110702.7, 332108.1, 996324.3, 2988973.0]],
-       ["gemm/bf16", 23552.0, 2944.0, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 12288.0, 0.1875, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [12300.3, 36900.9, 110702.7, 332108.1, 996324.3, 2988973.0]],
-       ["gemm/bf16", 22528.0, 16.0, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [4096.0, 4096.0, 4096.0, 4096.0, 4096.0, 4096.0]],
-       ["gemm/bf16", 22528.0, 0.34375, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [4096.0, 4096.0, 4096.0, 4096.0, 4096.0, 4096.0]],
-       ["gemm/bf16", 11264.0, 8.0, 6.0, 100000000.0, 1024, 1024, 16.0, false, false, [4100.1, 4100.1, 4100.1, 4100.1, 4100.1, 4100.1]],
-       ["gemm/bf16", 11264.0, 0.171875, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [4100.1, 4100.1, 4100.1, 4100.1, 4100.1, 4100.1]],
-       ["gemm/bf16", 1048576.0, 8704.0, 6.0, 100000000.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 2097152.0, 9728.0, 6.0, 100000000.0, 1024, 1024, 16.0, true, true, []]
+       ["gemm/bf16", 12288.0, 24.0, 6.0, 100000000.0, 1024, 1024, 16.0, false, false, [0.0, 12300.3, 36900.9, 110702.7, 332108.1, 996324.3], "forward"],
+       ["gemm/bf16", 43008.0, 5376.0, 6.0, 100000000.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 20480.0, 40.0, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [2988973.0, 2988973.0, 2988973.0, 2988973.0, 2988973.0, 2988973.0], "dx"],
+       ["gemm/bf16", 20480.0, 0.3125, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [2988973.0, 2988973.0, 2988973.0, 2988973.0, 2988973.0, 2988973.0], "dw"],
+       ["gemm/bf16", 12288.0, 1536.0, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0, null, null, null, null, null], "dx"],
+       ["gemm/bf16", 12288.0, 0.1875, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0, 12300.3, 36900.9, 110702.7, 332108.1, 996324.3], "dw"],
+       ["gemm/bf16", 12288.0, 24.0, 6.0, 100000000.0, 1024, 1024, 16.0, false, false, [12300.3, 36900.9, 110702.7, 332108.1, 996324.3, 2988973.0], "forward"],
+       ["gemm/bf16", 23552.0, 2944.0, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [], "dx"],
+       ["gemm/bf16", 12288.0, 0.1875, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [12300.3, 36900.9, 110702.7, 332108.1, 996324.3, 2988973.0], "dw"],
+       ["gemm/bf16", 22528.0, 16.0, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [4096.0, 4096.0, 4096.0, 4096.0, 4096.0, 4096.0], "dx"],
+       ["gemm/bf16", 22528.0, 0.34375, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [4096.0, 4096.0, 4096.0, 4096.0, 4096.0, 4096.0], "dw"],
+       ["gemm/bf16", 11264.0, 8.0, 6.0, 100000000.0, 1024, 1024, 16.0, false, false, [4100.1, 4100.1, 4100.1, 4100.1, 4100.1, 4100.1], "forward"],
+       ["gemm/bf16", 11264.0, 0.171875, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [4100.1, 4100.1, 4100.1, 4100.1, 4100.1, 4100.1], "dw"],
+       ["gemm/bf16", 1048576.0, 8704.0, 6.0, 100000000.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 2097152.0, 9728.0, 6.0, 100000000.0, 1024, 1024, 16.0, true, true, [], "forward"]
       ],
       "parts": [{"steps": 1526, "tokens": 100000000.0, "token_gates": 1.676824e+19, "partial_bits": 15138820.0, "grad_bits": 15138820.0}],
       "op_update_bits": 180224.0
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 913.4584,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "terms": {"fresh_products": 913.4584, "token": null, "decoding": null},
+       "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 0.9412 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M charges an operand the update reaches through a low-rank bottleneck at its \u03b2_eff",
+       "products_rests_on": "theorem of record on the weight gradients alone, given (H): operands are hard at \u03b2_w = 15.9 and \u03b2_x = 0.9412 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M charges an operand the update reaches through a low-rank bottleneck at its \u03b2_eff",
        "whole_making": {"e": null, "whole_chain": null, "diverged": [8.0, 64.0, 512.0, 1024.0, 1408.0, 65536.0]},
        "fresh": {"order": "chain", "lam": null, "share": 0.00775526, "numerical": null, "attention_share": 0.1666025},
        "target": {"rho": 18.74757, "basis": "target"},
@@ -3370,21 +3396,21 @@
       "decoder_gates": 405807400000.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/bf16", 12288.0, 24.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, [0.0]],
-       ["gemm/bf16", 43008.0, 5376.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 20480.0, 40.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [12300.3]],
-       ["gemm/bf16", 20480.0, 0.3125, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [12300.3]],
-       ["gemm/bf16", 12288.0, 1536.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0]],
-       ["gemm/bf16", 12288.0, 0.1875, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0]],
-       ["gemm/bf16", 12288.0, 24.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, [12300.3]],
-       ["gemm/bf16", 23552.0, 2944.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 12288.0, 0.1875, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [12300.3]],
-       ["gemm/bf16", 22528.0, 16.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [4096.0]],
-       ["gemm/bf16", 22528.0, 0.34375, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [4096.0]],
-       ["gemm/bf16", 11264.0, 8.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, [4100.1]],
-       ["gemm/bf16", 11264.0, 0.171875, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [4100.1]],
-       ["gemm/bf16", 1048576.0, 8704.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 2097152.0, 9728.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, true, []]
+       ["gemm/bf16", 12288.0, 24.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, [0.0], "forward"],
+       ["gemm/bf16", 43008.0, 5376.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 20480.0, 40.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [12300.3], "dx"],
+       ["gemm/bf16", 20480.0, 0.3125, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [12300.3], "dw"],
+       ["gemm/bf16", 12288.0, 1536.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0], "dx"],
+       ["gemm/bf16", 12288.0, 0.1875, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0], "dw"],
+       ["gemm/bf16", 12288.0, 24.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, [12300.3], "forward"],
+       ["gemm/bf16", 23552.0, 2944.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [], "dx"],
+       ["gemm/bf16", 12288.0, 0.1875, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [12300.3], "dw"],
+       ["gemm/bf16", 22528.0, 16.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [4096.0], "dx"],
+       ["gemm/bf16", 22528.0, 0.34375, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [4096.0], "dw"],
+       ["gemm/bf16", 11264.0, 8.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, [4100.1], "forward"],
+       ["gemm/bf16", 11264.0, 0.171875, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [4100.1], "dw"],
+       ["gemm/bf16", 1048576.0, 8704.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 2097152.0, 9728.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, true, [], "forward"]
       ],
       "parts": [{"steps": 1526, "tokens": 100000000.0, "token_gates": 1.255519e+19, "partial_bits": 2523136.0, "grad_bits": 2523136.0}],
       "op_update_bits": 180224.0
@@ -3400,7 +3426,7 @@
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+       "products_rests_on": "theorem of record on M, given (H): operands are hard at \u03b2_w = 16 and \u03b2_x = 15.9 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with operands below that \u03b2_w\u00b7\u03b2_x",
        "whole_making": {"e": null, "whole_chain": null, "diverged": [8.0, 64.0, 512.0, 1024.0, 1408.0, 65536.0]},
        "fresh": {"order": "chain", "lam": null, "share": 0.0007846717, "numerical": null, "attention_share": 0.03708479},
        "target": {"rho": 23.80487, "basis": "target"},
@@ -3482,19 +3508,19 @@
       "decoder_gates": 273298900000.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/bf16", 8192.0, 16.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, [0.0]],
-       ["gemm/bf16", 26624.0, 3328.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 22528.0, 16.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [4096.0]],
-       ["gemm/bf16", 22528.0, 0.34375, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [4096.0]],
-       ["gemm/bf16", 8192.0, 1024.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0]],
-       ["gemm/bf16", 8192.0, 0.125, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0]],
-       ["gemm/bf16", 11264.0, 8.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, [4100.1]],
-       ["gemm/bf16", 4096.0, 8.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [11275.28]],
-       ["gemm/bf16", 4096.0, 0.0625, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [11275.28]],
-       ["gemm/bf16", 11264.0, 1408.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 11264.0, 0.171875, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [4100.1]],
-       ["gemm/bf16", 1048576.0, 8704.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 2097152.0, 9728.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, true, []]
+       ["gemm/bf16", 8192.0, 16.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, [0.0], "forward"],
+       ["gemm/bf16", 26624.0, 3328.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 22528.0, 16.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [4096.0], "dx"],
+       ["gemm/bf16", 22528.0, 0.34375, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [4096.0], "dw"],
+       ["gemm/bf16", 8192.0, 1024.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0], "dx"],
+       ["gemm/bf16", 8192.0, 0.125, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0], "dw"],
+       ["gemm/bf16", 11264.0, 8.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, [4100.1], "forward"],
+       ["gemm/bf16", 4096.0, 8.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [11275.28], "dx"],
+       ["gemm/bf16", 4096.0, 0.0625, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [11275.28], "dw"],
+       ["gemm/bf16", 11264.0, 1408.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [], "dx"],
+       ["gemm/bf16", 11264.0, 0.171875, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [4100.1], "dw"],
+       ["gemm/bf16", 1048576.0, 8704.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 2097152.0, 9728.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, true, [], "forward"]
       ],
       "parts": [{"steps": 1526, "tokens": 100000000.0, "token_gates": 1.254025e+19, "partial_bits": 1474560.0, "grad_bits": 1474560.0}],
       "op_update_bits": 180224.0
@@ -3510,7 +3536,7 @@
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+       "products_rests_on": "theorem of record on M, given (H): operands are hard at \u03b2_w = 16 and \u03b2_x = 15.9 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with operands below that \u03b2_w\u00b7\u03b2_x",
        "whole_making": {"e": null, "whole_chain": null, "diverged": [8.0, 512.0, 1408.0, 65536.0]},
        "fresh": {"order": "chain", "lam": null, "share": 0.0004471915, "numerical": null, "attention_share": 0.03712898},
        "target": {"rho": 15.25384, "basis": "target"},
@@ -3592,14 +3618,14 @@
       "decoder_gates": 59628850000.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/bf16", 512.0, 1.0, 6.0, 100000000.0, 1024, 1024, 16.0, false, false, [0.0, 64.06406, 192.1922, 576.5766, 1729.73, 5189.189]],
-       ["gemm/bf16", 512.0, 512.0, 6.0, 100000000.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 512.0, 1.0, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [15567.57, 15567.57, 15567.57, 15567.57, 15567.57, 15567.57]],
-       ["gemm/bf16", 512.0, 0.0078125, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [15567.57, 15567.57, 15567.57, 15567.57, 15567.57, 15567.57]],
-       ["gemm/bf16", 512.0, 512.0, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0, null, null, null, null, null]],
-       ["gemm/bf16", 512.0, 0.0078125, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0, 64.06406, 192.1922, 576.5766, 1729.73, 5189.189]],
-       ["gemm/bf16", 1048576.0, 8704.0, 6.0, 100000000.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 2097152.0, 9728.0, 6.0, 100000000.0, 1024, 1024, 16.0, true, true, []]
+       ["gemm/bf16", 512.0, 1.0, 6.0, 100000000.0, 1024, 1024, 16.0, false, false, [0.0, 64.06406, 192.1922, 576.5766, 1729.73, 5189.189], "forward"],
+       ["gemm/bf16", 512.0, 512.0, 6.0, 100000000.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 512.0, 1.0, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [15567.57, 15567.57, 15567.57, 15567.57, 15567.57, 15567.57], "dx"],
+       ["gemm/bf16", 512.0, 0.0078125, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [15567.57, 15567.57, 15567.57, 15567.57, 15567.57, 15567.57], "dw"],
+       ["gemm/bf16", 512.0, 512.0, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0, null, null, null, null, null], "dx"],
+       ["gemm/bf16", 512.0, 0.0078125, 6.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0, 64.06406, 192.1922, 576.5766, 1729.73, 5189.189], "dw"],
+       ["gemm/bf16", 1048576.0, 8704.0, 6.0, 100000000.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 2097152.0, 9728.0, 6.0, 100000000.0, 1024, 1024, 16.0, true, true, [], "forward"]
       ],
       "parts": [{"steps": 1526, "tokens": 100000000.0, "token_gates": 1.655537e+19, "partial_bits": 196608.0, "grad_bits": 196608.0}],
       "op_update_bits": 8192.0
@@ -3615,7 +3641,7 @@
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+       "products_rests_on": "theorem of record on M, given (H): operands are hard at \u03b2_w = 16 and \u03b2_x = 15.9 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with operands below that \u03b2_w\u00b7\u03b2_x",
        "whole_making": {"e": null, "whole_chain": null, "diverged": [1.0, 64.0, 512.0, 1024.0, 65536.0]},
        "fresh": {"order": "chain", "lam": null, "share": 3.66201e-05, "numerical": null, "attention_share": 0.1687454},
        "target": {"rho": 1.0, "basis": "target"},
@@ -3697,14 +3723,14 @@
       "decoder_gates": 9938141000.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/bf16", 512.0, 1.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, [0.0]],
-       ["gemm/bf16", 512.0, 512.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 512.0, 1.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [64.06406]],
-       ["gemm/bf16", 512.0, 0.0078125, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [64.06406]],
-       ["gemm/bf16", 512.0, 512.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0]],
-       ["gemm/bf16", 512.0, 0.0078125, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0]],
-       ["gemm/bf16", 1048576.0, 8704.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 2097152.0, 9728.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, true, []]
+       ["gemm/bf16", 512.0, 1.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, [0.0], "forward"],
+       ["gemm/bf16", 512.0, 512.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 512.0, 1.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [64.06406], "dx"],
+       ["gemm/bf16", 512.0, 0.0078125, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [64.06406], "dw"],
+       ["gemm/bf16", 512.0, 512.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0], "dx"],
+       ["gemm/bf16", 512.0, 0.0078125, 1.0, 100000000.0, 1024, 1024, 16.0, true, false, [0.0], "dw"],
+       ["gemm/bf16", 1048576.0, 8704.0, 1.0, 100000000.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 2097152.0, 9728.0, 1.0, 100000000.0, 1024, 1024, 16.0, true, true, [], "forward"]
       ],
       "parts": [{"steps": 1526, "tokens": 100000000.0, "token_gates": 1.251971e+19, "partial_bits": 32768.0, "grad_bits": 32768.0}],
       "op_update_bits": 8192.0
@@ -3720,7 +3746,7 @@
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at the \u03b2 the row's products term takes, and (E): exports are wide at its b_y, premises a single counterexample refutes",
+       "products_rests_on": "theorem of record, given (H): operands are hard at the \u03b2_w and \u03b2_x the row's products term takes, and (E): exports are wide at its b_y, premises a single counterexample refutes",
        "whole_making": {"e": 0, "whole_chain": 1.0, "diverged": []},
        "fresh": {"order": "chain", "lam": 0.0, "share": 0.0, "numerical": 0.0, "attention_share": 0.03718992},
        "target": {"rho": 1.0, "basis": "target"},
@@ -3807,11 +3833,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 61.97809,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 61.97809, "token": null, "decoding": null},
+        "partial": true,
         "whole_making": {"e": null, "whole_chain": null, "diverged": [4.0, 64.0, 512.0, 1024.0, 65536.0]},
         "target": {"rho": 400.8307, "basis": "target"},
         "sensitivities": {"reduction": 23.5721, "update": 1.178605, "token_form": 401.303, "decoding_form": 0.999972, "per_gate": null, "fresh_old": null, "fresh_no_cell": null},
@@ -3821,11 +3847,11 @@
         "b": [21]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 62.35906,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 62.35906, "token": null, "decoding": null},
+        "partial": true,
         "whole_making": {"e": null, "whole_chain": null, "diverged": [4.0, 64.0, 512.0, 1024.0, 65536.0]},
         "target": {"rho": 5.802122, "basis": "target"},
         "sensitivities": {"reduction": 23.717, "update": 1.18585, "token_form": 5.802122, "decoding_form": 1.000444, "per_gate": null, "fresh_old": null, "fresh_no_cell": null},
@@ -3910,11 +3936,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 3175.534,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 3175.534, "token": null, "decoding": null},
+        "partial": true,
         "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 512.0, 1024.0, 65536.0]},
         "target": {"rho": 45.3986, "basis": "target"},
         "sensitivities": {
@@ -3932,11 +3958,11 @@
         "b": [0, 17, 17]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 3178.805,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 3178.805, "token": null, "decoding": null},
+        "partial": true,
         "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 512.0, 1024.0, 65536.0]},
         "target": {"rho": 45.20673, "basis": "target"},
         "sensitivities": {
@@ -4040,11 +4066,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 4333.256,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 4333.256, "token": null, "decoding": null},
+        "partial": true,
         "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 512.0, 1024.0, 1408.0, 65536.0]},
         "target": {"rho": 44.77084, "basis": "target"},
         "sensitivities": {
@@ -4062,11 +4088,11 @@
         "b": [0, 18, 18]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 4340.479,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 4340.479, "token": null, "decoding": null},
+        "partial": true,
         "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 512.0, 1024.0, 1408.0, 65536.0]},
         "target": {"rho": 45.19439, "basis": "target"},
         "sensitivities": {
@@ -4170,11 +4196,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 2921.724,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 2921.724, "token": null, "decoding": null},
+        "partial": true,
         "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 768.0, 1024.0, 65536.0]},
         "target": {"rho": 20.44363, "basis": "target"},
         "sensitivities": {
@@ -4192,11 +4218,11 @@
         "b": [0, 38, 38]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 2933.912,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 2933.912, "token": null, "decoding": null},
+        "partial": true,
         "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 768.0, 1024.0, 65536.0]},
         "target": {"rho": 20.5631, "basis": "target"},
         "sensitivities": {"reduction": 372.862, "update": 10.07735, "token_form": 20.5631, "decoding_form": 1.007894, "per_gate": null, "fresh_old": null, "fresh_no_cell": null},
@@ -4292,11 +4318,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 3983.652,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 3983.652, "token": null, "decoding": null},
+        "partial": true,
         "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 768.0, 1024.0, 2112.0, 65536.0]},
         "target": {"rho": 20.19619, "basis": "target"},
         "sensitivities": {
@@ -4314,11 +4340,11 @@
         "b": [0, 39, 39]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 4002.538,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 4002.538, "token": null, "decoding": null},
+        "partial": true,
         "whole_making": {"e": null, "whole_chain": null, "diverged": [16.0, 64.0, 768.0, 1024.0, 2112.0, 65536.0]},
         "target": {"rho": 20.51047, "basis": "target"},
         "sensitivities": {
@@ -4459,30 +4485,30 @@
       "decoder_gates": 0.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/bf16", 3080192.0, 5120.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 900597800.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 524288.0, 8192.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 524288.0, 512.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 45023230.0, 27392.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 44236800.0, 675.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, []],
-       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, []]
+       ["gemm/bf16", 3080192.0, 5120.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 900597800.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 45023230.0, 27392.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, [], "dx"],
+       ["gemm/bf16", 44236800.0, 675.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, [], "dw"],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, [], "dx"],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, [], "dx"]
       ],
       "parts": [{"steps": 13742, "tokens": 900597800.0, "token_gates": 8.898808e+20, "partial_bits": 1440956416, "grad_bits": 1440956416}],
       "op_update_bits": 824180700.0
      },
      "rho": {
       "default": {
-       "rho": 140190.6,
+       "rho": 138787.9,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 140190.6, "token": null, "decoding": null},
+       "terms": {"fresh_products": 138787.9, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+       "products_rests_on": "theorem of record on M, given (H): operands are hard at \u03b2_w = 15.9 and \u03b2_x = 15.9 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with operands below that \u03b2_w\u00b7\u03b2_x",
        "whole_making": {"e": 0.008337705, "whole_chain": 1.012533, "diverged": []},
        "fresh": {"order": "chain", "lam": 1.653459, "share": 0.1999576, "numerical": 1711308.0, "attention_share": 0.02827088},
        "target": {"rho": 98.00745, "basis": "target"},
@@ -4564,30 +4590,30 @@
       "decoder_gates": 0.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/bf16", 3080192.0, 5120.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 900597800.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 524288.0, 8192.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 524288.0, 512.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 45023230.0, 27392.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 44236800.0, 675.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, []],
-       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, []]
+       ["gemm/bf16", 3080192.0, 5120.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 900597800.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 45023230.0, 27392.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, [], "dx"],
+       ["gemm/bf16", 44236800.0, 675.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, [], "dw"],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, [], "dx"],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, [], "dx"]
       ],
       "parts": [{"steps": 13742, "tokens": 900597800.0, "token_gates": 2.107065e+20, "partial_bits": 1440956416, "grad_bits": 1440956416}],
       "op_update_bits": 824180700.0
      },
      "rho": {
       "default": {
-       "rho": 591935.2,
+       "rho": 586012.6,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 591935.2, "token": null, "decoding": null},
+       "terms": {"fresh_products": 586012.6, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+       "products_rests_on": "theorem of record on M, given (H): operands are hard at \u03b2_w = 15.9 and \u03b2_x = 15.9 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with operands below that \u03b2_w\u00b7\u03b2_x",
        "whole_making": {"e": 0.008337705, "whole_chain": 1.012533, "diverged": []},
        "fresh": {"order": "chain", "lam": 1.653459, "share": 0.8442932, "numerical": 7225763.0, "attention_share": 0.1193699},
        "target": {"rho": 413.8229, "basis": "target"},
@@ -4669,30 +4695,30 @@
       "decoder_gates": 0.0,
       "d_model": 512.0,
       "fresh": [
-       ["gemm/bf16", 3080192.0, 5120.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 900597800.0, 1024, 1024, 16.0, false, false, []],
-       ["gemm/bf16", 524288.0, 8192.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 524288.0, 512.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, []],
-       ["gemm/bf16", 45023230.0, 27392.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 44236800.0, 675.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, []],
-       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, []],
-       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, []]
+       ["gemm/bf16", 3080192.0, 5120.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 25755650.0, 50304.0, 1.0, 900597800.0, 1024, 1024, 16.0, false, false, [], "forward"],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 900597800.0, 1024, 1024, 16.0, false, true, [], "forward"],
+       ["gemm/bf16", 45023230.0, 27392.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, [], "dx"],
+       ["gemm/bf16", 44236800.0, 675.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, false, [], "dw"],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, [], "dx"],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 900597800.0, 1024, 1024, 16.0, true, true, [], "dx"]
       ],
       "parts": [{"steps": 13742, "tokens": 900597800.0, "token_gates": 6.692288e+21, "partial_bits": 1440956416, "grad_bits": 1440956416}],
       "op_update_bits": 824180700.0
      },
      "rho": {
       "default": {
-       "rho": 18642.43,
+       "rho": 18455.9,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "terms": {"fresh_products": 18642.43, "token": null, "decoding": null},
+       "terms": {"fresh_products": 18455.9, "token": null, "decoding": null},
        "partial": true,
        "why": {
         "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
         "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
-       "products_rests_on": "theorem of record, given (H): operands are hard at \u03b2 = 16 bits a word, and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with an operand below that \u03b2",
+       "products_rests_on": "theorem of record on M, given (H): operands are hard at \u03b2_w = 15.9 and \u03b2_x = 15.9 bits a word (\u03b2(k) per io-bound's red-team of (H); the casts of one value count as one word), and (E): exports are wide at b_y = 16 bits an output, premises a single counterexample refutes; M leaves out every product with operands below that \u03b2_w\u00b7\u03b2_x",
        "whole_making": {"e": 0.008337705, "whole_chain": 1.012533, "diverged": []},
        "fresh": {"order": "chain", "lam": 1.653459, "share": 0.0265902, "numerical": 227568.4, "attention_share": 0.003759439},
        "target": {"rho": 13.03295, "basis": "target"},
@@ -4795,10 +4821,10 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 132154.5,
+        "rho": 242431.7,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 132154.5, "token": null, "decoding": null},
+        "terms": {"fresh_products": 242431.7, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.02730984, "whole_chain": 1.041243, "diverged": []},
         "target": {"rho": 312.6342, "basis": "target"},
@@ -4817,10 +4843,10 @@
         "b": [0, 9]
        },
        "model": {
-        "rho": 132114.0,
+        "rho": 242357.4,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 132114.0, "token": null, "decoding": null},
+        "terms": {"fresh_products": 242357.4, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.02730984, "whole_chain": 1.041243, "diverged": []},
         "target": {"rho": 352.2618, "basis": "target"},
@@ -4925,10 +4951,10 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 208597.5,
+        "rho": 222386.3,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 208597.5, "token": null, "decoding": null},
+        "terms": {"fresh_products": 222386.3, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.01312323, "whole_chain": 1.019749, "diverged": []},
         "target": {"rho": 222.4367, "basis": "target"},
@@ -4947,10 +4973,10 @@
         "b": [0, 18]
        },
        "model": {
-        "rho": 208323.1,
+        "rho": 222093.7,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 208323.1, "token": null, "decoding": null},
+        "terms": {"fresh_products": 222093.7, "token": null, "decoding": null},
         "partial": true,
         "whole_making": {"e": 0.01312323, "whole_chain": 1.019749, "diverged": []},
         "target": {"rho": 249.6824, "basis": "target"},
