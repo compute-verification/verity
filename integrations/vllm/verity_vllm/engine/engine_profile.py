@@ -103,9 +103,9 @@ def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int, enforce_eager:
     profile row; ``max_num_batched_tokens`` is a declared scheduler flag, used by the varied-batch
     cases (M2) to change batch composition; replay must use the production's value so the recorded
     schedule is reproducible). Replay: + trace replay; ``replay_exec`` = ``eager`` (dispatch-mode
-    interception, ``enforce_eager=True``) or ``compiled-nograph`` (§16.1: the production compilation
+    interception, ``enforce_eager=True``) or ``compiled-nograph`` (the production compilation
     with CUDA graphs off in replay only, ``compilation_config.cudagraph_mode = NONE``).
-    ``tensor_parallel_size`` > 1 (lane TP, coverage wave axis 2; a profile port's
+    ``tensor_parallel_size`` > 1 (a profile port's
     ``parallelism.tensor_parallel_size``) is a declared production flag: the model is sharded over that
     many GPUs (vLLM's multiprocess executor; the engine core stays in-process). The key is absent at 1 so
     earlier profile ids are unchanged. In replay with TP > 1 the model lives in worker processes, so the
@@ -125,7 +125,7 @@ def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int, enforce_eager:
         if replay:
             kw["worker_extension_cls"] = TP_WORKER_EXTENSION
     if quantization:
-        # [QZ, additive] lane QZ (coverage wave axis "quantization", port b1-fp8): `--quantization fp8` is a declared
+        # `--quantization fp8` (the b1-fp8 port) is a declared
         # production flag (LLM(quantization=...)); the key is absent when unset so earlier profile ids are unchanged.
         # Replay reads it from the manifest's `quantization` field (replay.py) so the same online-quantised weights
         # and the same FP8 kernels run under the capture.
@@ -152,7 +152,7 @@ def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int, enforce_eager:
         # request's never computes those positions itself (its KV reads there are the other request's
         # values, its boundary has no step for them). Stock production keeps caching; the B0/B1 rows
         # bind every position of a request to that request's own steps. Cross-request KV identity
-        # is the R3 (prefix cache) row's rule.
+        # is a prefix-cache workload's rule.
         kw["enable_prefix_caching"] = False
     return kw
 
@@ -179,7 +179,7 @@ def gpu_info() -> dict[str, Any]:
         # W1cF F7/F10: the batch-invariant GEMM specialises on the SM count (NUM_SMS); a verifier on a
         # different device reports `specialised: NUM_SMS` for its PTX rather than a mismatch.
         "multi_processor_count": int(props.multi_processor_count),
-        # [R13 ampere] the tuned-GEMM arch family vLLM selects its batch-invariant GEMM table by, from vLLM's OWN function on this
+        # the tuned-GEMM arch family vLLM selects its batch-invariant GEMM table by, from vLLM's OWN function on this
         # device's capability (None = no table = default tiling, e.g. Ampere): the fold's GEMM target selection
         # (verity_vllm.program.frontend.gemm_targets) checks the record against it.
         "tuned_gemm_arch_family": _tuned_gemm_arch_family(props.major, props.minor),
@@ -309,7 +309,7 @@ def _backends_of_runner(runner: Any) -> dict[str, Any]:
 
 def _backends_probe(worker: Any) -> dict[str, Any]:
     """Runs inside a TP worker process (``LLM.collective_rpc`` with a callable): read-only class names of
-    the layers that ran, plus the collective implementation the TP group chose (lane TP)."""
+    the layers that ran, plus the collective implementation the TP group chose."""
     out = _backends_of_runner(worker.model_runner)
     try:
         from vllm.distributed import parallel_state as ps
@@ -376,8 +376,7 @@ def build_manifest(
                                          max_num_batched_tokens=max_num_batched_tokens,
                                          tensor_parallel_size=tensor_parallel_size,
                                          quantization=quantization).items() if k not in ("model", "tokenizer")}
-    # state rows (W10, R2/R3/R4): declared scheduler / cache overrides are part of the profile
-    # (they change the profile id) and are replayed under the same values (state_rows.py)
+    # declared engine overrides are part of the profile (they change the profile id) and are replayed under the same values
     if engine_overrides:
         kw.update(engine_overrides)
     doc = {
@@ -394,7 +393,7 @@ def build_manifest(
         "dists": sw["dists"],
         "gpu": gpu_info(),
         "dtype": "bfloat16",
-        # [QZ, additive] the declared quantization scheme (None = the bf16 profiles; "fp8" = lane QZ's b1-fp8 port,
+        # the declared quantization scheme (None = the bf16 profiles; "fp8" = the b1-fp8 port,
         # vLLM online per-tensor weight quantisation + dynamic per-token activation quantisation); the harness's C0
         # check compares this field with the port's `quantization`
         "quantization": (str(quantization) if quantization else None),

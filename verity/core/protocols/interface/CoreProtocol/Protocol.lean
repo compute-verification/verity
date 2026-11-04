@@ -75,9 +75,11 @@ structure Answer where
   published : Option Json
   profile : Option Json
 
-/-- Canonical JSON: UTF-8 that `Flock.canon` writes back byte for byte. The parameters must be canonical, and a protocol
-whose commitment or evidence is JSON reads it with this too. -/
+/-- Canonical JSON: text that `Flock.canon` writes back byte for byte. `canon` escapes every character outside printable
+ASCII, so a canonical text has no byte at or above `0x7f`, and one holding one is refused before it is parsed. The
+parameters must be canonical, and a protocol whose commitment or evidence is JSON reads it with this too. -/
 def canonicalJson (b : ByteArray) : V Json := do
+  unless b.data.all (· < 0x7f) do throw "not ASCII without DEL (a byte at or above 0x7f)"
   let some s := String.fromUTF8? b | throw "not UTF-8"
   let j ← match Json.parse s with
     | .ok j => pure j

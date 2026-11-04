@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.Assumptions.Registrant
 /-!
 # The premises the recursive audit's property takes
 
-The named premises a property of the recursive audit may take (the ruling of 8 Oct, 4:30 PM): `shape.premises` in
+The named premises a property of the recursive audit may take: `shape.premises` in
 `Security/lean-audit.json` names this module, so the shape check reads a hypothesis whose head is one of these as a
 premise and refuses every other. Each but `CompiledForkSound`, a proved lemma's conclusion, is the named assumption it
 abbreviates, unchanged.

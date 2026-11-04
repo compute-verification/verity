@@ -21,7 +21,7 @@ class LayerNormAtenRule(OpRule):
                     preconditions=("x is a bf16 value collection of rank >= 1", "normalized_shape == [x.shape[-1]]",
                                    "weight and bias are both present, bf16 [N]", f"N % {_LN.VEC} == 0 (the vectorized kernel)",
                                    "eps is a static float (absent: 1e-5)"),
-                    evidence_domain="structural; numerics: LayerNormAten_v1 (quarantine lane cov-ln; torch 2.13 vectorized_layer_norm_kernel)")
+                    evidence_domain="structural; numerics: LayerNormAten_v1 (quarantine; torch 2.13 vectorized_layer_norm_kernel)")
 
     def targets(self):
         return {aten.layer_norm.default}

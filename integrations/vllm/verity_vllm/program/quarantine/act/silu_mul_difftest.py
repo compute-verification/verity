@@ -3,7 +3,7 @@
     verity-vllm properties-admission produce --adapter verity_vllm.program.quarantine.act.silu_mul_difftest --n 60 --seed 7 --out DIR
     verity-vllm properties-admission check   --adapter verity_vllm.program.quarantine.act.silu_mul_difftest --dir DIR --out quarantine.json
 
-The row cycles through the generic edge kinds and, every sixth case, explicit words: gates over the red-team's edge classes
+The row cycles through the generic edge kinds and, every sixth case, explicit words: gates over the adversarial edge classes
 (+-0, +-inf, NaN, -88.5 / -89 / -100 around expf's overflow, subnormals, ordinary) against ups of +-0, +-1, +-inf and NaN.
 I = 8 is the vec path's unit of 8 bf16 lanes; 11 leaves a scalar tail; 8192 is Llama-3.2-1B's intermediate size.
 """

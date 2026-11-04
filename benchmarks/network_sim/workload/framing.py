@@ -12,11 +12,11 @@ frame says nothing of the message it belongs to. φ, which is public, fixes wher
 connection carries its messages in send order, each in `frame_count` frames.
 
 **Declared traffic D.** Each connection (source unit, destination unit) opens with one `HELLO` frame, the `data_frames`
-of the two units' indices (u16 each, big-endian) in `Hardware.unit_names` order: a function of public data, so it
+of the two units' indices (u16 each, big-endian) in `DeviceGraph.unit_names` order: a function of public data, so it
 carries nothing. A frame therefore has room for at least `HELLO.size` payload bytes.
 
 **Links and buckets.** A message crosses the certified unit boundaries on the route from its first edge's source leaf to its
-destination leaf (`Hardware.watched`), and on each its frames are counted in the bucket of the message's read tick, at the
+destination leaf (`DeviceGraph.watched`), and on each its frames are counted in the bucket of the message's read tick, at the
 reader's tick as `Placed.readOn` counts what a link delivers. A source sends its messages in send order (ready tick, then
 stream), and a connection's `HELLO` goes ahead of, and is counted with, the first message sent on it (`openers`).
 
@@ -31,7 +31,7 @@ from dataclasses import dataclass
 
 from verity.core.protocols.certifier.active import HEADER, data_frames, request_placement
 
-from .hardware import Hardware
+from .hardware import DeviceGraph
 from .placement import Edge
 
 HELLO = struct.Struct(">HH")
@@ -110,17 +110,17 @@ def frame_count(m: Message, frame_bytes: int) -> int:
     return max(1, -(-m.nbytes // room(frame_bytes)))
 
 
-def hello_data(hw: Hardware, src: str, dst: str) -> bytes:
+def hello_data(hw: DeviceGraph, src: str, dst: str) -> bytes:
     names = hw.unit_names()
     return HELLO.pack(names.index(src), names.index(dst))
 
 
-def hello(hw: Hardware, src: str, dst: str, frame_bytes: int) -> bytes:
+def hello(hw: DeviceGraph, src: str, dst: str, frame_bytes: int) -> bytes:
     (f,) = cut(hello_data(hw, src, dst), frame_bytes)
     return f
 
 
-def read_hello(hw: Hardware, frame: bytes) -> tuple[str, str] | None:
+def read_hello(hw: DeviceGraph, frame: bytes) -> tuple[str, str] | None:
     """(source unit, destination unit) of a `HELLO` frame, or None."""
     names = hw.unit_names()
     if len(frame) < HEADER.size + HELLO.size:
@@ -145,7 +145,7 @@ class Slot:
 
 @dataclass(frozen=True)
 class Phi:
-    hw: Hardware
+    hw: DeviceGraph
     frame_bytes: int
     messages: tuple[Message, ...]
 
@@ -164,7 +164,7 @@ class Phi:
         return out
 
     def route(self, m: Message) -> list[str]:
-        """The certified link directions message m crosses, by `Hardware.key`."""
+        """The certified link directions message m crosses, by `DeviceGraph.key`."""
         e = m.edges[0]
         return [self.hw.key(link, to) for link, to in self.hw.watched(e.src_leaf, e.dst_leaf)]
 
@@ -194,7 +194,7 @@ class Phi:
         return cut(encode(m, value), self.frame_bytes)
 
 
-def phi(hw: Hardware, edges: list[Edge], frame_bytes: int) -> Phi:
+def phi(hw: DeviceGraph, edges: list[Edge], frame_bytes: int) -> Phi:
     if frame_bytes < HEADER.size + HELLO.size:
         raise ValueError(f"a frame is at least {HEADER.size + HELLO.size} bytes, to hold a HELLO; not {frame_bytes}")
     return Phi(hw, frame_bytes, tuple(messages(edges)))

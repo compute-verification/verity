@@ -9,7 +9,7 @@ C1, a draw that depends on the registration, is already expressed on main: `Floc
 `ExtractionAnalysis` of the whole window with state-dependent `ε_ks(R, τ)` and `δ_link(R, τ)`. This module's own content
 is M2: what the window's `κ`, `coll(R, τ)` and `δ_link(R, τ)` are in terms of its calls', for a window of `C` calls,
 registered at once, drawn at once by a law that depends on the registration, and proved call by call (`Pouw.Window`).
-Stated, not proved: the order is statement, red team, card, then proof, so `lean-audit.json` lists
+Stated, not proved: the order is statement, review, card, then proof, so `lean-audit.json` lists
 `WindowEps` and `ServiceEscapes` under `shape.frozen` as `unstated`.
 
 * `WindowEps`: `Pr[accept ∧ wrong(X) ∈ 𝓑] ≤ sup_{B ∈ 𝓑} escape_{∏ L_c(R)}(B) + η + max_c κ_c + coll(R, τ) +
@@ -52,7 +52,7 @@ decision 101's keyed draw) is retired.
   `rateZ = N₀/(ek)` (`Pouw.Window.flockKnowledgeSound_analysisZC`, proved, read through the bridge below).
   `ksJoint_le` (`κ = 2^logLen/(e·Kr)`) is the non-ZK plain-leaf table's, which main's window doesn't run.
 * `LinkSoundIn … σ (δlink σ)`: C-Flock's link finder at the window's state, over the window's run.
-* `coll`: the random-oracle card's collision bound at the sessions' counted queries (`CollCounted`, premise, open), on
+* `coll`: the random-oracle claim's collision bound at the sessions' counted queries (`CollCounted`, premise, open), on
   average over the oracle; `WindowEps`'s bound at each oracle reads it through `Pouw.Window.avg_counted_le` (proved).
   It holds only where the plays are one oracle program's run at each oracle, counted by that program's calls. As
   stated, over a separate play at each oracle with a free count, it is false at a true count (a play holding a

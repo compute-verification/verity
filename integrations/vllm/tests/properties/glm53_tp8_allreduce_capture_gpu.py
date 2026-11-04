@@ -59,7 +59,7 @@ path, deterministically, with every rank's words equal and the references equal.
 launches, its probe's trees and FTZ, and its dispatch.  ``coverage`` lists, per setting, hidden size and route, the token counts
 whose launches were GO: what `tp_allreduce.CAPTURED` may then cite, with this run's id.
 
-    cd integrations/vllm; PY=/workspace/cp/venv312/bin/python  # vy-glm53-h8's venv; PYTHONPATH as verity_vllm/ops/pod_bootstrap.sh sets it
+    cd integrations/vllm; PY=/workspace/cp/venv312/bin/python  # the H200 pod's venv; PYTHONPATH as verity_vllm/ops/pod_bootstrap.sh sets it
     export CUDA_HOME=/usr/local/cuda PATH=/workspace/cp/venv312/bin:/usr/local/cuda/bin:$PATH
     $PY tests/properties/glm53_tp8_allreduce_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--served workload|custom-off]
         [--only fused,allreduce,probe,again,switch,h7168,h7168_probe]

@@ -4,7 +4,7 @@ import Definitions.Pouw.PearlC.Fp4Chain
 /-!
 # Pearl-C4's replayed debit: the lone-skip flags and the dead × dead block pairs (definitions only)
 
-Terms 2 and 3 of TT_OUT-FP4's debit (`internal/pouw/rtx-pro/theory-pearl-c4-domain.md` §2), over any `Fp4Atom` and its
+Terms 2 and 3 of TT_OUT-FP4's debit, over any `Fp4Atom` and its
 chain `Fp4Atom.chain` (no promotion): `sm120Nvf4` for `pearl-c-nvfp4-v0`, `sm120Mxf4` for `pearl-c-mxfp4-v0`. Their
 soundness, and the exactness lemma that ties term 2 to zero-sum atoms, are in `Pouw.PearlC.Fp4Freeze`; this module
 imports no proofs, so the device record may read it.
@@ -13,10 +13,9 @@ imports no proofs, so the device record may read it.
   Atom `t` of a chain is flagged when the chain is in the model and skipping `t` alone, in place (its incoming word
   passes through, `skipOne`), leaves the chain's final word unchanged. Computed by replay (`chainMask`).
 * **Term 3, the dead × dead pairs** (`dead`, `deadPair`): D-SS's `dead(b)` (theory §1; `pearl_c4.dead_blocks`), k-block
-  `β` of a clean row `x` is dead when `amax_β² > 90·ρ²` (exactly 90, about 9.49ρ: the row rule's screen, ruled 10:40Z;
-  was 144), with `ρ²` the exact mean of `x_l²` over `l = 0, 8, 16, …`
-  (`rhoSq`, `pearl_c4._exact_rho_sq`). It reads the clean row alone, so it is salt-free. A pair is dead on both A's row
-  and B's row.
+  `β` of a clean row `x` is dead when `amax_β² > 90·ρ²` (exactly 90, about 9.49ρ: the row rule's screen), with `ρ²` the
+  exact mean of `x_l²` over `l = 0, 8, 16, …` (`rhoSq`, `pearl_c4._exact_rho_sq`). It reads the clean row alone, so it
+  is salt-free. A pair is dead on both A's row and B's row.
 * **The counts** (`atomWords`, `pairWords`) over a tile `rows × cols` (`Finset.univ` for the unit), and the debits at a
   price per atom-word (`pureDebit`, 64 at one unit per MAC) and per pair-word (`deadDebit`, 16 on NVFP4).
 * **A block's contribution** (`blockTerms`): the group terms of k-block `β`'s groups, as the atom holding it reads them;
@@ -93,7 +92,7 @@ def blockAmax (p : Fp4Atom) (x : Fin k → ℚ) (β : ℕ) : ℚ :=
   (((List.finRange k).filter fun l => l.val / p.block = β).map fun l => |x l|).foldl max 0
 
 /-- **`dead(b)`** (D-SS, theory §1; `pearl_c4.dead_blocks`): k-block `β` of the clean row `x` is dead when
-`amax_β² > 90·ρ²` (exactly 90, about 9.49ρ; ruled 10:40Z, was 144), i.e. the noise `σ = ρ/4` is below `3/(2√90) ≈ 0.16`
+`amax_β² > 90·ρ²` (exactly 90, about 9.49ρ), i.e. the noise `σ = ρ/4` is below `3/(2√90) ≈ 0.16`
 of the block's code step. It is the row rule's screen, the one term 3's soundness needs. A salt-free screen: it reads
 the clean row alone. -/
 def dead (p : Fp4Atom) (x : Fin k → ℚ) (β : ℕ) : Bool := decide (90 * rhoSq x < blockAmax p x β ^ 2)

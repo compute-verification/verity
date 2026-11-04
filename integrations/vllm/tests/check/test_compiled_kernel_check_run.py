@@ -103,4 +103,4 @@ def test_run_record_is_pinned(monkeypatch) -> None:
 
 
 #: SHA-256 of the whole record as `json.dumps` writes it (key order included), "seconds" removed.
-RECORD_SHA256 = "a578b2e7adc2a724f2edf5d71a94d84af7c7c3ca5dded0a95ca3d62e13a75d1b"
+RECORD_SHA256 = "98b9fba9c7f1d7658c874d6904bd9aa0f55079015c736d1a6de87fab45c6795f"

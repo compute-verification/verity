@@ -1,7 +1,7 @@
 [
   {
     "id": "world-inference-2027",
-    "label": "all inference worldwide over a one-year monitoring period, at its Sept 2027 rate (Daniel's 3-pager)",
+    "label": "all inference worldwide over a one-year monitoring period, at its Sept 2027 rate (the 3-pager in its sources)",
     "role": "reference",
     "monitoring_period_s": 31536000,
     "requests": 21224489795918368,
@@ -16,10 +16,10 @@
     "h100_equivalents": 3e7,
     "flop_per_s_per_h100": 2e15,
     "growth_per_year": 3.3,
-    "note": "The base, 3e7 H100-equivalents x 2e15 FLOP/s x one year = 1.89e30 FLOP, is the rate at the base date; grown 3.3x a year for about 16 months to Sept 2027 (x4.95, 3.3^1.34), it gives requests x flop_per_request = 9.36e30 FLOP a year, the annual rate at Sept 2027 and the figure of record (the compute-research coordinator's reconciliation, 26 Oct, at Daniel's request).",
+    "note": "The base, 3e7 H100-equivalents x 2e15 FLOP/s x one year = 1.89e30 FLOP, is the rate at the base date; grown 3.3x a year for about 16 months to Sept 2027 (x4.95, 3.3^1.34), it gives requests x flop_per_request = 9.36e30 FLOP a year, the annual rate at Sept 2027 and the figure of record.",
     "sources": [
       {
-        "label": "Daniel's 3-pager \"Computational integrity via sampled zero-knowledge proofs\", workload model: all inference worldwide, one-year horizon (Daniel, 25 Oct 2026, 7:11 PM PDT: the adversary's compute is \"the whole world's compute, basically\")",
+        "label": "the 3-pager \"Computational integrity via sampled zero-knowledge proofs\", workload model: all inference worldwide, one-year horizon: the adversary's compute is the whole world's compute",
         "href": "https://app.notion.com/p/3e6399515d9e80bb86a6fea6920829ec"
       },
       {

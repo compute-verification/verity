@@ -311,14 +311,14 @@
    "when": "CUBLAS_WORKSPACE_CONFIG=:16:8 and CUBLASLT_WORKSPACE_SIZE=1 before the first cuBLAS handle, allow_fp16/bf16_reduced_precision_reduction = (False, False) and preferred_blas_library('cublaslt') on every rank (vLLM's batch-invariant cuBLAS settings on cc 9.0 without its Triton overrides); not yet set by the served engine"
   },
   "cublas-f32-out": {
-   "status": "tonight",
+   "status": "pending",
    "definitions": [],
    "note": "torch.mm(x, W.T, out_dtype=float32) on bf16 (the compressors' kv / score GEMMs, K = 7168, N = 4 * HD, 2 * HD or 4 * ID): cublas_bf16.GemmF32Out_v1{K, N, HopperBF16WgmmaDot16_v1} (Boolean _v2) on workstream A's branch, at GLM-5.3's shapes; these shapes need its capture too",
    "branch": "cursor/glm53-committed-ops-8c79",
    "when": "CUBLAS_WORKSPACE_CONFIG=:16:8 and CUBLASLT_WORKSPACE_SIZE=1 before the first cuBLAS handle, allow_fp16/bf16_reduced_precision_reduction = (False, False) and preferred_blas_library('cublaslt') on every rank (vLLM's batch-invariant cuBLAS settings on cc 9.0 without its Triton overrides); not yet set by the served engine"
   },
   "router-gemm": {
-   "status": "tonight",
+   "status": "pending",
    "definitions": [],
    "note": "GateLinear bf16 x bf16 -> f32 (N = E = 384, K = H = 7168): M <= 16 the cuteDSL ll_bf16_gemm (ll_bf16.LlBf16DotprodGemm / LlBf16SplitKGemm on workstream A's branch; its dispatch and split at these statics must be captured), above that cublas-f32-out",
    "branch": "cursor/glm53-committed-ops-8c79"
@@ -335,14 +335,14 @@
    "when": "vLLM's all-reduce defaults (target.switches) and calls of at most 2048 tokens: every decode step; a prefill step past 2048 tokens (the target leaves max_num_batched_tokens at vLLM's default) is not covered, nor is NCCL"
   },
   "fp8-block-linear-flashinfer": {
-   "status": "tonight",
+   "status": "pending",
    "definitions": [],
    "note": "FlashInferFp8DeepGEMMDynamicBlockScaledKernel's M < 32 branch: FlashInfer fp8_blockscale_gemm quantises the bf16 input itself (scale_1x128_kernel: f32 scales per 1x128, not ue8m0; neither its words nor its scales leave the op) and runs TRT-LLM's swapAB GEMM against the checkpoint's e4m3 weight and its e8m0 128x128 block scales upcast to f32: per output the wgmma e4m3 k32 chain of each 128-wide K block, promoted into an f32 accumulator with the product of the two scales, rounded to bf16. FlashInferFp8Linear_v1{K, N} (FlashInferFp8Quant1x128_v1{K}, then fp8.ScaledMmFp8BlockCoordinate_v1 per output word). Row SHARED-DG",
    "when": "route fp8-swapab: M < 32, every decode step of the serve and a prefill step of fewer than 32 tokens",
    "branch": "cursor/deepgemm-sm90-8c79"
   },
   "fp8-block-linear-deepgemm": {
-   "status": "tonight",
+   "status": "pending",
    "definitions": [],
    "note": "FlashInferFp8DeepGEMMDynamicBlockScaledKernel's M >= 32 branch: per_token_group_quant_fp8 of the input with ue8m0 (power-of-two) scales per 1x128 (Fp8GroupQuantUe8m0_v1{K, 128}), then DeepGEMM sm90 fp8_gemm_nt against the same weight and scales, the same GEMM chain. DeepGemmFp8Linear_v1{K, N}. Row SHARED-DG",
    "alternative_to": "fp8-block-linear-flashinfer",
@@ -350,7 +350,7 @@
    "branch": "cursor/deepgemm-sm90-8c79"
   },
   "fp8-einsum-deepgemm": {
-   "status": "tonight",
+   "status": "pending",
    "definitions": [],
    "note": "DeepGEMM fp8_einsum('bhr,hdr->bhd', recipe (1, 128, 128)) on one token: per o-group g, z[g] = the block-FP8 product of o_fp8[g] (scales o_scale[g], fused_inv_rope_fp8_quant's) and wo_a's weight rows of group g (e4m3, its e8m0 128x128 block scales upcast to f32 and reshaped to [OGL, OL / 128, HPG * HD / 128] at load, deepgemm_post_process_fp8_weight_block(is_bmm=True)), bf16 out. ScaledMmFp8BlockGrouped_v1{H, K, N, G} at H = OGL, K = HPG * HD, N = OL, G = 128. Row SHARED-DG",
    "branch": "cursor/deepgemm-sm90-8c79"

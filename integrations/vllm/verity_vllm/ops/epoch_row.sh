@@ -1,17 +1,17 @@
 #!/bin/bash
-# epoch_row.sh: one re-baseline row inside its `research run` job on a pod, with every stop the row's outcome depends on in the job.
+# epoch_row.sh: one re-baseline workload inside its `research run` job on a pod, with every stop its outcome depends on in the job.
 #
 #   research run --on <pod> --project verity --campaign <campaign> --custody-r2 --custody-ttl <T> --timeout <S> \
 #     --source <clean worktree at EPOCH_SHA> --cwd source/integrations/vllm \
-#     --env ROW=<row id> --env ROWNUM=<n> --env CLASS=<GREEN|FAIL> --env EPOCH_SHA=<sha> [--env K=V ...] \
+#     --env ROW=<workload id> --env ROWNUM=<n> --env CLASS=<GREEN|FAIL> --env EPOCH_SHA=<sha> [--env K=V ...] \
 #     -- bash verity_vllm/ops/epoch_row.sh
 #
-# One line per step in evidence/progress.txt; "STOP <why>" ends the row, and every stop, deadline or signal ends the same way (`finish`):
-# the row's small files, the store (epoch_store.sh: Build + records as fixture/v1 trees, `research data put --preserve`, then
+# One line per step in evidence/progress.txt; "STOP <why>" ends the workload, and every stop, deadline or signal ends the same way (`finish`):
+# the workload's small files, the store (epoch_store.sh: Build + records as fixture/v1 trees, `research data put --preserve`, then
 # `research data preserved` on what it stored), the digests, "END".  Nothing the outcome depends on runs off the pod.
 #   0 guard      the shipped tree is EPOCH_SHA; no epoch default is switched off; the custody key outlives the run's timeout by >= 1 h
-#   1 bootstrap  B0 + the row's checkpoint role (epoch_failfast.sh: pod_bootstrap.sh under the 15-minute fail-fast)
-#   2 Build, Match (`verity-vllm row run --stages build`, `--stages match`); a GREEN row whose Match FAILs stops (deferred)
+#   1 bootstrap  B0 + the workload's checkpoint role (epoch_failfast.sh: pod_bootstrap.sh under the 15-minute fail-fast)
+#   2 Build, Match (`verity-vllm row run --stages build`, `--stages match`); a GREEN workload whose Match FAILs stops (deferred)
 #   3 word check `verity-vllm epoch word-check`, from the Build's own manifest step
 #   4 Commit     `verity-vllm row run --stages commit` (manifest-verify and the verdict record inside)
 #   5 store      as in `finish`; then `rebaseline run` (candidate = this sweep; the frozen reference from the store)
@@ -19,14 +19,14 @@
 # Deadlines (epoch seconds are compared, UTC stamps accepted): the job ends its last stage STORE_RESERVE_S (default 2400) before the run's
 # timeout (status.json's start + timeout_s, or control/timeout_s after `tele set-timeout`), or at JOB_DEADLINE_UTC if that is earlier;
 # DEADLINE_BUILD / DEADLINE_MATCH / DEADLINE_COMMIT end one stage earlier still.  A stage still running then is stopped (TERM, then KILL
-# after 120 s) and the row stops "STOP <stage>: deadline" (exit 124).  STOP_AFTER=build|match stops the row after that stage (exit 23).
-# The record stage runs after the store, whose reserve it no longer holds back: it ends FINISH_RESERVE_S (default 300) before the run's
+# after 120 s) and the workload stops "STOP <stage>: deadline" (exit 124).  STOP_AFTER=build|match stops it after that stage (exit 23).
+# The record stage runs after the store, outside the store's reserve: it ends FINISH_RESERVE_S (default 300) before the run's
 # timeout, or at DEADLINE_RECORD if that is earlier (the job's end when the run has no timeout); stopped, it is "rebaseline run rc=124".
 # EPOCH_NOW (epoch seconds, or @FILE holding them, read at every use) fixes the "now" these deadlines are measured from; a stage's own
 # timeout still runs from its start.
 # Env: PY (/workspace/venv312/bin/python; `verity-vllm` is the launcher beside it), SWEEP_DIR (/workspace/epoch/sweep), RESEARCH_STORE
 # (/workspace/epoch/store), RESEARCH_CLI (`python3 -m research`), EPOCH_BOOTSTRAP (`bash verity_vllm/ops/epoch_failfast.sh`),
-# ALLOWED_QWORD_MAX_GATES (a GO's one allowed VERITY_QWORD_MAX_GATES value for the row).  Everything this script asks of Python is a
+# ALLOWED_QWORD_MAX_GATES (a GO's one allowed VERITY_QWORD_MAX_GATES value for the workload).  Everything this script asks of Python is a
 # `verity-vllm epoch` subcommand.  The sweep is outside the run dir: custody uploads every run-dir file, so evidence/ holds only small files.
 set -u
 export EV=$RESEARCH_RUN_DIR/evidence; mkdir -p "$EV"
@@ -77,7 +77,7 @@ run_stage() {  # run_stage STAGE LOG CMD...: CMD in the background under the sta
   return $rc
 }
 
-small() {   # the row's small files into evidence/ (idempotent; called after each step)
+small() {   # the workload's small files into evidence/ (idempotent; called after each step)
   mkdir -p "$EV/row"
   for f in stages.txt row.log timeline.jsonl build_summary.json verdict.json target_family.json admission.json manifest.log \
            match_summary.json global_match.json commit/manifest_verify.json commit/verdict.json commit/summary.json commit/runs.jsonl; do
@@ -86,7 +86,7 @@ small() {   # the row's small files into evidence/ (idempotent; called after eac
   read -r FAMS OUTCOME MANIFEST_VERIFY < <("$VV" epoch row-state "$D" --header "$EV/row/manifest_header.json" 2>/dev/null)
 }
 src=0
-store() {  # once per run, whenever a Build exists: deferred rows keep their Build too
+store() {  # once per run, whenever a Build exists: deferred workloads keep their Build too
   [ -f "$D/build_summary.json" ] || [ -d "$D/build" ] || return 0
   [ -f "$EV/stored" ] && return 0
   bash "$OPS/epoch_store.sh" "$D" > "$EV/store.log" 2>&1
@@ -110,8 +110,8 @@ for v in NORM_TAP GUARDED_MAX_TAP ROUTER_TAP VOCAB_TAP ROW_TAPS; do
   [ "${!v:-1}" = "1" ] || stop 3 "guard: $v=${!v} switches an epoch default off"
 done
 case "${VERITY_WORD_CHECK:-16/32}" in 16/32) ;; *) stop 3 "guard: VERITY_WORD_CHECK=$VERITY_WORD_CHECK is not the record's 16/32";; esac
-[ -z "${VERITY_QUERY_ID:-}" ] || stop 3 "guard: VERITY_QUERY_ID is set ($VERITY_QUERY_ID); the row runs the query of record"
-[ -z "${TARGET_FAMILY_WAIVER:-}" ] || stop 3 "guard: a row of record carries no target-family waiver"
+[ -z "${VERITY_QUERY_ID:-}" ] || stop 3 "guard: VERITY_QUERY_ID is set ($VERITY_QUERY_ID); the workload runs the query of record"
+[ -z "${TARGET_FAMILY_WAIVER:-}" ] || stop 3 "guard: a workload of record carries no target-family waiver"
 expires=$KEY_EXPIRES
 [ -n "$expires" ] || stop 3 "guard: no custody key at $CUSTODY_DIR (the store could not run)"
 [ -z "$RUN_END" ] || [ "$(epoch_of "$expires")" -ge $(( RUN_END + 3600 )) ] \

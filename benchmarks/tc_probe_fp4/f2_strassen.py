@@ -55,8 +55,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import f1_rates as F1  # noqa: E402
 import f3_lut as F3  # noqa: E402
-from emulation import E  # noqa: E402
 import probe as P  # noqa: E402
+import vec as V  # noqa: E402
 from verity_config.settings import SHARED  # noqa: E402
 
 ARCH = "sm_120a"
@@ -157,7 +157,7 @@ def group_halves(ops: F3.Operands, sh: Shape, b: int) -> tuple[np.ndarray, np.nd
 
 
 def scale_values(scales: np.ndarray) -> np.ndarray:
-    m, e = E.ue4m3_dyadic(scales.astype(np.int64))
+    m, e = V.ue4m3_dyadic(scales.astype(np.int64))
     return m * np.exp2(e.astype(np.float64))
 
 
@@ -223,8 +223,8 @@ def tile_terms(ops: F3.Operands, sh: Shape) -> tuple[np.ndarray, np.ndarray, np.
     w = F3.E2M1_HALVES[ops.wcodes[0]].reshape(-1, 4, 16)[tile_cols(sh)]
     gd = np.einsum("tibk,tjbk->tijb", a, w)
     anyp = np.einsum("tibk,tjbk->tijb", (a != 0).astype(np.int64), (w != 0).astype(np.int64)) > 0
-    ma, ea = E.ue4m3_dyadic(ops.ascale.astype(np.int64))
-    mb, eb = E.ue4m3_dyadic(ops.wscale[0].astype(np.int64))
+    ma, ea = V.ue4m3_dyadic(ops.ascale.astype(np.int64))
+    mb, eb = V.ue4m3_dyadic(ops.wscale[0].astype(np.int64))
     ma, ea = ma.reshape(NTILES, sh.tm, 4), ea.reshape(NTILES, sh.tm, 4)
     mb, eb = mb[tile_cols(sh)], eb[tile_cols(sh)]
     mm = ma[:, :, None, :] * mb[:, None, :, :]
@@ -390,7 +390,7 @@ class FakeF2:
     """CPU stand-in for the dry run: the Strassen kernel is emulated through the packed fragments (unpacked, multiplied per product
     and recombined by W), the native arm is the vectorised pinned model on the packed codes, the step the same model on the given
     group dots.  Its rates are invented (TF32 m16n8k8 at 256 and m16n8k4 at 128 products per SM per clock, NVFP4 at 2,048);
-    ``--fake-silicon`` never runs under a research run."""
+    ``--fake-silicon`` never runs with ``RESEARCH_RUN_ID`` set."""
 
     SMS, MHZ = 64, 2000.0   # 64 SMs x one 4-warp block: a warp per tile
     TPB = 128
@@ -804,7 +804,7 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--tolerance", type=float, default=0.02)
     args = ap.parse_args(argv)
     if getattr(args, "fake_silicon", False) and SHARED.RESEARCH_RUN_ID:
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     return {"build": build_cmd, "run": run_level, "collect": collect}[args.cmd](args)
 
 

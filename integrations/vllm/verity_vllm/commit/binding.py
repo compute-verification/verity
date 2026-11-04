@@ -207,8 +207,8 @@ def map_index(bmap: dict[str, Any]) -> dict[tuple, list[dict[str, Any]]]:
 def _op_key_index(idx: dict[tuple, Any]) -> dict[tuple, list[tuple]]:
     """(request, step, invocation, op_path, rank) -> the map keys of every member of that op, in map order.  The
     member-`*` identities (one per request x step x attention layer for the hidden family) used to scan the WHOLE index each: O(|*| x |map|)
-    = 132,096 x ~890k at B64 llama32-1b 1024/128 -- the serving thread sat hours at 100% CPU in coverage_check AFTER the run (attempt 2/3 of
-    the #23 device diagnostic, cp-r18-l40u 22:2xZ; B8: 16,512 x 111k, a few minutes, unnoticed).  Same keys, same order, built once."""
+    = 132,096 x ~890k at B64 llama32-1b 1024/128 -- the serving thread sat hours at 100% CPU in coverage_check AFTER the run (B8:
+    16,512 x 111k, a few minutes, unnoticed).  Same keys, same order, built once."""
     out: dict[tuple, list[tuple]] = {}
     for k in idx:
         out.setdefault((k[0], k[1], k[2], k[3], k[5]), []).append(k)
@@ -736,11 +736,10 @@ def composition_check(man_hdr: dict[str, Any], bmap: dict[str, Any], *, max_repo
 # ---------------------------------------------------------------------- sampling from the expected population
 
 def challenge_identities(population: Iterable[tuple], bmap: dict[str, Any], run_root: bytes, k: int, *, salt: bytes = b"",
-                         forced_late_step: bool = True, legacy: bool = CH.LEGACY,
-                         source: bytes | None = None) -> list[tuple[tuple, dict[str, Any], int]]:
+                         forced_late_step: bool = True, source: bytes | None) -> list[tuple[tuple, dict[str, Any], int]]:
     """Draw `k` identities from the EXPECTED population (not from the leaves that exist) with `challenge.identity_picker` over
-    (run_root, map digest, salt); map each to one committed leaf of its binding (a leaf chosen by the same picker inside the entry's
-    leaf range).  Forced picks: the
+    (source, run_root, map digest, salt), `source` the run's identities coin; map each to one committed leaf of its binding
+    (a leaf chosen by the same picker inside the entry's leaf range).  Forced picks: the
     last step and one identity of every op class family present.  Returns [(identity, entry, leaf_index)]; an identity WITHOUT a
     binding is returned with entry None (the opening then fails -- coverage and openings are both fail-closed)."""
     pop = sorted(p for p in set(population) if p[2] >= 0)      # leaf-bound identities only (registered inputs open by digest, not by leaf)
@@ -748,7 +747,7 @@ def challenge_identities(population: Iterable[tuple], bmap: dict[str, Any], run_
         return []
     idx = {kk: [e for e in es if e.get("kind") == "leaf"] for kk, es in map_index(bmap).items()}
     idx = {kk: es for kk, es in idx.items() if es}
-    pick = CH.identity_picker(run_root, bmap["digest"], salt, legacy=legacy, source=source)
+    pick = CH.identity_picker(run_root, bmap["digest"], salt, source=source)
 
     chosen: list[tuple] = [pop[pick(i, len(pop))] for i in range(k)]
     if forced_late_step:

@@ -1,5 +1,4 @@
-"""Channels: ordered pipes of frames between two parties, untrusted by both
-(`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3` §2, §4.4). The runtime holds one end of a pipe per party
+"""Channels: ordered pipes of frames between two parties, untrusted by both. The runtime holds one end of a pipe per party
 and channel:
 
 - `MemoryPipe`: in one process, for tests and for the parties of one machine; in a simulated run each frame arrives
@@ -29,7 +28,7 @@ from typing import Protocol
 from verity.core.wire import HEADER, MAX_HEAD, FrameReader, Refused
 
 from .sources import VirtualTime
-from .transcript import Transcript
+from .transcript import PartyLog
 
 
 class Pipe(Protocol):
@@ -299,7 +298,7 @@ class Playback:
 
     ended = None
 
-    def __init__(self, recorded: Transcript, channel: str) -> None:
+    def __init__(self, recorded: PartyLog, channel: str) -> None:
         self.recorded, self.channel = recorded.party, channel
         self.entries = [e for e in recorded.on(channel) if e.dir in ("in", "out")]
         if any(e.elided and e.dir == "out" for e in self.entries):
@@ -338,7 +337,7 @@ class Tee:
     """The transcript writer: `pipe`, with every frame sent through it and taken from it appended to `transcript` (`out`
     and `in` on `channel`, of kind `kind`)."""
 
-    def __init__(self, pipe: Pipe, transcript: Transcript, channel: str, kind: str = "private") -> None:
+    def __init__(self, pipe: Pipe, transcript: PartyLog, channel: str, kind: str = "private") -> None:
         self.pipe, self.transcript, self.channel, self.kind = pipe, transcript, channel, kind
 
     def send(self, frame: bytes) -> None:

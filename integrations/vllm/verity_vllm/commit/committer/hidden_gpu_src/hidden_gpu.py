@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""R9 cmt-hidden: GPU-resident commitment path (option (c)) over the M1 stream and the H1 digests.
+"""GPU-resident commitment path (option (c)) over the M1 stream and the H1 digests.
 
   verity-vllm hidden-gpu check  --out J          root of the GPU chunk tree == hidden_stream.commit_stream (hashlib) on random streams;
                                         tree_levels over synthetic H1 digests == ThreadLeafCommitment; openings served from the

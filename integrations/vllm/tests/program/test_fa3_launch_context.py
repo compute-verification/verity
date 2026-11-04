@@ -1,4 +1,4 @@
-"""[R15 hopper HOP-03, M-0225] The FA3 tile rule reads the LAUNCH's max_seqlen_q, not the request's own rows.
+"""The FA3 tile rule reads the LAUNCH's max_seqlen_q, not the request's own rows.
 
 Torch-free: the registry helpers (`parse_launch_context`, `launch_seqlen_q`, `attention_geometry` on a cc 9.0 / cc 8.9 profile) and the
 workload-side derivation (`verity_vllm.pipeline.launch_context`).  The measured case: Llama-3.2-1B (NH 32, KVH 8, D 64: g = 4) -- an 8-token
@@ -41,10 +41,10 @@ def test_launch_seqlen_q_is_the_launch_max_never_below_own_rows():
     assert TG.launch_seqlen_q(8, 0, ctx) == (1024, "declared launch context")
     # its decode steps: everyone decodes -> 1
     assert TG.launch_seqlen_q(1, 1, ctx) == (1, "declared launch context")
-    # [HOP-03b, rev-pm M-0326 T2] a context BELOW the request's own rows is another shape's context: refused, never corrected to max()
+    # a context BELOW the request's own rows is another shape's context: refused, never corrected to max()
     with pytest.raises(TG.LaunchContextInvalid):
         TG.launch_seqlen_q(1024, 0, TG.parse_launch_context([8]))
-    # [HOP-03b, rev-pm M-0326 T1] a step the context does not name is refused, never completed with own rows (the M-0225 bug via a truncated CLI)
+    # a step the context does not name is refused, never completed with own rows (a truncated CLI context would otherwise pick the own-rows tile)
     with pytest.raises(TG.LaunchContextInvalid):
         TG.launch_seqlen_q(1, 7, ctx)
     with pytest.raises(TG.LaunchContextConflict):
@@ -57,7 +57,7 @@ def test_fa3_tile_flips_with_the_launch_context_fa2_does_not():
     NH, KVH, D = 32, 8, 64
     alone = TG.attention_geometry(h100, D, TG.launch_seqlen_q(8, 0, None)[0], NH, KVH)
     batched = TG.attention_geometry(h100, D, TG.launch_seqlen_q(8, 0, TG.parse_launch_context([1024, 1]))[0], NH, KVH)
-    assert alone["BN"] == 192 and batched["BN"] == 128           # M-0225: the measured divergence, derived vs observed
+    assert alone["BN"] == 192 and batched["BN"] == 128           # the measured divergence, derived vs observed
     long_alone = TG.attention_geometry(h100, D, TG.launch_seqlen_q(1024, 0, None)[0], NH, KVH)
     long_batched = TG.attention_geometry(h100, D, TG.launch_seqlen_q(1024, 0, TG.parse_launch_context([1024, 1]))[0], NH, KVH)
     assert long_alone["BN"] == long_batched["BN"] == 128        # LP * g > 64: the context changes nothing (digest unchanged)
@@ -125,7 +125,7 @@ def test_measured_workload_file():
 
 
 def test_unreadable_manifest_is_an_error_not_no_context():
-    # [HOP-03b, rev-pm M-0326 T3] a manifest the module cannot read raises (rc != 0 on the CLI); row_pod's launch_args() fails the shape's
+    # a manifest the module cannot read raises (rc != 0 on the CLI); row_pod's launch_args() fails the shape's
     # Build on rc != 0 instead of treating empty stdout as "no context" (which would build the H100 B >= 2 request Program as a batch of one).
     with pytest.raises((KeyError, TypeError, ValueError)):
         LC.shape_contexts({"requests": [{"foo": 1}]})

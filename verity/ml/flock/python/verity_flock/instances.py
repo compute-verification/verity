@@ -30,9 +30,6 @@ K = 1536
 #: the frame-v3 binding tag and tree owners of B-Ligero's ``+blake3`` statements, which the frozen cells' roots are under
 BINDING_TAG = "verity/ligero-b/auth-binding/v2h"
 OWNER = {"a": -1, "b": -2, "y": -1}
-#: the ``vllm-v1`` port domains' tag and values (B-Ligero's ``+vllm-v1`` cells)
-VLLM_TAG = "verity/ligero-b/vllm-v1"
-VLLM_VALUES = {"a": "x-row", "b": "w-column", "y": "y-word-le"}
 
 
 @dataclass(frozen=True)
@@ -125,32 +122,6 @@ def binding_digest(*, dataset: str, tier: str, manifest_sha256: str, lo: int, hi
         raise ValueError(f"unknown tree {tree!r}")
     return bytes.fromhex(identity_digest(BINDING_TAG, {"dataset": dataset, "tier": tier, "manifest_sha256": manifest_sha256,
                                                        "lo": int(lo), "hi": int(hi), "K": int(K), "tree": tree, "schema": schema}))
-
-
-def _vllm_digest(kind: str, doc: dict) -> bytes:
-    from verity.ml.commitments import identity_digest
-    return bytes.fromhex(identity_digest(f"{VLLM_TAG}/{kind}/v1", doc))
-
-
-def vllm_ctx_digest(*, dataset: str, tier: str, manifest_sha256: str, lo: int, hi: int, tree: str) -> bytes:
-    """A ``vllm-v1`` port's context: the input set and range it commits."""
-    if tree not in VLLM_VALUES:
-        raise ValueError(f"unknown tree {tree!r}")
-    return _vllm_digest("ctx", {"dataset": dataset, "tier": tier, "manifest_sha256": manifest_sha256, "lo": int(lo),
-                                "hi": int(hi), "tree": tree})
-
-
-def vllm_domain(tree: str, ctx: bytes, count: int, *, K: int, word_bits: int, y_bytes: int):
-    """A ``vllm-v1`` port's ``StepDomain`` (PROTOCOL.md §9.1): program, ctx, geo and layout, fixed by the subcircuit, the
-    port and the set, never by the prover."""
-    from verity.ml.commitments import vllm_v1 as core
-
-    value_len = y_bytes if tree == "y" else K * word_bits // 8
-    program = _vllm_digest("program", {"scheme": core.NAME, "subcircuit": "gemm-coordinate", "K": int(K)})
-    geo = _vllm_digest("geo", {"K": int(K), "word_bits": int(word_bits), "row_bytes": K * word_bits // 8, "y_bytes": int(y_bytes)})
-    layout = _vllm_digest("layout", {"tree": tree, "leaf": "pos-leaf", "value": VLLM_VALUES[tree], "value_len": value_len,
-                                     "word_bits": int(8 * y_bytes if tree == "y" else word_bits)})
-    return core.StepDomain(program, bytes(ctx), geo, layout, int(count))
 
 
 def _frozen(rel):
@@ -266,7 +237,7 @@ def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0, leaf
     schemas = {"a": SCHEMES[leaf], "b": SCHEMES[leaf], "y": ysch}
     bind = {t: binding_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=manifest,
                                        lo=lo, hi=lo + n, K=K, tree=t, schema=schemas[t]) for t in "aby"}
-    dom = {n: CommitmentDomain(bind[n], OWNER[n], RangeIndexedDomain(0, counts[n])) for n in "aby"}
+    dom = {n: CommitmentDomain(bind[n], OWNER[n], RangeIndexedDomain(0, counts[n]), hash="sha256") for n in "aby"}
     fv = FrameV3({"a": Port(dom["a"], RowLeaf(leaf, ROLE_X, word_bits, K)),
                   "b": Port(dom["b"], RowLeaf(leaf, ROLE_W, word_bits, K)), "y": Port(dom["y"], WordLeaf(ysch, ybytes))})
     if leaf == "sha256":
@@ -292,48 +263,18 @@ def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0, leaf
             "y_bytes": ybytes, "y": y}
 
 
-def statement_vllm_v1(name: str, x, w, accs, total: int | None = None, lo: int = 0) -> dict:
-    """The three ``vllm-v1`` roots over the set's VUs ``[lo, lo + len(x))``: position-leaf trees of the x rows, the W
-    columns and the output words' ``y_bytes`` little-endian bytes, each root the step-root binding of its port's
-    ``StepDomain`` (PROTOCOL.md §4, §5). The domains are B-Ligero's (:func:`vllm_domain`: ctx = the set and range per
-    port), so a Flock cell binds the same three roots as a B-Ligero ``+vllm-v1`` cell on the same line did."""
-    from verity.ml.commitments import vllm_v1 as core
-
-    rel = _relation(name)
-    n = len(x)
-    total = n if total is None else total
-    word_bits = 16 if rel.word_dtype == "<u2" else 8
-    yb = word_schema(rel.y_bits)[1]
-    manifest = instances_digest(name, total)
-    y = [int(rel.y_public(int(a[-1]))) for a in accs]
-    rb = "<u2" if word_bits == 16 else "u1"
-    values = {"a": [np.ascontiguousarray(r.astype(rb)).tobytes() for r in x],
-              "b": [np.ascontiguousarray(r.astype(rb)).tobytes() for r in w],
-              "y": [v.to_bytes(yb, "little") for v in y]}
-    roots, digests, ctx = {}, {}, {}
-    for t in "aby":
-        ctx[t] = vllm_ctx_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=manifest, lo=lo,
-                                      hi=lo + n, tree=t)
-        dom = vllm_domain(t, ctx[t], n, K=K, word_bits=word_bits, y_bytes=yb)
-        roots[t] = dom.bind(core.fold([core.pos_leaf(v) for v in values[t]]))
-        digests[t] = core.domain_digest(dom)
-    return {"scheme": core.NAME, "roots": {t: roots[t].hex() for t in "aby"}, "domain_digests": {t: digests[t].hex() for t in "aby"},
-            "ctx": {t: ctx[t].hex() for t in "aby"}, "leaf": "pos-leaf", "y_bytes": yb, "y": y}
-
-
 def write(path: str | Path, name: str, total: int, procs: int = 1, cache: str | Path | None = None, lo: int = 0,
-          hi: int | None = None, scheme: str = "frame-v3", leaf: str = "blake3") -> dict:
-    """Write VUs ``[lo, hi)`` (default all) of the set's first ``total`` and their statement as a ``flock-pure-instances/v1``
-    file; returns the header. A sub-batch's instance reference keeps the whole batch's manifest and names its own range.
-    ``scheme`` is the commitment scheme the header's roots are under: ``frame-v3`` or ``vllm-v1``. A spine input set is
-    :func:`write_set`."""
+          hi: int | None = None, leaf: str = "blake3") -> dict:
+    """Write VUs ``[lo, hi)`` (default all) of the set's first ``total`` and their frame-v3 statement as a
+    ``flock-pure-instances/v1`` file; returns the header. A sub-batch's instance reference keeps the whole batch's manifest
+    and names its own range. A spine input set is :func:`write_set`."""
     from verity.ml.circuits.silicon.cast import f32_to_bf16_word
 
     rel = _relation(name)
     pipe = PIPES[name]
     hi = total if hi is None else hi
     x, w, accs = draw(name, total, procs, cache, lo, hi)
-    st = statement(name, x, w, accs, total, lo, leaf) if scheme == "frame-v3" else statement_vllm_v1(name, x, w, accs, total, lo)
+    st = statement(name, x, w, accs, total, lo, leaf)
     out = np.asarray([f32_to_bf16_word(int(a[-1])) if pipe.epilogue else int(a[-1]) for a in accs], dtype="<u4")
     ref = instances_ref(name, total)
     ref["range"] = [lo, hi]
@@ -362,7 +303,7 @@ def _frame_v3(dataset: str, tier: str, manifest: str, lo: int, K_: int, schema_r
     schemas = {"a": schema_row, "b": schema_row, "y": ysch}
     bind = {t: binding_digest(dataset=dataset, tier=tier, manifest_sha256=manifest, lo=lo, hi=lo + n, K=K_, tree=t,
                                        schema=schemas[t]) for t in "aby"}
-    dom = {t: CommitmentDomain(bind[t], OWNER[t], RangeIndexedDomain(0, n)) for t in "aby"}
+    dom = {t: CommitmentDomain(bind[t], OWNER[t], RangeIndexedDomain(0, n), hash="sha256") for t in "aby"}
     fv = FrameV3({"y": Port(dom["y"], WordLeaf(ysch, ybytes))})
     leaves = {"a": [dom["a"].leaf(r, r, schema_row, d) for r, d in enumerate(digests_a)],
               "b": [dom["b"].leaf(r, r, schema_row, d) for r, d in enumerate(digests_b)],
@@ -398,8 +339,8 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
     ``x.u16`` / ``w.u16`` with ``y.u16`` for BF16, ``x.u8`` / ``w.u8`` with ``y.u32``, the FP32 accumulator word, for E4M3)
     as a ``flock-pure-instances/v1`` file for ``relation`` (a :data:`lowering.PIPES` entry: its unit model chains each row, and
     the set's recorded y must equal the epilogue of the last accumulator, or the last accumulator itself; the committed y
-    word is the relation's ``y_public`` of it). Rows are written per VU (the unshared statement,
-    root's ruling 2026-09-26 02:30Z); the instance reference names the set and its ``content_digest``. ``y_model``: the set
+    word is the relation's ``y_public`` of it). Rows are written per VU (the unshared
+    statement); the instance reference names the set and its ``content_digest``. ``y_model``: the set
     was captured on other silicon, so y is the relation's own chain output (a distinct tier; the reference counts the words
     that differ from the set's recorded y)."""
     from concurrent.futures import ProcessPoolExecutor
@@ -525,7 +466,6 @@ if __name__ == "__main__":
     ap.add_argument("out")
     ap.add_argument("--procs", type=int, default=1)
     ap.add_argument("--cache")
-    ap.add_argument("--scheme", choices=["frame-v3", "vllm-v1"], default="frame-v3")
     ap.add_argument("--leaf", choices=sorted(SCHEMES), default="blake3", help="frame-v3 row-leaf schema of trees a and b")
     ap.add_argument("--set", default=None, help="a spine input set directory (x.u16 / w.u16 / y.u16): its first TOTAL VUs")
     ap.add_argument("--y-model", action="store_true", help="with --set: y is the relation's chain output, not the set's")
@@ -533,6 +473,6 @@ if __name__ == "__main__":
     a = ap.parse_args()
     h = (write_set(a.out, a.relation, a.set, 0, a.total, a.leaf, a.procs, a.y_model) if a.set else
          write_synth(a.out, a.relation, a.k, 0, a.total, a.leaf, a.procs) if a.k else
-         write(a.out, a.relation, a.total, a.procs, a.cache, scheme=a.scheme, leaf=a.leaf))
+         write(a.out, a.relation, a.total, a.procs, a.cache, leaf=a.leaf))
     print(json.dumps({"relation": h["relation"], "vus": h["vus"], "roots": h["roots"],
                       "manifest_sha256": h["instances"]["manifest_sha256"]}))

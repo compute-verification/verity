@@ -4,8 +4,8 @@ import Mathlib.Algebra.BigOperators.Intervals
 /-!
 # NCP's checked values on route U (trusted)
 
-`internal/pouw/new-crypto/route-u-checkpoints.md` in the project store (proposed). Route U runs the stacked product
-as u8 × s8: the left operand is biased by a parameter `β`, and the bias correction is the accumulator's initial value.
+Route U (proposed) runs the stacked product as u8 × s8: the left operand is biased by a
+parameter `β`, and the bias correction is the accumulator's initial value.
 With `X = stackX k A E₁ R` (`m × 3k`), `Y = stackY k B R F₁` (`3k × n`) and `T = 3k/16`:
 
 ~~~text

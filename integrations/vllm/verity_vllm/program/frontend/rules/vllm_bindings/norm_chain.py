@@ -14,7 +14,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, aten
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import MEAN_PINS
 
 
-# -- the unfused norm chain (`ir.ops.rms_norm` / `ir.ops.fused_add_rms_norm` as ATen on an f32 copy) [R15 dense, F-dense-05] -----------
+# -- the unfused norm chain (`ir.ops.rms_norm` / `ir.ops.fused_add_rms_norm` as ATen on an f32 copy) -----------
 #
 # A model whose norm module runs `forward_native` (vLLM `GemmaRMSNorm`; `RMSNorm` off the BI branch) exports the norm as a chain of ATen
 # ops on an f32 copy of the bf16 activation:

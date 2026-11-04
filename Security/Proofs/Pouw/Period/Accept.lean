@@ -5,7 +5,7 @@ import Proofs.Properties.Pouw.Draw
 /-!
 # PoUW's deployed check accepts H1's honest window at the leg's parameters
 
-The all-protocols PoUW leg (#4351, `benchmarks/all_protocols/legs/pouw.py`) checks its H1 window at `h1_params`: the
+The all-protocols PoUW leg (`benchmarks/all_protocols/legs/pouw.py`) checks its H1 window at `h1_params`: the
 pinned H1 tile's check item with the entries bound 1024 and no coin mode, ε = 1/2, δ = 10⁻⁶, the 3-bit grid, the range
 `[1, 2^16]` and the loop's fixed length, 4 requests of 2 decode steps (`h1Params`). A window registering the loop's
 128 real tiles is at level 39, which pads to `N = 144`, and its draw is `K′ = 24` (`kPrime_h1`:

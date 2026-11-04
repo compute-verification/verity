@@ -16,7 +16,7 @@ What it rests on, all named:
 * `ValueBinding`, the binding of wires to registered commit strings, which the circuit prover's `hm96-sha512` leaf
   layout discharges;
 * the lowering, `LoweringSoundB`, or in the `_placed` forms each drawn unit's place in its table (`UnitPlace`: the row
-  placement of #154).
+  placement).
 
 The numeric side conditions are `N₀/(ek) ≤ ρ < 1` for every table (`hr`, `hρ`) and `t'`, the SHA-512 evaluations of one
 session run.

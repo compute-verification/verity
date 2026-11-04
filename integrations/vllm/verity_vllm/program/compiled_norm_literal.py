@@ -1,12 +1,12 @@
 """Literal Triton transcriptions of Inductor's generated RMSNorm kernels -- the compiled rows' norm relation of record.
 
-[R16 compiled, Qwen run 8 07:15Z] The torch-modelled relation (compiled_relations._triton_sum_models: hand-modelled tl.sum order, torch
+The torch-modelled relation (compiled_relations._triton_sum_models: hand-modelled tl.sum order, torch
 IEEE division, torch.rsqrt) matched 221 of 224 add1_norm launches and left 3 launches at ONE element / one bf16 ulp each (55-row prefill,
-one row per launch).  Probe of record (r16c_sumprobe.py, 07:45Z, 8192 rows each width): the model's SUM TREE is exact (0 rows differ)
+one row per launch, on Qwen).  Probe of record (r16c_sumprobe.py, 8192 rows each width): the model's SUM TREE is exact (0 rows differ)
 and its epilogue is exact; the residue is the statement pair `tmp15 = tmp7 / 1536.0; tmp17 = tmp15 + 1e-06`, which the compiler (fp
 fusion on) lowers to ONE fma(tmp7, 1/1536, eps) -- reciprocal multiply, add contracted, a single rounding -- while the torch model rounds
 twice (`s / N + eps`): kernel rstd == torch.rsqrt(fma(s, 1/N, eps)) on 8192/8192 rows, == torch.rsqrt(s/N + eps) on 7452.  For N = 2048
-(Llama) 1/N is a power of two, s*(1/N) is exact and both agree on every row -- which is why R15 never saw it.  Rather than model each
+(Llama) 1/N is a power of two, s*(1/N) is exact and both agree on every row -- which is why the Llama rows never show it.  Rather than model each
 such lowering decision (the reduction tree, the contraction, libdevice), as for the SiLU kernel (compiled_relations
 `_silu_mul_triton`), the relation of record is therefore the generated source itself, transcribed statement for statement with the two
 model constants (row width N, epsilon EPS) and the vocabulary bound (embedding form) as constexpr parameters, and LAUNCHED WITH THE
@@ -27,7 +27,7 @@ from typing import Any
 
 _K: dict[str, Any] | None = None
 _EXEC: dict[str, list[dict[str, Any]]] | None = None
-DEFAULT_CONFIG = {"kwargs": {"XBLOCK": 2, "R0_BLOCK": 2048}, "num_warps": 16, "num_stages": 1}   # Inductor's reduction heuristic for size_hints r0_ 2048 (Llama 2048-wide and Qwen 1536-wide rows both; R15 S1-S2.md, R16 loaded_code_objects executed_configs)
+DEFAULT_CONFIG = {"kwargs": {"XBLOCK": 2, "R0_BLOCK": 2048}, "num_warps": 16, "num_stages": 1}   # Inductor's reduction heuristic for size_hints r0_ 2048 (Llama 2048-wide and Qwen 1536-wide rows both, as executed_configs() reports)
 
 
 def _build() -> dict[str, Any] | None:

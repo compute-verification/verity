@@ -1,8 +1,8 @@
-"""The workload Program's declared stop rule and LAG (`stop_rule`, `lag`), as GM-01's chronology check (G6) reads them from its
+"""The workload Program's declared stop rule and LAG (`stop_rule`, `lag`), as the global match's chronology check (G6) reads them from its
 global Program and the padded conversion (`commit.padding_steps`) from a pulled record's `workload_program.json`.
 
-GP-01 (`pipeline.global_program`) writes both blocks into `workload_program.json`, and GM-01's global Program carries them
-(`check.match.declaration.from_gprog`); GM-01's mock Program (`declaration.mock_global_program`) writes the same blocks.  A
+`pipeline.global_program` writes both blocks into `workload_program.json`, and the global match's global Program carries them
+(`check.match.declaration.from_gprog`); the global match's mock Program (`declaration.mock_global_program`) writes the same blocks.  A
 Program built before the stop rule was declared carries no `stop_rule`, and one built before LAG was declared carries no `lag`
 block and no LAG in its stop rule; G6 then fails every early stop, or every EOS stop, by name.  Every writer of a stop rule writes
 its `eos_token_ids`, and every writer of a `lag` block its `value`.
@@ -22,7 +22,7 @@ from verity_vllm.records.fields import RecordError, optional, present, required
 class StopRule:
     eos_token_ids: Sequence[int] | None               # None: no EOS set declared; empty under `ignore_eos`
     ignore_eos: bool | None                           # written only when the manifest switches EOS off
-    source: Mapping[str, Any] | None                  # where GP-01 read the EOS ids; the mock Program writes none
+    source: Mapping[str, Any] | None                  # where `pipeline.global_program` read the EOS ids; the mock Program writes none
     # one LAG under two names, both None on a Program built before LAG was declared
     lag: int | None
     eos_lag_rows: int | None
@@ -42,7 +42,7 @@ class StopRule:
 @dataclass(frozen=True)
 class LagBlock:
     value: int
-    source: str | None                                # the mock Program and GP-01 write it; a hand-built Program may not
+    source: str | None                                # the mock Program and `pipeline.global_program` write it; a hand-built Program may not
 
     @classmethod
     def of(cls, doc: Mapping[str, Any], where: str) -> LagBlock:

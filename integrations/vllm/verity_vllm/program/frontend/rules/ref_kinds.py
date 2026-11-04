@@ -1,12 +1,11 @@
-"""Derive-lane width-conversion composites for reference mode.
+"""Width-conversion composites of the derive frontend for reference mode.
 
-NUMERIC's `verity/ml/definitions/registry/ref_prims.py` (vocabulary `verity-ref-vocab/1`) is the reference vocabulary; the
-provisional `DeriveRef{Dot,Linear,BiasAdd,Add,Mul,Relu}F32` composites that carried S1 before it landed were
-retired (their semantics are `LinearRef_v1{DT="f32"}` / `AddRef` / `MulRef` / `ReluRef`, which NUMERIC defined
-identically — sequential f32 fma chain from +0, `F32MaxRef(x, +0)`). What remains here are the two element-wise
-width conversions a `.to(dtype)` cast needs as *one call*: batched `Bf16ToF32_v1` (exact) and `F32ToBf16Rn_v1`
-(RNE), both exact-model-tested registered primitives. They are deliberately unregistered (`register=False`) with a
-`DeriveRef` prefix so they cannot collide with NUMERIC's names.
+`verity/ml/definitions/registry/ref_prims.py` (vocabulary `verity-ref-vocab/1`) is the reference vocabulary
+(`LinearRef_v1{DT="f32"}` / `AddRef` / `MulRef` / `ReluRef`: sequential f32 fma chain from +0, `F32MaxRef(x, +0)`).
+What is here are the two element-wise width conversions a `.to(dtype)` cast needs as *one call*: batched
+`Bf16ToF32_v1` (exact) and `F32ToBf16Rn_v1` (RNE), both exact-model-tested registered primitives. They are
+deliberately unregistered (`register=False`) with a `DeriveRef` prefix so they cannot collide with the reference
+vocabulary's names.
 """
 
 from __future__ import annotations

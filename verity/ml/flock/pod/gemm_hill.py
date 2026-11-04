@@ -332,10 +332,9 @@ def _commit(root: Path) -> dict:
 
 
 #: per verifier source, its mark, the flag a version nobody reviewed carries, and the git blob ids of the reviewed versions with
-#: the flags each still carries. The column-major fold as granted (d1775df80 = cde1c7ac1, art:90b53162093c43559020e115d72d500225d8af62466cbbcedb7e63aada983fd8)
-#: and the structured lincheck as granted (8db1cb550 = e71789ed7 = f7d1e297d, art:f865ea7822990772c557751642e3c0c17212b6703ec2f8f5292f5f63fe5dd1f1)
-#: carry none, alone or with ab5087cd4 (= 750e344fd = acca35385, C0 = I checked once per statement, granted as
-#: art:2aef6594e7d5510a22c7cb7e7afa54fd20d954ceabf3d910a7437567ba204686)
+#: the flags each still carries. The column-major fold as granted (d1775df80 = cde1c7ac1)
+#: and the structured lincheck as granted (8db1cb550 = e71789ed7 = f7d1e297d)
+#: carry none, alone or with ab5087cd4 (= 750e344fd = acca35385, C0 = I checked once per statement, as granted)
 VERIFIER_SOURCES = (
     ("circuit.rs", "CscCircuit", "verifier-fold-unreviewed",
      {"1528b2ea3ede6998491ad0254c1a7917cd953263": (),
@@ -524,7 +523,7 @@ def metrics(a) -> None:
         # the GPU held while this job staged the statement itself (74-gemm-hill.sh STAGE_ONLY=1 stages it in a job without one)
         if not rec.get("stage_cached"):
             flags.append("staged-on-gpu")
-    # #554's untiled statements are reviewed (red-team-proofs-554's Q1 grant at 8a0b17250); a tiled one is a cost, not a claim,
+    # untiled GEMM statements are reviewed (at 8a0b17250); a tiled one is a cost, not a claim,
     # and a record without its stage can't show it isn't tiled. A changed statement digest starts a new curve
     if st.get("tile"):
         flags.append("tile-statement-unreviewed")
@@ -848,7 +847,7 @@ def _points(src: str, research: list[str]) -> list[dict]:
 def plot(a) -> None:
     """Per subcircuit, the console's three panels over the steps: overhead (log, best-so-far over byte-identical points) with
     the prove-only overhead beside it, throughput, and GPU utilization with GPU-held and prove-only seconds per VU on their own
-    axis; a point that fails its preflight check is hollow. Only the points under the last point's coins and session are drawn."""
+    axis; a point that fails its preflight check is hollow. Only the points under the last point's coins and session are sampled."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -861,7 +860,7 @@ def plot(a) -> None:
     (out / "points.json").write_text(json.dumps(pts, indent=1))
     for sid in sorted({p["subcircuit"]["id"] for p in pts}, key=lambda s: (len(s), s)):
         ps = sorted((p for p in pts if p["subcircuit"]["id"] == sid), key=lambda p: (p.get("time_utc") or ""))
-        # a point whose session never ran (refused, failed before a verdict) has no coins: it is drawn under any mode
+        # a point whose session never ran (refused, failed before a verdict) has no coins: it is sampled under any mode
         ran = [p for p in ps if p.get("coins")]
         mode = (ran[-1].get("coins"), ran[-1].get("session")) if ran else (None, None)
         other = len([p for p in ran if (p.get("coins"), p.get("session")) != mode])

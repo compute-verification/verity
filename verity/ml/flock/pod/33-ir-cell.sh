@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# flock-ir-lowering: a C-Flock cell of an IR template under frame-v3 (verity/flock-ir-frame/v3) through the bench spine
+# flock-ir-lowering: a Flock cell of an IR template under frame-v3 (verity/flock-ir-frame/v3) through the bench spine
 # (bench.drivers.c_interactive): the sweep verity_flock.ir_bench, prover on the line's GPU, verifier on a separate pod. The
 # cell's input set arrives as inputs/<content digest>.tar (research run --send); each pod stages its own instance files from it.
 #   ROLE=prover   TEMPLATE POINTS PER RUNS VERIFIER=host:port RTT_TARGET=host:22 LOOPBACK=1 OPERATOR [ART]   (GPU build)

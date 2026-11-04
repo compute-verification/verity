@@ -1,4 +1,4 @@
-"""GP-01: the workload Program composes request Programs (as descriptors) hierarchically, with weights once, a deterministic
+"""The workload Program composes request Programs (as descriptors) hierarchically, with weights once, a deterministic
 global address space and a declared chronology. Toy request Programs stand in for derive_step's request wrappers: the same
 lowering (`Program(fn)` -> Input batches + body), the same descriptor codec."""
 
@@ -8,7 +8,7 @@ from verity.ml.circuits.codec import SCHEMA_V1, _encode_body, _Tables, encode_pr
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, REGISTRY
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, RecordType, Value
 from verity_vllm.program import workload as W
 
 _ADD = PrimitiveDefinition("GpTestAdd16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: (a + b) & 0xFFFF)
@@ -159,10 +159,10 @@ def test_a_growing_key_value_sequence_composes_to_the_same_workload_through_its_
 
 
 def test_record_weights_lower_to_several_input_batches_shared_as_one_group():
-    """The real wrapper's `weights` is a mixed-width Record (bf16 tensors + an f32 rotary table), which lowers to one Input
+    """The real wrapper's `weights` is a mixed-width RecordType (bf16 tensors + an f32 rotary table), which lowers to one Input
     batch per field (a homogeneous record would be one batch): the group is shared as a whole either way."""
     def sig(S):
-        return ((("prompt", Array(S.LP, Value(16))), ("weights", Record(("wa", Array(2, Value(16))), ("wb", Array(3, Value(32)))))),
+        return ((("prompt", Array(S.LP, Value(16))), ("weights", RecordType(("wa", Array(2, Value(16))), ("wb", Array(3, Value(32)))))),
                 Array(1, Value(16)))
 
     def body(B, S, prompt, weights):
@@ -231,7 +231,7 @@ def test_a_workload_without_registered_values_keeps_its_digest():
 
 
 def test_theta_registered_binds_the_weights_at_registration_and_moves_only_the_workload_digest():
-    """NCI's baseline reads only registered inputs as θ (nci-check's `theta-not-registered`): `theta_registered` lowers the
+    """The inference-only check reads only registered inputs as θ (nci-check's `theta-not-registered`): `theta_registered` lowers the
     weights as `RegisteredInput<w>_v1`, still θ, and every other input as before. The components are the same Definitions, so
     their request digests stand and only the workload digest moves; off, it is the digest pinned above."""
     from verity.ml.circuits.constants import REGISTRATION, RUN
@@ -261,7 +261,7 @@ def test_theta_registered_binds_the_weights_at_registration_and_moves_only_the_w
 
 def test_theta_registered_keeps_a_tp_rank_programs_peers_bound_per_run():
     """A TP rank workload (B1's shape: `peers_*` before the weights, at shifting positions): only the weights move to
-    registration; every request's prompt and peers stay `Input<w>_v1`, the inputs NCI counts against the limit."""
+    registration; every request's prompt and peers stay `Input<w>_v1`, the inputs the inference-only check counts against the limit."""
     from verity.ml.circuits.program import INPUT_ID, REGISTERED_ID
     ca = W.request_component(encode_program(Program(_toy_rank_request(3, 2))), REGISTRY, _WP_rank(3, 2))
     cb = W.request_component(encode_program(Program(_toy_rank_request(5, 0))), REGISTRY, _WP_rank(5, 0))
@@ -274,7 +274,7 @@ def test_theta_registered_keeps_a_tp_rank_programs_peers_bound_per_run():
 
 
 def _toy_rank_request(LP: int, T: int):
-    """A TP rank Program's shape (tp M-0314): `(prompt, peers_0..peers_T, weights)` -- one received collective value per step, so
+    """A TP rank Program's shape: `(prompt, peers_0..peers_T, weights)` -- one received collective value per step, so
     the number of request-local inputs BEFORE the shared group depends on T and the weights group shifts per component."""
     def sig(S):
         peers = tuple((f"peers_{k}", Array(1, Value(16))) for k in range(S.T + 1))
@@ -298,7 +298,7 @@ def _WP_rank(LP, T):
 
 
 def test_tp_rank_components_share_weights_at_shifting_positions_and_tp1_digests_are_unchanged():
-    """tp M-0314 option (B): request-local `peers_*` inputs before the shared group shift its positions per component; the shared
+    """Request-local `peers_*` inputs before the shared group shift its positions per component; the shared
     group is still the same Input batches once, each request's peers are its own inputs; a non-request-local group at a shifting
     position is still refused. The uniform (TP1) static form is untouched, so every existing workload digest stands."""
     ca = W.request_component(encode_program(Program(_toy_rank_request(3, 2))), REGISTRY, _WP_rank(3, 2))   # weights at 4
@@ -439,7 +439,7 @@ def _stepped_request(LP: int, T: int, step_name: str = "GpTestStep"):
 
 
 def test_canon_is_per_compose_conflicts_refused_inside_one_never_across_composes():
-    """[R15 global, rev-pm M-0123 F(1)] the shared-definition canon belongs to ONE compose: two request Programs of one workload that
+    """The shared-definition canon belongs to ONE compose: two request Programs of one workload that
     disagree on a definition under the same id are refused (E_IDENTITY, fail closed); a LATER compose in the same process with its own
     canon is compared against its own components only, never against an earlier compose's definitions."""
     import copy
@@ -471,7 +471,7 @@ def test_repointing_keeps_every_id_and_refuses_a_substitute_of_another_id():
     a complete specialization formats its id once, so `Outer{F=..}`'s would go stale under a substitute of another id. Such
     a substitute is refused (E_IDENTITY, naming both ids) before anything is re-pointed, through the callee or the static."""
     import re
-    from verity.ml.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.defs import IdentityConflict, SpecializedDefinition
 
     def sig(S):
@@ -481,23 +481,23 @@ def test_repointing_keeps_every_id_and_refuses_a_substitute_of_another_id():
     outer = CompositeDefinition("GpTestRepointOuter", 1, ("F",), sig, lambda B, S, a: B.call(S.F, a), register=False)
     holder = CompositeDefinition("GpTestRepointHolder", 1, ("OPS",), sig, lambda B, S, a: B.call(_ADD, a, a), register=False)
     f, same, other = inner.bind(K=4), SpecializedDefinition(inner, {"K": 4}, ()), inner.bind(K=8)
-    assert same is not f and _spec_id(same) == _spec_id(f) != _spec_id(other)
+    assert same is not f and descriptor_id(same) == descriptor_id(f) != descriptor_id(other)
 
     o, h = SpecializedDefinition(outer, {"F": f}, ()), SpecializedDefinition(holder, {"OPS": {"f": f}}, ())
-    before = [(fn.id, _spec_id(fn), [_spec_id(n.fn) for n in fn.body.nodes]) for fn in (o, h)]
-    W._repoint(o, {_spec_id(f): same})
-    W._repoint(h, {_spec_id(f): same})
+    before = [(fn.id, descriptor_id(fn), [descriptor_id(n.fn) for n in fn.body.nodes]) for fn in (o, h)]
+    W._repoint(o, {descriptor_id(f): same})
+    W._repoint(h, {descriptor_id(f): same})
     assert o.bindings["F"] is o.body.nodes[-1].fn is same and h.bindings["OPS"]["f"] is same
-    assert [(fn.id, _spec_id(fn), [_spec_id(n.fn) for n in fn.body.nodes]) for fn in (o, h)] == before
+    assert [(fn.id, descriptor_id(fn), [descriptor_id(n.fn) for n in fn.body.nodes]) for fn in (o, h)] == before
     assert (o.id, h.id) == (SpecializedDefinition(outer, dict(o.bindings), ()).id,
                             SpecializedDefinition(holder, dict(h.bindings), ()).id)
 
-    why = re.escape(f"{_spec_id(f)!r} would be re-pointed to a definition of another id, {_spec_id(other)!r}")
+    why = re.escape(f"{descriptor_id(f)!r} would be re-pointed to a definition of another id, {descriptor_id(other)!r}")
     for fn, held, was in ((SpecializedDefinition(outer, {"F": f}, ()), lambda fn: fn.bindings["F"], before[0][0]),
                           (SpecializedDefinition(holder, {"OPS": {"f": f}}, ()), lambda fn: fn.bindings["OPS"]["f"], before[1][0])):
         assert fn.body.nodes and fn.id == was
         with pytest.raises(IdentityConflict, match="E_IDENTITY: " + why):
-            W._repoint(fn, {_spec_id(f): other})
+            W._repoint(fn, {descriptor_id(f): other})
         assert held(fn) is f and fn.id == was
 
 
@@ -520,9 +520,9 @@ def _derived_like(LP: int, T: int, src: dict):
 
 
 def test_two_requests_with_one_root_id_over_different_bodies_compose_by_digest():
-    """[R16 global, llama B64 1024/128 Build FAIL 07:09Z] a manifest with two requests of the same prompt length and different caps
-    (LP11: T24 and T36) derives two request Programs whose roots share derive's id `Root[Derived[vLLMRequest[..]]_v1{SRC=..}]` (SRC does
-    not name T) with different bodies and different digests; the compose compared the ROOTS under that id and refused the workload
+    """A manifest with two requests of the same prompt length and different caps (LP11: T24 and T36, as in the llama B64 1024/128
+    workload) derives two request Programs whose roots share derive's id `Root[Derived[vLLMRequest[..]]_v1{SRC=..}]` (SRC does not
+    name T) with different bodies and different digests; comparing the ROOTS under that id would refuse the workload
     (E_IDENTITY). The root is never shared -- the component's identity is its program digest -- so it is exempt from the shared-definition
     canon; every callee stays under the fail-closed rule (the test above)."""
     src = {"class": "LlamaForCausalLM", "mode": "profile", "inputs": [[3]], "config_sha256": "c" * 16}

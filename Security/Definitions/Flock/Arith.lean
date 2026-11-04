@@ -13,7 +13,7 @@ The model of the Flock verifier (PROTOCOL.md §9–§13) is written over two fie
 arithmetic functions: the Lagrange weights of the univariate-skip nodes, the pinned zerocheck
 coordinates, the packing of 128 bits into one `F` element, the embedding `F ⊂ K`, and the
 Reed–Solomon domain and novel basis. `Arith` collects them as data, so that the executable
-verifier (lane `flock-verifier`, `Flock.Field.*`, §20) instantiates the same functions this
+verifier (`Flock.Field.*`, §20) instantiates the same functions this
 model uses. `Arith.Correct` lists the mathematical facts the soundness proof needs about them;
 they are facts about concrete functions, to be proved for the GHASH instance, not assumptions.
 -/

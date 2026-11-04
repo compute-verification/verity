@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Referee check of QSTAR's ISA-CAP (note:20261017T0344Z-draft-eps1-qstar, the packed case): incidences one instruction
-creates.
+"""A check of ISA-CAP in the packed case: incidences one instruction creates.
 
 ISA-CAP: every sm_120 ALU instruction creates ≤ 32/7 ≈ 4.57 incidences, with "IMAD ≤ 3 by Kronecker packing". Outer
 products pack more, inside class P: an R-only word times a U-only word is a mixed-radix tuple of single-entry fields
@@ -97,7 +96,7 @@ def load_bound(cap, c_load, bytes_per_load=32):
 
 
 def table_eps(a, cap, c_load, honest=1.877):
-    """SPEC's table route read as one route (D2): words at 1 + A + Ld slots and Ld = (28 − κA)/c_L loads, as many as the
+    """The table route read as one route (D2): words at 1 + A + Ld slots and Ld = (28 − κA)/c_L loads, as many as the
     level's bytes allow, each saving (honest − slots)/32. Up to the bandwidth and bytes a load, which scale it, this is
     the saving per load; honest is VF3o-16's Dither-like threshold."""
     ld = (28 - cap * a) / c_load
@@ -107,7 +106,7 @@ def table_eps(a, cap, c_load, honest=1.877):
 def main() -> int:
     checks = Checks()
     checks.check("IMAD (r1 + 2^8 r2)·(u1 + 2^16 u2) + c writes 4 single-entry fields R[i]·U[j] in 8-bit slots of one "
-                 "32-bit word, exhaustively over R ∈ {0,1}², U ∈ (±1..±64)²: 4 incidences, not QSTAR's ≤ 3",
+                 "32-bit word, exhaustively over R ∈ {0,1}², U ∈ (±1..±64)²: 4 incidences, not ISA-CAP's IMAD ≤ 3",
                  outer_imad(2, 2, 16, 32), "slots at bits 0, 8, 16, 24")
     checks.check("IMAD.WIDE (r1 + 2^8 r2 + 2^16 r3)·(u1 + 2^24 u2) + c writes 6 fields (low word 4, high word 2), "
                  "exhaustively: 6 incidences in one instruction, above ISA-CAP's 32/7 ≈ 4.57",
@@ -122,7 +121,7 @@ def main() -> int:
                  f"{cases} cases, {fails} wrong")
     checks.check("IDP.2A.LO.U16.S8 with a's halfwords (r1 + 129 r2_0 + 33153 r3_0, 129 r2_1 + 33153 r3_1) and b's bytes "
                  "(u0, u1) writes r1·u0 under Σ_k r2_k·u_k and Σ_k r3_k·u_k (radices 129, 129·257) into one word, at "
-                 "every R ∈ {0,1}^5 and U ∈ (±1..±64)²: 5 incidences, as QSTAR's round 3 says", idp2a_packing(),
+                 "every R ∈ {0,1}^5 and U ∈ (±1..±64)²: 5 incidences", idp2a_packing(),
                  "fields of 1, 2 and 2 entries")
     cases, fails = got["IMADW"]
     checks.check("signed IMAD.WIDE with a = r1 + 2^29 r2 and b = 8 Σ_j 129^j u_j writes four r1·u_j into the low word and "
@@ -150,7 +149,7 @@ def main() -> int:
         return grid[int(np.argmax([table_eps(a, cap, c_load) for a in grid]))]
 
     flip = 28 / (1.877 - 1)
-    checks.check("SPEC's per-level table ε doesn't move with κ: read as one route, d(saving per load)/dA has the sign of "
+    checks.check("the per-level table ε doesn't move with κ: read as one route, d(saving per load)/dA has the sign of "
                  "κ(honest − 1) − 28 whatever c_L, so no ALU creation pays below κ = 28/0.877 ≈ 31.9; the best point "
                  "stays at A = 0 at κ = 32/7, 5 and 8 on every format, and leaves it at κ = 33",
                  all(best_a(cap, c) == 0 for cap in (32 / 7, 5, 8) for c in formats)

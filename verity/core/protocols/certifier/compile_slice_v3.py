@@ -20,7 +20,7 @@ computes.
   exactly ℓ_w gates wide. core refuses ℓ_w past the cap, so the count is the check. ``steps`` is advice because how
   many engine steps a certifier window holds is the scheduler's timing, which no public input fixes.
 - ``ing`` (*ingress*, unpadded): the window's K arrival slots' ``a_valid``, ``a_id`` and prompt length ``a_P``, which
-  the layout maps to the ingress gates of each request's arrival (IO-TIE's N1).
+  the layout maps to the ingress gates of each request's arrival.
 - ``req`` (*registered*): each slot's served output length ``a_O`` (and at AS = 1 ``a_cap``, O being its max_tokens),
   the request Program's end, and ``tok``, each slot's first CU·B token ids (its prompt, then its outputs), the request
   Program's token at each position (vLLM's V3).
@@ -356,7 +356,7 @@ def _build(C, S, adv, ing, req, srv_in, cout_in):
     arrivals = {**g, "a_O": w["a_O"], **({"a_cap": w["a_cap"]} if S.AS else {})}
     dec = [e[0] for e in a["dec"]] + [ZERO] * (S.D - S.DA)
     checks, cur, win = RC._load_rows(C, Sc, CS._consts(RC.encode(RC.empty(Sc), Sc)),
-                                     CS._consts(RC.encode_window(RC.Window(), Sc)),
+                                     CS._consts(RC.encode_window(RC.QueueRow(), Sc)),
                                      RC._flat(arrivals, RC.arrival_fields(Sc)), dec, const_bits(S.DA, Z.DW),
                                      a["steps"][0])
     tok = w["tok"]

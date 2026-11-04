@@ -1,6 +1,6 @@
-"""One `research run` on vy-nebius-2 (2 GPUs from the queue): build `lat`, start the responder on GPU 0 of the job, then for
+"""One job on a GPU node (2 GPUs from the queue): build `lat`, start the responder on GPU 0 of the job, then for
 each condition start its load and time challenges from three challengers in turn: on this node over loopback (the
-on-node lower bound), from vy-nebius-cpu-1 and from vy-nebius-1 over the VPC (the two-machine path). Stdlib only.
+on-node lower bound), from a CPU node and from a second GPU node over the VPC (the two-machine path). Stdlib only.
 
 Conditions: `quiet` (no load of ours; the node's other tenants as they are); `gemm` (back-to-back bf16 8192^3 GEMMs on
 both GPUs, and the job's other declared CPUs spinning or copying memory); `hbm` (`gemm` plus 2 GiB device-to-device

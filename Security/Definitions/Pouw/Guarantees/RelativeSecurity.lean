@@ -195,14 +195,14 @@ def OverlapFloorKOneSidedPerProver : Prop :=
 
 /-! ### The floors at call scope under J10-R
 
-Each floor of record and its form per prover, restated on J10-R's call design (`Definitions.Pouw.RelativeSecurityJ10R`;
-RT-ALGO-17, card bbf40543): a stage is a call of `n` rows, `n'` columns and `B` segments of `L`, its run one
-straight-line program over the call's bits, both sides shared across the call, each segment's coin × coin part one
-`⟨n, L, n'⟩` product. The premises are the J10-R mirrors of the floors' own (`ServiceSoundStagedJ10R`,
-`KScopeOneSidedJ10R`, `ChargeVF3j16J10R`; overlapped, `ServiceSoundOverlapJ10R`, `KScopeOverlapOneSidedJ10R`,
-`ChargeVF3j16OverlapJ10R`; per prover, the service premises' per-prover forms). The floor and the luck are the per-unit
-floors': `L n n' B` products a call, `M N K`, at the parity luck 0.854 and `2^{−40}`. The frame is a row's dither bits
-and a column's coin bits of one segment, so no plane weight enters. The floors per unit above stay as they are. -/
+Each floor of record and its form per prover, restated on J10-R's call design (`Definitions.Pouw.RelativeSecurityJ10R`):
+a stage is a call of `n` rows, `n'` columns and `B` segments of `L`, its run one straight-line program over the call's
+bits, both sides shared across the call, each segment's coin × coin part one `⟨n, L, n'⟩` product. The premises are the
+J10-R mirrors of the floors' own (`ServiceSoundStagedJ10R`, `KScopeOneSidedJ10R`, `ChargeVF3j16J10R`; overlapped,
+`ServiceSoundOverlapJ10R`, `KScopeOverlapOneSidedJ10R`, `ChargeVF3j16OverlapJ10R`; per prover, the service premises'
+per-prover forms). The floor and the luck are the per-unit floors': `L n n' B` products a call, `M N K`, at the parity
+luck 0.854 and `2^{−40}`. The frame is a row's dither bits and a column's coin bits of one segment, so no plane weight
+enters. The floors per unit above stay as they are. -/
 
 /-- `StagedFloorKOneSided` at call scope under J10-R: the staged window's service floor for one-sided operands of any
 form, each stage a call. In every machine `Mc` and for every service `S` whose seed is `R` rounds of `St` call draws on

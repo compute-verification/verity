@@ -1,4 +1,4 @@
-"""X-03 on IDENTITIES (R13): the fail-closed Commit verdict compares the committed tensor identities of every step against an expected
+"""The fail-closed Commit verdict on IDENTITIES: it compares the committed tensor identities of every step against an expected
 manifest derived from the install-time module set (+ FA2 hidden source, sampler), and the per-step multiset of module-tensor names against
 the run's own call structure.  Counts alone let 'missing one value, duplicated another' pass; identities do not.  Offline (no CUDA)."""
 from __future__ import annotations

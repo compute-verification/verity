@@ -20,7 +20,7 @@ class Harness:
         self.clock = 1_000_000.0
         monkeypatch.setattr(merge, "caught_up", lambda repo, remote, tool, since="", log=print, runs=None:
                             self.after.append((since, runs)))
-        monkeypatch.setattr(merge, "_sweep_after", lambda *a: None)
+        monkeypatch.setattr(merge, "_sweep_after", lambda *a, **k: None)
         monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: (0, 0))
         self.q = world.queue(**kw)
         self.d = Driver(self.q, on="m1", launch=self.launch, states=lambda repo, ids: {i: self.run_state[i] for i in ids},
@@ -88,7 +88,7 @@ def _lean_run(tmp_path, log: str = LEAN_AUDIT_LOG):
 
 
 def test_a_lean_audit_failure_names_the_lean_files_its_build_errors_are_in(tmp_path):
-    """16 Oct: three trains failed in lean-audit (#2143, #2168, #2174), each told as naming no file, each attributed by hand."""
+    """A train that fails in lean-audit isn't told as naming no file, to be attributed by hand."""
     from research.drive import implicated, lean_errors
 
     assert lean_errors(LEAN_AUDIT_LOG) == {"Security/Proofs/Flock/Claims/NumbersRadius.lean",
@@ -147,8 +147,8 @@ def test_a_failure_outside_the_suites_or_without_a_failing_test_points_at_no_fil
 
 
 def test_a_guard_failed_suite_with_no_failing_test_points_at_its_outside_reads_and_their_readers(tmp_path):
-    """Train 21b3d26fe1a6 (14 Oct 21:08Z): verity-lean-audit failed with 146/146 tests passing — the read guard alone — and
-    drive said "the failure names no file", so attribution took an agent's archaeology. The suite's record names the files
+    """A suite can fail with every test passing — the read guard alone — and then "the failure names no file" would leave
+    attribution to an agent's archaeology. The suite's record names the files
     read outside the inputs and the test module that read each (`outside`, path -> module; a child's reads in
     `child_outside`), and those implicate the PR that added the reading test or changed the file read."""
     import json
@@ -195,15 +195,15 @@ def test_forces_cold_reads_the_paths_that_move_most_circuit_check_keys():
 
     assert forces_cold(["verity/ml/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
     assert forces_cold(["tools/verity/circuit_check/src/circuit_check/cache.py"])
-    assert forces_cold(["integrations/vllm/verity_vllm/pipeline/serving_rows.py"])          # #2114: 907 targets rerun
+    assert forces_cold(["integrations/vllm/verity_vllm/pipeline/serving_rows.py"])          # else hundreds of targets rerun
     assert not forces_cold(["integrations/vllm/tests/pipeline/test_row.py", "tools/research/src/research/drive.py"])
     assert not forces_cold(["Security/Proofs/X.lean", "verity/ml/circuits/README.md", "verity/ml/circuits/tests/test_x.py"])
     assert not forces_cold([])
 
 
 def test_train_sh_runs_with_the_queues_credentials_and_git_never_prompts(tmp_path, monkeypatch):
-    """12 Oct, drive's first live tick: train.sh's `git fetch` in the queue's clone, which has no credential helper of its own,
-    waited on a password at the tty, and drive with it."""
+    """train.sh's `git fetch` in the queue's clone, which has no credential helper of its own, mustn't wait on a password at
+    the tty, and drive with it."""
     from research.drive import train_launch
 
     (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
@@ -219,7 +219,7 @@ def test_train_sh_runs_with_the_queues_credentials_and_git_never_prompts(tmp_pat
 
 
 def test_a_conflict_is_told_to_ci_and_the_lane_that_owns_the_pr(world, monkeypatch):
-    """12 Oct: drive's ejection posts named only the lander's subteam, so an owner heard of a conflict through a relay.  The
+    """An ejection post names the PR's owner too, not only drive's own handle, so the owner doesn't hear of a conflict through a relay.  The
     owner's handle comes from main's registry: the lane the body names, the agent id it carries, the ready mark's author, or
     the agent whose id ends in the branch's suffix."""
     import dataclasses
@@ -246,24 +246,76 @@ def test_a_conflict_is_told_to_ci_and_the_lane_that_owns_the_pr(world, monkeypat
         assert q.handle(pr) == want
 
 
-def test_a_pr_waiting_on_a_contained_pr_that_didnt_merge_is_told_once_per_head(world, monkeypatch):
-    """26 Oct: S1's #4373 and #4436 sat off `next` for six hours behind their contained #4326 and #4349, and no one was told."""
+def _lanes(world: World, *ns: int) -> None:
+    """Main's registry with the handle `lane-N` for each of ``ns``, so each PR's owner is tagged."""
+    import json
+
+    reg = {"handles": [{"handle": f"lane-{n}", "holder": f"the lane-{n} lane"} for n in ns]}
+    main = world.change({".agents/skills/using-slack/registry.json": json.dumps(reg)})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+
+
+def _conflict_with_dependants(world: World, h: Harness, deps: tuple[int, ...]) -> str:
+    """#1 on `next`, #2 conflicting with it, and ``deps`` each built on #2; #2's head."""
+    world.gh.put(1, world.change({"a.txt": "one\n"}))
+    world.gh.put(2, two := world.change({"a.txt": "two\n"}))
+    for n in deps:
+        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}, base=two))
+    return two
+
+
+def test_a_pr_that_didnt_merge_is_told_once_naming_every_pr_it_takes_out(world, monkeypatch):
+    """#2 at one head stopped merging and drive posted a refusal for each PR containing it, each owner apart: one root cause is one
+    post, naming why, every PR it takes out and each owner once; an identical sync posts nothing."""
+    _lanes(world, 1, 2, 3, 4, 5)
     h = Harness(world, monkeypatch)
     sent = []
     h.d.post = lambda text, to: sent.append((text, to)) or True
-    world.gh.put(1, world.change({"a.txt": "one\n"}))
-    two = world.change({"a.txt": "two\n"})
-    world.gh.put(2, two)
-    world.gh.put(3, world.change({"b.txt": "three\n"}, base=two))
+    two = _conflict_with_dependants(world, h, (3, 4, 5))
+    h.tick()
+    assert sent == [(f"@ci @lane-2 @lane-3 @lane-4 @lane-5 queue: #2 at {two[:8]} is out of `next`: conflicts with `next` in a.txt "
+                     "(touched by #1). It takes out #3, #4, #5, which contain it", ("@ci", "@lane-2", "@lane-3", "@lane-4", "@lane-5"))]
+    assert h.q.load_state()["drive"]["out"] == {"2": [two, [3, 4, 5], "conflicts with `next` in a.txt (touched by #1)"]}
+    h.tick()
+    assert len(sent) == 1
+    assert h.q.status()[4].why == "contains #2, which is refused: conflicts with `next` in a.txt (touched by #1) (at the last sync)"
+
+
+def test_a_root_cause_is_told_again_once_when_the_prs_it_takes_out_change(world, monkeypatch):
+    h = Harness(world, monkeypatch)
+    sent = []
+    h.d.post = lambda text, to: sent.append(text) or True
+    two = _conflict_with_dependants(world, h, (3,))
+    h.tick()
+    assert sent == [f"@ci queue: #2 at {two[:8]} is out of `next`: conflicts with `next` in a.txt (touched by #1). It takes out #3, "
+                    "which contains it"]
+    world.gh.put(6, world.change({"f6.txt": "6\n"}, base=two))
     h.tick()
     h.tick()
-    told = [text for text, _ in sent if "#3 at" in text]
-    assert told == [f"@ci queue: #3 at {world.gh.prs[3].head[:8]} is out of `next`: contains #2, which didn't merge"]
+    assert sent[1:] == [f"@ci queue: #2 at {two[:8]} is out of `next`: conflicts with `next` in a.txt (touched by #1). It takes out "
+                        "#3, #6, which contain it"]
+
+
+def test_two_independent_root_causes_are_two_posts(world, monkeypatch):
+    """Each PR left out for a reason of its own is its own root, told with the PRs it takes out and only those."""
+    h = Harness(world, monkeypatch)
+    sent = []
+    h.d.post = lambda text, to: sent.append(text) or True
+    two = _conflict_with_dependants(world, h, (3,))
+    world.gh.put(7, world.change({"b.txt": "seven\n"}))
+    world.gh.put(8, eight := world.change({"b.txt": "eight\n"}))
+    world.gh.put(9, world.change({"f9.txt": "9\n"}, base=eight))
+    h.tick()
+    h.tick()
+    assert sent == [f"@ci queue: #2 at {two[:8]} is out of `next`: conflicts with `next` in a.txt (touched by #1). It takes out #3, "
+                    "which contains it",
+                    f"@ci queue: #8 at {eight[:8]} is out of `next`: conflicts with `next` in b.txt (touched by #7). It takes out #9, "
+                    "which contains it"]
 
 
 def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refused_post_is_retried(world, monkeypatch):
-    """13 Oct: `research msg send` refuses a `--to` naming the sender, and drive posted as ci to @ci, so from 05:07Z no notice
-    was posted. The sender is also selectable (`queue eject --by lean`), so its handle, not always @ci, must be dropped."""
+    """`research msg send` refuses a `--to` naming the sender, so drive posting to its own handle would post no notice at all.
+    The sender is also selectable (`queue eject --by lean`), so its handle, not always drive's own, must be dropped."""
     from research import drive
 
     argv = []
@@ -276,7 +328,7 @@ def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refus
     assert drive.merge_thread_post("x", ("@ci", "@lean"), sender="lean")
     assert argv[-1][argv[-1].index("--as") + 1] == "lean"
     assert argv[-1][argv[-1].index("--to"):argv[-1].index("--quiet")] == ["--to", "@ci"]
-    assert all("--machine" in cmd for cmd in argv)                       # a report, held to no post length
+    assert all("--report" in cmd for cmd in argv)                       # a report, held to no post length
 
     h = Harness(world, monkeypatch)
     logged = []
@@ -291,10 +343,10 @@ def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refus
     assert state["told"] == ["k"] and logged[-1].startswith("research queue drive: told @ci @circuits")
 
 
-@pytest.mark.parametrize("to, sender", [(("@ci",), "ci"), (("@ci", "@circuits"), "ci"), (("@ci", "@lean"), "lean")])
+@pytest.mark.parametrize("to, sender", [(("@lean",), "lean"), (("@lean", "@circuits"), "lean"), (("@lean", "@infra"), "infra")])
 def test_every_notice_drive_sends_passes_msg_sends_own_refusals(monkeypatch, to, sender):
-    """13 Oct 17:41Z: train b22a's failure, for @ci alone, started `@ci queue:`, and `msg send` refused it as a post that wakes
-    only its author.  A stand-in for `msg send` had hidden that refusal, so here each post goes through `msg send` itself."""
+    """A notice for its sender alone, starting `@SENDER queue:`, is refused by `msg send` as a post that wakes only its author.  A
+    stand-in for `msg send` would hide that refusal, so here each post goes through `msg send` itself."""
     from research import drive, slack
 
     monkeypatch.setattr(slack, "acting_as", lambda ns, reg, name: slack.name_entry(ns, reg, name))
@@ -317,8 +369,8 @@ def _steps_run(tmp_path, name: str, steps: dict[str, str]):
 
 
 def test_a_collection_error_names_its_test_module(tmp_path):
-    """17 Oct 14:19Z: filler's suite failed collecting #2299's tests/test_capacity_of.py (a vector only #2286 adds); the
-    failure named no file, and the fallback on the suite's inputs ejected 8 PRs instead of #2299."""
+    """A suite that fails collecting one PR's test module (one reading a vector only another PR adds) names that module, so
+    the fallback on the suite's inputs doesn't eject every PR touching them instead of the one."""
     import json
 
     from research.drive import implicated
@@ -333,22 +385,23 @@ def test_a_collection_error_names_its_test_module(tmp_path):
 
 
 def test_lean_errors_reads_the_audits_orphan_and_layers_failures(tmp_path):
-    """22-23 Oct: #3215's orphan file and #3140's out-of-layer imports named no file drive matched, so it resent each train
-    instead of ejecting the one PR (a hand eject saved each about 30 min)."""
+    """An orphan file or an out-of-layer import names a file drive matches, so it ejects the one PR rather than resending the
+    train."""
     from research.drive import lean_errors
 
-    log = ("AUDIT /w/lean-audit-scratch-1-x/verity/core/service/flock: FAIL  14588 declarations in 159 modules\n"
+    flock = "verity/core/service/flock"
+    log = (f"AUDIT /w/lean-audit-scratch-1-x/{flock}: FAIL  14588 declarations in 159 modules\n"
            "  orphan: Flock/Test/KnownRead.lean is not imported by the roots (Flock, FlockVerify) nor under `exempt`: nothing builds"
            " or audits it\n  note: 267 definitions of the spec (VStar) are read by no guarantee\n"
            "AUDIT /w/lean-audit-scratch-1-x/verity/core/protocols/pouw/lean/check: FAIL  944 declarations in 13 modules\n"
            "  layers: PouwCheck.Credit imports Flock.Program, outside PouwCheck.Credit's layer (Std.Data.HashMap)\n")
-    assert lean_errors(log) == {"verity/core/service/flock/Flock/Test/KnownRead.lean",
+    assert lean_errors(log) == {f"{flock}/Flock/Test/KnownRead.lean",
                                 "verity/core/protocols/pouw/lean/check/PouwCheck/Credit.lean"}
 
 
 def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
-    """17 Oct 15:10Z: three trains' lean-audit failed with the build's error lines scrolled out of the step's log; drive found
-    no Lean file, fell back on every PR touching Lean, and ejected nine."""
+    """With the build's error lines scrolled out of the step's log, drive still finds the Lean files from Lake's list of
+    failed modules, rather than falling back on every PR touching Lean."""
     from research.drive import lean_errors
 
     log = ("AUDIT /w/lean-audit-scratch-1-x/Security/Proofs: FAIL; built WITHOUT a sandbox\n  build: exit 1\n"
@@ -359,8 +412,8 @@ def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
 
 
 def test_a_lean_check_whose_replay_was_killed_is_a_machines_fault(tmp_path):
-    """17 Oct, r20261017-104751-c19c on cpu-2: the Security/Proofs replay was OOM-killed (exit 137), lean-audit failed with rc 1,
-    and the fallback on Lean sources ejected #2224 and #2231, whose heads had passed."""
+    """A Security/Proofs replay OOM-killed (exit 137) fails lean-audit with rc 1; that is the machine's fault, and the fallback
+    on Lean sources mustn't eject PRs whose heads passed."""
     from research.drive import killed
 
     d = tmp_path / "run"
@@ -374,8 +427,8 @@ def test_a_lean_check_whose_replay_was_killed_is_a_machines_fault(tmp_path):
 
 
 def test_a_circuit_check_whose_only_failures_are_killed_targets_is_a_machines_fault(tmp_path):
-    """19 Oct, r20261019-102541-78d1 on cpu-1: three PoUS SHA-512 targets were OOM-killed at 149-164 GiB, circuit-check failed
-    with rc 1, and drive blamed circuit-check's inputs and tried to revert all 19 landings since 6c4f254d."""
+    """Targets OOM-killed (as PoUS's SHA-512 targets can be, at 150 GiB or so) fail circuit-check with rc 1; that is the
+    machine's fault, and drive mustn't blame circuit-check's inputs and revert every landing since the last verified `main`."""
     from research.drive import killed
 
     d = tmp_path / "run"
@@ -384,20 +437,18 @@ def test_a_circuit_check_whose_only_failures_are_killed_targets_is_a_machines_fa
     (d / "steps.jsonl").write_text(step)
     died = ("FAIL circuit-check/killed PousSha512Head_v1: its process died (signal 9: the OOM killer?) at a peak of 164.16 GiB\n"
             "FAIL circuit-check/killed PousSha512Mid_v1{M=1}: its process died (signal 9: the OOM killer?) at a peak of 164.16 GiB\n")
-    tail = "circuit-check: 5211 target(s), 2 new failure(s), 3 known\nwarn dead-gates/ir: 258100 over 309 target(s)\n"
+    tail = "circuit-check: 5211 target(s), 2 failure(s), 0 unchecked\nwarn dead-gates/ir: 258100 over 309 target(s)\n"
     (d / "circuit-check.log").write_text(died + tail)
     assert killed(d)
     (d / "circuit-check.log").write_text(died + "FAIL partition/unchecked PousSha512Ctr_v1: an output bit is free\n" + tail)
     assert not killed(d), "a real failure beside the killed ones is the code's"
-    (d / "circuit-check.log").write_text(died + "FAIL circuit_check.known lists Foo, which no longer fails: drop it\n" + tail)
-    assert not killed(d)
     (d / "circuit-check.log").write_text(died + tail)
     (d / "steps.jsonl").write_text(step + '{"step": "pytest", "status": "failed", "rc": 1, "log": "pytest.log"}\n')
     assert not killed(d), "another failed step is judged on its own"
 
 
 def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
-    """CI-48: nothing deleted a landed PR's branch or an idle one, and the repository reached 3,543 branches."""
+    """Something deletes landed PRs' branches and idle ones, or the repository's branches pile up by the thousand."""
     from research.drive import BRANCH_SWEEP_S
 
     h = Harness(world, monkeypatch)
@@ -411,8 +462,35 @@ def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
     assert len(calls) == 2
 
 
+def test_drive_deletes_the_head_branch_of_a_pr_it_closed_as_landed_unless_something_still_needs_it(world, monkeypatch):
+    """A PR drive closes once `main` reaches it (`_close_carried`) leaves no branch behind, but drive keeps one an open PR
+    uses as its head or base, a fork's, one of `KEEP_BRANCHES`, and one pushed to since (the lease)."""
+    import dataclasses
+
+    h = Harness(world, monkeypatch)
+    h.q._clone()
+    heads = {}
+    for n, branch, base, fork in ((1, "lane/one", "main", False), (2, "lane/two", "main", False), (3, "lane/three", "lane/two", False),
+                                  (4, "lane/four", "main", True), (5, "lane/five", "main", False), (6, "next", "main", False)):
+        heads[n] = world.change({f"{n}.txt": f"{n}\n"})
+        world.gh.put(n, heads[n])
+        world.gh.prs[n] = dataclasses.replace(world.gh.prs[n], branch=branch, base=base, fork=fork)
+        _git(world.origin, "update-ref", f"refs/heads/{branch}", heads[n])
+    _git(world.origin, "update-ref", "refs/heads/lane/five", world.change({"5.txt": "pushed since\n"}))
+    for n in (1, 2, 4, 5, 6):
+        h.d._delete_head(n, heads[n])
+    left = {r.split("refs/heads/")[1] for r in _git(world.origin, "for-each-ref", "--format=%(refname)", "refs/heads/").split()}
+    assert {"lane/two", "lane/three", "lane/four", "lane/five", "next"} <= left and "lane/one" not in left
+    logs = [x for x in world.logs if "#1's head" in x or "kept" in x]
+    assert f"research queue drive: deleted origin's lane/one, #1's head at {heads[1][:12]}" in logs
+    assert "research queue drive: kept lane/two, #2's head: another open PR's head or base" in logs
+    assert "research queue drive: kept lane/four, #4's head: a fork's" in logs
+    assert "research queue drive: kept next, #6's head: kept by drive" in logs
+    assert any(x.startswith("research queue drive: kept lane/five, #5's head: ") and "stale info" in x for x in logs), logs
+
+
 def test_a_branch_sweep_at_its_limit_sweeps_again_the_next_tick(world, monkeypatch):
-    """A sweep pushes at most `SWEEP_LIMIT` deletions: 26 Oct, 900 branches; the rest go on the ticks after, not a day later."""
+    """A sweep pushes at most `SWEEP_LIMIT` deletions; the rest go on the ticks after, not a day later."""
     from research.merge import SWEEP_LIMIT
 
     h = Harness(world, monkeypatch)
@@ -451,7 +529,7 @@ def _live_run(tmp_path, rid: str, commit: str, records: dict[str, str | None]):
 
 def test_the_after_landing_launch_gives_train_sh_no_cache_with_circuit_checks_cache(tmp_path):
     """Drive's after-landing run reuses no suite or Lean pass (`after_landing_no_cache`) but circuit-check's per-target ones: a
-    cold `circuit-check --all` (~4 h) outlasted every after-landing run from 24 Oct, so `main` was never verified."""
+    cold `circuit-check --all` (~4 h) would outlast every after-landing run, so `main` would never be verified."""
     from research.drive import train_launch
 
     (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
@@ -460,3 +538,76 @@ def test_the_after_landing_launch_gives_train_sh_no_cache_with_circuit_checks_ca
     ids, tail = train_launch(tmp_path, "c" * 40, "m1", extra.pop("agreement"), deferred="pytest,circuit-check", **extra)
     assert ids == ["r20261027-120000-aaaa"]
     assert f"argv: {'c' * 40} m1 --deferred pytest,circuit-check --no-cache --circuit-cache --no-regenerate" in tail, tail
+    ids, tail = train_launch(tmp_path, "c" * 40, "m1", False, deferred="ratchet-gate", base="b" * 40, ratchet_base="a" * 40)
+    assert f"argv: {'c' * 40} m1 --deferred ratchet-gate --base {'b' * 40} --ratchet-base {'a' * 40}" in tail, tail
+
+
+def test_the_after_landing_run_takes_a_check_slot_ahead_of_the_lean_checks(tmp_path, monkeypatch):
+    """Each part of the after-landing run (a shard, circuit-check's records step) asks for its check slot at
+    `POSTLAND_SLOT_RANK` (CHECK_SLOT_RANK, which check.py passes on as `slot.py --rank`), and a Lean check asks unranked,
+    whatever drive's own environment says: a ranked priority waiter takes the next free slot ahead of the unranked, so `main`
+    never waits on a slot for a Lean check of `next`."""
+    import contextlib
+    import os
+    import tempfile
+    import types
+
+    from research.drive import POSTLAND_SLOT_RANK, launched
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setenv("CHECK_SLOT_RANK", "7")
+    repo = tmp_path / "clone"
+    (repo / "tools" / "verity" / "check").mkdir(parents=True)
+    (repo / "tools" / "verity" / "check" / "train.sh").write_text(
+        'echo "rank=[$CHECK_SLOT_RANK]"\necho "RUN r20261103-140000-aaaa"\n')
+    d = Driver(types.SimpleNamespace(auth=(), workdir=repo), on="m1")
+
+    def tail(job: dict) -> str:
+        with contextlib.suppress(ChildProcessError):                     # its end, not a clock
+            os.waitpid(job["pid"], 0)
+        return launched(job)[1]
+
+    ranked = f"rank=[{POSTLAND_SLOT_RANK}]"
+    assert ranked in tail(d.launch_postland(repo, "c" * 40, "m1", "pytest", shard="1/3"))
+    assert ranked in tail(d.launch_postland(repo, "c" * 40, "m1", "circuit-check", cc_records=True))
+    assert "rank=[]" in tail(d.launch_lean(repo, "c" * 40, "m1"))
+
+
+def test_a_tick_sets_the_record_drivers_its_clone_lacks_and_plain_git_then_merges_two_records_with_merge_py(world, monkeypatch):
+    """A queue clone seeded from a copy without the drivers (or with another value) gets every `RECORD_DRIVER` key on a tick,
+    logged once, and a later tick only reads them; then a git without `git_env`'s settings merges two PRs' lean-audit.json
+    records in that clone through merge.py rather than line by line."""
+    import json
+    import os
+    from pathlib import Path
+
+    from research.clone import RECORD_DRIVER
+
+    lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
+    tools = {f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")}
+    base = world.change({**tools, ".gitattributes": "lean-audit.json merge=lean-audit\n"})
+    _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
+    wd = world.tmp / "q" / "verity"
+    _git(world.tmp, "clone", "-q", str(world.origin), str(wd))
+    _git(wd, "config", "--local", "merge.lean-caps.driver", "true")
+    h = Harness(world, monkeypatch)
+    assert h.q.workdir == wd
+
+    def said() -> list[str]:
+        return [x for x in world.logs if "set the record merge drivers" in x]
+
+    h.tick()
+    (line,) = said()
+    assert line.endswith(", ".join(RECORD_DRIVER)), line
+    assert {k: _git(wd, "config", "--local", "--get", k) for k in RECORD_DRIVER} == RECORD_DRIVER
+    h.tick()
+    assert said() == [line]
+
+    rec = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    a, b = (world.change({"pkg/lean-audit.json": json.dumps({**rec, "guarantees": {**rec["guarantees"], g: "1"}})}, base=base)
+            for g in "AB")
+    for k in [k for k in os.environ if k.startswith("GIT_CONFIG")]:
+        monkeypatch.delenv(k)
+    _git(wd, "fetch", "-q", "origin", f"refs/dev/{a}", f"refs/dev/{b}")
+    tree = _git(wd, f"--attr-source={base}", "merge-tree", "--write-tree", "--no-messages", a, b)
+    assert set(json.loads(_git(wd, "show", f"{tree}:pkg/lean-audit.json"))["guarantees"]) == {"T", "A", "B"}

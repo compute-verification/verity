@@ -6,7 +6,9 @@ not read.  Lane text is what records how the tree got here or who is working on 
 
 * ``attribution``: a parenthetical holding a date, ``(Daniel, 18 Oct)``, ``(12 Oct 06:20Z)``, ``(2026-10-12)``, or a date
   that follows ``Daniel``;
-* ``date``: an ISO date, ``2026-10-12``;
+* ``date``: a date, ``2026-10-12``, ``27 Oct``, ``Oct 27``;
+* ``name``: a person named as a rule's source, ``Daniel's ruling``, ``per Daniel``, except the Asks for Daniel database and
+  its ``Waiting on Daniel`` status, and where AGENTS.md and the skills name the person who decides;
 * ``note``, ``notion``, ``linear``, ``pr``: a ``note:`` id, a Notion URL, a Linear issue id (``VLLM-136``, the workspace's
   team keys) or URL, and a pull request (``#1234``, or its GitHub URL);
 * ``agent``, ``slack``: a Cursor agent id (``bc-`` and hex) and a Slack timestamp or archive URL;
@@ -55,7 +57,6 @@ LEFT_OUT = ("archive/",)
 SKIP = {
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
     "benchmarks/census/": "data only (AGENTS.md: verity never reads it)",
-    "benchmarks/numerical/CHANGELOG.md": "a changelog is dated history by design, and AGENTS.md keeps CHANGELOG.md",
     f"tests/lint/test_{NAME}.py": "its examples are the lane text it refuses",
 }
 #: test fixtures: a path with one of these directories is data
@@ -75,7 +76,9 @@ HASH = (".sh", ".bash", ".toml", ".yaml", ".yml", ".service", ".timer", ".conf",
 SLASH = (".rs", ".c", ".h", ".cc", ".cpp", ".hpp", ".cu", ".cuh", ".ts", ".js", ".go")
 
 MONTH = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?"
-DATE = rf"(?:\b\d{{1,2}} {MONTH}(?![\w-])|\b{MONTH} \d{{1,2}}\b(?!:)|\b20\d\d-[01]\d-[0-3]\d\b)"
+MONTH_WORD = (r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|January|February|March|April|June|July|August"
+              r"|September|October|November|December)")
+DATE = rf"(?:\b\d{{1,2}} {MONTH}(?![\w-])|\b{MONTH_WORD}\.? \d{{1,2}}\b(?!:)|\b20\d\d-[01]\d-[0-3]\d\b)"
 TEAMS = "TRN|CMP|TOP|CI|PRF|CIR|INF|NET|HASH|MEM|VLLM|LEAN|BENCH|COMM|CON|DAN|LAND"
 HANDLES = ("compute-accounting", "compute-research", "memory-accounting", "network-accounting", "benchmarks", "circuits",
            "soundness", "training", "console", "kernels", "proofs", "infra", "comms", "lean", "vllm", "top", "ci")
@@ -87,6 +90,9 @@ PATTERNS = tuple((kind, re.compile(p), before and re.compile(before)) for kind, 
     ("attribution", rf"\((?:[^()\n]{{0,80}}?[\s,;:(])?{DATE}[^()\n]{{0,120}}\)?", None),
     ("attribution", rf"Daniel(?:'s)?\b[^()\n.]{{0,40}}?{DATE}", r"\w"),
     ("date", r"20\d\d-[01]\d-[0-3]\d\b", r"\w"),
+    ("date", rf"\d{{1,2}} {MONTH_WORD}\b", r"[\w.:]"),
+    ("date", rf"{MONTH_WORD}\.? \d{{1,2}}\b(?![:\d])", r"\w"),
+    ("name", r"(?<!Asks for )(?<!Waiting on )Daniel(?:'s)?\b", r"\w"),
     ("note", r"note:[0-9A-Za-z][\w.:-]*", r"\w"),
     ("notion", r"notion\.(?:so|site|com)\b\S*", None),
     ("linear", rf"(?:{TEAMS})-\d+\b", r"\w"),
@@ -138,7 +144,7 @@ def found_in(prose: list[tuple[int, str]], owners: bool = False) -> list[tuple[i
         at += len(chunk) + 1
     out, end = [], 0
     for start, _, stop, kind, what in sorted(hits):
-        if start < end or owners and kind == "codename" and HANDLE.match(what):
+        if start < end or owners and (kind == "codename" and HANDLE.match(what) or kind == "name"):
             continue
         i = bisect.bisect_right(starts, start) - 1
         out.append((prose[i][0] + text.count("\n", starts[i], start), f"{kind}: {what.strip()[:80]}"))
@@ -309,6 +315,9 @@ def test_what_is_lane_text_and_what_is_not() -> None:
     assert sites("int x;  // INF-71 (Oct 12)\nchar *u = \"https://x\";\n", "k.cu") == [
         (1, "linear: INF-71"), (1, "attribution: (Oct 12)")]
     assert sites("x = 1  # (12 Oct)\n", "a.toml") == [(1, "attribution: (12 Oct)")]
+    named = "per Daniel. It landed 27 Oct (Oct 28 next); the Asks for Daniel database, Waiting on Daniel, Decision 3, 12:30Z, @daniel"
+    assert [w for _, w in sites(f"# {named}\n", "a.py")] == ["name: Daniel", "date: 27 Oct", "attribution: (Oct 28 next)"]
+    assert [w for _, w in sites(named, ".agents/skills/x/SKILL.md")] == ["date: 27 Oct", "attribution: (Oct 28 next)"]
     for src in (py, Path(__file__).read_text(encoding="utf-8"), (ROOT / "integrations/vllm/tools/ratchet_gate.py").read_text()):
         assert found_in(python_prose(src)) == found_in(tokenized(src))
     assert sites("#5040 (12 Oct)", "data.json") == []

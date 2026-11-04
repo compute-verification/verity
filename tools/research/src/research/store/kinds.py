@@ -13,13 +13,13 @@ KINDS: dict[str, str] = {
     "bench-result/v1": "a result.json (measurements, validation, fingerprint) + refs.run_files, refs.proof?",
     "bench-point/v1": "a sweep harness's raw result for its chosen point (a result.json with kind bench-point/v1): the run's attempt keeps "
                       "it and its run files; `bench.cell register` turns it into the cell's one bench-result/v1",
-    "native-peak/v1": "one card's measured dense-GEMM throughput for one dtype (benchmarks/native_peak; the canonical tables' 'native dense peak, "
+    "native-peak/v1": "one card's measured dense-GEMM throughput for one dtype (benchmarks/native_peak; the frozen tables' 'native dense peak, "
                       "measured' column): meta {device, dtype, accumulate, method, flop_per_second, spec_flop_per_second, fraction_of_spec, "
                       "sass, driver, cuda, clocks_mhz, power_w, sizes} + the result envelope",
     "tc-evidence/v1": "one tensor-core probe capture: meta {instruction, arch, sku, families, counts, model, model_agrees, first_mismatches, "
                       "seed, n}; payload tree = probe_results.json, capture_sample.json, tiles_*.npz",
     "dataset-snapshot/v1": "meta {name, note, query?}; refs.members = [art:...]; payload null",
-    "tables-parity/v1": "the switch's parity render (verity_numerical.bench.views --parity --record): meta {schema, rules, ok, differences, "
+    "tables-parity/v1": "the frozen tables' parity render: meta {schema, rules, ok, differences, "
                         "snapshot, tables_cells, cells: [{line, column, artifact, views_overhead, tables_overhead, printed}]}; refs.snapshot "
                         "(the tables --snapshot compared with), refs.cells; payload null",
     "verification-verdict/v1": "meta {result: PASS|FAIL, verifier, detail}; refs.proof, refs.verifier_attempt",
@@ -46,6 +46,10 @@ KINDS: dict[str, str] = {
     "labels-backup/v1": "a tarball of the local labels/ directory (every assertion file) -- interim durability until push carries labels; "
                         "meta {targets, files, taken_utc, host}",
     "telemetry/v1": "events.jsonl or resources.jsonl of an attempt",
+    "tasks-graph/v1": "a tasks/v1 task graph of one commit (`verity tasks list --json`), listed on a worker by the executor; "
+                      "its tasks' keys are the ones their verdicts are labelled under",
+    "verity-graph/v2": "a graph/v2 of one commit (`verity graph --json`), listed on a worker by the executor; its tasks' keys (or, "
+                       "for a task that reads others, the key rule's) are the ones their results are labelled under",
     "check/v1": "a repository check run's result.json (each step's status and seconds); what `research merge` reads is its attempt",
     "check-shard/v1": "one shard's result.json (tools/verity/check/check.py --shard K/N): its steps, each with the plan's parts it ran, and "
                       "meta.shard {k, n, parts, all, commit, config}; no gate takes it alone, only a `check.py --combine` check of "
@@ -144,7 +148,7 @@ KINDS: dict[str, str] = {
     "challenger-key/v1": "the auditor host's challenger signing key, published by infra apart from the ledger so that a verifier pins "
                          "it from here: payload one JSON file {host, instance, pubkey (hex), pubkey_sha512, W, H, pinned, valid_from_utc, "
                          "retired [{pubkey_sha512, retired_utc, sessions}]}; label challenger-key current|retired",
-    "verifier-run/v1": "one run of the verifier host's remote bandwidth verifier (benchmarks/live_verifier/host.py, vy-auditor-1): "
+    "verifier-run/v1": "one run of the verifier host's PoUB verifier (benchmarks/live_verifier/host.py, vy-auditor-1): "
                        "payload tree = request.json + out/ (verifier.json, challenger/, verifier.log, registry.json, "
                        "transcripts/*.json.gz + SHA256SUMS) + end.json, and replay/ once replayed; meta {run, by, pinned, peer, "
                        "period, requested_utc, end {rc, ended_utc}, replay}",

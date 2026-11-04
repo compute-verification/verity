@@ -43,7 +43,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "verity/core/protocols/pous/tests")]
 from verity.core.protocols.pous import streamed_wipe as sw  # noqa: E402
 
 WIPE_VERDICT = ROOT / "verity/core/devices/memory_challenger/lean/wipe_verdict.py"
-SECRET, SERVER = b"streamed-wipe bench secret", b"vy-nebius-2/bench"
+SECRET, SERVER = b"streamed-wipe bench secret", b"bench-node/bench"
 SESSION = hashlib.sha512(b"streamed-wipe bench session").digest()[:32]
 TABLE_LABELS = 1 << 28
 SESSION_LABELS = 1 << 20

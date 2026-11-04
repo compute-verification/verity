@@ -10,11 +10,10 @@ when `E₁` is `1` only at `(0, a)` and `F₁` is `1` only at `(b, 0)`; that is 
 and `H = [I; −R; I − R]`.
 
 `CheckpointIndependent k d R`: the non-final checkpoint matrices are linearly independent over `ℤ`. This is the clause
-the coordinator adopted (red-team Phase 3, P3-1). It is a hypothesis of the NCP instance below, not a clause of
+adopted. It is a hypothesis of the NCP instance below, not a clause of
 `Admissible`. `RelationFree k d R` (no non-final checkpoint matrix is `0`, `±M_q` or `±M_q ± M_{q'}` for earlier
 checkpoints) is the weaker clause proposed after `Pouw.NCP.ExtraIdentity`; it is kept as a lemma, implied by
-independence, and is not the rule: a twisted-block `R` is relation-free yet has linear relations with scalars
-(red-team Phase 3).
+independence, and is not the rule: a twisted-block `R` is relation-free yet has linear relations with scalars.
 
 The NCP instance of the word model (`Pouw.NCP.Word`): `N` units of `m` rows share one weight; `E₁` is per unit and
 `F₁` is shared, entries in `[−31, 32]`; each unit has `3k/16` checkpoints (depths `16, 32, …, 3k`) of `m·n` entries, in

@@ -219,7 +219,7 @@ def packed(c: Codec) -> Codec:
     return replace(c, eps=c.eps * g, y=c.y * g, tau=c.tau * g, slot_bits=bits)
 
 
-# Wide words at k = 1, measured by ra-codec-tensor (r20261012-073450-68ab, r20261012-080525-4dcf): ε is the decode's
+# Wide words at k = 1, measured by the tensor-core codec: ε is the decode's
 # CUDA-core time per native pass, y the fused GEMM's today (warp-specialized, no tag) at batch 1–8, weighted by bytes
 # over Llama-3.1's four linears with the best variant for each.
 WIDE = {

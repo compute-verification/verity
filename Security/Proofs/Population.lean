@@ -49,8 +49,9 @@ honest, a run is an assignment of the honest run's frozen dataflow.
 are public when the padded assignments are those holding the public values; that cone holds every honest run's.
 `Converse`: the padding is the least wiring that expresses every program with a given address map, and the pointer
 machine's honest wiring, which never has a secret upstream of the egress, does not bound its egress.
-`HonestCone`: Daniel's leakage form and the skipped work hold for every time-ordered, address-closed program at the
-cones over its honest runs, with no obliviousness; what needs the padding is isolation, a secret's place upstream.
+`HonestCone`: leakage in its uniform form (`card_leak_le_coneOver`) and the skipped work hold for every time-ordered,
+address-closed program at the cones over its honest runs, with no obliviousness; what needs the padding is isolation,
+a secret's place upstream.
 `LongValue`: a committed value of another length than its slot's width buys nothing. The verifier refuses such an
 opening before it reads it, so the slot is ⊥ in its view (or the run holds a collision), and its writer and readers are
 wrong; ⊥ is weakly dominated by a short wrong value, and the determinacy, egress, leakage and skipped-work

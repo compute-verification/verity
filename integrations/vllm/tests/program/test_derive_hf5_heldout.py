@@ -1,8 +1,8 @@
-"""Lane DERIVE-2 — held-out classes for the HF 5.x plumbing closures (compose-vs-extend rule): real `transformers` classes NOBODY
-used to find G-RH-1..13 — `Qwen3ForCausalLM` (Llama-like + q/k RMSNorm; primary), `OlmoForCausalLM` and `GemmaForCausalLM`
-(secondary) — tiny random configs, sdpa, f32, forward + greedy, ZERO transformers patches. Reuses REAL-HF's harness machinery
-(`test_derive_realhf`: wrappers, evaluation against torch CPU, JSONL rows). A refusal is a valid result and is recorded verbatim;
-this file never patches anything to make a class pass (new gaps are filed as G-RH-14+).
+"""Held-out classes for the HF 5.x plumbing closures (compose-vs-extend rule): real `transformers` classes NOBODY used to
+build those closures — `Qwen3ForCausalLM` (Llama-like + q/k RMSNorm; primary), `OlmoForCausalLM` and `GemmaForCausalLM`
+(secondary) — tiny random configs, sdpa, f32, forward + greedy, ZERO transformers patches. Reuses the harness machinery of
+`test_derive_realhf` (wrappers, evaluation against torch CPU, JSONL rows). A refusal is a valid result and is recorded verbatim;
+this file never patches anything to make a class pass.
 
 Run (pod, `/workspace/venv-realhf`):
     REALHF_OUT=/workspace/derive2-realhf/heldout.jsonl /workspace/venv-realhf/bin/python -m pytest \

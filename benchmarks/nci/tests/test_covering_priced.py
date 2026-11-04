@@ -54,7 +54,7 @@ def test_the_additive_form_is_four_times_the_priced_one():
 
 
 def test_daniels_table():
-    """The covering bound write-up's marginal-dampener table, Kimi K2 raw at k = 2e7, w = 2.5: 41, 166, 660."""
+    """The covering bound write-up's marginal-slowdown table, Kimi K2 raw at k = 2e7, w = 2.5: 41, 166, 660."""
     d = P.check_daniel()
     assert d["base"] == pytest.approx(41, rel=0.03)
     assert d["additive"] == pytest.approx(166, rel=0.03)
@@ -62,7 +62,7 @@ def test_daniels_table():
 
 
 def test_the_realism_notes_rows():
-    """note:training-20261022T1045Z-cover-assumptions-realism, section 4, at 1 MB: one uniform c at the cheapest 1%
+    """At 1 MB: one uniform c at the cheapest 1%
     tops out at about 1.2e3 (bf16); two c's at the mean price, which the priced form gives, at about 1.1e4."""
     g = P.grid(base(), P.PYTHIA, P.CHEAPEST, GATES)
     assert g["160m@100k"]["bf16"]["1 MB"]["one c"]["rho"] == pytest.approx(1.2e3, rel=0.05)

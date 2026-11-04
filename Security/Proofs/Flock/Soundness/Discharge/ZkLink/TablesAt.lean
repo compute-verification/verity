@@ -10,7 +10,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 /-!
 # The `--zk` table at each draw, from flock-verify's setup (statements)
 
-#828's `tablesAt` is the plain headline's table at draw `S`: `stmtOf` of the statement setupH sets up at the coin
+`tablesAt` is the plain headline's table at draw `S`: `stmtOf` of the statement setupH sets up at the coin
 server's draw `dj S`, wherever flock-verify accepts. Here is its `--zk` counterpart, `tablesAtZK`, a `TabZK` built from
 what `verify --zk` sets up at the draw (`zkInputs I`):
 
@@ -24,7 +24,7 @@ what `verify --zk` sets up at the draw (`zkInputs I`):
 needs of it; at a draw with none the table is a reference setup's statement with `contra`'s two regions alone, which no
 witness satisfies (as `tableAt`'s `refusedC`).
 
-* `RecordsLiveZK`, `DrawOkZK`: #862's `RecordsLive` and `DrawOk` at `--zk` (`AcceptsZK`, `zkInputs I`).
+* `RecordsLiveZK`, `DrawOkZK`: DecodeZL's `RecordsLive` and `DrawOk` at `--zk` (`AcceptsZK`, `zkInputs I`).
 * `TablesAtZKLive`: wherever flock-verify accepts what `wr` writes, the draw's `--zk` table is the executable's: its
   statement is `stmtOf` of setupH's, its dimensions and inner code are `Zk.verify`'s, and its extra claims at the
   record's link points are the executable's (`ExtraRealizes`, as `ofCircuit_extra`).
@@ -308,7 +308,7 @@ noncomputable abbrev tablesAtZK : Finset (Fin n) → Reg → TabZK 𝔽 mPts := 
 
 /-! ## The live session's record -/
 
-/-- **`wr` is the challenger's record of the live `--zk` session** (#862's `RecordsLive` at `--zk`): whenever
+/-- **`wr` is the challenger's record of the live `--zk` session** (DecodeZL's `RecordsLive` at `--zk`): whenever
 flock-verify accepts what `wr` writes for the outcome `o` at draw `S`, the record carries the draw `dj S`, the proof
 files are `o`'s, and the record decodes to a session whose table's `root_B`, link points and rep streams' rounds are
 `o`'s. -/
@@ -323,7 +323,7 @@ def RecordsLiveZK (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
         sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString r.val) =
           some s ∧ s.rounds.toList = pick (o.rep0, o.rep1) r
 
-/-- **The challenger's draw at `S`, at `--zk`** (#862's `DrawOk` at `zkInputs I`): it proves `S`, and setupH sets up
+/-- **The challenger's draw at `S`, at `--zk`** (DecodeZL's `DrawOk` at `zkInputs I`): it proves `S`, and setupH sets up
 at it under the `--zk` tags and coin tree with `mPts` link points. -/
 def DrawOkZK (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
   (∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved) ∧

@@ -2,14 +2,14 @@
 body against the pinned production operation, bit-exact, in two halves so the torch venv and the 3.12 verity venv never meet:
 
     # on the pod, in the vLLM venv (torch + the production kernel):
-    verity-vllm properties-admission produce --adapter verity_vllm.program.quarantine.<lane>.<def>_difftest --n 32 --seed 7 --out DIR
+    verity-vllm properties-admission produce --adapter verity_vllm.program.quarantine.<area>.<def>_difftest --n 32 --seed 7 --out DIR
     # on the pod in /workspace/venv-py312 (or on the laptop after copying DIR):
     verity-vllm properties-admission check --adapter <same> --dir DIR --out quarantine.json [--append]
 
-The ADAPTER (lane-written, next to the quarantined definition) is a plain module with three functions and no import of
+The ADAPTER (written next to the quarantined definition) is a plain module with three functions and no import of
 torch at module level:
 
-    SEMANTIC_ID = "<lane>/<Definition>@v1"                        # the versioned identity being admitted
+    SEMANTIC_ID = "<area>/<Definition>@v1"                        # the versioned identity being admitted
     def cases(rng: random.Random, i: int) -> dict:                 # statics + input specs for case i; MUST include the
         return {"statics": {...}, "inputs": [{"shape": [...], "dtype": "bfloat16", "kind": "random|zeros|max|subnormal|alternating"}], "edge": bool}
     def production(statics: dict, inputs: list["torch.Tensor"]) -> list["torch.Tensor"]:   # runs the pinned production op (imports torch inside)

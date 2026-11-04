@@ -68,7 +68,7 @@ class _Tables:
     def callee_of(self, f: FunctionDefinition) -> int:
         hit = self._seen.get(id(f))
         if hit is None or hit[0] is not f:
-            hit = self._seen[id(f)] = (f, self.callee(_spec_id(f)))
+            hit = self._seen[id(f)] = (f, self.callee(descriptor_id(f)))
         return hit[1]
 
     def type(self, t) -> int:
@@ -90,7 +90,7 @@ class _Tables:
 
 def _static_json(v: Any) -> Any:
     if isinstance(v, (PrimitiveDefinition, SpecializedDefinition)):
-        return {"fn": _spec_id(v)}
+        return {"fn": descriptor_id(v)}
     if isinstance(v, CompositeDefinition):
         return {"fn": v.id}
     if isinstance(v, (list, tuple)):
@@ -104,9 +104,10 @@ def _static_json(v: Any) -> Any:
     raise TypeError(f"unsupported static value {v!r}")
 
 
-def _spec_id(fn: FunctionDefinition) -> str:
-    """Descriptor id of a specialized definition: `Name_vN` for primitives / static-free composites, else
-    `Name_vN{k=v,...}` with the binding record in static-parameter order."""
+def descriptor_id(fn: FunctionDefinition) -> str:
+    """The id a descriptor names `fn` by (its `definitions` key and `callees` entry): `Name_vN` for primitives and static-free
+    composites, else `Name_vN{k=v,...}` with the binding record in static-parameter order.  The readable `fn.id` differs for
+    string, float, function and dict statics (`RMSNormTriton_v1{N=2048,EPS={"f64":"0x1.4f8b588e368f1p-17"}}` against `...EPS=1e-05}`)."""
     if isinstance(fn, PrimitiveDefinition):
         return fn.id
     assert isinstance(fn, SpecializedDefinition)
@@ -118,10 +119,7 @@ def _spec_id(fn: FunctionDefinition) -> str:
     return fn.base_id + "{" + ",".join(parts) + "}"
 
 
-def descriptor_id(fn: FunctionDefinition) -> str:
-    """The id a descriptor names `fn` by (its `definitions` key and `callees` entry): the readable `fn.id` differs for string, float,
-    function and dict statics (`RMSNormTriton_v1{N=2048,EPS={"f64":"0x1.4f8b588e368f1p-17"}}` against `...EPS=1e-05}`)."""
-    return _spec_id(fn)
+_spec_id = descriptor_id
 
 
 def _flat_parts(r: Refs) -> list[Refs]:
@@ -179,7 +177,7 @@ class _BodyEncoder:
             raise ValueError(f"{schema} bodies are encoded within a descriptor (interning tables)")
 
     def fn(self, f: FunctionDefinition) -> Any:
-        return _spec_id(f) if self.tables is None else self.tables.callee_of(f)
+        return descriptor_id(f) if self.tables is None else self.tables.callee_of(f)
 
     def type(self, t) -> Any:
         return t.to_json() if self.tables is None else self.tables.type(t)
@@ -290,7 +288,7 @@ def _program_fn_functions(program) -> list[FunctionDefinition]:
     `Program` from its `fn`; for a `DecodedProgram` the definitions its descriptor resolved for `program_fn`."""
     pfn = getattr(program, "fn", None)
     if isinstance(pfn, SpecializedDefinition):
-        owner = _spec_id(pfn)
+        owner = descriptor_id(pfn)
         return [_as_specialized(f, owner) for k in pfn.defn.statics for f in _static_functions(pfn.bindings[k])]
     return list(getattr(program, "program_fn_functions", ()))
 
@@ -315,8 +313,8 @@ def encode_program(program, schema: str = SCHEMA) -> dict:
     seen = _walk(program, encode)
     desc = {
         "schema": schema,
-        "root": _spec_id(program.root),
-        "program_fn": getattr(program, "program_fn_id", None) or _spec_id(program.fn),
+        "root": descriptor_id(program.root),
+        "program_fn": getattr(program, "program_fn_id", None) or descriptor_id(program.fn),
         "definitions": {fid: done[fid] for fid in seen},
         "annotations": dict(program.annotations),
     }
@@ -343,7 +341,7 @@ def _walk(program, done: Callable[[str, FunctionDefinition], None]) -> dict[str,
         if visited.get(id(fn)) is fn:
             return
         visited[id(fn)] = fn
-        fid = _spec_id(fn)
+        fid = descriptor_id(fn)
         prev = seen.get(fid)
         if prev is not None:
             if prev is not fn and (fid, id(fn)) not in dup_objects:
@@ -427,8 +425,8 @@ def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
             _intern_body(fn.body, tables)
 
     seen = _walk(program, intern)
-    skeleton = {"schema": schema, "root": _spec_id(program.root),
-                "program_fn": getattr(program, "program_fn_id", None) or _spec_id(program.fn),
+    skeleton = {"schema": schema, "root": descriptor_id(program.root),
+                "program_fn": getattr(program, "program_fn_id", None) or descriptor_id(program.fn),
                 "definitions": {fid: heads[fid] for fid in seen}}
     if tables is not None:
         skeleton.update(tables.to_json())
@@ -454,6 +452,8 @@ def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
 
 
 def canonical_json(obj: Any) -> bytes:
+    """Canonical JSON, the bytes Lean's `Flock.canon` writes: compact, keys sorted, every character outside printable ASCII
+    a lowercase `\\uXXXX` escape (a surrogate pair above U+FFFF), so no byte is at or above 0x7f."""
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
 
 
@@ -803,13 +803,14 @@ def _record_value(v: Any, fn: Callable[[str], Any]) -> Any:
     return v
 
 
-def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
+def definition_decoder(desc: dict, registry: Registry, built: dict[str, Any] | None = None) -> Callable[[str], Any]:
+    """The per-definition reader `decode_program` uses: each definition of ``desc`` by its id, decoded into ``built``."""
     schema = desc.get("schema")
     if schema not in SCHEMAS:
         raise ValueError(f"unexpected descriptor schema {schema!r}")
     _check_domain(desc)
     ddefs = desc["definitions"]
-    built: dict[str, Any] = {}
+    built = {} if built is None else built
     if schema == SCHEMA_V0:
         callee_id, arg_type = (lambda f: f), _type
     else:
@@ -903,9 +904,15 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
         admitted[fid] = SpecializedDefinition(reg, record, tuple((k, _static_key(record[k])) for k in reg.statics if k in record))
         return admitted[fid]
 
+    return get
+
+
+def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
+    built: dict[str, Any] = {}
+    get = definition_decoder(desc, registry, built)
     root = get(desc["root"])
     if not isinstance(root, SpecializedDefinition) or root.body.params:
         raise ValueError(f"root {desc['root']!r}: the root is a composite without parameters")
-    pfn_fns = tuple(get(fid) for fid in _record_function_ids(desc["program_fn"]) if fid in ddefs)
+    pfn_fns = tuple(get(fid) for fid in _record_function_ids(desc["program_fn"]) if fid in desc["definitions"])
     P.check(root)
     return DecodedProgram(root, built, desc, pfn_fns)

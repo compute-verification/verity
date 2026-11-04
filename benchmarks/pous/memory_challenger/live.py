@@ -10,7 +10,7 @@ digest of every block of `C` (`memory_challenger.block_digest`), in block order:
 each round's `H(block)` against, the table a proof will replace (`answer_circuit.PousAnswerOpens_v1` opens `H(block)`
 against C's leaf).
 
-- **The limit** is `Δ + RTT_ALLOWANCE_CAP_NS` (spec v1.1's 354 µs cap, `Δ + RTT = 854 µs`), fixed before any load.  The
+- **The limit** is `Δ + RTT_ALLOWANCE_CAP_NS` (P2's 354 µs cap, `Δ + RTT = 854 µs`), fixed before any load.  The
   calibration (`--calibrate-only`) still measures the loopback round trip and records whether its p99.9 fits under the cap.
 - **A session** draws a fresh session id (the auditor's designation: here the harness is the auditor) and challenger
   secret and commits its coin tree, every session's before the first round of any; it runs `k` rounds (the certificate's
@@ -87,7 +87,7 @@ RECORD_VERDICT = "lean"
 DISAGREE = "the Lean and Python verdicts disagree"
 WARMUP_PINGS = 8
 """Pings before each session's first round, after the previous session's signature: a session's round 0 otherwise follows
-the challenger's own Python work (one 655.8 µs round 0 of 26 µs at the responder in `r20261006-061825-bba8`)."""
+the challenger's own Python work (one measured round 0 took 655.8 µs, 26 µs of it at the responder)."""
 
 
 def test_signer() -> Any:

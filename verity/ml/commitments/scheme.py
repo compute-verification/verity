@@ -23,12 +23,10 @@ from verity.ml.crypto import blake3 as _blake3
 
 Path = tuple[bytes | None, ...]
 
-#: Table 1's hash class of every hash a :class:`LeafLayout` may use: the standard hashes only.  The algebraic Poseidon2 row
-#: leaves (:data:`rowleaf.SCHEMA_ROW`) are still admissible in Table 2, flagged as algebraic and never counted toward a
-#: standard-hash claim.
+#: Table 1's hash class of every hash a :class:`LeafLayout` may use: the standard hashes only.
 HASH_CLASS = {"sha256": "standard", "sha512": "standard", "blake3": "standard"}
 #: Output bytes of each hash; the SHA-512 variants of the framings (``frame-v3-sha512``, ``vllm-v1-sha512``) use 64-byte digests.
-DIGEST_BYTES = {"sha256": 32, "sha512": 64, "blake3": 32, "blake3-s256": 32}
+DIGEST_BYTES = {"sha256": 32, "sha512": 64, "blake3": 32}
 _SHA = {"sha256": hashlib.sha256, "sha512": hashlib.sha512}
 
 

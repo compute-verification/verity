@@ -1,5 +1,5 @@
 """A small step trace of varied traffic through vLLM's own scheduler, on CPU: the trace the derived encoding is measured on
-before TRACE-CORPUS's real ones, and the ground truth its derivations are tested against.
+before the trace corpus's real ones, and the ground truth its derivations are tested against.
 
 It drives the pinned vLLM's `Scheduler` (or `AsyncScheduler`) and `KVCacheManager`, unmodified, with a fake model runner:
 the runner returns one sampled id for every row that isn't a non-final prefill chunk (`Request.is_prefill_chunk`, the GPU

@@ -2,9 +2,7 @@
 # The fast-decode prototypes on one GPU (cwd = the source tree): builds every library outside the lease, then runs bench.py
 # under gpu-lease 1 --wait --max-min MAXMIN (default 20). Results go to $RESEARCH_RUN_DIR/out.
 #
-#   research run --on vy-nebius-2 --project verity --source . --cwd source --campaign resource-accounting \
-#     --declared-output 'out/*' -- env MAXMIN=20 GPU_LEASE_WHO=ra-fast-decode taskset -c 0-119 \
-#     bash benchmarks/pous/fast_decode/run.sh
+#   RESEARCH_RUN_DIR=DIR MAXMIN=20 GPU_LEASE_WHO=ra-fast-decode taskset -c 0-119 bash benchmarks/pous/fast_decode/run.sh
 #
 # The libraries: the tensor-core decode (tcsq.cu) at each width and Karatsuba depth in TC (PER:DEPTH:MINB), the NTT decode
 # (nttsq.cu, P2 v4's width) unless NTT=0, the decode in use (p2_v1/p2v1.cu, CGBN with p2sq.cuh's squaring) at 16,448 bits,

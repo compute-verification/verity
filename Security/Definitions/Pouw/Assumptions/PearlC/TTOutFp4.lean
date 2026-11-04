@@ -2,7 +2,7 @@ import Definitions.Pouw.Assumptions.PearlC.TTOut
 import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
-# TT_OUT for Pearl-C4 on sm_120 (trusted; the FP8 Lean lane's file; staged, nothing pinned)
+# TT_OUT for Pearl-C4 on sm_120 (trusted; staged, nothing pinned)
 
 `Prop`s taken as hypotheses by the statements that use them, never `axiom`s.
 -/
@@ -34,11 +34,11 @@ and §5): `TTOutFp4` at `devFp4Sm120`.
 - **The cost model.** `CM` is the sm_120 accounting in FP4 units: W1 at the node-2 prices, where one unit is one dense
   NVFP4 MAC with FP32 accumulation and an instruction is priced by its whole fragment. It charges every operation a
   program executes, and it is the same `CostModel` for the honest reference and for every adversary. That the honest
-  sm_120 program fits `W_ref` under this `CM` is the kernel lane's measured claim, not part of this assumption. At W1
+  sm_120 program fits `W_ref` under this `CM` is the kernel's measured claim, not part of this assumption. At W1
   (`TTOutFp4Sm120W1`, `Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`) `CM` is the term
   `W1.w1Priced (W1Device.fp4Sm120 sha fetch) salt`.
 - **The credit.** `creditFp4` less the unit's replayed debit (`Fp4Sem.unitDebit`), whose executable reference is
-  #556's `pearl_c4.tile_debit` (`9363e5012`). The debit has D-24's 2:4 row windows (`Fp4Dev.rowWin24`), F1′ (the base
+  `pearl_c4.tile_debit` (`9363e5012`). The debit has D-24's 2:4 row windows (`Fp4Dev.rowWin24`), F1′ (the base
   split's expected saving per row window under the exact noise law, `Fp4Dev.f1Row`, B̃'s at 10 times), the chain's
   firings whose lone skip leaves the word unchanged (`Fp4Skip.fp4PureFlags`), the positions whose A′ and B̃ codes are
   both salt-dead, the forming elements that are salt-dead or needed by no word, the sub-grid blocks
@@ -46,13 +46,13 @@ and §5): `TTOutFp4` at `devFp4Sm120`.
   columns' flatness, `Fp4Dev.int8Saving`, with `Fp4Dev.cL` the catalogue's minimum pinned per shape) and R1 (a row over
   `ρ` on its own F1′ earns nothing). A unit whose debit exceeds `ρ·creditFp4` is rejected. The row rule is D-NF alone
   (`Fp4Dev.RowAdmit4`: `0 ≤ β` and `0x08 ≤ e4m3(β) < 0x80`): D-SS's one-in-64 cap became the per-element charge on
-  salt-dead codes (the 10:50Z ruling), so a row with many screened blocks is charged for them rather than rejected.
-- **The domain is the grant's.** `pearlCDomainFp4` bounds the shapes as #556 does (`PearlC4.check`), with `n ≥ 4096`
-  in place of its `n ≥ 128`: `0 < m ≤ 2^24`, `4096 ≤ n ≤ 2^18`, both multiples of 64, and `1024 ≤ k ≤ 2^16` with
-  `128 ∣ k`. So the assumption says nothing about a unit outside those shapes.
-- **The base-split fix** (theory §6.2–6.5; the assessor's GO at 14:21Z and its conditions at 15:18Z, `ratings.md`).
+  salt-dead codes, so a row with many screened blocks is charged for them rather than rejected.
+- **The domain is the grant's.** `pearlCDomainFp4` bounds the shapes as the reference does (`PearlC4.check`), with
+  `n ≥ 4096` in place of its `n ≥ 128`: `0 < m ≤ 2^24`, `4096 ≤ n ≤ 2^18`, both multiples of 64, and `1024 ≤ k ≤ 2^16`
+  with `128 ∣ k`. So the assumption says nothing about a unit outside those shapes.
+- **The base-split fix** (theory §6.2–6.5).
   F1′, F2 and R1 answer the base split (A′ = A0 + ΔA with A0 near rank one and ΔA 2:4) and the masked int8 route on
-  flat scales. The assessor's falsifier for this row is an admitted tile, its credited debit at most `1/400`, on which
+  flat scales. The falsifier for this row is an admitted tile, its credited debit at most `1/400`, on which
   an exact program saves more than its debit plus 0.25% in W1. Open (§6.5): gathering across blocks on operands flat on
   both sides, whether the sorted pairing is the best layout inside a block, and adaptive regrouping after the salt.
 - **Exactness is per run.** Nothing here assumes the chain is exact. A claim that equates `C̃` with the exact product
@@ -64,7 +64,7 @@ and §5): `TTOutFp4` at `devFp4Sm120`.
   `CodeProofs.PinnedScales` (`CodeProofs.rhoDFp4At_ninety`, with `CodeProofs.rhoDFp4At_ninety_eq : RhoDFp4At 90 =
   RhoDFp4` by `rfl`). That the reference's `stats` meet `PinnedScales` is argued, not proved. The β and α₀ bounds rest
   on the FP32 error bound of `s5_stats`' `ρ²`, about `(k/256 + 13)·u ≈ 270u ≈ 2^-15.9` at `k = 2^16`, against the
-  `2⁻¹⁰` allowance, and on the numerical table in `internal/pouw/fp4-forming-lean/review-response.md`. There is no Lean
+  `2⁻¹⁰` allowance, and on the numerical table of `s5_stats`' error. There is no Lean
   lemma about `s5_stats` until `s5_stats` is pinned.
 - **D-SK is a domain rule.** `pearlCDomainFp4 sem` requires `Fp4Sem.SaltKeyedB`: `B̃`'s lines are drawn from
   `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (SHA-512, `pearl_c4.labelled`), so `B̃` is a function of the salt

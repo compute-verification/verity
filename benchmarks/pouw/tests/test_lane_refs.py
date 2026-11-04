@@ -1,4 +1,4 @@
-"""SERVE-REG's gated lane (`h1zy.PouwH1LaneZy_v1`) against option A's partials, byte for byte (`served_h1/lane_refs.py`):
+"""The gated lane (`h1zy.PouwH1LaneZy_v1`) against option A's partials, byte for byte (`served_h1/lane_refs.py`):
 every leaf's `partials.lane_partials` equals `h1tile.lane_partials(..., gated=admit)` and `h1zy.lane_partial` lane by
 lane, over live and dead leaves and leaves whose admitted rows lie outside some lanes' rows (m = 32 r + j, 0 < j < 8:
 lanes g >= j hold no admitted row and are ungated all the same), and the references' XOR is the served receipt.  A
@@ -35,9 +35,9 @@ def _s8(shape, seed: int) -> torch.Tensor:
     return torch.randint(-128, 128, shape, generator=torch.Generator().manual_seed(seed), dtype=torch.int8)
 
 
-def _window(nk, steps, dev="cpu", u_step=0) -> "PT.Window":
+def _window(nk, steps, dev="cpu", u_step=0) -> "PT.Calls":
     units = [(T // 32) * (n // 32) for n, _ in nk]
-    win = PT.Window([_s8((n, k), 10 + w).to(dev) for w, (n, k) in enumerate(nk)],
+    win = PT.Calls([_s8((n, k), 10 + w).to(dev) for w, (n, k) in enumerate(nk)],
                     [bytes([w + 1]) * 64 for w in range(len(nk))], [sum(units[:w]) for w in range(len(nk))],
                     u_step + sum(units))
     for s, m in steps.items():

@@ -1,5 +1,5 @@
 """Prover and verifier on separate machines (``bench.placement``, ``bench.cell``): machine identity, not container hostnames, and a
-routed link, not a host-private bridge (red-team-flock, coordinator 2026-09-26 12:00Z)."""
+routed link, not a host-private bridge."""
 from __future__ import annotations
 
 import copy
@@ -100,7 +100,7 @@ def test_the_real_cells_still_pass_on_documents():
     assert C.check(_cell(), _doc("6d1295ed")) == []
 
 
-# --- a datacenter's shared NAT IP (coordinator 2026-09-26 22:00Z; red-team-flock-3's conditions S1-S5, 22:05Z) ------------------
+# --- a datacenter's shared NAT IP (red-team-flock-3's conditions S1-S5) ---------------------------------------------------------
 
 IP = "91.199.227.82"
 #: An L40S prover and an H100 verifier in EU-NL-1 as the RunPod API shows them: two machine ids behind one egress NAT, the
@@ -333,7 +333,7 @@ def test_s4_the_rtt_target_is_the_verifier_pods_sshd_on_its_global_name(monkeypa
     assert seen["input"] == Path(PL.__file__).read_text()
 
 
-# --- the DMI uuid on bare metal (coordinator 22:40Z: RunPod containers cannot read it) ----------------------------------------
+# --- the DMI uuid on bare metal (RunPod containers cannot read it) ------------------------------------------------------------
 
 NO_UUID = {m: {k: x for k, x in rec.items() if k != "product_uuid"} for m, rec in PROBES.items()}
 
@@ -461,7 +461,7 @@ def _init_environ(monkeypatch, tmp_path, content):
 
 
 def test_an_ssh_started_probe_records_the_pod_from_the_container_init_environment(monkeypatch, tmp_path):
-    """A job started over ssh has no RUNPOD_* (flock-backend 03:11Z): the probe reads the pod id, public IP and datacenter from
+    """A job started over ssh has no RUNPOD_*: the probe reads the pod id, public IP and datacenter from
     the container's init process, so the shared-NAT re-check at register finds the pod id.  Only those keys are read."""
     for k in ("RUNPOD_POD_ID", "RUNPOD_PUBLIC_IP", "RUNPOD_DC_ID"):
         monkeypatch.delenv(k, raising=False)

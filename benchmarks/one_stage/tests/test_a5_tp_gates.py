@@ -23,6 +23,7 @@ from verity.ml.circuits.defs import bind
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, verifier as V
 from verity.ml.definitions.registry.b1_tp2 import AllReduce2
+from verity.ml.windows import rows as SR
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
@@ -51,7 +52,7 @@ def table(c, m, port: str) -> list[bytes]:
 
 
 def header(win: dict, m) -> dict:
-    return next(e for e in win["members"] if e["name"] == m.key)["registered"]
+    return SR.registered_header(win, next(e["k"] for e in win["members"] if e["name"] == m.key))
 
 
 def test_the_unit_is_the_registered_allreduce2_with_a_port_a_rank() -> None:

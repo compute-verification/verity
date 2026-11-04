@@ -74,6 +74,14 @@ def test_fast_clones_seeds_the_container_disk_from_the_volume_once(tmp_path):
     assert (tmp_path / "queue.volume" / ".git").is_dir()
 
 
+def test_start_seeds_the_clones_before_its_push_check():
+    """On a new container `$REPO` exists only once `fast_clones` has run, so a `start` that checks its dry-run push first is
+    always refused there."""
+    start = re.search(r"^  start\) (.*?);;\n", DRIVE.read_text(), re.M | re.S).group(1)
+    assert 'flock 8; fast_clones' in start
+    assert start.index("fast_clones") < start.index("gh_app_token.sh")
+
+
 def test_locked_calls_checkout_with_its_verb():
     body = re.search(r"^locked\(\) \{\n(.*?)^\}\n", DRIVE.read_text(), re.M | re.S).group(1)
     assert 'checkout "$1" || exit 1' in body and "--detach" not in body

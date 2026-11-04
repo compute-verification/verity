@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from verity.ml.circuits.types import Record
+from verity.ml.circuits.types import RecordType
 from verity_vllm.check.replay import index as IX
 from verity_vllm.correspondence.reader_for_query import recorded_names
 from verity_vllm.correspondence.runtime import validate_document
@@ -117,7 +117,7 @@ def test_compile_steps_names_each_program_the_same_on_every_compile_with_no_vllm
         u = next(u for u in c.requests if u.digest == dg)
         body = c.programs[dg].fn.body
         assert sorted(n.names) == list(range(len(body.nodes))) and n.params == [
-            [p, str(Record(*((WRAPPER + f, x) for f, x in t.fields)) if isinstance(t, Record) else t)] for p, t in body.params]
+            [p, str(RecordType(*((WRAPPER + f, x) for f, x in t.fields)) if isinstance(t, RecordType) else t)] for p, t in body.params]
         assert (n.shape["LP"], n.shape["T"], n.shape["C"], n.shape["sampling"]) == (u.LP, u.T, u.C, u.policy)
         d = tmp_path / dg[:16]
         assert write_build(str(d), c.programs[dg], n) == dg
@@ -134,6 +134,31 @@ def test_compile_steps_names_each_program_the_same_on_every_compile_with_no_vllm
     assert [c.named[u.digest].prefix for u in c.requests] == [None, {
         "input": 1, "C": 16, "row_leaves": TINY["num_key_value_heads"] * TINY["hidden_size"] // TINY["num_attention_heads"],
         "layers": [f"model.layers.{i}.self_attn.attn" for i in range(TINY["num_hidden_layers"])]}]
+
+
+def test_a_named_build_declares_what_the_manifest_reads_from_a_traces_record(tmp_path):
+    """`write_build`'s `result.json` declares the target and each attention layer under vLLM's layer name with its heads, where a
+    trace's `attention_impls_observed` stands: the manifest's correspondence takes the wrapper's ``model.`` off each op path, its
+    profile follows the declared target, and the Commit's X-03 reads each layer's statics from it."""
+    from verity_vllm.acquire import fa2_plane_classes as FP
+    from verity_vllm.correspondence.reader_for_query import Correspondence
+    from verity_vllm.query.program_view import from_instances
+    from verity_vllm.query.required import _profile
+    reg, (advice, ingress) = _registered(), _hit(16)
+    c = compile_steps(reg, advice, ingress, named=True)
+    dg, n = next(iter(c.named.items()))
+    d = tmp_path / "build_request_LP24_T3"
+    write_build(str(d), c.programs[dg], n)
+    res = json.loads((d / "result.json").read_text())
+    layers = [f"model.layers.{i}.self_attn.attn" for i in range(TINY["num_hidden_layers"])]
+    tp = reg.phi.target_profile()
+    assert res["target"] == {"declared": tp.to_json(), "declared_source": "declared"} and sorted(res["attention_impls_declared"]) == layers
+    assert Correspondence.of(from_instances(str(d / "instances.json.gz")), str(d),
+                             implementation_paths=Correspondence.implementation_paths_of(res)).prefix == WRAPPER
+    assert _profile(res, None)[0] == ("hopper" if tp.effective_flash_attn_version() == 3 else "ampere")
+    impls, path = FP.attention_impls_of_record(programs_root=str(tmp_path))
+    assert path == str(d / "result.json") and [(x.layer, x.NH, x.KVH, x.D, x.window) for x in FP.declarations_from_attention_impls(impls)] == [
+        (i, 4, 2, 16, None) for i in range(TINY["num_hidden_layers"])]
 
 
 @pytest.mark.parametrize("config,fact", [("qwen25-05b", "a q/k/v bias"), ("qwen3-4b", "q/k norms")])

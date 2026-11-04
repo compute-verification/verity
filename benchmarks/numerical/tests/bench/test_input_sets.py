@@ -1,6 +1,6 @@
 """Input sets (``bench.input_sets``), the template catalogue (``bench.templates``) and the IR generator (``bench.generate``).
 
-Captured and synthetic sets are interchangeable: the eight captured #101 manifests (``data/captured-101/manifests``, PR #42's
+Captured and synthetic sets are interchangeable: the eight captured #101 manifests (``data/captured-101/manifests``, the
 export ``art:b5bb0ca9``) identify their subcircuits, whose relation, set name and ports are exactly the exporter's; slices of
 seven of them (``data/captured-101/slices``, ``input_sets.subset``) re-evaluate bit-exactly through the IR evaluator; a synthetic
 set of each template has the captured layout and provenance fields and verifies the same way."""

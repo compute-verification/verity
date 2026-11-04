@@ -1,7 +1,7 @@
-"""NCCL's transport and vLLM's custom all-reduce per device class: what a tensor-parallel row's engines run with.
+"""NCCL's transport and vLLM's custom all-reduce per device class: what a tensor-parallel workload's engines run with.
 
 On a box whose GPUs reach each other only across PCIe and the CPU interconnect (`nvidia-smi topo -m`: SYS), NCCL's P2P transport
-hangs vLLM's all-reduce (#70 / #75), so a TP workload for such a target requires NCCL_P2P_DISABLE=1 in its `engine.env` and
+hangs vLLM's all-reduce, so a TP workload for such a target requires NCCL_P2P_DISABLE=1 in its `engine.env` and
 ``disable_custom_all_reduce: true`` in its `engine.args`, which `pipeline.workload` writes and `pipeline.row_tp.TpRow` applies.  Every
 other target, the H boxes among them, runs vLLM's own transport and its custom all-reduce, as standard vLLM does.  A TP workload's file states
 both (`config.RowConfig` refuses one without ``disable_custom_all_reduce``); nothing falls back to a default.

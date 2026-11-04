@@ -50,7 +50,7 @@ system's own class of single-game strategies, stated without reading which of `�
 collision finder built from the strategy meets `cr/sha-512` or `ecr/sha-512` at `q`), and only beside the theorem that
 the honest prover's induced strategies are in it. Holding the honest prover is not enough: the strategies of games that
 are no bad tile's proof game hold it, and give a `TileGame` for every tile at `ηzk = 0` with `Bad` the tile being bad,
-and so `GγHidden` from `GγSampled` with no proof system (the red team's F2 on #919). -/
+and so `GγHidden` from `GγSampled` with no proof system. -/
 structure TileGame [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (TR : TileRules Q R S)
     (HA : HiddenAudit Q R S)
     (Cls : Transcript → HA.Opening → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop) (ηzk : ℕ → ℝ)

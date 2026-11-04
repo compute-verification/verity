@@ -17,30 +17,10 @@ About the circuits and partitions of `Definitions.Flock.Circuit`:
 
 namespace FlockSoundness.Audit
 
-theorem xorSum_congr {ι : Type} {l : List ι} {v w : ι → Bool} (h : ∀ x ∈ l, v x = w x) :
-    xorSum l v = xorSum l w := by
-  unfold xorSum
-  rw [List.map_congr_left h]
-
 theorem xorSum_map {ι κ : Type} (l : List ι) (f : ι → κ) (v : κ → Bool) :
     xorSum (l.map f) v = xorSum l (v ∘ f) := by
   unfold xorSum
   rw [List.map_map]
-
-namespace Op
-
-variable {N : ℕ}
-
-theorem apply_congr (o : Op N) {v w : Fin N → Bool} (h : ∀ x ∈ o.args, v x = w x) :
-    o.apply v = o.apply w := by
-  cases o
-  case row a b =>
-    simp only [apply]
-    rw [xorSum_congr fun x hx => h x (List.mem_append_left _ hx),
-      xorSum_congr fun x hx => h x (List.mem_append_right _ hx)]
-  all_goals simp_all [args, apply]
-
-end Op
 
 namespace Circuit
 

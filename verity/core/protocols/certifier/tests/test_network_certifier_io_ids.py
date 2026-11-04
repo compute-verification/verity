@@ -147,14 +147,14 @@ def test_a_commit_that_differs_at_a_source_is_refused_in_both_buckets():
 
 def test_the_read_rows_are_the_commits_at_the_maps_steps():
     """Each bucket's read rows are the Commit's registered rows (`verity.ml.commitments.advice`'s registration) at its
-    map's steps: the verifier's own ports (`port_reads`, `INPUT_IDS`) have unit u read bucket u's steps, and the Lean
-    verifier's registered reads (`warden_rows.refusal`) accept every bucket's rows and refuse a row, a salt or a step
-    other than the Commit's, as `reads_open` does in the clear."""
+    map's steps: the verifier's own ports (`port_reads`, `INPUT_IDS`) have proof block u read bucket u's steps, and the
+    Lean verifier's registered reads (`warden_rows.refusal`) accept every bucket's rows and refuse a row, a salt or a
+    step other than the Commit's, as `reads_open` does in the clear."""
     insts, count = _link(ACROSS), len(_steps(ACROSS))
     seed = hashlib.sha512(b"commit").digest()
     rows = I.commit_rows(_steps(ACROSS), _tokens(_prompts(ACROSS)), P)
     salts = [IT.fake_salt(b"commit", s) for s in range(count)]
-    root = ADV.register(rows, 32 * P, seed, salts).root
+    root = ADV.commit(rows, 32 * P, seed, salts).root
     assert root == insts[0].port_root
     dom = IT.domain(seed, count)
     ports = I.port_reads([i.map for i in insts], root, dom.domain_id, count, P)
@@ -182,13 +182,13 @@ def test_the_read_rows_are_the_commits_at_the_maps_steps():
 def test_a_second_tree_of_the_users_ids_is_refused_under_the_commits_registration():
     """The forward computes request 2's position 5 on another id, and the Commit registers that
     tree. The prover hands the verifier instances opened from a second tree of the user's ids under the same public
-    domain, so every unit is 1. The verifier's own ports name the registration's root and its own maps' steps, never
-    an instance's, so the second tree's rows open none of them."""
+    domain, so every proof block is 1. The verifier's own ports name the registration's root and its own maps' steps,
+    never an instance's, so the second tree's rows open none of them."""
     tokens = _tokens(_prompts(ACROSS))
     tokens[2][5] ^= 1
     rows = I.commit_rows(_steps(ACROSS), tokens, P)
     salts, levels, dom_id = I.commit(rows)
-    registered = ADV.register(rows, 32 * P, hashlib.sha512(b"commit").digest(), salts)
+    registered = ADV.commit(rows, 32 * P, hashlib.sha512(b"commit").digest(), salts)
     forged = _link(ACROSS)
     assert registered.root == levels[-1][0] != forged[0].port_root and forged[0].port_domain == dom_id
     assert [I.unit_reference(SHAPE, i) for i in forged] == [1] * BUCKETS
@@ -363,7 +363,7 @@ def _chain_ands(CB: int, D2: int) -> int:
 
 def _chains(rng, CB: int, D2: int, count: int) -> list[list[list[int]]]:
     """Runs of 2^D2 members (class, kind, value): the even ones valid chains (sorted classes, each class but the sink one
-    value and a slot first), the odd ones a valid chain with one member's class, kind or value redrawn."""
+    value and a slot first), the odd ones a valid chain with one member's class, kind or value resampled."""
     n, sink = 1 << D2, (1 << CB) - 1
     out = []
     for c in range(count):
@@ -410,7 +410,7 @@ def test_the_batched_chain_is_the_flat_one():
                     reason="the flat trace of 1.2M ANDs, a few GB and minutes: VERITY_CERTIFIER_HEAVY=1")
 def test_the_batched_chain_is_the_flat_one_at_the_served_sort():
     """`IoTieIdsChain{13, 14}`, IoTieRequestIds{4096, 16, 1, 512, 6}'s, against its flat trace on random runs, valid and
-    with a member redrawn: what the default test's D2 <= 8 can't show is the batch's wiring at 16,383 links."""
+    with a member resampled: what the default test's D2 <= 8 can't show is the batch's wiring at 16,383 links."""
     rng = random.Random(14)
     chains = _chains(rng, 13, 14, 8)
     want = [_chain_reference(ms, (1 << 13) - 1) for ms in chains]
@@ -428,7 +428,7 @@ def test_the_unit_is_its_reference():
     fields, the classes' routing to the fields, the members (slots, the read rows' entries, the sink) into the sort,
     and IoTieRequest's checks beside them. No gate of it hashes: the read rows are the registered reads'.
 
-    Slow (the unit's ANDs traced and evaluated on 19 cases, about 18 s)."""
+    Slow (the proof block's ANDs traced and evaluated on 19 cases, about 18 s)."""
     sh = SHAPE
     ps = _prompts(ACROSS)
     sub, src = _tokens(ps), _tokens(ps)

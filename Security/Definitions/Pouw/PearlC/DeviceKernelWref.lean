@@ -1,11 +1,11 @@
 import Definitions.Pouw.PearlC.DeviceRev1
 
 /-!
-# Pearl-C at a device record with the honest kernel's `W_ref` (the price-twins lane's file; definitions only, staged)
+# Pearl-C at a device record with the honest kernel's `W_ref` (definitions only, staged)
 
 The statement's `W_ref` (`wrefDev`, `wrefDevRev1`) prices the honest program's forming as the credit does, with the E4M3
 cast at its cheapest bit-exact implementation. The kernel as it runs can cost more: sm_120's port casts at 32.06 per
-code as written and 16.00 packed four per word (`internal/pouw/rtx-pro/server.md`, 10:05Z), against a credited 8.0.
+code as written and 16.00 packed four per word, against a credited 8.0.
 These definitions add `c` per activation element to `W_ref`, the kernel's forming beyond what the record prices, and
 change nothing else: the credit, the debit, the cap and the checks are the record's, so TT_OUT reads the same game.
 -/

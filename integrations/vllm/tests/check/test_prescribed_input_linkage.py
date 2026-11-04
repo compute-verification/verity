@@ -125,7 +125,7 @@ def test_a_committed_seed_that_is_not_the_declared_one_fails_by_name_at_the_step
     assert lk["result"] is False and lk["unlinked_n"] == 1
     u = lk["unlinked"][0]
     assert u["kind"] == "seed" and u["request_id"] == "r0" and u["engine_step"] == 2
-    assert lk["why"] == "committed runner.sampler/seed 4242 != declared workload seed 1077402498 of r0 at step 2 (prescribed input, ruling 36)"
+    assert lk["why"] == "committed runner.sampler/seed 4242 != declared workload seed 1077402498 of r0 at step 2 (prescribed input)"
     assert lk["prescribed"]["seed"] == {"rule": LK.SEED_RULE, "requests_declared": 1, "checked": 4, "linked": 3}
 
 
@@ -160,7 +160,7 @@ def test_a_committed_splits_word_that_is_not_splitsfor_of_the_committed_live_cou
     assert lk["result"] is False and lk["unlinked_n"] == 1
     u = lk["unlinked"][0]
     assert u["kind"] == "splits" and u["request_id"] == "r1" and u["engine_step"] == 3
-    assert lk["why"] == "committed runner.sampler/splits 2 != SplitsFor_v1(live 3, num_SMs 4) = 1 for r1 at step 3 (prescribed input, ruling 36)"
+    assert lk["why"] == "committed runner.sampler/splits 2 != SplitsFor_v1(live 3, num_SMs 4) = 1 for r1 at step 3 (prescribed input)"
 
 
 def test_an_omitted_request_moves_the_live_count_and_every_batch_mates_s_is_named():
@@ -223,7 +223,7 @@ def test_the_s_of_record_is_the_registry_relation_not_a_table(live, nsm, want):
     assert splits_for_v1(live, nsm) == want
 
 
-# ------------------------------------------------------------------------------------- ruling 35 sixth consumer: the linkage horizon
+# ----------------------------------------------------------------------------------------------- sixth consumer: the linkage horizon
 
 def test_linkage_horizon_is_the_program_of_records_steps_capped_by_the_declared_cap():
     # B=1 eos-truncated: cap 32, served-shape Program build_request_LP32_T11 has 12 steps -> 12 steps linked, not 32
@@ -276,7 +276,7 @@ def test_an_early_stopped_request_must_end_on_a_declared_eos_id_at_the_horizons_
     assert lk2["horizon"]["r0"]["eos_of_record"]["verified"] is False
     # no declared stop rule -> fail closed, by name
     store, lk3 = _truncated(None)
-    assert lk3["result"] is False and "declares no stop rule (eos_token_ids)" in lk3["why"] and "fail closed (F-pm-24)" in lk3["why"]
+    assert lk3["result"] is False and "declares no stop rule (eos_token_ids)" in lk3["why"] and "fail closed" in lk3["why"]
     # ignore_eos: the declared set is EMPTY -> every early stop fails
     store, lk4 = _truncated([])
     assert lk4["result"] is False and lk4["unlinked"][0]["kind"] == "eos"

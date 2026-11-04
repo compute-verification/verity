@@ -1,8 +1,8 @@
 #!/bin/bash
 # hosttrace.sh VCPU RCPU -- CMD...: run CMD with hosttrace.bt tracing the memory challenger's and the responder's cores into
 # $RESEARCH_RUN_DIR/hosttrace.txt (HOSTTRACE_OUT overrides; HOSTTRACE_OVER_NS, default 5000, is its threshold).  Start it
-# outside vy-pous-quiet so bpftrace's own process stays off the quiet cores:
-#   gpu-lease 1 --on N --timed -- bash benchmarks/pous/hosttrace.sh 124 126 -- vy-pous-quiet env ... bash benchmarks/pous/pod.sh ...
+# outside the node's quiet-slice wrapper so bpftrace's own process stays off the quiet cores:
+#   gpu-lease 1 --on N --timed -- bash benchmarks/pous/hosttrace.sh 124 126 -- QUIET env ... bash benchmarks/pous/pod.sh ...
 # Without passwordless sudo or bpftrace, CMD runs untraced and the file says why.  Exits with CMD's status.
 set -u
 [ $# -ge 4 ] && [ "$3" = -- ] || { echo "usage: hosttrace.sh VCPU RCPU -- CMD..." >&2; exit 2; }

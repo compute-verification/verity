@@ -1,9 +1,9 @@
 """The arithmetic behind the fast-decode routes' ceilings and their effect on P2's timed audit, with the measured rates as
-parameters (the defaults are run r20261011-223010-39a4's, on one RTX PRO 6000 Blackwell Server Edition).
+parameters (the defaults are those measured on one RTX PRO 6000 Blackwell Server Edition).
 
 - `tc_ceiling_gbps`: the decode rate if the tensor cores did nothing but the two squarings' MMAs at a given int8 rate.
 - `full_pass_gbps`: a kernel and the key expansion run one after the other.
-- `seqroot`: P2's SeqRoot margin at width w, derived as `p2/PROTOCOL.md` §12 derives it at 16,448 bits (the Zen 5 floor
+- `seqroot`: P2's SeqRoot margin at width w, derived as `schemes.p2.ROOT_CALL_NS` derives it at 16,448 bits (the Zen 5 floor
   τ_F, (w − 2) + 40 squaring-equivalents a root, the measured 8-core cooperation 3.490×, half the cooperating root as
   `ROOT_CALL_NS`, the RTT cap the largest whole µs with Δ + cap below it), with τ_F scaled to w as w^alpha: log2(3) when
   narrowing drops a Karatsuba level of the floor's plan, log4(7) when it drops a Toom-4 level (the narrower width's best

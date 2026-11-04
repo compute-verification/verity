@@ -35,7 +35,7 @@ With one bit of a drawn unit's committed values flipped, it answered **⟨FLIP_V
   except with ⟨POUW_ERROR⟩. The block's one draw establishes ε = ⟨POUW_EPS⟩ at δ = 1%, over ⟨POUW_COVERAGE⟩ of the
   block's static INT8 MACs, and a certified share of ⟨POUW_CERTIFIED_SHARE⟩ at ρ = ⟨POUW_RHO⟩.
 - The network certifier: at most K = ⟨NET_K⟩ bits leaked, except with ⟨NET_ERROR⟩.
-- Each protocol's error, summed as JointHorizon states it (⟨JOINT_HORIZON_STATUS⟩): sampled proofs ⟨INTEGRITY_ERROR⟩,
+- Each protocol's error, summed as JointHorizonLive states it (⟨JOINT_HORIZON_STATUS⟩): sampled proofs ⟨INTEGRITY_ERROR⟩,
   PoUW ⟨POUW_ERROR⟩ and the network certifier ⟨NET_ERROR⟩, ⟨DEMO_A_ERROR_SUM⟩ in all.
 
 Said plainly: proving this block cost ⟨Y⟩× the block's own GPU time (⟨PROVING_GPU_S⟩ GPU-seconds of proving against
@@ -83,7 +83,7 @@ That's ⟨N_HOURS⟩ H200-hours, which D H200s fill in ⟨M_MINUTES⟩ minutes.
 
 - Long sampling blocks: keeping the committed state and requests needed to replay drawn units across a one-week
   sampling block.
-- The challenger's real network round trip, which is simulated (⟨SIMULATED_RTT_MS⟩ ms), by Daniel's ruling.
+- The challenger's real network round trip, which is simulated (⟨SIMULATED_RTT_MS⟩ ms): the demo runs the challenger beside the prover.
 - ⟨POUW_BACKING⟩
 ⟨CAVEATS⟩
 

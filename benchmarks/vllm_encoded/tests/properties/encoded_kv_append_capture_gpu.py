@@ -1,6 +1,6 @@
 """Capture the encoded stack's KV-cache append on sm_120 and set it against ``KvCacheAppendE4m3_v1``.
 
-The encoded stack (`benchmarks/vllm_encoded/stack.py`, #1956) serves Llama-3.1-8B from the encoded store and appends
+The encoded stack (`benchmarks/vllm_encoded/stack.py`) serves Llama-3.1-8B from the encoded store and appends
 each step's new BF16 key and value rows to vLLM's paged pool as word-codec words (`paged.cu`'s deferred
 ``pg_append_multi``).  This tool installs the stack exactly as serving does (`serve.py`'s ``Install``, KV receipts
 off), wraps the deferred append, and for one prefill and three decode steps captures the first and last layers' input
@@ -14,11 +14,11 @@ BF16 rows, their slots and every cache byte the append wrote for them.  It then 
 
 The second comparison is the diagnosis, not a gate: the encoded stack has no 8-bit cache mode today (its attention
 raises on ``kv_cache_dtype != "auto"``, and its payloads are the exact BF16 words), a deliberate interim choice
-(the 12 Oct card: FP8 KV where served is planned; the 8B model serves 16-bit for now).  The report records that the
+(FP8 KV where served is planned; the 8B model serves 16-bit for now).  The report records that the
 Definition applies nowhere, localizes the first differing element, and counts the elements the Definition's
 quantization would change, so the day the 8-bit mode lands this capture is re-pointed, not rewritten.
 
-Captured on the RTX PRO 6000 (run r20261014-194033-0a9c): one prefill and three decode appends, layers 0 and 31,
+Captured on the RTX PRO 6000: one prefill and three decode appends, layers 0 and 31,
 172,032/172,032 cache bytes bit-exact against the codec reference; 81,324 of 86,016 elements would change under the
 Definition's quantization, first difference localized, both scales FP32 1.0.
 

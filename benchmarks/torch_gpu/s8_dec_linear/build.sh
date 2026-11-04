@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The decode-to-staging ship for one GPU arch, built off the card (a CPU node, `research run --on auto --cwd source`):
+# The decode-to-staging ship for one GPU arch, built off the card on a CPU node (cwd = the source tree's root):
 #   lib/<variant>/libp2stage.so  p2stage.cu for ARCH (default sm_90a, the H200's), each refused unless ptxas reports no warning,
 #                                spill or stack frame and its SASS has no local memory (sass_gate.py, which records registers,
 #                                shared memory and the instruction mix into lib/<variant>/sass.json); VARIANTS names them

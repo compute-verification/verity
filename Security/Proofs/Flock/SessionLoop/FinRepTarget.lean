@@ -94,8 +94,8 @@ theorem finRepTarget (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Floc
     simp only [viewPoints, Array.size_map, Array.size_range]
     exact Nat.mul_comm _ _
   rw [hsch] at h₁ h₂
-  exact Masked.fwTarget_at x hx w hR t (finCoins x ops) (refK x) hnr s0 spec hsx j r (vs x w ν (finCoins x ops))
-    (_root_.Flock.Firewall.Finish.claimsOf q.xs) hxsz hxs tb.st hst tb.g hg tb.cm0.toC
+  exact Masked.fwTarget_at x hx w hR t (finCoins x ops) (refK x) hnr s0 spec hsx j r
+    (vs x w ν (finCoins x ops) (finS.seenOf x t)) (_root_.Flock.Firewall.Finish.claimsOf q.xs) hxsz hxs tb.st hst tb.g hg tb.cm0.toC
     (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic'.toC q.vals hl _ _ _ _ _ _ _ _ _ _ _ _ _ h₁ h₂ h₃
 
 end Loop

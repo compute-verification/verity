@@ -5,7 +5,7 @@ import Mathlib.Data.Fintype.Basic
 /-!
 # Noise that cancels inside one checked product: definitions (trusted)
 
-The coordinator's lead, as algebra only (no game instance): from integer matrices `E₁` (`m × k`), `F₁` (`k × n`) and
+The lead, as algebra only (no game instance): from integer matrices `E₁` (`m × k`), `F₁` (`k × n`) and
 `R` (`k × k`),
 
 ~~~text

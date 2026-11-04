@@ -1,4 +1,4 @@
-"""C-Flock lowering of ``rmsnorm-triton`` (RMSNormTriton_v1): the IR graph cut at its reduction boundary
+"""Flock lowering of ``rmsnorm-triton`` (RMSNormTriton_v1): the IR graph cut at its reduction boundary
 (``verity_flock.ir_lower.reduction_cut``) into identical units, one per warp of the Triton kernel's 128-thread CTA: its
 threads' 8-column square chains, the xor-butterfly to lane 0 (the warp sum is a cut word) and the epilogue of its 256
 columns, which reads the row scalar ``inv`` (a cut word). The tail, the CTA combine ``(w0 + w2) + (w1 + w3)``, the chunks

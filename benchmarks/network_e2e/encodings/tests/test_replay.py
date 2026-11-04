@@ -1,4 +1,4 @@
-"""ENC-REPLAY: the replay reproduces vLLM's own scheduler, and the residual advice decodes back to the trace.
+"""The scheduler replay: the replay reproduces vLLM's own scheduler, and the residual advice decodes back to the trace.
 
 The fixtures are step traces of vLLM d9105ea80's `Scheduler` and `AsyncScheduler` on a fake executor (`vllm_trace.py
 tests/fixtures --requests 14 --seed 3`, the cases named by the file): preemption under KV pressure in both engine loops,
@@ -128,8 +128,8 @@ def test_table_counts_every_request_and_step():
 
 
 def corpus_dir(t, d: Path) -> Path:
-    """`t` written as one TRACE-CORPUS trace (`benchmarks/network_e2e/traces/summary.py`'s joined files), with a step that
-    scheduled nothing, as the hook records one."""
+    """`t` written as one trace-corpus trace (`benchmarks/network_e2e/traces/summary.py`'s joined files), with a step
+    that scheduled nothing, as the hook records one."""
     seen: set[int] = set()
     with open(d / "steps.jsonl", "w") as f:
         f.write(json.dumps({"step": 0, "total_num_scheduled_tokens": 0, "new": [], "cached": []}) + "\n")
@@ -211,7 +211,7 @@ def test_order_bits_charge_only_reordering():
 def test_v0_advice_is_valid_advice_v0(tmp_path):
     v0 = R.load_v0(os.environ.get("VERITY_ENCODINGS_ADVICE_V0"))
     if v0 is None:
-        pytest.skip(f"ADV-SPEC's advice v0 isn't at {R.V0_PATH} (VERITY_ENCODINGS_ADVICE_V0: a path to its advice.py)")
+        pytest.skip(f"advice v0 (advice.py) isn't at {R.V0_PATH} (VERITY_ENCODINGS_ADVICE_V0: a path to its advice.py)")
     for name in CASES:
         t = trace(name)
         adv = R.v0_advice(t, v0)

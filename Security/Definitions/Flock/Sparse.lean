@@ -3,7 +3,7 @@ import Definitions.Flock.Piop
 /-!
 # Hidden unit circuits: L4′ with h, and the sparse phase H1–H4
 
-F4 candidate 3 (note:proofs/20261010T0250Z-draft-f4-bitsumcheck §1.3, row M1 of its §4) as `Game` programs, on the
+Hidden unit circuits as `Game` programs, on the
 pattern of `Piop.lean`. With hidden unit circuits the lincheck's comb is the public part's fold, and the prover sends
 the hidden part's fold `h` after `z_partial` and before `r'` (`holoLincheck`, L4′). The sparse phase (`sparsePhase`)
 then checks `h` against the registered templates at the rep's coins:
@@ -119,7 +119,7 @@ def vget {n : ℕ} (u : Fin n → F) (i : ℕ) : F := if h : i < n then u ⟨i, 
 /-- A point's coordinate `j`: the skip's six, then the rest. -/
 def cat6 {m : ℕ} (a : Fin 6 → F) (b : Fin m → F) (j : ℕ) : F := if j < 6 then vget a j else vget b (j - 6)
 
-/-- `Φ(q) = (α·q_{2ℓ} + q_{2ℓ+1}) · ∏_{j<ℓ} (1 + x_j + q_j)·(1 + y_j + q_{ℓ+j})` (§1.3). -/
+/-- `Φ(q) = (α·q_{2ℓ} + q_{2ℓ+1}) · ∏_{j<ℓ} (1 + x_j + q_j)·(1 + y_j + q_{ℓ+j})`. -/
 def sparsePhi (ell : ℕ) (α : F) (x y q : ℕ → F) : F :=
   (α * q (2 * ell) + q (2 * ell + 1)) * ∏ j ∈ Finset.range ell, ((1 + x j + q j) * (1 + y j + q (ell + j)))
 

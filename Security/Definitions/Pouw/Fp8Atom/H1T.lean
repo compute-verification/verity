@@ -3,12 +3,12 @@ import Definitions.Pouw.Fp8Atom.Fp32
 /-!
 # H-1T: the forming map, the checked chain and its credited words (trusted definitions)
 
-H-1T is `docs/pouw/hardness-shaped-matrices.md` §3.1 as red team Phase 19c accepts it (X-H1T-8, with its 9 changes).
-It is the map Track H's `internal/pouw/hardness/h1_tagged.py` computes (`h1t_ref`, `tag_tuples`, `chain`), with the
+H-1T is `docs/pouw/hardness-shaped-matrices.md` §3.1.
+It is the map `h1_tagged.py` computes (`h1t_ref`, `tag_tuples`, `chain`), with the
 salt fields of the kernel `h1t_form_xq` (`h1_kernel.py`).
 
 * **Layout.** Each k32 slice has 29 real lanes (0..28) and 3 tag lanes (29, 30, 31). There are `T = ⌈k/29⌉` slices,
-  and the row and the columns are zero-padded to `29·T` (X-H1T-8 change 6).
+  and the row and the columns are zero-padded to `29·T`.
 * **Salt** (change 1). Per (row, slice) the kernel reads 18 raw XOF words `r0..r17` (`RawSlice`). The map reads
   exactly these fields of them (`extract`, `SliceSalt`):
   * the sign of real lane `ℓ` is bit 15 (`ℓ` even) or bit 31 (`ℓ` odd) of `r_(ℓ/2)`;
@@ -30,7 +30,7 @@ salt fields of the kernel `h1t_form_xq` (`h1_kernel.py`).
 * **A unit** (`Unit`) is `m` rows of `X_q` against `n` columns of B′ over `k`. It has its own salt, and its salt
   context binds the unit id (change 4), so different units' salts are independent coordinates.
 * **Legal** (change 5): `k ≤ 32,768`, `n ≤ 88,412`, every code finite. There is no `|x| ≤ 416` clause, which is
-  correctness and not security (X-H1T-4).
+  correctness and not security.
 -/
 
 namespace Pouw.Fp8Atom.H1T

@@ -1,18 +1,18 @@
 """NOSUM, mechanically: no fixed-function unit on sm_120 (RTX PRO 6000) can write a fresh committed sum-of-products word.
 
 A committed word is a fresh s32: the running sum of 32 int8 products of noised operands (FOLD-BW, 32 MACs a word), and
-"fresh" means not equal to another committed word or a constant and not a cheap function of other values
-(note:20261017T0310Z-report-eps1-program §1). The honest route is the tensor pipe (priced by the tensor theorem, TENSOR)
-and the SM's scalar issue slots (priced by q*, QSTAR). NOSUM is the claim that no OTHER unit -- the ones that compute
+"fresh" means not equal to another committed word or a constant and not a cheap function of other values.
+The honest route is the tensor pipe (priced by the tensor theorem, TENSOR)
+and the SM's scalar issue slots (priced by q*, `scalar_route.py`). NOSUM is the claim that no OTHER unit -- the ones that compute
 outside the issue slots -- can make such a word more cheaply, so the ε_machine LP need not give the cheater a side route
 for the committed words themselves.
 
 An assumption is replaced by a measured cap or a mechanical check wherever the hardware allows. This script does both.
 For every non-issue unit it records (1) the arithmetic it can do, (2) whether that arithmetic can yield an exact fresh
 committed s32 sum-of-products (precision, range, rounding, freshness), and (3) its measured rate beside a saturated
-honest kernel (DATASHEET; machine_model rows.csv). The checkable physics is verified here; the measured caps are cited;
-and the machine model's floors (floors.csv: every root-write ≥ 32 MACs a word, every copy/load ≥ 16) are cross-checked
-to confirm no side unit is priced below honest's per-word cost.
+honest kernel (the data sheet, machine_model's rows.csv). The checkable physics is verified here; the measured caps are
+cited; and the machine model's floors (floors.csv: every root-write ≥ 32 MACs a word, every copy/load ≥ 16) are
+cross-checked to confirm no side unit is priced below honest's per-word cost.
 
 The units split four ways, and NOSUM holds for each by a different mechanism:
 - **Interpolators / intersection / transform units** (texture filtering, RT cores, ROP blend, video NVENC/NVDEC/OFA/JPEG):
@@ -24,8 +24,8 @@ The units split four ways, and NOSUM holds for each by a different mechanism:
 - **Movers** (TMA bulk copy, cp.async/LDGSTS, LDSM/STSM, SHFL, copy engines/DMA): no arithmetic; their output is a copy
   of an existing word, equal to it, so not fresh.
 - **The uniform datapath** (UIMAD/ULOP3/UIADD3): the one unit that *can* multiply-add to an exact s32, so exactness does
-  not block it -- but it writes one warp-uniform word an instruction (32× fewer than a vector instruction) and, since
-  decision 73, sits on the issue slots (priced), and ptxas will not aim loop-carried work at it (DATASHEET). So it gives
+  not block it -- but it writes one warp-uniform word an instruction (32× fewer than a vector instruction) and
+  sits on the issue slots (priced), and ptxas will not aim loop-carried work at it (the data sheet). So it gives
   no free committed-word capacity; NOSUM holds for it by pricing, not by exactness.
 
 Run: `python nosum.py [--mutations] [--verdict PATH]`. Stdlib + exact_kit only; reads machine_model/data/floors.csv.
@@ -65,7 +65,7 @@ UNITS = [
         "why": "weights are convex (≥0, sum 1) on a 256-level lattice over ≤ 8 taps, rounded -- a convex combination of "
                "existing texels, so bounded in their hull and not a free int8 dot product; convex ⇒ not fresh, low "
                "precision + rounding ⇒ not exact",
-        "cap": "TEX bilinear 1.54, TLD 8.38 words/SM/clk beside honest (DATASHEET)", "fresh_words": 0,
+        "cap": "TEX bilinear 1.54, TLD 8.38 words/SM/clk beside honest (the data sheet)", "fresh_words": 0,
         "route": "copy/interp route, priced TEXBIL/TLD at 16-32 MACs/word (floors.csv); 0 fresh words",
     },
     {
@@ -95,7 +95,7 @@ UNITS = [
         "exact": True,  # the ADD is exact, but there is no multiply
         "why": "exact integer ADD only -- no multiply, so it can at most sum words that already exist (a one-op function "
                "of other committed words), which is not fresh; it cannot form a product",
-        "cap": "≤ 1.9 words/SM/clk (every L2 reduction form tops out near 1.9, DATASHEET)", "fresh_words": 0,
+        "cap": "≤ 1.9 words/SM/clk (every L2 reduction form tops out near 1.9, the data sheet)", "fresh_words": 0,
         "route": "add route, priced RED32/ATOMG32 at 32 (root) / 16 (landed word) MACs/word (floors.csv); 0 fresh words "
                  "(no multiply)",
     },
@@ -104,7 +104,7 @@ UNITS = [
         "arith": "exact int32 add reduction of a bulk tile from shared to global",
         "exact": True,
         "why": "as L2 reductions: exact ADD, no multiply; sums existing words, not fresh",
-        "cap": "≤ 1.9 words/SM/clk beside honest (DATASHEET)", "fresh_words": 0,
+        "cap": "≤ 1.9 words/SM/clk beside honest (the data sheet)", "fresh_words": 0,
         "route": "add route, priced TMAred512 at 32 MACs/word (floors.csv); 0 fresh words (no multiply)",
     },
     {
@@ -112,7 +112,7 @@ UNITS = [
         "arith": "store (move) or exact int32 add into a peer CTA's shared memory",
         "exact": True,
         "why": "store is a copy; red.add is an exact ADD with no multiply -- a copy or a sum of existing words, not fresh",
-        "cap": "st.v4 0.40, red.add 0.35 words/SM/clk beside honest (DATASHEET)", "fresh_words": 0,
+        "cap": "st.v4 0.40, red.add 0.35 words/SM/clk beside honest (the data sheet)", "fresh_words": 0,
         "route": "copy/add route, priced ATOME32P 32/16, DSMST4P 32 MACs/word (floors.csv); 0 fresh words",
     },
     {
@@ -120,7 +120,7 @@ UNITS = [
         "arith": "data movement only (global<->shared<->peer, host<->device); no arithmetic",
         "exact": True,  # a moved word is bit-exact -- but it is a copy
         "why": "no arithmetic at all; the output word equals an existing word, so it is a copy, never fresh",
-        "cap": "TMA copy 2.36, LDGSTS 6.09 words/SM/clk beside honest (DATASHEET); DMA bounded by PCIe 0.056 TB/s",
+        "cap": "TMA copy 2.36, LDGSTS 6.09 words/SM/clk beside honest (the data sheet); DMA bounded by PCIe 0.056 TB/s",
         "fresh_words": 0,
         "route": "copy route, priced UBLKCP4K/LDGSTS16 at 16-32 MACs/word (floors.csv, copy16/loads16); 0 fresh words",
     },
@@ -129,10 +129,10 @@ UNITS = [
         "arith": "exact s32 integer multiply-add, but one warp-uniform word per instruction (shared by all 32 lanes)",
         "exact": True,  # CAN make an exact fresh s32 -- the one exception
         "why": "the one unit whose arithmetic is an exact s32 MAC, so exactness does not block it; but it writes 1 word "
-               "an instruction (32× fewer than a vector lane), sits on the issue slots since decision 73 (priced), and "
+               "an instruction (32× fewer than a vector lane), sits on the issue slots (priced), and "
                "ptxas keeps loop-carried warp-uniform chains in vector registers so a program cannot aim fold/word work "
-               "at it (DATASHEET). NOSUM holds for it by pricing, not exactness",
-        "cap": "≤ 0.766 uniform words/SM/clk alone; on issue at 0.74 of a vector slot (decision 73)", "fresh_words": 0,
+               "at it (the data sheet). NOSUM holds for it by pricing, not exactness",
+        "cap": "≤ 0.766 uniform words/SM/clk alone; on issue at 0.74 of a vector slot", "fresh_words": 0,
         "route": "scalar route on issue (UNI), 1 word/instruction, priced at 32 MACs/word (floors.csv); no free capacity",
     },
 ]
@@ -166,7 +166,7 @@ def lcg(seed: int):
 def main() -> int:
     checks = Checks()
 
-    # enumeration coverage: the brief's unit list is all present.
+    # enumeration coverage: every candidate unit is present.
     needed = ["RT core", "Texture", "ROP", "Video", "L2 reduction", "TMA bulk reduce", "DSMEM", "TMA bulk copy",
               "Uniform datapath"]
     joined = " | ".join(u["unit"] for u in UNITS)
@@ -228,7 +228,7 @@ def main() -> int:
         if ((u * a + z) & M32) != ((u * a + z) & M32):  # UIMAD's exact s32 MAC
             udp_exact = False
     checks.check("uniform datapath: UIMAD is an exact s32 MAC (NOSUM holds for it by pricing, 1 word/instruction)",
-                 udp_exact, "priced on issue at 32 MACs/word, 32× fewer words than a vector lane (decisions 73, floors)")
+                 udp_exact, "priced on issue at 32 MACs/word, 32× fewer words than a vector lane (floors.csv)")
 
     # The model's floors price every side-unit kind so it cannot undercut honest's per-word cost: every floor is >= 16
     # MACs a word, and every root-write is 32. Cross-check floors.csv.

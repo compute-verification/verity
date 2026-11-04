@@ -11,7 +11,7 @@ import Mathlib.Tactic.Ring
 import Definitions.Pouw.Guarantees.PearlC
 
 /-!
-# γ from TT_OUT (the cheap-binding lane's file)
+# γ from TT_OUT
 
 Lemmas, none a guarantee: `TTOutPearlC`, the premise of `pearlCGamma8192` and `pearlCGamma16384`, is falsified by the
 first-promotion skip (`Definitions.Pouw.Assumptions.PearlC.TTOut`), and rev1 (`TTOutPearlCDevRev1`) is its repair.
@@ -44,7 +44,7 @@ first-promotion skip (`Definitions.Pouw.Assumptions.PearlC.TTOut`), and rev1 (`T
   carries them, and their measured rate is reported beside γ, not folded into it.
 * `ttOutPearlCWitness`: `TTOutPearlC` is satisfiable, beside an honest reference at `W_ref` and an in-domain workload whose
   unit is within the cap and has positive credit. Its cost model has two programs and shows satisfiability only. That the
-  honest H100 program fits `W_ref` under the real H100 cost model is a measured claim, the kernel lane's, and none of these
+  honest H100 program fits `W_ref` under the real H100 cost model is the kernel's measured claim, and none of these
   statements asserts it.
 -/
 

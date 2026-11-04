@@ -1,8 +1,9 @@
 """Deterministic finite indexed domains: the position sets a commitment covers.
 
 Promoted from veritor ``core/indexed.py`` (eb865ce2): the protocol, the explicit and range domains and the iteration
-helpers.  The ``identity_digest`` tags are wire constants (they enter every ``CommitmentDomain.domain_id``).  The
-session-specific interval domains were left behind.
+helpers.  The ``identity_digest`` tags are wire constants (they enter every ``CommitmentDomain.domain_id`` but a
+:class:`RangeU64Domain`'s, which frames its start and count fixed-width instead).  The session-specific interval domains
+were left behind.
 """
 
 from __future__ import annotations
@@ -199,6 +200,63 @@ class RangeIndexedDomain:
     def __iter__(self) -> Iterator[Position]:
         for rank in range(self.count):
             yield self.unrank(rank)
+
+    def __len__(self) -> int:
+        if self.count > maxsize:
+            raise OverflowError("domain is too large for len(); use .count")
+        return self.count
+
+
+#: A ``range-u64`` domain's bound: ``start + count`` is below it, so every position and the count are u64 words.
+U64_BOUND = 1 << 64
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class RangeU64Domain:
+    """The positions ``start, start + 1, ..., start + count - 1``, rank ``position - start``: the ``range-u64`` kind.
+
+    A ``frame-v3-sha512`` domain over it frames ``start`` and ``count`` as u64be words in its domain id
+    (``merkle.range_u64_domain_message``, ``frame_v3/PROTOCOL.md`` §6), so it has no positions identity:
+    ``identity_digest`` refuses, and so does every frame but SHA-512's.
+    """
+
+    start: int
+    count: int
+
+    def __init__(self, start: int, count: int) -> None:
+        for value, name in ((start, "start"), (count, "count")):
+            if type(value) is not int:
+                raise InvalidArtifact(f"range-u64 domain {name} must be an integer")
+            if value < 0:
+                raise InvalidArtifact(f"range-u64 domain {name} must be nonnegative")
+        if start + count >= U64_BOUND:
+            raise InvalidArtifact("range-u64 domain needs start + count < 2^64")
+        object.__setattr__(self, "start", start)
+        object.__setattr__(self, "count", count)
+
+    @property
+    def identity_digest(self) -> Digest:
+        raise InvalidArtifact("a range-u64 domain has no positions identity: its domain id frames start and count")
+
+    def contains(self, item: int) -> bool:
+        return type(item) is int and self.start <= item < self.start + self.count
+
+    def __contains__(self, item: object) -> bool:
+        return self.contains(item)  # type: ignore[arg-type]
+
+    def rank(self, item: int) -> int:
+        if not self.contains(item):
+            raise KeyError(item)
+        return item - self.start
+
+    def unrank(self, rank: int) -> Position:
+        return Position(self.start + _checked_rank(rank, self.count))
+
+    def at_rank(self, rank: int) -> Position:
+        return self.unrank(rank)
+
+    def __iter__(self) -> Iterator[Position]:
+        return iter(range(self.start, self.start + self.count))
 
     def __len__(self) -> int:
         if self.count > maxsize:

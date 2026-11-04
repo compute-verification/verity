@@ -11,7 +11,7 @@ Three measurements, each written to one JSON under `--out`:
   host DRAM, by async H2D copies overlapped with the digest of the HBM-resident rest, over a sweep of `R` and `f`; and the
   PCIe H2D rate it measures.
 
-Run on a leased GPU through the research queue (`research run --queue --on vy-nebius-1 --gpus 1 ...`). `honest` and `cheater`
+Run on a leased GPU. `honest` and `cheater`
 write results per point to `--out` and skip points already there, so a preempted sweep resumes from a persistent `--out`
 instead of starting over. The honest/cheater separation and the recommended `R`, `T` are derived from these JSONs by
 `analyze.py`.

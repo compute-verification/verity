@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# The units' run on one H200 or RTX PRO 6000, from build.sh's ship (cwd = the source tree's root, a --cwd source run):
+# The units' run on one H200 or RTX PRO 6000, from build.sh's ship (cwd = the source tree's root):
 #
-#   tar -C BUILD_RUN/out/ship -cf /tmp/units-ship.tar .
-#   research run --on vy-dc-h200 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
-#     --send /tmp/units-ship.tar [--send /tmp/units-old.tar] -- bash benchmarks/torch_gpu/units/session.sh
-#   (the RTX PRO 6000: --on vy-nebius-2; --env SWEEP_ONLY=1 for the sweeps alone)
+#   tar -C SHIP -cf IN/units-ship.tar .
+#   OUT=DIR IN=IN bash benchmarks/torch_gpu/units/session.sh   (SWEEP_ONLY=1 for the sweeps alone)
+#
+# Needs CUDA torch and `gpu-lease` on PATH. IN (default a run directory's inputs/, RESEARCH_RUN_DIR) holds
+# units-ship.tar and, optionally, units-old.tar.
 #
 # Outside the lease: the ship (units-ship.tar) unpacked into a scratch directory and held to its MANIFEST.sha256, the
 # build's records and the fixture's summary copied to $OUT, the card and the Python recorded; units-old.tar, another
@@ -16,7 +17,7 @@
 # /workspace/venv312 and /workspace/jobs/venv312); GPU_LEASE_WHO the lease's holder (default units/ and the run's id);
 # LEASE_MIN the lease's bound (default 30); check.py's environment (SWEEP_ONLY, BATCHES, ...) passes through.
 set -uo pipefail
-O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
+O=${OUT:?}; IN=${IN:-${RESEARCH_RUN_DIR:?set IN}/inputs}
 export O GPU_LEASE_WHO=${GPU_LEASE_WHO:-units/${RESEARCH_RUN_ID:-local}}
 V=${VERITY_BENCH_VENV:-}
 if [ -z "$V" ]; then

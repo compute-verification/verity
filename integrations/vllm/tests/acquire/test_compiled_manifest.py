@@ -145,7 +145,7 @@ def test_identities_are_program_x_query_with_widths_from_the_wrappers():
     assert roles_of("triton_poi_fused_1", ["in_ptr0", "in_ptr1", "in_ptr2", "out_ptr0", "out_ptr1", "xnumel_0", "xnumel_1", "XBLOCK : tl.constexpr"])[0] == {0: "qkv", 1: "pos", 3: "k", 4: "q"}
     assert roles_of("triton_poi_fused_3", arity=6)[0] == {0: "qkv", 1: "bias", 2: "pos", 4: "k", 5: "qkv_b"}
     assert roles_of("triton_poi_fused_3", arity=7) == ({}, set())
-    assert roles_of("matmul_kernel_persistent_2") == ({0: "a", 2: "out"}, {1})                  # one arity: the name suffices (R15 callers)
+    assert roles_of("matmul_kernel_persistent_2") == ({0: "a", 2: "out"}, {1})                  # one arity: the name suffices
 
 
 def test_program_digest_is_the_artifact_not_the_workload():

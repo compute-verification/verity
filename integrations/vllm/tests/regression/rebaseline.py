@@ -1,4 +1,4 @@
-"""Re-baseline the R19 reference regression on the integration's (v2) outputs -- and keep the historical comparison runnable.
+"""Re-baseline the reference regression on the integration's (v2) outputs -- and keep the historical comparison runnable.
 
     cd integrations/vllm
     python -m tests.regression.rebaseline run   --record DIR [--oracle expected|frozen] [--tier T0,T1,T2] [-- <pytest args>]

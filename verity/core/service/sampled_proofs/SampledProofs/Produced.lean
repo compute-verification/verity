@@ -1,5 +1,5 @@
 /-
-Produced values (`one_stage/produced.py`, PRF-134): rows the prover computes after the draw from what it committed
+Produced values (`one_stage/produced.py`): rows the prover computes after the draw from what it committed
 before it, committed under hiding leaves and read as inputs by several statements of a session, each read opened against
 the one root the record names. They are never outputs. H1's drawn leaf is proved as its 32 lanes and their combine
 (`pouw.leaf_lanes`), which share the leaf's lane partials (`partials`, row l lane l).

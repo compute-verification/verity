@@ -1,5 +1,5 @@
 """`.cursor/hooks.json`'s Task hook keeps a coordinator from waiting on a local worker in the foreground, which holds its turn
-(and so every Slack, Linear and timer event) until the worker ends (proofs' rule 1, 18 Oct), and keeps a cloud agent from
+(and so every Slack, Linear and timer event) until the worker ends, and keeps a cloud agent from
 writing Linear through its MCP connector, which acts as the person who connected it."""
 import json
 import os
@@ -27,8 +27,8 @@ def answer(tmp_path, conversation_id, tool_input, tool_name="Task") -> dict:
 
 def test_cursor_runs_the_hook_before_every_task_call_direct_or_dynamic():
     entries = json.loads((ROOT / ".cursor/hooks.json").read_text())["hooks"]["preToolUse"]
-    assert {e["command"] for e in entries} == {"python3 tools/agent-guard/task_hook.py"}
-    assert sorted(e["matcher"] for e in entries) == ["CallDynamicTool", "Task"]
+    assert {e["command"] for e in entries} == {"sh tools/agent-guard/hook.sh task_hook.py"}
+    assert sorted(e["matcher"] for e in entries) == ["CallDynamicTool", "Task", "^MCP:"]
 
 
 def test_a_task_call_through_the_dynamic_tool_wrapper_is_judged_like_a_direct_one(tmp_path):
@@ -101,3 +101,20 @@ def test_each_verdict_is_logged_without_the_prompt(tmp_path):
     (rec,) = [json.loads(ln) for ln in (tmp_path / "task.jsonl").read_text().splitlines()]
     assert rec == {"conversation_id": HOLDER, "tool_name": "Task", "deny": True, "input_keys": ["prompt", "run_in_background", "subagent_type"],
                    "environment": None, "subagent_type": "generalPurpose", "run_in_background": False}
+
+
+@pytest.mark.parametrize("tool", ["save_issue", "save_comment", "save_status_update", "create_attachment"])
+def test_a_cloud_agents_linear_write_offered_directly_as_an_mcp_tool_is_refused_too(tmp_path, tool):
+    """An agent offered the connector's tools directly calls them as `MCP:<tool>` with no namespace: issues created that way
+    showed the connector's user as their creator though the dynamic-tool refusal was in place."""
+    a = answer(tmp_path, WORKER, {"title": "x", "team": "INF"}, f"MCP:{tool}")
+    assert a["permission"] == "deny" and f"`{tool}`" in a["agent_message"] and "research msg ask --as ME" in a["agent_message"]
+    assert not (tmp_path / "task.jsonl").exists()
+
+
+@pytest.mark.parametrize("conversation_id,tool", [
+    (HOLDER, "MCP:list_issues"), (WORKER, "MCP:get_issue"), (WORKER, "MCP:notion-update-page"),
+    (WORKER, "MCP:create_deployment"), (None, "MCP:save_issue"), ("6f1d2c3e-0000-4000-8000-000000000000", "MCP:save_issue")])
+def test_direct_mcp_reads_other_connectors_and_a_local_sessions_writes_pass_unlogged(tmp_path, conversation_id, tool):
+    assert answer(tmp_path, conversation_id, {"id": "INF-1"}, tool) == {"permission": "allow"}
+    assert not (tmp_path / "task.jsonl").exists()

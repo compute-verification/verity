@@ -3,7 +3,7 @@
     python benchmarks/tc_probe_fp4/recheck.py capture --instruction nvf4 --seeds 20261101,20261102 --n-random 625000 \
         --prebuilt SO --expect-uuid "$GPU_LEASE_UUID" --out DIR --budget-s 360   # a fill chunk; exit 99 while seeds remain
     python benchmarks/tc_probe_fp4/recheck.py verify --instruction nvf4 --seed 20261101 --n-random 625000 --capture DIR \
-        --prebuilt SO --out $RESEARCH_RUN_DIR                                      # CPU (a research run): the models, bit for bit
+        --prebuilt SO --out OUT                                                    # CPU (recorded run): the models, bit for bit
 
 ``capture``: the device's identity, the UUID gate, the SASS gate and probe.py's layout check, then for each seed the families of
 probe.py's ``--sweep`` (the same generators and rng) through the tile kernel.  Each family's words go to
@@ -242,7 +242,7 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--out", required=True)
     args = ap.parse_args(argv)
     if getattr(args, "fake_silicon", None) and SHARED.RESEARCH_RUN_ID:
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     if args.cmd == "capture" and not args.fake_silicon and not args.prebuilt:
         ap.error("capture needs --prebuilt (compile off the lease)")
     return capture(args) if args.cmd == "capture" else verify(args)

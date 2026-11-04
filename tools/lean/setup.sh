@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# The layout move put this script at tools/verity/lean/setup.sh. The Cloud Agent environment's install command (Daniel's
-# dashboard) still runs `bash tools/lean/setup.sh OLD_PACKAGE_DIR`, and while the file is missing every environment build
-# fails, so new agent VMs boot from the 30 Sep snapshot. This maps the old package path through `tools/move/layout_map.toml`
-# and runs the moved script. Delete it once the install command names tools/verity/lean/setup.sh.
+# The layout move put this script at tools/verity/lean/setup.sh. The Cloud Agent environment's install command (in the
+# Cursor dashboard) still runs `bash tools/lean/setup.sh OLD_PACKAGE_DIR`, and while the file is missing every environment
+# build fails, so new agent VMs boot from the last snapshot built before the move. This maps the old package path
+# through `tools/move/layout_map.toml` and runs the moved script. Delete it once the install command names
+# tools/verity/lean/setup.sh.
 set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 pkg=$(python3 - "$root" "${1:?usage: setup.sh PACKAGE_DIR}" <<'EOF'

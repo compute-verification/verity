@@ -35,14 +35,14 @@ from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_li
 
 
 def _spec_histogram(program) -> dict[str, int]:
-    from verity.ml.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import descriptor_id
     h: dict[str, int] = {}
     for n in program.fn.body.nodes:
         if n.form in ("call", "primitive"):
-            k = _spec_id(n.fn)
+            k = descriptor_id(n.fn)
             h[k] = h.get(k, 0) + 1
         else:
-            k = f"{n.form}:{_spec_id(n.fn)}"
+            k = f"{n.form}:{descriptor_id(n.fn)}"
             h[k] = h.get(k, 0) + 1
     return dict(sorted(h.items(), key=lambda kv: (-kv[1], kv[0])))
 
@@ -504,8 +504,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                              "triton_kernels": sorted({l["kernel"] for l in log.launches}), "n_triton_launches": len(log.launches)}
             res["export_facts"] = vm.export_facts(res["export"]["op_histogram"], res["export"]["triton_kernels"])
             observe_export_facts(res["export_facts"])
-            # READ BACK inside the export context: an export-phase value that diverged from the declared one (the R9 a1 shape: a
-            # second capability applied only around the export) is refused, never recorded as the declared value
+            # READ BACK inside the export context: an export-phase value that diverged from the declared one (a second capability
+            # applied only around the export) is refused, never recorded as the declared value
             applied_export["attention_backend"] = applied["attention_backend"]
             if "flash_attn_version" in applied:                  # absent when no layer is a FlashAttention impl (judged by the attention rule)
                 applied_export["flash_attn_version"] = applied["flash_attn_version"]

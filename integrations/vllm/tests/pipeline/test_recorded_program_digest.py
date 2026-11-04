@@ -1,5 +1,5 @@
 """`manifest.recorded_program_digest` reads a Build recorded before the SHA-512 re-baseline (ad58900df) as that commit's code did:
-its `program.sha512`, never its SHA-256 `program.digest`, which `verity/partition/v1` refuses (the R19 reference regression's
+its `program.sha512`, never its SHA-256 `program.digest`, which `verity/partition/v1` refuses (the reference regression's
 rebuilds of the frozen v1 records)."""
 
 from __future__ import annotations

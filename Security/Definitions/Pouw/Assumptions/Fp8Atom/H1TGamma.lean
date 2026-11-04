@@ -7,7 +7,7 @@ import Definitions.Pouw.Assumptions.Fp8Atom.H1TAssumptions
 # H-1T's γ corollary: several units in `MH100w` (trusted statements)
 
 A matmul's output is split into units (`Unit`) of at most 88,412 columns. Each unit's salt context binds its id, so
-each unit's salt is its own coordinate of the joint salt (`MSalt`, X-H1T-8 change 4 and X-H1T-S7). The free values
+each unit's salt is its own coordinate of the joint salt (`MSalt`). The free values
 (`mfree`) are W1's: the constants, which include every salt-independent function of the committed inputs, and every
 unit's raw XOF words. The grid is every joint salt.
 

@@ -21,16 +21,16 @@ theorem eq_or_collisionIn {H : Msg → Digest} {xs : List Msg} {x y : Msg} (hx :
     (h : H x = H y) : x = y ∨ CollisionIn H xs := by
   by_cases hxy : x = y
   · exact Or.inl hxy
-  · exact Or.inr ⟨x, hx, y, hy, hxy, congrArg Digest.bytes h⟩
+  · exact Or.inr ⟨x, hx, y, hy, hxy, congrArg Verity.Digest.bytes h⟩
 
 @[simp] theorem bytes_length (d : Digest) : d.bytes.length = 64 := List.length_ofFn
 
-theorem bytes_injective : Function.Injective Digest.bytes := List.ofFn_injective
+theorem bytes_injective : Function.Injective Verity.Digest.bytes := List.ofFn_injective
 
 theorem bytes_inj {d e : Digest} : d.bytes = e.bytes ↔ d = e := bytes_injective.eq_iff
 
 /-- Two lists of digests whose bytes concatenate to one string are equal. -/
-theorem flatMap_bytes_inj : ∀ {ds es : List Digest}, ds.flatMap Digest.bytes = es.flatMap Digest.bytes → ds = es
+theorem flatMap_bytes_inj : ∀ {ds es : List Digest}, ds.flatMap Verity.Digest.bytes = es.flatMap Verity.Digest.bytes → ds = es
   | [], [], _ => rfl
   | [], e :: es, h => by simp at h; simpa using congrArg List.length h.1
   | d :: ds, [], h => by simp at h; simpa using congrArg List.length h.1

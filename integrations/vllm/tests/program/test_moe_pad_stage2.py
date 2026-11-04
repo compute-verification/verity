@@ -1,14 +1,14 @@
-"""[R17-42 / MOE-PAD Stage 2, lane moe] The complete small padded MoE -- PADDING-DECISION s7 Stage 2, the first decisive milestone.
+"""Stage 2 of the padded MoE: the complete small padded block.
 
 Four experts, top-1 AND top-2, the Program built before any route (`moe_pad.block`), every admitted route walked in full
 (`moe_pad.admitted_routes`: 4 at top-1, 12 ordered at top-2), each demonstrated on the reference evaluator (`serve3_reference.materialize`:
 every gate of the denoted circuit, nothing shortcut):
 
   (a) ONE Program per envelope: digest / gate count / node set fixed by (E, TOPK, VPT, H, I) alone; every route is an assignment to the same
-      circuit.  The NEGATIVE the ruling names -- a builder that specializes to the observed route -- is written out and its digest moves.
+      circuit.  The NEGATIVE -- a builder that specializes to the observed route -- is written out and its digest moves.
   (b) EXACT active values: the selected slots' z_{r_j}, the ids, the weights and y are bit for bit the MOE-01 indexed-read block's
       (`registry/moe.py`: MoeExpertGemm / MoeExpertGemmW with the gather over the bank, MoeSum) on the same words.
-  (c) CORRECT inactive assignments (R17-43 / A12, pad's B7): an unselected slot is a DISABLED computation -- its enable `a_e = LEnable(a, s_e)`
+  (c) CORRECT inactive assignments (A12): an unselected slot is a DISABLED computation -- its enable `a_e = LEnable(a, s_e)`
       is Active(0), every word it produces (routed weight, output) is `enc(bot)` -- never Active(0), never INV; its input `x` is wired in
       unchanged; nothing on the selected side is bot.  A DISABLED block (a = 0: the continuation's post-prefix row) is all bot whatever it
       reads, every slot enable Active(0), nothing painted; an ENABLED block reading a bot token is INV by name (the v1 mechanism -- a bot
@@ -16,7 +16,7 @@ every gate of the denoted circuit, nothing shortcut):
   (d) CORRECT selected-output order: u_j = z_{r_j} in slot order; the two orders of one pair are two assignments.
   (e)/(f) full binding + openings and module/fine replay go through the existing Program/query machinery (next; not in this file).
 
-rev's s7 negatives, exercised DIRECTLY on the registered local relations (not by sample): substituted routing ids / expert weights, an
+The required negatives, exercised DIRECTLY on the registered local relations (not by sample): substituted routing ids / expert weights, an
 unselected expert influencing the output, an omitted inactive assignment (a disabled slot with Active words), wrong selected order, early
 inactivation (a selected slot disabled), cross-request mixing, unsupported index encodings, a route-specialised builder.  (The lag token in the served output is the continuation's relation --
 `lifted.ContinuationChain` -- outside this block.)
@@ -117,7 +117,7 @@ class Assignment:
                       Tuple(Array(S.H, BF16), Array(S.TOPK, I32), Array(S.TOPK, F32), Array(S.TOPK, Array(S.H, BF16)))),
            conformance="protocol-defined")
 def MoeIndexedReadRef(B, S, x, wg, w13, w2):
-    """One token through the registered fused-MoE block of record (MOE-01): router GEMM -> MoeRouterTopK_v1 -> per (token, slot) pair
+    """One token through the registered fused-MoE block of record: router GEMM -> MoeRouterTopK_v1 -> per (token, slot) pair
     MoeExpertGemm_v1 (the expert index as an I32 value, the row gathered over the bank) -> SiluMul -> MoeExpertGemmW_v1 -> MoeSum_v1."""
     logits = B.call(bind(b1.Gemm, K=S.H, N=S.E), x, wg, name="router/logits")
     r = B.call(bind(moe.MoeRouterTopK, E=S.E, TOPK=S.TOPK, VPT=S.VPT), logits, name="router/topk")
@@ -139,7 +139,7 @@ def MoeIndexedReadRef(B, S, x, wg, w13, w2):
 @composite("MoeRouteSpecialisedNEGATIVE", 1, ["E", "TOPK", "VPT", "H", "I", "ROUTE"],
            lambda S: (MP.block_signature(S)[0], Array(S.H, MP.V(16))), conformance="protocol-defined")
 def MoeRouteSpecialisedNEGATIVE(B, S, x, wg, w13, w2, a):
-    """THE PROHIBITED BUILDER (PADDING-DECISION s3 'do not observe the route and construct only the selected expert bodies afterward'):
+    """THE PROHIBITED BUILDER (one that observes the route and constructs only the selected expert bodies afterward):
     the observed route enters as a STATIC and only its slots are built.  Exists here to show its digest moves with the route."""
     body = L.lift_def(bind(MP.MoeExpertBody, H=S.H, I=S.I))
     logits = B.call(L.lift_def(bind(b1.Gemm, K=S.H, N=S.E)), x, wg, a)
@@ -260,7 +260,7 @@ def test_c2_a_disabled_block_is_all_bot_with_every_slot_enable_active0_nothing_i
     inputs[0] = L.bot_words(X_T)
     prog_b, t_b, outs_b = run(sp, inputs)
     assert outs_b == outs
-    # revb PADDED-ACCEPTANCE Stage 2 v2 item 8 (b): EVERY word the disabled block OWNS -- not only the returned record: the router's, every
+    # EVERY word the disabled block OWNS -- not only the returned record: the router's, every
     # slot's interior (up/gate rows, the activation, every down coordinate, its f32 accumulators, g chain), the combine, the sum -- is enc(bot)
     # at its own width; the only non-bot computed words are the slot enables (LEnable: Active(0)); the Inputs are read unchanged
     owned, enables = 0, 0
@@ -277,7 +277,7 @@ def test_c2_a_disabled_block_is_all_bot_with_every_slot_enable_active0_nothing_i
     assert enables == E and owned == prog_b.gates - prog_b.input_gates - E and owned > 900   # 1,038 (top-2) / 943 (top-1) owned computed words at E=4, H=I=16
     # the NEGATIVE the v2 rules name: an ENABLED block reading a bot token is INV by name -- the router's strict lift yields bot ids, the
     # selection conditions are bot, LEnable(1, bot) = INV_1 (N2: an enable is never bot; a bot local under an enabled parent is ill-formed)
-    # and the slot gates it enables are INV_w.  In v1 this passed silently as "the inactive token"; under R17-43 inactivity is the enable's
+    # and the slot gates it enables are INV_w.  In v1 this passed silently as "the inactive token"; now only the enable makes a block inactive
     inputs = lifted_inputs(x, weights, enable=ON)
     inputs[0] = L.bot_words(X_T)
     _, _, outs_i = run(sp, inputs)
@@ -318,7 +318,7 @@ def test_d_selected_outputs_follow_the_slot_order_and_the_two_orders_of_a_pair_a
 
 
 # ---------------------------------------------------------------------------------------------------------
-# rev's s7 negatives, on the registered relations directly
+# the required negatives, on the registered relations directly
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -353,8 +353,8 @@ def test_negatives_substituted_ids_omitted_inactive_early_inactivation_bad_encod
     # ill-formed enables are NAMED, never a silent Active(0): a bot or INV enable word makes LEnable INV_1 and the gates it enables INV_w
     assert en.evaluate(BOT1, 1) == en.evaluate(ON, BOT1) == en.evaluate(INV1, 1) == INV1
     assert lg_en.evaluate(a.ids[0], *[a.z[e][0] for e in range(E)], INV1) == INV16
-    # unsupported index encodings: an INV index is INV (never a slot); an out-of-range Active index is NAMED -- INV_16 under pad's
-    # LFixedSelect (MOE-PAD-SPEC s2, G2) -- and the boundary rejects it by name before any gate reads it either way
+    # unsupported index encodings: an INV index is INV (never a slot); an out-of-range Active index is NAMED -- INV_16 under
+    # LFixedSelect -- and the boundary rejects it by name before any gate reads it either way
     rows = [a.z[e][0] for e in range(E)]
     assert lg.evaluate(INV32, *rows) == INV16
     oor = lg.evaluate(E + 3, *rows)
@@ -417,7 +417,7 @@ def test_negative_cross_request_mixing_a_disabled_row_beside_an_enabled_one_chan
     _, _, alone0 = run(MP.block(E, TOPK, VPT, H, I), lifted_inputs(x0, weights))
     _, _, both2 = run(two, [L.lift_words(X_T, x0), L.lift_words(X_T, x1)] + shared + [[ON], [ON]])
     assert both2[:n_rec] == alone0 and both2[n_rec:] == alone
-    # revb item 8 (c): the per-slot enable a_{r,e} = LEnable(a_r, [e selected for r]) on a pattern where the SAME expert is selected by one
+    # the per-slot enable a_{r,e} = LEnable(a_r, [e selected for r]) on a pattern where the SAME expert is selected by one
     # token and not by the other -- expert 0 and 2 by token 0 only, 3 and 1 by token 1 only: the slot enables are per (row, expert), never shared
     b0, b1_ = Assignment(TOPK, both2[:n_rec]), Assignment(TOPK, both2[n_rec:])
     assert b0.a == [ON, OFF, ON, OFF] and b1_.a == [OFF, ON, OFF, ON]
@@ -434,13 +434,13 @@ def test_lmoe_ffn_returns_y_only_takes_the_enable_last_and_the_specified_class_i
     params, ret = sp.signature()
     assert ret == Array(H, MP.V(16))
     assert L.has_enable(sp) and L.has_enable(MP.block(E, 2, VPT, H, I)) and params[-1] == (L.ENABLE_PARAM, L.ENABLE_T)
-    # nothing new in pad's specified class: the block uses LSelect32, LBot32, LFixedSelect4x16, LEnable (their enabled _v2 forms) and
+    # nothing new in the specified class: the block uses LSelect32, LBot32, LFixedSelect4x16, LEnable (their enabled _v2 forms) and
     # strict / constant lifts only
     import re
     allowed = re.compile(r"^(LSelect\d+|LIsActive\d+|LBot\d+|LGatherRow\d+x\d+(?:o[0-9a-f]+)?|LStepLive\d+|LSplitsForSMS\d+|LFixedSelect\d+x\d+|LEnable|LIsEOS\S*|LEmitNext\S*)_v1$")
     for fid in L.specified_ids():
         assert allowed.match(fid), fid
-    # ids read without pad G1's `ORD=<mask>` static (`Lifted[MoeSum_v1]_v2{TOPK=2,H=16,ORD=0}` under G1 5261740d7; no static at v0.7)
+    # ids read without the ORDINARY class's `ORD=<mask>` static (`Lifted[MoeSum_v1]_v2{TOPK=2,H=16,ORD=0}` now; none on the first stack)
     used = {re.sub(r",ORD=[^,}]*", "", n.fn.id) for n in MP.block(E, 2, VPT, H, I).body.nodes}
     assert {"Lifted[LSelect32_v1]_v2", "Lifted[LBot32_v1]_v2", "LEnable_v1", MP.fixed_select_enabled(E, 16).id, "Lifted[I32Eq_v1]_v2",
             "Lifted[MoeExpertBody_v1]_v2{H=16,I=16}", "Lifted[MoeSum_v1]_v2{TOPK=2,H=16}"} <= used, used
@@ -486,7 +486,7 @@ def test_moe_ffn_fixed_unlifted_twin_equals_moe01_and_its_lift_of_record_is_the_
         _, _, y_pad = run(padded, lifted_inputs(x, weights))
         assert y_fixed == out01[:H]                                           # bit-exact to the MOE-01 indexed-read block
         assert y_fixed == y_pad                                               # and to the padded block (Active words: payload == word)
-    # route A (2): the lift OF RECORD of the twin is the hand-authored padded block (pad's register_hand_lift, moe_pad.HAND_LIFT) --
+    # route A (2): the lift OF RECORD of the twin is the hand-authored padded block (`register_hand_lift`, moe_pad.HAND_LIFT) --
     # (i) the registry path: lift_def(bind(twin)) IS bind(LMoeFfn) with the same bindings, same digest as the padded block
     assert MP.HAND_LIFT is MP.LMoeFfn and L.hand_lift_of("MoeFfnFixed_v1") is MP.LMoeFfn
     lifted = L.lift_def(fixed)

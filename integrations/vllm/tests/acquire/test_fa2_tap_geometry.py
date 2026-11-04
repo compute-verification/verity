@@ -1,7 +1,7 @@
 """FA2 M1 tap portability to sliding-window / softcap models (Gemma-2 hd 256, Phi-3 hd 96): torch-free checks.
 
 1. `fa2_swapped` mirrors flash_api.cpp:646 `seqlenq_ngroups_swapped` exactly: a GQA decode launch is swapped ONLY without a sliding
-   window (and dropout 0, D % 8 == 0, no alibi).  The R13 mirror (`max_seqlen_q == 1 and H > Hk`) declared the swapped geometry for
+   window (and dropout 0, D % 8 == 0, no alibi).  A mirror of `max_seqlen_q == 1 and H > Hk` alone declares the swapped geometry for
    Gemma-2's sliding layers at decode, which the kernel refuses (arm check b*h <= vt.H) -> named COMMIT FAIL, never a wrong binding.
 2. The oracle's softcap parameters are the kernel's (flash_api.cpp:156-159) and `apply_softcap` follows the measured MUFU.TANH rules
    (identity below 2^-8, saturation at |x| >= 8) -- the GPU bit-exactness itself is fa2_tap_xcheck.py --cases gemma on a pod.
@@ -33,7 +33,7 @@ def _oracle():
 @pytest.mark.parametrize("max_q,H,Hk,D,wl,wr,dropout,alibi,expect", [
     (1, 8, 4, 256, -1, -1, 0.0, None, True),       # Gemma-2-2B global layer at decode: swapped (rows = 2 groups, heads = 4)
     (1, 8, 4, 256, 4095, 0, 0.0, None, False),     # Gemma-2-2B sliding layer at decode (vLLM window (sw-1, 0)): NOT swapped
-    (1, 32, 8, 64, -1, -1, 0.0, None, True),       # Llama-3.2-1B decode: swapped (the R13 rows' geometry, unchanged)
+    (1, 32, 8, 64, -1, -1, 0.0, None, True),       # Llama-3.2-1B decode: swapped
     (1, 32, 32, 96, 2046, 0, 0.0, None, False),    # Phi-3-mini (MHA) sliding layer: never swapped (H == Hk)
     (1, 32, 32, 96, -1, -1, 0.0, None, False),
     (17, 8, 4, 256, -1, -1, 0.0, None, False),     # prefill: never swapped

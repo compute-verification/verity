@@ -4,9 +4,9 @@ import Definitions.Nci.Dampener
 # The compute dampener, remote protocol: the vocabulary
 
 The remote protocol's dampener (NCI, PoUW and network accounting, with no memory layer: `benchmarks/nci/tiers.py` at
-tiers T1 and T2, with no wipes and no sampling; "The dampener ρ, remote protocol", Notion) is
-`1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` with `ρ ≥ 1`. Its terms past `r̂` come from reading the monitored compute residual
-`r̂ = 1 − W_cert/C` (`residualShare`) against what the developer can do outside it:
+tiers T1 and T2, with no wipes and no sampling) is `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` with `ρ ≥ 1`. Its terms past
+`r̂` come from reading the monitored compute residual `r̂ = 1 − W_cert/C` (`residualShare`) against what the developer
+can do outside it:
 
 * the certificate slack `ε'`: PoUW certifies each window, and a window's certificate may be wrong, so the work certified
   correctly falls short of `W_cert` by at most the capacity of the windows whose certificates are wrong

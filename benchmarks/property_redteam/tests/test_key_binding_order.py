@@ -1,7 +1,7 @@
 """KeyBinding's ideal step against the codec's odd symmetry (KB-5).
 
-KB-1, a page appended after a pass's seed carrying that pass's receipts of other blocks, was accepted by the audit
-before #2390. Its regression test is remote_bandwidth's `test_append_order.py`, where the seed chains every append
+KB-1, a page appended after a pass's seed carrying that pass's receipts of other blocks, was once accepted by the
+audit. Its regression test is remote_bandwidth's `test_append_order.py`, where the seed chains every append
 received before the pass, so the page is rejected."""
 
 from __future__ import annotations

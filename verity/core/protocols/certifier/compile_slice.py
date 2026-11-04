@@ -1,6 +1,6 @@
-"""A slice of the in-proof compile unit as one Boolean Definition: the pieces of the compile unit's statement (the
+"""Part of the compile slice's proof block as one Boolean Definition: the pieces of its statement (the
 certifier PROTOCOL's "Advice v1") composed whole for one window of a few steps, so the composition is proved end to
-end before the chain splits it into one unit a step.
+end before the chain splits it into one proof block a step.
 
     CompileSlice_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW, Q, D, P, K, CN, CTW, CU}
         (pub, adv, cert, srv, cin, cout, wit) -> verdict[16]
@@ -20,7 +20,7 @@ window's blocks (`served_rows.register`'s G); at G = P the unit is the first, so
   the certified record's commitment (its b‖c);
 - ``srv``, the served rows: the step rows the served window ran (P steps of `rows_bits`, idle ones zero; `srv_row`;
   each step's rows at the runner's batch positions), a row the verifier holds by its b‖c to the window's row of the
-  served rows' registration (`served_rows`), committed on the Commit side before the draw. At G < P they are P / G
+  served rows' registration (`served_rows`), committed on the Commit side before the sample. At G < P they are P / G
   rows ``srv0`` … (`srv_rows`), row j steps [j·G, (j + 1)·G) and held to window w's leaf w·(P / G) + j
   (`served_rows.leaf`); step u is checked against row u // G;
 - ``cin`` and ``cout``, the charge's carry-in and carry-out (`charge_chain.encode`'s 96 bits): the window's reads of
@@ -79,7 +79,7 @@ b‖c check refuses ``srv``. A restarted carry-in (the priors, or counts fitted 
 which takes any carry-in, and refused by `charge_chain.check_chain` (``CH-carry``) on its b‖c.
 
 **Stand-ins** (named, each a piece not ready):
-- *the evictable and returned counts*: ENC-DERIVED's evictable and returned-block counts are held at 0 (ReplayStep_v1's
+- *the evictable and returned counts*: the derived evictable and returned-block counts are held at 0 (ReplayStep_v1's
   ``evict`` and ``ret``), true of a slice that stops or preempts nothing; on one that does, the rows differ from the
   clear recompile's and ``rows`` refuses. `compile_slice_v2.CompileSlice_v2` derives them from vLLM's block pool;
 - *the still-sent fields*: ``adv`` holds only the decisions, the count and the step count, so ChargeLink_v1 codes the
@@ -109,13 +109,13 @@ below P. The served bits and the unit's ANDs are the same at every G: a block's 
 ANDs (`cache_step`'s cost; a lookup, which writes nothing, about half), and each step's three lookups walk min(CN + 1, CU)
 units and its two computes ⌊(B − 1 + T) / B⌋. On corpus-smallkv's class (CN 24, CU 25, B 16) a step's calls are 1.06M
 ANDs and the unit about 7.6M, past circuit-check's lowering: its circuit = reference tests, sidecar and ZK run
-(`benchmarks/network_traces/compile_slice_zk.py`) are at the demonstration class (`demo`, 59,341 ANDs) and at vLLM
-8eb1's sizes under a sync scheduler (the sync class, no prefix caching: 857,866 ANDs, ChargeLink_v1{32}'s 97,159 and
-its 5,509 copies of the words it carries among them, `charge_chain.size`'s ``carry``), and at the corpus class the
-run's staged verdict words are the reference's. 8eb1's engine class is AS = 1, its AsyncScheduler, where the ZK run
-proves w212. At AS = 1 ``rows`` is ``map``'s: R² products of a slot's row and 2·R·(R − 1) one-to-one ANDs a step in
-place of the slot-for-slot comparison (`demo_async`, 32,236 ANDs; 8eb1's async window 1 at its own statics, 314,936,
-and at its engine class 1,021,302, of them 123,120 the map's).
+(`benchmarks/network_traces/compile_slice_zk.py`) are at the demonstration class (`demo`, 59,341 ANDs) and at the
+served vLLM run's sizes under a sync scheduler (the sync class, no prefix caching: 857,866 ANDs, ChargeLink_v1{32}'s
+97,159 and its 5,509 copies of the words it carries among them, `charge_chain.size`'s ``carry``), and at the corpus
+class the run's staged verdict words are the reference's. That run's engine class is AS = 1, its AsyncScheduler, where
+the ZK run proves w212. At AS = 1 ``rows`` is ``map``'s: R² products of a slot's row and 2·R·(R − 1) one-to-one ANDs a
+step in place of the slot-for-slot comparison (`demo_async`, 32,236 ANDs; its async window 1 at its own statics,
+314,936, and at its engine class 1,021,302, of them 123,120 the map's).
 """
 from __future__ import annotations
 
@@ -261,7 +261,7 @@ def _build(C, S, *ins):
     p, a, c, ci, co, w = (split[r] for r in ("pub", "adv", "cert", "cin", "cout", "wit"))
     served = [e for r in srv_names(S) for e in split[r]["rows"]]
     states, win = w["state"], w["window"][0]
-    load_ok = RC._build_load(C, Sc, _consts(RC.encode(RC.empty(Sc), Sc)), _consts(RC.encode_window(RC.Window(), Sc)),
+    load_ok = RC._build_load(C, Sc, _consts(RC.encode(RC.empty(Sc), Sc)), _consts(RC.encode_window(RC.QueueRow(), Sc)),
                              RC._flat(c, RC.arrival_fields(Sc)), [e[0] for e in a["dec"]], a["count"][0], a["steps"][0],
                              states[0], win)[0]
     CA = S.W + S.A
@@ -551,7 +551,7 @@ def scan(S, sl: Slice, window: Sequence[int] | None = None, cert: Sequence[RC.Ar
     Sc, St = chain(S), step_statics(S)
     arrivals = tuple(map(tuple, cert if cert is not None else sl.arrivals))
     toks = {a[0]: tuple(t) for a, t in zip(arrivals, tokens if tokens is not None else sl.tokens)}
-    loaded = RC.load(Sc, RC.empty(Sc), RC.Window(), arrivals, sl.decisions, sl.steps)
+    loaded = RC.load(Sc, RC.empty(Sc), RC.QueueRow(), arrivals, sl.decisions, sl.steps)
     if loaded is None:
         raise ValueError("the load refuses the slice")
     cur, win = loaded
@@ -644,7 +644,7 @@ def check(S, rows: dict) -> dict[str, bool | None]:
     dec = [e[0] for e in a["dec"]]
     if count > S.D or any(dec[count:]):
         raise RC.MalformedRow(f"the advice's count {count} with a decision past it")
-    loaded = RC.load(Sc, RC.empty(Sc), RC.Window(), cert, dec[:count], _int(a["steps"][0]))
+    loaded = RC.load(Sc, RC.empty(Sc), RC.QueueRow(), cert, dec[:count], _int(a["steps"][0]))
     flags: dict[str, bool | None] = {"load": loaded == (states[0], win)}
     ok, length, carried = AE.reference_charge(S.D, _book(S, p), CC.carry_of([int(b) for b in rows["cin"]]),
                                               [int(k < count) for k in range(S.D)], dec)
@@ -723,7 +723,7 @@ def case(S, sl: Slice, book: dict, *, carry: AE.Carry | None = None, cout: AE.Ca
             "adv": _pack(S, "adv", {"dec": padded, "count": [len(dec)], "steps": [sl.steps]}),
             **srv_rows(S, served),
             "cin": list(CC.encode(carry)), "cout": list(CC.encode(cout))}
-    cert_bits = RC.load_arguments(Sc, RC.empty(Sc), RC.Window(), sc.arrivals, sl.decisions, len(sl.decisions), sl.steps,
+    cert_bits = RC.load_arguments(Sc, RC.empty(Sc), RC.QueueRow(), sc.arrivals, sl.decisions, len(sl.decisions), sl.steps,
                                   RC.encode(sc.states[0], Sc), RC.encode_window(sc.window, Sc))[2]
     if S.PC:
         n = S.CU * S.B

@@ -969,7 +969,7 @@ class F1Device:
 
 class FakeF1:
     """CPU stand-in for the driver's dry run: invented rates (NVFP4 at 16 MMAs per SM per 128 clocks, everything else slower per
-    product).  Its numbers are made up; ``--fake-silicon`` never runs under a research run."""
+    product).  Its numbers are made up; ``--fake-silicon`` never runs with ``RESEARCH_RUN_ID`` set."""
 
     SMS, MHZ = 188, 2000.0
 
@@ -1399,7 +1399,7 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--tolerance", type=float, default=0.02)
     args = ap.parse_args(argv)
     if getattr(args, "fake_silicon", False) and SHARED.RESEARCH_RUN_ID:
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     return {"build": build_cmd, "run": run_family, "scan-libs": scan_libs, "collect": collect}[args.cmd](args)
 
 

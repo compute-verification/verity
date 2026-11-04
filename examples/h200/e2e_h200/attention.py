@@ -1,5 +1,5 @@
-"""MQA attention at one position, on the CPU through the Definitions' own numpy kernels: the stand-in for kernels' KP2-ATTN
-until it is handed over (a BF16 tensor-core product computed by torch is another function).
+"""MQA attention at one position, on the CPU through the Definitions' own numpy kernels: the stand-in for kernels' attention
+kernel until it is handed over (a BF16 tensor-core product computed by torch is another function).
 
     scores   GemmCoordinate_v2{K=d, GEMM_HOPPER} (`HopperBF16WgmmaDot16`'s 16-wide steps in ascending k from +0, then
              `F2fpBf16`): query head h of slot b against the KV head's key at each position s <= t
@@ -13,7 +13,7 @@ Words are numpy u16 (bf16) and u32 (f32); everything is evaluated by `evaluation
 one IEEE round to nearest.
 
 `Attention` runs a micro-batch of slots, each at its own position (``lens`` = position + 1 keys), on the tensors' device:
-on CUDA through kernels' `attn_ref` (#4466: QK^T and PV, each word ``GemmCoordinate_v2{K, GEMM_HOPPER}``, PV's K the keys
+on CUDA through kernels' `attn_ref` (QK^T and PV, each word ``GemmCoordinate_v2{K, GEMM_HOPPER}``, PV's K the keys
 padded to a multiple of 16, which equals the K = 32 padding: both pad with +0 codes) and `softmax_t` (SoftmaxRow_v1 in
 torch integer and f32 ops); elsewhere through the numpy kernels above, one call per distinct length. Scores and
 probabilities come out (B, H, C), zero past each slot's length. The step commits a head's probabilities, padded with +0 to 32

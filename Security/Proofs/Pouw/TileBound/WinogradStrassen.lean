@@ -3,7 +3,7 @@ import Proofs.Pouw.TileBound.Proofs
 /-!
 # A program that beats the honest count in the abstract slot model (a later bundle; outside the 36 merged pins)
 
-`docs/pouw/fp4-tile-model.md` §7 (bc-d9842080). One Strassen level on 2 × 2 blocks, each of its 7 sub-products done by
+`docs/pouw/fp4-tile-model.md` §7. One Strassen level on 2 × 2 blocks, each of its 7 sub-products done by
 Winograd's commutative inner-product trick, for `⟨2m, 4, 2n⟩`:
 
 ~~~text
@@ -12,7 +12,7 @@ Winograd's commutative inner-product trick, for `⟨2m, 4, 2n⟩`:
 
 As a `SlotProg` with every slot in `int8`, it is correct (`CrossOn` on every entry). It is `Representable` under every
 block partition: each slot input reads at most 4 entries (2 of X and 2 of Y, checked by
-`internal/pouw/fp4-tile-lean/winograd_strassen_check.py`), and the proof bounds that by 8, within int8's capacity of 10.
+`winograd_strassen_check.py`), and the proof bounds that by 8, within int8's capacity of 10.
 It costs `7(mn + m + n)` against honest `8mn`. That is below honest
 whenever `7(m + n) < mn`, for instance at `m = n = 16`. So the model's int8 cell is open for a real program, not only for
 the numbers `support_admits_open` exhibits. On the card, tile index sharing and integer scale classes stop it (§7.3).

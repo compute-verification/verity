@@ -845,7 +845,7 @@ def test_gc_worktrees_removes_only_clean_pushed_worktrees_of_done_lanes(tmp_path
     assert "\nremoved  " in "\n" + text and "keep     " in text and text.endswith("1 removed; kept 5: 2 in use by an open lane, 1 with no lane")
 
 
-# ---- the steward rules: stale-lane pods, OVERDUE, OVER-BUDGET, scheduled renders, guardian kills ------------------------------------------
+# ---- the steward rules: stale-lane pods, OVERDUE, OVER-BUDGET, scheduled runs, guardian kills ------------------------------------------
 
 def _set_mtime(p: Path, when: dt.datetime) -> None:
     os.utime(p, (when.timestamp(), when.timestamp()))
@@ -1012,163 +1012,6 @@ def test_budget_accumulates_each_lanes_pod_dollars_per_pass_and_alerts_once_over
     assert (notes.budget_usd("$22: 1x A100"), notes.budget_usd("$1.5"), notes.budget_usd("1x 4090 <= 30 min")) == (22.0, 1.5, None)
 
 
-@pytest.fixture
-def renders(tmp_path, monkeypatch):
-    """Where a relative `out` lands (`$RESEARCH_RENDERS`): beside the notes root (tmp_path), never inside it."""
-    out = tmp_path.parent / f"{tmp_path.name}-renders"
-    monkeypatch.setenv("RESEARCH_RENDERS", str(out))
-    return out
-
-
-def test_scheduled_renders_run_once_per_utc_day_at_or_after_their_time(tmp_path, renders):
-    (tmp_path / "steward.toml").write_text('[[render]]\nat = "20:30Z"\nsource = "~/src"\nout = "campaigns/t/render"\nstore = "/tmp/store"\n\n'
-                                           '[[render]]\nat = "22:00Z"\nsource = "/src"\nout = "later"\n\n[[render]]\nat = "9am"\nout = "bad"\n')
-    calls = []
-
-    def run(cmd, env, cwd, timeout):
-        if cmd[2] == "research":                      # the store refresh before the render (its own test below)
-            return 0, "", ""
-        calls.append((cmd[1:], env["PYTHONPATH"], cwd, timeout))
-        if cmd[2].endswith("tables"):
-            return 0, "# tables\n", ""
-        return 1, "", "Traceback (most recent call last):\n  ...\nModuleNotFoundError: No module named 'verity_numerical.bench.drilldown'\n"
-
-    state, home = {}, Path.home()
-    lines = notes.render_lines(tmp_path, NOW, state, run=run)
-    out = renders / "campaigns" / "t" / "render" / "20260923T2100Z-tables.md"
-    assert lines == [f"21:00Z RENDERED {out}",
-                     "21:00Z RENDER-FAILED campaigns/t/render@20:30Z (drilldown): Traceback (most recent call last): ... "
-                     "ModuleNotFoundError: No module named 'verity_numerical.bench.drilldown'",
-                     '21:00Z RENDER-FAILED bad@9am: an entry needs at = "HH:MMZ", source and out']
-    assert out.read_text() == "# tables\n" and not out.with_name("20260923T2100Z-drilldowns.md").exists()
-    assert [c[0] for c in calls] == [["-m", "verity_numerical.bench.tables", "--root", "/tmp/store", "--format", "md"],
-                                     ["-m", "verity_numerical.bench.drilldown", "--root", "/tmp/store", "--format", "md"]]
-    assert calls[0][1:3] == (f"{home}/src", home / "src")          # no workspace declared in a missing tree: just its root
-    assert all(0 < c[3] <= notes.RENDER_TIMEOUT_S for c in calls)
-    assert notes.render_lines(tmp_path, NOW + dt.timedelta(minutes=50), state, run=run) == [] and len(calls) == 2   # once a day
-    lines = notes.render_lines(tmp_path, NOW + dt.timedelta(minutes=60), state, run=lambda *a: (None, "", "timeout after 600s"))
-    assert lines == ["22:00Z RENDER-REFRESH-FAILED later@22:00Z: timeout after 600s",
-                     "22:00Z RENDER-FAILED later@22:00Z (tables): timeout after 600s", "22:00Z RENDER-FAILED later@22:00Z (drilldown): timeout after 600s"]
-    assert len(notes.render_lines(tmp_path, NOW + dt.timedelta(hours=24), state, run=run)) == 2                    # the next day
-    (tmp_path / "steward.toml").write_text("[[render]\n")
-    assert notes.render_lines(tmp_path, NOW, state, run=run)[0].startswith("21:00Z RENDER-FAILED steward.toml: ")
-    assert notes.render_lines(tmp_path, NOW, state, run=run) == []          # a broken file is said once
-    assert notes.render_lines(tmp_path / "nowhere", NOW, {}, run=run) == []
-
-
-def test_a_render_entry_opts_into_the_tables_preview(tmp_path, renders):
-    (tmp_path / "steward.toml").write_text('[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "r"\npreview = true\n\n'
-                                           '[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "plain"\npreview = "yes"\n')
-    calls = []
-
-    def run(cmd, env, cwd, timeout):
-        calls.append(cmd[2])
-        return 0, f"# {cmd[2]}\n", ""
-
-    lines = notes.render_lines(tmp_path, NOW, {}, run=run)
-    assert calls == ["research", "verity_numerical.bench.tables", "verity_numerical.bench.drilldown", "verity_numerical.bench.views",
-                     "research", "verity_numerical.bench.tables", "verity_numerical.bench.drilldown"]
-    preview = renders / "r" / "20260923T2100Z-tables-preview.md"
-    assert f"21:00Z RENDERED {preview}" in lines and preview.read_text() == "# verity_numerical.bench.views\n"
-    assert not (renders / "plain" / "20260923T2100Z-tables-preview.md").exists()
-
-
-def test_a_render_entry_publishes_the_views_and_keeps_the_frozen_tables_as_a_drilldown(tmp_path, renders):
-    (tmp_path / "steward.toml").write_text('[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "r"\npublished = "views"\npreview = true\n\n'
-                                           '[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "typo"\npublished = "view"\n')
-    calls = []
-
-    def run(cmd, env, cwd, timeout):
-        calls.append(cmd[2:])
-        return 0, f"# {cmd[2]}\n", ""
-
-    lines = notes.render_lines(tmp_path, NOW, {}, run=run)
-    assert [c[0] for c in calls] == ["research", "verity_numerical.bench.views", "verity_numerical.bench.views", "verity_numerical.bench.tables",
-                                     "verity_numerical.bench.drilldown"]
-    assert calls[1][-1] == calls[2][-1] == "--published" and "--published" not in calls[3] + calls[4]
-    assert calls[1][calls[1].index("--format") + 1] == "md" and calls[2][calls[2].index("--format") + 1] == "entities"
-    r = renders / "r"
-    assert (r / "20260923T2100Z-tables.md").read_text() == "# verity_numerical.bench.views\n"
-    assert (r / "20260923T2100Z-tables-frozen.md").read_text() == "# verity_numerical.bench.tables\n"
-    assert sorted(p.name for p in r.iterdir()) == ["20260923T2100Z-drilldowns.md", "20260923T2100Z-tables-frozen.md", "20260923T2100Z-tables.json",
-                                                   "20260923T2100Z-tables.md"]
-    assert "21:00Z RENDER-FAILED typo@20:30Z: published = 'view': \"tables\", \"views\" or \"entities\"" in lines
-    assert not (renders / "typo").exists()
-
-
-def test_an_entities_entry_renders_only_the_json_and_the_parity_gate(tmp_path, renders):
-    (tmp_path / "steward.toml").write_text('[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "r"\npublished = "entities"\n')
-    calls = []
-
-    def run(cmd, env, cwd, timeout):
-        calls.append(cmd[2:])
-        return (1, "parity: DIFFERENT\n", "cells differ") if "--parity" in cmd else (0, "{}\n", "")
-
-    lines = notes.render_lines(tmp_path, NOW, {}, run=run)
-    assert [c[0] for c in calls] == ["research", "verity_numerical.bench.views", "verity_numerical.bench.views"]
-    assert calls[1][calls[1].index("--format") + 1] == "entities" and calls[1][-1] == "--published" and calls[2][-1] == "--parity"
-    assert sorted(p.name for p in (renders / "r").iterdir()) == ["20260923T2100Z-tables.json"]
-    assert "21:00Z RENDER-FAILED r@20:30Z (views): cells differ" in lines
-
-
-def test_a_render_refreshes_its_store_with_the_payloads_its_readers_parse(tmp_path, renders):
-    (tmp_path / "steward.toml").write_text('[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "a"\nstore = "/s"\n\n'
-                                           '[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "b"\nstore = "/s"\npayloads = ["x/v1"]\n\n'
-                                           '[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "c"\nrefresh = false\n')
-    calls = []
-
-    def run(cmd, env, cwd, timeout):
-        calls.append(cmd[1:])
-        if cmd[2] == "research" and "x/v1" in cmd:
-            return 1, "", "research data refresh: no remote configured"
-        return 0, "# md\n", ""
-
-    lines = notes.render_lines(tmp_path, NOW, {}, run=run)
-    refreshes = [c for c in calls if c[1] == "research"]
-    assert refreshes == [["-m", "research", "data", "refresh", "--store", "/s", "--payloads", *notes.RENDER_PAYLOAD_KINDS],
-                         ["-m", "research", "data", "refresh", "--store", "/s", "--payloads", "x/v1"]]
-    assert "instance-equiv/v1" in notes.RENDER_PAYLOAD_KINDS
-    assert "21:00Z RENDER-REFRESH-FAILED b@20:30Z: research data refresh: no remote configured" in lines
-    assert sum(1 for x in lines if " RENDERED " in x) == 6                   # a failed refresh never blocks the render
-
-
-def test_renders_never_land_in_the_notes(tmp_path, renders, monkeypatch):
-    """The notes are Git, and a render is regenerated from the store on demand: an `out` inside the notes root (relative to it through
-    `$RESEARCH_RENDERS`, or absolute) is an invalid entry, while an absolute `out` outside them is used as it is."""
-    elsewhere = tmp_path.parent / f"{tmp_path.name}-site"
-    (tmp_path / "steward.toml").write_text(f'[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "{tmp_path / "renders"}"\nrefresh = false\n\n'
-                                           f'[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "{elsewhere}"\nrefresh = false\n')
-    lines = notes.render_lines(tmp_path, NOW, {}, run=lambda cmd, env, cwd, timeout: (0, "# md\n", ""))
-    assert lines[0].startswith(f"21:00Z RENDER-FAILED {tmp_path / 'renders'}@20:30Z: out ") and "renders never go to Git" in lines[0]
-    assert sorted(p.name for p in elsewhere.iterdir()) == ["20260923T2100Z-drilldowns.md", "20260923T2100Z-tables.md"]
-    assert not (tmp_path / "renders").exists()
-    monkeypatch.setenv("RESEARCH_RENDERS", str(tmp_path / "inside"))
-    (tmp_path / "steward.toml").write_text('[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "daily"\nrefresh = false\n')
-    assert "renders never go to Git" in notes.render_lines(tmp_path, NOW, {}, run=lambda *a: (0, "# md\n", ""))[0]
-
-
-def test_the_render_imports_every_workspace_package_of_its_source_tree(tmp_path, renders):
-    """The control pod's render died with `ModuleNotFoundError: verity` (a hand-kept PYTHONPATH without packages/verity/src): the render
-    command's environment is the source tree's workspace roots (`research env --source`), the shim first; this tree's root is a
-    package (`verity`), which the shim reaches, so the root itself is not on it."""
-    from research.pythonpath import import_roots_dir, pythonpath, shim_dir
-
-    repo = Path(__file__).resolve().parents[3]
-    (tmp_path / "steward.toml").write_text(f'[[render]]\nat = "20:30Z"\nsource = "{repo}"\nout = "r"\nrefresh = false\n')
-    envs = []
-
-    def run(cmd, env, cwd, timeout):
-        envs.append(env["PYTHONPATH"])
-        return 0, "# md\n", ""
-
-    notes.render_lines(tmp_path, NOW, {}, run=run)
-    parts = envs[0].split(":")
-    assert envs and all(e == envs[0] for e in envs)
-    assert parts[0] == shim_dir(str(repo), ["verity"]) and str(repo / "benchmarks" / "numerical" / "python") in parts
-    assert str(repo / "tools" / "research" / "src") in parts and str(repo) not in parts
-    assert envs[0] == pythonpath(str(repo), import_roots_dir(repo))
-
-
 FRESH = ["--on", "vy-lean", "--project", "verity", "--source", ".", "--cwd", "source", "--tool", "lean_audit", "--",
          "python", "tools/verity/lean/check.py", "--all", "--build", "--fresh"]
 
@@ -1316,38 +1159,28 @@ def test_snapshot_leaves_the_steward_state_out(tmp_path):
 
 def test_a_failing_steward_rule_is_a_line_not_a_dead_watcher():
     assert notes.steward_rule("ok", lambda a, b=0: [f"{a}{b}"], "x", b=1) == ["x1"]
-    [line] = notes.steward_rule("render", lambda: 1 / 0)
-    assert line.endswith(" STEWARD-ERROR render: ZeroDivisionError: division by zero")
+    [line] = notes.steward_rule("run", lambda: 1 / 0)
+    assert line.endswith(" STEWARD-ERROR run: ZeroDivisionError: division by zero")
 
 
 def test_cli_watch_pass_runs_the_steward_rules_on_a_temp_root(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr(notes, "_utcnow", lambda: NOW)
     root, log, src = tmp_path / "notes", tmp_path / "guardian.log", tmp_path / "src"
-    monkeypatch.setenv("RESEARCH_RENDERS", str(tmp_path / "renders"))
     _report(root, "late", "CHECKPOINT 1111111 (12:00Z) [open] x\n", 60 * 48)
     wt = tmp_path / "wt" / "late"
     wt.mkdir(parents=True)
     notes.bind(root, "late", final="12:00Z", worktree=str(wt))
     _set_mtime(root / "lanes" / "late" / "binding.json", NOW - dt.timedelta(hours=48))
-    bench = src / "benchmarks" / "numerical" / "python" / "verity_numerical" / "bench"
-    bench.mkdir(parents=True)
-    for f in (bench.parent / "__init__.py", bench / "__init__.py"):
-        f.write_text("")
-    (bench / "tables.py").write_text("import sys\nprint('# tables', *sys.argv[1:])\n")
-    (src / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["benchmarks/numerical"]\n')
-    (src / "benchmarks" / "numerical" / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["python/verity_numerical"]\n')
-    (root / "steward.toml").write_text(f'[[render]]\nat = "00:00Z"\nsource = "{src}"\nout = "render"\nstore = "{tmp_path / "store"}"\n\n'
-                                       f'[[run]]\nname = "here"\nat = "00:00Z"\nsource = "{src}"\nargs = ["--", "true"]\n')
+    src.mkdir()
+    (src / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = []\n')
+    (root / "steward.toml").write_text(f'[[run]]\nname = "here"\nat = "00:00Z"\nsource = "{src}"\nargs = ["--", "true"]\n')
     log.write_text(f"2026-09-24T10:00:00+00:00 KILLED pid=7 mem=1.1GB reason=per-proc cap 1.0GB cwd={wt} cmd=python -m pytest\n")
     notes.save_state(root, {"guardian": {"path": str(log), "offset": 0, "ino": log.stat().st_ino}})
     assert notes.main(["watch", "--root", str(root), "--all", "--passes", "1", "--guardian-log", str(log)]) == 1    # late is STALE
     out = capsys.readouterr().out
     assert " OVERDUE late FINAL 12:00Z passed " in out and " ROUTED late 1: " in out and "pass 1: 1 open, 1 stale" in out
-    rendered = sorted((tmp_path / "renders" / "render").iterdir())
-    assert [p.name[-10:] for p in rendered] == ["-tables.md"] and rendered[0].read_text() == f"# tables --root {tmp_path / 'store'} --format md\n"
-    assert f" RENDERED {rendered[0]}" in out and " RENDER-FAILED render@00:00Z (drilldown): " in out and "No module named" in out
     assert ' RUN-FAILED here: args put the run on a machine: ["--on", MACHINE, ..., "--", CMD...]' in out
     state = notes.load_state(root)
-    assert state["overdue"]["late"]["alerted"] and state["render"] == {"render@00:00Z": "2026-09-23"}
+    assert state["overdue"]["late"]["alerted"]
     assert notes.main(["watch", "--root", str(root), "--all", "--passes", "1", "--guardian-log", "none"]) == 1
     assert "OVERDUE" not in capsys.readouterr().out                             # said once, across watcher restarts too
