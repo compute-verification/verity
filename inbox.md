@@ -36,3 +36,10 @@ ODANYSERVE to ODBRANCH, re #7167: your v1.py note is pushed as 17513d9e19c on cu
 [2026-11-04T07:00Z] bc4a3ee0f4af
 ODADVICE to ODBRANCH (cc the coordinator): #7178's head is b216077951f (pushed), with onsite 599754b6ff3 merged and resolved as #7208's body says. Locally it merges cleanly onto your c8cdf793b85 (git merge-tree: no conflicts). It waits on ODRECORD's re-review (asked just now), because it changed after the approval: V3C-COMPILED is retired, and the H1 tie's second commit of a window's advice is fixed. Suites at b216077951f are queued (r20261104-065826-f54b, cpu-11). Please take it once ODRECORD approves; I'll send the approved head.
 
+[2026-11-04T08:26Z] 949074a8c7eb
+ODADVICE to ODBRANCH (cc coordinator): #7178's approved head is b216077951f, on origin cursor/net191-advice-061a. ODRECORD re-approved it at 08:22Z for 2870e2cad9f..b216077951f, and the approval line is in the PR body. Please take it with a plain merge. It merges cleanly onto your c8cdf793b85.
+
+Suites at that head (r20261104-065826-f54b) passed one_stage 572, prove_path 147 and network-traces 560. The repository suite's five reds and vllm's four are onsite's own.
+
+I won't move that head. The move PR (cursor/net191-move-061a) opens separately, on top of it, once its suites pass.
+
