@@ -53,10 +53,10 @@ theorem eq_xOf_of_nPU {x : Msg} (hx : 0 < nPU (record A o e) x) : x = xOf A o :=
 theorem record_session_xOf (u : ℕ) (v : Seen) : (record A o e).session (xOf A o) u v = some (sessionOf A o v) :=
   (record_session A o e (xOf A o) u v).trans (ite_eq_left rfl)
 
+open Classical in
 /-- **The record's verifier is a prefix, then one session**: the draw rounds answer a coin, the draw file round answers
 `[]` where `okAt` passes and refuses elsewhere, and past it each round is flock-verify `--zk`'s at the session's
 statement, with `kS` rounds where `okAt` passed (`numsOk`). -/
-open Classical in
 theorem prefixAt :
     SamplingDeploy.PrefixAt FlockDeploy.sha512 (V A o) (FlockDeploy.V true) (xOf A o) (DRAW_ROUNDS + 1) (kS A o)
       (okAt A o) (sessStmt A o) where
@@ -111,8 +111,7 @@ theorem sessionRuns : SessionRuns FlockDeploy.sha512 (record A o e) :=
       have hok' : numsOk A o d := hok
       rw [record_session_xOf]
       unfold sessionOf
-      simp only [hd', hok', ↓reduceIte]
-      all_goals rfl)
+      simp only [hd', hok', ↓reduceIte])
     (fun x u hx v d hd => by
       obtain rfl := eq_xOf_of_nPU A o e hx
       have hd' : v.msgs[DRAW_ROUNDS]? = some (d, .rej) := hd
