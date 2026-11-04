@@ -17,6 +17,7 @@ import Proofs.NetworkCertifier.PeriodSum
 import Proofs.NetworkCertifier.Pooled
 import Proofs.NetworkCertifier.TapRows
 import Proofs.NetworkCertifier.Period
+import Proofs.NetworkCertifier.PeriodReg
 import Proofs.NetworkCertifier.PooledLeak
 import Proofs.NetworkCertifier.Schedule
 import Proofs.NetworkCertifier.PerWindow
@@ -120,6 +121,7 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
       (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ decode hδ hdec reg β Dj hβ).2 x hx s P hs hP op _⟩
 
 theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
+theorem PeriodLeakRegistered : NetTiming.Guarantees.PeriodLeakRegistered := NetTiming.periodLeak_registered
 theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe := NetTiming.horizonIncorrectBlocks
 theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.horizonLeak
 
