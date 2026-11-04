@@ -12288,11 +12288,6 @@
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
-    "Properties.Remote.SecurityProofs.acceptComplies",
-    "Properties.Remote.SecurityProofs.acceptInferenceOnly",
-    "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial",
-    "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBounds",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -13682,18 +13677,18 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "d44697a73211095b732ac099d7f367144b0c1559cca9bbf3c0d3a10db8078b83",
+   "digest": "4622637f5451bb8bab417f714cb2f5b2037fc7b534d466c6cb97bd233dc9cdfe",
    "definitions": {
     "Flock.Registered.Port": "8bf63b4f11162dce1bbc385541afd32990ae8951927d86e9839649edf19734a7",
     "Flock.Registered.Port.domain": "59766f0cc4f10430def56f75d58c4ba25d8b353a298127516dfd435ef2349909",
     "Flock.Registered.Port.schema": "195a10f870174a6b9ac9b51cc688df07d6ec5f6e3369b4059ce50514a1e78f6e",
-    "Flock.Registered.REGISTERED_DOMAIN": "401efe3b64e8bc755df43de17ecc93d34d0659af14512977e7541f56f42d3009",
+    "Flock.Registered.REGISTERED_DOMAIN": "30c49b988c430c9e903bc74cb7cf8f602e58276862a7c4773b4bd97a0967e0e1",
     "Flock.Registered.SCHEMAS": "a02300d9c629886741e436df03ce5087ea523c61648df048c6520efb8ddb1941",
     "Flock.Registered.WIDTHS": "f4977ebbfc1f56b3a8b18966d93bca3730eb80a89722073817b69365af01fb60",
     "Flock.Registered.WIDTH_KEY": "622d07ccba61c2e7c41c90ab6fdc3227805b4c267753ea215026fa7f9a71b5a0",
     "Flock.Registered.WORD_BITS": "4542d084de1788925e0a2fcbecfc92a7faea54947782d73e5ba18998b41cf3aa",
     "Flock.Registered.domain": "6b7a33fcaa3a1e513ec58845d192a740233d3126543af6653c93abb8f450ac69",
-    "Flock.Registered.domainWith": "49b0e81e704d15a08c8f2d14781f9568f3e557a203c02d514c5ef667be8ec782",
+    "Flock.Registered.domainWith": "e36768ed995d03d14bbafcb75ea0d218bf9d467699f8ec04ed92604979676d05",
     "Flock.Registered.rowLeaf": "09ceb544a5a4910cbbfa21ac341e5fdcf6b3fd232451f5f63fb7d9ff9ea64cde",
     "Flock.Registered.rowWords": "88b71b67bc7da442e3af20bc7d557b6a01b1f73607299f5c42ff7b1df66dee0b",
     "_private.Flock.Registered.0.Flock.Registered.tagged": "722909620809d3fc0c88f4eca4e02b75c137673488be949e64466acf03bff32a"
@@ -22842,12 +22837,12 @@
    ]
   },
   "SampledProofs.Supplied": {
-   "digest": "b2d3e64faf9bfdb9040451b880e6c3a5be2e102e2ef37f3886412b4f661a2f03",
+   "digest": "3fd01f0a5f39f4228d83dfb52927e1d78286bc2e2b0862d1d14e133b17b99525",
    "definitions": {
     "SampledProofs.Supplied.Rows": "776fe215cb458bc287adf02317250ed93eb9a0f36382d51d8dfc64d6926bf5e9",
     "SampledProofs.Supplied.SALT_BYTES": "60f4399cfb3ee4a3761e11b59dd8a469201238f1963ce7eb9314d3f30e951e64",
     "SampledProofs.Supplied.SOURCES": "99af65bb4cfd14a31c0951f7fecfcfd92ab25786d412f86f08149dc0b2df6b45",
-    "SampledProofs.Supplied.SUPPLIED_SALT": "ea56d74890a05d6f8f3ca2325541829a103e8a13891cfdfe40e7a4226fdc6485",
+    "SampledProofs.Supplied.SUPPLIED_SALT": "cba16b610be978e65f778be4b7df7b52e1c3cb7e54b078e7cd239483c6907652",
     "SampledProofs.Supplied.WINDOW_SALT": "13ac4d68cba6fc1623ed8496a945cac4c7aa8fb925e6aeb11b0c6bbd76585cc9",
     "SampledProofs.Supplied.bytesLeaves": "666e4f6f72fc0c0deb299a9858e7540826fa3915607773a8962fe01e744165f9",
     "SampledProofs.Supplied.logBase": "b76e132518571a1b23d672b7ac853c306266394801f048872bad5e1a0e0c78fd",
@@ -22856,7 +22851,7 @@
     "SampledProofs.Supplied.rows": "3d049091901d9833547a2be2c4e165fb28f0960558208af0f933c50a41cae8a4",
     "SampledProofs.Supplied.rows._sparseCasesOn_1": "b9d37e5870679a015d25a5687b29c7cb17008a668a638dfa32642a9b20309eb1",
     "SampledProofs.Supplied.rows._sparseCasesOn_2": "90cd9aee9cc9353c50118ed62bdad4ef1f525d06c853028a4b2d718f9f0a4bc6",
-    "SampledProofs.Supplied.salt": "183578761e91d45d0622a33b6b30e802862c8c65d596de943bcd9405496f09b4",
+    "SampledProofs.Supplied.salt": "fda63c395b04550f9905f27f1680200d174b76d96dfb9e0da08f771ddbd7d584",
     "SampledProofs.Supplied.sourceBytes": "94df50890f94b28bf659f336577b5f1af228c430f40101c9fda6ba86a99228be",
     "SampledProofs.Supplied.sources": "22509016732b7babf3fce7999b951119fc8a530b5c458c3cf3ab263d690c5400",
     "SampledProofs.Supplied.sources._sparseCasesOn_1": "18bb62be0274db9c2349562465e41f9aa9717b2561869fc2e9df349d8c58bbf2",
