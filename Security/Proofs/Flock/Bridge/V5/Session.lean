@@ -39,7 +39,7 @@ variable {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.
 
 /-- **The openings at values `Xu`**: at each committed wire `g` of unit `u` that `κ` doesn't fix, in wire order, `g`'s
 position with `Xu`'s bit there and the datum `dat g`, under `roots`. -/
-def revealOf : List (List Claims.Msg × Opening Bool) :=
+noncomputable def revealOf : List (List Claims.Msg × Opening Bool) :=
   ((List.finRange C.N).filter fun g => decide (g ∈ P.io u ∧ κ g = none)).map fun g =>
     (roots, ⟨posOf C g, Xu g, dat g⟩)
 
@@ -167,9 +167,8 @@ theorem _root_.FlockSoundness.Discharge.ZkHidden.DrawSetupZHJP.table_congr {n mP
 variable {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Option ByteArray} {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
 
 theorem partOf_one (h1 : I.count ≤ 1) (d : Lean.Json) (v : ℕ) : (Composed.partOf I d v).val = 0 := by
-  have := (Composed.partOf I d v).isLt
-  unfold nTab at this
-  rw [if_pos h1] at this
+  have h2 := (Composed.partOf I d v).isLt
+  have h3 : nTab I = 1 := by simp [nTab, h1]
   omega
 
 /-- **At one table and a constant draw, a drawn proof block's table is the table set up at that draw** (`tableZHJP`'s
@@ -296,10 +295,17 @@ theorem correct_of_revealV5
     obtain ⟨hcom, -⟩ := vb.opening_spec S R u hu M hM g hg
     obtain ⟨⟨r, hr, hv, hvw⟩, hy⟩ :=
       (openingsCanonV5 n Reg I own ht D hD hU pi hpi pub hpub hscope kd dj S₀ d₀ y₀ S R u hu M hM g hg).2 hk
-    exact opens_dataOfRow hr (transports_shapedP_at (dj := dj) (y₀ := y₀) (ht := ht)
+    have hr' : rowsOfLP D.unroll hU n pi Lm g = some r := hr
+    have hv' : FlockSoundness.Discharge.Layout.RowShaped (vb.opening S R u M (vb.pos g)).2.1 := hv
+    have hvw' : (vb.opening S R u M (vb.pos g)).2.1.1.val = r.width := hvw
+    have hy' : (vb.opening S R u M (vb.pos g)).2.2.length = saltLen := hy
+    have hcom' : vb.com ((vb.opening S R u M (vb.pos g)).1, (vb.opening S R u M (vb.pos g)).2.1,
+        (vb.opening S R u M (vb.pos g)).2.2) = vb.cs R (vb.pos g) := hcom
+    exact opens_dataOfRow hr' (transports_shapedP_at (dj := dj) (y₀ := y₀) (ht := ht)
       (hc := Flock.Desc.parse_flat hD) (hscope := hscope) (hU := hU) (hpi := hpi) (hpub := hpub) R
       (rowsOk_of_scopeOkH hscope) (rootsDistinctL_of_fixes hdup hroots)
-      (fun u q => ref_lt_cntP hpub u.isLt q.isLt) hr _ _ _ hv hvw hy hcom)
+      (fun u q => ref_lt_cntP hpub u.isLt q.isLt) hr' (vb.opening S R u M (vb.pos g)).1
+      (vb.opening S R u M (vb.pos g)).2.1 (vb.opening S R u M (vb.pos g)).2.2 hv' hvw' hy' hcom')
 
 end V5
 
