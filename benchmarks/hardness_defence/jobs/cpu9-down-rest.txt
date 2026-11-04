@@ -1,0 +1,4 @@
+# 70B down_proj at its served K on every layer cpu9-down-full-orders.txt doesn't price: the split in the natural
+# order at the small ranks that are cheapest on a flat matrix (on 70B's gate and up the split's least falls with the
+# rank: r20261104-085532-5d0f), so that a split within 0.07 of the line gets an all-orders run
+70b-down-rest --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 1,2,3,4,5,6,7,8,9,10,13,16,17,18,19,20,21,22,23,24,25,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79 --match down_proj --fast --ranks 8,32,128 --workers 16
