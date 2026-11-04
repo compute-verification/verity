@@ -2498,6 +2498,18 @@
      "Claims.Witness.SamplingGeneric.twoCosts_meets",
      "Claims.Witness.SamplingGeneric.twoSessions_meets"
     ]
+   },
+   "Claims.ZKOut": {
+    "fails": "Claims.ZKOut_fails",
+    "meets": ["Claims.Flock.masked_meets_zk"]
+   },
+   "Claims.SamplingGeneric.ZkArg.ZK": {
+    "fails": "Claims.SamplingGeneric.ZkArg.ZK_fails",
+    "meets": ["Claims.Flock.masked_meets_zk"]
+   },
+   "Claims.SamplingGeneric.ZkCompiled.ZK": {
+    "fails": "Claims.SamplingGeneric.ZkCompiled.ZK_fails",
+    "meets": ["Claims.Sampling.masked_meets_zk", "Claims.Witness.SamplingGeneric.echo_meets"]
    }
   },
   "not": {
@@ -2559,7 +2571,10 @@
    "Claims.SamplingGeneric.Arg.OwnLe": "a helper the claims read: the proof system's own calls, at most a bound, which `CompilerBits` and `CompilerEfficient` read",
    "Claims.SamplingGeneric.Compiled.OpenCallsLe": "a helper the claims read: the opening checks' count, which `CompilerBits` and `CompilerEfficient` read",
    "Claims.SamplingGeneric.CompilerBits": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerBits`)",
-   "Claims.SamplingGeneric.CompilerEfficient": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerEfficient`)"
+   "Claims.SamplingGeneric.CompilerEfficient": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerEfficient`)",
+   "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier",
+   "Claims.ZKOutLeak": "proved of every protocol zero knowledge with a public outcome over finitely many outcomes (`Claims.zkOutLeak`)",
+   "Claims.SamplingGeneric.CompilerZK": "proved of every zero-knowledge proof system and masked compiled verifier (`Claims.SamplingGeneric.compilerZK`)"
   }
  },
  "witnesses": {
@@ -12572,6 +12587,18 @@
    "signature": ["Verity.SecurityProofs.ToCircuitAnd : Verity.Guarantees.ToCircuitAnd"],
    "assumptions": [],
    "type_hash": "d7a46674efa40159e39bed4221c853818c160c91fe491f6e0746b33d2e6b02ab"
+  },
+  "Claims.ZKOut_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.ZkArg.ZK_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.ZkCompiled.ZK_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.SamplingGeneric.echo_meets": {
+   "owner": "@proofs"
   }
  },
  "shape": {

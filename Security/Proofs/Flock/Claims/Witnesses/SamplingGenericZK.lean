@@ -20,12 +20,18 @@ fail at a toy instance.
   the toy witness is in the sampling relation: its composed simulator says nothing while the prover talks, at an error
   of `0`: `ZkCompiled.ZK_fails`.
 
-The lock's `meets` witnesses: `Claims.Flock.masked_meets_zk` (the deployed record is masked) and `zkFlock_meets`:
-C-Flock's deployed masked session as a proof system with a public outcome (`zkA`, zero knowledge by `MaskedZK` through
-`ZKmalR`'s two-sided bound, `zkOut_of_zkmalR`), under a masked compiled verifier of one session (`zkL`) that meets the
-zero-knowledge contract, so `CompilerZK` reads antecedents that hold together. `zkL`'s commitment opens nothing, so its
-sampling relation is empty and the contract's `witness` holds vacuously there: the tree states no member of C-Flock's
-relation for a session's witness to be.
+The lock's `meets` witnesses: the deployed records are masked (`Claims.Flock.masked_meets_zk`,
+`Claims.Sampling.masked_meets_zk`), and `echo_meets`: `CompilerZK`'s antecedents hold together at a nonempty relation.
+`echoArg` is `talkArg` with a simulator that asks the verifier its answer to the talking prover's `[0]` (`echoSimOut`),
+so it is zero knowledge at error `0` with every witness in its relation (`echoArg_zk`); `echoL`, `talkL`'s one-session
+masked compiled verifier over it, meets the zero-knowledge contract, and the toy witness is in its sampling relation.
+
+At C-Flock, `zkA_zk`: C-Flock's deployed masked session as a proof system with a public outcome (`zkA`) is zero
+knowledge, by `MaskedZK` through `ZKmalR`'s two-sided bound (`zkOut_of_zkmalR`). `zkFlock_meets` puts it under a masked
+compiled verifier of one session (`zkL`) that meets the zero-knowledge contract, but only vacuously in its `witness`
+field: `zkL`'s commitment opens nothing, so its sampling relation is empty. A nonempty one would need the contract's
+`witness` there, a member of C-Flock's relation (`Flock.Readable.relation`) at each statement the run admits, so a
+statement the deployed parser accepts and a witness its tables hold of, and the tree constructs none.
 -/
 
 namespace Claims.Witness.SamplingGeneric
@@ -184,6 +190,62 @@ theorem zkCompiled_talk_fails (H : Msg → Msg) : ¬ (talkL Coin).ZK H := by
 
 end Talk
 
+/-! ## `CompilerZK`'s antecedents hold where a witness is in the sampling relation -/
+
+/-- **A simulator that echoes the talking prover**: it asks the verifier its answer to `[0]` and outputs that round,
+the talking prover's transcript against every verifier of one round. -/
+def echoSimOut : SimOut Unit where
+  C _ := Unit
+  prog _ _ _ := .ask [[0]] fun b => .ret [([0], b)]
+
+/-- Against a verifier of one round, the talking prover's transcript is its `[0]` and the verifier's answer. -/
+theorem talk_msgs (H : Msg → Msg) {Θ : Type} (Vs : VStar Θ) (x : Msg) (θ : Θ) (hk : Vs.k x = 1)
+    (ω : Unit × Unit) : (runStar H talkP Vs x ω θ).msgs = [([0], ((Vs.next x [[0]] θ).eval H).1)] := by
+  unfold runStar
+  rw [hk]
+  cases hb : ((Vs.next x [[0]] θ).eval H).1 <;> simp [stepWith, talkP, OC.eval, hb]
+
+/-- **The echoing proof system**: `talkArg` with the simulator that echoes the talking prover. -/
+def echoArg (Coin : Type) : ZkArg Coin := { talkArg Coin with S := echoSimOut }
+
+/-- **The echoing proof system is zero knowledge** at error `0`, at every witness, all in its relation: the echoing
+simulator's transcript is the talking prover's. -/
+theorem echoArg_zk {Coin : Type} (H : Msg → Msg) : (echoArg Coin).ZK H := by
+  intro x w _ Θ Vs θ hk o Ev
+  change Pr (fun ω : Unit × Unit => () = o ∧ Ev (runStar H talkP Vs x ω θ).msgs) ≤
+    Pr (fun c : Unit => Ev ((echoSimOut.given o).out H Vs θ x c)) + 0
+  rw [add_zero]
+  by_cases hE : Ev [([0], ((Vs.next x [[0]] θ).eval H).1)]
+  · refine (Pr_le_one _).trans (le_of_eq ?_)
+    exact ((Pr_congr fun c : Unit => iff_true_intro (show Ev ((echoSimOut.given o).out H Vs θ x c) from hE)).trans
+      Claims.ZKMal.Pr_true).symm
+  · refine (le_of_eq ?_).trans (Pr_nonneg _)
+    exact (Pr_congr fun ω : Unit × Unit => iff_false_intro fun h : () = o ∧ Ev (runStar H talkP Vs x ω θ).msgs =>
+      hE (talk_msgs H Vs x θ hk ω ▸ h.2)).trans Pr_false
+
+/-- **A masked compiled verifier of one session over the echoing proof system**: `talkL`'s parts. -/
+def echoL (Coin : Type) : ZkCompiled Coin (echoArg Coin) := { talkL Coin with }
+
+section Echo
+
+variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+
+/-- `echoL` meets the zero-knowledge contract, as `talkL` does: the contract reads the proof system's simulator only
+through its coins, `Unit` at both. -/
+theorem echoL_sessions (H : Msg → Msg) : (echoL Coin).ZkSessions H :=
+  have h := talkL_sessions (Coin := Coin) H
+  ⟨h.rounds, h.routed, h.shaped, h.witness, h.honest⟩
+
+/-- **`CompilerZK`'s antecedents hold together at a nonempty relation**: the echoing proof system is zero knowledge, the
+one-session masked compiled verifier over it meets the zero-knowledge contract, and the toy witness, which no proof
+block faults, is in its sampling relation, so the contract's `witness` field holds of a witness there. -/
+theorem echo_meets (H : Msg → Msg) :
+    (echoArg Coin).ZK H ∧ (echoL Coin).ZkSessions H ∧
+      Claims.Sampling.Rhon H (echoL Coin).commit (echoL Coin).parse (echoL Coin).partition [] toyWit :=
+  ⟨echoArg_zk H, echoL_sessions H, talkL_rhon (Coin := Coin) H⟩
+
+end Echo
+
 /-! ## C-Flock's masked session meets the zero-knowledge contract -/
 
 /-- A simulator, as one given a trivial outcome. -/
@@ -294,7 +356,8 @@ theorem zkL_sessions (H : Msg → Msg) : zkL.ZkSessions H where
 
 /-- **`CompilerZK`'s antecedents hold together** at C-Flock's deployed masked session: as a proof system with a public
 outcome it is zero knowledge (`MaskedZK`), and the one-session masked compiled verifier over it meets the
-zero-knowledge contract. -/
+zero-knowledge contract, its `witness` field vacuously (`rhon_rejCm`); `echo_meets` is the antecedents at a nonempty
+relation. -/
 theorem zkFlock_meets : zkA.ZK FlockDeploy.sha512 ∧ zkL.ZkSessions FlockDeploy.sha512 :=
   ⟨zkA_zk, zkL_sessions _⟩
 
