@@ -126,8 +126,9 @@ class LiveDraw:
     """`verify_run.verify_passes`' ``draw`` from a draw session of its own on the auditor host's challenger, through
     infra's gate (``gate``, ``peer`` and ``lane`` as `_LiveSession`'s; `run` its gate's subprocess in tests): called on
     the run's commitment C, it reserves a session withheld with the draw coin alone (``reserve --withhold``,
-    `window.DRAW_FAMILIES`, as `serve_h1_gate.ServedGate.reserve_draw`), opens it on C and takes its ``pouw/draw`` coin
-    after C (`pouw_h1_window.DrawSession`), whose full opening and commitment the session releases at its close.
+    `window.DRAW_FAMILIES`, `pouw_h1_window.reserve_draw` as H1's window draws), opens it on C and takes its
+    ``pouw/draw`` coin after C (`pouw_h1_window.DrawSession`), whose full opening and commitment the session releases at
+    its close.
     Refused (`CoinError`) before reserving while ``lane`` has a period open in the auditor's ledger, and before its open
     when the reserve joined one, so the draw counts toward no period's sessions; and when the gate reserves it plain.
     Returns (the coin's 64 bytes, the coin record's ``draw``: `verify_run`'s module docstring, "The coin record")."""
@@ -140,19 +141,13 @@ class LiveDraw:
     def __call__(self, root: bytes, asking: Any) -> tuple[bytes, dict[str, Any]]:
         from verity.core.protocols.pouw import window as Wd
         from verity.core.protocols.sampled_proofs.challenger import CoinError
-        from verity_vllm.protocols.pouw.h1 import challenger as PHC
         from verity_vllm.protocols.pouw.h1 import window as PHW
 
         period = PHW.open_period(self.gate.ledger(), self.lane)
         if period is not None:
             raise CoinError(f"refused before reserving the run's draw session: lane {self.lane}'s period "
                             f"{period['period']} is open, and the draw joins no period (close it first)")
-        answer = self.gate.call("reserve", "--peer", self.peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(),
-                                "--withhold")
-        if answer.get("withheld") is not True:
-            raise CoinError(f"the gate reserved draw session {answer.get('session')} plain, not withheld")
-        reserved = PHW.reserved_of({k: v for k, v in answer.items() if k in ("session", *PHW.RESERVE_FIELDS)},
-                                   "draw_session")
+        reserved = PHW.reserve_draw(self.gate.call, self.peer)
         if reserved.get("period") is not None:
             raise CoinError(f"draw session {reserved['session']} joined period {reserved['period']}: refused before its "
                             "open, since the draw joins no period")

@@ -280,6 +280,16 @@ def reserve_salt(call: Callable[..., Mapping[str, Any]], ledger: Callable[[], It
     return reserved, period
 
 
+def reserve_draw(call: Callable[..., Mapping[str, Any]], peer: str) -> dict[str, Any]:
+    """A draw session (`window.DRAW_FAMILIES`, the draw coin alone) reserved withheld at infra's gate, as words (`call`,
+    ``reserve --peer PEER ... --withhold``, under the lane's gate key): its reserve answer as `DrawSession` takes it
+    (`reserved_of`). `CoinError` when the gate refuses, or reserves it plain."""
+    answer = call("reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(), "--withhold")
+    if answer.get("withheld") is not True:
+        raise CoinError(f"the gate reserved draw session {answer.get('session')} plain, not withheld")
+    return reserved_of({k: v for k, v in answer.items() if k in ("session", *RESERVE_FIELDS)}, "draw_session")
+
+
 def open_session(entry: str, gate: Callable[..., Mapping[str, Any]], sid: str, root: bytes, k: int = 0,
                  at: str = "127.0.0.1:0", wait: Callable[[float], Any] = time.sleep,
                  clock: Callable[[], float] = time.monotonic
@@ -439,5 +449,5 @@ def finish(run: Any, client: Any) -> None:
 
 __all__ = ["DrawSession", "EPOCHS", "Gate", "H1_PERIOD", "NO_DRAW_SESSION", "RESERVE_FIELDS", "WITHHELD_OPEN", "Window", "at_port",
            "closed_on_error", "connect", "finish", "gate_of", "in_process_draw", "open_period", "open_session", "opened",
-           "period_reason", "period_setting", "refusals", "reserve_salt", "reserved_of", "salt_session", "session",
-           "session_setting"]
+           "period_reason", "period_setting", "refusals", "reserve_draw", "reserve_salt", "reserved_of", "salt_session",
+           "session", "session_setting"]
