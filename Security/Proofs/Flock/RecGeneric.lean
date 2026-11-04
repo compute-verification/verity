@@ -36,6 +36,7 @@ public import Proofs.Flock.RecGeneric.AtFlockCompiledContract
 public import Proofs.Flock.RecGeneric.AtFlockCompiledKS
 public import Proofs.Flock.RecGeneric.CompiledCost
 public import Proofs.Flock.RecGeneric.AtFlockCompiledNontrivial
+public import Proofs.Flock.RecGeneric.CompiledBits
 
 /-! The recursion as a compiler, generic in the outer argument and the server, over inner protocols with repetition
 extractors: its statements (`Proofs.Flock.RecGeneric.Statement`), the Flock instance's
@@ -72,7 +73,9 @@ argument, with its targets and bound (`Proofs.Flock.RecGeneric.AtFlockCompiled`)
 at the deployment (`Proofs.Flock.RecGeneric.AtFlockCompiledSessions`), the compiler's contract at the deployment's
 dense statements (`Proofs.Flock.RecGeneric.AtFlockCompiledContract`, A1d), the bound at every statement from it, with
 no hypothesis (`Proofs.Flock.RecGeneric.AtFlockCompiledKS`), with `Compiled.EO`'s expected reruns at most
-`1 + Σ_s (1 + m′_s·k_s)` (`Proofs.Flock.RecGeneric.CompiledCost`), and the bound false at the verifier that accepts
-everything (`Proofs.Flock.RecGeneric.AtFlockCompiledNontrivial`, the lock's `nontrivial`). -/
+`1 + Σ_s (1 + m′_s·k_s)` (`Proofs.Flock.RecGeneric.CompiledCost`), the bound false at the verifier that accepts
+everything (`Proofs.Flock.RecGeneric.AtFlockCompiledNontrivial`, the lock's `nontrivial`), and its bits at the loop
+bounds `(·, 2^256, 2^257)` and the link's `M = 2^256`: at most `κ + t·ε`, `κ` route 2C's and `ε` five per-call terms
+(`Proofs.Flock.RecGeneric.CompiledBits`). -/
 
 @[expose] public section
