@@ -502,7 +502,8 @@ def census_line(name: str, *fields: str) -> dict:
 def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one_phase(tmp_path):
     p = OR.record(accepted(tmp_path))["periods"]
     phase = Fraction(63 * 20, 1000)
-    one = {"bits": KR, "share": KR / LB.WEIGHTS.bits, "share_of_capacity": KR / CAPACITY, "vacuous": False, "how": "proved",
+    one = {"bits": KR, "share": KR / LB.WEIGHTS.bits, "share_served": KR / LB.SERVED.bits,
+           "share_of_capacity": KR / CAPACITY, "vacuous": False, "how": "proved",
            "delta_net": [{"symbol": "eps", "value": "1/1048576"}, {"symbol": "ε_ks", "times": 1},
                          {"symbol": "ε_bind", "times": 1}, {"symbol": "ε_tap", "times": 1}],
            "eps_per_phase_below": "1", "statement": LB.STATEMENTS["per_period"]}
@@ -519,11 +520,12 @@ def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one
                 KR * w * n, OR.delta_net(Fraction(1, 2 ** 20) * w * n, w * n), "scaled", rules[where])
             assert c["delta_net"][0]["value"] == str(Fraction(w * n, 2 ** 20))
             assert c["vacuous"] == (w * n >= 2 ** 20) and c["share"] == KR * w * n / LB.WEIGHTS.bits
-            assert c["share_of_capacity"] == KR / CAPACITY
+            assert c["share_served"] == KR * w * n / LB.SERVED.bits and c["share_of_capacity"] == KR / CAPACITY
             assert c["eps_per_phase_below"] == str(Fraction(1, w * n))
             assert c["parameters"] == {"phases": w, "phase_s": str(phase), "connections": str(252 * w * n), "links": n}
             assert c["per_phase"] == (one if where == "node" else {
-                "bits": KR * n, "share": KR * n / LB.WEIGHTS.bits, "share_of_capacity": KR / CAPACITY,
+                "bits": KR * n, "share": KR * n / LB.WEIGHTS.bits, "share_served": KR * n / LB.SERVED.bits,
+                "share_of_capacity": KR / CAPACITY,
                 "delta_net": OR.delta_net(Fraction(n, 2 ** 20), n),
                 "vacuous": n >= 2 ** 20, "eps_per_phase_below": str(Fraction(1, n)), "how": "scaled", "rule": where,
                 "statement": OR.STATEMENTS[where]})
@@ -535,6 +537,11 @@ def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one
                   census_line("deployments.json", "gpus_per_machine")]}
     assert p["rules"]["datacenter"]["sources"][0]["id"] == "dc-12500-machines-600s"
     assert {k: r["rule"] for k, r in p["rules"].items()} == OR.RULES
+    world = census_line("adversary.json", "model", "total_params", "weights_bytes", "weights_datatype")
+    assert p["weights"] == {
+        "share": {"of": LB.WEIGHTS.label, "is": OR.WEIGHTS, "bits": 8 * world["read"]["weights_bytes"], "source": world},
+        "share_served": {"of": "the demo's served model (Llama-3.2-1B) in BF16", "bits": LB.SERVED.bits}}
+    assert world["read"]["model"] == "DeepSeek-V4-Pro" and world["id"] == "world-inference-2027"
 
 
 def test_eps_is_split_into_the_scans_and_the_charged_audits_delta_beside_each_cells_threshold(tmp_path):

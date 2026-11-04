@@ -221,8 +221,9 @@ negatives.
   run states it and the terms no check computes named, and that bound over the
   run's own certification period (proved) and each monitoring period for the node (proved where the run's period
   covers it, else scaled), the census's reference datacenter and the world (scaled), each scaled cell naming its rule,
-  whose sources the record states, beside its figure over one execution phase, and its share of a weights copy and of
-  the schedule's egress capacity (the served egress is in no published file, and the record says so). The cells are
+  whose sources the record states, beside its figure over one execution phase, and its share of one copy of the
+  weights a deployment protects (the census adversary model's as published, a stated parameter with its census line),
+  beside it of the demo's served model's (Llama-3.2-1B), and of the schedule's egress capacity (the served egress is in no published file, and the record says so). The cells are
   the figure of record's: K as the period's check states it only where its Lean verdict held both checks the tight
   ℓ_{a,j} rests on (each tied audit's free inputs computed from its descriptor, and its circuit held fixed whatever its
   advice) and none of its premises is open: each is discharged by theorems `Security/lean-audit.json` or

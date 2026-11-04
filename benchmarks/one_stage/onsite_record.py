@@ -66,8 +66,10 @@ premises it is conditional on (``conditional_on``), never as the result. A node'
 covers the monitoring period's seconds (its m execution phases), and otherwise scaled from the run to the period; a
 datacenter's and the world's are scaled from the node's. Each scaled cell names its rule, which ``rules`` states with
 its sources (`RULES`): the bound, the case's schedule, and each census line it reads with its SHA-512 (`census`). Each
-cell gives K in bits (the least integer at or above a scaled one), its share of one copy of the weights
-(`leak_bounds.WEIGHTS`), its share of the egress its execution phases can carry (``share_of_capacity``, the schedule's
+cell gives K in bits (the least integer at or above a scaled one), its share of one copy of the weights a deployment
+protects (``share``: `leak_bounds.WEIGHTS`, the adversary resource model's as published, a stated parameter that
+``weights`` gives with its census line and SHA-512, `WEIGHTS`) and beside it of the demo's served model's
+(``share_served``, `leak_bounds.SERVED`), its share of the egress its execution phases can carry (``share_of_capacity``, the schedule's
 capacity in ``egress``, `EGRESS`; the served egress is missing, `SERVED_EGRESS`), its δ_net's terms over the execution
 phases it counts (``delta_net``), whether eps alone is
 already vacuous (at least 1), the eps a phase under which it wouldn't be (``eps_per_phase_below``, beside the bound's
@@ -266,6 +268,9 @@ EGRESS = ("the schedule's egress capacity an execution phase, from the case's pa
           "K's share of it (each cell's share_of_capacity) is a lower bound on K's share of the egress it carried")
 SERVED_EGRESS = ("not in this record: the egress the run served is a count of its own traffic, which no published file "
                  "states (the network certifier's chain files that count it stay on the node)")
+WEIGHTS = ("a stated parameter: one copy of the weights a deployment protects, the adversary resource model's model as "
+           "published (its census line's weights_bytes, at its weights_datatype), whatever the model the run served; "
+           "share_served is of the demo's served model beside it")
 FROM_BOUND = "bound: the run's K and eps over its m execution phases"
 FROM_SCHEDULE = f"{CASE} params.schedule: an execution phase's T buckets of τ"
 STATEMENTS = {"run": LB.STATEMENTS["per_period"], "node": LB.STATEMENTS["per_period"],
@@ -486,7 +491,7 @@ def cell(bits: Fraction, eps: Fraction, phases: int, where: str, capacity: int,
          rule: str | None = None) -> dict[str, Any]:
     """A cell over ``phases`` execution phases, each of ``capacity`` egress bits (`EGRESS`), proved, or scaled by
     ``rule`` (`RULES`)."""
-    return {"bits": math.ceil(bits), "share": float(bits / LB.WEIGHTS.bits),
+    return {"bits": math.ceil(bits), "share": float(bits / LB.WEIGHTS.bits), "share_served": float(bits / LB.SERVED.bits),
             "share_of_capacity": float(bits / (capacity * phases)), "delta_net": delta_net(eps, phases),
             "vacuous": eps >= 1, "eps_per_phase_below": str(Fraction(1, phases)),
             "statement": STATEMENTS[where]} | ({"how": "scaled", "rule": rule} if rule else {"how": "proved"})
@@ -504,7 +509,11 @@ def periods(K: int, eps: Fraction, m: int, phase_s: Fraction, connections: int, 
                                                         "connections": connections, "per_phase": per_phase}
     sources = {"per-phase": [FROM_BOUND], "run-to-period": [FROM_BOUND, FROM_SCHEDULE],
                **{k: v["sources"] for k, v in refs.items()}}
-    out: dict[str, Any] = {"phase_s": str(phase_s), "weights": LB.WEIGHTS.label, "run": run,
+    weights = {"share": {"of": LB.WEIGHTS.label, "is": WEIGHTS, "bits": LB.WEIGHTS.bits,
+                         "source": census_line("adversary.json", "model", "total_params", "weights_bytes",
+                                               "weights_datatype")},
+               "share_served": {"of": LB.SERVED.label, "bits": LB.SERVED.bits}}
+    out: dict[str, Any] = {"phase_s": str(phase_s), "weights": weights, "run": run,
                            "egress": {"capacity_bits_per_phase": capacity, "is": EGRESS,
                                       "served": {"missing": SERVED_EGRESS}},
                            "rules": {k: {"rule": text, "sources": sources[k]} for k, text in RULES.items()}}
@@ -728,7 +737,7 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
             "composite_error": {k: rec["composite_error"][k] for k in ("stated", "vacuous")},
             "connections": (b.get("connections") or {}).get("count"),
             "year_datacenter": None if year is None else {
-                k: year[k] for k in ("bits", "share", "share_of_capacity", "delta_net", "how")},
+                k: year[k] for k in ("bits", "share", "share_served", "share_of_capacity", "delta_net", "how")},
             "advice_measured_on": m.get("run"), **{k: b[k] for k in ("missing", "error") if k in b}}
 
 
