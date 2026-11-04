@@ -1,5 +1,7 @@
-import Definitions.Pous.Accounting.GradedMeets
-import Proofs.Pous.Graded.Tail
+module
+
+public import Definitions.Pous.Accounting.GradedMeets
+public import Proofs.Pous.Graded.Tail
 
 /-!
 # Theorem 1(ii) for the graded audit
@@ -21,6 +23,8 @@ probability at most `p₀` given any history. When every answer is correct, a ro
 `gradedAuditSecure_zero_iff`: with no grace the graded audit is the sequential audit, for `D ≤ D_late` and
 `Q ≤ Q_late`.
 -/
+
+@[expose] public section
 
 namespace PousGraded
 

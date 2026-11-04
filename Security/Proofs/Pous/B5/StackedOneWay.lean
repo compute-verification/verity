@@ -1,19 +1,21 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Basic.Real.Basic
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Fintype.Option
-import Mathlib.Data.Fintype.Sum
-import Mathlib.Data.List.Chain
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
-import Proofs.Pous.Pebbling.FischClaims1314
-import Proofs.Pous.B5.ExPostFacto
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Fintype.Option
+public import Mathlib.Data.Fintype.Sum
+public import Mathlib.Data.List.Chain
+public import Mathlib.Tactic.GCongr
+public import Mathlib.Tactic.Linarith
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
+public import Proofs.Pous.Pebbling.FischClaims1314
+public import Proofs.Pous.B5.ExPostFacto
 
 /-!
 # The one-way bound for Fisch's stacked graph: `PousBridge.b2ToB5` and `PousBridge.b5_stacked`
@@ -28,6 +30,8 @@ Three parts, composed at the end:
 `b2ToB5` is the bridge with Claim 13 discharged. `b5_stacked` chains it with `Pous.Guarantees.B5ExPostFactoBounded` at
 `s = ⌊(1 − ε)n⌋`, `D = ⌊βn⌋ − 1`, `k = n − ⌈εn/2⌉ + 1`, with the `n` last-layer nodes as challenges.
 -/
+
+@[expose] public section
 
 /-!
 # Bridge B2 → B5 (draft statement `B2ToB5`, proved from `Pous.Guarantees.FischClaim13`)

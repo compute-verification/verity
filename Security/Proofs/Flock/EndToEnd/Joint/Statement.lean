@@ -1,6 +1,8 @@
-import Proofs.Flock.EndToEnd.Period.Run
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundCustody
-import Flock.Desc
+module
+
+public import Proofs.Flock.EndToEnd.Period.Run
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundCustody
+public import Flock.Desc
 
 /-!
 # The joint stratified bound: one detection budget over a sampling block's whole draw, and over a period (trusted)
@@ -41,6 +43,8 @@ strategy each sampling block is played with (in a period, at every strategy it i
 
 C-Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

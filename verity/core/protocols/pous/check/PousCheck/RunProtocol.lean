@@ -1,7 +1,13 @@
-import CoreProtocol.Cli
-import CoreProtocol.Ratio
-import PousCheck.Certificate
-import PousCheck.Run
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Ratio
+public import PousCheck.Certificate
+public import PousCheck.Run
+meta import CoreProtocol.Cli
+meta import CoreProtocol.Ratio
+meta import PousCheck.Certificate
+meta import PousCheck.Run
 
 /-!
 # A PoUS run as a core protocol
@@ -39,6 +45,10 @@ and `wide320Certificate`'s `2^-20` (`Pous.SecurityProofs.ObligationWide320`, fro
 `protocol` (`verity/pous/p2/v4/run`) accepts S1's LMS (`SCHEMES`) only; `testProtocol`, under an id of its own, the test
 signers' schemes and only them.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PousCheck.RunProtocol
 

@@ -1,5 +1,7 @@
-import Properties.Pous.Period
-import Properties.Pous.EndToEndAt
+module
+
+public import Properties.Pous.Period
+public import Properties.Pous.EndToEndAt
 
 /-!
 # PoUS over one period at any point and block count
@@ -22,6 +24,8 @@ import Properties.Pous.EndToEndAt
   `δ + ε_max`.
 * `PeriodHeldDemo`: `PeriodHeldAt` at `N = 1038·2^16`, whose state bound is 1,060,008,348,186 bits.
 -/
+
+@[expose] public section
 
 namespace Pous.Period
 

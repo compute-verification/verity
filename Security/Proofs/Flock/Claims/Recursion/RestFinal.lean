@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.RestLens
-import Proofs.Flock.Claims.Recursion.DeployedR
+module
+
+public import Proofs.Flock.Claims.Recursion.RestLens
+public import Proofs.Flock.Claims.Recursion.DeployedR
 
 /-!
 # `final` reads the last message at every witnesses (`FinalReads`), at the deployed `finalR` and `restR elem`
@@ -19,6 +21,8 @@ hypothesis:
   round `i` each top's `n` instances (`capsOpen_count`) and the row it absorbs where it absorbs one (`rowOpen_count`,
   `rowsCoverAll`), which `nAtSched_succ` counts.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.RestRead
 

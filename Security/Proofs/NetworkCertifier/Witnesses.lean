@@ -1,9 +1,11 @@
-import Proofs.NetworkCertifier.SampledAuditInstance
-import Proofs.NetworkCertifier.Pooled
-import Proofs.Flock.Claims.Witnesses.Sampling
-import Proofs.Flock.Claims.Witnesses.Meets
-import Proofs.Flock.Claims.KS.ZkExtend
-import Definitions.NetworkCertifier.Guarantees.SampledCharge
+module
+
+public import Proofs.NetworkCertifier.SampledAuditInstance
+public import Proofs.NetworkCertifier.Pooled
+public import Proofs.Flock.Claims.Witnesses.Sampling
+public import Proofs.Flock.Claims.Witnesses.Meets
+public import Proofs.Flock.Claims.KS.ZkExtend
+public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 
 /-!
 # The honest and nontrivial lemmas of the network certifier's acceptance guarantees
@@ -27,6 +29,8 @@ whose verifier accepts everything.
 
 The count conjuncts of the leak bounds read no verifier: they hold at every deployment, the accepting one included.
 -/
+
+@[expose] public section
 
 namespace NetTiming.Witness
 

@@ -1,6 +1,8 @@
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
-import Mathlib.Order.ConditionallyCompleteLattice.Indexed
-import Definitions.Pous.Model.Audit
+module
+
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+public import Mathlib.Order.ConditionallyCompleteLattice.Indexed
+public import Definitions.Pous.Model.Audit
 
 /-!
 # The continuous audit: a memory challenger, and a responder that runs on its clock
@@ -98,6 +100,8 @@ machine did before. No cap like the graded audit's `D_late ≤ 12` (`audit.LATE_
   memory challenger that rejects the run on either, or past a cap on the audit's duration (`audit_cap`), accepts fewer
   runs, so the bound covers it too.
 -/
+
+@[expose] public section
 
 namespace Pous
 

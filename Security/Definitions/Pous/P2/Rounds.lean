@@ -1,4 +1,6 @@
-import Definitions.Pous.P2.Cost
+module
+
+public import Definitions.Pous.P2.Cost
 
 /-!
 # P2's sequential audit with a state size per round boundary (trusted)
@@ -13,6 +15,8 @@ A round boundary is the moment between one answer and the next challenge. Bounda
 are correct. At `Sz = fun _ => S` a `SeqResponderOn` is a `VarResponderOn`, and `varPassesOn sch k k` is
 `seqAcceptsOn sch k`. `lowBoundaries Sz S k` counts the boundaries `j < k` at which the state is at most `S` bits.
 -/
+
+@[expose] public section
 
 namespace Pous
 

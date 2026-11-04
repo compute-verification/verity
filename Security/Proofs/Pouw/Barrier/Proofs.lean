@@ -1,8 +1,10 @@
-import Definitions.Pouw.Barrier.Pinned
-import Proofs.Pouw.NCP.Proofs
-import Proofs.Pouw.Prob
-import Proofs.Pouw.Break
-import Definitions.Pouw.Guarantees.Barrier
+module
+
+public import Definitions.Pouw.Barrier.Pinned
+public import Proofs.Pouw.NCP.Proofs
+public import Proofs.Pouw.Prob
+public import Proofs.Pouw.Break
+public import Definitions.Pouw.Guarantees.Barrier
 
 /-!
 # The degenerate-input barrier: proofs
@@ -11,6 +13,8 @@ import Definitions.Pouw.Guarantees.Barrier
 * In the abstract model: the zero-input adversaries of classes (a), (b) and (c), each a plan per unit, and
   `H_ref` plans for class (a) at `2·W_mm` and `3·W_mm` and for class (b) at `t·W_mm`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Barrier.Proofs
 

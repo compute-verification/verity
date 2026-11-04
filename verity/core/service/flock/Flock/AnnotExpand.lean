@@ -11,7 +11,11 @@ The layout is the descriptor's (`Flock.Program`, §6): member `m` of node `j` of
 gates `[off + offsets[j] + m·G, off + offsets[j] + (m + 1)·G)`, `G` the callee's gates (one for a primitive). An input
 gate is one a primitive whose id is an input id computes (`Program.isInputId`), as `Prog.gate` locates it.
 -/
-import Flock.Annot
+module
+
+public import Flock.Annot
+
+@[expose] public section
 
 namespace Flock.Annot
 
@@ -124,12 +128,12 @@ def isInputGate (P : Prog) (g : Nat) : V Bool := do
 
 /-- The meaning decided gate by gate: the tiling on the family's sets, each gate in increasing order (`input-held`,
 `overlap`, `gate-in-no-set`), then `too-many` on the labels, then `too-large` on the largest label's gates. -/
-def reference (Φ : Meaning) (P : Prog) (D : Desc) : V Verdict := do
+def reference (Φ : Meaning) (P : Prog) (D : Desc) : V CheckResult := do
   let F ← eval P D
   let ss ← sets P F
   let ls ← labelled P D F
   let count := ls.size
-  let refused := fun (code : String) => (pure { accept := false, code, count } : V Verdict)
+  let refused := fun (code : String) => (pure { accept := false, code, count } : V CheckResult)
   if let some t := Φ.tiling then
     let mut held := Array.replicate (P.defs[P.root]!).gates 0
     for s in ss do

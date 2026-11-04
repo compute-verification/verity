@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.Reps.AlgL
-import Proofs.Flock.C3.Reps.Vals
-import Proofs.Flock.VBridge.Family
+module
+
+public import Proofs.Flock.C3.Reps.AlgL
+public import Proofs.Flock.C3.Reps.Vals
+public import Proofs.Flock.VBridge.Family
 
 /-!
 # C3's rep decoder: the reps' unit maps, openings and values over a list of V*'s statements
@@ -18,6 +20,8 @@ coins) and those read off V*'s layers (`rep₀`'s `w` and `comb`, `rows`, `acc`)
   `proofOfVals_of_src` takes (`proofOfVals`). `rep`'s rounds and extras are the history's and its comb `rep₀`'s,
   which this file leaves fields.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

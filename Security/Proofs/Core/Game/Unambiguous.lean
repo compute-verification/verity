@@ -1,5 +1,7 @@
-import Definitions.Core.Decisive
-import Mathlib.Order.ConditionallyCompleteLattice.Basic
+module
+
+public import Definitions.Core.Decisive
+public import Mathlib.Order.ConditionallyCompleteLattice.Basic
 
 /-!
 # A batch of decisive games reads as no other list of games
@@ -20,6 +22,8 @@ the rest of a batch of decisive games being non-constant itself, or the empty ba
 A constant game breaks it (`not_unambiguous_of_constant`): `[send Bool fun _ => ret true, send Bool fun b => ret b]` has
 the batch of `[ret true, g₂']`, where `g₂'` replays the first game's move and the schedule's choice.
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 

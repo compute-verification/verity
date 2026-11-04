@@ -1,7 +1,9 @@
-import Definitions.Pouw.Basic.Prob
-import Definitions.Pouw.Basic.Mat
-import Definitions.Pouw.Basic.QTree
-import Definitions.Hash.Basic
+module
+
+public import Definitions.Pouw.Basic.Prob
+public import Definitions.Pouw.Basic.Mat
+public import Definitions.Pouw.Basic.QTree
+public import Definitions.Hash.Basic
 
 /-!
 # The γ-gap game (trusted; problem statement §3.2–§3.5)
@@ -37,6 +39,8 @@ probability of its event together with no collision among the inputs the run its
 excludes is bounded by what the run carries. A model whose programs hash nothing (`CostModel.Hashless`, every model's
 default) never breaks, and there each statement reads as it did without the break.
 -/
+
+@[expose] public section
 
 namespace Pouw
 

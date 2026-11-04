@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.Inner
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Inner
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
 
 /-!
 # The honest pads' algebra
@@ -20,6 +22,8 @@ The verifier's checks on the honest inner proof (`Zk.verifyInnerWith`), on `Y = 
 (`innerY_batched`, from `dot_innerY`), and each column check `code(Y)_j = code(h ‖ pad_h)_j + β code(μ ‖ pad_μ)_j`
 (`innerY_column`, from `codeAt_innerY`: the code is linear, `of_codeAt`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

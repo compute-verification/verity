@@ -1263,16 +1263,36 @@ NOTES_TOKEN_URL = BROKER.rsplit("/api/", 1)[0] + "/api/agent-github/token"   # t
 NOTES_TOKEN_TTL_S, NOTES_TOKEN_MARGIN_S = 50 * 60, 120          # a token with no stated expiry lasts this long; renewed early
 NOTES_TOKEN_RETRY_S = 60                                        # after a refusal, the broker isn't asked again for this long
 _notes_token: dict = {}
+#: where this deployment's Vercel OIDC token comes from when $VERCEL_OIDC_TOKEN doesn't hold it: a host whose identity arrives
+#: with each request (the Slack events service, through the vercel SDK) sets it
+OIDC_TOKEN: Callable[[], str | None] | None = None
+
+
+def vercel_oidc_token() -> str | None:
+    """This deployment's Vercel OIDC token: `OIDC_TOKEN`'s when a host set it, else $VERCEL_OIDC_TOKEN; None when there is
+    no identity here (every agent and pod)."""
+    if OIDC_TOKEN is None:
+        return os.environ.get("VERCEL_OIDC_TOKEN") or None
+    try:
+        return OIDC_TOKEN() or None
+    except Exception as e:  # noqa: BLE001 - the host's lookup has no identity for this call: the notes token falls back
+        _notes_token["why"] = f"no OIDC identity ({type(e).__name__})"
+        print(f"research msg: no Vercel OIDC identity ({type(e).__name__}): using RESEARCH_NOTES_TOKEN if set", file=sys.stderr)
+        return None
 
 
 def notes_token(now: float | None = None) -> str | None:
-    """A token for the private notes repository.  Where there is a Vercel OIDC identity ($VERCEL_OIDC_TOKEN, as the Slack
-    events service has it), the one the broker mints for it (`NOTES_TOKEN_URL`, scope `notes`), kept until shortly before
-    it expires; else, or when the broker refuses (said on stderr), $RESEARCH_NOTES_TOKEN.  None when there is neither, so
-    a read goes unauthenticated and a private file answers 404.  `notes_token_source` says which one it was."""
-    if (oidc := os.environ.get("VERCEL_OIDC_TOKEN")) and (token := _broker_notes_token(oidc, time.time() if now is None else now)):
+    """A token for the private notes repository.  Where there is a Vercel OIDC identity (`vercel_oidc_token`, as the Slack events
+    service has it), the one the broker mints for it (`NOTES_TOKEN_URL`, scope `notes`), kept until shortly before it
+    expires; else, or when the broker refuses (said on stderr), $RESEARCH_NOTES_TOKEN.  None when there is neither, so a
+    read goes unauthenticated and a private file answers 404.  `notes_token_source` says which one it was, and why."""
+    _notes_token.pop("why", None)
+    oidc = vercel_oidc_token()
+    if oidc and (token := _broker_notes_token(oidc, time.time() if now is None else now)):
         _notes_token["source"] = "broker"
         return token
+    if not oidc:
+        _notes_token.setdefault("why", "no OIDC identity")
     token = os.environ.get("RESEARCH_NOTES_TOKEN") or None
     _notes_token["source"] = "env" if token else None
     return token
@@ -1284,25 +1304,49 @@ def notes_token_source() -> str | None:
     return _notes_token.get("source")
 
 
+def notes_token_why() -> str | None:
+    """Why the last `notes_token` didn't come from the broker: "no OIDC identity", the broker's refusal, or None."""
+    return None if _notes_token.get("source") == "broker" else _notes_token.get("why")
+
+
 def _broker_notes_token(oidc: str, now: float) -> str | None:
-    if _notes_token.get("oidc") == oidc and now < _notes_token.get("until", 0):
-        return _notes_token["token"]
+    if now < _notes_token.get("until", 0):
+        if not _notes_token.get("token"):
+            _notes_token["why"] = _notes_token.get("refused", "the broker refused")
+        return _notes_token.get("token")
     _notes_token.update(oidc=oidc, token=None, until=now + NOTES_TOKEN_RETRY_S)
     try:
         out = http_json("POST", NOTES_TOKEN_URL, json.dumps({"scope": "notes"}).encode(),
                         {"Authorization": f"Bearer {oidc}", "Content-Type": "application/json"}) or {}
     except (urllib.error.URLError, OSError, ValueError) as e:
+        said = _refusal(e)
+        why = f"the broker refused ({getattr(e, 'code', '') or getattr(e, 'reason', e)}{': ' + said if said else ''})"
+        _notes_token.update(why=why, refused=why)
         print(f"research msg: the broker gave no notes token ({getattr(e, 'code', '') or getattr(e, 'reason', e)}): using "
               "RESEARCH_NOTES_TOKEN if set, else reading the notes unauthenticated", file=sys.stderr)
         return None
     token, expires = out.get("token"), out.get("expires_at")
     if not token:
+        _notes_token.update(why="the broker's answer had no token", refused="the broker's answer had no token")
         print("research msg: the broker's notes-token answer has no `token`: using RESEARCH_NOTES_TOKEN if set, else reading "
               "the notes unauthenticated", file=sys.stderr)
         return None
     until = (_iso_epoch(expires) if expires else now + NOTES_TOKEN_TTL_S) - NOTES_TOKEN_MARGIN_S
     _notes_token.update(oidc=oidc, token=token, until=until)
     return token
+
+
+def _refusal(e: Exception) -> str:
+    """What an HTTP refusal's JSON body says it refused (the broker's `error` and the claim it names), or ""."""
+    if not isinstance(e, urllib.error.HTTPError):
+        return ""
+    try:
+        body = json.loads(e.read(4096) or b"{}")
+    except (OSError, ValueError):
+        return ""
+    if not isinstance(body, dict):
+        return ""
+    return " ".join(str(body[k]) for k in ("error", "reason", "claim", "message") if body.get(k))[:160]
 
 
 def http_get(url: str, timeout: float = 10) -> bytes | None:

@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.DeployedCounts
-import Proofs.Flock.Claims.Recursion.DeployScopeRuns
-import Proofs.Flock.Claims.Recursion.InnerForm
-import Proofs.Flock.Claims.Recursion.DeployMargin
-import Proofs.Flock.Claims.KS.PlainStep
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployedCounts
+public import Proofs.Flock.Claims.Recursion.DeployScopeRuns
+public import Proofs.Flock.Claims.Recursion.InnerForm
+public import Proofs.Flock.Claims.Recursion.DeployMargin
+public import Proofs.Flock.Claims.KS.PlainStep
 
 /-!
 # The deployed brings' scope at an accepted statement
@@ -28,6 +30,8 @@ prover: `hS` the inner session's setup inputs (`innerSetupIns`, `setupLen`), and
 record's inner-verifier calls (`innerCalls`, `BitsLin2`'s `n`). The prover's queries are `BitsLin2`'s `t`, which multiplies
 `2^{-λ₂}` and doesn't enter `λ₂`.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

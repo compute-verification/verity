@@ -1,5 +1,7 @@
-import Definitions.Pous.Assumptions.P2
-import Proofs.Pous.P2.RingTight
+module
+
+public import Definitions.Pous.Assumptions.P2
+public import Proofs.Pous.P2.RingTight
 
 /-!
 # P2 in the ring model: dropping low bits breaks `k = 88` at `L = 2^30`
@@ -14,6 +16,8 @@ and `2^(t+1)` ring queries, and the sequential audit passes with probability at 
 `(497571/2^19)^88 > 1% + 2^-128`, so `MeetsOn` fails at every `k ≤ 88`, `D ≥ 2`, `Q ≥ 2` and `L ≥ 2^30`
 (`not_meetsOn_b19_k88`).
 -/
+
+@[expose] public section
 
 namespace PousP2Ring
 

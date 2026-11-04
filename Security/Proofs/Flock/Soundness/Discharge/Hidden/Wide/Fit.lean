@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
 
 /-!
 # Output rows whose last bytes share the `hm96` pad block
@@ -12,6 +14,8 @@ row's bits, `constBit_msg`), so the flat twin's row there is a self row (`flat_s
 (`outPairs_countF`), and a satisfying witness of the hidden statement satisfies its flat twin (`sat_flatF`) and holds
 each output row's message bit's copy (`msg_copyF`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

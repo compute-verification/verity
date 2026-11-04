@@ -1,11 +1,13 @@
-import Proofs.Flock.Claims.KS.PlainRdRun
-import Proofs.Flock.Claims.KS.Rounds
-import Proofs.Flock.Claims.KS.PlainBound
-import Proofs.Flock.Claims.KS.OffSim
-import Proofs.Flock.Claims.Recursion.FlockKSLin
-import Proofs.Flock.Claims.Recursion.FlockKSAcc
-import Proofs.Flock.Claims.Recursion.FlockKSRecord
-import Proofs.Flock.Claims.KS.PlainRdRunK
+module
+
+public import Proofs.Flock.Claims.KS.PlainRdRun
+public import Proofs.Flock.Claims.KS.Rounds
+public import Proofs.Flock.Claims.KS.PlainBound
+public import Proofs.Flock.Claims.KS.OffSim
+public import Proofs.Flock.Claims.Recursion.FlockKSLin
+public import Proofs.Flock.Claims.Recursion.FlockKSAcc
+public import Proofs.Flock.Claims.Recursion.FlockKSRecord
+public import Proofs.Flock.Claims.KS.PlainRdRunK
 
 /-!
 # `KSFlockLin` at the deployed plain record
@@ -25,6 +27,8 @@ The plain record's KS chain with the cap terms linear: each cap slot's term is c
   `KSFlockLin_of_tableBoundAbortLin` with the record's code facts and numbers (`plain_KSAbort`'s).
 * `plain_tableBoundAbortLinK`: `plain_tableBoundAbortLin` at `deployPlainK keep`, from `plain_accPr_le_rdAllK`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

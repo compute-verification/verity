@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.BoundRun
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundRun
 
 /-!
 # The inner view accepts, at V*'s bound layout (option (d))
@@ -17,6 +19,8 @@ Each part's inner check holds on the readers' messages, at the run's coins:
 So `VStarB.PartChecksB` gives each part's check on the readers' messages, and `VStarB.DecompB` gives the inner verifier's
 acceptance. With `Refuses` and `ReadersTrue`, the three shapes give `InnerAcceptsColl` (`RecDeploy.innerAcceptsColl_bound`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStarB
 

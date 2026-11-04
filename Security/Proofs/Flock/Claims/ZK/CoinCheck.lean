@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.GK
-import Proofs.Flock.Soundness.ZK.GK.Extract
+module
+
+public import Proofs.Flock.Claims.ZK.GK
+public import Proofs.Flock.Soundness.ZK.GK.Extract
 
 /-!
 # The coin-tree check as an oracle program (`coin-tree/hm96-sha512/v2`)
@@ -16,6 +18,8 @@ conflict under the root, so T6 located (`coinPairs_coll`) gives an aligned pair 
 `H(ν ‖ ·)`. Each is an input the walk asked (`coinPairs_mem`, `reachK_passes`), so the two checks' logs hold a
 collision.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

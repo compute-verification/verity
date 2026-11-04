@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
-import Proofs.Flock.Soundness.CompiledAlign
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
+public import Proofs.Flock.Soundness.CompiledAlign
 
 /-!
 # The salted compiled bound for any level-0 table
@@ -12,6 +14,8 @@ import Proofs.Flock.Soundness.CompiledAlign
 
 with `ε_c⁻ = tableError + Σ √(N_ℓ·Q_ℓ·Adv_{r,ℓ}) + Pr[self-clash]` (`epsCminusL`), one number for every `T`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

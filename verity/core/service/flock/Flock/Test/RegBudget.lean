@@ -5,7 +5,12 @@ coefficients); one port more, one leaf past `2^MAX_DEPTH`, or one instance more 
 V\*'s list of `MAX_STATEMENTS` statements passes and one more is refused (`count`); a shape `RecVStar.statements` refuses
 (claims not two and two per region) is left to the checks that run it. Without an inner shape nothing is refused.
 -/
-import Flock.RecBudget
+module
+
+public import Flock.RecBudget
+meta import Flock.RecBudget
+
+@[expose] public section
 
 namespace Flock.Test.RegBudget
 

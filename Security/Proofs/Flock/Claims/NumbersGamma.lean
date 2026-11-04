@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Numbers
-import Proofs.Flock.Claims.NumbersPads
-import Proofs.Flock.Soundness.Accounting.PaddedNumbers
+module
+
+public import Proofs.Flock.Claims.Numbers
+public import Proofs.Flock.Claims.NumbersPads
+public import Proofs.Flock.Soundness.Accounting.PaddedNumbers
 
 /-!
 # Flock's `γ` at the deployed parameters
@@ -20,6 +22,8 @@ At `201` rounds `C` runs from `2^{18.98}` (`m = 22`) to `2^{31.97}` (`m = 35`) w
 (`m = 25`, `N = 2^12`) to `2^{32.02}` (`m = 35`, `N = 2^13`) with it, so `γ` from `2^{31.67}` to `2^{44.67}`; the spec's
 `2^{38.5}` is `--zk` at `m = 26, 27` with `N = 2^12` (`2^{38.00}`, `2^{38.25}`). `λ` doesn't move: `½ log₂ γ ≤ 23.4`.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock.Numbers
 

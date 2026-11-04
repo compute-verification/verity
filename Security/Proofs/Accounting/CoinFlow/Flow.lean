@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.CoinFlow
-import Proofs.Accounting.HMu.Luck
+module
+
+public import Definitions.Accounting.Guarantees.CoinFlow
+public import Proofs.Accounting.HMu.Luck
 
 /-!
 # The coin rules, proved on the dataflow model
@@ -12,6 +14,8 @@ node's coins are its own fresh coins, and its reads are non-fold. `pointMass` mo
 keeps the uniform measure (`prob_comp_equiv`). The view is then a function of `Ω₀` (`viewIndependent`), and
 `Accounting.HMuProofs.coinPointMass` applies.
 -/
+
+@[expose] public section
 
 namespace Accounting.CoinFlowProofs
 

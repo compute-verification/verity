@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.KS.PlainWire
-import Proofs.Flock.Claims.KS.PlainDraw
-import Proofs.Flock.Claims.KS.ForkCoupling
-import Proofs.Flock.Claims.KS.RoundsN
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainWire
+public import Proofs.Flock.Claims.KS.PlainDraw
+public import Proofs.Flock.Claims.KS.ForkCoupling
+public import Proofs.Flock.Claims.KS.RoundsN
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain simulator
@@ -12,6 +14,8 @@ uniform function per deployed round of the live coins' revealed history (`plainT
 feeds `P` are `fnC` of that tape and the live coins' revealed entries (`simCoins`), which are `plainΦ`'s coins
 (`Claims.Bridge.Live.fnAt` at the history key `FnFork.histKey`) wherever the history is the live session's.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

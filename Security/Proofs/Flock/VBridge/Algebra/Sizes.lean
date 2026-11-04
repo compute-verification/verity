@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.Algebra.RunSkel
+module
+
+public import Proofs.Flock.VBridge.Algebra.RunSkel
 
 /-!
 # `verifierRows` reads a record's rounds only through their sizes
@@ -8,6 +10,8 @@ from them feed `finalWeights` (RecAlgebra.lean:456–496), whose checks read onl
 hold as many coins each, with as many extra claims, `run` succeeds at one exactly when at the other
 (`residualLins_sizes`), and so does `verifierRows` (`verifierRows_sizes`).
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

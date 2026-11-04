@@ -1,5 +1,7 @@
-import Definitions.Core.Partition
-import Definitions.Pouw.PearlC.PeelExact
+module
+
+public import Definitions.Core.Partition
+public import Definitions.Pouw.PearlC.PeelExact
 
 /-!
 # The tile unit as a core circuit (definitions only)
@@ -25,6 +27,8 @@ templates' descriptor digests pinned, by `tests/test_circuit_tile_lean.py`. The 
 `CallGraph`; it and each primitive's semantics are the trusted part: `F32Add_v2` is `f32Add`, the atom is `p.step` and
 the K16 step is `k16Step`, each pinned by its conformance vectors.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.TileCircuit
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.SessionLoop.FinRepRows
-import Proofs.Flock.Claims.ZK.FinishFwRestart
+module
+
+public import Proofs.Flock.SessionLoop.FinRepRows
+public import Proofs.Flock.Claims.ZK.FinishFwRestart
 
 /-!
 # `FinRepRestart`: level 0's restart is `Σ y₁'·bFold`
@@ -13,6 +15,8 @@ reads the proof's level-0 restart `t'` as `Σ_col y₁'(col)·bFold(col)`.
 draws from the tape, `FinRepRestart` holds. It reads the firewall's run, its coins, the tape and the witness, never the
 workers' clear values or the rows: `y₁'` reads the witness lanes, the mask slot and the extra lanes.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

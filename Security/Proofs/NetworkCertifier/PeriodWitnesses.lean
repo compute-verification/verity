@@ -1,6 +1,8 @@
-import Proofs.NetworkCertifier.Witnesses
-import Proofs.NetworkCertifier.WitnessToys
-import Proofs.NetworkCertifier.Assumptions.SampledCode
+module
+
+public import Proofs.NetworkCertifier.Witnesses
+public import Proofs.NetworkCertifier.WitnessToys
+public import Proofs.NetworkCertifier.Assumptions.SampledCode
 
 /-!
 # The monitoring period's honest and nontrivial lemmas
@@ -24,6 +26,8 @@ import Proofs.NetworkCertifier.Assumptions.SampledCode
   one step whose faulty set holds its one unit (`pooled_bound_fails`). There its conditional escape (`hesc`) holds
   only at `q = 0`, which its `hF` refuses at `δ < 1`.
 -/
+
+@[expose] public section
 
 namespace NetTiming.Witness
 

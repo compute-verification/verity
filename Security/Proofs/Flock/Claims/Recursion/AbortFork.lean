@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.Fork
-import Proofs.Flock.Claims.Recursion.Abort
+module
+
+public import Proofs.Flock.Claims.KS.Fork
+public import Proofs.Flock.Claims.Recursion.Abort
 
 /-!
 # The finders' events at runs that may abort, covered by `BAbort`
@@ -17,6 +19,8 @@ import Proofs.Flock.Claims.Recursion.Abort
   round guess of the forks' collision probabilities (`PrBAbort_eq_avg`), each fork event is covered by its round's
   (`Pr_fork_le_abort`) and each one-run event by `BAbort` (`Pr_one_le_PrBAbort`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

@@ -4,7 +4,11 @@
 With `holds_fixed`, the firewall's own values that leave an accepted session are the specified ones once
 `FirewallComputes` holds: whatever the workers do, what leaves is honest output or nothing.
 -/
-import Flock.Firewall.Assumptions
+module
+
+public import Flock.Firewall.Assumptions
+
+@[expose] public section
 
 namespace Flock.Firewall.Contract
 

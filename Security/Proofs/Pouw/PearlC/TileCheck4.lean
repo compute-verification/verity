@@ -1,6 +1,8 @@
-import Definitions.Pouw.PearlC.TileCheck4
-import Proofs.Pouw.PearlC.TileCheck8
-import Proofs.Pouw.PearlC.Tile4Circuit
+module
+
+public import Definitions.Pouw.PearlC.TileCheck4
+public import Proofs.Pouw.PearlC.TileCheck8
+public import Proofs.Pouw.PearlC.Tile4Circuit
 
 /-!
 # `pc4`'s tile check: its units are its templates (proofs)
@@ -21,6 +23,8 @@ the composed table unchanged:
   `chain4_SA`, `chain4_B`, `chain4_SB`, `chain4_PA`, `chain4_PB`), each gate a tile reads being committed
   (`Whole.port_committed`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.WholeCircuit
 

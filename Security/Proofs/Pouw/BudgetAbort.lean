@@ -1,4 +1,6 @@
-import Definitions.Pouw.Game.Defs
+module
+
+public import Definitions.Pouw.Game.Defs
 
 /-!
 # Cost models that truncate
@@ -17,6 +19,8 @@ costs at most `b`.
 W1, which prices a correct unit's operand fetches by the transcript's correctness, doesn't truncate:
 `Pouw.PearlC.W1BudgetAbort.w1_not_budgetAbort`.
 -/
+
+@[expose] public section
 
 namespace Pouw.BudgetAbort
 

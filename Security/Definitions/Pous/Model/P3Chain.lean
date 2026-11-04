@@ -1,9 +1,11 @@
-import Mathlib.Data.Fintype.Perm
-import Mathlib.Data.Finset.Sort
-import Definitions.Pous.Model.Scheme
-import Definitions.Pous.Model.M1
-import Definitions.Pous.Model.Labelling
-import Definitions.Pous.Model.Invertible
+module
+
+public import Mathlib.Data.Fintype.Perm
+public import Mathlib.Data.Finset.Sort
+public import Definitions.Pous.Model.Scheme
+public import Definitions.Pous.Model.M1
+public import Definitions.Pous.Model.Labelling
+public import Definitions.Pous.Model.Invertible
 
 /-!
 # P3 with a concrete `H`: the overwrite chain on `Π₂`
@@ -32,6 +34,8 @@ same renaming, states and proves the pins about these constants:
 
 The definitions are total; the side conditions the proofs need are hypotheses of their theorems.
 -/
+
+@[expose] public section
 
 namespace Pous.Sponge
 

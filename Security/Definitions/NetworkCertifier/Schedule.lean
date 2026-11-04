@@ -1,4 +1,6 @@
-import Definitions.NetworkCertifier.Run
+module
+
+public import Definitions.NetworkCertifier.Run
 
 /-!
 # The Program's schedule: frames at their send ticks, one FIFO per execution block
@@ -21,6 +23,8 @@ for one execution block of those windows, at send ticks its hand ticks (`Proofs.
 **One clock per spatial unit.** Every egress link reads the same advice. **The allocation is the slot count `S`**, as
 in Python, where a row has `allocation` slots.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

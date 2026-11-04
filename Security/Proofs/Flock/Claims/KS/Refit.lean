@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.TableBound
+module
+
+public import Proofs.Flock.Claims.KS.TableBound
 
 /-!
 # The old fixed-table bound's terms, refit to `TableBoundθ`
@@ -29,6 +31,8 @@ terms one by one, at one table.
   term when the mean `Adv`s are at most the fork events' probabilities, since a mean of roots is at most the root of
   the mean (`mean_sqrt_le`; `mean_epsSL_le`, `mean_epsSZ_le`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

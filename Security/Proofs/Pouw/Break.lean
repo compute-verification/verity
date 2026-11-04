@@ -1,5 +1,7 @@
-import Definitions.Pouw.Game.Defs
-import Proofs.Pouw.Prob
+module
+
+public import Definitions.Pouw.Game.Defs
+public import Proofs.Pouw.Prob
 
 /-!
 # The game's break
@@ -8,6 +10,8 @@ A collision among some inputs is one among any inputs that contain them (`collis
 nothing never breaks (`not_breaks_of_hashless`), so there an event and no break has the event's probability
 (`pr_and_not_breaks`). Every model built without `hashed` hashes nothing (`hashless_of_default`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 

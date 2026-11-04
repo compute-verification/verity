@@ -1,8 +1,10 @@
-import Definitions.Accounting.PerRun
-import Definitions.Accounting.Pouw
-import Definitions.Pouw.Game.Params
-import Definitions.Pouw.PearlC.W1Stop
-import Definitions.Pouw.Assumptions.Game
+module
+
+public import Definitions.Accounting.PerRun
+public import Definitions.Accounting.Pouw
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.PearlC.W1Stop
+public import Definitions.Pouw.Assumptions.Game
 
 /-!
 # The per-run guarantees (trusted)
@@ -44,6 +46,8 @@ Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guara
 (`Proofs.Accounting.PerRunPouw`, `Proofs.Accounting.PerRunJoint`, `Proofs.Accounting.PerRunPriced` and
 `Proofs.Accounting.PerRunStop`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

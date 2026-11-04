@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.ZK.Adaptivity
-import Mathlib.Data.Fin.VecNotation
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.Fintype.Prod
-import Mathlib.Tactic.FinCases
+module
+
+public import Proofs.Flock.Soundness.ZK.Adaptivity
+public import Mathlib.Data.Fin.VecNotation
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Tactic.FinCases
 
 /-!
 # Zero knowledge: `Adaptivity`'s two lemmas for four blocks of randomness
@@ -19,6 +21,8 @@ ordinary product and each block an ordinary type.
 
 Both are proved by instantiating the general lemma at `G = ![G₀, G₁, G₂, G₃]`, through the equivalence `blocksEquiv`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

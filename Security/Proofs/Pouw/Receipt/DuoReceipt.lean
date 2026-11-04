@@ -1,4 +1,6 @@
-import Proofs.Pouw.Receipt.Duo
+module
+
+public import Proofs.Pouw.Receipt.Duo
 
 /-!
 # duo's served receipt `y ⊕ rotl(z, h)` binds one word up to no XOR constant
@@ -15,6 +17,8 @@ the second depends only on `x mod 2^(n−1−h)`, so the first can't step from `
 `t = 2^(n−1)`; `δ = 0` is `c = 0`, and `δ = t` is `c = t`, where `ε = 2^(r−1) + t`, which `0 < r < n` keeps off
 `{0, t}`.
 -/
+
+@[expose] public section
 
 namespace Pouw.ReceiptProofs
 

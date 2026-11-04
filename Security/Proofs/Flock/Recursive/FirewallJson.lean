@@ -1,4 +1,7 @@
-import Flock.Firewall
+module
+
+public import Flock.Firewall
+import all Init.Data.Repr
 
 /-!
 # A plain value's text parses back to it
@@ -17,6 +20,8 @@ ascending order into a tree whose keys are all below them go after its members, 
 `fractional_eq` reads `fractional`'s loop as `scan`, and every part of a plain value's text takes `scan` from outside a
 string to outside a string, whatever follows (`Clean`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallJson
 

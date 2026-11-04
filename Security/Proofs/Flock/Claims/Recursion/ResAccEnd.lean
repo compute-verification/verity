@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.ResNextW
-import Proofs.Flock.Soundness.ExecDraw
+module
+
+public import Proofs.Flock.Claims.Recursion.ResNextW
+public import Proofs.Flock.Soundness.ExecDraw
 
 /-!
 # Some algebra part reads `acc1` (`AccEndHeldW`)
@@ -18,6 +20,8 @@ port, at every shape it accepts:
 
 With it, `NextHeldW` (`nextHeldW_of`), StepsW and P3 at KS's brings hold with no hypothesis (`accPorts_deployed`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.AccEnd
 

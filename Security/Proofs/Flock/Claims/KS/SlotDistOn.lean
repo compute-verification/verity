@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.SlotPost
-import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
+module
+
+public import Proofs.Flock.Claims.KS.SlotPost
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
 
 /-!
 # A slot's distance on the paths that can end well
@@ -17,6 +19,8 @@ every outcome past such a point is `Bad`, the distance can stop asking there:
 * `SlotAtD.lead_fst_on`, `SlotAtD.lead_snd_on`: `SlotAtD.lead_fst` and `SlotAtD.lead_snd` at such a distance, a `Bad`
   part's outcomes `Dead` after the continuation.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

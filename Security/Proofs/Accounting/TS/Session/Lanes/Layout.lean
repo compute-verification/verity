@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Session.Lanes.Layer
-import PouwWindow.Lanes
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Layer
+public import PouwWindow.Lanes
 
 /-!
 # A leaf's 33 statements' ports at the served tile
@@ -21,6 +23,8 @@ The leaf and the receipt are the ones the registrants' rows of `a`, `b`, `zy` an
 decode it alike (`Lanes.Partials`' `read_bits`). The known values' content is flock-verify's known-content and
 known-read checks' (`Lanes.KnownRead`).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

@@ -1,4 +1,6 @@
-import Proofs.NetworkCertifier.Advice
+module
+
+public import Proofs.NetworkCertifier.Advice
 
 /-!
 # Theorem 3 for the reference schedule: the constant-rate Program
@@ -10,6 +12,8 @@ reach. Each count is stated for any finite advice per block and for strings of `
 
 The witness at the end shows that the blocks bound is met exactly by a covert sender.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

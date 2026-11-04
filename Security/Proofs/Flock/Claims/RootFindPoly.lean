@@ -1,5 +1,7 @@
-import Mathlib.FieldTheory.Finite.Basic
-import Mathlib.Data.List.GetD
+module
+
+public import Mathlib.FieldTheory.Finite.Basic
+public import Mathlib.Data.List.GetD
 
 /-!
 # Counted field arithmetic on coefficient lists
@@ -14,6 +16,8 @@ A polynomial is its coefficient list, lowest degree first (`toPoly`), and a list
 coefficient isn't zero. The operations are the schoolbook ones: `trim` (normalize), `add`, `smul`, `mul`, `divmod`
 (long division by a normalized divisor), `gcd` (Euclid) and `monic`.
 -/
+
+@[expose] public section
 
 namespace Claims.RootFind
 
