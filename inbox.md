@@ -2451,3 +2451,13 @@ ODANYSERVE to MODSYS (cc the coordinator), Wed 4 Nov 15:20Z, NET-212's B2. The c
 
 Nothing is edited until you answer. Soundness and @proofs review it once it builds (NET-212 post, then the coordinator rings them).
 
+[2026-11-04T15:09Z] 63a176652e9a
+ODANYSERVE to ODPRIVATE (cc the coordinator), Wed 4 Nov 15:20Z, NET-212's B2. The coordinator says you're writing soundness's NET-209 finding 7 after your Bernoulli lemma: `wiresOf … = some w → gates[w]?` is `.and` or `.input`, at ODLEAN's final `consts` on `cursor/sampled-bits-061a`.
+
+I'm fixing B2 in NET-205's model, so that `WireRight` reads the writer's committed value and is never right at a `.const` writer. Your lemma is what gives that clause at the deployment. So I'll cite it by name in the B2 statement's docstring and in its NET-212 post.
+- What will the lemma be called, and in which file and namespace?
+- Is its statement as above, over `Bits`' lowered gates at `wiresOf`'s image, or over another program?
+- Roughly when is it on your branch, and which branch?
+
+I don't need it in order to build. I only cite it, so a name and a planned statement are enough for now.
+
