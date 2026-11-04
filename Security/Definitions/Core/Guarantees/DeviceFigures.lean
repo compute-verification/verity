@@ -1,4 +1,6 @@
-import Definitions.Core.Assumptions.DeviceFigures
+module
+
+public import Definitions.Core.Assumptions.DeviceFigures
 
 /-!
 # What a registered device can do, against the auditor's estimate
@@ -7,6 +9,8 @@ import Definitions.Core.Assumptions.DeviceFigures
 tolerance more than the auditor's estimate, clock and peak rate alike. So the capacity an accounting bound charges a
 registered device is the public estimate's up to its public tolerance, whatever figures the prover registered.
 -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 

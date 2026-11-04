@@ -1,5 +1,7 @@
-import Proofs.Properties.Verity.Sampled.Accepts
-import Proofs.Properties.Verity.Sampled.Trees
+module
+
+public import Proofs.Properties.Verity.Sampled.Accepts
+public import Proofs.Properties.Verity.Sampled.Trees
 
 /-!
 # The record the log readers read is the record v2 verified
@@ -11,6 +13,8 @@ which is total, so a proof reads one parsed record out of both. The log reader r
 exactly that record's parse (`sent_records`), the value the decoders' lemmas read off the record
 (`Verity.Sampled.Decoders`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled
 
