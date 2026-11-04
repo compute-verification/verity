@@ -43,8 +43,11 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
 
-from te_core import VERSION, console, formalism, frontier_fit, policy  # noqa: E402
+from te_core import VERSION, formalism, policy  # noqa: E402
 from te_core.gates import UNIT  # noqa: E402
+
+# te_core.console and te_core.frontier_fit (through te_core.plots) read matplotlib, which the trace's torch environment
+# hasn't, so `build` and `put` import them
 
 PANEL = "training/size-scaling"
 #: (size, its parameters in te_core.policy's SHAPES, the ladder's batch in sequences): the four v3 starts at ladder.py's
@@ -166,6 +169,8 @@ def fit_v3(rows: list[dict]) -> tuple[dict, dict[str, dict]]:
 def effective(fit: dict, l0: float | None) -> tuple[float | None, float | None, float | None]:
     """C_eff at l0 and at l0 plus and minus the fit's rms in loss (lo, hi); None where the fit's points are no more
     than its parameters (te_core.frontier_fit's `unbounded`)."""
+    from te_core import frontier_fit
+
     if l0 is None:
         return None, None, None
     mid = frontier_fit.c_eff(fit, l0)
@@ -298,6 +303,8 @@ def main(argv=None) -> int:
             print(json.dumps({"size": name, "gates": block["gates"], "tokens": block["tokens"],
                               "rows": len(block["rows"]), "seconds": block["seconds"]}), flush=True)
         return 0
+    from te_core import console
+
     if a.cmd == "build":
         stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         p, info = build(a.tables, a.steps, a.trace_run, stamp)
