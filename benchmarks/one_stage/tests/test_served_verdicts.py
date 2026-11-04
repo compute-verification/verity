@@ -2837,7 +2837,8 @@ def _pearl_tied_commit(tmp_path: Path, chained: bool = True) -> None:
 def test_under_pearlplus_tie_v3c_audits_the_commit_tied_to_pearls_w_with_records_audits_tie(tmp_path):
     """V3c makes no commit of its own: it holds the piece's R to W (chained right after it), and audits it tied to W with
     no prefix (Pearl+'s values are W's own names) at stratified:1 on a port a sampled block, saying the audit's tie. The
-    verifier's own window-circuit record it holds the commit's circuit to is the circuit cut at Pearl+'s linears."""
+    verifier's own window-circuit record it holds the commit's circuit to is the circuit cut at Pearl+'s linears, and it
+    leaves that record beside R in the tie the record reads, for the period's circuit."""
     _pearl_tied_commit(tmp_path)
     rc, lines, order, _limits = _v3c(tmp_path, **PEARL_TIES, CERTIFIER_CHAIN_CMD=None, CERTIFIER_PERIOD_CMD=None)
     assert rc == 0 and "window-commit" not in order and "audit" in order, (lines, order)

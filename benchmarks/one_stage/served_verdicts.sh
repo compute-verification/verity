@@ -1445,6 +1445,7 @@ if [ "${1:-}" = v3c ]; then  # an existing serve dir's window: D and K set, its 
   [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
   [ "$v3c_ok" = 1 ] || exit 16
   v3c_proved; rc=$?
+  [ -z "$PEARLPLUS_TIE" ] || window_tie
   private_pieces
   exit "$rc"
 fi
