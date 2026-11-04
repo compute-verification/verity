@@ -226,6 +226,7 @@ theorem sksL_Freg (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : 
   rw [hv 0 Nat.one_pos, sksL_regVal] at hc
   cases hc
 
+omit [Nonempty Coin] in
 /-- Whose acceptance probability is `0`: the incorrect set is outside `M_0`. -/
 theorem sksL_notM (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) :
     (sksL Coin).Freg H P x ω ∉ toyStmt.design.M ((sksL Coin).part toyStmt) 0 := by
