@@ -42,7 +42,7 @@ sample), or its slot entries' or scan slots' stratum in part too (`tied-entries-
 link-window whose scan's state is not its
 wired audit's `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions,
 at another root or domain, or none, `UNSTATES`). The tied audits run one class circuit, a Program drawn once, whose
-SHA-512 is the parameters' `circuit` (`_held`), and a link-window whose tied audit runs another, or under another
+SHA-512 is the parameters' `circuit` (`_held`), and a phase whose tied audit runs another, or under another
 `circuit`, is refused (`circuit-swapped`, `UNHOLDS`). `case(kind, seed, form)` is a small period of the form aimed at a
 verdict, or at a decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with
 its answer, as a composition's difftest takes a real component's cases.
@@ -1464,7 +1464,7 @@ UNWIRES = ("output", "key", "chunk", "leaves", "lane", "members", "body")
 #: or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, or beside a second
 UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra", "audit", "audit-root", "audit-extra")
 #: How `rows-circuit-swapped` breaks the class circuit's hold while every tie, wiring and state holds: the aimed
-#: link-window's tied audit registered under a Program of one more unit, its answer and population that Program's
+#: phase's tied audit registered under a Program of one more unit, its answer and population that Program's
 #: (`audit`), or the parameters' `circuit` another digest: of no Program, the scan's, or an untied audit's (`params`)
 UNHOLDS = ("audit", "params")
 
@@ -2249,3 +2249,20 @@ def cases(seed: int = 0, form: str = "clock") -> dict[str, tuple[dict, dict]]:
     """One small period of the form of each kind it can be aimed at (`kinds`) with its answer,
     `{kind: (case, answer)}`."""
     return {k: (c, answer(c)) for k in kinds(form) for c in [case(k, seed, form)]}
+
+
+def audits_of(case: dict) -> list[tuple[dict, dict, dict]]:
+    """A period's compute audits, each its params' entry, its registration record and one-stage's answer for it."""
+    c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
+    return list(zip(case["params"]["audits"], c["audits"], e["audits"], strict=True))
+
+
+def with_audits(case: dict, audits: list[tuple[dict, dict, dict]]) -> dict:
+    """`case` with the compute audits `audits` (as `audits_of` gives them) in its params, commitment and evidence. The
+    check holds no audit to a record outside the period: beside a rows-form period's tied audit, an audit no
+    execution phase's scan ties (a stray, another period's) is accepted, and a composite that ties every compute audit
+    to its policy's record is what refuses it."""
+    c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
+    return {"commitment": D.canonical({**c, "audits": [a[1] for a in audits]}).encode().hex(),
+            "evidence": D.canonical({**e, "audits": [a[2] for a in audits]}).encode().hex(),
+            "params": {**case["params"], "audits": [a[0] for a in audits]}}

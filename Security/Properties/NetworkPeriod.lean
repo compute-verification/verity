@@ -38,9 +38,9 @@ its property of any period check at `check` (`RowsProgWiredOf`, `RowsStateTiedOf
 false at `acceptAllRows`, a check that accepts every period. Each guarantee writes its acceptance of `check` out rather
 than being its `…Of check`: the shape rule reads the acceptance off the statement's own binders.
 
-`RowsCircuitHeld` says the check accepts no link-window whose tied audit's registration names a Program other than the
-class circuit, the parameters' `circuit`: the one Program the workload's class registers, fixed for the period, so the
-prover chooses no link-window's circuit. It states the registrations alone: that the descriptor whose input gates a
+`RowsCircuitHeld` says the check accepts no phase whose tied audit's registration names a Program other than the class
+circuit, the parameters' `circuit`: the one Program the workload's class registers, fixed for the period, so the prover
+chooses no phase's circuit. It states the registrations alone: that the descriptor whose input gates a
 tied audit's term counts is the Program its registration names is the audit check's (`auditCheck`), which compares
 them as `Json` (`==`, which no proof unfolds) and no property states. Its witnesses are an empty rows-form period
 `check` accepts, beside a tied audit registered under the class circuit, and an explicit period whose tied audit is
@@ -115,24 +115,24 @@ def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Outcome P
 accepts a period in the rows form, each link-window's scan's registration has a state entry (`stateEntries`: a `roots`
 port `scan/state` or a `registered` value `verity/certifier/scan-state/v1`), every one at one root and domain, and an
 audit whose slot entries are the scan's `prog` (`wired`) has one, every one at that root and domain (`stateTied`). The
-scan's units read their state at that root and register the state their transition computes there, so the state a
-slot's Program reads is the scan's, and a `SCAN_STATE` that skips or alters a transition, at another root or domain, is
-refused. -/
+scan's units read their state at that root and their `o1` the state their transition computes there (all but the
+last, whose state no row holds), so the state a slot's Program reads is the scan's, and a `SCAN_STATE` that skips or
+alters a transition, at another root or domain, is refused. -/
 def RowsStateTied : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateTiedAt p c
 
-/-- What `RowsCircuitHeld` says of a period its check accepted: in the rows form, each link-window's tied compute audits
-are registered under the parameters' class circuit (`held`). -/
+/-- What `RowsCircuitHeld` says of a period its check accepted: in the rows form, each phase's tied compute audits are
+registered under the parameters' class circuit (`held`). -/
 def RowsCircuitHeldAt (p : Params) (c : Commitment) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → held p.circuit c.audits reg = true
 
-/-- **The rows form accepts no link-window whose tied compute audit's window circuit is not the class circuit.** If the
-check accepts a period in the rows form, every audit a link-window's scan's `prog` is an output of (`tiedAudits`) has a
+/-- **The rows form accepts no phase whose tied compute audit's window circuit is not the class circuit.** If the check
+accepts a period in the rows form, every audit a phase's scan's `prog` is an output of (`tiedAudits`) has a
 registration whose `program` is the parameters' `circuit`, the SHA-512 of the Program of the one window circuit the
 workload's class registers (`held`). A window circuit's own digest binds its window's run; its Program is one for the
-period, so no link-window's tied audit is registered under a Program the prover chose for that window. That its term
+period, so no phase's tied audit is registered under a Program the prover chose for that phase. That its term
 counts the free inputs of that Program's descriptor is the audit check's (`auditCheck`), not stated here. -/
 def RowsCircuitHeld : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
@@ -144,7 +144,7 @@ def RowsCircuitHeld : Prop :=
 def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
   .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
 
-/-- A link-window's window record whose `prog` is at the root `r` and the domain `d`. -/
+/-- A phase's window record whose `prog` is at the root `r` and the domain `d`. -/
 def tiedWindow : Lean.Json :=
   Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")]])]
 

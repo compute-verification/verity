@@ -9,7 +9,7 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 `2 ^ K` is the product of the factors' bounds.
 
 `RowsProgWired`, `RowsStateTied` and `RowsCircuitHeld` read the check's refusals off its findings: on acceptance every
-finding is none (`firstFinding_none`), each link-window's `wiredCheck`, `stateCheck` and `heldCheck` among them.
+finding is none (`firstFinding_none`), each phase's `wiredCheck`, `stateCheck` and `heldCheck` among them.
 `rowsCircuitHeld_honest` and `rowsCircuitHeld_nontrivial` are `RowsCircuitHeld`'s witnesses: an empty rows-form period
 the check accepts, beside a tied audit that runs the class circuit, and a period whose tied audit runs another.
 -/
@@ -286,16 +286,16 @@ theorem rowsCircuitHeld : RowsCircuitHeld := by
     · assumption
     · cases h0
 
-/-- A link-window whose tied audit is registered under the class circuit `c` holds it. -/
+/-- A phase whose tied audit is registered under the class circuit `c` holds it. -/
 theorem tiedWindow_held : held (some "c") #[heldReg "c"] tiedWindow = true := by
   decide +kernel
 
-/-- A link-window whose tied audit is registered under another Program than the class circuit `c` does not. -/
+/-- A phase whose tied audit is registered under another Program than the class circuit `c` does not. -/
 theorem tiedWindow_swapped : held (some "c") #[heldReg "d"] tiedWindow = false := by
   decide +kernel
 
-/-- **`RowsCircuitHeld`'s honest lemma**: the check accepts a rows-form period of no link-window under the class
-circuit `c`, and a link-window whose tied audit is registered under `c` holds it. -/
+/-- **`RowsCircuitHeld`'s honest lemma**: the check accepts a rows-form period of no phase under the class circuit
+`c`, and a phase whose tied audit is registered under `c` holds it. -/
 theorem rowsCircuitHeld_honest :
     check ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
         ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ =
@@ -303,8 +303,8 @@ theorem rowsCircuitHeld_honest :
     held (some "c") #[heldReg "c"] tiedWindow = true :=
   ⟨by simp [check, auditChecks, wiredChecks, stateChecks, heldChecks, firstFinding, rowsPublic]; rfl, tiedWindow_held⟩
 
-/-- **`RowsCircuitHeld`'s nontrivial lemma**: `RowsCircuitHeldAt` fails at a rows-form period of one link-window whose
-tied audit is registered under another Program than the class circuit `c`, which a check that accepts everything
+/-- **`RowsCircuitHeld`'s nontrivial lemma**: `RowsCircuitHeldAt` fails at a rows-form period of one phase whose tied
+audit is registered under another Program than the class circuit `c`, which a check that accepts everything
 accepts. -/
 theorem rowsCircuitHeld_nontrivial :
     ¬ RowsCircuitHeldAt

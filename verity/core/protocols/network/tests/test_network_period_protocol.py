@@ -179,9 +179,9 @@ def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypat
 
 
 def test_a_tied_audit_that_runs_another_circuit_is_refused(server, monkeypatch):
-    """The rows form holds each link-window's tied audits to the class circuit, the parameters' `circuit`: a period
+    """The rows form holds each phase's tied audits to the class circuit, the parameters' `circuit`: a period
     whose every tied audit is registered under it passes, and Lean accepts it with the mirror's public, whose `held`
-    names `circuit` and `free`; each way the hold can fail (`PC.UNHOLDS`: the aimed link-window's tied audit registered
+    names `circuit` and `free`; each way the hold can fail (`PC.UNHOLDS`: the aimed phase's tied audit registered
     under another Program, or the parameters' `circuit` another digest) Lean and the mirror refuse by name; and a mirror
     that skips the hold accepts what Lean refuses."""
     for n in range(3):
@@ -230,6 +230,30 @@ def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
         assert PC.UNWIRED in reference(case)["reason"], (n, reference(case))
         verdict, out = D.replay(PORT, case, server)
         assert verdict == REJECT and "is no compute audit's output" in json.loads(out)["reason"], (n, out)
+
+
+def test_a_stray_audit_beside_the_tied_one_is_accepted_and_alone_refused(server):
+    """A composite's tie of the network certifier's compute audits to its policy's record has two rows-form fixtures
+    (`PC.audits_of`, `PC.with_audits`): a small `rows-honest` period, whose one execution phase's scan ties its one
+    audit, and the same period with another period's audit beside its own, a stray no phase's scan ties. Lean and the
+    mirror accept both alike, with the commitment registering exactly those audits' records, so the stray is the
+    composite's to refuse; and with the stray in place of the tied audit, the scan's prog is no compute audit's output
+    and both refuse it."""
+    for n in range(3):
+        tied = build("rows-honest", n, small=True)
+        (own,) = PC.audits_of(tied)
+        stray = PC.audits_of(build("rows-honest", 100 + n, small=True))[0]
+        for case, audits in ((tied, [own]), (PC.with_audits(tied, [own, stray]), [own, stray])):
+            out = reference(case)
+            assert out["verdict"] == ACCEPT, (n, out)
+            verdict, got = D.replay(PORT, case, server)
+            assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+            assert [PC.R.digest(a) for a in json.loads(bytes.fromhex(case["commitment"]))["audits"]] == [
+                PC.R.digest(a[1]) for a in audits]
+        alone = PC.with_audits(tied, [stray])
+        assert "is no compute audit's output" in reference(alone)["reason"], (n, reference(alone))
+        verdict, got = D.replay(PORT, alone, server)
+        assert verdict == REJECT and "is no compute audit's output" in json.loads(got)["reason"], (n, got)
 
 
 def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):

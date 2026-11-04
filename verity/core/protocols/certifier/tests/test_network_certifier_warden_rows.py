@@ -61,8 +61,7 @@ def test_a_link_window_is_a_row_a_bucket_whatever_the_load(traffic):
 def test_the_wiring_places_each_connections_cells_where_its_client_got_them(traffic):
     """Connection q's cell k of the execution phase is at its row's slot `place` gives: the cells its client got that
     window, in order. Ordinals count connections from 1 in the order they reached the network certifier (the wire's
-    ingress ordinal: the active certifier's `Requests` and the I/O tie's map number them so). A bucket's cells are
-    sorted by stream."""
+    ingress ordinal: the active certifier's `Requests` numbers them so). A bucket's cells are sorted by stream."""
     warden, clients = traffic
     seen, ordinals, shared = 0, set(), 0
     for record in records(warden)[1]:

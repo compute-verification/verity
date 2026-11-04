@@ -163,16 +163,17 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   (`stateTied`): the scan's registration has an entry of its `roots` whose port is `scan/state` or of its `registered`
   whose value is `verity/certifier/scan-state/v1`, every such entry at one root and domain, and so has a `wired`
   audit's registration, every such entry at that root and domain. The scan's ingress unit t reads `sin` as that root's
-  row t and registers its `o1` as row t + 1, so each row past row 0 is the state the scan's transition computed from
-  the row before it, the prover's word for none; row 0 is the empty state, which no unit reads, and only the Programs
-  anchored at bucket 0 read it, whose entries the scan reads for no slot, since its state before bucket 0 has none
-  occupied. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
+  row t and its `o1` as row t + 1, but for its last unit, whose `o1` no row holds (the egress tie's is the prover's
+  one-leaf `scan/last`, registered before any coin), so each row past row 0 is the state the scan's transition computed
+  from the row before it, the prover's word for none; row 0 is the empty state, which no unit reads, and only the
+  Programs anchored at bucket 0 read it, whose entries the scan reads for no slot, since its state before bucket 0 has
+  none occupied. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
   the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`).
-* in the rows form, link-window `w`'s tied compute audits run the class circuit (`held`): each audit its scan's `prog`
+* in the rows form, phase `w`'s tied compute audits run the class circuit (`held`): each audit its scan's `prog`
   is an output of (`tiedAudits`) has a registration naming the parameters' `circuit` as its Program. A window circuit's
   own digest binds its window's run, so it is another each window; its Program is the class's, one for the period, and
-  is what the audit's free inputs are read off. So no link-window's tied audit is registered under a Program the prover
-  chose for that window (`Properties.NetworkPeriod.RowsCircuitHeld`), and, since the audit check holds the registered
+  is what the audit's free inputs are read off. So no phase's tied audit is registered under a Program the prover
+  chose for that phase (`Properties.NetworkPeriod.RowsCircuitHeld`), and, since the audit check holds the registered
   Program to the descriptor whose input gates its term counts (`auditCheck`), those are the class circuit's.
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `PeriodLeakAccepted`'s factor:
@@ -241,7 +242,7 @@ charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · E_w`) when `b
   reads: the δ part of the union over the monitoring period's windows that `CommOfPeriodLeakAccepted` states, each
   window at δ plus its knowledge error and its collision errors. Each δ is a ratio, summed exactly in lowest terms.
 * `held` names, sorted, the checks of a tied audit the rows form holds (`heldNames`): `circuit`, its Program is the
-  class circuit (`heldChecks`), and `free`, the free inputs its link-window's term counts are that Program's input
+  class circuit (`heldChecks`), and `free`, the free inputs its phase's term counts are that Program's input
   gates, counted off its registered descriptor (`inputGates`), never a parameter. The check refuses a period where
   either fails, so every accepted rows-form public names both, and a reader of `K` charges a tied audit its counted
   free inputs only for a public that does.
@@ -1117,8 +1118,8 @@ def stateEntries (reg : Json) : Array Json :=
 
 /-- The scan's state is the state its slots' Programs read: the scan's registration has a state entry (`stateEntries`),
 every one at one root and domain, and an audit `wired` to the scan's `prog` has one, every one at that root and domain.
-The scan's units read and register their states at that root (`sin` row t, `o1` row t + 1), so the `SCAN_STATE` that
-audit's Programs read is the chain of the scan's transitions. -/
+The scan's units read their states at that root (`sin` row t, `o1` row t + 1, but the last unit's `o1`, which no row
+holds), so the `SCAN_STATE` that audit's Programs read is the chain of the scan's transitions. -/
 def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json) : Bool :=
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
   match (stateEntries reg)[0]? with
@@ -1232,24 +1233,24 @@ def runsCircuit (circuit : Option String) (reg : Json) : Bool := match circuit, 
   | some d, .str x => x == d
   | _, _ => false
 
-/-- The class circuit is held at a link-window: each audit its scan's `prog` is an output of (`tiedAudits`) runs it
-(`runsCircuit`), so the link-window's tied audit runs the one window circuit the class registers, and, with the audit
+/-- The class circuit is held at a phase: each audit its scan's `prog` is an output of (`tiedAudits`) runs it
+(`runsCircuit`), so the phase's tied audit runs the one window circuit the class registers, and, with the audit
 check holding its registration to its descriptor (`auditCheck`), the free inputs its term counts are that Program's. -/
 def held (circuit : Option String) (audits : Array Json) (reg : Json) : Bool :=
   (tiedAudits audits reg).all fun i => (audits[i]?.map (runsCircuit circuit)).getD false
 
-/-- Link-window `w`'s class circuit finding in the rows form: a refusal unless the audits its scan's `prog` is an output
+/-- Phase `w`'s class circuit finding in the rows form: a refusal unless the audits its scan's `prog` is an output
 of run the class circuit (`held`). A window circuit's own digest binds its window's run, so only its Program can be
-held; without the hold a link-window's audit could run a Program the prover chose for that window, and its term would
+held; without the hold a phase's audit could run a Program the prover chose for that phase, and its term would
 count that Program's free inputs, not the class circuit's. -/
 def heldCheck (p : Params) (audits : Array Json) (w : Nat) (reg : Json) : Option (Core.Verdict × String) :=
   if held p.circuit audits reg then none else
     some (.reject, s!"window {w}: the tied audit's window circuit is not the registered class circuit: an audit the \
       scan's prog is an output of (tiedAudits) is registered under another Program than the parameters' circuit, so \
-      its link-window's term would count the free inputs of a Program the prover chose for that window: register \
-      every link-window's audit under the class's window circuit")
+      its phase's term would count the free inputs of a Program the prover chose for that phase: register every \
+      phase's audit under the class's window circuit")
 
-/-- The rows form's class circuit findings, one a link-window, in order (`heldCheck`); none in the clock form. -/
+/-- The rows form's class circuit findings, one a phase, in order (`heldCheck`); none in the clock form. -/
 def heldChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with
   | .rows .. => c.windows.zipIdx.map fun (reg, i) => heldCheck p c.audits (p.first + i) reg
   | .clock _ => #[]

@@ -21,7 +21,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build.
 # `verity/core/protocols/network/nci/lean/lakefile.toml`, named on its own too: served_cases' inference-only case goes through
 # that package's `inference-only` check, which its tests `lake build` there, beside one-stage v1's case through
-# `sampled-proofs-one-stage` and v2's through `sampled-proofs-one-stage-zk`; its slow test builds the 4,32,4 class's
+# `sampled-proofs-one-stage`, v2's through `sampled-proofs-one-stage-zk` and remote's sampled proofs case through
+# `vstar-recursive sampled` (`verity/core/service/vstar/recursive`); its slow test builds the 4,32,4 class's
 # window circuit (`integrations/vllm/verity_vllm`).
 # `benchmarks/live_challenger`: the challenger reserve's tests open a session on its local auditor host (auditor.py), whose
 # serve.py runs under its tests' stub of the Lean verifier's coins (stub_serve.py). `verity_numerical.bench`'s input sets
@@ -37,14 +38,16 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # fixtures; `benchmarks/prove_path/records_audit.py`: prove_bundle's verifier window. `examples/vllm/serve_load.py`:
 # served_verdicts' load, whose timings file its tests read and whose fixed window `test_serve_load` runs against
 # serve-openai's endpoint (`integrations/vllm/verity_vllm`) over a stand-in engine; `examples/vllm/serve.sh`: the
-# demo's endpoint (`test_vllm_example`).
+# demo's endpoint (`test_vllm_example`). network_e2e's endpoint advice: `verity-vllm advice`'s output, which
+# advice_charge's tests read. `benchmarks/census/adversary.json`: onsite_record's world cells (`leak_bounds.world_links`).
 inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchmarks/live_challenger",
           "examples/h200/interfaces/verity_e2e_demo", "benchmarks/torch_gpu/commit_slots/slots.py",
           "benchmarks/prove_path/records_audit.py", "examples/vllm/serve_load.py", "examples/vllm/serve.sh",
           "examples/h200/interfaces/tests/fixtures/drawn-unit-bundle.json",
           "examples/h200/interfaces/tests/fixtures/drawn-unit-bundle.bin",
           "examples/h200/interfaces/tests/fixtures/drawn-unit-registration.json",
-          "benchmarks/census/deployments.json",
+          "benchmarks/census/deployments.json", "benchmarks/census/adversary.json",
+          "benchmarks/network_e2e/tests/data/endpoint/advice",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "verity/core/protocols/network/nci/lean/lakefile.toml",

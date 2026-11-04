@@ -26,12 +26,12 @@ the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAud
 
 | subprotocol | `Audit` | onsite's component | remote's component | remote with the network certifier's |
 | --- | --- | --- | --- | --- |
-| sampled proofs | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v1's audit or the recursive audit, as its params' `form` names it) | the same | the same |
+| sampled proofs | `.sampled` | `SampledProofs.OneStage.protocol` (v1) | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit or the recursive audit, as its params' `form` names it; one-stage v1 refused) | remote's |
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | the same | the same |
 | the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | the same | the same |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` | | |
 | PoUB-P2 | `.poub` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | | |
-| the network certifier | `.network` | `NetworkCheck.Period.protocol` | | the same |
+| the network certifier | `.network` | `NetworkCheck.Period.protocol` | | onsite's |
 | the wipe | | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | | |
 
 The statement's form is the causal game, the committed files, one fixed extractor and one adversary form:
@@ -159,7 +159,7 @@ def ties : Verity.Registration.Composite → List Composition.Tie
 /-- **The compiled component of composite `k` that decides subprotocol `a`**; `none` when `k` has no such
 subprotocol. -/
 def component : Verity.Registration.Composite → Subprotocol → Option BlobProtocol
-  | .onsite, .sampled => some VStar.Recursive.Sampled.protocol
+  | .onsite, .sampled => some SampledProofs.OneStage.protocol
   | .onsite, .pouw => some PouwCheck.Period.protocol
   | .onsite, .inferenceOnly => some NciCheck.Protocol.protocol
   | .onsite, .pous => some PousCheck.RunProtocol.protocol

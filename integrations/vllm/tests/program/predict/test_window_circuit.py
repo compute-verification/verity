@@ -142,15 +142,15 @@ def test_a_3_request_and_an_8_request_window_at_the_class_of_records_slots_are_o
 
 def test_the_slots_entries_are_one_member_a_lane_in_boundary_order():
     """At the class of record's slots, the wires into the slots' entries begin and end at every lane's nb = 2 slots and
-    nowhere else, and no server block ends among them, so `interface.members` (which cuts a template's batch only there
-    and at the cap) makes the entry template one member a lane, ``<descriptor id>/c<j>``: its ``o0`` rows lane j's
+    nowhere else, so `interface.members` (which cuts a template's batch only there and at the cap) makes the entry
+    template one member a lane, ``<descriptor id>/c<j>``: its ``o0`` rows lane j's
     entries, slot nb·j + b at leaf b, each lane's a hiding row with its own root in the window's registration, which the
     network certifier's scan reads as lane j's Programs."""
     eight = _circuit(EIGHT, cls=SLOTS, placed=[(0, 1)] * 4 + [(16, 17)] * 4)
     entry = {_label(fn): IF.descriptor_id(fn) for fn, _ in eight.templates}[ENTRY]
     nb = SLOTS.slots // SLOTS.lanes
     ends = {x for w in eight.wires if w.reader == entry for x in (w.at, w.at + w.reader_units)}
-    assert ends == set(range(0, SLOTS.slots + 1, nb)) and not eight.server_ends().get(entry)
+    assert ends == set(range(0, SLOTS.slots + 1, nb))
 
 
 def test_the_class_of_record_takes_both_windows_to_its_one_class_circuit(monkeypatch):
@@ -166,7 +166,7 @@ def test_the_class_of_record_takes_both_windows_to_its_one_class_circuit(monkeyp
     reg = S._registered()
     for window, placed in ((THREE, [(0, 1), (0, 2), (16, 31)]), (EIGHT, [(0, 1)] * 4 + [(16, 17)] * 4)):
         assert window_circuit(reg, S.compile_steps(reg, *S._session(*window)), CLASS_OF_RECORD, placed=placed) == "the class circuit"
-    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, WC.NAME, True)] * 2
+    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, WC.NAME, True, None)] * 2
 
 
 def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
@@ -180,7 +180,7 @@ def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
     compiled = S.compile_steps(reg, *S._session(*window))
     assert [(u.LP, u.T + 1) for u in compiled.requests if u is not None] == [(1, 64)]
     assert window_circuit(reg, compiled, CLASS_OF_RECORD, placed=[(16, 59)]) == "the class circuit"
-    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, WC.NAME, True)]
+    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, WC.NAME, True, None)]
 
 
 def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():
