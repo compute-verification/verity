@@ -15,7 +15,9 @@ streams, that stream's next round, below `2^rounds_log`, at most `block` coins. 
 record to them (`session_tree_reason`): its `coin_tree` a logged tree, its link points that tree's `session` round 0,
 opened after its link's `root_F` and each table's `root_B` in table-name order (`linkAfter`), and each round `k` of each
 of its streams that tree's round `k` of the stream, opened after its `msg_sha512`, its `n` coins hashing to the logged
-digest (each coin's 16 bytes as the record's 32 hex digits write them). `sessionsTreeReason` holds an audit's sessions
+digest (each coin's 16 bytes as the record's 32 hex digits write them); and each round the tree shows opened one the
+record gives its stream (`recordRounds`, `EXTRA_OPENING`), so the tree opens its `session` stream once, each stream the
+record names exactly its `rounds`, and no other stream. `sessionsTreeReason` holds an audit's sessions
 to them (`sessions_tree_reason`): each session's record so, no tree two sessions', and every tree a session's, so no
 statement's coins are flipped twice. `trustedTreesOf` reads the trees from the one session the auditor's ledger opens on
 the verifier's window (`trustedSessionOf`), the session the sample's coins come from.
@@ -144,6 +146,38 @@ private def recordCoins? (cs : Json) : Option ByteArray :=
     | _ => none
   | _ => none
 
+/-- `record_rounds`, **the rounds a session's record gives stream `stream` of its coin tree**: one of `TREE_SESSION`, its
+round 0 the link points; of another stream, the size of `rounds` of the record's first stream so named; none of a stream
+the record doesn't name. -/
+def recordRounds (record : Json) (stream : String) : Nat :=
+  if stream == TREE_SESSION then 1
+  else
+    match getD record "streams" with
+    | .arr ss =>
+      match ss.find? (fun x => match getD x "stream" with | .str n => n == stream | _ => false) with
+      | some x =>
+        match getD x "rounds" with
+        | .arr rs => rs.size
+        | _ => 0
+      | none => 0
+    | _ => 0
+
+private def streamT (name : String) (rounds : Nat) : Json :=
+  Json.mkObj [("rounds", Json.arr (Array.replicate rounds Json.null)), ("stream", Json.str name)]
+private def roundsT : Json := Json.mkObj [("streams", Json.arr #[streamT "t/rep0" 2, streamT "t/rep0" 5,
+  streamT TREE_SESSION 3])]
+
+#guard recordRounds roundsT TREE_SESSION == 1
+#guard recordRounds roundsT "t/rep0" == 2
+#guard recordRounds roundsT "t/rep1" == 0
+#guard recordRounds Json.null "t/rep0" == 0
+#guard recordRounds Json.null TREE_SESSION == 1
+
+/-- The refusal of a session whose coin tree opens a round its record doesn't give its stream (`recordRounds`). -/
+def EXTRA_OPENING : String :=
+  "its coin tree opens a round its record doesn't record: the challenger opens a tree's " ++ TREE_SESSION ++
+  " round 0 and each round of each stream the record names, as the session records it, and no other"
+
 /-- `session_tree_reason` (module docstring): why `record`, a `--zk` session's record, doesn't show its coins to be ones
 the release log shows the challenger released (`trees`, `coinTreesOf`'s); `none` when it does. -/
 def sessionTreeReason (trees : Array LoggedTree) (record : Json) : Option String := Id.run do
@@ -178,6 +212,7 @@ def sessionTreeReason (trees : Array LoggedTree) (record : Json) : Option String
         | none => false
       unless ok do
         return some s!"its {name} round {k} is not coins the challenger opened under its tree after that round's message"
+  unless t.opened.all fun o => o.round < recordRounds record o.stream do return some EXTRA_OPENING
   return none
 
 /-- `sessions_tree_reason` (module docstring): why the `--zk` sessions `records`, each its name and its record, don't
