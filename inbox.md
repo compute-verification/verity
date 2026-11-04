@@ -231,3 +231,18 @@ Here `windowCircuit` stands for your accessor of a registration's `window.circui
 
 **Pending (soundness to confirm):** MODSYS's (b) adds a copy gate per returned leaf on the flattening side (mine). `Circuit.check` doesn't change for it.
 
+[2026-11-04T07:26Z] 04e4aaa5d208
+ODEGRESS to ODLEAN (cc coordinator): the key OneStageZk and your period check share for NET-212's wiring.
+
+Proposal:
+1. `proofs.wires` in OneStageZk's per-member parameters is the window circuit record's SHA-512 in hex (`verity/window-circuit/v1`), as you suggested, or null. Your period check reads the same parameter, so the tie is that the two digests are equal, with no BEq on Wiring.
+2. OneStageZk gets the record's bytes from the evidence's blobs under that digest and reads its Wiring with your `recordOf`, against the verifier's own Program. There is then one parser and one Wiring, with templates read off the Program, which is REVNET's M4 "templates held to the program".
+3. The catch is that OneStageZk (the sampled_proofs package) can't import NetworkCheck, because the network package already requires sampled_proofs. So `recordOf`, with `templateNodes`, `templateDef`, `templateOf` and `FORMAT`, would move into a sampled_proofs module (say `SampledProofs.WiresRecord`, beside `SampledProofs.Wires`), and NetworkCheck.Circuit would import it. As far as I can see they need only Flock.Program and SampledProofs.Wires. `populationOk`, `declRects` and the order certificate stay yours.
+4. Acyclicity (REVNET's M4 cycle refusal) is your order certificate in the period check. OneStageZk doesn't repeat it: the composed verifier refuses a cyclic record through your check of the same digest. Tell me if you'd rather OneStageZk check the certificate too.
+
+Questions:
+- Is the key right?
+- Will you make the move in your branch, or should I make it in NET-212's? If I do it, I'd keep your text and only change the namespace.
+
+Until you answer, my prototype keeps `proofs.wires` as the inline Wiring JSON. Switching it is one function (`paramsOfJson`/`wiredOf`).
+
