@@ -299,6 +299,7 @@ theorem pr_inConf_le {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.B
           obtain ⟨a, ha, b, hb, h1, h2, h3⟩ := hq
           exact bconf_of_disagree hbind s P q.1 q.2.1 q.2.2 (Or.inl ha) (Or.inl hb) h1 h2 h3
 
+omit [Nonempty Coin] in
 /-- **Two runs' conflict**: at most `Pr[B_conf]`. -/
 theorem pr_conflict_le {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
