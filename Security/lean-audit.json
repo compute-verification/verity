@@ -22470,7 +22470,7 @@
    ]
   },
   "Definitions.Claims.Sampling": {
-   "digest": "d9f2e4d00d689168ab44bf291c2c694c84fb9c8ea902178b7d9fecef72c41684",
+   "digest": "3e37282aec0b050d955177598b01fae8577619cb85100884cb44957c306c14a3",
    "definitions": {
     "Claims.Sampling.AuditStatement": "14dca2945e169db647822bc5ada687c2bc9d3c764e14fe1a86a63ed6862061f8",
     "Claims.Sampling.AuditStatement.design": "91e2b9592fce2faa8cd2c622f9b00f2a3a45f4a39d15b8793549795948ce108d",
@@ -22560,7 +22560,7 @@
     "Claims.Sampling.Opening.pos": "42dd487eed7169ed4b5f2334ba0c4cfb134669083050ba23b07919148da6c0ca",
     "Claims.Sampling.Opening.val": "ad13def2e7a94d940bf4bbaa5a766627daf1c2cf58943dadd228aa38c307aa8b",
     "Claims.Sampling.Partition": "3c3c979f1c2f533e20d469bf0a5dc97f8a8c2e7f175ffd238a2be77c959418f4",
-    "Claims.Sampling.Partition.Partitions": "54b1e0dc096a80e5865e3838aaad619e0da82cd8329654b5fcf47a05d92544b1",
+    "Claims.Sampling.Partition.Partitions": "1591c910081806eb03169590fa7591adb67a18252f476a77a6c158042b7b667c",
     "Claims.Sampling.Partition.blocks": "c3f8849c01316fe1aaf8dce50b3b62c8d87fb01902d6e62d71a629aa9981dedc",
     "Claims.Sampling.Partition.classes": "29fd716148a7711eade08bfcedaa3e27e73db1897070ece8d8cbe987092968f6",
     "Claims.Sampling.Partition.gates": "a7aa78b4c9df86161d96e5171783aa597b46e54801f533984fa20cccf4193290",
@@ -22633,11 +22633,12 @@
     "Claims.Sampling.missAt": "4cd3005129b864d69f120637e09625f1dce9a7cc6ecfc21201a36fe81e4ae2fe",
     "Claims.Sampling.nPU": "b8b194b7475994808dea70fc2ff62d8050051a565b561b5f5570648206ab83ac",
     "Claims.Sampling.ofOC": "d438f3f55a130d155018272891d7e2500c147459e7bf774352897170b5d40edd",
+    "Claims.Sampling.outputs": "1719bd5c3d51d7de93eb069e0a7c6da1552e0d92deec3f9c8f8113ebef725096",
     "Claims.Sampling.ownLog": "d831bb479cd3a7a58bb73ff8f84e52e9e02c57779891142a3152c93a80ce9e3a",
     "Claims.Sampling.slack": "46c756ddc847c82296f6b0ca19b922850004679965f0b7abc0329bea687d90bd",
     "Claims.Sampling.strataPa": "4066df1a938977271f39b9ef03423176dba7f7a74bbb7dc0c3d70a84f894e88d",
     "Claims.Sampling.strataSizes": "3e65e4ae902fc50503e561c9df3e8d1def7433f99dd2f385d8fe65e581ba6f67",
-    "Claims.Sampling.unitClass": "c3b46ba7dc28d55a350e20d697a814e4d67765dca7e8578f62f54dd7a17e79f7",
+    "Claims.Sampling.unitClass": "f7fc6132c8a2dc536155add6811b315f99d680acc224d520a29af4638b0f9745",
     "Claims.Sampling.unitClassMax": "cfd5d8c6c8bd005b894ca319d8f78f9808a91f83c0af6a3f2379d6369d60addb",
     "Claims.Sampling.unitClasses": "89b7f705e4da346df3203df4f010562817bcec76189e97c1ce5d9ae80efad2d8",
     "Claims.Sampling.unitExt": "1d89866e75c4eddb97b5f264f7a4b3bd9f420ee7727883b680db702ec7611339",
