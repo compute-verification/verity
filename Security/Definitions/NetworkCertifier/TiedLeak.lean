@@ -13,7 +13,8 @@ its own `δ`. At a period's phases `As` reads no trace: it pins the registered i
 
 A phase's good event (`PhaseGood`) is `WindowGoodReg`'s for the joint Program: its registered inputs, each statement's
 (`Phase.reg`), are pinned at the values the registration opens (`Phase.regVal`), which it fixes before the run, not at
-the traces' values, and `ρ` is those values at the registered free inputs. A trace that disagrees with the registration
+the traces' values, and `ρ` is those values at the registered free inputs. The state reads at row `0` are among them, at
+the empty state (`RowsStateEmpty`), so `ρ` is `false` there. A trace that disagrees with the registration
 at a registered input makes, with the registration's opening there, a collision among the calls that check the traces'
 openings and the registration's (`phaseRegLog`). A tied gate is no free input: it is wired, and its value is its
 writer's.
@@ -103,17 +104,18 @@ def SamePhase {L S : ℕ} (D : Deploy Coin Col T) (lay : AuditStatement → Boun
   List.Forall₂ (SameRegistration D lay k reg) ph₀.stmts ph.stmts
 
 /-- **A phase's good event at the registration's values**: at the phase's statements `xs`, the scan's first, and the
-audits' extracted witnesses `ws`, each statement is in the audit's scope, and they parse to a phase registered as `ph₀`
-at which the phase's leak relation at the network certifier's rows holds with the joint Program's registered inputs
-pinned at the values the registration opens (`RLeakTied`, at `AsReg` of `Phase.reg reg` at `Phase.regVal ops`), the
-registration opens `ρ` at the registered free inputs, and the run's observations `o` have the horizon's length, jitter
-below `Dj` and every status complete. -/
+audits' extracted witnesses `ws`, each statement is in the audit's scope, and they parse to a phase registered as `ph₀`,
+whose state reads at row `0` the registration opens at the empty state (`RowsStateEmpty`), at which the phase's leak
+relation at the network certifier's rows holds with the joint Program's registered inputs pinned at the values the
+registration opens (`RLeakTied`, at `AsReg` of `Phase.reg reg` at `Phase.regVal ops`), the registration opens `ρ` at
+the registered free inputs (so `ρ` is `false` at the row-`0` state reads among them), and the run's observations `o`
+have the horizon's length, jitter below `Dj` and every status complete. -/
 def PhaseGood (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (δ : ℕ → ℝ) (reg : AuditStatement → Finset ℕ) (ops : AuditStatement → List (Opening Bool))
     (Dj : ℕ) (ph₀ : Phase) (t : Ties) (ρ : ℕ → Bool) (tops : AuditStatement → List (Opening Bool)) (xs : List Msg)
     (ws : List Wit) (o : List (Obs L K S)) : Prop :=
   (∀ x ∈ xs, ScopeAcc D lay k x) ∧
-    ∃ ph, SamePhase D lay k reg ph₀ ph ∧
+    ∃ ph, SamePhase D lay k reg ph₀ ph ∧ RowsStateEmpty ph reg ops t ∧
       RLeakTied H D.commit D.parse D.partition L K S lay (k ph.scan) ph t δ
         (fun _ => AsReg ph.prog (ph.layout lay t) (k ph.scan) (ph.reg reg) (ph.regVal ops)) Dj (tops ph.scan) xs ws ∧
       (∀ g ∈ ph.reg reg, g ∈ freeInputs ph.prog (ph.layout lay t) (k ph.scan) → ph.regVal ops g = ρ g) ∧

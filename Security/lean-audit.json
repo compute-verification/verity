@@ -2805,6 +2805,9 @@
   "NetTiming.SecurityProofs.PeriodLeakAccepted": {
    "nontrivial": "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
   },
+  "NetTiming.SecurityProofs.PeriodTiedCount": {
+   "nontrivial": "NetTiming.Witness.PeriodTiedCount_nontrivial"
+  },
   "NetTiming.SecurityProofs.PooledLeakAccepted": {
    "honest": ["NetTiming.Witness.PooledLeakAccepted_honest"],
    "nontrivial": "NetTiming.Witness.PooledLeakAccepted_nontrivial"
@@ -10390,6 +10393,9 @@
    ],
    "assumptions": [],
    "type_hash": "6d5989bb9928b43e730b8de9d106321e4bf69b6f3c022bb3cc664608992a6bd5"
+  },
+  "NetTiming.Witness.PeriodTiedCount_nontrivial": {
+   "owner": "@network-accounting"
   },
   "NetTiming.Witness.PooledLeakAccepted_honest": {
    "owner": "@network-accounting",

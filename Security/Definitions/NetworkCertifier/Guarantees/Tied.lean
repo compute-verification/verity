@@ -11,16 +11,17 @@ import Mathlib.Algebra.BigOperators.Fin
 its tied compute audits' Programs side by side, with the ties among its wires (`Definitions.NetworkCertifier.Tied`). A
 tied gate is no free input, so the content term is the joint Program's free inputs less the registered ones, which the
 period check's count bounds (`CircuitCounts`). The registered inputs are pinned at the values the registration opens
-(`Phase.regVal`), the state reads at row `0` among them at the empty state (`RowsStateEmpty`).
+(`Phase.regVal`), and a phase's good event has its state reads at row `0` among them at the empty state
+(`RowsStateEmpty`).
 
 `PeriodTiedCount` is the part that holds on every run, in two parts:
 
-* **The tie.** At a phase registered as `pw i` whose ties are placed together (`RowsStateHeld`, `RowsProgWired`), whose
-  state reads at row `0` the registration opens at the empty state (`RowsStateEmpty`) and whose statements'
-  registrations open their registered inputs (`RegOpensAt`), the sampling relation at each statement's own incorrect
-  set (`RWired`, at its own wires and its `δ`) gives the phase's leak relation at the network certifier's rows with the
-  registered inputs at the registration's values (`RLeakTied`, at `AsReg`), or two of the traces' openings, or one of
-  them and one of the registration's or the network certifier's, collide. A tie is right by binding: its two ends are
+* **The tie.** At a phase registered as `pw i` whose ties are placed together (`RowsStateHeld`, `RowsProgWired`) and
+  whose statements' registrations open their registered inputs (`RegOpensAt`), the sampling relation at each
+  statement's own incorrect set (`RWired`, at its own wires and its `δ`) gives the phase's leak relation at the network
+  certifier's rows with the registered inputs at the registration's values (`RLeakTied`, at `AsReg`), or two of the
+  traces' openings, or one of them and one of the registration's or the network certifier's, collide. The tie holds at
+  whatever values the registration opens, so it needs no empty state. A tie is right by binding: its two ends are
   committed as one bit of one leaf under one root (`SharedRootsParsed`, at the deployed parse), and a trace's transfer
   gate is the network certifier's (`CommitmentScheme.Binds`). So a wrong tie is no new error: each statement fails
   `RWired` with probability at most `δ + ε_ks + ε_bind` at its session (`KSWired`), and a collision is found on the
@@ -58,8 +59,8 @@ by `trusted-host` on schedules in `Ss` its record format holds (`SchedulesHeld`)
 (`SchedulesCovered`):
 
 * at every phase whose statements' bytes and traces parse to a phase registered as `pw i` (`PhaseParsed`), with its ties
-  placed together (`RowsStateHeld`, `RowsProgWired`), its state reads at row `0` registered at the empty state
-  (`RowsStateEmpty`) and its statements' registrations opening their registered inputs (`RegOpensAt`), traces at which
+  placed together (`RowsStateHeld`, `RowsProgWired`) and its statements' registrations opening their registered inputs
+  (`RegOpensAt`), traces at which
   each statement meets the sampling relation at its own incorrect set (`RWired`) meet the phase's leak relation at the
   network certifier's rows with the registered inputs at the registration's values (`RLeakTied`, at `AsReg` of
   `Phase.regVal`), or the `H` calls that check their openings, the registration's and the network certifier's collide
@@ -92,8 +93,7 @@ def PeriodTiedCount : Prop :=
     (x : Z → Fin n → Claims.Msg) (xt : Z → Fin n → List Claims.Msg) (wit : Z → Fin n → List Wit)
     (tops : AuditStatement → List (Opening Bool)),
     (∀ i (ph : Phase) (xs : List Claims.Msg) (ws : List Wit), SamePhase D lay k reg (pw i) ph → PhaseParsed D ph xs ws →
-      RowsStateHeld ph place (t i) → RowsProgWired ph place (t i) → RowsStateEmpty ph reg ops (t i) →
-      (∀ x ∈ xs, RegOpensAt H D reg ops x) →
+      RowsStateHeld ph place (t i) → RowsProgWired ph place (t i) → (∀ x ∈ xs, RegOpensAt H D reg ops x) →
       (∀ j x w, xs[j]? = some x → ws[j]? = some w →
         RWired H D.commit D.parse D.partition (fun s => (lay s).wires) (δ j) x w) →
       RLeakTied H D.commit D.parse D.partition L K S lay (k ph.scan) ph (t i) δ
