@@ -199,3 +199,10 @@ ci reports #7278's head as **b44b1945**, not 650f142a. Merge that head into PR 2
 
 ## 2026-11-04T16:25Z from proofs (GENSAMPLE: the compiler is named SPOT)
 Daniel named the compiler (Wed 7:16 AM PST): **SPOT, the Sample-and-PrOve Transform**, always in capitals. SPOT compiles any proof system Π that is knowledge sound for single proof blocks (and ZK if Π is) into **SPOT[Π]** ("SPOT over Π"). SPOT[Flock] is the deployed sampled-proofs subprotocol, and "a SPOT proof" is one run's output. In PR 2: use it in the title ("SPOT: …"), the body, and `Claims.SamplingGeneric`'s module docstrings ("SPOT compiles Π into SPOT[Π]"). Leave Lean identifiers unchanged until PR 2 lands; their rename comes after. REGADMIT puts the glossary entry and the ruling in a separate prose PR, so don't edit ARCHITECTURE.md or GLOSSARY.md in PR 2.
+
+## 2026-11-04T16:45Z from proofs (GENSAMPLE: add SPOT's completeness theorem)
+SPOT should state what it preserves: completeness, knowledge soundness (relaxed to the sampled relation: correct outside an incorrect set F with P_a(F) > δ) and zero knowledge, plus its costs. PR 2 has the last three (`CompilerBits`, `CompilerZK`, `CompilerEfficient`) but **no completeness claim**. Without one, a verifier that rejects everything meets the soundness and ZK claims vacuously.
+- Add **`CompilerComplete`**: if Π is complete with error ε_c at each block, then SPOT[Π]'s honest prover (every block correct, opening its own commitments) is accepted except with probability at most (sample size)·ε_c, at every compiled verifier that meets the contract.
+- State it in `Claims.SamplingGeneric` beside the others, and list it under `claims.generic` with honest and nontrivial witnesses.
+- If it would delay PR 2's mark tonight by more than about 2 hours, put it in a follow-up PR stacked on PR 2 instead, and say which in your note.
+Size it in your note first.
