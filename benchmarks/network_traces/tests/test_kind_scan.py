@@ -240,11 +240,9 @@ def _out(tmp_path: Path, period) -> Path:
     (v3c / "registration.json").write_text(json.dumps(reg))
     (v3c / "circuits").mkdir()
     (v3c / "circuits" / f"{CIRCUIT_PIN}.txt").write_bytes(CIRCUIT)
-    audit = case["params"]["audits"][0]
-    (v3c / "period.json").write_text(json.dumps({"answer": ev["audits"][0], "registration": reg,
+    (v3c / "period.json").write_text(json.dumps({"answer": ev["audits"][0], "registration": reg, "free": 3,
                                                  "circuits": [{"template": "t@0", "sha512": CIRCUIT_PIN}],
-                                                 "free": period.input_gates(audit["program"]),
-                                                 **{k: audit[k] for k in ("steps", "program")}}))
+                                                 **{k: case["params"]["audits"][0][k] for k in ("steps", "program")}}))
     (out / "compiler.json").write_text(json.dumps(COMPILER))
     (out / "registration.json").write_text(json.dumps(SV.public_registration(ADVICE)))
     (out / "weights_registration.json").write_text(json.dumps(WEIGHTS))
