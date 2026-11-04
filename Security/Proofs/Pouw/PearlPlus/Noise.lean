@@ -5,6 +5,16 @@ import Mathlib.Data.List.GetD
 import Mathlib.Data.List.Basic
 import Mathlib.Tactic.Ring
 import Mathlib.Tactic.NormNum
+import Mathlib.Tactic.Linarith
+import Mathlib.Tactic.FieldSimp
+import Mathlib.Tactic.Zify
+import Mathlib.Data.Nat.Sqrt
+import Mathlib.Data.List.Monad
+import Mathlib.Algebra.Order.BigOperators.Group.List
+import Proofs.Pouw.PearlC.CoreOps
+import Proofs.Pouw.PearlC.Peel
+import Proofs.Pouw.PearlC.PeelExactProofs
+import Proofs.Properties.Evaluate
 
 /-!
 # Pearl+'s bridge, part (b), the noise: the check's -h3 noise is `NoiseSha512`'s
@@ -533,5 +543,824 @@ theorem seedsAreTheSpec : SeedsAreTheSpec := by
   · rw [Words.seedB, hs "seed-B" (by simp [roles]), bytesNat_append, Pouw.PearlC.NoiseSha512.seedB]
   · rw [Words.rowSeed, hs "seed-A" (by simp [roles]), bytesNat_append, bytesNat_append, bytesNat_append,
       segDigestIsRowDigest, bytesNat_le, Pouw.PearlC.NoiseSha512.rowSeed]
+
+namespace NoiseProofs
+
+open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.PeelExact Pouw.PearlC.PeelExactProofs
+
+/-! ## The check's FP32 and BF16 words on values -/
+
+theorem floor_div_65536 (n : ℕ) : ⌊(n : ℚ) / 65536⌋ = ((n / 65536 : ℕ) : ℤ) := by
+  rw [Int.floor_eq_iff]
+  constructor
+  · rw [le_div_iff₀ (by norm_num)]
+    exact_mod_cast Nat.div_mul_le_self n 65536
+  · rw [div_lt_iff₀ (by norm_num)]
+    exact_mod_cast (show n < (n / 65536 + 1) * 65536 by omega)
+
+/-- BF16's nearest-even rounding of `n` units of `2^-16`, as the check's carry `(n + 0x7FFF + lsb) >>> 16`. -/
+theorem roundEven_div_65536 (n : ℕ) :
+    roundEven ((n : ℚ) / 65536) = (((n + 32767 + n / 65536 % 2) / 65536 : ℕ) : ℤ) := by
+  have hfrac : (n : ℚ) / 65536 - ((n / 65536 : ℕ) : ℤ) = ((n % 65536 : ℕ) : ℚ) / 65536 := by
+    have : (n : ℚ) = ((n / 65536 : ℕ) : ℚ) * 65536 + ((n % 65536 : ℕ) : ℚ) := by
+      exact_mod_cast (Nat.div_add_mod' n 65536).symm
+    rw [this, Int.cast_natCast]; ring
+  have h1 : ((n % 65536 : ℕ) : ℚ) / 65536 < 1 / 2 ↔ n % 65536 < 32768 := by
+    rw [div_lt_iff₀ (by norm_num)]; norm_num
+  have h2 : 1 / 2 < ((n % 65536 : ℕ) : ℚ) / 65536 ↔ 32768 < n % 65536 := by
+    rw [lt_div_iff₀ (by norm_num)]; norm_num
+  unfold roundEven
+  simp only [floor_div_65536, hfrac, h1, h2]
+  split_ifs <;> omega
+
+theorem and_ff (u : ℕ) : u &&& 0xFF = u % 256 := Nat.and_two_pow_sub_one_eq_mod u 8
+theorem and_ffff (u : ℕ) : u &&& 0xFFFF = u % 65536 := Nat.and_two_pow_sub_one_eq_mod u 16
+theorem and_7fff (u : ℕ) : u &&& 0x7FFF = u % 32768 := Nat.and_two_pow_sub_one_eq_mod u 15
+theorem and_one (u : ℕ) : u &&& 1 = u % 2 := Nat.and_two_pow_sub_one_eq_mod u 1
+
+theorem finite_ok {w : ℕ} (hf : (w >>> 23) % 256 ≠ 255) : Words.finite w = .ok w := by
+  simp [Words.finite, and_ff, hf]; rfl
+
+theorem sgn_abs (b : Prop) [Decidable b] (y : ℚ) : |(if b then (-1 : ℚ) else 1) * y| = |y| := by
+  split <;> simp
+
+theorem sgn_neg (b : Prop) [Decidable b] {y : ℚ} (hy : 0 < y) : (if b then (-1 : ℚ) else 1) * y < 0 ↔ b := by
+  split <;> simp_all [hy.le]
+
+/-- A finite FP32 word's value, `±M·2^(e − 150)` with `M = 2^23 + mantissa`, is `bf16Rn`'s `±roundEven(M / 2^16)` at
+`2^(e − 134)`. -/
+theorem bf16Rn_fields (s : Prop) [Decidable s] (M e : ℕ) (h1 : 2 ^ 23 ≤ M) (h2 : M < 2 ^ 24) :
+    bf16Rn ((if s then (-1 : ℚ) else 1) * ((M : ℚ) * 2 ^ ((e : ℤ) - 150))) =
+      (if s then (-1 : ℚ) else 1) * (roundEven ((M : ℚ) / 65536) : ℚ) * 2 ^ ((e : ℤ) - 134) := by
+  have hU : (2 : ℚ) ^ ((e : ℤ) - 150) = 2 ^ ((e : ℤ) - 134) / 65536 := by
+    rw [show (e : ℤ) - 150 = ((e : ℤ) - 134) + (-16) by ring, zpow_add₀ two_ne_zero]; norm_num; ring
+  have hA : 0 < (M : ℚ) * 2 ^ ((e : ℤ) - 150) := by
+    have : (0 : ℚ) < M := by exact_mod_cast (show 0 < M by omega)
+    exact mul_pos this (zpow_pos (by norm_num) _)
+  have hb : binade |(if s then (-1 : ℚ) else 1) * ((M : ℚ) * 2 ^ ((e : ℤ) - 150))| = (e : ℤ) - 127 := by
+    rw [sgn_abs, abs_of_pos hA]
+    have hM1 : (2 : ℚ) ^ 23 ≤ M := by exact_mod_cast h1
+    have hM2 : (M : ℚ) < 2 ^ 24 := by exact_mod_cast h2
+    apply Proofs.binade_unique hA
+    · rw [show (e : ℤ) - 127 = 23 + ((e : ℤ) - 150) by ring, zpow_add₀ two_ne_zero]
+      exact mul_le_mul_of_nonneg_right (by exact_mod_cast hM1) (zpow_pos (by norm_num) _).le
+    · rw [show (e : ℤ) - 127 + 1 = 24 + ((e : ℤ) - 150) by ring, zpow_add₀ two_ne_zero]
+      exact mul_lt_mul_of_pos_right (by exact_mod_cast hM2) (zpow_pos (by norm_num) _)
+  have hlt : ((if s then (-1 : ℚ) else 1) * ((M : ℚ) * 2 ^ ((e : ℤ) - 150)) < 0) ↔ s := sgn_neg s hA
+  unfold bf16Rn ulpBf16
+  rw [hb, sgn_abs, abs_of_pos hA, show (e : ℤ) - 127 - 7 = (e : ℤ) - 134 by ring]
+  have hq : (M : ℚ) * 2 ^ ((e : ℤ) - 150) / 2 ^ ((e : ℤ) - 134) = (M : ℚ) / 65536 := by
+    rw [hU]; field_simp
+  rw [hq]
+  by_cases hs : s
+  · rw [ite_eq_left (hlt.2 hs), ite_eq_left hs]
+  · rw [ite_eq_right (fun h => hs (hlt.1 h)), ite_eq_right hs]
+
+theorem carry_split (W sb e q r : ℕ) (hsb : sb < 2) (he : e < 255) (hq : q < 128) (hr : r < 65536) :
+    (65536 * (W * 65536 + sb * 32768 + e * 128 + q) + r + 32767 +
+      (65536 * (W * 65536 + sb * 32768 + e * 128 + q) + r) / 65536 % 2) / 65536 % 65536 =
+      sb * 32768 + e * 128 + (q + (r + 32767 + q % 2) / 65536) := by
+  have h1 : (65536 * (W * 65536 + sb * 32768 + e * 128 + q) + r) / 65536 = W * 65536 + sb * 32768 + e * 128 + q := by
+    rw [Nat.mul_add_div (by norm_num), Nat.div_eq_of_lt hr, Nat.add_zero]
+  rw [h1, show (W * 65536 + sb * 32768 + e * 128 + q) % 2 = q % 2 by omega,
+    show 65536 * (W * 65536 + sb * 32768 + e * 128 + q) + r + 32767 + q % 2 =
+      65536 * (W * 65536 + sb * 32768 + e * 128 + q) + (r + 32767 + q % 2) by ring,
+    Nat.mul_add_div (by norm_num)]
+  have hc : (r + 32767 + q % 2) / 65536 ≤ 1 := by omega
+  generalize (r + 32767 + q % 2) / 65536 = c at hc ⊢
+  omega
+
+theorem carry_word (w : ℕ) (he : w / 8388608 % 256 ≠ 255) :
+    (w + 32767 + w / 65536 % 2) / 65536 % 65536 = w / 2147483648 % 2 * 32768 + w / 8388608 % 256 * 128 +
+      (w % 8388608 / 65536 + (w % 8388608 % 65536 + 32767 + w % 8388608 / 65536 % 2) / 65536) := by
+  have hw : w = 65536 * (w / 4294967296 * 65536 + w / 2147483648 % 2 * 32768 + w / 8388608 % 256 * 128 +
+      w % 8388608 / 65536) + w % 8388608 % 65536 := by omega
+  have := carry_split (w / 4294967296) (w / 2147483648 % 2) (w / 8388608 % 256) (w % 8388608 / 65536)
+    (w % 8388608 % 65536) (by omega) (by omega) (by omega) (by omega)
+  rw [← hw] at this
+  exact this
+
+theorem bf16_fields {sb e k : ℕ} (hsb : sb < 2) (he : e < 255) (hk : k ≤ 128)
+    (hov : ¬ 32640 ≤ (sb * 32768 + e * 128 + k) % 32768) :
+    (sb * 32768 + e * 128 + k) / 128 % 256 = e + k / 128 ∧ (sb * 32768 + e * 128 + k) % 128 = k % 128 ∧
+      (sb * 32768 + e * 128 + k) / 32768 % 2 = sb ∧ e + k / 128 ≠ 255 := by
+  have h : e * 128 + k < 32640 := by omega
+  refine ⟨by omega, by omega, by omega, by omega⟩
+
+/-- **The check's BF16 rounding is `bf16Rn`** on a finite word of magnitude at least `2^−126`: its carry
+`(w + 0x7FFF + lsb) >>> 16` is `roundEven` of the low 16 bits, and a carry out of the mantissa is the next binade. -/
+theorem toBf16_spec {w h : ℕ} {x : ℚ} (hx : wordQ w = some x) (he0 : (w >>> 23) % 256 ≠ 0)
+    (hh : Words.toBf16 w = .ok h) : h < 65536 ∧ bf16Exp h ≠ 255 ∧ bf16Value h = bf16Rn x := by
+  have hf : (w >>> 23) % 256 ≠ 255 := by
+    intro hf
+    simp [Words.toBf16, Words.finite, and_ff, hf] at hh
+    cases hh
+  rw [Words.toBf16, finite_ok hf] at hh
+  dsimp only [bind, Except.bind] at hh
+  split at hh
+  · cases hh
+  cases hh
+  rename_i hov
+  rw [wordQ_fields hf, Option.some.injEq] at hx
+  subst hx
+  rw [ite_eq_right he0, show max ((w >>> 23) % 256) 1 = (w >>> 23) % 256 by omega,
+    bf16Rn_fields _ _ _ (by omega) (by omega), roundEven_div_65536]
+  unfold bf16Value bf16Sig bf16ExpOr1 bf16Exp bf16Man bf16Sign
+  simp only [Nat.shiftRight_eq_div_pow, Nat.reducePow, and_ffff, and_7fff, and_one] at hov hf he0 ⊢
+  rw [carry_word w (by omega)] at hov ⊢
+  obtain ⟨e, h_e⟩ : ∃ e, w / 8388608 % 256 = e := ⟨_, rfl⟩
+  obtain ⟨m, h_m⟩ : ∃ m, w % 8388608 = m := ⟨_, rfl⟩
+  obtain ⟨sb, h_s⟩ : ∃ sb, w / 2147483648 % 2 = sb := ⟨_, rfl⟩
+  rw [h_e, h_m, h_s] at hov ⊢
+  rw [h_e] at he0 hf
+  have hm : m < 8388608 := by omega
+  have hsb : sb < 2 := by omega
+  have he256 : e < 256 := by omega
+  clear h_e h_m h_s
+  have h_re : (8388608 + m + 32767 + (8388608 + m) / 65536 % 2) / 65536 =
+      128 + (m / 65536 + (m % 65536 + 32767 + m / 65536 % 2) / 65536) := by omega
+  rw [h_re]
+  have hk : m / 65536 + (m % 65536 + 32767 + m / 65536 % 2) / 65536 ≤ 128 := by omega
+  generalize m / 65536 + (m % 65536 + 32767 + m / 65536 % 2) / 65536 = k at hk hov ⊢
+  obtain ⟨f1, f2, f3, f4⟩ := bf16_fields hsb (by omega) hk hov
+  rw [f1, f2, f3]
+  refine ⟨by omega, f4, ?_⟩
+  rw [ite_eq_right (show e + k / 128 ≠ 0 by omega), show max (e + k / 128) 1 = e + k / 128 by omega]
+  have hs : ((sb == 1) = true) = (sb = 1) := by simp
+  simp only [hs]
+  rcases Nat.lt_or_ge k 128 with h | h
+  · rw [Nat.div_eq_of_lt h, Nat.mod_eq_of_lt h, Nat.add_zero]
+    push_cast; ring
+  · obtain rfl : k = 128 := by omega
+    rw [show (128 : ℕ) % 128 = 0 from rfl, show (128 : ℕ) / 128 = 1 from rfl]
+    push_cast
+    rw [show ((e : ℤ) + 1 - 134) = ((e : ℤ) - 134) + 1 by ring, zpow_add_one₀ two_ne_zero]
+    ring
+
+theorem word_fields {sb e mm : ℕ} (hsb : sb < 2) (he : e < 256) (hm : mm < 2 ^ 23) :
+    ((sb * 2 ^ 31 + e * 2 ^ 23 + mm) >>> 23) % 256 = e ∧ (sb * 2 ^ 31 + e * 2 ^ 23 + mm) % 2 ^ 23 = mm ∧
+      ((sb * 2 ^ 31 + e * 2 ^ 23 + mm) >>> 31) % 2 = sb := by
+  simp only [Nat.shiftRight_eq_div_pow]
+  omega
+
+theorem wordQ_word {sb e mm : ℕ} (hsb : sb < 2) (he : e < 255) (he0 : e ≠ 0) (hm : mm < 2 ^ 23) :
+    wordQ (sb * 2 ^ 31 + e * 2 ^ 23 + mm) =
+      some ((if sb = 1 then (-1 : ℚ) else 1) * (((2 ^ 23 + mm : ℕ) : ℚ) * 2 ^ ((e : ℤ) - 150))) := by
+  obtain ⟨f1, f2, f3⟩ := word_fields (e := e) hsb (by omega) hm
+  rw [wordQ_fields (by rw [f1]; omega), f1, f2, f3, ite_eq_right he0, show max e 1 = e by omega]
+
+/-- **`ofInt` is exact** below `2^24`: the word of `z` has exponent field `⌊log₂|z|⌋ + 127` and value `z`. -/
+theorem ofInt_spec {z : ℤ} (h1 : z ≠ 0) (h2 : z.natAbs < 2 ^ 24) :
+    wordQ (Words.ofInt z) = some (z : ℚ) ∧ (Words.ofInt z >>> 23) % 256 ≠ 0 := by
+  have ha : z.natAbs ≠ 0 := Int.natAbs_ne_zero.2 h1
+  have hl1 := Nat.log2_self_le ha
+  have hl2 := Nat.lt_log2_self (n := z.natAbs)
+  have hl3 : z.natAbs.log2 < 24 := (Nat.log2_lt ha).2 h2
+  obtain ⟨e, he⟩ : ∃ e, z.natAbs.log2 = e := ⟨_, rfl⟩
+  rw [he] at hl1 hl2 hl3
+  have hd : z.natAbs - 2 ^ e < 2 ^ e := by rw [Nat.pow_succ] at hl2; omega
+  have hm : (z.natAbs - 2 ^ e) <<< (23 - e) < 2 ^ 23 := by
+    rw [Nat.shiftLeft_eq, show (2 : ℕ) ^ 23 = 2 ^ e * 2 ^ (23 - e) by rw [← Nat.pow_add]; congr 1; omega]
+    exact Nat.mul_lt_mul_of_pos_right hd (Nat.two_pow_pos _)
+  have hE : (e + 127) <<< 23 + (z.natAbs - 2 ^ e) <<< (23 - e) < 2 ^ 31 := by
+    rw [Nat.shiftLeft_eq]; omega
+  obtain ⟨sb, hsb, hs⟩ : ∃ sb, sb < 2 ∧ (if z < 0 then 0x80000000 else 0) = sb * 2 ^ 31 ∧ (sb = 1 ↔ z < 0) :=
+    if hz : z < 0 then ⟨1, by omega, by rw [ite_eq_left hz]; rfl, by simp [hz]⟩
+    else ⟨0, by omega, by rw [ite_eq_right hz]; rfl, by simp [hz]⟩
+  have hw : Words.ofInt z = sb * 2 ^ 31 + (e + 127) * 2 ^ 23 + (z.natAbs - 2 ^ e) * 2 ^ (23 - e) := by
+    unfold Words.ofInt
+    simp only [ite_eq_right ha, he, hs.1, Nat.or_assoc, ← Nat.shiftLeft_add_eq_or_of_lt hm]
+    rcases Nat.lt_or_ge sb 1 with h | h
+    · obtain rfl : sb = 0 := by omega
+      rw [Nat.zero_mul, Nat.zero_or, Nat.shiftLeft_eq, Nat.shiftLeft_eq]; omega
+    · obtain rfl : sb = 1 := by omega
+      rw [Nat.one_mul, Nat.or_comm, Nat.or_two_pow_eq_add_of_lt hE, Nat.shiftLeft_eq, Nat.shiftLeft_eq]; omega
+  rw [hw]
+  have hm' : (z.natAbs - 2 ^ e) * 2 ^ (23 - e) < 2 ^ 23 := by rw [← Nat.shiftLeft_eq]; exact hm
+  obtain ⟨f1, -, -⟩ := word_fields (e := e + 127) hsb (by omega) hm'
+  refine ⟨?_, by rw [f1]; omega⟩
+  rw [wordQ_word (e := e + 127) hsb (by omega) (by omega) hm']
+  congr 1
+  have hv : (((2 ^ 23 + (z.natAbs - 2 ^ e) * 2 ^ (23 - e) : ℕ) : ℚ) * 2 ^ (((e + 127 : ℕ) : ℤ) - 150)) = z.natAbs := by
+    have h23 : (2 : ℕ) ^ 23 = 2 ^ e * 2 ^ (23 - e) := by rw [← Nat.pow_add]; congr 1; omega
+    rw [show 2 ^ 23 + (z.natAbs - 2 ^ e) * 2 ^ (23 - e) = z.natAbs * 2 ^ (23 - e) by
+      rw [h23, ← Nat.add_mul]; congr 1; omega]
+    push_cast
+    rw [mul_assoc, ← zpow_natCast, ← zpow_add₀ two_ne_zero, show ((23 - e : ℕ) : ℤ) + ((e : ℤ) + 127 - 150) = 0 by omega,
+      zpow_zero, mul_one]
+  have hab : ((z.natAbs : ℕ) : ℚ) = |(z : ℚ)| := by simp
+  rw [hv, hab]
+  rcases lt_or_ge z 0 with hz | hz
+  · rw [ite_eq_left (hs.2.2 hz), abs_of_neg (by exact_mod_cast hz)]; ring
+  · rw [ite_eq_right (fun h => absurd (hs.2.1 h) (not_lt.2 hz)), abs_of_nonneg (by exact_mod_cast hz)]
+    ring
+
+/-- **A finite normal `f32Word` is `rn`**: from `2^−126` up, `f32Word` rounds to 24 bits in the value's binade as `rn`
+does, and its exponent field is the binade's. -/
+theorem f32Word_normal {y : ℚ} (hn : (2 : ℚ) ^ (-126 : ℤ) ≤ |y|) (hf : (f32Word y >>> 23) % 256 ≠ 255) :
+    wordQ (f32Word y) = some (rn y) ∧ (f32Word y >>> 23) % 256 ≠ 0 := by
+  have ha : 0 < |y| := lt_of_lt_of_le (zpow_pos (by norm_num) _) hn
+  obtain ⟨hb1, hb2⟩ := Proofs.binade_spec ha
+  obtain ⟨b, hbd⟩ : ∃ b, binade |y| = b := ⟨_, rfl⟩
+  rw [hbd] at hb1 hb2
+  have hb : -126 ≤ b := by
+    by_contra h
+    have : (2 : ℚ) ^ (b + 1) ≤ 2 ^ (-126 : ℤ) := zpow_le_zpow_right₀ (by norm_num) (by omega)
+    linarith
+  have hu : (0 : ℚ) < 2 ^ (b - 23) := zpow_pos (by norm_num) _
+  have hq1 : (2 : ℚ) ^ 23 ≤ |y| / 2 ^ (b - 23) := by
+    rw [le_div_iff₀ hu, ← zpow_natCast, ← zpow_add₀ two_ne_zero]; convert hb1 using 2; push_cast; ring
+  have hq2 : |y| / 2 ^ (b - 23) < 2 ^ 24 := by
+    rw [div_lt_iff₀ hu, ← zpow_natCast, ← zpow_add₀ two_ne_zero]; convert hb2 using 2; push_cast; ring
+  obtain ⟨R, hRd⟩ : ∃ R, roundEven (|y| / 2 ^ (b - 23)) = R := ⟨_, rfl⟩
+  have hR1 : 2 ^ 23 ≤ R := by
+    rw [← hRd]; exact le_trans (Int.le_floor.2 (by exact_mod_cast hq1)) (Proofs.floor_le_roundEven _)
+  have hR2 : R ≤ 2 ^ 24 := by
+    have := Proofs.roundEven_le (|y| / 2 ^ (b - 23))
+    have h2 : ⌊|y| / 2 ^ (b - 23)⌋ < 2 ^ 24 := Int.floor_lt.2 (by exact_mod_cast hq2)
+    rw [hRd] at this
+    omega
+  obtain ⟨N, hN⟩ : ∃ N : ℕ, (N : ℤ) = R := ⟨R.toNat, Int.toNat_of_nonneg (by omega)⟩
+  have hrn : rn y = (if y < 0 then -1 else 1) * ((N : ℚ) * 2 ^ (b - 23)) := by
+    rw [rn, ulp, hbd, hRd, ← hN, Int.cast_natCast, mul_assoc]
+  obtain ⟨sb, hsb, hs⟩ : ∃ sb, sb < 2 ∧ (if y < 0 then 2 ^ 31 else 0) = sb * 2 ^ 31 ∧ (sb = 1 ↔ y < 0) :=
+    if hy : y < 0 then ⟨1, by omega, by rw [ite_eq_left hy]; rfl, by simp [hy]⟩
+    else ⟨0, by omega, by rw [ite_eq_right hy]; rfl, by simp [hy]⟩
+  have hsgn : (if sb = 1 then (-1 : ℚ) else 1) = if y < 0 then -1 else 1 := by
+    by_cases hy : y < 0
+    · rw [ite_eq_left (hs.2.2 hy), ite_eq_left hy]
+    · rw [ite_eq_right (fun h => hy (hs.2.1 h)), ite_eq_right hy]
+  have hN1 : 2 ^ 23 ≤ N := by omega
+  have hN2 : N ≤ 2 ^ 24 := by omega
+  have hw : f32Word y = if N = 2 ^ 24 then
+        (if 127 < b + 1 then sb * 2 ^ 31 + 0x7F800000 else sb * 2 ^ 31 + (b + 1 + 127).toNat * 2 ^ 23 + 0)
+      else (if 127 < b then sb * 2 ^ 31 + 0x7F800000 else sb * 2 ^ 31 + (b + 127).toNat * 2 ^ 23 + (N - 2 ^ 23)) := by
+    unfold f32Word
+    simp only [ite_eq_right ha.ne', hbd, max_eq_left hb, hRd, ← hN, Int.toNat_natCast, hs.1]
+    by_cases hc : N = 2 ^ 24
+    · simp only [hc, ite_true, show ¬ ((2 : ℕ) ^ 23 < 2 ^ 23) by omega, ite_false, Nat.sub_self]
+    · simp only [hc, ite_false, show ¬ (N < 2 ^ 23) by omega]
+  have hinf : ((sb * 2 ^ 31 + 0x7F800000) >>> 23) % 256 = 255 := by
+    rw [Nat.shiftRight_eq_div_pow]; omega
+  by_cases hc : N = 2 ^ 24
+  · rw [ite_eq_left hc] at hw
+    have h127 : ¬ 127 < b + 1 := fun h => hf (by rw [hw, ite_eq_left h]; exact hinf)
+    rw [ite_eq_right h127] at hw
+    obtain ⟨f1, -, -⟩ := word_fields (e := (b + 1 + 127).toNat) (mm := 0) hsb (by omega) (by norm_num)
+    rw [hw, wordQ_word hsb (by omega) (by omega) (by norm_num), f1, hrn, hsgn, hc]
+    refine ⟨?_, by omega⟩
+    congr 1
+    rw [show (((b + 1 + 127).toNat : ℕ) : ℤ) - 150 = (b - 23) + 1 by omega, zpow_add_one₀ two_ne_zero]
+    push_cast; ring
+  · rw [ite_eq_right hc] at hw
+    have h127 : ¬ 127 < b := fun h => hf (by rw [hw, ite_eq_left h]; exact hinf)
+    rw [ite_eq_right h127] at hw
+    obtain ⟨f1, -, -⟩ := word_fields (e := (b + 127).toNat) (mm := N - 2 ^ 23) hsb (by omega) (by omega)
+    rw [hw, wordQ_word hsb (by omega) (by omega) (by omega), f1, hrn, hsgn]
+    refine ⟨?_, by omega⟩
+    refine congrArg some ?_
+    rw [show 2 ^ 23 + (N - 2 ^ 23) = N by omega, show (((b + 127).toNat : ℕ) : ℤ) - 150 = b - 23 by omega]
+
+/-! ## The check's BF16 steps on values -/
+
+theorem bind_eq_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
+    ∃ a, x = .ok a ∧ f a = .ok b := by
+  cases x with
+  | error e => cases h
+  | ok a => exact ⟨a, rfl, h⟩
+
+theorem pure_eq_ok {ε α : Type} {a b : α} (h : (pure a : Except ε α) = .ok b) : a = b := by
+  cases h; rfl
+
+theorem ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
+
+theorem finite_eq_ok {w a : ℕ} (h : Words.finite w = .ok a) : a = w ∧ (w >>> 23) % 256 ≠ 255 := by
+  unfold Words.finite at h
+  rw [and_ff] at h
+  by_cases hf : (w >>> 23) % 256 = 255
+  · simp [hf] at h
+  · simp [hf] at h
+    cases h
+    exact ⟨rfl, hf⟩
+
+theorem ofBf16_ok {h : ℕ} (he : bf16Exp h ≠ 255) : Words.ofBf16 h = .ok (h <<< 16) := by
+  unfold Words.ofBf16 bf16Exp at *
+  rw [and_ff]
+  simp [he]
+  rfl
+
+theorem mul_word {a b : ℕ} {x y : ℚ} (hx : wordQ a = some x) (hy : wordQ b = some y) (h0 : x * y ≠ 0) :
+    Verity.Fp32.f32MulV2 a b = f32Word (x * y) := by
+  obtain ⟨ma, hda, rfl⟩ := CoreOps.decode_fin hx
+  obtain ⟨mb, hdb, rfl⟩ := CoreOps.decode_fin hy
+  have hv : (if (signBit a ^^ signBit b) = true then (-1 : ℚ) else 1) *
+      (((ma * mb : ℕ) : ℚ) / ((1 <<< 149 : ℕ) : ℚ) / 2 ^ 149) =
+      (if signBit a = true then (-1 : ℚ) else 1) * ((ma : ℚ) / 2 ^ 149) *
+        ((if signBit b = true then (-1 : ℚ) else 1) * ((mb : ℚ) / 2 ^ 149)) := by
+    rw [CoreOps.sgn_xor, Nat.one_shiftLeft]; push_cast; ring
+  rw [CoreOps.mulV2_eq hda hdb, CoreOps.rnWord_round _ _ (by rw [Nat.one_shiftLeft]; exact Nat.two_pow_pos 149), hv,
+    CoreOps.rnWord_of_ne h0]
+
+theorem div_word {a b : ℕ} {x y : ℚ} (hx : wordQ a = some x) (hy : wordQ b = some y) (hx0 : x ≠ 0) (hy0 : y ≠ 0) :
+    Verity.Fp32.f32DivV2 a b = f32Word (x / y) := by
+  obtain ⟨ma, hda, rfl⟩ := CoreOps.decode_fin hx
+  obtain ⟨mb, hdb, rfl⟩ := CoreOps.decode_fin hy
+  have hmb : mb ≠ 0 := fun h => hy0 ((CoreOps.val_eq_zero _ _).2 h)
+  rw [CoreOps.divV2_eq hda hdb hmb, CoreOps.rnWord_round _ _ (Nat.pos_of_ne_zero hmb), CoreOps.div_val,
+    CoreOps.rnWord_of_ne (div_ne_zero hx0 hy0)]
+
+/-- A BF16 word `h` (below `2^16`, finite) of value `v`. -/
+def Bf16Of (h : ℕ) (v : ℚ) : Prop := h < 65536 ∧ bf16Exp h ≠ 255 ∧ bf16Value h = v
+
+theorem ofBf16_rnd {h : ℕ} {y : ℚ} (hn : (2 : ℚ) ^ (-126 : ℤ) ≤ |y|)
+    (hh : (Words.finite (f32Word y) >>= Words.toBf16) = .ok h) : Bf16Of h (bf16Rn (rn y)) := by
+  obtain ⟨w', hf', hh'⟩ := bind_eq_ok hh
+  obtain ⟨rfl, hf⟩ := finite_eq_ok hf'
+  obtain ⟨hq, he0⟩ := f32Word_normal hn hf
+  exact toBf16_spec hq he0 hh'
+
+theorem bf16Mul_spec {a b h : ℕ} {x y : ℚ} (ha : Bf16Of a x) (hb : Bf16Of b y)
+    (hn : (2 : ℚ) ^ (-126 : ℤ) ≤ |x * y|) (hh : Words.bf16Mul a b = .ok h) : Bf16Of h (bf16Rn (rn (x * y))) := by
+  have h0 : x * y ≠ 0 := by
+    intro h0; rw [h0, abs_zero] at hn; exact absurd hn (not_le.2 (zpow_pos (by norm_num) _))
+  have hw := mul_word (wordQ_bf16 ha.2.1) (wordQ_bf16 hb.2.1) (by rw [ha.2.2, hb.2.2]; exact h0)
+  rw [ha.2.2, hb.2.2, ← Properties.Evaluator.Fp32.f32MulV2] at hw
+  unfold Words.bf16Mul at hh
+  rw [ofBf16_ok ha.2.1, ofBf16_ok hb.2.1, ok_bind, ok_bind, hw] at hh
+  exact ofBf16_rnd hn hh
+
+theorem shl16_exp (b : ℕ) : ((b <<< 16) >>> 23) % 256 = bf16Exp b := by
+  unfold bf16Exp; rw [Nat.shiftLeft_eq, Nat.shiftRight_eq_div_pow, Nat.shiftRight_eq_div_pow]; omega
+
+theorem low31_ne {w : ℕ} {y : ℚ} (hf : (w >>> 23) % 256 ≠ 255) (hy : wordQ w = some y) (hy0 : y ≠ 0) :
+    (w &&& 0x7FFFFFFF == 0) = false := by
+  rw [show (0x7FFFFFFF : ℕ) = 2 ^ 31 - 1 from rfl, Nat.and_two_pow_sub_one_eq_mod]
+  rw [wordQ_fields hf] at hy
+  rw [beq_eq_false_iff_ne]
+  intro h0
+  have h1 : (w >>> 23) % 256 = 0 := by rw [Nat.shiftRight_eq_div_pow]; omega
+  have h2 : w % 2 ^ 23 = 0 := by omega
+  rw [h1, h2] at hy
+  apply hy0
+  rw [← Option.some.inj hy]
+  simp
+
+theorem bf16Div_spec {a b h : ℕ} {x y : ℚ} (ha : Bf16Of a x) (hb : Bf16Of b y) (hx0 : x ≠ 0) (hy0 : y ≠ 0)
+    (hn : (2 : ℚ) ^ (-126 : ℤ) ≤ |x / y|) (hh : Words.bf16Div a b = .ok h) : Bf16Of h (bf16Rn (rn (x / y))) := by
+  have hw := div_word (wordQ_bf16 ha.2.1) (wordQ_bf16 hb.2.1) (by rw [ha.2.2]; exact hx0) (by rw [hb.2.2]; exact hy0)
+  rw [ha.2.2, hb.2.2, ← Properties.Evaluator.Fp32.f32DivV2] at hw
+  have hc := low31_ne (by rw [shl16_exp]; exact hb.2.1) (wordQ_bf16 hb.2.1) (by rw [hb.2.2]; exact hy0)
+  unfold Words.bf16Div at hh
+  rw [ofBf16_ok ha.2.1, ofBf16_ok hb.2.1, ok_bind, ok_bind] at hh
+  simp only [hc, Bool.false_eq_true, ite_false] at hh
+  rw [hw] at hh
+  exact ofBf16_rnd hn hh
+
+theorem bf16Value_sgn (h : ℕ) : ∃ P : ℚ, 0 ≤ P ∧ (P = 0 ↔ bf16Value h = 0) ∧
+    bf16Value h = (if (h >>> 15) % 2 = 1 then -1 else 1) * P := by
+  refine ⟨(bf16Sig h : ℚ) * 2 ^ ((bf16ExpOr1 h : ℤ) - 134),
+    mul_nonneg (Nat.cast_nonneg _) (zpow_pos (by norm_num) _).le, ?_, ?_⟩
+  · unfold bf16Value
+    rw [mul_assoc]
+    constructor
+    · intro h0; rw [h0, mul_zero]
+    · intro h0
+      rcases mul_eq_zero.1 h0 with h1 | h1
+      · split at h1 <;> norm_num at h1
+      · exact h1
+  · unfold bf16Value bf16Sign
+    rw [mul_assoc]
+    by_cases hb : (h >>> 15) % 2 = 1
+    · rw [ite_eq_left hb]; simp [hb]
+    · rw [ite_eq_right hb]; simp [hb]
+
+theorem sign_bf16 {h : ℕ} (h0 : bf16Value h ≠ 0) :
+    (if ((h <<< 16) >>> 31) % 2 = 1 then 128 else 0) = (if bf16Value h < 0 then 128 else 0) := by
+  have hs : ((h <<< 16) >>> 31) % 2 = (h >>> 15) % 2 := by
+    rw [Nat.shiftLeft_eq, Nat.shiftRight_eq_div_pow, Nat.shiftRight_eq_div_pow]; omega
+  obtain ⟨P, hP, hP0, hv⟩ := bf16Value_sgn h
+  have hPpos : 0 < P := lt_of_le_of_ne hP (fun h' => h0 (hP0.1 h'.symm))
+  rw [hs, hv]
+  by_cases hb : (h >>> 15) % 2 = 1
+  · rw [ite_eq_left hb, ite_eq_left hb, ite_eq_left (by linarith)]
+  · rw [ite_eq_right hb, ite_eq_right hb, ite_eq_right (by linarith)]
+
+theorem e4m3_bf16 {h : ℕ} (he : bf16Exp h ≠ 255) (h0 : bf16Value h ≠ 0) :
+    e4m3Word (h <<< 16) = e4m3 (bf16Value h) := by
+  apply Fin.ext
+  have h1 : (e4m3Word (h <<< 16)).val =
+      ((if ((h <<< 16) >>> 31) % 2 = 1 then 128 else 0) + e4m3Mag |bf16Value h|) % 256 := by
+    unfold e4m3Word; rw [wordQ_bf16 he]
+  have h2 : (e4m3 (bf16Value h)).val = ((if bf16Value h < 0 then 128 else 0) + e4m3Mag |bf16Value h|) % 256 := rfl
+  rw [h1, h2, sign_bf16 h0]
+
+theorem toFp8_spec {h c : ℕ} {v : ℚ} (hh : Bf16Of h v) (h0 : v ≠ 0) (hc : Words.toFp8 (h <<< 16) = .ok c) :
+    c = (e4m3 v).val := by
+  obtain ⟨hlt, he, rfl⟩ := hh
+  unfold Words.toFp8 at hc
+  obtain ⟨w, hf, hc⟩ := bind_eq_ok hc
+  obtain ⟨rfl, -⟩ := finite_eq_ok hf
+  cases hc
+  rw [Properties.Evaluator.Casts.f32ToE4m3Sat,
+    CoreOps.cast_e4m3Word (by rw [Nat.shiftLeft_eq]; omega), e4m3_bf16 he h0]
+
+/-! ## The norms' BF16 words -/
+
+theorem bf16Rn_pow (e : ℕ) : bf16Rn ((2 : ℚ) ^ e) = 2 ^ e := by
+  have h := bf16Rn_fields False (2 ^ 23) (e + 127) (le_refl _) (by norm_num)
+  rw [ite_eq_right id, one_mul, one_mul] at h
+  have h2 : ((2 ^ 23 : ℕ) : ℚ) * 2 ^ (((e + 127 : ℕ) : ℤ) - 150) = 2 ^ e := by
+    rw [show (((e + 127 : ℕ) : ℤ) - 150) = (e : ℤ) - 23 by push_cast; ring, zpow_sub₀ two_ne_zero, zpow_natCast]
+    push_cast; field_simp
+  rw [h2, roundEven_div_65536, show (2 ^ 23 + 32767 + 2 ^ 23 / 65536 % 2) / 65536 = 128 by norm_num,
+    show (((e + 127 : ℕ) : ℤ) - 134) = (e : ℤ) - 7 by push_cast; ring, zpow_sub₀ two_ne_zero, zpow_natCast] at h
+  rw [h]
+  push_cast
+  field_simp
+
+theorem norm_E : Bf16Of Words.NORM_E 8192 ∧ bf16Rn ((256 : ℚ) * 32) = 8192 := by
+  refine ⟨⟨by unfold Words.NORM_E; norm_num, by unfold Words.NORM_E bf16Exp; norm_num [Nat.shiftRight_eq_div_pow], ?_⟩, ?_⟩
+  · unfold Words.NORM_E bf16Value bf16Sign bf16Sig bf16ExpOr1 bf16Exp bf16Man; norm_num [Nat.shiftRight_eq_div_pow]
+  · have := bf16Rn_pow 13; norm_num at this ⊢; exact this
+
+theorem norm_F : Bf16Of Words.NORM_F 512 ∧ bf16Rn ((16 : ℚ) * 32) = 512 := by
+  refine ⟨⟨by unfold Words.NORM_F; norm_num, by unfold Words.NORM_F bf16Exp; norm_num [Nat.shiftRight_eq_div_pow], ?_⟩, ?_⟩
+  · unfold Words.NORM_F bf16Value bf16Sign bf16Sig bf16ExpOr1 bf16Exp bf16Man; norm_num [Nat.shiftRight_eq_div_pow]
+  · have := bf16Rn_pow 9; norm_num at this ⊢; exact this
+
+/-! ## Magnitudes: each rounding keeps a value within a factor of two -/
+
+theorem bf16Rn_half (z : ℚ) : |z| / 2 ≤ |bf16Rn z| ∧ |bf16Rn z| ≤ 2 * |z| := by
+  have h1 := Peel.bf16Rn_sub_le z
+  have h2 := abs_sub_abs_le_abs_sub z (bf16Rn z)
+  have h3 := abs_sub_abs_le_abs_sub (bf16Rn z) z
+  rw [abs_sub_comm] at h2
+  have h4 : |z| / 2 ^ 8 ≤ |z| / 2 := div_le_div_of_nonneg_left (abs_nonneg _) (by norm_num) (by norm_num)
+  have h5 : 0 ≤ |z| := abs_nonneg _
+  constructor <;> linarith
+
+theorem rn_half (z : ℚ) : |z| / 2 ≤ |rn z| ∧ |rn z| ≤ 2 * |z| := by
+  have h1 := Peel.rn_sub_le z
+  have h2 := abs_sub_abs_le_abs_sub z (rn z)
+  have h3 := abs_sub_abs_le_abs_sub (rn z) z
+  rw [abs_sub_comm] at h2
+  have h4 : |z| / 2 ^ 24 ≤ |z| / 2 := div_le_div_of_nonneg_left (abs_nonneg _) (by norm_num) (by norm_num)
+  have h5 : 0 ≤ |z| := abs_nonneg _
+  constructor <;> linarith
+
+theorem min_le : (2 : ℚ) ^ (-126 : ℤ) ≤ 1 / 2 ^ 20 := by
+  rw [zpow_neg]; norm_num
+
+/-- The scale's quotient and the scale: from `512 ≤ |a|` and `0 < |b| ≤ 2^25`, the quotient is at least `2^−126` and its
+rounded scale at least `2^−18`. -/
+theorem scale_bound {a b : ℚ} (ha : 512 ≤ |a|) (hb1 : 0 < |b|) (hb2 : |b| ≤ 2 ^ 25) :
+    (2 : ℚ) ^ (-126 : ℤ) ≤ |a / b| ∧ 1 / 2 ^ 18 ≤ |bf16Rn (rn (a / b))| := by
+  have hq : 1 / 2 ^ 16 ≤ |a / b| := by
+    rw [abs_div, le_div_iff₀ hb1]
+    calc 1 / 2 ^ 16 * |b| ≤ 1 / 2 ^ 16 * 2 ^ 25 := by gcongr
+      _ = 512 := by norm_num
+      _ ≤ |a| := ha
+  refine ⟨le_trans min_le (le_trans (by norm_num) hq), ?_⟩
+  have h1 := (rn_half (a / b)).1
+  have h2 := (bf16Rn_half (rn (a / b))).1
+  linarith
+
+theorem elem_bound {p s : ℚ} (hp : 1 / 2 ≤ |p|) (hs : 1 / 2 ^ 18 ≤ |s|) :
+    (2 : ℚ) ^ (-126 : ℤ) ≤ |p * s| ∧ bf16Rn (rn (p * s)) ≠ 0 := by
+  have hps : 1 / 2 ^ 19 ≤ |p * s| := by
+    rw [abs_mul]
+    calc (1 : ℚ) / 2 ^ 19 = 1 / 2 * (1 / 2 ^ 18) := by norm_num
+      _ ≤ |p| * |s| := mul_le_mul hp hs (by norm_num) (abs_nonneg _)
+  refine ⟨le_trans min_le (le_trans (by norm_num) hps), fun h0 => ?_⟩
+  have h1 := (rn_half (p * s)).1
+  have h2 := (bf16Rn_half (rn (p * s))).1
+  rw [h0, abs_zero] at h2
+  linarith
+
+/-! ## `isqrt` is `Nat.sqrt` -/
+
+theorem newton_ge {n s x : ℕ} (hs : s * s ≤ n) (hx : 0 < x) : s ≤ (x + n / x) / 2 := by
+  have h := Nat.div_add_mod n x
+  have hr := Nat.mod_lt n hx
+  by_contra hc
+  have hq : x + n / x + 1 ≤ 2 * s := by omega
+  obtain ⟨q, hq'⟩ : ∃ q, n / x = q := ⟨_, rfl⟩
+  obtain ⟨r, hr'⟩ : ∃ r, n % x = r := ⟨_, rfl⟩
+  rw [hq'] at h hq
+  rw [hr'] at h hr
+  have h1 : x * (x + q + 1) ≤ x * (2 * s) := Nat.mul_le_mul_left x hq
+  zify at h hr hs h1
+  nlinarith [sq_nonneg ((s : ℤ) - x)]
+
+theorem newton_lt {n s x : ℕ} (hn : n < (s + 1) * (s + 1)) (hx : s < x) : n / x ≤ s := by
+  have : n < (s + 1) * x := lt_of_lt_of_le hn (Nat.mul_le_mul_left _ hx)
+  have := (Nat.div_lt_iff_lt_mul (by omega)).2 this
+  omega
+
+theorem go_eq {n s : ℕ} (hs : s * s ≤ n) (hn : n < (s + 1) * (s + 1)) (hs1 : 0 < s) :
+    ∀ (f x : ℕ), s ≤ x → x - s < 2 ^ f → Evaluate.Fp32.isqrt.go n f x = s := by
+  intro f
+  induction f with
+  | zero => intro x h1 h2; simp only [Evaluate.Fp32.isqrt.go]; simp at h2; omega
+  | succ f ih =>
+    intro x h1 h2
+    simp only [Evaluate.Fp32.isqrt.go]
+    have hge := newton_ge hs (show 0 < x by omega)
+    rcases Nat.eq_or_lt_of_le h1 with rfl | hlt
+    · rw [ite_eq_right (by omega)]
+    · have hq := newton_lt hn hlt
+      rw [ite_eq_left (by omega)]
+      apply ih _ hge
+      rw [Nat.pow_succ] at h2
+      omega
+
+theorem isqrt_eq (n : ℕ) : Evaluate.Fp32.isqrt n = Nat.sqrt n := by
+  unfold Evaluate.Fp32.isqrt
+  rcases Nat.eq_zero_or_pos n with rfl | hn
+  · simp
+  rw [ite_eq_right hn.ne']
+  have hs := Nat.sqrt_le n
+  have hlt := Nat.lt_succ_sqrt n
+  have hs1 : 0 < Nat.sqrt n := Nat.sqrt_pos.2 hn
+  have hL := Nat.lt_log2_self (n := n)
+  obtain ⟨L, hLd⟩ : ∃ L, n.log2 = L := ⟨_, rfl⟩
+  rw [hLd] at hL ⊢
+  rw [Nat.one_shiftLeft]
+  have hx0 : Nat.sqrt n < 2 ^ (L / 2 + 1) := by
+    apply Nat.mul_self_lt_mul_self_iff.1
+    calc Nat.sqrt n * Nat.sqrt n ≤ n := hs
+      _ < 2 ^ (L + 1) := hL
+      _ ≤ 2 ^ (L / 2 + 1) * 2 ^ (L / 2 + 1) := by
+        rw [← Nat.pow_add]; exact Nat.pow_le_pow_right (by norm_num) (by omega)
+  have hx1 : 2 ^ (L / 2 + 1) ≤ 2 ^ (L + 4) := Nat.pow_le_pow_right (by norm_num) (by omega)
+  exact go_eq hs hlt hs1 _ _ hx0.le (by omega)
+
+/-! ## Lists and byte arrays -/
+
+theorem toList_loop (bs : ByteArray) : ∀ (k i : ℕ) (r : List UInt8), bs.size - i = k → i ≤ bs.size →
+    ByteArray.toList.loop bs i r = r.reverse ++ bs.data.toList.drop i := by
+  intro k
+  induction k with
+  | zero =>
+    intro i r hk hi
+    have hi' : i = bs.size := by omega
+    rw [ByteArray.toList.loop, ite_eq_right (by omega), hi', ByteArray.size, ← Array.length_toList,
+      List.drop_length, List.append_nil]
+  | succ k ih =>
+    intro i r hk hi
+    have hlt : i < bs.size := by omega
+    rw [ByteArray.toList.loop, ite_eq_left hlt, ih (i + 1) _ (by omega) (by omega)]
+    have hl : i < bs.data.toList.length := by rw [Array.length_toList]; exact hlt
+    rw [List.drop_eq_getElem_cons hl, List.reverse_cons, List.append_assoc, List.singleton_append]
+    congr 2
+    rw [Array.getElem_toList]
+    obtain ⟨d⟩ := bs
+    exact getElem!_pos d i hlt
+
+theorem toList_eq (bs : ByteArray) : bs.toList = bs.data.toList := by
+  unfold ByteArray.toList
+  rw [toList_loop bs _ 0 [] rfl (Nat.zero_le _)]
+  simp
+
+theorem foldl_add {α : Type} (g : α → ℕ) : ∀ (l : List α) (a : ℕ),
+    l.foldl (fun s x => s + g x) a = a + (l.map g).sum
+  | [], a => by simp
+  | x :: l, a => by rw [List.foldl_cons, foldl_add g l, List.map_cons, List.sum_cons]; ring
+
+theorem mapM_ok {α β ε : Type} (f : α → Except ε β) : ∀ (l : List α) (ys : List β), l.mapM f = .ok ys →
+    ys.length = l.length ∧ ∀ i (h1 : i < l.length) (h2 : i < ys.length), f l[i] = .ok ys[i]
+  | [], ys, h => by
+      rw [List.mapM_nil] at h
+      cases h
+      exact ⟨rfl, fun i h1 => absurd h1 (Nat.not_lt_zero _)⟩
+  | a :: l, ys, h => by
+      rw [List.mapM_cons] at h
+      cases hfa : f a with
+      | error e => rw [hfa] at h; cases h
+      | ok b =>
+        rw [hfa] at h
+        cases hl : l.mapM f with
+        | error e => simp only [hl] at h; cases h
+        | ok bs =>
+          simp only [hl] at h
+          cases h
+          obtain ⟨h1, h2⟩ := mapM_ok f l bs hl
+          refine ⟨by simp [h1], fun i hi1 hi2 => ?_⟩
+          cases i with
+          | zero => exact hfa
+          | succ i => exact h2 i (by simpa using hi1) (by simpa using hi2)
+
+theorem array_mapM_ok {α β ε : Type} (f : α → Except ε β) (xs : Array α) (ys : Array β) (h : xs.mapM f = .ok ys) :
+    ys.size = xs.size ∧ ∀ i (h1 : i < xs.size) (h2 : i < ys.size), f xs[i] = .ok ys[i] := by
+  rw [Array.mapM_eq_mapM_toList] at h
+  cases hl : xs.toList.mapM f with
+  | error e => simp only [hl] at h; cases h
+  | ok bs =>
+    simp only [hl] at h
+    cases h
+    obtain ⟨h1, h2⟩ := mapM_ok f _ _ hl
+    refine ⟨by simp [h1], fun i hi1 hi2 => ?_⟩
+    have := h2 i (by simpa using hi1) (by simpa [h1] using hi1)
+    simpa using this
+
+/-! ## The digest's length -/
+
+theorem compress_length (h w : List ℕ) : (Pouw.PearlC.Sha512.compress h w).length = 8 := by
+  unfold Pouw.PearlC.Sha512.compress; rfl
+
+theorem foldl_compress_length : ∀ (L : List (List ℕ)) (h : List ℕ), h.length = 8 →
+    (L.foldl (fun h blk => Pouw.PearlC.Sha512.compress h (Pouw.PearlC.Sha512.blockWords blk)) h).length = 8
+  | [], _, hh => hh
+  | _ :: L, _, _ => foldl_compress_length L _ (compress_length _ _)
+
+theorem digest_length (m : List ℕ) : (Pouw.PearlC.Sha512.digest m).length = 64 := by
+  unfold Pouw.PearlC.Sha512.digest
+  rw [List.length_flatMap]
+  have hb : ∀ x, (Pouw.PearlC.Sha512.beBytes 8 x).length = 8 := fun x => by simp [Pouw.PearlC.Sha512.beBytes]
+  simp only [hb, List.map_const', List.sum_replicate, Nat.nsmul_eq_mul]
+  rw [foldl_compress_length _ _ rfl]
+
+theorem s512_length (role : String) (m : List ℕ) : (Pouw.PearlC.NoiseSha512.s512 role m).length = 32 := by
+  rw [Pouw.PearlC.NoiseSha512.s512, List.length_take, digest_length]
+  rfl
+
+/-! ## The line: its bytes, integers and scale -/
+
+theorem ofInt_bf16 {z : ℤ} {h : ℕ} (h1 : z ≠ 0) (h2 : z.natAbs < 2 ^ 24) (hh : Words.toBf16 (Words.ofInt z) = .ok h) :
+    Bf16Of h (bf16Rn z) := by
+  obtain ⟨hq, he0⟩ := ofInt_spec h1 h2
+  exact toBf16_spec hq he0 hh
+
+theorem bytesNat_pair {a b : ℕ} (ha : a < 256) (hb : b < 256) : bytesNat (Words.bytesOf [a, b]) = [a, b] := by
+  simp [bytesNat, Words.bytesOf, Nat.mod_eq_of_lt ha, Nat.mod_eq_of_lt hb]
+
+theorem lineInt_byte (b : UInt8) :
+    (if b.toNat >>> 7 = 1 then (-1 : ℤ) else 1) * ((b.toNat &&& 0x7F : ℕ) + 1 : ℤ) =
+      (if b.toNat / 128 % 2 = 1 then -1 else 1) * (((b.toNat % 128 : ℕ) : ℤ) + 1) := by
+  have hb := b.toNat_lt
+  have h1 : b.toNat >>> 7 = b.toNat / 128 % 2 := by rw [Nat.shiftRight_eq_div_pow]; omega
+  have h2 : b.toNat &&& 0x7F = b.toNat % 128 := Nat.and_two_pow_sub_one_eq_mod _ 7
+  rw [h1, h2]
+
+theorem xs_eq (raw : ByteArray) :
+    (raw.toList.toArray.map fun b : UInt8 =>
+      (if b.toNat >>> 7 = 1 then (-1 : ℤ) else 1) * ((b.toNat &&& 0x7F : ℕ) + 1 : ℤ)).toList =
+      NoiseSha512.lineInts (bytesNat raw) := by
+  rw [Array.toList_map, List.toList_toArray, toList_eq]
+  unfold NoiseSha512.lineInts bytesNat
+  rw [List.map_map]
+  exact List.map_congr_left fun b _ => lineInt_byte b
+
+theorem lineInts_natAbs {L : List ℕ} {x : ℤ} (hx : x ∈ NoiseSha512.lineInts L) : 1 ≤ x.natAbs ∧ x.natAbs ≤ 128 := by
+  unfold NoiseSha512.lineInts at hx
+  obtain ⟨b, -, rfl⟩ := List.mem_map.1 hx
+  have : b % 128 < 128 := Nat.mod_lt _ (by norm_num)
+  split <;> omega
+
+theorem sq_eq (xs : Array ℤ) :
+    xs.foldl (fun s x => s + x.natAbs * x.natAbs) 0 * 32 * 32 = (xs.toList.map fun x => x.natAbs ^ 2).sum * 1024 := by
+  rw [← Array.foldl_toList, foldl_add (fun x : ℤ => x.natAbs * x.natAbs), Nat.zero_add]
+  simp only [pow_two]
+  ring
+
+theorem sq_bounds {xs : List ℤ} (hl : xs.length = 32) (hx : ∀ x ∈ xs, 1 ≤ x.natAbs ∧ x.natAbs ≤ 128) :
+    32 ≤ (xs.map fun x => x.natAbs ^ 2).sum ∧ (xs.map fun x => x.natAbs ^ 2).sum ≤ 524288 := by
+  constructor
+  · have := List.length_nsmul_le_sum (xs.map fun x => x.natAbs ^ 2) 1 (by
+      intro y hy
+      obtain ⟨x, hx', rfl⟩ := List.mem_map.1 hy
+      have := (hx x hx').1
+      exact Nat.one_le_pow _ _ this)
+    rw [List.length_map, hl, Nat.nsmul_eq_mul] at this
+    omega
+  · have := List.sum_le_length_nsmul (xs.map fun x => x.natAbs ^ 2) 16384 (by
+      intro y hy
+      obtain ⟨x, hx', rfl⟩ := List.mem_map.1 hy
+      have := (hx x hx').2
+      calc x.natAbs ^ 2 ≤ 128 ^ 2 := Nat.pow_le_pow_left this 2
+        _ = 16384 := by norm_num)
+    rw [List.length_map, hl, Nat.nsmul_eq_mul] at this
+    omega
+
+theorem coe_list (I : List ℤ) : ((do let a ← I; pure (a : ℚ)) : List ℚ) = I.map (fun a : ℤ => (a : ℚ)) := by
+  simp [List.map_eq_flatMap]
+
+theorem norm_word {norm32 : ℕ} {norm : ℚ}
+    (h : norm32 = Words.NORM_E ∧ norm = 256 ∨ norm32 = Words.NORM_F ∧ norm = 16) :
+    Bf16Of norm32 (bf16Rn (norm * 32)) ∧ 512 ≤ |bf16Rn (norm * 32)| := by
+  rcases h with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+  · rw [norm_E.2]; exact ⟨norm_E.1, by norm_num⟩
+  · rw [norm_F.2]; exact ⟨norm_F.1, by norm_num⟩
+
+end NoiseProofs
+
+section Line
+
+open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.PeelExact Pouw.PearlC.PeelExactProofs
+
+open NoiseProofs in
+theorem lineIsTheSpec : LineIsTheSpec := by
+  intro seed side factor line norm32 norm codes hside hfactor hnorm h
+  obtain ⟨raw, hraw⟩ : ∃ raw, Words.s512 "line" (Words.lineKey seed ++ Words.bytesOf [side, factor] ++ Words.le 4 line) =
+      raw := ⟨_, rfl⟩
+  have hL : bytesNat raw = NoiseSha512.s512 "line"
+      (NoiseSha512.s512 "noise-line" (bytesNat seed) ++ [side, factor] ++ Sha512.leBytes 4 line) := by
+    rw [← hraw, (seedsAreTheSpec).1 "line" (by simp [roles]), bytesNat_append, bytesNat_append, Words.lineKey,
+      (seedsAreTheSpec).1 "noise-line" (by simp [roles]), bytesNat_le, bytesNat_pair hside hfactor]
+  unfold Words.sampleLine at h
+  rw [hraw] at h
+  obtain ⟨xs, hxs⟩ : ∃ xs : Array ℤ, (raw.toList.toArray.map fun b : UInt8 =>
+      (if b.toNat >>> 7 = 1 then (-1 : ℤ) else 1) * ((b.toNat &&& 0x7F : ℕ) + 1 : ℤ)) = xs := ⟨_, rfl⟩
+  have hxl : xs.toList = NoiseSha512.lineInts (bytesNat raw) := by rw [← hxs, xs_eq]
+  simp only [hxs] at h
+  rw [sq_eq, hxl, isqrt_eq] at h
+  obtain ⟨d, hd, h⟩ := bind_eq_ok h
+  obtain ⟨sc, hsc, h⟩ := bind_eq_ok h
+  obtain ⟨hsize, hcodes⟩ := array_mapM_ok _ _ _ h
+  -- the line's integers
+  set I := NoiseSha512.lineInts (bytesNat raw) with hI
+  have hIl : I.length = 32 := by
+    rw [hI, NoiseSha512.lineInts, List.length_map, hL, s512_length]
+  have hxsize : xs.size = 32 := by rw [← Array.length_toList, hxl, hIl]
+  have hImem : ∀ x ∈ I, 1 ≤ x.natAbs ∧ x.natAbs ≤ 128 := fun x hx => lineInts_natAbs hx
+  -- the scale
+  obtain ⟨hS1, hS2⟩ := sq_bounds hIl hImem
+  set S := (I.map fun x => x.natAbs ^ 2).sum with hS
+  have hr1 : 0 < Nat.sqrt (S * 1024) := Nat.sqrt_pos.2 (by omega)
+  have hr2 : Nat.sqrt (S * 1024) < 2 ^ 24 := Nat.sqrt_lt'.2 (by
+    calc S * 1024 ≤ 524288 * 1024 := Nat.mul_le_mul_right _ hS2
+      _ < (2 ^ 24) ^ 2 := by norm_num)
+  have hD := ofInt_bf16 (z := (Nat.sqrt (S * 1024) : ℤ)) (by omega) (by rw [Int.natAbs_natCast]; exact hr2) hd
+  rw [Int.cast_natCast] at hD
+  obtain ⟨hN, hN512⟩ := norm_word hnorm
+  have hR : (1 : ℚ) ≤ (Nat.sqrt (S * 1024) : ℚ) := by exact_mod_cast hr1
+  have hR2 : (Nat.sqrt (S * 1024) : ℚ) < 2 ^ 24 := by exact_mod_cast hr2
+  obtain ⟨hB1, hB2⟩ := bf16Rn_half (Nat.sqrt (S * 1024) : ℚ)
+  rw [abs_of_pos (show (0 : ℚ) < (Nat.sqrt (S * 1024) : ℚ) by linarith)] at hB1 hB2
+  have hb0 : 0 < |bf16Rn (Nat.sqrt (S * 1024) : ℚ)| := by linarith
+  obtain ⟨hq, hsc0⟩ := scale_bound hN512 hb0 (by linarith)
+  have hSc := bf16Div_spec hN hD (fun h0 => by rw [h0, abs_zero] at hN512; linarith)
+    (fun h0 => by rw [h0, abs_zero] at hb0; exact lt_irrefl _ hb0) hq hsc
+  have hscale : bf16Rn (rn (bf16Rn (norm * 32) / bf16Rn (Nat.sqrt (S * 1024) : ℚ))) = NoiseSha512.lineScale norm I := by
+    rw [NoiseSha512.lineScale]
+  rw [hscale] at hSc hsc0
+  -- each code
+  refine ⟨by rw [hsize, hxsize], fun t => ?_⟩
+  have ht : t.val < 32 := t.isLt
+  have hF := hcodes t.val (by rw [hxsize]; exact ht) (by rw [hsize, hxsize]; exact ht)
+  have htI : t.val < I.length := by rw [hIl]; exact ht
+  have hxt : xs[t.val]'(by rw [hxsize]; exact ht) = I[t.val]'htI := by
+    rw [← Array.getElem_toList]; simp only [hxl]
+  rw [hxt] at hF
+  obtain ⟨x, hxdef⟩ : ∃ x, I[t.val]'htI = x := ⟨_, rfl⟩
+  rw [hxdef] at hF
+  obtain ⟨hx1, hx2⟩ := hImem x (hxdef ▸ List.getElem_mem htI)
+  obtain ⟨a, ha, hF⟩ := bind_eq_ok hF
+  obtain ⟨p, hp, hF⟩ := bind_eq_ok hF
+  obtain ⟨w, hw, hF⟩ := bind_eq_ok hF
+  have hx0 : x ≠ 0 := by omega
+  have hA := ofInt_bf16 (z := x) hx0 (by omega) ha
+  have hxq : (1 : ℚ) ≤ |(x : ℚ)| := by
+    rw [← Int.cast_abs]; exact_mod_cast Int.one_le_abs hx0
+  have hA2 : 1 / 2 ≤ |bf16Rn (x : ℚ)| := by
+    have := (bf16Rn_half (x : ℚ)).1; linarith
+  obtain ⟨hpn, hp0⟩ := elem_bound hA2 hsc0
+  have hP := bf16Mul_spec hA hSc hpn hp
+  rw [ofBf16_ok hP.2.1] at hw
+  cases hw
+  rw [getElem!_pos codes t.val (by rw [hsize, hxsize]; exact ht), toFp8_spec hP hp0 hF]
+  unfold NoiseSha512.sampleLine NoiseSha512.lineList
+  dsimp only
+  rw [← hL, ← hI]
+  rw [coe_list I, List.map_map, List.getD_eq_getElem _ _ (by simp only [List.length_map]; omega), List.getElem_map]
+  simp only [Function.comp_apply, hxdef]
+
+open NoiseProofs in
+theorem NoiseProofs.basis_spec {seedB : ByteArray} {side k : ℕ} {fa : Array (Array ℕ)} (hside : side < 256)
+    (h : Words.basis seedB side k = .ok fa) :
+    fa.size = k ∧ ∀ l < k, ∀ t : Fin Params.pi.r,
+      (fa[l]!)[t.val]! = (NoiseSha512.sampleLine (bytesNat seedB) side 1 l 16 t).val := by
+  unfold Words.basis at h
+  obtain ⟨hs, hf⟩ := array_mapM_ok _ _ _ h
+  rw [Array.size_range] at hs
+  refine ⟨hs, fun l hl t => ?_⟩
+  have := hf l (by rw [Array.size_range]; exact hl) (by rw [hs]; exact hl)
+  rw [Array.getElem_range] at this
+  rw [getElem!_pos fa l (by rw [hs]; exact hl)]
+  exact (lineIsTheSpec seedB side 1 l Words.NORM_F 16 _ hside (by norm_num) (.inr ⟨rfl, rfl⟩) this).2 t
+
+open NoiseProofs in
+theorem fixedNoiseIsTheSpec : FixedNoiseIsTheSpec := by
+  intro salt rootB k wn h
+  unfold Words.fixedNoise at h
+  obtain ⟨fa, hfa, h⟩ := bind_eq_ok h
+  obtain ⟨fb, hfb, h⟩ := bind_eq_ok h
+  obtain ⟨gram, -, h⟩ := bind_eq_ok h
+  rw [← pure_eq_ok h]
+  obtain ⟨ha1, ha2⟩ := basis_spec (by norm_num) hfa
+  obtain ⟨hb1, hb2⟩ := basis_spec (by norm_num) hfb
+  exact ⟨(seedsAreTheSpec).2.1 salt rootB, ha1, hb1, fun l hl t => ⟨ha2 l hl t, hb2 l hl t⟩⟩
+
+end Line
 
 end Pouw.PearlPlus.Bridge
