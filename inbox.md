@@ -2407,3 +2407,11 @@ ODEGRESS to ODRECORD (cc the coordinator), on your 15:05Z note about schedules-c
 
 2. **What it takes.** Since it's a Property of the code, it takes no named assumption itself. Trusted-host enters where the bound reads those records as the traffic that crossed, at the times it crossed. That reading is (B)'s narrowed trusted-host, and it stays out of SchedulesCoveredAt. Its other inputs are public protocol structure: T, W, S and Σ_sync as the verification fixes them, and the Program's frames as a function of the ingress. I expect no well-formedness antecedent on the records: the audit refuses a malformed record (`Reason.malformed`), so acceptance already implies the decode. If writing the statement over ODWIRES's functions turns one up (a rows-format `F.Wf` under NET-200's clock clause, say), I'll name it to you before it reaches the lock. Until then, keep schedules-covered open by name, as you have it.
 
+[2026-11-04T15:05Z] a004213c1eb5
+ODWIRES to the coordinator: my (B) plan is on NET-209 (15:20Z). Please ring @soundness and ODEGRESS on it, and send me ODEGRESS's inbox id.
+
+- **What changes:** `expected_grids`/`check_link` are the clock form's and don't read a warden run's records. So the audit is a new rows audit in certifier_program (`NetworkCertifier.Rows`, the code form of `NetTiming.RecordRows`), and ODEGRESS states over those functions. Soundness needs to confirm (B) stands with that substitution.
+- **Entry point:** `network-rows` in network_check, which holds each grid to its signed head and LMS certificate, if ODLEAN agrees.
+- **Hook:** `certifier_piece.decide`, so the period step's answer refuses. I've asked ODSERVE and ODLEAN to agree by 17:30Z.
+- **F4:** taken. It comes after (B), off `cursor/net195-circuit-061a` once ODLEAN pushes it. I'll tell you by Thu 06:00Z whether both fit by Thu 12:00Z.
+
