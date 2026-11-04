@@ -2279,10 +2279,10 @@ def test_an_unnamed_inline_hypothesis_fails_with_the_fix():
 
 
 def test_update_keeps_a_held_guarantees_inline_entry_while_its_statement_prints_it():
-    """A guarantee a witness entry or an unfrozen property holds keeps through `--update` each `shape.inline` entry its
-    statement still prints, and drops the rest, so the check without `--update` passes on the updated lock, and still
-    does once a merge leaves the guarantee unheld (its witness entry gone, its property frozen). The lock `--update`
-    wrote used to lack them, and every records PR put them back by hand."""
+    """A guarantee a witness entry, an unfrozen property or a generic claim holds keeps through `--update` each
+    `shape.inline` entry its statement still prints, and drops the rest, so the check without `--update` passes on the
+    updated lock, and still does once a merge leaves the guarantee unheld (its witness entry or claim gone, its property
+    frozen). The lock `--update` wrote used to lack them, and every records PR put them back by hand."""
     why = "inline when the rule came"
     pol, f = inlined(premise("P.f n = 3", "Eq"), premise("P.k n = 6", "Eq"))
     inline = {"P.t": {"P.f n = 3": why, "P.k n = 6": why, "P.h n = 5": why}}
@@ -2290,7 +2290,9 @@ def test_update_keeps_a_held_guarantees_inline_entry_while_its_statement_prints_
     prop = {"function": "P.f", "outcome": "none"}
     for lock, unheld in ((pol | witness | {"shape": {"inline": inline}}, lambda p: p | {"witnesses": {}}),
                          (pol | {"shape": {"properties": {"P.t": prop}, "inline": inline}},
-                          lambda p: p | {"shape": p["shape"] | {"frozen": {"P.t": "frozen: open"}}})):
+                          lambda p: p | {"shape": p["shape"] | {"frozen": {"P.t": "frozen: open"}}}),
+                         (pol | {"claims": {"generic": {"P.C": "P.t"}}, "shape": {"inline": inline}},
+                          lambda p: p | {"claims": {}})):
         fails, out = A.judge(lock, f, FILES, update=True)
         assert [x for x in fails if "inline" in x.code] == []
         assert out["shape"]["inline"] == {"P.t": {"P.f n = 3": why, "P.k n = 6": why}}

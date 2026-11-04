@@ -2107,10 +2107,12 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
     the offenders when the rule came) lists it. A property `shape.properties` holds (not under `shape.frozen`) is left to
     the shape rule, which holds each hypothesis it takes to its acceptance, a premise or a shared field, and a witness
     `claims.witnesses` or `witnesses` names (`claim_witnesses`) to that rule's form: what it takes is the deployment's
-    facts, not what a guarantee rests on, and `--update` drops its entries. So is a guarantee `claims.generic` lists
-    (`generic_claims`), whose antecedents are what the theorem is about, held to `claim_failures`' eligibility. A closed
-    hypothesis of the statement as written is the hypotheses rule's. `--update` keeps an entry only while its premise
-    still offends, and that of a guarantee the lock doesn't list yet (one a PR ahead on `next` brings), and adds none, so
+    facts, not what a guarantee rests on. So is a guarantee `claims.generic` lists (`generic_claims`), whose antecedents
+    are what the theorem is about, held to `claim_failures`' eligibility. A closed hypothesis of the statement as
+    written is the hypotheses rule's. `--update` keeps an entry only while its premise still offends, a held guarantee's
+    too, though it neither fails nor offends here (what holds it is the lock's, which a merge can change: a witness
+    entry removed, a property frozen; `merge.py`'s `held` and the queue's `lock_drops` keep a premise its statement
+    prints), and that of a guarantee the lock doesn't list yet (one a PR ahead on `next` brings), and adds none, so
     the map only shrinks; its size is the formalization debt the AUDIT line prints. `--moved` carries an entry to its
     guarantee's new name (`renamed_witnesses`, which renames `shape.inline` with the witnesses)."""
     spec = policy.get("shape") or {}
