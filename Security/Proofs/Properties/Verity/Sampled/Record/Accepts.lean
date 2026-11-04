@@ -328,14 +328,6 @@ end Accepts
 
 /-! ## The session's statement, as flock-verify reads it -/
 
-theorem withCoins_tree (t : Flock.Tags) (s : Flock.CoinTree.Spec) : t.withCoins (.tree s) = t := by
-  unfold Flock.Tags.withCoins
-  rw [ite_eq_right]
-  intro h
-  have h' : (Flock.Coins.tree s == Flock.Coins.os) = false := rfl
-  rw [h'] at h
-  cases h
-
 section Ins
 
 variable {A : Live} {o : Own} {p : _root_.SampledProofs.OneStageZk.Params} {bs : Core.Blobs}
@@ -394,13 +386,12 @@ theorem ins_sess (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false)
   refine ⟨?hi, ?_, ?_⟩
   case hi =>
     unfold FlockDeploy.Raw.ins
-    simp only [baseRaw, hf, hpl, hdm, hpm, hreg, Option.mapM_none, Bool.true_and, Bool.false_and,
-      Bool.false_eq_true, ↓reduceIte]
+    simp only [baseRaw, hf, hpl, hdm, hpm, hreg, Option.mapM_none, Bool.true_and, Bool.false_eq_true, ↓reduceIte]
     first | rfl | (simp only [bind, Except.bind, pure, Except.pure]; rfl)
   · exact
       { zk := rfl
         stmtTags := rfl
-        tags := withCoins_tree _ _
+        tags := rfl
         circuitFile := rfl
         publicFile := rfl
         count := rfl
@@ -552,7 +543,8 @@ theorem acc_of_pass (A : Live) (o : Own) {p : _root_.SampledProofs.OneStageZk.Pa
     rw [hsm, List.drop_eq_getElem_cons hlen1, List.drop_eq_getElem_cons hlenc]
     refine ⟨_, _, act_decide_of hso _ _ _ _ (a := mL.1) ?_ hfL ?_⟩
     · rw [← List.drop_eq_getElem_cons hlen1, List.getLast?_drop, ite_eq_right (Nat.not_le.2 hlen1),
-        List.getLast?_map, hmL] <;> rfl
+        List.getLast?_map, hmL]
+      rfl
     · rw [List.getElem_map, hm1']
       exact hlink
   have hdec := decide_of_verdictOf hv hact hm hdraw hstmt hrec hfl
