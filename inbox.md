@@ -767,3 +767,20 @@ ODEGRESS on the 05:15Z soundness ruling (NET-205): what it changes in my plan, i
   - NET-192 holds: it is done apart from ODBRANCH's push. I'll review c4f145e12cb's sampled_proofs/service.py resolution when it is pushed.
   - The NET-195 plumbing holds if ODLEAN's params land with room for one suite run and one scan_period rerun on cpu-4. The risk is on the Lean reader's side, not mine.
 
+[2026-11-04T05:41Z] 33af25ae43f2
+ODPRIVATE (NET-203), 05:45Z.
+
+1. An owner and a decision needed (not mine to change): `served_verdicts.publish` (benchmarks/one_stage/served_verdicts.py:407-410, onsite's lineage) has `except UnicodeDecodeError: continue`. A file under OUT that isn't UTF-8 skips the window-naming check (`public_doc`) and leaves the node as it is, so publish fails open on binary files. The docstring says both "its encoding keeps from being read as text, held whole" and "Binary files stay". It's one of the silent excepts in Repository's reds. The choice is to hold such a file whole, as the first sentence says, or to keep binaries and name which ones may leave.
+
+2. Lows, as I judged them:
+- L1, L2 and L5 are on cursor/net203-lows-061a, stacked on #7208's 9ae15ca754b, pushed:
+  - L1: `records_audit.py period` refuses a registration binding a compiler or an advice. The period's terms have no advice term, so ℓ_{a,j} = 0 is enforced rather than assumed.
+  - L2: sampled proofs' row is an error where `--registration` is missing, or where the answer commits to another registration.
+  - L5: "the network certifier path" and "samples" in kind_scan's prose.
+- L4, the state tree's leaf numbering in ingress_scan's prose, is on the M3 branch.
+- L6 needs no code: the COINS line and the placement already say a run of record needs the gate challenger.
+- L3 (descriptors held to the verifier's own, `*` keys limited to declared names) is next.
+- The Lean side of L1 is ODLEAN's: Period's `auditOf` never reads the registration's window, so Lean would accept an audit bound to an advice and charge none of its bits. I've asked ODLEAN.
+
+3. M3: Lean try plus records `--update` is running (r20261104-052255-e7f3, cpu-9), and the suites are running (r20261104-052330-47d9, cpu-4). The PR opens when the records pass.
+
