@@ -16,25 +16,10 @@ from verity.ml.circuits.liveness import Liveness
 from verity.ml.circuits.parts import Limits, Part, Unsupported, n_members
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, array_of, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.ml.circuits.types import Array, Tuple
 
-V16, V32 = Value(16), Value(32)
-A16 = Array(16, V16)
+from test_ir_liveness import V16, V32, Add32, Coord, Dot, Gemm, Mul32, Zero32, prim, comp
 
-
-def prim(name: str, params, ret, fn) -> PrimitiveDefinition:
-    return PrimitiveDefinition(name, 1, tuple(params), ret, fn, register=False)
-
-
-def comp(name: str, params, ret, body) -> CompositeDefinition:
-    return CompositeDefinition(name, 1, (), lambda S: (tuple(params), ret), body, register=False)
-
-
-Add32 = prim("TAdd32", [("a", V32), ("b", V32)], V32, lambda a, b: (a + b) & 0xFFFFFFFF)
-Mul32 = prim("TMul32", [("a", V32), ("b", V32)], V32, lambda a, b: (a * b) & 0xFFFFFFFF)
-Zero32 = prim("TZero32", [], V32, lambda: 0)
-Dot16 = prim("TDot16", [("acc", V32), ("a", A16), ("b", A16)], V32, lambda acc, *ab: acc)
-Cvt16 = prim("TCvt16", [("a", V32)], V16, lambda a: a >> 16)
 Pair16 = prim("TPair16", [("g", V16), ("u", V16)], V16, lambda g, u: g)
 _GATHER: dict[int, PrimitiveDefinition] = {}
 
@@ -45,20 +30,6 @@ def gather(V: int) -> PrimitiveDefinition:
     return _GATHER[V]
 
 
-def _dot(Bd, S, x, w):
-    acc = Bd.call(Zero32)
-    for s in range(S.K // 16):
-        acc = Bd.call(Dot16, acc, x[16 * s:16 * s + 16], w[16 * s:16 * s + 16])
-    return acc
-
-
-Dot = CompositeDefinition("TDot", 1, ("K",), lambda S: ((("x", Array(S.K, V16)), ("w", Array(S.K, V16))), V32), _dot,
-                          register=False)
-Coord = CompositeDefinition("TGemmCoordinate", 1, ("K",), lambda S: ((("x", Array(S.K, V16)), ("wrow", Array(S.K, V16))), V16),
-                            lambda Bd, S, x, wrow: Bd.call(Cvt16, Bd.call(bind(Dot, K=S.K), x, wrow)), register=False)
-Gemm = CompositeDefinition("TGemm", 1, ("K", "N"),
-                           lambda S: ((("x", Array(S.K, V16)), ("w", Array(S.N, Array(S.K, V16)))), Array(S.N, V16)),
-                           lambda Bd, S, x, w: Bd.batch(bind(Coord, K=S.K), x, w, axes=(None, 0)), register=False)
 Pairs = CompositeDefinition("TPairs", 1, ("I",), lambda S: ((("gu", Array(2 * S.I, V16)),), Array(S.I, V16)),
                             lambda Bd, S, gu: Bd.batch(Pair16, gu[0:S.I], gu[S.I:2 * S.I], axes=(0, 0)), register=False)
 Embedding = CompositeDefinition(
