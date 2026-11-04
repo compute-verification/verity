@@ -17,9 +17,10 @@ queued, in arrival order):
   each connection) gives each connection at most its cap (`Schedule.caps`) and fits the rows format at `S = lanes·r`
   slots (`RowsFormat.Fits`), so it is `NetTiming.SchedulesHeld` for any record format whose `fits` is the rows
   format's;
-* `SchedulesCoveredAt`: where the network certifier runs the relay's code (`trusted-host`) and no secret moves the
-  arrivals, the relay admits no more connections than the caps count, and the schedule it runs for each secret is one
-  of `relaySchedules` (`NetTiming.SchedulesCovered`): the count's `schedOf` is the network certifier's run;
+* `SchedulesCoveredAt`: where the network certifier runs the relay's code (`trusted-host`), on whatever arrivals each
+  secret gives, the relay admits no more connections than the caps count, and the schedule it runs for each secret is
+  one of `relaySchedulesAny`, `relaySchedules` over every arrival list (`NetTiming.SchedulesCovered`): the count's
+  `schedOf` is the network certifier's run;
 * `SchedulesCountedAt`: those schedules number at most `∏ c, (cap c + 1)`, the count the verifier's `schedules` term
   charges (`NetworkCheck.Period.capsTerm` of the caps).
 
@@ -28,8 +29,10 @@ order, the ordinals' order: connection `c` is the `c`-th lane admitted, and one 
 admitted past the run, `D` buckets after the one before it, so it holds no bucket of the period and shares none with
 another.
 
-**What they leave out.** The arrivals are fixed: a secret that moves when a client connects moves the schedules too,
-and `relaySchedules` is then a union over the arrivals it can give. The period starts at the run's first tick. A
+**What they leave out.** A client may time its arrivals to what it has observed, so a secret can move the arrivals.
+`SchedulesCoveredAt` covers that: `relaySchedulesAny` is no sender's choice. `SchedulesHeldAt` holds on every arrival
+list, so on the union too. `SchedulesCountedAt` counts one arrival list's schedules, so the arrival timing a secret
+moves is not in the `schedules` term's count. The period starts at the run's first tick. A
 connection the relay fails for its client's sake is not one these schedules give (`CertifierDevice.Relay`).
 -/
 
@@ -61,6 +64,11 @@ def relaySchedules (s : Schedule) (n : ℕ) (ready : List ℕ) :
   {σ | ∃ conns : List Conn, conns.map Conn.ready = ready ∧
     σ = relaySchedule s n (lanes (CertifierDevice.Relay.run s (n * s.window) conns))}
 
+/-- **The schedules the relay can run on any arrivals** over `n` windows: `relaySchedules` over every arrival list, the
+set a sender whose clients time their arrivals to what they observe runs on. -/
+def relaySchedulesAny (s : Schedule) (n : ℕ) : Set (NetTiming.WardenSchedule (Fin (periodConns s n))) :=
+  ⋃ ready, relaySchedules s n ready
+
 /-- **The record format holds the relay's schedules**: at a schedule of `r ≥ 1` cells a bucket, for a record format `f`
 whose `fits` is the rows format `F`'s over `n` windows at `S = lanes·r` slots (`F`'s connections the period's, in
 order, and its window `T` buckets), every schedule the relay can run on any arrivals gives each connection at most its
@@ -75,16 +83,15 @@ def SchedulesHeldAt : Prop :=
 
 /-- **The network certifier runs one of the relay's schedules for each secret**: at a schedule of `r ≥ 1` cells a
 bucket, where the device `dev` runs the relay's code over `n` windows (`trusted-host`: `relay dev` is
-`CertifierDevice.Relay.run`) and each secret `z` of `Zs` gives connections `conns z` arriving at `ready`, the relay
-admits no more connections than the caps count, and the schedule it runs for `z` is one of `relaySchedules`
-(`NetTiming.SchedulesCovered`). -/
+`CertifierDevice.Relay.run`) and each secret `z` of `Zs` gives connections `conns z`, arriving whenever it times them,
+the relay admits no more connections than the caps count, and the schedule it runs for `z` is one of
+`relaySchedulesAny` (`NetTiming.SchedulesCovered`). -/
 def SchedulesCoveredAt : Prop :=
-  ∀ {Dev Z : Type} (relay : Dev → List Conn → List Decision) (dev : Dev) (s : Schedule) (n : ℕ) (ready : List ℕ)
+  ∀ {Dev Z : Type} (relay : Dev → List Conn → List Decision) (dev : Dev) (s : Schedule) (n : ℕ)
     (Zs : Set Z) (conns : Z → List Conn),
     0 < s.slots → Verity.Assumptions.TrustedHost dev relay (CertifierDevice.Relay.run s (n * s.window)) →
-    (∀ z ∈ Zs, (conns z).map Conn.ready = ready) →
     (∀ z ∈ Zs, (lanes (relay dev (conns z))).length ≤ periodConns s n) ∧
-      NetTiming.SchedulesCovered (relaySchedules s n ready) Zs fun z => relaySchedule s n (lanes (relay dev (conns z)))
+      NetTiming.SchedulesCovered (relaySchedulesAny s n) Zs fun z => relaySchedule s n (lanes (relay dev (conns z)))
 
 /-- **The relay's schedules are counted by the caps**: at a schedule of `r ≥ 1` cells a bucket, the schedules the relay
 can run over `n` windows on the arrivals `ready` number at most `∏ c, (cap c + 1)`: on fixed arrivals, each lane's
