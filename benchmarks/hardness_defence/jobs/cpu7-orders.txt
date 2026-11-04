@@ -1,0 +1,7 @@
+# The operating point's matrices nearest the line, with the split, in HT-USEFUL's row and column orders too
+8b-orders-l0 --hf unsloth/Meta-Llama-3.1-8B --target 0.06 --layers 0 --match q_proj,k_proj --fast --ranks 16,32,48,64,96,128,192,256 --orders none,fold,sort --workers 2
+70b-orders-k5 --hf unsloth/Meta-Llama-3.1-70B --target 0.05 --layers 54,63,65 --match k_proj --fast --ranks 16,32,48,64,96,128,192 --orders none,fold,sort --workers 3
+70b-orders-k10 --hf unsloth/Meta-Llama-3.1-70B --target 0.1 --layers 3 --match k_proj,v_proj --fast --ranks 16,32,48,64,96,128,192 --orders none,fold,sort --workers 2
+70b-orders-k20 --hf unsloth/Meta-Llama-3.1-70B --target 0.2 --layers 1,2,46,62 --match k_proj --fast --ranks 16,32,48,64,96,128,192 --orders none,fold,sort --workers 4
+70b-orders-q20 --hf unsloth/Meta-Llama-3.1-70B --target 0.2 --layers 1 --match q_proj --fast --ranks 64,128,256,384,512 --orders none,fold,sort --workers 1
+70b-orders-gu --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,5 --match gate_proj,up_proj --no-split --orders none,fold,sort --workers 4

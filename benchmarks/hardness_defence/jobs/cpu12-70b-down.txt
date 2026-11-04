@@ -1,0 +1,3 @@
+# 70B down_proj at 2%, every layer, served at its whole K (28,672): the none and tile routes, the price of crediting
+# them at a margin (HT-USEFUL v2 had layers 0, 40 and 79 at 1.043-1.046 on sm_120; their spectra are flat, screen.py)
+70b-down-full --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --match down_proj --no-split --workers 22
