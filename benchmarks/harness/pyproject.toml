@@ -118,3 +118,10 @@ paths = ["fixtures/artifacts.json"]
 [[tool.verity.tests.reads]]
 tests = ["tests/test_settings.py"]
 paths = ["benchmarks/harness/tests", "benchmarks/harness/verity_bench"]
+
+# The overhead table scales γ by the census's datacenter, world and datasheet rates and rho's FLOP-to-gates conversion, and
+# `verity bench overhead` is the door's runner, which a test runs.
+[[tool.verity.tests.reads]]
+tests = ["tests/test_overhead.py"]
+paths = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json", "benchmarks/census/hardware.json",
+         "benchmarks/rho/data/hardware.toml", "benchmarks/overhead/run.py"]

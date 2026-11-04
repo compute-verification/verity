@@ -1,0 +1,87 @@
+# overhead
+
+`verity bench overhead` is the one front door for an overhead measurement: a scheme's prover overhead γ over stock, at a
+card's operating points, from labelled runs of record alone. Its code is `verity-bench`'s (`benchmarks/harness`:
+`verity_bench/overhead.py` holds the rules, `overhead_node.py` and `overhead_node.sh` the node side, `overhead_records.py`
+the store side and the table); this directory holds its runner.
+
+```text
+verity bench overhead points [--card h200] [--on NODE]       sweep m on one GPU of NODE for C and L (a research run)
+verity bench overhead points --store RUN                      store RUN's points as the card's next version, of record
+verity bench overhead run --scheme S [--point C|L|all]        time S against stock at the card's points (a research run)
+verity bench overhead run --record RUN                        label RUN a run of record, once it stands as a whole
+verity bench overhead table [--json]                          γ per scheme, point and card, from runs of record alone
+```
+
+A run takes one GPU of its node through the node's GPU lease (`research run --on NODE --gpus 1`, which waits for it); the
+H200's node is `vy-dc-h200`. Its outputs are `out/points.json` or `out/overhead.json` and `out/busy.json`, beside each
+`bench.py` result and log.
+
+## The operating points
+
+A card's points belong to it, a model and a precision (`overhead.MODELS`: Llama-3.1-70B's four linears for the kernel
+points). Each is a summed layer: at each m, every linear's fastest stock kernel over every library the card runs (on the
+H200 cuBLASLt, vLLM's CUTLASS and DeepGEMM) and every scaling (per-tensor, rowwise and 128-block FP8), by the graph replays'
+wall time, summed.
+
+- **C**: the smallest m at which the layer's throughput reaches 90% of the best sampled, and every m sampled above it does.
+- **L**: the largest m whose time, and every sampled time below it, stays within 10% of the time at m = 1.
+
+The sweep times every power of two from 1 to 32,768, then bisects each point's bracket on multiples of 16 until it is one
+step wide, so both points are multiples of 16. `points --store` keeps the sweep as a versioned art of kind
+`verity-bench-overhead-points/v1`, labelled `run_of_record=overhead-points`; the version it replaces is labelled
+`superseded_by` it, and a γ timed at superseded points is refused.
+
+## γ
+
+`run` times the scheme's arm (`overhead.SCHEMES`: a PoUW harness arm and the stock scaling its useful output matches)
+beside every finalist stock kernel of that scaling and the tune's fastest one's twin (`bench.py --twins`), in one
+`bench.py` process under Nsight Systems. Warm-up is the harness's own. At each shape the timed pass runs untraced (graph
+replays for wall time, bursts for the host's CPU), and a traced pass of the same entries runs beside it (`--traced`):
+nsys captures only that pass (`--capture-range=cudaProfilerApi`), each item an NVTX range, and samples "SMs Active" at
+10 kHz. An item's busy SM-time is that metric integrated over its kernels' span, a call.
+
+Rep r of the layer is every linear's rep r, summed. γ's numerator is the scheme's busy SM-time plus the host CPU
+core-seconds it spends above stock's, at the node's weight (0.48 SM-s a core-second on the H200 node, 1.64 on the
+RTX PRO 6000's); its denominator is the stock arm's busy SM-time. γ is the median over the reps of their ratio, less one,
+with a 95% interval from the ratios' order statistics.
+
+- The stock arm is each linear's fastest by wall time; the least-SM-time arm's γ is beside it, and so is γ with the arm's
+  weight side added, a bound.
+- The A/A control is the twinned stock kernel against its original, in every run: it is the `stock` scheme's γ.
+- The cross-check: each entry's busy SM-time must be within 5% of its kernels' occupied SM-time (each kernel's duration
+  times the SMs its blocks occupy), either way.
+- ε comes from the scheme's own function at the same point and card, in the same record. A kernel point runs no model, so
+  its perplexity is a served point's; nor does it serve requests, so it has no load counts to keep on the node.
+- The scheme gate is γ ≤ 10 at each point, recorded beside γ.
+
+## The source check
+
+An overhead of record comes only from a labelled run of this door. A γ stands when its run is labelled
+`run_of_record=overhead`, passed with exit 0 from a clean tree, was timed at points of record that nothing supersedes, ran
+the arm's cubin from the `art:` id it names (one of the art's blobs is a binary the run's SASS gate passed; a cubin built
+in the run is development only), and its point passed every rule: each linear timed, at least 20 paired reps, a 95%
+interval within ±5% of the ratio, the cross-check, and the arm's reference verifier accepting every row
+(`verify.py --every-row`). Runs of record are chosen by label, as `served-table`'s are. `table` refuses every other figure
+and says why. A reader of γ outside `benchmarks/` takes it from `table --json`, whose rows carry `of_record` and `why`;
+inside, `overhead_records.gamma_of_record` raises on a γ without one.
+
+`table` presents each γ of record per window and per monitoring period of a week, a month and a year, over all compute:
+the census's datacenter (`dc-12500-machines-600s`: the GPU-hours spent proving at the share γ/(1+γ), and their FLOP at the
+card's datasheet rate and gates) beside the world's inference compute (`world-inference-2027`: the FLOP and gates proving
+adds, γ times it). Gates are FLOP at `benchmarks/rho/data/hardware.toml`'s one conversion. γ is measured on one card;
+every total is scaled from it, not proved.
+
+## A scheme's arm
+
+A scheme registers in `overhead.SCHEMES`: Pearl+ is `pearl-plus`, its arm `overhead_arm:PearlPlus` and its ε
+`overhead_arm:epsilon`, both in `benchmarks/pouw/pearl_c_sm90/`. The arm keeps the harness's arm contract
+(`benchmarks/pouw/harness/arm.py`). Its build record names:
+
+- `cubin_art`: the `art:` id of the cubin it loads, which it lists in its `binaries`, so the SASS gate passes it before
+  anything is timed;
+- `verifier`: its reference verifier's declaration (`arm.check_verifier`), whose commands `verify.py` runs on the run's own
+  transcripts, `ACCEPT` or `REJECT` naming each transcript's sha256.
+
+`overhead.json` keeps both, and the binaries the gate passed, beside γ. `epsilon(m, n, k, card)` returns
+`{"epsilon", "delta", "basis"}` at one linear of the layer, and `overhead.json` records it at each point beside γ.
