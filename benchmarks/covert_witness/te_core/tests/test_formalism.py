@@ -767,6 +767,35 @@ def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_si
         F.he_figure(F.he_of_rows(HE_STEP, 9e8), c, C)
 
 
+def test_the_products_term_charges_m_its_least_pair_where_a_layers_arrays_differ_in_beta():
+    """F = 2/√3 is proved for one β on a layer's three shared arrays (weights, activations, output gradients); with a β
+    each, Motzkin-Straus sums u_r·u_s/(β_r·β_s) over the pairs M's products multiply, so both terms take the least
+    pair product among M's products. Weights at 2 (the record's code size), activations at β(k) = 15.9 and output
+    gradients at 8: all of M binds at the input gradient's 2·8 = 16, below the forward product's 2·15.9, which would
+    read higher, and each threshold's M_P keeps only the products whose pair is at least its own."""
+    c, k, C, m, K = 1e11, 65_536.0, 1e13, 256, 65_536
+
+    def group(beta: list, weight: list, forward: bool, dw: bool, scale: float) -> dict:
+        return {"beta": beta, "width": [16, 16], "weight": weight, "b_y": 16, "forward": forward, "k_dim": K,
+                "dw": dw, "head": False, "macs": scale * m * m * K, "wires": scale * m * m * 16}
+
+    fwd, dx = group([16.0, 16.0], [False, True], True, False, 1), group([8.0, 16.0], [False, True], False, False, 4)
+    dw = group([8.0, 16.0], [False, False], False, True, 0.25)
+    he = {"k": k, "groups": [fwd, dx, dw], "r_step": None, "candidates_macs": 5.25 * m * m * K, "self_macs": 0.0,
+          "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None, "trained_weights": None}
+    fig = F.he_figure(he, c, C, beta_code=2.0)
+    share = 2 / math.sqrt(3)
+
+    def rho(M: list, bw: float, bx: float, f: float = share) -> float:
+        return F.he_rho(sum(g["macs"] for g in M), sum(g["wires"] for g in M), bw, bx, 16, f, c, k, C)
+
+    assert (fig["subset"], fig["beta_w"], fig["beta_x"], fig["code_bound"]) == ("M", 2.0, 8.0, True)
+    assert fig["F"] == pytest.approx(share, rel=1e-15) and fig["macs_share"] == 1
+    assert fig["rho"] == pytest.approx(rho([fwd, dx, dw], 2.0, 8.0), rel=1e-12)
+    assert rho([fwd, dx, dw], 2.0, 8.0) < rho([fwd, dx, dw], 2.0, 15.9)
+    assert fig["rho"] > max(rho([fwd, dw], 2.0, 15.9), rho([dw], 15.9, 8.0), rho([dw], 15.9, 8.0, 1.0)) > 0
+
+
 #: a code name in a published string: a dotted path (a module's, or its function's), an identifier with an underscore
 #: (te_core, io_bound, rows_of, ONE_CLASS, FRESH_VOID, k_whole) other than a one-letter math subscript (b_y), or a
 #: command-line flag
