@@ -52,7 +52,8 @@ theorem swapSess_swapSess {k n : ℕ} (o : ℕ) (p : (Fin k → Coin) × (Fin n 
       first | rfl | (exfalso; omega) | exact congrArg d (Fin.ext (Nat.add_sub_of_le (by omega)))
   · have hj := j.isLt
     simp only [swapSess]
-    split_ifs with h1 h2 <;> first | rfl | (exfalso; omega) | exact congrArg e (Fin.ext Nat.add_sub_cancel_left)
+    split_ifs with h1 h2 <;>
+      first | rfl | (exfalso; omega) | exact congrArg e (Fin.ext (Nat.add_sub_cancel_left _ _))
 
 /-- **A session's coins read off uniform coins are uniform where `F` reads them**: `F` reads the session's coins only
 at the rounds `o + j` the run has. -/
@@ -211,17 +212,72 @@ theorem Ex_sessionProg_le (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P
           waitExp (L.sessRunAt H P x ω s r (A.V.k xO)) (A.k xO) (A.cap (A.shape xO)) 0) + 1 := by
   refine (Ex_mono fun c => L.sessionProg_runs_le H P x ω s r xO h c).trans (le_of_eq ?_)
   rw [Ex_add, Ex_const, Ex_mul_left]
-  refine congrArg (· + (1 : ℝ)) (congrArg (_ * ·) ?_)
+  congr 2
   exact (Ex_EC_cast A xO h fun ρ => ∑ i, (waitRuns (L.sessRunAt H P x ω s r (A.V.k xO)) (A.k xO)
       ((List.finRange (A.cap (A.shape xO))).map (ρ i)) 0 : ℝ)).trans
     (Ex_sum_pi (fun σ : Fin (A.cap (A.shape xO)) → Fin (A.V.k xO) → Coin =>
       (waitRuns (L.sessRunAt H P x ω s r (A.V.k xO)) (A.k xO) ((List.finRange (A.cap (A.shape xO))).map σ) 0 : ℝ))
       (A.waits (A.shape xO)))
 
+/-- Session `s`'s waits read the judged coins only before the session's first round. -/
+theorem waitsAt_prefix (L : Compiled Coin A) (H : Msg → Msg) (hSt : L.Stages) {Ω : Type} (P : Prover Ω) (x : Msg)
+    (ω : Ω) (s : ℕ) (r r' : Fin (L.V.k x) → Coin) (h : ∀ i : Fin (L.V.k x), i.val < L.off x s → r i = r' i) :
+    L.waitsAt H P x ω s r' = L.waitsAt H P x ω s r := by
+  have hr : fork (L.off x s) r r' = r' := funext fun i => by
+    simp only [fork]
+    split_ifs with hi <;> first | exact h i hi | rfl
+  rw [← hr, L.waitsAt_fork H hSt]
+
+/-- **The replay's acceptance weighs the waits by its probability at each prefix** (`Ex_acc_fork`, at the session's
+first round, a constant). -/
+theorem Ex_replayAt_waits (L : Compiled Coin A) (H : Msg → Msg) (hSt : L.Stages) {Ω : Type} (P : Prover Ω)
+    (x : Msg) (ω : Ω) (s : ℕ) :
+    Ex (fun r : Fin (L.V.k x) → Coin => (if L.replayAt H P x ω s r then (1 : ℝ) else 0) * L.waitsAt H P x ω s r) =
+      Ex (fun r => Pr (fun d : Fin (L.V.k x) → Coin => L.replayAt H P x ω s (fork (L.off x s) r d)) *
+        L.waitsAt H P x ω s r) :=
+  Ex_acc_fork (off := fun _ => L.off x s) (fun _ _ _ => rfl) (L.replayAt H P x ω s) (L.waitsAt H P x ω s)
+    fun r r' h => L.waitsAt_prefix H hSt P x ω s r r' h
+
+/-- **At each prefix the replay accepts with a wait's rerun's probability**: the session's coins of uniform coins
+are uniform where the run reads them (`Ex_sessCoins`). -/
+theorem Pr_replayAt_fork (L : Compiled Coin A) (H : Msg → Msg) (hSt : L.Stages) {Ω : Type} (P : Prover Ω)
+    (x : Msg) (ω : Ω) (s : ℕ) (r : Fin (L.V.k x) → Coin) :
+    Pr (fun d : Fin (L.V.k x) → Coin => L.replayAt H P x ω s (fork (L.off x s) r d)) =
+      Pr (fun d => (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r)) d).out = .acc) := by
+  have hrep : (fun d : Fin (L.V.k x) → Coin => L.replayAt H P x ω s (fork (L.off x s) r d)) =
+      fun d => (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r))
+        (sessCoins (L.off x s) d (A.V.k (L.stmtAt H P x ω s r)))).out = .acc :=
+    funext fun d => L.replayAt_fork H hSt P x ω s r d
+  rw [hrep, ← Ex_ind, ← Ex_ind]
+  exact Ex_sessCoins (L.off x s)
+    (fun d => if (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r)) d).out = .acc then (1 : ℝ) else 0)
+    fun d e h => by simp only [L.sessRunAt_congr H P x ω s r h]
+
+/-- **At each prefix the replay's probability times the waits' expected reruns is at most `m′·k`**: one wait's
+`ε·N ≤ k` (`waitRuns_exp`). -/
+theorem replay_waits_le (L : Compiled Coin A) (H : Msg → Msg) (hSt : L.Stages) {Ω : Type} (P : Prover Ω)
+    (x : Msg) (ω : Ω) (s : Fin (L.nS x)) (kk : ℕ) (r : Fin (L.V.k x) → Coin)
+    (hSh : A.shape (L.stmtAt H P x ω s r) = L.sh x s) (hk : A.k (L.stmtAt H P x ω s r) ≤ kk) :
+    Pr (fun d : Fin (L.V.k x) → Coin => L.replayAt H P x ω s (fork (L.off x s) r d)) *
+      L.waitsAt H P x ω s r ≤ (A.waits (L.sh x s) : ℝ) * kk := by
+  rw [L.Pr_replayAt_fork H hSt P x ω s r]
+  have hw := waitRuns_exp (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r))) (A.k (L.stmtAt H P x ω s r))
+    (A.cap (A.shape (L.stmtAt H P x ω s r))) 0 (Nat.zero_le _)
+  simp only [Nat.cast_zero, sub_zero] at hw
+  have hkr : (A.k (L.stmtAt H P x ω s r) : ℝ) ≤ kk := by exact_mod_cast hk
+  unfold waitsAt
+  calc _ = (A.waits (A.shape (L.stmtAt H P x ω s r)) : ℝ) *
+        (Pr (fun d => (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r)) d).out = .acc) *
+          waitExp (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r))) (A.k (L.stmtAt H P x ω s r))
+            (A.cap (A.shape (L.stmtAt H P x ω s r))) 0) := by ring
+    _ ≤ (A.waits (A.shape (L.stmtAt H P x ω s r)) : ℝ) * kk :=
+        mul_le_mul_of_nonneg_left (hw.trans hkr) (Nat.cast_nonneg _)
+    _ = (A.waits (L.sh x s) : ℝ) * kk := by rw [hSh]
+
 /-- **Session `s` reruns the prover at most `1 + m′·k` times in expectation**, over the judged coins and `E_O`'s
 coins for the session, where the staged statements read only the rounds before the sessions, session `s`'s has its
 shape and `A`'s `k` there is at most `k`: the replay accepts at each prefix with the probability `ε` a wait's rerun does
-(`Ex_acc_fork`, `Ex_sessCoins`), and one wait's `ε·N ≤ k` (`waitRuns_exp`). -/
+(`Ex_replayAt_waits`, `Pr_replayAt_fork`), and one wait's `ε·N ≤ k` (`replay_waits_le`). -/
 theorem sess_runs_exp (L : Compiled Coin A) (H : Msg → Msg) (hSt : L.Stages) (x : Msg) {Ω : Type} (P : Prover Ω)
     (ω : Ω) (s : Fin (L.nS x)) (kk : ℕ) (hSh : ∀ r, A.shape (L.stmtAt H P x ω s r) = L.sh x s)
     (hk : ∀ r, A.k (L.stmtAt H P x ω s r) ≤ kk) :
@@ -232,54 +288,13 @@ theorem sess_runs_exp (L : Compiled Coin A) (H : Msg → Msg) (hSt : L.Stages) (
       (((L.sessionProg x r s (L.stmtAt H P x ω s r) c).eval H (run H P L.V x ω)).2.2 : ℝ)) ≤
       (if L.replayAt H P x ω s r then (1 : ℝ) else 0) * L.waitsAt H P x ω s r + 1 :=
     fun r => L.Ex_sessionProg_le H P x ω s r _ (hSh r)
-  have hG : ∀ r r' : Fin (L.V.k x) → Coin, (∀ i : Fin (L.V.k x), i.val < L.off x s → r i = r' i) →
-      L.waitsAt H P x ω s r' = L.waitsAt H P x ω s r := by
-    intro r r' h
-    have hr : fork (L.off x s) r r' = r' := funext fun i => by
-      simp only [fork]
-      split_ifs with hi
-      · exact h i hi
-      · rfl
-    rw [← hr, L.waitsAt_fork H hSt]
-  have hA := Ex_acc_fork (Coin := Coin) (k := L.V.k x) (off := fun _ => L.off x s) (fun _ _ _ => rfl)
-    (L.replayAt H P x ω s) (L.waitsAt H P x ω s) hG
-  have hPr : ∀ r, Pr (fun d : Fin (L.V.k x) → Coin => L.replayAt H P x ω s (fork (L.off x s) r d)) =
-      Pr (fun d => (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r)) d).out = .acc) := by
-    intro r
-    have hrep : (fun d : Fin (L.V.k x) → Coin => L.replayAt H P x ω s (fork (L.off x s) r d)) =
-        fun d => (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r))
-          (sessCoins (L.off x s) d (A.V.k (L.stmtAt H P x ω s r)))).out = .acc :=
-      funext fun d => L.replayAt_fork H hSt P x ω s r d
-    rw [hrep, ← Ex_ind, ← Ex_ind]
-    exact Ex_sessCoins (L.off x s)
-      (fun d => if (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r)) d).out = .acc then (1 : ℝ) else 0)
-      fun d e h => by simp only [L.sessRunAt_congr H P x ω s r h]
-  have hpt : ∀ r, Pr (fun d : Fin (L.V.k x) → Coin => L.replayAt H P x ω s (fork (L.off x s) r d)) *
-      L.waitsAt H P x ω s r ≤ (A.waits (L.sh x s) : ℝ) * kk := by
-    intro r
-    rw [hPr r]
-    have hw := waitRuns_exp (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r))) (A.k (L.stmtAt H P x ω s r))
-      (A.cap (A.shape (L.stmtAt H P x ω s r))) 0 (Nat.zero_le _)
-    simp only [Nat.cast_zero, sub_zero] at hw
-    have hkr : (A.k (L.stmtAt H P x ω s r) : ℝ) ≤ kk := by exact_mod_cast hk r
-    unfold waitsAt
-    calc _ = (A.waits (A.shape (L.stmtAt H P x ω s r)) : ℝ) *
-          (Pr (fun d => (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r)) d).out = .acc) *
-            waitExp (L.sessRunAt H P x ω s r (A.V.k (L.stmtAt H P x ω s r))) (A.k (L.stmtAt H P x ω s r))
-              (A.cap (A.shape (L.stmtAt H P x ω s r))) 0) := by ring
-      _ ≤ (A.waits (A.shape (L.stmtAt H P x ω s r)) : ℝ) * kk :=
-          mul_le_mul_of_nonneg_left (hw.trans hkr) (Nat.cast_nonneg _)
-      _ = (A.waits (L.sh x s) : ℝ) * kk := by rw [hSh r]
-  calc _ = Ex (fun r : Fin (L.V.k x) → Coin => Ex fun c : A.EC (L.sh x s) =>
-          (((L.sessionProg x r s (L.stmtAt H P x ω s r) c).eval H (run H P L.V x ω)).2.2 : ℝ)) := Ex_prod _
-    _ ≤ Ex (fun r => (if L.replayAt H P x ω s r then (1 : ℝ) else 0) * L.waitsAt H P x ω s r + 1) := Ex_mono hc
-    _ = Ex (fun r => (if L.replayAt H P x ω s r then (1 : ℝ) else 0) * L.waitsAt H P x ω s r) + 1 := by
-        rw [Ex_add, Ex_const]
-    _ = Ex (fun r => Pr (fun d : Fin (L.V.k x) → Coin => L.replayAt H P x ω s (fork (L.off x s) r d)) *
-          L.waitsAt H P x ω s r) + 1 := by rw [hA]
-    _ ≤ (A.waits (L.sh x s) : ℝ) * kk + 1 := by
-        exact add_le_add ((Ex_mono hpt).trans (Ex_const _).le) le_rfl
-    _ = ((1 + A.waits (L.sh x s) * kk : ℕ) : ℝ) := by push_cast; ring
+  rw [Ex_prod]
+  refine (Ex_mono hc).trans ?_
+  rw [Ex_add, Ex_const, L.Ex_replayAt_waits H hSt P x ω s]
+  refine (add_le_add ((Ex_mono fun r => L.replay_waits_le H hSt P x ω s kk r (hSh r) (hk r)).trans
+    (Ex_const _).le) le_rfl).trans (le_of_eq ?_)
+  push_cast
+  ring
 
 /-! ## `E_O`'s expected reruns -/
 
