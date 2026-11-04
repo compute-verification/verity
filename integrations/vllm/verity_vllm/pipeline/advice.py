@@ -36,8 +36,11 @@ which `serving_rows.after_commit(binding=…)` takes).  Under ``--out``:
     private/advice.bin    the prover's: the advice as the compiler reads it, I1's canonical encoding padded to ℓ bits
     private/advice.json   the same advice, I1's `to_json`
     private/opening.json  the advice's opening (`advice_windows.opening`: its padded bytes and every row's salt)
-    private/report.json   the round trip (`decode(encode(a)) == a`), the run's counts (they describe the advice), and the digests of
-                          what it read
+    private/report.json   the round trip (`decode(encode(a)) == a`), the run's counts (they describe the advice), the digests of
+                          what it read, and the release rule: on the engine clock, its first step's reading ``t0`` (the trace's
+                          clock, the server's ``time.time``), from which output i's bucket is ⌊(t_i − t0) / τ⌋ and window w
+                          buckets [w·T, (w+1)·T), so periods place on one clock; private, since a period's start is when
+                          requests reached an idle engine
 
 A `verity-vllm serve-openai` run (its ``advice_trace.jsonl``, the server's scheduler step trace with each Commit window's open and
 close, and its ``requests.jsonl``, whose ``user`` names each request) gets one advice a closed Commit window (`windows_of`), each
@@ -377,7 +380,7 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
                 release.append(bucket[s])
                 kept[r] += 1
                 known[r] += 1
-    rule = {"rule": "engine clock", "tau_s": tau} if clocked else {"rule": "step index"}
+    rule = {"rule": "engine clock", "tau_s": tau, "t0": t0} if clocked else {"rule": "step index"}
     try:
         if not window:
             I1.Advice(tuple(q.i1() for q in advice_reqs), i1_steps, tuple(release))
