@@ -127,7 +127,29 @@ def _cli(log: list, name: str, argv: list[str], env: dict | None = None) -> subp
     return p
 
 
+def _logs(root: Path, out: Path) -> None:
+    """The scratch host's logs and its sessions' public files into `out`, its key's private half left behind."""
+    import shutil
+    dest = out / "auditor"
+    dest.mkdir(parents=True, exist_ok=True)
+    for f in root.glob("serve-*.log"):
+        shutil.copyfile(f, dest / f.name)
+    for name in ("windows.jsonl",):
+        if (root / "var" / name).exists():
+            shutil.copyfile(root / "var" / name, dest / name)
+    for d in (root / "var" / "sessions").glob("*/out"):
+        shutil.copytree(d, dest / "sessions" / d.parent.name, dirs_exist_ok=True)
+
+
 def run(out: Path) -> int:
+    root = Path(tempfile.mkdtemp(prefix="pp-auditor-"))
+    try:
+        return _run(out, root)
+    finally:
+        _logs(root, out)
+
+
+def _run(out: Path, root: Path) -> int:
     from verity.core.protocols.pouw import salt as PS
     from verity_vllm.pipeline.commit_coins import ChallengerGate
     from verity_vllm.protocols.pouw.h1 import window as PHW
@@ -137,7 +159,7 @@ def run(out: Path) -> int:
     import test_pearl_c_vllm as T
 
     out.mkdir(parents=True, exist_ok=True)
-    root, scratch = Path(tempfile.mkdtemp(prefix="pp-auditor-")), Path(tempfile.mkdtemp(prefix="pp-e2e-"))
+    scratch = Path(tempfile.mkdtemp(prefix="pp-e2e-"))
     A = _auditor()
     host = A.Host(root=root / "var", peers=root / "peers", name=HOST, pins=root / "pins.jsonl")
     (root / "var" / "sessions").mkdir(parents=True)
@@ -256,9 +278,7 @@ def run(out: Path) -> int:
     print(f"[control] {json.dumps(report['control'])[:1500]}", flush=True)
 
     auditor = out / "auditor"
-    auditor.mkdir()
-    for name in ("windows.jsonl",):
-        (auditor / name).write_bytes((root / "var" / name).read_bytes())
+    auditor.mkdir(exist_ok=True)
     (auditor / "pins.jsonl").write_bytes(host.pins.read_bytes())
     (auditor / "public").write_bytes((host.key / "public").read_bytes())
     report["ledger"] = [{"kind": e["kind"], "session": e.get("session"),
