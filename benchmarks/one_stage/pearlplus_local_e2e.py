@@ -22,8 +22,9 @@ process of its own (this file's ``serve`` verb, `auditor.run` with no coin link,
 
 Stand-ins, named in OUT/e2e.json: the serve (one toy pass, `served.json` written here), sampled proofs' window
 registration and records audit (two files tied to W), and the Lean ``PouwCheck.PearlPlus`` verdict (``pearlplus-lean.json``,
-copied from Pearl+'s answer; the node step that writes it is another lane's). Then, as a control, a second draw session
-opened on the same commitment: the compose refuses the piece it leaves."""
+copied from Pearl+'s answer; the node step that writes it is another lane's). Then, as a control, a second draw on the
+same commitment: the gate refuses its open (one session a root, ever), so no second coin exists, and the piece written
+after it composes the same row."""
 from __future__ import annotations
 
 import argparse
@@ -303,13 +304,19 @@ def _run(out: Path, root: Path) -> int:
     spec = importlib.util.spec_from_file_location("e2e_bench_arm", TREE / "benchmarks" / "pouw" / "pearl_c_vllm" / "bench_arm.py")
     BA = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(BA)
-    _coin2, again = BA.LiveDraw(gate_cmd, PEER, LANE)(bytes.fromhex(record["commitment"]), lambda info: None)
-    _ended(root, again["reserved"]["session"])
+    from verity.core.protocols.sampled_proofs.challenger import CoinError
+    marks: list = []
+    try:
+        BA.LiveDraw(gate_cmd, PEER, LANE)(bytes.fromhex(record["commitment"]), marks.append)
+        refused = None
+    except CoinError as e:
+        refused = str(e)
     _cli(log, "pearlplus (after a second draw)", ["benchmarks/one_stage/served_verdicts.py", "pearlplus", str(piece),
                                                   "--served", str(doc), "--verify", str(piece / "verify.json"), "--gate",
                                                   gate_cmd, "--key-sha512", key_sha512, "--main", str(main), "--coin",
                                                   str(piece / S.COIN_PUT)])
-    report["control"] = {"second_draw_session": again["reserved"]["session"], "row": row()}
+    report["control"] = {"second_draw_reserved": [m.get("reserved") for m in marks], "gate_refused": refused,
+                         "row": row()}
     print(f"[control] {json.dumps(report['control'])[:1500]}", flush=True)
 
     auditor = out / "auditor"
@@ -320,9 +327,12 @@ def _run(out: Path, root: Path) -> int:
                          **{k: (e.get("body") or {}).get(k) for k in ("period", "by", "withheld", "families")}}
                         for e in _ledger(root)]
     (out / "e2e.json").write_text(json.dumps(report, indent=1, default=str) + "\n")
-    ok = report["row"]["verdict"] == "accept" and report["control"]["row"]["verdict"] != "accept"
-    print(f"E2E {'ok' if ok else 'FAILED'}: row {report['row']['verdict']} ({report['row'].get('protocol')}); control "
-          f"{report['control']['row']['verdict']}: {str(report['control']['row'].get('why'))[:300]}", flush=True)
+    control = report["control"]
+    ok = (report["row"]["verdict"] == "accept" and report["row"]["profile"]["draw_session"] == dsid
+          and "one session a root" in str(control["gate_refused"]) and control["row"] == report["row"])
+    print(f"E2E {'ok' if ok else 'FAILED'}: row {report['row']['verdict']} ({report['row'].get('protocol')}), its draw "
+          f"session {dsid}; a second draw on the run's commitment: {control['gate_refused']}; the row then "
+          f"{control['row']['verdict']}", flush=True)
     return 0 if ok else 1
 
 
