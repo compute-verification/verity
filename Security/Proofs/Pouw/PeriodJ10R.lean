@@ -177,7 +177,7 @@ theorem nDigits_eq (k : ℕ) : PouwCheck.Credit.nDigits k = J10R.nDigits k := by
 reads, is `J10R.unitBlocks` at every slot, contraction, tile and place. -/
 theorem j10rBlocks_eq (M k R C I J : ℕ) :
     PouwCheck.Credit.j10rBlocks M k (R, C) I J = J10R.unitBlocks M k R C I J := by
-  simp only [PouwCheck.Credit.j10rBlocks, J10R.unitBlocks, J10R.Layout.row, J10R.Layout.col, J10R.rb, J10R.cb,
+  simp only [PouwCheck.Credit.j10rBlocks, J10R.unitBlocks, J10R.NoiseLayout.row, J10R.NoiseLayout.col, J10R.rb, J10R.cb,
     J10R.rowBits, J10R.colBits, nDigits_eq]
 
 end Properties.Pouw.PeriodJ10R.SecurityProofs
