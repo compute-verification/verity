@@ -14,7 +14,8 @@ registers every member, draws one sample over all their proof blocks on live coi
 stratified or work, a stratum free to span members), each member's proof blocks `MemberV5.emb` into the population, and
 then runs one flock-verify session per member in the registration's order, member `m` proving its part of the sample
 (`MemberV5.part`, drawn by `subset |part|`). A member's drawn count is random and may be zero. The run accepts when the
-session of every member with a proof block in the sample accepts (`JointAuditV5.Accepts`).
+session of every member with a proof block in the sample accepts (`JointAuditV5.Accepts`). A draw that runs out of the
+verifier's bytes (not `DrawEnds`) fails the window: its run records no member's transcript (`JointAuditV5.out`).
 
 A prover may read every coin it has seen, so member `m`'s session is played with a strategy that read the sample and the
 earlier members' sessions. `JointAuditV5.memberLaw` and `JointAuditV5.memberStrat` are that session played alone: its
@@ -34,11 +35,13 @@ play; the window's are their images in the population (`JointAuditV5.wrongSet`),
   most the most any choice in that confidence set holds.
 
 `ε_ks,m` is member `m`'s knowledge term at the worst registration and `ε_bind,m` its binding term `δ_link`, each at the
-sampling design that draws member `m`'s part of the sample (`JointAuditV5.design`), as `SampledKSLiveV5` states them. A
-member with no proof block in the sample contributes nothing to `ε_bind,m` at that draw and the empty draw's knowledge term
-to `ε_ks,m`. Each member's session has one link-point count at every draw (`JointAuditV5.hcls`), which the registration
-check makes so by refusing a member whose fewest and most drawn proof blocks have different counts. The named assumptions
-are A3 (`uniform/io-getrandombytes`) for the sample's bytes, `live-verifier` at each member (`MemberV5.hCust`,
+sampling design that draws member `m`'s part of a sample that ends (`JointAuditV5.design`), as `SampledKSLiveV5` states
+them. A member with no proof block in the sample contributes nothing to `ε_bind,m` at that draw and the empty draw's
+knowledge term to `ε_ks,m`. Each member's session has one link-point count at every draw that ends (`JointAuditV5.hcls`),
+which the registration check makes so by refusing a member whose fewest and most proof blocks over the draws that end have
+different counts. Some draw ends (`JointAuditV5.hend`): a law none of whose draws ends fails every window it registers a
+member in, with nothing to bound. The named assumptions are A3 (`uniform/io-getrandombytes`) for the sample's bytes,
+`live-verifier` at each member (`MemberV5.hCust`,
 `RecordCustodyZKJPLaw` at `subset |S|` for its part `S`), and `cr/sha-512` (`Assumptions.TableCRZAt`) and `ecr/sha-512`
 (`Assumptions.LinkCRZCAt`) at the strategy each member's session is played with alone (in a period, at every window's
 strategy on some run, `JointPeriodV5.Plays`), stated flat. Their proofs are in `Joint/V5/Bound.lean`.
@@ -166,10 +169,18 @@ noncomputable def link (L : Law m.n) : ℝ≥0∞ :=
 
 end MemberV5
 
+/-- **The deployed draw ends on the coins `ω`**: `SampledProofs.Draw.drawUnits` under `law` over `[0, pop)` draws its
+units within the verifier's bytes `src ω`, rather than running out of them (`Bridge.execSel`'s fallback, which draws
+every unit). -/
+def DrawEnds {Ω : Type} {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (law : Flock.Draw.Law)
+    (pop : ℕ) (ω : Ω) : Prop :=
+  ∃ r, SampledProofs.Draw.drawUnits law pop (Properties.SampledProofs.bytesOf (src ω 0)) = .ok r
+
 /-- **A window's audit of several members**: every member registered at one registration `Reg`, in the registration's
 order; one live sample over the population of all their `nJ` proof blocks, drawn by the deployed draw on the verifier's
 one byte stream `src` under the registration's law `law` on strata of sizes `ns`, drawing `kd` proof blocks; then one
-session per member, in order. Each member's part of every draw has its session's link points (`hcls`). -/
+session per member, in order. Some draw ends (`hend`), and each member's part of every draw that ends has its session's
+link points (`hcls`). -/
 structure JointAuditV5 where
   Reg : Type
   nJ : ℕ
@@ -184,7 +195,8 @@ structure JointAuditV5 where
   [nonemptyΩ : Nonempty Ω]
   Lb : Fin 1 → ℕ
   src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256
-  hcls : ∀ (k : Fin ms.length) (ω : Ω),
+  hend : ∃ ω, DrawEnds src law nJ ω
+  hcls : ∀ (k : Fin ms.length) (ω : Ω), DrawEnds src law nJ ω →
     mPtsOf (ms.get k).D.unroll.g ((ms.get k).part ((Bridge.execSel (n := nJ) src law nJ).draw ω)).card =
       mPtsOf (ms.get k).D.unroll.g ((ms.get k).kd / nTab (ms.get k).I)
 
@@ -204,20 +216,27 @@ def L : Law w.nJ := Bridge.execSel (n := w.nJ) w.src w.law w.nJ
 noncomputable def sessions (S : Finset (Fin w.nJ)) (R : w.Reg) : Game (List Discharge.Exec.Transcript) :=
   seqG (fun m : MemberV5 w.Reg w.nJ => m.live (m.part S) R) w.ms
 
+/-- **What the window's run records** at the registration `R` and the sample's coins `ω`: the registration, the sample,
+and the members' transcripts `ts`, none when the draw ran out of the verifier's bytes (not `DrawEnds`). -/
+noncomputable abbrev out (R : w.Reg) (ω : w.L.Ω) (ts : List Discharge.Exec.Transcript) :
+    w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript :=
+  (R, w.L.draw ω, if DrawEnds w.src w.law w.nJ ω then ts else [])
+
 /-- **The window's audit as it runs**: the prover registers every member, the verifier draws the sample on live coins,
 and each member's session proves its part. -/
 noncomputable def game : Game (w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript) :=
-  .send w.Reg fun R => .coin w.L.Ω fun ω => (w.sessions (w.L.draw ω) R).map fun ts => (R, w.L.draw ω, ts)
+  .send w.Reg fun R => .coin w.L.Ω fun ω => (w.sessions (w.L.draw ω) R).map (w.out R ω)
 
 /-- **The run accepts**: flock-verify `--zk --public-inputs` accepts, at its `own`, the session of every member with a
-proof block in the sample. A member with none has no statement to verify, so nothing reads its session's verdict. -/
+proof block in the sample. A member with none has no statement to verify, so nothing reads its session's verdict. A run
+whose draw ran out of the verifier's bytes records no transcript (`out`), so it accepts only when it has no member. -/
 def Accepts (o : w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript) : Prop :=
   List.Forall₂ (fun m t => (m.part o.2.1).Nonempty → AcceptsZKP m.I m.own t) w.ms o.2.2
 
 /-- **The coins of the sessions before member `k`'s**, at the strategy `τ` and the sample's coins `ω`. -/
-def before (τ : Strategy w.game) (k : Fin w.ms.length) (ω : w.L.Ω) : Type :=
+noncomputable def before (τ : Strategy w.game) (k : Fin w.ms.length) (ω : w.L.Ω) : Type :=
   seqTape (fun m : MemberV5 w.Reg w.nJ => m.live (m.part (w.L.draw ω)) τ.1) w.ms k.1 k.2
-    (Strategy.ofMap (fun ts => (τ.1, w.L.draw ω, ts)) _ (τ.2 ω))
+    (Strategy.ofMap (w.out τ.1 ω) _ (τ.2 ω))
 
 noncomputable instance instFintypeBefore (τ : Strategy w.game) (k : Fin w.ms.length) (ω : w.L.Ω) :
     Fintype (w.before τ k ω) :=
@@ -226,23 +245,28 @@ noncomputable instance instFintypeBefore (τ : Strategy w.game) (k : Fin w.ms.le
 instance instNonemptyBefore (τ : Strategy w.game) (k : Fin w.ms.length) (ω : w.L.Ω) : Nonempty (w.before τ k ω) :=
   seqTape.nonempty _ _ _ _ _
 
-/-- **Member `k`'s session's sampling design, played alone at `τ`**: the sample's coins and, for each, the coins of the
-sessions before member `k`'s, drawn together; it samples member `k`'s part of the sample. -/
+/-- **The sample's coins on which the draw ends.** -/
+abbrev EΩ : Type := {ω : w.L.Ω // DrawEnds w.src w.law w.nJ ω}
+
+instance : Nonempty w.EΩ := w.hend.elim fun ω h => ⟨⟨ω, h⟩⟩
+
+/-- **Member `k`'s session's sampling design, played alone at `τ`**: the sample's coins on which the draw ends and, for
+each, the coins of the sessions before member `k`'s, drawn together; it samples member `k`'s part of the sample. -/
 noncomputable def memberLaw (τ : Strategy w.game) (k : Fin w.ms.length) : Law (w.ms.get k).n where
-  Ω := w.L.Ω × ((ω : w.L.Ω) → w.before τ k ω)
-  draw x := (w.ms.get k).part (w.L.draw x.1)
+  Ω := w.EΩ × ((ω : w.EΩ) → w.before τ k ω.1)
+  draw x := (w.ms.get k).part (w.L.draw x.1.1)
 
 /-- **Member `k`'s session played alone at `τ`**: `τ`'s registration, and on the sample's coins and the earlier sessions'
 coins the strategy `τ` leaves for member `k`'s session there. -/
 noncomputable def memberStrat (τ : Strategy w.game) (k : Fin w.ms.length) :
     Strategy ((w.ms.get k).game (w.memberLaw τ k)) :=
-  ⟨τ.1, fun x => Strategy.map (fun t => (τ.1, (w.ms.get k).part (w.L.draw x.1), t)) _
-    (seqStrat (fun m : MemberV5 w.Reg w.nJ => m.live (m.part (w.L.draw x.1)) τ.1) w.ms k.1 k.2
-      (Strategy.ofMap (fun ts => (τ.1, w.L.draw x.1, ts)) _ (τ.2 x.1)) (x.2 x.1))⟩
+  ⟨τ.1, fun x => Strategy.map (fun t => (τ.1, (w.ms.get k).part (w.L.draw x.1.1), t)) _
+    (seqStrat (fun m : MemberV5 w.Reg w.nJ => m.live (m.part (w.L.draw x.1.1)) τ.1) w.ms k.1 k.2
+      (Strategy.ofMap (w.out τ.1 x.1.1) _ (τ.2 x.1.1)) (x.2 x.1))⟩
 
-/-- Member `k`'s part of every draw has its session's link points, played alone at `τ`. -/
+/-- Member `k`'s part of every draw that ends has its session's link points, played alone at `τ`. -/
 theorem oneClass_memberLaw (τ : Strategy w.game) (k : Fin w.ms.length) : (w.ms.get k).OneClass (w.memberLaw τ k) :=
-  fun x => w.hcls k x.1
+  fun x => w.hcls k x.1.1 x.1.2
 
 /-- The model audit's strategy member `k`'s session refines to, played alone at `τ`. -/
 noncomputable def memberSim (τ : Strategy w.game) (k : Fin w.ms.length) :=
@@ -256,10 +280,11 @@ noncomputable def memberWrong (τ : Strategy w.game) (k : Fin w.ms.length) : Fin
 noncomputable def wrongSet (τ : Strategy w.game) : Finset (Fin w.nJ) :=
   Finset.univ.biUnion fun k => (w.memberWrong τ k).image (w.ms.get k).emb
 
-/-- **The sampling design of member `k`'s part of the sample**: the sample's coins, member `k`'s part. -/
+/-- **The sampling design of member `k`'s part of the sample**: the sample's coins on which the draw ends, member `k`'s
+part. -/
 noncomputable def design (k : Fin w.ms.length) : Law (w.ms.get k).n where
-  Ω := w.L.Ω
-  draw ω := (w.ms.get k).part (w.L.draw ω)
+  Ω := w.EΩ
+  draw ω := (w.ms.get k).part (w.L.draw ω.1)
 
 /-- The law's own miss of a set `B` of the population's proof blocks, `P_a(B)` of `oneStageOf law` on the strata
 `ns`. -/
