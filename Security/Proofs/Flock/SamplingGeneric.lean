@@ -22,9 +22,9 @@ it is two steps (`SamplingGeneric/Split.lean`: `KSOf`, `SessionKSOf`, composed b
 (`ksOf`, `SamplingGeneric/Assemble.lean`: an accepted run whose extraction fails is in `Fails` at `Found` or its
 extraction's own calls collide, `Compiled.split`). `CompilerKSCount` and `CompilerBits` follow from it
 (`SamplingGeneric/Count.lean`, `SamplingGeneric/Bits.lean`, the latter through the extractor's expected reruns and own
-calls, `ExpOwnOf`). `CompilerEfficient` as stated is false (`Counter.not_compilerEfficient`,
-`SamplingGeneric/Efficient.lean`). A session's coins in a compiled run, `coinsOf` and `place`, invert each other
-(`SamplingGeneric/Coins.lean`).
+calls, `ExpOwnOf`). `CompilerEfficient` and `ExpOwnOf` as stated are false (`Counter.not_compilerEfficient`,
+`Counter.not_expOwnOf`, `SamplingGeneric/Efficient.lean`). A session's coins in a compiled run, `coinsOf` and `place`,
+invert each other (`SamplingGeneric/Coins.lean`).
 -/
 
 @[expose] public section
