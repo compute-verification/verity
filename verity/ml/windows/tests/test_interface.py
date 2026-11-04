@@ -594,6 +594,33 @@ def test_a_cut_port_is_rows_each_wired_from_its_own_writer():
         sliced(wires=(*c.wires, I.Wire(GID, "x", G8ID, "o0", at=2, radix=(1,), base=0, step=(0,), cut=(1, 1))))
 
 
+def _bit_for_bit(reader, port: str, writer, out: str, k: int = 1) -> bool:
+    """The network period's circuit check's rule for a wire (`NetworkCheck.Circuit.leavesOk`): ``reader``'s parameter
+    ``port``, cut ``k`` ways, is ``k`` times ``writer``'s output field ``out``'s bits, each side's leaves of one width, the
+    two widths equal or one of them 1."""
+    tp, to = dict(reader.signature()[0])[port], I._fields(writer.signature()[1])[int(out[1:])]
+    (a,), (b,) = tp.width_set(), to.width_set()
+    return (a == b or 1 in (a, b)) and I._bits(tp) == k * I._bits(to)
+
+
+def test_check_wires_reads_words_so_it_takes_wires_the_period_check_refuses_bit_for_bit():
+    """`check_wires` is the sampled proofs' word rule: a reader row of its writer's output row's words, whatever their
+    leaves, an output field under 16 bits one zero-padded word (`interface._width`). So it takes two wires the network
+    period's circuit check refuses, which reads a row bit for bit (`_bit_for_bit`): the accumulator's s32 read as row
+    ``x#0`` of the coordinate's s8 ``x`` cut 16 ways (2 words each side, leaves of 32 bits and of 8), and an embedding
+    read's one-bit ``ok`` read as row ``x#0`` of a GEMM's bf16 ``x`` cut 16 ways (a word each side, 1 bit and 16). Both
+    take the s32 read as the coordinate's f32 ``sx``. So `check_wires` taking a wire is no evidence that the period takes
+    it: the period refuses a circuit with such a wire, and honest serving of it fails."""
+    acc_x = I.Wire(TID, "x", AID, "o0", at=0, radix=(1,), base=0, step=(0,))
+    ok_x = I.Wire(GID, "x", EID, "o1", at=0, radix=(1,), base=0, step=(0,))
+    c = I.Circuit("words", ((ACC, 1), (COORD, 1), (EMB, 1), (GEMM, 1)), wires=(acc_x, ok_x), cuts={TID: {"x": 16}, GID: {"x": 16}})
+    words = {t: (dict(c.layouts[t][0].rows), dict(c.layouts[t][0].outs)) for t in (TID, AID, EID, GID)}
+    assert words[TID][0]["x"] // 16 == words[AID][1]["o0"] == 2 and words[GID][0]["x"] // 16 == words[EID][1]["o1"] == 1
+    assert not _bit_for_bit(COORD, "x", ACC, "o0", 16) and not _bit_for_bit(GEMM, "x", EMB, "o1", 16)
+    assert _bit_for_bit(COORD, "sx", ACC, "o0")
+    I.Circuit("sx", ((ACC, 1), (COORD, 1)), wires=(I.Wire(TID, "sx", AID, "o0", at=0, radix=(1,), base=0, step=(0,)),))
+
+
 def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():
     """A template passes with the k_log its rows alone need, and is refused, its message naming it, its cuts, its rows and
     the fix, when its rows are more than Flock's composer takes, none is past 111 bytes, or they alone need a Flock block
