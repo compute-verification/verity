@@ -1,5 +1,4 @@
 import Definitions.Core.Assumptions
-import Proofs.NetworkCertifier.Period
 import Proofs.NetworkCertifier.RecordRows
 
 /-!
