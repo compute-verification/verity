@@ -68,9 +68,9 @@ CASES = {"rcp": _ALL, "sqrt": _ALL, "div": _ALL, "cdiv3": _ALL, "cdiv": _ALL, "u
 #: the checks of the bodies ptxas builds for kernels' units.cu and hash_decode.cuh's line codes (ieee_pin.cu's units_checks),
 #: which only an sm_90 card runs
 UNITS_CASES = {"units_sqrt": _ALL, "units_rms_mean": _ALL, "units_rms_rs": _ALL, "units_soft_one": _ALL,
-               "units_soft_div": _ALL, "norm_two": _ALL}
+               "units_soft_div": _ALL, "norm_two": _ALL, "norm_one": _ALL}
 FLOAT = {"rcp", "sqrt", "div", "cdiv3", "cdiv", "host_rcp", "host_sqrt", "host_div", "host_cdiv3", *UNITS_CASES}
-NORMAL = {"sqrt", "host_sqrt", "units_sqrt", "norm_two"}  # never subnormal: a square root, or 8192 / b
+NORMAL = {"sqrt", "host_sqrt", "units_sqrt", "norm_two", "norm_one"}  # never subnormal: a square root, or 8192 / b
 
 
 class PinFailed(RuntimeError):
