@@ -881,9 +881,9 @@
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Pouw.PearlPlus": {
-   "imports": ["PouwPearlPlus", "Definitions.Pouw.PearlC.Unscale", "Definitions.Core.Fp32"],
+   "imports": ["PouwPearlPlus", "Definitions.Pouw.PearlC.Unscale", "Definitions.Core.Fp32", "Properties.Pouw.Commit"],
    "except": [],
-   "why": "the properties are stated against Pearl+'s verdict's own functions (`pouw_pearlplus`), on Lean core, and the served y against its Definition (`Pouw.PearlC.unscale`, on `security`'s FP32 words, which import nothing): nothing of Mathlib"
+   "why": "the properties are stated against Pearl+'s verdict's own functions (`pouw_pearlplus`), on Lean core, the trees' messages against the commitments' (`Properties.Pouw.Commit.pathFrames`), and the served y against its Definition (`Pouw.PearlC.unscale`, on `security`'s FP32 words, which import nothing): nothing of Mathlib"
   },
   "Properties.Pouw.Commit": {
    "imports": ["PouwCommit"],
@@ -5996,7 +5996,7 @@
    "Properties.Pouw.PearlPlus.LoadedGivesUp": "unstated: a loaded pass's give-up keeps V-EX's caps and the published records root, unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
    "Properties.Pouw.PearlPlus.TileAcceptMeans": "unstated: what a passed tile establishes (its openings, its words and leaf, the per-row rules and cap, the y as the unscale of U), unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
    "Properties.Pouw.PearlPlus.TileKeepsTheCap": "unstated: a passed tile's replayed debit is within rho = 1/400 of its credit, as a tile and on each credited row, unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
-   "Properties.Pouw.PearlPlus.OpeningBinds": "unstated: two accepted openings of one position name one value or SHA-512 collides, unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
+   "Properties.Pouw.PearlPlus.OpeningBinds": "unstated: two accepted openings of one position of an hm96 tree open one value, or two different messages hashed in checking them (`rowsHashed`) collide under SHA-512; proved (`Properties.Pouw.PearlPlus.openingBinds`), and listed under guarantees once it has its witnesses",
    "Properties.Pouw.PearlPlus.YIsTheUnscale": "unstated: the unscale Pearl+'s check holds the served y to is the Definition Pouw.PearlC.unscale (PearlCUnscale_v1 at BIAS off), unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
    "Properties.Pouw.PearlPlus.WorkIsTheCredit": "unstated: the work an accepted Pearl+ run publishes is its credit at Pearl's assumption over the plan's passes at its draws and delta = 1/100, unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
    "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
