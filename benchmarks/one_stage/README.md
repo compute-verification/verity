@@ -237,8 +237,11 @@ negatives.
   run's measurement beside the bound as that run's. It lists the re-proof inputs, what a later re-proof of the sampled
   units with each wire read inside its session needs (the committed values and openings of every sampled unit and of
   the units that write what it reads, the registration, the live draw and its receipt, and the public files), by
-  where each is and whether the run wrote each public one, and how each must be kept: in custody past the week after
-  the run, never only on the served node.
+  where each is and whether the run wrote each public one, and how each must be kept: past the week after the run,
+  never only on the served node, the public ones in custody and the serve dir's, witness, in a private copy off the
+  node, never in `$OUT` or custody. `--reproof-copy NODE:/PATH` with `--reproof-listing` (the copy's listing, kept
+  off `$OUT`; `REPROOF_COPY` and `REPROOF_LISTING` in `served_verdicts.sh`) names the copy and checks each serve-dir
+  input against the listing by its path alone.
 - `advice_charge.py ADVICE --run RUN --to FILE`: honest serving's advice charge from `verity-vllm advice`'s output
   over a test run with public inputs: each Commit period's advice bits, unpadded, beside its requests' prompt and
   output lengths and finishes, labelled as that run's. `served_verdicts.sh advice-charge` serves such a run

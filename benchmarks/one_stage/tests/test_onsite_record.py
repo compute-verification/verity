@@ -23,6 +23,7 @@ import dataclasses
 import hashlib
 import json
 import math
+import re
 import sys
 from fractions import Fraction
 from pathlib import Path
@@ -676,6 +677,39 @@ def test_the_record_lists_the_re_proof_inputs_and_which_of_outs_the_run_wrote(tm
             (out / path).touch()
     assert all(v["present"] for v in OR.record(out)["reproof"]["inputs"].values() if v["in"] == "OUT")
     assert OR.record(served_out(tmp_path / "rehearsal"))["reproof"]["kept"] == OR.REPROOF_KEPT
+    assert got["copy"] == {"missing": OR.NO_COPY}
+
+
+def test_the_serve_dirs_re_proof_inputs_are_checked_against_their_copys_listing_by_path_alone(tmp_path):
+    """The serve dir's inputs, witness, are copied off the node: the record names the copy's node and path and says of
+    each input whether the listing holds every file its path names, and nothing of the listing's window names; one file
+    short is that input not copied, and a copy that isn't NODE:/PATH or a listing it can't read is the copy's error."""
+    def files(path: str) -> list[str]:
+        out = []
+        for part in path.split(", "):
+            m = re.fullmatch(r"(.*)\{([^}]*)\}(.*)", part)
+            for p in [m[1] + x + m[3] for x in m[2].split(",")] if m else [part]:
+                p = p.replace("<K>", "7").replace("<class>", "c64")
+                out.append(p + "m0-private.bin" if p.endswith("/") else p)
+        return out
+
+    out = accepted(tmp_path)
+    serve = [p for at, p, _ in OR.REPROOF.values() if at == "serve dir"]
+    listing = tmp_path / "private" / "listing.txt"
+    listing.parent.mkdir()
+    listing.write_text("\n".join(f for p in serve for f in files(p)) + "\n")
+    got = OR.record(out, copy="vy-nebius-cpu-3:/home/research/keep/reproof", listing=listing)["reproof"]
+    assert got["copy"] == {"node": "vy-nebius-cpu-3", "path": "/home/research/keep/reproof", "not_copied": []}
+    assert all(v["copied"] for v in got["inputs"].values() if v["in"] == "serve dir")
+    assert not any("copied" in v for v in got["inputs"].values() if v["in"] == "OUT")
+    assert not SV.NAMED.search(json.dumps(got)) and "c64" not in json.dumps(got)
+    listing.write_text("\n".join(f for p in serve for f in files(p) if not f.endswith("/receipt.json")) + "\n")
+    got = OR.record(out, copy="vy-nebius-cpu-3:/home/research/keep/reproof", listing=listing)["reproof"]
+    assert got["copy"]["not_copied"] == ["draw"] and got["inputs"]["values"]["copied"]
+    assert OR.record(out, copy="vy-nebius-cpu-3", listing=listing)["reproof"]["copy"] == {
+        "error": "--reproof-copy 'vy-nebius-cpu-3' isn't NODE:/PATH"}
+    assert OR.record(out, copy="n:/p", listing=tmp_path / "none.txt")["reproof"]["copy"] == {
+        "error": "the copy's listing (--reproof-listing) can't be read: FileNotFoundError"}
 
 
 def test_the_record_leaves_the_node_as_written(tmp_path):

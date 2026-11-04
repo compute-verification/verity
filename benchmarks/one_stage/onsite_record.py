@@ -80,7 +80,10 @@ one execution phase, proved only where m is 1.
 unit reads then proved inside its session: the committed values and their openings for every sampled unit and the units
 that write what it reads, the registration, the live draw and its receipt, and the public files, each by where it is (the
 serve dir's by their paths there, naming no window) and what it holds, with whether the run wrote each of OUT's and how
-each must be kept (``kept``, `REPROOF_KEPT`).
+each must be kept (``kept``, `REPROOF_KEPT`). The serve dir's are witness, kept off OUT and custody in a copy off the
+served node (``--reproof-copy`` NODE:/PATH, ``--reproof-listing``, a listing of it kept off OUT): ``copy`` names its node
+and path, and each serve-dir input says whether the listing holds every file its path names, never their bytes or
+digests; with no copy given, ``copy`` is missing with why.
 
 The record's counts and indices are the certification period's (m and each phase j), public in the Lean answer's
 profile; it names no Commit window, whose count `publish` holds.
@@ -319,9 +322,13 @@ REPROOF = {
                                "registrations"),
     "record": ("OUT", "record/verdicts.json", "the window report of every verdict"),
 }
-REPROOF_KEPT = ("each in custody, retained past the week after the run, never only on the served node. This record reads "
-                "OUT alone: it says whether the run wrote each of OUT's, and nothing of the serve dir's, the prover's, "
-                "which `publish` keeps off OUT; a re-proof holds each to the public registration and the audit's summary")
+REPROOF_KEPT = ("each retained past the week after the run, never only on the served node: OUT's in custody with the "
+                "run's public files; the serve dir's, witness, never in OUT or custody, which are public, but copied off "
+                "the served node to a private path keeping the serve dir's layout (`copy`: its node and path, and of "
+                "each serve-dir input whether the copy's listing holds every file its path names, never their bytes or "
+                "digests); a re-proof holds each to the public registration and the audit's summary")
+NO_COPY = ("no copy of the serve dir's inputs is given (--reproof-copy NODE:/PATH and --reproof-listing): they are on "
+           "the served node only")
 
 
 def missing(why: str, src: str | None = None) -> dict[str, Any]:
@@ -646,16 +653,49 @@ def figure(out: Path, case: Mapping[str, Any], public: Mapping[str, Any], K: int
         return (why := {"error": f"{CASE} commitment: {type(e).__name__}: {e}"}), why
 
 
-def reproof(out: Path) -> dict[str, Any]:
-    """The re-proof inputs (`REPROOF`), each with where it is and what it holds, and of OUT's whether the run wrote it."""
-    return {"inputs": {name: {"in": at, "path": path, "holds": what} | ({"present": (out / path).exists()}
-                                                                       if at == "OUT" else {})
-                       for name, (at, path, what) in REPROOF.items()},
-            "kept": REPROOF_KEPT}
+def named(path: str) -> list[re.Pattern[str]]:
+    """Each file a `REPROOF` path names, as a pattern over a listing's paths: ``, `` separates paths, ``{a,b}`` is each of
+    a and b, ``<x>`` any one name, and a trailing ``/`` a directory holding at least one file."""
+    out = []
+    for part in path.split(", "):
+        m = re.fullmatch(r"(.*)\{([^}]*)\}(.*)", part)
+        for p in [m[1] + x + m[3] for x in m[2].split(",")] if m else [part]:
+            rx = "".join("[^/]+" if t.startswith("<") else re.escape(t) for t in re.split(r"(<[^>]+>)", p))
+            out.append(re.compile(rx + (".+" if p.endswith("/") else "")))
+    return out
 
 
-def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
-    """OUT's onsite record (module docstring); FileNotFoundError where `served_verdicts.py record` wrote no report."""
+def reproof(out: Path, copy: str | None = None, listing: Path | None = None) -> dict[str, Any]:
+    """The re-proof inputs (`REPROOF`), each with where it is and what it holds; of OUT's whether the run wrote it, and of
+    the serve dir's, where ``copy`` (NODE:/PATH) and ``listing`` (each file under PATH, one path relative to it a line)
+    are given, whether the copy holds every file its path names."""
+    files = None
+    if copy is None or listing is None:
+        kept: dict[str, Any] = {"missing": NO_COPY}
+    elif not (node_at := copy.partition(":"))[0] or not node_at[2].startswith("/"):
+        kept = {"error": f"--reproof-copy {copy!r} isn't NODE:/PATH"}
+    else:
+        try:
+            files = [x for x in listing.read_text().splitlines() if x]
+            kept = {"node": node_at[0], "path": node_at[2]}
+        except (OSError, UnicodeDecodeError) as e:
+            kept = {"error": f"the copy's listing (--reproof-listing) can't be read: {type(e).__name__}"}
+    inputs = {}
+    for name, (at, path, what) in REPROOF.items():
+        inputs[name] = {"in": at, "path": path, "holds": what}
+        if at == "OUT":
+            inputs[name]["present"] = (out / path).exists()
+        elif files is not None:
+            inputs[name]["copied"] = all(any(rx.fullmatch(f) for f in files) for rx in named(path))
+    if files is not None:
+        kept["not_copied"] = [n for n, x in inputs.items() if x.get("copied") is False]
+    return {"inputs": inputs, "copy": kept, "kept": REPROOF_KEPT}
+
+
+def record(out: Path, advice_charge: Path | None = None, copy: str | None = None,
+           listing: Path | None = None) -> dict[str, Any]:
+    """OUT's onsite record (module docstring), with the re-proof inputs' ``copy`` and its ``listing`` where given
+    (`reproof`); FileNotFoundError where `served_verdicts.py record` wrote no report."""
     report = json.loads((out / "record" / "verdicts.json").read_text())
     if report.get("format") != EXTENDS:
         raise ValueError(f"record/verdicts.json is {report.get('format')!r}, not {EXTENDS}")
@@ -681,7 +721,7 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
                       "missing": [k for k, x in v.items() if x["verdict"] == "missing"],
                       "not_accepting": [k for k, x in v.items() if x["verdict"] not in ("accept", "missing")]},
         "placement": profile.get("placement"), "advice_charge": advice, "composite_error": composite_error(rows, None),
-        "reproof": reproof(out)}
+        "reproof": reproof(out, copy, listing)}
     nv = v["the network certifier"]
     if nv["verdict"] != "accept":
         why = (f"the network certifier's verdict is {nv['verdict']}"
@@ -749,10 +789,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("out", type=Path, help="the served run's public $OUT")
     ap.add_argument("--advice-charge", type=Path,
                     help="a test run's advice-charge.json (advice_charge.py), stated beside the bound as that run's")
+    ap.add_argument("--reproof-copy", metavar="NODE:/PATH",
+                    help="where the serve dir's re-proof inputs were copied off the served node, keeping its layout")
+    ap.add_argument("--reproof-listing", type=Path,
+                    help="the copy's listing, kept off OUT: each file under PATH, one path relative to it a line")
     ap.add_argument("--to", type=Path, help="the record's path (default OUT/record/onsite.json)")
     a = ap.parse_args(argv)
     try:
-        rec = record(a.out, a.advice_charge)
+        rec = record(a.out, a.advice_charge, a.reproof_copy, a.reproof_listing)
     except FileNotFoundError as e:
         print(f"ONSITE: not written: {e.filename} is missing", file=sys.stderr)
         return 1
