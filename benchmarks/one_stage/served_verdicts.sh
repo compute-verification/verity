@@ -85,6 +85,9 @@
 #     unless COMPOSITE is set empty,
 #     remote's and onsite's Lean verdicts on the run's cases (`served_composite.sh`'s docstring). Their verdicts gate
 #     nothing, but a composite that didn't run (a tree without composite.py) or whose Lean didn't answer fails the run.
+#     Under COMPOSE_OFF_NODE=1, the default, neither is of record here: the served node is the prover's, so this record
+#     says (its `deferred`) that the final record and the composite are composed off it, and in the composite's place
+#     the run's last step, after V3c, writes the compose hand-off they are composed from (below, at `handoff`).
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
 #     alone, its other pieces dropped (not run, no default command, the wipe's and the certifier's included; the
 #     preflight refuses any onsite command set), its record composing their verdicts alone and its composite remote's.
@@ -100,10 +103,9 @@
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
 #     registration's root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the
 #     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), samples the
-#     registration's members (V3C_LAW, default subset:1, stratified:1 under H1_TIE) on a local development challenger
-#     session's coins (--challenger local, pinned on main's first-parent line: MAIN_FILE's, kept as
-#     $OUT/v3c-audit/main.txt, else MAIN_SHA's) and proves them, its composes made before it with V3C_WARM_JOBS (at
-#     `v3c_audit`); then
+#     registration's members (V3C_LAW, default subset:1, stratified:1 under H1_TIE) on V3C_CHALLENGER's coins (below,
+#     Coins; pinned on main's first-parent line: MAIN_FILE's, kept as $OUT/v3c-audit/main.txt, else MAIN_SHA's) and
+#     proves them, its composes made before it with V3C_WARM_JOBS (at `v3c_audit`); then
 #     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
 #     and a copy in $OUT/v3c-audit: the registration, the Program, its answer and its free inputs), and V3c fails where it
 #     writes none. Under H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close, its
@@ -122,10 +124,44 @@
 #     and the period check, which the run's --timeout holds beside the other steps. The period check writes the
 #     certifier's answer.json in DIR, which step 4's certifier piece reads; `served_verdicts.sh v3c`, which writes no
 #     record, moves the steps' logs (CERTIFIER_PRIVATE) to the serve dir's private/pieces/certifier before it exits.
-# Coins: sampled proofs' sample is on a local development challenger session's coins on the served node (run.sh's
-# PP_CHALLENGER default, local, pinned on PP_MAIN's line, else MAIN_FILE's, else origin's main's) unless PP_CHALLENGER
-# names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY); V3c's audit's is on
-# a local development session of its own where it runs (step 6). With H1_GATE (the
+# Composed off the served node: with COMPOSE_OFF_NODE=1 (the default; 0 composes both on the served node, the composite
+# then a development check that claims no record, `served_composite.sh`, which refuses one there under 1) the run's
+# last step (`handoff`, after V3c in every run, so the composite reads V3c's audit's cases where it ran, the class window
+# of record, and step 3's audit's only in a run without V3c) writes the serve dir's private/compose: the
+# record's pieces (only the files the record reads of each), the inference-only verdict, the settings the follow-on
+# composes at (compose.env: the window and its engine steps, the product, COMPOSITE, ALPHA, GAMMA, the served node,
+# COMPOSE_NODE, the tree's commit and the host V3c's audit ran on) and its every input relative to the serve dir
+# (`handoff_inputs`: verifier-side files alone, the records audits' cases and the blobs they name, H1's log and records,
+# PoUW's period case, sampled proofs' summary and registration), listed (inputs.txt) and hashed (inputs.sha256). A list
+# holding a served run's witness (`served_verdicts.py witness`: a value file, a prover's instance, private or salts file,
+# the advice, a key, a row dir, the requests) or a blob outside the serve dir is refused, and the run fails. Those files alone
+# are copied to the same path on COMPOSE_NODE, an auditor host the prover doesn't control and where no witness goes
+# (default vy-auditor-2; never a prover node such as a deferral's follow-on), outside any run dir (`served_verdicts.sh
+# copy compose`), and there `served_verdicts.sh compose` with D alone holds the copy to its sums,
+# runs at the served node's tree (another only with FOLLOW_ANY_TREE=1), refuses the served node itself and a serve dir
+# holding any witness, needs no row dir, vLLM venv, card or gpu-lease, and composes the final record (`record --off-node
+# --steps --sampled-lean`: composed_on the host it ran on, served_node false, from the hand-off, sampled proofs' row this
+# host's own run of its Lean verifier on the case's proofs, each other row's answer as the served node wrote it, and each
+# row naming which in its answer_from) and the composite (`served_composite.sh`,
+# SERVED_NODE the served node, COMPOSE_HANDOFF set); its $OUT is published as every run's is. PRODUCT=onsite's composite
+# reads PoUS's and the wipe's cases, which only the served node's card writes, so under COMPOSE_OFF_NODE=1 the preflight
+# refuses it unless COMPOSITE is set empty. `served_verdicts.sh handoff`, in TREE with D, K and OUT, writes the hand-off
+# alone from OUT's pieces and its record's inference-only verdict.
+# `served_verdicts.sh copy deferred|compose HOST`, with D, on the node that holds the list, sends each file a deferral's
+# or a hand-off's inputs.txt lists, and nothing else, to the same path on HOST (RSYNC, default rsync over ssh), its log
+# in the serve dir's private/: the deferral's (prover-side, its window's witness) to a prover node, never COMPOSE_NODE;
+# the hand-off's only once `served_verdicts.py witness` passes its list again.
+# Coins: V3c's audit, the sampled-proofs audit of record, samples on V3C_CHALLENGER's coins, by default PP_CHALLENGER's: the
+# live challenger with PP_CHALLENGER=gate:USER@HOST (records_audit's, with its peer V3C_PEER, default PP_PEER, the node
+# it runs on, PP_CHALLENGER_KEY and PP_GATE_KEY), where it runs, on the served node or a deferral's follow-on. There
+# `served_verdicts.py gate --root` first finds no session on the window's run root (the gate opens a root once, ever) and
+# no period of lane H1_LANE open (a reserve would join it), its V3C-GATE line saying so and when. A local or loopback
+# session is a development session, which the preflight refuses unless DEVELOPMENT=1 (a development run), as it refuses a
+# V3C_PEER other than the node's peer H1's or Pearl+'s session names, and in a follow-on the served node's. Sampled
+# proofs' step 3 samples on a local development challenger session's coins on the served node (run.sh's PP_CHALLENGER
+# default, local, pinned on PP_MAIN's line, else MAIN_FILE's, else origin's main's) unless PP_CHALLENGER names the live
+# challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY), and then too while V3c's audit is
+# live, since both open on the window's run root: step 3 is then a development check. With H1_GATE (the
 # lane's gate command, by default "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"; empty, no
 # H1) the endpoint serves PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER,
 # default vy-dc-h200, at the engine's T and S WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a
@@ -165,21 +201,25 @@
 # and PoUW's period case once each of its windows names R (`served_cases.py`). The
 # preflight refuses H1_TIE on a tree whose window-commit takes no --window-registration.
 # Under H1_TIE on a node with less memory than V3c's audit needs (its MemTotal, NODE_MEM_GB, under V3C_AUDIT_MEM_GB, default
-# 290), step 6 holds the tie (WINDOW-COMMIT, WINDOW-CIRCUIT-HELD) and defers the audit and the composite (`defer`), for
-# PRODUCT=remote alone (onsite's composite reads PoUS's case, which needs this node's card: the preflight refuses it).
+# 290), step 6 holds the tie (WINDOW-COMMIT, WINDOW-CIRCUIT-HELD) and defers the audit (and, under COMPOSE_OFF_NODE=0, the
+# composite; `defer`), for PRODUCT=remote alone (onsite's composite reads PoUS's case, which needs this node's card: the
+# preflight refuses it).
 # Step 5's record says what was deferred and why (its `deferred`), a DEFERRED line says so, and the serve dir's
 # private/deferred gets the pieces the record read, the inference-only verdict (which the follow-on's record carries as
 # the served node wrote it), the settings the follow-on runs at (deferred.env: the window, the
-# product, V3c's class and law, H1_TIE, COMPOSITE, ALPHA, GAMMA, the served node and the tree's commit), and the
+# product, V3c's class, law and coins (V3C_CHALLENGER, DEVELOPMENT), H1_TIE, COMPOSITE, ALPHA, GAMMA, the served node, its
+# peer, the tree's commit, COMPOSE_OFF_NODE and COMPOSE_NODE; a deferral that names no COMPOSE_OFF_NODE follows on at 0),
+# and the
 # follow-on's every input relative to the serve dir (`deferred_inputs`), listed (inputs.txt, which names inputs.sha256
 # too) and hashed (inputs.sha256). The copy is the prover's: those files alone, to the same path on a node with the
 # memory, outside any run dir. There `served_verdicts.sh v3c` with D alone (deferred.env names the window, and an
 # environment that sets one of its settings to another value is refused) holds the copy to its sums, runs at the served
 # node's tree (another only with FOLLOW_ANY_TREE=1, which its WINDOW-CIRCUIT line names, since it reads that tree's
-# window-circuit record), needs no row dir, vLLM venv, card or gpu-lease, and after V3c's audit composes the final record
-# (`record --node` the served node, so its composed_on names the host it composed on, served_node false, and that it read
-# a prover-side copy) and the
-# composite (`served_composite.sh`, SERVED_NODE the served node); its $OUT is published as every run's is.
+# window-circuit record), needs no row dir, vLLM venv, card or gpu-lease, and after V3c's audit writes the compose hand-off
+# there (above; a compose follow-on refuses a serve dir holding the copy's value files, so COMPOSE_NODE is then another
+# node), or under COMPOSE_OFF_NODE=0 composes the final record (`record --node` the served node, so its composed_on names
+# the host it composed on, served_node false, and that it read a prover-side copy) and the composite
+# (`served_composite.sh`, SERVED_NODE the served node); its $OUT is published as every run's is.
 # POUW=pearlplus (default h1) makes Pearl+ PoUW's piece instead: H1_GATE defaults empty (set, the preflight refuses
 # it), and POUW_CMD to 'bash benchmarks/one_stage/served_pearlplus.sh "$1" "$2" "$3"' within POUW_TIMEOUT 120m, which
 # once the window is audited serves Pearl+ (pouw:pearl-c-h100-v1-h3, Llama 3.2 1B's BF16 checkpoint) on this card under
@@ -229,17 +269,28 @@ ROOT=${SERVE_ROOT:-/workspace/research/vllm-served-verdicts}
 D=${D:-$ROOT/${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}
 # step 6's deferral (`defer`): the settings the follow-on runs at, its inputs' list and sums, and the pieces the record read
 DEFER_DIR=$D/private/deferred
-FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE" FOLLOW= CLASH=
-if [ "${1:-}" = v3c ] && [ -f "$DEFER_DIR/deferred.env" ]; then  # the follow-on of a deferral, at the settings it recorded
-  FOLLOW=1
+FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE"
+# the compose hand-off (`handoff`): the settings its follow-on composes at, its inputs' list and sums, and the pieces
+COMPOSE_DIR=$D/private/compose
+COMPOSES="K PRODUCT COMPOSITE ALPHA GAMMA SERVED_NODE COMPOSE_NODE COMPOSE_TREE AUDITED_ON STEPS"
+FOLLOW= COMPOSE= CLASH=
+follow_env() {  # $1's settings, those named in $2, read over the environment's, CLASH naming each the environment set otherwise
   declare -A given=()
-  for v in $FOLLOWS; do [ -z "${!v+x}" ] || given[$v]=${!v}; done
+  for v in $2; do [ -z "${!v+x}" ] || given[$v]=${!v}; done
   set -a
   # shellcheck source=/dev/null
-  . "$DEFER_DIR/deferred.env"
+  . "$1"
   set +a
-  for v in $FOLLOWS; do [ -z "${given[$v]+x}" ] || [ "${given[$v]}" = "${!v-}" ] || CLASH+=" $v"; done
+  for v in $2; do [ -z "${given[$v]+x}" ] || [ "${given[$v]}" = "${!v-}" ] || CLASH+=" $v"; done
   VENV=${VENV:-$TREE/.venv}
+}
+if [ "${1:-}" = v3c ] && [ -f "$DEFER_DIR/deferred.env" ]; then  # the follow-on of a deferral, at the settings it recorded
+  FOLLOW=1
+  follow_env "$DEFER_DIR/deferred.env" "$FOLLOWS"
+  COMPOSE_OFF_NODE=${COMPOSE_OFF_NODE-0}  # a deferral that names no COMPOSE_OFF_NODE predates it: it composes as it did
+elif [ "${1:-}" = compose ]; then  # the compose follow-on of a hand-off, at the settings it recorded
+  COMPOSE=1
+  [ ! -f "$COMPOSE_DIR/compose.env" ] || follow_env "$COMPOSE_DIR/compose.env" "$COMPOSES"
 fi
 H=/workspace/research/vllm-composed-h200int8
 ROW=${ROW:-$H/r20261030-210701-a20f/llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager} ROW_ID=${ROW_ID:-${ROW##*/}}
@@ -266,6 +317,8 @@ fi
 if [ -n "$H1_GATE" ]; then WINDOW_STEPS=${WINDOW_STEPS:-16}; else WINDOW_STEPS=${WINDOW_STEPS:-256}; fi
 MAIN_SHA=${MAIN_SHA-$(git -C "$TREE" rev-parse HEAD 2>/dev/null)}
 PRODUCT=${PRODUCT:-onsite}
+COMPOSE_OFF_NODE=${COMPOSE_OFF_NODE:-1} COMPOSE_NODE=${COMPOSE_NODE:-vy-auditor-2}
+export COMPOSE_OFF_NODE
 if [ "$PRODUCT" = onsite ]; then
   # shellcheck disable=SC2016
   [ -f "$TREE/benchmarks/pous/streamed_wipe/served_wipe.sh" ] \
@@ -309,6 +362,7 @@ case $PRODUCT in
     done ;;
   *) say "PREFLIGHT: PRODUCT is onsite or remote, not $PRODUCT"; exit 3 ;;
 esac
+case $COMPOSE_OFF_NODE in 0 | 1) ;; *) say "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default) or 0, not $COMPOSE_OFF_NODE"; exit 3 ;; esac
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
 weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's registration
@@ -343,6 +397,28 @@ NODE_MEM_GB=${NODE_MEM_GB:-$(awk '/^MemTotal:/ {print int($2 / 1048576)}' /proc/
 short_of_memory() {  # 0 iff this node has less memory than V3c's audit needs, saying both
   [ "$NODE_MEM_GB" -lt "$V3C_AUDIT_MEM_GB" ] || return 1
   echo "this node has $NODE_MEM_GB GB, under the $V3C_AUDIT_MEM_GB GB V3c's audit needs (V3C_AUDIT_MEM_GB)"
+}
+# V3c's audit's coins (`v3c_audit`, records_audit's --challenger): V3C_CHALLENGER, by default sampled proofs' PP_CHALLENGER,
+# on the gate with its peer V3C_PEER (default PP_PEER: the node the audit runs on, as the gate's /etc/vy/peers names it,
+# in a follow-on not the served node) under PP_CHALLENGER_KEY and PP_GATE_KEY. A local or loopback session's coins are a
+# development session's, which only a development run (DEVELOPMENT=1) takes.
+V3C_CHALLENGER=${V3C_CHALLENGER:-${PP_CHALLENGER:-local}} V3C_PEER=${V3C_PEER:-${PP_PEER:-}} DEVELOPMENT=${DEVELOPMENT:-}
+v3c_live() { [[ $V3C_CHALLENGER == gate:* ]]; }
+# Step 3's: PP_CHALLENGER's, but local while V3c's audit is live, since both open on the window's run root, which the
+# gate opens once, ever, and V3c's is the sampled-proofs audit of record
+SP_CHALLENGER=${PP_CHALLENGER:-local}
+[ -n "$V3C" ] && v3c_live && SP_CHALLENGER=local
+v3c_coins() {  # where V3c's audit's coins come from, as its COINS line says
+  if v3c_live; then
+    echo "the challenger $V3C_CHALLENGER (peer $([ -n "${DEFER:-}" ] && echo "the follow-on's node's" || echo "$V3C_PEER")), the window's run root's one session, the sampled-proofs audit of record"
+  else
+    echo "a development challenger session where it runs (V3C_CHALLENGER $V3C_CHALLENGER), in a development run (DEVELOPMENT=1)"
+  fi
+}
+v3c_gate() {  # V3C_CHALLENGER's gate as the command `served_verdicts.py gate` runs, the ssh records_audit's session reaches
+  local g=(ssh -o BatchMode=yes)
+  [ -z "${PP_GATE_KEY:-}" ] || g+=(-o IdentitiesOnly=yes -i "$PP_GATE_KEY")
+  printf '%q ' "${g[@]}" "${V3C_CHALLENGER#gate:}"
 }
 tree_sha() { git -C "$TREE" rev-parse HEAD 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-}"; }
 window_commit() {  # window K of $D committed as V3C's class circuit's units in $VW/window, its answer in $1 and its errors
@@ -433,7 +509,7 @@ v3c_warm() {  # every template of the committed window composed into $VW/compose
   say "V3C-WARM class $V3C (records_audit.py warm exit $rc, $V3C_WARM_JOBS at a time): $why"
 }
 v3c_audit() {  # the committed window audited from its records alone: its circuit and run root the verifier's, the weights pinned
-  local run leanb m0 rc tie=() cache=() ports=${V3C_PORTS:-16} main=$OUT/v3c-audit/main.txt
+  local run leanb m0 rc gl tie=() cache=() ch=(--challenger "$V3C_CHALLENGER") ports=${V3C_PORTS:-16} main=$OUT/v3c-audit/main.txt
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
     "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for the window in windows.jsonl"; return 1; }
   mkdir -p "$OUT/v3c-audit"
@@ -455,10 +531,17 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     v3c_warm
     cache=(--compose-cache "$VW/compose-cache")
   fi
+  if v3c_live; then  # the gate opens the run root once, ever, and a reserve joins the lane's open period: neither, first
+    gl=$("$PY" "$SV" gate --gate "$(v3c_gate)" --lane "${H1_LANE:-vllm}" --main "$main" --root "$run" 2>&1); rc=$?
+    say "V3C-$(tail -1 <<< "$gl" | cut -c1-1200) (checked $(date -u +%Y-%m-%dT%H:%M:%SZ))"
+    [ "$rc" = 0 ] || return 1
+    ch+=(--peer "$V3C_PEER" --challenger-key "$PP_CHALLENGER_KEY" ${PP_GATE_KEY:+--gate-key "$PP_GATE_KEY"})
+  fi
+  V3C_AUDITED=$(hostname -s)
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
     --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${cache[@]}" \
-    --challenger local --main "$main" --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/flock-verify" \
+    "${ch[@]}" --main "$main" --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/flock-verify" \
     --firewall "$leanb/flock-firewall" --ports "$ports" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
   rc=$?
   cp "$VW/audit/summary.json" "$OUT/v3c-audit/" 2>/dev/null
@@ -766,25 +849,36 @@ for x in open(sys.argv[1]):
     (cd "$D" && find "v3c-w$K-$vtag/window" private/deferred/pieces private/deferred/deferred.env -type f 2>/dev/null)
   } | (cd "$D" && while IFS= read -r f; do [ ! -f "$f" ] || echo "$f"; done) | LC_ALL=C sort -u
 }
-DEFERRED_WHAT="V3c's audit$([ -z "${COMPOSITE-1}" ] || echo " and the composite")"
+HANDED_WHAT="the final record$([ -z "${COMPOSITE-1}" ] || echo " and the composite")"
+if [ "$COMPOSE_OFF_NODE" = 1 ]; then DEFERRED_WHAT="V3c's audit"
+else DEFERRED_WHAT="V3c's audit$([ -z "${COMPOSITE-1}" ] || echo " and the composite")"; fi
 defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a follow-on: the pieces the record read
   # copied to the serve dir's private/deferred, the settings it runs at (deferred.env), and the follow-on's every input
   # listed (inputs.txt, what a prover-side copy takes) and hashed (inputs.sha256, what the follow-on holds the copy to)
   (umask 077; rm -rf "$DEFER_DIR" && mkdir -p "$DEFER_DIR/pieces") || return 1
   [ ! -d "$OUT/pieces" ] || cp -a "$OUT/pieces/." "$DEFER_DIR/pieces/" || return 1
   [ ! -f "$OUT/record/inference-only.json" ] || cp "$OUT/record/inference-only.json" "$DEFER_DIR/inference-only.json" || return 1
-  printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "${V3C_LAW:-subset:1}" H1_TIE "${H1_TIE:-}" \
-    COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" SERVED_NODE "$(hostname)" DEFERRED_TREE "$(tree_sha)" \
-    > "$DEFER_DIR/deferred.env" || return 1
+  printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "${V3C_LAW:-subset:1}" V3C_CHALLENGER "$V3C_CHALLENGER" \
+    DEVELOPMENT "$DEVELOPMENT" H1_TIE "${H1_TIE:-}" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
+    SERVED_NODE "$(hostname)" SERVED_PEER "$V3C_PEER" DEFERRED_TREE "$(tree_sha)" COMPOSE_OFF_NODE "$COMPOSE_OFF_NODE" \
+    COMPOSE_NODE "$COMPOSE_NODE" > "$DEFER_DIR/deferred.env" || return 1
   deferred_inputs > "$DEFER_DIR/inputs.txt"
   (cd "$D" && tr '\n' '\0' < "$DEFER_DIR/inputs.txt" | xargs -0 -r sha256sum) > "$DEFER_DIR/inputs.sha256" || return 1
   echo private/deferred/inputs.sha256 >> "$DEFER_DIR/inputs.txt"
-  say "DEFERRED $DEFERRED_WHAT: $1. A follow-on on a node with the memory runs them and composes the final record there," \
-      "from the serve dir's audit inputs copied prover-side, outside any run dir, each file its private/deferred/inputs.txt" \
-      "lists: D=$D bash benchmarks/one_stage/served_verdicts.sh v3c"
+  if [ "$COMPOSE_OFF_NODE" = 1 ]; then
+    say "DEFERRED $DEFERRED_WHAT: $1. A follow-on on a node with the memory runs it there and writes the compose hand-off," \
+        "from the serve dir's audit inputs copied prover-side, outside any run dir, each file its private/deferred/inputs.txt" \
+        "lists: D=$D bash benchmarks/one_stage/served_verdicts.sh v3c; $HANDED_WHAT are composed off both nodes, on" \
+        "COMPOSE_NODE ($COMPOSE_NODE), from that hand-off"
+  else
+    say "DEFERRED $DEFERRED_WHAT: $1. A follow-on on a node with the memory runs them and composes the final record there," \
+        "from the serve dir's audit inputs copied prover-side, outside any run dir, each file its private/deferred/inputs.txt" \
+        "lists: D=$D bash benchmarks/one_stage/served_verdicts.sh v3c"
+  fi
 }
 follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: the copy held to the served node's sums, then
-  # step 6's audit, the final record and the composite, here rather than on the served node
+  # step 6's audit, and the final record and the composite here rather than on the served node, or under
+  # COMPOSE_OFF_NODE=1 the compose hand-off for a node of neither
   local rc vrc rec comp=0 TPY=$TREE/.venv/bin/python
   (cd "$D" && sha256sum --check --strict --quiet private/deferred/inputs.sha256) > "$DEFER_DIR/check.log" 2>&1
   rc=$?
@@ -800,6 +894,12 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
       "$([ "$sha" = "$DEFERRED_TREE" ] && echo "(this tree's)" || echo "(this tree is $sha: FOLLOW_ANY_TREE)");" \
       "this node holds no row dir to count it from"
   v3c_commit && v3c_proved; vrc=$?
+  if [ "$COMPOSE_OFF_NODE" = 1 ]; then
+    handoff "$DEFER_DIR/pieces" "$DEFER_DIR/inference-only.json"; rc=$?
+    echo "---- verdicts"; cat "$OUT/verdicts.txt"
+    [ "$vrc" = 0 ] && [ "$rc" = 0 ]
+    return
+  fi
   if [ -f "$DEFER_DIR/inference-only.json" ]; then
     mkdir -p "$OUT/record" && cp "$DEFER_DIR/inference-only.json" "$OUT/record/inference-only.json" \
       && say "INFERENCE-ONLY: the served node's verdict, carried into this record as it wrote it (the serve dir's private/deferred/inference-only.json)"
@@ -812,6 +912,140 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   echo "---- verdicts"; cat "$OUT/verdicts.txt"
   [ "$vrc" = 0 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ]
 }
+# The compose hand-off (COMPOSE_OFF_NODE=1, the default): what the final record and the composite read, relative to the
+# serve dir, and nothing else. The record's: step 3's records audit's summary, audit record, registration and runs, and
+# of each piece the files `piece_row` and `piece_server` read (copied to private/compose/pieces). The composite's: each
+# records audit's cases (sampled-proofs-served's and V3c's window/case.json, case-v2.json and their error files), the
+# files a case names as its blobs (the circuit, the public file, each session's record and proofs, the lookup tables),
+# H1's log and each record it names, and PoUW's period case. And compose.env, its settings: the window, its engine steps
+# (the record's, picked here from the requests file, which stays), the product, the composite, α and Γ, the served node,
+# the follow-on node COMPOSE_NODE, the tree's commit, and the host V3c's audit ran on (AUDITED_ON, empty where the hand-off carries none).
+# Every one is a verifier's input: `served_verdicts.py witness` refuses a list holding a value file, a prover's instance or
+# private file, the advice, a key, a row dir or the requests, and a blob outside the serve dir is refused too.
+COMPOSE_PIECE_FILES="answer.json development.json piece.json refused.txt served.json runs.json"
+handoff_inputs() {  # the hand-off's every input but its own sums, each existing file once
+  local a blobs cases=()
+  for a in sampled-proofs-served "v3c-w$K-$vtag/audit"; do
+    [ -f "$D/$a/window/case-v2.json" ] && cases+=("$D/$a/window/case-v2.json")
+  done
+  [ -f "$D/private/pouw/period/case.json" ] && cases+=("$D/private/pouw/period/case.json")
+  blobs=$([ "${#cases[@]}" = 0 ] || "$SAY_PY" - "$D" "${cases[@]}" <<'EOF'
+import json, os, sys
+d = os.path.abspath(sys.argv[1])
+for case in sys.argv[2:]:
+    for b in json.load(open(case)).get("blobs") or ():
+        r = os.path.relpath(os.path.abspath(b), d)
+        if r.startswith(".."):
+            sys.exit(f"{case} names a blob outside the serve dir: {b}")
+        print(r)
+EOF
+) || return 1
+  {
+    printf '%s\n' sampled-proofs-served/summary.json sampled-proofs-served/window/audit.json \
+      sampled-proofs-served/windows/rank0/registration.json sampled-proofs-served/runs.json h1/log.jsonl \
+      private/pouw/period/case.json private/pouw/period/answer.json
+    for a in sampled-proofs-served "v3c-w$K-$vtag/audit"; do
+      printf "$a/window/%s\n" case.json case-v2.json case-error.txt case-v2-error.txt
+    done
+    [ ! -f "$D/h1/log.jsonl" ] || "$SAY_PY" -c 'import json, sys
+for x in open(sys.argv[1]):
+    if x.strip():
+        print("h1/" + str(json.loads(x).get("file")))' "$D/h1/log.jsonl"
+    [ -z "$blobs" ] || printf '%s\n' "$blobs"
+    for f in pieces compose.env inference-only.json; do
+      [ ! -e "$D/private/compose/$f" ] || (cd "$D" && find "private/compose/$f" -type f)
+    done
+  } | (cd "$D" && while IFS= read -r f; do [ ! -f "$f" ] || echo "$f"; done) | LC_ALL=C sort -u
+}
+handoff() {  # the compose hand-off in private/compose, from the pieces in $1 and the inference-only verdict $2
+  local d f steps why rc
+  (umask 077; rm -rf "$COMPOSE_DIR" && mkdir -p "$COMPOSE_DIR/pieces") || return 1
+  for d in "$1"/*/; do
+    [ -d "$d" ] || continue
+    for f in $COMPOSE_PIECE_FILES; do
+      [ ! -f "$d$f" ] || { mkdir -p "$COMPOSE_DIR/pieces/$(basename "$d")" && cp "$d$f" "$COMPOSE_DIR/pieces/$(basename "$d")/"; } || return 1
+    done
+  done
+  [ ! -f "$2" ] || cp "$2" "$COMPOSE_DIR/inference-only.json" || return 1
+  steps=$("$SAY_PY" "$SV" window "$D" --slots 1073741824 --window "$K" 2> "$COMPOSE_DIR/window.err" \
+    | "$SAY_PY" -c 'import json, sys; print(",".join(map(str, json.load(sys.stdin)["steps"])))') \
+    || { say "HANDOFF refused: the window has no engine steps to hand the record (the serve dir's private/compose/window.err)"; return 1; }
+  printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
+    SERVED_NODE "${SERVED_NODE:-$(hostname)}" COMPOSE_NODE "$COMPOSE_NODE" COMPOSE_TREE "$(tree_sha)" \
+    AUDITED_ON "${V3C_AUDITED:-}" STEPS "$steps" > "$COMPOSE_DIR/compose.env" || return 1
+  handoff_inputs > "$COMPOSE_DIR/inputs.txt" 2> "$COMPOSE_DIR/inputs.err"
+  rc=$?
+  [ "$rc" = 0 ] || { say "HANDOFF refused: $(tail -1 "$COMPOSE_DIR/inputs.err" | cut -c1-600)"; return 1; }
+  why=$("$SAY_PY" "$SV" witness < "$COMPOSE_DIR/inputs.txt") \
+    || { say "HANDOFF refused: it would carry the served run's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 1; }
+  (cd "$D" && tr '\n' '\0' < "$COMPOSE_DIR/inputs.txt" | xargs -0 -r sha256sum) > "$COMPOSE_DIR/inputs.sha256" || return 1
+  echo private/compose/inputs.sha256 >> "$COMPOSE_DIR/inputs.txt"
+  say "HANDOFF $HANDED_WHAT, composed off this node: on COMPOSE_NODE ($COMPOSE_NODE), from the serve dir's verifier-side" \
+      "files and no witness, each file its private/compose/inputs.txt lists, copied to the same path there:" \
+      "D=$D bash benchmarks/one_stage/served_verdicts.sh compose"
+}
+compose() {  # `served_verdicts.sh compose` on a copy of a compose hand-off: the copy held to the served node's sums, then
+  # the final record and the composite, here, off the served node
+  local rc rec comp=0 TPY=$TREE/.venv/bin/python
+  (cd "$D" && sha256sum --check --strict --quiet private/compose/inputs.sha256) > "$COMPOSE_DIR/check.log" 2>&1
+  rc=$?
+  say "COMPOSE on $(hostname -s) (COMPOSE_NODE $COMPOSE_NODE): $HANDED_WHAT of the served node $SERVED_NODE, from its compose" \
+      "hand-off (verifier-side files, no witness; $([ -n "${AUDITED_ON:-}" ] && echo "V3c's audit from $AUDITED_ON" || echo "no V3c audit")), each file as it" \
+      "hashed it (the serve dir's private/compose/inputs.sha256):" \
+      "$([ "$rc" = 0 ] && echo PASS || echo "FAIL (the serve dir's private/compose/check.log)")"
+  [ "$rc" = 0 ] || return 3
+  wait "$BUILD"; rc=$?
+  [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
+  if [ -f "$COMPOSE_DIR/inference-only.json" ]; then
+    mkdir -p "$OUT/record" && cp "$COMPOSE_DIR/inference-only.json" "$OUT/record/inference-only.json" \
+      && say "INFERENCE-ONLY: the served node's verdict, carried into this record as it wrote it (the serve dir's private/compose/inference-only.json)"
+  fi
+  "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$D/sampled-proofs-served" \
+    --pieces "$COMPOSE_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" --node "$SERVED_NODE" --steps "$STEPS" \
+    --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" --off-node --sampled-lean \
+    2>&1 | publish_lines
+  rec=${PIPESTATUS[0]}
+  [ -z "${COMPOSITE-1}" ] || TPY=$TPY SERVED_NODE=$SERVED_NODE COMPOSE_HANDOFF=1 bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" \
+    || comp=1
+  echo "---- verdicts"; cat "$OUT/verdicts.txt"
+  [ "$rec" = 0 ] && [ "$comp" = 0 ]
+}
+compose_build() {  # what the compose follow-on runs: the tree's venv, and lake for the cases' and the product's Lean
+  command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
+  command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+  uv sync --all-packages --extra torch-cpu || return 5
+}
+copy() {  # `served_verdicts.sh copy deferred|compose HOST`: each file the list names, and nothing else, to the same path on HOST
+  local kind=$1 host=$2 dir served composer n rc why log=$D/private/copy-$1.log
+  case $kind in
+    deferred) dir=$DEFER_DIR ;;
+    compose) dir=$COMPOSE_DIR ;;
+    *) say "COPY refused: served_verdicts.sh copy deferred|compose HOST, not $kind"; return 3 ;;
+  esac
+  [ -f "$dir/inputs.txt" ] && [ -f "$dir/$kind.env" ] \
+    || { say "COPY refused: the serve dir $D holds no $kind list (private/$kind/inputs.txt and $kind.env)"; return 3; }
+  # shellcheck source=/dev/null
+  IFS='|' read -r served composer < <(set +u; . "$dir/$kind.env"; echo "${SERVED_NODE%%.*}|${COMPOSE_NODE%%.*}")
+  host=${host#*@}
+  if [ "$kind" = deferred ]; then
+    for n in "$composer" "${COMPOSE_NODE%%.*}"; do
+      [ -z "$n" ] || [ "${host%%.*}" != "$n" ] \
+        || { say "COPY refused: the deferral's list holds the window's witness, and $host is COMPOSE_NODE, an auditor host where no witness goes: copy it to a prover node"; return 3; }
+    done
+  else
+    [ "${host%%.*}" != "$served" ] \
+      || { say "COPY refused: $host is the served node, which the prover controls: copy the hand-off to COMPOSE_NODE ($composer)"; return 3; }
+    why=$("$SAY_PY" "$SV" witness < "$dir/inputs.txt") \
+      || { say "COPY refused: the hand-off's list names the served run's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 3; }
+  fi
+  n=$(count "$dir/inputs.txt")
+  # shellcheck disable=SC2086
+  ${RSYNC:-rsync} -a --files-from="$dir/inputs.txt" --rsync-path="mkdir -p $(printf %q "$D") && rsync" "$D/" "$2:$D/" > "$log" 2>&1
+  rc=$?
+  say "COPY the $([ "$kind" = deferred ] && echo "deferral's prover-side" || echo "hand-off's verifier-side") list's $n files to $host," \
+      "each to the same path there: $([ "$rc" = 0 ] && echo PASS || echo "FAIL (exit $rc, the serve dir's private/copy-$kind.log)")"
+  return "$rc"
+}
 
 if [ "${1:-}" = serve ]; then serve; exit $?; fi
 if [ "${1:-}" = tie ]; then shift; tie "$@"; exit $?; fi
@@ -822,6 +1056,8 @@ if [ "${1:-}" = block-counts ]; then K=${2:?served_verdicts.sh block-counts WIND
 if [ "${1:-}" = front-flags ]; then front_ok; exit $?; fi
 if [ "${1:-}" = private-pieces ]; then private_pieces; exit $?; fi
 if [ "${1:-}" = defer ]; then defer "${2:?served_verdicts.sh defer WHY}"; exit $?; fi
+if [ "${1:-}" = handoff ]; then handoff "$OUT/pieces" "$OUT/record/inference-only.json"; exit $?; fi
+if [ "${1:-}" = copy ]; then copy "${2:?served_verdicts.sh copy deferred|compose HOST}" "${3:?served_verdicts.sh copy deferred|compose HOST}"; exit $?; fi
 
 # $OUT leaves the node: once the run is done, however it ends, each of its files that names a window or counts its own is
 # held in full in the serve dir's private/out, its public form in its place (`served_verdicts.py publish`)
@@ -837,9 +1073,22 @@ if [ -n "$FOLLOW" ]; then  # a deferral's follow-on: no serve, its venv the tree
   sha=$(tree_sha)
   [ -n "$DEFERRED_TREE" ] && { [ "$sha" = "$DEFERRED_TREE" ] || [ -n "${FOLLOW_ANY_TREE:-}" ]; } \
     || { say "PREFLIGHT: the follow-on reads the served node's window-circuit record, which its tree ${DEFERRED_TREE:-(unknown)} wrote, and this tree is ${sha:-(unknown)}: run it at that commit, or set FOLLOW_ANY_TREE=1"; exit 3; }
+elif [ -n "$COMPOSE" ]; then  # a compose follow-on: no serve, row dir, card or gpu-lease, and never the served node
+  [ -f "$COMPOSE_DIR/compose.env" ] \
+    || { say "PREFLIGHT: the compose follow-on composes from the served node's hand-off, and the serve dir $D holds none (private/compose/compose.env): copy each file its private/compose/inputs.txt lists to the same path here first"; exit 3; }
+  [ -z "$CLASH" ] || { say "PREFLIGHT: the compose follow-on runs at the hand-off's settings (the serve dir's private/compose/compose.env), and the environment sets another$CLASH: unset it"; exit 3; }
+  { [ "$(hostname)" != "$SERVED_NODE" ] && [ "$(hostname -s)" != "${SERVED_NODE%%.*}" ]; } \
+    || { say "PREFLIGHT: this is the served node $SERVED_NODE, which the prover controls, so nothing composed here claims a record: compose on COMPOSE_NODE ($COMPOSE_NODE)"; exit 3; }
+  sha=$(tree_sha)
+  [ -n "$COMPOSE_TREE" ] && { [ "$sha" = "$COMPOSE_TREE" ] || [ -n "${FOLLOW_ANY_TREE:-}" ]; } \
+    || { say "PREFLIGHT: the compose follow-on composes with the served node's tree ${COMPOSE_TREE:-(unknown)}, and this tree is ${sha:-(unknown)}: run it at that commit, or set FOLLOW_ANY_TREE=1"; exit 3; }
+  held=$(cd "$D" && find . -type f -printf '%P\n' | "$SAY_PY" "$SV" witness) \
+    || { say "PREFLIGHT: the compose follow-on holds no witness of the served run, and this node's serve dir does ($(echo "$held" | head -1 | cut -c1-400)): compose on a node that holds the hand-off alone"; exit 3; }
 else
   for f in "$ROW/manifest.json" "$ROW/build_summary.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
   command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
+  [ "${1:-}" = v3c ] || [ "$COMPOSE_OFF_NODE" = 0 ] || [ "$PRODUCT" != onsite ] || [ -z "${COMPOSITE-1}" ] \
+    || { say "PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite off this node from its hand-off, and onsite's reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, COMPOSITE set empty, or COMPOSE_OFF_NODE=0 for a development composite here"; exit 3; }
 fi
 front_ok || exit 3
 SPLIT= DEFER=
@@ -854,13 +1103,36 @@ if [ -n "${V3C_WARM_JOBS:-}" ]; then  # V3c's composes made before its audit
   grep -q -- '"warm"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { say "PREFLIGHT: V3C_WARM_JOBS composes the window's templates before its audit with records_audit.py warm, which this tree's records_audit.py doesn't have"; exit 3; }
 fi
-if [ -n "${H1_TIE:-}" ]; then  # V3c's audit tied to H1's W, in the serve's run and in `served_verdicts.sh v3c` alike
+case $DEVELOPMENT in '' | 1) ;; *) say "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not $DEVELOPMENT"; exit 3 ;; esac
+if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live challenger's, or a development run's
+  case $V3C_CHALLENGER in
+    local | loopback:*)
+      [ "$DEVELOPMENT" = 1 ] \
+        || { say "PREFLIGHT: V3c's audit is the sampled-proofs audit of record, and V3C_CHALLENGER (default PP_CHALLENGER) is $V3C_CHALLENGER, a development session, which only a development run takes: set PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, or DEVELOPMENT=1"; exit 3; } ;;
+    gate:?*@?*)
+      [ -n "$V3C_PEER" ] \
+        || { say "PREFLIGHT: V3c's audit's session on $V3C_CHALLENGER listens on its peer's 127.0.0.1, and V3C_PEER (default PP_PEER), this node's name in the gate's /etc/vy/peers, is unset"; exit 3; }
+      [ -n "${PP_CHALLENGER_KEY:-}" ] && [ -r "$PP_CHALLENGER_KEY" ] \
+        || { say "PREFLIGHT: V3c's audit's session on $V3C_CHALLENGER is held to the challenger key record PP_CHALLENGER_KEY, which is ${PP_CHALLENGER_KEY:-unset} and not a readable file"; exit 3; }
+      if [ -n "$FOLLOW" ]; then here=${SERVED_PEER:-} what=SERVED_PEER
+      elif [ -n "$H1_GATE" ]; then here=$H1_PEER what=H1_PEER
+      elif [ "$POUW" = pearlplus ] && [ -n "$PEARLC_CHALLENGER_GATE" ]; then here=$PEARLC_CHALLENGER_PEER what=PEARLC_CHALLENGER_PEER
+      else here= what=; fi
+      if [ -n "$FOLLOW" ] && [ "$V3C_PEER" = "$here" ]; then
+        say "PREFLIGHT: V3C_PEER (default PP_PEER) is $V3C_PEER, the served node's (SERVED_PEER), which deferred the audit: its session would listen on that node's 127.0.0.1, not this one's; name this node as the gate's /etc/vy/peers does"; exit 3
+      elif [ -z "$FOLLOW" ] && [ -n "$here" ] && [ "$V3C_PEER" != "$here" ]; then
+        say "PREFLIGHT: V3C_PEER (default PP_PEER) is $V3C_PEER, and $what is $here: each names the node the run serves on, where V3c's audit's session listens as the other one does"; exit 3
+      fi ;;
+    *) say "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT or gate:USER@HOST, not $V3C_CHALLENGER"; exit 3 ;;
+  esac
+fi
+if [ -n "${H1_TIE:-}" ] && [ -z "$COMPOSE" ]; then  # V3c's audit tied to H1's W, in the serve's run and in `served_verdicts.sh v3c` alike
   grep -q -- '"--tie"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { say "PREFLIGHT: under H1_TIE V3c's audit is tied to H1's W, whose tables the circuit reads, with records_audit's --tie, which this tree's records_audit.py doesn't take"; exit 3; }
   [[ ${V3C_LAW:-} == stratified:* ]] \
     || { say "PREFLIGHT: under H1_TIE every table H1's W registers needs a sampled reader, which only stratified:K, a stratum of each table's readers, gives: V3C_LAW is ${V3C_LAW:-unset}"; exit 3; }
 fi
-if [ -n "${H1_TIE:-}" ] && [ "${1:-}" != v3c ]; then  # V3c's window commit at each H1 window's close, before its sample coin
+if [ -n "${H1_TIE:-}" ] && [ "${1:-}" != v3c ] && [ -z "$COMPOSE" ]; then  # V3c's window commit at each H1 window's close, before its sample coin
   [ -n "$H1_GATE" ] && [ -n "${H1_CIRCUITS:-}" ] \
     || { say "PREFLIGHT: H1_TIE ties H1's windows, and H1_GATE or H1_CIRCUITS (whose prover state window-commit reads) is unset"; exit 3; }
   [ -n "$V3C" ] || { say "PREFLIGHT: H1_TIE commits each H1 window at V3C_CLASS, and it is empty"; exit 3; }
@@ -875,9 +1147,12 @@ if [ -n "${H1_TIE:-}" ] && [ "${1:-}" != v3c ]; then  # V3c's window commit at e
 fi
 if [ -n "${PREFLIGHT_ONLY:-}" ]; then  # the checks above alone: nothing kept, built or served
   if [ -n "$FOLLOW" ]; then plan="the follow-on of $SERVED_NODE's deferral"
+    [ "$COMPOSE_OFF_NODE" = 0 ] || plan+=", its compose hand-off for COMPOSE_NODE ($COMPOSE_NODE)"
+  elif [ -n "$COMPOSE" ]; then plan="the compose follow-on of $SERVED_NODE's hand-off: $HANDED_WHAT"
   else
     plan="the serve's lease ${LEASE_MIN:-60} min, capped at ${LEASE_MEM_GB:-128} GB"
-    [ -z "$DEFER" ] || plan+="; $DEFER, so step 6 defers V3c's audit and the composite to a follow-on"
+    [ -z "$DEFER" ] || plan+="; $DEFER, so step 6 defers $DEFERRED_WHAT to a follow-on"
+    [ "$COMPOSE_OFF_NODE" = 0 ] || plan+="; $HANDED_WHAT composed off this node, on COMPOSE_NODE ($COMPOSE_NODE), from its compose hand-off"
   fi
   say "PREFLIGHT passed on $(hostname -s), $NODE_MEM_GB GB: $plan. PREFLIGHT_ONLY: nothing kept, built or served"
   exit 0
@@ -888,7 +1163,7 @@ KEEP_WHY="served_verdicts.sh's serve dirs (sealed row dirs, advice, window circu
 { "$PY" -m research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY" \
   || research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY"; } 2>&1 | tail -2
 # H1's every window open runs its Lean verifier of record; without lake each is refused and serving goes on uncredited
-if [ -z "$FOLLOW" ] && { [ -n "$H1_GATE" ] || [[ " ${SERVE_ARGS:-} " == *" --protocols "* ]]; }; then
+if [ -z "$FOLLOW$COMPOSE" ] && { [ -n "$H1_GATE" ] || [[ " ${SERVE_ARGS:-} " == *" --protocols "* ]]; }; then
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
     | sh -s -- -y --default-toolchain none > "$OUT/elan.log" 2>&1
   (cd "$TREE/verity/core/protocols/pouw/lean/check" && lake build pouw-check-difftest) > "$OUT/h1-lean.log" 2>&1 \
@@ -908,10 +1183,14 @@ build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.
   # without which the verdict is the Python count's alone
   (cd verity/core/protocols/network/nci/lean && lake build nci-check) || echo "nci-check didn't build"
 }
-( unset PYTHONPATH; build ) > "$OUT/build.log" 2>&1 &
+if [ -n "$COMPOSE" ]; then ( unset PYTHONPATH; compose_build ) > "$OUT/build.log" 2>&1 &
+else ( unset PYTHONPATH; build ) > "$OUT/build.log" 2>&1 &
+fi
 BUILD=$!
+if [ -n "$COMPOSE" ]; then compose; exit $?; fi
 
 if [ "${1:-}" = v3c ]; then  # an existing serve dir's window: D and K set, its advice written (step 3); V3c alone
+  say "COINS V3c's audit: $(v3c_coins)"
   if [ -n "$FOLLOW" ]; then follow; exit $?; fi
   [ -n "${K:-}" ] && [ -f "$D/advice/w$K/private/advice.bin" ] || { say "V3C: set D and K, a serve dir and its window with advice"; exit 3; }
   [ -f "$WREG" ] || CUDA_VISIBLE_DEVICES='' weights
@@ -954,13 +1233,15 @@ if [ -n "$H1_GATE" ]; then
   H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer $H1_PEER, T $T, S $WINDOW_STEPS), a development run under the lane's development key: it credits nothing"
   export POUW_CMD=${POUW_CMD:-"$TREE/.venv/bin/python benchmarks/one_stage/served_verdicts.py pouw \$1 \$2 \$3${H1_STATEMENTS:+ --statements $H1_STATEMENTS}${H1_LIVE_EVIDENCE:+ --live-evidence $H1_LIVE_EVIDENCE}"}
 fi
-if [ "${PP_CHALLENGER:-local}" != local ]; then
-  COINS="the challenger $PP_CHALLENGER (peer ${PP_PEER:-?})"
+if [ "$SP_CHALLENGER" != local ]; then
+  COINS="the challenger $SP_CHALLENGER (peer ${PP_PEER:-?})"
+elif [ "${PP_CHALLENGER:-local}" != local ]; then
+  COINS="a local development challenger session on $(hostname -s), the served node, for step 3, a development check, since V3c's audit's live session takes the window's run root, which the gate opens once, ever"
 else
   COINS="a local development challenger session on $(hostname -s), the served node, not an auditor's (PP_CHALLENGER local)"
 fi
 COINS+="; $H1_COINS;"
-[ -z "$V3C" ] || COINS+=" V3c's audit: a local development challenger session where it runs;"
+[ -z "$V3C" ] || COINS+=" V3c's audit: $(v3c_coins);"
 say "COINS ${LEAD}sampled proofs: $COINS the bandwidth audit's: vy-auditor-2's bw_party, inside PoUS's piece"
 
 # 0. B: the row's Build of record from its declared inputs, before the lease; the traced Build only its cross-check
@@ -1105,7 +1386,8 @@ IOV=$!
 [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; wait "$IOV"; stop build "$rc"; }
 [ "$MAX_TOKENS" = 1 ] && export PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step0.json}
 env -u PYTHONPATH PP_SERVE_RUN="$D" PP_WINDOW="$K" PP_SERVE_ROWS="$D/windows/w$K" PP_RECORDS=1 PP_ONLY="${PP_ONLY:-honest}" \
-  PP_MAIN="${PP_MAIN:-${MAIN_FILE:-}}" PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$D/sampled-proofs.log" 2>&1
+  PP_CHALLENGER="$SP_CHALLENGER" PP_MAIN="${PP_MAIN:-${MAIN_FILE:-}}" PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" \
+  OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$D/sampled-proofs.log" 2>&1
 rc=$?
 SP=$D/sampled-proofs-served
 rm -rf "$SP"; [ ! -d "$OUT/sampled-proofs/served" ] || mv "$OUT/sampled-proofs/served" "$SP"
@@ -1135,25 +1417,32 @@ TPY=$TREE/.venv/bin/python
 
 # 5. one record of every verdict
 wait "$IOV"
+LEFT=
+if [ "$COMPOSE_OFF_NODE" = 1 ]; then
+  LEFT="$HANDED_WHAT, composed off this node, on COMPOSE_NODE ($COMPOSE_NODE), from its compose hand-off"
+  [ -z "$DEFER" ] || LEFT="$DEFERRED_WHAT, to a follow-on on a node with the memory, which writes the compose hand-off: $DEFER; and $LEFT"
+elif [ -n "$DEFER" ]; then LEFT="$DEFERRED_WHAT, to a follow-on on a node with the memory, which composes the final record: $DEFER"; fi
 "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$SP" \
   --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" \
   --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" \
-  ${DEFER:+--deferred "$DEFERRED_WHAT, to a follow-on on a node with the memory, which composes the final record: $DEFER"} \
-  2>&1 | publish_lines
+  ${LEFT:+--deferred "$LEFT"} 2>&1 | publish_lines
 rec=${PIPESTATUS[0]}
 private_pieces
 # 6. V3c after the record, each step within its limit: it gates nothing. Under H1_TIE it comes before the composite,
 # whose one-stage and policy cases are its audit's of the record H1 bound; on a node short of the audit's memory, the
-# tie held here, the audit and the composite are deferred to a follow-on.
+# tie held here, the audit and the composite are deferred to a follow-on. Under COMPOSE_OFF_NODE=1 the compose hand-off
+# comes last, after V3c in every run, so the composite composed from it reads V3c's audit's cases.
 v3c_done=$SPLIT left=0
 if [ -n "$DEFER" ]; then v3c_commit; defer "$DEFER" || left=1; v3c_done=1
 elif [ -z "$v3c_done" ] && [ -n "${H1_TIE:-}" ]; then v3c_commit && v3c_proved; v3c_done=1; fi
 comp=0
-[ -n "$DEFER" ] || [ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+[ -n "$DEFER" ] || [ "$COMPOSE_OFF_NODE" = 1 ] || [ -z "${COMPOSITE-1}" ] \
+  || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
 measure
 if [ -n "$v3c_done" ]; then :
 elif [ -n "$V3C" ]; then v3c_commit && v3c_proved
 else say "V3C: not in this run (V3C_CLASS empty): \`served_verdicts.sh v3c\` runs it on the serve dir"; fi
+[ -n "$DEFER" ] || [ "$COMPOSE_OFF_NODE" = 0 ] || handoff "$OUT/pieces" "$OUT/record/inference-only.json" || left=1
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
 [ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && [ "$left" = 0 ] \
   && grep -q '"composed": "\(pending\|accept\)"' "$OUT/verdicts.txt"
