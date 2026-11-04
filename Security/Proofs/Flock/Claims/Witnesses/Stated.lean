@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Claims.ZKOut
 public import Proofs.Flock.Claims.Witnesses.Sampling
 public import Proofs.Flock.Claims.ZK.Indexed
 
@@ -58,24 +57,6 @@ theorem ZKmalRx_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonem
       ¬ Claims.ZKmalRx (fun _ => N) (fun _ => Ω) H (fun _ => 1) P (fun _ _ => True) S εzk γ :=
   ⟨fun _ _ => ZKMal.quietP N Ω [], ZKMal.collSim [] [],
     (ZKMal.zkmalRx_const H _ (fun _ => ZKMal.quietP N Ω []) _ _ εzk γ).not.2 (Witness.ZKmalR_fails H [] [] εzk γ x hε)⟩
-
-/-- **`ZKOut` fails**: at every `ε < 1`, with one outcome, the quiet prover and a simulator that outputs the empty
-transcript fail it, against the verifier that accepts the first message. -/
-theorem ZKOut_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (ε : Msg → ℝ)
-    (x : Msg) (hε : ε x < 1) :
-    ∃ (P : Unit → (x : Msg) → Prover (N × Ω)) (S : SimOut Unit),
-      ¬ Claims.ZKOut (fun _ => N) (fun _ => Ω) H (fun _ => 1) P (fun _ _ => True) (fun _ _ => ()) S
-        (fun x _ _ _ _ _ => ε x) := by
-  refine ⟨fun _ _ => ZKMal.quietP N Ω [], { C := fun _ => Unit, prog := fun _ _ _ => .ret [] }, fun h => ?_⟩
-  have a : Pr (fun ω : N × Ω => () = () ∧
-        (runStar H (ZKMal.quietP N Ω []) (ZKMal.accNow fun _ => 1) x ω ()).msgs = [([], .acc)]) ≤
-      Pr (fun _ : Unit => ([] : List (Msg × Out)) = [([], .acc)]) + ε x :=
-    h x () trivial Unit (ZKMal.accNow fun _ => 1) () rfl () fun τ => τ = [([], .acc)]
-  rw [Pr_congr (q := fun _ => True) fun ω =>
-      iff_true_intro (⟨rfl, ZKMal.runStar_quietP_accNow H [] (fun _ => 1) x one_pos ω⟩ : () = () ∧ _),
-    ZKMal.Pr_true, Pr_congr (q := fun _ => False) fun _ => iff_false_intro (List.cons_ne_nil _ _).symm,
-    Pr_false] at a
-  linarith
 
 /-- **`Nontrivial` fails**: some verifier rejects a recorded run. -/
 theorem Nontrivial_fails {Coin : Type} [Inhabited Coin] (H : Msg → Msg) :
