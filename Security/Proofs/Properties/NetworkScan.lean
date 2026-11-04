@@ -9,8 +9,8 @@ import Proofs.Flock.SamplingScope
 # Toward an accepted scan's fit, at Bits' positions
 
 `ScanFits` and `ScanScopeAcc` are stated at Bits' positions (`Properties.NetworkScan`): the statement's circuit is the
-scan's audit's members' joint program (`jointOf`), its layout read through `SampledProofs.Bits.inBit`, `outBit` and
-`wiresOf`. What `scanOf`'s acceptance gives of the Program is `Fits.scanOf_accepted` (`Accept`), and what the joint
+scan's audit's members' joint program (`jointOf`), its layout read through `SampledProofs.Bits.inBit` and `outBit`,
+with no wires. What `scanOf`'s acceptance gives of the Program is `Fits.scanOf_accepted` (`Accept`), and what the joint
 program holds at each position, its inputs, outputs and reads, is `Lowered`'s. Here are the facts both statements'
 witnesses read:
 

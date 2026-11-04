@@ -15,6 +15,8 @@ returns every unit's output copy bits, the key program's outputs.
 * `jointOf ms`, `Flattens ms C`: the members' joint program, and `C` being it.
 * `FilesOf P fs`: one circuit file a template of the Program `P`, in order, each one Bits lays out as its template
   (`SampledProofs.Bits.check`).
+* `RowsRead P fs`: each of those files' units reads no input padding and every bit of its template's `row` parameter
+  (`SampledProofs.Bits.readsWhy`).
 * `MembersOf P fs rs ms`: the members hold each unit of the template query's population once (its ranges `rs`, as
   `Flock.TemplateQuery.evaluate` gives them, a unit an instance), each member one template's circuit file over units
   the code locates at that template's node (`Flock.TemplateQuery.locate`).
@@ -62,6 +64,15 @@ one Bits lays out as its template (`SampledProofs.Bits.check`, at the template's
 def FilesOf (P : Flock.Program.Prog) (fs : List Flock.Circuit) : Prop :=
   fs.length = (templateNodes P).length ∧ ∀ i < fs.length,
     SampledProofs.Bits.check (fs.getD i default) P (templateDef P ((templateNodes P).getD i 0)).key = none
+
+/-- **The circuit files `fs` of `P`'s templates read their `row` parameters**: at each, `SampledProofs.Bits.readsWhy`
+finds nothing wrong with the unit's read input columns (`SampledProofs.Bits.unitReads`) against its template's
+Definition at `row`. Its unit reads no input column that no port holds (input padding, a source with no commitment
+position) and, where its template has a parameter `row`, every bit of it, so that no constant fixes one
+(`SampledProofs.Bits.consts`). The period check refuses a circuit file it reads where `readsWhy` refuses. -/
+def RowsRead (P : Flock.Program.Prog) (fs : List Flock.Circuit) : Prop :=
+  ∀ i < fs.length, SampledProofs.Bits.readsWhy (fs.getD i default) (templateDef P ((templateNodes P).getD i 0))
+    (SampledProofs.Bits.unitReads (fs.getD i default)) ["row"] = none
 
 /-- **The members of `P`'s audit** at its templates' circuit files `fs` and the ranges `rs` of the template query over
 `P` (`Flock.TemplateQuery.evaluate`, the population as the sampled verifier reads it: each call and each batch member
