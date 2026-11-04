@@ -330,7 +330,7 @@ structure Reads where
   wired : Option (WiredReads.Ctx × WiredReads.Member) := none
 
 def readsOf : Option Json → V Reads
-  | none => pure ⟨none, #[], #[], #[]⟩
+  | none => pure ⟨none, #[], #[], #[], none⟩
   | some j => do
     let bound ← Flock.RegBound.ofJson j
     let j := Flock.RegBound.ownOf j
@@ -338,7 +338,7 @@ def readsOf : Option Json → V Reads
     let known ← Flock.Registered.knownOf j
     Flock.Registered.checkKnownAll own known
     pure ⟨some own, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j), ← Flock.Registered.paramsOf j,
-      bound⟩
+      bound, none⟩
 
 /-- The checks `verifyCmd` makes on a session's tables once they are set up, before `Zk.shapeOk`. -/
 def setupChecks (I : Flock.Witness.Inputs) (rd : Reads) (sts : Array Flock.Stmt) : V Unit := do
