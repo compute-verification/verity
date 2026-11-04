@@ -153,6 +153,23 @@ def mirror(path: Path):
     return mod
 
 
+def _case(ap: argparse.ArgumentParser, spec: str) -> tuple[str, Path, Path, dict, list[str]]:
+    """The command line's case ``spec`` (NAME=WARDEN_RUN,SCAN_OUT,RECORD[,ROUND]) with its record read (``own``: the
+    run's own, `warden_chain.own_record`), else a usage error naming the case and what it lacks or why its record is
+    unread."""
+    name, _, rest = spec.partition("=")
+    fields = rest.split(",")
+    if not name or not 3 <= len(fields) <= 4 or not all(fields[:3]):
+        ap.error(f"case {spec!r}: give NAME=WARDEN_RUN,SCAN_OUT,RECORD[,tampered|chain|forged], RECORD a {WC.RECORD} "
+                 "file or own")
+    run, scan, record, *round_ = fields
+    try:
+        read = WC.own_record(Path(run)) if record == "own" else json.loads(Path(record).read_text())
+    except (OSError, ValueError, KeyError) as e:
+        ap.error(f"case {name}: its RECORD {record}: {type(e).__name__}: {e}")
+    return name, Path(run), Path(scan), read, round_
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="scan_period.py", description=__doc__.splitlines()[0])
     ap.add_argument("--mirror", type=Path, required=True, help="the period's mirror (period_case.py, its tests')")
@@ -164,18 +181,16 @@ def main(argv=None) -> int:
     ap.add_argument("cases", nargs="+", help="NAME=WARDEN_RUN,SCAN_OUT,RECORD[,tampered|chain|forged], RECORD a "
                                              f"{WC.RECORD} file, or own for a run the job made itself")
     a = ap.parse_args(argv)
+    cases = [_case(ap, spec) for spec in a.cases]
     m = mirror(a.mirror)
     a.out.mkdir(parents=True, exist_ok=True)
     got, ok = {}, True
-    for spec in a.cases:
-        name, _, rest = spec.partition("=")
-        run, scan, record, *round_ = rest.split(",")
-        record = WC.own_record(Path(run)) if record == "own" else json.loads(Path(record).read_text())
-        case = rows_case(Path(run), Path(scan), *round_, v3c=a.v3c, record=record)
+    for name, run, scan, record, round_ in cases:
+        case = rows_case(run, scan, *round_, v3c=a.v3c, record=record)
         (a.out / name).mkdir(exist_ok=True)
         (a.out / name / "case.json").write_text(json.dumps(case, indent=1, sort_keys=True))
         py, lean = m.reference(case), lean_check(a.lean, case, a.out / name)
-        scan_said = {x["answer"]["verdict"] for x in json.loads((Path(scan) / "answers.json").read_text())["windows"]}
+        scan_said = {x["answer"]["verdict"] for x in json.loads((scan / "answers.json").read_text())["windows"]}
         honest = not round_ and scan_said == {"accept"}
         if honest and a.v3c:
             want = "accept"

@@ -3,7 +3,8 @@
 key is refused at the record before any check; one that keeps the recorded deployment.json beside records re-signed
 under its own key carries certificates that don't verify under the record's key and session, which the period check
 refuses (period_case's cert-key changes, held to network-period). The quick form of the rows-form test in
-test_scan_zk.py, which runs the period's mirror on both."""
+test_scan_zk.py, which runs the period's mirror on both. The command refuses a case with no record, or one it can't
+read, by name before it checks any case."""
 from __future__ import annotations
 
 import shutil
@@ -34,3 +35,16 @@ def test_the_periods_case_refuses_a_fetch_re_signed_under_another_key_than_the_a
     shutil.copyfile(honest / "deployment.json", resigned / "deployment.json")
     assert SP.WC.deployment_of(resigned, record) == SP.WC.deployment_of(honest, record)
     assert not any(_verifies(record, c) for c in SP.certificates(resigned, 0))
+
+
+def test_the_command_refuses_a_case_with_no_record_or_an_unread_one_by_name_before_any_check(tmp_path, capsys):
+    argv = ["--mirror", str(tmp_path / "period_case.py"), "--lean", "network-period", "--out", str(tmp_path / "out")]
+    (bad := tmp_path / "bad.json").write_text("{")
+    none = tmp_path / "none.json"
+    for record, said in (("", "case 'honest=R,S': give NAME=WARDEN_RUN,SCAN_OUT,RECORD[,tampered|chain|forged]"),
+                         (f",{none}", f"case honest: its RECORD {none}: FileNotFoundError"),
+                         (f",{bad}", f"case honest: its RECORD {bad}: JSONDecodeError")):
+        with pytest.raises(SystemExit) as e:
+            SP.main([*argv, f"honest=R,S{record}"])
+        assert e.value.code == 2 and said in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
