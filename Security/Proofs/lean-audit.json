@@ -83,6 +83,7 @@
   "Proofs.Properties.Verity.Sampled.Accepts",
   "Proofs.Properties.Verity.Sampled.Assembled",
   "Proofs.Properties.Verity.Sampled.Decoders",
+  "Proofs.Properties.Verity.Sampled.ParseBridge",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
