@@ -181,3 +181,6 @@ Verification: core pouw 2075 passed at df3b87 (r20261104-215704-2d43, cpu-1). Be
 
 Cap.lean: band rule = bandCredited, forming test = formingCapOK (lean CKFORM3b). Open bridge assumptions: semH3 alpha/beta/x vs the FP32 s5 words; atomMixP hopper = FormChain.atomMix. Gap: the prover words-only remedy (volunteer_words) does not see the forming term, so a salt-dead element can still leave a tile over cap; option A covers it.
 
+[2026-11-04T23:48Z] 100086a0c5c0
+PEARLCAP: py13 (r20261104-222847-eff0, cpu-3) finished at df3b87fcfa1. verity-pouw-benchmarks 1358 passed, benchmarks/one_stage 656 passed, benchmarks/pouw/pearlplus_lean 16 passed 1 failed: only test_a_salt_dead_element_over_the_row_cap, the missing test_instance=True at test_pearlplus_lean.py:210 from my report. With that one line in #7221 final head, every suite I touch passes. Removing my worktree now; done.
+
