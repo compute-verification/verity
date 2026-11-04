@@ -406,7 +406,7 @@ theorem first_wf (rule : Select.Rule) (d : Program) (query : Json) (table : Opti
       | all => exact absurd rfl hne
       | law t => exact ⟨t, hnamed⟩
     obtain ⟨t, ht⟩ := hnamed'
-    rcases flockLaw_cases _ _ _ hp with ⟨k, rfl, hk, hnat⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk
+    rcases flockLaw_cases _ _ _ hp with ⟨k, rfl, hk, hnat, -⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk
     · exact ⟨parseLaw_k t named ht k hnat, by rw [hsum']; exact hk⟩
     · exact ⟨hb, hab⟩
     · exact absurd hk hk1
