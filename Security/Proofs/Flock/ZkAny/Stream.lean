@@ -108,7 +108,7 @@ theorem PerOutcome.map_out {Ω St St' Ωs V : Type} [Fintype Ω] [Fintype Ωs] {
   · calc prCoin (fun ω => f (out ω) = s' ∧ E (rel ω)) ≤ prCoin (fun _ : Ω => False) :=
           prCoin_mono fun ω hω => hs ⟨out ω, hω.1⟩
       _ = 0 := by classical rw [prCoin_eq_card]; simp
-      _ ≤ _ := zero_le _
+      _ ≤ _ := zero_le
 
 /-- **Sessions in sequence, per outcome** (`PerOutcome.chain`, iterated). Where each session `j < ℓ` is simulated per
 outcome at every value `π` of the earlier sessions' randomness, by its simulator `S j` given the earlier sessions'
