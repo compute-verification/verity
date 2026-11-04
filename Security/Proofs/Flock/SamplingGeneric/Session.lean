@@ -12,7 +12,7 @@ import Proofs.Flock.SamplingGeneric.Split
 At an accepted run, a sampled proof block's extraction (`Compiled.unitExt`) is `A`'s extractor at the block's session,
 each of its reruns the compiled verifier's run with the session's rounds replaced (`place`), seen as the session's view
 (`serve`, `viewing`). Here its success (`Compiled.Found`) is bounded from `A`'s knowledge soundness (`Arg.KS`), its
-rounds (`Arg.WF`) and the contract's `runs` and `fixed` (`Compiled.Sessions`): `Claims.Sampling`'s `SessionKS_of` with
+rounds (`Arg.wf`) and the contract's `runs` and `fixed` (`Compiled.Sessions`): `Claims.Sampling`'s `SessionKS_of` with
 Flock's `E^rep` replaced by `A`'s extractor.
 
 * `served_eval`, `found_of`: under `runs`, the served extraction is `A`'s extractor against the session's prover `P'`
@@ -30,7 +30,7 @@ Flock's `E^rep` replaced by `A`'s extractor.
   guess (`forkCollAt`), which averages to `PrB` (`Ex_forkCollAt`).
 * `fiber_bound`: the two at the largest of the proof blocks' error bounds, `κ_s + √(k_V·γ_s·Pr[B])`, since `A`'s
   errors at the session are within the block's bounds (`runs`), so `κ_A ≤ κ_s` and `γ_A/k_A ≤ γ_s`, `k_A` the rounds
-  of the block's shape (`Arg.WF`).
+  of the block's shape (`Arg.wf`).
 * `sessionKS_of`, `sessionKSOf`: **`SessionKS`**, at the slot a selection picks among the sample's, over the second
   stage, `κ_s + √(k_V·γ_s·β(ω, r))` with `β` averaging at most `Pr[B]`: the coins the picked slot gives its block are
   one coordinate of the slots' and then of the blocks' (`Pr_pi_eval_dep`), and resampling the block's session's rounds
@@ -171,7 +171,7 @@ theorem session_transfer {H : Msg → Msg} (hKS : A.KS H) (L : Compiled Coin A) 
     (hshape : A.shape xS = L.sh x u)
     (hcard : A.V.k xS = (L.rounds x u).card)
     (hacc : ∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, r' t = R0 t) →
-      ((run H P L.V x ω r').out = .acc ↔ (run H P' A.V xS () (L.coinsOf x u xS r')).out = .acc))
+      (run H P L.V x ω r').out = .acc → (run H P' A.V xS () (L.coinsOf x u xS r')).out = .acc)
     (hview : ∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, (∀ t' ∈ L.rounds x u, t < t') → r' t = R0 t) →
       L.session x u (run H P L.V x ω r').seen = some (xS, (run H P' A.V xS () (L.coinsOf x u xS r')).seen)) :
     Pr (fun s : (Fin (L.V.k x) → Coin) × A.EC (L.sh x u) =>
@@ -187,7 +187,7 @@ theorem session_transfer {H : Msg → Msg} (hKS : A.KS H) (L : Compiled Coin A) 
           ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.rounds x u) R0 s.1) s.2 →
         Q (fun i => s.1 (L.emb x u xS hcard i)) (cast (congrArg A.EC hshape.symm) s.2) := by
     rintro s ⟨h1, h2⟩
-    have ha := (hacc _ (hag0 s.1)).1 h1
+    have ha := hacc _ (hag0 s.1) h1
     rw [L.coinsOf_forkOn hcard] at ha
     refine ⟨ha, fun hR => h2 (L.found_of H P ω P' R0 hshape hcard hview (hag0 s.1) s.2 ?_)⟩
     rw [L.coinsOf_forkOn hcard]
@@ -288,8 +288,8 @@ theorem session_fork_div (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω :
 /-- **At one sampled proof block's session, the others' coins fixed**: the session transfer and the session's fork at
 `runs`'s session, with `A`'s errors there within the block's bounds (`runs`), so at most the largest of the proof
 blocks' bounds: `κ_A ≤ κb ≤ κ_s`, and `γ_A·Pr[B_sess] ≤ γ_s·k_A·Pr[B_sess] ≤ k_V·γ_s·Pr[B]`, `k_A` the rounds of the
-block's shape (`Arg.WF`). -/
-theorem fiber_bound {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compiled Coin A} (hS : L.Sessions H) (x : Msg)
+block's shape (`Arg.wf`). -/
+theorem fiber_bound {H : Msg → Msg} (hKS : A.KS H) {L : Compiled Coin A} (hS : L.Sessions H) (x : Msg)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (R0 : Fin (L.V.k x) → Coin) (u : Fin (L.nPU x))
     (hu : u.val ∈ L.checked x R0) :
     Pr (fun s : (Fin (L.V.k x) → Coin) × A.EC (L.sh x u) =>
@@ -301,7 +301,7 @@ theorem fiber_bound {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compiled 
   have hT := L.session_transfer hKS x P ω R0 u xS P' hshape hcard hacc fun r' h => (hview r' h).1
   have hF := L.session_fork H x P ω R0 u xS P' hcard fun r' h => (hview r' h).2
   have hκ := hκb.trans (L.κ_le_κs x u.isLt)
-  have hkS : A.V.k xS = A.rounds (L.sh x u) := (hWF xS).trans (congrArg A.rounds hshape)
+  have hkS : A.V.k xS = A.rounds (L.sh x u) := (A.wf xS).trans (congrArg A.rounds hshape)
   have hkle : A.V.k xS ≤ L.V.k x := by
     simpa using Fintype.card_le_of_injective _ (L.emb x u xS hcard).injective
   have hγs0 := L.γs_nonneg x
@@ -431,7 +431,7 @@ theorem selMiss_none (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Pr
 
 /-- **At the picked slot's block's session's coins**, the others fixed: the coins the slot gives its block are one
 coordinate of the slots' and then of the blocks' (`Pr_pi_eval_dep`), and `fiber_bound`. -/
-theorem selMiss_fiber {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compiled Coin A} (hS : L.Sessions H)
+theorem selMiss_fiber {H : Msg → Msg} (hKS : A.KS H) {L : Compiled Coin A} (hS : L.Sessions H)
     (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (sel : List ℕ → Option (Fin (L.nPU x)))
     {R0 : Fin (L.V.k x) → Coin} {i u : Fin (L.nPU x)} (h : L.selSlot x sel R0 = some (i, u)) :
     (Ex fun σ => L.selMiss H P x ω sel (forkOn (L.rounds x u) R0 σ)) ≤
@@ -455,11 +455,11 @@ theorem selMiss_fiber {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compile
   rw [← Pr_prod_eq_Ex (fun s : (Fin (L.V.k x) → Coin) × A.EC (L.sh x u) =>
     (run H P L.V x ω (forkOn (L.rounds x u) R0 s.1)).out = .acc ∧
       ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.rounds x u) R0 s.1) s.2)]
-  exact fiber_bound hWF hKS hS x P ω R0 u (mem_of_selSlot h)
+  exact fiber_bound hKS hS x P ω R0 u (mem_of_selSlot h)
 
 /-- At second-stage coins `d`, resampling the picked block's session's rounds: `selMiss_fiber`, or `0` when none is
 picked. -/
-theorem resample_bound {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compiled Coin A} (hS : L.Sessions H)
+theorem resample_bound {H : Msg → Msg} (hKS : A.KS H) {L : Compiled Coin A} (hS : L.Sessions H)
     (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (sel : List ℕ → Option (Fin (L.nPU x)))
     (r d : Fin (L.V.k x) → Coin) :
     (Ex fun σ => L.selMiss H P x ω sel
@@ -476,13 +476,13 @@ theorem resample_bound {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compil
     obtain ⟨i, u⟩ := iu
     rw [selRounds_some h]
     simp only [forkOn_sub (hS.fixed x _ u (mem_of_selSlot h)).1]
-    exact selMiss_fiber hWF hKS hS x P ω sel h
+    exact selMiss_fiber hKS hS x P ω sel h
 
 /-- **`SessionKS` from `A`'s knowledge soundness**, its rounds and the contract: `β(ω, r)` is `B`'s collision
 probability averaged over the second stage, which averages to `Pr[B]` (`Ex_forkCollAt`); at `(ω, r)`, resampling the
 picked slot's block's session's rounds (`Ex_resample`, `selRounds_resample`) gives `resample_bound` at each
 second-stage `d`, averaged by Jensen's inequality (`Ex_sqrt_le`). -/
-theorem sessionKS_of {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compiled Coin A} (hS : L.Sessions H) :
+theorem sessionKS_of {H : Msg → Msg} (hKS : A.KS H) {L : Compiled Coin A} (hS : L.Sessions H) :
     L.SessionKS H := by
   intro x Ω _ _ P
   refine ⟨fun ω r => Ex fun d => forkCollAt H L.V P x ω (forkOn (L.stage2 x) r d),
@@ -510,7 +510,7 @@ theorem sessionKS_of {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compiled
           (forkOn (L.stage2 x) r (forkOn (L.selRounds x sel (forkOn (L.stage2 x) r d)) d σ)) := hres'.symm
     _ ≤ Ex fun d => L.κs x + Real.sqrt ((L.V.k x : ℝ) * L.γs x * Ex fun σ => forkCollAt H L.V P x ω
           (forkOn (L.stage2 x) r (forkOn (L.selRounds x sel (forkOn (L.stage2 x) r d)) d σ))) :=
-        Ex_mono fun d => resample_bound hWF hKS hS x P ω sel r d
+        Ex_mono fun d => resample_bound hKS hS x P ω sel r d
     _ = L.κs x + Ex fun d => Real.sqrt ((L.V.k x : ℝ) * L.γs x * Ex fun σ => forkCollAt H L.V P x ω
           (forkOn (L.stage2 x) r (forkOn (L.selRounds x sel (forkOn (L.stage2 x) r d)) d σ))) := by
         rw [Ex_add, Ex_const]
@@ -525,6 +525,6 @@ theorem sessionKS_of {H : Msg → Msg} (hWF : A.WF) (hKS : A.KS H) {L : Compiled
 end Compiled
 
 /-- **The sessions' KS from the proof system's**: `Compiled.sessionKS_of` at every compiled sampled verifier. -/
-theorem sessionKSOf : SessionKSOf := fun _ _ _ _ _ _ _ hWF hKS hS => Compiled.sessionKS_of hWF hKS hS
+theorem sessionKSOf : SessionKSOf := fun _ _ _ _ _ _ _ hKS hS => Compiled.sessionKS_of hKS hS
 
 end Claims.SamplingGeneric

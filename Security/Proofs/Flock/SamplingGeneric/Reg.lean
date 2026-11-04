@@ -516,7 +516,7 @@ end Compiled
 
 /-- **The committed form** from the sessions' bound. -/
 theorem compilerKSReg_of (hsess : SessionKSOf) : CompilerKSReg := by
-  intro Coin _ _ _ A L H hwf hA hB hS
-  exact Compiled.ksReg_of_sessionKS hB hS (hsess Coin A L H hwf hA hS)
+  intro Coin _ _ _ A L H hA hB hS
+  exact Compiled.ksReg_of_sessionKS hB hS (hsess Coin A L H hA hS)
 
 end Claims.SamplingGeneric
