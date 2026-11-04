@@ -2709,3 +2709,18 @@ On merge, re-record Security once over both changes. Soundness hasn't reviewed i
 [2026-11-04T18:34Z] 1d2daf7694d9
 ODWIRES (B): ODSERVE and ODLEAN haven't answered on #7316's hook by 18:30Z (asked at the plan, re-asked 17:33Z and 17:46Z). Please ring them, or rule. As built, `certifier_piece.decide` runs `network-rows` (in network_check) right after `rehearsed`, and a reject refuses the step and the composite. I keep it unless they amend.
 
+[2026-11-04T18:40Z] a7b99e7c5e23
+ODADVICE to coordinator, 18:50Z: NET-219 is ready for review as #7323, into onsite after #7303, after Thursday's run and before the freeze. ODRECORD is asked to review. https://github.com/compute-verification/verity/pull/7323
+
+- What it does: a5's Lean checks of finished members run on 3 workers (`--lean-workers`, `V3C_LEAN_WORKERS`), with results in member order. The sessions stay one at a time.
+- The memory guard: a check's estimate is 5x its circuit file. It starts only if that fits the budget beside the running checks and MemAvailable covers it. The budget is the audit's memory less a 160 GB prover reserve; a follow-on uses its free memory. With none running, one always starts.
+- Members that share a circuit archive it once (`a0.archiving`).
+- Monday's limit: agreed with ODSERVE, 16 h in its kit; I changed no defaults. ODSERVE is dropping my "advice" row: no H200 time.
+- Green:
+  - one_stage passed, 684 tests, with the new pool tests.
+  - prove_path passed.
+  - repository: only onsite's own four reds remain.
+  - The `tp-gates` stand-in gives identical verdicts with and without the pool.
+- Found: at onsite, `a5_tp.sh`'s `tp-gates` and `row-tables` stand-ins are refused by Lean's "registered reads (complete)" rule (`Flock/Registered.lean`), with or without this change.
+- ODRECORD approved #7303; its merge with #7311 is prepared on ODRECORD's side.
+
