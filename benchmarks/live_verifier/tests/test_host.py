@@ -957,3 +957,33 @@ def test_a_pin_line_names_the_branch_its_commit_is_on_where_infra_names_it(tmp_p
     assert H.pin_of(host, PIN) == {"line": 0, "utc": "2026-10-21T13:00:00Z", "on": "remote"}
     H.record_pin(log, PIN, T1, seal=lambda p: None)
     assert H.pin_of(host, PIN) == {"line": 1, "utc": "2026-10-21T13:30:00Z"}
+
+
+def test_a_compose_is_killed_with_everything_it_started_when_its_minutes_run_out(tmp_path, monkeypatch):
+    """`run_compose` with a compose that never ends (a child blocked on a FIFO): its timer kills the whole process group
+    and the exit is 124; one that ends is its exit."""
+    armed: list[float] = []
+
+    class Timer:
+        """Runs out the moment it starts."""
+
+        def __init__(self, seconds, fn):
+            armed.append(seconds)
+            self.fn = fn
+
+        def start(self):
+            self.fn()
+
+        def cancel(self):
+            pass
+
+    script = tmp_path / "benchmarks" / "one_stage" / "served_verdicts.sh"
+    script.parent.mkdir(parents=True)
+    script.write_text('mkfifo "$D/f"; (read -r x < "$D/f") & wait\n')
+    env = {"PATH": "/usr/bin:/bin", "D": str(tmp_path)}
+    monkeypatch.setattr(H.threading, "Timer", Timer)
+    assert H.run_compose(env, tmp_path / "log", 3, tree=tmp_path) == 124 and armed == [180]
+    monkeypatch.undo()
+    script.write_text('echo composed; exit 7\n')
+    assert H.run_compose(env, tmp_path / "log", tree=tmp_path) == 7
+    assert (tmp_path / "log").read_text() == "composed\n"

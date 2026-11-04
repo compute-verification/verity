@@ -813,7 +813,7 @@ def gate_compose(rest: list[str], host: Host, *, by: str, now: datetime, token: 
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise Refused("another compose runs; one at a time") from None
-        scratch = host.scratch / f"compose-{now.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}-{token}"
+        scratch = host.scratch / f"compose-{utc(now).replace('-', '').replace(':', '')}-{token}"
         scratch.mkdir(mode=0o700)
         own(scratch)
         try:
@@ -917,14 +917,21 @@ def run_compose(env: dict[str, str], log: Path, minutes: int = COMPOSE_MINUTES, 
     with open(log, "wb") as out, subprocess.Popen(["nice", "-n", "10", "bash", "benchmarks/one_stage/served_verdicts.sh",
                                                    "compose"], cwd=tree, env=env, stdin=subprocess.DEVNULL, stdout=out,
                                                   stderr=subprocess.STDOUT, start_new_session=True) as p:
+        ran_out = threading.Event()
+
+        def kill() -> None:
+            ran_out.set()
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(p.pid, signal.SIGKILL)
+        timer = threading.Timer(minutes * 60, kill)
+        timer.start()
         try:
-            rc = p.wait(timeout=minutes * 60)
-        except subprocess.TimeoutExpired:
-            rc = 124
+            rc = p.wait()
+        finally:
+            timer.cancel()
         with contextlib.suppress(ProcessLookupError):
             os.killpg(p.pid, signal.SIGKILL)
-        p.wait()
-    return rc
+    return 124 if ran_out.is_set() else rc
 
 
 def answered(out: Path, cap: int = COMPOSE_ANSWER_BYTES) -> dict[str, Any]:
