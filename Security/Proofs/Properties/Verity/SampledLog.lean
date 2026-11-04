@@ -3,19 +3,18 @@ import SampledProofs.ChallengerSession
 import Std.Tactic.Do
 
 /-!
-# The challenger session's release log, line by line, as v2's check reads it
+# Reading the challenger session's release log as v2's check reads it
 
-The device's log as `SampledProofs.Challenger.releasedRootsOf` reads the challenger session's release log, its head
-aside: a coin tree's line (`treeLine`) its own release (`treeRelease`), and the other lines in pairs, a root's line and
-its coin's release, of the family and after the root the root's line shows (`rootOf`), with the draw's coins placed in
-order on the releases of the draw's family after the registration's digest (`readLines`). `countFresh` counts those
-pairs and `chunks` cuts the coins.
+The facts the reads of the release log rest on, for `Verity.Sampled.readLines` (`coinsRead`'s line reading: a coin
+tree's line its own release, `treeRelease`, and the other lines in pairs, a root's line, `rootOf`, and its coin's
+release) and for any other read of v2's logs. `countFresh` counts the pairs whose root's line shows the draw's family
+after the registration's digest, `chunks` cuts the draw's coins, and a coin tree's line answers no family's frame
+(`treeRelease_frame`).
 
-Its fields are read only by matching on what `event` parses, and its lines classified only by `treeLine` and by their
-position, as v2's check classifies them: `BEq Json` and `Json.parse` are `partial`, so no proof can read a field off a
-`Json` comparison v2 makes, or see that a line v2 accepts parses. A fact about one of the verifier's monadic functions
-is a Hoare triple proved by `mvcgen`, read back at an `.ok` or `some` result (`of_triple`, `of_triple_opt`); the
-triples here hold of any `Except` or `Option` value, so `mvcgen` passes over a `partial` call it can't unfold.
+`BEq Json` and `Json.parse` are `partial`, so no proof can read a field off a `Json` comparison v2 makes, or see that a
+line v2 accepts parses. A fact about one of the verifier's monadic functions is a Hoare triple proved by `mvcgen`, read
+back at an `.ok` or `some` result (`of_triple`, `of_triple_opt`); the triples here hold of any `Except` or `Option`
+value, so `mvcgen` passes over a `partial` call it can't unfold.
 -/
 
 set_option mvcgen.warning false
@@ -89,69 +88,11 @@ theorem findIdxA_spec {α : Type} (p : α → Bool) (l : Array α) : ⦃⌜True�
   opt_spec _
 theorem getElem?_spec {α : Type} (l : List α) (i : Nat) : ⦃⌜True⌝⦄ l[i]? ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
 
-/-! ## The read -/
+/-! ## Counting the draw's coins -/
 
-/-- **The family and the root a root line of the release log shows**, as `releasedRootsOf` reads them. -/
-def rootOf (l : String) : String × ByteArray :=
-  match event l with
-  | .ok r => ((match SampledProofs.getD r "label" with | .str x => x | _ => ""),
-      match SampledProofs.getD r "root" with | .str x => (Flock.unhex x).toOption.getD .empty | _ => .empty)
-  | .error _ => ("", .empty)
-
-/-- **A coin tree's line's release**, after the trees `ts` sampled so far: its hello with its root's and key's bits, or
-a round opened, with its coins' bits where a record of its tree gives them. -/
-def treeRelease (records : List Json) (ts : List (String × Flock.CoinTree.Spec)) (j : Json) :
-    Option (Verity.Release × List (String × Flock.CoinTree.Spec)) :=
-  let ev := match SampledProofs.getD j "event" with | .str x => x | _ => ""
-  if ev == TREE_EVENT then do
-    let .str key := SampledProofs.getD j "key" | none
-    let .str nonce := SampledProofs.getD j "nonce" | none
-    let .str root := SampledProofs.getD j "root" | none
-    let spec ← specOf (SampledProofs.getD j "spec")
-    let ν ← (Flock.unhex nonce).toOption
-    let r ← (Flock.unhex root).toOption
-    let κ ← (Flock.unhex key).toOption
-    pure (⟨.hello spec, ν, Verity.bitsOfBytes (r ++ κ)⟩, ts ++ [(root, spec)])
-  else if ev == OPEN_EVENT then do
-    let .str root := SampledProofs.getD j "tree" | none
-    let .str stream := SampledProofs.getD j "stream" | none
-    let .str aft := SampledProofs.getD j "after" | none
-    let k ← SampledProofs.nat? (SampledProofs.getD j "round")
-    let n ← SampledProofs.nat? (SampledProofs.getD j "n")
-    let i ← ts.findIdx? (·.1 == root)
-    let (_, spec) ← ts[i]?
-    let s ← spec.streams.findIdx? (· == stream)
-    let b ← (Flock.unhex aft).toOption
-    let coins := match records.find? (recordTree · == root) with
-      | some rec => ((recordRound rec stream k).map Verity.bitsOfBytes).getD []
-      | none => []
-    pure (⟨.opening i s n, b, coins⟩, ts)
-  else none
-
-/-- **The releases the log's lines `ls` show**, after the release log's head: a coin tree's line (`treeLine`) its
-release (`treeRelease`), and the other lines in pairs, as `releasedRootsOf` reads them, a root's line `pending` and
-its coin's release, of the family and after the root the root's line shows (`rootOf`), with the next coin of the draw's
-`ξ` where it is the draw's (`label`'s, after `after`), else none. -/
-def readLines (label : String) (after : ByteArray) (records : List Json) :
-    List String → List (String × Flock.CoinTree.Spec) → Option String → ByteArray → List Verity.Release
-  | [], _, _, _ => []
-  | l :: ls, ts, pending, ξ =>
-    if treeLine l then
-      match (event l).toOption.bind (treeRelease records ts) with
-      | some (r, ts') => r :: readLines label after records ls ts' pending ξ
-      | none => readLines label after records ls ts pending ξ
-    else
-      match pending with
-      | none => readLines label after records ls ts (some l) ξ
-      | some a =>
-        if (rootOf a).1 = label ∧ (rootOf a).2 = after then
-          ⟨.fresh label, after, Verity.bitsOfBytes (ξ.extract 0 COIN_BYTES)⟩ ::
-            readLines label after records ls ts none (ξ.extract COIN_BYTES ξ.size)
-        else ⟨.fresh (rootOf a).1, (rootOf a).2, []⟩ :: readLines label after records ls ts none ξ
-
-/-- The pairs of `ls` whose root's line shows family `label` after `after`. -/
+/-- The pairs of `ls` whose root's line shows family `label` after `after` (`rootOf`). -/
 def countFresh (label : String) (after : ByteArray) : List String → Nat
-  | a :: _ :: rest => countFresh label after rest + if (rootOf a).1 = label ∧ (rootOf a).2 = after then 1 else 0
+  | a :: _ :: rest => countFresh label after rest + if rootOf a = some (label, after) then 1 else 0
   | _ => 0
 
 /-- The bits of `m` coins of `ξ`, in order. -/
@@ -167,6 +108,110 @@ theorem treeRelease_frame {records : List Json} {ts ts' : List (String × Flock.
   refine of_triple_opt (Q := fun p => ∀ l, p.1.frame ≠ .fresh l) ?_ h
   clear h
   mvcgen [treeRelease, -Spec.throw_Option, none_spec, specOf_spec, toOption_spec, nat_spec, findIdx_spec,
+    getElem?_spec, findIdxA_spec]
+  all_goals exact fun l h => Verity.Frame.noConfusion h
+
+/-! ## The read with v2's own tests -/
+
+/-- The streams a coin tree's spec names, as `SampledProofs.Challenger.coinTreesOf` reads them: none where it names no
+list. -/
+def specStreams (spec : Json) : Array Json :=
+  match SampledProofs.getD spec "streams" with | .arr ss => ss | _ => #[]
+
+/-- **A coin tree's line's release, read with the tests `SampledProofs.Challenger.coinTreesOf` makes**, after the trees
+`ts` read so far, each its root and its spec as its line gives them: where the line's `event` is `TREE_EVENT` by
+`coinTreesOf`'s comparison, its hello after its nonce, with its root's and key's bits; else a round opened, of the
+`i`-th tree read and the `s`-th of its spec's streams, the first one equal to the line's by the comparison
+`coinTreesOf`'s `contains` makes, after the bytes it answers, with its coins' bits where a record of that tree gives
+them, else none; `none` where the line doesn't read as either. -/
+def treeStep (records : List Json) (ts : List (String × Json)) (d : Json) :
+    Option (Verity.Release × List (String × Json)) :=
+  if SampledProofs.getD d "event" == Json.str TREE_EVENT then do
+    let .str key := SampledProofs.getD d "key" | none
+    let .str nonce := SampledProofs.getD d "nonce" | none
+    let .str root := SampledProofs.getD d "root" | none
+    let spec ← specOf (SampledProofs.getD d "spec")
+    let ν ← (Flock.unhex nonce).toOption
+    let r ← (Flock.unhex root).toOption
+    let κ ← (Flock.unhex key).toOption
+    pure (⟨.hello spec, ν, Verity.bitsOfBytes (r ++ κ)⟩, ts ++ [(root, SampledProofs.getD d "spec")])
+  else do
+    let .str root := SampledProofs.getD d "tree" | none
+    let .str stream := SampledProofs.getD d "stream" | none
+    let .str aft := SampledProofs.getD d "after" | none
+    let k ← SampledProofs.nat? (SampledProofs.getD d "round")
+    let n ← SampledProofs.nat? (SampledProofs.getD d "n")
+    let i ← ts.findIdx? (·.1 == root)
+    let (_, spec) ← ts[i]?
+    let s ← (specStreams spec).findIdx? (Json.str stream == ·)
+    let b ← (Flock.unhex aft).toOption
+    let coins := match records.find? (recordTree · == root) with
+      | some rec => ((recordRound rec stream k).map Verity.bitsOfBytes).getD []
+      | none => []
+    pure (⟨.opening i s n, b, coins⟩, ts)
+
+/-- **The releases the lines after the release log's head show**, read as `readLines` reads them but each coin tree's
+line by `treeStep`, after the trees `ts` read so far: for the draw of family `label` after `after`, with the draw's
+coins `ξ` still to place and the root's line `pending` still to pair. -/
+def readTail (label : String) (after : ByteArray) (records : List Json) :
+    List String → List (String × Json) → Option String → ByteArray → Option (List Verity.Release)
+  | [], _, none, _ => some []
+  | [], _, some _, _ => none
+  | l :: ls, ts, pending, ξ =>
+    if treeLine l then do
+      let (r, ts') ← (event l).toOption.bind (treeStep records ts)
+      pure (r :: (← readTail label after records ls ts' pending ξ))
+    else
+      match pending with
+      | none => readTail label after records ls ts (some l) ξ
+      | some a => do
+        let (lab, root) ← rootOf a
+        if lab = label ∧ root = after then
+          let m := COIN_BYTES
+          pure (⟨.fresh label, after, Verity.bitsOfBytes (ξ.extract 0 m)⟩ ::
+            (← readTail label after records ls ts none (ξ.extract m ξ.size)))
+        else pure (⟨.fresh lab, root, []⟩ :: (← readTail label after records ls ts none ξ))
+
+/-- **The releases the release log's lines show, read with v2's own tests**: its head's coin tree where the head is a
+coin tree's line (`SampledProofs.Challenger.coinTreesOf` reads the head's line too), then the lines after it
+(`readTail`). -/
+def readLog (label : String) (after : ByteArray) (records : List Json) (ξ : ByteArray) :
+    List String → Option (List Verity.Release)
+  | [] => some []
+  | l :: ls =>
+    if treeLine l then do
+      let (r, ts) ← (event l).toOption.bind (treeStep records [])
+      pure (r :: (← readTail label after records ls ts none ξ))
+    else readTail label after records ls [] none ξ
+
+/-- A session's record on the blobs `bs`, as `SampledProofs.OneStageZk.treesHeld` reads it: one that doesn't parse is
+`null`; `none` where no blob holds it or it isn't UTF-8. -/
+def recordOn (bs : _root_.Core.Blobs) (r : _root_.SampledProofs.OneStageZk.RunFiles) : Option Json := do
+  let b ← (bs.get r.record s!"session {r.name}'s record").toOption
+  let t ← String.fromUTF8? b
+  pure ((Json.parse t).toOption.getD Json.null)
+
+/-- The records of the sessions v2's evidence `e` names, on the blobs `bs`, as `SampledProofs.OneStageZk.treesHeld`
+reads them (`recordOn`). -/
+def recordsOn (bs : _root_.Core.Blobs) (e : _root_.SampledProofs.OneStageZk.Evidence) : Option (List Json) :=
+  e.sessions.toList.mapM (recordOn bs)
+
+/-- **The device's log as v2's check reads it, with v2's own tests**: `coinsRead`'s read, with each coin tree's line
+read by the tests `SampledProofs.Challenger.coinTreesOf` makes, the head's line included (`readLog`), and the
+sessions' records as `SampledProofs.OneStageZk.treesHeld` reads them (`recordsOn`). -/
+def logRead (s : Verity.Sent) : Option (List Verity.Release) := do
+  let (p, c, e) ← (caseOf s).toOption
+  let (_, label) ← p.base.challenger
+  let ξ ← (_root_.SampledProofs.OneStageZk.coinsOf p c e).toOption
+  let lines ← (linesOf e).toOption
+  readLog label c.digest (← recordsOn (_root_.Core.Blobs.ofArray s.blobs) e) ξ lines
+
+/-- A coin tree's line's release, read with v2's own tests, answers no family's frame. -/
+theorem treeStep_frame {records : List Json} {ts ts' : List (String × Json)} {d : Json} {r : Verity.Release}
+    (h : treeStep records ts d = some (r, ts')) : ∀ l, r.frame ≠ .fresh l := by
+  refine of_triple_opt (Q := fun p => ∀ l, p.1.frame ≠ .fresh l) ?_ h
+  clear h
+  mvcgen [treeStep, -Spec.throw_Option, none_spec, specOf_spec, toOption_spec, nat_spec, findIdx_spec,
     getElem?_spec, findIdxA_spec]
   all_goals exact fun l h => Verity.Frame.noConfusion h
 
