@@ -443,17 +443,15 @@ theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
     rw [List.length_take]
     omega
   -- the placeholder at the binding: the frame's state there
-  have hopJ := (coins_taken_of_live (ofLoop T L₀ real) wk x w ρ κ ((m₀, ρ₀) :: ops) hlive
-    hle hrf (i := J) (by omega) (by omega)).1
   obtain ⟨mA, hA⟩ := answered_ok_of_live (ofLoop T L₀ real) wk x w ρ κ (((m₀, ρ₀) :: ops).take J)
     (by rw [htl J (by omega)]; exact hkd J le_rfl (by omega))
     ((ofLoop T L₀ real).live_take wk x w ρ κ _ hlive J)
-  have hAJ := hA
+  have hAJ := frameAnswer_of_answered hA
   obtain ⟨⟨dm, da⟩, hd⟩ : ∃ d, ops[J - 2]? = some d := ⟨ops[J - 2]'(by omega), List.getElem?_eq_getElem _⟩
   have htk2 : ops.take (J - 1) = ops.take (J - 2) ++ [(dm, da)] := by
     rw [show J - 1 = J - 2 + 1 by omega, List.take_add_one, hd]; rfl
   have hts : (ops.take (J - 2)).length = J - 2 := by rw [List.length_take]; omega
-  rw [answered_of_opens _ _ _ _ hopJ, htk J (by omega),
+  rw [htk J (by omega),
     ofLoop_frameAnswer_same T L₀ real x ρ (m₀, ρ₀) (ops.take (J - 1)) hsx (q := J - 2) (j := P - 1)
       (by rw [List.length_take]; omega)
       (by rw [hloc (J - 2) (J - 1 - R) (by omega) (by omega)]; show J - 1 - R = P - 1 + 1; omega),
@@ -461,6 +459,7 @@ theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
     progOf_snoc x ((ops.take (J - 2)).map fun p => ZKMal.CoinLayer.rd p.2) (ZKMal.CoinLayer.rd da) hsx (q := J - 3)
       (by rw [List.length_map, hts]; omega),
     hloc (J - 3) (P - 1) (by omega) (by omega)] at hAJ
+  replace hAJ := (bind_rankStop_ok hAJ).1
   dsimp only at hAJ
   rcases hph : placeholder spec (Masked.stsOf x) (2 * j + r)
       (wordsAt x ((ops.take (J - 2)).map fun p => ZKMal.CoinLayer.rd p.2) 0) with e | ⟨c', t, dom, xs, hi⟩

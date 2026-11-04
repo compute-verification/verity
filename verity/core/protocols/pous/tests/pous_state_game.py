@@ -1,5 +1,5 @@
-"""The state game for the key chain (POUS `internal/p3-instantiation/overwrite-state-game.py`, verbatim but for this
-paragraph): three chaining modes, on the pilot's dense rows and on P3's band rows.
+"""The state game for the key chain (the designer's, verbatim but
+for this paragraph): three chaining modes, on the pilot's dense rows and on P3's band rows.
 
 Rows: row i absorbs its parents newest first (dense: i - 1, ..., 0; band k: i - 1, ..., i - min(i, k)), then the pad.
 The pad call's output is the key. Dense: the label is key xor W, known with the key. Band (P3): the label is

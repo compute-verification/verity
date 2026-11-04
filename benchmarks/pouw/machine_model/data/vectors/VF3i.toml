@@ -1,8 +1,7 @@
-# VF3i: Filtered textures and uniform heads at 32 MACs a word written, inside the LP; round 8's adopted vector.
+# VF3i: Filtered textures and uniform heads at 32 MACs a word written, inside the LP; the vector adopted before the strict VF3i.
 name = "VF3i"
 epoch = "VF3i"
-summary = "Filtered textures and uniform heads at 32 MACs a word written, inside the LP; round 8's adopted vector."
-note = "note:20261016T1538Z-draft-rs-vf3i-textures-uniform"
+summary = "Filtered textures and uniform heads at 32 MACs a word written, inside the LP; the vector adopted before the strict VF3i."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
@@ -29,9 +28,8 @@ credits = [
     ["UNI", 32], ["UNI64", 64], ["CVT64", 2048],
 ]
 
-[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.1129
-tau_600w = 0.0883
 uf_low = 1.0938
 margin = 1.935
 

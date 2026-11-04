@@ -72,6 +72,7 @@ OF_RECORD = "of-record"
 RUN_OF_RECORD = "run_of_record"
 GOAL = "goal"
 ABANDONED = "abandoned"
+WITHDRAWN = "withdrawn"
 REPLAY_SET = "replay_set"
 REPLAY_EXPECT = "replay_expect"
 INTERACTION_ATTEMPT_OF = "interaction_attempt_of"
@@ -82,6 +83,7 @@ PIPELINE = "pipeline"
 KERNEL_OUTCOME = "kernel_outcome"
 KERNEL_OUTCOMES = ("screened", "frontier", "kept", "dropped", "voided", "superseded")
 KERNEL_REASON = "kernel_reason"
+UNIT_LOWERING = "unit_lowering"
 
 # ---- verification labels: an independent verifier, never the producer ----------------------------------------------------------------
 
@@ -163,7 +165,7 @@ TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
 #: Mirrors the Glossary's backend families (`README.md`, "Backend family").  A `candidate` label written today names one of these.
 BACKEND_FAMILIES = ("A-GKR", "B-Ligero", "C-Flock", "D-SP1")
 #: The backend families, then the values the frozen ledger's import derived from a ledger lane, which recorded labels carry
-#: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `archive/vole`, not C-Flock), `SP1` (D-SP1 as the frozen ledger and
+#: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `archive/vole`, not Flock), `SP1` (D-SP1 as the frozen ledger and
 #: tables spell it) and `shared`.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
 CANDIDATES = (*BACKEND_FAMILIES, "B-AIR", "C", "SP1", "shared")
 APPROACH_STATUSES = ("live", "parked", "killed", "superseded", "merged")
@@ -208,7 +210,7 @@ GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
 READY = "ready"
 #: A reviewer's verdict on a pull request at one head (`research queue review`): `land` lands it with drive's `land = "review"`
 #: once every member below it has one, `hold` keeps it and everything above it on `next`; the owner's own doesn't count
-#: (PRs land on an eyeball review, and the full check runs after landing).
+#: (on `checked`; `main` follows only to commits whose after-landing run passed).
 REVIEWED = "reviewed"
 REVIEW_VERDICTS = ("land", "hold")
 #: A `check.py --update` report (its audit.json) on a pull request at one head: a record of what its lean-audit.json change printed
@@ -216,6 +218,19 @@ REVIEW_VERDICTS = ("land", "hold")
 LEAN_REVIEW = "lean_review"
 #: On a run a landing's `Check:` or `Checked:` trailer names: main's commit that landed what it checked (`research merge`).
 LANDED = "landed"
+#: On `task:<key>`, by the executor's worker that ran it (`verity tasks run`): its verdict (`research.executor`).
+TASK_VERDICT = "verdict"
+TASK_VERDICTS = ("pass", "fail")
+#: On `commit:<sha>`, by drive in shadow mode: its after-landing run's verdicts beside the executor's (`executor.compare`).
+EXECUTOR_SHADOW = "executor_shadow"
+#: On `commit:<sha>`, by the executor: the art: id of the after-landing task graph it listed for that commit on a worker
+#: (`tasks-graph/v1`), whose keys drive reads verdicts under.
+TASKS_GRAPH = "tasks_graph"
+#: On `commit:<sha>`, by the executor: the art: id of the graph/v2 it listed for that commit on a worker (`verity-graph/v2`),
+#: whose keys drive reads results under.
+VERITY_GRAPH = "verity_graph"
+#: On `task:<key>`, by the executor's worker that ran a graph/v2 task (`verity graph run`): its result/v1 document.
+TASK_RESULT = "result"
 
 
 def canonical_key(name: str) -> str:
@@ -324,6 +339,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "session kind until GATE, e.g. V3)", pattern=r"(refused|blocked): \S.*"),
     _k(ABANDONED, GROUP_RESULT, TEXT, "the line of work this evidence belongs to was given up, in a few words; --ref names the note that says why "
                                       "(note:<lane>/<file name without .md>), so nobody builds on it unawares"),
+    _k(WITHDRAWN, GROUP_RESULT, TEXT, "the artifact's blobs were deleted from the shared store (`research data withdraw`) because "
+       "they held values that must never be shared, in a few words; --ref names the issue. Its manifest stays, so a citation "
+       "still resolves and `fetch` reports the payload gone"),
     _k(INTERACTION_ATTEMPT_OF, GROUP_RESULT, TEXT, "on an interaction attempt that is not the cell's figure (refused, or run on an earlier pair): the art: id of "
        "the cell it belongs to; the cell lists every attempt with its deviation (IX1)"),
     _k(HASH, GROUP_RESULT, TEXT, "the operand commitment proven in-circuit: none, poseidon2-babybear-w24, or the leaf's name"),
@@ -334,6 +352,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "not judged; frontier: a distinct route kept for search; kept: adopted; dropped; voided: it didn't measure what it claims; "
        "superseded); the latest label wins", KERNEL_OUTCOMES),
     _k(KERNEL_REASON, GROUP_RESULT, TEXT, "on a kernel-attempt/v1 record: the kernel_outcome's reason, one line"),
+    _k(UNIT_LOWERING, GROUP_RESULT, TEXT, "on a `benchmarks/unit_lowering` run, by its lane: the leaderboard's row, a JSON object "
+       "(--value-json) {unit tile|lane|combine, k, tile [R, C], form flat|structural, peak_gib, wall_min, ands, bytes, k_log, "
+       "guard pass|fail|n/a, approach, commit branch@sha}"),
     _k(MEMORY_LINE_OF_RECORD, GROUP_RESULT, TEXT, "on a gate run's verifier run, by its lane: its memory line of record is the "
        "auditor_line.json of --ref's auditor_line.py run, as `lean conditional on NAMES`: that file's line_by, which must be lean (the "
        "Lean verifier's line, held exactly to line.py's; a line.py-only line is not of record), and the names of its conditional_on in "
@@ -386,6 +407,19 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "needs a statement reviewer"),
     _k(LANDED, GROUP_VERIFICATION, TEXT, "on a run (a check, or a part of one), by research-merge: main's commit whose Check: or "
        "Checked: trailer names it (`research merge`; `--label-landed` for past landings)", pattern=r"[0-9a-f]{40}"),
+    _k(TASK_VERDICT, GROUP_VERIFICATION, ENUM, "on task:<key>, by the executor's worker that ran `verity tasks run`: pass (passed "
+       "or skipped) or fail; a key with any fail is failed (`research.executor.fold`)", TASK_VERDICTS),
+    _k(TASKS_GRAPH, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by the executor: the art: id of the after-landing task graph "
+       "(`tasks-graph/v1`) it listed for that commit on a worker; drive reads verdicts under its tasks' keys",
+       pattern=r"art:[0-9a-f]{64}"),
+    _k(VERITY_GRAPH, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by the executor: the art: id of the graph/v2 (`verity-graph/v2`) it "
+       "listed for that commit on a worker; drive with `executor = \"on\"` reads results under its tasks' keys",
+       pattern=r"art:[0-9a-f]{64}"),
+    _k(TASK_RESULT, GROUP_VERIFICATION, TEXT, "on task:<key>, by the executor's worker that ran a graph/v2 task (`verity graph run`): "
+       "its result/v1 document, pass or fail (an error is never one); a key with any fail is failed (`research.executor.fold_results`)"),
+    _k(EXECUTOR_SHADOW, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by drive with `executor = \"shadow\"`: a JSON object comparing "
+       "the after-landing run's verdicts with the executor's ({check, graph, run, units, agree, disagree: [{unit, old, executor}], "
+       "pending, missing, executor_only, error, incomplete}); `research queue shadow-report` reads it"),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),

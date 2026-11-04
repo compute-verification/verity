@@ -5,12 +5,12 @@ An ended window binds, in order: the epoch round (round 0, the tree over the B t
 root the tree over the round's leaves, each leaf the tree over that kind's per-call roots: a-step, admit-step, z-step,
 y-step and receipt-step, the last holding step s - D + 1's receipt-table roots), the final round (the tree over the
 tail's receipt-tail roots, each the tree over one tail step's receipt-table roots, steps S - D + 1 to S - 1), and the
-manifest root, the tree over every round root of the window in order, which the draw coin follows.  manifest.json holds
+manifest root, the tree over every round root of the window in order, which the sampling coin follows.  manifest.json holds
 the window, every round's root, each step's round leaves and unit salt, the B roots, the final round's leaves, the
 manifest root and the coins in `coins.check`'s form; each step's per-call roots go to a file beside it (`calls`, by
 sha512).  `check` recomputes every round root from the manifest's leaves (the epoch round from the B roots, the final
 round from the tail's leaves), the manifest root from those, and holds the challenger's run to them: the salt coin after
-the window's root, each round's coin after its root, the draw coin after the manifest root, the session run from a
+the window's root, each round's coin after its root, the sampling coin after the manifest root, the session run from a
 commit the host's pins log (``--pins``) records on the verifier's own first-parent history of main (``--main``).
 
     python dither_manifest.py check --manifest OUT/manifest-SESSION.json --challenger-out SESSION_DIR --ledger HEAD [...]
@@ -85,7 +85,7 @@ def write(out_dir: str | Path, name: str, doc: dict, calls: bytes, calls_dir: st
 
 def expect(m: dict) -> dict:
     """What the verifier recomputes from manifest `m` alone: every round root (the epoch round from the B roots, each
-    step's from its leaves, the final from the tail's leaves), the manifest root over them (the draw coin's root), the
+    step's from its leaves, the final from the tail's leaves), the manifest root over them (the sampling coin's root), the
     unit salts as the manifest lists them, and where the recomputed roots differ from the manifest's own."""
     W, kinds, s0 = m["window"], m["round_kinds"], m["first"]
     rounds = [epoch_root(W, [bytes.fromhex(x) for x in m["b_roots"]])]

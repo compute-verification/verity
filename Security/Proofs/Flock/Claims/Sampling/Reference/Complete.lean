@@ -43,8 +43,8 @@ refused draw checks each once (`size_checked_le`, `size_allSlots`). -/
 theorem checkedLe_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : CheckedLe D := by
   rintro x ⟨s, Pt, hx, hP, -⟩ r
   obtain ⟨rule, d, query, table, cm, l, L, bytes, -, hl, hshape, -, -, hch⟩ := h x s Pt hx hP
-  have hnPU : nPU D x = (slotPartition l).sizes.sum := by
-    simp [nPU, hx, Deploy.part, hP, Partition.sizes_of_shape hshape]
+  have hnPU : nPU D x = (slotPartition l).blocks.length := by
+    simp [nPU, hx, Deploy.part, hP, Partition.blocks_length_of_shape hshape]
   rw [hch r, hnPU, Array.length_toList]
   unfold drawChecked
   split
@@ -89,7 +89,7 @@ theorem sessErr_nonneg (H : Msg → Msg) (D : Deploy Coin Col T) (hnn : ∀ xS, 
 
 omit [Fintype Coin] [Nonempty Coin] in
 theorem le_sessErr (H : Msg → Msg) (D : Deploy Coin Col T) {x xS : Msg} {w : Wit} {ω : D.Tape}
-    {r : Fin (D.V.k x) → Coin} {u : ℕ × ℕ} {vS : Seen} (hw : Rhon H D.commit D.parse D.partition x w)
+    {r : Fin (D.V.k x) → Coin} {u : ℕ} {vS : Seen} (hw : Rhon H D.commit D.parse D.partition x w)
     (hu : u ∈ D.checked x r) (h : D.session x u (run H (D.P w) D.V x ω r).seen = some (xS, vS)) :
     min 1 (D.flock.δc H xS) ≤ sessErr H D x := by
   unfold sessErr sessErrAt
@@ -108,7 +108,7 @@ def slotRounds (D : Deploy Coin Col T) (x : Msg) (p : ℕ) (r : Fin (D.V.k x) �
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- A slot that checks a unit is below `n_PU`. -/
 theorem slot_lt (D : Deploy Coin Col T) (hle : CheckedLe D) {x : Msg} (hx : Scope D x) {d : Fin (D.V.k x) → Coin}
-    {p : ℕ} {u : ℕ × ℕ} (hu : (D.checked x d)[p]? = some u) :
+    {p : ℕ} {u : ℕ} (hu : (D.checked x d)[p]? = some u) :
     ∃ q : Fin (nPU D x), (D.checked x d)[q.val]? = some u :=
   ⟨⟨p, (List.getElem?_eq_some_iff.1 hu).1.trans_le (hle x hx d)⟩, hu⟩
 

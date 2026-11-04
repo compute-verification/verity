@@ -173,7 +173,7 @@ def test_the_steps_agree_with_their_word_steps(target) -> None:
 
 
 def _finite_e4m3(rng, inputs: list[np.ndarray]) -> list[np.ndarray]:
-    """``inputs`` with every E4M3 operand byte drawn uniformly from the finite bytes (0x7F and 0xFF are E4M3's NaNs)."""
+    """``inputs`` with every E4M3 operand byte sampled uniformly from the finite bytes (0x7F and 0xFF are E4M3's NaNs)."""
     out = []
     for a in inputs:
         if a.dtype == np.uint8:
@@ -217,7 +217,7 @@ def test_the_fp4_steps_and_coordinates_agree_with_their_word_definitions(target,
 
 
 def _s8_operands(rng, n: int, k: int) -> tuple[np.ndarray, np.ndarray]:
-    """Uniform s8 bytes; every fourth instance's operands are drawn from {-128, -127, 127} (the largest products)."""
+    """Uniform s8 bytes; every fourth instance's operands are sampled from {-128, -127, 127} (the largest products)."""
     a = rng.integers(0, 256, (n, k), dtype=np.uint16).astype(np.uint8)
     b = rng.integers(0, 256, (n, k), dtype=np.uint16).astype(np.uint8)
     big = np.array([0x80, 0x81, 0x7F], np.uint8)

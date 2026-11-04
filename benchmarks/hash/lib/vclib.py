@@ -207,7 +207,7 @@ OPEN_HEAD = 16 + 192 + 128 + 64
 
 
 @dataclass(frozen=True)
-class Opening:
+class VcOpen:
     """One vc_open_launch record: ``offset`` is the leaf's byte offset in the levels (None outside the tree)."""
 
     position: int
@@ -218,7 +218,7 @@ class Opening:
     path: tuple[bytes, ...]
 
 
-def parse_openings(raw: bytes, n_leaves: int, m: int) -> list[Opening]:
+def parse_openings(raw: bytes, n_leaves: int, m: int) -> list[VcOpen]:
     """vc_open_launch's m records, read back from the device (``raw``: m * vc_open_bytes(n_leaves) bytes)."""
     depth = (n_leaves - 1).bit_length() if n_leaves > 1 else 0
     size = OPEN_HEAD + 64 * depth
@@ -228,7 +228,7 @@ def parse_openings(raw: bytes, n_leaves: int, m: int) -> list[Opening]:
     for i in range(m):
         r = raw[size * i:size * (i + 1)]
         pos, off = int.from_bytes(r[:8], "little"), int.from_bytes(r[8:16], "little")
-        out.append(Opening(pos, None if off == (1 << 64) - 1 else off, r[16:208], r[208:336], r[336:400],
+        out.append(VcOpen(pos, None if off == (1 << 64) - 1 else off, r[16:208], r[208:336], r[336:400],
                            tuple(r[OPEN_HEAD + 64 * k:OPEN_HEAD + 64 * (k + 1)] for k in range(depth))))
     return out
 

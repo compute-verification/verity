@@ -32,7 +32,7 @@ from verity.ml.circuits.codec import canonical_json, encode_program, program_dig
 from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
-from verity.ml.circuits.types import Array, Record, Type, Value
+from verity.ml.circuits.types import Array, RecordType, Type, Value
 
 from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder, drive
 from .common import Unexpressible, _arr_shape, _Launch, _Peers, _Stochastic, launch_batch, launch_rows
@@ -220,7 +220,7 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
     n = M if wrapper == "step" else int(LP)
     events = 1 if wrapper == "step" else int(T) + 1
     inputs = [list(_arr_shape(t)) for _, t in params[:P.weights_at[0]]]
-    W = [Coll(Record(*ls), concat([Affine("p", at + i, 0, t.leaves) for i, (_, t) in enumerate(ls)]))
+    W = [Coll(RecordType(*ls), concat([Affine("p", at + i, 0, t.leaves) for i, (_, t) in enumerate(ls)]))
          for at, ls in zip(P.weights_at, P.leaves)]
     B = Builder(params, Value(1))
     ids = Coll(params[0][1], Affine("p", 0, 0, n))

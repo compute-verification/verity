@@ -18,7 +18,7 @@ Each statement is a `Prop` here; its theorem (`theorem … : G`) is in the file 
   code equal to `a + β·b` and the column's `hm96` leaf climbing to the pads' root.
 
 **Acceptance and the statement** (under tags without hidden outputs, `hh`, as `Exec`'s; with them `setupTables` calls
-`setupHidden`, [wave2-hidden-exec]'s):
+`setupHidden`, `Discharge/HiddenExec`'s):
 * `AcceptsZKSetupH`: every table is `setupH`'s statement under the `--zk` tags (`tagsAt (zkTags I) J j`) and the coin
   tree, at some draw (the record's, for one table), and passes `Zk.shapeOk`.
 * `AcceptsZKOne`: a one-table acceptance is one `setupH` statement's, with `Zk.verify` on `#[Setup.ofCircuit st]`.
@@ -48,7 +48,7 @@ checks accept with one cap, on the proof files `proofs[2i]` and `proofs[2i+1]`. 
 def ZkVerifyOk : Prop :=
   ∀ (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray),
     Flock.Zk.verify spec tabs record proofs = .ok () →
-    spec.coinTree.isSome = true ∧ ∃ (sess : Session) (schs : Array (Flock.Schedule × ℕ)),
+    spec.coinTree.isSome = true ∧ ∃ (sess : RunRecord) (schs : Array (Flock.Schedule × ℕ)),
       Record.decode spec record = .ok sess ∧ tabs.size = spec.tables.size ∧ 0 < tabs.size ∧
       proofs.size = spec.repStreams.size ∧ schs.size = tabs.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (hs : i < schs.size) (c : ByteArray),
@@ -84,7 +84,7 @@ def repProg (st : Setup) (sch : Flock.Schedule) (tPad r : ℕ) (extras : Array F
 pinned ones and its pads' root has 64 bytes, `repProg` runs on the stream's rounds from the rep's domain and consumes
 every round, and the returned cap, the proof's flattened cap, is the table's `root_B`. -/
 def ZkRepOk : Prop :=
-  ∀ (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (sess : Session) (i r : ℕ)
+  ∀ (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i r : ℕ)
     (bytes cap : ByteArray),
     Flock.Zk.verifyRep spec st sch tPad sess i r bytes = .ok cap →
     ∃ (stream : StreamRec) (extras : Array Flock.Claim) (zp : Flock.Zk.ZkProof) (tr : Flock.Transcript),

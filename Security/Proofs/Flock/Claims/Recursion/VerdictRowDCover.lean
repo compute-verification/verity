@@ -27,7 +27,7 @@ hypotheses. This file supplies the pieces and those two.
 * At one table: `rowDPiecesAt key i x` (table `i`'s pieces), `DecAt.rowDPiecesAt_cover`, and
   `DecAt.hholds_rowDPiecesAt` at `runs_assembled`'s own `hside` and `hpos`, where the rows run (`verifierRows_rep`) and
   every run's level checks pass (`hlev`; at the honest run, `DecAt.levels_of_merkleOk` from `MerkleOk` and the coin
-  tie). `DecAt.rowD_target`: row D's four hypotheses of `runs_assembled` at table `i` (RECINT's `TargetD` body), with
+  tie). `DecAt.rowD_target`: row D's four hypotheses of `runs_assembled` at table `i` (`TargetD` body), with
   the rows' run from row R's structure and sizes (`DecAt.rowsRun_of`). `DecAt.runs_openAt`: `runs_assembled` at them,
   with `hcover` and `hholds` discharged but for `hlev`.
 -/
@@ -197,7 +197,7 @@ theorem hholds_rowDPieces (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × �
 /-- **Table `i`'s reps run at the decision** (`runs_assembled`) at the pieces `rowDPieces key x`: their cover is
 `rowDPieces_cover`, and they hold by `hholds_rowDPieces` at the layout and coin ties and the verifier rows' passing
 level checks at every table. -/
-theorem runs_open {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem runs_open {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)
     (hframed : ∀ r : Fin 2, FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st
@@ -308,7 +308,7 @@ theorem levels_of_merkleOk {i : ℕ} (r : Fin 2) {hs : Hashes Flock.V}
   levelPass_of_merkleOk hops (FlockSoundness.Refine.fast100_level _ _ hfast) h
     (pos := fun ℓ => (info.lg.conss[ℓ]!).pos) (htie v info kappa hv)
 
-/-- **Row D's four hypotheses of `runs_assembled`** at table `i` (RECINT's `TargetD` body): table `i`'s pieces, at
+/-- **Row D's four hypotheses of `runs_assembled`** at table `i` (`TargetD` body): table `i`'s pieces, at
 `sideAt` and `posAt` with their ties `hside` and `hpos`, hold where the rows run (`hrun`) and every run's level checks
 pass (`hlev`), and cover every query. -/
 theorem rowD_target (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) {i : ℕ} (hi : i < D.sts.size)
@@ -353,7 +353,7 @@ theorem rowsRun_of {i : ℕ} (hti : i < D.spec.tables.size) {S : RecAlgebra.GfS}
 /-- **Table `i`'s reps run at the decision** (`runs_assembled`) at table `i`'s pieces, with `runs_assembled`'s own
 `hside` and `hpos`: the cover is `rowDPiecesAt_cover`, and the pieces hold by `hholds_rowDPiecesAt` at the verifier
 rows' run (`verifierRows_rep`) and their passing level checks (`hlev`). -/
-theorem runs_openAt {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem runs_openAt {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)
     (hframed : ∀ r : Fin 2, FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st

@@ -44,9 +44,15 @@ def portReadsB (net : Net) : Bool :=
         (net.b.row (min (net.inWords * WORD) net.constPos + i)).toList).all fun x =>
       decide (x < min (net.inWords * WORD) net.constPos → x ∈ portBits net.inGroups)
 
+/-- **No output port is pinned** (META `pinned_outputs`, `HmRow.pinnedCount`). -/
+def unpinned (c : Circuit) : Bool := HmRow.pinnedCount c.metaJ == 0
+
 /-- **Every row is an unsegmented `sha512/row/v1` row**: `16 · words` bits in at least one chunk. -/
-def v1Ports (c : Circuit) : Bool :=
+def v1Rows (c : Circuit) : Bool :=
   c.ports.all fun p => !p.v2 && p.segs.isNone && p.bits == 16 * p.words && 0 < p.chunks
+
+/-- **`v1Rows`, and no pinned output** (`unpinned`). -/
+def v1Ports (c : Circuit) : Bool := v1Rows c && unpinned c
 
 /-- **The circuits `rs` covers**: the unit reads only its leaf group, returns the outputs, and reads only port bits among
 its inputs, and every row is a `sha512/row/v1` row. -/
@@ -80,10 +86,10 @@ theorem scopeOk_spec {c : Circuit} (hU : Built c.unit) (h : scopeOk c = true) :
 /-- **`scopeOk` gives `sha512/row/v1` rows**: no bit row, `16 · words` bits, at least one chunk. -/
 theorem scopeOk_ports {c : Circuit} (h : scopeOk c = true) :
     ∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks := by
-  unfold scopeOk v1Ports at h
+  unfold scopeOk v1Ports v1Rows at h
   simp only [Bool.and_eq_true, Array.all_eq_true', Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq] at h
   intro p hp
-  obtain ⟨⟨⟨hv, -⟩, hb⟩, hc⟩ := h.2 p (Array.mem_toList_iff.1 hp)
+  obtain ⟨⟨⟨hv, -⟩, hb⟩, hc⟩ := h.2.1 p (Array.mem_toList_iff.1 hp)
   exact ⟨hv, hb, hc⟩
 
 /-! ## The hidden-output headlines' scope -/
@@ -106,9 +112,12 @@ def segRow (p : Port) : Bool :=
       decide (128 * (((m + 7) / 8 + 17 + 127) / 128 - 1) ≤ (m + 7) / 8)
 
 /-- **Every row is a `v2Row` or a `segRow`**, of any mix, and each output row is a `v2Row` holding one output port. -/
-def bitRows (c : Circuit) : Bool :=
+def bitRowsU (c : Circuit) : Bool :=
   c.ports.all (fun p => v2Row p || segRow p) && c.outRowPorts.all (· == 1) &&
     (List.range c.outRowPorts.size).all fun j => v2Row (c.ports.getD (HmOut.nIn c + j) default)
+
+/-- **`bitRowsU`, and no pinned output** (`unpinned`). -/
+def bitRows (c : Circuit) : Bool := bitRowsU c && unpinned c
 
 /-- **The circuits the hidden-output headlines cover**: `scopeOk`'s conditions on the unit, and every row a
 `sha512/row/v1` row (`v1Ports`) or every row a `v2Row` or a `segRow`, each output row a `v2Row` of one output port
@@ -164,17 +173,25 @@ theorem rowsH_spec {c : Circuit} (h : (v1Ports c || bitRows c) = true) :
   simp only [Bool.or_eq_true] at h
   rcases h with h1 | h2
   · left
-    unfold v1Ports at h1
+    unfold v1Ports v1Rows at h1
     simp only [Array.all_eq_true', Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq] at h1
     intro p hp
-    obtain ⟨⟨⟨hv, -⟩, hb⟩, hc⟩ := h1 p (Array.mem_toList_iff.1 hp)
+    obtain ⟨⟨⟨hv, -⟩, hb⟩, hc⟩ := h1.1 p (Array.mem_toList_iff.1 hp)
     exact ⟨hv, hb, hc⟩
   · right
-    unfold bitRows at h2
+    unfold bitRows bitRowsU at h2
     simp only [Bool.and_eq_true, Array.all_eq_true', Bool.or_eq_true, beq_iff_eq, List.all_eq_true,
       List.mem_range] at h2
-    obtain ⟨⟨hp, hr⟩, ho⟩ := h2
+    obtain ⟨⟨⟨hp, hr⟩, ho⟩, -⟩ := h2
     exact ⟨fun p hm => hp p (Array.mem_toList_iff.1 hm), fun r hm => hr r (Array.mem_toList_iff.1 hm), ho⟩
+
+/-- **The hidden-output headlines' rows have no pinned output.** -/
+theorem rowsH_unpinned {c : Circuit} (h : (v1Ports c || bitRows c) = true) : HmRow.pinnedCount c.metaJ = 0 := by
+  have : unpinned c = true := by
+    unfold v1Ports bitRows at h
+    simp only [Bool.or_eq_true, Bool.and_eq_true] at h
+    rcases h with h | h <;> exact h.2
+  simpa [unpinned] using this
 
 theorem scopeOkH_rowsB {c : Circuit} (h : scopeOkH c = true) : (v1Ports c || bitRows c) = true := by
   unfold scopeOkH at h

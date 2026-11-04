@@ -4,6 +4,7 @@ import Proofs.Flock.VBridge.Residuals
 import Proofs.Flock.VBridge.Climb
 import Proofs.Flock.VBridge.Open
 import Proofs.Flock.VBridge.RecOpen
+import Proofs.Flock.VBridge.RecLink
 import Proofs.Flock.VBridge.Net
 import Proofs.Flock.VBridge.Unit
 import Proofs.Flock.VBridge.Keyed
@@ -71,12 +72,9 @@ import Proofs.Flock.VBridge.Family.Pub
 import Proofs.Flock.VBridge.Family.Registrants
 import Proofs.Flock.VBridge.Family.PartReads
 import Proofs.Flock.VBridge.Family.OutCols
-import Proofs.Flock.VBridge.Family.VCoins
 import Proofs.Flock.VBridge.Family.PartKeys
 import Proofs.Flock.VBridge.Family.Ends
-import Proofs.Flock.VBridge.Family.MsgsRead
 import Proofs.Flock.VBridge.Family.AccRows
-import Proofs.Flock.VBridge.Family.RegistrantFinder
 import Proofs.Flock.VBridge.Sparse.Defs
 import Proofs.Flock.VBridge.Sparse.Residuals
 import Proofs.Flock.VBridge.Sparse.Plays
