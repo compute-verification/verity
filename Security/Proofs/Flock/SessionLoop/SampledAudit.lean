@@ -22,7 +22,8 @@ at hm96's leaves, `N·2δ₁` with `δ₁` the hiding gap at the pinned key (`Fl
 `Flock.SecurityProofs.SampledAuditAnyDeployed` proves it: `FlockSoundness.ZK.sampledAudit_zkOut` at the first conjunct
 of `Loop.ZkAnyAt` (`SessionLoopZKAnyDeployed`), and `ideal_hm96` for `δ`.
 
-The released bytes are the session loop's messages (`ZKOut`), not the held relay's frames (`ZKOutRelay`). The
+The released bytes here are the session loop's messages (`ZKOut`). What reaches the auditor is the held relay's frames
+(`ZKOutRelay`), which `Flock.Guarantees.SampledAuditAnyRelayDeployed` covers (`SessionLoop/SampledRelay.lean`). The
 simulators' coins at each session's statement are a type of the session's index alone (`eC`), which holds where the
 statements session `j` can take have one shape.
 -/
@@ -69,7 +70,7 @@ def _root_.Flock.Guarantees.SampledAuditAnyDeployed : Prop :=
           (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)).toSrv.Worker) Claims.Flock.Wit
         (((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce ×
           (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand) ×
-          (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)).toSrv.Chk) Θ)
+          (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)).toSrv.Chk) Θ (List (Msg × Out)))
       (eC : ∀ j ρ χ b, CB j ≃
         (Loop.anySim Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) t).C
           (Q.x j ρ χ b))
