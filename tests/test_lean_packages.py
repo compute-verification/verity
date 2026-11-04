@@ -54,9 +54,10 @@ def test_one_mathlib():
 #: PRs on `next` then brought, the exclusion bounds that read a partition once a derived circuit's registration built
 #: its one-block partition (`RegisteredCircuit.ofCircuit`), the six C-Flock statements whose claim or verifier read
 #: lies in a module of `trees`' `except`, once the rule read through those, and C-Flock's `LoopInnerRound0Own`, which
-#: reads a claim, from a PR on `next`; and the two exclusion bounds a definition hides, once `Facts.lean`'s `chain`
-#: recorded the bound it ends at
-UNWITNESSED = {"Security": 601, "Security/Properties": 234, "verity/core/service/flock": 8}
+#: reads a claim, from a PR on `next`; the two exclusion bounds a definition hides, once `Facts.lean`'s `chain`
+#: recorded the bound it ends at; and C-Flock's three joint-sample statements (`JointSampledV5`, `JointShareV5`,
+#: `JointHorizonV5`), whose acceptance is flock-verify's as `SampledKSLiveV5`'s is, until they read a verifier record
+UNWITNESSED = {"Security": 604, "Security/Properties": 234, "verity/core/service/flock": 8}
 
 
 def test_the_unwitnessed_list_only_shrinks():
