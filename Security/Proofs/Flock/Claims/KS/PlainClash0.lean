@@ -403,23 +403,23 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **A self-clash at level 0** at a table's output, at the model leaf `lf`: `SelfClashL`'s first case. -/
-def Clash₀LLf (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (sch : Accounting.Schedule)
+def Clash₀LLf (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (sch : FlockSoundness.Accounting.Schedule)
     (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
   ClashL H512 enc512 lf out.cap₀ (lvOf sch 0).lanes (Model.pathLen (lvOf sch 0)) (opens₀L sch out)
 
 /-- **A self-clash past level 0** at a table's output, at the model leaf `lf`: `SelfClashL`'s second case. -/
-def LaterClashLLf (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (sch : Accounting.Schedule)
+def LaterClashLLf (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (sch : FlockSoundness.Accounting.Schedule)
     (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
   ∃ r < 2, ∃ ℓ, 1 ≤ ℓ ∧ ∃ cap, (if r = 0 then out.pend.1 else out.pend.2).caps[ℓ - 1]? = some cap ∧
     ClashL H512 enc512 lf cap (lvOf sch ℓ).lanes (Model.pathLen (lvOf sch ℓ))
       (slotOpensL out r ℓ (lvOf sch ℓ).queries)
 
 /-- **A self-clash at level 0** at a table's output: `SelfClashL`'s first case. -/
-def Clash₀L (sch : Accounting.Schedule) (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
+def Clash₀L (sch : FlockSoundness.Accounting.Schedule) (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
   ClashL H512 enc512 leaf512 out.cap₀ (lvOf sch 0).lanes (Model.pathLen (lvOf sch 0)) (opens₀L sch out)
 
 /-- **A self-clash past level 0** at a table's output: `SelfClashL`'s second case. -/
-def LaterClashL (sch : Accounting.Schedule) (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
+def LaterClashL (sch : FlockSoundness.Accounting.Schedule) (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
   ∃ r < 2, ∃ ℓ, 1 ≤ ℓ ∧ ∃ cap, (if r = 0 then out.pend.1 else out.pend.2).caps[ℓ - 1]? = some cap ∧
     ClashL H512 enc512 leaf512 cap (lvOf sch ℓ).lanes (Model.pathLen (lvOf sch ℓ))
       (slotOpensL out r ℓ (lvOf sch ℓ).queries)
@@ -622,7 +622,7 @@ raw columns (`rawCols_plain`), so the run has a raw clash at level 0 (`PlainClas
 theorem plainClashQ₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
-    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,

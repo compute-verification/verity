@@ -14,6 +14,10 @@ discharges (all of it but `SwCausal`), each at the deployed prover `Masked.PE`, 
 * `causal_dataE`: round `i` reads the coins before `i` only (`Masked.causalExe`, kept by stopping where a refusal is
   seen, `Masked.causal_encStop`).
 * `tapeOK_dataE`: the tape is read with fibers of one size (`Masked.fibersEq_ofLayout` at `TapeLayout.exe`).
+
+`SwCausal vs` stays a premise: the statement's other premises read `vs` only at the coins a strict prefix pads to, and
+`SwCausal` reads it at every coin vector. It holds at the honest values (`swCausal_honestVals_dataE`, from
+`RefSession.swCausal_vals`), so the statement applies to an honest worker.
 -/
 
 namespace Claims.ZKServer
@@ -41,6 +45,10 @@ theorem causal_dataE : (CoinLayer.session Loop.loopNr Masked.dataE).Causal :=
 theorem tapeOK_dataE : (CoinLayer.session Loop.loopNr Masked.dataE).TapeOK :=
   (RefSession.tapeOKOn_iff _).1 <|
     RefSession.tapeOKOn_of_tape _ (fun _ => True) fun x _ => fibersEq_ofLayout (TapeLayout.exe PE) exeTape x
+
+theorem swCausal_honestVals_dataE :
+    (CoinLayer.session Loop.loopNr Masked.dataE).SwCausal (CoinLayer.session Loop.loopNr Masked.dataE).honestVals :=
+  RefSession.swCausal_vals _ causal_dataE
 
 end Loop
 

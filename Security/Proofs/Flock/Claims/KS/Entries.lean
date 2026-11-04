@@ -83,7 +83,7 @@ theorem plainRepColsOf_ok {sh : _root_.Flock.Shape} {rounds : Array _root_.Flock
 and rows are `os`, an output that opens a position off the oracle of `C` without a self-clash has the reader look up a
 column off `C`. -/
 theorem exists_ne_of_entries {D Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
-    (Lf : Merkle.Leaf (List 𝔽) Sl D H) (sch : Accounting.Schedule) (cap₀ : Model.Cap D)
+    (Lf : Merkle.Leaf (List 𝔽) Sl D H) (sch : FlockSoundness.Accounting.Schedule) (cap₀ : Model.Cap D)
     (out : Model.OutCL 𝔽 D Sl) {N : ℕ} (hN : N = 2 ^ (lvOf sch 0).logLen) (C : Fin N → List 𝔽) (d : ℕ)
     (os : List (ℕ × List 𝔽)) (hcap : out.cap₀ = cap₀)
     (hver : ∀ x ∈ opens₀L sch out,

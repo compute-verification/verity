@@ -10,7 +10,7 @@ registered word makes true, every inner prover has a fork whose two runs clash (
 or R's level 0 opened to a row other than the registered word's), or the table accepts with probability at most
 `holoError`. `holoForkSound_holoAt` is that at the executable's parameters (`holoAt st hp`).
 
-`RecursiveAuditC3` is about the word the prover's own runs open (`Recursive/RegExtract.lean`), whose registrant's
+`RecursiveAuditHolo` is about the word the prover's own runs open (`Recursive/RegExtract.lean`), whose registrant's
 openings it does not have, so its pick (`clashPickHL`) reads only clashes of two runs. This form is what the
 extraction reduces to where the runs open every position.
 

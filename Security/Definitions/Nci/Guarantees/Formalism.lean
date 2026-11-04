@@ -45,7 +45,7 @@ The counting lemma, Slowdown, Fit's bounds and Security each have an honest and 
 namespace Nci.Formalism.Guarantees
 
 open Finset
-open Verity (Declaration Partition)
+open Verity (RegisteredCircuit Partition)
 open Nci.Formalism Nci.Formalism.Assumptions
 open scoped NNReal ENNReal
 
@@ -53,7 +53,7 @@ open scoped NNReal ENNReal
 an inference block holds, and kinds `J` that each give a bound `Λ_J` for the whole partition, every partition `𝓘` into
 inference blocks has `|𝓘| c / |C| ≥ max(max_K (|B_K| / |C|) / (cap_K / c), max_J Λ_J)`. -/
 def Counting : Prop :=
-  ∀ (d : Declaration) (c k : ℕ) (κ : Type) (B : κ → Finset (Fin d.D.N)) (cap : κ → ℝ≥0) (ι : Type) (Λ : ι → ℝ≥0∞)
+  ∀ (d : RegisteredCircuit) (c k : ℕ) (κ : Type) (B : κ → Finset (Fin d.D.N)) (cap : κ → ℝ≥0) (ι : Type) (Λ : ι → ℝ≥0∞)
     (m : ℕ) (P : Partition d.D m),
     Caps d c k B cap → (∀ J, PartitionBound d c k (Λ J)) → P.IsCK d c k →
     max (⨆ K, kindBound d c (B K) (cap K)) (⨆ J, Λ J) ≤ partitionSlowdown d m c
@@ -61,14 +61,14 @@ def Counting : Prop :=
 /-- **The token kind's cap from A1**: under A1 at the witness blocks `𝒲`, every inference block holds at most `cap`
 gates of `X`, for any `cap` that bounds the token work within A1's budget. -/
 def TokenCap : Prop :=
-  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (E : Type)
+  ∀ (d : RegisteredCircuit) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (E : Type)
     (e : Finset (Fin d.D.N) → L → E) (𝒲 : Finset (Finset (Fin d.D.N))) (X : Finset (Fin d.D.N)) (cap : ℝ≥0),
     CutCost A c k e 𝒲 → A.TokenCapAt c k e 𝒲 X cap → ∀ I, InferenceBlock d c k I → ((I ∩ X).card : ℝ≥0) ≤ cap
 
 /-- **The token cap's clean form**: with at most `r(ν)` gates of token work a bit of state, `max_ν (k - ν) r(ν)` bounds
 the token work within A1's budget, the bound `(k - u) max (W / a)`. -/
 def TokenCapClean : Prop :=
-  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (E : Type)
+  ∀ (d : RegisteredCircuit) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (E : Type)
     (e : Finset (Fin d.D.N) → L → E) (𝒲 : Finset (Finset (Fin d.D.N))) (X : Finset (Fin d.D.N)) (r : ℕ → ℝ≥0)
     (M : ℝ≥0),
     A.WorkPerBit c k e 𝒲 X r → PeakAtMost k r M → A.TokenCapAt c k e 𝒲 X M
@@ -77,7 +77,7 @@ def TokenCapClean : Prop :=
 bounds `Λ_J` and a set `X` of token gates with a cap `cap_X` within A1's budget, every partition `𝓘` into inference
 blocks has `|𝓘| c / |C| ≥ max((|X| / |C|) / (cap_X / c), max_K (|B_K| / |C|) / (cap_K / c), max_J Λ_J)`. -/
 def Slowdown : Prop :=
-  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (E : Type)
+  ∀ (d : RegisteredCircuit) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (E : Type)
     (e : Finset (Fin d.D.N) → L → E) (𝒲 : Finset (Finset (Fin d.D.N))) (X : Finset (Fin d.D.N)) (capX : ℝ≥0)
     (κ : Type) (B : κ → Finset (Fin d.D.N)) (cap : κ → ℝ≥0) (ι : Type) (Λ : ι → ℝ≥0∞) (m : ℕ) (P : Partition d.D m),
     A.Valid → CutCost A c k e 𝒲 → A.TokenCapAt c k e 𝒲 X capX → Caps d c k B cap →
@@ -87,19 +87,19 @@ def Slowdown : Prop :=
 /-- **Fit, running `θ'`**: session blocks of at least `c - d` gates that read within `k`, `Δ + s τ ≤ k`, give
 `ρ ≤ c / (c - d)`. -/
 def FitServing : Prop :=
-  ∀ (d : Declaration) (B : ℕ) (P : Partition d.D B) (c k dg Δ s τ : ℕ), d.D.Boolean → SessionBlocks d P c dg Δ s τ →
+  ∀ (d : RegisteredCircuit) (B : ℕ) (P : Partition d.D B) (c k dg Δ s τ : ℕ), d.D.Boolean → SessionBlocks d P c dg Δ s τ →
     ServingFits Δ s τ k → slowdown d c k ≤ (c : ℝ≥0∞) / ((c - dg : ℕ) : ℝ≥0∞)
 
 /-- **Fit, honest serving**: with `Δ = 0` and no decoder, session blocks that read `s τ ≤ k` give exactly `ρ = 1`, one
 block per session. -/
 def FitHonestServing : Prop :=
-  ∀ (d : Declaration) (B : ℕ) (P : Partition d.D B) (c k s τ : ℕ), d.D.Boolean → SessionBlocks d P c 0 0 s τ →
+  ∀ (d : RegisteredCircuit) (B : ℕ) (P : Partition d.D B) (c k s τ : ℕ), d.D.Boolean → SessionBlocks d P c 0 0 s τ →
     ServingFits 0 s τ k → 0 < B → 0 < c → slowdown d c k = 1
 
 /-- **Fit, training**: compute, reduction and update application blocks of at least `c - d` gates that each read
 within `k` give `ρ ≤ c / (c - d)`. -/
 def FitTraining : Prop :=
-  ∀ (d : Declaration) (B : ℕ) (P : Partition d.D B) (c k dg Δ Δt Δgrad s τ : ℕ), d.D.Boolean →
+  ∀ (d : RegisteredCircuit) (B : ℕ) (P : Partition d.D B) (c k dg Δ Δt Δgrad s τ : ℕ), d.D.Boolean →
     TrainingBlocks d P c dg Δ Δt Δgrad s τ → TrainingFits Δ Δt Δgrad s τ k →
     slowdown d c k ≤ (c : ℝ≥0∞) / ((c - dg : ℕ) : ℝ≥0∞)
 

@@ -19,12 +19,12 @@ the bins of `Δ`, the update profiles along which A2's floor is measured.
 namespace Nci.Formalism
 
 open Finset
-open Verity (Declaration)
+open Verity (RegisteredCircuit)
 open scoped ENNReal
 
 /-- **A run**: a declaration, an annotation of its training with `numTokens` tokens, and the inputs it runs on. -/
 structure Run where
-  d : Declaration
+  d : RegisteredCircuit
   numTokens : ℕ
   A : Annotation d (Fin numTokens)
   inputs : d.D.Transcript

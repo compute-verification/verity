@@ -1,13 +1,15 @@
+import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Nat.Size
-import Definitions.Core.Partition
 import Definitions.Core.Digest
 
 /-!
 # The advice root, with every string it hashes
 
-A private partition is committed as advice under a hidden root (`verity.ml.commitments.advice`, which partition v2,
-`verity.ml.circuits.partition_v2`, uses): the partition's rows, each under a salt of the prover's choosing in an
-`hm96-sha512/row/v2` leaf, in one `frame-v3-sha512` tree. This module models that root with each hash it takes, so that
+The advice the developer reports, the registered compiler's input (`Verity.Compiler`), is committed under a hidden root
+(`verity.ml.commitments.advice`, which partition v2, `verity.ml.circuits.partition_v2`, uses): the advice's rows, each
+under a salt of the prover's choosing in an `hm96-sha512/row/v2` leaf, in one `frame-v3-sha512` tree. The commitment
+commits the advice, never a partition chosen beside it: the partition is the compiler's output on the advice (partition
+v2's rows are its Call and cut tables, from which the compiler reads each gate's proof block). This module models that root with each hash it takes, so that
 a statement can name the strings a broken binding collides: `hashInputs`, every string hashed from the rows up to the
 root.
 
@@ -30,7 +32,7 @@ Folded into the framing (`Framing`) as constants of the public statement, not mo
 SHA-512 of the domain: its binding, owner `-1` and the public row count `R_b`) and the schema string, which the frame
 messages carry; the row width, in `rowPrefix`; and hm96's key, through its digest in `leafPrefix` and its matrix in
 `mask`. `advice.py` refuses a commitment of no rows, and `empty_root` is not modelled: here the tree of no rows is one
-pad. Which rows a partition has is partition v2's `rows`, padded with zero rows to `R_b` (`Rows`).
+pad. Which rows the advice has is its encoding, partition v2's `rows`, padded with zero rows to `R_b` (`Rows`).
 -/
 
 namespace Verity.Advice
@@ -114,32 +116,31 @@ def inputsAt : ℕ → ℕ → Finset (List UInt8)
 /-- **What the advice root hashes**: every string hashed from the rows up to the root. -/
 def hashInputs : Finset (List UInt8) := inputsAt H F rows salt (depth rows.length) 0
 
-/-- A partition's advice as rows, partition v2's `rows` padded to the public row count, and the decoder that reads the
-partition back: partition v2's `decode`, whose Call and cut tables give each gate of `C` its unit. -/
-structure Rows (C : Circuit) where
-  rows : (n : ℕ) → Partition C n → List (List UInt8)
-  decode : List (List UInt8) → Option ((n : ℕ) × Partition C n)
+/-- The advice as rows, the advice list `a_1, …, a_n` encoded as partition v2's `rows` padded to the public row count, and
+the decoder that reads the advice back: partition v2's `decode`. -/
+structure Rows where
+  rows : List (List Bool) → List (List UInt8)
+  decode : List (List UInt8) → Option (List (List Bool))
 
-/-- **The rows' format fact**: they decode to their partition, so two partitions never have the same rows. -/
-def Rows.Decodes {C : Circuit} (A : Rows C) : Prop :=
-  ∀ n (P : Partition C n), A.decode (A.rows n P) = some ⟨n, P⟩
+/-- **The rows' format fact**: they decode to their advice, so two advice lists never have the same rows. -/
+def Rows.Decodes (A : Rows) : Prop :=
+  ∀ a, A.decode (A.rows a) = some a
 
-/-- A commitment, the prover's side of an advice root: a partition of `C` into `n` units, and the salt of each of its
-rows (the prover's choice). Only its root goes public. -/
-structure Committed (C : Circuit) where
-  n : ℕ
-  P : Partition C n
+/-- A commitment, the prover's side of an advice root: the advice list `a`, and the salt of each of its rows (the
+prover's choice). Only its root goes public. -/
+structure Committed where
+  a : List (List Bool)
   salt : ℕ → List UInt8
 
 namespace Committed
 
-variable {C : Circuit} (A : Rows C) (r : Committed C)
+variable (A : Rows) (r : Committed)
 
-/-- The commitment's root: the advice tree over its partition's rows under its salts. -/
-def root : Digest := Advice.root H F (A.rows r.n r.P) r.salt
+/-- The commitment's root: the advice tree over its advice's rows under its salts. -/
+def root : Digest := Advice.root H F (A.rows r.a) r.salt
 
 /-- Every string the commitment hashes from its rows up to its root. -/
-def hashInputs : Finset (List UInt8) := Advice.hashInputs H F (A.rows r.n r.P) r.salt
+def hashInputs : Finset (List UInt8) := Advice.hashInputs H F (A.rows r.a) r.salt
 
 end Committed
 

@@ -29,7 +29,7 @@ import Definitions.Nci.Formalism
 namespace Nci.Formalism.Assumptions
 
 open Finset
-open Verity (Declaration)
+open Verity (RegisteredCircuit)
 open Nci.Formalism
 open scoped NNReal ENNReal
 
@@ -38,7 +38,7 @@ inference block that reads less). **A1, cut cost**: every inference block `I` of
 every token `T` it works on, the state bits `a_T(e_T(I))` where its work on `T` begins, the least of `T`'s own gates
 that a witness block of `𝒲` entering there reads, and its shared bits `u_I`, what those witness blocks read beyond the
 tokens' own state, counted once and net of what `I` computes: `|in(I) \ θ| ≥ u_I + Σ_T a_T(e_T(I))`. -/
-def CutCost {d : Declaration} {L : Type} [Fintype L] (A : Annotation d L) (c k : ℕ) {E : Type}
+def CutCost {d : RegisteredCircuit} {L : Type} [Fintype L] (A : Annotation d L) (c k : ℕ) {E : Type}
     (e : Finset (Fin d.D.N) → L → E) (𝒲 : Finset (Finset (Fin d.D.N))) : Prop :=
   ∀ I, InferenceBlock d c k I →
     A.blockShared e 𝒲 I + ∑ T ∈ A.worksOn I, A.stateAt e 𝒲 T (e I T) ≤ (d.unregistered I).card

@@ -6,6 +6,7 @@ import Definitions.Core.Blocks
 import Definitions.Core.DeviceFigures
 import Definitions.Core.Site
 import Definitions.Core.Period
+import Definitions.Core.Structure
 import Definitions.Nci
 import Definitions.Nci.Support
 import Definitions.Nci.Reads
@@ -13,6 +14,7 @@ import Definitions.Nci.Transfers
 import Definitions.Nci.Dark
 import Definitions.Nci.Packed
 import Definitions.Nci.Covering
+import Definitions.Nci.Capability
 import Definitions.Nci.Formalism
 import Definitions.Nci.Formalism.Instances
 import Definitions.Pous

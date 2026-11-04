@@ -57,7 +57,7 @@ abbrev C : Circuit where
   outputs := {3}
 
 /-- Gate 0 is registered. -/
-abbrev d : Declaration := ⟨C, {0}, by decide⟩
+abbrev d : RegisteredCircuit := .ofCircuit C {0} (by decide)
 
 /-- Two blocks, gate 2 and gate 3. -/
 abbrev P : Partition d.D 2 := ⟨![none, none, some 0, some 1], by decide⟩
@@ -86,7 +86,7 @@ abbrev C : Circuit where
   outputs := {4}
 
 /-- Gate 0 is registered. -/
-abbrev d : Declaration := ⟨C, {0}, by decide⟩
+abbrev d : RegisteredCircuit := .ofCircuit C {0} (by decide)
 
 /-- The new weight is gate 1, and the one token holds gates 2, 3 and 4. -/
 abbrev A : Annotation d (Fin 1) := ⟨{1}, ⟨fun _ => {2, 3, 4}⟩⟩

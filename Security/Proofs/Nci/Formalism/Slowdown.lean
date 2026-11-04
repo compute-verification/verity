@@ -27,11 +27,11 @@ Each lower bound `X ≤ ρ` is proved as `X ≤ m c / |C|` for a partition `P` i
 namespace Nci.Formalism
 
 open Finset
-open Verity (Declaration Partition)
+open Verity (RegisteredCircuit Partition)
 open Nci.Formalism.Assumptions
 open scoped NNReal ENNReal
 
-variable {d : Declaration} {L : Type} [Fintype L]
+variable {d : RegisteredCircuit} {L : Type} [Fintype L]
 
 /-- **A lower bound on `ρ`** is one on `|𝓘| c / |C|` for every partition `𝓘` into inference blocks. -/
 theorem le_slowdown_iff {c k : ℕ} {X : ℝ≥0∞} :

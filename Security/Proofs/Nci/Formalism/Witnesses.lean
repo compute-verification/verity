@@ -25,7 +25,7 @@ value, which both tokens read, and nothing for token `1`'s, which it computes.
 namespace Nci.Formalism
 
 open Finset
-open Verity (Circuit Declaration Partition)
+open Verity (Circuit RegisteredCircuit Partition)
 open Nci.Formalism.Assumptions
 open scoped NNReal ENNReal
 
@@ -46,7 +46,7 @@ theorem natCast_div_natCast {a b : ℕ} (hb : b ≠ 0) :
 
 /-- `W_T(x, ν) ≤ n` when every inference block whose work on `T` begins at `x` with at most `ν` shared bits holds at
 most `n` gates of `X` in `T`. -/
-theorem entryWork_le_of {d : Declaration} {L : Type} [Fintype L] (A : Annotation d L) {c k : ℕ} {E : Type}
+theorem entryWork_le_of {d : RegisteredCircuit} {L : Type} [Fintype L] (A : Annotation d L) {c k : ℕ} {E : Type}
     {e : Finset (Fin d.D.N) → L → E} {𝒲 : Finset (Finset (Fin d.D.N))} {X : Finset (Fin d.D.N)} {T : L} {x : E}
     {ν n : ℕ}
     (h : ∀ I, InferenceBlock d c k I → e I T = x → A.blockShared e 𝒲 I ≤ ν → (I ∩ A.tokens.holds T ∩ X).card ≤ n) :
@@ -58,25 +58,25 @@ theorem entryWork_le_of {d : Declaration} {L : Type} [Fintype L] (A : Annotation
   exact h I hI.2.1 hI.2.2.1 hI.2.2.2
 
 /-- A block of at most `c` gates holds at most `c` gates of any token's work, so `W_T(x, ν) ≤ c`. -/
-theorem entryWork_le {d : Declaration} {L : Type} [Fintype L] (A : Annotation d L) {c k : ℕ} {E : Type}
+theorem entryWork_le {d : RegisteredCircuit} {L : Type} [Fintype L] (A : Annotation d L) {c k : ℕ} {E : Type}
     (e : Finset (Fin d.D.N) → L → E) (𝒲 : Finset (Finset (Fin d.D.N))) (X : Finset (Fin d.D.N)) (T : L) (x : E)
     (ν : ℕ) : A.entryWork c k e 𝒲 X T x ν ≤ c :=
   entryWork_le_of A fun _ hI _ _ => (card_le_card (inter_subset_left.trans inter_subset_left)).trans hI.2.1
 
 /-- The witness blocks entering `T` at `x` of a family of one witness `W` that enters there: `W` alone. -/
-theorem enters_singleton {d : Declaration} {L : Type} (A : Annotation d L) {E : Type}
+theorem enters_singleton {d : RegisteredCircuit} {L : Type} (A : Annotation d L) {E : Type}
     {e : Finset (Fin d.D.N) → L → E} {W : Finset (Fin d.D.N)} {T : L} {x : E} (hW : A.Enters e {W} T x W) :
     {W' | A.Enters e {W} T x W'} = {W} :=
   Set.ext fun _ => ⟨fun h => Finset.mem_singleton.1 h.1, fun h => (Set.mem_singleton_iff.1 h) ▸ hW⟩
 
 /-- When `W` is the one witness block entering `T` at `x`, `a_T(x)` is the state bits of `T` it reads. -/
-theorem stateAt_of_eq {d : Declaration} {L : Type} (A : Annotation d L) {E : Type}
+theorem stateAt_of_eq {d : RegisteredCircuit} {L : Type} (A : Annotation d L) {E : Type}
     {e : Finset (Fin d.D.N) → L → E} {𝒲 : Finset (Finset (Fin d.D.N))} {W : Finset (Fin d.D.N)} {T : L} {x : E}
     (h : {W' | A.Enters e 𝒲 T x W'} = {W}) : A.stateAt e 𝒲 T x = A.stateReads W T := by
   rw [Annotation.stateAt, h, Set.image_singleton, csInf_singleton]
 
 /-- When `W` is the one witness block entering `T` at `x`, `R_T(x)` is what it reads beyond `θ`. -/
-theorem readsAt_of_eq {d : Declaration} {L : Type} (A : Annotation d L) {E : Type}
+theorem readsAt_of_eq {d : RegisteredCircuit} {L : Type} (A : Annotation d L) {E : Type}
     {e : Finset (Fin d.D.N) → L → E} {𝒲 : Finset (Finset (Fin d.D.N))} {W : Finset (Fin d.D.N)} {T : L} {x : E}
     (h : {W' | A.Enters e 𝒲 T x W'} = {W}) : A.readsAt e 𝒲 T x = d.unregistered W := by
   have hW : A.Enters e 𝒲 T x W := (Set.ext_iff.1 h W).2 (Set.mem_singleton W)
@@ -87,13 +87,13 @@ theorem readsAt_of_eq {d : Declaration} {L : Type} (A : Annotation d L) {E : Typ
   exact hg
 
 /-- When no witness block enters `T` at `x`, `a_T(x)` is `0`. -/
-theorem stateAt_of_empty {d : Declaration} {L : Type} (A : Annotation d L) {E : Type}
+theorem stateAt_of_empty {d : RegisteredCircuit} {L : Type} (A : Annotation d L) {E : Type}
     {e : Finset (Fin d.D.N) → L → E} {𝒲 : Finset (Finset (Fin d.D.N))} {T : L} {x : E}
     (h : {W' | A.Enters e 𝒲 T x W'} = ∅) : A.stateAt e 𝒲 T x = 0 := by
   rw [Annotation.stateAt, h, Set.image_empty, Nat.sInf_empty]
 
 /-- When no witness block enters `T` at `x`, `R_T(x)` is empty. -/
-theorem readsAt_of_empty {d : Declaration} {L : Type} (A : Annotation d L) {E : Type}
+theorem readsAt_of_empty {d : RegisteredCircuit} {L : Type} (A : Annotation d L) {E : Type}
     {e : Finset (Fin d.D.N) → L → E} {𝒲 : Finset (Finset (Fin d.D.N))} {T : L} {x : E}
     (h : {W' | A.Enters e 𝒲 T x W'} = ∅) : A.readsAt e 𝒲 T x = ∅ := by
   refine Finset.eq_empty_of_forall_notMem fun g hg => ?_
@@ -436,7 +436,7 @@ abbrev C : Circuit where
   outputs := {4}
 
 /-- Gate 0 is registered. -/
-abbrev d : Declaration := ⟨C, {0}, by decide⟩
+abbrev d : RegisteredCircuit := .ofCircuit C {0} (by decide)
 
 /-- The new weight is gate 1, and tokens `0`, `1` and `2` hold gates 2, 3 and 4. -/
 abbrev A : Annotation d (Fin 3) := ⟨{1}, ⟨![{2}, {3}, {4}]⟩⟩

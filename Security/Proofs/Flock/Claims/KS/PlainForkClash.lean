@@ -46,7 +46,7 @@ theorem plain_liveOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse f
     (hacc : (Claims.run sha512 P (V false) x ω (plainΦ x spec st (u, r'))).out = .acc)
     (hA : AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN
       (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) sha512 (plainSim P x spec st) x (ω, u) r')))
-    {sch : Accounting.Schedule} {out : Model.OutCL 𝔽 Dig (List UInt8)} {k : ℕ} (hk : k < 2)
+    {sch : FlockSoundness.Accounting.Schedule} {out : Model.OutCL 𝔽 Dig (List UInt8)} {k : ℕ} (hk : k < 2)
     (hL : LaterEntriesAt sch ins.read.I d (wrPD ins.read.I d (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN
       (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) sha512 (plainSim P x spec st) x (ω, u) r')) out k) :
     ∃ (st' : Stmt) (sch' : Flock.Schedule) (p : Proof), setupAtD ins.read.I (some d) = .ok (spec, #[st']) ∧
@@ -140,7 +140,7 @@ open Classical in
 /-- **An opened position at a rep's cap is a verifying opening there**: where rep `r`'s level-`ℓ` openings at `cap`
 open `p`, one of them is at `p`, opened to that row. -/
 theorem opRL_eq_some {D Sl : Type} {Hc : List UInt8 → D} {E : Merkle.Enc (List 𝔽) D}
-    {Lf : Merkle.Leaf (List 𝔽) Sl D Hc} {sch : Accounting.Schedule} {r ℓ : ℕ} {cap : Model.Cap D}
+    {Lf : Merkle.Leaf (List 𝔽) Sl D Hc} {sch : FlockSoundness.Accounting.Schedule} {r ℓ : ℕ} {cap : Model.Cap D}
     {out : Model.OutCL 𝔽 D Sl} {p : Fin (2 ^ (lvOf sch ℓ).logLen)}
     (h : (opRL Hc E Lf sch r ℓ cap out p).isSome) :
     ∃ x ∈ slotOpensL out r ℓ (lvOf sch ℓ).queries, x.1 = p.val ∧
@@ -155,7 +155,7 @@ theorem opRL_eq_some {D Sl : Type} {Hc : List UInt8 → D} {E : Merkle.Enc (List
 /-- **The fork event's two entries**: `ForkEvL` at rep `r`'s level `ℓ + 1` is one recorded cap `d` in both outputs
 and an opening in each of one position to different rows. -/
 theorem forkEvL_entries {D Sl : Type} [Inhabited D] [Inhabited Sl] {Hc : List UInt8 → D}
-    {E : Merkle.Enc (List 𝔽) D} {Lf : Merkle.Leaf (List 𝔽) Sl D Hc} {sch : Accounting.Schedule} {r ℓ : ℕ}
+    {E : Merkle.Enc (List 𝔽) D} {Lf : Merkle.Leaf (List 𝔽) Sl D Hc} {sch : FlockSoundness.Accounting.Schedule} {r ℓ : ℕ}
     {a a' : List (Model.OutCL 𝔽 D Sl)} (h : ForkEvL Hc E Lf sch r ℓ a a') :
     ∃ dc, CapAtL r ℓ (a.getD 0 dfltOutL) dc ∧ CapAtL r ℓ (a'.getD 0 dfltOutL) dc ∧
       ∃ x₁ ∈ slotOpensL (a.getD 0 dfltOutL) r (ℓ + 1) (lvOf sch (ℓ + 1)).queries,
@@ -178,7 +178,7 @@ logs (`tiedColl_of_openings`). -/
 theorem plainForkQ_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
-    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,
@@ -228,7 +228,7 @@ theorem plain_liveOpeningK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.F
     (hacc : (Claims.run sha512 P (VK keep) x ω (plainΦ x spec st (u, r'))).out = .acc)
     (hA : AcceptsAtDK keep ins.read.I (some d) (wrPDK keep ins.read.I d (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN
       (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) sha512 (plainSimK keep P x spec st) x (ω, u) r')))
-    {sch : Accounting.Schedule} {out : Model.OutCL 𝔽 Dig (List UInt8)} {k : ℕ} (hk : k < 2)
+    {sch : FlockSoundness.Accounting.Schedule} {out : Model.OutCL 𝔽 Dig (List UInt8)} {k : ℕ} (hk : k < 2)
     (hL : LaterEntriesAtK keep sch ins.read.I d (wrPDK keep ins.read.I d (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN
       (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) sha512 (plainSimK keep P x spec st) x (ω, u) r')) out k) :
     ∃ (st' : Stmt) (sch' : Flock.Schedule) (p : Proof), setupAtD ins.read.I (some d) = .ok (spec, #[st']) ∧
@@ -310,7 +310,7 @@ theorem plain_liveOpeningK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.F
 theorem plainForkQ_ofK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
-    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtDK keep ins.read.I (some d) (wrPDK keep ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,

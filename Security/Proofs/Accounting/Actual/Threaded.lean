@@ -27,7 +27,7 @@ namespace Accounting.SecurityProofs.Actual
 open Verity Nci Finset
 
 /-- Every counted multiplication lies in exactly one unit of a division of the reference circuit. -/
-theorem card_M_eq_sum {c : Declaration} (T : Threading c) {m : ℕ} (Q : Partition c.D m) :
+theorem card_M_eq_sum {c : RegisteredCircuit} (T : Threading c) {m : ℕ} (Q : Partition c.D m) :
     T.M.card = ∑ u, (T.mults (Q.gates u)).card := by
   classical
   rw [← card_biUnion fun u _ v _ huv => disjoint_left.2 fun g hu hv => huv (by

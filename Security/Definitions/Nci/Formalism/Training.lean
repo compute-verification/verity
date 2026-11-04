@@ -50,11 +50,11 @@ inputs reaches). Defined from it and A1's values:
 namespace Nci.Formalism
 
 open Finset
-open Verity (Circuit Declaration)
+open Verity (Circuit RegisteredCircuit)
 open scoped NNReal ENNReal
 
 /-- **An annotation** of `d`'s training, tokens labelled by `L`: the new slow weights `θ'` and the token blocks `𝒯`. -/
-structure Annotation (d : Declaration) (L : Type) where
+structure Annotation (d : RegisteredCircuit) (L : Type) where
   /-- `θ'`, the new slow weights: values computed by gates of `d`, the trained weights. -/
   θ' : Finset (Fin d.D.N)
   /-- The token blocks `𝒯`: token `T` holds the gates of one token's computation in one step. -/
@@ -62,7 +62,7 @@ structure Annotation (d : Declaration) (L : Type) where
 
 namespace Annotation
 
-variable {d : Declaration} {L : Type} (A : Annotation d L)
+variable {d : RegisteredCircuit} {L : Type} (A : Annotation d L)
 
 /-- **A valid annotation**: `θ'` is computed by gates, not inputs, and the token blocks are pairwise disjoint sets of
 gates. -/

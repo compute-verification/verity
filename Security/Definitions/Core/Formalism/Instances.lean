@@ -28,7 +28,7 @@ abbrev C : Circuit where
   outputs := {3}
 
 /-- Gate 0 is registered. -/
-abbrev d : Declaration := ⟨C, {0}, by decide⟩
+abbrev d : RegisteredCircuit := .ofCircuit C {0} (by decide)
 
 /-- The proof blocks `{1, 2}` and `{3}`. -/
 abbrev Honest : Partition d.D 2 := ⟨![none, some 0, some 0, some 1], by decide⟩

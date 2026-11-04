@@ -93,3 +93,11 @@ def test_a_header_cut_off_has_none():
 def test_names_lose_their_quotes():
     assert H.imports("import «A».B.«c d»\n") == ["A.B.c d"]
     assert H.parts("«A».B.«c.d»") == ["A", "B", "c.d"] and H.name("«A».B") == "A.B"
+
+
+def test_each_import_starts_at_its_first_word():
+    """Where the codemod (`modules.py`) writes `public ` before an import."""
+    src = "/- c -/\nmodule\n\npublic import A\nmeta import B -- why\n/- x -/ import all C import D\n\ndef x := 1\n"
+    assert [src[a:].split("\n")[0] for a in H.starts(src)] == [
+        "public import A", "meta import B -- why", "import all C import D", "import D"]
+    assert H.starts("def x := 1\n") == () and H.starts("import\n") is None

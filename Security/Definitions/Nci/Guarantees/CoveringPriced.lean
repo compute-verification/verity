@@ -37,7 +37,7 @@ and the rest give its count.
 The counts are stated multiplied out, with no division, so they say something when `k = 0`; in the slowdown form a
 division by zero is zero. -/
 def CoveringBoundPriced : Prop :=
-  ∀ (d : Declaration) (B : MulBlocks d) (s k D : ℕ) (p : Fin B.nw → ℝ) (ca : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
+  ∀ (d : RegisteredCircuit) (B : MulBlocks d) (s k D : ℕ) (p : Fin B.nw → ℝ) (ca : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
     (∀ i, 0 ≤ p i) → (∀ W : Finset (Fin B.nw), D ≤ W.card → (k : ℝ) < ∑ i ∈ W, p i) → 0 < ca →
     Assumptions.ParameterHardPricedAt d B s p → Covers d s k I →
       (∃ U ⊆ Assumptions.chainedBlocksAt d B D ca, (U.card : ℝ) ≤ n * k ∧

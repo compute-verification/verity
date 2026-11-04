@@ -9,7 +9,7 @@ import Definitions.Nci.Formalism.Runs
 The training formalism v2, the one statement of the training slowdown, in Lean:
 
 * §1, circuits (`Definitions.Nci.Formalism.Circuits`): a circuit is a `Verity.Circuit` that is `Wellformed`, `in(S)` is
-  `Circuit.into`, `in(C)` is `inputs`, `θ` is a `Verity.Declaration`'s registered inputs, and `reconstruct` is the
+  `Circuit.into`, `in(C)` is `inputs`, `θ` is a `Verity.RegisteredCircuit`'s registered inputs, and `reconstruct` is the
   reconstruction;
 * §2, inference (`Definitions.Nci.Formalism.Inference`): the policy `(θ, c, k, n)`, inference blocks, the slowdown `ρ`
   over core's `(c, k)`-partitions, kinds of work `K` with their work `B_K`, caps `cap_K` and bounds, the partition-level
