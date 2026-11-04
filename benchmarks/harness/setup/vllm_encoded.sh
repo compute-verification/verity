@@ -1,6 +1,6 @@
 # Sourced by run_point.sh (a spec's `setup`): the bandwidth arms' GPU libraries (benchmarks/vllm_encoded/bench_arm.py),
-# built from this source tree as benchmarks/kv_filler/run.sh builds the encoded stack (STACK=...) at its default field
-# (1024, masked, FOLD6, 32 query heads) and the top-up, and the VERITY_VLLM_BENCH_*_LIB names the arms read exported.
+# built from this source tree: the encoded stack at its default field (1024, masked, FOLD6, 32 query heads) and the
+# top-up (benchmarks/vllm_encoded/topup.cu), and the VERITY_VLLM_BENCH_*_LIB names the arms read exported.
 #
 # wt.cu takes nvcc about 9 minutes, so a build is kept on the node in $VERITY_BENCH_LIB_CACHE/KEY (default
 # /workspace/research/cache/verity-bench-libs), KEY the hash of nvcc's version, the flags and every file each build reads
@@ -23,7 +23,7 @@ declare -A VE_BUILDS=(
   [wt]="-DWT_FIELD=$VE_FIELD -DWT_MASK=1 -DWT_FOLD6=1 -DWT_RECEIPT=1 benchmarks/codec_tensor/wt.cu"
   [reader]="benchmarks/codec_tensor/reader.cu"
   [paged]="-DKV_FIELD=$VE_FIELD -DKV_MASK=1 -DKV_FOLD6=1 -DKV_QHEADS=32 benchmarks/vllm_encoded/paged.cu"
-  [topup]="benchmarks/kv_filler/topup.cu"
+  [topup]="benchmarks/vllm_encoded/topup.cu"
 )
 mkdir -p "$VE_CACHE" "$VE_RUN/setup" "$VE_RUN/out/setup"
 VE_RECIPE=$(nvcc --version; echo "flags: ${VE_FLAGS[*]}"; for lib in "${VE_ORDER[@]}"; do echo "$lib: ${VE_BUILDS[$lib]}"; done)

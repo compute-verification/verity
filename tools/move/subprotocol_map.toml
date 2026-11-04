@@ -1,4 +1,4 @@
-# The remote audit's component becomes its subprotocol: what `tools/move/rename.py --map
+# PoUB's component becomes its subprotocol: what `tools/move/rename.py --map
 # tools/move/subprotocol_map.toml` renames ("components" and `product` are older names for subprotocols and their
 # composition). `Properties.RemoteAudit.Component` is the property of one subprotocol's run, and its modules move with
 # it. Declarations keep their place in the locks' records: `rename.py --moves` prints the renames that `check.py

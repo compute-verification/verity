@@ -1,8 +1,7 @@
 """The Definition the differential test of `GumbelTopPTokenSelect_v1{V,S}(logits, top_p, seed, pos, temp)` checks
 production against (`spec`: the registered composite's body that returns ALSO its intermediate masked fp32 row, so the
 `TopPMask_v1{V,S}` value is checked lane by lane, not only the sampled token), and the registered family (`spec_registered`).
-The adapter (gate G4, `verity_vllm.properties.admission`: cases and the pinned production chain of vLLM d9105ea80's
-`Sampler.sample`) is `verity_vllm.program.sampling_topp_adapter`."""
+The test's cases and the production chain it runs (vLLM d9105ea80's `Sampler.sample`) are its caller's."""
 
 from __future__ import annotations
 
