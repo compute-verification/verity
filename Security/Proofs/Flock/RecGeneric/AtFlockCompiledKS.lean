@@ -1,12 +1,13 @@
 module
 
 public import Proofs.Flock.RecGeneric.AtFlockCompiledSessions
+public import Proofs.Flock.RecGeneric.AtFlockCompiledContract
 public import Proofs.Flock.RecGeneric.AtFlockEvery
 public import Proofs.Flock.RecGeneric.AtFlockServer
 public import Proofs.Flock.RecGeneric.OuterProof
 
 /-!
-# L2 at Flock at every statement, given the compiler's contract (A1e)
+# L2 at Flock: the compiled recursive verifier's knowledge soundness at every statement
 
 L2 (`Flock.SecurityProofs.GenericRecursiveKSCompiled`) at `Proto.ofFlock`, `Server.ofBound`, `Arg.ofFlock DO` and
 `recCompiler` gives `KSCompiledOn` at the statements where the compiler's contract holds (`ksCompiledOn_of`), from F4
@@ -14,8 +15,9 @@ L2 (`Flock.SecurityProofs.GenericRecursiveKSCompiled`) at `Proto.ofFlock`, `Serv
 compiler's contract for `E_O` (`SessionsOfRec`). `Comp.err` is nonnegative where the inner protocol is well formed and
 `κ_O` is (`Comp.err_nonneg`), and the deployed compiled verifier accepts only dense statements, so `KSCompiledOn` at
 `RecDeploy.DenseAt` holds at every statement (`ksCompiledOn_every`). At the deployment every premise but the
-compiler's contract holds, so `ContractCompiledDense` (A1d) gives `Flock.Guarantees.RecursiveKSCompiledEvery`
-(`recursiveKSCompiledEvery_of_contract`).
+compiler's contract holds, so `ContractCompiledDense` gives `Flock.Guarantees.RecursiveKSCompiledEvery`
+(`recursiveKSCompiledEvery_of_contract`), and A1d proves it from F1 (`contractCompiledDense`, `ivStarOfBound`,
+`openViewOfBound`): `Flock.SecurityProofs.RecursiveKSCompiledEvery`, with no hypothesis.
 -/
 
 @[expose] public section
@@ -47,6 +49,7 @@ section Instance
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
   {Col' T' : Type} [DecidableEq Col']
 
+omit [DecidableEq Col'] in
 /-- **L2 at Flock gives `KSCompiledOn` at the statements `G` admits**: L2 at the deployed inner decoder, from the
 element-level Flock's KS with no root (`KSFlockLin` at `DE`), Flock's KS as the outer argument's, the compiler's
 contract for `E_O`, answers that decode to their coins, `DE`'s nonnegative table errors, F8, `rowIn` injective
@@ -64,6 +67,7 @@ theorem ksCompiledOn_of [Zero Col] (H : Msg → Msg) (D : RecAt Coin) (Bd : Boun
     (Server.ofBound Bd) (Arg.ofFlock DO) (recCompiler D DO) (protoWFOfFlock Bd Bd.deploy.decode Cp hdec hε)
     (kSAbortLinOfFlockLin H Bd Cp hKS Bd.deploy.decode hdI) hLC (bindsOfBound Bd hB) hA hS x (hC x hx) Ω P m M
 
+omit [DecidableEq Col] [DecidableEq Col'] in
 /-- **`KSCompiledOn` at every statement from `KSCompiledOn` where runs accept**: where every run the compiled verifier
 accepts is of a statement `G` admits, the inner protocol is well formed and the sessions' table errors are
 nonnegative, elsewhere no run accepts, so the failure is `0`, at most the bound (`Comp.err_nonneg`). -/
@@ -138,3 +142,14 @@ theorem recursiveKSCompiledEvery_of_contract (hC : ContractCompiledDense) :
     (fun x _ => FlockDeploy.KS.plainRdInR RecDeploy.DeployedR.rdR x) (hC b aux nOf hd recRest)
 
 end Claims.RecGeneric
+
+namespace Flock.SecurityProofs
+
+open Claims.RecGeneric
+
+/-- **Knowledge soundness of the recursive verifier compiled over Flock `--zk`, at every statement, at the deployed
+reader.** -/
+theorem RecursiveKSCompiledEvery : Flock.Guarantees.RecursiveKSCompiledEvery :=
+  recursiveKSCompiledEvery_of_contract (contractCompiledDense (ivStarOfBound _) (openViewOfBound _))
+
+end Flock.SecurityProofs

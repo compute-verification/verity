@@ -193,7 +193,7 @@ def public_answer(judged: Mapping[str, Any], bind: bytes, scope: str, r_bytes_pe
     """The case's answer `judged` in public: its commitment a hiding one to the case's digest under `bind`, whose
     opening goes to `private`, its profile without the registration's digest and with `scope`, and γ against R."""
     row = bytes.fromhex(judged["commitment"])
-    hidden = advice.register([row], 8 * len(row), bind)
+    hidden = advice.commit([row], 8 * len(row), bind)
     o = hidden.open(0)
     _write(private / "opening.json", {"binding": bind.hex(), "count": 1, "index": o.index, "n_bits": 8 * len(row),
                                       "path": [p.hex() for p in o.path], "root": hidden.root.hex(), "row": row.hex(),
