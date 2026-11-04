@@ -82,8 +82,9 @@ theorem ticketsOf_cast (NT : ℕ) (v : ℕ → ℚ) {g : ℕ} (hg : g < NT) (hv 
 
 theorem goodDeclTiles_subset {Q R S : Type} (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R)
     (s : S) (τ : Transcript) (dec : ℕ → Decl) : goodDeclTiles P TR U H s τ dec ⊆ goodTiles P TR U H s τ := by
-  unfold goodDeclTiles
-  exact filter_subset _ _
+  intro g hg
+  unfold goodDeclTiles at hg
+  exact (mem_filter.mp hg).1
 
 /-- **The draw's bound for one oracle and salt.** Fix a transcript `τ`, its declarations `dec`, a set `good` of its
 committed tiles on which the draw's weight is at most `Ω` times `credit`, and a set `O` of committed tiles disjoint from
