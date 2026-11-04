@@ -24,6 +24,9 @@ from verity.ml.circuits.codec import canonical_json
 from verity_vllm.engine.profiles import dense_generic as DG
 from verity_vllm.pipeline.advice_windows import CAP_BITS, Capped
 
+__all__ = ["compiler_doc", "inner_digest", "phi_of_serve", "registered_of_serve", "registered_seed", "served_gates",
+           "served_identity"]
+
 
 def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target: str | None = None) -> Any:
     """φ of a served engine as B compiles under it: the pinned model (``serve.json``'s ``model`` and ``revision``, and the
