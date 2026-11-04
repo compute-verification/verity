@@ -52,12 +52,15 @@ _POUB_TERM = re.compile(rf"\b(?:remote{_WRAP}(?:bandwidth|audit)s?|proof{_WRAP}o
                         re.I)
 #: Where the words name something else: the bandwidth audit over PoUS's store, and the archive.
 POUB_ELSEWHERE = ("archive/", "verity/core/protocols/bandwidth/")
-#: Files a PR queued on `next` adds a retired name to, until it lands and PoUB's rename follows it.
+#: Files whose retired names a PR queued on `next` adds or rewrites the lines beside, until it lands and PoUB's rename
+#: follows it.
 POUB_PENDING = dict.fromkeys(
     ("tools/verity/cli/tests/step0.py", "verity/core/protocols/composition/tests/periods.py",
      "verity/core/protocols/composition/tests/test_composition_difftest.py", "tools/move/glossary_names_map.toml",
      "verity/README.md", "tests/test_lean_vocabulary.py"),
-    "a PR queued on next adds the name here; PoUB's rename follows it")
+    "a PR queued on next adds the name here; PoUB's rename follows it") | dict.fromkeys(
+    ("benchmarks/one_stage/README.md", "benchmarks/prove_path/e2e_chains/README.md"),
+    "a PR queued on next rewrites the lines beside the name; PoUB's rename follows it")
 
 #: The retired-terms table, the Glossary's older names (`ARCHITECTURE.md` links it).
 GLOSSARY = "GLOSSARY.md"
