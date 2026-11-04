@@ -151,8 +151,30 @@ def test_the_command_refuses_a_new_edge_and_only_shrinks(judged, capsys) -> None
     assert "lean import Priv" in capsys.readouterr().out
 
 
-def test_an_unread_lake_package_fails_closed(tmp_path: Path) -> None:
-    (tmp_path / "x").mkdir()
-    (tmp_path / "x/lakefile.toml").write_text('name = "x"\n[[lean_lib]]\nname = "X"\nsrcDir = "y"\n', encoding="utf-8")
-    with pytest.raises(ValueError, match="can't read"):
-        _ = PB.Tree(tmp_path, files=["x/lakefile.toml"]).lake
+@pytest.mark.parametrize(("files", "read"), [
+    ({"x/lakefile.toml": 'name = "x"\n[[lean_lib]]\nname = "X"\nsrcDir = "y"\n', "x/X.lean": "import Y\n"}, "x/X.lean"),
+    ({"x/lakefile.toml": 'name = "x"\n[[lean_lib]]\nname = "X"\n', "x/X.lean": "/- open\nimport Y\n"}, "x/X.lean"),
+    ({"x/a.py": "import (\n"}, "x/a.py"),
+    ({"x/pyproject.toml": "[project\n", "x/a.py": ""}, "x/a.py"),
+])
+def test_a_file_it_cannot_read_fails_closed(tmp_path: Path, files: dict[str, str], read: str) -> None:
+    """A need it can't read is an error, not a file that needs nothing."""
+    for f, text in files.items():
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text(text, encoding="utf-8")
+    with pytest.raises(ValueError, match="can't|isn't"):
+        PB.Tree(tmp_path, files=files).edges(read)
+
+
+@pytest.mark.parametrize(("script", "line"), [
+    ("echo \"a\nresearch status\"; research run x\n", 2),
+    ("set -e\nresearch keep \"$X\" --owner o \\\n  --why \"y\" > /dev/null 2>&1\n", 2),
+])
+def test_a_shell_command_over_lines_is_still_read(tmp_path: Path, script: str, line: int) -> None:
+    """A line `shlex` refuses alone, one a quote leaves open or a backslash continues, still names its command."""
+    files = {"tools/priv/pyproject.toml": TREE["tools/priv/pyproject.toml"], "verity/pub/x.sh": script}
+    for f, text in files.items():
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text(text, encoding="utf-8")
+    assert [(e.line, e.target) for e in PB.Tree(tmp_path, files=files).edges("verity/pub/x.sh")] == [
+        (line, "tools/priv/pyproject.toml")]

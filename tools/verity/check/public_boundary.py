@@ -213,6 +213,12 @@ class Tree:
     def text(self, rel: str) -> str:
         return (self.root / rel).read_text(encoding="utf-8", errors="replace")
 
+    def toml(self, rel: str) -> dict:
+        try:
+            return tomllib.loads(self.text(rel))
+        except tomllib.TOMLDecodeError as e:
+            raise ValueError(f"public_boundary: {rel} isn't TOML ({e}), so what it needs can't be read") from e
+
     def under(self, d: str) -> list[str]:
         return self.anchored.under(d)
 
@@ -258,8 +264,11 @@ class Tree:
         modules, owner, _ = self.lake
         src = self.text(f)
         h, starts = HEADERS.header(src), HEADERS.starts(src)
+        if h is None or starts is None:
+            raise ValueError(f"public_boundary: {f}'s header is cut off (a comment left open, or an import without a "
+                             "module's name), so what it imports can't be read")
         out = [Edge(f, owner[f], 1, "package", "its Lake package")] if f in owner else []
-        for imp, at in zip(h.imports if h else (), starts or ()):
+        for imp, at in zip(h.imports, starts):
             if (t := modules.get(imp.module)) is not None and t != f:
                 out.append(Edge(f, t, src.count("\n", 0, at) + 1, "lean import", imp.module))
         return out
@@ -270,7 +279,7 @@ class Tree:
                                                                        f"{d}/lean-toolchain" if d else "lean-toolchain")
                if t in self.files]
         text = self.text(f)
-        for r in tomllib.loads(text).get("require", []):
+        for r in self.toml(f).get("require", []):
             if not isinstance(r, dict) or not isinstance(r.get("path"), str):
                 continue
             t = Path(os.path.normpath(Path(d) / r["path"] / "lakefile.toml")).as_posix()
@@ -287,11 +296,8 @@ class Tree:
         pyproject}, {pyproject: the roots its suite's `pythonpath` adds})."""
         names: dict[str, list[str]] = defaultdict(list)
         dists, commands, paths = {}, {}, {}
-        for f in sorted(x for x in self.files if x.endswith("pyproject.toml") and x.rpartition("/")[2] == "pyproject.toml"):
-            try:
-                doc = tomllib.loads(self.text(f))
-            except tomllib.TOMLDecodeError:
-                continue
+        for f in sorted(x for x in self.files if x.rpartition("/")[2] == "pyproject.toml"):
+            doc = self.toml(f)
             d = os.path.dirname(f)
             project, tool = doc.get("project", {}), doc.get("tool", {})
             if isinstance(project.get("name"), str):
@@ -385,8 +391,8 @@ class Tree:
         text = self.text(f)
         try:
             tree = ast.parse(text, filename=f)
-        except SyntaxError:
-            return []
+        except SyntaxError as e:
+            raise ValueError(f"public_boundary: {f} isn't Python ({e}), so what it imports can't be read") from e
         nodes = list(ast.walk(tree))
         out = [Edge(f, i, 1, "package", "a package above it") for i in self._packages(f)]
         if (p := self._pyproject(f)) is not None:
@@ -432,28 +438,32 @@ class Tree:
         text, out = self.text(f), []
         for line, reached in ANCHORS.shell_joins(f, text):
             out += self._path(f, line, reached)
-        for n, raw in enumerate(text.splitlines(), 1):
+        lines, at = text.splitlines(), 0
+        while at < len(lines):
+            n, raw = at + 1, lines[at]
+            while raw.endswith("\\") and at + 1 < len(lines):
+                at += 1
+                raw = raw[:-1] + " " + lines[at]
+            at += 1
             if raw.lstrip().startswith("#"):
                 continue
             # a path from the root only when the tree has exactly it: a script's relative path is often from its own place
             out += [Edge(f, p, n, "path", p) for m in SH_PATH.finditer(raw)
                     if (p := m.group(1).rstrip("/.")) in self.files or p in self.dirs]
+            lex = shlex.shlex(raw.replace("$(", " ( "), posix=True, punctuation_chars=";&|()`")
+            lex.whitespace_split, lex.commenters = True, "#"
             try:
-                lex = shlex.shlex(raw.replace("$(", " ( "), posix=True, punctuation_chars=";&|()`")
-                lex.whitespace_split, lex.commenters = True, "#"
                 words = list(lex)
             except ValueError:
-                continue
+                # a quote this line leaves open (a string over several lines): its words as they stand
+                words = re.findall(r"[;&|()`]+|[^\s;&|()`'\"]+", raw.replace("$(", " ( "))
             for i, w in enumerate(words):
                 if i == 0 or words[i - 1] in SH_STARTS:
                     out += self._ran(f, n, words[i:])
         return out
 
     def _manifest(self, f: str) -> list[Edge]:
-        try:
-            doc = tomllib.loads(self.text(f))
-        except tomllib.TOMLDecodeError:
-            return []
+        doc = self.toml(f)
         _, dists, _, _ = self.python
         out = [Edge(f, t, 1, "package", "the workspace's") for t in ("pyproject.toml", "uv.lock") if t in self.files and t != f]
         project = doc.get("project", {})

@@ -29,6 +29,7 @@ benchmarks/one_stage/a0.py -> benchmarks/numerical/python/verity_numerical/bench
 benchmarks/one_stage/a10.sh -> benchmarks/pouw/hidden_zk/job.sh
 benchmarks/one_stage/a11.py -> benchmarks/served_units
 benchmarks/one_stage/a11.sh -> benchmarks/pouw/hidden_zk/job.sh
+benchmarks/one_stage/a11.sh -> tools/research/pyproject.toml
 benchmarks/one_stage/a2.py -> benchmarks/numerical/python/verity_numerical/bench/input_sets.py
 benchmarks/one_stage/a3.py -> benchmarks/numerical/python/verity_numerical/bench/input_sets.py
 benchmarks/one_stage/a5.py -> benchmarks/numerical/python/verity_numerical/bench/input_sets.py
@@ -57,6 +58,7 @@ benchmarks/one_stage/a8.py -> verity/core/protocols/remote_bandwidth/receipts.py
 benchmarks/one_stage/a8.sh -> benchmarks/pouw/hidden_zk/job.sh
 benchmarks/one_stage/a8_gpu.sh -> benchmarks/proof_throughput/verify.sh
 benchmarks/one_stage/a9.sh -> benchmarks/pouw/hidden_zk/job.sh
+benchmarks/one_stage/a9.sh -> tools/research/pyproject.toml
 benchmarks/one_stage/compose_circuit.py -> benchmarks/numerical/python/verity_numerical/bench/input_sets.py
 benchmarks/one_stage/forged_proofs.py -> tools/verity/circuit_check/src/circuit_check/__init__.py
 benchmarks/one_stage/forged_proofs.sh -> benchmarks/pouw/hidden_zk/job.sh
@@ -74,6 +76,7 @@ benchmarks/one_stage/served_bandwidth.sh -> benchmarks/torch_gpu/p2_stage/build.
 benchmarks/one_stage/served_composite.sh -> benchmarks/pous/served_case.sh
 benchmarks/one_stage/served_composite.sh -> verity/core/devices/memory_challenger/lean
 benchmarks/one_stage/served_composite.sh -> verity/core/protocols/pous/check
+benchmarks/one_stage/served_util.sh -> tools/research/pyproject.toml
 benchmarks/one_stage/served_verdicts.py -> examples/h200/interfaces
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/network_traces/certifier_piece.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/pous/served_piece.sh
@@ -148,6 +151,7 @@ integrations/vllm/tests/program/test_io_shell.py -> verity/core/protocols/certif
 integrations/vllm/tests/program/test_sampling_split.py -> tools/verity/circuit_check/tests/data/sampling_split_tasks.json
 integrations/vllm/tests/protocols/challenger_host.py -> benchmarks/live_challenger/models.py
 integrations/vllm/tests/protocols/pous_gpu.sh -> benchmarks/torch_gpu/p2_stage/build.sh
+integrations/vllm/tests/protocols/pous_gpu.sh -> tools/research/pyproject.toml
 integrations/vllm/tests/protocols/pouw_h1_circuits.py -> benchmarks/pouw/h1_prove
 integrations/vllm/tests/protocols/pouw_h1_circuits.py -> benchmarks/pouw/h1_prove/live.py
 integrations/vllm/tests/protocols/pouw_h1_circuits.py -> benchmarks/pouw/hidden_zk
