@@ -738,18 +738,18 @@ theorem length_flatMap_const {α β : Type} (f : α → List β) (c : ℕ) (hc :
       Nat.add_comm]
 
 /-- Unit `u`'s tiles in `gridTiles 64 64`, in its order. -/
-def unitGrid (L : Layout) (u : ℕ) : List (ℕ × ℕ × ℕ) :=
+def unitGrid (L : Pouw.PearlC.Layout) (u : ℕ) : List (ℕ × ℕ × ℕ) :=
   (List.range (((L.shape u).m + 64 - 1) / 64)).flatMap fun bi =>
     (List.range (((L.shape u).n + 64 - 1) / 64)).map fun bj => (u, bi, bj)
 
-theorem gridTiles_eq (L : Layout) : gridTiles 64 64 L = (List.range L.N).flatMap (unitGrid L) := rfl
+theorem gridTiles_eq (L : Pouw.PearlC.Layout) : gridTiles 64 64 L = (List.range L.N).flatMap (unitGrid L) := rfl
 
-theorem unitGrid_length (L : Layout) (u : ℕ) :
+theorem unitGrid_length (L : Pouw.PearlC.Layout) (u : ℕ) :
     (unitGrid L u).length = nblocks (L.shape u).m 64 * nblocks (L.shape u).n 64 := by
   rw [unitGrid, length_flatMap_const _ (nblocks (L.shape u).n 64) (fun _ => by simp [nblocks]), List.length_range]
   rfl
 
-theorem unitGrid_getElem? (L : Layout) (u x : ℕ) : (unitGrid L u)[x]? =
+theorem unitGrid_getElem? (L : Pouw.PearlC.Layout) (u x : ℕ) : (unitGrid L u)[x]? =
     if x < nblocks (L.shape u).m 64 * nblocks (L.shape u).n 64 then
       some (u, x / nblocks (L.shape u).n 64, x % nblocks (L.shape u).n 64) else none := by
   unfold unitGrid
@@ -767,16 +767,16 @@ theorem unitGrid_getElem? (L : Layout) (u x : ℕ) : (unitGrid L u)[x]? =
   · rw [ite_eq_right (by simpa [nblocks] using hx), ite_eq_right hx]
 
 /-- The index in `gridTiles 64 64 L` of unit `u`'s first tile. -/
-def gstart (L : Layout) (u : ℕ) : ℕ := ((List.range u).map fun v => (unitGrid L v).length).sum
+def gstart (L : Pouw.PearlC.Layout) (u : ℕ) : ℕ := ((List.range u).map fun v => (unitGrid L v).length).sum
 
-theorem gridTiles_getElem? {L : Layout} {u x : ℕ} (hu : u < L.N)
+theorem gridTiles_getElem? {L : Pouw.PearlC.Layout} {u x : ℕ} (hu : u < L.N)
     (hx : x < nblocks (L.shape u).m 64 * nblocks (L.shape u).n 64) :
     (gridTiles 64 64 L)[gstart L u + x]? =
       some (u, x / nblocks (L.shape u).n 64, x % nblocks (L.shape u).n 64) := by
   rw [gridTiles_eq, gstart, getElem?_flatMap_range (unitGrid L) L.N u x hu (by rw [unitGrid_length]; exact hx),
     unitGrid_getElem?, ite_eq_left hx]
 
-theorem gridTiles_inv {L : Layout} {g : ℕ} {b : ℕ × ℕ × ℕ} (h : (gridTiles 64 64 L)[g]? = some b) :
+theorem gridTiles_inv {L : Pouw.PearlC.Layout} {g : ℕ} {b : ℕ × ℕ × ℕ} (h : (gridTiles 64 64 L)[g]? = some b) :
     ∃ u < L.N, ∃ x < nblocks (L.shape u).m 64 * nblocks (L.shape u).n 64, g = gstart L u + x ∧
       b = (u, x / nblocks (L.shape u).n 64, x % nblocks (L.shape u).n 64) := by
   rw [gridTiles_eq] at h
@@ -786,7 +786,7 @@ theorem gridTiles_inv {L : Layout} {g : ℕ} {b : ℕ × ℕ × ℕ} (h : (gridT
   exact ⟨u, hu, x, hx, rfl, hb.symm⟩
 
 /-- The audit's tile `x` of unit `u`: its index is below `NT`, and its unit, rows and columns are the code's. -/
-theorem audit_at {L : Layout} {u x : ℕ} (hu : u < L.N)
+theorem audit_at {L : Pouw.PearlC.Layout} {u x : ℕ} (hu : u < L.N)
     (hx : x < nblocks (L.shape u).m 64 * nblocks (L.shape u).n 64) :
     gstart L u + x < (auditTiling 64 64 L).NT ∧ (auditTiling 64 64 L).unit (gstart L u + x) = u ∧
       (auditTiling 64 64 L).rows (gstart L u + x) =
@@ -827,8 +827,8 @@ on its weight's noise, has `declOK` at the deployed rules: its kept width is wit
 declares in the tile passes `RowOK` at `c`'s activations. -/
 def TilePassGivesTheDecl : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (coins : PouwCommit.CoinCommitment)
-    (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening) (U : Workload) (g : ℕ) (τ : Transcript) (c : Commit)
-    (dec : ℕ → Decl),
+    (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening) (U : Pouw.PearlC.Workload) (g : ℕ)
+    (τ : Pouw.PearlC.Transcript) (c : Pouw.PearlC.Commit) (dec : ℕ → Decl),
     PouwCheck.PearlPlus.load coins man = .ok p → TileOf p tid U g →
     τ ((auditTiling 64 64 U.layout).unit g) = some c → (∀ r ∈ p.records, dec r.matmul.index = declOf r) →
     OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c →
@@ -898,7 +898,7 @@ def decOf (passes : List Pass) (u : ℕ) : Decl :=
 
 /-- How the run's passes lie over the game's workload `U` and transcript `τ`: 64 × 64 tiles, each record's call a unit
 of `U` that `τ` commits, with the record's shape and weight, and no call in two records. -/
-structure RunLayout (passes : List Pass) (U : Workload) (τ : Transcript) : Prop where
+structure RunLayout (passes : List Pass) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Transcript) : Prop where
   tile64 : ∀ p ∈ passes, p.scheme.tileM = 64 ∧ p.scheme.tileN = 64
   unit : ∀ p ∈ passes, ∀ r ∈ p.records, r.matmul.index < U.layout.N ∧
     (U.layout.shape r.matmul.index).m = r.matmul.m ∧ (U.layout.shape r.matmul.index).k = r.matmul.k ∧
@@ -908,7 +908,7 @@ structure RunLayout (passes : List Pass) (U : Workload) (τ : Transcript) : Prop
     p.records[pos]? = some r → passes[i']? = some p' → p'.records[pos']? = some r' →
     r.matmul.index = r'.matmul.index → i = i' ∧ pos = pos'
 
-variable {passes : List Pass} {U : Workload} {τ : Transcript}
+variable {passes : List Pass} {U : Pouw.PearlC.Workload} {τ : Pouw.PearlC.Transcript}
 
 theorem decOf_cases (passes : List Pass) (u : ℕ) : decOf passes u = ⟨0, ∅, ∅⟩ ∨
     ∃ (i : ℕ) (p : Pass) (pos : ℕ) (r : UnitRecord), passes[i]? = some p ∧ p.records[pos]? = some r ∧
@@ -944,7 +944,7 @@ theorem decOf_eq (hL : RunLayout passes U τ) {i pos : ℕ} {p : Pass} {r : Unit
     simp at this
 
 /-- The game tile of a run's tile: tile `x` of its call's unit in `gridTiles 64 64`. -/
-def gOf (L : Layout) (c : Cell) : ℕ := gstart L c.r.matmul.index + c.x
+def gOf (L : Pouw.PearlC.Layout) (c : Cell) : ℕ := gstart L c.r.matmul.index + c.x
 
 theorem cell_facts (hL : RunLayout passes U τ) {c : Cell} (hc : c ∈ cells passes) :
     c.p ∈ passes ∧ c.r ∈ c.p.records ∧ c.x < nblocks c.r.matmul.m 64 * nblocks c.r.matmul.n 64 ∧
@@ -1092,7 +1092,7 @@ declaration read from its record (`decOf`), each of `Run.tickets`' entries is a 
 `drawTickets` under `pearlCDrawRev1 devH100` are the entry's tickets; distinct entries are on distinct game tiles, and
 every game tile with a ticket has an entry. -/
 def TicketsAreTheDraw : Prop :=
-  ∀ {Q R S : Type} (TR : TileRules Q R S) (passes : List Pass) (U : Workload) (τ : Transcript),
+  ∀ {Q R S : Type} (TR : TileRules Q R S) (passes : List Pass) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Transcript),
     (∀ L, TR.tiling L = auditTiling 64 64 L) → RunLayout passes U τ →
     ∃ φ : ℕ → ℕ,
       (∀ j id t, (tickets passes)[j]? = some (id, t) →
@@ -1153,8 +1153,9 @@ theorem ticketsAreTheDraw : TicketsAreTheDraw := by
 /-- What the game reads of the plan's tile `(pi, tid)` on audit tile `g`: the verdict opens it, it is `g` (`TileOf`),
 its pass's salt is the game's, its weight's root is the semantics', each weight row of its columns passes `P`'s rules,
 and its openings are its unit's commitment. -/
-structure DrawnOn {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (P : Protocol Q R S) (s : S) (pl : Plan)
-    (opener : ℕ → ℕ → Except String TileOpening) (U : Workload) (τ : Transcript) (pi tid g : ℕ) : Prop where
+structure DrawnOn {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (P : Pouw.PearlC.Protocol Q R S) (s : S)
+    (pl : Plan) (opener : ℕ → ℕ → Except String TileOpening) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Transcript)
+    (pi tid g : ℕ) : Prop where
   todo : (pi, tid) ∈ pl.todo
   tile : TileOf pl.passes[pi]! tid U g
   salt : bytesNat pl.passes[pi]!.salt = saltOf s
@@ -1172,13 +1173,13 @@ the check accepts a run laid out as the game's workload, every sample `c` of the
 the records' declarations; or SHA-512 collides on two different messages of an opened tile, one hashed in digesting the
 words the check forms and one in digesting the commitment's words. -/
 def AcceptGivesTheAudit : Prop :=
-  ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (P : Protocol Q R S) (TR : TileRules Q R S)
-    (H : Q → R) (s : S) (i : Input) (opener : ℕ → ℕ → Except String TileOpening) (pl : Plan) (U : Workload)
-    (τ : Transcript) {w : ℕ → ℕ} {t : ℕ} (c : Fin t → Ticket w (TR.tiling U.layout).NT),
+  ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (P : Pouw.PearlC.Protocol Q R S)
+    (TR : TileRules Q R S) (H : Q → R) (s : S) (i : Input) (opener : ℕ → ℕ → Except String TileOpening) (pl : Plan)
+    (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Transcript) {w : ℕ → ℕ} {t : ℕ} (c : Fin t → Ticket w (TR.tiling U.layout).NT),
     TR.tiling = auditTiling 64 64 → TR.rowOK = (tilesH3 saltOf rootOf ρ : TileRules Q R S).rowOK →
-    P.ticket = (protocolH3 saltOf rootOf ρ : Protocol Q R S).ticket →
-    P.useful = (protocolH3 saltOf rootOf ρ : Protocol Q R S).useful →
-    P.weightOK = (protocolH3 saltOf rootOf ρ : Protocol Q R S).weightOK →
+    P.ticket = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).ticket →
+    P.useful = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).useful →
+    P.weightOK = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).weightOK →
     (check i opener).accept = true → plan i = .ok pl → RunLayout pl.passes U τ →
     (∀ j, ∃ pi tid, DrawnOn saltOf rootOf P s pl opener U τ pi tid (c j).1) →
     AuditAcceptsTol (goodDeclTiles P TR U H s τ (decOf pl.passes) ∪ blankTiles TR U τ) (overCapTiles TR U H s τ) c ∨
