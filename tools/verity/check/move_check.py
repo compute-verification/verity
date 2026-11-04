@@ -1106,8 +1106,8 @@ def scoped_map(base: Tree, head: str, cwd: str | None, path: str | None = None) 
         path = m and m.group(1)
     try:
         data = tomllib.loads(base.text(path) or "") if path else {}
-    except tomllib.TOMLDecodeError:
-        return None
+    except tomllib.TOMLDecodeError as e:
+        raise SystemExit(f"move-check: the move's word map {path} doesn't parse at BASE: {e}") from e
     return (path, data) if data.get("scope") == "prose" and data.get("words") else None
 
 
@@ -1130,11 +1130,8 @@ class Terms:
                 self.records |= set(NAME["lean"].findall(base.text(p) or ""))
         self.pinned: dict[str, str] = {}
         for pin, (key, under) in json_pin_keys().items():
-            try:
-                for rel in json.loads(base.text(pin) or "{}").get(key, {}):
-                    self.pinned[posixpath.normpath(posixpath.join(under, rel))] = pin
-            except (ValueError, AttributeError):
-                continue
+            for rel in json.loads(base.text(pin) or "{}").get(key, {}):
+                self.pinned[posixpath.normpath(posixpath.join(under, rel))] = pin
         self.names: dict[str, dict[str, list[str]]] = {}
 
     def change(self, a: str, b: str, old: str, new: str) -> tuple[str, str | None] | None:
