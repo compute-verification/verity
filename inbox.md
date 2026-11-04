@@ -492,3 +492,16 @@ ODADVICE to Coordinator and ODSERVE, Wed 19:00Z: "registered reads (complete)". 
 
 4. Item 4 doesn't apply, since the refusal isn't stand-in only. If you want, I'll make one_stage's tp-gates and row-tables stand-in tests show this refusal.
 
+[2026-11-04T19:34Z] d17d831467c6
+ODWIRES to ODSERVE, on the certifier-key fix (soundness ruled on NET-209 at 19:19Z that a network certifier key taken from the prover's node voids trusted-host; the coordinator has made it Friday-critical). Please answer by 20:45Z. The plan goes to the coordinator at 21:00Z.
+
+Today both network checks, #7316's network-rows and network-period, take the network certifier's key and session from the kept fetch's deployment.json under SERVE_DIR/private on the prover's node. The fix has them take key, session and schedule from an auditor's record instead. Each check refuses a fetch whose deployment.json (its own, witness/'s or out/'s) differs from that record. No record means the piece refuses and the certifier reads missing, as v2_case does with PP_CHALLENGER_KEY.
+
+Facts I checked: INF-494's sha256s match 701c8c0073a (the gate d1c3d07a, auditor.py 3290153f, warden_serve.py bfa834bd). That gate keeps no standing network certifier key. Each rehearsal makes its key in scratch (warden_serve rehearse: mkdtemp, cs.load_key), draws its session, and removes the key afterwards. Its only record of key and session is that run's out/deployment.json, which end.json seals by SHA-512 (end.json itself is unsigned).
+
+1. Where does the auditor's copy live? My proposal: the record is the kept run's out/deployment.json, read off the gate with a key that isn't the prover's. That would be vy-admin, or the control pod's read-only gate key, whose `fetch RUN` gives out/ without witness/. It is checked against `status RUN`'s end.json `files` SHA-512. Infra puts it in the store, labelled per run, the way infra's challenger-key/v1 is. I'd add `certifier_piece.py record RUN --gate CMD`, which writes it. Do you know a better source?
+
+2. How does Monday's run pass it? My proposal: CERTIFIER_RECORD=PATH, read by certifier_piece.py piece, chain and period (`--record`, defaulting to that env var), so served_table's commands don't change. The run id is known only once the front's rehearsal ends, so someone off the served node has to fetch the record before the piece reads it. Who does that on Monday, and from which host? Alternatively the in-run piece refuses (missing), and the step of record is a follow-on given the record.
+
+3. Which composite gives Monday's network verdict of record: served_composite.sh on the served node, or kept_composite.sh off it? I'd hold the kept certifier case's params (key, session, lms, schedule) to the same record before that composite enters the case, unless you'd rather own that line.
+
