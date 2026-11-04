@@ -1,0 +1,6 @@
+# The knees within 0.005 of the line on matrices credited in full at the recommended point, at the ranks between those
+# priced: 70B L3 gate and up (1.051-1.052 at ranks 8 and 16) and L11, L43 and L57 k (1.051-1.054 at rank 64). An
+# unpriced rank took up to 0.0023 off (70B L0 q at rank 48 against 32 and 64, r20261104-133157-6b84)
+70b-l3gu-knee-lo --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 3 --match gate_proj,up_proj --fast --ranks 2,4,6 --orders none,fold,sort --workers 2
+70b-l3gu-knee-hi --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 3 --match gate_proj,up_proj --fast --ranks 10,12,14 --orders none,fold,sort --workers 2
+70b-k-knee --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 11,43,57 --match k_proj --fast --ranks 40,56,72,80 --orders none,fold,sort --workers 3
