@@ -148,9 +148,9 @@ structure Live where
   src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256
   hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src
   hTags : TagsOkZHJ I
-  /-- `live-verifier` at the writer as V5 reads it, under the law (`DrawFileZK (printedDraw law) law n`) -/
+  /-- `live-verifier` at the writer as V5 reads it, under the law at every draw (`DrawFileZK (printedDraw law) law n`) -/
   hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw I own (printedDraw law)
-    (fun S R => (planZHJP (Reg := Reg) (printedDraw law) y₀ S R).length) wr law
+    (fun S R => (planZHJP (Reg := Reg) (printedDraw law) y₀ S R).length) wr fun _ => law
   k : ℕ
   Rw : ℕ
   M : ℕ
