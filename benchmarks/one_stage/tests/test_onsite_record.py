@@ -299,8 +299,8 @@ def held_both(out: Path) -> dict:
 def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both_checks_are_held(
         tmp_path, lock, monkeypatch):
     """A lock listing the pinned guarantees the tight K rests on and none of the theorems that discharge its premises,
-    with PeriodLeakTied, not yet stated, unlisted, and the premises with no discharge named: every premise is open, by
-    name, and so is PeriodLeakTied, so the figure of record charges ℓ_a + 1 for the tied audit, and the tight K's cells
+    with PeriodTiedCount, not yet stated, unlisted, and the premises with no discharge named: every premise is open, by
+    name, and so is PeriodTiedCount, so the figure of record charges ℓ_a + 1 for the tied audit, and the tight K's cells
     beside it are conditional on each."""
     for name, premise in UNNAMED.items():
         monkeypatch.setitem(OR.PREMISES, name, premise)
@@ -309,7 +309,7 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     lock.write_text(json.dumps(lock_doc({g: [] for g in OR.RESTS_ON if g not in UNPINNED})))
     rec = held_both(tmp_path)
     of = rec["bound"]["of_record"]
-    assert UNPINNED == ["NetTiming.SecurityProofs.PeriodLeakTied"]
+    assert UNPINNED == ["NetTiming.SecurityProofs.PeriodTiedCount"]
     assert (of["held"], of["open"], of["K"]) == (["free", "circuit"], [*OR.PREMISES, *UNPINNED], K + 2 ** 23 + 1)
     assert [p["missing"] for p in of["premises"]["premises"].values()] == [
         list(p["discharged_by"]) for p in OR.PREMISES.values()]
@@ -455,7 +455,7 @@ def test_a_guarantee_the_tight_K_rests_on_is_open_by_name_where_the_lock_states_
 
 def test_a_guarantee_the_tight_K_rests_on_with_no_statement_pinned_is_open_even_where_the_lock_lists_it(
         tmp_path, lock, monkeypatch):
-    """PeriodLeakTied, listed before what it takes was read at its statement: open by its name, whatever the lock
+    """PeriodTiedCount, listed before what it takes was read at its statement: open by its name, whatever the lock
     states it as."""
     (g,) = UNPINNED
     monkeypatch.setitem(OR.RESTS_ON, g, RESTS_ON[g])

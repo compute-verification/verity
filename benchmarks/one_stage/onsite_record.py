@@ -202,7 +202,7 @@ ROOT = HERE.parents[1]
 LOCKS = (ROOT / "Security" / "lean-audit.json", ROOT / "Security" / "Properties" / "lean-audit.json")
 #: the guarantees the tight K rests on, by their names in `LOCKS`: PeriodLeakRegistered's count, at the values the
 #: registration opens at its registered inputs, is K's; PeriodLeakAccepted's is the same count at the trace's values
-#: there; PeriodLeakTied's counts a phase's tied audits with the scan as one Program, as ℓ_{a,j} does. The lock records
+#: there; PeriodTiedCount's counts a phase's tied audits with the scan as one Program, as ℓ_{a,j} does. The lock records
 #: a guarantee's named assumptions, never the antecedents its statement takes, so each gives ``statement``, the digest
 #: of its statement among the lock's reads (`statement`) at which it was read, None where none was, and ``takes``, each
 #: hypothesis, antecedent and condition its good event reads that the deployed code must meet, by its Prop's name or,
@@ -225,12 +225,18 @@ RESTS_ON: dict[str, dict[str, Any]] = {
                   "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.SchedulesHeld": "schedules-held",
                   "NetTiming.SenderDecodes": "schedules-covered", "NetTiming.ScopeAcc": "wires-fit",
                   "NetTiming.RegOpensAt": "reg-opens-at", "NetTiming.TapsOpen": "taps-open"}},
-    "NetTiming.SecurityProofs.PeriodLeakTied": {
+    "NetTiming.SecurityProofs.PeriodTiedCount": {
         "statement": None,
-        "takes": {"NetTiming.RowsStateHeld": "rows-state-held", "NetTiming.RowsProgWired": "rows-prog-wired",
-                  "NetTiming.RowsCircuitHeld": "circuit-held", "NetTiming.RowsTiesOrdered": "rows-ties-ordered",
-                  "NetTiming.CircuitCounts": "free-count",
-                  "NetTiming.Assumptions.SharedRootsParsed": "shared-roots-parsed"}},
+        "takes": {"NetTiming.SharedRootsParsed": "shared-roots-parsed",
+                  "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge", "NetTiming.RWired": "sampled-leg-bridge",
+                  "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
+                  "NetTiming.RowsTiesOrdered": "rows-ties-ordered", "NetTiming.CircuitCounts": "free-count",
+                  "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.TiedExposed": "tied-exposed",
+                  "NetTiming.SchedulesHeld": "schedules-held", "NetTiming.SchedulesCovered": "schedules-covered",
+                  "NetTiming.SenderDecodes": "client-decodes", "NetTiming.PhaseParsed": "phase-parsed",
+                  "NetTiming.RowsStateHeld": "rows-state-held", "NetTiming.RowsProgWired": "rows-prog-wired",
+                  "NetTiming.RegOpensAt": "reg-opens-at", "NetTiming.TapsOpen": "taps-open",
+                  "NetTiming.ScopeAcc": "wires-fit"}},
 }
 #: each premise the tight K rests on, by the name ``open`` gives it: what it says, and the theorems that discharge it at
 #: the deployed code by their names in `LOCKS`' guarantees (none named yet leaves it open)
@@ -270,6 +276,10 @@ PREMISES: dict[str, dict[str, Any]] = {
                                   "position under one root open to one value, or their H calls collide; the sampled "
                                   "leg's bridge proves it of the deployed parse. Open until that theorem is named",
                             "discharged_by": ()},
+    "phase-parsed": {"is": "PhaseParsed, an antecedent of PeriodTiedCount's tie: at the deployment, the phase's "
+                           "statements' bytes parse to its registered statements, the scan's first, with one trace each. "
+                           "Open until the theorem that gives it of the deployed parse is named",
+                     "discharged_by": ()},
     "reg-opens-at": {"is": "RegOpensAt: at each window's statement the registration's openings open its registered "
                            "inputs under the statement's roots (RegOpens). The run's reg holds per-window values (the "
                            "window's tied activations and the scan's state) and pinned ones (the weights, at their "
@@ -286,8 +296,14 @@ PREMISES: dict[str, dict[str, Any]] = {
                   "discharged_by": ("Properties.NetworkCertifier.tapsOpen",)},
     "windows-placed": {"is": "WindowsPlaced, PeriodLeakAccepted's hPw and hβ: each window's statement has the partition "
                              "the period read, and each of its faulty sets at δ commits at most the bits β the period "
-                             "charges it. Open until the theorem that the period check's acceptance gives it is named",
-                       "discharged_by": ()},
+                             "charges it, from the period check's acceptance of the scan; the tied audits' half is "
+                             "`tied-exposed`",
+                       "discharged_by": ("Properties.NetworkPeriod.scanWindowsPlaced",)},
+    "tied-exposed": {"is": "TiedExposed, PeriodTiedCount's hexp: in each phase, each tied audit that can be wrong at its "
+                           "partition and δ shows the rest of the phase at most the gates βt the period charges it "
+                           "(Phase.exposed); the scan's half is `windows-placed`. Open until it is stated of the period "
+                           "check's acceptance and a theorem gives it",
+                     "discharged_by": ()},
     "schedules-held": {"is": "SchedulesHeld, PeriodLeakAccepted's hcap and hfit: each schedule the network certifier may "
                              "run gives each connection at most its cap of cells, and its record format holds it "
                              "(TapRecord.fits, the rows format's). Open until the theorem that gives it of the network "
