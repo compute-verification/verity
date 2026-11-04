@@ -263,6 +263,11 @@
 # under the lease, from what its serve.json will record of φ on this card (`prove_path.py serve-phi`, then `class-circuit`,
 # no advice: the circuit is the class's whatever the traffic), into the serve dir's pearlplus/circuit-record.json
 # (PEARLPLUS-CIRCUIT, within PEARLPLUS_CIRCUIT_TIMEOUT, default 30m), and step 3 says whether its record is that one.
+# With a gate, serve() then opens the lane's Pearl-C period PEARLPLUS_PERIOD (default pearlplus-RUN_ID) on that record
+# (`served_verdicts.py pearlplus-period open --circuit-record`, cap 1: the window's one salt session joins it; the
+# PEARLPLUS-PERIOD lines) before serve-openai starts, and closes it once the windows are sealed and the endpoint stopped
+# (or when it never listens, or is stopped), so before Pearl+'s piece draws: open, serve, seal, close, draw. The record
+# reads the period's circuit against the window-circuit record V3c held R's circuit to (`window_tie` keeps it beside R).
 # Pearl+'s piece then serves
 # nothing of its own (served_pearlplus.sh's PEARLPLUS_TIE): it takes the window's epoch pearl/w<k>/, writes W
 # (`retain --window-record`), and runs `served_verdicts.sh pearl-tie` (PEARLPLUS_TIE_CMD) before its coin: the window's
@@ -530,11 +535,29 @@ if r.get("previous") != w:
 print(f"W {w[:16]}…, R {REG.digest(r)[:16]}… chained right after it")
 EOF
 }
-window_tie() {  # under PEARLPLUS_TIE: R and V3c's audit's summary in the layout `served_verdicts.py record --window-tie` reads
+window_tie() {  # under PEARLPLUS_TIE: R, V3c's audit's summary and, once V3c held R's circuit to it, the window-circuit
+  # record, in the layout `served_verdicts.py record --window-tie` reads
   local t
   t=$(pearl_dir)/tie
   mkdir -p "$t/windows/rank0" && cp "$VW/window/registration.json" "$t/windows/rank0/" 2>/dev/null \
-    && { cp "$VW/audit/summary.json" "$t/" 2>/dev/null || true; }
+    && { cp "$VW/audit/summary.json" "$t/" 2>/dev/null || true; } \
+    && { [ "$v3c_ok" != 1 ] || cp "$D/window-circuit-w$K-$vtag.json" "$t/circuit-record.json" 2>/dev/null || true; }
+}
+pearl_period() {  # under PEARLPLUS_TIE with a gate, in serve(): $1 open (on PEARLPLUS-CIRCUIT's record) or close the lane's
+  # Pearl-C period the window's salt session joins
+  local out
+  if [ "$1" = open ]; then
+    [ -n "$PEARLPLUS_TIE" ] && [ -n "$PEARLC_CHALLENGER_GATE" ] || return 0
+    [ -f "$PEARLPLUS_CIRCUIT" ] || { say "PEARLPLUS-PERIOD not opened: PEARLPLUS-CIRCUIT built no record, so the window's salt session joins no period"; return 1; }
+    out=$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" pearlplus-period open "$D/pearlplus" \
+      --gate "$PEARLC_CHALLENGER_GATE" --name "${PEARLPLUS_PERIOD:-pearlplus-${RESEARCH_RUN_ID:-local}}" \
+      --circuit-record "$PEARLPLUS_CIRCUIT" 2>&1) && PEARL_PERIOD=1
+  else
+    [ "${PEARL_PERIOD:-}" = 1 ] || return 0
+    out=$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" pearlplus-period close "$D/pearlplus" \
+      --gate "$PEARLC_CHALLENGER_GATE" 2>&1) && PEARL_PERIOD=
+  fi
+  say "PEARLPLUS-$(tail -1 <<< "$out" | cut -c1-600)"
 }
 v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its circuit held to the verifier's window-circuit record
   VW=$D/v3c-w$K-$vtag
@@ -791,7 +814,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
       --max-tokens "$MAX_TOKENS" ${H1_DRAW_K:+--draw-k "$H1_DRAW_K"} ${H1_MODEL:+--model "$H1_MODEL"} 2>&1 | tail -1)"
     [ -f "$D/period.json" ] && period=1
   fi
-  [ -z "$PEARLPLUS_TIE" ] || pearl_circuit
+  [ -z "$PEARLPLUS_TIE" ] || { pearl_circuit; pearl_period open; }
   # shellcheck disable=SC2086
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal \
@@ -801,7 +824,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 --seal-warm-gb 0 ${SERVE_ARGS:-} \
     > "$D/serve.log" 2>&1 &
   local srv=$! up=0 c=0 s=0 rc=0 release
-  trap 'kill -TERM "$srv" 2>/dev/null; wait "$srv"; exit 143' TERM INT
+  trap 'kill -TERM "$srv" 2>/dev/null; wait "$srv"; pearl_period close; exit 143' TERM INT
   for _ in $(seq 1 900); do
     grep -q "SERVE-OPENAI listening" "$D/serve.log" && { up=1; break; }
     kill -0 "$srv" 2>/dev/null || break
@@ -812,6 +835,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     say "SERVE: not listening: $(grep -m1 -E 'UsageError|Error|refus' "$D/serve.log" | cut -c1-400)"
     kill -TERM "$srv" 2>/dev/null; wait "$srv"
     [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period close "$D" --gate "$H1_GATE" 2>&1 | tail -1)"
+    pearl_period close
     return 10
   fi
   say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$D/serve.log" | cut -c1-300)"
@@ -857,6 +881,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   elif [ "$c" = 0 ]; then say "SERVE stopped (exit $stopped): no window closed"
   else say "SERVE stopped (exit $stopped): not every closed window sealed (the serve dir's private/verdicts.txt)"; fi
   [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period close "$D" --gate "$H1_GATE" 2>&1 | tail -1)"
+  pearl_period close
   # a front's exit is the certifier's verdict (CERTIFIER-FRONT, and its piece reads the session), not the load's
   { [ "$LOAD" = front ] || [ "$rc" = 0 ]; } && [ "$c" -gt 0 ] && [ "$s" -ge "$c" ]
 }
@@ -1094,7 +1119,7 @@ EOF
     printf '%s\n' sampled-proofs-served/summary.json sampled-proofs-served/window/audit.json \
       sampled-proofs-served/windows/rank0/registration.json sampled-proofs-served/runs.json h1/log.jsonl \
       private/pouw/period/case.json private/pouw/period/answer.json "pearlplus/w$K/tie/windows/rank0/registration.json" \
-      "pearlplus/w$K/tie/summary.json"
+      "pearlplus/w$K/tie/summary.json" "pearlplus/w$K/tie/circuit-record.json"
     for a in sampled-proofs-served "v3c-w$K-$vtag/audit"; do
       printf "$a/window/%s\n" case.json case-v2.json case-error.txt case-v2-error.txt
     done

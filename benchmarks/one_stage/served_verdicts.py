@@ -13,7 +13,7 @@ sampled proofs, and the one record of every verdict (the block record).
                                 [--statements FILE] [--live-evidence FILE] [--lean-answers DIR]
     served_verdicts.py pearlplus DIR --served FILE --verify FILE [--unretained FILE] [--gate CMD] [--key-sha512 HEX]
                                  [--main FILE] [--coin COIN_PUT]
-    served_verdicts.py pearlplus-period open DIR --gate CMD --name P [--scheme S] [--cubin FILE]
+    served_verdicts.py pearlplus-period open DIR --gate CMD --name P [--scheme S] [--cubin FILE | --circuit-record FILE]
     served_verdicts.py pearlplus-period close DIR --gate CMD
     served_verdicts.py coin DIR --record FILE [--run RUN_ID] [--run-dir DIR]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
@@ -116,14 +116,16 @@ document carries the passes, that verdict's line and credit at Pearl's Assumptio
 its passes are not the window sampled proofs audited). ``record`` composes an accepted one as PoUW's verdict of record
 only where `pearlplus_of_record` holds it to live coins under ``--key-sha512``, the lane ``--lane``'s own reserve and
 Pearl-C period, a draw session the lane reserved first after that period closed and opened on the run's commitment, the
-window's registration chained after Pearl+'s window record, and the Lean `PouwCheck.PearlPlus` verdict on the same run;
-else its row stays missing, naming the first condition it fails.
+window's registration chained after Pearl+'s window record, that period's circuit the window-circuit record V3c held the
+window's circuit to, and the Lean `PouwCheck.PearlPlus` verdict on the same run; else its row stays missing, naming the
+first condition it fails.
 
-``pearlplus-period open``: the lane's Pearl-C period P, opened at ``--gate`` before Pearl+'s retained serve with cap 1 (the
-serve's one salt session joins it) and circuit the SHA-512 of the piece's ``pearlplus-descriptor.json``
-(`pearlplus_descriptor`: Pearl+'s protocol, ``--scheme`` and ``--cubin``'s SHA-512), its answer in ``DIR/period.json``;
-``pearlplus-period close`` closes it once the serve's session has ended, before the verifier's draw, which joins no
-period. ``coin``: the verifier's coin record published the moment it is drawn (`coin`), ``--run-dir`` naming the run's
+``pearlplus-period open``: the lane's Pearl-C period P, opened at ``--gate`` before Pearl+'s serve with cap 1 (the serve's
+one salt session joins it) and circuit the SHA-512 of ``DIR/pearlplus-descriptor.json``: with ``--circuit-record``, the
+served window's circuit record (served_verdicts.sh's PEARLPLUS-CIRCUIT, the circuit cut at Pearl+'s linears that step 3's
+window-circuit writes), byte for byte; without it, `pearlplus_descriptor` (Pearl+'s protocol, ``--scheme`` and
+``--cubin``'s SHA-512), which names no model. Its answer goes in ``DIR/period.json``; ``pearlplus-period close`` closes it
+once the serve's session has ended, before the verifier's draw, which joins no period. ``coin``: the verifier's coin record published the moment it is drawn (`coin`), ``--run-dir`` naming the run's
 Attempt as its custody where no put preserves it.
 
 ``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
@@ -278,6 +280,9 @@ RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 #: the Pearl-C period's circuit descriptor in the piece (`pearlplus_period_open`), whose SHA-512 the period's open commits
 PEARLPLUS_DESCRIPTOR = "pearlplus-descriptor.json"
 PEARLPLUS_DESCRIPTOR_SCHEMA = "verity-pouw/pearl-plus-period/v1"
+#: beside the window registration R under ``--window-tie``: the window-circuit record V3c held R's circuit to
+#: (served_verdicts.sh's `window_tie`), whose SHA-512 Pearl+'s period must have committed
+CIRCUIT_RECORD = "circuit-record.json"
 #: the seconds `coin` gives each ``research data put`` before naming it unanswered
 PUT_TIMEOUT_S = 300
 #: what `record` composes from, until it runs on an auditor-side host reading each party's own answer
@@ -838,18 +843,21 @@ def pearlplus_descriptor(scheme: str, cubin: Path | None) -> bytes:
     return json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
 
 
-def pearlplus_period_open(piece_dir: Path, gate: str, name: str, scheme: str, cubin: Path | None = None
-                          ) -> dict[str, Any]:
-    """``pearlplus-period open``: the lane's Pearl-C period `name` opened at `gate` before Pearl+'s retained serve, of cap
-    1 (the serve's one salt-only session, `bench_arm._LiveSession`, which joins it) and circuit the SHA-512 of
-    `pearlplus_descriptor`, written to ``piece_dir/PEARLPLUS_DESCRIPTOR``; the open and what it committed go to
+def pearlplus_period_open(piece_dir: Path, gate: str, name: str, scheme: str, cubin: Path | None = None,
+                          record: Path | None = None) -> dict[str, Any]:
+    """``pearlplus-period open``: the lane's Pearl-C period `name` opened at `gate` before Pearl+'s serve, of cap 1 (the
+    serve's one salt-only session, `bench_arm._LiveSession` or a tied window's `serve_pearl.live`, which joins it) and
+    circuit the SHA-512 of its descriptor, written to ``piece_dir/PEARLPLUS_DESCRIPTOR``: the served window's circuit
+    record `record` byte for byte where it is given, else `pearlplus_descriptor`. That descriptor is each pass's
+    ``descriptor`` for credit's circuit clause (`challenger.circuit_reason`). The open and what it committed go to
     ``piece_dir/PERIOD``, which `period_close` closes. The run's draw session is reserved after the close, so it joins
     no period (`bench_arm.LiveDraw`) and the close lists the salt session alone (`credit.pearl_c_period_credit`)."""
-    raw = pearlplus_descriptor(scheme, cubin)
+    raw = record.read_bytes() if record is not None else pearlplus_descriptor(scheme, cubin)
     piece_dir.mkdir(parents=True, exist_ok=True)
     (piece_dir / PEARLPLUS_DESCRIPTOR).write_bytes(raw)
     circuit = hashlib.sha512(raw).hexdigest()
     doc = {"name": name, "circuit": circuit, "cap": 1, "descriptor": PEARLPLUS_DESCRIPTOR,
+           "circuit_record": None if record is None else str(record),
            "open": _gate_json(gate, ["period-open", "--name", name, "--cap", "1", "--circuit", circuit])}
     (piece_dir / PERIOD).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     return doc
@@ -1470,7 +1478,9 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, sampled_proofs:
        and the verdict is over the coin published at its draw (`pearlplus_coin`).
        Pearl+'s verdict (`PEARLPLUS_ANSWER`) held its passes to a window record W (``verify --tie W``), the
        window's registration R under `sampled_proofs` is chained right after W, and its records audit is tied to W
-       (``records_audit --tie W``), so the window sampled proofs audited reads the roots Pearl+ credits.
+       (``records_audit --tie W``), so the window sampled proofs audited reads the roots Pearl+ credits. The period's
+       open (in the signed ledger) committed the SHA-512 of the window-circuit record V3c held R's circuit to
+       (`CIRCUIT_RECORD` beside R), so the period holds the salt session to the circuit of the window served.
     4. **Lean.** The Lean `PouwCheck.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
        draw source, holds the passes to the same W, and credits work over tiles at the reference's ε.
 
@@ -1543,6 +1553,15 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, sampled_proofs:
                       f"Pearl+'s window record W {w[:16]}...")
     if ((summary.get("tie") or {}).get("record")) != w:
         return None, f"the window's records audit is not tied to Pearl+'s window record W {w[:16]}... (records_audit --tie W)"
+    try:
+        held = hashlib.sha512((sampled_proofs / CIRCUIT_RECORD).read_bytes()).hexdigest()
+    except OSError as e:
+        return None, (f"no window-circuit record V3c held R's circuit to ({CIRCUIT_RECORD} beside R: {type(e).__name__}), "
+                      f"so nothing holds period {name}'s circuit to the window served")
+    if period.get("circuit") != held:
+        return None, (f"period {name} committed circuit {str(period.get('circuit'))[:16]}..., not {held[:16]}..., the "
+                      "SHA-512 of the window-circuit record V3c held R's circuit to: its salt session counts toward "
+                      "another circuit than the window served")
 
     try:
         lean = json.loads((piece_dir / PEARLPLUS_LEAN).read_text())
@@ -1908,7 +1927,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     ppe.add_argument("--gate", required=True)
     ppe.add_argument("--name")
     ppe.add_argument("--scheme", default="pearl-c-h100-v1-h3")
-    ppe.add_argument("--cubin", type=Path)
+    described = ppe.add_mutually_exclusive_group()
+    described.add_argument("--cubin", type=Path)
+    described.add_argument("--circuit-record", type=Path, help="the served window's circuit record (PEARLPLUS-CIRCUIT's), "
+                                                               "whose bytes are the period's descriptor")
     rg = sub.add_parser("public-registration")
     rg.add_argument("registration", type=Path)
     pl = sub.add_parser("public-lines")
@@ -1946,8 +1968,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                   "under, in its open period, for a verdict of record "
                                                   "(PEARLC_CHALLENGER_LANE)")
     r.add_argument("--window-tie", type=Path, help="where Pearl+'s tie to the window is read for a verdict of record: the "
-                   "window tied to W, its windows/rank0/registration.json and its records audit's summary.json (default "
-                   "--sampled-proofs)")
+                   "window tied to W, its windows/rank0/registration.json, its records audit's summary.json and the "
+                   "window-circuit record V3c held R's circuit to, circuit-record.json (default --sampled-proofs)")
     sub.add_parser("witness")
     rb = sub.add_parser("rebase")
     rb.add_argument("serve_dir", type=Path)
@@ -2082,12 +2104,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return 0
             if not a.name:
                 raise ValueError("pearlplus-period open needs --name")
-            doc = pearlplus_period_open(a.piece_dir, a.gate, a.name, a.scheme, a.cubin)
+            doc = pearlplus_period_open(a.piece_dir, a.gate, a.name, a.scheme, a.cubin, a.circuit_record)
         except (OSError, RuntimeError, ValueError, KeyError) as e:
             print(f"PERIOD refused: {type(e).__name__}: {e}"[:1200], flush=True)
             return 1
-        print(f"PERIOD opened {doc['name']}: Pearl-C, cap 1, circuit {doc['circuit'][:16]}... ({PEARLPLUS_DESCRIPTOR})",
-              flush=True)
+        of = f"the window's circuit record {a.circuit_record}" if a.circuit_record else PEARLPLUS_DESCRIPTOR
+        print(f"PERIOD opened {doc['name']}: Pearl-C, cap 1, circuit {doc['circuit'][:16]}... ({of})", flush=True)
         return 0
     if a.cmd == "coin":
         try:
