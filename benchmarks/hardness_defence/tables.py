@@ -121,9 +121,10 @@ class Book:
         self.v = collections.defaultdict(lambda: collections.defaultdict(dict))
         self.split = set()
         self.orders = set()
+        self.split_least = {}
         self.runs = collections.defaultdict(set)
 
-    def add(self, model, tensor, var, scores, split, run, orders=False):
+    def add(self, model, tensor, var, scores, split, run, orders=False, split_least=math.inf):
         cur = self.v[model][tensor].setdefault(var, {})
         for k, (ol, route) in scores.items():
             if k not in cur or ol < cur[k][0]:
@@ -132,10 +133,29 @@ class Book:
             self.split.add((model, tensor, var))
         if orders:
             self.orders.add((model, tensor, var))
-        self.runs[(model, tensor, var)].add(run)
+        key = (model, tensor, var)
+        self.split_least[key] = min(self.split_least.get(key, math.inf), split_least)
+        self.runs[key].add(run)
 
     def get(self, model, tensor, target=0.02, rot="hadamard", deflate=0, noise=0, chunks=1):
         return self.v[model][tensor].get((target, rot, deflate, noise, chunks))
+
+
+def split_least(rec: dict) -> float:
+    """The least over the leaf of a record's exact splits alone, over chips and prices."""
+    n, K = rec["shape"]
+    return min(((rotated.lrx(int(r), n, K, v["d"]) + v["routes"][k]["cost"]) / rec["leaf"]
+                for r, v in rec.get("isvd", {}).items() for k in KEYS), default=math.inf)
+
+
+def chunk_split_least(rec: dict) -> float:
+    """The same for a record in K chunks, each chunk on its own least split."""
+    n, kc, m = rec["shape"][0], rec["K_chunk"], rec["chunks"]
+
+    def at(k):
+        return sum(min((rotated.lrx(int(r), n, kc, v["d"]) + v["routes"][k]["cost"] for r, v in part["isvd"].items()),
+                       default=math.inf) for part in rec["per_chunk"]) / m / rec["leaf"]
+    return min(at(k) for k in KEYS)
 
 
 def load(runs: Path) -> Book:
@@ -155,14 +175,15 @@ def load(runs: Path) -> Book:
                     if rec.get("chunked"):
                         var = (target, rot, deflate, 0, rec["chunks"])
                         scores = {k: (v["over_leaf"], v["route"]) for k, v in rec["best"].items()}
-                        book.add(model, rec["tensor"], var, scores, True, run, orders)
+                        book.add(model, rec["tensor"], var, scores, True, run, orders, chunk_split_least(rec))
                         continue
                     split = bool(rec.get("isvd")) or "energy_top" in rec
                     scores = {}
                     for k in KEYS:
                         s = rotated.score(rec, k)
                         scores[k] = (s["over_leaf"], s["route"])
-                    book.add(model, rec["tensor"], (target, rot, deflate, 0, 1), scores, split, run, orders)
+                    book.add(model, rec["tensor"], (target, rot, deflate, 0, 1), scores, split, run, orders,
+                             split_least(rec))
                     if "noise" in rec:
                         ns = {k: (s["over_leaf"], s["route"]) for k in KEYS for s in [rotated.noise_score(rec, k)]}
                         book.add(model, rec["tensor"], (target, rot, deflate, rec["noise"]["f"], 1), ns, True, run,
@@ -178,14 +199,22 @@ def all_tensors(model: str):
     return [tensor_name(L, k) for L in range(MODELS[model][3]) for k in KINDS]
 
 
-# A defence chooses, per matrix, the variant served and its credit (a fraction of its MACs): None is uncredited.
+# A defence chooses, per matrix, the variant served (a key of Book.v[model][tensor]; None: not priced) and its credit,
+# the share of its MACs credited (0: uncredited).
+U = (0.02, "hadamard", 0, 0, 1)
+
+
+def present(book, model, t, var):
+    return var if var in book.v[model][t] else None
+
+
 def base(book, model, t):
-    return book.get(model, t), 1.0
+    return present(book, model, t, U), 1.0
 
 
 def clip_choice(book, model, t, cap=1.0):
     """The least clip target whose variant clears the line at every chip and price; else the one that comes closest."""
-    vs = {var: s for var, s in book.v[model][t].items() if var[1:] == ("hadamard", 0, 0, 1) and var[0] <= cap}
+    vs = {var: s for var, s in book.v[model][t].items() if var[1:] == U[1:] and var[0] <= cap}
     if not vs:
         return None, False
     ok = sorted(var for var, s in vs.items() if least_of(s) >= LINE)
@@ -194,15 +223,16 @@ def clip_choice(book, model, t, cap=1.0):
 
 
 def clip(book, model, t):
-    var, _ = clip_choice(book, model, t)
-    return (book.v[model][t][var] if var else None), 1.0
+    return clip_choice(book, model, t)[0], 1.0
 
 
 def margin(book, model, t):
-    s = book.get(model, t)
-    if s is None:
-        return None, 1.0
-    return s, min(1.0, least_of(s) / LINE)
+    var = present(book, model, t, U)
+    return var, min(1.0, least_of(book.v[model][t][var]) / LINE) if var else 1.0
+
+
+def qkv_margin(book, model, t):
+    return margin(book, model, t) if kind(t) in QKV else base(book, model, t)
 
 
 def qkv_out(book, model, t):
@@ -210,37 +240,44 @@ def qkv_out(book, model, t):
 
 
 def broken_out(book, model, t):
-    s = book.get(model, t)
-    return (None, 0.0) if s is not None and least_of(s) < LINE else (s, 1.0)
+    var = present(book, model, t, U)
+    return (None, 0.0) if var and least_of(book.v[model][t][var]) < LINE else (var, 1.0)
+
+
+def deflated(book, model, t):
+    """The least deflation of design U's 2% codes that clears the line, if any was priced."""
+    ok = sorted(var for var, s in book.v[model][t].items()
+                if var[0] == U[0] and var[1] == U[1] and var[2] and var[3:] == U[3:] and least_of(s) >= LINE)
+    return ok[0] if ok else None
 
 
 def operating(down="margin"):
-    """Clip where a clip clears the line, uncredited where none does; 70B's down_proj at its whole K credited at a
-    margin, or in K chunks."""
+    """Clip where a clip clears the line, else deflation where it clears, else uncredited; 70B's down_proj at its
+    whole K credited at a margin, or in K chunks."""
     def choose(book, model, t):
         if model == "70b" and kind(t) == "down_proj":
             if down == "chunks":
-                s = book.get(model, t, chunks=4)
-                return (s, 1.0) if s else (None, 1.0)
+                return present(book, model, t, U[:4] + (4,)), 1.0
             return margin(book, model, t)
         var, ok = clip_choice(book, model, t)
-        if var is None:
-            return None, 1.0
-        return (book.v[model][t][var], 1.0) if ok else (None, 0.0)
+        if var is None or ok:
+            return var, 1.0
+        d = deflated(book, model, t)
+        return (d, 1.0) if d else (None, 0.0)
     return choose
 
 
 def rotation(rot):
     def choose(book, model, t):
-        s = book.get(model, t, rot=rot)
-        return (s, 1.0) if s else base(book, model, t)
+        var = present(book, model, t, (U[0], rot) + U[2:])
+        return (var, 1.0) if var else base(book, model, t)
     return choose
 
 
 def noise(f):
     def choose(book, model, t):
-        s = book.get(model, t, noise=f)
-        return (s, 1.0) if s else base(book, model, t)
+        var = present(book, model, t, U[:3] + (f, 1))
+        return (var, 1.0) if var else base(book, model, t)
     return choose
 
 
@@ -249,36 +286,47 @@ DEFENCES = {
     "1: second Hadamard (where priced)": rotation("hadamard2"),
     "1: Haar rotation (where priced)": rotation("haar"),
     "1: output-side Hadamard too (where priced)": rotation("both"),
+    "2: least clip that clears, up to 30%": clip,
     "3: live weight noise f=1 (where priced)": noise(1),
     "3: live weight noise f=4 (where priced)": noise(4),
-    "2: least clip that clears, up to 20%": clip,
-    "4: broken matrices at a margin": margin,
-    "4: broken matrices uncredited": broken_out,
+    "4: q, k, v at a margin": qkv_margin,
+    "4: every broken matrix at a margin": margin,
     "4: q, k, v uncredited": qkv_out,
+    "4: every broken matrix uncredited": broken_out,
     "operating point (down_proj at a margin)": operating("margin"),
     "operating point (down_proj in K chunks)": operating("chunks"),
 }
 
+NEAR = 0.07  # the most a reorder took off a split's residual, over the leaf (r20261104-093237-c694 against natural)
+
 
 def evaluate(book, model, choose):
     """Per chip@price the least cost over credit of a credited matrix (its over the leaf / the share of its MACs
-    credited), the matrix setting it, the credited share of the model's MACs, and the credited matrices unpriced."""
+    credited), the matrix setting it, the credited share of the model's MACs, the credited matrices unpriced, and
+    those a reorder could take under the line: a split priced only in the natural order within NEAR of it
+    (`natural`), or a variant within NEAR of it never priced with the split (`unsplit`)."""
     worst = {k: (math.inf, None, None) for k in KEYS}
     credited = 0.0
-    unpriced = []
+    unpriced, natural, unsplit = [], [], []
     for t in all_tensors(model):
-        s, credit = choose(book, model, t)
+        var, credit = choose(book, model, t)
         if credit == 0:
             continue
         credited += macs(model, kind(t)) * credit
-        if s is None:
+        if var is None:
             unpriced.append(t)
             continue
+        s, key = book.v[model][t][var], (model, t, var)
+        if key not in book.split:
+            if least_of(s) / credit < LINE + NEAR:
+                unsplit.append(t)
+        elif key not in book.orders and book.split_least[key] / credit < LINE + NEAR:
+            natural.append(t)
         for k in KEYS:
             ol = s[k][0] / credit
             if ol < worst[k][0]:
                 worst[k] = (ol, t, s[k][1])
-    return worst, credited / total_macs(model), unpriced
+    return worst, credited / total_macs(model), unpriced, natural, unsplit
 
 
 def short(t: str) -> str:
@@ -291,31 +339,45 @@ def main():
     ap.add_argument("--matrices", action="store_true", help="also every matrix the split or a defence moves")
     args = ap.parse_args()
     book = load(args.runs)
-    print("| defence | model | sm_120 0.84 / 1.48 / 1.78 | H200 0.84 / 1.48 / 1.78 | least set by | MACs credited | unpriced |")
-    print("|---|---|---|---|---|---|---|")
+    print("| defence | model | sm_120 0.84 / 1.48 / 1.78 | H200 0.84 / 1.48 / 1.78 | least set by | MACs credited | "
+          f"unpriced | within {NEAR} of the line: natural order only / unsplit |")
+    print("|---|---|---|---|---|---|---|---|")
     for name, choose in DEFENCES.items():
         for model in MODELS:
-            worst, share, unpriced = evaluate(book, model, choose)
+            worst, share, unpriced, natural, unsplit = evaluate(book, model, choose)
             cells = [" / ".join(f"{worst[f'{c}@{p}'][0]:.3f}" for p in PRICES) for c in ("sm120", "h200")]
             k0 = min(KEYS, key=lambda k: worst[k][0])
             setter = f"{short(worst[k0][1])} ({worst[k0][2]}, {k0})" if worst[k0][1] else "-"
-            print(f"| {name} | {model} | {cells[0]} | {cells[1]} | {setter} | {100 * share:.2f}% | {len(unpriced)} |")
+            print(f"| {name} | {model} | {cells[0]} | {cells[1]} | {setter} | {100 * share:.3f}% | {len(unpriced)} | "
+                  f"{len(natural)} / {len(unsplit)} |")
     if args.matrices:
         print()
-        print("| model | matrix | 2% least (sm_120 / H200 at 0.84) | route | clip chosen | its least | split, orders |")
+        print("The operating point (down_proj in K chunks) on every matrix the split breaks at 2% or that it serves "
+              "otherwise:")
+        print()
+        print("| model | matrix | 2% least (sm_120 / H200 at 0.84) | its route | served | its least | priced in |")
         print("|---|---|---|---|---|---|---|")
+        choose = operating("chunks")
         for model in MODELS:
             for t in all_tensors(model):
+                var, credit = choose(book, model, t)
                 s = book.get(model, t)
-                var, ok = clip_choice(book, model, t)
-                if s is None or least_of(s) >= LINE + 0.04:
+                if s is None or (least_of(s) >= LINE and var == U):
                     continue
-                c = book.v[model][t][var]
                 k0 = min(KEYS, key=lambda k: s[k][0])
-                searched = [w for w, seen in (("split", book.split), ("orders", book.orders)) if (model, t, var) in seen]
+                if credit == 0:
+                    served, its = "uncredited", "–"
+                elif var is None:
+                    served, its = "not priced yet", "–"
+                else:
+                    served = (f"{var[4]} K chunks" if var[4] > 1 else f"deflated by {var[2]}" if var[2]
+                              else f"{var[0]:.0%} clip")
+                    its = f"{least_of(book.v[model][t][var]):.3f}"
+                key = (model, t, var)
+                searched = ("all orders" if key in book.orders else "natural order" if key in book.split
+                            else "no split")
                 print(f"| {model} | {short(t)} | {s['sm120@0.84'][0]:.3f} / {s['h200@0.84'][0]:.3f} | {s[k0][1]} | "
-                      f"{var[0]:.0%}{'' if ok else ' (none clears)'} | {least_of(c):.3f} | "
-                      f"{', '.join(searched) or 'neither'} |")
+                      f"{served} | {its} | {searched if var else '–'} |")
 
 
 if __name__ == "__main__":

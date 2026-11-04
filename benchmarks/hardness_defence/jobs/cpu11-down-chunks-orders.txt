@@ -1,0 +1,3 @@
+# 70B down_proj in K chunks of 7,168 in all three orders, on the three whose top 128 directions hold the most of
+# ||q||^2 (12.5-13.2%, screen.py): their chunks' splits are 1.115 or more in the natural order (cpu9-70b-q-down.txt)
+70b-down-k8192-o --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,11,14 --match down_proj --kcap 8192 --fast --ranks 64,256 --orders none,fold,sort --workers 3
