@@ -112,11 +112,11 @@ def Phase.layout {L S : ℕ} (ph : Phase) (lay : AuditStatement → BoundaryGate
 `s`'s registration commits gate `g`'s value as bit `b` of leaf `l` under the root `r`. Two gates at one leaf are at two
 bits of it. The position is the bit's place, built from `at_` and the deployed placement under `SampledProofs.Bits`
 (`RowPos`: row, leaf, bit), never from `at_` alone. -/
-abbrev Placement := AuditStatement → ℕ → Option (Msg × ℕ × ℕ)
+abbrev GatePlaces := AuditStatement → ℕ → Option (Msg × ℕ × ℕ)
 
 /-- **The wires `t` are placed together**: each joins a gate of the phase to a writer that the registrations commit as
 the same bit of the same leaf under the same root. -/
-def Placed (ph : Phase) (place : Placement) (t : ℕ → Option ℕ) : Prop :=
+def Placed (ph : Phase) (place : GatePlaces) (t : ℕ → Option ℕ) : Prop :=
   ∀ g w, t g = some w → ∃ (j h j' h' : ℕ) (s s' : AuditStatement) (p : Msg × ℕ × ℕ),
     ph.locate g = some (j, h) ∧ ph.locate w = some (j', h') ∧ ph.stmts[j]? = some s ∧ ph.stmts[j']? = some s' ∧
       place s h = some p ∧ place s' h' = some p
@@ -127,7 +127,7 @@ binding only if the deployment's parse puts each statement's registered roots am
 the registration names, so that two passing openings of them are openings of one committed bit. It is a fact about the
 deployed parse, which the sampled leg's bridge proves at the deployed record, and no assumption about the period check,
 which checks the placements (`RowsStateHeld`, `RowsProgWired`). -/
-def SharedRootsParsed {Coin Col T : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (place : Placement) : Prop :=
+def SharedRootsParsed {Coin Col T : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (place : GatePlaces) : Prop :=
   ∀ (x x' : Msg) (s s' : AuditStatement) (g g' : ℕ) (p : Msg × ℕ × ℕ), D.parse x = some s → D.parse x' = some s' →
     place s g = some p → place s' g' = some p →
       ∀ o o' : Opening Bool, o.pos = g → o'.pos = g' → o.val ≠ o'.val → D.commit.Opens H s.roots o = true →
@@ -137,11 +137,11 @@ def SharedRootsParsed {Coin Col T : Type} (H : Msg → Msg) (D : Deploy Coin Col
 /-- **RowsStateHeld**: the phase's state ties are placed together. Each tied audit's state read at row `a ≥ 1` is
 committed where the scan's `o1` of unit `a − 1` is, under the scan's state root, and so is the scan's own state read at
 unit `a`. -/
-def RowsStateHeld (ph : Phase) (place : Placement) (t : Ties) : Prop := Placed ph place t.state
+def RowsStateHeld (ph : Phase) (place : GatePlaces) (t : Ties) : Prop := Placed ph place t.state
 
 /-- **RowsProgWired**: the phase's `prog` ties are placed together. The scan's `prog` read at lane `l`, leaf `b` is
 committed where its tied audit's slot entry of chunk `l`, leaf `b` is, under that audit's entries root. -/
-def RowsProgWired (ph : Phase) (place : Placement) (t : Ties) : Prop := Placed ph place t.prog
+def RowsProgWired (ph : Phase) (place : GatePlaces) (t : Ties) : Prop := Placed ph place t.prog
 
 /-- **RowsStateEmpty**: the phase's state reads at row `0` (`start`) are registered inputs of their statements (`reg`),
 which the registration (its openings `ops`) opens at the empty state, every bit `false`. -/
