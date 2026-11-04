@@ -304,8 +304,8 @@ def terms(k: dict, period: str) -> dict:
     t = k["terms"]
     (row,) = [r for r in k["rows"] if (r["period"], r["scope"], r["prog"]) == (period, "link", READING)]
     m, requests = row["link_windows"], row["requests"]
-    got = {"m": m, "requests": requests, "k_sched": requests * t["schedules_per_request"],
-           "k_fail": requests * t["cells_per_request"], "ell_a": m * t["free"][READING]["link_window"],
+    got = {"m": m, "requests": requests, "k_sched": m * t["schedules_per_block"],
+           "k_fail": m * t["cells_per_block"], "ell_a": m * t["free"][READING]["link_window"],
            "k_skip": 0, "jitter": m * t["jitter_per_block"]}
     if not math.isclose(sum(got[x] for x in TERMS), row["per_period"], rel_tol=1e-12):
         raise SystemExit(f"{period}: the terms sum to {sum(got[x] for x in TERMS)}, not leak's {row['per_period']}")
@@ -331,8 +331,9 @@ def zone_record(zd: Path) -> dict:
         "established": entry["verdict"] == "accept", "statement": LB.STATEMENTS["per_period"], "bound": BOUND,
         "reading": READING, "class": k["class"],
         "scan_class": scan_class(session), "params": k["params"], "run": k["run"],
-        "per_request": {"k_sched": k["terms"]["schedules_per_request"], "k_fail": k["terms"]["cells_per_request"]},
-        "per_phase": {"ell_a": k["terms"]["free"][READING]["link_window"], "k_skip": 0, "T_j": T,
+        "per_phase": {"connections": k["terms"]["connections_per_block"], "cell": k["terms"]["cell"],
+                      "k_sched": k["terms"]["schedules_per_block"], "k_fail": k["terms"]["cells_per_block"],
+                      "ell_a": k["terms"]["free"][READING]["link_window"], "k_skip": 0, "T_j": T,
                       "d_jit": k["terms"]["jitter_bound"], "jitter": k["terms"]["jitter_per_block"],
                       "K": next(r["per_link_window"] for r in k["rows"] if r["prog"] == READING)},
         "periods": {p: terms(k, p) for p in LB.PERIODS},
@@ -374,8 +375,10 @@ def notes() -> list[str]:
         "anything else has no K established, and its figures are the bound its run's load would have had; the lab's "
         "sum is established only where every zone's is, and the datacenter's and the world's never are, their links "
         "being no run's",
-        "k_sched and k_fail both charge each connection's cell count, log2(cap + 1) with cap its lane's egress cells: "
-        "PeriodLeakAccepted's terms as proved, a known overcount: a bound charging each bit once would be tighter",
+        "k_sched and k_fail each charge ⌈log2(cap + 1)⌉ for every connection the schedule can carry (Schedule.caps: "
+        "egress_cells for each of lanes·T_j connections a phase), whatever the requests served, since the adversary "
+        "picks how many connections it opens. Both count the cell counts: PeriodLeakAccepted's terms as proved, a "
+        "known overcount, and a bound charging each bit once would be tighter",
         "ℓ_a,j is phase j's registered advice width (the tied audit's slot entries, NR·T_j/EVERY of them), not the "
         "realized advice length |a_j|, which is private and not in this record",
         "k_skip,j is 0 in the per-period form, every proof block being drawn; the pooled form's k_skip at δ is "
@@ -456,8 +459,9 @@ def markdown(doc: dict) -> str:
         status = "established" if k["established"] else f"not established: {why}"
         lines += [f"**{b}** ({status}) at scan class {k['scan_class']}, "
                   f"{k['run']['requests_per_link_window']:g} requests a phase of T_j = {w['T_j']} buckets: "
-                  f"ℓ_a,j = {w['ell_a']:,}, k_skip,j = 0, T_j·log2 d_jit = {w['jitter']} (d_jit = {w['d_jit']}), "
-                  f"a request's k_sched = k_fail = {k['per_request']['k_sched']}; K a phase = {w['K']:,.0f}.", "",
+                  f"k_sched = k_fail = {w['k_sched']:,} ({w['connections']} connections the schedule can carry, "
+                  f"{w['cell']} bits each), ℓ_a,j = {w['ell_a']:,}, k_skip,j = 0, T_j·log2 d_jit = {w['jitter']} "
+                  f"(d_jit = {w['d_jit']}); K a phase = {w['K']:,.0f}.", "",
                   "| period | m | k_sched | k_fail | Σ_j ℓ_a,j | Σ_j T_j·log2 d_jit | K per period (share) | "
                   "eps (δ part) | K pooled, δ = 1e-6 (k_skip) |", "|---|---|---|---|---|---|---|---|---|"]
         for p, t in k["periods"].items():

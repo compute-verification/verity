@@ -97,7 +97,7 @@ def test_the_record_is_each_zones_verdicts_and_K_in_the_bounds_terms_labelled_si
     monkeypatch.syspath_prepend(str(TRACES))
     import leak_bounds as LB
     import scan_zk as SZ
-    from verity.core.protocols.certifier import ingress_scan as IS
+    from verity.core.protocols.certifier import ingress_scan as IS, warden as W
     params = asdict(SZ.W63K4.params)
     assert params["egress_cells"] == W63K4_CELLS
     out = tmp_path / "out"
@@ -123,11 +123,15 @@ def test_the_record_is_each_zones_verdicts_and_K_in_the_bounds_terms_labelled_si
     cls, T = SZ.W63K4.cls, params["window"]
     ell_a = cls.NR * (T // cls.EVERY) * IS.entry_bits(cls)
     cell = math.ceil(math.log2(W63K4_CELLS + 1))
+    caps = W.WardenParams(**params).caps(1)
     k = b0["K"]
-    assert k["per_request"] == {"k_sched": cell, "k_fail": cell}
+    assert (len(caps), cell) == (128, 3)
+    assert {x: k["per_phase"][x] for x in ("connections", "cell", "k_sched", "k_fail")} == {
+        "connections": len(caps), "cell": cell, "k_sched": 384, "k_fail": 384}
+    assert k["per_phase"]["k_sched"] == sum(math.ceil(math.log2(c + 1)) for c in caps)
     assert {x: k["per_phase"][x] for x in ("ell_a", "k_skip", "T_j", "d_jit", "jitter")} == {
         "ell_a": ell_a, "k_skip": 0, "T_j": T, "d_jit": 2, "jitter": T}
-    assert k["per_phase"]["K"] == 4 * 2 * cell + ell_a + T
+    assert k["per_phase"]["K"] == 384 + 384 + ell_a + T
     one = LB.link(cls, Fraction(4, 1) / (T * Fraction(1, 10)), T=T, tau=Fraction(1, 10), egress_cells=W63K4_CELLS)
     for period, t in k["periods"].items():
         m = Fraction(LB.PERIODS[period]) / (T * Fraction(1, 10))
@@ -161,6 +165,8 @@ def test_the_record_is_each_zones_verdicts_and_K_in_the_bounds_terms_labelled_si
     assert f"| week | the lab | 3 | {f(3 * week)} | no |" in md
     assert f"| week | datacenter | 12,500 | {f(12_500 * week)} | no (scaled) |" in md
     assert "δ_net = eps + m·(ε_ks + ε_bind + ε_tap)" in md and "δ_net has no number here" in md
+    assert "k_sched = k_fail = 384 (128 connections the schedule can carry, 3 bits each)" in md
+    assert "whatever the requests served" in md and "a request's" not in md
     assert "(vacuous)" in md and "known overcount" in md and "Σ_j (ℓ_a,j + k_skip,j + T_j·log2 d_jit)" in md
     for retired in ("D_j", "k_i", "link-window", "delta_net", "J is", "brief", "NET-"):
         assert retired not in md, retired
