@@ -20,7 +20,7 @@ import PouwWindow.Rounds
   the node's draw, a v1 record (which names no draw), no record, a source given on the command line, and an in-process
   challenger's epoch coins. Without it they are read as development runs.
 
-Every JSON comparison here is by a match (`jsonStrIs`), never `Lean.Json`'s `==`.
+Every JSON comparison here is by a match (`PouwCommit.fieldIs`), never `Lean.Json`'s `==`.
 -/
 
 namespace PouwCheck.PearlPlus
@@ -43,9 +43,6 @@ def get? (j : Json) (k : String) : Option Json :=
   | .obj kv => kv.get? k
   | _ => none
 
-/-- `j == .str s`, by a match. -/
-def jsonStrIs (j : Json) (s : String) : Bool := match j with | .str t => t == s | _ => false
-
 /-- The epoch's coin commitment as its challenger published it: an in-process challenger's, or a live session's. -/
 inductive EpochCoins where
   | inproc (c : CoinCommitment)
@@ -56,7 +53,7 @@ instance : Coe CoinCommitment EpochCoins := ⟨.inproc⟩
 /-- `verify_run.epoch_coins`: a live session's commitment when the document's scheme is `LIVE_SCHEME`, else an in-process
 challenger's. -/
 def EpochCoins.ofJson (j : Json) : Except String EpochCoins :=
-  if jsonStrIs ((get? j "scheme").getD .null) LIVE_SCHEME then EpochCoins.live <$> LiveCommitment.ofJson j
+  if fieldIs (get? j "scheme") LIVE_SCHEME then EpochCoins.live <$> LiveCommitment.ofJson j
   else EpochCoins.inproc <$> CoinCommitment.ofJson j
 
 /-- `LiveCommitment.__eq__`, field by field. -/
@@ -95,7 +92,7 @@ def nodeDraw : Json := Json.mkObj [("from", .str DRAW_NODE), ("claim", .str NODE
 /-- Why the record's challenger draw is not coin ``pouw/draw`` 0 of a draw session's commitment, opened after the run's
 commitment `root`, its coin the record's source; `none` when it is, or when the record names no challenger draw. -/
 def drawReason (h : CoinRecord) (root : ByteArray) : Option String := Id.run do
-  if !jsonStrIs ((get? h.draw "from").getD .null) DRAW_CHALLENGER then return none
+  if !fieldIs (get? h.draw "from") DRAW_CHALLENGER then return none
   let parsed : Except String (LiveCommitment × LiveOpening) := do
     pure (← LiveCommitment.ofJson ((get? h.draw "commitment").getD .null),
       ← LiveOpening.ofJson ((get? h.draw "opening").getD .null))
@@ -126,11 +123,11 @@ def ofRecordReason (coins : EpochCoins) (source : Option ByteArray) (held : Opti
     if h.schema != COIN_SCHEMA then
       some s!"the verifier's coin record is {pyRepr h.schema}, not {COIN_SCHEMA}, which carries its draw"
     else
-      let src := (get? h.draw "from").getD .null
-      if jsonStrIs src DRAW_CHALLENGER then none
-      else if jsonStrIs src DRAW_NODE then
+      let src := get? h.draw "from"
+      if fieldIs src DRAW_CHALLENGER then none
+      else if fieldIs src DRAW_NODE then
         some ("the verifier's draw source is drawn on the serving node (verify_run.node_draw), not a challenger coin " ++
           "opened on the run commitment: a development draw no verdict of record takes")
-      else some s!"the verifier's coin record's draw is from {pyReprJson src}, not the challenger's"
+      else some s!"the verifier's coin record's draw is from {pyReprJson (src.getD .null)}, not the challenger's"
 
 end PouwCheck.PearlPlus

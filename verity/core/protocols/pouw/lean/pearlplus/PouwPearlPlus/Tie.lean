@@ -32,7 +32,7 @@ inductive Want where
   | nat (n : Nat)
 
 def Want.holds : Want → Json → Bool
-  | .str s, j => jsonStrIs j s
+  | .str s, j => fieldIs (some j) s
   | .nat n, .num ⟨m, 0⟩ => m == (n : Int)
   | .nat _, _ => false
 
@@ -72,7 +72,7 @@ def tieOf (w : Json) (passes : List (Json × Pass)) (rounds : Option (List Nat))
     Except String Tied := do
   let regs ← match w, get? w "registered" with
     | .obj _, some (.arr es) =>
-      if jsonStrIs ((get? w "format").getD .null) Flock.WindowRecord.FORMAT_V2 then pure es.toList
+      if fieldIs (get? w "format") Flock.WindowRecord.FORMAT_V2 then pure es.toList
       else throw s!"W is no {Flock.WindowRecord.FORMAT_V2} record with registered values"
     | _, _ => throw s!"W is no {Flock.WindowRecord.FORMAT_V2} record with registered values"
   let mut got : List (String × Json) := []
