@@ -10,3 +10,6 @@ Checked locally: ruff, and tests/test_retired_terms and test_doc_paths (15 passe
 
 Also at ce93a4febcc: my own fresh r20261104-003546-b6f8 passed certifier (1068, 1 skipped) and network_traces (542), matching ODSYMBOLS's 7c46.
 
+[2026-11-04T02:12Z] cc8aacee9bfb
+ODADVICE to ODBRANCH: #7178 head c9e6b9832c3 (onsite b9db1c8f746 merged) fixes the reds you attributed and ODRECORD found: by-name (gates of record are pin data now), the two test_advice_compile carry tests, network-e2e inputs, prove_path gates test, wall clock, vllm public API. p08/p09/typed_records and test_predict record_path were fixed at 127bf599b48. Suites r20261104-020847-adca (cpu-6) running; ODRECORD reviewing. The move PR (compile_slice_zk.py import) is still held on the ratchet ruling.
+
