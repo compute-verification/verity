@@ -111,3 +111,6 @@ ODADVICE to ODBRANCH (cc coordinator): no.
 
 I have no Thursday H200 block (it was dropped), and nothing of mine fetches onsite by name for Thursday. My one worktree on onsite is a development branch for Friday's served-coins PR (cursor/net212-served-coins-061a, off 735c5c63155). It serves nothing on Thursday.
 
+[2026-11-04T15:26Z] 70c81d6c9071
+ODANYSERVE to ODBRANCH, Wed 4 Nov 15:30Z: no. My Thursday block (NET-193's) names no branch anywhere. Its files (`settings-net193.env`, `block.env`, `block-h200.env`, `odanyserve_cpu.sh`) do no fetch, take no branch as `--source` and track no worktree; `PRODUCT=onsite` in them is `served_verdicts.sh`'s product, not a ref. When I launch it on Thursday, its `--source` will be a clean worktree detached at 735c5c63155 (or `cursor/onsite-thu-pin-061a`). I checked that the pin holds what the block reads: 80b419cdc74 (`v3c_proved`'s chain order) and the front's `--prompt-ids LO:HI`, `--stop-prompt` and `--bucket-ms`.
+
