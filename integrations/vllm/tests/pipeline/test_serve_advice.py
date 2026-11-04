@@ -32,7 +32,6 @@ from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
 from verity_vllm.pipeline import serve_release as RL
-from verity_vllm.pipeline import served_compiler as SC
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.serve_admit import Delta
 from verity_vllm.program.predict.phi import Phi
@@ -110,12 +109,12 @@ class Server:
     windows marking it."""
 
     def __init__(self, out: Path, window_steps: int = 64, abort_after: dict[tuple[int, ...], int] | None = None,
-                 advice: bool = False) -> None:
+                 advice: bool = False, compiler: AW.Capped = C) -> None:
         self.runner = Runner()
         self.engine = SchedEngine(self.runner, abort_after)
         self.engine.client_goes = self.client_goes
         self.trace = sc.advice_trace(out, self.engine.sched)
-        self.advice = SA.ServedAdvice(out, self.trace, wall=lambda: 0.0).start(C) if advice else None
+        self.advice = SA.ServedAdvice(out, self.trace, wall=lambda: 0.0).start(compiler) if advice else None
         self.advice_summary: dict | None = None
         self.windows = sc.CommitWindows(Committer(self.runner), out, run_id="t", window_steps=window_steps, eos_ids=[Tokenizer.eos_token_id],
                                         clock=lambda: 0.0, wall=lambda: 0.0, marks=self.trace.window, advice=self.advice)
@@ -503,6 +502,72 @@ def test_the_servers_advice_is_the_advice_commands_window_for_window_and_each_ha
         ADV.write(tmp_path, compiler=C)
 
 
+GROUP = [_body(i, 24, 4, f"user-{i}") for i in range(4)]  # one group of 4 prompts of 24 ids, 4 outputs each
+
+
+def test_at_one_step_a_window_the_least_cap_of_the_servers_limits_commits_every_window(tmp_path):
+    """At one engine step a Commit window, at most 4 requests in one (the stand-in scheduler's 4 sequences), every length
+    within 512 and ids of at most 24 bytes, ℓ_a = `least_cap` of `window_advice.max_bits` of those limits pads every window's
+    advice: the group is committed window by window, one a step, none refused."""
+    cap = AW.least_cap(WA.max_bits(4, 1, 512, 24))
+    with Server(tmp_path, window_steps=1, advice=True, compiler=ADV.registered_compiler("test-compiler", "ab" * 64, cap)) as s:
+        serve_concurrently(s, GROUP)
+    assert s.advice_summary["passed"] and s.advice_summary["refused"] == [] and len(s.advice_summary["committed"]) >= 4
+    assert all(x["advice"]["bits"] == cap for x in records(tmp_path, SA.LINES) if not x.get("empty"))
+
+
+LENGTH = {"reason": "length", "stop_reason": None}
+
+
+def _one_after_another(out: Path, users: list[str]) -> tuple[list[dict], list[dict], list[dict]]:
+    """A served trace at one step a Commit window, written to ``out`` with its Commit record: each user's request in turn, its
+    prompt of 24 ids in one window's step and its decode, which finishes it by length, in the next. -> the trace's records,
+    the requests' Commit records and the windows' lines."""
+    recs, reqs, lines = [{"kind": "header", "schema": ST.SCHEMA, "config": {}}], [], []
+    for i, user in enumerate(users):
+        rid = f"r{i}"
+        recs.append({"kind": "arrive", "request": rid, "before_step": 2 * i, "prompt_len": 24})
+        for w, (start, n, fin) in enumerate(((0, 24, {}), (24, 1, {rid: LENGTH})), 2 * i):
+            recs += [{"kind": "window", "window": w, "event": "open", "before_step": w},
+                     {"kind": "step", "step": w, "T": n, "order": "runner", "rows": [[rid, start, n]], "new": [] if start else [rid],
+                      "resumed": [], "cache_hit": {}, "preempted": [], "emitted": {rid: 1}, "finished": fin},
+                     {"kind": "window", "window": w, "event": "close", "before_step": w + 1}]
+            lines.append({"window": w, "run_id": "t", "run_root": f"{w:02x}" * 32})
+        reqs.append({"request": rid, "user": user, "prompt_ids": list(range(i, i + 24)), "output_ids": [7, 8], "finish": LENGTH})
+    (out / ST.SERVED).write_text("".join(json.dumps(r) + "\n" for r in recs))
+    (out / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in reqs))
+    return recs, reqs, lines
+
+
+def test_the_committer_refuses_a_window_past_its_registered_cap_by_name_and_goes_on_from_nothing_carried(tmp_path):
+    """On a fixed trace (`_one_after_another`) under a cap a byte short of the window admitting a request of a 24-byte id, the
+    served id bound: that window is refused by `pad`'s reason, and the next, its decode, because the one before it is refused,
+    so it opens on nothing carried. The committer goes on: both windows of the next request, of a 1-byte id, are committed
+    at ℓ_a, the second carrying it from the first, and every window has its line."""
+    alone = WA.total_bits(WA.Advice((WA.RequestAdvice("u" * 24, 24, 2, "length"),), (WA.StepAdvice((WA.Row(0, "prefill", 0, 24),)),),
+                                    (0,)))
+    cap = AW.least_cap(alone) - 8
+    recs, reqs, lines = _one_after_another(tmp_path, ["u" * 24, "v"])
+    sa = SA.ServedAdvice(tmp_path, SimpleNamespace(records=recs), wall=lambda: 0.0)
+    sa.compiler = ADV.registered_compiler("test-compiler", "ab" * 64, cap)
+    for line in lines:
+        sa.closed(line)
+    for r in reqs:
+        sa.recorded(r)
+    sa._poll(final=False)
+    assert sa.summary() == {"committed": [2, 3], "empty": [], "refused": [0, 1], "waiting": [], "error": None, "passed": True}
+    assert json.loads((tmp_path / "advice" / "windows.json").read_text())["refused"] == {
+        "0": f"the advice is {cap} bits, over the registered cap ℓ = {cap} bits less its 8-bit end mark",
+        "1": "step 0: request r0 is first scheduled at position 24, not at its cache hit 0 (window 0 before it is refused, so it "
+             "opens on nothing carried)"}
+    assert [(x["window"], x.get("refused"), x.get("advice", {}).get("bits")) for x in records(tmp_path, SA.LINES)] == [
+        (0, True, None), (1, True, None), (2, None, cap), (3, None, cap)]
+    first, second = (WA.decode(sa.compiler.unpad((tmp_path / "advice" / f"w{w}" / "private" / "advice.bin").read_bytes()))
+                     for w in (2, 3))
+    WA.follows(first, second)
+    assert [q.id for q in first.requests] == ["v"] and len(second.carried) == 1
+
+
 def test_a_window_is_committed_once_whole_and_waits_on_a_record_or_a_step_still_to_come(tmp_path):
     """The server's committer takes a window once it is whole: its close and its windows.jsonl line, every step it scheduled
     recorded, and the Commit record of every request it ran. Fed na-4's run in 3-step windows as the server has it part way
@@ -543,22 +608,26 @@ def test_a_draw_of_a_window_before_its_advice_line_fails_its_release(tmp_path):
         (tmp_path / f"w{w}.sampled_proofs.json").write_text(json.dumps({"window": w, "protocol": "sampled_proofs", "reads": []}))
     assert dd.scan() == 2
     with pytest.raises(Refused, match=r"window 0's advice line \(advice.jsonl\) isn't out: a draw comes after its advice"):
-        draws.wait(0)
-    assert draws.wait(1) == {"sampled_proofs": []}
+        draws.wait(window=0)
+    assert draws.wait(window=1) == {"sampled_proofs": []}
 
 
-def test_b_is_registered_once_as_the_verifier_recomputes_it_and_the_registration_log_names_it(tmp_path, monkeypatch):
-    """`serve_advice.register` writes B as `served_compiler.compiler_doc` makes it of serve.json, the verifier's formula, and its
+def test_b_is_registered_once_as_the_verifier_recomputes_it_and_the_registration_log_names_it(tmp_path):
+    """`serve_advice.register` writes B as `served_compiler.compiler_doc` makes it of serve.json, the verifier's formula (run as
+    ``verity-vllm predict compiler``, the server's process importing no predictor), and its
     information entry, a registration log whose builder is B's item (`advice.builder_item`: the window advice's format, ℓ_a),
     whose last entry declares B's digest as the day's program and whose head names it. A second registration in the same
     serve dir is refused, and so is serving into one that holds it."""
     from verity.core.protocols import registration as REGLOG
     from verity_vllm.config import UsageError
     from verity_vllm.engine.served_seed import DEFAULT_SEED
+    from verity_vllm.program.predict import served_compiler as SC
 
-    monkeypatch.setattr(SC, "served_identity", lambda: (ADV.COMPILER, "cd" * 64))
-    serve = {"model": "org/m", "revision": "r", "target": {"compute_capability": [12, 0], "num_sms": 188}, "execution": "eager",
-             "default_seed": DEFAULT_SEED}
+    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+             "target": {"compute_capability": [12, 0], "num_sms": 188}, "execution": "eager", "default_seed": DEFAULT_SEED}
+    with pytest.raises(ValueError, match=r"org/m@r is pinned in no checkpoint manifest"):
+        SA.register(tmp_path, {**serve, "model": "org/m", "revision": "r"}, 4096)
+    assert not (tmp_path / SA.REGISTRATION).exists()
     compiler, body = SA.register(tmp_path, serve, 4096)
     assert compiler.digest == SC.compiler_doc(serve, cap_bits=4096)["digest"] == body["compiler"]["digest"]
     assert (compiler.cap_bits, body["advice"]) == (4096, WA.SCHEMA)
@@ -572,7 +641,7 @@ def test_b_is_registered_once_as_the_verifier_recomputes_it_and_the_registration
     opts = SimpleNamespace(commit=True, out=str(tmp_path), advising=SA.AdviceOptions(advice=True))
     assert "a run registers B once" in SA.refusal(opts)
     assert SA.refusal(SimpleNamespace(commit=False, out=str(tmp_path / "x"), advising=SA.AdviceOptions(advice=True))) \
-        == "--advice commits each Commit window's advice: it needs the Commit (drop --no-commit)"
+        == "--advice commits each Commit period's advice: it needs the Commit (drop --no-commit)"
     fresh = SimpleNamespace(commit=True, out=str(tmp_path / "x"))
     assert SA.refusal(SimpleNamespace(**vars(fresh), advising=SA.AdviceOptions(advice=True, advice_day=-1))) \
         == "--advice-day -1: a day is its index among the monitoring period's days, 0 or more"
@@ -581,16 +650,15 @@ def test_b_is_registered_once_as_the_verifier_recomputes_it_and_the_registration
 
 
 def test_a_run_extends_the_deployments_log_with_its_days_declaration_and_a_day_declared_or_another_builder_is_refused(
-        tmp_path, monkeypatch):
+        tmp_path):
     """Given the deployment's log so far (`--advice-log`: a run's advice_registration.json), the next day's run appends only
     its day's declaration of B, since the log registers B already; a run of a day the log declares is refused
     (`duplicate-declaration`: one program a day), and so is a log whose builder is another B or another deployment's."""
     from verity.core.protocols import registration as REGLOG
     from verity_vllm.engine.served_seed import DEFAULT_SEED
 
-    monkeypatch.setattr(SC, "served_identity", lambda: (ADV.COMPILER, "cd" * 64))
-    serve = {"model": "org/m", "revision": "r", "target": {"compute_capability": [12, 0], "num_sms": 188}, "execution": "eager",
-             "default_seed": DEFAULT_SEED}
+    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+             "target": {"compute_capability": [12, 0], "num_sms": 188}, "execution": "eager", "default_seed": DEFAULT_SEED}
     (tmp_path / "d0").mkdir()
     compiler, first = SA.register(tmp_path / "d0", serve, 4096, day=0)
     so_far = SA.log_doc(json.loads((tmp_path / "d0" / SA.REGISTRATION).read_text()))

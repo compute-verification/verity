@@ -7,7 +7,8 @@
 #   (the slot's mem= reserves the run's memory, so the job reserves none beside it), or, while the pool is full,
 #   `bash benchmarks/network_traces/compile_slice_zk.sh` alone as a job of 16 CPUs and 64 GB.
 # env: CS_MEM_GB (what job.sh's stages may take, within the slot's)  CS_SLICE (compile_slice_zk.py's --slice, demo by
-#      default; several, comma-separated, are proved one after another)  CS_POINTS (its --points, 1 by default)
+#      default; several, comma-separated, are proved one after another; empty, none)  CS_V3 (`cost3`'s classes,
+#      comma-separated, each costed after the slices: CompileSlice_v3's honest units)  CS_POINTS (its --points, 1 by default)
 #      CS_KINDS (its --kinds, every kind by default)  CS_G (its --g, the steps a served row holds, P by default)
 #      CS_CACHE (the build cache, kept across runs where writable; default pouw-hidden-zk's)  CS_DRY=1 (the slice and
 #      its references only)
@@ -33,7 +34,7 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "cszk: no firewall frame"; exit 7; }
 
 rc=0
-for slice in $(echo "${CS_SLICE:-demo}" | tr , ' '); do
+for slice in $(echo "${CS_SLICE-demo}" | tr , ' '); do
   log "cszk: proving, slice $slice, points ${CS_POINTS:-1}${CS_KINDS:+, kinds $CS_KINDS}${CS_G:+, G $CS_G}${CS_DRY:+, dry}"
   "$PY" benchmarks/network_traces/compile_slice_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/cszk/$slice" \
     --slice "$slice" --points "${CS_POINTS:-1}" ${CS_KINDS:+--kinds "$CS_KINDS"} ${CS_G:+--g "$CS_G"} ${CS_DRY:+--dry} 2>&1 \
@@ -43,6 +44,17 @@ for slice in $(echo "${CS_SLICE:-demo}" | tr , ' '); do
   (cd "$W/cszk/$slice" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 \
     | xargs -0 -r -I{} cp --parents {} "$OUT/cszk/$slice/")
   log "cszk: $slice done, rc $r"
+  [ "$r" = 0 ] || rc=$r
+done
+for cls in $(echo "${CS_V3:-}" | tr , ' '); do
+  log "cszk: CompileSlice_v3's cost, class $cls, points ${CS_POINTS:-1}${CS_DRY:+, dry}"
+  "$PY" benchmarks/network_traces/compile_slice_zk.py cost3 --bin "$BIN" --lean "$LEAN" --out "$W/cszk/v3-$cls" \
+    --class "$cls" --points "${CS_POINTS:-1}" ${CS_DRY:+--dry} 2>&1 | tee -a "$OUT/cszk-v3-$cls.log" | cut -c1-4000
+  r=${PIPESTATUS[0]}
+  mkdir -p "$OUT/cszk/v3-$cls"
+  (cd "$W/cszk/v3-$cls" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 \
+    | xargs -0 -r -I{} cp --parents {} "$OUT/cszk/v3-$cls/")
+  log "cszk: v3 $cls done, rc $r"
   [ "$r" = 0 ] || rc=$r
 done
 exit "$rc"

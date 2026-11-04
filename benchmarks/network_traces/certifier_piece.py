@@ -2,8 +2,8 @@
 the active network certifier in front of serve-openai there (its ``CERTIFIER_FRONT``).
 
     python certifier_piece.py front PORT SERVE_DIR OUT [--gate USER@HOST | --gate local] [--key KEY] [--peer NAME]
-        [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--scan-class w63k4] [--height 10]
-        [--minutes M] [--bucket-ms MS] [--warmup N]
+        [--prompts 4] [--prompt-ids 24 | --prompt-ids LO:HI] [--tokens 4] [--vocab 128000] [--scan-class w63k4]
+        [--height 10] [--minutes M] [--bucket-ms MS] [--warmup N] [--stop-prompt N] [--attack NAME [--attack-nth K]]
     python certifier_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--draw K] [--chain-cmd CMD]
         [CR_K=V ...]
     python certifier_piece.py chain SERVE_DIR WINDOW DIR V3C [--eos-ids IDS] [--draw K] [--class w63k4]
@@ -13,8 +13,9 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
 
 * **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
   (`served_session.session`, ``warden-rehearse --scan --prompts --window-per-group``) against serve-openai on PORT, one
-  group of ``--prompts`` requests (at most the scan's 4 lanes) of ``--prompt-ids`` ids below ``--vocab``, each answered
-  with exactly ``--tokens`` ids, sampled from a fresh secret seed. A group is sent half a bucket into execution phase 0
+  group of ``--prompts`` requests (at most the scan's 4 lanes) of ``--prompt-ids`` ids below ``--vocab`` (``LO:HI``:
+  each prompt's length drawn in LO … HI), sampled from a fresh secret seed, each with ``--tokens`` its max_tokens, which
+  the model's EOS ends sooner. A group is sent half a bucket into execution phase 0
   and its cells are execution phase 0's alone (``--tokens`` at most 4 keeps the group in one execution phase), so the
   engine admits the group together and closes it into one Commit window, the run's earliest: the window the run audits (with
   ``REQUESTS=1`` the requests after it make a smaller window, which `served_verdicts.py window` passes over). The
@@ -31,29 +32,43 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   `served_session.USERS`, which it does only once the request's window has closed. So each warm-up is a window of one
   request, closed before the gate is asked, which the pick passes over for the group's whenever the group's window
   holds two or more; one that fails or isn't recorded within `WARMUP_CLOSE_S` refuses the front. A warm-up doesn't
-  make a slow endpoint pass; a tick whose D·τ covers its answer does. The gate's fetch,
-  ``witness/`` with it, is kept under SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz (0700, the serve dir stays on the node);
+  make a slow endpoint pass; a tick whose D·τ covers its answer does. ``--stop-prompt N`` then puts last in the group
+  a prompt whose answer the model's own EOS ends (`stop_prompt`): up to N fresh prompts of HI ids, each sent as a
+  warm-up is, until one's answer finishes on a stop within ``--tokens``. The gate's requests are greedy, as a warm-up
+  is: the rehearsal's request records the gate's default temperature 0 and top_p 1, which the network certifier's
+  client puts on every request (`auditor.sampling_argv`). Serving is batch-invariant (served_verdicts.sh's
+  ``VLLM_BATCH_INVARIANT=1``), so the group's answer to that prompt stops alike; none of N stopping refuses the front,
+  before the gate is asked. The gate's fetch, ``witness/`` with it, is kept under SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz
+  (0700, the serve dir stays on the node);
   OUT gets ``session.json`` and ``bundle.tgz``, the public outcome, and the run's kept directory a copy of
   ``session.json`` (`SESSION`), whose gate the piece's placement names. ``--gate local`` is the dry run's (this
   tree's gate in this process, a `relay` to PORT its tunnel): a warden on the prover's node is no auditor's device,
-  so it never stands for the gate.
-  Exit as `served_session.session`'s.
+  so it never stands for the gate. ``--attack NAME`` (after the warm-ups) puts the prover's relay playing attack NAME
+  (`attacks.py relay`; ``--attack-nth K``, the completion request it plays on) between the gate's tunnel and PORT, at
+  the scan's cells and delay and the front's tick (`attack_relay`), its log the prover's under
+  SERVE_DIR/`PRIVATE`/attacks; `attacks.py judge` reads the outcome. Exit as `served_session.session`'s.
 * **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
   form): accept only when the chain accepted and ``network-period check`` accepted the period, whose answer it then is.
   1. The kept network certifier run: exactly one fetch under SERVE_DIR/`PRIVATE`, whose rehearsal the gate's check
      passed (its ``end.json``: exit 0 and accepted, as the front's exit reads it). With none the run's load didn't go
      through the front (it wasn't set, or the gate, its tunnel or ssh failed); a rehearsal that failed (each request
      late past the network certifier's D·τ, or cut) certified no served answer, so there is none for the protocol to
-     reject (`rehearsed`).
-  2. The window's requests are certified ones: each window request's user names one of the network certifier's certified
-     requests (`warden_chain.io`), with the same prompt and streamed ids; else reject.
+     reject, and the refusal names the network certifier's own check's problems (`rehearsed`). One whose certified
+     egress holds a cell that is neither an id-form cell nor a `FAIL`, bytes the server sent that are no output's, is a
+     reject.
+  2. The audited Commit period's requests are certified ones (`bind`): each one's user names one of the network
+     certifier's certified requests (`warden_chain.io`), it carries the network certifier's run in its release, with
+     the same prompt and streamed ids; and of the requests the endpoint recorded carrying that run, no two name one
+     certified request and every certified request is one; else reject. These read the endpoint's records, the
+     prover's, in the clear: they refuse what a relay between the network certifier and an honest endpoint does
+     (`attacks.py`), and the chain's tie is what binds the committed values to the certified cells.
   3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, endpoint, N2, tie and scan)
      on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
      take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a
      reject with its why.
-  4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and
-     streamed ids lie in it, else reject.
+  4. The period's execution phase is the scan's (the one entry of ``answers.json``'s ``windows``): every audited
+     request's release and streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): the certifier on the gate's host, and the chain, the period check and
@@ -97,6 +112,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import secrets
 import select
 import shutil
@@ -110,6 +126,7 @@ import threading
 import time
 import traceback
 import urllib.request
+from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 
@@ -145,6 +162,11 @@ REFUSED = "refused.txt"
 CASE = "case.json"
 #: the scan class of V3c's default window class (`served_verdicts.sh`'s V3C_CLASS)
 V3C_SCAN_CLASS = "w63k4"
+#: what `bind`'s rejects say: a served request the network certifier didn't carry, a certified one the endpoint didn't
+#: serve, and one certified request served twice
+NOT_SEEN = "the Commit period served traffic the network certifier didn't see"
+UNSERVED = "the network certifier carried traffic the endpoint didn't serve"
+SHARED = "one certified request served twice"
 #: the split piece's chain step's accept, which its period step reads
 CHAINED = "chain.json"
 #: the logs `served_verdicts.sh` and `served_verdicts.py` write in DIR, which a refusal keeps
@@ -194,19 +216,29 @@ def front(a: argparse.Namespace) -> int:
     if a.gate == "local":
         a.tunnel = lambda ssh, port: [sys.executable, str(Path(__file__).resolve()), "relay", "--listen", str(port),
                                       "--to", str(a.port)]
+    attack = None
     try:
         if a.prompts > SS.A.SCAN["--lanes"]:
             raise SS.Refused(f"--prompts {a.prompts}: one group, at most the scan's {SS.A.SCAN['--lanes']} lanes")
         if SS.A.scan_group_windows(a.tokens) != 1:
             raise SS.Refused(f"--tokens {a.tokens}: a group past one link-window, which the period's rows form refuses")
-        if a.warmup < 0:
-            raise SS.Refused(f"--warmup {a.warmup}: a count of requests, 0 for none")
+        for flag, n in (("--warmup", a.warmup), ("--stop-prompt", a.stop_prompt)):
+            if n < 0:
+                raise SS.Refused(f"{flag} {n}: a count of requests, 0 for none")
         ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, secrets.token_bytes(32))
         data = json.dumps(ps, separators=(",", ":")).encode()
         SS.check(a, data)
+        warm = {}
         if a.warmup:
-            warm = warmup(a, serve_dir)
-            (out / "warmup.json").write_text(json.dumps({"requests": warm}, indent=1) + "\n")
+            warm["requests"] = warmup(a, serve_dir)
+            (out / "warmup.json").write_text(json.dumps(warm, indent=1) + "\n")
+        if a.stop_prompt:
+            ps[-1], warm["stop_prompt"] = stop_prompt(a, serve_dir)
+            (out / "warmup.json").write_text(json.dumps(warm, indent=1) + "\n")
+            data = json.dumps(ps, separators=(",", ":")).encode()
+            SS.check(a, data)
+        if a.attack:
+            attack, a.port = attack_relay(a, keep)
         rc = SS.session(a, data, ps)
         if (doc := out / "session.json").is_file():
             shutil.copyfile(doc, keep / json.loads(doc.read_text())["run"] / SESSION)
@@ -215,14 +247,55 @@ def front(a: argparse.Namespace) -> int:
         (out / "session.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
         print(f"refused: {e}", file=sys.stderr)
         return e.code
+    finally:
+        if attack is not None:
+            end_group(attack)
 
 
-def warmup(a: argparse.Namespace, serve_dir: Path, *, clock: Callable[[], float] = time.monotonic,
-           sleep: Callable[[float], object] = time.sleep) -> list[dict]:
-    """``--warmup``'s requests (the module docstring), each its user, finish and seconds; `served_session.Refused`
-    when one fails or serve-openai hasn't recorded every one's window closed within `WARMUP_CLOSE_S`."""
+def attack_relay(a: argparse.Namespace, keep: Path) -> tuple[subprocess.Popen, int]:
+    """``--attack``'s relay (`attacks.py relay`, in a process group of its own) from a free loopback port to PORT, at
+    the scan's payload and delay and the front's tick, its log at KEEP/attacks/NAME.jsonl (the prover's, 0700): the
+    process and its port, once it listens."""
+    (keep / "attacks").mkdir(mode=0o700, exist_ok=True)
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    S = SS.A.SCAN
+    p = subprocess.Popen([sys.executable, str(HERE / "attacks.py"), "relay", "--attack", a.attack, "--listen", str(port),
+                          "--to", str(a.port), "--cell-bytes", str(S["--cell-bytes"]),
+                          "--bucket-ms", str(a.bucket_ms or S["--bucket-ms"]), "--delay", str(S["--delay"]),
+                          "--nth", str(a.attack_nth), "--log", str(keep / "attacks" / f"{a.attack}.jsonl")],
+                         stdout=subprocess.PIPE, text=True, process_group=0)
+    line = p.stdout.readline()
+    if not line.startswith("relay listening"):
+        end_group(p)
+        raise SS.Refused(f"--attack {a.attack}: the relay didn't listen: {line.strip()!r}")
+    threading.Thread(target=lambda: [print(x, end="", flush=True) for x in p.stdout], daemon=True).start()
+    print(f"attack {a.attack}: the relay on {port} to {a.port}", flush=True)
+    return p, port
+
+
+def stop_prompt(a: argparse.Namespace, serve_dir: Path, **kw) -> tuple[list[int], list[dict]]:
+    """``--stop-prompt N``'s prompt (the module docstring), the first of N fresh prompts of HI ids whose warm-up answer
+    finishes on a stop, and the warm-ups it took; `served_session.Refused` when none of N does."""
+    hi = SS.bounds(a.prompt_ids)[1]
+    ps = SS.prompts(a.stop_prompt, hi, a.vocab, secrets.token_bytes(32))
+    tried = warmup(a, serve_dir, ps, **kw)
+    if tried[-1]["finish_reason"] != "stop":
+        raise SS.Refused(f"--stop-prompt {a.stop_prompt}: no answer to {a.stop_prompt} prompts of {hi} ids finished "
+                         f"on a stop within --tokens {a.tokens}")
+    return ps[len(tried) - 1], tried
+
+
+def warmup(a: argparse.Namespace, serve_dir: Path, ps: list[list[int]] | None = None, *,
+           clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], object] = time.sleep) -> list[dict]:
+    """``--warmup``'s requests (the module docstring), each its user, finish and seconds; or `stop_prompt`'s, `ps`
+    until one's answer finishes on a stop. `served_session.Refused` when one fails or serve-openai hasn't recorded
+    every one's execution phase closed within `WARMUP_CLOSE_S`."""
+    flag = "--warmup" if ps is None else "--stop-prompt"
+    ps = SS.prompts(a.warmup, a.prompt_ids, a.vocab, secrets.token_bytes(32)) if ps is None else ps
     tag, done = secrets.token_hex(4), []
-    for i, p in enumerate(SS.prompts(a.warmup, a.prompt_ids, a.vocab, secrets.token_bytes(32))):
+    for i, p in enumerate(ps):
         body = {"user": f"warmup-{tag}-{i}", "prompt": p, "max_tokens": a.tokens, "temperature": 0.0, "top_p": 1.0}
         req = urllib.request.Request(f"http://127.0.0.1:{a.port}/v1/completions", json.dumps(body).encode(),
                                      {"content-type": "application/json"})
@@ -231,20 +304,23 @@ def warmup(a: argparse.Namespace, serve_dir: Path, *, clock: Callable[[], float]
             with urllib.request.urlopen(req, timeout=WARMUP_REQUEST_S) as r:  # noqa: S310
                 got = json.loads(r.read())
         except (OSError, ValueError) as e:
-            raise SS.Refused(f"--warmup: request {i}: {type(e).__name__}: {e}") from None
+            raise SS.Refused(f"{flag}: request {i}: {type(e).__name__}: {e}") from None
         done.append({"user": body["user"], "finish_reason": ((got.get("choices") or [{}])[0]).get("finish_reason"),
                      "seconds": round(clock() - t, 3)})
-        print(f"warm-up {i + 1}/{a.warmup}: {done[-1]}", flush=True)
+        print(f"{flag} {i + 1}/{len(ps)}: {done[-1]}", flush=True)
+        if flag == "--stop-prompt" and done[-1]["finish_reason"] == "stop":
+            break
     users, until = {d["user"] for d in done}, clock() + WARMUP_CLOSE_S
     while left := users - {r.get("user") for r in _lines(serve_dir / SS.USERS)}:
         if clock() > until:
-            raise SS.Refused(f"--warmup: serve-openai recorded no closed window of {sorted(left)} in "
+            raise SS.Refused(f"{flag}: serve-openai recorded no closed execution phase of {sorted(left)} in "
                              f"{serve_dir / SS.USERS} within {WARMUP_CLOSE_S} s")
         sleep(1)
     return done
 
 
-def relay(listen: int, to: int, *, ready: Callable[[], None] = lambda: None) -> None:
+def relay(listen: int, to: int, *, host: str = "127.0.0.1", ready: Callable[[], None] = lambda: None) -> None:
+    """A TCP relay from 127.0.0.1:``listen`` to ``host``:``to``, one upstream connection a connection."""
     srv = socket.create_server(("127.0.0.1", listen))
     ready()
 
@@ -264,7 +340,7 @@ def relay(listen: int, to: int, *, ready: Callable[[], None] = lambda: None) -> 
     while True:
         conn, _ = srv.accept()
         try:
-            up = socket.create_connection(("127.0.0.1", to))
+            up = socket.create_connection((host, to))
         except OSError:
             conn.close()
             continue
@@ -342,34 +418,80 @@ def unpack(fetch: Path) -> tuple[Path, Path]:
     return d, run
 
 
+def device_problems(run: Path) -> list[str]:
+    """The network certifier's own check of the kept run (`warden_serve.check` on its witness), each problem once with
+    its numbers (connections, cells, phases) as N: what refused the rehearsal, none of its counts."""
+    import warden_chain as WC
+    try:
+        got = WC.WS.check(WC.witness(run))
+    except (OSError, ValueError, KeyError, SystemExit) as e:
+        return [f"the check didn't run: {type(e).__name__}"]
+    return list(dict.fromkeys(re.sub(r"\d+", "N", p) for p in got["problems"]))
+
+
 def rehearsed(run: Path) -> None:
     """`NotRun` unless the gate's check passed the kept rehearsal (its ``end.json``): a failed one, late or otherwise,
-    is an infrastructure failure, like a busy gate."""
+    is an infrastructure failure, like a busy gate, and names the network certifier's own check's problems
+    (`device_problems`): a connection the network certifier failed closed (late, past the egress cells, upstream) is
+    inside k_fail and certifies no served answer. But one whose certified egress holds a cell that is neither an
+    id-form cell nor a `FAIL`, bytes the server sent that are no output's, is Rejected."""
+    import warden_chain as WC
     try:
         end = json.loads((run / "end.json").read_text())
     except (OSError, ValueError) as e:
         raise NotRun(f"the kept run's end.json: {type(e).__name__}: {e}") from None
     v = end.get("verdict") or {}
     if end.get("rc") != 0 or v.get("accepted") is not True:
+        problems = device_problems(run)
+        try:
+            violations, unread = WC.io(run)["violations"], ""
+        except (OSError, ValueError, KeyError, SystemExit) as e:
+            violations, unread = [], f"; its certified I/O unread ({type(e).__name__}: {e})"
+        if any(why == WC.NOT_ID_CELL for _, why in violations):
+            raise Rejected(f"the network certifier's certified egress holds {WC.NOT_ID_CELL.removeprefix('an ')}: "
+                           f"bytes the server sent that are no output's; the network certifier's own check: "
+                           f"{problems[:4]}")
         raise NotRun(f"the gate's rehearsal didn't pass, so it certified no served answer: exit {end.get('rc')}, "
                      f"{end.get('ended')}; its check accepted {v.get('accepted')} with {v.get('problems')} problems, "
-                     f"failed {v.get('failed')}")
+                     f"failed {v.get('failed')}; the network certifier's own check: {problems[:4]}{unread}")
 
 
-def bind(reqs: list[dict], io: dict) -> dict[str, dict]:
-    """Each window request's certified record by its user; Rejected when one isn't the network certifier's."""
+def release_run(r: dict) -> str | None:
+    """The network certifier's run a served request's release names (requests.jsonl's ``release``, [run, N] under
+    ``--admit release-order``, run "" without the run header), None without one."""
+    rel = r.get("release")
+    return (rel[0] or None) if isinstance(rel, list) and len(rel) == 2 else None
+
+
+def bind(reqs: list[dict], io: dict, run_id: str | None = None, served: list[dict] | None = None) -> dict[str, dict]:
+    """Each audited request's certified record by its user; Rejected when one isn't the network certifier's: its user
+    names no certified request, it carries no release of the network certifier's run ``run_id`` (when given), or its
+    prompt or streamed ids aren't the certified ones. Of ``served`` (when given: every request the endpoint recorded,
+    of which those carrying the run's release and ``reqs`` are read), Rejected when two name one certified request or
+    a certified request is none of them."""
     if not io["accepted"]:
         raise Rejected(f"the warden's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
     by, got = {r["user"]: r for r in io["records"]}, {}
     for r in reqs:
-        c = by.get(r.get("user"))
+        eid, user = r.get("engine_id"), r.get("user")
+        c = by.get(user)
         if c is None:
-            raise Rejected(f"window request {r.get('engine_id')}'s user {r.get('user')!r} is no certified request: "
-                           "the window served traffic the warden didn't see")
+            raise Rejected(f"audited request {eid}'s user {user!r} is no certified request: {NOT_SEEN}")
+        if run_id is not None and release_run(r) != run_id:
+            raise Rejected(f"audited request {eid} (user {user!r}) carries no release of the network certifier's run "
+                           f"({r.get('release')!r}): {NOT_SEEN}")
         for key, theirs in (("prompt_ids", "prompt"), ("streamed_ids", "output")):
             if key in r and r[key] != c[theirs]:
-                raise Rejected(f"window request {r.get('engine_id')}'s {key} aren't the certified {theirs}")
-        got[r["user"]] = c
+                raise Rejected(f"audited request {eid}'s {key} aren't the certified {theirs}")
+        got[user] = c
+    if served is not None:
+        mine = {json.dumps(r, sort_keys=True): r
+                for r in [*reqs, *(r for r in served if run_id is not None and release_run(r) == run_id)]}
+        named = Counter(r.get("user") for r in mine.values() if r.get("user") in by)
+        if twice := sorted(u for u, n in named.items() if n > 1):
+            raise Rejected(f"certified request {twice[0]!r} is {named[twice[0]]} served requests: {SHARED}")
+        if unserved := sorted(set(by) - set(named)):
+            raise Rejected(f"certified request {unserved[0]!r} is no served request: {UNSERVED}")
     return got
 
 
@@ -564,7 +686,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
         except SystemExit as e:
             raise Rejected(f"the kept warden run: {e}") from None
         T = params.window
-        certified = bind(reqs, io)
+        certified = bind(reqs, io, dep["run_id"], _lines(serve_dir / "requests.jsonl"))
         out = keep / run / "chain" / "out"
         report = out / "report" / "report.json"
         if chain is None:
@@ -788,7 +910,9 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--key", type=Path, default=SS.KEY)
     f.add_argument("--peer", default="vy-dc-h200")
     f.add_argument("--prompts", type=int, default=PROMPTS)
-    f.add_argument("--prompt-ids", type=int, default=PROMPT_IDS)
+    f.add_argument("--prompt-ids", type=SS.span, default=PROMPT_IDS, help="N, or LO:HI each prompt's length drawn in")
+    f.add_argument("--stop-prompt", type=int, default=0, metavar="N",
+                   help="the group's last prompt the first of N, tried as warm-ups, whose answer ends on a stop")
     f.add_argument("--tokens", type=int, default=TOKENS)
     f.add_argument("--vocab", type=int, default=SS.VOCAB)
     f.add_argument("--scan-class", choices=sorted(SS.A.SCAN_CLASSES), default=V3C_SCAN_CLASS,
@@ -800,6 +924,11 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--warmup", type=int, default=0, metavar="N",
                    help="plain requests of the group's shape straight to PORT first, each in a window of its own "
                         "(none by default)")
+    import attacks as AT
+    f.add_argument("--attack", choices=AT.RELAYED,
+                   help="the prover's relay playing this attack between the gate's tunnel and PORT (attacks.py)")
+    f.add_argument("--attack-nth", type=int, default=1, metavar="K",
+                   help="the completion request, from 1, an attack on one connection plays on")
     q = sub.add_parser("piece")
     q.add_argument("serve_dir", type=Path)
     q.add_argument("window", type=int)

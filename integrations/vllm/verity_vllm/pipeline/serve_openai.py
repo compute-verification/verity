@@ -9,8 +9,8 @@
         [--copy-records-to $OUT] [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
-        [--advice [--advice-cap BITS] [--advice-composite onsite|remote] [--advice-day 0 [--advice-log JSON]]
-                  [--advice-weights JSON] [--advice-tau 0.1]]
+        [--advice [--advice-cap BITS] [--advice-composite onsite|remote] [--advice-day 0 [--advice-log JSON]] [--advice-tau 0.1]
+                  [--advice-weights JSON]]
 
 It serves what the network certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
@@ -90,10 +90,9 @@ it is written before the pending seals too, and its ``final`` is true only once 
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
 ``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
 through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
-``--advice`` registers the served compiler B, capped at ``--advice-cap``, before the engine loop runs
-(``advice_registration.json``), with its declaration as day ``--advice-day``'s one program in the registration log
-(``--advice-log``'s, extended), and commits each Commit window's advice as it serves, each window's public line in
-``advice.jsonl`` before any draw of it (`serve_advice`).
+``--advice`` registers the served compiler B, capped at ``--advice-cap``, before the engine loop runs, as day
+``--advice-day``'s one program in the registration log (``--advice-log``'s, extended; ``advice_registration.json``), and
+commits each Commit period's advice as it serves, its public line in ``advice.jsonl`` before any draw of it (`serve_advice`).
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to
 PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
 record is ``remote_session.json``, and a rejected session fails the exit.

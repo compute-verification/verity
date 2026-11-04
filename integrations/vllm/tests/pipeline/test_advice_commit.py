@@ -120,6 +120,14 @@ def test_the_capped_compiler_reads_only_advice_padded_to_its_cap():
         ADV.registered_compiler("test-compiler", "ab" * 64, cap_bits=65)
 
 
+@pytest.mark.parametrize("bits", [0, 1, 7, 8, 9, 1317])
+def test_least_cap_is_the_least_width_pad_takes_an_encoding_of_that_many_bits_to(bits):
+    data, cap = bytes(-(-bits // 8)), AW.least_cap(bits)
+    assert len(AW.unpad(AW.pad(data, cap), cap)) == len(data)
+    with pytest.raises(ValueError, match="over the registered cap"):
+        AW.pad(data, cap - 8)
+
+
 def test_the_default_compiler_digest_is_64_bytes():
     c = ADV.registered_compiler()
     assert c.inner.name == ADV.COMPILER and len(bytes.fromhex(c.digest)) == 64 and len(bytes.fromhex(c.inner.digest)) == 64

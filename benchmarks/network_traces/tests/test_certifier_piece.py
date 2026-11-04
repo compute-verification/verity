@@ -18,7 +18,8 @@ warm-ups go straight to the endpoint, one at a time, each recorded in a closed w
 asked, and the pick passes over those windows for the group's. At a tick of 4000 ms the front's rehearsal reaches this
 tree's gate with the tick in its request and the minutes counted at it, and the warden runs the scan's schedule there;
 a tick the gate refuses (past its range, or on a request that isn't the scan rehearsal) refuses the front before the
-gate is asked."""
+gate is asked. An attack's front puts the prover's relay between the gate and the endpoint, and ends it with the
+front."""
 from __future__ import annotations
 
 import argparse
@@ -30,6 +31,7 @@ import re
 import shlex
 import signal
 import socket
+import socketserver
 import subprocess
 import sys
 import tarfile
@@ -43,6 +45,7 @@ HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parents[1]
 sys.path[:0] = [str(HERE), str(Path(__file__).resolve().parent), str(ROOT / "benchmarks" / "one_stage")]
 
+import attacks as AT  # noqa: E402
 import certifier_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
 import served_verdicts as S  # noqa: E402
@@ -95,8 +98,9 @@ def warden(tmp_path_factory):
         fetches[name] = d / f"{name}.tar.gz"
         with tarfile.open(fetches[name], "w:gz") as tar:
             tar.add(run, arcname=RUN)
+    dep = WC.deployment(run)[0]
     return {**fetches, "w": w, "records": by[w][:4], "others": [r for x, rs in by.items() if x != w for r in rs],
-            "windows": WC.deployment(run)[0]["windows"]}
+            "windows": dep["windows"], "all": io["records"], "run_id": dep["run_id"]}
 
 
 def _write(path: Path, rows: list[dict]) -> None:
@@ -105,13 +109,17 @@ def _write(path: Path, rows: list[dict]) -> None:
 
 def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: bool = True,
                fetch: str = "fetch") -> Path:
-    """A serve dir whose window K served ``records`` (the network certifier's, by default those of its execution phase)
-    and whose gate fetch (``warden[fetch]``) the front kept."""
+    """A serve dir whose Commit period K served ``records`` (the network certifier's, by default those of its
+    execution phase) and Commit period K + 1 the network certifier's other certified requests, each released in its
+    run, and whose gate fetch (``warden[fetch]``) the front kept."""
     records = warden["records"] if records is None else records
     d.mkdir(parents=True)
+    rest = [r for r in warden["all"] if r["user"] not in {x["user"] for x in records}]
     reqs = [{"engine_id": f"e{i}", "user": r["user"], "prompt_ids": r["prompt"], "streamed_ids": r["output"],
-             "windows": [K], "check": {"passed": True}} for i, r in enumerate(records)]
+             "windows": [K if i < len(records) else K + 1], "release": [warden["run_id"], r.get("stream", i)],
+             "check": {"passed": True}} for i, r in enumerate([*records, *rest])]
     _write(d / "requests.jsonl", reqs)
+    reqs = reqs[:len(records)]
     _write(d / "seals.jsonl", [{"window": K, "requests": [r["engine_id"] for r in reqs]}])
     _write(d / "windows.jsonl", [{"window": K, "passed": True, "commit": {"steps": 9}}])
     _write(d / "advice_trace.jsonl", [{"step": 0}])
@@ -694,11 +702,84 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63 --window-per-group")
 
 
+def test_the_front_sends_a_span_of_prompt_lengths(tmp_path, monkeypatch):
+    """``--prompt-ids 1:32``: the group's prompts are `served_session.prompts`' at the span, 1 to 32 ids below the
+    vocabulary, and the gate's request is unchanged. The seed is pinned."""
+    _stub_gate(tmp_path, monkeypatch)
+    monkeypatch.setattr(CP.secrets, "token_bytes", lambda n: b"s" * n)
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key"), "--prompt-ids", "1:32"]) == 0
+    ps = json.loads((tmp_path / "prompts.json").read_text())
+    assert ps == CP.SS.prompts(CP.PROMPTS, (1, 32), 128000, b"s" * 32) and len({len(p) for p in ps}) > 1
+    assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63k4 --window-per-group")
+    assert json.loads((out / "session.json").read_text())["prompts"] == {"count": CP.PROMPTS, "ids": sum(map(len, ps))}
+
+
+class _Ids(socketserver.StreamRequestHandler):
+    """serve-openai's ``--protocol ids`` as the relay reads it: the request read whole, then `IDS`' id events at the
+    scan's payload and the trailer, and the connection closed."""
+
+    def handle(self):
+        head = b""
+        while not head.endswith(b"\r\n\r\n"):
+            head += self.rfile.readline()
+        self.rfile.read(int(re.search(rb"(?i)content-length:\s*(\d+)", head).group(1)))
+        self.wfile.write(AT.WS.id_response(IDS, SCAN_PAYLOAD))
+
+
+IDS = [5, 6]
+SCAN_PAYLOAD = CP.SS.A.SCAN["--cell-bytes"] - AT.IT.HEADER.size
+
+
+def test_an_attack_front_puts_the_relay_between_the_gate_and_the_endpoint_and_ends_it(tmp_path, monkeypatch):
+    """``--attack token``: the gate's request names the relay's port, a request through it (the session's stand-in)
+    reaches the endpoint on PORT and comes back with its first id one other, its line in the prover's 0700 attacks log,
+    and the relay is gone once the front ends."""
+    _stub_gate(tmp_path, monkeypatch)
+    endpoint = socketserver.ThreadingTCPServer(("127.0.0.1", 0), _Ids)
+    threading.Thread(target=endpoint.serve_forever, daemon=True).start()
+    relays, seen, real, real_relay = [], [], CP.SS.session, CP.attack_relay
+
+    def attack_relay(a, keep):
+        relays.append(real_relay(a, keep))
+        return relays[-1]
+
+    def session(a, data, ps):
+        request = AT.id_request(model="m", user="u", prompt=[1, 2], max_tokens=len(IDS),
+                                frame_bytes=CP.SS.A.SCAN["--cell-bytes"], offset=0)
+        with socket.create_connection(("127.0.0.1", a.port)) as s:
+            s.sendall(request)
+            got = b""
+            while chunk := s.recv(1 << 16):
+                got += chunk
+        seen.append(got)
+        return real(a, data, ps)
+
+    monkeypatch.setattr(CP, "attack_relay", attack_relay)
+    monkeypatch.setattr(CP.SS, "session", session)
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    try:
+        assert CP.main(["front", str(endpoint.server_address[1]), str(serve), str(out), "--key", str(tmp_path / "key"),
+                        "--attack", "token"]) == 0
+    finally:
+        endpoint.shutdown()
+        endpoint.server_close()
+    ((p, port),) = relays
+    assert p.poll() is not None
+    assert f" --port {port} " in (tmp_path / "request").read_text()
+    assert seen == [AT.WS.id_response([IDS[0] ^ 1, *IDS[1:]], SCAN_PAYLOAD)]
+    log = serve / CP.PRIVATE / "attacks"
+    assert log.stat().st_mode & 0o777 == 0o700
+    (line,) = [json.loads(x) for x in (log / "token.jsonl").read_text().splitlines()]
+    assert (line["connection"], line["attack"], line["events"]) == (1, "token", len(IDS))
+
+
 def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,
                                                                                                    monkeypatch):
-    """``--gate local``, this tree's gate in this process: the run's request records the tick and the minutes counted
-    at it, and the warden's command is the scan's schedule at it. The tunnel and the rehearsal are stand-ins, the
-    rehearsal's check accepting."""
+    """``--gate local``, this tree's gate in this process: the run's request records the tick, the minutes counted at
+    it and greedy sampling (temperature 0, top_p 1, which the network certifier's client puts on every request, as
+    ``--stop-prompt``'s warm-ups are sent), and `warden_command` is the scan's schedule at it. The tunnel and the
+    rehearsal are stand-ins, the rehearsal's check accepting."""
     real, ran, check = CP.SS.A.certifier_run, [], json.dumps({"accepted": True, "problems": []})
 
     def command(req, work, url):
@@ -718,11 +799,14 @@ def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_sc
     minutes = CP.SS.A.warden_group_minutes(1, CP.TOKENS, CP.HEIGHT, 4000) + CP.SS.MARGIN
     assert minutes > CP.SS.A.warden_group_minutes(1, CP.TOKENS, CP.HEIGHT) + CP.SS.MARGIN
     (req,) = [json.loads(p.read_text()) for p in (serve / CP.PRIVATE).rglob("request.json")]
-    assert {k: req.get(k) for k in ("bucket_ms", "scan", "prompts", "window_per_group", "minutes")} == {
+    assert {k: req.get(k) for k in ("bucket_ms", "scan", "prompts", "window_per_group", "minutes", "temperature",
+                                    "top_p")} == {
         "bucket_ms": 4000, "scan": True, "prompts": {"count": CP.PROMPTS, "ids": CP.PROMPTS * CP.PROMPT_IDS},
-        "window_per_group": True, "minutes": minutes}
+        "window_per_group": True, "minutes": minutes, "temperature": 0.0, "top_p": 1.0}
     relay, warden = ran
     assert relay[-5:] == ["relay", "--listen", "1", "--to", "18190"]
+    at = warden.index("--temperature")
+    assert warden[at:at + 4] == ["--temperature", "0.0", "--top-p", "1.0"]
     at = warden.index("--ids")
     assert warden[at:at + 1 + len(CP.SS.A.SCAN_SCHEDULE)] == ["--ids", *CP.SS.A.scan_schedule(4000, CP.V3C_SCAN_CLASS)]
     assert CP.SS.A.scan_schedule(4000) != CP.SS.A.SCAN_SCHEDULE
@@ -777,9 +861,10 @@ def test_the_pick_passes_over_the_warm_ups_windows_for_the_groups(tmp_path):
 
 
 class _Endpoint(http.server.BaseHTTPRequestHandler):
-    """serve-openai's completions as the warm-up sees them: each answered whole, and recorded in the serve dir's
-    request_users.jsonl first (serve-openai records a request there once its window has closed) unless ``record`` is
-    off; each request noted with whether the gate had been asked by then."""
+    """serve-openai's completions as the warm-up sees them: each answered whole, finishing on a stop for the requests
+    numbered in ``stops`` and on the length otherwise, and recorded in the serve dir's request_users.jsonl first
+    (serve-openai records a request there once its execution phase has closed) unless ``record`` is off; each request
+    noted with whether the gate had been asked by then."""
 
     def do_POST(self):
         s = self.server
@@ -793,7 +878,8 @@ class _Endpoint(http.server.BaseHTTPRequestHandler):
         if s.record:
             with open(s.serve / "request_users.jsonl", "a") as fh:
                 fh.write(json.dumps({"engine_id": f"cmpl-{len(s.seen)}-0", "user": body["user"]}) + "\n")
-        out = json.dumps({"id": f"cmpl-{len(s.seen)}", "choices": [{"text": "", "finish_reason": "length"}]}).encode()
+        finish = "stop" if len(s.seen) in s.stops else "length"
+        out = json.dumps({"id": f"cmpl-{len(s.seen)}", "choices": [{"text": "", "finish_reason": finish}]}).encode()
         self.send_response(200)
         self.send_header("content-type", "application/json")
         self.send_header("content-length", str(len(out)))
@@ -808,7 +894,7 @@ class _Endpoint(http.server.BaseHTTPRequestHandler):
 def endpoint(tmp_path, monkeypatch):
     _stub_gate(tmp_path, monkeypatch)
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Endpoint)
-    srv.seen, srv.status, srv.record, srv.serve, srv.stub_dir = [], 200, True, tmp_path / "serve", tmp_path
+    srv.seen, srv.status, srv.record, srv.serve, srv.stub_dir, srv.stops = [], 200, True, tmp_path / "serve", tmp_path, ()
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield srv
     srv.shutdown()
@@ -834,6 +920,36 @@ def test_the_front_warms_the_endpoint_up_a_window_at_a_time_before_it_asks_the_g
                                                      "warmup.json"]
 
 
+def test_a_stop_prompt_is_the_first_tried_whose_answer_stops_and_goes_last_in_the_group(tmp_path, endpoint):
+    """``--stop-prompt N``: after the ``--warmup`` requests, fresh prompts of HI ids go to the endpoint as warm-ups do
+    (greedy, ``--tokens`` max_tokens), one at a time, until one's answer finishes on a stop, and that prompt is the
+    group's last; the gate's request is unchanged. None of N stopping refuses the front before the gate is asked."""
+    port, serve, out = endpoint.server_address[1], endpoint.serve, tmp_path / "out"
+    endpoint.stops = {4}
+    argv = ["front", str(port), str(serve), str(out), "--key", str(tmp_path / "key"), "--prompt-ids", "8:32",
+            "--warmup", "1", "--stop-prompt", "5"]
+    assert CP.main(argv) == 0
+    bodies = [s["body"] for s in endpoint.seen]
+    assert [len(b["prompt"]) for b in bodies[1:]] == [32] * 3 and not any(s["gate asked"] for s in endpoint.seen)
+    assert {(b["max_tokens"], b["temperature"], b["top_p"]) for b in bodies} == {(CP.TOKENS, 0.0, 1.0)}
+    *rest, last = json.loads((tmp_path / "prompts.json").read_text())
+    assert last == bodies[3]["prompt"] and len(rest) == CP.PROMPTS - 1 and all(8 <= len(p) <= 32 for p in rest)
+    warm = json.loads((out / "warmup.json").read_text())
+    assert [w["finish_reason"] for w in warm["requests"]] == ["length"]
+    assert [(w["user"], w["finish_reason"]) for w in warm["stop_prompt"]] == [
+        (b["user"], f) for b, f in zip(bodies[1:], ("length", "length", "stop"))]
+    assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63k4 --window-per-group")
+    endpoint.seen.clear()
+    endpoint.stops = ()
+    (tmp_path / "request").unlink()
+    assert CP.main([*argv[:-4], "--stop-prompt", "2"]) == 2
+    assert json.loads((out / "session.json").read_text())["refused"] == (
+        "--stop-prompt 2: no answer to 2 prompts of 32 ids finished on a stop within --tokens 4")
+    assert len(endpoint.seen) == 2 and not (tmp_path / "request").exists()
+    assert CP.main([*argv[:-1], "-1"]) == 2
+    assert json.loads((out / "session.json").read_text())["refused"] == "--stop-prompt -1: a count of requests, 0 for none"
+
+
 def test_a_warm_up_that_fails_or_isnt_recorded_closed_refuses_the_front_before_the_gate(tmp_path, endpoint):
     port, serve, out = endpoint.server_address[1], endpoint.serve, tmp_path / "out"
     endpoint.status = 503
@@ -842,7 +958,7 @@ def test_a_warm_up_that_fails_or_isnt_recorded_closed_refuses_the_front_before_t
     assert not (tmp_path / "request").exists() and not (out / "warmup.json").exists()
     endpoint.status, endpoint.record, clock = 200, False, _Clock()
     a = argparse.Namespace(port=port, warmup=1, prompt_ids=CP.PROMPT_IDS, vocab=128000, tokens=CP.TOKENS)
-    with pytest.raises(CP.SS.Refused, match="recorded no closed window of .'warmup-"):
+    with pytest.raises(CP.SS.Refused, match="recorded no closed execution phase of .'warmup-"):
         CP.warmup(a, serve, clock=clock, sleep=clock.sleep)
     assert clock.t > CP.WARMUP_CLOSE_S and not (tmp_path / "request").exists()
 

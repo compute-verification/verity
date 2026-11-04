@@ -47,10 +47,11 @@ from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.ml.windows import interface as IF, rows as CS
+from verity_vllm.engine.profiles import dense_generic as DG
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
-from verity_vllm.pipeline import served_compiler as SC
 from verity_vllm.pipeline.tp import serving_rows as SRT
+from verity_vllm.program.predict import served_compiler as SC
 
 HERE = Path(__file__).resolve().parent
 VLLM = HERE.parents[2] / "integrations" / "vllm"
@@ -811,7 +812,7 @@ def _tiny_served(tmp_path: Path, monkeypatch) -> SimpleNamespace:
     and each compile's ``named``."""
     from verity_vllm.program.predict import steps as ST
 
-    monkeypatch.setattr(SC, "GATES_OF_RECORD", {})
+    monkeypatch.setattr(DG, "gates_of_record", lambda repo, revision: ())
     s = _served(tmp_path, monkeypatch)
     builds = {(4, 1): _request_build(LP=4, T=1, named=True), (4, 2): _request_build(LP=4, T=2, named=True)}
     units = [ST.RequestUnit(0, builds[(4, 1)].digest, 4, 1, {"kind": "greedy"}, None, 0, "r0"),
@@ -867,16 +868,19 @@ def test_a_served_windows_bodies_are_its_requests_ingress_by_i1_id(tmp_path, mon
 
 def test_phi_of_a_served_engine_is_advice_compiles_and_reads_its_target_and_execution(tmp_path):
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "engine": {"execution": "bi-eager"}, "target": TARGET}
-    phi = SC.phi_of_serve(serve)
+    with pytest.raises(ValueError, match=r"m/x@r is pinned in no checkpoint manifest, so it has no config.json of record"):
+        SC.phi_of_serve(serve)
+    hf = str(PP.LLAMA32_1B_CONFIG)
+    phi = SC.phi_of_serve(serve, hf)
     assert (phi.model["repo"], phi.model["revision"], phi.target, phi.execution) == ("m/x", "r", TARGET, "bi-eager")
-    assert phi.model["hf_config"] == json.loads(SC.LLAMA32_1B_CONFIG.read_text()) and not phi.requests
+    assert phi.model["hf_config"] == json.loads(PP.LLAMA32_1B_CONFIG.read_text()) and not phi.requests
     with pytest.raises(ValueError, match="serve.json records no target profile .* --target F gives it"):
-        SC.phi_of_serve({**serve, "target": None})
+        SC.phi_of_serve({**serve, "target": None}, hf)
     (tmp_path / "target.json").write_text(json.dumps({**TARGET, "device_name": "other"}))
-    assert SC.phi_of_serve({**serve, "target": None}, target=str(tmp_path / "target.json")).target["device_name"] == "other"
+    assert SC.phi_of_serve({**serve, "target": None}, hf, str(tmp_path / "target.json")).target["device_name"] == "other"
     with pytest.raises(ValueError, match="no execution label"):
-        SC.phi_of_serve({**serve, "engine": {}})
-    assert SC.phi_of_serve({**serve, "execution": "eager"}).execution == "eager"
+        SC.phi_of_serve({**serve, "engine": {}}, hf)
+    assert SC.phi_of_serve({**serve, "execution": "eager"}, hf).execution == "eager"
 
 
 def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
@@ -890,23 +894,23 @@ def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
     phi = SC.phi_of_serve(serve)
     assert phi.model["hf_config"] == json.loads(pinned_hf_config(serve["model"], rev).read_text())
     assert phi.model["hf_config"]["quantization_config"]["quant_method"] == "verity_int8" and phi.target["int8_exact"] == "linears"
-    assert phi.digest() != SC.phi_of_serve(serve, hf_config=str(SC.LLAMA32_1B_CONFIG)).digest()
+    assert phi.digest() != SC.phi_of_serve(serve, hf_config=str(PP.LLAMA32_1B_CONFIG)).digest()
     bf16 = {**serve, "model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "target": TARGET}
-    assert SC.phi_of_serve(bf16).model["hf_config"] == json.loads(SC.LLAMA32_1B_CONFIG.read_text())
+    assert SC.phi_of_serve(bf16).model["hf_config"] == json.loads(PP.LLAMA32_1B_CONFIG.read_text())
 
 
 def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(monkeypatch):
     """The served I2 is named as the server names its compiler, and its digest is a single-GPU window's I2's (one
     `I2Compiler.digest`) with the server's compiler (`served_identity`) as its code: φ, the default seed, ℓ and the served
     model name move it as they move a single-GPU one's."""
-    serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}
-    reg = SC.registered_of_serve(serve, None, None, PP.CAP_BITS)
+    serve, hf = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}, str(PP.LLAMA32_1B_CONFIG)
+    reg = SC.registered_of_serve(serve, hf, None, PP.CAP_BITS)
     one = PP.I2Compiler(reg, {}, "", name=SERVER[0], code=SERVER[1])
     assert one.name == SERVER[0] and one.digest != SERVER[1] and len(one.digest) == 128
     monkeypatch.setattr(PP, "code_identity", lambda: SERVER[1])
     assert PP.I2Compiler(reg, {}, "", name=SERVER[0]).digest == one.digest
     assert PP.I2Compiler(reg, {}, "", name=SERVER[0], code="c0" * 64).digest != one.digest
-    others = [SC.registered_of_serve(other, None, None, cap) for other, cap in (
+    others = [SC.registered_of_serve(other, hf, None, cap) for other, cap in (
         ({**serve, "model": "m/y"}, PP.CAP_BITS), ({**serve, "revision": "s"}, PP.CAP_BITS),
         ({**serve, "execution": "eager"}, PP.CAP_BITS), ({**serve, "target": {**TARGET, "device_name": "other"}}, PP.CAP_BITS),
         (serve, 2 * PP.CAP_BITS))] + [replace(reg, default_seed=DEFAULT_SEED + 1), replace(reg, served_model="llama")]
@@ -916,7 +920,8 @@ def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(mon
 
 #: a served run's ``serve.json`` edited after its advice was registered, in each field the compile reads of it (`phi_of_serve`,
 #: `registered_of_serve`, `served_gates`), and the verifier's own ``--hf-config`` other than the pin's config of record
-SERVE_EDITS = {"model": {"model": "verity-int8/Llama-3.2-1B-INT8"}, "revision": {"revision": "0" * 40},
+SERVE_EDITS = {"model": {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d400d796ee589e7737d03a919526bf800"},
+               "revision": {"revision": "0" * 40},
                "default_seed": {"default_seed": DEFAULT_SEED + 1}, "execution": {"execution": "eager"},
                "engine-execution": {"engine": {"execution": "eager", "pin": {"world": 1}}},
                "target": {"target": {**TARGET, "device_name": "other-gpu"}}, "hf_config": None}
@@ -928,12 +933,13 @@ def test_a_served_window_under_another_serve_json_than_its_advice_was_registered
     whose ``serve.json`` says another model, revision, execution or target than the one `verity-vllm advice` registered its
     advice under (or whose verifier compiles under another config) is refused by name before any commit (`serve_check`'s
     ``compiler``, and ``advice``: its advice tree's domain is the registered compiler), and the records audit's compiler
-    table (`compiler_doc`, ``prove_path.py compiler``) holds another digest; one recording another default seed is refused
-    outright (`registered_seed`); the honest one passes."""
+    table (`compiler_doc`, ``prove_path.py compiler``) holds another digest; one recording another default seed
+    (`registered_seed`), or a revision no manifest pins (`phi_of_serve`: it has no config of record), is refused outright; the
+    honest one passes."""
     from verity_vllm.program.predict import steps as ST
 
     s = _served(tmp_path, monkeypatch)
-    monkeypatch.setitem(SC.GATES_OF_RECORD, SERVE_EDITS["model"]["model"], SC.GATES_OF_RECORD["unsloth/Llama-3.2-1B"])
+    monkeypatch.setattr(DG, "gates_of_record", lambda repo, revision: ("RoPEHead_v1{D=64}",))
     units = [ST.RequestUnit(0, "d0" * 64, 5, 2, {}, None, 0, "r0"), ST.RequestUnit(1, "d1" * 64, 3, 1, {}, None, 2, "r1")]
     monkeypatch.setattr(ST, "compile_steps", lambda registered, data, ingress, named=False: SimpleNamespace(requests=units, named={}))
     _q, held, _o = PP.served_advice(s.a)
@@ -942,13 +948,14 @@ def test_a_served_window_under_another_serve_json_than_its_advice_was_registered
     serve = json.loads((s.run / "serve.json").read_text())
     if SERVE_EDITS[field] is None:
         config = tmp_path / "config.json"
-        config.write_text(json.dumps({**json.loads(SC.LLAMA32_1B_CONFIG.read_text()), "rms_norm_eps": 1e-6}))
+        config.write_text(json.dumps({**json.loads(PP.LLAMA32_1B_CONFIG.read_text()), "rms_norm_eps": 1e-6}))
         s.a.hf_config = str(config)
     else:
         (s.run / "serve.json").write_text(json.dumps({**serve, **SERVE_EDITS[field]}))
-    if field == "default_seed":
+    outright = {"default_seed": f"filled in default seed {DEFAULT_SEED + 1}", "revision": "is pinned in no checkpoint manifest"}
+    if field in outright:
         for refused in (lambda: PP.served_advice(s.a), lambda: PP.compiler_doc(str(s.run), None, None, CAP)):
-            with pytest.raises(ValueError, match=f"filled in default seed {DEFAULT_SEED + 1}"):
+            with pytest.raises(ValueError, match=outright[field]):
                 refused()
         return
     _c, _r, bound, _o = PP.compiled(s.a)
@@ -963,12 +970,12 @@ def test_a_served_run_registers_the_public_default_seed_and_one_that_records_ano
     """A served window's registration fixes `engine.served_seed.DEFAULT_SEED`, as vllm's registered compiler does: a run
     whose serve.json says its server filled in another seed (7, 0, the public one as a string or a float) or none is refused
     by name, by the served compiler and its commands, never compiled under the seed the run recorded."""
-    serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}
-    assert SC.registered_seed(serve) == SC.registered_of_serve(serve, None, None, PP.CAP_BITS).default_seed == DEFAULT_SEED
+    serve, hf = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}, str(PP.LLAMA32_1B_CONFIG)
+    assert SC.registered_seed(serve) == SC.registered_of_serve(serve, hf, None, PP.CAP_BITS).default_seed == DEFAULT_SEED
     for seed in (7, 0, None, str(DEFAULT_SEED), float(DEFAULT_SEED)):
         why = f"serve.json: the run's server filled in default seed {seed!r}, and the registered one is engine.served_seed."
         with pytest.raises(ValueError, match=re.escape(why)):
-            SC.registered_of_serve({**serve, "default_seed": seed}, None, None, PP.CAP_BITS)
+            SC.registered_of_serve({**serve, "default_seed": seed}, hf, None, PP.CAP_BITS)
     with pytest.raises(ValueError, match="filled in default seed None"):
         SC.registered_seed({k: v for k, v in serve.items() if k != "default_seed"})
     s = _served(tmp_path, monkeypatch)
@@ -1033,7 +1040,7 @@ def test_the_served_compiler_is_what_the_registration_must_name(tmp_path, monkey
     doc = PP.compiler_doc(str(s.run), None, None, CAP)
     assert {"name": doc["name"], "digest": doc["digest"]} == s.bound["compiler"] == {"name": PP.CAPPED, "digest": s.compiler.digest}
     assert doc["served"] == {"name": SERVER[0], "digest": SERVER[1]} and doc["default_seed"] == DEFAULT_SEED and doc["phi"]["target"] == TARGET
-    assert doc["transfer_gates"] == list(SC.GATES_OF_RECORD["unsloth/Llama-3.2-1B"])
+    assert doc["transfer_gates"] == ["RoPEHead_v1{D=64}"]
     assert PP.compiler_doc(str(s.run), None, None, 2 * CAP)["digest"] != doc["digest"]
     capsys.readouterr()
     assert PP.main(["compiler", "--serve-run", str(s.run), "--cap-bits", str(CAP)]) == 0
@@ -1216,14 +1223,16 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
 
 
 def test_the_transfer_gates_of_a_served_model_are_its_compiler_of_records():
-    """`served_gates`: Llama-3.2-1B's compiler of record lists its RoPE heads (the TP1 stand-in), ``--transfer-gate`` may restate
-    the list and nothing else (another template, or the record's with one more), and a model with no line lists none."""
-    llama, tg = {"model": "unsloth/Llama-3.2-1B"}, "RoPEHead_v1{D=64}"
+    """`served_gates`: pinned Llama-3.2-1B's compiler of record lists its RoPE heads (the TP1 stand-in), ``--transfer-gate`` may
+    restate the list and nothing else (another template, or the record's with one more), and a checkpoint with no line, or
+    no pin, lists none."""
+    llama, tg = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da"}, "RoPEHead_v1{D=64}"
     assert SC.served_gates(llama) == SC.served_gates(llama, [tg, tg]) == (tg,)
     for other in (["SiluMul_v2{I=8192}"], [tg, "SiluMul_v2{I=8192}"]):
         with pytest.raises(ValueError, match=r"unsloth/Llama-3.2-1B's compiler of record lists \['RoPEHead_v1\{D=64\}'\]"):
             SC.served_gates(llama, other)
-    assert SC.served_gates({"model": "m/x"}) == ()
+    assert SC.served_gates({"model": "m/x"}) == SC.served_gates({**llama, "revision": "0" * 40}) == ()
+    assert SC.served_gates({"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d400d796ee589e7737d03a919526bf800"}) == ()
     with pytest.raises(ValueError, match=r"m/x's compiler of record lists \[\]"):
         SC.served_gates({"model": "m/x"}, [tg])
 
@@ -1239,7 +1248,7 @@ def test_a_served_compiler_lists_its_models_transfer_gates_of_record_beside_the_
     assert doc["served"] == {"name": SERVER[0], "digest": SERVER[1]} and doc["transfer_gates"] == [tg]
     assert doc == PP.compiler_doc(str(s.run), None, None, CAP, [tg])
     assert doc["inner"]["name"] == SERVER[0] and doc["inner"]["digest"] != SERVER[1] and doc["digest"] != s.bound["compiler"]["digest"]
-    gated = PP.Capped(PP.i2_of_serve(str(s.run), 0, s.a.row_dir, None, None, transfer_gates=(tg, tg)))
+    gated = PP.Capped(PP.i2_of_serve(str(s.run), 0, s.a.row_dir, None, None, CAP, transfer_gates=(tg, tg)), CAP)
     assert gated.transfer_gates == (tg,) and {"name": PP.CAPPED, "digest": gated.digest} == {"name": doc["name"], "digest": doc["digest"]}
     capsys.readouterr()
     assert PP.main(["compiler", "--serve-run", str(s.run), "--transfer-gate", tg, "--cap-bits", str(CAP)]) == 0

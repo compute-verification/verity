@@ -77,11 +77,16 @@ def registered_seed(meta: dict) -> int:
 
 def advice_of(adv: Path, data: bytes | None = None) -> bytes:
     """The advice of a `verity-vllm advice` directory ``adv``: ``data`` (default its ``private/advice.bin``), the advice as the
-    registered compiler reads it, less its padding to its registration's ℓ (`advice_windows.unpad`); a ValueError otherwise."""
+    registered compiler reads it, less its padding to its registration's ℓ (`advice_windows.unpad`); a ValueError otherwise,
+    a missing or unreadable registration or advice file included."""
     from verity_vllm.pipeline import advice_windows as AW
 
-    reg = json.loads((adv / "registration.json").read_text())
-    return AW.unpad((adv / "private" / "advice.bin").read_bytes() if data is None else data, int(reg["compiler"]["cap_bits"]))
+    try:
+        cap = int(json.loads((adv / "registration.json").read_text())["compiler"]["cap_bits"])
+        raw = (adv / "private" / "advice.bin").read_bytes() if data is None else data
+    except (OSError, KeyError, TypeError, ValueError) as e:
+        raise ValueError(f"{adv}: no advice to read at its registration's ℓ ({type(e).__name__}: {e})") from None
+    return AW.unpad(raw, cap)
 
 
 def carry_of(run: Path, window: int, data: bytes) -> dict:
