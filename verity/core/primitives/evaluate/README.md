@@ -9,7 +9,7 @@ this package adds the primitives. It is code, so it requires nothing of `Securit
 - `Evaluate/Prims.lean`: the primitives implemented, each with the signature the registry holds for it. E0 is the Boolean
   profile (§9: `And<n>_v1`, `Xor<n>_v1`, `Not_v1`), `Input<w>_v1` and `RegisteredInput<w>_v1`; E1 the constant family
   `Const<w>[0x<hex>]_v1` and the scalar primitives; E2 the FP32 and BF16 arithmetic and the casts that read no table; E3 the
-  tensor-core dot steps; E4 the rest of the registry's 172 gate primitives and the lazy families `TableRead{IB}x{EW}_v1`,
+  tensor-core dot steps; E4 the rest of the registry's gate primitives and the lazy families `TableRead{IB}x{EW}_v1`,
   `GatherBf16x{V}_v1` and `GatherF32x{V}_v1`. Any other primitive (the lifting families, `BitAtx`, `TopPMaskWordx`, ...)
   is refused by name.
 - `Evaluate/Scalar.lean`: the scalar primitives (`verity.ml.circuits.ops.scalar`, and the vLLM integration's `I32Sub`,
@@ -32,11 +32,11 @@ this package adds the primitives. It is code, so it requires nothing of `Securit
   `Security/Definitions/Pouw/PearlC/RowPrims.lean`, the rest transcribed). `Evaluate/Libdevice.lean`: the sampler's
   `NvLogf`, Gumbel and `TopPNumkeep`, libdevice's FTZ steps as the host's doubles compute them, and Philox.
   `Evaluate/Mufu.lean` (with `MufuFits.lean`): the eight MUFU primitives, each a bit rule around its table held as the
-  unit's interpolant. `Evaluate/Decimal.lean`: `F32ExpRn`, `F32ErfRn` and `F32TanhRn`, decimal arithmetic at 100 digits half
-  to even. `Evaluate/Act.lean` (with `GeluErfTable.lean`, `act.py`'s stored `GeluErfBf16` region): SiLU, RoPE's outputs,
-  tanh, the GELUs, the registered tables `gelu_tanh_bf16` and `tanh_rn`, and the lazy families. SiLU and tanh call the host
-  C library's `exp` and `tanh` on doubles, as the Python's `math` does, so their words are the Python's on the same host and
-  may differ on another. Security defines none of these but six of `Words`.
+  unit's interpolant. `Evaluate/Decimal.lean`: `F32ExpRn`, `F32LogRn`, `F32ErfRn` and `F32TanhRn`, decimal arithmetic at
+  100 digits half to even. `Evaluate/Act.lean` (with `GeluErfTable.lean`, `act.py`'s stored `GeluErfBf16` region): SiLU,
+  RoPE's outputs, tanh, the GELUs, the registered tables `gelu_tanh_bf16` and `tanh_rn`, and the lazy families. SiLU and
+  tanh call the host C library's `exp` and `tanh` on doubles, as the Python's `math` does, so their words are the
+  Python's on the same host and may differ on another. Security defines none of these but six of `Words`.
 - `Evaluate/Walk.lean`: the gate walk (`Evaluate.evaluate`).
 - `Evaluate/Serve.lean`: `Evaluate.evaluateFn`, which `verity-evaluate` serves through the difftest harness's line protocol
   (`Difftest.serve`, [harness](../../difftest/README.md)): `{"fn": "evaluate", "input": {"program": <descriptor>, "inputs":
