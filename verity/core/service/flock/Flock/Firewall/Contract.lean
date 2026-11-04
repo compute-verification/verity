@@ -54,6 +54,7 @@ module
 
 public import Flock.Canon
 public import Flock.Hm96
+public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -862,7 +863,7 @@ def cmd (args : List String) : IO UInt32 := do
     | none => pure (Except.ok ({} : PublicInput))
     | some f => do
       let text ← IO.FS.readFile f
-      pure (Json.parse text >>= PublicInput.ofJson)
+      pure (JsonParse.parse text >>= PublicInput.ofJson)
   match pub with
   | .error e =>
     IO.println (Json.mkObj [("public", Json.str (pubFile.getD "")), ("error", Json.str e)]).compress
@@ -871,7 +872,7 @@ def cmd (args : List String) : IO UInt32 := do
     let mut rc : UInt32 := 0
     for f in files do
       let text ← IO.FS.readFile f
-      match Json.parse text >>= ReleaseLog.ofJson with
+      match JsonParse.parse text >>= ReleaseLog.ofJson with
       | .ok t =>
         IO.println ((run pub t).toJson.setObjVal! "file" (Json.str f)).compress
       | .error e =>

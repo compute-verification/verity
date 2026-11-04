@@ -18,6 +18,7 @@ public import Flock.Canon
 public import Flock.Hash
 public import Flock.Sizes
 public import Flock.Steps
+public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -424,7 +425,7 @@ decreasing_by
 
 /-- Every `{"fn": id}` in a specialization id's binding record, in encoding order (`codec._record_function_ids`). -/
 def recordFunctionIds (fid : String) : Array String :=
-  (recordPairs fid).foldl (fun acc (_, v) => match Json.parse v with
+  (recordPairs fid).foldl (fun acc (_, v) => match JsonParse.parse v with
     | .ok j => fnRefs acc j
     | .error _ => acc) #[]
 
@@ -954,7 +955,7 @@ end
 see the module docstring), then the program's SHA-512. -/
 def decode (bytes : ByteArray) : V Prog := do
   let some text := String.fromUTF8? bytes | throw "program: not UTF-8"
-  let j ← match Json.parse text with
+  let j ← match JsonParse.parse text with
     | .ok j => pure j
     | .error e => throw s!"program: not JSON: {e}"
   let .obj top := j | throw "program: not an object"
@@ -1003,7 +1004,7 @@ decoder state is this module's own. -/
 def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (sha512 : ByteArray → M ByteArray)
     (bytes : ByteArray) : M Prog := do
   let some text := String.fromUTF8? bytes | throw "program: not UTF-8"
-  let j ← match Json.parse text with
+  let j ← match JsonParse.parse text with
     | .ok j => pure j
     | .error e => throw s!"program: not JSON: {e}"
   let .obj top := j | throw "program: not an object"

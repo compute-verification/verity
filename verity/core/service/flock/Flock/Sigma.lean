@@ -47,6 +47,7 @@ public import Lean.Data.Json
 public import Std.Data.HashMap
 public import Std.Data.HashSet
 public import Flock.Program
+public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -584,7 +585,7 @@ def checkBytes (word bits : ByteArray) : Except Refusal Report := do
     | .ok p => pure p
     | .error e => throw { code := "decode", why := s!"Boolean descriptor: {e}" }
   let link := match String.fromUTF8? bits with
-    | some t => match Json.parse t with
+    | some t => match JsonParse.parse t with
       | .ok j => (j.getObjVal? "word").toOption.getD Json.null
       | .error _ => Json.null
     | none => Json.null

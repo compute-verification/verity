@@ -7,6 +7,7 @@ module
 public import Lean.Data.Json
 public import Flock.Canon
 public import Flock.Hash
+public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -190,7 +191,7 @@ def load (sp : CompSpec) (file : ByteArray) : V Comp := do
   let text ← match String.fromUTF8? (file.extract 0 nl) with
     | some s => pure s
     | none => throw s!"{ctx}: header is not UTF-8"
-  let h ← match Json.parse text with
+  let h ← match JsonParse.parse text with
     | .ok j => pure j
     | .error e => throw s!"{ctx}: header: {e}"
   if (← J.str h "format" ctx) != "flock-r1cs-rows/v1" then throw s!"{ctx}: not flock-r1cs-rows/v1"
