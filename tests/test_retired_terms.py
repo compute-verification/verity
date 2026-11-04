@@ -125,7 +125,6 @@ PENDING: dict[str, str] = {
     "examples/h200/README.md": "#6115 on next rewrites this file; its rename follows in the next sweep",
     "integrations/vllm/README.md": "#6165 on next rewrites this file; its rename follows in the next sweep",
     "verity/README.md": "#5988 on next rewrites this file; its rename follows in the next sweep",
-                                                                               "the next sweep"),
     "verity/core/protocols/network/tests/period_case.py": _LEAN_REFUSAL,
     "verity/core/protocols/network/tests/test_network_period_protocol.py": _LEAN_REFUSAL,
     "verity/ml/windows/interface.py": "#5726 on next rewrites this file; its rename follows in the next sweep",
