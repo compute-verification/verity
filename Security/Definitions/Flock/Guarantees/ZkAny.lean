@@ -6,22 +6,32 @@ public import Definitions.Flock.ZK.AnyValues
 /-!
 # Zero knowledge at any values
 
-What the ZK server releases is simulated for any worker and any committed values, valid or not: the simulator reads the
-public inputs, the auditor's coins and samples, and the protocol's public outcome (each verdict and where a session
-stopped), and nothing of the values. An outcome that correlates with the values costs a factor of the number of outcomes
-`|St|`, `log₂ |St|` bits.
+What the ZK server releases is simulated per outcome (`FlockSoundness.ZK.PerOutcome`) for any worker and any trace,
+valid or not, at any values carrying the statement's public region data, which the ZK server's splice of the public
+regions makes true of every worker. The simulator reads the public inputs, the auditor's coins and samples, a dummy
+carrying the public region data, and the release's public outcome (each verdict and where the release stopped). It
+reads nothing of the worker's values: `Table.sim` reads none of the table's `vals`, `nu` or `sReg`, so at the table
+whose witnesses carry a worker's clear values it is one simulator at every value
+(`FlockSoundness.ZK.Table.sim_onVals`). An outcome that correlates with the values costs a factor of the number of
+outcomes `|St|`, `log₂ |St|` bits.
 
-* `ZkAnyOutcome`: the generic form. A release that is, at each outcome `s`, a branch `B s` simulated by `S s` within
-  `ε s` is simulated within `ε s` jointly with that outcome, within `Σ_s (Pr[S s ∈ E] + ε s)` overall, and so within
-  `|St|` times the simulator that draws the outcome uniformly, plus `Σ_s ε s`.
-* `ZkAnyGate`: the check-then-release instance, two outcomes: where the server's check passes, the view is a derived
-  view `d` that a simulator matches; where it fails, only the cut leaves. Nothing reads the values beyond these
-  premises, which an instance proves at every witness.
-* `TableReleaseAny`: `ZkAnyGate` for one table of C-Flock's ZK server, exactly: on any witness `w` carrying the public
-  region data and a dummy `w₀`, with no premise that `w`'s values pass the inner constraint, the release behind a check
-  that passes only where they do (`Table.Gated`) is bounded by `S_shvzk(x, e)` on `w₀` plus the dummy's pre-final view.
-* `SessionReleaseAny`: `ZkAnyOutcome` for a session of `J` tables, the outcome being where it stopped: the tables whose
-  files left show their views, each behind its check (`Session.Gated`), and the others their pre-final views.
+Scope:
+
+* The released bytes and their order, not their times: when each frame leaves is the worker's, and its timing is the
+  network certifier's (`trusted-host`).
+* The registered commitments are public input, made outside the ZK server; a worker that chooses their salts is outside
+  this guarantee.
+* Both statements are over the table model (`FlockSoundness.ZK.Table`), at one statement and fixed coins, not yet at the
+  session loop's release. There the one zero-knowledge definition, `ZKOut` in the claims core, is stated against every
+  verifier, and these statements are what its proof reads.
+
+* `TableReleaseAny`: one table, two outcomes. Where the ZK server's check passes, the view leaves, and the check passes
+  only where the values pass the inner constraint at the drawn pads (`Table.Gated`); where it fails, only the pre-final
+  view leaves. The released bytes are simulated per outcome, exactly, by `S_shvzk(x, e)` on a dummy `w₀` and the
+  dummy's pre-final view.
+* `TablesReleaseAny`: a release of `J` tables, the outcome being where it stopped: the tables whose files left show
+  their views, each behind its check (`Release.Gated`), and the others their pre-final views. The released bytes are
+  simulated per outcome, exactly, by the simulator at that outcome (`Release.simAt`).
 -/
 
 @[expose] public section
@@ -35,75 +45,36 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **Zero knowledge with a public outcome, generic**: a release `rel` that is, at each outcome `s = out ω`, the branch
-`B s ω` (`Splits`), where each branch is simulated by `S s` within `ε s` (`Within`), is simulated within `ε s` jointly
-with each outcome, within `Σ_s (Pr[S s ∈ E] + ε s)` overall, and within `|St|` times the simulator that draws the
-outcome uniformly, plus `Σ_s ε s`. -/
-def ZkAnyOutcome : Prop :=
-  ∀ {Ω St Ωs V : Type} [Fintype Ω] [Fintype St] [Fintype Ωs] (rel : Ω → V) (out : Ω → St) (B : St → Ω → V)
-    (S : St → Ωs → V) (ε : St → ℝ≥0∞),
-    Splits rel out B → (∀ s, Within (B s) (S s) (ε s)) →
-    ∀ E : V → Prop,
-      (∀ s, prCoin (fun ω => out ω = s ∧ E (rel ω)) ≤ prCoin (fun σ => E (S s σ)) + ε s) ∧
-      prCoin (fun ω => E (rel ω)) ≤ ∑ s, (prCoin (fun σ => E (S s σ)) + ε s) ∧
-      prCoin (fun ω => E (rel ω)) ≤
-        (Fintype.card St : ℝ≥0∞) * prCoin (fun p : St × Ωs => E (S p.1 p.2)) + ∑ s, ε s
-
-/-- **Check-then-release, generic**: where the cut `cut` is simulated by `simCut` within `εc`, the derived view `d` by
-`simFull` within `εf`, and the view is the derived view wherever the check `go` passes (`AgreesWhere`), the release (the
-view where the check passes, the cut where it fails) is simulated on each branch, and overall within the sum of both
-simulators plus `εf + εc`. -/
-def ZkAnyGate : Prop :=
-  ∀ {Ω Ωf Ωc V P : Type} [Fintype Ω] [Fintype Ωf] [Fintype Ωc]
-    (view d : Ω → V) (cut : Ω → P) (go : Ω → Bool) (simFull : Ωf → V) (simCut : Ωc → P) (εf εc : ℝ≥0∞),
-    Within cut simCut εc → Within d simFull εf → AgreesWhere go view d →
-    ∀ E : V ⊕ P → Prop,
-      prCoin (fun ω => go ω = true ∧ E (.inl (view ω))) ≤ prCoin (fun σ => E (.inl (simFull σ))) + εf ∧
-      prCoin (fun ω => go ω = false ∧ E (.inr (cut ω))) ≤ prCoin (fun σ => E (.inr (simCut σ))) + εc ∧
-      prCoin (fun ω => E (if go ω then .inl (view ω) else .inr (cut ω))) ≤
-        prCoin (fun σ => E (.inl (simFull σ))) + prCoin (fun σ => E (.inr (simCut σ))) + (εf + εc)
-
 /-- **One table's release behind the ZK server's check, at any values**: at coins non-degenerate for the table
 (`Table.Simulable`), for a witness `w` and a dummy `w₀` carrying the public region data (`Table.RegPublic`), and a check
 `go` on the server's randomness that passes only where `w`'s values pass the inner constraint at the drawn pads
-(`Table.Gated`), and with no premise that they pass it anywhere, the release is the view where `go` passes and the
-pre-final view where it doesn't (`Table.release`), and each branch is bounded by its simulator: `S_shvzk(x, e)` on `w₀`
-and the dummy's pre-final view. -/
+(`Table.Gated`), and with no premise that they pass it anywhere, the released bytes (`Table.release`: the view where
+`go` passes, the pre-final view where it doesn't) are simulated per outcome, exactly, by `S_shvzk(x, e)` on `w₀` where
+the check passed and the dummy's pre-final view where it failed. -/
 def TableReleaseAny : Prop :=
   ∀ {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2] [Fintype F] [DecidableEq F] [Fintype K]
     [DecidableEq K] [Fintype Salt] [DecidableEq Salt] [Fintype Seed] [DecidableEq Seed] [Fintype Hi] [DecidableEq Hi]
     [AddCommGroup Salt] [AddCommGroup Seed] [AddCommGroup Hi] (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL)
     (go : T.Rand → Bool) (w w₀ : W),
     T.Simulable → T.RegPublic w → T.RegPublic w₀ → T.Gated go w →
-    ∀ E : T.View ⊕ T.PreView → Prop,
-      prCoin (fun ω => go ω = true ∧ E (.inl (T.view w ω))) ≤ prCoin (fun σ => E (.inl (T.sim w₀ σ))) ∧
-      prCoin (fun ω => go ω = false ∧ E (.inr (T.preView w ω))) ≤ prCoin (fun ω => E (.inr (T.preView w₀ ω))) ∧
-      prCoin (fun ω => E (T.release go w ω)) ≤
-        prCoin (fun σ => E (.inl (T.sim w₀ σ))) + prCoin (fun ω => E (.inr (T.preView w₀ ω)))
+    FlockSoundness.ZK.PerOutcome go (T.release go w) (FlockSoundness.ZK.gatedSim (T.sim w₀) (T.preView w₀))
+      fun _ => 0
 
-/-- **A session's release behind the ZK server's checks, at any values**: at coins non-degenerate for each of its `J`
-tables, for witnesses `w` and dummies `w₀` carrying the public region data, an outcome `out ω` (where the session
+/-- **A release of `J` tables behind the ZK server's checks, at any values**: at coins non-degenerate for each of its
+tables, for witnesses `w` and dummies `w₀` carrying the public region data, an outcome `out ω` (where the release
 stopped, a function of the server's randomness) and the tables whose files leave at each outcome (`full`), where a
-table's file leaves only if its values pass the inner constraint at its drawn pads (`Session.Gated`), and with no
-premise that they pass it anywhere, the session's release (`Session.releaseAt`) is bounded at each outcome, jointly with
-it, by the simulator at that outcome (`Session.simAt`), overall by the sum over outcomes, and so by `|St|` times the
-simulator that draws the outcome uniformly. -/
-def SessionReleaseAny : Prop :=
+table's file leaves only if its values pass the inner constraint at its drawn pads (`Release.Gated`), and with no
+premise that they pass it anywhere, the released bytes (`Release.bytesAt`) are simulated per outcome, exactly, by the
+simulator at that outcome (`Release.simAt`). -/
+def TablesReleaseAny : Prop :=
   ∀ {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2] [Fintype F] [DecidableEq F] [Fintype K]
     [DecidableEq K] [Fintype Salt] [DecidableEq Salt] [Fintype Seed] [DecidableEq Seed] [Fintype Hi] [DecidableEq Hi]
     [AddCommGroup Salt] [AddCommGroup Seed] [AddCommGroup Hi] {J : ℕ}
-    (T : Fin J → FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) {St : Type} [Fintype St]
+    (T : Fin J → FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) {St : Type}
     (out : (∀ j, (T j).Rand) → St) (full : St → Fin J → Bool) (w w₀ : Fin J → W),
     (∀ j, (T j).Simulable) → (∀ j, (T j).RegPublic (w j)) → (∀ j, (T j).RegPublic (w₀ j)) →
-    FlockSoundness.ZK.Session.Gated T out full w →
-    ∀ E : (∀ j, (T j).View ⊕ (T j).PreView) → Prop,
-      (∀ s, prCoin (fun ω => out ω = s ∧ E (FlockSoundness.ZK.Session.releaseAt T full w (out ω) ω)) ≤
-        prCoin (fun σ => E (FlockSoundness.ZK.Session.simAt T full w₀ s σ))) ∧
-      prCoin (fun ω => E (FlockSoundness.ZK.Session.releaseAt T full w (out ω) ω)) ≤
-        ∑ s, prCoin (fun σ => E (FlockSoundness.ZK.Session.simAt T full w₀ s σ)) ∧
-      prCoin (fun ω => E (FlockSoundness.ZK.Session.releaseAt T full w (out ω) ω)) ≤
-        (Fintype.card St : ℝ≥0∞) *
-          prCoin (fun p : St × (∀ j, (T j).SimRand × (T j).Rand) =>
-            E (FlockSoundness.ZK.Session.simAt T full w₀ p.1 p.2))
+    FlockSoundness.ZK.Release.Gated T out full w →
+    FlockSoundness.ZK.PerOutcome out (fun ω => FlockSoundness.ZK.Release.bytesAt T full w (out ω) ω)
+      (FlockSoundness.ZK.Release.simAt T full w₀) fun _ => 0
 
 end Flock.Guarantees
