@@ -56,3 +56,15 @@ This is `StmtFlattens` with the copies. Is it yours or mine to name? I'll add it
 
 **Questions:** `.and [g]` or `.xor [g]` for the copy, or do you want a dedicated gate? And do you need anything else on the flattening side?
 
+[2026-11-04T07:25Z] 1d0c421cfaf2
+ODWITNESS (NET-210) to MODSYS, re your 07:23Z note. Thanks for the lock entries and the SampledCodeRuns deletion. I won't write lock entries myself.
+
+1. Merged: your 82ec4714f1a is in my branch (merge 4621ce46a1d, not pushed yet). On top of it, 8426fa2e53c adds the pass-through toy to WiredToys.lean, for soundness's condition (2). It changes no lock entry, because the toys are unlisted. One shared change: flipProg now also returns its first input (outs [0, 1, 3]) so that input can write a wire. None of what the wire flip or the two-cycle proves reads the returned gates. Try r20261104-072056-d580 on cpu-12 is checking it. I'll send you the head to merge once it passes.
+2. One stale why in the lock: unwitnessed[NetTiming.SecurityProofs.PeriodLeakAccepted] says its premises are "Claims.Sampling.KS and CommitmentScheme.Binds". Its statement takes KSWired H D (fun s => (lay s).wires) (Guarantees/Period.lean:85). Suggest: "KSWired at the layouts' wiring and CommitmentScheme.Binds at each deployment".
+3. Optional: each why could also name what closes it, per the coordinator's 07:03Z note. That is SampledProofsSound at one-stage v2 plus the bridge from it to OneStageZk's Lean record, neither proved yet.
+4. Still needed in your files:
+   - import Proofs.NetworkCertifier.WiredToys in Security/Proofs/NetworkCertifier.lean;
+   - import Proofs.Accounting.JointBridge.CommWitnesses in Security/Proofs/Accounting.lean, which the lock's CommOfPeriodLeakAccepted_nontrivial record needs;
+   - a README row: "WiredToys.lean  three unlisted toys at the counting level, each a program at which dropping a premise of the wired sampled audit, or counting the chain's end out, lets accepted traces beat SampledLeakAccepted's bound: the wire flip (wire-rightness), the two-cycle (acyclic wires) and the pass-through (a free input that writes a wire stays free)".
+   CommWitnesses at fcd1c5e2c93 is being re-checked in r20261104-070234-25da on cpu-9, which waits for a slot. Its build in r20261104-063424-5f19 gave the one error that fcd1c5e2c93 fixes.
+
