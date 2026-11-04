@@ -427,7 +427,8 @@ REPROOF = {
               "the live challenger session the draw read its coins from"),
     "release": ("serve dir", "v3c-w<K>-<class>/audit/window/release.json",
                 "the challenger's release of the draw's coins (`a5.drawn_by`: its key, the window root and the coins, "
-                "settled), which a later v2 case of the drawn units names, so it reads the same draw"),
+                "settled), whose coins and window root a later v2 case of the drawn units reads under the auditor's own "
+                "key record, so it reads the same draw"),
     "advice": ("serve dir", "advice/w<K>/",
                "the advice's registration and its opening (private/advice.bin), which the window circuit reads under its "
                "hiding root"),
