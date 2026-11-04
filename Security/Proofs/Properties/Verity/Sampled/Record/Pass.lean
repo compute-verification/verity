@@ -202,10 +202,7 @@ theorem pass_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Sampled
   unfold Flock.HmIn.drawn at hdr
   obtain ⟨D, hD, -, hnD, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec hdr
   rw [hdraw.symm.trans hsd] at hlawc
-  first
-    | rw [ite_eq_left Option.isSome_some] at hlawc
-    | rw [ite_eq_left rfl] at hlawc
-    | simp only [Option.isSome_some, ↓reduceIte] at hlawc
+  rw [ite_eq_left Option.isSome_some] at hlawc
   have hX : _root_.Properties.SampledProofs.Units.unitsAt A.pub.header (Flock.norm J) =
       some ((drawn A (drawBytes (coinsAt r))).toArray.qsort (· < ·)) := by
     have h := hu
