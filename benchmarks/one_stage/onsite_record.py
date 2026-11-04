@@ -296,9 +296,9 @@ PREMISES: dict[str, dict[str, Any]] = {
                            "audit's free inputs off the inputs its circuit reads as the reader parses it (circuitOf at "
                            "Tags.circuit, whole_circuit), where the bridge is definitional, while each session proves "
                            "the circuit at Zk.tags (Tags.circuit.withCoins c), and that the two read the same inputs "
-                           "is an identity lemma, not a definition. Open, by this name, until a theorem in the lock "
-                           "gives it at every c: a change to Flock that makes it definitional, or a lemma at each "
-                           "parse",
+                           "is an identity lemma, not a definition. Open, by this name, until the lemma that circuitOf "
+                           "at t.withCoins c is circuitOf at t, by definition once circuitOf reads its tags with their "
+                           "identity dropped, is in the lock beside whole_circuit",
                      "discharged_by": ()},
     "held-performed": {"is": "the public's held names only the checks the period check performed, each holding of it",
                        "discharged_by": ("Properties.NetworkPeriod.rowsHeld",)},
