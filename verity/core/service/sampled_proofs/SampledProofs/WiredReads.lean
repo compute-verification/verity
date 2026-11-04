@@ -10,7 +10,8 @@ the unit's position, its rank among the member's units (leaf `i` of a member's o
 per-member statement holds its units to the member's); and the registration gives the root of each member's port
 (`<member>/<port>`), its leaves and domain the verifier's own `ports`. All of it is fixed before any coin:
 
-* `ctxOf`: the context; each template the wiring names is one template of the partition, of its units, and no
+* `ctxOf`: the context; each template the wiring names is one template of the partition, of its units, each wire's
+  writer units precede its reader units in the population (`ordered`, in closed form, so the wires are acyclic), and no
   registration port is named twice;
 * `derive`: a session's wired reads, one `Flock.RegWired.Port` per wired row of the member's template, one read per
   session instance (its unit the instance's `units.indices`, which the verifier derived), refused when a wire meets only
@@ -77,8 +78,28 @@ def writersOf (record : Json) (ports : Array (String × Json)) : V (Std.HashMap 
     | _, _ => pure ()
   pure out
 
+/-- The greatest of `Σ_k d_k · (step_k − place_k)` over the digits `d` of `ps` (radices and steps, the fastest digit
+first, as `Wires.Wire.pairs`), `place` the first digit's place in the reader's unit: `Wires.highOf`'s closed form. -/
+def gapOf : List (Nat × Int) → Int → Int
+  | [], _ => 0
+  | (r, s) :: ps, place => max 0 ((s - place) * ((r : Int) - 1)) + gapOf ps (place * r)
+
+/-- The greatest of wire `w`'s writer unit less its reader unit over its reader indices, each in its own template's
+units, in closed form: reader index `i`'s reader unit is `start + i / cuts`, so the row digit (the fastest, when the wire
+is cut) moves the writer alone. -/
+def lead (w : Wires.Wire) : Int :=
+  w.base - w.start + if w.cuts == 1 then gapOf w.pairs 1 else match w.pairs with
+    | (r, s) :: ps => max 0 (s * ((r : Int) - 1)) + gapOf ps 1
+    | [] => 0
+
+/-- Each of wire `w`'s writer units precedes its reader unit in the population whose templates start at `firsts`. -/
+def ordered (firsts : Array (String × Nat × Nat)) (w : Wires.Wire) : Bool :=
+  match firsts.find? (·.1 == w.writer), firsts.find? (·.1 == w.reader) with
+  | some (_, wf, _), some (_, rf, _) => w.units == 0 || decide ((wf : Int) - rf + lead w < 0)
+  | _, _ => false
+
 /-- The context at the templates' first units and counts `firsts`: each template the wiring `spec` names one of them with
-the wiring's units, and the members and registration's ports. -/
+the wiring's units, each wire's writers before their readers (`ordered`), and the members and registration's ports. -/
 def ctxAt (spec : String × Wires.Wiring × Wires.Summary) (firsts : Array (String × Nat × Nat)) (record : Json)
     (ports : Array (String × Json)) (members : Array Member) : V Ctx := do
   for (tid, t) in spec.2.1.templates do
@@ -87,6 +108,9 @@ def ctxAt (spec : String × Wires.Wiring × Wires.Summary) (firsts : Array (Stri
       if n != t.units then
         throw s!"proofs: wires: template {tid} has {t.units} units, and the verifier's partition {n}"
     | _ => throw s!"proofs: wires: template {tid} is not one template of the verifier's partition"
+  if let some (_, i) := spec.2.2.wires.zipIdx.find? (fun (w, _) => !ordered firsts w) then
+    throw (s!"proofs: wires: wire {i} reads a unit at or after its reader's: each wire reads earlier units of the " ++
+      "verifier's partition, so the wires are acyclic")
   pure { digest := spec.1, wiring := spec.2.1, summary := spec.2.2, firsts, members,
          writers := ← writersOf record ports }
 

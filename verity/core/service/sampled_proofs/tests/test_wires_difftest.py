@@ -8,7 +8,9 @@ and the overlap check pair by pair) against the expansion.
 
 `wired_reads` (`WiredReads.ctxAt`, `WiredReads.deriveAt`) is held to a Python reference of a per-member session's wired
 reads: per wired row of the member's template, each drawn instance's writer root (the writer unit's member's output, as
-the registration holds it) and the writer unit's rank among its member's units.
+the registration holds it) and the writer unit's rank among its member's units. Its refusal of a wire whose writer unit
+is not before its reader unit in the population (`WiredReads.ordered`, in closed form) is held to every reader index
+expanded (`order_refusal`).
 """
 
 from __future__ import annotations
@@ -221,6 +223,20 @@ def _get(j, k):
     return j.get(k) if isinstance(j, dict) else None
 
 
+def order_refusal(wires: list, firsts) -> str | None:
+    """`WiredReads.ordered`, every reader index expanded: the refusal of the first wire one of whose writer units is not
+    before its reader unit in the population whose templates start at `firsts`."""
+    first = {}
+    for t, lo, _ in firsts:
+        first.setdefault(t, lo)
+    for i, w in enumerate(wires):
+        wf, rf = first[w["writer"]], first[w["reader"]]
+        if any(wf + writers(w, x) >= rf + w["at"] + x // w["c"] for x in range(units(w))):
+            return (f"proofs: wires: wire {i} reads a unit at or after its reader's: each wire reads earlier units of "
+                    "the verifier's partition, so the wires are acyclic")
+    return None
+
+
 def _registered(record, ports: dict) -> dict:
     """`WiredReads.writersOf`: the registration's roots by port, each with its port's leaves and domain."""
     roots = _get(record, "roots")
@@ -344,6 +360,8 @@ def reference_reads(j):
             if hits[0][2] != t["units"]:
                 raise Refused(f"proofs: wires: template {tid} has {t['units']} units, and the verifier's partition "
                               f"{hits[0][2]}")
+        if why := order_refusal(got["wires"], firsts):
+            raise Refused(why)
         registered = _registered(j["record"], ports)
         return {"ok": True, "ports": _derive(wiring["cuts"], got["wires"], firsts, members, registered, member, indices)}
     except Refused as e:
@@ -444,16 +462,27 @@ def drawn_instances(draw, broken: bool = False):
 
 @st.composite
 def wired_instances(draw, broken: bool = False):
-    """An instance of `instances` laid out as a population: its templates' first units in a drawn order (rarely one
-    missing, twice or at another count), members cut at every template's and wire's ends (some merged, so that a wire
+    """An instance of `instances` laid out as a population: its templates' first units in a drawn order, mostly each
+    wire's writer template before its reader's (rarely one missing, twice or at another count), members cut at every template's and wire's ends (some merged, so that a wire
     meets only some of a member's units, and one sometimes of two ranges), each member's outputs registered with its
     units as leaves (rarely missing, twice, at other leaves or not hex), and some of one member's units drawn, mostly a
     reader's (rarely a unit outside it)."""
     wiring = draw(instances())
     del wiring["queries"]
     templates = wiring["templates"]
+    order = draw(st.permutations(sorted(templates)))
+    if draw(st.integers(0, 3)):
+        edges = {(w["writer"], w["reader"]) for w in wiring["wires"] if w["writer"] != w["reader"]}
+        ahead = []
+        while left := [t for t in order if t not in ahead]:
+            t = next((t for t in left if not any((u, t) in edges for u in left)), None)
+            if t is None:
+                ahead += left
+                break
+            ahead.append(t)
+        order = ahead
     firsts, lo = [], 0
-    for t in draw(st.permutations(sorted(templates))):
+    for t in order:
         firsts.append([t, lo, templates[t]["units"]])
         lo += templates[t]["units"]
     start = {t: f for t, f, _ in firsts}
@@ -636,8 +665,25 @@ def _gathered(**change) -> dict:
     return j | change
 
 
+def _chain(**wire) -> dict:
+    """A chain: template `C`'s unit u + 1 reads unit u's output (its wire's fields changed by `wire`), units 0 and 1 to 3
+    in members c0 and c1, each member's output registered with its units as leaves, and c1's instances at units 2 and 1
+    drawn."""
+    w = {"reader": "C", "port": "x", "writer": "C", "out": "o", "at": 1, "radix": [3], "base": 0, "step": [1]} | wire
+    return {"wiring": {"templates": {"C": {"units": 4, "rows": {"x": [1, 1]}, "outs": {"o": 1}}}, "cuts": {}, "wires": [w]},
+            "firsts": [["C", 0, 4]],
+            "members": [{"name": "c0", "units": [[0, 1]]}, {"name": "c1", "units": [[1, 4]]}],
+            "record": {"roots": [{"port": "c0/o", "root": "b0"}, {"port": "c1/o", "root": "b1"}]},
+            "ports": {"c0/o": {"leaves": 1, "domain": "dd"}, "c1/o": {"leaves": 3, "domain": "dd"}},
+            "member": "c1", "indices": [2, 1]}
+
+
 def _why(reason: str) -> dict:
     return {"ok": False, "reason": reason}
+
+
+UNORDERED = _why("proofs: wires: wire 0 reads a unit at or after its reader's: each wire reads earlier units of the "
+                 "verifier's partition, so the wires are acyclic")
 
 
 GATHERED = {"ok": True, "ports": [
@@ -673,6 +719,11 @@ GATHERED = {"ok": True, "ports": [
      _why("proofs: wires: template A has 2 units, and the verifier's partition 3")),
     ("a refused wiring", _gathered(wiring=_wiring(wires__0__base=1)),
      _why("proofs: wires: the wiring is refused (bounds, wire 0)")),
+    ("a writer template after its reader's", _gathered(firsts=[["A", 0, 2], ["G", 2, 6]]), UNORDERED),
+    ("a chain", _chain(), {"ok": True, "ports": [{"name": "x", "reads": [["c1/o", "b1", "dd", 3, 0],
+                                                                         ["c0/o", "b0", "dd", 1, 0]]}]}),
+    ("a chain read backwards", _chain(at=0, base=1), UNORDERED),
+    ("a unit reading itself", _chain(at=0), UNORDERED),
 ], ids=lambda x: x if isinstance(x, str) else "")
 def test_wired_reads_named_cases(pieces, name, j, want):
     """Each wired row of a drawn reader opens its writer member's registered root at the writer unit's rank, or the

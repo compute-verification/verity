@@ -152,13 +152,15 @@ def _per_member(a: dict, members: dict | None = None, statements: list | None = 
             "evidence": {**a["evidence"], "proofs": {"statements": statements}}}
 
 
-def _wiring(a: dict, units: int = 0) -> dict:
-    """A wiring of no wire over one template of `a`'s partition, at its units plus `units` (none when no template is one
-    root node's alone)."""
+def _wiring(a: dict, units: int = 0, itself: bool = False) -> dict:
+    """A wiring over one template of `a`'s partition, at its units plus `units` (none when no template is one root node's
+    alone): of no wire, or at `itself` of one wire by which each of its units reads its own output."""
     rs = R.PARTITION.ranges(OS.PROGRAMS[a["params"]["partition"]["program"]], a["params"]["query"])
     one = [(t, n) for t, _, n in rs if n and sum(r == t for r, _, _ in rs) == 1]
     templates = {t: {"units": n + units, "rows": {"x": [1, 1]}, "outs": {"o": 1}} for t, n in one[:1]}
-    return {"templates": templates, "cuts": {}, "wires": []}
+    wires = [{"reader": t, "port": "x", "writer": t, "out": "o", "at": 0, "radix": [n], "base": 0, "step": [1]}
+             for t, n in one[:1] if itself]
+    return {"templates": templates, "cuts": {}, "wires": wires}
 
 
 def _wired(a: dict) -> dict:
@@ -177,7 +179,7 @@ def _statement(member: str, public: bytes = PUBLIC) -> dict:
 #: (`_per_member`), a statement naming no member or a member twice, statements out of the members' order, two members'
 #: units meeting, a member's units or keys malformed, its circuit or its statement's public file in no blob, the
 #: evidence's proofs in the other form than the params', proved units no session proved, and wires the wire check
-#: refuses or naming a template outside the verifier's partition or of other units than its.
+#: refuses, naming a template outside the verifier's partition or of other units than its, or reading a unit's own output.
 V2_BREAKS = {
     "v1": _v1,
     "v1-evidence": lambda a: {**a, "evidence": _v1(a)["evidence"]},
@@ -210,6 +212,7 @@ V2_BREAKS = {
     "wires-template": lambda a: _per_member(a, wires={**_wiring(a), "templates": {
         "no-template": {"units": 1, "rows": {"x": [1, 1]}, "outs": {"o": 1}}}}),
     "wires-units": lambda a: _per_member(a, wires=_wiring(a, units=1)),
+    "wires-order": lambda a: _per_member(a, wires=_wiring(a, itself=True)),
 }
 
 

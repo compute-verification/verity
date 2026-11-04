@@ -328,7 +328,8 @@ def _members_held(members: dict, sts: list) -> str | None:
 
 def _wired_context(p: dict, record: dict) -> str | None:
     """`WiredReads.ctxOf`'s refusals: a template the wiring names that is not one template of the verifier's partition
-    (`partition.ranges`) or not of the wiring's units, and a registration port named twice."""
+    (`partition.ranges`) or not of the wiring's units, a wire reading a unit at or after its reader's
+    (`WIRES.order_refusal`), and a registration port named twice."""
     rs = PARTITION.ranges(p["program"], p["query"])
     for tid, t in sorted(p["wires"]["templates"].items()):
         counts = [n for r, _, n in rs if r == tid]
@@ -336,6 +337,8 @@ def _wired_context(p: dict, record: dict) -> str | None:
             return f"proofs: wires: template {tid} is not one template of the verifier's partition"
         if counts[0] != t["units"]:
             return f"proofs: wires: template {tid} has {t['units']} units, and the verifier's partition {counts[0]}"
+    if why := WIRES.order_refusal(WIRES.expand(p["wires"])["wires"], rs):
+        return why
     seen = set()
     for r in record.get("roots") if isinstance(record.get("roots"), list) else []:
         port = r.get("port") if isinstance(r, dict) else None
