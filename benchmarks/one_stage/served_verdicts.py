@@ -16,6 +16,7 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --registration FILE --pieces DIR --out DIR
                               [--node NAME] [--product P] [--deferred WHY]
     served_verdicts.py public-registration REGISTRATION
+    served_verdicts.py advice-line SERVE_DIR --window K --compiler FILE --coins-after T
     served_verdicts.py front-line SESSION
     served_verdicts.py public-lines [--private FILE]
     served_verdicts.py publish OUT --private DIR
@@ -28,8 +29,10 @@ its public form in its place; what a verifier reads of OUT (`RECEIVED`) it leave
 with ``--received-scanned`` (``kind_scan.py --received OUT`` found every field of it one of the public kinds), and holds
 whole without it. The class's padded counts, the period's declared T and S, the bench Build's requests and the
 verifier's coins and draws are public. ``public-registration`` prints what the run publishes of a window's advice
-registration (`public_registration`: the advice's length padded to its compiler's cap), and ``front-line`` the
-CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
+registration (`public_registration`: refused unless the advice was committed padded to its compiler's cap), ``advice-line`` the ADVICE-LINE
+verdict on a serve-openai ``--advice`` run (`advice_line`: B registered before the first window, every window's advice
+line before sampled proofs' and the certifier's first coin, the audited window's registration under B), and ``front-line``
+the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
@@ -474,19 +477,104 @@ def publish(out: Path, private: Path, received_scanned: bool = False) -> list[st
     return held
 
 
-#: The advice registration's fields that state the advice's own length, which `public_registration` pads to the cap.
-PADDED = ("binding.advice.bits", "rows")
+def padded(reg: Mapping[str, Any]) -> bool:
+    """Whether a window's advice registration says no length of the advice: its advice committed padded to its compiler's
+    ``cap_bits`` (`advice_windows.pad`), so its length is the cap and its rows the ones the cap fixes at ``row_bits`` each,
+    and no field of the bits per egress window."""
+    try:
+        cap, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])
+        return (int(reg["binding"]["advice"]["bits"]), int(reg["rows"])) == (cap, -(-cap // row_bits)) \
+            and "bits_by_window" not in reg
+    except (KeyError, TypeError, ValueError):
+        return False
 
 
 def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
-    """What the run publishes of a window's advice registration: the advice's length (`PADDED`) at its compiler's
-    ``cap_bits``, the one length the class declares (its rows at ``row_bits`` each), no count or refusal of its requests,
-    no window's number (`public_json`), and the rest as registered. ``padded`` names the fields padded."""
-    cap, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])
-    out = {k: v for k, v in reg.items() if k not in ("requests", "compiled", "refused")}
-    out["binding"] = {**reg["binding"], "advice": {**reg["binding"]["advice"], "bits": cap}}
-    out["rows"] = -(-cap // row_bits)
-    return public_json({**out, "padded": list(PADDED)})
+    """What the run publishes of a window's advice registration: the registration as committed, refused (ValueError) unless
+    it is `padded`, with no count or refusal of its requests and no window's number (`public_json`)."""
+    if not padded(reg):
+        raise ValueError("the window's advice registration states the advice's own length: its advice wasn't committed "
+                         "padded to its compiler's cap (advice_windows.pad)")
+    return public_json({k: v for k, v in reg.items() if k not in ("requests", "compiled", "refused")})
+
+
+#: serve-openai ``--advice``'s public records in its serve dir (`verity_vllm.pipeline.serve_advice`): B's registration,
+#: written before its first window, and each closed window's advice line
+ADVICE_REGISTRATION, ADVICE_LINES = "advice_registration.json", "advice.jsonl"
+
+
+def advice_line(serve_dir: Path, window: int, compiler: Mapping[str, Any], coins_after: float) -> tuple[bool, str]:
+    """The ADVICE-LINE verdict on a serve-openai ``--advice`` run: B as the server registered it before its first window
+    (`ADVICE_REGISTRATION`) is ``compiler``, the one ``prove_path.py compiler`` recomputes from serve.json, the builder
+    of the registration log it committed (B's inner digest, the window advice's format, ℓ_a), and that log's last entry
+    the run's day's declaration, B's digest its program (`serve_advice.declared_log`: one program a day); every closed window
+    (``windows.jsonl``) has its line (`ADVICE_LINES`), in window order, each under B with ℓ_a and the rows ℓ_a fixes as
+    the advice's length and row count, written before ``coins_after`` (unix seconds: before sampled proofs and the network
+    certifier draw any coin); and window ``window``'s registration, the one the records audit opens, is its line's root
+    under B, its advice committed padded to ℓ_a (`padded`). -> (passed, the line, naming no window)."""
+    from verity.core.protocols import registration as REG
+
+    why: list[str] = []
+    reg, lines = _json(serve_dir / ADVICE_REGISTRATION), _lines(serve_dir / ADVICE_LINES)
+    if reg is None:
+        return False, (f"ADVICE-LINE: FAIL: no {ADVICE_REGISTRATION}: the server registered no B (serve-openai without "
+                       "--advice)")
+    b, cap = reg.get("compiler") or {}, reg.get("cap_bits")
+    if (b.get("digest"), b.get("cap_bits"), b.get("inner")) != (compiler.get("digest"), compiler.get("cap_bits"),
+                                                                 compiler.get("inner")):
+        why.append("the server's B isn't the compiler prove_path.py recomputes from serve.json")
+    if cap != b.get("cap_bits"):
+        why.append("its ℓ_a isn't its compiler's cap")
+    day = reg.get("day")
+    try:
+        composite, log = REG.log_of(reg["registration"]["log"])
+        view = REG.check(REG.Auditor(), composite, log).view()
+        want = {"kind": "builder", "digest": (b.get("inner") or {}).get("digest"), "advice": reg.get("advice"), "cap": cap}
+        if view.builder != want or view.head != reg["registration"].get("head"):
+            why.append("its registration log's builder isn't B's (its inner digest, its advice's format and ℓ_a)")
+        last = log[-1] if log else None
+        if isinstance(day, bool) or not (isinstance(last, REG.Declaration) and last.day == day
+                                         and last.program == b.get("digest")):
+            why.append("its registration log's last entry isn't the run's day's declaration of B as the day's program")
+    except (KeyError, TypeError, ValueError, REG.Refused) as e:
+        why.append(f"its registration log doesn't check ({type(e).__name__})")
+    closed = sorted({int(x["window"]) for x in _lines(serve_dir / "windows.jsonl")})
+    order = [int(x["window"]) for x in lines]
+    if order != sorted(set(order)):
+        why.append("the advice lines aren't one a window in window order")
+    if sorted(order) != closed:
+        why.append("a closed window has no advice line")
+    rows = -(-int(cap) // int(reg.get("row_bits") or 1)) if isinstance(cap, int) else None
+    for x in lines:
+        if x.get("refused") or x.get("empty"):
+            continue
+        if (x.get("compiler") or {}).get("digest") != b.get("digest") or (x.get("advice") or {}).get("bits") != cap \
+                or x.get("rows") != rows:
+            why.append("an advice line names another compiler than B, or a length or row count other than ℓ_a's")
+            break
+    t0 = reg.get("t")
+    if any(not (isinstance(x.get("t"), (int, float)) and x["t"] < coins_after) for x in lines):
+        why.append("an advice line was written after sampled proofs' or the network certifier's first coin")
+    if not isinstance(t0, (int, float)) or any(isinstance(x.get("t"), (int, float)) and x["t"] < t0 for x in lines):
+        why.append("an advice line was written before B's registration")
+    mine = next((x for x in lines if int(x["window"]) == int(window)), None)
+    wreg = _json(serve_dir / "advice" / f"w{int(window)}" / "registration.json")
+    if mine is None or mine.get("refused") or mine.get("empty") or wreg is None:
+        why.append("the audited window has no committed advice")
+    elif (wreg["binding"]["advice"]["root"], wreg["binding"]["compiler"]) != (mine["advice"]["root"], mine["compiler"]) \
+            or mine["compiler"] != {"name": b.get("name"), "digest": b.get("digest")}:
+        why.append("the audited window's registration isn't its advice line's root under B")
+    elif not padded(wreg) or wreg["compiler"].get("cap_bits") != cap:
+        why.append("the audited window's advice wasn't committed padded to ℓ_a: its registration states its own length")
+    ok = not why
+    return ok, (f"ADVICE-LINE: B (compiler digest {str(b.get('digest'))[:16]}…, its advice {reg.get('advice')}, ℓ_a {cap} "
+                f"bits) registered by the server once, before its first window, the registration log's builder and the "
+                f"compiler prove_path.py recomputes from serve.json, and declared day {day}'s one program; every closed "
+                f"window's advice committed by the server "
+                f"as it served, padded to ℓ_a, its line (the advice's root, ℓ_a and the rows ℓ_a fixes) out before sampled "
+                f"proofs' and the network certifier's first coin; "
+                f"the audited window's registration its line's root under B, at ℓ_a: {'PASS' if ok else 'FAIL'}"
+                + (f" ({'; '.join(why)})" if why else ""))
 
 
 #: The certifier front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
@@ -1379,6 +1467,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     cn.add_argument("--run", help="the run the coin was drawn in (RESEARCH_RUN_ID), the put's meta")
     rg = sub.add_parser("public-registration")
     rg.add_argument("registration", type=Path)
+    al = sub.add_parser("advice-line")
+    al.add_argument("serve_dir", type=Path)
+    al.add_argument("--window", type=int, required=True)
+    al.add_argument("--compiler", type=Path, required=True, help="prove_path.py compiler's output for the serve dir")
+    al.add_argument("--coins-after", type=float, required=True,
+                    help="unix seconds before sampled proofs and the network certifier draw any coin")
     pl = sub.add_parser("public-lines")
     pl.add_argument("--private", type=Path)
     pb = sub.add_parser("publish")
@@ -1411,8 +1505,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         if a.product not in BR.PRODUCTS:
             ap.error(f"--product {a.product!r}: not one of {sorted(BR.PRODUCTS)}")
     if a.cmd == "public-registration":
-        print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
+        try:
+            print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
+        except ValueError as e:
+            print(f"public-registration: {e}", file=sys.stderr)
+            return 1
         return 0
+    if a.cmd == "advice-line":
+        ok, line = advice_line(a.serve_dir, a.window, json.loads(a.compiler.read_text()), a.coins_after)
+        print(line)
+        return 0 if ok else 1
     if a.cmd == "front-line":
         try:
             print(front_line(json.loads(a.session.read_text())))

@@ -72,6 +72,8 @@ def test_the_endpoint_serves_under_predicts_row_held_to_the_traced_one(tmp_path)
     assert compare[:3] == ["predict", "compare", traced] and compare[compare.index("--predicted") + 1] == pred
     assert compare[compare.index("--config") + 1] == "config.json"
     assert serve[0] == "serve-openai" and serve[serve.index("--required-manifest") + 1] == f"{pred}/manifest.json"
+    assert serve.count("--advice") == 1 and serve[serve.index("--advice-cap") + 1] == "8388608"
+    assert serve[serve.index("--advice-weights") + 1] == str(tmp_path / "serve" / "r-toy" / "weights_registration.json")
     assert "PREDICT-COMPARE [predict] row: EQUAL on every rank" in (tmp_path / "out" / "steps.txt").read_text()
 
 

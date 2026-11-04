@@ -20,8 +20,9 @@ the leaves the drawn blocks open.
 * **Where draws come in.** `Draws.put` in process (PoUW H1's under ``pouw``, from its arm once the window's draw coin is
   open: `serve_h1.H1Windows.drawn`), or `DrawDir`: ``--draws-dir`` (default ``OUT/draws``) holds one file a draw,
   ``w<k>.<protocol>.json`` = ``{"window": k, "protocol": P, "reads": [[step, name, lo, hi], ...]}``, written whole (to a temporary
-  name, then renamed) once the window's ``windows.jsonl`` line, its commitment, is out. A file that doesn't parse, or names
-  another window or protocol, fails that window's release by name; the server serves on.
+  name, then renamed) once the window's ``windows.jsonl`` line, its commitment, is out, and under ``--advice`` its
+  ``advice.jsonl`` line (`serve_advice`). A file that doesn't parse, names another window or protocol, or comes before the
+  window's advice line, fails that window's release by name; the server serves on.
 * **At the stop** the pending seals wait for their windows' draws as they wait for their sealer: a drawer must draw every window
   whose line was written before it stops the server, or the stop waits on it.
 * **Failures.** A window that reaches no release (its draws fail, or its close or seal job does) is discarded (`Draws.discard`):
@@ -217,11 +218,13 @@ class Draws:
 
 class DrawDir:
     """``--draws-dir``: each ``w<k>.<protocol>.json`` put into `Draws` once; `scan` reads what's new, `start` scans every
-    ``period_s`` (default `VERITY_DRAWS_POLL_S`) on a thread of its own until `stop`."""
+    ``period_s`` (default `VERITY_DRAWS_POLL_S`) on a thread of its own until `stop`. With ``advised`` (serve-openai's
+    ``--advice``: `serve_advice.ServedAdvice.committed`), a draw of a window whose advice line isn't out is refused, and the
+    window's release with it: its coin came before its advice was committed."""
 
     def __init__(self, path: str | Path, draws: Draws, *, period_s: float | None = None,
-                 sleep: Callable[[float], None] = time.sleep) -> None:
-        self.path, self.draws, self.sleep = Path(path), draws, sleep
+                 sleep: Callable[[float], None] = time.sleep, advised: Callable[[int], bool] | None = None) -> None:
+        self.path, self.draws, self.sleep, self.advised = Path(path), draws, sleep, advised
         self.period_s = settings.VERITY_DRAWS_POLL_S if period_s is None else float(period_s)
         self.path.mkdir(parents=True, exist_ok=True)
         self.seen: set[str] = set()
@@ -238,6 +241,9 @@ class DrawDir:
             self.seen.add(f.name)
             window, protocol = int(m.group(1)), m.group(2)
             try:
+                if self.advised is not None and not self.advised(window):
+                    raise ValueError(f"window {window}'s advice line (advice.jsonl) isn't out: a draw comes after its advice is "
+                                     "committed")
                 body = json.loads(f.read_text())
                 if not isinstance(body, Mapping) or body.get("window") != window or body.get("protocol") != protocol:
                     raise ValueError(f"its body names window {body.get('window') if isinstance(body, Mapping) else None!r} and "

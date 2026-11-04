@@ -5,13 +5,15 @@ from the window's registration W, so one record is H1's Commit record and the au
 * **When.** On the window's release thread (`serve_h1.H1Windows`' ``closer``), inside `pouw_h1.H1Run.finish` once H1 has
   closed the window and its tables are fixed (the pouw setting ``commit_record``, `hook`): first the window's seal line
   (`sealed`, which `serve_commit.CommitWindows` calls once the seal is written, or with why there is none), then the advice
-  trace's lines flushed (``flush``) and the window's prover state written (``kept``).
+  trace's lines flushed (``flush``; under ``--advice`` `serve_advice.ServedAdvice.drain`, which also commits every whole
+  window's advice) and the window's prover state written (``kept``).
 * **W.** The window's registration (`pouw_h1_commit.registration`), a ``verity/registration/v2`` record of its served
   tables' entries, chained after the log's last record (``previous``; None for the first), written to
   ``h1/w<k>/registration.json``.
 * **R.** ``CMD`` runs as ``bash -c CMD _ SERVE_DIR K W_FILE R_FILE PROVER_DIR`` (``PROVER_DIR`` the window's
   ``--h1-prover`` directory), its output in ``h1/w<k>/window-commit.log``: V3c's window-commit of window K from its sealed
-  row dir (``SERVE_DIR/windows/w<K>``), its advice, the weights registration and H1's prover state, which writes to R_FILE
+  row dir (``SERVE_DIR/windows/w<K>``), its advice as the server committed it (``SERVE_DIR/advice/w<K>/``, its one
+  commitment), the weights registration and H1's prover state, which writes to R_FILE
   (``h1/w<k>/record.json``) R, a registration chained right after W that registers each of the window's A tables and
   input-ids tables as its outputs from W (`pouw_h1_commit.reused`).
 * **Then.** `pouw_h1_commit.bind` holds R to W and binds it into calls_root, and only then come draw_root and the sample
@@ -46,7 +48,8 @@ def run_command(argv: list[str], log: IO[str]) -> int:
 
 class WindowTie:
     """The tie of each H1 window under serve-openai's ``out``: ``command`` (``--h1-window-commit``) run a window by
-    ``runner`` (`run_command`), after ``flush`` (the advice trace's `StepTrace.drain`) when given. ``last`` is the digest of
+    ``runner`` (`run_command`), after ``flush`` (the advice trace's `StepTrace.drain`, or `serve_advice.ServedAdvice.drain`)
+    when given. ``last`` is the digest of
     the log's last record, which the next W chains after."""
 
     def __init__(self, command: str, out: Path, *, flush: Callable[[], Any] | None = None,

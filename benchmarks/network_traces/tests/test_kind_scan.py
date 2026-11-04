@@ -191,13 +191,13 @@ COMPILER = {"name": "verity-vllm/capped/v1", "digest": "0a" * 64, "cap_bits": L_
                     "target": {"gpu": "H200"}, "tp": 1, "sampling": {"kind": "greedy"},
                     "engine": {"execution": "bi-eager", "pin": {"world": 1}}, "workload": {}, "execution": "bi-eager",
                     "profile": "b1-eager-v3"}}
-#: a window's advice registration as `verity-vllm advice` writes it, with its requests, the advice's own length and the
-#: window's number
+#: a window's advice registration as `verity-vllm advice` writes it, with its requests and the window's number, its advice
+#: committed padded to ℓ_a (the rows ℓ_a fixes)
 ADVICE = {"schema": "verity-vllm/advice-registration/v1", "scheme": "verity-vllm/advice/v1",
           "binding": {"compiler": {"name": COMPILER["name"], "digest": COMPILER["digest"]},
-                      "advice": {"root": "06" * 64, "bits": REALIZED}},
+                      "advice": {"root": "06" * 64, "bits": L_A}},
           "compiler": {"name": COMPILER["name"], "digest": COMPILER["digest"], "cap_bits": L_A, "inner": COMPILER["inner"]},
-          "rows": 1, "row_bits": 4096, "T": 600, "bits_by_window": {"3": REALIZED}, "window": 3,
+          "rows": L_A // 4096, "row_bits": 4096, "T": 600, "window": 3,
           "commit": {"run_id": "RUN/w3", "run_root": "ab" * 64}, "registered_roots": {"weights/embed@4": "02" * 64},
           "requests": 2, "compiled": [{"request": "r0"}], "refused": [{"request": "r1", "why": "a chunked prefill"}]}
 #: the committer's weights registration (`window_weights.weights_registration`)
@@ -263,11 +263,11 @@ def _edit(p: Path, f) -> None:
     (lambda o: (o / "v3c-audit" / "audit.log").write_text('RECORDS {"population": 37}\n'), [("v3c-audit/audit.log", "")]),
     (lambda o: (o / "v3c-audit" / "main.txt").write_text("ab" * 20 + "\n"), [("v3c-audit/main.txt", "")]),
     (lambda o: _edit(o / "registration.json", lambda r: {**r, "binding": {**r["binding"], "advice": {
-        **r["binding"]["advice"], "bits": REALIZED}}, "rows": 1}),
-     [("registration.json", "binding.advice.bits"), ("registration.json", "rows")]),
+        **r["binding"]["advice"], "bits": REALIZED}}, "rows": 1, "bits_by_window": {"3": REALIZED}}),
+     [("registration.json", p) for p in ("binding.advice.bits", "bits_by_window.3", "rows")]),
     (lambda o: (o / "registration.json").write_text(json.dumps(ADVICE)),
-     [("registration.json", p) for p in ("binding.advice.bits", "bits_by_window.3", "compiled[].request",
-                                         "refused[].request", "refused[].why", "requests", "rows", "window")]),
+     [("registration.json", p) for p in ("compiled[].request", "refused[].request", "refused[].why", "requests",
+                                         "window")]),
     (lambda o: _edit(o / "compiler.json", lambda c: {**c, "phi": {**c["phi"], "workload": {
         "requests": [{"request_id": "r0", "prompt": 11, "max_tokens": 8}]}}}),
      [("compiler.json", f"phi.workload.requests[].{k}") for k in ("max_tokens", "prompt", "request_id")]),
@@ -284,7 +284,7 @@ def _edit(p: Path, f) -> None:
 def test_what_reads_the_advice_or_counts_the_window_is_a_finding_in_what_a_verifier_receives(
         tmp_path, period, plant, want):
     """A log or main's history left in the piece's dir or V3c's audit; the advice's own length in its registration,
-    or the registration as `verity-vllm advice` writes it (its requests, compiles, length and window); a workload in the
+    or the registration as `verity-vllm advice` writes it (its requests, compiles and window); a workload in the
     compiler's φ; the advice's length in a class's count; a compile in V3c's summary (the audit opened the advice); an
     advice binding in the registration V3c audited; and a field of the audit record `served_integrity.answer` doesn't
     read: each is a finding, and the scan exits 1."""

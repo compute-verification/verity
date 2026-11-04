@@ -383,7 +383,7 @@ def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entri
 def test_the_window_circuit_command_writes_the_class_circuit_from_what_the_run_publishes(tmp_path, monkeypatch, capsys):
     """``prove_path.py window-circuit``, the verifier's, on what the synthetic serve-openai run of `test_prove_path`
     publishes (its registered compiler, `compiler_doc`, and the window's advice registration in its public form, its
-    length padded to the cap), I2's class circuit stubbed, one whose every input is registered: it builds the circuit
+    advice committed padded to the cap), I2's class circuit stubbed, one whose every input is registered: it builds the circuit
     from the class and the compiler's φ, default seed and ℓ alone, reading no serve dir, advice or row dir; writes the
     circuit's record from its description (members stated at its cap, no run) or, ``--description``, the description;
     and prints its count, which states no length of the advice. It exits `records_audit.REFUSED` where I2 refuses the
@@ -393,26 +393,25 @@ def test_the_window_circuit_command_writes_the_class_circuit_from_what_the_run_p
     it records another root, or none, every registered read is free."""
     import prove_path as PP
     import served_verdicts as SV
-    from test_prove_path import _served
+    from test_prove_path import CAP, _served
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict.build import Unexpressible
 
     s, circuit, refuse = _served(tmp_path, monkeypatch), _registered_circuit(), []
-    doc = PP.compiler_doc(str(s.run), None, None, PP.CAP_BITS)
+    doc = PP.compiler_doc(str(s.run), None, None, CAP)
     assert {"name": doc["name"], "digest": doc["digest"]} == s.bound["compiler"]
 
     def lower(registered, cls):
         assert cls == WC.CLASS_OF_RECORD and registered.phi.to_json() == doc["phi"] and not registered.phi.workload
-        assert (registered.default_seed, registered.cap_bits) == (doc["default_seed"], PP.CAP_BITS)
+        assert (registered.default_seed, registered.cap_bits) == (doc["default_seed"], CAP)
         if refuse:
             raise Unexpressible("a family the class's lowering doesn't take")
         return circuit
 
     monkeypatch.setattr(WC, "class_circuit", lower)
-    served = SV.public_registration({**json.loads((s.run / "advice" / "w0" / "registration.json").read_text()),
-                                     "row_bits": 4096})
+    served = SV.public_registration(json.loads((s.run / "advice" / "w0" / "registration.json").read_text()))
     bits = served["binding"]["advice"]["bits"]
-    assert bits == PP.CAP_BITS != s.bound["advice"]["bits"]
+    assert bits == CAP == s.bound["advice"]["bits"]
     for d in (s.run, Path(s.a.row_dir)):
         shutil.rmtree(d)
     compiler, reg_file = tmp_path / "compiler.json", tmp_path / "registration.json"
@@ -442,7 +441,7 @@ def test_the_window_circuit_command_writes_the_class_circuit_from_what_the_run_p
     reg_file.write_text(json.dumps(served))
     other = {"name": doc["name"], "digest": "00" * 64}
     for bad, why in [({**doc, **other}, "not one compiler"), ({**doc, "default_seed": doc["default_seed"] + 1}, "not one compiler"),
-                     ({**doc, "cap_bits": 2 * PP.CAP_BITS}, "not one compiler"),
+                     ({**doc, "cap_bits": 2 * CAP}, "not one compiler"),
                      ({**doc, "served": {**doc["served"], "digest": "00" * 64}}, "the verifier's tree must hold the server's")]:
         compiler.write_text(json.dumps(bad))
         assert PP.main([*base, "--out", str(tmp_path / "e.json")]) == RA.REFUSED
@@ -1126,7 +1125,7 @@ def test_the_served_compilers_command_charges_the_registered_length_and_refuses_
     window): it writes a circuit record the audit reads (`interface.window_of_record`) under no run and prints the length the
     registration charges, and exits `records_audit.REFUSED` on advice it can't compile."""
     import prove_path as PP
-    from test_prove_path import _served
+    from test_prove_path import CAP, _served
     from verity_vllm.pipeline import serving_rows as SRW
 
     s = _served(tmp_path, monkeypatch)
@@ -1137,10 +1136,10 @@ def test_the_served_compilers_command_charges_the_registered_length_and_refuses_
     (tmp_path / "part.json").write_text(json.dumps({"templates": [TID], "law": LAW}))
     (tmp_path / "advice.bin").write_bytes(s.data)
     base = ["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"), "--out",
-            str(tmp_path / "out.json")]
+            str(tmp_path / "out.json"), "--cap-bits", str(CAP)]
     capsys.readouterr()
     assert PP.main([*base, "--advice", str(tmp_path / "advice.bin")]) == 0
-    assert json.loads(capsys.readouterr().out.strip().splitlines()[-1]) == {"bits": s.bound["advice"]["bits"]}
+    assert json.loads(capsys.readouterr().out.strip().splitlines()[-1]) == {"bits": s.bound["advice"]["bits"]} == {"bits": CAP}
     out = json.loads((tmp_path / "out.json").read_text())
     assert out["format"] == IF.CIRCUIT and (out["run"], out["context"]) == ("", "") and set(out) == set(IF.circuit_record(
         window, "x", IF.templates_of(window)))
@@ -1191,7 +1190,7 @@ def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_igno
     ignores names that make the same one (layers 0 and 1's first SiluMul rows swapped, which moves only the prover's own reads;
     two weights fields swapped): the verifier's record is its own compile's in each case."""
     import prove_path as PP
-    from test_prove_path import LAYER0, _circuit, _row_dir, _tiny_served
+    from test_prove_path import CAP, LAYER0, _circuit, _row_dir, _tiny_served
 
     s = _tiny_served(tmp_path, monkeypatch)
     (tmp_path / "part.json").write_text(json.dumps(LAYER0))
@@ -1199,10 +1198,11 @@ def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_igno
     out = tmp_path / "mine" / "circuit.json"
     out.parent.mkdir()
     assert PP.main(["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"),
-                    "--advice", str(tmp_path / "advice.bin"), "--out", str(out)]) == 0
+                    "--advice", str(tmp_path / "advice.bin"), "--out", str(out), "--cap-bits", str(CAP)]) == 0
     assert s.compiles == [True] and list(out.parent.iterdir()) == [out]
     mine = json.loads(out.read_text())
-    own, own_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(tmp_path / "own"), None, None, own=True)), s.data, LAYER0)
+    own, own_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(tmp_path / "own"), None, None, CAP, own=True), CAP),
+                             s.data, LAYER0)
     assert IF.circuit_of(own) == IF.circuit_of(mine)
     copy = ("import json, shutil, sys; a = sys.argv; shutil.copy(a[1], a[a.index('--out') + 1]); "
             f"print(json.dumps({{'bits': {s.bound['advice']['bits']}}}))")
@@ -1216,6 +1216,6 @@ def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_igno
             ("layers 0 and 1's SiluMul rows swapped", ("model.model.layers.0.mlp.act_fn/", "model.model.layers.1.mlp.act_fn/"), False, [], False),
             ("layers 0 and 1's down_proj weights swapped", None, True, [], True))):
         rows = _row_dir(tmp_path / f"rows{k}", s, names, params)
-        theirs, their_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(rows), None, None)), s.data, LAYER0)
+        theirs, their_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(rows), None, None, CAP), CAP), s.data, LAYER0)
         v, bound = RA.compile_check(theirs, s.bound, opening, compilers, tmp_path / "c")
         assert (v["codes"], bound is None, reads(their_rows) == reads(own_rows)) == (codes, bool(codes), same_reads), name

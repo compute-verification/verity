@@ -22,22 +22,25 @@ from the Commit record's token ids.  Each kept output's `release` bucket is the 
 the first step, in which the engine emitted it (the step's clock reading): with no certifier on the path, the earliest bucket
 its frame could be released in.  A trace without a clock takes the step index as the bucket.
 
-The advice is not published: its canonical encoding is committed as hiding rows (`advice_windows.commit_advice`:
-hm96-sha512 rows under `verity.ml.commitments.advice`, the tree's domain bound to the registered compiler), and only the root and
-the advice's length go public, as the binding a window's registration carries (`advice_windows.binding`, the window provenance's
-``binding``, which `serving_rows.after_commit(binding=…)` takes).  Under ``--out``:
+The advice is not published, nor is its length: its canonical encoding, padded to the registered compiler's ℓ bits
+(`advice_windows.pad`), is committed as hiding rows (`advice_windows.commit_advice`: hm96-sha512 rows under
+`verity.ml.commitments.advice`, the tree's domain bound to the registered compiler), as many as ℓ fixes, and only the root and
+ℓ go public, as the binding a window's registration carries (`advice_windows.binding`, the window provenance's ``binding``,
+which `serving_rows.after_commit(binding=…)` takes).  Under ``--out``:
 
-    registration.json     public: the binding (the compiler's name and digest, the advice's root and ``total_bits``), the
-                          registered compiler, `advice_windows.Capped` with ℓ (the cap on the advice's length its digest covers)
-                          and the compiler it wraps (``compiler``), the bits
-                          I1 charges each egress window of `--T` buckets (``bits_by_window``), and with `--weights-of-record`
-                          the committer's hiding root of each weight parameter the window circuit registers, as its weights
-                          registration records it (``registered_roots``: `registered_weights`)
-    private/advice.bin    the prover's: the advice, I1's canonical encoding
+    registration.json     public: the binding (the compiler's name and digest, the advice's root and ℓ), the registered
+                          compiler, `advice_windows.Capped` with ℓ (the cap on the advice's length its digest covers) and the
+                          compiler it wraps (``compiler``), the rows ℓ fixes, and with `--weights-of-record` the committer's
+                          hiding root of each weight parameter the window circuit registers, as its weights registration
+                          records it (``registered_roots``: `registered_weights`)
+    private/advice.bin    the prover's: the advice as the compiler reads it, I1's canonical encoding padded to ℓ bits
     private/advice.json   the same advice, I1's `to_json`
-    private/opening.json  the advice's opening (`advice_windows.opening`: its encoding and every row's salt)
-    private/report.json   the round trip (`decode(encode(a)) == a`), the run's counts (they describe the advice), and the digests of
-                          what it read
+    private/opening.json  the advice's opening (`advice_windows.opening`: its padded bytes and every row's salt)
+    private/report.json   the round trip (`decode(encode(a)) == a`), the run's counts (they describe the advice), the digests of
+                          what it read, and the release rule: on the engine clock, its first step's reading ``t0`` (the trace's
+                          clock, the server's ``time.time``), from which output i's bucket is ⌊(t_i − t0) / τ⌋ and window w
+                          buckets [w·T, (w+1)·T), so periods place on one clock; private, since a period's start is when
+                          requests reached an idle engine
 
 A `verity-vllm serve-openai` run (its ``advice_trace.jsonl``, the server's scheduler step trace with each Commit window's open and
 close, and its ``requests.jsonl``, whose ``user`` names each request) gets one advice a closed Commit window (`windows_of`), each
@@ -51,7 +54,9 @@ with the requests it carries across its open and close, since a window closes af
 and the requests its clients abort (the trace's outside finish, ``abort``, after the step in flight).
 The windows are read in order, each opening with the state the last one left (`Left`: where each unfinished request's next
 row continues, its kept outputs and the KV it computed), so a request that runs on into the next window is held there to the
-position it reached, and its record (lengths and finish) is the Commit record's.
+position it reached, and its record (lengths and finish) is the Commit record's.  A run served with ``--advice``
+(`serve_advice`) committed each window's advice this way as it served, under its own ``advice/``, after registering B once
+before its first window; this command refuses it, since a window's advice is committed once.
 
     verity-vllm advice RUN [--trace FILE] [--io FILE] [--out DIR] [--window K] [--T 600] [--tau 0.1] [--compiler-name N --compiler-digest D] [--cap BITS]
         [--weights-of-record FILE]
@@ -104,8 +109,9 @@ def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bit
 
 def builder_item(compiler: AW.Capped) -> dict[str, Any]:
     """B's item in the deployment's registration log (`verity.core.protocols.registration`, kind ``builder``): the inner
-    compiler's digest, the format of the advice it reads (`certifier.advice.SCHEMA`) and ℓ, as the log decodes it."""
-    return REG.item_of({"kind": "builder", "digest": compiler.inner.digest, "advice": I1.SCHEMA, "cap": compiler.cap_bits})
+    compiler's digest, the format of the advice it reads (a Commit period's, `window_advice.SCHEMA`) and ℓ, as the log
+    decodes it."""
+    return REG.item_of({"kind": "builder", "digest": compiler.inner.digest, "advice": WA.SCHEMA, "cap": compiler.cap_bits})
 
 
 def finish_of(rid: str, rec: dict[str, Any] | None) -> str:
@@ -143,13 +149,20 @@ def io_record(path: str | Path) -> dict[str, dict[str, Any]]:
             continue
         doc = json.loads(line)
         for r in doc.get("requests") if isinstance(doc.get("requests"), list) else [doc]:
-            rid = str(r.get("request") or r.get("engine_id"))
+            rid, entry = io_entry(r)
             if rid in out:
                 raise UsageError(f"{path}: request {rid} is recorded twice")
-            out[rid] = {"user": str(r.get("user") or r.get("http_id") or rid), "prompt_ids": list(r["prompt_ids"]),
-                        "output_ids": list(r.get("output_ids") if r.get("output_ids") is not None else r["streamed_ids"]),
-                        "finish": r.get("finish")}
+            out[rid] = entry
     return out
+
+
+def io_entry(r: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """One request of the Commit record (a ``requests.jsonl`` line, or a request of a ``windows.jsonl`` line) as `io_record`
+    holds it, with its engine request id."""
+    rid = str(r.get("request") or r.get("engine_id"))
+    return rid, {"user": str(r.get("user") or r.get("http_id") or rid), "prompt_ids": list(r["prompt_ids"]),
+                 "output_ids": list(r.get("output_ids") if r.get("output_ids") is not None else r["streamed_ids"]),
+                 "finish": r.get("finish")}
 
 
 @dataclass
@@ -367,7 +380,7 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
                 release.append(bucket[s])
                 kept[r] += 1
                 known[r] += 1
-    rule = {"rule": "engine clock", "tau_s": tau} if clocked else {"rule": "step index"}
+    rule = {"rule": "engine clock", "tau_s": tau, "t0": t0} if clocked else {"rule": "step index"}
     try:
         if not window:
             I1.Advice(tuple(q.i1() for q in advice_reqs), i1_steps, tuple(release))
@@ -408,18 +421,14 @@ def registered_weights(registration: dict[str, Any], serve: dict[str, Any] | Non
     return r.roots
 
 
-def registration(compiler: Any, a: I1.Advice, root: bytes, rows: int, T: int,
-                 registered_roots: dict[str, str] | None = None) -> dict[str, Any]:
-    """What goes public of the advice: the binding (the compiler, the root of the advice's hiding commitment and its length in
-    bits), the bits I1 charges each egress window of ``T`` buckets and, given, the root of each registered parameter
-    (``registered_roots``, `registered_weights`).  Nothing of the advice itself."""
-    c = codec(a)
-    return {"schema": REGISTRATION, "scheme": AW.SCHEME, "binding": AW.binding(compiler, root.hex(), int(c.total_bits(a))),
+def registration(compiler: Any, root: bytes, rows: int, registered_roots: dict[str, str] | None = None) -> dict[str, Any]:
+    """What goes public of the advice: the binding (the compiler, the root of the advice's hiding commitment and ℓ, the length
+    in bits the compiler reads it at) and, given, the root of each registered parameter (``registered_roots``,
+    `registered_weights`).  Nothing of the advice itself, its length included: the commitment's ``rows`` are the ones ℓ fixes."""
+    return {"schema": REGISTRATION, "scheme": AW.SCHEME, "binding": AW.binding(compiler, root.hex(), int(compiler.cap_bits)),
             "compiler": {"name": str(compiler.name), "digest": compiler.digest, "cap_bits": int(compiler.cap_bits),
                          "inner": {"name": str(compiler.inner.name), "digest": compiler.inner.digest}},
-            "rows": rows, "row_bits": AW.ROW_BITS, "T": int(T),
-            "bits_by_window": {str(w): int(n) for w, n in sorted(c.bits_by_window(a, int(T)).items())},
-            **({"registered_roots": dict(registered_roots)} if registered_roots else {})}
+            "rows": rows, "row_bits": AW.ROW_BITS, **({"registered_roots": dict(registered_roots)} if registered_roots else {})}
 
 
 def codec(a: Any) -> Any:
@@ -427,17 +436,74 @@ def codec(a: Any) -> Any:
     return WA if isinstance(a, WA.Advice) else I1
 
 
-def commit(compiler: Any, a: Any, T: int = 600, salts: list[bytes] | None = None,
+def commit(compiler: Any, a: Any, salts: list[bytes] | None = None,
            registered_roots: dict[str, str] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The advice (I1's, or a Commit window's) committed: its public registration (`registration`, with ``registered_roots``) and
-    its private opening (`advice_windows.opening`).  Advice over the compiler's ℓ (``compiler``: an `advice_windows.Capped`)
-    is refused: the compiler is total only up to it."""
-    data = codec(a).encode(a)
-    cap = int(compiler.cap_bits)
-    if 8 * len(data) > cap:
-        raise ValueError(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {cap} bits")
+    """The advice (I1's, or a Commit period's) committed at the compiler's ℓ (``compiler``: an `advice_windows.Capped`), its
+    encoding padded to ℓ bits (`advice_windows.pad`) so the rows ℓ fixes hold it whatever its length: its public registration
+    (`registration`, with ``registered_roots``) and its private opening (`advice_windows.opening`, of the padded bytes).
+    Advice past ℓ less the pad's end mark is refused: the compiler is total only up to it."""
+    data = compiler.pad(codec(a).encode(a))
     reg = AW.commit_advice(compiler, data, salts)
-    return registration(compiler, a, reg.root, len(reg.rows), T, registered_roots), AW.opening(data, reg)
+    return registration(compiler, reg.root, len(reg.rows), registered_roots), AW.opening(data, reg)
+
+
+def within_cap(compiler: Any, b: Built) -> Built:
+    """A window's advice ``b``, refused (ValueError, `advice_windows.pad`'s) when its encoding is past ``compiler``'s ℓ less
+    the pad's end mark, so a window longer than its registered width is a refused window, as any other the advice refuses."""
+    compiler.pad(WA.encode(b.advice))
+    return b
+
+
+class TraceIndex:
+    """A served trace's records indexed by what `window` reads, extended (`extend`) as the trace grows, so a server reads each
+    record once however many windows it splits."""
+
+    def __init__(self) -> None:
+        self.first: dict[str, Any] | None = None
+        self.opened: dict[int, int] = {}
+        self.closed: dict[int, int] = {}
+        self.steps: dict[int, list[dict[str, Any]]] = {}
+        self._arrive: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+        self._finish: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+        self.n = 0
+
+    def extend(self, recs: list[dict[str, Any]]) -> TraceIndex:
+        for r in recs:
+            i, self.n = self.n, self.n + 1
+            if self.first is None:
+                self.first = r
+            kind = r["kind"]
+            if kind == "window":
+                (self.opened if r["event"] == "open" else self.closed)[int(r["window"])] = int(r["before_step"])
+            elif kind == "step":
+                self.steps.setdefault(int(r["step"]), []).append(r)
+            elif kind in ("arrive", "finish"):
+                (self._arrive if kind == "arrive" else self._finish).setdefault(r["request"], []).append((i, r))
+        return self
+
+    def span(self, w: int) -> tuple[int, int]:
+        """Closed window ``w``'s steps, ``[lo, hi)``."""
+        return self.opened.get(w, 0), self.closed[w]
+
+    def complete(self, w: int) -> bool:
+        """Whether closed window ``w``'s every step is recorded: async scheduling records a window's last step after its close."""
+        lo, hi = self.span(w)
+        return all(s in self.steps for s in range(lo, hi))
+
+    def window(self, w: int) -> list[dict[str, Any]] | None:
+        """Closed window ``w``'s records, a trace of its own (`windows_of`); None for one with no step."""
+        lo, hi = self.span(w)
+        steps = [st for s in range(lo, hi) for st in self.steps.get(s, ())]
+        if not steps:
+            return None
+        ids = {row[0] for st in steps for row in st["rows"]}
+
+        def of(by: dict[str, list[tuple[int, dict[str, Any]]]]) -> list[dict[str, Any]]:
+            return [r for _, r in sorted((x for rid in ids for x in by.get(rid, ())), key=lambda x: x[0])]
+
+        return [self.first, *({**r, "before_step": max(0, r["before_step"] - lo)} for r in of(self._arrive)),
+                *({**st, "step": st["step"] - lo} for st in steps),
+                *({**r, "after_step": r["after_step"] - lo} for r in of(self._finish))]
 
 
 def windows_of(recs: list[dict[str, Any]]) -> tuple[dict[int, list[dict[str, Any]]], list[int]]:
@@ -445,22 +511,9 @@ def windows_of(recs: list[dict[str, Any]]) -> tuple[dict[int, list[dict[str, Any
     the requests with rows in the window, its steps renumbered from 0, and their outside finishes; and the windows still open.  A
     window's steps are those scheduled from its open to its close, wherever async scheduling recorded them; one with none is left
     out."""
-    opened: dict[int, int] = {}
-    closed: dict[int, int] = {}
-    for r in recs:
-        if r["kind"] == "window":
-            (opened if r["event"] == "open" else closed)[int(r["window"])] = int(r["before_step"])
-    out: dict[int, list[dict[str, Any]]] = {}
-    for w in sorted(closed):
-        lo, hi = opened.get(w, 0), closed[w]
-        steps = sorted((r for r in recs if r["kind"] == "step" and lo <= r["step"] < hi), key=lambda r: r["step"])
-        if not steps:
-            continue
-        ids = {row[0] for st in steps for row in st["rows"]}
-        out[w] = [recs[0], *({**r, "before_step": max(0, r["before_step"] - lo)} for r in recs if r["kind"] == "arrive" and r["request"] in ids),
-                  *({**st, "step": st["step"] - lo} for st in steps),
-                  *({**r, "after_step": r["after_step"] - lo} for r in recs if r["kind"] == "finish" and r["request"] in ids)]
-    return out, sorted(set(opened) - set(closed))
+    idx = TraceIndex().extend(recs)
+    out = {w: sub for w in sorted(idx.closed) if (sub := idx.window(w)) is not None}
+    return out, sorted(set(idx.opened) - set(idx.closed))
 
 
 def served(recs: list[dict[str, Any]]) -> bool:
@@ -474,6 +527,9 @@ def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path |
     """The run's advice, committed (`write_one`); a `verity-vllm serve-openai` run's, one advice a closed Commit window
     (`write_served`); each registration with ``registered_roots``, the root of each parameter its window circuit registers."""
     run = Path(run)
+    if (run / "advice.jsonl").exists():
+        raise ValueError("its server committed each window's advice as it served (serve-openai --advice: advice.jsonl, "
+                         "advice/w<k>/), and a window's advice is committed once: read those")
     if trace is None:
         trace = next((p for p in (run / ST.SERVED, run / "step_trace.jsonl") if p.exists()), run / "step_trace.jsonl")
     trace = Path(trace)
@@ -495,8 +551,8 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
     `write_one` writes it, its registration naming the window's Commit (its run id and run root, from windows.jsonl, or
     from seals.jsonl while the window's line waits for its PoUW H1 release, which reads this advice: `serve_tie`).  The
     windows are read in order, each opening with what the last one left (`from_trace`'s ``carry``), so ``window`` reads the
-    ones before it too.  A window whose advice is refused (a finish the advice can't say, a trace the Commit record contradicts)
-    is named in ``refused``, and the others are written; the window after a refused one opens on nothing carried.  Until the
+    ones before it too.  A window whose advice is refused (a finish the advice can't say, a trace the Commit record contradicts,
+    an encoding past ℓ: `within_cap`) is named in ``refused``, and the others are written; the window after a refused one opens on nothing carried.  Until the
     server has `stopped`, a window holding a request with no Commit record yet is named in ``pending``, and neither it nor any
     window after it is read.  ``out/windows.json`` (public) lists each window's registration, written only when none is pending."""
     if io is None:
@@ -526,7 +582,7 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
                 + (f" (window {window} opens on what window {w} leaves)" if window is not None and w != window else ""))
             break
         try:
-            b = from_trace(sub, {i: q for i, q in io_all.items() if i in ids}, tau=tau, carry=carry)
+            b = within_cap(compiler, from_trace(sub, {i: q for i, q in io_all.items() if i in ids}, tau=tau, carry=carry))
         except ValueError as e:
             if window is None or w == window:
                 refused[str(w)] = str(e) + (f" (window {gone} before it is refused, so it opens on nothing carried)" if gone is not None else "")
@@ -570,12 +626,12 @@ def _written(run: Path, out: Path, b: Built, recs: list[dict[str, Any]], trace: 
     a = b.advice
     data = WA.encode(a)
     back = WA.decode(data)
-    public, opened = commit(compiler, a, T, registered_roots=registered_roots)
+    public, opened = commit(compiler, a, registered_roots=registered_roots)
     public.update(extra or {})
     private = out / "private"
     private.mkdir(parents=True, exist_ok=True)
     (out / "registration.json").write_text(json.dumps(public, indent=1) + "\n")
-    (private / "advice.bin").write_bytes(data)
+    (private / "advice.bin").write_bytes(bytes.fromhex(opened["advice"]))
     (private / "advice.json").write_text(json.dumps(WA.to_json(a), separators=(",", ":")) + "\n")
     (private / "opening.json").write_text(json.dumps(opened) + "\n")
     steps = ST.steps(recs)
@@ -622,9 +678,10 @@ class Options:
                                          help="its digest, 128 hex digits (default: interface.compiler_digest of the name over "
                                               "the integration's import closure in this git work tree)")
     cap: int = option("--cap", type=int, default=CAP_BITS,
-                      help="ℓ, the cap on the advice's length in bits the compiler is total up to: the registered compiler is "
-                           "advice_windows.Capped over the one named, whose digest covers ℓ (default 2^23, 1 MiB)")
-    T: int = option("--T", type=int, default=600, help="egress buckets per window, for the bits I1 charges each window")
+                      help="ℓ, the cap on the advice's length in bits the compiler is total up to and the length every window's "
+                           "advice is padded to and committed at: the registered compiler is advice_windows.Capped over the one "
+                           "named, whose digest covers ℓ (default 2^23, 1 MiB)")
+    T: int = option("--T", type=int, default=600, help="egress buckets per window, for the bits I1 charges each window in the private report")
     tau: float = option("--tau", type=float, default=0.1, help="the egress bucket's width in seconds, for each output's release bucket")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON",
                                            help="the committer's weights registration (window_weights.weights_registration), "
@@ -634,10 +691,8 @@ class Options:
 
 def _say(rep: dict[str, Any], where: str = "") -> bool:
     reg = rep["registration"]
-    for w, bits in reg["bits_by_window"].items():
-        print(f"[advice]{where} egress window {w} (buckets {int(w) * reg['T']}-{(int(w) + 1) * reg['T'] - 1}): {bits} bits", flush=True)
     bound = reg["binding"]["advice"]
-    print(f"[advice]{where} {bound['bits']} bits at T={reg['T']}, committed as {reg['rows']} hiding rows, root {bound['root'][:16]}…; "
+    print(f"[advice]{where} padded to ℓ = {bound['bits']} bits, committed as {reg['rows']} hiding rows, root {bound['root'][:16]}…; "
           f"round trip {'equal' if rep['roundtrip'] else 'NOT EQUAL'} ({rep['i1']['module']})", flush=True)
     return bool(rep["roundtrip"])
 

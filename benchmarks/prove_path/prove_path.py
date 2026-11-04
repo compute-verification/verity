@@ -1,8 +1,8 @@
 """Prove path: a committed run and its advice through the proof system, for network accounting under arbitrary vLLM usage.
 
 Each window's step units are Programs a registered compiler made from the advice (`pipeline.advice_windows`), not a declared
-workload's. The advice is private: the prover commits I1's canonical encoding under hiding rows (`advice_windows.commit_advice`),
-and each window's registration binds the compiler's digest and that commitment's root, before any coin. The prover commits each
+workload's. The advice is private, its length too: the prover commits I1's canonical encoding padded to ℓ (`advice_windows.pad`)
+under hiding rows (`advice_windows.commit_advice`), and each window's registration binds the compiler's digest and that commitment's root, before any coin. The prover commits each
 window over the compiler's Programs from its sealed bundle. The verifier, handed the commitment's opening (the named gap: the
 advice is opened to the verifier until the compile unit exists, README.md), compiles the advice with its own copy of the
 compiler, derives its own window and audits it through the one-stage audit's `service.Stream` (`benchmarks/one_stage/a5.py`'s
@@ -27,14 +27,14 @@ Two kinds of committed run:
   with `verity-vllm advice`'s ``advice/w<K>/`` (``registration.json``, public; ``private/advice.bin`` and ``private/opening.json``,
   the prover's); the window's Commit is its sealed row dir (``commit/replay_bundle_p0``, the Commit's records, the
   Build's Programs, ``manifest.json``). The compiler is `Capped` over `I2Compiler` under φ of the served engine
-  (`phi_of_serve`), the bodies each request's ingress record (`serve_ingress`), named as `verity-vllm advice` names it
-  (`served_identity`: compile_steps over the tree's code identity), its digest a single-GPU window's I2's over that code, so
+  (`served_compiler.phi_of_serve`), the bodies each request's ingress record (`serve_ingress`), named as `verity-vllm advice` names it
+  (`served_compiler.served_identity`: compile_steps over the tree's code identity), its digest a single-GPU window's I2's over that code, so
   it covers what the compile reads of ``serve.json`` (`I2Compiler.digest`). The advice is committed once, by the server:
   the prover commits the window under the published binding (no re-commit), and both sides hold the published records to their
   own (`serve_check`): the registration names this window, a compiler whose digest carries the cap ℓ and is the verifier's own,
   and the root the opening opens; the root serve-openai published for the window is a SHA-512 root, the row dir's run root.
 
-    prove_path.py advice --workload F --out FILE
+    prove_path.py advice --workload F --out FILE [--cap-bits L]
     prove_path.py commit (--tp-commit DIR --build-root DIR | --bundle DIR --row-dir DIR --workload F [--hf-config F] \\
         | --serve-run DIR --window K --row-dir DIR [--hf-config F] [--target F]) [--advice FILE] [--opening FILE] --partition F \\
         --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...]
@@ -56,7 +56,8 @@ Two kinds of committed run:
         --checkpoint-dir DIR --out DIR [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--law L] [--cap N] \\
         [--workers N] [--window-registration W --h1-key FILE] [--hf-config F] [--target F] [--cap-bits L]
 
-* **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
+* **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding
+  padded to ℓ (``--cap-bits``, `advice_windows.pad`), as the registered compiler reads it.
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
 * **commit** (the prover): the advice compiled (`compile_advice`) and committed, its opening (the advice and its salts) written to
   ``--opening``, the prover's private file, never under the run's out/; then each window from its bundle over the compiler's
@@ -78,7 +79,7 @@ Two kinds of committed run:
   the tree's code (`code_identity`: ``integrations/vllm`` and ``verity`` by content), so the audit runs on a
   tree whose two are the server's; over what the compile reads of ``serve.json`` (its model, revision and that pin's config,
   target, execution and default seed), so the audit runs on the serve.json it was registered under; over ℓ and the transfer
-  gates its model's compiler of record lists (`GATES_OF_RECORD`). It is the name and digest ``verity-vllm advice
+  gates its pinned model's compiler of record lists (`dense_generic.gates_of_record`). It is the name and digest ``verity-vllm advice
   --compiler-name N --compiler-digest D`` registers the
   window's advice under.
 * **weights-registration** (the committer): a served run's weights registration (`weights_registration_of_serve`), each
@@ -134,16 +135,18 @@ Two kinds of committed run:
   H1's steps, the class's outputs), and the window's registration ``--out``/registration.json is chained right after W
   and registers them as W's tables (`pouw_h1_commit.reuse`), refused unless the model made each as H1 committed it.
 
-`Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
-every byte string: the requests, or a `ValueError` naming why, the same one on every run.
+`Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest and reads the advice at ℓ bits
+(`advice_windows.pad`: the encoding, a 0x80 byte, zero bytes), so its commitment's rows and its registration's length are ℓ's
+whatever the encoding's; `compile_advice` is total on every byte string: the requests, or a `ValueError` naming why, the same
+one on every run.
 
 **Transfer gates** (``--transfer-gate T``, repeatable, the same on both sides): the templates the registered compiler lists as
 holding transfer gates (`advice_windows`: the I/O shell's units, proved with selection All, never sampled), which its digest
 covers (`I2Compiler`, `advice_windows.Traced`). The window's ``work:K`` law then draws every unit of theirs beside K of the rest
 (`serving_rows.work_table_of`), and the stream registers with that work table. A served window's I2 lists them beside the
 server's code and ``serve.json`` (`I2Compiler.digest`), and its advice is registered under that compiler (``compiler``).
-A served window's list is its model's compiler of record's (`GATES_OF_RECORD`, by ``serve.json``'s ``model``) on both sides,
-whatever ``--transfer-gate`` says (`served_gates`: a list other than the record's is refused), so the verifier holds a
+A served window's list is its model's compiler of record's (`dense_generic.gates_of_record`, by ``serve.json``'s pin) on both sides,
+whatever ``--transfer-gate`` says (`served_compiler.served_gates`: a list other than the record's is refused), so the verifier holds a
 registration to that list and no other. Until COMPILER lists the I/O shell's units, the run names a stand-in template, at TP1
 ``RoPEHead_v1{D=64}`` (``llama32_1b_tg_*.json``). Their negatives are a5's `transfer_gate_negatives` and the registrations under
 the compiler listing none and under it less each one gate (`more_negatives`).
@@ -162,7 +165,6 @@ import argparse
 import contextlib
 import functools
 import hashlib
-import importlib
 import json
 import multiprocessing
 import os
@@ -182,22 +184,20 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 from records_audit import PORTS, REFUSED, free_ports, pin_arg, pins_of, registration_roots  # noqa: E402, F401
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
-from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.windows import interface as IF, rows as RW  # noqa: E402
+from verity_vllm.engine.profiles import dense_generic as DG  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline.advice_windows import CAP_BITS, CAPPED, Capped  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
+from verity_vllm.program.predict import served_compiler as SC  # noqa: E402
 
 I2 = "verity/prove-path/i2-compile-steps/v0"
-#: the checkpoint config I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test fixture)
-LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
+#: the checkpoint config a single-GPU I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test model)
+LLAMA32_1B_CONFIG = DG.HF_CONFIG_DIR / "LLAMA32_1B.config.json"
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
 #: the sampling parameters a request's body carries to I2 (vLLM's `SamplingParams` names the record holds)
 BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
-#: the templates each served model's compiler of record lists as holding transfer gates, by ``serve.json``'s ``model``
-#: (`served_gates`): unsloth/Llama-3.2-1B's is the TP1 stand-in, its RoPE heads, until I2 lists the I/O shell's units
-GATES_OF_RECORD: Mapping[str, tuple[str, ...]] = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}
 #: the schema of the request Programs vllm's registered compiler writes into a served window's row dir (``manifest.json``)
 SERVED_PROGRAMS = "verity-vllm/served-window-programs/v1"
 #: what a plain audit's summary names as its interim (a5's `PLAIN_SCOPE` is the scope it refuses outside of), with the
@@ -218,7 +218,7 @@ class I2Compiler:
     (``own``, `own_builds`) and the prover's reads its row dir's. ``transfer_gates`` are the templates it lists as holding
     transfer gates (module docstring), the run's stand-in until I2 lists the I/O shell's own. Its digest, a single-GPU
     window's and a served one's alike, names its name, its code (``code``: a single-GPU window's I2 runs this tree's,
-    `code_identity`; a served window's, the server's registered compiler, `served_identity`; both the verifier's
+    `code_identity`; a served window's, the server's registered compiler, `served_compiler.served_identity`; both the verifier's
     `interface.compiler_digest` over the integration's import closure as git lists it), everything ``registered`` holds
     that I2 reads (φ: the model, its revision and config, the target and the execution; the default seed; ℓ; the served
     model name, where it names one) and that list. So a served window's ``serve.json`` is bound before the draw with the code: one that differs
@@ -238,12 +238,7 @@ class I2Compiler:
 
     @functools.cached_property
     def digest(self) -> str:
-        r = self.registered
-        served_model = getattr(r, "served_model", None)
-        return hashlib.sha512(canonical_json({"name": self.name, "code": self.code or code_identity(), "phi": r.phi.to_json(),
-                                              "default_seed": r.default_seed, "cap_bits": r.cap_bits,
-                                              **({"served_model": served_model} if served_model is not None else {}),
-                                              "transfer_gates": sorted(self.transfer_gates)})).hexdigest()
+        return SC.inner_digest(self.name, self.code or code_identity(), self.registered, self.transfer_gates)
 
     def requests(self, data: bytes) -> list[dict]:
         """I2's requests for the advice ``data``: each request's id, first step, prompt length, ``max_tokens`` (its kept outputs)
@@ -309,9 +304,9 @@ def own_builds(i2: I2Compiler, requests: Sequence[Mapping[str, Any]]) -> None:
 
 
 def code_identity() -> str:
-    """The code a single-GPU window's I2 runs: the served compiler's digest (`served_identity`), so a single-GPU window's
+    """The code a single-GPU window's I2 runs: the served compiler's digest (`served_compiler.served_identity`), so a single-GPU window's
     I2 and a served one's name their code by one formula, the verifier's `interface.compiler_digest`."""
-    return served_identity()[1]
+    return SC.served_identity()[1]
 
 
 def bodies_by_digest(programs_root: str) -> dict[str, str]:
@@ -504,85 +499,18 @@ def serve_ingress(requests: list[Mapping[str, Any]]) -> dict[str, dict]:
     return out
 
 
-def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target: str | None = None) -> Any:
-    """φ of a served engine as vllm's registered compiler registers it (the formula its Build compiles the request Programs under):
-    the pinned model (``serve.json``'s ``model`` and ``revision``, and the checkpoint's ``config.json``: ``hf_config``, else the
-    pin's config of record, as `advice_compile` reads it (`dense_generic.pinned_hf_config`), else for a model no manifest pins
-    unsloth/Llama-3.2-1B's), the serving device's target profile (``serve.json``'s ``target``, the int8 scope its layers ran
-    included, else the file ``target``) and the engine's execution label (``execution``, else ``engine.execution``); no workload."""
-    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
-    from verity_vllm.program.predict.phi import Phi
-
-    prof = json.loads(Path(target).read_text()) if target else serve.get("target")
-    if not isinstance(prof, Mapping):
-        raise ValueError("serve.json records no target profile (the serving device's TargetProfile.to_json()), so φ can't be read: "
-                         "--target F gives it")
-    execution = serve.get("execution") or (serve.get("engine") or {}).get("execution")
-    if not isinstance(execution, str) or not execution:
-        raise ValueError("serve.json records no execution label (execution, engine.execution), so φ can't be read")
-    hf = json.loads(Path(hf_config or pinned_hf_config(serve["model"], serve["revision"]) or LLAMA32_1B_CONFIG).read_text())
-    return Phi(model={"repo": serve["model"], "revision": serve["revision"], "hf_config": hf}, target=dict(prof), execution=execution)
-
-
-def registered_seed(serve: Mapping[str, Any]) -> int:
-    """The default seed a served window's registration fixes, `engine.served_seed.DEFAULT_SEED` (as vllm's registered compiler takes
-    it); a ValueError when ``serve.json`` says the server filled in another (or says none), since a request that sent no
-    seed would be compiled under a seed its sample didn't use."""
-    from verity_vllm.engine.served_seed import DEFAULT_SEED
-
-    seed = serve.get("default_seed")
-    if type(seed) is not int or seed != DEFAULT_SEED:
-        raise ValueError(f"serve.json: the run's server filled in default seed {seed!r}, and the registered one is "
-                         f"engine.served_seed.DEFAULT_SEED ({DEFAULT_SEED}): serve it under that rule")
-    return DEFAULT_SEED
-
-
-def registered_of_serve(serve: Mapping[str, Any], hf_config: str | None, target: str | None, cap_bits: int) -> Any:
-    from verity_vllm.program.predict.steps import Registered
-
-    return Registered.of(phi_of_serve(serve, hf_config, target), registered_seed(serve), cap_bits)
-
-
-def served_gates(serve: Mapping[str, Any], given: Sequence[str] = ()) -> tuple[str, ...]:
-    """The transfer gates a served window's compiler lists: its model's compiler of record's (`GATES_OF_RECORD`, none for a
-    model it has no line for). ``given`` (``--transfer-gate``) may only restate them: any other list is refused, so neither side
-    builds a served compiler listing another."""
-    model, pinned = str(serve.get("model")), GATES_OF_RECORD.get(str(serve.get("model")), ())
-    if given and sorted(set(map(str, given))) != sorted(pinned):
-        raise ValueError(f"--transfer-gate {sorted(set(map(str, given)))}: {model}'s compiler of record lists {list(pinned)} "
-                         "(prove_path.GATES_OF_RECORD), and a served window's compiler lists those and no others")
-    return pinned
-
-
 def i2_of_serve(run: str, window: int, programs_root: str, hf_config: str | None, target: str | None,
                 cap_bits: int = CAP_BITS, transfer_gates: Sequence[str] = (), own: bool = False) -> I2Compiler:
-    """I2 over a served window: φ of the served engine (`phi_of_serve`), the public default seed (`registered_seed`), the bodies
+    """I2 over a served window: φ of the served engine (`served_compiler.phi_of_serve`), the public default seed (`served_compiler.registered_seed`), the bodies
     the window's requests brought (`serve_ingress`), each Program's body from the Build's files under ``programs_root`` (the
     prover's row dir, or with ``own`` the verifier's own Builds), named as the server registers it and running its code
-    (`served_identity`), listing its model's transfer gates of record (`served_gates`, which ``transfer_gates`` may only
+    (`served_compiler.served_identity`), listing its model's transfer gates of record (`served_compiler.served_gates`, which ``transfer_gates`` may only
     restate). Its digest is a single-GPU window's I2's over that code (`I2Compiler.digest`), so it covers every field of
     ``serve.json`` the compile reads."""
     serve = json.loads((Path(run) / "serve.json").read_text())
-    name, code = served_identity()
-    return I2Compiler(registered_of_serve(serve, hf_config, target, cap_bits), serve_ingress(serve_requests(run, window)),
-                      str(programs_root), name=name, transfer_gates=served_gates(serve, transfer_gates), code=code, own=own)
-
-@functools.lru_cache(maxsize=1)
-def served_identity() -> tuple[str, str]:
-    """The code a served window's compiler runs, as `verity-vllm advice` names it (``pipeline.advice``'s
-    ``registered_compiler``): compile_steps by its module path, its digest the verifier's `interface.compiler_digest` over
-    the integration's import closure (``integrations/vllm`` and ``verity``), so the audit's tree holds the server's. The
-    window's I2 is that name, with this digest as its code (`i2_of_serve`)."""
-    try:
-        ADV = importlib.import_module("verity_vllm.pipeline.advice")
-    except ImportError:
-        raise ValueError("a served window's registered compiler is `verity-vllm advice`'s (verity_vllm.pipeline.advice), "
-                         "which this tree lacks") from None
-    inner = getattr(ADV.registered_compiler(), "inner", None)
-    if inner is None:
-        raise ValueError("verity_vllm.pipeline.advice registers no capped compiler (its registered_compiler wraps none)")
-    return str(inner.name), str(inner.digest)
-
+    name, code = SC.served_identity()
+    return I2Compiler(SC.registered_of_serve(serve, hf_config, target, cap_bits), serve_ingress(serve_requests(run, window)),
+                      str(programs_root), name=name, transfer_gates=SC.served_gates(serve, transfer_gates), code=code, own=own)
 
 def compiler_of(tp_commit: str, build_root: str, cap_bits: int = CAP_BITS, transfer_gates: Sequence[str] = ()) -> Capped:
     return Capped(AW.Traced.for_commit(tp_commit, build_root, transfer_gates), cap_bits)
@@ -653,19 +581,18 @@ def serve_negatives(s: SimpleNamespace, compiler: Capped, bound: Mapping[str, An
 
 def compile_advice(compiler: Capped, data: Any, codec: Any = None) -> list[dict]:
     """The compiler on any input: the requests it compiles, or a `ValueError` naming why it refuses the input, a function of the
-    input alone. Refused in order: not bytes; over the cap ℓ (before any of it is read); not I1 advice (`MalformedAdvice`, the
-    codec's first broken rule); not its canonical encoding; a request the compiler can't run (a chunked prefill, a prefix-cache
-    hit, a preemption, a gap: `advice_windows.requests_of`, or I2's own refusals, `I2Compiler.requests`)."""
+    input alone. Refused in order: not bytes; not ℓ bits padded (`Capped.unpad`, before any of it is read); not I1 advice
+    (`MalformedAdvice`, the codec's first broken rule); not its canonical encoding; a request the compiler can't run (a chunked
+    prefill, a prefix-cache hit, a preemption, a gap: `advice_windows.requests_of`, or I2's own refusals, `I2Compiler.requests`)."""
     if not isinstance(data, bytes):
         raise ValueError(f"the advice is a byte string, not a {type(data).__name__}")
-    if 8 * len(data) > compiler.cap_bits:
-        raise ValueError(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {compiler.cap_bits} bits")
+    enc = compiler.unpad(data)
     c = AW.codec_of(codec)
-    advice = c.decode(data)
-    if c.encode(advice) != data:
+    advice = c.decode(enc)
+    if c.encode(advice) != enc:
         raise ValueError("the advice's bytes are not its canonical encoding")
     own = getattr(compiler.inner, "requests", None)
-    return own(data) if own is not None else AW.requests_of(advice)
+    return own(enc) if own is not None else AW.requests_of(advice)
 
 
 def commit_advice(compiler: Capped, data: bytes) -> tuple[list[dict], dict, dict]:
@@ -1142,19 +1069,12 @@ def audit(a: argparse.Namespace) -> int:
 
 def compiler_doc(serve_run: str, hf_config: str | None, target: str | None, cap_bits: int,
                  transfer_gates: Sequence[str] = ()) -> dict[str, Any]:
-    """A served run's registered compiler, `Capped` over I2 running the server's code (`served_identity`) under the run's
-    ``serve.json`` (`registered_of_serve`), listing its model's transfer gates of record (`served_gates`, which
+    """A served run's registered compiler, `Capped` over I2 running the server's code (`served_compiler.served_identity`) under the run's
+    ``serve.json`` (`served_compiler.registered_of_serve`), listing its model's transfer gates of record (`served_compiler.served_gates`, which
     ``transfer_gates`` may only restate): the name and digest its windows' bindings must carry, ℓ and the compiler it wraps
     (``inner``, what `verity-vllm advice --compiler-name --compiler-digest` takes, its digest `I2Compiler.digest`'s), the
     server's code (``served``), and the φ and default seed I2 compiles each window's Programs under."""
-    name, digest = served_identity()
-    serve = json.loads((Path(serve_run) / "serve.json").read_text())
-    reg = registered_of_serve(serve, hf_config, target, cap_bits)
-    inner = I2Compiler(reg, {}, "", name=name, transfer_gates=served_gates(serve, transfer_gates), code=digest)
-    c = Capped(inner, cap_bits)
-    return {"name": c.name, "digest": c.digest, "cap_bits": c.cap_bits, "inner": {"name": name, "digest": inner.digest},
-            "served": {"name": name, "digest": digest}, "transfer_gates": list(inner.transfer_gates),
-            "phi": reg.phi.to_json(), "default_seed": reg.default_seed}
+    return SC.compiler_doc(json.loads((Path(serve_run) / "serve.json").read_text()), hf_config, target, cap_bits, transfer_gates)
 
 
 def committer_key(path: Path) -> bytes:
@@ -1172,7 +1092,7 @@ def committer_key(path: Path) -> bytes:
 
 def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     """A served run's weights registration, the committer's (`window_weights.weights_registration` under the φ its window
-    circuit lowers under, `registered_of_serve`): each weight committed under the committer's salts, drawn under ``--key``
+    circuit lowers under, `served_compiler.registered_of_serve`): each weight committed under the committer's salts, drawn under ``--key``
     (`committer_key`, never sent), once the committer has checked ``--checkpoint-dir``'s shards against ``--checkpoints``
     (default the tree's ``manifests/checkpoints.json``), and the rotary table at the words the engine serves
     (``--tables``' ``cos_sin_cache.npy``, serve-openai's, default under ``--serve-run``'s ``private/``) once they are
@@ -1189,7 +1109,7 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
 
     serve = json.loads((Path(a.serve_run) / "serve.json").read_text())
     cos_sin = Path(a.tables or Path(a.serve_run) / "private") / "cos_sin_cache.npy"
-    doc = weights_registration(registered_of_serve(serve, a.hf_config, a.target, CAP_BITS), committer_key(Path(a.key)),
+    doc = weights_registration(SC.registered_of_serve(serve, a.hf_config, a.target, CAP_BITS), committer_key(Path(a.key)),
                                a.checkpoint_dir, checkpoints_manifest=a.checkpoints,
                                tables={"cos_sin": np.load(cos_sin)} if cos_sin.is_file() else None)
     roots = registered_weights(doc, serve)
@@ -1203,7 +1123,7 @@ def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
     (`serving_rows.population`, as `window1` makes the verifier's), each Program's Build this command's own, from its compile
     (`own_builds`, into a directory of its own beside ``--out``: it reads no row dir and needs no vLLM), and its circuit record
     (`serving_rows.circuit_record`) written to ``--out``, under no run (its `interface.RUN_FIELDS` empty: the compiler knows
-    none). -> the advice's length in bits, the one the registration charges (`advice_windows.of_advice`)."""
+    none). -> the advice's length in bits, ℓ, the one the registration charges (`advice_windows.of_advice`)."""
     import tempfile
 
     from verity_vllm.pipeline import serving_rows as SRW
@@ -1217,8 +1137,7 @@ def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
                                       transfer_gates=compiler.transfer_gates)
         record = SRW.circuit_record(window, rows, p.arrivals)
     Path(a.out).write_bytes(IF.circuit_bytes(record))
-    c = AW.codec_of()
-    return {"bits": int(c.total_bits(c.decode(data)))}
+    return {"bits": 8 * len(data)}
 
 
 def window_class_of(arg: str | None) -> Any:
@@ -1232,8 +1151,8 @@ def window_class_of(arg: str | None) -> Any:
 def registered_of_compiler(doc: Mapping[str, Any], registration: Mapping[str, Any]) -> Any:
     """The registered compiler a served run publishes (``compiler``'s document, `compiler_doc`) as the verifier takes it:
     its φ, default seed and ℓ, once its name and digest are those the window's advice registration binds
-    (``binding.compiler``) and recompute from those fields, this tree's served code (`served_identity`) and its model's
-    transfer gates of record (`served_gates`). A ValueError where any differs."""
+    (``binding.compiler``) and recompute from those fields, this tree's served code (`served_compiler.served_identity`)
+    and its pinned model's transfer gates of record (`served_compiler.served_gates`). A ValueError where any differs."""
     from verity_vllm.program.predict.phi import Phi
     from verity_vllm.program.predict.steps import Registered
 
@@ -1242,11 +1161,12 @@ def registered_of_compiler(doc: Mapping[str, Any], registration: Mapping[str, An
     except (KeyError, TypeError, ValueError, AttributeError) as e:
         raise ValueError(f"the registered compiler's document states no φ, default seed and ℓ ({type(e).__name__}: "
                          f"{e})") from None
-    name, code = served_identity()
+    name, code = SC.served_identity()
     if doc.get("served") != {"name": name, "digest": code}:
         raise ValueError(f"the registered compiler runs the server's code {doc.get('served')}, and this tree's is "
                          f"{name} at {code[:16]}…: the verifier's tree must hold the server's")
-    gates = served_gates({"model": registered.phi.model.get("repo")}, doc.get("transfer_gates") or ())
+    pin = registered.phi.model
+    gates = SC.served_gates({"model": pin.get("repo"), "revision": pin.get("revision")}, doc.get("transfer_gates") or ())
     c = Capped(I2Compiler(registered, {}, "", name=name, transfer_gates=gates, code=code), registered.cap_bits)
     bound = (registration.get("binding") or {}).get("compiler")
     if {"name": c.name, "digest": c.digest} != {"name": doc.get("name"), "digest": doc.get("digest")} or bound != {
@@ -1507,7 +1427,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     tie = h1_tie(a, cls)
     tables = None if tie is None else tie[2]
     try:
-        compiled = compile_steps(registered, data, compiler.inner.ingress)
+        compiled = compile_steps(registered, compiler.unpad(data), compiler.inner.ingress)
         WC.takes(compiled, cls, tables=tables)
         low = WC.lower(registered, cls, tables=tables)
     except Unexpressible as e:
@@ -1587,7 +1507,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
 
 def standin_brought(body: Mapping[str, Any], seed: int) -> dict[str, Any]:
     """What a stand-in request's ingress brought: the record's body without its prompt, a stochastic one that names no seed
-    bringing the declared run's default ``seed``, since the stand-in's server fills in the public one (`registered_seed`)."""
+    bringing the declared run's default ``seed``, since the stand-in's server fills in the public one (`served_compiler.registered_seed`)."""
     out = {k: v for k, v in body.items() if k != "prompt"}
     return {**out, "seed": int(seed)} if out.get("temperature") and out.get("seed") is None else out
 
@@ -1616,7 +1536,7 @@ def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
     (out / "windows.jsonl").write_text(json.dumps({"window": 0, "run_id": run_id, "run_root": root,
                                                    "requests": [q["engine_id"] for q in reqs], "passed": True}) + "\n")
     compiler = Capped(i2_of_serve(str(out), 0, a.row_dir, a.hf_config, None, a.cap_bits), a.cap_bits)
-    data = AW.codec_of().encode(AW.advice_of_workload(json.loads(Path(a.workload).read_text())))
+    data = compiler.pad(AW.codec_of().encode(AW.advice_of_workload(json.loads(Path(a.workload).read_text()))))
     _reqs, bound, reg = AW.of_advice(compiler, data)
     adv = out / "advice" / "w0"
     (adv / "private").mkdir(parents=True, exist_ok=True)
@@ -1641,7 +1561,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("advice", help="a declared run's I1 advice from its workload file")
     p.add_argument("--workload", required=True, type=workload_arg)
-    p.add_argument("--out", required=True, help="the advice's file: I1's canonical encoding")
+    p.add_argument("--out", required=True, help="the advice's file: I1's canonical encoding padded to ℓ (advice_windows.pad)")
+    p.add_argument("--cap-bits", type=int, default=CAP_BITS, help="ℓ, the length in bits the advice is padded to (default 2^23)")
     for name in ("commit", "audit"):
         p = sub.add_parser(name)
         p.add_argument("--tp-commit", help="a TP Commit's record (its --out: runs.jsonl, versions.json)")
@@ -1655,7 +1576,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--window", type=int, help="with --serve-run: the closed Commit window K")
         p.add_argument("--target", help="with --serve-run: the serving device's target profile (JSON), where serve.json records none")
         p.add_argument("--hf-config", help="with --bundle or --serve-run: the checkpoint's config.json (default with --serve-run the "
-                                           "served pin's config of record, `pinned_hf_config`; else unsloth/Llama-3.2-1B's)")
+                                           "served pin's config of record, `pinned_hf_config`; with --bundle unsloth/Llama-3.2-1B's)")
         p.add_argument("--opening", help="the advice's opening (advice_windows.opening): commit writes it, the prover's private file; "
                        "audit reads it, the named gap. A served window's is the server's (default advice/w<K>/private/opening.json)")
         p.add_argument("--cap-bits", type=int, default=CAP_BITS, help="ℓ, the public cap on the advice's length in bits, "
@@ -1666,7 +1587,7 @@ def main(argv: list[str] | None = None) -> int:
                        "audited rank, which draw from the run root's one challenger session)")
         p.add_argument("--transfer-gate", action="append", default=[], help="a template the registered compiler lists as holding "
                        "transfer gates, in its digest, every unit of which is proved (repeatable; the partition's law is work:K). A "
-                       "served window's are its model's of record (GATES_OF_RECORD), which this may only restate")
+                       "served window's are its model's of record (dense_generic.gates_of_record), which this may only restate")
         p.add_argument("--out", required=True)
     p = sub.choices["commit"]
     p.add_argument("--advice", help="the advice's file: I1's canonical encoding (the prover's, private); a served window's is the "
@@ -1700,7 +1621,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("compiler", help="a served run's registered compiler: what verity-vllm advice --compiler-name/--compiler-digest takes")
     p.add_argument("--serve-run", required=True)
     p.add_argument("--transfer-gate", action="append", default=[], help="a template the compiler lists as holding transfer gates "
-                   "(repeatable; the model's of record, GATES_OF_RECORD, whatever it says: another list is refused)")
+                   "(repeatable; the model's of record, dense_generic.gates_of_record, whatever it says: another list is refused)")
     p = sub.add_parser("weights-registration", help="a served run's weights registration, the committer's: what verity-vllm "
                        "advice --weights-of-record takes, and the roots the verifier pins (window-circuit --pins)")
     for flag in ("--serve-run", "--checkpoint-dir", "--out"):
@@ -1797,11 +1718,11 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "advice":
         c = AW.codec_of()
         advice = AW.advice_of_workload(json.loads(Path(a.workload).read_text()), c)
-        data = c.encode(advice)
+        data = AW.pad(c.encode(advice), a.cap_bits)
         AW.requests_of(advice)
         Path(a.out).parent.mkdir(parents=True, exist_ok=True)
         Path(a.out).write_bytes(data)
-        print(json.dumps({"advice": a.out, "requests": len(advice.requests), "steps": len(advice.steps), "bits": c.total_bits(advice)}))
+        print(json.dumps({"advice": a.out, "requests": len(advice.requests), "steps": len(advice.steps), "bits": 8 * len(data)}))
         return 0
     if served(a):
         if a.tp_commit or a.workload or a.window is None or not a.row_dir or getattr(a, "advice", None):

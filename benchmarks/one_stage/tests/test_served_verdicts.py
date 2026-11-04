@@ -32,7 +32,8 @@ memory or another tree, and audits, records about the served node on V3c's audit
 elsewhere, as the record says where it was composed and what was deferred, with sampled proofs missing on the served
 node. Its load, `serve_load.py
 --varied`, writes each request's send, first-token and done times beside its record, on an injected clock and a stand-in
-endpoint."""
+endpoint. Its ADVICE-LINE holds a serve-openai ``--advice`` run's B to the compiler the verifier recomputes and every
+closed window's advice line to after B's registration and before the first coin."""
 from __future__ import annotations
 
 import argparse
@@ -102,25 +103,125 @@ def test_the_window_subcommand_prints_the_whole_pick_which_stays_on_the_node(tmp
     assert json.loads(out.getvalue()) == got
 
 
-REGISTRATION = {"schema": "verity-vllm/advice-registration/v1", "row_bits": 256, "rows": 2, "T": 600, "window": 7,
-                "binding": {"compiler": {"name": "c", "digest": "d"}, "advice": {"root": "ab" * 64, "bits": 392}},
+#: a window's advice registration as `verity-vllm advice` writes it, its advice padded to the cap ℓ_a = 2^23: 32,768 rows
+REGISTRATION = {"schema": "verity-vllm/advice-registration/v1", "row_bits": 256, "rows": 32768, "window": 7,
+                "binding": {"compiler": {"name": "c", "digest": "d"}, "advice": {"root": "ab" * 64, "bits": 8388608}},
                 "commit": {"run_id": "r1/w7", "run_root": "ef" * 64},
-                "compiler": {"name": "c", "digest": "d", "cap_bits": 8388608}, "bits_by_window": {"7": 392, "8": 7},
+                "compiler": {"name": "c", "digest": "d", "cap_bits": 8388608},
                 "registered_roots": {"weights/w@16": "cd" * 64}, "requests": 3, "refused": {"q0": "2 of its 3 tokens"}}
 
 
-def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path, capsys):
-    """The advice registration's public form states no length of the advice but its compiler's cap, counts and refuses
-    none of its requests, names no window, and keeps its roots, compiler and binding's root."""
+def test_the_published_registration_is_the_padded_one_and_one_stating_the_advices_length_is_refused(tmp_path, capsys):
+    """A window's advice registration is published as committed, its advice padded to its compiler's cap so its length and
+    rows are ℓ_a's, less the count and refusals of its requests and its window's number. One that states the advice's own
+    length (a length or a row count other than ℓ_a's, or its bits per egress window) is refused, by the command too, which
+    prints nothing on stdout."""
     got = S.public_registration(REGISTRATION)
-    assert got["binding"]["advice"] == {"root": "ab" * 64, "bits": 8388608} and got["rows"] == 32768
-    assert got["padded"] == list(S.PADDED) and got["commit"] == {"run_id": "r1/wK", "run_root": "ef" * 64}
-    assert not {"requests", "compiled", "refused", "window", "bits_by_window"} & set(got) and "392" not in json.dumps(got)
-    assert {k: got[k] for k in ("registered_roots", "compiler", "T", "schema")} == {
-        k: REGISTRATION[k] for k in ("registered_roots", "compiler", "T", "schema")}
+    assert got["binding"] == REGISTRATION["binding"] and got["rows"] == 32768 and S.padded(REGISTRATION)
+    assert got["commit"] == {"run_id": "r1/wK", "run_root": "ef" * 64} and not {"requests", "compiled", "refused", "window"} & set(got)
+    assert {k: got[k] for k in ("registered_roots", "compiler", "schema", "row_bits")} == {
+        k: REGISTRATION[k] for k in ("registered_roots", "compiler", "schema", "row_bits")}
     (tmp_path / "r.json").write_text(json.dumps(REGISTRATION))
     assert S.main(["public-registration", str(tmp_path / "r.json")]) == 0
     assert json.loads(capsys.readouterr().out) == got
+    advice = REGISTRATION["binding"]["advice"]
+    for bad in ({**REGISTRATION, "binding": {**REGISTRATION["binding"], "advice": {**advice, "bits": 392}}},
+                {**REGISTRATION, "rows": 2}, {**REGISTRATION, "bits_by_window": {"7": 392}},
+                {k: v for k, v in REGISTRATION.items() if k != "rows"},
+                {**REGISTRATION, "compiler": {**REGISTRATION["compiler"], "cap_bits": 4096}}):
+        assert not S.padded(bad)
+        with pytest.raises(ValueError, match="states the advice's own length"):
+            S.public_registration(bad)
+        (tmp_path / "r.json").write_text(json.dumps(bad))
+        assert S.main(["public-registration", str(tmp_path / "r.json")]) == 1
+        out = capsys.readouterr()
+        assert out.out == "" and "wasn't committed padded to its compiler's cap" in out.err
+
+
+B = {"name": "verity/prove-path/capped-compiler/v1", "digest": "b0" * 64, "cap_bits": 4096,
+     "inner": {"name": "verity-vllm/i2-compile-steps/v0", "digest": "1a" * 64}}
+
+
+def _advised(d: Path, *, cap: int = 4096, t0: float = 10.0, day: int = 3, declared: tuple | None = (3, B["digest"])) -> Path:
+    """A serve-openai ``--advice`` serve dir of day ``day``: B registered at ``t0`` under a log whose builder is B's item at
+    ``cap`` and whose last entry, given ``declared`` (a day and a program), is that declaration; windows 0-2 closed, 1
+    empty, each with its advice line, 0's and 2's committed under B."""
+    from verity.core.protocols import registration as REG
+
+    item = REG.item_of({"kind": "builder", "digest": B["inner"]["digest"], "advice": "verity-vllm/window-advice/v1", "cap": cap})
+    log = REG.chain("onsite", [REG.Information((item,)), *([REG.Declaration(*declared)] if declared else [])])
+    d.mkdir(parents=True)
+    (d / S.ADVICE_REGISTRATION).write_text(json.dumps({
+        "compiler": B, "advice": "verity-vllm/window-advice/v1", "cap_bits": 4096, "row_bits": 256, "day": day, "t": t0,
+        "registration": {"composite": "onsite", "head": REG.head("onsite", log), "log": json.loads(REG.committed("onsite", log))}}))
+    _write(d, "windows.jsonl", [{"window": k} for k in range(3)])
+    named = {"name": B["name"], "digest": B["digest"]}
+    _write(d, S.ADVICE_LINES, [
+        {"window": 0, "compiler": named, "advice": {"root": "a0" * 64, "bits": 4096}, "rows": 16, "t": 11.0},
+        {"window": 1, "empty": True, "t": 12.0},
+        {"window": 2, "compiler": named, "advice": {"root": "a2" * 64, "bits": 4096}, "rows": 16, "t": 13.0}])
+    for k in (0, 2):
+        (d / "advice" / f"w{k}").mkdir(parents=True)
+        (d / "advice" / f"w{k}" / "registration.json").write_text(json.dumps(_window_registration(named, f"a{k}" * 64)))
+    return d
+
+
+def _window_registration(compiler: dict, root: str, bits: int = 4096, rows: int = 16) -> dict:
+    """A window's advice registration under B, its advice committed padded to ℓ_a = 4096 bits (16 rows) unless ``bits`` and
+    ``rows`` say its own length."""
+    return {"binding": {"compiler": compiler, "advice": {"root": root, "bits": bits}}, "rows": rows, "row_bits": 256,
+            "compiler": {**compiler, "cap_bits": 4096}}
+
+
+def test_the_advice_line_holds_the_servers_b_and_each_windows_line_before_the_first_coin(tmp_path, capsys):
+    """ADVICE-LINE passes on a run whose server registered B, the compiler the verifier recomputes, as its log's builder at
+    ℓ_a with the run's day's declaration of B as the log's last entry, and wrote every closed window's line under B at ℓ_a
+    and its rows after that and before the first coin, the audited window's registration its line's root, its advice padded
+    to ℓ_a; it names no window and states no advice's own length. It fails, saying why, for another compiler, a log of
+    another ℓ_a, a log that declares no day, another day or another program, a closed window with no line, a line of
+    another length or row count, a line after the coins or before B, an audited window whose registration roots other
+    advice, states the advice's own length or has no advice, and a run that registered no B."""
+    ok, line = S.advice_line(_advised(tmp_path / "ok"), 2, B, coins_after=20.0)
+    assert ok and line.endswith(": PASS") and S.public_line(line) == line and "4096 bits" in line
+    assert "declared day 3's one program" in line
+    assert S.main(["advice-line", str(tmp_path / "ok"), "--window", "2", "--compiler", str(_dump(tmp_path, B)),
+                   "--coins-after", "20"]) == 0 and capsys.readouterr().out.strip() == line
+
+    def fails(d: Path, window: int = 2, compiler: dict = B, coins_after: float = 20.0) -> str:
+        ok, line = S.advice_line(d, window, compiler, coins_after)
+        assert not ok and ": FAIL" in line and S.public_line(line) == line
+        return line
+
+    assert "isn't the compiler prove_path.py recomputes" in fails(_advised(tmp_path / "b"), compiler={**B, "digest": "00" * 64})
+    assert "builder isn't B's" in fails(_advised(tmp_path / "cap", cap=8192))
+    for k, declared in enumerate((None, (4, B["digest"]), (3, "00" * 64))):
+        assert "isn't the run's day's declaration of B" in fails(_advised(tmp_path / f"day{k}", declared=declared))
+    assert "isn't the run's day's declaration of B" in fails(_advised(tmp_path / "day-b", day=True, declared=(1, B["digest"])))
+    assert "after sampled proofs' or the network certifier's first coin" in fails(_advised(tmp_path / "late"), coins_after=12.5)
+    assert "before B's registration" in fails(_advised(tmp_path / "early", t0=11.5))
+    assert "has no committed advice" in fails(_advised(tmp_path / "empty"), window=1)
+    d = _advised(tmp_path / "gap")
+    _write(d, S.ADVICE_LINES, [x for x in S._lines(d / S.ADVICE_LINES) if x["window"] != 0])
+    assert "a closed window has no advice line" in fails(d)
+    named = {"name": B["name"], "digest": B["digest"]}
+    for k, (field, value) in enumerate((("rows", 2), ("advice", {"root": "a0" * 64, "bits": 392}))):
+        d = _advised(tmp_path / f"line{k}")
+        _write(d, S.ADVICE_LINES, [{**x, field: value} if x["window"] == 0 else x for x in S._lines(d / S.ADVICE_LINES)])
+        assert "a length or row count other than ℓ_a's" in fails(d)
+    d = _advised(tmp_path / "root")
+    (d / "advice" / "w2" / "registration.json").write_text(json.dumps(_window_registration(named, "ff" * 64)))
+    assert "isn't its advice line's root under B" in fails(d)
+    for k, (bits, rows) in enumerate(((392, 16), (4096, 2), (392, 2))):
+        d = _advised(tmp_path / f"own{k}")
+        (d / "advice" / "w2" / "registration.json").write_text(json.dumps(_window_registration(named, "a2" * 64, bits, rows)))
+        assert "wasn't committed padded to ℓ_a" in fails(d)
+    (tmp_path / "none").mkdir()
+    assert "the server registered no B" in fails(tmp_path / "none")
+
+
+def _dump(d: Path, doc: dict) -> Path:
+    (d / "doc.json").write_text(json.dumps(doc))
+    return d / "doc.json"
 
 
 #: a window's number (``w7``, ``window 7``), a step range, a count of windows or requests, or a field of a window's own
@@ -1600,6 +1701,15 @@ PERIOD = ('echo period-check >> "$ORDER"; test -s "$4/period.json" || exit 1; '
           'echo \'{"verdict": "accept"}\' > "$3/answer.json"; echo checked')
 
 
+def _default_cap(requests: int = 4, steps: int = 256, max_model_len: int = 512, id_bytes: int = 24) -> str:
+    """ℓ_a's default in `served_verdicts.sh` at those limits (SLOTS, WINDOW_STEPS, MAX_MODEL_LEN, ID_BYTES; their defaults
+    with H1 off)."""
+    from verity_vllm.pipeline import advice_windows as AW
+    from verity_vllm.pipeline import window_advice as WA
+
+    return str(AW.least_cap(WA.max_bits(requests, steps, max_model_len, id_bytes)))
+
+
 def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = FAKE_V3C_PROVE_PATH,
          records_audit: str = FAKE_RECORDS_AUDIT, **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
     """`served_verdicts.sh v3c` (or ``args``) on window 7 of a toy serve dir at the certifier's class, in a toy tree whose
@@ -1748,27 +1858,14 @@ def test_the_split_certifier_needs_v3c_and_no_whole_piece_beside_it(tmp_path, ar
     assert (rc, lines, order) == (3, [line], [])
 
 
-FAKE_ADVICE = '''import json, os, sys
-from pathlib import Path
-a = sys.argv[1:]
-open(os.environ["ORDER"], "a").write("advice\\n")
-k, out = a[a.index("--window") + 1], Path(a[a.index("--out") + 1])
-assert a[a.index("--compiler-name") + 1] == %r and "--weights-of-record" in a
-if os.environ.get("ADVICE_RC") == "3":
-    print(f"[advice] commit window {k}: pending: request r1 of window {k} has no Commit record yet")
-    sys.exit(3)
-(out / f"w{k}" / "private").mkdir(parents=True)
-(out / f"w{k}" / "registration.json").write_text("{}")
-(out / f"w{k}" / "private" / "advice.bin").write_bytes(b"\\x01")
-(out / "windows.json").write_text("{}")
-''' % COMPILER_DOC["inner"]["name"]
 W_OF_7 = {"format": "verity/registration/v2", "window": 7, "previous": None}
 
 
-def _tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProcess, list[str]]:
+def _tie(tmp_path: Path, committed: bool = True, **extra: str) -> tuple[subprocess.CompletedProcess, list[str]]:
     """The ``--h1-window-commit`` that `served_verdicts.sh serve` gives serve-openai under H1_TIE, run as `serve_tie` runs
     it at window 7's close (``bash -c CMD _ SERVE_DIR K W_FILE R_FILE PROVER_DIR``, from elsewhere), in a toy tree whose
-    prove_path.py and advice note each step they run (``extra`` adds to the environment): the run and the steps in order."""
+    prove_path.py notes each step it runs, on a serve dir where the server committed window 7's advice (unless not
+    ``committed``; ``extra`` adds to the environment): the run and the steps in order."""
     rc, argv = _serve_argv(tmp_path, {"H1_GATE": GATE, "H1_CIRCUITS": str(tmp_path / "circuits"), "H1_TIE": "1"})
     assert rc == 10 and "--h1-prover" in argv and argv.count("--h1-window-commit") == 1, (rc, argv)
     cmd = argv[argv.index("--h1-window-commit") + 1]
@@ -1776,9 +1873,11 @@ def _tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProcess, lis
     (tree / "benchmarks" / "prove_path").mkdir(parents=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
     (tree / "benchmarks" / "one_stage").symlink_to(HERE.parent, target_is_directory=True)
-    (tmp_path / "advice.py").write_text(FAKE_ADVICE)
-    _script(venv / "python", f'[ "$1 $2 $3" = "-m verity_vllm.pipeline.cli advice" ] && {{ shift 3; exec {sys.executable} '
-                             f'{tmp_path}/advice.py "$@"; }}\nunset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
+    _script(venv / "python", f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
+    if committed:
+        (d / "advice" / "w7" / "private").mkdir(parents=True)
+        (d / "advice" / "w7" / "registration.json").write_text("{}")
+        (d / "advice" / "w7" / "private" / "advice.bin").write_bytes(b"\x01")
     for p in (d / "h1" / "w7", d / "private" / "h1" / "w7"):
         p.mkdir(parents=True, exist_ok=True)
     (d / "weights_registration.json").write_text("{}")
@@ -1791,13 +1890,14 @@ def _tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProcess, lis
     return run, (tmp_path / "order").read_text().split() if (tmp_path / "order").exists() else []
 
 
-def test_under_h1_tie_each_h1_windows_close_writes_its_advice_and_commits_it_chained_after_its_w_as_its_record_r(tmp_path):
-    """serve-openai's tie command, from any directory, writes the window's advice where step 3 reads it, then runs
-    window-commit at V3C_CLASS on W, the window's H1 prover key and V3c's law, and copies the registration it wrote to R.
-    It says nothing in $OUT (its window is H1's, which no published line names); its commit's answer stays in the serve dir."""
+def test_under_h1_tie_each_h1_windows_close_commits_it_on_the_servers_advice_chained_after_its_w_as_its_record_r(tmp_path):
+    """serve-openai's tie command, from any directory, runs window-commit on the window's advice as the server committed
+    it, at V3C_CLASS on W, the window's H1 prover key and V3c's law, and copies the registration it wrote to R. It commits
+    no advice of its own, so the window's advice has one commitment, and says nothing in $OUT (its window is H1's, which no
+    published line names); its commit's answer stays in the serve dir."""
     run, order = _tie(tmp_path)
     d = tmp_path / "serve"
-    assert run.returncode == 0 and order == ["compiler", "advice", "window-commit"], (run.stdout, run.stderr, order)
+    assert run.returncode == 0 and order == ["window-commit"], (run.stdout, run.stderr, order)
     assert run.stdout.splitlines()[-1] == f"TIE: window-commit class {W63K4}: its registration is the window's record R"
     vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
     assert json.loads((d / "h1" / "w7" / "record.json").read_text()) == json.loads((vw / "registration.json").read_text()) \
@@ -1805,22 +1905,25 @@ def test_under_h1_tie_each_h1_windows_close_writes_its_advice_and_commits_it_cha
     assert (tmp_path / "order.commit").read_text().split() == [
         "--window-registration", str(d / "h1" / "w7" / "registration.json"), "--h1-key", str(d / "private" / "h1" / "w7" / "key"),
         "--law", "stratified:1"]
-    assert (d / "advice" / "w7" / "private" / "advice.bin").exists() and (d / "advice" / ".w7" / "windows.json").exists()
+    assert sorted(p.relative_to(d / "advice").as_posix() for p in (d / "advice").rglob("*")) == [
+        "w7", "w7/private", "w7/private/advice.bin", "w7/registration.json"]
     assert json.loads((d / "h1" / "w7" / "window-commit.json").read_text())["population"] == 37
     assert not (tmp_path / "tie-out" / "verdicts.txt").exists()
 
 
-@pytest.mark.parametrize("extra, rc, steps, said", [
-    ({"ADVICE_RC": "3"}, 14, ["compiler", "advice"],
-     "TIE: the window's advice is pending: a request of it runs on past its close, with no Commit record yet"),
-    ({"FAIL_COMMIT": "1"}, 16, ["compiler", "advice", "window-commit"],
+@pytest.mark.parametrize("committed, extra, rc, steps, said", [
+    (False, {}, 14, [], "TIE: the server committed no advice for the window (advice.jsonl): it refused it, or a request of "
+     "it runs on past its close"),
+    (True, {"FAIL_COMMIT": "1"}, 16, ["window-commit"],
      f"TIE: window-commit class {W63K4} refused (exit 2): prove_path.py window-commit: the row dir holds no window 7"),
 ])
-def test_a_tie_whose_advice_is_pending_or_whose_commit_is_refused_writes_no_record_r(tmp_path, extra, rc, steps, said):
-    """A request carried past the window's close has no Commit record until a later close, so its advice can't be written
-    before the window's sample coin: the tie fails at once, never polls; a refused window-commit fails it too. Either way
-    no R, so `serve_tie` refuses the window's record and H1 draws no sample coin."""
-    run, order = _tie(tmp_path, **extra)
+def test_a_tie_on_a_window_the_server_committed_no_advice_for_or_whose_commit_is_refused_writes_no_record_r(
+        tmp_path, committed, extra, rc, steps, said):
+    """The server commits a window's advice once it is whole, and `serve_tie`'s flush commits every whole window before the
+    command runs. A window it committed none for (it refused it, or a request carried past the close has no Commit record
+    until a later close) fails the tie at once, which never polls and commits no advice of its own; a refused
+    window-commit fails it too. Either way no R, so `serve_tie` refuses the window's record and H1 draws no sample coin."""
+    run, order = _tie(tmp_path, committed, **extra)
     assert (run.returncode, order, run.stdout.splitlines()[-1]) == (rc, steps, said), run.stderr
     assert not (tmp_path / "serve" / "h1" / "w7" / "record.json").exists()
 
@@ -2426,11 +2529,20 @@ def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_comma
     ({"SERVE_ARGS": f"{IDS} --h1-prover"}, "PREFLIGHT: advice-charge serves with H1_GATE empty, and serve-openai "
      "refuses SERVE_ARGS' --h1-receipts or --h1-prover without H1's --protocols: drop them"),
     ({"SERVE_ARGS": IDS}, None),
+    ({"SERVE_ARGS": f"{IDS} --advice-tau 4"}, "PREFLIGHT: the server commits the advice in buckets of SERVE_ARGS' "
+     "--advice-tau (4 s), and advice_charge.py charges it in buckets of ADVICE_TAU (0.1 s): make them equal"),
+    ({"SERVE_ARGS": IDS, "ADVICE_TAU": "4"}, "PREFLIGHT: the server commits the advice in buckets of SERVE_ARGS' "
+     "--advice-tau (0.1 s), and advice_charge.py charges it in buckets of ADVICE_TAU (4 s): make them equal"),
+    ({"SERVE_ARGS": f"{IDS} --advice-tau 4", "ADVICE_TAU": "4"}, None),
+    ({"SERVE_ARGS": f"--advice-tau=4.0 {IDS}", "ADVICE_TAU": "4"}, None),
 ])
-def test_the_advice_charge_run_serves_remote_with_no_h1_option_serve_openai_would_refuse(tmp_path, extra, line):
-    """advice-charge serves a test run with H1_GATE empty, which passes serve-openai no H1 --protocols, so its preflight
-    refuses an onsite product, an H1 gate, and an H1 option in SERVE_ARGS, which serve-openai refuses only once the node
-    is leased; a run it lets through goes on to the row's files (here absent)."""
+def test_the_advice_charge_runs_preflight_refuses_what_serve_openai_or_its_report_would_refuse_after_the_lease(
+        tmp_path, extra, line):
+    """advice-charge serves a test run with H1_GATE empty, which passes serve-openai no H1 --protocols, and charges the
+    server's advice in buckets of ADVICE_TAU. So its preflight refuses an onsite product, an H1 gate, an H1 option in
+    SERVE_ARGS, which serve-openai refuses only once the node is leased, and a server --advice-tau other than ADVICE_TAU,
+    which advice_charge.py refuses only once the run has served; a run it lets through goes on to the row's files (here
+    absent)."""
     tree, venv, row = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "row"
     tree.mkdir()
     _script(venv / "python", f'exec {sys.executable} "$@"')
@@ -2823,19 +2935,21 @@ def test_the_offline_program_is_the_one_serve_openai_declares_under_the_same_pro
 
 
 def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
-    """`served_verdicts.sh serve` in a toy tree whose venv python records serve-openai's argv and exits before listening,
-    under a no-op `sleep`: the exit status and that argv."""
+    """`served_verdicts.sh serve` in a toy tree whose venv python runs a ``-c`` program (ℓ_a's default) and otherwise records
+    serve-openai's argv and exits before listening, under a no-op `sleep`: the exit status and that argv."""
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
     for d in (tree / "integrations" / "vllm", bin_, venv):
         d.mkdir(parents=True)
-    for path, body in ((venv / "python", f"printf '%s\\n' \"$@\" > {tmp_path}/argv; exit 1"), (bin_ / "sleep", "exit 0")):
+    py = f'[ "$1" = -c ] && exec {sys.executable} "$@"\nprintf \'%s\\n\' "$@" > {tmp_path}/argv; exit 1'
+    for path, body in ((venv / "python", py), (bin_ / "sleep", "exit 0")):
         path.write_text(f"#!/bin/sh\n{body}\n")
         path.chmod(0o755)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
            "OUT": str(tmp_path / "out"), **env}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
-    return rc, (tmp_path / "argv").read_text().splitlines()
+    argv = tmp_path / "argv"
+    return rc, argv.read_text().splitlines() if argv.exists() else []
 
 
 @pytest.mark.parametrize("env, budget", [
@@ -2852,6 +2966,69 @@ def test_the_engine_gets_one_token_budget_with_or_without_h1(tmp_path, env, budg
     assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
     assert argv.count("--max-num-batched-tokens") == 1 and argv[argv.index("--max-num-batched-tokens") + 1] == budget
     assert ("--protocols" in argv) == bool(env["H1_GATE"]) and "--h1-window-commit" not in argv
+
+
+@pytest.mark.parametrize("env, cap, composite", [
+    ({}, (4, 256, 512, 24), "onsite"),
+    ({"WINDOW_STEPS": "1"}, "1328", "onsite"),
+    ({"SLOTS": "8", "WINDOW_STEPS": "16", "MAX_MODEL_LEN": "2048", "ID_BYTES": "12"}, (8, 16, 2048, 12), "onsite"),
+    ({"CAP": "65536", "PRODUCT": "remote"}, "65536", "remote"),
+    ({"CAP": "65536", "SERVE_ARGS": "--prefix-caching"}, "65536", "onsite"),
+])
+def test_the_server_registers_b_at_cap_and_commits_each_windows_advice_under_the_weights_registration(tmp_path, env, cap,
+                                                                                                      composite):
+    """serve-openai gets ``--advice`` once, B capped at CAP (ℓ_a), by default the least cap that pads every Commit period
+    within the run's limits (SLOTS requests and WINDOW_STEPS steps a period, MAX_MODEL_LEN, ID_BYTES), its registration log
+    the run's PRODUCT's, and each window's advice recording the serve dir's weights registration, which the run writes once
+    the server listens."""
+    cap = _default_cap(*cap) if isinstance(cap, tuple) else cap
+    rc, argv = _serve_argv(tmp_path, {"H1_GATE": "", **env})
+    assert rc == 10 and argv.count("--advice") == 1, (rc, argv)
+    got = {f: argv[argv.index(f) + 1] for f in ("--advice-cap", "--advice-composite", "--advice-weights")}
+    assert got == {"--advice-cap": cap, "--advice-composite": composite,
+                   "--advice-weights": str(tmp_path / "serve" / "weights_registration.json")}
+
+
+def test_a_server_with_the_prefix_cache_and_no_cap_is_refused_before_it_starts(tmp_path):
+    """ℓ_a's default leaves out the prefix cache's KV sources, so a server serving with it and no CAP is a PREFLIGHT refusal
+    before serve-openai runs, never a server whose every period past the default is refused."""
+    rc, argv = _serve_argv(tmp_path, {"H1_GATE": "", "SERVE_ARGS": "--prefix-caching"})
+    lines = (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
+    assert rc == 3 and argv == [], (rc, argv)
+    assert lines == ["PREFLIGHT: SERVE_ARGS serves with the prefix cache, whose KV sources ℓ_a's default leaves out: set CAP"]
+
+
+@pytest.mark.parametrize("env, cap", [
+    ({}, (4, 256, 512, 24)),
+    ({"WINDOW_STEPS": "1"}, "1328"),
+    ({"CAP": "65536"}, "65536"),
+    ({"SERVE_ARGS": "--prefix-caching"}, None),
+])
+def test_charge_on_a_serve_dir_whose_server_committed_no_advice_writes_it_under_b_at_cap(tmp_path, env, cap):
+    """`served_verdicts.sh charge` alone, on a serve dir with no advice.jsonl, writes each window's advice with
+    `verity-vllm advice` under prove_path's compiler, both at CAP, by default ℓ_a of the run's limits as `serve` derives
+    it, then charges it (advice_charge.py); with the prefix cache and no CAP it is the same PREFLIGHT refusal as `serve`'s,
+    before any of them runs."""
+    tree, venv, calls = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "calls"
+    (tree / "integrations" / "vllm").mkdir(parents=True)
+    _script(venv / "python", f'[ "$1" = -c ] && exec {sys.executable} "$@"\nprintf \'%s\\n\' "$*" >> {calls}\n'
+                             'case $1 in *prove_path.py) echo \'{"inner": {"name": "n", "digest": "d"}}\' ;; esac')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
+           "OUT": str(tmp_path / "out"), "H1_GATE": "", **env}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "charge"], cwd=tree, env=env, check=False,
+                        capture_output=True).returncode
+    ran = [c.split() for c in calls.read_text().splitlines()] if calls.exists() else []
+    if cap is None:
+        assert (rc, ran) == (3, []) and (tmp_path / "out" / "verdicts.txt").read_text().splitlines() == [
+            "PREFLIGHT: SERVE_ARGS serves with the prefix cache, whose KV sources ℓ_a's default leaves out: set CAP"]
+        return
+    cap = _default_cap(*cap) if isinstance(cap, tuple) else cap
+    compiler, advice, charge = ran
+    assert rc == 0 and compiler[:2] == ["benchmarks/prove_path/prove_path.py", "compiler"], (rc, ran)
+    assert compiler[compiler.index("--cap-bits") + 1] == cap and advice[advice.index("--cap") + 1] == cap
+    assert advice[:4] == ["-m", "verity_vllm.pipeline.cli", "advice", str(tmp_path / "serve")]
+    assert [advice[advice.index(f) + 1] for f in ("--compiler-name", "--compiler-digest")] == ["n", "d"]
+    assert charge[0] == str(tree / "benchmarks" / "one_stage" / "advice_charge.py")
 
 
 class _Response:
