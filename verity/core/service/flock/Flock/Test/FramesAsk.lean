@@ -6,7 +6,12 @@ next pad. That frame put back as the place read it (with the place made, `placeO
 next round leaves under the pad the last one used, and the two releases' sum is the two device values' sum. `askOf`
 writes no frame, so nothing but a rep's round and coins puts its frame back.
 -/
-import Flock.Firewall.Frames
+module
+
+public import Flock.Firewall.Frames
+meta import Flock.Firewall.Frames
+
+@[expose] public section
 
 namespace Flock.Test.FramesAsk
 
