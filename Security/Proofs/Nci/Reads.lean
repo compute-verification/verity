@@ -5,17 +5,18 @@ import Proofs.Nci.Lemmas
 /-!
 # Updated matrix multiplications are throttled, in reads form
 
-The per-IU counts (`card_products_le`, `iu_reads`), the charge for split entries (`sum_card_outputsOther_le`) and the
-total (`sum_card_products`), with the IUs' total reads as the bound. A compliant division at `(Γ, α)` reads at most
-`α size(D)` in total and each of its IUs at most `K = αΓ`, which gives `F · 2G ≤ size(D)` through `F = f(K) / (2α)`
-(`F_eq_readFactor`, used by `containedMatMul_of_reads`).
+The per-block counts (`card_products_le`, `iu_reads`), the charge for split entries (`sum_card_outputsOther_le`) and
+the total (`sum_card_products`), with the inference blocks' total fresh input as the bound. A division that complies at
+`c` gates per inference block and the rate `α` reads at most `α size(D)` in total and each of its inference blocks at
+most `k = α c`, which gives `F · 2G ≤ size(D)` through `F = f(k) / (2α)` (`F_eq_readFactor`, used by
+`containedMatMul_of_reads`).
 -/
 
 namespace Nci.SecurityProofs
 
 open Verity Finset
 
-/-- **NCI's factor is the read factor over `2α`**: `F = f(K) / (2α)`. -/
+/-- **The policy's factor is the read factor over `2α`**: `F = f(K) / (2α)`. -/
 theorem F_eq_readFactor (α K b_w b_a d : ℝ) : F α K b_w b_a d = readFactor K b_w b_a d / (2 * α) := by
   unfold F readFactor
   rw [one_div_mul_eq_div]

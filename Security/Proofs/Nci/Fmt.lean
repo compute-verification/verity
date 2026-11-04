@@ -17,7 +17,7 @@ open Verity Finset
 
 section Work
 
-variable {c : Declaration} (T : Threading c)
+variable {c : RegisteredCircuit} (T : Threading c)
 
 theorem work_nonneg (d e : ℕ) (R : Finset (Fin c.D.N)) (t : Fin T.m) : 0 ≤ T.work d e R t := by
   unfold Threading.work
@@ -49,7 +49,7 @@ theorem work_le {d e : ℕ} (he : 0 < e) (R : Finset (Fin c.D.N)) (t : Fin T.m) 
 end Work
 
 /-- The piece of `c` inside a set `W` of `d`'s computed gates is small by information when `W` is. -/
-theorem smallInfo_piece {c d : Declaration} (M : Containment c.D d.D)
+theorem smallInfo_piece {c d : RegisteredCircuit} (M : Containment c.D d.D)
     (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) {θc : c.D.Transcript} {θv : d.D.Transcript}
     (hv : ∀ g ∈ c.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g) {Γ : ℕ} {K : ℝ}
     {W : Finset (Fin d.D.N)} (hWc : W ⊆ d.D.computed) (hΓ : d.D.size W ≤ Γ) (hK : novelInfo d θv W ≤ K) :

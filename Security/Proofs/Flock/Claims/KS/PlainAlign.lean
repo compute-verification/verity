@@ -39,7 +39,7 @@ has `d` as rep `r`'s recorded level-`ℓ + 1` cap, since the opening is a reques
 pairs with the entry's cap. -/
 theorem capAtL_of_sessRelL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     {A : Model.Arith 𝔽 K} {Hc : List UInt8 → D} {E : Merkle.Enc (List 𝔽) D} {Lf : Merkle.Leaf (List 𝔽) Sl D Hc}
-    {S : Model.Statement} {sch : Accounting.Schedule} {C₀ : Model.Oracle 𝔽} {cap₀ : Model.Cap D}
+    {S : Model.Statement} {sch : FlockSoundness.Accounting.Schedule} {C₀ : Model.Oracle 𝔽} {cap₀ : Model.Cap D}
     {i : IRep 𝔽 D × IRep 𝔽 D} {a b : List (Model.OutCL 𝔽 D Sl)} {r : Fin 2} {ℓ : ℕ} {t : Model.Oracle 𝔽}
     {d : Model.Cap D} (hR : SessRelL A Hc E Lf S sch C₀ cap₀ 0 i a b)
     (hg : Lock.getPair (getRep 0) (getRep 1) i (slotOf r.val (ℓ + 1)) = some (t, d))
@@ -91,7 +91,7 @@ rep `r`'s level-`ℓ + 1` entry `(t, d)` and opening a position at `d` there to 
 both. -/
 theorem sessFork_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
-    (S : Model.Statement) (sch : Accounting.Schedule) (C₀ : Model.Oracle 𝔽) (cap₀ : Model.Cap D) (r : Fin 2)
+    (S : Model.Statement) (sch : FlockSoundness.Accounting.Schedule) (C₀ : Model.Oracle 𝔽) (cap₀ : Model.Cap D) (r : Fin 2)
     (ℓ : ℕ) (t : Model.Oracle 𝔽) (d : Model.Cap D) (i₁ : IRep 𝔽 D × IRep 𝔽 D) (a₁ b₁ : List (Model.OutCL 𝔽 D Sl))
     (i₂ : IRep 𝔽 D × IRep 𝔽 D) (a₂ b₂ : List (Model.OutCL 𝔽 D Sl))
     (h₁ : SessRelL A Hc E Lf S sch C₀ cap₀ 0 i₁ a₁ b₁) (h₂ : SessRelL A Hc E Lf S sch C₀ cap₀ 0 i₂ a₂ b₂)
@@ -136,7 +136,7 @@ theorem advRSL_le_forkC {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [I
 /-- **Empty rows open only the empty row**: where every opening of an output has an empty row, every position its
 rep-`r` level-`ℓ` openings open at a cap opens to the empty row. -/
 theorem opRL_of_nul {D Sl : Type} (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
-    (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : Accounting.Schedule) (r ℓ : ℕ) (cap : Model.Cap D)
+    (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule) (r ℓ : ℕ) (cap : Model.Cap D)
     {out : Model.OutCL 𝔽 D Sl} (ho : ∀ r ℓ i, (out.opens r ℓ i).1 = []) (p : Fin (2 ^ (lvOf sch ℓ).logLen))
     {v : Fin (2 ^ (lvOf sch ℓ).lanes) → 𝔽} (hv : opRL Hc E Lf sch r ℓ cap out p = some v) :
     v = rowFin (lvOf sch ℓ).lanes [] := by
@@ -151,7 +151,7 @@ theorem opRL_of_nul {D Sl : Type} (Hc : List UInt8 → D) (E : Merkle.Enc (List 
 
 /-- **Two runs with empty rows never conflict** at a position of a cap. -/
 theorem not_conflictAt_nul {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List UInt8 → D)
-    (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : Accounting.Schedule) (r ℓ : ℕ)
+    (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule) (r ℓ : ℕ)
     (cap : Model.Cap D) {b b' : List (Model.OutCL 𝔽 D Sl)}
     (hb : ∀ r ℓ i, ((b.getD 0 dfltOutL).opens r ℓ i).1 = [])
     (hb' : ∀ r ℓ i, ((b'.getD 0 dfltOutL).opens r ℓ i).1 = []) (p : Fin (2 ^ (lvOf sch ℓ).logLen)) :
@@ -186,7 +186,7 @@ theorem outN_batch_one {Op A : Type} {nul : Op} {g : Game A} {outs : List A} (d 
 /-- **The session after `Commit`, answered with `nulOp`, reaches only empty rows.** -/
 theorem opens_of_outN_sessAfterL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
-    (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (S : Model.Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
+    (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (S : Model.Statement) (sch : FlockSoundness.Accounting.Schedule) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) {outs : List (Model.OutCL 𝔽 D Sl)}
     (h : Claims.Bridge.OutN (nulOp (D := D) (Sl := Sl)) (sessAfterL A Hc E Lf S sch hm ptLocal mPts [] [] cap₀) outs)
     (r ℓ i : ℕ) : ((outs.getD 0 dfltOutL).opens r ℓ i).1 = [] := by
@@ -198,7 +198,7 @@ theorem opens_of_outN_sessAfterL {K D Sl : Type} [Field K] [Fintype K] [Decidabl
 
 theorem allInh_sessAfterL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
-    (S : Model.Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) :
+    (S : Model.Statement) (sch : FlockSoundness.Accounting.Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) :
     AllInh (sessAfterL A Hc E Lf S sch hm ptLocal mPts [] [] cap₀) := by
   unfold sessAfterL
   exact .coin fun _ => AllInh.map _ (AllInh.interleave
@@ -209,7 +209,7 @@ theorem allInh_sessAfterL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] 
 `nulOp`, only outcomes with empty rows, `answerWith nulOp` forks to `0` at the conflict event of any cap's openings,
 whatever the chooser and the number of coins. -/
 theorem slotAt_answerWith_nul {D Sl T I α : Type} [Inhabited D] [Inhabited Sl] (Hc : List UInt8 → D)
-    (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : Accounting.Schedule)
+    (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule)
     (plur : Lock.Chooser T (Model.Cap D) (List (Model.OutCL 𝔽 D Sl))) (slot r ℓ j : ℕ)
     {get : I → ℕ → Option (T × Model.Cap D)} {R : I → α → List (Model.OutCL 𝔽 D Sl) → Prop} {i : I} {g : Game α}
     {g' : Game (List (Model.OutCL 𝔽 D Sl))} (L : Lock T (Model.Cap D) get R i g g') (hg : AllInh g')

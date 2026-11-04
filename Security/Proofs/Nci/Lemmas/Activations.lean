@@ -17,9 +17,9 @@ open Verity
 rates: a chain's weight entries and input entries are distinct weight and activation gates, and an input entry whose
 activation is whole in `R` is linked to an entry whole in `R`. -/
 def ActivationsChain : Prop :=
-  ∀ (c : Declaration) (ch : Chain c.D) (T : Threading c) (L : T.Links) (Γ : ℕ) (K b_w b_a : ℝ),
+  ∀ (r : RegisteredCircuit) (ch : Chain r.D) (T : Threading r) (L : T.Links) (c : ℕ) (k b_w b_a : ℝ),
     ChainIn ch T L → 0 ≤ b_w → 0 ≤ b_a →
-    Assumptions.ActivationsIncompressibleAll c T L Γ K b_w b_a →
-      Assumptions.ActivationsIncompressible c ch Γ K b_w b_a
+    Assumptions.ActivationsIncompressibleAll r T L c k b_w b_a →
+      Assumptions.ActivationsIncompressible r ch c k b_w b_a
 
 end Nci.Guarantees

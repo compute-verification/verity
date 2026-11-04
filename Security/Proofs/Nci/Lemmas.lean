@@ -1,11 +1,12 @@
 import Definitions.Nci.Assumptions
+import Definitions.Nci.Threads
 import Definitions.Core.Circuit
-import Definitions.Core.Declaration
+import Definitions.Core.RegisteredCircuit
 import Definitions.Core.Partition
 import Definitions.Nci
 
 /-!
-# NCI's lemmas
+# The inference-only policy's lemmas
 
 These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
@@ -18,22 +19,21 @@ namespace Nci.Guarantees
 open Verity
 open scoped ENNReal
 
-/-- **The read bound**: a declaration that contains `c` (`M`) and complies at `(Γ, α)`, with its θ registered
-(`ThetaRegistered`), has at least `Reads_Γ(c) / α` gates. Lower bounds on NCI become lower bounds on size when the
-declared circuit computes `c` the way `c` does. -/
+/-- **The read bound**: a declaration that contains the reference circuit `r` (`M`) and complies at `(c, k)`, with its
+registered information free of the reference circuit's fresh input (`ThetaRegistered`), has at least `Reads_c(r) / α`
+gates, at the rate `α = k / c`. Lower bounds on the fresh input a computation reads become lower bounds on size when the
+declared circuit computes `r` the way `r` does. -/
 def ReadBound : Prop :=
-  ∀ (Γ : ℕ) (α : ℝ) (c d : Declaration) (M : Containment c.D d.D), Complies Γ α d →
-    Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M) →
-    (Reads Γ c : ℝ) ≤ α * d.D.size d.D.computed
+  ∀ (c k : ℕ) (r d : RegisteredCircuit) (M : Containment r.D d.D), Complies c k d →
+    Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) →
+    (Reads c r : ℝ) ≤ (k / c : ℝ) * d.D.size d.D.computed
 
-/-- **Inference complies as declared**: a declaration divided into sessions of at most `Γ` gates, each reading from
-outside itself only registered information and its own prompt `prompt u`, with at most `α` bits of prompt per gate of the
-session, complies at `(Γ, α)`, and its slowdown factor is at most 1. -/
+/-- **Inference complies as declared**: a Boolean declaration divided into sessions of exactly `c` gates, padding
+included, each reading from outside itself only registered information and its own prompt `prompt u` of at most `k`
+bits, complies at `(c, k)`, and its slowdown factor is at most 1. -/
 def Inference : Prop :=
-  ∀ (Γ : ℕ) (α : ℝ) (d : Declaration) (n : ℕ) (P : Partition d.D n) (prompt : Fin n → Finset (Fin d.D.N)),
-    (∀ u, d.D.size (P.gates u) ≤ Γ) → (∀ u, d.D.into (P.gates u) ⊆ d.θ ∪ prompt u) →
-    (∀ u, (d.D.width (prompt u) : ℝ) ≤ α * d.D.size (P.gates u)) →
-      Complies Γ α d ∧ slowdown (Complies Γ α) d ≤ 1
+  ∀ (c k : ℕ) (d : RegisteredCircuit) (B : ℕ) (P : Partition d.D B) (prompt : Fin B → Finset (Fin d.D.N)),
+    d.D.Boolean → Assumptions.Sessions d P prompt c k → Complies c k d ∧ slowdown (Complies c k) d ≤ 1
 
 end Nci.Guarantees
 
@@ -57,11 +57,6 @@ def _root_.Nci.Guarantees.FullPositions : Prop :=
 end Nci.SecurityProofs
 
 namespace Nci.SecurityProofs
-open Verity Finset
-
-end Nci.SecurityProofs
-
-namespace Nci.SecurityProofs
 open Finset
 
 /-- **The discrete Loomis–Whitney inequality** in three dimensions: a finite set of triples, squared, has at most the
@@ -78,8 +73,8 @@ open Verity Finset
 
 /-- **Lemma 2 (other positions)** (the draft, "Throttling updated matrix multiplications"): "At positions that are not
 full positions of `R`, every entry of `x^{(ℓ-1)}` that `R` uses costs `R` a read of at least `b_a` bits, and every entry
-of `y^{(ℓ)}` that `R` contributes products to is split." `R` is an IU of a division `P`; the read is the one
-`Assumptions.ActivationsIncompressible` charges, since such an entry is not linked to an entry whole in `R`. -/
+of `y^{(ℓ)}` that `R` contributes products to is split." `R` is an inference block of a division `P`; the read is the
+one `Assumptions.ActivationsIncompressible` charges, since such an entry is not linked to an entry whole in `R`. -/
 def _root_.Nci.Guarantees.OtherPositions : Prop :=
   ∀ {D : Circuit} (c : Chain D) {n : ℕ} (P : Partition D n) (u : Fin n),
     (∀ ℓ t j, ⟨ℓ, t, j⟩ ∈ c.inputsUsed (P.gates u) → ¬ c.Full (P.gates u) t →

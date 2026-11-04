@@ -49,7 +49,7 @@ theorem card_image_le_of_factor {α β γ : Type} [DecidableEq β] [DecidableEq 
 
 /-- **The counting bound**: the gates of an IU's subset `T` take at most `2^novelReads(R)` distinct values over the runs
 with the baseline at `θv`. -/
-theorem support_le (d : Declaration) (θv : d.D.Transcript) {R T : Finset (Fin d.D.N)} (hR : R ⊆ d.D.computed)
+theorem support_le (d : RegisteredCircuit) (θv : d.D.Transcript) {R T : Finset (Fin d.D.N)} (hR : R ⊆ d.D.computed)
     (hT : T ⊆ R) : support d θv T ≤ 2 ^ novelReads d R := by
   classical
   set U := d.D.into R \ d.θ
@@ -71,7 +71,7 @@ theorem support_le (d : Declaration) (θv : d.D.Transcript) {R T : Finset (Fin d
         rfl
 
 /-- A set of gates takes at most `2^width` distinct values. -/
-theorem support_le_width (d : Declaration) (θv : d.D.Transcript) (T : Finset (Fin d.D.N)) :
+theorem support_le_width (d : RegisteredCircuit) (θv : d.D.Transcript) (T : Finset (Fin d.D.N)) :
     support d θv T ≤ 2 ^ d.D.width T := by
   classical
   calc support d θv T ≤ Fintype.card ((g : T) → BitVec (d.D.w g)) := card_le_univ _

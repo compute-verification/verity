@@ -1,6 +1,7 @@
 import Proofs.Nci.Chain
 import Proofs.Nci.Inequalities
 import Proofs.Nci.LoomisWhitney
+import Proofs.Nci.Rate
 import Proofs.Nci.Lemmas
 
 /-!

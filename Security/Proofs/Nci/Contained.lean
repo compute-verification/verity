@@ -3,6 +3,7 @@ import Definitions.Nci.Dark
 import Proofs.Nci.Reads
 import Proofs.Nci.Pull
 import Proofs.Nci.Support
+import Proofs.Nci.Rate
 import Proofs.Nci.Lemmas.Reads
 
 /-!
@@ -31,8 +32,9 @@ open Verity Finset
 
 /-- The partial-sum law on a reference circuit, in reads: `UpdatedMatMulReads` with its assumptions on the contained
 circuit `c`. -/
-theorem containedMatMul_of_reads (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (ch : Chain c.D) (dd : ℕ)
-    (M : Containment c.D d.D) (hα : 0 < α) (hw : 0 < b_w) (ha : 0 < b_a) (hd : ∀ ℓ, dd ≤ ch.d ℓ) (hP : Complies Γ α d)
+theorem containedMatMul_of_reads (Γ : ℕ) (α b_w b_a : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (dd : ℕ)
+    (M : Containment c.D d.D) (hα : 0 < α) (hw : 0 < b_w) (ha : 0 < b_a) (hd : ∀ ℓ, dd ≤ ch.d ℓ)
+    (hP : CompliesRate Γ α d)
     (hB : Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M))
     (hA : Assumptions.ActivationsIncompressible c ch Γ (α * Γ) b_w b_a)
     (hPS : Assumptions.PartialSumsIncompressible c ch Γ (α * Γ) b_w b_a) :
@@ -60,7 +62,7 @@ theorem containedMatMul_of_reads (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaratio
 
 section Dark
 
-variable {c d : Declaration} (M : PartialContainment c d) {n : ℕ} (P : Partition d.D n)
+variable {c d : RegisteredCircuit} (M : PartialContainment c d) {n : ℕ} (P : Partition d.D n)
 
 /-- The part of `c`'s gate `g` when each dark gate joins the pieces of `P` as a part of its own. -/
 def darkUnit (g : Fin c.D.N) : Option (Fin n ⊕ {v // v ∈ M.dark}) :=
@@ -142,7 +144,7 @@ end Dark
 
 /-- A piece of a compliant division is within the reference circuit's caps: it has no more gates than its IU and reads
 no more novel information. -/
-theorem piece_caps {Γ : ℕ} {α K : ℝ} {c d : Declaration} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
+theorem piece_caps {Γ : ℕ} {α K : ℝ} {c d : RegisteredCircuit} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
     (hα : 0 ≤ α) (hαK : α * Γ ≤ K)
     (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
     (hB : Assumptions.ThetaRegistered c d M) (u : Fin n) :
@@ -151,7 +153,7 @@ theorem piece_caps {Γ : ℕ} {α K : ℝ} {c d : Declaration} {M : PartialConta
     ((mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα).trans hαK)⟩
 
 /-- The pieces with the dark gates are within the caps, when each dark gate reads at most `K` itself. -/
-theorem withDark_caps {Γ : ℕ} {α K : ℝ} {c d : Declaration} {M : PartialContainment c d} {n : ℕ}
+theorem withDark_caps {Γ : ℕ} {α K : ℝ} {c d : RegisteredCircuit} {M : PartialContainment c d} {n : ℕ}
     {P : Partition d.D n} (hα : 0 ≤ α) (hαK : α * Γ ≤ K) (hΓ : 1 ≤ Γ)
     (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
     (hB : Assumptions.ThetaRegistered c d M) (hX : ∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K)
@@ -168,7 +170,7 @@ open Classical in
 /-- **The partial sums, counted over the pieces**: partial sums charged `s` over the pieces with the dark gates, each
 piece's charge within its IU's reads, leave the split entries' contributions within the IUs' reads and the dark gates'
 charges. -/
-theorem partialSums_count {c d : Declaration} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
+theorem partialSums_count {c d : RegisteredCircuit} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
     {ch : Chain c.D} {b_w b_a : ℝ} (ha : 0 ≤ b_a) {s : Fin (Fintype.card (Fin n ⊕ {v // v ∈ M.dark})) → ℕ}
     (hsum : ∑ x : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ), (ch.spread (withDark M P) x.1 x.2.1 x.2.2 - 1) ≤ ∑ i, s i)
     (hsP : ∀ u, b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
@@ -204,7 +206,7 @@ open Classical in
 split-entry contributions are within the IUs' reads and `B`, then
 `max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) B`. Each piece is within its IU's reads by
 `ActivationsIncompressible` on the reference circuit. -/
-theorem matMulOn_of_counts {Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : Declaration} {ch : Chain c.D} {dd emax : ℕ}
+theorem matMulOn_of_counts {Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : RegisteredCircuit} {ch : Chain c.D} {dd emax : ℕ}
     {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n} (hα : 0 ≤ α) (hK : 0 < K) (hw : 0 < b_w)
     (ha : 0 < b_a) (hdd : 0 < dd) (hαK : α * Γ ≤ K) (hμ₀ : 0 ≤ μ) (hμ₁ : μ ≤ 1) (hd : ∀ ℓ, dd ≤ ch.d ℓ)
     (he : ∀ ℓ, ch.e ℓ ≤ emax)
