@@ -19,6 +19,8 @@ import Proofs.Flock.Bridge.Honest
 import Proofs.Flock.Bridge.V5
 import Proofs.Flock.Bridge.Public
 import Proofs.Flock.Bridge.RelDeploy
+import Proofs.Flock.Bridge.Partitions
+import Proofs.Flock.Bridge.KeyPartitions
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
@@ -35,7 +37,10 @@ at the code's partition (`Flock.Bridge.relDeploy_ofCircuit`).
 parameters. `Honest`: `Flock.SecurityProofs.SampledKSLiveHonest : Flock.Guarantees.SampledKSLiveHonest`, the file
 hypotheses of V2, V3 and Pub at the deployed session, from the named premise that its files parse
 (`Bridge.Assumptions.ServedFilesParse`). `RelDeploy`: `RelDeployTarget`, proved (`Flock.Bridge.relDeploy`), and its
-leaf-map form at V5's layout (`Flock.Bridge.relDeployL`). -/
+leaf-map form at V5's layout (`Flock.Bridge.relDeployL`). `Partitions`: `partOf` partitions `progOf`
+(`Flock.Bridge.partOf_partitions`) when no output is an input, every unit holds a gate and every block fits a class.
+`KeyPartitions`: those conditions at the key program of a circuit file whose units commit at most `unitClassMax` bits
+(`Flock.Bridge.keyPart_partitions`). -/
 
 /-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
 theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl
