@@ -49,10 +49,10 @@ def record(bpb: dict[int, float], commit: str) -> dict:
             "checkpoints": [{"step": s, "val_bpb": b, "e_bytes": 30, "source": "submit"} for s, b in bpb.items()]}
 
 
-def fixture(tmp_path: Path, rho_own: bool = True, cheap: bool = False) -> list[str]:
+def fixture(tmp_path: Path, rho_own: bool = True, cheap: bool | str = False) -> list[str]:
     """FINALS.json, the finals job's launch file, the two reruns' records, the scorer's tables and a starts manifest;
     and `build`'s arguments over them. The covert point's first launch was superseded by its step check. With
-    `cheap`, the `CHEAP` point too."""
+    `cheap`, the `CHEAP` point too, its seed dropped if `cheap` is "dropped"."""
     pin = frontier.pinned()[0]
     finals = {"points": [{"point": f"{run} point", "run": run, "start": "s1", "island": island,
                           "mechanism": f"{island}/m",
@@ -60,7 +60,8 @@ def fixture(tmp_path: Path, rho_own: bool = True, cheap: bool = False) -> list[s
                          | ({"label": label} if label else {}) for run, island, seeds, label, *_ in POINTS]}
     if cheap:
         finals["points"].append({"point": "r-cheap point", "run": "r-cheap", "start": "s1", "island": "ref-data",
-                                 "mechanism": "ref-data/m", "reruns": [{"seed": "own"}]})
+                                 "mechanism": "ref-data/m",
+                                 "reruns": [{"seed": "own"} | ({"dropped": "late"} if cheap == "dropped" else {})]})
     (tmp_path / "FINALS.json").write_text(json.dumps(finals))
     launches = [{"key": "r-honest seed own", "node": "n1", "run": "f-a", "rc": 0},
                 {"key": "r-covert seed own", "node": "n1", "run": "f-b-old", "rc": 0},
@@ -92,7 +93,7 @@ def fixture(tmp_path: Path, rho_own: bool = True, cheap: bool = False) -> list[s
             str(tmp_path / "starts.json"), "--policy-art", "art:test", "--out", str(tmp_path / "out")]
 
 
-def table(tmp_path: Path, rho_own: bool = True, cheap: bool = False) -> tuple[dict, str]:
+def table(tmp_path: Path, rho_own: bool = True, cheap: bool | str = False) -> tuple[dict, str]:
     assert FT.main(fixture(tmp_path, rho_own, cheap)) == 0
     return (json.loads((tmp_path / "out" / "finals-table.json").read_text()),
             (tmp_path / "out" / "finals-table.md").read_text())
@@ -138,6 +139,9 @@ def test_a_cheaper_honest_search_point_without_a_finished_seed_is_a_caveat_on_h(
     assert "(0 of 1 finished)" in by[1.1]["H_caveat"] and "dearer H" in by[1.1]["H_caveat"]
     assert by[2]["H_caveat"] is None  # r-honest is the search's H there, and it reached
     assert "- CAVEAT: the search's honest H at 1.1x" in md
+    (tmp_path / "dropped").mkdir()
+    t, _ = table(tmp_path / "dropped", cheap="dropped")
+    assert "(not rerun in the finals): so p here reads against a dearer H" in t["tables"][0]["H_caveat"]
 
 
 def test_every_point_the_table_leaves_out_or_seed_it_lacks_says_why(tmp_path):
