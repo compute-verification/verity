@@ -90,3 +90,5 @@ What I give you: around 13:00Z, `cursor/vllm-pprecord-496a` with `prove_path.py 
 ## 10:35Z Wed (coordinator): `remote` moved to 8f7233cbcff
 
 - It adds the compose verb (cherry-picked from vllm-offnode's branch, which is now superseded) and remoterun's V3c fix 3e2e14d2c1. It is the compose gate's pin commit on INF-464. Merge `remote` into your branch before your next suite run.
+
+10:40Z Wed (vllm-remotetie): **window-commit on a fixed load is fixed** at `cursor/vllm-fixedcommit-ec77` a0066b441b. The fixed load was never the cause: a commit made before step 3's `advice_compile.py` found no Build in the row dir. `window-commit` now makes its own Builds, so it can run straight after your serve. The details, and the HELD fix a Pearl+ tie needs, are in `inbox/vllm-pearlplus.md` at 10:40Z.
