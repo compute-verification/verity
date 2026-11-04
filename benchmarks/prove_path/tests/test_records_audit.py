@@ -688,7 +688,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     day = G.chain("remote", [G.Declaration(0, got.rec["program"])])
     (tmp_path / "log.json").write_bytes(G.committed("remote", day))
     named = tmp_path / "w-day.json"
-    named.write_text(json.dumps({**got.w, "window": {"day": 0, "declaration": day[0].digest()}}))
+    named.write_text(json.dumps({**got.w, "window": {"day": 0, "declaration": G.Declaration(0, got.rec["program"]).digest()}}))
     seen.clear()
     assert RA.main([*base, "--out", str(tmp_path / "unnamed"), "--tie", str(got.w_file), "--tie-prefix", "h1/", "--day", "0",
                     "--day-log", str(tmp_path / "log.json")]) == 1
@@ -733,21 +733,23 @@ def test_a_declared_day_holds_the_registrations_program_to_the_days_one_declarat
 
 def test_a_declared_day_holds_the_tied_ws_naming_to_a_declaration_of_that_day_in_the_log(tmp_path):
     """Under ``--tie`` W's window names the day's declaration (``day``, ``declaration``: `serve_day.Day.naming`), and
-    `declared_day` holds it to the log: W naming day 3's declaration by its digest passes; naming another day, a digest the
-    log doesn't hold for day 3 (day 4's), or a day without ``--day`` is refused before any session. A W naming no day
-    under no ``--day`` (Pearl+'s, every window without the switch) is as before."""
+    `declared_day` holds it to the log: W naming day 3's declaration by its digest rebuilt with no ``previous`` passes;
+    naming another day, a digest the log doesn't hold for day 3 (day 4's), the log's chained digest of day 3's entry, or a
+    day without ``--day`` is refused before any session. A W naming no day under no ``--day`` (Pearl+'s, every window
+    without the switch) is as before."""
     from verity.core.protocols import registration as G
 
     log = tmp_path / "log.json"
     entries = G.chain("remote", [G.Declaration(3, "5d" * 64), G.Declaration(4, "6e" * 64)])
     log.write_bytes(G.committed("remote", entries))
-    d3, d4 = entries[0].digest(), entries[1].digest()
+    d3, d4 = G.Declaration(3, "5d" * 64).digest(), G.Declaration(4, "6e" * 64).digest()
+    assert entries[0].previous and entries[0].digest() != d3
 
     def w(**named: object) -> dict[str, object]:
         return {"format": "toy", "window": {"kind": "served", **named}}
     assert RA.declared_day(3, str(log), None, w(day=3, declaration=d3))["day"] == 3
     assert RA.declared_day(None, None, None, w()) == {}
-    for bad in (w(day=4, declaration=d3), w(day=3, declaration=d4), w()):
+    for bad in (w(day=4, declaration=d3), w(day=3, declaration=d4), w(day=3, declaration=entries[0].digest()), w()):
         with pytest.raises(ValueError, match="not one of day 3's in --day-log"):
             RA.declared_day(3, str(log), None, bad)
     with pytest.raises(ValueError, match="names day 3's declaration, and the audit has no --day"):

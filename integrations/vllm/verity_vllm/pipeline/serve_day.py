@@ -13,12 +13,13 @@ the one circuit it serves that day in the deployment's registration log, and eve
   server restarted within its day); one that declares it another is the refusal. A new log takes ``--day-params``'
   composite. The read, the check and the write hold an exclusive lock on ``LOG.lock``, so two servers of one deployment
   can't both declare a day.
-* **Where it is registered.** The serve dir's `FILE` (the entry, its digest and the log's head after it), ``serve.json``'s
-  ``day``, and, under ``--h1-window-commit``, the first line of the window log ``h1/log.jsonl`` (`serve_tie`, kind
-  ``declaration``), which the windows' W and R then follow.
+* **Where it is registered.** The serve dir's `FILE` (the entry, the digest windows name it by and the log's head after
+  it), ``serve.json``'s ``day``, and, under ``--h1-window-commit``, the first line of the window log ``h1/log.jsonl``
+  (`serve_tie`, kind ``declaration``), which the windows' W and R then follow.
 * **Each window names it.** Each W (`pouw_h1_commit.registration`) carries ``window.day`` and ``window.declaration``, the
-  entry's digest. Before an R is named the window's Commit record, its ``program`` must be the day's (`Day.refusal`): the
-  server's own guard, the window's visible refusal. What counts is R2's (sampled proofs' ``R2-declared``, which the audit
+  declaration's digest with no ``previous`` (`named`), which R2 rebuilds from the day, program and blocks of the log's
+  entry or of the challenger device's signed one, so both paths name it alike. Before an R is named the window's Commit
+  record, its ``program`` must be the day's (`Day.refusal`): the server's own guard, the window's visible refusal. What counts is R2's (sampled proofs' ``R2-declared``, which the audit
   runs with the day and the log's declarations).
 
 Without ``--day`` nothing here runs, and every byte the server writes is as before.
@@ -65,8 +66,8 @@ class DayOptions:
 
 @dataclass(frozen=True)
 class Day:
-    """The day's declaration as the log holds it: the entry, its digest, and whether this server wrote it (``now``) or a
-    server before it that day (``earlier``)."""
+    """The day's declaration as the log holds it: the entry, the digest windows name it by (`named`), the log's head, and
+    whether this server wrote it (``now``) or a server before it that day (``earlier``)."""
 
     entry: G.Declaration
     digest: str
@@ -163,11 +164,18 @@ def append(path: Path, declaration: G.Declaration, params: tuple[str, S.Auditor]
         same = [e for e in log if isinstance(e, G.Declaration) and e.day == declaration.day
                 and (e.program, e.blocks) == (declaration.program, declaration.blocks)]
         if same:
-            return Day(same[0], same[0].digest(), G.head(composite, log), path, "earlier")
+            return Day(same[0], named(same[0]), G.head(composite, log), path, "earlier")
         entry = G.chain(composite, [*log, declaration])[-1]
         G.check(auditor, composite, [*log, entry])
         _write(path, G.committed(composite, [*log, entry]))
-        return Day(entry, entry.digest(), entry.digest(), path, "now")
+        return Day(entry, named(entry), entry.digest(), path, "now")
+
+
+def named(entry: G.Declaration) -> str:
+    """The digest a window names a day's declaration by: `registration.Declaration`'s with no ``previous``, the day, program
+    and blocks alone, which R2 rebuilds alike from the prover's log and from the challenger device's signed entry. The log's
+    own chained entry (its ``previous`` set) is the log's, not what a window names."""
+    return G.Declaration(entry.day, entry.program, entry.blocks).digest()
 
 
 def _read(path: Path, params: tuple[str, S.Auditor] | None) -> tuple[str, list[G.Entry]]:
@@ -187,4 +195,4 @@ def _write(path: Path, body: bytes) -> None:
     os.replace(tmp, path)
 
 
-__all__ = ["FILE", "Day", "DayOptions", "append", "declare", "refusal"]
+__all__ = ["FILE", "Day", "DayOptions", "append", "declare", "named", "refusal"]

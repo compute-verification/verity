@@ -2897,12 +2897,17 @@ def _day_deferred(tmp_path: Path, **extra: str | None) -> RL.Declaration:
     params.write_text(json.dumps(RL.params("remote", SITE.Auditor())))
     d.mkdir()
     (d / "declaration.json").write_text(json.dumps({"day": 3, "program": "5d" * 64, "blocks": [],
-                                                    "declaration": entry.digest(), "head": entry.digest(),
+                                                    "declaration": _named(entry), "head": entry.digest(),
                                                     "log": str(log), "declared": "now", "entry": entry.to_json(),
                                                     "file": "declaration.json"}))
     run = _deferred(tmp_path, DAY="3", DAY_LOG=str(log), DAY_PARAMS=str(params), **extra)
     assert run.returncode == 0, run.stderr
     return entry
+
+
+def _named(entry: RL.Declaration) -> str:
+    """The digest serve-openai's declaration.json names ``entry`` by: its Declaration with no ``previous``."""
+    return RL.Declaration(entry.day, entry.program, entry.blocks).digest()
 
 
 def _held(entry: RL.Declaration, verdict: str) -> str:
@@ -2928,7 +2933,7 @@ def test_a_deferral_under_day_carries_the_days_log_and_its_follow_on_audits_r2_a
     rc, lines, order, _limits = _follow(tmp_path, records_audit=_day_tree(tmp_path), **extra)
     assert rc == 0 and order == ["audit", "period", "record", "composite"], (lines, order)
     assert lines[1].endswith("(the serve dir's private/deferred/inputs.sha256): PASS")
-    assert lines[2] == _held(entry, f"PASS (day 3, program {'5d' * 8}…, declaration {entry.digest()[:16]}…)")
+    assert lines[2] == _held(entry, f"PASS (day 3, program {'5d' * 8}…, declaration {_named(entry)[:16]}…)")
     assert _audited(tmp_path, DAYS) == {"--day": "3", "--day-log": str(dd / "day-log.json"),
                                         "--day-params": str(dd / "day-params.json")}
 
@@ -2953,9 +2958,9 @@ def test_a_follow_on_under_day_refuses_a_day_log_unlike_the_one_the_serve_declar
         (dd / "inputs.sha256").write_text("".join(
             f"{h}  {f}\n" if f == "private/deferred/day-log.json" else f"{x}\n"
             for x, f in ((x, x.split("  ", 1)[1]) for x in sums)))
-        assert other.digest() != entry.digest()
+        assert _named(other) != _named(entry)
         said = [V3C_ENTRY, FOLLOW_FAIL.replace("FAIL (the serve dir's private/deferred/check.log)", "PASS"),
-                _held(entry, f"FAIL (it holds no declaration of day 3 with digest {entry.digest()[:16]}…)")]
+                _held(entry, f"FAIL (it holds no declaration of day 3 with digest {_named(entry)[:16]}…)")]
     elif change == "clash":
         extra = {"DAY": "4"}
         said = [f"{CLASH} DAY: unset it"]

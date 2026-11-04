@@ -93,9 +93,21 @@ def test_serve_openai_declares_the_day_in_the_registration_log_before_the_model_
     entry = G.Declaration(2, AUDITED, ("t0", "t1"), ST.genesis("onsite"))
     assert composite == "onsite" and log == [entry]
     assert G.check(ST.Auditor(), composite, log).view().declared(2) == entry.declared()
-    assert seen["file"] == {"day": 2, "program": AUDITED, "blocks": ["t0", "t1"], "declaration": entry.digest(),
+    assert seen["file"] == {"day": 2, "program": AUDITED, "blocks": ["t0", "t1"],
+                            "declaration": G.Declaration(2, AUDITED, ("t0", "t1")).digest(),
                             "log": str(tmp_path / "log.json"), "head": entry.digest(), "declared": "now", "file": SD.FILE,
                             "entry": entry.to_json()}
+
+
+def test_a_window_names_the_declaration_by_its_digest_with_no_previous_not_the_logs_chained_one(tmp_path):
+    """W names the day's declaration by `registration.Declaration`'s digest rebuilt from its day, program and blocks with
+    no ``previous`` (`named`), the digest R2 rebuilds from the challenger device's entry too; the log's chained entry,
+    whose digest is the log's head, is not what a window names."""
+    day = SD.declare(_opts(tmp_path, *_day(tmp_path, 3, AUDITED, "--day-blocks", "t0")), tmp_path)
+    _composite, (entry,) = G.log_of(json.loads((tmp_path / "log.json").read_text()))
+    rebuilt = G.Declaration(3, AUDITED, ("t0",)).digest()
+    assert day.naming() == {"day": 3, "declaration": rebuilt} == {"day": 3, "declaration": SD.named(entry)}
+    assert entry.previous and entry.digest() == day.head != rebuilt
 
 
 def test_a_second_declaration_of_the_day_is_refused_by_name_and_leaves_the_log_as_it_was(tmp_path):
@@ -107,7 +119,7 @@ def test_a_second_declaration_of_the_day_is_refused_by_name_and_leaves_the_log_a
     assert first.declared == "now" and first.naming() == {"day": 0, "declaration": first.digest}
     body = log.read_bytes()
     again = SD.declare(_opts(tmp_path, *_day(tmp_path, 0, AUDITED)), tmp_path)
-    assert (again.declared, again.digest, again.head) == ("earlier", first.digest, first.digest) and log.read_bytes() == body
+    assert (again.declared, again.digest, again.head) == ("earlier", first.digest, first.head) and log.read_bytes() == body
     (tmp_path / "other").mkdir()
     with pytest.raises(cli.UsageError, match="refuses its declaration, entry 1: duplicate-declaration: day 0 is declared "
                                              "already, to another circuit"):
@@ -115,7 +127,7 @@ def test_a_second_declaration_of_the_day_is_refused_by_name_and_leaves_the_log_a
     assert log.read_bytes() == body and list((tmp_path / "other").iterdir()) == []
     second = SD.declare(_opts(tmp_path, *_day(tmp_path, 1, OTHER)), tmp_path)
     composite, entries = G.log_of(json.loads(log.read_text()))
-    assert second.declared == "now" and entries[1].previous == first.digest and second.digest == entries[1].digest()
+    assert second.declared == "now" and entries[1].previous == first.head and second.digest == SD.named(entries[1])
     view = G.check(ST.Auditor(), composite, entries).view()
     assert (view.declared(0)["program"], view.declared(1)["program"]) == (AUDITED, OTHER)
     wrong = tmp_path / "remote.json"

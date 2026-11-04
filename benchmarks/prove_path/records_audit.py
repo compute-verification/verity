@@ -594,9 +594,15 @@ def declared_day(day: int | None, log: str | None, params: str | None,
     if got[0] != "accept":
         raise ValueError(f"--day-log {log}: core's check refuses it, {got[1]}")
     if w is not None:
-        _held_naming(named, day, {e.digest() for e in entries if isinstance(e, G.Declaration) and e.day == day},
-                     f"--day-log {log}")
+        _held_naming(named, day, {_rebuilt(e.day, e.program, e.blocks) for e in entries
+                                  if isinstance(e, G.Declaration) and e.day == day}, f"--day-log {log}")
     return {"day": day, "declarations": got[1]["declarations"]}
+
+
+def _rebuilt(day: int, program: str, blocks: Any) -> str:
+    """The digest a window names its day's declaration by (serve_day's ``named``): `registration.Declaration`'s with no
+    ``previous``, rebuilt alike from the prover's log and from the challenger device's entry."""
+    return G.Declaration(day, program, tuple(blocks)).digest()
 
 
 def _held_naming(named: Mapping[str, Any], day: int, digests: set[str], where: str) -> None:
@@ -628,8 +634,8 @@ def device_day(lines: list[bytes], root: str, key: Any, verify: Callable[[bytes,
     declarations = [{"blocks": list(d["blocks"]), "day": d["day"], "program": d["program"]} for d in got["declarations"]]
     if w is not None:
         named = {k: (w.get("window") or {}).get(k) for k in ("day", "declaration")}
-        _held_naming(named, day, {G.Declaration(d["day"], d["program"], tuple(d["blocks"])).digest()
-                                  for d in declarations if d["day"] == day}, "the challenger's ledger")
+        _held_naming(named, day, {_rebuilt(d["day"], d["program"], d["blocks"]) for d in declarations if d["day"] == day},
+                     "the challenger's ledger")
     return {"day": day, "declarations": declarations}
 
 

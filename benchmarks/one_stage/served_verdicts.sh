@@ -927,7 +927,8 @@ got = G.check_log(p, (composite, log))
 if got[0] != "accept":
     sys.exit(f"core check refuses it, {got[1]}")
 want = decl.get("declaration")
-if decl.get("day") != day or not any(isinstance(e, G.Declaration) and e.day == day and e.digest() == want for e in log):
+if decl.get("day") != day or not any(isinstance(e, G.Declaration) and e.day == day
+                                     and G.Declaration(e.day, e.program, e.blocks).digest() == want for e in log):
     sys.exit(f"it holds no declaration of day {day} with digest {str(want)[:16]}…")
 program = str(decl.get("program"))
 print(f"day {day}, program {program[:16]}…, declaration {want[:16]}…")' \
