@@ -525,6 +525,17 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
           "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
           "uniform draws the tape models", "Firewall OS source", "standard"),
+    # the min-cut bound's cut conjectures (Security/Definitions/Nci/Assumptions/Cut.lean): (H) is
+    # `Nci.Cut.Assumptions.Hardness`, (E) `Nci.Cut.Assumptions.Exports`
+    Entry("training-cut-hardness", "assumption",
+          "(H), cut hardness: every set S of words of the registered circuit with κ(S) ≤ k has "
+          "Σ_r β_r |val(S ∩ A_r)| ≤ κ(S), κ(S) the least number of gates meeting every path from the unregistered "
+          "inputs to the gates of S's words: each value of array A_r that S's words carry costs β_r of those gates; "
+          "refuted by exhibiting a set of words whose values cost more than κ(S)", "(H) cut hardness", "conjectured"),
+    Entry("training-cut-exports", "assumption",
+          "(E), cut exports: every set B of computed gates has κ(B → E(B)) ≥ b |E(B)|, E(B) the outputs fed by a MAC "
+          "inside B with no wire in B: each output B finishes costs b of the gates separating B from it; refuted by "
+          "exhibiting a set of computed gates with κ(B → E(B)) < b |E(B)|", "(E) cut exports", "conjectured"),
 )}
 
 
