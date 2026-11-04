@@ -1,8 +1,8 @@
 import Batteries.Tactic.OpenPrivate
 import Proofs.Flock.Claims.Complete.Json.Canon
 import Proofs.Flock.Claims.Complete.Json.Record
+import Proofs.Flock.Claims.Sampling.Select.LetWalk
 import Proofs.Flock.Claims.Sampling.Select.Steps
-import Proofs.Flock.Soundness.Refine.Walk
 import Proofs.Pouw.Period.Sort
 import SampledProofs.OneStage
 
@@ -33,7 +33,6 @@ namespace Properties.SampledProofs.SecurityProofs
 open Lean (Json JsonNumber)
 open Claims.Json (Same Good)
 open FlockComplete.JsonRT (Distinct good_mkObj good_toJson good_arr_of get?_mkObj get?_mkObj_none same_num)
-open FlockSoundness.Refine (walk_step)
 open Properties.Pouw.Period.SecurityProofs.Sort (qsort_of_sorted)
 
 namespace SameLaw
@@ -79,8 +78,8 @@ theorem list_mapM_congr {α β : Type} (f : α → Option β) :
   | x :: l, y :: l', hl, h => by
     have h0 := h 0 (by simp) (by simp)
     simp only [List.getElem_cons_zero] at h0
-    have ih := list_mapM_congr f l l' (by simpa using hl) fun i h₁ h₂ => by
-      simpa using h (i + 1) (by simpa using h₁) (by simpa using h₂)
+    have ih := list_mapM_congr f l l' (by simpa using hl) fun i h₁ h₂ =>
+      h (i + 1) (Nat.succ_lt_succ h₁) (Nat.succ_lt_succ h₂)
     rw [List.mapM_cons, List.mapM_cons, h0, ih]
   | [], _ :: _, hl, _ => by simp at hl
   | _ :: _, [], hl, _ => by simp at hl
@@ -327,28 +326,21 @@ theorem shape_k {law : Json} {kind w : String} {u : Unit} (hl : getD law "law" =
     obtain ⟨hg, hne⟩ := good_of_nat? hv
     exact ⟨_, get?_of_getD rfl hne, hg⟩
 
-theorem ok_ite {c : Prop} [Decidable c] {e : String} {a : Unit}
-    (h : (if c then (throw e : Flock.V Unit) else pure ()) = .ok a) : ¬ c := by
-  intro hc
-  rw [if_pos hc] at h
-  exact throw_ne _ _ h
-
 theorem throw_bind_eq {α β : Type} (e : String) (f : α → Flock.V β) : ((throw e : Flock.V α) >>= f) = throw e := rfl
 
 theorem rule_shape {law : Json} (h : OneStage.rule law = .ok law) : Shape law := by
   unfold OneStage.rule at h
   try dsimp only at h
-  try simp only [throw_bind_eq, pure_bind] at h
+  try simp only [throw_bind_eq] at h
   repeat' walk_step
   all_goals first
     | exact shape_bern (by assumption) (by assumption) (by assumption)
     | exact shape_k (by assumption) (by assumption) (by assumption)
-    | exact shape_k (by assumption) (by assumption) (ok_ite (by assumption))
 
 theorem rule_eq {x y : Json} (h : OneStage.rule x = .ok y) : y = x := by
   unfold OneStage.rule at h
   try dsimp only at h
-  try simp only [throw_bind_eq, pure_bind] at h
+  try simp only [throw_bind_eq] at h
   repeat' walk_step
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h
@@ -366,7 +358,6 @@ theorem canon_pr_obj {m m' : Std.TreeMap.Raw String Json compare} (hm' : m'.WF)
     (hget : ∀ p ∈ m.toList, m'.get? p.1 = some p.2) (hkeys : (m.toList.map (·.1)).Perm (m'.toList.map (·.1)))
     (hg : ∀ p ∈ m.toList, Good p.2) (s : String) (hs : Flock.canon (.obj m) = .ok s) :
     FlockComplete.JsonRT.ReadBack.Pr (.obj m') s.toList := by
-  open FlockComplete.JsonRT.ReadBack in
   rw [Flock.canon] at hs
   cases hp : m.toArray.attach.mapM (fun p => do pure (p.1.1, ← Flock.canon p.1.2)) with
   | error e => rw [hp] at hs; cases hs
@@ -583,8 +574,8 @@ theorem digits_head (n : ℕ) : ∃ d ds, (Int.repr (Int.ofNat n)).toList = d ::
   obtain ⟨c, cs, hc, h0, h9⟩ := FlockComplete.JsonRT.ReadBack.toDigits_ne n
   exact ⟨c, cs, by simp [Int.repr, Nat.repr, hc], h0, h9⟩
 
-theorem lit_head (s X Y : String) (c : Char) (hs : s.toList = [c]) :
-    (s ++ X ++ Y).toList = c :: (X.toList ++ Y.toList) := by
+theorem lit_head (s mid tail : String) (c : Char) (hs : s.toList = [c]) :
+    (s ++ mid ++ tail).toList = c :: (mid.toList ++ tail.toList) := by
   rw [String.toList_append, String.toList_append, hs]
   rfl
 
@@ -595,13 +586,12 @@ open SameLaw
 /-- **The verifier's law, as `OneStage.paramsParsed` keeps it, is one `OneStage.rule` accepts as it stands.** -/
 theorem paramsParsed_rule {j : Json} {p : OneStage.Params} (h : OneStage.paramsParsed j = .ok p) :
     OneStage.rule p.verifier.law = .ok p.verifier.law := by
-  unfold OneStage.paramsParsed at h
-  try dsimp only at h
-  try simp only [throw_bind_eq, pure_bind] at h
-  repeat' walk_step
+  revert p
+  show FlockSoundness.Refine.Ret (OneStage.paramsParsed j) fun p => OneStage.rule p.verifier.law = .ok p.verifier.law
+  rw [OneStage.paramsParsed.eq_def]
+  ret_walk_let [OneStage.rule]
   all_goals
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    subst h
+    subst_vars
     exact rule_self (by assumption)
 
 /-- **The verifier's law, as `OneStage.paramsOfJson` keeps it, is one `OneStage.rule` accepts as it stands**:
@@ -610,7 +600,7 @@ theorem paramsOfJson_rule {j : Json} {p : OneStage.Params} (h : OneStage.paramsO
     OneStage.rule p.verifier.law = .ok p.verifier.law := by
   unfold OneStage.paramsOfJson at h
   try dsimp only at h
-  try simp only [throw_bind_eq, pure_bind] at h
+  try simp only [throw_bind_eq] at h
   repeat' walk_step
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h
@@ -665,8 +655,8 @@ theorem sameLawProfile_honest :
 
 /-- `SameLawProfile`'s conclusion is not trivial: two laws the profile tells apart. -/
 theorem sameLawProfile_nontrivial :
-    Record.profileDraw (Json.mkObj [("law", "subset"), ("k", Lean.toJson (1 : ℕ))]) ≠
-      Record.profileDraw (Json.mkObj [("law", "subset"), ("k", Lean.toJson (2 : ℕ))]) := by
+    ¬ (Record.profileDraw (Json.mkObj [("law", "subset"), ("k", Lean.toJson (1 : ℕ))]) =
+      Record.profileDraw (Json.mkObj [("law", "subset"), ("k", Lean.toJson (2 : ℕ))])) := by
   rw [show Record.profileDraw (Json.mkObj [("law", "subset"), ("k", Lean.toJson (1 : ℕ))]) = some (.subset 1) from rfl,
     show Record.profileDraw (Json.mkObj [("law", "subset"), ("k", Lean.toJson (2 : ℕ))]) = some (.subset 2) from rfl]
   simp
@@ -708,8 +698,8 @@ theorem nat?_of_jeq_toJson {a : Json} {n : ℕ} (h : jeq a (Lean.toJson n) = tru
     | error e => rw [hp] at ha; cases ha
     | ok parts =>
       rw [hp] at ha
-      obtain ⟨X, hX⟩ : ∃ X : String, "[" ++ X ++ "]" = Int.repr (Int.ofNat n) := ⟨_, Except.ok.inj ha⟩
-      rw [← hX, lit_head "[" _ _ '[' rfl] at hd
+      obtain ⟨mid, hm⟩ : ∃ mid : String, "[" ++ mid ++ "]" = Int.repr (Int.ofNat n) := ⟨_, Except.ok.inj ha⟩
+      rw [← hm, lit_head "[" _ _ '[' rfl] at hd
       injection hd with e
       subst e
       exact absurd h9 (by decide)
@@ -720,8 +710,8 @@ theorem nat?_of_jeq_toJson {a : Json} {n : ℕ} (h : jeq a (Lean.toJson n) = tru
     | error e => rw [hp] at ha; cases ha
     | ok vals =>
       rw [hp] at ha
-      obtain ⟨X, hX⟩ : ∃ X : String, "{" ++ X ++ "}" = Int.repr (Int.ofNat n) := ⟨_, Except.ok.inj ha⟩
-      rw [← hX, lit_head "{" _ _ '{' rfl] at hd
+      obtain ⟨mid, hm⟩ : ∃ mid : String, "{" ++ mid ++ "}" = Int.repr (Int.ofNat n) := ⟨_, Except.ok.inj ha⟩
+      rw [← hm, lit_head "{" _ _ '{' rfl] at hd
       injection hd with e
       subst e
       exact absurd h9 (by decide)
