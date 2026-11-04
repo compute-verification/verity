@@ -588,9 +588,10 @@ def test_an_audit_in_the_record_form_is_counted_on_its_record(server):
 
 
 def test_the_record_forms_circuit_check_refuses_what_it_must(server):
-    """Lean refuses as parameters a record-form audit whose record `NetworkCheck.Circuit.check` refuses, checks the
-    mirror leaves to it (`period_case._record_count`): an order ranking a wire's readers below its writers, one of
-    another format, a record over another Program, one that lists its members, and one that declares ingress."""
+    """Lean alone refuses as parameters a record-form audit whose record `NetworkCheck.Circuit.check` refuses, checks
+    the mirror leaves to it (`period_case._record_count`), so Lean's answer is read without the mirror's: an order
+    ranking a wire's readers below its writers, one of another format, a record over another Program, one that lists
+    its members, and one that declares ingress."""
     case = build("audit-record", 0, small=True)
     i, a = next((i, a) for i, a in enumerate(case["params"]["audits"]) if "circuit" in a)
     order, doc = a["order"], a["circuit"]
@@ -603,7 +604,7 @@ def test_the_record_forms_circuit_check_refuses_what_it_must(server):
         ({"circuit": doc | {"ingress": [{}]}}, "declares ingress"),
     ]:
         audits = [*case["params"]["audits"][:i], a | edit, *case["params"]["audits"][i + 1:]]
-        verdict, out = D.replay(PORT, case | {"params": case["params"] | {"audits": audits}}, server)
+        verdict, out = PORT.lean(server, case | {"params": case["params"] | {"audits": audits}})
         reason = json.loads(out)["reason"]
         assert verdict == REJECT and reason.startswith("params: an audit: circuit: ") and why in reason, (why, out)
 
