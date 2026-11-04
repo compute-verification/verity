@@ -8,6 +8,7 @@ public import Proofs.Flock.SamplingGeneric.Coins
 public import Proofs.Flock.SamplingGeneric.Session
 public import Proofs.Flock.SamplingGeneric.Count
 public import Proofs.Flock.SamplingGeneric.Bits
+public import Proofs.Flock.SamplingGeneric.Reg
 public import Proofs.Flock.SamplingGeneric.Efficient
 public import Proofs.Flock.SamplingGeneric.Counter
 
@@ -30,7 +31,10 @@ the extractor's expected reruns and own calls (`SamplingGeneric/Bits.lean`, `Exp
 `compilerBits`). Their own-call bounds read `Compiled.OpenCallsLe`, without which they fail
 (`Counter.not_ownLe_openCalls`, `SamplingGeneric/Counter.lean`). The opening checks'
 count they read, `Compiled.OpenCallsLe`, is the frozen `Sampling.OpenCallsLe` at Flock (`openCallsLe_of_deploy`). A
-session's coins in a compiled run, `coinsOf` and `place`, invert each other (`SamplingGeneric/Coins.lean`).
+session's coins in a compiled run, `coinsOf` and `place`, invert each other (`SamplingGeneric/Coins.lean`). The
+committed form, against the incorrect set of the plurality trace the prover's tape fixes, follows from the sessions'
+bound and the rewinding lemma (`SamplingGeneric/Reg.lean`: `compilerKSReg_of`), so **`CompilerKSReg` is proved**
+(`compilerKSReg`), and with it Flock's (`flockKSReg`).
 -/
 
 @[expose] public section
@@ -59,6 +63,16 @@ theorem flockKS : FlockKS (Coin := Coin) (Col := Col) (T := T) := flockKS_of_com
 
 /-- The count form, at the miss of a count. -/
 theorem compilerKSCount : CompilerKSCount := compilerKSCount_of compilerKS
+
+theorem flockKSReg_of_compilerKSReg (h : CompilerKSReg) : FlockKSReg (Coin := Coin) (Col := Col) (T := T) := by
+  intro H D _ decode L hKS hdec hB hS
+  exact h Coin (Arg.ofFlock D decode) L H (arg_ofFlock_wf D decode) (flockArgKS H D decode hKS hdec) hB hS
+
+/-- **The committed form**: `CompilerKSReg` from the sessions' bound (`compilerKSReg_of`). -/
+theorem compilerKSReg : CompilerKSReg := compilerKSReg_of sessionKSOf
+
+/-- **Flock's committed form**: the compiler's at `Arg.ofFlock`. -/
+theorem flockKSReg : FlockKSReg (Coin := Coin) (Col := Col) (T := T) := flockKSReg_of_compilerKSReg compilerKSReg
 
 /-- **Bits**: `CompilerKS` and `ExpOwnOf` (`compilerBits_of`). -/
 theorem compilerBits : CompilerBits := compilerBits_of compilerKS expOwnOf
