@@ -1770,6 +1770,86 @@ def test_the_pearlplus_period_opens_around_the_retained_serve_and_closes_before_
                 str(record), "--cubin", str(cubin)])
 
 
+@pytest.mark.parametrize("case", ["held", "stray", "unread", "unsalted"])
+def test_the_tied_period_closes_holding_its_reserves_to_the_windows_salt_sessions(tmp_path, monkeypatch, capsys, case):
+    """``pearlplus-period close --lane L --windows PEARL_DIR`` (PEARLPLUS_TIE's, in serve()): the ledger read before the
+    close, the sessions lane L reserved (``for``, else ``by``) since the period's open held to the windows' salt sessions
+    (each pearl/w<k>/served.json's ``coins.reserved.session``, in window order), kept as period.json's ``reserves`` and
+    said held or REFUSED in a line that names no session and counts none; the period closes either way."""
+    calls = []
+    ledger = [{"kind": "reserve", "session": "s-before", "body": {"by": "vllm"}},
+              {"kind": "period-open", "session": None, "body": {"period": "pp-r1", "lane": "vllm"}},
+              {"kind": "reserve", "session": "s-other", "body": {"by": "kernels"}},
+              {"kind": "reserve", "session": "s-salt", "body": {"by": "vllm"}}]
+    if case == "stray":
+        ledger.insert(2, {"kind": "reserve", "session": "s-stray", "body": {"by": "infra", "for": "vllm"}})
+
+    def gate_out(gate: str, *words: str) -> bytes:
+        calls.append(words[0])
+        if words[0] == "ledger":
+            if case == "unread":
+                raise RuntimeError("the gate refused ledger (exit 255): ssh: connect to host: timed out")
+            return "".join(json.dumps(e) + "\n" for e in ledger).encode()
+        return json.dumps({"period": words[2], "verb": words[0]}).encode()
+    monkeypatch.setattr(S, "_gate_out", gate_out)
+    serve = tmp_path / "serve"
+    (tied := serve / "pearlplus").mkdir(parents=True)
+    (tied / S.PERIOD).write_text(json.dumps({"name": "pp-r1", "cap": 1}))
+    for k, reserved in ((0, {"session": "s-salt", "period": "pp-r1"}), (1, None)):
+        (serve / "pearl" / f"w{k}").mkdir(parents=True)
+        if case != "unsalted":
+            (serve / "pearl" / f"w{k}" / "served.json").write_text(json.dumps({"coins": {"reserved": reserved}}))
+    assert S.main(["pearlplus-period", "close", str(tied), "--gate", GATE, "--lane", "vllm", "--windows",
+                   str(serve / "pearl")]) == 0
+    assert calls == ["ledger", "period-close"]
+    doc, out = json.loads((tied / S.PERIOD).read_text()), capsys.readouterr().out
+    salt = [] if case == "unsalted" else ["s-salt"]
+    assert doc["close"]["verb"] == "period-close" and doc["reserves"]["salt_sessions"] == salt
+    assert doc["reserves"]["ok"] is (case == "held") and not any(f"s-{s}" in out for s in ("salt", "stray", "other"))
+    said = {"held": "its reserves held (lane vllm's since its open the windows' salt sessions alone)",
+            "stray": "its reserves REFUSED (lane vllm reserved in it other sessions than the windows' salt sessions; "
+                     "period.json's reserves), so no draw follows it",
+            "unread": "its reserves REFUSED (the ledger can't be read: RuntimeError: the gate refused ledger (exit 255)",
+            "unsalted": "its reserves REFUSED (no window's served.json names a salt session; "}[case]
+    assert out.startswith(f"PERIOD closed pp-r1, {said}"), out
+    if case != "unread":
+        assert doc["reserves"]["since_open"] == (["s-stray", "s-salt"] if case == "stray" else ["s-salt"])
+    assert S.main(["pearlplus-period", "close", str(tied), "--gate", GATE, "--lane", "vllm"]) == 1
+    assert capsys.readouterr().out.startswith(
+        "PERIOD refused: ValueError: pearlplus-period close takes --lane and --windows together")
+
+
+@pytest.mark.parametrize("case", ["held", "between", "open", "node"])
+def test_the_rule_line_reads_whether_the_draw_was_the_lanes_first_reserve_after_the_close(tmp_path, monkeypatch,
+                                                                                          capsys, case):
+    """``pearlplus-period rule``, once the coin is drawn: HELD where the coin record's draw session is the lane's first
+    reserve after the period in DIR's period.json closed (`pouw_h1_window.after_close`), else BROKEN, exit 1, saying
+    why; kept as period.json's ``rule``. A reserve of another lane between them leaves it held."""
+    ledger = [{"kind": "period-open", "session": None, "body": {"period": "pp-r1", "lane": "vllm"}},
+              {"kind": "reserve", "session": "s-salt", "body": {"by": "vllm"}}]
+    if case != "open":
+        ledger.append({"kind": "period-close", "session": None, "body": {"period": "pp-r1"}})
+    ledger.append({"kind": "reserve", "session": "s-other", "body": {"by": "kernels"}})
+    if case == "between":
+        ledger.append({"kind": "reserve", "session": "s-between", "body": {"by": "vllm"}})
+    ledger.append({"kind": "reserve", "session": "s-draw", "body": {"by": "vllm", "withheld": True}})
+    monkeypatch.setattr(S, "_gate_out", lambda gate, *words: "".join(json.dumps(e) + "\n" for e in ledger).encode())
+    (piece := tmp_path / "pearlplus").mkdir()
+    (piece / S.PERIOD).write_text(json.dumps({"name": "pp-r1"}))
+    draw = {"from": "node"} if case == "node" else {"from": "challenger", "reserved": {"session": "s-draw"}}
+    (coin := tmp_path / "coin.json").write_text(json.dumps({"draw": draw}))
+    argv = ["pearlplus-period", "rule", str(piece), "--gate", GATE, "--lane", "vllm", "--coin", str(coin)]
+    assert S.main(argv) == (0 if case == "held" else 1)
+    why = {"held": "HELD (the draw session s-draw is the lane's first reserve after the close)",
+           "between": "BROKEN (the lane's first reserve after the close is s-between, not the draw session s-draw)",
+           "open": "BROKEN (the ledger doesn't close period pp-r1)",
+           "node": "BROKEN (the verifier's coin record names no draw session)"}[case]
+    assert capsys.readouterr().out == f"RULE no other reserve on lane vllm between period pp-r1's close and the draw: {why}\n"
+    assert json.loads((piece / S.PERIOD).read_text())["rule"]["held"] is (case == "held")
+    assert S.main(argv[:-2]) == 1
+    assert capsys.readouterr().out.startswith("RULE not read: ValueError: pearlplus-period rule needs --lane and --coin")
+
+
 def test_the_pouw_piece_fetches_the_windows_sample_session_and_gives_the_check_its_tree(tmp_path, monkeypatch):
     """A window whose record names its sample's session (``draw_session``, which the coin check refuses without): the
     piece fetches it beside the window's session, and the check gets its tree as ``--draw-dir``."""
@@ -2869,7 +2949,8 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
 def test_under_pearlplus_tie_with_a_gate_the_window_serve_runs_inside_a_pearl_c_period_on_its_circuit_record(tmp_path):
     """With a gate, serve() opens the lane's Pearl-C period on PEARLPLUS-CIRCUIT's record (``pearlplus-period open
     --circuit-record``) once it is built and before serve-openai starts, so the window's salt session joins it, and
-    closes it once serve-openai is done, here when it never listens: before Pearl+'s piece draws. In-process coins
+    closes it once serve-openai is done, here when it never listens: before Pearl+'s piece draws, its reserves first
+    held to the windows' salt sessions (``--lane``, ``--windows`` the serve dir's pearl/). In-process coins
     (PEARLC_CHALLENGER_GATE empty) open no period."""
     cubin = {"PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": "/c/pearl_c_sm90.cubin"}
     live = {"PEARLC_CHALLENGER_GATE": GATE, "PEARLC_CHALLENGER_PEER": "vy-dc-h200", "PEARLC_CHALLENGER_LANE": "vllm",
@@ -2884,7 +2965,7 @@ def test_under_pearlplus_tie_with_a_gate_the_window_serve_runs_inside_a_pearl_c_
         "serve-phi", "class-circuit",
         f"pearlplus-period open {d} --gate {GATE} --name pearlplus-r20261104-121500-abcd --circuit-record "
         f"{d}/circuit-record.json",
-        "serve-openai", f"pearlplus-period close {d} --gate {GATE}"], calls
+        "serve-openai", f"pearlplus-period close {d} --gate {GATE} --lane vllm --windows {d.parent}/pearl"], calls
     _rc, _argv = _serve_argv(tmp_path / "in-process", {**PEARL_TIES, **cubin})
     assert not any("pearlplus-period" in c for c in (tmp_path / "in-process" / "calls").read_text().splitlines())
 
