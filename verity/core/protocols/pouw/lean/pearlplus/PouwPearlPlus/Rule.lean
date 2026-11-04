@@ -237,7 +237,7 @@ where
       let elems ← (cr.zip words).mapM fun (i, ws) =>
         rowElements ops.a.alpha[posA i]! ops.a.beta[posA i]! ops.a.x[posA i]! (ws.map (·.1))
       pure ((words.zip elems).map fun (ws, e) =>
-        debitUnits r.matmul.n cc.length (ws.foldl (· + (·.1.filter id).size) 0) (ws.foldl (· + ·.2) 0) e)
+        debitUnits r.matmul.n cc.length (ws.foldl (fun t w => t + (w.1.filter id).size) 0) (ws.foldl (· + ·.2) 0) e)
     match replay with
     | .error e => return some s!"the debit replay: {e}"
     | .ok rowDebit =>

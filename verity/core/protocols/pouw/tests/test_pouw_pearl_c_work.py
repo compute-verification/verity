@@ -391,14 +391,15 @@ def test_aligned_spike_unit_is_rejected_by_the_cap():
 
 
 def test_h3_caps_each_credited_row_as_well_as_the_tile():
-    """-h3's row cap (`TTOutRowSeed.lean`'s (C2)), its seeds keyed on SHA-512 row digests: one A row with the aligned spikes
-    among 31 Gaussian rows, on spiked B, is over 10x its own cap while the 32-row tile's debit is under 3/4 of the tile's.
+    """-h3's row cap (`TTOutRowSeed.lean`'s (C2)), its seeds keyed on SHA-512 row digests: one A row with aligned spikes of
+    72 among 31 Gaussian rows, on spiked B, is over 10x its own cap while the 32-row tile's debit is under 3/4 of the
+    tile's (at 300 its forming elements alone put the tile over).
     h0's tile rule accepts the tile and -h3's audit refuses it for that row; V-EX gives the row up, and the audit then
     accepts on the other 31 rows."""
     k, m, n = 1024, 32, 4
     h3, h0 = (C.PearlC(k_min=128, tile=(m, n), forming="v1", hashing=h) for h in ("h3", "h0"))
     assert CW.row_cap(h3) and not CW.row_cap(h0) and not CW.row_cap(S)
-    rows_a = spiked_rows(k, 1, 100, 300.0) + spiked_rows(k, m - 1, 200, None)
+    rows_a = spiked_rows(k, 1, 100, 72.0) + spiked_rows(k, m - 1, 200, None)
     rows_b = spiked_rows(k, n, 900, 300.0)
     work = Workload((Matmul(0, Shape(m, k, n), 1),))
     splits = {1: W.Split(k)}
@@ -443,9 +444,9 @@ def _census_tile(scheme, spikes: list[float | None], k: int, n: int = 4):
 
 def test_census_k_caps_each_row_at_four_rho_and_the_tile_at_rho():
     """At the H100 record's census k = 256, -h3 caps each credited row's debit at 4ρ of its
-    cells' credit (`pearlCTilesDevRev1RowCapAt` at ρr = 1/100) and the tile's at ρ.  A row at 3.66ρ in a tile at 0.30ρ is
-    accepted (the ρ row cap refused it), a row at 10.4ρ is refused by the 4ρ row cap, and 16 rows each under 4ρ that
-    put the tile over ρ are refused by the tile cap."""
+    cells' credit (`pearlCTilesDevRev1RowCapAt` at ρr = 1/100) and the tile's at ρ.  A row at 3.66ρ in a tile at 0.23ρ is
+    accepted (the ρ row cap refused it), a row at 7.3ρ in a tile at 0.46ρ is refused by the 4ρ row cap, and 16 rows each
+    under 4ρ that put the tile over ρ are refused by the tile cap."""
     m = 16
     h3 = C.PearlC(tile=(m, 4), forming="v1", hashing="h3")
     assert h3.census_ks == (256,) and h3.row_cap_at(256) == 4 * h3.cap == Fraction(1, 100)
@@ -455,7 +456,7 @@ def test_census_k_caps_each_row_at_four_rho_and_the_tile_at_rho():
     row = CW._debit_cap(h3, rec, tile, ops, [0], [0, 1, 2, 3])
     assert debit < cap / 2 and row[1] < row[0] < 4 * row[1]
     assert CW.check_opened(h3, rec, tile, a, b, ops) is None
-    rec, tile, a, b, ops = _census_tile(h3, [100.0] + [None] * (m - 1), 256)
+    rec, tile, a, b, ops = _census_tile(h3, [85.0] + [None] * (m - 1), 256)
     reason = CW.check_opened(h3, rec, tile, a, b, ops)
     assert reason.startswith("A row 0's replayed debit") and "(the row cap: 4ρ·its credited cells' credit)" in reason
     spikes = [50.0, 50.0, 50.0, 50.0, 30.0, 20.0, 20.0, 30.0, 30.0, None, 10.0, 20.0, 30.0, 20.0, None, 30.0]

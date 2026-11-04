@@ -150,7 +150,7 @@ def TileKeepsTheCap : Prop :=
         ops.a.x[rows.idxOf i]! (ws.map (·.1))) = .ok elems ∧
       let credit := creditOf 1 r.kKept r.matmul.n
       let rowDebit := (words.zip elems).map fun (ws, e) =>
-        Rule.debitUnits r.matmul.n cc.length (ws.foldl (· + (·.1.filter id).size) 0) (ws.foldl (· + ·.2) 0) e
+        Rule.debitUnits r.matmul.n cc.length (ws.foldl (fun t w => t + (w.1.filter id).size) 0) (ws.foldl (· + ·.2) 0) e
       rowDebit.foldl (· + ·) 0 * Rule.CAP_DEN ≤ Rule.CAP_NUM * credit * cr.length * cc.length ∧
       ∀ d ∈ rowDebit, d * Rule.CAP_DEN ≤
         Rule.CAP_NUM * credit * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1)
