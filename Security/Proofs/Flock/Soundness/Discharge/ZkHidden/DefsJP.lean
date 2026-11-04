@@ -1,8 +1,12 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
-import Proofs.Flock.Soundness.Discharge.Composed.DefsJA
-import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
-import Proofs.Flock.Soundness.Discharge.HiddenExec.RowsAtHP
-import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+public import Proofs.Flock.Soundness.Discharge.Composed.DefsJA
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.RowsAtHP
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+
+@[expose] public section
 
 set_option Elab.async false
 

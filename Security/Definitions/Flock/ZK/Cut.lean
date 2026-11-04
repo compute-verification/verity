@@ -1,4 +1,6 @@
-import Definitions.Flock.ZK.Table
+module
+
+public import Definitions.Flock.ZK.Table
 
 /-!
 # Zero knowledge: what a prover that stops has sent
@@ -25,6 +27,8 @@ first failing check in that order, and a guarded message is sent exactly when ev
 * `Session.pos`, `Session.guard`, `Session.passes`, `Session.sent`: the session's order, its checks, and what each table
   sent when the session stops at the first failing check. `Refusal.Session.sent_admits` proves that it is admitted.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

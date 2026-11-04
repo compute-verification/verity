@@ -1,3 +1,5 @@
+module
+
 /-!
 # The schedule check: each pass's plan is a fixed function of the published schedule
 
@@ -24,6 +26,8 @@ list after its length. Fewer than 2^(a+1) schedules encode in at most a bits, so
 bounds the layouts a prover can steer to over every coin, where the bits of the one schedule it publishes after them
 would not: its schedule's length can follow the coins. Code: Lean core only.
 -/
+
+@[expose] public section
 
 namespace RemoteAudit.Schedule
 

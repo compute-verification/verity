@@ -1,8 +1,10 @@
-import Proofs.Flock.EndToEnd.Joint.MT.Draw
-import Proofs.Flock.EndToEnd.Period.Run
-import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
-import Proofs.Flock.Soundness.Assumptions.Zk
-import Flock.Desc
+module
+
+public import Proofs.Flock.EndToEnd.Joint.MT.Draw
+public import Proofs.Flock.EndToEnd.Period.Run
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Flock.Desc
 
 /-!
 # The joint stratified bound over sampling blocks of several tables (trusted)
@@ -38,6 +40,8 @@ and `Flock.SecurityProofs.JointStratifiedHorizonMT` (`Joint/MT/Bound.lean`).
 
 C-Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

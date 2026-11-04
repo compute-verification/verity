@@ -1,4 +1,6 @@
-import Definitions.Flock.Audit.Law
+module
+
+public import Definitions.Flock.Audit.Law
 
 /-!
 # Harm bounds
@@ -10,6 +12,8 @@ fill in floating point; this file states what it must return and does not prove 
 proves it for the stratified law at closed-form bounds: the greedy fill's value, over the risk `k_s c / n_s` or the exact
 risk, at the price where the fill stops.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

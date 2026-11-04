@@ -11,7 +11,11 @@ w: no coefficient slot and no product. v has no comb. The verifier computes that
 `RecAlgebra`'s ring switching and Ligerito unchanged, and cuts it into parts with `RecResiduals`' grouping and
 renumbering.
 -/
-import Flock.RecResiduals
+module
+
+public import Flock.RecResiduals
+
+@[expose] public section
 
 namespace Flock
 namespace RecOpening

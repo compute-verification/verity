@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.RestLowR
-import Proofs.Flock.Claims.Recursion.HmOpen
+module
+
+public import Proofs.Flock.Claims.Recursion.RestLowR
+public import Proofs.Flock.Claims.Recursion.HmOpen
 
 /-!
 # `SaltRowsJ` at `finalR` off the hm96 slots the openings sit at (`OpensSlots`)
@@ -14,6 +16,8 @@ came from (`HmOpen.checks_of_calls`), so `SaltRowsJ` is a fact about the layout 
   are among `s`'s recorded calls; and the port's row prefix is the one `rowInDeployed` lays at the row's length.
 * `saltRowsJ_of_slots`: `OpensSlots L` gives `SaltRowsJ` at `finalR`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.RestLow
 

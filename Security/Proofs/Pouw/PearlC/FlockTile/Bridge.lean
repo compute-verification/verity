@@ -1,5 +1,7 @@
-import Definitions.Core.Game
-import Proofs.Flock.Soundness.Game.Basic
+module
+
+public import Definitions.Core.Game
+public import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # C-Flock's games as core's games
@@ -11,6 +13,8 @@ carry a prover's strategies both ways and are inverse to each other; and every e
 strategy and its image (`prob_toVerity`, `prob_ofVerity`), and the same value for the optimal prover (`value_toVerity`).
 So a bound C-Flock proves on `FlockSoundness.Game.prob` is the same bound on core's game, for the same prover.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.FlockTile
 

@@ -1,5 +1,7 @@
-import Proofs.Nci.Cover.Paths
-import Definitions.Nci.Assumptions.CoverAdditive
+module
+
+public import Proofs.Nci.Cover.Paths
+public import Definitions.Nci.Assumptions.CoverAdditive
 
 /-!
 # The cover theorem's vocabulary on a declaration's gates
@@ -19,6 +21,8 @@ wiring (`Nci.Cover.Circuit`), which also reads a declaration bit by bit (`Circui
   (`updateHardness_iff`), and `ConditionalParameterHardAt` implies `ConditionalUpdateHardness` with the token
   computations as the regions (`conditionalUpdateHardness_of_conditional`).
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

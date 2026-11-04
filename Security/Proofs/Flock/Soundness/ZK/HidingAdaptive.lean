@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ZK.Hiding
+module
+
+public import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # Zero knowledge: T1 over adaptive leaves
@@ -15,6 +17,8 @@ route of `Session.adaptive_prefinal_hm96`:
    a time: `U_i = V_i − x_i(…)`, where the leaves before `i` are already the ideal leaves `H(V_j, c(y_j))`. So the adaptive
    leaves on `(U, y)` are distributed as the ideal leaves `H(V_i, c(y_i))`, exactly.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

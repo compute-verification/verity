@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.Family.Registered
+module
+
+public import Proofs.Flock.VBridge.Family.Registered
 
 /-!
 # VBridge G at V*'s family: the parts' row columns and the reads at them
@@ -20,6 +22,8 @@ what the part sessions' reads files and registered reads say there:
   name, read at the unit's position;
 * `rowColKeys_of`, `sameRow_of`: `RowColKeys` and `SameRow` from those and `HCover`.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

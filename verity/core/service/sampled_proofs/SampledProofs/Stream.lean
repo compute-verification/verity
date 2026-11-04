@@ -45,7 +45,13 @@ A halt is final. It ends every registration without a final outcome at once, as 
 nothing accepts it after that, and outcomes already final stay. A halted stream refuses every op (`halted`) and changes
 nothing, so it receives no registration again.
 -/
-import SampledProofs.Run
+module
+
+public import SampledProofs.Run
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Stream
 

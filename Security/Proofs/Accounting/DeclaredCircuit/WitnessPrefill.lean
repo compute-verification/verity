@@ -1,5 +1,7 @@
-import Mathlib
-import Proofs.Accounting.DeclaredCircuit.Witness
+module
+
+public import Mathlib
+public import Proofs.Accounting.DeclaredCircuit.Witness
 
 /-!
 # An honest run with a prefill meets every hypothesis of `DeclaredCircuitRequirement`
@@ -33,6 +35,8 @@ It meets every hypothesis of `G` but the world's (`meets`), so `G` bounds it (`a
   residency at windows of 15 to 60 s) both of `G`'s thresholds are positive for 8B and for 70B TP8 (`life30_8b`,
   `life30_70b`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.DeclaredCircuitWitnessPrefill
 

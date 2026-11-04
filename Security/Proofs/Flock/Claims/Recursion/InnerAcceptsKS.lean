@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.InnerAccepts
-import Proofs.Flock.Claims.Recursion.FlockKSDeploy
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerAccepts
+public import Proofs.Flock.Claims.Recursion.FlockKSDeploy
 
 /-!
 # The recursion's KS where the inner view may reject on a collision
@@ -21,6 +23,8 @@ least three rounds past the inner ones.
 
 `KSFlock_of_flockKS_V_coll` is `KSFlock_of_flockKS_V` with `InnerAcceptsColl` and the margin for `InnerAccepts`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

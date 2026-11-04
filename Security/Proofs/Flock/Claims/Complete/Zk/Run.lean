@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.Honest
-import Proofs.Flock.Claims.Complete.Run
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Honest
+public import Proofs.Flock.Claims.Complete.Run
 
 /-!
 # The honest run against the masked verifier
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.Complete.Run
 through `setupOf` and the verdict), so `act_coin` and `act_final` hold at any `zk` (`act_coin_any`, `act_final_any`),
 and the prover's side is `feed_sim` and `stepWith_acc` as for `honestP`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

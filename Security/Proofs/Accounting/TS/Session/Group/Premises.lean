@@ -1,4 +1,6 @@
-import Proofs.Accounting.TS.Session.Group.Assumptions
+module
+
+public import Proofs.Accounting.TS.Session.Group.Assumptions
 
 /-!
 # The premises a leaf's group of linked sessions takes
@@ -17,6 +19,8 @@ it abbreviates at every proof's every session, unchanged:
 They belong in `Security/Definitions/`, but they read `RowsSession`, which is in the proofs package, so they are here
 until C-Flock's spec is extracted, as `Accounting.Assumptions.TS`'s other session premises are.
 -/
+
+@[expose] public section
 
 namespace Accounting.Premises.TS
 

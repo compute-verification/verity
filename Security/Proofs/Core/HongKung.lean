@@ -1,4 +1,6 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # Loomis–Whitney, and Hong–Kung's count of a product's segments
@@ -19,6 +21,8 @@ start and the `M` it moves, so it moves at least `M (T − 1) ≥ m k n / (2√2
 cards' rates this is at most 2.8% of the tensor units' time, so the bound does not bind: P1's floor on the tensor
 units does.
 -/
+
+@[expose] public section
 
 namespace Verity.Accel.HongKung
 

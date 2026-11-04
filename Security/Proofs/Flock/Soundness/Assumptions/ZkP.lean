@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Assumptions.Zk
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
+module
+
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
 
 /-!
 # The `--zk` session's custody at the verifier's public inputs
@@ -11,6 +13,8 @@ At `own = none` it is `RecordCustodyZKJ` (`recordCustodyZKJP_none`). `RecordCust
 the draw file under the registration's law, and at the subset law it is `RecordCustodyZKJP`
 (`recordCustodyZKJPLaw_subset`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Assumptions.Zk
 

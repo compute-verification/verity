@@ -1,4 +1,6 @@
-import SampledProofs.WiresSound
+module
+
+public import SampledProofs.WiresSound
 
 /-!
 The wire check on the drawn units alone: a reader unit is faulty in the wired flattening when its outputs are not its
@@ -11,6 +13,8 @@ and the unit's rows (`Wire.rowsAt`). `drawnOk_iff`: the drawn check accepts exac
 wires cover (`checkRef`'s entries) whose unit is drawn is its writer's row, `same` being the comparison of two rows' public
 strings (`b ‖ c`) the leaf layer binds.
 -/
+
+@[expose] public section
 
 namespace SampledProofs.Wires
 

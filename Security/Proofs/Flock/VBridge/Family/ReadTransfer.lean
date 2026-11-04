@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Assumptions.Recursive
-import Proofs.Flock.Recursive.Statements
+module
+
+public import Proofs.Flock.Soundness.Assumptions.Recursive
+public import Proofs.Flock.Recursive.Statements
 
 /-!
 # `v-bridge` at the wires V* reads
@@ -10,6 +12,8 @@ V*'s message rows pad a port of `n` elements to `64 ⌈8 n / 64⌉` words and re
 (`InnerRepCheck.lean:24,39-44`), and a session that accepts nothing it writes may be another history's. `VBridgeRead` is that assumption at the family's arguments, so the
 family's theorems state what `Flock.SecurityProofs.RecursiveRanRegistered` reads.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

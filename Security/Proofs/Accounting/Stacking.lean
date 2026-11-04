@@ -1,9 +1,11 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.Stacking
-import Proofs.Accounting.RateAudit.DeployedSketchSum
-import Proofs.Accounting.RateAudit.DeployedRelay
-import Proofs.Accounting.Requirement
-import Proofs.Accounting.Gates
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.Stacking
+public import Proofs.Accounting.RateAudit.DeployedSketchSum
+public import Proofs.Accounting.RateAudit.DeployedRelay
+public import Proofs.Accounting.Requirement
+public import Proofs.Accounting.Gates
 
 /-!
 # Stacking: the carrier lemma and the stacked session
@@ -43,6 +45,8 @@ bound a declared circuit's held and read bits over at most `k` steps by the stor
 are its own (`Requirement.cap_of_matches`, from `RequirementHeld` and `RequirementMoved` with no block held), so a
 shortfall against the requirement is one against the store.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

@@ -1,7 +1,9 @@
-import Definitions.Nci.Guarantees.Capability.Budgets
-import Definitions.Nci.Guarantees.Capability.Incidence
-import Definitions.Nci.Guarantees.Capability.Dependency
-import Definitions.Nci.Capability.Toy
+module
+
+public import Definitions.Nci.Guarantees.Capability.Budgets
+public import Definitions.Nci.Guarantees.Capability.Incidence
+public import Definitions.Nci.Guarantees.Capability.Dependency
+public import Definitions.Nci.Capability.Toy
 
 /-!
 # Local bounds: their witnesses
@@ -23,6 +25,8 @@ Each honest witness also proves its parameter spent: at deficit or ambiguity `0`
 decoder `M` describes `11`, an honest run's value, in one bit, and its recovery program spends one bit picking the
 source. Min-entropy hardness holds at deficit `0` for the product's value, a uniform bit.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

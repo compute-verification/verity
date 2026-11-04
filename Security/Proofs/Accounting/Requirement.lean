@@ -1,6 +1,8 @@
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Order.Interval.Finset.Nat
-import Definitions.Accounting.Guarantees.Requirement
+module
+
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Order.Interval.Finset.Nat
+public import Definitions.Accounting.Guarantees.Requirement
 
 /-!
 # A declared circuit's requirement, from what the audit credits
@@ -16,6 +18,8 @@ planned blocks hold none of `W`'s credited values. `Accounting.SecurityProofs.Re
 `Accounting.SecurityProofs.RequirementDense` sum the credited bits block by block. An execution that follows its wiring
 reads only live values (`reads_subset_live`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Requirement
 
