@@ -39,6 +39,7 @@ public import Proofs.Flock.SessionLoop.InnerSlot
 public import Proofs.Flock.SessionLoop.InnerUnrefused
 public import Proofs.Flock.SessionLoop.LiveInnerAt
 public import Proofs.Flock.SessionLoop.ZkAny
+public import Proofs.Flock.SessionLoop.SampledAudit
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames

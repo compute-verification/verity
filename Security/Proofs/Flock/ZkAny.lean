@@ -16,6 +16,7 @@ public import Proofs.Flock.ZkAny.Finish
 public import Proofs.Flock.ZkAny.SampledAudit
 public import Proofs.Flock.ZkAny.Stream
 public import Proofs.Flock.ZkAny.RecordHiding
+public import Proofs.Flock.ZkAny.SampledSessions
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -24,6 +25,7 @@ unswitched prover's zero knowledge at any values, the go prover's one-sided zero
 the `Finish` on both outcomes, the release with real hm96 leaves on both branches, the deployed relay's release held to
 the session's schedule, its model frames held to the model's messages, and its release per outcome, read through
 `ZKOut`; a sampled audit's view, the registration's record with the sampled sessions' releases; sessions in sequence
-per outcome; and the registration's ideal record hiding its values at hm96 commitments. -/
+per outcome; the registration's ideal record hiding its values at hm96 commitments; and the view at sampled sessions of
+one protocol that meets `ZKOut`. -/
 
 @[expose] public section
