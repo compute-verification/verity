@@ -1164,6 +1164,11 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
   unless f.units == 2 * s.window do refuse s!"{what}: profile: {f.units} units, not the scan's 2T = {2 * s.window}"
   pure (f, (tiedAudits audits reg).foldl (fun n i => n + ((p.audits[i]?.map (·.free)).getD 0)) 0)
 
+/-- Whether `j` is the string `s`: `Json`'s `==` on strings, by a match a proof unfolds. -/
+def isStr (j : Json) (s : String) : Bool := match j with
+  | .str x => x == s
+  | _ => false
+
 /-- Whether pin `(p, root)` is registration `reg`'s window's registered root for parameter `p` (its
 `registered_roots`, `interface.held_params`: the hex compared without case). -/
 def pinHeld (reg : Json) (pin : String × String) : Bool :=
@@ -1177,9 +1182,9 @@ record (`window.circuit`, its digest) and records each pin the count held as its
 (`pinHeld`); a tied audit sampled in part is charged in its link-windows' terms (`chargedOf`, `faultyEntries`). -/
 def auditCheck (i : Nat) (a : Audit) (reg : Json) (x : Core.Answer) : Found Facts := do
   let what := s!"audit {i}"
-  unless reg.getObjValD "program" == .str a.program do refuse s!"{what}: registration: not its Program"
+  unless isStr (reg.getObjValD "program") a.program do refuse s!"{what}: registration: not its Program"
   if let some (d, pins) := a.record then
-    unless (reg.getObjValD "window").getObjValD "circuit" == .str d do
+    unless isStr ((reg.getObjValD "window").getObjValD "circuit") d do
       refuse s!"{what}: registration: its window binds another circuit record than the one its free inputs are \
         counted on"
     if let some (p, _) := pins.find? (!pinHeld reg ·) then
@@ -1683,6 +1688,7 @@ def clocksFn (j : Json) : Except String Json := do
 #guard
   let reg := Json.mkObj [("window", Json.mkObj [("registered_roots", Json.mkObj [("w", .str "AB")])])]
   pinHeld reg ("w", "ab") && !pinHeld reg ("w", "ac") && !pinHeld reg ("v", "ab") && !pinHeld (Json.mkObj []) ("w", "ab")
+#guard isStr (.str "ab") "ab" && !isStr (.str "ab") "AB" && !isStr (toJson 1) "1" && !isStr .null ""
 -- a lane's Programs' rows, the lane's index in ASCII digits without a leading zero
 #guard progPort (progName 0) && progPort "scan/prog3" && progPort "scan/prog12" && progName 3 == "scan/prog3"
 #guard !(progPort "scan/prog" || progPort "scan/prog01" || progPort "scan/prog/" || progPort "Scan/prog0" ||
