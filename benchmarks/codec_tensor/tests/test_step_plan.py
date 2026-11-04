@@ -1,4 +1,4 @@
-"""The step's pass under the remote bandwidth driver's registered chunk layout (`receipts.LAYOUTS`): the fused GEMM's and
+"""The step's pass under the PoUB driver's registered chunk layout (`receipts.LAYOUTS`): the fused GEMM's and
 attention's receipts, as `step.py` places them in the pass's one receipt buffer, are the store's registered chunks in
 store order, so `receipts.plan_of` takes the step's byte map under store-order/v0 and returns the plan the step commits
 (`Step.plan`, `Plan.whole` of the weights' chunks and the KV's token-layers)."""

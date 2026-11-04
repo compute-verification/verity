@@ -48,7 +48,7 @@ def test_the_schemas_separate_from_each_other_and_from_the_word_rows() -> None:
     x = R.sha256_row_nvfp4_digest(codes, scales, R.ROLE_X)
     assert x != R.sha256_row_nvfp4_digest(codes, scales, R.ROLE_W)
     assert R.blake3_row_nvfp4_digest(codes, scales, R.ROLE_X) != R.blake3_row_nvfp4_digest(codes, scales, R.ROLE_W)
-    dom = CommitmentDomain(bytes(32), 0, RangeIndexedDomain(4))
+    dom = CommitmentDomain(bytes(32), 0, RangeIndexedDomain(4), hash="sha256")
     assert R.row_leaf(dom, 0, x, R.SCHEMA_SHA256_ROW_NVFP4) != R.row_leaf(dom, 0, x, R.SCHEMA_SHA256_ROW)
     assert R.row_leaf(dom, 0, x, R.SCHEMA_BLAKE3_ROW_NVFP4) != R.row_leaf(dom, 0, x, R.SCHEMA_BLAKE3_ROW)
 

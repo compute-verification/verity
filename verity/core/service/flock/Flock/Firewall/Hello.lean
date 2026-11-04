@@ -14,6 +14,7 @@ The analysis holds these to the coin layer's `Hello` (`Claims.ZKMal.CoinLayer.he
 -/
 import Flock.Witness
 import Flock.Firewall.Coins
+import Flock.JsonParse
 
 namespace Flock.Firewall.Hello
 
@@ -26,7 +27,7 @@ def json (spec : SessionSpec) (nonce : String) : V String :=
   match spec.coinTree with
   | none => pure spec.hello
   | some _ => do
-    let some own := (Json.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
+    let some own := (JsonParse.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
     let coins := (own.getObjVal? "coins").toOption.getD Json.null
     canon (own.setObjVal! "coins" (coins.setObjVal! "nonce" (Json.str nonce)))
 
@@ -44,7 +45,7 @@ def NONCE_BYTES : Nat := 32
 
 /-- A request's draw: the verifier's answer to `Register`, JSON text, `null` where it drew none. -/
 def drawOf (text : String) : Except String (Option Json) :=
-  match Json.parse text with
+  match JsonParse.parse text with
   | .ok Json.null => .ok none
   | .ok d => .ok (some d)
   | .error e => .error s!"the draw is not JSON: {e}"
@@ -110,15 +111,15 @@ def Setup.ofArgs (usage : String) (args : List String) : IO (Except String Setup
   return .ok { I := { tags, circuitFile, publicFile, count, tables, partition, program }, work, stratified, closure }
 
 /-- The session's spec and its tables' statements at the verifier's draw `draw` (`Stmt.setupTables`, `setup_eq`; the public
-file the verifier's own, without rows), its circuit parsed with each net's rows in tasks (`HmOut.parseFast`). -/
+file the verifier's own, without rows), its circuit parsed with each net's rows in tasks (`HmOut.parseCommitFast`). -/
 def Setup.setup (S : Setup) (draw : Option Json) : V (SessionSpec × Array Stmt) :=
-  Stmt.setupTablesOf (HmOut.parseFast (Witness.zkTags S.I) S.I.circuitFile S.I.tables) (Witness.zkTags S.I) S.I.circuitFile
+  Stmt.setupTablesOf (HmOut.parseCommitFast (Witness.zkTags S.I) S.I.circuitFile S.I.tables) (Witness.zkTags S.I) S.I.circuitFile
     S.I.publicFile (Witness.zkCoins S.I) S.I.count S.I.tables draw S.I.partition S.I.program S.work S.stratified S.closure
 
 theorem Setup.setup_eq (S : Setup) (draw : Option Json) :
     S.setup draw = Stmt.setupTables (Witness.zkTags S.I) S.I.circuitFile S.I.publicFile (Witness.zkCoins S.I) S.I.count
       S.I.tables draw S.I.partition S.I.program S.work S.stratified S.closure := by
-  rw [Setup.setup, Stmt.setupTables_eq, HmOut.parse_eq_fast]
+  rw [Setup.setup, Stmt.setupTables_eq, HmOut.parseCommit_eq_fast]
 
 /-- The session's spec at `draw`. -/
 def Setup.spec (S : Setup) (draw : Option Json) : V SessionSpec := (S.setup draw).map (·.1)

@@ -5,7 +5,7 @@ Primitives for the lane's theory and referee scripts, and their one check regist
 imports it with no `sys.path` entry.
 
 The kit holds no theory and no fold semantics. A referee and the author it checks may both use it, and neither re-runs
-the other's argument. Fold semantics belong to FILL-SEC's receipt-fold module. MMA semantics come from
+the other's argument. Fold semantics belong to the receipt-fold module. MMA semantics come from
 `verity.ml.circuits.silicon` and are never re-derived here.
 
 ## API

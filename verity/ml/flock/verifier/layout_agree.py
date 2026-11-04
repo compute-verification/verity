@@ -175,7 +175,7 @@ def _table(ws):
 
 
 def fanout(m, r):
-    """The red team's reach_fanout (review of #200): a unit calling one small type m times and reading a 16-word table r
+    """The red team's reach_fanout (the layouts' review): a unit calling one small type m times and reading a 16-word table r
     times through one placed generated read, over 3 layouts."""
     callee = CT.CircuitType(library.PROGRAM, ((1, 1),), ((1, 1),), (), (), ((CT.AND, ((0,), 0), ((0,), 1)),), (((1,), 0),))
     ws = [(i * 7 + 3) & 0xF for i in range(16)]

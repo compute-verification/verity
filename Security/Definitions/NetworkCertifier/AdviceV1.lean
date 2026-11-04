@@ -180,7 +180,7 @@ def charges (bk : Book) (N : ℕ) {W : ℕ} (a : Fin W → List Bool) : Option (
   session bk N ⟨bk.priors, 0⟩ (List.ofFn a)
 
 /-- **Advice v1's decision streams**: those of `W` windows whose charge no window refuses. A refused window fails its
-compile unit, so no accepted run has other advice. -/
+compile slice's proof block, so no accepted run has other advice. -/
 def Streams (bk : Book) (N W : ℕ) : Type := {a : Fin W → List Bool // (charges bk N a).isSome}
 
 /-- **Advice v1's charge** (I1's `bits(advice, w)`): window `w`'s. -/

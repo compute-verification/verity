@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # One-stage audit, run A9, on a CPU machine: GLM-5.3 TP8 B1's routed-expert GEMMs in the static pair form (a9.py), then the
 # units that fit M0 through the one-stage audit (a11.py --load-values), on hidden_zk's builds as a11.sh runs them. From a clone:
-#   research run --queue --on NODE --cpus 32 --mem-gb 256 --max-min 300 --source . --cwd clone --project verity \
-#     --send a11-values-r0-s01.tar --send a9-experts-r0-l3.tar --send derive-report.json --env A9_MEM_GB=256 \
-#     -- bash benchmarks/one_stage/a9.sh
+#   A9_MEM_GB=256 bash benchmarks/one_stage/a9.sh
+#   (a job run from a clone of the tree, 32 CPUs, 256 GB, up to 300 min, with a11-values-r0-s01.tar, a9-experts-r0-l3.tar, derive-report.json sent)
 # Inputs: a11_slice.py's value slice (inputs/a11-values*.tar), a11_slice.ckpt_experts' share (inputs/a9-experts*.tar), the
 # load-time roles (inputs/derive-report.json). Records: $OUT/a9 (a9.json, the saved units) and $OUT/a11 (the audit's records).
-# env: A9_MEM_GB (the job's --mem-gb)  A9_ARGS (more a9.py arguments)  A11_ARGS (more a11.py arguments)  A11_CACHE (the build cache)
+# env: A9_MEM_GB (the job's memory, GB)  A9_ARGS (more a9.py arguments)  A11_ARGS (more a11.py arguments)  A11_CACHE (the build cache)
 #      A9_SAVED (an input tar of a9.py --save-values' directory: audit those units, with no values stage and no value tars)
 set -uo pipefail
 export HZ_CONFIGS=a11 HZ_MEM_GB=${A9_MEM_GB:?}

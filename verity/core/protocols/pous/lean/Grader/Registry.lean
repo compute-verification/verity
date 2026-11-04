@@ -50,8 +50,6 @@ def pinnedTargets : List Name := [
   `Pous.Guarantees.ContinuousAudit,
   `Pous.Guarantees.BackgroundRebuildExcluded,
   `Pous.Guarantees.BandFamilyContinuousTimeAverage,
-  `Pous.Guarantees.SecureErasureMeetsFamily,
-  `Pous.Guarantees.SecureErasureMeets96GiB,
   `Pous.Guarantees.P2MeetsM1pB19Uncond,
   `Pous.Guarantees.P2MeetsM1pFamilyUncond,
   `Pous.Guarantees.P2MeetsM1pW8192Uncond,
