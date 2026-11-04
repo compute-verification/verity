@@ -139,6 +139,10 @@ RUN_TAG = "verity/pouw/pearl-plus/run/v1"
 RUN_DRAW_DOMAIN = "verity/pouw/pearl-plus-run-draw/v1"
 ASSUMPTION = "Pearl's Assumption 1 (pearl_kw)"
 DELTA = Fraction(1, 100)
+#: `verify_passes`' rules on an opened tile over its inert-work bound (``over_cap``): the run is rejected, or the tile is
+#: credited nothing; `served_passes.OVER_CAP` names the same two
+REJECT, UNCREDITED = "reject", "uncredited"
+OVER_CAP = (REJECT, UNCREDITED)
 LIMITS = VerificationLimits()
 
 
@@ -302,10 +306,11 @@ def load(path: Path, coins: CoinCommitment | LiveCommitment | None = None, recor
 _JOB: dict = {}
 
 
-def check(job: tuple[int, tuple[int, int, int]]) -> tuple[int, int, bool, str | None, bool | None]:
+def check(job: tuple[int, tuple[int, int, int]]) -> tuple[int, int, bool, str | None, bool, bool | None]:
     """The verdict of the ``i``-th tile in the draw's order, ``job`` = (i, (pass, record position, tile id)): (pass, tile
-    id, ok, reason, same), where on `--fast`, for the first tile and every `--cross-check`-th after it, ``same`` says whether
-    the scalar reference's verdict is the same one (None where it was not replayed twice).  By place, not tile id: an
+    id, ok, reason, over, same) (`_check`'s, then ``same``), where on `--fast`, for the first tile and every
+    `--cross-check`-th after it, ``same`` says whether the scalar reference's verdict is the same one (None where it was
+    not replayed twice).  By place, not tile id: an
     excluded row's tile starts its row of a matmul, at an id that is a multiple of the matmul's column tiles (256 for the
     1B's gate_up), so a rule on ids takes whole layouts' tiles or none."""
     i, pick = job
@@ -321,9 +326,11 @@ def check(job: tuple[int, tuple[int, int, int]]) -> tuple[int, int, bool, str | 
     return *got, same
 
 
-def _check(pick: tuple[int, int, int]) -> tuple[int, int, bool, str | None]:
+def _check(pick: tuple[int, int, int]) -> tuple[int, int, bool, str | None, bool]:
     """One tile, (pass, record position, tile id), as `clear_work.audit` checks it: the openings and digest
-    (`Verifier.check_tile`), then the tile rule."""
+    (`Verifier.check_tile`), then the tile rule, its rows and then its inert-work bound, then its y.  (pass, tile id, ok,
+    reason, over): ``over`` where the tile fails its bound (`clear_work.cap_failure`, the reason) and passes every other
+    check, y included, which `verify_passes`' ``over_cap`` decides."""
     i, pos, tid = pick
     p = _JOB["passes"][i]
     scheme, epoch, transcript = p.scheme, p.epoch, p.transcript
@@ -331,19 +338,23 @@ def _check(pick: tuple[int, int, int]) -> tuple[int, int, bool, str | None]:
     try:
         opened = p.prover.open(epoch, tid)
     except (OSError, ValueError) as ex:
-        return i, tid, False, f"the prover's files don't open it: {type(ex).__name__}: {ex}"
+        return i, tid, False, f"the prover's files don't open it: {type(ex).__name__}: {ex}", False
     v = p.verifier.check_tile(transcript, opened)
     if not v.ok:
-        return i, tid, False, v.reason
+        return i, tid, False, v.reason, False
     h = scheme.commitment_hash
     a, b = [opened_value(h, o.value) for o in opened.a], [opened_value(h, o.value) for o in opened.b]
-    reason = CW.check_opened(scheme, p.records[pos], ref.tile, a, b, v.ops)
+    record = p.records[pos]
+    reason = CW.rows_failure(scheme, record, ref.tile, a, b, v.ops)
+    over = None if reason is not None else CW.cap_failure(scheme, record, ref.tile, v.ops, getattr(scheme, "r1_tolerance", 0))
     if reason is None and "y" in p.man["matmuls"][pos]:
         try:
             reason = check_y(p, pos, ref.tile, v, p.prover.open_y(epoch, tid))
         except (OSError, ValueError) as ex:
             reason = f"the prover's files don't open its y: {type(ex).__name__}: {ex}"
-    return i, tid, reason is None, reason
+    if reason is None and over is not None:
+        return i, tid, False, over, True
+    return i, tid, reason is None, reason, False
 
 
 def check_y(p: Pass, pos: int, tile: Tile, v, opened: tuple[Opening, ...]) -> str | None:
@@ -372,7 +383,7 @@ def check_y(p: Pass, pos: int, tile: Tile, v, opened: tuple[Opening, ...]) -> st
 
 
 def replay(passes: list[Pass], todo: list[tuple[int, int, int]], jobs: int, fast: bool = False, cross_check: int = 0
-           ) -> tuple[list[tuple[int, int, bool, str | None, bool | None]], bool]:
+           ) -> tuple[list[tuple[int, int, bool, str | None, bool, bool | None]], bool]:
     """`check` on each (pass, record position, tile id) of `todo` over J processes, and whether the batch forms ran:
     `fast` replays on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a promoted device; otherwise the
     scalar reference), and the first tile of `todo` and every `cross_check`-th after it (`check`) on the scalar reference
@@ -412,20 +423,20 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         todo = [(0, pos, tid) for pos, tid in p.tile_ids(CW.draw(scheme, records, key, draws) + CW.exclusion_tiles(scheme, records))]
         verdicts, fast = replay([p], todo, jobs, fast, cross_check)
         out["replay"] = "batch" if fast else "scalar"
-        differ = [t for _, t, _, _, same in verdicts if same is False]
+        differ = [t for _, t, _, _, _, same in verdicts if same is False]
         ok = all(v[2] for v in verdicts) and not differ
         w_ref, credit = CW.work(scheme, records)
-        bad = "; ".join(f"tile {t}: {r}" for _, t, good, r, _ in verdicts if not good)
+        bad = "; ".join(f"tile {t}: {r}" for _, t, good, r, *_ in verdicts if not good)
         if differ:
             bad = "; ".join(filter(None, [bad, f"the batch replay's verdict is not the scalar one's on tiles {differ}"]))
             out["cross_check_failed"] = differ
         if fast:
-            out["cross_checked"] = [t for _, t, _, _, same in verdicts if same is not None]
+            out["cross_checked"] = [t for _, t, _, _, _, same in verdicts if same is not None]
         at = CW.draw_wref(scheme)
         out.update(accepted=ok, scheme=scheme.name, source=source.hex(), tiles=[t for _, t, *_ in verdicts],
                    draw_wref=at.statement if at else "wref",
                    drawn=draws, exclusion_tiles=len(todo) - draws,
-                   verdicts=[{"tile": t, "ok": g, "reason": r} for _, t, g, r, _ in verdicts], w_ref=str(w_ref), credit=str(credit))
+                   verdicts=[{"tile": t, "ok": g, "reason": r} for _, t, g, r, *_ in verdicts], w_ref=str(w_ref), credit=str(credit))
         out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: clear_work's tiles ({draws} drawn, "
                        f"{len(todo) - draws} for excluded rows) of {c['count']} over {len(records)} matmuls"
                        f"{'' if ok else ' (' + bad + ')'}; transcript root {c['root'][:16]}, records {man['records_root'][:16]}, "
@@ -523,10 +534,23 @@ def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: t
     return {"record": REG.digest(w), "tables": len(want)}
 
 
-def epsilon(t: int, delta: Fraction) -> Fraction:
-    """The smallest ε (rounded up to 10^-9) with (1 − ε)^t ≤ δ: t accepted work-weighted draws leave more than ε of the
-    tickets' weight on wrong tiles except with δ."""
-    return Fraction(math.ceil(-math.expm1(math.log(delta) / t) * 1e9) + 1, 10 ** 9)
+def epsilon(t: int, delta: Fraction, over: int = 0) -> Fraction:
+    """One more than the least k with Σ_{i ≤ over} C(t, i) (k/10⁹)^i (1 − k/10⁹)^(t − i) ≤ δ, over 10⁹, exactly (at
+    ``over`` = 0, (1 − ε)^t ≤ δ): of t work-weighted draws, ``over`` landed on tiles over their inert-work bound and the
+    rest passed, and the tiles wrong or over the bound hold more than ε of the tickets' weight only with δ.  The Lean's
+    `epsilon`, step for step."""
+    g, num, den = 10 ** 9, delta.numerator, delta.denominator
+
+    def ok(k: int) -> bool:
+        mass = sum(math.comb(t, i) * k ** i * (g - k) ** (t - i) for i in range(min(over, t) + 1))
+        return mass * den <= num * g ** t
+
+    lo, hi = 0, g
+    for _ in range(31):
+        if lo < hi:
+            mid = (lo + hi) // 2
+            lo, hi = (lo, mid) if ok(mid) else (mid + 1, hi)
+    return Fraction(lo + 1, g)
 
 
 def credited_cells(scheme: Any, r: PW.UnitRecord) -> list[int]:
@@ -539,11 +563,12 @@ def pass_macs(p: Pass) -> int:
     return sum(sum(credited_cells(p.scheme, r)) * r.k_kept for r in p.records)
 
 
-def credit_at_assumption(passes: list[Pass], t: int, delta: Fraction) -> dict:
+def credit_at_assumption(passes: list[Pass], t: int, delta: Fraction, over: int = 0) -> dict:
     """The run's credit at Pearl's Assumption 1 (`pearl_kw`): a tile that passes the rule cost its credited cells' MACs,
-    (1 − ρ) of them at the scheme's cap.  t accepted draws by ticket weight leave at most ε of the tickets' weight on wrong
-    tiles except with δ (`epsilon`); the most MACs that weight can hold, filled from the records whose cells hold the most
-    MACs a ticket, are taken off."""
+    (1 − ρ) of them at the scheme's cap.  Of t draws by ticket weight, ``over`` (X_O) landed on tiles over their
+    inert-work bound, credited nothing, and the rest passed: the tiles wrong or over the bound hold at most ε of the
+    tickets' weight except with δ (`epsilon`); the most MACs that weight can hold, filled from the records whose cells hold
+    the most MACs a ticket, are taken off."""
     macs, tiles, units = 0, 0, []
     for p in passes:
         for r in p.records:
@@ -553,13 +578,14 @@ def credit_at_assumption(passes: list[Pass], t: int, delta: Fraction) -> dict:
                 macs += sum(cells) * r.k_kept
                 tiles += sum(1 for c in cells if c)
                 units.append((r.k_kept / ticket, sum(cells) * ticket))
-    eps, rho = epsilon(t, delta), passes[0].scheme.cap
+    eps, rho = epsilon(t, delta, over), passes[0].scheme.cap
     budget, wrong = eps * sum(w for _, w in units), Fraction(0)
     for ratio, w in sorted(units, reverse=True):
         take = min(budget, w)
         wrong, budget = wrong + take * ratio, budget - take
     credited = (1 - rho) * max(macs - wrong, Fraction(0))
-    return {"credited": math.floor(credited), "credited_tiles": tiles, "macs": macs, "rho": str(rho), "epsilon": str(eps)}
+    return {"credited": math.floor(credited), "credited_tiles": tiles, "macs": macs, "rho": str(rho), "epsilon": str(eps),
+            "over_cap_draws": over}
 
 
 def rejected(reason: str, commit: str) -> dict:
@@ -572,12 +598,17 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                   source: bytes | None = None,
                   fast: bool = False, cross_check: int = 0, delta: Fraction = DELTA, window: dict | None = None,
                   rounds: list[int] | None = None, dropped: tuple[int, ...] = (), record: Path | None = None,
-                  draw: Any = node_draw) -> dict:
+                  draw: Any = node_draw, over_cap: str = UNCREDITED) -> dict:
     """One served run's verdict over all its passes, in core's answer form (`core_check.answer_of`): every pass is read
     and held to what it published, and to the window record `window` where there is one (`tie`), then one source of the
     verifier's coins (`pouw.verifier.coins`), drawn after, keys `draws` work-weighted tiles over every pass's tickets
     together (`clear_work.draw` on their records in order), and each pass opens one tile per excluded row.  It accepts iff
     every opened tile passes the tile rule, and credits the run at Pearl's assumption (`credit_at_assumption`) at δ.
+
+    ``over_cap`` is the rule on an opened tile that passes every check but its inert-work bound (`clear_work.cap_failure`):
+    ``uncredited`` (CMP-311 option A, the default) accepts it with its bound's reason and credits it nothing, the credit
+    taking X_O, the draws that landed on such tiles; ``reject`` rejects the run.  The verdict records the rule it ran under
+    (``over_cap``, and the profile's).
 
     ``paths`` are the passes the prover retained, pass i the served run's round ``rounds[i]`` (default i), the rounds
     ``dropped`` left out before the coin: they credit nothing, and W may register them (`tie`).  ``record`` is the
@@ -587,8 +618,10 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     source's draw on the run's commitment C (module docstring, "The run's draw"): it calls ``asking(info)`` just before it
     asks, which marks the record (`ASKED`) so a draw that fails or is cut short is never asked again (`ASKED_ONCE`), and
     returns (S, the record's ``draw``).  A given ``source`` (a test's) is recorded as the node's."""
+    if over_cap not in OVER_CAP:
+        raise ValueError(f"over_cap {over_cap!r} is none of {', '.join(OVER_CAP)}")
     named = [read(x)[2] for x in paths]
-    out = {"passes": named, "verifier_commit": commit, "draws": draws, "delta": str(delta),
+    out = {"passes": named, "verifier_commit": commit, "draws": draws, "delta": str(delta), "over_cap": over_cap,
            **({"rounds": list(rounds), "dropped": list(dropped)} if rounds is not None else {})}
 
     def reject(reason: str) -> dict:
@@ -652,15 +685,21 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     for pos, tile in CW.draw(scheme, records, key, draws):
         i = bisect.bisect_right(at, pos) - 1
         drawn.setdefault(i, []).append((pos - at[i], tile))
-    todo = [(i, pos, tid) for i, p in enumerate(passes)
-            for pos, tid in p.tile_ids(drawn.get(i, []) + CW.exclusion_tiles(p.scheme, p.records))]
+    todo, picked = [], []
+    for i, p in enumerate(passes):
+        mine, ex = p.tile_ids(drawn.get(i, [])), p.tile_ids(CW.exclusion_tiles(p.scheme, p.records))
+        todo += [(i, pos, tid) for pos, tid in mine + ex]
+        picked += [True] * len(mine) + [False] * len(ex)
     excluded = len(todo) - sum(map(len, drawn.values()))
     verdicts, fast = replay(passes, todo, jobs, fast, cross_check)
-    bad = [f"pass {i} tile {t}: {r}" for i, t, good, r, _ in verdicts if not good]
-    bad += [f"pass {i} tile {t}: the batch replay's verdict is not the scalar one's" for i, t, _, _, same in verdicts if same is False]
-    credit = credit_at_assumption(passes, draws, delta)
+    uncredited = over_cap == UNCREDITED
+    bad = [f"pass {i} tile {t}: {r}" for i, t, good, r, over, _ in verdicts if not good and not (over and uncredited)]
+    bad += [f"pass {i} tile {t}: the batch replay's verdict is not the scalar one's" for i, t, *_, same in verdicts if same is False]
+    over_draws = sum(1 for v, d in zip(verdicts, picked, strict=True) if d and v[4])
+    credit = credit_at_assumption(passes, draws, delta, over_draws)
     out.update(scheme=scheme.name, source=source.hex(), commitment=root.hex(), replay="batch" if fast else "scalar",
-               verdicts=[{"pass": i, "tile": t, "ok": g, "reason": r} for i, t, g, r, _ in verdicts])
+               verdicts=[{"pass": i, "tile": t, "ok": g or (over and uncredited), "reason": r}
+                         for i, t, g, r, over, _ in verdicts])
     if bad:
         return reject("; ".join(bad))
     public = {"work": credit, "unit": "MAC", "assumption": ASSUMPTION, "scheme": scheme.name,
@@ -669,12 +708,14 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
               **({"tie": tied} if tied is not None else {}),
               **({"rounds": list(rounds), "dropped": list(dropped)} if rounds is not None else {})}
     profile = {"delta": str(delta), "draws": draws, "draw": "work-weighted, with replacement", "source": source.hex(),
-               "source_from": out["draw"],
+               "source_from": out["draw"], "over_cap": over_cap,
                "exclusion_tiles": excluded, "tiles": [[i, t] for i, t, *_ in verdicts]}
     ys = [r for p in passes for r in y_roots(p)]
     tie_clause = "" if tied is None else f", tied to W {tied['record'][:16]} on its {tied['tables']} tables"
     if dropped:
         tie_clause += f", {len(dropped)} passes dropped before the coin (rounds {', '.join(map(str, dropped))})"
+    if over_draws:
+        tie_clause += f", {over_draws} draws on tiles over their inert-work bound credited nothing"
     out.update(answer={"protocol": PROTOCOL, "verdict": "accept", "reason": None, "commitment": root.hex(), "public": public,
                        "profile": profile},
                line=(f"ACCEPT {PROTOCOL} {scheme.name}: {len(todo) - excluded} drawn and {excluded} exclusion tiles over "

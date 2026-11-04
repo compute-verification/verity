@@ -718,7 +718,7 @@ def test_volunteer_leaves_each_pass_no_tile_over_a_cap_and_its_transcript_as_cap
         assert man["commitment"] == before[name]["commitment"] and man["records_root"] == r["records_root"]["after"]
         p = VR.load(out / name / "manifest.json", coins)
         got, _ = VR.replay([p], [(0, ref.matmul, ref.id) for ref in p.verifier.refs], 1)
-        assert [reason for _, _, ok, reason, _ in got if not ok] == []
+        assert [reason for _, _, ok, reason, *_ in got if not ok] == []
     assert res["ok"]
 
 

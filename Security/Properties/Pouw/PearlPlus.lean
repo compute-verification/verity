@@ -14,18 +14,21 @@ What they compose into is the remote theorem's useful-work part: on an accepted 
 record per drawn tile (`TTOutTilePearlCH100Rev1`), the run's credit is at most its cost up to the draw's ε at δ, or a
 SHA-512 break on the run's trees. These properties are the code's side of it:
 
-* `AcceptMeans`: an accepted run is a plan (`PlanMeans`) whose every drawn and exclusion tile passes `checkTile`.
+* `AcceptMeans`: an accepted run is a plan (`PlanMeans`) whose every drawn and exclusion tile passes `checkTile`, or,
+  under `over_cap` `uncredited` (CMP-311 option A, the default), is over its inert-work bound with every other check
+  passed and is credited nothing.
 * `PlanMeans`: the plan's passes are the loaded passes, its commitment theirs, its source the coin record's when there is one
   (retention and give-up fixed before the coin, `after-coin`), and its tiles the draw's over their tickets, keyed by the
   source and the commitment.
 * `LoadedGivesUp`: a loaded pass's records are its published root's, and V-EX's give-up is within its caps.
-* `TileAcceptMeans`: a tile that passes opens against the pass's roots, its checked words are the committed leaf's, its
-  rows keep the per-row rules, its credited cells' replayed debit is within ρ = 1/400 of their credit (as a tile and per
-  credited A row), and its served y rows are the unscale of its U.
+* `TileAcceptMeans`: a tile that passes, or is only over its inert-work bound, opens against the pass's roots, its
+  checked words are the committed leaf's, its rows keep the per-row rules, its credited cells' replayed inert work is
+  within ρ = 1/400 of their credit (as a tile and per credited A row) where it passes and over it where it doesn't, and
+  its served y rows are the unscale of its U.
 * `YIsTheUnscale`: the unscale the check holds y to is `Pouw.PearlC.unscale`, the served y's Definition
   (`PearlCUnscale_v1` at `BIAS` off).
 * `WorkIsTheCredit`: the work an accepted run publishes is its credit at Pearl's assumption (`creditAtAssumption`) over
-  the plan's passes, at the run's draws and δ = 1/100.
+  the plan's passes, at the run's draws, the draws over the inert-work bound (X_O) and δ = 1/100.
 * `OpeningBinds`: two openings of one position of a tree both accepted name one value, or SHA-512 collides.
 
 The window record's tie (`tie`) is not ported.
@@ -72,17 +75,19 @@ def PlanMeans : Prop :=
     (∀ h, i.held = some h → h.commitment = pl.root ∧ pl.source = h.source ∧ (i.source = none ∨ i.source = some h.source)) ∧
     (i.held = none → i.source = some pl.source) ∧
     ∃ key drawn, PouwCheck.PearlPlus.drawKey pl.source pl.root = .ok key ∧ PouwCheck.PearlPlus.draw pl.passes key i.draws = .ok drawn ∧
-      pl.todo = todo pl.passes drawn ∧ pl.drawn = drawn.length
+      pl.todo = todo pl.passes drawn ∧ pl.drawn = drawn.length ∧ pl.picks = drawn
 
 /-- **What `check` accepts**: a plan, every one of whose tiles the prover opened and `checkTile` passed, on the fixed
-operand's noise of its weight; the verdicts are those tiles', in the plan's order, each passed. -/
+operand's noise of its weight, or found over its inert-work bound with every other check passed where the run's
+`over_cap` is `uncredited`; the verdicts are those tiles', in the plan's order, each ok under that rule. -/
 def AcceptMeans : Prop :=
   ∀ (i : Input) (opener : Nat → Nat → Except String TileOpening), (check i opener).accept = true →
-    ∃ pl, plan i = .ok pl ∧ (check i opener).plan = some pl ∧
+    ∃ pl, plan i = .ok pl ∧ (check i opener).plan = some pl ∧ (check i opener).overCap = i.overCap ∧
       (check i opener).verdicts.map (fun v => (v.pass, v.tile)) = pl.todo ∧
-      (∀ v ∈ (check i opener).verdicts, v.reason = none) ∧
+      (∀ v ∈ (check i opener).verdicts, v.ok i.overCap = true) ∧
       ∀ pi tid, (pi, tid) ∈ pl.todo → ∃ p o, pl.passes[pi]? = some p ∧ opener pi tid = .ok o ∧
-        checkTile p (noiseOf p tid) tid o = none
+        (checkTile p (noiseOf p tid) tid o = .pass ∨
+          i.overCap = .uncredited ∧ ∃ why, checkTile p (noiseOf p tid) tid o = .overCap why)
 
 /-- **A run the verdict refuses before any tile is opened carries no commitment**: a refusal of `plan` (`after-coin`, a
 pass that doesn't load, passes that share a call) answers with no plan and no verdicts. -/
@@ -110,14 +115,16 @@ def formed (p : Pass) (wn : Reject FixedNoise) (rows cols : List Nat) (u : Matmu
     (o.a.map (openedValue ·.value)) cols (o.b.map (openedValue ·.value))
   pure (ops, ← checked ops)
 
-/-- **What a passed tile establishes**: the tile is the verifier's own (`tile?`); its A and B rows and its leaf open, at the
-tile's positions, against the call's A root, the weight's root and the pass's transcript root (hm96 under SHA-512); its
-words formed from those rows under the pass's salt and the fixed operand's noise are checked and hash to the opened leaf;
-its rows keep the per-row rules and its credited cells' replayed debit is within the cap (`Rule.checkOpened`); and on a
-call with y, the tile's real rows open against the y root and each word is the unscale of the tile's U
-(`Rule.yReason`). -/
+/-- **What a tile that passes, or is only over its inert-work bound, establishes**: the tile is the verifier's own
+(`tile?`); its A and B rows and its leaf open, at the tile's positions, against the call's A root, the weight's root and
+the pass's transcript root (hm96 under SHA-512); its words formed from those rows under the pass's salt and the fixed
+operand's noise are checked and hash to the opened leaf; its rows keep the per-row rules (`Rule.rowsFailure`); its
+credited cells' replayed inert work is within the bound where it passes and over it, with that reason, where it is
+`overCap` (`Rule.capCheck`); and on a call with y, the tile's real rows open against the y root and each word is the
+unscale of the tile's U (`Rule.yReason`). -/
 def TileAcceptMeans : Prop :=
-  ∀ (p : Pass) (wn : Reject FixedNoise) (tid : Nat) (o : TileOpening), checkTile p wn tid o = none →
+  ∀ (p : Pass) (wn : Reject FixedNoise) (tid : Nat) (o : TileOpening) (bound : Option String),
+    checkTile p wn tid o = (match bound with | none => .pass | some why => .overCap why) →
     ∃ pos rows cols ops ch, p.tile? tid = some (pos, rows, cols) ∧
       let r := p.records[pos]!
       let u := r.matmul
@@ -127,7 +134,7 @@ def TileAcceptMeans : Prop :=
         ((p.weightRoots.lookup u.weight).getD ByteArray.empty) ROW_SCHEMA) ∧
       opens (transcriptDomain p.salt p.weightsRoot p.count HM96) p.transcriptRoot TILE_SCHEMA o.leaf ∧
       formed p wn rows cols u o = .ok (ops, ch) ∧ leaf ch = openedValue o.leaf.value ∧
-      Rule.checkOpened p.scheme r rows cols ops = none ∧
+      Rule.rowsFailure r rows cols ops = none ∧ Rule.capCheck p.scheme r rows cols ops = .ok bound ∧
       ∀ yRoot, p.yRoots[pos]! = some yRoot → ∃ ys, o.y = .ok ys ∧
         ys.map (·.position) = rows.filter (· < r.realRows) ∧
         ys.all (opens (rowsDomain (yBinding p.salt u.index) u.index r.realRows HM96 false) yRoot ROW_SCHEMA) ∧
@@ -157,12 +164,13 @@ def YIsTheUnscale : Prop :=
   (∀ u alphaA alphaB, Rule.unscale u alphaA alphaB = Pouw.PearlC.unscale u alphaA alphaB) ∧
   ∀ u alphaA alphaB y, Rule.yOf u alphaA alphaB = some y → y = Pouw.PearlC.unscale u alphaA alphaB
 
-/-- **The work an accepted run publishes is its credit at Pearl's assumption**: over the plan's passes, at the run's draws and
-δ = 1/100 (`creditAtAssumption`); a refused or rejected run publishes none. -/
+/-- **The work an accepted run publishes is its credit at Pearl's assumption**: over the plan's passes, at the run's draws,
+X_O (how many of them landed on a tile over its inert-work bound, `overCapDraws`) and δ = 1/100 (`creditAtAssumption`); a
+refused or rejected run publishes none. -/
 def WorkIsTheCredit : Prop :=
   ∀ (i : Input) (opener : Nat → Nat → Except String TileOpening),
     ((check i opener).accept = true → ∃ pl, plan i = .ok pl ∧
-      (check i opener).work = some (creditAtAssumption pl.passes i.draws DELTA)) ∧
+      (check i opener).work = some (creditAtAssumption pl.passes i.draws (overCapDraws pl (check i opener).verdicts) DELTA)) ∧
     ((check i opener).accept = false → (check i opener).work = none)
 
 /-! ## The trees -/

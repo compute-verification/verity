@@ -86,19 +86,22 @@ the salt and the call's index), takes the verifier's coin (with ``PEARLC_CHALLEN
 set, a draw session's on the auditor host opened on the run's commitment, `bench_arm.LiveDraw`, reserved under
 ``PEARLC_CHALLENGER_LANE`` once that lane has no period open; else the node's, `verify_run.node_draw`; the format is
 `verify_run`'s "The coin record"), and replays ``--draws`` work-weighted tiles over all of them and
-each pass's exclusion tiles.  It writes the details to ``--out``, with, where ``served.json`` says which passes the timed
-call made and no ``--manifest`` names others, the credit over those retained alone (`timed_credit`), and the core answer
-(`answer_of`'s form, ``public.work.credited`` the MACs credited at Pearl's Assumption 1 at ``--delta``) to ``--answer``
+each pass's exclusion tiles.  A tile that passes every check but its inert-work bound is credited nothing under
+``--over-cap uncredited`` (the default, CMP-311 option A; the credit takes the draws on such tiles, X_O) and rejects the run
+under ``--over-cap reject``; the verdict records which (``over_cap``).  It writes the details to ``--out``, with, where
+``served.json`` says which passes the timed call made and no ``--manifest`` names others, the credit over those retained
+alone (`timed_credit`), and the core answer (`answer_of`'s form, ``public.work.credited`` the MACs credited at Pearl's Assumption 1 at ``--delta``) to ``--answer``
 (default ``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints one line
 and exits 0 only on accept.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
 PouwCheck).
 
 ``lean`` is the Lean verdict of record on the run `verify` judged (`PouwCheck.PearlPlus`, ``--exe`` its ``pouw-pearlplus``):
 the passes ``verify --out``'s document (``--verify``) names, read as `verify` reads them and held to the names and SHA-256s
-that document gives them, the epoch's ``DIR/coins.json``, that document's draws, and the verifier's coin record it wrote
-(``DIR/coin.json``), which pins the Lean's source to the Python's (`lean_argv`, the one place the Lean's command line is
+that document gives them, the epoch's ``DIR/coins.json``, that document's draws and over-cap rule, and the verifier's coin
+record it wrote (``DIR/coin.json``), which pins the Lean's source to the Python's (`lean_argv`, the one place the Lean's command line is
 written). It holds the Lean's printout to the Python's verdict on every field both give (`LEAN_HELD`: the verdict, its
-reason and refusal, the run's commitment and source, each opened tile's verdict, and an accepted run's work), and to the
+reason and refusal, the run's commitment and source, the over-cap rule, each opened tile's verdict, and an accepted run's
+work), and to the
 same W where the Lean names one. Where they agree it writes the Lean's answer to ``--out`` (`lean_answer`: the
 printout with W at ``tie``), the file `served_verdicts.pearlplus_of_record` reads; where they don't, or the Lean doesn't
 answer within ``--timeout`` seconds, it writes none and removes any there. Either way both verdicts, the Lean's command
@@ -148,7 +151,7 @@ UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so 
 COIN, RETENTION = "coin.json", "retention.json"
 #: the fields of the Lean `PouwCheck.PearlPlus` printout `lean` holds to the Python's verdict, as its difftest does
 #: (`benchmarks/pouw/pearlplus_lean`'s ``answer``)
-LEAN_HELD = ("verdict", "reason", "refused", "commitment", "source", "verdicts", "work")
+LEAN_HELD = ("verdict", "reason", "refused", "commitment", "source", "over_cap", "verdicts", "work")
 #: `lean`'s record of both verdicts, beside its answer
 LEAN_CHECK = "pearlplus-lean-check.json"
 LEAN_SCHEMA = "verity-pouw/pearl-plus-lean-check/v1"
@@ -528,7 +531,8 @@ def verify(args: argparse.Namespace) -> int:
                             settings.PEARLC_CHALLENGER_LANE) or VR.node_draw
         doc.update(VR.verify_passes(paths, args.draws, args.jobs, args.commit, coins, fast=args.fast,
                                     cross_check=args.cross_check, delta=args.delta, window=window, rounds=rounds,
-                                    dropped=dropped, record=record, draw=draw))
+                                    dropped=dropped, record=record, draw=draw,
+                                    over_cap=over_cap_rule(VR.verify_passes, args.over_cap)))
         if served is not None and not args.manifest and doc["answer"]["verdict"] == "accept":
             doc["timed"] = timed_credit(served, doc["answer"]["public"]["work"], coins, rounds)
     out = Path(args.out)
@@ -555,11 +559,14 @@ def arm(args: argparse.Namespace) -> int:
     return 0
 
 
-def lean_argv(exe: Path, coins: Path, draws: int, record: Path, manifests: list[Path], tie: Path | None) -> list[str]:
+def lean_argv(exe: Path, coins: Path, draws: int, record: Path, manifests: list[Path], tie: Path | None,
+              over_cap: str = OVER_CAP[1]) -> list[str]:
     """``pouw-pearlplus``'s command line on the run's retained passes (`manifests`, in order), the epoch's coin commitment,
-    the draws and the verifier's coin record, which pins the Lean's source to the one the Python drew (PR #7221's
-    ``--coins COINS --draws T --record RECORD MANIFEST...``). W (`tie`) is not passed: #7221's executable takes none yet."""
-    return [str(exe), "--coins", str(coins), "--draws", str(draws), "--record", str(record), *map(str, manifests)]
+    the draws, the verifier's coin record, which pins the Lean's source to the one the Python drew, and the over-cap rule
+    the Python ran under (PR #7221's ``--coins COINS --draws T --record RECORD --over-cap RULE MANIFEST...``). W (`tie`) is
+    not passed: #7221's executable takes none yet."""
+    return [str(exe), "--coins", str(coins), "--draws", str(draws), "--record", str(record), "--over-cap", over_cap,
+            *map(str, manifests)]
 
 
 def lean_answer(got: dict) -> dict:
@@ -573,7 +580,8 @@ def python_answer(doc: dict) -> dict:
     """`verify`'s document in the Lean's terms (`LEAN_HELD`)."""
     a = doc["answer"]
     return {"verdict": a["verdict"], "reason": a["reason"], "refused": doc.get("refused"),
-            "commitment": doc.get("commitment"), "source": doc.get("source"), "verdicts": doc.get("verdicts", []),
+            "commitment": doc.get("commitment"), "source": doc.get("source"), "over_cap": doc.get("over_cap"),
+            "verdicts": doc.get("verdicts", []),
             "work": (a.get("public") or {}).get("work")}
 
 
@@ -615,7 +623,7 @@ def lean(args: argparse.Namespace) -> int:
         return done(f"no Lean executable at {exe}", 2)
     rec["exe_sha256"] = hashlib.sha256(exe.read_bytes()).hexdigest()
     rec["argv"] = lean_argv(exe, passes / "coins.json", doc["draws"], record, paths,
-                            Path(doc["tie_record"]) if doc.get("tie_record") else None)
+                            Path(doc["tie_record"]) if doc.get("tie_record") else None, doc.get("over_cap", OVER_CAP[0]))
     try:
         p = subprocess.run(rec["argv"], capture_output=True, text=True, timeout=args.timeout, check=False)
     except subprocess.TimeoutExpired:
@@ -699,6 +707,8 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--cross-check", type=int, default=256)
     v.add_argument("--coin-record", help=f"the verifier's coin record (default: DIR/{COIN} where served.json names the "
                    "passes, none with --manifest)")
+    v.add_argument("--over-cap", choices=OVER_CAP, help="the rule on a drawn tile over its inert-work bound: uncredited "
+                   "credits it nothing, reject rejects the run (default: verify_run.verify_passes' own, uncredited)")
     a = sub.add_parser("arm")
     a.add_argument("--spec", type=Path, default=SPEC)
     a.add_argument("--arm", help=f"the spec's {ARM_PREFIX}* arm (default: its one)")
