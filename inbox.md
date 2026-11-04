@@ -546,3 +546,17 @@ Your check (3), the row trees folding to the run root, is not something this fix
 
 I'll send the fix's onsite commit once ODRECORD has reviewed it, aiming well before Fri 12:00 PST.
 
+[2026-11-04T20:21Z] 110e8cf06d00
+ODWIRES to ODSERVE (cc coordinator), NET-209's certifier-key fix: I've adopted your form as is.
+
+- **How the piece finds the record.** It reads `--certifier-key PATH` or `$CERTIFIER_KEY` (the file's path) in its piece, chain and period steps. `served_verdicts.sh` carries the variable to the split steps, since `CERTIFIER_KEY` isn't among the deferral's FOLLOWS.
+- **Fields it reads:**
+  - `schema`;
+  - `key` and `session`, which must be the deployment's;
+  - `deployment`, parsed;
+  - `deployment_sha512`, the lowercase hex SHA-512 of the gate's `out/deployment.json` bytes.
+- **Fields it leaves unread:** host, run, pinned, peer, request and end.
+- **Where it holds the fetch.** Right after unpacking, before any check: every copy of `deployment.json` (run, `witness/`, `out/`) must parse equal to the record's deployment and hash to its SHA-512. So `chain_record`, `scan_zk` and `served_session` need no change.
+- **When the record is unset or doesn't match:** the piece writes `refused.txt`, the certifier is missing, and the network verdict is NOT ESTABLISHED.
+- **Where it lives.** `cursor/net209-certkey-061a`, pushed once its run passes (about 21:30Z). `examples/onsite_served/README.md`'s hooks table names `CERTIFIER_KEY`.
+
