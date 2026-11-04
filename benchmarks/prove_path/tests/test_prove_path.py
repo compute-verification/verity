@@ -156,9 +156,9 @@ def _bound(rec: dict) -> dict:
     return {k: rec["window"][k] for k in SRT.BINDING}
 
 
-def test_the_advice_must_be_in_the_registration_the_draw_followed():
+def test_the_advice_must_be_in_the_registration_the_challengers_stream_drew_after():
     rec = _rec("11" * 64)
-    drawn = R.receipt(rec, A5.VERIFIER, received="0")
+    drawn = R.receipt(rec, A5.CHALLENGER, received="0")
     assert PP.advice_before_draw(drawn, rec, _bound(rec)) == {"ok": True, "codes": [], "detail": {
         "drawn_after": R.digest(rec), "registration": R.digest(rec), "received": "0"}}
     late = _rec("22" * 64)
@@ -167,16 +167,6 @@ def test_the_advice_must_be_in_the_registration_the_draw_followed():
     assert PP.advice_before_draw(drawn, rec, _bound(late))["codes"] == ["advice"]
     other = _rec("11" * 64, compiler="ef" * 64)
     assert PP.advice_before_draw(drawn, rec, _bound(other))["codes"] == ["compiler"]
-
-
-def test_on_the_challengers_coins_the_advice_must_be_in_the_registration_the_challengers_stream_drew_after():
-    rec = _rec("11" * 64)
-    theirs, ours = R.receipt(rec, A5.CHALLENGER, received="0"), R.receipt(rec, A5.VERIFIER, received="0")
-    assert PP.advice_before_draw(theirs, rec, _bound(rec), "challenger")["ok"]
-    assert PP.advice_before_draw(ours, rec, _bound(rec), "challenger")["codes"] == ["after-the-draw"]
-    assert PP.advice_before_draw(theirs, rec, _bound(rec))["codes"] == ["after-the-draw"]
-    late = _rec("22" * 64)
-    assert PP.advice_before_draw(theirs, late, _bound(late), "challenger")["codes"] == ["after-the-draw"]
 
 
 @dataclass(frozen=True)
@@ -252,7 +242,7 @@ def test_the_challengers_coins_need_main_and_the_gates_peer_and_key(monkeypatch)
     run = ["--bundle", "b", "--row-dir", "d", "--workload", "f", "--opening", "o", "--windows", "w", "--partition", "p",
            "--template-sets", "s", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", "o"]
     gate = ["--challenger", "gate:research@vy-challenger-1", "--main", "m.txt"]
-    for refused in (["--challenger", "local"], gate, [*gate, "--peer", "vy-nebius-2"], ["--challenger", "remote", "--main", "m.txt"]):
+    for refused in ([], ["--challenger", "local"], gate, [*gate, "--peer", "vy-nebius-2"], ["--challenger", "remote", "--main", "m.txt"]):
         with pytest.raises(SystemExit):
             PP.main(["audit", *run, *refused])
     got = []
@@ -382,7 +372,7 @@ def test_advice_committed_after_the_draw_passes_every_check_before_it_and_is_ref
     committed again after the coins (a fresh root, a true commitment of it, which `source` accepts with its opening) is refused."""
     compiler, bound, opening, mine, held = _mine(tp, "honest", 0)
     rec = _registered(tp["honest"] / "rank0")
-    receipt = R.receipt(rec, A5.VERIFIER, received="0")
+    receipt = R.receipt(rec, A5.CHALLENGER, received="0")
     assert PP.advice_before_draw(receipt, rec, bound)["ok"]
     got = PP.advice_after_draw(compiler, receipt, rec, opening, mine, held)
     assert got == {"refused": True, "codes": ["after-the-draw"], "before_draw_checks_pass": True}
@@ -408,7 +398,7 @@ def test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_
     unit, is inside it under stratified:8, and refused before the sample under its own subset:8, drawn outside a stream, with a
     second member, or with registered reads or shared rows. A `--zk` audit is refused for none of these."""
     _c, _b, _o, mine, _held = _mine(tp, "honest", 0)
-    plain, zk = (argparse.Namespace(plain=p, coins=None, verifier_coins=True) for p in (True, False))
+    plain, zk = (argparse.Namespace(plain=p, coins="challenger") for p in (True, False))
     stratified = replace(mine, law={"law": "stratified", "k": 8})
     assert A5.plain_refusal(plain, stratified, None) is None
     m = mine.members[0]
@@ -417,7 +407,7 @@ def test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_
         return SimpleNamespace(members=members, law=stratified.law, population=sum(x.n for x in members), row_tables=())
 
     cases = [("a plain session's draw is stratified", plain, mine, None),
-             ("through a rank's service.Stream", argparse.Namespace(plain=True, coins=None, verifier_coins=False), stratified, None),
+             ("through a rank's service.Stream", argparse.Namespace(plain=True, coins=None), stratified, None),
              ("the window has 2 members", plain, window(m, replace(m, base=m.n)), None),
              ("registered reads, shared rows", plain, stratified, {m.key: {"ports": {}}}),
              ("registered reads, shared rows", plain, window(replace(m, tables=(("x", 1),))), None)]
@@ -1359,7 +1349,8 @@ def test_the_verifiers_i2_reads_only_builds_it_wrote_itself_and_the_provers_its_
     got = []
     monkeypatch.setattr(PP, "audit", lambda a: got.append(a) or 0)
     run = ["--serve-run", str(s.run), "--window", "0", "--row-dir", str(rows), "--windows", "w", "--partition", "p", "--template-sets",
-           "t", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out")]
+           "t", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
+           "--challenger", "local", "--main", "m.txt"]
     assert PP.main(["audit", *run]) == 0 and PP.main(["audit", *run, "--vllm-python", "pinned-python"]) == 0
     assert [a.builds for a in got] == [str(tmp_path / "out" / "builds")] * 2
     with pytest.raises(SystemExit):

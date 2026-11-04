@@ -8,7 +8,9 @@ them (`verity/core/difftest/tests/test_annot.py` builds them, and holds the sets
 module
 
 public import Flock.AnnotExpand
+public import Flock.JsonParse
 meta import Flock.AnnotExpand
+meta import Flock.JsonParse
 
 @[expose] public section
 
@@ -27,8 +29,8 @@ def nest : String := "{\"annotations\":{},\"callees\":[\"TZero32_v1\",\"TDot16_v
 def run (f : Meaning → Flock.Program.Prog → Desc → V CheckResult) (p a m : String) : String :=
   match (do
       let P ← Flock.Program.decode p.toUTF8
-      let D ← Desc.ofJson (← Json.parse a)
-      f (← Meaning.ofJson (← Json.parse m)) P D) with
+      let D ← Desc.ofJson (← JsonParse.parse a)
+      f (← Meaning.ofJson (← JsonParse.parse m)) P D) with
   | .ok v => v.toJson.compress
   | .error e => "reject " ++ (e.splitOn ":").head!
 
@@ -108,7 +110,7 @@ gates, the `TDot` calls inside them overlap them, and the Input batches, primiti
 
 /-- `expand` of the six coordinates: the last input gate in no label, the first and last coordinate gates in labels 0 and 5. -/
 def coords : Except String (Array (Array Nat)) := do
-  expand (← Flock.Program.decode gemm.toUTF8) (← Desc.ofJson (← Json.parse "{\"query\":{\"op\":\"instances\",\"path\":\"@2\"}}"))
+  expand (← Flock.Program.decode gemm.toUTF8) (← Desc.ofJson (← JsonParse.parse "{\"query\":{\"op\":\"instances\",\"path\":\"@2\"}}"))
 
 #guard (coords.toOption.map fun e => (e.size, e[223]!, e[224]!, e[227]!, e[228]!, e[247]!)) ==
   some (248, #[], #[0], #[0], #[1], #[5])

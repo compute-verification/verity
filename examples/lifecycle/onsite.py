@@ -185,8 +185,6 @@ class OnsiteVerifier(Verifier):
     """The verifier, with the onsite components: the certifier's signed view of each execution phase, and the memory
     challenger's report."""
 
-    work = IDS["pouw-period"]
-
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         self.views: dict[int, dict[str, Any]] = {}
         self.reports: dict[int, dict[str, Any]] = {}

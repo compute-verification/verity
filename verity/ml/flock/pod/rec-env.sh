@@ -1,5 +1,5 @@
 # Sourced by the rec-v0 jobs (80-rec-inner.sh, 87-rec-c3-open.sh, 88-rec-c3-inner.sh) after their CPU pinning: the run's
-# directories ($O out/, $S scratch, $L cache), host.txt, /usr/bin/time, the Lean verifier ($LEAN_BIN, built in the background: wait $LP), the
+# directories ($O out/, $S scratch, $L cache), host.txt, /usr/bin/time, the Lean verifier ($LEAN_BIN, and $FIREWALL_BIN beside it, built in the background: wait $LP), the
 # prover build ($B, 60-circuit.sh's, keyed by its sources) and the job's Python ($REPO's packages on PYTHONPATH).
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/rec-v0-job}/out; mkdir -p $O
 [ -z "${FLOCK_WORK:-}" ] && [ ! -w /workspace ] && export FLOCK_WORK=/workspace/jobs/rec-v0
@@ -15,13 +15,16 @@ trap 'rm -rf $S' EXIT
 
 LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
 LEAN_BIN=$L/lean-$LSHA/flock-verify
+# the inner session's send check (rec_live --lean), built beside it
+FIREWALL_BIN=$L/lean-$LSHA/flock-firewall
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   exec 9>$L/lean.lock; flock 9
-  if [ ! -x $LEAN_BIN ]; then
+  if [ ! -x $LEAN_BIN ] || [ ! -x $FIREWALL_BIN ]; then
     rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/service/flock/. $L/lean-src/ \
-      && (cd $L/lean-src && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $L/lean-src/.lake/build/bin/flock-verify $LEAN_BIN
+      && (cd $L/lean-src && lake build flock-verify flock-firewall) && mkdir -p $L/lean-$LSHA \
+      && cp $L/lean-src/.lake/build/bin/flock-verify $L/lean-src/.lake/build/bin/flock-firewall $L/lean-$LSHA/
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!

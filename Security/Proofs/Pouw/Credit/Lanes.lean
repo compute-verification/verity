@@ -4,26 +4,29 @@ public import Properties.Pouw.Credit
 public import Proofs.Pouw.Period.Accept
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
 import all Init.Data.Array.DecidableEq
+import all Init.Data.Array.QSort.Basic
 import all Init.Data.List.Sort.Basic
+import all Init.Data.Nat.Bitwise.Basic
 import all Init.Data.Repr
+import all Init.Data.String.Defs
 
 /-!
-# The compiled `strata` and `law` accept the lanes window
+# The lanes window's strata and law
 
-`strata_lanes` and `law_lanes`, which `GroupedDrawMisses`'s honest lemma (`Proofs.Pouw.Credit`) reads: the compiled
-`strata` and `law` run on the lanes window in the kernel (`decide +kernel`, through the `DecidableEq` the draw's
-structures derive here), past `strata`'s key sort, which the kernel doesn't reduce (`keys_lanes`, as
-`Proofs.Pouw.Period.Accept` reads H1's items). They sit in a module of their own, where the core definitions `strata`
-and `law` unfold are visible (`import all`), which would slow `Proofs.Pouw.Credit`'s other proofs past their
-heartbeats.
+The compiled `strata` and `law` run on the lanes window in the kernel (`decide +kernel`, through the `DecidableEq` the
+draw's structures derive here), past `strata`'s key sort, which the kernel doesn't reduce (`keys_lanes`, as
+`Proofs.Pouw.Period.Accept` reads H1's items). Their loops, sorts and the template's digits are core's, so this module
+imports those in full. `Proofs.Pouw.Credit` reads the results from here: with core's definitions in full there, its
+`Nat.choose` bounds exceed their budget.
 -/
 
 @[expose] public section
 
 namespace Properties.Pouw.Credit.SecurityProofs
 
-open Lean (Json toJson)
+open Lean (toJson)
 
 deriving instance DecidableEq for Flock.Draw.Stratum
 deriving instance DecidableEq for Flock.Draw.WorkStratum
