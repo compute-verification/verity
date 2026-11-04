@@ -585,13 +585,14 @@ def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever
 
 @pytest.mark.parametrize("drawn, entries", [(1, 896), (16, 0)])
 def test_w63k4s_tied_audit_drawn_in_part_charges_its_slot_entries_and_drawn_whole_doesnt(tmp_path, drawn, entries):
-    """Monday's defaults: w63k4 at a 4 s tick over three execution phases, each phase's tied V3c audit drawn subset:1
-    (charged), its draw read at δ_i = 2^-64 with a bound of 15 beside its answer's 8 at 1/2, so k_{skip,j} is its
-    E_w = 896 slot-entry bits beside the schedule's and the jitter's 800: with ℓ_{a,j} = 0, both checks held and no
-    open premise, 1,696 bits a phase of record, of the schedule's egress capacity of 4 lanes · 4 slots · 32 buckets of
-    512-byte cells a phase. eps is each phase's scan's 2^-64 and its charged audit's δ_i, never the answer's 1/2. Drawn
-    whole, its 16 proof blocks proved, the entries and its δ_i leave the bound. With a check open, each phase's figure
-    of record adds the run's advice cap ℓ_a + 1 = 2^23 + 1, 8,390,305 bits a phase drawn in part."""
+    """Monday's schedule with a toy tied audit: w63k4 at a 4 s tick over three execution phases, each phase's tied audit
+    one of 16 proof blocks (V3c's registration has millions) drawn subset:1 (charged), its draw read at δ_i = 2^-64
+    with a bound of 15 beside its answer's 8 at 1/2, so k_{skip,j} is its E_w = 896 slot-entry bits beside the
+    schedule's and the jitter's 800: with ℓ_{a,j} = 0, both checks held and no open premise, 1,696 bits a phase of
+    record, of the schedule's egress capacity of 4 lanes · 4 slots · 32 buckets of 512-byte cells a phase. eps is each
+    phase's scan's 2^-64 and its charged audit's δ_i, never the answer's 1/2. Drawn whole, every one of its proof
+    blocks proved, the entries and its δ_i leave the bound. With a check open, each phase's figure of record adds the
+    run's advice cap ℓ_a + 1 = 2^23 + 1, 8,390,305 bits a phase drawn in part."""
     sys.path.insert(0, str(HERE.parent.parent / "network_traces"))
     import scan_zk as SZ
     schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
