@@ -231,6 +231,18 @@ noncomputable def filesE {R : Type} (src : Msg → Flock.Wit → R → ℕ → V
     return (← recordOf src x w ρ h spec sts proofs, proofs)
   | none => .error "no session"
 
+/-- **What the workers see of the tape**: the nonce and each cell's part the device's level-0 commitment reads
+(`Masked.ExeSeen`). -/
+abbrev Seen : Type :=
+  (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (Fin Claims.Flock.zkTableCap → Masked.ExeSeen)
+
+/-- **The worker a release runs at a pad-blind worker** `bw`: handed what the workers see of the tape (`Masked.seenOf`)
+and the verifier's answers as coins (`CoinLayer.rd`). -/
+noncomputable def blind (L : LeanRelease Flock.Wit
+    ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
+    (bw : L.toSrv.BWorker Seen FlockDeploy.Coin) : L.toSrv.Worker :=
+  L.toSrv.lift Masked.seenOf CoinLayer.rd bw
+
 end Loop
 
 /-- `L₀` with the session loop's own `Finish` at the level-0 source `src`: its files `Loop.filesE` at `L₀`'s frame draws

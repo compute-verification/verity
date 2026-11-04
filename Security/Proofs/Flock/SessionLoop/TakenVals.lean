@@ -15,8 +15,9 @@ released word plus the pad (`Loop.valsOf`). The switched session at the deployed
 Masked.dataE`) masks the values `vs` gives at the opened coins the same way (`Masked.swSrcE_masked_pad_any`). This file
 states the switched session's side by pad index, as the firewall's words:
 
-* **`Loop.vsWord`**: table `j`'s rep `r` value `k` of `vs` at the opened coins, at the table's base on the tape (its
-  mask slot and extra lanes, which a table's values may read), as the firewall's word; `0` from `n_E` on.
+* **`Loop.vsWord`**: table `j`'s rep `r` value `k` of `vs` at the opened coins and what the workers see of the tape
+  (`RefSession.seenOf`, as the switched session reads `vs`), at the table's base on the tape (its mask slot and level
+  0's hiding, which a table's values may read), as the firewall's word; `0` from `n_E` on.
 * **`Loop.RowsOK`**: each table's rows hold at `vs` at its base, at every nonce, opened coins and tape at which none of
   the table's zerocheck outer coins is `1`. Where they fail the switched session commits its pads tree over the moved
   pads (`Table.swPads`), while the frame commits it over the drawn ones, so a rep's first round, which carries the pads
@@ -61,7 +62,7 @@ set_option smartUnfolding false in
 /-- **The rows at the honest values are the table's own**: where each rep's batched constraint holds at `w`'s view at
 every draw, the rows hold at `w` and the table's values. -/
 theorem rowsAt_vals {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
-    (T : Table F K W Salt Seed D Hi VL) (w : W) (u : T.Mask) (R : T.XLanes)
+    (T : Table F K W Salt Seed D Hi VL) (w : W) (u : T.Mask) (R : T.Vis)
     (h : ∀ (ω : T.Rand) (r : Fin 2),
       ∑ i, T.lam r (T.view w ω).pre i * T.hFull (ω.2.2.1 r) i = T.theta r (T.view w ω).pre) :
     T.onVals.RowsAt (w, T.vals) u R :=
@@ -79,15 +80,16 @@ open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 
 namespace Loop
 
-/-- **`vs`'s value at pad `k`** of table `j`'s rep `r`, at the opened coins `c` and at table `j`'s base on the tape `τ`
-(its mask slot and extra lanes), as the firewall's word; `0` from `n_E` on. -/
+/-- **`vs`'s value at pad `k`** of table `j`'s rep `r`, at the opened coins `c` and what the workers see of the tape `τ`
+(`RefSession.seenOf`), at table `j`'s base on `τ` (its mask slot and level 0's hiding), as the firewall's word; `0`
+from `n_E` on. -/
 noncomputable def vsWord (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit)
     (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (k : ℕ) :
     _root_.Flock.F128 :=
   if hk : k < (tabC PE x j).z.nE then
-    FlockLevel3.GF128.val (vs x w ν c j r (wtOf PE x w j)
+    FlockLevel3.GF128.val (vs x w ν c ((CoinLayer.session Loop.loopNr Masked.dataE).seenOf x τ) j r (wtOf PE x w j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 ⟨k, hk⟩)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1 ⟨k, hk⟩)
   else 0
 
 /-- **The rows hold at `vs`**: at every nonce, opened coins and tape, at each table none of whose zerocheck outer coins
@@ -97,9 +99,10 @@ honest values (`rowsOK_honestVals`). -/
 def RowsOK (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit) : Prop :=
   ∀ (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)),
     (∀ (r : Fin 2), ∀ y ∈ (tabC PE x j).rOuter (czExe PE x c j) r, y ≠ 1) →
-    ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, vs x w ν c j)
+    ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt
+      (wtOf PE x w j, vs x w ν c ((CoinLayer.session Loop.loopNr Masked.dataE).seenOf x τ) j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1
 
 /-- **The rows hold at the honest values** at every witness in the deployed relation: each table's share is valid
 (`complete_tabC`), so it carries the public region data (`coinedOf_reg_of`), and the honest pads satisfy each rep's
@@ -171,9 +174,9 @@ def TakesFinalC (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
 theorem swSrcE_masked_vsWord (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit)
     (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) {k : ℕ}
     (hk : k < (tabC PE x j).z.nE) :
-    ((swSrcE x c w (vs x w ν c) τ j.val).rep r.val).masked k =
+    ((swSrcE x c w (vs x w ν c ((CoinLayer.session Loop.loopNr Masked.dataE).seenOf x τ)) τ j.val).rep r.val).masked k =
       vsWord vs x w ν c τ j r k + (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j)).h[k]! := by
-  rw [swSrcE_masked_pad_any x c w (vs x w ν c) τ j r hk]
+  rw [swSrcE_masked_pad_any x c w (vs x w ν c ((CoinLayer.session Loop.loopNr Masked.dataE).seenOf x τ)) τ j r hk]
   unfold vsWord
   split
   · rfl
@@ -184,7 +187,7 @@ the switched source's (`Masked.swSrcE`), which where the rows hold commits the w
 noncomputable def vsTau (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit)
     (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) :
     ByteArray :=
-  ((swSrcE x c w (vs x w ν c) τ j.val).rep r.val).tauCom
+  ((swSrcE x c w (vs x w ν c ((CoinLayer.session Loop.loopNr Masked.dataE).seenOf x τ)) τ j.val).rep r.val).tauCom
 
 set_option smartUnfolding false in
 /-- The switched source's `τ` commitment is a SHA-512 digest at any values. -/
@@ -202,7 +205,7 @@ theorem swSrcE_tauCom_size (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w 
 theorem vsTau_size (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit)
     (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) :
     (vsTau vs x w ν c τ j r).size = 64 :=
-  swSrcE_tauCom_size x c w (vs x w ν c) τ j r
+  swSrcE_tauCom_size x c w (vs x w ν c ((CoinLayer.session Loop.loopNr Masked.dataE).seenOf x τ)) τ j r
 
 end Loop
 
