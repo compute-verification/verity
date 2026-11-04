@@ -273,17 +273,39 @@ end Positions
 
 /-! ## The key program -/
 
+theorem uniform_perUnit (k : ℕ) (R : Rows) (ins : ℕ → ℕ → ℕ) (one : ℕ) :
+    ∀ n, (uniform k R ins one n).perUnit = R.nComp
+  | 0 => rfl
+  | n + 1 => by simp only [uniform, KeyProg.snoc]; exact uniform_perUnit k R ins one n
+
+/-- `uniform`'s unit `u`'s column `c`: an input column on gate `ins u c`, a computed column on the unit's own row after
+the `k` inputs and the units before it, the constant on gate `one` (`KeyProg.snoc`'s). -/
+def uniformCol (k : ℕ) (R : Rows) (ins : ℕ → ℕ → ℕ) (one u c : ℕ) : ℕ :=
+  if c < R.nIn then ins u c else if c < R.nIn + R.nComp then k + u * R.nComp + (c - R.nIn) else one
+
+/-- **`uniform`'s rows** as one formula over its `n` units, unit `u`'s on `uniformCol`. -/
+theorem uniform_rows (k : ℕ) (R : Rows) (ins : ℕ → ℕ → ℕ) (one : ℕ) :
+    ∀ n, (uniform k R ins one n).rows = ((List.range n).flatMap fun u => (List.range R.nComp).map fun i =>
+      ((R.a.getD i []).map (uniformCol k R ins one u), (R.b.getD i []).map (uniformCol k R ins one u))).toArray
+  | 0 => rfl
+  | n + 1 => by
+    have hN : (uniform k R ins one n).size = k + n * R.nComp := by
+      simp only [KeyProg.size, uniform_inputs, uniform_rows_size]
+    simp only [uniform, KeyProg.snoc, hN, uniform_rows k R ins one n, range_add_one, List.flatMap_append,
+      List.flatMap_singleton, List.append_toArray] <;> rfl
+
 /-- The stacked rows' inputs: a unit's source gates. -/
 def srcs (c : Flock.Circuit) : ℕ := ((Rows.ofNet c.unit).stack c.upv).nIn
 
-theorem keyProg_inputs (c : Flock.Circuit) (n : ℕ) : (keyProg c n).inputs = 2 + n * srcs c := rfl
+theorem keyProg_inputs (c : Flock.Circuit) (n : ℕ) : (keyProg c n).inputs = 2 + n * srcs c :=
+  SampledProofs.Bits.keyProg_inputs c n
 
 theorem keyProg_perUnit (c : Flock.Circuit) (n : ℕ) :
-    (keyProg c n).perUnit = ((Rows.ofNet c.unit).stack c.upv).nComp := rfl
+    (keyProg c n).perUnit = ((Rows.ofNet c.unit).stack c.upv).nComp := by
+  simp only [keyProg, uniform_perUnit]
 
 theorem keyProg_size_rows (c : Flock.Circuit) (n : ℕ) : (keyProg c n).rows.size = n * (keyProg c n).perUnit := by
-  simp only [keyProg, List.size_toArray, List.length_flatMap, List.length_map, List.length_range]
-  exact sum_range_const n _
+  rw [SampledProofs.Bits.keyProg_rows_size, keyProg_perUnit]
 
 theorem two_le_length (c : Flock.Circuit) (n : ℕ) (κ : ℕ → Option Bool) : 2 ≤ (prog (keyProg c n) κ).1.length := by
   have h2 : 2 ≤ (keyProg c n).inputs := by rw [keyProg_inputs]; omega
@@ -309,7 +331,8 @@ theorem keyProg_rows (c : Flock.Circuit) (n : ℕ) :
     (keyProg c n).rows = ((List.range n).flatMap fun u =>
       (List.range ((Rows.ofNet c.unit).stack c.upv).nComp).map fun i =>
         ((((Rows.ofNet c.unit).stack c.upv).a.getD i []).map (wireOf c n u),
-          (((Rows.ofNet c.unit).stack c.upv).b.getD i []).map (wireOf c n u))).toArray := rfl
+          (((Rows.ofNet c.unit).stack c.upv).b.getD i []).map (wireOf c n u))).toArray := by
+  simp only [keyProg, uniform_rows] <;> rfl
 
 /-- **Unit `u`'s row `i`** is the stacked rows' row `i` on `wireOf`. -/
 theorem keyProg_row? (c : Flock.Circuit) {n u i : ℕ} (hu : u < n) (hi : i < (keyProg c n).perUnit) :
