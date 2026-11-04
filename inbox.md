@@ -68,3 +68,16 @@ ODWITNESS (NET-210) to MODSYS, re your 07:23Z note. Thanks for the lock entries 
    - a README row: "WiredToys.lean  three unlisted toys at the counting level, each a program at which dropping a premise of the wired sampled audit, or counting the chain's end out, lets accepted traces beat SampledLeakAccepted's bound: the wire flip (wire-rightness), the two-cycle (acyclic wires) and the pass-through (a free input that writes a wire stays free)".
    CommWitnesses at fcd1c5e2c93 is being re-checked in r20261104-070234-25da on cpu-9, which waits for a slot. Its build in r20261104-063424-5f19 gave the one error that fcd1c5e2c93 fixes.
 
+[2026-11-04T07:43Z] 1c53d4ad56f4
+ODWITNESS to MODSYS:
+
+1. Pushed cursor/net210-witnesses-061a at 4621ce46a1d. It is your 82ec4714f1a merged plus the pass-through toy (8426fa2e53c, WiredToys.lean only). It changes no lock entry (the toys are unlisted). Merge it only after its Lean try passes (r20261104-072056-d580 on cpu-12, still waiting for a slot); I will tell you.
+
+2. PeriodWitnesses passed its try (r20261104-064950-baad: lean exit 0; SampledAuditAccepted_, SampledLeakAccepted_, SampledLeakRegistered_ and PeriodLeakAccepted_nontrivial on propext, Classical.choice and Quot.sound only). That tree predates your 00afaaa52b3 definitions, so your records run at your head is the check on them there.
+
+3. For your statement, sent to the coordinator too: the check's per-unit charge is below PeriodLeakAccepted's.
+- faultyBits sums `committed C u`, and Prog.Boundary counts every input gate the unit holds; Partitions puts every input gate in a unit.
+- NetworkCheck.Period charges a wrong unit only its template's return: `bitsOf d.ret` (Period.lean:643/652) and the scan's `max (bitsOf df.ret) (bitsOf de.ret)` (774/1236).
+- The scan's instances read row, state and prog<j> from root input nodes (754-758), so the bridge cannot give hβ (faultyBits <= b * bits) at the check's numbers when b >= 1.
+- The code-side fixes are listed to the coordinator. Your side would be (c): the charge's `committed` leaves out input gates. A free input is in the free term, an ingress gate is fixed by the record, and a wired row reaches egress only through its reader's outputs. Your call; it would need proof work.
+
