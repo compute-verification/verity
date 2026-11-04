@@ -394,8 +394,8 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
 
     s, circuit, refuse = _served(tmp_path, monkeypatch), _registered_circuit(), []
 
-    def lower(registered, compiled, cls):
-        assert cls == WC.CLASS_OF_RECORD and compiled.requests
+    def lower(registered, compiled, cls, tables=None):
+        assert cls == WC.CLASS_OF_RECORD and compiled.requests and tables is None
         if refuse:
             raise Unexpressible("a family the window's lowering doesn't take")
         return circuit

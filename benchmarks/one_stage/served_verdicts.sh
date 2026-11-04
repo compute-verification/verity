@@ -601,7 +601,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     --firewall "$leanb/flock-firewall" --ports "$ports" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
   rc=$?
   cp "$VW/audit/summary.json" "$OUT/v3c-audit/" 2>/dev/null
-  [ "${#tie[@]}" = 0 ] || say "V3C-TIE: $(grep -m1 '^TIE ' "$OUT/v3c-audit/audit.log" | "$PY" -c 'import json, sys
+  [ -z "$PEARLPLUS_TIE" ] || say "V3C-TIE: $(grep -m1 '^TIE ' "$OUT/v3c-audit/audit.log" | "$PY" -c 'import json, sys
 line = sys.stdin.read()
 if not line.startswith("TIE "):
     sys.exit("no TIE line: the audit stopped before it read its records tied to W (v3c-audit/audit.log)")
