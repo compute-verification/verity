@@ -150,7 +150,9 @@ other quantity bits. A gate is any of AND, XOR and NOT, so a count is about 3x i
 `frontier` gives, per start, target and cell, W\*, H and S with W\*'s route and its x₀ and s\* bounds and best-known
 values; `plots` writes five panels (P1-P4 and the A2 curve, the least |C| to each target against Δ, per start), each
 `<name>.json` and its PNG, which are off the console; `console` cuts each to the panels route's limits and holds one
-panel's PUT; `rescore` scores v2.3's records in one command, on the measured quantities beside the analysis's (module
+panel's PUT, which it refuses where a trace the ledger shares among a run's records (`ledger.shared_trace`: one object
+for each distinct trace) was changed in place after it was read (`ledger.changed_traces`); `rescore` scores v2.3's
+records in one command, on the measured quantities beside the analysis's (module
 docstring). The console's training panels, `training/algorithm-policy` and `training/frontier-fit`, are both PUT by
 `python -m te_core.algorithm_policy --out DIR --publish`. They read the ledger and the quantities through `rescore`'s
 loading (`rescore.arguments`, `rescore.load`), so they score the measured quantities unless told otherwise
