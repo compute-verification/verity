@@ -1,0 +1,4 @@
+{
+"model.layers.0.self_attn.q_proj.weight": "absmax",
+"model.layers.0.self_attn.k_proj.weight": "absmax"
+}

@@ -142,7 +142,8 @@ def ppls(model, wt_ids, val_ids, args, spec: str) -> dict:
     if "wikitext2" in args.ppl_sets:
         out["wikitext2"] = perplexity(model, wt_ids, args.seq)
     if "fineweb_val" in args.ppl_sets:
-        out["fineweb_val"] = perplexity(model, val_ids, args.seq, max_windows=args.val_tokens // args.seq)
+        out["fineweb_val"] = perplexity(model, val_ids[args.val_skip * args.seq:], args.seq,
+                                        max_windows=args.val_tokens // args.seq)
     return out
 
 
@@ -199,6 +200,8 @@ def main(argv=None) -> int:
     ap.add_argument("--eval-every", type=int, default=100)
     ap.add_argument("--val-tokens", type=int, default=1_048_576)
     ap.add_argument("--ppl-sets", default="wikitext2,fineweb_val", help="the perplexity sets to measure")
+    ap.add_argument("--val-skip", type=int, default=0, help="FineWeb-Edu val windows to skip first (a model too slow "
+                    "for one lease measures --val-tokens in parts and sums their nll)")
     ap.add_argument("--data", type=Path, default=Path(os.environ.get("HU_DATA", "data")))
     ap.add_argument("--tasks", default=TASKS, help="lm-eval tasks, comma-separated; empty for perplexity only")
     ap.add_argument("--zs-batch", type=int, default=64)
