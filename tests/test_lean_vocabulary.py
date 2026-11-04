@@ -404,7 +404,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 414
+KNOWN_MAX = 418
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -823,6 +823,8 @@ KNOWN: dict[str, str] = {
         "homonym, one sampling block's charge: rename (network-accounting)",
     "verity/core/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
         "homonym, how a profile level is drawn: rename (proofs)",
+    "verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record":
+        "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes a reading of it (proofs)",
     "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Card":
         "duplicate of `Verity.Accel.Card`: becomes a reading of it (soundness)",
     "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Link":
@@ -969,6 +971,8 @@ KNOWN: dict[str, str] = {
     "verity/core/service/flock/Flock/Layout.lean::Flock.Layout": "homonym, C-Flock's block-type layout: rename (proofs)",
     "verity/core/service/flock/Flock/Program.lean::Flock.Program.Node":
         "homonym, a circuit program's node: rename (proofs)",
+    "verity/core/service/flock/Flock/RecLinks.lean::Flock.RecLinks.Link":
+        "homonym, a recursion link from a reader to a port: rename (proofs)",
     "verity/core/service/flock/Flock/RecRecord.lean::Flock.RecRecord.Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes the challenger's live-coin entries (proofs)",
     "verity/core/service/flock/VStar/In.lean::VStar.In.Opening": "homonym, a Ligerito opening: rename (proofs)",
@@ -1002,6 +1006,8 @@ KNOWN: dict[str, str] = {
     "verity/ml/flock/pod/gf2.py::Circuit": "homonym, a pod prover's GF(2) gate recorder: rename (proofs)",
     "verity/ml/flock/python/verity_flock/firewall_transcript.py::Session":
         "homonym, one inner proof through the firewall: rename (proofs)",
+    "verity/ml/flock/python/verity_flock/rec_links.py::Link":
+        "homonym, a recursion link from a reader to a port, `Flock.RecLinks.Link`'s pair: rename (proofs)",
     "verity/ml/windows/interface.py::Circuit":
         "duplicate of `Flock.Circuit`: becomes a reading of it in proof blocks (proofs)",
     "verity/ml/windows/interface.py::Opening": "homonym, a template's open read of a table row: rename (proofs)",
