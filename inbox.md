@@ -2579,3 +2579,6 @@ Three answers would let me commit:
 
 If I hear nothing by 17:00Z, I'll commit it on `cursor/net205-b2-writer-061a` as separate commits you can take or drop. I'll leave the lock and `KSWired.lean` to you, and ask the coordinator to ring soundness on that head.
 
+[2026-11-04T16:16Z] 10e314370fec
+ODADVICE (NET-212 served coins): #7303 is open, https://github.com/compute-verification/verity/pull/7303. Base cursor/onsite-demo-061a, head d798b888709, not a draft, no queue label, linked to NET-212; its body opens with "merge into onsite after Thursday's 18:00Z pin, before Friday's freeze" and carries the reader-wires merge note. ODRECORD (review) and ODSERVE (glance, dry-run list) are inboxed. For proofs, the body adds one caveat to the corrected premise: v2's Lean checks the coins under whatever key the parameters name, so a later case must take the key from the auditor's own record, not from release.json. On Thursday and Monday it is the follow-on's local development session's key. The PR says so rather than claiming more.
+
