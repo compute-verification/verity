@@ -23,10 +23,10 @@ What the record takes beside v2's acceptance:
   the evidence's;
 * `LiveCoins`: live-verifier at the draw (v2's coins are the draw rounds' coins' first bytes) and at the session, as at
   the recursive session (`Verity.Recursive.LiveCoins`);
-* `Fits`: the session's statement fits its 8-byte length words. v2 refuses a file or a draw its statement can't hold
-  (`fitsWhy`, `drawFitsWhy`), but the run's draw file is the prover's bytes, which v2 reads only as the JSON they parse
-  to, so its acceptance doesn't give this of them;
-* `drawOk` at the run's draw file: its units are the coins' draw and its session has the statement's numbers.
+* `drawOk` at the run's draw file: its units are the coins' draw, its session has the statement's numbers, and its
+  statement fits its 8-byte length words (`Fits`). v2 refuses a file or a draw its statement can't hold (`fitsWhy`,
+  `drawFitsWhy`), which bounds every length but three (`lengths_of_accepts`, `fits_of_accepts`): the run's draw file
+  and `o`'s partition object and registered file, which v2 reads only as the JSON they parse to.
 -/
 
 namespace Verity.Sampled.Record
@@ -127,11 +127,6 @@ def LiveCoins (A : Live) (o : Own) (ξ : ByteArray) (v : Seen) (cs : List Coin) 
     FlockDeploy.act true (sessStmt A o (drawOf v)) ((v.msgs.map Prod.fst).drop (DRAW_ROUNDS + 1))
         (cs.drop (DRAW_ROUNDS + 1)) = .decide si spec sts link c₁ mids f →
       (do FlockDeploy.custody spec (← FlockDeploy.liveOf spec f.record) link c₁ mids : Flock.V Unit) = .ok ()
-
-/-- **The session's statement at the draw file `d` fits its length words**: every file's size and the draw file's
-under `2^64`, as `FlockDeploy.Raw.encode`'s 8-byte words hold them. -/
-def Fits (A : Live) (o : Own) (d : Msg) : Prop :=
-  Verity.Recursive.Part.RawFits { baseRaw A o with draw := some ⟨d.toArray⟩ }
 
 /-! ## The run's walk -/
 
@@ -380,7 +375,6 @@ theorem lengths_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt 
   unfold _root_.SampledProofs.OneStageZk.fitsWhy at hf'
   try rw [hW] at hf'
   split_ifs at hf' with h1 h2 h3 h4 h5 h6 h7
-  all_goals first | (cases hf'; done) | skip
   refine ⟨Nat.lt_of_not_le h1, Nat.lt_of_not_le h2, Nat.lt_of_not_le h3, ?_, ?_, ?_, ?_⟩
   · intro t ht
     have hno : ¬ (decide (2 ^ 64 ≤ t.1.utf8ByteSize) || decide (2 ^ 64 ≤ t.2.size)) = true :=
@@ -545,9 +539,7 @@ theorem readOf_sess {d : Msg} (hfits : Fits A o d) {r : Flock.Readable.Read}
   | ok s' =>
     rw [hi] at hs
     cases hs
-    first
-      | exact ⟨_, rfl, rfl⟩
-      | exact ⟨_, hi, rfl⟩
+    exact ⟨_, rfl, rfl⟩
 
 /-- **flock-verify reads the session's statement as v2's inputs**: where the session's statement at the draw file `d`
 fits its length words and flock-verify `--zk` reads it as `r`, `r` is `ins_sess`'s reading: v2's inputs at `A`
@@ -641,8 +633,8 @@ theorem setupAt_of_verdictOf {I : Flock.Witness.Inputs} {scope ksFiles : Flock.V
 
 /-- **v2's acceptance is the record's verifier's**, at a run whose draw file round keeps its draw file: where
 one-stage v2 accepts on the blobs `bs` reading `A`'s and `o`'s inputs (`Names`), the run of the record's verifier
-against `sha512` accepts, given that the blobs show the run's session (`Shows`), live-verifier at it (`LiveCoins`), its
-statement fits its length words (`Fits`), and the draw file round keeps the run's draw file (`drawOk`). -/
+against `sha512` accepts, given that the blobs show the run's session (`Shows`), live-verifier at it (`LiveCoins`), and
+the draw file round keeps the run's draw file (`drawOk`, whose statement then fits its length words). -/
 theorem acc_of_pass (A : Live) (o : Own) {p : _root_.SampledProofs.OneStageZk.Params}
     {c : _root_.SampledProofs.OneStage.Commitment} {ev : _root_.SampledProofs.OneStageZk.Evidence} {bs : Core.Blobs}
     {ξ : ByteArray} {pub : _root_.SampledProofs.OneStage.Public} {prof : Core.Integrity}
@@ -651,9 +643,9 @@ theorem acc_of_pass (A : Live) (o : Own) {p : _root_.SampledProofs.OneStageZk.Pa
     (hshow : Shows A o ev bs (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen)
     (hlive : LiveCoins A o ξ (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen
       ((List.range (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.length).map (coinSeq r)))
-    (hfits : Fits A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen))
     (hpass : drawOk A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen) (coinsAt r)) :
     (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).out = .acc := by
+  have hfits := fits_of_drawOk hpass
   obtain ⟨s, rd, B, record, ksFiles, hs, hpl, hrd, hB, hu, hv⟩ := verdict_of_accepts hacc hn
   have hreach := reach FlockDeploy.sha512 P ω r hpass
   have hsm : (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen.msgs =

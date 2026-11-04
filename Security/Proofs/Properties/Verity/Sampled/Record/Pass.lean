@@ -158,8 +158,8 @@ theorem units_of_pass (A : Live) (o : Own) {b : ByteArray} {p : _root_.SampledPr
 and `o`'s inputs (`Names`), with the verifier's law read over `A`'s population as `A`'s (`lawAt`), at a run whose draw
 file the blobs show (`Shows`) and whose draw rounds' coins begin with `ξ` (`LiveCoins`' first half), where the run's
 draw file and `o`'s partition object and registered file are each under `2^64` bytes, the draw file round keeps the
-run's draw file (`drawOk`): it proves the units the draw rounds' coins draw, and its session sets up one table of `A.kd`
-units, so it has the statement's numbers. -/
+run's draw file (`drawOk`): it proves the units the draw rounds' coins draw, its session sets up one table of `A.kd`
+units, so it has the statement's numbers, and its session's statement fits its length words (`fits_of_accepts`). -/
 theorem pass_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.SampledProofs.OneStageZk.Params}
     {c : _root_.SampledProofs.OneStage.Commitment} {ev : _root_.SampledProofs.OneStageZk.Evidence} {bs : Core.Blobs}
     {ξ : ByteArray} {pub : _root_.SampledProofs.OneStage.Public} {prof : Core.Integrity}
@@ -175,7 +175,7 @@ theorem pass_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Sampled
     drawOk A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen) (coinsAt r) := by
   have hfits := fits_of_accepts hacc hn hd hpart hreg
   have hu := units_of_pass A o he hacc hn hlaw P ω r hshow hlive
-  refine ⟨hu, numsOk_of_refOk ?_⟩
+  refine ⟨hu, numsOk_of_refOk ?_, hfits⟩
   obtain ⟨s, rd, B, record, ksFiles, hs, hpl, hrd, hB, hutf, hv⟩ := verdict_of_accepts hacc hn
   have h64 := reach_draw FlockDeploy.sha512 P ω r
   have hsm : (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen.msgs =
@@ -202,10 +202,7 @@ theorem pass_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Sampled
   unfold Flock.HmIn.drawn at hdr
   obtain ⟨D, hD, -, hnD, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec hdr
   rw [hdraw.symm.trans hsd] at hlawc
-  first
-    | rw [if_pos Option.isSome_some] at hlawc
-    | rw [if_pos rfl] at hlawc
-    | simp only [Option.isSome_some, ↓reduceIte] at hlawc
+  rw [ite_eq_left Option.isSome_some] at hlawc
   have hX : _root_.Properties.SampledProofs.Units.unitsAt A.pub.header (Flock.norm J) =
       some ((drawn A (drawBytes (coinsAt r))).toArray.qsort (· < ·)) := by
     have h := hu

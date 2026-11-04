@@ -100,30 +100,23 @@ theorem getD_of_arr {j : Json} {k ctx : String} {a : Array Json} (h : Flock.J.ar
     cases v <;> first
       | (cases h; rfl)
       | cases h
-      | (simp only [Lean.Json.getArr?, pure, Except.pure, Except.ok.injEq] at h; subst h; rfl)
-      | (simp [Lean.Json.getArr?] at h; subst h; rfl)
-      | simp [Lean.Json.getArr?, throw, throwThe, MonadExceptOf.throw] at h
   rw [← hva]
   simp only [_root_.SampledProofs.getD, _root_.SampledProofs.field?, hg, Except.toOption, Option.getD_some]
 
 /-- **A draw file's units, as v2 credits them, are as many as its draw's**: `unitsAt` reads one unit per entry of the
 draw's `units` field, which `UnitDraw.ofJson` reads as its units. -/
-theorem unitsAt_size {h j : Json} {X : Array ℕ} {D : Flock.Draw.UnitDraw}
-    (hu : _root_.Properties.SampledProofs.Units.unitsAt h j = some X) (hD : Flock.Draw.UnitDraw.ofJson j = .ok D) :
-    X.size = D.units.size := by
+theorem unitsAt_size {h j : Json} {xs : Array ℕ} {D : Flock.Draw.UnitDraw}
+    (hu : _root_.Properties.SampledProofs.Units.unitsAt h j = some xs) (hD : Flock.Draw.UnitDraw.ofJson j = .ok D) :
+    xs.size = D.units.size := by
   obtain ⟨⟨a, ha, hm⟩, -, -⟩ := FlockSoundness.Discharge.Composed.ofJson_shape hD
   have hga := getD_of_arr ha
   unfold _root_.Properties.SampledProofs.Units.unitsAt at hu
   split at hu
   · rw [hga] at hu
     try dsimp only at hu
-    first
-      | (obtain ⟨us, hus, hX⟩ := Option.bind_eq_some_iff.1 hu
-         cases hX
-         rw [_root_.Properties.SampledProofs.size_qsort, size_mapM_option hus, size_mapM_except hm])
-      | (simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hu
-         obtain ⟨us, hus, rfl⟩ := hu
-         rw [_root_.Properties.SampledProofs.size_qsort, size_mapM_option hus, size_mapM_except hm])
+    obtain ⟨us, hus, hX⟩ := Option.bind_eq_some_iff.1 hu
+    cases hX
+    rw [_root_.Properties.SampledProofs.size_qsort, size_mapM_option hus, size_mapM_except hm]
   · cases hu
 
 /-- **The coins draw `A.kd` units** where the draw ends: `A`'s law is on its strata and draws `A.kd` (`Live.hlaw`). -/
@@ -153,7 +146,7 @@ theorem proved_of_drawLaw {T : Flock.Tags} {J : Json} {D : Flock.Draw.UnitDraw}
       | work K ws => simp [Flock.ProvedScope.lawWhy, hl] at hw
     unfold Flock.Draw.UnitDraw.proved
     rw [hcl]
-    all_goals first | rfl | simp
+    rfl
 
 /-! ## The session statement's one table -/
 
@@ -231,14 +224,13 @@ theorem nums_congr {d d' : Msg} {s s' : Ins} {t t' : Flock.Stmt}
   obtain ⟨u, pi, _pop, B, -, hst, hpar, hpi, hB, hreg, hm, -, -⟩ := shape_sess hins (FlockDeploy.setupOf_some hset).2
   obtain ⟨u', pi', _pop', B', -, hst', hpar', hpi', hB', hreg', hm', -, -⟩ :=
     shape_sess hins' (FlockDeploy.setupOf_some hset').2
-  have htu : t = u := by first | exact Array.singleton_inj.1 hst | simpa using hst | (cases hst; rfl)
-  have htu' : t' = u' := by first | exact Array.singleton_inj.1 hst' | simpa using hst' | (cases hst'; rfl)
+  have htu : t = u := Array.singleton_inj.1 hst
+  have htu' : t' = u' := Array.singleton_inj.1 hst'
   rw [← htu] at hpar hpi hB hreg hm
   rw [← htu'] at hpar' hpi' hB' hreg' hm'
   have eT : s.read.tags = s'.read.tags := by
     rw [Verity.Recursive.Numbers.read_tags_of hins rfl, Verity.Recursive.Numbers.read_tags_of hins' rfl,
       stmtTags_sess hins, stmtTags_sess hins']
-    all_goals rfl
   have eC : s.read.I.circuitFile = s'.read.I.circuitFile :=
     (Verity.Recursive.Numbers.raw_ins_files hins).1.trans (Verity.Recursive.Numbers.raw_ins_files hins').1.symm
   have eTb : s.read.I.tables = s'.read.I.tables :=

@@ -3,6 +3,7 @@ import Proofs.Flock.Claims.Sampling.Session
 import Proofs.Flock.Claims.Sampling.Deployed
 import Proofs.Flock.Bridge.LeafMap
 import Proofs.Properties.SampledProofs.Units
+import Proofs.Properties.Verity.Recursive.PartStatement
 
 /-!
 # One-stage v2's audit at a session, as a sampling record
@@ -15,7 +16,8 @@ public-coin form (`V`), with what the sampling claims read of it (`code`, `recor
   of draw coins, whose bytes (`drawBytes`) are the challenger's `MAX_COINS · COIN_BYTES` bytes v2's draw may read; one
   round in which the prover sends the session's draw file `d`, which the verifier keeps only when its units are the ones
   the coins draw (`drawOk`: `provedOf`, as v2 credits a session's units, against `drawn`, as v2's challenger draw reads
-  the coins) and its session has the statement's numbers (`numsOk`); then the one session, flock-verify `--zk` in
+  the coins), its session has the statement's numbers (`numsOk`) and its statement fits its length words (`Fits`, as v2
+  refuses a length a session's statement can't hold); then the one session, flock-verify `--zk` in
   public-coin form (`FlockDeploy.V true`) at the session's statement `sessStmt A o d`. Every other statement is refused.
 * **The session's numbers are the statement's**: the sampling record fixes each checked unit's session rounds by the
   statement, so the verifier holds the session's round count and `N₀` to those at a reference draw file (`d₀`, one
@@ -111,10 +113,19 @@ def numsOk (A : Live) (o : Own) (d : Msg) : Prop := Nums (sessStmt A o d) = Nums
 /-- The session's rounds the statement fixes. -/
 noncomputable def kS (A : Live) (o : Own) : ℕ := (FlockDeploy.V true).k (xS₀ A o)
 
-/-- **The draw file round's check**: the draw file proves exactly the units the draw coins `cs` draw, and its session
-has the statement's numbers. -/
+/-- **The session's statement at the draw file `d` fits its length words**: every file's size and the draw file's
+under `2^64`, as `FlockDeploy.Raw.encode`'s 8-byte words hold them. -/
+def Fits (A : Live) (o : Own) (d : Msg) : Prop :=
+  Verity.Recursive.Part.RawFits { baseRaw A o with draw := some ⟨d.toArray⟩ }
+
+/-- **The draw file round's check**: the draw file proves exactly the units the draw coins `cs` draw, its session
+has the statement's numbers, and its statement fits its length words. -/
 def drawOk (A : Live) (o : Own) (d : Msg) (cs : List FlockDeploy.Coin) : Prop :=
-  provedOf A d = some ((drawn A (drawBytes cs)).toArray.qsort (· < ·)) ∧ numsOk A o d
+  provedOf A d = some ((drawn A (drawBytes cs)).toArray.qsort (· < ·)) ∧ numsOk A o d ∧ Fits A o d
+
+/-- **A kept draw file fits its statement's length words.** -/
+theorem fits_of_drawOk {A : Live} {o : Own} {d : Msg} {cs : List FlockDeploy.Coin} (h : drawOk A o d cs) : Fits A o d :=
+  h.2.2
 
 open Classical in
 /-- **The verifier's step at the record's statement**: a draw round answers its coin; the draw file round answers `[]`
