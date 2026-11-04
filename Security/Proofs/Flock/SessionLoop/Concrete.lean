@@ -162,7 +162,7 @@ open RecDeploy.VStarNets (netLs)
 theorem parse_builds {name : String} {l : HmNets.Laid} {useful : ℕ} {ig og : Group} {w : ℕ} (hw : ConcreteNet.Tok name)
     (hb : Builds name l useful ig og w) :
     Net.parse (netLs name l).toArray = .ok (built name useful ig og w (sparseOf l.ra) (sparseOf l.rb)) := by
-  obtain ⟨hra, hrb, h⟩ := hb
+  obtain ⟨hra, hrb, h, -⟩ := hb
   have h' : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb =
       .ok (built name useful ig og w (sparseOf l.ra) (sparseOf l.rb)) := h
   have hu : useful = l.useful := (Net.ofRows_ok h').2.2.2.1
@@ -189,7 +189,7 @@ theorem fixedNets_parse (hn : FixedNetsBuild) :
       Net.parse (netLs "sha512x3" (HmNets.shaLaid ())).toArray = .ok shaNet) ∧
     HmNets.netOf "hm96" (HmNets.hmLaid ()) = .ok hmNet ∧
       Net.parse (netLs "hm96" (HmNets.hmLaid ())).toArray = .ok hmNet :=
-  ⟨⟨hn.1.2.2, parse_builds sha_tok hn.1⟩, hn.2.2.2, parse_builds hm_tok hn.2⟩
+  ⟨⟨hn.1.2.2.1, parse_builds sha_tok hn.1⟩, hn.2.2.2.1, parse_builds hm_tok hn.2⟩
 
 end FlockDeploy
 
