@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Game.Prob
-import Definitions.Accounting.TS.ProofLayer
+module
+
+public import Proofs.Flock.Soundness.Game.Prob
+public import Definitions.Accounting.TS.ProofLayer
 
 /-!
 # The bridge's probability steps, over any family of sessions
@@ -14,6 +16,8 @@ sessions, with no C-Flock definition:
 * `soundAt_of_sessions`: `SoundAt` at `δo + δ` when each unsound proof is off (probability at most `δo`) or its
   session's outcome is in a bad event of probability at most `δ` in every session it runs.
 -/
+
+@[expose] public section
 
 namespace Flock.SoundAtBridge
 

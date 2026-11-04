@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.ExePlan
-import Proofs.Flock.Claims.ZK.Stopped
+module
+
+public import Proofs.Flock.Claims.ZK.ExePlan
+public import Proofs.Flock.Claims.ZK.Stopped
 
 /-!
 # The deployed masked session's open premises, as statements
@@ -22,6 +24,8 @@ statements below; each is a `Prop`, proved on its own.
 `h0`, `ho`, `hr` and `hp` hold by construction (`encExe_zero`, `outerReads_czExe`, `coinReads_czExe`,
 `pointReads_czExe`); `hstep` is `PrefixLive` and `SimSession` at `c = padOps ops`, `n = ops.length`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

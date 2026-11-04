@@ -1,9 +1,11 @@
-import Proofs.Flock.Recursive.Flock
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-import Mathlib.Data.Fintype.EquivFin
+module
+
+public import Proofs.Flock.Recursive.Flock
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+public import Mathlib.Data.Fintype.EquivFin
 
 /-!
 # Recursion: V*'s sessions as the prover supplies them (gap 8)
@@ -27,6 +29,8 @@ builds them from the raw ones and carries the prover's strategy across:
   rounds. Where every session at a registration types, the sessions are the same game (`sessions_zsOf`) and the
   strategy is cast (`sessT`); elsewhere it is any strategy, and the raw event is empty there (`Loads`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

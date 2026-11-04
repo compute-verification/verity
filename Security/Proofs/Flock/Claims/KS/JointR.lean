@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ZkLiveW
+module
+
+public import Proofs.Flock.Claims.KS.ZkLiveW
 
 /-!
 # One wait's bound from every table's bound, the escapes counted per round
@@ -14,6 +16,8 @@ deployed masked verifier is KS from every table's bound counted per round (`Floc
 so from the live sessions' bound off the table on a witness lane where some run accepts and `ExtendJ`
 (`FlockDeploy.KS.zk_KS_of_liveAccWJ`).
 -/
+
+@[expose] public section
 
 namespace Claims
 

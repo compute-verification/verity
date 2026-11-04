@@ -2,9 +2,13 @@
 Level 3, L3-F (PROTOCOL.md §2.1, §17.4 stage 2): the bits of a natural number as a polynomial over GF(2). XOR is addition,
 a left shift is multiplication by a power of `X`, and a number split at bit `w` is `X^w · high + low`.
 -/
-import Mathlib.Algebra.Polynomial.Div
-import Mathlib.Data.ZMod.Basic
-import Mathlib.Data.Nat.Bitwise
+module
+
+public import Mathlib.Algebra.Polynomial.Div
+public import Mathlib.Data.ZMod.Basic
+public import Mathlib.Data.Nat.Bitwise
+
+@[expose] public section
 
 open Polynomial
 

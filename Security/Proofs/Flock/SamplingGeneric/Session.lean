@@ -1,10 +1,12 @@
-import Definitions.Claims.SamplingGeneric
-import Proofs.Flock.Claims.Sampling.Session
-import Proofs.Flock.Claims.Recursion.Cost
-import Proofs.Flock.Claims.Recursion.InnerAbort
-import Proofs.Flock.SamplingGeneric.Coins
-import Proofs.Flock.SamplingGeneric.Fails
-import Proofs.Flock.SamplingGeneric.Split
+module
+
+public import Definitions.Claims.SamplingGeneric
+public import Proofs.Flock.Claims.Sampling.Session
+public import Proofs.Flock.Claims.Recursion.Cost
+public import Proofs.Flock.Claims.Recursion.InnerAbort
+public import Proofs.Flock.SamplingGeneric.Coins
+public import Proofs.Flock.SamplingGeneric.Fails
+public import Proofs.Flock.SamplingGeneric.Split
 
 /-!
 # The sampled compiler: a sampled proof block's session
@@ -36,6 +38,8 @@ Flock's `E^rep` replaced by `A`'s extractor.
   one coordinate of the slots' and then of the blocks' (`Pr_pi_eval_dep`), and resampling the block's session's rounds
   keeps the pick (`fixed`, `Ex_resample`).
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

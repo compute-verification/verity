@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Algebra.Build
-import Proofs.Flock.VBridge.Algebra.ToVStar
+module
+
+public import Proofs.Flock.VBridge.Algebra.Build
+public import Proofs.Flock.VBridge.Algebra.ToVStar
 
 /-!
 # The S `structureOf` builds has its `wt` bits below 128
@@ -10,6 +12,8 @@ residuals at `symbolic`, renamed by `bump` (which fixes exactly the elements wit
 `symbolic`, which is `symbolic` itself. Their elements are fixed by `bump` (`Lin.Good`), and `build` makes its
 operands from them and its added terms of the running sums and v (`structureOf_bitsOk`).
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

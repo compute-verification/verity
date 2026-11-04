@@ -1,18 +1,20 @@
-import Definitions.Claims.SamplingGeneric
-import Proofs.Flock.SamplingGeneric.Fails
-import Proofs.Flock.SamplingGeneric.Split
-import Proofs.Flock.SamplingGeneric.Assemble
-import Proofs.Flock.SamplingGeneric.Coins
-import Proofs.Flock.SamplingGeneric.Session
-import Proofs.Flock.SamplingGeneric.Count
-import Proofs.Flock.SamplingGeneric.Bits
-import Proofs.Flock.SamplingGeneric.Reg
-import Proofs.Flock.SamplingGeneric.Efficient
-import Proofs.Flock.SamplingGeneric.Counter
-import Proofs.Flock.SamplingGeneric.Deployed
-import Proofs.Flock.SamplingGeneric.Instance
-import Proofs.Flock.SamplingGeneric.ZK
-import Proofs.Flock.SamplingGeneric.FlockZk
+module
+
+public import Definitions.Claims.SamplingGeneric
+public import Proofs.Flock.SamplingGeneric.Fails
+public import Proofs.Flock.SamplingGeneric.Split
+public import Proofs.Flock.SamplingGeneric.Assemble
+public import Proofs.Flock.SamplingGeneric.Coins
+public import Proofs.Flock.SamplingGeneric.Session
+public import Proofs.Flock.SamplingGeneric.Count
+public import Proofs.Flock.SamplingGeneric.Bits
+public import Proofs.Flock.SamplingGeneric.Reg
+public import Proofs.Flock.SamplingGeneric.Efficient
+public import Proofs.Flock.SamplingGeneric.Counter
+public import Proofs.Flock.SamplingGeneric.Deployed
+public import Proofs.Flock.SamplingGeneric.Instance
+public import Proofs.Flock.SamplingGeneric.ZK
+public import Proofs.Flock.SamplingGeneric.FlockZk
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -61,6 +63,8 @@ knowledge at the session's statement against `V*` after the run's messages befor
 zero knowledge per outcome (`FlockZk.server_zkOut`, `SamplingGeneric/FlockZk.lean`), at the simulator given the outcome
 and the server's error, under the premises `Claims.ZKServer.Flock.zk_server_lean_loop` takes.
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

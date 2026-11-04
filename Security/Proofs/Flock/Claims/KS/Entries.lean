@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.OffSC
-import Proofs.Flock.Claims.KS.LevelZeroAcc
+module
+
+public import Proofs.Flock.Claims.KS.OffSC
+public import Proofs.Flock.Claims.KS.LevelZeroAcc
 
 /-!
 # The deployed reader's level-0 entries at flock-verify's acceptance
@@ -20,6 +22,8 @@ with their rows, the deployed reader's entries. This file proves all three at fl
   (`accepts_req0`, `verified_opens₀L`); `accepts_verdict_hm96` gives such runs, accepted at `capOfRoot` of the table's
   `root_B`.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

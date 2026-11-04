@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Flat
-import Proofs.Flock.Soundness.Discharge.Layout.OutShape
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Flat
+public import Proofs.Flock.Soundness.Discharge.Layout.OutShape
+
+@[expose] public section
 
 set_option Elab.async false
 

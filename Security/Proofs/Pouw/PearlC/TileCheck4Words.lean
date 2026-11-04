@@ -1,6 +1,8 @@
-import Proofs.Pouw.PearlC.TileCheck4
-import Proofs.Pouw.PearlC.Block4Sem
-import Proofs.Pouw.PearlC.TileGamma
+module
+
+public import Proofs.Pouw.PearlC.TileCheck4
+public import Proofs.Pouw.PearlC.Block4Sem
+public import Proofs.Pouw.PearlC.TileGamma
 
 /-!
 # `pc4`'s tile check computes the words (proofs)
@@ -30,6 +32,8 @@ unit reads (`formRow_table`). `TileCheckWords` composes these into
 L3's words for the plain `pc4` Program on a domain of whole-tile shapes (`Shape4`); D₄'s are
 (`shape4_of_pearlCShapeFp4`). The peel's rows exist at two `Row4OK` rows (`PeelExists4`). The cap is not part of it.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.WholeCircuit
 

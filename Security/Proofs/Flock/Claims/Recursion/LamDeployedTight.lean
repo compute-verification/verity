@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.DeployedBringsLam
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployedBringsLam
 
 /-!
 # Route 2C's bound at the deployed shape: `λ₂ ≥ 135.7`
@@ -19,6 +21,8 @@ Fdev's term, `255 − log₂(β₂·c_S)`, binds (`lamLin2_core_tight`): at the 
 V\* parts of `200` tables each, `|S(x_I)| = 2^56`, `n = v = 2^55`) these bounds put it at about `138.33`, `κ`'s at about
 `140.4` and the rest above `146`, so a larger `L` needs smaller caps on `n`, `v`, `|S(x_I)|`, `nS x` or the tables.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

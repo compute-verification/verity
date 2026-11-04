@@ -1,6 +1,8 @@
-import Definitions.Claims.Sampling
-import Definitions.Claims.Recursion
-import Definitions.Claims.ZKOut
+module
+
+public import Definitions.Claims.Sampling
+public import Definitions.Claims.Recursion
+public import Definitions.Claims.ZKOut
 
 /-!
 # Claims: the sampled audit as a compiler, generic in the proof system for proof blocks
@@ -72,6 +74,8 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
 Statements only: definitions, no proofs. `Claims.Sampling` stays as it is, frozen; it becomes this block's Flock
 instance when its extractor is restated as `Compiled.E` at `Arg.ofFlock`.
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

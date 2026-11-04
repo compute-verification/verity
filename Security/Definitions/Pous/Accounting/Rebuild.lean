@@ -1,5 +1,7 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Definitions.Pous.Model.BandChain
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Definitions.Pous.Model.BandChain
 
 /-!
 # The background-rebuild budget
@@ -10,6 +12,8 @@ on a graded audit's whole duration that the guarantee requires the memory challe
 "Isolation over the whole graded window"). A call of at least `call_ns` is the ideal-permutation model's unit; at the
 reference Feistel-SHAKE256 `Π₂` a prover answers from 1.53% of `C` in 481 Keccak-f without completing a call.
 -/
+
+@[expose] public section
 
 namespace Pous.Rebuild
 

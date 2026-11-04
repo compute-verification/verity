@@ -1,4 +1,6 @@
-import Definitions.Pouw.Fp8Atom.H1TLemmas
+module
+
+public import Definitions.Pouw.Fp8Atom.H1TLemmas
 
 /-!
 # H-1T's running words (a named assumption, M4b and M4c)
@@ -23,6 +25,8 @@ implied by `DistinctLiveH1T` (`h1tRunningOfDistinct`), and with `H1TOneFlip` it 
 (`h1tDistinctLive`): the two are equivalent. It is Assumed, with simulation evidence (pair frequencies
 at most 0.375), and it is a hypothesis of the pins that use it.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T
 

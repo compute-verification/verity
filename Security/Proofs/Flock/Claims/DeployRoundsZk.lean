@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.DeployRounds
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
-import Flock.With.Zk
+module
+
+public import Proofs.Flock.Claims.DeployRounds
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+public import Flock.With.Zk
 
 /-!
 # The rounds the shipped masked verifier reads
@@ -10,6 +12,8 @@ import Flock.With.Zk
 on the hash. The masked replay reads `m + (kLog − 6)` rounds, Ligerito `k0 + 7 + 11 R` (the plain count and the lane
 phase's `ρ` pair), and the inner proof four; a masked rep reads all of its stream's rounds (`zkVerifyRepWith_rounds`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

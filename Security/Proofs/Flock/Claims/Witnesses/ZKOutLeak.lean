@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Witnesses.SamplingGenericZK
-import Proofs.Flock.Claims.Deploy
+module
+
+public import Proofs.Flock.Claims.Witnesses.SamplingGenericZK
+public import Proofs.Flock.Claims.Deploy
 
 /-!
 # `ZKOutLeak` says something
@@ -13,6 +15,8 @@ import Proofs.Flock.Claims.Deploy
 * Nontrivial (`zkOutLeak_nontrivial`): its conclusion fails at the talking prover with the silent simulator, against the
   verifier that accepts everything (`talk_leaks`).
 -/
+
+@[expose] public section
 
 namespace Claims.Witness.SamplingGeneric
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Witnesses.SamplingGeneric
-import Proofs.Flock.SamplingGeneric.Efficient
-import Proofs.Flock.Claims.Sampling.Wait
-import Proofs.Flock.Claims.Sampling.Cost
+module
+
+public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
+public import Proofs.Flock.SamplingGeneric.Efficient
+public import Proofs.Flock.Claims.Sampling.Wait
+public import Proofs.Flock.Claims.Sampling.Cost
 
 /-!
 # Refutation witnesses: the generic sampled compiler's cost claims
@@ -20,6 +22,8 @@ The lock's `meets` witnesses of these claims are `twoSessions_meets` (the contra
 `twoOpenCalls_meets`: the opening checks' count holds at `twoL`, so `CompilerBits` and `CompilerEfficient` read
 antecedents that hold together.
 -/
+
+@[expose] public section
 
 namespace Claims.Witness.SamplingGeneric
 

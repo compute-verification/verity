@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.ExecDraw
-import Proofs.Flock.Soundness.Audit.Stratified
-import Proofs.Flock.Soundness.E2E
+module
+
+public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.Audit.Stratified
+public import Proofs.Flock.Soundness.E2E
 
 /-!
 # The executable stratified draw, and the e2e theorems at its law
@@ -24,6 +26,8 @@ same bounds for it.
 
 `stratumK` is the count law's `k` by `rfl`: `countRule_eq_draw` (`Audit/FlockWork.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

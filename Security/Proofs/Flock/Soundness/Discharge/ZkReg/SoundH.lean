@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Sound
-import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
-import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sound
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
 
 /-!
 # One hidden-output `--zk` sampled session with registered reads
@@ -17,6 +19,8 @@ statement gives (`regPathsH`).
 What it rests on: `zk_session_soundH`'s assumptions, and nothing more for the second conjunct, which reads only the
 executable's checks.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

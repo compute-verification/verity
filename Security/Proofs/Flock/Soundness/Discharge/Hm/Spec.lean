@@ -2,7 +2,11 @@
 SHA-512's compression (FIPS 180-4 §6.4.2) on 64-bit vectors, in the builder's shape (`Flock.HmNets`): the schedule one word at
 a time, the rounds from constant `t`, the feed-forward. `Compress` proves the builder's rows force it.
 -/
-import Flock.HmNets
+module
+
+public import Flock.HmNets
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 

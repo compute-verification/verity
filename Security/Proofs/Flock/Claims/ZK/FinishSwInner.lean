@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FinishSwLigE
-import Proofs.Flock.Claims.ZK.FinishInner
-import Proofs.Flock.Claims.ZK.InnerY
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwLigE
+public import Proofs.Flock.Claims.ZK.FinishInner
+public import Proofs.Flock.Claims.ZK.InnerY
 
 /-!
 # The inner proof at the switched source
@@ -20,6 +22,8 @@ pads are the request's draws, which are the tape's wherever the tape's pads of t
   coins, at the inner proof's slot, from the batched constraint (which `repCut_fw` hands `hinner`: the firewall's own
   inner proof checked it, `innerP_batched`) and `τ`'s commitment.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

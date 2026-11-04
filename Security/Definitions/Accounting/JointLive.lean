@@ -1,6 +1,8 @@
-import Definitions.Accounting.JointBlocks
-import Definitions.Core.Game
-import Definitions.Claims
+module
+
+public import Definitions.Accounting.JointBlocks
+public import Definitions.Core.Game
+public import Definitions.Claims
 
 /-!
 # A period as a causal game, its claims on a fixed extractor's values, its break a fixed finder's (trusted)
@@ -43,6 +45,8 @@ The period's game may be a horizon's: one game, several periods, each read off t
 and commitment sent after the coins of the periods before it, so a period's extractor may read the run's prefix up to
 its commitment (`extract` reads the run).
 -/
+
+@[expose] public section
 
 namespace Accounting
 
