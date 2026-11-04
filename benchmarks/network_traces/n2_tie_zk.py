@@ -477,7 +477,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
                              f"{T} units")
         sdir = wdir / "session"
         m = {"dir": x.statement.dir, "n": T, "pin": sg.st.pin}
-        record, live, proc = M.a8.session(av, m, sdir, list(range(T)), port + j, env=env)
+        record, live, proc = M.a8.session(av, m, sdir, list(range(T)), port + j if port else Z._free_port(), env=env)
         sessions = tuple(sorted(p.parent for p in (sdir / "sessions").glob("*/session.json")))
         delivered = TS.Delivered(M.PF.Proof(sg.circuit, x.statement.dir / f"pub-{T}.bin", sessions),
                                  x.statement.salts, x.statement.outputs)
@@ -622,7 +622,7 @@ def prove(a) -> int:
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
 
     def go(k: int, name: str) -> tuple[str, dict]:
-        res = member(M, a, sg, tie, name, rounds[name], out / name, a.port + 100 * k)
+        res = member(M, a, sg, tie, name, rounds[name], out / name, a.port + 100 * k if a.port else 0)
         res["received"] = _member_scan(M, sg, rounds[name], out / name)
         return name, res
 
@@ -666,7 +666,8 @@ def main(argv=None) -> int:
                                                    "warden-rehearse's, its witness under witness/)")
     p.add_argument("--windows", type=int, default=1, help="--class warden: its first execution phases proved")
     p.add_argument("--gpu", action="store_true", help="each session's prover on the GPU (`flock-circuit prove --gpu`)")
-    p.add_argument("--port", type=int, default=7981)
+    p.add_argument("--port", type=int, default=0,
+                   help="member k's window j listens on PORT + 100k + j; 0 (the default): a free port for each session")
     p.add_argument("--jobs", type=int, default=1, help="1: the members proved one after another (n2_zk.ONE_SESSION); "
                                                        "more is refused")
     p.add_argument("--debug-clear", action="store_true",

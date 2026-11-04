@@ -91,6 +91,11 @@
 #     unless COMPOSITE is set empty,
 #     remote's and onsite's Lean verdicts on the run's cases (`served_composite.sh`'s docstring). Their verdicts gate
 #     nothing, but a composite that didn't run (a tree without composite.py) or whose Lean didn't answer fails the run.
+#     With the network certifier in the run, its piece (CERTIFIER_CMD) or its front (CERTIFIER_FRONT), `onsite_record.py`
+#     then writes the onsite demo's record
+#     ($OUT/record/onsite.json: every verdict its run of record needs, the network bound term by term and over each
+#     monitoring period, and beside it ADVICE_CHARGE's measured advice charge, a test run's advice-charge.json, below);
+#     its ONSITE line gates nothing.
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
 #     alone, its other pieces dropped (not run, no default command, the wipe's and the certifier's included; the
 #     preflight refuses any onsite command set), its record composing their verdicts alone and its composite remote's.
@@ -156,6 +161,17 @@
 # publishes its launch command, so a load's counts (REQUESTS, PROMPTS, SLOTS, CERTIFIER_FRONT's) go in the file, and the
 # command names only its path.
 # `served_verdicts.sh circuits K`, in TREE with D and OUT, counts serve dir D's window K's circuits alone (its advice written).
+# `served_verdicts.sh advice-charge`, with PRODUCT=remote, measures honest serving's advice charge on a test run whose
+# inputs and counts are public, never on a served run: steps 0 to 2 at the run of record's serving (T, WINDOW_STEPS, the
+# front's tick), H1_GATE empty and so no H1 option in SERVE_ARGS (serve-openai refuses one without H1's --protocols),
+# then every closed window's advice: the server's own where it committed each as it served (`--advice`, whose
+# `--advice-tau` must be ADVICE_TAU), else `verity-vllm advice`'s under the prove path's registered compiler at ADVICE_T
+# buckets of ADVICE_TAU seconds (default 600 and 0.1; an execution phase is ADVICE_T buckets of the network certifier's
+# tick) in the serve dir; and `advice_charge.py`'s record of it, each window's unpadded length and their sum over each
+# execution phase, $OUT/advice-charge.json,
+# which names each window and counts its requests: its inputs being public, the run publishes $OUT as it is, with no
+# `publish`. Its record is what a served run's ADVICE_CHARGE names. `served_verdicts.sh charge`, in TREE with D and OUT,
+# is its last step alone, on a serve dir D already served.
 # Defaults are vy-dc-h200's: the int8 B4 row's traced Build (r20261030-210701-a20f's, traced after the required manifest stopped
 # naming the FlashAttention M1 stream, as `predict row` doesn't) and taps under $H, vLLM's venv /workspace/cp/venv312, CUDA 13.0.
 # The serve dir D (row dirs, advice, the window circuits' records) stays on the node under `research keep`; $OUT keeps the
@@ -533,14 +549,45 @@ private_pieces() {
   done
 }
 
+advice_charge() {  # the test run's every closed window's advice and advice_charge.py's record of it (the header's)
+  local ca rc=0 adv="$D/advice-charge"
+  if [ -f "$D/advice.jsonl" ]; then  # serve-openai --advice committed each window's advice as it served, and only once
+    adv="$D/advice"
+    say "ADVICE: the server's own, each window's committed as it served"
+  else
+    ca=$(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP" \
+      | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])")
+    [ -n "$ca" ] || { say "ADVICE-CHARGE: no registered compiler (prove_path.py compiler)"; return 13; }
+    # shellcheck disable=SC2086
+    (cd "$TREE/integrations/vllm" && vv advice "$D" --cap "$CAP" $ca --T "${ADVICE_T:-600}" --tau "${ADVICE_TAU:-0.1}" \
+      --out "$adv") > "$OUT/advice.log" 2>&1
+    rc=$?
+    say "ADVICE (verity-vllm advice exit $rc): $(tail -1 "$OUT/advice.log" | cut -c1-400)"
+  fi
+  "$PY" "$TREE/benchmarks/one_stage/advice_charge.py" "$adv" --run "${RESEARCH_RUN_ID:-local}" \
+    --tau "${ADVICE_TAU:-0.1}" --T "${ADVICE_T:-600}" --to "$OUT/advice-charge.json" 2>&1 | publish_lines
+  [ "${PIPESTATUS[0]}" = 0 ] && [ "$rc" = 0 ]
+}
+
 if [ "${1:-}" = serve ]; then serve; exit $?; fi
 if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; rc=$?; measure; exit "$rc"; fi
 if [ "${1:-}" = front-flags ]; then front_ok; exit $?; fi
 if [ "${1:-}" = private-pieces ]; then private_pieces; exit $?; fi
+if [ "${1:-}" = charge ]; then advice_charge; exit $?; fi
+if [ "${1:-}" = advice-charge ]; then
+  [ "$PRODUCT" = remote ] && [ -z "$H1_GATE" ] \
+    || { say "PREFLIGHT: advice-charge serves a test run alone: PRODUCT=remote and H1_GATE empty"; exit 3; }
+  case " ${SERVE_ARGS:-} " in *" --h1-receipts "* | *" --h1-prover "*)
+    say "PREFLIGHT: advice-charge serves with H1_GATE empty, and serve-openai refuses SERVE_ARGS' --h1-receipts or" \
+      "--h1-prover without H1's --protocols: drop them"; exit 3 ;;
+  esac
+fi
 
 # $OUT leaves the node: once the run is done, however it ends, each of its files that names a window or counts its own is
-# held in full in the serve dir's private/out, its public form in its place (`served_verdicts.py publish`)
-trap 'rc=$?; "$SAY_PY" "$SV" publish "$OUT" --private "$D/private/out" || echo "PUBLISH failed (exit $?): $OUT may name a window"; exit $rc' EXIT
+# held in full in the serve dir's private/out, its public form in its place (`served_verdicts.py publish`); an
+# advice-charge run's inputs are public, and its $OUT leaves as it is
+[ "${1:-}" = advice-charge ] \
+  || trap 'rc=$?; "$SAY_PY" "$SV" publish "$OUT" --private "$D/private/out" || echo "PUBLISH failed (exit $?): $OUT may name a window"; exit $rc' EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT
 stop() { say "STOP at $1 (exit $2)"; exit "$2"; }
@@ -579,8 +626,10 @@ build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.
   # FW is the node's, every run's: two builds in it at once break each other's crates
   RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/ml/flock/pod/60-circuit.sh || return 6
 }
-( unset PYTHONPATH; build ) > "$OUT/build.log" 2>&1 &
-BUILD=$!
+if [ "${1:-}" != advice-charge ]; then
+  ( unset PYTHONPATH; build ) > "$OUT/build.log" 2>&1 &
+  BUILD=$!
+fi
 
 if [ "${1:-}" = v3c ]; then  # an existing serve dir's window: D and K set, its advice written (step 3); V3c alone
   [ -n "${K:-}" ] && [ -f "$D/advice/w$K/private/advice.bin" ] || { say "V3C: set D and K, a serve dir and its window with advice"; exit 3; }
@@ -714,6 +763,7 @@ else
   "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/serve/overhead.json" 2> "$D/overhead.err" \
     || { say "OVERHEAD: no aggregate: $(cut -c1-300 "$D/overhead.err")"; rm -f "$OUT/serve/overhead.json"; }
 fi
+if [ "${1:-}" = advice-charge ]; then advice_charge; exit $?; fi
 
 # 3. sampled proofs: the window, its advice and Programs, V3b's window circuit, then C-Flock --zk and the Lean verifier
 # the pick (its number, steps, requests and users, and each window refused and why) stays in the serve dir's private/
@@ -791,6 +841,8 @@ rec=${PIPESTATUS[0]}
 private_pieces
 comp=0
 [ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+[ -z "${CERTIFIER_CMD:-}${CERTIFIER_FRONT:-}" ] \
+  || "$TPY" benchmarks/one_stage/onsite_record.py "$OUT" ${ADVICE_CHARGE:+--advice-charge "$ADVICE_CHARGE"} 2>&1 | publish_lines
 measure
 # V3c after the record, each step within its limit: it gates nothing
 if [ -n "$SPLIT" ]; then :

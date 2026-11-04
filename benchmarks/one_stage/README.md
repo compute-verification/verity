@@ -205,6 +205,23 @@ negatives.
 - `served_composite.sh`: `served_verdicts.sh`'s step after its record. It writes PoUS's and the wipe's composite cases
   (PoUS's `served_case.sh`), then gets remote's and onsite's Lean verdicts on the run's cases (soundness's composite
   reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`, and a tree without those two scripts skips the step.
+- `onsite_record.py OUT [--advice-charge FILE]`: the onsite demo's record of a served run (`record/onsite.json`), which
+  `served_verdicts.sh` writes after its composite step when the network certifier is in the run: its piece
+  (`CERTIFIER_CMD`, or the split's `CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`) or its front (`CERTIFIER_FRONT`). It holds every verdict
+  the run of record needs (sampled proofs, PoUW, inference-only, remote, the network certifier, onsite), each missing
+  with its why where the run has no answer. Beside them are the network certifier's bound term by term in the notation
+  table's symbols, with its overcount, the seconds it covers, the connections it counts and δ_net term by term with
+  each term's source (the check's `eps`, only its δ part, and each phase's knowledge, binding and collision errors,
+  which no check computes), and that bound over the
+  run's own certification period (proved) and each monitoring period for the node (proved where the run's period
+  covers it, else scaled), the census's reference datacenter and the world (scaled), each scaled cell naming its rule,
+  whose sources the record states, beside its figure over one execution phase. The realized advice charge is private:
+  the record carries the registered width as its upper bound, and `--advice-charge` states a test run's measurement
+  beside the bound as that run's.
+- `advice_charge.py ADVICE --run RUN --to FILE`: honest serving's advice charge from `verity-vllm advice`'s output
+  over a test run with public inputs: each Commit period's advice bits, unpadded, beside its requests' prompt and
+  output lengths and finishes, labelled as that run's. `served_verdicts.sh advice-charge` serves such a run
+  (`PRODUCT=remote`, `H1_GATE` empty) and writes it.
 - `served_util.sh` (with `served_util.py`): the whole-step tensor utilization of serve-openai on the int8 Llama-3.2-1B
   prefill mix (prompts of 1,024 ids, `max_tokens` 1, all queued at once, T tokens a step), one arm a run (stock, the
   Commit unsealed or sealed, the Commit with PoUW H1 on in-process coins), under Nsight Systems' GPU metrics.

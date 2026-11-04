@@ -103,18 +103,23 @@ warden run's witness never go on the prover's machine. Without the gate's coins 
 
 `certifier_piece.py` is the network certifier's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
 (`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's
-class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in execution phase 0, the
+class (4 prompts of 24 ids, or `--prompt-ids LO:HI` each prompt's length drawn in LO … HI, at most 4 ids out,
+`--window-per-group`; `--stop-prompt N` puts last a prompt whose answer the model's own EOS ends, the first of N
+tried as warm-ups) to serve-openai, all of it in execution phase 0, the
 network certifier at the schedule of that class's scan (`--scan-class w63k4`, 5 egress cells, the one the chain's
 `scan_zk.py prove --class w63k4` takes), so the engine closes it into the run's earliest window, the one the run audits,
 and the gate's fetch is kept in the serve dir's `private/certifier`. A request's answer must be whole D·τ after its
 admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` runs the scan at a longer tick, up to
 4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's warden path on that fetch with the serve dir's endpoint
 records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows form of
-the scan's link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
-of the audited window is a certified one inside that link-window, and the Lean check accepts; beside that answer goes
+the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
+of the audited Commit period is a certified one inside that execution phase and carries the network certifier's run in
+its release, every certified request is exactly one served request, and the Lean check accepts; beside that answer goes
 its case, `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window). Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
-late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
+late, say, a connection the network certifier failed closed) or a step that can't run, the piece refuses
+(`refused.txt`), naming the network certifier's own check's problems, which leaves the certifier missing; a rehearsal
+whose certified egress holds bytes that are no output's is a reject. An accept's
 profile names its placement: the certifier on the gate's host, and the chain, the period check and their proofs' coins
 on the prover's node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report,
 whose rows count each Commit window's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
@@ -125,6 +130,16 @@ bits. The leak guard (`--public`) moves any file the piece doesn't declare out o
 (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its `period` runs the
 consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of V3c's; each step
 releases through its own hold.
+
+`attacks.py` lists what the served path must refuse or charge (`table`): each attack with its case, the check that
+refuses it or the leak bound's term that charges it, and the reason its verdict names. Its `relay` is the prover's
+process between the network certifier's server connections and the endpoint, playing an attack on the responses
+(timing, chunking, padding, an altered or extra id) or on the connections (one answered without the endpoint, a copy
+served around the network certifier); `certifier_piece.py front --attack NAME` puts it in a served rehearsal, and
+`judge NAME --front OUT --serve SERVE_DIR` reads that rehearsal as the attack's verdict. `rehearse PORT SERVE_DIR OUT
+[--attacks NAME,...] -- FRONT_FLAGS` is served_verdicts.sh's `CERTIFIER_FRONT` for a serve step that plays the attacks
+one front after another against one serve-openai, each judged, their public verdicts in OUT/attacks.public.json.
+`tests/test_attacks.py` plays each attack on the network certifier at the scan's schedule on a virtual clock.
 
 ## The chain's run of record
 
@@ -219,19 +234,24 @@ docstring says why pooling them by weight copy would be unsound).
 **K per monitoring period on a run**: `uv run benchmarks/network_traces/chain_record.py leak --warden-run RUN --scan
 SUMMARY --out FILE`, with RUN a fetched warden run and SUMMARY its scan's `summary.json` (its draw). It reads
 `leak_bounds` on the run's parameters (`deployment.json`), its traffic (`end.json`'s requests and sampling blocks) and
-the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block undrawn. FILE holds the widths, each
+the scan's class (`chain_record.run_class`: the `scan_zk` class whose schedule has the run's egress cells, w63's 65 or
+w63k4's 5), and refuses a scan that left a proof block undrawn. FILE holds the widths, each
 term, the links and a row for each monitoring period, scope and reading; `FILE.md`, which it prints, holds the tables.
 A run's figures are its published Attempt's. The report's `d1` lists, per sampling block, whether its certificates, N2
 and the scan accepted.
 
 The terms, in the generator reading of the scan's statement (each proof block's registered rows its boundary values):
-- The schedules and the fail cells, ⌈log2(cap_c + 1)⌉ each a connection (`capsTerm`, charged twice, as
-  `#S_s ≤ ∏_c (cap_c + 1)`; the record's `terms.cap_per_request`). Here cap_c bounds `WardenSchedule.cells c`, the
-  egress cells of connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network
-  certifier's schedule: it enters the compute audit's terms, which go into JointPeriodLive.
-- The free inputs (`terms.free`): as registered, the tied audit's slot entries, NR·T / EVERY entries of NE bits
-  (`ingress_scan.entry_bits`) a sampling block; or an entry's 33 + KO·IDB bits a request if `prog` is an input only at
-  its anchored entries.
+- The schedules and the fail cells, ⌈log2(cap_c + 1)⌉ for each connection c the schedule can carry (`capsTerm`,
+  charged twice, as `#S_s ≤ ∏_c (cap_c + 1)`; the record's `terms.cap_per_block`). Here cap_c bounds
+  `WardenSchedule.cells c`, the egress cells of connection c's lane, which is egress_cells, and the connections are
+  the lanes·T a sampling block can carry (`NetworkCheck.Period`'s `Schedule.caps`, the only caps its rows form takes).
+  They are charged whatever the requests served, since the sender picks how many connections it opens. The
+  endpoint's slot count isn't a term of the network certifier's schedule: it enters the compute audit's terms, which go
+  into JointPeriodLive.
+- The free inputs (`terms.free_per_block`): as registered, the tied audit's slot entries, NR·T / EVERY entries of NE
+  bits (`ingress_scan.entry_bits`) a sampling block; or, if `prog` is an input only at its anchored entries, an entry's
+  33 + KO·IDB bits for each of those slot entries, whatever the requests served, since any of them may be anchored by
+  a request the sender opens.
 - No faulty term with every proof block drawn.
 - The jitter term is charged at D_j = 2 (`leak_bounds.JITTER_BOUND`): one bit a bucket, T bits a sampling block (the
   record's `terms.jitter_per_block`). J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel). J is
@@ -287,10 +307,10 @@ record's number.
 K also rests on these conditions:
 - The generator reading of the scan's statement, in which each proof block's registered rows are its boundary values.
   That reading is a claim, not yet a locked guarantee.
-- Each connection's cap is its lane's egress_cells, which the network certifier holds a lane to and
-  `NetworkCheck.Period` doesn't check.
-- The scan proves sampling block 0. A monitoring period's figures scale its per-sampling-block and per-request terms at
-  the run's rate.
+- Each connection's cap is its lane's egress_cells: `NetworkCheck.Period` takes only the registered schedule's caps
+  (`Schedule.caps`), and the network certifier holds a lane to them (trusted-host).
+- The scan proves sampling block 0. A monitoring period's figures are its per-sampling-block terms times the period's
+  sampling blocks, whatever the requests served.
 - The jitter term is T bits a sampling block, one a bucket: J assumed at D_j = 2; at D_j = 1 not met (next-bucket
   host-state channel).
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
