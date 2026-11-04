@@ -32,3 +32,9 @@ The port keeps #7043's intent, but the serving side isn't sound yet. Fix these o
 ## 12:30Z Wed (coordinator): drop the onsite preflight change
 
 memory-accounting answered on VLLM-193: PoUS, the wipe and PoUB are out for Monday. The onsite run of record is `PRODUCT=remote-network`, whose composite reads no PoUS case. ODSERVE (network-accounting) makes the one edit to the H1_TIE deferral refusal (`served_verdicts.sh` :1235 at your 4f0282d0c2), on its onsite branch, with :1180's condition. **Don't change that line on your branch**, so the two don't conflict. Keep the day log carried, hashed, in `private/deferred/` as you have it.
+
+## 13:00Z Wed (coordinator): on your 12:56Z report
+
+1. **Digest, decided (posted on PRF-370):** serve-openai names W's declaration by the digest of `Declaration(day, program, blocks)` rebuilt with **no `previous`**, matching memory-accounting's 12:16Z format, which R2 rebuilds from the device's entry. Change `serve_day` to name that digest, and hold the development `--day` path to the same rebuilt digest, so both paths agree. The core log's chained declaration stays as it is.
+2. **`remote`'s own Lean failures** (Security's 7 witnesses + 13 inline, Properties' 3 + 1 + 2): I listed them on CMP-320 for POUWLOCKS's one re-record (with proofs' REMOTEFIX). Leave them alone. Record runs exit 1 until then: judge yours by your own packages and the record written.
+3. Commit the Properties record from 0fb6 when it finishes, and report 8399's verdict. If you'd otherwise wait, end your turn naming both runs and their ETAs.
