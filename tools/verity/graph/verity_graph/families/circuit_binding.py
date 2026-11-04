@@ -1,9 +1,11 @@
 """circuit-check's catalog as tasks: one ``circuit-catalog`` task building every catalog binding's record (check.py's records
-step, `circuit-check --all --records-only`), one ``circuit-binding`` task per catalog binding checking that binding's targets
-from those records (`circuit-check --binding NAME`, `circuit_check.shard.binding`'s names) and writing their Definitions'
-failures (`failures`), one ``circuit-coverage`` task holding the bindings circuit-check makes to the ones listed here, and one
-``circuit-known`` task holding `circuit_check.known` to every binding's failures, as `circuit-check --all` holds it to the whole
-list's, from those outputs alone.
+step, `circuit-check --all --records-only`) and cutting them into each binding's slice and the part they share (``--slices``,
+`circuit_check.units.slices`: `slice_of`, `SHARED`), one ``circuit-binding`` task per catalog binding checking that binding's
+targets from its slice and the shared part alone (`circuit-check --binding NAME --slice`, `circuit_check.shard.binding`'s
+names), so one binding's edit changes only the slices that read what it changed, and writing their Definitions' failures
+(`failures`), one ``circuit-coverage`` task holding the bindings circuit-check makes, from every record, to the ones listed
+here, and one ``circuit-known`` task holding `circuit_check.known` to every binding's failures, as `circuit-check --all` holds
+it to the whole list's, from those outputs alone.
 
 Bindings are read from the binding files' syntax alone (`ast`), as circuit-check names them: each sidecar's (`*.circuit-check.py`
 under a regular package of `sidecars.PACKAGES`, named for its module as `sidecars.discover` names it) root functions
@@ -28,6 +30,9 @@ SIDECARS = f"{SOURCE}/sidecars.py"
 SUFFIX = ".circuit-check"
 CATALOG = "circuit-catalog:records"
 RECORDS = {"name": "records", "path": "out/circuit-records.tar.gz"}
+#: the directory of the catalog task's slices, and the part every binding's run shares
+SLICES = "out/slices"
+SHARED = {"name": "shared", "path": f"{SLICES}/shared.json"}
 KNOWN = "circuit-known:catalog"
 #: the directory of the circuit-binding tasks' ``failures`` outputs, all of which the circuit-known task reads
 FAILURES = "out/failures"
@@ -119,6 +124,11 @@ def failures(name: str) -> dict:
     return {"name": "failures", "path": f"{FAILURES}/{hashlib.sha256(name.encode()).hexdigest()[:16]}.json"}
 
 
+def slice_of(name: str) -> dict:
+    """The catalog task's output of binding ``name``'s slice, which that binding's task alone reads."""
+    return {"name": f"slice {name}", "path": f"{SLICES}/{hashlib.sha256(name.encode()).hexdigest()[:16]}.json"}
+
+
 def tasks(root: Path, files: list[str]) -> list[dict]:
     ins = base(root, files)
     found = bindings(root, files)
@@ -127,8 +137,9 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
                          f"them to {CHECKER}/pyproject.toml's [tool.verity.tests] inputs)")
     reads = [{"task": CATALOG, "output": RECORDS["name"]}]
     shared = [*ins, f"{RUNNERS}/circuit_binding.py"]          # the catalog's and coverage's runners import the binding runner
-    return [{"id": CATALOG, "kind": "circuit-catalog", "about": "build every circuit-check catalog binding's record",
-             "inputs": shared, "outputs": [RECORDS], "resources": {"cores": 16, "mem_gb": 64, "disk_gb": 8}},
+    return [{"id": CATALOG, "kind": "circuit-catalog", "about": "build every circuit-check catalog binding's record and slice",
+             "inputs": shared, "outputs": [RECORDS, SHARED, *(slice_of(name) for name in found)],
+             "resources": {"cores": 16, "mem_gb": 64, "disk_gb": 8}},
             {"id": "circuit-coverage:catalog", "kind": "circuit-coverage", "inputs": shared, "reads": reads,
              "resources": {"cores": 1, "mem_gb": 16, "disk_gb": 2},
              "about": "the circuit-check catalog's bindings are the circuit-binding tasks'",
@@ -138,5 +149,7 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
              "reads": [{"task": f"circuit-binding:{f}:{e}", "output": "failures"} for f, e in found.values()],
              "about": "every circuit_check.known entry still matches a failure of a circuit-binding task's targets",
              "vars": {"failures": FAILURES}},
-            *({"id": f"circuit-binding:{f}:{e}", "inputs": ins, "reads": reads, "outputs": [failures(name)],
-               "vars": {"binding": name, "records": RECORDS["path"]}} for name, (f, e) in found.items())]
+            *({"id": f"circuit-binding:{f}:{e}", "inputs": ins, "outputs": [failures(name)],
+               "reads": [{"task": CATALOG, "output": SHARED["name"]}, {"task": CATALOG, "output": slice_of(name)["name"]}],
+               "vars": {"binding": name, "slice": slice_of(name)["path"], "shared": SHARED["path"]}}
+              for name, (f, e) in found.items())]
