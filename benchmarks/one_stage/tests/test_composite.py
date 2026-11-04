@@ -102,11 +102,11 @@ def test_onsite_takes_the_policy_as_one_of_its_subprotocols(tmp_path):
 def test_remote_network_is_remotes_subprotocols_and_the_network_certifiers(tmp_path):
     assert C.COMPONENTS["remote-network"] == ("verity/certifier/v0", *C.COMPONENTS["remote"])
     cert = put(tmp_path / "cert", "verity/certifier/v0", {"w": 1}, b"\x04", b"{}", b"\xdd" * 64, verdict="accept")
-    v1 = put(tmp_path / "v1", V1, {}, b"\x01", b"{}", b"\xaa" * 64)
+    v1 = put(tmp_path / "v1", SAMPLED, {}, b"\x01", b"{}", b"\xaa" * 64)
     exe = lean(tmp_path, {"protocol": "verity/remote-network/v0", "verdict": "reject", "reason": "params: x"}, 1)
     assert C.main(["remote-network", "--cases", str(v1), "--cases", str(cert), *outs(tmp_path), "--exe", exe]) == 1
     params = json.loads((tmp_path / "private" / "params.json").read_bytes())
-    assert [c["id"] for c in params["components"]] == ["verity/certifier/v0", V1]
+    assert [c["id"] for c in params["components"]] == ["verity/certifier/v0", SAMPLED]
     body = ('{"components":[{"commitment":"' + "dd" * 64 + '","id":"verity/certifier/v0"},{"commitment":"' + "aa" * 64 +
             '","id":"verity/sampled-proofs/v1"}]}')
     assert (tmp_path / "private" / "commitment.bin").read_bytes() == \

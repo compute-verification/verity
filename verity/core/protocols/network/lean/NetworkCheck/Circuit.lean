@@ -17,8 +17,9 @@ of their description (AGENTS.md "Design rules"), never per unit:
   input gate a template's parameter, and the root returning every template node's outputs, in order. The Program is
   laid out as C-Flock's decoder lays one out, within its resolution's walk (`NciCheck.Desc`), and topological.
 * **The wires** (`SampledProofs.Wires.check`), with the templates' rows read off their Definitions (`templateOf`,
-  `interface.layout`); each wire's reader row is its writer's output field leaf for leaf, in leaves of one width
-  (`leavesOk`). A writer's leaf may be a constant or an input its template passes through.
+  `interface.layout`); each wire's reader row is its writer's output field bit for bit, each side in leaves of one
+  width, the widths equal or one of them a Boolean-profile port's 1 (`leavesOk`). A writer's leaf may be a constant or
+  an input its template passes through.
 * **The declarations** (`declRects`): the registered parameters, tables, reads, table reads and openings well formed
   for the templates (`interface.check_inputs`), and no row filled twice by a wire or a declaration (`apart`). A record
   that lists its members, declares ingress, or registers values or formats beside its reads is refused.
@@ -344,13 +345,15 @@ def fieldOf (ret : Ty) (o : String) : Option (Ty × Nat × Nat) :=
   let fs := fieldsOf ret
   (fs.zipIdx.find? (outName ·.2 == o)).map fun (t, j) => (t, ((fs.take j).map (·.leaves)).sum, j)
 
-/-- Each wire's reader row is its writer's output field leaf for leaf: the reader's parameter, cut `k` ways, has `k`
-times the field's leaves, all of one width, the field's. -/
+/-- Each wire's reader row is its writer's output field bit for bit: the reader's parameter, cut `k` ways, has `k`
+times the field's bits, each side's leaves of one width, the two widths equal (leaf for leaf) or one of them 1, a
+Boolean-profile port's, whose row is the same bits in the same order (`interface._width`). -/
 def leavesOk (P : Prog) (r : Stated) : Bool :=
   r.wiring.wires.all fun w => match nodeOf P r w.reader, nodeOf P r w.writer with
     | some kr, some kw => match (templateDef P kr).params.find? (·.1 == w.port), fieldOf (templateDef P kw).ret w.out with
-      | some (_, tp), some (to, _, _) =>
-        widthOf tp == widthOf to && tp.leaves == r.wiring.cutsOf w.reader w.port * to.leaves
+      | some (_, tp), some (to, _, _) => match widthOf tp, widthOf to with
+        | some a, some b => (a == b || a == 1 || b == 1) && bitsOf tp == r.wiring.cutsOf w.reader w.port * bitsOf to
+        | _, _ => false
       | _, _ => false
     | _, _ => false
 
@@ -668,7 +671,7 @@ def refusalWhy (e : SampledProofs.Wires.Refusal) : String :=
     | none => ""
 
 /-- **The circuit record's checks**: record `record` read against Program `P` (`recordOf`) is its population program
-(`populationOk`); its wires pass `SampledProofs.Wires.check`, each reader row its writer's output field leaf for leaf
+(`populationOk`); its wires pass `SampledProofs.Wires.check`, each reader row its writer's output field bit for bit
 (`leavesOk`); its declarations are well formed and fill no row a
 wire or another declaration fills (`declRects`, `apart`); and `order` ranks every wire's writers below its readers
 (`ordered`). A writer leaf may be a constant or an input its template passes through: the order ranks the chain's
@@ -685,7 +688,8 @@ def checked (P : Prog) (record order : Json) : Except String (Stated × SampledP
     | .ok s => pure s
     | .error e => throw (refusalWhy e)
   unless leavesOk P r do
-    throw "wires: a reader row is not its writer's output field leaf for leaf, in leaves of one width"
+    throw "wires: a reader row is not its writer's output field bit for bit, each in leaves of one width, the widths \
+      equal or one of them a Boolean-profile port's"
   let rects ← declRects r.wiring r.registered
   unless apart rects (r.wiring.wires.map wireRect) do
     throw "the circuit's inputs: a row filled by two of its wires, registered reads, table reads or openings"

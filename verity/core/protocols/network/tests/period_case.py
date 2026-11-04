@@ -54,7 +54,8 @@ the scan's state in every phase tied to it (`_charge`); a second audit tied to a
 link-window's or none's, is charged them free (`state-unheld`). In the
 clock form an audit may be in the record form (`audit-record`): its window's circuit record, wire order and the
 verifier's pins beside its Program (`record_audit`), its registration's window binding the record and recording each
-pin's root; refused where the window binds another record (`audit-record-circuit`) or records no pin's root
+pin's root, a record whose wire reads a Boolean-profile writer's bits as 16-bit leaves accepted too
+(`audit-record-bits`); refused where the window binds another record (`audit-record-circuit`) or records no pin's root
 (`audit-record-pin`), or a pin is of `SCAN_STATE` (`audit-record-state`). `case(kind, seed, form)` is a small period of
 the form aimed at a
 verdict, or at a decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with
@@ -89,6 +90,7 @@ from verity.ml.circuits import boolean as BL, codec, metadata as AN, population
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.defs import REGISTRY
 from verity.ml.circuits.ops import gemm as GM
+from verity.ml.circuits.ops.boolean import elementwise as BE
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import array_of, coll_concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
@@ -1359,7 +1361,8 @@ EXPECT = {
     "answer-profile": REJECT,
     "audit-other": REJECT, "audit-reject": REJECT, "audit-undecided": UNDECIDED, "audit-profile": REJECT,
     "audit-bound": REJECT, "audit-program": REJECT, "audit-units": REJECT,
-    "audit-record": ACCEPT, "audit-record-circuit": REJECT, "audit-record-pin": REJECT, "audit-record-state": REJECT,
+    "audit-record": ACCEPT, "audit-record-bits": ACCEPT,
+    "audit-record-circuit": REJECT, "audit-record-pin": REJECT, "audit-record-state": REJECT,
     "undecided-and-reject": REJECT, "form": REJECT,
     "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
@@ -1656,22 +1659,36 @@ def audit_descriptor(units: tuple[tuple[int, int], ...], entries: tuple[int, ...
 
 
 RECORD_GEMM = bind(GM.Gemm, K=16, N=16, **GM.GEMM_AMPERE)
-RECORD_UNITS = 8
+RECORD_BITS = bind(BE.Bf16Add)
+#: the record-form audit's units: `record_audit`'s, and `record_audit(bits=True)`'s
+RECORD_UNITS = {False: 8, True: 17}
 
 
 @lru_cache(maxsize=None)
-def record_audit() -> tuple[str, str, str]:
+def record_audit(bits: bool = False) -> tuple[str, str, str]:
     """A record-form audit's Program, circuit record and wire order, each canonical JSON: two requests' two steps through
     two layers of one `Gemm_v2{K=16, N=16}` template (`RECORD_GEMM`), unit (layer, step, request) at 4·layer + 2·step +
     request, layer 1 reading layer 0's output and layer 0 at step 1 layer 1's at step 0, layer 0's input at step 0
     external; the record `interface.descriptor_record`'s and the Program its population program, and the order one
-    segment ranking each unit at 2·layer + 4·step + request, so every wire's writer ranks below its reader."""
+    segment ranking each unit at 2·layer + 4·step + request, so every wire's writer ranks below its reader. With
+    ``bits``, one Gemm unit whose ``x``, cut 16 ways, reads 16 `Bf16Add_v2` units' outputs (`RECORD_BITS`), a
+    Boolean-profile writer's 16 one-bit leaves a row for the reader's one 16-bit leaf, ranked below it."""
     gid = codec.descriptor_id(RECORD_GEMM)
-    c = IF.Circuit("period-record", ((RECORD_GEMM, RECORD_UNITS),), external=(f"{gid}/x",), wires=(
-        IF.Wire(gid, "x", gid, "o0", at=4, radix=(2, 2), base=0, step=(2, 1)),
-        IF.Wire(gid, "x", gid, "o0", at=2, radix=(1, 2), base=4, step=(2, 1))))
-    order = {"format": "verity/wire-order/v1", "segments": [
-        {"template": gid, "at": 0, "radix": [2, 2, 2], "c": 0, "r": [2, 4, 1]}], "wires": [[0, 0], [0, 0]]}
+    if bits:
+        bid = codec.descriptor_id(RECORD_BITS)
+        c = IF.Circuit("period-record-bits", ((RECORD_GEMM, 1), (RECORD_BITS, 16)), external=(f"{bid}/a", f"{bid}/b"),
+                       cuts={gid: {"x": 16}}, wires=(
+            IF.Wire(gid, "x", bid, "o0", at=0, radix=(16,), base=0, step=(1,), cut=(0, 16)),))
+        order = {"format": "verity/wire-order/v1", "segments": [
+            {"template": bid, "at": 0, "radix": [16], "c": 0, "r": [0]},
+            {"template": gid, "at": 0, "radix": [1], "c": 1, "r": [0]}], "wires": [[0, 1]]}
+    else:
+        c = IF.Circuit("period-record", ((RECORD_GEMM, RECORD_UNITS[False]),), external=(f"{gid}/x",), wires=(
+            IF.Wire(gid, "x", gid, "o0", at=4, radix=(2, 2), base=0, step=(2, 1)),
+            IF.Wire(gid, "x", gid, "o0", at=2, radix=(1, 2), base=4, step=(2, 1))))
+        order = {"format": "verity/wire-order/v1", "segments": [
+            {"template": gid, "at": 0, "radix": [2, 2, 2], "c": 0, "r": [2, 4, 1]}], "wires": [[0, 0], [0, 0]]}
+    assert sum(n for _, n in c.templates) == RECORD_UNITS[bits]
     return (D.canonical(codec.encode_program(c.program()[0])), D.canonical(IF.descriptor_record(c, 2)),
             D.canonical(order))
 
@@ -2251,9 +2268,9 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             split = r.randint(1, n_prog - 1) if n_prog > 1 and r.random() < 0.3 else None
             outs = r.sample(UNIT_BYTES, 1 if split is None else 2)
         desc = json.loads(audit_descriptor(shape_of(n_prog, split, outs), entries, renamed, i in selects, scan_slots))
-        recorded = i == a and m.startswith("audit-record")
+        recorded, bits = i == a and m.startswith("audit-record"), m == "audit-record-bits"
         if recorded:
-            desc, units = json.loads(record_audit()[0]), RECORD_UNITS
+            desc, units = json.loads(record_audit(bits)[0]), RECORD_UNITS[bits]
         elif anchors and in_class:
             desc = json.loads(anchor[0])
         prog = program_sha512(desc)
@@ -2292,7 +2309,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 rp.shuffle(rec[there])
         record = {}
         if recorded:
-            _, doc, order = record_audit()
+            _, doc, order = record_audit(bits)
             pins = {"w": rp.randbytes(64).hex()} if r.random() < 0.5 or m == "audit-record-pin" else {}
             if m == "audit-record-state":
                 pins[SCAN_STATE] = rp.randbytes(64).hex()
