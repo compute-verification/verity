@@ -63,12 +63,12 @@ the prover's bytes:
 * Each request leaves at most once, at its place in the session's schedule, the honest prover's order (`State.place`, on
   what of the session's frames that carry no coin left before it, `Placed`; a `Commit` or `Round` at the opening its
   coins count, `State.request`, where an answer that is not coins ends the session, `State.answer`, so no opening is
-  asked for twice): `Register`; `Hello`; the first rep stream's
-  `Open`; `Commit`; `Link`; the first rep stream's rounds; then each later rep stream's `Open` and its rounds, in
-  `SessionSpec.repStreams` order, a stream's `Open` only once the rounds before it are past; and `Finish` once every rep
-  stream opened. A second `Register`, `Hello`, `Link` or `Open` of a stream, and any of them out of its place, is a
-  refusal. So what leaves is fixed by the statement and the schedule, as the model has it: each frame that carries no
-  coin once, at its place, and one message a round (`Claims.ZKServer.LeanRelease.toSrv`), and nothing the prover places.
+  asked for twice): `Register`; `Hello`; the first rep stream's `Open`; `Commit`; `Link`; the first rep stream's rounds;
+  then each later rep stream's `Open` and its rounds, in `SessionSpec.repStreams` order, a stream's `Open` only once the
+  rounds before it are past; and `Finish` once every rep stream opened. A second `Register`, `Hello`, `Link` or `Open`
+  of a stream, and any of them out of its place, is a refusal. So what leaves is fixed by the statement and the
+  schedule, as the model has it: each frame that carries no coin once, at its place, and one message a round
+  (`Claims.ZKServer.LeanRelease.toSrv`), and nothing the prover places.
 
 A refusal answers the prover `Resp::Refused(WHY)` and stops the session: every request after it is refused for the same
 reason without asking the auditor (`State.request`), `Ping` alone answered `Resp::Ok` by the loop, so nothing of the
