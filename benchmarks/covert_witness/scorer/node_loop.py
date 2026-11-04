@@ -12,9 +12,11 @@ covert-witness branches and every commit the scorer's records name that it holds
 serves for training (served.json, the rows the run's algorithm-policy keeps); launches refresh-node.sh with them, the
 last refresh's PUT statuses (vm-put.log) and the te_core ledger's records the node lacks (ledger.tar: the harness's
 launchers ingest every run into this VM's ledger, `launch.py --collect`); and once it has ended and custody has stored
-its record, fetches out/vm/'s small files, PUTs its console bodies, frontier-fit then algorithm-policy as
-te_core.algorithm_policy does, with RESCORE checked out at the run's re-score commit (`at_build`), where the route still
-serves what the run read, posts post.json's lines with those statuses in place of v1cycle.VM_PUT, pushes merge.bundle
+its record, fetches out/vm/'s small files, PUTs frontier-fit's console body as te_core.algorithm_policy does and
+algorithm-policy only as plot 2's overlay, never the raw search table (`overlay`: plot2_final.py on the run's stored
+search table and FINALS_RUN's finals table), with RESCORE checked out at the run's re-score commit (`at_build`), where
+the route still serves what the run read, posts post.json's lines with those statuses in place of v1cycle.VM_PUT,
+pushes merge.bundle
 to RESCORE_AHEAD, copies the panels and the efficiency table to the artifacts and labels the run's record, so the store
 keeps it past a run record's 7 days.
 """
@@ -79,6 +81,11 @@ PUT = ("import json, sys\nfrom te_core import console\nfor f in sys.argv[1:]:\n 
        "    try:\n        s = console.put(p)\n    except SystemExit as e:\n        s = f'not PUT: {str(e)[:300]}'\n"
        "    print(f\"PUT {console.PANELS_URL}/{p['id']}: {s}\", flush=True)\n")
 MERGE = "refs/te-scorer/merge"
+#: the integrator's finals build whose out/finals-table.json plot 2's overlay reads (plot2_final.py), its run id on one
+#: line; without it no refresh PUTs algorithm-policy, which is only ever the overlay (coordinator 18:05Z)
+FINALS_RUN = LOOP / "finals.txt"
+#: a refresh run's uncut search table, the overlay's search side
+TABLE = "out/tables/algorithm-policy/tables/algorithm-policy.json"
 
 
 def say(*a) -> None:
@@ -102,9 +109,59 @@ def on_node(cmd: str, timeout: float = 120) -> str:
 
 
 def console(code: str, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run([str(CONSOLE_PY), "-c", code, *args], cwd=RESCORE / "benchmarks" / "covert_witness",
+    return rescore_py("-c", code, *args)
+
+
+def rescore_py(*args: str) -> subprocess.CompletedProcess:
+    """CONSOLE_PY in RESCORE's benchmarks/covert_witness, whose te_core it imports."""
+    return subprocess.run([str(CONSOLE_PY), *args], cwd=RESCORE / "benchmarks" / "covert_witness",
                           capture_output=True, text=True, check=False,
-                          env=os.environ | {"PYTHONPATH": str(WT / "tools" / "research" / "src")})
+                          env=os.environ | {"PYTHONPATH": str(WT / "tools" / "research" / "src"),
+                                            "AGENT_GUARD_LOCAL_OK": "1"})
+
+
+def fetch(art: str, path: str, to: Path) -> Path:
+    r = subprocess.run(["research", "data", "fetch", art, "--to", str(to), "--path", path], cwd=Path.home(),
+                       capture_output=True, text=True, check=False, env=os.environ | {"AGENT_GUARD_LOCAL_OK": "1"})
+    if r.returncode:
+        raise SystemExit(f"{art[:16]}'s {path} not fetched: {(r.stderr.strip().splitlines() or ['?'])[-1][:200]}")
+    return to / path
+
+
+def overlay(art: str, mine: Path, put: bool = True) -> tuple[str, str]:
+    """Plot 2's overlay (plot2_final.py) built on run record `art`'s search table and FINALS_RUN's finals table, and
+    PUT unless not `put`: its status for the board's lines and its PUT line for vm-put.log."""
+    runs = FINALS_RUN.read_text().split() if FINALS_RUN.exists() else []
+    if not runs:
+        return f"not PUT: plot 2 is only the overlay and {FINALS_RUN} names no finals build", ""
+    finals = LOOP / f"finals-{runs[0]}.json"
+    try:
+        if not finals.exists():
+            rec = (V.attempt(runs[0]).get("outputs") or {}).get("run_record")
+            if not rec:
+                return f"not PUT: the finals build {runs[0]} has no run record", ""
+            shutil.copyfile(fetch(rec, "out/finals-table.json", mine / "ft"), finals)
+        table = fetch(art, TABLE, mine / "pol")
+    except SystemExit as e:
+        return f"not PUT: {e}", ""
+    out = mine / "p2"
+    shutil.rmtree(out, ignore_errors=True)
+    tool = str(HERE / "plot2_final.py")
+    b = rescore_py(tool, "build", "--finals", str(finals), "--policy", str(table), "--out", str(out))
+    (mine / "p2-build.out").write_text(b.stdout + b.stderr)
+    if b.returncode:
+        return f"not PUT: plot2_final's build: {(b.stderr.strip().splitlines() or ['?'])[-1][:200]}", ""
+    (ARTIFACTS / "te-panels").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(out / "algorithm-policy.png", ARTIFACTS / "te-panels" / "algorithm-policy-overlay.png")
+    if not put:
+        return "built, not PUT", ""
+    u = rescore_py(tool, "put", str(out))
+    (mine / "p2-put.out").write_text(u.stdout + u.stderr)
+    m = re.search(r" PUT (\S+): (\S+) \((art:[0-9a-f]+); (\d+) rows", u.stdout)
+    if not m:
+        return f"not PUT: {((u.stdout + u.stderr).strip().splitlines() or ['?'])[-1][:200]}", ""
+    return (f"{m[2]} (plot 2's overlay, scorer/plot2_final.py: the finals table of {runs[0]} over this table, {m[3]}, "
+            f"{m[4]} console rows)"), f"PUT {m[1]}: {m[2]}"
 
 
 def git(*args: str, cwd: Path = WT) -> subprocess.CompletedProcess:
@@ -262,7 +319,7 @@ def finish(run: str, until: float) -> dict:
         now = console(SERVED)
         sent = json.loads((mine / "served.json").read_text()) if (mine / "served.json").exists() else {}
         served = json.loads(now.stdout) if not now.returncode else None
-        bodies = [vm / "put" / f"{n}.json" for n in (V.FIT, "algorithm-policy")]
+        bodies = [vm / "put" / f"{V.FIT}.json"]
         if served is None:
             put = {k: f"not PUT: GET failed ({(now.stderr.strip().splitlines() or ['?'])[-1][:160]})" for k in ap}
         elif not art:
@@ -277,7 +334,8 @@ def finish(run: str, until: float) -> dict:
             r = console(PUT, *map(str, bodies))
             lines = [x for x in r.stdout.splitlines() if x.startswith("PUT ")]
             put = {u.rstrip("/").rsplit("/", 1)[-1]: s for u, s in (x[4:].split(": ", 1) for x in lines)}
-            (mine / "vm-put.log").write_text("\n".join(lines) + "\n" + r.stderr)
+            put["algorithm-policy"], line = overlay(art, mine)
+            (mine / "vm-put.log").write_text("\n".join([*lines, *filter(None, [line])]) + "\n" + r.stderr)
         put = {k: v for k, v in put.items() if k in ("algorithm-policy", V.FIT)}
     posts = json.loads((vm / "post.json").read_text()) if (vm / "post.json").exists() else []
     for tag, text in posts:
