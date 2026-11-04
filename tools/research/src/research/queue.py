@@ -1390,6 +1390,8 @@ class Queue:
         self._preflight_ahead: set[int] = set()
         #: the merges this sync took a recorded preflight verdict for instead of running one (`_preflighted`)
         self._preflights_reused = 0
+        #: each member's base on `next` as this sync found it, by head (`_next_base`), read once a sync
+        self._next_bases: dict[str, str] | None = None
         #: drive's priority list (`--priority-file`: `priority_file`, read again at each sync, `priority_list`): these PRs and
         #: those they contain (`_prioritized`) go first of what a sync merges anew (`order`), and their preflights start
         #: whatever `PREFLIGHT_BUDGET_S` and the PRs the last sync left waiting (`_preflighted`)
@@ -2104,36 +2106,64 @@ class Queue:
             reach = max(reach, end)
         return spent
 
+    def _next_base(self, head: str) -> str | None:
+        """The tree ``head`` was merged onto on `next` as this sync found it (its merge's first parent there), or None."""
+        if self._next_bases is None:
+            r = _git(self.workdir, "log", "--first-parent", "--format=%P", f"refs/remotes/origin/{self.branch}", f"^{self.base}",
+                     check=False)
+            self._next_bases = {}
+            for parents in (line.split() for line in r.stdout.splitlines()):
+                if len(parents) == 2:
+                    self._next_bases.setdefault(parents[1], parents[0])
+        if (below := self._next_bases.get(head)) is None:
+            return None
+        return _git(self.workdir, "rev-parse", "-q", "--verify", f"{below}^{{tree}}", check=False).stdout.strip() or None
+
     def _standing(self, head: str, base_tree: str, tree: str, flights: dict) -> bool:
-        """Whether ``head``'s newest record in ``flights`` is a pass onto another base tree that stands for its merge ``tree``
-        onto ``base_tree``.  A rebuild of `next` (a landing's lock commit, a lift, an ejection, a `main` that moved) gives every
-        member above the change a new base tree, and each preflight takes a place in the sync's pool and wall time of its
-        budget.  It stands when (a) the head's change is the same onto both bases: `git diff-tree -r` from base to merge, each
-        path with its modes and blobs on both sides, so no path it touches differs between the bases and the merge (a rebuilt
-        pin, a restack) wrote the same files; (b) between the bases no path of `PREFLIGHT_RULES` changed and none was deleted;
-        and (c) the change deletes no path.  `Preflight.onto` refuses only what fails on the merge and not on its base, so what
-        a check says of a file alone (a Markdown cap, a report-genre name, a pin, which every change to its inputs rewrites)
-        carries across, and (b) and (c) keep out a reference from one side to a path the other takes away (a module string, a
-        doc path).  What still carries is a reference to a name the other side drops from a file it keeps (a `module:attr`
-        whose attribute a change below removed): the after-landing run's suites run these checks on `checked`'s tip and revert
-        the culprit, as for a preflight that fails to run.  The record may be of a preflight run above one that then refused
-        (`_Back`): it judged the trees it names all the same.  A record whose trees this clone lacks stands for nothing."""
-        old = next(((k, rec) for fl in (flights["now"], flights["before"]) for k, rec in reversed(fl.items())
-                    if rec.get("head") == head), None)
-        if old is None or old[1].get("why") is not None or not old[1].get("tree"):
-            return False
-        old_base, old_tree = old[0].rpartition(":")[2], old[1]["tree"]
+        """Whether a pass of ``head``'s in ``flights`` onto another base tree stands for its merge ``tree`` onto ``base_tree``:
+        first the one onto the base it had on `next` as this sync found it (`_next_base`), then its newest by position (the state
+        is saved with its keys sorted, so position orders a head's records by their bases' hashes, not by time).  A rebuild of
+        `next` (a landing's lock commit, a lift, an ejection, a `main` that moved) gives every member above the change a new base
+        tree, and each preflight takes a place in the sync's pool and wall time of its budget.  It stands when (a) the head's
+        change is the same onto both bases: `git diff-tree -r` from base to merge, each path with its modes and blobs on both
+        sides, so no path it touches differs between the bases and the merge (a rebuilt pin, a restack) wrote the same files;
+        (b) between the bases no path of `PREFLIGHT_RULES` changed and none was deleted; and (c) the change deletes no path.
+        `Preflight.onto` refuses only what fails on the merge and not on its base, so what a check says of a file alone (a
+        Markdown cap, a report-genre name, a pin, which every change to its inputs rewrites) carries across, and (b) and (c) keep
+        out a reference from one side to a path the other takes away (a module string, a doc path).  What still carries is a
+        reference to a name the other side drops from a file it keeps (a `module:attr` whose attribute a change below removed):
+        the after-landing run's suites run these checks on `checked`'s tip and revert the culprit, as for a preflight that fails
+        to run.  The record may be of a preflight run above one that then refused (`_Back`): it judged the trees it names all
+        the same.  A record whose trees this clone lacks stands for nothing."""
+        records = []
+        if (on_next := self._next_base(head)) is not None:
+            key = f"{head}:{on_next}"
+            if (rec := flights["now"].get(key) or flights["before"].get(key)) is not None:
+                records.append((key, rec))
+        newest = next(((k, rec) for fl in (flights["now"], flights["before"]) for k, rec in reversed(fl.items())
+                       if rec.get("head") == head), None)
+        if newest is not None and newest[0] not in {k for k, _ in records}:
+            records.append(newest)
 
         def rows(a: str, b: str) -> list[tuple[str, str]] | None:
             r = _git(self.workdir, "diff-tree", "-r", "-z", "--no-renames", a, b, check=False)
             parts = r.stdout.split("\0")
             return None if r.returncode else [(meta, path) for meta, path in zip(parts[::2], parts[1::2])]
 
-        change = rows(old_base, old_tree)
-        if change is None or change != rows(base_tree, tree) or (between := rows(old_base, base_tree)) is None:
-            return False
         ruled = lambda path: any(path == r or (r.endswith("/") and path.startswith(r)) for r in PREFLIGHT_RULES)  # noqa: E731
-        return not any(meta.endswith(" D") for meta, _ in [*change, *between]) and not any(ruled(p) for _, p in between)
+        mine = None
+        for old_key, old in records:
+            if old.get("why") is not None or not old.get("tree"):
+                continue
+            old_base = old_key.rpartition(":")[2]
+            if (change := rows(old_base, old["tree"])) is None or (between := rows(old_base, base_tree)) is None:
+                continue
+            if mine is None:
+                mine = rows(base_tree, tree)
+            if (change == mine and not any(meta.endswith(" D") for meta, _ in [*change, *between])
+                    and not any(ruled(p) for _, p in between)):
+                return True
+        return False
 
     def _read_priority(self, state: dict) -> frozenset[int]:
         """Drive's priority list from `priority_file` (`priority_list`), logged when it changes (the state's `priority`); one it
@@ -2275,7 +2305,7 @@ class Queue:
         before = (cache.get("of") or {}) if (cache.get("main"), cache.get("gates")) == (main, list(gates)) else {}
         verdicts: dict[str, list[str]] = {}
         flights = {"before": state.get("preflights") or {}, "now": {}}
-        self._flown, self._running, self._preflights_reused = [], [], 0
+        self._flown, self._running, self._preflights_reused, self._next_bases = [], [], 0, None
         waited = {n for n in state.get("preflight_waited") or () if n in entries}
         self._preflight_first = waited.union(*(entries[n].after for n in waited))
         self._preflight_ahead = waited & set(order[k:])
