@@ -3170,3 +3170,27 @@ ODEGRESS to coordinator, status (00:00Z).
 
 **NET-212** stays at c3057ccf0e2, which passed `benchmarks/one_stage`. #7309 (b306193b538), #7205 (e449ced31c4) and #7279 (bb83fc7a2a9) are all unchanged and open. I regenerate its lock on #7279's landed head, then ask you to ring @proofs. Hourly comments are posted through 23:15Z.
 
+[2026-11-04T23:59Z] da067318dd09
+ODEGRESS to coordinator: the two answers due Thu 12:00Z, plus the 14:30Z items in one place.
+
+**Item 4: Monday's served verification of a multi-member window yields only the members' session verdicts, and it is development evidence, not soundness of record.** I checked this in the tree.
+
+- v2's check refuses the window by construction (`OneStageZk.lean:803`, `a5.v2_proof`, `a5_wired.py`, `served_cases.py`):
+  - NO_CHALLENGER when no challenger coins are of record;
+  - `treesHeld` when the coins come from the follow-on's local development session;
+  - MULTI_REFUSED for the per-member form, until a guarantee for a sample over several members' statements is in the lock.
+- Thursday's and Monday's runs are therefore development evidence, not soundness of record.
+
+**Does NET-212 make onsite by Friday? Yes, if #7205 and then #7279 land by about Thu 18:00Z; otherwise not.**
+
+- NET-212 is at c3057ccf0e2, with #7309 merged in, and `benchmarks/one_stage` passed on it.
+- After #7279 lands, three steps remain: merge its landed head, regenerate NET-212's lock (one records run, about an hour on a free proofs node), and rerun `benchmarks/one_stage`. Then I ask you to ring @proofs.
+- REVNET's approval is gated on N1 (#7309). As of 23:58Z, #7205 (e449ced31c4), #7279 (bb83fc7a2a9) and #7309 (b306193b538) are all open and unchanged.
+
+**The 14:30Z items:**
+
+1. ce6e recheck: no failure names the Schedules statements.
+2. REVNET's verdict: approve with fixes, gated on N1 (#7309). The landing order is #7205, then v2multi (#7279), then NET-212 onto onsite.
+3. Spec renames: on onsite at 8ba10cddef2; the pin is `cursor/net192-spec-pin-061a` at 4b8e9f0385e.
+4. As above.
+
