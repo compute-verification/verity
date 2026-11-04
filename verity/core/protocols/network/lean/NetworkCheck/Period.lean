@@ -939,8 +939,21 @@ def readsEntriesFn (j : Json) : Except String Json := do
   return .bool (readsEntries x (← Flock.J.nat j "o" ctx) (← Flock.J.nat j "t0" ctx) (← Flock.J.nat j "every" ctx)
     (← Flock.J.nat j "E" ctx) ks)
 
+/-- No two of the Program's definitions share a key. -/
+def keysUnique (P : Flock.Program.Prog) : Bool :=
+  (P.defs.foldl (fun (seen, ok) d => (seen.insert d.key (), ok && !seen.contains d.key))
+    (({} : Std.HashMap String Unit), true)).2
+
+#guard keysUnique { defs := #[{ (default : Flock.Program.Defn) with key := "A_v1" },
+    { (default : Flock.Program.Defn) with key := "B_v1" }], index := {}, root := 0, programFn := "", sha512 := .empty } &&
+  !keysUnique { defs := #[{ (default : Flock.Program.Defn) with key := "A_v1" },
+    { (default : Flock.Program.Defn) with key := "A_v1" }], index := {}, root := 0, programFn := "", sha512 := .empty }
+
 /-- The scan's terms from its Program's descriptor (`Flock.Program.decode` of its canonical bytes), which must be the
-registered Program (`program`, its SHA-512) and the generator form of the schedule's execution phase: its root batches
+registered Program (`program`, its SHA-512), with no two definitions of one key (`keysUnique`) and no template keyed
+as an input (`Flock.Program.isInputId`), so the template query (`Flock.TemplateQuery.evaluate`, which finds a
+definition by its key, the first of that key, and skips an input's) reads each template node as this check does, and
+the generator form of the schedule's execution phase: its root batches
 one instance of bucket 0's template, `T - 1` of the later ingress buckets' (no such template when `T = 1`), both
 returning the same and each one's `row` the schedule's row (`S · B` bytes), then `T` of the egress template, which
 returns a u16 and the schedule's row, and every input gate is a template's parameter. The types are the Boolean profile's, as the
@@ -969,6 +982,9 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   need (Flock.hexOf prog.sha512 == program) "scan: its SHA-512 is not the registered Program's (program)"
   let root ← needSome prog.defs[prog.root]? "scan: no root"
   let templates := (templateNodes prog).toArray.map fun k => (root.body.nodes[k]!, prog.defs[root.body.nodes[k]!.fn]!)
+  need (keysUnique prog) "scan: two of the Program's definitions share a key, which a query by key reads as one"
+  need (templates.all fun (_, d) => !Flock.Program.isInputId d.key)
+    "scan: a template is keyed as an input (Flock.Program.isInputId), which a query by key skips"
   let T := s.window
   let row : Flock.Program.Ty := .array (s.allocation * s.cellBytes) (.array 8 (.value 1))
   let (xe, de) ← needSome templates.back? "scan: no template"

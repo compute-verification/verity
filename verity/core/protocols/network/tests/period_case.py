@@ -754,8 +754,9 @@ def _record_count(a: dict, ctx: str) -> tuple[int, int, tuple[str, tuple[tuple[s
 
 
 def _scan(j, program: str, s: WardenParams) -> Scan:
-    """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
-    form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), an egress template
+    """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program, with no
+    template keyed as an input (`INPUT_ID`; two definitions of one key can't be written, `definitions` being an object),
+    and the generator form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), an egress template
     with a row among its parameters (the checker form) refused first. Then what `NetTiming.BoundaryGates.Fits` asks: the
     walk within `FUEL` (`_walkable`), the root returning every egress leaf, the egress template returning only gates it
     computes (`_own_returns`), each ingress row and every template's row, state and egress argument one input node's
@@ -770,6 +771,8 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     defs, callees = j["definitions"], j["callees"]
     nodes = defs[j["root"]]["body"]["nodes"]
     templates = [(x, defs[callees[x["fn"]]]["body"]) for x in nodes if defs[callees[x["fn"]]]["form"] != "primitive"]
+    if any(INPUT_ID.fullmatch(callees[x["fn"]]) for x, _ in templates):
+        raise D.Reject("scan: a template is keyed as an input")
     T, row = s.window, ["Array", s.lanes * s.slots * s.cell_bytes, BOOL_BYTE]
     if not templates:
         raise D.Reject("scan: no template")
@@ -2964,7 +2967,8 @@ def bad_scans(p: dict) -> list[dict]:
     """Rows-form parameters whose scan `scanOf` refuses, each one change to `p`: not a descriptor, another Program's
     (its SHA-512 not `program`), and, each under its own SHA-512, the checker form (its egress row an input), templates
     with other parameters, another number of instances, rows not the schedule's, a lane's `prog<j>` another row of its
-    input than its bucket's or another lane's input, an input gate no template's, and each negative of a check of what
+    input than its bucket's or another lane's input, an input gate no template's, the egress template keyed as an
+    input, and each negative of a check of what
     `NetTiming.BoundaryGates.Fits` asks (`scan_negatives`)."""
     s, desc = p["schedule"], p["scan"]
     T, row, widths = s["window"], s["lanes"] * s["slots"] * s["cell_bytes"], _scan_widths(desc)
@@ -2978,6 +2982,12 @@ def bad_scans(p: dict) -> list[dict]:
     def scan(*a, **k) -> str:
         return scan_descriptor(*a, **({"lanes": L, "every": every} | k))
 
+    keyed = json.loads(D.canonical(desc))
+    fn = [x["fn"] for x in keyed["definitions"][keyed["root"]]["body"]["nodes"]
+          if keyed["definitions"][keyed["callees"][x["fn"]]]["form"] != "primitive"][-1]
+    old = keyed["callees"][fn]
+    keyed["callees"][fn] = "Input3_v1"
+    keyed["definitions"]["Input3_v1"] = keyed["definitions"].pop(old) | {"id": "Input3_v1"}
     extra = json.loads(D.canonical(desc))
     extra["types"].append(["Array", 1, ["Value", 1]])
     extra["definitions"][extra["root"]]["body"]["nodes"].append(
@@ -2997,6 +3007,7 @@ def bad_scans(p: dict) -> list[dict]:
             *([own(scan(T, row, widths, skew=1))] if T // every > 1 else []),
             *([own(scan(T, row, widths, shared=True))] if L > 1 else []),
             p | {"scan": extra, "program": program_sha512(extra)},
+            p | {"scan": keyed, "program": program_sha512(keyed)},
             *(q for q, _ in scan_negatives(p).values())]
 
 
