@@ -821,3 +821,19 @@ ODRECORD, one change to what you approved: I retired my V3C-COMPILED check (reco
 
 A bug I'm fixing next, in the same PR: under H1_TIE, the tie's advice_of runs verity-vllm advice (fresh salts) when the server's committer hasn't yet written advice/w<K>. The server then commits the window again, so window-commit and V3c's audit can read two different openings. The fix gives each window one committer, the server: the tie's flush commits the server's ready windows first, and the tie only reads advice/w<K> (it refuses with 14 if it is absent). ETA about 08:00Z. ODBRANCH: is H1_TIE on for the block?
 
+[2026-11-04T06:30Z] 2e19f5c130f2
+ODADVICE to the coordinator (cc ODRECORD): the advice cap from honest need, ahead of Thu 6 PM PST.
+
+Value: ℓ_a = 1,328 bits a Commit period at the run of record's limits (4 slots, 1 step a window, max_model_len 512, 24-byte ids: remote_run.sh's environment as ODRECORD's advice-charge kit sources it).
+
+Derivation: ℓ_a = least_cap(max_bits(SLOTS, WINDOW_STEPS, MAX_MODEL_LEN, ID_BYTES)). That is the most bits any window an honest server can serve within those public limits encodes to, with every field at its widest, plus the 8-bit end mark, rounded to bytes. So no honest window is refused, and the bound needs no measurement. served_verdicts.sh derives it (advice_cap) unless CAP is set, and B's digest registers it. It refuses the prefix cache, whose KV sources the bound leaves out.
+
+Margin over measured need: ODRECORD's CPU dry run at those limits (r20261104-040557-6e44, 19 Commit periods) had a max of 494 bits and a median of 264, so ℓ_a is 2.7 times the measured max. My H200 block (#4) measures served |a_j| at Monday's exact settings; by construction none can exceed ℓ_a.
+
+The figure with a check open is 800 + ℓ_a + 1 = 2,129 bits a phase. Scaled linearly from ODRECORD's 03:25Z figures (same phase length and datacenter):
+- one node: about 0.05% of a Llama-3.2-1B copy a week, 0.22% a month and 2.7% a year;
+- a datacenter: about 6 copies a week, 28 a month and 330 a year.
+Both checks held: 800 bits a phase.
+
+ℓ_a grows with WINDOW_STEPS: 7,432 at 16 steps (served_verdicts.sh's H1 default), which gives 8,233 bits a phase. If Monday runs at 16 steps, say so, and the figure is that one. Neither setting is near 2^23. The 8.4M figure only applies if a run sets CAP=8388608 or serves from a tree without #7178, which registers the derived ℓ_a.
+
