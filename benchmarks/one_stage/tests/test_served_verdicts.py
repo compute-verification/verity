@@ -199,13 +199,17 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
     whose text or JSON names or counts a window is held there in full with its public form left in out/, and the rest,
     the bench Build's requests by name and a window named ``all`` among them, stay byte for byte; a binary file, which no
     scan reads, is held whole. What a verifier reads (`RECEIVED`: the advice registration, the certifier's answer and
-    case, and V3c's period audit) is held whole unless the kind scan found it clean (``--received-scanned``), and then
-    keeps every key and value, the period's ``steps`` and the case's ``windows`` among them, only its text in public form.
-    Then out/ names no window, counts none of a window's own but what a verifier reads, and a second pass holds
-    nothing."""
+    case, V3c's period audit and its circuit file) is held whole unless the kind scan found it clean
+    (``--received-scanned``), and then keeps every key and value, the period's ``steps`` and the case's ``windows`` among
+    them, only its text in public form, and the circuit file as written, its wire names that read as a window's kept
+    (`AS_WRITTEN`: read by its SHA-512). Then out/ names no window, counts none of a window's own but what a verifier
+    reads, and a second pass holds nothing."""
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
     case = {"params": {"windows": 4, "link": "certified"}, "commitment": "ab" * 8}
+    circuit = "flock-ir-unit/v2\nw7 = and w3 w4\n"
+    circuit_rel = f"v3c-audit/circuits/{hashlib.sha512(circuit.encode()).hexdigest()}.txt"
     files = {
+        circuit_rel: circuit,
         "verdicts.txt": "SERVE stopped (exit 0): 3 window(s) closed, 2 sealed\nCOMPOSITE CASE verity/pous/p2/v4/run accept\n",
         "record/verdicts.json": json.dumps({"window": 7, "node": "n", "composed": {"verdict": "pending", "reason": "window 7: no"}}),
         "record/block-record.json": json.dumps({"server_time": [{"server": "n", "steps": [13, 19]}], "composed": {"verdict": "pending"}}),
@@ -231,12 +235,14 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
     assert S.main(["publish", str(out), "--private", str(private), *(["--received-scanned"] * scanned)]) == 0
     said = capsys.readouterr().out
     assert ("(RECEIVED) wasn't found clean by the kind scan: held whole" in said) == (not scanned)
-    received = {"registration.json", "pieces/certifier/answer.json", "pieces/certifier/case.json", "v3c-audit/period.json"}
+    received = {"registration.json", "pieces/certifier/answer.json", "pieces/certifier/case.json", "v3c-audit/period.json",
+                circuit_rel}
     assert {r for r in files if any(fnmatch.fnmatchcase(r, g) for g in S.RECEIVED)} == received
+    assert {r for r in files if any(fnmatch.fnmatchcase(r, g) for g in S.AS_WRITTEN)} == {circuit_rel}
     whole = {"sampled-proofs/w7/summary.json", *(() if scanned else received)}
     kept = {"predicted.json", "pieces/wipe/served.json", *(received - {"pieces/certifier/answer.json"} if scanned else ())}
-    assert _window_data(out, 7) == (['pieces/certifier/case.json: "windows":', 'v3c-audit/period.json: "steps": 1']
-                                    if scanned else []), _window_data(out, 7)
+    assert _window_data(out, 7) == (['pieces/certifier/case.json: "windows":', f"{circuit_rel}: w7",
+                                     'v3c-audit/period.json: "steps": 1'] if scanned else []), _window_data(out, 7)
     for rel, body in files.items():
         assert (out / rel).exists() == (rel not in whole), rel
         if rel in kept:
@@ -1565,7 +1571,7 @@ else:
         (out / "registration.json").write_text(json.dumps({{"format": "toy", "after": json.load(open(tail[1]))}}))
     print(json.dumps({{"run": "ab", "circuit": "cd", "population": 37, "sources": {{"pad": 3}}, "window": 7}}))
 '''
-FAKE_RECORDS_AUDIT = '''import json, os, sys
+FAKE_RECORDS_AUDIT = '''import hashlib, json, os, sys
 from pathlib import Path
 a = sys.argv[1:]
 open(os.environ["ORDER"], "a").write(a[0] + "\\n")
@@ -1591,7 +1597,11 @@ assert a[0] == "period" and a[a.index("--audit") + 1] == str(out.parent / "audit
 if os.environ.get("FAIL_PERIOD"):
     print("records_audit.py period: the audit under it wrote no Program", file=sys.stderr)
     sys.exit(1)
-out.write_text(json.dumps({"free": 0}))
+text = b"flock-ir-unit/v2 stand-in\\n"
+pin = hashlib.sha512(text).hexdigest()
+(circuits := Path(a[a.index("--circuits") + 1])).mkdir(parents=True)
+(circuits / f"{pin}.txt").write_bytes(text)
+out.write_text(json.dumps({"circuits": [{"template": "a@0", "sha512": pin}], "free": 0}))
 print("PERIOD " + json.dumps({"verdict": "accept"}))
 '''
 TOY_MAIN = f"{'ef' * 20}\n{'01' * 20}\n"
@@ -1658,7 +1668,8 @@ def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_
     the serve dir, the window, the certifier's piece dir and V3c's dir, and writes the answer `pieces` reads there. The
     two steps' logs, which count the window's requests, end in the serve dir's private/pieces/certifier, and V3c's
     audit's in its private/v3c-audit, not in $OUT, which leaves the node; $OUT/v3c-audit holds what the record reads of
-    the audit alone, and what a verifier reads of $OUT scans clean (`kind_scan.py --received`) and leaves as it is. $OUT
+    the audit alone, with the period's circuit files under their SHA-512 (`records_audit.py period --circuits`, into V3c's
+    dir, then copied), and what a verifier reads of $OUT scans clean (`kind_scan.py --received`) and leaves as it is. $OUT
     then names no window and counts none of its own (the window commit's population, the audit's, the chain's window):
     each line is whole in the serve dir's private/verdicts.txt, each file in its private/out."""
     rc, lines, order, limits = _v3c(tmp_path)
@@ -1672,12 +1683,15 @@ def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_
     held = (tmp_path / "serve" / "private" / "verdicts.txt").read_text()
     assert "chain on window 7" in held and '"population": 37' in held and "chain on window K" in "\n".join(lines)
     assert '"population": 37' in (tmp_path / "serve" / "private" / "v3c-audit" / "audit.log").read_text()
-    assert sorted(p.relative_to(tmp_path / "out").as_posix() for p in (tmp_path / "out" / "v3c-audit").rglob("*")) == [
-        "v3c-audit/period.json", "v3c-audit/summary.json"]
+    pin = hashlib.sha512(b"flock-ir-unit/v2 stand-in\n").hexdigest()
+    assert sorted(p.relative_to(tmp_path / "out").as_posix() for p in (tmp_path / "out" / "v3c-audit").rglob("*")
+                  if p.is_file()) == [f"v3c-audit/circuits/{pin}.txt", "v3c-audit/period.json", "v3c-audit/summary.json"]
     scan = (tmp_path / "serve" / "private" / "received-scan.txt").read_text().splitlines()
     assert scan[-1].startswith("KIND-SCAN clean: ") and not (tmp_path / "serve" / "private" / "out" / "compiler.json").exists()
     assert json.loads((pieces / "answer.json").read_text()) == {"verdict": "accept"}
-    assert json.loads((tmp_path / "out" / "v3c-audit" / "period.json").read_text()) == {"free": 0}
+    assert json.loads((tmp_path / "out" / "v3c-audit" / "period.json").read_text()) == {
+        "circuits": [{"template": "a@0", "sha512": pin}], "free": 0}
+    assert (vw / "circuits" / f"{pin}.txt").read_bytes() == b"flock-ir-unit/v2 stand-in\n"
     heads = [line.split(" (")[0].split(":")[0] for line in lines]
     assert heads[:3] == [f"WINDOW-CIRCUIT class {W63K4}", f"WINDOW-COMMIT class {W63K4}",
                          f"WINDOW-CIRCUIT-HELD class {W63K4}"] and heads[-1] == "CERTIFIER-PERIOD"

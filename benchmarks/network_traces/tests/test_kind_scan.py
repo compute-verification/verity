@@ -13,10 +13,12 @@ What a verifier on another machine receives of a served run's OUT (``--received`
 the registered compiler, the advice and weights registrations and the window circuit's count) scans clean as the run
 writes it, and anything that reads the advice or counts the window is a finding: a log left in either dir, an undeclared
 file, the advice's own length in its registration, a workload in φ, the advice's length in a count, a compile in the
-audit's summary and an advice binding in its registration."""
+audit's summary, an advice binding in its registration, and a circuit file period.json doesn't name or that isn't the
+bytes its name hashes."""
 from __future__ import annotations
 
 import fnmatch
+import hashlib
 import importlib.util
 import json
 import sys
@@ -208,10 +210,15 @@ WEIGHTS = {"schema": "verity-vllm/weights-registration/v1", "program": "window-c
            "unrooted": {"lm_head": "tied to the embedding"}}
 
 
+#: a stand-in of V3c's circuit file (`records_audit.period`'s ``--circuits``), and its SHA-512
+CIRCUIT = b"flock-ir-unit/v2 stand-in\n"
+CIRCUIT_PIN = hashlib.sha512(CIRCUIT).hexdigest()
+
+
 def _out(tmp_path: Path, period) -> Path:
     """A served run's OUT as the verifier receives it (`RECEIVED`): the certifier's piece, V3c's audit as the run
-    copies it (its summary and audit record as `served_integrity.public_copy` writes them, the registration it audited
-    and its period audit), the registered compiler, the window's advice registration in its public form
+    copies it (its summary and audit record as `served_integrity.public_copy` writes them, the registration it audited,
+    its period audit and its circuit file), the registered compiler, the window's advice registration in its public form
     (`served_verdicts.public_registration`), the weights registration and a class's count."""
     out = tmp_path / "out"
     case, answer = _case(period)
@@ -231,7 +238,10 @@ def _out(tmp_path: Path, period) -> Path:
         "draw": {"law": "subset", "k": 2, "population": reg["population"], "units": units},
         "wrong_units": {"delta": 1e-6, "of": reg["population"], "bound": 9, "rule": "at most `bound` incorrect proof blocks"}}))
     (v3c / "registration.json").write_text(json.dumps(reg))
+    (v3c / "circuits").mkdir()
+    (v3c / "circuits" / f"{CIRCUIT_PIN}.txt").write_bytes(CIRCUIT)
     (v3c / "period.json").write_text(json.dumps({"answer": ev["audits"][0], "registration": reg,
+                                                 "circuits": [{"template": "t@0", "sha512": CIRCUIT_PIN}],
                                                  **{k: case["params"]["audits"][0][k] for k in ("free", "steps", "program")}}))
     (out / "compiler.json").write_text(json.dumps(COMPILER))
     (out / "registration.json").write_text(json.dumps(SV.public_registration(ADVICE)))
@@ -243,12 +253,14 @@ def _out(tmp_path: Path, period) -> Path:
 
 def test_what_a_verifier_receives_of_a_served_run_is_of_the_public_kinds(tmp_path, period):
     """OUT as the run writes it scans clean, every file `served_verdicts.RECEIVED` names read (the leaves counted by
-    kind), and the paths the scan reads are the ones publish leaves as they are."""
+    kind), and the paths the scan reads are the ones publish leaves as they are, the circuit files it holds to their
+    SHA-512 the ones publish leaves unread (`served_verdicts.AS_WRITTEN`)."""
     out = _out(tmp_path, period)
     found, kinds = KS.received(out)
     assert found == [] and all(kinds[k] for k in KS.KINDS), (found, kinds)
     assert KS.main(["--received", str(out)]) == 0
     assert {f"{d}/*" for d in KS.RECEIVED_DIRS} | set(KS.RECEIVED) == set(SV.RECEIVED)
+    assert SV.AS_WRITTEN == (f"v3c-audit/{KS.CIRCUITS}/*",)
     published = sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file())
     assert all(any(fnmatch.fnmatchcase(p, g) for g in SV.RECEIVED) for p in published), published
 
@@ -280,14 +292,20 @@ def _edit(p: Path, f) -> None:
      [("v3c-audit/registration.json", "window.advice")]),
     (lambda o: _edit(o / "v3c-audit" / "window" / "audit.json", lambda r: {**r, "statement": {"requests": 2}}),
      [("v3c-audit/window/audit.json", "statement.requests")]),
+    (lambda o: (o / "v3c-audit" / "circuits" / f"{hashlib.sha512(b'witness').hexdigest()}.txt").write_bytes(b"witness"),
+     [(f"v3c-audit/circuits/{hashlib.sha512(b'witness').hexdigest()}.txt", "")]),
+    (lambda o: (o / "v3c-audit" / "circuits" / f"{CIRCUIT_PIN}.txt").write_bytes(CIRCUIT + b"requests 2\n"),
+     [(f"v3c-audit/circuits/{CIRCUIT_PIN}.txt", "")]),
+    (lambda o: (o / "v3c-audit" / "circuits" / "witness.bin").write_bytes(b"\x00"), [("v3c-audit/circuits/witness.bin", "")]),
 ])
 def test_what_reads_the_advice_or_counts_the_window_is_a_finding_in_what_a_verifier_receives(
         tmp_path, period, plant, want):
     """A log or main's history left in the piece's dir or V3c's audit; the advice's own length in its registration,
     or the registration as `verity-vllm advice` writes it (its requests, compiles, length and window); a workload in the
     compiler's φ; the advice's length in a class's count; a compile in V3c's summary (the audit opened the advice); an
-    advice binding in the registration V3c audited; and a field of the audit record `served_integrity.answer` doesn't
-    read: each is a finding, and the scan exits 1."""
+    advice binding in the registration V3c audited; a field of the audit record `served_integrity.answer` doesn't
+    read; and among V3c's circuit files one period.json doesn't name (under its own SHA-512, or under no SHA-512) or one
+    whose bytes aren't its name's: each is a finding, and the scan exits 1."""
     out = _out(tmp_path, period)
     plant(out)
     found = KS.received(out)[0]
@@ -301,7 +319,12 @@ def test_a_received_file_that_is_a_symlink_or_isnt_json_is_a_finding(tmp_path, p
     (out / "weights_registration.json").unlink()
     (out / "weights_registration.json").symlink_to(out / "compiler.json")
     (out / "window-circuit-4-32-4.json").write_text("registered 7 bits")
-    assert sorted(_paths(KS.received(out)[0])) == [("weights_registration.json", ""), ("window-circuit-4-32-4.json", "")]
+    circuit = out / "v3c-audit" / "circuits" / f"{CIRCUIT_PIN}.txt"
+    (tmp_path / "elsewhere.txt").write_bytes(circuit.read_bytes())
+    circuit.unlink()
+    circuit.symlink_to(tmp_path / "elsewhere.txt")
+    assert sorted(_paths(KS.received(out)[0])) == [(f"v3c-audit/circuits/{CIRCUIT_PIN}.txt", ""),
+                                                   ("weights_registration.json", ""), ("window-circuit-4-32-4.json", "")]
     with pytest.raises(SystemExit):
         KS.main([])
 
