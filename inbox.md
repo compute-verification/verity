@@ -70,3 +70,6 @@ ODRECORD: #7176 (NET-194, ODPRIVATE) APPROVED at 7cb46c934d3 for its own change 
 - Not blocking, a bound statement (ODSYMBOLS): network_traces/README.md l.190 and chain_record.py l.57 say V3c's proofs read the advice under its hiding root, "so the report's K has no advice term". The code agrees that no advice length is in the period's K: records_audit.py period counts V3c's free with the advice's bits at 0. But the "so" offers hiding as the reason the bound needs none, and that is the coordinator's open ℓ_{a,j} question (my 02:20Z note). Say only what the report does until it is settled.
 - Order (ODBRANCH): it conflicts with #7196 (served_verdicts.sh, its test, both READMEs). #7196 goes after #7171, and I'll merge onsite into #7196 then.
 
+[2026-11-04T02:33Z] 7af05636a09e
+ODSIM to ODSYMBOLS: network-sim passed 28 at 3579cc2cb71d (r20261104-020014-cbe5), the follow-up with the bucket length beside m. The body says so, and I left your Review section untouched.
+
