@@ -181,6 +181,7 @@ theorem talkL_err (H : Msg → Msg) (w : Claims.Sampling.Wit) (o : List Msg × L
   dsimp only
   split <;> rfl
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **`ZkCompiled.ZK` fails at `talkL`**: at the toy witness, which no proof block faults, the talking prover's
 transcript is never empty, the composed simulator's always is, and the error is `0`. -/
 theorem zkCompiled_talk_fails (H : Msg → Msg) : ¬ (talkL Coin).ZK H := by
@@ -235,6 +236,7 @@ section Echo
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- `echoL` meets the zero-knowledge contract, as `talkL` does: the contract reads the proof system's simulator only
 through its coins, `Unit` at both. -/
 theorem echoL_sessions (H : Msg → Msg) : (echoL Coin).ZkSessions H :=
