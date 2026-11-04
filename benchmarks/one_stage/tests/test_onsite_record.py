@@ -16,7 +16,9 @@ audit's own registration binds an advice), the tight K's cells beside it, condit
 audit drawn in part charges its slot entries in k_{skip,j}; each cell states its
 share of the schedule's egress capacity, and the served egress is missing. The run's `publish`
 leaves the record as written. The run is of record only when every verdict, the onsite composite's included,
-accepted."""
+accepted. Its caller's serving settings, S and MAX_TOKENS, both or neither, label the record and its line, missing where
+it states none; runs' records at two settings go beside each other, each run's figures labelled with its own settings
+and ℓ_a, and a record of another format, or stating no settings, is refused by path."""
 from __future__ import annotations
 
 import dataclasses
@@ -923,3 +925,89 @@ def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path)
 def test_a_run_with_no_window_report_writes_no_record(tmp_path, capsys):
     assert OR.main([str(tmp_path)]) == 1
     assert "record/verdicts.json is missing" in capsys.readouterr().err and not (tmp_path / "record").exists()
+
+
+def published(cap: int) -> dict:
+    """The run's advice registration as published, its advice padded to its compiler's cap ℓ_a = ``cap``."""
+    return SV.public_registration({"row_bits": 256, "binding": {"advice": {"root": "ab" * 64, "bits": 392}},
+                                   "compiler": {"name": "c", "digest": "d", "cap_bits": cap}})
+
+
+#: two runs' serving settings, (S, MAX_TOKENS), each with the ℓ_a its registration states
+SETTINGS = ((1, 1, 1328), (16, 4, 7432))
+
+
+def test_the_callers_serving_settings_label_the_record_and_its_line_and_are_missing_where_it_states_none(
+        tmp_path, capsys):
+    out = accepted(tmp_path)
+    assert OR.main([str(out), "--window-steps", "16", "--max-tokens", "4"]) == 0
+    text = (out / "record" / "onsite.json").read_text()
+    assert json.loads(text)["serving"] == {"window_steps": 16, "max_tokens": 4, "is": OR.SERVING}
+    line = capsys.readouterr().out.strip()
+    assert json.loads(line[7:])["serving"] == {"window_steps": 16, "max_tokens": 4}
+    assert SV.public_doc(text) == text and SV.public_line(line) == line
+    assert OR.main([str(out)]) == 0
+    assert json.loads((out / "record" / "onsite.json").read_text())["serving"] == {"missing": OR.NO_SERVING}
+    assert json.loads(capsys.readouterr().out.strip()[7:])["serving"] is None
+
+
+@pytest.mark.parametrize("args", [["--window-steps", "16"], ["--max-tokens", "4"],
+                                  ["--window-steps", "0", "--max-tokens", "4"],
+                                  ["--window-steps", "x", "--max-tokens", "4"]])
+def test_serving_settings_are_given_both_or_neither_each_a_whole_number_of_at_least_1(tmp_path, args):
+    out = accepted(tmp_path)
+    with pytest.raises(SystemExit) as e:
+        OR.main([str(out), *args])
+    assert e.value.code == 2 and not (out / "record" / "onsite.json").exists()
+
+
+def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_with_its_own(tmp_path, capsys):
+    paths = []
+    for s, m, cap in SETTINGS:
+        out = accepted(tmp_path / f"s{s}", registration=published(cap))
+        assert OR.main([str(out), "--window-steps", str(s), "--max-tokens", str(m)]) == 0
+        paths.append(out / "record" / "onsite.json")
+    capsys.readouterr()
+    f = tmp_path / "beside" / "onsite-beside.json"
+    assert OR.main(["--beside", *map(str, paths), "--to", str(f)]) == 0
+    doc = json.loads(f.read_text())
+    assert (doc["format"], doc["is"]) == (OR.BESIDE, OR.BESIDE_IS)
+    runs = doc["runs"]
+    assert [(r["record"], r["run"], r["tree"], r["serving"], r["ell_a"]) for r in runs] == [
+        (str(p), "toy-run", TREE, {"window_steps": s, "max_tokens": m}, [cap]) for p, (s, m, cap) in zip(paths, SETTINGS)]
+    assert [(r["of_record"], r["K"], r["K_tight"], r["open"]) for r in runs] == [
+        (False, K + cap + 1, K, ["free", "circuit"]) for _, _, cap in SETTINGS]
+    for p, r in zip(paths, runs):
+        rec = json.loads(p.read_text())
+        for name in ("periods", "periods_tight"):
+            run = rec[name]["run"]
+            assert r[name]["run"] == {"bits": run["bits"], "share": run["share"], "phases": 1,
+                                      "per_phase": run["per_phase"]["bits"]}
+            assert all(r[name][n][w] == {k: rec[name][n][w][k] for k in ("bits", "share", "how")}
+                       for n in LB.PERIODS for w in ("node", "datacenter", "world"))
+        assert r["periods_tight"]["conditional_on"] == ["free", "circuit"] and "conditional_on" not in r["periods"]
+    assert runs[1]["periods"]["run"]["bits"] - runs[0]["periods"]["run"]["bits"] == 7432 - 1328
+    line = capsys.readouterr().out.strip()
+    assert line.startswith("ONSITE-BESIDE ") and [(x["serving"], x["K"]) for x in json.loads(line[14:])] == [
+        (r["serving"], r["K"]) for r in runs]
+
+
+def test_beside_refuses_by_path_a_record_of_another_format_or_one_stating_no_serving_settings(tmp_path, capsys):
+    out = accepted(tmp_path)
+    assert OR.main([str(out)]) == 0
+    rec, other, f = out / "record" / "onsite.json", tmp_path / "other.json", tmp_path / "beside.json"
+    other.write_text(json.dumps({"format": OR.BESIDE}))
+    capsys.readouterr()
+    assert OR.main(["--beside", str(rec), "--to", str(f)]) == 1
+    assert capsys.readouterr().err.strip() == f"ONSITE-BESIDE: not written: {rec} {OR.UNLABELLED}"
+    assert OR.main(["--beside", str(other), "--to", str(f)]) == 1
+    assert f"{other} is {OR.BESIDE!r}, not {OR.FORMAT}" in capsys.readouterr().err
+    assert not f.exists()
+
+
+@pytest.mark.parametrize("args", [[], ["--beside", "r.json"], ["out", "--beside", "r.json", "--to", "b.json"],
+                                  ["--beside", "r.json", "--to", "b.json", "--window-steps", "1", "--max-tokens", "1"]])
+def test_beside_takes_the_records_and_to_alone_and_otherwise_the_record_takes_an_out(args):
+    with pytest.raises(SystemExit) as e:
+        OR.main(args)
+    assert e.value.code == 2

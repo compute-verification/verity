@@ -2,10 +2,17 @@
 record needs, the network certifier's bound term by term, and that bound over each monitoring period for the serving
 node, a datacenter and the world. It reads only the run's public $OUT and decides nothing:
 
-    python benchmarks/one_stage/onsite_record.py OUT [--advice-charge FILE] [--to FILE]
+    python benchmarks/one_stage/onsite_record.py OUT [--window-steps S --max-tokens M] [--advice-charge FILE] [--to FILE]
+    python benchmarks/one_stage/onsite_record.py --beside RECORD [RECORD ...] --to FILE
 
 `served_verdicts.sh` runs it after its composite step on a run with the network certifier's piece, and its one
 ``ONSITE`` line goes to the run's verdicts.txt.
+
+**Serving** (``serving``, `SERVING`): the run's S (served_verdicts.sh's WINDOW_STEPS) and MAX_TOKENS as its caller
+states them, which no file of OUT does, else ``missing`` (`NO_SERVING`); they label every figure of the record and its
+line. ``--beside`` sets runs' records beside each other (`BESIDE`, `BESIDE_IS`): each run's figure of record, tight K,
+ℓ_a and period cells, labelled with its run, tree and serving settings, and none carried to another's settings; a record
+stating no serving settings is refused (`UNLABELLED`).
 
 **Verdicts** (`VERDICTS`), each ``{protocol, verdict, from}`` with the answer's ``reason`` or ``refusal``, or, where the
 run wrote no answer, ``missing`` and ``why``:
@@ -445,6 +452,18 @@ REPROOF_KEPT = ("each retained past the week after the run, never only on the se
                 "each directory it names, never their bytes or digests); a re-proof holds each to the public registration and the audit's summary")
 NO_COPY = ("no copy of the serve dir's inputs is given (--reproof-copy NODE:/PATH and --reproof-listing): they are on "
            "the served node only")
+SERVING = ("the run's serving settings as its caller states them (--window-steps, --max-tokens): S, served_verdicts.sh's "
+           "WINDOW_STEPS, the most engine steps a Commit period holds, and its MAX_TOKENS. No file of OUT states them; "
+           "ℓ_a (advice_charge.cap) is the cap the run's S, slots, model length and id bytes set, and every figure here "
+           "is the run's at these settings alone")
+NO_SERVING = ("the run's caller stated no serving settings (--window-steps and --max-tokens: served_verdicts.sh's "
+              "WINDOW_STEPS and MAX_TOKENS)")
+BESIDE = "verity/onsite-network-records-beside/v1"
+BESIDE_IS = ("each run's figures from its own record, beside the others', each labelled with its serving settings "
+             "(`SERVING`) and ℓ_a: its figure of record and tight K, and each period's cells (bits and share of the "
+             "weights). No figure is carried from one run's settings to another's")
+UNLABELLED = ("states no serving settings, which label its figures beside another run's: write it again from its OUT "
+              "with --window-steps and --max-tokens")
 
 
 def missing(why: str, src: str | None = None) -> dict[str, Any]:
@@ -844,9 +863,10 @@ def reproof(out: Path, copy: str | None = None, listing: Path | None = None) -> 
 
 
 def record(out: Path, advice_charge: Path | None = None, copy: str | None = None,
-           listing: Path | None = None) -> dict[str, Any]:
+           listing: Path | None = None, serving: tuple[int, int] | None = None) -> dict[str, Any]:
     """OUT's onsite record (module docstring), with the re-proof inputs' ``copy`` and its ``listing`` where given
-    (`reproof`); FileNotFoundError where `served_verdicts.py record` wrote no report."""
+    (`reproof`), and the run's ``serving`` settings, S and MAX_TOKENS, where its caller states them (`SERVING`);
+    FileNotFoundError where `served_verdicts.py record` wrote no report."""
     report = json.loads((out / "record" / "verdicts.json").read_text())
     if report.get("format") != EXTENDS:
         raise ValueError(f"record/verdicts.json is {report.get('format')!r}, not {EXTENDS}")
@@ -867,6 +887,8 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     tree = next((x for x in lines(out, "machine.txt") if re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", x)), None)
     rec: dict[str, Any] = {
         "format": FORMAT, "extends": EXTENDS, "run": report.get("run"), "tree": tree, "node": report.get("node"),
+        "serving": {"missing": NO_SERVING} if serving is None else {
+            "window_steps": serving[0], "max_tokens": serving[1], "is": SERVING},
         "verdicts": v,
         "of_record": {"holds": all(x["verdict"] == "accept" for x in v.values()),
                       "missing": [k for k, x in v.items() if x["verdict"] == "missing"],
@@ -918,13 +940,14 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
 
 
 def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
-    """The ``ONSITE`` line: each verdict, whether the run is of record, K of record, the tight K and the checks it is
-    conditional on, its δ_net's terms, eps's split and connections, the composite's stated error, the year's datacenter
-    cell, and the measured advice charge's test run."""
-    b, p = rec.get("bound") or {}, rec.get("periods") or {}
+    """The ``ONSITE`` line: the run's serving settings, each verdict, whether the run is of record, K of record, the
+    tight K and the checks it is conditional on, its δ_net's terms, eps's split and connections, the composite's stated
+    error, the year's datacenter cell, and the measured advice charge's test run."""
+    b, p, s = rec.get("bound") or {}, rec.get("periods") or {}, rec.get("serving") or {}
     year = (p.get("year") or {}).get("datacenter")
     m, fig = rec["advice_charge"]["measured"], b.get("of_record") or {}
-    return {"verdicts": {k: x["verdict"] for k, x in rec["verdicts"].items()}, "of_record": rec["of_record"]["holds"],
+    return {"serving": {k: s[k] for k in ("window_steps", "max_tokens")} if "window_steps" in s else None,
+            "verdicts": {k: x["verdict"] for k, x in rec["verdicts"].items()}, "of_record": rec["of_record"]["holds"],
             "K": fig.get("K"), "K_tight": b.get("K"), "open": fig.get("open"),
             "delta_net": None if "delta_net" not in b else delta_net(eps_of(b), b["phases"]),
             "delta": None if "delta" not in b else {k: b["delta"][k] for k in ("scan", "charged")},
@@ -935,19 +958,85 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
             "advice_measured_on": m.get("run"), **{k: b[k] for k in ("missing", "error") if k in b}}
 
 
+def cells(p: Mapping[str, Any] | None) -> Any:
+    """``p`` (`periods`) as each cell's bits, share and how, the run's own period's with its phases and its figure over
+    one; ``p`` as it is where it holds no figure (its ``missing`` or ``error``, or None)."""
+    if not isinstance(p, Mapping) or "run" not in p:
+        return p
+    run = p["run"]
+    return ({"conditional_on": p["conditional_on"]} if "conditional_on" in p else {}) | {
+        "run": {"bits": run["bits"], "share": run["share"], "phases": run["phases"],
+                "per_phase": run["per_phase"]["bits"]},
+        **{name: {where: {k: p[name][where][k] for k in ("bits", "share", "how")}
+                  for where in ("node", "datacenter", "world")} for name in LB.PERIODS}}
+
+
+def beside(paths: Sequence[Path]) -> dict[str, Any]:
+    """The records at ``paths``, each a run's (`FORMAT`), beside each other (`BESIDE`): each run's figures labelled with
+    its serving settings and ℓ_a. ValueError, by path, for a record of another format or one stating no serving
+    settings (`UNLABELLED`)."""
+    runs = []
+    for path in paths:
+        rec = json.loads(path.read_text())
+        if rec.get("format") != FORMAT:
+            raise ValueError(f"{path} is {rec.get('format')!r}, not {FORMAT}")
+        line = summary(rec)
+        if line["serving"] is None:
+            raise ValueError(f"{path} {UNLABELLED}")
+        runs.append({"record": str(path), "run": rec.get("run"), "tree": rec.get("tree"), "serving": line["serving"],
+                     "ell_a": (rec["advice_charge"].get("cap") or {}).get("ell_a"), "of_record": line["of_record"],
+                     "K": line["K"], "K_tight": line["K_tight"], "open": line["open"],
+                     "periods": cells(rec.get("periods")), "periods_tight": cells(rec.get("periods_tight"))})
+    return {"format": BESIDE, "is": BESIDE_IS, "runs": runs}
+
+
+def positive(s: str) -> int:
+    n = int(s)
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"{s} isn't a whole number of at least 1")
+    return n
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("out", type=Path, help="the served run's public $OUT")
+    ap.add_argument("out", type=Path, nargs="?", help="the served run's public $OUT")
+    ap.add_argument("--window-steps", type=positive, metavar="S",
+                    help="the run's S, served_verdicts.sh's WINDOW_STEPS, with --max-tokens (`SERVING`)")
+    ap.add_argument("--max-tokens", type=positive, metavar="M",
+                    help="the run's MAX_TOKENS, served_verdicts.sh's, with --window-steps")
+    ap.add_argument("--beside", type=Path, nargs="+", metavar="RECORD",
+                    help="runs' records written, set beside each other (`BESIDE`) at --to, in place of OUT's")
     ap.add_argument("--advice-charge", type=Path,
                     help="a test run's advice-charge.json (advice_charge.py), stated beside the bound as that run's")
     ap.add_argument("--reproof-copy", metavar="NODE:/PATH",
                     help="where the serve dir's re-proof inputs were copied off the served node, keeping its layout")
     ap.add_argument("--reproof-listing", type=Path,
                     help="the copy's listing, kept off OUT: each file under PATH, one path relative to it a line")
-    ap.add_argument("--to", type=Path, help="the record's path (default OUT/record/onsite.json)")
+    ap.add_argument("--to", type=Path,
+                    help="the record's path (default OUT/record/onsite.json); with --beside, where the records go "
+                         "beside each other")
     a = ap.parse_args(argv)
+    if a.beside is not None:
+        if a.to is None or any(x is not None for x in (a.out, a.advice_charge, a.reproof_copy, a.reproof_listing,
+                                                         a.window_steps, a.max_tokens)):
+            ap.error("--beside reads the records written, with --to alone: where they go beside each other")
+        try:
+            doc = beside(a.beside)
+        except (OSError, ValueError) as e:
+            print(f"ONSITE-BESIDE: not written: {e}", file=sys.stderr)
+            return 1
+        a.to.parent.mkdir(parents=True, exist_ok=True)
+        a.to.write_text(json.dumps(doc, indent=1, sort_keys=True, ensure_ascii=False) + "\n")
+        print("ONSITE-BESIDE " + json.dumps([{k: r[k] for k in ("run", "serving", "ell_a", "K", "K_tight", "open")}
+                                             for r in doc["runs"]], sort_keys=True, ensure_ascii=False), flush=True)
+        return 0
+    if a.out is None:
+        ap.error("give the served run's OUT, or --beside its records")
+    if (a.window_steps is None) != (a.max_tokens is None):
+        ap.error("--window-steps and --max-tokens go together: the run's S and MAX_TOKENS label its figures")
+    serving = None if a.window_steps is None else (a.window_steps, a.max_tokens)
     try:
-        rec = record(a.out, a.advice_charge, a.reproof_copy, a.reproof_listing)
+        rec = record(a.out, a.advice_charge, a.reproof_copy, a.reproof_listing, serving)
     except FileNotFoundError as e:
         print(f"ONSITE: not written: {e.filename} is missing", file=sys.stderr)
         return 1
