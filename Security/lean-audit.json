@@ -844,51 +844,51 @@
   },
   "Claims.ZKMal.RefSession.Causal": {
    "owner": "@proofs",
-   "digest": "8f2c33116ba3c84299d4aec57d8ba00e665a6543aff268b52d85244fbe09b889"
+   "digest": "e7b12b4512e355535658c08310196b6fdfb50a00657d5aa54fb97f0c09d24a56"
   },
   "Claims.ZKMal.RefSession.Complete": {
    "owner": "@proofs",
-   "digest": "9b70f509163a582c4e2b0f229e74b3ec2a298ba19f64ff4a9cdc68f244ce6140"
+   "digest": "5cd58e97be1eeac3e8bc310c741bec9b5fffb4a1acfae2dd68302ef47d206282"
   },
   "Claims.ZKMal.RefSession.DummyReg": {
    "owner": "@proofs",
-   "digest": "e65280f9bbb51100bdeeb8a713b5b5a7ef53d5fae49dd96e352dfc09d41e4654"
+   "digest": "ee26aba6eac4bd0e9c9cea286e79be51b925803ca2ed0254306b0e7b7f079546"
   },
   "Claims.ZKMal.RefSession.SwCausal": {
    "owner": "@proofs",
-   "digest": "7f51513674ceed050488bbdce7f8e05fa1bcb070fbe0a5f14cbae95199424928"
+   "digest": "fd1c6e7eb09ae354243c35ffdfc221658e0447170428a54195323d76ffb3f8ff"
   },
   "Claims.ZKMal.RefSession.Tables": {
    "owner": "@proofs",
-   "digest": "453497e841dc2e6ef0f710e30b48a8f70507eab141839b3304e609722f1d656c"
+   "digest": "a817ea15a1408d55e4526c65ed67e7d9fb1db3243c9a107f1d7ff96ed48f1e5c"
   },
   "Claims.ZKMal.RefSession.TapeOK": {
    "owner": "@proofs",
-   "digest": "8d90cbc1c4d81241f80d5bca81b4d45dd6e331bd58a4ddaaa05c19709c1b5f68"
+   "digest": "eb4b307cc92a8b952ed839cbcb6c805ed8ac530e67f3f692503738f6a30b91fd"
   },
   "Claims.ZKServer.LeanRelease.FillRoundEq": {
    "owner": "@proofs",
-   "digest": "a44b9c8bc18b0d46b82aeb7de64dd3794e849ea405c8a2818175b24c2a538186"
+   "digest": "1c870520e9df12fb6be531cf217352d61c09eff7d1efdf0ee79ac53ec7eb0b14"
   },
   "Claims.ZKServer.LeanRelease.FinishIs": {
    "owner": "@proofs",
-   "digest": "f0760e9569771953c7d45a44fce806422106c997527a54590d46a7b14dd59227"
+   "digest": "0132d92a621aa79cc95bae63d7f8ff88e551684e64629c7d0f6512d56ec1c2e7"
   },
   "Claims.ZKServer.LeanRelease.LinkRoundEq": {
    "owner": "@proofs",
-   "digest": "9e6f120af7ab316f2fc5e51acc7d3c5989721fc82c329cbeab8371ae9721675a"
+   "digest": "9f0a2fd9f728841e5df8001fadd15fb6df11c9afd857ad8004469b4a2eb0ba42"
   },
   "Claims.ZKServer.LeanRelease.LiveRoundEq": {
    "owner": "@proofs",
-   "digest": "a5e9e5a7c65c166dd3f2c2d8218ab199d6353814763efc01c77e18b4bc5b7563"
+   "digest": "2f306629e983a24982211a00b67e9dc48187edf83f69d27407b8e2239882e38d"
   },
   "Claims.ZKServer.Loop.Serves": {
    "owner": "@proofs",
-   "digest": "2a7bc556074ddc71792447e3ef2f822accdebb815026515635d400e5108d1d8b"
+   "digest": "ff5093925dc629a3a42ec9f76800e7f44da5ece3a4d3a7fd1a3aa2b208d1578d"
   },
   "Claims.ZKServer.Loop.Src": {
    "owner": "@proofs",
-   "digest": "071a931b0e4d680afac772df12dd7658afeb135227fa99b1b24eb2ea8a19d695"
+   "digest": "b33d1cd8789fedbe4e4100ec78ab5dc862eb2c5c73f3f06514b55b83d6ae5151"
   },
   "Flock.Assumptions.VBridge": {
    "owner": "@proofs",
@@ -916,7 +916,7 @@
   },
   "Flock.Guarantees.LoopInnerRound0": {
    "owner": "@proofs",
-   "digest": "d195a2a8a719668393f8de5dc55e1d651e02f34b5efd44f39bbd98d5c58382e1"
+   "digest": "b76feb8e1ffbf2d77f747cc25c6a5ca128408940bcdb1f5f765ce00493219696"
   },
   "Flock.Guarantees.OuterSessionsZK": {
    "owner": "@proofs",
@@ -940,11 +940,11 @@
   },
   "Flock.Guarantees.TablesAdmitUnrefused": {
    "owner": "@proofs",
-   "digest": "13ecfde668563586e4274813a2c760a111cd8b9a5167fbd5351d64d0d834b106"
+   "digest": "ed88eeb4d435e505ece46cb679e91c1693662afc46c18d0a08ed61e551b6f263"
   },
   "Flock.SoundAtBridge.AcceptedLive": {
    "owner": "@proofs",
-   "digest": "e92eb70ac54ab3296dfab0f8ab49323eed79ec51e2f1b43c0bc5872f8f6f6839"
+   "digest": "43f4906631c7ee4c5ea655a109d526c032f825fd3c2884c691f5fe663a96e229"
   },
   "Flock.SoundAtBridge.OpenedPlurAt": {
    "owner": "@proofs",
@@ -2604,6 +2604,10 @@
    "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
    "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
   },
+  "Pouw.Salt.keyed_leaf_binds": {
+   "honest": ["Pouw.Salt.keyed_leaf_binds_honest"],
+   "nontrivial": "Pouw.Salt.keyed_leaf_binds_nontrivial"
+  },
   "Nci.SecurityProofs.CapabilityFloor": {
    "honest": ["Nci.SecurityProofs.CapabilityFloorHonest"],
    "nontrivial": "Nci.SecurityProofs.CapabilityFloorNontrivial"
@@ -2655,10 +2659,6 @@
    "honest": ["Nci.SecurityProofs.WeightedProductCapHonest"],
    "nontrivial": "Nci.SecurityProofs.WeightedProductCapNontrivial",
    "kind": "exclusion"
-  },
-  "Pouw.Salt.keyed_leaf_binds": {
-   "honest": ["Pouw.Salt.keyed_leaf_binds_honest"],
-   "nontrivial": "Pouw.Salt.keyed_leaf_binds_nontrivial"
   },
   "Flock.SecurityProofs.RecursiveKSDeployed": {
    "honest": ["RecDeploy.HonestHalfFixture.recursiveKSDeployed_honest"],
