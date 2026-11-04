@@ -24,6 +24,7 @@ public import Proofs.Flock.ZkAny.RelaySession
 public import Proofs.Flock.ZkAny.RelayParams
 public import Proofs.Flock.ZkAny.RelaySched
 public import Proofs.Flock.ZkAny.RelaySlot
+public import Proofs.Flock.ZkAny.RelayRun
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -38,6 +39,8 @@ the stream's first round in the schedule: where the session's stop is whether an
 model's message; and that stop from one request to the next, the model's at the session's first frame round and
 carried by a round and its coins to its next request; and a frame round's coin count, its frame's configuration and
 its scheduled round, the model's; and so what the relay read for a frame round at the model's place, the deferred
-model's message, with the session's stop at its next request the model's one round on. -/
+model's message, with the session's stop at its next request the model's one round on; both at a frame round as the
+loop ran it, its reads and puts of the loop's frames with only the updates between the session's requests between
+them. -/
 
 @[expose] public section
