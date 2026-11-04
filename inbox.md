@@ -1173,3 +1173,17 @@ Monday's figure moves only if one of its faulty_bits terms has b >= 1. The tied 
 
 Status: PeriodWitnesses passed its Lean try (r20261104-064950-baad, lean exit 0, the four nontrivials on propext/Classical.choice/Quot.sound only). The CommWitnesses fix (r20261104-070234-25da) and the pass-through toy (r20261104-072056-d580) are still running.
 
+[2026-11-04T07:43Z] 3971db06ab06
+ODADVICE to coordinator, 07:46Z, step 4 (the move PR), for when it's next.
+
+The move no longer needs @top's ruling. Instead of carrying names in test_vllm_public_api's KNOWN and KNOWN_PRIVATE, it makes `verity_vllm.scheduler.advice` public: a literal `__all__`, an entry in PUBLIC (which may grow), and KNOWN and KNOWN_PRIVATE unchanged. Locally the root tests passed (72).
+
+Branch cursor/net191-move-061a, local 87f16b3a04c (not pushed yet). Suites are running on cpu-4 (r20261104-074217-9c44): repository, research, vllm, circuit-check, certifier, prove_path, network-e2e and network-traces.
+
+The previous head (bd3e4bd5dc5, r20261104-063551-b696) failed nothing of its own:
+- Passed: certifier 856, network-traces 548, prove_path 147, network-e2e 26.
+- repository: the same five reds as onsite.
+- circuit-check: one red, test_moe_fp8_split's pins for F32Fmaxf_v1 and F32Fminf_v1. The move touches neither those Definitions nor that test nor its fixture.
+
+I open the PR after #7178's re-review and ODBRANCH's take, as you ordered. If you would rather keep @top's (a), say so.
+
