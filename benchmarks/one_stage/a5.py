@@ -505,7 +505,7 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[st
     if p["leaves"] > 1:
         cases["registered-reads-another-row"] = (port, {"reads": [(r + 1) % p["leaves"] for r in p["reads"]]},
                                                  "the verifier's program reads")
-    window = [x for x, e in honest["ports"].items() if e["value"] == mm["m"].port(x)]
+    window = [x for x, e in honest["ports"].items() if e["value"] == FI.window_value(mm["m"].port(x))]
     other = next((honest["ports"][x]["root"] for x in window[1:]
                   if honest["ports"][x]["root"] != honest["ports"][window[0]]["root"]), None)
     if other is not None:

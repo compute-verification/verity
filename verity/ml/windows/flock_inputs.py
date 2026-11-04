@@ -4,9 +4,9 @@
 are all staged under one circuit, whose META, pin and class (`FlockCircuit`) are read off it once.
 
 A drawn member's files may be completed at audit time (`complete`): every port of its circuit a registered read, each
-parameter port at the root the registration names and every other port at its window tree, the verifier's own
-``--registered`` file naming them all (the Lean verifier refuses a file that leaves a port out, `Flock.Registered.
-checkComplete`).  A completed file is a shared-row file (`Flock.ProvedScope.sharedRowsOk`), so an instance-major member's
+parameter port at the root the registration names and every other port at its window tree (a read of `window_value`),
+the verifier's own ``--registered`` file naming them all (the Lean verifier refuses a file that leaves a port out,
+`Flock.Registered.checkComplete`).  A completed file is a shared-row file (`Flock.ProvedScope.sharedRowsOk`), so an instance-major member's
 bodies are re-laid port-major under identity refs: the same rows and strings, the same trees, under the same circuit."""
 from __future__ import annotations
 
@@ -49,6 +49,13 @@ def flock_circuit(circuit: str | bytes) -> FlockCircuit:
     return FlockCircuit(meta, hashlib.sha512(b).hexdigest(), cls.hexdigest())
 
 
+def window_value(port: str) -> str:
+    """The value a completed member's read of window port ``port`` (``<member>/<port>``) names: never ``port`` itself, as the
+    one-stage audit refuses a session's registered read named by one of its registration's roots ports that its
+    registered values don't name (`one_stage.audit.session_registered`)."""
+    return f"{port}@window"
+
+
 @dataclass(frozen=True)
 class Complete:
     """A member's files with every port a registered read (`complete`): its header's ``shared_rows`` and ``registered``
@@ -67,7 +74,8 @@ def complete(window: Binding, k: int, roots: Mapping[str, Mapping[str, Any]], bo
              params: Mapping[str, Any] | None = None, header: Mapping[str, Mapping[str, Any]] | None = None) -> Complete:
     """Member ``k``'s files completed so the verifier's ``--registered`` file names every port of its circuit: each port the
     registration makes a parameter port at the root it names (``params``: the verifier's own file of the member's parameter
-    reads, a pinned value's or a row table's, never the member's), and every other port at its window tree. ``roots``
+    reads, a pinned value's or a row table's, never the member's), and every other port at its window tree, a read of
+    `window_value`. ``roots``
     (``{<member>/<port>: {"root", "domain", "leaves"}}``) are the window's registered roots, taken only once the auditor's
     record has tied the registration to the coins; ``window`` is the verifier's own, its run the root the auditor's record
     opens. Each window port's tree is folded again from ``body``, the member's public body as served (each row's ``b || c`` a
@@ -128,8 +136,9 @@ def complete(window: Binding, k: int, roots: Mapping[str, Mapping[str, Any]], bo
             why.append(f"{p}: its served rows fold to {lv[-1][0].hex()[:16]}… under the window's domain, not the registered "
                        f"root {str(r.get('root'))[:16]}…")
             continue
-        entries[p] = {"value": m.port(p), "positions": list(range(count)), "paths": [tree_path(lv, i).hex() for i in range(count)]}
-        files[p] = {"value": m.port(p), "root": r["root"], "leaves": count, "words": int(words), "domain": r["domain"],
+        entries[p] = {"value": window_value(m.port(p)), "positions": list(range(count)),
+                      "paths": [tree_path(lv, i).hex() for i in range(count)]}
+        files[p] = {"value": window_value(m.port(p)), "root": r["root"], "leaves": count, "words": int(words), "domain": r["domain"],
                     **({} if schema == ROW_SCHEMA else {registered.SCHEMA_KEY: schema}), "reads": refs[:, j].tolist(),
                     registered.READS_FROM: m.base}
     if missing:

@@ -1428,8 +1428,9 @@ def _completed(window: CS.Binding, c: CS.Committed, k: int, got: FI.Complete, pa
         if p in params:
             continue
         e, h, dom, root = got.reads["ports"][p], got.registered[p], c.domains[m.port(p)], c.roots[m.port(p)]
-        assert (e["value"], e["root"], e["domain"], e["leaves"], e["reads_from"]) == (m.port(p), root.hex(), dom.domain_id.hex(),
-                                                                                     dom.count, m.base)
+        assert (e["value"], e["root"], e["domain"], e["leaves"], e["reads_from"]) == (
+            FI.window_value(m.port(p)), root.hex(), dom.domain_id.hex(), dom.count, m.base)
+        assert h["value"] == e["value"] != m.port(p)
         assert e["reads"] == (c.refs[k][:, j].tolist() if m.tables else list(range(m.n)))
         bc = c.bc[m.port(p)]
         assert h["positions"] == list(range(dom.count))
