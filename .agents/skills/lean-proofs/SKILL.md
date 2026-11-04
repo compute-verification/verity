@@ -40,10 +40,12 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   built imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), exiting with lean's status. It
   never writes a record. After editing a file others import, `lake build` its module, then try an importer. It also runs
   on a project machine with `--on` (the README).
-- **Build on a CPU machine.** Never `lake update`, and never change a `require`, a revision or `lean-toolchain` in a
-  feature PR. The full check, `python tools/verity/lean/check.py PKG`, is the train's; run it by hand only on a machine
-  of your own. It refuses a package too big for the machine, naming where to run it; a queued Security audit takes
-  `--kind lean-audit`.
+- **Build on a CPU machine.** Never `lake update`, and never change an external dependency in a feature PR: a git
+  `require` or its revision, Mathlib, ArkLib or `lean-toolchain`, which every package bumps together in a PR of its
+  own. A `path` require between the workspace's own packages (`network_check` on `core_sampled_proofs`) may go in a
+  feature PR, in a commit of its own with the regenerated `lake-manifest.json`, while the requires stay acyclic. The
+  full check, `python tools/verity/lean/check.py PKG`, is the train's; run it by hand only on a machine of your own. It
+  refuses a package too big for the machine, naming where to run it; a queued Security audit takes `--kind lean-audit`.
 - **The fast path is for the lock and the mark**, once `verity lean try` passes: your records and the `--update` printout
   the landing DM carries, without a build of your own (`lean_changed.py`'s docstring).
 
