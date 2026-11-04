@@ -1,5 +1,7 @@
-import Definitions.Core
-import Mathlib.Analysis.Real.Sqrt
+module
+
+public import Definitions.Core
+public import Mathlib.Analysis.Real.Sqrt
 
 /-!
 # The inference-only policy
@@ -27,6 +29,8 @@ it uses, the entries whole in `R`, `R`'s full positions, and in a division into 
 split and the number of inference blocks that hold products of each. `F` is the draft's lower bound on that size ratio
 for such chains.
 -/
+
+@[expose] public section
 
 namespace Nci
 

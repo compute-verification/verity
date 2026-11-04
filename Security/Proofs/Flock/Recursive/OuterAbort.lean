@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.View
-import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
-import Proofs.Flock.Soundness.Game.Prob
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+public import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
+public import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # V*'s outer sessions: the honest prover's self-check, and the coins it refuses
@@ -35,6 +37,8 @@ they are `CoinedSetup.Admits`, which `ZkViewAtJ` assumes. The rest of the module
   `Σ_j 2·|LeafPos_j|·δ₁`, at `zk_session_viewHJ`'s plan under its hypotheses. There is no hypothesis on the coins and no
   probability charge.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.Table
 

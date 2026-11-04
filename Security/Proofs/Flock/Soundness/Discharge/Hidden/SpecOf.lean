@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 
 /-!
 # What `Stmt.setupHiddenOf` checked and produced (`SpecOf`)
@@ -6,6 +8,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 `Spec` on the circuit the caller parsed (`parsed`), which `Stmt.setupHiddenOf` reads: `HmOut.parseCommit`'s for
 `Stmt.setupHidden` (`Stmt.setupHidden_eq`). `SpecOf.spec` is `Spec` at `HmOut.parseCommit`.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 open Lean (Json)

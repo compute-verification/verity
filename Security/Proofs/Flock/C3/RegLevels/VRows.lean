@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.RegLevels.OpensRegs
+module
+
+public import Proofs.Flock.C3.RegLevels.OpensRegs
 
 /-!
 # Check 5's `v` rows: `rec-residuals`' rows as bits of `vOf`
@@ -16,6 +18,8 @@ as `HVCoins`' bits:
 
 The `mapM` the hypotheses state is `checkResiduals`' rows, definitionally `Recursion.residualRowsOf`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

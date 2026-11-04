@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Headline
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Headline
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
 
 /-!
 # Zero knowledge of production's `--zk` session: hidden outputs, `J` tables
@@ -19,6 +21,8 @@ with its own coin vector.
 output rows' Δ pairs and regions as at a `setupH` one. Registered reads (`checkRegistered`) add no prover message: they
 hold the statement to the verifier's own files and only shrink the accepting event.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

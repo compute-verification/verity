@@ -1,7 +1,9 @@
-import Definitions.Nci.Guarantees.Capability.Incidence
-import Proofs.Nci.Capability.Items
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Tactic.Linarith
+module
+
+public import Definitions.Nci.Guarantees.Capability.Incidence
+public import Proofs.Nci.Capability.Items
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Tactic.Linarith
 
 /-!
 # Local bounds: proofs of the caps from incidence
@@ -12,6 +14,8 @@ import Mathlib.Tactic.Linarith
   selections it holds (`exists_selection`), so their prices bound how many there are, and the incidence cap at those
   numbers is at most `Q`.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

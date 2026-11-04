@@ -1,8 +1,12 @@
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Definitions.Core.Guarantees.PrivatePartition
-import Proofs.Core.Advice
+module
+
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Definitions.Core.Guarantees.PrivatePartition
+public import Proofs.Core.Advice
 
 /-! # Proofs about private partitions: the per-Call check, the leakage weight, and the advice's commitment -/
+
+@[expose] public section
 
 namespace Verity.Partition
 

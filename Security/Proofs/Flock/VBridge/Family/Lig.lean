@@ -1,7 +1,9 @@
-import Proofs.Flock.VBridge.Family.Encode
-import Proofs.Flock.VBridge.Family.Openings
-import Proofs.Flock.Soundness.Refine.Setup
-import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+module
+
+public import Proofs.Flock.VBridge.Family.Encode
+public import Proofs.Flock.VBridge.Family.Openings
+public import Proofs.Flock.Soundness.Refine.Setup
+public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
 
 /-!
 # The proof files' cap and Ligerito openings, read off V*'s layers and the inner messages
@@ -27,6 +29,8 @@ array at the length `decodeProof` reads (Proof.lean:94-151) by construction, so 
   setup's regions (`regionsFit_of_setupH`, `regionsFit_of_spec`; `regionsOf`'s, `length_regionsOf`), and `hRegs_of`,
   `hRegs_of_spec` are `vbridgeRead_assembled`'s `hregs`.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

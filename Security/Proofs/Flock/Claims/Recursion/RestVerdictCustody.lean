@@ -1,6 +1,10 @@
-import Proofs.Flock.Claims.Recursion.RestVerdictBases
-import Proofs.Flock.Claims.Complete.ZkTables.Decode
-import Proofs.Flock.Claims.Complete.ZkTables.Scope
+module
+
+public import Proofs.Flock.Claims.Recursion.RestVerdictBases
+public import Proofs.Flock.Claims.Complete.ZkTables.Decode
+public import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # Custody at the reader's record (`CustodyRecJ`)
@@ -18,6 +22,8 @@ custody compares is the link's or a round message's by construction.
 * **The reading's lengths** (`readPs_len`): the round messages are as many as the opened rounds after the link.
 * **`custodyRecJ`**: custody's comparisons, the points and coins aside (`custody_coinSubJ`), are then identities.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

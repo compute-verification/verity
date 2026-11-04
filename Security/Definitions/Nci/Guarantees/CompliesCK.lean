@@ -1,5 +1,7 @@
-import Definitions.Core.Expand
-import Definitions.Nci
+module
+
+public import Definitions.Core.Expand
+public import Definitions.Nci
 
 /-!
 # The policy at a rate as a `(c, k)`-partition
@@ -11,6 +13,8 @@ declaration that contains it (`CompliesCK`), which complies at `(c, ⌊αc⌋)` 
 Theorem 3 apply. A multi-bit declaration first takes its bit-level expansion (`ExpandComplies`): an inference block of
 gates at most `W` bits wide becomes one of at most `c W` one-bit gates, reading the same fresh input bits.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Masked
-import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
+module
+
+public import Proofs.Flock.Claims.ZK.Masked
+public import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
 
 /-!
 # The deployed masked session's mask tape
@@ -19,6 +21,8 @@ component, `Fin nMask → Fin 128 → ZMod 2`), which the tables read through `C
   `Flock.zk_deployZk_masked_atMask_stop_gap` at a stopping round plan (`RoundPlan.stop`), where the third round is
   about `honestPR` alone.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

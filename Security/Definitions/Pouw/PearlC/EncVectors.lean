@@ -1,6 +1,10 @@
-import Definitions.Pouw.PearlC.Defs
+module
+
+public import Definitions.Pouw.PearlC.Defs
 
 /-! Generated (seeds 2026092922, 2026092923) by a script that isn't in the tree; do not edit. -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.EncVectors
 

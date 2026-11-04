@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOut
-import Definitions.Pouw.PearlC.DeviceRev1
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOut
+public import Definitions.Pouw.PearlC.DeviceRev1
 
 /-!
 # The named assumption TT_OUT, rev1 (trusted; `Prop`s taken as hypotheses, never `axiom`s)
@@ -10,6 +12,8 @@ tile. It asserts less than the granted rows: a unit correct under rev1 is correc
 credit (`ttOutPearlCDevRev1_of_granted`). That is an implication only: the granted rows are falsified by the
 first-promotion skip (rating D), so it carries no evidence for rev1, whose rating B rests on its own review alone.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 

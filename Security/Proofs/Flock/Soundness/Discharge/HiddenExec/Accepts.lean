@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 
 /-!
 # flock-verify's acceptance under either tag
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 `setupTables_retainAny` put the two tags together through `setupOne`. The acceptance lemmas follow from them as
 e2e-exec's do from `setupTables_ok`, with no `hh`.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

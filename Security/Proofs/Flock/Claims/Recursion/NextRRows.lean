@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.Recursion.NextRSession
-import Proofs.Flock.Claims.DeployTables
+module
+
+public import Proofs.Flock.Claims.Recursion.NextRSession
+public import Proofs.Flock.Claims.DeployTables
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The honest rows fit a message
@@ -22,6 +26,8 @@ rep's round's (`repRows`). They do, at every statement that sets up, so the hone
 
 The bounds' hypotheses hold together at the concrete honest rep `honest₀` (`rowsFit₀`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

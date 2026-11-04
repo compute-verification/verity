@@ -1,8 +1,10 @@
-import Proofs.Flock.Recursive.AuditC3
-import Proofs.Flock.Recursive.FirewallZK
-import Proofs.Flock.Recursive.Loads
-import Proofs.Flock.Recursive.RegExtract
-import Proofs.Flock.C3.VStarList.Range
+module
+
+public import Proofs.Flock.Recursive.AuditC3
+public import Proofs.Flock.Recursive.FirewallZK
+public import Proofs.Flock.Recursive.Loads
+public import Proofs.Flock.Recursive.RegExtract
+public import Proofs.Flock.C3.VStarList.Range
 
 /-!
 # The recursive audit at candidate 3: its proof
@@ -41,6 +43,8 @@ gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_in
 
 (ii) is `RecursiveFirewallPrivate`.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

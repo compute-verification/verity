@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.ZK.Refusal
-import Proofs.Flock.Soundness.ZK.RealLeaves
+module
+
+public import Proofs.Flock.Soundness.ZK.Refusal
+public import Proofs.Flock.Soundness.ZK.RealLeaves
 
 /-!
 # Zero knowledge at a refused coin: the prover's prefix, with real leaves
@@ -19,6 +21,8 @@ in world `W₀` (every pre-final leaf ideal). Here the same at a refused coin wi
   to `τ`. Every one of them is unopened at a refusal (the final message never comes), so T1 is paid on each, not only on
   `Hid`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

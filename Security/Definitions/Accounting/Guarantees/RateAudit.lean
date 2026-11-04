@@ -1,6 +1,8 @@
-import Definitions.Accounting.RateAudit
-import Definitions.Accounting.RateAuditJoint
-import Definitions.Accounting.RateAuditInteractive
+module
+
+public import Definitions.Accounting.RateAudit
+public import Definitions.Accounting.RateAuditJoint
+public import Definitions.Accounting.RateAuditInteractive
 
 /-!
 # The rate audit: what an accepted device held and read (trusted)
@@ -26,6 +28,8 @@ registry names, for a deployed device, the measurement or conjecture that carrie
 * `RateOfAuditInteractive` and `RateOfAuditInteractiveRO`: `RateOfAudit` for a joint run whose bandwidth audit an
   interactive device plays.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

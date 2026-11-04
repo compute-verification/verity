@@ -1,7 +1,9 @@
-import Mathlib.Data.Fintype.Card
-import Mathlib.Data.Fintype.Prod
-import Mathlib.Data.Fintype.Sum
-import Definitions.Pouw.Fp8Atom.H1TVectors
+module
+
+public import Mathlib.Data.Fintype.Card
+public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Data.Fintype.Sum
+public import Definitions.Pouw.Fp8Atom.H1TVectors
 
 /-!
 # H-1T's pinned statements (trusted)
@@ -48,6 +50,8 @@ The FP32 add (`Pouw.Fp8Atom.Fp32`):
 * **`HalfOfInvolution`**: a predicate that an involution always falsifies holds on at most half of a finite set; the
   counting step of the half-salt clause's one-flip cases.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T
 

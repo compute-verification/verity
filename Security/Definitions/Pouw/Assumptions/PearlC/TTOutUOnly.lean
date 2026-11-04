@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
-import Definitions.Pouw.PearlC.W1
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.PearlC.W1
 
 /-!
 # TT_OUT over U alone (trusted; the game under U-only binding, and the named `Prop`)
@@ -16,6 +18,8 @@ contains the (C̃, U) row's (`ttOutPearlCDevRev1_of_uOnly`). It is a new conject
 At W1 (`TTOutUW1`, `TTOutPearlCDevUOnlyW1`) the cost model is the term `W1.w1Priced dv salt`, as `TTOutW1` states the
 device forms; they are stated here, not in `Definitions`, because `correctSetU` is.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

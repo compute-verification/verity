@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Defs
-import Proofs.Flock.Soundness.Discharge.Composed.Headline
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Defs
+public import Proofs.Flock.Soundness.Discharge.Composed.Headline
 
 /-!
 # One `--zk` session is zero knowledge at every coin vector
@@ -23,6 +25,8 @@ No coin vector is left: the outer coin `1`, where the view would not be simulate
   `2·(m − 13)·2^-128` (completeness).
 * `zk_session_view_all`: at every draw `verify --zk` sets up, `ZkViewAll` at `2^-193`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkEveryCoin
 

@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.ZK.Hypotheses
-import Proofs.Flock.Claims.ZK.Prefinal
-import Proofs.Flock.Soundness.Discharge.ZkHidden.View
-import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
-import Proofs.Flock.Soundness.Discharge.ZkView.Prefinal
+module
+
+public import Proofs.Flock.Claims.ZK.Hypotheses
+public import Proofs.Flock.Claims.ZK.Prefinal
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+public import Proofs.Flock.Soundness.Discharge.ZkView.Prefinal
 
 /-!
 # Flock's zero knowledge at the tables `verify --zk` sets up
@@ -36,6 +38,8 @@ the session's own and most of what the Props ask is a theorem:
 `Flock.zk_deployZk_of_tables_gap` is the same at the pinned key's hiding gap (`CROnly.hm96Hiding_gap`), with
 `Claims.Hm96Hiding` discharged.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

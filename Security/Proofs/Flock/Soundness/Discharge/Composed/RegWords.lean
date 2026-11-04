@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Coined
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
-import Proofs.Flock.Soundness.Discharge.Hidden.Public
-import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
-import Proofs.Flock.Soundness.LinkSound
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
+public import Proofs.Flock.Soundness.Discharge.Hidden.Public
+public import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
+public import Proofs.Flock.Soundness.LinkSound
 
 /-!
 # A valid witness's registered values are the public ones
@@ -15,6 +17,8 @@ public one (`coinedOf_reg_of`), at a valid witness in particular (`coinedOf_reg`
 statement is whole-word (`setupHidden_whole`), and of a `setupH` statement whose output is the unit's and whose circuit
 is untyped (`setupH_whole`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

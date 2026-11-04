@@ -1,4 +1,6 @@
-import Definitions.Pouw.Fp8Atom.H1T
+module
+
+public import Definitions.Pouw.Fp8Atom.H1T
 
 /-!
 # H-1T's conformance vectors: what each one asserts (trusted definitions)
@@ -19,6 +21,8 @@ it in the kernel. Codes and words are natural numbers, and lists of them are pac
   writes each `I_p`.
   Every word is finite, `R_0 = I_0`, and each `R_(p+1)` is `rnAdd` of the values of `R_p` and `I_(p+1)`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T
 

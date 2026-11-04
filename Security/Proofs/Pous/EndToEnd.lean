@@ -1,6 +1,10 @@
-import Properties.Pous.EndToEnd
-import Proofs.Pous.Sanity
-import Proofs.Pous.Thm1.Theorem1iiSeq
+module
+
+public import Properties.Pous.EndToEnd
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Thm1.Theorem1iiSeq
+
+@[expose] public section
 
 namespace Pous.EndToEnd.SecurityProofs
 

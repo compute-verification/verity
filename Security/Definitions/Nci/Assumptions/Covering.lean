@@ -1,5 +1,7 @@
-import Definitions.Nci.Covering
-import Mathlib.Basic.Real.Basic
+module
+
+public import Definitions.Nci.Covering
+public import Mathlib.Basic.Real.Basic
 
 /-!
 # The covering bound's two assumptions, at one width `b` and one compression rate `r`
@@ -31,6 +33,8 @@ guarantee and it holds under either; only whether `ParameterHard` holds with a u
 `ParameterHard` and `c_a` in `ActivationChained`, giving `(k / c_w)(k / c_a) + k` a block; that two-rate form is
 `Nci.Guarantees.CoveringBoundTwoCosts`.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

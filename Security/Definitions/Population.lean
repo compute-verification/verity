@@ -1,12 +1,14 @@
-import Definitions.Population.Dataflow
-import Definitions.Population.Partition
-import Definitions.Population.LongValue
-import Definitions.Population.Oblivious
-import Definitions.Population.AddressMap
-import Definitions.Population.Necessity
-import Definitions.Population.Exfiltration
-import Definitions.Population.DrawPressure
-import Definitions.Population.ChiPool
+module
+
+public import Definitions.Population.Dataflow
+public import Definitions.Population.Partition
+public import Definitions.Population.LongValue
+public import Definitions.Population.Oblivious
+public import Definitions.Population.AddressMap
+public import Definitions.Population.Necessity
+public import Definitions.Population.Exfiltration
+public import Definitions.Population.DrawPressure
+public import Definitions.Population.ChiPool
 
 /-! The population sampled proofs sample from: proof blocks over committed value slots with public read and write
 sets (`Dataflow`), each proof block's function and its correctness, what a checker confirms of the dataflow (single
@@ -30,3 +32,5 @@ follows from it.
   samples that miss an incorrect set.
 * `ChiPool`: the halt `Δ` phases after the first caught phase's commitment, and what leaves through it
   (`Strategy.cumLag`, `Strategy.cumUpToLag`). -/
+
+@[expose] public section

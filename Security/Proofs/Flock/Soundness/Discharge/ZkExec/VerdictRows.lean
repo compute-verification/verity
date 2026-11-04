@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictReplay
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictReplay
 
 /-!
 # A `--zk` rep's inner check holds on its inner openings
@@ -15,6 +17,8 @@ values are the claim checks, `openingZK_plays'`) and level 0's two lane rows (`l
 * `zk_inner_qpos`, `zk_qpos_of_rep`: the position a result of the compiled rep records for inner query `jj` is the
   table's `pos` at the rounds' last coin `jj`, the query word `Zk.verifyInner` draws.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

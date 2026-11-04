@@ -1,5 +1,7 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Data.Fintype.Card
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Data.Fintype.Card
 
 /-!
 # Circuits
@@ -23,6 +25,8 @@ A trace is one run's data, a value for every gate. `eval a` is the honest trace 
 every assignment to `D`'s inputs, `D` produces the values of `C`'s output gates among its own outputs. `D` contains `C`
 (`Contains C D`) when, besides, `D` computes every non-input gate of `C` from the same wires.
 -/
+
+@[expose] public section
 
 namespace Verity
 

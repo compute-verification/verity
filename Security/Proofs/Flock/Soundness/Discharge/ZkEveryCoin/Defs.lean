@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Coined
-import Proofs.Flock.Soundness.ZK.Abort
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
+public import Proofs.Flock.Soundness.ZK.Abort
 
 /-!
 # One `--zk` session at every coin vector: what the prover sends and what the simulator outputs
@@ -21,6 +23,8 @@ randomness:
 * `instFintypeF128`, `instFintypeF256`, `instFintypeRestZK`, `instFintypeCoinsZK` (and `instFintypeRestCoinedOf` at a draw's tables): the uniform distribution on a
   draw's coins.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkEveryCoin
 

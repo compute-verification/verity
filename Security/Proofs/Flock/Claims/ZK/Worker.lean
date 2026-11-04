@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.ZK.RealLeaves
-import Proofs.Flock.Soundness.ZK.Refusal
+module
+
+public import Proofs.Flock.Soundness.ZK.RealLeaves
+public import Proofs.Flock.Soundness.ZK.Refusal
 
 /-!
 # Lemma B at a worker's values
@@ -35,6 +37,8 @@ inner proof's constraint:
   `2·|Hid|·δ₁` each way, the form `table_shvzk_hm96` gives the session's tables: the switched view's hidden leaves
   commit `p`'s columns where the rows hold and the honest prover's on the moved pads elsewhere (`Hm96.swDig`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.Table
 

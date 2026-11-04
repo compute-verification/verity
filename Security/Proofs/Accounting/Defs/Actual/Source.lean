@@ -1,4 +1,6 @@
-import Definitions.Accounting.Physical
+module
+
+public import Definitions.Accounting.Physical
 
 /-!
 # Ingress by source
@@ -11,6 +13,8 @@ side budget `β_side (T + RTT)`. So it needs ingress from a location `Y`, and th
 * `ingressFrom X Y I`: `in_X(I; Y)`, the width of the gates placed in `Y` and outside `X` that `A[X, I]` reads;
 * `linkCapacityFrom ends β X Y`: the total capacity of the links across `X`'s boundary whose end outside `X` is in `Y`.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

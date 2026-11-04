@@ -1,6 +1,9 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Reps
-import Proofs.Flock.Claims.Complete.Zk.Json.Record
-import Proofs.Flock.Verifier.Hash
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Reps
+public import Proofs.Flock.Claims.Complete.Zk.Json.Record
+public import Proofs.Flock.Verifier.Hash
+import all Lean.Data.Json.Basic
 
 /-!
 # What the masked record needs of the statement, at several tables
@@ -20,6 +23,8 @@ import Proofs.Flock.Verifier.Hash
   a nonce, an object; `canon` prints the `Hello` and `parse` reads back an alike object (`hello_ok`), which stays
   printable with the prover's nonce put in (`good_of_same`, `good_insert`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

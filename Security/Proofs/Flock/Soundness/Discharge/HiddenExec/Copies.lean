@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
-import Proofs.Flock.Soundness.Discharge.Zero
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
+public import Proofs.Flock.Soundness.Discharge.Zero
 
 /-!
 # `Layout.Aliased` at a hidden-output statement, from its flat twin's copy positions
@@ -16,6 +18,8 @@ hidden statement as in its twin (`UnitRowsFlat`), so:
   the hidden statement (`Layout.Aliased`);
 - `stack_zero_blockH`: a stacked input that reads the zero carries 0.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

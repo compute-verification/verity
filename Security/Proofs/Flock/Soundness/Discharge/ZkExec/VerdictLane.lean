@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictForms
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictForms
 
 /-!
 # Level 0's lane rows are the executable's
@@ -12,6 +14,8 @@ constraints `Zk.ligeritoConstraints` builds, at the record `Zk.ligerito` returns
 * `foldZK_rel`, `ligeritoPadZC_row`: the model's lane rounds fold the claim as the executable does, so every run of
   `ligeritoPadZC` returns the row `laneLhs` is.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

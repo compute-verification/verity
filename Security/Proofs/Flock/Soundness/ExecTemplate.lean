@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.ExecCircuit
-import Proofs.Flock.Soundness.ExecCheck
-import Proofs.Flock.Soundness.ExecTyped
-import Proofs.Flock.Soundness.ExecSetup
+module
+
+public import Proofs.Flock.Soundness.ExecCircuit
+public import Proofs.Flock.Soundness.ExecCheck
+public import Proofs.Flock.Soundness.ExecTyped
+public import Proofs.Flock.Soundness.ExecSetup
 
 /-!
 # A typed template's statement, as `HmRow.parse` and `Stmt.setupH` accept it (1e for templates, T2)
@@ -12,6 +14,8 @@ import Proofs.Flock.Soundness.ExecSetup
   the rows' own chains (`rowWires`), with no leaf map or cut; and `HmRow.check` passed. A typed statement's rows are
   `sha512/row/v1`'s (`rowPorts_typed`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

@@ -1,6 +1,10 @@
-import Definitions.Pouw.PearlC.Sm120
+module
+
+public import Definitions.Pouw.PearlC.Sm120
 
 /-! Generated from `verity.ml.tc` at `8eed14b0` (seed 2026093006) by a script that isn't in the tree; do not edit. -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Sm120Vectors
 

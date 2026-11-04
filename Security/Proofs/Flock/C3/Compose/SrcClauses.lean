@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Compose.DecodeFix
+module
+
+public import Proofs.Flock.C3.Compose.DecodeFix
 
 /-!
 # n7: `SrcOK`'s coin clause and its message types, stage by stage
@@ -15,6 +17,8 @@ The ties (`SparseTie`, `OpenTie`) leave their stages' coins existential, so each
 `CoinsAt`: that its unit's coins are the history's at its rounds, which reads the custody record's coins (`ChecksC3`'s
 coin check, `RecordCustody`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

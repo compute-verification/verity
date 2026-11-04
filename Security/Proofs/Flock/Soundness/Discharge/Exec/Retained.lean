@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
-import Proofs.Flock.Soundness.Discharge.Exec.Tables
-import Proofs.Flock.Soundness.Refine.Frames
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.Exec.Tables
+public import Proofs.Flock.Soundness.Refine.Frames
 
 /-!
 # The production statements retain every round's bytes
@@ -18,6 +20,8 @@ only the framed bytes absorbed since round `k - 1`, exactly (`Transcript.squeeze
 * `accepts_allRetained`: the same as `Refine.AllRetained` for every stream, the hypothesis of `Refine/Frames.lean`'s
   squeeze and sampling lemmas: these tags retain too, so those lemmas apply to the production statements.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

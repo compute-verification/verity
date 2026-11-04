@@ -1,4 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+
+@[expose] public section
 
 set_option Elab.async false
 
