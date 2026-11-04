@@ -2934,10 +2934,10 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
         "--challenger-gate": GATE, "--challenger-peer": "vy-dc-h200", "--challenger-lane": "compute-accounting"}
     assert gated.count("--protocols") == 1 and "--h1-prover" not in gated
     calls, d = (tmp_path / "calls").read_text().splitlines(), tmp_path / "serve" / "pearlplus"
-    assert [c.split("prove_path/prove_path.py ", 1)[-1] for c in calls[-3:-1]] == [
+    assert [c.split("prove_path/prove_path.py ", 1)[-1] for c in calls[-4:-2]] == [
         f"serve-phi --model unsloth/Llama-3.2-1B --revision 9535bd9b1d1dea6acafbdc4813b728796aeb28da --out {d}/serve-phi.json",
         f"class-circuit --serve {d}/serve-phi.json --class 4,32,4 --pearl-tables pearl-c-h100-v1-h3 --out "
-        f"{d}/circuit-record.json"] and "serve-openai" in calls[-1], calls
+        f"{d}/circuit-record.json"] and "inference_only.py policy" in calls[-2] and "serve-openai" in calls[-1], calls
     _rc, default = _serve_argv(tmp_path / "default", {k: v for k, v in {**PEARL_TIES, **cubin}.items()
                                                       if k != "PEARLC_CHALLENGER_GATE"})
     assert default[default.index("--challenger-gate") + 1] == (
@@ -2950,24 +2950,42 @@ def test_under_pearlplus_tie_with_a_gate_the_window_serve_runs_inside_a_pearl_c_
     """With a gate, serve() opens the lane's Pearl-C period on PEARLPLUS-CIRCUIT's record (``pearlplus-period open
     --circuit-record``) once it is built and before serve-openai starts, so the window's salt session joins it, and
     closes it once serve-openai is done, here when it never listens: before Pearl+'s piece draws, its reserves first
-    held to the windows' salt sessions (``--lane``, ``--windows`` the serve dir's pearl/). In-process coins
-    (PEARLC_CHALLENGER_GATE empty) open no period."""
+    held to the windows' salt sessions (``--lane``, ``--windows`` the serve dir's pearl/). Between the record and the
+    open the inference-only policy is written, before serve-openai's start, from serve-phi's φ. In-process coins
+    (PEARLC_CHALLENGER_GATE empty) open no period, and the policy is written all the same."""
     cubin = {"PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": "/c/pearl_c_sm90.cubin"}
     live = {"PEARLC_CHALLENGER_GATE": GATE, "PEARLC_CHALLENGER_PEER": "vy-dc-h200", "PEARLC_CHALLENGER_LANE": "vllm",
             "RESEARCH_RUN_ID": "r20261104-121500-abcd"}
     rc, argv = _serve_argv(tmp_path, {**PEARL_TIES, **cubin, **live})
     assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
     d = tmp_path / "serve" / "pearlplus"
-    calls = [c.split("one_stage/served_verdicts.py ", 1)[-1] if "served_verdicts.py" in c
-             else c.split("prove_path/prove_path.py ", 1)[-1].split()[0] if "prove_path.py" in c else c.split()[2]
-             for c in (tmp_path / "calls").read_text().splitlines()]
-    assert calls[-5:] == [
-        "serve-phi", "class-circuit",
+
+    def steps(calls: Path) -> list[str]:
+        return [c.split("one_stage/served_verdicts.py ", 1)[-1] if "served_verdicts.py" in c
+                else c.split("prove_path/prove_path.py ", 1)[-1].split()[0] if "prove_path.py" in c
+                else "inference_only.py " + c.split()[1] if "inference_only.py" in c else c.split()[2]
+                for c in calls.read_text().splitlines()]
+    assert steps(tmp_path / "calls")[-6:] == [
+        "serve-phi", "class-circuit", "inference_only.py policy",
         f"pearlplus-period open {d} --gate {GATE} --name pearlplus-r20261104-121500-abcd --circuit-record "
         f"{d}/circuit-record.json",
-        "serve-openai", f"pearlplus-period close {d} --gate {GATE} --lane vllm --windows {d.parent}/pearl"], calls
+        "serve-openai", f"pearlplus-period close {d} --gate {GATE} --lane vllm --windows {d.parent}/pearl"]
     _rc, _argv = _serve_argv(tmp_path / "in-process", {**PEARL_TIES, **cubin})
-    assert not any("pearlplus-period" in c for c in (tmp_path / "in-process" / "calls").read_text().splitlines())
+    assert steps(tmp_path / "in-process" / "calls")[-4:] == [
+        "serve-phi", "class-circuit", "inference_only.py policy", "serve-openai"]
+
+
+def test_under_pearlplus_tie_the_inference_only_policy_states_serve_phis_phi_cut_at_pearl_plus_linears(tmp_path):
+    """Under PEARLPLUS_TIE the policy reads φ as serve-phi states it on the card (``--serve``, PEARLPLUS-CIRCUIT's
+    pearlplus/serve-phi.json, which serve() writes under the lease before serve-openai starts) and cuts the class's
+    circuit at Pearl+'s linears (``--pearl-tables``, PEARLPLUS_ARM's scheme): the BF16 checkpoint's φ, which an H200 int8
+    serve's facts don't state."""
+    rc, lines, calls = _inference_only(tmp_path, "inference-policy", **PEARL_TIES)
+    assert rc == 0 and lines == ["INFERENCE-ONLY POLICY at class 4,32,4: c 7 gates, k 3 fresh bits, n 16 sessions"]
+    assert calls == [["policy", "--class", "4,32,4", "--model", "unsloth/Llama-3.2-1B", "--revision",
+                      "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "--lease-min", "60", "--tree", SHA, "--serve",
+                      str(tmp_path / "serve" / "pearlplus" / "serve-phi.json"), "--pearl-tables", "pearl-c-h100-v1-h3",
+                      "--out", str(tmp_path / "out" / "inference-only-policy.json")]]
 
 
 def _pearl_tied_commit(tmp_path: Path, chained: bool = True) -> None:
