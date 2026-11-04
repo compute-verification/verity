@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SampledGeneric.Zk
 public import Proofs.Flock.Claims.ZK.SessionLean
+public import Proofs.Flock.Claims.ZK.DeferredOut
 
 /-!
 # The sampled audit's zero knowledge at Flock's ZK server
@@ -22,6 +23,9 @@ statement alone. So the server is a `Zk` (`FlockZk.server`), but what it meets i
 * `FlockZk.server_below`, `FlockZk.server_zkBelow`: `zk_server_lean_loop` in `Exp`'s terms, at the relation `LiveRel`, the
   statement's relation together with the live path's premises at the statement.
 * `FlockZk.audit_below`: the Flock instance, with every premise of `zk_server_lean_loop` carried as it states it.
+* `FlockZk.simOut`, `FlockZk.errOut`, `FlockZk.server_zkOut`: `zk_server_lean_loop` per outcome, in the claims core's
+  `ZKOut`: the outcome is the verdict and whether the session stopped at its `Finish` (`ZKServer.outD`), and given it
+  the simulator is `leaky1` at its bit, so the factor is `1` and the error is the server's without the `2`.
 -/
 
 @[expose] public section
@@ -315,5 +319,105 @@ theorem audit_below (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : 
     (fun s w v => err rel T vs L pc fc t δ₁ (stmtOf s) w v) samp wit
     ((server_zkBelow rel T vs t ht hT1 hδ₁ hS hV hD hc hsc hT L₀ L hL wk pc fc Θ).comap stmtOf) hH Xt
     (fun r S => ⟨hR r S, hPr r S, hLk r S, hF r S, hE r S, hEf r S⟩) X₀ v
+
+/-! ## Per outcome -/
+
+/-- **The server's simulator given the outcome**: `sim` with its guess replaced by the outcome's bit
+(`ZKServer.simOutD`). -/
+noncomputable abbrev simOut (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (pc : PC T)
+    (fc : FC T) (t : ℕ) : Claims.SimOut (Option Bool × Bool) :=
+  Claims.ZKServer.simOutD
+    (((Stops T L pc fc).refP.withSim fun x _ c => (Stops T L pc fc).coinModel x c).simulatorE t (t * 3 ^ t))
+    (rounds rel) L.toSrv.stop
+
+/-- **The server's error per outcome** at `(x, w)` against `V*` at `θ`, at every outcome:
+`8·N·δ₁ + 8t·N·δ₁ + 2·3^{-t} + 4t·3^t·Pr[Fork]`, `err` without its factor `2`. -/
+noncomputable def errOut (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : Release T) (pc : PC T)
+    (fc : FC T) (t : ℕ) (δ₁ : ℝ≥0∞) (x : Claims.Msg) (w : Claims.Flock.Wit) (Θ : Type) (Vs : Claims.VStar Θ) (θ : Θ)
+    (_ : Option Bool × Bool) : ℝ :=
+  (8 * (Stops T L pc fc).nLeaves x * δ₁.toReal + 8 * t * (Stops T L pc fc).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t) +
+    4 * t * 3 ^ t * (Claims.Fork sha (((Stops T L pc fc).swP vs).prover w) Vs θ x).Pr sha
+
+/-- **`Flock.zk_server_lean_stops` per outcome**: at a session `S`, a stop rule `Rf` and the premises
+`Flock.zk_server_lean_stops` takes, the deferred server's transcript shows an outcome `o` (`ZKServer.outD`) and an event
+with probability at most the simulator's given `o` (`ZKServer.simOutD`, at the session with the frame's stops) of the
+event, plus the server's error without its factor `2`. `ZkServer.zkOut_deferred` where `Flock.zk_server_lean` takes
+`ZkServer.zk_deferred`, at the item-stream refinement `Flock.zk_server_lean_stops` proves. -/
+theorem zkOut_stops (H : Claims.Msg → Claims.Msg) (rel : Parser) (S : Claims.ZKMal.RefSession)
+    (Rf : (x : Claims.Msg) → (Fin (Claims.ZKMal.refK x) → S.Coin) → ℕ → Bool) (hRf : S.StopsCausal Rf)
+    (vs : S.SwVals) (t : ℕ) (ht : 0 < t) {δ₁ : ℝ≥0∞}
+    (hT1 : Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash δ₁)
+    (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables) (hV : S.Complete (Claims.Flock.R (FlockDeploy.deployZk rel).parse))
+    (hD : S.DummyReg) (hc : S.Causal) (hsc : S.SwCausal vs) (hT : S.TapeOK)
+    (L : Claims.ZKServer.LeanRelease Claims.Flock.Wit (S.refP.Nonce × S.refP.Rand)) (wk : L.toSrv.Worker)
+    (x : Claims.Msg) (w : Claims.Flock.Wit) (hR : Claims.Flock.R (FlockDeploy.deployZk rel).parse x w)
+    (hlast : L.last x = Claims.ZKMal.refK x + 1) (hst : Claims.ZKServer.LeanRelease.StopsAt S Rf L H x)
+    (hC : Claims.ZKServer.LeanRelease.CheckIs S L H x) (hH : Claims.ZKServer.LeanRelease.HelloEq S L x)
+    (hLk : Claims.ZKServer.LeanRelease.LinkRoundEq S vs L x w)
+    (hF : Claims.ZKServer.LeanRelease.FinalRoundEq S vs L H wk x w)
+    (hE : Claims.ZKServer.LeanRelease.LiveRoundEq S vs L H wk x w)
+    (hEf : Claims.ZKServer.LeanRelease.FillRoundEq S vs L H wk x w)
+    {Θ : Type} (Vs : Claims.VStar Θ) (θ : Θ) (hk : Vs.k x = rounds rel x) (o : Option Bool × Bool)
+    (Ev : List (Claims.Msg × Claims.Out) → Prop) :
+    Claims.Pr (fun ω : (S.refP.Nonce × S.refP.Rand) × L.toSrv.Chk =>
+        Claims.ZKServer.outD L.toSrv.stop (rounds rel) x
+            (Claims.runStar H (L.toSrv.proverD L.fillOf (rounds rel) wk w) Vs x ω θ).msgs = o ∧
+          Ev (Claims.runStar H (L.toSrv.proverD L.fillOf (rounds rel) wk w) Vs x ω θ).msgs) ≤
+      Claims.Pr (fun c : (((S.withStops Rf L.stop).refP.withSim fun x _ c =>
+            (S.withStops Rf L.stop).coinModel x c).simulatorE t (t * 3 ^ t)).C x =>
+          Ev (((Claims.ZKServer.simOutD (((S.withStops Rf L.stop).refP.withSim fun x _ c =>
+            (S.withStops Rf L.stop).coinModel x c).simulatorE t (t * 3 ^ t)) (rounds rel) L.toSrv.stop).given o).out
+              H Vs θ x c)) +
+        ((8 * (S.withStops Rf L.stop).nLeaves x * δ₁.toReal + 8 * t * (S.withStops Rf L.stop).nLeaves x * δ₁.toReal +
+            2 * (1 / 3) ^ t) +
+          4 * t * 3 ^ t * (Claims.Fork H (((S.withStops Rf L.stop).swP vs).prover w) Vs θ x).Pr H) :=
+  have hO := Claims.ZKServer.LeanRelease.openingsRefused_of_checkIs S L H x hC
+  L.toSrv.zkOut_deferred L.fillOf H (rounds rel) ((S.withStops Rf L.stop).swP vs).prover _ _ _ _
+    (Claims.ZKMal.Flock.zk_deployZk_sw H rel (S.withStops Rf L.stop) vs t ht hT1 hδ₁
+      (S.withStops_tables Rf L.stop hS) (S.withStops_complete Rf L.stop hV) (S.withStops_dummyReg Rf L.stop hD)
+      (S.withStops_causal Rf L.stop hRf hc) (S.withStops_swCausal Rf L.stop vs hRf hsc)
+      (S.withStops_tapeOK Rf L.stop hT)).2 x w hR wk
+    (L.refD H _ _ wk x w
+      ⟨L.helloRefine_withStops S Rf vs H x w hH,
+        L.ownRefine_withStops S Rf vs H (rounds rel) wk x w (Claims.ZKServer.deployZk_last_eq rel x) hlast hst hO
+          hLk hF,
+        L.liveRefine_withStops S Rf vs H wk x w hlast hst hO hE,
+        L.fillRefine_withStops S Rf vs H (rounds rel) wk x w (Claims.ZKServer.deployZk_last_eq rel x).le hlast hst hO
+          hEf,
+        L.stopRefine_withStops S Rf vs H (rounds rel) wk x w (Claims.ZKServer.deployZk_last_eq rel x).le hst⟩)
+    Vs θ hk o Ev
+
+/-- **Flock's ZK server is zero knowledge per outcome** (`Claims.ZKOut`): at a statement in the relation with its live
+path's premises (`LiveRel`), against every verifier of the server's rounds, the deferred server's transcript shows an
+outcome `o` (`ZKServer.outD`: the verdict, and whether the session stopped at its `Finish`) and an event with
+probability at most the simulator's given `o` (`simOut`) of the event, plus `errOut`, which reads the statement, the
+witness and the verifier through `Fork`. `server_zkBelow`'s factor `2` is the simulator's guess of the outcome's bit,
+which the simulator given `o` doesn't make. The premises are `zk_server_lean_loop`'s, as it takes them: the release's
+facts at the session loop are `Flock.zk_server_lean_coinLayer`'s and `zk_server_lean_loop`'s, then `zkOut_stops`. -/
+theorem server_zkOut (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (t : ℕ)
+    (ht : 0 < t) {δ₁ : ℝ≥0∞}
+    (hT1 : Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash δ₁)
+    (hδ₁ : δ₁ ≠ ⊤) (hS : (Sess T).Tables) (hV : (Sess T).Complete (Claims.Flock.R (FlockDeploy.deployZk rel).parse))
+    (hD : (Sess T).DummyReg) (hc : (Sess T).Causal) (hsc : (Sess T).SwCausal vs) (hT : (Sess T).TapeOK)
+    (L₀ L : Release T) (hL : L = Claims.ZKServer.LeanRelease.loop Claims.ZKServer.Loop.loopNr T L₀)
+    (wk : L.toSrv.Worker) (pc : PC T) (fc : FC T) :
+    Claims.ZKOut (fun _ => Tape T) (fun _ => L.toSrv.Chk) sha (rounds rel)
+      (fun w _ => L.toSrv.proverD L.fillOf (rounds rel) wk w) (LiveRel rel T vs L wk pc fc)
+      (Claims.ZKServer.outD L.toSrv.stop (rounds rel)) (simOut rel T L pc fc t) (errOut T vs L pc fc t δ₁) := by
+  intro x w hR Θ Vs θ hk o Ev
+  obtain ⟨hR, hPr, hLk, hF, hE, hEf⟩ := hR
+  have hlast := Claims.ZKServer.LeanRelease.loop_last Claims.ZKServer.Loop.loopNr T L₀ x
+  have hCo := Claims.ZKServer.LeanRelease.loop_coinsRead Claims.ZKServer.Loop.loopNr T L₀ x
+  have hH := Claims.ZKServer.LeanRelease.loop_helloIs Claims.ZKServer.Loop.loopNr T L₀ x
+  have hP := Claims.ZKServer.LeanRelease.loop_helloParses Claims.ZKServer.Loop.loopNr T L₀ x
+  have hFw := Claims.ZKServer.LeanRelease.loop_reqsFollow T L₀ x
+  rw [← hL] at hlast hCo hH hP hFw
+  have hC := Claims.ZKServer.LeanRelease.checkIs_coinLayer Claims.ZKServer.Loop.loopNr T L x hP hFw
+  exact zkOut_stops sha rel (Sess T) _
+    (Claims.ZKServer.LeanRelease.stopsCausal_rfOf (Sess T) L pc fc Claims.ZKServer.Loop.readCoins) vs t ht hT1 hδ₁
+    hS hV hD hc hsc hT L wk x w hR hlast
+    (Claims.ZKServer.LeanRelease.stopsAt_of_readsCoins (Sess T) L sha pc fc Claims.ZKServer.Loop.readCoins x
+      ⟨hPr, hCo⟩ hC) hC
+    (Claims.ZKServer.LeanRelease.helloEq_of_helloIs Claims.ZKServer.Loop.loopNr T L x hH) hLk hF hE hEf Vs θ hk o Ev
 
 end FlockSoundness.SampledGeneric.FlockZk
