@@ -214,6 +214,18 @@ def start_bpb(on: list[dict]) -> float | None:
     return v[len(v) // 2] if v else None
 
 
+def left_out(r: dict, shape: dict | None, ladder=None) -> str | None:
+    """Why `formalism_rows` leaves row `r` (from a start of shape `shape`) out before measuring it, else None."""
+    if shape is None:
+        return "no-shape"
+    if r.get("data") == "v3" and shape.get("tokenizer") != policy.V3_TOKENIZER:
+        return "pilot-start"
+    if not policy.eligible((r.get("model") or {}).get("forward_gates_per_token"),
+                           r.get("start_forward_gates_per_token") or policy.w_fwd(shape), r.get("val_bpb"), ladder):
+        return "over-cap"
+    return None
+
+
 def formalism_rows(rows: list[dict], shapes: dict[str, dict], ladder=None) -> tuple[list[dict], dict[str, str]]:
     """Each row whose start has a shape and that the scoring cap admits (te_core.policy's `eligible`, under the ladder's
     fit `ladder`), with its formalism quantities (`measured`), |C| in gates, ρ in every cell of its start (te_core.policy's
@@ -225,15 +237,8 @@ def formalism_rows(rows: list[dict], shapes: dict[str, dict], ladder=None) -> tu
     out, skipped, cells = [], {}, {}
     for r in rows:
         shape = shapes.get(r["start"])
-        if shape is None:
-            skipped[r["id"]] = "no-shape"
-            continue
-        if r.get("data") == "v3" and shape.get("tokenizer") != policy.V3_TOKENIZER:
-            skipped[r["id"]] = "pilot-start"
-            continue
-        if not policy.eligible((r.get("model") or {}).get("forward_gates_per_token"),
-                               r.get("start_forward_gates_per_token") or policy.w_fwd(shape), r.get("val_bpb"), ladder):
-            skipped[r["id"]] = "over-cap"
+        if why := left_out(r, shape, ladder):
+            skipped[r["id"]] = why
             continue
         if r["start"] not in cells:
             cells[r["start"]] = policy.cells(shape)

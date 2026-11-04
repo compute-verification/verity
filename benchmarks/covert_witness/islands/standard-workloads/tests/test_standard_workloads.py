@@ -1,6 +1,7 @@
 """standard_workloads.py builds `training/standard-workloads`: a row per workload and measured dial setting, whose
 ρ is formalism.published's under the builder's `READING`, A (with its binding kind, what it rests on and its kinds as
-published gives them, reading B's forms among their sensitivities; null and "unmeasured" where it has no bound, never
+published gives them, a measured row's rests_on opening with algorithm_policy's TRACED where ρ is the products term's
+or its floor's, reading B's forms among their sensitivities; null and "unmeasured" where it has no bound, never
 infinite) at the console's default (rho_default and rho_console) and the registered serving block (rho_served), whose
 rho_inputs give the dial's ρ at both (page_rho) and whose input_status says which inputs te_core measured (an
 unmeasured Δ_grad's steps and whether Fit's verdict rests on it, and the products kind's input); a generation
@@ -55,10 +56,11 @@ PRODUCT = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m":
            "gates_per_mac": 1480.0, "cell_gates": 23682.0, "fed": [[1024, 1.0]], "P": 1.0, "gathered": [False, False]}
 
 
-def products_rows(*rows, steps: float = 1.0, p_match: tuple = (), dial: tuple = (), elementwise: tuple = (),
+def products_rows(*rows, steps: float | None = None, p_match: tuple = (), dial: tuple = (), elementwise: tuple = (),
                   capture: str = formalism.ELEMENTWISE_FROM, code: str | None = None) -> dict:
     """`rows` as a run's products (formalism.products_of_trace): a traced step's, captured by `capture` (and written
-    by the code of VERSION `code`, where the trace records it), times `steps`, with the ops that break P-match
+    by the code of VERSION `code`, where the trace records it), times `steps` (None: the step captured on its own,
+    which stands for one after the run's first ones, so M keeps it whole), with the ops that break P-match
     `p_match` and the products the step writes elementwise `elementwise`, and the same rows at each k of `dial` (a
     trace's `at`)."""
     block = {"capture": capture, "capture_code": code, "k": float(policy.CONSOLE[1]), "order": "unknown", "tokens": 8,
@@ -146,11 +148,13 @@ def test_under_reading_a_a_row_is_publisheds_rho_and_basis_as_is_with_its_terms_
     assert list(kinds["bound"]) == list(formalism.KINDS) and kinds["bound"]["fresh_products"] is None
     assert kinds["bound"]["token"] == pytest.approx(b["terms"]["token"], rel=1e-3)
     assert (kinds.get("partial", False), kinds.get("why")) == (one["partial"], one["why"])
-    assert "reading A, one bound over the valid kinds (null: unmeasured)" in p["note"]
-    assert (f"c = {algorithm_policy.num(policy.CONSOLE[0], 5)} gates, one 4,096-in, 1,024-out session of the 45M "
-            f"reference with attention") in p["note"]
-    assert ("Products term: rho_HE (theorem of record, given (H), (E)); kinds' fresh_old, the old term, rests on "
-            "P-width extended, false on honest circuits.") in p["note"]
+    assert p["note"].startswith(f"Training's slowdown code {VERSION}, reading A. ")
+    assert ("Products term rho_HE: theorem of record, given (H), (E); fresh_old, the old term, rests on P-width "
+            "extended, false on honest circuits.") in p["note"]
+    assert ("Headline (no column yet): each workload's own 4,096-in, 1,024-out session at k = 65,536. Sensitivities: "
+            f"rho_default = rho_console, the console's default, that session of the 45M reference (c = "
+            f"{algorithm_policy.num(policy.CONSOLE[0], 5)}); rho_served, the serving block (c = "
+            f"{algorithm_policy.num(panels.SERVED[0], 5)}, k = 145,568).") in p["note"]
     assert formalism.RESTS_ON_CELL["fresh_products"].startswith("theorem of record, given (H): ")
     assert formalism.CELL_SENSITIVITIES[-1] == "fresh_old" and formalism.SENSITIVITIES["fresh_old"].startswith(
         "rests on P-width extended, false on honest circuits: ")
@@ -220,7 +224,8 @@ def test_a_modelled_row_is_the_workload_models_products_priced_at_both_points():
     """A workload no run measures (the rows file's RL with the updated weights between updates, and inference on an
     unregistered model) is te_core.workloads' model at the row's dials, its products at each point's k priced as a
     run's are: its ρ at each point workloads.rho's, its run cell `MODELLED` with what the model is, its dials every
-    argument of the model, each input the model's, no capture code; the rows file's words for it name no code."""
+    argument of the model, each input the model's, no capture code, and what it rests on published's, which no trace's
+    label opens; the rows file's words for it name no code."""
     rows = [r for r in json.loads(SW.ROWS.read_text())["rows"] if "modelled" in r]
     assert [r["workload"] for r in rows] == ["rl", "inference"]
     p, details = SW.build({"rows": rows}, REVS, stamp="2026-11-03T00:00:00Z")
@@ -229,6 +234,10 @@ def test_a_modelled_row_is_the_workload_models_products_priced_at_both_points():
         assert cells["run"] == f"{SW.MODELLED} ({r['modelled']})" and cells["dials"] == SW.compact(model.dials)
         for name, (c, k) in SW.POINTS.items():
             assert cells[f"rho_{name}"] == SW.rho_cell(workloads.rho(model, c, k)["rho"])
+        con = workloads.rho(model, *SW.POINTS["console"])
+        assert cells["rests_on"] == (con["products_rests_on"] if con["basis"] == "fresh_products" else
+                                     formalism.RESTS_ON_CELL[con["basis"]])
+        assert not cells["rests_on"].startswith(algorithm_policy.TRACED)
         assert cells["rho_default"] == cells["rho_console"] and cells["capture_code"] is None
         st = json.loads(cells["input_status"])
         assert list(st) == [*SW.KEYS, "products"] and all(v.startswith("modelled: ") for v in st.values())
@@ -474,10 +483,11 @@ def test_the_builders_own_words_in_a_published_string_name_no_code():
 
 def test_a_binding_fresh_products_term_is_publisheds_and_the_products_input_names_the_untraced_steps_that_update(
         monkeypatch):
-    """Where the products term binds, the row's binding kind and what it rests on (the theorem of record, given (H) at
-    the β and (E) at the b_y the term takes) are published's as it gives them, and the kinds cell's premises
-    algorithm_policy's; the row's products input names its untraced steps but a step whose structure updates nothing
-    (`IDLE`), which has no products of two operands that depend on the update."""
+    """Where the products term binds, the row's binding kind and what it rests on (the theorem of record on the subset
+    of M it takes, given (H) at its β_w, a weight's, and β_x, an activation's at most β(k), and (E) at its b_y) are
+    published's as it gives them, opening with algorithm_policy's `TRACED` as algorithm_policy's rows do, and the
+    kinds cell's premises algorithm_policy's; the row's products input names its untraced steps but a step whose
+    structure updates nothing (`IDLE`), which has no products of two operands that depend on the update."""
     fx = json.loads(PINNED.read_text())
     m = dataclasses.replace(formalism.from_json(fx["measured"]), products=products_rows(PRODUCT, steps=1e9))
     last = "step 9: the program's last, its structure having no other step, not traced"
@@ -485,9 +495,15 @@ def test_a_binding_fresh_products_term_is_publisheds_and_the_products_input_name
     one = formalism.published(m, *SW.POINTS["console"], SW.READING)
     he = formalism.bound(m, *SW.POINTS["console"])["inputs"]["fresh_products"]
     assert one["binding_kind"] == "fresh_products" and one["rests_on"] == formalism.he_rests_on(he)
-    assert one["rests_on"].startswith(f"theorem of record, given (H): operands are hard at β = {he['beta']:.4g} bits")
+    assert (he["subset"], he["beta_w"], he["beta_x"], he["b_y"]) == ("M", 16, 15.9, 16)
+    assert one["rests_on"].startswith(
+        f"theorem of record on M, given (H): operands are hard at β_w = 16 and β_x = 15.9 bits a word "
+        f"({formalism.BETA_K_LABEL}; the casts of one value count as one word), and (E): exports are wide at b_y = 16 "
+        f"bits an output")
     _, _, cells = build(m, fx, monkeypatch)
-    assert (cells["binding_kind"], cells["rests_on"]) == ("fresh_products", one["rests_on"])
+    assert (cells["binding_kind"], cells["rests_on"]) == ("fresh_products",
+                                                          f"{algorithm_policy.TRACED}; {one['rests_on']}")
+    assert cells["rests_on"] == algorithm_policy.rests_on(one)
     assert json.loads(cells["kinds"])["rests_on"] == {"fresh_products": formalism.RESTS_ON_CELL["fresh_products"]}
     assert json.loads(cells["input_status"])["products"].startswith(f"assumed: none on 1 untraced step ({last}),")
 
