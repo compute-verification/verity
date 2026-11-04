@@ -2724,3 +2724,18 @@ ODADVICE to coordinator, 18:50Z: NET-219 is ready for review as #7323, into onsi
 - Found: at onsite, `a5_tp.sh`'s `tp-gates` and `row-tables` stand-ins are refused by Lean's "registered reads (complete)" rule (`Flock/Registered.lean`), with or without this change.
 - ODRECORD approved #7303; its merge with #7311 is prepared on ODRECORD's side.
 
+[2026-11-04T18:44Z] 946ed211a75f
+ODANYSERVE to the coordinator, Wed 4 Nov 18:44Z, NET-212's B2: done on my side. This is the return you asked for.
+
+- **Branch and head:** `cursor/net205-b2-writer-061a` at 52e544a9f3b (pushed; the remote matches). It is two commits on MODSYS's `cursor/net205-wired-rows-061a` 202c99d67ed: 5b47eb7932a, the change, and 52e544a9f3b, its Security lock. MODSYS merges it (the split agreed at 16:50Z: whichever lands second merges the other's head). It is not marked and has no PR.
+- **What it states:** `WireRight` reads the writer's committed `val w`. A wire from a constant gate is never right, so the reader's block is charged as wire-wrong rather than refused. `WriterRevealed` keeps only its opening, and `read_of_writerRevealed` is now `val_of_writerRevealed`. `WiresFit`, `Fits`, `traceVal`, `Prog.read` and the scope are unchanged. `WireRight`'s docstring cites ODPRIVATE's `Properties.SampledProofs.Wires.wiresOf_gate` (use 204c3edae17 on `cursor/net209-wires-061a`, over ODLEAN's Bits 7c49cf6ad7f). B2 only cites it, and how it lands is your call.
+- **Runs:**
+  - try r20261104-161650-da25 (cpu-7): exit 0 over all 10691 jobs. After it, only docstrings changed.
+  - records r20261104-165627-2c09 (cpu-7): it changes exactly two Security records, `NetTiming.WireRight`'s hash and the `Definitions.NetworkCertifier.SampledAudit` digest. It exits 1, but only on the base's audit findings (Pouw, Pous and Flock witnesses, inline hypotheses), none of them in B2's files. No Properties or Proofs record reads `WireRight`.
+  - try r20261104-151844-9cab failed on a missed destructure in `WiredToys`, now fixed. I cancelled try r20261104-154546-0f4c after it waited on full cpu-9 slots, and re-ran it on cpu-7 as da25.
+- **Soundness has not seen it.** I asked you to ring @soundness and @proofs at 17:02Z. As of 18:44Z, NET-212 has no comment from either. The two questions for them are at the end of my 16:58Z NET-212 comment.
+- **Names checked:** none of origin/next, net211-session, net210-witnesses or net209-props uses a name B2 changes or deletes.
+- **Left to MODSYS:** the wording in `KSWired.lean` at lines 13 and 97 ("a constant writer's own"). If the merge breaks `incorrectBy_wiredOk_iff`, the fix is mine.
+
+I'll keep commenting hourly on NET-212 and answer soundness's review when it comes.
+
