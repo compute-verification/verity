@@ -16,7 +16,8 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    later, else on LAST's re-score commit; then TE40_WT moves to it.
 2. Builds the measured ledger (trace40.py): v3's valid runs (the pilot's too under CAPTURE_FINAL's capture or with
    TE_TRACE_PILOT=1) traced, measured and ingested again in shards of TRACE_SHARD runs over TRACE_POOLS' free slots,
-   a long-tier record in its tier's layer (TIER_FROM), the runs traced at earlier refreshes kept.
+   a long-tier record in its tier's layer (TIER_FROM), the runs traced at earlier refreshes kept, and each run whose
+   trace lists an elementwise product retraced in the fix layer over its layer (FIX, `listed`), scored from there.
 3. Runs its `python -m te_core.rescore` on that ledger at PINS: per checkpoint of every valid record, v3's and the
    pilot's, measured, formalism v2's quantities measured on its traced step (t literal), Fit per kind of block and rho
    (c/(c - d) where every part fits, else Slowdown's bound, a target) on te_core.policy's (c, k) grid with the frozen
@@ -40,6 +41,7 @@ per-run P4 (final and search) for final.md, and posts FINAL-TABLE instead of DIG
 """
 import argparse
 import collections
+import gzip
 import json
 import math
 import os
@@ -210,9 +212,10 @@ def same_capture(a: str, b: str) -> bool:
 
 
 #: a later commit of a layer's capture that traces only runs the layer's capture failed on or listed falsely
-#: (NEXT_WT-VERSION-fix, its runs named when it is made): scored over that layer, never the layer that traces (te_core
-#: 4.11's bf16 mv, the toolsmith's 14:37Z line; 4.12.13's elementwise listings, whose traces read 4.12.9 as their
-#: capture, so the cache's traced.json names the capture code, coordinator 23:59Z)
+#: (NEXT_WT-VERSION-fix, `fixed`): scored over that layer, never the layer that traces (te_core 4.11's bf16 mv, the
+#: toolsmith's 14:37Z line). 4.12.13's code drops 4.12.9's false elementwise listings, so its fix layer retraces each
+#: run its layer's trace lists one for (`listed`, coordinator 23:59Z); a trace there reads 4.12.9 as its capture, so
+#: the cache's traced.json names the capture code (`mark`)
 FIX = "-fix"
 
 
@@ -228,8 +231,44 @@ def layers() -> list[Path]:
     have = capture_version(trace40.TE40_WT)
     got = [p for p in (NEXT_WT, *NEXT_WT.parent.glob(NEXT_WT.name + "-*")) if p.exists()]
     return sorted((p for p in got if version(capture_version(p)) > version(have)
-                   and (layer_tier(p) or not same_capture(capture_version(p), have))),
+                   and (layer_tier(p) or p.name.endswith(FIX) or not same_capture(capture_version(p), have))),
                   key=lambda p: version(capture_version(p)))
+
+
+def fixed(te: Path) -> Path:
+    """The layer fix layer `te` is scored over: the newest layer before it that is neither a fix nor a tier's, else
+    TE40_WT's."""
+    below = [p for p in layers() if not p.name.endswith(FIX) and not layer_tier(p)
+             and version(capture_version(p)) < version(capture_version(te))]
+    return below[-1] if below else trace40.TE40_WT
+
+
+def listed(te: Path) -> set[str]:
+    """The runs whose trace in `te`'s cache lists a matrix product a step writes with elementwise ops (4.12.7's
+    `elementwise_products`), read from each records file's first row, since a run's checkpoints share its trace."""
+    out = set()
+    for p in (trace40.cache(te) / "records").glob("*.jsonl.gz"):
+        with gzip.open(p, "rt") as f:
+            line = f.readline()
+        if not line:
+            continue
+        at = ((json.loads(line).get("formalism") or {}).get("products") or {}).get("at") or {}
+        if any(v.get("elementwise_products") for v in at.values()):
+            out.add(p.name.removesuffix(".jsonl.gz"))
+    return out
+
+
+def mark(te: Path) -> None:
+    """Names fix layer `te`'s capture code in each traced run's entry of its traced.json: a trace from before te_core
+    4.12.14 names only its frozen capture (CAPTURE_FINAL), not the code that wrote it (coordinator 23:59Z)."""
+    f = trace40.cache(te) / "traced.json"
+    traced = json.loads(f.read_text()) if f.exists() else {}
+    code = {"capture_code": capture_version(te),
+            "provenance": (f"te_core {capture_version(te)}'s capture code ({git('rev-parse', '--short', 'HEAD', cwd=te)}"
+                           f", tree {trace40.cache(te).name}); the trace reads {CAPTURE_FINAL} as its capture")}
+    new = {k: v | code for k, v in traced.items() if not v.get("error") and "capture_code" not in v}
+    if new:
+        f.write_text(json.dumps(traced | new, indent=1, sort_keys=True, default=str))
 
 
 def tier_layer(tier: str, top: Path, newest: str) -> Path | None:
@@ -381,12 +420,16 @@ def run_tiers() -> dict[str, str | None]:
 def to_trace(te: Path, busy: set[str]) -> list[tuple[int, str]]:
     """The runs in scope with no trace in `te`'s cache and no node run tracing them, each with its rank: v3's first
     (`retrace_order`), then the pilot's under CAPTURE_FINAL's capture or when TE_TRACE_PILOT is set. A tier's layer
-    takes only that tier's records, and a layer before TIER_FROM's none of them."""
+    takes only that tier's records, and a layer before TIER_FROM's none of them; a fix layer only the runs its layer's
+    traces list elementwise products for (`listed`)."""
     v3, done = v3_scope(), trace40.done(trace40.cache(te)) | busy
     pilot = os.environ.get("TE_TRACE_PILOT") == "1" or same_capture(capture_version(te), CAPTURE_FINAL)
     tier, tiers, at = layer_tier(te), run_tiers(), version(capture_version(te))
+    fix = listed(fixed(te)) if te.name.endswith(FIX) else None
 
     def here(run: str) -> bool:
+        if fix is not None:
+            return run in fix
         t = tiers.get(run)
         return t == tier if tier else not (t in TIER_FROM and at < version(TIER_FROM[t]))
     runs = [r["run_id"] for r in trace40.scope() if r["run_id"] not in done and (r["run_id"] in v3 or pilot)
@@ -942,11 +985,24 @@ def main() -> int:
                       f"{te_version(newest)}'s traces replace it")
             os.environ["TE_PIN_REV"] = commit
             PINS[:] = trace40.pins(commit)
+    # a fix layer plans after the wait, so the runs its layer traced during it are retraced too; its node runs are
+    # taken at the next refresh
+    fixes = [] if final else [p for p in layers() if p.name.endswith(FIX)]
+    got = {}
+    if fixes and not args.no_trace:
+        slots, _, room = pool_room()
+        got, waits = plan(fixes, slots, room)
+        mem_wait |= waits
+    for h in fixes:
+        held[capture_version(h)] = measured_ledger(out / f"held-{capture_version(h)}", got.get(h, []), h,
+                                                   build=False, wait=False)
+        mark(h)
     if not final:
         LAST.write_text(json.dumps({"commit": commit, "te_core": te_version(commit), "stamp": stamp}) + "\n")
     trace_version = capture_version(trace40.TE40_WT)
     # the runs each newer capture has traced are scored on its traces already, where the re-score's te_core reads them
-    over = [p for p in layers() if (nxt or p in tiered) and version(capture_version(p)) <= version(te_version(commit))]
+    over = [p for p in layers() if (nxt or p in tiered or p.name.endswith(FIX))
+            and version(capture_version(p)) <= version(te_version(commit))]
     rs = out / "rescore"
     # the tiers' node runs that ended during the wait taken too
     for te in tiered:
