@@ -202,7 +202,30 @@ def test_a5s_registered_read_negatives_alter_one_of_a_chunks_two_ports_and_keep_
 
     monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
     a5.registered_negatives(SimpleNamespace(lean="lean"), {"st": {"registered_file": tmp_path / "registered.json"},
-                                                            "m": SimpleNamespace(n=T)}, tmp_path)
+                                                            "m": SimpleNamespace(n=T, port=lambda p: f"c0/{p}")}, tmp_path)
     assert seen == {"chunk-without-registered-reads": None,
                     "registered-read-against-another-root": {**ports, "part0": {**ports["part0"], "root": "00" * 64}},
                     "registered-reads-another-row": {**ports, "part0": {**ports["part0"], "reads": [*range(1, T), 0]}}}
+
+
+def test_a5s_registered_read_negatives_read_a_completed_members_first_window_port_at_another_window_tree(tmp_path, monkeypatch):
+    """A completed member's ``--registered`` file names its own ports at their window trees (each entry's ``value`` its port's
+    name in the window): a5's negatives read the first at another window tree's root, every other read as registered, and
+    Lean is to refuse it by a row that does not open; a parameter port is never the one moved."""
+    import a5
+
+    ports = {"w": {"value": "weights/w", "root": "aa" * 64, "leaves": 1, "reads": [0, 0]},
+             "x": {"value": "c0/x", "root": "bb" * 64, "leaves": T, "reads": list(range(T))},
+             "o0": {"value": "c0/o0", "root": "cc" * 64, "leaves": T, "reads": list(range(T))}}
+    (tmp_path / "registered.json").write_text(json.dumps({"format": "verity/registered-reads/v1", "ports": ports}))
+    seen = {}
+
+    def lean_verify(lean, st, n, sdir, zk, log):
+        seen[log] = json.loads(st["registered_file"].read_text())["ports"] if "registered_file" in st else None
+        return {"accepted": False, "digest": "d", "why": "setup: registered reads: a row does not open"}
+
+    monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
+    got = a5.registered_negatives(SimpleNamespace(lean="lean"), {"st": {"registered_file": tmp_path / "registered.json"},
+                                                                  "m": SimpleNamespace(n=T, port=lambda p: f"c0/{p}")}, tmp_path)
+    assert seen["window-port-read-against-another-window-tree"] == {**ports, "x": {**ports["x"], "root": "cc" * 64}}
+    assert got["window-port-read-against-another-window-tree"]["refused"]
