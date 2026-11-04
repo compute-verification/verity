@@ -13,8 +13,9 @@ each ``w<k>/``). Each of ``commit_periods`` is one Commit period's: ``bits``, it
 ``by_egress_window``, the bits I1 charges each egress window of ``T`` buckets of τ (``--tau``, the advice's) that holds
 any, counted from the Commit period's first step, with the requests it admits and carries in and its engine steps.
 ``bits`` summarizes the Commit periods, and ``prompt_len``, ``output_len`` and ``finishes`` (``eos``: a stop token
-ended it; ``length``: its cap did; ``abort``) the requests, each once, in the Commit period that admits it. ``serving`` is the engine's configuration the step trace
-records (`verity-vllm advice`'s report), the settings it was measured at. ``refused`` and ``open`` are the Commit
+ended it; ``length``: its cap did; ``abort``) the requests, each once, in the Commit period that admits it: a Commit
+period's advice lists the requests it carries in first, then those it admits. ``serving`` is the engine's
+configuration the step trace records (`verity-vllm advice`'s report), the settings it was measured at. ``refused`` and ``open`` are the Commit
 periods the advice refused or left open, which no figure counts. `served_verdicts.sh advice-charge` serves such a run
 and writes it.
 """
@@ -63,10 +64,12 @@ def charge(advice: Path, run: str, tau: float) -> dict[str, Any]:
         if bits != int(w["bits"]):
             raise ValueError(f"Commit period {k}'s registration binds {bits} bits, and windows.json {w['bits']}")
         compilers.add(json.dumps(reg["binding"]["compiler"], sort_keys=True))
-        admitted = adv["requests"]
+        carried = len(adv.get("carried") or ())
+        if carried > len(adv["requests"]):
+            raise ValueError(f"Commit period {k} carries {carried} requests in and lists {len(adv['requests'])}")
+        admitted = adv["requests"][carried:]
         periods.append({"period": int(k), "bits": bits, "by_egress_window": reg["bits_by_window"],
-                       "admitted": len(admitted), "carried_in": len(adv.get("carried") or ()),
-                       "engine_steps": len(adv["steps"])})
+                       "admitted": len(admitted), "carried_in": carried, "engine_steps": len(adv["steps"])})
         prompts += [int(q["prompt_len"]) for q in admitted]
         outputs += [int(q["output_len"]) for q in admitted]
         finishes.update(str(q["finish"]) for q in admitted)
