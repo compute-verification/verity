@@ -7,8 +7,7 @@ import Proofs.Flock.Bridge.Statement
 # Bits' key program lays out the bridge's (`SampledProofs.Bits.keyProg`)
 
 `Placed.keyProg c hU n`, with outputs `Layout.outsOf c hU n`, is the bridge's program of a circuit file's `n` units, and
-`SampledProofs.Bits.keyProg c n` is Bits'. Where every input a computed row reads has a row key (`Layout.KeysRow`), so
-that no such input is a free source, Bits' lays out the bridge's:
+`SampledProofs.Bits.keyProg c n` is Bits'. Bits' lays out the bridge's:
 
 * `uniform_op_input`, `uniform_op_row`, `uniform_unit_row`, `rowsWireC_uniform_comp`: `Placed.uniform`'s gates in
   closed form. Its inputs come first, then unit `u`'s computed row `i` at gate `gates k R u + i`, reading its columns'
@@ -270,16 +269,15 @@ theorem keyProg_unit_row {u : ℕ} (hu : u < n) (i : Fin (Placed.circuitRows c h
     (ins := Placed.insOf n _ (Aliased.keyIdx c (Placed.circuitRows c hU).nIn)) (one := Placed.oneGate n _)
     (hone := Placed.insOf_ne_one n _ _) n u hu i g (by rw [gates_val]; exact hg)
 
-/-- **Bits' gate of unit `u`'s column `col` is the bridge's**, where an input column's Bits source isn't free. -/
+/-- **Bits' gate of unit `u`'s column `col` is the bridge's.** -/
 theorem keyWire_colVal (hR : RowsAgree (bitsRows c) (Placed.circuitRows c hU)) {u : ℕ} (hu : u < n)
-    (col : Fin (Placed.circuitRows c hU).w)
-    (hcol : col.val < (Placed.circuitRows c hU).nIn → ∀ k p t, SampledProofs.Bits.srcKey c col.val ≠ .free k p t) :
+    (col : Fin (Placed.circuitRows c hU).w) :
     keyWire c n u col.val = colVal (Placed.inGates n (Placed.circuitRows c hU).nIn) (Placed.circuitRows c hU)
       (Placed.insOf n _ (Aliased.keyIdx c (Placed.circuitRows c hU).nIn)) (Placed.oneGate n _) u col := by
   unfold keyWire colVal
   rw [hR.1, hR.2.1]
   by_cases h1 : col.val < (Placed.circuitRows c hU).nIn
-  · simp only [h1, ↓reduceIte, ↓reduceDIte, getD_map_range _ h1, keyIdx_eq c h1 (hcol h1),
+  · simp only [h1, ↓reduceIte, ↓reduceDIte, getD_map_range _ h1, keyIdx_eq c h1,
       Placed.insOf_of_lt hu]
     cases Aliased.keyIdx c (Placed.circuitRows c hU).nIn ⟨col.val, h1⟩ <;> rfl
   · by_cases h2 : col.val < (Placed.circuitRows c hU).nIn + (Placed.circuitRows c hU).nComp
@@ -287,19 +285,8 @@ theorem keyWire_colVal (hR : RowsAgree (bitsRows c) (Placed.circuitRows c hU)) {
     · simp only [h1, h2, ↓reduceIte, ↓reduceDIte]
       rfl
 
-/-- An input a computed row reads has no free Bits source, where it has a row key. -/
-theorem not_free_of_keysRow {rowW : Fin c.ports.size → ℕ} (hkeys : Layout.KeysRow c hU rowW)
-    {i : Fin (Placed.circuitRows c hU).nComp} {col : Fin (Placed.circuitRows c hU).w}
-    (hc : col ∈ (Placed.circuitRows c hU).a i ++ (Placed.circuitRows c hU).b i)
-    (hlt : col.val < (Placed.circuitRows c hU).nIn)
-    (k p t : ℕ) : SampledProofs.Bits.srcKey c col.val ≠ .free k p t := fun h => by
-  have hk := hkeys i col hc hlt
-  rw [Layout.RowKey, srcKey_eq, h] at hk
-  rcases hk with hk | ⟨q, byte, bit, hk, -⟩ <;> simp [srcOf] at hk
-
 /-- **Bits' key program lays out the bridge's circuit**, without its outputs. -/
-theorem keyProg_laysOut_gates (hu : c.unit.unitLog ≤ 32) {rowW : Fin c.ports.size → ℕ}
-    (hkeys : Layout.KeysRow c hU rowW) :
+theorem keyProg_laysOut_gates (hu : c.unit.unitLog ≤ 32) :
     (SampledProofs.Bits.keyProg c n).size = Layout.keyN c hU n ∧
     (∀ g : Fin (Layout.keyN c hU n), (SampledProofs.Bits.keyProg c n).row? g.val = none →
       (Placed.keyProg c hU n).op g = .input) ∧
@@ -328,11 +315,9 @@ theorem keyProg_laysOut_gates (hu : c.unit.unitLog ≤ 32) {rowW : Fin c.ports.s
     obtain ⟨A, B, hop, hA, hB⟩ := keyProg_op_row hu ⟨i, hi'⟩ g (by rw [he]; dsimp only; rw [← hR.1, ← hR.2.1]; omega)
     refine ⟨A, B, hop, ?_, ?_⟩
     · rw [hA, (hR.2.2 ⟨i, hi'⟩).1, List.map_map]
-      refine List.map_congr_left fun col hc => keyWire_colVal hR hu col fun hlt => ?_
-      exact not_free_of_keysRow hkeys (List.mem_append_left _ hc) hlt
+      exact List.map_congr_left fun col _ => keyWire_colVal hR hu col
     · rw [hB, (hR.2.2 ⟨i, hi'⟩).2, List.map_map]
-      refine List.map_congr_left fun col hc => keyWire_colVal hR hu col fun hlt => ?_
-      exact not_free_of_keysRow hkeys (List.mem_append_right _ hc) hlt
+      exact List.map_congr_left fun col _ => keyWire_colVal hR hu col
 
 /-! ## Outputs -/
 
@@ -440,10 +425,10 @@ theorem outs_keyProg (hu : c.unit.unitLog ≤ 32) : (SampledProofs.Bits.keyProg 
       obtain ⟨u, hun, k, hk, j, hj, t, ht, h⟩ := outGate_of_mem hu hg
       exact ⟨u, hun, k, hk, j, hj, t, ht, h⟩
 
-/-- **Bits' key program lays out the bridge's circuit**, where every input a computed row reads has a row key. -/
-theorem laysOut_keyProg (hu : c.unit.unitLog ≤ 32) {rowW : Fin c.ports.size → ℕ} (hkeys : Layout.KeysRow c hU rowW) :
+/-- **Bits' key program lays out the bridge's circuit.** -/
+theorem laysOut_keyProg (hu : c.unit.unitLog ≤ 32) :
     LaysOut (SampledProofs.Bits.keyProg c n) ((Placed.keyProg c hU n).circuit (Layout.outsOf c hU n)) :=
-  have h := keyProg_laysOut_gates (n := n) hu hkeys
+  have h := keyProg_laysOut_gates (n := n) hu
   ⟨h.1, h.2.1, h.2.2, outs_keyProg hu⟩
 
 /-! ## Units -/
@@ -487,22 +472,22 @@ theorem constsOf_eq_keyConsts (g : Fin (Layout.keyN c hU n)) : constsOf c hU n g
   split_ifs <;> simp_all [Fin.ext_iff]
 
 /-- **The bridge's program of a circuit file is Bits'**, at the circuit's constants. -/
-theorem progOf_keyProg (hu : c.unit.unitLog ≤ 32) {rowW : Fin c.ports.size → ℕ} (hkeys : Layout.KeysRow c hU rowW) :
+theorem progOf_keyProg (hu : c.unit.unitLog ≤ 32) :
     progOf ((Placed.keyProg c hU n).circuit (Layout.outsOf c hU n)) (constsOf c hU n) =
       Properties.SampledProofs.bitsProg (SampledProofs.Bits.keyProg c n) keyConsts :=
-  (laysOut_keyProg hu hkeys).progOf_eq constsOf_eq_keyConsts
+  (laysOut_keyProg hu).progOf_eq constsOf_eq_keyConsts
 
 /-- **The bridge's positions of a circuit file's gates are Bits'.** -/
-theorem posOf_keyProg (hu : c.unit.unitLog ≤ 32) {rowW : Fin c.ports.size → ℕ} (hkeys : Layout.KeysRow c hU rowW)
+theorem posOf_keyProg (hu : c.unit.unitLog ≤ 32)
     (g : Fin (Layout.keyN c hU n)) : posOf ((Placed.keyProg c hU n).circuit (Layout.outsOf c hU n)) g =
       SampledProofs.Bits.posOf (SampledProofs.Bits.keyProg c n) g.val :=
-  (laysOut_keyProg hu hkeys).posOf_eq g
+  (laysOut_keyProg hu).posOf_eq g
 
 /-- **The bridge's proof blocks of a circuit file are Bits'**, at the circuit's constants. -/
-theorem blockOf_keyProg (hu : c.unit.unitLog ≤ 32) {rowW : Fin c.ports.size → ℕ} (hkeys : Layout.KeysRow c hU rowW)
+theorem blockOf_keyProg (hu : c.unit.unitLog ≤ 32)
     (u : Fin n) : blockOf ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) (constsOf c hU n) u =
       SampledProofs.Bits.blockOf (SampledProofs.Bits.keyProg c n) keyConsts u.val :=
-  blockOf_eq (laysOut_keyProg hu hkeys) (unitsOut_keyProg hu) constsOf_eq_keyConsts u
+  blockOf_eq (laysOut_keyProg hu) (unitsOut_keyProg hu) constsOf_eq_keyConsts u
 
 end keyProg
 
