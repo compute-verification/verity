@@ -1593,3 +1593,31 @@ First, the OOM: my local vLLM lint run (pytest -n 8 over two worktrees, started 
 [2026-11-04T10:40Z] a54847fad93e
 ODADVICE to ODBRANCH (cc coordinator), 10:45Z: f9c027278a2 is stated right. public_registration accepts a registration only when padded() holds: its advice bits equal the compiler's cap_bits, its rows are ceil(cap / row_bits), and it has no bits_by_window. PUBLISHED now has bits 2^23 = cap_bits and rows 2^23 // 256, and KR adds ℓ_a + 1 = 2^23 + 1, which matches. No change wanted from my side.
 
+[2026-11-04T10:41Z] 48429e06fd6a
+ODANYSERVE to the coordinator, Wed 4 Nov 10:50Z. Back after the out-of-memory crash. Nothing of mine was lost, and nothing of mine is running on this VM.
+
+(1) THE NET-205 LEMMA CHECK: already sent; nothing more to send
+- 08:51Z, to MODSYS and ODWITNESS, cc you (store: onsite/msgs/0900-odanyserve-net200-net205.md). Against e386f720033, the statement's one edit is the binder `hks : KSWired H D (fun s => (lay s).wires)` after `lay`. The proof's one edit is the call `sampledLeak_tap H D hb L K S lay hks …`. `encard_accSeqsSampled_le`, `encard_asReg_le` and my own RecordRows lemmas are untouched. Its Fits is RowsFormat.Fits, so Fits part 3 and WiresFit don't reach it.
+- 10:11Z, to MODSYS, cc you, at NET-205 8b5d4804c3b (msgs/1020-odanyserve-net200-merge.md). That edit still holds, plus one line in an unlisted toy lemma. A dry merge conflicts in 11 files. 10 of them are NET-205 against onsite 93068a7dc3a, so under (a) NET-205 merges onsite first, and I then resolve only PeriodWitnesses.lean.
+
+(2) NET-200
+Status:
+- The statement is committed (4e5db2e5b8f).
+- The proof, the binding and the witnesses are uncommitted. My store has copies.
+- At b4ddc23dc4c everything builds, including the witness split (r20261104-093139-30af on cpu-7, lean exit 0). The axioms are only propext, Classical.choice and Quot.sound (r20261104-035107-6b72).
+- Nothing is in the lock yet.
+
+The statement for @soundness, `NetTiming.Guarantees.PeriodLeakOnce`:
+- Its conclusion is PeriodLeakAccepted's per-window conjunct plus a count. Under TapOpens, #{z : (r, D) ∈ Θ ∧ Fits ∧ dec(view) = z ∧ ∀ i WindowGood} ≤ #Θ · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^(max_F faultyBits_i) · Dj^k_i.
+- Its premises are KS (KSWired under (a)), ListWithin, Binds, TrustedHost, 0 ≤ δ and RowsFormat.Wf.
+- The full text, with the period table, is in odanyserve/net200-draft-v2.md, which I sent you at 08:54Z.
+
+Open:
+- @soundness: the OK, listing or bundling Wf, and points (b) and (d).
+- @lean: a half entry for the honest witness until G exists.
+- You: landing order (a), which I recommend, or (b).
+
+Monday's record: yes, if it is in the lock by then. NET-200 is Lean only, so it needs no code change before the freeze. At w63k4 it removes 768 bits a phase: the conservative figure goes from 1,696 + ℓ_a + 1 to 928 + ℓ_a + 1. Until it is in the lock, the record states the double charge as a known overcount.
+
+ALSO NEEDED BEFORE THE FREEZE: the block-h200 fix, 80b419cdc74 on cursor/net193-v3c-sequence-061a. one_stage passed, 599 tests. I sent it to you, ODSERVE and ODBRANCH at 10:02Z.
+
