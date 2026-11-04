@@ -1429,7 +1429,9 @@ def test_a_wired_members_header_opens_each_wired_row_against_its_writers_root(tm
     """`fed_chain`'s wired members: their header's ``wired`` entry (`rows.wired_header`, Flock's ``RegWired``) gives each wired
     row, unit by unit, the path that opens its ``b || c`` against its writer's committed output root at the writer unit's rank
     among its member's units, and the circuit prover's files carry it (`flock_inputs.flock_input_files`); an unwired member
-    has none. A writer that is no member's unit and a writer's public file whose rows are not its stated tree are refused."""
+    has none. Each wired row's tree over its units' ``b || c`` (`rows.port_tree`) is the root its ``frame_v3`` states, and
+    not with a row changed. A writer that is no member's unit and a writer's public file whose rows are not its stated tree
+    are refused."""
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
     win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
     win.record(SRC, feed_ins, feed)
@@ -1453,6 +1455,10 @@ def test_a_wired_members_header_opens_each_wired_row_against_its_writers_root(tm
                 assert _opens(c.domains[wm.port(o)], c.roots[wm.port(o)], g - wm.base, wm.schema(o), bc, bytes.fromhex(head[p][u]))
                 assert not _opens(c.domains[wm.port(o)], c.roots[wm.port(o)], g - wm.base, wm.schema(o), bytes(CS.BC_BYTES),
                                   bytes.fromhex(head[p][u]))
+            fv = doc["members"][k]["frame_v3"]
+            bcs = [c.bc[m.port(p)][u * CS.BC_BYTES:(u + 1) * CS.BC_BYTES] for u in range(m.n)]
+            assert CS.port_tree(fv, p, bcs).commitment.root.hex() == fv["roots"][p]
+            assert CS.port_tree(fv, p, [bytes(CS.BC_BYTES), *bcs[1:]]).commitment.root.hex() != fv["roots"][p]
     k, mem = wired[-1], doc["members"][wired[-1]]
     meta = {"scheme": CS.SCHEME, "ports": [[p, n, 1] for p, n in mem["ports"]], "input_ports": mem["input_ports"],
             "out_ports": mem["out_ports"], "row_schemas": mem.get("row_schemas"), "vus_per_block": 1, "units_per_vu": 1,

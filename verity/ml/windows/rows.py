@@ -886,11 +886,18 @@ def _out_tree(window_dir: str | Path, win: Mapping[str, Any], j: int, out: str) 
         bc = b[lo:lo + n * BC_BYTES].reshape(n, BC_BYTES)
     else:
         bc = b[:n * len(names) * BC_BYTES].reshape(n, len(names) * BC_BYTES)[:, at * BC_BYTES:(at + 1) * BC_BYTES]
-    dom = CommitmentDomain(bytes.fromhex(fv["bindings"][out]), OWNER, RangeIndexedDomain(0, n), hash="sha512")
-    tree = MerkleTree(dom, {i: INST.tree_leaf(INST.default_key, bytes(bc[i])) for i in range(n)}, lambda _: fv["schemas"][out])
-    if dom.domain_id.hex() != fv["domain_ids"][out] or tree.commitment.root.hex() != fv["roots"][out]:
+    tree = port_tree(fv, out, [bytes(x) for x in bc])
+    if tree.domain.domain_id.hex() != fv["domain_ids"][out] or tree.commitment.root.hex() != fv["roots"][out]:
         raise ValueError(f"member {j} {out}: its public file's rows are not the tree its frame_v3 states")
     return tree
+
+
+def port_tree(fv: Mapping[str, Any], port: str, bcs: Sequence[bytes]) -> MerkleTree:
+    """Row ``port``'s tree over its rows' ``b || c`` ``bcs``, in order, under the domain its ``frame_v3`` ``fv`` binds (a public
+    file's header's, or a window member's)."""
+    dom = CommitmentDomain(bytes.fromhex(fv["bindings"][port]), OWNER, RangeIndexedDomain(0, len(bcs)), hash="sha512")
+    return MerkleTree(dom, {i: INST.tree_leaf(INST.default_key, bytes(bc)) for i, bc in enumerate(bcs)},
+                      lambda _: fv["schemas"][port])
 
 
 def wired_header(window_dir: str | Path, win: Mapping[str, Any], k: int,
