@@ -103,11 +103,11 @@ Tap.lean        what the tap's certifier saw is what its warden sent: under trus
 RecordRows.lean  the rows format reads back the code's cells on every schedule that fits it (read_record), so it
                                          is a record format (tapRecord); #guards hold it to the Python network
                                          certifier's egress records
-ReadFree.lean   the rows format reads back the code's cells from the record and the schedule's (r, D) alone
-                                         (readFree_record), so the secrets decoded from the client's view number at most
-                                         #Θ · ∏_i #A_i, Θ their schedules' (r, D) (encard_readFree_le); a period's
-                                         count over any good event, at its windows' or phases' sets
-                                         (encard_periodRead_le)
+ReadFree.lean   the rows format reads back the code's cells from the record and the schedule's rate and latency
+                                         alone (readFree_record), so the secrets decoded from the client's view number
+                                         at most #Θ · ∏_i #A_i, Θ their schedules' (rate, latency) pairs
+                                         (encard_readFree_le); a period's count over any good event, at its windows' or
+                                         phases' sets (encard_periodRead_le)
 TapRows.lean    the leak bound at the network certifier's rows: the sampling relation at the incorrect set,
                                          at a trace that agrees
                                          with its openings gives the leak relation at them (rLeakTap_of_r, through the

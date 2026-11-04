@@ -39,6 +39,13 @@ witnesses; `Witnesses` has the negation `notStmt` and its accepting verifier `le
   whose faulty set holds the one unit `Fmax = 1` allows none of, at `δ = 1/2`.
 * `fxRows`: a rows format of the Python network certifier's fixture `fxQueue` (three connections, `fixtureAgrees`
   checks its egress record), one window of ten buckets of four slots, which `fxQueueSched` fits (`fxQueue_fits`).
+* `scopelessD`, `sksD` parsing no statement (`scopelessD_ks`, `scopelessD_binds`), and `leakyRun`, a device that shows
+  the client a cell on one of two servings that the schedule `emptySched` doesn't send (`leakyRun_untrusted`), which
+  `leakyDec` reads back (`leakyDec_run`).
+* `blindRows`, a rows format that writes every frame as the empty list, so it isn't well formed (`blindRows_not_wf`),
+  and `blindRun`, the network certifier's code serving one cell `z` on `oneSched` and recording in `blindRows`. `wfD`,
+  `leakD` with a rejecting verifier whose commitment `negCm` binds (`negCm_binds`): the openings `negOps` register every
+  serving's record at `notStmt` (`blindRun_tapOpens`), and `cellDec` reads `z` back (`cellDec_run`).
 -/
 
 namespace NetTiming.Witness
@@ -625,5 +632,117 @@ theorem leakyRun_untrusted :
   intro h
   have h0 := congrArg (fun q => q.1 0) (h (emptySched, true))
   simp [leakyRun, wardenCode, emptySched, wardenLane] at h0
+
+/-! ### A rows format that drops each frame's content -/
+
+/-- An opening passes when its value is `pos = 1`: the input `false` at gate `0`, the negation `true` at gate `1`. -/
+def negCm : CommitmentScheme Bool := ⟨fun _ o => .ret (o.val == decide (o.pos = 1)), fun _ _ _ => []⟩
+
+/-- `negCm` binds: at one position, only one value passes. -/
+theorem negCm_binds (H : Msg → Msg) : negCm.Binds H := by
+  intro roots o o' hp hv ho ho'
+  simp only [negCm, CommitmentScheme.Opens, OC.eval, beq_iff_eq] at ho ho'
+  exact (hv (by rw [ho, ho', hp])).elim
+
+/-- The network certifier's openings at `notStmt`: the input `false` and the negation's presence gate `true`. -/
+def negOps : List (Opening Bool) := [⟨0, false, []⟩, ⟨1, true, []⟩]
+
+theorem negOps_opens (H : Msg → Msg) (roots : List Msg) : ∀ q ∈ negOps, negCm.Opens H roots q = true := by
+  intro q hq
+  simp [negOps] at hq
+  rcases hq with rfl | rfl <;> rfl
+
+/-- `leakD` with a rejecting verifier and the openings `negCm` passes. -/
+noncomputable def wfD (Coin : Type) : Claims.Sampling.Deploy Coin Unit Unit :=
+  { leakD Coin with V := Claims.Witness.rejV Coin, commit := negCm }
+
+theorem wfD_scopeAcc (x : Msg) : ScopeAcc (wfD Unit) (fun _ => notLay) (fun _ => 1) x :=
+  ⟨⟨notStmt, notPart, rfl, rfl, inScope_not⟩, notStmt, rfl, notLay_fits⟩
+
+/-- At `δ = 0` the empty set is a possible faulty set of `notStmt`: its design accepts it with probability `1`. -/
+theorem empty_mem_notFaulty : (∅ : Finset ℕ) ∈ faultySets notStmt.design notPart 0 := by
+  classical
+  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset]
+  refine ⟨Finset.empty_subset _, ?_, Finset.disjoint_empty_left _⟩
+  show (0 : ℝ) < notStmt.design.Pa notPart ∅
+  have h : notStmt.design.Pa notPart ∅ = 1 := by
+    simp [Design.Pa, classesPa, OneStage.Pa, notStmt, notPart, Claims.Sampling.window]
+  rw [h]
+  exact one_pos
+
+/-- A rows format that encodes every frame as the empty list and decodes nothing: not well formed. -/
+def blindRows : RowsFormat Unit ℕ 1 1 where
+  conns := [()]
+  enc _ := []
+  dec _ := none
+  link := 0
+  T := 1
+  jitter _ _ _ := 0
+  status _ _ _ _ := .complete
+
+theorem blindRows_not_wf : ¬ blindRows.Wf := fun h => by
+  have h1 := h.2.2 ((), .pad)
+  simp [blindRows] at h1
+
+/-- One connection, one cell a bucket, no latency, one cell. -/
+def oneSched : WardenSchedule Unit := ⟨1, 0, fun _ => 0, fun _ => 1⟩
+
+/-- The server sends the one cell `z`, on time. -/
+def cellArr : ℕ → Unit → Arrivals ℕ := fun z _ => ⟨[z], fun _ => 0⟩
+
+theorem oneSched_fits : blindRows.Fits 1 1 oneSched := by
+  refine ⟨fun c j hj => ?_, fun b => ?_⟩
+  · obtain rfl := Nat.lt_one_iff.1 hj
+    exact Nat.one_pos
+  · simp only [blindRows, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, laneLoad]
+    have h0 : ¬ (oneSched.adm () ≤ b ∧ b < oneSched.adm () + oneSched.D) :=
+      fun h => absurd h.2 (Nat.not_lt_zero b)
+    rw [ite_eq_right h0, zero_add]
+    exact (List.length_filter_le _ _).trans (by simp [oneSched])
+
+/-- The device runs the network certifier's code, recording in `blindRows`. -/
+def blindRun : Unit → WardenSchedule Unit × ℕ → (Unit → List (ℕ × CellView ℕ)) × (Fin 1 → List (Obs 1 1 1)) :=
+  fun _ p => (wardenCode p.1 (cellArr p.2), blindRows.record 1 1 p.1 (cellArr p.2) (wardenCode p.1 (cellArr p.2)))
+
+/-- The client reads the cell's data. -/
+def cellDec (v : Unit → List (ℕ × CellView ℕ)) : ℕ :=
+  match v () with
+  | (_, .data z) :: _ => z
+  | _ => 0
+
+theorem cellDec_run (z : ℕ) : cellDec (blindRun () (oneSched, z)).1 = z := rfl
+
+theorem blindRun_length (z : ℕ) (i : Fin 1) : ((blindRun () (oneSched, z)).2 i).length = 1 := rfl
+
+theorem blindRun_covered (z : ℕ) (i : Fin 1) : Covered 1 ((blindRun () (oneSched, z)).2 i) := by
+  intro t ht h κ
+  obtain rfl := Nat.lt_one_iff.1 ht
+  rfl
+
+theorem blindRun_jitter (z : ℕ) (i : Fin 1) : ∀ y ∈ (blindRun () (oneSched, z)).2 i, y.jitter < 1 := by
+  intro y hy
+  rcases List.mem_singleton.1 hy with rfl
+  exact Nat.one_pos
+
+/-- **`negOps` registers the record** on every serving: every frame is the empty list, so the row is the empty frame
+the negation's presence gate `true` holds, whatever cell the server sent. -/
+theorem blindRun_tapOpens (H : Msg → Msg) (z : ℕ) (i : Fin 1) :
+    TapOpens H negCm notLay 1 (fun _ _ => [false]) notStmt negOps ((blindRun () (oneSched, z)).2 i) := by
+  obtain rfl : i = 0 := Subsingleton.elim _ _
+  refine ⟨negOps_opens H _, fun t ht => ?_⟩
+  obtain rfl := Nat.lt_one_iff.1 ht
+  refine ⟨fun ℓ σ g hg => ?_, fun g hg => ?_, Nat.lt_of_lt_of_eq Nat.one_pos (blindRun_length z 0).symm,
+    fun ℓ => ?_, rfl⟩
+  · simp [notLay, slotGates] at hg
+    subst hg
+    exact ⟨fun b hb => by simp [notStmt, notProg] at hb, ⟨1, true, []⟩, by simp [negOps], rfl⟩
+  · simp [notLay] at hg
+    subst hg
+    exact ⟨⟨0, false, []⟩, by simp [negOps], rfl⟩
+  · funext σ
+    obtain rfl : ℓ = 0 := Subsingleton.elim _ _
+    obtain rfl : σ = 0 := Subsingleton.elim _ _
+    simp [blindRun, RowsFormat.record, blindRows, bucketFrames, laneFrames, oneSched, cellArr, wardenCode,
+      wardenLane, WardenSchedule.bucket, streamCell, rowOf, notLay, tapVal, negOps]
 
 end NetTiming.Witness
