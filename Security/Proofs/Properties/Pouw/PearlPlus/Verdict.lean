@@ -529,8 +529,10 @@ theorem replay_eq (pl : Plan) (opener : Nat → Nat → Except String TileOpenin
 /-! ## A tile -/
 
 theorem tileAcceptMeans : TileAcceptMeans := by
-  intro p wn tid o bound h
-  generalize ht : (match bound with | none => TileOutcome.pass | some why => .overCap why) = t at h
+  intro p wn tid o bound h0
+  generalize h : checkTile p wn tid o = t at h0
+  have ht := h0.symm
+  clear h0
   have hnf : ∀ w, t ≠ .fail w := by
     intro w hw
     subst hw
