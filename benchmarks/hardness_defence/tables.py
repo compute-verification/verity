@@ -123,8 +123,8 @@ def total_macs(model: str) -> int:
 
 class Book:
     """model -> tensor -> variant -> {chip@price: (over the leaf, route)}; a variant is (target, rot, deflate, live
-    noise f, K chunks). split and orders record whether any record of that variant searched the split, and the
-    attacker's row and column orders (`price.permute`)."""
+    noise f, K chunks). split and orders record whether any record of that variant searched the split, and the split
+    in the attacker's row and column orders too (`price.permute`)."""
 
     def __init__(self):
         self.v = collections.defaultdict(lambda: collections.defaultdict(dict))
@@ -140,7 +140,7 @@ class Book:
                 cur[k] = (ol, route)
         if split:
             self.split.add((model, tensor, var))
-        if orders:
+        if orders and split:
             self.orders.add((model, tensor, var))
         key = (model, tensor, var)
         self.split_least[key] = min(self.split_least.get(key, math.inf), split_least)
