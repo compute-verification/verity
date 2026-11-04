@@ -146,9 +146,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   link points and round coins that tree's openings after its link's roots and each round's message. Then it runs
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, accepts
   the session only if the public file's units are the population in order (`FilePart.check`) and each of the circuit
-  file's units, its owned sources and returned output bits, fits a public size class (`FilePart.checkClass`, the
-  `UNIT_CLASS_MAX` the program's units are held to), binds `proved_units` to what the session proved, and hands its
-  verdict to v1's `checkAt` at those coins.
+  file's units' outputs, its returned output bits, fit a public size class (`FilePart.checkClass`, at most
+  `UNIT_CLASS_MAX`; the sources it owns count toward no class), binds `proved_units` to what the session proved, and
+  hands its verdict to v1's `checkAt` at those coins.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
   to `verify`'s. Onsite and remote (`Core.Onsite`, `Core.Remote`) read v1 as `VStar.Recursive.Sampled`'s one-stage
   form, never alone; switching it to v2 is what is left.

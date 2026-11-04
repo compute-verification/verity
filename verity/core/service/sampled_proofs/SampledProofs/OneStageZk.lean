@@ -34,9 +34,8 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   `SampledKSLiveV5`'s, `Flock.KsScope.checkOf`), and a session's verdict holds only where the registration's population
   is the circuit file's units in order (`FilePart.check`: its strata over the verifier's program and query, read stratum
   by stratum, are its units in order, and the public file holds exactly those, so slot `u` is the file's unit `u`, as
-  `Flock.Bridge.partOf` reads it) and each unit fits a public size class (`FilePart.checkClass`: the sources it owns
-  and the returned output bits it holds, at most `UNIT_CLASS_MAX`, as the program's units are); then v1's `check` on
-  those verdicts, one of
+  `Flock.Bridge.partOf` reads it) and each unit's outputs fit a public size class (`FilePart.checkClass`: the returned
+  output bits it holds, at most `UNIT_CLASS_MAX`); then v1's `check` on those verdicts, one of
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
   units other than the evidence's `proved_units`, or a circuit, public or record file no blob holds, rejects; a rep
   file no blob holds is that session's reject, as a file `flock-verify` can't read is.
@@ -338,7 +337,7 @@ def coinKeyOf (record : String) (st : SetUp) : Option String :=
 `coinKeys`, `Zk.verify` and the checks `verifyCmd` makes after it, its last the files' ports and roots
 (`ksFiles`, `Flock.PortRoots.checkOf`) and the form `Flock.Guarantees.SampledKSLiveV4` covers at `draw`
 (`Flock.KsScope.checkOf`); then the circuit file's partition (`filePart`, `FilePart.checkFile`): the registration's
-population the public file's units in order, each unit in a public size class. -/
+population the public file's units in order, each unit's outputs in a public size class. -/
 def verdictOf (I : Flock.Witness.Inputs) (scope ksFiles filePart : V Unit) (coinKeys : Array String)
     (record : String) (draw : Option Json) (st : SetUp) (files : V (Array ByteArray)) (coinKey : Option String) :
     V Unit := do
@@ -409,7 +408,7 @@ def provedHeld (proved want : Array Nat) : V Unit :=
 /-- One `flock-verify verify --zk` over the evidence's sessions on the blobs, as `one_stage.proofs.verify` runs it, each
 session set up at its own record's draw: every session's verdict, the units the accepted ones proved and whether all
 accepted. A session accepts only where the registration's population is the public file's units in order and each of
-the circuit file's units fits a public size class (`FilePart.checkFile`, last). A refusal for what `proofs.verify`
+the circuit file's units' outputs fit a public size class (`FilePart.checkFile`, last). A refusal for what `proofs.verify`
 refuses: registered values read without the verifier's registered file, a file no blob holds, an accepted session
 naming another program than the partition object's, or proved units other than the evidence's (`provedHeld`). -/
 def run (p : Own) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) : V Run := do
