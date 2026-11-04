@@ -7,13 +7,15 @@ Each OUT_DIR is one ladder run's `out/` (ladder.py writes ladder.json, curve.jso
 start.json for each registered start); a resumed size's later run supersedes its earlier ones. Stdlib and numpy only.
 
 F is every annealed branch end of every size (registered starts and `--extra` points alike): its compute, as C0 (MACs,
-te_core's counter) and as non-embedding FLOPs 6 N D (N non-embedding parameters, D tokens), and its held-out loss, with the
-main runs' un-annealed evaluations kept apart, and F's lower envelopes in both. The fit is L(N, D) = E + A N^-alpha +
-B D^-beta (L nats a token on the search pool) over the annealed points of every size but the screens (`--screen`: s, the
-cheap screen, whose points are checked against the fit and never enter it), least squares in relative error with E, A,
-B >= 0, alpha and beta on a grid (one at the grid's edge is flagged, `alpha_at_bound` or `beta_at_bound`: the points
-don't fix it, and the compute-optimal model moves with it). Each fitted point is checked against the fit made without it
-(leave one out), and a screen's against the fit; a start more than FLAG_PCT off is flagged.
+as training's slowdown code counts them) and as non-embedding FLOPs 6 N D (N non-embedding parameters, D tokens), and its
+held-out loss, with the main runs' un-annealed evaluations kept apart, and F's lower envelopes in both. The fit is
+L(N, D) = E + A N^-alpha + B D^-beta (L nats a token on the search pool) over the annealed points of every size but the
+screens (`--screen`: s, the cheap screen, whose points are checked against the fit and never enter it), least squares in
+relative error with E, A, B >= 0, alpha and beta on a grid (one at the grid's edge is flagged, `alpha_at_bound` or
+`beta_at_bound`: the points don't fix it, and the compute-optimal model moves with it). `alpha_95` and `beta_95` are each
+exponent's profile interval: the grid values whose best fit an F test at 95% can't tell from the best one. Each fitted
+point is checked against the fit made without it (leave one out), and a screen's against the fit; a start more than
+FLAG_PCT off is flagged.
 
 FIT.json is the fit's compute-optimal model at each loss, between the least and the greatest fitted size (te_core.policy's
 `ladder_fit` reads its points' loss and forward_gates_per_token; outside them the cap keeps a start's own forward), with
@@ -113,9 +115,19 @@ def nnls3(cols: np.ndarray, y: np.ndarray, w: np.ndarray) -> np.ndarray | None:
     return best
 
 
+def t975(dof: int) -> float:
+    """Student's t at 97.5% (two-sided 95%): exact to 4 degrees of freedom, then its expansion in 1 / dof (within 0.2%)."""
+    if dof <= 4:
+        return (12.706, 4.303, 3.182, 2.776)[dof - 1]
+    z = 1.959964
+    return (z + (z ** 3 + z) / (4 * dof) + (5 * z ** 5 + 16 * z ** 3 + 3 * z) / (96 * dof ** 2)
+            + (3 * z ** 7 + 19 * z ** 5 + 17 * z ** 3 - 15 * z) / (384 * dof ** 3))
+
+
 def fit(points: list[dict]) -> dict | None:
     """None with no more points than the law's five parameters. For each (alpha, beta) of the grid, (E, A, B) >= 0 by
-    least squares (`nnls3`), the best kept."""
+    least squares (`nnls3`), the best kept; each exponent's profile interval keeps the grid values whose best error is
+    within the best's F test at 95% (error at most the best's times 1 + t^2 / dof)."""
     if len(points) <= 5:
         return None
     n = np.array([p["non_embedding_params"] for p in points], dtype=float)
@@ -123,22 +135,27 @@ def fit(points: list[dict]) -> dict | None:
     y = np.array([p["nats_per_token"] for p in points], dtype=float)
     w = 1 / y
     best = None
-    for al in GRID:
-        for be in GRID:
+    errs = np.full((len(GRID), len(GRID)), np.inf)
+    for i, al in enumerate(GRID):
+        for j, be in enumerate(GRID):
             cols = np.stack([np.ones_like(n), n ** -al, d ** -be], 1)
             coef = nnls3(cols, y, w)
             if coef is None:
                 continue
-            err = float(((cols @ coef - y) / y) ** 2 @ np.ones_like(y))
+            err = errs[i, j] = float(((cols @ coef - y) / y) ** 2 @ np.ones_like(y))
             if best is None or err < best[0]:
                 best = (err, al, be, coef)
     if best is None:
         return None
     err, al, be, (e, a, b) = best
+    dof = len(y) - 5
+    near = errs <= err * (1 + t975(dof) ** 2 / dof)
+    a95, b95 = GRID[near.any(1)], GRID[near.any(0)]
     return {"E": float(e), "A": float(a), "alpha": float(al), "B": float(b), "beta": float(be),
             "rms_rel_pct": 100 * math.sqrt(err / len(y)), "points": len(y),
             "sizes": len({p["non_embedding_params"] for p in points}), "E_at_bound": bool(e == 0),
-            "alpha_at_bound": bool(al in (GRID[0], GRID[-1])), "beta_at_bound": bool(be in (GRID[0], GRID[-1]))}
+            "alpha_at_bound": bool(al in (GRID[0], GRID[-1])), "beta_at_bound": bool(be in (GRID[0], GRID[-1])),
+            "alpha_95": [float(a95.min()), float(a95.max())], "beta_95": [float(b95.min()), float(b95.max())]}
 
 
 def predict(f: dict, n: float, d: float) -> float:
@@ -200,8 +217,9 @@ def compute_optimal(f: dict | None, runs: dict[str, dict], bpb_per_nat: float | 
                     "one under the fit, compute in non-embedding FLOPs (C = 6 N D), between the least and the greatest "
                     "fitted size; flops: that model's 6 N D (its effective compute); forward_gates_per_token: its forward "
                     "MACs a token (a power law through the fitted sizes' counts) at the bf16 GEMM price; train_macs: its "
-                    "training at te_core's counted MACs a token (likewise a power law), for reference. checks: every "
-                    "annealed point against the fit without it (leave one out), and a screen's against the fit"}
+                    "training's MACs, a token's as training's slowdown code counts them (likewise a power law), for "
+                    "reference. fit.alpha_95 and fit.beta_95: each exponent's profile interval (F test at 95%). checks: "
+                    "every annealed point against the fit without it (leave one out), and a screen's against the fit"}
 
 
 def checks(fitted: list[dict], screens: list[dict], full: dict | None) -> list[dict]:
@@ -261,8 +279,8 @@ def report(runs: dict[str, dict], screen: tuple[str, ...] = SCREEN) -> dict:
             "checks": list(check.values()),
             "compute_optimal": compute_optimal(full, fitted_runs, float(np.median(ratios)) if ratios else None,
                                                list(check.values())),
-            "F": {"rule": "every annealed branch end of every size: its compute, C0 MACs (te_core's counter, steps x one "
-                          "step) and non-embedding FLOPs (flops, 6 N D), against held-out loss on covert_witness's search "
+            "F": {"rule": "every annealed branch end of every size: its compute, C0 MACs (as training's slowdown code counts "
+                          "them, steps x one step) and non-embedding FLOPs (flops, 6 N D), against held-out loss on covert_witness's search "
                           "pool (bpe32k)",
                   "annealed": annealed, "envelope_bpb": envelope(annealed),
                   "envelope_bpb_flops": envelope(annealed, compute="flops"), "main_run": main},
@@ -291,7 +309,8 @@ def main(argv=None) -> int:
               f"{s['nats_per_token']:6.3f} {s['c0_macs']:10.3e} {s['flops']:10.3e} {eff}  {s['verdict']}")
     if f := rep["fit"]:
         print(f"fit: L = {f['E']:.3f} + {f['A']:.4g} N^-{f['alpha']:.3f} + {f['B']:.4g} D^-{f['beta']:.3f}, "
-              f"rms {f['rms_rel_pct']:.2f}% over {f['points']} points, {f['sizes']} sizes"
+              f"rms {f['rms_rel_pct']:.2f}% over {f['points']} points, {f['sizes']} sizes, "
+              f"alpha {f['alpha_95'][0]:.2f} to {f['alpha_95'][1]:.2f} and beta {f['beta_95'][0]:.2f} to {f['beta_95'][1]:.2f} (95%)"
               + (f", screens {','.join(f['screens'])} not in it" if f["screens"] else "")
               + (" (E at its bound 0)" if f["E_at_bound"] else "")
               + "".join(f" ({k} at its grid's edge: the data don't fix it)" for k in ("alpha", "beta") if f[f"{k}_at_bound"]))
