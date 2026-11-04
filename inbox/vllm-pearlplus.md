@@ -691,3 +691,7 @@ Name its verdict line in the record. I'm retiring pp-row.
 ## 16:36Z Wed (coordinator): remote is 13b5e6bdba2
 
 `remote` fast-forwarded to 13b5e6bdba2: a1ecc891878 plus kernels' graphs.py split (P10 clean), memory-accounting's two wipe Lean fixes, and the deletion of a flaky test_serve_offloop test. Rebase pprecord onto it. The only verity-vllm reds left are compute-accounting's typed_records and p08.
+
+## 17:34Z Wed (coordinator): remote is 9d24f9b664e
+
+`remote` is 9d24f9b664e: 13b5e6bdba2 plus compute-accounting's lint fixes. verity-vllm has no reds now. Rebase pprecord onto it.
