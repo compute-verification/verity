@@ -1,27 +1,29 @@
 import Proofs.Pouw.PearlPlus.Assembly
 
 /-!
-# Pearl+'s bridge, part (c): a passed tile keeps the game's cap
+# Pearl+'s bridge, part (c): a passed tile is within the game's inert-work bound
 
-The cap the game reads is `TileGood`'s first conjunct, `capOK` of `pearlCTilesDevRev1 devH100` at the deployed semantics
-and `ρ = 1/400`: the tile's replayed debit (`tileDebit`: its flagged atom-words and its forming) on its rows that pass
-the rules and all its columns is at most `ρ·creditOf` times their share. A tile with it is outside `overCapTiles`, and
-with (d)'s words and its weight rows' rules it is in `goodTiles`.
+The bound the game reads is `TileGood`'s first conjunct, `capOK` of `pearlCTilesDevRev1 devH100` at the deployed
+semantics and `ρ = 1/400`: the tile's replayed inert work (`tileDebit`: its flagged atom-words and its forming) on its
+rows that pass the rules and all its columns is at most `ρ·creditOf` times their share. Acceptance doesn't read it:
+`Draw` puts a sampled tile with good words in `goodDeclTiles` within the bound and in `overCapTiles` over it. The credit
+does: the tolerant audit's deduction grows with the samples on `overCapTiles`, and a passed tile within the bound keeps
+those to the samples the check finds over its own bound.
 
-The check's cap (`Rule.checkOpened`'s `capFailure`) sums the chain debit over the record's credited rows and columns
-only, those neither excluded nor voluntary, and has no forming term. So `TilePassGivesTheCap` is stated and not proved:
-a voluntary row passes the rules, and a voluntary column's cells are in the tile, so the game's cap counts debit the
-check never reads.
+The check's bound (`Rule.checkOpened`'s `capFailure`) sums the chain's inert work over the record's credited rows and
+columns only, those neither excluded nor voluntary, and has no forming term. So `TilePassGivesTheCap` is stated and not
+proved: a voluntary row passes the rules, and a voluntary column's cells are in the tile, so the game's bound counts
+inert work the check never reads.
 -/
 
 namespace Pouw.PearlPlus.Bridge
 
 open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
 
-/-- **(c) A passed tile keeps the cap**: a tile of a pass `load` gives, which is audit tile `g` of `U`, under the
-semantics' salt and weight root, whose weight rows all pass the rules (`TileGood`'s second conjunct, as (d) takes it),
-whose openings are its unit's commitment `c`, and that `checkTile` passes on its weight's noise, has its replayed debit
-within the cap at `ρ = 1/400`. -/
+/-- **(c) A passed tile is within the inert-work bound**: a tile of a pass `load` gives, which is audit tile `g` of `U`,
+under the semantics' salt and weight root, whose weight rows all pass the rules (`TileGood`'s second conjunct, as (d)
+takes it), whose openings are its unit's commitment `c`, and that `checkTile` passes on its weight's noise, has its
+replayed inert work within the game's bound at `ρ = 1/400`. -/
 def TilePassGivesTheCap : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S)
     (coins : PouwCommit.CoinCommitment) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
