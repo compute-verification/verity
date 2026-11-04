@@ -1450,7 +1450,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         try:
             ok, line = gate_ready(a.gate, a.lane, a.main, a.root)
-        except (OSError, RuntimeError, ValueError) as e:
+        except (KeyError, OSError, RuntimeError, ValueError) as e:
             ok, line = False, f"GATE refused: {type(e).__name__}: {e}"[:800]
         print(line, flush=True)
         return 0 if ok else 1
