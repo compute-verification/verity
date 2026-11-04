@@ -87,24 +87,24 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   make a guarantee easier: no stronger input relation, weaker output relation, smaller challenge space, unmotivated
   hypothesis, or verifier check moved into an assumption.
 - **Witness a contract before proving over it.** A statement over every system meeting a contract (a compiler, a
-  composition, an interface) has its honest and nontrivial lemmas (Standing rulings) before its proof, the honest one an
-  instance meeting the whole contract with at least two sessions or rounds: a clause one session meets can fail at every
-  deployed shape (an iff two sequential sessions break), leaving each theorem over it vacuous. List the theorem as a
-  guarantee so `witnesses` holds it; a statement under `claims.not` as "proved" escapes that.
+  composition, an interface) gets its honest and nontrivial lemmas (Standing rulings) before its proof, the honest one
+  meeting the whole contract over at least two sessions or rounds: a clause one session meets can fail at every deployed
+  shape (an iff two sequential sessions break), making each theorem over it vacuous. List it as a guarantee so
+  `witnesses` holds it; under `claims.not` it escapes that.
 - **Extractors and simulators are counted programs**, `Claims.Extractor` (a rerun program; `RP.eval` counts its SHA-512
-  calls and reruns) and `Claims.Simulator` (`SP.eval`), a simulator fixed before the witness. Never a function, a
-  structure of free fields or `Classical.choose`: hm96 is statistically hiding, so a free extractor opens every
-  commitment to an honest trace, meets every hypothesis and empties the incorrect set. A cost is what the program
-  evaluates, never a declared field. `tests/test_lean_vocabulary.py` refuses a second `Extractor` or `Simulator` type.
+  calls and reruns) and `Claims.Simulator` (`SP.eval`), a simulator fixed before the witness. Never a function, free
+  fields or `Classical.choose`: hm96 hides statistically, so a free extractor opens each commitment to an honest trace and
+  meets every hypothesis. A cost is what the program evaluates, never a declared field. `tests/test_lean_vocabulary.py`
+  refuses a second `Extractor` or `Simulator` type.
 - **The verifier derives what soundness reads.** A set soundness depends on (the ports that must be registered, the
-  sampled proof blocks, the bound roots) is computed in Lean from public registered data (the registered circuit's interface,
-  the registration), never read from a file `verity.ml` or an integration writes, which only supplies values checked
-  against it; else the guarantee covers what the writer chose (a registered output bound instead of registered).
-- **"Proved" is four checks**, each named when only some hold: it elaborates (`verity lean try`, whose "lean exit 0" says
-  only that); `#print axioms` of it and of each lemma you added shows only `propext`, `Classical.choice` and `Quot.sound`
-  (a `sorry` below it shows as `sorryAx`); a full `check.py` replayed it through the kernel (the fast path doesn't); an
-  agent other than its prover red-teamed its statement. Otherwise say which: "elaborates, rests on `X`'s sorry",
-  "proved, not replayed".
+  sampled proof blocks, the bound roots) is computed in Lean from public registered data (the registered circuit's
+  interface, the registration), never read from a file `verity.ml` or an integration writes, which only supplies values
+  checked against it; else the guarantee covers the set the writer chose.
+- **"Proved" is four checks**, each named when only some hold: it elaborates (`verity lean try`'s "lean exit 0" says
+  only that); `#print axioms` of it and each lemma you added shows only `propext`, `Classical.choice` and `Quot.sound`
+  (a `sorry` shows as `sorryAx`); a full `check.py` replayed it through the kernel (the fast path doesn't); an agent
+  other than its prover red-teamed its statement. Else say which: "elaborates, rests on `X`'s sorry", "proved, not
+  replayed".
 
 ## Assumptions and guarantees
 
