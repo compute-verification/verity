@@ -2,8 +2,7 @@
 # ssn_1l's kernel on one H200 in one gpu-lease: built, SASS-gated (the harness's sass_gate.py: sass_gate.json) and its
 # mainloop checked (IGMMA in every ssn_k, no local memory) before the lease, the tree's files it read listed with their
 # sha256 (sources.sha256); under it the exact check of every word (check.jsonl), then the timings at each M, the SM clock
-# sampled beside it all. `gate.py OUT --run RUN` then makes the lead's GateRecord from them. Measurement only. cwd: the
-# source tree's root.
+# sampled beside it all. Measurement only. cwd: the source tree's root.
 #   MS (64 512 8192: Llama-3.2-1B's T 512 at 64 and 512 rows, and T 8,192; an M under 64 is one decode call over its
 #   padded tile, e.g. "1 16"), REPS (5), BUDGET_GB (16: the exported words a
 #   hash chunk holds), ROWS (0 65536 16384: the hash pass's row bytes, 0 for row-seg, -B for L1's plain leaves of B-byte
@@ -62,8 +61,7 @@ if [ "${1:-}" != leased ]; then
   "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v --no-compress "${SRCS[@]}" -lcuda \
     -o "$BUILD_DIR/ssn" > "$OUT/build_ssn.log" 2>&1
   rc=$?; say "build ssn rc $rc"; [ "$rc" = 0 ] || { tail -40 "$OUT/build_ssn.log"; exit 3; }
-  # the tree's files the build read (nvcc -M of each translation unit, plain_rows.py and this script), sha256sum's format:
-  # gate.py names the variant by them
+  # the tree's files the build read (nvcc -M of each translation unit, plain_rows.py and this script), sha256sum's format
   for f in "$HERE/ssn.cu" "$COMMITTER/native_rows.cu"; do
     "$CUDA/bin/nvcc" -M -std=c++17 -gencode arch=compute_90a,code=sm_90a -I "$KERNELS" "$f" || exit 3
   done > "$BUILD_DIR/deps.mk" 2>> "$OUT/build_ssn.log"
