@@ -117,9 +117,12 @@ members_server = D.server_fixture(MEMBERS)
 
 @pytest.mark.slow
 def test_the_members_are_interfaces(members_server):
-    """Lean's members are `interface.members`' on every drawn record, and both refuse the same records."""
-    stats = D.run(MEMBERS, examples=400, seed=1, server=members_server)
-    assert stats.outputs > 200 and stats.rejects > 10, stats
+    """Lean's members are `interface.members`' on every drawn record, and both refuse the same records. A draw costs
+    seconds (Python builds its population program three times), so this adds minutes to `check`; it catches what the
+    fixed case can't: a layout difference at drawn cuts, reads, table reads, openings and caps, and a record one side
+    refuses and the other doesn't."""
+    stats = D.run(MEMBERS, examples=60, seed=1, server=members_server)
+    assert stats.outputs > 30 and stats.rejects > 2, stats
 
 
 def test_a_cap_that_splits_a_segment(members_server):
