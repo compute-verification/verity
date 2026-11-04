@@ -89,7 +89,7 @@ theorem setupH_scope {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables :
 
 theorem parseH_identity {tags : Tags} (ht : tags.typed = false) (x : Lean.Json) (b : ByteArray)
     (t : List (String × ByteArray)) : HmOut.parse { tags with identity := x } b t = HmOut.parse tags b t := by
-  simp only [HmOut.parse, Composed.parse_identity, Tags.isTmpl]
+  simp only [HmOut.parse, Flock.ProvedScope.parse_identity, Tags.isTmpl]
   simp only [ht, Bool.not_false, ite_true]
 
 theorem parseH_tagsAt {tags : Tags} (ht : tags.typed = false) (count j : ℕ) (b : ByteArray)
@@ -187,7 +187,7 @@ theorem table0 {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht : 
     rw [Composed.parse_tagsAt] at hp
     rw [Composed.loadPublic_tagsAt] at hpop
     refine ⟨?_, ⟨pop, ?_⟩, hm, L.kLog6, hk, hm35, hzk⟩
-    · simp only [ProvedScope.circuitOf, hh, Bool.false_eq_true, ↓reduceIte, hp]
+    · simp only [ProvedScope.circuitOf_eq, hh, Bool.false_eq_true, ↓reduceIte, hp]
     · simp only [ProvedScope.publicOf, hh, Bool.false_eq_true, ↓reduceIte, hpop]
   · rw [hh] at hd
     simp only [↓reduceIte] at hd
@@ -198,7 +198,7 @@ theorem table0 {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht : 
     obtain ⟨pop, hpop, -⟩ := S.pub
     rw [loadPublicH_tagsAt] at hpop
     refine ⟨?_, ⟨pop, ?_⟩, S.m, L.kLog6, S.kLog, S.m35, hzk⟩
-    · simp only [ProvedScope.circuitOf, hh, ↓reduceIte, hp]
+    · simp only [ProvedScope.circuitOf_eq, hh, ↓reduceIte, hp]
     · simp only [ProvedScope.publicOf, hh, ↓reduceIte, hpop]
 
 end Flock.Readable

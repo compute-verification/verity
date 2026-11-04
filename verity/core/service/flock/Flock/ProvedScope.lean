@@ -202,9 +202,13 @@ def scopeWhyT (hidden zk registered : Bool) (count : Nat) (c : Circuit) (tu : Tm
   else scopeWhy true c
 
 /-- The circuit as `Stmt.setupTables` parses it: for a statement with hidden outputs the one its session commits
-(`HmOut.parseCommit`: a templated statement's carries its template, `Circuit.tmpl`), else `HmRow`'s. -/
+(`HmOut.parseCommit`: a templated statement's carries its template, `Circuit.tmpl`), else `HmRow`'s. It reads the tags with
+the identity dropped: only the setups' statement digests read the identity (`Stmt.setupH`, `Stmt.setupHidden`,
+`Stmt.setupHiddenOf`, a table's `Tags.tableIdentity`), never the parses (`parseCommit_identity`, `parse_identity`), so tags
+that differ only in their identity (`Tags.withCoins`, `Zk.tags`) have one circuit by definition (`circuitOf_identity`). -/
 def circuitOf (tags : Tags) (file : ByteArray) (tables : List (String × ByteArray)) : V Circuit :=
-  if tags.hiddenOutputs then HmOut.parseCommit tags file tables else HmRow.parse tags file tables
+  if tags.hiddenOutputs then HmOut.parseCommit { tags with identity := .null } file tables
+  else HmRow.parse { tags with identity := .null } file tables
 
 /-- The public file as the headlines read it: `HmOut`'s for a statement with hidden outputs, else `HmRow`'s. -/
 def publicOf (tags : Tags) (c : Circuit) (file : ByteArray) : V Public :=
@@ -320,9 +324,39 @@ theorem check_eq (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) 
       = checkOf (circuitOf tags circuitFile tables) tags zk publicFile count publicInputs registered :=
   rfl
 
+/-- **`HmOut.parseCommit` reads no identity.** -/
+theorem parseCommit_identity (tags : Tags) (x : Lean.Json) (file : ByteArray) (tables : List (String × ByteArray)) :
+    HmOut.parseCommit { tags with identity := x } file tables = HmOut.parseCommit tags file tables := by
+  kernel_rfl
+
+/-- **`HmRow.parse` reads no identity.** -/
+theorem parse_identity (tags : Tags) (x : Lean.Json) (file : ByteArray) (tables : List (String × ByteArray)) :
+    HmRow.parse { tags with identity := x } file tables = HmRow.parse tags file tables := by
+  kernel_rfl
+
+/-- **Tags that differ only in their identity have one circuit**, by definition. -/
+theorem circuitOf_identity (tags : Tags) (x : Lean.Json) (file : ByteArray) (tables : List (String × ByteArray)) :
+    circuitOf { tags with identity := x } file tables = circuitOf tags file tables :=
+  rfl
+
+/-- **A session's circuit is its statement's on any coins**: `Tags.withCoins` chooses only the identity. -/
+theorem circuitOf_withCoins (tags : Tags) (coins : Coins) (file : ByteArray) (tables : List (String × ByteArray)) :
+    circuitOf (tags.withCoins coins) file tables = circuitOf tags file tables :=
+  rfl
+
+/-- `circuitOf` is the parse at the tags themselves. -/
+theorem circuitOf_eq (tags : Tags) (file : ByteArray) (tables : List (String × ByteArray)) :
+    circuitOf tags file tables =
+      if tags.hiddenOutputs then HmOut.parseCommit tags file tables else HmRow.parse tags file tables := by
+  rw [circuitOf, parseCommit_identity, parse_identity]
+
 theorem circuitOf_hidden {tags : Tags} (hh : tags.hiddenOutputs = true) (file : ByteArray)
     (tables : List (String × ByteArray)) : circuitOf tags file tables = HmOut.parseCommit tags file tables := by
-  simp only [circuitOf, hh, ↓reduceIte]
+  rw [circuitOf_eq, if_pos hh]
+
+theorem circuitOf_plain {tags : Tags} (hh : tags.hiddenOutputs = false) (file : ByteArray)
+    (tables : List (String × ByteArray)) : circuitOf tags file tables = HmRow.parse tags file tables := by
+  rw [circuitOf_eq, if_neg (by simp [hh])]
 
 /-- At hidden outputs, the circuit `HmOut.parse` reads (a flat statement's: it refuses a templated one's tags) is the one
 `circuitOf` reads. -/

@@ -234,7 +234,7 @@ theorem rows_commit_check {p : Parsed} {w : Claims.Flock.Wit} (hP : Parses p) (h
   have hcst : HmOut.parseCommit p.tags p.I.circuitFile p.I.tables = .ok st.c :=
     (parseCommit_tagsAt ht _ _ _ _).symm.trans s.parse
   have hc0' : c0 = st.c := by
-    unfold ProvedScope.circuitOf at hc0
+    rw [ProvedScope.circuitOf_eq] at hc0
     rw [hh] at hc0
     simp only [↓reduceIte] at hc0
     exact Except.ok.inj (hc0.symm.trans hcst)

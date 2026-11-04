@@ -328,7 +328,7 @@ theorem scopeGen (hh : t.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circ
 theorem parse (hh : t.hiddenOutputs = false) : HmRow.parse t I.circuitFile I.tables = .ok (circ t I) := by
   have := h.circuit_ok
   rw [h.circ_flat (h.flat (.inl hh))]
-  simpa [ProvedScope.circuitOf, hh] using this
+  simpa [ProvedScope.circuitOf_eq, hh] using this
 
 /-- **The statement circuit is the one `HmOut.parseStmt` reads**, at hidden outputs: a flat statement's `HmOut.parse`'s,
 a templated statement's committed circuit unrolled. -/

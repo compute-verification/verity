@@ -186,7 +186,7 @@ theorem tableAt_zk {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (h
     have hp := (setupH_spec ht' hd).1
     have hc' : c = sts[j].c := by
       rw [Composed.parse_tagsAt] at hp
-      simp only [ProvedScope.circuitOf, hh, Bool.false_eq_true, ↓reduceIte, hp] at hc
+      simp only [ProvedScope.circuitOf_eq, hh, Bool.false_eq_true, ↓reduceIte, hp] at hc
       exact (Except.ok.inj hc).symm
     exact ⟨Composed.maskSetup_of_setupH ht' hd, Composed.setupH_whole hd (hc' ▸ ho hh) (parse_facts hp).typed⟩
   · rw [hh] at hd

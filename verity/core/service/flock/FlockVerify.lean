@@ -247,7 +247,8 @@ theorem buildSessionOf_eq (tags : Tags) (circuitB pubB compB : ByteArray) (coins
   cases hh : tags.hiddenOutputs <;> cases hr : tags.hm96Rows <;> simp only [Bool.and_false, Bool.and_true, Bool.false_eq_true,
     ↓reduceIte]
   unfold buildSession
-  simp only [hr, ↓reduceIte, ProvedScope.circuitOf, hh, Stmt.setupTables_eq]
+  rw [ProvedScope.circuitOf_hidden hh]
+  simp only [hr, ↓reduceIte, hh, Stmt.setupTables_eq]
 
 /-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
 it derives a template query's units. -/

@@ -55,13 +55,13 @@ theorem tableAt {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht :
     obtain ⟨hp, -⟩ := setupH_scope ht' hd
     rw [Composed.parse_tagsAt] at hp
     refine ⟨?_, setupH_layout ht' hd, Refine.setupH_wf hd⟩
-    simp only [ProvedScope.circuitOf, hh, Bool.false_eq_true, ↓reduceIte, hp]
+    simp only [ProvedScope.circuitOf_eq, hh, Bool.false_eq_true, ↓reduceIte, hp]
   · rw [hh] at hd
     simp only [↓reduceIte] at hd
     have hp := (Hidden.setupHidden_spec' hd).parse
     rw [parseCommit_tagsAt ht] at hp
     refine ⟨?_, Hidden.hidden_layout' ht' hd (HiddenExec.setupTables_pinnedH hh hset j hj), Hidden.setupHidden_wf hd⟩
-    simp only [ProvedScope.circuitOf, hh, ↓reduceIte, hp]
+    simp only [ProvedScope.circuitOf_eq, hh, ↓reduceIte, hp]
 
 /-- **Every table fits the first table's blocks**: the same circuit (so `k_log`), the same link points (so `nbl` and
 `m`), `6 ≤ k_log ≤ m` and the pin in the block. -/

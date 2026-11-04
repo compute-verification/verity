@@ -62,7 +62,7 @@ theorem plain_setupH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false 
   subst e
   have hc := (setupH_spec ht hst).1
   have hcirc : ins.read.circ = st'.c := by
-    simp only [Readable.Read.circ, ProvedScope.circuitOf, htags, hh, Bool.false_eq_true, ↓reduceIte, hc]
+    simp only [Readable.Read.circ, ProvedScope.circuitOf_eq, htags, hh, Bool.false_eq_true, ↓reduceIte, hc]
   have hstmt : ins.read.stmt = st'.c := by
     rw [Readable.Read.stmt, hcirc]
     exact FlockSoundness.unrolled_flat (FlockSoundness.parse_facts hc).tmpl

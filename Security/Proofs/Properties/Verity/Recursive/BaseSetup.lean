@@ -147,9 +147,7 @@ theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {dra
           FlockDeploy.noIdentifier st
           pure (ForInStep.yield PUnit.unit) : V PUnit) = .ok PUnit.unit ∧
       Flock.Registered.checkFull registered r.draw = .ok () := by
-  have hos : (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1)) == Flock.Coins.os) = false := rfl
-  have hwc : tags0.withCoins (.tree (Flock.Zk.coinSpec (tags0.tableNames 1))) = tags0 := by
-    simp [Flock.Tags.withCoins, hos]
+  have hwc : tags0.withCoins (.tree (Flock.Zk.coinSpec (tags0.tableNames 1))) = tags0 := rfl
   have hcoins : r.coins = .tree (Flock.Zk.coinSpec (tags0.tableNames 1)) := by
     simp [Flock.Readable.Read.coins, hzk, FlockSoundness.Discharge.ZkExec.zkCoins, hI, hwc]
   have htags : r.tags =
@@ -182,7 +180,7 @@ theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {dra
         (B := SampledProofs.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst), hfull,
         Except.ok.inj hb⟩
       rw [Flock.Stmt.setupTables_eq]
-      simpa only [Flock.ProvedScope.circuitOf, hhid, ↓reduceIte] using hs
+      simpa only [Flock.ProvedScope.circuitOf_eq, hhid, ↓reduceIte] using hs
     · obtain ⟨x, hs, hb⟩ := bind_ok hb
       obtain ⟨⟨⟩, hloop, hb⟩ := bind_ok hb
       obtain ⟨⟨⟩, hfull, hb⟩ := bind_ok hb

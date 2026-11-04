@@ -685,7 +685,7 @@ theorem nets_three {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x x
   subst hst0
   have hparse : HmRow.parse i.base.read.tags i.base.read.I.circuitFile [] = .ok sts[0].c := by
     rw [← htb]
-    unfold ProvedScope.circuitOf at hc0
+    rw [ProvedScope.circuitOf_eq] at hc0
     split at hc0
     · obtain ⟨_, _, -, -, -, -, hor⟩ := FlockSoundness.Discharge.Hidden.parseCommit_untyped hty hc0
       have hi : i.base.read.tags.isTmpl = false := by

@@ -181,9 +181,11 @@ def Coins.tree? : Coins → Option CoinTree.Spec
   | _ => none
 
 /-- The tags a session on `coins` is verified under: on `os` coins, a statement whose prover names its coin mode
-(`Tags.liveOs`) binds the live-OS identity (`Tags.liveOsIdentity`) in its statement digest; otherwise the tags as they are. -/
+(`Tags.liveOs`) binds the live-OS identity (`Tags.liveOsIdentity`) in its statement digest; otherwise the tags as they are.
+Only the identity is chosen by the coins, so a reader of every other field reads `t`'s by definition
+(`ProvedScope.circuitOf_withCoins`). -/
 def Tags.withCoins (t : Tags) (coins : Coins) : Tags :=
-  if coins == .os && t.liveOs then { t with identity := Tags.liveOsIdentity t.identity } else t
+  { t with identity := if coins == .os && t.liveOs then Tags.liveOsIdentity t.identity else t.identity }
 
 /-- Everything a session needs about the statement. -/
 structure Stmt where

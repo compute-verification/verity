@@ -56,11 +56,7 @@ def LiveAcceptsZK (I : Inputs) (o : Reg × Finset (Fin n) × Transcript) : Prop 
 
 /-! ## The `--zk` tags change only the identity -/
 
-theorem withCoins_tree (t : Flock.Tags) (s : Flock.CoinTree.Spec) : t.withCoins (.tree s) = t := by
-  unfold Flock.Tags.withCoins
-  have : ((Flock.Coins.tree s == Flock.Coins.os) && t.liveOs) = false := by
-    cases t.liveOs <;> rfl
-  simp [this]
+theorem withCoins_tree (t : Flock.Tags) (s : Flock.CoinTree.Spec) : t.withCoins (.tree s) = t := rfl
 
 theorem zkTags_eq (I : Inputs) : zkTags I = Flock.Zk.tags I.tags (Flock.Zk.maskLogOf I.circuitFile) I.count := by
   unfold zkTags zkCoins

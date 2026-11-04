@@ -115,7 +115,7 @@ theorem tmpl_facts {t : Tags} {cf : ByteArray} {tables : List (String × ByteArr
       Layout.bitRows (HmOut.unrolled c) = ProvedScope.bitRows c := by
   have hh : t.hiddenOutputs = true := by
     cases hh : t.hiddenOutputs
-    · simp only [ProvedScope.circuitOf, hh, Bool.false_eq_true, ↓reduceIte] at hc
+    · simp only [ProvedScope.circuitOf_eq, hh, Bool.false_eq_true, ↓reduceIte] at hc
       rw [(parse_facts hc).tmpl] at ht
       cases ht
     · rfl

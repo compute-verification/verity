@@ -156,7 +156,7 @@ theorem parseStmtH_identity {tags : Tags} (ht : tags.typed = false) (x : Lean.Js
     (t : List (String × ByteArray)) : HmOut.parseStmt { tags with identity := x } b t = HmOut.parseStmt tags b t := by
   have hi : ({ tags with identity := x } : Tags).isTmpl = tags.isTmpl := rfl
   have hp : HmOut.parse { tags with identity := x } b t = HmOut.parse tags b t := by
-    simp only [HmOut.parse, Composed.parse_identity, Tags.isTmpl]
+    simp only [HmOut.parse, Flock.ProvedScope.parse_identity, Tags.isTmpl]
     simp only [ht, Bool.not_false, ite_true]
   unfold HmOut.parseStmt
   rw [hi, parseTmpl_identity tags x b t, hp]

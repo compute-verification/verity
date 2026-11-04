@@ -40,13 +40,13 @@ def VStmt.Loads (Q : VStmt) (I : Inputs) : Prop :=
 
 /-- **`--zk`'s parse at V*'s statement is a constant of the circuit file**: at `--statement` `t₀`, `--zk`'s tags are
 `t₀`'s but for the identity (`withCoins` on a coin tree leaves the tags as they are, `withCoins_tree`), which
-`HmRow.parse` does not read (`parse_identity`), whatever the table count. -/
+`HmRow.parse` does not read (`ProvedScope.parse_identity`), whatever the table count. -/
 theorem parse_zkTags_vstar {I : Inputs} {t₀ : Flock.Tags} (hT : I.tags = t₀) (b : ByteArray)
     (tb : List (String × ByteArray)) :
     HmRow.parse (zkTags I) b tb = HmRow.parse (Flock.Zk.tags (t₀.withCoins (.tree (Flock.Zk.coinSpec #[t₀.table])))
       (Flock.Zk.maskLogOf I.circuitFile) 1) b tb := by
   subst hT
-  simp only [zkTags, zkCoins, Flock.Zk.tags, withCoins_tree, parse_identity]
+  simp only [zkTags, zkCoins, Flock.Zk.tags, withCoins_tree, Flock.ProvedScope.parse_identity]
 
 /-- **A session of V*'s statement `Q` loads it**, at V*'s tags and no lookup tables, when its circuit file parses at
 the file's constant tags to `Q`'s circuit and its registered population has `Q`'s units: the session's circuit is the

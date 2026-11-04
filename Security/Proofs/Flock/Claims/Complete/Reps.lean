@@ -362,7 +362,7 @@ theorem hm_check_kinds {c : Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.c
 theorem circuitOf_check {tags : Tags} {file : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (ht : tags.typed = false) (h : ProvedScope.circuitOf tags file tables = .ok c) :
     ∃ ls, HmRow.check c tags ls = .ok () := by
-  unfold ProvedScope.circuitOf at h
+  rw [ProvedScope.circuitOf_eq] at h
   split at h
   · exact FlockSoundness.Discharge.Hidden.parseCommit_check ht h
   · exact hm_parse_check h

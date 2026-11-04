@@ -209,7 +209,7 @@ theorem flat_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w 
   rw [hx] at hx'
   cases hx'
   obtain ⟨hc, -⟩ := tableAt (tablesOf_of_parses hp') ht hpi htl
-  unfold ProvedScope.circuitOf at hc
+  rw [ProvedScope.circuitOf_eq] at hc
   split at hc
   · rcases FlockSoundness.Discharge.Hidden.committed_of_commit hc with hc | hc
     · exact (FlockSoundness.parse_facts (FlockSoundness.Discharge.Hidden.parse_untyped ht hc).1).tmpl
