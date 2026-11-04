@@ -1,23 +1,25 @@
-import Definitions.Nci.Witness
-import Definitions.Nci.Assumptions
-import Definitions.Nci.Threads
-import Definitions.Core.Circuit
-import Definitions.Core.RegisteredCircuit
-import Definitions.Core.Partition
-import Definitions.Nci
-import Definitions.Nci.Dampener
-import Definitions.Nci.Reads
-import Definitions.Nci.Assumptions.Threads
-import Definitions.Nci.Assumptions.Baseline
-import Definitions.Nci.Assumptions.Activations
-import Definitions.Nci.Assumptions.Layered
-import Definitions.Nci.Assumptions.Dampener
-import Definitions.Nci.Assumptions.Training
-import Definitions.Nci.Assumptions.PackedTraining
-import Definitions.Nci.Support
-import Definitions.Nci.Guarantees.CoverTraining
-import Definitions.Nci.Guarantees.CoverChained
-import Definitions.Nci.Guarantees.Remote
+module
+
+public import Definitions.Nci.Witness
+public import Definitions.Nci.Assumptions
+public import Definitions.Nci.Threads
+public import Definitions.Core.Circuit
+public import Definitions.Core.RegisteredCircuit
+public import Definitions.Core.Partition
+public import Definitions.Nci
+public import Definitions.Nci.Dampener
+public import Definitions.Nci.Reads
+public import Definitions.Nci.Assumptions.Threads
+public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Assumptions.Activations
+public import Definitions.Nci.Assumptions.Layered
+public import Definitions.Nci.Assumptions.Dampener
+public import Definitions.Nci.Assumptions.Training
+public import Definitions.Nci.Assumptions.PackedTraining
+public import Definitions.Nci.Support
+public import Definitions.Nci.Guarantees.CoverTraining
+public import Definitions.Nci.Guarantees.CoverChained
+public import Definitions.Nci.Guarantees.Remote
 
 /-!
 # The inference-only policy's guarantees in `(c, k)`: their witnesses
@@ -38,6 +40,8 @@ for the dampener, and PoUW's soundness (`PouwSound`) for the remote dampener. Th
 `CoverTrainingAligned`) are stated at the multiplication blocks `mb0` of no product, where coverage `α₀ > 0` fails;
 `CoverTrainingChained` at the toy's two products on its bit view, where at depth `0` the cap `k < c_w D` fails.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 
