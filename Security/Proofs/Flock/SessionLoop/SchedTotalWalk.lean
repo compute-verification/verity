@@ -114,8 +114,8 @@ theorem st_feed {α : Type} {Q : α → Hist → Prop} : ∀ (s : Step α) (L : 
     have hx : x.size = n ∧ A hs x := by
       have e := (feed_keeps (k x) L (rs.push (c, n))).2 rs.size (by rw [Array.size_push]; omega)
       rw [Array.getElem?_push_size] at e
-      simpa only [List.take_zero, List.append_nil, List.getElem_cons_zero] using
-        hA 0 (by simp only [List.length_cons]; omega) c n (by rw [Nat.add_zero]; exact e)
+      have := hA 0 (by simp only [List.length_cons]; omega) c n (by rw [Nat.add_zero]; exact e)
+      simpa only [List.take_zero, List.append_nil, List.getElem_cons_zero] using this
     have ih := st_feed (k x) L (rs.push (c, n)) (hs ++ [x]) (h x hx.1 hx.2) fun j hj c' n' e => by
       have := hA (j + 1) (by simp only [List.length_cons]; omega) c' n'
         (by rw [← e, Array.size_push, Nat.add_assoc, Nat.add_comm 1 j])
