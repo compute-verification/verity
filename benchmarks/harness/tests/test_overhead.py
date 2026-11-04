@@ -29,8 +29,8 @@ SHA = "c" * 40
 #: the arm's stand-in cubin, and the art a node-only run names it by
 CUBIN = b"stand-in cubin"
 CUBIN_ART = "art:" + "a" * 64
-#: the gpu-lease wait `research run --gpus 1` puts before a direct run's command, as its attempt records it
-LEASE = ["gpu-lease", "1", "--wait", "--mem-gb", "0", "--"]
+#: the gpu-lease wait the door puts before its node job, as the run's attempt records it
+LEASE = R.gpu_lease(60)
 
 # ---- stand-in timings ---------------------------------------------------------------------------------------------------------
 
@@ -228,7 +228,8 @@ def scheme(tmp_path, monkeypatch):
     arm_dir.mkdir()
     (arm_dir / "overhead_eps_standin.py").write_text(
         "def epsilon(m, n, k, card):\n    return {'epsilon': 2.0 ** -40 * n / 8192, 'delta': 1e-9, 'basis': 'stand-in'}\n")
-    sch = O.Scheme("pearl-plus", "fp8-blk128", "overhead_arm:PearlPlus", str(arm_dir), "overhead_eps_standin:epsilon")
+    sch = O.Scheme("pearl-plus", O.SCHEMES["pearl-plus"].family, "overhead_arm:PearlPlus", str(arm_dir),
+                   "overhead_eps_standin:epsilon")
     monkeypatch.setitem(O.SCHEMES, "pearl-plus", sch)
     monkeypatch.setattr(sys, "path", list(sys.path))
     return sch
@@ -385,7 +386,8 @@ def test_busy_sm_time_integrates_sms_active_over_each_ranges_kernels_and_checks_
     assert nsys.report(tmp_path / "prime.sqlite", H200, "item ") == {"busy": {}, "ranges": 0, "stray": 0}
     assert O.cross_check_why({"a": got["item 0"]["ratio"]}) is None
     assert "1 entries" in O.cross_check_why({"a": got["item 0"]["ratio"], "b": got["item 1"]["ratio"]})
-    assert "(tail: 0.7)" in O.cross_check_why({"tail": 0.7, "a": 1.02}) and O.cross_check_why({"none": None})
+    assert O.cross_check_why({"tail": 0.7, "a": 1.02}) is None and O.cross_check_why({"none": None})
+    assert "exceeds their kernels' occupied SM-time by over 5% (over: 1.07)" in O.cross_check_why({"over": 1.07, "a": 1.02})
 
 
 def test_blocks_an_sm_holds_are_the_tightest_of_warps_registers_and_shared_memory():
@@ -473,7 +475,7 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
     assert prof[:len(overhead_node.NSYS_PROFILE) + 1] == ["nsys", *overhead_node.NSYS_PROFILE]
     assert "--capture-range=cudaProfilerApi" in prof
     bench = prof[prof.index("-o") + 2:]
-    assert {"--traced", "--twins", "--bridge"} <= set(bench) and between(bench, "--families") == ["fp8-blk128"]
+    assert {"--traced", "--twins", "--bridge"} <= set(bench) and between(bench, "--families") == ["fp8-e4m3-rowwise"]
     assert between(bench, "--methods") == ["graph", "burst"] and between(bench, "--arm") == [scheme.arm]
     assert len(exports) == 1 + 2 * len(LINEARS) == len(doc["reports"]) and all(e["exit"] == 0 for e in doc["reports"])
     assert doc["reports"][0] == {"report": "prof.1.nsys-rep", "exit": 0, "items": 0, "stray_kernels": 0}
@@ -569,7 +571,7 @@ class Store:
 
     def ran(self, run: str, run_dir: Path, *, sub: str = "run", argv: list[str] | None = None, env: dict | None = None,
             validation: str = "passed", rc: int = 0, dirty: bool = False) -> None:
-        """The run's attempt: by default the door's node job `sub` as `research run --gpus 1` records it."""
+        """The run's attempt: by default the door's node job `sub` under the door's lease."""
 
         from research.store import canon
 
@@ -651,7 +653,9 @@ def test_only_a_run_of_the_door_s_own_job_can_be_stored_or_recorded(tmp_path):
         s.ran(run, tmp_path / "r20261104-020000-0002", **kw)
         with pytest.raises(ValueError, match=why):
             R.store_points(s.store, run)
-    s.ran("r20261104-020000-0020", tmp_path / "r20261104-020000-0002", argv=["bash", R.NODE_JOB, "points", "--card=h200"],
+    # the lease `research run --gpus 1` puts before it, where gpu-lease hands out every GPU, holds the same job
+    gpus = ["gpu-lease", "1", "--wait", "--mem-gb", "0", "--", "bash", R.NODE_JOB, "points", "--card=h200"]
+    s.ran("r20261104-020000-0020", tmp_path / "r20261104-020000-0002", argv=gpus,
           env={"VERITY_BENCH_VENV": "/workspace/jobs/venv312"})
     assert R.store_points(s.store, "r20261104-020000-0020").startswith("art:")
 
@@ -740,6 +744,15 @@ def test_the_table_shows_only_labelled_runs_of_record_and_refuses_the_rest_with_
 # ---- the command ------------------------------------------------------------------------------------------------------------------
 
 
+def job(argv: list[str], minutes: str) -> list[str]:
+    """The node job's arguments in a launch: the command after `research run`'s `--` is the node job under a lease of one
+    GPU for the run's bound, which the job takes itself (a node whose GPUs gpu-lease doesn't hand out refuses `--gpus`)."""
+
+    cmd = argv[argv.index("--") + 1:]
+    assert cmd[:7] == ["gpu-lease", "1", "--wait", "--max-min", minutes, "--", "bash"] and cmd[7] == R.NODE_JOB
+    return cmd[8:]
+
+
 def test_the_command_launches_each_step_as_a_research_run_on_one_gpu_and_ships_the_points(tmp_path, monkeypatch, capsys):
     s = Store(tmp_path)
     art = stored_points(tmp_path, s, "r20261104-020000-0001")
@@ -759,7 +772,7 @@ def test_the_command_launches_each_step_as_a_research_run_on_one_gpu_and_ships_t
     assert main(["overhead", "run", "--scheme", "stock", "--point", "L", "--local-only"]) == 0
     assert main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", s.cubin, "--local-only"]) == 0
     (points, _), (run, sent), (armed, armed_sent) = launched
-    assert armed[armed.index("--") + 3:] == ["run", "--card", "h200", "--scheme", "pearl-plus", "--points", "points.json",
+    assert job(armed, "60") == ["run", "--card", "h200", "--scheme", "pearl-plus", "--points", "points.json",
                                              "--points-art", art, "--point", "all", "--cubin", "arm.cubin",
                                              "--cubin-art", s.cubin]
     assert armed_sent == [Path(s.store.fetch(art)).read_bytes(), CUBIN]
@@ -776,11 +789,11 @@ def test_the_command_launches_each_step_as_a_research_run_on_one_gpu_and_ships_t
         main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", tree, "--local-only"])
     assert "isn't one file" in capsys.readouterr().err
     for argv in (points, run):
-        assert argv[:6] == ["research", "run", "--on", "vy-dc-h200", "--gpus", "1"] and "--require-result" in argv
-        assert argv[argv.index("--cwd") + 1] == "source" and argv[argv.index("--") + 1:][:2] == ["bash", R.NODE_JOB]
-    assert points[points.index("--") + 3:] == ["points", "--card", "h200", "--model", O.KERNEL_MODEL, "--precision", "fp8"]
-    assert run[run.index("--") + 3:] == ["run", "--card", "h200", "--scheme", "stock", "--points", "points.json",
-                                         "--points-art", art, "--point", "L"]
+        assert argv[:4] == ["research", "run", "--on", "vy-dc-h200"] and "--require-result" in argv
+        assert argv[argv.index("--cwd") + 1] == "source" and "--gpus" not in argv
+    assert job(points, "150") == ["points", "--card", "h200", "--model", O.KERNEL_MODEL, "--precision", "fp8"]
+    assert job(run, "60") == ["run", "--card", "h200", "--scheme", "stock", "--points", "points.json",
+                              "--points-art", art, "--point", "L"]
     assert sent == [Path(s.store.fetch(art)).read_bytes()] and run[run.index("--timeout") + 1] == "60m"
     with pytest.raises(SystemExit):
         main(["overhead", "points", "--card", "rtx-pro-6000"])
