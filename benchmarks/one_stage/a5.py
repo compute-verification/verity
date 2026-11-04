@@ -174,9 +174,10 @@ import multiprocessing
 import os
 import shutil
 import sys
+import threading
 import time
 from collections.abc import Iterator, Sequence
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
@@ -911,7 +912,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
 
     def member_checks(s: dict) -> dict:
         """Lean's verdicts on member session ``s`` (`member_session`) and what the audit takes from it. They read only the
-        session's archive, so they run while the next member is proved."""
+        session's archive, so they run beside the next member's session, `LeanPool`'s workers at a time."""
         if "handle" in s:
             s = collected(s)
         mm, sdir, record, live, draw_t, v = s["mm"], s["sdir"], s["record"], s["live"], s["draw_t"], s["draw_check"]
@@ -943,13 +944,16 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
 
     # every member's statement is staged before any session flips a coin, and outer proofs run one at a time
     # (`ONE_AT_A_TIME`): the sessions run in the members' order, on the proof server's one prover or each as its own process
-    # pair, and only Lean's checks, outside any ZK server, overlap the next member's session. A server's challengers audit
-    # its sessions at its close, each member's audit then a verdict.
+    # pair, and only Lean's checks of finished members, outside any ZK server, overlap the next member's session: a process
+    # pair's `LeanPool`'s workers at a time, a proof server's one at a time, each waiting there for its session (`collected`).
+    # A server's challengers audit its sessions at its close, each member's audit then a verdict.
     try:
         statements = [staged(mm, local) for mm, local in drawn]
-        with ThreadPoolExecutor(1) as lean:
-            checks = [lean.submit(member_checks, member_session(i, s)) for i, s in enumerate(statements)]
-            done = [c.result() for c in checks]
+        with LeanPool(getattr(a, "lean_workers", LEAN_WORKERS) if server is None else 1, lean_budget(a, available_memory),
+                      available_memory) as lean:
+            for i, s in enumerate(statements):
+                lean.submit(member_checks, member_session(i, s), lean_need(s["mm"]["st"]))
+            done = lean.results()
     finally:
         if server is not None:
             exits = server.close()
@@ -1305,6 +1309,88 @@ def one_session(s: str) -> int:
     return 1
 
 
+#: Lean checks of finished members at once (`LeanPool`): they read a session's archive outside the ZK server, which
+#: `ONE_AT_A_TIME` doesn't cover
+LEAN_WORKERS = 3
+#: a Lean check's memory estimate per byte of its member's circuit file, which Lean's verify (`a0.lean_verify`) reads,
+#: hashes and parses whole
+LEAN_BYTES_PER_CIRCUIT_BYTE = 5
+#: what the audit's memory leaves the prover's session, the rest the Lean checks' budget (`lean_budget`)
+PROVER_RESERVE_GB = 160
+
+
+class LeanPool:
+    """Member checks on ``workers`` threads beside the caller's sessions, which stay one at a time (`ONE_AT_A_TIME`). Checks
+    start in the order submitted, each once its memory estimate ``need`` fits: with the running checks' estimates within
+    ``budget`` bytes, and ``available()`` bytes free now. With none running the next starts whatever its estimate, so one
+    over the budget runs alone. `results` are the checks' in the order submitted."""
+
+    def __init__(self, workers: int, budget: float, available: Callable[[], float]):
+        self.budget, self.available = budget, available
+        self.ex = ThreadPoolExecutor(workers)
+        self.cv = threading.Condition()
+        self.futures: list[Future] = []
+        self.next = self.running = 0
+        self.used = 0.0
+
+    def __enter__(self) -> LeanPool:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.ex.shutdown(wait=True)
+
+    def submit(self, check: Callable[[Any], Any], arg: Any, need: float) -> None:
+        self.futures.append(self.ex.submit(self._run, len(self.futures), check, arg, need))
+
+    def results(self) -> list:
+        return [f.result() for f in self.futures]
+
+    def _fits(self, turn: int, need: float) -> bool:
+        return turn == self.next and (not self.running or (self.used + need <= self.budget and self.available() >= need))
+
+    def _run(self, turn: int, check: Callable[[Any], Any], arg: Any, need: float) -> Any:
+        with self.cv:
+            self.cv.wait_for(lambda: self._fits(turn, need))
+            self.next, self.running, self.used = self.next + 1, self.running + 1, self.used + need
+            self.cv.notify_all()
+        try:
+            return check(arg)
+        finally:
+            with self.cv:
+                self.running, self.used = self.running - 1, self.used - need
+                self.cv.notify_all()
+
+
+def available_memory() -> int:
+    """The node's available memory now, in bytes (/proc/meminfo's MemAvailable)."""
+    for line in Path("/proc/meminfo").read_text().splitlines():
+        if line.startswith("MemAvailable:"):
+            return int(line.split()[1]) * 1024
+    raise OSError("/proc/meminfo has no MemAvailable")
+
+
+def lean_budget(a: argparse.Namespace, available: Callable[[], float]) -> float:
+    """The Lean checks' memory budget in bytes: the audit's memory (``--audit-mem-gb``, else what ``available()`` gives as
+    its sessions start) less `PROVER_RESERVE_GB`."""
+    gb = getattr(a, "audit_mem_gb", None)
+    return (gb * 2**30 if gb is not None else available()) - PROVER_RESERVE_GB * 2**30
+
+
+def lean_need(st: dict) -> int:
+    """A member's Lean check's memory estimate in bytes, `LEAN_BYTES_PER_CIRCUIT_BYTE` of its circuit file (none: 0)."""
+    f = st["dir"] / "circuit.txt"
+    return LEAN_BYTES_PER_CIRCUIT_BYTE * f.stat().st_size if f.is_file() else 0
+
+
+def lean_options(p: argparse.ArgumentParser) -> None:
+    """The Lean checks' flags (`LeanPool`), on a5's parser and its callers'."""
+    p.add_argument("--lean-workers", type=int, default=LEAN_WORKERS,
+                   help="Lean checks of finished members at once, beside the next member's session (sessions stay one at a time)")
+    p.add_argument("--audit-mem-gb", type=float,
+                   help=f"the audit's memory: the Lean checks start within it less {PROVER_RESERVE_GB} GB for the prover, each "
+                        f"estimated at {LEAN_BYTES_PER_CIRCUIT_BYTE}x its circuit file (default: what is available as the sessions start)")
+
+
 def plain(a: argparse.Namespace) -> bool:
     """The sessions are plain (``--plain``), not `--zk`."""
     return bool(getattr(a, "plain", False))
@@ -1534,6 +1620,7 @@ def main() -> int:
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
     ap.add_argument("--session-jobs", type=one_session, default=1, help="1 only: the sessions run one at a time (ONE_AT_A_TIME)")
+    lean_options(ap)
     ap.add_argument("--session-timeout", type=float, default=14400,
                     help="each drawn member's prover limit in seconds, and each template's compose: one firewalled session of a MoE "
                          "w2 coordinate chunk (MoeExpertFp8GemmW_v2{N=1}, k_log 26) takes ~8 min, and over an hour on a loaded "
