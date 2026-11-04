@@ -1674,10 +1674,10 @@ def test_v3c_into_an_out_holding_a_previous_runs_circuit_files_leaves_this_runs_
     assert sorted(p.relative_to(old).as_posix() for p in old.rglob("*")) == [f"{pin}.txt"]
 
 
-def test_a_circuit_file_over_circuit_out_max_stays_on_the_node_named_in_period_json(tmp_path):
-    """A circuit file over CIRCUIT_OUT_MAX bytes (1 GB by default) never goes into $OUT: it stays in V3c's dir, which
-    the period check reads, period.json naming it by its SHA-512, and the V3C-PERIOD line says how many stayed; what a
-    verifier reads of $OUT, missing it, still scans clean."""
+def test_a_circuit_file_over_circuit_out_max_is_left_out_of_out_named_in_period_json(tmp_path):
+    """A circuit file over CIRCUIT_OUT_MAX bytes (1 GB by default) never goes into $OUT: it is left in V3c's dir, which
+    the period check reads, period.json naming it by its SHA-512, and the V3C-PERIOD line says how many are not in $OUT;
+    what a verifier reads of $OUT, missing it, still scans clean."""
     rc, lines, _order, _limits = _v3c(tmp_path, CIRCUIT_OUT_MAX="25")
     assert rc == 0, lines
     pin = hashlib.sha512(b"flock-ir-unit/v2 stand-in\n").hexdigest()
@@ -1685,7 +1685,7 @@ def test_a_circuit_file_over_circuit_out_max_stays_on_the_node_named_in_period_j
     assert (vw / "circuits" / f"{pin}.txt").stat().st_size == 26 and not list((out / "circuits").iterdir())
     assert json.loads((out / "period.json").read_text())["circuits"] == [{"template": "a@0", "sha512": pin}]
     assert [x for x in lines if x.startswith("V3C-PERIOD")][0].endswith(
-        "; its circuit files over 25 bytes, 1, stay on the node, period.json naming each")
+        "; its circuit files over 25 bytes, 1, not in $OUT, recomposable, period.json naming each by its SHA-512")
     scan = (tmp_path / "serve" / "private" / "received-scan.txt").read_text().splitlines()
     assert scan[-1].startswith("KIND-SCAN clean: ")
 
