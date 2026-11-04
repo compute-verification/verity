@@ -3,6 +3,7 @@ import Definitions.Pouw.PearlC.DeviceRev1
 import Definitions.Pouw.PearlC.RowSem
 import Definitions.Pouw.PearlC.NoiseSha512
 import Proofs.Pouw.PearlPlus.Noise
+import Proofs.Pouw.PearlPlus.Numerics
 
 /-!
 # Pearl+'s bridge, part (b): a tile's words under -h3's noise are the semantics'
