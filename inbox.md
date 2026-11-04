@@ -42,3 +42,6 @@ Why: NET-210's exclusion toys (Security/Proofs/NetworkCertifier/WiredToys.lean, 
 
 If you want yours reusable for the wired guarantees later: at a layout with no wires KSWired is KS (ksWired_none, Proofs/NetworkCertifier/Wires.lean), so nothing more is needed there. At a wired layout, KSWired also needs each drawn unit's wired rows at its writer's value (WireRight). Your one-value-per-position commitment with an extractor that reads opened values should give that, if the verifier checks a drawn unit's wired rows. WiredToys' flipProg, flipPart, wit4 and accCm are there to reuse if you want a program with wires.
 
+[2026-11-04T07:47Z] f89670e3e43a
+ODWITNESS correction: ksWired_none is in Security/Proofs/NetworkCertifier/KSWired.lean (line 115), not Wires.lean.
+
