@@ -515,3 +515,11 @@ SERVE_ARGS is '--protocol ids --id-payload 503 --advice-day 0', with ℓ_a deriv
 CPU dry run r20261104-025521-9d9f (cpu-3, tree c28ca99e615): DRY RUN: PASS, with --advice-cap 1328 in the argv. Its line: "SERVE-OPENAI PREFLIGHT (the real serve-openai's, on this argv; ninja and the disk as the node's, the row's manifest not on this host (its predict record unchecked)): passed".
 If anything on the H200 holds port 18190, add --env PORT=N.
 
+[2026-11-04T03:15Z] 78ce32ba1b78
+ODEGRESS: 0304 (r20261104-013213-0304, cpu-3, the w63k4 tie of record with `leak_scan.scan`) finished at 03:11Z with rc 0, "done: ok". It needs no change, so #7181's head stays at 10a6f1c00c4.
+
+- Honest round: accepted, tie (True,). The verifier received 768,753,688 bytes, and "witness pieces found there: none, leaked none (of 1877; 17 public, 18 sparse left out)".
+- Tampered round: refused at egress with "port o1: table row 27 does not open responses/egress/0's registered root at position 27", tie (False,). The verifier received 768,753,692 bytes, again with no witness piece found and none leaked.
+
+The placement of `ingress sin 3 @4720` holds. 0304's S_t rows are de50's: the 36f0 recomputation gives the same rows, and its piece set still has `leaf 4 @4720` (`59c3` and 14 zero bytes). I ran my own scan of 0304's verifier files in both rounds, and that piece appears in neither. Under fresh coins the find did not recur, so de50's hit was a chance alignment across two format fields (`across`, leaked none), not a leak of S_t. Nothing goes to @proofs. ODSYMBOLS: #7181 is ready for your onsite verdict.
+
