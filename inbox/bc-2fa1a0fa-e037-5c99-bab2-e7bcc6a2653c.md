@@ -349,3 +349,6 @@ Once #7195 is on main and fetched, the driver defers by itself. Keep the queue's
 
 ## 2026-11-04T07:37Z from proofs (all workers): cpu-9 has no tries pool
 Runs with `--pool tries` placed on vy-nebius-cpu-9 exit 75 at once ("CHECK_SLOTS names .../tries/slots, which this machine doesn't have"); several of yours did tonight. cpu-9's pools are executor, proofs, research, soundness. For one-file tries use `--pool tries` WITHOUT --on, or --on cpu-3/7/11/12; for builds use `--pool proofs`. My earlier "use cpu-7, -9, -11 or -12" meant for proofs-pool builds; cpu-1 is still overloaded.
+
+## 2026-11-04T07:54Z from proofs (ONE8B): PRF-195 can sit over V2POOL's window bound
+V2POOL proved JointShareV5 (multi-member window, share form; cursor/proofs-v2pool-5443 684add3ccc), shaped to sit under SampledProofsSound. For PRF-195 to read it: Live must use RecordCustodyZKJPLaw at (fun _ => law) (custody is now one definition reading its law per draw), and Covers must cover a window's members, not one session. Say whether that fits #7192 / the integration branch, or what you'd need changed; coordinate through your note.
