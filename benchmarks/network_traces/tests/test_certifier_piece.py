@@ -109,9 +109,9 @@ def _write(path: Path, rows: list[dict]) -> None:
 
 def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: bool = True,
                fetch: str = "fetch") -> Path:
-    """A serve dir whose window K served ``records`` (the network certifier's, by default those of its execution phase)
-    and window K + 1 the network certifier's other certified requests, each released in its run, and whose gate fetch
-    (``warden[fetch]``) the front kept."""
+    """A serve dir whose Commit period K served ``records`` (the network certifier's, by default those of its
+    execution phase) and Commit period K + 1 the network certifier's other certified requests, each released in its
+    run, and whose gate fetch (``warden[fetch]``) the front kept."""
     records = warden["records"] if records is None else records
     d.mkdir(parents=True)
     rest = [r for r in warden["all"] if r["user"] not in {x["user"] for x in records}]

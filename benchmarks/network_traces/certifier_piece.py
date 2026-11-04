@@ -49,18 +49,18 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      reject, and the refusal names the network certifier's own check's problems (`rehearsed`). One whose certified
      egress holds a cell that is neither an id-form cell nor a `FAIL`, bytes the server sent that are no output's, is a
      reject.
-  2. The window's requests are certified ones (`bind`): each window request's user names one of the network certifier's
-     certified requests (`warden_chain.io`), it carries the network certifier's run in its release, with the same
-     prompt and streamed ids; and of the requests the endpoint recorded carrying that run, no two name one certified
-     request and every certified request is one; else reject. These read the endpoint's records, the prover's, in the
-     clear: they refuse what a relay between the network certifier and an honest endpoint does (`attacks.py`), and the
-     chain's tie is what binds the committed values to the certified cells.
+  2. The audited Commit period's requests are certified ones (`bind`): each one's user names one of the network
+     certifier's certified requests (`warden_chain.io`), it carries the network certifier's run in its release, with
+     the same prompt and streamed ids; and of the requests the endpoint recorded carrying that run, no two name one
+     certified request and every certified request is one; else reject. These read the endpoint's records, the
+     prover's, in the clear: they refuse what a relay between the network certifier and an honest endpoint does
+     (`attacks.py`), and the chain's tie is what binds the committed values to the certified cells.
   3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, endpoint, N2, tie and scan)
      on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
      take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a
      reject with its why.
-  4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and
+  4. The period's link-window is the scan's (``answers.json``'s one window): every audited request's release and
      streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's, an accept's profile
@@ -157,7 +157,7 @@ CASE = "case.json"
 V3C_SCAN_CLASS = "w63k4"
 #: what `bind`'s rejects say: a served request the network certifier didn't carry, a certified one the endpoint didn't
 #: serve, and one certified request served twice
-NOT_SEEN = "the window served traffic the network certifier didn't see"
+NOT_SEEN = "the Commit period served traffic the network certifier didn't see"
 UNSERVED = "the network certifier carried traffic the endpoint didn't serve"
 SHARED = "one certified request served twice"
 #: the split piece's chain step's accept, which its period step reads
@@ -388,7 +388,7 @@ def unpack(fetch: Path) -> tuple[Path, Path]:
 
 def device_problems(run: Path) -> list[str]:
     """The network certifier's own check of the kept run (`warden_serve.check` on its witness), each problem once with
-    its numbers (connections, cells, windows) as N: what refused the rehearsal, none of its counts."""
+    its numbers (connections, cells, phases) as N: what refused the rehearsal, none of its counts."""
     import warden_chain as WC
     try:
         got = WC.WS.check(WC.witness(run))
@@ -432,7 +432,7 @@ def release_run(r: dict) -> str | None:
 
 
 def bind(reqs: list[dict], io: dict, run_id: str | None = None, served: list[dict] | None = None) -> dict[str, dict]:
-    """Each window request's certified record by its user; Rejected when one isn't the network certifier's: its user
+    """Each audited request's certified record by its user; Rejected when one isn't the network certifier's: its user
     names no certified request, it carries no release of the network certifier's run ``run_id`` (when given), or its
     prompt or streamed ids aren't the certified ones. Of ``served`` (when given: every request the endpoint recorded,
     of which those carrying the run's release and ``reqs`` are read), Rejected when two name one certified request or
@@ -444,13 +444,13 @@ def bind(reqs: list[dict], io: dict, run_id: str | None = None, served: list[dic
         eid, user = r.get("engine_id"), r.get("user")
         c = by.get(user)
         if c is None:
-            raise Rejected(f"window request {eid}'s user {user!r} is no certified request: {NOT_SEEN}")
+            raise Rejected(f"audited request {eid}'s user {user!r} is no certified request: {NOT_SEEN}")
         if run_id is not None and release_run(r) != run_id:
-            raise Rejected(f"window request {eid} (user {user!r}) carries no release of the network certifier's run "
+            raise Rejected(f"audited request {eid} (user {user!r}) carries no release of the network certifier's run "
                            f"({r.get('release')!r}): {NOT_SEEN}")
         for key, theirs in (("prompt_ids", "prompt"), ("streamed_ids", "output")):
             if key in r and r[key] != c[theirs]:
-                raise Rejected(f"window request {eid}'s {key} aren't the certified {theirs}")
+                raise Rejected(f"audited request {eid}'s {key} aren't the certified {theirs}")
         got[user] = c
     if served is not None:
         mine = {json.dumps(r, sort_keys=True): r

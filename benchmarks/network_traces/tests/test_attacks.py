@@ -10,7 +10,7 @@ and 2, `attacks.piece_of`):
   the egress cells' cap it fails closed (limit) instead; an extra id event is the piece's reject in the clear;
 - an altered output token is the piece's reject in the clear;
 - an extra connection the relay answers itself is a certified request the endpoint didn't serve; one arriving with the
-  queue full is REFUSED and its window certified nowhere;
+  queue full is REFUSED and its execution phase certified nowhere;
 - a request served straight to the endpoint, under another user or the certified one's, is served traffic the network
   certifier didn't carry.
 `bind`'s two reads of the served requests (a certified request served twice, or never) are held on the honest run's."""
@@ -43,7 +43,7 @@ WS = AT.WS
 #: the network certifier's schedule on the served path: the scan's, at w63k4's egress cells (4 ids and the trailer)
 PARAMS = dataclasses.replace(sz.PARAMS, egress_cells=A.SCAN_CLASSES[CP.V3C_SCAN_CLASS][0])
 SESSION = bytes(range(32))
-#: the window the endpoint's records put the group in
+#: the Commit period the endpoint's records put the group in
 K = 3
 
 

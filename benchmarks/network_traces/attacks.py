@@ -19,7 +19,7 @@ the check or the term (``by``), the reason its verdict names (``reason``), and t
 - ``clear``: a check in the clear on what the prover records or opens: the piece's `certifier_piece.bind`, which
   reads the endpoint's records against the certified I/O (it refuses what a relay between the network certifier and
   an honest endpoint does, and the verdict of record is the tie's, which binds the committed values to the certified
-  cells), the records audit's compile of a window's advice opening (`prove_path.compile_advice`), and ADVICE-LINE
+  cells), the records audit's compile of an execution phase's advice opening (`prove_path.compile_advice`), and ADVICE-LINE
   (`served_verdicts.advice_line`); a ``waits`` names the piece whose refusal of record hasn't landed.
 An attack the served rehearsal plays (``served``) also names the network certifier's check's outcome (``gate``: True
 when it accepts the run) and the piece's (``piece``): ``bound`` (steps 1 and 2 pass), ``reject``, or ``missing``
@@ -59,7 +59,7 @@ and the bits (the prover's own record, kept on its node).
 certifier's check's outcome, and the piece's steps 1 and 2 (`bound`) on the requests the endpoint recorded for the run,
 the front's warm-ups aside: each carrying the run's release, and each carrying no run's that the endpoint received
 (``times.received``) while the front ran, by the node's clock (`SPAN`), so a request around the network certifier is
-read wherever its Commit window falls and another front's never. ``ok`` when both are the attack's and the piece names
+read wherever its Commit period falls and another front's never. ``ok`` when both are the attack's and the piece names
 the attack's reason.
 
 **The rehearsal** (`rehearse`): served_verdicts.sh's ``CERTIFIER_FRONT`` (``LOAD=front``, the fronts' groups the run's
@@ -201,20 +201,20 @@ ATTACKS = {a.name: a for a in [
            relay="token", waits=("the egress tie",), tests=(TESTS,)),
     Attack("altered-read", "an altered output token", "prover", "a statement reading a cell one bit off the "
            "network certifier's", "refused", REGISTERED, "doesn't open", "proof", tests=(A5,)),
-    Attack("advice-late", "advice after its coin", "prover", "a window's advice committed after that window's coin",
-           "refused", "ADVICE-LINE (served_verdicts.advice_line): every closed window's advice line out before sampled "
-           "proofs' and the network certifier's first coin", "after sampled proofs' or the network certifier's first "
-           "coin", "clear", waits=("advice v1's commitment",)),
-    Attack("advice-cap", "advice over the cap", "prover", "a window's advice longer than the registered cap",
-           "refused", "the advice's registered width ℓ_a: prove_path.compile_advice refuses an opening over ℓ_a "
-           "before it reads it, and ℓ_a is in the registered compiler's digest (registering that compiler, capped at "
-           "ℓ_a, before the served path's first window is advice v1's)", "over the registered cap", "clear",
-           waits=("advice v1's commitment",), tests=(PP,)),
+    Attack("advice-late", "advice after its coin", "prover", "an execution phase's advice committed after that "
+           "phase's coin", "refused", "ADVICE-LINE (served_verdicts.advice_line): every closed execution phase's "
+           "advice line out before sampled proofs' and the network certifier's first coin", "after sampled proofs' or "
+           "the network certifier's first coin", "clear", waits=("advice v1's commitment",)),
+    Attack("advice-cap", "advice over the cap", "prover", "an execution phase's advice longer than the registered "
+           "cap", "refused", "the advice's registered width ℓ_a: prove_path.compile_advice refuses an opening over "
+           "ℓ_a before it reads it, and ℓ_a is in the registered compiler's digest (registering that compiler, capped "
+           "at ℓ_a, before the served path's first execution phase is advice v1's)", "over the registered cap",
+           "clear", waits=("advice v1's commitment",), tests=(PP,)),
     Attack("extra", "an extra connection", "server", "one connection answered by the relay, never by the endpoint",
            "refused", f"{BIND}: every certified request is a served one", UNSERVED, "clear", gate=True,
            piece="reject", relay="extra", tests=(TESTS,)),
     Attack("over-capacity", "an extra connection", "client", "a connection arriving with the queue full", "refused",
-           f"{AUDIT}: REFUSED to the connection, and no record of its window certified", WITHHELD, "device",
+           f"{AUDIT}: REFUSED to the connection, and no record of its execution phase certified", WITHHELD, "device",
            tests=(TESTS,)),
     Attack("bypass", "traffic around the network certifier", "server", "a request served straight to the endpoint "
            "under a user no certified request names", "refused", f"{BIND}: every served request is a certified one",
