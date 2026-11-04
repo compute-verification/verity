@@ -382,6 +382,8 @@
   "Definitions.Flock.Circuit",
   "Definitions.Flock.Lowering",
   "VStar",
+  "VStarRecursive.Protocol",
+  "VStarRecursive.Sampled",
   "Properties.Pouw",
   "PouwWindow.Grid",
   "PouwWindow.Draw",
