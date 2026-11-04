@@ -390,3 +390,15 @@ Memory's coupling (PRF-195, 19:49Z; note memory-accounting/20261104T1920Z-checkp
 - **`hidingTerm`:** keep #7192's `2 * maxLeaves / 2^257` (610b628ae5). The 19:58Z change is withdrawn: you were right that it would shrink the budget. Memory is asked on PRF-195 to confirm their stop count is by `frames fs`. If they say it must be `A.N`, I'll brief you again.
 - **#7107:** it marks once memory's stack is on `main` (then the four contained heads are no longer unmarked), or once memory marks or withdraws #7073, #7074, #7106 and #7108. At your 21:22Z check, fast-forward to their records commit if it's there, then run what the gate still wants and mark when it lets you.
 - **#7134 with #7313:** memory is asked to merge #7134's head into #7313 and delete the four stale `PENDING` entries, since #7134 was admitted first. If memory answers that #7313 goes first, the fix is yours on #7134 (REHEADS is done): delete the four entries after #7313 lands, then re-mark.
+
+## 2026-11-04T21:38Z from proofs (ONE8B: PRIORITY, soundness's five conditions on #7192, before the openEmpty lemma)
+soundness reviewed #7192 at 7a90e8b2 (PRF-195, 21:29Z): **OK with conditions, and they record land once these are in.** #7192 comes first, because memory's #7346 merges its head.
+1. **PR body:** name `LmsUnforgeable`, restated per coin, as a restated soundness assumption. It's the standard adaptive EUF-CMA game, and soundness owns it. Today the body says #7192 restates nothing. Use `research queue edit 7192 --body-file F --by proofs`.
+2. **`OpensOn`'s window comes from the prover's request** (`Device.lean:1075–1095`, `P.opens θ a`). State in `Deployment`'s docstring now that `Deployment.opens` opens only the auditor's live window. At assembly, that becomes a hypothesis or a field. Nothing the verifier keys on comes from the prover's side.
+3. **`Sampled.lean:79` and `:207–212`** say a play's trees hold at most `maxLeaves` leaves "with no premise", but nothing proves it.
+   - Prove `releases_leaves_le`. If it can't be done tonight, word it as what `CouplingTarget`'s proof must show.
+   - It's the count memory's h\u03b5 reads (`2·(1 + A.N) ≤ maxLeaves`), and it feeds your openEmpty lemma.
+4. **`Game.lean:493` `finish`:** add to its docstring that the deployed reserve and open signatures come before any coin, and that a strategy which hard-codes them is covered by the mixture.
+5. **Re-merge #7059's head f0743d98** (clean with 7a90e8b2).
+
+Then run the records and re-mark. Post the new head on PRF-195, so memory re-merges it into #7346 and soundness records land. **Target:** items 1, 2, 4 and 5 tonight; item 3 proved by Thu 10 AM PST. The openEmpty lemma stays due Thu 6 PM PST.
