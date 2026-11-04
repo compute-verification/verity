@@ -18,12 +18,16 @@ wired gate's writer is the copy of its writer's output leaf, whatever that leaf'
 or an input the template passes through).
 
 **The wires as gates** (`rowGates`): wire `w`'s reader index `i` is reader unit `u` and row `j` (`Wire.readerAt`), and
-writer unit `v` (`Wire.writerAt`). Leaf `ℓ` of the row, of `F` leaves (its writer's output field's, `fieldOf`), is leaf
-`u · Lₚ + j · F + ℓ` of the root input node the reader's template node reads as its port (`inputArg`, `Lₚ` the port's
-leaves), resolved from the root (`Properties.NetworkScan.gateAt`); its writer is the copy of the writer's template node's
-output leaf `v · L + off + ℓ` (`off` the field's first leaf, `L` the Definition's output leaves). The registered rows
-(`regGates`) are the reader rows of the registered reads of a held parameter and of the table reads and openings of a
-table over one, the rows `countsOf` counts as `registered`, leaf for leaf the same way.
+writer unit `v` (`Wire.writerAt`). The row is its writer's output field (`fieldOf`, from leaf `off`) bit for bit
+(`leavesOk`), in the reader port's leaves of width `a` and the field's of width `b`, so it is `R` leaves, the field's
+bits over `a`. Leaf `ℓ` of the row is leaf `u · Lₚ + j · R + ℓ` of the root input node the reader's template node reads
+as its port (`inputArg`, `Lₚ` the port's leaves), resolved from the root (`Properties.NetworkScan.gateAt`); its writer
+is the copy of the writer's template node's output leaf holding the leaf's first bit, row bit `ℓ · a`: leaf
+`v · L + off + ⌊ℓ · a / b⌋` (`L` the Definition's output leaves). A gate is a leaf of any width, as the Program's layout
+has it (`Flattens`), so at `a = b` this is leaf for leaf, and where one side is a Boolean-profile port's bits, a word
+gate is wired to the gate of its first bit, and a bit gate to its word's. The registered rows (`regGates`) are the
+reader rows of the registered reads of a held parameter and of the table reads and openings of a table over one, the
+rows `countsOf` counts as `registered`, leaf for leaf.
 
 * `CircuitWiresFit`: an accepted record's wires fit the circuit of its decoded Program (`BoundaryGates.WiresFit`) over
   any horizon with no ingress: each wired gate an input, each writer returned, and a rank falling along every wire.
@@ -52,7 +56,7 @@ namespace Properties.NetworkCertifier
 
 open Lean (Json)
 open Flock.Program (Prog Ty)
-open NetworkCheck.Circuit (Stated Counts Wire nodeOf fieldOf templateDef recordOf heldOf)
+open NetworkCheck.Circuit (Stated Counts Wire nodeOf fieldOf widthOf templateDef recordOf heldOf)
 open Properties.NetworkScan (gateAt Flattens)
 
 /-- The leaves of the root's return before template node `k`'s: the root returns each template node's outputs whole and
@@ -99,19 +103,25 @@ def portGates (P : Prog) (r : Stated) (tid port : String) (u a n : ℕ) : List �
       | none => []
       | some q => (List.range n).map fun ℓ => gateAt P P.rootScope ⟨false, q, u * t.leaves + a + ℓ⟩
 
-/-- **Wire `w`'s gates**, reader and writer: for each reader index `i` (`Wire.readerAt`: unit `u`, row `j`) and leaf `ℓ`
-of the writer's output field `w.out` (`fieldOf`: `F` leaves from leaf `off`), leaf `j · F + ℓ` of the reader's port at
-unit `u` (`portGates`), and the copy (`copied`) of return leaf `retStart + v · L + off + ℓ`, the writer's template node's
-output leaf `off + ℓ` at unit `v` (`Wire.writerAt`), `L` its output leaves. -/
+/-- **Wire `w`'s gates**, reader and writer, bit for bit as `leavesOk` reads a wire: the reader's port has leaves of
+width `a` and the writer's output field `w.out` (`fieldOf`, from leaf `off`) leaves of width `b`, so a reader row is
+`R = bits / a` leaves, `bits` the field's. For each reader index `i` (`Wire.readerAt`: unit `u`, row `j`) and leaf
+`ℓ < R` of the row, leaf `j · R + ℓ` of the reader's port at unit `u` (`portGates`), and the copy (`copied`) of the
+writer leaf holding its first bit, row bit `ℓ · a`: return leaf `retStart + v · L + off + ⌊ℓ · a / b⌋`, the writer's
+template node's output leaf at unit `v` (`Wire.writerAt`), `L` its output leaves. At `a = b` it is leaf for leaf. -/
 def wireGates (P : Prog) (r : Stated) (w : Wire) : List (ℕ × ℕ) :=
   match nodeOf P r w.writer with
   | none => []
   | some kw => match fieldOf (templateDef P kw).ret w.out with
     | none => []
-    | some (t, off, _) => (List.range w.units).flatMap fun i =>
-      (portGates P r w.reader w.port (w.readerAt i).1 ((w.readerAt i).2 * t.leaves) t.leaves).zip
-        ((List.range t.leaves).map fun ℓ => (P.defs[P.root]!).gates + retStart P kw +
-          (w.writerAt i).toNat * (templateDef P kw).outLeaves + off + ℓ)
+    | some (t, off, _) =>
+      let a := (((nodeOf P r w.reader).bind (portParam P · w.port)).bind (widthOf ·.2)).getD 1
+      let b := (widthOf t).getD 1
+      let n := NetworkCheck.Period.bitsOf t / a
+      (List.range w.units).flatMap fun i =>
+        (portGates P r w.reader w.port (w.readerAt i).1 ((w.readerAt i).2 * n) n).zip
+          ((List.range n).map fun ℓ => (P.defs[P.root]!).gates + retStart P kw +
+            (w.writerAt i).toNat * (templateDef P kw).outLeaves + off + ℓ * a / b)
 
 /-- **The record's wires as gates** of the circuit (`copied`): each gate a wire's reader leaf resolves to
 (`wireGates`) ↦ its writer's copy, the first wire's that covers it; none at a gate no wire covers. -/
@@ -175,8 +185,8 @@ def CircuitCountsOf (chk : Prog → Json → Json → Json → Except String Cou
 record `record` against the Program `P` C-Flock decodes, with the pins `pins` and the count `c`, then at every flattening
 `C` of `P` and every layout whose wires are the record's (`rowGates`) with no ingress before `k`, the free inputs of
 `copied P C` (`NetTiming.freeInputs`: its input gates, neither ingress nor wired) outside the rows the record's reads of
-held parameters fill (`regGates`) number at most `c.free`, the bits of the input rows no wire or registered read fills.
--/
+held parameters fill (`regGates`) number at most `c.free`, the bits of the input rows no wire or registered read fills:
+each such gate is a leaf of such a row, of at least one bit. -/
 def CircuitCounts : Prop :=
   ∀ (P : Prog) (record order pins : Json) (c : Counts),
     NetworkCheck.Circuit.check P record order pins = .ok c → CircuitCountsAt P record pins c
