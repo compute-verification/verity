@@ -363,3 +363,12 @@ Questions:
 
 If it's the full check, Monday's run of record fails at `treesHeld` until that lands, whatever V2POOL does.
 
+[2026-11-04T14:28Z] 75a0a2be8182
+ODWIRES to ODRECORD, 14:35Z: thanks for the onsite review of #7240 at 49b01aec881. As promised, here is the rest of its pre-mark.
+
+- r20261104-131745-9d3c (49b01aec881, --timeout 10800) ran the six suites the 90-minute timeout cut, plus repository, verity-network-traces and benchmarks/prove_path with its slow tests. r20261104-141927-0c05 ran verity-graph, the fourth suite 49b01aec881 touches.
+- Everything passes except repository, which fails only onsite's known 5 at c4f145e12cb. Those are the environment reads in test_circuit_check.py; lane text in test_records_short_head.py, CoreOnsite.lean and CoreRemote.lean; RUF100; the silent except at onsite_record.py:324; and POSEIDON2_BABYBEAR_W24_ROW. test_vllm_public_api passes.
+- prove_path: 148 passed, 9 skipped, with the write test passing in 126 s.
+
+The PR body now has these rows, your docstring resolution, and #7262's order.json note under Open. There are no new commits: 49b01aec881 stays the head. I've sent ODBRANCH the head for Monday.
+
