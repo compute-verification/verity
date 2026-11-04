@@ -224,6 +224,7 @@
   "F32ErfRn_v1": "94fb10e64caa2b83bf58190566fd2cbf6372124c40b5c76631e1e9930b8b0a163bd7eb7a4c485b5755152e40dbd0f8dee6a91c749fb12f7c0fb6b34cdc420d6e",
   "F32ExpRn_v1": "d923bf24ef1f9605e2a5fadca3862f9309dea1d4870be08066506b6ea6fcbc65c721c46172989b2d84fe1f4a4cd15a52da8acfe8ee6c135c4e98941336316eae",
   "F32GtStrict_v1": "4cff26a8392afa8b17fef9e9156d6a45c431318a1acf85e080676a931e4494633ba3a45f516ce808ee415139169ee688a0a465b6c726762c2b2cf782844f69a1",
+  "F32LogRn_v1": "c73f9fb7b434dbbfafda46004ae8295a703aa8a1b60abe8009a89873b880358278b2c4c8931796f81a33719365d107b092de8001c7801e9348ecce0987771f67",
   "F32MaxRef_v1": "0d89fa27ab388a25b73302148994da7659e78c3f23d450cf74916a60d639cadcda4dad0942eacd65f788db355924b1c6072e8c31892d6f6420707bd2e14971a6",
   "F32Sqrt_v1": "d38884200a97d510291db522fbbef2b1c8d35d25571223d2cabab6d2033f7a49176a31ee03f80adf8b9fbcd2f8013c4928c485aac83658050dcb1d5e38f56479",
   "F32Sub_v1": "9688045f4b4fa7b0ce8e02f692155c9234624fda8681c3024b7ad9c4b52b84de3f3f5cdd77aa0d5e0b9c4b7c4ac518ac2771f2501f99ddd7606406f48525370c",
@@ -450,6 +451,7 @@
   "F32ErfRn_v1": "ref_prims",
   "F32ExpRn_v1": "ref_prims",
   "F32GtStrict_v1": "ref_prims",
+  "F32LogRn_v1": "ref_prims",
   "F32MaxRef_v1": "ref_prims",
   "F32Sqrt_v1": "ref_prims",
   "F32Sub_v1": "ref_prims",
@@ -623,6 +625,7 @@
   "F32ErfRn_v1",
   "F32ExpRn_v1",
   "F32GtStrict_v1",
+  "F32LogRn_v1",
   "F32MaxRef_v1",
   "F32Sqrt_v1",
   "F32Sub_v1",
@@ -1591,6 +1594,10 @@
   [
    "definition",
    "F32GtStrict_v1"
+  ],
+  [
+   "definition",
+   "F32LogRn_v1"
   ],
   [
    "definition",
