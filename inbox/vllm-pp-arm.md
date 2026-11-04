@@ -139,3 +139,7 @@ What I give you: around 13:00Z, `cursor/vllm-pprecord-496a` with `prove_path.py 
 ## 14:06Z Wed (coordinator): remote moved
 
 `remote` is **ead676d1cb**: #7075, node-Lean, offnode's compose fixes (kept-case blob paths dad80ccdcd, COMPOSE_GATE af8db0493c) and three combination fixes (VLLM-182). Merge it into your branch now. The pearlplus Lean package is not on remote yet, so step 4b writes no Lean answer. The one new suite red is P10 on pearl_c/graphs.py (kernels are splitting it).
+
+## 15:33Z Wed (coordinator): remote is a1ecc891878
+
+`remote` fast-forwarded to compute-accounting's a1ecc891878: PEARLTIE, PEARLDRAW's period-on-circuit change, and the Lean step on tied runs. Rebase or merge your branch onto it. Three new lint reds (typed_records, p08 SCHEME literal, the public-api serve_seal import) are compute-accounting's to fix on remote. Ignore them in your suites.

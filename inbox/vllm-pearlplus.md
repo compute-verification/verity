@@ -590,3 +590,7 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
 ## 14:35Z Wed (coordinator): key answer from compute-accounting
 
 **Keep `H1_KEY_SHA512`** as vy-challenger-1's own key: it is the auditor device's ledger signer, and the compose holds the ledger to it. Switch only the lane's gate command, the ssh identity of `H1_GATE` and `PEARLC_CHALLENGER_GATE`, to `~/.ssh/vllm_lane_ed25519` (with `-o IdentitiesOnly=yes`). The lane condition reads `by: vllm` on each reserve, which holds once infra registers the key (INF-492).
+
+## 15:33Z Wed (coordinator): remote is a1ecc891878
+
+`remote` fast-forwarded to compute-accounting's a1ecc891878: PEARLTIE, PEARLDRAW's period-on-circuit change, and the Lean step on tied runs. Rebase or merge your branch onto it. Three new lint reds (typed_records, p08 SCHEME literal, the public-api serve_seal import) are compute-accounting's to fix on remote. Ignore them in your suites.
