@@ -73,12 +73,14 @@ theorem recordDrawn_of_drawHeld {v : _root_.SampledProofs.Registration.Verifier}
     have hr' : String.fromUTF8? recB = some record := hr
     rw [hr'] at hd
     dsimp only at hd
-    split at hd
-    · rename_i hrd
-      unfold drawnUnits
-      generalize _root_.SampledProofs.getD e.base.draw "units" = j at hrd ⊢
-      cases j <;> exact hrd
-    · cases hd
+    unfold drawnUnits
+    generalize _root_.SampledProofs.getD e.base.draw "units" = j at hd ⊢
+    cases j
+    all_goals
+      dsimp only at hd ⊢
+      split at hd
+      · assumption
+      · cases hd
 
 /-- **v2 holds the record it reads to the draw it drew**: wherever composite `k` accepted what the prover sent as a
 `same` composition and v2 drew `units` there under the law `L` over `n` units (`Drew`), the session's record v2 reads
