@@ -21,6 +21,7 @@ import Proofs.Flock.Bridge.Public
 import Proofs.Flock.Bridge.Partitions
 import Proofs.Flock.Bridge.PartitionsKey
 import Proofs.Flock.Bridge.RelDeploy
+import Proofs.Flock.Bridge.Code
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
@@ -41,7 +42,9 @@ hypotheses of V2, V3 and Pub at the deployed session, from the named premise tha
 input and every block commits at most `unitClassMax` bits (`Flock.Bridge.partOf_partitions`). `PartitionsKey`: at a
 circuit file's key program with a template instance, only the class bound is left
 (`Flock.Bridge.partOf_partitions_key`). `RelDeploy`: `RelDeployTarget`, proved (`Flock.Bridge.relDeployTarget`), and
-at a leaf map (`Flock.Bridge.relDeployTargetL`). -/
+at a leaf map (`Flock.Bridge.relDeployTargetL`). `Code`: the bridge's code at one registration (`Flock.Bridge.parseOf`,
+`partitionOf`, `scopeOf`, `CodeIs`), and there `ProgramScope`, `RegMatches`, `ScopeMatches` and `StmtIsFile`
+(`Flock.Bridge.programScope_bridge`, `regMatches_bridge`, `scopeMatches_bridge`, `stmtIsFile_bridge`). -/
 
 /-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
 theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl

@@ -1,6 +1,6 @@
 import Proofs.Flock.Bridge.FilePart.Srcs
 import Proofs.Flock.Bridge.FilePartTarget
-import Proofs.Flock.Bridge.Targets
+import Proofs.Flock.Bridge.RelDeploy
 import Proofs.Flock.C3.Reps.ReadWhole
 import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
@@ -23,8 +23,8 @@ the circuit's constants:
 
 * `filePartOf c n ns`: the code's partition, `FilePart.ofCircuit c n`'s blocks, unit `u`'s at slot `u`, in consecutive
   runs of the sizes `ns`.
-* `partOf_ofCircuit`: at a circuit in scope it is `partOf`'s, so `relDeploy_ofCircuit` is `RelDeployTarget` with the
-  partition hypothesis `cd.partition s = some (filePartOf D.unroll n ns)`.
+* `partOf_ofCircuit`: at a circuit file in scope it is `partOf`'s, so `relDeploy_ofCircuit` is `relDeployTarget` with
+  the partition hypothesis `cd.partition s = some (filePartOf c n ns)`.
 * `why_eq_none`, `check_ok`: the population check (`FilePart.check`) passes exactly where the registration's strata,
   read stratum by stratum, are the units in order, of sizes `ns` (`FilePart.sizes`), and the public file's units are
   `0, …, N − 1`, `N` their sum: the `ns` and `n` of `filePartOf`.
@@ -125,49 +125,49 @@ blocks, unit `u`'s at slot `u`, in consecutive runs of slots. -/
 def filePartOf (c : Flock.Circuit) (n : ℕ) (ns : List ℕ) : Claims.Sampling.Partition :=
   ⟨[ns.splitLengths ((List.range n).map fun u => ((SampledProofs.FilePart.ofCircuit c n).block u).toList)]⟩
 
-/-- **`partOf` is the code's partition** at the key program of a circuit in scope, at the circuit's constants. -/
-theorem partOf_ofCircuit (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit)
-    (hscope : FlockSoundness.Discharge.Layout.scopeOkH D.unroll = true) (n : ℕ) (ns : List ℕ) :
-    partOf ((FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).partition
-        (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)) (fun g => constsOf D.unroll hU n g) ns =
-      filePartOf D.unroll n ns := by
-  have h : (List.finRange n).map (blockOf ((FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).partition
-        (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)) (fun g => constsOf D.unroll hU n g)) =
-      (List.range n).map fun u => ((SampledProofs.FilePart.ofCircuit D.unroll n).block u).toList := by
+/-- **`partOf` is the code's partition** at the key program of a circuit file in scope, at the circuit's constants. -/
+theorem partOf_ofCircuit (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit)
+    (hscope : FlockSoundness.Discharge.Layout.scopeOkH c = true) (n : ℕ) (ns : List ℕ) :
+    partOf ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition
+        (FlockSoundness.Discharge.Layout.outsOf c hU n)) (fun g => constsOf c hU n g) ns =
+      filePartOf c n ns := by
+  have h : (List.finRange n).map (blockOf ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition
+        (FlockSoundness.Discharge.Layout.outsOf c hU n)) (fun g => constsOf c hU n g)) =
+      (List.range n).map fun u => ((SampledProofs.FilePart.ofCircuit c n).block u).toList := by
     rw [← FilePart.map_val_finRange n, List.map_map]
     exact List.map_congr_left fun u _ =>
-      (blockOf_keyProg D.unroll hU (unitLog_le_of_scopeOkH hscope) n
-        (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n) u).symm
+      (blockOf_keyProg c hU (unitLog_le_of_scopeOkH hscope) n
+        (FlockSoundness.Discharge.Layout.outsOf c hU n) u).symm
   unfold partOf filePartOf
   rw [h]
 
-/-- **rel_deploy at the code's partition**: `RelDeployTarget` at the key program of a circuit in scope and the
-circuit's constants, its partition hypothesis the deployed partition being the code's (`filePartOf`). -/
-theorem relDeploy_ofCircuit (hR : RelDeployTarget) {T : Type}
+/-- **rel_deploy at the code's partition**: `RelDeployTarget` (`relDeployTarget`) at the key program of a circuit file
+in scope and the circuit's constants, its partition hypothesis the deployed partition being the code's
+(`filePartOf`). -/
+theorem relDeploy_ofCircuit {T : Type}
     (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T) (cd : SamplingDeploy.Code)
-    (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit)
-    (hscope : FlockSoundness.Discharge.Layout.scopeOkH D.unroll = true) (n : ℕ)
-    (rows : Fin ((FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).circuit
-      (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)).N → Option RowAt)
+    (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit)
+    (hscope : FlockSoundness.Discharge.Layout.scopeOkH c = true) (n : ℕ)
+    (rows : Fin ((FlockSoundness.Discharge.Placed.keyProg c hU n).circuit
+      (FlockSoundness.Discharge.Layout.outsOf c hU n)).N → Option RowAt)
     (nl : ℕ) (ns : List ℕ) (r : Claims.Sampling.OneStage) (desc : Claims.Msg) (q : Claims.Sampling.Query)
     (roots : List Claims.Msg)
-    (Xr : Fin ((FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).circuit
-      (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)).N → Bool) (δ : ℝ) (x : Claims.Msg) :
-    let Cc := (FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).circuit
-      (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)
-    let P := (FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).partition
-      (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)
-    let κ : Fin Cc.N → Option Bool := fun g => constsOf D.unroll hU n g
-    LayoutIs Cc rows D.unroll nl roots cd →
+    (Xr : Fin ((FlockSoundness.Discharge.Placed.keyProg c hU n).circuit
+      (FlockSoundness.Discharge.Layout.outsOf c hU n)).N → Bool) (δ : ℝ) (x : Claims.Msg) :
+    let Cc := (FlockSoundness.Discharge.Placed.keyProg c hU n).circuit (FlockSoundness.Discharge.Layout.outsOf c hU n)
+    let P := (FlockSoundness.Discharge.Placed.keyProg c hU n).partition
+      (FlockSoundness.Discharge.Layout.outsOf c hU n)
+    let κ : Fin Cc.N → Option Bool := fun g => constsOf c hU n g
+    LayoutIs Cc rows c nl roots cd →
     cd.parse x = some (stmtOf P κ r desc q roots) →
-    cd.partition (stmtOf P κ r desc q roots) = some (filePartOf D.unroll n ns) →
-    ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg (commitDep Cc rows D.unroll nl roots) δ (stmtOf P κ r desc q roots)
-      (partOf P κ ns) (witDep Cc (commitDep Cc rows D.unroll nl roots) Claims.Sampling.sha512Msg roots Xr) →
+    cd.partition (stmtOf P κ r desc q roots) = some (filePartOf c n ns) →
+    ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg (commitDep Cc rows c nl roots) δ (stmtOf P κ r desc q roots)
+      (partOf P κ ns) (witDep Cc (commitDep Cc rows c nl roots) Claims.Sampling.sha512Msg roots Xr) →
     ¬ Claims.Sampling.R Claims.Sampling.sha512Msg (SamplingDeploy.deployOf F cd).commit cd.parse cd.partition δ x
-      (witDep Cc (commitDep Cc rows D.unroll nl roots) Claims.Sampling.sha512Msg roots Xr) := by
+      (witDep Cc (commitDep Cc rows c nl roots) Claims.Sampling.sha512Msg roots Xr) := by
   intro Cc P κ hL hx hpart hrel
-  exact hR F cd P rows D.unroll nl ns r κ desc q roots Xr δ x hL hx
-    (hpart.trans (congrArg some (partOf_ofCircuit D hU hscope n ns).symm)) hrel
+  exact relDeployTarget F cd P rows c nl ns r κ desc q roots Xr δ x hL hx
+    (hpart.trans (congrArg some (partOf_ofCircuit c hU hscope n ns).symm)) hrel
 
 /-- **The population check's verdict**: `why` finds nothing exactly where the strata, read stratum by stratum, are the
 units in order, of sizes `ns`, and the public file's units are `0, …, N − 1`, `N` their sum. -/
