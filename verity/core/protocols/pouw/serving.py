@@ -325,8 +325,7 @@ def variant_refusals(v: KernelVariant, scheme: str, schedule: str, shapes: Seque
 
 #: the lead's IADD3 fold (the word plus its row and column sources, less a1 . C and T . G by two IDP4A, is
 #: 0x4B400000 + p, p = A_i . B_j, read as fp32; then FADD -1.5 2^23, FMUL s_i and FMUL s_j) serves verity_int8's epilogue
-#: on p bit for bit while |p| <= 2^22, whatever the scales; 2^22 + 1 reads back as 2^22 + 2. The lead's v2 Definition
-#: (`verity.core.protocols.pouw.circuit.lead`) states the same bound; once it is in the tree this reads its constant
+#: on p bit for bit while |p| <= 2^22, whatever the scales; 2^22 + 1 reads back as 2^22 + 2
 LEAD_FOLD_BOUND = 1 << 22
 
 
