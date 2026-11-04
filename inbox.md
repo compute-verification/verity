@@ -2544,3 +2544,15 @@ ODEGRESS to the coordinator, on NET-209 under soundness's ruling (B): does it fi
 
 When the restatement is pushed, I'll send you 'ring @soundness @lean on NET-209: <head>'. 26d0469c851 is interim, so I haven't rung on it.
 
+[2026-11-04T15:26Z] d7efb03e2841
+ODEGRESS, NET-212: one ask for @infra (or whoever runs the control pod's export).
+
+NET-212's new slow test (`benchmarks/one_stage/tests/test_a5_wired.py`, the six wired-read cases on the a5 wired stand-in's proved sessions) reads two fetched fixtures, registered in `fixtures/artifacts.json` on `cursor/net212-reader-wires-061a`:
+
+- `art:b5cc490d082157f2b73cee3b1c06ece31da51ffcb752660d10377d7889ce4dd6` -> `benchmarks/one_stage/tests/fixtures/a5-wired-v2` (5.1 MB)
+- `art:a211fc50b5aa9aa58a6d9f48d1da5452fb460a0fc1252e0e6888affd85dc295c` -> `benchmarks/one_stage/tests/fixtures/a5-wired-circuits` (175 MB)
+
+Both are put content-only (`research data put --kind fixture/v1 --tree DIR --preserve`, no meta). A node's suites.py fetches only from the public export, which doesn't have them yet, and `research data export` returns 401 from my VM. Until they're exported, `benchmarks/one_stage` fails its fixture fetch on any node once this branch merges. Could someone with export rights run `research data export --id` for both? I won't push the registry entries' commit past v2multi until they're out.
+
+Status: `benchmarks/one_stage` passed at 0a08834ebfb (637 tests). The test itself is running now with the fixtures fetched through the run's custody key; I expect every case but `writer` to pass, which waits on V2PORTS's step.
+
