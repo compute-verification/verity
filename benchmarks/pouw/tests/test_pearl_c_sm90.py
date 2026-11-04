@@ -305,6 +305,66 @@ def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_take
     assert calls == ["programmatic", "plain"]
 
 
+def test_pd_shared_launches_the_same_pd_commit_and_pd_tree_in_half_an_sm():
+    """`pd_setup` gives each served pd_commit and pd_tree and each stamp twin PD_WHOLE's dynamic shared memory (all a CTA
+    may take beside its static, so one CTA an SM) and `Pipeline.pd_shared`'s (half an SM's beside its static and the
+    driver's reserve, so two CTAs an sm_90 SM and not three), each at least the PD_PAIR_SMEM the code uses and within the
+    limit it sets; a static that leaves less is refused.  Under ``pd_shared`` a pipeline launches the same functions with
+    the same grid, block and parameters, its shared memory alone changed, in each mode and with stamps."""
+    sm = H100_MAX_DYN + RUN.CTA_RESERVED_SMEM
+
+    class D:
+        def __init__(self, static):
+            self.static, self.dev, self.limit, self.launched = static, 0, {}, []
+
+        def get(self, call, attr, x):
+            return H100_MAX_DYN if call == "cuDeviceGetAttribute" else self.static[x.rsplit("_", 1)[0]]
+
+        def fn(self, name):
+            return name
+
+        def ck(self, call, fn, attr, v):
+            self.limit[fn] = v
+
+        def launch(self, name, grid, block, smem=0, p=(), i=(), **kw):
+            self.launched.append((name, grid, block, smem, tuple(p), tuple(i)))
+
+        def sync(self):
+            pass
+
+    static = {"pd_commit": 6000, "pd_tree": 1500}
+    d = D(static)
+    RUN.pd_setup(d)
+    for v in (*RUN.PD_SERVED, *RUN.PD_STAMPED):
+        for f, whole, shared in (("pd_commit", d.pd_smem, d.pd_smem_shared), ("pd_tree", d.pd_tree_smem, d.pd_tree_smem_shared)):
+            cta = {x: x + static[f] + RUN.CTA_RESERVED_SMEM for x in (whole[v], shared[v])}
+            assert v & RUN.PD_WHOLE and whole[v] == H100_MAX_DYN - static[f] and 2 * cta[whole[v]] > sm
+            assert shared[v] == (H100_MAX_DYN - RUN.CTA_RESERVED_SMEM) // 2 - static[f] >= RUN.PD_PAIR_SMEM
+            assert 2 * cta[shared[v]] <= sm < 3 * cta[shared[v]] and d.limit[f"{f}_{v}"] == whole[v]
+    with pytest.raises(RuntimeError, match="pd_tree_shared"):
+        RUN.pd_setup(D({"pd_commit": 6000, "pd_tree": 70000}))
+
+    pipe = RUN.Pipeline.__new__(RUN.Pipeline)
+    pipe.b = dict.fromkeys(("xa", "rowdig_a", "tree_a", "seeds_a", "lkeys_a", "pd_count", "seed_a", "line_a", "ea_codes"), 1)
+    pipe.keys = dict.fromkeys(("unit", "dom_a", "salt_key", "hm"), 2)
+    pipe.dev, pipe.rows_bf16, pipe.fillers, pipe.split_a, pipe.k, pipe.m, pipe.m_real = d, None, True, True, 4096, 64, 32
+    for pipe.pd in RUN.PD_SERVED:
+        for pipe.stamps in (0, 9):
+            got = {}
+            for pipe.pd_shared in (False, True):
+                d.launched.clear()
+                pipe.pd_commit(0)
+                pipe.pd_commit(1)
+                pipe.pd_tree()
+                got[pipe.pd_shared] = list(d.launched)
+            v = pipe.pd_a | (RUN.PD_STAMP if pipe.stamps else 0)
+            assert [x[3] for x in got[False]] == [d.pd_smem[v]] * 2 + [d.pd_tree_smem[v]]
+            assert [x[3] for x in got[True]] == [d.pd_smem_shared[v]] * 2 + [d.pd_tree_smem_shared[v]]
+            assert [x[:3] + x[4:] for x in got[True]] == [x[:3] + x[4:] for x in got[False]]
+            assert [x[0] for x in got[True]] == [f"pd_commit_{v}"] * 2 + [f"pd_tree_{v}"]
+    pipe.pd_shared = False
+
+
 def test_the_whole_check_refuses_a_capture_forking_a_tree_and_a_scales_where_a_commitment_reads_bf16_rows(monkeypatch):
     """`e2e.bf16_race`: a whole capture with hashing forking each call's A tree and A scales (`whole_defer_a`,
     `whole_fork_stats`) on this kernel, under BF16_ROWS and from a cubin with BF16_ROWS_MARK (`Pipeline.reads_bf16`'s own),
@@ -735,6 +795,14 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     assert json.loads((small_fixture / "check.json").read_text())["weight"] == F.WEIGHT != 0
     assert nonces == {(RUN.nonce_args(F.HM96_WEIGHTS + F.WEIGHT), False), ((0, 0), True),
                       (RUN.nonce_args(F.HM96_TRANSCRIPT), False)}, nonces
+    # check_pd's /shared forms: pd_commit in both modes and pd_tree, each a launch of a PD_WHOLE form but its shared memory
+    pd: dict[int, set] = {}
+    for ev in evs:
+        if ev["op"] == "launch" and ev["name"].startswith(("pd_commit_", "pd_tree_")):
+            pd.setdefault(ev["smem"], set()).add((ev["name"], tuple(ev["grid"]), ev["block"], tuple(ev["p"]), tuple(ev["i"])))
+    half = (H100_MAX_DYN - RUN.CTA_RESERVED_SMEM) // 2
+    assert set(pd) == {H100_MAX_DYN, half} and pd[half] <= pd[H100_MAX_DYN]
+    assert {(x[0], x[4][2]) for x in pd[half]} == {("pd_commit_851", 0), ("pd_commit_851", 1), ("pd_tree_851", 0)}
 
     log = tmp_path / "launches.jsonl"
     r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
@@ -860,6 +928,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
             assert bool(p[12]) == (i[0] < i[3]) and RUN.PD_PAIR_SMEM <= ev["smem"] <= H100_MAX_DYN, ev
         if name.startswith(("pd_commit_", "pd_tree_")):
             assert bool(p[13]) == bool(int(name.rsplit("_", 1)[1]) & RUN.PD_STAMP), ev
+            assert ev["smem"] in (H100_MAX_DYN, (H100_MAX_DYN - RUN.CTA_RESERVED_SMEM) // 2), ev
         if name.startswith("pl_"):
             half = RUN.PD_PAIR_SMEM // 2
             shape = {"pl_leaves": (-(-i[0] // RUN.PL_ROWS), 128, half), "pl_seed_a": (1, 64, half),

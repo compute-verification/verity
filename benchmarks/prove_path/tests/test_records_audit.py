@@ -432,6 +432,49 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     assert "prove_path.py window-circuit: I2's window circuit refuses the advice" in capsys.readouterr().err
 
 
+def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_names_the_runs_compiler_before_it_serves(
+        tmp_path, monkeypatch, capsys):
+    """``prove_path.py class-circuit --serve F`` builds the class's circuit from φ alone, no advice, row dir or window, and
+    writes ``window-circuit``'s record of the run's window byte for byte, at the class of record and cut at Pearl+'s
+    linears under ``--pearl-tables`` alike (I2's class circuit stubbed, `window_circuit.window_circuit` left to call it).
+    ``serve-phi`` states what serve.json will record of φ from this device (`serve_seal.target_of` stubbed with the run's),
+    and ``compiler --serve`` over it names the compiler ``compiler --serve-run`` names once the run has served."""
+    import prove_path as PP
+    from test_prove_path import _served
+    from verity_vllm.pipeline import serve_seal
+    from verity_vllm.program.predict import window_circuit as WC
+
+    s, circuit, seen = _served(tmp_path, monkeypatch), _registered_circuit(), []
+
+    def lower(registered, cls, programs=None, grain=None, name=None, provable=True, tables=None):
+        seen.append((registered, cls, tables))
+        return circuit
+
+    monkeypatch.setattr(WC, "class_circuit", lower)
+    monkeypatch.setattr(WC, "takes", lambda *a: None)
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    serve = json.loads((s.run / "serve.json").read_text())
+    monkeypatch.setattr(serve_seal, "target_of", lambda model=None, async_scheduling=False: {
+        "target": serve["target"], "execution": serve.get("execution") or serve["engine"]["execution"]})
+    phi = tmp_path / "phi.json"
+    assert PP.main(["serve-phi", "--model", serve["model"], "--revision", serve["revision"], "--out", str(phi)]) == 0
+    for tables in ((), ("--pearl-tables", "pearl-c-h100-v1-h3")):
+        seen.clear()
+        assert PP.main(["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
+                        str(tmp_path / "advice.bin"), "--cap", "4", "--out", str(tmp_path / "w.json"), *tables]) == 0
+        for given in (s.run / "serve.json", phi):
+            assert PP.main(["class-circuit", "--serve", str(given), "--cap", "4", "--out", str(tmp_path / "c.json"),
+                            *tables]) == 0
+            assert (tmp_path / "c.json").read_bytes() == (tmp_path / "w.json").read_bytes()
+        assert len(seen) == 3 and seen[0] == seen[1] == seen[2] and seen[0][1] == WC.CLASS_OF_RECORD
+        assert (seen[0][2] is None) == (not tables) and (not tables or seen[0][2].scheme == "pearl-c-h100-v1-h3")
+    capsys.readouterr()
+    assert PP.main(["compiler", "--serve-run", str(s.run)]) == 0
+    served = json.loads(capsys.readouterr().out)
+    assert PP.main(["compiler", "--serve", str(phi)]) == 0
+    assert json.loads(capsys.readouterr().out) == served
+
+
 def test_the_window_circuit_command_under_h1s_w_reads_its_tables_with_no_key(tmp_path, monkeypatch, capsys):
     """``prove_path.py window-circuit --window-registration W``, the verifier's record of a window H1 tied: I2's window
     circuit reads H1's tables of W's Program (`h1_tie`'s, as window-commit's circuit with W reads them), and the command
@@ -669,7 +712,7 @@ def _tied(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
                            rec=json.loads((d / "registration.json").read_text()))
 
 
-def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_registration(tmp_path, monkeypatch):
+def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_registration(tmp_path, monkeypatch, capsys):
     """A window whose circuit takes values (`_tied`) is audited tied to the earlier registration W that registered them
     first (``--tie W --tie-prefix P``), and refused before any session without the tie: the tie hands a5 one-stage's
     ``log``, ``registered``, ``outputs`` and ``schemas`` (`tie_of`), the value's readers read W's table at W's root and
@@ -713,6 +756,10 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
                                                  for f in seen["registered"].values())
     summary = json.loads((tmp_path / "out" / "summary.json").read_text())
     assert summary["tie"] == {"record": R.digest(got.w), "values": [got.name]}
+    named = {**summary["tie"], "previous": R.digest(got.w), "chained": True}
+    assert json.loads((tmp_path / "out" / "tie.json").read_text()) == named, "named before any proof, as the TIE line"
+    assert f"TIE {json.dumps(named, sort_keys=True)}" in capsys.readouterr().out
+    assert not (tmp_path / "refused" / "tie.json").exists()
     assert summary["registered"]["roots"] == summary["registered"]["pins"] == {got.name: got.entry["root"]}
     assert summary["leak"]["registered"] == 8 * 8 * K and "unpinned" not in summary["leak"]
 
