@@ -101,7 +101,8 @@
 #     CERTIFIER_FRONT is remote's too: the network certifier in front of the endpoint is how its requests are served, not
 #     a piece, so its session stays in the serve dir's private/ and its exit is the CERTIFIER-FRONT line's, which remote's
 #     record doesn't read. Behind the front remote also takes the split certifier's CERTIFIER_CHAIN_CMD and
-#     CERTIFIER_PERIOD_CMD (step 6), whose period case the onsite record reads; remote's record drops the certifier.
+#     CERTIFIER_PERIOD_CMD (step 6), whose period case and answer the onsite record reads; remote's record drops the
+#     certifier.
 #     Beside them, the inference-only verdict (`inference_only.py`), at IO_CLASS (default the first class of CLASSES but
 #     `record`): its policy, (c, k, n) and every input to them, is written before the lease from the run's settings alone
 #     (the class, REPO at REV, LEASE_MIN), $OUT/inference-only-policy.json and its INFERENCE-ONLY POLICY line; once the
@@ -204,7 +205,8 @@
 # check after V3c's audit (their answer and case in its own $OUT/pieces/certifier), and after them REPROOF_CMD where
 # it is set (`bash -c CMD _ D K VW` in TREE, its log the serve dir's private/reproof.log and its last line the REPROOF
 # line: a command that copies the serve dir's re-proof inputs off the node and writes REPROOF_LISTING, and fails the
-# follow-on where it fails), composes the final record (`record --node` the served node, so its composed_on names the
+# follow-on where it fails; it runs whatever V3c's audit gave, a failed audit's inputs kept as well), composes the
+# final record (`record --node` the served node, so its composed_on names the
 # host it composed on, served_node false, and that it read a prover-side copy) and the
 # composite (`served_composite.sh`, SERVED_NODE the served node), and under ONSITE the onsite record, as the served
 # node's run would (with REPROOF_COPY and REPROOF_LISTING); its $OUT is published as every run's is.

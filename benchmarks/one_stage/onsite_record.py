@@ -13,7 +13,9 @@ run wrote no answer, ``missing`` and ``why``:
 * sampled proofs and PoUW: ``record/verdicts.json``'s ``integrity`` and ``work`` rows (`served_verdicts.py record`);
 * inference-only: its case's outcome in remote's composite;
 * remote: remote's Lean verdict, ``composite/remote/composite.json`` (`composite.py`), with what it couldn't establish;
-* the network certifier: the ``communication`` row, `NetworkCheck.Period`'s answer (`NETWORK`);
+* the network certifier: the ``communication`` row, `NetworkCheck.Period`'s answer (`NETWORK`), or, where the run's
+  product drops it (remote's, with the split certifier behind its front) and its period check answered, the row that
+  answer gives (``pieces/certifier/answer.json``, `served_verdicts.piece_row`), as onsite's report composes it;
 * onsite: the Lean composition of remote's three subprotocols and the network certifier over one registration, the
   composite whose product is `ONSITE`, missing where the run has none.
 
@@ -335,9 +337,22 @@ def missing(why: str, src: str | None = None) -> dict[str, Any]:
     return {"verdict": "missing", "why": why, **({"from": src} if src else {})}
 
 
-def row_verdict(rows: Mapping[str, Any], key: str) -> dict[str, Any]:
-    """A verdict from the window report's row ``key``: a missing, dropped or development row is missing, with its why."""
-    src = f"record/verdicts.json protocols.{key}"
+def network_row(out: Path, rows: Mapping[str, Any], run: str | None) -> tuple[Any, str]:
+    """The network certifier's row and where it is from: the window report's, or, where the report's product dropped it
+    and its period check answered under OUT, the row that answer gives (`served_verdicts.piece_row`)."""
+    key, answer = ROWS["the network certifier"], CASE.parent / "answer.json"
+    r = rows.get(key)
+    if not (isinstance(r, Mapping) and r.get("verdict") == "dropped" and (out / answer).is_file()):
+        return r, f"record/verdicts.json protocols.{key}"
+    import served_verdicts as SV
+
+    return SV.piece_row(key, out / "pieces", run), str(answer)
+
+
+def row_verdict(rows: Mapping[str, Any], key: str, src: str | None = None) -> dict[str, Any]:
+    """A verdict from the window report's row ``key`` (from ``src``, default the report's): a missing, dropped or
+    development row is missing, with its why."""
+    src = src or f"record/verdicts.json protocols.{key}"
     r = rows.get(key)
     if not isinstance(r, Mapping):
         return missing(f"the window report has no {key} row", src)
@@ -702,12 +717,15 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     advice = {"served": ADVICE, "charged": {"missing": "no bound"}, "cap": {"missing": "no bound"},
               "measured": measured(advice_charge)}
     rows = report.get("protocols") or {}
+    net, net_src = network_row(out, rows, report.get("run"))
+    if net is not None:
+        rows = {**rows, ROWS["the network certifier"]: net}
     found = composites(out)
     v = {name: row_verdict(rows, ROWS[name]) for name in ("sampled proofs", "PoUW")}
     v["inference-only"] = case_verdict(found, REMOTE, INFERENCE_ONLY)
     v["remote"] = composite_verdict(found, REMOTE, "remote's composite didn't run: the run has no "
                                                    "composite/remote/composite.json")
-    v["the network certifier"] = row_verdict(rows, ROWS["the network certifier"])
+    v["the network certifier"] = row_verdict(rows, ROWS["the network certifier"], net_src)
     v["onsite"] = composite_verdict(found, ONSITE, f"the run has no composite of {ONSITE}")
     v = {k: v[k] for k in VERDICTS}
     net = rows.get(ROWS["the network certifier"]) or {}
