@@ -432,6 +432,49 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     assert "prove_path.py window-circuit: I2's window circuit refuses the advice" in capsys.readouterr().err
 
 
+def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_names_the_runs_compiler_before_it_serves(
+        tmp_path, monkeypatch, capsys):
+    """``prove_path.py class-circuit --serve F`` builds the class's circuit from φ alone, no advice, row dir or window, and
+    writes ``window-circuit``'s record of the run's window byte for byte, at the class of record and cut at Pearl+'s
+    linears under ``--pearl-tables`` alike (I2's class circuit stubbed, `window_circuit.window_circuit` left to call it).
+    ``serve-phi`` states what serve.json will record of φ from this device (`serve_seal.target_of` stubbed with the run's),
+    and ``compiler --serve`` over it names the compiler ``compiler --serve-run`` names once the run has served."""
+    import prove_path as PP
+    from test_prove_path import _served
+    from verity_vllm.pipeline import serve_seal
+    from verity_vllm.program.predict import window_circuit as WC
+
+    s, circuit, seen = _served(tmp_path, monkeypatch), _registered_circuit(), []
+
+    def lower(registered, cls, programs=None, grain=None, name=None, provable=True, tables=None):
+        seen.append((registered, cls, tables))
+        return circuit
+
+    monkeypatch.setattr(WC, "class_circuit", lower)
+    monkeypatch.setattr(WC, "takes", lambda *a: None)
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    serve = json.loads((s.run / "serve.json").read_text())
+    monkeypatch.setattr(serve_seal, "target_of", lambda model=None, async_scheduling=False: {
+        "target": serve["target"], "execution": serve.get("execution") or serve["engine"]["execution"]})
+    phi = tmp_path / "phi.json"
+    assert PP.main(["serve-phi", "--model", serve["model"], "--revision", serve["revision"], "--out", str(phi)]) == 0
+    for tables in ((), ("--pearl-tables", "pearl-c-h100-v1-h3")):
+        seen.clear()
+        assert PP.main(["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
+                        str(tmp_path / "advice.bin"), "--cap", "4", "--out", str(tmp_path / "w.json"), *tables]) == 0
+        for given in (s.run / "serve.json", phi):
+            assert PP.main(["class-circuit", "--serve", str(given), "--cap", "4", "--out", str(tmp_path / "c.json"),
+                            *tables]) == 0
+            assert (tmp_path / "c.json").read_bytes() == (tmp_path / "w.json").read_bytes()
+        assert len(seen) == 3 and seen[0] == seen[1] == seen[2] and seen[0][1] == WC.CLASS_OF_RECORD
+        assert (seen[0][2] is None) == (not tables) and (not tables or seen[0][2].scheme == "pearl-c-h100-v1-h3")
+    capsys.readouterr()
+    assert PP.main(["compiler", "--serve-run", str(s.run)]) == 0
+    served = json.loads(capsys.readouterr().out)
+    assert PP.main(["compiler", "--serve", str(phi)]) == 0
+    assert json.loads(capsys.readouterr().out) == served
+
+
 def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = False,
                 listed: bool = False) -> SimpleNamespace:
     """A window of ``n`` coordinates each reading its ``wrow`` from a registered value ``name`` of 4 rows (coordinate u row u % 4),

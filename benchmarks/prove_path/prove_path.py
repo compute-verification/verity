@@ -42,7 +42,7 @@ Two kinds of committed run:
         --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall --out DIR [--cap-bits L] \\
         [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] --challenger local|gate:USER@HOST --main FILE
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--builds DIR]
-    prove_path.py compiler --serve-run DIR [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
+    prove_path.py compiler (--serve-run DIR | --serve FILE) [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
     prove_path.py weights-registration --serve-run DIR --checkpoint-dir DIR --key FILE --out FILE [--checkpoints F] \\
         [--tables DIR] [--hf-config F] [--target F]
     prove_path.py serve-standin --bundle DIR --row-dir DIR --workload F --out RUN [--hf-config F] [--cap-bits L]
@@ -51,6 +51,9 @@ Two kinds of committed run:
     prove_path.py window-circuit --serve-run DIR --window K --row-dir DIR --advice FILE --out FILE [--cap N] [--description] \\
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--pin NAME=ROOT ...] [--pins FILE ...] [--pearl-tables SCHEME] \\
         [--hf-config F] [--target F] [--cap-bits L]
+    prove_path.py serve-phi --model REPO --revision SHA --out FILE [--async-scheduling]
+    prove_path.py class-circuit --serve FILE --out FILE [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--pearl-tables SCHEME] \\
+        [--cap N] [--description] [--pin NAME=ROOT ...] [--pins FILE ...] [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE \\
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --key FILE --registration FILE \\
@@ -107,6 +110,12 @@ Two kinds of committed run:
   registration, `verity-vllm advice`'s, records the pinned root for its parameter, and any other is free), which
   ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
   unit's rows as the record's members.
+* **class-circuit**: that Circuit from φ alone (`class_circuit_of_serve`), no advice, row dir or window: ``window-circuit``'s
+  record of any window of the class served under ``--serve``'s φ (a run's ``serve.json``, or **serve-phi**'s statement
+  of what it will record, read on the serving device before the run serves), since the circuit is the class's whatever the
+  traffic. So the verifier's record, and a period opened on it, can precede the serve. ``compiler`` reads nothing of the
+  run but ``serve.json``, which the serve writes as it starts listening, so before it ``compiler --serve FILE`` takes
+  **serve-phi**'s statement instead, and names the compiler the run's windows will register under.
 * **class-size**: that Circuit's padded size at ``--class``, too large to lower there (`class_size_of_advice`): one class
   Program of the window's registration lowered at the small class ``--probe`` and projected with v19's heads
   (`class_size.project`), its units, ANDs and m a Program and at the class's slots (the window's circuit, whatever its
@@ -1141,15 +1150,15 @@ def audit(a: argparse.Namespace) -> int:
     return 0 if summary["ok"] else 1
 
 
-def compiler_doc(serve_run: str, hf_config: str | None, target: str | None, cap_bits: int,
-                 transfer_gates: Sequence[str] = ()) -> dict[str, Any]:
+def compiler_doc(serve_run: str | None, hf_config: str | None, target: str | None, cap_bits: int,
+                 transfer_gates: Sequence[str] = (), serve_file: str | None = None) -> dict[str, Any]:
     """A served run's registered compiler, `Capped` over I2 running the server's code (`served_identity`) under the run's
-    ``serve.json`` (`registered_of_serve`), listing its model's transfer gates of record (`served_gates`, which
+    ``serve.json`` (`registered_of_serve`; ``serve_file`` instead, `serve_phi`'s statement of it before the serve), listing its model's transfer gates of record (`served_gates`, which
     ``transfer_gates`` may only restate): the name and digest its windows' bindings must carry, ℓ and the compiler it wraps
     (``inner``, what `verity-vllm advice --compiler-name --compiler-digest` takes, its digest `I2Compiler.digest`'s), the
     server's code (``served``), and the φ and default seed I2 compiles each window's Programs under."""
     name, digest = served_identity()
-    serve = json.loads((Path(serve_run) / "serve.json").read_text())
+    serve = json.loads(Path(serve_file or Path(str(serve_run)) / "serve.json").read_text())
     reg = registered_of_serve(serve, hf_config, target, cap_bits)
     inner = I2Compiler(reg, {}, "", name=name, transfer_gates=served_gates(serve, transfer_gates), code=digest)
     c = Capped(inner, cap_bits)
@@ -1259,6 +1268,46 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     roots = registration_roots(json.loads((Path(a.serve_run) / "advice" / f"w{a.window}" / "registration.json").read_text()))
     return {"bits": int(c.total_bits(c.decode(data))), "count": IF.input_count(doc, pins=pins, roots=roots),
             "seconds": {"circuit": round(lowered, 1), "record": round(time.time() - t0 - lowered, 1)}}
+
+
+def serve_phi(a: argparse.Namespace) -> dict[str, Any]:
+    """What a serve-openai run's ``serve.json`` will record of φ, read before it serves: ``--model`` and ``--revision``,
+    the default seed it fills in (`engine.served_seed.DEFAULT_SEED`), and this device's target profile and execution
+    (`serve_seal.target_of`, under this process's environment, which must be the serve's: ``VLLM_BATCH_INVARIANT`` names
+    the execution; ``--async-scheduling`` as the serve's), with no int8 scope, which a checkpoint served in BF16 runs none
+    of. Written to ``--out``: `class_circuit_of_serve`'s ``--serve``, its circuit the one the run's windows are committed
+    as once ``serve.json`` says the same (`registered_of_serve` reads only these fields)."""
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
+    from verity_vllm.pipeline.serve_seal import target_of
+
+    doc = {"model": a.model, "revision": a.revision, "default_seed": DEFAULT_SEED, **target_of(None, a.async_scheduling)}
+    Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
+    return {"out": a.out, "execution": doc["execution"], "device": doc["target"].get("device_name")}
+
+
+def class_circuit_of_serve(a: argparse.Namespace) -> dict[str, Any]:
+    """A window class's one Circuit from φ alone (`window_circuit.class_circuit` at ``--class``, cut at Pearl+'s linears
+    with ``--pearl-tables``), no advice: ``--serve``'s φ (a run's ``serve.json``, or `serve_phi`'s statement of it before
+    the run serves; `registered_of_serve`). Its record (`interface.descriptor_record` at ``--cap``, or with
+    ``--description`` its description) is ``window-circuit``'s of any window of the class the run serves under that φ,
+    whatever its traffic (`window_circuit.window_circuit` refuses a window the class doesn't take and builds this
+    circuit), so it can be written, and a period opened on it, before the serve. -> the record's input count at the pins
+    (``--pin``, ``--pins``), and the seconds."""
+    from verity_vllm.program.predict.build import Unexpressible
+    from verity_vllm.program.predict.window_circuit import PearlTables, class_circuit
+
+    serve, pins = json.loads(Path(a.serve).read_text()), pins_of(a.pin, a.pins)
+    registered, cls = registered_of_serve(serve, a.hf_config, a.target, a.cap_bits), window_class_of(a.window_class)
+    t0 = time.time()
+    try:
+        circuit = class_circuit(registered, cls, tables=PearlTables(a.pearl_tables) if a.pearl_tables else None)
+    except Unexpressible as e:
+        raise ValueError(f"I2's class circuit refuses φ: {e}") from None
+    lowered = time.time() - t0
+    doc = circuit.description() if a.description else IF.descriptor_record(circuit, a.cap)
+    Path(a.out).write_bytes(IF.circuit_bytes(doc))
+    return {"count": IF.input_count(doc, pins=pins), "seconds": {"circuit": round(lowered, 1),
+                                                                  "record": round(time.time() - t0 - lowered, 1)}}
 
 
 def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
@@ -1708,7 +1757,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git rev-list "
                    "--first-parent origin/main), which must hold the commit the session's host pins")
     p = sub.add_parser("compiler", help="a served run's registered compiler: what verity-vllm advice --compiler-name/--compiler-digest takes")
-    p.add_argument("--serve-run", required=True)
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--serve-run")
+    g.add_argument("--serve", help="instead, before the run serves: serve-phi's statement of its serve.json")
     p.add_argument("--transfer-gate", action="append", default=[], help="a template the compiler lists as holding transfer gates "
                    "(repeatable; the model's of record, GATES_OF_RECORD, whatever it says: another list is refused)")
     p = sub.add_parser("weights-registration", help="a served run's weights registration, the committer's: what verity-vllm "
@@ -1744,6 +1795,20 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pins", action="append", default=[], metavar="FILE", help="pins as a JSON {param: root}, or a "
                    "registration of values {program, values}, the committer's weights registration "
                    "(window_weights.weights_registration), as `records_audit.py count --pins` takes them (repeatable)")
+    p = sub.add_parser("serve-phi", help="what a serve-openai run's serve.json will record of φ, read on this device before "
+                       "it serves (class-circuit's --serve)")
+    for flag in ("--model", "--revision", "--out"):
+        p.add_argument(flag, required=True)
+    p.add_argument("--async-scheduling", action="store_true", help="the serve's --async-scheduling")
+    p = sub.add_parser("class-circuit", help="a window class's one Circuit from φ alone, no advice (window-circuit's record "
+                       "of any window of the class), its record written to --out: buildable before the serve")
+    for flag in ("--serve", "--out"):
+        p.add_argument(flag, required=True, help={"--serve": "φ: a run's serve.json, or serve-phi's statement of it"}.get(flag))
+    p.add_argument("--cap", type=int, default=64, help="units a member (a statement), the record's stated cap")
+    p.add_argument("--description", action="store_true", help="write the circuit's description, not its record")
+    p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT")
+    p.add_argument("--pins", action="append", default=[], metavar="FILE")
+    p.add_argument("--pearl-tables", metavar="SCHEME", help="the circuit cut at its linears, as window-circuit --pearl-tables")
     p = sub.add_parser("class-size", help="a served window's padded size at its class, projected from a small probe class")
     for flag in ("--serve-run", "--row-dir", "--advice"):
         p.add_argument(flag, required=True)
@@ -1778,7 +1843,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.choices["window-circuit"].add_argument("--pearl-tables", metavar="SCHEME", help="the circuit cut at its linears, "
                                                "as a window tied to Pearl+'s W under PoUW scheme SCHEME commits it "
                                                "(`window_class.PearlTables`)")
-    for name in ("window-circuit", "class-size", "window-commit"):
+    for name in ("window-circuit", "class-circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--class", dest="window_class", help="the window class SLOTS,PROMPT,OUTPUTS[,LANES,"
                                        "EVERY] (`window_circuit.WindowClass`; by default `CLASS_OF_RECORD`, 8,1024,64,4,16)")
     sub.choices["audit"].add_argument("--builds", help="with --bundle or --serve-run: where the verifier writes its own Build of "
@@ -1786,19 +1851,21 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("audit", "circuit"):
         sub.choices[name].add_argument("--vllm-python", help="ignored: the verifier writes its own Builds from its compile, "
                                        "with no vLLM (own_builds)")
-    for name in ("compiler", "serve-standin", "circuit", "window-circuit", "class-size", "window-commit"):
+    for name in ("compiler", "serve-standin", "circuit", "window-circuit", "class-circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--hf-config")
         sub.choices[name].add_argument("--cap-bits", type=int, default=CAP_BITS)
-    for name in ("compiler", "circuit", "window-circuit", "class-size", "window-commit"):
+    for name in ("compiler", "circuit", "window-circuit", "class-circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--target")
     a = ap.parse_args(argv)
     if a.cmd == "compiler":
-        print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits, a.transfer_gate), sort_keys=True))
+        print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits, a.transfer_gate, a.serve), sort_keys=True))
         return 0
     if a.cmd == "window-commit":
         a.bundle = str(Path(a.row_dir) / "commit" / "replay_bundle_p0")
-    if a.cmd in ("circuit", "window-circuit", "class-size", "window-commit", "weights-registration"):
-        commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice, "class-size": class_size_of_advice,
+    if a.cmd in ("circuit", "window-circuit", "class-circuit", "serve-phi", "class-size", "window-commit",
+                 "weights-registration"):
+        commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice,
+                    "class-circuit": class_circuit_of_serve, "serve-phi": serve_phi, "class-size": class_size_of_advice,
                     "window-commit": window_commit_of_advice, "weights-registration": weights_registration_of_serve}
         try:
             print(json.dumps(commands[a.cmd](a), sort_keys=True))
