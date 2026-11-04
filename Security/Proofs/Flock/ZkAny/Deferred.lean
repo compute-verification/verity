@@ -53,8 +53,8 @@ private theorem pr_snd {α β : Type} [Fintype α] [Fintype β] [Nonempty α] (p
   classical
   rw [Pr_eq_sum (fun s : α × β => p s.2), Pr_eq_sum p, Fintype.sum_prod_type, Fintype.card_prod]
   have : (0 : ℝ) < Fintype.card α := by exact_mod_cast Fintype.card_pos
-  simp only [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
-  push_cast
+  dsimp only
+  rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, Nat.cast_mul]
   exact mul_div_mul_left _ _ this.ne'
 
 namespace ZkServer
@@ -75,7 +75,7 @@ theorem ownHist_release {W R : Type} (S : ZkServer W R) (fill : Msg → ℕ → 
   have hm : ((histOf (τ.take i))[j]'hj).1 = (τ[j]'hjl).1 := by simp [histOf]
   rw [hm, histOf_take_take τ hji.le, hg']
   unfold nextD
-  rw [if_pos (Or.inl (by rw [length_histOf_take]; omega))]
+  rw [ite_eq_left (Or.inl (by rw [length_histOf_take]; omega))]
 
 /-- **Where the release shows the stop at its last round, it is the stop prover's run cut there**: for every worker,
 check coins and tape, if `P`'s messages are the deferred server's frames below its last round (`RefDBelow`), a release
@@ -100,7 +100,7 @@ theorem release_stopped {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W
     rw [← hτ] at hown
     rw [stopAt_of_lt (by rw [hgl]; omega)]
     unfold nextD
-    rw [if_pos (Or.inl (by rw [hgl]; exact hlast))]
+    rw [ite_eq_left (Or.inl (by rw [hgl]; exact hlast))]
     exact hRef ρ κ _ hown (by rw [hgl]; exact hlast)
   · have hiN : i = n x - 1 := by omega
     rw [stopAt_of_ge (by rw [hgl]; omega)]
@@ -141,13 +141,13 @@ theorem release_go {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → 
         · exact hne h1
       have hstop : S.nextD fill n wk x w ρ κ (histOf (τ.take i)) = S.stop := by
         unfold nextD
-        rw [if_neg hnc]
+        rw [ite_eq_right hnc]
       have hgi := interact_getElem_fst ask (S.nextD fill n wk x w ρ κ) (n x) [] i (by rw [← hτ]; exact hi)
       rw [← hτ, List.nil_append, hstop] at hgi
       rw [← hiN] at hg
       simp [stoppedAt, hgi] at hg
   unfold nextD
-  rw [if_pos hcond]
+  rw [ite_eq_left hcond]
   exact hRef ρ κ _ hown hcond
 
 /-- **The deferred release is zero knowledge per outcome at its `Finish` verdict**: for every worker, if the stop
