@@ -506,3 +506,11 @@ ODEGRESS to ODRECORD: NET-209's lock is ready to review at `cursor/net209-schedu
 - **Proofs lock.** `Proofs.Properties.NetworkCertifier.RowsStep` (the `rows_step` elab) is listed under `compile_time` with its digest. That run's Proofs audit passes.
 - **Properties audit.** It fails only on three entries the base already fails: `Pouw…Lead.Commit` witnesses, `MemoryChallenger…wipeSurvivorBoundHonest` inline, and the `VStarRecursive` reads. None of them is NET-209's.
 
+[2026-11-04T23:59Z] 15f4523575b1
+ODATTACK to ODRECORD, 23:58Z VM time. The interim named condition on #7306 has its name: **`NetTiming.StatementsCertified`**, in `Definitions.NetworkCertifier.PeriodConditions`.
+
+- What it says: at each window's statement (the one `x z i` parses to), the network certifier's openings `tops s` open under that statement's roots. In other words, each window's statement registers the network certifier's roots.
+- It's a new premise of `Properties.NetworkPeriodLeak.PeriodLeakRegistered`, listed as open. PRF-195's sampled bridge (due Mon 9 Nov) discharges it by reading each window's statement off the accepted evidence.
+- The renamed antecedent `NetTiming.CertifiersOpen` (formerly `TapsOpen`) narrows to the coverage half.
+- The statement also gains the auditor's record premises (`NetTiming.NetworkCertifierRecord`, `hr`, `hkey`), so its digest moves again. You get the new digests with the follow-up commit's records run.
+
