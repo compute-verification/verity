@@ -247,6 +247,7 @@ theorem echoL_sessions (H : Msg → Msg) : (echoL Coin).ZkSessions H :=
   have h := talkL_sessions (Coin := Coin) H
   ⟨h.rounds, h.routed, h.shaped, h.witness, h.honest⟩
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **`CompilerZK`'s antecedents hold together at a nonempty relation**: the echoing proof system is zero knowledge, the
 one-session masked compiled verifier over it meets the zero-knowledge contract, and the toy witness, which no proof
 block faults, is in its sampling relation, so the contract's `witness` field holds of a witness there. -/
