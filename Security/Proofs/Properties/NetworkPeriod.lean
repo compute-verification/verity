@@ -121,17 +121,8 @@ theorem rowsProgWired : RowsProgWired := by
     · assumption
     · cases h0
 
-/-- A link-window's window record whose `prog` is at the root `r` and the domain `d`. -/
-def tiedWindow : Lean.Json :=
-  Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")]])]
-
-/-- A compute audit whose Program has one `SlotEntry_v1` template of one member, a pinned Definition (its closure
-digest `slotEntryPins`' first), and the schedule of one slot a window (one lane, T = 1, `every` 1). -/
-def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)]⟩
-
-def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
-
-/-- Its registration, with that template's entries port at the root `r` and the domain `d`. -/
+/-- The slot audit's registration (`slotAudit`), with that template's entries port at the root `r` and the domain
+`d`. -/
 def slotReg : Lean.Json :=
   Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
     [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
@@ -295,12 +286,6 @@ theorem rowsCircuitHeld : RowsCircuitHeld := by
     · assumption
     · cases h0
 
-/-- The slot audit's registration under the Program `d`: its entries port at the root `r` and the domain `d`, so
-`tiedWindow`'s scan's `prog` is its output. -/
-def heldReg (d : String) : Lean.Json :=
-  Lean.Json.mkObj [("program", .str d), ("roots", Lean.Json.arr #[Lean.Json.mkObj
-    [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
-
 /-- A link-window whose tied audit is registered under the class circuit `c` holds it. -/
 theorem tiedWindow_held : held (some "c") #[heldReg "c"] tiedWindow = true := by
   decide +kernel
@@ -310,7 +295,7 @@ theorem tiedWindow_swapped : held (some "c") #[heldReg "d"] tiedWindow = false :
   decide +kernel
 
 /-- **`RowsCircuitHeld`'s honest lemma**: the check accepts a rows-form period of no link-window under the class
-circuit `c`, and a link-window whose tied audit runs `c` holds it. -/
+circuit `c`, and a link-window whose tied audit is registered under `c` holds it. -/
 theorem rowsCircuitHeld_honest :
     check ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
         ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ =
@@ -319,7 +304,8 @@ theorem rowsCircuitHeld_honest :
   ⟨by simp [check, auditChecks, wiredChecks, stateChecks, heldChecks, firstFinding, rowsPublic]; rfl, tiedWindow_held⟩
 
 /-- **`RowsCircuitHeld`'s nontrivial lemma**: `RowsCircuitHeldAt` fails at a rows-form period of one link-window whose
-tied audit runs another Program than the class circuit `c`, which a check that accepts everything accepts. -/
+tied audit is registered under another Program than the class circuit `c`, which a check that accepts everything
+accepts. -/
 theorem rowsCircuitHeld_nontrivial :
     ¬ RowsCircuitHeldAt
       ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c",
