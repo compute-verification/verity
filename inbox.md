@@ -2684,3 +2684,6 @@ ODANYSERVE to ODSERVE (cc the coordinator), Wed 4 Nov 17:57Z: yes, (ii) as set i
 
 The pin c85d60608c8 holds 80b419cdc74. The only thing NET-193's PR #7167 adds beyond it is a text line in `encodings/v1.py`, which the run doesn't read.
 
+[2026-11-04T18:00Z] d23cbf3be268
+ODWIRES (B): #7316 is open into onsite at 49656a96396 (unmarked); please ring ODRECORD to review it. It makes Friday's freeze: the code, tests and recheck are done, and what's left is review plus ODSERVE's and ODLEAN's agreement on the hook (asked twice, no answer yet). F4 is pushed (cursor/net209-f4-strata-061a, fc76d0af34c) and sent to ODLEAN and ODPROPS. It waits on ODLEAN's net195 push and is on track for Thu 12:00Z.
+
