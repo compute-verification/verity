@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""`tools/move/stage.py MAP... [--base REF] [--branch NAME [--push]] [--certificate FILE] [--map OLD=NEW]... [--no-lock]
-[--no-rerun] [--no-fetch] [--keep]`: stage a move on a base as one certified commit per map, for its lander.
+"""`tools/move/stage.py MAP... [--base REF] [--branch NAME [--push] [--bundle FILE]] [--certificate FILE] [--map OLD=NEW]...
+[--no-lock] [--no-rerun] [--no-fetch] [--keep]`: stage a move on a base as one certified commit per map, for its lander.
 
 For each map in order, on BASE (default `origin/main`, fetched first) or on the commit the map before it made:
 1. read the map (`tools/move/NAME.toml`) as that commit has it: one with `[words]` runs `rename.py`, one with `[paths]`
@@ -18,8 +18,10 @@ For each map in order, on BASE (default `origin/main`, fetched first) or on the 
    land, `restack.py BRANCH` carries an open branch across all of them by rerunning each.
 
 Nothing in this checkout changes but the branch `--branch` names, created at the last commit (refused if it exists
-here, or on the remote with `--push`); `--push` pushes it, never forced. `--certificate FILE` writes each commit's
-`move_check.py` report as JSON. Exit 0 when every map is staged and certified, 1 on a refusal, 2 on a git error.
+here, or on the remote with `--push`); `--push` pushes it, never forced, and `--bundle FILE` writes it as a git bundle
+over BASE, for a staging run on a node, whose clone can't push, to hand back. `--certificate FILE` writes each
+commit's `move_check.py` report as JSON. A git that can't commit (a node has no identity) is refused before anything
+runs. Exit 0 when every map is staged and certified, 1 on a refusal, 2 on a git error.
 """
 from __future__ import annotations
 
@@ -179,6 +181,10 @@ def stage(repo: Path, base: str, maps: list[str], *, extra: list[str] = (), no_l
     if bad := [m for m in maps if not MAP.match(m)]:
         raise Refused(f"{', '.join(bad)}: a map is a file directly in tools/move/ (`tools/move/NAME.toml`), where move_check.py "
                       "reads word maps and a move's `Move:` line names its map")
+    if any(subprocess.run(["git", "var", v], cwd=repo, capture_output=True).returncode
+           for v in ("GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT")):
+        raise Refused("git has no identity here to commit the moves as (a node has none): set user.name and user.email, or "
+                      "GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME and GIT_COMMITTER_EMAIL")
     s = Stage(repo, base, extra=[f"--map={x}" for x in extra], no_lock=no_lock, rerun=rerun, log=log)
     moves, parent = [], base
     try:
@@ -198,6 +204,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--branch", help="create this branch at the last commit (refused if it exists)")
     ap.add_argument("--push", action="store_true", help="push --branch to --remote, never forced")
     ap.add_argument("--remote", default="origin")
+    ap.add_argument("--bundle", type=Path, metavar="FILE",
+                    help="write --branch as a git bundle over BASE, to fetch and push from another checkout")
     ap.add_argument("--certificate", type=Path, metavar="FILE", help="write each commit's move_check.py report here, as JSON")
     ap.add_argument("--map", dest="extra", action="append", default=[], metavar="OLD=NEW",
                     help="an extra path (or dotted module) mapping for move_check.py, as `verity check move` takes it")
@@ -205,8 +213,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-rerun", action="store_true", help="don't check that a second run changes nothing")
     ap.add_argument("--keep", action="store_true", help="keep the worktree and the scripts, and print where")
     a = ap.parse_args(argv)
-    if a.push and not a.branch:
-        ap.error("--push pushes --branch: name one")
+    if (a.push or a.bundle) and not a.branch:
+        ap.error(f"{'--push pushes' if a.push else '--bundle bundles'} --branch: name one")
     try:
         repo = Path(git(Path.cwd(), "rev-parse", "--show-toplevel"))
         remote, _, name = a.base.partition("/")
@@ -226,6 +234,8 @@ def main(argv: list[str] | None = None) -> int:
             git(repo, "branch", a.branch, head)
             if a.push:
                 git(repo, "push", "-q", "-u", a.remote, a.branch)
+            if a.bundle:
+                git(repo, "bundle", "create", "-q", str(a.bundle), f"refs/heads/{a.branch}", f"^{base}")
     except Refused as e:
         print(f"stage: refused: {e}", file=sys.stderr)
         return 1
@@ -234,6 +244,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     print(f"\nstaged {len(moves)} move{'s' * (len(moves) > 1)} on {a.base} {base[:12]}: {head}"
           + (f", branch {a.branch}" + (f" on {a.remote}" if a.push else "") if a.branch else ""))
+    if a.bundle:
+        print(f"bundled to {a.bundle}; where it's pushed from: git fetch FILE {a.branch}:{a.branch} && git push -u "
+              f"{a.remote} {a.branch}")
     print("the lander checks each:")
     for m in moves:
         print(f"  {m['check']}")

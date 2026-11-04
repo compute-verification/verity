@@ -57,6 +57,16 @@ A move lands alone, as one commit per map on the commit it was made on. Its lead
 3. hands the lander the branch and the command `stage.py` printed for each commit, `verity check move PARENT COMMIT`
    (`move_check.py`, which exits 0 on a pure move, 1 naming what isn't).
 
+Over the whole tree `rename.py` and `move_check.py` each run for minutes, so the lead stages on a node, from a checkout at
+the window's base. The node's clone can't push and its git has no identity (`stage.py` refuses before running), so the
+run names one and bundles the branch into its outputs, and the lead pushes it from the checkout:
+
+    git fetch origin main && git checkout --detach origin/main
+    research run --on auto --cwd clone -- bash -c 'export GIT_{AUTHOR,COMMITTER}_NAME=LEAD GIT_{AUTHOR,COMMITTER}_EMAIL=EMAIL;
+      python3 tools/move/stage.py tools/move/NAME.toml --base HEAD --no-fetch --branch BRANCH \
+        --bundle "$OUT/move.bundle" --certificate "$OUT/cert.json"'
+    research fetch RUN --all && git fetch ~/.research/runs/RUN/out/move.bundle BRANCH:BRANCH && git push -u origin BRANCH
+
 If `main` moves before the move lands, the lead stages it again on the new `main`: the map reruns over whatever landed
 since. A word map can also go through the queue, as a PR whose body says `Move: tools/move/NAME.toml`: drive regenerates
 its move on the tip below it with `checked`'s scripts, as `stage.py` does with its base's, and lands it only if certified

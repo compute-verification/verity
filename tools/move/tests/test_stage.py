@@ -176,6 +176,33 @@ def test_a_map_that_renames_nothing_is_refused(tmp_path, monkeypatch, capsys):
     assert "changes nothing on" in capsys.readouterr().err
 
 
+def test_a_git_that_cant_commit_is_refused_before_anything_runs(tmp_path, monkeypatch, capsys):
+    """A node's git has no identity: refused at once, not after the codemod's run."""
+    repo, base = _repo(tmp_path, {**TREE, "tools/move/zorble_map.toml": WORDS})
+    for k in ("GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"):
+        monkeypatch.delenv(k)
+    for k, v in {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "user.useConfigOnly", "GIT_CONFIG_VALUE_0": "true"}.items():
+        monkeypatch.setenv(k, v)
+    assert _stage(monkeypatch, repo, "tools/move/zorble_map.toml", "--base", base, "--branch", "staged") == 1
+    assert "git has no identity here to commit the moves as" in capsys.readouterr().err
+    assert len(git(repo, "worktree", "list").splitlines()) == 1
+    assert git(repo, "branch", "--list", "staged") == ""
+
+
+def test_the_staged_branch_bundles_for_the_checkout_that_pushes_it(tmp_path, monkeypatch, capsys):
+    """A staging run on a node hands its branch back as a bundle over BASE, which a checkout at BASE fetches whole."""
+    repo, base = _repo(tmp_path, {**TREE, "tools/move/zorble_map.toml": WORDS})
+    lead = tmp_path / "lead"
+    git(tmp_path, "clone", "-q", str(repo), str(lead))
+    bundle = tmp_path / "move.bundle"
+    assert _stage(monkeypatch, repo, "tools/move/zorble_map.toml", "--base", base, "--branch", "staged",
+                  "--bundle", str(bundle)) == 0
+    assert f"bundled to {bundle}" in capsys.readouterr().out
+    git(lead, "fetch", "-q", str(bundle), "staged:staged")
+    assert git(lead, "rev-parse", "staged") == git(repo, "rev-parse", "staged")
+    assert git(lead, "rev-parse", "staged^") == base
+
+
 def test_the_branch_is_pushed_from_the_fetched_base_and_never_over_one_that_exists(tmp_path, monkeypatch, capsys):
     repo, base = _repo(tmp_path, {**TREE, "tools/move/zorble_map.toml": WORDS})
     remote = tmp_path / "remote.git"
