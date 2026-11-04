@@ -115,36 +115,39 @@ class Words:
         self.keep += [re.compile(re.escape(s)) for s in keep.get("strings", [])]
         self.keep_in: dict[str, list[str]] = data.get("keep_in", {})
         self.keep_paths: dict[str, list[str]] = data.get("keep_paths", {})
-        self._rules: dict[tuple[int, ...], tuple[re.Pattern, list[str], list[str]]] = {}
+        self._rules: dict[tuple[int, ...], list[tuple[list[str], str, str]]] = {}
+        self._patterns: dict[tuple[tuple[int, ...], tuple[int, ...]], tuple[re.Pattern, list[str]]] = {}
 
     def excluded(self, path: str) -> bool:
         return any(_match(path, g) for g in self.exclude)
 
-    def rules(self, path: str = "") -> tuple[re.Pattern, list[str], list[str]]:
-        """The words for file `path`: those of each [[words_in]] whose files match it (whole words, first), then [words].
-        The pattern has one group per rule, and the first list holds each group's new word."""
+    def rules(self, path: str, text: str) -> tuple[re.Pattern, list[str]]:
+        """The words for file `path`: those of each [[words_in]] whose files match it (whole words, first), then [words],
+        each only if `text` holds every one of its parts (no other can match). The pattern has one group per rule, and the
+        list holds each group's new word."""
         which = tuple(i for i, (globs, _) in enumerate(self.scoped) if path and any(_match(path, g) for g in globs))
         if which not in self._rules:
             scoped: dict[str, str] = {}
             for i in which:
                 for k, v in self.scoped[i][1].items():
                     scoped.setdefault(k, v)
-            rules = [(_word(w, whole=True), n) for w, n in scoped.items()] + [(_word(w), n) for w, n in self.words.items()]
-            first = "".join(sorted({re.escape(w[0]) for w in {**scoped, **self.words}}))
-            pattern = f"(?=[{first}])(?:" + "|".join(f"({r})" for r, _ in rules) + ")" if rules else "(?!)"
-            self._rules[which] = (re.compile(pattern),
-                                  [n for _, n in rules],
-                                  [max(w.lower().split(" "), key=len) for w in {**scoped, **self.words}])
-        return self._rules[which]
+            self._rules[which] = ([(w.split(" "), _word(w, whole=True), n) for w, n in scoped.items()] +
+                                  [(w.split(" "), _word(w), n) for w, n in self.words.items()])
+        rules = self._rules[which]
+        live = tuple(i for i, (parts, _, _) in enumerate(rules) if all(p in text for p in parts))
+        if (which, live) not in self._patterns:
+            first = "".join(sorted({re.escape(rules[i][0][0][0]) for i in live}))
+            pattern = f"(?=[{first}])(?:" + "|".join(f"({rules[i][1]})" for i in live) + ")" if live else "(?!)"
+            self._patterns[which, live] = (re.compile(pattern), [rules[i][2] for i in live])
+        return self._patterns[which, live]
 
     def sub(self, text: str, path: str = "", keep: list[tuple[int, int]] = (), counts: Counter | None = None,
             kept: Counter | None = None, protect: bool = True) -> str:
         """`text` (of file `path`) with every word renamed, except inside the spans [keep] (and `keep`) cover and the words
         [keep_in] lists for `path`. ``counts`` and ``kept`` count the words renamed (by old and new) and the words left
         standing; without ``protect`` (a path), [keep] keeps nothing and [keep_paths] holds its words as [keep_in] does."""
-        pattern, new, lower = self.rules(path)
-        low = text.lower()
-        if not any(w in low for w in lower) or pattern.search(text) is None:
+        pattern, new = self.rules(path, text)
+        if pattern.search(text) is None:
             return text
         held = [(m.start(), m.end()) for k in self.keep if protect for m in k.finditer(text)]
         if held and path.endswith(".py"):
