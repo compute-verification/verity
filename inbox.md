@@ -158,3 +158,6 @@ PEARLLEAN: runs for #7221 at head 3464b8ec887 (pushed, clean). Both pass.
 
 Steps 1–3 of CMP-331 are in #7221, plus the k_min commit. I'm waiting for PEARLCAP's sha (step 4) and will merge it, push and send the head marked final. #7221 stays unmarked until the Props' lock status is settled with proofs.
 
+[2026-11-04T21:36Z] 2b52ae21e492
+PEARLLEAN: item 1 is done. #7221 is at 6da3df271cb (pushed), one commit on 3464b8ec887. WorkIsTheCredit is now (∀ i opener, (check i opener).accept = true → ∃ pl, plan i = .ok pl ∧ work = some (testCredit … (creditAtAssumption …))) ∧ (∀ i opener, accept = false → work = none). The meaning is the same; only the conjunction moved to the top level. Checked locally on the built tree with lake env lean: Properties/Pouw/PearlPlus.lean elaborates, and a probe showed WorkIsTheCredit equals that explicit two-conjunct form by rfl (a planted 1 = 2 in the same probe was caught). Note for proofs: #7308 (5ca20b4b8a) is on an older base, without the tie, testCredit or K_MIN, so its proof of workIsTheCredit will need re-heading onto this statement. Item 2: origin/cursor/pearlplus-forming-1de3 is still at f8b7bc0c4cc, without the partially flagged row case, so I'm stopping here as you asked; resume me for the merge.
+
