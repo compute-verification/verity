@@ -36,7 +36,6 @@ it stood on; `stubs` lists what is still a stand-in.
   report's OK requires), and an honest arm's is one of the honest run's own Commit windows. When each was registered is
   read off the registration and the endpoint's trace (`closes`), never the job's.
 * **The negatives** (`negatives`): `negatives.suite` on the runs, handed the advice's v0 bytes for its advice negatives
-  and, given the endpoint's records (``--ids``), each request's id request for the ingress tie's verdict on them
   (`negatives.advice_run`).
 """
 from __future__ import annotations
@@ -605,9 +604,8 @@ def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | N
 
 # --- the negatives ----------------------------------------------------------------------------------------------------
 
-def negatives(runs: dict[str, Path], work: Path, adv, clock, ids: Path | None = None) -> dict:
-    """`negatives.suite` on ``runs`` (by strategy), its advice negatives made from ``adv``'s v0 bytes, and with ``ids``
-    (the endpoint's records, `negatives.read_requests`) the ingress tie's on each request's id request. ``ok`` unless a
+def negatives(runs: dict[str, Path], work: Path, adv, clock) -> dict:
+    """`negatives.suite` on ``runs`` (by strategy), its advice negatives made from ``adv``'s v0 bytes. ``ok`` unless a
     row that ran says otherwise: a pending check's row (``ok`` None) or one that didn't run is the report's to list, not
     a failure."""
     path = None
@@ -615,7 +613,7 @@ def negatives(runs: dict[str, Path], work: Path, adv, clock, ids: Path | None = 
         work.mkdir(parents=True, exist_ok=True)
         path = work / "advice.bin"
         path.write_bytes(I1.encode(adv))
-    rows = NG.suite(runs, work / "negatives", advice=path, ids=ids, clock=clock)
+    rows = NG.suite(runs, work / "negatives", advice=path, clock=clock)
     return {"ran": True, "format": NG.FORMAT, "rows": rows,
             "ok": all(r.get("ok") is not False for r in rows.values() if r.get("ran"))}
 

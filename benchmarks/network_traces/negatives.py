@@ -752,7 +752,7 @@ def judge(name: str, verdict: dict) -> dict:
 
 
 def suite(runs: dict[str, Path], work: Path, *, advice: Path | None = None, commit: Path | None = None,
-          ids: Path | None = None, clock=time.monotonic) -> dict[str, dict]:
+          clock=time.monotonic) -> dict[str, dict]:
     """Every negative's row for the one command's report, from a rehearsal's runs by strategy (`runs`, which must hold
     honest): a shim negative is its own run (`rehearse --strategies`), any other is made from honest's under `work`.
     A row says what the negative tampers, the check and code it names and what it waits on; whether it ran, and if so

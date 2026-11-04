@@ -8,7 +8,7 @@ the chain's stages (`chain`): the advice's bits per link-window, the prove path'
 
     python benchmarks/network_e2e/e2e.py --from SRC [SRC ...] --out DIR (--bin flock-circuit --lean flock-verify |
                                          --proofs N2ZK_DIR | --no-prove) [--advice FILE [--serving-config FILE] |
-                                         --endpoint-run DIR] [--ids FILE] [--prove-path DIR ...
+                                         --endpoint-run DIR] [--prove-path DIR ...
                                          [--prove-path-registered FILE]] [--no-negatives]
     python benchmarks/network_e2e/e2e.py (--upstream URL | --vllm MODEL | --endpoint-peer NAME:PORT) --out DIR [...]
                                          [--endpoint-run DIR] [certifier_serve.py rehearse's options]
@@ -722,8 +722,7 @@ def stages_of(runs: dict[str, dict], plan: dict, args, work: Path, clock) -> dic
     """The chain's stages (`chain`): the advice and its bits per link-window when ``--advice`` gives it (T, the
     certified I/O and the windows from the honest run), or the endpoint's own when ``--endpoint-run`` names its records
     (`endpoint_advice`), the prove path when ``--prove-path`` does, and the negatives (`negatives.py`) on the runs
-    unless ``--no-negatives`` (not on the advice profile: its rows take N2's verdict), its advice negatives tied on
-    each request's id request when ``--ids`` gives the endpoint's records."""
+    unless ``--no-negatives`` (not on the advice profile: its rows take N2's verdict)."""
     honest, out, adv = runs[HONEST]["dir"], {}, None
     if getattr(args, "endpoint_run", None):
         out["advice"], out["bits"] = endpoint_advice(getattr(args, "endpoint_dir", None),
@@ -752,8 +751,7 @@ def stages_of(runs: dict[str, dict], plan: dict, args, work: Path, clock) -> dic
     if (plan.get("occupancy") or {}).get("kind") == chain.ADVICE:
         out["negatives"] = {"ran": False, "why": "its rows take N2's verdict, which the advice profile has none of"}
     elif not args.no_negatives:
-        out["negatives"] = chain.negatives({s: r["dir"] for s, r in runs.items()}, work / "chain", adv, clock,
-                                           ids=Path(args.ids) if args.ids else None)
+        out["negatives"] = chain.negatives({s: r["dir"] for s, r in runs.items()}, work / "chain", adv, clock)
         log(f"negatives (the registry): ok {out['negatives']['ok']}")
     return out
 
@@ -875,9 +873,6 @@ def main(argv=None) -> int:
                          "UTC; when is read off the record's out/advice_windows.jsonl stamp, else the registration's "
                          "file time: at serve time if before its sample and no later than the next window's close (the "
                          "session's end, per the record, for its last window)")
-    ap.add_argument("--ids", metavar="FILE", help="the endpoint's record of each request (serve-openai's "
-                                                  "requests.jsonl: user, prompt_ids), for the ingress tie's verdict on "
-                                                  "the advice negatives (negatives.read_requests)")
     ap.add_argument("--no-negatives", action="store_true", help="skip the negatives registry (negatives.suite)")
     args, rest = ap.parse_known_args(argv)
     if rest and args.sources:

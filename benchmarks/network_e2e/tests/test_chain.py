@@ -557,8 +557,8 @@ def test_commit_windows_that_carry_a_request_across_their_close_bind_as_one_advi
 def _args(src, out, **kw) -> SimpleNamespace:
     return SimpleNamespace(**{"sources": [str(src)], "upstream": None, "vllm": None, "out": str(out), "work": None,
                               "bin": None, "lean": None, "delta": 2.0 ** -20, "no_prove": True, "proofs": None,
-                              "advice": None, "serving_config": None, "prove_path": None, "ids": None,
-                              "no_negatives": False, **kw})
+                              "advice": None, "serving_config": None, "prove_path": None, "no_negatives": False,
+                              **kw})
 
 
 @pytest.fixture(scope="module")
