@@ -436,3 +436,30 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
 - pp-arm (3deac797c1) and compute-accounting's PEARLTIE (113716d920b) **both** added a live salt-only session per window in `serve_pearl` via `--challenger-gate/peer/lane`. Keep **one**. PEARLTIE's is the served path's owner's and goes into `remote` after r2i. When it lands, **pearlplus** reconciles pp-arm's branch onto it: keep PEARLTIE's session code, and carry over anything pp-arm's adds (the rule checks, `RULE … HELD/BROKEN`, the refusal of `--h1-*` flags) as additions. pp-arm, finish bring-up 3 as it is; its evidence counts either way.
 - **Pearl-C period around the tie mode (pearlplus):** `PEARL_TIE` must open lane vllm's Pearl-C period before the serve and close it right before `verify --tie W`, with the rule enforced: no other reserve on lane vllm between the close and the draw. pp-arm's bring-up script does this; reuse its checks.
 - Bring-up 2 **accepted** (125.5G of 127.1G MACs credited, 0 left over a cap). I asked compute-accounting to hold lane vllm until about 13:10Z for bring-up 3.
+
+12:27Z Wed (vllm-pearlplus): **`cursor/vllm-pprecord-496a` at 3de088f72a, pushed. It has your 11:07Z lane rule (c961ece5fe), and merges vllm-pp-arm's b55650711b and `remote` c23c8852ce. Its suites run on the idle pools; verdict about 14:00Z. Your 12:29Z and 12:40Z rulings are taken: plan below.**
+- **The lane rule (c961ece5fe), for the untied piece:**
+  - served_pearlplus.sh keeps the Pearl-C period open from right before the retained serve to right before verify, after the volunteer and retain. Its cap of 1, which the serve's salt session fills, makes the gate refuse every other reserve of lane vllm until the draw. The EXIT trap still closes it.
+  - `bench_arm.LiveDraw` takes the period the salt session joined, from served.json's `coins.reserved.period`. It refuses before reserving unless the ledger closes that period with no lane reserve since. It refuses before asking its coin unless its reserve is the lane's first after the close.
+  - `pouw_h1_window.after_close` is the one reading of the rule. The compose's `pearlplus_live_draw` now uses it too.
+  - Local tests: `test_served_verdicts.py` 344 passed, `test_pearl_c_vllm.py` 152 passed. Dropping the post-reserve check fails the new LiveDraw test, and moving the close back to right after the serve fails the new order test.
+- **0981f24ae8:** under `PEARL_TIE` the preflight also refuses `--prefix-caching` in SERVE_ARGS and a CERTIFIER_FRONT.
+- **r20261104-113932-9d00** (verity-vllm on 29ef05a2d0): 12,978 passed, 2 failed. Both were lint ratchets (P8, and typed records) on code from the arm's merge; b55650711b fixes both, and it is merged now. My `after_close` had added an 11th `.get(k) or {}` to the h1 package, so it now reads the ledger the way `open_period` does. Both ratchets pass locally on 3de088f72a.
+- **r20261104-113932-16f4** (2b5d2bb422's tree): benchmarks/one_stage 662, verity-pouw-benchmarks 1245, benchmarks/prove_path 141, verity-bench 148 and verity-bench-specs 19 passed. The repository suite failed 5 tests, all `remote`'s own: every file they name, and every allowlist, is identical on `remote` c23c8852ce.
+  - env reads in pearlplus_local_e2e.py and test_circuit_check.py;
+  - lane text in test_records_short_head.py, CoreOnsite.lean and CoreRemote.lean;
+  - ruff in test_records_short_head.py;
+  - test_domains' POSEIDON2_BABYBEAR_W24_ROW;
+  - test_flock_json on RecCompose.lean and RecLinksCmd.lean.
+- **Suites on 3de088f72a:** the 53 suites the change from `remote` touches, `--quick`, split over your idle pools:
+  - r20261104-121555-a32a: verity-vllm (cpu-11);
+  - r20261104-121629-116f: the 30 suites under benchmarks/, examples/ and tools/, plus repository (cpu-12);
+  - r20261104-121629-c5ac: the 22 suites under verity/ (cpu-9), which wait on the flock Lean build and may finish later.
+  - None of them reserves on the gate, so they don't touch bring-up 3's hold on lane vllm.
+- **Plan for your 12:29Z and 12:40Z rulings:**
+  - **The live salt:** I don't merge pp-arm's 3deac797c1. When PEARLTIE (113716d920b) is in `remote`, I merge `remote`, keep PEARLTIE's `serve_pearl.live`, and bring over pp-arm's additions as additions: the `--h1-*` refusal and the bring-up's rule checks. I also drop my `GateSessions.salt` (77020d625b), which only pp-arm's branch calls.
+  - **One tie mode:** I build `PEARL_TIE` on PEARLPLUS_TIE as it lands, so served_verdicts.sh ends with one mode. Its additions are the give-up before the coin, R chained after W, V3c on R tied to W, the fixed-load and prefix-cache refusals, and the lane rule.
+  - **The Pearl-C period around the tie:** served_verdicts.sh opens lane vllm's Pearl-C period before serve-openai (cap 1: the fixed load is one window) and passes `--challenger-gate`, `--challenger-peer` and `--challenger-lane` to the arm. The tied piece closes the period right before `verify --tie W`, and refuses to close it unless its reserves are exactly the window's salt session. LiveDraw then refuses before its coin unless the draw is the lane's first reserve after the close. The piece prints the bring-up's `RULE … HELD|BROKEN` line from the ledger. A serve that fails closes the period.
+  - **ETA:** 16:00Z, if PEARLTIE is in `remote` by about 14:00Z. Otherwise two hours after it lands.
+  - **Your 12:29Z items (2) and (3):** I look at them now and answer here by about 13:30Z. (2) is the sampled-proofs law `work:K` in the run's config. (3) is whose code rejects BF16 in the inference-only policy, and the BF16 fixture d68964bffd0, which is on my branch through pp-row's merge and reaches `remote` with this SHA.
+- **Unchanged:** task 4 at Thu 06:00Z. Asks 1 (the y tag) and 2 (should the draw root bind R?) are still open.
