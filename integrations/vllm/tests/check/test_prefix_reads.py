@@ -21,7 +21,7 @@ WNAME = "model.layers.0.self_attn.qkv_proj.weight"
 LAYERS = [f"model.layers.{l}.self_attn.attn" for l in range(L)]
 
 
-def _finish(P: C.Prog, inst: list[dict], compact: bool) -> C.Prog:
+def _finish(P: C.RootView, inst: list[dict], compact: bool) -> C.RootView:
     P.compact = compact
     P.inst = [dict(r, args=[K.from_runs(a) if compact else list(a) for a in r["args"]]) for r in inst]
     P.k2i = {r["k"]: i for i, r in enumerate(P.inst)}
@@ -30,8 +30,8 @@ def _finish(P: C.Prog, inst: list[dict], compact: bool) -> C.Prog:
     return P
 
 
-def _blank(label: str, inputs: dict) -> C.Prog:
-    P = C.Prog.__new__(C.Prog)
+def _blank(label: str, inputs: dict) -> C.RootView:
+    P = C.RootView.__new__(C.RootView)
     P.label, P.digest, P.inputs = label, f"digest-{label}", inputs
     P.seed_nodes, P.seed_index = set(), {}
     P.param_names, P.oracle_rows, P.n_nodes, P.nodes = [], None, 0, None
@@ -53,7 +53,7 @@ def _select(k: int, src: int) -> dict:
     return {"k": k, "spec": "TokenSelect_v1{V=4}", "form": "call", "args": [[("n", src, 0, RL)]], "out": "i32"}
 
 
-def warm_program(tmp_path, compact: bool = False, layers: list[str] = LAYERS) -> C.Prog:
+def warm_program(tmp_path, compact: bool = False, layers: list[str] = LAYERS) -> C.RootView:
     """The warm request's Program (`build --cached C`): prompt, prefix [L, 2, C, KVH*D], weights; each layer computes row C and attends
     over its C cached rows (one run of the prefix input) and its own row."""
     P = _blank("derived", {0: ("Input32_v1", LP), 1: ("Input16_v1", 2 * L * C_ROWS * RL), 2: ("Input16_v1", RL)})
@@ -81,7 +81,7 @@ def _meta(k: int, request: str, position: int, hint: str) -> dict:
     return row
 
 
-def fold(compact: bool = False, read_row=lambda l, j: (l, j)) -> tuple[C.Prog, list[int]]:
+def fold(compact: bool = False, read_row=lambda l, j: (l, j)) -> tuple[C.RootView, list[int]]:
     """The batch: r0 computes rows 0..C-1 of every layer, r1 (warm) computes row C and reads r0's rows as its first C rows.
     `read_row(l, j)` is the (layer, position) of r0's row r1 reads as its row j of layer l.  Returns the fold and r1's instances."""
     F = _blank("fold", {0: ("Input32_v1", LP), 1: ("Input32_v1", LP), 2: ("Input16_v1", RL)})
@@ -122,7 +122,7 @@ def warm_projection(compact: bool = False, cached: int = C_ROWS, **kw) -> BD.Pro
     return P
 
 
-def _att(P: C.Prog, layer: int) -> int:
+def _att(P: C.RootView, layer: int) -> int:
     return [i for i, r in enumerate(P.inst) if r["spec"] == ATT][layer]
 
 

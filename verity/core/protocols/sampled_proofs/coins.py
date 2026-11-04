@@ -1,7 +1,7 @@
-"""The verifier's coins: its own randomness and the one-stage draws it makes from it.
+"""A draw's coins: the auditor's challenger's, and the one-stage draws the verifier makes from them.
 
-The verifier samples every coin from its own randomness (`OwnRandomness`), with no derivation and no beacon, after the
-prover's commitments are registered.  `draw_first` draws a one-stage sampling design's proof blocks as the Lean verifier's
+The verifier samples no coins of its own. Every coin of a sample is the challenger's (`ChallengerCoins`), read from its log
+after the prover's commitments are registered, with no derivation and no beacon, by exact samplers (`OwnRandomness`).  `draw_first` draws a one-stage sampling design's proof blocks as the Lean verifier's
 `Flock.Draw.drawWith` does from the same bytes, and `closure_of` widens a work sample by the verifier's closure map.  A
 sampled proof block's outcome is final: nothing resamples.
 
@@ -24,8 +24,8 @@ from typing import Any
 
 from verity.ml.randomness import uniform_from_words
 
-from .challenger import (COIN_BYTES, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify,
-                         live_reason, record_many, trusted_session_of)
+from .challenger import (COIN_BYTES, WITHHELD, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify,
+                         live_reason, record_many, trusted_session_of, withheld_on)
 from .one_stage.draw import digits, strata_problem
 from .remote import MAX_BATCH
 
@@ -101,9 +101,8 @@ def _on(src: bytes) -> Callable[[int], bytes]:
 
 
 class OwnRandomness:
-    """The verifier's randomness, read directly: exact samplers over raw bytes from `source`, the caller's coins (the
-    proof system's are the Lean verifier's, `verifier.coins`; there is no default, so nothing here reads the operating
-    system), consumed in order, with no hash and no derivation.  They are the Lean verifier's `Flock.Draw` and
+    """Exact samplers over raw bytes from `source`, the caller's coins (the proof system's are the challenger's,
+    `ChallengerCoins`; there is no default, so nothing here reads the operating system), consumed in order, with no hash and no derivation.  They are the Lean verifier's `Flock.Draw` and
     `flock-circuit`'s `unit_draw` samplers: `uniform(n)` reads w = ceil((bitlen(n) + 64) / 8)-byte big-endian words and returns the
     first below the largest multiple of n, mod n; `bernoulli(a/b)`, a/b in lowest terms, is `uniform(b) < a` (p = 0 and
     p = 1 read nothing); `subset` is a sparse partial Fisher-Yates."""
@@ -159,7 +158,11 @@ class ChallengerCoins:
     index, `after` and the openings), from which the verifier replays the bytes (`challenger_stream`, `read_reason`,
     and `coins_reason`, which the Lean verifier's run checks). It
     refuses a commitment whose coins are opened already, a read before any commitment, and every read after a coin
-    fails: a retry never redraws."""
+    fails: a retry never redraws.
+
+    On a withheld session (`remote.RemoteChallenger.withheld`) a read uses each coin's raw bytes as the challenger gave
+    them, and the segments hold those until the session closes; `settle` then puts in each coin's full opening, checked
+    against the commitment the challenger released at its close."""
 
     def __init__(self, record: LiveRecord) -> None:
         self.record = record
@@ -201,12 +204,32 @@ class ChallengerCoins:
             batch = min(m, MAX_BATCH)
             for o in record_many([(self.record, s.after)] * batch):
                 i = s.start + len(s.openings)
-                why = live_reason(commitment, o, s.label, i, s.after)
+                if commitment is None:
+                    why = None if (o.label, o.index, o.after, len(o.coin)) == (s.label, i, s.after, COIN_BYTES) else \
+                        "coin is not the one asked for, opened after what the verifier recorded"
+                else:
+                    why = live_reason(commitment, o, s.label, i, s.after)
                 if why is not None:
                     raise CoinError(f"the challenger's {s.label} coin {i}: {why}")
                 s.openings.append(o)
                 self._stream += o.coin
             m -= batch
+
+    def settle(self) -> None:
+        """Once a withheld session has closed (`remote.RemoteChallenger.close`): each segment's coins as the full openings
+        the challenger released at its close, each checked against its commitment as the coin read. Nothing to do on a
+        session that released them as it ran."""
+        ch = self.record.challenger
+        if not getattr(ch, "withheld", False):
+            return
+        if ch.commitment is None:
+            raise CoinError("a withheld session's coins are settled once it has closed")
+        for s in self.segments:
+            full = [ch.opened.get((o.label, o.index)) for o in s.openings]
+            for i, (o, f) in enumerate(zip(s.openings, full)):
+                if f is None or f.coin != o.coin or live_reason(ch.commitment, f, s.label, s.start + i, s.after) is not None:
+                    raise CoinError(f"the challenger's {s.label} coin {s.start + i} is not the one it released at its close")
+            s.openings[:] = full
 
 
 class Segment:
@@ -281,8 +304,9 @@ def coins_reason(coins: Any, window: str, after: bytes, read: bytes, verify: Ver
     verifier reads from the challenger's signed open of the registration's window (`registration.check`'s
     `window_root`), never the record's or the evidence's. So a prover picks no window: coins another window's session
     released after the same commitment are refused, and a prover with sessions in several windows gets one draw, not
-    the best of them. `service.Stream.outcome` hands the evidence to the Lean verifier, whose run refuses a
-    draw from the challenger without evidence that holds (`Run.run`'s `select`, code `coins`)."""
+    the best of them. The session must be a withheld one (`withheld_on`), as `draw_coins`'s. `service.Stream.outcome`
+    hands the evidence to the Lean verifier, whose run refuses a draw from the challenger without evidence that holds
+    (`Run.run`'s `select`, code `coins`)."""
     if not isinstance(coins, Mapping) or sorted(coins) != ["key", "ledger", "main", "pins", "segment", "session"]:
         return COINS_FORM
     try:
@@ -290,9 +314,35 @@ def coins_reason(coins: Any, window: str, after: bytes, read: bytes, verify: Ver
                                                coins["pins"], coins["main"], coins["session"], verify)
     except CoinError as e:
         return str(e)
+    if not withheld_on(coins["ledger"], window):
+        return WITHHELD
     segment = coins["segment"]
     label = segment.get("label") if isinstance(segment, Mapping) else None
     return read_reason(commitment, segment, after, read, roots.get(label, ()) if type(label) is str else ())
+
+
+DRAW_FORM = ("a draw's coin evidence is {ledger, main, pins, segment, session}: the auditor's ledger, the verifier's copy "
+             "of main's first-parent history, the host's pins log, the draw's coins (Segment.to_json) and the challenger "
+             "session's files")
+
+
+def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins: Any, verify: Verify) -> bytes:
+    """Lean `Challenger.drawCoins`: the coins of family `label` that the session the auditor's ledger opens on `window` (its
+    open root) under `key` released after `after`, read from `coins`, `{ledger, main, pins, segment, session}`, in order.
+    Unlike `coins_reason`'s evidence, this carries no key: the key, the window and the family are the verifier's, so a
+    prover can't sign a ledger of its own. The session must be a withheld one (`withheld_on`): its challenger released
+    no root, salt or path before it closed. One-stage's check reads its draw's coins through it (`OneStage.coinsOf`).
+    Raises `CoinError`."""
+    if not isinstance(coins, Mapping) or sorted(coins) != ["ledger", "main", "pins", "segment", "session"]:
+        raise CoinError(DRAW_FORM)
+    commitment, roots = trusted_session_of(coins["ledger"], {"root": window}, key, coins["pins"], coins["main"],
+                                           coins["session"], verify)
+    if not withheld_on(coins["ledger"], window):
+        raise CoinError(WITHHELD)
+    segment = coins["segment"]
+    if not (isinstance(segment, Mapping) and segment.get("label") == label):
+        raise CoinError(f"the draw's coins are not the challenger's {label} family's")
+    return challenger_stream(commitment, segment, after, roots.get(label, ()))
 
 
 def closure_of(closure: Mapping[int, Sequence[int]], units: Sequence[int]) -> list[int]:
@@ -351,5 +401,5 @@ def _nth(ranges: Sequence[Sequence[int]], j: int) -> int:
     raise IndexError(j)
 
 
-__all__ = ["COINS_FORM", "ChallengerCoins", "OwnRandomness", "SEGMENT_FORM", "Segment", "challenger_stream",
-           "closure_of", "coins_reason", "draw_first", "read_reason"]
+__all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "OwnRandomness", "SEGMENT_FORM", "Segment",
+           "challenger_stream", "closure_of", "coins_reason", "draw_coins", "draw_first", "read_reason"]

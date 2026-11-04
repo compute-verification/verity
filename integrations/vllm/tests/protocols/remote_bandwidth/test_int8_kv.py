@@ -8,7 +8,7 @@ import torch
 from tests.protocols.remote_bandwidth.test_registry import CODEC, RECEIPT
 from verity_vllm.protocols.remote_bandwidth.binder import PagedBacking, storage_bytes
 from verity_vllm.protocols.remote_bandwidth.int8_kv import BLOCK, kv_refusal, layer_keys, store_bases, token_layer_layout
-from verity_vllm.protocols.remote_bandwidth.registry import Store
+from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
 
 PAGES, SLOTS, G, D = 3, 16, 8, 128
 
@@ -24,7 +24,7 @@ def test_a_token_layer_is_one_block_of_its_layers_region():
     lay = token_layer_layout(caches[0], PAGES, SLOTS, D)
     assert (lay.planes, lay.slot_bytes, lay.slot_major, lay.pages, lay.slots) == (1, BLOCK, True, PAGES, SLOTS)
     backings = [PagedBacking(storage_bytes(t), t.storage_offset() * t.element_size(), lay) for t in caches]
-    s = Store()
+    s = NodeMemory()
     s.register_kv_pool("kv", backings, lay, block_bytes=BLOCK, codec=CODEC, receipt=RECEIPT, encode=False)
     regions = {r.name: r for r in s.layout().regions}
     bases = store_bases(s.layout())
@@ -45,7 +45,7 @@ def test_other_layouts_and_block_sizes_are_refused():
         token_layer_layout(torch.empty(PAGES, G, SLOTS, 2 * D, dtype=torch.bfloat16), PAGES, SLOTS, D)
     with pytest.raises(ValueError, match="block a token-layer"):
         token_layer_layout(_cache(0), PAGES, SLOTS, D, block_bytes=2 * BLOCK)
-    s = Store()
+    s = NodeMemory()
     with pytest.raises(ValueError, match="no KV pool"):
         store_bases(s.layout())
 

@@ -409,7 +409,7 @@ class CompiledGraphSource:
         self.eager_rows = {}
         self.direct_step = False
         c = self.c
-        self.step_ntok = int(getattr(c, "_plan_key", 0) >> 16) if c is not None else 0
+        self.step_ntok = int((getattr(c, "_plan_shape", None) or (0, 0))[0]) if c is not None else 0
 
     # the op body: runs during eager execution, piece capture (recorded into the graph) -- never during replay
     def _record(self, x: torch.Tensor, id: int) -> None:
@@ -510,7 +510,7 @@ class CompiledGraphSource:
 
     def _rows_request(self, key: tuple[int, int]) -> int:
         c = self.c
-        nreq = int(getattr(c, "_plan_key", 0) & 0xFFFF) if c is not None else 1
+        nreq = int((getattr(c, "_plan_shape", None) or (0, 0))[1]) if c is not None else 1
         return max(1, min(nreq, self.rows))
 
     # ------------------------------------------------------------------ evidence

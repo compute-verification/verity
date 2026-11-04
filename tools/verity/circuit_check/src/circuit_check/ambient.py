@@ -216,8 +216,11 @@ def check(targets: list[str], *, path: tuple[str, ...] = ()) -> list[dict]:
 
 def ambiguous_words() -> dict[str, list[str]]:
     """Each word primitive that registered Boolean Definitions build with two or more different builders, and that
-    `ir_lower.PIECES` lowers by one of them (no piece of its own): their ids, in registration order. Every registry is
-    loaded first (`targets.load_registries`)."""
+    `ir_lower.PIECES` lowers by one of them (no piece of its own; a piece the Boolean export's tracer wrapped, as it wraps
+    each one once the process exports, is the one it wraps): their ids, in registration order. Every registry is loaded
+    first (`targets.load_registries`)."""
+    import inspect
+
     from verity_flock import ir_lower as IL
 
     from verity.ml.circuits.defs import REGISTRY
@@ -234,7 +237,7 @@ def ambiguous_words() -> dict[str, list[str]]:
     out = {}
     for word, ds in by.items():
         builds = {id(d.build) for d in ds}
-        if len(builds) > 1 and id(IL.PIECES.get(word)) in builds:
+        if len(builds) > 1 and id(inspect.unwrap(IL.PIECES.get(word))) in builds:
             out[word] = [d.id for d in ds]
     return out
 

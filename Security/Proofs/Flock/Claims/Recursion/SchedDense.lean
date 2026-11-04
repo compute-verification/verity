@@ -26,7 +26,7 @@ open Claims (Msg)
 
 /-- **What `parse` read**: a statement `parse` accepts is `readX`'s reading, which the setup's checks accept
 (`RecScope.accepts`), made readable (`RecScope.toStmt`). -/
-theorem parse_read {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) :
+theorem parse_read {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) :
     ∃ r, readX x = some r ∧ RecScope.accepts (readOf r) = true ∧ st = RecScope.toStmt (readOf r) := by
   obtain ⟨r', hr', rfl⟩ := Option.map_eq_some_iff.1 hst
   obtain ⟨hd, ha⟩ := Option.filter_eq_some_iff.1 hr'
@@ -35,7 +35,7 @@ theorem parse_read {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some 
 
 /-- **No statement the reader reads is at the sparse form**: the verifier's list refuses a RecSparse shape at public
 circuits (`holo_of_list`). -/
-theorem not_parse_sparse {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) :
+theorem not_parse_sparse {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) :
     ¬ Claims.Recursion.Form.Sparse st.form := by
   obtain ⟨r, -, ha, rfl⟩ := parse_read hst
   rintro ⟨hh, hs⟩
@@ -55,7 +55,7 @@ theorem schedMatches_sparse : SchedMatches Claims.Recursion.Form.Sparse :=
 /-- **The inner shape the verifier's list accepts has a rep schedule**: `RecVStar.checkTopsListed` refuses one without. -/
 theorem repSched_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
     ∃ rs, repSched i = some rs := by
-  obtain ⟨_, _, _, _, _, -, -, -, ht, -, -, -⟩ := FlockC3.VStarList.statements_ok h
+  obtain ⟨_, _, _, _, _, _, -, -, -, ht, -, -, -, -⟩ := FlockC3.VStarList.statements_ok h
   unfold RecVStar.checkTopsListed at ht
   unfold repSched
   cases hrs : (if i.holo then RecVStar.holoRepRounds else RecVStar.repRounds) i.m i.kLog i.claims with

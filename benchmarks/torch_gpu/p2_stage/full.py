@@ -19,7 +19,7 @@ encoded store, read only, under the salt `setup.draw_salt` of the coin and commi
   - its rows and its buffer freed, so one tensor's rows and staging buffer are on the device at a time.
 - **summary**: each tensor's fastest decode summed, which is the decode of a step measured tensor by tensor, and the peak
   HBM torch allocated and reserved over the pass.
-- **receipts** (`--receipts`): the remote bandwidth audit's pass over the units the store's tensors lie in
+- **receipts** (`--receipts`): PoUB's pass over the units the store's tensors lie in
   (`sketch.plan_units`; the encoded padding past the head is in no receipt) beside the stage pass (`sketch.py`), under
   the seed `receipts.seed(CHALLENGE, PASS, PREVIOUS)`: each tensor's rows taken in whole units (up to three blocks more
   at each end), the sketch attached to the warm-up decode (the pass's σ), and its timed decodes with the sketch and

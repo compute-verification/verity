@@ -252,6 +252,12 @@ BELLS_STALE_S = 30 * 60
 # person's stop or the watch's own; ERROR is `restart`'s
 IDLE_DONE = {"FINISHED", "EXPIRED", "WAITING_FOR_BACKGROUND_WORK"}
 AGENT_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
+SHORT_AGENT_RE = re.compile(r"\b(bc-[0-9a-f]{8})\b(?!-[0-9a-f]{4}-)")
+
+
+def short_id(agent: str) -> str:
+    """An agent id as notes often write it: `bc-` and its first 8 hex digits."""
+    return agent[:11]
 WAKE = ("wake: your timer or your inbox subscription seems not to have fired ({why}; the agent watch started this run). Read "
         "your doorbell (`research msg read --as {handle}`), run your duties, and set again whichever lapsed.")
 SCHEMA = "verity/agent-watch-status/v1"
@@ -430,13 +436,14 @@ def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: 
 def note_times(notes: Path | None, t: float) -> tuple[dict[str, float], dict[str, set[str]], dict[str, float]]:
     """(agent id -> its newest note's mtime, agent id -> the branches its notes' origins name, lane -> its newest note's mtime),
     over the notes `recent_notes` gives: a note is an agent's when its `origin:` names it (`ZKS10, bc-...; code
-    cursor/zk-frame-c7a9`), and its lane's by its directory under `lanes/` and its `lane:`."""
+    cursor/zk-frame-c7a9`), by its full id or its short one (`bc-` and 8 hex digits, keyed as given: `short_id`), and its lane's by
+    its directory under `lanes/` and its `lane:`."""
     heard: dict[str, float] = {}
     named: dict[str, set[str]] = {}
     lanes: dict[str, float] = {}
     for p, mtime, fm in recent_notes(notes, t):
         origin = fm.get("origin", "")
-        for agent in AGENT_RE.findall(origin):
+        for agent in set(AGENT_RE.findall(origin)) | set(SHORT_AGENT_RE.findall(origin)):
             heard[agent] = max(heard.get(agent, mtime), mtime)
             named.setdefault(agent, set()).update(BRANCH_RE.findall(origin))
         for lane in {p.parent.name, fm.get("lane", "")} - {""}:
@@ -1409,11 +1416,13 @@ class Watch:
         heads = self.heads.get("heads") or {}
         for agent, k in sorted(known.items()):
             coord = agent in self.coords
-            mine = {*k["branches"], *named.get(agent, ()), *(b for b in heads if b.endswith("-" + agent[-4:]))}
+            mine = {*k["branches"], *named.get(agent, ()), *named.get(short_id(agent), ()),
+                    *(b for b in heads if b.endswith("-" + agent[-4:]))}
             pushed = max((heads[b][1] for b in mine if b in heads), default=None)
             # a coordinator signs its notes with its lane, not its id (top, 27 Oct: four false silent rings in 70 min)
             lane_note = max((lanes[x] for x in (k["handle"], k["lane"]) if x and x in lanes), default=None) if coord else None
-            last = max(x for x in (k["since"], heard.get(agent), lane_note, pushed, self.heads["t0"]) if x is not None)
+            last = max(x for x in (k["since"], heard.get(agent), heard.get(short_id(agent)), lane_note, pushed, self.heads["t0"])
+                       if x is not None)
             s = self.silent.get(agent)
             if s and s["from"] != last:
                 self.silent.pop(agent)

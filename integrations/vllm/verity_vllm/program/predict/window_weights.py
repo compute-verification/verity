@@ -139,12 +139,20 @@ def _fields(registered: Any) -> tuple[Any, list[tuple[str, list[int], int]]]:
     return r, [(n, list(_arr_shape(t)), next(iter(t.width_set()))) for n, t in dict(r.program.fn.signature()[0])[WEIGHTS].fields]
 
 
-def _weights(registered: Any, grain: Grain) -> tuple[Any, list[tuple[str, list[int], int]], dict[str, int], dict[str, list[str]]]:
-    """`_fields`, the weight parameters the class circuit registers at ``grain`` (their words), wired or not, and those by
-    field."""
+def _weights(registered: Any, grain: Grain, served_params: Any = ()) -> tuple[Any, list[tuple[str, list[int], int]], dict[str, int],
+                                                                             dict[str, list[str]]]:
+    """`_fields`, the weight parameters the class circuit registers at ``grain`` and those of ``served_params`` (a served
+    window's record's, ``weights/<label>@<words>``: its slice units' rows of a weight, `pipeline.weight_rows`) with their
+    words, wired or not, and those by field. Refused (ValueError) for a served parameter of no field, or of a table."""
     r, fields = _fields(registered)
     every = lower(registered, WEIGHTS_CLASS, None, grain, wired=False).circuit.registered.params
     params = {p: every[p] for p in weight_params(every)}
+    words = {n: int(np.prod(s, dtype=np.int64)) * int(b) // 16 for n, s, b in fields}
+    for p in served_params:
+        label, _w, table = _param(p)
+        if table or label not in words:
+            raise ValueError(f"{p}: a served read is of rows of a weight of the record, not {'a table' if table else 'another field'}")
+        params.setdefault(p, words[label])
     of: dict[str, list[str]] = {}
     for p in params:
         of.setdefault(_param(p)[0], []).append(p)
@@ -175,7 +183,7 @@ def _unrooted(rec: dict[str, Any], of: dict[str, list[str]], rooted: Any) -> dic
 
 
 def weights_record(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None = None,
-                   kv_cache_dtype: str = "auto", grain: Grain = _GRAIN) -> dict[str, Any]:
+                   kv_cache_dtype: str = "auto", grain: Grain = _GRAIN, served_params: Any = ()) -> dict[str, Any]:
     """The weights of record of the circuit's registered weights (`check.weights_of_record`), the verifier's: each field of
     the class Program's weights record, in its order, composed from the checkpoint's pinned shards (``checkpoints_manifest``,
     default the repository's ``manifests/checkpoints.json``) at ``registered``'s model and revision, and each weight
@@ -186,8 +194,8 @@ def weights_record(registered: Any, checkpoint_dir: str, checkpoints_manifest: s
     A field held to an analytic table (the rotary table, within a bound of config.json's function) has its entry from
     its declared shape, the verifier never reading its words; a parameter whose field has neither is ``unrooted`` with
     why, and its reads stay free. The weights record is the model's, one at every class; its parameters are the grain's,
-    which the record names."""
-    r, fields, params, of = _weights(registered, grain)
+    which the record names, and ``served_params``, a served window's record's (`_weights`), which its entries name."""
+    r, fields, params, of = _weights(registered, grain, served_params)
     shapes: dict[str, dict[str, Any]] = {}
 
     def shape(name: str, words: np.ndarray) -> None:
@@ -202,13 +210,16 @@ def weights_record(registered: Any, checkpoint_dir: str, checkpoints_manifest: s
             "unrooted": _unrooted(rec, of, shapes)}
 
 
-def weight_values(registered: Any, served: Any, key: bytes, grain: Grain = _GRAIN, keep_rows: bool = False) -> dict[str, G.Registered]:
+def weight_values(registered: Any, served: Any, key: bytes, grain: Grain = _GRAIN, keep_rows: bool = False,
+                  served_params: Any = ()) -> dict[str, G.Registered]:
     """The weights a committer serves, committed (a window's committer or the registration's): each weight
-    parameter the class circuit registers at ``grain`` whose field ``served`` names (its words, as `check.weights_of_record`
-    composes the field), its `weight_value` under ``key`` at its nonce (`weight_nonces`), its rows held with ``keep_rows``.
-    So a window's root for a weight is the registered one (`weights_registration`) exactly when it serves the registered
-    words, and the verifier's pin holds the reads of no other (`interface.input_count`)."""
-    r, _fields, params, of = _weights(registered, grain)
+    parameter the class circuit registers at ``grain`` or ``served_params`` names (`_weights`) whose field ``served`` names
+    (its words, as `check.weights_of_record` composes the field), its `weight_value` under ``key`` at its nonce
+    (`weight_nonces`), its rows held with ``keep_rows`` (a served window's committer, `serving_rows.after_commit`'s
+    ``weight_values``). So a window's root for a weight is the registered one (`weights_registration`, given the same
+    ``served_params``, whose nonces are of them all) exactly when it serves the registered words, and the verifier's pin
+    holds the reads of no other (`interface.input_count`)."""
+    r, _fields, params, of = _weights(registered, grain, served_params)
     nonces = weight_nonces(params)
     return {p: weight_value(r.digest, p, served[name], key, nonces[p], keep_rows) for name in sorted(of) if name in served
             for p in of[name]}
@@ -228,12 +239,13 @@ def record_words(registered: Any, checkpoint_dir: str, checkpoints_manifest: str
 
 def weights_registration(registered: Any, key: bytes, checkpoint_dir: str, served: Any = None,
                          checkpoints_manifest: str | None = None, kv_cache_dtype: str = "auto",
-                         grain: Grain = _GRAIN, tables: Any = None) -> dict[str, Any]:
+                         grain: Grain = _GRAIN, tables: Any = None, served_params: Any = ()) -> dict[str, Any]:
     """The committer's registration of the weights it serves (`records.weights_registration`), written once per model and
     key before the first window's coins and pinned by the verifier (core's ``registration.check(pinned=...)``,
     ``records_audit.py --registered`` and ``--pins``, `registration_pins`): each weight parameter the class circuit
-    registers at ``grain`` its `weight_value` under ``key`` at its nonce (`weight_nonces`), its entry core's
-    `registered.Registered.entry()`. The key never leaves the committer: the registration names no salt.
+    registers at ``grain``, and each of ``served_params`` (a served window's record's, `_weights`), its `weight_value` under
+    ``key`` at its nonce (`weight_nonces`), its entry core's `registered.Registered.entry()`. The key never leaves the
+    committer: the registration names no salt.
 
     The checkpoint tie is the committer's own: each field is composed from the checkpoint's pinned shards, and a field
     ``served`` (the words the committer serves, by field, as `check.weights_of_record` composes them) names other words
@@ -244,7 +256,7 @@ def weights_registration(registered: Any, key: bytes, checkpoint_dir: str, serve
     A field the weights record holds to an analytic table is registered at ``tables``' words for that table (the words the
     engine serves, by the record's table name: ``cos_sin``, the rotary table), refused by name unless they are within its
     bound (`_table_words`); a table ``tables`` doesn't name leaves its parameters unrooted."""
-    r, fields, params, of = _weights(registered, grain)
+    r, fields, params, of = _weights(registered, grain, served_params)
     nonces = weight_nonces(params)
     entries: dict[str, dict[str, Any]] = {}
     refused: dict[str, str] = {}

@@ -82,7 +82,7 @@ def _derived():
 
 
 D = _derived()
-ADVICE = "advice"  # certifier_serve's varied plan's N2 profile: the egress counts are N2's advised counts' to derive
+ADVICE = "advice"  # certifier_serve's varied plan's N2 profile: its egress counts, from the advice, no N2 unit holds
 
 
 def _sha512(data: bytes) -> str:
@@ -218,7 +218,7 @@ def opens(reg: dict, opening: dict, adv) -> bool:
     w = reg["row_bits"] // 8
     rows = [data[i:i + w].ljust(w, b"\0") for i in range(0, max(len(data), 1), w)]
     binding = hashlib.sha512(canonical_json({"scheme": reg["scheme"], "compiler": reg["binding"]["compiler"]})).digest()
-    got = AC.register(rows, reg["row_bits"], binding, [bytes.fromhex(s) for s in opening["salts"]])
+    got = AC.commit(rows, reg["row_bits"], binding, [bytes.fromhex(s) for s in opening["salts"]])
     return got.root.hex() == reg["binding"]["advice"]["root"]
 
 
@@ -806,9 +806,9 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
         out.append("Varied traffic: certifier_serve.py's `rehearse --traffic varied` (Poisson arrivals, "
                    "prompts as ids, real EOS) isn't in this tree.")
     if r.get("profile") == ADVICE:
-        out.append("N2 on the advice profile: N2's advised counts (NetworkAdvisedCounts_v1) aren't run, so no "
-                   "link-window has N2's verdict and nothing is proved by n2_zk; the rehearsal's own check (certified "
-                   "I/O, audit, salt) is the verdict.")
+        out.append("N2 on the advice profile: no N2 unit holds its egress counts, so no link-window has N2's verdict "
+                   "and nothing is proved by n2_zk; the rehearsal's own check (certified I/O, audit, salt) is the "
+                   "verdict.")
     a, b = c.get("advice"), c.get("bits") or {}
     served = "served" in b
     if a is None and not served:
@@ -830,8 +830,7 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
                    "registered.")
     if served:
         out.append("Advice in the clear: the rehearsal opens each Commit window's advice to its report, where only its "
-                   "registration is public; the compile unit and N2's advised counts, which take it hidden, aren't run "
-                   "here.")
+                   "registration is public; the compile unit, which takes it hidden, isn't run here.")
     out.append("Coded bits: the chain doesn't run the advice code (encodings/code_v1.py).")
     p = c.get("prove_path")
     if p is None:
@@ -996,7 +995,7 @@ def markdown(c: dict) -> list[str]:
             lines += ["", "## Prove path", "",
                       f"`prove_path.py audit --serve-run`'s output adopted from {p['dir']}: each arm a Commit window of "
                       f"the endpoint's served run ({b['served']}), its step units compiled from that window's advice by "
-                      "the registered compiler, drawn on the verifier's own coins, proved --zk behind the Lean firewall "
+                      "the registered compiler, drawn on the auditor's challenger's coins, proved --zk behind the Lean firewall "
                       f"and verified by Lean. Bound to these runs: {_cell(p['bound'])}"
                       + (" (every arm's Commit the endpoint's, its run root the one sealed while serving, its advice "
                          "root registered under that Commit and opened to the report's advice of its window, and an "
@@ -1016,7 +1015,7 @@ def markdown(c: dict) -> list[str]:
         else:
             lines += ["", "## Prove path" + (" (from the fixed workload, not this run)" if served else ""), "",
                       f"`prove_path.py audit`'s output adopted from {p['dir']}: each rank's step units compiled from the "
-                      "advice by the registered compiler, drawn on the verifier's own coins, proved --zk behind the Lean "
+                      "advice by the registered compiler, drawn on the auditor's challenger's coins, proved --zk behind the Lean "
                       "firewall and verified by Lean. The advice each arm committed is the --advice file: "
                       f"{_cell(p['committed_is_the_advice_file'])}. Bound to these runs: {_cell(p['bound'])}"
                       + ("" if p["bound"] else f" ({p['bound_why']}), so its ok is not the report's")

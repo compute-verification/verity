@@ -1,5 +1,4 @@
-"""``verity/flock-circuit/types``: the circuit statement with its unit as circuit types, not rows (Project doc
-`constant-api-public.md` §2.2; the constant design's step 2, under Daniel's rows decision). A statement carries the types,
+"""``verity/flock-circuit/types``: the circuit statement with its unit as circuit types, not rows. A statement carries the types,
 the partition and the layouts. The verifier derives the unit's rows itself (`Flock.Derive`, the soundness lane's), and the
 prover gets them as data beside the statement (:attr:`Typed.unit_rows`, :mod:`derive`'s mirror), so staging needs no Lean.
 

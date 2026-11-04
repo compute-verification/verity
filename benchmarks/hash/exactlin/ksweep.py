@@ -167,9 +167,9 @@ def gemm(out: Path, models: tuple[str, ...], ms: tuple[int, ...], top: int, reps
 
 
 def quant(out: Path, models: tuple[str, ...], ms: tuple[int, ...], reps: int, clock) -> list[dict]:
-    """Each (num_warps, rows a program) plan gated (xq and s_a equal int8_exact's on plain rows, on the edge rows, and at
-    an M that leaves a partial row block) and timed over copies of plain rows that together pass the L2, as served
-    activations arrive."""
+    """Each (num_warps, rows a program) plan gated (xq and s_a equal int8_exact's on plain rows, on the edge rows, and, from
+    M 4, at M - 3 rows, which leaves a partial row block) and timed over copies of plain rows that together pass the L2, as
+    served activations arrive."""
     e = kgate.E()
     recs = []
     l2 = torch.cuda.get_device_properties(0).L2_cache_size
@@ -178,7 +178,9 @@ def quant(out: Path, models: tuple[str, ...], ms: tuple[int, ...], reps: int, cl
             rec, fns = {"k": k, "m": m, "plans": {}}, {}
             copies = max(2, -(-2 * l2 // (2 * m * k)))
             xs = [kgate.activations(m, k, 11 + m + i, special=False) for i in range(copies)]
-            gates = {"plain": xs[0], "edge": kgate.activations(m, k, 11 + m), "tail": kgate.activations(m - 3, k, 5 + m)}
+            gates = {"plain": xs[0], "edge": kgate.activations(m, k, 11 + m)}
+            if m >= 4:
+                gates["tail"] = kgate.activations(m - 3, k, 5 + m)
             refs = {kind: e.quantize_rows(x) for kind, x in gates.items()}
             xq = torch.empty((m, k), dtype=torch.int8, device="cuda")
             s = torch.empty(m, dtype=torch.float32, device="cuda")

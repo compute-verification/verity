@@ -14,8 +14,7 @@ import Proofs.Pous.Accounting.Numbers
 # B2: Fisch's stacking lemma, proved
 
 Source: B. Fisch, ePrint 2018/702, Appendix B, Claim 12. The definitions and the statement of `b2_stacking` are
-copied verbatim from `B2StackingDraft.lean` (the statement under red-team review); its header lists the modelling
-choices. Only the `sorry` is replaced.
+copies of the trusted ones (`Security/Definitions/Pous/Model/Pebbling.lean`, `Pous.Guarantees.B2Stacking`).
 
 The combinatorial core is kept in general lemmas, so it survives a restatement:
 

@@ -28,6 +28,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -44,7 +45,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 BPS = 1 << 16
 WIDTH, C0, PAYLOAD = 16_448, 21_065, 2_054
 NB = WIDTH // 8
-DIGEST = 64
+DIGEST = hashlib.sha512().digest_size
 
 
 def quantiles(xs: list[float]) -> dict[str, float]:

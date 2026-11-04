@@ -92,7 +92,7 @@ def _registered(program, q=None, preds=None, family="test", grid_bits=V.GRID_BIT
     preds = dict(preds)
     preds["grid_bits"] = grid_bits
     rs = V.pad(V.rows(adv), grid_bits)
-    reg = A.register(rs, V.ROW_BITS, V.BINDING, _salts(label, len(rs)))
+    reg = A.commit(rs, V.ROW_BITS, V.BINDING, _salts(label, len(rs)))
     return adv, rs, reg, V.statement(family, preds, adv, reg.root)
 
 
@@ -468,7 +468,7 @@ def test_the_pinned_vector():
     P = codec.decode_program(json.loads(want["descriptor"]), REGISTRY)           # the verifier's side: from the bytes alone
     assert codec.program_digest(P) == want["program_digest"] == codec.program_digest(_program())
     assert V.check(want["statement"], rs, P).ok and V.decode(rs) == V.build(P)
-    assert A.register(rs, V.ROW_BITS, V.BINDING, _salts("vtop", len(rs))).root.hex() == want["root"] == want["statement"]["advice"]["root"]
+    assert A.commit(rs, V.ROW_BITS, V.BINDING, _salts("vtop", len(rs))).root.hex() == want["root"] == want["statement"]["advice"]["root"]
 
 
 if __name__ == "__main__" and "--write" in sys.argv:
