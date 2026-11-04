@@ -4,7 +4,6 @@ report (here a stand-in's), the records tarball is the records' bytes alone, and
 and the shared part."""
 from __future__ import annotations
 
-import io
 import json
 import os
 import subprocess
@@ -14,7 +13,7 @@ from pathlib import Path
 import pytest
 from conftest import git, toy_tree
 
-from verity_graph import ROOT, contract, graph, local, runners
+from verity_graph import ROOT, contract, graph, runners
 from verity_graph.families import circuit_binding as F
 from verity_graph.runners import circuit_binding as CB
 from verity_graph.runners import circuit_catalog, circuit_coverage
