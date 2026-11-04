@@ -147,8 +147,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `challenger.sessions_tree_reason`): its `coin_tree` a logged tree, its link points and round coins that tree's
   openings after its link's roots and each round's message, one tree per session and every tree a session's.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
-  to `verify`'s. Onsite and remote (`Core.Onsite`, `Core.Remote`) read v1 as `VStar.Recursive.Sampled`'s one-stage
-  form, never alone; switching it to v2 is what is left.
+  to `verify`'s. What its acceptance says of R7's held roots, that a port of the verifier's registered file reads each
+  value R7 holds to a root at that root, is stated in `Security/Properties/SampledProofs/Covered.lean` (`HeldCovered`).
+  Onsite and remote (`Core.Onsite`, `Core.Remote`) read v1 as `VStar.Recursive.Sampled`'s one-stage form, never alone;
+  switching it to v2 is what is left.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
