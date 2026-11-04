@@ -26,7 +26,7 @@ from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match.program_compare import compare_steps, load_oracle
 from verity_vllm.observe.log import dumps as log_dumps
 from verity_vllm.observe.fold.fold import fold
-from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Witness
+from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, WitnessParam
 from tests.observe import test_fold_synthetic as toy
 from tests.observe.test_fold_synthetic import (A_COS, A_DOWN_W, A_EMBED, A_GU_W, A_LN1, A_LN2, A_NORM, A_O_W, A_QKV_W, BF, BN, C, I32D, I64D,
                                                       W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM, W_O, W_QKV, Ids, V, _as3, _kv_flat,
@@ -200,7 +200,7 @@ def p_rms_witness(node, ctx, borrow=False):
     if borrow:
         keys[-1] = keys[0]
     return Compute(bind(VI.RMSNormTritonV3, N=C["H"]), a["input_ptr"].shape[0],
-                   (PerRow(a["input_ptr"]), Shared(a["weight_ptr"]), Witness("schedule", tuple(keys))), (PerRow(a["output_ptr"]),), (node.id,),
+                   (PerRow(a["input_ptr"]), Shared(a["weight_ptr"]), WitnessParam("schedule", tuple(keys))), (PerRow(a["output_ptr"]),), (node.id,),
                    node.enter.module or "")
 
 
