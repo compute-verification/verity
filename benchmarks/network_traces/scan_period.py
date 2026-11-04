@@ -3,7 +3,7 @@ and the scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), 
 and its Lean.
 
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
-        [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
+        [--v3c PERIOD_JSON --circuit RECORD] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
   and one schedule, whose caps over the one link-window are the cells, `WardenParams.caps`: `egress_cells` for each of
@@ -16,8 +16,9 @@ and its Lean.
   commitment the audits' registrations and the scan's; the evidence the audits' answers, then the scan's answer, the
   certificates of W's three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations
   (``cells.jsonl``, as ``answers.json`` carries them). The rows form reads a registration of one link-window's 2T
-  units, so a group of more is refused, and the scan's `prog` must be an audit's `SlotEntry_v1` template's entries
-  and its ``scan/state`` that audit's.
+  units, so a group of more is refused, the scan's `prog` must be an audit's `SlotEntry_v1` template's entries
+  and its ``scan/state`` that audit's, and that audit must run the class circuit, the parameters' ``circuit``
+  (`heldChecks`): the stand-in block audit's own Program here.
 * **tampered** and **chain**: the same rows and certificates with that round's registration
   (``<round>/registration.json``) and its refusal as the answer: tampered's an egress-only Program's, a prover's answer
   for another statement than the link's Program; chain's the link's Program's, refused.
@@ -35,7 +36,9 @@ and its Lean.
 * **V3c's audit** (``--v3c``, ``records_audit.py period``'s ``period.json``, for scans proved on V3c's trees,
   ``scan_zk.py --v3c``): the one compute audit, its Program's `SelectEntry_v1` chunks' o0 the scan's ``scan/prog<j>``
   and its `SCAN_STATE` the scan's ``scan/state``, its registration the one the scan's ``summary.json`` names (a foreign
-  audit is refused before any check). The honest case is then accepted at any sample of V3c's (``subset:1``
+  audit is refused before any check), held to the class circuit of the verifier's own window-circuit record
+  (``--circuit``, `circuit_of_record`): a phase whose audit's registration names another Program is refused by name,
+  in Lean and in the mirror. The honest case is then accepted at any sample of V3c's (``subset:1``
   included): the period check is the consistency check, the committed I/O against the certificates, and what a
   sample of one or two proof blocks leaves unproved is covert capacity, which K charges.
 """
@@ -58,6 +61,7 @@ import warden_serve as WS  # noqa: E402
 from verity.core.protocols.certifier.warden import WardenParams  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registration as RG  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
+from verity.ml.windows.interface import CIRCUIT  # noqa: E402
 
 CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "window")
 
@@ -77,15 +81,21 @@ def certificates(run: Path, w: int) -> list[dict]:
     return out
 
 
-def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None) -> dict:
+def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None,
+              circuit: str | None = None) -> dict:
     """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
     (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
     ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's,
     in place of ``answers.json``'s, and its registration must be the one whose trees the scan read (``summary.json``'s
     ``v3c``): the period's audit, its scan's trees and the run's record are one registration, and an audit of another
-    is refused by name, never put in its place."""
+    is refused by name, never put in its place. With ``v3c``, ``circuit`` is required: the class circuit, the Program
+    digest of the verifier's own window-circuit record (`circuit_of_record`), to which the check holds V3c's
+    registration. Without ``v3c`` the class circuit is the stand-in block audit's own Program, whose wiring the check
+    refuses first (with no block audit, none, whose parameters the check refuses)."""
     if v3c is not None:
+        if circuit is None:
+            raise SystemExit(f"{v3c}: V3c's audit is held to the verifier's own window-circuit record: give its circuit")
         audit = json.loads(v3c.read_text())
         read = (json.loads((scan / "summary.json").read_text()).get("v3c") or {}).get("registration")
         if read != (got := RG.digest(audit["registration"])):
@@ -95,6 +105,8 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     doc = json.loads((scan / "answers.json").read_text())
     if v3c is not None:
         doc["audits"] = [audit]
+    elif circuit is None and doc.get("audits"):
+        circuit = doc["audits"][0]["registration"]["program"]
     if len(doc["windows"]) != 1:
         raise SystemExit(f"{scan}: a group of {len(doc['windows'])} link-windows is one registration over all their "
                          "units, and the rows form reads one link-window's 2T: prove each with scan_zk.py --group 1")
@@ -113,7 +125,8 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     audits = doc.get("audits", [])
     caps = WardenParams(**dep["params"]).caps(1)
     params = {"audits": [{k: a[k] for k in ("program", "steps")} for a in audits], "cells": caps,
-              "first": x["window"], "jitter": LB.JITTER_BOUND, "key": dep["key"]["public"], "link": WS.LINK,
+              "circuit": circuit, "first": x["window"], "jitter": LB.JITTER_BOUND, "key": dep["key"]["public"],
+              "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),
               "session": dep["session"], "windows": 1}
@@ -121,6 +134,16 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     evidence = canonical_json({"audits": [a["answer"] for a in audits], "windows": [
         {"answer": answer, "certificates": certs, "registrations": x["registrations"]}]})
     return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
+
+
+def circuit_of_record(path: Path) -> str:
+    """The class circuit a window-circuit record names (``verity/window-circuit/v1``, the verifier's own, which
+    ``served_verdicts.sh`` keeps as ``window-circuit-w<K>-<class>.json`` beside V3c's ``v3c-w<K>-<class>``): its
+    Program's digest, which a window's registration under that class names too."""
+    doc = json.loads(path.read_text())
+    if doc.get("format") != CIRCUIT or not isinstance(doc.get("program"), str):
+        raise SystemExit(f"{path}: not a {CIRCUIT} record naming its program")
+    return doc["program"]
 
 
 def lean_check(exe: str, case: dict, d: Path,
@@ -154,15 +177,21 @@ def main(argv=None) -> int:
     ap.add_argument("--v3c", type=Path, metavar="PERIOD",
                     help="V3c's period.json (records_audit.py period): the one compute audit, for scans proved on its "
                          "trees (scan_zk.py --v3c)")
+    ap.add_argument("--circuit", type=Path, metavar="RECORD",
+                    help="the verifier's own window-circuit record of V3c's class (prove_path.py window-circuit): its "
+                         "program is the class circuit V3c's audit is held to; required with --v3c")
     ap.add_argument("cases", nargs="+", help="NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged]")
     a = ap.parse_args(argv)
+    if a.v3c and not a.circuit:
+        ap.error("--v3c needs --circuit: V3c's audit is held to the verifier's own window-circuit record")
+    circuit = circuit_of_record(a.circuit) if a.circuit else None
     m = mirror(a.mirror)
     a.out.mkdir(parents=True, exist_ok=True)
     got, ok = {}, True
     for spec in a.cases:
         name, _, rest = spec.partition("=")
         run, scan, *round_ = rest.split(",")
-        case = rows_case(Path(run), Path(scan), *round_, v3c=a.v3c)
+        case = rows_case(Path(run), Path(scan), *round_, v3c=a.v3c, circuit=circuit)
         (a.out / name).mkdir(exist_ok=True)
         (a.out / name / "case.json").write_text(json.dumps(case, indent=1, sort_keys=True))
         py, lean = m.reference(case), lean_check(a.lean, case, a.out / name)

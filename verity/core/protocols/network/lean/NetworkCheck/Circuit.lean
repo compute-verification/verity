@@ -632,11 +632,15 @@ def countsOf (r : Record) (s : SampledProofs.Wires.Summary) (held : List String)
     ((reg.openings.filter (pinned.contains ·.table)).map fun o => (o.ports.map fun p => o.units * 16 * words o.reader p).sum).sum
   { inputs, wired := s.wiredBits, registered, free := inputs - s.wiredBits - registered }
 
-/-- The parameters `pins` names, `{param: root}` with each root a string. -/
+/-- The pins, `{param: root}` with each root a string, as (param, root) pairs. -/
+def pinsOf (pins : Json) : Except String (List (String × String)) := do
+  (← fields pins).mapM fun (p, v) => match v with
+    | .str r => pure (p, r)
+    | _ => throw "pins are {param: root}"
+
+/-- The parameters `pins` names (`pinsOf`). -/
 def heldOf (pins : Json) : Except String (List String) := do
-  let ps ← fields pins
-  unless ps.all (fun (_, v) => match v with | .str _ => true | _ => false) do throw "pins are {param: root}"
-  pure (ps.map (·.1))
+  pure ((← pinsOf pins).map (·.1))
 
 def refusalWhy (e : SampledProofs.Wires.Refusal) : String :=
   s!"wires: {e.code.name}" ++ match e.wire with
