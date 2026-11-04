@@ -35,8 +35,9 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   file no blob holds is that session's reject, as a file `flock-verify` can't read is;
 * **per member** (`runMembers`): before any session runs, the statements are held as public structure
   (`membersHeld`): a statement naming no member of the parameters or one an earlier statement named, statements out of
-  the members' order (by first unit, the registration's: one order, one statement), or a statement of more than one
-  session (one session on live coins, never retried), rejects. Then each statement is verified as the one statement is,
+  the members' order (by first unit, the registration's: one order, one statement), or a statement of other than
+  exactly one session (one session on live coins, never retried; none proves nothing), rejects. Then each statement is
+  verified as the one statement is,
   on its member's circuit and registered file, after the statements before it, so no coin tree serves two statements.
   Its proofs in the other form than the parameters', or a session proving a unit outside its member's units, rejects;
   the evidence's `proved_units` are held to the union of the statements'. A stratum may span members, so a member's
@@ -492,8 +493,9 @@ def Member.first (m : Member) : Nat := m.units.foldl (fun a (lo, _) => min a lo)
 
 /-- The per-member form's statements as public structure (module docstring, **per member**), before any session runs:
 each names a member of the parameters that no earlier statement named, in the canonical order (each member's first unit,
-`Member.first`, after the previous one's: one order, so one statement), with at most one session (one pass on live
-coins, never retried). Their members, statement by statement. -/
+`Member.first`, after the previous one's: one order, so one statement), with exactly one session (one pass on live
+coins, never retried; a statement of none would prove nothing, and an undrawn member has no statement). Their members,
+statement by statement. -/
 def membersHeld (ms : Array Member) (sts : Array StatementFiles) : V (Array Member) := do
   let mut held : Array Member := #[]
   for st in sts do
@@ -505,9 +507,9 @@ def membersHeld (ms : Array Member) (sts : Array StatementFiles) : V (Array Memb
       if m.first < prev.first then
         throw (s!"member {name}: its statement follows member {prev.name}'s, whose units start after its own: the " ++
           "statements are in the members' order (by first unit, the registration's), one order for one statement")
-    if st.sessions.size > 1 then
-      throw (s!"member {name}: its statement has {st.sessions.size} sessions: a statement is one session on live " ++
-        "coins, never retried")
+    if st.sessions.size != 1 then
+      throw (s!"member {name}: its statement has {st.sessions.size} sessions: a statement is exactly one session on " ++
+        "live coins, never retried, and an undrawn member has no statement")
     held := held.push m
   pure held
 
@@ -673,8 +675,10 @@ private def whyT (r : V (Array Member)) : String := match r with
 #guard (memberT "m0" #[(5, 6), (0, 1)]).first == 0
 #guard ((membersHeld membersT #[statementT "m0", statementT "m2", statementT "m10"]).toOption.map (·.map (·.name))) ==
   some #["m0", "m2", "m10"]
-#guard ((membersHeld membersT #[statementT "m2" 0, statementT "m10"]).toOption.map (·.map (·.name))) == some #["m2", "m10"]
+#guard ((membersHeld membersT #[statementT "m2", statementT "m10"]).toOption.map (·.map (·.name))) == some #["m2", "m10"]
 #guard ((membersHeld membersT #[]).toOption.map (·.size)) == some 0
+#guard (whyT (membersHeld membersT #[statementT "m2" 0, statementT "m10"])).startsWith
+  "member m2: its statement has 0 sessions"
 #guard (whyT (membersHeld membersT #[statementT "m2", statementT "m0"])).startsWith
   "member m0: its statement follows member m2's, whose units start after its own"
 #guard (whyT (membersHeld membersT #[statementT "m0", statementT "m10", statementT "m2"])).startsWith

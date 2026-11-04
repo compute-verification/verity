@@ -2080,6 +2080,10 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     assert got[0] == "reject" and got[1].startswith("params: the parameters name no proofs"), got
 
 
+#: `OneStageZk.membersHeld`'s reason for a statement of other than exactly one session.
+ONE_SESSION = "a statement is exactly one session on live coins, never retried, and an undrawn member has no statement"
+
+
 def test_v2_per_member_runs_each_statement_on_its_members_inputs(server, server_v2):
     """v2's per-member form (`OneStageZk.runMembers`): parameters naming each member's units, circuit and registered
     file, evidence naming one statement per drawn member, its sessions the evidence's in statement order. Parameters
@@ -2087,9 +2091,9 @@ def test_v2_per_member_runs_each_statement_on_its_members_inputs(server, server_
     refused, and so is evidence whose statement names no member or has other keys. The audit v1 accepts is, with its
     proofs per member: rejected by the coin trees' check across statements (a tree no statement's session used, or one
     serving two members' statements), by the session's own verdict on its member's circuit (another member's circuit no
-    blob holds is not read), and for a statement naming a member the parameters don't, a member an earlier statement
-    named, a circuit no blob holds, proofs in the other form than the parameters', or proved units the statements didn't
-    prove. A unit proved outside its member's units and the refusal of what would accept (`MULTI_REFUSED`) need an
+    blob holds is not read), and for a statement naming a member the parameters don't, a statement of no session (an
+    undrawn member has no statement), a circuit no blob holds, proofs in the other form than the parameters', or proved
+    units the statements didn't prove. A unit proved outside its member's units and the refusal of what would accept (`MULTI_REFUSED`) need an
     accepted session: `within`'s guards hold the first, `stage_zk_one_statement` proves the second."""
     s, law = SETUPS[3], {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
@@ -2128,11 +2132,10 @@ def test_v2_per_member_runs_each_statement_on_its_members_inputs(server, server_
     assert run(per_member(("m0", ["s"]), ("m1", ["t"]))) == (
         "reject", f"proofs: session t's coins are not the challenger's: {SHARED_TREE}")
     assert run(per_member(("m2", ["s"]))) == ("reject", "proofs: member m2: the parameters name no such member")
-    assert run(per_member(("m0", []), ("m0", []), b=base0), p=p0) == (
-        "reject", "proofs: member m0: a second statement: a member's units are one statement's")
-    for sts in ((), (("m0", []),), (("m0", []), ("m1", []))):
-        assert run(per_member(*sts, b=base0), p=p0) == (
-            "reject", "proofs: the units the sessions proved are not the evidence's proved_units"), sts
+    assert run(per_member(("m0", []), b=base0), p=p0) == (
+        "reject", f"proofs: member m0: its statement has 0 sessions: {ONE_SESSION}")
+    assert run(per_member(b=base0), p=p0) == (
+        "reject", "proofs: the units the sessions proved are not the evidence's proved_units")
     assert run(base | {"proofs": {"public": _sha(public), "sessions": sessions(["s"])}, "sessions": ["s"]}) == (
         "reject", "proofs: the evidence's proofs are one statement's (public, sessions) and the parameters' per member "
                   "(members)")
@@ -2166,8 +2169,9 @@ def test_v2_per_member_runs_each_statement_on_its_members_inputs(server, server_
 def test_v2_per_member_holds_its_statements_to_the_members_order_and_one_session_each(server, server_v2):
     """v2's per-member statements are public structure (`OneStageZk.membersHeld`), held before any session runs, on
     sessions whose coins are the challenger's two trees: statements out of the members' order (by first unit, so `m10`
-    after `m2`, not by name) are refused, and so is a statement of two sessions; in the members' order, one session each,
-    each session runs and its own verdict rejects (no blob holds a circuit file)."""
+    after `m2`, not by name) are refused, and so are a member's second statement and a statement of two sessions; in the
+    members' order, exactly one session each, each session runs and its own verdict rejects (no blob holds a circuit
+    file)."""
     s, law = SETUPS[3], {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
@@ -2190,9 +2194,9 @@ def test_v2_per_member_holds_its_statements_to_the_members_order_and_one_session
     assert run(("m10", [("s", 0)]), ("m2", [("t", 1)])) == (
         "reject", "proofs: member m2: its statement follows member m10's, whose units start after its own: the statements "
                   "are in the members' order (by first unit, the registration's), one order for one statement")
-    assert run(("m2", [("s", 0), ("t", 1)])) == (
-        "reject", "proofs: member m2: its statement has 2 sessions: a statement is one session on live coins, never "
-                  "retried")
+    assert run(("m2", [("s", 0)]), ("m2", [("t", 1)])) == (
+        "reject", "proofs: member m2: a second statement: a member's units are one statement's")
+    assert run(("m2", [("s", 0), ("t", 1)])) == ("reject", f"proofs: member m2: its statement has 2 sessions: {ONE_SESSION}")
     assert run(("m2", [("s", 0)]), ("m10", [("t", 1)])) == ("reject", "verdict flock-verify/s did not accept")
 
 

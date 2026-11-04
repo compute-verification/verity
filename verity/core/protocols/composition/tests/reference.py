@@ -287,7 +287,7 @@ def _statement_check(p: dict, own: dict, st: dict, held: dict) -> str | None:
 
 def _members_held(members: dict, sts: list) -> str | None:
     """`OneStageZk.membersHeld`: each statement names a member of the params that no earlier statement named, in the
-    members' order by first unit (`Member.first`), with at most one session."""
+    members' order by first unit (`Member.first`), with exactly one session."""
     first = {m: min(lo for lo, _ in x["units"]) for m, x in members.items()}
     held: list[str] = []
     for st in sts:
@@ -301,9 +301,9 @@ def _members_held(members: dict, sts: list) -> str | None:
         if held and first[name] < first[held[-1]]:
             return (f"member {name}: its statement follows member {held[-1]}'s, whose units start after its own: the "
                     "statements are in the members' order (by first unit, the registration's), one order for one statement")
-        if len(st["sessions"]) > 1:
-            return (f"member {name}: its statement has {len(st['sessions'])} sessions: a statement is one session on live "
-                    "coins, never retried")
+        if len(st["sessions"]) != 1:
+            return (f"member {name}: its statement has {len(st['sessions'])} sessions: a statement is exactly one session "
+                    "on live coins, never retried, and an undrawn member has no statement")
         held.append(name)
     return None
 
