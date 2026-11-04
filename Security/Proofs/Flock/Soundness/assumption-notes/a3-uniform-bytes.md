@@ -37,7 +37,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   statements follows from `KSLin2` there (`bitsLin2On_of_ksLin2On`).
 - **The salts.** Flock's prover reads every hm96 leaf salt, 192 bytes a leaf,
   from the operating system (`getrandom`, the kernel's `getrandom(2)`, which `/dev/urandom` also reads; under the
-  ZK server, from its tap), and the recursive audit's ZK server and a registrant read theirs the same way (`os.urandom`).
+  firewall, from its tap), and the recursive audit's firewall and a registrant read theirs the same way (`os.urandom`).
   A3 per test (`UniformRandomBytesTest`) is that those reads pass the theorem's test as independent uniform bytes do, up
   to `η`. Zero knowledge's hiding theorems are stated at uniform salts; `Discharge/ZkView/OsSalts.lean` reads 192 bytes
   as one salt, one for one (`saltEquiv`; `leaf_os`: the executable's leaf at those bytes is the model's), and takes them
@@ -45,13 +45,13 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   `n` leaves), `hides_os` and `hides_leaves_os` (a registration, at one event), and, for the recursive audit,
   `Flock.SecurityProofs.recursiveZK_os_gap` (`Recursive/OsSalts.lean`).
 - **Its scope: the masks and the Reed–Solomon padding** are the operating system's bytes too (`live/src/zk_hooks.rs`),
-  read by the ZK server's Lean processes. Each rep's frame reads its samples in one call at its start (`flock-firewall
+  read by the firewall's Lean processes. Each rep's frame reads its samples in one call at its start (`flock-firewall
   frame`; `Frame.cmd` is `Frame.cmdWith IO.getRandomBytes`, and `Frame.drawsWith` refuses a read of any other length):
   the pads `h`, the dot-product mask `μ`, the inner rows' padding, `τ`'s salt and the pads tree's salts. The tap
   (`flock-firewall tap`) serves the prover's every other read: the mask slot's words, level 0's hiding, the other trees'
   salts and the coin tree's nonce. What ties them to the model is `Claims.ZKServer.frame_cmd` and `frame_draws` (the
   frame's read, on rep `i`'s stream of the tape, is the release's samples), as `drawOS_def` is for the unit sample;
-  `Claims/ZK/Os.lean` takes the ZK server's three theorems to those bytes (`zkServerLeanOs`). So no premise on a stream
+  `Claims/ZK/Os.lean` takes the firewall's three theorems to those bytes (`zkServerLeanOs`). So no premise on a stream
   generator is left on the salts or the masks.
 - **What is outside it.** A VM snapshot restored more than once repeats the kernel's CRNG state unless the kernel
   reseeds on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support). For one-time pads a

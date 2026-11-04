@@ -13,7 +13,7 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
     package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), the bandwidth audit over PoUS's store,
     PoUB over a node's registered store and network certification, each a Python verifier until its Lean verifier (its
     `lean/`) replaces it; the inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims'
-    ids, `service/flock/` C-Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
+    ids, `service/flock/` C-Flock's Lean verifier and the firewall (`Flock.Firewall`), `service/firewall/` the firewall's
     release side, and `difftest` the Python held to each Lean.
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
@@ -69,7 +69,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   16-bit limit). A plain path, C-Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
   works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and `flock-verify`
   refuses a plain session past what the plain theorem covers (one table today).
-- **One proof system** for PoUW, PoUS and network accounting: the workers behind the ZK server, the challenger and the
+- **One proof system** for PoUW, PoUS and network accounting: the prover behind the firewall, the challenger and the
   verifier. A protocol states what is committed, which units need proofs, the public Program each must pass and what it
   does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
   integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
@@ -84,9 +84,9 @@ The rules in force, each stated as itself; the friction skill has the standing r
   per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the window's
   live salt (`pouw.salt`) and the operands' committed roots, which a sampled proof block's proof derives. Grinding is a term
   of the guarantee: a steer that needs m noised coordinates succeeds with probability at most μ^m a try. No
-  retries: a failed proof is a visible failure, and nothing resamples. Outer proofs go through the ZK server as independent
+  retries: a failed proof is a visible failure, and nothing resamples. Outer proofs go through the firewall as independent
   sessions: each staged statement is fixed before any session flips coins and gets exactly one session, with its own live
-  coins in its own ZK server pass; no statement reads another session's transcript or coins; every session is recorded and
+  coins in its own firewall pass; no statement reads another session's transcript or coins; every session is recorded and
   every verdict counts (provisional).
 - **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier works in
   proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
@@ -118,7 +118,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
   choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
   never interprets, whose length is charged; the values, committed in a `verity.ml.commitments` scheme and registered
-  before any coin; and on a sample, the sampled proof blocks' openings, to the prover behind the ZK server.
+  before any coin; and on a sample, the sampled proof blocks' openings, to the prover behind the firewall.
 - **Results are per monitoring period, over all compute.** The time length of interest is the monitoring
   period (Glossary), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message, is presented for monitoring periods of one week, one month and one year, and over
@@ -182,7 +182,7 @@ reverted on `checked` (how a PR lands: the team skill).
   area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
   (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its component and never requires `Security/`: C-Flock's
-  executable verifier and the ZK server (`verity/core/service/flock/`, with the release side in
+  executable verifier and the firewall (`verity/core/service/flock/`, with the release side in
   `verity/core/service/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
   PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
   computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through

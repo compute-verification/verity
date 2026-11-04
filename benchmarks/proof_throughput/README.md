@@ -119,17 +119,17 @@ proving cost doesn't depend on the values it carries. Regenerate with `instances
 
 ## Configuration 2: recursive zero knowledge
 
-Workers would prove the inner statement natively with ZK off and the outer proof's arithmetic unmasked; a ZK server
+The prover would prove the inner statement natively with ZK off and the outer proof's arithmetic unmasked; the firewall
 (compiled Lean, CPU) would sample the masks and salts, check the outer relations and release; the auditor runs the Lean
 verifier. That split doesn't exist. The ZK point measures today's stand-in,
 labelled so in its result (`proof-throughput/zk-standin/v1`): `job.sh ZK=1` proves the same sampled sessions with
-`flock-circuit prove --zk --gpu` (M1's masked protocol) under the ZK server (`FC_FIREWALL=1`, PROTOCOL §10): `flock-circuit`'s
+`flock-circuit prove --zk --gpu` (M1's masked protocol) under the firewall (`FC_FIREWALL=1`, PROTOCOL §10): `flock-circuit`'s
 checks on its host threads and the Lean (`verity/core/service/flock/Flock/Firewall`, the `flock-firewall` processes the
 prover starts on the same node: the session loop, the frames and the finish, which commits level 0 and computes the
 opening and the proof file), and `zk-point` writes the result: the prover process's CPU seconds per session, the
-ZK server's recheck and opening times, the session's bytes out and its released proof. The ZK server's CPU per session is
+firewall's recheck and opening times, the session's bytes out and its released proof. The firewall's CPU per session is
 that CPU with `FC_FIREWALL=1` less the same point's with `FC_FIREWALL=0`; `/usr/bin/time` counts a `flock-firewall`
-process's CPU only once the prover has waited for it. The ZK server rechecks a witness the host assembled (`FC_HOST_WITNESS=1`,
+process's CPU only once the prover has waited for it. The firewall rechecks a witness the host assembled (`FC_HOST_WITNESS=1`,
 §10.2), so `ZK=1` sets it in both arms. `zk` prints each field and its source.
 
 ## Placement

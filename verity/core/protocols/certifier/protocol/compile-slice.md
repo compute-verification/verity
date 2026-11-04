@@ -92,7 +92,7 @@ held to its request's slot through ``map``.
   - With their own rows there, the proof block accepts them, and the native ``srv`` b‖c check refuses them.
 
 **In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py --slice w212`, and `--slice demo`), each proof
-block is proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`. The verifier opens only
+block is proved by Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`. The verifier opens only
 ``pub`` and the verdict, and runs the bindings, the carry chain's among them, on the proof blocks' b‖c. What the
 verifier received holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the ``cin`` and ``cout``
 rows whole.

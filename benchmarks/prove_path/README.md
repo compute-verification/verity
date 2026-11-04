@@ -2,7 +2,7 @@
 
 Network accounting under arbitrary vLLM usage proves a served run's step units after the fact: a precommitted compiler turns
 the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof system samples
-units on live coins, proves them with Flock `--zk` behind the Lean ZK server, and the Lean verifier accepts or refuses them.
+units on live coins, proves them with Flock `--zk` behind the Lean firewall, and the Lean verifier accepts or refuses them.
 `prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`), a single-GPU one (`--bundle`, TP1) or a closed
 Commit window of a `verity-vllm serve-openai` run (`--serve-run`, TP1): the prover commits the advice under hiding rows (a
 served window's the server committed) and each rank's window over the compiler's Programs for it, and the verifier audits each
@@ -71,7 +71,7 @@ commitments and never published.
 What doesn't change:
 - the sample: the service's rule, the partition file's law, on live coins read after the receipt, with ε surfaced at δ by the
   outcome;
-- the per-member `--zk` sessions behind the ZK server;
+- the per-member `--zk` sessions behind the firewall;
 - Lean's verdicts, the audit record and the Lean `Run.run` agreement.
 
 ## What an accepted audit means
@@ -166,7 +166,7 @@ match is refused. It is never a soundness gap.
 The unit closes the named gap: the advice is never opened, and the verifier never recompiles.
 
 - **Selection All.** Each registration has one compile unit, always proved. Its Spec's selection is `service.All`, so it is
-  never sampled. It reads no coins, and its proof goes through the ZK server like every unit's.
+  never sampled. It reads no coins, and its proof goes through the firewall like every unit's.
 - **Public inputs.** Only kinds AGENTS.md allows (protocol structure and hiding commitments):
   - d_C, the registered compiler's digest (`Capped.digest`), which fixes the compiler's code and ℓ;
   - ρ, the advice's root (`window.advice.root`);
