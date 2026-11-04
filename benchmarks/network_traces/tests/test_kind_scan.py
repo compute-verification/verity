@@ -3,8 +3,12 @@ certifier's certificates. A rows-form period (`period_case`'s accept, its regist
 committed window's, as `scan_zk` and `prove_path.py window-commit` write them) and its answer with the piece's placement
 scan clean as DIR/case.json and as the hold's three period files. A field no declaration names is a finding wherever it
 lies: the window's own number in V3c's provenance, a count of requests in an answer, an advice length beside the
-parameters, and a file DIR doesn't declare, a log among them. What either development check would feed the record
-is a finding naming the check: an advice binding in an audit's registration (what `records_audit.py audit --opening`
+parameters, and a file DIR doesn't declare, a log among them. Each Program DIR names is the verifier's: the parameters'
+program, the scan's descriptor and each scan registration's the scan Program pinned at the schedule
+(`scan_service.SCAN_PINS`), and each audit's descriptor and registration the class circuit, so another (a Program,
+the scan's annotations, which no digest covers, or a schedule no class pins) is a finding in either layout, naming no
+value; DIR without the period's files (the split's chain step) holds the scan's answers to some class's Program.
+What either development check would feed the record is a finding naming the check: an advice binding in an audit's registration (what `records_audit.py audit --opening`
 opens), at any length, the padded width included, and the chain's endpoint step (CR_ENDPOINT's rebuild), or any step
 the active-warden path doesn't run. On a finding the piece refuses, releasing nothing, its findings (file and key path)
 in its hold.
@@ -127,6 +131,75 @@ def test_a_field_no_declaration_names_is_a_finding_wherever_it_lies(tmp_path, pe
                                     ("period/evidence.json", "windows[].answer.public.requests"),
                                     ("period/params.json", "advice_bits")]
     assert KS.main([str(tmp_path / "dir")]) == 1
+
+
+OTHER = "ee" * 64
+#: a Program the verifier doesn't fix, planted in the rows-form accept's parameters and commitment: the findings it
+#: makes, each the period's part and key path, and why
+UNPINNED = {
+    "the parameters' program": (lambda p, c: p.update(program=OTHER), [("params", "program")], KS.NOT_PINNED),
+    "another scan": (lambda p, c: p["scan"].update(root="other"), [("params", "scan")], KS.NOT_PINNED),
+    "the scan's annotations": (lambda p, c: p["scan"].update(annotations={"note": "x"}),
+                               [("params", "scan.annotations")], KS.ANNOTATED),
+    "a window's registration": (lambda p, c: c["windows"][0].update(program=OTHER),
+                                [("commitment", "windows[].program")], KS.NOT_PINNED),
+    "another audit": (lambda p, c: p["audits"][0]["program"].update(root="other"),
+                      [("params", "audits[].program")], KS.NOT_CLASS),
+    "an audit's registration": (lambda p, c: c["audits"][0].update(program=OTHER),
+                                [("commitment", "audits[].program")], KS.NOT_CLASS),
+    "another class circuit": (lambda p, c: p.update(circuit=OTHER),
+                              [("params", "audits[].program"), ("commitment", "audits[].program")], KS.NOT_CLASS),
+}
+
+
+def _where(part: str, path: str, hold: bool) -> tuple[str, str]:
+    """A period's ``part`` and key path as a finding names them in DIR/case.json, or in the hold's period files."""
+    return ({"params": "period/params.json", "commitment": "period/commitment.bin"}[part], path) if hold else \
+        ("case.json", f"{part}.{path}")
+
+
+@pytest.mark.parametrize("name", list(UNPINNED))
+def test_a_program_the_verifier_doesnt_fix_is_a_finding_in_either_layout(tmp_path, period, name):
+    plant, want, why = UNPINNED[name]
+    case, answer = _case(period)
+    pin, circuit = case["params"]["program"], case["params"]["circuit"]
+    params, com = json.loads(canonical_json(case["params"])), json.loads(bytes.fromhex(case["commitment"]))
+    plant(params, com)
+    case = {**case, "params": params, "commitment": canonical_json(com).hex()}
+    for hold in (False, True):
+        found = KS.scan(_dir(tmp_path / str(hold), case, answer, hold))[0]
+        assert sorted((f.file, f.path, f.why) for f in found) == sorted((*_where(*w, hold), why) for w in want)
+        assert not any(v in str(f) for f in found for v in (OTHER, pin, circuit))
+    assert KS.main([str(tmp_path / "False")]) == 1
+
+
+def test_a_schedule_no_scan_class_pins_is_a_finding(tmp_path, period, monkeypatch):
+    case, answer = _case(period)
+    monkeypatch.delitem(KS.SCAN_PINS, period.params(case["params"]).schedule.digest.hex())
+    for hold in (False, True):
+        found = KS.scan(_dir(tmp_path / str(hold), case, answer, hold))[0]
+        assert [(f.file, f.path, f.why) for f in found] == [(*_where("params", "schedule", hold), KS.NO_PIN)]
+
+
+def test_the_scans_answers_name_the_scan_program_pinned_at_the_schedule_or_without_it_some_classs(tmp_path, period):
+    """The scan's answers (``chain/scan/answers.json``) beside the period name the scan Program pinned at its schedule;
+    in a DIR without the period's files (the split's chain step), any class's. Another is a finding."""
+    case, answer = _case(period)
+    pin = case["params"]["program"]
+    other_class = next(v for v in KS.SCAN_PINS.values() if v != pin)
+    for split, held in ((False, [pin]), (True, [pin, other_class])):
+        for i, program in enumerate((pin, other_class, OTHER)):
+            d = tmp_path / f"{split}-{i}"
+            if split:
+                d.mkdir()
+                (d / "answer.json").write_text(json.dumps(answer))
+            else:
+                _dir(d, case, answer)
+            (d / "chain" / "scan").mkdir(parents=True)
+            (d / "chain" / "scan" / "answers.json").write_text(json.dumps(
+                {"format": "answers", "delta": "1/100", "registration": {"program": program}, "windows": []}))
+            want = [] if program in held else [("chain/scan/answers.json", "registration.program")]
+            assert _paths(KS.scan(d)[0]) == want, (split, i)
 
 
 def test_an_audit_that_opened_the_advice_is_a_finding_naming_the_check_at_any_length(tmp_path, period):

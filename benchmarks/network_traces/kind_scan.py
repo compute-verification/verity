@@ -17,6 +17,13 @@ or a development check's field. A list's length and an object's keys are the sha
 no declaration names, one a change adds included, is a finding until its kind is declared here: a window's own number, a
 count of its requests, the advice's length.
 
+A descriptor is structure only as the Program the verifier fixes, so DIR's Programs are held to it (`pinned`): the
+parameters' ``program``, the scan's descriptor (``scan``) and each scan registration's Program (the commitment's windows'
+and the scan's answers') are the scan Program pinned at the parameters' schedule's digest (`scan_service.SCAN_PINS`;
+where DIR holds no parameters, some class's), the descriptor with no ``annotations``, which no digest covers; and each
+audit's descriptor and registration are the class circuit, the parameters' ``circuit``. V3c's own copy of its audit's
+Program (``v3c-audit/period.json``) is not held here.
+
 The record path's two development checks are findings wherever they reach the verifier (`Development`, each naming its
 check): an advice binding in a registration (``window.compiler``, ``window.advice``: the compiler and the advice's root and
 length an audit opens, `records_audit.py audit --opening`), since no audit of record reads an advice (V3c's class
@@ -51,7 +58,9 @@ from pathlib import Path
 from typing import Any
 
 from verity.core import wire as W
+from verity.core.protocols.certifier.scan_service import SCAN_PINS
 from verity.core.protocols.certifier.warden import WardenParams
+from verity.ml.circuits.codec import program_digest
 
 CERTIFICATE = "certificate"
 KINDS = (*(k for k in W.KINDS if k in W.PUBLIC), CERTIFICATE)
@@ -78,7 +87,8 @@ def under(prefix: str, table: Mapping[str, Any]) -> dict[str, Any]:
     return {f"{prefix}.{k}": v for k, v in table.items()}
 
 
-#: a Program's descriptor (``verity-ir/descriptor/v1``): the circuit, every field of it structure
+#: a Program's descriptor (``verity-ir/descriptor/v1``): the circuit, every field of it structure, as the Program the
+#: verifier pins (`pinned`)
 DESCRIPTOR = {"**": S}
 #: a window's circuit record (``verity/window-circuit/v1``) and its wires' order (``verity/wire-order/v1``): the circuit's
 #: description, every field of it structure
@@ -319,6 +329,67 @@ def scan_doc(rel: str, doc: Any, kinds: Counter, docs: Mapping[str, Mapping[str,
     return out
 
 
+#: why `pinned` finds a Program the verifier doesn't fix
+NO_PIN = "a schedule no scan class pins (scan_service.SCAN_PINS), so no scan Program is the verifier's at it"
+NOT_PINNED = "not the scan Program pinned at the schedule's digest (scan_service.SCAN_PINS)"
+NOT_CLASS = "not the class circuit (the parameters' circuit), which each audit runs"
+ANNOTATED = "a descriptor's annotations, which no digest covers"
+
+
+def _hex(doc: Any, k: str) -> Any:
+    """``doc[k]``, hex of JSON (`HEX`), as its JSON; None where it isn't, which `scan_doc` finds."""
+    try:
+        return json.loads(bytes.fromhex(doc[k]))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _programs(doc: Any, key: str) -> list[Any]:
+    """The ``program`` of each item of ``doc``'s list ``key`` that names one."""
+    items = doc.get(key) if isinstance(doc, dict) else None
+    return [x["program"] for x in items if isinstance(x, dict) and "program" in x] if isinstance(items, list) else []
+
+
+def _digest(desc: Any) -> str | None:
+    return program_digest(desc) if isinstance(desc, dict) else None
+
+
+def pinned(seen: Mapping[str, Any]) -> list[Finding]:
+    """DIR's Programs held to the verifier's (module docstring), ``seen`` its files' JSON by path: each finding names
+    its file and key path, never the value."""
+    case, out, pins = seen.get("case.json"), [], []
+    periods = [("case.json", "params.", case.get("params"), "case.json", "commitment.", _hex(case, "commitment"))
+               ] if isinstance(case, dict) else []
+    if {"period/params.json", "period/commitment.bin"} & seen.keys():
+        periods.append(("period/params.json", "", seen.get("period/params.json"), "period/commitment.bin", "",
+                        seen.get("period/commitment.bin")))
+    for pf, pp, params, cf, cp, commitment in periods:
+        params = params if isinstance(params, dict) else {}
+        try:
+            pin = SCAN_PINS.get(WardenParams(**params["schedule"]).digest.hex())
+        except (KeyError, TypeError, ValueError):
+            pin = None
+        scans = [(cf, f"{cp}windows[].program", p) for p in _programs(commitment, "windows")]
+        scans += [(pf, f"{pp}program", params["program"])] if "program" in params else []
+        if "scan" in params:
+            scans.append((pf, f"{pp}scan", _digest(params["scan"])))
+            if isinstance(params["scan"], dict) and params["scan"].get("annotations", {}) != {}:
+                out.append(Finding(pf, f"{pp}scan.annotations", ANNOTATED))
+        if pin is None:
+            out.append(Finding(pf, f"{pp}schedule", NO_PIN))
+        else:
+            pins.append(pin)
+            out += [Finding(f, p, NOT_PINNED) for f, p, v in scans if v != pin]
+        audits = [(pf, f"{pp}audits[].program", _digest(d)) for d in _programs(params, "audits")]
+        audits += [(cf, f"{cp}audits[].program", p) for p in _programs(commitment, "audits")]
+        out += [Finding(f, p, NOT_CLASS) for f, p, v in audits if v is None or v != params.get("circuit")]
+    answers = seen.get("chain/scan/answers.json")
+    reg = answers.get("registration") if isinstance(answers, dict) else None
+    if isinstance(reg, dict) and "program" in reg and reg["program"] not in (pins if periods else [*SCAN_PINS.values()]):
+        out.append(Finding("chain/scan/answers.json", "registration.program", NOT_PINNED))
+    return out
+
+
 def _json(rel: str, p: Path, out: list[Finding]) -> Any:
     if p.is_symlink():
         out.append(Finding(rel, "", "a symlink, which the verifier would receive as the file it names"))
@@ -331,9 +402,9 @@ def _json(rel: str, p: Path, out: list[Finding]) -> Any:
 
 
 def scan(d: Path, docs: Mapping[str, Mapping[str, Any]] = DOCS) -> tuple[list[Finding], Counter]:
-    """Every file under ``d`` scanned by its declaration in ``docs`` (module docstring; `DOCS`, a piece's DIR): the
-    findings, and the leaves counted by kind."""
-    kinds, out = Counter(), []
+    """Every file under ``d`` scanned by its declaration in ``docs`` (module docstring; `DOCS`, a piece's DIR, its
+    Programs held to the verifier's: `pinned`): the findings, and the leaves counted by kind."""
+    kinds, out, seen = Counter(), [], {}
     for p in sorted(x for x in d.rglob("*") if x.is_file() or x.is_symlink()):
         rel = p.relative_to(d).as_posix()
         if rel in TEXT and docs is DOCS and not p.is_symlink():
@@ -344,7 +415,8 @@ def scan(d: Path, docs: Mapping[str, Mapping[str, Any]] = DOCS) -> tuple[list[Fi
             continue
         if (doc := _json(rel, p, out)) is not None:
             out += scan_doc(rel, doc, kinds, docs)
-    return out, kinds
+            seen[rel] = doc
+    return out + (pinned(seen) if docs is DOCS else []), kinds
 
 
 def padded(rel: str, reg: Any) -> list[Finding]:

@@ -7,7 +7,8 @@ link-window: the period mirror's certifier/v0 accept (`period_case`), its profil
 the kept gate's host, the checks on the prover's node), then goes through `served_verdicts.py record` into the window
 report and the block record's certifier leg, which `block_record.check` holds and its schema admits, and its case.json
 is the three files `network-period` read, as `composite.py` reads a piece's case, each field of DIR's of a public kind
-or a certificate (`kind_scan`); the chain opens no endpoint records, and its report stays in the kept run. A window
+or a certificate and each Program the verifier's (`kind_scan`; the chain's stand-in scan pinned at the run's schedule,
+`SCAN`); the chain opens no endpoint records, and its report stays in the kept run. A window
 request the warden didn't certify is rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a period the check
 rejects are rejects; a rehearsal the gate's check failed (each request late) and a step that can't run (no kept run, no
 report, no build, the time limit) refuse, which leaves the certifier missing, and no process of a step's group outlives
@@ -50,10 +51,12 @@ import certifier_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
 import kind_scan as KS  # noqa: E402
 import served_verdicts as S  # noqa: E402
+from test_scan_zk import sz  # noqa: E402
 from test_served_session import RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
+from verity.core.protocols.certifier.scan_service import SCAN_PINS  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registration as RG  # noqa: E402
-from verity.ml.circuits.codec import canonical_json  # noqa: E402
+from verity.ml.circuits.codec import canonical_json, program_digest  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
 PERIOD_CASE = ROOT / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
@@ -68,6 +71,26 @@ GATE_HOST = "gate-host"
 #: the window's private values, as numbers no other field of the chain's files takes: its request and output counts
 REQUESTS, OUTPUTS = 7919, 7933
 PRIVATE = {REQUESTS, OUTPUTS}
+#: the chain's stand-in scan Program (`_chain_out`'s ``scan/joint/program.json``) and its digest, pinned at the
+#: synthetic run's schedule in this process (`pinned`) and in the piece's (`_python`): a class's own is tens of MB
+STAND_IN = {"schema": "verity-ir/descriptor/v1", "root": "stand-in"}
+SCAN, SCHEDULE = program_digest(STAND_IN), sz.PARAMS.digest.hex()
+
+
+@pytest.fixture(autouse=True)
+def pinned(monkeypatch):
+    monkeypatch.setitem(SCAN_PINS, SCHEDULE, SCAN)
+
+
+def _python(tmp_path: Path) -> str:
+    """The piece's Python: this one, pinning the stand-in scan at the synthetic run's schedule
+    (`scan_service.SCAN_PINS`) before it runs the script its first argument names, as ``python SCRIPT ARGS`` would."""
+    w = tmp_path / "python" / "pinned.py"
+    w.parent.mkdir(exist_ok=True)
+    w.write_text("import runpy, sys\nfrom verity.core.protocols.certifier.scan_service import SCAN_PINS\n"
+                 f"SCAN_PINS[{SCHEDULE!r}] = {SCAN!r}\nsys.argv[:] = sys.argv[1:]\n"
+                 "runpy.run_path(sys.argv[0], run_name='__main__')\n")
+    return f"{shlex.quote(sys.executable)} {shlex.quote(str(w))}"
 
 
 @pytest.fixture(scope="module")
@@ -138,9 +161,9 @@ def _chain_out(d: Path, verdict: str, w: int) -> Path:
     (out / "scan" / "joint").mkdir(parents=True)
     (out / "report" / "report.json").write_text(json.dumps({"verdict": verdict, "why": None if verdict == "accepted"
                                                             else {"n2": "a window refused"}}))
-    (out / "scan" / "answers.json").write_text(json.dumps({"registration": {"program": "ab" * 64}, "windows": [
+    (out / "scan" / "answers.json").write_text(json.dumps({"registration": {"program": SCAN}, "windows": [
         {"window": w, "answer": {"verdict": "accept"}, "registrations": []}]}))
-    (out / "scan" / "joint" / "program.json").write_text("{}")
+    (out / "scan" / "joint" / "program.json").write_text(json.dumps(STAND_IN))
     return d
 
 
@@ -158,7 +181,7 @@ def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None
     """The piece's command, its `network-period` `_stub_lean`'s answering ``answer``."""
     lean = lean or _stub_lean(tmp_path, answer)
     cmd = cmd or f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
-    return (f"{shlex.quote(sys.executable)} {shlex.quote(str(HERE / 'certifier_piece.py'))} piece \"$@\" "
+    return (f"{_python(tmp_path)} {shlex.quote(str(HERE / 'certifier_piece.py'))} piece \"$@\" "
             f"--lean {shlex.quote(str(lean))} --chain-cmd {shlex.quote(cmd)}")
 
 
@@ -475,7 +498,7 @@ def _private_chain_out(out: Path) -> Path:
         "scan/summary.json": {"warden_run": RUN, "T": 30, "ok": True, "responses": {"0": OUTPUTS}, "rounds": {
             "honest": {"ok": True, "audit": {"accepted": True, "window_accepted": True}},
             "chain": {"ok": True, "audit": {"accepted": False, "window_accepted": False}}}},
-        "scan/answers.json": {"format": "answers", "delta": "1/100", "registration": {"program": "ab" * 64},
+        "scan/answers.json": {"format": "answers", "delta": "1/100", "registration": {"program": SCAN},
                               "windows": [{"window": 0, "answer": {"verdict": "accept"}, "registrations": []}]},
         "job.json": {"path": CR.WARDEN, "run": "r-chain", "rc": {"n2": "0", "scan": "0"}},
     }
@@ -542,8 +565,8 @@ def _v3c(serve: Path, period: dict | None = None, committed: bool = True, circui
 
 def _hook(step: str, d: Path, dir_: Path, v3c: Path, *args: str) -> int:
     """The split piece's ``step`` as `served_verdicts.sh`'s ``certifier_step`` runs it: ``bash -c CMD _ D K DIR V3C`` in
-    the tree, its output DIR/<step>.log."""
-    cmd = f"{shlex.quote(sys.executable)} {shlex.quote(str(HERE / 'certifier_piece.py'))} {step} \"$@\" " + \
+    the tree, its output DIR/<step>.log, on the piece's Python (`_python`) beside the serve dir ``d``."""
+    cmd = f"{_python(d.parent)} {shlex.quote(str(HERE / 'certifier_piece.py'))} {step} \"$@\" " + \
         " ".join(map(shlex.quote, args))
     dir_.mkdir(parents=True, exist_ok=True)
     with open(dir_ / f"{step}.log", "w") as log:
@@ -567,12 +590,13 @@ def _lean(tmp_path: Path, answer: dict) -> list[str]:
     return ["--lean", str(_stub_lean(tmp_path, answer))]
 
 
-#: V3c's period.json as `records_audit.py period` writes it (its values stand-ins of the kinds `kind_scan` declares: the
-#: period check here is a stub)
-PERIOD = {"answer": {"verdict": "accept"}, "free": 5, "program": {"v3c": 1}, "registration": {"program": "cd" * 64},
-          "steps": 0}
+#: V3c's period.json as `records_audit.py period` writes it (its values stand-ins of the kinds `kind_scan` declares, its
+#: Program and registration's the class circuit's, as `kind_scan.pinned` holds them: the period check here is a stub)
+V3C_PROGRAM = {"schema": "verity-ir/descriptor/v1", "root": "window-circuit"}
+PERIOD = {"answer": {"verdict": "accept"}, "free": 5, "program": V3C_PROGRAM,
+          "registration": {"program": program_digest(V3C_PROGRAM)}, "steps": 0}
 #: the verifier's own window-circuit record at V3c's class, the fields `scan_period.circuit_of_record` reads
-CIRCUIT = {"format": "verity/window-circuit/v1", "program": "c3" * 64}
+CIRCUIT = {"format": "verity/window-circuit/v1", "program": program_digest(V3C_PROGRAM)}
 
 
 def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_path, warden, period, capsys,
