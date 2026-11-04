@@ -144,6 +144,77 @@ def test_a_pr_made_before_the_port_deleting_a_file_the_port_only_ported_merges_w
     assert entries[2].state == "refused" and entries[2].why == "conflicts with `next` in Lib/Edited.lean", entries[2].why
 
 
+def test_the_port_merged_onto_a_tip_that_deleted_a_file_it_only_ported_merges_with_it_deleted(world, tmp_path):
+    """The mirror: a head carrying the port merges onto a tip that, since the port's base, deleted a `.lean` file the head
+    changed only by porting it.  Where the head's text is what its own codemod makes of the merge base's, the merge takes the
+    tip's deletion and the log names it; a head that changed the file beyond porting it still conflicts."""
+    from research.queue import conflicting_files
+
+    old = "-- made before the port\nimport Init\n"
+    _move_main(world, {"Lib/Gone.lean": old, "Lib/Edited.lean": old})
+    tooling = _tooling(tmp_path / "argv")
+    world.gh.put(1, one := world.change({**tooling, "Lib/Gone.lean": _port(old), "a.txt": "a1\n"}))
+    world.gh.put(2, world.change({**tooling, "Lib/Edited.lean": _port(old) + "\ndef y := 2\n"}))
+    main = _move_main(world, {"Lib/Gone.lean": None, "Lib/Edited.lean": None})
+    assert conflicting_files(world.dev, main, one) == []
+    members, entries = world.queue().sync()
+    assert [m.pr for m in members] == [1], {n: e.why for n, e in entries.items()}
+    assert _git(world.origin, "ls-tree", "--name-only", members[0].commit, "--", "Lib/Gone.lean") == ""
+    assert _show(world, members[0].commit, "a.txt") == "a1\n"
+    assert ("research queue: `next` deletes Lib/Gone.lean, which #1 changed only by porting it to the module system: deleted "
+            "in the merge" in world.logs), world.logs
+    assert entries[2].state == "refused" and entries[2].why == "conflicts with `next` in Lib/Edited.lean", entries[2].why
+
+
+def _criss_cross(world: World, old: str, edited: str) -> tuple[str, str]:
+    """Two commits whose merge bases are two (a criss-cross history): ``a`` edits `Lib/Gone.lean` from ``old`` to ``edited``,
+    ``b`` leaves it, and each side merges the other; their texts of the file are ``edited``."""
+    base = world.change({"Lib/Gone.lean": old})
+    a = world.change({"Lib/Gone.lean": edited, "a.txt": "a1\n"}, base=base)
+    b = world.change({"b.txt": "b1\n"}, base=base)
+    out = []
+    for ours, theirs in ((a, b), (b, a)):
+        _git(world.dev, "checkout", "-q", "--detach", ours)
+        _git(world.dev, "merge", "-q", "--no-ff", "--no-edit", theirs)
+        out.append(_git(world.dev, "rev-parse", "HEAD"))
+    return out[0], out[1]
+
+
+@pytest.mark.parametrize("deleter", ["tip", "head"])
+def test_a_criss_cross_merge_takes_the_deletion_when_one_merge_base_ports_to_the_porting_sides_text(world, tmp_path, deleter):
+    """A criss-cross history has more than one merge base, here two with different texts of the file.  The deletion is taken
+    when the porting side's text is the port of one base's text, whichever side deleted it (`port_deletions`), and `taken`
+    says which side that was."""
+    from research.queue import merged_tree, taken
+
+    old, edited = "-- made before the port\nimport Init\n", "-- edited before the port\nimport Init\n"
+    ab, ba = _criss_cross(world, old, edited)
+    porter = world.change({**_tooling(tmp_path / "argv"), "Lib/Gone.lean": _port(edited)}, base=ab)
+    deleting = world.change({"Lib/Gone.lean": None}, base=ba)
+    tip, head = (deleting, porter) if deleter == "tip" else (porter, deleting)
+    assert len(_git(world.dev, "merge-base", "--all", tip, head).split()) == 2
+    tree, files, _ = merged_tree(world.dev, tip, head)
+    assert tree and files == ["Lib/Gone.lean"], files
+    assert _git(world.dev, "ls-tree", "--name-only", tree, "--", "Lib/Gone.lean") == ""
+    assert _git(world.dev, "show", f"{tree}:a.txt") == "a1" and _git(world.dev, "show", f"{tree}:b.txt") == "b1"
+    assert taken(world.dev, tree, head, files) == (([], [], files) if deleter == "tip" else ([], files, []))
+
+
+@pytest.mark.parametrize("deleter", ["tip", "head"])
+def test_a_deletion_of_a_file_the_other_side_changed_beyond_porting_still_conflicts(world, tmp_path, deleter):
+    """A porting side's text that no merge base's text ports to, a change beyond porting it, keeps the modify/delete conflict
+    in either direction: the deletion would drop that change."""
+    from research.queue import conflicting_files, merged_tree
+
+    old, edited = "-- made before the port\nimport Init\n", "-- edited before the port\nimport Init\n"
+    ab, ba = _criss_cross(world, old, edited)
+    porter = world.change({**_tooling(tmp_path / "argv"), "Lib/Gone.lean": _port(edited) + "\ndef y := 2\n"}, base=ab)
+    deleting = world.change({"Lib/Gone.lean": None}, base=ba)
+    tip, head = (deleting, porter) if deleter == "tip" else (porter, deleting)
+    assert merged_tree(world.dev, tip, head)[:2] == (None, ["Lib/Gone.lean"])
+    assert conflicting_files(world.dev, tip, head) == ["Lib/Gone.lean"]
+
+
 def test_a_base_without_the_port_merges_lean_files_as_the_pr_wrote_them(world):
     """Before the port lands the tree has no codemod, and the merge is git's alone."""
     new = "import Lib.Old\n"

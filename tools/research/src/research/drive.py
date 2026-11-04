@@ -3751,7 +3751,7 @@ class Driver:
 
     def _clean_merge(self, tip: str, head: str) -> tuple[str | None, str]:
         """(the tree of ``head`` merged onto ``tip``, "") when it merges as `Queue._merge` merges, with ``tip``'s merge drivers
-        and a merge whose every conflict is in a pin or in Lean ``tip`` only ported that ``head`` deletes kept, each pin
+        and a merge whose every conflict is in a pin or in Lean one side deletes that the other only ported kept, each pin
         rebuilt from the merged tree (`repinned`) and each such file deleted (`port_deletions`), and the merged tree's Lean
         on the Lean module system once the tree has it (`ported`), else (None, why).  A git without
         `--attr-source` merges without the drivers, which conflicts more."""
