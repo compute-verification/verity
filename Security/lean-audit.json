@@ -3201,6 +3201,11 @@
    "type_hash": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b",
    "missing": "honest",
    "why": "its premises at the network certifier's rows are the sampled leg's (Claims.Sampling.KS and CommitmentScheme.Binds at each deployment), whose honest lemmas at the deployed record take the assembled record's hypotheses, which are no named assumptions"
+  },
+  "NetTiming.SecurityProofs.PeriodTiedCount": {
+   "type_hash": "faf629a35f50fc38166541278e70dd27b5f618a9bb87d964750812e1b35c9b0b",
+   "missing": "honest",
+   "why": "its premises at the deployed parse are the sampled leg's bridge facts (SharedRootsParsed, WindowsPlaced, TiedExposed), CommitmentScheme.Binds at the deployment and the period check's properties at its phases (RowsTiesOrdered, CircuitCounts), whose honest lemmas at the deployed record take the assembled record's hypotheses, which are no named assumptions"
   }
  },
  "layers": {
