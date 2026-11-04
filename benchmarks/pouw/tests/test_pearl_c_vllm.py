@@ -1413,7 +1413,8 @@ def test_served_passes_same_holds_two_seeded_serves_of_one_load_to_the_same_pass
 def test_served_passes_counts_a_passs_linear_macs_and_verify_run_its_credited_cells_macs(tmp_path):
     """`pearl_c.window.macs` (served.json's) is a pass's real rows × n × k, and `verify_run.pass_macs` the MACs of the cells
     `clear_work` credits (`UnitRecord.credited` over the scheme's tiles, at kept K), `credit_at_assumption`'s ``macs`` over
-    the pass alone: a filler row, an excluded A row and an excluded B row each take their cells out."""
+    the pass alone: a filler row and an excluded A row each take their cells out, and an excluded B row its block of 64
+    columns' (the band rule)."""
     from verity_vllm.protocols.pouw.pearl_c.window import macs
 
     path = proved_pass(tmp_path, PROMOTED[0])[0]
@@ -1423,9 +1424,12 @@ def test_served_passes_counts_a_passs_linear_macs_and_verify_run_its_credited_ce
     assert any(u["excluded_a"] for u in man["matmuls"]) and any(u["real_rows"] < u["m"] for u in man["matmuls"])
     assert VR.pass_macs(p) == VR.credit_at_assumption([p], 459, Fraction(1, 100))["macs"] < macs(str(path))
     r = p.records[0]
-    b = min(set(range(r.matmul.shape.n)) - set(r.excluded_b))
+    blocks = {j // PW.BAND for j in (*r.excluded_b, *r.voluntary_b)}
+    b = min(j for j in range(r.matmul.shape.n) if j // PW.BAND not in blocks)
+    block = sum(1 for j in range(r.matmul.shape.n) if j // PW.BAND == b // PW.BAND)
     more = dataclasses.replace(p, records=[dataclasses.replace(r, excluded_b=(*r.excluded_b, b)), *p.records[1:]])
-    assert VR.pass_macs(more) == VR.pass_macs(p) - (r.real_rows - len(r.excluded_a)) * r.k_kept
+    assert not r.voluntary_a and block > 1
+    assert VR.pass_macs(more) == VR.pass_macs(p) - (r.real_rows - len(r.excluded_a)) * block * r.k_kept
 
 
 def test_verify_run_refuses_a_call_index_at_2_to_the_32_and_one_held_twice(tmp_path):
@@ -1588,8 +1592,8 @@ def test_volunteer_pass_on_the_device_counts_every_tile_as_the_replay_and_gives_
 
 
 def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex_or_its_published_root(tmp_path):
-    """A pass whose rows over a cap are given up (`volunteer_pass`) is accepted by the run's verdict, which credits none of
-    the given-up rows' cells.  More given-up rows than V-EX allows (⌈m/64⌉ of a call's A), or records changed after the
+    """A pass whose rows over a cap are given up (`volunteer_pass`) is accepted by the run's verdict, which credits no cell
+    of a given-up A row's band of 64 rows or a given-up B row's block of 64 columns.  More given-up rows than V-EX allows (⌈m/64⌉ of a call's A), or records changed after the
     pass published their root, the verdict refuses before it takes its coin."""
     VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
@@ -1599,8 +1603,11 @@ def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex
     assert good["answer"]["verdict"] == "accept", good["line"]
     p = VR.load(path, coins)
     assert any(r.voluntary_a or r.voluntary_b for r in p.records)
-    kept = sum(r.k_kept * (r.real_rows - len(r.excluded_a) - len(r.voluntary_a)) *
-               (r.matmul.shape.n - len(r.excluded_b) - len(r.voluntary_b)) for r in p.records)
+    def band_rule(r):
+        bands, blocks = {i // PW.BAND for i in r.voluntary_a}, {j // PW.BAND for j in (*r.excluded_b, *r.voluntary_b)}
+        rows = sum(1 for i in range(r.real_rows) if i not in r.excluded_a and i // PW.BAND not in bands)
+        return r.k_kept * rows * sum(1 for j in range(r.matmul.shape.n) if j // PW.BAND not in blocks)
+    kept = sum(band_rule(r) for r in p.records)
     whole = sum(r.k_kept * (r.real_rows - len(r.excluded_a)) * (r.matmul.shape.n - len(r.excluded_b)) for r in p.records)
     assert good["answer"]["public"]["work"]["macs"] == kept < whole
     assert good["answer"]["public"]["work"] == {**VR.credit_at_assumption([p], 3, VR.DELTA), "credited": 0}
@@ -1937,36 +1944,36 @@ def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
 
 
-def test_volunteer_words_gives_up_a_b_row_for_a_row_the_a_count_leaves_over():
-    """V-EX allows ⌈m/64⌉ = 1 A row of a 16-row unit: of two credited rows over their row caps the one further over is
-    given up as an A row, and the other gives up the B row holding its flagged atom-word.  A third row over its cap in the
-    other tile finds the weight's ⌈n/64⌉ = 1 B row taken, and `over_words` names its tile as left over."""
+def test_volunteer_words_gives_up_one_a_row_a_band_and_a_b_row_once_the_a_count_is_spent():
+    """Of two credited rows of one band over their row caps, the one further over is given up as an A row, and the band
+    rule leaves the other no credit, so it needs no B row.  With V-EX's ⌈m/64⌉ = 2 A rows of a 128-row unit already
+    spent, the row furthest over gives up the B row holding its flagged atom-word, whose block of 64 columns is the
+    weight's every column, and no tile is left over."""
     s = PPD.scheme_of("pearl-c-h100-v1-h3", k_min=32, tile=(16, 16))
-    rec = PW.UnitRecord(Matmul(7, Shape(16, 128, 32), 2), 16, 128)
-    assert len(s.tiles(rec.matmul.shape)) == 2
+    rec = PW.UnitRecord(Matmul(7, Shape(128, 128, 32), 2), 128, 128)
+    tiles = s.tiles(rec.matmul.shape)
+    first = next(t for t, x in enumerate(tiles) if x.rows[0] == 0 and x.cols[0] == 0)
 
     def counts(*flags):
-        out = {(0, t): (np.zeros((16, 16), np.int64), np.zeros((16, 16), np.int64)) for t in range(2)}
-        for t, i, j, n in flags:
-            out[(0, t)][0][i, j] = n
+        out = {(0, t): (np.zeros((16, 16), np.int64), np.zeros((16, 16), np.int64)) for t in range(len(tiles))}
+        for i, j, n in flags:
+            out[(0, first)][0][i, j] = n
         return out
 
-    two = counts((0, 0, 3, 2), (0, 1, 5, 1))
-    assert {x["tile"]: [r[0] for r in x["rows"]] for x in CW.over_words(s, [rec], two)} == {0: [0, 1]}
+    two = counts((0, 3, 2), (1, 5, 1))
+    assert {x["tile"]: [r[0] for r in x["rows"]] for x in CW.over_words(s, [rec], two)} == {first: [0, 1]}
     va, vb = CW.volunteer_words(s, [rec], two)
-    assert (va, vb) == ({7: [0]}, {2: [5]})
-    given = [PW.UnitRecord(rec.matmul, 16, 128, voluntary_a=tuple(va[7]), voluntary_b=tuple(vb[2]))]
-    assert CW.over_words(s, given, two) == []
-    three = counts((0, 0, 3, 2), (0, 1, 5, 1), (1, 2, 7, 1))
-    va, vb = CW.volunteer_words(s, [rec], three)
-    assert (va, vb) == ({7: [0]}, {2: [5]})
-    given = [PW.UnitRecord(rec.matmul, 16, 128, voluntary_a=tuple(va[7]), voluntary_b=tuple(vb[2]))]
-    assert [(x["tile"], [r[0] for r in x["rows"]]) for x in CW.over_words(s, given, three)] == [(1, [2])]
+    assert (va, vb) == ({7: [0]}, {})
+    assert CW.over_words(s, [dataclasses.replace(rec, voluntary_a=(0,))], two) == []
+    spent = dataclasses.replace(rec, voluntary_a=(64, 100))
+    va, vb = CW.volunteer_words(s, [spent], two)
+    assert (va, vb) == ({7: [64, 100]}, {2: [3]})
+    assert CW.over_words(s, [dataclasses.replace(spent, voluntary_b=(3,))], two) == []
 
 
 def _volunteer_words_one_row_at_a_time(scheme, records, words):
     """`clear_work.volunteer_words` with its A count stated one row at a time: every tile of the unit rescanned after each
-    A row given up, the row furthest over then given up."""
+    A row given up, the row furthest over then given up, each tile's credit `UnitRecord.credited`'s (the band rule)."""
     _, tol, units = CW._word_units(scheme, records, words)
     va = {r.matmul.index: set(r.voluntary_a) for r in records}
     vb = {}
@@ -1974,9 +1981,10 @@ def _volunteer_words_one_row_at_a_time(scheme, records, words):
         vb.setdefault(r.matmul.weight, set(r.voluntary_b))
 
     def credited(r, tile):
-        ua, ub = set(r.excluded_a) | va[r.matmul.index], set(r.excluded_b) | vb[r.matmul.weight]
-        return ([x for x, i in enumerate(tile.rows) if i < r.real_rows and i not in ua],
-                [z for z, j in enumerate(tile.cols) if j not in ub])
+        cur = dataclasses.replace(r, voluntary_a=tuple(sorted(va[r.matmul.index])),
+                                  voluntary_b=tuple(sorted(vb[r.matmul.weight])))
+        rows, cols = (set(x) for x in cur.credited(tile))
+        return [x for x, i in enumerate(tile.rows) if i in rows], [z for z, j in enumerate(tile.cols) if j in cols]
 
     def a_left(r):
         return len(va[r.matmul.index]) < CW.voluntary_cap(r.matmul.shape.m)
@@ -2039,8 +2047,8 @@ def _volunteer_words_one_row_at_a_time(scheme, records, words):
 
 
 def test_volunteer_words_ranks_a_units_rows_over_their_caps_in_one_scan():
-    """`volunteer_words` gives up a unit's A rows over their caps from one scan of its tiles, since an A row given up leaves
-    every other row's sum and cap as they were: on seeded counts with more rows over their caps than ⌈m/64⌉ allows, filler
+    """`volunteer_words` gives up a unit's A rows over their caps from one scan of its tiles, one a band, since an A row
+    given up takes its band out and leaves every other band's rows' sums and caps as they were: on seeded counts with more rows over their caps than ⌈m/64⌉ allows, filler
     rows, and B rows over theirs, across three units, it gives up the A and B rows the one-row-at-a-time statement does."""
     s = PPD.scheme_of("pearl-c-h100-v1-h3", k_min=32, tile=(16, 16))
     rng = np.random.default_rng(7)

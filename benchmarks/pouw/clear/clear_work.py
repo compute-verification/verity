@@ -75,7 +75,7 @@ from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_debit as D
 from verity.core.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.pouw.schemes.pearl_c_device import SM120, Prices
-from verity.core.protocols.pouw.schemes.pearl_c_work import ALIGN, Split, UnitRecord, records_root
+from verity.core.protocols.pouw.schemes.pearl_c_work import ALIGN, BAND, Split, UnitRecord, records_root
 from verity.core.protocols.pouw.serving import HASH_FORMATS
 from verity.ml.randomness import Key, derive
 
@@ -640,7 +640,9 @@ def volunteer_words(scheme: C.PearlC, records: Sequence[UnitRecord],
     `scheme.tiles`' order (`fast_tile.word_debits` on the tile's A′ and B̃ codes).  Returns (voluntary A rows by matmul
     index, voluntary B rows by weight), for `declare`; `over_words` on the records with them is what the caps leave over.
     - Under the row cap (`row_cap`) a unit's A rows over their own caps go first, the row furthest over summed over the
-      unit's tiles first, up to ⌈m/64⌉.  A row the A count leaves over then gives up, one at a time, the B row whose word
+      unit's tiles first, one a band of 64 (the band rule leaves the rest of its band no credit), up to ⌈m/64⌉, which
+      covers every band unless the records already spent it.  A row the A count leaves over then gives up, one at a
+      time, the B row whose word
       carries most of its debit, while that word's debit is over the row's cap a cell, up to ⌈n/64⌉ per weight.
     - Then a tile over its own cap gives up the row whose removal leaves the least debit over the cap, as `volunteer` does.
     - It repeats until nothing changes: a B row given up lowers the cap of every row in its column's tiles.
@@ -672,8 +674,10 @@ def volunteer_words(scheme: C.PearlC, records: Sequence[UnitRecord],
         for _, r, _, row_cell, tiles in units if capped else ():
             if not a_left(r):
                 continue
-            # an A row given up leaves every other row's sum and cap as they were (both read the credited columns, which
-            # only a B row changes), so one scan ranks the rows given up one at a time: furthest over, then the lower row
+            # an A row given up takes its band out and leaves every other band's rows' sums and caps as they were (both
+            # read the credited columns, which only a B row changes), so one scan ranks the rows given up one at a time:
+            # furthest over, then the lower row, one a band
+            bands = {i // BAND for i in va[r.matmul.index]}
             excess: dict[int, Fraction] = {}
             for _, tile, w in tiles:
                 rows, cols = credited(r, tile)
@@ -685,8 +689,10 @@ def volunteer_words(scheme: C.PearlC, records: Sequence[UnitRecord],
             for i in sorted(excess, key=lambda i: (-excess[i], i)):
                 if not a_left(r):
                     break
-                va[r.matmul.index].add(i)
-                changed = True
+                if i // BAND not in bands:
+                    va[r.matmul.index].add(i)
+                    bands.add(i // BAND)
+                    changed = True
         for _, r, _, row_cell, tiles in units if capped else ():
             for _, tile, w in tiles:
                 while b_left(r):

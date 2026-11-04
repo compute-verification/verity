@@ -36,8 +36,8 @@ ONE = 0x3F800000
 
 def _verdicts(scheme, k: int, at, voluntary=()) -> tuple[bool, bool, str | None]:
     """(the hidden verdict, the clear verdict, the clear reason) on the first unflagged random tile on which `T.flag_words`
-    flags the words of ``at`` and no other (zeroing an atom can flag a later one of its word), every row credited but
-    ``voluntary``."""
+    flags the words of ``at`` and no other (zeroing an atom can flag a later one of its word), the hidden cap's credited
+    rows the record's (`UnitRecord.credited`: a ``voluntary`` row's band of 64 has none, so the tile has none)."""
     tm, tn = TILE
     d = scheme.device
     want = [0] * tm
@@ -48,14 +48,16 @@ def _verdicts(scheme, k: int, at, voluntary=()) -> tuple[bool, bool, str | None]
         T.flag_words(ac, bc, at)
         if T._row_flags(d.name, ac, bc) == want:
             break
-    ok = [i not in voluntary for i in range(tm)]
+    record = UnitRecord(Matmul(0, Shape(tm, k, N), 0), tm, k, voluntary_a=tuple(voluntary))
+    tile = Tile(tuple(range(tm)), tuple(range(tn)))
+    credited = set(record.credited(tile)[0])
+    ok = [i in credited for i in range(tm)]
     pa, pb = T._peel_rows(k, TILE)
     cert = [cap.certificates(ac[i], bc[j], d.name) for i in range(tm) for j in range(tn)]
     flat = lambda rows: [x for r in rows for x in r]  # noqa: E731
     hidden = evaluate(cap.templates(k, d.name, TILE, N, row_rho=cap.row_rho(scheme, k))["tile"], flat(ac), flat(bc),
                       flat(pa), flat(pb), [int(o) for o in ok], [0] * (tm * k // 32), flat(cert))[-1]
-    record = UnitRecord(Matmul(0, Shape(tm, k, N), 0), tm, k, voluntary_a=tuple(voluntary))
-    reason = CW.cap_failure(scheme, record, Tile(tuple(range(tm)), tuple(range(tn))), SimpleNamespace(
+    reason = CW.cap_failure(scheme, record, tile, SimpleNamespace(
         a=SimpleNamespace(codes=ac, alpha=[ONE] * tm, x=[[0] * k] * tm, beta=[ONE] * tm), b=SimpleNamespace(codes=bc)))
     return bool(hidden), reason is None, reason
 
