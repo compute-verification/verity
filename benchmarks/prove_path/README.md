@@ -255,7 +255,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   the coins' context) and its charged length to the registered one, so a row dir whose names make another circuit under
   unchanged digests is refused (`circuit`). It imports no `verity_vllm` code. Its sampled members' sessions run one at a time
   (`a5.ONE_AT_A_TIME`), and Lean's checks of finished members run beside them, `--lean-workers` at a time, each starting
-  only while its memory estimate fits within `--audit-mem-gb` less the prover's reserve (`a5.LeanPool`).
+  only while its memory estimate fits within `--audit-mem-gb` beside the running session's and checks' (`a5.LeanPool`).
 - **A single-GPU window** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
   `deferred_rows.from_bundle` writes one. The sealed bundle records the Commit's absolute node paths, and none is read: the
   prover's Programs come from `--row-dir` and the verifier's from its own compile, and the Build manifest falls back to

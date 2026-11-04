@@ -1,6 +1,7 @@
 """a5's Lean checks beside the sessions (`a5.LeanPool`): up to its workers at once, each starting in the order submitted once
-its memory estimate fits the budget beside the running checks' and the node's free memory, one always starting with none
-running, and the results in the order submitted; the budget and the estimate (`lean_budget`, `lean_need`); and the run's
+its memory estimate fits the budget beside the running checks' and the running session's and the node's free memory, one
+always starting with no check and no session running, a session starting once the running checks leave it room, and the
+results in the order submitted; the budget and the estimates (`audit_memory`, `lean_need`, `session_need`); and the run's
 shared archive (`a0.archiving`), under which one circuit is put once."""
 
 from __future__ import annotations
@@ -125,17 +126,59 @@ def test_a_failed_check_frees_its_place_and_its_failure_comes_back():
         assert p.futures[1].result() == 1
 
 
-def test_the_budget_is_the_audits_memory_less_the_provers_reserve():
-    reserve = a5.PROVER_RESERVE_GB * GB
-    assert a5.lean_budget(argparse.Namespace(audit_mem_gb=290), lambda: 0) == 290 * GB - reserve
-    assert a5.lean_budget(argparse.Namespace(), lambda: 500 * GB) == 500 * GB - reserve
-    assert a5.lean_budget(argparse.Namespace(audit_mem_gb=None), lambda: 400 * GB) == 400 * GB - reserve
+def test_a_check_starts_beside_the_running_session_only_within_the_budget_and_else_once_it_ends():
+    c = Checks(3)
+    with pool(c, [], budget=10 * GB) as p:
+        with p.session(6 * GB):
+            p.submit(c, 0, 4 * GB)
+            c.started[0].wait()
+            p.submit(c, 1, GB)
+            assert not c.started[1].is_set()
+        c.started[1].wait()
+        c.release[0].set()
+        c.release[1].set()
+        with p.session(6 * GB):
+            p.submit(c, 2, 20 * GB)
+            assert not c.started[2].is_set()
+        c.started[2].wait()
+        c.release[2].set()
+        assert p.results() == [0, 1, 2]
 
 
-def test_a_checks_estimate_is_its_circuit_files_bytes_times_the_factor(tmp_path):
+def test_a_session_starts_once_the_running_checks_leave_its_estimate_within_the_budget():
+    c, entered = Checks(2), threading.Event()
+
+    def session() -> None:
+        with p.session(6 * GB):
+            entered.set()
+
+    with pool(c, [4 * GB, 4 * GB], budget=10 * GB) as p:
+        c.started[0].wait()
+        c.started[1].wait()
+        t = threading.Thread(target=session)
+        t.start()
+        assert not entered.is_set()
+        c.release[0].set()
+        entered.wait()
+        t.join()
+        c.release[1].set()
+        assert p.results() == [0, 1]
+        with p.session(20 * GB):
+            pass
+
+
+def test_the_budget_is_the_audits_memory():
+    assert a5.audit_memory(argparse.Namespace(audit_mem_gb=290), lambda: 0) == 290 * GB
+    assert a5.audit_memory(argparse.Namespace(), lambda: 500 * GB) == 500 * GB
+    assert a5.audit_memory(argparse.Namespace(audit_mem_gb=None), lambda: 400 * GB) == 400 * GB
+
+
+def test_the_estimates_are_the_circuit_files_bytes_times_their_factors(tmp_path):
     (tmp_path / "circuit.txt").write_bytes(b"x" * 7)
     assert a5.lean_need({"dir": tmp_path}) == 7 * a5.LEAN_BYTES_PER_CIRCUIT_BYTE
     assert a5.lean_need({"dir": tmp_path / "none"}) == 0
+    assert a5.session_need(tmp_path / "circuit.txt") == 7 * a5.SESSION_BYTES_PER_CIRCUIT_BYTE
+    assert a5.session_need(tmp_path / "none") == 0
 
 
 def test_the_flags_reach_the_audit():
