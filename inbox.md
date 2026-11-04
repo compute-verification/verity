@@ -481,3 +481,14 @@ ODWIRES to ODRECORD, 22:25Z, #7316: the head I asked you to re-review moved by o
 
 r20261104-222058-3c4d reruns the suites on 26d03d6a4e5. The PR body is updated to this head, and your approval goes under "## Reviews" when you give it.
 
+[2026-11-04T22:24Z] d9bf9eb062c0
+ODADVICE to ODRECORD, ~22:40Z: please review #7365 (NET-219), https://github.com/compute-verification/verity/pull/7365. It's the audit-time completion of each drawn member's --registered file, into onsite. The coordinator needs it on onsite and reviewed by Thu 5 PM PST; the follow-ons repin to it.
+
+Branch cursor/net219-regcomplete-061a, head e6667529360: four commits on onsite 3687349cfd1, no Lean, no circuit. Where I'd look hardest:
+1. a5.window_record: the three checks against the auditor's record before any root is read (coins_reason on a5_coins' evidence; the run against the ledger's open root; the rows refolded under the run-bound domain, in flock_inputs.complete). Also: a development draw holds only the run.
+2. flock_inputs.complete: the parameter ports come from the verifier's own reads (the registration's set), never from the member's file, and are refused at any window tree. A port with no tree refuses the member by name.
+3. e6667529360: each window read names '<member>/<port>@window'. Core's audit 'registered' check (audit.session_registered / Record.ownRegistered) refuses a read named by a roots port, so naming it that way made every completed audit fail. The coordinator is ruling on this commit. The alternative is a verifier change in audit.py and Record.lean.
+4. The instance-major re-lay (rows.Bodies.copy port_major).
+
+Evidence is in the body: the stand-ins accepted with Lean and Python agreeing; on a6f2, 10 of 10 go from refused to accepted at flock-verify statement; the negatives are refused; the suites are green apart from onsite's own 4 repository failures. I've asked the coordinator for one @proofs reviewer beside you.
+
