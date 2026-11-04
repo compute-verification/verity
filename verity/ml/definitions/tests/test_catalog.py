@@ -90,6 +90,10 @@ COUNT += 5  # `torch_step`'s TrainStep_v1 with its TrainStepConstants_v1, and F.
 
 COUNT += 1  # `ref_prims`' F32LogRn_v1, a line of its own so it merges with any other change to the count
 
+COUNT += 1  # ops' `HopperBF16WgmmaDot16_v3`, a line of its own so it merges with any other change to the count
+
+COUNT += 4  # `cublas_bf16`'s `HOPPER_STEP_V3`, the four `HopperBf16Dot16Step*_v2`
+
 
 def test_the_catalog_loads_every_definition_and_no_other():
     got = fresh()
