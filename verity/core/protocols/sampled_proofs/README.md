@@ -16,8 +16,8 @@ the audit on the proofs) or the recursive audit (`verity/sampled-proofs/recursiv
 coins held to the challenger's release log, every round its coin server recorded opened after what it recorded and
 every logged opening read (`VStar.Recursive.innerCoinsHeld`, `SampledProofs/ChallengerInnerTrees.lean`), then V*'s
 compiled check, which ends in the one-stage audit's live check on its verdict of record). One-stage v1, whose verdicts
-are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form naming no `proofs`). The composite accepts only
-when every component accepts.
+are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form whose params or evidence name no `proofs`). The
+composite accepts only when every component accepts.
 
 ## Guarantee and assumptions
 
