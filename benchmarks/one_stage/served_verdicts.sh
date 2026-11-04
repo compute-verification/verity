@@ -173,7 +173,9 @@
 # proofs' step 3 samples on a local development challenger session's coins on the served node (run.sh's PP_CHALLENGER
 # default, local, pinned on PP_MAIN's line, else MAIN_FILE's, else origin's main's) unless PP_CHALLENGER names the live
 # challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY), and then too while V3c's audit is
-# live, since both open on the window's run root: step 3 is then a development check. With H1_GATE (the
+# live, since both open on the window's run root: step 3 is then a development check. A record composed after V3c (a
+# follow-on's, or the compose's from its hand-off) reads V3c's audit where it wrote its summary, else step 3's
+# (`sampled_of_record`). With H1_GATE (the
 # lane's gate command, by default "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"; empty, no
 # H1) the endpoint serves PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER,
 # default vy-dc-h200, at the engine's T and S WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a
@@ -320,7 +322,7 @@ DEFER_DIR=$D/private/deferred
 FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE"
 # the compose hand-off (`handoff`): the settings its follow-on composes at, its inputs' list and sums, and the pieces
 COMPOSE_DIR=$D/private/compose
-COMPOSES="K PRODUCT PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON STEPS"
+COMPOSES="K PRODUCT PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON SAMPLED_AUDIT STEPS"
 FOLLOW= COMPOSE= CLASH=
 follow_env() {  # $1's settings, those named in $2, read over the environment's, CLASH naming each the environment set otherwise
   declare -A given=()
@@ -545,7 +547,7 @@ window_tie() {  # under PEARLPLUS_TIE: R, V3c's audit's summary and, once V3c he
   # record, in the layout `served_verdicts.py record --window-tie` reads
   local t
   t=$(pearl_dir)/tie
-  mkdir -p "$t/windows/rank0" && cp "$VW/window/registration.json" "$t/windows/rank0/" 2>/dev/null \
+  mkdir -p "$t/window" && cp "$VW/window/registration.json" "$t/window/" 2>/dev/null \
     && { cp "$VW/audit/summary.json" "$t/" 2>/dev/null || true; } \
     && { [ "$v3c_ok" != 1 ] || cp "$D/$(v3c_record)" "$t/circuit-record.json" 2>/dev/null || true; }
 }
@@ -1027,13 +1029,14 @@ private_pieces() {
 # window-circuit record at the class reading H1's tables (step 3's, `v3c_record`), windows.jsonl (the run root), H1's log
 # and each record it names, the tie's window-commit answer, and the commit's window dir (circuit.json, registration.json,
 # every value file). The record's: seals.jsonl, windows.jsonl and requests.jsonl (the pick's steps), step 3's records
-# audit's summary, audit record, registration and runs, the pieces it read, and the inference-only verdict it carries. The
+# audit's summary, audit record, registration and runs (which it reads where V3c's audit writes no summary:
+# `sampled_of_record`), the pieces it read, and the inference-only verdict it carries. The
 # composite's: PoUW's period case. And deferred.env, the settings the follow-on runs at. Each is listed where it exists.
 deferred_inputs() {
   {
     printf '%s\n' weights_registration.json "$(v3c_record)" windows.jsonl seals.jsonl requests.jsonl \
       h1/log.jsonl "h1/w$K/window-commit.json" sampled-proofs-served/summary.json sampled-proofs-served/window/audit.json \
-      sampled-proofs-served/windows/rank0/registration.json sampled-proofs-served/runs.json private/pouw/period/case.json \
+      sampled-proofs-served/window/registration.json sampled-proofs-served/runs.json private/pouw/period/case.json \
       private/pouw/period/answer.json private/deferred/inference-only.json "pearlplus/w$K/registration.json" \
       "pearlplus/w$K/window-commit.json"
     [ ! -f "$D/h1/log.jsonl" ] || "$SAY_PY" -c 'import json, sys
@@ -1100,7 +1103,7 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
     mkdir -p "$OUT/record" && cp "$DEFER_DIR/inference-only.json" "$OUT/record/inference-only.json" \
       && say "INFERENCE-ONLY: the served node's verdict, carried into this record as it wrote it (the serve dir's private/deferred/inference-only.json)"
   fi
-  "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$D/sampled-proofs-served" \
+  "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$D/$(sampled_of_record)" \
     --pieces "$DEFER_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" --node "$SERVED_NODE" ${wt[@]+"${wt[@]}"} \
     --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" 2>&1 | publish_lines
   rec=${PIPESTATUS[0]}
@@ -1108,18 +1111,25 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   echo "---- verdicts"; cat "$OUT/verdicts.txt"
   [ "$vrc" = 0 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ]
 }
+# The record's sampled-proofs audit, relative to the serve dir: V3c's of window K where it wrote its summary, the
+# sampled-proofs audit of record, on V3C_CHALLENGER's coins (step 3's are local while those are live) and, under a tie,
+# tied to H1's or Pearl+'s W; else step 3's records audit
+sampled_of_record() {
+  if [ -f "$D/v3c-w$K-$vtag/audit/summary.json" ]; then echo "v3c-w$K-$vtag/audit"; else echo sampled-proofs-served; fi
+}
 # The compose hand-off (COMPOSE_OFF_NODE=1, the default): what the final record and the composite read, relative to the
-# serve dir, and nothing else. The record's: step 3's records audit's summary, audit record, registration and runs, and
-# of each piece the files `piece_row` and `piece_server` read (copied to private/compose/pieces). The composite's: each
-# records audit's cases (sampled-proofs-served's and V3c's window/case.json, case-v2.json and their error files), the
-# files a case names as its blobs (the circuit, the public file, each session's record and proofs, the lookup tables),
-# H1's log and each record it names, and PoUW's period case. And compose.env, its settings: the window, its engine steps
-# (the record's, picked here from the requests file, which stays), the product, the composite, α and Γ, the served node,
-# the follow-on node COMPOSE_NODE, the tree's commit, and the host V3c's audit ran on (AUDITED_ON, empty where the hand-off carries none).
+# serve dir, and nothing else. The record's: its sampled-proofs audit's (`sampled_of_record`) summary, audit record,
+# registration and runs, and of each piece the files `piece_row` and `piece_server` read (copied to
+# private/compose/pieces). The composite's: each records audit's cases (sampled-proofs-served's and V3c's
+# window/case.json, case-v2.json and their error files), the files a case names as its blobs (the circuit, the public
+# file, each session's record and proofs, the lookup tables), H1's log and each record it names, and PoUW's period case.
+# And compose.env, its settings: the window, its engine steps (the record's, picked here from the requests file, which
+# stays), the product, the composite, α and Γ, the served node, the follow-on node COMPOSE_NODE, the tree's commit, the
+# host V3c's audit ran on (AUDITED_ON, empty where the hand-off carries none) and the record's audit (SAMPLED_AUDIT).
 # Every one is a verifier's input: `served_verdicts.py witness` refuses a list holding a value file, a prover's instance or
 # private file, the advice, a key, a row dir or the requests, and a blob outside the serve dir is refused too.
 COMPOSE_PIECE_FILES="answer.json development.json piece.json refused.txt served.json runs.json"
-handoff_inputs() {  # the hand-off's every input but its own sums, each existing file once
+handoff_inputs() {  # the hand-off's every input but its own sums, each existing file once, the record's audit $1's among them
   local a blobs cases=()
   for a in sampled-proofs-served "v3c-w$K-$vtag/audit"; do
     [ -f "$D/$a/window/case-v2.json" ] && cases+=("$D/$a/window/case-v2.json")
@@ -1137,9 +1147,8 @@ for case in sys.argv[2:]:
 EOF
 ) || return 1
   {
-    printf '%s\n' sampled-proofs-served/summary.json sampled-proofs-served/window/audit.json \
-      sampled-proofs-served/windows/rank0/registration.json sampled-proofs-served/runs.json h1/log.jsonl \
-      private/pouw/period/case.json private/pouw/period/answer.json "pearlplus/w$K/tie/windows/rank0/registration.json" \
+    printf '%s\n' "$1/summary.json" "$1/window/audit.json" "$1/window/registration.json" "$1/runs.json" h1/log.jsonl \
+      private/pouw/period/case.json private/pouw/period/answer.json "pearlplus/w$K/tie/window/registration.json" \
       "pearlplus/w$K/tie/summary.json" "pearlplus/w$K/tie/circuit-record.json"
     for a in sampled-proofs-served "v3c-w$K-$vtag/audit"; do
       printf "$a/window/%s\n" case.json case-v2.json case-error.txt case-v2-error.txt
@@ -1155,7 +1164,8 @@ for x in open(sys.argv[1]):
   } | (cd "$D" && while IFS= read -r f; do [ ! -f "$f" ] || echo "$f"; done) | LC_ALL=C sort -u
 }
 handoff() {  # the compose hand-off in private/compose, from the pieces in $1 and the inference-only verdict $2
-  local d f steps why rc
+  local d f steps why rc sampled
+  sampled=$(sampled_of_record)
   (umask 077; rm -rf "$COMPOSE_DIR" && mkdir -p "$COMPOSE_DIR/pieces") || return 1
   for d in "$1"/*/; do
     [ -d "$d" ] || continue
@@ -1169,8 +1179,8 @@ handoff() {  # the compose hand-off in private/compose, from the pieces in $1 an
     || { say "HANDOFF refused: the window has no engine steps to hand the record (the serve dir's private/compose/window.err)"; return 1; }
   printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" PEARLPLUS_TIE "$PEARLPLUS_TIE" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
     SERVED_NODE "${SERVED_NODE:-$(hostname)}" SERVED_DIR "$D" COMPOSE_NODE "$COMPOSE_NODE" COMPOSE_TREE "$(tree_sha)" \
-    AUDITED_ON "${V3C_AUDITED:-}" STEPS "$steps" > "$COMPOSE_DIR/compose.env" || return 1
-  handoff_inputs > "$COMPOSE_DIR/inputs.txt" 2> "$COMPOSE_DIR/inputs.err"
+    AUDITED_ON "${V3C_AUDITED:-}" SAMPLED_AUDIT "$sampled" STEPS "$steps" > "$COMPOSE_DIR/compose.env" || return 1
+  handoff_inputs "$sampled" > "$COMPOSE_DIR/inputs.txt" 2> "$COMPOSE_DIR/inputs.err"
   rc=$?
   [ "$rc" = 0 ] || { say "HANDOFF refused: $(tail -1 "$COMPOSE_DIR/inputs.err" | cut -c1-600)"; return 1; }
   why=$("$SAY_PY" "$SV" witness < "$COMPOSE_DIR/inputs.txt") \
@@ -1187,7 +1197,8 @@ compose() {  # `served_verdicts.sh compose` on a copy of a compose hand-off: the
   (cd "$D" && sha256sum --check --strict --quiet private/compose/inputs.sha256) > "$COMPOSE_DIR/check.log" 2>&1
   rc=$?
   say "COMPOSE on $(hostname -s) (COMPOSE_NODE $COMPOSE_NODE): $HANDED_WHAT of the served node $SERVED_NODE, from its compose" \
-      "hand-off (verifier-side files, no witness; $([ -n "${AUDITED_ON:-}" ] && echo "V3c's audit from $AUDITED_ON" || echo "no V3c audit")), each file as it" \
+      "hand-off (verifier-side files, no witness; $([ -n "${AUDITED_ON:-}" ] && echo "V3c's audit from $AUDITED_ON" || echo "no V3c audit");" \
+      "the record's sampled proofs ${SAMPLED_AUDIT:-sampled-proofs-served}), each file as it" \
       "hashed it (the serve dir's private/compose/inputs.sha256):" \
       "$([ "$rc" = 0 ] && echo PASS || echo "FAIL (the serve dir's private/compose/check.log)")"
   [ "$rc" = 0 ] || return 3
@@ -1201,7 +1212,8 @@ compose() {  # `served_verdicts.sh compose` on a copy of a compose hand-off: the
     mkdir -p "$OUT/record" && cp "$COMPOSE_DIR/inference-only.json" "$OUT/record/inference-only.json" \
       && say "INFERENCE-ONLY: the served node's verdict, carried into this record as it wrote it (the serve dir's private/compose/inference-only.json)"
   fi
-  "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$D/sampled-proofs-served" \
+  "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" \
+    --sampled-proofs "$D/${SAMPLED_AUDIT:-sampled-proofs-served}" \
     --pieces "$COMPOSE_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" --node "$SERVED_NODE" --steps "$STEPS" \
     ${PEARLPLUS_TIE:+--window-tie "$(pearl_dir)/tie"} \
     --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" --off-node --sampled-lean \

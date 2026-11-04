@@ -1455,7 +1455,7 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record")
     if case != "no Lean":
         (piece / S.PEARLPLUS_LEAN).write_text(json.dumps(lean))
     audit = tmp_path / "audit"
-    (audit / "windows" / "rank0").mkdir(parents=True)
+    (audit / S.WINDOW_REGISTRATION).parent.mkdir(parents=True)
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps(
         {"format": REG.FORMAT_V2, "previous": "ab" * 64 if case == "R not after W" else PEARL_W, "registered": []}))
     (audit / S.AUDIT_SUMMARY).write_text(json.dumps({} if case == "audit untied" else {"tie": {"record": PEARL_W}}))
@@ -1503,8 +1503,8 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
     pieces, tied, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
-    (steps := tmp_path / "steps" / "windows" / "rank0").mkdir(parents=True)
-    (steps / "registration.json").write_text(json.dumps({"format": REG.FORMAT_V2, "previous": None, "registered": []}))
+    (steps := tmp_path / "steps" / S.WINDOW_REGISTRATION).parent.mkdir(parents=True)
+    steps.write_text(json.dumps({"format": REG.FORMAT_V2, "previous": None, "registered": []}))
     (tmp_path / "steps" / S.AUDIT_SUMMARY).write_text(json.dumps({}))
     (tmp_path / "serve").mkdir()
     base = ["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
@@ -2958,7 +2958,7 @@ SHORT = "this node has 196 GB, under the 290 GB V3c's audit needs (V3C_AUDIT_MEM
 DEFERRED_READS = ("weights_registration.json", f"window-circuit-w7-{VTAG}-tie.json", "windows.jsonl", "seals.jsonl",
                   "requests.jsonl", "h1/log.jsonl", "h1/w7/registration.json", "h1/w7/record.json",
                   "h1/w7/window-commit.json", "sampled-proofs-served/summary.json", "sampled-proofs-served/window/audit.json",
-                  "sampled-proofs-served/windows/rank0/registration.json", "sampled-proofs-served/runs.json",
+                  "sampled-proofs-served/window/registration.json", "sampled-proofs-served/runs.json",
                   "private/pouw/period/case.json", "private/pouw/period/answer.json")
 FAKE_RECORD = '''import json, os, sys
 a = sys.argv[1:]
@@ -2993,7 +2993,7 @@ def _deferred(tmp_path: Path, **extra: str | None) -> subprocess.CompletedProces
              "requests.jsonl": {"user": "a", "engine_id": "a", "windows": [7], "check": {"passed": True}},
              "sampled-proofs-served/summary.json": {"audit": {}},
              "sampled-proofs-served/window/audit.json": {"accepted": True},
-             "sampled-proofs-served/windows/rank0/registration.json": {"format": "toy"},
+             "sampled-proofs-served/window/registration.json": {"format": "toy"},
              "sampled-proofs-served/runs.json": ["r0"], "private/pouw/period/case.json": {"evidence": "beef"},
              "private/pouw/period/answer.json": {"protocol": "verity/pouw/period/v1"},
              "windows/w7/rows.bin": {}, "private/weights.key": {}, "sampled-proofs-served/window/sessions/0.json": {}}
@@ -3085,8 +3085,9 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     """The follow-on of a deferral made under COMPOSE_OFF_NODE=0, at the settings the deferral recorded: the copy held to
     the served node's sums, then no window circuit or commit of its own (the served node's record at the class, its
     tree's, and the commit H1 bound, held as there), V3c's audit and period, the final record about the served node from
-    the pieces it read, and the composite, told the served node, so each says it composed elsewhere. Another tree runs
-    only under FOLLOW_ANY_TREE, which its line names. $OUT names no window."""
+    the pieces it read and V3c's audit, the sampled-proofs audit of record, and the composite, told the served node, so
+    each says it composed elsewhere. Another tree runs only under FOLLOW_ANY_TREE, which its line names. $OUT names no
+    window."""
     assert _deferred(tmp_path, COMPOSE_OFF_NODE="0").returncode == 0
     rc, lines, order, limits = _follow(tmp_path, **extra)
     d, out = tmp_path / "serve", tmp_path / "out"
@@ -3105,9 +3106,9 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
                                   "--tie-prefix": "h1/", "--ports": "3"}
     argv = json.loads((tmp_path / "order.record").read_text())
     assert argv[:-4] == [
-        "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"), "--pieces",
-        str(d / "private" / "deferred" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",
-        "vy-dc-h200"]
+        "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / f"v3c-w7-{VTAG}" / "audit"),
+        "--pieces", str(d / "private" / "deferred" / "pieces"), "--out", str(out / "record"), "--product", "remote",
+        "--node", "vy-dc-h200"]
     assert (argv[-4], len(argv[-3]), argv[-2:]) == ("--key-sha512", 128, ["--lane", "vllm"])
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", str(d), str(out)]
     assert not _window_data(out, 7), _window_data(out, 7)
@@ -3257,7 +3258,7 @@ HELD_BACK = ("sampled-proofs-served/window/m0/inst-0.bin", "sampled-proofs-serve
 HANDED_READS = ("h1/log.jsonl", "h1/w7/record.json", "h1/w7/registration.json", "private/pouw/period/answer.json",
                 "private/pouw/period/case.json", "sampled-proofs-served/runs.json", "sampled-proofs-served/summary.json",
                 "sampled-proofs-served/window/audit.json", "sampled-proofs-served/window/case-v2.json",
-                "sampled-proofs-served/window/case.json", "sampled-proofs-served/windows/rank0/registration.json",
+                "sampled-proofs-served/window/case.json", "sampled-proofs-served/window/registration.json",
                 f"v3c-w7-{VTAG}/audit/window/case.json")
 HANDED_OWN = ("private/compose/compose.env", "private/compose/inference-only.json",
               "private/compose/pieces/pouw/answer.json", "private/compose/pieces/pouw/served.json")
@@ -3289,7 +3290,7 @@ def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, verdict: bool = True
              "h1/log.jsonl": {"window": 7, "kind": "registration", "file": "w7/registration.json"},
              "h1/w7/registration.json": W_OF_7, "h1/w7/record.json": {"format": "toy"}, "h1/w7/window-commit.json": {},
              f"{sp}/summary.json": {"audit": {}}, f"{sp}/window/audit.json": {"accepted": True},
-             f"{sp}/windows/rank0/registration.json": {"format": "toy"}, f"{sp}/runs.json": ["r0"],
+             f"{sp}/window/registration.json": {"format": "toy"}, f"{sp}/runs.json": ["r0"],
              f"{sp}/window/case.json": {"evidence": "beef"},
              f"{sp}/window/case-v2.json": {"blobs": [b if b.startswith("/") else str(d / b) for b in blobs]},
              f"v3c-w7-{VTAG}/audit/window/case.json": {"evidence": "cafe"},
@@ -3320,7 +3321,7 @@ def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, verdict: bool = True
                           env=env, check=False, capture_output=True, text=True)
 
 
-COMPOSES = "K PRODUCT COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON STEPS"
+COMPOSES = "K PRODUCT COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON SAMPLED_AUDIT STEPS"
 
 
 def test_the_served_nodes_compose_hand_off_lists_and_hashes_the_verifier_side_files_alone(tmp_path):
@@ -3336,7 +3337,8 @@ def test_the_served_nodes_compose_hand_off_lists_and_hashes_the_verifier_side_fi
     d, dc, out = tmp_path / "serve", tmp_path / "serve" / "private" / "compose", tmp_path / "served-out"
     assert _env_of(dc / "compose.env", COMPOSES) == {
         "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
-        "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "", "STEPS": "0,3"}
+        "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "",
+        "SAMPLED_AUDIT": "sampled-proofs-served", "STEPS": "0,3"}
     listed = (dc / "inputs.txt").read_text().splitlines()
     assert listed == [*sorted([*HANDED_READS, *BLOBS, *HANDED_OWN]), "private/compose/inputs.sha256"]
     assert not set(listed) & set(HELD_BACK) and S.witness(listed) == []
@@ -3354,6 +3356,29 @@ def test_a_hand_off_of_a_record_with_no_inference_only_verdict_lists_the_rest(tm
     listed = (tmp_path / "serve" / "private" / "compose" / "inputs.txt").read_text().splitlines()
     own = [f for f in HANDED_OWN if f != "private/compose/inference-only.json"]
     assert listed == [*sorted([*HANDED_READS, *BLOBS, *own]), "private/compose/inputs.sha256"]
+
+
+def test_a_hand_off_after_v3cs_audit_gives_the_record_that_audit_and_carries_its_files_not_step_3s(tmp_path):
+    """Where V3c audited the window before the hand-off (its summary there), the hand-off names V3c's audit, the
+    sampled-proofs audit of record, as the record's (SAMPLED_AUDIT) and carries its summary, audit record, registration
+    and runs; of step 3's, on local coins while V3c's are live, only the cases the composite reads. The compose's record
+    then reads V3c's audit, its Lean check on that audit's coins."""
+    v3c = f"v3c-w7-{VTAG}/audit"
+    files = {f"{v3c}/summary.json": {"tie": {"record": "d7" * 64}}, f"{v3c}/window/audit.json": {"accepted": True},
+             f"{v3c}/window/registration.json": {"format": "toy"}, f"{v3c}/runs.json": ["r1"]}
+    assert _handed(tmp_path, files=files).returncode == 0
+    d, dc = tmp_path / "serve", tmp_path / "serve" / "private" / "compose"
+    assert _env_of(dc / "compose.env", "SAMPLED_AUDIT") == {"SAMPLED_AUDIT": v3c}
+    step3 = {f"sampled-proofs-served/{f}" for f in ("summary.json", "window/audit.json", "window/registration.json",
+                                                    "runs.json")}
+    listed = (dc / "inputs.txt").read_text().splitlines()
+    assert listed == [*sorted([*(set(HANDED_READS) - step3), *files, *BLOBS, *HANDED_OWN]),
+                      "private/compose/inputs.sha256"]
+    rc, lines, order = _compose(tmp_path)
+    assert rc == 0 and order == ["record", "composite"], (lines, order)
+    assert lines[0] == COMPOSED.format(audit="no V3c audit", sampled=f"v3c-wK-{VTAG}/audit", verdict="PASS")
+    argv = json.loads((tmp_path / "order.record").read_text())
+    assert argv[argv.index("--sampled-proofs") + 1] == str(d / v3c) and "--sampled-lean" in argv
 
 
 @pytest.mark.parametrize("blob, said", [
@@ -3441,8 +3466,9 @@ def _compose(tmp_path: Path, keep: tuple[str, ...] = (), **extra: str | None) ->
 
 
 COMPOSED = ("COMPOSE on vy-auditor-2 (COMPOSE_NODE vy-auditor-2): the final record and the composite of the served "
-            "node vy-dc-h200, from its compose hand-off (verifier-side files, no witness; {audit}), each file as it hashed "
-            "it (the serve dir's private/compose/inputs.sha256): {verdict}")
+            "node vy-dc-h200, from its compose hand-off (verifier-side files, no witness; {audit}; the record's sampled "
+            "proofs {sampled}), each file as it hashed it (the serve dir's private/compose/inputs.sha256): {verdict}")
+STEP3 = "sampled-proofs-served"
 
 
 def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_record_and_composite_off_the_node(tmp_path):
@@ -3455,7 +3481,7 @@ def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_r
     rc, lines, order = _compose(tmp_path)
     d, out = tmp_path / "serve", tmp_path / "compose-out"
     assert rc == 0 and order == ["record", "composite"], (lines, order)
-    assert lines[0] == COMPOSED.format(audit="no V3c audit", verdict="PASS")
+    assert lines[0] == COMPOSED.format(audit="no V3c audit", sampled=STEP3, verdict="PASS")
     assert [x.split(" ")[0] for x in lines[1:]] == ["INFERENCE-ONLY:", "RECORD", "COMPOSITE:"]
     assert lines[-1] == "COMPOSITE: composed on vy-auditor-2"
     argv = json.loads((tmp_path / "order.record").read_text())
@@ -3476,7 +3502,7 @@ COMPOSE_CLASH = ("PREFLIGHT: the compose follow-on runs at the hand-off's settin
 
 @pytest.mark.parametrize("keep, change, extra, line", [
     ((), "sampled-proofs-served/window/m0/pub-0.bin", {}, COMPOSED.format(
-        audit="no V3c audit", verdict="FAIL (the serve dir's private/compose/check.log)")),
+        audit="no V3c audit", sampled=STEP3, verdict="FAIL (the serve dir's private/compose/check.log)")),
     ((), None, {"HOST": "vy-dc-h200"}, "PREFLIGHT: this is the served node vy-dc-h200, which the prover controls, so "
      "nothing composed here claims a record: compose on COMPOSE_NODE (vy-auditor-2)"),
     (("advice/w7/private/advice.bin",), None, {}, "PREFLIGHT: the compose follow-on holds no witness of the served run, "
@@ -3512,8 +3538,10 @@ def test_a_compose_follow_on_refuses_the_served_node_a_witness_a_changed_copy_an
 def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_nothing(tmp_path):
     """Under COMPOSE_OFF_NODE=1 the deferral's follow-on is prover-side (it holds the copy's value files), so after V3c's
     audit it composes neither the record nor the composite: it writes the compose hand-off, naming itself as where V3c's
-    audit ran, with the deferral's pieces and inference-only verdict. A compose follow-on on a third node then composes
-    both from that hand-off alone, and refuses the follow-on's serve dir, which holds the value files."""
+    audit ran and that audit, the sampled-proofs audit of record, as the record's (step 3's, on local coins while V3c's
+    are live, isn't carried), with the deferral's pieces and inference-only verdict. A compose follow-on on a third node
+    then composes both from that hand-off alone, the record from V3c's audit, and refuses the follow-on's serve dir, which
+    holds the value files."""
     verdict = {"format": "verity-bench/inference-only-verdict/v3", "verdict": "accept"}
     (tmp_path / "served-out" / "record").mkdir(parents=True)
     (tmp_path / "served-out" / "record" / "inference-only.json").write_text(json.dumps(verdict))
@@ -3524,21 +3552,24 @@ def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_n
     assert lines.pop(0) == V3C_ENTRY
     assert [x.split(" ")[0] for x in lines[4:]] == ["V3C-AUDIT", "V3C-PERIOD", "HANDOFF"]
     assert lines[-1] == HANDOFF_LINE.replace("{d}", str(d))
+    v3c = f"v3c-w7-{VTAG}/audit"
     assert _env_of(dc / "compose.env", COMPOSES) == {
         "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
-        "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6", "STEPS": "0,3"}
+        "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6",
+        "SAMPLED_AUDIT": v3c, "STEPS": "0,3"}
     listed = (dc / "inputs.txt").read_text().splitlines()
     assert listed == [*sorted([
         "h1/log.jsonl", "h1/w7/record.json", "h1/w7/registration.json", "private/compose/compose.env",
         "private/compose/inference-only.json", "private/compose/pieces/pouw/answer.json", "private/pouw/period/answer.json",
-        "private/pouw/period/case.json", "sampled-proofs-served/runs.json", "sampled-proofs-served/summary.json",
-        "sampled-proofs-served/window/audit.json", "sampled-proofs-served/windows/rank0/registration.json"]),
+        "private/pouw/period/case.json", f"{v3c}/summary.json"]),
         "private/compose/inputs.sha256"]
     assert S.witness(listed) == [] and json.loads((dc / "inference-only.json").read_text()) == verdict
     (tmp_path / "order").unlink()
     rc, lines, order = _compose(tmp_path, HOST="vy-auditor-2")
     assert rc == 0 and order == ["record", "composite"], (lines, order)
-    assert lines[0] == COMPOSED.format(audit="V3c's audit from cpu-6", verdict="PASS")
+    assert lines[0] == COMPOSED.format(audit="V3c's audit from cpu-6", sampled=f"v3c-wK-{VTAG}/audit", verdict="PASS")
+    argv = json.loads((tmp_path / "order.record").read_text())
+    assert argv[argv.index("--sampled-proofs") + 1] == str(d / v3c) and "--sampled-lean" in argv
     for x in ("serve", "compose-out"):
         shutil.rmtree(tmp_path / x)
     (tmp_path / "served-node").rename(tmp_path / "serve")

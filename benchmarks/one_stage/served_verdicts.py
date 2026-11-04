@@ -129,10 +129,10 @@ once the serve's session has ended (the untied piece's right before the verifier
 period, must be the lane's first reserve after the close. ``coin``: the verifier's coin record published the moment it is
 drawn (`coin`), ``--run-dir`` naming the run's Attempt as its custody where no put preserves it.
 
-``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
-``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
-as `served_integrity.answer` reads it (Pearl+'s window tie from the same files under ``--window-tie DIR`` where it
-is given, the window tied to W); each other subprotocol's from
+``record``: sampled proofs' answer from the records audit kept under ``--sampled-proofs`` (`prove_path/run.sh`'s with
+``PP_RECORDS=1``, or V3c's: ``summary.json``, ``window/audit.json``, and ``window/registration.json``, the registration it
+sampled against), read as `served_integrity.answer` reads it (Pearl+'s window tie from the same files under
+``--window-tie DIR`` where it is given, the window tied to W); each other subprotocol's from
 ``--pieces/<component>/answer.json`` (`piece_row`), else a ``missing`` row naming why. Each answer is about the server
 `piece_server` names: sampled proofs' the record's node, a piece's the one its ``served.json`` names, else the node it ran
 on, and the wipe's the one its ``served.json`` names. They go into the window report (``verdicts.json``, `row_of`'s rows,
@@ -324,8 +324,9 @@ PEARLPLUS_PROTOCOL = "verity/pouw/pearl-plus/v1"
 #: Pearl+'s verdict's core answer in its piece (`served_pearlplus.sh`'s step 4), and the Lean `PouwCheck.PearlPlus`
 #: verdict on the same passes and coin record there (`pouw-pearlplus`'s printout)
 PEARLPLUS_ANSWER, PEARLPLUS_LEAN = "pearlplus-answer.json", "pearlplus-lean.json"
-#: the window's registration R and its records audit's summary under ``--sampled-proofs`` (`sampled_proofs_row`)
-WINDOW_REGISTRATION, AUDIT_SUMMARY = "windows/rank0/registration.json", "summary.json"
+#: the window's registration R as its records audit under ``--sampled-proofs`` sampled against (a5's copy), and that
+#: audit's summary (`sampled_proofs_row`)
+WINDOW_REGISTRATION, AUDIT_SUMMARY = "window/registration.json", "summary.json"
 #: why `pearlplus_live_draw` refuses a node's draw source
 PEARLPLUS_NODE_DRAW = ("the verifier's draw source is drawn on the serving node (verify_run.node_draw, PEARLPLUS_NODE_DRAWS), "
                        "not a challenger coin opened on the run commitment (served_passes.py verify under "
@@ -1342,7 +1343,7 @@ def sampled_proofs_row(audit_dir: Path, run: str | None = None) -> dict[str, Any
     """Sampled proofs' row from the records audit kept under ``audit_dir`` (module docstring)."""
     import served_integrity as SI
 
-    reg = audit_dir / "windows" / "rank0" / "registration.json"
+    reg = audit_dir / WINDOW_REGISTRATION
     try:
         a = SI.answer(audit_dir, json.loads(reg.read_text()) if reg.exists() else None)
         return row_of(INTEGRITY_OWNER, a, audit_dir, run)
@@ -1970,7 +1971,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                   "under, in its open period, for a verdict of record "
                                                   "(PEARLC_CHALLENGER_LANE)")
     r.add_argument("--window-tie", type=Path, help="where Pearl+'s tie to the window is read for a verdict of record: the "
-                   "window tied to W, its windows/rank0/registration.json, its records audit's summary.json and the "
+                   "window tied to W, its window/registration.json, its records audit's summary.json and the "
                    "window-circuit record V3c held R's circuit to, circuit-record.json (default --sampled-proofs)")
     sub.add_parser("witness")
     rb = sub.add_parser("rebase")
