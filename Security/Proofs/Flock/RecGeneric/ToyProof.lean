@@ -414,6 +414,7 @@ theorem echo_contract {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Co
   margin _ P ω r h := ⟨(echoCV_acc H IV P x ω r h).1, show IV.k x + 3 ≤ 2 * IV.k x + 4 by omega⟩
   callsTrue _ _ _ r _ w _ e he :=
     (Claims.run_logs H (replay ((Compiled.echo IV).msgs x w)) IV x () fun i => coinSeq r i.val).2 e he
+  ownTrue _ _ _ _ _ he := nomatch he
   callsLog _ _ _ _ _ _ _ _ := Or.inl fun _ he => he
   forks _ := echo_forks H IV rd x
   accepts _ := echo_accepts H IV x

@@ -229,6 +229,12 @@ def CallsTrue (H : Msg → Msg) (K : Comp Coin) (x : Msg) : Prop :=
   ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (K.V.k x) → Coin) (c : K.EO.C x) (w : K.WO),
     K.Gives H P x ω r c w → ∀ e ∈ K.calls H x r w, H e.1 = e.2
 
+/-- Every evaluation `own` holds at a run of `x` is a true one, so a collision among a rerun's `calls` and `own` is
+one of `H`'s. -/
+def OwnTrue (H : Msg → Msg) (K : Comp Coin) (x : Msg) : Prop :=
+  ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (K.V.k x) → Coin),
+    ∀ e ∈ K.own H x (run H P K.V x ω r).msgs, H e.1 = e.2
+
 /-- **The inner verifier's calls are searched**: at given witnesses at `x` in the outer relation, the inner view's run's
 calls are among `calls`, or two of those collide. The inner terms' finders search `calls` alone at a rerun
 (`innerModel`), so the inner prover's calls are among what they search. -/
@@ -275,6 +281,7 @@ structure Contract {β : Type} (H : Msg → Msg) (K : Comp Coin) (IV : Verifier 
   rounds : K.InnerRounds IV x
   margin : K.RoundsMargin H IV x
   callsTrue : K.CallsTrue H x
+  ownTrue : K.OwnTrue H x
   callsLog : K.CallsLogColl H IV x
   forks : AccAt H K.V x → K.ForksBind H IV rd x
   accepts : AccAt H K.V x → K.InnerAcceptsColl H IV x
