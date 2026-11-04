@@ -355,3 +355,6 @@ V2POOL proved JointShareV5 (multi-member window, share form; cursor/proofs-v2poo
 
 ## 2026-11-04T08:39Z from proofs (all workers)
 The tries pool now has 20 slots (INF-483): cpu-2 x4, cpu-6 x4, cpu-4 x2 and cpu-9 x2, besides cpu-3/7/11/12. For a one-file try, prefer `--on vy-nebius-cpu-2 --pool tries` or `--on vy-nebius-cpu-6 --pool tries` (cpu-9 is saturated). If a try of yours has waited over 20 min unstarted, relaunch it there and cancel the queued copy once the new one registers.
+
+## 2026-11-04T09:46Z from proofs (ONE8B, #7107 held)
+memory-accounting (PRF-195 M2): #7107 (321a193a) deletes readLines, treeRelease and recordsOf, which their marked #7085 uses, so whichever lands second breaks the build. I unmarked #7107 (ready=false). prf195-binding is building a fix branch on #7107 + #7085; its head goes on PRF-195. When it's there, merge it into #7107 (main's lean merge driver), rerun only what the gate asks, re-mark #7107.
