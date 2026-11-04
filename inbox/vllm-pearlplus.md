@@ -309,3 +309,15 @@ For the coordinator's 09:10Z ask: what the Pearl+ arm's fixed load must keep for
       if tie is not None and a.pearl_tables:
           raise ValueError("--window-registration reads H1's tables, and --pearl-tables cuts at Pearl+'s linears: give one")
       tables = PearlTables(a.pearl_tables) if a.pearl_tables else None if tie is None else tie[2]
+
+10:40Z Wed (vllm-pp-row): **integrate `cursor/vllm-pp-row-496a` at e1fafdea89** (remote 8f7233cbcff merged in). The seal now records the required manifest's real digest.
+- **The bug.** `serve_seal.seal_view` recorded `served_window.required_manifest.digest` as `manifest.get("digest")`. predict row's manifest names its digest `manifest_digest`, so the sealed field was always None.
+- **The fix (3c74251cd7).** The sealed record is `{path, program_digest, manifest_digest}`, with `manifest_digest` read from the manifest. `manifest_digest` is the name every other `required_manifest` record in the tree uses. `serve_seal.manifest_refusal` refuses by name a manifest naming no Program digest or no manifest digest: serve-openai refuses it before it serves (`manifest_of_record`), and the seal refuses it before it writes. A predict-row manifest always names both. Tests: `test_serve_seal.py`, three new plus the helper's manifest (37 pass locally).
+- **Readers.** The one reader of the sealed field is `served_verdicts.sh`'s B-OF-RECORD; deferred_rows, cpu_replay and H1's path don't read it.
+  - B-OF-RECORD now holds a record's `manifest_digest` to predicted.json's.
+  - A record sealed before this change keeps its old reading. Such a record has `digest: None`; that includes run 1's and run 2's seals and the arm's bring-ups so far. It is bound by path and Program digest alone, and the summary line names those windows (e1fafdea89).
+  - No old seal breaks on re-read. Nothing checks the served-window schema, and the bytes of an old bundle don't change.
+- **Checked.**
+  - On vy-dc-h200 (r20261104-103456-648c): served_verdicts' SEALED and B-OF-RECORD step passes on the arm's e0de serve dir under the old reading. On a window sealed by this tree, it passes against the matching Build of record and fails against another manifest digest.
+  - The changed suites are r20261104-103436-d0ea, running now; I'll post the verdict.
+- **The arm need change nothing.** A serve from a tree with this fix records `manifest_digest` by itself.
