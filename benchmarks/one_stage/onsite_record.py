@@ -318,11 +318,13 @@ PREMISES: dict[str, dict[str, Any]] = {
                              "certifier's code is named",
                        "discharged_by": ()},
     "schedules-covered": {"is": "SenderDecodes's schedule half, PeriodLeakAccepted's hs: each secret K counts runs on a "
-                                "schedule of Ss, whose number k_sched counts, so Ss must hold every schedule the deployed "
-                                "network certifier can run (its own admission, at the case's caps). Open until it is "
-                                "stated of the network certifier's code and a theorem gives it; the decoder half is what "
-                                "K counts (`COUNTS`)",
-                          "discharged_by": ()},
+                                "schedule of Ss, whose number k_sched counts, so Ss must hold every schedule the "
+                                "network certifier's signed records can show. A property of the compiled Lean audit "
+                                "the verification runs over those records, which trusted-host makes the traffic that "
+                                "crossed, never of the device's code. Open, by this name, until the Property that "
+                                "gives it of that audit is in the lock at the statement `DISCHARGES` pins; the decoder "
+                                "half is what K counts (`COUNTS`)",
+                          "discharged_by": ("Properties.NetworkCertifier.SchedulesCoveredAt",)},
     "sampled-leg-bridge": {"is": "the sampled leg's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
                                  "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KS; "
                                  "ListWithin, the decoder's list at Flock's radius; Binds, the trace commitment's "
@@ -345,7 +347,9 @@ PREMISES: dict[str, dict[str, Any]] = {
 DISCHARGES: dict[str, dict[str, Any]] = {}
 #: the named assumptions that may stand under the figure of record, each on an auditor-trusted device or the auditor's
 #: placement of one, named beside the bound
-STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifier and its host are the auditor's",
+STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifier and its host are the auditor's, "
+                                              "which covers only that the records it signs are the traffic that "
+                                              "crossed, at the times it crossed, not what the device's code computes",
             "Accounting.Covered": "certifier-coverage: the links in the room are the registered ones, each through the "
                                   "network certifier (a listed physical premise, the auditor's placement)"}
 #: what K counts: the hypotheses on the covert sender's strategy that its guarantee quantifies, which no deployment
@@ -455,9 +459,9 @@ REPROOF_KEPT = ("each retained past the week after the run, never only on the se
 NO_COPY = ("no copy of the serve dir's inputs is given (--reproof-copy NODE:/PATH and --reproof-listing): they are on "
            "the served node only")
 SERVING = ("the run's serving settings as its caller states them (--window-steps, --max-tokens): S, served_verdicts.sh's "
-           "WINDOW_STEPS, the most engine steps a Commit period holds, and its MAX_TOKENS. No file of OUT states them; "
-           "ℓ_a (advice_charge.cap) is the cap the run's S, slots, model length and id bytes set, and every figure here "
-           "is the run's at these settings alone")
+           "WINDOW_STEPS, the most engine steps a Commit period holds, and its MAX_TOKENS. No file of OUT states both "
+           "(its COINS line names S only where PoUW H1 is served); ℓ_a (advice_charge.cap) is the cap the run's S, "
+           "slots, model length and id bytes set, and every figure here is the run's at these settings alone")
 NO_SERVING = ("the run's caller stated no serving settings (--window-steps and --max-tokens: served_verdicts.sh's "
               "WINDOW_STEPS and MAX_TOKENS)")
 BESIDE = "verity/onsite-network-records-beside/v1"

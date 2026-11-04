@@ -80,6 +80,8 @@ UNPINNED = [g for g, r in OR.RESTS_ON.items() if r["statement"] is None]
 ACCEPTED = "NetTiming.SecurityProofs.PeriodLeakAccepted"
 #: the theorem that discharges the free-input count's premise
 (COUNTED,) = OR.PREMISES["free-count"]["discharged_by"]
+#: the Property of the Lean audit over the network certifier's signed records that discharges schedules-covered
+(COVERED,) = OR.PREMISES["schedules-covered"]["discharged_by"]
 
 
 def discharged() -> dict:
@@ -333,6 +335,8 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     ({"Properties.NetworkPeriod.rowsHeld": ["NetTiming.Assumptions.SampledCodeRuns"]}, ["held-performed"]),
     ({"Properties.NetworkPeriod.rowsHeld": ["Verity.Assumptions.TrustedHost"]}, []),
     ({COUNTED: None}, ["free-count"]),
+    ({COVERED: None}, ["schedules-covered"]),
+    ({COVERED: ["Verity.Assumptions.TrustedHost"]}, []),
     ({ACCEPTED: ["NetTiming.Assumptions.SampledCodeRuns"]}, ["NetTiming.Assumptions.SampledCodeRuns"]),
     ({ACCEPTED: ["Verity.Assumptions.TrustedHost"]}, []),
     ({ACCEPTED: ["Accounting.Covered"]}, []),
@@ -343,8 +347,9 @@ def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_non
     """Both checks held: a premise whose discharge the lock doesn't list, or lists taking an assumption that doesn't
     stand (SampledCodeRuns, a premise about our own Python), is open, and so is an assumption of a guarantee the tight
     K rests on that is neither standing nor named in what it takes, by its name, and that guarantee where the lock
-    doesn't list it. trusted-host and certifier-coverage stand, and a premise its takes names is that premise's. With
-    one check open too, the tight K is conditional on both."""
+    doesn't list it. trusted-host and certifier-coverage stand, and a premise its takes names is that premise's: so
+    schedules-covered is open by its name until the Lean audit's Property is in the lock, and discharged once it is,
+    resting on trusted-host alone. With one check open too, the tight K is conditional on both."""
     write_lock(lock, given)
     rec = held_both(tmp_path / "held")
     of = rec["bound"]["of_record"]
@@ -354,6 +359,7 @@ def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_non
     assert p["held-performed"]["assumes"] == (["NetTiming.Assumptions.SampledCodeRuns"] if "held-performed" in open_
                                               else [])
     assert p["free-count"]["missing"] == ([COUNTED] if "free-count" in open_ else [])
+    assert p["schedules-covered"]["missing"] == ([COVERED] if "schedules-covered" in open_ else [])
     rec = OR.record(accepted(tmp_path / "free", dict(PUBLIC, held=["free"])))
     assert rec["periods_tight"]["conditional_on"] == ["circuit", *open_]
 
@@ -586,7 +592,7 @@ def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever
 
 @pytest.mark.parametrize("drawn, entries", [(1, 896), (16, 0)])
 def test_w63k4s_tied_audit_drawn_in_part_charges_its_slot_entries_and_drawn_whole_doesnt(tmp_path, drawn, entries):
-    """Monday's schedule with a toy tied audit: w63k4 at a 4 s tick over three execution phases, each phase's tied audit
+    """w63k4's schedule with a toy tied audit: w63k4 at a 4 s tick over three execution phases, each phase's tied audit
     one of 16 proof blocks (V3c's registration has millions) drawn subset:1 (charged), its draw read at δ_i = 2^-64
     with a bound of 15 beside its answer's 8 at 1/2, so k_{skip,j} is its E_w = 896 slot-entry bits beside the
     schedule's and the jitter's 800: with ℓ_{a,j} = 0, both checks held and no open premise, 1,696 bits a phase of
