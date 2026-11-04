@@ -3270,7 +3270,9 @@
   "Flock.SecurityProofs.SoundAtBridge": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc",
   "Nci.SecurityProofs.ActivationsChain": "714e334345569e58449896333930509e1d7d4844154c1eabc8b38becd0f99498",
   "Nci.SecurityProofs.ReferenceThreaded": "14031cc870afb5d46cab9fe5d4401dd018bc2db17e335f114a2e75adc1343bb5",
-  "Nci.SecurityProofs.ThreadedOfLayered": "017ad0d2173bb30536bdc8d3867ded723d0680900af60269224798bb1dfc6b6f"
+  "Nci.SecurityProofs.ThreadedOfLayered": "017ad0d2173bb30536bdc8d3867ded723d0680900af60269224798bb1dfc6b6f",
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": "25bb13b79dd739375049d34f8168300966c182117594c7a5a67767779cd0ea9c",
+  "Verity.SecurityProofs.PrivateFitsOfLocal": "64f42467cd87ee1d655ab157a39ee9412d15a923c2cbbd93d790f98f69f9029b"
  },
  "layers": {
   "Definitions.Core": {
