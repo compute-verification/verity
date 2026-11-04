@@ -1024,11 +1024,11 @@
   },
   "FlockSoundness.Assumptions.TableCRAt": {
    "owner": "@proofs",
-   "digest": "59144eca1337195cff560732b0893d04b932ff1e49776abb46964fa283596148"
+   "digest": "20a3b540bd59c19a57e0358913aaef55d38bab3da8552fa3c6eb6bed1e4e4f72"
   },
   "FlockSoundness.Assumptions.TableCRZAt": {
    "owner": "@proofs",
-   "digest": "406013c1a29772f3fdb909233b6aae28f7b15c544dfd7be1e6cc47d09c18cca5"
+   "digest": "c682643ee00b008e6e50867741b22ae66fe4dc13c14f59c6208e32fa256813cd"
   },
   "FlockSoundness.Assumptions.UniformRandomBytes": {
    "owner": "@proofs",
@@ -1096,19 +1096,19 @@
   },
   "FlockSoundness.Audit.Analysis.KnowledgeSound": {
    "owner": "@proofs",
-   "digest": "113c607a6169cc3630a686056fa69592a208b48f9bda865e3accb113ac45b69d"
+   "digest": "d2f8858afae86803eb0858e0969fec051a08c08795b41681399fb0e1a729fbe1"
   },
   "FlockSoundness.Audit.Analysis.LinkSound": {
    "owner": "@proofs",
-   "digest": "5940e744cfbf40d468b38bff5b5e11af64fa5ec785bd3e59b8842b3242bd461c"
+   "digest": "aa8c54f9cf3049269a757cf2022e42740f230b939efc6e4b7808382546aa9e25"
   },
   "FlockSoundness.Audit.Analysis₂.KnowledgeSound": {
    "owner": "@proofs",
-   "digest": "8a2f46b27b21677f27cc741dbe7157563462022f8dd8380491b783e5a16c1ca0"
+   "digest": "0a22cec892f9e752e5dd8911dd185c2461c660c8de04f3a4ae25d9b109908f6c"
   },
   "FlockSoundness.Audit.Analysis₂.LinkSound": {
    "owner": "@proofs",
-   "digest": "b2dd0bef8eef004c2e18888ce56dfec5928aa24a38399cbd7741a01bdc3ca1e2"
+   "digest": "06f8ee00cf97f113fdf6d5106959445535b5da41236518b30408a28f31d45599"
   },
   "FlockSoundness.Audit.IsHarmBound": {
    "owner": "@proofs",
@@ -1120,11 +1120,11 @@
   },
   "FlockSoundness.Audit.Partition.AnchorsSound": {
    "owner": "@proofs",
-   "digest": "ee66c362fa30414a4eec41722cb34b5d4152539846da39933f92cbaa2b89236d"
+   "digest": "a27af2f8a0a654b529138a19ceb4d3a004726668b145ace06864f1e1cee6b545"
   },
   "FlockSoundness.Audit.Partition.AnchorsSound₂": {
    "owner": "@proofs",
-   "digest": "693df68f8eefe5547fe3465d17dcc6a2169a5a6ab947fe0a67c867708ead03ac"
+   "digest": "1d7273337b4e4031c21356ed23bebac44e84e289cceb40013496702be8c7771f"
   },
   "FlockSoundness.Audit.Partition.Separates": {
    "owner": "@proofs",
@@ -1160,7 +1160,7 @@
   },
   "FlockSoundness.Discharge.Recursion.InnerSound": {
    "owner": "@proofs",
-   "digest": "cfdcc51712a29f61d501055b6849788cb2e30c68987149be33bbd83e032e5254"
+   "digest": "058a338c9396590e9bcd8a6155feddcc1a9ad585466295cdd10ec343a0f5f7b6"
   },
   "FlockSoundness.Discharge.Recursion.TagsFound": {
    "owner": "@proofs",
@@ -1196,7 +1196,7 @@
   },
   "FlockSoundness.Discharge.ZkLink.SessCRZ": {
    "owner": "@proofs",
-   "digest": "6632288d79c2f0850f4647b8d0dc88eccf99768f84bcc3a79803f6e1f3ad3735"
+   "digest": "099b3ba6e78fe8bc2dee72339ce94c921f82e9d236514b36c8341a028d1d6cfc"
   },
   "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": {
    "owner": "@proofs",
@@ -2080,11 +2080,11 @@
   },
   "Pouw.PearlC.FlockTile.TileReadBinds": {
    "owner": "@compute-accounting",
-   "digest": "a7b2e2e657e18ad621a78896024942ffb3fb63c9da3a8f017ba28d3a3fbd4a9c"
+   "digest": "0deaee2e5b057429bc78a5f71bee82ce3817e506749bdfef60857ca17d98c8fb"
   },
   "Pouw.PearlC.FlockTile.TileReadSound": {
    "owner": "@compute-accounting",
-   "digest": "1af3ce33570d3fe952d8f6efb3b91b5b9eb96a578c05cd2fec7a86e4dbbddbe9"
+   "digest": "14415c7d065b4ef9f59bad5fa4baeeb20f227279a0ba2c484a28ec5e779da21c"
   },
   "Pouw.PearlC.Gγ": {
    "owner": "@memory-accounting",
@@ -3711,10 +3711,11 @@
     "Definitions.Hash.Basic",
     "Definitions.Core.Game",
     "Definitions.Core.Draw",
+    "Definitions.Core.Rewinding",
     "Definitions.Flock"
    ],
    "except": [],
-   "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof; the audit partitions core's Boolean circuit (Definitions.Core.Boolean); a Merkle collision is the hash area's (Definitions.Hash.Basic); the game's uniform average and probability, and the draw law, are core's (Definitions.Core.Game, Definitions.Core.Draw)"
+   "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof; the audit partitions core's Boolean circuit (Definitions.Core.Boolean); a Merkle collision is the hash area's (Definitions.Hash.Basic); its games, with their uniform average and probability, and the draw law, are core's (Definitions.Core.Game, Definitions.Core.Rewinding, Definitions.Core.Draw)"
   },
   "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted": {
    "imports": [
@@ -7850,7 +7851,7 @@
    "owner": "@proofs",
    "signature": [
     "FlockSoundness.Audit.Adaptive.life_harm_budget {n : Nat} {L : Nat → FlockSoundness.Audit.Law n} {Reg : Nat → Type}",
-    "  {session : (m : Nat) → Finset (Fin n) → Reg m → FlockSoundness.Game Bool}",
+    "  {session : (m : Nat) → Finset (Fin n) → Reg m → Verity.Game Bool}",
     "  (A : (m : Nat) → FlockSoundness.Audit.Analysis (L m) (Reg m) (session m)) {εks δlink : Nat → ENNReal}",
     "  (hks : ∀ (m : Nat), (A m).KnowledgeSound (εks m)) (hlink : ∀ (m : Nat), (A m).LinkSound (δlink m))",
     "  {π h : Fin n → Real} (hL : ∀ (m : Nat), (L m).Design π) {lam : Real} (hlam0 : Real.instLE.le 0 lam)",
@@ -7863,7 +7864,7 @@
     "      ((Finset.range N).sum fun m => instHAdd.hAdd (εks m) (δlink m)))"
    ],
    "assumptions": [],
-   "type_hash": "8cce025887058f45fb1f0afbcd764f4859918cf5c5ab2bebd8735dedd2d5648a"
+   "type_hash": "83edf087185978f69c2291e749981c6f3f85ea48bd204ec55b01b6e628d13cd7"
   },
   "FlockSoundness.Audit.Law.closure_escape": {
    "owner": "@proofs",
@@ -7944,7 +7945,7 @@
     "  {Pf : FlockSoundness.Audit.Partition C nf} {Pc : FlockSoundness.Audit.Partition C nc} {a : Fin C.N → Bool}",
     "  {εks δlink δin : ENNReal} {D : Finset (Fin C.N)} (r : Pf.Refines Pc) {L₁ : FlockSoundness.Audit.Law nc}",
     "  {L₂ : Fin nc → FlockSoundness.Audit.Law nf} {Reg : Type} {Int : Finset (Fin nc) → Type}",
-    "  {session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → FlockSoundness.Game Bool}",
+    "  {session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → Verity.Game Bool}",
     "  (X : (R : Reg) → FlockSoundness.Audit.Cont₁ L₁ L₂ Reg Int session R → Fin C.N → Bool)",
     "  (Yint :",
     "    (R : Reg) →",
@@ -7957,7 +7958,7 @@
     "  (hin : FlockSoundness.Audit.Partition.AnchorsSound₂ X a δin) (δ : ENNReal)",
     "  (σ : (FlockSoundness.Audit.twoStage L₁ L₂ Reg Int session).Strategy) :",
     "  ENNReal.instLE.le",
-    "    (FlockSoundness.Game.prob",
+    "    (Verity.Game.prob",
     "      (fun o =>",
     "        And (Eq o.fst Bool.true)",
     "          (Not",
@@ -7967,14 +7968,14 @@
     "    (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd δ εks) δlink) δin)"
    ],
    "assumptions": [],
-   "type_hash": "1e60e868153ea1d60325bf8527e1cc857dd7ffa310078c7c7dac968564d4a577"
+   "type_hash": "d7bbc97e790ec41278cb0c1a6a8feead4879fb0a3e3128f3327625deb53bdff9"
   },
   "FlockSoundness.Audit.Partition.audit_exfiltration": {
    "owner": "@proofs",
    "signature": [
     "FlockSoundness.Audit.Partition.audit_exfiltration {C : FlockSoundness.Audit.Circuit} {n : Nat}",
     "  (P : FlockSoundness.Audit.Partition C n) {L : FlockSoundness.Audit.Law n} {Reg : Type}",
-    "  {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool}",
+    "  {session : Finset (Fin n) → Reg → Verity.Game Bool}",
     "  {X : (R : Reg) → FlockSoundness.Audit.Cont L Reg session R → Fin C.N → Bool}",
     "  {ext : (S : Finset (Fin n)) → (R : Reg) → (session S R).Strategy → Fin n → Option (Fin C.N → Bool)}",
     "  {a : Fin C.N → Bool} {εks δlink δin : ENNReal} {D : Finset (Fin C.N)} {M : Type} [Fintype M] [Nonempty M]",
@@ -7990,7 +7991,7 @@
     "  (g : ((Subtype fun x => SetLike.instMembership.mem D x) → Bool) → M) :",
     "  ENNReal.instLE.le",
     "    (Verity.Game.avg fun m =>",
-    "      FlockSoundness.Game.prob",
+    "      Verity.Game.prob",
     "        (fun o =>",
     "          And (Eq o.fst Bool.true)",
     "            (Eq",
@@ -8006,21 +8007,21 @@
     "      (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd δ εks) δlink) δin))"
    ],
    "assumptions": [],
-   "type_hash": "847e45bfa461973d5274666a776d88c56b36bf30659c40c9dcb68d0c1f49561c"
+   "type_hash": "bb4eecfb7bd7e366bd65bb40726964f474e43c37d62942144b73c4f5f5cd411f"
   },
   "FlockSoundness.Audit.Partition.audit_influence": {
    "owner": "@proofs",
    "signature": [
     "FlockSoundness.Audit.Partition.audit_influence {C : FlockSoundness.Audit.Circuit} {n : Nat}",
     "  (P : FlockSoundness.Audit.Partition C n) {L : FlockSoundness.Audit.Law n} {Reg : Type}",
-    "  {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool}",
+    "  {session : Finset (Fin n) → Reg → Verity.Game Bool}",
     "  {X : (R : Reg) → FlockSoundness.Audit.Cont L Reg session R → Fin C.N → Bool}",
     "  {ext : (S : Finset (Fin n)) → (R : Reg) → (session S R).Strategy → Fin n → Option (Fin C.N → Bool)}",
     "  {a : Fin C.N → Bool} {εks δlink δin : ENNReal} {D : Finset (Fin C.N)} (hks : (P.analysis X ext).KnowledgeSound εks)",
     "  (hlink : (P.analysis X ext).LinkSound δlink) (hin : FlockSoundness.Audit.Partition.AnchorsSound X a δin) (δ : ENNReal)",
     "  (σ : (FlockSoundness.Audit.audit L Reg session).Strategy) :",
     "  ENNReal.instLE.le",
-    "    (FlockSoundness.Game.prob",
+    "    (Verity.Game.prob",
     "      (fun o =>",
     "        And (Eq o.fst Bool.true)",
     "          (Not",
@@ -8030,7 +8031,7 @@
     "    (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd δ εks) δlink) δin)"
    ],
    "assumptions": [],
-   "type_hash": "f77526a26c3fa8d90399552d4ad897e48b65d2cd095821b33dcc393302a9fc27"
+   "type_hash": "edd83f91c99695a493721463430c0f5627d9244b7daa9438febfdf1c74fa10a0"
   },
   "FlockSoundness.Audit.Partition.card_admissible_le": {
    "owner": "@proofs",
@@ -8378,22 +8379,22 @@
    "owner": "@proofs",
    "signature": [
     "FlockSoundness.Audit.audit_profile {n : Nat} {L : FlockSoundness.Audit.Law n} {Reg : Type}",
-    "  {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool} (A : FlockSoundness.Audit.Analysis L Reg session)",
+    "  {session : Finset (Fin n) → Reg → Verity.Game Bool} (A : FlockSoundness.Audit.Analysis L Reg session)",
     "  {εks δlink : ENNReal} (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (𝓑 : Finset (Fin n) → Prop)",
     "  (σ : (FlockSoundness.Audit.audit L Reg session).Strategy) :",
     "  ENNReal.instLE.le",
-    "    (FlockSoundness.Game.prob (fun o => And (Eq o.fst Bool.true) (𝓑 (A.wrong (A.committedOf σ))))",
+    "    (Verity.Game.prob (fun o => And (Eq o.fst Bool.true) (𝓑 (A.wrong (A.committedOf σ))))",
     "      (FlockSoundness.Audit.audit L Reg session) σ)",
     "    (instHAdd.hAdd (instHAdd.hAdd (iSup fun B => iSup fun x => Verity.Law.escape L B) εks) δlink)"
    ],
    "assumptions": [],
-   "type_hash": "3cdd287f7909d3d12703d0bb030da43ef243a73a0a4c9a393de9cc4c7f1734da"
+   "type_hash": "d344ae7c7fc73d5cab39db07a4d4aae73cf91d2f78577d19ed7f4ff4ad1168f7"
   },
   "FlockSoundness.Audit.audit_window_split_of_record": {
    "owner": "@proofs",
    "signature": [
     "FlockSoundness.Audit.audit_window_split_of_record {n m : Nat} {σ : Fin n → Fin m} {cl : Fin n → Finset (Fin n)}",
-    "  {Reg : Type} {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool} {C : Nat} {call : Fin m → Fin C}",
+    "  {Reg : Type} {session : Finset (Fin n) → Reg → Verity.Game Bool} {C : Nat} {call : Fin m → Fin C}",
     "  {w v f : Fin m → Nat}",
     "  (A :",
     "    FlockSoundness.Audit.Analysis",
@@ -8416,7 +8417,7 @@
     "        ((FlockSoundness.Audit.Law.stratified σ (FlockSoundness.Audit.Law.windowK σ call w f 27713) ⋯).closure cl) Reg",
     "        session).Strategy) :",
     "  ENNReal.instLE.le",
-    "    (FlockSoundness.Game.prob",
+    "    (Verity.Game.prob",
     "      (fun o =>",
     "        And (Eq o.fst Bool.true)",
     "          (Or",
@@ -8431,19 +8432,19 @@
     "    (instHAdd.hAdd (instHAdd.hAdd (ENNReal.instInv.inv (instHPow.hPow 2 40)) εks) δlink)"
    ],
    "assumptions": [],
-   "type_hash": "283d8d7f92bac7d9e23bbc1d9e27f148419813d1b76b08aa9c88f50dc9de89ae"
+   "type_hash": "20fd7b63f9dffd3439640facd8a13bb069ebdc707095587b02130ec2cfe536e3"
   },
   "FlockSoundness.Audit.audit_work_floor": {
    "owner": "@proofs",
    "signature": [
     "FlockSoundness.Audit.audit_work_floor {n m : Nat} {σ : Fin n → Fin m} {w f : Fin m → Nat} {K : Nat} {Reg : Type}",
-    "  {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool}",
+    "  {session : Finset (Fin n) → Reg → Verity.Game Bool}",
     "  (A : FlockSoundness.Audit.Analysis (FlockSoundness.Audit.Law.work σ w f K) Reg session) {εks δlink : ENNReal}",
     "  (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (s : Fin m)",
     "  (hs : (FlockSoundness.Audit.Law.stratum σ s).Nonempty) (b : Nat)",
     "  (σ' : (FlockSoundness.Audit.audit (FlockSoundness.Audit.Law.work σ w f K) Reg session).Strategy) :",
     "  ENNReal.instLE.le",
-    "    (FlockSoundness.Game.prob",
+    "    (Verity.Game.prob",
     "      (fun o =>",
     "        And (Eq o.fst Bool.true)",
     "          (instLENat.le b (Finset.filter (fun x => Eq (σ x) s) (A.wrong (A.committedOf σ'))).card))",
@@ -8458,19 +8459,19 @@
     "      δlink)"
    ],
    "assumptions": [],
-   "type_hash": "9ffda6ce0c3c42e0824ab2f1fcca6950f138af6a1be0c155c35101ea6dcaba92"
+   "type_hash": "60dad443cde6b0b8b007b0224719d8ccc4c94363bdd7f57c178d8e7e241b012e"
   },
   "FlockSoundness.Audit.audit_work_whole_stratum": {
    "owner": "@proofs",
    "signature": [
     "FlockSoundness.Audit.audit_work_whole_stratum {n m : Nat} {σ : Fin n → Fin m} {w f : Fin m → Nat} {K : Nat} {Reg : Type}",
-    "  {session : Finset (Fin n) → Reg → FlockSoundness.Game Bool}",
+    "  {session : Finset (Fin n) → Reg → Verity.Game Bool}",
     "  (A : FlockSoundness.Audit.Analysis (FlockSoundness.Audit.Law.work σ w f K) Reg session) {εks δlink : ENNReal}",
     "  (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (s : Fin m) (hf : instLENat.le 1 (f s))",
     "  (hs : (FlockSoundness.Audit.Law.stratum σ s).Nonempty)",
     "  (σ' : (FlockSoundness.Audit.audit (FlockSoundness.Audit.Law.work σ w f K) Reg session).Strategy) :",
     "  ENNReal.instLE.le",
-    "    (FlockSoundness.Game.prob",
+    "    (Verity.Game.prob",
     "      (fun o =>",
     "        And (Eq o.fst Bool.true)",
     "          (Finset.instPartialOrder.le (FlockSoundness.Audit.Law.stratum σ s) (A.wrong (A.committedOf σ'))))",
@@ -8478,7 +8479,7 @@
     "    (instHAdd.hAdd εks δlink)"
    ],
    "assumptions": [],
-   "type_hash": "976d69f6639cfdf806f5cc359b2520f3c93f9996ad618782053bc4a4d2429413"
+   "type_hash": "2277cd0772dd066ffd4fe2c28b301d475b36c5245577ae34793a847cadb813f2"
   },
   "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1": {
    "owner": "@proofs",
@@ -9056,12 +9057,12 @@
     "  (hm : instLENat.le 13 S.m) (ptLocal mPts : Nat) (hlay : S.LinkLayout ptLocal mPts)",
     "  (σ : (FlockSoundness.Model.table A S sch hm ptLocal mPts).Strategy) :",
     "  ENNReal.instLE.le",
-    "    (FlockSoundness.Game.prob (fun out => And (Eq out.fst Bool.true) (Not (FlockSoundness.Committed A S sch out.snd)))",
+    "    (Verity.Game.prob (fun out => And (Eq out.fst Bool.true) (Not (FlockSoundness.Committed A S sch out.snd)))",
     "      (FlockSoundness.Model.table A S sch hm ptLocal mPts) σ)",
     "    (ENNReal.ofReal (FlockSoundness.Accounting.tableError sch (S.shape mPts)))"
    ],
    "assumptions": [],
-   "type_hash": "83f5ae9ccd00d0cc1482d572d33490e4bf90d3ec48251d1d04bb154300a2c745"
+   "type_hash": "ef1e49efb9bbb8bb1a0f8b8a008f5bd4d07ddd7b5676e082db4ec2635014dc20"
   },
   "FlockSoundness.table_sound_fast100": {
    "owner": "@proofs",
@@ -9072,12 +9073,12 @@
     "  (hm1 : instLENat.le 22 S.m) (hm2 : instLENat.le S.m 33) (ptLocal mPts : Nat) (hshape : (S.shape mPts).InRange)",
     "  (hlay : S.LinkLayout ptLocal mPts) (σ : (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts).Strategy) :",
     "  ENNReal.instLE.le",
-    "    (FlockSoundness.Game.prob (fun out => And (Eq out.fst Bool.true) (Not (FlockSoundness.Committed A S sch out.snd)))",
+    "    (Verity.Game.prob (fun out => And (Eq out.fst Bool.true) (Not (FlockSoundness.Committed A S sch out.snd)))",
     "      (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts) σ)",
     "    (ENNReal.ofReal (instHPow.hPow 2 (-205)))"
    ],
    "assumptions": [],
-   "type_hash": "63a747759c939efb61b6eaafdacde8ce1b226d25437253e802e2de2a02bcb726"
+   "type_hash": "bc315650de1a36f9c9c3e8107727341a1b164bb34203fdf03995b42e92c7f2ea"
   },
   "FlockSoundness.table_sound_fast100_34_35": {
    "owner": "@proofs",
@@ -9088,12 +9089,12 @@
     "  (hm1 : instLENat.le 34 S.m) (hm2 : instLENat.le S.m 35) (ptLocal mPts : Nat) (hshape : (S.shape mPts).InRange)",
     "  (hlay : S.LinkLayout ptLocal mPts) (σ : (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts).Strategy) :",
     "  ENNReal.instLE.le",
-    "    (FlockSoundness.Game.prob (fun out => And (Eq out.fst Bool.true) (Not (FlockSoundness.Committed A S sch out.snd)))",
+    "    (Verity.Game.prob (fun out => And (Eq out.fst Bool.true) (Not (FlockSoundness.Committed A S sch out.snd)))",
     "      (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts) σ)",
     "    (ENNReal.ofReal (instHPow.hPow 2 (-205)))"
    ],
    "assumptions": [],
-   "type_hash": "7e0c11a4d90441db227b441f593fc687e9eca34586574971bc5863213962da4a"
+   "type_hash": "4bf683b15ca0d39f74b25215fe59fb906479f0d3dac5657bcc6d7dfad8944bab"
   },
   "FlockVBridge.chainAcc_level": {
    "owner": "@proofs",
@@ -15310,7 +15311,7 @@
     "why": "P2RingRoundSecure's statement at every block count from 2^19 to 2^27, so that it reaches the demo's 1038*2^16 blocks; open and unchecked in N above 2^25 (the eps0 a proof would give against N is pending the memory-accounting lane's pous-chain analysis); it implies P2RingRoundSecure (Pous.SecurityProofs.roundSecure_of_wide), so every refutation of that one (PousP2Rounds.round_tight and round_trunc, Security/Proofs/Pous/P2/RoundTests.lean) refutes it, and its falsification test is that one's, whose scaled point doesn't depend on N."
    }
   },
-  "events": ["FlockSoundness.Game.prob"],
+  "events": ["Verity.Game.prob"],
   "inline": {
    "Accounting.SecurityProofs.AccelAdditive": {
     "∀ (r : Verity.Accel.Res), instDistribLatticeOfLinearOrder.toSemilatticeInf.le (Verity.Accel.Machine.units iss r) (instHMul.hMul (m.card.ρ r) T)": "a bound that is no plain range, on `main` (CMP-156) before the rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -16365,6 +16366,7 @@
    "Flock.SecurityProofs.RanRegisteredRun": {
     "com.Opens rt p op₀": "com.Opens taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (b : β), acc b → com.Opens rt (prog b) (op b)": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "ENNReal.instLE.le (FlockSoundness.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.RecursiveCircuitIndist": {
@@ -18346,6 +18348,282 @@
     "Nci.SecurityProofs.UpdatedMatMul_nontrivial"
    ]
   },
+  "Definitions.Core.Game": {
+   "digest": "7314aade457a4e16fc0ac065e5c88a6a2a645071f76cbf563b0852ae199e2688",
+   "definitions": {
+    "Verity.Game.instMonad": "daedda04333e47ad11d436fb0d89cf4e85fc68aa9cac1a8b8ce22e3622f07ce5",
+    "Verity.Game.recv": "c5eb7339b009a02ace4da354b3e4862135f81f1c46c6435a5096147c0679bbaf"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.RanRegisteredRun",
+    "FlockSoundness.table_sound",
+    "FlockSoundness.table_sound_fast100",
+    "FlockSoundness.table_sound_fast100_34_35"
+   ]
+  },
+  "Definitions.Core.Game.Batch": {
+   "digest": "dc892c883de4f7d755373d341062ef78f953856b410584aec2ad3c218995e1a6",
+   "definitions": {
+    "Verity.Game.Lock.batchLock": "a2753b33caf12517475b3b2267f50ddc784040d5786197c3b65f29b08b6f6870",
+    "Verity.Game.Lock.leftSame": "4425a144b8c6fd90e19d660a33ad8d704815c229c55cb0a583f023b972cb5263",
+    "Verity.Game.Lock.lockWithL": "b773eec89f15c9463aff2b0e5510b014e6070f6468e3a786cf870d71d8da46c0",
+    "Verity.Game.Lock.lockWithSame": "af7f8894adb4a6a85e7387ee5e2c070fe8c9b1c7299ef209f98e06ca165882b2",
+    "Verity.Game.Lock.mapL": "30aaebfe2169821f9c6605434e5902e4539fa5058953da5ceac35ae7bb68382c",
+    "Verity.Game.Lock.rightSame": "9ed2bbd4c1a8dbb615f7a0affd42337de419c3c21f9af2cd469bd46ee0b95bbe",
+    "Verity.Game.Lock.sameThen": "74d88c943dc64ae42f3fcb443e9deac2a37aac85e27aff3009b6677aa6473cff"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.TS.CheckedSessionSound",
+    "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafGroupSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEndHidden",
+    "Flock.SecurityProofs.EndToEndHiddenDrawn",
+    "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
+    "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndRegistered",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawn",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
+    "Flock.SecurityProofs.EndToEndRegisteredFlat",
+    "Flock.SecurityProofs.EndToEndRegisteredRows",
+    "Flock.SecurityProofs.EndToEndRegisteredRowsFlat",
+    "Flock.SecurityProofs.IntegrityBlock",
+    "Flock.SecurityProofs.IntegrityBlockCarried",
+    "Flock.SecurityProofs.IntegrityBlocks",
+    "Flock.SecurityProofs.IntegrityHorizon",
+    "Flock.SecurityProofs.IntegrityHorizonBlocks",
+    "Flock.SecurityProofs.IntegrityHorizonCarried",
+    "Flock.SecurityProofs.IntegrityPeriod",
+    "Flock.SecurityProofs.IntegrityPeriodLog",
+    "Flock.SecurityProofs.JointStratified",
+    "Flock.SecurityProofs.JointStratifiedHorizon",
+    "Flock.SecurityProofs.JointStratifiedHorizonMT",
+    "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveRanRegistered",
+    "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLivePub",
+    "Flock.SecurityProofs.SampledKSLiveStated",
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
+    "Flock.SecurityProofs.SampledKSLiveV5",
+    "Flock.SecurityProofs.SoundAtBridge",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
+  },
+  "Definitions.Core.Game.Expect": {
+   "digest": "2b9f1a341259b1e938a904ed7b0a29d2c5edf4be6abdad92c468607433bf0f04",
+   "definitions": {
+    "Verity.Game.expect": "8a53f53087283ab8cbc66e6aa48c85da6da1cbd5a5ad1e6f43a26f6c112ddec9",
+    "Verity.Game.ind": "50408a858d513b4634a7e04c2c6fc41b890625de466f703c55ac749eed122e1b",
+    "Verity.Rewinding.IsPluralityE": "f2e883069f0ace19e0fe143f6c91f52c694caa162b59162b6b389a4ceecf30d9"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.TS.CheckedSessionSound",
+    "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafGroupSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEndHidden",
+    "Flock.SecurityProofs.EndToEndHiddenDrawn",
+    "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
+    "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndRegistered",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawn",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
+    "Flock.SecurityProofs.EndToEndRegisteredFlat",
+    "Flock.SecurityProofs.EndToEndRegisteredRows",
+    "Flock.SecurityProofs.EndToEndRegisteredRowsFlat",
+    "Flock.SecurityProofs.IntegrityBlock",
+    "Flock.SecurityProofs.IntegrityBlockCarried",
+    "Flock.SecurityProofs.IntegrityBlocks",
+    "Flock.SecurityProofs.IntegrityHorizon",
+    "Flock.SecurityProofs.IntegrityHorizonBlocks",
+    "Flock.SecurityProofs.IntegrityHorizonCarried",
+    "Flock.SecurityProofs.IntegrityPeriod",
+    "Flock.SecurityProofs.IntegrityPeriodLog",
+    "Flock.SecurityProofs.JointStratified",
+    "Flock.SecurityProofs.JointStratifiedHorizon",
+    "Flock.SecurityProofs.JointStratifiedHorizonMT",
+    "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveRanRegistered",
+    "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLivePub",
+    "Flock.SecurityProofs.SampledKSLiveStated",
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
+    "Flock.SecurityProofs.SampledKSLiveV5",
+    "Flock.SecurityProofs.ServedRowsLinked",
+    "Flock.SecurityProofs.SoundAtBridge",
+    "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
+  },
+  "Definitions.Core.Game.Lock": {
+   "digest": "d69bb40a483c6ab02787fed465806811b54240423f5801f8195f0c51863e17f0",
+   "definitions": {
+    "Verity.Game.Lock": "9cec305b5f9b232b221b09bc6f067938a3f6a8e3f5e0b793ea6f7cf7c22999fb",
+    "Verity.Game.Lock.Chooser": "a8ca128169c6b3987cc3b3ec4e4dcb751be041a10e3c25479716f0ca8f1c822c",
+    "Verity.Game.Lock.Disjoint": "c1e7eb2fdb562a2f77d1925c56bdc3de470f62e256e9f0b6fc6e45178217556a",
+    "Verity.Game.Lock.RPair": "2c34e208432ba5e9e7e1d561b159df91b5701cd04864158903cce68e3633e677",
+    "Verity.Game.Lock.below": "1e76e395e69b744ec56d93ae0ccf798c15e2a6b3d3ac07f2ea879e30996b3153",
+    "Verity.Game.Lock.bind": "555f7713baf02ca0219f4f93970374bea1ddf7cb5977ac92050a17bcb0b2bf36",
+    "Verity.Game.Lock.brecOn": "671a2fe95fdd52e1800c709beeebfa60bb7aa70560c87a9f22a4daf900bf1789",
+    "Verity.Game.Lock.brecOn.go": "5fb864fa220fb0940ccbfa7b35851e2c39cf3db50590a416a21dba075b44d352",
+    "Verity.Game.Lock.casesOn": "b0d41737da9010d3e0666438060748230928938d94b7774e35b2d2fc158df6e1",
+    "Verity.Game.Lock.coin": "1687bcf3f958bc60aa3e2f641ee60c46fd6fb617aff69407b5b01cdcdbfac8c7",
+    "Verity.Game.Lock.embedLeft": "e97b7d159455edcbb787f837ac76043e4a145f89625b453d41b5b799d01a2b30",
+    "Verity.Game.Lock.embedRight": "f938dfce5ed7d309a2ab6157a773b9413e32a229d0ce46264bc1e665d5bccf47",
+    "Verity.Game.Lock.getPair": "f8022123b8d880c67b59688e22181d340a895a67f3eb8935f0f1af2392c9ef23",
+    "Verity.Game.Lock.interleaveLock": "094800c88ac55e9181df622701503643851c3d5c5be36b5618c853308e455c8c",
+    "Verity.Game.Lock.lockWith": "466896527826dabfd8840ae655bc60e507ad6c2b84e3489061697825d397e49e",
+    "Verity.Game.Lock.map": "792f4ea7849ab563bb4d4c48f3c2eec29f57b4daf6d0f6db79fa2dd6ad75db5c",
+    "Verity.Game.Lock.mono": "43986658e481cc24ec045d46df8ab7153a82d372a33db4067b0a63f52a0a6450",
+    "Verity.Game.Lock.oracleStrat": "417652595848a97f31b35614993bcf3b3044079906aa5d0605a477c0bb554920",
+    "Verity.Game.Lock.rec": "6818369e7544952b43fc4b46152132f6c23c0d61bcef887ec77c2ce76b0f4618",
+    "Verity.Game.Lock.ret": "2ee087f4e6b99ebfd3e40328318a7d1c6e8aecf1873333f40c6200747b379d0c",
+    "Verity.Game.Lock.same": "b54961d52ad5aa5f3b2fd988cbc8630dd51404cf121e4e09394ad66e61a8c144",
+    "Verity.Game.Lock.send": "35df520e1d1ce8f1f97af9359d3f4742adc9fd6cf4fb1f0615a929f580ee08cf",
+    "Verity.Game.Lock.table": "5a4968573a143b382ae1636fd69e5223f7572b91304a144cb0521db74b565cd2"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.TS.CheckedSessionSound",
+    "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafGroupSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEndHidden",
+    "Flock.SecurityProofs.EndToEndHiddenDrawn",
+    "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
+    "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndRegistered",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawn",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
+    "Flock.SecurityProofs.EndToEndRegisteredFlat",
+    "Flock.SecurityProofs.EndToEndRegisteredRows",
+    "Flock.SecurityProofs.EndToEndRegisteredRowsFlat",
+    "Flock.SecurityProofs.IntegrityBlock",
+    "Flock.SecurityProofs.IntegrityBlockCarried",
+    "Flock.SecurityProofs.IntegrityBlocks",
+    "Flock.SecurityProofs.IntegrityHorizon",
+    "Flock.SecurityProofs.IntegrityHorizonBlocks",
+    "Flock.SecurityProofs.IntegrityHorizonCarried",
+    "Flock.SecurityProofs.IntegrityPeriod",
+    "Flock.SecurityProofs.IntegrityPeriodLog",
+    "Flock.SecurityProofs.JointStratified",
+    "Flock.SecurityProofs.JointStratifiedHorizon",
+    "Flock.SecurityProofs.JointStratifiedHorizonMT",
+    "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveRanRegistered",
+    "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLivePub",
+    "Flock.SecurityProofs.SampledKSLiveStated",
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
+    "Flock.SecurityProofs.SampledKSLiveV5",
+    "Flock.SecurityProofs.SoundAtBridge",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
+  },
+  "Definitions.Core.Game.Prob": {
+   "digest": "7c68e51a14ef4384d41893dde1d4b9c2e5e3df254230f1e4c48abcbdc814b35e",
+   "definitions": {
+    "Verity.Game.Strategy.ofBind": "11f95349cd3a3b37a058c8621e3318c7d1f1ace216744e9c62e2eda3f19a4170"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Flock.SecurityProofs.IntegrityBlock",
+    "Flock.SecurityProofs.IntegrityBlockCarried",
+    "Flock.SecurityProofs.IntegrityBlocks",
+    "Flock.SecurityProofs.IntegrityHorizon",
+    "Flock.SecurityProofs.IntegrityHorizonBlocks",
+    "Flock.SecurityProofs.IntegrityHorizonCarried",
+    "Flock.SecurityProofs.IntegrityPeriod",
+    "Flock.SecurityProofs.IntegrityPeriodLog",
+    "Flock.SecurityProofs.JointStratifiedHorizon",
+    "Flock.SecurityProofs.JointStratifiedHorizonMT",
+    "FlockSoundness.Audit.Adaptive.life_harm_budget"
+   ]
+  },
+  "Definitions.Core.Game.Seq": {
+   "digest": "b40b57ff164bc0f55f32a1dee872420608220be400946c26cac11fac6f840984",
+   "definitions": {
+    "Verity.Game.Strategy.bind": "5611a3aadc98a10632bd8772ac280c0b8daacaac7949e9793f657353e9f4da1f",
+    "Verity.Game.Strategy.map": "3278efca3c1e241bf7cadcf88c3cfc5ae7bbcc3629fd9acb4960b43fe7f09676",
+    "Verity.Game.drawStrat": "a90a41279fcd1d64277b99cc405a6dee1d985ec78dbf3bc75fab24d87330e335",
+    "Verity.Game.runsG": "bbc8fc5f477b5509bbe3ac830743db287a4d4bb60e806f50fd439ef39acc9463",
+    "Verity.Game.runsStrat": "252d77524f0829877a146c1bd1235eb4346db1c8eea52cb4064d8cf14b110794"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.TS.CheckedSessionSound",
+    "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafGroupSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEndHidden",
+    "Flock.SecurityProofs.EndToEndHiddenDrawn",
+    "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
+    "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndRegistered",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawn",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
+    "Flock.SecurityProofs.EndToEndRegisteredFlat",
+    "Flock.SecurityProofs.EndToEndRegisteredRows",
+    "Flock.SecurityProofs.EndToEndRegisteredRowsFlat",
+    "Flock.SecurityProofs.IntegrityBlock",
+    "Flock.SecurityProofs.IntegrityBlockCarried",
+    "Flock.SecurityProofs.IntegrityBlocks",
+    "Flock.SecurityProofs.IntegrityHorizon",
+    "Flock.SecurityProofs.IntegrityHorizonBlocks",
+    "Flock.SecurityProofs.IntegrityHorizonCarried",
+    "Flock.SecurityProofs.IntegrityPeriod",
+    "Flock.SecurityProofs.IntegrityPeriodLog",
+    "Flock.SecurityProofs.JointStratified",
+    "Flock.SecurityProofs.JointStratifiedHorizon",
+    "Flock.SecurityProofs.JointStratifiedHorizonMT",
+    "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveRanRegistered",
+    "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLivePub",
+    "Flock.SecurityProofs.SampledKSLiveStated",
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
+    "Flock.SecurityProofs.SampledKSLiveV5",
+    "Flock.SecurityProofs.ServedRowsLinked",
+    "Flock.SecurityProofs.SoundAtBridge",
+    "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
+  },
   "Definitions.Core.RegisteredCircuit": {
    "digest": "e9f80b59a79d724afb0a217260e9130638f1f811ac8b2547d0c2dd4e901fe30c",
    "definitions": {
@@ -18537,6 +18815,57 @@
     "Verity.SecurityProofs.ExpandAndSize",
     "Verity.SecurityProofs.ExpandSize",
     "Verity.SecurityProofs.Padding"
+   ]
+  },
+  "Definitions.Core.Rewinding": {
+   "digest": "7d168f9741119ee6396672758f5a2d9d5b396ef45585b303f5947ef0ec5c72ec",
+   "definitions": {
+    "Verity.Rewinding.ConflictAt": "bf24b2ceb8f5f56af7fc55e6b048110bea001d9385dabc265396ee4581f93a75"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.TS.CheckedSessionSound",
+    "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafGroupSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
+    "Flock.SecurityProofs.EndToEnd",
+    "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.EndToEndHidden",
+    "Flock.SecurityProofs.EndToEndHiddenDrawn",
+    "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
+    "Flock.SecurityProofs.EndToEndHiddenFlat",
+    "Flock.SecurityProofs.EndToEndRegistered",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawn",
+    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
+    "Flock.SecurityProofs.EndToEndRegisteredFlat",
+    "Flock.SecurityProofs.EndToEndRegisteredRows",
+    "Flock.SecurityProofs.EndToEndRegisteredRowsFlat",
+    "Flock.SecurityProofs.IntegrityBlock",
+    "Flock.SecurityProofs.IntegrityBlockCarried",
+    "Flock.SecurityProofs.IntegrityBlocks",
+    "Flock.SecurityProofs.IntegrityHorizon",
+    "Flock.SecurityProofs.IntegrityHorizonBlocks",
+    "Flock.SecurityProofs.IntegrityHorizonCarried",
+    "Flock.SecurityProofs.IntegrityPeriod",
+    "Flock.SecurityProofs.IntegrityPeriodLog",
+    "Flock.SecurityProofs.JointStratified",
+    "Flock.SecurityProofs.JointStratifiedHorizon",
+    "Flock.SecurityProofs.JointStratifiedHorizonMT",
+    "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveRanRegistered",
+    "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLivePub",
+    "Flock.SecurityProofs.SampledKSLiveStated",
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
+    "Flock.SecurityProofs.SampledKSLiveV5",
+    "Flock.SecurityProofs.SoundAtBridge",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
   "Definitions.Core.Site": {
