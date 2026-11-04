@@ -527,17 +527,14 @@ def test_an_inline_premise_one_side_dropped_stays_while_the_merged_record_lists_
 
 
 def test_a_checkout_whose_merge_rules_predate_origin_main_s_merges_by_origin_main_s_drivers(tmp_path, monkeypatch):
-    """#6676's 935c15b76 merged #5899's head into its checkout of b018a08d, and git ran that checkout's `merge.py`, from
-    before `held`: it applied a side's drop of `shape.inline` premises that the merged tree still printed, for 12 guarantees,
-    and the merged tree's records failed `guarantees.inline-hypothesis` (LEAN-172).  Here a branch whose checkout has a
-    `merge.py` without `held` dropped premise `a`, and merges `main`, whose driver has it: the driver defers to
-    `origin/main`'s copy of its directory (`deferred`), so `a` stays.  With deferring off, the checkout's own driver drops `a`,
-    as 935c15b76 did.  A branch that changed `merge.py` itself merges by its own, and so does one that holds `origin/main`'s
-    rules."""
+    """Git runs the driver from the worktree of the side merged into.  A branch whose checkout has a `merge.py` without
+    `held` dropped premise `a` and merges `main`, whose driver has it: the driver defers to `origin/main`'s copy of its
+    directory (`deferred`), so `a` stays.  Without `origin/main`, the checkout's own driver merges and drops `a`, which the
+    merged tree still prints, so that tree's records would fail `guarantees.inline-hypothesis`.  A branch that committed a
+    `merge.py` of its own merges by it, and so does one that holds `origin/main`'s rules."""
     for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
                  "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}.items():
         monkeypatch.setenv(k, v)
-    monkeypatch.delenv(M.DEFERRED, raising=False)
     repo, rec = tmp_path / "repo", {"owner": "@lean", "signature": ["P.t : P.T"], "assumptions": [], "type_hash": "a" * 64}
     (lean := repo / "tools" / "verity" / "lean").mkdir(parents=True)
     driver = (HERE.parent / "merge.py").read_text()
@@ -562,14 +559,12 @@ def test_a_checkout_whose_merge_rules_predate_origin_main_s_merges_by_origin_mai
     git(repo, "checkout", "-q", "main")
     (lean / "merge.py").write_text(driver)
     commit("main: held", t=t, u={"c": "why c", "d": "why d"})
-    git(repo, "update-ref", "refs/remotes/origin/main", "main")
     git(repo, "checkout", "-q", "pr")
 
-    monkeypatch.setenv(M.DEFERRED, "off")
     off = git(repo, "merge", "--no-edit", "main")
-    monkeypatch.delenv(M.DEFERRED)
     assert deferring not in off.stderr and inline() == {"P.t": {"b": "why b"}, "P.u": {"c": "why c", "d": "why d"}}
     git(repo, "reset", "-q", "--hard", "ORIG_HEAD")
+    git(repo, "update-ref", "refs/remotes/origin/main", "main")
 
     git(repo, "checkout", "-q", "-b", "own")
     (lean / "merge.py").write_text(stale + "# a rule of its own\n")

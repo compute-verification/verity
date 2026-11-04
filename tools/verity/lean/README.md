@@ -418,22 +418,15 @@ Two branches that each add guarantees both change `lean-audit.json`, usually in 
 conflicts. `.gitattributes` gives the file to `merge.py` instead, once `python tools/verity/lean/merge.py --install` has registered
 it in the clone's git config. It merges entry by entry: each side's change to a guarantee, a module under `reads`, a dependency
 or a policy entry applies. Within a module both sides changed, the definitions merge the same way, the readers as sets, and
-the digest is recomputed. Guarantees arrive byte for byte from their branches, and a hand-written section one side extends
-(a module added to `meaning`) is kept. A side written before guarantees were called that (`pins`) is read under today's
-names. A guarantee's `owner` merges apart from the rest of its entry, so one side's new owner and the other side's
-restatement both apply.
+the digest is recomputed. A guarantee's `owner` merges apart from the rest of its entry, so one side's new owner and the
+other side's restatement both apply.
 
 What the build determines never refuses: a guarantee's record (restated on both sides, the merged statement decides it),
 `reads` and assumption digests merge as the union or ours' value, named on stderr, and the train's Lean check regenerates
 them. It refuses where both sides changed what a person writes: an owner, a `shape` entry, a dependency. A refusal is a
-conflict in git, with the entries named; take either side and run `check.py --update` on the merged tree.
-
-Git runs the driver from the worktree you merge into, so a branch whose checkout took older rules would merge by those: #6676's
-935c15b76 merged with a `merge.py` from before a `shape.inline` premise one side dropped was kept, and dropped premises the
-merged tree still printed (LEAN-172). So when `origin/main` has changed `merge.py` or `check.py` since your checkout took them,
-and your branch neither edited them nor committed a `merge.py` of its own, the driver runs `origin/main`'s copy and says so on
-stderr; fetch `main` before you merge. A tree from before this rule runs its own driver, so merge into it with
-`git -c merge.lean-audit.driver="python3 <main's merge.py> %O %A %B %P" merge ...`, naming a checkout of `main`.
+conflict in git, with the entries named; take either side and run `check.py --update` on the merged tree. Git runs the driver
+from the worktree you merge into, and one whose rules are older than `origin/main`'s runs `origin/main`'s (`deferred`), so
+fetch `main` before you merge.
 
 A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
 so a merge that is clean but wrong (a definition that changed on one side without a guarantee there reading it, while the

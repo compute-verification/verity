@@ -111,8 +111,6 @@ MISSING = object()
 #: the `check.py` it loads
 MAIN = "origin/main"
 RULES = ("tools/verity/lean/merge.py", "tools/verity/lean/check.py")
-#: set for the driver `deferred` runs, to the commit it came from, so that one merges as itself
-DEFERRED = "VERITY_MERGE_DRIVER_FROM"
 
 
 def one(path: str, o, a, b, why: list[str]):
@@ -860,30 +858,25 @@ def load(path: Path) -> dict:
 
 def deferred(argv: list[str]) -> int | None:
     """Run the driver ``argv`` names with `MAIN`'s copy of this directory when git runs this file from its worktree, unedited,
-    and `MAIN` has changed the merge rules (`RULES`) since this checkout took them while the checkout changed no `merge.py`
+    and `MAIN` has changed the merge rules (`RULES`) since this checkout took them while the checkout committed no `merge.py`
     of its own: that run's exit status, else None, and this file merges. Git runs a driver from the worktree of the side
-    merged into, so a branch that merges another into its older checkout would merge by the rules that checkout took:
-    #6676's 935c15b76 merged #5899's head into b018a08d with b018a08d's `merge.py`, from before `held`, and it dropped the
-    `shape.inline` premises of 12 guarantees that #5899's tree printed, so the merged tree's records failed
-    `guarantees.inline-hypothesis` (LEAN-172). Without `MAIN` (a test's repository) this file merges, and a copy outside the
-    worktree (`research queue`'s `base_drivers`, which runs the drivers of the tip it merges onto) is never deferred."""
-    if os.environ.get(DEFERRED):
-        return None
+    merged into, so a branch that merges another into an older checkout would merge by the rules that checkout took: one from
+    before `held` applies a side's drop of `shape.inline` premises the merged tree still prints, and that tree's records fail
+    `guarantees.inline-hypothesis`. Without `MAIN` (a test's repository) this file merges, and a copy outside the worktree
+    (the one this runs, and those `research queue`'s `base_drivers` runs, the drivers of the tip it merges onto) never
+    defers."""
 
     def git(*args: str) -> subprocess.CompletedProcess:
         return subprocess.run(["git", *args], capture_output=True)
-    try:
-        top = git("rev-parse", "--show-toplevel")
-        if top.returncode or (Path(top.stdout.decode().strip()) / "tools" / "verity" / "lean").resolve() != HERE:
-            return None
-        tip = git("rev-parse", "-q", "--verify", f"{MAIN}^{{commit}}").stdout.decode().strip()
-        if (not tip or git("diff", "--quiet", "HEAD", "--", *RULES).returncode
-                or not git("rev-list", "-n1", tip, "^HEAD", "--", *RULES).stdout.strip()
-                or git("rev-list", "-n1", "HEAD", f"^{tip}", "--", RULES[0]).stdout.strip()):
-            return None
-        ls = git("ls-tree", "-z", tip, "--", f"{Path(RULES[0]).parent}/").stdout
-    except OSError:
+    top = git("rev-parse", "--show-toplevel")
+    if top.returncode or (Path(top.stdout.decode().strip()) / "tools" / "verity" / "lean").resolve() != HERE:
         return None
+    tip = git("rev-parse", "-q", "--verify", f"{MAIN}^{{commit}}").stdout.decode().strip()
+    if (not tip or git("diff", "--quiet", "HEAD", "--", *RULES).returncode
+            or not git("rev-list", "-n1", tip, "^HEAD", "--", *RULES).stdout.strip()
+            or git("rev-list", "-n1", "HEAD", f"^{tip}", "--", RULES[0]).stdout.strip()):
+        return None
+    ls = git("ls-tree", "-z", tip, "--", f"{Path(RULES[0]).parent}/").stdout
     with tempfile.TemporaryDirectory(prefix="lean-merge-driver-") as tmp:
         for e in filter(None, ls.split(b"\0")):
             meta, path = e.decode().split("\t", 1)
@@ -892,7 +885,7 @@ def deferred(argv: list[str]) -> int | None:
                 out.write_bytes(git("cat-file", "blob", meta.split()[2]).stdout)
         print(f"merge.py: merging with {MAIN}'s drivers ({tip[:10]}), which changed the merge rules since this checkout "
               f"took them", file=sys.stderr)
-        return subprocess.run([sys.executable, str(Path(tmp) / RULES[0]), *argv], env=os.environ | {DEFERRED: tip}).returncode
+        return subprocess.run([sys.executable, str(Path(tmp) / RULES[0]), *argv]).returncode
 
 
 def install(repo: Path) -> None:
