@@ -310,7 +310,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                          "registered gates are read at a template's first unit, so it holds only of templates of one "
                          "unit per VU (units_per_vu 1): its discharge counts only at a statement that takes no premise "
                          "on units_per_vu, which the period check's circuit read gives once it refuses every other",
-                   "discharged_by": ("Properties.NetworkPeriod.phaseCounts",)},
+                   "discharged_by": ("Properties.NetworkCertifier.circuitCounts",)},
     "tied-padding-reads": {"is": "CircuitCounts' tied-audit half: that no unit of a tied audit's circuit file reads "
                                  "into its padding (FilesOf's readsWhy at no reads is none). The period check reads "
                                  "the scan's circuit files whole, so the scan's half follows from its acceptance, but "
