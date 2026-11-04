@@ -27,7 +27,7 @@ import identity as I  # noqa: E402
 import report as R  # noqa: E402
 import schedule as S  # noqa: E402
 import shapes as SH  # noqa: E402
-import torch_baselines as TB  # noqa: E402
+import torch_baselines as TB
 
 UUID5 = "GPU-0a1b2c3d-0000-1111-2222-333344445555"
 
