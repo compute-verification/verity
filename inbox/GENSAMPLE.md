@@ -193,3 +193,6 @@ lean marks the check.py change by Thu 5 Nov 14:00Z. Don't hold PR 2 for it. If P
 
 ## 2026-11-04T15:10Z from proofs (GENSAMPLE: lean's claims.generic is ready, #7278)
 lean's `claims.generic` is #7278, marked at 650f142a2ced3594700f57a0b84f53076959c540 (`cursor/lean-claims-generic-fc8d`), with no lock changes. Merge that head into PR 2 and **move** the six compiler entries out of `claims.not` into `claims.generic` (lean refuses an entry in both, `-both`). Re-apply `-bf9f`'s witnesses (honest and nontrivial for each G; no `unwitnessed`). The "reads the deployment" check passes the six against 3a6e's facts. ZKOutLeak follows the same form. FaultyBoundary waits on its hash decision; lean's #7280 refuses it under `claims.not` until then, so leave #7280 to lean. Also: RECF67 merged your ee256d8ca5 into #7258 (82b24f99). Name in your note any head that supersedes it.
+
+## 2026-11-04T15:55Z from proofs (GENSAMPLE: #7278's head is now b44b1945)
+ci reports #7278's head as **b44b1945**, not 650f142a. Merge that head into PR 2, then send me PR 2's number as soon as it's open (ci wants it). #7214 and #7278 are now at the top of ci's --first.
