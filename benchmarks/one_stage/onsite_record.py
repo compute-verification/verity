@@ -94,7 +94,8 @@ serve dir's by their paths there, naming no window) and what it holds, with whet
 each must be kept (``kept``, `REPROOF_KEPT`). The serve dir's are witness, kept off OUT and custody in a copy off the
 served node (``--reproof-copy`` NODE:/PATH, ``--reproof-listing``, a listing of it kept off OUT): ``copy`` names its node
 and path, and each serve-dir input says whether the listing holds each file its path names and at least one file under
-each directory it names, never their bytes or digests; with no copy given, ``copy`` is missing with why.
+each directory it names, never their bytes or digests; with no copy given, ``copy`` is missing with why. Under H1_TIE
+(``--h1-tie``) the circuit is the verifier's record reading H1's tables, the one V3c holds the tied commit to.
 
 The record's counts and indices are the certification period's (m and each phase j), public in the Lean answer's
 profile; it names no Commit window, whose count `publish` holds.
@@ -227,12 +228,13 @@ RESTS_ON: dict[str, dict[str, Any]] = {
                   "hfit": "schedules-held", "hs": "schedules-covered", "hdz": "client-decodes",
                   "NetTiming.ScopeAcc": "wires-fit", "NetTiming.TapOpens": "taps-open"}},
     "NetTiming.SecurityProofs.PeriodLeakRegistered": {
-        "statement": "79ebe236812c4d1257a7dd6dfc7dbc9816c7d1846745f64dce1596c5ebd20034",
+        "statement": "a950c611a388e2a0afa380e293fdc65946330ba10ed90b6f8f567883d6f1af09",
         "takes": {"Claims.Sampling.KS": "sampled-leg-bridge", "Claims.Flock.ListWithin": "sampled-leg-bridge",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
                   "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
                   "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.SchedulesHeld": "schedules-held",
-                  "NetTiming.SenderDecodes": "schedules-covered", "NetTiming.ScopeAcc": "wires-fit",
+                  "NetTiming.SchedulesCovered": "schedules-covered", "NetTiming.SenderDecodes": "client-decodes",
+                  "NetTiming.ScopeAcc": "wires-fit",
                   "NetTiming.RegOpensAt": "reg-opens-at", "NetTiming.TapsOpen": "taps-open"}},
     "NetTiming.SecurityProofs.PeriodTiedCount": {
         "statement": None,
@@ -265,7 +267,10 @@ PREMISES: dict[str, dict[str, Any]] = {
                             "bridge (`sampled-leg-bridge`), never a named assumption. Open until the theorem that "
                             "OneStageZk.verdicts' acceptance gives it is named and in the lock",
                       "discharged_by": ()},
-    "free-count": {"is": "CircuitCounts: each tied audit's free at least #(freeInputs \\ reg) at the wired layout",
+    "free-count": {"is": "CircuitCounts: each tied audit's free at least #(freeInputs \\ reg) at the wired layout. The "
+                         "registered gates are read at a template's first unit, so it holds only of templates of one "
+                         "unit per VU (units_per_vu 1): its discharge counts only at a statement that takes no premise "
+                         "on units_per_vu, which the period check's circuit read gives once it refuses every other",
                    "discharged_by": ("Properties.NetworkPeriod.phaseCounts",)},
     "held-performed": {"is": "the public's held names only the checks the period check performed, each holding of it",
                        "discharged_by": ("Properties.NetworkPeriod.rowsHeld",)},
@@ -317,12 +322,15 @@ PREMISES: dict[str, dict[str, Any]] = {
                              "(TapRecord.fits, the rows format's). Open until the theorem that gives it of the network "
                              "certifier's code is named",
                        "discharged_by": ()},
-    "schedules-covered": {"is": "SenderDecodes's schedule half, PeriodLeakAccepted's hs: each secret K counts runs on a "
-                                "schedule of Ss, whose number k_sched counts, so Ss must hold every schedule the deployed "
-                                "network certifier can run (its own admission, at the case's caps). Open until it is "
-                                "stated of the network certifier's code and a theorem gives it; the decoder half is what "
-                                "K counts (`COUNTS`)",
-                          "discharged_by": ()},
+    "schedules-covered": {"is": "SchedulesCovered, PeriodLeakAccepted's hs: each secret K counts runs on a schedule of "
+                                "Ss, whose number k_sched counts, so Ss must hold every schedule the network "
+                                "certifier's signed records can show, the union over their arrivals. A property of "
+                                "the compiled Lean audit the verification runs over those records, which trusted-host "
+                                "makes the traffic that crossed, never of the device's code. Open, by this name, "
+                                "until k_sched's count bounds that union and the Property that gives it, stated over "
+                                "that audit, is in the lock at the statement `DISCHARGES` pins; SenderDecodes, the "
+                                "decoder, is what K counts (`COUNTS`)",
+                          "discharged_by": ("Properties.NetworkCertifier.schedulesCoveredAt",)},
     "sampled-leg-bridge": {"is": "the sampled leg's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
                                  "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KS; "
                                  "ListWithin, the decoder's list at Flock's radius; Binds, the trace commitment's "
@@ -345,13 +353,15 @@ PREMISES: dict[str, dict[str, Any]] = {
 DISCHARGES: dict[str, dict[str, Any]] = {}
 #: the named assumptions that may stand under the figure of record, each on an auditor-trusted device or the auditor's
 #: placement of one, named beside the bound
-STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifier and its host are the auditor's",
+STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifier and its host are the auditor's, "
+                                              "which covers only that the records it signs are the traffic that "
+                                              "crossed, at the times it crossed, not what the device's code computes",
             "Accounting.Covered": "certifier-coverage: the links in the room are the registered ones, each through the "
                                   "network certifier (a listed physical premise, the auditor's placement)"}
 #: what K counts: the hypotheses on the covert sender's strategy that its guarantee quantifies, which no deployment
 #: discharges, so none is open
 COUNTS = {"client-decodes": "the secrets a decoder recovers from the client's view, the cells the network certifier's "
-                            "run gives the client: SenderDecodes's decoder half, PeriodLeakAccepted's hdz"}
+                            "run gives the client: SenderDecodes, PeriodLeakAccepted's hdz"}
 DISCHARGE = ("the tight K's premises (`PREMISES`), each open until every theorem that discharges it at the deployed code "
              "is in Security's lock at the statement `DISCHARGES` pins (``unpinned``, with the lock's digest, where it "
              "isn't), with no named assumption but a standing one (`STANDING`) or one its pin takes, and every premise "
@@ -412,7 +422,8 @@ TEST_PHASES = ("the test run's own: T buckets of τ from its first Commit period
                "certifier's phase boundaries, so a Commit period near a boundary can count in the next phase")
 #: what a later re-proof of the run's sampled units needs, each wire a sampled unit reads then proved inside its session:
 #: each by name, where it is (the serve dir, the prover's on the served node, by its path there with w<K> the audited
-#: window and <class> V3c's class; or OUT, the run's public files) and what it holds
+#: window, <class> V3c's class and <tie> -tie where H1_TIE ties the window, whose record V3c holds the commit to reads
+#: H1's tables (served_verdicts.sh's `v3c_record`), else nothing; or OUT, the run's public files) and what it holds
 REPROOF = {
     "values": ("serve dir", "v3c-w<K>-<class>/window/",
                "the window commit: every unit's committed values with their rows and salts, the sampled units' and those "
@@ -431,8 +442,9 @@ REPROOF = {
                 "the weights registration the audit pins, the committer's key their salts come from and the rotary table, "
                 "beside the checkpoint (REPO at REV, public)"),
     "run root": ("serve dir", "windows.jsonl", "the run root the audit holds the registration to"),
-    "circuit": ("serve dir", "window-circuit-w<K>-<class>.json",
-                "the verifier's window-circuit record at the class, which the window commit's circuit is held to"),
+    "circuit": ("serve dir", "window-circuit-w<K>-<class><tie>.json",
+                "the verifier's window-circuit record at the class (under H1_TIE, the one reading H1's tables), which "
+                "the window commit's circuit is held to"),
     "h1": ("serve dir", "h1/", "under H1_TIE, H1's registration of the window and its log, whose tables the circuit reads"),
     "registration": ("OUT", "v3c-audit/registration.json",
                      "the window's registration, whose roots bind every committed value and which the period's "
@@ -455,9 +467,9 @@ REPROOF_KEPT = ("each retained past the week after the run, never only on the se
 NO_COPY = ("no copy of the serve dir's inputs is given (--reproof-copy NODE:/PATH and --reproof-listing): they are on "
            "the served node only")
 SERVING = ("the run's serving settings as its caller states them (--window-steps, --max-tokens): S, served_verdicts.sh's "
-           "WINDOW_STEPS, the most engine steps a Commit period holds, and its MAX_TOKENS. No file of OUT states them; "
-           "ℓ_a (advice_charge.cap) is the cap the run's S, slots, model length and id bytes set, and every figure here "
-           "is the run's at these settings alone")
+           "WINDOW_STEPS, the most engine steps a Commit period holds, and its MAX_TOKENS. No file of OUT states both "
+           "(its COINS line names S only where PoUW H1 is served); ℓ_a (advice_charge.cap) is the cap the run's S, "
+           "slots, model length and id bytes set, and every figure here is the run's at these settings alone")
 NO_SERVING = ("the run's caller stated no serving settings (--window-steps and --max-tokens: served_verdicts.sh's "
               "WINDOW_STEPS and MAX_TOKENS)")
 BESIDE = "verity/onsite-network-records-beside/v1"
@@ -838,11 +850,12 @@ def figure(out: Path, case: Mapping[str, Any], public: Mapping[str, Any], K: int
         return (why := {"error": f"{CASE} commitment: {type(e).__name__}: {e}"}), why
 
 
-def named(path: str) -> list[re.Pattern[str]]:
+def named(path: str, tie: bool = False) -> list[re.Pattern[str]]:
     """Each file a `REPROOF` path names, as a pattern over a listing's paths: ``, `` separates paths, ``{a,b}`` is each of
-    a and b, ``<x>`` any one name, and a trailing ``/`` a directory holding at least one file."""
+    a and b, ``<tie>`` -tie where ``tie`` (H1_TIE ties the window) and nothing otherwise, any other ``<x>`` any one name,
+    and a trailing ``/`` a directory holding at least one file."""
     out = []
-    for part in path.split(", "):
+    for part in path.replace("<tie>", "-tie" if tie else "").split(", "):
         m = re.fullmatch(r"(.*)\{([^}]*)\}(.*)", part)
         for p in [m[1] + x + m[3] for x in m[2].split(",")] if m else [part]:
             rx = "".join("[^/]+" if t.startswith("<") else re.escape(t) for t in re.split(r"(<[^>]+>)", p))
@@ -850,11 +863,11 @@ def named(path: str) -> list[re.Pattern[str]]:
     return out
 
 
-def reproof(out: Path, copy: str | None = None, listing: Path | None = None) -> dict[str, Any]:
-    """The re-proof inputs (`REPROOF`), each with where it is and what it holds; of OUT's whether the run wrote it, and of
-    the serve dir's, where ``copy`` (NODE:/PATH) and ``listing`` (each file under PATH, one path relative to it a line)
-    are given, whether the copy's listing holds each file its path names and at least one under each directory it
-    names."""
+def reproof(out: Path, copy: str | None = None, listing: Path | None = None, tie: bool = False) -> dict[str, Any]:
+    """The re-proof inputs (`REPROOF`), each with where it is, its path (``<tie>`` -tie where ``tie``: H1_TIE ties the
+    window) and what it holds; of OUT's whether the run wrote it, and of the serve dir's, where ``copy`` (NODE:/PATH) and
+    ``listing`` (each file under PATH, one path relative to it a line) are given, whether the copy's listing holds each
+    file its path names (`named`) and at least one under each directory it names."""
     files = None
     if copy is None or listing is None:
         kept: dict[str, Any] = {"missing": NO_COPY}
@@ -868,6 +881,7 @@ def reproof(out: Path, copy: str | None = None, listing: Path | None = None) -> 
             kept = {"error": f"the copy's listing (--reproof-listing) can't be read: {type(e).__name__}"}
     inputs = {}
     for name, (at, path, what) in REPROOF.items():
+        path = path.replace("<tie>", "-tie" if tie else "")
         inputs[name] = {"in": at, "path": path, "holds": what}
         if at == "OUT":
             inputs[name]["present"] = (out / path).exists()
@@ -879,10 +893,10 @@ def reproof(out: Path, copy: str | None = None, listing: Path | None = None) -> 
 
 
 def record(out: Path, advice_charge: Path | None = None, copy: str | None = None,
-           listing: Path | None = None, serving: tuple[int, int] | None = None) -> dict[str, Any]:
+           listing: Path | None = None, serving: tuple[int, int] | None = None, tie: bool = False) -> dict[str, Any]:
     """OUT's onsite record (module docstring), with the re-proof inputs' ``copy`` and its ``listing`` where given
-    (`reproof`), and the run's ``serving`` settings, S and MAX_TOKENS, where its caller states them (`SERVING`);
-    FileNotFoundError where `served_verdicts.py record` wrote no report."""
+    (`reproof`, ``tie`` where H1_TIE ties the window), and the run's ``serving`` settings, S and MAX_TOKENS, where its
+    caller states them (`SERVING`); FileNotFoundError where `served_verdicts.py record` wrote no report."""
     report = json.loads((out / "record" / "verdicts.json").read_text())
     if report.get("format") != EXTENDS:
         raise ValueError(f"record/verdicts.json is {report.get('format')!r}, not {EXTENDS}")
@@ -913,7 +927,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
                       "missing": [k for k, x in v.items() if x["verdict"] == "missing"],
                       "not_accepting": [k for k, x in v.items() if x["verdict"] not in ("accept", "missing")]},
         "placement": profile.get("placement"), "advice_charge": advice, "composite_error": composite_error(rows, None),
-        "reproof": reproof(out, copy, listing)}
+        "reproof": reproof(out, copy, listing, tie)}
     nv = v["the network certifier"]
     if nv["verdict"] != "accept":
         why = (f"the network certifier's verdict is {nv['verdict']}"
@@ -1031,13 +1045,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="where the serve dir's re-proof inputs were copied off the served node, keeping its layout")
     ap.add_argument("--reproof-listing", type=Path,
                     help="the copy's listing, kept off OUT: each file under PATH, one path relative to it a line")
+    ap.add_argument("--h1-tie", action="store_true",
+                    help="the run ties its window to H1's W (H1_TIE): the re-proof's circuit is the record reading "
+                         "H1's tables (`REPROOF`'s <tie>)")
     ap.add_argument("--to", type=Path,
                     help="the record's path (default OUT/record/onsite.json); with --beside, where the records go "
                          "beside each other")
     a = ap.parse_args(argv)
     if a.beside is not None:
-        if a.to is None or any(x is not None for x in (a.out, a.advice_charge, a.reproof_copy, a.reproof_listing,
-                                                         a.window_steps, a.max_tokens)):
+        if a.to is None or a.h1_tie or any(x is not None for x in (a.out, a.advice_charge, a.reproof_copy,
+                                                                     a.reproof_listing, a.window_steps, a.max_tokens)):
             ap.error("--beside reads the records written, with --to alone: where they go beside each other")
         try:
             doc = beside(a.beside)
@@ -1055,7 +1072,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ap.error("--window-steps and --max-tokens go together: the run's S and MAX_TOKENS label its figures")
     serving = None if a.window_steps is None else (a.window_steps, a.max_tokens)
     try:
-        rec = record(a.out, a.advice_charge, a.reproof_copy, a.reproof_listing, serving)
+        rec = record(a.out, a.advice_charge, a.reproof_copy, a.reproof_listing, serving, a.h1_tie)
     except FileNotFoundError as e:
         print(f"ONSITE: not written: {e.filename} is missing", file=sys.stderr)
         return 1

@@ -80,6 +80,8 @@ UNPINNED = [g for g, r in OR.RESTS_ON.items() if r["statement"] is None]
 ACCEPTED = "NetTiming.SecurityProofs.PeriodLeakAccepted"
 #: the theorem that discharges the free-input count's premise
 (COUNTED,) = OR.PREMISES["free-count"]["discharged_by"]
+#: the Property of the Lean audit over the network certifier's signed records that discharges schedules-covered
+(COVERED,) = OR.PREMISES["schedules-covered"]["discharged_by"]
 
 
 def discharged() -> dict:
@@ -333,6 +335,8 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     ({"Properties.NetworkPeriod.rowsHeld": ["NetTiming.Assumptions.SampledCodeRuns"]}, ["held-performed"]),
     ({"Properties.NetworkPeriod.rowsHeld": ["Verity.Assumptions.TrustedHost"]}, []),
     ({COUNTED: None}, ["free-count"]),
+    ({COVERED: None}, ["schedules-covered"]),
+    ({COVERED: ["Verity.Assumptions.TrustedHost"]}, []),
     ({ACCEPTED: ["NetTiming.Assumptions.SampledCodeRuns"]}, ["NetTiming.Assumptions.SampledCodeRuns"]),
     ({ACCEPTED: ["Verity.Assumptions.TrustedHost"]}, []),
     ({ACCEPTED: ["Accounting.Covered"]}, []),
@@ -343,8 +347,9 @@ def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_non
     """Both checks held: a premise whose discharge the lock doesn't list, or lists taking an assumption that doesn't
     stand (SampledCodeRuns, a premise about our own Python), is open, and so is an assumption of a guarantee the tight
     K rests on that is neither standing nor named in what it takes, by its name, and that guarantee where the lock
-    doesn't list it. trusted-host and certifier-coverage stand, and a premise its takes names is that premise's. With
-    one check open too, the tight K is conditional on both."""
+    doesn't list it. trusted-host and certifier-coverage stand, and a premise its takes names is that premise's: so
+    schedules-covered is open by its name until the Lean audit's Property is in the lock, and discharged once it is,
+    resting on trusted-host alone. With one check open too, the tight K is conditional on both."""
     write_lock(lock, given)
     rec = held_both(tmp_path / "held")
     of = rec["bound"]["of_record"]
@@ -354,6 +359,7 @@ def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_non
     assert p["held-performed"]["assumes"] == (["NetTiming.Assumptions.SampledCodeRuns"] if "held-performed" in open_
                                               else [])
     assert p["free-count"]["missing"] == ([COUNTED] if "free-count" in open_ else [])
+    assert p["schedules-covered"]["missing"] == ([COVERED] if "schedules-covered" in open_ else [])
     rec = OR.record(accepted(tmp_path / "free", dict(PUBLIC, held=["free"])))
     assert rec["periods_tight"]["conditional_on"] == ["circuit", *open_]
 
@@ -586,7 +592,7 @@ def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever
 
 @pytest.mark.parametrize("drawn, entries", [(1, 896), (16, 0)])
 def test_w63k4s_tied_audit_drawn_in_part_charges_its_slot_entries_and_drawn_whole_doesnt(tmp_path, drawn, entries):
-    """Monday's schedule with a toy tied audit: w63k4 at a 4 s tick over three execution phases, each phase's tied audit
+    """w63k4's schedule with a toy tied audit: w63k4 at a 4 s tick over three execution phases, each phase's tied audit
     one of 16 proof blocks (V3c's registration has millions) drawn subset:1 (charged), its draw read at δ_i = 2^-64
     with a bound of 15 beside its answer's 8 at 1/2, so k_{skip,j} is its E_w = 896 slot-entry bits beside the
     schedule's and the jitter's 800: with ℓ_{a,j} = 0, both checks held and no open premise, 1,696 bits a phase of
@@ -814,20 +820,23 @@ def test_the_record_lists_the_re_proof_inputs_and_which_of_outs_the_run_wrote(tm
     assert got["copy"] == {"missing": OR.NO_COPY}
 
 
+def _reproof_files(path: str, tie: bool = False) -> list[str]:
+    """A file of window 7 at class c64 for each a `REPROOF` path names (one under each directory), H1-tied where ``tie``."""
+    out = []
+    for part in path.split(", "):
+        m = re.fullmatch(r"(.*)\{([^}]*)\}(.*)", part)
+        for p in [m[1] + x + m[3] for x in m[2].split(",")] if m else [part]:
+            p = p.replace("<K>", "7").replace("<class>", "c64").replace("<tie>", "-tie" if tie else "")
+            out.append(p + "m0-private.bin" if p.endswith("/") else p)
+    return out
+
+
 def test_the_serve_dirs_re_proof_inputs_are_checked_against_their_copys_listing_by_path_alone(tmp_path):
     """The serve dir's inputs, witness, are copied off the node: the record names the copy's node and path and says of
     each input whether the listing holds each file its path names and at least one under each directory it names, and
     nothing of the listing's window names; one file short is that input not copied, and a copy that isn't NODE:/PATH
     or a listing it can't read is the copy's error."""
-    def files(path: str) -> list[str]:
-        out = []
-        for part in path.split(", "):
-            m = re.fullmatch(r"(.*)\{([^}]*)\}(.*)", part)
-            for p in [m[1] + x + m[3] for x in m[2].split(",")] if m else [part]:
-                p = p.replace("<K>", "7").replace("<class>", "c64")
-                out.append(p + "m0-private.bin" if p.endswith("/") else p)
-        return out
-
+    files = _reproof_files
     out = accepted(tmp_path)
     serve = [p for at, p, _ in OR.REPROOF.values() if at == "serve dir"]
     listing = tmp_path / "private" / "listing.txt"
@@ -845,6 +854,32 @@ def test_the_serve_dirs_re_proof_inputs_are_checked_against_their_copys_listing_
         "error": "--reproof-copy 'vy-nebius-cpu-3' isn't NODE:/PATH"}
     assert OR.record(out, copy="n:/p", listing=tmp_path / "none.txt")["reproof"]["copy"] == {
         "error": "the copy's listing (--reproof-listing) can't be read: FileNotFoundError"}
+
+
+def test_under_h1s_tie_the_re_proofs_circuit_is_the_record_reading_h1s_tables(tmp_path):
+    """Under H1_TIE the window commit's circuit is held to the verifier's record reading H1's tables (served_verdicts.sh's
+    `v3c_record`, window-circuit-w<K>-<class>-tie.json), so a tied run's copy holding only the untied record at the
+    class hasn't copied the circuit; `--h1-tie` says the run is tied, and the record names the circuit it needs."""
+    out, copy = accepted(tmp_path), "vy-nebius-cpu-3:/home/research/keep/reproof"
+    serve = [p for at, p, _ in OR.REPROOF.values() if at == "serve dir"]
+    listing = tmp_path / "private" / "listing.txt"
+    listing.parent.mkdir()
+    for tie in (False, True):
+        listing.write_text("\n".join(f for p in serve for f in _reproof_files(p, tie)) + "\n")
+        got = OR.record(out, copy=copy, listing=listing, tie=tie)["reproof"]
+        assert got["copy"]["not_copied"] == []
+        assert got["inputs"]["circuit"]["path"] == f"window-circuit-w<K>-<class>{'-tie' * tie}.json"
+        assert OR.main([str(out), "--reproof-copy", copy, "--reproof-listing", str(listing), *(["--h1-tie"] * tie)]) == 0
+        written = json.loads((out / "record" / "onsite.json").read_text())["reproof"]
+        assert written["copy"]["not_copied"] == [] and written["inputs"]["circuit"] == got["inputs"]["circuit"]
+        assert "<tie>" not in json.dumps(written)
+    untied = [f for p in serve for f in _reproof_files(p)]
+    listing.write_text("\n".join(untied) + "\n")
+    assert OR.record(out, copy=copy, listing=listing, tie=True)["reproof"]["copy"]["not_copied"] == ["circuit"]
+    assert OR.main([str(out), "--reproof-copy", copy, "--reproof-listing", str(listing), "--h1-tie"]) == 0
+    assert json.loads((out / "record" / "onsite.json").read_text())["reproof"]["copy"]["not_copied"] == ["circuit"]
+    [tied] = OR.named("window-circuit-w<K>-<class><tie>.json", tie=True)
+    assert tied.fullmatch("window-circuit-w7-c64-tie.json") and not tied.fullmatch("window-circuit-w7-c64.json")
 
 
 def test_the_record_leaves_the_node_as_written(tmp_path):

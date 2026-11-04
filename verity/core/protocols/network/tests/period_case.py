@@ -28,7 +28,9 @@ of chunk j's entries port of that link-window's slot entries' template (`slot_en
 smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding beside a stand-in scan slots'
 `ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's registration and Program
 (`_prog_tied`, `_wired`), and its
-state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), answered by one-stage with a
+state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), a state tree of T rows (`_state_tree`)
+whose units' reads its `window` states as the chain (`state_reads`, `_state_read`) and whose leaf 0 it opens to the
+empty state (`state_empty`, `_state_empty`), answered by one-stage with a
 stratified or subset draw at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
 the checker form is a bad scan (`bad_scans`), as is each check's negative of what `NetTiming.BoundaryGates.Fits` asks
@@ -41,7 +43,9 @@ stratum a template, `_by_template`), one or two of its proof blocks sampled (`ti
 sample), or its slot entries' or scan slots' stratum in part too (`tied-entries-sampled`, `tied-slots-sampled`), and a
 link-window whose scan's state is not its
 wired audit's `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions,
-at another root or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a
+at another root or domain, or none, `UNSTATES`), as is one whose units read their state off the chain
+(`state-misindexed`, `MISREADS`) and one whose row 0 isn't opened to the empty state (`state-unpinned`, `UNPINS`).
+`case(kind, seed, form)` is a small period of the form aimed at a
 verdict, or at a decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with
 its answer, as a composition's difftest takes a real component's cases.
 
@@ -68,7 +72,7 @@ from verity.core.protocols.certifier.certificate import (SALT_BYTES, Certificate
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as R
 from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
 from verity.ml.circuits import boolean as BL, codec, metadata as AN, population
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -76,7 +80,10 @@ from verity.ml.circuits.defs import REGISTRY
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import array_of, coll_concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
+from verity.ml.commitments import advice as ADV
+from verity.ml.commitments.frame_v3 import BitRowLeaf
 from verity.ml.commitments.identity import tagged_sha512
+from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.crypto import lms
 from verity.ml.definitions.registry.sampling import bit_at
 
@@ -886,11 +893,83 @@ def _states(reg: dict) -> list[dict]:
             *(e for e in _entries(reg, "registered") if e.get("value") == SCAN_STATE)]
 
 
+def _get(j, k: str):
+    """`getObjValD`: `j`'s value at `k`, None where `j` is no object or has none."""
+    return j.get(k) if isinstance(j, dict) else None
+
+
+def _natural(v) -> int | None:
+    """`getNat?`: an int, not a bool, at least 0; else None."""
+    return v if isinstance(v, int) and not isinstance(v, bool) and v >= 0 else None
+
+
+def _unhex(v) -> bytes | None:
+    """`Flock.unhex`, as an option: a string of lowercase hex digit pairs; else None."""
+    ok = isinstance(v, str) and len(v) % 2 == 0 and all(c in "0123456789abcdef" for c in v)
+    return bytes.fromhex(v) if ok else None
+
+
+def _run(j, lo: int, hi: int, leaf: int) -> bool:
+    """`isRun`: `j` is ``{"leaf": leaf, "units": [lo, hi]}``, each a natural (`_natural`)."""
+    units = _get(j, "units")
+    return _natural(_get(j, "leaf")) == leaf and isinstance(units, list) and len(units) == 2 \
+        and _natural(units[0]) == lo and _natural(units[1]) == hi
+
+
+def state_reads(T: int) -> dict:
+    """The scan's state reads its registration's `window` states (`stateRead`): `sin` units 1 … T − 1 from leaf 1,
+    `o1` units 0 … T − 2 from leaf 1, unit t's `sin` at leaf t and its `o1` at leaf t + 1."""
+    return {STATE: {"o1": {"leaf": 1, "units": [0, T - 1]}, "sin": {"leaf": 1, "units": [1, T]}}}
+
+
+def _state_read(p: Params, reg: dict) -> bool:
+    """`stateRead`: the registration's `window`'s `reads` of `STATE` are `state_reads` at the schedule's T."""
+    r = _get(_get(_get(reg, "window"), "reads"), STATE)
+    T = p.schedule.window
+    return _run(_get(r, "sin"), 1, T, 1) and _run(_get(r, "o1"), 0, T - 1, 1)
+
+
+class _Domain:
+    """A frame-v3-sha512 domain known by its id alone, as Lean's `climb` takes one: a leaf's hash and a node's read the
+    id and nothing else of the domain."""
+    hash = "sha512"
+    leaf, node = CommitmentDomain.leaf, CommitmentDomain.node
+
+    def __init__(self, domain_id: bytes, count: int) -> None:
+        self.domain_id, self.count = domain_id, count
+
+
+def _state_empty(p: Params, reg: dict) -> bool:
+    """`stateEmpty`: the registration's `window`'s ``empty`` of `STATE` opens leaf 0 of its first state entry's root
+    and domain to the empty state, ``words`` (at least 1) zero u16 words under a 192-byte ``salt``, through ``path``,
+    one sibling a level of T leaves."""
+    o, es, T = _get(_get(_get(reg, "window"), "empty"), STATE), _states(reg), p.schedule.window
+    w = _natural(_get(o, "words"))
+    if not es or not w:
+        return False
+    salt, path, root, dom = (_unhex(_get(o, "salt")), _unhex(_get(o, "path")), _unhex(es[0].get("root")),
+                             _unhex(es[0].get("domain")))
+    if salt is None or path is None or root is None or dom is None or len(salt) != ADV.INST.salt_bytes \
+            or len(path) != 64 * clog2(T):
+        return False
+    bc = ADV.INST.commit_string(ADV.INST.default_key, BitRowLeaf(16 * w).layout().digest(bytes(2 * w)), salt)
+    return G.verify_read(_Domain(dom, T), root, 0, bc, path, G.SCHEMA_V2)
+
+
+def state_empty(tree: ADV.Committed) -> dict:
+    """The opening of a state tree's leaf 0 its registration's `window` gives as ``empty`` (`stateEmpty`): its words,
+    salt and path."""
+    o = tree.open(0)
+    return {STATE: {"path": b"".join(o.path).hex(), "salt": o.salt.hex(), "words": tree.n_bits // 16}}
+
+
 def _state_tied(p: Params, audits: list[dict], reg: dict) -> bool:
-    """`stateTied`: the scan's registration has a state entry (`_states`), every one at one root and domain, both
-    strings, and an audit wired to its `prog` (`_wired`) has one, every one at that root and domain."""
+    """`stateTied`: the scan's registration states its units' state reads as the chain (`_state_read`), has a state
+    entry (`_states`), every one at one root and domain, both strings, and an audit wired to its `prog` (`_wired`) has
+    one, every one at that root and domain."""
     es = _states(reg)
-    if not es or not isinstance(root := es[0].get("root"), str) or not isinstance(dom := es[0].get("domain"), str):
+    if not _state_read(p, reg) or not es or not isinstance(root := es[0].get("root"), str) \
+            or not isinstance(dom := es[0].get("domain"), str):
         return False
 
     def at(o: dict) -> bool:
@@ -977,8 +1056,18 @@ def _audit_check(i: int, audit: Audit, reg: dict, a: dict) -> Facts:
 
 #: `wiredCheck`'s refusal, after its window's number.
 UNWIRED = "the scan's prog is no compute audit's slot entries"
-#: `stateCheck`'s refusal, after its window's number.
+#: `stateCheck`'s refusals, after its window's number: the state untied, its reads off the chain, its row 0 unopened.
 UNSTATED = "the scan's state is no wired audit's SCAN_STATE"
+MISREAD = "the scan's state reads are not its transitions' chain"
+UNPINNED = "the scan's state's row 0 is not the empty state"
+
+
+def _state_refusal(p: Params, audits: list[dict], reg: dict) -> str | None:
+    """`stateCheck`'s refusal of a link-window's scan: none when its state is tied (`_state_tied`) and its row 0
+    opened to the empty state (`_state_empty`)."""
+    if not _state_tied(p, audits, reg):
+        return UNSTATED if _state_read(p, reg) else MISREAD
+    return None if _state_empty(p, reg) else UNPINNED
 
 
 def clog2(x: int) -> int:
@@ -1065,8 +1154,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
     if p.schedule is not None:
         findings += [Finding(REJECT, f"window {p.first + i}: {UNWIRED}") for i, reg in enumerate(c.windows)
                      if not _wired(p, c.audits, reg)]
-        findings += [Finding(REJECT, f"window {p.first + i}: {UNSTATED}") for i, reg in enumerate(c.windows)
-                     if not _state_tied(p, c.audits, reg)]
+        findings += [Finding(REJECT, f"window {p.first + i}: {why}") for i, reg in enumerate(c.windows)
+                     if (why := _state_refusal(p, c.audits, reg))]
     if rejected := next((f for f in findings if f.verdict == REJECT), None):
         return REJECT, rejected.reason
     if findings:
@@ -1128,7 +1217,8 @@ EXPECT = {
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-delta": REJECT, "rows-units": REJECT, "rows-prog-untied": REJECT,
-    "rows-prog-unwired": REJECT, "rows-state-untied": REJECT,
+    "rows-prog-unwired": REJECT, "rows-state-untied": REJECT, "rows-state-misindexed": REJECT,
+    "rows-state-unpinned": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
     "rows-undecided-and-reject": REJECT, "rows-form": REJECT,
@@ -1428,6 +1518,78 @@ UNWIRES = ("output", "key", "chunk", "leaves", "lane", "members", "body")
 #: scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no string,
 #: or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, or beside a second
 UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra", "audit", "audit-root", "audit-extra")
+#: How `rows-state-misindexed` puts its link-window's scan's state reads off the chain while its state stays tied by
+#: root and domain: unit t's `sin` at leaf t + 1 (a leaf no unit registered) or its `o1` at leaf t (over the state
+#: before it), a run over other units, the two ports' runs swapped, the reads or a port's run missing or under
+#: another name, or a field no natural
+MISREADS = ("sin-leaf", "o1-leaf", "units", "swapped", "missing", "untyped")
+#: How `rows-state-unpinned` leaves its link-window's scan's row 0 unopened while its reads and its tie hold: a state
+#: tree whose row 0 is a state the prover chose, opened as committed; the opening missing or under another name, its
+#: salt or its path another, its words another count, leaf 1's opening in its place, or a field of another type
+UNPINS = ("row", "missing", "salt", "path", "words", "leaf", "untyped")
+
+
+def _state_tree(rp: random.Random, T: int, empty: bool = True) -> ADV.Committed:
+    """A scan's state tree of T rows of one to three u16 words under drawn salts and binding: row 0 the empty state, or
+    a state the prover chose (``empty`` False, its first byte nonzero), the others any."""
+    w = rp.randint(1, 3)
+    first = bytes(2 * w) if empty else bytes([rp.randrange(1, 256)]) + rp.randbytes(2 * w - 1)
+    rows = [first, *(rp.randbytes(2 * w) for _ in range(T - 1))]
+    return ADV.commit(rows, 16 * w, rp.randbytes(64), salts=[rp.randbytes(ADV.INST.salt_bytes) for _ in rows])
+
+
+def _flip_hex(rp: random.Random, h: str) -> str:
+    """`h` with one of its bytes changed."""
+    b = bytearray(bytes.fromhex(h))
+    b[rp.randrange(len(b))] ^= 1 << rp.randrange(8)
+    return b.hex()
+
+
+def _misread(rp: random.Random, T: int) -> dict | None:
+    """The scan's `window`'s ``reads`` off the chain, as one of `MISREADS` says; None for none."""
+    reads = state_reads(T)
+    s, how = reads[STATE], rp.choice(MISREADS)
+    port = rp.choice(["sin", "o1"])
+    if how == "sin-leaf":
+        s["sin"]["leaf"] = 2
+    elif how == "o1-leaf":
+        s["o1"]["leaf"] = 0
+    elif how == "units":
+        lo, hi = s[port]["units"]
+        s[port]["units"] = rp.choice([[lo, hi + 1], [lo + 1, hi + 1], [hi, lo] if lo != hi else [lo + 1, hi]])
+    elif how == "swapped":
+        s["sin"], s["o1"] = s["o1"], s["sin"]
+    elif how == "missing":
+        return rp.choice([None, {}, {"scan/state2": s}, {STATE: {k: v for k, v in s.items() if k != port}},
+                          {STATE: {k if k != port else port.upper(): v for k, v in s.items()}}])
+    else:
+        s[port] = rp.choice([s[port] | {"leaf": rp.choice(["1", True, -1, None])},
+                             s[port] | {"units": rp.choice([s[port]["units"][:1], s[port]["units"] + [0],
+                                                            {"lo": s[port]["units"][0]}, str(s[port]["units"])])}])
+    return reads
+
+
+def _unpinned(rp: random.Random, tree: ADV.Committed, how: str) -> dict | None:
+    """The scan's `window`'s ``empty`` of `tree` unopened, as `how`, one of `UNPINS`, says; None for none. A tree whose
+    row 0 the prover chose (``row``) is opened as committed."""
+    e = state_empty(tree)
+    o, T = e[STATE], len(tree.rows)
+    if how == "missing":
+        return rp.choice([None, {}, {"scan/state2": o}])
+    if how == "salt":
+        o["salt"] = _flip_hex(rp, o["salt"])
+    elif how == "path":
+        o["path"] = rp.choice([_flip_hex(rp, o["path"]), o["path"][:-128], o["path"] + rp.randbytes(64).hex()]) \
+            if T > 1 else rp.randbytes(64).hex()
+    elif how == "words":
+        o["words"] = rp.choice([o["words"] + 1, 0] + ([o["words"] - 1] if o["words"] > 1 else []))
+    elif how == "leaf" and T > 1:
+        x = tree.open(1)
+        o |= {"path": b"".join(x.path).hex(), "salt": x.salt.hex()}
+    elif how in ("leaf", "untyped"):
+        o |= rp.choice([{"salt": o["salt"].upper()} if any(c in "abcdef" for c in o["salt"]) else {"salt": 7},
+                        {"words": rp.choice([str(o["words"]), True, -1, None])}, {"path": None}])
+    return e
 
 
 def _present(e: dict) -> dict:
@@ -1576,9 +1738,13 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             for w, i in zip(range(first, first + n_windows), owners)}
     untie = rp.choice(UNTIES) if m == "prog-untied" else None
     unwire = rp.choice(UNWIRES) if m == "prog-unwired" else None
-    states = {i: {"root": rp.randbytes(64).hex(), "domain": rp.randbytes(64).hex()} for i in range(n_audits)} \
-        if rows else {}
     unstate = rp.choice(UNSTATES) if m == "state-untied" else None
+    unpin = rp.choice(UNPINS) if m == "state-unpinned" else None
+    # each audit's `SCAN_STATE`, the state tree of the link-window tied to it, whose leaf 0 the scan opens
+    trees = {i: _state_tree(rp, sched.window, not (unpin == "row" and i == ties[first + t]["audit"]))
+             for i in range(n_audits)} if rows else {}
+    states = {i: {"root": x.root.hex(), "domain": ADV.domain(x.binding, len(x.rows)).domain_id.hex()}
+              for i, x in trees.items()}
     if untie == "untyped":
         for c in ties[first + t]["chunks"]:
             c["root"] = rp.choice([None, 7, False])
@@ -1697,8 +1863,13 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         entries += _prog_entries(rp, ties[w], where, untie if aimed else None, unwire == "lane" and aimed, hit)
         entries += _state_entries(rp, states, ties[w]["audit"], where, unstate if aimed else None)
         rp.shuffle(entries)
+        tree = trees[ties[w]["audit"]]
+        reads = _misread(rp, T) if aimed and m == "state-misindexed" else state_reads(T)
+        empty = _unpinned(rp, tree, unpin) if aimed and unpin else state_empty(tree)
+        window = {"kind": "stand-in", "window": w} | ({} if reads is None else {"reads": reads}) | (
+            {} if empty is None else {"empty": empty})
         rec = {"format": fmt, "law": law, "partition": f"{link}/scan/{w}", "population": units, "program": program,
-               "protocol": ONE_STAGE, where: entries, "window": {"kind": "stand-in", "window": w}}
+               "protocol": ONE_STAGE, where: entries, "window": window}
         if aimed and m == "program":
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
         digest = bytes.fromhex(R.digest(rec))
