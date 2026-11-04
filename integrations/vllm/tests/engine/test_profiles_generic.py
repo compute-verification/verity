@@ -9,6 +9,7 @@ import json
 
 import pytest
 
+from verity_vllm.config import checkpoint_entries
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import TokenSelectArgmax
@@ -52,6 +53,17 @@ def test_a_pin_reads_its_config_of_record_and_an_unpinned_model_none(monkeypatch
     monkeypatch.setattr(dg, "_sha256", lambda p: "0" * 64)
     with pytest.raises(ValueError, match="config_sha256"):
         dg.pinned_hf_config("verity-int8/Llama-3.2-1B-INT8", "15b0976d400d796ee589e7737d03a919526bf800")
+
+
+def test_a_pins_transfer_gates_of_record_are_its_roles_line_and_every_line_names_a_pinned_role():
+    """`gates_of_record`, the transfer gates a served pin's compiler of record lists (`served_compiler.served_gates`): by the
+    pin's role, so another revision of the repo, an unpinned model or a role with no line lists none."""
+    lines = json.loads(dg.GATES_OF_RECORD.read_text())
+    roles = {str(e.get("role")) for e in checkpoint_entries(dg.MANIFEST)}
+    assert lines and set(lines) <= roles and all(isinstance(g, list) and g for g in lines.values())
+    assert dg.gates_of_record("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da") == ("RoPEHead_v1{D=64}",)
+    assert dg.gates_of_record("unsloth/Llama-3.2-1B", "0" * 40) == dg.gates_of_record("m/x", "r") == ()
+    assert dg.gates_of_record("verity-int8/Llama-3.2-1B-INT8", "15b0976d400d796ee589e7737d03a919526bf800") == ()
 
 
 # ------------------------------------------------------------------------------------------------------------ names, roles, the finder

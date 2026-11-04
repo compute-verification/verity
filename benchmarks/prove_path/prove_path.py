@@ -80,7 +80,7 @@ Two kinds of committed run:
   the tree's code (`code_identity`: ``integrations/vllm`` and ``verity`` by content), so the audit runs on a
   tree whose two are the server's; over what the compile reads of ``serve.json`` (its model, revision and that pin's config,
   target, execution and default seed), so the audit runs on the serve.json it was registered under; over ℓ and the transfer
-  gates its model's compiler of record lists (`dense_generic.GATES_OF_RECORD`). It is the name and digest ``verity-vllm advice
+  gates its pinned model's compiler of record lists (`dense_generic.gates_of_record`). It is the name and digest ``verity-vllm advice
   --compiler-name N --compiler-digest D`` registers the
   window's advice under.
 * **weights-registration** (the committer): a served run's weights registration (`weights_registration_of_serve`), each
@@ -136,7 +136,7 @@ holding transfer gates (`advice_windows`: the I/O shell's units, proved with sel
 covers (`I2Compiler`, `advice_windows.Traced`). The window's ``work:K`` law then draws every unit of theirs beside K of the rest
 (`serving_rows.work_table_of`), and the stream registers with that work table. A served window's I2 lists them beside the
 server's code and ``serve.json`` (`I2Compiler.digest`), and its advice is registered under that compiler (``compiler``).
-A served window's list is its model's compiler of record's (`dense_generic.GATES_OF_RECORD`, by ``serve.json``'s ``model``) on both sides,
+A served window's list is its model's compiler of record's (`dense_generic.gates_of_record`, by ``serve.json``'s pin) on both sides,
 whatever ``--transfer-gate`` says (`served_compiler.served_gates`: a list other than the record's is refused), so the verifier holds a
 registration to that list and no other. Until COMPILER lists the I/O shell's units, the run names a stand-in template, at TP1
 ``RoPEHead_v1{D=64}`` (``llama32_1b_tg_*.json``). Their negatives are a5's `transfer_gate_negatives` and the registrations under
@@ -184,6 +184,8 @@ from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
 from verity_vllm.program.predict import served_compiler as SC  # noqa: E402
 
 I2 = "verity/prove-path/i2-compile-steps/v0"
+#: the checkpoint config a single-GPU I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test model)
+LLAMA32_1B_CONFIG = DG.HF_CONFIG_DIR / "LLAMA32_1B.config.json"
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
 #: the sampling parameters a request's body carries to I2 (vLLM's `SamplingParams` names the record holds)
 BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
@@ -442,7 +444,7 @@ def i2_of_record(bundle: str, row_dir: str, workload: str, hf_config: str | None
     got = hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     if got != r.row.get("workload_sha256"):
         raise ValueError(f"{workload}: workload sha256 {got[:16]} is not the record's {str(r.row.get('workload_sha256'))[:16]}")
-    phi = phi_of({"row": r.row["label"], "workload": doc}, config=str(hf_config or DG.UNPINNED_HF_CONFIG))
+    phi = phi_of({"row": r.row["label"], "workload": doc}, config=str(hf_config or LLAMA32_1B_CONFIG))
     return I2Compiler(Registered.of(phi, int(doc.get("seed") or 0), cap_bits), ingress_of(r.ctx), str(programs_root or row_dir),
                       transfer_gates=tuple(dict.fromkeys(map(str, transfer_gates))), own=own)
 
@@ -1505,7 +1507,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--window", type=int, help="with --serve-run: the closed Commit window K")
         p.add_argument("--target", help="with --serve-run: the serving device's target profile (JSON), where serve.json records none")
         p.add_argument("--hf-config", help="with --bundle or --serve-run: the checkpoint's config.json (default with --serve-run the "
-                                           "served pin's config of record, `pinned_hf_config`; else unsloth/Llama-3.2-1B's)")
+                                           "served pin's config of record, `pinned_hf_config`; with --bundle unsloth/Llama-3.2-1B's)")
         p.add_argument("--opening", help="the advice's opening (advice_windows.opening): commit writes it, the prover's private file; "
                        "audit reads it, the named gap. A served window's is the server's (default advice/w<K>/private/opening.json)")
         p.add_argument("--cap-bits", type=int, default=CAP_BITS, help="ℓ, the public cap on the advice's length in bits, "
@@ -1516,7 +1518,7 @@ def main(argv: list[str] | None = None) -> int:
                        "audited rank, which draw from the run root's one challenger session)")
         p.add_argument("--transfer-gate", action="append", default=[], help="a template the registered compiler lists as holding "
                        "transfer gates, in its digest, every unit of which is proved (repeatable; the partition's law is work:K). A "
-                       "served window's are its model's of record (dense_generic.GATES_OF_RECORD), which this may only restate")
+                       "served window's are its model's of record (dense_generic.gates_of_record), which this may only restate")
         p.add_argument("--out", required=True)
     p = sub.choices["commit"]
     p.add_argument("--advice", help="the advice's file: I1's canonical encoding (the prover's, private); a served window's is the "
@@ -1550,7 +1552,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("compiler", help="a served run's registered compiler: what verity-vllm advice --compiler-name/--compiler-digest takes")
     p.add_argument("--serve-run", required=True)
     p.add_argument("--transfer-gate", action="append", default=[], help="a template the compiler lists as holding transfer gates "
-                   "(repeatable; the model's of record, dense_generic.GATES_OF_RECORD, whatever it says: another list is refused)")
+                   "(repeatable; the model's of record, dense_generic.gates_of_record, whatever it says: another list is refused)")
     p = sub.add_parser("weights-registration", help="a served run's weights registration, the committer's: what verity-vllm "
                        "advice --weights-of-record takes, and the roots the verifier pins (window-circuit --pins)")
     for flag in ("--serve-run", "--checkpoint-dir", "--out"):

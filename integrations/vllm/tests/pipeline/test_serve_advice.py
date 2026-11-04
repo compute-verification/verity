@@ -557,8 +557,11 @@ def test_b_is_registered_once_as_the_verifier_recomputes_it_and_the_registration
     from verity_vllm.engine.served_seed import DEFAULT_SEED
     from verity_vllm.program.predict import served_compiler as SC
 
-    serve = {"model": "org/m", "revision": "r", "target": {"compute_capability": [12, 0], "num_sms": 188}, "execution": "eager",
-             "default_seed": DEFAULT_SEED}
+    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+             "target": {"compute_capability": [12, 0], "num_sms": 188}, "execution": "eager", "default_seed": DEFAULT_SEED}
+    with pytest.raises(ValueError, match=r"org/m@r is pinned in no checkpoint manifest"):
+        SA.register(tmp_path, {**serve, "model": "org/m", "revision": "r"}, 4096)
+    assert not (tmp_path / SA.REGISTRATION).exists()
     compiler, body = SA.register(tmp_path, serve, 4096)
     assert compiler.digest == SC.compiler_doc(serve, cap_bits=4096)["digest"] == body["compiler"]["digest"]
     assert (compiler.cap_bits, body["advice"]) == (4096, WA.SCHEMA)
@@ -588,8 +591,8 @@ def test_a_run_extends_the_deployments_log_with_its_days_declaration_and_a_day_d
     from verity.core.protocols import registration as REGLOG
     from verity_vllm.engine.served_seed import DEFAULT_SEED
 
-    serve = {"model": "org/m", "revision": "r", "target": {"compute_capability": [12, 0], "num_sms": 188}, "execution": "eager",
-             "default_seed": DEFAULT_SEED}
+    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+             "target": {"compute_capability": [12, 0], "num_sms": 188}, "execution": "eager", "default_seed": DEFAULT_SEED}
     (tmp_path / "d0").mkdir()
     compiler, first = SA.register(tmp_path / "d0", serve, 4096, day=0)
     so_far = SA.log_doc(json.loads((tmp_path / "d0" / SA.REGISTRATION).read_text()))

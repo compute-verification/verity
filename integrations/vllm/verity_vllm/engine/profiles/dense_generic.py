@@ -33,7 +33,7 @@ Where the config comes from (`find_hf_config(role)`, first hit wins; the source 
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping
+import json
 from pathlib import Path
 from typing import Any
 
@@ -42,13 +42,10 @@ from verity_vllm.config import CHECKPOINTS as MANIFEST, checkpoint_entries
 
 MODULE_PREFIX = "dense_"                    # verity_vllm.observe.fold.profiles.dense_<ROLE>
 HF_CONFIG_DIR = Path(__file__).with_name("hf_configs")
-#: the config φ reads for a served model no manifest pins (`served_compiler.phi_of_serve`): unsloth/Llama-3.2-1B's, I2's
-#: test model
-UNPINNED_HF_CONFIG = HF_CONFIG_DIR / "LLAMA32_1B.config.json"
-#: the templates each served model's compiler of record lists as holding transfer gates, by ``serve.json``'s ``model``
-#: (`served_compiler.served_gates`): unsloth/Llama-3.2-1B's is the TP1 stand-in, its RoPE heads, until I2 lists the I/O
-#: shell's units
-GATES_OF_RECORD: Mapping[str, tuple[str, ...]] = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}
+#: the templates each pinned checkpoint's compiler of record lists as holding transfer gates, by the pin's role
+#: (`gates_of_record`, `served_compiler.served_gates`): Llama-3.2-1B's is the TP1 stand-in, its RoPE heads, until I2 lists the
+#: I/O shell's units
+GATES_OF_RECORD = Path(__file__).with_name("gates_of_record.json")
 
 #: the served vocabulary is `family_facts.FAMILY_FACTS` (every family's vLLM hard-codes with provenance); a configuration outside it, or
 #: with a structure the table does not describe, refuses fail-closed in `generic.structural_refusal` -- not a silently mis-fitted profile.
@@ -118,13 +115,27 @@ def find_hf_config(role: str) -> tuple[Path, str, dict[str, Any] | None] | None:
     return None
 
 
+def pin_of(repo: str, revision: str) -> dict[str, Any] | None:
+    """The manifests' pin of ``repo``@``revision``, else None."""
+    if not MANIFEST.exists():
+        return None
+    return next((e for e in checkpoint_entries(MANIFEST) if e.get("repo") == repo and str(e.get("revision")) == str(revision)), None)
+
+
+def gates_of_record(repo: str, revision: str) -> tuple[str, ...]:
+    """The transfer gates the compiler of record of the checkpoint pinned at ``repo``@``revision`` lists (`GATES_OF_RECORD`, by
+    its pin's role); none for a checkpoint no manifest pins or whose role has no line."""
+    entry = pin_of(repo, revision)
+    if entry is None:
+        return ()
+    return tuple(map(str, json.loads(GATES_OF_RECORD.read_text()).get(str(entry.get("role")), ())))
+
+
 def pinned_hf_config(repo: str, revision: str) -> Path | None:
     """The config.json of record of the checkpoint the manifests pin at ``repo``@``revision``: `find_hf_config` of its role, its
     sha256 held to the pin's ``config_sha256``, so a prover and a verifier read the same bytes wherever they run. None when no
     manifest pins it; a ValueError when it is pinned and no source has its config, or one has another config."""
-    if not MANIFEST.exists():
-        return None
-    entry = next((e for e in checkpoint_entries(MANIFEST) if e.get("repo") == repo and str(e.get("revision")) == str(revision)), None)
+    entry = pin_of(repo, revision)
     if entry is None:
         return None
     found = find_hf_config(str(entry.get("role")))

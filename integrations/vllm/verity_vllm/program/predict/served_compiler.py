@@ -28,9 +28,9 @@ from verity_vllm.pipeline.advice_windows import CAP_BITS, Capped
 def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target: str | None = None) -> Any:
     """φ of a served engine as B compiles under it: the pinned model (``serve.json``'s ``model`` and ``revision``, and the
     checkpoint's ``config.json``: ``hf_config``, else the pin's config of record, as `advice_compile` reads it
-    (`dense_generic.pinned_hf_config`), else for a model no manifest pins unsloth/Llama-3.2-1B's), the serving device's target
-    profile (``serve.json``'s ``target``, the int8 scope its layers ran included, else the file ``target``) and the engine's
-    execution label (``execution``, else ``engine.execution``); no workload."""
+    (`dense_generic.pinned_hf_config`); a model no manifest pins has none, and is refused without ``hf_config``), the serving
+    device's target profile (``serve.json``'s ``target``, the int8 scope its layers ran included, else the file ``target``) and
+    the engine's execution label (``execution``, else ``engine.execution``); no workload."""
     from .phi import Phi
 
     prof = json.loads(Path(target).read_text()) if target else serve.get("target")
@@ -41,7 +41,11 @@ def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target:
     execution = serve.get("execution") or (engine.get("execution") if isinstance(engine, Mapping) else None)
     if not isinstance(execution, str) or not execution:
         raise ValueError("serve.json records no execution label (execution, engine.execution), so φ can't be read")
-    hf = json.loads(Path(hf_config or DG.pinned_hf_config(serve["model"], serve["revision"]) or DG.UNPINNED_HF_CONFIG).read_text())
+    config = hf_config or DG.pinned_hf_config(serve["model"], serve["revision"])
+    if config is None:
+        raise ValueError(f"serve.json's {serve['model']}@{serve['revision']} is pinned in no checkpoint manifest, so it has no "
+                         "config.json of record: serve a pinned checkpoint, or give its config (--hf-config)")
+    hf = json.loads(Path(config).read_text())
     return Phi(model={"repo": serve["model"], "revision": serve["revision"], "hf_config": hf}, target=dict(prof), execution=execution)
 
 
@@ -64,14 +68,15 @@ def registered_of_serve(serve: Mapping[str, Any], hf_config: str | None, target:
 
 
 def served_gates(serve: Mapping[str, Any], given: Sequence[str] = ()) -> tuple[str, ...]:
-    """The transfer gates B lists: its model's compiler of record's (`dense_generic.GATES_OF_RECORD`, none for a model it has
-    no line for).
+    """The transfer gates B lists: its pinned checkpoint's compiler of record's (`dense_generic.gates_of_record`, none for a
+    checkpoint whose role has no line).
     ``given`` (``--transfer-gate``) may only restate them: any other list is refused, so neither side builds a B listing
     another."""
-    model, pinned = str(serve.get("model")), DG.GATES_OF_RECORD.get(str(serve.get("model")), ())
+    model = str(serve.get("model"))
+    pinned = DG.gates_of_record(model, str(serve.get("revision")))
     if given and sorted(set(map(str, given))) != sorted(pinned):
         raise ValueError(f"--transfer-gate {sorted(set(map(str, given)))}: {model}'s compiler of record lists {list(pinned)} "
-                         "(dense_generic.GATES_OF_RECORD), and a served window's compiler lists those and no others")
+                         "(dense_generic.gates_of_record), and a served window's compiler lists those and no others")
     return pinned
 
 
