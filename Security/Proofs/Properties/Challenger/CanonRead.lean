@@ -6,6 +6,9 @@ public import Proofs.Properties.Pouw.LiveSalt.Canon
 public import Proofs.Properties.RemoteAudit.Sort
 public import Proofs.Flock.Claims.JsonEq
 public import Proofs.Core.QSort
+import all Init.Data.Int.Repr
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
 
 /-!
 # Canonical JSON reads back
