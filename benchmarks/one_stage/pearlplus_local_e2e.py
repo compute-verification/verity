@@ -14,11 +14,15 @@ process of its own (this file's ``serve`` verb, `auditor.run` with no coin link,
    (`pouw_h1_window.reserve_salt` and ``open_session``, as `bench_arm.live_coins`' install does), its salt coin salting
    a toy pass (the pouw suite's `proved_pass`, k = 128 and 16 x 16 tiles, in place of a GPU serve), then closed.
 3. ``served_verdicts.py pearlplus-period close``, once that session has ended.
-4. ``served_passes.py verify --tie W`` under PEARLC_CHALLENGER_GATE/PEER/LANE: the verifier's draw a draw session reserved
-   withheld after the period closed and opened on the run's commitment (`bench_arm.LiveDraw`), recorded in coin.json.
+4. ``served_passes.py verify --tie W --test-instance`` under PEARLC_CHALLENGER_GATE/PEER/LANE: the verifier's draw a draw
+   session reserved withheld after the period closed and opened on the run's commitment (`bench_arm.LiveDraw`), recorded
+   in coin.json. The toy isn't the served instance (k_min 1,024 at 64 x 64 tiles), so its passes are read as a
+   test instance's, crediting nothing.
 5. ``served_verdicts.py coin`` and ``served_verdicts.py pearlplus``: the coin published and the piece written, each
    session fetched through the gate and held to the signed ledger under the scratch key's pin.
-6. `served_verdicts.piece_row`: PoUW's row, composed of record when `pearlplus_of_record` holds.
+6. `served_verdicts.piece_row`: PoUW's row, composed of record when `pearlplus_of_record` holds. A test instance
+   credits nothing, so on the toy every condition holds up to its last, the Lean's credit, which the row names
+   (`TOY_ROW`).
 
 Stand-ins, named in OUT/e2e.json: the serve (one toy pass, `served.json` written here), sampled proofs' window
 registration and records audit (two files tied to W), and, unless ``--lean`` names a ``pouw-pearlplus``, the Lean
@@ -46,6 +50,8 @@ LANE, PEER, HOST = "vllm", "local", "local-challenger"
 PARAMS = (4, 6)
 SCHEME = "pearl-c-h100-v1-h3"
 PERIOD = "pearlplus-e2e"
+#: the toy row's one refusal, after every other condition of record held: a test instance's passes credit nothing
+TOY_ROW = "the Lean verdict credits 0 MACs over {tiles} tiles: nothing"
 #: how long a session's end, or a session's challenger, is waited for
 WAIT_S = 300
 
@@ -215,12 +221,15 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     report: dict = {"gate": "benchmarks/live_challenger/auditor.py on a scratch host, as lane " + LANE, "pin": pin,
                     "key_sha512": key_sha512, "period": PERIOD, "steps": log,
                     "stand_ins": {"serve": "one toy pass (proved_pass, k 128, 16 x 16 tiles) salted by the live session",
-                                  "sampled_proofs": "registration.json chained after W and a records-audit summary tied to W",
+                                  "sampled_proofs": "registration.json chained after W, a records-audit summary tied to W "
+                                                    "and a toy circuit record beside R, the period's circuit",
                                   "lean": "pearlplus-lean.json copied from Pearl+'s answer (--lean runs the node's step)"}}
 
-    # 1. the lane's Pearl-C period
+    # 1. the lane's Pearl-C period, its circuit the window's circuit record
+    (circuit_record := scratch / S.CIRCUIT_RECORD).write_bytes(b'{"name":"toy window circuit (pearlplus_local_e2e)"}\n')
     if _cli(log, "period open", ["benchmarks/one_stage/served_verdicts.py", "pearlplus-period", "open", str(piece),
-                                 "--gate", gate_cmd, "--name", PERIOD, "--scheme", SCHEME]).returncode:
+                                 "--gate", gate_cmd, "--name", PERIOD, "--scheme", SCHEME,
+                                 "--circuit-record", str(circuit_record)]).returncode:
         return 1
 
     # 2. a salt-only session in it salts the toy pass
@@ -254,7 +263,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     env = {"PEARLC_CHALLENGER_GATE": gate_cmd, "PEARLC_CHALLENGER_PEER": PEER, "PEARLC_CHALLENGER_LANE": LANE}
     _cli(log, "verify", ["benchmarks/pouw/pearl_c_vllm/served_passes.py", "verify", "--passes", str(served), "--out",
                          str(piece / "verify.json"), "--answer", str(piece / S.PEARLPLUS_ANSWER), "--jobs", "2",
-                         "--tie", str(wfile)], env)
+                         "--tie", str(wfile), "--test-instance"], env)
     record = json.loads((served / "coin.json").read_text())
     dsid = (record["draw"].get("reserved") or {}).get("session")
     report["draw"] = {"from": record["draw"]["from"], "session": dsid, "end": _ended(root, dsid)["body"] if dsid else None,
@@ -301,6 +310,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     (audit / S.WINDOW_REGISTRATION).parent.mkdir(parents=True, exist_ok=True)
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps({"previous": tie, "registered": [], "stand_in": True}))
     (audit / S.AUDIT_SUMMARY).write_text(json.dumps({"tie": {"record": tie}, "stand_in": True}))
+    (audit / S.CIRCUIT_RECORD).write_bytes(circuit_record.read_bytes())
 
     def row() -> dict:
         r = S.piece_row("work", piece.parent, sampled_proofs=audit, key_sha512=key_sha512, lane=LANE)
@@ -343,9 +353,12 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
                         for e in _ledger(root)]
     (out / "e2e.json").write_text(json.dumps(report, indent=1, default=str) + "\n")
     control = report["control"]
-    ok = (report["row"]["verdict"] == "accept" and report["row"]["profile"]["draw_session"] == dsid
+    tiles = (((answer.get("public") or {}).get("work") or {}).get("credited_tiles"))
+    ok = (report["row"]["verdict"] == "missing" and report["row"]["why"] == f"{S.DEV_VERDICT}: {TOY_ROW.format(tiles=tiles)}"
+          and report["draw"]["from"] == "challenger" and dsid is not None
           and "one session a root" in str(control["gate_refused"]) and control["row"] == report["row"])
-    print(f"E2E {'ok' if ok else 'FAILED'}: row {report['row']['verdict']} ({report['row'].get('protocol')}), its draw "
+    print(f"E2E {'ok' if ok else 'FAILED'}: row {report['row']['verdict']} ({report['row'].get('protocol')}: "
+          f"{report['row'].get('why')}), its draw "
           f"session {dsid}; a second draw on the run's commitment: {control['gate_refused']}; the row then "
           f"{control['row']['verdict']}", flush=True)
     return 0 if ok else 1
