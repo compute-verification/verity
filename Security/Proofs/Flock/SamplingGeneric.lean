@@ -25,10 +25,10 @@ from the session transfer and the session's fork (`SamplingGeneric/Session.lean`
 `KSOf`'s deterministic half, a failed extraction giving the failure event or a `Bext` collision (`split`,
 `SamplingGeneric/Assemble.lean`: `ksOf`). So **`CompilerKS` is proved** (`compilerKS`), and with it Flock's instance
 (`flockKS`) and the count form (`compilerKSCount`, `SamplingGeneric/Count.lean`). `CompilerBits` follows from it and
-the extractor's expected reruns and own calls (`SamplingGeneric/Bits.lean`, `ExpOwnOf`). `CompilerEfficient` and
-`ExpOwnOf` as stated are false at a sample that repeats a proof block (`Counter.not_compilerEfficient`,
-`Counter.not_expOwnOf`, `SamplingGeneric/Counter.lean`), and hold where the extractor extracts slot by slot
-(`Compiled.efficient_of_slots`, `Compiled.expOwn_of_slots`, `SamplingGeneric/Efficient.lean`). The opening checks'
+the extractor's expected reruns and own calls (`SamplingGeneric/Bits.lean`, `ExpOwnOf`), so **`CompilerEfficient`,
+`ExpOwnOf` and `CompilerBits` are proved** (`compilerEfficient`, `expOwnOf`, `SamplingGeneric/Efficient.lean`;
+`compilerBits`). Their own-call bounds read `Compiled.OpenCallsLe`, without which they fail
+(`Counter.not_ownLe_openCalls`, `SamplingGeneric/Counter.lean`). The opening checks'
 count they read, `Compiled.OpenCallsLe`, is the frozen `Sampling.OpenCallsLe` at Flock (`openCallsLe_of_deploy`). A
 session's coins in a compiled run, `coinsOf` and `place`, invert each other (`SamplingGeneric/Coins.lean`).
 -/
@@ -59,6 +59,9 @@ theorem flockKS : FlockKS (Coin := Coin) (Col := Col) (T := T) := flockKS_of_com
 
 /-- The count form, at the miss of a count. -/
 theorem compilerKSCount : CompilerKSCount := compilerKSCount_of compilerKS
+
+/-- **Bits**: `CompilerKS` and `ExpOwnOf` (`compilerBits_of`). -/
+theorem compilerBits : CompilerBits := compilerBits_of compilerKS expOwnOf
 
 /-- **The opening checks' count at Flock is the frozen one**: a compiled verifier over Flock at a deployed sampled
 verifier `D`'s Flock verifier, with `D`'s parser, commitment, reveal and opening count, meets `Compiled.OpenCallsLe`
