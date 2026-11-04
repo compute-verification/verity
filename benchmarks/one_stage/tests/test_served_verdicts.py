@@ -2573,6 +2573,55 @@ def test_the_follow_on_runs_reproof_cmd_after_the_audit_then_the_onsite_record_w
         "--reproof-listing", str(listing), "--h1-tie"]
 
 
+#: V3c's audit of `FAKE_RECORDS_AUDIT` with its circuits composed: template A's in the warm's cache, linked at its first
+#: member m0 and at m2, a drawn member of it; template B's at m1, which V2_CASE makes the file a v2 case names; and m0's
+#: opening, which isn't a circuit
+COMPOSED_AUDIT = FAKE_RECORDS_AUDIT.replace('    (out / "summary.json").write_text("{}")\n', '''\
+    (out / "summary.json").write_text("{}")
+    w, cache = out / "window", out.parent / "compose-cache" / "a"
+    for p in (w / "m0", w / "m1", w / "m2", cache):
+        p.mkdir(parents=True)
+    (cache / "circuit.txt").write_text("A" * 10)
+    for m in ("m0", "m2"):
+        os.link(cache / "circuit.txt", w / m / "circuit.txt")
+    (w / "m1" / "circuit.txt").write_text("B" * 4)
+    (w / "m0-private.bin").write_bytes(b"\\x01")
+    if os.environ.get("V2_CASE"):
+        blobs = [str(w / "m1" / "circuit.txt"), str(w / "m0-private.bin")]
+        (w / "case-v2.json").write_text(json.dumps({"blobs": blobs}))
+''')
+#: a step that notes the circuit files left under V3c's dir when it runs
+LEFT = '(cd "{at}" && find . -name circuit.txt | sort) > "$ORDER.left-{step}"'
+
+
+@pytest.mark.parametrize("v2, first, last", [
+    (None, "4 files, 14 bytes freed", None),
+    ("1", "3 files, 10 bytes freed; 1 the v2 case names, after the composite", "1 file, 4 bytes freed"),
+])
+def test_the_follow_on_removes_the_windows_circuit_files_after_its_period_check_before_the_reproof_copy(
+        tmp_path, v2, first, last):
+    """Once the period check has read them, the follow-on removes the window's every circuit file under V3c's dir (each
+    member's, links and all, and the warm's cache), so the re-proof copy finds none and the node's next window has the
+    disk, saying how many and the bytes freed; the openings stay. A file the audit's v2 case names waits for the
+    composite, which reads it, and goes after."""
+    assert _deferred(tmp_path).returncode == 0
+    vw = tmp_path / "serve" / f"v3c-w7-{VTAG}"
+    composite = f"{FAKE_SERVED_COMPOSITE}\n{LEFT.format(at=vw, step='composite')}"
+    reproof = f'echo reproof >> "$ORDER"; {LEFT.format(at=vw, step="reproof")}; echo "REPROOF COPY: PASS"'
+    rc, lines, order, _limits = _follow(tmp_path, composite, records_audit=COMPOSED_AUDIT, V2_CASE=v2,
+                                        REPROOF_CMD=reproof)
+    assert rc == 0 and order == ["audit", "period", "reproof", "record", "composite"], (lines, order)
+    said = "V3C-CIRCUITS removed, the window's circuit files, recomposable and named by their pins: "
+    heads = [x.split(" ")[0] for x in lines[4:]]
+    assert heads == ["V3C-AUDIT", "V3C-PERIOD", "V3C-CIRCUITS", "REPROOF", "RECORD", "COMPOSITE:",
+                     *["V3C-CIRCUITS"] * bool(last)], lines
+    assert lines[6] == said + first and (not last or lines[-1] == said + last), lines
+    kept = ["./audit/window/m1/circuit.txt"] if v2 else []
+    left = [(tmp_path / f"order.left-{s}").read_text().split() for s in ("reproof", "composite")]
+    assert left == [kept, kept]
+    assert not list(vw.rglob("circuit.txt")) and (vw / "audit" / "window" / "m0-private.bin").read_bytes() == b"\x01"
+
+
 #: the network certifier's kept run in `_deferred`'s serve dir: the gate's fetch and the front's session
 KEPT = ("private/certifier/r1/fetch.tar.gz", "private/certifier/r1/session.json")
 
