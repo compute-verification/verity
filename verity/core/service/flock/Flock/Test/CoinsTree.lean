@@ -2,7 +2,7 @@
 What a statement keeps without parsing its own output. The keyed coin tree a session reads (`Stmt.coinTree`,
 `SessionSpec.coinTree`) is the setup's coins' (`Coins.tree?`), which is what the setup's `Hello` names
 (`CoinTree.ofHello (helloOf …)`): the tree's spec for `.tree`, none for the OS's coins or a seed's. The public header is
-kept as `Flock.norm` of what `Json.parse` read, which has the same value at every key, the same `unit_draw` once `drawn`
+kept as `Flock.norm` of what `JsonParse.parse` read, which has the same value at every key, the same `unit_draw` once `drawn`
 puts the draw in, and the same canonical bytes (`publicDigest` hashes those).
 -/
 import Flock.HmRow
@@ -30,7 +30,7 @@ def headers : List String :=
 
 def keys : List String := ["format", "statement", "instances", "rows", "units", "z", "m", "a", "b", "unit_draw", "none"]
 
-def parsed : List Json := headers.filterMap fun h => (Json.parse h).toOption
+def parsed : List Json := headers.filterMap fun h => (JsonParse.parse h).toOption
 
 #guard parsed.length == headers.length
 #guard parsed.all fun j => (canon (Flock.norm j)).toOption == (canon j).toOption && (canon j).toOption.isSome
