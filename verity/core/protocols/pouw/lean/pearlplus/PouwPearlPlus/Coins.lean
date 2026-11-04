@@ -56,8 +56,8 @@ instance : Coe CoinCommitment EpochCoins := ⟨.inproc⟩
 /-- `verify_run.epoch_coins`: a live session's commitment when the document's scheme is `LIVE_SCHEME`, else an in-process
 challenger's. -/
 def EpochCoins.ofJson (j : Json) : Except String EpochCoins :=
-  if jsonStrIs ((get? j "scheme").getD .null) LIVE_SCHEME then .live <$> LiveCommitment.ofJson j
-  else .inproc <$> CoinCommitment.ofJson j
+  if jsonStrIs ((get? j "scheme").getD .null) LIVE_SCHEME then EpochCoins.live <$> LiveCommitment.ofJson j
+  else EpochCoins.inproc <$> CoinCommitment.ofJson j
 
 /-- `LiveCommitment.__eq__`, field by field. -/
 def sameLive (a b : LiveCommitment) : Bool :=
@@ -76,9 +76,9 @@ def epochOpenRoot (weights : ByteArray) (k : Nat) : ByteArray :=
 def liveSalt (c : LiveCommitment) (o : LiveOpening) (weightsRoot : ByteArray) (k : Json) :
     Except String ByteArray := do
   if let some why := PouwWindow.saltEpochReason c then throw s!"DomainError: the salt's {why}"
-  let some k := (jsonInt? k).filter (fun i => 0 ≤ i && i < 2 ^ 64)
+  let some n := (jsonInt? k).filter (fun i => decide (0 ≤ i) && decide (i < 2 ^ 64))
     | throw s!"DomainError: a salt epoch's number is an integer in [0, 2^64), not {pyReprJson k}"
-  match SampledProofs.Challenger.liveReason c o PouwWindow.SALT 0 (epochOpenRoot weightsRoot k.toNat) with
+  match SampledProofs.Challenger.liveReason c o PouwWindow.SALT 0 (epochOpenRoot weightsRoot n.toNat) with
   | .error e => throw s!"CoinError: {e}"
   | .ok (some why) => throw s!"DomainError: the salt's {why}"
   | .ok none => match saltOf ⟨c.epoch, c.root⟩ o.coin weightsRoot with
@@ -126,11 +126,11 @@ def ofRecordReason (coins : EpochCoins) (source : Option ByteArray) (held : Opti
     if h.schema != COIN_SCHEMA then
       some s!"the verifier's coin record is {pyRepr h.schema}, not {COIN_SCHEMA}, which carries its draw"
     else
-      let from? := (get? h.draw "from").getD .null
-      if jsonStrIs from? DRAW_CHALLENGER then none
-      else if jsonStrIs from? DRAW_NODE then
+      let src := (get? h.draw "from").getD .null
+      if jsonStrIs src DRAW_CHALLENGER then none
+      else if jsonStrIs src DRAW_NODE then
         some ("the verifier's draw source is drawn on the serving node (verify_run.node_draw), not a challenger coin " ++
           "opened on the run commitment: a development draw no verdict of record takes")
-      else some s!"the verifier's coin record's draw is from {pyReprJson from?}, not the challenger's"
+      else some s!"the verifier's coin record's draw is from {pyReprJson src}, not the challenger's"
 
 end PouwCheck.PearlPlus

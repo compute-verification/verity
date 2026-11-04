@@ -148,7 +148,7 @@ def test_the_lean_is_given_w_and_on_live_coins_is_asked_for_a_verdict_of_record(
     assert rc == 0 and check["argv"] == [*head, "--tie", str(wfile), *passes]
     (live := tmp_path / "live").mkdir()
     shutil.copytree(d, live, dirs_exist_ok=True)
-    coins = Ch.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, lambda n: b"\1" * n).commitment
+    coins = Ch.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, lambda n: b"\x01" * n).commitment
     (live / "coins.json").write_text(json.dumps(coins.to_json()))
     rc, _answer, check = lean(tmp_path, v, live, exe)
     head = [str(exe), "--coins", str(live / "coins.json"), "--draws", "3", "--record", str(d / SP.COIN)]

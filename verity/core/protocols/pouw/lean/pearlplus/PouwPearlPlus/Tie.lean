@@ -37,7 +37,7 @@ def Want.holds : Want → Json → Bool
   | .nat _, _ => false
 
 /-- One call's entry as `tie_entries` wants it: root, leaves, words, word_bits and domain, in that order. -/
-abbrev Entry := List (String × Want)
+abbrev TieEntry := List (String × Want)
 
 private def rawStr (j : Option Json) : String := match j with | some (.str s) => s | _ => ""
 
@@ -46,16 +46,16 @@ private def domainHex (d : Except String RowsDomain) : Except String String := d
 
 /-- `tie_entries(passes, rounds)`: what W must register for each call of the run, in Python's order. `passes` are the
 manifests with their loaded passes. -/
-def tieEntries (passes : List (Json × Pass)) (rounds : Option (List Nat)) : Except String (List (String × Entry)) :=
+def tieEntries (passes : List (Json × Pass)) (rounds : Option (List Nat)) : Except String (List (String × TieEntry)) :=
   go (rounds.getD (List.range passes.length)) passes
 where
-  go : List Nat → List (Json × Pass) → Except String (List (String × Entry))
+  go : List Nat → List (Json × Pass) → Except String (List (String × TieEntry))
     | [], [] => pure []
     | [], _ :: _ => throw "zip() argument 2 is longer than argument 1"
     | _ :: _, [] => throw "zip() argument 2 is shorter than argument 1"
     | s :: rs, (man, p) :: ps => do
       let us := match get? man "matmuls" with | some (.arr us) => us.toList | _ => []
-      let mut out : List (String × Entry) := []
+      let mut out : List (String × TieEntry) := []
       for ((r, rec), c) in (p.records.zip us).zipIdx do
         let u := r.matmul
         let some y := get? rec "y" | throw s!"pass {s}'s call {c} (index {u.index}) commits no y to tie"
@@ -90,9 +90,9 @@ def tieOf (w : Json) (passes : List (Json × Pass)) (rounds : Option (List Nat))
     throw s!"W registers {xs.foldl (fun m y => if y < m then y else m) x}, no call of the run's"
   for (v, x) in want do
     let some e := got.lookup v | throw s!"W registers no {v}"
-    let have (k : String) : Json :=
+    let held (k : String) : Json :=
       if k == "word_bits" then (get? e k).getD (.num ⟨REGISTERED_WORD_BITS, 0⟩) else (get? e k).getD .null
-    let bad := x.filterMap fun (k, want) => if want.holds (have k) then none else some k
+    let bad := x.filterMap fun (k, want) => if want.holds (held k) then none else some k
     if !bad.isEmpty then throw s!"W's {v}: its {", ".intercalate bad} not the call's"
   pure { record := ← Flock.WindowRecord.digestHex w, tables := want.length }
 
