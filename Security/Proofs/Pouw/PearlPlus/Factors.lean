@@ -34,7 +34,8 @@ theorem optMapM_of {f : α → Option β} : ∀ {l : List α} {ys : List β}, l.
     have h0 : f a = some b := hf 0 (by simp) (by simp)
     have ht : l.mapM f = some ys :=
       optMapM_of (by simpa using h) fun i h1 h2 => hf (i + 1) (by simpa using h1) (by simpa using h2)
-    rw [List.mapM_cons, h0, ht] <;> rfl
+    rw [List.mapM_cons, h0, ht]
+    rfl
 
 theorem bind_some_of {x : Option α} {f : α → Option β} {a : α} {b : β} (hx : x = some a) (hf : f a = some b) :
     (x >>= f) = some b := by
@@ -155,13 +156,13 @@ theorem rnWord_overflow {v : ℚ} {nz : Bool} (h : PeelExact.finite? (PeelExact.
   have he : (PeelExact.rnWord v nz >>> 23) % 256 = 255 := by
     unfold PeelExact.finite? at h
     by_contra hne
-    rw [if_neg hne] at h
+    rw [ite_eq_right hne] at h
     cases h
   unfold PeelExact.rnWord at he
   by_cases h0 : v = 0
-  · rw [if_pos h0] at he
+  · rw [ite_eq_left h0] at he
     cases nz <;> exact absurd he (by decide)
-  · rw [if_neg h0] at he
+  · rw [ite_eq_right h0] at he
     refine ⟨he, ?_⟩
     cases hq : wordQ (f32Word v) with
     | none => rfl
@@ -227,7 +228,7 @@ theorem accLoop_ok {be : Array ℕ} {gram : Array (Array ℕ)} {q : ℕ} {eb gq 
       rw [hbe i hi32, hg1] at hf ⊢
       have hfma := fmaWord_of hb1 hg2 hz1 hb2 hg3 (Option.isSome_iff_exists.2 (wordQ_of hz2)) hf
       refine ⟨_, rfl, by rw [eF]; exact fmaV2_lt _ _ _, hf, ?_⟩
-      rw [List.take_succ, hget i hi32, Option.toList_some, List.foldlM_append, hz3]
+      rw [List.take_add_one, hget i hi32, Option.toList_some, List.foldlM_append, hz3]
       simp only [List.foldlM_cons, List.foldlM_nil, Option.bind_eq_bind, Option.bind_some, hfma,
         Option.pure_def]) h
   simp only [List.length_range', Std.Legacy.Range.size, PouwCheck.PearlPlus.R, Nat.zero_add] at this
