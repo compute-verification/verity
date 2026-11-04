@@ -635,7 +635,7 @@ def _tied(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
                            rec=json.loads((d / "registration.json").read_text()))
 
 
-def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_registration(tmp_path, monkeypatch):
+def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_registration(tmp_path, monkeypatch, capsys):
     """A window whose circuit takes values (`_tied`) is audited tied to the earlier registration W that registered them
     first (``--tie W --tie-prefix P``), and refused before any session without the tie: the tie hands a5 one-stage's
     ``log``, ``registered``, ``outputs`` and ``schemas`` (`tie_of`), the value's readers read W's table at W's root and
@@ -679,6 +679,10 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
                                                  for f in seen["registered"].values())
     summary = json.loads((tmp_path / "out" / "summary.json").read_text())
     assert summary["tie"] == {"record": R.digest(got.w), "values": [got.name]}
+    named = {**summary["tie"], "previous": R.digest(got.w), "chained": True}
+    assert json.loads((tmp_path / "out" / "tie.json").read_text()) == named, "named before any proof, as the TIE line"
+    assert f"TIE {json.dumps(named, sort_keys=True)}" in capsys.readouterr().out
+    assert not (tmp_path / "refused" / "tie.json").exists()
     assert summary["registered"]["roots"] == summary["registered"]["pins"] == {got.name: got.entry["root"]}
     assert summary["leak"]["registered"] == 8 * 8 * K and "unpinned" not in summary["leak"]
 
