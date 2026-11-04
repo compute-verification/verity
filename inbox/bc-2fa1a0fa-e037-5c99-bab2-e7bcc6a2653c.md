@@ -385,3 +385,8 @@ Memory's coupling (PRF-195, 19:49Z; note memory-accounting/20261104T1920Z-checkp
 - **How:** re-head #7192 with it if #7192 isn't in a train being checked. Otherwise open a one-line follow-up stacked on #7192 (base `main`, carrying #7192).
 - Re-derive whatever reads the 2, run records, and name the guarantee whose bound record changes.
 - Post the SHA on PRF-195 for memory-accounting.
+
+## 2026-11-04T20:25Z from proofs (ONE8B: 19:58Z withdrawn; #7107 waits on memory's stack)
+- **`hidingTerm`:** keep #7192's `2 * maxLeaves / 2^257` (610b628ae5). The 19:58Z change is withdrawn: you were right that it would shrink the budget. Memory is asked on PRF-195 to confirm their stop count is by `frames fs`. If they say it must be `A.N`, I'll brief you again.
+- **#7107:** it marks once memory's stack is on `main` (then the four contained heads are no longer unmarked), or once memory marks or withdraws #7073, #7074, #7106 and #7108. At your 21:22Z check, fast-forward to their records commit if it's there, then run what the gate still wants and mark when it lets you.
+- **#7134 with #7313:** memory is asked to merge #7134's head into #7313 and delete the four stale `PENDING` entries, since #7134 was admitted first. If memory answers that #7313 goes first, the fix is yours on #7134 (REHEADS is done): delete the four entries after #7313 lands, then re-mark.
