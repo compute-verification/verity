@@ -44,8 +44,9 @@ theorem ofFn_mapM_id {n : ℕ} {a : Fin n → Option β} {b : Fin n → β} (h :
 theorem foldlM_inv (P : β → Prop) (f : β → α → Option β) (hf : ∀ b a b', P b → f b a = some b' → P b') :
     ∀ (l : List α) (b b' : β), P b → l.foldlM f b = some b' → P b'
   | [], b, b', hb, h => by
-    simp only [List.foldlM_nil, pure, Option.some.injEq] at h
-    exact h ▸ hb
+    rw [List.foldlM_nil] at h
+    obtain rfl := Option.some.inj h
+    exact hb
   | a :: l, b, b', hb, h => by
     rw [List.foldlM_cons] at h
     obtain ⟨s, hs, h⟩ := Option.bind_eq_some_iff.1 h
@@ -103,7 +104,7 @@ theorem rho_empty (a : ℕ) {n : ℕ} (hn : n = 0) :
     by_cases hm : m = 0
     · subst hm; cases s <;> decide +kernel
     · show wordQ (Evaluate.Fp32.sqrtRn (if (0 : ℕ) = 0 then
-          (if m = 0 then Evaluate.Fp32.F32_NAN_PTX else Evaluate.Fp32.infWord (s ^^ false))
+          (if m = 0 then Evaluate.Scalar.F32_NAN_PTX else Evaluate.Fp32.infWord (s ^^ false))
         else Evaluate.Fp32.roundRn (s ^^ false) (m <<< 149) 0)) = none
       rw [if_pos rfl, if_neg hm]
       cases s <;> decide +kernel
@@ -125,7 +126,7 @@ theorem s5Stats_pos {x : Array ℕ} {s ρw αw βw : ℕ} (h : Words.s5Stats x =
   subst hρw
   revert hρ
   try dsimp only
-  rw [rho_empty _ (n := (x.size + 7) / 8) (by rw [hx])]
+  rw [rho_empty _ (n := (x.size + 7) / 8) (by omega)]
   decide
 
 /-- A chain that returns `.ok` multiplies rows of one length in whole atoms. -/
@@ -178,7 +179,9 @@ theorem column_get {b : Array (Array ℕ)} {q l : ℕ} (hl : l < b.size) : (Word
 
 theorem cols_get (b : Array (Array ℕ)) {q : ℕ} (hq : q < 32) :
     ((Array.range R).map (Words.column b))[q]! = Words.column b q := by
-  rw [amap_get! (by simpa [R] using hq), range_get! (by simpa [R] using hq)]
+  have hqR : q < R := by simpa [R] using hq
+  have hqS : q < (Array.range R).size := by rw [Array.size_range]; exact hqR
+  rw [amap_get! hqS, range_get! hqR]
 
 /-- **The fixed operand's noise**: where `fixedNoise` is a value, `F_A` and `F_B` have `k` rows of 32 codes, 32 columns
 of `k` codes each, and the Gram word `(p, q)` is the chain of `F_B`'s column `p` and `F_A`'s column `q`. -/
@@ -436,13 +439,13 @@ theorem wordsAreTheSemantics_of (hA : PeelARow) (hB : PeelBRow) : WordsAreTheSem
   refine ⟨?_, ?_⟩
   · show _ = atNat _ rows[x]! cols[y]!
     unfold atNat
-    rw [dif_pos ⟨him, hjn⟩]
+    rw [dif_pos (And.intro him hjn)]
     have hv := TileCircuit.chainWordP_value hopperE4m3K32 4 _ hC
     rw [Accum.chainP_hopper_four] at hv
     exact hv.symm
   · show _ = atNat _ rows[x]! cols[y]!
     unfold atNat
-    rw [dif_pos ⟨him, hjn⟩]
+    rw [dif_pos (And.intro him hjn)]
     rw [PeelExactP.peelExactP_hopper] at hP
     have hv := congrArg (fun o => Option.bind o wordQ) hP
     simp only [Option.bind_some] at hv
