@@ -1,6 +1,6 @@
 """CPU twins of the FP8 Definitions (`registry.fp8`) on numpy arrays: the per-token and per-tensor quantization kernels and the
-e4m3 conversions, for the binding cross-check and the pod experiments, and the scale products a host committer commits for
-`ScaledMmFp8BlockSharedScale_v1`."""
+e4m3 conversions, for the tests that hold them to a production run's words and the pod experiments, and the scale products a
+host committer commits for `ScaledMmFp8BlockSharedScale_v1`."""
 from __future__ import annotations
 
 import numpy as np
@@ -100,7 +100,8 @@ def np_dynamic_per_token_quant(x_bf16: np.ndarray) -> tuple[np.ndarray, np.ndarr
 def np_online_weight_quant(w_bf16: np.ndarray) -> tuple[np.ndarray, np.float32]:
     """CPU twin of `Fp8PerTensorOnlineLinearMethod.process_weights_after_loading` on the bf16 tensor [N, K]:
     amax over the tensor (aminmax + abs + maximum in bf16 — exact), s_w = f32(amax) / 448 (torch f32 RN),
-    W_q = cvt(f32(W) * (1.0f / s_w)) (static_scaled_fp8_quant: reciprocal multiply, then clamp ±448, then cvt)."""
+    W_q = cvt(f32(W) * (1.0f / s_w)) (static_scaled_fp8_quant: reciprocal multiply, then clamp ±448, then cvt).  Held to the
+    production run's committed words in `verity/ml/definitions/tests/test_fp8_twins.py`."""
     wf = np_bf16_to_f32(w_bf16)
     amax = np.float32(np.max(np.abs(wf)))
     s_w = np.float32(amax / np.float32(448.0))
