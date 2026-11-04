@@ -98,6 +98,9 @@ SOURCES = [
     ("r20261104-122626-1f88", "8b-*", "8b", {"orders": True}),
     ("r20261104-122626-2c76", "70b-*", "70b", {"orders": True}),
     ("r20261104-122626-cd66", "70b-*", "70b", {"orders": True}),
+    ("r20261104-133126-ac09", "70b-*", "70b", {"orders": True}),
+    ("r20261104-133157-6b84", "70b-*", "70b", {"orders": True}),
+    ("r20261104-133157-6b84", "8b-*", "8b", {"orders": True}),
 ]
 
 
@@ -131,16 +134,19 @@ def total_macs(model: str) -> int:
 class Book:
     """model -> tensor -> variant -> {chip@price: (over the leaf, route)}; a variant is (target, rot, deflate, live
     noise f, K chunks). split and orders record whether any record of that variant searched the split, and the split
-    in the attacker's row and column orders too (`price.permute`)."""
+    in the attacker's row and column orders too (`price.permute`). Per variant, ordered_ranks are the split's ranks
+    priced in all orders and natural_ranks each rank's least split priced in the natural order."""
 
     def __init__(self):
         self.v = collections.defaultdict(lambda: collections.defaultdict(dict))
         self.split = set()
         self.orders = set()
         self.split_least = {}
+        self.ordered_ranks = collections.defaultdict(set)
+        self.natural_ranks = collections.defaultdict(dict)
         self.runs = collections.defaultdict(set)
 
-    def add(self, model, tensor, var, scores, split, run, orders=False, split_least=math.inf):
+    def add(self, model, tensor, var, scores, split, run, orders=False, splits=None):
         cur = self.v[model][tensor].setdefault(var, {})
         for k, (ol, route) in scores.items():
             if k not in cur or ol < cur[k][0]:
@@ -150,28 +156,39 @@ class Book:
         if orders and split:
             self.orders.add((model, tensor, var))
         key = (model, tensor, var)
-        self.split_least[key] = min(self.split_least.get(key, math.inf), split_least)
+        splits = splits or {}
+        self.split_least[key] = min(self.split_least.get(key, math.inf), min(splits.values(), default=math.inf))
+        for r, sl in splits.items():
+            if orders:
+                self.ordered_ranks[key].add(r)
+            else:
+                self.natural_ranks[key][r] = min(self.natural_ranks[key].get(r, math.inf), sl)
         self.runs[key].add(run)
+
+    def natural_only(self, key) -> float:
+        """The least split over the leaf at the ranks of a variant priced in the natural order only."""
+        return min((sl for r, sl in self.natural_ranks[key].items() if r not in self.ordered_ranks[key]),
+                   default=math.inf)
 
     def get(self, model, tensor, target=0.02, rot="hadamard", deflate=0, noise=0, chunks=1):
         return self.v[model][tensor].get((target, rot, deflate, noise, chunks))
 
 
-def split_least(rec: dict) -> float:
-    """The least over the leaf of a record's exact splits alone, over chips and prices."""
+def splits(rec: dict) -> dict:
+    """Per rank, the least over the leaf of a record's exact split alone, over chips and prices."""
     n, K = rec["shape"]
-    return min(((rotated.lrx(int(r), n, K, v["d"]) + v["routes"][k]["cost"]) / rec["leaf"]
-                for r, v in rec.get("isvd", {}).items() for k in KEYS), default=math.inf)
+    return {int(r): min((rotated.lrx(int(r), n, K, v["d"]) + v["routes"][k]["cost"]) / rec["leaf"] for k in KEYS)
+            for r, v in rec.get("isvd", {}).items()}
 
 
-def chunk_split_least(rec: dict) -> float:
-    """The same for a record in K chunks, each chunk on its own least split."""
+def chunk_splits(rec: dict) -> dict:
+    """The same for a record in K chunks, each chunk on its own least split, under the one rank "chunks"."""
     n, kc, m = rec["shape"][0], rec["K_chunk"], rec["chunks"]
 
     def at(k):
         return sum(min((rotated.lrx(int(r), n, kc, v["d"]) + v["routes"][k]["cost"] for r, v in part["isvd"].items()),
                        default=math.inf) for part in rec["per_chunk"]) / m / rec["leaf"]
-    return min(at(k) for k in KEYS)
+    return {"chunks": min(at(k) for k in KEYS)}
 
 
 def load(runs: Path) -> Book:
@@ -192,7 +209,7 @@ def load(runs: Path) -> Book:
                     if rec.get("chunked"):
                         var = (target, rot, deflate, 0, rec["chunks"])
                         scores = {k: (v["over_leaf"], v["route"]) for k, v in rec["best"].items()}
-                        book.add(model, rec["tensor"], var, scores, True, run, orders, chunk_split_least(rec))
+                        book.add(model, rec["tensor"], var, scores, True, run, orders, chunk_splits(rec))
                         continue
                     split = bool(rec.get("isvd")) or "energy_top" in rec
                     scores = {}
@@ -200,7 +217,7 @@ def load(runs: Path) -> Book:
                         s = rotated.score(rec, k)
                         scores[k] = (s["over_leaf"], s["route"])
                     var = (target, rot, deflate, 0, 1)
-                    book.add(model, rec["tensor"], var, scores, split, run, orders, split_least(rec))
+                    book.add(model, rec["tensor"], var, scores, split, run, orders, splits(rec))
                     if not orders and var == U:
                         refs[(run, model, rec["tensor"])] = scores
                     elif not orders and rot != U[1]:
@@ -350,8 +367,9 @@ NEAR = 0.085  # the most a reorder took off a split, over the leaf (70B L62 q at
 def evaluate(book, model, choose):
     """Per chip@price the least cost over credit of a credited matrix (its over the leaf / the share of its MACs
     credited), the matrix setting it, the credited share of the model's MACs, the credited matrices unpriced, and
-    those a reorder could take under the line: a split priced only in the natural order within NEAR of it
-    (`natural`), or a variant within NEAR of it never priced with the split (`unsplit`)."""
+    those a reorder could take under the line: a split at a rank priced in the natural order only, whose cost less
+    NEAR over the credit is under it (`natural`), or a variant within NEAR of it never priced with the split
+    (`unsplit`)."""
     worst = {k: (math.inf, None, None) for k in KEYS}
     credited = 0.0
     unpriced, natural, unsplit = [], [], []
@@ -367,7 +385,7 @@ def evaluate(book, model, choose):
         if key not in book.split:
             if least_of(s) / credit < LINE + NEAR:
                 unsplit.append(t)
-        elif key not in book.orders and book.split_least[key] / credit < LINE + NEAR:
+        elif (book.natural_only(key) - NEAR) / credit < LINE:
             natural.append(t)
         for k in KEYS:
             ol = s[k][0] / credit
@@ -407,7 +425,7 @@ def main():
         print(json.dumps(served_map(book, args.map, DEFENCES[args.defence]), indent=1))
         return
     print("| defence | model | sm_120 0.84 / 1.48 / 1.78 | H200 0.84 / 1.48 / 1.78 | least set by | MACs credited | "
-          f"unpriced | within {NEAR} of the line: natural order only / unsplit |")
+          f"unpriced | within {NEAR} of the line: a rank priced in the natural order only / unsplit |")
     print("|---|---|---|---|---|---|---|---|")
     for name, choose in DEFENCES.items():
         for model in MODELS:
@@ -442,8 +460,10 @@ def main():
                     its = f"{least_of(book.v[model][t][var]):.3f}"
                 served += f" | {credit:.1%}"
                 key = (model, t, var)
-                searched = ("all orders" if key in book.orders else "natural order" if key in book.split
-                            else "no split")
+                nat = sorted(r for r in book.natural_ranks[key] if r not in book.ordered_ranks[key])
+                searched = ("natural order" if key not in book.orders else
+                            f"all orders, natural at {', '.join(map(str, nat))}" if nat else "all orders")
+                searched = searched if key in book.split else "no split"
                 print(f"| {model} | {short(t)} | {s['sm120@0.84'][0]:.3f} / {s['h200@0.84'][0]:.3f} | {s[k0][1]} | "
                       f"{served} | {its} | {searched if var else '–'} |")
 
