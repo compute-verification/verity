@@ -92,8 +92,8 @@ def _lanes(units, cl, tp, inputs: list[int], made_up=None):
 
 def _stage(topo, d: Path, wired: bool):
     """The program, its partition and the stagings: honest (with `Wiring`), and with ``wired`` the two cheats (layer 1's x reads
-    layer 0's outputs flipped; the honest rows under link salts of their own), else the honest lanes staged without `Wiring`
-    (``plain``)."""
+    layer 0's outputs flipped; the honest rows under link salts of their own) and the honest lanes with every instance's own
+    rows (``own``, ``share_rows=False``), else the honest lanes staged without `Wiring` (``plain``)."""
     rng = random.Random(f"test-wired-links/{len(topo)}")
     fn, program = _program(topo)
     nets = [U.pad(U.Netlist(N_IN, tuple((rng.randrange(4), rng.randrange(N_IN + g), rng.randrange(N_IN + g)) for g in range(G)),
@@ -117,6 +117,8 @@ def _stage(topo, d: Path, wired: bool):
                                  wiring=replace(wiring, strict=False))
         st["wrong_salt"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "wrong_salt", key, packed=True,
                                     wiring=replace(wiring, writer_salts=False))
+        st["own"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "own", key, packed=True, wiring=wiring,
+                             share_rows=False)
         text = (d / "honest" / "circuit.txt").read_text()
         (d / "links.json").write_text(json.dumps(CS.links_file(program, query, text, wiring.indices)))
     return fn, program, query, tp, st
@@ -135,11 +137,14 @@ def _meta(d: Path) -> dict:
 
 
 def _bc(d: Path, n: int):
-    """The public file's `b || c` of instance ``i``'s row ``name`` (a shared-row file: its table row, by the instance's ref)."""
+    """The public file's `b || c` of instance ``i``'s row ``name``: a shared-row file's table row, by the instance's ref, else
+    the instance's own (instance-major, ports in order)."""
     meta = _meta(d)
     head, body = (d / f"pub-{n}.bin").read_bytes().split(b"\n", 1)
     head = json.loads(head)
     names = [p[0] for p in meta["ports"]]
+    if "shared_rows" not in head:
+        return lambda i, name: body[128 * (i * len(names) + names.index(name)):][:128]
     counts = [head["shared_rows"][x] for x in names]
     starts = [sum(counts[:k]) for k in range(len(counts))]
     o = 128 * sum(counts)
@@ -165,8 +170,10 @@ def test_honest_link_rows_are_their_writers_output_rows_and_each_cheat_breaks_th
     n = tp.population
     port = _meta(d / "honest")["links"][0]["port"]
     triples = json.loads((d / "links.json").read_text())["links"]
-    bc = {k: _bc(d / k, n) for k in ("honest", "made_up", "wrong_salt")}
+    bc = {k: _bc(d / k, n) for k in ("honest", "made_up", "wrong_salt", "own")}
     assert all(bc["honest"](r, port) == bc["honest"](w, "out") for r, _p, w in triples)
+    # every instance's own rows: each reader's link row is its own, and still its writer's output row under the writer's salt
+    assert all(bc["own"](r, port) == bc["own"](w, "out") for r, _p, w in triples)
     assert all(bc["made_up"](r, port) != bc["made_up"](w, "out") for r, _p, w in triples)
     assert all(bc["wrong_salt"](r, port) != bc["wrong_salt"](w, "out") for r, _p, w in triples)
     # the wrong-salt rows hold the right values: its writers' output rows are the honest ones
@@ -203,6 +210,8 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
     assert ok is not None, out
     note = ok["partition_check"]["note"]
     assert ok["partition_check"]["units"] == "derived" and f"Linking checked: {N} cut wire(s)" in note and "unit-class/" in note
+    ok, out = _lean("--circuit", str(d / "own" / "circuit.txt"), "--public", str(d / "own" / f"pub-{n}.bin"), *bound)
+    assert ok is not None and f"Linking checked: {N} cut wire(s)" in ok["partition_check"]["note"], out
     for cheat in ("made_up", "wrong_salt"):
         bad, out = _lean("--circuit", str(d / cheat / "circuit.txt"), "--public", str(d / cheat / f"pub-{n}.bin"), *bound)
         assert bad is None and "links: cut wire" in out and "the reader's row" in out, out
@@ -233,7 +242,7 @@ def test_the_live_verifier_checks_links_against_its_own_file(staged):
         return p.stdout
 
     links = ["--links", str(d / "links.json")]
-    assert "STATEMENT\t" in live(d / "honest", n, *links)
+    assert "STATEMENT\t" in live(d / "honest", n, *links) and "STATEMENT\t" in live(d / "own", n, *links)
     for cheat in ("made_up", "wrong_salt"):
         assert "the reader's row is not the writer's committed output row" in live(d / cheat, n, *links)
     assert "pass the verifier's own links file" in live(d / "honest", n)
