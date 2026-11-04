@@ -300,9 +300,12 @@ def build(finals: dict, runs: dict[str, dict[str, str]], records: Path, fits: di
             caveat = None
             if searched_h and all(p is not searched_h[1] for p in got):
                 cs, sp, srow = searched_h
+                sa = sp["at"][k]
                 caveat = (f"the search's honest H at {g:g}x, {sp['point']} ({srow['record']}, C {cs:.3g} gates), has no "
-                          f"finished seed reaching it on the final set ({sp['at'][k]['finished']} of "
-                          f"{sp['at'][k]['planned']} finished): until it has, p here reads against a dearer H")
+                          "finished seed reaching it on the final set ("
+                          + (f"{sa['finished']} of {sa['planned']} finished): until it has, " if sa["planned"] else
+                             "not rerun in the finals): so ")
+                          + "p here reads against a dearer H")
             tables.append({"start": start, "gain": g, "data": mine[0]["data"], "H_caveat": caveat,
                            "H": h and {"point": h["point"], "run": h["run"], "island": h["island"],
                                        "C": h["at"][k]["C"]},
