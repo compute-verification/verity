@@ -423,6 +423,7 @@ def test_coins_no_line_names_live_leave_the_figure_of_record_and_each_cell_condi
         {} if said else {"missing": OR.NO_COINS})
     of = rec["bound"]["of_record"]
     assert rec["verdicts"]["sampled proofs"]["conditional_on"] == rec["of_record"]["conditional_on"] == cond
+    assert rec["composite_error"]["conditional_on"] == cond
     assert (of["held"], of["open"], of["conditional_on"], of["K"]) == (["free", "circuit"], cond, cond, KR)
     assert rec["periods"]["conditional_on"] == rec["periods_tight"]["conditional_on"] == cond
     assert (rec["periods"]["run"]["bits"], rec["periods_tight"]["run"]["bits"]) == (KR, K)
@@ -440,7 +441,7 @@ def test_coins_a_line_names_live_add_no_condition_and_the_tight_K_is_of_record(t
     assert rec["coins"] == {"open": False, "sampled_proofs": [GATE], "from": "verdicts.txt COINS", "is": OR.COINS}
     of = rec["bound"]["of_record"]
     assert not any("conditional_on" in x for x in (rec["verdicts"]["sampled proofs"], rec["of_record"], of,
-                                                   rec["periods"]))
+                                                   rec["periods"], rec["composite_error"]))
     assert (of["K"], of["open"], "periods_tight" in rec) == (K, [], False)
     line = json.loads(capsys.readouterr().out.strip()[7:])
     assert (line["conditional_on"], line["K"], line["open"]) == ([], K, [])

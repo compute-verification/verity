@@ -32,8 +32,8 @@ network certifier's answer's, which host ran each party.
 **Coins** (``coins``, `COINS`): sampled proofs' coins as the run's COINS lines in verdicts.txt name them (the served
 run's, or the follow-on's where it audits), ``open`` unless each names the live challenger (`LIVE_COINS`), and
 ``missing`` where the run published none. While they are open, live-coins is named wherever a figure rests on that
-draw: the sampled-proofs verdict's and ``of_record``'s ``conditional_on``, and the figure of record's ``open`` and
-``conditional_on`` and its periods'.
+draw: the sampled-proofs verdict's, ``of_record``'s and the composite's error's ``conditional_on``, and the figure of
+record's ``open`` and ``conditional_on`` and its periods'.
 
 **The composite's error** (``composite_error``, `COMPOSITE`): the sum over the onsite composite's four subprotocols of
 each one's error, each subprotocol's δ with where the run states it: sampled proofs' and PoUW's from their rows (their
@@ -207,9 +207,9 @@ COINS = (f"{COINS_OPEN}: V3c's tied audit drew its sample on the live challenger
          "know before it commits (the run's COINS line names PP_CHALLENGER gate:USER@HOST and its peer). Open, by this "
          "name, wherever a COINS line names a local development challenger session, another challenger or no coins, "
          "or the run published none: "
-         "the sampled-proofs verdict, each tied audit's δ in eps and the slot entries E_w that k_{skip,j} charges rest "
-         "on that draw, so every figure here, the figure of record's included, holds only on those coins and never as "
-         "a live draw's")
+         "the sampled-proofs verdict and its δ in the composite's error, each tied audit's δ in eps and the slot "
+         "entries E_w that k_{skip,j} charges rest on that draw, so every figure here, the figure of record's "
+         "included, holds only on those coins and never as a live draw's")
 NO_COINS = "the run published no COINS line naming sampled proofs' coins (served_verdicts.sh's)"
 CHARGED = ("PeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audit tied to execution phase j's scan, those "
            "its Program neither registers at a pinned root nor ties (NetworkCheck.Period's tiedAudits sums the "
@@ -616,10 +616,12 @@ def delta_net(eps: Fraction, phases: int) -> list[dict[str, Any]]:
     return [{"symbol": "eps", "value": str(eps)}, *({"symbol": s, "times": phases} for s in ERRORS)]
 
 
-def composite_error(rows: Mapping[str, Any], eps: Fraction | None, why: str = "no accepted bound") -> dict[str, Any]:
+def composite_error(rows: Mapping[str, Any], eps: Fraction | None, why: str = "no accepted bound",
+                    conditional: Sequence[str] = ()) -> dict[str, Any]:
     """The composite's error term by term (`COMPOSITE`): each subprotocol's δ with where the run states it, or why it
     doesn't (the network certifier's eps from its bound, else ``why``); ``stated`` sums those stated (None where none
-    is), ``vacuous`` at 1 or more."""
+    is), ``vacuous`` at 1 or more; ``conditional_on`` the conditions sampled proofs' δ and eps rest on where any is
+    open (`COINS`)."""
     terms: list[dict[str, Any]] = []
     for name in ("sampled proofs", "PoUW"):
         t = {"subprotocol": name, "from": f"record/verdicts.json protocols.{ROWS[name]}.delta: its answer's "
@@ -635,7 +637,8 @@ def composite_error(rows: Mapping[str, Any], eps: Fraction | None, why: str = "n
     given = [Fraction(t["delta"]) for t in terms if "delta" in t]
     stated = sum(given, Fraction(0)) if given else None
     return {"is": COMPOSITE, "terms": terms, "stated": None if stated is None else str(stated),
-            "vacuous": stated is not None and stated >= 1, "unvalued": COMPOSITE_UNVALUED}
+            "vacuous": stated is not None and stated >= 1, "unvalued": COMPOSITE_UNVALUED} | (
+        {"conditional_on": list(conditional)} if conditional else {})
 
 
 def eps_of(b: Mapping[str, Any]) -> Fraction:
@@ -966,7 +969,8 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
                       "missing": [k for k, x in v.items() if x["verdict"] == "missing"],
                       "not_accepting": [k for k, x in v.items() if x["verdict"] not in ("accept", "missing")]}
                      | ({"conditional_on": cond} if cond else {}),
-        "placement": profile.get("placement"), "advice_charge": advice, "composite_error": composite_error(rows, None),
+        "placement": profile.get("placement"), "advice_charge": advice,
+        "composite_error": composite_error(rows, None, conditional=cond),
         "reproof": reproof(out, copy, listing)}
     nv = v["the network certifier"]
     if nv["verdict"] != "accept":
@@ -981,7 +985,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     except ValueError as e:
         return rec | {"bound": {"error": str(e)}, "periods": {"missing": "no bound"}}
     b["verdict_line"] = next((x for x in reversed(lines(out, "verdicts.txt")) if x.startswith(LINE)), None)
-    rec["composite_error"] = composite_error(rows, eps_of(b))
+    rec["composite_error"] = composite_error(rows, eps_of(b), conditional=cond)
     advice["charged"] = charged(b)
     b["period_s"] = None
     try:
