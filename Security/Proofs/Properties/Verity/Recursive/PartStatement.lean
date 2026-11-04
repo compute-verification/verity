@@ -4,6 +4,11 @@ public import Proofs.Flock.Claims.Complete.Encode
 public import Proofs.Flock.Claims.Recursion.Deploy
 public import Proofs.Properties.Verity.Recursive.Names
 public import VStarRecursive
+import all Init.Data.String.Defs
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Basic
 
 /-!
 # A step of `acc_of_accepts`: V\* part `s`'s statement is the compiled part's inputs
