@@ -10,8 +10,8 @@ can only shrink.
 What is scanned: every ``*.py`` under ``integrations/vllm/verity_vllm`` and ``verity/ml/definitions`` (the Definitions
 that moved from it, keyed by their repository paths) except ``tests/`` directories and
 ``test_*.py`` files (test fixtures may name models).  Docstrings, comments, f-strings, ``raise``/``assert`` messages,
-message-like keyword/dict positions (``hint=``, ``why=``, ``help=``, …) and a module's ``__models__`` marker (the models it
-exists for, ``verity_vllm.glue``) are not rule positions and are ignored.
+message-like keyword/dict positions (``hint=``, ``why=``, ``help=``, …), a module's ``__models__`` marker (the models it
+exists for, ``verity_vllm.glue``) and its ``__all__`` (the names it binds and exports) are not rule positions and are ignored.
 
 Three kinds of offender (``kind`` in the allowlist):
 
@@ -228,7 +228,7 @@ class _Finder(ast.NodeVisitor):
             self._emit("table", node, name, symbol=name)
 
     def visit_Assign(self, node: ast.Assign) -> None:
-        if not self.scope and any(isinstance(t, ast.Name) and t.id == "__models__" for t in node.targets):
+        if not self.scope and any(isinstance(t, ast.Name) and t.id in ("__models__", "__all__") for t in node.targets):
             return
         if not self.scope or self.scope[-1].startswith("class "):
             for t in node.targets:

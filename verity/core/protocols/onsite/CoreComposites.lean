@@ -1,8 +1,10 @@
 /-
 The composite a configuration's subprotocols make (`verity run CONFIG`): onsite (`Core.Onsite.protocol`,
 `verity/onsite/v0`) when they are onsite's, remote (`Core.Remote.protocol`, `verity/remote/v0`) when they are remote's,
-listed in any order. These two are the only composites a verifier runs: protocol soundness covers only these two, so
-`ofIds` refuses any other set by name (an id neither composes, one listed twice, none, or a set that is neither one's).
+and remote with the network certifier (`Core.RemoteNetwork.protocol`, `verity/remote-network/v0`) when they are
+remote's and the network certifier's, listed in any order. These three are the only composites a verifier runs:
+protocol soundness covers only these three, so `ofIds` refuses any other set by name (an id none composes, one listed
+twice, none, or a set that is none's).
 
     product IDS id | check PARAMS COMMITMENT EVIDENCE | serve        IDS: the subprotocols' ids, comma-separated
 
@@ -11,6 +13,7 @@ The command after `IDS` is the core CLI's (`CoreProtocol.Cli`), of the composite
 import CoreProtocol.Cli
 import CoreOnsite
 import CoreRemote
+import CoreRemoteNetwork
 
 namespace Core.Composites
 
@@ -19,7 +22,8 @@ open Composition
 /-- The composites, each with its subprotocols' ids. -/
 def composites : List (BlobProtocol × List String) :=
   [(Core.Onsite.protocol, Core.Onsite.components.map (·.id)),
-    (Core.Remote.protocol, Core.Remote.components.map (·.id))]
+    (Core.Remote.protocol, Core.Remote.components.map (·.id)),
+    (Core.RemoteNetwork.protocol, Core.RemoteNetwork.components.map (·.id))]
 
 /-- Every subprotocol of some composite, by id. -/
 def known : List String := (composites.flatMap (·.2)).eraseDups
@@ -54,29 +58,35 @@ private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 
 private def onsiteIds : List String := Core.Onsite.components.map (·.id)
 private def remoteIds : List String := Core.Remote.components.map (·.id)
+private def remoteNetworkIds : List String := Core.RemoteNetwork.components.map (·.id)
 
-#guard composites.map (·.1.id) == ["verity/onsite/v0", "verity/remote/v0"]
-#guard onsiteIds.all known.contains && remoteIds.all known.contains
-#guard known.length == (onsiteIds ++ remoteIds).eraseDups.length
+#guard composites.map (·.1.id) == ["verity/onsite/v0", "verity/remote/v0", "verity/remote-network/v0"]
+#guard onsiteIds.all known.contains && remoteIds.all known.contains && remoteNetworkIds.all known.contains
+#guard known.length == (onsiteIds ++ remoteIds ++ remoteNetworkIds).eraseDups.length
 
 -- the composites by their subprotocols, in any order, and no other set
 #guard idOf onsiteIds == some "verity/onsite/v0"
 #guard idOf onsiteIds.reverse == some "verity/onsite/v0"
 #guard idOf remoteIds == some "verity/remote/v0"
 #guard idOf remoteIds.reverse == some "verity/remote/v0"
+#guard idOf remoteNetworkIds == some "verity/remote-network/v0"
+#guard idOf remoteNetworkIds.reverse == some "verity/remote-network/v0"
+#guard idOf ("verity/certifier/v0" :: remoteIds) == some "verity/remote-network/v0"
+#guard idOf ["verity/certifier/v0"] == none
+#guard idOf (remoteNetworkIds.drop 1) == some "verity/remote/v0"
+#guard idOf (remoteNetworkIds ++ ["verity/wipe/v0"]) == none
+#guard idOf (remoteNetworkIds ++ ["verity/certifier/v0"]) == none
 #guard idOf [] == none
 #guard idOf ["verity/sampled-proofs/one-stage/v1"] == none
 #guard idOf ["verity/sampled-proofs/one-stage/v2"] == none
-#guard idOf ["verity/sampled-proofs/v1", "verity/certifier/v0"] == none
+#guard idOf ["verity/sampled-proofs/one-stage/v1", "verity/certifier/v0"] == none
 #guard idOf (onsiteIds.drop 1) == none
 #guard idOf ["verity/wipe/v0"] == none
-#guard idOf ["verity/pouw/v1", "verity/pouw/v1", "verity/sampled-proofs/v1"] == none
+#guard idOf ["verity/pouw/v1", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v1"] == none
 #guard idOf (remoteIds ++ ["verity/pouw/period/v1"]) == none
 #guard idOf (onsiteIds ++ ["verity/pouw/v1"]) == none
-#guard contains (match ofIds ["verity/sampled-proofs/v1"] with | .error e => e | .ok _ => "")
-  "protocol soundness covers only those composites"
 #guard contains (match ofIds ["verity/sampled-proofs/one-stage/v1"] with | .error e => e | .ok _ => "")
-  "is no composite's subprotocol"
+  "protocol soundness covers only those composites"
 #guard contains (match ofIds ["verity/sampled-proofs/one-stage/v2"] with | .error e => e | .ok _ => "")
   "is no composite's subprotocol"
 

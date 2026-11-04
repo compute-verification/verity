@@ -72,6 +72,10 @@ BOUND = "k_exfil(Y) ≤ k_sched + k_fail + Σ_j (ℓ_a,j + k_skip,j + T_j·log2 
 #: (`Claims.Sampling.Bext`) and the collisions with the network certifier's openings (`NetTiming.Btap`). No check
 #: computes them, so δ_net has no number.
 ERRORS = ("ε_ks", "ε_bind", "ε_tap")
+#: the period check's two holds of a tied compute audit that K's ℓ_a,j (`scans[j].free`) waits on; until both are Lean
+#: refusals, K charged at the counted free inputs is conditional
+OPEN_CHECKS = ("free counted off the tied audit's registered descriptor",
+               "each phase's window circuit held to the registered class circuit")
 #: what the lab leaves unmet of the onsite demo's placement, each a reason the record is simulated and never served
 SIMULATED = (
     "one host: every zone, its network certifier and the fabric are network namespaces of one Linux host "
@@ -329,11 +333,12 @@ def zone_record(zd: Path) -> dict:
     T = k["params"]["window"]
     entry["K"] = {
         "established": entry["verdict"] == "accept", "statement": LB.STATEMENTS["per_period"], "bound": BOUND,
-        "reading": READING, "class": k["class"],
+        "conditional_on": list(OPEN_CHECKS), "reading": READING, "class": k["class"],
         "scan_class": scan_class(session), "params": k["params"], "run": k["run"],
         "per_phase": {"connections": k["terms"]["connections_per_block"], "cell": k["terms"]["cell"],
                       "k_sched": k["terms"]["schedules_per_block"], "k_fail": k["terms"]["cells_per_block"],
                       "ell_a": k["terms"]["free_per_block"][READING], "k_skip": 0, "T_j": T,
+                      "tau_ms": k["params"]["bucket_ms"], "phase_s": k["run"]["link_window_s"],
                       "d_jit": k["terms"]["jitter_bound"], "jitter": k["terms"]["jitter_per_block"],
                       "K": next(r["per_link_window"] for r in k["rows"] if r["prog"] == READING)},
         "periods": {p: terms(k, p) for p in LB.PERIODS},
@@ -379,8 +384,13 @@ def notes() -> list[str]:
         "egress_cells for each of lanes·T_j connections a phase), whatever the requests served, since the adversary "
         "picks how many connections it opens. Both count the cell counts: PeriodLeakAccepted's terms as proved, a "
         "known overcount, and a bound charging each bit once would be tighter",
-        "ℓ_a,j is phase j's registered advice width (the tied audit's slot entries, NR·T_j/EVERY of them), not the "
-        "realized advice length |a_j|, which is private and not in this record",
+        "ℓ_a,j is phase j's scans[j].free, the period check's free-input term for its tied compute audit, not the "
+        "realized advice length |a_j|, which is private and not in this record. The lab ties no audit (no V3c), so "
+        "the record reads it as registered (leak_bounds): the audit's NR·T_j/EVERY slot entries, NE bits each",
+        "every K here is conditional: it charges ℓ_a,j as the tied audit's counted free inputs, which holds only once "
+        "two checks are Lean refusals in the period check (" + "; ".join(OPEN_CHECKS) + "). Until both are in, a tied "
+        "audit is charged its advice's cap ℓ_a + 1 bits instead, a figure this record doesn't compute: ℓ_a there is "
+        "the advice's padded length, which the record doesn't carry yet, not the registered ℓ_a,j it reads",
         "k_skip,j is 0 in the per-period form, every proof block being drawn; the pooled form's k_skip at δ is "
         "F·log2(N + 1) + b·F (leak_bounds), and that form is conditional (hesc and hleak await SampledKSLive and P2)",
         f"the jitter is T_j·log2 d_jit at d_jit = {LB.JITTER_BOUND}, T_j bits a phase: JitterBounded holds only at "
@@ -446,6 +456,9 @@ def markdown(doc: dict) -> str:
               f"({LB.WEIGHTS.label}). It bounds a zone only over a period its period check accepted: K is established "
               f"for {', '.join(accepted) or 'no zone'} here. A zone's figures without that accept are the bound its "
               "run's load would have had, had its period check accepted.", "",
+              "Every K here is conditional: it charges ℓ_a,j (the period check's scans[j].free) as the tied audit's "
+              f"counted free inputs, which holds only once the period check holds {OPEN_CHECKS[0]} and "
+              f"{OPEN_CHECKS[1]} in Lean; until then a tied audit is charged its advice's cap ℓ_a + 1 bits.", "",
               "Each bound holds except at δ_net = eps + m·(ε_ks + ε_bind + ε_tap) over its row's m phases. The tables "
               "give eps, the period check's δ part of δ_net; no check computes ε_ks, ε_bind or ε_tap, so δ_net has "
               "no number here.", ""]
@@ -458,12 +471,15 @@ def markdown(doc: dict) -> str:
             z["verdict"], f"the period check answered {z['verdict']}")
         status = "established" if k["established"] else f"not established: {why}"
         lines += [f"**{b}** ({status}) at scan class {k['scan_class']}, "
-                  f"{k['run']['requests_per_link_window']:g} requests served in a phase of T_j = {w['T_j']} buckets. "
-                  f"Its terms a phase, whatever the requests served: k_sched = k_fail = {w['k_sched']:,} ({w['connections']} connections the schedule can carry, "
-                  f"{w['cell']} bits each), ℓ_a,j = {w['ell_a']:,}, k_skip,j = 0, T_j·log2 d_jit = {w['jitter']} "
+                  f"{k['run']['requests_per_link_window']:g} requests served in a phase of T_j = {w['T_j']} buckets "
+                  f"of τ = {w['tau_ms']} ms ({w['phase_s']:g} s). Its terms a phase, whatever the requests served: "
+                  f"k_sched = k_fail = {w['k_sched']:,} ({w['connections']} connections the schedule can carry, "
+                  f"{w['cell']} bits each), ℓ_a,j = scans[j].free = {w['ell_a']:,} (conditional), k_skip,j = 0, "
+                  f"T_j·log2 d_jit = {w['jitter']} "
                   f"(d_jit = {w['d_jit']}); K a phase = {w['K']:,.0f}.", "",
-                  "| period | m | k_sched | k_fail | Σ_j ℓ_a,j | Σ_j T_j·log2 d_jit | K per period (share) | "
-                  "eps (δ part) | K pooled, δ = 1e-6 (k_skip) |", "|---|---|---|---|---|---|---|---|---|"]
+                  f"| period | m ({w['phase_s']:g} s phases) | k_sched | k_fail | Σ_j ℓ_a,j | Σ_j T_j·log2 d_jit | "
+                  "K per period (share) | eps (δ part) | K pooled, δ = 1e-6 (k_skip) |",
+                  "|---|---|---|---|---|---|---|---|---|"]
         for p, t in k["periods"].items():
             pooled = t["pooled"]["1e-06"]
             lines.append(f"| {p} | {fmt(t['m'])} | {fmt(t['k_sched'])} | {fmt(t['k_fail'])} | {fmt(t['ell_a'])} | "
@@ -473,8 +489,13 @@ def markdown(doc: dict) -> str:
     if doc["lab"]:
         first = next(z["K"] for z in zones.values() if z["K"])
         lab = held(doc["lab"]["established"])
-        lines += ["## Over all compute", "", "| period | scope | links | m | established | K per period (share) | "
-                  "eps (δ part) | K pooled, δ = 1e-6 | basis |", "|---|---|---|---|---|---|---|---|---|"]
+        w = first["per_phase"]
+        lines += ["## Over all compute", "",
+                  f"m counts the phases over the period, summed over the scope's links, each phase T_j = {w['T_j']} "
+                  f"buckets of τ = {w['tau_ms']} ms ({w['phase_s']:g} s), the lab's tick. K a phase reads no τ, so at "
+                  "a longer tick a period holds fewer phases and its K and eps shrink in proportion.", "",
+                  "| period | scope | links | m | established | K per period (share) | eps (δ part) | "
+                  "K pooled, δ = 1e-6 | basis |", "|---|---|---|---|---|---|---|---|---|"]
         for p in LB.PERIODS:
             for b, z in zones.items():
                 if z["K"]:
