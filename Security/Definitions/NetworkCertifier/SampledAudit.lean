@@ -17,8 +17,8 @@ sampling's own vocabulary: its statement, partition, design, faulty set and `M_�
 are wired: each wired input gate's writer, a gate whose value the registered descriptor's wiring carries into it. It
 fits the program (`BoundaryGates.Fits`) when, before the horizon, the egress gates are gates `C` returns and not inputs,
 so their values are committed and computed by `C`, the ingress gates are inputs, `C` is causal, and the wiring fits
-(`BoundaryGates.WiresFit`: each wired gate an input, its writer a gate `C` returns that reads no ingress before the
-horizon, and the wires acyclic). The verifier
+(`BoundaryGates.WiresFit`: each wired gate an input, its writer a gate `C` returns, not a constant, that reads no ingress
+before the horizon, and the wires acyclic). The verifier
 refuses a statement whose layout doesn't fit, as it refuses one outside the sampling scope.
 
 **The circuit's Program** (`circuitProgram`) is `C` run on the ingress up to step `t` and the declared advice, read off
@@ -125,11 +125,12 @@ def WiresAcyclic (C : Prog) (wires : ℕ → Option ℕ) : Prop :=
   ∃ r : ℕ → ℕ, ∀ g w g', wires g = some w → wires g' ≠ none → Depends C g' w → r g' < r g
 
 /-- **The wiring fits the program** over the horizon `k`. Each wired gate is an input of `C` and no ingress gate before
-`k`, and its writer is a gate `C` returns, so both values are committed; no writer depends on an ingress gate before `k`,
-so a wire carries no step's ingress; and the wires are acyclic (`WiresAcyclic`). -/
+`k`, and its writer is a gate `C` returns and not a constant, so both values are committed and a gate reading the writer
+reads its committed value (`Prog.read`); no writer depends on an ingress gate before `k`, so a wire carries no step's
+ingress; and the wires are acyclic (`WiresAcyclic`). -/
 def BoundaryGates.WiresFit {L S : ℕ} (lay : BoundaryGates L S) (C : Prog) (k : ℕ) : Prop :=
   (∀ g w, lay.wires g = some w →
-    C.gates[g]? = some .input ∧ (∀ t < k, g ∉ lay.ingress t) ∧ w ∈ C.outs ∧
+    C.gates[g]? = some .input ∧ (∀ t < k, g ∉ lay.ingress t) ∧ w ∈ C.outs ∧ (∀ b, C.gates[w]? ≠ some (.const b)) ∧
       ∀ t < k, ∀ i ∈ lay.ingress t, ¬ Depends C i w) ∧
     WiresAcyclic C lay.wires
 
