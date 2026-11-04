@@ -175,7 +175,7 @@ HIDDEN_SO=${HIDDEN_SO:-$H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so} NORM_TAP_
 VENV=${VENV:-/workspace/cp/venv312}
 REPO=${REPO:-verity-int8/Llama-3.2-1B-INT8} REV=${REV:-15b0976d400d796ee589e7737d03a919526bf800} PRECISION=${PRECISION:-verity_int8}
 PORT=${PORT:-18190} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-16:24} MAX_TOKENS=${MAX_TOKENS:-4} RATE=${RATE:-1000} SEED=${SEED:-1}
-REQUESTS=${REQUESTS:-$SLOTS} CLASSES=${CLASSES:-4,32,4} CAP=${CAP:-8388608} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512}
+REQUESTS=${REQUESTS:-$SLOTS} CLASSES=${CLASSES:-4,32,4} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} ID_BYTES=${ID_BYTES:-24}
 T=${T:-${H1_T:-512}}
 DISK_FLOOR_GB=${DISK_FLOOR_GB:-100}
 H1_KEY_SHA512=${H1_KEY_SHA512:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
@@ -225,6 +225,16 @@ case $PRODUCT in
     done ;;
   *) say "PREFLIGHT: PRODUCT is onsite or remote, not $PRODUCT"; exit 3 ;;
 esac
+# ℓ_a, unless CAP gives it: the least width that pads every Commit period's advice this server commits (advice_windows.least_cap
+# of window_advice.max_bits), at most SLOTS requests (--window-requests) and WINDOW_STEPS engine steps a period, positions
+# within MAX_MODEL_LEN, no prefix cache, and ids of at most ID_BYTES bytes, the loads' longest (varied's varied.<j:05d>, the
+# front's user-<i>, a warm-up's warmup-<8 hex>-<i>). A period past it is refused by name (advice.within_cap).
+case " ${SERVE_ARGS:-} " in
+  *" --prefix-caching "*) [ -n "${CAP:-}" ] || { say "PREFLIGHT: SERVE_ARGS serves with the prefix cache, whose KV sources ℓ_a's default leaves out: set CAP"; exit 3; } ;;
+esac
+CAP=${CAP:-$("$PY" -c 'import sys; from verity_vllm.pipeline import advice_windows as AW, window_advice as WA; print(AW.least_cap(WA.max_bits(*map(int, sys.argv[1:]))))' \
+  "$SLOTS" "$WINDOW_STEPS" "$MAX_MODEL_LEN" "$ID_BYTES")}
+[ -n "$CAP" ] || { say "PREFLIGHT: no ℓ_a from SLOTS $SLOTS, WINDOW_STEPS $WINDOW_STEPS, MAX_MODEL_LEN $MAX_MODEL_LEN and ID_BYTES $ID_BYTES (window_advice.max_bits): set CAP"; exit 3; }
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
 weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's registration
