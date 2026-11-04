@@ -33,3 +33,14 @@ Daniel approved (12:44 PM PST): restate `RecursiveKS` and `RecursiveKSDeployed` 
 - Until that PR, draft the new statement beside the locked one and leave the locked one alone.
 - The deploying PR's body cites the decision (it's recorded on PRF-383).
 - Put this in your design note's plan: name which PR deploys the wrap, and which obligations it must carry so the restated guarantee is proved when it lands. Proved means (a) the deferred release, (b) `Honest` with V[B] tied to the Lean verifier, and (c1) the honest worker.
+
+## 2026-11-04T21:50Z from proofs (ZKZK: Daniel's settled decisions D1–D3 for PRF-383 and PRF-381)
+Read `note:20261104T2049Z-draft-double-zk-architecture`. Only its **Settled** section is decisions; P1–P7 are proposals Daniel hasn't answered, so don't build on them as settled.
+- **D1:** the write-up is a short systems post that composes existing constructions. No novelty claim, no comparison; its contribution is the implementation and the benchmarks.
+  - It cites each construction where it's used: Ben-Or et al. 1988, Bowe et al. 2020 (Zexe), De Santis–Yung 1990, Mironov–Stephens-Davidowitz 2015, and Ganesh–Magri–Venturi 2020.
+  - It has three sections: intro, architecture, performance.
+- **D2:** one name per party, used for the party, its algorithm and its machine. V_in and V_out are algorithms; there's one verifier. The deployment section says only where each party runs and how the links go, in physical words (GPU servers, a small server, data diodes).
+- **D3:** the parties are **the prover, the firewall and the verifier**. "Firewall" replaces "ZK server", and "workers" goes. Write Π_in and Π_out for the proof systems, and never call a machine inner or outer.
+- **Facts the note records,** which your statement must respect:
+  - The Lean-checked recursive verifier accepts only public inner circuits (`Claims.Recursion.InScope` has no circuit commitment, and `RecSetup.denseOnly` refuses holo and sparse). So PRF-383's statement must say which forms it covers.
+  - Today the whole outer proof runs on the firewall's CPU: the reference run aff7 took 14,757 CPU-s and about 98 GB summed peak memory for one 33.9M-AND window. PRF-382's CPU rows land tonight.
