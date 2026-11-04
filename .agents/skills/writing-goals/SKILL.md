@@ -29,6 +29,8 @@ The plan is one graph of outcomes. Daniel reads it on the console's Goals page; 
   least daily (`research goals confirm ID`). Other components that do pieces of it are @handle in its plan; a check
   the remote demo runs is the demo lead's goal even when proofs writes it in Lean.
 - **A due date** (`--due 2026-11-05`, the end of that day, or `2026-11-05T10:00-08:00` when the hour matters).
+- **A priority**, 1 to 3: anyone may set one (`research goals priority ID 1|2|3|clear --by LANE`), and the page shows
+  who set it and when. A goal nobody set takes the highest priority of the goals waiting on it.
 - **A next step** (`--next TEXT --next-due WHEN`), dated within a day, for every open goal due within a week. The
   page shows it on the goal's row, red once its date passes; from Thu 10 AM PST the site refuses a write to such a goal
   that names none. `--no-next` clears it.

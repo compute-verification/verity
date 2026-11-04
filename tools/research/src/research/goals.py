@@ -34,7 +34,7 @@ from .slack import RouteError, SlackError, _Identity, http_json, route_error
 GOALS = "https://website-docs-sage.vercel.app/api/goals"   # the route, and its OIDC token's audience
 PACIFIC = ZoneInfo("America/Los_Angeles")
 STATUSES = ("on-track", "off-track", "done")
-STORED_ONLY = ("updatedAt", "updatedBy", "wasDue", "priority", "prioritySet")
+STORED_ONLY = ("updatedAt", "updatedBy", "wasDue", "priority", "prioritySet", "prioritySetBy", "prioritySetAt")
 
 
 class Route:
@@ -173,6 +173,10 @@ def main(argv: list[str], route: Route | None = None) -> int:
     s.add_argument("--no-next", action="store_true", help="it names no next step")
     for name in ("confirm", "done", "remove"):
         sub.add_parser(name).add_argument("id")
+    pr = sub.add_parser("priority", help="set a goal's priority (anyone may), or clear it back to the derived one")
+    pr.add_argument("id")
+    pr.add_argument("level", choices=["1", "2", "3", "clear"])
+    pr.add_argument("--by", required=True, metavar="LANE", help="your lead's handle, shown as who set it")
     sub.add_parser("replace").add_argument("file")
     ns = p.parse_args(argv)
     route = route or Route(ns.url)
@@ -191,6 +195,10 @@ def main(argv: list[str], route: Route | None = None) -> int:
         if ns.cmd == "remove":
             route.call({"remove": ns.id})
             print(f"research goals: removed {ns.id}")
+            return 0
+        if ns.cmd == "priority":
+            route.call({"priority": {"id": ns.id, "priority": None if ns.level == "clear" else int(ns.level)}, "by": ns.by})
+            print(f"research goals: {ns.id}'s priority is {'derived again' if ns.level == 'clear' else ns.level}, set by {ns.by}")
             return 0
         current = _find(route.call(), ns.id)
         if ns.cmd == "set":

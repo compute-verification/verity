@@ -120,3 +120,15 @@ def test_a_refusal_is_one_line_naming_the_field(capsys):
 def test_the_command_line_refuses_what_the_site_would(argv):
     with pytest.raises(SystemExit):
         goals.main(argv, Fake())
+
+
+def test_priority_sets_or_clears_a_goal_s_priority_as_its_own_write():
+    fake = Fake([GOAL])
+    assert goals.main(["priority", "demos/both", "1", "--by", "top"], fake) == 0
+    assert fake.posted[-1] == {"priority": {"id": "demos/both", "priority": 1}, "by": "top"}
+    assert goals.main(["priority", "demos/both", "clear", "--by", "top"], fake) == 0
+    assert fake.posted[-1] == {"priority": {"id": "demos/both", "priority": None}, "by": "top"}
+    stored = GOAL | {"priority": 1, "prioritySet": True, "prioritySetBy": "top", "prioritySetAt": "2026-11-04T21:40:00.000Z"}
+    fake = Fake([stored])
+    assert goals.main(["set", "demos/both", "--title", "Reworded"], fake) == 0
+    assert not {"priority", "prioritySet", "prioritySetBy", "prioritySetAt"} & set(fake.posted[-1]["set"]), "a goal write never sends priority back"
