@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SessionLoop.RoundLigFramePast
 public import Proofs.Flock.SessionLoop.LiveInner
+import all Init.Data.String.Defs
 
 /-!
 # The frame past level 0's close
