@@ -152,10 +152,37 @@ def headerNet (line : String) : Flock.V Flock.Net := do
 private def intLists (j : Json) (k : String) : Flock.V (Array (Array Int)) := do
   (← Flock.J.arr j k ctx).mapM fun u => do (← Flock.J.asArr u s!"{ctx}.{k}").mapM fun x => Flock.J.asInt x s!"{ctx}.{k}"
 
+/-- **META's row ports**, input rows then output rows: each one's name and words, and its bits, a bit row's length
+(`row_schemas`) or 16 per word, as `Flock.HmRow.rowPorts` reads them; the rows' constants, which the C-Flock verifier
+checks on the same bytes, are not read. -/
+def rowPorts (mj : Json) : Flock.V (Array Flock.Port) := do
+  let ports ← (← Flock.J.arr mj "ports" ctx).mapM fun p => do
+    let a ← Flock.J.asArr p s!"{ctx}: a port"
+    if a.size < 2 then throw s!"{ctx}: a port is not [name, words, …]"
+    pure ({ name := ← Flock.J.asStr a[0]! "port name", words := ← Flock.J.asNat a[1]! "port words", chunks := 0,
+            nb := 0 } : Flock.Port)
+  match mj.getObjVal? "row_schemas" with
+  | .error _ => pure ports
+  | .ok s =>
+    let s ← Flock.J.asArr s "row_schemas"
+    if s.size != ports.size then throw "META: row_schemas is not one [schema, bits] per port"
+    (ports.zip s).mapM fun (p, x) => do
+      let a ← Flock.J.asArr x "row_schemas"
+      if a.size != 2 then throw "META: row_schemas: a port's is not [schema, bits]"
+      pure { p with bits := ← Flock.J.asNat a[1]! "a bit row's length", v2 := true }
+
+/-- **META's output rows**: each output row's run of output ports (`out_row_ports`), else one row a port but the pinned
+ones (`Flock.HmRow.pinnedCount`), as `Flock.HmRow` reads them. -/
+def outRows (mj : Json) (outPorts : Nat) : Flock.V (Array Nat) := do
+  match mj.getObjVal? "out_row_ports" with
+  | .error _ => pure (Array.replicate (outPorts - Flock.HmRow.pinnedCount mj) 1)
+  | .ok v => (← Flock.J.asArr v "out_row_ports").mapM (Flock.J.asNat · "out_row_ports")
+
 /-- **The circuit file's header as a `Flock.Circuit`**: its name, SHA-512 `sha`, nets (each its header, no rows), units
-per VU, unit net, the net returning the outputs (META `out_net`, the unit by default), leaf maps, wires and leaf cuts
-(META `wires` and `leaf_cuts`, read as `Flock.Circuit.parse` and `Flock.HmRow` read them) and META. A file of
-another format than `Flock.Tags.circuit`'s, a typed template's (`flock-circuit/types`) among them, is refused. -/
+per VU, unit net, the net returning the outputs (META `out_net`, the unit by default), row ports (`rowPorts`), output
+ports and output rows (`outRows`), leaf maps, wires and leaf cuts (META `wires` and `leaf_cuts`, read as
+`Flock.Circuit.parse` and `Flock.HmRow` read them) and META. A file of another format than `Flock.Tags.circuit`'s, a
+typed template's (`flock-circuit/types`) among them, is refused. -/
 def ofHeader (sha : ByteArray) (lines : Array String) : Flock.V Flock.Circuit := do
   let tags := Flock.Tags.circuit
   let head := (lines.getD 0 "").trimAsciiEnd.toString
@@ -198,9 +225,14 @@ def ofHeader (sha : ByteArray) (lines : Array String) : Flock.V Flock.Circuit :=
       if (x[0]!.getStr?).toOption != some "unit" then throw "META: a leaf cut into anything but a unit"
       pure (← Flock.J.asNat x[1]! "a leaf cut", ← Flock.J.asNat x[2]! "a leaf cut", ← Flock.J.asNat x[3]! "a leaf cut")
     | _ => pure #[]
+  let outPorts ← (← Flock.J.arr mj "out_ports" ctx).mapM fun p => do
+    let a ← Flock.J.asArr p "out port"
+    if a.size != 2 then throw "META: an out port is not [name, words]"
+    pure (← Flock.J.asStr a[0]! "out port name", ← Flock.J.asNat a[1]! "out port words")
   return { (default : Flock.Circuit) with name, sha, nets, upv := ← Flock.J.nat mj "units_per_vu" ctx, unitNet,
-                                          outNet, leavesIn := ← intLists mj "leaves_in", leavesOut, wires, leafCuts,
-                                          metaJ := mj }
+                                          outNet, ports := ← rowPorts mj, outPorts,
+                                          outRowPorts := ← outRows mj outPorts.size, leavesIn := ← intLists mj "leaves_in",
+                                          leavesOut, wires, leafCuts, metaJ := mj }
 
 /-- A whole file's SHA-512 and its header's circuit, from its hash and lines. -/
 def result (hs : Hasher) (ls : Lines) : Flock.V (ByteArray × Flock.Circuit) := do
@@ -248,12 +280,15 @@ private def toyNet : Array String :=
         (b.inGroups ++ b.outGroups).map (fun g => (g.col, g.words, g.bits))
   | _, _ => false
 
-/-- A file of that unit net at two units a VU, each instance returning its own output word, its META's other fields
-`extra`. -/
+/-- A file of that unit net at two units a VU, each instance returning its own output word, an input row `x` of four
+words and an output row `o` of two, its META's other fields `extra`. -/
 private def toyFileWith (extra : List (String × Json)) : ByteArray :=
   let ns (xs : List Nat) : Json := Json.arr (xs.toArray.map Lean.toJson)
   let mj := Json.mkObj ([("format", .str Flock.Tags.circuit.fileFormat),
     ("statement", .str Flock.Tags.circuit.statement), ("units_per_vu", Lean.toJson (2 : Nat)),
+    ("ports", Json.arr #[Json.arr #["x", Lean.toJson (4 : Nat), Lean.toJson (0 : Nat)],
+      Json.arr #["o", Lean.toJson (2 : Nat), Lean.toJson (0 : Nat)]]),
+    ("out_ports", Json.arr #[Json.arr #["o", Lean.toJson (2 : Nat)]]),
     ("leaves_in", Json.arr #[ns [0, 1], ns [2, 3]]), ("leaves_out", Json.arr #[ns [0], ns [1]])] ++ extra)
   (String.intercalate "\n" ([s!"{Flock.Tags.circuit.fileFormat} toy", s!"META {mj.compress}",
     s!"{Flock.Tags.circuit.blockKeyword} unit {toyNet.size}"] ++ toyNet.toList) ++ "\n").toUTF8
@@ -272,7 +307,13 @@ private def jn (k : Nat) : Json := Lean.toJson k
 
 #guard [1, 7, 64, 1000, toyFile.size].all fun k => match ofChunks toyFile k with
   | .ok (sha, c) => sha.data == (Flock.Sha512.hash toyFile).data && c.name == "toy" && c.upv == 2 && c.unitNet == 0 &&
-      c.outNet == 0 && c.unit.constPos == 145 && c.leavesOut == #[#[0], #[1]] && c.leavesIn.size == 2
+      c.outNet == 0 && c.unit.constPos == 145 && c.leavesOut == #[#[0], #[1]] && c.leavesIn.size == 2 &&
+      c.ports.map (fun p => (p.name, p.words, p.bits)) == #[("x", 4, 64), ("o", 2, 32)] && c.inWords == 6 &&
+      c.outPorts == #[("o", 2)] && c.outRowPorts == #[1]
+  | .error _ => false
+#guard match ofChunks (toyFileWith [("row_schemas", Json.arr #[Json.arr #["hm96-sha512/row/v2", jn 60],
+    Json.arr #["hm96-sha512/row/v2", jn 32]]), ("out_row_ports", Json.arr #[jn 1])]) 64 with
+  | .ok (_, c) => c.ports.map (·.bits) == #[60, 32] && c.outRowPorts == #[1]
   | .error _ => false
 #guard match ofChunks (toyFile.extract 0 (toyFile.size - 40)) 64 with
   | .error e => e == "a block is truncated"

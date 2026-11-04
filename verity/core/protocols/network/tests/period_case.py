@@ -1466,7 +1466,8 @@ WORD = 128
 class CircuitHeader:
     """What `NetworkCheck.CircuitFile.read` reads of a circuit file: its SHA-512, META, units per VU and leaf maps, and
     its unit net's header (`headerNet`): its constant's column, input words and port groups, each `(col, words,
-    bits)`; and whether META's `out_net` is the unit."""
+    bits)`; whether META's `out_net` is the unit; its row ports (`rowPorts`), each `(name, words, bits)`, and its output
+    rows' count (`outRows`)."""
     sha512: str
     meta: dict
     upv: int
@@ -1477,6 +1478,8 @@ class CircuitHeader:
     in_groups: list[tuple[int, int, list[int]]]
     out_groups: list[tuple[int, int, list[int]]]
     out_unit: bool
+    ports: list[tuple[str, int, int]]
+    out_rows: int
 
 
 def _header_net(line: str) -> tuple[int, int, list, list]:
@@ -1531,8 +1534,25 @@ def read_circuit(text: str) -> CircuitHeader:
             raise D.Reject("META: a leaf cut is not [circuit, unit, port, leaf]")
         if x[0] != "unit":
             raise D.Reject("META: a leaf cut into anything but a unit")
+    out_ports = meta.get("out_ports")
+    if not isinstance(out_ports, list) or any(not isinstance(p, list) or len(p) != 2 for p in out_ports):
+        raise D.Reject("META: an out port is not [name, words]")
     return CircuitHeader(hashlib.sha512(text.encode()).hexdigest(), meta, _nat(meta.get("units_per_vu"), "META"),
-                         meta["leaves_in"], meta["leaves_out"], *nets["unit"], meta.get("out_net", "unit") == "unit")
+                         meta["leaves_in"], meta["leaves_out"], *nets["unit"], meta.get("out_net", "unit") == "unit",
+                         _row_ports(meta), len(meta["out_row_ports"]) if "out_row_ports" in meta
+                         else len(out_ports) - len(meta.get("pinned_outputs", [])))
+
+
+def _row_ports(meta: dict) -> list[tuple[str, int, int]]:
+    """`CircuitFile.rowPorts`: META's row ports, each `(name, words, bits)`, its bits a bit row's length
+    (`row_schemas`) or 16 per word."""
+    ports = meta.get("ports")
+    if not isinstance(ports, list) or any(not isinstance(p, list) or len(p) < 2 for p in ports):
+        raise D.Reject("circuit META: a port is not [name, words, …]")
+    schemas = meta.get("row_schemas")
+    if schemas is not None and len(schemas) != len(ports):
+        raise D.Reject("META: row_schemas is not one [schema, bits] per port")
+    return [(p[0], p[1], schemas[i][1] if schemas is not None else 16 * p[1]) for i, p in enumerate(ports)]
 
 
 def bits_why(c: CircuitHeader, keys: frozenset[str], template: str) -> str | None:
@@ -1551,15 +1571,21 @@ def bits_why(c: CircuitHeader, keys: frozenset[str], template: str) -> str | Non
     if len(c.leaves_in) != c.upv or len(c.leaves_out) != c.upv or any(
             len(c.leaves_in[k]) != len(gi) or len(c.leaves_out[k]) != len(go) for k in range(c.upv)):
         return "the circuit file's leaf maps are not one per template instance over its unit's ports"
+    if any(w[0] == "unit" for w in c.meta.get("wires", [])):
+        return "a wire into the circuit file's unit"
+    pc = [b for g in c.in_groups for b in g[2]]
+    rows = sum(p[1] for p in c.ports)
+    if any(k >= c.upv or p < len(gi) or p >= len(pc) or pc[p] < 16 or w >= rows
+           for _, k, p, w in c.meta.get("leaf_cuts", [])):
+        return "a leaf cut outside the unit's cut inputs or the rows"
     wired: dict[tuple[int, int], int] = {}
-    for kp in [(x[1], x[2]) for x in c.meta.get("leaf_cuts", [])] + [
-            (w[1], w[2]) for w in c.meta.get("wires", []) if w[0] == "unit"]:
+    for kp in [(x[1], x[2]) for x in c.meta.get("leaf_cuts", [])]:
         wired[kp] = wired.get(kp, 0) + 1
     for k in range(c.upv):
-        for p in range(len(gi), sum(len(g[2]) for g in c.in_groups)):
+        for p in range(len(gi), len(pc)):
             if wired.get((k, p), 0) != 1:
                 return (f"input port {p} of the circuit file's unit, template instance {k}, is not wired exactly once by "
-                        "a leaf cut or a wire")
+                        "a leaf cut")
     if len(set(outs)) != len(outs):
         return "the circuit file's unit returns an output word twice"
     if n_in != c.in_words * WORD:
@@ -1654,13 +1680,15 @@ CUT_HEAD = "flock-ir-unit/v2 toy 273 272 2 0 1 2 16 16 1 1 1 16 1 2 1 1 16"
 
 def circuit_file(program: str, partition: str | None, upv: int = LISTED_UPV, head: str = TOY_HEAD, **meta) -> str:
     """A flat circuit file of `NetworkCheck.CircuitFile`'s toy unit net (one input word of two 16-bit ports, its output
-    word on computed rows), its header line `head`, at `upv` template instances a VU, each its own output word, META
+    word on computed rows), its header line `head`, at `upv` template instances a VU, each its own output word, an input
+    row `x` of two words an instance and an output row `o` of one, META
     binding the Program's SHA-512 `program` and, given one, the `verity/partition/v1` digest `partition`; `meta`
     overrides META's keys. The period's check reads only its SHA-512 and header."""
     net = [head] + [
         f"1 {i} 1 {i}" if i < 32 else "0 0" if i < 128 else f"2 {i - 128} {i - 112} 1 145" if i < 144
         else "1 128 1 145" if i == 144 else "1 145 1 145" for i in range(146)]
     m = {"format": CIRCUIT_FORMAT, "statement": CIRCUIT_STATEMENT, "units_per_vu": upv,
+         "ports": [["x", 2 * upv, 0], ["o", upv, 0]], "out_ports": [["o", upv]],
          "leaves_in": [[2 * k, 2 * k + 1] for k in range(upv)], "leaves_out": [[k] for k in range(upv)],
          "program_sha512": program, **({"partition": {"rule": PARTITION_V1, "digest": partition}} if partition else {})}
     return "\n".join([f"{CIRCUIT_FORMAT} toy", "META " + json.dumps(m | meta, separators=(",", ":")),

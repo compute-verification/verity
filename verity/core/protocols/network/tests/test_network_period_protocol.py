@@ -702,8 +702,9 @@ def test_a_listed_audit_counts_its_vus_off_its_circuit_files(server, tmp_path):
     public, its units its VUs and each wrong one charged `vu_bits(2, words)`; with no files, or through `serve`, Lean
     and the mirror refuse its parameters, as only the check given its files reads a listing; and each set of files
     that is not the listing's is refused by both: a file of another SHA-512, a file too many, META naming another
-    Program or another partition, a unit returning one output word twice or a cut input port wired by no leaf cut or
-    wire, or by two (`SampledProofs.Bits.check`), and instances that are not whole VUs. A file whose cut port each
+    Program or another partition, a unit returning one output word twice, a wire into the unit, a leaf cut past the
+    rows, or a cut input port wired by no leaf cut or by two (`SampledProofs.Bits.check`), and instances that are not
+    whole VUs. A file whose cut port each
     instance wires by one leaf cut is accepted. A file at one instance a VU passes, and the audit's answer over 4 VUs is
     then not its 8."""
     exe = D.build(LEAN, "network-period")
@@ -742,7 +743,12 @@ def test_a_listed_audit_counts_its_vus_off_its_circuit_files(server, tmp_path):
             (None, PC.listed_files(case, head=PC.CUT_HEAD), "input port 2 of the circuit file's unit, template "
              "instance 0, is not wired exactly once"),
             (None, PC.listed_files(case, head=PC.CUT_HEAD, leaf_cuts=[["unit", k, 2, 0] for k in (0, 0, 1)]),
-             "is not wired exactly once")]
+             "is not wired exactly once"),
+            (None, PC.listed_files(case, head=PC.CUT_HEAD, leaf_cuts=[["unit", k, 2, 0] for k in range(PC.LISTED_UPV)],
+                                   wires=[["unit", 0, 1, "unit", 0, 0]]), "a wire into the circuit file's unit"),
+            (None, PC.listed_files(case, head=PC.CUT_HEAD, leaf_cuts=[["unit", k, 2, 3 * PC.LISTED_UPV]
+                                                                      for k in range(PC.LISTED_UPV)]),
+             "a leaf cut outside the unit's cut inputs or the rows")]
         for k, (c, files, fragment) in enumerate(refusals):
             c = c or _relisted(case, files)
             mirror = PC.reference_with(c, files)
