@@ -79,7 +79,8 @@ negatives.
   `WC_RECORD_TIMEOUT` (default 20m), after the record: a timeout or refusal there is reported and never fails the run. Then
   comes V3c, sampled proofs' audit of record, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`: the window committed as the
   class circuit's units (`prove_path.py window-commit`), then its records audit (`records_audit.py audit --circuit`, on a
-  challenger's coins), which is C-Flock `--zk` on the drawn proof blocks and the Lean verifier. The class circuit is the
+  local development challenger session's coins unless `PP_CHALLENGER` names the live challenger, as the run's COINS line
+  says, a deferral's follow-on its own), which is C-Flock `--zk` on the drawn proof blocks and the Lean verifier. The class circuit is the
   class's, whatever the window's requests, and reads no advice, so no advice opening reaches the verifier. V3c writes its audit as the network
   certifier's period reads it (`period.json`). Then come PoUW, PoUS, the bandwidth audit and the network certifier. Each runs its piece where
   `POUW_CMD`, `POUS_CMD`, `BANDWIDTH_CMD` or `CERTIFIER_CMD` names one, within its own limit; otherwise its `MISSING` line
@@ -235,15 +236,18 @@ negatives.
   `Security/Properties/lean-audit.json` lists, taking no named assumption but a standing one (trusted-host and
   certifier-coverage), and no premise about our own Python stands; and each guarantee the tight K rests on is in the lock
   at the statement whose hypotheses and antecedents the record names by hand, each by the premise that covers it, since
-  the lock records a guarantee's named assumptions and never its antecedents. While
-  one of those is open, it is K plus ℓ_a + 1 bits for each tied audit of each phase, with the tight K's cells beside
-  them, conditional on what is open, by name. The realized advice charge is private: the record states ℓ_{a,j} with its source,
+  the lock records a guarantee's named assumptions and never its antecedents; and the run's COINS line names the live
+  challenger (PP_CHALLENGER gate:USER@HOST at a named peer). While one of those is open, it is K plus ℓ_a + 1 bits for
+  each tied audit of each phase, with the tight K's cells beside them, conditional on what is open, by name; and while
+  the coins are a local development session's, or no line names them, the condition live-coins is named on every figure
+  that rests on the draw (the sampled-proofs verdict, the figure of record and its cells), never as a live draw's.
+  The realized advice charge is private: the record states ℓ_{a,j} with its source,
   the tied compute audits' free inputs (no advice length and no cap is in them), beside it ℓ_a, the cap of the advice
   the run registered (its published `registration.json`'s compiler `cap_bits`), as a cap, in no term of K, and
   `--advice-charge` states a test
   run's measurement beside the bound as that run's. It lists the re-proof inputs, what a later re-proof of the sampled
   units with each wire read inside its session needs (the committed values and openings of every sampled unit and of
-  the units that write what it reads, the registration, the live draw and its receipt, and the public files), by
+  the units that write what it reads, the registration, the draw and its receipt, and the public files), by
   where each is and whether the run wrote each public one, and how each must be kept: past the week after the run,
   never only on the served node, the public ones in custody and the serve dir's, witness, in a private copy off the
   node, never in `$OUT` or custody. `--reproof-copy NODE:/PATH` with `--reproof-listing` (the copy's listing, kept
