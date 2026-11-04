@@ -21,6 +21,8 @@ wire between two members of one template needs.
 * `act_node`, `act_not_input`: a member's activation lies in its node's gates, so no input node's gate is in it;
 * `inM_input`, `memberIdx_inj`: an input node's gate is in `InM` at a member only as that member's own leaf of it, and
   on an argument mapped over its first axis no leaf is two members';
+* `inM_unit`: so where one argument alone reads an input node, mapped over its first axis, a gate of that node is in
+  `InM` at one member only, the one its leaf's slice is;
 * `InM`, `closure_member`, `depends_member`: at a batch whose every argument is one input node's leaves
   (`NetworkCheck.Period.inputArg`), the gates of member `m`'s activation and those its own references resolve to hold
   what they read in a flattening (`Properties.NetworkScan.Flattens`), so whatever such a gate depends on is among them;
@@ -473,6 +475,34 @@ theorem inM_input {bytes : ByteArray} (hdec : decode bytes = .ok P) {k m q x : �
     have hq1 := (BodiesOk.decoded bytes P hdec _ hfn).1 hprim
     refine ⟨i, j, hi, hj, hq', ?_⟩
     rw [arg_gate P hq' hq1 hqb hres, upIdx_batch hbatch]
+
+/-- **The one member whose closure holds an input node's gate.** If only argument `iq` of root node `kq` reads the
+input node `q`, mapped over its first axis at its parameter's `L` leaves, then a gate `x` of `q` is in `InM` at member
+`m` of a root batch `k` of a composite, every argument of which is one input node's leaves, only at `k = kq` and
+`m = (x − offsets[q]) / L`. -/
+theorem inM_unit {bytes : ByteArray} (hdec : decode bytes = .ok P) {k m q kq iq x : ℕ}
+    (hk : k < (P.defs[P.root]!).body.nodes.size) (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members)
+    (hcomp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
+    (hbatch : ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
+    (hargs : ∀ b ∈ ((P.defs[P.root]!).body.nodes[k]!).args, (inputArg P b).isSome = true)
+    (hq : q < (P.defs[P.root]!).body.nodes.size)
+    (hin : NciCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[q]!) = true)
+    (hqb : ((P.defs[P.root]!).body.nodes[q]!).form = .batch)
+    (hxq : (P.defs[P.root]!).body.offsets[q]! ≤ x ∧ x < (P.defs[P.root]!).body.offsets[q + 1]!)
+    (huniq : ∀ i, inputArg P (((P.defs[P.root]!).body.nodes[k]!).args[i]!) = some q → k = kq ∧ i = iq)
+    (hdims : ∃ d, (((P.defs[P.root]!).body.nodes[kq]!).args[iq]!).dims =
+      some (d, ((P.defs[((P.defs[P.root]!).body.nodes[kq]!).fn]!).body.params[iq]!).2.leaves))
+    (h : InM P k m x) :
+    k = kq ∧ m = (x - (P.defs[P.root]!).body.offsets[q]!) /
+      ((P.defs[((P.defs[P.root]!).body.nodes[kq]!).fn]!).body.params[iq]!).2.leaves := by
+  obtain ⟨i, j, -, hj, hiq, hx⟩ :=
+    inM_input P hroot hB hL hdec hk hm hcomp hbatch hargs hq hin hqb hxq h
+  obtain ⟨rfl, rfl⟩ := huniq i hiq
+  obtain ⟨d, hd⟩ := hdims
+  rw [memberIdx_slice hd hj] at hx
+  refine ⟨rfl, ?_⟩
+  have hL0 := Nat.lt_of_le_of_lt (Nat.zero_le j) hj
+  rw [hx, Nat.add_sub_cancel_left, Nat.add_comm, Nat.add_mul_div_right _ _ hL0, Nat.div_eq_of_lt hj, Nat.zero_add]
 
 /-- **What a gate of `InM` depends on is in `InM`.** -/
 theorem depends_member {bytes : ByteArray} (hdec : decode bytes = .ok P) (hov : P.orderViolation = none)
