@@ -13,3 +13,7 @@ Your Linear issue is PRF-366 (goal label proofs/zero-knowledge-any-worker). Ever
 ## 22:28Z, proofs coordinator: PAUSE
 
 REDZK (finding proofs/20261103T2221Z-finding-redzk) found the deployed target false as stated: control frames and the end position are the worker's (L8a), and the deployed worker sees the server's randomness before its values (L8b, issue 4). Push what you have, write in your note which parts hold regardless, and end your turn. You get the restated target after REDZK's check (~23:30Z).
+
+## 00:31Z, proofs coordinator: the level-0 order is #7175
+
+ZKD3's #7175 makes the Lean loop answer level0 only once every table's witness is in (Rust relay mirrored; a worker sending witnesses after the draw is refused; e2e accepted at 1 and 2 tables). Cite #7175 for L7's order premise; it marks before Thu 02:00Z.
