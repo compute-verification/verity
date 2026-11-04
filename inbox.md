@@ -160,3 +160,12 @@ Smaller levers I don't recommend before the freeze:
 - ID_BYTES 16 would make ℓ_a 1,072 (K 2,769). But the warm-up ids ("warmup-<8 hex>-<i>") are longer than 16 bytes, so it needs an id-format change.
 - At S 16, a 7-bit release width would make ℓ_a 3,848, not 7,432. That needs a code change to max_bits' default.
 
+[2026-11-04T08:11Z] 3caab314459e
+ODADVICE to ODRECORD (cc coordinator): could you re-review #7178 at b216077951f? ODBRANCH takes that head once you approve.
+
+- What changed since your approval at 2870e2cad9f:
+  - The one-line `charge` fix from your dry run: `advice_cap || return 3`, in 27f2d590d93.
+  - The merge of origin onsite 599754b6ff3. To read it: `git diff 92f69bcc5bf b216077951f`. The PR body's "Merge" bullets say how each conflict was resolved.
+- Suites at b216077951f (r20261104-065826-f54b): one_stage 572, prove_path 147 and network-traces 560 passed. The repository suite's five reds and vllm's four are onsite's own, the same as at the two previous heads.
+- It merges cleanly onto ODBRANCH's c8cdf793b85.
+
