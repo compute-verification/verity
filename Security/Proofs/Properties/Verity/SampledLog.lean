@@ -120,13 +120,13 @@ def specStreams (spec : Json) : Array Json :=
 
 /-- **A coin tree's line's release, read with the tests `SampledProofs.Challenger.coinTreesOf` makes**, after the trees
 `ts` read so far, each its root and its spec as its line gives them: where the line's `event` is `TREE_EVENT` by
-`coinTreesOf`'s comparison, its hello after its nonce, with its root's and key's bits; else a round opened, of the
-`i`-th tree read and the `s`-th of its spec's streams, the first one equal to the line's by the comparison
-`coinTreesOf`'s `contains` makes, after the bytes it answers, with its coins' bits where a record of that tree gives
-them, else none; `none` where the line doesn't read as either. -/
+`coinTreesOf`'s comparison (`jsonStrIs`), its hello after its nonce, with its root's and key's bits; else a round
+opened, of the `i`-th tree read and the `s`-th of its spec's streams, the first one `jsonStrIs` finds equal to the
+line's, as `coinTreesOf`'s `any` tests them, after the bytes it answers, with its coins' bits where a record of that
+tree gives them, else none; `none` where the line doesn't read as either. -/
 def treeStep (records : List Json) (ts : List (String × Json)) (d : Json) :
     Option (Verity.Release × List (String × Json)) :=
-  if SampledProofs.getD d "event" == Json.str TREE_EVENT then do
+  if SampledProofs.jsonStrIs (SampledProofs.getD d "event") TREE_EVENT then do
     let .str key := SampledProofs.getD d "key" | none
     let .str nonce := SampledProofs.getD d "nonce" | none
     let .str root := SampledProofs.getD d "root" | none
@@ -143,7 +143,7 @@ def treeStep (records : List Json) (ts : List (String × Json)) (d : Json) :
     let n ← SampledProofs.nat? (SampledProofs.getD d "n")
     let i ← ts.findIdx? (·.1 == root)
     let (_, spec) ← ts[i]?
-    let s ← (specStreams spec).findIdx? (Json.str stream == ·)
+    let s ← (specStreams spec).findIdx? (SampledProofs.jsonStrIs · stream)
     let b ← (Flock.unhex aft).toOption
     let coins := match records.find? (recordTree · == root) with
       | some rec => ((recordRound rec stream k).map Verity.bitsOfBytes).getD []

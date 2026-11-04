@@ -24,8 +24,8 @@ reads the log (`ReadsLog`, `drawRead_coinsRead`).
 * **What `coinsRead` leaves open** (`ReadsLog`): that the read returns a log wherever v2 accepts. The read refuses a
   coin tree's line whose `event` string is neither a tree's nor an opening's, an opening whose stream its tree's spec
   doesn't name, and a record that doesn't parse. v2's check tells a coin tree's line apart and finds its stream by
-  `BEq Json` (`treeLine`, `coinTreesOf`), which is `partial`, and reads the trees over the whole log, its head
-  included, where the read takes them after the head; so v2's acceptance shows none of those to read. The pairs v2
+  `jsonStrIs` (`treeLine`, `coinTreesOf`), and reads the trees over the whole log, its head included, where the read
+  takes them after the head; so v2's acceptance shows none of those to read. The pairs v2
   shows to read: each root's line parses with its family and root, and none is left without its release
   (`releasedRootsOf`).
 * **The read with v2's own tests** (`logRead`, `logRead_isSome`, `shows_logRead`, `drawRead_logRead`): `logRead` reads
@@ -802,7 +802,7 @@ theorem fold_skip {records : List Json} {pre : List String} {l : String} {ts : L
 
 theorem fold_hello {records : List Json} {pre : List String} {l : String} {trees : Array LoggedTree} {d : Json}
     {a : Bool} {t : LoggedTree} (hI : treeFold records [] pre = some (heldTrees trees)) (ht : treeLine l = true)
-    (he : event l = .ok d) (hT : (SampledProofs.getD d "event" == Json.str TREE_EVENT) = true)
+    (he : event l = .ok d) (hT : SampledProofs.jsonStrIs (SampledProofs.getD d "event") TREE_EVENT = true)
     (hc : (a && isHexN (SampledProofs.getD d "key") 512 && isHexN (SampledProofs.getD d "nonce") 64 &&
       isHexN (SampledProofs.getD d "root") 128 && isTreeSpec (SampledProofs.getD d "spec")) = true)
     (hr : t.root = strOf (SampledProofs.getD d "root")) (hs : t.spec = SampledProofs.getD d "spec") :
@@ -822,12 +822,12 @@ theorem fold_hello {records : List Json} {pre : List String} {l : String} {trees
 theorem fold_open {records : List Json} {pre : List String} {l : String} {trees : Array LoggedTree} {d : Json}
     {root s : String} {i k n : ℕ} {t : LoggedTree} {f : LoggedTree → LoggedTree} {a₁ a₂ a₃ a₄ : Bool}
     (hI : treeFold records [] pre = some (heldTrees trees)) (ht : treeLine l = true) (he : event l = .ok d)
-    (hT : ¬(SampledProofs.getD d "event" == Json.str TREE_EVENT) = true)
+    (hT : ¬SampledProofs.jsonStrIs (SampledProofs.getD d "event") TREE_EVENT = true)
     (hroot : SampledProofs.getD d "tree" = .str root) (hi : trees.findIdx? (·.root == root) = some i)
     (hti : trees[i]? = some t) (hs : SampledProofs.getD d "stream" = .str s)
     (hk : SampledProofs.nat? (SampledProofs.getD d "round") = some k)
     (hn : SampledProofs.nat? (SampledProofs.getD d "n") = some n)
-    (hc : ((specStreams t.spec).contains (Json.str s) && a₁ && a₂ && a₃ &&
+    (hc : ((specStreams t.spec).any (SampledProofs.jsonStrIs · s) && a₁ && a₂ && a₃ &&
       isHexN (SampledProofs.getD d "after") 128 && a₄) = true)
     (hf : ∀ x, (f x).root = x.root ∧ (f x).spec = x.spec) :
     treeFold records [] (pre ++ [l]) = some (heldTrees (trees.modify i f)) := by
@@ -846,7 +846,7 @@ theorem fold_open {records : List Json} {pre : List String} {l : String} {trees 
     unfold heldTrees
     rw [List.getElem?_map, Array.getElem?_toList, hti]
     rfl
-  have hsome : ((specStreams t.spec).findIdx? (Json.str s == ·)).isSome := by
+  have hsome : ((specStreams t.spec).findIdx? (SampledProofs.jsonStrIs · s)).isSome := by
     rw [Array.findIdx?_isSome]
     exact hcont
   obtain ⟨si, hsi⟩ := Option.isSome_iff_exists.1 hsome
