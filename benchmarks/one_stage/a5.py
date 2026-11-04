@@ -1315,7 +1315,9 @@ LEAN_WORKERS = 3
 #: a Lean check's memory estimate per byte of its member's circuit file, which Lean's verify (`a0.lean_verify`) reads,
 #: hashes and parses whole
 LEAN_BYTES_PER_CIRCUIT_BYTE = 5
-#: what the audit's memory leaves the prover's session, the rest the Lean checks' budget (`lean_budget`)
+#: what the audit's memory leaves the prover's session, the rest the Lean checks' budget (`lean_budget`): a margin, not
+#: a session's peak at the window's largest template, so a node the audit shares runs one check at a time
+#: (served_verdicts.sh)
 PROVER_RESERVE_GB = 160
 
 
@@ -1382,9 +1384,16 @@ def lean_need(st: dict) -> int:
     return LEAN_BYTES_PER_CIRCUIT_BYTE * f.stat().st_size if f.is_file() else 0
 
 
+def positive(s: str) -> int:
+    """``--lean-workers``: at least 1."""
+    if int(s) < 1:
+        raise argparse.ArgumentTypeError(f"{s}: Lean checks at once is at least 1")
+    return int(s)
+
+
 def lean_options(p: argparse.ArgumentParser) -> None:
     """The Lean checks' flags (`LeanPool`), on a5's parser and its callers'."""
-    p.add_argument("--lean-workers", type=int, default=LEAN_WORKERS,
+    p.add_argument("--lean-workers", type=positive, default=LEAN_WORKERS,
                    help="Lean checks of finished members at once, beside the next member's session (sessions stay one at a time)")
     p.add_argument("--audit-mem-gb", type=float,
                    help=f"the audit's memory: the Lean checks start within it less {PROVER_RESERVE_GB} GB for the prover, each "

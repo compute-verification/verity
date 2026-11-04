@@ -92,8 +92,9 @@
 #     session's coins (--challenger local, pinned on main's first-parent line: MAIN_FILE's, kept as
 #     $OUT/v3c-audit/main.txt, else MAIN_SHA's) and proves them, its composes made before it with V3C_WARM_JOBS (at
 #     `v3c_audit`), its sessions one at a time and Lean's checks of finished members beside them, V3C_LEAN_WORKERS at a
-#     time (default a5's LEAN_WORKERS, 3), within V3C_AUDIT_MEM_GB less the prover's reserve on a node it shares, a
-#     follow-on's within what its node has free (`a5.LeanPool`); then
+#     time: on a node it shares default 1, within V3C_AUDIT_MEM_GB less the prover's reserve (a margin,
+#     `a5.PROVER_RESERVE_GB`), a follow-on's default a5's LEAN_WORKERS, 3, within what its node has free
+#     (`a5.LeanPool`); then
 #     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
 #     and a copy in $OUT/v3c-audit: the registration, the Program, its answer and its free inputs), and V3c fails where it
 #     writes none. Under H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close, its
@@ -420,7 +421,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     cache=(--compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}")
   fi
   local pool=(${V3C_LEAN_WORKERS:+--lean-workers "$V3C_LEAN_WORKERS"})
-  [ -n "$FOLLOW" ] || pool+=(--audit-mem-gb "$V3C_AUDIT_MEM_GB")
+  [ -n "$FOLLOW" ] || pool=(--lean-workers "${V3C_LEAN_WORKERS:-1}" --audit-mem-gb "$V3C_AUDIT_MEM_GB")
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
     --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${cache[@]}" \
