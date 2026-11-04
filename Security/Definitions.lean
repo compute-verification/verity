@@ -34,6 +34,7 @@ import Definitions.Claims.IndexedTapes
 import Definitions.Claims.Recursion
 import Definitions.Claims.RecursionLin
 import Definitions.Claims.Sampling
+import Definitions.Claims.SamplingGeneric
 import Definitions.Hash
 import Definitions.Flock
 
