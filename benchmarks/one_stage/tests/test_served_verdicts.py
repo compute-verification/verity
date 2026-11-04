@@ -2939,7 +2939,7 @@ def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_r
     assert [x.split(" ")[0] for x in lines[1:]] == ["INFERENCE-ONLY:", "RECORD", "COMPOSITE:"]
     assert lines[-1] == "COMPOSITE: composed on vy-auditor-2"
     argv = json.loads((tmp_path / "order.record").read_text())
-    assert argv[:-6] + argv[-2:] == [
+    assert argv[:17] == [
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"), "--pieces",
         str(d / "private" / "compose" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",
         "vy-dc-h200", "--steps", "0,3"]
