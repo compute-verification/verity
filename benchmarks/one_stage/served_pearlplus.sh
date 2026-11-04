@@ -251,7 +251,8 @@ if [ -s "$Q/served.json" ]; then
   say "verdict: served_passes.py verify exit $rc after $(took "$t"): $(tail -1 "$Q/verify.log" | cut -c1-400)"
 fi
 
-if [ -s "$P/verify.json" ]; then
+rm -f "$P/pearlplus-lean.json"
+if [ -s "$Q/served.json" ] && [ -s "$P/verify.json" ]; then
   t=$(date +%s)
   LX=${PEARLPLUS_LEAN_EXE:-}
   if [ -z "$LX" ]; then
