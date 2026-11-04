@@ -80,7 +80,7 @@ def PeriodHeldDeployed : Prop :=
       ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
         (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
         (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
-        DeviceModel r P τ RING_D RING_Q RING_L round → Instantiates P τ →
+        DeviceModel Run.DEPLOYED r P τ RING_D RING_Q RING_L round → Instantiates Run.DEPLOYED P τ →
           S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S →
             ∀ o : ΩW × ΩQ,
               Pouw.pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
@@ -141,7 +141,8 @@ r20260929-060834-0ec4): `DEADLINE_ROUNDS ≤ RING_D`, with `RING_D + 1` rounds t
 instance. -/
 def PeriodHeldHonest : Prop :=
   (∀ P : Audits Unit Unit, P.sid.size = 32 →
-      DeviceModel honestRun P honestStrategy RING_D RING_Q RING_L 1 ∧ Instantiates P honestStrategy) ∧
+      DeviceModel Run.DEPLOYED honestRun P honestStrategy RING_D RING_Q RING_L 1 ∧
+        Instantiates Run.DEPLOYED P honestStrategy) ∧
     0 < (HONEST_S : ℝ) * (honestRun.win .capacity).len ∧
     (HONEST_S : ℝ) * (honestRun.win .capacity).len + honestDevice.chip +
         ((∑ i, honestDevice.cap i * 1 : ℕ) : ℝ) ≤ Pous.EndToEnd.S ∧
