@@ -45,8 +45,8 @@ leaves and challenge derivation), not with the expander.
 - Above `2^23` blocks the run protocol takes `wide_certificate`: the per-period guarantee
   `Pous.Period.SecurityProofs.periodHeldAt`, for every block count `2^19 ≤ N ≤ 2^27` at the registered width and prime,
   the same `⌊ρ·|C|⌋` at `1% + 2^-128` (`PeriodHeldDemo` at Demo B's `1038·2^16` blocks: 1,060,008,348,186 bits).  It
-  is in the ring model, not abstract M1, and rests on the open conjecture `P2RingRoundSecureWide` (unchecked in `N`
-  above `2^25`), the device model `RingDeviceAt` and the coin commitments' hiding at `N` (`WIDE_CLAIMS`).
+  is in the ring model, not abstract M1, and rests on the open conjecture `P2RingRoundSecure` at the ceiling `2^27`
+  (unchecked in `N` above `2^25`), the device model `RingDeviceAt` and the coin commitments' hiding at `N` (`WIDE_CLAIMS`).
 - **The instantiation assumption is not accepted** (spec decision 8, Daniel's deferred default): that
   square–mask–square with fresh per-block keys instantiates M1's slow-inverse permutation is a novel, algebraic
   assumption, and it is outside Lean.
@@ -56,7 +56,7 @@ leaves and challenge derivation), not with the expander.
   spec caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS`.
 - `wide320_certificate` is `Pous.SecurityProofs.ObligationWide320` for `2^19` to `2^27` blocks: P2's ring-model
   audit window of 320 reads, the state at most `⌊ρ·|C|⌋` at each, passed with probability at most `2^-20`
-  (`(1 − 0.043)^320 + 320·2^-137`), from `P2RingRoundSecureWide`. It bounds the window at the store's snapshot, not
+  (`(1 − 0.043)^320 + 320·2^-137`), from `P2RingRoundSecure` at the ceiling `2^27`. It bounds the window at the store's snapshot, not
   the composed check, for which `periodHeldAt` holds at 105 reads only. No run takes it: at `k ≥ 320` the run
   protocol keeps the 105-read certificates' `1% + 2^-128`.
 - A shared mask with linear tweaks is model M2, which is not covered; the keys here are per block.
@@ -109,7 +109,7 @@ P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "rando
 
 WIDE_CLAIMS = (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding")
 """What `wide_certificate` rests on: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks, the
-conjecture `Pous.P2.Assumptions.P2RingRoundSecureWide`, the device model `Pous.Period.RingDeviceAt` and the coin
+conjecture `Pous.P2.Assumptions.P2RingRoundSecure` at the ceiling `2^27`, the device model `Pous.Period.RingDeviceAt` and the coin
 commitments' hiding `Pous.P2.Assumptions.CoinCommitHides (coinViewAt N)`."""
 
 POINT = (16448, 21065, 1 << 16)
@@ -124,7 +124,7 @@ CERT_FAMILY_BLOCKS = (1 << 8, 1 << 23)
 
 CERT_WIDE_BLOCKS = (1 << 19, 1 << 27)
 """The block counts `Pous.Period.PeriodHeldAt` covers at the registered width and prime (`wide_certificate`), the range
-of `P2RingRoundSecureWide`."""
+of `P2RingRoundSecure` at the ceiling `2^27`."""
 
 CERT_K = 105
 """The audit's k: `P2SlackFamilyUncond`'s `λ = 128` row, for every block count from 2^8 to 2^23."""

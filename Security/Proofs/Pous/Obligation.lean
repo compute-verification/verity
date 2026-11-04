@@ -149,10 +149,11 @@ theorem ObligationDemo : Pous.Guarantees.ObligationDemo := by
   intro T _ _ tag htag Sz k D Q L c _ h W A₁ A₂
   exact ObligationOfStatic N T tag htag Sz k D Q L c h W A₁ A₂
 
-/-- The widened per-round floor implies `P2RingRoundSecure`: its range contains that one's. -/
-theorem roundSecure_of_wide {p ε₀ : ℝ≥0∞} {D Q L : ℕ} (h : Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L) :
-    Pous.P2.Assumptions.P2RingRoundSecure p ε₀ D Q L :=
-  fun N _ h1 h2 => h N h1 (h2.trans (by norm_num))
+/-- The per-round floor at a ceiling implies it at every smaller one: its range contains the smaller one's. -/
+theorem roundSecure_mono {Nmax Nmax' : ℕ} {p ε₀ : ℝ≥0∞} {D Q L : ℕ} (hN : Nmax ≤ Nmax')
+    (h : Pous.P2.Assumptions.P2RingRoundSecure Nmax' p ε₀ D Q L) :
+    Pous.P2.Assumptions.P2RingRoundSecure Nmax p ε₀ D Q L :=
+  fun N _ h1 h2 => h N h1 (h2.trans hN)
 
 theorem lowBoundaries_of_le {Sz : ℕ → ℕ} {S k : ℕ} (h : ∀ j < k, Sz j ≤ S) : lowBoundaries Sz S k = k := by
   unfold lowBoundaries

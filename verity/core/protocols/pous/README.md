@@ -198,8 +198,8 @@ instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
   `P2SlackFamilyFreeBlocks`, `P2SlackFamilyWide`, `P2SlackFamilyFreeBlocksWide`, and the ring-model forms
   `P2RingAuditSecureOfReduces`, `P2RingAuditSecureOfRoundSecure` and `P2RingGradedOfRoundSecure`; `P2ContentAbsorbs`
   (`Guarantees/Obligation.lean`); above `2^23` blocks, `Pous.Period.SecurityProofs.periodHeldAt`. The named
-  assumptions (`Assumptions/P2.lean`): `PrimeP16448`, `P2RingAuditSecure`, `P2RingReducesToM1p`, `P2RingRoundSecure`,
-  `P2RingRoundSecureWide` and `CoinCommitHides`. `schemes.p2.P2_CLAIMS` and `WIDE_CLAIMS` are the claims a certificate
+  assumptions (`Assumptions/P2.lean`): `PrimeP16448`, `P2RingAuditSecure`, `P2RingReducesToM1p`, `P2RingRoundSecure`
+  (at a ceiling on the block count: `2^25`, or `2^27`) and `CoinCommitHides`. `schemes.p2.P2_CLAIMS` and `WIDE_CLAIMS` are the claims a certificate
   rests on.
 - **Python.** `schemes.p2`: `P2Params`, the schemes `P2` (`p2-16448/v4`) and `P2ChaCha` (`p2-16448/v2`),
   `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `encode_segment`,

@@ -17,8 +17,8 @@ import Proofs.Pous.Obligation
 * `endToEndRingOfRoundSecure`: `PousP2Rounds.graded` at `N`, on the server's responder read as a `VarResponderOn` with
   a constant state size (`PousP2Rounds.ofSeq`).
 * `endToEndRingOfRoundSecureWide`, `endToEndRingDemo`: the same chain at one `N` (`seqAccepts_le_of_round`, which
-  reads the per-round floor only at that `N`) from `P2RingRoundSecureWide`, and at Demo B's `N` with its state bound
-  (`Pous.SecurityProofs.stateBound_p2ring_demo`).
+  reads the per-round floor only at that `N`) from `P2RingRoundSecure (2 ^ 27)`, and at Demo B's `N` with its state
+  bound (`Pous.SecurityProofs.stateBound_p2ring_demo`).
 -/
 
 namespace Pous.EndToEnd.SecurityProofs
