@@ -202,9 +202,9 @@ def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
 
 /-- The per-member form's link points (`Registration.linkRefused`): when the verifier names members, its own law over its
-program and query applies (`LinkPoints.lawOf`, with the population), and no member's fewest and most drawn units under
-it, over the draws that end, give different link points (`LinkPoints.refused`); a draw that runs out of coins fails
-the window (`OneStageZk.RAN_OUT`). -/
+program and query applies (`LinkPoints.lawOf`, with the population), some draw under it ends, and no member's fewest
+and most drawn units under it, over the draws that end, give different link points (`LinkPoints.refused`, which
+refuses a law no draw of which ends); a draw that runs out of coins fails the window (`OneStageZk.RAN_OUT`). -/
 def RL (v : Registration.Verifier) : Prop :=
   v.members.isEmpty = false → ∃ law n, LinkPoints.lawOf v.program v.query v.law v.workTable = .ok (law, n) ∧
     LinkPoints.refused law n v.members = .ok #[]

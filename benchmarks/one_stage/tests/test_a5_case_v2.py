@@ -277,11 +277,22 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     assert got == {"members": 3, "error": "a subset draw of 41 exceeds the population of 40"}
 
 
+def test_a5_records_a_law_none_of_whose_draws_ends(monkeypatch):
+    """`a5.link_points` records the registration's refusal of a law no draw of which ends (`link_points.NEVER_ENDS`),
+    which `coins.law_problem` refuses first for every law it reads: past it, `subset:41` over 40 units is refused for
+    every member."""
+    from verity.core.protocols.sampled_proofs.one_stage import link_points as LP
+
+    monkeypatch.setattr(a5.CC, "law_problem", lambda law, population: None)
+    m = {"k": 0, "m": SimpleNamespace(template="t", base=0, n=40), "st": {"meta": {"vus_per_block": 1}}}
+    assert a5.link_points({"k": 41, "law": "subset"}, 40, [m]) == {"members": 1, "error": LP.NEVER_ENDS}
+
+
 def test_a5_records_whether_the_draw_ran_out_of_the_challengers_coins():
     """`a5.draw_ran_out`, which fails the window in v2's per-member form: `subset:9` over 10 units first reads a stream
     of 226 bytes (`2 k · width(n) + 64`), so it runs out of one coin's 64 bytes and not of 256 zero bytes, which reject
-    no word; a law that doesn't apply is None."""
+    no word; a law that doesn't apply records why."""
     law = {"k": 9, "law": "subset"}
     assert a5.draw_ran_out(law, 10, bytes(64)) is True
     assert a5.draw_ran_out(law, 10, bytes(256)) is False
-    assert a5.draw_ran_out({"k": 11, "law": "subset"}, 10, bytes(256)) is None
+    assert a5.draw_ran_out({"k": 11, "law": "subset"}, 10, bytes(256)) == "a subset draw of 11 exceeds the population of 10"

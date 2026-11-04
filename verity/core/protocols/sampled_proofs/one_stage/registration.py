@@ -181,8 +181,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     the log registered under the domain it takes now is a ValueError (`unwindowed`).  R3 reads `ports` by name, so its codes come in the ports' sorted
     order whatever order the mapping has, as the Lean port reads them.  `members`: the per-member form's members, each
     its units (`[lo, hi)` ranges) and its circuit's units a proof block; after R7, `link-points` refuses the record when
-    a member's fewest and most drawn units give different link points (`link_points.refused`), or the members or the
-    sampling design are not well formed over the population."""
+    a member's fewest and most drawn units give different link points (`link_points.refused`), no draw under the sampling
+    design ends (`link_points.NEVER_ENDS`), or the members or the sampling design are not well formed over the
+    population."""
     c = _Collect()
     v2 = bool(registered)
     sup = G.sources(supplied if supplied is not None else {})

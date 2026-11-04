@@ -2335,6 +2335,19 @@ def test_v2_per_member_registration_refuses_a_member_whose_link_points_vary(serv
     assert run(two, {"m0": ([[0, 11]], 2)}) == (("reject", "registration: link-points"), ("link-points",))
 
 
+def test_link_points_refuses_a_law_none_of_whose_draws_ends():
+    """`link_points.refused` refuses a law no draw of which ends (`NEVER_ENDS`, `ends`): `subset:11` over 10 units, a
+    Bernoulli law of denominator 0, a stratum drawing more units than it has; `subset:10` and `bernoulli 0/0` end. These
+    are `LinkPoints`' `#guard`s. The `link_points` piece can't reach them, since `Draw.flockLaw` (`coins.law_problem`)
+    refuses a subset above the population and a denominator of 0, and a stratum's rule draws at most its units."""
+    stratum = {"k": 3, "law": "stratified", "strata": [{"k": 3, "template": "a", "units": [[0, 2]]}]}
+    assert LP.ends({"k": 10, "law": "subset"}, 10) and LP.ends({"law": "bernoulli", "p": "0/0"}, 10)
+    for law in ({"k": 11, "law": "subset"}, {"law": "bernoulli", "p": "1/0"}, stratum):
+        assert not LP.ends(law, 10)
+        with pytest.raises(ValueError, match=f"^{LP.NEVER_ENDS}$"):
+            LP.refused(law, 10, [([[0, 10]], 1)])
+
+
 def test_v2_per_member_fails_a_window_whose_draw_ran_out(server, server_v2):
     """A per-member window whose draw runs out of the challenger's coins fails before its coin trees or any session is
     read (`OneStageZk.RAN_OUT`, `OneStage.ranOut`): its challenger opened one coin after the registration, 64 bytes, and
