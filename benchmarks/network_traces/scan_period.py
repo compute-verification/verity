@@ -7,7 +7,8 @@ and its Lean.
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
   and one schedule, whose caps over the one link-window are the cells, `WardenParams.caps`: `egress_cells` for each of
-  the `lanes · window` connections it can carry), the link `warden_serve.LINK`, the Program the scan's registration's,
+  the `lanes · window` connections it can carry), the link `warden_serve.LINK`, the scan Program pinned at that
+  schedule's digest (`scan_service.SCAN_PINS`, never the scan's registration's: a schedule no class pins is refused),
   the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor and steps, off which
   descriptor the period check counts its free inputs, and V3c's circuit record, wire order and pins where ``--v3c``'s
@@ -59,6 +60,7 @@ sys.path.insert(0, str(HERE))
 import leak_bounds as LB  # noqa: E402
 import scan_zk as SZ  # noqa: E402
 import warden_serve as WS  # noqa: E402
+from verity.core.protocols.certifier.scan_service import SCAN_PINS  # noqa: E402
 from verity.core.protocols.certifier.warden import WardenParams  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registration as RG  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
@@ -96,7 +98,9 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     is refused by name, never put in its place. With ``v3c``, ``circuit`` is required: the class circuit, the Program
     digest of the verifier's own window-circuit record (`circuit_of_record`), to which the check holds V3c's
     registration. Without ``v3c`` the class circuit is the stand-in block audit's own Program, whose wiring the check
-    refuses first (with no block audit, none, whose parameters the check refuses)."""
+    refuses first (with no block audit, none, whose parameters the check refuses). The parameters' ``program`` is the
+    scan Program pinned at the schedule's digest (`scan_service.SCAN_PINS`), to which the check holds the scan and each
+    registration; a schedule no class pins is refused here."""
     if v3c is not None:
         if circuit is None:
             raise SystemExit(f"{v3c}: V3c's audit is held to the verifier's own window-circuit record: give its circuit")
@@ -106,6 +110,11 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
             raise SystemExit(f"{v3c}: a foreign audit: it registers {got[:16]}…, and the scan read the trees of "
                              f"{f'{read[:16]}…' if read else 'no V3c registration'}")
     dep = json.loads(SZ._found(run, "deployment.json").read_text())
+    schedule = WardenParams(**dep["params"])
+    if (program := SCAN_PINS.get(schedule.digest.hex())) is None:
+        raise SystemExit(f"{run}: no scan Program is pinned at its schedule's digest {schedule.digest.hex()[:16]}… "
+                         "(scan_service.SCAN_PINS): pin its class's, which `python "
+                         "benchmarks/network_traces/tests/test_scan_pins.py` prints")
     doc = json.loads((scan / "answers.json").read_text())
     if v3c is not None:
         doc["audits"] = [audit]
@@ -127,11 +136,11 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
         certs[1]["signature"] = sig[:-1] + ("1" if sig[-1] == "0" else "0")
     N, W, H = dep["key"]["params"]
     audits = doc.get("audits", [])
-    caps = WardenParams(**dep["params"]).caps(1)
+    caps = schedule.caps(1)
     params = {"audits": [{k: a[k] for k in AUDIT_KEYS if k in a} for a in audits], "cells": caps,
               "circuit": circuit, "first": x["window"], "jitter": LB.JITTER_BOUND, "key": dep["key"]["public"],
               "link": WS.LINK,
-              "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
+              "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": program,
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),
               "session": dep["session"], "windows": 1}
     commitment = canonical_json({"audits": [a["registration"] for a in audits], "windows": [reg]})
