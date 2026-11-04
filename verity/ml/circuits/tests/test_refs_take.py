@@ -1,5 +1,6 @@
 """`Coll.take`: member m along an axis is the leaves of every index over the earlier axes, at m, in row-major order, whatever
-mix of reference runs holds them."""
+mix of reference runs holds them, and leaf l of it is the leaf `types.axis_runs` places, which `layout` and `bits.compile` read in
+place of a take."""
 from __future__ import annotations
 
 import random
@@ -7,7 +8,7 @@ import random
 import pytest
 
 from verity.ml.circuits.refs import Affine, Coll, Explicit, Strided, broadcast, concat
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.ml.circuits.types import Array, Tuple, Value, axis_runs
 
 
 def _member(t, refs, axis, m):
@@ -62,10 +63,13 @@ def test_take_is_the_member_along_its_axis(seed):
         n = t
         for _ in range(axis):
             n = n.elem
+        outer, an, L = axis_runs(t, axis)
+        assert (outer * an * L, an) == (t.leaves, n.n)
         for m in range(n.n):
             got = c.take(axis, m)
             assert list(got.refs) == _member(t, c.refs, axis, m)
             assert got.refs.count == got.type.leaves
+            assert [c.refs[(j // L) * an * L + m * L + j % L] for j in range(got.refs.count)] == list(got.refs)
         assert list(c.take(axis, -1).refs) == list(c.take(axis, n.n - 1).refs)
         with pytest.raises(IndexError):
             c.take(axis, n.n)

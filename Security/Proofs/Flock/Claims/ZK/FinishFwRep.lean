@@ -10,7 +10,7 @@ base, on the packed table of the witness's trace (`ligTab`), at pads with `h_ab 
 layout's length.
 
 **`fwRows_at`**: where that run returns, its constraints and pads are `rowsAt_of_fw`'s at rep `r`, at the worker's clear
-values `v`, the tape's mask and extra lanes, given what the clear values `v` and the opening's sums are at the run:
+values `v`, the tape's mask and level 0's hiding, given what the clear values `v` and the opening's sums are at the run:
 
 * `hM`: below `zp 64`, the clear values are the request's;
 * `hV`: level 0's out-of-domain value, lane messages and pair's sums are the masked values (`LaneVals`);
@@ -36,8 +36,8 @@ namespace Masked
 /-- **A deployed rep's rows from the firewall's run**: where `repFwC` on table `j`'s rep `r`, answered by the opened
 coins from the rep's base at the packed table of the witness's trace (`hg`), with as many extra claims `xs` as the
 statement's (`hxsz`), returns at pads `pads` with `h_ab = h_a·h_b` and `h_w = h_x·h_y` on the layout's length, the pads
-and the run's seven constraints are `rowsAt_of_fw`'s at rep `r`, at the clear values `v` and the tape's mask and extra
-lanes, wherever below `zp 64` the clear values are the request's (`hM`), level 0's values are the masked values (`hV`),
+and the run's seven constraints are `rowsAt_of_fw`'s at rep `r`, at the clear values `v` and the tape's mask and level
+0's hiding, wherever below `zp 64` the clear values are the request's (`hM`), level 0's values are the masked values (`hV`),
 the ring switch's `T` is the opening's (`hT`) and level 0's restart is `Σ y₁'·bFold` (`hTP`). -/
 theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hnr : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)
@@ -64,11 +64,11 @@ theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) 
     (hM : ∀ k < (Composed.layOf (zkTab x j).table (stAt x j)).zp 64,
       (Composed.msgAt (((tabC PE x j).T (czExe PE x c j)).tab.onVals.vals r (wtOf PE x w j, v j)
         (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-        (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) k).val = vals[k]!)
+        (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1) k).val = vals[k]!)
     (hV : LaneVals (zkTab x j).table (stAt x j)
       (fun i => ((tabC PE x j).T (czExe PE x c j)).tab.onVals.vals r (wtOf PE x w j, v j)
         (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-        (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 i + fOf pads.h[i.val]!)
+        (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1 i + fOf pads.h[i.val]!)
       p.proof.ligerito p.level0)
     (hT : ∀ zp zc t₁ l₁ lp lc t₂ l₂ ss T sws t₃ l₃,
       ((FlockComplete.zerocheckCut (FlockComplete.asksCut (ligCoin c) n) st.m st.digest (FlockComplete.flat cm0.cap)
@@ -102,7 +102,7 @@ theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) 
         Composed.rowsOf (zkTab x j).table (stAt x j) (czExe PE x c j) r
           (fun i => ((tabC PE x j).T (czExe PE x c j)).tab.onVals.vals r (wtOf PE x w j, v j)
             (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-            (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 i + fOf hh[i.val]!)
+            (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1 i + fOf hh[i.val]!)
           (((tabC PE x j).T (czExe PE x c j)).tab.onVals.nu (wtOf PE x w j, v j) +
             ((tabC PE x j).T (czExe PE x c j)).tab.onVals.maskHom
               (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1)
@@ -189,7 +189,7 @@ theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) 
   have hmk : ∀ k < (Composed.layOf (zkTab x j).table (stAt x j)).zp 64,
       (Composed.msgAt (fun i => ((tabC PE x j).T (czExe PE x c j)).tab.onVals.vals r (wtOf PE x w j, v j)
         (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-        (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 i + fOf pads.h[i.val]!) k).val =
+        (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1 i + fOf pads.h[i.val]!) k).val =
         vals[k]! + pads.h[k]! := by
     intro k hk
     have hkE : k < ((tabC PE x j).T (czExe PE x c j)).tab.onVals.nE := by omega
@@ -381,7 +381,7 @@ theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) 
   obtain ⟨rp, ss, lgc, hf, hc7, hasz, hform⟩ := Composed.tauFw_vals (zkTab x j).table (stAt x j) (czExe PE x c j) r
     (fun i => ((tabC PE x j).T (czExe PE x c j)).tab.onVals.vals r (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 i + fOf pads.h[i.val]!)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1 i + fOf pads.h[i.val]!)
     (((tabC PE x j).T (czExe PE x c j)).tab.onVals.nu (wtOf PE x w j, v j) +
       ((tabC PE x j).T (czExe PE x c j)).tab.onVals.maskHom
         (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1)
