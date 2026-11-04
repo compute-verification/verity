@@ -64,10 +64,8 @@ theorem PrOut_eq_zero (L : Compiled Coin A) (hc : ∀ x w, A.check x w = true �
   unfold Comp.PrOut
   refine (Pr_congr fun t => iff_false_intro ?_).trans Pr_false
   rintro ⟨ws, hws, hn⟩
-  apply hn
   obtain ⟨-, -, hs⟩ := L.eo_some_staged H P x t.1 t.2.1 t.2.2 (ws := ws) hws
-  show ∀ p ∈ (ws : List (Msg × A.W)), A.R p.1 p.2
-  intro p hp
+  refine hn fun p hp => ?_
   obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hp
   exact hc _ _ (hs i hi).2
 
