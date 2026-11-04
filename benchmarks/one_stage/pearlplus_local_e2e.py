@@ -214,7 +214,8 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     piece.mkdir(parents=True)
     report: dict = {"gate": "benchmarks/live_challenger/auditor.py on a scratch host, as lane " + LANE, "pin": pin,
                     "key_sha512": key_sha512, "period": PERIOD, "steps": log,
-                    "stand_ins": {"serve": "one toy pass (proved_pass, k 128, 16 x 16 tiles) salted by the live session",
+                    "stand_ins": {"serve": "one toy pass (proved_pass, k 128, 16 x 16 tiles) salted by the live session, "
+                                           "its rows over their caps given up (served_passes.py volunteer)",
                                   "sampled_proofs": "registration.json chained after W, a records-audit summary tied to W "
                                                     "and a toy circuit record beside R, the period's circuit",
                                   "lean": "pearlplus-lean.json copied from Pearl+'s answer (--lean runs the node's step)"}}
@@ -253,6 +254,11 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     (served / "served.json").write_text(json.dumps({"run": T.RUN, "passes": [
         {"pass": 0, "timed": True, "units": 2, "tiles": 4, "manifest": str(path)}]}))
     (served / "coins.json").write_text((path.parent / "coins.json").read_text())
+    # the live salt decides which of the toy's honest rows exceed their caps, so they're given up before the coin, as
+    # served_pearlplus.sh's step 3 gives them up
+    if _cli(log, "volunteer", ["benchmarks/pouw/pearl_c_vllm/served_passes.py", "volunteer", "--passes", str(served),
+                               "--out", str(piece / "volunteer.json"), "--jobs", "2"]).returncode:
+        return 1
     (wfile := scratch / "window-record.json").write_text(json.dumps(T.window_record(path)))
     env = {"PEARLC_CHALLENGER_GATE": gate_cmd, "PEARLC_CHALLENGER_PEER": PEER, "PEARLC_CHALLENGER_LANE": LANE}
     _cli(log, "verify", ["benchmarks/pouw/pearl_c_vllm/served_passes.py", "verify", "--passes", str(served), "--out",
