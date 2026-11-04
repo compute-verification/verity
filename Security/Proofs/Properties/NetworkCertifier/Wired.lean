@@ -50,6 +50,12 @@ theorem ok_of_findingOf {α : Type} {f : Found α} (h : findingOf f = none) : �
   | error x => simp [findingOf] at h
   | ok v => exact ⟨v, rfl⟩
 
+/-- A registration whose window registers the root `q.2` for the parameter `q.1` holds the pin `q`. -/
+theorem pinHeld_of {reg : Json} {q : String × String}
+    (h : isStr (((reg.getObjValD "window").getObjValD "registered_roots").getObjValD q.1) q.2 = true) :
+    pinHeld reg q = true := by
+  simp [pinHeld, isStr_eq h]
+
 private theorem getObjVal?_mkObj {l : List (String × Json)} (hd : l.Pairwise (fun a b => ¬ compare a.1 b.1 = .eq))
     {k : String} {v : Json} (hm : (k, v) ∈ l) : (Json.mkObj l).getObjVal? k = .ok v := by
   simp only [Json.mkObj, Json.getObjVal?, Std.TreeMap.Raw.get?_eq_getElem?]
@@ -282,7 +288,9 @@ theorem rowsHeld : RowsHeld := by
 theorem slotPeriod_unnamed (j : Json) : ¬ RowsWiresCheckedAt j slotPeriod ⟨#[.null], #[], .empty⟩ := by
   intro h
   obtain ⟨_, _, _, _, _, _, _, _, _, _, hreg, -⟩ := h 0 slotAudit .null rfl rfl
-  cases hreg
+  first
+    | cases hreg
+    | injection hreg
 
 /-- **`RowsWiresChecked`'s honest lemma**: the check accepts a rows-form period of no audit, and a circuit-record
 audit's registration that names its Program, binds its record and registers its pin's root passes each registration
@@ -294,7 +302,7 @@ theorem rowsWiresChecked_honest :
       .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] #[] 1 0 #[]) { link := "", windows := 0 } ∧
     isStr (recordReg.getObjValD "program") "x" = true ∧
     isStr ((recordReg.getObjValD "window").getObjValD "circuit") "d" = true ∧ pinHeld recordReg ("k", "r") = true :=
-  ⟨rowsCircuitHeld_honest.1, by decide +kernel, by decide +kernel, by decide +kernel⟩
+  ⟨rowsCircuitHeld_honest.1, by decide +kernel, by decide +kernel, pinHeld_of (by decide +kernel)⟩
 
 /-- **`RowsWiresChecked`'s nontrivial lemma**: a verifier that decodes every parameters to `slotPeriod` and accepts
 every period accepts one whose audit's registration names no Program, where `RowsWiresCheckedAt` fails. -/
@@ -315,17 +323,5 @@ and accepts every period accepts one whose audit's registration names no Program
 theorem rowsHeld_nontrivial : ¬ RowsHeldOf acceptAllParams acceptAllRows := fun h =>
   slotPeriod_unnamed .null (h .null slotPeriod ⟨#[.null], #[], .empty⟩ ⟨#[], #[]⟩ _ _ rfl rfl slotSchedule .empty
     ⟨0, 0, 0, 0, 0⟩ rfl).2.2.2
-
-set_option pp.deepTerms true in
-set_option pp.maxSteps 1000000 in
-#print NetworkCheck.Period.auditOf
-
-set_option pp.deepTerms true in
-set_option pp.maxSteps 1000000 in
-#print NetworkCheck.Period.paramsOf
-
-set_option pp.deepTerms true in
-set_option pp.maxSteps 1000000 in
-#print NetworkCheck.Period.auditCheck
 
 end Properties.NetworkPeriod
