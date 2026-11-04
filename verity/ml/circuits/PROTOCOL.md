@@ -8,7 +8,7 @@ implementation, such as the Lean port of `Q_word` (`verity/core/service/sampled_
   with `types`, `refs`, `defs` (`Node`, `Body`, `Builder`), `program` (the root, `INPUT_ID`), `layout` (`Circuit`, `resolve`),
   `parts.n_members`, for §8, §10 and §11 `cut` and `partition_object`, for §9 `boolean`, and for §12 `ports`.
 - Vectors: `verity/ml/circuits/tests/format_vectors.json`, written by
-  `python verity/ml/circuits/tests/test_format_spec.py --write`.
+  `uv run python tools/verity/check/pins.py --write verity/ml/circuits/tests/format_vectors.json`.
 - Conformance: `verity/ml/circuits/tests/test_format_spec.py` checks the reference against every vector, and restates
   canonical JSON (as RFC 8785), leaf order, reference sequences and the interning order independently of it. Each section
   names its vector keys. `verity/ml/circuits/tests/partition_vectors.json` pins `Q_word` v1 on top of this format.
@@ -438,7 +438,7 @@ significant first), or a `Value<1>` that is not inside one. `elements(T)` lists 
 `word_type`: the signature of the word Definition it computes. A port's number format is metadata
 (`verity/metadata/v0`), outside every digest; the word view does not read it.
 
-Vectors (`verity/ml/circuits/tests/boolean_vectors.json`, written by `python verity/ml/circuits/tests/test_boolean.py --write`): `gates` (id,
+Vectors (`verity/ml/circuits/tests/boolean_vectors.json`, written by `uv run python tools/verity/check/pins.py --write` on it): `gates` (id,
 kind, parameters, return type, truth table), `constants`, `gate_ids` (id, its kind and inputs, or null), `constant_ids` (id,
 its width and value, or null), `word_view` (type, element widths, word type), and `program`: a 2-bit
 adder built from two full-adder calls, a batch of `Xor2_v1` over axis 1, a constant, a `Not_v1` and an `Xor3_v1`, with its
@@ -519,7 +519,7 @@ Rules the Program format left open, pinned here:
 - **A proof block with no outputs** (a dead gate) is still a proof block: every computing gate is in exactly one.
 - **An unread parameter leaf** is in the input unit and is not committed.
 
-Vectors: `qcall_vectors.json`, written by `python verity/ml/circuits/tests/test_qcall_vectors.py --write`. They cover a word
+Vectors: `qcall_vectors.json`, written by `uv run python tools/verity/check/pins.py --write` on its path. They cover a word
 program and a Boolean program at two values of X. The word program has a Call that fits; one that splits into sub-Calls two levels
 down; a batch of a composite and of a primitive; a scan with a chained carry and one with a passed-through carry; pass-through
 outputs; a constant read by two proof blocks; a constant-derived gate committed across proof blocks; a 64-bit input and constant; a recompute
