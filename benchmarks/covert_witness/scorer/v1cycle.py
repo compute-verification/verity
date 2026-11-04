@@ -123,8 +123,10 @@ TIER_FROM = {"long": "4.12.3"}
 #: a shard's custody key lifetime: `--on auto` adds its 4 h queue wait to the 150 min timeout (23,400 s), past the
 #: default key's 6 h, so `research run` refuses the launch without it
 TRACE_CUSTODY_TTL = "8h"
-#: how long a refresh waits for its node runs; one still tracing is taken at the next refresh
+#: how long a refresh waits for its node runs; one still tracing is taken at the next refresh. TE_TRACE_UNTIL (epoch
+#: seconds) waits until then instead, so a refresh launched early takes the traces that land by a deadline
 TRACE_WAIT_S = 1080
+TRACE_UNTIL = float(os.environ.get("TE_TRACE_UNTIL") or "nan")
 #: the integrator's te_core whose capture TE40_WT's isn't (`next_capture`), checked out with no files: its runs traced
 #: into its own cache while the refresh scores TE40_WT's traces with them over those, until they replace those
 #: (`replaces`)
@@ -134,8 +136,10 @@ LAST = trace40.STATE / "trace40" / "rescored.json"
 #: the first capture whose traces a later te_core doesn't refuse for their capture (formalism.refusal: read-backs
 #: unchecked before 4.2): over one, the refresh scores on the integrator's newest te_core, not LAST's
 READS_SINCE = "4.2"
-#: what 4.0's rescore also writes, to the evidence store only (coordinator 01:22Z): t as the frozen tail, and the analysis
-VARIANTS = {"frozen": ["--tail", "frozen"], "analysis": ["--quantities", "analysis"]}
+#: what 4.0's rescore also writes, to the evidence store only (coordinator 01:22Z): t as the frozen tail, and the analysis.
+#: TE_VARIANTS=0 writes neither, for a refresh whose tables must be stored by a deadline (the two take about 24 min)
+VARIANTS = {} if os.environ.get("TE_VARIANTS") == "0" else {
+    "frozen": ["--tail", "frozen"], "analysis": ["--quantities", "analysis"]}
 #: the measurement commits scored: the re-score commit's pin, same_version and pilot (trace40.pins), set by `main`
 PINS: list[str] = []
 PANELS_DIR = Path(os.environ.get("TE_PANELS_DIR", "/opt/cursor/artifacts/te-panels"))
@@ -740,7 +744,8 @@ def measured_ledger(out: Path, shards: list[tuple[list[str], str, str]] = (), te
     out.mkdir(parents=True, exist_ok=True)
     pf = cache / "pending.json"
     pending = json.loads(pf.read_text()) if pf.exists() else {}
-    took, log, deadline = [], {}, time.monotonic() + TRACE_WAIT_S
+    took, log = [], {}
+    deadline = time.monotonic() + (TRACE_WAIT_S if math.isnan(TRACE_UNTIL) else max(0.0, TRACE_UNTIL - time.time()))
 
     def settle() -> None:
         for run in list(pending):
