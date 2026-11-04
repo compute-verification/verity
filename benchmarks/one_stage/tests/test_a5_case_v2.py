@@ -66,7 +66,8 @@ def test_v2_says_why_an_audit_has_no_case():
     assert "drew 2 members" in a5.v2_proof([{}, {}], zk=True)
 
 
-def test_a_v2_refusal_is_written_beside_the_v1_case(tmp_path, monkeypatch, RP):
+@pytest.fixture
+def stub_case(monkeypatch, RP):
     class C:
         def __init__(self, *a):
             pass
@@ -78,11 +79,34 @@ def test_a_v2_refusal_is_written_beside_the_v1_case(tmp_path, monkeypatch, RP):
     monkeypatch.setattr(RP, "evidence", lambda *a, **k: {})
     monkeypatch.setattr(RP, "Case", C)
     monkeypatch.setattr(RP, "python", lambda c: {"verdict": "accept"})
-    a5.write_case(tmp_path, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
-                  session_roots={}, served=[], v2="v2 verifies --zk sessions; this audit's are plain")
+    return RP
+
+
+def write(out: Path, v2) -> None:
+    a5.write_case(out, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
+                  session_roots={}, served=[], v2=v2)
+
+
+def test_a_v2_refusal_is_written_beside_the_v1_case_and_leaves_sampled_proofs_no_case(tmp_path, stub_case):
+    write(tmp_path, "v2 verifies --zk sessions; this audit's are plain")
     assert json.loads((tmp_path / "case.json").read_text())["commitment"] == "ab"
     assert not (tmp_path / "case-v2.json").exists()
+    assert not (tmp_path / "case-sampled.json").exists()
     assert (tmp_path / "case-v2-error.txt").read_text().startswith("ValueError: v2 verifies --zk")
+
+
+def test_sampled_proofs_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, stub_case):
+    """Sampled proofs refuses one-stage v1's case, so its case is v2's with the form, never v1's."""
+    zk = {"blobs": ["b"], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(),
+          "params": {"proofs": {"circuit": "cc" * 64, "registered": None}}}
+    monkeypatch.setattr(a5, "case_v2", lambda case, sessions, **k: zk)
+    write(tmp_path, {})
+    assert json.loads((tmp_path / "case-v2.json").read_text()) == zk
+    got = json.loads((tmp_path / "case-sampled.json").read_text())
+    assert got == a5.case_with_form(zk)
+    assert got["params"]["form"] == "one-stage" and got["params"]["proofs"] == zk["params"]["proofs"]
+    assert json.loads(bytes.fromhex(got["evidence"])) == {"form": "one-stage", "proofs": {}}
+    assert not (tmp_path / "case-v2-error.txt").exists()
 
 
 def test_the_case_carries_the_verifiers_partition_which_v2_verifies_the_sessions_against(tmp_path, monkeypatch, RP):
