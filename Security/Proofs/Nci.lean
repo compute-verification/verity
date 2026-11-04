@@ -2,6 +2,7 @@ import Definitions.Nci.Guarantees
 import Proofs.Nci.Inequalities
 import Proofs.Nci.LoomisWhitney
 import Proofs.Nci.Cut
+import Proofs.Nci.CutWitness
 import Proofs.Core
 import Proofs.Nci.Chain
 import Proofs.Nci.Throttling
