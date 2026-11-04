@@ -1,5 +1,7 @@
 import Definitions.Core.Assumptions
 import Proofs.NetworkCertifier.RecordRows
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Data.Set.Card
 
 /-!
