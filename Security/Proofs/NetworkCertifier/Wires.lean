@@ -40,13 +40,21 @@ theorem depends_of_read {C : Prog} {g : ℕ} {x : BGate} (hx : C.gates[g]? = som
   Relation.ReflTransGen.single (by simp [hx, hi])
 
 theorem dependsWired_of_depends {C : Prog} {wires : ℕ → Option ℕ} {i g : ℕ} (h : Depends C i g) :
-    DependsWired C wires i g :=
-  Relation.ReflTransGen.mono (fun _ _ hab => Or.inl hab) h
+    DependsWired C wires i g := by
+  unfold Depends at h
+  unfold DependsWired
+  induction h with
+  | refl => exact Relation.ReflTransGen.refl
+  | tail _ hab ih => exact ih.tail (Or.inl hab)
 
 /-- With no wires, depending through reads and wires is depending. -/
 theorem dependsWired_none {C : Prog} {wires : ℕ → Option ℕ} (hw : wires = fun _ => none) {i g : ℕ}
-    (h : DependsWired C wires i g) : Depends C i g :=
-  Relation.ReflTransGen.mono (fun a b hab => hab.resolve_right (by simp [hw])) h
+    (h : DependsWired C wires i g) : Depends C i g := by
+  unfold DependsWired at h
+  unfold Depends
+  induction h with
+  | refl => exact Relation.ReflTransGen.refl
+  | tail _ hab ih => exact Or.elim hab (fun h1 => ih.tail h1) (fun h2 => by simp [hw] at h2)
 
 theorem valOver_of_some (C : Prog) (inp : ℕ → Bool) {free : ℕ → Option Bool} {g : ℕ} {b : Bool}
     (hf : free g = some b) : valOver C inp free g = b := by
