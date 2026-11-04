@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.ZkAny.RelayRelease
+public import Proofs.Flock.ZkAny.RelayFirst
 public import Proofs.Flock.Claims.ZK.LiveBefore
 
 /-!
@@ -18,13 +19,18 @@ earlier round failed (`ZkServer.liveBefore`), a frame round is one message in bo
   the loop's finish has not computed) releases the scheduled round as a stopped rep's and stops the session;
   **`roundStep_nextD_nd`**: so where the session has not stopped but Rust's checks fail the round, it is again the
   deferred release's message, and after it a round has failed in both.
+* `roundStep_put_some`: a round at a place `roundPlace` readies puts a frame back. **`envOk_roundStep`**: so where what
+  the relay read for a round is the loop's round on its frames, whose release is a message's after the stream's domain
+  frame at its first round (as the two above give the deferred model's), and the loop's first round of the stream and
+  its domain frame are the schedule's and the setup's, what the relay read there is that message's (`EnvOk`).
 -/
 
 @[expose] public section
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Frame (Masker)
+open _root_.Flock (SessionSpec)
+open _root_.Flock.Firewall.Frame (Masker Place)
 open _root_.Flock.Firewall.Frames (Sessions Rep)
 
 /-- **A released frame round of the session is the deferred model's message, and keeps the session's stop the
@@ -116,5 +122,35 @@ theorem roundStep_nextD_nd {W Rr : Type} (L : LeanRelease W Rr) (n : Msg → ℕ
   refine ⟨out, hoo, ?_, fun e => ?_⟩
   · rw [hrel, L.nextD_frame_cross n wk x w ρ κ h hk hn hlt hv hc]
   · rw [hst, L.liveBefore_snoc_cross wk x w ρ κ h hk hlt hv hc e, Bool.not_false]
+
+/-- **A round at a place `roundPlace` readies puts a frame back.** -/
+theorem roundStep_put_some {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
+    {dom content : ByteArray} {n : Nat} {q : Rep} {pl : Place} {f : Bool} {nd : Option String}
+    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd)) :
+    ∃ p₁, (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).put = some p₁ := by
+  rcases hres : _root_.Flock.Firewall.Frame.step q.cfg q.st
+    (.round n (if nd.isSome then ByteArray.empty else content) pl) with ⟨a, st'⟩
+  obtain ⟨v, hv⟩ := roundStep_put hrp hres
+  exact ⟨_, hv⟩
+
+/-- **What the relay read for a round is the message the loop's round releases**: where the relay's read of the round
+(`Env.round`) is the loop's round on its frames at a place `roundPlace` readies, whose release, wherever it puts a frame
+back, is the message `M`'s after the stream's domain frame at its first round (`roundStep_nextD`,
+`roundStep_nextD_nd`), and the loop's first round of the stream is the schedule's and its domain frame the setup's. -/
+theorem envOk_roundStep {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
+    {dom content : ByteArray} {n : Nat} {q : Rep} {pl : Place} {f : Bool} {nd : Option String}
+    {spec : SessionSpec} {seen : List String} {stream : String} {k : Nat} {e : Env} {M : Msg}
+    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
+    (he : e.round = (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).out)
+    (hrel : ∀ o p₁, (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).out = .ok o →
+      (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).put = some p₁ →
+      ∃ out, o = (if f then dom ++ out else out) ∧ 0 :: out.data.toList = M)
+    (hf : f = !seen.contains stream) (hd : dom = domOf spec stream) :
+    EnvOk spec seen (.round stream k) e M := by
+  refine envOk_round fun c hc => ?_
+  rw [he] at hc
+  obtain ⟨p₁, hput⟩ := roundStep_put_some hrp
+  obtain ⟨out, hoo, hmsg⟩ := hrel c p₁ hc hput
+  exact ⟨out, hmsg, hoo.trans (leaveOf_first hf hd)⟩
 
 end Claims.ZKServer.Relay
