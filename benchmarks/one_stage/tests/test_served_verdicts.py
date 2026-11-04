@@ -737,7 +737,7 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     assert tree == tmp_path / "pieces" / "pouw" / "session" / SID and SID in ledger and '"commit"' in pins
     assert (main, key) == (tmp_path / "main.txt", "ff" * 64)
     row = S.piece_row("work", tmp_path / "pieces")
-    why = f"{S.DEV_WHY}; core's credit refuses the window (budget) the window is in no period"
+    why = f"{S.DEV_VERDICT}: core's credit refuses the window (budget) the window is in no period"
     assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", why, "accept")
     report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run="r")
     assert line["composed"] == "pending" and "pouw" in line["record_missing"] and line["development"] == {"PoUW": "accept"}
@@ -1269,6 +1269,110 @@ def test_a_development_pouw_piece_rejects_what_its_checks_refuse(tmp_path, monke
     assert row["verdict"] == "reject" and row["reason"].startswith(why[case])
     _report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run=None)
     assert rec is None and (line["composed"], line["by"], line["development"]) == ("reject", ["PoUW"], {"PoUW": "reject"})
+
+
+KEY = "ff" * 64
+
+
+def _of_record(tmp_path: Path, monkeypatch, case: str = "record") -> tuple[Path, Path]:
+    """A served H1 window whose piece `pouw` wrote as run 2's node does (``development.json``, its challenger check's
+    document, the gate's ledger), and its serve dir's Lean answer on the period's case: every condition of record met,
+    or, by `case`, one not."""
+    from verity.core.protocols.pouw import credit as CR
+    from verity.core.protocols.pouw import period_check as PC
+
+    role = next(iter(CR.PINNED_MODELS))
+    opened = {"period": "served-r1", "lane": "vllm", "key_sha512": KEY, CR.K_FIELD: 2048, CR.ROWS_FIELD: 512,
+              CR.WEIGHTS_FIELD: "cd" * 64, CR.MODEL_FIELD: {"name": role, "checkpoint_sha512": CR.PINNED_MODELS[role]}}
+    opened = {k: v for k, v in opened.items() if (case, k) not in (("k", CR.K_FIELD), ("weights", CR.WEIGHTS_FIELD))}
+    reserve = {"by": "vy-admin", "for": "vllm"} if case == "for" else {"by": "compute-accounting" if case == "lane" else "vllm"}
+    ledger = [*([] if case == "no period" else [{"kind": "period-open", "session": None, "body": opened}]),
+              {"kind": "reserve", "session": SID, "body": reserve}]
+    calls = [3, 5]
+    refused = ["budget", "the window is in no period"] if case == "credit" else None
+    credit = {"window": refused, "manifest": None, "k": 2048, "drawn": [3], "eps": "1/10", "calls": calls,
+              "credit": None if refused else [] if case == "no calls" else calls}
+
+    def gate(cmd: str, *words: str) -> bytes:
+        if words[0] == "ledger":
+            return "".join(json.dumps(e) + "\n" for e in ledger).encode()
+        return _gate([])(cmd, *words)
+    monkeypatch.setattr(S, "_gate_out", gate)
+
+    def check(calls_file, tree, ledger_file, pins, main, key, out, inputs):
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "pouw_h1_challenger.json").write_text(json.dumps({"pinned_public_sha512": key,
+                                                                 "key": {"public_sha512": key}}))
+        return {"ok": True, "reason": None, "manifest": None, "rounds": 4, "credit": credit,
+                "lean_answers": {"ran": 2, "taken": {}, "unkeyed": 0}}
+
+    d = _h1_serve_dir(tmp_path)
+    (d / S.PERIOD).write_text(json.dumps({"name": "served-r1"}))
+    doc = S.pouw(d, 1, tmp_path / "pieces" / "pouw", gate=GATE, key=KEY, main=None, check=check)
+    assert doc["verdict"] == "accept" and doc["credited"] is False and doc["why"] == S.DEV_WHY
+    lean = {"protocol": PC.ID, "verdict": "accept", "reason": None, "commitment": "ab" * 64,
+            "public": {"windows": [[3] if case == "lean calls" else calls], "work": [1000], "k": 2048,
+                       "delta": str(CR.DELTA), "eps": ["1/10"]}, "profile": {"period": "served-r1", "windows": 1}}
+    if case == "lean reject":
+        lean = {**lean, "verdict": "reject", "reason": "window: window 0 of period served-r1 is refused",
+                "public": None, "profile": None}
+    if case != "no lean":
+        (d / S.POUW_PERIOD_ANSWER).parent.mkdir(parents=True)
+        (d / S.POUW_PERIOD_ANSWER).write_text(json.dumps(lean))
+    return d, tmp_path / "pieces"
+
+
+def test_a_pouw_window_credit_accepts_under_the_lanes_own_key_and_period_is_its_verdict_of_record(tmp_path, monkeypatch):
+    """Run 2's node writes the development piece; composed with the challenger's pin and the lane, a window whose coins
+    the check accepted under that pin, reserved under the lane's own gate key in its period whose open commits K, rows
+    and weights, credited by core's credit and accepted by the Lean on the period's case, is PoUW's verdict of record:
+    core's answer, its work the Lean's credited work less its ε share over the credited calls at credit's δ, and the
+    remote record composes accept with PoUW's leg."""
+    from verity.core.protocols.pouw import credit as CR
+
+    d, pieces = _of_record(tmp_path, monkeypatch)
+    row = S.piece_row("work", pieces, serve_dir=d, key_sha512=KEY, lane="vllm")
+    assert (row["verdict"], row["reason"], "development" in row) == ("accept", None, False), row.get("why")
+    assert row["quantity"]["work"] == {"credited": 900, "credited_tiles": 2, "work": 1000, "eps": "1/10", "k": 2048}
+    assert row["delta"] == str(CR.DELTA) and row["answer"]["profile"]["lean"]["verdict"] == "accept"
+    assert row["answer"]["profile"]["lean_answers"] == {"ran": 2, "taken": {}, "unkeyed": 0}
+    assert row["piece"]["verdict"] == "accept"
+    rows = {**_rows(_accepted(), pieces), "work": row}
+    _report, rec, line = S.record(rows, window=1, steps=(0, 4), node="n", run="r", product="remote",
+                                  servers={"work": ("n", "real")})
+    assert (line["composed"], line["record_missing"]) == ("accept", [])
+    assert rec["legs"]["pouw"]["quantity"] == {"symbol": "W_cert", "value": 900, "unit": "work", "tiles": 2}
+    assert "development" not in line and line["verdicts"]["PoUW"] == "accept"
+
+
+@pytest.mark.parametrize("case, why", [
+    ("key", "the challenger check pinned key ffffffffffffffff..., not the compose's pin"),
+    ("no key", "the compose holds the coins to no key pin"),
+    ("for", "the window's session was reserved by vy-admin for lane vllm, not under the lane's own gate key"),
+    ("lane", "the window's session was reserved under lane compute-accounting's gate key, not lane vllm's own"),
+    ("no period", "the window's session joined no period of lane vllm"),
+    ("k", "period served-r1's open doesn't commit what credit needs: (budget)"),
+    ("weights", "period served-r1's open doesn't commit what credit needs: (weights)"),
+    ("credit", "core's credit refuses the window (budget) the window is in no period"),
+    ("no calls", "core's credit accepted the window with no credited calls"),
+    ("no lean", "no Lean answer on the period's case"),
+    ("lean reject", "the period's Lean answer is reject: window: window 0"),
+    ("lean calls", "the period's Lean answer is period served-r1's with credited calls [[3]]"),
+])
+def test_a_pouw_window_that_fails_a_condition_of_record_stays_a_development_piece_naming_it(tmp_path, monkeypatch,
+                                                                                             case, why):
+    """Each condition of record failed alone (the compose's pin another or none, the session reserved for the lane by
+    vy-admin or under another lane's key, in no period, its period's open committing no K or no weights, credit
+    refusing or crediting no call, no Lean answer on the period's case, one rejecting, or one over other calls): PoUW's
+    row stays the development piece's ``missing``, its ``why`` the condition failed, and the record names it."""
+    d, pieces = _of_record(tmp_path, monkeypatch, case)
+    key = None if case == "no key" else "ee" * 64 if case == "key" else KEY
+    row = S.piece_row("work", pieces, serve_dir=d, key_sha512=key, lane="vllm")
+    assert (row["verdict"], row["development"]["verdict"]) == ("missing", "accept")
+    assert row["why"].startswith(f"{S.DEV_VERDICT}: {why}"), row["why"]
+    _report, _rec, line = S.record({**_rows(_accepted(), pieces), "work": row}, window=1, steps=(0, 4), node="n",
+                                   run="r", product="remote")
+    assert line["verdicts"]["PoUW"] == S.DEV_VERDICT and line["missing"]["PoUW"] == row["why"]
 
 
 def test_the_gate_is_refused_while_the_lane_has_a_period_open(tmp_path, monkeypatch):
