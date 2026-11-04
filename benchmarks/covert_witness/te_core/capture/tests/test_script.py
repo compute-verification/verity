@@ -11,6 +11,7 @@ import math
 import os
 import re
 import sys
+import tracemalloc
 from pathlib import Path
 
 import numpy as np
@@ -201,9 +202,12 @@ def test_the_stub_stream_has_the_parts_its_start_read_then_an_unread_part(starts
 
 def test_the_stub_streams_unread_part_is_as_long_as_the_run_record_reads(starts):
     """hybrid's grow.py refuses an arm that reads more windows than its stream leaves unread (``--unread``): the unread
-    part is the record's steps times its largest step's tokens, STREAM_HEADROOM times over, at least STREAM_TOKENS."""
+    part is the record's steps' tokens, STREAM_HEADROOM times over, at least STREAM_TOKENS; a long scoring step adds its
+    own tokens, not the step count times them."""
     run = {"steps": [{"tokens": T}] * 2000 + [{"tokens": 0}]}
-    assert script.stream_tokens(run) == script.STREAM_HEADROOM * 2001 * T
+    assert script.stream_tokens(run) == script.STREAM_HEADROOM * 2000 * T
+    scored = {"steps": [{"tokens": T}] * 2000 + [{"tokens": 1000 * T}]}
+    assert script.stream_tokens(scored) == script.STREAM_HEADROOM * 3000 * T
     assert script.stream_tokens({"steps": [{"tokens": T}]}) == script.stream_tokens({}) == script.STREAM_TOKENS
     need = str((script.stream_tokens(run) - 1) // CTX)
     with pytest.raises(CaptureRefused, match=rf"train: {need} windows to read, {(10 ** 5 - 1) // CTX} in the stream"):
@@ -211,6 +215,23 @@ def test_the_stub_streams_unread_part_is_as_long_as_the_run_record_reads(starts)
     g = script.record(PROGRAM, ["--batch", str(B), "--update", "inplace", "--unread", need], step=1, starts=starts,
                       wall=[0.1] * 8, step_tokens=T, stream_tokens=script.stream_tokens(run))
     assert fwd_roles(g) == ["updated", "updated"] and g.updated_macs() == T * FWD
+
+
+def test_the_stub_stream_holds_its_window_count_until_a_program_reads_its_order(starts):
+    """A start whose provenance parts hold 1e10 windows (2e10 at the halved ctx) is recorded through `TrainData.next`
+    with no permutation of them, 80 GB of int64: the stand-in makes prepare's order only when a program reads it."""
+    path = starts / "toy.start.json"
+    toy = json.loads(path.read_text())
+    parts = [{"index": 0, "sha256": "a" * 64, "tokens": 10 ** 10 * CTX + 1}]
+    path.write_text(json.dumps(toy | {"tokenizer": "bpe32k", "provenance": {"data": {"parts": parts}}}))
+    tracemalloc.start()
+    try:
+        g = recorded(starts, "--update", "inplace")
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert fwd_roles(g) == ["updated", "updated"] and g.updated_macs() == T * FWD
+    assert peak < 2 ** 28, f"{peak:,} bytes traced at the peak"
 
 
 def test_a_boolean_mask_index_is_taken_at_its_largest():

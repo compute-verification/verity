@@ -110,9 +110,8 @@ def main() -> int:
     err = {n: torch.zeros_like(p) for n, p in P.items()}
     opt = torch.optim.AdamW(P.values(), lr=LR) if a.update == "adamw" else None
     data = prepare.TrainData(start.get("tokenizer"))
-    if len(data.order) < a.unread:
+    if a.unread and len(data.order) < a.unread:
         raise SystemExit(f"train: {a.unread} windows to read, {len(data.order)} in the stream")
-    ids = data.order
     if a.fresh:
         read = ((start.get("provenance") or {}).get("data") or {}).get("parts") or []
         where = {q["sha256"]: i for i, q in

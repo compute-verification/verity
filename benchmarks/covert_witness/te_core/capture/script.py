@@ -737,12 +737,24 @@ def _patched(rec: _Recorder, prepare, hooks, starts: Path, scale: int, windows_o
             self.parts = [_Zeros(n) for n in sizes]
             self.tokens = _Zeros(sum(sizes))
             self.starts = np.cumsum([0] + [(n - 1) // self.ctx for n in sizes])
-            self.order = np.random.default_rng(seed).permutation(int(self.starts[-1]))
+            self.windows, self.seed, self._order = int(self.starts[-1]), seed, None
             self.at = 0
+
+        @property
+        def order(self):
+            """prepare's seeded permutation of the windows, made when a program first reads it: the stream's own
+            reads need only its length, and a stream sized from a run record can hold more windows than fit in memory."""
+            if self._order is None:
+                self._order = np.random.default_rng(self.seed).permutation(self.windows)
+            return self._order
+
+        @order.setter
+        def order(self, value):
+            self._order = value
 
         def next(self, n, device=None):
             rec.boundary()
-            if self.at + n > len(self.order):
+            if self.at + n > (self.windows if self._order is None else len(self._order)):
                 self.at = 0
             self.at += n
             with rec.suspended():
@@ -873,11 +885,10 @@ class _Graph(torch.nn.Module):
 
 
 def stream_tokens(run: dict) -> int:
-    """The stubbed stream's unread tokens for a run record: its steps times its largest step's tokens, STREAM_HEADROOM
-    times over, and at least STREAM_TOKENS."""
-    steps = run.get("steps") or []
-    most = max((int(s.get("tokens") or 0) for s in steps), default=0)
-    return max(STREAM_TOKENS, STREAM_HEADROOM * len(steps) * most)
+    """The stubbed stream's unread tokens for a run record: its steps' tokens, STREAM_HEADROOM times over, and at least
+    STREAM_TOKENS. The sum, not the step count times the largest step: one scoring step can count thousands of training
+    steps' tokens, and a program may make an array of every window in its stream (ref-data's ids)."""
+    return max(STREAM_TOKENS, STREAM_HEADROOM * sum(int(s.get("tokens") or 0) for s in run.get("steps") or []))
 
 
 def tier_of(run: dict) -> str | None:
