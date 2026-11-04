@@ -69,7 +69,10 @@ round, less the rounds ``DIR/retention.json`` drops, with the verifier's coin re
 the device numbers calls across the epoch, and a run whose passes share an index is refused before any replay), then
 reads every pass, holds the window record ``--tie W`` (``retain --window-record W`` writes it) to them where one is named
 (`verify_run.tie`: each call's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>`` entry its root and its domain recomputed from
-the salt and the call's index), takes the verifier's coin, and replays ``--draws`` work-weighted tiles over all of them and
+the salt and the call's index), takes the verifier's coin (with ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER``
+set, a draw session's on the auditor host opened on the run's commitment, `bench_arm.LiveDraw`, reserved under
+``PEARLC_CHALLENGER_LANE`` once that lane has no period open; else the node's, `verify_run.node_draw`; the format is
+`verify_run`'s "The coin record"), and replays ``--draws`` work-weighted tiles over all of them and
 each pass's exclusion tiles.  It writes the details to ``--out``, with, where ``served.json`` says which passes the timed
 call made and no ``--manifest`` names others, the credit over those retained alone (`timed_credit`), and the core answer
 (`answer_of`'s form, ``public.work.credited`` the MACs credited at Pearl's Assumption 1 at ``--delta``) to ``--answer``
@@ -463,6 +466,7 @@ def retain(args: argparse.Namespace) -> int:
 
 def verify(args: argparse.Namespace) -> int:
     sys.path.insert(0, str(HERE))
+    import bench_arm as BA
     import verify_run as VR
 
     passes = Path(args.passes)
@@ -483,9 +487,11 @@ def verify(args: argparse.Namespace) -> int:
     if paths is not None:
         coins = VR.epoch_coins(passes / "coins.json")
         window = json.loads(Path(args.tie).read_text()) if args.tie else None
+        draw = BA.live_draw(settings.PEARLC_CHALLENGER_GATE, settings.PEARLC_CHALLENGER_PEER,
+                            settings.PEARLC_CHALLENGER_LANE) or VR.node_draw
         doc.update(VR.verify_passes(paths, args.draws, args.jobs, args.commit, coins, fast=args.fast,
                                     cross_check=args.cross_check, delta=args.delta, window=window, rounds=rounds,
-                                    dropped=dropped, record=record))
+                                    dropped=dropped, record=record, draw=draw))
         if served is not None and not args.manifest and doc["answer"]["verdict"] == "accept":
             doc["timed"] = timed_credit(served, doc["answer"]["public"]["work"], coins, rounds)
     out = Path(args.out)
