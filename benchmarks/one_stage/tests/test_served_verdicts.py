@@ -2308,8 +2308,9 @@ def _deferred(tmp_path: Path, **extra: str) -> subprocess.CompletedProcess:
 
 def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_and_hashing_each_input(tmp_path):
     """Step 6's deferral leaves in the serve dir's private/deferred the pieces the record read, the settings the
-    follow-on runs at (the window, the product, V3c's class and law, H1_TIE, the composite, the served node and the tree's
-    commit), and the follow-on's every input, listed for the prover's copy and hashed for the follow-on to hold it to:
+    follow-on runs at (the window, the product, V3c's class and law, H1_TIE, the composite, the served node, the tree's
+    commit, and WINDOW_STEPS and MAX_TOKENS, which label the onsite record), and the follow-on's every input, listed for
+    the prover's copy and hashed for the follow-on to hold it to:
     V3c's window dir whole, H1's log and each record it names, the tie's commit answer, the record's and the composite's
     inputs and its own files, and nothing else of the serve dir. Its one line in $OUT names what was deferred, why and the
     follow-on's command, and no window; nothing else lands in $OUT."""
@@ -2317,13 +2318,14 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     assert run.returncode == 0, run.stderr
     d, dd, out = tmp_path / "serve", tmp_path / "serve" / "private" / "deferred", tmp_path / "served-out"
     names = ("K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE CR_SCAN_DELTA ONSITE "
-             "CERTIFIER_CHAIN_CMD CERTIFIER_PERIOD_CMD")
+             "CERTIFIER_CHAIN_CMD CERTIFIER_PERIOD_CMD WINDOW_STEPS MAX_TOKENS")
     said = subprocess.run(["bash", "-c", f'. "$1"; for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done', "_",
                            str(dd / "deferred.env")], check=True, capture_output=True, text=True).stdout
     assert dict(x.split("=", 1) for x in said.splitlines()) == {
         "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": "stratified:1", "H1_TIE": "1", "COMPOSITE": "1",
         "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200", "DEFERRED_TREE": SHA,
-        "CR_SCAN_DELTA": "5.421010862427522e-20", "ONSITE": "", "CERTIFIER_CHAIN_CMD": "", "CERTIFIER_PERIOD_CMD": ""}
+        "CR_SCAN_DELTA": "5.421010862427522e-20", "ONSITE": "", "CERTIFIER_CHAIN_CMD": "", "CERTIFIER_PERIOD_CMD": "",
+        "WINDOW_STEPS": "16", "MAX_TOKENS": "4"}
     listed = (dd / "inputs.txt").read_text().splitlines()
     window = [f"v3c-w7-{VTAG}/window/{f}" for f in ("circuit.json", "registration.json", "values/a.bin")]
     own = ["private/deferred/deferred.env", "private/deferred/pieces/pouw/answer.json"]
@@ -2401,6 +2403,7 @@ CLASH = ("PREFLIGHT: the follow-on runs at the deferral's settings (the serve di
     ("case.json", {}, FOLLOW_FAIL),
     (None, {"K": "8"}, f"{CLASH} K: unset it"),
     (None, {"PRODUCT": "onsite", "COMPOSITE": ""}, f"{CLASH} PRODUCT COMPOSITE: unset it"),
+    (None, {"WINDOW_STEPS": "1", "MAX_TOKENS": "4"}, f"{CLASH} WINDOW_STEPS: unset it"),
     (None, {"NODE_MEM_GB": "196"}, f"PREFLIGHT: the follow-on runs the V3c audit the served node deferred, and {SHORT}"),
     (None, {"RESEARCH_SOURCE_SHA": "cd" * 20}, "PREFLIGHT: the follow-on reads the served node's window-circuit record, "
      f"which its tree {SHA} wrote, and this tree is {'cd' * 20}: run it at that commit, or set FOLLOW_ANY_TREE=1"),
@@ -2504,9 +2507,10 @@ def test_the_follow_on_runs_reproof_cmd_after_the_audit_then_the_onsite_record_w
     """A deferral of a run that writes the onsite record (its certifier's front or piece set) records ONSITE, and its
     follow-on runs REPROOF_CMD once V3c's audit is done, with the serve dir, the window and V3c's dir, its log in the
     serve dir's private/ and its last line the REPROOF line; then the record and the composite, and last the onsite
-    record with REPROOF_COPY and REPROOF_LISTING, before $OUT is published. A copy that fails fails the follow-on, and
-    every record is still written."""
-    assert _deferred(tmp_path, CERTIFIER_FRONT="front").returncode == 0
+    record at the served run's WINDOW_STEPS and MAX_TOKENS, not the follow-on's defaults, with REPROOF_COPY and
+    REPROOF_LISTING, before $OUT is published. A copy that fails fails the follow-on, and every record is still
+    written."""
+    assert _deferred(tmp_path, CERTIFIER_FRONT="front", WINDOW_STEPS="1", MAX_TOKENS="1").returncode == 0
     d, out, listing = tmp_path / "serve", tmp_path / "out", tmp_path / "serve" / "private" / "reproof-listing.txt"
     (tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True, exist_ok=True)
     (tmp_path / "tree" / "benchmarks" / "one_stage" / "onsite_record.py").write_text(FAKE_ONSITE_RECORD)
@@ -2517,7 +2521,8 @@ def test_the_follow_on_runs_reproof_cmd_after_the_audit_then_the_onsite_record_w
     assert f"REPROOF (exit {rc}): REPROOF COPY: {said}" in lines and lines[-1].startswith("ONSITE ")
     assert oct((d / "private" / "reproof.log").stat().st_mode & 0o777) == "0o600"
     assert json.loads((tmp_path / "order.onsite").read_text()) == [
-        str(out), "--reproof-copy", "vy-nebius-cpu-3:/p/r1", "--reproof-listing", str(listing)]
+        str(out), "--window-steps", "1", "--max-tokens", "1", "--reproof-copy", "vy-nebius-cpu-3:/p/r1",
+        "--reproof-listing", str(listing)]
 
 
 #: the network certifier's kept run in `_deferred`'s serve dir: the gate's fetch and the front's session

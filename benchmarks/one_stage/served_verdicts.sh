@@ -98,7 +98,8 @@
 #     With the network certifier in the run, its piece (CERTIFIER_CMD) or its front (CERTIFIER_FRONT), `onsite_record.py`
 #     then writes the onsite demo's record
 #     ($OUT/record/onsite.json: every verdict its run of record needs, the network bound term by term and over each
-#     monitoring period, beside it ADVICE_CHARGE's measured advice charge, a test run's advice-charge.json, below, and
+#     monitoring period, labelled with the run's WINDOW_STEPS and MAX_TOKENS, beside it ADVICE_CHARGE's measured
+#     advice charge, a test run's advice-charge.json, below, and
 #     the re-proof inputs, the serve dir's and $OUT's files a later re-proof of the sampled units needs, with
 #     REPROOF_COPY's copy of the serve dir's, NODE:/PATH, checked against REPROOF_LISTING, its listing kept off $OUT);
 #     its ONSITE line gates nothing.
@@ -208,7 +209,8 @@
 # the served node wrote it), the advice registration's public form ($OUT/registration.json, which the follow-on's
 # $OUT carries for the onsite record), the settings the follow-on runs at (deferred.env: the window, the
 # product, V3c's class and law, H1_TIE, COMPOSITE, ALPHA, GAMMA, the served node, the tree's commit, ONSITE, whether
-# the run writes the onsite record, and the split certifier's two commands), and the
+# the run writes the onsite record, the split certifier's two commands, and WINDOW_STEPS and MAX_TOKENS, which label
+# the onsite record's figures), and the
 # follow-on's every input relative to the serve dir (`deferred_inputs`, with the split's chain the network certifier's
 # kept run), listed (inputs.txt, which names inputs.sha256
 # too) and hashed (inputs.sha256). The copy is the prover's: those files alone, to the same path on a node with the
@@ -286,7 +288,7 @@ D=${D:-$ROOT/${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}
 # step 6's deferral (`defer`): the settings the follow-on runs at, its inputs' list and sums, and the pieces the record read
 DEFER_DIR=$D/private/deferred
 FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE CR_SCAN_DELTA ONSITE"
-FOLLOWS+=" CERTIFIER_CHAIN_CMD CERTIFIER_PERIOD_CMD" FOLLOW= CLASH=
+FOLLOWS+=" CERTIFIER_CHAIN_CMD CERTIFIER_PERIOD_CMD WINDOW_STEPS MAX_TOKENS" FOLLOW= CLASH=
 if [ "${1:-}" = v3c ] && [ -f "$DEFER_DIR/deferred.env" ]; then  # the follow-on of a deferral, at the settings it recorded
   FOLLOW=1
   declare -A given=()
@@ -887,7 +889,7 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
     COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" SERVED_NODE "$(hostname)" DEFERRED_TREE "$(tree_sha)" \
     CR_SCAN_DELTA "$CR_SCAN_DELTA" ONSITE "$([ -z "${CERTIFIER_CMD:-}${CERTIFIER_FRONT:-}" ] || echo 1)" \
     CERTIFIER_CHAIN_CMD "${CERTIFIER_CHAIN_CMD:-}" CERTIFIER_PERIOD_CMD "${CERTIFIER_PERIOD_CMD:-}" \
-    > "$DEFER_DIR/deferred.env" || return 1
+    WINDOW_STEPS "$WINDOW_STEPS" MAX_TOKENS "$MAX_TOKENS" > "$DEFER_DIR/deferred.env" || return 1
   deferred_inputs > "$DEFER_DIR/inputs.txt"
   (cd "$D" && tr '\n' '\0' < "$DEFER_DIR/inputs.txt" | xargs -0 -r sha256sum) > "$DEFER_DIR/inputs.sha256" || return 1
   echo private/deferred/inputs.sha256 >> "$DEFER_DIR/inputs.txt"
@@ -936,7 +938,8 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   [ "$vrc" = 0 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && [ "$rp" = 0 ]
 }
 onsite_record() {  # the onsite record ($OUT/record/onsite.json, the header's), which gates nothing
-  "$TPY" benchmarks/one_stage/onsite_record.py "$OUT" ${ADVICE_CHARGE:+--advice-charge "$ADVICE_CHARGE"} \
+  "$TPY" benchmarks/one_stage/onsite_record.py "$OUT" --window-steps "$WINDOW_STEPS" --max-tokens "$MAX_TOKENS" \
+    ${ADVICE_CHARGE:+--advice-charge "$ADVICE_CHARGE"} \
     ${REPROOF_COPY:+--reproof-copy "$REPROOF_COPY"} ${REPROOF_LISTING:+--reproof-listing "$REPROOF_LISTING"} \
     2>&1 | publish_lines
 }
