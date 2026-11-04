@@ -33,6 +33,7 @@
   "Properties.Evaluate",
   "Properties.NetworkRecords",
   "Properties.NetworkPeriod",
+  "Properties.NetworkPeriod.Placed",
   "Properties.Core.Period",
   "Properties.NetworkScan",
   "Properties.SampledProofs",
@@ -447,6 +448,7 @@
   "Definitions.Core.TC.Spec",
   "Properties.NetworkRecords",
   "Properties.NetworkPeriod",
+  "Properties.NetworkPeriod.Placed",
   "Properties.NetworkScan",
   "Properties.SampledProofs",
   "SampledProofs",
@@ -655,6 +657,13 @@
   "Properties.NetworkPeriod.rowsStateHeld": {
    "honest": ["Properties.NetworkPeriod.rowsStateHeld_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsStateHeld_nontrivial"
+  },
+  "Properties.NetworkPeriod.scanWindowsPlaced": {
+   "nontrivial": "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial"
+  },
+  "Properties.NetworkPeriod.wrongBoundsDrawn": {
+   "honest": ["Properties.NetworkPeriod.wrongBoundsDrawn_honest"],
+   "nontrivial": "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial"
   }
  },
  "unwitnessed": {
@@ -865,7 +874,12 @@
    "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record"
   },
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": "33f7abc2366880d43c453c6ef7f93c829313485d13e4d3112049d6c68e127c27",
-  "Properties.RemoteAudit.Component.publishedEps": "cf7c54d7f6c205f892c215116f64e504646a0e2fba5a236dea6c734cd5e15789"
+  "Properties.RemoteAudit.Component.publishedEps": "cf7c54d7f6c205f892c215116f64e504646a0e2fba5a236dea6c734cd5e15789",
+  "Properties.NetworkPeriod.scanWindowsPlaced": {
+   "type_hash": "e9dedfc752c9606c233f7c1ef9c8b0d87ca8955ce390931958bf5645cb3b9ff1",
+   "missing": "honest",
+   "why": "its premises at the deployed parse are the sampled leg's bridge facts (StmtBits, and WrongBounds at the audit's published bound, which wrongBounds_of_countBound gives from the code's strata), whose honest lemmas at the deployed record take the assembled record's hypotheses, which are no named assumptions"
+  }
  },
  "layers": {
   "Properties.Pouw": {
@@ -1105,9 +1119,17 @@
    "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Accounting.JointPeriod`), its realization (`Definitions.Accounting.JointBridge.CreditedWords`) and its named premises (`Definitions.Accounting.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
   },
   "Properties.NetworkPeriod": {
-   "imports": ["NetworkCheck.Period", "Mathlib.Algebra.BigOperators.Fin"],
+   "imports": [
+    "NetworkCheck.Period",
+    "Mathlib.Algebra.BigOperators.Fin",
+    "SampledProofs.Bits",
+    "SampledProofs.Bound",
+    "Definitions.Claims.Sampling.Strata",
+    "Definitions.NetworkCertifier.PeriodConditions",
+    "Definitions.NetworkCertifier.Tied"
+   ],
    "except": [],
-   "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, never a proof"
+   "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, and what its scan's `faulty_bits` charges against the sampled statement's layout as the code lays it out (`SampledProofs.Bits`), the period's premise it meets (`NetTiming.WindowsPlaced`), and the audit's bound against the code's count bound (`SampledProofs.Bound`) at the claims' strata draw (`Definitions.Claims.Sampling.Strata`), never a proof"
   },
   "Properties.Composition": {
    "imports": ["CoreComposition.Product", "CoreComposition.Registered", "CoreComposition.Tie"],
@@ -3064,6 +3086,37 @@
    "owner": "@network-accounting"
   },
   "Properties.NetworkPeriod.rowsWiresChecked_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.scanWindowsPlaced": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkPeriod.scanWindowsPlaced : Properties.NetworkPeriod.ScanWindowsPlaced"],
+   "assumptions": [],
+   "type_hash": "e9dedfc752c9606c233f7c1ef9c8b0d87ca8955ce390931958bf5645cb3b9ff1"
+  },
+  "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial :",
+    "  Exists fun j =>",
+    "    Exists fun c =>",
+    "      Exists fun x =>",
+    "        Exists fun D =>",
+    "          Exists fun sw =>",
+    "            Exists fun Pw =>",
+    "              Exists fun x =>",
+    "                Exists fun x => Exists fun x => Exists fun x => Not (NetTiming.WindowsPlaced D (1 / 2) sw Pw fun x => 0)"
+   ],
+   "assumptions": [],
+   "type_hash": "cd6d7ffbbbd9a636fb8133bf75bd00db1b34001e7d7a290948e1b6b2bc6b9ded"
+  },
+  "Properties.NetworkPeriod.wrongBoundsDrawn": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.wrongBoundsDrawn_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial": {
    "owner": "@network-accounting"
   },
   "Properties.NetworkRecords.acceptMeans": {
@@ -6023,6 +6076,14 @@
    },
    "Properties.NetworkPeriod.rowsStateHeld": {
     "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.scanWindowsPlaced": {
+    "function": ["NetworkCheck.Period.scanOf", "Flock.canon"],
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.wrongBoundsDrawn": {
+    "function": ["SampledProofs.Bound.strataOf", "SampledProofs.Bound.boundOf"],
     "outcome": "accept"
    }
   },
@@ -9321,10 +9382,10 @@
     "Claims.Flock.Stmt": "2c4346d8df20d7feb229714fe99da0c1190d561939f9bbf4af4b394199739701",
     "Claims.Flock.Wit": "f38698de65e7092c5615c7fa9743feb28c33f1447dc2e754e3f25c499b1097b7"
    },
-   "guarantees": []
+   "guarantees": ["Properties.NetworkPeriod.scanWindowsPlaced", "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial"]
   },
   "Definitions.Claims.Sampling": {
-   "digest": "abc3a025438583e8a49877b73044b7b43197401561ebd8249a999899bcf0e475",
+   "digest": "491fdc2679797ced57126b131da180c9e6358d3ba5a46dd2d6a80353a249309e",
    "definitions": {
     "Claims.Sampling.AuditStatement": "14dca2945e169db647822bc5ada687c2bc9d3c764e14fe1a86a63ed6862061f8",
     "Claims.Sampling.AuditStatement.desc": "9aba517d0fa98c7dc8fccb8df71878f443a969a34b856cd0ea175f9a594e0496",
@@ -9345,6 +9406,7 @@
     "Claims.Sampling.Deploy.partition": "3778167b1219a7c66ea0f62ecadb8b9515e47d7ff42b79c088e0ded41721c6fa",
     "Claims.Sampling.Deploy.scopeCheck": "9b1760dc76ce539fc56fa7456b3507267ba7414d1ec5cbdd2f42d2476db3b3dc",
     "Claims.Sampling.Design": "38c80dce3504e644ff790219fb916d63383addf97d5d113aed3fb45c1babfc5d",
+    "Claims.Sampling.Design.M": "a426f8ea390ea750c503abeae605f02a78aecd486fe864f9a377a26d3d7dca10",
     "Claims.Sampling.Design.Pa": "c8979b7d81f43badf43e5fda2a38af635d8aee22efcf8f02fa0b4de2c40f1ffb",
     "Claims.Sampling.Design.WellFormed": "73e36630a77be5a8cd882d31fb922c1ed6c8aefaaba5b2c03f017bd7fefc6c69",
     "Claims.Sampling.Design.rules": "9cfd8c81edd200a90200f292ea17a1aee6fee2d042a6d3b71943a8a6f3f53864",
@@ -9355,6 +9417,7 @@
     "Claims.Sampling.OneStage.all": "18919f46a2fd852ec78ee3a993acd8a9f46dcae24e754500354660cbfd73f98d",
     "Claims.Sampling.OneStage.bernoulli": "591c88f68150f30ba65aa1ae3fc662389d9942434e3b92b5ebe0d61c40ce8d23",
     "Claims.Sampling.OneStage.casesOn": "96c76634dae868a160a12a5f767bdeac8f88c693d26031bb3f4ae459dc604dad",
+    "Claims.Sampling.OneStage.ctorIdx": "b05e734892bdf56982bd9afb6bdaf537225f7640d33479ce3ef33797cfabdf08",
     "Claims.Sampling.OneStage.rec": "8fa858c57ca3a056b9029041d5a706c31554641f60bcb03436d48ec6a801a2fb",
     "Claims.Sampling.OneStage.stratified": "d9381a4be911f35df0d3a5f704650b068d7d42f928bbcaadd88f9a038cc4fb7c",
     "Claims.Sampling.OneStage.subset": "bf2e04f44f50b7c46497a525b37c17110b9ffb1da46b7fc563c8984c3a1ff6ba",
@@ -9388,6 +9451,8 @@
     "Claims.Sampling.window": "d11d808843864bb4dc6ce0ebb8a26c85eb2d72bf5f633396f7e6f269d091137d"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
+    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses"
    ]
@@ -9459,6 +9524,8 @@
     "FlockSoundness.Audit.xorSum": "c627186d879d69d17638b56c9e47172a64d74159228eebeebe6104754ad393a8"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
+    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -9813,6 +9880,8 @@
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial",
     "Pous.Period.SecurityProofs.periodHeldSha512",
     "Pous.Period.SecurityProofs.periodHeldSha512At",
+    "Properties.NetworkPeriod.scanWindowsPlaced",
+    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
@@ -9859,6 +9928,8 @@
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_honest",
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial",
+    "Properties.NetworkPeriod.scanWindowsPlaced",
+    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
@@ -10756,6 +10827,13 @@
     "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial"
    ]
   },
+  "Definitions.NetworkCertifier.PeriodConditions": {
+   "digest": "fd9bf1b958b86cff3d9c0b6e6993f93d79e2c1253a7790109498ed19c349c2b5",
+   "definitions": {
+    "NetTiming.WindowsPlaced": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
+   },
+   "guarantees": ["Properties.NetworkPeriod.scanWindowsPlaced", "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial"]
+  },
   "Definitions.NetworkCertifier.Premises": {
    "digest": "aa7d78606bf681c2c756d8768f6f08aa4a31f12042de5c38ed91002ad4c40b0f",
    "definitions": {
@@ -10800,17 +10878,33 @@
    ]
   },
   "Definitions.NetworkCertifier.SampledAudit": {
-   "digest": "50cb1d3f166211f0f040e72fa49f621c506d29a7c6cfd259c698856f6e7ebaae",
+   "digest": "faaebdbfc7b4b69ce3a1c2c0cdf3091fd301460fb290c8b367e2d7327a7290ca",
    "definitions": {
-    "NetTiming.BoundaryGates": "fa62e710a7aac7d4f76bb7c7c2a4400f4d483ad59c9d5d7adf193c0ece654d55",
-    "NetTiming.BoundaryGates.Fits": "ebd05c19dd122a05cfe405333069c75efe8856277437c8e6766d9f1f6f2c233b",
+    "NetTiming.BoundaryGates": "d3e54616f8da666218af8aa727cc81d6b675fb41bea0a8cf49691b641f30c7a3",
+    "NetTiming.BoundaryGates.Fits": "9c3804d342282e4cb7c0e4657540d573ee43c40e686709ff8e0fc22c9bfc5b10",
+    "NetTiming.BoundaryGates.WiresFit": "1a68f098d00a6394e19993ba15c372ee0a5bf17f53d8b532e9743ae7e418485b",
     "NetTiming.BoundaryGates.egress": "7b6781ceed9e705bdcd2f73da44515d154ded194be9ce8c07e8a80adaca1765c",
     "NetTiming.BoundaryGates.ingress": "0cd000b86e85138614ec3ab7313538273046b378ee4a37b1718995198a41da24",
+    "NetTiming.BoundaryGates.wires": "ec18eaece927d5f4897fdbb09627b8ec350567de081d9e7f260fd3b2ed89f21e",
     "NetTiming.Depends": "f211d957c793800d99efe76d3fbd2afc44b357018a916000b6358941e750ac83",
+    "NetTiming.DependsWired": "968b74120864ef6de7ebe2dba81192beef61215a9a0fb361c0642ef7f7476bbc",
     "NetTiming.ScopeAcc": "c7fd760721042dfff5fa8908b38893d3749f30682f2cda072d1b29a9550d03f5",
+    "NetTiming.WiresAcyclic": "d122d0fc7f6b27fce9c33e2f68a116089b4b2a26ce6a9fe431fb103ae7864869",
+    "NetTiming.allSlots": "1eb924389e5ffa3b1cce62cd754f9ed3b413f91286b038c394ab98209c426b56",
+    "NetTiming.allSlotsFrom": "e9f843f09815a0f9027e7fd2a939b5ce9801351103e731aff9367f6e3b5375be",
+    "NetTiming.allSlotsFrom._sparseCasesOn_1": "bcca8d9b059205db51b931ee670d3133083fe08379abd3f4d078670d8448fc4f",
+    "NetTiming.allSlotsFrom._sparseCasesOn_4": "5f47fc59eca3ea87c24247696303acec324803ca0c91cf3d5386cded3c7bf333",
     "NetTiming.slotGates": "18b5cf00d01de76454aa5c83b4f78ecbfb92810ca9b0389aa74215a1d9372e0d"
    },
-   "guarantees": []
+   "guarantees": ["Properties.NetworkPeriod.scanWindowsPlaced", "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial"]
+  },
+  "Definitions.NetworkCertifier.SampledCharge": {
+   "digest": "3d2d01b1c1e90b9d880a036ad1e8d96a21b99044afb2d4c47007347784e1a71e",
+   "definitions": {
+    "NetTiming.faultyBits": "11626696611eb91d66ee3f2a5c453e27db0facb8f80ee3d83b1c5f75a1a1dc27",
+    "NetTiming.faultySets": "cf08892338b4055889a2cb6fd6b503d7977e9a006937f0e3c224517ffef076ba"
+   },
+   "guarantees": ["Properties.NetworkPeriod.scanWindowsPlaced", "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial"]
   },
   "Definitions.NetworkCertifier.Schedule": {
    "digest": "f111025e1c4fd3b54ab0b3e233cd45ec6207e10ef6e40d1058c19954dc177694",
@@ -10829,6 +10923,14 @@
     "Proofs.NetworkCertifier.encardProgramRunsLeWindows",
     "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest"
    ]
+  },
+  "Definitions.NetworkCertifier.Tied": {
+   "digest": "9330c0f8e07de5513e11ddcba3135424cf8fbf78dd7e616f8cf6a529b5c40595",
+   "definitions": {
+    "NetTiming.shiftGate": "b42a0f01c6042674794c2fca16fc05c47a91aac3697d6d05ab2cadeac343742f",
+    "NetTiming.sideBySide": "753a9e063ec4ebbf1ec9c7d32616c8a744b840076296d9be391f2cf6808ad0c8"
+   },
+   "guarantees": ["Properties.NetworkPeriod.scanWindowsPlaced"]
   },
   "Definitions.Pous.Accounting.Params": {
    "digest": "5a64fc298f5cb7679b6d07c8c3132766a127bc474dd74ec36b94b5e56ca141f6",
@@ -11805,20 +11907,32 @@
    ]
   },
   "Flock.Bytes": {
-   "digest": "e95d7ef478017a40061bb1a116f2e8c08053587953ff89cfe3cd41568515a851",
+   "digest": "df477736cd6194b8fd4e500bf44dac49e8fceab5a417b5757b9aedb0b664abce",
    "definitions": {
     "Flock.Reader": "142f35b54fe69b55679f16638948d896389ff3941c3138e9919737ee271632b6",
     "Flock.Reader.M": "886955667f2c71471a290310539e053a122285f1ba3d9be4bdad51afb1c83376",
     "Flock.Reader.bytes": "22941852a202c47981cabe887fe291ee2f545444bf59ad7236c0a71da47f60c7",
     "Flock.Reader.data": "8819ecc923f7b289f6411154e8e3110e9a9c7ce1b94b3ce0ca63908f6adf3eec",
+    "Flock.Reader.f128": "88cf6caa0aec007de1ea5bca7b78ca9f2c17f2061a127c28a99521fc0f1f9e35",
+    "Flock.Reader.f256": "2e59b8ff7466f65b0e80dbe836cc26e728d38db1d8b9d58a7ec28c5e7fb566de",
     "Flock.Reader.need": "92d6848268a151c0f67ec7450885024f237a1f5a71113135cf82254450136e0f",
+    "Flock.Reader.nonce0": "496df5cd56a0d17f4c767ef3ffe96cadb7ad54154df2861a2d4ac4deaa60f2d5",
     "Flock.Reader.pos": "ed6a4a8ae0b16caf7dedcc9ceb0e827c8dfc63e83c1f4dadeedd2b5c5088e5aa",
+    "Flock.Reader.runAll": "8064923639197f55f5003d06437831dcd4da417a7f2d6cfdd9cb5131d46d6262",
+    "Flock.Reader.u32": "cdb2b8a0ea9eeb8f4375744e042ea2788be36cfac924942108b0d116b8a2c70c",
+    "Flock.Reader.u64": "c6e4ed755ed28b473ae7772666b15bdb4964078e0dc400dc8a820200f8670895",
+    "Flock.Reader.u8": "5efdc0cb5709468577e171baae9b9f57b1299ee43b023f728642bc41b727fdc5",
+    "Flock.Reader.vecAny": "850c9b8482cdafecef81edd23af0e24b3a74b4b0b833babbb7d1e25595b3785f",
+    "Flock.Reader.vecExact": "73945656edfe6723985ae4e5af065e8ba648209480984ac895e5462e907172fe",
     "Flock.V": "9a2fbe4642d5cc5cadfef0c823bb3b77ffe1f0a9ec677602dad8a142eeb4f4ee",
     "Flock.be32": "851cf97622c41660202d5e44f768a86d5721ade4ad9466a725555a580f9da652",
     "Flock.be64": "b57f46169edd9c5c42ec456f4139fad51d62b5eb56e7a9ea0137e6909c196e13",
+    "Flock.f128OfHex": "1018db10512c621ed4eebf4ce35ee3266148df2abef6a3db2b32a43036a51e01",
     "Flock.hexOf": "af7629f7cce9d3332331bd5e6d2bb198d21f9fd3f90298c5a57c5e704a04fc61",
     "Flock.le32": "46c27dd5f12b3c0878e00ad0036cc019acf547cf4531ac270ecb5fd09b1c4868",
+    "Flock.le64": "c0b88475a415d0be81672b73a7d600ecf219becff19bd4748dd852c900992458",
     "Flock.u32OfLE": "c714e65b349376b44e67f451c5b9ef46133c79338dea6b8fe3f5261b9f451b46",
+    "Flock.u64OfLE": "dd9a79d053cb4d7d586bf0607eec115565f549e634b58f1dafa7883ad3828717",
     "Flock.unhex": "4e3499b832e79dc2ca1524af17e40f298fc0842bed87fabc165196f17083c08c",
     "Flock.unhex._sparseCasesOn_1": "b0320251bf17bf6863d3b054f397c7aad54c62faba6bd378bede5304fe5f1ffe",
     "_private.Flock.Bytes.0.Flock.hexDigit": "242ae26c46d2dc228fe0433d3eaba3116be00c18226f89bb07d3bb80ff51768a"
@@ -11943,6 +12057,8 @@
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.scanWindowsPlaced",
+    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -12141,6 +12257,8 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateTied",
+    "Properties.NetworkPeriod.scanWindowsPlaced",
+    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -12283,6 +12401,7 @@
     "Flock.instInhabitedWire.default": "e9f25bc5c2c2da965cfb4d19d740bd50159c32e1c96797e9df4c8ec6e7b0f5a7"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -12357,6 +12476,7 @@
     "_private.Flock.CircuitType.0.Flock.CircuitType.portsOfJson": "85a1e80d9ab12ab9944d8f9e4ae23e0c8e42bf3a119a63e3d3a46be5c46ee99f"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -12386,6 +12506,7 @@
     "Flock.rd32": "1023ca573b2f5767610f1a96d09b95c162b412865dc098ab0b52fcfc817c3098"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -12403,6 +12524,7 @@
     "Flock.Derive.ceilPow2": "cff16037ede34ed07b6b641f362f23fe908fb00ef0a5c361b12c3d6a4c1df4e0"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -12495,6 +12617,7 @@
     "Flock.DeriveAll.xorCols": "8513b9a13c7edc534fcea36661c4bb85f82d4a03bbf60a1be1a24956d344412e"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -12554,6 +12677,7 @@
     "Flock.DeriveAll.walk._sparseCasesOn_3": "2287c60cb4cbc4629081a9aa0db5774e702e1de63c7f7352719eae3f5d899bba"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -13142,6 +13266,7 @@
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -13518,7 +13643,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "9775baf163491b0a51ca9e163d58f48c7d3875113a2657ef8f55453c05345522",
+   "digest": "1cb0b60f29ab9e256bbb384f387cec6d906d55ebc5bcb2425c7390c587d1cafc",
    "definitions": {
     "Flock.HmOut.checkPinned": "be695fb6208f54d0549abc4562a07a5a6a0e9141cdbfec833fc24bcee6fc732b",
     "Flock.HmOut.checkRows": "098f24c4033c2c7f98461e63d948ae97698a038872521e9bb334da3a4d1926a0",
@@ -13561,6 +13686,7 @@
     "Flock.HmRow.check._sparseCasesOn_3": "29bdfe52536b3ac51d4cdb6e0f4563db8c6f44e02edb0f68746d814a540f3198",
     "Flock.HmRow.checkPartitionObject": "5a3b1e0e0c68d9009597658a8f7e705e1484ce2ba66c99af39097e4357ebf6be",
     "Flock.HmRow.checkPartitionObject._sparseCasesOn_1": "0b53c545fc0b971d4ad038fb49f4527c1399c2bb782239f646b6b0984bfaecc5",
+    "Flock.HmRow.checkPublic": "8706cb97a45aacaf17cd0b1a52332c978d599d212ed4d22fec12eff73feb0b87",
     "Flock.HmRow.checkTyped": "0388dc52b5d45b621bea39a0158e6f461c162d9e29f176dc462ed87a4067f50d",
     "Flock.HmRow.classOf": "3225537895d28e75ade1feea8abe03e5ea3615d32a8b2690ca7b0b744a75d41e",
     "Flock.HmRow.classOf._sparseCasesOn_1": "d2860e4ced1127f5e5bde67ba6d17ef7a999b320c5da1dc21c5ee4371705b79e",
@@ -13723,6 +13849,7 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -13831,6 +13958,7 @@
     "_private.Flock.Layout.0.Flock.BlockLayout.natArr": "8253f40dd7d4d13ff6c6d57e66243b21348d270134124d01d8abaf6319362d4b"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -13856,6 +13984,7 @@
     "Flock.libraryTable?": "2e4f5eb96b2eaa7ac47dad86353794bc75e4ba83998eb37a6b6780b50bc321cf"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -14048,6 +14177,7 @@
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -14132,6 +14262,7 @@
     "Flock.Tmpl.unrollAt": "df54e4ea28f9c052076c4975db0147dbdd3dec697d4f49d9b48be85e312b69d4"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -14513,6 +14644,7 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -14584,7 +14716,7 @@
    ]
   },
   "Flock.Qcall": {
-   "digest": "c110bdb5128652e83fd2abc88851c03b24045779ae11ede6c1fc0f455d37d4af",
+   "digest": "1e6b96f61052624988a6ff2df26b3af3ada2fe52f2dfd82baf767df950105ac1",
    "definitions": {
     "Flock.Qcall.Call": "95c1f54f91d8a500d02ad760247627928ad8889d0801e1a3c37d35d772bafc69",
     "Flock.Qcall.Call.c": "eaf99a72ffcbb0f91bf72997241daa374a3eb0add284a4cdd8f4feff71bbdeeb",
@@ -14617,6 +14749,8 @@
     "Flock.Qcall.ProofBlock": "d015e99350660c62d082925bfaaaf51809fb1ecc166b4ec7182d05b3120f3175",
     "Flock.Qcall.ProofBlock.hi": "a7543510f59fa8b1247f6e23742e723cde0727131dee7f53a5f639218084d86a",
     "Flock.Qcall.ProofBlock.lo": "6663d8cec6334c5aa00c022245ab8cfb79ce17ad41d4649ad8736c302924c419",
+    "Flock.Qcall.ProofBlock.path": "0834da801d4298c5a09b2a3f50c6e1460f98aecfd9ecfa6c8b163b88af641b2f",
+    "Flock.Qcall.claimedUnits": "0e17c99a86c5768ef72224d27ca8fafc5a7eec78499b63cad57c8c56a2e234f5",
     "Flock.Qcall.cut": "f9994f9e8381821f80deecd89ed45d744ca2bd4674732b7a9cbe5fb9e1ebe88b",
     "Flock.Qcall.cutIn": "f983f0445296e4e6f2f5a4d0cc1d645d992ffc5fd05d185fce096d597c5d0e5f",
     "Flock.Qcall.cutIn._sparseCasesOn_1": "1555de7485e27aa137e449a9d906286b5c06430430d152749450f4df9380fc8f",
@@ -14630,8 +14764,11 @@
     "Flock.Qcall.gatesWith._sparseCasesOn_7": "500e4e1466fd66c823b6dac63777d5073286dcd13bcef491b0a7101a2b5a0ef3",
     "Flock.Qcall.inapplicable": "a49561f53269562ec519cafe619bf400aee59a1ee0df7a2b8b5bdf912a70621c",
     "Flock.Qcall.inapplicableDetail?": "60f38b04da0abdd885e712408e626a2b432d2645d5392fb48dca52e5275a054b",
+    "Flock.Qcall.instInhabitedDefCut.default": "9ec455828cb474f7748c6233da03560bb96a641e43e82a3ea230555598ec1bda",
     "Flock.Qcall.instInhabitedProofBlock": "6ff471c0ba52f6d86fdaa1ad58b71c17397d610a6086439e7ec0f7aa825c17e4",
     "Flock.Qcall.instInhabitedProofBlock.default": "09967563652175830b49c57a0cc0a8699084e342b70ee580f41a26d3d5d872cf",
+    "Flock.Qcall.locate": "61e8159913080c5d54c5a4ca85b6b0950ec1aeff399d9f6b0651e3a2a713a7fd",
+    "Flock.Qcall.population": "1bb0509e452235acbe36152c0ddb399a5b6fc1de827b53bafe525c75d202c12b",
     "Flock.Qcall.readToOf": "c0a2067b47a22c5c8265162e86eaf40f5758642e04390bc9701d8b263db891a8",
     "_private.Flock.Qcall.0.Flock.Qcall.withCall": "301752229030fc27701ac6ca204e2b12a6b8a4a70cef23b52a85a3645c593b72",
     "_private.Flock.Qcall.0.Flock.Qcall.withCall._sparseCasesOn_1": "87d69ec69db9432d52144924fea3a6d9501cd3634b4475d6520cb16d58a8ed55"
@@ -15323,6 +15460,7 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -15348,12 +15486,14 @@
    ]
   },
   "Flock.Tags": {
-   "digest": "2b59ae8bb21d2293ed20a96cdb2f9e19025591e3d74eda98cbf5546348764478",
+   "digest": "ec35952a3776787b23e301b853bd3f714e7e20cd95d13e6e71e165f061826837",
    "definitions": {
     "Flock.TablesTags": "616e6a1133659aca6313acb08b641dbdb15f03279404705add3efd103a55fd45",
     "Flock.Tags": "fbe58120a1c12d798dc2b847570ed9652d50cc11ddbf0e211a2b771fc0fae0e1",
+    "Flock.Tags.all": "465b4dce5f0c3aded1401977c0993b3e350d0df76d194bbc9476dcdfd563d06e",
     "Flock.Tags.bindings": "a53413c3b119d20558f8287f879ba6654e452b5d19d56b534d588dd70480c027",
     "Flock.Tags.blockKeyword": "2ee005a169cc273bfe3927786bb012bbc5950408e27eb88a822523b7a03153e7",
+    "Flock.Tags.circuitSelftest": "f942e9ed104b5c7b03e55afc4a9203907fb4f2b8d7f0e6963016786ea04e6a00",
     "Flock.Tags.fileFormat": "0692ed7e07f2264ea0caa4056aa1642009e091ff2298a121db61957983f72f6d",
     "Flock.Tags.hiddenOutputs": "b094af57863595a9854fdf6a9c319f6993784fa133dbbc0a9d0362c11fc032e4",
     "Flock.Tags.hooksNoMask": "6973183a78e5296f08d89c783df613a02fd455f351a1b15de92565e98370d43c",
@@ -15503,6 +15643,7 @@
     "Flock.Tmpl.write": "6ad4a2e8427d885d98219bc3b97309c3de7a16479eb856f09aab5f1aec37f1fd"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -15524,6 +15665,7 @@
     "Flock.Tmpl.ascend._sparseCasesOn_1": "9b141f10244ce06d0ccc813b43d610fd61e4554ba47c2bbd6a443375b1bc098d"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -15548,6 +15690,7 @@
     "Flock.TmplUnit.t": "07c1e0ee77f879f688a79e3fb1b7dd515c5d071666e08b97512ba90c11da2d5b"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -15602,6 +15745,7 @@
     "Flock.Tmpl.up": "f64998158661355c175a5cd80f13b80fc297aead5b35a2d0cba31c4b7c0fb921"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -15627,6 +15771,7 @@
     "Flock.Tmpl.selfRow": "f1d06f07b9e7895740fb85cead3ce97f46bf92536b55d614855eb21256aedceb"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -15644,6 +15789,7 @@
     "Flock.Tmpl.Tmpl.groupsOk": "8b1813655c7d51736052ce2592b4e2cac90a522f80ea04d312d5fe23ae86bc03"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -15705,6 +15851,7 @@
     "_private.Flock.Typed.0.Flock.Typed.ctx": "35fd1c8fb7bc6ab93cf2e1f04c60788cdda858e75b8e305bb3d35a34ee42c844"
    },
    "guarantees": [
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -16996,6 +17143,7 @@
     "NciCheck.Properties.SecurityProofs.DescWitnesses",
     "NciCheck.Properties.SecurityProofs.ProtocolAccepts",
     "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial",
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial",
@@ -17778,6 +17926,7 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
+    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -20933,6 +21082,18 @@
     "Properties.NetworkPeriod.rowsStateTied_nontrivial"
    ]
   },
+  "Properties.NetworkPeriod.Placed": {
+   "digest": "dbddf622f38d7a8b8854f9c5c4f2b261d575a598fd0af0445aee5e1dd909d1fd",
+   "definitions": {
+    "Properties.NetworkPeriod.LaidOut": "f82e1be1df904134dfa3b90d588e13e98782e298643c2b7b7d6db1e3dbd0c242",
+    "Properties.NetworkPeriod.ScanWindowsPlaced": "65e34930d98bb8a57a70dc0bbd6a4058ad2e2d12c2523045e5deaf42c4cd6a37",
+    "Properties.NetworkPeriod.StmtBits": "a36896012d0776251754f9e643fb47571d92546d5b8ab4e4a28c233b713cd890",
+    "Properties.NetworkPeriod.WrongBounds": "7668c33339b3695f33da552f2a32dbdb6012bb9ed0d849b60aec5bee204b7026",
+    "Properties.NetworkPeriod.gateOf": "88aeffe3e26687076c61bd19322a62fa0be5c250139fe850cd3ffae238c5eacd",
+    "Properties.NetworkPeriod.memberProg": "92a8c3b964c1bdcd1e78500dce3a0d5215a0dcf2dbe30a5166f7d6c6c80a9d75"
+   },
+   "guarantees": ["Properties.NetworkPeriod.scanWindowsPlaced", "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial"]
+  },
   "Properties.NetworkRecords": {
    "digest": "c2275d182bc1428c70bb8f4e78b5d552554db2089a104cb73b9d6e70b97ce449",
    "definitions": {
@@ -20967,32 +21128,6 @@
     "Properties.NetworkRecords.noGridAcceptsMore",
     "Properties.NetworkRecords.noGridMeans"
    ]
-  },
-  "Properties.NetworkScan": {
-   "digest": "39a59b535062c28193d1ba1cdff3ab472ccb53b6d57fb7143bf7a1ff940163db",
-   "definitions": {
-    "Properties.NetworkScan.ScanFits": "5f2430c038392abe606d6578beef8615a1e0b800b56c8205341082a209c10906",
-    "Properties.NetworkScan.ScanScopeAcc": "fb8120b5845dcfc226891abe77600ffbe65657129370ba72d7676fa8ed984c8a",
-    "Properties.NetworkScan.gateAt": "e4aebb4c0d3ac773a86f2760eaa99f09c90a0fe73f2465ed07b03be6aa8f9572",
-    "Properties.NetworkScan.layOf": "5394737e0797755936169638c28c5a322d5fea963856a47cae16609f69372396",
-    "Properties.NetworkScan.scanLayout": "e20dc682d93b04e93b017c91e7b177e5f44822a56f35c62b63432b9e76b975f0"
-   },
-   "guarantees": []
-  },
-  "Properties.NetworkScan.Assumptions": {
-   "digest": "13f4ca49a49330ea32355b29e579be06559dbbe3a14fec783f751ef7489163f9",
-   "definitions": {
-    "Properties.NetworkScan.ScopeMatches": "034e585f8cf7bd0bc270f3d5d2e503ebd70488b8c972161b8a70c22e12caf7e7",
-    "Properties.NetworkScan.StmtFlattens": "d9457f2011bf51bdb5935b85ce9a848b489c67ef0a02ca412731b2f15d24255a"
-   },
-   "guarantees": []
-  },
-  "Properties.NetworkScan.Flattens": {
-   "digest": "3f5949648ef80db4b0a7f77b4162c0e1ca3dbf3ed95de83770191adb9f069e12",
-   "definitions": {
-    "Properties.NetworkScan.Flattens": "958b48d427a4799a495e8498981cebdafaf311689c3fefb050bf30006a382055"
-   },
-   "guarantees": []
   },
   "Properties.Pous": {
    "digest": "2b441606eaf35a16f58580f22b4c696d510069ff5f239ad65067aa5a5e26caf3",
@@ -23716,6 +23851,76 @@
     "Verity.soundness_of_subprotocols_honest",
     "Verity.soundness_of_subprotocols_nontrivial"
    ]
+  },
+  "SampledProofs.Bits": {
+   "digest": "8c8e6354833df99268b43e218f432d39a07fc08125d578bc9510220d97b556f2",
+   "definitions": {
+    "SampledProofs.Bits.Index": "8b77434ffef93be5dba6fb2b5a6e7d6f6406f7a67a3ff965d1d8d03e3cd4598a",
+    "SampledProofs.Bits.Index.cuts": "cb96d72a1737767ddab4cdd1c8f415b327dba403c2ec3f01eb8694b497196581",
+    "SampledProofs.Bits.Index.of": "75255a6fde0cfacccda2104dcb1af021652c691035929c28eccfedfedc1447bd",
+    "SampledProofs.Bits.Index.starts": "889dfe15cd90c19c37311465f340711374de3e1f614a92982571f5c0371c9185",
+    "SampledProofs.Bits.Index.wires": "c5d150d5210cf00c023a19f7e5594cb2c280e6633dd9be58a85eded8e6447fbf",
+    "SampledProofs.Bits.KeyProg": "0ecaaea659e849fb03e648bb30e7a4b30484750da11712027b491a940ee89f8d",
+    "SampledProofs.Bits.KeyProg.inputs": "dabdc4c2c6c77ea986cffadc70f118d9712f673e785d1f76bc3bec2b260e5c9f",
+    "SampledProofs.Bits.KeyProg.outs": "b6a2414c823d58f03580b31773ed3f80c008df30a3f51afa116603caab53bb34",
+    "SampledProofs.Bits.KeyProg.perUnit": "13e8ea355e9472d69907b132e30e92353c0479dc625f80b6fad077f718401ea7",
+    "SampledProofs.Bits.KeyProg.row?": "38b8612e98a37ff4ef7fb3903a85176f811df35eed499226a6198987c0abc49e",
+    "SampledProofs.Bits.KeyProg.rows": "7211243d0d8f2e653461fe5f52d6ea99bcaf4d0cb5eb83f1f58af944613c7bfe",
+    "SampledProofs.Bits.KeyProg.size": "b61d8c5f8ca84a179dc83ee221b7f0543c9b8edecb334bde8a9bcc1a61607c4d",
+    "SampledProofs.Bits.KeyProg.units": "a9b93c526df7e7d604cb4055155e83f2c469690dd390400cdf152cb31cca2702",
+    "SampledProofs.Bits.LGate": "589b9c2200430382776ce5ddaf922b84fa5100b5048239fa4e6f2cb8acabf5ea",
+    "SampledProofs.Bits.LGate.and": "26d955289e6c6b9431082b4063b49d03ae037b1bd41e4552f55ea6583d99e3f2",
+    "SampledProofs.Bits.LGate.casesOn": "d6a60055bd317c62e721dc0ee2b4674ba3e5966966bc05b607e919a19098bbc9",
+    "SampledProofs.Bits.LGate.const": "1b092899a1254b9b8bffbd6ddc9cfdfb53b5617a0b095a68885eab83d55697b5",
+    "SampledProofs.Bits.LGate.input": "9452e6828be2a6be3508304615f3abbea3e1c2957f556a1b1915153d92ac989b",
+    "SampledProofs.Bits.LGate.not": "e13c9e69e70667a2786c3f754a12457458b19567b12785a7436fd15458df6955",
+    "SampledProofs.Bits.LGate.rec": "8d62bb959582149b88a58b281bde62a9ff7ee67ebdf944afa0c57f9a2f6e4782",
+    "SampledProofs.Bits.LGate.xor": "c3b75c5587bdda5741ae136e888bc8aeb254b4acb25ab43bd6bcc7906a77958a",
+    "SampledProofs.Bits.Members": "4e559da3d28ff3a771933c313c301d577373df3676e79f8716c672f03c5baabe",
+    "SampledProofs.Bits.Rows": "3f03b1a5477dd59a70a8d02e6e6c35166aba8a9697ed517f449e08f6ea77394e",
+    "SampledProofs.Bits.Rows.a": "f7d66bf708374e80246e09bb5585badfd5fd2970f765e1327ebbc1b88f86ede1",
+    "SampledProofs.Bits.Rows.b": "2b1d8d89544317da033248778158f36dd4dd1dc1e0900c1a5cc758a7642896e9",
+    "SampledProofs.Bits.Rows.nComp": "89543f9cafb4e6bc149f819a091af2cd90449b9aa1e97973a321827f03d3bb32",
+    "SampledProofs.Bits.Rows.nIn": "7fff9ca27ceceb8601be7cc9e480a171d930e7f331040c7c6ce4e685cefe2a90",
+    "SampledProofs.Bits.Rows.ofNet": "4d6e1babae931a425863bcf5ae1b69c29dc36c7957b1f10bf19949ffcd761ad0",
+    "SampledProofs.Bits.Rows.stack": "05fb09b58221bddabf46b2b91dfcbb982004fee9ee501a8423448fb20b991991",
+    "SampledProofs.Bits.Rows.stackCol": "0543d61ac2f869ee8f67133a3fb86f7c96aa78daa1f857ece769eb1063b87941",
+    "SampledProofs.Bits.Rows.stackRow": "dd17d1ca609e1bd38a045ae8ce87a118030b55386acfd37fbbda5118ed0fbd8c",
+    "SampledProofs.Bits.Src": "b304a3492a2e9186566e4ebfb7f7f6577ecafd26850c6a3427f9f2fc09038897",
+    "SampledProofs.Bits.Src.casesOn": "e3260a1a1fd8796487adf7d245c78055579af6489b66a19b375a954ebf271f94",
+    "SampledProofs.Bits.Src.lit": "300df5c79429c5311f8135d64a6cafb3dfc35abbd2fed6b72127703753382c8b",
+    "SampledProofs.Bits.Src.msg": "4092cb9625f6b5314b0424bed813911f724249cd021fcc9fed3ef552cd6a8c7b",
+    "SampledProofs.Bits.Src.pad": "a4b20a0002f4c38af733176309dd7805e34f24542da9d4d7f75c7cf9d6aa999f",
+    "SampledProofs.Bits.Src.rec": "216c1fb6535768fc06034ade8d3b5554646407507f81111d501036c114f4a559",
+    "SampledProofs.Bits.Src.wire": "62d90d473068399f19717bad0ddfc16e0c6bc5802f633f3838141fbefed16470",
+    "SampledProofs.Bits.Src.zero": "160fa963631d21d9a112962198b32e11666ec811a9718532744f1e5a3042e273",
+    "SampledProofs.Bits.args": "4640bcc35d77b29b4186026ccaeb04b1563fdad53ac9a652b114f9c139889d4b",
+    "SampledProofs.Bits.base": "dd5f45610a8de930e462e9eda9b976d5ee2dce4354d368339dc6e729b1da461b",
+    "SampledProofs.Bits.blockOf": "fa78c2c50406d702d06469660a40b213c4e84715bd0bc293c2c9315b9b2494c5",
+    "SampledProofs.Bits.check": "d1f2361ed8008e9ecf8cba6f2965351a7ef43d6f0cf60b2f5e2e4cd4ac318df2",
+    "SampledProofs.Bits.gateSize": "75ea0638d34d1a82a79be8c080752ea6617e4b3700c4b14bfaeb5590e0855a9d",
+    "SampledProofs.Bits.insOf": "b35c82db7e13d890b0ddf7deb9b68deb4dd124cc246f4805bca9cc14b9a3e4d4",
+    "SampledProofs.Bits.instDecidableEqSrc": "05457f81c46883d35629ba6962f7ead105c4bfb13e25e95a4e3075c863f60f29",
+    "SampledProofs.Bits.instDecidableEqSrc.decEq": "3bd4229509f84b0c8c5b8bd44f2c67325adc5409bb1c8c90a3fec18865e9cd79",
+    "SampledProofs.Bits.keyIdx": "d02c4150bf803f849cc485da298eb4fb32a4c143c141b0027ffc46c7cf276c35",
+    "SampledProofs.Bits.keyProg": "2f7079da8aca77cfd17bbb0f49fb72968861efb75de6d58dd6374c7abe673e02",
+    "SampledProofs.Bits.lastLe": "0794fa49bc8c4548eefe9863cb85a0f62237ba80ea83258ab31c147a19e5ca30",
+    "SampledProofs.Bits.lower": "7f1cfb8d36c18871a29de9d6d76c61e89c596035dcb1d08c499aa2f47d8c7852",
+    "SampledProofs.Bits.msgAt": "d539321a2f472fc3cfb307bff99fce3cec821d02792878336d386c7996234c02",
+    "SampledProofs.Bits.off": "ddf71f519ba437ee56eee420d262ad13d6159eb997a798081503e56a8812a713",
+    "SampledProofs.Bits.outCol": "f9eaad69b728e7024da306a71ecb21dfb3fcbad44878c4948f675ea971a9a8b2",
+    "SampledProofs.Bits.outGate": "55acb32ed4d04b3166b54e93cc5db0435d0999b55ce17767e85803b3edd80b11",
+    "SampledProofs.Bits.owner": "df93a7ab2b202f7c0e0030fef3048a3a332f09e2109103fcf084fec83e54fcd1",
+    "SampledProofs.Bits.posOf": "4203eb27a5822b9ca2ee98bf31af6b01614d96f380cb0419facddc38145f4684",
+    "SampledProofs.Bits.prog": "59148edbc046f3a556b28bde7cc188a9b2c99ff6480d0564411fea41070cb495",
+    "SampledProofs.Bits.rowGate": "29f985d7a562de3cc7317b4b6d1711ad2681e5cf1392e1dc622cc74022b93786",
+    "SampledProofs.Bits.srcAt": "8eb34f498c7b429403a1a4a7ba26e52f778e0a8e033538e315eede1f38d1245d",
+    "SampledProofs.Bits.srcKey": "2f9e925b7b1bdbe507f8ca1a2f6fdf85a881778719eee1e0fae481fed24d6fb3",
+    "SampledProofs.Bits.unitGates": "4664f0ccad2a460d9ca9cd96dd964ec7b08d2b64bc90ebb50e2e830a6bce2945",
+    "SampledProofs.Bits.unitOf": "759cc643c9e4a835657b124c236c683d2ff388ae14d53fac9a20637463b341ca",
+    "SampledProofs.Bits.writers._sparseCasesOn_1": "e71f4fa8b3058282de4bb78561feee207f21d82c9c3d1c3bc66c64f142a2bc92"
+   },
+   "guarantees": ["Properties.NetworkPeriod.scanWindowsPlaced"]
   },
   "SampledProofs.Bound": {
    "digest": "68997e4499aaef8774a1c0f2b8028bb66264891117563e0dbb5967cb0c7a1bfb",

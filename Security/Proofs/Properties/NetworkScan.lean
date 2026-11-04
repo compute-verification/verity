@@ -1,6 +1,7 @@
 import Properties.NetworkScan
 import Proofs.Properties.NetworkScan.Accept
 import Proofs.Properties.NetworkScan.Lowered
+import Proofs.Flock.SamplingScope
 
 /-!
 # Toward an accepted scan's fit, at Bits' positions
@@ -15,6 +16,8 @@ witnesses read:
 * `jointOf_nil`, `not_fits_of_no_members`: an audit of no members has the empty joint program, so no layout fits it.
 * `oneSlot`, `canon_null`, `bytes_of_data_toList`: a schedule of one slot and one step, C-Flock's canonical `null`, and
   a byte array through its list of bytes.
+* `nullStmt`, `acceptAllDeploy`: the statement whose descriptor is `null`'s bytes and whose circuit is empty, and a
+  deployment whose scope check takes everything and which parses every message to it.
 -/
 
 namespace Properties.NetworkScan
@@ -44,5 +47,13 @@ theorem canon_null : Flock.canon .null = .ok "null" := by
   rfl
 
 theorem bytes_of_data_toList (b : ByteArray) : (⟨b.data.toList.toArray⟩ : ByteArray) = b := rfl
+
+/-- The statement whose descriptor is the bytes of `null` and whose circuit is empty. -/
+def nullStmt : Claims.Sampling.AuditStatement :=
+  { Claims.Sampling.ScopeWitness.toyStmt with desc := "null".toUTF8.data.toList, prog := ⟨[], []⟩ }
+
+/-- A deployment whose scope check takes everything and which parses every message to `nullStmt`. -/
+def acceptAllDeploy : Claims.Sampling.Deploy Bool ℕ Unit :=
+  { Claims.Sampling.ScopeWitness.toyD with parse := fun _ => some nullStmt }
 
 end Properties.NetworkScan

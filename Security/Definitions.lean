@@ -28,10 +28,13 @@ import Definitions.NetworkCertifier
 import Definitions.NetworkCertifier.Guarantees.SampledAudit
 import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Definitions.NetworkCertifier.WindowCharge
+import Definitions.NetworkCertifier.PeriodConditions
 import Definitions.NetworkCertifier.Warden
 import Definitions.NetworkCertifier.Tap
 import Definitions.NetworkCertifier.RecordRows
 import Definitions.NetworkCertifier.Period
+import Definitions.NetworkCertifier.Tied
+import Definitions.NetworkCertifier.TiedLeak
 import Definitions.Accounting.Sheets
 import Definitions.Accounting
 import Definitions.Population
@@ -40,6 +43,7 @@ import Definitions.Claims.IndexedTapes
 import Definitions.Claims.Recursion
 import Definitions.Claims.RecursionLin
 import Definitions.Claims.Sampling
+import Definitions.Claims.Sampling.Strata
 import Definitions.Hash
 import Definitions.Flock
 
