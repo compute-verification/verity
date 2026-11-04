@@ -103,13 +103,18 @@ def exe():
 
 
 class Loop:
-    """A running `core-firewall session` for outer sessions of `session` at `part`, on the state directory `state`."""
+    """A running `core-firewall session` for outer sessions of `session` at `part`, on the state directory `state`, with
+    the public file `public` (by default junk) and the further `flags`."""
 
-    def __init__(self, exe: Path, state: Path, session: str, part: str, auditor: Auditor, junk: Path):
+    def __init__(self, exe: Path, state: Path, session: str, part: str, auditor: Auditor, junk: Path,
+                 public: Path | None = None, flags: tuple[str, ...] = ()):
         (junk / "c").write_bytes(b"x")
-        (junk / "p").write_bytes(b"x")
+        if public is None:
+            public = junk / "p"
+            public.write_bytes(b"x")
         self.p = subprocess.Popen([str(exe), "session", "--state", str(state), "--session", session, "--part", part,
-                                   "--verifier", auditor.addr, "--circuit", str(junk / "c"), "--public", str(junk / "p")],
+                                   "--verifier", auditor.addr, "--circuit", str(junk / "c"), "--public", str(public),
+                                   *flags],
                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         line = self.p.stdout.readline().decode()
         assert line.startswith("LISTENING "), (line, self.p.stderr.read().decode() if self.p.poll() is not None else "")
