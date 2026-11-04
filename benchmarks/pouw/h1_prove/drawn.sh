@@ -3,7 +3,7 @@
 # verity_vllm.protocols.pouw.h1.drawn, reading --checkpoint with the live challenger's model registry) stages each
 # drawn call's J10-R units on the window's own registered values, and each drawn unit of a lanes-form K as its lanes and
 # combine; each staged statement is proved by one C-Flock --zk session drawing all its instances (hidden_zk/job.sh's
-# `session`, at the slot its circuit file's META names), one session at a time, its prover under the ZK server
+# `session`, at the slot its circuit file's META names), one session at a time; with H1_FIREWALL=1 its prover is under the ZK server
 # (FC_FIREWALL=1, FC_HOST_WITNESS=1: the Lean session loop flock-firewall, live PROTOCOL.md §10.4, whose Hello is set up
 # on the statement's own program.json and partition.json, the Program and partition credit verifies it under, so what
 # leaves for the live verifier is the loop's), as h1_prove/job.sh, live.sh and h1_lanes/served.sh prove theirs; the
@@ -19,8 +19,9 @@
 #      FLOCK_PROVE, FLOCK_SELFTEST, FLOCK_VERIFY (prebuilt; else job.sh builds them under HZ_CACHE)  FC_FIREWALL_LEAN (the
 #      ZK server's flock-firewall, prebuilt; else built beside FLOCK_VERIFY)  H1_DRAWN_MEM_GB (the job's budget, default
 #      90% of the host's memory)  H1_ZK_SERVER_GB (a session's live verifier, `serve --zk`, its cap, default 88)
-#      H1_ZK_LEAN_GB (what the prover's share leaves the ZK server's Lean processes, default 96)  H1_FIREWALL (1; 0 the
-#      unfirewalled --zk path, for a cost comparison only: no ZK server serves it)
+#      H1_ZK_LEAN_GB (what the prover's share leaves the ZK server's Lean processes, default 96)  H1_FIREWALL (0, the
+#      unfirewalled --zk path, which no ZK server serves; 1 the ZK server, whose sessions credit's Lean verifier refuses
+#      at setup's registered reads (complete) on port o0, r20261104-043623-2364, so not the default until that's fixed)
 #      PY (served_verdicts.sh's venv python, default .venv's)  H1_DRAWN_ONLY=1: write and check the statements, no verdict
 #      H1_DRAWN_CHECK=0: no drawn.py check, for a caller whose credit verifies the statements itself
 #      H1_DRAWN_WORK (a private directory on the node: the scratch directory goes in it and is kept, so the proof files
@@ -58,7 +59,7 @@ export HZ_MEM_GB=${H1_DRAWN_MEM_GB:-$(awk '/MemTotal/ {print int($2 * 0.9 / 1048
 # shellcheck source=../hidden_zk/job.sh
 . benchmarks/pouw/hidden_zk/job.sh
 trap 'cp "$OUT/job.log" "$P/drawn/" 2>/dev/null; rm -rf "$W"; [ -n "${H1_DRAWN_WORK:-}" ] || rm -rf "$SCR"' EXIT
-FW=${H1_FIREWALL:-1}
+FW=${H1_FIREWALL:-0}
 SERVE_GB=${H1_ZK_SERVER_GB:-88} LEAN_GB=0
 [ "$FW" = 1 ] && LEAN_GB=${H1_ZK_LEAN_GB:-96}
 PROVE_GB=$(( MEM_GB - SERVE_GB - LEAN_GB ))
