@@ -7,6 +7,9 @@ import PouwCommit.Rows
 
 `checkTile p wn tid o` is the verdict on tile `tid` of pass `p` from the prover's openings `o`, in the Python's order:
 
+0. the tile's matmul is in the scheme's domain, k ≤ `K_MAX` = 2^16 among its bounds (`Scheme.domainReason`, the pass
+   load's refusal, `DomainError`; `load` refuses such a pass first, and here it holds for any `Pass`, so the words are
+   formed only at k ≤ 2^16, where `s5Stats`' `Words.ofInt` of ⌈k/8⌉ is below 2^24 and exact);
 1. the openings cover the tile (A's rows and B's columns at the tile's positions, in order);
 2. each A row opens against the call's activation root (`activation opening`), each B row against its weight's root
    (`weight opening`), and the transcript leaf at the tile's id against the pass's transcript root (`transcript opening`),
@@ -77,6 +80,7 @@ def checkTile (p : Pass) (wn : Except String FixedNoise) (tid : Nat) (o : TileOp
   let some (pos, rows, cols) := p.tile? tid | return .fail "tile does not match the verifier's own enumeration"
   let r := p.records[pos]!
   let u := r.matmul
+  if let some why := p.scheme.domainReason u then return .fail s!"DomainError: {why}"
   let rootA := p.rootsA[pos]!
   let rootB := (p.weightRoots.lookup u.weight).getD ByteArray.empty
   let da := rowsDomain (activationBinding p.salt u.index) u.index u.m HM96 false

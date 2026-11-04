@@ -197,6 +197,28 @@ def test_a_served_y_that_is_not_the_unscale_of_its_u(exe, tmp_path):
     assert "the prover's files don't open its y: ValueError: " in same(exe, [path])["reason"]
 
 
+def test_a_layer_past_k_max(exe, tmp_path):
+    """A weight of K_MAX + 1 = 2^16 + 1 channels, its call at the split's k (whole promotion groups) and |K|, with the
+    records root the pass publishes over them: the pass load refuses it (`DomainError`, k ≤ 2^16 among the domain's
+    bounds) before the coin, in both; `checkTile` refuses the same past any load."""
+    path = T.proved_pass(tmp_path, H100)[0]
+    man = json.loads(path.read_text())
+    w, k_max = man["matmuls"][0]["weight"], 2 ** 16
+    man["weights"][str(w)]["k"] = k_max + 1
+    for u in man["matmuls"]:
+        if u["weight"] == w:
+            u["k"], u["k_kept"] = T.PW.Split(k_max + 1).k_unit, k_max + 1
+    epoch, _ = T.PPD.manifest_epoch(man, T.published(path), False)
+    calls = tuple(T.Matmul(u["index"], T.Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
+    splits = {x: T.PW.Split(man["weights"][str(x)]["k"]) for x in epoch.workload.weights()}
+    man["records_root"] = T.PW.records_root(epoch.salt, epoch.weights_root, splits, VR.records_of(man, calls)).hex()
+    path.write_text(json.dumps(man))
+    got = same(exe, [path])
+    assert got["verdict"] == "reject" and got["source"] is None and got["verdicts"] == []
+    assert got["reason"].startswith("DomainError: ") and f"k={T.PW.Split(k_max + 1).k_unit}," in got["reason"]
+    assert f"<= k <= {k_max}" in got["reason"]
+
+
 def test_calls_refused_before_anything_is_opened(exe, tmp_path):
     path = T.proved_pass(tmp_path, H100)[0]
     for index, code in ((T.C.CALL_RANGE, "call-range"), (0, "repeated-call")):
