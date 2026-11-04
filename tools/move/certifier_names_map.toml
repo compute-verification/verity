@@ -53,14 +53,14 @@ files = ["verity/core/protocols/certifier/PROTOCOL.md"]
 
 # replay_chain: the queue row, the arrivals and decisions the steps read, beside the state row (`Row`)
 [[words_in]]
-files = ["verity/core/protocols/certifier/replay_chain.py"]
+files = ["integrations/vllm/verity_vllm/scheduler/replay_chain.py"]
 [words_in.words]
 "Window" = "QueueRow"
 
 [[words_in]]
-files = ["verity/core/protocols/certifier/compile_slice.py", "verity/core/protocols/certifier/compile_slice_v2.py",
-         "verity/core/protocols/certifier/compile_slice_v3.py",
-         "verity/core/protocols/certifier/tests/test_network_certifier_replay_chain.py",
+files = ["integrations/vllm/verity_vllm/scheduler/compile_slice.py", "integrations/vllm/verity_vllm/scheduler/compile_slice_v2.py",
+         "integrations/vllm/verity_vllm/scheduler/compile_slice_v3.py",
+         "integrations/vllm/tests/scheduler/test_network_certifier_replay_chain.py",
          "benchmarks/network_e2e/encodings/tests/test_v1.py"]
 [words_in.words]
 "RC.Window" = "RC.QueueRow"

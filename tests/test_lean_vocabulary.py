@@ -867,7 +867,7 @@ KNOWN: dict[str, str] = {
         "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
     "verity/core/protocols/certifier/audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (network-accounting)",
-    "verity/core/protocols/certifier/cache_step_v2.py::Op":
+    "integrations/vllm/verity_vllm/scheduler/cache_step_v2.py::Op":
         "homonym, a cache call's inputs: rename (network-accounting)",
     "verity/core/protocols/certifier/egress.py::Record": "homonym, a slot's record: rename (network-accounting)",
     "verity/core/protocols/certifier/io_request.py::Layout":
@@ -878,7 +878,7 @@ KNOWN: dict[str, str] = {
         "homonym, a Program's egress prediction: rename (network-accounting)",
     "verity/core/protocols/certifier/lean/NetworkCertifier/WindowCharge.lean::NetworkCertifier.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
-    "verity/core/protocols/certifier/replay_chain.py::Window": "homonym, a replay row: rename (network-accounting)",
+    "integrations/vllm/verity_vllm/scheduler/replay_chain.py::Window": "homonym, a replay row: rename (network-accounting)",
     "verity/core/protocols/certifier/window_charge.py::Window":
         "homonym, one sampling block's charge: rename (network-accounting)",
     "verity/core/protocols/certifier/service.py::Opening":

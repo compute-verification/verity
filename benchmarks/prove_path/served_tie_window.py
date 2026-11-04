@@ -39,7 +39,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from verity.core.protocols.certifier import served_rows as SR, served_statics as SS, served_tie as ST
+from verity_vllm.scheduler import served_rows as SR, served_statics as SS, served_tie as ST
 
 PORT_NAMES = ("step.input/ids", "step.input/positions")
 RECORD_KEYS = ("schema", "binding", "root", "count", "n_bits")
