@@ -161,20 +161,23 @@ def test_under_pearlplus_tie_a_window_whose_epoch_failed_or_is_missing_gets_no_r
                                    said[0].endswith("so there are no passes to tie")), said
 
 
-@pytest.mark.parametrize("reserves", [{"ok": True}, {"ok": False}, None])
-def test_under_pearlplus_tie_and_the_gate_the_piece_draws_only_after_a_period_whose_reserves_held(tmp_path, reserves):
+@pytest.mark.parametrize("case", ["held", "unclosed", "refused", "unread"])
+def test_under_pearlplus_tie_and_the_gate_the_piece_draws_only_after_a_period_whose_reserves_held(tmp_path, case):
     """Under the gate the window serve closed its Pearl-C period (served_verdicts.sh's serve()), its period.json saying
-    whether the lane's reserves since the open were the window's salt sessions alone (``reserves``): the piece draws only
-    after one that held, and once the coin is drawn its RULE line reads the ledger (``pearlplus-period rule`` on the serve
-    dir's pearlplus/, the lane and the coin record). Otherwise it says why, draws nothing and still writes its piece."""
-    period = {"name": "pp-r1", **({} if reserves is None else {"reserves": reserves})}
+    whether the lane's reserves since the open were the window's salt sessions alone (``reserves``) and holding the gate's
+    close (``close``): the piece draws only after one that closed and held, and once the coin is drawn its RULE line reads
+    the ledger (``pearlplus-period rule`` on the serve dir's pearlplus/, the lane and the coin record). Otherwise, the
+    gate's close refused too, it says why, draws nothing and still writes its piece."""
+    reserves = {"held": {"ok": True}, "unclosed": {"ok": True}, "refused": {"ok": False}, "unread": None}[case]
+    period = {"name": "pp-r1", **({} if reserves is None else {"reserves": reserves}),
+              **({} if case == "unclosed" else {"close": {"kind": "period-close"}})}
     run, sd, _tree = _piece(tmp_path, _epoch(), period=period, PEARLC_CHALLENGER_GATE="ssh gate",
                             PEARLC_CHALLENGER_LANE="vllm")
     assert run.returncode == 0, (run.stdout, run.stderr)
     names = [" ".join([Path(a[0]).name, *a[1:3 if a[1:2] == ["pearlplus-period"] else 2]]) for a in _steps(tmp_path)]
     given = ["served_passes.py volunteer-needed", "debit.py --cubin", "served_passes.py volunteer", "served_passes.py retain"]
     lines = run.stdout.splitlines()
-    if reserves == {"ok": True}:
+    if case == "held":
         assert names == [*given, "served_passes.py verify", "served_verdicts.py coin",
                          "served_verdicts.py pearlplus-period rule", "served_passes.py lean",
                          "served_verdicts.py pearlplus"], lines

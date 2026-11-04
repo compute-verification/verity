@@ -317,7 +317,8 @@ PD=$P
 [ -z "$TIE" ] || PD=$SD/pearlplus
 if [ -n "$GO" ] && [ -n "$TIE" ] && [ -n "${PEARLC_CHALLENGER_GATE:-}" ]; then  # the window serve closed the period
   held=$("$TPY" -c 'import json, sys
-print("ok" if (json.load(open(sys.argv[1])).get("reserves") or {}).get("ok") is True else "")' "$PD/period.json" 2>/dev/null)
+d = json.load(open(sys.argv[1]))
+print("ok" if (d.get("reserves") or {}).get("ok") is True and d.get("close") else "")' "$PD/period.json" 2>/dev/null)
   [ "$held" = ok ] || { say "draw: refused before it: the window serve's Pearl-C period didn't close with the lane's" \
     "reserves since its open the window's salt sessions alone (served_verdicts.sh's PEARLPLUS-PERIOD line), so no draw" \
     "follows it"; GO=; }

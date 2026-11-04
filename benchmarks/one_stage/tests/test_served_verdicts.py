@@ -1825,6 +1825,48 @@ def test_the_tied_period_closes_holding_its_reserves_to_the_windows_salt_session
         "PERIOD refused: ValueError: pearlplus-period close takes --lane and --windows together")
 
 
+@pytest.mark.parametrize("polls", [0, 1, 3])
+def test_the_tied_close_waits_for_the_ledger_to_end_each_windows_salt_session(tmp_path, monkeypatch, capsys, polls):
+    """``--wait S``: the gate closes a period only once each of its windows has ended, and a salt session's ``end`` follows
+    its client's close by the time its challenger takes to exit, so the close reads the ledger again every PERIOD_POLL_S
+    seconds, for at most S, until it ends each window's salt session, then closes; past S it closes anyway, and the gate's
+    refusal is the close's."""
+    ledger = [{"kind": "period-open", "session": None, "body": {"period": "pp-r1", "lane": "vllm"}},
+              {"kind": "reserve", "session": "s-salt", "body": {"by": "vllm"}},
+              {"kind": "open", "session": "s-salt", "body": {"by": "vllm"}}]
+    calls, slept, reads = [], [], []
+
+    def gate_out(gate: str, *words: str) -> bytes:
+        calls.append(words[0])
+        if words[0] == "ledger":
+            reads.append(1)
+            ended = [{"kind": "end", "session": "s-salt", "body": {"complete": True}}] if len(reads) > polls else []
+            return "".join(json.dumps(e) + "\n" for e in ledger + ended).encode()
+        if len(reads) <= polls:
+            return b'{"refused": "period pp-r1\'s window s-salt still runs"}'
+        return json.dumps({"period": words[2], "verb": words[0]}).encode()
+    monkeypatch.setattr(S, "_gate_out", gate_out)
+    serve = tmp_path / "serve"
+    (tied := serve / "pearlplus").mkdir(parents=True)
+    (tied / S.PERIOD).write_text(json.dumps({"name": "pp-r1", "cap": 1}))
+    (serve / "pearl" / "w0").mkdir(parents=True)
+    (serve / "pearl" / "w0" / "served.json").write_text(json.dumps({"coins": {"reserved": {"session": "s-salt"}}}))
+    if polls < 3:
+        doc = S.pearlplus_period_close(tied, GATE, "vllm", serve / "pearl", wait_s=2 * S.PERIOD_POLL_S,
+                                       sleep=slept.append)
+        assert calls == ["ledger"] * (polls + 1) + ["period-close"] and slept == [S.PERIOD_POLL_S] * polls
+        assert doc["reserves"]["ok"] is True and doc["close"]["verb"] == "period-close"
+        return
+    with pytest.raises(RuntimeError, match="the gate refused period-close: .*still runs"):
+        S.pearlplus_period_close(tied, GATE, "vllm", serve / "pearl", wait_s=2 * S.PERIOD_POLL_S, sleep=slept.append)
+    assert calls == ["ledger"] * 3 + ["period-close"] and slept == [S.PERIOD_POLL_S] * 2
+    assert json.loads((tied / S.PERIOD).read_text())["reserves"]["ok"] is True
+    assert S.main(["pearlplus-period", "close", str(tied), "--gate", GATE, "--lane", "vllm", "--windows",
+                   str(serve / "pearl"), "--wait", "0"]) == 0
+    assert calls[4:] == ["ledger", "period-close"] and slept == [S.PERIOD_POLL_S] * 2
+    assert capsys.readouterr().out.startswith("PERIOD closed pp-r1, its reserves held")
+
+
 @pytest.mark.parametrize("case", ["held", "between", "open", "node"])
 def test_the_rule_line_reads_whether_the_draw_was_the_lanes_first_reserve_after_the_close(tmp_path, monkeypatch,
                                                                                           capsys, case):
@@ -2962,7 +3004,8 @@ def test_under_pearlplus_tie_with_a_gate_the_window_serve_runs_inside_a_pearl_c_
     """With a gate, serve() opens the lane's Pearl-C period on PEARLPLUS-CIRCUIT's record (``pearlplus-period open
     --circuit-record``) once it is built and before serve-openai starts, so the window's salt session joins it, and
     closes it once serve-openai is done, here when it never listens: before Pearl+'s piece draws, its reserves first
-    held to the windows' salt sessions (``--lane``, ``--windows`` the serve dir's pearl/). Between the record and the
+    held to the windows' salt sessions (``--lane``, ``--windows`` the serve dir's pearl/), once the ledger ends them
+    (``--wait`` PEARLPLUS_CLOSE_WAIT, default 300 s). Between the record and the
     open the inference-only policy is written, before serve-openai's start, from serve-phi's φ. In-process coins
     (PEARLC_CHALLENGER_GATE empty) open no period, and the policy is written all the same."""
     cubin = {"PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": "/c/pearl_c_sm90.cubin"}
@@ -2981,7 +3024,7 @@ def test_under_pearlplus_tie_with_a_gate_the_window_serve_runs_inside_a_pearl_c_
         "serve-phi", "class-circuit", "inference_only.py policy",
         f"pearlplus-period open {d} --gate {GATE} --name pearlplus-r20261104-121500-abcd --circuit-record "
         f"{d}/circuit-record.json",
-        "serve-openai", f"pearlplus-period close {d} --gate {GATE} --lane vllm --windows {d.parent}/pearl"]
+        "serve-openai", f"pearlplus-period close {d} --gate {GATE} --lane vllm --windows {d.parent}/pearl --wait 300"]
     _rc, _argv = _serve_argv(tmp_path / "in-process", {**PEARL_TIES, **cubin})
     assert steps(tmp_path / "in-process" / "calls")[-4:] == [
         "serve-phi", "class-circuit", "inference_only.py policy", "serve-openai"]

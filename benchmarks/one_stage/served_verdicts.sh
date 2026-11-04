@@ -288,9 +288,11 @@
 # (`served_verdicts.py pearlplus-period open --circuit-record`, cap 1: the window's one salt session joins it; the
 # PEARLPLUS-PERIOD lines) before serve-openai starts, and closes it once the windows are sealed and the endpoint stopped
 # (or when it never listens, or is stopped), so before Pearl+'s piece draws: open, serve, seal, close, draw. The close
-# first reads the ledger: the lane's reserves since the open must be the windows' salt sessions alone (pearl/w<k>/
-# served.json's), its line saying held or REFUSED, and the piece draws only after a period whose reserves held; once the
-# coin is drawn, its RULE line says whether the draw session was the lane's first reserve after the close. The record
+# first reads the ledger, waiting up to PEARLPLUS_CLOSE_WAIT seconds (default 300) for it to end each window's salt
+# session, since the gate closes a period only once its windows have ended: the lane's reserves since the open must be
+# the windows' salt sessions alone (pearl/w<k>/served.json's), its line saying held or REFUSED, and the piece draws only
+# after a period that closed with its reserves held; once the coin is drawn, its RULE line says whether the draw session
+# was the lane's first reserve after the close. The record
 # reads the period's circuit against the window-circuit record V3c held R's circuit to (`window_tie` keeps it beside R).
 # Pearl+'s piece then serves
 # nothing of its own (served_pearlplus.sh's PEARLPLUS_TIE): it takes the window's epoch pearl/w<k>/, writes W
@@ -582,7 +584,8 @@ pearl_period() {  # under PEARLPLUS_TIE with a gate, in serve(): $1 open (on PEA
   else
     [ "${PEARL_PERIOD:-}" = 1 ] || return 0
     out=$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" pearlplus-period close "$D/pearlplus" \
-      --gate "$PEARLC_CHALLENGER_GATE" --lane "$PEARLC_CHALLENGER_LANE" --windows "$D/pearl" 2>&1) && PEARL_PERIOD=
+      --gate "$PEARLC_CHALLENGER_GATE" --lane "$PEARLC_CHALLENGER_LANE" --windows "$D/pearl" \
+      --wait "${PEARLPLUS_CLOSE_WAIT:-300}" 2>&1) && PEARL_PERIOD=
   fi
   say "PEARLPLUS-$(tail -1 <<< "$out" | cut -c1-600)"
 }
