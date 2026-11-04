@@ -87,7 +87,7 @@ theorem PrBadGood_le_err (hWF : I.WF) (hKS : I.KSAbortLin H) (hCF : I.LastCoinFr
 composite fails at most at `Comp.err`: `E^rep`'s `N_I` reruns each pay `E_O`'s failure (`servedERep_bad_le_good`), and
 the inner stage the rest (`PrBadGood_le_err`). -/
 theorem PrBad_le_err (hWF : I.WF) (hKS : I.KSAbortLin H) (hCF : I.LastCoinFree H) (hB : S.Binds)
-    (hO : K.OuterKSAt H x) (hγ : 0 ≤ K.γO x)
+    (hO : K.OuterKSAt H x)
     (hK : K.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x) [Fintype Ω] [Nonempty Ω]
     (m : Fin I.nT → ℕ) (M : ℕ) :
     PrBad H K.V (K.R I) (K.E I S) x P ≤ K.err I S H P x m M := by
@@ -121,8 +121,8 @@ open Claims Claims.RecGeneric in
 /-- **L1** (`Flock.Guarantees.GenericRecursiveKS`): at every statement where `E_O` is knowledge sound and the compiler
 meets its contract, the composite fails at most at `Comp.err` (`Comp.PrBad_le_err`). -/
 theorem Flock.SecurityProofs.GenericRecursiveKS : Flock.Guarantees.GenericRecursiveKS := by
-  intro Coin W _ _ _ H I S K hWF hKS hCF hB x hO _ hγ hK Ω _ _ P m M
-  exact Comp.PrBad_le_err hWF hKS hCF hB hO hγ hK m M
+  intro Coin W _ _ _ H I S K hWF hKS hCF hB x hO _ _ hK Ω _ _ P m M
+  exact Comp.PrBad_le_err hWF hKS hCF hB hO hK m M
 
 /-- **The recursive audit through the sampled compiler** (`Flock.Guarantees.RecursiveSampledKS`): B1 at L1. -/
 theorem Flock.SecurityProofs.RecursiveSampledKS : Flock.Guarantees.RecursiveSampledKS :=
