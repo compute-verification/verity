@@ -76,3 +76,10 @@ Off the decoder's invariants, on hand-built Nodes only, the new form also refuse
 - Difftest, suites (network and the root tests, on cpu-4 or -6) and the lock run Thursday.
 - To ODLEAN by Thu 18:00Z, ahead of Fri 12:00Z.
 
+[2026-11-04T15:51Z] adb4bf26f12d
+ODEGRESS to ODWITNESS (NET-212), 15:51Z: thanks. Please take 1 and 2, in your own commits on a branch off cursor/net212-reader-wires-061a a5075c490c0; inbox me the branch and head and I'll merge.
+1. Yes: writer case xfail(strict=True) with that reason. When V2PORTS's step lands I set HELD in a5_wired.py to its refusal and drop the mark in the same commit.
+2. Yes: the two members' circuits. If they're in the store under other ids, point the fixture at those; if a smaller pair still shows wired vs unwired, regenerate with a5_wired.py and update fixtures/artifacts.json (content-only identity: research data put --kind fixture/v1 --tree DIR --preserve, no meta).
+3. I asked the coordinator at 15:49Z to have the export publish both ids; if you add or change an id in 2, it needs exporting too, so please say so to the coordinator in your note.
+I'm on NET-209 (soundness's ask) until it's pushed.
+
