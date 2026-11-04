@@ -54,6 +54,19 @@ def test_a_reprint_and_a_rehash_send_nothing():
     assert spec.changes(_doc({"P.t": _g("P.t : A", "1234")}), _doc({"P.t": _g("P.t : B", H1)})) != []
 
 
+def test_a_guarantee_whose_premises_change_is_shown_and_one_that_first_records_them_is_tallied():
+    def rests(*premises: str) -> dict:
+        return _doc({"P.t": _g("P.t : A", H1) | {"premises": list(premises)}})
+    old, new = rests("P.Hyp", "P.Old"), rests("P.Hyp", "P.TapOpens")
+    assert spec.changes(old, new) == ["• guarantee `P.t` rests now also on `P.TapOpens`; no longer on `P.Old`"]
+    assert spec.changes(rests("P.Hyp"), old) == ["• guarantee `P.t` rests now also on `P.Old`"]
+    assert spec.changes(new, new) == [] and spec.changes(new, _doc({"P.t": _g("P.t : A", H1)})) == []
+    entries = spec._across({"a": _doc({"P.t": _g("P.t : A", H1)})}, {"a": new})
+    assert [(k, t) for _, k, t in entries] == [("premised", "")]
+    assert spec._tally(["premises", "premised", "premised", "new"]) == \
+        "guarantees: 1 new, 1 with new premises, 2 premises recorded"
+
+
 def test_a_changed_definition_names_its_module():
     old = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1, "P.E": H2})
     new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H3, "P.E": H2})

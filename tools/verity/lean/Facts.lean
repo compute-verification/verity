@@ -776,7 +776,7 @@ partial def premisesOf (env : Environment) (meaning premises : Array Name) (buil
       for x in xs do
         let t ← inferType x
         let hs ← if !(← isProp t) then fieldPremises env meaning premises moduleOf true t
-          else if only then mentioned env premises moduleOf t
+          else if only then do pure ((← mentioned env premises moduleOf t) ++ (← packedHeads moduleOf t).filter mine)
           else do pure ((← packedHeads moduleOf t) ++ (← mentioned env premises moduleOf t))
         let hs := (hs.foldl (init := (({} : NameSet), #[])) fun (s, out) h =>
           if s.contains h then (s, out) else (s.insert h, out.push h)).2
@@ -785,12 +785,12 @@ partial def premisesOf (env : Environment) (meaning premises : Array Name) (buil
             ("head", toJson h.toString), ("module", toJson ((moduleOf h).map toString))]
       if body.isAppOfArity ``And 2 || body.isAppOfArity ``Or 2 || body.isAppOfArity ``ite 5 then
         for b in body.getAppArgs.extract (body.getAppNumArgs - 2) body.getAppNumArgs do
-          ps := ps ++ (← premisesOf env meaning premises moduleOf true b)
+          ps := ps ++ (← premisesOf env meaning premises built moduleOf true b)
       else if body.isAppOfArity ``Exists 2 then
         if let .lam n ty b bi := body.appArg! then
-          ps := ps ++ (← withLocalDecl n bi ty fun y => premisesOf env meaning premises moduleOf true (b.instantiate1 y))
+          ps := ps ++ (← withLocalDecl n bi ty fun y => premisesOf env meaning premises built moduleOf true (b.instantiate1 y))
       else if let some (statement, v) := unfoldSpec? env meaning moduleOf body then
-        ps := ps ++ (← premisesOf env meaning premises moduleOf (only || !statement) (← plain v))
+        ps := ps ++ (← premisesOf env meaning premises built moduleOf (only || !statement) (← plain v))
       else
         let args := body.getAppArgs
         for h : j in [0:args.size] do
@@ -800,10 +800,10 @@ partial def premisesOf (env : Environment) (meaning premises : Array Name) (buil
             unless ← (asserts 6 c j <|> pure true) do continue
           if a.isLambda then
             ps := ps ++ (← lambdaTelescope a fun _ b => do
-              if ← isProp b then premisesOf env meaning premises moduleOf true b else return #[])
+              if ← isProp b then premisesOf env meaning premises built moduleOf true b else return #[])
           else
             ps := ps ++ (← forallTelescopeReducing (← inferType a) fun ys t => do
-              if t.isProp then premisesOf env meaning premises moduleOf true (mkAppN a ys) else return #[])
+              if t.isProp then premisesOf env meaning premises built moduleOf true (mkAppN a ys) else return #[])
       return ps)
   return out
 
@@ -1002,7 +1002,7 @@ def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
     ("hypotheses", toJson hypotheses), ("shape", ← shapeInfo env table meaning moduleOf ci.type),
     ("premises", ← (do
-      let ps ← premisesOf env meaning premises moduleOf false (← plain ci.type)
+      let ps ← premisesOf env meaning premises built moduleOf false (← plain ci.type)
       return toJson (← ps.mapM fun p => do
         let some h := (p.getObjValAs? String "head").toOption | return p
         return p.setObjVal! "unfolds" (← unfoldsOf env meaning premises listed built moduleOf h.toName))) <|> pure Json.null),

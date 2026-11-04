@@ -2,7 +2,8 @@
 guarantee says waits on nobody, and he is shown it.
 
 The spec is what each package's `lean-audit.json` records: every guarantee's statement (its printed signature and type
-hash), every definition the statements read (its hash, under `reads`), every named assumption no `reads` record holds
+hash, and the named assumptions it rests on, its `premises`: a change to those is shown), every definition the statements
+read (its hash, under `reads`), every named assumption no `reads` record holds
 (its `digest` under `assumptions`, of it and the definitions it reads: one that gains a digest is shown as recorded), what
 the shape rule exempts (`shape.frozen`:
 an entry added there is shown with its reason), and the compiled code allowed on a verifier's path (`verifier.allow`: an
@@ -76,6 +77,13 @@ def _assumptions(doc: dict) -> dict[str, str | None]:
     return {n: (r or {}).get("digest") for n, r in a.items() if n not in held} if isinstance(a, dict) else {}
 
 
+def _premises(rec: dict) -> list[str] | None:
+    """A guarantee record's `premises`, the named assumptions its statement rests on; None in a record written before
+    records held them."""
+    p = rec.get("premises")
+    return [x for x in p if isinstance(x, str)] if isinstance(p, list) else None
+
+
 def _frozen(doc: dict) -> dict[str, str]:
     """{name: why}: the record's `shape.frozen`, what the shape rule exempts until it fits."""
     f = (doc.get("shape") or {}).get("frozen") or {}
@@ -116,7 +124,8 @@ def _package(path: str) -> str:
 def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) -> list[tuple[str, str, str]]:
     """(package, kind, text) of every change from the records ``olds`` to ``news`` ({record path: record}), matched by name
     and type hash across all of them, so a guarantee or definition that moved from one record to another is no change.
-    The kinds are `changed`, `removed`, `definition`, `assumption` (an assumption's digest changed under its name),
+    The kinds are `changed`, `removed`, `premises` (the named assumptions a guarantee's record says it rests on changed;
+    `premised`, text "", for a record that lists them for the first time), `definition`, `assumption` (an assumption's digest changed under its name),
     `recorded` (an assumption listed before, with a digest now), `frozen` (an entry added to `shape.frozen`, the guarantees and
     statements exempt from the shape rule, matched by name across records like a guarantee), `conjecture` (an entry of
     `shape.conjectures` added or with a new status), `compiled` (an entry added to `verifier.allow`) and `new`, in that order (what an existing guarantee says comes first,
@@ -133,6 +142,16 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
     out = [(b[n][0], "changed", f"• changed guarantee `{n}`, before:\n{_signature(a[n][1])}\nafter:\n{_signature(b[n][1])}")
            for n in sorted(set(a) & set(b)) if _restated(a[n][1], b[n][1])]
     out += [(a[n][0], "removed", f"• removed guarantee `{n}`") for n, r in sorted(gone.items()) if r.get("type_hash") not in renamed]
+    for n in sorted(set(a) & set(b)):
+        was, now = _premises(a[n][1]), _premises(b[n][1])
+        if now is None or was == now:
+            continue
+        if was is None:
+            out.append((b[n][0], "premised", ""))
+            continue
+        more, less = [f"`{x}`" for x in now if x not in was], [f"`{x}`" for x in was if x not in now]
+        said = ([f"now also on {', '.join(more)}"] if more else []) + ([f"no longer on {', '.join(less)}"] if less else [])
+        out.append((b[n][0], "premises", f"• guarantee `{n}` rests {'; '.join(said)}"))
     da: dict[str, set[str]] = {}
     for d in olds.values():
         for name, (h, _) in _definitions(d).items():
@@ -190,7 +209,9 @@ def changes(old: dict, new: dict) -> list[str]:
 
 def _tally(kinds: list[str]) -> str:
     """`guarantees: 1 changed, 19 new, 1691 moved here; definitions: 2 changed` for one package's entries."""
-    g = ", ".join(f"{kinds.count(k)} {k}" for k in ("changed", "removed", "new") if k in kinds)
+    g = ", ".join([f"{kinds.count(k)} {k}" for k in ("changed", "removed", "new") if k in kinds]
+                  + [f"{kinds.count(k)} {w}" for k, w in (("premises", "with new premises"), ("premised", "premises recorded"))
+                     if k in kinds])
     g = ", ".join(([g] if g else []) + ([f"{kinds.count('moved')} moved here"] if "moved" in kinds else []))
     d = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("definition", "changed"), ("rehashed", "rehashed")) if k in kinds)
     a = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("assumption", "changed"), ("recorded", "recorded")) if k in kinds)

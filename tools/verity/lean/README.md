@@ -216,7 +216,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
   one's are the guarantee's named assumptions. One that asserts anything else (an unlisted `Prop`, `False`, a bound
   predicate, a constant applied to a proposition or a predicate, a recursive definition) is a new one.
   In a conclusion, and under a definition outside a `Guarantees` module, a premise is a constant of an assumptions
-  module or of a module under `shape.premises` that a hypothesis mentions. `--update` writes each one's `digest`: its `reads`
+  module or of a module under `shape.premises` that a hypothesis mentions, or a hypothesis's head that the repository
+  builds. `--update` writes each one's `digest`: its `reads`
   record's, else, wherever its module lies, that of it and every definition it reads in `meaning` and this repository's
   modules (`Facts.lean`'s `assumption_reads`). So a change to an assumption or to what it reads fails under its own name,
   and the landing DM shows it; an entry no guarantee reads fails. A list of modules is the old form:
@@ -234,7 +235,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
   modules the package imports.
 - `guarantees`: the guarantees (README "Glossary"), and any lemma still listed beside them.
   `--update` fills each record, and a `reads` section, from the build: the signature, the named assumptions among the
-  hypotheses, a hash of the type, and for each module the definitions the guarantees read, with a hash each (not who
+  hypotheses, the `premises` (every named assumption it rests on), a hash of the type, and for each module the
+  definitions the guarantees read, with a hash each (not who
   reads them), and a `digest` of those hashes. Without `--update` the audit fails on any difference, so a statement, or
   a definition it depends on, cannot change without a visible diff of this file. A record holds the statement, not the
   proof: list a `sorry` stub, and the guarantee passes once a proof with allowed axioms replaces it. A record written
@@ -314,8 +316,8 @@ the replay pass it: only the records see it, and only a person can judge it. (A 
 Merkle binding guarantee vacuous for unsalted schemes; the records flagged it and a review caught it.) `--update` records
 the change and prints it: each changed guarantee's signature before and after, and each changed definition a guarantee
 reads, with the guarantees that read it and its source now (also in `review.txt` among the reports). Say so in the PR.
-An audit without `--update` whose only failures are record differences (a guarantee's signature, named assumptions or
-type hash, a `reads` group, an assumption's digest: what a train's merge of two PRs, each recorded on its own side, can
+An audit without `--update` whose only failures are record differences (a guarantee's signature, named assumptions,
+premises or type hash, a `reads` group, an assumption's digest: what a train's merge of two PRs, each recorded on its own side, can
 leave) writes the `lean-audit.json` and `review.txt` that `--update` would among its reports, and its `report.json`'s
 `regenerated` names that file; a missing record or name, an owner or any other failure writes none. Which failures those
 are is decided by code, not by text: every failure carries one (`check.py`'s `Failure`, such as `guarantees.signature` or

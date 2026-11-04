@@ -49,7 +49,8 @@ environment extension loaded, so none of the package's code runs), and replays t
                  which `--update` converts into the definitions the guarantees read there
     guarantees   a theorem in `guarantees` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop`
                  hypothesis that is not a listed assumption, or no longer says what its record says:
-                 signature, named assumptions, type hash, and (under `reads`, per module) the definitions the guarantees
+                 signature, named assumptions, premises (the named assumptions its statement rests on, `assumption_records`),
+                 type hash, and (under `reads`, per module) the definitions the guarantees
                  read and the digest of those definitions, which with the type hashes fix what each guarantee reads, so
                  the record lists no readers (one that does fails until `--update`); the hashes are SHA-256 over a
                  canonical form of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are
@@ -1341,7 +1342,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         fails.append(Failure("assumptions.modules", None, f"assumptions: the policy lists assumption modules "
                              f"({', '.join(prefixes)}); list the assumptions by name instead, each with its record: "
                              f"`check.py --update` converts the list"))
-    kept, premised, unfolds = {}, {}, {}
+    kept, premised, unfolds, recorded, compared = {}, {}, {}, set(), set()
     for name, rec in sorted(policy.get("guarantees", {}).items()):
         who = (rec or {}).get("owner") or owner
         if not who:
@@ -1392,12 +1393,14 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                                  f"definition of a `Guarantees` module (`check.py --lift` writes it), or is not a guarantee"))
         now = {"signature": f["signature"].splitlines(), "assumptions": sorted(set(named)), "type_hash": f["type_sha256"]}
         kept[name] = ({"owner": who} if who else {}) | now
+        recorded.add(name)
         if update:
             continue
         if not unowned(rec):
             fails.append(Failure("guarantees.unrecorded", name, f"guarantees: {name} has no record; run `check.py --update` "
                                  f"and commit the record"))
             continue
+        compared.add(name)
         for k in ("signature", "assumptions", "type_hash"):
             built = f["type_hash"] if k == "type_hash" and len(rec.get(k, "")) == OLD else now[k]
             if rec.get(k) != built:
@@ -1405,6 +1408,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                                                       n=1)) if k == "signature" else f"{rec.get(k)} -> {built}"
                 fails.append(Failure(f"guarantees.{k.replace('_', '-')}", name,
                                      f"guarantees: {name}'s {k.replace('_', ' ')} changed:\n{diff}"))
+                compared.discard(name)
                 break
     reads = guarantee_reads(facts)
     now_reads, old_reads, by = read_groups(reads), read_groups(reads, old=True), readers(reads)
@@ -1437,8 +1441,21 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                                  f"`python tools/verity/lean/merge.py --normalize` drops them"))
     walked = {a: (next((e["module"] for e in es if e["name"] == a), None), digest(es))
               for a, es in facts.get("assumption_reads", {}).items() if es}
-    records, why = assumption_records(policy, now_reads, update, owner, premised, unfolds, walked, by)
+    records, why, taken = assumption_records(policy, now_reads, update, owner, premised, unfolds, walked, by)
     fails += why + assumed_failures(policy, facts, records)
+    rests: dict[str, set[str]] = {}
+    for a, gs in taken.items():
+        for g in gs:
+            rests.setdefault(g, set()).add(a)
+    for name in sorted(recorded):
+        r = kept[name]
+        kept[name] = {k: v for k, v in r.items() if k != "type_hash"} | {"premises": sorted(rests.get(name, ())),
+                                                                          "type_hash": r["type_hash"]}
+        if name in compared and (was := policy["guarantees"][name].get("premises")) != kept[name]["premises"]:
+            fails.append(Failure("guarantees.premises-changed", name, f"guarantees: {name}'s premises changed: "
+                                 f"{', '.join(was) if isinstance(was, list) and was else 'none' if was is not None else 'unrecorded'}"
+                                 f" -> {', '.join(kept[name]['premises']) or 'none'}; run `check.py --update` and commit "
+                                 f"the record"))
     ifails, inline, _ = inline_failures(policy, facts)
     fails += ifails
     out = dict(policy)
@@ -2214,11 +2231,12 @@ def unfolding(d: str, unfolds: dict, listed) -> tuple[list[str], list[str]] | No
 
 def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None,
                        premised: dict | None = None, unfolds: dict | None = None, walked: dict | None = None,
-                       read_by: dict | None = None) -> tuple[dict, list[str]]:
-    """The `assumptions` records as the build has them, and the failures: each named assumption (a definition of the spec,
-    stated as a `Prop` and taken as a hypothesis or read inside a guarantee's statement) has an `owner` and a `digest`, so a
-    changed assumption shows as its own record, and an entry no guarantee reads fails.  The digest is the one its `reads`
-    record holds, where the definitions it reads have records of their own; for a premise no `reads` record holds, whatever
+                       read_by: dict | None = None) -> tuple[dict, list[str], dict[str, set[str]]]:
+    """The `assumptions` records as the build has them, the failures, and {named assumption: the guarantees that take it
+    as a premise} (``premised`` with each alias of listed assumptions as those), which each guarantee's record lists as
+    its `premises`.  Each named assumption (a definition of the spec, stated as a `Prop` and taken as a hypothesis or read
+    inside a guarantee's statement) has an `owner` and a `digest`, so a changed assumption shows as its own record, and an
+    entry no guarantee reads fails.  The digest is the one its `reads` record holds, where the definitions it reads have records of their own; for a premise no `reads` record holds, whatever
     module defines it (a Proofs or Properties module, outside `meaning`), it is ``walked``'s ({premise: (its module, the
     digest of it and every definition it reads in `meaning` and this repository's modules)}, `Facts.lean`'s
     `assumption_reads`), so a change to its statement or to anything it reads changes its record.  An
@@ -2229,7 +2247,8 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     a statement takes, headed by a constant of an assumptions module or of any module this repository builds
     (`own_modules`: a premise defined in `Definitions` carries what it assumes as much as one in `Models`), its `Guarantees`
     definitions unfolded and a `Premises` abbrev seen through, and under its other definitions and in its conclusion each
-    constant of an assumptions module or a `shape.premises` module that a hypothesis mentions:
+    constant of an assumptions module or a `shape.premises` module that a hypothesis mentions, and the head of a hypothesis
+    there that is a constant of a module this repository builds (an antecedent the package states, `TapOpens … → bound`):
     one the lock doesn't list fails, and an update adds it the same way, so an entry lost in a merge is never silent.
     A premise that is an alias of listed assumptions (`unfolding`, by ``unfolds``) is not one: what it unfolds to is
     premised in its place.  Under an update, a premise that doesn't unfold counts as listed, since the update adds it."""
@@ -2239,7 +2258,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     owners = {n: (r or {}).get("owner") for n, r in policy.get("guarantees", {}).items()}
     if isinstance(assumed, list):
         if not update:
-            return {}, []
+            return {}, [], {}
         assumed = {}
         for d, (m, _, by) in sorted(read.items()):
             if under(policy["assumptions"], m):
@@ -2301,7 +2320,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                              f"add it with its guarantees' owner and commit the record (Daniel's DM shows it when it "
                              f"lands), or write {json.dumps(d)}: {json.dumps({'owner': '@lane'} | entry)} under "
                              f"`assumptions`{'' if mine else ' with the lane that answers for it'}.{parts}"))
-    return out, fails
+    return out, fails, premised
 
 
 class Codes(frozenset):
@@ -2318,6 +2337,7 @@ class Codes(frozenset):
 #: name, an owner, and every other failure take a person
 RECORD_DIFFERENCE = Codes({
     "guarantees.signature", "guarantees.assumptions", "guarantees.type-hash",       # its record's statement differs
+    "guarantees.premises-changed",                                                  # or what it rests on
     "guarantees.reads-new", "guarantees.reads-gone", "guarantees.reads-changed",    # a `reads` group differs
     "guarantees.reads-digest", "guarantees.readers",                                # or still lists its readers
     "guarantees.unrecorded",                                                        # owned, with no record yet
