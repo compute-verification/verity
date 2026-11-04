@@ -173,14 +173,4 @@ elab "ret_walk" "[" cs:ident,* "]" : tactic => do
       | none => left := left.push g; todo := rest
   setGoals left.toList
 
-open Lean Elab Tactic Meta in
-/-- `kernel_rfl` closes `a = b` with `Eq.refl a` and leaves `a ≡ b` to the kernel, which checks it when the declaration
-is added (a false one fails there). The elaborator's `rfl` unfolds an executable function's join points into both arms;
-the kernel compares two calls of it whose arguments differ only in fields it never reads in milliseconds. -/
-elab "kernel_rfl" : tactic => do
-  let g ← getMainGoal
-  let some (_, a, _) := (← instantiateMVars (← g.getType)).eq? | throwError "kernel_rfl: the goal is not an equation"
-  g.assign (← mkEqRefl a)
-  replaceMainGoal []
-
 end FlockSoundness.Refine

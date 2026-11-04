@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Discharge.Exec.Setup
+import Flock.KernelRfl
 
 /-!
 # Table `j`'s tags: the identity alone differs, which the circuit and public parses do not read

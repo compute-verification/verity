@@ -6,6 +6,7 @@ general instance form (`scopeOkI`, once `wiresAcyclic` passed); with public outp
 -/
 import Flock.HmRow
 import Flock.JsonParse
+import Flock.KernelRfl
 
 namespace Flock.ProvedScope
 

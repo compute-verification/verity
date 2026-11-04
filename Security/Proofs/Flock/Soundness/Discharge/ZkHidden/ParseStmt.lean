@@ -2,6 +2,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
 import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+import Flock.KernelRfl
 
 /-!
 # The hidden-output `--zk` chain's statement circuit
