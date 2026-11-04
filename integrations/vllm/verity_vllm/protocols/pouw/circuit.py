@@ -39,7 +39,7 @@ from verity.core.protocols.pouw.protocol import tagged
 
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.query.manifest.format import spec_family
-from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.evaluation.reference import evaluate_region
 
 #: The model Program's families for one row of a PoUW site: its served output, checked by the replay against the call; the
 #: second is a biased linear's row whose bias add was the pre-bias output's only reader (`program.registry.pouw_rows`)
@@ -301,8 +301,9 @@ def call_leaf(rec: CallRecord) -> bytes:
 
 
 def calls_root(salt: bytes, weights_root: bytes, records: Sequence[CallRecord]) -> bytes:
-    """The root over every call's leaf, in call order."""
-    return commit_rows(tagged(CALLS_BINDING, salt, weights_root), -1, [call_leaf(r) for r in records]).commitment.root
+    """The root over every call's leaf, in call order: a plain tree, which the replay recomputes from the records."""
+    return commit_rows(tagged(CALLS_BINDING, salt, weights_root), -1, [call_leaf(r) for r in records], "sha256",
+                       public=True).commitment.root
 
 
 def sides(records: Sequence[CallRecord]) -> list[WeightRecord]:

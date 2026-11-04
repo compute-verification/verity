@@ -49,10 +49,6 @@ theorem deployPlainK_true (rel : Readable.Parsed → Readable.Relation) :
   congrArg (fun W => ({ deployPlain rel with V := W } : Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.PlainTrace))
     VK_true
 
-theorem deployPlainTrimK_id (rel : Readable.Parsed → Readable.Relation) :
-    deployPlainTrimK id rel = deployPlainTrim rel :=
-  congrArg (fun D => Claims.Flock.Deploy.mapCols D trimCol) (deployPlainK_id rel)
-
 /-- **`VK keep`'s decision at SHA-512**: it accepts exactly when the verdict read through `keep` accepts the record and
 proof files at the statement's setup and the custody checks pass (`next_decide_sha512`'s form). -/
 theorem nextK_decide_sha512 (keep : Bool → Bool) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}

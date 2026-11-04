@@ -32,9 +32,9 @@ each session's coins are its own keyed coin tree's, drawn fresh at its `Hello`, 
 record is read once, in comparisons quadratic in V*'s statement count (at most 4096, `RecBudget`), never per gate.
 -/
 import Lean.Data.Json
+import Flock.JsonParse
 import Flock.Bytes
 import Flock.Hash
-import Flock.JsonParse
 
 namespace Flock
 namespace RecCompose

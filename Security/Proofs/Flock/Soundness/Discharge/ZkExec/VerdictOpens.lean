@@ -71,7 +71,7 @@ theorem reqOKZ_succ {ms : MerkleScheme} {sch : Flock.Schedule} {cap : Array Byte
       (Flock.positions (sch.levels.getD ℓ default) cw).toList from Refine.positions_eq _ hl cw, Array.toArray_toList]
   exact hmc
 
-/-- **The proof's openings pass `OpensOKZ`** (§14): for `hm96-sha512/v1`, a rep whose requests passed the executable's
+/-- **The proof's openings pass `OpensOKZ`** (`Flock.Merkle`): for `hm96-sha512/v1`, a rep whose requests passed the executable's
 Merkle checks (`ReqOKZ`) and whose caps are the proof's verifies every requested row, level 0's `2^lanes + EXTRA_LANES`
 wide, at openings and salts that are the proof's rows, siblings and salts. -/
 theorem opensOKZ_of (sch : Flock.Schedule) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
@@ -875,7 +875,7 @@ theorem zk_rep_reqs {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T
 
 /-! ## `ZkRepAccepts`'s openings -/
 
-/-- **A `--zk` rep's requested rows verify** (PROTOCOL.md §14; `ZkRepAccepts`'s third conclusion). At the `--zk`
+/-- **A `--zk` rep's requested rows verify** (`Flock.Merkle`; `ZkRepAccepts`'s third conclusion). At the `--zk`
 schedule under `hm96-sha512/v1`, at a compiled table at the executable's dimensions whose extra claims are the
 executable's, when a run of rep `r`'s transcript program consumes every round, every result of the compiled rep, played
 with the rep's messages and the rounds' coins, verifies every row it requested (`OpensOKZ`, level 0's rows `width₀ T`

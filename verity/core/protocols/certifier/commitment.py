@@ -27,7 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from verity.ml.commitments.identity import Digest, canonical_json_bytes, tagged_sha256
-from verity.core.protocols.certifier.grid import Grid, GridParams, Record, Row, Status, row_count, row_left_packed
+from verity.core.protocols.certifier.grid import Grid, GridParams, BlockGrid, Row, Status, row_count, row_left_packed
 
 ROW_TAG = "verity-network-warden/row/v1"
 RECORD_TAG = "verity-network-warden/record/v1"
@@ -69,6 +69,6 @@ class CommittedRecord:
     status: Status
 
 
-def commit(record: Record, params: GridParams) -> CommittedRecord:
+def commit(record: BlockGrid, params: GridParams) -> CommittedRecord:
     return CommittedRecord(record.link, record.window,
                            record_digest(record.link, record.window, record.grid, record.status, params), record.status)

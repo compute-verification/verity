@@ -4,13 +4,16 @@ with the command it lacks and given no verdict, one that refused to run is missi
 wrote no answer errs; and sampled proofs' accepted answer composes, with the others missing, to a pending block record that
 `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing composes to reject with no
 block record. The record accepts only when every subprotocol accepted on its node, and names each one missing, rejecting,
-malformed or about another server. The wipe composes only when its answer accepts on the record's server. PoUW's
-development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a period
+malformed or about another server. An accepted network certifier's clause names the one link K counts and every other
+link of the node uncounted and uncertified; one whose certifier ran on the node names no link. The wipe composes only
+when its answer accepts on the record's server. Remote's product runs no onsite piece and composes sampled proofs and
+PoUW alone, the others dropped. PoUW's development piece checks the window's gate session and credits
+nothing, and the gate is refused while the lane has a period
 open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
 `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
 gates nothing; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
-front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its composite
+front doesn't take, a front whose endpoint isn't on the network certifier's id form, and a front load with no front; its composite
 step publishes each case's and each product's verdict lines and nothing else. Its V3c step runs the split network
 certifier's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
 written; its preflight refuses the split beside the certifier's whole piece, or without V3c. Its load, `serve_load.py
@@ -431,6 +434,41 @@ def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_o
     assert line["reason"].split("; the network certifier: ", 1)[1].startswith(f"accept (trusted-host {premise}; ")
 
 
+def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_gate_names_none(tmp_path):
+    """The network certifier's placement as its piece writes it. On the gate's host, its ``links`` are the relayed link
+    K counts and the gate's ssh link it doesn't: the accept's clause names the counted link and says every other link of
+    the node is uncounted and uncertified, before the premise. Under ``--gate local`` it has no links, and the clause
+    states the premise alone."""
+    node, host = "vy-dc-h200", "204.12.178.84"
+    gated = {"kind": "not-placed", "parties": {"network_certifier": host, "prover": node, "verifier": node},
+             "trusted-host": f"assumed, the auditor's devices not placed: the network certifier ran on {host}, not the "
+                             f"prover's {node}",
+             "links": [{"name": "certified", "from": host, "to": node, "counted": True,
+                        "via": "the warden's tunnel to the endpoint's port"},
+                       {"name": "gate", "from": node, "to": host, "counted": False,
+                        "via": "ssh, both ways: the session's request and prompts, its status and its fetch"}],
+             "uncounted": f"every link of {node}'s but the certified one"}
+    local = {"kind": "prover-node", "parties": {"network_certifier": node, "prover": node, "verifier": node},
+             "trusted-host": f"unmet: the network certifier ran on the prover's node {node} (the front's --gate local)",
+             "links": [], "uncounted": f"every link of {node}'s"}
+    clause = {}
+    for name, place in (("gated", gated), ("local", local)):
+        (d := tmp_path / name / "certifier").mkdir(parents=True)
+        (d / "answer.json").write_text(json.dumps({
+            "protocol": "verity/certifier/v0", "verdict": "accept", "reason": None, "commitment": "cd" * 64,
+            "public": {"K": 15764, "eps": "1/100", "windows": 1}, "profile": {"placement": place}}))
+        (d / S.RAN).write_text(json.dumps({"server": node, "rc": 0, "limit": "60m"}))
+        _report, _rec, line = S.record(_rows(_accepted(), d.parent), window=1, steps=(5, 11), node=node, run="r1",
+                                       servers={k: S.piece_server(k, d.parent) for k in [*S.PIECES, "wipe"]})
+        clause[name] = line["reason"].split("; the network certifier: ", 1)[1]
+    assert clause["gated"].startswith(
+        f"accept (K counts the relayed link alone, {host} to {node} through the warden's tunnel to the endpoint's "
+        f"port; every link of {node}'s but the certified one is uncounted and uncertified; "
+        f"trusted-host {gated['trusted-host']}; ")
+    assert clause["local"].startswith(f"accept (trusted-host {local['trusted-host']}; ")
+    assert "K counts" not in clause["local"]
+
+
 def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp_path):
     row = S.sampled_proofs_row(tmp_path)
     assert row["verdict"] == "error" and "no summary" in row["reason"]
@@ -567,6 +605,67 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
         assert rec["legs"][leg]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == [leg]
 
 
+def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(tmp_path, monkeypatch, capsys):
+    """PRODUCT=remote: `pieces` runs PoUW's piece and no onsite one, whatever its command, printing a DROPPED line for
+    each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
+    composed, whatever their pieces left, and composes accept from sampled proofs' and PoUW's accepts on its node. The
+    same pieces composed for onsite reject on the wipe's answer. The report and the line say they were composed on the
+    served node, from the answer files it wrote, and the published line keeps that. A certifier front's kept fetch and
+    session in the serve dir leave remote's record as it was."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    pieces, ran = tmp_path / "pieces", tmp_path / "ran"
+    pouw = {"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]}
+    env = {"POUW_CMD": f"echo '{json.dumps(pouw)}' > \"$3/answer.json\"",
+           **{f"{c}_CMD": f"touch {ran}" for c in ("POUS", "BANDWIDTH", "CERTIFIER")}}
+    got = S.pieces(tmp_path, 1, pieces, env=env, node="vy-dc-h200", product="remote")
+    why = "not run: the remote product composes sampled proofs and PoUW alone"
+    assert not ran.exists()
+    assert got == {"pouw": {"verdict": "accept", "rc": 0},
+                   **{c: {"verdict": "dropped", "why": why} for c in ("pous", "bandwidth", "certifier")}}
+    dropped = [x.split(" (")[0] for x in capsys.readouterr().out.splitlines() if x.startswith("DROPPED ")]
+    assert dropped == ["DROPPED PoUS", "DROPPED the bandwidth audit", "DROPPED the network certifier"]
+    (pieces / "wipe").mkdir()
+    (pieces / "wipe" / "answer.json").write_text(json.dumps(WIPE_REJECT))
+    (pieces / "wipe" / S.SERVED).write_text(json.dumps({"server": "vy-dc-h200"}))
+    (tmp_path / "serve").mkdir()
+    argv = ["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
+            str(tmp_path / "audit"), "--pieces", str(pieces), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200",
+            "--product", "remote"]
+    rc = S.main(argv)
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert rc == 0 and line["check"] == {} == BR.check(rec)
+    assert (line["product"], line["composed"], line["record_missing"], line["missing"]) == ("remote", "accept", [], {})
+    names = ("PoUS", "the bandwidth audit", "the network certifier", "the wipe")
+    assert line["dropped"] == {n: why for n in names} and all(line["verdicts"][n] == "dropped" for n in names)
+    assert line["reason"] == "sampled proofs: accept; PoUW: accept; " + "; ".join(f"{n}: dropped, {why}" for n in names)
+    assert (rec["composed"]["product"], rec["composed"]["dropped"]) == ("remote", ["bandwidth", "certifier", "pous", "wipe"])
+    assert rec["composed"]["legs"] == {"integrity": "accept", "pouw": "accept"} and rec["legs"]["wipe"] is None
+    report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
+    assert report["protocols"]["wipe"] == {"verdict": "dropped", "owner": "memory-accounting", "why": why}
+    where = {"host": "vy-dc-h200", "served_node": True, "from": S.COMPOSED_FROM}
+    assert report["composed_on"] == line["composed_on"] == where
+    assert json.loads(S.public_line("RECORD " + json.dumps(line)).removeprefix("RECORD "))["composed_on"] == where
+    front = tmp_path / "serve" / "private"
+    (front / "certifier" / "c20260101T000000Z-ab12").mkdir(parents=True)
+    (front / "certifier" / "c20260101T000000Z-ab12" / "fetch.tar.gz").write_bytes(b"the front's kept fetch")
+    (front / "certifier-front").mkdir()
+    (front / "certifier-front" / "session.json").write_text(json.dumps({"run": "c20260101T000000Z-ab12", "rc": 0}))
+    assert S.main(argv) == 0
+    assert json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD ")) == line
+    assert json.loads((tmp_path / "record" / "block-record.json").read_text()) == rec
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    assert S.main(argv) == 0
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    assert line["composed_on"] == {**where, "host": "vy-auditor-2", "served_node": False}
+    assert S.main([*argv, "--product", "onsite"]) == 1
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    assert (line["product"], line["composed"], line["by"]) == ("onsite", "reject", ["the wipe"])
+
+
 SID = "s20261026T221500Z-ab12"
 GATE = "ssh -i KEY -o BatchMode=yes research@gate"
 
@@ -644,6 +743,25 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     assert "POUW (development run, credits nothing) " in out and got["pouw"]["verdict"] == "accept"
     assert (got["pouw"]["session"], got["pouw"]["coins"], got["pouw"]["credited"]) == (SID, None, False)
     assert {p: got["pouw"][p]["met"] for p in S.PREMISES} == {"AcceptedLive": False, "SaltIsLiveCoin": True}
+
+
+def test_the_pouw_piece_fetches_the_windows_sample_session_and_gives_the_check_its_tree(tmp_path, monkeypatch):
+    """A window whose record names its sample's session (``draw_session``, which the coin check refuses without): the
+    piece fetches it beside the window's session, and the check gets its tree as ``--draw-dir``."""
+    calls, got = [], []
+    monkeypatch.setattr(S, "_gate_out", _gate(calls))
+    d, dsid = _h1_serve_dir(tmp_path), "s20261026T221503Z-cd34"
+    (d / S.H1_CALLS.format(k=1)).write_text(json.dumps({"commitment": {"session": {"session": SID},
+                                                                       "draw_session": {"session": dsid}}}))
+
+    def check(calls_file, tree, ledger, pins, main, key, out, inputs):
+        got.append(inputs)
+        assert (tree / "out" / "record.json").is_file() and (Path(inputs["--draw-dir"]) / "out" / "record.json").is_file()
+        return {"ok": True, "reason": None, "manifest": None, "credit": {}}
+
+    S.pouw(d, 1, tmp_path / "pieces" / "pouw", gate=GATE, key="ff" * 64, main=None, check=check)
+    assert [w for _g, w in calls] == [("fetch", SID), ("fetch", dsid), ("ledger",), ("pins",)]
+    assert got == [{"--draw-dir": str(tmp_path / "pieces" / "pouw" / "session" / dsid)}]
 
 
 def test_the_pouw_piece_gives_credit_the_declared_program_the_period_and_the_proofs_it_has(tmp_path, monkeypatch):
@@ -933,8 +1051,8 @@ IDS = "--protocol ids --id-payload 503"
     ("varied", FRONT, "--gate --warmup --bucket-ms-x", IDS, "PREFLIGHT: CERTIFIER_FRONT passes --bucket-ms, which this "
                                                              "tree's certifier front doesn't take"),
     ("front", "", "", "", "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"),
-    ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", "PREFLIGHT: the certifier front's warden sends "
-     "id-form requests, which serve-openai answers only under SERVE_ARGS='--protocol ids --id-payload 503'"),
+    ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", "PREFLIGHT: the network certifier in front of the "
+     "endpoint sends id-form requests, which serve-openai answers only under SERVE_ARGS='--protocol ids --id-payload 503'"),
 ])
 def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_front_load_with_no_front(
         tmp_path, load, front, takes, serve_args, line):
@@ -949,6 +1067,79 @@ def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_
                         check=False).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
     assert (rc, said) == ((3, [line]) if line else (0, []))
+
+
+def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused(tmp_path):
+    """SETTINGS names the file a load's counts are launched from, so the job record's command holds only its path."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    settings = tmp_path / "private" / "settings.env"
+    settings.parent.mkdir()
+    settings.write_text("LOAD=front\nCERTIFIER_FRONT=\n")
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "SETTINGS": str(settings)}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
+    assert (rc, said) == (3, ["PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"])
+    got = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree,
+                         env={**env, "SETTINGS": str(tmp_path / "missing.env")}, check=False, capture_output=True, text=True)
+    assert (got.returncode, got.stderr.strip()) == (3, f"PREFLIGHT: SETTINGS={tmp_path / 'missing.env'} is not a readable file")
+
+
+@pytest.mark.parametrize("product, extra, line", [
+    ("remote", {}, None),
+    ("remote", {"POUS_CMD": "true"}, "PREFLIGHT: PRODUCT=remote runs no onsite piece, and POUS_CMD is set: unset it"),
+    ("remote", {"CERTIFIER_CHAIN_CMD": "true"},
+     "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_CHAIN_CMD is set: unset it"),
+    ("remote", {"CERTIFIER_CMD": "true"},
+     "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_CMD is set: unset it"),
+    ("remote", {"LOAD": "front", "CERTIFIER_FRONT": FRONT, "SERVE_ARGS": IDS}, None),
+    ("onsite", {}, None),
+    ("offsite", {}, "PREFLIGHT: PRODUCT is onsite or remote, not offsite"),
+])
+def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_command(tmp_path, product, extra, line):
+    """PRODUCT=remote drops the onsite pieces: in a tree that has the wipe's piece its default WIPE_CMD isn't set, and
+    the preflight refuses any onsite piece's command set, before anything runs. The certifier's front is how a run's
+    requests are served, not a piece, so remote takes it."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    _script(tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh", "exit 0")
+    (tree / "benchmarks" / "network_traces").mkdir(parents=True)
+    (tree / "benchmarks" / "network_traces" / "certifier_piece.py").write_text(
+        "print('usage: certifier_piece.py front PORT [--gate --warmup --bucket-ms]')\n")
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "PRODUCT": product, **extra}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
+    assert (rc, said) == ((3, [line]) if line else (0, []))
+
+
+@pytest.mark.parametrize("extra, line", [
+    ({"PRODUCT": "onsite"}, "PREFLIGHT: advice-charge serves a test run alone: PRODUCT=remote and H1_GATE empty"),
+    ({"H1_GATE": "ssh gate"}, "PREFLIGHT: advice-charge serves a test run alone: PRODUCT=remote and H1_GATE empty"),
+    ({"SERVE_ARGS": "--h1-receipts --h1-model m"}, "PREFLIGHT: advice-charge serves with H1_GATE empty, and serve-openai "
+     "refuses SERVE_ARGS' --h1-receipts or --h1-prover without H1's --protocols: drop them"),
+    ({"SERVE_ARGS": f"{IDS} --h1-prover"}, "PREFLIGHT: advice-charge serves with H1_GATE empty, and serve-openai "
+     "refuses SERVE_ARGS' --h1-receipts or --h1-prover without H1's --protocols: drop them"),
+    ({"SERVE_ARGS": IDS}, None),
+])
+def test_the_advice_charge_run_serves_remote_with_no_h1_option_serve_openai_would_refuse(tmp_path, extra, line):
+    """advice-charge serves a test run with H1_GATE empty, which passes serve-openai no H1 --protocols, so its preflight
+    refuses an onsite product, an H1 gate, and an H1 option in SERVE_ARGS, which serve-openai refuses only once the node
+    is leased; a run it lets through goes on to the row's files (here absent)."""
+    tree, venv, row = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "row"
+    tree.mkdir()
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "SERVE_ROOT": str(tmp_path / "serve"), "ROW": str(row), "PRODUCT": "remote", "H1_GATE": "", **extra}
+    (tmp_path / "out").mkdir()
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "advice-charge"], cwd=tree, env=env,
+                        check=False, capture_output=True).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
+    assert (rc, said) == (3, [line or f"PREFLIGHT: no {row}/manifest.json"])
 
 
 FAKE_COMPOSITE = '''import json, sys
@@ -973,9 +1164,13 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     """served_composite.sh with a stand-in lake, served_case.sh, served_cases.py and composite.py: PoUS's case is written
     under the serve dir's private dir with both Lean answers built and passed, and served_cases.py's under it, given no α
     or Γ while ALPHA and GAMMA are unset; each product gets the cases of its own subprotocols; OUT/verdicts.txt gets each
-    CASE line's protocol and verdict, each case not written by its protocol, and each product's NOT_ESTABLISHED and
-    VERDICT lines, never a PIECE line, a reason, a log or a path; each product's public output is OUT/composite/PRODUCT;
-    and without composite.py in the tree it says so and fails, since no Lean answered."""
+    CASE line's protocol and verdict, each case not written by its protocol, each product's NOT_ESTABLISHED and
+    VERDICT lines and the host it composed on, never a PIECE line, a reason, a log or a path; each product's public
+    output is OUT/composite/PRODUCT;
+    and without composite.py in the tree it says so and fails, since no Lean answered. PRODUCT=remote needs no
+    served_case.sh, writes neither PoUS's case nor the wipe's, and runs remote's Lean alone. A serve dir with no V3c
+    audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/sampled-proofs-served``) once it holds a
+    case."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
     out.mkdir()
     _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
@@ -994,7 +1189,9 @@ echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run"
     v2 = d / "private" / "sampled-proofs-v2"
     (tree / "benchmarks" / "one_stage" / "served_cases.py").write_text(f'''import json, sys
 from pathlib import Path
-assert sys.argv[1:] == ["--serve-dir", "{d}", "--private", "{d}/private", "--from-division"], sys.argv
+assert sys.argv[1:3] in (["--serve-dir", "{d}"], ["--audit", "{d}/sampled-proofs-served"]), sys.argv
+assert sys.argv[3:] == ["--private", "{d}/private", "--from-division"], sys.argv
+Path("{tmp_path}", "served_cases.argv").write_text(json.dumps(sys.argv[1:3]))
 Path("{v2}").mkdir(parents=True)
 Path("{v2}", "case.json").write_text(json.dumps({{"evidence": "beef"}}))
 Path("{v2}", "answer.json").write_text(json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept"}}))
@@ -1008,6 +1205,9 @@ sys.exit(1)
                                  check=False, capture_output=True, text=True)
     r = run()
     assert r.returncode == 0, r.stderr
+    host = subprocess.run(["hostname", "-s"], check=True, capture_output=True, text=True).stdout.strip()
+    on = (f"COMPOSITE: composed on {host}, which holds the serve dir, from the cases the served node wrote there, not "
+          "from the parties that produced them")
     assert (out / "verdicts.txt").read_text().splitlines() == [
         "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE CASES: served_case.sh exit 0",
         "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept",
@@ -1015,7 +1215,8 @@ sys.exit(1)
         "COMPOSITE NOT_WRITTEN verity/inference-only/v0",
         "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
         "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
-        "COMPOSITE onsite: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE onsite: VERDICT verity/onsite/v0 reject components"]
+        "COMPOSITE onsite: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE onsite: VERDICT verity/onsite/v0 reject components",
+        on]
     p = d / "private" / "composite"
     assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == [str(v2)]
     assert json.loads((p / "onsite" / "private" / "argv.json").read_text()) == [str(d / "private" / "pous" / "w0")]
@@ -1028,6 +1229,26 @@ sys.exit(1)
     shutil.rmtree(out / "composite")
     assert run().returncode == 1
     assert (out / "verdicts.txt").read_text() == "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+    (tree / "benchmarks" / "pous" / "served_case.sh").unlink()
+    (out / "verdicts.txt").unlink()
+    shutil.rmtree(d / "private")
+    env["PRODUCT"] = "remote"
+    r = run()
+    assert r.returncode == 0, r.stderr
+    assert (out / "verdicts.txt").read_text().splitlines() == [
+        "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept", "COMPOSITE CASE verity/registration/v0 accept",
+        "COMPOSITE NOT_WRITTEN verity/inference-only/v0", "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
+        "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
+        on]
+    assert sorted(x.name for x in (out / "composite").iterdir()) == ["remote"] and not (p / "onsite").exists()
+    assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--serve-dir", str(d)]
+    (d / "sampled-proofs-served" / "window").mkdir(parents=True)
+    (d / "sampled-proofs-served" / "window" / "case.json").write_text("{}")
+    (out / "verdicts.txt").unlink()
+    shutil.rmtree(d / "private")
+    assert run().returncode == 0
+    assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--audit", str(d / "sampled-proofs-served")]
 
 
 DIGEST = "5e" * 64

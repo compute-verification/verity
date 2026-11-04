@@ -3,17 +3,17 @@ import Definitions.Accounting.Assumptions.RemoteSketch
 import Proofs.Accounting.RemoteHeld
 
 /-!
-# Statement C in full against the receipts' sketch bound and its derivation
+# The certifiers' observation against the receipts' sketch bound and its derivation
 
-With no device outside the node computing on a registered block during a credited pass (`NoOutsideCompute`), a block
-on the node or computed on outside it at a tick of the pass was on the node (`present_of_outside`). So:
+Where nothing but the verifier's messages entered the node over the credited passes of an accepting outcome, the
+certifiers' coverage of its uplinks (`Covered`) leaves no device outside the node computing for it then, so a block on
+the node or computed on outside it for the node at a tick of a pass was on the node (`onNode_of_covered`). So:
 
-* `SketchBoundAt` and `NoOutsideCompute` give `SketchBound` (`sketchBound_of_noOutside`), and `SketchBound` gives
-  `SketchBoundAt` at every record of outside computation (`sketchBoundAt_of_sketchBound`);
-* the sketch model's `Present` is `PresentAt`, the same with outside computation allowed, under C over the model's
-  passes (`present_of_noOutside`, `presentAt_of_present`);
-* the provider's lockdown (`ProviderLockdown`) over an interval holding every credited pass gives `NoOutsideCompute`
-  (`noOutsideCompute_of_lockdown`).
+* `SketchBoundAt` and `Covered` give the receipts' sketch bound where the certifiers observed nothing else entering
+  (`Quiet` at `Ingress.counted`), at `δ + δ_net` with their count (`IngressCounted`, `sketchBound_of_covered`), and
+  `SketchBound` gives `SketchBoundAt` at every record of outside computation (`sketchBoundAt_of_sketchBound`);
+* the sketch model's `Present` is `PresentAt`, the same with outside computation allowed, under `Covered` where nothing
+  else entered over the model's passes (`present_of_covered`, `presentAt_of_present`).
 -/
 
 namespace Accounting.SecurityProofs.Remote
@@ -22,33 +22,29 @@ open Accounting.Remote.Held Accounting.Remote.Held.Assumptions
 
 section Trace
 
-variable {Ω : Type} {T : Trace Ω} {O : Outside T}
+variable {Ω : Type} {T : Trace Ω} {O : Outside T} {I : Ingress Ω}
 
-/-- Under `NoOutsideCompute`, a block on the node or computed on outside it at a tick of a credited pass of an
-accepting outcome was on the node then. -/
-theorem present_of_outside (hO : NoOutsideCompute T O) {ω : Ω} (ha : T.accepts ω) {p t : ℕ} (hp : p < T.passes)
-    (h1 : T.tick ω p ≤ t) (h2 : t < T.tick ω (p + 1)) {j : Fin T.blocks} (hj : j ∈ T.present ω t ∪ O.blocks ω t) :
-    j ∈ T.present ω t := by
+/-- Under `Covered`, a block on the node or computed on outside it for the node at a tick of a credited pass of an
+accepting outcome where nothing but the verifier's messages entered was on the node then. -/
+theorem onNode_of_covered (hC : Covered T O I) {ω : Ω} (ha : T.accepts ω) (hq : Quiet T I.entered ω) {p t : ℕ}
+    (hp : p < T.passes) (h1 : T.tick ω p ≤ t) (h2 : t < T.tick ω (p + 1)) {j : Fin T.blocks}
+    (hj : j ∈ T.present ω t ∪ O.blocks ω t) : j ∈ T.present ω t := by
   rcases Finset.mem_union.1 hj with h | h
   · exact h
-  · rw [(hO ω ha p hp t h1 h2).1] at h
+  · rw [(hC ω ha hq p hp t h1 h2).1] at h
     simp at h
-
-/-- The provider's lockdown over `[applied, lifted)` grounds `NoOutsideCompute` when every credited pass of every
-accepting outcome lies inside that interval. -/
-theorem noOutsideCompute_of_lockdown {applied lifted : ℕ} (hL : ProviderLockdown T O applied lifted)
-    (inside : ∀ ω, T.accepts ω → ∀ p < T.passes, applied ≤ T.tick ω p ∧ T.tick ω (p + 1) ≤ lifted) :
-    NoOutsideCompute T O := fun ω ha p hp t h1 h2 =>
-  hL ω ha t ((inside ω ha p hp).1.trans h1) (lt_of_lt_of_le h2 (inside ω ha p hp).2)
 
 variable [Fintype Ω]
 
-/-- `SketchBoundAt` and `NoOutsideCompute` give `SketchBound`. -/
-theorem sketchBound_of_noOutside {δ : ℝ} (hk : SketchBoundAt T O δ) (hO : NoOutsideCompute T O) :
-    SketchBound T δ :=
-  holdsMono (fun ω ha h p hp j hj => by
-    obtain ⟨t, h1, h2, ht⟩ := h p hp j hj
-    exact ⟨t, h1, h2, present_of_outside hO ha hp h1 h2 ht⟩) hk
+/-- `SketchBoundAt` at `δ`, `Covered` and the certifiers' count at `δnet` give the receipts' sketch bound where the
+certifiers observed nothing but the verifier's messages entering, at `δ + δnet`. -/
+theorem sketchBound_of_covered {δ δnet : ℝ} (hk : SketchBoundAt T O δ) (hC : Covered T O I)
+    (hI : IngressCounted T I δnet) :
+    T.Holds (δ + δnet) fun ω => Quiet T I.counted ω →
+      ∀ p < T.passes, ∀ j ∈ T.correct ω p, ∃ t, T.tick ω p ≤ t ∧ t < T.tick ω (p + 1) ∧ j ∈ T.present ω t :=
+  holdsMono (fun ω ha h hq p hp j hj => by
+    obtain ⟨t, h1, h2, ht⟩ := h.1 p hp j hj
+    exact ⟨t, h1, h2, onNode_of_covered hC ha (h.2 hq) hp h1 h2 ht⟩) (holdsAnd hk hI)
 
 /-- `SketchBound` gives `SketchBoundAt` at every record of outside computation. -/
 theorem sketchBoundAt_of_sketchBound {δ : ℝ} (hk : SketchBound T δ) (O : Outside T) : SketchBoundAt T O δ :=
@@ -65,8 +61,8 @@ open Accounting.Remote.Sketch Accounting.Remote.Sketch.Assumptions
 variable {β Hs : Type} {P N m h S L q ks : ℕ} {G : Fin P → ℕ}
 
 /-- `Present` with outside computation allowed: on every accepting outcome, a block the kept candidate's device of pass
-`j` obtained whole was in node memory or on a chip, or computed on by a device outside the node, at some tick of the
-pass. -/
+`j` obtained whole was in node memory or on a chip, or computed on by a device outside the node for it, at some tick of
+the pass. -/
 def PresentAt (A : Session β Hs P N m h S L q ks G) (T : Trace (Outcome β Hs N m)) (O : Outside T) : Prop :=
   ∀ ω, T.accepts ω → ∀ j : Fin P, ∀ t : Fin N, A.Whole ω j (A.kept ω j) t →
     ∀ b : Fin T.blocks, (b : ℕ) = t →
@@ -80,12 +76,13 @@ theorem presentAt_of_present (hP : Present A T) (O : Outside T) : PresentAt A T 
     obtain ⟨τ, h1, h2, h3⟩ := hP ω ha j t hw b hb
     exact ⟨τ, h1, h2, Finset.mem_union_left _ h3⟩
 
-/-- `PresentAt` and `NoOutsideCompute` give `Present`, where the model's passes are among the trace's credited ones. -/
-theorem present_of_noOutside {O : Outside T} (hle : P ≤ T.passes) (hO : NoOutsideCompute T O)
-    (hP : PresentAt A T O) : Present A T :=
+/-- `PresentAt` and `Covered` give `Present` where nothing but the verifier's messages entered the node over the
+credited passes of any accepting outcome, and the model's passes are among the trace's credited ones. -/
+theorem present_of_covered {O : Outside T} {I : Ingress (Outcome β Hs N m)} (hle : P ≤ T.passes)
+    (hC : Covered T O I) (hq : ∀ ω, T.accepts ω → Quiet T I.entered ω) (hP : PresentAt A T O) : Present A T :=
   fun ω ha j t hw b hb => by
     obtain ⟨τ, h1, h2, h3⟩ := hP ω ha j t hw b hb
-    exact ⟨τ, h1, h2, present_of_outside hO ha (lt_of_lt_of_le j.2 hle) h1 h2 h3⟩
+    exact ⟨τ, h1, h2, onNode_of_covered hC ha (hq ω ha) (lt_of_lt_of_le j.2 hle) h1 h2 h3⟩
 
 end Sketch
 

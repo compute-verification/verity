@@ -6,7 +6,7 @@ records each call they give the verifier's log of hash calls. The one hashing th
 `hm96-sha512/v1` key's: `Hm96.Default512.key`, its mask tables and its leaf prefix are the statement's constants, derived
 once from the key label with SHA-512 itself.
 
-Here: the oracle, and §14's Merkle checks over it. A registered scheme's node and leaf go through the oracle
+Here: the oracle, and `Flock.Merkle`'s Merkle checks over it. A registered scheme's node and leaf go through the oracle
 (`MerkleScheme.opsWith`, by the registry's ids alone); a scheme the registry doesn't name keeps its own closures.
 -/
 import Flock.Merkle

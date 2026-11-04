@@ -99,6 +99,22 @@ def inputNodes (d : Desc) : Array (Nat × Nat × Nat) := Id.run do
     at_ := at_ + x.members * d.gates id
   return out
 
+/-- `inputNodes` with each root callee's gates read off `Partition.gTable`, computed once. -/
+def inputNodesFast (d : Desc) : Array (Nat × Nat × Nat) := Id.run do
+  let some root := d.def? d.root | return #[]
+  let G := Partition.gTable d
+  let mut out := #[]
+  let mut at_ := 0
+  for x in root.nodes do
+    let id := d.callees.getD x.fn ""
+    if let some w := Flock.Program.inputWidth? id then out := out.push (w, x.n, at_)
+    at_ := at_ + x.members * Partition.look d G id
+  return out
+
+@[csimp] theorem inputNodes_eq_inputNodesFast : @inputNodes = @inputNodesFast := by
+  funext d
+  simp only [inputNodes, inputNodesFast, Partition.look_gTable]
+
 /-- The verifier's program function's parameters (`[[name, type], ...]`), distinct names whose types lower to exactly the
 root body's input nodes, with each one's Input gates. -/
 def params (d : Desc) (j : Json) : V (Array Param) := do

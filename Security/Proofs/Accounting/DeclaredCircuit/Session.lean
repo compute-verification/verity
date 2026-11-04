@@ -258,7 +258,7 @@ theorem pr_badK_pass_le [Fintype Ω] [Fintype Ca] {k qtot : ℕ} {δ : ℝ≥0�
     · calc _ ≤ pr (fun _ : (Fin N → Fin 128 → Sector) × SketchPassCoins N ρ 512 16 G => False) :=
             pr_mono fun _ hy => hr hy.1
         _ ≤ _ := by
-          rw [Rate.Horizon.pr_false]
+          rw [Rate.Pooled.pr_false]
           exact bot_le
 
 /-- **The session's passes priced.** Some window has signs of rank below 12, or some pass a guessed tag or `k + 1`

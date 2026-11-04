@@ -86,10 +86,6 @@ theorem sound_fresh (a b : Lin) : Sound (fresh a b) fun z r => ev z r = (ev z a 
   simp only [rowHolds] at this
   simpa [fresh, StateT.run] using this
 
-theorem sound_input (n : ℕ) : Sound (input n) fun _ l => l.length = n := by
-  intro s
-  exact ⟨fun r hr => hr, fun z _ => by simp [input, StateT.run]⟩
-
 theorem sound_and (a b : Lin) : Sound (Flock.HmNets.and a b) fun z r => ev z r = (ev z a && ev z b) := by
   unfold Flock.HmNets.and
   refine Sound.ite' (fun ha => Sound.pure' fun z => ?_) fun ha => Sound.ite' (fun hb => Sound.pure' fun z => ?_)

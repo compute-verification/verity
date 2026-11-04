@@ -34,7 +34,7 @@ theorem coin_of_carries {R : Array Round} {j : ℕ} {T : Transcript} {f : ℕ �
 
 /-- **Zerocheck's coins at the stream**: on rounds carrying the masked prover's zerocheck from `t₀`, a replay from
 round `t₀.k` reads the prover's `z`, `r_outer` and `ρ`. -/
-theorem zc_coins_at {lay : Zk.PadLayout} {hp : Array F128} {m : ℕ} {digest cap root : ByteArray} {cz : Zc.Coins}
+theorem zc_coins_at {lay : Zk.PadLayout} {hp : Array F128} {m : ℕ} {digest cap root : ByteArray} {cz : Zc.Challenges}
     {tr : Trace} (t₀ : Transcript) (hk : t₀.k = t₀.rounds.size) (t : Transcript) (ht : t.k = t₀.k)
     (hZ : Agrees t.rounds (ZcZ.tEnd lay hp m digest cap root cz tr t₀).rounds 0) :
     zAt t = cz.z ∧ pinned ++ rOuterAt t = cz.r m ∧ ∀ j < m - 6, Lincheck.coinAt t (3 + j) = cz.ρ j := by
@@ -55,7 +55,7 @@ theorem zc_coins_at {lay : Zk.PadLayout} {hp : Array F128} {m : ℕ} {digest cap
 /-- **Lincheck's coins at the stream**: on rounds carrying the masked prover's lincheck from `T₁`, which starts
 `3 + (m − 6)` rounds after the replay, the replay reads the prover's `α`, `β`, `t_j` and `r′`. -/
 theorem lc_coins_at {lay : Zk.PadLayout} {hp : Array F128} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut}
-    {full : Array F128} {cl : Lc.Coins} (T₁ t : Transcript) (hTs : T₁.rounds.size = t.k + 3 + (m - 6))
+    {full : Array F128} {cl : Lc.Challenges} (T₁ t : Transcript) (hTs : T₁.rounds.size = t.k + 3 + (m - 6))
     (hR : Agrees t.rounds (LcZ.tEnd lay hp c m tr zc full cl T₁).rounds 0) :
     Lincheck.coinAt t (3 + (m - 6)) = cl.ca 0 ∧ Lincheck.coinAt t (4 + (m - 6)) = cl.cb 0 ∧
       (∀ j < c.kLog - 6, Lincheck.coinAt t (5 + (m - 6) + j) = cl.τ j) ∧
@@ -86,7 +86,7 @@ theorem lc_coins_at {lay : Zk.PadLayout} {hp : Array F128} {c : CircuitFold} {m 
 /-- **The seven coin identities** at a replay from round `t₀.k` of rounds carrying the masked prover's zerocheck and
 lincheck from `t₀` (A9's `Agrees`, as `rs_of` takes it). -/
 theorem replay_coins {lay : Zk.PadLayout} {hp : Array F128} {c : CircuitFold} {m : ℕ} {digest cap root : ByteArray}
-    {cz : Zc.Coins} {tr : Trace} {full : Array F128} {cl : Lc.Coins} (t₀ : Transcript) (hk : t₀.k = t₀.rounds.size)
+    {cz : Zc.Challenges} {tr : Trace} {full : Array F128} {cl : Lc.Challenges} (t₀ : Transcript) (hk : t₀.k = t₀.rounds.size)
     (t : Transcript) (ht : t.k = t₀.k)
     (hR : Agrees t.rounds (LcZ.tEnd lay hp c m tr (Zc.out m cz tr) full cl
       (ZcZ.tEnd lay hp m digest cap root cz tr t₀)).rounds 0) :
@@ -101,7 +101,7 @@ theorem replay_coins {lay : Zk.PadLayout} {hp : Array F128} {c : CircuitFold} {m
 `Zc.fold_final`'s, `Lc.lcAlgebra_of`'s and `claims_switch`'s conclusions. -/
 theorem replay_rows_zero_agrees (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (p : Proof) (root : ByteArray)
     (hm : 14 ≤ st.m) {t t' : Transcript} {rp : Zk.Replayed} (hrun : Zk.replay st lay p root t = .ok (rp, t'))
-    (c : CircuitFold) (tr : Trace) (zcs : Zc.Coins) (cs : Lc.Coins) (full : Array F128)
+    (c : CircuitFold) (tr : Trace) (zcs : Zc.Challenges) (cs : Lc.Challenges) (full : Array F128)
     (hfd : st.fold = c) (hk : st.kLog = c.kLog)
     (hpz : p.zerocheck = ZcZ.proof lay h st.m zcs tr)
     (hpl : p.lincheck = LcZ.proof lay h c st.m tr (Zc.out st.m zcs tr) full cs)
@@ -169,7 +169,7 @@ from the plain lemmas' conclusions: `replay_rows_zero_agrees` as `ConsHold`. -/
 theorem replay_consHold_agrees (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (p : Proof) (root : ByteArray)
     (hm : 14 ≤ st.m) {t t' : Transcript} {rp : Zk.Replayed} (hrun : Zk.replay st lay p root t = .ok (rp, t'))
     (hsz : h.size = lay.len)
-    (c : CircuitFold) (tr : Trace) (zcs : Zc.Coins) (cs : Lc.Coins) (full : Array F128)
+    (c : CircuitFold) (tr : Trace) (zcs : Zc.Challenges) (cs : Lc.Challenges) (full : Array F128)
     (hfd : st.fold = c) (hk : st.kLog = c.kLog)
     (hpz : p.zerocheck = ZcZ.proof lay h st.m zcs tr)
     (hpl : p.lincheck = LcZ.proof lay h c st.m tr (Zc.out st.m zcs tr) full cs)

@@ -1,15 +1,18 @@
 """`verity.ml.commitments.gates.embedding`: the embedding's row read at a hidden position returns the token's row of a table
 committed one token a row (`row_table.commit` over ``hm96-sha512/row-seg/v1`` rows, as `one_stage.registered` registers a
 row-seg value) with ok = 1, and `Embedding_v1`'s 0x7FFF fill with ok = 1 for a token outside [0, V); it refuses (ok = 0)
-another token's position, a changed row, salt, root, domain id or sibling; and its parts cost the gates pinned here."""
+another token's position, a changed row, salt, root, domain id or sibling; its parts cost the gates pinned here, and
+C-Flock lowers its selection by the builder its trace was taken from."""
 from __future__ import annotations
 
 import random
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.commitments import row_table as RT
@@ -123,6 +126,16 @@ def test_the_selection_is_embedding_v1s_on_every_token_edge() -> None:
     got = evaluate_bits(bind(E.EmbeddingReadSelect, V=V, H=H), *_columns(rows)).reshape(len(rows), -1)
     assert [([int(sum(int(b) << j for j, b in enumerate(g[16 * w:16 * w + 16]))) for w in range(H)], int(g[16 * H]))
             for g in got] == want
+
+
+def test_the_selection_lowers_by_the_builder_its_trace_was_taken_from() -> None:
+    """C-Flock lowers a part's activation by its builder (`ir_lower._boolean_activation`, ``build(C, S, *e)``), and a part
+    without one gate by gate; called so, the selection's builder traces to its own gates."""
+    d = E.EmbeddingReadSelect
+    S = SimpleNamespace(V=2, H=1)
+    params, ret = d.signature(S)
+    got, want = TR.trace(lambda C, *e: d.build(C, S, *e), [t for _, t in params], ret), d.traced(2, 1)
+    assert (got.gates, got.outputs) == (want.gates, want.outputs)
 
 
 @pytest.mark.slow

@@ -1,4 +1,4 @@
-"""The price-vector LP (rs-machine-model §8): a convex combination B_θ = Σ θ_r·row_r of the machine's rows.
+"""The price-vector LP: a convex combination B_θ = Σ θ_r·row_r of the machine's rows.
 
 Charnes–Cooper over λ ≥ 0 with p_MMA = 4096 (a tensor MAC costs 1); every constraint is homogeneous:
 
@@ -10,8 +10,8 @@ Stage 1 minimizes the honest GEMM's non-MMA price (U/F_low - 1); stage 2 minimiz
 U/F_low - 1 ≤ infl_max; stage 3 is stage 2 without the cap (τ alone). Kinds with no coefficient on the vector's rows are
 refused, not gated: they leave (i) and every attack that uses them.
 
-The arithmetic, constraint order and solver calls are those of the legacy `rs-price-99.py` `solve`, which every published
-vector came from, so a vector re-solves to the same vertex.
+The arithmetic, constraint order and solver calls are fixed, so every published vector re-solves to the vertex it was
+published at (tests/test_vectors.py).
 """
 from __future__ import annotations
 

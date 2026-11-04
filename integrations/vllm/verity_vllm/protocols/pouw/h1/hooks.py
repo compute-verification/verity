@@ -5,6 +5,7 @@ model runner's ``execute_model``, which hands each step's admissions to the wind
 from __future__ import annotations
 
 import weakref
+from contextlib import nullcontext
 from typing import Any
 
 from verity_vllm.protocols.pouw import credit_gate as CG
@@ -12,10 +13,12 @@ from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 
 
-def layers(model: Any, types: tuple[type, ...], ks: tuple[int, ...] | None = None) -> list[Any]:
+def layers(model: Any, types: tuple[type, ...], ks: tuple[int, ...] | None = None, *,
+           scheme: str = PH.SCHEME) -> list[Any]:
     """The linear layers by type in module order, with ``ks`` only those whose weight's K is one of them (the pouw setting
-    ``ks``; the others serve on their arm, unhooked); ValueError names every one not on the int8_exact plain arm
-    (`engine.int8_vllm.Int8PlainLinearMethod`, whose ``observe`` the option wraps) with its int8 weight and scales.
+    ``ks``; the others serve on their arm, unhooked); ValueError, naming `scheme`, names every one not on the int8_exact
+    plain arm (`engine.int8_vllm.Int8PlainLinearMethod`, whose ``observe`` the option wraps) with its int8 weight and
+    scales.
 
     A MoE layer's routed experts (a module whose quant method is a ``FusedMoEMethodBase``) count in its place as their
     sites (`engine.int8_experts.ExpertSite`), each expert's gate_up then its down in expert order, the order the method
@@ -32,11 +35,11 @@ def layers(model: Any, types: tuple[type, ...], ks: tuple[int, ...] | None = Non
             seen.add(id(qm))
             out += list(getattr(qm, "sites", None) or [m])
     if not out:
-        raise ValueError(f"pouw:{PH.SCHEME}: the model has no linear layer")
+        raise ValueError(f"pouw:{scheme}: the model has no linear layer")
     if ks is not None:
         out = [m for m in out if not hasattr(m, "weight") or int(m.weight.shape[-1]) in ks]
         if not out:
-            raise ValueError(f"pouw:{PH.SCHEME}: the model has no linear layer at K {list(ks)} (the pouw setting 'ks')")
+            raise ValueError(f"pouw:{scheme}: the model has no linear layer at K {list(ks)} (the pouw setting 'ks')")
     bad = []
     for w, layer in enumerate(out):
         method = layer.quant_method
@@ -46,7 +49,7 @@ def layers(model: Any, types: tuple[type, ...], ks: tuple[int, ...] | None = Non
             bad.append(f"linear {w}: {type(method).__name__} with a {dtype} weight is not the int8_exact plain arm"
                        + (" (a MoE layer's routed experts record as their sites)" if not hasattr(layer, "weight") else ""))
     if bad:
-        raise ValueError(f"pouw:{PH.SCHEME} refused at install: " + "; ".join(bad))
+        raise ValueError(f"pouw:{scheme} refused at install: " + "; ".join(bad))
     return out
 
 
@@ -97,12 +100,15 @@ def expert_names(layers: list[Any]) -> dict[int, str]:
 
 def observer(run: PH.H1Run, w: int, orig: Any) -> Any:
     """Layer `w`'s ``observe``: the arm's own, then the call recorded with the layer's weight and the z the arm's kernel
-    wrote, if it hands one over (`H1Run.record`: ``scaled_mm_zy``'s z/y records, the tensor itself)."""
+    wrote, if it hands one over (`H1Run.record`: ``scaled_mm_zy``'s z/y records, the tensor itself). A record given z writes
+    neither y nor z and runs no GEMM, so it runs `credit_gate.outside` the trace; one without z stays in it, where the GEMM
+    a retaining record runs is seen."""
 
     def observe(layer: Any, xq: Any, s_a: Any, y: Any, z: Any = None) -> None:
         orig(layer, xq, s_a, y) if z is None else orig(layer, xq, s_a, y, z)
         if run.commit:
-            run.record(w, xq, s_a, layer.weight, layer.weight_scale, z)
+            with CG.outside() if z is not None else nullcontext():
+                run.record(w, xq, s_a, layer.weight, layer.weight_scale, z)
     return observe
 
 

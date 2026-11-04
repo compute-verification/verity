@@ -1,6 +1,7 @@
 import Mathlib.Data.ZMod.Basic
 import Definitions.Pous.Game.Prob
 import Definitions.Accounting.Tag.Sketch
+import Definitions.Core.Draw
 
 /-!
 # The rate audit with a sketch-then-hash tag, for a device that reads sectors verbatim (trusted)
@@ -59,12 +60,16 @@ def Data.stream {N m ρ : ℕ} {X : Type} (D : Data N m ρ X) : Fin ρ → X := 
 `d`, an `h`-bit tag. -/
 abbrev Oracle (N ρ h : ℕ) (X Dg : Type) : Type := (Fin ρ → X) × Fin N × Dg → Bits h
 
-/-- A window's coins besides its stream: the signs, the oracle at the fresh seed and the `s` sampled tiles. -/
-abbrev Coins (N ρ h s : ℕ) (X Sig Dg : Type) : Type := Sig × Oracle N ρ h X Dg × (Fin s → Fin N)
+/-- What a window's checks read besides its stream and its sample: the signs and the oracle at the fresh seed. -/
+abbrev Pub (N ρ h : ℕ) (X Sig Dg : Type) : Type := Sig × Oracle N ρ h X Dg
+
+/-- A window's coins besides its stream: the live coins (`Verity.Coins`) with the signs and the oracle at the fresh seed
+as their public part, and the `s` sampled tiles as their draw. -/
+abbrev Coins (N ρ h s : ℕ) (X Sig Dg : Type) : Type := Verity.Coins (Pub N ρ h X Sig Dg) s N
 
 instance instFintypeCoins (N ρ h s : ℕ) (X Sig Dg : Type) [Fintype X] [DecidableEq X] [Fintype Sig] [Fintype Dg]
     [DecidableEq Dg] : Fintype (Coins N ρ h s X Sig Dg) :=
-  inferInstanceAs (Fintype (_ × _ × _))
+  inferInstanceAs (Fintype ((_ × _) × (Fin s → Fin N)))
 
 /-- A chip program in the window, ending in a value of type `α`. Each step waits on one answer: a tag from the oracle,
 or one whole sector, read from device memory, taken in over the side link, or rebuilt. -/

@@ -156,7 +156,7 @@ class Sink:
         self.inbox.eof(self.src)
 
 
-class Block:
+class BlockProcess:
     def __init__(self, ctx: Context, unit: str, connect) -> None:
         self.ctx, self.unit, self.connect = ctx, unit, connect
         hw, phi = ctx.hw, ctx.phi
@@ -272,7 +272,7 @@ class MemoryNet:
 
     def __init__(self, ctx: Context) -> None:
         self.ctx = ctx
-        self.blocks = {u: Block(ctx, u, self._connect) for u in ctx.units()}
+        self.blocks = {u: BlockProcess(ctx, u, self._connect) for u in ctx.units()}
 
     async def _connect(self, src: str, dst: str) -> _MemoryWriter:
         return _MemoryWriter(self.blocks[dst].inbox.connection())
@@ -306,7 +306,7 @@ async def serve_tcp(ctx: Context, unit: str, addresses: dict[str, tuple[str, int
         _, writer = await asyncio.open_connection(host, port)
         return _TcpWriter(writer)
 
-    block = Block(ctx, unit, connect)
+    block = BlockProcess(ctx, unit, connect)
 
     async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         sink = block.inbox.connection()

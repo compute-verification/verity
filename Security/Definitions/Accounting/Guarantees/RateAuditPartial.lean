@@ -75,8 +75,8 @@ def RateAuditPartial : Prop :=
   ∀ (N b h ρ S L q s k F cTag rounds cRoot lam : ℕ) (cost : ℕ → ℕ) (A : Rate.PartialDevice N b h ρ S L q),
     Assumptions.WorkHardness b rounds cRoot cost →
     pr (fun x : Store N b × Coins N b h ρ s =>
-        A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cost x.1 x.2.1 x.2.2.1 ≤ F ∧
-          A.footprint x.1 x.2.1 x.2.2.1 * (rounds * cRoot) < floor b ρ S L F cTag (rounds * cRoot) k lam)
+        A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ A.compute cTag cost x.1 x.2.1.1 x.2.1.2 ≤ F ∧
+          A.footprint x.1 x.2.1.1 x.2.1.2 * (rounds * cRoot) < floor b ρ S L F cTag (rounds * cRoot) k lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 
 /-- **Completeness of `RateAuditPartial`: an honest device that reads every word once is accepted on every coin.** For

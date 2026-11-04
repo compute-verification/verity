@@ -281,7 +281,7 @@ theorem stacked_audit_seq {ℓ n N : ℕ} {V : Type} [Fintype V] [DecidableEq V]
     (t : Fin ℓ) (ht : (t : ℕ) + 1 = ℓ)
     (w S Q tt : ℕ) (d : Fin N → Bits w)
     (A₁ : (LabelQry N w → Bits w) → Bits S)
-    (step : ℕ → Bits S → Fin n → Prog (IdealModel.randomOracle (LabelQry N w) (Bits w)) (Bits w × Bits S))
+    (step : ℕ → Bits S → Fin n → OracleAlgorithm (IdealModel.randomOracle (LabelQry N w) (Bits w)) (Bits w × Bits S))
     (hstep : ∀ j σ b, (step j σ b).Bounded (⌊β * n⌋₊ - 1) Q) :
     pr (fun x : (LabelQry N w → Bits w) × (Fin tt → Fin n) =>
         seqAnswers x.1 step 0 (List.ofFn x.2) (A₁ x.1) = List.ofFn fun j => label G d x.1 (e (node t (x.2 j)))) ≤
@@ -330,7 +330,7 @@ theorem stacked_audit_seq {ℓ n N : ℕ} {V : Type} [Fintype V] [DecidableEq V]
       rw [Finset.mem_filter] at hb ⊢
       refine ⟨Finset.mem_image.2 ⟨b, Finset.mem_univ _, rfl⟩, ?_⟩
       refine (run_progMap (M := IdealModel.randomOracle (LabelQry N w) (Bits w)) Prod.fst H _).trans ?_
-      exact (congrArg (fun c => (Prog.run H (step hist.length (seqState H step 0 hist (A₁ H)) c)).1)
+      exact (congrArg (fun c => (OracleAlgorithm.run H (step hist.length (seqState H step 0 hist (A₁ H)) c)).1)
         (hidx b)).trans hb.2
     have hE : pr E ≤ (∑ j ∈ Finset.range tt, (n : ℝ≥0∞) ^ j) *
         (N * 2 ^ S * ((((n * (Q + 1) + N) ^ 2 : ℕ) : ℝ≥0∞) / 2 ^ w) ^ (⌊(1 - ε) * n⌋₊ + 1)) := by
@@ -396,7 +396,7 @@ theorem stacked_audit_one_percent {ℓ : ℕ} {V : Type} [Fintype V] [DecidableE
     (t : Fin ℓ) (ht : (t : ℕ) + 1 = ℓ) (d : Fin (2 ^ 17) → Bits 8192)
     (A₁ : (LabelQry (2 ^ 17) 8192 → Bits 8192) → Bits 508614548)
     (step : ℕ → Bits 508614548 → Fin (2 ^ 16) →
-      Prog (IdealModel.randomOracle (LabelQry (2 ^ 17) 8192) (Bits 8192)) (Bits 8192 × Bits 508614548))
+      OracleAlgorithm (IdealModel.randomOracle (LabelQry (2 ^ 17) 8192) (Bits 8192)) (Bits 8192 × Bits 508614548))
     (hstep : ∀ j σ b, (step j σ b).Bounded (⌊β * (2 ^ 16 : ℕ)⌋₊ - 1) (2 ^ 20)) :
     pr (fun x : (LabelQry (2 ^ 17) 8192 → Bits 8192) × (Fin 210 → Fin (2 ^ 16)) =>
         seqAnswers x.1 step 0 (List.ofFn x.2) (A₁ x.1) = List.ofFn fun j => label G d x.1 (e (node t (x.2 j)))) ≤

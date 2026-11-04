@@ -42,6 +42,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS
 from verity.ml.commitments import hm96
 from verity.ml.commitments.rowleaf import ROLE_X, blake3_row_key, sha256_row_prefix, sha512_row_prefix
 from verity_vllm.commit import scheme
@@ -59,9 +60,8 @@ RESULT_SCHEMA = "research/result/v0.1"
 POS_LEAF_PREFIX = len(scheme.POS_LEAF_TAG) + 8
 SALTED_BLAKE3_SALT = 32
 
-ADD, ADD64 = 31, 63
+ADD = 31
 SHA256_ANDS = 64 * (7 * ADD + 32 + 32) + 48 * 3 * ADD + 8 * ADD
-SHA512_ANDS = 80 * (7 * ADD64 + 64 + 64) + 64 * 3 * ADD64 + 8 * ADD64
 BLAKE3_ANDS = 7 * 8 * 6 * ADD
 _SHA = {"sha256": (64, 9, SHA256_ANDS), "sha512": (128, 17, SHA512_ANDS)}
 _HM = {"sha256": hm96.SHA256, "sha512": hm96.SHA512}

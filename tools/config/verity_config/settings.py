@@ -56,8 +56,8 @@ RECORD_SCHEMA = "verity-config/settings/v1"
 REGISTRY_FILE = "settings.py"
 
 
-class Registry(settings.Registry):
-    """A distribution's registry: `verity.settings.Registry`, writing `RECORD_SCHEMA`, that reads `SHARED`'s settings too
+class Registry(settings.EnvSettings):
+    """A distribution's registry: `verity.settings.EnvSettings`, writing `RECORD_SCHEMA`, that reads `SHARED`'s settings too
     (with ``shared`` false, its own alone)."""
 
     def __init__(self, path: str | os.PathLike, prefixes: Iterable[str], *declared: Setting, shared: bool = True,

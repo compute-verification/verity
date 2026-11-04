@@ -152,9 +152,6 @@ verifier's layout. -/
 theorem toModel_ofStmt {st : Stmt} (L : FlockSoundness.Layout st) (h : (ofStmt st).Ok) :
     (ofStmt st).toModel h = L.model (Refine.regionsOf st) := rfl
 
-theorem ok_ofStmt {st : Stmt} (L : FlockSoundness.Layout st) : (ofStmt st).Ok :=
-  ⟨L.kLog6, by rw [show (ofStmt st).m = st.m from rfl, L.m]; exact Nat.le_add_right _ _, L.pin_lt⟩
-
 end Tab
 
 /-- Table `c`'s share of the hidden values of `J` tables, interleaved (its bit `a` is hidden value `a·J + c`), as a model

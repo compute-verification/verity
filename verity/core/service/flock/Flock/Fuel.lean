@@ -78,7 +78,7 @@ theorem defOfJsonIn_mono : ∀ {n m : Nat} {j : Lean.Json} {d : Qword.Def}, n �
 
 /-- A Q_call cut the verifier finishes at some nesting bound, it finishes alike at any larger one. -/
 theorem cutIn_mono {P : Prog} {G : Qcall.Gates} {X : Nat} : ∀ {n m : Nat} {lo hi : Nat} {path : Array (Array Nat)}
-    {how : Qcall.Piece} {acc r : Array Qcall.Unit}, n ≤ m →
+    {how : Qcall.Piece} {acc r : Array Qcall.ProofBlock}, n ≤ m →
     Qcall.cutIn n P G X lo hi path how acc = .ok r → Qcall.cutIn m P G X lo hi path how acc = .ok r
   | 0, _, _, _, _, _, _, _, _, h => by simp [Qcall.cutIn] at h
   | _ + 1, 0, _, _, _, _, _, _, hnm, _ => by omega

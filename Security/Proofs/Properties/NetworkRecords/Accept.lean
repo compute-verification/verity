@@ -9,7 +9,7 @@ The check accepts exactly when the evidence fits, the parameters have their dige
 -/
 
 open NetworkCheck hiding Params
-open NetworkCheck.Check (Params Certified Link Evidence Grid Profile LinkWindow manifestSet)
+open NetworkCheck.Check (Params Certified LinkOpening Evidence Grid Profile LinkWindow manifestSet)
 open Properties.NetworkCertifier (EvidenceFits ParamsDigests)
 open Properties.NetworkCertifier.CheckProofs (fits_iff any_ne zip_left)
 open NetworkCheck.RecordsBytes (frameBytes_toEvidence)
@@ -19,7 +19,7 @@ namespace Properties.NetworkRecords
 open CheckProofs
 
 /-- `e`'s egress links read as v2 reads them, paired with their names, are `e`'s. -/
-theorem zip_toLinks {egress : List String} {e : Records.ByteEvidence} {l : String} {L : Link}
+theorem zip_toLinks {egress : List String} {e : Records.ByteEvidence} {l : String} {L : LinkOpening}
     (hm : (l, L) ∈ egress.zip e.toEvidence.links.toList) :
     ∃ link, (l, link) ∈ egress.zip e.links.toList ∧ L = link.toLink := by
   simp only [Records.ByteEvidence.toEvidence, Array.toList_map, List.zip_map_right, List.mem_map] at hm

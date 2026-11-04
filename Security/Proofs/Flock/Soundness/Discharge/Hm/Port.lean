@@ -62,11 +62,6 @@ theorem bitL_bytesOf (w : ℕ → Bool) {N : ℕ} (a : ℕ → ℕ → ℕ) {q :
   rw [bitL, bytesOf, List.getD_eq_getElem?_getD, List.getElem?_ofFn, dite_eq_left (by omega), Option.getD_some,
     testBit_byteOf (fun t => w (a (q / 8) t)) ⟨q % 8, Nat.mod_lt _ (by norm_num)⟩]
 
-/-- `Binding.bytesAt` at addresses `A (a j t)` reads `bytesOf` of the witness's bits. -/
-theorem bytesAt_eq_bytesOf {m N : ℕ} (z : Model.Witness m) (A : ℕ → Fin (2 ^ m)) (a : ℕ → ℕ → ℕ) :
-    Binding.bytesAt z (fun (j : Fin N) (t : Fin 8) => A (a j t)) =
-      bytesOf (fun x => FlockSoundness.bit (z (A x))) N a := rfl
-
 /-! ## The row's columns -/
 
 /-- Compression `k` of port `p`'s row: its `sha512x3` slot at template instance `g`, its first column. -/

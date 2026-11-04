@@ -26,12 +26,15 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, replace
 
-# RTX PRO 6000 Blackwell Server (sm_120).
+from verity.hardware import load, rate
+
+# RTX PRO 6000 Blackwell Server (sm_120): its card, verity/hardware/cards/rtx-pro-6000-server.toml.
+SERVER = load("rtx-pro-6000-server")
 R_READ = 1.488e12  # B/s, measured; the datasheet's 1.597e12
 S_CHIP = 239_992_832  # B: registers + shared memory + L2 + the red team's allowance
-M_DEVICE = 103_079_215_104  # B
+M_DEVICE = SERVER["store"]["dram"]["value"]  # B
 CLOCK_LOCKED_MHZ = 2092
-CLOCK_MAX_MHZ = 2430
+CLOCK_MAX_MHZ = SERVER["clock"]["sm"]["value"]
 
 
 @dataclass(frozen=True)
@@ -252,8 +255,9 @@ def extrapolated(bits: int) -> Codec:
     return Codec(eps, p767.r * bits / 768, p767.y + eps - p767.eps, p767.tau, bits, bits, bits)
 
 
-SMS = 188
-ISSUE_LANES = 128  # an SM's four schedulers, one 32-lane instruction each a clock
+SMS = SERVER["sm"]["count"]["value"]
+WARP = 32  # lanes a warp instruction
+ISSUE_LANES = WARP * SERVER["rate"]["issue"]["value"]  # an SM's four schedulers, one 32-lane instruction each a clock
 
 
 def sq_floor(bits: float, ops: float | None = None, clock_mhz: float = CLOCK_LOCKED_MHZ) -> float:
@@ -266,7 +270,7 @@ def sq_floor(bits: float, ops: float | None = None, clock_mhz: float = CLOCK_LOC
     are."""
     limbs = bits / 32
     n = limbs * (limbs + 1) + 5 * limbs if ops is None else ops
-    return R_READ * n / (bits / 8 * SMS * clock_mhz * 1e6 * ISSUE_LANES)
+    return R_READ * n / (bits / 8 * float(rate(SERVER, "issue", mhz=clock_mhz)) * WARP)
 
 
 def at_floor(c: Codec, sq: float, rounds: int = 1, eta: float = 0.1) -> Codec:

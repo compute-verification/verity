@@ -39,6 +39,7 @@ class FakeLinear:
         self.visible, self.team_key = None, "INF"
         self.parent = {"id": "P1", "project": {"id": "PJ1"}, "projectMilestone": {"id": "MS3"}}
         self.relations, self.wrote = [], []
+        self.project_teams = {"PJ3": [{"id": "T-infra", "key": "INF"}]}
         self.users = [{"id": "U1", "name": "Daniel Reuter"}, {"id": "U2", "name": "Verity Asks"}]
         self.asked, self.ask_filter, self.tags = [], None, {}
 
@@ -66,7 +67,7 @@ class FakeLinear:
             raise urllib.error.HTTPError(url, 401, "Unauthorized", {}, io.BytesIO(b'{"errors": [{"message": "auth"}]}'))
         user = "the app" if headers["Authorization"].startswith("Bearer") else "Daniel"
         if m := re.search(r"\{ (issueRelationCreate|issueRelationDelete|projectUpdateCreate|projectCreate|projectMilestoneCreate|"
-                          r"projectMilestoneUpdate)\(", q):
+                          r"projectMilestoneUpdate|projectUpdate)\(", q):
             self.wrote.append((m[1], v))
             if m[1] == "issueRelationCreate":
                 self.relations.append({"id": f"R{len(self.wrote)}", "type": v["i"]["type"], "issue": self._issue(v["i"]["issueId"]),
@@ -80,6 +81,8 @@ class FakeLinear:
             return {"data": {"a": {**a, "relations": {"nodes": [r for r in self.relations if r["issue"] == a]},
                                    "inverseRelations": {"nodes": [r for r in self.relations if r["relatedIssue"] == a]}},
                              "b": self._issue(v["b"])}}
+        if "project(id:" in q:
+            return {"data": {"project": {"teams": {"nodes": self.project_teams.get(v["id"], [])}}}}
         if "projects(filter" in q:
             return {"data": {"projects": {"nodes": [{"name": p["name"]} for p in self.projects if p["name"].lower() == v["n"].lower()]}}}
         if "users(first" in q:
@@ -303,6 +306,12 @@ def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin, tmp_path)
     assert rc == 0 and out.strip() == "INF-1 commented"
     (_, v, _), = lin.sent("commentCreate")
     assert v["i"] == {"issueId": "I1", "body": "@infra: picked up"}
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", "--as", "infra", "options", "first")
+    assert rc == 0 and lin.sent("commentCreate")[-1][1]["i"]["body"] == "@infra: options first"
+    with pytest.raises(SystemExit):
+        run(capsys, "linear", "comment", "INF-1", "--as", "infra", "x", "--bogus", "y")
+    err = capsys.readouterr().err
+    assert "unrecognized arguments:" in err and "--bogus y" in err
     rc, _, err = run(capsys, "linear", "comment", "INF-1", "no sender")
     assert rc != 0 and "--as HANDLE" in err
     body = tmp_path / "postmortem.md"
@@ -586,14 +595,16 @@ def test_the_audit_names_the_teams_it_cant_read_skips_them_and_never_fails_on_th
 
 def asked(ident: str, state: str = "In Progress", kind: str = "started", labels=(), comments=(), dates=(), **kw) -> dict:
     """A person's ask as `asks` reads it: filed a day before AUDIT_NOW, with nothing to find; `dates` are its due
-    dates in the order they were set (the first set on an undated issue)."""
+    dates in the order they were set (the first set on an undated issue), the nth at 0n:00Z on the 19th; a comment is its
+    body (posted at 12:00Z, after every move) or (body, time)."""
     moves = [{"createdAt": f"2026-10-19T0{n}:00:00Z", "fromDueDate": f"{a}T00:00:00.000Z" if a else None,
               "toDueDate": f"{b}T00:00:00.000Z"} for n, (a, b) in enumerate(zip((None, *dates), dates))]
+    comments = [c if isinstance(c, tuple) else (c, "2026-10-19T12:00:00Z") for c in comments]
     return {"identifier": ident, "title": "One check for every PR", "url": f"https://linear.app/x/issue/{ident}",
             "dueDate": dates[-1] if dates else "2026-10-30", "createdAt": "2026-10-18T20:00:00Z", "completedAt": None,
             "canceledAt": None, "state": {"name": state, "type": kind}, "team": {"key": ident.split("-")[0]},
             "labels": {"nodes": [{"name": n} for n in ("asker:daniel", *labels)]},
-            "comments": {"nodes": [{"body": b} for b in comments]}, "history": {"nodes": moves[::-1]}, **kw}
+            "comments": {"nodes": [{"body": b, "createdAt": t} for b, t in comments]}, "history": {"nodes": moves[::-1]}, **kw}
 
 
 ASKED = [
@@ -609,6 +620,10 @@ ASKED = [
     asked("INF-40", comments=("asked again", "Postmortem: the class fix is #12")),                     # answered
     asked("INF-41", "Done", "completed", comments=("asked again",), completedAt="2026-10-19T19:00:00Z"),  # delivered
     asked("CMP-42", "Triage", "triage", labels=("lane:compute-research",)),                            # unstaffed, its lane's
+    asked("INF-43", dates=("2026-10-20", "2026-10-22", "2026-10-25"),
+          comments=(("Slip (infra): the H200 was down; its return holds the next", "2026-10-19T03:00:00Z"),)),  # explained
+    asked("INF-44", dates=("2026-10-20", "2026-10-22", "2026-10-25"),
+          comments=(("slip: the H200 was down", "2026-10-19T01:30:00Z"),)),                          # slipped again since
 ]
 
 
@@ -619,7 +634,7 @@ def test_a_persons_ask_is_found_parked_unstaffed_slipped_or_restated_and_nothing
     found = lin.audit({"INF": "infra", "CMP": "compute-accounting"}, now=AUDIT_NOW)
     assert [(f["issue"], f["kind"]) for f in found] == [
         ("CMP-42", "unstaffed"), ("INF-31", "parked"), ("INF-33", "parked"), ("INF-35", "unstaffed"), ("INF-37", "slipped"),
-        ("INF-39", "repeated")]
+        ("INF-39", "repeated"), ("INF-44", "slipped")]
     by = {(f["issue"], f["kind"]): f for f in found}
     assert by[("INF-31", "parked")]["fix"] == (
         "daniel asked for it, and only daniel parks or cancels it: start it (In Progress, with a comment naming its worker and "
@@ -627,20 +642,22 @@ def test_a_persons_ask_is_found_parked_unstaffed_slipped_or_restated_and_nothing
         "--label asker-ok`)")
     assert by[("INF-35", "unstaffed")]["fix"].startswith("daniel's ask, filed 2 h ago, has no worker: move it to In Progress")
     assert by[("INF-37", "slipped")]["fix"].startswith("its date moved later 2 times (2026-10-20 -> 2026-10-22 -> 2026-10-21 -> "
-                                                       "2026-10-25): comment what missed each date")
+                                                       "2026-10-25): comment `slip:` what missed each date")
     assert by[("INF-39", "repeated")]["fix"].startswith("daniel asked for it again (2 `asked again`, 1 `postmortem` comments)")
     assert by[("CMP-42", "unstaffed")]["lane"] == "compute-research" and by[("INF-31", "parked")]["lane"] == "infra"
     assert fake.ask_filter == {"labels": {"some": {"name": {"startsWith": "asker:"}}},
                                "or": [{"state": {"type": {"in": ["triage", "unstarted", "started", "backlog"]}}},
                                       {"completedAt": {"gt": "2026-10-12T20:00:00Z"}}, {"canceledAt": {"gt": "2026-10-12T20:00:00Z"}}]}
-    assert linear.tally(found) == {"compute-research": {"unstaffed": 1}, "infra": {"parked": 2, "unstaffed": 1, "slipped": 1,
+    assert linear.tally(found) == {"compute-research": {"unstaffed": 1}, "infra": {"parked": 2, "unstaffed": 1, "slipped": 2,
                                                                                     "repeated": 1}}
     rows = {a["issue"]: a for a in lin.asks({"INF": "infra"}, ["INF"], now=AUDIT_NOW)}
     assert fake.ask_filter["team"] == {"or": [{"key": {"in": ["INF"]}}, {"name": {"in": ["INF"]}}]}
-    assert {k: rows["INF-37"][k] for k in ("asker", "type", "due", "dates", "slips", "again", "postmortems", "ok", "closed")} == {
+    assert {k: rows["INF-37"][k] for k in ("asker", "type", "due", "dates", "slips", "explained", "again", "postmortems", "ok",
+                                           "closed")} == {
         "asker": "daniel", "type": "started", "due": "2026-10-25", "dates": ["2026-10-20", "2026-10-22", "2026-10-21", "2026-10-25"],
-        "slips": 2, "again": 0, "postmortems": 0, "ok": False, "closed": None}
+        "slips": 2, "explained": False, "again": 0, "postmortems": 0, "ok": False, "closed": None}
     assert rows["INF-32"]["ok"] and rows["INF-41"]["closed"] == AUDIT_NOW - 3600
+    assert rows["INF-43"]["explained"] and not rows["INF-44"]["explained"] and not rows["INF-38"]["explained"]
 
 
 def test_the_asks_ledger_counts_delivered_against_not_by_lane(fake, registry, capsys, lin):
@@ -650,16 +667,17 @@ def test_the_asks_ledger_counts_delivered_against_not_by_lane(fake, registry, ca
     lines = out.splitlines()
     assert rc == 0 and lines[0] == "@compute-research: 1 not delivered, 0 delivered"
     assert lines[1].split(":")[0].split() == ["CMP-42", "Triage", "due", "2026-10-30", "0", "slip(s),", "asked", "again", "0,", "24", "h", "old"]
-    assert lines[2] == "@infra: 9 not delivered, 1 delivered"
-    assert [ln.split()[0] for ln in lines[3:12]] == ["INF-31", "INF-32", "INF-33", "INF-37", "INF-38", "INF-39", "INF-40", "INF-35",
-                                                    "INF-36"]                                    # oldest first; Done and duplicates not
-    assert lines[-1] == ("12 ask(s) of daniel open or closed recently: 1 delivered, 10 not (2 parked without `asker-ok`, "
-                         "3 with no worker, 1 slipped), 1 closed with the asker's yes or as duplicates")
+    assert lines[2] == "@infra: 11 not delivered, 1 delivered"
+    assert [ln.split()[0] for ln in lines[3:14]] == ["INF-31", "INF-32", "INF-33", "INF-37", "INF-38", "INF-39", "INF-40", "INF-43",
+                                                    "INF-44", "INF-35", "INF-36"]                # oldest first; Done and duplicates not
+    assert lines[-1] == ("14 ask(s) of daniel open or closed recently: 1 delivered, 12 not (2 parked without `asker-ok`, "
+                         "3 with no worker, 2 slipped with no `slip:` comment), 1 closed with the asker's yes or as duplicates")
     rc, out, _ = run(capsys, "linear", "audit", "--asks", "--lane", "@compute-research", "--json", "--now", str(AUDIT_NOW))
     assert rc == 0 and [a["issue"] for a in json.loads(out)] == ["CMP-42"]
     rc, out, _ = run(capsys, "linear", "audit", "--asks", "--asker", "luke", "--now", str(AUDIT_NOW))
     assert rc == 0 and out.splitlines() == ["0 ask(s) of anyone open or closed recently: 0 delivered, 0 not (0 parked without "
-                                            "`asker-ok`, 0 with no worker, 0 slipped), 0 closed with the asker's yes or as duplicates"]
+                                            "`asker-ok`, 0 with no worker, 0 slipped with no `slip:` comment), 0 closed with the "
+                                            "asker's yes or as duplicates"]
 
 
 def test_an_ask_filed_for_a_person_carries_their_label_and_a_bad_name_or_an_untracked_ask_is_refused(fake, registry, capsys, lin, tmp_path):
@@ -863,6 +881,20 @@ def test_project_create_sends_its_teams_lead_date_and_body_and_refuses_a_name_ta
     assert len(fake.wrote) == 1 and stateless(fake)
 
 
+def test_project_edit_adds_teams_and_keeps_the_ones_it_has(tmp_path):
+    fake = FakeLinear()
+    lin = linear.Linear(APP, fake, cache=tmp_path / "t")
+    assert lin.project_teams("Full s", ["INF", "comms"]) == "Full stack: added teams COM"
+    assert fake.wrote == [("projectUpdate", {"id": "PJ3", "i": {"teamIds": ["T-infra", "T-comms"]}})]
+    assert lin.project_teams("Full s", ["INF"]) == "Full stack: has every team given already" and len(fake.wrote) == 1
+    for args, says in ((("Full s", []), "project edit: give the team to add, --team KEY (more: repeat it)"),
+                       (("Full s", ["NOPE"]), "no Linear team named 'NOPE'"),
+                       (("Full", ["INF"]), "active project 'Full' matches 2 of")):
+        with pytest.raises(linear.LinearError, match=re.escape(says)):
+            lin.project_teams(*args)
+    assert len(fake.wrote) == 1 and stateless(fake)
+
+
 def test_milestone_create_and_edit_by_prefix_and_refuse_a_name_the_project_has_in_any_case(tmp_path):
     fake = FakeLinear()
     lin = linear.Linear(APP, fake, cache=tmp_path / "t")
@@ -906,12 +938,13 @@ def test_the_relation_and_project_verbs_from_the_cli_print_one_line_and_refuse_w
             (["project", "create", "Smaller", "Lean", "--team", "INF", "--team", "COM", "--target", "2026-11-30",
               "--description-file", str(body)],
              "project Smaller Lean created: teams INF COM, targetDate 2026-11-30, content 15 characters https://linear.app/x/project/1"),
+            (["project", "edit", "Full", "stack", "--team", "COM"], "Full stack: added teams COM"),
             (["milestone", "create", "E2E", "M4 · served", "--date", "2026-11-02"], f"{e2e} / M4 · served: created, targetDate 2026-11-02"),
             (["milestone", "edit", "E2E", "M3", "--rename", "M3 · served", "--description-file", str(body)],
              f"{e2e} / M3 · composed: set name M3 · served, description 15 characters")):
         assert run(capsys, "linear", *argv) == (0, want + "\n", "")
     assert [w for w, _ in lin.wrote] == ["issueRelationCreate", "issueRelationDelete", "projectUpdateCreate", "projectCreate",
-                                         "projectMilestoneCreate", "projectMilestoneUpdate"]
+                                         "projectUpdate", "projectMilestoneCreate", "projectMilestoneUpdate"]
     assert lin.wrote[2][1]["i"]["body"] == "M3 slips a day\n" and lin.wrote[3][1]["i"]["content"] == "M3 slips a day\n"
     for argv, says in ((["relate", "INF-1", "INF-2"], "linear relate: give ISSUE blocks|blocked-by|related|duplicate OTHER"),
                        (["relate", "INF-1", "blocks", "INF-1"], "INF-1 and INF-1 are one issue"),
@@ -920,14 +953,15 @@ def test_the_relation_and_project_verbs_from_the_cli_print_one_line_and_refuse_w
                        (["update", "--health", "onTrack", "--body-file", str(body)], "linear update: give the PROJECT"),
                        (["update", "E2E", "--health", "onTrack", "--body-file", str(tmp_path / "missing.md")], "No such file"),
                        (["update", "E2E", "--body-file", str(body)], "--health: give one of onTrack, atRisk, offTrack"),
-                       (["project", "edit", "Smaller", "Lean"], "linear project: give `create NAME`"),
+                       (["project", "rename", "Smaller", "Lean"], "linear project: give `create NAME` or `edit PROJECT --team KEY`"),
+                       (["project", "edit", "Full", "s"], "project edit: give the team to add, --team KEY"),
                        (["project", "create", "--team", "INF"], "linear project: give the project's NAME"),
                        (["milestone", "rename", "E2E", "M3"], "linear milestone: give `create` or `edit`, then PROJECT NAME"),
                        (["milestone", "create", "E2E"], "linear milestone create: give PROJECT"),
                        (["relate", "INF-1", "blocks", "INF-2", "--dry-run"], "linear relate has no --dry-run (it would write)")):
         rc, _, err = run(capsys, "linear", *argv)
         assert rc == 2 and says in err, (argv, err)
-    assert len(lin.wrote) == 6 and stateless(lin)
+    assert len(lin.wrote) == 7 and stateless(lin)
 
 
 def slack_bot(registry) -> str:

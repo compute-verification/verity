@@ -51,15 +51,16 @@ def _committed(T) -> p2.Store:
     return p2.Store(p2.register(T.SOURCE, T.NODE, commitment, vk), blocks)
 
 
-def _held(store: p2.Store) -> pous.Store:
+def _held(store: p2.Store) -> pous.EncodedStore:
     """PoUS's store for the `C*` that P2's `store` registers: its setup published at that `C*`'s commitment, salt and
     root."""
     reg, q = store.registration, store.registration.params
     n = q.blocks_per_segment
-    return pous.Store(RUN.Point(q, POUS_K, pous.LIMIT_NS), RUN.Setup(q.blocks, reg.commitment, reg.root, reg.salt),
-                      store.blocks, b"".join(mc.block_digest(b) for b in store.blocks),
-                      pous.setup_case(q, reg.commitment, reg.salt,
-                                      [list(store.blocks[n * s:n * (s + 1)]) for s in range(q.segments)]))
+    return pous.EncodedStore(RUN.Point(q, POUS_K, pous.LIMIT_NS),
+                             RUN.Setup(q.blocks, reg.commitment, reg.root, reg.salt),
+                             store.blocks, b"".join(mc.block_digest(b) for b in store.blocks),
+                             pous.setup_case(q, reg.commitment, reg.salt,
+                                             [list(store.blocks[n * s:n * (s + 1)]) for s in range(q.segments)]))
 
 
 def _with_setup(case: dict, setup_of: dict, trusted: tuple[bytes, ...]) -> tuple[dict, dict]:
@@ -71,7 +72,7 @@ def _with_setup(case: dict, setup_of: dict, trusted: tuple[bytes, ...]) -> tuple
     point = RUN.Point(P2.P2Params(q["w"], q["c0"], q["blocks_per_segment"], q["segments"]),
                       p["point"]["k"], p["point"]["limit_ns"])
     answer = pous.answer(point, mc.SCHEMES, trusted, RUN.Setup.from_json(json.loads(bytes.fromhex(case["commitment"]))),
-                         bytes.fromhex(ev["digests"]), RUN.Session.from_json(ev["session"]),
+                         bytes.fromhex(ev["digests"]), RUN.ChallengerRecord.from_json(ev["session"]),
                          bytes.fromhex(p["session_id"]), setup_inputs=pous.setup_inputs(setup_of))
     return case | {"evidence": canonical_json_bytes(ev).hex()}, answer
 

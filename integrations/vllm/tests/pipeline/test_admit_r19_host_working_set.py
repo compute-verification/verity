@@ -289,7 +289,7 @@ def test_the_opened_reader_answers_none_for_an_excluded_interior_and_verified_by
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.check.oracle_compare import OpenedReader
-    C = NC.GPU_CHUNK_BYTES
+    from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES as C
     # step stream: [qkv 300 B][fa2.m1 plane 4 chunks + 100 B][o_proj 200 B]
     spec = [("model.layers.0.self_attn.qkv_proj/0", 300, "bfloat16"), ("fa2.m1/L0/s0/g32x8x1/S", 4 * C + 100, "int32"), ("model.layers.0.self_attn.o_proj/0", 200, "bfloat16")]
     used = sum(nb for _name, nb, _dt in spec)

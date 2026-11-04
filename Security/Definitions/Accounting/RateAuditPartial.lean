@@ -178,8 +178,8 @@ structure RealizesRatePartial {N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : D
   dev : ΩW × ΩS → Rate.PartialDevice N b h ρ d.chip (∑ i, d.cap i * (r.win .bandwidth).len)
     (d.rate .oracle * (r.win .bandwidth).len)
   /-- the bandwidth audit's verdict is the game's -/
-  accepts_iff : ∀ x y s', r.accepts .bandwidth (x, y, s') ↔ (dev (x, s')).Accepts y.1 y.2.1 y.2.2.1 y.2.2.2
+  accepts_iff : ∀ x y s', r.accepts .bandwidth (x, y, s') ↔ (dev (x, s')).Accepts y.1 y.2.1.1 y.2.1.2 y.2.2
   /-- the bandwidth account's reads from device memory cover the game's ingress -/
-  ingress_le : ∀ x y s', (dev (x, s')).ingress y.1 y.2.1 y.2.2.1 ≤ r.read (x, y, s')
+  ingress_le : ∀ x y s', (dev (x, s')).ingress y.1 y.2.1.1 y.2.1.2 ≤ r.read (x, y, s')
 
 end Accounting

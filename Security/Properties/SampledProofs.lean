@@ -10,9 +10,9 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 `AcceptMeans`: what the check accepts is a commitment and evidence for which
 
 * **the registration** keeps R1–R7 against the verifier's own copies (`Registered`): the record's format, protocol, law
-  and window (`R1`); its program, query, partition and population (`R2`); its scheme, ports, roots, leaves and domains
-  (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window and the window's stream and prover (`R6`); and
-  for a v2 record its registered values (`R7`);
+  and window (`R1`); its program, query, partition and population, and its day's declared program (`R2`); its scheme,
+  ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window and the
+  window's stream and prover (`R6`); and for a v2 record its registered values (`R7`);
 * **the draw** is a draw of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work law, its strata and closure;
 * **the units** were proved and served as drawn, under the registered roots, and the verifiers of record opened the
@@ -58,16 +58,25 @@ def R1 (rec : Json) (v : Registration.Verifier) (law : Json) : Prop :=
   Draw.derive v.program v.query v.law v.workTable = .ok law ∧ jeq (getD rec "law") law ∧
   (getD rec "window" matches .obj _) ∧ ∃ k ∈ Registration.KINDS, jeq (getD (getD rec "window") "kind") (.str k)
 
+/-- The window's declared day (`Registration.Verifier.declared`), for a verifier that reads the registration log's
+declarations: the log declares exactly one program for the day, and the record names it. -/
+def DeclaredDay (rec : Json) (v : Registration.Verifier) : Prop :=
+  match v.declared with
+  | none => True
+  | some (day, ds) => ∃ p, Registration.declaredOf day ds = [p] ∧ jeq (getD rec "program") (.str p)
+
 /-- R2: the verifier's partition names its program's SHA-512, and the record names the same program; the record's query
 is the SHA-512 of the partition's canonical query (whenever that query has a canonical form); the partition has a digest,
 which the record names; and the record's population is the number of units the verifier's query derives from its own
-program. -/
+program; and, for a verifier that reads the registration log's declarations, the record names its day's declared program
+(`DeclaredDay`). -/
 def R2 (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD (partitionOf v) "program") (.str (Flock.hexOf v.program.sha512)) ∧
   jeq (getD rec "program") (getD (partitionOf v) "program") ∧
   (∀ q, Registration.queryDigest (getD (partitionOf v) "query") = .ok q → jeq (getD rec "query") (.str q)) ∧
   (∃ d, Partition.digest (partitionOf v) = some d ∧ jeq (getD rec "partition") (.str d)) ∧
-  ∃ n, Partition.units v.program v.query = .ok n ∧ jeq (getD rec "population") (Lean.toJson n)
+  (∃ n, Partition.units v.program v.query = .ok n ∧ jeq (getD rec "population") (Lean.toJson n)) ∧
+  DeclaredDay rec v
 
 /-- The record's roots: its `roots` list (none when it isn't a list). -/
 def rootsOf (rec : Json) : Array Json :=
@@ -314,7 +323,7 @@ def drawnNats (draw : Json) : Array Nat :=
 /-- The public outputs at δ, for the law `law` with its profile's draw `d` over `n` units: the drawn units, the proved
 ones, the exact bound on wrong units (`Bound.boundOf`: `Bound.countBound` over the draw's strata, `Bound.bernoulliBound`
 for a Bernoulli draw), and for a stratified or work law each template's own (`Bound.stratumBound`). -/
-def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) : Public :=
+def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat) : Public :=
   { drawn := drawnNats e.draw,
     proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
     bound := Bound.boundOf n d p.delta,
@@ -323,7 +332,7 @@ def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) 
 
 /-- The integrity profile at δ: the record's program; one level `unit`, the record's partition, of `n` units, drawn by
 `d`; and the number of units drawn. -/
-def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.Draw) (n : Nat) : Core.Integrity :=
+def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.SamplingDesign) (n : Nat) : Core.Integrity :=
   let str := fun (k : String) => match getD c.record k with | .str s => s | _ => ""
   { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
     levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := n, draw := some d }],

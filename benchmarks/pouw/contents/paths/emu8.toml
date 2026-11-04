@@ -1,4 +1,0 @@
-order = 100
-path = "`emu8/`"
-runs_on = "RTX PRO 6000"
-what = "Dither's int8 k32 prefix words from E4M3 QMMA (Karatsuba with 3 products per step, schoolbook with 4), each prefix word gated bit for bit against int64 and timed against native IMMA and cuBLASLt int8; `accounting.py` counts the limb products a cheater still needs (`run.sh`)"

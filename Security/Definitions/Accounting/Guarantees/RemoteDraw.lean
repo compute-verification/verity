@@ -65,7 +65,7 @@ plus the windows' distinguishers' advantages on `prf`, plus the receipts' bindin
 moved off the row its root holds). -/
 def PooledDraw : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : Coins n κ X → Fin n → ℕ → ℕ) (D : Session n m k κ X) (T : Trace (Coins n κ X)) (R : Receipts n κ X)
+    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Session n m k κ X) (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X)
     (δ : ℝ), 0 ≤ δ → m < 2 ^ 448 → Live D → Refused D prf rest T R → Counted D T →
     T.Holds (δ + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δ t)).toReal +
@@ -76,7 +76,7 @@ def PooledDraw : Prop :=
 for every `W` at least the record's pooled bound at `δ` on every accepted outcome. -/
 def LiveCoinsDrawn : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : Coins n κ X → Fin n → ℕ → ℕ) (D : Session n m k κ X) (T : Trace (Coins n κ X)) (R : Receipts n κ X)
+    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Session n m k κ X) (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X)
     (W δ : ℝ), 0 ≤ δ → m < 2 ^ 448 → Live D → Refused D prf rest T R → Counted D T →
     (∀ ω, T.accepts ω → D.pooled δ ω ≤ W) →
     LiveCoins T W (δ + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 +
@@ -88,7 +88,7 @@ def LiveCoinsDrawn : Prop :=
 `δc`. -/
 def HeldDrawn : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : Coins n κ X → Fin n → ℕ → ℕ) (D : Session n m k κ X) (T : Trace (Coins n κ X)) (R : Receipts n κ X)
+    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Session n m k κ X) (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X)
     (S s₀ e : ℕ) (s E β Br Bd δs δc : ℝ),
     0 < E → 0 ≤ s → 0 ≤ β → 0 ≤ δc → m < 2 ^ 448 →
     Identity T → SquaringCeiling T s E Br → Disks T β Bd → ChipCeiling T S → Routed T → Causal T s₀ e →
@@ -102,8 +102,8 @@ def HeldDrawn : Prop :=
 draw's premises and `W` by the record's pooled bound at `δc`. -/
 def HeldOverTimeDrawn : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : Coins n κ X → Fin n → ℕ → ℕ) (D : Session n m k κ X) (T : Trace (Coins n κ X)) (R : Receipts n κ X)
-    (K : Pace (Coins n κ X)) (S : ℕ) (s E β Br Bd δs δc : ℝ),
+    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Session n m k κ X) (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X)
+    (K : Pace (DrawCoins n κ X)) (S : ℕ) (s E β Br Bd δs δc : ℝ),
     0 < E → 0 ≤ s → 0 ≤ β → 0 ≤ δc → m < 2 ^ 448 →
     Identity T → SquaringCeiling T s E Br → Disks T β Bd → ChipCeiling T S → Routed T → Paced T K → Covers T →
     SketchBound T δs → Live D → Refused D prf rest T R → Counted D T →
@@ -119,8 +119,8 @@ def HeldOverTimeDrawn : Prop :=
 `LiveCoins` replaced by the draw's premises and `W` by the record's pooled bound at `δc`. -/
 def HeldOverTimeLinksDrawn : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : Coins n κ X → Fin n → ℕ → ℕ) (D : Session n m k κ X) (T : Trace (Coins n κ X)) (R : Receipts n κ X)
-    (K : Pace (Coins n κ X)) (S : ℕ) (s E β βl Br Bd Bl δs δc : ℝ),
+    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Session n m k κ X) (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X)
+    (K : Pace (DrawCoins n κ X)) (S : ℕ) (s E β βl Br Bd Bl δs δc : ℝ),
     0 < E → 0 ≤ s → 0 ≤ β → 0 ≤ βl → 0 ≤ δc → m < 2 ^ 448 →
     Links T βl Bl → SquaringCeiling T s E Br → Disks T β Bd → ChipCeiling T S → Routed T → Paced T K → Covers T →
     SketchBound T δs → Live D → Refused D prf rest T R → Counted D T →

@@ -114,7 +114,7 @@ theorem frameOf_toLogical (j : Lean.Json) : Check.frameOf j = ByteFrame.toLogica
       rfl
 
 /-- `Check.evidenceOf`'s link, its do block written out. -/
-private def linkOfL (l : Lean.Json) : Flock.V Check.Link :=
+private def linkOfL (l : Lean.Json) : Flock.V Check.LinkOpening :=
   Except.bind (Flock.J.arr l "frames" "a link") fun fs => Except.bind (fs.mapM Check.frameOf) fun fr =>
     Except.bind (Flock.J.arr l "syncs" "a link") fun ss => Except.bind (ss.mapM Check.syncOf) fun sy =>
     Except.pure { frames := fr.toList, syncs := sy }

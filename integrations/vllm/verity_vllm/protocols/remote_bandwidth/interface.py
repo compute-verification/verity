@@ -10,7 +10,7 @@ codec       a region's encoding: payload words in, stored words out, `encode(pay
 receipt     a keyed hash of one block read in a pass, `keyed(seed)(j, block, z)`; `z` is the input a receipt bound to the
             prior tile's output reads (None for receipts that bind only the block)
 registration  putting a block into the store: its bytes are the codec's encoding of a payload a `Source` names; every
-            registration is a record in the log, and `Registration.root` commits the log
+            registration is a record in the store's chain, and `ChainHead.root` commits the chain
 window      the interval of one challenge σ: `begin_window(σ)` ... `end_window()`, which the verifier's boundary
             message ends (the next window's challenge, or the close after the last)
 pass        one read of the live store: weights, the batch's written KV, and filler to top up, no block twice; its seed
@@ -32,6 +32,8 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
+
+from verity.ml.commitments.merkle import Opening
 
 TIERS = ("hbm", "host")
 KINDS = ("weights", "kv", "filler", "activations")
@@ -149,9 +151,9 @@ class Layout:
 
 
 @dataclass(frozen=True)
-class Registration:
-    """The registration log so far: ``count`` records and ``root``, the hash chain over them (one link per registration
-    event: a region, a page's written blocks, a page's return to filler)."""
+class ChainHead:
+    """The head of the store's chain: ``count`` records and ``root``, the hash chain over them (one link per event: a
+    region, a page's written blocks, a page's return to filler)."""
 
     count: int
     root: bytes
@@ -198,11 +200,12 @@ class WindowRecord:
 
 
 @dataclass(frozen=True)
-class Opening:
+class BlockOpening:
     """Block ``block`` (region ``region``, tier and kind as read) at position ``position`` of pass ``pass_index``: the
-    bytes read, the receipt, the leaf's receipts (up to 16, in plan order), the leaf's path to its segment's node and
-    the node's path to the pass's root (together the driver's path), the registration ``source`` the decoding is
-    checked against, and the leaf's ``salt``."""
+    bytes read, the receipt, the leaf's receipts (up to 16, in plan order) and ``salt``, the registration ``source`` the
+    decoding is checked against, and ``leaf``, the leaf's opening in the pass's tree (`merkle.Opening`: the leaf's
+    index, its hidden value `receipts.hidden` of its receipts under its salt, and the driver's path, the leaf's path to
+    its segment's node and then the node's to the pass's root)."""
 
     pass_index: int
     position: int
@@ -213,10 +216,9 @@ class Opening:
     data: bytes
     receipt: bytes
     leaf_receipts: tuple[bytes, ...]
-    leaf_path: tuple[bytes, ...]
-    segment_path: tuple[bytes, ...]
     source: Source
     salt: bytes
+    leaf: Opening
 
 
 class Stale(RuntimeError):
@@ -238,7 +240,7 @@ class StoreView(Protocol):
 
     def layout(self) -> Layout: ...
 
-    def registration(self) -> Registration: ...
+    def registration(self) -> ChainHead: ...
 
     def begin_window(self, challenge: bytes, registration: bytes | None = None) -> None: ...
 
@@ -246,7 +248,7 @@ class StoreView(Protocol):
 
     def plan(self, pass_index: int, window: int | None = None) -> Sequence[int]: ...
 
-    def open(self, sample: Sequence[tuple[int, int]], window: int | None = None) -> list[Opening]: ...
+    def open(self, sample: Sequence[tuple[int, int]], window: int | None = None) -> list[BlockOpening]: ...
 
 
 @dataclass(frozen=True)

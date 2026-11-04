@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Refine.Tapes
 # How the executable's statement denotes a model statement
 
 The model's verifier is written for a `Model.Statement`: a block R1CS with matrices `A₀`, `B₀`, a pinned column and
-public regions (PROTOCOL.md §16.1–§16.2). The executable's verifier never holds the matrices. The lincheck calls the
+public regions (`Flock.Statement`). The executable's verifier never holds the matrices. The lincheck calls the
 statement's circuit fold, which computes `α·A₀ᵀe + B₀ᵀe` from the statement's sparse layout (`Stmt.fold`).
 
 `FoldRealizes c S` says the executable's fold `c` computes the model statement `S`'s. It is a fact about the statement
@@ -18,7 +18,7 @@ open Flock
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The circuit fold realizes the statement** (§10, §16.1). The pinned column and `k_log` are the statement's, and on
+/-- **The circuit fold realizes the statement** (`Flock.Piop`'s lincheck, `Flock.Statement`). The pinned column and `k_log` are the statement's, and on
 64 skip weights `lw` and `k_log − 6` block coordinates `ρ`, a fold that succeeds has, at every column `c < 2^k_log`,
 `Σ_i e_i·(α·A₀[i, c] + B₀[i, c])` for `e_i = lw[i mod 64]·eq(ρ, ⌊i/64⌋)`. A `folded` that succeeds is such a fold, of
 `2^k_log` entries, with `β` added at the pin and halved at the challenges `ts` in turn. -/

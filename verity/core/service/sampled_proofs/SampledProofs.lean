@@ -15,6 +15,7 @@ import SampledProofs.Rate
 import SampledProofs.HiddenDraw
 import SampledProofs.Select
 import SampledProofs.Slots
+import SampledProofs.PopOrder
 import SampledProofs.Service
 import SampledProofs.Run
 import SampledProofs.Stream

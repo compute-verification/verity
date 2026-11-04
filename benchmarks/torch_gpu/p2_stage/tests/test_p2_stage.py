@@ -336,7 +336,7 @@ def test_decode_layer_zeroes_the_gaps_and_refuses_padding(monkeypatch):
     rows = kern.encode(torch.cat([torch.zeros(len(blocks), L.LEAD, dtype=torch.uint8),
                                   torch.from_numpy(w).view(-1, L.PAYLOAD)], dim=1), blocks.start)
     buf = torch.full((lay.staging_bytes(1),), 0xA5, dtype=torch.uint8)
-    S.decode_layer(S.Store(lay, rows, blocks.start, "unused"), 1, buf)
+    S.decode_layer(S.EncodedRows(lay, rows, blocks.start, "unused"), 1, buf)
     at = 0
     for t in lay.layer(1):
         assert not buf[at:t.staging_offset].any()
@@ -349,10 +349,10 @@ def test_decode_layer_zeroes_the_gaps_and_refuses_padding(monkeypatch):
     bad = rows.clone()
     bad[o.first_block + o.blocks - 1 - blocks.start] = kern.encode(m, o.first_block + o.blocks - 1)[0]
     with pytest.raises(S.StoreError) as e:
-        S.decode_layer(S.Store(lay, bad, blocks.start, "unused"), 1, buf)
+        S.decode_layer(S.EncodedRows(lay, bad, blocks.start, "unused"), 1, buf)
     assert e.value.flags == S.PADDING
     with pytest.raises(ValueError):
-        S.decode_layer(S.Store(lay, rows, blocks.start, "unused"), 1, buf[:-1])
+        S.decode_layer(S.EncodedRows(lay, rows, blocks.start, "unused"), 1, buf[:-1])
 
 
 def test_layer_driver_stages_and_checks_on_a_stand_in_codec(tmp_path, monkeypatch):
@@ -448,7 +448,7 @@ def test_the_toys_coin_and_segments_stage_as_an_encoded_store(tmp_path, monkeypa
         assert bytes(rows.numpy()) == L.segment_rows(root, lay.spec, blocks.start, len(blocks)) \
             == c_star[blocks.start:blocks.stop].tobytes()
         buf = torch.full((lay.staging_bytes(i),), 0xA5, dtype=torch.uint8)
-        S.decode_layer(S.Store(lay, rows, blocks.start, "unused"), i, buf)
+        S.decode_layer(S.EncodedRows(lay, rows, blocks.start, "unused"), i, buf)
         assert hashlib.sha512(buf.numpy().tobytes()).hexdigest() == sha
     s = (lay.blocks(0).stop - 1) // bps
     L.segment_path(root, s, "c").write_bytes(bytes(bps * L.ROW))

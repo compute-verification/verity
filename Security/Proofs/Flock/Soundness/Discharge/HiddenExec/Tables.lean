@@ -1,6 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Defs
-import Proofs.Flock.Soundness.Discharge.Integrate
+import Proofs.Flock.Soundness.Discharge.Integrate.Headline
 
 /-!
 # The tables and sites of a one-table hidden-output session

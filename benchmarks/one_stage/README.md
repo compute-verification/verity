@@ -19,8 +19,8 @@ negatives.
   (`bash benchmarks/one_stage/a5_llama1b_h200.sh`). Llama-3.2-1B int8's B4 row on one H200 under `gpu-lease`: its Build and
   Match, then a deferred config-run Commit under rows-sha512 whose `--serving-rows` window
   (`llama32_1b_rope_d64_l0.json`: layer 0's RoPE d64 heads at steps 1-7) its C2 site commits before the bundle is sealed,
-  a `served` window under the 64-byte run root. Then the Commit's CPU replay, and `a5.sh` with `WINDOW=served` on the bundle
-  and that window, whose private bodies stay on the node.
+  a `served` window under the 64-byte run root. Then the Commit's CPU replay (the prover's pre-flight check, on the node), and
+  `a5.sh` with `WINDOW=served` on the bundle and that window, whose private bodies stay on the node.
 - `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`a5.py --tp-commit`), taken as served only under a
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
   the sample): GLM-5.3's TP8 Commit with
@@ -48,7 +48,7 @@ negatives.
   its rows under the Program's value, two units swapped: `--made-for`), are refused by Lean's registered reads. Its warden run
   is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `warden_replay.py`'s: a served window's requests through the
   warden, each answered with the tokens the server streamed it.
-- `a5_tp_gates.py` (`a5_tp.sh` with `A5_COINS=verifier` and `STANDIN=tp-gates`, `tp-gates:altered`, `tp-gates:swapped`,
+- `a5_tp_gates.py` (`a5_tp.sh` with `A5_CHALLENGER=local` and `STANDIN=tp-gates`, `tp-gates:altered`, `tp-gates:swapped`,
   `tp-gates:other-collective`, `tp-gates:other-request` or `tp-gates:own`): A5 on both ranks of a synthetic Llama TP2 step
   of two requests whose cross-rank transfers hold transfer gates, which no served TP2 window has yet. Each rank's partial of
   each reduction (layer 0's embedding, o_proj and down_proj, H = 2048) for each request is a registered value its
@@ -64,8 +64,9 @@ negatives.
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
 - `examples/vllm/commit.sh` (the vLLM example's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
   bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the workload's Build and Match of record, a config-run Commit that seals
-  `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run), its replay on CPU, and the row dir in the evidence
-  store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
+  `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run), and its replay on CPU. The workload dir,
+  bundle included, stays on the node; the run publishes the stages' records (`research-outputs write`). A deferred
+  single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
 - `served_verdicts.sh` (with `served_verdicts.py`): one served window through every subprotocol, in one job on an H200 node
   from a clone of the tree (`bash benchmarks/one_stage/served_verdicts.sh`). It serves
   Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
@@ -84,7 +85,10 @@ negatives.
   (`benchmarks/pous/served_piece.py`), and `BANDWIDTH_CMD` collects its answer (`served_bandwidth.py collect`).
   Finally the all-protocols window report and the block record, which accepts only when every subprotocol accepted on this
   node and names each one missing, rejecting or about another server, with its reason (PoUW's development piece: development
-  run, credits nothing). An accept's clause says when its weights were held and their share of the checkpoint, where its
+  run, credits nothing). `PRODUCT=remote` composes sampled proofs and PoUW alone: the onsite pieces are dropped, not run
+  and not composed, and the preflight refuses any onsite piece's command. `CERTIFIER_FRONT` is not a piece but how the
+  requests are served, so a remote run may set it (with `LOAD=front`) to serve through the network certifier in front
+  of its endpoint, its verdicts unchanged. An accept's clause says when its weights were held and their share of the checkpoint, where its
   profile says so (PoUS's), and each δ of the block record's at which its quantity is not established. V3c runs last, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`, since nothing before it reads it, and writes its audit as the network
   certifier's period reads it (`period.json`). With the certifier's piece split in two (`CERTIFIER_CHAIN_CMD` and
   `CERTIFIER_PERIOD_CMD`), V3c runs before the pieces instead: the chain after its window commit, beside its audit
@@ -108,6 +112,21 @@ negatives.
   byte run with any case's evidence. With `--exe`, it runs `onsite check` or `remote check` and exits with
   Lean's code. It decides nothing: a subprotocol with no case is left out, Lean's verdict on what remains stands (a
   rejection naming the missing case), and the run is labelled `NOT_ESTABLISHED` with what is missing.
+- `pouw_piece.py`: PoUW's `--cases` directory for `composite.py`, remote's `verity/pouw/v1` (`v1`: the verifier's params,
+  the window's one-stage registration and the proof service's answer to it) or onsite's `verity/pouw/period/v1`
+  (`period`: the key, main's first-parent history, the period's name, the auditor's ledger, the pins log and each
+  window's evidence), and its answer, `pouw-check`'s or `pouw-period`'s with `--exe`, written private as `composite.py`
+  reads it. From a served run (`--serve-run DIR --window K`) it names the piece MISSING with why and writes no case, so
+  `composite.py` leaves it out: an H1 window has no `v1` case, and no `period` case outside a period or without its drawn
+  units' proof outcomes.
+- `v2_case.py`: sampled proofs v2's `--cases` directory from a served window's kept files (`case_v2` of its v1 case,
+  partition, public file, sessions and circuit file), with its own Lean answer with `--exe`. A circuit file the run didn't
+  keep is rebuilt by the command its `m0/compose.log` records and used only at the log's pin.
+- `kept_composite.sh SRC [K]`: remote's and onsite's Lean verdicts on a served run's kept records (`served_verdicts.sh`'s
+  `out/`, or a tarball of it) on a CPU node: it builds the products and the pieces' checks, writes PoUW's pieces
+  (`pouw_piece.py`; the period from the kept `pieces/pouw/`, `main.txt`, `H1_KEY_SHA512` and the drawn and live legs'
+  statements, `POUW_STATEMENTS` and `POUW_LIVE`), v2's (`v2_case.py`) and every kept piece holding a case beside its
+  answer, all private in scratch, and runs `composite.py remote` and `onsite`; `$OUT` gets only their public output.
 - `a8.sh`: run A8's entry point, on the same builds. A8 is one window of the remote bandwidth audit over a registered store of
   a few thousand blocks with every opening proved by the opening unit (`remote_bandwidth.opening`) under `--zk` and held by
   Lean, honest and with a tampered block, a scan of everything the verifier received for the sampled proof blocks' bytes, and the
@@ -186,12 +205,32 @@ negatives.
 - `served_composite.sh`: `served_verdicts.sh`'s step after its record. It writes PoUS's and the wipe's composite cases
   (PoUS's `served_case.sh`), then gets remote's and onsite's Lean verdicts on the run's cases (soundness's composite
   reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`, and a tree without those two scripts skips the step.
+- `onsite_record.py OUT [--advice-charge FILE]`: the onsite demo's record of a served run (`record/onsite.json`), which
+  `served_verdicts.sh` writes after its composite step when the network certifier is in the run: its piece
+  (`CERTIFIER_CMD`, or the split's `CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`) or its front (`CERTIFIER_FRONT`). It holds every verdict
+  the run of record needs (sampled proofs, PoUW, inference-only, remote, the network certifier, onsite), each missing
+  with its why where the run has no answer. Beside them are the network certifier's bound term by term in the notation
+  table's symbols, with its overcount, the seconds it covers, the connections it counts and δ_net term by term with
+  each term's source (the check's `eps`, only its δ part, and each phase's knowledge, binding and collision errors,
+  which no check computes), and that bound over the
+  run's own certification period (proved) and each monitoring period for the node (proved where the run's period
+  covers it, else scaled), the census's reference datacenter and the world (scaled), each scaled cell naming its rule,
+  whose sources the record states, beside its figure over one execution phase. The realized advice charge is private:
+  the record carries the registered width as its upper bound, and `--advice-charge` states a test run's measurement
+  beside the bound as that run's.
+- `advice_charge.py ADVICE --run RUN --to FILE`: honest serving's advice charge from `verity-vllm advice`'s output
+  over a test run with public inputs: each Commit period's advice bits, unpadded, beside its requests' prompt and
+  output lengths and finishes, labelled as that run's. `served_verdicts.sh advice-charge` serves such a run
+  (`PRODUCT=remote`, `H1_GATE` empty) and writes it.
 - `served_util.sh` (with `served_util.py`): the whole-step tensor utilization of serve-openai on the int8 Llama-3.2-1B
   prefill mix (prompts of 1,024 ids, `max_tokens` 1, all queued at once, T tokens a step), one arm a run (stock, the
   Commit unsealed or sealed, the Commit with PoUW H1 on in-process coins), under Nsight Systems' GPU metrics.
   `served_util.py` takes Tensor Active's mean over the longest run of full steps, each step from the previous step's end
   to its own on the step trace's clock, and splits the rest into losses by what the GPU was running at each sample.
   With `PYSPY=1`, `pyspy_steps.py` splits the same steps' host time by Python function and thread, from py-spy's trace.
+- `served_shares.py SERVE_DIR [--credit ANSWER.json]`: a served run's declared utilization (the work its step trace's
+  steps declare, the linears at θ and attention and the LM head at θ/2, over the loads' busy wall) and its accounted share
+  (the period credit's work at J10-R's 9/64 floor at θ, over the same wall), at the tensor and boost clock readings.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as

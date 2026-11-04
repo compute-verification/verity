@@ -77,12 +77,6 @@ theorem piop_na (coins : Got) (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.P
   na_mono (fun _ ⟨_, ⟨_, hs⟩, _⟩ => hs) _
     (Sched.repPiop_sim (L := naLift coins) st lay cap cap root extras mk rfl hd hcn hr hm t t ht got)
 
-theorem sp_mono {α : Type} {Q Q' : α → List ℕ → Prop} (h : ∀ a ns, Q a ns → Q' a ns) :
-    ∀ (s : Step α) (ns : List ℕ), SP Q s ns → SP Q' s ns
-  | .done a, ns, hs => h a ns hs
-  | .fail _, _, _ => trivial
-  | .ask _ _ k, _, ⟨ns', e, hk⟩ => ⟨ns', e, fun cs => sp_mono h (k cs) ns' (hk cs)⟩
-
 theorem sp_na_bind {α β : Type} {Q : α → Prop} {R : β → List ℕ → Prop} {f : α → Step β} {ns : List ℕ}
     (hf : ∀ a, Q a → SP R (f a) ns) : ∀ s : Step α, NA Q s → SP R (s.bind f) ns
   | .done a, h => hf a h

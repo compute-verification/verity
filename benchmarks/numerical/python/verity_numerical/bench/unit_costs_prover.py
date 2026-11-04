@@ -20,7 +20,7 @@ by the SHA-512, hm96 and lookup ranges (every recorded block is at least 2^22); 
 types), each at :data:`BYTES_PER_NNZ` per nonzero of what the circuit text holds (:func:`netlists`): a registered type's one
 unit (GEMM's tc-step: 263,933 nonzeros, shared by its K/16 units), a token-select tree's distinct members, a generic type's
 whole subcircuit; never more than Z nonzeros. ρ is the least nonzeros per committed row among the bucket's types (the
-inventory's ``nnz / committed``). A block is at most 2^:data:`K_LOG_MAX` bits (``Stmt.InRange``), so a session needing more
+inventory's ``nnz / committed``). A block is at most 2^:data:`K_MAX` bits (``Stmt.InRange``), so a session needing more
 is out of range: flock-circuit refuses it.
 
 **Per workload** (:func:`audit`): the padding table's body in its dp4 buckets at B = 16 and its tail at B = 1
@@ -66,6 +66,8 @@ import math
 from collections import defaultdict
 from typing import Any, Mapping, Sequence
 
+from verity.ml.windows.interface import K_MAX, PACK_LOG
+
 from . import unit_costs_padding as P
 
 #: vy-nebius-1 and vy-nebius-2: ``free -g`` total (GiB)
@@ -79,9 +81,6 @@ BYTES_PER_NNZ = 6.04
 #: the circuit text that is not a unit's netlist (SHA-512 compressions, hm96 rows, META): the smallest recorded circuit's,
 #: Pc4RowATail_v1{K=256,KS=64} of 5,280 ANDs
 GLUE_BYTES = 55_911_585
-K_MIN_LOG = 22
-#: ``Stmt.InRange``'s block bound (``live/src/circuit.rs``'s ``IN_RANGE_K_LOG``; ``verity_flock.circuit.K_MAX``)
-K_LOG_MAX = 27
 POW2 = tuple(range(16, 33))
 CAP_SEARCH = tuple(range(16, 41))
 #: ρ for the power-of-two table: RoPE's and RMSNorm's registered layouts (GEMM's is 27.9, attention's 27.9-29.6)
@@ -299,13 +298,13 @@ def session(Z: float, rho: float, coef: Mapping[str, Sequence[float]], slots: in
     (:data:`SLOT_SUMCHECK`; None: no slot sumcheck), adding its entries, seconds and GiB, and the session's total seconds
     and peak GiB."""
     rows = Z / rho
-    k_log = max(K_MIN_LOG, math.ceil(math.log2(rows + 1)) + 2)
+    k_log = max(PACK_LOG, math.ceil(math.log2(rows + 1)) + 2)
     D = slots * 2.0 ** k_log
     full = bytes_per_nnz * Z
     held = [full] * slots if nets is None else sorted(nets, reverse=True)[:slots]
     cb = glue + sum(min(n, full) for n in held)
     x = features(D, cb, 2.0 ** k_log)
-    s = {"Z": Z, "slots": slots, "rho": rho, "rows": rows, "k_log": k_log, "in_range": k_log <= K_LOG_MAX, "D": D,
+    s = {"Z": Z, "slots": slots, "rho": rho, "rows": rows, "k_log": k_log, "in_range": k_log <= K_MAX, "D": D,
          "circuit_bytes": cb, **{k: _at(c, x) for k, c in coef.items()}}
     T = slots if nets is None else max(len(nets), 1)
     s["template"] = max((min(n, full) / bytes_per_nnz for n in held), default=Z)
@@ -618,7 +617,7 @@ def prover(inv: Mapping[str, Any], law: Mapping[str, Any] | None = None,
     kw["slot"] = slot
     names = list(dict.fromkeys(r["workload"] for r in inv["rows"]))
     return {"format": "verity/f6-prover/v3", "K": inv["K"], "slots": SLOTS, "menu": f"dp{MENU_K}", "node_gib": NODE_GIB,
-            "gpu_gib": GPU_GIB, "bytes_per_nnz": BYTES_PER_NNZ, "glue_bytes": GLUE_BYTES, "k_log_max": K_LOG_MAX, "fit": law,
+            "gpu_gib": GPU_GIB, "bytes_per_nnz": BYTES_PER_NNZ, "glue_bytes": GLUE_BYTES, "k_log_max": K_MAX, "fit": law,
             "slot_sumcheck": None if slot is None else {
                 **slot, "entries": "slots x the session's largest template (its type's registered table, at most Z)"},
             "staging_fit": {"coef": slaw, "ladder": [dict(zip(("run", "G", "ands", "wall_s", "peak_gib"), r)) for r in STAGING],

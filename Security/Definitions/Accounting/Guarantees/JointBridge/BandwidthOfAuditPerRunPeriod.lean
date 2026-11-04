@@ -3,7 +3,7 @@ import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
 /-!
 # PoUB's per-period guarantee, from the bandwidth audit's (trusted)
 
-The bridge from the bandwidth audit v0's guarantee (`Bandwidth.Guarantees.AuditRO`, through its per-run reading
+The bridge from the bandwidth audit v0's guarantee (`Accounting.Guarantees.Remote.AuditRO`, through its per-run reading
 `Accounting.Guarantees.BandwidthOfAuditPerRun`) to PoUB's per-period guarantee (`Accounting.PeriodRun.Sound` at audit
 `.poub`), the coins model's form: in a period that realizes the bandwidth audit's game
 (`Accounting.RealizesBandwidthOfAuditPerRunPeriod`), at any bandwidth certificate `Q` at most

@@ -1,12 +1,11 @@
 """The CUDA copies of the ``vllm-v1`` rules hash the conformance vectors' bytes (``verity.ml.commitments.vllm_v1``).
 
-Four copies, each checked on every vector its rule covers:
+Three copies, each checked on every vector its rule covers:
 
 * ``native_tree.cu`` -- the production ``verity_native_collect`` extension, through its extern "C" launchers: chunk leaves of a whole
   step and of a ``ci_base`` window, node/lift levels, trees and paths, the run and weights folds; and through ``StepHasher``, whole trees
   and window subtrees on both sides of the bound under which a tree's narrow top is one launch;
 * ``hidden_gpu_tree.cu`` -- ``hidden_gpu.ext()``: chunk leaves, node/lift levels, trees and paths, the run and weights folds;
-* ``native_leafhash.cu`` -- ``leafhash.ext()``: position leaves (alone and as the tail after a full leaf), tree roots, the weights fold;
 * ``verity_tap.h`` at ``VERITY_TAP=4`` -- the FA2 thread leaf, compiled into a one-thread harness against the pod's FA2 tree.
 
 The chunk kernels hard-wire header words 8/9 to 0, so they only reproduce legacy-tile chunk vectors; the device has no empty tree and
@@ -181,34 +180,6 @@ def test_hidden_gpu_tree() -> None:
         return _digests(e.tree_level(_rows(ds)))
 
     _check_tree_copy(chunk_leaves, levels, one_level)
-
-
-def test_native_leafhash() -> None:
-    from verity_vllm.commit.committer import leafhash as LH
-
-    e = LH.ext()
-
-    def pos_leaves(buf: bytes, chunk: int) -> list[bytes]:
-        o = e.pos_leaves(torch.frombuffer(bytearray(buf), dtype=torch.uint8).cuda(), int(chunk)).cpu().numpy().tobytes()
-        return [o[32 * i:32 * i + 32] for i in range(len(o) // 32)]
-
-    def root(leaves: list[bytes]) -> bytes:
-        return e.tree_root(torch.frombuffer(bytearray(b"".join(leaves)), dtype=torch.uint8).reshape(-1, 32).cuda()).cpu().numpy().tobytes()
-
-    head = np.random.default_rng(0).integers(0, 256, size=4096, dtype=np.uint8).tobytes()
-    for pv in V["pos_leaf"]:
-        v = H(pv["value"])
-        if not v:
-            continue                              # pos_leaves refuses an empty buffer; the host skips numel() == 0 tensors
-        assert pos_leaves(v, len(v))[0].hex() == pv["leaf"]
-        for chunk in (256, 4096):
-            if len(v) <= chunk:
-                assert pos_leaves(head[:chunk] + v, chunk)[1].hex() == pv["leaf"]
-    for t in TREES:
-        assert root([H(x) for x in t["leaves"]]).hex() == t["root"]
-    assert root([H(p) for p in NODE["parts"]]).hex() == NODE["digest"]
-    i = WEIGHTS["inputs"]
-    assert root([H(x) for x in i["tensor_roots"]]) == scheme.fold([H(x) for x in i["tensor_roots"]])
 
 
 HARNESS = r"""

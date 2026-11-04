@@ -24,7 +24,7 @@ import re
 from test_repository import REGISTRY, ROOT, _tracked
 
 #: Top-level names the tree had before a move, so a mention of one is still read as a path.
-RETIRED = frozenset({"packages", "protocols", "pods", "census", "security_proofs", "frontends", "archive"})
+RETIRED = frozenset({"packages", "protocols", "pods", "census", "security_proofs", "frontends", "archive", "glossary"})
 #: (document, token as written) that reads as a repository path but names something else, each with why.
 NOT_PATHS = {
     ("verity/ml/circuits/ops/tests/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
@@ -124,7 +124,7 @@ def test_every_path_a_document_names_exists():
     bad = dead_paths(_tree())
     assert not bad, (
         "documents name repository paths that aren't in the tree. Write each path's current location (where it moved: "
-        "`git log --follow -- PATH`, `tools/move/layout_map.toml`) or drop the mention; an identifier that only looks like a "
+        "`git log --follow -- PATH`) or drop the mention; an identifier that only looks like a "
         "path goes in this test's NOT_PATHS with a reason:\n" + "\n".join(f"  {d}:{n}: `{t}`" for d, n, t in bad))
 
 

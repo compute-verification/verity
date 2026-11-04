@@ -285,26 +285,27 @@ def _prepare(x: int | tuple[int, ...]) -> None:
 
 
 def _planned(plan: UN.Plan, opts: CK.Options, cache: Path, forked: bool = False,
-             keep: Callable[[str, str], bool] | None = None) -> tuple[list[tuple], list[dict], dict[int, tuple[dict, str]]]:
+             keep: Callable[[str, str], bool] | None = None) -> tuple[list[tuple], list[dict | None], dict[int, tuple[dict, str]]]:
     """`_tasks` of ``--all`` from the bindings' records (`units.plan`), each target's key and the entries reused.  A target that
     misses through a binding built apart, or through any binding when the zygotes fork the checks (``forked``), is made here
     only if it is a primitive its id makes (`units.built_here`), and anything else where it is checked (`_made`): by the zygote
     that forks its check, which makes every such target of its binding (`_prepare`, `_owners`), or else by its check's process.
     So a run whose records count describes no target here, one after another, to check it.  Else it is made here from a
     binding that reaches it (`units._materialize`), and `units.Stale` when its descriptor is not its record's.  A target
-    ``keep`` (its kind and label) refuses, another shard's, is neither looked up nor made."""
+    ``keep`` (its kind and label) refuses, another shard's, is neither keyed (its key None), looked up nor made."""
     d = plan.derived
     memo = lambda: {}  # noqa: E731
     pins = CC.recorded_pins(CK.load_pins())
     tasks: list[tuple] = []
-    keys: list[dict] = []
+    keys: list[dict | None] = []
     hits: dict[int, tuple[dict, str]] = {}
     for fid in d.ids:
         node = d.nodes[fid]
         call = node["f"] in plan.calls
-        k = target_key("definition", fid, opts, call, desc=node["d"])
+        mine = keep is None or keep("definition", fid)
+        k = target_key("definition", fid, opts, call, desc=node["d"]) if mine else None
         fn, later = None, False
-        if keep is not None and not keep("definition", fid):
+        if not mine:
             pass
         elif (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
             hits[len(tasks)] = hit
@@ -327,8 +328,8 @@ def _planned(plan: UN.Plan, opts: CK.Options, cache: Path, forked: bool = False,
         tasks.append(("definition", fid, check, info))
         keys.append(k)
     for label, sub, sts in TG.templates():
-        k = target_key("template", label, opts, None)
-        if (keep is None or keep("template", label)) and (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
+        k = target_key("template", label, opts, None) if keep is None or keep("template", label) else None
+        if k is not None and (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
             hits[len(tasks)] = hit
         tasks.append(("template", label, lambda sub=sub, sts=sts: CK.check_subcircuit(sub, opts, instance_statics=sts, memo=memo(), pins=pins),
                       {"units": sorted(TG.BINDINGS.get(label, ()))}))

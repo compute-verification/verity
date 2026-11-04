@@ -1,8 +1,11 @@
 import Proofs.Flock.Claims.Recursion.Deploy
 import Proofs.Flock.Claims.Recursion.DeployScope
-import Proofs.Flock.Claims.Recursion
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Soundness.Refine.Paths
+import Proofs.Flock.Claims.KS.PlainAcc
+import Proofs.Flock.Claims.Recursion.FlockKSRecord
+import Proofs.Flock.Claims.Recursion.Gap
+import Proofs.Flock.Claims.Recursion.KSLin
 
 /-!
 # The compiled verifier's structural code facts

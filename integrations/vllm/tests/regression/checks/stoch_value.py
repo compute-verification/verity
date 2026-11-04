@@ -74,6 +74,8 @@ def _linked(row: resolver.Row, rels, dest: Path) -> None:
 
 
 def actual(row: resolver.Row) -> dict:
+    if kept := resolver.kept_on_the_node(row, "match_stoch.json"):
+        return kept
     if row.candidate_root() is not None:
         ms_p = row.candidate("match_stoch.json")
         if ms_p is None:

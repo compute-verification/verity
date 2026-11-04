@@ -84,7 +84,8 @@ and KV connectors.
 certifier's PROTOCOL.md, "Advice v1"):
 1. the committed advice is the decision bits themselves, one per open-step ask in the scan's order, read directly;
 2. a scan of this step over the session's steps, from the empty engine, the arrivals' cursor moving by `taken` and
-   the decisions' by `used`; the certified request records (P, O) are the arrivals, in the warden's release order;
+   the decisions' by `used`; the certified request records (P, O) are the arrivals, in the network certifier's release
+   order;
 3. the charge: advice v1's arithmetic code run forward over the same decisions (`arith_encode`), each window's coded
    length at most its declared charge, so no decoder runs in the circuit;
 4. `compile_steps` (`integrations/vllm/verity_vllm/program/predict/steps.py`): each row (request, start, n) becomes a `RowRef`
@@ -122,7 +123,7 @@ from verity.ml.circuits.boolean.forms import ONE, ZERO, Circuit, add, and_reduce
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.types import Array, Tuple
-from verity.core.protocols.certifier.head_check import BIT, _part, ands
+from verity.core.protocols.certifier.head_check import BIT, _part
 
 STATICS = ("R", "W", "A", "M", "T", "L", "B", "H", "CH", "WM", "FULL", "PC", "NB", "IW", "AS", "EW")
 

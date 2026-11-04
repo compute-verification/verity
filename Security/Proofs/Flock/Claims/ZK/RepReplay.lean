@@ -101,7 +101,7 @@ theorem lc_zr0_nil (c : CircuitFold) (m : ℕ) (zc : ZcOut) (k : ℕ) : (Lc.zr0 
     rw [getElem!_neg (#[] : Array Bool) _ (by simp)]
     rfl) k
 
-theorem lc_zrT_nil (c : CircuitFold) (m : ℕ) (zc : ZcOut) (cs : Lc.Coins) :
+theorem lc_zrT_nil (c : CircuitFold) (m : ℕ) (zc : ZcOut) (cs : Lc.Challenges) :
     ∀ i k : ℕ, (Lc.zrT c m tr0 zc cs i)[k]! = 0
   | 0, k => by
     show (Lc.zr0 c m tr0 zc)[k]! = 0
@@ -111,7 +111,7 @@ theorem lc_zrT_nil (c : CircuitFold) (m : ℕ) (zc : ZcOut) (cs : Lc.Coins) :
     unfold halve
     exact get_map_range_zero (fun x _ => by simp only [lc_zrT_nil c m zc cs i, f_add_zero, f_mul_zero]) k
 
-theorem lc_msg_nil (c : CircuitFold) (m : ℕ) (zc : ZcOut) (full : Array F128) (cs : Lc.Coins) (j : ℕ) :
+theorem lc_msg_nil (c : CircuitFold) (m : ℕ) (zc : ZcOut) (full : Array F128) (cs : Lc.Challenges) (j : ℕ) :
     Lc.msg c m tr0 zc full cs j = (0, 0) := by
   simp only [Lc.msg, lc_zrT_nil, f_add_zero, f_mul_zero, sumF_zero]
 
@@ -170,7 +170,7 @@ with its coins, from a zerocheck output with the `z` and `ρ` of `zcs`, where it
 returned some `full`, and its proof and transcript are `LcZ`'s at the coins from `l.size`. -/
 theorem lincheckCut_closed (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg}
     (hr : ∀ k, coinOf (resp k) = coin k) (c : CircuitFold) (m : ℕ) {lay : Zk.PadLayout} (hn' : c.kLog - 6 ≤ lay.nLc)
-    (mk : ℕ → F128) (zcs : Zc.Coins) {zc : ZcOut} (hz : zc.z = (Zc.out m zcs tr0).z)
+    (mk : ℕ → F128) (zcs : Zc.Challenges) {zc : ZcOut} (hz : zc.z = (Zc.out m zcs tr0).z)
     (hρ : zc.rho = (Zc.out m zcs tr0).rho) {t t₂ : Transcript} {l l₂ : Array Claims.Msg} {lp : LincheckProof}
     {lc : LcOut} (h : ((lincheckCut (asksCut coin n) c m lay mk zc).run t).go l = (.ok ((lp, lc), t₂), l₂)) :
     ∃ full, c.fold (coin l.size 0) (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok full ∧

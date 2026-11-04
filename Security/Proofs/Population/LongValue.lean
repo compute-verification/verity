@@ -7,21 +7,21 @@ import Proofs.Population.Leakage
 A prover may commit a value of any length, since an hm96 leaf's inner hash takes any length. The verifier's view is the
 roots, the openings it accepts and its coins, and it refuses an opening of another length than the slot's width before
 it reads it. So a long value is the prover's private memory plus one ordinary leaf: the slot it sits in has no opening
-of its width (or the run holds a collision), the verifier's view of it is ⊥, and its writer and every reader are wrong.
+of its width (or the run holds a collision), the verifier's view of it is ⊥, and its writer and every reader are incorrect.
 
 * **The openings.** `view_congr`, `view_add_long`: the view reads only openings of the declared width, so a run that
   also commits long values has the view it would have without them. `view_of_accepts`, `long_value`: under
   `CollisionStep` (a named assumption: two strings that climb to one position give a collision among the run's hashed
   strings), an accepted opening is the view, and a slot a long value climbs to is ⊥, or the run holds a collision.
   `optCorrect_of_opened`, `opened_of_optCorrect`: a unit's proof holds exactly when the unit is correct in the view.
-  `long_value_wrong`: the writer and every reader of a long value's slot are wrong.
-* **⊥ is weakly dominated by a short wrong value.** `wrong_fill_subset`: putting any value of the slot's width in place
-  of every ⊥ gives an assignment whose wrong units are among the ⊥ assignment's (`fill_mem_egressAt`: within the same
-  budget, and showing the same values wherever the ⊥ assignment shows one). A unit that reads or writes ⊥ is wrong
-  (`mem_optWrong_of_read_none`, `mem_optWrong_of_write_none`).
+  `long_value_incorrect`: the writer and every reader of a long value's slot are incorrect.
+* **⊥ is weakly dominated by a short incorrect value.** `incorrect_fill_subset`: putting any value of the slot's width in place
+  of every ⊥ gives an assignment whose incorrect units are among the ⊥ assignment's (`fill_mem_egressAt`: within the same
+  budget, and showing the same values wherever the ⊥ assignment shows one). A unit that reads or writes ⊥ is incorrect
+  (`mem_optIncorrect_of_read_none`, `mem_optIncorrect_of_write_none`).
 * **T1–T4 over `Option V`.** `liftFns f` applies `f` when every read holds a value and writes ⊥ otherwise; a unit
-  correct over `Option V` is correct under it (`wrong_lift_subset`), so the population theorems hold over `Option V`
-  with the wrong units of `optWrong`: robust determinacy and the cone (`opt_eq_of_writes`, `opt_eq_off_down`,
+  correct over `Option V` is correct under it (`incorrect_lift_subset`), so the population theorems hold over `Option V`
+  with the incorrect units of `optIncorrect`: robust determinacy and the cone (`opt_eq_of_writes`, `opt_eq_off_down`,
   `opt_eq_honest_off_down`), the egress count with `|V| + 1` for `|V|` (`card_optEgress_le`, `card_optEgressAt_le`,
   `card_optEgressAt_le_reach`), leakage beyond the honest egress (`opt_card_leak_le_coneEgress`,
   `opt_card_leak_le_reach`), and the skipped work (`opt_skipped_work_le_wt`, `opt_skipped_work_le_wt_of_luck`). The
@@ -61,10 +61,10 @@ theorem optCorrect_of_correct_lift {V : Type} {f : P.Fns V} {σ : S → Option V
   refine ⟨fun r => (σ r).get (hr r), fun r => (Option.some_get (hr r)).symm, fun s => ?_⟩
   rw [h s, P.liftFns_of_isSome f hr s]
 
-theorem wrong_lift_subset [Fintype U] {V : Type} {f : P.Fns V} {σ : S → Option V} :
-    P.wrong (P.liftFns f) σ ⊆ P.optWrong f σ := by
+theorem incorrect_lift_subset [Fintype U] {V : Type} {f : P.Fns V} {σ : S → Option V} :
+    P.incorrect (P.liftFns f) σ ⊆ P.optIncorrect f σ := by
   intro u hu
-  simp only [wrong, optWrong, mem_filter, mem_univ, true_and] at hu ⊢
+  simp only [incorrect, optIncorrect, mem_filter, mem_univ, true_and] at hu ⊢
   exact fun hc => hu (P.correct_lift_of_optCorrect hc)
 
 /-- Over assignments that hold a value everywhere, correctness over `Option V` is correctness. -/
@@ -77,28 +77,28 @@ theorem optCorrect_some_iff {V : Type} {f : P.Fns V} {τ : S → V} {u : U} :
     exact fun s => Option.some_injective _ (hw s)
   · exact fun h => ⟨fun r : P.reads u => τ r, fun r => rfl, fun s => congrArg some (h s)⟩
 
-theorem optWrong_some [Fintype U] {V : Type} (f : P.Fns V) (τ : S → V) :
-    P.optWrong f (fun s => some (τ s)) = P.wrong f τ := by
+theorem optIncorrect_some [Fintype U] {V : Type} (f : P.Fns V) (τ : S → V) :
+    P.optIncorrect f (fun s => some (τ s)) = P.incorrect f τ := by
   ext u
-  simp only [optWrong, wrong, mem_filter, mem_univ, true_and, P.optCorrect_some_iff]
+  simp only [optIncorrect, incorrect, mem_filter, mem_univ, true_and, P.optCorrect_some_iff]
 
-/-- **The writer of ⊥ is wrong.** -/
-theorem mem_optWrong_of_write_none [Fintype U] {V : Type} (f : P.Fns V) {σ : S → Option V} {u : U} {s : S}
-    (hs : s ∈ P.writes u) (h : σ s = none) : u ∈ P.optWrong f σ := by
-  simp only [optWrong, mem_filter, mem_univ, true_and]
+/-- **The writer of ⊥ is incorrect.** -/
+theorem mem_optIncorrect_of_write_none [Fintype U] {V : Type} (f : P.Fns V) {σ : S → Option V} {u : U} {s : S}
+    (hs : s ∈ P.writes u) (h : σ s = none) : u ∈ P.optIncorrect f σ := by
+  simp only [optIncorrect, mem_filter, mem_univ, true_and]
   rintro ⟨x, -, hw⟩
   have := hw ⟨s, hs⟩
   simp [h] at this
 
-/-- **Every reader of ⊥ is wrong.** -/
-theorem mem_optWrong_of_read_none [Fintype U] {V : Type} (f : P.Fns V) {σ : S → Option V} {u : U} {r : S}
-    (hr : r ∈ P.reads u) (h : σ r = none) : u ∈ P.optWrong f σ := by
-  simp only [optWrong, mem_filter, mem_univ, true_and]
+/-- **Every reader of ⊥ is incorrect.** -/
+theorem mem_optIncorrect_of_read_none [Fintype U] {V : Type} (f : P.Fns V) {σ : S → Option V} {u : U} {r : S}
+    (hr : r ∈ P.reads u) (h : σ r = none) : u ∈ P.optIncorrect f σ := by
+  simp only [optIncorrect, mem_filter, mem_univ, true_and]
   rintro ⟨x, hx, -⟩
   have := hx ⟨r, hr⟩
   simp [h] at this
 
-/-! ## ⊥ is weakly dominated by a short wrong value -/
+/-! ## ⊥ is weakly dominated by a short incorrect value -/
 
 theorem fill_of_some {V : Type} {d : S → V} {σ : S → Option V} {s : S} {v : V} (h : σ s = some v) :
     fill d σ s = v := by
@@ -113,50 +113,50 @@ theorem correct_fill_of_optCorrect {V : Type} {f : P.Fns V} {σ : S → Option V
   rw [hx]
   exact fill_of_some (hw s)
 
-/-- **⊥ is weakly dominated by a short wrong value**: filling every ⊥ with any value of the slot's width wrongs no unit
+/-- **⊥ is weakly dominated by a short incorrect value**: filling every ⊥ with any value of the slot's width wrongs no unit
 that was correct. -/
-theorem wrong_fill_subset [Fintype U] {V : Type} (f : P.Fns V) (σ : S → Option V) (d : S → V) :
-    P.wrong f (fill d σ) ⊆ P.optWrong f σ := by
+theorem incorrect_fill_subset [Fintype U] {V : Type} (f : P.Fns V) (σ : S → Option V) (d : S → V) :
+    P.incorrect f (fill d σ) ⊆ P.optIncorrect f σ := by
   intro u hu
-  simp only [wrong, optWrong, mem_filter, mem_univ, true_and] at hu ⊢
+  simp only [incorrect, optIncorrect, mem_filter, mem_univ, true_and] at hu ⊢
   exact fun hc => hu (P.correct_fill_of_optCorrect d hc)
 
 theorem holds_fill {V : Type} {a : S → V} {X : Finset S} {σ : S → Option V} (d : S → V) (h : P.OptHolds a X σ) :
     P.Holds a X (fill d σ) :=
   fun s hs hsX => fill_of_some (h s hs hsX)
 
-/-- **Within the same budget**: an assignment over `Option V` with at most `m` wrong units, ⊥ filled with any short
+/-- **Within the same budget**: an assignment over `Option V` with at most `m` incorrect units, ⊥ filled with any short
 values, is an assignment the population's count already covers. -/
 theorem fill_mem_egressAt [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) {a : S → V}
     {X O : Finset S} {m : ℕ} {σ : S → Option V} (d : S → V) (hσa : P.OptHolds a X σ)
-    (hσm : (P.optWrong f σ).card ≤ m) : (fun o : O => fill d σ o) ∈ P.egressAt f a X O m := by
+    (hσm : (P.optIncorrect f σ).card ≤ m) : (fun o : O => fill d σ o) ∈ P.egressAt f a X O m := by
   simp only [egressAt, mem_image, mem_filter, mem_univ, true_and]
-  exact ⟨fill d σ, ⟨P.holds_fill d hσa, (card_le_card (P.wrong_fill_subset f σ d)).trans hσm⟩, rfl⟩
+  exact ⟨fill d σ, ⟨P.holds_fill d hσa, (card_le_card (P.incorrect_fill_subset f σ d)).trans hσm⟩, rfl⟩
 
 /-! ## T1: robust determinacy and the cone over `Option V` -/
 
 /-- **Robust determinacy over `Option V`**: an assignment is determined by its inputs and the writes of a set
-containing its wrong units, ⊥ included. -/
+containing its incorrect units, ⊥ included. -/
 theorem opt_eq_of_writes [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {B : Finset U}
-    {σ τ : S → Option V} (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : P.optWrong f σ ⊆ B) (hτ : P.optWrong f τ ⊆ B)
+    {σ τ : S → Option V} (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : P.optIncorrect f σ ⊆ B) (hτ : P.optIncorrect f τ ⊆ B)
     (hB : ∀ u ∈ B, ∀ s ∈ P.writes u, σ s = τ s) : σ = τ :=
-  P.eq_of_writes hc ha (P.liftFns f) hin (P.wrong_lift_subset.trans hσ) (P.wrong_lift_subset.trans hτ) hB
+  P.eq_of_writes hc ha (P.liftFns f) hin (P.incorrect_lift_subset.trans hσ) (P.incorrect_lift_subset.trans hτ) hB
 
 /-- **The cone over `Option V`**. -/
 theorem opt_eq_off_down [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {B : Finset U}
-    {σ τ : S → Option V} (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : P.optWrong f σ ⊆ B) (hτ : P.optWrong f τ ⊆ B) :
+    {σ τ : S → Option V} (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : P.optIncorrect f σ ⊆ B) (hτ : P.optIncorrect f τ ⊆ B) :
     ∀ v, v ∉ P.down B → ∀ s ∈ P.writes v, σ s = τ s :=
-  P.eq_off_down hc ha (P.liftFns f) hin (P.wrong_lift_subset.trans hσ) (P.wrong_lift_subset.trans hτ)
+  P.eq_off_down hc ha (P.liftFns f) hin (P.incorrect_lift_subset.trans hσ) (P.incorrect_lift_subset.trans hτ)
 
-/-- **Integrity against the honest run over `Option V`**: off the downstream cone of the wrong units, every slot holds
+/-- **Integrity against the honest run over `Option V`**: off the downstream cone of the incorrect units, every slot holds
 its honest value, never ⊥. -/
 theorem opt_eq_honest_off_down [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V)
     {honest : S → V} {σ : S → Option V} (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u)
     (hσ : ∀ s ∈ P.input, σ s = some (a s)) :
-    ∀ v, v ∉ P.down (P.optWrong f σ) → ∀ s ∈ P.writes v, σ s = some (honest s) :=
+    ∀ v, v ∉ P.down (P.optIncorrect f σ) → ∀ s ∈ P.writes v, σ s = some (honest s) :=
   P.eq_off_down (P.covered_of_singleAssignment h.1) h.2 (P.liftFns f) (τ := fun s => some (honest s))
-    (fun s hs => by rw [hσ s hs, hh s hs]) P.wrong_lift_subset
-    (P.wrong_lift_subset.trans (by rw [P.optWrong_some, P.wrong_eq_empty hc]; exact empty_subset _))
+    (fun s hs => by rw [hσ s hs, hh s hs]) P.incorrect_lift_subset
+    (P.incorrect_lift_subset.trans (by rw [P.optIncorrect_some, P.incorrect_eq_empty hc]; exact empty_subset _))
 
 /-! ## T2: the egress count over `Option V` -/
 
@@ -166,7 +166,7 @@ theorem optEgress_subset [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.F
   intro e he
   simp only [optEgress, egress, mem_image, mem_filter, mem_univ, true_and] at he ⊢
   obtain ⟨σ, ⟨hσa, hσw⟩, rfl⟩ := he
-  exact ⟨σ, ⟨hσa, P.wrong_lift_subset.trans hσw⟩, rfl⟩
+  exact ⟨σ, ⟨hσa, P.incorrect_lift_subset.trans hσw⟩, rfl⟩
 
 theorem optEgressAt_subset [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) (a : S → V)
     (X O : Finset S) (m : ℕ) :
@@ -174,16 +174,16 @@ theorem optEgressAt_subset [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P
   intro e he
   simp only [optEgressAt, egressAt, mem_image, mem_filter, mem_univ, true_and] at he ⊢
   obtain ⟨σ, ⟨hσa, hσm⟩, rfl⟩ := he
-  exact ⟨σ, ⟨hσa, (card_le_card P.wrong_lift_subset).trans hσm⟩, rfl⟩
+  exact ⟨σ, ⟨hσa, (card_le_card P.incorrect_lift_subset).trans hσm⟩, rfl⟩
 
-/-- **The capacity at a wrong set over `Option V`**: at most `(|V| + 1) ^ |writes B|` egress values. -/
+/-- **The capacity at an incorrect set over `Option V`**: at most `(|V| + 1) ^ |writes B|` egress values. -/
 theorem card_optEgress_le [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     (f : P.Fns V) (a : S → V) {X O : Finset S} {B : Finset U} (hX : ∀ s ∈ X, s ∉ P.up O) :
     (P.optEgress f a X O B).card ≤ (Fintype.card V + 1) ^ (P.writesOf B).card := by
   rw [← Fintype.card_option]
   exact (card_le_card (P.optEgress_subset f a X O B)).trans (P.card_egress_le hc ha (P.liftFns f) _ hX)
 
-/-- **The capacity with at most `m` wrong units over `Option V`**. -/
+/-- **The capacity with at most `m` incorrect units over `Option V`**. -/
 theorem card_optEgressAt_le [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     (f : P.Fns V) (a : S → V) {X O : Finset S} (hX : ∀ s ∈ X, s ∉ P.up O) (m w : ℕ)
     (hw : ∀ u, (P.writes u).card ≤ w) :
@@ -215,18 +215,18 @@ theorem card_image_some_le {ι : Type} {O : Finset S} {V : Type} [Fintype V] [De
   rw [this]
   exact card_image_le
 
-/-- **The uniform form over `Option V`**: with at most `m` wrong units and every unit's cone egress `E(u) ≤ E`, the
+/-- **The uniform form over `Option V`**: with at most `m` incorrect units and every unit's cone egress `E(u) ≤ E`, the
 egress takes at most `#honest · C(|U|, m) · (|V| + 1) ^ (m E)` values. -/
 theorem opt_card_leak_le_coneEgress [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     [DecidableEq V] (f : P.Fns V) (O : Finset S) {m E : ℕ} (hmU : m ≤ Fintype.card U)
     (hE : ∀ u, (P.coneEgress O {u}).card ≤ E) {ι : Type} (Cl : Finset ι) (σ : ι → S → Option V)
     (honest : ι → S → V) (hin : ∀ i ∈ Cl, ∀ t ∈ P.input, σ i t = some (honest i t))
-    (hh : ∀ i ∈ Cl, ∀ u, P.Correct f (honest i) u) (hm : ∀ i ∈ Cl, (P.optWrong f (σ i)).card ≤ m) :
+    (hh : ∀ i ∈ Cl, ∀ u, P.Correct f (honest i) u) (hm : ∀ i ∈ Cl, (P.optIncorrect f (σ i)).card ≤ m) :
     (Cl.image fun i (o : O) => σ i o).card ≤
       (Cl.image fun i (o : O) => honest i o).card * (Fintype.card U).choose m * (Fintype.card V + 1) ^ (m * E) := by
   have h := P.card_leak_le_coneEgress hc ha (P.liftFns f) O hmU hE Cl σ (fun i t => some (honest i t)) hin
     (fun i hi u => P.correct_lift_of_optCorrect (P.optCorrect_some_iff.2 (hh i hi u)))
-    (fun i hi => (card_le_card P.wrong_lift_subset).trans (hm i hi))
+    (fun i hi => (card_le_card P.incorrect_lift_subset).trans (hm i hi))
   rw [Fintype.card_option] at h
   exact h.trans (Nat.mul_le_mul_right _ (Nat.mul_le_mul_right _ (card_image_some_le Cl honest)))
 
@@ -236,12 +236,12 @@ theorem opt_card_leak_le_reach [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V 
     (f : P.Fns V) (O : Finset S) (m R : ℕ) (hR : ∀ B : Finset U, B.card ≤ m → (P.coneEgress O B).card ≤ R)
     {ι : Type} (Cl : Finset ι) (σ : ι → S → Option V) (honest : ι → S → V)
     (hin : ∀ i ∈ Cl, ∀ t ∈ P.input, σ i t = some (honest i t)) (hh : ∀ i ∈ Cl, ∀ u, P.Correct f (honest i) u)
-    (hm : ∀ i ∈ Cl, (P.optWrong f (σ i)).card ≤ m) :
+    (hm : ∀ i ∈ Cl, (P.optIncorrect f (σ i)).card ≤ m) :
     (Cl.image fun i (o : O) => σ i o).card ≤ (Cl.image fun i (o : O) => honest i o).card *
       (∑ j ∈ range (m + 1), (Fintype.card U).choose j) * (Fintype.card V + 1) ^ R := by
   have h := P.card_leak_le_reach hc ha (P.liftFns f) O m R hR Cl σ (fun i t => some (honest i t)) hin
     (fun i hi u => P.correct_lift_of_optCorrect (P.optCorrect_some_iff.2 (hh i hi u)))
-    (fun i hi => (card_le_card P.wrong_lift_subset).trans (hm i hi))
+    (fun i hi => (card_le_card P.incorrect_lift_subset).trans (hm i hi))
   rw [Fintype.card_option] at h
   exact h.trans (Nat.mul_le_mul_right _ (Nat.mul_le_mul_right _ (card_image_some_le Cl honest)))
 
@@ -251,12 +251,12 @@ theorem fill_card_leak_le_coneEgress [Fintype U] (hc : P.Covered) (ha : P.Acycli
     [DecidableEq V] [Nonempty V] (f : P.Fns V) (O : Finset S) {m E : ℕ} (hmU : m ≤ Fintype.card U)
     (hE : ∀ u, (P.coneEgress O {u}).card ≤ E) {ι : Type} (Cl : Finset ι) (σ : ι → S → Option V)
     (d honest : ι → S → V) (hin : ∀ i ∈ Cl, ∀ t ∈ P.input, σ i t = some (honest i t))
-    (hh : ∀ i ∈ Cl, ∀ u, P.Correct f (honest i) u) (hm : ∀ i ∈ Cl, (P.optWrong f (σ i)).card ≤ m) :
+    (hh : ∀ i ∈ Cl, ∀ u, P.Correct f (honest i) u) (hm : ∀ i ∈ Cl, (P.optIncorrect f (σ i)).card ≤ m) :
     (Cl.image fun i (o : O) => fill (d i) (σ i) o).card ≤
       (Cl.image fun i (o : O) => honest i o).card * (Fintype.card U).choose m * Fintype.card V ^ (m * E) :=
   P.card_leak_le_coneEgress hc ha f O hmU hE Cl (fun i => fill (d i) (σ i)) honest
     (fun i hi t ht => fill_of_some (hin i hi t ht)) hh
-    (fun i hi => (card_le_card (P.wrong_fill_subset f (σ i) (d i))).trans (hm i hi))
+    (fun i hi => (card_le_card (P.incorrect_fill_subset f (σ i) (d i))).trans (hm i hi))
 
 /-! ## T4: the skipped work over `Option V` -/
 
@@ -265,17 +265,17 @@ theorem skipsLucky_lift {V : Type} {f : P.Fns V} {honest : S → V} {σ : S → 
   fun u hu hr hc => hl u hu hr
     (P.optCorrect_of_correct_lift (fun r => by rw [hr r.1 r.2]; rfl) hc)
 
-/-- **The skipped work over `Option V`**: at most `F · wt(wrong)` plus the lucky work, the wrong units those of
-`optWrong`, the readers and writers of ⊥ among them. -/
+/-- **The skipped work over `Option V`**: at most `F · wt(incorrect)` plus the lucky work, the incorrect units those of
+`optIncorrect`, the readers and writers of ⊥ among them. -/
 theorem opt_skipped_work_le_wt [Fintype U] [DecidableEq U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V)
     {honest : S → V} {σ : S → Option V} (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u)
     (hσ : ∀ s ∈ P.input, σ s = some (a s)) {K L : Finset U} (hl : P.OptSkipsLucky f honest σ K L) (wt : U → ℕ)
     (F : ℕ) (hF : ∀ u, ∑ v ∈ P.down {u}, wt v ≤ F * wt u) :
-    ∑ u ∈ univ \ K, wt u ≤ F * ∑ u ∈ P.optWrong f σ, wt u + ∑ u ∈ L, wt u :=
+    ∑ u ∈ univ \ K, wt u ≤ F * ∑ u ∈ P.optIncorrect f σ, wt u + ∑ u ∈ L, wt u :=
   (P.skipped_work_le_wt h (P.liftFns f) (fun s => some (a s)) (honest := fun s => some (honest s))
     (fun s hs => by rw [hh s hs]) (fun u => P.correct_lift_of_optCorrect (P.optCorrect_some_iff.2 (hc u))) hσ
     (P.skipsLucky_lift hl) wt F hF).trans
-    (Nat.add_le_add_right (Nat.mul_le_mul_left _ (sum_le_sum_of_subset P.wrong_lift_subset)) _)
+    (Nat.add_le_add_right (Nat.mul_le_mul_left _ (sum_le_sum_of_subset P.incorrect_lift_subset)) _)
 
 /-- **The skipped work under weighted sampling and a luck rate, over `Option V`**:
 `(den − num) · W ≤ den · (F M + slack)`. -/
@@ -283,11 +283,11 @@ theorem opt_skipped_work_le_wt_of_luck [Fintype U] [DecidableEq U] (h : P.Checke
     (a : S → V) {honest : S → V} {σ : S → Option V} (hh : ∀ s ∈ P.input, honest s = a s)
     (hc : ∀ u, P.Correct f honest u) (hσ : ∀ s ∈ P.input, σ s = some (a s)) {K L : Finset U}
     (hl : P.OptSkipsLucky f honest σ K L) (wt : U → ℕ) (F : ℕ) (hF : ∀ u, ∑ v ∈ P.down {u}, wt v ≤ F * wt u)
-    (M : ℕ) (hM : ∑ u ∈ P.optWrong f σ, wt u ≤ M) (num den slack : ℕ)
+    (M : ℕ) (hM : ∑ u ∈ P.optIncorrect f σ, wt u ≤ M) (num den slack : ℕ)
     (hluck : den * ∑ u ∈ L, wt u ≤ num * ∑ u ∈ univ \ K, wt u + den * slack) :
     (den - num) * ∑ u ∈ univ \ K, wt u ≤ den * (F * M + slack) := by
   have h1 := P.opt_skipped_work_le_wt h f a hh hc hσ hl wt F hF
-  have h2 : F * ∑ u ∈ P.optWrong f σ, wt u ≤ F * M := Nat.mul_le_mul_left _ hM
+  have h2 : F * ∑ u ∈ P.optIncorrect f σ, wt u ≤ F * M := Nat.mul_le_mul_left _ hM
   have h3 : den * ∑ u ∈ univ \ K, wt u ≤ den * (F * M) + den * ∑ u ∈ L, wt u := by
     rw [← Nat.mul_add]
     exact Nat.mul_le_mul_left _ (h1.trans (Nat.add_le_add_right h2 _))
@@ -384,14 +384,14 @@ theorem opened_of_optCorrect {f : P.Fns V} {u : U} (h : P.OptCorrect f O.view u)
   exact ⟨x, fun r => O.exists_of_view_eq_some (hr r), fun s => O.exists_of_view_eq_some (hw s)⟩
 
 /-- **The long-value lemma**: when a string whose length is not slot `s`'s width climbs to `s`'s position, `s`'s writer
-and every unit that reads `s` are wrong in the verifier's view, or the run holds a collision. With
-`wrong_fill_subset`, the attack is weakly dominated by writing a short wrong value at `s`. -/
-theorem long_value_wrong [Fintype U] {D : Type} {H : List UInt8 → D} (hcs : CollisionStep H O) (f : P.Fns V)
+and every unit that reads `s` are incorrect in the verifier's view, or the run holds a collision. With
+`incorrect_fill_subset`, the attack is weakly dominated by writing a short incorrect value at `s`. -/
+theorem long_value_incorrect [Fintype U] {D : Type} {H : List UInt8 → D} (hcs : CollisionStep H O) (f : P.Fns V)
     {s : S} {x : List UInt8} (hx : x ∈ O.climbs s) (hlen : x.length ≠ O.width s) :
-    ((∀ u, s ∈ P.writes u → u ∈ P.optWrong f O.view) ∧ ∀ u, s ∈ P.reads u → u ∈ P.optWrong f O.view) ∨
+    ((∀ u, s ∈ P.writes u → u ∈ P.optIncorrect f O.view) ∧ ∀ u, s ∈ P.reads u → u ∈ P.optIncorrect f O.view) ∨
       Collides H O.hashed :=
   (O.long_value hcs hx hlen).imp_left fun h =>
-    ⟨fun _ hu => P.mem_optWrong_of_write_none f hu h, fun _ hu => P.mem_optWrong_of_read_none f hu h⟩
+    ⟨fun _ hu => P.mem_optIncorrect_of_write_none f hu h, fun _ hu => P.mem_optIncorrect_of_read_none f hu h⟩
 
 end Dataflow
 

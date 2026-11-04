@@ -731,7 +731,7 @@ oprove)
   # loopback, a forgery's once; upstream's replay --zk of the last session, which (accepted or not) is kept under $DD/v-sess
   # beside the statement directory Lean reads it with. MODES names the prover's sides, WARM + RUNS sessions each per
   # statement: dev (the device's witness, rec-reprice's), host (FC_HOST_WITNESS=1, no ZK server) and ZK server (FC_FIREWALL=1
-  # on the host witness: the send check and the level-0 recheck, PROTOCOL.md §10); the ZK server's cost is ZK server's minus
+  # on the host witness: the send check and the level-0 recheck, live/PROTOCOL.md §10); the ZK server's cost is ZK server's minus
   # host's. The last mode's last session is the one oreplay and lean read.
   # Statements are proved OPROVE_JOBS at once, the largest first, while their estimated peaks (oprove_gb) sum to at most
   # OPROVE_MEM_GB; each in a subshell of its own (its WARM, RUNS, PENV, LAST and hello_at's exports), its log

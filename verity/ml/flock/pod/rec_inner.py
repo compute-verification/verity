@@ -1,4 +1,4 @@
-"""The first recursive session's inner side (hiding model architectures, lane rec-v0; ``80-rec-inner.sh``): the inner
+"""The first recursive session's inner side (hiding model architectures; ``80-rec-inner.sh``): the inner
 statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the unmodified prover against
 ``verity_flock.rec_live``'s proxy and coin server.
 

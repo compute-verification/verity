@@ -67,7 +67,7 @@ def input_prim(w: int, binding: str = RUN) -> PrimitiveDefinition:
             raise ValueError(f"an input is bound per {RUN!r} or at {REGISTRATION!r}, not {binding!r}")
 
         def _no_eval(*_a: int) -> int:
-            raise ValueError("Input gates take their value from the transcript, they are not evaluated")
+            raise ValueError("Input gates take their value from the trace, they are not evaluated")
 
         name, doc = (("Input", f"prescribed input leaf of width {w}, bound per run") if binding == RUN else
                      ("RegisteredInput", f"prescribed input leaf of width {w}, bound at registration"))

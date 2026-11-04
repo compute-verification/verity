@@ -116,7 +116,7 @@ class Form:
 
 
 @dataclasses.dataclass(frozen=True)
-class Op:
+class SimtMultiplier:
     """One CUDA-core multiplier: ``body`` is one dependent step on chain register %0 with operands %1 (y) and %2 (z)."""
     name: str
     ptx: str
@@ -269,26 +269,28 @@ def _forms() -> list:
 FORMS_TENSOR = _forms()
 
 OPS = [
-    Op("ffma_f32", "fma.rn.f32", "fma.rn.f32 %0, %0, %1, %2;", "f", "f", "f", "ffma", "FFMA", 1, 1),
+    SimtMultiplier("ffma_f32", "fma.rn.f32", "fma.rn.f32 %0, %0, %1, %2;", "f", "f", "f", "ffma", "FFMA", 1, 1),
     # an immediate addend: two register sources, so no three-operand register-bank conflict (the op's best form)
-    Op("ffma_f32_imm", "fma.rn.f32 (immediate addend 2^-4)", "fma.rn.f32 %0, %0, %1, 0f3D800000;", "f", "f", None, "ffma_imm", "FFMA",
-       1, 1),
-    Op("fmul_f32", "mul.rn.f32", "mul.rn.f32 %0, %0, %1;", "f", "f", None, "fmul", "FMUL", 1, 1),
-    Op("ffma_f32x2", "fma.rn.f32x2", "fma.rn.f32x2 %0, %0, %1, %2;", "l", "l", "l", "ffma2", "FFMA", 2, 2),
-    Op("hfma2_f16", "fma.rn.f16x2", "fma.rn.f16x2 %0, %0, %1, %2;", "r", "r", "r", "hfma2", "HFMA2", 1, 2),
-    Op("hfma2_bf16", "fma.rn.bf16x2", "fma.rn.bf16x2 %0, %0, %1, %2;", "r", "r", "r", "bfma2", "HFMA2", 1, 2),
+    SimtMultiplier("ffma_f32_imm", "fma.rn.f32 (immediate addend 2^-4)", "fma.rn.f32 %0, %0, %1, 0f3D800000;", "f", "f", None,
+                   "ffma_imm", "FFMA", 1, 1),
+    SimtMultiplier("fmul_f32", "mul.rn.f32", "mul.rn.f32 %0, %0, %1;", "f", "f", None, "fmul", "FMUL", 1, 1),
+    SimtMultiplier("ffma_f32x2", "fma.rn.f32x2", "fma.rn.f32x2 %0, %0, %1, %2;", "l", "l", "l", "ffma2", "FFMA", 2, 2),
+    SimtMultiplier("hfma2_f16", "fma.rn.f16x2", "fma.rn.f16x2 %0, %0, %1, %2;", "r", "r", "r", "hfma2", "HFMA2", 1, 2),
+    SimtMultiplier("hfma2_bf16", "fma.rn.bf16x2", "fma.rn.bf16x2 %0, %0, %1, %2;", "r", "r", "r", "bfma2", "HFMA2", 1, 2),
     # ptxas lowers half of these to HFMA2 with a -0 addend (an exact multiply): both count
-    Op("hmul2_f16", "mul.rn.f16x2", "mul.rn.f16x2 %0, %0, %1;", "r", "r", None, "hmul2", ("HMUL2", "HFMA2"), 1, 2),
-    Op("dfma_f64", "fma.rn.f64", "fma.rn.f64 %0, %0, %1, %2;", "d", "d", "d", "dfma", "DFMA", 1, 1),
-    Op("imad_s32", "mad.lo.s32", "mad.lo.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IMAD", 1, 1),
-    Op("imad_s32_imm", "mad.lo.s32 (immediate addend)", "mad.lo.s32 %0, %0, %1, 12345;", "r", "r", None, "int", "IMAD", 1, 1),
-    Op("imad_hi_u32", "mad.hi.u32", "mad.hi.u32 %0, %0, %1, %2;", "r", "r", "r", "int", "IMAD.HI", 1, 1),
-    Op("imad_wide_u32", "mad.wide.u32", "{\n.reg .b32 lo, hi;\nmov.b64 {lo, hi}, %0;\nmad.wide.u32 %0, lo, %1, %0;\n}", "l", "r", None,
-       "int", "IMAD.WIDE", 1, 1),
-    Op("dp4a_s8", "dp4a.s32.s32", "dp4a.s32.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IDP.4A", 1, 4),
-    Op("dp2a_s16s8", "dp2a.lo.s32.s32", "dp2a.lo.s32.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IDP.2A", 1, 2),
-    Op("popc_and_b1", "and.b32 + popc.b32 + add.u32", "{\n.reg .b32 t;\nand.b32 t, %0, %1;\npopc.b32 t, t;\nadd.u32 %0, %0, t;\n}",
-       "r", "r", None, "int", "POPC", 1, 32, product="b1"),
+    SimtMultiplier("hmul2_f16", "mul.rn.f16x2", "mul.rn.f16x2 %0, %0, %1;", "r", "r", None, "hmul2", ("HMUL2", "HFMA2"), 1, 2),
+    SimtMultiplier("dfma_f64", "fma.rn.f64", "fma.rn.f64 %0, %0, %1, %2;", "d", "d", "d", "dfma", "DFMA", 1, 1),
+    SimtMultiplier("imad_s32", "mad.lo.s32", "mad.lo.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IMAD", 1, 1),
+    SimtMultiplier("imad_s32_imm", "mad.lo.s32 (immediate addend)", "mad.lo.s32 %0, %0, %1, 12345;", "r", "r", None, "int", "IMAD",
+                   1, 1),
+    SimtMultiplier("imad_hi_u32", "mad.hi.u32", "mad.hi.u32 %0, %0, %1, %2;", "r", "r", "r", "int", "IMAD.HI", 1, 1),
+    SimtMultiplier("imad_wide_u32", "mad.wide.u32", "{\n.reg .b32 lo, hi;\nmov.b64 {lo, hi}, %0;\nmad.wide.u32 %0, lo, %1, %0;\n}",
+                   "l", "r", None, "int", "IMAD.WIDE", 1, 1),
+    SimtMultiplier("dp4a_s8", "dp4a.s32.s32", "dp4a.s32.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IDP.4A", 1, 4),
+    SimtMultiplier("dp2a_s16s8", "dp2a.lo.s32.s32", "dp2a.lo.s32.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IDP.2A", 1, 2),
+    SimtMultiplier("popc_and_b1", "and.b32 + popc.b32 + add.u32",
+                   "{\n.reg .b32 t;\nand.b32 t, %0, %1;\npopc.b32 t, t;\nadd.u32 %0, %0, t;\n}", "r", "r", None, "int", "POPC", 1, 32,
+                   product="b1"),
 ]
 
 FORMS = FORMS_TENSOR + OPS
@@ -406,11 +408,11 @@ def _op_words(c: str | None) -> int:
     return 0 if c is None else (2 if c in ("d", "l") else 1)
 
 
-def op_words_per_chain(op: Op) -> int:
+def op_words_per_chain(op: SimtMultiplier) -> int:
     return _op_words(op.x) + _op_words(op.y) + _op_words(op.z)
 
 
-def simt_kernel(op: Op) -> str:
+def simt_kernel(op: SimtMultiplier) -> str:
     w = op_words_per_chain(op)
 
     def load(c, idx):
@@ -858,7 +860,7 @@ def _f64w(v) -> np.ndarray:
     return np.ascontiguousarray(v, np.float64).view(np.uint32)
 
 
-def simt_inputs(op: Op, threads: int, seed: int) -> np.ndarray:
+def simt_inputs(op: SimtMultiplier, threads: int, seed: int) -> np.ndarray:
     """u32[threads][SIMT_CH][words]: (x, y[, z]) per chain, in the op's domain: FMA chains x <- x*y + z with y in [0.5, 0.99) and z
     small (x converges, finite), multiply chains with y = +-1, integer chains uniform random words."""
     rng = np.random.default_rng([seed, 7, _seed(op.name)])

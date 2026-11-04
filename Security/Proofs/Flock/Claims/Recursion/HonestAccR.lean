@@ -2,7 +2,6 @@ import Proofs.Flock.Claims.Recursion.HonestRepR
 import Proofs.Flock.Claims.Recursion.HonestIVStarR
 import Proofs.Flock.Claims.Recursion.HonestVerdictR
 import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
-import Proofs.Flock.Claims.Recursion.RestVerdictDraw
 import Proofs.Flock.Claims.Recursion.RestLive
 import Proofs.Flock.Soundness.Refine.Seam
 

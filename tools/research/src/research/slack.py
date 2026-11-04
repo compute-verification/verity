@@ -18,6 +18,7 @@ Notes are records, never messages.
   research msg linear relate ISSUE blocks|blocked-by|related|duplicate OTHER | unrelate ISSUE OTHER
   research msg linear update PROJECT --health onTrack|atRisk|offTrack --body-file F   # a project update
   research msg linear project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]
+  research msg linear project edit PROJECT --team KEY...       # add teams, so their issues can be placed in it
   research msg linear milestone create|edit PROJECT NAME [--date D] [--description-file F] [--rename NEW]
   research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: NAME's unread doorbells
   research msg names open|read|close|list [--as NAME] [--forward-to @NAME] [--succeeds] [--poster BC_ID]  # the names you answer to
@@ -45,6 +46,7 @@ Notes are records, never messages.
                           --default V --deadline '3:00 PM'|ISO (--page FILE.md --area AREA | --link NOTION_URL) [--wait]
                           # the ask's page in the Asks for Daniel database, and a card in #ask-daniel linking it; prints `<id> <ts> <permalink>`
   research msg ask-daniel status ID [--wait] [--json] | resolve ID --choice V [--note T]
+  research msg ask-daniel extend ID --deadline '3:00 PM'|ISO [--note T] | withdraw ID --note T   # the asker only, while pending
                           # --wait polls for at most 20 min: a card still pending then exits 79 with the status command (research/waitcap.py)
   research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]  # asks' pages edited lately: Status, Decision, newest comment
 
@@ -1861,7 +1863,7 @@ def render_asks(rows: list[dict], now: float) -> str:
     lines.append(f"{len(rows)} ask(s) of {askers} open or closed recently: {sum(a['type'] == 'completed' for a in rows)} delivered, "
                  f"{len(todo)} not ({sum(a['type'] in ('backlog', 'canceled') and not a['ok'] for a in todo)} parked without `{ASKER_OK}`, "
                  f"{sum(a['type'] in ('triage', 'unstarted') for a in todo)} with no worker, "
-                 f"{sum(a['slips'] >= ASK_SLIPS for a in todo)} slipped), "
+                 f"{sum(a['slips'] >= ASK_SLIPS and not a['explained'] for a in todo)} slipped with no `slip:` comment), "
                  f"{len(rows) - len(todo) - sum(a['type'] == 'completed' for a in rows)} closed with the asker's yes or as duplicates")
     return "\n".join(lines)
 
@@ -1873,7 +1875,8 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     [--milestone M]` (`--asks [--asker NAME]`: the ledger of people's asks), `edit ISSUE [--title T] [--due D|none]
     [--file BRIEF.md] [--parent ID] [--label L [--remove]]`, `relate ISSUE
     blocks|blocked-by|related|duplicate OTHER`, `unrelate ISSUE OTHER`, `update PROJECT --health H --body-file F`,
-    `project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]` and `milestone create|edit
+    `project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]`, `project edit PROJECT --team
+    KEY...` (adds teams) and `milestone create|edit
     PROJECT NAME [--date D] [--description-file F] [--rename NEW]`. Each prints one line; a refusal exits 2."""
     from . import linear
 
@@ -1932,10 +1935,12 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                              ns.health, brief))
             return 0
         if ns.verb in ("project", "milestone"):
-            if ns.target not in ("create",) + (("edit",) if ns.verb == "milestone" else ()):
-                raise SlackError("linear project: give `create NAME`" if ns.verb == "project"
+            if ns.target not in ("create", "edit"):
+                raise SlackError("linear project: give `create NAME` or `edit PROJECT --team KEY`" if ns.verb == "project"
                                  else "linear milestone: give `create` or `edit`, then PROJECT NAME")
-            if ns.verb == "project":
+            if ns.verb == "project" and ns.target == "edit":
+                print(lin.project_teams(need(value, "the PROJECT (a prefix of its name)"), ns.team))
+            elif ns.verb == "project":
                 print(lin.create_project(need(value, "the project's NAME"), ns.team, ns.lead, ns.date, brief))
             elif len(ns.value) < 2:
                 raise SlackError(f"linear milestone {ns.target}: give PROJECT (a prefix of its name, one word or quoted) and NAME")
@@ -2937,6 +2942,8 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
                     dropped.append({"name": f"subteam^{gid}", "ts": m["ts"], "by": poster(m, reg)})
         if not (m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and is_ask(m)):   # older clients tagged an fyi without (quiet)
             continue
+        if poster(m, reg) not in handles | {p.lower() for p in reg.get("external_posters", [])}:
+            continue                                                 # a machine's alert (`vy-monitors`) isn't an ask
         x = {"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)}
         if link := LINEAR_LINK_RE.search(m.get("text") or ""):
             answered, state = issue_state(link[1], x["by"], taken)
@@ -3734,7 +3741,9 @@ def route_error(what: str, e: urllib.error.HTTPError) -> str:
     if e.code == 401:
         return f"{what}: the route rejected this agent's Cursor identity ({why}): it takes managed agents on compute-verification/verity only"
     if e.code == 403:
-        return f"{what}: the route refused ({why}): only a card's own asker may resolve it"
+        return f"{what}: the route refused ({why}): only a card's own asker may resolve, extend or withdraw it"
+    if e.code == 409:
+        return f"{what}: the card is closed ({why}): it was decided or withdrawn already; `ask-daniel status ID` says which"
     if e.code == 429:
         return f"{what}: the route is rate limiting ({why}; retry after {e.headers.get('Retry-After')} s)"
     if e.code >= 500:
@@ -3893,6 +3902,29 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
                 if e.status == 404:
                     raise SlackError(no_such_card("resolve", ns.id)) from None
                 raise
+        if ns.verb in ("extend", "withdraw"):
+            if ns.verb == "extend":
+                if not ns.deadline:
+                    raise SlackError("ask-daniel extend needs --deadline: later than the card's, at most 7 days out")
+                body = {"deadline": _iso(parse_deadline(ns.deadline, _now())), **({"note": ns.note} if ns.note else {})}
+            elif not ns.note:
+                raise SlackError("ask-daniel withdraw needs --note: why the ask no longer stands")
+            else:
+                body = {"note": ns.note}
+            if ns.dry_run:
+                print(f"dry-run: POST {ASK_DANIEL}{path}/{ns.verb} {json.dumps(body, sort_keys=True)}", file=sys.stderr)
+                return 0
+            try:
+                out = AskDaniel().call("POST", f"{path}/{ns.verb}", body)
+            except RouteError as e:
+                if e.status == 404:
+                    raise SlackError(no_such_card(ns.verb, ns.id)) from None
+                raise
+            if ns.json:
+                print(json.dumps(out, indent=2, ensure_ascii=False))
+            else:
+                print(" ".join(str(out.get(k)) if out.get(k) not in (None, "") else "-" for k in ("status", "deadline", "held")))
+            return 0
         if ns.dry_run:
             print(f"dry-run: GET {ASK_DANIEL}{path}", file=sys.stderr)
             return 0
@@ -4040,7 +4072,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                       "[--remove]]`, `relate ISSUE blocks|blocked-by|related|"
                       "duplicate OTHER` (Linear moves a duplicate to its Duplicate status), `unrelate ISSUE OTHER`, `update "
                       "PROJECT --health onTrack|atRisk|offTrack --body-file F` (a project update), `project create NAME --team "
-                      "KEY... [--lead USER] [--target YYYY-MM-DD] [--description-file F]`, `milestone create|edit PROJECT NAME "
+                      "KEY... [--lead USER] [--target YYYY-MM-DD] [--description-file F]`, `project edit PROJECT --team KEY...` (adds teams), `milestone create|edit PROJECT NAME "
                       "[--date YYYY-MM-DD] [--description-file F] [--rename NEW]`, `create --as HANDLE --title T --file BRIEF.md [--team KEY] "
                       "[--due YYYY-MM-DD] [--parent ID]` (an issue in your own team, or KEY's); none sends a state")
     p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit", "relate", "unrelate", "update",
@@ -4049,7 +4081,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                                              "team (a handle or its key); update: the project; project, milestone: create or edit")
     p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; place: the project; audit: more teams; "
                                             "relate: the kind and the other issue; unrelate: the other issue; project create: "
-                                            "its name; milestone: the project (one word or quoted) and the milestone's name")
+                                            "its name; project edit: the project; milestone: the project (one word or quoted) and the milestone's name")
     p.add_argument("--state", default=None, metavar="NAME", help="list: only issues in this state (default: every open one)")
     p.add_argument("--write", default=None, metavar="TEAM", help="check: also file, comment on and cancel a test issue in TEAM")
     p.add_argument("--as", dest="handle", default=None, metavar="HANDLE",
@@ -4064,7 +4096,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                         "update's body; project create, milestone: the description")
     p.add_argument("--parent", default=None, metavar="ID", help="edit: make it a sub-issue of this issue (CMP-92)")
     p.add_argument("--health", default=None, metavar="H", help="update: onTrack, atRisk or offTrack")
-    p.add_argument("--team", action="append", default=[], metavar="KEY", help="project create: a team it is in (repeat for more)")
+    p.add_argument("--team", action="append", default=[], metavar="KEY", help="project create: a team it is in; project edit: a team to add (repeat for more)")
     p.add_argument("--lead", default=None, metavar="USER",
                    help="project create: its lead, a prefix of a Linear user's name (a person: a lane is its --team)")
     p.add_argument("--date", "--target", dest="date", default=None, metavar="YYYY-MM-DD",
@@ -4156,9 +4188,11 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--urgent", action="store_true", help="--as: exit 1 unless an unread doorbell is URGENT")
     p.add_argument("--json", action="store_true")
     p = cmd("ask-daniel", "an ask's page in the Asks for Daniel database and its card in #ask-daniel; `status ID` reads the card's "
-            "answer, `resolve ID` records one from its page or thread, `pages` lists the pages edited lately")
-    p.add_argument("verb", nargs="?", choices=("status", "resolve", "pages"),
-                   help="read a card's decision, record Daniel's answer from its page or thread, or list the asks' pages edited lately")
+            "answer, `resolve ID` records one from its page or thread, `extend ID` moves its deadline later, `withdraw ID` "
+            "takes back an ask events overtook, `pages` lists the pages edited lately")
+    p.add_argument("verb", nargs="?", choices=("status", "resolve", "extend", "withdraw", "pages"),
+                   help="read a card's decision, record Daniel's answer from its page or thread, move its deadline later "
+                        "(a held default resumes at it), withdraw it, or list the asks' pages edited lately")
     p.add_argument("id", nargs="?", metavar="ID", help="the card's id, as posting it printed")
     p.add_argument("--as", dest="handle", default=None, metavar="HANDLE",
                    help="the asking coordinator's handle (workers ask through theirs); pages: only this lane's")
@@ -4171,7 +4205,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                         "naming `ask-daniel status ID` to check back")
     p.add_argument("--every", type=float, default=WAIT_EVERY_S, metavar="S", help=f"seconds between polls (default {WAIT_EVERY_S})")
     p.add_argument("--choice", default=None, metavar="VALUE", help="resolve: the option Daniel chose in the thread")
-    p.add_argument("--note", default=None, help="resolve: his words, or a link to them")
+    p.add_argument("--note", default=None, help="resolve: his words, or a link to them; extend: why; withdraw: why the ask no longer stands")
     p.add_argument("--provisional", action="store_true",
                    help="resolve: the lane decided it under the standing rule, so the card says the lane decided, not "
                         "Daniel (implied by a --note starting 'Provisionally accepted')")
@@ -4199,7 +4233,11 @@ def main(argv: list[str], prog: str = "research msg") -> int:
         q.add_argument("--app-id", default=None, metavar="ID", help="the app (default: the registry's slack_app_id)")
         q.add_argument("--manifest", default=None, metavar="PATH", help=f"the repo's manifest (default: the checkout's {MANIFEST_REL})")
 
-    ns = ap.parse_args(argv)
+    ns, extra = ap.parse_known_args(argv)
+    if extra and ns.cmd == "linear" and not any(x.startswith("-") for x in extra):
+        ns.value += extra                       # argparse ends `value` at the first option: `comment ID --as H TEXT`
+    elif extra:
+        ap.error(f"unrecognized arguments: {' '.join(extra)}")
     try:
         path = registry_path(ns.registry)
         reg = load_registry(path, people=ns.cmd not in ("groups", "chat"))     # these two never write people.d's into it

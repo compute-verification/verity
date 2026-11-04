@@ -27,7 +27,7 @@ verifier's opening draw (`Accounting.Remote.Draw`), each a named `Prop` on a ses
 
 The draw is the deployed one, not a premise: each window's openings are `Key.subset` on the first blocks its coin gives
 (`Session.opened`), the sampler exact on each draw's first word and the rest free. The openings coins are uniform and
-independent of the other coins, as the challenger draws them (the trace's uniform measure on `Coins`).
+independent of the other coins, as the challenger draws them (the trace's uniform measure on `DrawCoins`).
 -/
 
 namespace Accounting.Remote.Draw.Assumptions
@@ -41,19 +41,19 @@ windows' openings coins give window `t` the same size and the same correct recei
 the later ones. The guarantees read it of the session the prover plays, which holds no coin commitment while it runs;
 the memory line over the prover's records reads it of `Committed.view c` at every commitment `c`. -/
 def Live (D : Session n m s κ X) : Prop :=
-  ∀ t (ω ω' : Coins n κ X), ω.1 = ω'.1 → (∀ j, j < t → ω.2 j = ω'.2 j) →
+  ∀ t (ω ω' : DrawCoins n κ X), ω.1 = ω'.1 → (∀ j, j < t → ω.2 j = ω'.2 j) →
     D.size t ω = D.size t ω' ∧ D.correct t ω = D.correct t ω'
 
 /-- **Refused**: on every accepting outcome, every receipt a window opens, on the first blocks `prf` and the
 fallbacks `rest`, is among its correct ones or moved: presented, accepted at its root and rank, with a row other than
 the one its root holds. -/
 def Refused [Fintype X] (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : Coins n κ X → Fin n → ℕ → ℕ) (T : Trace (Coins n κ X)) (R : Receipts n κ X) : Prop :=
+    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) : Prop :=
   ∀ ω, T.accepts ω → ∀ t, ∀ p ∈ D.opened prf rest t ω, p ∈ D.correct t ω ∨ R.Moved D prf rest t ω p
 
 /-- **Counted**: on every accepting outcome, the credited passes' wrong receipts of registered blocks are at most the
 windows' wrong receipts. -/
-def Counted (D : Session n m s κ X) (T : Trace (Coins n κ X)) : Prop :=
+def Counted (D : Session n m s κ X) (T : Trace (DrawCoins n κ X)) : Prop :=
   ∀ ω, T.accepts ω → T.wrong ω ≤ D.wrong ω
 
 end Accounting.Remote.Draw.Assumptions

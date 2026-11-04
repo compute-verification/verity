@@ -1,4 +1,4 @@
-"""The source-close evaluator against ``verity.ml.circuits.silicon.silicon`` and the hardware captures (test plan items a-d of lane WP1).
+"""The source-close evaluator against ``verity.ml.circuits.silicon.models`` and the hardware captures (test plan items a-d of lane WP1).
 
 The exhaustive/pod counterpart is ``exhaustive_driver.py`` (recorded run, stage ``wp1.exhaustive``); these run in seconds.
 """
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ml.circuits.silicon import silicon as S
+from verity.ml.circuits.silicon import models as S, term as T
 from verity.ml.circuits.silicon.errors import InvalidArtifact
 from verity_numerical.reference import hawkeye_close as H
 from wp1_cases import (
@@ -41,10 +41,10 @@ def test_every_bf16_encoding_decodes_alike_and_non_finite_is_flagged_alike() -> 
         if finite:
             for other in (ONE, 0x0080, 0x0001):  # times 1.0, the smallest normal, the smallest subnormal
                 got = H.multiply_bfloat16_to_gfloat(word, other)
-                assert canon(got) == canon_term(S.bf16_product(word, other)), f"{word:#06x} * {other:#06x}"
+                assert canon(got) == canon_term(T.bf16_product(word, other)), f"{word:#06x} * {other:#06x}"
         else:
             with pytest.raises(InvalidArtifact):
-                S.bf16_product(word, ONE)
+                T.bf16_product(word, ONE)
             with pytest.raises(H.NonFinite):
                 H.tc_dot16(0, [word] + [0] * 15, [ONE] * 16)
             # the faithful routine has no branch: exponent field 0xFF is the exponent 128 with an implicit one
@@ -63,7 +63,7 @@ def test_all_256x256_significand_products_agree() -> None:
             b = (sb & 0x7F) | ((0x7F if sb & 0x80 else 0) << 7)
             for sign in (0, 0x8000):
                 got = H.multiply_bfloat16_to_gfloat(a ^ sign, b)
-                want = S.bf16_product(a ^ sign, b)
+                want = T.bf16_product(a ^ sign, b)
                 assert canon(got) == canon_term(want)
                 if got.significand:
                     assert got.significand == (sa * sb) << 9
@@ -102,7 +102,7 @@ def test_boundary_values_are_the_expected_ones() -> None:
     assert over.exponent == 128 and H.gfloat_to_float_bits(over) == 0x7F800000  # ... or, with a zero mantissa, +inf
     over = H.group_sum(groups["overflow to 129 (masking)"])
     assert over.exponent == 129 and H.gfloat_to_float_bits(over) >> 23 == 0  # wraps into the subnormal field
-    assert S.pack_fp32(term_of(over)) == 0x7F800000  # silicon saturates
+    assert T.pack_fp32(term_of(over)) == 0x7F800000  # silicon saturates
 
 
 # (d) the transition unit --------------------------------------------------------------------------------------------------------
@@ -210,7 +210,7 @@ def test_adapter_inverts_operator_float_on_every_reachable_output_and_the_wrappe
         word = H.gfloat_to_float_bits(g)
         assert H.fp32_to_gfloat(word) == g  # left inverse (the zero is not among the outputs enumerated here)
         assert H.group_sum([g]) == g  # the wrapper's final group_sum over the single remaining Gfloat changes nothing
-        assert canon(gfloat_of(S.fp32_term(word))) == canon(g)  # and silicon decodes the word to the same term
+        assert canon(gfloat_of(T.fp32_term(word))) == canon(g)  # and silicon decodes the word to the same term
         n += 1
     assert n > 3500
     for zero in (H.Gfloat(False, H.E_ZERO, 0), H.Gfloat(True, H.E_ZERO, 0)):

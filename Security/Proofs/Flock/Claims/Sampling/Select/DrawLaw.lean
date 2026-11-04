@@ -123,18 +123,18 @@ theorem Design.wellFormed_of_shape (d : Design) {P Q : Partition} (h : P.shape =
 /-! ## The deployed draw's checked slots -/
 
 /-- Every slot of a layout, in order. -/
-def allSlots (l : Slots.Layout) : Array ℕ := Array.range l.blocks.size
+def allSlots (l : Slots.SlotOrder) : Array ℕ := Array.range l.blocks.size
 
-theorem mem_allSlots (l : Slots.Layout) (v : ℕ) : v ∈ allSlots l ↔ v < l.blocks.size := by
+theorem mem_allSlots (l : Slots.SlotOrder) (v : ℕ) : v ∈ allSlots l ↔ v < l.blocks.size := by
   simp [allSlots]
 
-theorem slotPartition_blocks (l : Slots.Layout) : (slotPartition l).blocks = l.blocks.toList.map puGates := by
-  simp [slotPartition, Partition.blocks, Slots.Layout.blocks, List.map_flatten, Function.comp_def]
+theorem slotPartition_blocks (l : Slots.SlotOrder) : (slotPartition l).blocks = l.blocks.toList.map puGates := by
+  simp [slotPartition, Partition.blocks, Slots.SlotOrder.blocks, List.map_flatten, Function.comp_def]
 
-theorem size_allSlots (l : Slots.Layout) : (allSlots l).size = (slotPartition l).blocks.length := by
+theorem size_allSlots (l : Slots.SlotOrder) : (allSlots l).size = (slotPartition l).blocks.length := by
   simp [allSlots, slotPartition_blocks]
 
-theorem size_checked_le (l : Slots.Layout) (proved : Array ℕ) :
+theorem size_checked_le (l : Slots.SlotOrder) (proved : Array ℕ) :
     (Slots.checked l proved).size ≤ (slotPartition l).blocks.length := by
   rw [slotPartition_blocks, List.length_map, Array.length_toList, ← Array.length_toList]
   simp only [Slots.checked, Array.toList_map, Array.toList_filter, List.length_map]
@@ -143,7 +143,7 @@ theorem size_checked_le (l : Slots.Layout) (proved : Array ℕ) :
 /-- **The slots the deployed draw checks** on the bytes `src`: `Slots.select`'s, and every slot of the layout `l` where
 it is refused, where the run rejects. -/
 def drawChecked (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
-    (cm : Option (Array (Int × Array Int))) (l : Slots.Layout) (src : ByteArray) : Array ℕ :=
+    (cm : Option (Array (Int × Array Int))) (l : Slots.SlotOrder) (src : ByteArray) : Array ℕ :=
   match Slots.select rule d query table cm src with
   | .ok (_, c) => c
   | .error _ => allSlots l
@@ -166,7 +166,7 @@ on them (`drawChecked`). -/
 def DrawSlots (D : Deploy Coin Col T) : Prop :=
   ∀ x s Pt, D.parse x = some s → D.partition s = some Pt →
   ∃ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
-    (cm : Option (Array (Int × Array Int))) (l : Slots.Layout) (L : ℕ) (bytes : (Fin (D.V.k x) → Coin) → Fin L → Fin 256),
+    (cm : Option (Array (Int × Array Int))) (l : Slots.SlotOrder) (L : ℕ) (bytes : (Fin (D.V.k x) → Coin) → Fin L → Fin 256),
     Program.parse ⟨s.desc.toArray⟩ = .ok d ∧ Slots.layout d query = .ok l ∧ Pt.shape = (slotPartition l).shape ∧
       slotDesign rule d query table = .ok s.design ∧
       (∀ E : (Fin L → Fin 256) → Prop, Pr (fun c => E (bytes c)) = Pr E) ∧

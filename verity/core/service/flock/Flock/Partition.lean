@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.7: the partition invariant on one circuit (`verity.ir.partition.validate_unit_cut`): every gate, input
+The partition invariant on one circuit (`verity.ir.partition.validate_unit_cut`): every gate, input
 gates included, is certified by exactly one unit, cross-unit reads go only through committed values, and the committed
 set is the boundary set. The verifier checks it itself, on its own copy of the cut.
 -/

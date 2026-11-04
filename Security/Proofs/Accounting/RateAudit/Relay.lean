@@ -187,7 +187,7 @@ open Bandwidth.AuditRO (card_sample)
 at `k − m` words, at `((k − 1)/N)^s + C(N, m)·2^L/2^(h·m) + C(q, k − m)/2^λ`. -/
 theorem _root_.Accounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : ℕ} (A : RelayDevice N b h ρ S L q)
     (s k m F cTag cEnc lam : ℕ) :
-    pr (fun x : Store N b × Coins N b h ρ s =>
+    pr (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
           A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc (k - m) lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m)
@@ -197,7 +197,7 @@ theorem _root_.Accounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : ℕ} (A 
   · refine (pr_le_of_card _ 1 0 one_ne_zero ?_).trans (by simp)
     rw [Finset.filter_false_of_mem (fun x _ hx => by simp [floor, hkm] at hx), Finset.card_empty, zero_mul,
       zero_mul]
-  have hsplit : ∀ x : Store N b × Coins N b h ρ s,
+  have hsplit : ∀ x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)),
       (A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
         A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc (k - m) lam) →
       (((A.correct x.1 x.2.1 x.2.2.1).card < k ∧ ∀ i, x.2.2.2 i ∈ A.correct x.1 x.2.1 x.2.2.1) ∨
@@ -215,7 +215,7 @@ theorem _root_.Accounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : ℕ} (A 
         Finset.card_le_card_sdiff_add_card
       omega
     exact Or.inr ⟨hq, taken_lt_of_floor A E R O hq hc hf⟩
-  have hΩ : Fintype.card (Store N b × Coins N b h ρ s) =
+  have hΩ : Fintype.card (Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N))) =
       Fintype.card (Store N b) * (Fintype.card (Bits ρ) * (Fintype.card (Oracle N b h ρ) * N ^ s)) := by
     simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]
   by_cases hN : N ^ s = 0
@@ -224,7 +224,7 @@ theorem _root_.Accounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : ℕ} (A 
   refine (pr_mono hsplit).trans ?_
   refine (pr_or_le _ _).trans (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ?_)
   · -- the sample misses the words without a correct tag
-    have hc := pr_le_of_card (fun x : Store N b × Coins N b h ρ s =>
+    have hc := pr_le_of_card (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         (A.correct x.1 x.2.1 x.2.2.1).card < k ∧ ∀ i, x.2.2.2 i ∈ A.correct x.1 x.2.1 x.2.2.1) (N ^ s)
         ((k - 1) ^ s) hN (by
       rw [hΩ]
@@ -241,7 +241,7 @@ theorem _root_.Accounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : ℕ} (A 
     refine hc.trans (le_of_eq ?_)
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
   · -- relayed tags
-    have hc := pr_le_of_card (fun x : Store N b × Coins N b h ρ s =>
+    have hc := pr_le_of_card (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         m ≤ (A.relayed x.1 x.2.1 x.2.2.1).card) (2 ^ (h * m)) (N.choose m * 2 ^ L) (by positivity) (by
       rw [hΩ]
       refine (card_filter_prod_le _ _

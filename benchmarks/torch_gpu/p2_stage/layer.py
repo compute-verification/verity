@@ -229,7 +229,7 @@ def stage(args, lay, src, read: L.Read, dev, out: Out, layer: int) -> tuple[dict
     out.record(step="stage", ready=names, encoded=[dev.encoded.start, dev.encoded.stop])
     if not names:
         return staged, whole_s, True
-    store = S.Store(lay, dev.rows(dev.encoded), dev.encoded.start, args.lib, chunk=args.chunk)
+    store = S.EncodedRows(lay, dev.rows(dev.encoded), dev.encoded.start, args.lib, chunk=args.chunk)
     for name in names:
         t = lay.tensor(layer, name)
         w = torch.empty(t.n, t.k, dtype=torch.int8, device=DEVICE)
@@ -271,7 +271,7 @@ def stage(args, lay, src, read: L.Read, dev, out: Out, layer: int) -> tuple[dict
     return staged, whole_s, ok
 
 
-def run_window(st: S.Store, offset: int, size: int) -> tuple[int, str | None]:
+def run_window(st: S.EncodedRows, offset: int, size: int) -> tuple[int, str | None]:
     """The flags `st` refuses W bytes [offset, offset + size), a tensor's last bytes, with (0 when it decodes)."""
     st.decode_into(offset, size, torch.empty(size, dtype=torch.uint8, device=st.rows.device), end=True)
     try:
@@ -281,7 +281,7 @@ def run_window(st: S.Store, offset: int, size: int) -> tuple[int, str | None]:
     return 0, None
 
 
-def controls(args, lay, src, read: L.Read, store: S.Store, out: Out, layer: int, name: str) -> bool:
+def controls(args, lay, src, read: L.Read, store: S.EncodedRows, out: Out, layer: int, name: str) -> bool:
     """Other keys, a corrupted row, a row at p and a last block nonzero past the matrix's end, each among the last 64
     blocks of `name`: each refused with its flag bit among those it raises (other keys' garbage is nonzero past the end
     too), and the honest blocks passed."""
@@ -305,7 +305,7 @@ def controls(args, lay, src, read: L.Read, store: S.Store, out: Out, layer: int,
         cases["padding"] = (lay, padded, S.PADDING)
     res = {}
     for label, (lo, rs, want) in cases.items():
-        flags, why = run_window(S.Store(lo, rs, j0, args.lib), j0 * L.PAYLOAD, t.offset + t.size - j0 * L.PAYLOAD)
+        flags, why = run_window(S.EncodedRows(lo, rs, j0, args.lib), j0 * L.PAYLOAD, t.offset + t.size - j0 * L.PAYLOAD)
         res[label] = {"flags": flags, "want": want, "why": why}
     ok = all(v["flags"] & v["want"] if v["want"] else not v["flags"] for v in res.values())
     out.record(step="controls", matrix=name, blocks=[j0, last + 1], last_block_used=used, results=res, ok=ok)
@@ -337,7 +337,7 @@ def toy(args, out: Out) -> bool:
     def staging(lo: L.StoreLayout, rs: torch.Tensor, layer: int) -> tuple[str | None, int]:
         buf = torch.full((lo.staging_bytes(layer),), 0xA5, dtype=torch.uint8, device=DEVICE)
         try:
-            S.decode_layer(S.Store(lo, rs, 0, args.lib), layer, buf)
+            S.decode_layer(S.EncodedRows(lo, rs, 0, args.lib), layer, buf)
         except S.StoreError as e:
             return None, e.flags
         return sha512(buf), 0
@@ -357,7 +357,7 @@ def toy(args, out: Out) -> bool:
     spots = []
     srows = to_device(spot_c).view(-1, L.ROW)
     for j, v in enumerate(spot["vectors"]):
-        st = S.Store(real, srows[j:j + 1].clone(), v["i"], args.lib)
+        st = S.EncodedRows(real, srows[j:j + 1].clone(), v["i"], args.lib)
         m = st.decode_rows(v["i"], v["i"] + 1)
         try:
             st.check()

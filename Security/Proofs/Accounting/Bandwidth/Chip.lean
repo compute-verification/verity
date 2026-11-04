@@ -177,6 +177,17 @@ theorem pr_mono {Ω : Type} [Fintype Ω] {P Q : Ω → Prop} (h : ∀ x, P x →
   gcongr
   exact h _
 
+open Classical in
+/-- A probability over a store and live coins whose public part is a pair is the same over the store, the public
+part's two halves and the draw, in that order. -/
+theorem pr_coins_flat {S A B D : Type} [Fintype S] [Fintype A] [Fintype B] [Fintype D]
+    (P : S × ((A × B) × D) → Prop) :
+    pr P = pr (fun x : S × A × B × D => P (x.1, (x.2.1, x.2.2.1), x.2.2.2)) := by
+  let e : S × A × B × D ≃ S × ((A × B) × D) := (Equiv.refl S).prodCongr (Equiv.prodAssoc A B D).symm
+  unfold pr
+  rw [Fintype.card_congr e, Finset.card_equiv e (t := Finset.univ.filter P) fun x => by
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]; exact Iff.rfl]
+
 theorem pr_or_le {Ω : Type} [Fintype Ω] (P Q : Ω → Prop) : pr (fun x => P x ∨ Q x) ≤ pr P + pr Q := by
   classical
   unfold pr

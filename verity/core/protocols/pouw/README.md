@@ -24,7 +24,7 @@ protocol's front door is
 
 ## What runs
 
-The verifier is Lean, three Lake packages under `lean/`:
+The verifier is Lean, the source of truth for what PoUW checks: three Lake packages under `lean/`.
 
 - `lean/check` (`pouw_check`): `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), the `Core.Protocol` both the
   onsite and the remote protocol compose, and `PouwCheck.protocol` (`verity/pouw/v1`), one execution phase's check,
@@ -78,9 +78,33 @@ useful output; everything else (commitments, salt, sample, openings) is the prot
 - **Pearl-C4** (`pearl-c-nvfp4-v0`, `schemes/pearl_c4.py`): Pearl-C with the FP8 product replaced by sm_120's
   block-scaled FP4, NVFP4 only.
 - **NCP** (`ncp-v1`, `schemes/ncp.py`): noise-cancelling polarization over int7 activations.
-- **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
+- **Dither**, a no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`. It rests
+  on SAK and is no longer the bar or the plan (below).
 
 Each scheme module's docstring states its steps and roundings, with pinned vectors under `tests/vectors`.
+
+## The bar and the next scheme
+
+PoUW's bar holds on the H200, under an assumption milder than SAK. It supersedes Dither and SAK
+(`SAKMatmul`, `SAKHigh`) as the bar.
+
+- **T1**: the gap between honest and adversary is at most 1% of stock, additive, in priced work. The honest program is
+  the best possible, hashing is credited, and every matmul takes fresh noise on every call.
+- **T2**: honest overhead is at most 100×.
+- **T3**: perplexity rises at most 5%.
+
+The next scheme is **the lead**, protocol id `verity/pouw/v2`: NCP-family served
+sparse noise with row tags and three certifier-streamed coin lanes, every k32 word committed. Its defaults:
+
+- ShaWrites (rank 4a) counts as milder than SAK, with "honest is best" for hashing's credit;
+- the copy model is tile grain;
+- hiding is the keyed leaf, d = SHA-512(ks_w ‖ salt_w ‖ M_top);
+- the certifier is the coin source, on a trusted host;
+- the network term and whole-step coverage are reported beside T1;
+- the fold is exact on |A·Bᵀ| ≤ 2^22;
+- stock's decode price is reported both ways.
+
+v1 (H1, `verity/pouw/v1`) stays until v2 credits a served window.
 
 ## Security assumptions and guarantees
 
@@ -104,11 +128,12 @@ reads. Proved:
   `Accounting.SecurityProofs.ComputeOfPouwPerRun`, `Accounting.SecurityProofs.PouwEndToEndPerRun` and
   `Accounting.SecurityProofs.PouwLocalOff`.
 
-Stated, open: an execution phase's ε from its calls' (`Pouw.Guarantees.WindowEps`, and `Pouw.Guarantees.ServiceEscapes` for
-the deployed sample, `Security/Definitions/Pouw/Guarantees/Window.lean`); Dither's guarantees
-(`Security/Definitions/Pouw/Guarantees/DitherInstance.lean`); and several of Pearl-C's per-shape and per-model instances
-(`Security/Definitions/Pouw/Guarantees/PearlC.lean`). No guarantee over the remote protocol as a whole is stated yet; `Properties.Composition` (`Security/Properties/Composition.lean`) proves the composition's accept
-rule against its code.
+Stated, open: an execution phase's ε from its calls' (`Pouw.Guarantees.Window.WindowEps`, and
+`Pouw.Guarantees.Window.ServiceEscapes` for the deployed sample, `Security/Definitions/Pouw/Guarantees/Window.lean`);
+Dither's guarantees (`Security/Definitions/Pouw/Guarantees/DitherInstance.lean`); and several of Pearl-C's per-shape and
+per-model instances (`Security/Definitions/Pouw/Guarantees/PearlC.lean`). No guarantee over the remote protocol as a whole
+is stated yet; `Properties.Composition` (`Security/Properties/Composition.lean`) proves the composition's accept rule
+against its code.
 
 The guarantees rest on named assumptions, each a hypothesis of the statement: the schemes' conjectures, stated and not
 proved (`Pouw.NCP.Assumptions.TTNCP_U`, and Pearl-C's TT_OUT forms such as
@@ -140,6 +165,6 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the s
   (`compile`) and the sampling plan (`plan`). Each Definition has its `circuit-check` sidecar.
 - `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its difftest; `lean/check/README.md` and
   `lean/window/README.md` map each Lean module to its Python.
-- `PROTOCOL.md`: the experimental spec, until the Lean covers it.
 - `dither/`: Dither, experimental, with its `PROTOCOL.md`.
-- `tests/`: the package's suite. `benchmarks/pouw/` is the measuring side; nothing here imports it.
+- `tests/`: the package's suite, with the schemes' and the window's pinned vectors under `tests/vectors`.
+  `benchmarks/pouw/` is the measuring side; nothing here imports it.

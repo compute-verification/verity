@@ -1,6 +1,6 @@
 //! `verity/flock-vllm-block/v1`: the Flock backend's relation as ONE block R1CS whose operands are committed under
-//! `vllm-v1` (core spec `verity/ml/commitments/vllm_v1/PROTOCOL.md`), lane flock-vllm-v1. The shape is flock-pure-block's
-//! (`pure_block`, lane flock-gpu-link), with the keyed-BLAKE3 row leaves replaced by `vllm-v1` position leaves.
+//! `vllm-v1` (core spec `verity/ml/commitments/vllm_v1/PROTOCOL.md`). The shape is flock-pure-block's
+//! (`pure_block`), with the keyed-BLAKE3 row leaves replaced by `vllm-v1` position leaves.
 //!
 //! Block `v` is VU `v` (`k_log` = log2ceil(2 · per_role · 2^15 + units · 2^13): 21 for 8-bit rows):
 //! - SHA-256 slots `0..per_role` (2^15 bits each, Flock's `sha2` circuit): the x row's position leaf

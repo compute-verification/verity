@@ -2,16 +2,16 @@
 
 Semantic-equivalence vectors for statement format 3 (`veritor/proofs/statement/v3`, range
 positions) and witness formats 2 (multiproof, shared sibling paths) and 3 (packed leaves), against
-the per-position reference (statement format 2, witness format 1). PROOF-FMT lane, GUIDANCE
-§57.9 change **A**: *the optimized path must decide exactly what the reference decides* — same
+the per-position reference (statement format 2, witness format 1). The rule they hold: *the
+optimized path must decide exactly what the reference decides* — same
 accept, same reject, same phase — on wrong values, roots and positions; missing or substituted
 obligations; invalid ranges and slot maps; and values supplied through a shared table that nothing
 authenticated.
 
 `vectors.json` (schema `veritor/proof-format-v3/vectors/v1`) was **generated** by veritor's
 `test_format3_equivalence.py::test_write_vectors` (the Python reference, which decided every
-vector; `expected` is its verdict) and is frozen. D-SP1's guest kernel replayed it
-(`format3_equivalence.rs`, deleted with the archive in `2091252fe3`). Gate set
+vector; `expected` is its verdict) and is frozen. The archived D-SP1 prover's guest kernel replays it
+(`format3_equivalence.rs`; `git checkout 2091252fe3^ -- archive` restores it). Gate set
 `veritor.word-arithmetic@2` at width 16; packed leaves of 8 `u16le` words under
 `verity-vllm/leaf/v1` framing; frame-v3 (`u16`) leaves for the multiproof family.
 

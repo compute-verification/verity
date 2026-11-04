@@ -8,9 +8,11 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py period close SERVE_DIR [--gate CMD]
     served_verdicts.py program OUT [--model M] [--rows T] [--steps S] [--like SERVE_DIR]
     served_verdicts.py pieces --serve-run DIR --window K --out DIR [--node NAME] [--only COMPONENT]... [--skip COMPONENT]...
+                              [--product P]
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
                                 [--statements FILE] [--live-evidence FILE]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
+                              [--product P]
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py sampled-line LOG [--partition FILE]
     served_verdicts.py front-line SESSION
@@ -47,6 +49,9 @@ leaves it missing; no verdict is made for a piece that didn't run. A development
 that audited another server than the node it ran on says so in ``DIR/served.json`` (`SERVED`: ``{server, source}``,
 ``source`` ``fixture`` for an answer brought from a recorded run); one that names no server there leaves its answer about
 the node it ran on. ``--only`` and ``--skip`` (a component each, repeatable) run those pieces alone, or all but those.
+``--product`` (default onsite; served_verdicts.sh passes its PRODUCT) is the product the run composes (`block_record.PRODUCTS`): onsite's
+every subprotocol, remote's sampled proofs and PoUW alone. A piece the product drops isn't run, whatever its command,
+and prints a ``DROPPED`` line naming it.
 
 ``gate``: before serving with H1's coins from infra's gate (``--gate``, default ``H1_GATE``): refused while the key's lane
 (``--lane``) has a period open, which a reserve would join; prints one ``GATE`` line with the gate's latest pin and,
@@ -71,8 +76,9 @@ them (the Program is a function of the linears, T and S, and of the pouw setting
 serve-openai run and refuses unless the digest is that run's.
 
 ``pouw``: PoUW's development piece (``POUW_CMD``): window K's H1 outcome (``windows.jsonl``'s ``pouw_h1``) and record
-(``h1/w<K>/pouw-h1-calls.json``); with the auditor host's challenger's coins, the window's session as the gate's ``fetch``
-gives it, the auditor's ledger and pins log as the gate answers now and main's first-parent history (``--main``),
+(``h1/w<K>/pouw-h1-calls.json``); with the auditor host's challenger's coins, the window's session and its sample's
+session (the record's ``draw_session``, ``--draw-dir``) as the gate's ``fetch`` gives them, the auditor's ledger and pins
+log as the gate answers now and main's first-parent history (``--main``),
 checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``--key-sha512``). Its verdict is accept when
 H1's tables are tied to the window's Commit, its coins are the session the ledger opened and ended for it, and its record
 is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`). Credit reads the
@@ -94,12 +100,17 @@ an answer that names no server isn't carried. An accepted answer whose outputs a
 (`block_record.leg`) is its subprotocol's error. `block_record` carries only an accepted subprotocol's certificate, so
 where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written; it is
 ``accept`` only when every subprotocol accepted here.
+Those are the subprotocols of ``--product`` (default onsite; `block_record.PRODUCTS`): each one the
+product drops is ``dropped`` in the report (`dropped_row`, whatever its piece left), not run and composed into no
+verdict, so remote's verdict is ``accept`` when sampled proofs and PoUW accepted here, whatever the onsite pieces.
 The report's ``composed`` and the block record's ``composed.onsite`` give that verdict with its reason (`said`), one clause
 a subprotocol: its verdict and, unless it accepted here, why; an accept here with what it holds beyond its verdict
 (`terms`: when its weights were held and their share of the checkpoint, where its profile says, and each δ of the block
 record's at which its quantity is not established); PoUW's development piece reads ``development run, credits nothing``
-with core's refusal of the window's credit. Prints one ``RECORD`` line, naming each subprotocol's verdict (the
-development piece's `DEV_VERDICT`), each missing one and why, each rejecting one, each one elsewhere, and the reason.
+with core's refusal of the window's credit. Prints one ``RECORD`` line, naming the product, each subprotocol's verdict
+(the development piece's `DEV_VERDICT`), each missing one and why, each dropped one, each rejecting one, each one
+elsewhere, and the reason. The report and the line say where they were composed (``composed_on``: the host, whether it
+is the record's node, and what it read, `COMPOSED_FROM`).
 """
 from __future__ import annotations
 
@@ -161,6 +172,9 @@ DEVELOPMENT = "development.json"
 DEV_WHY = ("development run, credits nothing: H1's coins come from vy-challenger-1's gate under the lane's development key, "
            "and a window counts for credit only under the lane's own key; core's credit also needs the window in a period "
            "whose open commits its draw K, rows and weights")
+#: what `record` composes from, until it runs on an auditor-side host reading each party's own answer
+COMPOSED_FROM = ("each piece's answer file as the served node wrote it, not the party that produced it: an edit to that "
+                 "file on the node changes its row")
 #: a development piece's verdict in the ``RECORD`` line, in place of its row's ``missing``
 DEV_VERDICT = "development run, credits nothing"
 #: H1's record of a window (`pouw_h1.CALLS_FILE`) under the serve dir
@@ -426,16 +440,33 @@ def _unset(comp: str, what: str) -> str:
     return f"{comp.upper()}_CMD unset: {what}"
 
 
+def dropped_row(key: str, product: str) -> dict[str, Any]:
+    """The row of a subprotocol ``product`` drops (`block_record.PRODUCTS`, its legs being the components): not run."""
+    from verity_e2e_demo import block_record as BR
+
+    by_leg = {"integrity": NAMES["integrity"], **{v[1]: v[0] for v in PIECES.values()}, "wipe": WIPE[0]}
+    return {"verdict": "dropped", "owner": PIECES.get(key, WIPE)[2],
+            "why": f"not run: the {product} product composes {' and '.join(by_leg[x] for x in BR.PRODUCTS[product])} alone"}
+
+
 def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | None = None,
-           node: str | None = None, only: Sequence[str] | None = None, skip: Sequence[str] = ()) -> dict[str, dict[str, Any]]:
+           node: str | None = None, only: Sequence[str] | None = None, skip: Sequence[str] = (),
+           product: str = "onsite") -> dict[str, dict[str, Any]]:
     """Each piece of `PIECES` run where ``<COMPONENT>_CMD`` names it, under `timeout` at its limit, else named missing;
     one line each on stdout, its verdict the one `piece` gives the record. ``only`` and ``skip`` name components: those
-    alone, or all but those, so one piece can run beside the others (`served_verdicts.sh` starts the certifier's early)."""
+    alone, or all but those, so one piece can run beside the others (`served_verdicts.sh` starts the certifier's early).
+    A piece ``product`` drops isn't run, whatever its command (`dropped_row`)."""
+    from verity_e2e_demo import block_record as BR
+
     env = dict(os.environ if env is None else env)
     node = node or socket.gethostname()
     got: dict[str, dict[str, Any]] = {}
     for key, (name, comp, owner, what) in PIECES.items():
         if (only is not None and comp not in only) or comp in skip:
+            continue
+        if comp not in BR.PRODUCTS[product]:
+            got[comp] = {k: v for k, v in dropped_row(key, product).items() if k != "owner"}
+            print(f"DROPPED {name} ({owner}): {got[comp]['why']}", flush=True)
             continue
         cmd = env.get(f"{comp.upper()}_CMD")
         if not cmd:
@@ -570,7 +601,9 @@ def period_open_argv(serve_dir: Path, name: str, circuits: Path, *, slots: int, 
     length = {"max_tokens": [int(max_tokens)] * int(slots), "stop": "fixed"}
     weights = ["--model", model] if model else []
     compact = {"sort_keys": True, "separators": (",", ":")}
-    argv = ["period-open", "--name", name, "--cap", "1", "--circuit", circuit, "--draw-k", str(k), "--rows", str(rows),
+    # One served window is two of the gate's sessions, its own and its withheld draw session, and the gate counts
+    # each against the period's cap; credit reads the close's list as window, then draw (credit._period_of).
+    argv = ["period-open", "--name", name, "--cap", "2", "--circuit", circuit, "--draw-k", str(k), "--rows", str(rows),
             *weights, "--circuit-files", json.dumps(files, **compact), "--length", json.dumps(length, **compact)]
     return argv, {"circuit": circuit, "rows": rows, "steps": steps, "draw_k": k, "circuit_files": files,
                   "missing": missing, "length": length, "weights": weights}
@@ -717,14 +750,17 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
         try:
             if not (gate and key):
                 raise ValueError("no gate or no key pin to check the window's session by (H1_GATE, H1_KEY_SHA512)")
-            sid = json.loads(calls.read_text())["commitment"]["session"]["session"]
+            com = json.loads(calls.read_text())["commitment"]
+            sid, dsid = com["session"]["session"], (com.get("draw_session") or {}).get("session")
             tgz, tree = out / "session.tgz", out / "session"
-            tgz.write_bytes(_gate_out(gate, "fetch", sid))
-            with tarfile.open(tgz) as t:
-                t.extractall(tree, filter="data")
+            for s in (sid, dsid) if dsid else (sid,):
+                tgz.write_bytes(_gate_out(gate, "fetch", s))
+                with tarfile.open(tgz) as t:
+                    t.extractall(tree, filter="data")
             (out / "ledger.jsonl").write_bytes(_gate_out(gate, "ledger"))
             (out / "pins.jsonl").write_bytes(_gate_out(gate, "pins"))
-            got = check(calls, tree / sid, out / "ledger.jsonl", out / "pins.jsonl", main, key, out / "check", inputs)
+            got = check(calls, tree / sid, out / "ledger.jsonl", out / "pins.jsonl", main, key, out / "check",
+                        {**inputs, **({"--draw-dir": str(tree / dsid)} if dsid else {})})
         except (OSError, RuntimeError, ValueError, KeyError, TypeError, tarfile.TarError) as e:
             reasons.append(f"coins: {type(e).__name__}: {e}"[:600])
         else:
@@ -857,13 +893,19 @@ def _ratio(e: Fraction, deltas: Sequence[Fraction]) -> str:
 
 def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
     """What an accepted answer holds beyond its verdict: where its profile says when its weights were held and what share
-    of the checkpoint they are, those; where it says which host ran each party, what its `trusted-host` premise rests on
-    (the network certifier's ``placement``); and each δ of the block record's at which its leg's quantity is not
-    established."""
+    of the checkpoint they are, those; where it says which host ran each party (the network certifier's ``placement``),
+    the link K counts, named, with every other link of the node uncounted and uncertified, and what its `trusted-host`
+    premise rests on; and each δ of the block record's at which its leg's quantity is not established. A placement
+    with no links (the front's ``--gate local``) states no link."""
     profile = (r.get("answer") or {}).get("profile")
     w = profile.get("weights") if isinstance(profile, Mapping) else None
     place = profile.get("placement") if isinstance(profile, Mapping) else None
-    out = [f"trusted-host {place['trusted-host']}"] if isinstance(place, Mapping) and place.get("trusted-host") else []
+    place = place if isinstance(place, Mapping) else {}
+    counted = [f"{x['from']} to {x['to']} through {x['via']}" for x in place.get("links") or () if x.get("counted")]
+    others = place.get("uncounted") or "every other link of the node"
+    out = ([f"K counts the relayed link alone, {'; '.join(counted)}; {others} is uncounted and uncertified"]
+           if counted else [])
+    out += [f"trusted-host {place['trusted-host']}"] if place.get("trusted-host") else []
     if isinstance(w, Mapping) and w.get("held"):
         out.append(f"its weights {w['held']}, not concurrently with the block")
     if isinstance(w, Mapping) and w.get("share"):
@@ -888,6 +930,8 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
         v, server = r.get("verdict"), at[k][0]
         if v == "missing":
             s = r.get("why") if "development" in r else f"missing: {r.get('why')}"
+        elif v == "dropped":
+            s = f"dropped, {r.get('why')}"
         elif server not in (None, node):
             s = f"{v} about {server}, another server: carried, not composed"
         elif v == "accept":
@@ -900,16 +944,19 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
 
 
 def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[int, int], node: str,
-           run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None
+           run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite"
            ) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
-    rejected, erred or was undecided), and the ``RECORD`` line's summary. ``servers``: each piece's `piece_server`, by
-    runner name; sampled proofs' answer is about ``node``, and a piece's that names no server isn't carried."""
+    rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
+    drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; sampled proofs'
+    answer is about ``node``, and a piece's that names no server isn't carried."""
     from verity_e2e_demo import block_record as BR
 
     legs = {v: k for k, v in BR.RUNNER_KEYS.items()} | {"wipe": "wipe"}
-    at = {k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
-    rows = {k: dict(r) for k, r in rows.items()}
+    drops = [k for k in rows if legs[k] not in BR.PRODUCTS[product]]
+    at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
+          | {k: (None, "real") for k in drops})
+    rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
     built: dict[str, dict[str, Any]] = {}
     for k, r in rows.items():
         if r.get("verdict") == "accept" and at[k][0] is not None:
@@ -918,19 +965,23 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
             except (KeyError, IndexError, TypeError, ValueError, ZeroDivisionError) as e:
                 rows[k] = {**r, "verdict": "error", "quantity": None, "epsilon": None,
                            "reason": f"its answer is not the block record's {legs[k]} leg: {type(e).__name__}: {e}"[:2000]}
+    host = socket.gethostname()
+    where = {"host": host, "served_node": host == node, "from": COMPOSED_FROM}
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
-              "servers": {k: at[k][0] for k in rows}}
+              "servers": {k: at[k][0] for k in rows}, "composed_on": where}
     verdicts = {NAMES[k]: DEV_VERDICT if "development" in r and r.get("verdict") == "missing" else r.get("verdict")
                 for k, r in rows.items()}
     missing = {NAMES[k]: r.get("why") for k, r in rows.items() if r.get("verdict") == "missing"}
     elsewhere = {NAMES[k]: at[k][0] for k in rows if at[k][0] not in (None, node)}
-    unserved = sorted(NAMES[k] for k, r in rows.items() if r.get("verdict") != "missing" and at[k][0] is None)
+    unserved = sorted(NAMES[k] for k, r in rows.items()
+                      if r.get("verdict") not in ("missing", "dropped") and at[k][0] is None)
     dev = {"development": {NAMES[k]: r["development"]["verdict"] for k, r in rows.items() if "development" in r}}
     dev = dev if dev["development"] else {}
-    named = {"verdicts": verdicts, "missing": missing, "elsewhere": elsewhere, **({"unserved": unserved} if unserved else {}),
-             **dev}
+    named = {"product": product, "verdicts": verdicts, "missing": missing, "elsewhere": elsewhere, "composed_on": where,
+             **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
+             **({"unserved": unserved} if unserved else {}), **dev}
     bad = sorted(NAMES[k] for k, r in rows.items()
-                 if r.get("verdict") not in ("accept", "missing") and NAMES[k] not in elsewhere)
+                 if r.get("verdict") not in ("accept", "missing", "dropped") and NAMES[k] not in elsewhere)
     if bad:
         composed = "reject" if any(rows[k].get("verdict") in ("reject", "error") for k in rows
                                    if NAMES[k] in bad) else "pending"
@@ -941,7 +992,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     extra = {legs[k]: {"row": r, "server": at[k][0], "runs": r.get("runs") or [run], "source": at[k][1]}
              for k, r in rows.items() if k != "integrity" and r.get("verdict") == "accept" and at[k][0] is not None}
     composing = {**report, "protocols": {k: r if k == "integrity" else {"verdict": "missing"} for k, r in rows.items()}}
-    rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, extra=extra)
+    rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, extra=extra, product=product)
     report["composed"] = rec["composed"]["onsite"] = {"protocol": REPORT_FORMAT, "verdict": rec["composed"]["verdict"],
                                                       "reason": said(rows, at, node, built)}
     line = {"composed": rec["composed"]["verdict"], **named, "reason": report["composed"]["reason"],
@@ -1014,7 +1065,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--out", type=Path, required=True)
     for q in (p, r):
         q.add_argument("--node", default=socket.gethostname())
+        q.add_argument("--product", default="onsite")
     a = ap.parse_args(argv)
+    if a.cmd in ("pieces", "record"):
+        from verity_e2e_demo import block_record as BR
+
+        if a.product not in BR.PRODUCTS:
+            ap.error(f"--product {a.product!r}: not one of {sorted(BR.PRODUCTS)}")
     if a.cmd == "public-registration":
         print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
         return 0
@@ -1101,15 +1158,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "pieces":
         a.out.mkdir(parents=True, exist_ok=True)
-        got = pieces(a.serve_run, a.window, a.out, node=a.node, only=a.only, skip=a.skip)
-        return 0 if all(g["verdict"] in ("accept", "missing") for g in got.values()) else 1
+        got = pieces(a.serve_run, a.window, a.out, node=a.node, only=a.only, skip=a.skip, product=a.product)
+        return 0 if all(g["verdict"] in ("accept", "missing", "dropped") for g in got.values()) else 1
     steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")
     keys = [*PIECES, "wipe"]
     got = {k: piece(k, a.pieces, run) for k in keys}
     rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: row for k, (row, _) in got.items()}}
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
-                               servers={k: at for k, (_, at) in got.items()})
+                               servers={k: at for k, (_, at) in got.items()}, product=a.product)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:

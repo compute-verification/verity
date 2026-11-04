@@ -176,7 +176,7 @@ fi
 
 # ------------------------------------------------------------------ negatives on SmolLM2 (fast; the same commit_delta the workloads use)
 WL=workloads/$SMOL.json
-BASE=("${PY%/*}/verity-vllm" commit --case B0 --workload "$WL" --committer native_collect_v2b --fast-copy --gpu-tree --openings 64
+BASE=("${PY%/*}/verity-vllm" commit --case B0 --workload "$WL" --committer native_collect_v2b --openings 64
       --pairs 1 --warmup 1 --max-num-seqs 1 --engine-arg max_model_len=288 --engine-arg "gpu_memory_utilization=$GPU_UTIL")
 negative() {   # <name> <expect: exit3|rootdiff> <reason-regex> <args...>
   local name=$1 expect=$2 rx=$3; shift 3

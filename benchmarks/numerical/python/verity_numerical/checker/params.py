@@ -1,6 +1,6 @@
 """Widths of the transition unit as data, so that every gadget, contract and search is parametric.
 
-``REAL`` is the frozen target (:data:`verity.ml.circuits.silicon.silicon.AMPERE_BF16_M16N8K16` seen through the checker's
+``REAL`` is the frozen target (:data:`verity.ml.circuits.silicon.models.AMPERE_BF16_M16N8K16` seen through the checker's
 decomposition); ``TOY`` and ``TINY`` are reduced widths for exhaustive search.  Every derived quantity below is a
 *bound* used by a contract; the bounds are conservative (a table may have a few rows nobody reaches) and are the
 same formulas at every width.

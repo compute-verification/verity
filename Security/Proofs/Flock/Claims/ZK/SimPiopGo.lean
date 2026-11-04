@@ -35,11 +35,11 @@ theorem abcClaims_size (m kLog : ℕ) (zc : ZcOut) (lc : LcOut) : (abcClaims m k
 
 /-- **The lincheck's coins at the cut's coins** from round `L` on, over `n` rounds: `α`'s at `L`, `β`'s at `L + 1`,
 round `j`'s at `L + 2 + j`, `r'`'s at `L + 2 + n`. -/
-def lcCoins (coin : ℕ → ℕ → F128) (L n : ℕ) : Lc.Coins :=
+def lcCoins (coin : ℕ → ℕ → F128) (L n : ℕ) : Lc.Challenges :=
   ⟨coin L, coin (L + 1), fun j => coin (L + 2 + j), coin (L + 2 + n)⟩
 
 /-- **A lincheck's `r'` and `r_in` at the coins `cs`**, over `n` rounds, those `Lc.out` returns. -/
-abbrev LcOutAt (n : ℕ) (cs : Lc.Coins) (o : LcOut) : Prop :=
+abbrev LcOutAt (n : ℕ) (cs : Lc.Challenges) (o : LcOut) : Prop :=
   o.rPrime = cs.cf 0 ∧ o.rIn = (pushes cs.τ n).reverse
 
 theorem lincheckCut_congr (io : Asks PS) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (mk : ℕ → F128)

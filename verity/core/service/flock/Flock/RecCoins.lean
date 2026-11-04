@@ -1,5 +1,5 @@
 /-
-V*'s verifier-registered values against the verifier's own coins (lane rec-v0). V* registers three values itself, under
+V*'s verifier-registered values against the verifier's own coins. V* registers three values itself, under
 public salts (`rec_residuals.verifier_value`, rec_residuals.py:393): each Ligerito level's opening coefficients `rec-coef`
 and position bits `rec-dirs` (`rec_outer.stage`, rec_outer.py:216–217), and each algebra part's coefficients `rec-v`
 (`rec_residuals.write`, rec_residuals.py:450). A statement whose unit is `rec-open/…` or `rec-residuals/…` is accepted only
@@ -137,7 +137,7 @@ structure Inner where
   /-- the inner circuit's unit range (META's `ranges`, the unit net's), whose slots the sparse phase's layout factors weigh -/
   unitRange : V Range := .error "the verifier's inner coins hold no unit range"
 
-/-- A recursive session's inner statement (PROTOCOL.md §16.16), on the coins the coin server draws. -/
+/-- A recursive session's inner statement (`Tags.withPlainLeaves`), on the coins the coin server draws. -/
 def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
 
 /-- The inner circuit's unit range: META's one range of its unit net, whose slots the sparse phase's layout factors weigh. -/

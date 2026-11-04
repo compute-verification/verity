@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Pearl-C's served decode overhead over stock FP8, without hashing and with it, across a list of points (noise_sweep.py's
-# summary), on node 2: untimed preemptible screens (tier 2a), not panel rows.  From a run tree's root:
+# summary), on an RTX PRO 6000 node: untimed preemptible screens (tier 2a), not panel rows.  From a run tree's root:
 #   research run --on MACHINE --project verity --source <tree> --cwd source --declared-output 'out/*' \
 #     --env GPU_LEASE_WHO=LANE --env UNTIL=<ISO time> --send points.txt -- \
 #     bash benchmarks/pouw/pearl_c_vllm/noise_sweep.sh "$RESEARCH_RUN_DIR"/inputs/points.txt

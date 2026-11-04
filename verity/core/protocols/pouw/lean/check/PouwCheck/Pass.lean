@@ -1,4 +1,5 @@
 import Flock.Draw
+import PouwCommit.Bindings
 import PouwCommit.Draws
 import PouwWindow.Rounds
 import PouwCheck.Inputs
@@ -164,12 +165,11 @@ def coinVersionAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteAr
 def coinReasonAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteArray) : Except String (Option String) :=
   (·.1) <$> coinVersionAt c o label after false
 
-/-- `tagged` of `tag` and each `(id, root)` by ascending id, its first `keep` bytes: `core_check.weights_root`
+/-- `PouwCommit.foldRoots` at `tag`, its first `keep` bytes: `core_check.weights_root`
 (`audit.weights_root`, an epoch's, under a scheme's version) and `Credit.weightsRoot` (`weights.weights_root`, the
 weights' root a live H1 window's open root binds). -/
 def weightsRootAt (keep : Nat) (tag : String) (roots : List (Nat × ByteArray)) : ByteArray :=
-  let sorted := roots.mergeSort fun a b => a.1 ≤ b.1
-  (tagged tag (sorted.flatMap fun (w, r) => [.int w, .bytes r])).extract 0 keep
+  (PouwCommit.foldRoots tag roots).extract 0 keep
 
 /-- A refusal: its code (`coin` or `manifest`) and why. -/
 abbrev R := Except (String × String)
@@ -503,8 +503,8 @@ def SEEDED_PINNED : String :=
 
 /-- `core_check.draw`: none when `units` are the window's draw, else the refusal. Seeded coins (`coinsOf`) have their
 `draw` coin, and are refused (`coin-key`) when the window's parameters pin a challenger key; live ones
-(`PouwWindow.LIVE_SCHEME`, a certified window's) are read only from the challenger's signed record with the key it is
-signed under, `{key, record}`: that key must be `key`, the challenger key the window's parameters pin (`coin-key`, so a
+(`PouwWindow.LIVE_SCHEME`, a certified window's) are read only from its draw session's (`PouwWindow.DRAW_FAMILIES`)
+signed record with the key it is signed under, `{key, record}`: that key must be `key`, the challenger key the window's parameters pin (`coin-key`, so a
 record the prover signed under a key of its own, over coins it holds, is refused), this check verifies the record under
 it (`SampledProofs.Challenger.recordReason`; a bare live commitment is refused, `SIGNED_LIVE`), and they have their
 `pouw/draw` coin 0 (`SampledProofs.Challenger.liveReason`). -/
@@ -525,7 +525,7 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
       let record := SampledProofs.getD coins "record"
       if let some why ← port (SampledProofs.Challenger.recordReason want record) then coin why
       let c := (← port (SampledProofs.Challenger.ChallengerRecord.ofJson record)).commitment
-      if let some why := PouwWindow.liveEpochReason c then coin why
+      if let some why := PouwWindow.drawEpochReason c then coin why
       pure (.inr c)
     else match key with
       | .null => .inl <$> (coinsOf coins recorded).mapError malformed

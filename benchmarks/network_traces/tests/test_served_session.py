@@ -1,6 +1,7 @@
-"""served_session: the plan is the gate's scan rehearsal inside the scan's class (PROMPT_IDS prompt ids in, at most KO
-out), which this tree's gate accepts, with the endpoint's sealed flags and its hand start, and a request the gate or
-the class refuses is refused with its reason; a session through a stub gate keeps
+"""served_session: the plan is the gate's scan rehearsal inside the scan's class (PROMPT_IDS prompt ids in, or each
+prompt's length drawn in a LO:HI span, at most KO out), which this tree's gate accepts, with the endpoint's sealed flags
+and its hand start, and a request the gate or the class refuses is refused with its reason; a session through a stub
+gate keeps
 the session's fetch (with witness/) 0700 under KEEP and publishes only the bundle less witness/ and its outcome, removes
 a published file that holds a prompt's ids, and refuses a KEEP inside --out; --at waits on the injected clock and sends
 nothing when late; io writes the kept run's certified I/O 0600 in KEEP; endpoint runs the endpoint step on the served
@@ -12,6 +13,7 @@ rehearsal's records, and is refused without the leak guard; its draw on the gate
 the coin link's peer, and the served node is refused."""
 from __future__ import annotations
 
+import argparse
 import hashlib
 import io
 import json
@@ -107,10 +109,29 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     assert SS.plan(long, b"[[1]]")["endpoint"].endswith(f"--max-model-len {SS.KI + SS.KO}")
 
 
+def test_a_plan_at_another_scan_class_asks_the_gate_for_it_and_its_session_runs_the_plans_request():
+    """``--scan-class w63k4`` is passed to the gate, which takes prompts of its KI = 32 ids and 4 tokens out, and the
+    plan's session run is the plan's request: its class, prompt ids, tokens and vocabulary."""
+    a = SS.parser().parse_args(["plan", "--scan-class", "w63k4", "--prompt-ids", "32", "--tokens", "4", "--prompts", "4",
+                                "--requests", "4", "--height", "10"])
+    a.minutes = SS.A.warden_minutes(a.requests, a.height) + SS.MARGIN
+    ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")
+    doc = SS.plan(a, json.dumps(ps).encode())
+    assert doc["request"] == (f"warden-rehearse --peer vy-dc-h200-2 --port 18782 --minutes {a.minutes} --requests 4 "
+                              "--height 10 --scan --prompts --tokens 4 --scan-class w63k4")
+    session = SS.parser().parse_args(shlex.split(shlex.split(doc["runs"]["session"])[-1])[2:])
+    assert {k: v for k, v in vars(session).items() if k in vars(a)} == {**vars(a), "cmd": "session"}
+    assert "--scan-class" not in SS.plan(SS.parser().parse_args(["plan", "--minutes", "10"]), b"[[1]]")["request"]
+
+
 @pytest.mark.parametrize("flags, why", [
     (["--tokens", "65"], "1 to KO = 64"),
     (["--tokens", "0"], "1 to KO = 64"),
     (["--prompt-ids", "1025"], "1 to KI = 1024"),
+    (["--scan-class", "w63k4", "--prompt-ids", "33", "--tokens", "4"], "1 to KI = 32"),
+    (["--scan-class", "w63k4", "--prompt-ids", "32"], "1 to KO = 4"),
+    (["--scan-class", "w63k4", "--prompt-ids", "1:33", "--tokens", "4"], "--prompt-ids 1:33: the scan's class takes 1 "
+                                                                         "to KI = 32"),
     (["--prompts", "200", "--prompt-ids", "1024"], "the gate refuses it: --prompts: over 1048576 bytes"),
     (["--requests", "100000", "--minutes", "60"], "the gate refuses it: --requests '100000'"),
     (["--minutes", "5"], "the gate refuses it: --minutes 5"),
@@ -118,6 +139,39 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
 def test_a_request_the_gate_or_the_class_refuses_is_refused_with_its_reason(flags, why, capsys):
     assert SS.main(["plan", *flags]) == 2
     assert why in capsys.readouterr().err
+
+
+def test_prompt_ids_lo_hi_draws_each_prompts_length_in_the_span_from_the_seed():
+    """``--prompt-ids LO:HI``: prompt j's length is drawn in LO … HI from the seed and its ids are the fixed-length
+    draw's first ones, so N (or N:N) keeps every prompt N ids, as before; a malformed span is the parser's error."""
+    assert [SS.span(t) for t in ("24", "1:32", "5:5")] == [24, (1, 32), 5]
+    for bad in ("x", "1:", ":4", "0:4", "5:4", "1:2:3"):
+        with pytest.raises(argparse.ArgumentTypeError):
+            SS.span(bad)
+    ps = SS.prompts(64, (1, 32), SS.VOCAB, b"seed")
+    assert {len(p) for p in ps} <= set(range(1, 33)) and len({len(p) for p in ps}) > 8
+    assert ps == SS.prompts(64, (1, 32), SS.VOCAB, b"seed") != SS.prompts(64, (1, 32), SS.VOCAB, b"other")
+    assert all(p == q[:len(p)] for p, q in zip(ps, SS.prompts(64, 32, SS.VOCAB, b"seed")))
+    assert SS.prompts(2, 4, 256, b"seed")[1][3] == int.from_bytes(
+        hashlib.sha512(b"seed" + (1).to_bytes(4, "big") + (3).to_bytes(4, "big")).digest()[:8], "big") % 256
+
+
+def test_a_span_plan_at_w63k4_is_the_gates_request_and_its_session_runs_the_span(tmp_path, capsys):
+    """The w63k4 plan at ``--prompt-ids 1:32`` is the gate's request (its ids the group's total), its session runs the
+    span, and its endpoint's context is HI + KO; the local stand-in, which serves one prompt length, refuses a span."""
+    a = SS.parser().parse_args(["plan", "--scan-class", "w63k4", "--prompt-ids", "1:32", "--tokens", "4", "--prompts",
+                                "4", "--requests", "4", "--height", "10"])
+    a.minutes = SS.A.warden_minutes(a.requests, a.height) + SS.MARGIN
+    ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")
+    doc = SS.plan(a, json.dumps(ps).encode())
+    assert doc["prompts"] == {"count": 4, "ids": sum(map(len, ps))} and len({len(p) for p in ps}) > 1
+    session = SS.parser().parse_args(shlex.split(shlex.split(doc["runs"]["session"])[-1])[2:])
+    assert (session.prompt_ids, session.scan_class) == ((1, 32), "w63k4")
+    wide = SS.parser().parse_args(["plan", "--prompt-ids", f"1:{SS.KI}", "--minutes", str(a.minutes)])
+    assert SS.plan(wide, b"[[1]]")["endpoint"].endswith(f"--max-model-len {SS.KI + SS.KO}")
+    assert SS.main(["session", "--out", str(tmp_path), "--gate", "local", "--vocab", "256", "--prompt-ids", "1:8"]) == 2
+    assert "the stand-in serves prompts of one length, not --prompt-ids 1:8" in capsys.readouterr().err
+    assert list(tmp_path.iterdir()) == []
 
 
 def _session(tmp_path, monkeypatch, *flags):
@@ -269,7 +323,8 @@ def _serve_dir(d: Path, ps: list[list[int]]) -> Path:
 
 
 def _certified(d: Path, ps: list[list[int]]) -> Path:
-    """io's file: the warden run's deployment.json and its certified I/O, each prompt answered with [1, 2]."""
+    """io's file: the network certifier run's deployment.json and its certified I/O, each prompt answered with [1,
+    2]."""
     d.mkdir(parents=True, exist_ok=True)
     (d / SS.CERTIFIED).write_text(json.dumps({
         "deployment": {"run_id": RUN, "origin_unix": 0.0, "windows": 4, "params": {"window": 10, "bucket_ms": 10000}},

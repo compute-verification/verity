@@ -7,8 +7,9 @@ time); `u64be 2^64 − 1` ends the session, after its last round or a late one. 
 `WARMUPS` frames on `WARMUP_INDEX`, which no coin chose, and discards their answers: nothing times, records or signs them,
 so the first timed round doesn't pay for waking both processes and the prover's memory path after the session's setup.
 The challenger draws its coins on its own host, designates the session id from them, the node and the setup's root
-(`period.SESSION_DOMAIN`), signs under its own key and claims the id in its own session log. It reports `{"host",
-"public_key", "session", "session_id", "warmups"}`.
+(`period.SESSION_DOMAIN`), signs under its own key and claims the id in its own session log. Nothing but the indices, one
+a round, goes on the wire: the coin tree's root, the session id and the openings leave only in its report, `{"host",
+"public_key", "session", "session_id", "warmups"}`, after the session's last answer and its signature.
 
 That id is a request's that names no audit (`period.audit`'s), whose salt is drawn where setup ran. An audit's two coins
 are the challenger's, the setup's salt and the session's:
@@ -39,7 +40,9 @@ prover -> memory-challenger   per frame Block, the whole block (private)
 `Frames` is their codec over the session's stream, which the deployment layer's byte-stream adapter
 (`verity.core.deploy.stream`) drives them on: `serve` and `answer` are the two parties run there, on the clock and coins
 they are given. The challenger reads its clock once before each index it sends and once after each block it takes,
-those readings alone, so on the same coins and readings it signs the same bytes wherever it runs.
+those readings alone, so on the same coins and readings it signs the same bytes wherever it runs. Each side reads its
+connection through `Polled`, which polls for up to `SPIN_NS` before it blocks, so neither host's CPU sleeps through a
+round.
 
 `python -m verity.core.protocols.pous.challenger_party --device DIR [--listen HOST:PORT]` is the challenger's side
 (`main`): it reads one JSON line on stdin, a salt request or the session's `{"binding", "block_bytes", "blocks", "k",
@@ -111,6 +114,49 @@ MANIFEST = Manifest(
               Schema("End", 1, "structure"), Schema("Block", 1, "private", body=Body(max=MAX_BLOCK))))
 SETUPS = "setups"
 PARAMS = ("blocks_per_segment", "c0", "expander", "segments", "w")
+SPIN_NS = 2_000_000
+"""How long a side's read polls its connection before it blocks (`Polled`). A side that blocks between rounds pays its
+host's wake-up, which between the KVM guests of the cross-host path took rounds from about 90 µs to 550–650 µs, most
+of the RTT allowance. A round's frame comes well within this budget, and a longer wait (the session's setup) blocks."""
+
+
+class Polled:
+    """A connected socket as a session's stream: `read(n)` polls it without blocking for up to `spin_ns` on `clock` while
+    nothing arrives, then blocks until something does, and returns short only when the peer closes. Polling changes no
+    reading: the challenger still reads its clock after the whole block is in."""
+
+    def __init__(self, sock: socket.socket, spin_ns: int = SPIN_NS,
+                 clock: Callable[[], int] = time.perf_counter_ns) -> None:
+        self.sock, self.spin_ns, self.clock = sock, spin_ns, clock
+
+    def read(self, n: int) -> bytes:
+        buf = bytearray(n)
+        view, got, until = memoryview(buf), 0, None
+        while got < n:
+            try:
+                k = self.sock.recv_into(view[got:], n - got, socket.MSG_DONTWAIT)
+            except BlockingIOError:
+                now = self.clock()
+                until = now + self.spin_ns if until is None else until
+                if now < until:
+                    continue
+                k = self.sock.recv_into(view[got:], n - got)
+            if k == 0:
+                break
+            got, until = got + k, None
+        return bytes(view[:got])
+
+    def write(self, b: bytes) -> None:
+        self.sock.sendall(b)
+
+    def flush(self) -> None:
+        pass
+
+    def __enter__(self) -> Polled:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
 
 
 def _read(f: BinaryIO, n: int) -> bytes:
@@ -208,7 +254,7 @@ class Challenger:
         self.c: mc.MemoryChallenger | None = None
         self.sid: bytes | None = None
         self._drawn: list[bytes] = []
-        self.session: R.Session | None = None
+        self.session: R.ChallengerRecord | None = None
         self._reading: int | None = None
         self._block: bytes | None = None
         self._warm = 0
@@ -288,7 +334,7 @@ class Challenger:
         self.c.receive(block)
         if not self.c.done:
             return [_read_clock()]
-        self.session = R.Session(self.c.close(), self.c.commitment, self.c.openings())
+        self.session = R.ChallengerRecord(self.c.close(), self.c.commitment, self.c.openings())
         return [Send(PROVER, Message("End")),
                 Finish({"session": self.session.to_json(), "session_id": self.sid.hex()}, kind="private")]
 
@@ -330,7 +376,7 @@ PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: _challenger, PROVER: Prover})
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, coins: bytes,
           domain: str, salts: mc.SaltLog | None = None, clock: Callable[[], int] = time.perf_counter_ns,
-          warmups: int = WARMUPS, draw: Callable[[int], bytes] = os.urandom) -> tuple[bytes, R.Session]:
+          warmups: int = WARMUPS, draw: Callable[[int], bytes] = os.urandom) -> tuple[bytes, R.ChallengerRecord]:
     """The challenger's side of one session over the connection `f`: `Challenger` on `coins` and `clock`, under its
     audit's id from `salts` when `request` names one, else the id designated under `domain`, its coin tree's hiding key
     and salts from `draw`, `warmups` untimed exchanges first, the session signed by `signer`, with the collector paused
@@ -356,7 +402,7 @@ def answer(f: BinaryIO, block_bytes: int, respond: Callable[[int], bytes]) -> in
     return done.outcome
 
 
-def report(sid: bytes, session: R.Session, public_key: bytes, warmups: int = WARMUPS) -> dict[str, Any]:
+def report(sid: bytes, session: R.ChallengerRecord, public_key: bytes, warmups: int = WARMUPS) -> dict[str, Any]:
     return {"host": socket.gethostname(), "public_key": public_key.hex(), "session": session.to_json(),
             "session_id": sid.hex(), "warmups": warmups}
 
@@ -388,8 +434,7 @@ def session(side: Side, request: Mapping[str, Any], respond: Callable[[int], byt
 
     def drive(s: socket.socket) -> int:
         s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        with s.makefile("rwb") as f:
-            return answer(f, request["block_bytes"], respond)
+        return answer(Polled(s), request["block_bytes"], respond)
 
     out, rounds = side.talk(request, drive)
     return out | {"rounds": rounds - out.get("warmups", 0)}
@@ -505,9 +550,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     with socket.create_server((host, int(port))) as srv:
         print(json.dumps({"listening": srv.getsockname()[1]}), flush=True)
         conn, _ = srv.accept()
-        with conn, conn.makefile("rwb") as f:
+        with conn:
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            sid, s = serve(f, request, signer=signer, log=sessions, salts=salts,
+            sid, s = serve(Polled(conn), request, signer=signer, log=sessions, salts=salts,
                            coins=secrets.token_bytes(COIN_BYTES), domain=period.SESSION_DOMAIN)
     keep(device, sid, request)
     print(json.dumps(report(sid, s, signer.public_key), sort_keys=True), flush=True)
@@ -515,9 +560,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 __all__ = ["AUDIT_BYTES", "CHALLENGER", "COIN_BYTES", "END", "ID", "MANIFEST", "PARAMS", "PREMISE", "PROTOCOL", "PROVER",
-           "SESSION_ID_TAG", "SETUPS", "SOURCE_BYTES", "VERSION", "WARMUPS", "WARMUP_INDEX", "Challenger", "Frames",
-           "Prover", "Refusal", "answer", "command", "designate", "give_salt", "keep", "main", "placement", "report",
-           "request_of", "salt", "serve", "session", "session_id", "setup_of", "side_of"]
+           "SESSION_ID_TAG", "SETUPS", "SOURCE_BYTES", "SPIN_NS", "VERSION", "WARMUPS", "WARMUP_INDEX", "Challenger",
+           "Frames", "Polled", "Prover", "Refusal", "answer", "command", "designate", "give_salt", "keep", "main",
+           "placement", "report", "request_of", "salt", "serve", "session", "session_id", "setup_of", "side_of"]
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -33,7 +33,7 @@ log() { echo "$(date -u +%FT%TZ) [neg $ROW] $*" | tee -a "$OUT/negatives.log"; }
 [ -f "$MAN" ] || { log "no required-value manifest $MAN (run the positive Commit first: row_pod builds it)"; echo "NEGATIVES FAIL no manifest"; exit 2; }
 POS_ROOT=$(python3 -c "import json;v=json.load(open('$POS/verdict.json'));print((v.get('run_roots') or [''])[0])" 2>/dev/null)
 log "start fa=$FA_VER hidden_so=$HIDDEN_SO class=$CLASS B=$B manifest=$MAN positive_root=${POS_ROOT:0:16}"
-BASE=("${PY%/*}/verity-vllm" commit --case "$ROLE" --workload "$WL" --committer native_collect_v2b --fast-copy --gpu-tree --openings 64
+BASE=("${PY%/*}/verity-vllm" commit --case "$ROLE" --workload "$WL" --committer native_collect_v2b --openings 64
       --pairs 1 --warmup 1 --max-num-seqs "$B" --engine-arg "gpu_memory_utilization=$GPU_UTIL" --engine-arg "max_model_len=$MML"
       --window-mb 256 --window-slots 8 --retain host --open-after-release --required-manifest "$MAN")
 reason_of() { python3 -c "import json;print(json.load(open('$1')).get('first_fail_reason') or '')" 2>/dev/null; }

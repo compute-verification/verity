@@ -70,7 +70,7 @@ end OkV
 namespace Replay
 
 /-- Zerocheck's residual round `i` before its squeeze, from `t₀`: its padded message absorbed. -/
-def ZcZ.pre (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (cs : Zc.Coins) (tr : Trace) (t₀ : Transcript) (i : ℕ) :
+def ZcZ.pre (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (cs : Zc.Challenges) (tr : Trace) (t₀ : Transcript) (i : ℕ) :
     Transcript :=
   ⟨(ZcZ.loopT lay h m cs tr t₀ i).rounds, (ZcZ.loopT lay h m cs tr t₀ i).k,
     pF (ZcZ.msg lay h tr (m - 6) (cs.r m) cs.z cs.ρ i).2
@@ -78,7 +78,7 @@ def ZcZ.pre (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (cs : Zc.Coins) (tr 
 
 /-- Lincheck's round `j` before its squeeze, from `t`: its padded message absorbed. -/
 def LcZ.pre (lay : Zk.PadLayout) (h : Array F128) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut)
-    (full : Array F128) (cs : Lc.Coins) (t : Transcript) (j : ℕ) : Transcript :=
+    (full : Array F128) (cs : Lc.Challenges) (t : Transcript) (j : ℕ) : Transcript :=
   ⟨(LcZ.loopT lay h c m tr zc full cs t j).rounds, (LcZ.loopT lay h c m tr zc full cs t j).k,
     pF (LcZ.msg lay h c m tr zc full cs j).2
       (pF (LcZ.msg lay h c m tr zc full cs j).1 (LcZ.loopT lay h c m tr zc full cs t j).pending)⟩
@@ -86,7 +86,7 @@ def LcZ.pre (lay : Zk.PadLayout) (h : Array F128) (c : CircuitFold) (m : ℕ) (t
 variable {R : Array Round} {lay : Zk.PadLayout} {h : Array F128} {m : ℕ} {tr : Trace}
 
 /-- **Rounds carrying the masked prover's zerocheck carry each of its squeezes**, at its position. -/
-theorem zc_carries {digest cap root : ByteArray} {zcs : Zc.Coins} {t₀ : Transcript} (hk₀ : t₀.k = t₀.rounds.size)
+theorem zc_carries {digest cap root : ByteArray} {zcs : Zc.Challenges} {t₀ : Transcript} (hk₀ : t₀.k = t₀.rounds.size)
     (hZ : Agrees R (ZcZ.tEnd lay h m digest cap root zcs tr t₀).rounds 0) :
     Carries R (ZcZ.t₁ digest cap root t₀).k (sent (ZcZ.t₁ digest cap root t₀) 2 6 zcs.c0) ∧
       Carries R (ZcZ.t₂ digest cap root zcs t₀).k (sent (ZcZ.t₂ digest cap root zcs t₀) 2 (m - 13) zcs.c1) ∧
@@ -112,7 +112,7 @@ theorem zc_carries {digest cap root : ByteArray} {zcs : Zc.Coins} {t₀ : Transc
 
 /-- **Rounds carrying the masked prover's lincheck carry each of its squeezes**, at its position, from any start `T₁`
 whose earlier rounds are recorded. -/
-theorem lc_carries {c : CircuitFold} {zc : ZcOut} {full : Array F128} {lcs : Lc.Coins} (T₁ : Transcript)
+theorem lc_carries {c : CircuitFold} {zc : ZcOut} {full : Array F128} {lcs : Lc.Challenges} (T₁ : Transcript)
     (hT₁k : T₁.k = T₁.rounds.size) (hR : Agrees R (LcZ.tEnd lay h c m tr zc full lcs T₁).rounds 0) :
     Carries R (Lc.t₁ T₁).k (sent (Lc.t₁ T₁) 1 1 lcs.ca) ∧
       Carries R (Lc.t₂ lcs T₁).k (sent (Lc.t₂ lcs T₁) 1 1 lcs.cb) ∧
@@ -138,7 +138,7 @@ lincheck rounds from `t₀` (`t₀.k` its position, every earlier round recorded
 `LcZ.proof`) under the cap `p.cap`, from `t₀`'s position and pending bytes, the verifier's masked replay returns under
 any hash, wherever the circuit fold at the prover's coins returns a vector of width `64`. -/
 theorem replayWith_ok (hs : Hashes V) (st : Setup) (hm : 14 ≤ st.m) (lay : Zk.PadLayout) (h : Array F128)
-    (p : Proof) (root : ByteArray) (zcs : Zc.Coins) (lcs : Lc.Coins) (full : Array F128) (tr : Trace)
+    (p : Proof) (root : ByteArray) (zcs : Zc.Challenges) (lcs : Lc.Challenges) (full : Array F128) (tr : Trace)
     (t₀ : Transcript) (hk₀ : t₀.k = t₀.rounds.size) {R : Array Round}
     (hR : Agrees R (LcZ.tEnd lay h st.fold st.m tr (Zc.out st.m zcs tr) full lcs
       (ZcZ.tEnd lay h st.m st.digest (flat p.cap) root zcs tr t₀)).rounds 0)
@@ -188,7 +188,7 @@ theorem replayWith_ok (hs : Hashes V) (st : Setup) (hm : 14 ≤ st.m) (lay : Zk.
     refine OkV.ok_then (sampleWith_sent_at hs _ (by exact hRu) (by exact hku)
       (by simp only [ZcZ.pre, hpu, hzr i hi, pF]) (cl i hi)) ?_
     refine OkV.pure ⟨_, rfl, rfl, rfl, rfl, ?_⟩
-    simp only [hb, pushes, Zc.Coins.ρ]
+    simp only [hb, pushes, Zc.Challenges.ρ]
   obtain ⟨hR₁, hk₁, hp₁, hb₁⟩ := h₁
   refine OkV.ok_then (Flock.RecAlgebra.absorbF_eq _ _) ?_
   refine OkV.ok_then (Flock.RecAlgebra.absorbF_eq _ _) ?_
@@ -210,7 +210,7 @@ theorem replayWith_ok (hs : Hashes V) (st : Setup) (hm : 14 ≤ st.m) (lay : Zk.
     refine OkV.ok_then (sampleWith_sent_at hs _ (by exact hRu) (by exact hku)
       (by simp only [LcZ.pre, hpu, hlr j hj, pF]) (cτ j hj)) ?_
     refine OkV.pure ⟨_, rfl, rfl, rfl, rfl, ?_⟩
-    simp only [hb, pushes, Lc.Coins.τ]
+    simp only [hb, pushes, Lc.Challenges.τ]
   obtain ⟨hR₂, hk₂, hp₂, hb₂⟩ := h₂
   have hfold : st.fold.folded (lcs.ca 0) (lcs.cb 0) (skipWeights (zcs.c2 0)) (b₁.2.extract 0 (st.kLog - 6)) b₂.2 =
       .ok comb := by

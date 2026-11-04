@@ -29,6 +29,8 @@ theorem run_size (h : Hash) (m : ByteArray) : (h.run m).size = h.bytes := by
   · exact sha256_size m
   · exact sha512_size m
 
+theorem bytes_sha512 : Hash.sha512.bytes = 64 := rfl
+
 theorem frameHash_size (h : Hash) (tag : String) (parts : List ByteArray) : (frameHash h tag parts).size = h.bytes :=
   run_size h _
 
@@ -128,11 +130,11 @@ theorem coinAccepts_iff (c : CoinCommitment) (o : CoinOpening) (label : String) 
   · have hr : rank < 2 := by rcases (idx_labels label rank).1 hl with ⟨_, h⟩ | ⟨_, h⟩ <;> omega
     rcases o with ⟨epoch, olabel, oafter, coin, salt, path⟩
     rcases path with _ | ⟨sib, _ | ⟨s2, rest⟩⟩
-    · simp [Domain.verify, hc, hh, depth2, checkPath, Hash.bytes]
+    · simp [Domain.verify, hc, hh, depth2, checkPath, bytes_sha512]
       repeat' split
       all_goals simp [pure, Except.pure]
     · dsimp only
-      simp only [Domain.verify, hc, hh, depth2, checkPath, Hash.bytes, coinRoot, leafValue, leaf_size, COIN_BYTES]
+      simp only [Domain.verify, hc, hh, depth2, checkPath, bytes_sha512, coinRoot, leafValue, leaf_size, COIN_BYTES]
       by_cases h1 : epoch = c.epoch
       case neg => simp [h1, pure, Except.pure]
       by_cases h2 : olabel = label
@@ -182,7 +184,7 @@ theorem coinRaises_iff (c : CoinCommitment) (o : CoinOpening) (label : String) (
     have hr2 : ¬ 2 ≤ rank := by rcases (idx_labels label rank).1 hl with ⟨_, h⟩ | ⟨_, h⟩ <;> omega
     rcases o with ⟨epoch, olabel, oafter, coin, salt, path⟩
     dsimp only
-    simp only [Domain.verify, hc, hh, depth2, checkPath, Hash.bytes, leafValue, leaf_size, COIN_BYTES]
+    simp only [Domain.verify, hc, hh, depth2, checkPath, bytes_sha512, leafValue, leaf_size, COIN_BYTES]
     by_cases h1 : epoch = c.epoch
     case neg => simp [h1, hm, pure, Except.pure, Except.isOk, Except.toBool]
     by_cases h2 : olabel = label
@@ -460,10 +462,27 @@ theorem foldl_frame (parts : List ByteArray) (acc : ByteArray) :
   | nil => simp [framed]
   | cons p ps ih => simp [ih, framed, List.append_assoc]
 
+theorem byte_eq (n s : Nat) (hs : s ≤ 56) : (UInt64.ofNat n >>> UInt64.ofNat s).toUInt8 = UInt8.ofNat (n >>> s) := by
+  apply UInt8.toNat_inj.mp
+  have h64 : (2 : Nat) ^ 64 = 2 ^ s * (2 ^ (64 - s - 8) * 2 ^ 8) := by
+    rw [← Nat.pow_add, ← Nat.pow_add]; congr 1; omega
+  simp only [UInt64.toNat_toUInt8, UInt64.toNat_shiftRight, UInt8.toNat_ofNat', UInt64.toNat_ofNat',
+    Nat.shiftRight_eq_div_pow]
+  rw [show s % 2 ^ 64 % 64 = s by omega, h64, Nat.mod_mul_right_div_self, Nat.mod_mul_left_mod]
+
+/-- frame-v3's length field (`Flock.be64` of the length as a `UInt64`) is `be8` of the length. -/
+theorem be64_eq_be8 (n : Nat) : be64 n.toUInt64 = be8 n := by
+  simp [be64, be8, List.range', ByteArray.push, ByteArray.emptyWithCapacity]
+  apply Array.ext (by simp; rfl)
+  intro i h1 h2
+  simp at h2
+  rcases i with _ | _ | _ | _ | _ | _ | _ | _ | i
+  all_goals first | omega | (simp; first | exact byte_eq n _ (by decide) | rfl)
+
 theorem frameBytes_data (tag : String) (parts : List ByteArray) :
-    (frameBytes tag parts).data.toList = FRAME.data.toList ++ (be32 tag.toUTF8.size.toUInt32).data.toList ++
+    (frameBytes tag parts).data.toList = FV3.FRAME.data.toList ++ (be32 tag.toUTF8.size.toUInt32).data.toList ++
       tag.toUTF8.data.toList ++ framed parts := by
-  simp [frameBytes, foldl_frame, List.append_assoc]
+  simp [frameBytes, FV3.input, be64_eq_be8, foldl_frame, List.append_assoc]
 
 theorem be8_length (x : Nat) : (be8 x).data.toList.length = 8 := by simp [be8_data]
 
@@ -602,8 +621,8 @@ theorem leafValue_binding (L L' : List ByteArray) (coin salt coin' salt' : ByteA
 
 theorem pathFrames_one (d : Domain) (rank : Nat) (leaf sib : ByteArray) :
     pathFrames d rank leaf [sib] =
-      [if rank % 2 == 0 then frameBytes "node" [d.id, natBytes 0, natBytes (rank / 2), leaf, sib]
-        else frameBytes "node" [d.id, natBytes 0, natBytes (rank / 2), sib, leaf]] := rfl
+      [if rank % 2 == 0 then frameBytes "node" [d.id, FV3.uint 0, FV3.uint (rank / 2), leaf, sib]
+        else frameBytes "node" [d.id, FV3.uint 0, FV3.uint (rank / 2), sib, leaf]] := rfl
 
 theorem coinBinding : CoinBinding := by
   intro c o o' label after after' h h'
@@ -618,7 +637,7 @@ theorem coinBinding : CoinBinding := by
   have hlf : ∀ v, ((coinDomain c.epoch).leaf rank SCHEME v).size = 64 := fun _ => frameHash_size ..
   have mem : ∀ (o : CoinOpening) x, x ∈ [COIN_TAG ++ o.coin, Hm96.Default512.saltPrefix ++ o.salt,
       Hm96.Default512.leafPrefix ++ Hm96.Default512.commitString (Sha512.hash (COIN_TAG ++ o.coin)) o.salt,
-      frameBytes "leaf" [(coinDomain c.epoch).id, natBytes rank, natBytes rank, SCHEME.toUTF8,
+      frameBytes "leaf" [(coinDomain c.epoch).id, FV3.uint rank, FV3.uint rank, SCHEME.toUTF8,
         leafValue o.coin o.salt]] → x ∈ coinHashed c.epoch rank o :=
     fun _ _ hx => List.mem_append_left _ hx
   have memN : ∀ (o : CoinOpening) sib x, o.path = [sib] →
@@ -644,7 +663,8 @@ theorem coinBinding : CoinBinding := by
         x = y ∨ Break (coinHashed c.epoch rank o) (coinHashed c.epoch rank o') :=
     fun x y hx hy e e' => step hx hy (e.trans e'.symm)
   by_cases hr : rank % 2 = 0
-  · simp only [coinRoot, hr, ite_true, Domain.node, frameHash, hd, Hash.run] at hroot hroot'
+  · simp only [coinRoot, hr, ite_true, Domain.node, Domain.fv3, FV3.Domain.node, FV3.Scheme.node, FV3.Scheme.hash,
+      FV3.hash, hd, Hash.scheme, FV3.Sha512.scheme] at hroot hroot'
     rcases node _ _ (memN o sib _ hp (by simp only [pathFrames_one, hr]; exact List.mem_singleton_self _))
       (memN o' sib' _ hp' (by simp only [pathFrames_one, hr]; exact List.mem_singleton_self _))
       hroot.symm hroot'.symm with e | b
@@ -652,7 +672,8 @@ theorem coinBinding : CoinBinding := by
     have e := frameBytes_sizes _ _ _ (by simp only [List.map_cons, List.map_nil, hlf, hsib, hsib']) e
     simp only [List.cons.injEq, and_true, true_and] at e
     exact leaves e.1
-  · simp only [coinRoot, hr, ite_false, Domain.node, frameHash, hd, Hash.run] at hroot hroot'
+  · simp only [coinRoot, hr, ite_false, Domain.node, Domain.fv3, FV3.Domain.node, FV3.Scheme.node, FV3.Scheme.hash,
+      FV3.hash, hd, Hash.scheme, FV3.Sha512.scheme] at hroot hroot'
     rcases node _ _
       (memN o sib _ hp (by simp only [pathFrames_one, hr, beq_iff_eq, ite_false]; exact List.mem_singleton_self _))
       (memN o' sib' _ hp' (by simp only [pathFrames_one, hr, beq_iff_eq, ite_false]; exact List.mem_singleton_self _))

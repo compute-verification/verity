@@ -17,7 +17,8 @@ once per check which key would close the gap (under *Unmonitored*: `needs KEY: w
 The checks (cloud_watch.toml holds every threshold, price and path):
 
 - **loops**: each loop post_start.sh starts leaves a success marker (a log line with its time, a JSON time field, or a file's
-  mtime). One with no success in twice its period is an anomaly.
+  mtime). One with no success in twice its period is an anomaly; a loop's `also_mention` user groups are named in it too, and
+  once it is `page_after_s` later still, a second anomaly names `page_user` (the agent watch's: the top coordinator's group, then the person who runs the project).
 - **r2**: an incremental ListObjectsV2 sweep of each bucket, at most `page_cap` pages (1000 keys, one class-A op) a pass, resumed
   from the last key, so a complete sweep's totals per top-level prefix come every few passes at a bounded cost. Growth between
   the last two sweeps above `max_gib_per_day`, or `mean_ratio` times the 7-day mean, is an anomaly naming the prefix that grew most;
@@ -177,8 +178,14 @@ def check_loops(ctx: Ctx, rep: Report) -> None:
         late = None if t is None else ctx.now - t
         if t is None or late > 2 * period:
             last = "no success line in its log" if t is None else f"last success {iso(t)}, {ago(late)} ago"
-            rep.findings.append(Finding(f"loop|{name}", f"*{name}* has not succeeded in twice its period ({ago(2 * period)}): {last}. "
-                                                         f"Marker `{loop['file']}`; started by {loop.get('started_by', 'post_start.sh')}."))
+            also = "".join(f"<!subteam^{g}> " for g in loop.get("also_mention", []))
+            rep.findings.append(Finding(f"loop|{name}", f"{also}*{name}* has not succeeded in twice its period ({ago(2 * period)}): "
+                                                         f"{last}. Marker `{loop['file']}`; started by "
+                                                         f"{loop.get('started_by', 'post_start.sh')}."))
+            if loop.get("page_user") and late is not None and late > 2 * period + float(loop["page_after_s"]):
+                rep.findings.append(Finding(f"loop|{name}|page", f"<@{loop['page_user']}> *{name}* has not succeeded for "
+                                                                  f"{ago(late)} (last success {iso(t)}), and the alert to its "
+                                                                  f"owners {ago(late - 2 * period)} ago didn't bring it back."))
         rep.lines.append(f"{name}: " + ("no success line" if t is None else f"ok {ago(max(late, 0))} ago" if late <= 2 * period
                                         else f"LATE, last success {ago(late)} ago"))
 

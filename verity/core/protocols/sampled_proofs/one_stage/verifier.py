@@ -12,9 +12,11 @@ or run, or that refuses an input (a form its decoders don't read), disagrees wit
 * `matches_public`, `check_draw`, `check_proved`, and the proof system's public-items rule (`check_public`) and hold on
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
 * `select`: the challenger's sample (`service.select_draw`, which the service passes in with the bytes of its coins that
-  flip read), compared whole with the number of bytes read; the sample of record is the Lean's;
-* `coins`: those bytes themselves, the challenger's coins, which only the Lean reads from the operating system
-  (`IO.getRandomBytes`, A3); there is no Python twin to compare, and a Lean that can't answer leaves no coins;
+  sample read), compared whole with the number of bytes read; the sample of record is the Lean's;
+* `coins`: the entropy a challenger flips its coins from (`challenger.LiveChallenger`, on the challenger's host), which
+  only the Lean reads from the operating system (`IO.getRandomBytes`, A3); there is no Python twin to compare, and a
+  Lean that can't answer leaves no coins. The verifier reads none of it: its samples read the challenger's coins from its
+  log (`run`'s `coins`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`), which `Stream.outcome`
   passes in with everything it read on the way: compared whole;
 * `audit_record`: the whole record, equal under `canonical_json`. The registered roots the record's `registered` check
@@ -170,9 +172,10 @@ COINS_MAX = 1 << 24
 
 def coins(n: int) -> bytes:
     """`n` bytes of the operating system's randomness, read by the Lean verifier (`IO.getRandomBytes`, A3's
-    `uniform/io-getrandombytes`): the challenger's coins (`service.Stream`'s default), which the Python never reads from
-    the operating system itself. Raises `LeanError` where the Lean can't run, refuses or answers other than `n` bytes:
-    no coins, so no sample and no salt."""
+    `uniform/io-getrandombytes`): a challenger's entropy (`challenger.LiveChallenger`'s, on its own host), which the
+    Python never reads from the operating system itself. No stream or verifier samples from it: they read the challenger's
+    coins from its log. Raises `LeanError` where the Lean can't run, refuses or answers other than `n` bytes: no
+    coins."""
     if not (type(n) is int and 0 <= n <= COINS_MAX):
         raise ValueError(f"coins are 0 to {COINS_MAX} bytes a request, not {n!r}")
     kind, body = _server.call("coins", n)
@@ -225,7 +228,8 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             registered: Mapping[str, int] | None, supplied: Mapping[str, Any] | None = None,
             pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
             schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-            held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None) -> dict[str, Any]:
+            held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None,
+            day: int | None = None, declarations: Sequence[Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`)."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
@@ -248,6 +252,9 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
         p["held"] = list(held)
     if outputs is not None:
         p["outputs"] = {v: dict(o) for v, o in outputs.items()}
+    if day is not None or declarations is not None:
+        p["day"] = day
+        p["declarations"] = None if declarations is None else [dict(d) for d in declarations]
     return p
 
 
@@ -258,14 +265,16 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None,
           binding: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
           window_root: str | None = None, held: Sequence[str] | None = None,
-          outputs: Mapping[str, Mapping[str, str]] | None = None) -> Verdict:
-    """`registration.check` (R1-R7) by the verifier."""
+          outputs: Mapping[str, Mapping[str, str]] | None = None, day: int | None = None,
+          declarations: Sequence[Mapping[str, Any]] | None = None) -> Verdict:
+    """`registration.check` (R1-R7) by the verifier, with R2's declared day when it passes `day` and `declarations`."""
     log = list(log)
     py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
-                 supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held)
+                 supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held,
+                 day=day, declarations=declarations)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
                                                   work_table, registered, supplied, pinned, binding, schemas,
-                                                  window_root, held, outputs),
+                                                  window_root, held, outputs, day, declarations),
                        "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"]}
@@ -341,16 +350,15 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         session_roots: Mapping[str, str] | None = None, *, supplied: Mapping[str, Any] | None = None,
         pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
         schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-        held: Sequence[str] | None = None, coin_source: str, coins: Mapping[str, Any] | None = None) -> Verdict:
+        held: Sequence[str] | None = None, coins: Mapping[str, Any] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies, `check_public`'s values and declared items, the receipt's challenger and place in
     the log, `select`'s rule, the bytes of the coins the sample read and the closure map, and `audit_record`'s arguments
-    with the sessions' roots whole. `coin_source` is where the sample's coins came from (`"verifier"` or `"challenger"`,
-    the stream's `coin_source`, required): from the challenger, the Lean also checks `coins`, their evidence
-    (`coins.coins_reason`'s), that the bytes the sample read are the coins the session the ledger opens for `window_root`
-    released after the registration's digest, and refuses the select step where they aren't or `coins` is missing
-    (code `coins`); from the verifier, `coins` must be None. Where the two differ,
+    with the sessions' roots whole. The verifier has no coins of its own: for a sample that read coins the Lean also checks
+    `coins`, their evidence (`coins.coins_reason`'s), that the bytes the sample read are the coins the session the ledger
+    opens for `window_root` released after the registration's digest, and refuses the select step where they aren't or
+    `coins` is missing (code `coins`); for one that read none, `coins` must be None. Where the two differ,
     or the Lean refuses a step, the verdict fails with `DISAGREE` alone."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     got = lean("run", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
@@ -363,7 +371,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
                        "proved_units": None if proved_units is None else list(proved_units), "instances": instances,
                        "served": None if served is None else list(served),
                        "session_roots": None if session_roots is None else dict(session_roots),
-                       "coin_source": coin_source, "coins": None if coins is None else dict(coins)})
+                       "coins": None if coins is None else dict(coins)})
     if isinstance(got.get("audit"), str):
         try:
             got = {**got, "audit": json.loads(got["audit"])}

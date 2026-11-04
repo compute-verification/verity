@@ -482,8 +482,8 @@ def test_python_constructors_match_parse():
     assert q == parse(CANONICAL) and query_id(q) == query_id(parse(CANONICAL))
 
 
-def test_legacy_query_untouched(gemm, attn):
+def test_query_names_calls_by_path(gemm):
     assert [c.id for c in query(gemm.circuit, "//GemmCoordinate")] == ["GemmCoordinate_v1{K=32}"] * 6
-    regs = query(attn.circuit, "//AttnBlock ! groups(DotBf16, 4)")
-    assert regs and all(r.size == 4 * regs[0].size // 4 for r in regs)
     assert query(gemm.circuit, "/")[0].size == gemm.gates
+    with pytest.raises(QueryError, match="takes a path"):
+        query(gemm.circuit, "//Gemm ! groups(GemmCoordinate, 2)")

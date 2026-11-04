@@ -2,10 +2,10 @@
 (nothing reaches a node otherwise). The gate's scan rehearsal (`vy-challenger-gate warden-rehearse --scan --prompts`,
 `benchmarks/live_challenger/auditor.py`) runs against the endpoint on the peer's loopback, by default `PEER`'s
 `verity-vllm serve-openai` on 127.0.0.1:18782, inside the scan's class (`scan_zk.W63`: at most KI = 1,024 prompt ids and
-KO = 64 ids out a request). The session's prompts are of `PROMPT_IDS` = 256 ids, since prompts of 1,024 reach the warden
-late against its D = 2.7 s (about 1.2 s of ingress and 1.2 to 4 s of committed prefill), and each is answered
-greedily with at most 64 ids: the base Llama-3.2-1B ends at its one EOS id, 128001, after 1 to 5 ids in 15 to 27% of
-requests. The network chain's run of record (`chain_record.sh`'s warden path) then proves the session.
+KO = 64 ids out a request). The session's prompts are of `PROMPT_IDS` = 256 ids, since prompts of 1,024 reach the
+network certifier late against its D = 2.7 s (about 1.2 s of ingress and 1.2 to 4 s of committed prefill), and each is
+answered greedily with at most 64 ids: the base Llama-3.2-1B ends at its one EOS id, 128001, after 1 to 5 ids in 15 to
+27% of requests. The network chain's run of record (`chain_record.sh`'s network certifier path) then proves the session.
 
     python served_session.py plan [FLAGS]
     python served_session.py session --out DIR [FLAGS] [--gate USER@HOST | --gate local] [--key KEY] [--keep DIR]
@@ -17,10 +17,11 @@ requests. The network chain's run of record (`chain_record.sh`'s warden path) th
         [--coins verifier | --coins gate --challenger-key RECORD [--coin-peer NAME] [--main FILE]] [CR_K=V ...]
 
 FLAGS: [--peer PEER] [--port 18782] [--prompts 64] [--requests 113] [--height 12] [--minutes M]
-       [--prompt-ids 256] [--tokens 64] [--vocab 128000]
+       [--prompt-ids 256] [--tokens 64] [--vocab 128000] [--scan-class w63|w63k4]
 
 ``--requests`` is by default `REQUESTS`, what h200-2's free disk seals by the endpoint's sizing; ``--tokens`` is each
-request's max_tokens, at most KO.
+request's max_tokens, at most KO. ``--scan-class`` asks the gate for another class's schedule (`auditor.SCAN_CLASSES`:
+w63k4, the window circuit's 4,32,4, at 5 egress cells), whose KI and KO then bound ``--prompt-ids`` and ``--tokens``.
 
 * **plan** prints the request's words, the minutes it takes (``--minutes`` by default `auditor.warden_minutes` of its
   requests and height plus `MARGIN`), the prompts' size, the endpoint's flags and each run's command. The request and
@@ -29,8 +30,9 @@ request's max_tokens, at most KO.
   400 requests at most.
 * **session** sends the request, waiting until ``--at`` (a UTC time) when given; launched more than `LATE_S` after it,
   it sends nothing (exit 3). The prompts are ``--prompts`` prompts of ``--prompt-ids`` ids below ``--vocab`` (Llama 3's
-  128,000 regular ids by default), sampled from a fresh secret seed this process alone holds: they are the prover's,
-  which the gate writes to its run's ``witness/`` alone, so they are written nowhere here.
+  128,000 regular ids by default), ``--prompt-ids LO:HI`` drawing each prompt's length in LO … HI (`prompts`),
+  sampled from a fresh secret seed this process alone holds: they are the prover's, which the gate writes to its run's
+  ``witness/`` alone, so they are written nowhere here.
   - ``--gate USER@HOST`` (the challenger's gate, `GATE`, under the lane's gate key ``--key``): the request with the
     prompts on its stdin, whose reply goes to KEEP/RUN/start.json alone (0600), ``status`` every `POLL_S` seconds
     until the run ends (``status.json``), then ``fetch``. The reply is the request's public fields and the run's
@@ -52,8 +54,8 @@ request's max_tokens, at most KO.
   does SIGTERM (exit 143): the files stay in the hold, out of the record. Exit 0 when the gate's check accepted the run,
   its rc (or 1) when it didn't, 2 when the gate refused the request.
 * **io** writes the kept warden run's certified I/O (`warden_chain.io`: each request's prompt and streamed ids as the
-  warden's cells carry them) and its deployment.json to KEEP/RUN/certified-io.json (0600), on `AUDITOR`, and prints only
-  its path and counts.
+  network certifier's cells carry them) and its deployment.json to KEEP/RUN/certified-io.json (0600), on `AUDITOR`, and
+  prints only its path and counts.
 * **endpoint** is the chain's endpoint step on the served node, where the endpoint's records stay: serve-openai's serve
   dir (``--from``, its ``--out``) holds requests.jsonl and advice_trace.jsonl, whose arrive, step and finish records
   carry each request's prompt length, sampling (its seed), rows and emitted ids. It copies the trace, windows.jsonl,
@@ -65,11 +67,12 @@ request's max_tokens, at most KO.
   its report.json and `RECORDS`. It writes nothing unless serve.json shows the endpoint served with `ENDPOINT`'s flags
   and no published file holds a request's prompt ids, a trace's arrive, step or finish record, or a request-valued
   field (`valued`).
-* **chain** runs chain_record.sh's warden path on the kept fetch (CR_PATH=warden, CR_GATES=KEEP/RUN/fetch.tar.gz), with
+* **chain** runs chain_record.sh's network certifier path on the kept fetch (CR_PATH=warden,
+  CR_GATES=KEEP/RUN/fetch.tar.gz), with
   the endpoint's report (``--endpoint``, ``endpoint``'s art), or a dry rehearsal's endpoint records (KEEP/RUN/endpoint
   by default) and the model's EOS ids (``--eos-ids``, the stand-in's ``--vocab``), N2's period drawn
   on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 link-windows (CR_TIE_WINDOWS)
-  at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every unit, or ``--draw K`` of them, on the
+  at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every proof block, or ``--draw K`` of them, on the
   verifier's own coins (``--coins verifier``, the default and the fallback) or on the gate's (``--coins gate``). It is
   refused unless the tree has the record's leak guard (``leak_guard.py``), which chain_record.sh runs on its
   way out, whatever the exit.
@@ -91,14 +94,14 @@ CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--pee
 listens within about 35 s. Its records stay in its serve dir on h200-2: requests.jsonl (prompt and streamed ids) and
 advice_trace.jsonl (prompt lengths, sampling, rows, emitted ids) are request values, and this runbook neither fetches
 nor publishes them. The endpoint step's advice (`verity-vllm advice`) needs both, so ``endpoint`` runs it there, on a
-copy whose requests.jsonl is rebuilt from `USERS` (each engine request's id and its warden user, ``{"engine_id",
-"user"}`` a line, in requests.jsonl's order) and the certified I/O, each request's prompt and streamed ids as the
-warden's cells carry them and its finish (`finish`): the endpoint's trace is checked against the certified I/O, not the
-prover's record of it. The certified I/O is ``io``'s file, written in KEEP on `AUDITOR`: it reaches the served node
-over a private route (``endpoint --io -`` on an ssh stdin, or a ``--send`` the step moves out of the run dir), never
-through a run's custody, and the served node already holds its values. The check then runs on the prover's node, and
-the chain's report says so (`chain_record.WARDEN_SERVED_STUBBED`). Its art (``--endpoint ART``, ``endpoint``'s
-``$OUT``) is report.json, windows.jsonl and serve.json.
+copy whose requests.jsonl is rebuilt from `USERS` (each engine request's id and its network certifier user,
+``{"engine_id", "user"}`` a line, in requests.jsonl's order) and the certified I/O, each request's prompt and streamed
+ids as the network certifier's cells carry them and its finish (`finish`): the endpoint's trace is checked against the
+certified I/O, not the prover's record of it. The certified I/O is ``io``'s file, written in KEEP on `AUDITOR`: it
+reaches the served node over a private route (``endpoint --io -`` on an ssh stdin, or a ``--send`` the step moves out of
+the run dir), never through a run's custody, and the served node already holds its values. The check then runs on the
+prover's node, and the chain's report says so (`chain_record.WARDEN_SERVED_STUBBED`). Its art (``--endpoint ART``,
+``endpoint``'s ``$OUT``) is report.json, windows.jsonl and serve.json.
 
 The runs (the lane's gate key is on `AUDITOR`, a CPU node; KEEP is the lane's gate directory there):
 
@@ -151,8 +154,8 @@ TREE = HERE.parents[1]
 sys.path.insert(0, str(HERE.parent / "live_challenger"))
 import auditor as A  # noqa: E402
 
-#: the scan's class (`scan_zk.W63`): at most KI prompt ids in, at most KO ids out a request
-KI, KO = 1024, 64
+#: the scan's class (`scan_zk.W63`, the gate's class of record): at most KI prompt ids in, at most KO ids out a request
+(_, KI), (_, KO) = A.scan_bounds()
 #: the session's prompt ids a request, which reach the warden in time (KI's don't)
 PROMPT_IDS = 256
 #: the session's requests: what `PEER`'s free disk seals, within 72 GB even if every request runs all KO ids
@@ -172,14 +175,15 @@ VOCAB = 128_000
 MARGIN = 3
 LATE_S, POLL_S = 60, 15
 SSH = ("ssh", "-T", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "ServerAliveInterval=15")
-#: the flags the endpoint serves the session with: the warden's id form, in its release order, each window sealed
-#: without the attention interiors (about 1 GB a request at 256 ids)
+#: the flags the endpoint serves the session with: the network certifier's id form, in its release order, each window
+#: sealed without the attention interiors (about 1 GB a request at 256 ids)
 ENDPOINT = "verity-vllm serve-openai --host 127.0.0.1 --port {port} --protocol ids --id-payload 503 --admit release-order " \
            "--scheme rows-sha512 --seal --retain-exclude hidden_m1"
 #: serve-openai's default --max-model-len, which the endpoint's flags name only past it
 CONTEXT = 512
-#: the endpoint's map from its engine requests to the warden's, in its serve dir: each engine request's engine_id and
-#: its warden user (null for a body that sent none), a line in requests.jsonl's order: requests.jsonl less its values
+#: the endpoint's map from its engine requests to the network certifier's, in its serve dir: each engine request's
+#: engine_id and its network certifier user (null for a body that sent none), a line in requests.jsonl's order:
+#: requests.jsonl less its values
 USERS = "request_users.jsonl"
 #: the endpoint's records its art publishes beside the endpoint step's report.json, from the serve dir
 RECORDS = ("windows.jsonl", "serve.json")
@@ -213,11 +217,40 @@ class Late(Refused):
     code = 3
 
 
-def prompts(n: int, ids: int, vocab: int, seed: bytes) -> list[list[int]]:
-    """`n` prompts of `ids` token ids below `vocab`: prompt j's id i is SHA-512(seed ‖ u32be j ‖ u32be i)'s first 8
-    bytes, mod `vocab`."""
-    return [[int.from_bytes(hashlib.sha512(seed + j.to_bytes(4, "big") + i.to_bytes(4, "big")).digest()[:8], "big")
-             % vocab for i in range(ids)] for j in range(n)]
+def span(text: str) -> int | tuple[int, int]:
+    """``--prompt-ids``: N, every prompt N ids, or LO:HI, each prompt's length drawn in LO … HI (`prompts`); N:N is
+    N."""
+    lo, colon, hi = text.partition(":")
+    try:
+        got = (int(lo), int(hi)) if colon else int(lo)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"N or LO:HI prompt ids, not {text!r}") from None
+    if colon and not 1 <= got[0] <= got[1]:
+        raise argparse.ArgumentTypeError(f"LO:HI with 1 <= LO <= HI, not {text!r}")
+    return got[0] if colon and got[0] == got[1] else got
+
+
+def bounds(ids: int | tuple[int, int]) -> tuple[int, int]:
+    """A prompt's least and most ids under ``--prompt-ids``."""
+    return ids if isinstance(ids, tuple) else (ids, ids)
+
+
+def label(ids: int | tuple[int, int]) -> str:
+    """``--prompt-ids``' words for `ids`."""
+    return f"{ids[0]}:{ids[1]}" if isinstance(ids, tuple) else str(ids)
+
+
+def _draw(seed: bytes, *at: int) -> int:
+    return int.from_bytes(hashlib.sha512(seed + b"".join(x.to_bytes(4, "big") for x in at)).digest()[:8], "big")
+
+
+def prompts(n: int, ids: int | tuple[int, int], vocab: int, seed: bytes) -> list[list[int]]:
+    """`n` prompts of token ids below `vocab`, of `ids` ids or, for ``(LO, HI)``, prompt j's length LO +
+    (SHA-512(seed ‖ "len" ‖ u32be j)'s first 8 bytes mod HI − LO + 1): prompt j's id i is SHA-512(seed ‖ u32be j ‖
+    u32be i)'s first 8 bytes, mod `vocab`."""
+    lo, hi = bounds(ids)
+    lens = [lo + _draw(seed + b"len", j) % (hi - lo + 1) if hi > lo else lo for j in range(n)]
+    return [[_draw(seed, j, i) % vocab for i in range(lens[j])] for j in range(n)]
 
 
 def words(a: argparse.Namespace) -> list[str]:
@@ -225,6 +258,7 @@ def words(a: argparse.Namespace) -> list[str]:
     return ["warden-rehearse", "--peer", a.peer, "--port", str(a.port), "--minutes", str(a.minutes),
             "--requests", str(a.requests), "--height", str(a.height), "--scan",
             *(["--bucket-ms", str(tick)] if tick is not None else []), "--prompts", "--tokens", str(a.tokens),
+            *(["--scan-class", a.scan_class] if getattr(a, "scan_class", None) else []),
             *(["--window-per-group"] if getattr(a, "window_per_group", False) else [])]
 
 
@@ -236,10 +270,12 @@ def scratch_host(d: Path, peer: str) -> A.Host:
 
 def check(a: argparse.Namespace, data: bytes) -> dict:
     """The request as this tree's gate records it, or Refused with the gate's reason or the scan class's."""
-    if not 1 <= a.prompt_ids <= KI:
-        raise Refused(f"--prompt-ids {a.prompt_ids}: the scan's class takes 1 to KI = {KI} prompt ids a request")
-    if not 1 <= a.tokens <= KO:
-        raise Refused(f"--tokens {a.tokens}: the scan's class answers 1 to KO = {KO} ids a request")
+    (_, ki), (_, ko) = A.scan_bounds(getattr(a, "scan_class", None))
+    lo, hi = bounds(a.prompt_ids)
+    if not 1 <= lo <= hi <= ki:
+        raise Refused(f"--prompt-ids {label(a.prompt_ids)}: the scan's class takes 1 to KI = {ki} prompt ids a request")
+    if not 1 <= a.tokens <= ko:
+        raise Refused(f"--tokens {a.tokens}: the scan's class answers 1 to KO = {ko} ids a request")
     if not 2 <= a.vocab <= 1 << A.WARDEN_PROMPT_ID_BITS:
         raise Refused(f"--vocab {a.vocab}: 2 to 2^{A.WARDEN_PROMPT_ID_BITS}, the scan's ids")
     with tempfile.TemporaryDirectory() as d:
@@ -255,8 +291,9 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
     req = check(a, data)
     session = (f"python3 benchmarks/network_traces/served_session.py session --out \"$OUT\" --peer {a.peer} "
                f"--port {a.port} --prompts {a.prompts} --requests {a.requests} --height {a.height} "
-               f"--minutes {a.minutes}" + (f" --at {a.at}" if a.at else ""))
-    ctx = a.prompt_ids + a.tokens
+               f"--minutes {a.minutes} --prompt-ids {label(a.prompt_ids)} --tokens {a.tokens} --vocab {a.vocab}"
+               + (f" --at {a.at}" if a.at else "") + (f" --scan-class {a.scan_class}" if a.scan_class else ""))
+    ctx = bounds(a.prompt_ids)[1] + a.tokens
     return {"request": shlex.join(words(a)), "minutes": a.minutes,
             "least_minutes": A.warden_minutes(a.requests, a.height),
             "prompts": req["prompts"], "prompts_bytes": len(data),
@@ -388,7 +425,7 @@ def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
     print(f"gate run {run} (local)", flush=True)
     endpoint = keep / run / "endpoint"
     endpoint.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    stub = [sys.executable, str(HERE / "demo_stub.py"), "serve", "--prompt-ids", str(a.prompt_ids), "--tokens",
+    stub = [sys.executable, str(HERE / "demo_stub.py"), "serve", "--prompt-ids", label(a.prompt_ids), "--tokens",
             str(a.tokens), "--vocab", str(a.vocab), "--out", str(endpoint)]
     A.certifier_run(host, run, pinned=pinned(), now=lambda: datetime.now(UTC),
                     tunnel_argv=getattr(a, "tunnel", None) or (lambda ssh, port: [*stub, "--port", str(port)]))
@@ -504,7 +541,7 @@ def input_file(path: Path, what: str) -> Path:
 
 
 def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
-    """The scan's sample arguments: none (every unit), ``--draw K`` on the verifier's coins, or K on the gate's, drawn on
+    """The scan's sample arguments: none (every proof block), ``--draw K`` on the verifier's coins, or K on the gate's, drawn on
     the auditor's side (`--coin-peer`)."""
     if a.coins == "verifier":
         return [] if a.draw is None else ["--draw", str(a.draw)]
@@ -528,8 +565,8 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
 
 
 def certified_io(fetch: Path) -> tuple[dict, dict]:
-    """The kept warden run's deployment.json and certified I/O (`warden_chain.io`), read in a scratch directory beside
-    the fetch."""
+    """The kept network certifier run's deployment.json and certified I/O (`warden_chain.io`), read in a scratch
+    directory beside the fetch."""
     sys.path[:0] = [str(TREE), str(HERE)]
     import warden_chain as WC
     with tempfile.TemporaryDirectory(dir=fetch.parent) as d:
@@ -720,9 +757,11 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--requests", type=int, default=REQUESTS)
         q.add_argument("--height", type=int, default=12)
         q.add_argument("--minutes", type=int)
-        q.add_argument("--prompt-ids", type=int, default=PROMPT_IDS)
+        q.add_argument("--prompt-ids", type=span, default=PROMPT_IDS, help="N, or LO:HI each prompt's length drawn in")
         q.add_argument("--tokens", type=int, default=KO)
         q.add_argument("--vocab", type=int, default=VOCAB)
+        q.add_argument("--scan-class", choices=sorted(A.SCAN_CLASSES),
+                       help="the gate's scan class (its class of record, w63, by default)")
         q.add_argument("--at")
     q = sub.choices["session"]
     q.add_argument("--out", type=Path, required=True)
@@ -746,7 +785,7 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("--keep", type=Path, default=KEEP)
     q.add_argument("--endpoint", help="endpoint's art (its report.json), or a dry rehearsal's endpoint records")
     q.add_argument("--eos-ids")
-    q.add_argument("--draw", type=int, help="the scan's K sampled proof blocks (every unit by default)")
+    q.add_argument("--draw", type=int, help="the scan's K sampled proof blocks (every proof block by default)")
     q.add_argument("--coins", choices=("verifier", "gate"), default="verifier")
     q.add_argument("--coin-peer", default=AUDITOR, help="with --coins gate: this node, as the gate's peers file names it")
     q.add_argument("--challenger-key", type=Path)
@@ -770,6 +809,9 @@ def main(argv: list[str] | None = None) -> int:
             a.minutes = A.warden_minutes(a.requests, a.height) + MARGIN
         if a.cmd == "session" and a.gate == "local" and a.vocab > 256:
             raise Refused(f"--gate local: the stand-in serves byte ids, --vocab at most 256, not {a.vocab}")
+        if a.cmd == "session" and a.gate == "local" and isinstance(a.prompt_ids, tuple):
+            raise Refused(f"--gate local: the stand-in serves prompts of one length, not --prompt-ids "
+                          f"{label(a.prompt_ids)}")
         ps = prompts(a.prompts, a.prompt_ids, a.vocab, secrets.token_bytes(32))
         data = json.dumps(ps, separators=(",", ":")).encode()
         doc = plan(a, data)

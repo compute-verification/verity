@@ -134,6 +134,36 @@ def test_store_layout_stages_and_loads_every_tensor(weights, monkeypatch):
     assert list(STO.blocks_of(STO.PAYLOAD, STO.PAYLOAD)) == [1]
 
 
+class IdentityKernels:
+    """`p2_v1.gpu.Kernels`' interface on the CPU with the identity decode: the staging decode over the store's rows,
+    without P2's cost or its library."""
+
+    def __init__(self, lib_dir, build_dir, params, prefix):
+        self.device = torch.device("cpu")
+
+    def decode(self, c, first=0):
+        return c.clone()
+
+    def raised(self):
+        return 0
+
+
+def test_store_stages_every_tensor_through_the_staging_decode(weights, monkeypatch):
+    monkeypatch.setattr(STO.p2_stage().gpu, "Kernels", IdentityKernels)
+    rows = torch.from_numpy(identity_store(weights, monkeypatch).rows)
+    s = P2Store(weights, bytes(24), rows, stage_lib="lib")
+    assert s.describe()["decode"].startswith("p2_stage")
+    names = [name for name, t in weights.t.items() if t.kind == "s8"]
+    for name in names:
+        want = torch.from_numpy(weights.codes(name))
+        dst = torch.empty(weights.dims[name], dtype=torch.int8)
+        assert s.stage(name, dst).data_ptr() == dst.data_ptr() and torch.equal(dst, want), name
+        assert torch.equal(s.stage(name), want), name
+    rows[STO.blocks_of(weights.base(names[0]), 1).start, 0] = 1
+    with pytest.raises(STO.Refused, match=names[0]):
+        s.stage(names[0])
+
+
 def test_cpu_s32_sum_is_exact_across_chunks(monkeypatch):
     from e2e_h200 import ops as O
     monkeypatch.setattr(O, "F64_CHUNK", 3 * 4096)

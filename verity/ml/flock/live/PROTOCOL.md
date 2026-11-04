@@ -34,7 +34,7 @@ Everything below is on the rep's live stream (`circuit/rep{r}`), in this order. 
 M0 and upstream Flock.
 
 ~~~text
-bind_statement      label flock-r1cs-v0 · bytes statement digest · bytes witness cap (68-lane level-0 tree)
+bind_statement      label flock-r1cs-v0 · bytes statement digest · bytes witness cap (level 0's tree, 68 lanes)
 zerocheck           label flock-zerocheck-v0
   M1                label verity-flock-zk-pads-v0 · bytes pads root (64)
                     squeeze r_skip (6) · squeeze r_outer (m-13)
@@ -397,7 +397,7 @@ by round, and a Goldreich–Kahan simulator rewinds once, to just after that com
 degenerate coins as they open (the Claim above).
 
 **The coin commitment** (`src/coin_tree.rs`, the keyed coin tree `coin-tree/hm96-sha512/v2`,
-`SessionConfig::coin_tree`; the verifier's side is `verity/ml/flock/verifier/PROTOCOL.md` §7.4).
+`SessionConfig::coin_tree`; the verifier's side is `Flock.CoinTree`).
 - The schedule is pinned in `Hello` (`coins: {block, nonce, rounds_log, scheme, streams}`): streams `session`,
   `circuit/rep0`, `circuit/rep1`; `2^9` rounds per stream; blocks of 512 coins. A RoPE rep uses 100 rounds and at most
   277 coins in one (level 0's queries); the session stream's round 0 is the two link points.

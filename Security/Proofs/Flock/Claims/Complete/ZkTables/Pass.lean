@@ -46,8 +46,8 @@ theorem claimPoints_congr_lt {m kLog : ℕ} (hm : 6 ≤ m) (hk : 6 ≤ kLog) {f 
 
 /-- **Round `1` after a masked rep's lincheck is the zerocheck's `m − 13` outer coins.** -/
 theorem lcZ_round1 {lay lay' : Zk.PadLayout} {hz hz' : Array F128} {c : CircuitFold} {m m' : ℕ}
-    {digest cap root : ByteArray} {cs : Zc.Coins} {tr tr' : Trace} {zc : ZcOut} {full : Array F128}
-    {cs' : Lc.Coins} (dom : ByteArray) :
+    {digest cap root : ByteArray} {cs : Zc.Challenges} {tr tr' : Trace} {zc : ZcOut} {full : Array F128}
+    {cs' : Lc.Challenges} (dom : ByteArray) :
     (LcZ.tEnd lay' hz' c m' tr' zc full cs'
       (ZcZ.tEnd lay hz m digest cap root cs tr (Transcript.init #[] dom))).rounds[1]!.n = m - 13 := by
   have hp : Prefix ((ZcZ.t₂ digest cap root cs (Transcript.init #[] dom)).rounds.push

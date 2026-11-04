@@ -1,7 +1,8 @@
 """No request value reaches a job's $OUT, which custody uploads. Each script's copy into $OUT runs on stand-in records,
 with a prompt planted in every file a request's values are in (the endpoint's requests.jsonl, advice_trace.jsonl,
-windows.jsonl and served rows, a rehearsal's plan.json, probe.json, io.json and out-witness.jsonl, a warden rehearsal's
-traffic.json and client.json): $OUT gets the public records and no file holding the prompt or a request's id fields."""
+windows.jsonl and served rows, a rehearsal's plan.json, probe.json, io.json and out-witness.jsonl, a network certifier
+rehearsal's traffic.json and client.json): $OUT gets the public records and no file holding the prompt or a request's id
+fields."""
 from __future__ import annotations
 
 import json
@@ -107,7 +108,7 @@ def test_n2_zk_publishes_the_runs_public_files_and_none_of_their_request_values(
     runs, out = tmp_path / "runs", tmp_path / "OUT"
     put(runs, REHEARSAL)
     (out / "runs").mkdir(parents=True)
-    got = run(block("n2_zk.sh", '(cd "$RUNS" && find', "  -print0"), RUNS=runs, OUT=out)
+    got = run(block("n2_zk.sh", '  (cd "$RUNS" && find', "    -print0"), RUNS=runs, OUT=out)
     assert got.returncode == 0, got.stderr
     assert published(out) == sorted(f"runs/{f}" for f in (
         "calibration.json", "honest/deployment.json", "honest/certified.jsonl", "honest/check.json"))

@@ -18,7 +18,7 @@ statement takes two inputs per window:
   certifier's record are not accepted with the faulty set `W_i` (`LeakAt`) with probability at most `e'_i`.
 
 From them, every audit accepts while the faulty sets hold `Fmax ≥ ln(1/δ)/q` units or more, or some window's leak
-relation fails, with probability at most `δ + Σ_i e_i + Σ_i e'_i` (the escapes multiply, `PooledWrongUnitsLe`'s
+relation fails, with probability at most `δ + Σ_i e_i + Σ_i e'_i` (the escapes multiply, `PooledIncorrectBlocksLe`'s
 argument with the escape as the input); and the secrets whose every window meets its relation, with the faulty sets
 under `Fmax` (`PooledGood`), number at most
 `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i` the
@@ -28,8 +28,8 @@ bits, so `b = 16`.
 
 The network certifier is one device on the server's uplink, as in `PeriodLeakAccepted`
 (`Definitions.NetworkCertifier.Tap`): one run of its code gives the cells the client receives (it functions as an
-active warden) and its record of them, the observations the audits read, so on every schedule its record format holds
-the client's cells read back from the record. Its one named assumption is `trusted-host`.
+active network certifier) and its record of them, the observations the audits read, so on every schedule its record
+format holds the client's cells read back from the record. Its one named assumption is `trusted-host`.
 
 The statement is conditional: it holds for any audits that satisfy the two inputs. Over a monitoring period of live
 audits they are `Flock.Guarantees.SampledKSLive` at each window's history (at `K₀ = |W_i|`) and the live

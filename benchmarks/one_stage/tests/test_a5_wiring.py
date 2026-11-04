@@ -15,6 +15,8 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.windows import interface as I
+from verity.ml.windows import rows as CS
+from verity.ml.windows import wiring as WI
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import a5
@@ -61,3 +63,21 @@ def test_a_unit_no_other_unit_writes_its_words_for_is_rewired_to_other_words_and
     win, neg = negatives(circuit, 1, [(GEMM, x0, w0), (WIDE, np.repeat(gemm(GEMM, x0, w0), UNITS, 0), bf16(UNITS, 32, 16))])
     assert [dict(m.out_rows)["o0"] for m in win.window.members] == [16] + [32] * UNITS
     assert neg["chunk-wired-to-another-unit (§16.13)"] == {"refused": True, "words": "other"}
+
+
+def test_a_shared_row_readers_flipped_wired_row_is_its_drawn_units_own():
+    """A shared-row reader (its body each port's table, then its units' refs) whose wired port is not its first, as the weights
+    tie's stream rows (``data`` a registered read, ``cv`` wired): the flipped string is its unit 0's ``cv`` row, so the
+    verifier's wiring check on that unit refuses it, and the honest wires hold."""
+    n, rng = 3, np.random.default_rng(7)
+    writer = CS.Member("W", (("a", 64),), (("o0", 64),), n)
+    reader = CS.Member("R", (("data", 64), ("cv", 64)), (("o0", 64),), n, base=n, tables=(("data", n), ("cv", n)),
+                       wired=(("cv", "o0", tuple(range(n))),))
+    strings = rng.integers(0, 256, (n, 2, WI.BC_BYTES), dtype=np.uint8)
+    refs = np.tile(np.arange(n, dtype="<u4")[:, None], (1, 3))
+    tables = [rng.integers(0, 256, (n, WI.BC_BYTES), dtype=np.uint8), strings[:, 1], rng.integers(0, 256, (n, WI.BC_BYTES), dtype=np.uint8)]
+    publics = {"W": strings.tobytes(), "R": b"".join(t.tobytes() for t in tables) + refs.tobytes()}
+    assert WI.check_drawn((writer, reader), publics, range(2 * n)) == {}
+    assert WI.string_at(reader, publics["R"], "cv", 0) == n * WI.BC_BYTES
+    neg = a5.wiring_negatives((writer, reader), publics)
+    assert neg["wired-row-not-its-writer-s-output (§16.13)"] == {"refused": True}

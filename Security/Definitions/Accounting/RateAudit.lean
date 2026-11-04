@@ -1,4 +1,5 @@
 import Definitions.Pous.Game.Prob
+import Definitions.Core.Draw
 
 /-!
 # The rate audit in the random-oracle model (trusted)
@@ -69,12 +70,17 @@ abbrev Store (N b : ℕ) : Type := Fin N → Bits b
 `j` and word contents `x`, an `h`-bit tag. -/
 abbrev Oracle (N b h ρ : ℕ) : Type := Bits ρ × Fin N × Bits b → Bits h
 
-/-- A window's coins: the certified stream, the oracle at the fresh seed and the `s` sampled words. -/
-abbrev Coins (N b h ρ s : ℕ) : Type := Bits ρ × Oracle N b h ρ × (Fin s → Fin N)
+/-- What a window's checks read besides its sample: the certified stream and the oracle at the fresh seed. -/
+abbrev Pub (N b h ρ : ℕ) : Type := Bits ρ × Oracle N b h ρ
+
+/-- A window's coins: the live coins (`Verity.Coins`) with the certified stream and the oracle at the fresh seed as
+their public part, and the `s` sampled words as their draw. -/
+abbrev Coins (N b h ρ s : ℕ) : Type := Verity.Coins (Pub N b h ρ) s N
 
 /-- The coins are finite, as a product: an instance of its own, because instance search with its default size does not
 reach the product's under `n` windows' function type. -/
-instance instFintypeCoins (N b h ρ s : ℕ) : Fintype (Coins N b h ρ s) := inferInstanceAs (Fintype (_ × _ × _))
+instance instFintypeCoins (N b h ρ s : ℕ) : Fintype (Coins N b h ρ s) :=
+  inferInstanceAs (Fintype ((_ × _) × (Fin s → Fin N)))
 
 /-- A chip program in the window, ending in a value of type `α`. Each step waits on one answer: a tag from the oracle,
 one bit of device memory at an address (ingress), one bit of a free side source at an address, one bit of the certified

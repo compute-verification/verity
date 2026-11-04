@@ -327,23 +327,23 @@ structure RootFinder (F : Type) [Field F] where
   cost_le : ∀ cs, cost cs ≤ bound.eval cs.length
 
 /-- A node of the search: the coefficients found so far, lowest first, and the table. -/
-abbrev Node (F : Type) := List F × List (List F)
+abbrev SearchNode (F : Type) := List F × List (List F)
 
 /-- A node's children: one per root `a` of its lowest nonzero row, with table `Q_v(X, XY + a)`. -/
-def expand {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) (D L : ℕ) (nd : Node F) : List (Node F) :=
+def expand {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) (D L : ℕ) (nd : SearchNode F) : List (SearchNode F) :=
   match lowRow D L nd.2 with
   | none => []
   | some v => (rf.run (nd.2.getD v [])).map fun a => (nd.1 ++ [a], childTab D L nd.2 v a)
 
 /-- `expand`'s field operations: a zero test per entry of the box, the root finder, and each child's table. -/
-def expandCost {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) (D L : ℕ) (nd : Node F) : ℕ :=
+def expandCost {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) (D L : ℕ) (nd : SearchNode F) : ℕ :=
   (D + 1) * (L + 1) + match lowRow D L nd.2 with
     | none => 0
     | some v => rf.cost (nd.2.getD v []) + (rf.run (nd.2.getD v [])).length * childCost D L
 
 /-- Level `d` of the search, from the root `([], T)`. -/
 def level {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) (D L : ℕ) (T : List (List F)) :
-    ℕ → List (Node F)
+    ℕ → List (SearchNode F)
   | 0 => [([], T)]
   | d + 1 => (level rf D L T d).flatMap (expand rf D L)
 
@@ -358,7 +358,7 @@ def rrCost {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) (D L : ℕ) 
   | d + 1 => rrCost rf D L T d + ((level rf D L T d).map (expandCost rf D L)).sum
 
 theorem mem_level_succ {F : Type} [Field F] [DecidableEq F] {rf : RootFinder F} {D L : ℕ} {T : List (List F)}
-    {d : ℕ} {nd : Node F} (hnd : nd ∈ level rf D L T d) {v : ℕ} (hv : lowRow D L nd.2 = some v) {a : F}
+    {d : ℕ} {nd : SearchNode F} (hnd : nd ∈ level rf D L T d) {v : ℕ} (hv : lowRow D L nd.2 = some v) {a : F}
     (ha : a ∈ rf.run (nd.2.getD v [])) : (nd.1 ++ [a], childTab D L nd.2 v a) ∈ level rf D L T (d + 1) := by
   rw [level, List.mem_flatMap]
   refine ⟨nd, hnd, ?_⟩
@@ -445,7 +445,7 @@ theorem sum_map_flatMap {α β : Type} (l : List α) (f : α → List β) (g : �
 
 
 /-- A node's potential: the degree of its lowest nonzero row's polynomial (`0` at a zero table). -/
-noncomputable def phi {F : Type} [Field F] [DecidableEq F] (D L : ℕ) (nd : Node F) : ℕ :=
+noncomputable def phi {F : Type} [Field F] [DecidableEq F] (D L : ℕ) (nd : SearchNode F) : ℕ :=
   match lowRow D L nd.2 with
   | none => 0
   | some v => (rowPolyY nd.2 v).natDegree

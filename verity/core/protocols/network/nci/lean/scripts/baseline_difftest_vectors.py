@@ -16,13 +16,15 @@ three records before the run's own, so the run is the deployment's first in a qu
 Each parameter holding a θ node is registered in the run's record under the root its provenance cites: the log's first
 record's registered value of the same root and shape (one entry, when the run's record is that first record and the
 value is the parameter's name). The records carry decoy values and ports. Just under half the cases are broken in one
-way, each refused with one of `CODES`; an entry of another kind (`output` among them) is `theta-provenance`, and one
-citing a later record that registers the same value under the same root is `theta-not-at-deployment-start`. The data
-ends with `pinned()`: on a declaration worked by hand, two cases the check accepts (the first record cited from the
-deployment's first run and from its third), one negative per code, an entry of the `output` kind θ no longer takes
-(`theta-provenance`), `theta-not-registered`, and two of a field of another JSON type than the string or null the check
-compares it with (`TYPED`): the cited entry's root a number (`theta-root`) and a record's `previous` neither its
-predecessor's digest nor null (`trusted`).
+way, each refused with one of `CODES`; an entry of another kind (`output` among them) is `theta-provenance`, one citing a
+later record that registers the same value under the same root is `theta-not-at-deployment-start`, and a run's own
+record naming another Program is `run-program`, whatever θ is. The data ends with `pinned()`: on a declaration worked by
+hand, two cases the check accepts (the first record cited from the deployment's first run and from its third), one
+negative per code, an entry of the `output` kind θ no longer takes (`theta-provenance`), `theta-not-registered`, two of
+a field of another JSON type than the string or null the check compares it with (`TYPED`): the cited entry's root a
+number (`theta-root`) and a record's `previous` neither its predecessor's digest nor null (`trusted`); then two served
+windows with θ empty (`windows()`), each accepted on its own log, and each one's log with the other's Program, refused
+`run-program`.
 """
 from __future__ import annotations
 
@@ -53,8 +55,8 @@ vectors = _load("difftest_vectors")
 reference = vectors.reference
 
 COUNT = 1200
-CODES = ["theta-provenance", "trusted", "theta-record-unknown", "theta-not-at-deployment-start", "theta-root",
-         "theta-unbound", "theta-width"]
+CODES = ["theta-provenance", "trusted", "run-program", "theta-record-unknown", "theta-not-at-deployment-start",
+         "theta-root", "theta-unbound", "theta-width"]
 PROTOCOL = "verity/sampled-proofs/one-stage/v1"
 # pinned breaks of a field's JSON type, and the code each is refused with
 TYPED = [("root-type", "theta-root"), ("previous-type", "trusted")]
@@ -85,6 +87,31 @@ def hand() -> tuple[str, list]:
     params = (("a", Value(8)), ("b", Value(16)), ("c", Array(4, Value(32))))
     fn = bind(CompositeDefinition("HandBase", 1, (), lambda S: (params, Value(1)), body, register=False))
     text = codec.canonical_json(codec.encode_program(Program(fn, registered=("a", "c")))).decode()
+    return text, [[n, t.to_json()] for n, t in params]
+
+
+#: two served windows by label, as (requests, steps): one serves request 3 for one step, the other requests 3 and 7 for two
+WINDOWS = {"one request": ((3,), 1), "two requests": ((3, 7), 2)}
+
+
+def window(requests: tuple[int, ...], steps: int) -> tuple[str, list]:
+    """A served window's Program worked by hand: `tokens`, one Value<16> per request (bound per run), and
+    `w: Array<steps, Value<16>>` (registered); each step maps every token through f(token, w[step]), and the last step's
+    tokens fold into one Value<16>."""
+    f = vectors.prim((16, 16), 16)
+    params = (("tokens", Array(len(requests), Value(16))), ("w", Array(steps, Value(16))))
+
+    def body(B, S, tokens, w):
+        xs = [tokens[r] for r in range(len(requests))]
+        for s in range(steps):
+            xs = [B.call(f, x, w[s]) for x in xs]
+        out = xs[0]
+        for x in xs[1:]:
+            out = B.call(f, out, x)
+        return out
+    name = f"Window{'r'.join(map(str, requests))}s{steps}"
+    fn = bind(CompositeDefinition(name, 1, (), lambda S: (params, Value(16)), body, register=False))
+    text = codec.canonical_json(codec.encode_program(Program(fn, registered=("w",)))).decode()
     return text, [[n, t.to_json()] for n, t in params]
 
 
@@ -151,7 +178,7 @@ def build(rng, text: str, params: list, theta_pick, bad: str | None, run_at: int
     entries = [cited[own[k]] for k in theta]
     target = rng.randrange(len(theta)) if theta else None
     i_t = own[theta[target]] if theta else None
-    later = None
+    later = unbound = None
     # breaks of a record's contents come before the chain, so the chain still holds
     if bad == "theta-width" and theta:
         c = cited[i_t]
@@ -171,17 +198,19 @@ def build(rng, text: str, params: list, theta_pick, bad: str | None, run_at: int
         later = rng.randrange(1, run_at) if run_at > 1 else rng.randrange(1, len(recs))
         if not any(e["value"] == c["value"] and e["root"] == c["root"] for e in recs[later]["registered"]):
             recs[later]["registered"].append(_entry(c["value"], c["root"], c["rows"], c["words"], c["bits"], _hex(rng)))
+    elif bad == "run-program":
+        # the run's own record another Program's, as one window's record beside another window's Program is
+        recs[run_at]["program"] = _hex(rng)
     elif bad == "theta-unbound" and theta:
         # when the run's record is the first and registers the cited value under the parameter's own name, the run's
-        # entry is the cited one, and only the program can be wrong without breaking theta-root first
+        # entry is the cited one, and only the parameter's name in the trusted input can be wrong without breaking
+        # theta-root first
         shared = run_at == 0 and cited[i_t]["value"] == params[i_t][0]
-        how = "program" if shared else rng.choice(["root", "program", "missing"])
+        unbound = "rename" if shared else rng.choice(["root", "missing", "rename"])
         mine = [e for e in recs[run_at]["registered"] if e["value"] == params[i_t][0]]
-        if how == "root":
+        if unbound == "root":
             mine[-1]["root"] = _hex(rng)
-        elif how == "program":
-            recs[run_at]["program"] = _hex(rng)
-        else:
+        elif unbound == "missing":
             recs[run_at]["registered"] = [e for e in recs[run_at]["registered"] if e["value"] != params[i_t][0]]
     elif bad == "theta-root" and theta and rng.random() < 0.5:
         c = cited[i_t]
@@ -236,6 +265,9 @@ def build(rng, text: str, params: list, theta_pick, bad: str | None, run_at: int
         # the first record's `previous` the empty string rather than null, or a later one's its digest in a list
         n = rng.randrange(len(recs))
         trusted["log"][n]["previous"] = "" if n == 0 else [trusted["log"][n]["previous"]]
+    elif bad == "theta-unbound" and unbound == "rename":
+        # the trusted input names the target's parameter otherwise, so the run's record registers no entry for it
+        trusted["params"][i_t][0] = f"{params[i_t][0]}'"
     elif bad == "theta-record-unknown" and theta:
         p["registration"] = _hex(rng)
     elif bad == "theta-not-at-deployment-start" and later is not None:
@@ -289,7 +321,25 @@ def pinned() -> list[dict]:
                 break
         else:
             raise AssertionError(f"no seed gives a pinned {bad} case refused {code}")
-    return out
+    return out + windows()
+
+
+def windows() -> list[dict]:
+    """The two windows of `WINDOWS`, each its deployment's first run with θ empty and accepted on its own log, then each
+    one's log with the other's Program, each refused `run-program`. With θ empty no entry reads the run's record, so its
+    `program` is all that ties the log to the Program checked: without it, `verity/nci/v1` would answer one window's
+    registration, the digest one-stage commits to, with the other's Program."""
+    made = {}
+    for seed, (w, (requests, steps)) in enumerate(WINDOWS.items()):
+        text, params = window(requests, steps)
+        made[w] = build(random.Random(30_000 + seed), text, params, lambda c: [], None, 0) | {"window": w}
+    one, two = (made[w]["case"] for w in WINDOWS)
+
+    def swap(inst: dict, tr: dict, w: str) -> dict:
+        return {"case": copy.deepcopy({"instance": inst, "trusted": tr}), "malformed": "run-program", "theta": 0,
+                "window": w}
+    return [*made.values(), swap(two["instance"], one["trusted"], "one request's record, two requests' Program"),
+            swap(one["instance"], two["trusted"], "two requests' record, one request's Program")]
 
 
 def total(count: int = COUNT) -> int:

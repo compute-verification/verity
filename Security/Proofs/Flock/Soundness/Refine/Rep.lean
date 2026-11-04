@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.Refine.Basis
 import Flock.Verify
 
 /-!
-# One rep refines the model's (PROTOCOL.md §9–§14)
+# One rep refines the model's (`Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`)
 
 `rep_refines`: when the executable's `verifyRep` accepts rep `r`, the record carries the rep's stream and the proof
 decodes. Then, at the proof's openings, the model's compiled rep `repC`, played with the proof's messages (`repMsgs`) and
@@ -23,7 +23,7 @@ open Flock FlockLevel3 Game Transcript Model Accounting
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- The shape `verifyRep` decodes a proof with (§8.3), `nExtra` the statement's extra claims. -/
+/-- The shape `verifyRep` decodes a proof with (`Flock.Proof`), `nExtra` the statement's extra claims. -/
 def shapeOf (st : Setup) (sch : Flock.Schedule) (nExtra : ℕ) : Shape :=
   { m := st.m, kLog := st.kLog, claims := 2 + nExtra, sched := sch, hashLen := st.merkle.digestLen,
     saltLen := if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes }
@@ -70,7 +70,7 @@ theorem merkleCheck_cap {ms : MerkleScheme} {cap : Array ByteArray} {c d : ℕ} 
   obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hb)
   exact h₂.1 i hi
 
-/-- **The table's cap** (§14): an accepting Ligerito run's level-0 cap has `2^c` entries of the digest width, since its
+/-- **The table's cap** (`Flock.Merkle`): an accepting Ligerito run's level-0 cap has `2^c` entries of the digest width, since its
 level-0 queries passed their Merkle check. -/
 theorem ligerito_cap (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray) (p : LigeritoProof)
     (basisAt : Array F256 → ℕ → Array F256) (hq : (sch.levels.getD 0 default).q ≠ 0) {t t' : Transcript}

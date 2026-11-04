@@ -960,7 +960,9 @@ def cmd_push(argv: list[str]) -> int:
     artifact it references, and the assertions about the attempt, its derivation and those artifacts (`labels_sync.push_targets`; an
     explicit art: id pushes its own assertions) -- an attempt whose assertions did not all land is reported NOT preserved.  `--pending`
     pushes every local artifact without a verified remote replica, every attempt the remote lacks, and every local assertion the remote
-    lacks.  One object's failure is reported, the batch continues; exit 1 if anything is not PRESERVED."""
+    lacks.  An artifact withdrawn from the shared store (`research data withdraw`, its `withdrawn` label pulled from the remote first)
+    is refused, so a machine's copy never goes back up.  One object's failure is reported, the batch continues; exit 1 if anything
+    is not PRESERVED."""
     ap = _ap("push")
     ap.add_argument("targets", nargs="*", help="art:<hex> or run ids")
     ap.add_argument("--pending", action="store_true", help="everything local that the remote does not verifiably hold")
@@ -1017,6 +1019,8 @@ def cmd_push(argv: list[str]) -> int:
             print(f"\r  {p['id'][:16]}… {p['done']}/{p['objects'] - 1} blobs  {p['done'] / max(p['seconds'], 1e-9):.1f} obj/s", end="", file=sys.stderr, flush=True)
 
     notes_seen: set[str] = set()
+    if arts:                                                       # a withdrawal made elsewhere: its label first, so push refuses
+        LS.pull_targets(st, list(dict.fromkeys(arts)), jobs=ns.jobs)
     for a in dict.fromkeys(arts):
         try:
             rep = st.push(a, preserve=True, jobs=ns.jobs, verify=ns.verify, progress=heartbeat)

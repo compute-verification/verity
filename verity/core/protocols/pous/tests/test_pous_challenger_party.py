@@ -49,21 +49,21 @@ def _in_process() -> tuple[period.Run, run.Point, run.Setup, list[bytes], bytes]
 
 
 def _split(point: run.Point, root: bytes, respond, signer: mc.Signer, warmups: int = CP.WARMUPS,
-           draw=os.urandom) -> tuple[bytes, run.Session, int]:
+           draw=os.urandom) -> tuple[bytes, run.ChallengerRecord, int]:
     """One session with the challenger's side in a thread and the prover's here, over a socket pair."""
     a, b = socket.socketpair()
     got: dict = {}
 
     def side() -> None:
-        with a, a.makefile("rwb") as f:
-            got["session"] = CP.serve(f, CP.request_of("n0", point, root), signer=signer, log=ts.session_log(),
-                                      coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock(), warmups=warmups,
-                                      draw=draw)
+        with a:
+            got["session"] = CP.serve(CP.Polled(a), CP.request_of("n0", point, root), signer=signer,
+                                      log=ts.session_log(), coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock(),
+                                      warmups=warmups, draw=draw)
 
     t = threading.Thread(target=side)
     t.start()
-    with b, b.makefile("rwb") as f:
-        rounds = CP.answer(f, point.params.block_bytes, respond)
+    with b:
+        rounds = CP.answer(CP.Polled(b), point.params.block_bytes, respond)
     t.join()
     return *got["session"], rounds
 
@@ -72,7 +72,7 @@ def test_the_split_session_is_the_periods() -> None:
     p, point, published, blocks, digests = _in_process()
     signer = ts.TestSigner(b"challenger host", 2)
     sid, session, rounds = _split(point, published.root, lambda i: blocks[i], signer)
-    mine = run.Session.from_json(json.loads(bytes.fromhex(p.case["evidence"]))["session"])
+    mine = run.ChallengerRecord.from_json(json.loads(bytes.fromhex(p.case["evidence"]))["session"])
     assert sid.hex() == p.case["params"]["session_id"]
     assert [r.index for r in session.signed.rounds] == [r.index for r in mine.signed.rounds]
     assert rounds == CP.WARMUPS + len(session.signed.rounds) == CP.WARMUPS + point.k
@@ -145,6 +145,40 @@ def test_the_runtime_runs_the_same_parties_to_the_same_session() -> None:
     assert r.outcomes[CP.PROVER] == {"outcome": rounds, "refused": None}
 
 
+class Script:
+    """A socket whose reads follow `steps`: bytes, or None while nothing has arrived. It records whether each read
+    polled (`MSG_DONTWAIT`) or blocked."""
+
+    def __init__(self, *steps: bytes | None) -> None:
+        self.steps, self.reads = list(steps), []
+
+    def recv_into(self, view, n: int, flags: int = 0) -> int:
+        polled = bool(flags & socket.MSG_DONTWAIT)
+        self.reads.append("poll" if polled else "block")
+        step = self.steps.pop(0)
+        if step is None:
+            assert polled, "a blocking read waits for bytes"
+            raise BlockingIOError
+        view[:len(step)] = step
+        return len(step)
+
+
+def test_a_polled_read_polls_for_its_budget_then_blocks_and_gathers_the_frame() -> None:
+    """Each wait polls until `spin_ns` has passed on the side's clock since it began, then blocks; any bytes start the
+    next wait afresh, and the frame comes back whole."""
+    sock = Script(None, None, None, b"abc", b"de", None, None, b"fgh")
+    clock = iter([0, 5, 10, 20, 30]).__next__
+    assert CP.Polled(sock, spin_ns=10, clock=clock).read(8) == b"abcdefgh"
+    assert sock.reads == ["poll", "poll", "poll", "block", "poll", "poll", "poll", "block"]
+
+
+def test_a_polled_read_the_peer_ends_early_is_short_and_refused() -> None:
+    sock = Script(bytes(3), None, b"")
+    clock = iter([0]).__next__
+    with pytest.raises(ConnectionError, match="closed after 3 of 8 bytes"):
+        CP.Frames().read(CP.Polled(sock, spin_ns=10, clock=clock))
+
+
 def test_a_short_answer_is_refused_by_the_prover() -> None:
     a, b = socket.socketpair()
     with a, b, a.makefile("rwb") as fa, b.makefile("rwb") as fb:
@@ -174,7 +208,7 @@ def _salt_log(tmp_path) -> mc.SaltLog:
 
 
 def _audit_session(point: run.Point, published: run.Setup, respond, signer: mc.Signer, salts: mc.SaltLog,
-                   log: mc.SessionLog) -> tuple[bytes, run.Session]:
+                   log: mc.SessionLog) -> tuple[bytes, run.ChallengerRecord]:
     """One session of the audit `AUDIT` on `published`, the challenger's side in a thread, the prover's here."""
     a, b = socket.socketpair()
     got: dict = {}

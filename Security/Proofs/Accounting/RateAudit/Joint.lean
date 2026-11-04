@@ -26,9 +26,9 @@ theorem RateOfAudit : Accounting.Guarantees.RateOfAudit := by
   · have h1 := real.compute_le x y s'
     have h2 := r.work_add_othersWork p (x, y, s')
     omega
-  · have h1 := Chip.card_addrs_le ((real.dev (x, s')).world y.1 y.2.1 y.2.2.1)
+  · have h1 := Chip.card_addrs_le ((real.dev (x, s')).world y.1 y.2.1.1 y.2.1.2)
       ((real.dev (x, s')).chip ((real.dev (x, s')).state y.1))
-    have h3 : (real.dev (x, s')).footprint y.1 y.2.1 y.2.2.1 * cEnc ≤ r.read (x, y, s') * cEnc :=
+    have h3 : (real.dev (x, s')).footprint y.1 y.2.1.1 y.2.1.2 * cEnc ≤ r.read (x, y, s') * cEnc :=
       Nat.mul_le_mul_right _ (h1.trans (real.ingress_le x y s'))
     exact lt_of_le_of_lt h3 hread
 

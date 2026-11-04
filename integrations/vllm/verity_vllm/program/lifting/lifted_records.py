@@ -1,14 +1,12 @@
 """What a record says about a lifted Program (`registry.lifted`): the post-EOS lag a run header ATTESTS and the lag a
-Build DECLARED (read through GP-01's one rule, `program.workload.eos_lag_rows_declared`), and the (query, use) documents of a
-lifted VU-partition use (`query.query_artifact`)."""
+Build DECLARED (read through GP-01's one rule, `program.workload.eos_lag_rows_declared`)."""
 
 from __future__ import annotations
 
 import re
 from typing import Any
 
-from verity.ml.definitions.registry.lifted import (LIFTED_RULES_VERSION, N_OUT_HISTOGRAM_MAX_SETS, USE_KIND_LIFTED, W_MAX, W_MAX_LIFTED,
-                                                 W_MAX_LIFTED_STATUS, check_lag, width_summary_a44)
+from verity.ml.definitions.registry.lifted import check_lag
 from verity_vllm.program.workload import eos_lag_rows_declared
 
 
@@ -70,21 +68,3 @@ def declared_lag_of_row(workload_program: dict | None) -> tuple[int | None, str 
     if len({v for v, _ in found}) > 1:  # one artifact, two values: not a declaration (lag.value == stop_rule.lag == eos_lag_rows)
         raise ValueError("the Build's declaration disagrees with itself: " + ", ".join(f"{f}={v}" for v, f in found) + " — refused by name")
     return found[0]
-
-
-def lifted_vu_use_document(query: Any, program: Any, verdict: Any, *, w_max_lifted: int = W_MAX_LIFTED, utc: str | None = None,
-                           fam: Any = None, histogram_max_sets: int = N_OUT_HISTOGRAM_MAX_SETS) -> tuple[dict, dict]:
-    """The (query document, use document) of a LIFTED VU-partition use — `query_artifact.vu_use_document` with the use
-    configuration `{"kind": "vu-partition-lifted", "w_max": w_max_lifted, "rules_version": "lifted-v1", "w_max_active_reference": 32}`
-    and a `width_summary` {w_max_lifted, max_seen (the validator's), n_out histogram (the boundary
-    module's; `fam` = the evaluated family, else the query is evaluated here)}.  The query document is unchanged in shape (no kind, no
-    w_max: it binds the query to Lift(P)'s digest).  `gates.gate_G8` refuses this document by name (`use.kind != "vu-partition"`): a
-    lifted verdict never reads as an active-reference G8 pass."""
-    from verity_vllm.query import query_artifact as QA
-    from verity.ml.circuits.query_ast import evaluate
-    qdoc, use = QA.vu_use_document(query, program, verdict, w_max=int(w_max_lifted), utc=utc)
-    use["use"] = {"kind": USE_KIND_LIFTED, "w_max": int(w_max_lifted), "rules_version": LIFTED_RULES_VERSION,
-                  "w_max_active_reference": W_MAX, "w_max_lifted_status": W_MAX_LIFTED_STATUS}
-    fam = evaluate(program, query) if fam is None else fam
-    use["width_summary"] = width_summary_a44(program, fam, getattr(verdict, "width", verdict), w_max_lifted=w_max_lifted, histogram_max_sets=histogram_max_sets)
-    return qdoc, use

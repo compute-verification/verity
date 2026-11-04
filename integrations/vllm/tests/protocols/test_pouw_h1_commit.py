@@ -217,16 +217,16 @@ def _ids(run, s):
     return out
 
 
-class _Laid(dict):
-    """`Served`'s open step tables (``_a``, each call's block by call) laid out by ``lay`` when a step's table of K is
+def _laid(served, lay):
+    """``served``'s step tables of K (`Served._a_rows`, each call's block in call order) laid out by ``lay`` when one is
     taken whole: the rows the window registers and hands the tap as its table, the Commit's own rows untouched."""
+    whole = served._a_rows
 
-    def __init__(self, lay):
-        super().__init__()
-        self.lay = lay
+    def laid(call, value, mine, codes, scales):
+        table = whole(call, value, mine, codes, scales)
+        return None if table is None else np.concatenate(lay(np.split(table, len(mine))))
 
-    def pop(self, key, *default):
-        return dict(enumerate(self.lay([b for _c, b in sorted(super().pop(key, *default).items())])))
+    served._a_rows = laid
 
 
 #: the server's step-input port's T (`served_record.StepInputPort`: whole 4096-byte chunks of i64 ids)
@@ -278,7 +278,7 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
         port = next(s for s in com.sources if isinstance(s, StepInputPort))
     served = SV.Served(PH.TILE, _unit(), window=key, tap=tap)
     if lay is not None:
-        served._a = _Laid(lay)
+        _laid(served, lay)
     kw = {"transcript_dir": str(tmp_path / "w"), "served": served}
     settings = (_remote(rows=ROWS, steps=STEPS, **kw) if coins is None
                 else coins(SimpleNamespace(runner=Runner()), {**kw, "admission": "round-0"}))
@@ -434,6 +434,51 @@ def test_a_step_table_with_a_calls_rows_shifted_by_a_call_is_refused_by_core(tmp
     a_link, arow = _core(record, run)
     refused = a_link if at == "a-link" else arow
     assert (at == "a-link" or a_link is None) and refused[0] == at and refused[1].startswith(why), (a_link, arow)
+
+
+@pytest.mark.parametrize("k", [64, 8192])
+def test_the_taps_check_of_a_step_table_is_the_whole_tables_comparison(k):
+    """`commit._theirs`, which builds each call's words only to its own rows and requires zero words past them, decides as
+    comparing the whole table of the Commit's rows (each block padded to M) does, over Commit rows fewer or more than the
+    window's, rows of zero codes and scale 0 standing for padding, an edited scale or padding word, empty calls, blocks
+    swapped and a table a block short."""
+    served, call = SimpleNamespace(m=8), SimpleNamespace(k=k)
+    served.a_words = lambda call, codes, scales, out=None, slots=None: SV.Served.a_words(served, call, codes, scales, out,
+                                                                                          slots)
+    rng = np.random.default_rng(k)
+
+    def rows(m, zero=0):
+        codes, scales = rng.integers(-127, 128, (m, k), dtype=np.int8), (rng.random(m) + 0.5).astype("<f4")
+        codes[m - zero:], scales[m - zero:] = 0, 0
+        return codes, scales
+
+    def table(held):
+        return np.concatenate([served.a_words(call, c, s) for c, s in held])
+
+    def poke(t, at):
+        t = t.copy()
+        t[at] += 1
+        return t
+
+    a, b, three = rows(5), rows(4), rows(3)
+    n = Wt.chunks(k)
+    cases = {
+        "honest": ([a, b], table([a, b]), True),
+        "window-more": ([(a[0][:3], a[1][:3]), b], table([a, b]), False),
+        "window-more-zero": ([three, b], table([(np.concatenate([three[0], np.zeros((2, k), np.int8)]),
+                                                 np.concatenate([three[1], np.zeros(2, "<f4")])), b]), True),
+        "commit-more": ([a, b], table([(a[0][:3], a[1][:3]), b]), False),
+        "commit-more-zero": ([rows(5, zero=2), b], None, True),
+        "scale": ([a, b], poke(table([a, b]), (8 * n + 2 * n - 1, -1)), False),
+        "padding": ([a, b], poke(table([a, b]), (8 * n - 1, 0)), False),
+        "empty": ([rows(0), rows(0)], table([rows(0), rows(0)]), True),
+        "swapped": ([a, b], table([b, a]), False),
+        "short": ([a, b], table([a]), False),
+    }
+    for name, (held, words, want) in cases.items():
+        words = table([(c[:len(c) - 2], s[:len(s) - 2]) for c, s in held[:1]] + held[1:]) if words is None else words
+        whole = np.array_equal(table(held), words)
+        assert CT._theirs(served, call, held, words) == whole == want, name
 
 
 def test_input_ids_off_the_prompts_credit_nothing(tmp_path, monkeypatch):
@@ -722,8 +767,11 @@ def test_a_forward_out_of_module_order_ties_and_its_a_zero_is_refused_at_arow(tm
 class _Gate:
     """The challenger gate for a run of several windows (`pouw_h1_gpu.window_sessions`): each ``reserve`` is a challenge phase of its own
     on a challenger host of its own (`challenger_host.Host`, gated), all under one auditor key and one ledger, which
-    reserves, opens and ends them in turn. Calling it is the gate's open (`pouw_h1_window.Gate`), the serving side
-    reaches the challenge phase opened last, and ``ended`` is the challenge phase's ``status`` once its end is in the ledger."""
+    reserves, opens and ends them in turn; a reserve of no `steps` is a window's draw's challenge phase, whose host, over
+    the draw's coins (`window.draw_challenger`) and withheld, starts (and the ledger reserves it) at its open, since the
+    window's open is signed at a leaf held from its reserve. Calling it is the gate's open (`pouw_h1_window.Gate`), the
+    serving side reaches the challenge phase opened last, and ``ended`` is the challenge phase's ``status`` once its end
+    is in the ledger."""
 
     def __init__(self, tmp_path, monkeypatch):
         self.dir, self.leaves, self.hosts, self.opened = tmp_path / "gate", itertools.count(), {}, None
@@ -735,17 +783,26 @@ class _Gate:
     def reserve(self, peer, steps):
         n = len(self.hosts) + 1
         sid = CH.session_id(n)
-        self.hosts[sid] = CH.Host(self.dir / sid, Wd.live_challenger(0, steps, CH.entropy(n)), 1, sid, self.leaves,
-                                  self.ledger, gated=True)
+        if steps is None:
+            self.hosts[sid] = n
+        else:
+            self.hosts[sid] = CH.Host(self.dir / sid, Wd.live_challenger(0, steps, CH.entropy(n)), 1, sid, self.leaves,
+                                      self.ledger, gated=True)
         return {"session": sid, "seq": len(self.ledger.lines) - 1, "peer": peer, "by": "vllm",
                 "expires_utc": "2026-10-20T11:18:00Z"}
 
-    def __call__(self, session, root):
-        self.opened = self.hosts[session]
-        return self.opened.open(session, root)
+    def __call__(self, session, root, withhold=False):
+        host = self.hosts[session]
+        assert isinstance(host, int) == withhold, "a draw session is opened withheld, a window's session never"
+        if withhold:
+            host = self.hosts[session] = CH.Host(self.dir / session, Wd.draw_challenger(0, CH.entropy(host)), 1, session,
+                                                 self.leaves, self.ledger, gated=True, withhold=True)
+        self.opened = host
+        return host.open(session, root)
 
     def ended(self, session):
-        self.hosts[session].ended()
+        if not isinstance(self.hosts[session], int):
+            self.hosts[session].ended()
         lines = [json.loads(line) for line in self.ledger.lines]
         entry = {e["kind"]: e for e in lines if e["session"] == session}
         return {"session": session, "open": entry.get("open"), "end": entry.get("end")}
@@ -753,9 +810,13 @@ class _Gate:
 
 def _live(gate, sessions, name):
     """``coins`` for `_window`: window `name`'s settings as the GPU harness makes them with ``--challenger --gate --peer``,
-    its challenge phase the one `sessions` (`pouw_h1_gpu.window_sessions`) reserves for it."""
+    its challenge phase and its draw's the ones `sessions` (`pouw_h1_gpu.window_sessions`) reserves for it."""
     from tests.protocols import pouw_h1_gpu as G
-    return lambda eng, kw: G.h1_settings(eng, ROWS, STEPS, AUDITOR, sessions(name), gate, **kw)
+
+    def settings(eng, kw):
+        reserved = sessions(name)
+        return G.h1_settings(eng, ROWS, STEPS, AUDITOR, reserved, gate, sessions.draws[name], **kw)
+    return settings
 
 
 def _in_process(eng, kw):
@@ -765,17 +826,22 @@ def _in_process(eng, kw):
 
 
 def _summary_row(gate, sessions, name, record, run):
-    """Window `name` as the GPU harness's record keeps it for `pouw_h1_gpu.coins_summary`, its challenge phase ended."""
+    """Window `name` as the GPU harness's record keeps it for `pouw_h1_gpu.coins_summary`, its challenge phase and its
+    draw's ended."""
     from tests.protocols import pouw_h1_gpu as G
-    end = G.session_end(gate, sessions.held[name]) if name in getattr(sessions, "held", {}) else None
-    return {"coin_source": record["commitment"]["coin_source"], "gate": run.credit(), **({"session": end} if end else {})}
+    ends = {}
+    if name in getattr(sessions, "held", {}):
+        ends = {"session": G.session_end(gate, sessions.held[name]),
+                "draw_session": G.session_end(gate, sessions.draws[name])}
+    return {"coin_source": record["commitment"]["coin_source"], "gate": run.credit(), **ends}
 
 
 def test_each_commit_window_draws_every_coin_from_a_session_of_its_own(tmp_path, monkeypatch):
     """`pouw_h1_gpu.py --commit --challenger --gate --peer`: the honest Commit window and a negative each reserve their own
-    challenge phase at the gate (`window_sessions`), opened on that window's open root; every coin the credit gate checks, the
-    salt, each round's and the sample, is that challenge phase's, which the verifier trusts (`trusted_rounds_reason`) and which
-    ends closed and complete before the next is reserved (`session_end`). The honest window's credit gate passes every
+    challenge phase at the gate (`window_sessions`), opened on that window's open root, and a sampling challenge phase
+    beside it, opened withheld on its sample root; the salt and each round's coin are the window's challenge phase's and
+    the sample the sampling one's, which the verifier trusts (`trusted_rounds_reason`) and which end closed and complete
+    before the next window's are reserved (`session_end`). The honest window's credit gate passes every
     served call, the negative's refuses every one as untied (never as in-process), core still refuses the negative at
     ``arow``, the harness's summary is ok, and a window asks for its challenge phase once."""
     from tests.protocols import pouw_h1_gpu as G
@@ -792,19 +858,25 @@ def test_each_commit_window_draws_every_coin_from_a_session_of_its_own(tmp_path,
             doc["h1_commit"] = row
         else:
             doc["negatives"]["a-zero"] = {"window": row}
-    assert [s["session"] for s in sessions.held.values()] == [CH.session_id(1), CH.session_id(2)]
+    assert [s["session"] for s in sessions.held.values()] == [CH.session_id(1), CH.session_id(3)]
+    assert [s["session"] for s in sessions.draws.values()] == [CH.session_id(2), CH.session_id(4)]
     for name, (record, run, row) in runs.items():
-        c, sid = record["commitment"], sessions.held[name]["session"]
-        host = gate.hosts[sid]
+        c, sid, dsid = record["commitment"], sessions.held[name]["session"], sessions.draws[name]["session"]
+        host, drawn = gate.hosts[sid], gate.hosts[dsid]
         assert c["coin_source"] == PH.CHALLENGER and run.details["challenger"] == {"closed": True}
         assert c["session"]["session"] == sid and c["coins"] == c["round_coins"] == host.challenger.commitment.to_json()
+        assert c["draw_session"]["session"] == dsid
         assert row["session"]["ok"] and row["session"]["end"]["complete"]
+        assert row["draw_session"]["ok"] and row["draw_session"]["end"]["complete"]
         assert PHC.trusted_rounds_reason(c, host.directory, [gate.ledger.path], host.window, host.key,
-                                         pins=[gate.ledger.pins_path], main=CH.MAIN) is None
+                                         pins=[gate.ledger.pins_path], main=CH.MAIN,
+                                         draw_directory=drawn.directory) is None
         received = R.released_roots(host.directory / R.RELEASES, host.challenger.commitment)
         assert received[Wd.SALT] == (bytes.fromhex(c["session"]["root"]),)
         assert received[Wd.ROUND] == tuple(bytes.fromhex(r["root"]) for r in c["rounds"]) and len(c["rounds"]) == STEPS
-        assert received[Wd.DRAW] == (bytes.fromhex(c["draw"]["root"]),) and c["draw"]["coin"]
+        assert Wd.DRAW not in received
+        draws = R.released_roots(drawn.directory / R.RELEASES, drawn.challenger.commitment)
+        assert draws[Wd.DRAW] == (bytes.fromhex(c["draw"]["root"]),) and c["draw"]["coin"]
     honest, zero = runs["commit"][2]["gate"], runs["commit-a-zero"][2]["gate"]
     served = sum(len(runs["commit"][1].owners[s]) for s in range(STEPS)) * 2
     assert honest["refused"]["calls"] == 0 and honest["gate_passed"]["rows"] == served and honest["coins"] == PH.CHALLENGER
@@ -872,13 +944,18 @@ def test_a_refused_reserve_or_a_reused_session_serves_no_window():
         G.window_sessions(Refusing(), "vy-nebius-1", STEPS)("commit")
 
     class Same:
-        def reserve(self, peer, steps):
-            return {"session": CH.session_id(1), "seq": 0, "peer": peer, "by": "vllm"}
+        def __init__(self, draw):
+            self.draw = draw
 
-    sessions = G.window_sessions(Same(), "vy-nebius-1", STEPS)
-    assert sessions("commit")["session"] == CH.session_id(1)
+        def reserve(self, peer, steps):
+            return {"session": CH.session_id(1 if steps is not None else self.draw), "seq": 0, "peer": peer, "by": "vllm"}
+
+    sessions = G.window_sessions(Same(0xd), "vy-nebius-1", STEPS)
+    assert sessions("commit")["session"] == CH.session_id(1) and sessions.draws["commit"]["session"] == CH.session_id(0xd)
     with pytest.raises(ValueError, match="no fresh session"):
         sessions("fill")
+    with pytest.raises(ValueError, match="no fresh draw session"):
+        G.window_sessions(Same(1), "vy-nebius-1", STEPS)("commit")
 
 
 @pytest.mark.parametrize("argv,why", [

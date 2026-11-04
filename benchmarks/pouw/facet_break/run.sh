@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # One facet_break batch: generate the seeded grid, build and gate it (the gate's refusals are dropped by name and the rest
 # rebuilt in chunks of 64, so one bad sink loses only its chunk), gate again and time on one leased GPU, then load every
-# program on every facet. From a pushed commit:
+# program on every facet. From a pushed commit, on an RTX PRO 6000 node (MACHINE):
 #
-#   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source --custody-ttl 12h \
+#   research run --on MACHINE --project verity --source <tree> --cwd source --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=facet-break -- bash benchmarks/pouw/facet_break/run.sh [generate.py flags: --seed S --n N ...]
 #
 # $OUT gets fb_*.cu (the sources timed), kept.txt, gate0.txt (the first gate, refusals included), sass/, chunks/*/ (each

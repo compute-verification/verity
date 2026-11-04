@@ -83,10 +83,12 @@ from typing import Any, NamedTuple
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.profile import Work, WorkStratum
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
-from verity.core.protocols.pouw.protocol import U64, tagged
+from verity.core.protocols.pouw.protocol import U64, fold_roots, tagged
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, domains, verify_opening
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -330,8 +332,8 @@ def commitment(b: bytes) -> dict:
 
 
 def digest(c: dict) -> bytes:
-    """`registration.digest`: SHA-512(format || 0 || the canonical record)."""
-    return hashlib.sha512(c["format"].encode() + b"\0" + c["bytes"]).digest()
+    """`registration.record_digest` over the record's own bytes: SHA-512(format || 0 || the canonical record)."""
+    return R.record_digest(c["format"], c["bytes"])
 
 
 # ---- the evidence, as `Core.Answer.ofJson` and `Core.Integrity.ofJson` read it (with `Flock.J`'s messages) ------------
@@ -397,17 +399,25 @@ def _exactly(written: Any, j: Any, ctx: str) -> None:
 
 
 def _core_draw(j: Any, ctx: str) -> dict:
-    """`Core.Draw.ofJson`, as `Draw.toJson` writes it."""
+    """`Core.SamplingDesign.ofJson`, as `SamplingDesign.toJson` writes it."""
     if _has(j, "bernoulli"):
         d: dict = {"bernoulli": str(ratio(_str_at(j, "bernoulli", ctx), f"{ctx}.bernoulli"))}
     elif _has(j, "subset"):
         d = {"subset": _nat_at(j, "subset", ctx)}
+    elif _has(j, "strata") and isinstance(j, dict) and j.get("law") == "work":
+        k, c = _nat_at(j, "k", ctx), f"{ctx}.strata"
+        strata = [WorkStratum(_str_at(s, "name", c), _nat_at(s, "size", c), _nat_at(s, "k", c), _nat_at(s, "work", c),
+                              _nat_at(s, "floor", c)) for s in _arr_at(j, "strata", ctx)]
+        try:
+            d = Work(k, tuple(strata)).to_json()
+        except ValueError as e:
+            raise Refused(f"{ctx}: {e}") from None
     elif _has(j, "strata"):
         c = f"{ctx}.strata"
         d = {"law": "stratified", "strata": [{"name": _str_at(s, "name", c), "size": _nat_at(s, "size", c),
                                               "k": _nat_at(s, "k", c)} for s in _arr_at(j, "strata", ctx)]}
     else:
-        raise Refused(f"{ctx}: not a bernoulli, subset or stratified draw")
+        raise Refused(f"{ctx}: not a bernoulli, subset, stratified or work draw")
     _exactly(d, j, ctx)
     return d
 
@@ -506,6 +516,14 @@ def _strata(work: bool, j: Any, ctx: str) -> list[dict]:
     return out
 
 
+def _num_den(p: str, ctx: str) -> str:
+    """`pOf`: ``num/den``, each a natural number in canonical decimal (`Flock.Draw.Law.bernoulli`'s), kept as written."""
+    parts = p.split("/")
+    if len(parts) == 2 and all(t and all(c in "0123456789" for c in t) and str(int(t)) == t for t in parts):
+        return p
+    raise Refused(f"{ctx}.p: not num/den")
+
+
 def unit_draw(j: Any) -> dict:
     """The public outputs ``{"draw": d}``, `d` one of one-stage's `draw.py` laws with exactly its keys (`check_draw`'s),
     and a live window's ``salt``, an object (`window_salt` reads it)."""
@@ -518,7 +536,7 @@ def unit_draw(j: Any) -> dict:
     _keys_are(d, (["closure"] if law == "work" and "closure" in d else []) + _DRAW_KEYS[law], ctx)
     out: dict[str, Any] = {"law": law, "population": _nat_at(d, "population", ctx)}
     if law == "bernoulli":
-        out["p"] = _str_at(d, "p", ctx)
+        out["p"] = _num_den(_str_at(d, "p", ctx), ctx)
     else:
         out["k"] = _nat_at(d, "k", ctx)
     if law in ("stratified", "work"):
@@ -744,9 +762,10 @@ OK_SALT_TAG = domains.POUW_H1_OK_ROW_SALT.encode() + b"\0"
 
 def ok_salt(context: str, position: int) -> bytes:
     """The ok row's hm96 salt, which anyone derives from the window's context and the unit's position: its content is
-    the one the verifier accepts (`OK_ROW`), so the salt hides nothing. SHAKE-256 of `OK_SALT_TAG` ‖ context ‖ 0 ‖
-    u64be(position), `SALT_BYTES` bytes."""
-    return hashlib.shake_256(OK_SALT_TAG + context.encode() + b"\0" + int(position).to_bytes(8, "big")).digest(SALT_BYTES)
+    the one the verifier accepts (`OK_ROW`), so the salt hides nothing. `SALT_BYTES` bytes of SHA-512 in counter mode
+    (`SHA-512(m ‖ u32be c)` for c < 3, each output whole) over m = `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position)."""
+    head = OK_SALT_TAG + context.encode() + b"\0" + int(position).to_bytes(8, "big")
+    return b"".join(hashlib.sha512(head + c.to_bytes(4, "big")).digest() for c in range(SALT_BYTES // 64))
 
 
 def call_reads(u0: int, rows: list[int | None]) -> dict[str, Any]:
@@ -1029,7 +1048,7 @@ def weights_root(scheme: str, roots: dict[int, bytes]) -> bytes:
     """`audit.weights_root`, an epoch's weights' root, under a coin commitment's scheme (`COIN_VERSIONS`); a live H1
     window's open root binds `weights.weights_root` instead (`salt`)."""
     n, tag = COIN_VERSIONS[scheme]
-    return tagged(tag, *(p for w in sorted(roots) for p in (w, roots[w])))[:n]
+    return fold_roots(tag, roots)[:n]
 
 
 def _manifest(raw: bytes) -> dict:
@@ -1321,7 +1340,7 @@ SEEDED_PINNED = ("the window's parameters pin a challenger key, so its draw's co
 def _live_coins(coins: dict, pinned: Any) -> tuple[Ch.LiveCommitment | None, tuple[str, str] | None]:
     """A live window's commitment from `coins`, ``{"key", "record"}``: `key` must be `pinned`, the challenger key the
     window's parameters pin (``coin-key``), the record must be signed under it (`challenger.record_reason`) and its
-    commitment a live epoch's; else None and the refusal."""
+    commitment a live window's draw session's (`window.DRAW_FAMILIES`); else None and the refusal."""
     if sorted(coins) != ["key", "record"]:
         return None, ("coin", SIGNED_LIVE)
     try:
@@ -1338,7 +1357,7 @@ def _live_coins(coins: dict, pinned: Any) -> tuple[Ch.LiveCommitment | None, tup
     if why is not None:
         return None, ("coin", why)
     c = Ch.ChallengerRecord.from_json(coins["record"]).commitment
-    return (None, ("coin", why)) if (why := Wd.live_epoch_reason(c)) is not None else (c, None)
+    return (None, ("coin", why)) if (why := Wd.draw_epoch_reason(c)) is not None else (c, None)
 
 
 def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: Any, receipt: Any, k: Any, population: Any,
@@ -1348,8 +1367,8 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
     `k` over `population` on the stream ``"draw"`` of the key the coin derives under the stream's digest `stream`, the
     registration and its `receipt`; else the refusal (``coin``, ``coin-key``, ``draw`` or ``sampler``, and why). A
     seeded commitment (`coins_of`) has its ``draw`` coin, and is refused when the window's parameters pin a challenger
-    key. A live one (`window.LIVE_SCHEME`, a certified window's) is read only from its challenger's signed record with
-    the key it is signed under, ``{"key", "record"}``: that key must be `key`, the challenger key the window's
+    key. A live one (`window.LIVE_SCHEME`, a certified window's) is read only from its draw session's
+    (`window.DRAW_FAMILIES`) signed record with the key it is signed under, ``{"key", "record"}``: that key must be `key`, the challenger key the window's
     parameters pin (``coin-key``, so a record the prover signed under a key of its own, over coins it holds, is
     refused), and this check verifies the record under it (`challenger.record_reason`; a bare live commitment is
     refused, `SIGNED_LIVE`); it has its ``pouw/draw`` coin 0 (`challenger.live_reason`)."""

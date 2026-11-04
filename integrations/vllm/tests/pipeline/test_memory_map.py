@@ -112,7 +112,7 @@ def test_the_commits_map_is_the_records_at_the_engines_pages(tmp_path):
     out = tmp_path / "memory_map.jsonl"
     doc = PMM.write(out, {"path": str(out), "registration": "ab" * 64}, loaded={"r0": lp}, store=_store(rows), arrivals={"r0": ARRIVE},
                     caches=_caches(kv, payload))
-    layout = MM.Layout(block_size=4, pages=8)
+    layout = MM.KvPool(block_size=4, pages=8)
     head, steps = MM.record({"r0": kv}, {"r0": ARRIVE}, payload, bytes.fromhex("ab" * 64), layout, {"r0": PAGES})
     assert out.read_text() == dumps(head, steps)
     got_head, got = parse(out.read_text().splitlines())
@@ -289,7 +289,7 @@ def test_a_warm_requests_map_takes_its_cached_page_from_its_producer(tmp_path, m
     with pytest.raises(ValueError, match="request r1's Program reads 4 cached rows, and 0 producing requests are named"):
         PMM.write(out, req, **kw)
     doc = PMM.write(out, req, cached_prefixes={"r1": {"cached": 4, "producers": ["r0"]}}, **kw)
-    assert out.read_text() == dumps(*MM.record(kv, WARM_ARRIVE, payload, bytes.fromhex("ab" * 64), MM.Layout(block_size=4, pages=6),
+    assert out.read_text() == dumps(*MM.record(kv, WARM_ARRIVE, payload, bytes.fromhex("ab" * 64), MM.KvPool(block_size=4, pages=6),
                                                WARM_TABLES, None, PRODUCERS))
     assert doc["requests"]["r1"] == {"arrive": 1, "steps": 5, "positions": 12, "layers": 2, "row_bytes": 1024, "pages": [1, 4, 5],
                                      "program_digest": dig1, "cached": 4, "producers": ["r0"]}
@@ -341,7 +341,7 @@ def test_each_tp_rank_writes_the_map_of_its_mla_latent_rows(tmp_path, served, mo
         got = RR.memory_map(st, p, committed=None)
         out = tmp_path / "maps" / f"memory_map.rank{rank}.jsonl"
         head, steps = MM.record({"r0": rows}, {"r0": ARRIVE}, lambda r, x, words=words: words(r, x).tobytes(), bytes.fromhex(("ab", "cd")[rank] * 64),
-                                MM.Layout(block_size=64, pages=8), {"r0": DSA_PAGES})
+                                MM.KvPool(block_size=64, pages=8), {"r0": DSA_PAGES})
         assert out.read_text() == dumps(head, steps)
         # the prefill fills page 3 (a block a layer), read to the last step; the decode rows reach page 5's filler and leave it dirty
         assert [(s.step, list(s.freed), [w.slot for w in s.written]) for s in steps] == [

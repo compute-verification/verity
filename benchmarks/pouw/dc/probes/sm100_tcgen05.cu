@@ -539,7 +539,7 @@ DC_DEV void sync_until_mma(const OpArgs& a) {
   OP_SINK(v ^ threadIdx.x)
 }
 
-// ---- kind::mxf4: E2M1 K = 64 a MMA at twice i8's MAC rate (lowbit_dc/fpx.cu's call and descriptor) --------------------
+// ---- kind::mxf4: E2M1 K = 64 a MMA at twice i8's MAC rate --------------------
 // The operand tile's 32 bytes a row are 64 packed E2M1 (every code valid). UE8M0 scales of 1 (0x7F) fill columns 256-383
 // (uniform, so their layout doesn't matter), so the MMAs write D0 only.
 DC_DEV void umma_mxf4(uint32_t d, uint64_t da, uint64_t db, uint32_t idesc, uint32_t sfa, uint32_t sfb, uint32_t acc) {

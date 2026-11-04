@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §12: claim batching and ring switching; the batched basis `b̂` that Ligerito consumes.
+Claim batching and ring switching; the batched basis `b̂` that Ligerito consumes.
 -/
 import Flock.Piop
 
@@ -35,7 +35,7 @@ def applyMap (cols : Array F128) (s : Array F256) : Array F256 := Id.run do
       if cu.bit l then out := out.set! l (out[l]! + su)
   return out
 
-/-- The width-128 branching program of §12.4 over the prefix `q ∈ K^{ℓ−e}`, then every Boolean suffix. -/
+/-- The width-128 branching program over the prefix `q ∈ K^{ℓ−e}`, then every Boolean suffix. -/
 def basisForClaim (sw : Switched) (q : Array F256) (e : Nat) : Array F256 := Id.run do
   let eqR := eqTable sw.rpp
   let mut s : Array F256 := (Array.replicate 128 (0 : F256)).set! 0 1
@@ -62,7 +62,7 @@ def basis (sws : Array Switched) (q : Array F256) (e : Nat) : Array F256 :=
     let b := basisForClaim sw q e
     (Array.range (2 ^ e)).map fun y => acc[y]! + (b[y]!).smul sw.gamma) (Array.replicate (2 ^ e) 0)
 
-/-- §12.2–§12.3: returns `T` and the switched claims. -/
+/-- Returns `T` and the switched claims. -/
 def ringSwitch (m : Nat) (claims : Array Claim) (rs : Array (Array F128)) : TM (F128 × Array Switched) := do
   let n := claims.size
   label "flock-pcs-open-batch-v0"

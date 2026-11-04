@@ -18,6 +18,8 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from verity.ml.circuits.boolean import forms
+from verity.ml.circuits.silicon import fp4, tc_step
 from verity.ml.circuits.silicon.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32
 from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
 
@@ -30,8 +32,8 @@ _LOWERED = {HOPPER_BF16_M16N8K16: "bf16-hopper", ADA_E4M3_M16N8K32: "fp8-ada", H
             AMPERE_BF16_M16N8K16: "bf16-ampere"}
 _TARGETS = {BF16_HOPPER.name: "bf16-hopper", FP8_ADA_MMA.name: "fp8-ada", FP8_HOPPER_WGMMA.name: "fp8-hopper",
             FIRST.name: "bf16-ampere"}
-_HERE = Path(__file__).resolve().parent
-_LOWERING_SOURCES = ("lowering.py", "unit.py", "gf2.py")
+#: what the lowering is built from: ``lowering.py`` and the modules its ``unit``, ``unit_fp4`` and ``gf2`` alias
+_LOWERING_SOURCES = tuple(Path(m.__file__).resolve() for m in (lowering, tc_step, fp4, forms))
 
 
 @dataclass(frozen=True)
@@ -58,10 +60,11 @@ class Unavailable:
 
 
 def lowering_version() -> str:
-    """sha256 over the lowering's source files (``lowering.py``, ``unit.py``, ``gf2.py``), in that order."""
+    """sha256 over the lowering's source files (``lowering.py``, ``silicon/tc_step.py``, ``silicon/fp4.py``,
+    ``boolean/forms.py``), in that order, each as its file name, a zero byte and its bytes."""
     h = hashlib.sha256()
-    for name in _LOWERING_SOURCES:
-        h.update(name.encode() + b"\0" + (_HERE / name).read_bytes())
+    for path in _LOWERING_SOURCES:
+        h.update(path.name.encode() + b"\0" + path.read_bytes())
     return h.hexdigest()
 
 

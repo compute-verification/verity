@@ -77,9 +77,9 @@ class Run:
                 "session_id": self.session_id.hex()} | ({"setup_of": self.setup_of} if self.setup_of else {})
 
 
-def session_of(s: M.Session) -> run.Session:
+def session_of(s: M.Session) -> run.ChallengerRecord:
     """The record of `s`; `s.trusted` is the verifier's list, which the record never carries."""
-    return run.Session(s.signed, s.commitment, s.openings)
+    return run.ChallengerRecord(s.signed, s.commitment, s.openings)
 
 
 def rows_of(q: P2.P2Params, tag: int) -> tuple[bytes, ...]:
@@ -241,8 +241,8 @@ def _decode_setup(j: Any) -> run.Setup:
     return run.Setup(M.nat(j, "blocks"), M.hex_(j, "commitment"), M.hex_(j, "root"), M.hex_(j, "salt"))
 
 
-def _decode_session(j: Any) -> run.Session:
-    return run.Session(M.signed_of(M._get(j, "signed")), M.commitment_of(M._get(j, "commitment")),
+def _decode_session(j: Any) -> run.ChallengerRecord:
+    return run.ChallengerRecord(M.signed_of(M._get(j, "signed")), M.commitment_of(M._get(j, "commitment")),
                        tuple(M.opening_of(o) for o in M.list_(j, "openings")))
 
 
@@ -352,7 +352,8 @@ def _named(signer: M.AtLeaf) -> Run:
     return Run(point, run.Setup(q.blocks, bytes(64), root, salt), s, (signer.scheme,), bytes(32))
 
 
-def _deployed_run(tmp: Path, tampered: int | None = None) -> tuple[Path, Path, Path, run.Setup, bytes, run.Session, bytes]:
+def _deployed_run(tmp: Path, tampered: int | None = None
+                  ) -> tuple[Path, Path, Path, run.Setup, bytes, run.ChallengerRecord, bytes]:
     """A run at the deployed point signed at leaf 0 of a key at S1's deployed parameters (`mc_cases.deployed_signer`, a
     sparse tree), written as `pous-run` reads it, round `tampered`'s answer not its label. The rows the rounds don't name
     are digests of nothing in particular. Last, the signer's public key."""
@@ -376,7 +377,7 @@ def _deployed_run(tmp: Path, tampered: int | None = None) -> tuple[Path, Path, P
         b = M.block(i, q.block_bytes)
         c.receive(M._flip(b, 0) if j == tampered else b)
     setup = run.Setup(q.blocks, hashlib.sha512(b"deployed W").digest(), root, salt)
-    session = run.Session(c.close(), c.commitment, c.openings())
+    session = run.ChallengerRecord(c.close(), c.commitment, c.openings())
     digests = b"".join(rows)
     paths = tmp / "SETUP.json", tmp / "DIGESTS.bin", tmp / "SESSION.json"
     paths[0].write_text(D.canonical(setup.to_json()))
@@ -391,7 +392,7 @@ def _trusted_file(path: Path, trusted: tuple[bytes, ...]) -> Path:
     return path
 
 
-def _python_outcome(trusted: tuple[bytes, ...], setup: run.Setup, digests: bytes, session: run.Session,
+def _python_outcome(trusted: tuple[bytes, ...], setup: run.Setup, digests: bytes, session: run.ChallengerRecord,
                     session_id: bytes) -> dict:
     try:
         run.check(trusted, setup, digests, session, session_id)

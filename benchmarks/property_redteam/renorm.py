@@ -14,11 +14,11 @@ set is a circuit with r = L − k budgeted gates (`build`), and every circuit of
 (§R3.3 step 1). The search measures the largest fiber N_k it finds for each k, so ε = N_k/p and the measured d is k; the
 formula then needs d₀ ≥ k − log_B(p/N_k) (`implied_d0`).
 
-**The model.** `Op`, `Gate` and the functions below port `Security/Definitions/Accounting/Gates/Model.lean` (6b's branch
-cursor/circuit-encode-proofs-6cd3 at f7a216e236): `raw`, `out`, `Ok`, `InWindow`, `derive`, `Proven`, `DeclaredHold`,
-`FanIn`, `Width`, `budgeted`, and `Restricted` (`Codec.lean`). One generalization: an `mma` operand format has b bits, not 8,
-so that at a toy base B = 2^b a digit fills its format as a byte does at B = 256 (the closure lemma's degree bound needs that).
-At B = 256 the formats are Model.lean's s8 and u8.
+**The model.** The circuits are built in `gates.py`, `Security/Definitions/Accounting/Gates/Model.lean` on the canonical
+circuit, whose evaluator runs them and whose `Ok`, `InWindow`, `derive`, `Proven` and `DeclaredHold` they are held to;
+this module adds `FanIn`, `Width`, `budgeted` (the budgeted gates) and `Restricted` (`Codec.lean`). One generalization: an
+`mma` operand format has b bits, not 8, so that at a toy base B = 2^b a digit fills its format as a byte does at B = 256
+(the closure lemma's degree bound needs that). At B = 256 the formats are Model.lean's s8 and u8.
 
 Exhaustive over a ∈ [0, p) at every toy size; the constraint sets are searched exactly where stated (modes, every subset of
 carries) and heuristically elsewhere (lines through the heaviest points, small and LLL-short constraint rows, a beam).
@@ -32,217 +32,42 @@ import itertools
 import json
 import math
 import random
-from dataclasses import dataclass, field
-from typing import Callable, Sequence
+from dataclasses import dataclass
+from typing import Sequence
 
 import numpy as np
 
-S32_MIN, S32_MAX = -(2 ** 31), 2 ** 31 - 1
+from gates import Builder, is_charged, op_affine, op_mma, proven
+
 P1024 = 2 ** 1024 - 105  # p1024 (verity.core.protocols.remote_bandwidth.codec, Field("p1024", 1024, 105))
 
 
-# ---- the model: Model.lean's gates, values, window and interval analysis -------------------------------------------------
+# ---- the model's restriction: Codec.lean's `FanIn`, `Width`, `budgeted` and `Restricted` over a gates.Builder -------------
 
 
-def fmt_range(fmt: tuple[bool, int]) -> tuple[int, int]:
-    """An operand format (signed, bits): s8 is (True, 8), [-128, 127]; u8 is (False, 8), [0, 255]."""
-    signed, bits = fmt
-    return (-(2 ** (bits - 1)), 2 ** (bits - 1) - 1) if signed else (0, 2 ** bits - 1)
+def fan_in(f: int, C: Builder) -> bool:
+    """`FanIn f C`: every charged gate but a gather reads at most `f` operands."""
+    return all(not is_charged(C.kinds[i], C.bindings.get(i)) or C.kinds[i] == "gather" or len(C.args[i]) <= f
+               for i in range(len(C)))
 
 
-S8, U8 = (True, 8), (False, 8)
+def width(w: int, C: Builder) -> bool:
+    """`Width w C`: every declared interval within `[−2^w, 2^w)`."""
+    return all(-(2 ** w) <= C.lo[i] and C.hi[i] < 2 ** w for i in range(len(C)))
 
 
-@dataclass(frozen=True)
-class Op:
-    """`Op ι`: an input slot (by binding), a constant, an affine map `c + Σ coeff·v`, an s8-family coordinate `mma`, a
-    `gather`, or a `budgeted` primitive of class `cls` (any function of its operands, vectorized over inputs)."""
-
-    kind: str
-    c: int = 0
-    coeff: tuple[int, ...] = ()
-    fa: tuple[bool, int] = S8
-    fb: tuple[bool, int] = S8
-    k: int = 0
-    sat: bool = True
-    slot: int = -1
-    binding: str = "registered"
-    cls: str = "rounding"
-    f: Callable[[list[np.ndarray]], np.ndarray] | None = field(default=None, compare=False)
-
-    @property
-    def derived(self) -> bool:
-        return self.kind in ("const", "affine", "mma")
-
-    @property
-    def charged(self) -> bool:
-        return self.kind in ("gather", "budgeted") or (self.kind == "input" and self.binding == "run")
-
-    @property
-    def budget(self) -> str | None:
-        return "gather" if self.kind == "gather" else self.cls if self.kind == "budgeted" else None
-
-
-@dataclass(frozen=True)
-class Gate:
-    op: Op
-    args: tuple[int, ...]
-    lo: int
-    hi: int
-
-    @property
-    def bits(self) -> int:
-        return max(0, math.ceil(math.log2(max(1, self.hi + 1 - self.lo))))
-
-
-def _dot(k: int, v: Sequence[np.ndarray], n: int) -> np.ndarray:
-    a, b = v[:k], v[k:]
-    out = np.zeros(n, dtype=object if any(x.dtype == object for x in v) else np.int64)
-    for x, y in zip(a, b):
-        out = out + x * y
-    return out
-
-
-def raw(op: Op, x: dict[int, np.ndarray], v: list[np.ndarray], n: int) -> np.ndarray:
-    """`Op.raw`: the exact value before an s8-family step's clamp or wrap."""
-    if op.kind == "input":
-        return x[op.slot]
-    if op.kind == "const":
-        return np.full(n, op.c, dtype=np.int64)
-    if op.kind == "affine":
-        out = np.full(n, op.c, dtype=np.int64)
-        for cf, val in zip(op.coeff, v):
-            out = out + cf * val
-        return out
-    if op.kind == "mma":
-        head = v[0] if v else np.zeros(n, dtype=np.int64)
-        return head + _dot(op.k, v[1:], n)
-    if op.kind == "gather":
-        idx = np.maximum(v[0], 0) if v else np.zeros(n, dtype=np.int64)
-        col = np.stack(v[1:]) if len(v) > 1 else np.zeros((1, n), dtype=np.int64)
-        ok = idx < len(v) - 1
-        return np.where(ok, col[np.minimum(idx, max(0, len(v) - 2)), np.arange(n)], 0)
-    return np.asarray(op.f(v), dtype=np.int64)  # type: ignore[misc]
-
-
-def out(op: Op, z: np.ndarray) -> np.ndarray:
-    """`Op.out`: an s8-family step clamps (`satfinite`) or wraps to s32; every other op passes its exact value."""
-    if op.kind != "mma":
-        return z
-    if op.sat:
-        return np.clip(z, S32_MIN, S32_MAX)
-    return (z - S32_MIN) % 2 ** 32 + S32_MIN
-
-
-def operands_ok(op: Op, v: list[np.ndarray], n: int) -> np.ndarray:
-    if op.kind != "mma":
-        return np.ones(n, dtype=bool)
-    if len(v) != 2 * op.k + 1:
-        return np.zeros(n, dtype=bool)
-    ok = np.ones(n, dtype=bool)
-    for z in v[1:op.k + 1]:
-        lo, hi = fmt_range(op.fa)
-        ok &= (lo <= z) & (z <= hi)
-    for z in v[op.k + 1:]:
-        lo, hi = fmt_range(op.fb)
-        ok &= (lo <= z) & (z <= hi)
-    return ok
-
-
-def evaluate(C: Sequence[Gate], x: dict[int, np.ndarray], n: int) -> tuple[list[np.ndarray], np.ndarray, np.ndarray]:
-    """`values` with, per input, `InWindow` (every gate `Ok`) and `DeclaredHold` (inputs and budgeted gates in their
-    declared intervals), as boolean arrays over the n inputs."""
-    vs: list[np.ndarray] = []
-    window = np.ones(n, dtype=bool)
-    hold = np.ones(n, dtype=bool)
-    for g in C:
-        v = [vs[j] if j < len(vs) else np.zeros(n, dtype=np.int64) for j in g.args]
-        z = raw(g.op, x, v, n)
-        inside = (g.lo <= z) & (z <= g.hi)
-        ok = inside & operands_ok(g.op, v, n)
-        if g.op.kind == "mma" and not (S32_MIN <= g.lo and g.hi <= S32_MAX):
-            ok &= False
-        window &= ok
-        if not g.op.derived:
-            hold &= inside
-        vs.append(out(g.op, z))
-    return vs, window, hold
-
-
-Iv = tuple[int, int]
-
-
-def derive(g: Gate, ivs: Sequence[Iv]) -> Iv:
-    """`Gate.derive`: a constant's value, an affine map's or an s8-family step's interval image, else the declared one."""
-    a = [ivs[j] if j < len(ivs) else (0, 0) for j in g.args]
-    if g.op.kind == "const":
-        return (g.op.c, g.op.c)
-    if g.op.kind == "affine":
-        lo = hi = g.op.c
-        for cf, (l, h) in zip(g.op.coeff, a):
-            lo, hi = lo + min(cf * l, cf * h), hi + max(cf * l, cf * h)
-        return (lo, hi)
-    if g.op.kind == "mma":
-        lo, hi = a[0] if a else (0, 0)
-        k = g.op.k
-        for (l1, h1), (l2, h2) in zip(a[1:k + 1], a[k + 1:]):
-            ps = (l1 * l2, l1 * h2, h1 * l2, h1 * h2)
-            lo, hi = lo + min(ps), hi + max(ps)
-        return (lo, hi)
-    return (g.lo, g.hi)
-
-
-def intervals(C: Sequence[Gate]) -> list[Iv]:
-    ivs: list[Iv] = []
-    for g in C:
-        ivs.append(derive(g, ivs))
-    return ivs
-
-
-def proven(C: Sequence[Gate]) -> list[str]:
-    """`Proven C`'s failures (empty when it holds): a derived interval outside its declared one, or an s8-family step whose
-    operands' derived intervals leave their formats or whose declared interval leaves s32."""
-    bad = []
-    ivs: list[Iv] = []
-    for i, g in enumerate(C):
-        d = derive(g, ivs)
-        if g.op.derived and not (g.lo <= d[0] and d[1] <= g.hi):
-            bad.append(f"gate {i}: derived {d} outside declared {(g.lo, g.hi)}")
-        if g.op.kind == "mma":
-            k = g.op.k
-            if len(g.args) != 2 * k + 1 or not (S32_MIN <= g.lo and g.hi <= S32_MAX):
-                bad.append(f"gate {i}: mma shape or declared interval outside s32")
-            for j in g.args[1:k + 1]:
-                lo, hi = fmt_range(g.op.fa)
-                if not (lo <= ivs[j][0] and ivs[j][1] <= hi):
-                    bad.append(f"gate {i}: operand {j}'s derived {ivs[j]} outside {(lo, hi)}")
-            for j in g.args[k + 1:]:
-                lo, hi = fmt_range(g.op.fb)
-                if not (lo <= ivs[j][0] and ivs[j][1] <= hi):
-                    bad.append(f"gate {i}: operand {j}'s derived {ivs[j]} outside {(lo, hi)}")
-        ivs.append(d)
-    return bad
-
-
-def fan_in(f: int, C: Sequence[Gate]) -> bool:
-    return all(not g.op.charged or g.op.budget == "gather" or len(g.args) <= f for g in C)
-
-
-def width(w: int, C: Sequence[Gate]) -> bool:
-    return all(-(2 ** w) <= g.lo and g.hi < 2 ** w for g in C)
-
-
-def restricted(f: int, w: int, C: Sequence[Gate]) -> bool:
+def restricted(f: int, w: int, C: Builder) -> bool:
     """`Restricted f w C` (Codec.lean): `Proven C ∧ FanIn f C ∧ Width w C`."""
     return not proven(C) and fan_in(f, C) and width(w, C)
 
 
-def budgeted(C: Sequence[Gate]) -> int:
-    return sum(1 for g in C if g.op.budget is not None)
+def budgeted(C: Builder) -> int:
+    """The budgeted gates: the gathers and the budgeted primitives."""
+    return sum(1 for kind in C.kinds if kind in ("gather", "budgeted"))
 
 
-def run_bits(C: Sequence[Gate]) -> int:
-    return sum(g.bits for g in C if g.op.kind == "input" and g.op.binding == "run")
+def run_bits(C: Builder) -> int:
+    return sum(C.bits(i) for i, binding in C.bindings.items() if binding == "run")
 
 
 # ---- toy fields and their tables ------------------------------------------------------------------------------------------
@@ -676,7 +501,7 @@ def search(T: Table, *, lines_bases: int = 200, small_coeff: int = 1, max_rows: 
 
 @dataclass
 class Built:
-    C: list[Gate]
+    C: Builder
     out: list[int]
     slots: list[int]
 
@@ -686,30 +511,18 @@ def build(T: Table, cn: Constraint | None, mono_names: list[tuple[int, ...]]) ->
     affine maps), its last L − k budgeted gates (each any function of the word a, one operand), and W a unimodular
     completion of the constraint rows. `cn = None` is the honest circuit (k = 0, L budgeted carries)."""
     F, L, B = T.F, T.F.L, T.F.B
-    fu = (False, F.b)
-    C: list[Gate] = []
-    ivs: list[Iv] = []
+    fu = (0, B - 1)
+    C = Builder()
 
-    def add(op: Op, args: Sequence[int], lo: int | None = None, hi: int | None = None) -> int:
-        g = Gate(op, tuple(args), 0, 0)
-        if op.derived:
-            dlo, dhi = derive(g, ivs)
-            g = Gate(op, tuple(args), dlo, dhi)
-        else:
-            g = Gate(op, tuple(args), int(lo), int(hi))  # type: ignore[arg-type]
-        C.append(g)
-        ivs.append(derive(g, ivs))
-        return len(C) - 1
-
-    dig = [add(Op("input", slot=l, binding="registered"), (), 0, B - 1) for l in range(L)]
-    zero = add(Op("const", c=0), ())
-    A = add(Op("affine", c=0, coeff=tuple(B ** l for l in range(L))), dig)
+    dig = [C.inp(l, 0, B - 1, "registered") for l in range(L)]
+    zero = C.const(0)
+    A = C.gate(op_affine(0, tuple(B ** l for l in range(L))), dig)
     t = []
     for col in range(2 * L - 1):
         pairs = [(i, col - i) for i in range(L) if 0 <= col - i < L]
-        t.append(add(Op("mma", fa=fu, fb=fu, k=len(pairs)), [zero] + [dig[i] for i, _ in pairs] + [dig[j] for _, j in pairs]))
-    s = [add(Op("affine", c=0, coeff=(1, F.delta)), (t[l], t[l + L])) if l + L < 2 * L - 1 else
-         add(Op("affine", c=0, coeff=(1,)), (t[l],)) for l in range(L)]
+        t.append(C.gate(op_mma(fu, fu, len(pairs)), [zero] + [dig[i] for i, _ in pairs] + [dig[j] for _, j in pairs]))
+    s = [C.gate(op_affine(0, (1, F.delta)), (t[l], t[l + L])) if l + L < 2 * L - 1 else
+         C.gate(op_affine(0, (1,)), (t[l],)) for l in range(L)]
 
     k = cn.k if cn else 0
     W = unimodular_completion(cn.psi if cn else [], L)
@@ -731,29 +544,33 @@ def build(T: Table, cn: Constraint | None, mono_names: list[tuple[int, ...]]) ->
                 g = dig[name[0]]
             else:
                 if name not in prods:
-                    prods[name] = add(Op("mma", fa=fu, fb=fu, k=1), (zero, dig[name[0]], dig[name[1]]))
+                    prods[name] = C.gate(op_mma(fu, fu, 1), (zero, dig[name[0]], dig[name[1]]))
                 g = prods[name]
             terms.append(g)
-            coefs.append(cf)
-        w.append(add(Op("affine", c=cn.m[j], coeff=tuple(coefs)), terms))  # type: ignore[union-attr]
+            coefs.append(int(cf))
+        w.append(C.gate(op_affine(int(cn.m[j]), tuple(coefs)), terms))  # type: ignore[union-attr]
     for j in range(k, L):
         col = w_full[:, j]
         lut = col.copy()
         lo, hi = int(col[good].min()), int(col[good].max())
-        w.append(add(Op("budgeted", cls="rounding", f=lambda v, lut=lut: lut[v[0]]), (A,), lo, hi))
-    c = [add(Op("affine", c=0, coeff=tuple(Winv[l])), w) for l in range(L)]
-    y = [add(Op("affine", c=0, coeff=(1, F.delta, -B)), (s[0], c[L - 1], c[0]))] + \
-        [add(Op("affine", c=0, coeff=(1, 1, -B)), (s[l], c[l - 1], c[l])) for l in range(1, L)]
+        w.append(C.budgeted(lambda v, lut=lut: lut[v[0]], [A], lo, hi))
+    c = [C.gate(op_affine(0, tuple(Winv[l])), w) for l in range(L)]
+    y = [C.gate(op_affine(0, (1, F.delta, -B)), (s[0], c[L - 1], c[0]))] + \
+        [C.gate(op_affine(0, (1, 1, -B)), (s[l], c[l - 1], c[l])) for l in range(1, L)]
     return Built(C, y, dig)
 
 
 def renormalization_witness(T: Table, bc: Built, f: int = 4, w: int = 31) -> dict:
     """Renormalization's premises for `bc` (Restricted f w, no run input, every free input a digit of a) and the a on which
-    it holds its declared intervals and outputs the canonical digits: the `good` set, and its budgeted gates."""
+    it holds its declared intervals and outputs the canonical digits: the `good` set, and its budgeted gates. Each a is a
+    run of the canonical evaluator."""
     F = T.F
-    x = {l: T.digits[:, l] for l in range(F.L)}
-    vs, window, hold = evaluate(bc.C, x, F.p)
-    outs = np.stack([vs[i] for i in bc.out], axis=1)
+    outs = np.zeros((F.p, len(bc.out)), dtype=np.int64)
+    window = np.zeros(F.p, dtype=bool)
+    hold = np.zeros(F.p, dtype=bool)
+    for a in range(F.p):
+        vs, window[a], hold[a] = bc.C.evaluate({l: int(T.digits[a, l]) for l in range(F.L)})
+        outs[a] = [vs[i] for i in bc.out]
     good = hold & (outs == T.y).all(axis=1)
     return {"restricted": restricted(f, w, bc.C), "proven_failures": proven(bc.C)[:3], "run_bits": run_bits(bc.C),
             "budgeted": budgeted(bc.C), "good": int(good.sum()), "window_on_good": bool(window[good].all()),

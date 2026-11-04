@@ -604,6 +604,37 @@ def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
     assert rec["recomputed_across"] == 1120 and rec["whole"]["q_word_v2"]["codes"] == ["unit-too-wide"]
 
 
+def test_the_partition_cuts_a_call_once(monkeypatch):
+    """`partition` checks the cut `word.unit_rule` made of the whole Definition (its ``graphs``) rather than cutting it again: one
+    `word.Graph` of it, and the record and failures of cutting it twice; a Definition cut member by member (`word.separable`) is
+    cut whole once, by `partition` alone."""
+    from verity.ml.circuits.types import Value
+    from verity.ml.definitions import word as W
+    from verity.ml.definitions.registry import prims as P
+
+    real_rule, cuts = W.unit_rule, []
+
+    class Counted(W.Graph):
+        def __init__(self, fn, *a, **k):
+            cuts.append(fn.id)
+            super().__init__(fn, *a, **k)
+
+    monkeypatch.setattr(W, "Graph", Counted)
+    chained = _composite("CircuitCheckCutOnce", (_f32x2(), Value(32)),
+                         lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])))
+    rope = TG.definition(BOOL_RECOMPUTE)
+    assert W.separable(chained) is None and W.separable(rope) is not None
+    for fn, q_word, twice in ((chained, 1, 2), (rope, 2, 1), (rope, 1, 1)):
+        cuts.clear()
+        once = _partition(fn, q_word)
+        assert cuts.count(fn.id) == 1, fn.id
+        with monkeypatch.context() as m:
+            m.setattr(W, "unit_rule", lambda *a, graphs=None, **k: real_rule(*a, **k))
+            cuts.clear()
+            assert _partition(fn, q_word) == once and cuts.count(fn.id) == twice, fn.id
+    assert once[1] == [f"partition/gate-recomputed {rope.id} (1120 gate(s))"]
+
+
 def test_q_call_is_recorded_per_call_and_refuses_a_gate_wider_than_32_bits():
     """`Q_call` v1 beside `Q_word`: a Boolean Call's proof blocks, committed bits and the values two proof blocks compute
     (reported); a Call with
@@ -888,8 +919,23 @@ def test_a_proof_blocks_export_counts_its_circuit_types():
         C.output("out0", [C.AND(x, y) for x, y in zip(a, b)])
         return C
 
-    assert CK._export_counts(build, "test unit") == {"and": 4, "xor": 0, "not": 0, "subcircuit_types": 1, "flat_ands": 4,
-                                                      "shared_across_types": 0}
+    want = {"and": 4, "xor": 0, "not": 0, "subcircuit_types": 1, "flat_ands": 4, "shared_across_types": 0}
+    assert CK._export_counts(build, "test unit") == want == CK._export_counts(build, "test unit", build())
+
+
+def test_a_proof_blocks_export_is_evaluated_against_the_circuit_it_is_handed():
+    """`checks._export_counts` given the circuit ``build`` made (`template_lowering` hands it `_traced`'s) evaluates the
+    export's types against that circuit: one that computes something else is refused."""
+    from verity_flock import gf2
+
+    def build(xor: bool = False):
+        C = gf2.Circuit(cse=True)
+        a, b = C.input("a", 4), C.input("b", 4)
+        C.output("out0", [x ^ y if xor else C.AND(x, y) for x, y in zip(a, b)])
+        return C
+
+    with pytest.raises(AssertionError, match="disagree with its circuit"):
+        CK._export_counts(build, "test unit", build(xor=True))
 
 
 def _lowering_pin(e: dict) -> dict:
@@ -1293,3 +1339,40 @@ def test_the_cache_key_is_the_same_in_every_check_slot(monkeypatch):
     assert CC.key({"target": "F32Mul_v1"}) == here
     monkeypatch.setenv("VERITY_REGRESSION", "1" if os.environ.get("VERITY_REGRESSION") != "1" else "0")
     assert CC.key({"target": "F32Mul_v1"}) != here
+
+
+def test_the_cache_key_is_the_same_on_every_node(monkeypatch, tmp_path):
+    """A report one node stored counts on every other node of the image (`check.py --plan`, `research merge --verdicts`): the key
+    names no host, kernel, working directory, home, PATH or check slot (each slot sets its own `VERITY_TEST_CACHE`,
+    `tools/verity/check/slot.py`), while the CPU, a variable that can change what a check computes and the request still key it."""
+    import platform
+
+    from circuit_check import cache as CC
+
+    def node(name: str) -> dict:
+        home = tmp_path / name
+        return {"HOME": str(home), "PATH": f"{home}/.local/bin:/usr/bin", "HOSTNAME": name, "TMPDIR": f"{home}/tmp",
+                "VIRTUAL_ENV": f"{home}/trees/{name}/.venv", "SSH_CONNECTION": f"10.0.0.{len(name)} 22", "CUDA_VISIBLE_DEVICES": "",
+                "VERITY_TEST_CACHE": f"{home}/.cache/verity/tests-slot-{name}", "CHECK_SLOT": name}
+
+    def on(name: str) -> None:
+        for k, v in node(name).items():
+            monkeypatch.setenv(k, v)
+        (tmp_path / name).mkdir(exist_ok=True)
+        monkeypatch.chdir(tmp_path / name)
+        monkeypatch.setattr(platform, "node", lambda: name)
+        monkeypatch.setattr(platform, "release", lambda: f"6.{len(name)}.0-{name}")
+        monkeypatch.setattr(platform, "version", lambda: f"#1 SMP {name}")
+        monkeypatch.setattr(platform, "platform", lambda *a, **k: f"Linux-6.{len(name)}.0-{name}-x86_64")
+
+    on("vy-nebius-1")
+    here = CC.key({"target": "F32Mul_v1"})
+    on("vy-nebius-cpu-11")
+    assert CC.key({"target": "F32Mul_v1"}) == here
+    assert CC.key({"target": "F32Add_v1"}) != here
+    monkeypatch.setenv("VERITY_REGRESSION", "1" if os.environ.get("VERITY_REGRESSION") != "1" else "0")
+    assert CC.key({"target": "F32Mul_v1"}) != here
+    monkeypatch.undo()
+    here = CC.key({"target": "F32Mul_v1"})
+    monkeypatch.setattr(platform, "machine", lambda: "aarch64")
+    assert CC.key({"target": "F32Mul_v1"}) != here                  # a different CPU is a different machine

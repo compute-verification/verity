@@ -87,7 +87,7 @@ EXPECT = {
     "answer-commitment-type": "evidence: answer.commitment: not a string",
     "answer-shape": "evidence: answer: an accept has no reason", "answer-profile": "evidence: profile.levels: not a list",
     "answer-profile-delta": 'evidence: profile.delta: "2/4" is not in lowest terms',
-    "answer-profile-draw": "evidence: profile.levels[0].draw: not a bernoulli, subset or stratified draw",
+    "answer-profile-draw": "evidence: profile.levels[0].draw: not a bernoulli, subset, stratified or work draw",
     "answer-public": "evidence: public: keys are not draw",
     "answer-public-law": "evidence: public.draw: keys are not law, p, population, units",
     "answer-protocol": "outcome: protocol", "answer-other": "outcome: for registration",
@@ -107,7 +107,8 @@ EXPECT = {
     "answer-public-null": "evidence: answer: an accept has no reason",
     "answer-reject-public": "evidence: answer: a reject has a reason, and neither",
     "answer-profile-type": "evidence: profile: levels missing", "answer-public-bernoulli": "draw: bernoulli:1/2 over",
-    "answer-public-bernoulli-unreduced": "draw: bernoulli:2/4 over", "answer-public-stratified": "draw: stratified:",
+    "answer-public-bernoulli-unreduced": "draw: bernoulli:2/4 over",
+    "answer-public-bernoulli-padded": "evidence: public.draw.p: not num/den", "answer-public-stratified": "draw: stratified:",
     "answer-public-work": "draw: work:", "answer-public-work-bare": "draw: work:",
     "answer-public-law-other": "evidence: public.draw.law: not subset, bernoulli, stratified or work",
     "answer-public-law-type": "evidence: public.draw.law: not a string",
@@ -351,6 +352,21 @@ def test_a_salted_unit_opens_only_under_its_certified_windows_salt():
         assert opened({**cases[salt], "params": other}, None).startswith("the window's template's unit reads a salt")
 
 
+#: `ok_salt("ab" * 64, 3)`, its first 32 bytes
+OK_SALT_3 = "41da7caf12c48dda02c2fc5ca1aba62e7c7325eb26fdc32e56a3e50d5a8a322b"
+
+
+def test_the_ok_salt_is_sha512_in_counter_mode():
+    """`core_check.ok_salt` is `SALT_BYTES` bytes of SHA-512 in counter mode over `OK_SALT_TAG` ‖ context ‖ 0 ‖
+    u64be(position), each block's counter a u32 big-endian (one hash, SHA-512, whole outputs), pinned so the Lean
+    `Credit.okSalt` and every registered ok row move with it."""
+    salt = CC.ok_salt("ab" * 64, 3)
+    assert salt[:32].hex() == OK_SALT_3
+    head = b"verity/pouw/h1-prove/ok-row-salt/v1\0" + b"ab" * 64 + b"\0" + (3).to_bytes(8, "big")
+    assert salt == b"".join(hashlib.sha512(head + c.to_bytes(4, "big")).digest() for c in range(3))
+    assert len({CC.ok_salt("ab" * 64, 4), salt, CC.ok_salt("cd" * 64, 3), CC.public_row_salt("ab" * 64, 3)}) == 4
+
+
 def test_the_public_row_is_the_compiled_programs_salt_position_and_roots():
     """`core_check.public_row`'s bits are the leaves `Compiled.inputs` fills for one unit: `pouw.salt`, the unit's
     position, then its group's two roots (`seeds.leaves`, `seeds.position_leaves`, Boolean), bit t of the row bit t % 8
@@ -525,7 +541,7 @@ DRAW_EXPECT = {
     "units": ("draw", "the units are not the draw coin's subset:"), "other-key": ("draw", "the units are not the draw coin's"),
     "early-coins-live": ("coin", "the draw's coin does not open"),
     "live-coins": ("coin", "the challenger record is malformed: "),
-    "live-not-epoch": ("coin", "the coin commitment's coins are not a live epoch's"),
+    "live-not-epoch": ("coin", "the coin commitment's coins are not a live window's draw session's"),
     "live-bare": ("coin", CC.SIGNED_LIVE),
     "live-key": ("coin", "the verifier's challenger key is malformed: a challenger key is {H, W, public}"),
     "live-no-record": ("coin", "no challenger record: the verifier holds no coin commitment"),
@@ -596,7 +612,7 @@ def test_every_draw_mutation_hits_its_refusal():
 def _live_draw(sk: lms.PrivateKey, coins: str, reg: str, stream: str, receipt: dict, n: int, k: int, pinned: dict) -> dict:
     """The sample's check of record's input (`pouw_pass_cases.honest_live_draw`'s layout) for a challenger run on coins
     `coins`, its record signed under `sk` and naming that key, in a window whose parameters pin challenger key `pinned`."""
-    ch = Wd.live_challenger(0, 1, random.Random(coins).randbytes)
+    ch = Wd.draw_challenger(0, random.Random(coins).randbytes)
     message = Ch.record_message(lms.public_key(sk)[:16], "provers-node", ch.commitment)
     record = Ch.ChallengerRecord(ch.commitment, "provers-node", lms.sign_at(sk, 0, message).encode())
     o = ch.open(Wd.DRAW, 0, bytes.fromhex(reg))

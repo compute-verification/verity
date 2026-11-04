@@ -1,0 +1,67 @@
+# The NVIDIA B200 SXM 180 GB (HGX B200, 1000 W): the one source of its numbers (verity/hardware/README.md).
+# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU and firmware exceeds it, what the
+# model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
+# (neither, open). Per-SM rates are a SM-clock's. No Lean card table is held to this file yet: the B200's numbers in Lean
+# are Security/Definitions/Accounting/Sheets/B200.lean's. The host the card sits in is its own card.
+
+kind = "gpu"
+sku = "b200-sxm-180gb"
+name = "NVIDIA B200 SXM 180 GB (HGX B200, 1000 W)"
+die = "GB100 x 2"
+arch = "sm_100a"
+board = "692-2G525-0220-000"
+vbios = "97.00.D9.00.35"
+nodes = "a B200 node: one card a VM (art:a597e0beaf00: nvidia-smi -q and the clock trials; art:986044d82e9b)"
+
+[sm]
+count = { value = 148, unit = "SM", mark = "ceiling", source = "the SMs the firmware enables, as the device reports them (sm_100/table.toml, EPS1 DC, note:20261017T0452Z-draft-eps1-dc); no NVIDIA document read gives the B200's count (Technical Brief V2.1 Table 3 says only '16 Blackwell Die for 8 GPUs')" }
+
+[clock]
+sm = { value = 1965, unit = "MHz", mark = "ceiling", source = "art:a597e0beaf00 (nvidia-smi -q: max, application, default application and max customer boost clocks 1965 MHz; NVML GPC and memory clock VF offset ranges [0, 0]; supported graphics clocks top at 1965; every lock, application clock and offset above 1965 MHz clamped or refused); no NVIDIA document states a B200 clock" }
+tensor = { value = 1965, unit = "MHz", mark = "ceiling", source = "clock.sm: the tensor cores run on the SM clock, which bounds them; the data sheets' rates imply 1854 MHz (Accounting.TS.Sheets.B200's impliedMHz), which no document states as a clock, and no lower tensor clock is measured on this card" }
+memory = { value = 3996, unit = "MHz", mark = "ceiling", source = "art:a597e0beaf00 (max, application and default application memory clock 3996 MHz; supported memory clocks top at 3996; memory VF offset range [0, 0], a +500 MHz offset refused)" }
+
+# The stores. Registers in 32-bit words an SM; the rest in bytes.
+[store]
+reg = { value = 65536, unit = "word/SM", mark = "ceiling", source = "Blackwell Tuning Guide section 1.4.1.1: 'The register file size is 64K 32-bit registers per SM'" }
+reg_extra = { value = 70030, unit = "word/SM", mark = "ceiling", source = "the uniform registers (63 a warp at 64 warps, 4032 words), the predicates (7 bits a thread at 2048 threads, 448 words) and the uniform predicates (7 bits a warp, 14 words), as the H200's at the Tuning Guide's 64 warps an SM; and the tensor memory, 256 KiB an SM (65536 words: PTX ISA 9.0 'Tensor Memory', 128 lanes of 512 32-bit columns), which Isa.lean has no Store for" }
+smem = { value = 262144, unit = "B/SM", mark = "ceiling", source = "Blackwell Tuning Guide section 1.4.2.3: the B200's 'combined L1 cache, texture cache, and shared memory of 256 KB' (shared memory alone is configurable to 228 KB, so the pool is the larger)" }
+l2 = { value = 132120576, unit = "B", mark = "placeholder", source = "126 MiB: Blackwell Tuning Guide section 1.4.2.2, 'The NVIDIA GB200 GPU increases the L2 cache capacity to 126 MB', taken as MiB; no document gives the HGX B200's, and the device's L2 size isn't on record" }
+dram = { value = 193273528320, unit = "B", mark = "ceiling", source = "Lenovo HGX B200 180GB 1000W GPU Product Guide Table 2: 'GPU Memory 180 GB HBM3e', taken as 180 GiB, above the 183,359 MiB the driver reports (art:a597e0beaf00)" }
+
+# The resources' rates, each a SM-clock (a Lean table's rho would be SMs x this x clock.sm, the tensor's x clock.tensor).
+[rate]
+tensor = { value = 8192, unit = "s8 MAC/SM-clock", mark = "measurement", source = "tcgen05.mma kind::i8 measured at 8195 MACs a SM-clock (benchmarks/pouw/sass_census/unpriced_fp4.cu) and UTCIMMA M128 N256 at 512 SMSP-cycles (DC-100); the data sheets' 4.5 dense INT8 petaOPS (Lenovo Product Guide Table 2; Technical Brief V2.1 Table 3) over 2 x 148 SMs is 8192 at 1854 MHz, but no document states the clock it is quoted at (Accounting.TS.Sheets.B200's impliedMHz), so the per-clock rate is measured only" }
+issue = { value = 4, unit = "warp instruction/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 18.9.1 (CC 10.x), as section 18.8.1: '4 warp schedulers ... each scheduler issues one instruction for one of its assigned warps'; a uniform instruction takes the slot too (Accounting.TS.Sheets.B200, A2u)" }
+alu = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 10.0: 32-bit integer add, compare, min, max, logic and shift 64" }
+imad = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 10.0: 32-bit integer multiply, multiply-add and extended-precision multiply-add 64" }
+shfl = { value = 32, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 10.0: warp shuffle 32" }
+f64 = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 10.0: 64-bit floating-point add, multiply and multiply-add 64" }
+sfu = { value = 16, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7: reciprocal, square root, logarithm, exponential, sine and cosine 16" }
+smem = { value = 32, unit = "bank word/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9, 'Shared Memory', CC 10.0: 32 banks of one 32-bit word a clock" }
+l2 = { value = 512, unit = "word/SM-clock", mark = "placeholder", source = "the lane loads' issue bound, neither measured nor a ceiling; the B200's L2 bandwidth isn't measured (sm_100/table.toml)" }
+
+[memory]
+bus = { value = 8192, unit = "bit", mark = "ceiling", source = "eight HBM3e stacks of 1024 bits (Technical Brief V2.1 Table 3: 'Up to 192 GB HBM3e', eight 24 GB stacks); no data-sheet figure" }
+transfers = { value = 2, unit = "transfer/clock", mark = "ceiling", source = "HBM3e is double data rate: two transfers a clock of the 3996 MHz nvidia-smi reports" }
+bandwidth = { value = 8.183808e12, unit = "B/s", mark = "ceiling", source = "clock.memory x memory.transfers x memory.bus / 8, above NVIDIA's 'Up to 8TB/s' (HGX AI Factory reference architecture, Table 1, B200 SXM) and the Lenovo Product Guide's 'GPU Memory Bandwidth 7.7 TB/s' (Table 2); not measured on the B200" }
+
+# The tensor units a MAC of each operand format uses (rate.tensor counts s8 MACs).
+[weight]
+s8 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "rate.tensor's unit (tcgen05.mma kind::i8)" }
+u8 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "tcgen05.mma kind::i8 takes u8 as s8 (PTX ISA 9.0), at the data sheets' one INT8 rate" }
+b1 = { value = 0.125, unit = "tensor unit/MAC", mark = "placeholder", source = "no b1 MMA rate is documented or measured on the B200 (tcgen05.mma has no b1 kind): the H200's measured ratio, 8 b1 MACs in a s8 MAC's time, until one is" }
+e4m3 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "the data sheets' FP8 4.5 dense petaFLOPS, the INT8 rate (Lenovo Product Guide Table 2; Technical Brief V2.1 Table 3: 'FP8/FP6 Tensor Core 4.5 | 9 petaFLOPS')" }
+e5m2 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e4m3 (tcgen05.mma kind::f8f6f4)" }
+e2m1 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "kind::f8f6f4 runs e2m1, FP6 (e2m3, e3m2) and FP8 at one rate (CUTLASS: 'kind::f8f6f4 | 2x Hopper Fp8 Tensor Core'); measured alone with e2m1 operands at 8195 MACs a SM-clock, the e4m3 rate (unpriced_fp4.cu); Isa.lean has no FP6 format" }
+f16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "Lenovo Product Guide Table 2: FP16 2.25 dense petaFLOPS (the brief's 2.2), half the FP8 rate" }
+bf16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "Lenovo Product Guide Table 2: BFLOAT16 2.25 dense petaFLOPS" }
+tf32 = { value = 4, unit = "tensor unit/MAC", mark = "ceiling", source = "Lenovo Product Guide Table 2: TF32 1.1 dense petaFLOPS, a quarter of the FP8 rate" }
+nvf4 = { value = 0.5, unit = "tensor unit/MAC", mark = "ceiling", source = "the data sheets' FP4 9 dense petaFLOPS, twice the FP8 rate (Lenovo Product Guide Table 2; Technical Brief V2.1 Table 3); kind::mxf4nvf4 measured at 16390 MACs a SM-clock, 2.000 times kind::i8's 8195 (unpriced_fp4.cu)" }
+mxf4 = { value = 0.5, unit = "tensor unit/MAC", mark = "ceiling", source = "as nvf4 (kind::mxf4, measured at the same rate, unpriced_fp4.cu)" }
+f64 = { value = 128, unit = "tensor unit/MAC", mark = "ceiling", source = "the data sheets' FP64 Tensor Core 37 teraFLOPS over 148 SMs at 1965 MHz is 63.6 DMMA MACs a SM-clock; measured 64 (DMMA.8x8x4, benchmarks/pouw/sass_census/unpriced.cu), sharing the tensor pipe's time with the other formats; 8192 / 64" }
+
+# The model's own ranges (Accel.Card's exact and text).
+[model]
+exact = { value = 31, unit = "bit", mark = "ceiling", source = "PTX ISA 9.0 tcgen05.mma and mma: integer MMAs accumulate in .s32, so a dot is exact at most while |C| + sum |a*b| < 2^31 (P1, Card.Exact); captured exact within it (silicon.integer.BLACKWELL_SM100_S8_K32, art:1015987ce8db, 0 mismatches)" }
+instruction_bytes = { value = 16, unit = "B/instruction", mark = "ceiling", source = "an instruction is 128 bits from Volta on (CUDA Binary Utilities 12.9), so code fits in store.dram / 16 instructions" }

@@ -372,7 +372,7 @@ def _bitlen(m: np.ndarray) -> np.ndarray:
 
 def _tc_dot16_pipeline(acc: np.ndarray, a: np.ndarray, b: np.ndarray, *, groups: tuple[int, ...], width: int,
                        floor: int) -> tuple[np.ndarray, np.ndarray]:
-    """One bf16 k16 tensor-core step under a `veritor.core.silicon.Pipeline`'s parameters, vectorised: acc (...,) f32 words,
+    """One bf16 k16 tensor-core step under a `verity.ml.circuits.silicon.models.GroupSum`'s parameters, vectorised: acc (...,) f32 words,
     a/b (..., 16) bf16 words -> (f32 words, nonfinite mask).  `groups` lists, in k order, how many products each grouped sum
     takes (the incoming accumulator joins the first group and each group's result joins the next); `width` is the adder's
     significand width and `floor` its exponent floor -- exactly `silicon.group_sum` / `silicon.tc_dot`, gate for gate.

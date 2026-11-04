@@ -3,6 +3,10 @@
   "NetworkServedCounts_v1{T=12,FOUT=3,FIN=2,R=2,RIN=2,OWN=1}": {
    "and": 4918
   },
+  "NetworkServedCounts_v1{T=60,FOUT=4,FIN=1,R=6,RIN=1,OWN=1}": {
+   "and": 28468,
+   "type": "94bfbd33df4e258aad18deaf22288915f5a78693edeacb56d1b67d899e79a8002700bbe1c8059d17400ea1be4a41b181f5ed3b87fadc376471a9a068a45b28dd"
+  },
   "NetworkServedCounts_v1{T=8,FOUT=3,FIN=1,R=2,RIN=2,OWN=0}": {
    "and": 3438
   },
@@ -13,6 +17,9 @@
  "digests": {
   "NetworkServedCounts_v1{T=12,FOUT=3,FIN=2,R=2,RIN=2,OWN=1}": {
    "sha512": "21e6c7d449479ca36ef63b85508b88a47f01ee86f36f864fecefea5c247ee42c8a48c8015b29f6d49b84527616daa9ce789c47f31b55235884092ccce27c1685"
+  },
+  "NetworkServedCounts_v1{T=60,FOUT=4,FIN=1,R=6,RIN=1,OWN=1}": {
+   "sha512": "cc3162c2ad3510ff390eba3e91f35247c7edba64e9767d3108edfcf133b8ab07b1c6b69aed3fa95fcc3e349fc80730b12d175f995f7b5202319e163192529908"
   },
   "NetworkServedCounts_v1{T=600,FOUT=1024,FIN=1,R=6,RIN=1,OWN=0}": {
    "sha512": "88515d489a24909b572537bcef4f8e42dc877115ae8f42d87ec4f52e2eb7c6662f5194fafa958d21a770ccbae8876bc9343115f1936b97f829f80ccf1566f676"

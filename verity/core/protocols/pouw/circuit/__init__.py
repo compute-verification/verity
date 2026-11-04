@@ -1,5 +1,4 @@
-"""`ncp-v2`: NCP-INT's noised GEMM as a `verity.ml.circuits` Program, verified by sampled proofs
-(`PROTOCOL.md` §`ncp-v2`).
+"""`ncp-v2`: NCP-INT's noised GEMM as a `verity.ml.circuits` Program, verified by sampled proofs.
 
 * `words`: PoUW's word primitives (every output at most 32 bits but `pc8`'s exact squares, which stay inside a row unit).
 * `boolean`: the six of them `pc4`'s and `pc8`'s row units call, and the four Keccak words their hiding tiles' digest calls,
@@ -20,7 +19,7 @@
   ports and the anchored inputs public input regions (`PORTS`).  No scheme of theirs is in `SCHEMES` yet.
 * `rowk`: their row units cut along k into a head, one form per segment and a tail (``Shape.row_k``, opt-in), so each
   piece fits C-Flock's block.
-* `compile`: PoUW as one pass over a served Program (`PROTOCOL.md` §`compile`): `compile(program, scheme,
+* `compile`: PoUW as one pass over a served Program: `compile(program, scheme,
   groups)` replaces every registered matmul's dots (`MATMULS`) with the scheme's r × c tile units, each deriving its seed
   and noise in its own proof from the one coin, the salt, and checks the result; `rebuild` is the
   verifier's side. Its schemes are its own `SCHEMES`, not this module's.
@@ -42,6 +41,12 @@
 * `live`: a round's served rows under rule A (`PouwLiveSlots`), one unit a round: ok iff exactly its slots [0, m) name
   requests of the gate-signed request table, none more often than it can take in round s (its prompt at its prefill, one
   row a decode), for the public m that dense credit counts.
+* `lead`: the lead's sampled unit (`verity/pouw/v2`, `PouwLeadTile`): one 16 × 8 MMA tile of a call over a block of at
+  most 32 k32 steps, its committed words against the call's data and the certifier's coin feed at the layout of
+  `Security/Definitions/Pouw/Lead/Layout.lean`, and on the call's last block the served fold, which reads A_i · B_j back
+  exactly within 2^22 and serves verity_int8's epilogue on it. Its window: the registration record, the instance
+  positions and domains, where a unit's words and A rows are committed, and the verifier's refusals of the certifier's
+  record (`PouwCheck/Opening.lean` is its Lean reader).
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs

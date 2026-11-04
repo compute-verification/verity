@@ -43,7 +43,7 @@ B=$(python3 -c "import json;print(json.load(open('$WL')).get('batch') or json.lo
 PAIRS=${PAIRS:-3}; GPU_UTIL=${GPU_UTIL:-0.3}; TO=${COMMIT_TIMEOUT:-2400}; TAPS=${TAPS:-kernels}
 HIDDEN_SO=${HIDDEN_SO:-/workspace/cp/fa2/build/matReq/verity_fa2_matReq.so}
 log() { echo "[$(date -u +%FT%TZ)] compiled_commit $ROW: $*" | tee -a "$D/stages.txt"; }
-COMMON=(--case "$ROLE" --workload "$WL" --committer native_collect_v2b --fast-copy --gpu-tree --hidden-so "$HIDDEN_SO" --openings 64 --pairs "$PAIRS" --warmup 2
+COMMON=(--case "$ROLE" --workload "$WL" --committer native_collect_v2b --hidden-so "$HIDDEN_SO" --openings 64 --pairs "$PAIRS" --warmup 2
         --max-num-seqs "$B" --engine-arg "gpu_memory_utilization=$GPU_UTIL" --engine-arg enforce_eager=false
         # the compilation_config of record is the WORKLOAD's engine.args (workload.py --target: cudagraph_mode +
         # inductor_compile_config {emulate_precision_casts: true} from TargetProfile.engine_args()); an explicit 3rd argument overrides the

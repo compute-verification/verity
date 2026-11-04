@@ -28,7 +28,7 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   `U`, whether the openings lie in `C`, and otherwise true. It reads `b`'s first `k` blocks and runs the Fisher–Yates.
 * `below δ P u`: the threshold coin. `u`, 512 uniform bits, falls below `min(1, δ/P)` rounded down to a multiple of
   `2^-512`, and always when `P ≤ δ`.
-* `Coins n κ X`: a session's coins, the other coins `x` (the prover's, the world's, every window's challenge) and each
+* `DrawCoins n κ X`: a session's coins, the other coins `x` (the prover's, the world's, every window's challenge) and each
   window's `κ`-bit openings coin.
 * `Session`: each window's size `U_t` and correct receipts, read off the coins. The prover is sent every coin once it is
   released (`coins.coin_reason`), so it may read an earlier window's whole coin, not only its openings. That window
@@ -143,15 +143,16 @@ def test {m : ℕ} (U k : ℕ) (C : Finset ℕ) (b : Blocks m) : Prop :=
 /-- **The threshold coin**: `u` read as a number below `2^512` is below `⌊δ·2^512/P⌋`, or `P ≤ δ`. -/
 def below (δ P : ℝ) (u : Pous.Bits 512) : Prop := P ≤ δ ∨ Pous.bitsVal u < ⌊δ * 2 ^ 512 / P⌋₊
 
-/-- A session's coins: the other coins and window `t`'s openings coin. -/
-abbrev Coins (n κ : ℕ) (X : Type) : Type := X × (Fin n → Pous.Bits κ)
+/-- A session's coins: the other coins and window `t`'s openings coin. Not the live coins (`Verity.Coins`): each
+openings coin seeds a draw without replacement over its window's own receipts, and the other coins hold the prover's. -/
+abbrev DrawCoins (n κ : ℕ) (X : Type) : Type := X × (Fin n → Pous.Bits κ)
 
 /-- A session of `n` windows of at most `m` receipts, window `t` drawing `min(s_t, U_t)` of its `U_t`. -/
 structure Session (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) where
   /-- Window `t`'s receipt count `U_t`. -/
-  size : Fin n → Coins n κ X → Fin (m + 1)
+  size : Fin n → DrawCoins n κ X → Fin (m + 1)
   /-- Window `t`'s correct receipts, by position. -/
-  correct : Fin n → Coins n κ X → Finset ℕ
+  correct : Fin n → DrawCoins n κ X → Finset ℕ
 
 /-- `audit.pooled`'s budget: `S·(1 − δ^(1/S))` (`-expm1(log δ / S)·S`). -/
 noncomputable def budget (S : ℕ) (δ : ℝ) : ℝ := S * (1 - δ ^ ((S : ℝ)⁻¹))
@@ -167,45 +168,45 @@ namespace Session
 variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X)
 
 /-- Window `t`'s draw count, `min(s_t, U_t)`. -/
-def draws (t : Fin n) (ω : Coins n κ X) : ℕ := min (s t) (D.size t ω)
+def draws (t : Fin n) (ω : DrawCoins n κ X) : ℕ := min (s t) (D.size t ω)
 
 /-- The receipts window `t` opens at coins `ω`: its draw on the first blocks `prf t` gives its coin, with the fallbacks
 `rest ω t` where the sampler rejects a first word. -/
-def opened (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n)
-    (ω : Coins n κ X) : Finset ℕ :=
+def opened (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n)
+    (ω : DrawCoins n κ X) : Finset ℕ :=
   openings (D.size t ω) (D.draws t ω) (prf t (ω.2 t)) (rest ω t)
 
 /-- Window `t`'s correct receipts among its `U_t`. -/
-def good (t : Fin n) (ω : Coins n κ X) : ℕ :=
+def good (t : Fin n) (ω : DrawCoins n κ X) : ℕ :=
   ((range (D.size t ω)).filter (· ∈ D.correct t ω)).card
 
 /-- Window `t`'s bound on uniform first blocks: `(g_t/U_t)^(s'_t)`, `0` when `g_t < s'_t`. -/
-noncomputable def bound (t : Fin n) (ω : Coins n κ X) : ℝ :=
+noncomputable def bound (t : Fin n) (ω : DrawCoins n κ X) : ℝ :=
   if D.draws t ω ≤ D.good t ω then ((D.good t ω : ℝ) / (D.size t ω : ℕ)) ^ D.draws t ω else 0
 
 /-- Window `t`'s test at outcome `ω` on first blocks `b`: its draw of `s'_t` of its `U_t` lands in its correct
 receipts. -/
-def lands (t : Fin n) (ω : Coins n κ X) (b : Blocks m) : Prop :=
+def lands (t : Fin n) (ω : DrawCoins n κ X) (b : Blocks m) : Prop :=
   test (D.size t ω) (D.draws t ω) (D.correct t ω) b
 
 /-- **Window `t`'s distinguisher** on coins `y.1 = (ω, u)` and first blocks `y.2`: windows `j < t` land on `prf j` at
 their coins in `ω`, window `t` lands on `y.2`, and the threshold coin `u` falls below `∏_{j ≤ t} bound j`. -/
 def distinguisher (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n)
-    (y : (Coins n κ X × Pous.Bits 512) × Blocks m) : Prop :=
+    (y : (DrawCoins n κ X × Pous.Bits 512) × Blocks m) : Prop :=
   (∀ j, j < t → D.lands j y.1.1 (prf j (y.1.1.2 j))) ∧ D.lands t y.1.1 y.2 ∧
     below δ (∏ j ∈ univ.filter (· ≤ t), D.bound j y.1.1) y.1.2
 
 /-- **The hybrid's potential after `t` windows** at coins `z = (ω, u)`: windows `j < t` land on `prf j` at their coins,
 and the threshold coin `u` falls below the product of their bounds. -/
-def potential (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : ℕ) (z : Coins n κ X × Pous.Bits 512) : Prop :=
+def potential (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : ℕ) (z : DrawCoins n κ X × Pous.Bits 512) : Prop :=
   (∀ j : Fin n, (j : ℕ) < t → D.lands j z.1 (prf j (z.1.2 j))) ∧
     below δ (∏ j ∈ univ.filter (fun j : Fin n => (j : ℕ) < t), D.bound j z.1) z.2
 
 /-- The session's wrong receipts, `Σ_t (U_t − good_t)`. -/
-def wrong (ω : Coins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D.good t ω)
+def wrong (ω : DrawCoins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D.good t ω)
 
 /-- The session's pooled bound at `δ`, at the sizes and draw counts of outcome `ω`. -/
-noncomputable def pooled (δ : ℝ) (ω : Coins n κ X) : ℝ :=
+noncomputable def pooled (δ : ℝ) (ω : DrawCoins n κ X) : ℝ :=
   Draw.pooled n (fun t => D.size t ω) (fun t => D.draws t ω) δ
 
 end Session
@@ -220,19 +221,19 @@ namespace Committed
 variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} (F : Committed n m s κ X Cm)
 
 /-- The session the prover plays holding commitment `com ω` at coins `ω`. -/
-def play (com : Coins n κ X → Cm) : Session n m s κ X where
+def play (com : DrawCoins n κ X → Cm) : Session n m s κ X where
   size t ω := (F.view (com ω)).size t ω
   correct t ω := (F.view (com ω)).correct t ω
 
 /-- The commitment with openings coin `t`'s leaf committing zeros: `com` at the coins with window `t`'s openings coin
 replaced by zeros, the other coins and every salt as they are. -/
-def junk (com : Coins n κ X → Cm) (t : Fin n) (ω : Coins n κ X) : Cm :=
+def junk (com : DrawCoins n κ X → Cm) (t : Fin n) (ω : DrawCoins n κ X) : Cm :=
   com (ω.1, Function.update ω.2 t fun _ => false)
 
 /-- **Window `t`'s hiding term**: how much likelier the potential after `t + 1` windows is at the deployed commitment
 than with openings coin `t`'s leaf committing zeros, plus how much likelier the potential after `t` windows is with
 that leaf committing zeros than at the deployed commitment (each truncated at 0). -/
-noncomputable def hide [Fintype X] (com : Coins n κ X → Cm) (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ)
+noncomputable def hide [Fintype X] (com : DrawCoins n κ X → Cm) (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ)
     (t : Fin n) : ℝ≥0∞ :=
   (Pous.pr ((F.play com).potential prf δ ((t : ℕ) + 1)) -
       Pous.pr ((F.play (junk com t)).potential prf δ ((t : ℕ) + 1))) +
@@ -242,7 +243,7 @@ end Committed
 
 /-- **Window `t`'s continuation** of coins `ω` on `ζ`: `ω`'s other coins and its openings coins before window `t`'s,
 then `ζ`'s openings coins from window `t`'s on. -/
-def cont {n κ : ℕ} {X : Type} (t : Fin n) (ω ζ : Coins n κ X) : Coins n κ X :=
+def cont {n κ : ℕ} {X : Type} (t : Fin n) (ω ζ : DrawCoins n κ X) : DrawCoins n κ X :=
   (ω.1, fun j => if j < t then ω.2 j else ζ.2 j)
 
 /-- **A session's receipts as the windows' roots hold them**: receipt `p` of window `t` at coins `ω` is a row of an
@@ -253,13 +254,13 @@ structure Receipts (n κ : ℕ) (X : Type) where
   /-- The hash, SHA-512. -/
   hash : Hash.Msg → Hash.Digest
   /-- What the verifier holds for receipt `p`'s leaf: its domain, the hm96 key and the format (`row/v2`). -/
-  verifier : Fin n → Coins n κ X → ℕ → Hash.RowLeaf.Verifier
+  verifier : Fin n → DrawCoins n κ X → ℕ → Hash.RowLeaf.Verifier
   /-- The root window `t` registered for receipt `p`. -/
-  root : Fin n → Coins n κ X → ℕ → Hash.Digest
+  root : Fin n → DrawCoins n κ X → ℕ → Hash.Digest
   /-- Receipt `p`'s leaf's rank. -/
-  rank : Fin n → Coins n κ X → ℕ → ℕ
+  rank : Fin n → DrawCoins n κ X → ℕ → ℕ
   /-- The opening the prover presents for receipt `p`. -/
-  opened : Fin n → Coins n κ X → ℕ → Hash.RowLeaf.Opening
+  opened : Fin n → DrawCoins n κ X → ℕ → Hash.RowLeaf.Opening
 
 namespace Receipts
 
@@ -268,7 +269,7 @@ variable {n κ : ℕ} {X : Type} (R : Receipts n κ X)
 /-- **Receipt `p` of window `t` shows row `v` at coins `ω`**: the window opens it, the verifier accepts the opening the
 prover presents at the receipt's root and rank, and its row is `v`. -/
 def Shows {m : ℕ} {s : Fin n → ℕ} (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (p : ℕ) (ω : Coins n κ X) (v : Hash.Row) : Prop :=
+    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (p : ℕ) (ω : DrawCoins n κ X) (v : Hash.Row) : Prop :=
   p ∈ D.opened prf rest t ω ∧
     Hash.RowLeaf.accepts R.hash R.hash (R.verifier t ω p) (R.root t ω p) (R.rank t ω p) (R.opened t ω p) ∧
     (R.opened t ω p).row = v
@@ -277,20 +278,20 @@ def Shows {m : ℕ} {s : Fin n → ℕ} (D : Session n m s κ X) (prf : Fin n �
 `t`'s continuations of `ω`, a row that the most of them show (`Accounting.TS.plural` at `cont t`, ties broken by
 `Classical.epsilon`). -/
 noncomputable def held [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Session n m s κ X)
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : Coins n κ X)
+    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : DrawCoins n κ X)
     (p : ℕ) : Hash.Row :=
   Accounting.TS.plural (cont t) (R.Shows D prf rest t p) ω
 
 /-- **Receipt `p` of window `t` moved**: the verifier accepts the opening presented, at the receipt's root and rank,
 with a row other than the one its root holds. -/
 def Moved [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : Coins n κ X) (p : ℕ) : Prop :=
+    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : DrawCoins n κ X) (p : ℕ) : Prop :=
   Hash.RowLeaf.accepts R.hash R.hash (R.verifier t ω p) (R.root t ω p) (R.rank t ω p) (R.opened t ω p) ∧
     (R.opened t ω p).row ≠ R.held D prf rest t ω p
 
 /-- **The receipts' binding term**: the probability that some window opens a receipt that moved. -/
 noncomputable def binding [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Session n m s κ X)
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) : ℝ≥0∞ :=
+    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) : ℝ≥0∞ :=
   Pous.pr fun ω => ∃ t, ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p
 
 end Receipts

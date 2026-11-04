@@ -57,7 +57,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.circuits.cut import DefinitionCut
 from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.units import Activation, PartitionUnits, UnitCircuit
+from verity.ml.circuits.units import Activation, PartitionUnits, ProofBlockCircuit
 
 from . import circuit as FC
 from . import class_sweep
@@ -146,7 +146,7 @@ class ClassDefinition:
         return params, Array(self.w_out, Value(16))
 
 
-def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[list[int]]:
+def sources(act: Activation, uc: ProofBlockCircuit, owner_of: dict[int, str]) -> list[list[int]]:
     """The unit's inputs grouped by source, in first-read order: one group per Call parameter it reads leaves of, and one per class
     (shape) of producing units whose committed outputs it reads (``owner_of``: computing gate -> its unit's shape in the flat cut),
     as serving commits a tensor once, not per element. Each group is one row, and every instance reading the same values opens
@@ -161,7 +161,7 @@ def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[
     return list(groups.values())
 
 
-def element_rows(act: Activation, uc: UnitCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[tuple[int, ...]], list[int]]:
+def element_rows(act: Activation, uc: ProofBlockCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[tuple[int, ...]], list[int]]:
     """FLOCK_CORE_ROWS's rows of an FP GEMM coordinate (`ELEMENT_ROWS`): x with its scales one row and the W column with its
     scales another, each core's bit row (``verity.ml.commitments.rowleaf.bit_row``: each element's bits low first, the codes, then
     the scales, nothing after). Returns the merged source groups, the `sources` groups each one joins, and each row's length in
@@ -201,7 +201,7 @@ def _packs(packed: bool | Sequence[bool], groups: list[list[int]]) -> list[bool]
 @dataclass
 class Wiring:
     """A class statement of a template-instance partition (`Q_template_instance(s)` v0, the class one template's instances) whose
-    units may read other units' outputs (PROTOCOL.md §16.13, Linking): the program, the query, and each staged instance's unit
+    units may read other units' outputs (`HmOut`, Linking): the program, the query, and each staged instance's unit
     (ascending). Each such read is a link port: the reader's row of exactly the writer's output row's words (`link_ports`),
     committed under the writer's output row's salt, so the two rows' ``b || c`` are equal and the verifiers compare them
     (`link_triples`). This binds a public topology; it does not hide the topology: the verifiers derive the wiring from
@@ -251,7 +251,7 @@ def _whole_row(reads: Sequence[tuple[int, int] | None], n_out) -> int | None:
     return v
 
 
-def link_ports(uc: UnitCircuit, groups: list[list[int]], reads: list[list], n_out) -> tuple[list[list[int]], list[int], list]:
+def link_ports(uc: ProofBlockCircuit, groups: list[list[int]], reads: list[list], n_out) -> tuple[list[list[int]], list[int], list]:
     """Split every source group through which some unit reads another unit's outputs into segments, at each leaf where any unit's
     reads stop being one run (circuit inputs, or one writer's consecutive outputs). Each segment must then be, in every unit,
     circuit inputs only or exactly one writer's whole output row in order (``n_out(v)``: writer ``v``'s output count); a partial
@@ -318,7 +318,7 @@ def links_file(program: Any, query: dict, text: str, indices: Sequence[int]) -> 
             "ports": [x["port"] for x in meta.get("links") or []], "links": [list(x) for x in triples]}
 
 
-def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[list[int]] | None = None,
+def class_lowering(act: Activation, uc: ProofBlockCircuit, name: str, groups: list[list[int]] | None = None,
                    packed: bool | Sequence[bool] = False, blocks: bool = True) -> IL.Lowering:
     """The class's unit on u16 ports: one row port per source group (``groups``: input positions; default one row for all), its
     words laid out by `_slots` (``packed``: narrow words share leaves; per group when a sequence), each padded to whole 64-word
@@ -351,7 +351,7 @@ def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[lis
     return IL.Lowering(name, ClassDefinition(name, port_words, w_out), units, C, lay)
 
 
-def pack(uc: UnitCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]], w_in: int, w_out: int,
+def pack(uc: ProofBlockCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]], w_in: int, w_out: int,
          groups: list[list[int]] | None = None, port_words: Sequence[int] | None = None, packed: bool | Sequence[bool] = False):
     """The lanes as each port's rows ``{p{i}: (n, words)}``, all ports side by side ``(n, w_in)``, and outputs ``(n, w_out)``, u16, in
     the layout `class_lowering` reads (``packed`` as there)."""
@@ -755,7 +755,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
         ({"links": links, "definition": definition} if wiring is not None else {})
 
 
-def _check_bit_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,
+def _check_bit_rows(uc: ProofBlockCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,
                     name: str, lanes: int = 8) -> None:
     """The first ``lanes`` staged rows of each port are core's bit row of the lane's elements (``rowleaf.bit_row``), then zero."""
     from verity.ml.commitments.rowleaf import bit_row
@@ -1045,10 +1045,10 @@ class UnitStager:
     row ``(schema, output ports)``, a run of consecutive output ports of exactly their words (`circuit.compose`'s
     ``seg_out_rows`` / ``v2_out_rows``). ``public_inputs`` (``{param: {"seed", "derivation"}}``): parameters that are public
     input ports, not rows (`circuit.compose`; PoUW's anchors, which the verifier recomputes from public seeds), laid out as
-    `unit_lowering`'s ``public``. ``circuit``: where circuit.txt is written, once; else `stage` writes it beside each round's
-    files. ``pin`` and ``class_sha512`` (`circuit.digest`, `circuit.class_digest`) are computed on first read: `stage` reads
-    them after writing circuit.txt, so a streamed circuit (``benchmarks/pouw/hidden_zk/fast_stage.py``) is hashed in the pass
-    that writes it. ``bind`` (``{"partition", "program"}``, `circuit.compose`'s): the statement bound to a partition of another
+    `unit_lowering`'s ``public``. ``circuit``: where circuit.txt is written, once, as it is composed (`circuit.compose_to`: the
+    stager never holds it, and ``text`` reads it back); else `stage` writes it beside each round's files, and ``pin`` and
+    ``class_sha512`` (`circuit.digest`, `circuit.class_digest`) are computed on first read: `stage` reads them after writing
+    circuit.txt, so a streamed circuit (``benchmarks/pouw/hidden_zk/fast_stage.py``) is hashed in the pass that writes it. ``bind`` (``{"partition", "program"}``, `circuit.compose`'s): the statement bound to a partition of another
     Program, a template query's that lists ``definition``, which META ``program_digests`` then names as the circuit's template
     (as `_shims`' does with a ``definition``); `stage` then takes each instance's global unit index (``indices``). The class
     (`circuit.class_digest`) is the unbound stager's. ``layout`` (a layout mode, ``iv/hybrid/4``): the templated statement
@@ -1094,18 +1094,26 @@ class UnitStager:
                                    outputs=[port(f"o{j}") for j in range(len(self.out_words))],
                                    program_digests=lambda statics: programs, **({"definition": lambda **_: definition} if bind else {}))
         self.iset = SimpleNamespace(subcircuit=self.sub, name=name.replace("/", "-"), content_digest=hashlib.sha256(content).hexdigest())
-        self.text = FC.compose(self.low, self.sub, port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
-                               seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
-                               seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None,
-                               partition=bind and bind["partition"], program=bind and bind["program"], layout=layout,
-                               tail=getattr(self.low, "tail", None), leaf_scheme=LEAF_SCHEME)
+        kw = dict(port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
+                  seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
+                  seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None,
+                  partition=bind and bind["partition"], program=bind and bind["program"], layout=layout,
+                  tail=getattr(self.low, "tail", None), leaf_scheme=LEAF_SCHEME)
         self.bound = bind is not None
-        self.meta = FC.meta_of(self.text)
-        self.ports = FC._meta_ports(self.meta)
         self.circuit = circuit
-        if circuit is not None:
+        if circuit is None:
+            self._text = self._head = FC.compose(self.low, self.sub, **kw)
+        else:
             circuit.parent.mkdir(parents=True, exist_ok=True)
-            circuit.write_text(self.text)
+            got = FC.compose_to(circuit, self.low, self.sub, **kw)
+            self._text, self._head, self.pin, self.class_sha512 = None, got["head"], got["sha512"], got["class"]
+        self.meta = FC.meta_of(self._head)
+        self.ports = FC._meta_ports(self.meta)
+
+    @property
+    def text(self) -> str:
+        """The circuit's text: the stager's own, or with ``circuit`` read from the file, a fresh copy each read."""
+        return self._text if self.circuit is None else self.circuit.read_bytes().decode()
 
     @functools.cached_property
     def pin(self) -> str:
@@ -1177,13 +1185,13 @@ class UnitStager:
         out_dir.mkdir(parents=True, exist_ok=True)
         if self.circuit is None:
             (out_dir / "circuit.txt").write_text(self.text)
-        FC.write(self.text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
+        FC.write(self._text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
                  rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in self.in_rows}, outs=outs, salts=salts,
                  public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in self.public_inputs},
                  digests=(self.pin, self.class_sha512), indices=None if indices is None else [int(u) for u in indices],
                  share_rows=tables is not None, tables=tables, refs=refs, registered=registered, meta=self.meta)
         counts = getattr(self.low, "counts", None) or self.low.layout.counts
-        return {"meta": FC.meta_of(self.text), "outs": outs, "salts": salts, "ands": counts["ands"],
+        return {"meta": FC.meta_of(self._head), "outs": outs, "salts": salts, "ands": counts["ands"],
                 "unit_nnz": counts["nnz_a"] + counts["nnz_b"], "circuit_sha512": self.pin}
 
 

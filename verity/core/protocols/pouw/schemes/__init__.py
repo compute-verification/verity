@@ -1,5 +1,5 @@
-"""The named PoUW schemes.  `get(name)` returns a configured `verity.core.protocols.pouw.protocol.PoUWScheme`; each name has a section
-in ``PROTOCOL.md`` and pinned vectors under ``tests/vectors``."""
+"""The named PoUW schemes.  `get(name)` returns a configured `verity.core.protocols.pouw.protocol.PoUWScheme`; each name's module
+docstring states its steps, and its pinned vectors are under ``tests/vectors``."""
 
 from __future__ import annotations
 
