@@ -479,6 +479,7 @@ def test_a_probe_that_reads_past_the_table_is_a_partial_reference(monkeypatch):
 
 def test_a_parameter_over_the_input_budget_without_a_probe_fails_by_name():
     e = CK.check_definition(_table_read(), TABLE_OPTS, memo={}, pins=PINS)
+    assert e["conformance"] == "not-yet-established"
     assert [f["name"] for f in e["failures"]] == [
         "correspondence/unprobed-table CircuitCheckTableRead_v1 parameter 1 has 8192 leaves, over the input budget 1024, and no "
         "registered table probes it (`circuit_check.targets.TABLE_PROBES`)"]

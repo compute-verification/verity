@@ -68,7 +68,7 @@ ScanSlotsV2 = EW.specialized("ScanSlots", 2, ["NS", "NP", "IDB", "K0", "K", "OCC
                              doc="Each lane's first position's token and slot, occupancy word and head from the scan's state "
                                  "row (`io_shell`'s module docstring; `io_shell.scan_reference`).",
                              refuse=X.slots_refuse,
-                             conformance="the network certifier's scan state row as its Programs read their slots, and each "
-                                         "slot's first position's token feed")
+                             conformance="not-yet-established: the network certifier's scan state row as its Programs read "
+                                         "their slots, and each slot's first position's token feed")
 
 BOOLEAN_IO_SHELL = [IngressPromptV2, ScanSlotsV2]

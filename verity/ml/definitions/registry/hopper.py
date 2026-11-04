@@ -181,13 +181,6 @@ CALL_NAMES: dict[str, str] = {k: v.name for k, v in PORTED.items()}
 NAME_MAP: dict[str, str] = {**CALL_NAMES, **{k: v.name for k, v in _BoundPrims._over.items()}}
 
 
-def set_conformance(status: dict[str, str]) -> None:
-    """Set conformance statuses from evidence (the profile's `expectations.json` / conformance run)."""
-    by_name = {d.name: d for d in HOPPER_COMPOSITES + [Fa3InvSum]}  # HopperBF16WgmmaDot16's conformance is core's
-    for name, st in status.items():
-        by_name[name].conformance = st
-
-
 # ---------------------------------------------------------------------------------------------------------
 # bindings as data, and the structural comparison that backs "same structure, different bindings"
 # ---------------------------------------------------------------------------------------------------------
