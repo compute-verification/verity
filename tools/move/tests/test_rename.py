@@ -477,16 +477,15 @@ def test_a_prose_map_renames_only_words_in_prose(path, old, new):
     assert PROSE.sub(old, path) == new
 
 
-def test_a_data_file_under_a_prose_map_leaves_every_word_standing():
-    """A file with no prose (a data file, a lock) keeps its bytes, and the report counts each of its words as left standing,
-    a [keep] span's too, as for a word in a literal of a file that has prose."""
+def test_a_data_file_under_a_prose_map_is_left_as_it_is():
+    """A file with no prose (a data file, a lock) keeps its bytes and its words go uncounted, while a file with prose counts
+    a word its literal keeps as left standing."""
     words = M.Words({"scope": "prose", "words": {"draw": "sample", "firewall": "ZK server"},
                      "keep": {"patterns": [r'"draw"']}})
     text = '{"draw": "a draw by the firewall", "unit_draw": 1}\n'
     kept, counts = M.Counter(), M.Counter()
     assert words.sub(text, "x.json", counts=counts, kept=kept) == text
-    assert kept == {"draw": 3, "firewall": 1} and not counts
-    kept = M.Counter()
+    assert not kept and not counts
     assert words.sub("# a draw\nx = 'a draw by the firewall'\n", "y.py", kept=kept) == "# a sample\nx = 'a draw by the firewall'\n"
     assert kept == {"draw": 1, "firewall": 1}
 

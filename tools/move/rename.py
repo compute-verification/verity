@@ -450,14 +450,14 @@ class Words:
             kept: Counter | None = None, protect: bool = True) -> str:
         """`text` (of file `path`) with every word renamed, except inside the spans [keep] (and `keep`) cover and the words
         [keep_in] lists for `path`. ``counts`` and ``kept`` count the words renamed (by old and new) and the words left
-        standing; without ``protect`` (a path), [keep] keeps nothing and [keep_paths] holds its words as [keep_in] does."""
+        standing; without ``protect`` (a path), [keep] keeps nothing and [keep_paths] holds its words as [keep_in] does.
+        Under `scope = "prose"` a file with no prose (a data file, a lock) is returned as it is, its words not counted:
+        finding each one in Security's lock takes most of a 32-process move."""
         pattern, new = self.rules(path, text)
         if pattern.search(text) is None:
             return text
         parts = regions(path, text) if self.scope and protect else None
-        if parts is not None and all(k != PROSE for _, _, k in parts):     # a data file: every word stands
-            if kept is not None:
-                kept.update(re.sub(GAP, " ", m.group(0)) for m in pattern.finditer(text))
+        if parts is not None and all(k != PROSE for _, _, k in parts):
             return text
         held = [(m.start(), m.end()) for k in self.keep if protect for m in k.finditer(text)]
         if held and path.endswith(".py") and (names := [(m.start(), m.end()) for m in EXPORTS.finditer(text)]):
