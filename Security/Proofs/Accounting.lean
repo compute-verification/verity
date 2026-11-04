@@ -1,6 +1,6 @@
 import Proofs.Accounting.Defs
 import Proofs.Accounting.Memory
-import Proofs.Accounting.MemoryShare
+import Proofs.Pous.Obligation
 import Proofs.Accounting.Device
 import Proofs.Accounting.Gates
 import Proofs.Accounting.FillerLuck
@@ -43,10 +43,8 @@ import Proofs.Accounting.PerRunNecessity
 import Proofs.Accounting.PerRunPriced
 import Proofs.Accounting.PerRunStop
 import Proofs.Accounting.RemoteHeld
-import Proofs.Accounting.RemoteHeld.Meets
 import Proofs.Accounting.RemoteHeld.OverTime
 import Proofs.Accounting.RemoteHeld.Draw
-import Proofs.Accounting.RemoteHeld.DrawMeets
 import Proofs.Accounting.RemoteHeld.Binding
 import Proofs.Accounting.RemoteHeld.Sketch
 import Proofs.Accounting.RemoteHeld.SketchLine
