@@ -5,12 +5,12 @@ import Proofs.Properties.Verity.SampledCoins
 # Sampled proofs' coupling: the coin map
 
 The coin map the projection reads (`CoinMap`, in `Proofs.Properties.Verity.Sampled.Project`) writes the live audit's
-coins into the period's tape at the projection's stops. A stop is an opening's coin node, where the device draws the
-opened round among the draws the coin tree committed to there (`TreeOpenable`, a fiber of the leaf's hash), and releases
-the draw's first coins. A live coin is uniform over its challenges and the fiber's draws aren't uniform over their
-releases, so no map writes one into the other as the tape's own: the coin map's round and link premises hold within an
-explicit term, the written draw's shortfall below uniform at each stop. The start's premises hold exactly: a fresh
-frame's coins are 512 uniform bits, one for one with 64 of the draw's bytes.
+coins into the period's tape at the projection's stops. A stop is an opening's coin node, where the device flips the
+opened round among the rounds the coin tree committed to there (`TreeOpenable`, a fiber of the leaf's hash), and
+releases the round's first coins. A live coin is uniform over its challenges and the fiber's rounds aren't uniform over
+their releases, so no map writes one into the other as the tape's own: the coin map's round and link premises hold
+within an explicit term, the written round's shortfall below uniform at each stop. The start's premises hold exactly: a fresh
+frame's coins are 512 uniform bits, one for one with 64 of the bytes the sample reads.
 
 * **A filled tape** (`fill`, `avg_fill`, `avg_walk_fill`): along the tape's play up to the first stop, each chosen coin
   node takes the next of the coins `κ`, and nothing from the stop on is written. Over uniform `κ` the filled tape is
@@ -26,18 +26,19 @@ frame's coins are 512 uniform bits, one for one with 64 of the draw's bytes.
   sum is at most the hiding term (`couples_of_within`, `couplingTarget_withProject_of_close`). `RoundPreserves` and
   `LinkPreserves` are the premises at term zero (`CoinMap.RoundPreserves.close`, `CoinMap.LinkPreserves.close`).
 * **An opening's node** (`OpeningAt`, `openingOf`, `writeOpening`, `openGap`): a node described as the releases'
-  opening branch (`relK`), recognised by choice among its descriptions. There the tape's draw is replaced by one the
+  opening branch (`relK`), recognised by choice among its descriptions. There the tape's round is replaced by one the
   device releases as the written bits at every description (`opened_writeOpening`) wherever the fiber holds one, within
   the opening's gap (`avg_le_writeOpening`).
 * **The coin map** (`roundBits`, `linkBits`, `openMap`): each round's live coins and the link points, as bits under an
   encoding `e` of the field, written into the stop's opening; its premises hold within the openings' gaps
   (`openMap_roundClose`, `openMap_linkClose`, `openMap_couples`), at any widening and start that leave the tape from
   the first stop fresh (`FirstStopFresh`) and are within `ε₀` of the uniform tape (`StartWithin`).
-* **The draw-coupled coin map** (`FreshAt`, `freshSel`, `srcCoins`, `drawStart`, `drawMap`, `drawMaps`): widened by a
-  tape of the period's game, its start fills the fresh frames of the draw's family with the draw's bytes as coins
-  (`srcCoins`, whose bytes are the draw's: `bytesOf_srcCoins`). It leaves the tape from the first stop fresh
-  (`drawMap_fresh`) and is the uniform tape wherever the draw's coins are uniform (`drawMap_start`, `avg_srcCoins`), so
-  its premise holds within the openings' gaps alone (`drawMap_couples`, `couplingTarget_withProject_of_draw`).
+* **The sample-coupled coin map** (`FreshAt`, `freshSel`, `srcCoins`, `sampleStart`, `sampleMap`, `sampleMaps`):
+  widened by a tape of the period's game, its start fills the fresh frames of the sample's family with the bytes the
+  sample reads, as coins (`srcCoins`, whose bytes are the sample's: `bytesOf_srcCoins`). It leaves the tape from the
+  first stop fresh (`sampleMap_fresh`, by `avg_prod_walk_fill`) and is the uniform tape wherever the sample's coins are
+  uniform (`sampleMap_start`, `avg_srcCoins`), so its premise holds within the openings' gaps alone
+  (`sampleMap_couples`, `couplingTarget_withProject_of_sample`).
 -/
 
 namespace Verity.Game
@@ -101,7 +102,7 @@ def writeCoin {g' : Game α} {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : 
   subst hg
   exact fun z => (w z.1, z.2)
 
-/-- **The coin a tape from a coin node draws there.** -/
+/-- **The coin a tape from a coin node holds there.** -/
 def headCoin {g' : Game α} {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game α}
     (hg : g' = @Game.coin _ C iF iN k) (s' : Strategy g') : CoinTape g' s' → C := by
   subst hg
@@ -113,7 +114,7 @@ theorem headCoin_writeCoin {g' : Game α} {C : Type} {iF : Fintype C} {iN : None
   subst hg
   rfl
 
-/-- **The coin a tape draws at a node, under two descriptions of the node.** -/
+/-- **The coin a tape holds at a node, under two descriptions of the node.** -/
 theorem headCoin_congr {g' : Game α} {C C' : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game α}
     {iF' : Fintype C'} {iN' : Nonempty C'} {k' : C' → Game α} (hg : g' = @Game.coin _ C iF iN k)
     (hg' : g' = @Game.coin _ C' iF' iN' k') (hC : C = C') (s' : Strategy g') (x : CoinTape g' s') :
@@ -430,6 +431,18 @@ theorem avg_walk_fill (sel : FillSel α Q) (G : Pos g σ V ι → ℝ≥0∞) :
             ((hstep (fun _ => e (κ 0)) m (Fin.tail κ)).trans
               (congrArg avg (funext fun z => congrArg (Pos.resample G) (e' z))).symm)
 
+/-- **`avg_walk_fill` beside a uniform point**: over a uniform `C` and a tape from the root, any reading `G` at the
+point of the walk's stop on the tape filled with the point's coins `κ` is its average over the tapes from the stop.
+Stated over an arbitrary game so that a concrete game's instance unifies term by term: solving `avg_prod`'s function at
+a concrete game approximates `?f (c, d)` against the walk and evaluates the game. -/
+theorem avg_prod_walk_fill {C : Type} [Fintype C] (sel : FillSel α Q) (G : C → Pos g σ V ι → ℝ≥0∞)
+    (Ks : ι → DigestCut V g) (m : ℕ) (κ : C → Fin m → Q) :
+    avg (fun ω : C × CoinTape g σ => G ω.1 (Pos.walk g σ Ks (fill sel g σ Ks m (κ ω.1) ω.2) id)) =
+      avg fun ω : C × CoinTape g σ => Pos.resample (G ω.1) (Pos.walk g σ Ks (fill sel g σ Ks m (κ ω.1) ω.2) id) := by
+  refine (avg_prod (C := C) (D := CoinTape g σ) _).trans
+    (Eq.trans ?_ (avg_prod (C := C) (D := CoinTape g σ) _).symm)
+  exact congrArg avg (funext fun c => avg_walk_fill sel (G c) g σ Ks m (κ c) id)
+
 end Fill
 
 end Verity.Game
@@ -604,8 +617,8 @@ end Session
 
 /-! ## An opening's node -/
 
-/-- **An opening's coin node, described**: `g'` is the device's draw of stream `p.1`'s round `p.2` of the tree `T` among
-the draws the tree committed to there, on the frame `.opening i s n` answering `b`, with the releases' continuation
+/-- **An opening's coin node, described**: `g'` is the device's flip of stream `p.1`'s round `p.2` of the tree `T` among
+the rounds the tree committed to there, on the frame `.opening i s n` answering `b`, with the releases' continuation
 after it (`relK`'s opening branch). -/
 structure OpeningAt {β : Type} (g' : Game β) where
   T : OpenTree
@@ -627,20 +640,20 @@ namespace OpeningAt
 
 variable {β : Type} {g' : Game β}
 
-/-- The draws an opening's node draws among. -/
+/-- The rounds an opening's node flips among. -/
 abbrev Openable (o : OpeningAt g') : Type := TreeOpenable o.T.nonce o.T.spec o.T.sample o.p.1 o.p.2
 
 instance (o : OpeningAt g') : Fintype o.Openable := o.iF
 
 instance (o : OpeningAt g') : Nonempty o.Openable := o.iN
 
-/-- Two descriptions of one node draw among one type. -/
+/-- Two descriptions of one node flip among one type. -/
 theorem openable_eq (o o' : OpeningAt g') : o.Openable = o'.Openable := by
   have h := o.eq.symm.trans o'.eq
   injection h
 
 open Classical in
-/-- **The draws released as `bits`**: those whose first `n` coins are `bits` at every description of the node. -/
+/-- **The rounds released as `bits`**: those whose first `n` coins are `bits` at every description of the node. -/
 noncomputable def classOf (o : OpeningAt g') (bits : List Bool) : Finset o.Openable :=
   Finset.univ.filter fun d => ∀ o' : OpeningAt g', TreeDraw.opened (cast (openable_eq o o') d).1 o'.n = bits
 
@@ -651,13 +664,13 @@ open Classical in
 noncomputable def openingOf {β : Type} (g' : Game β) : Option (OpeningAt g') :=
   if h : Nonempty (OpeningAt g') then some (Classical.choice h) else none
 
-/-- **The release `bits` written into an opening's node**: at an opening's coin node, the tape's draw there replaced by
-the draw it picks among those released as `bits`; every other tape unchanged. -/
+/-- **The release `bits` written into an opening's node**: at an opening's coin node, the tape's round there replaced by
+the round it picks among those released as `bits`; every other tape unchanged. -/
 noncomputable def writeOpening {β : Type} {g' : Game β} (s' : Strategy g') (bits : List Bool) :
     CoinTape g' s' → CoinTape g' s' :=
   (openingOf g').elim id fun o => writeCoin o.eq (pickIn (o.classOf bits)) s'
 
-/-- **The opening's gap** at the node `g'` and the release `bits` of a uniform `P`: the written draw's shortfall below
+/-- **The opening's gap** at the node `g'` and the release `bits` of a uniform `P`: the written round's shortfall below
 uniform at an opening's coin node; none at every other node. -/
 noncomputable def openGap {β P : Type} [Fintype P] (g' : Game β) (bits : P → List Bool) : ℝ≥0∞ :=
   (openingOf g').elim 0 fun o => shortfall fun c => pickIn (o.classOf (bits c))
@@ -677,8 +690,8 @@ theorem avg_le_writeOpening {β P : Type} [Fintype P] [Nonempty P] {g' : Game β
   | some o => exact avg_le_writeCoin o.eq (fun c => pickIn (o.classOf (bits c))) s' G hG
 
 open Classical in
-/-- **The written release is `bits`**: at an opening's node whose draws include one released as `bits`, the written
-tape's draw there is released as `bits` at every description of the node. -/
+/-- **The written release is `bits`**: at an opening's node whose rounds include one released as `bits`, the written
+tape's round there is released as `bits` at every description of the node. -/
 theorem opened_writeOpening {β : Type} {g' : Game β} (s' : Strategy g') (bits : List Bool) (z : CoinTape g' s')
     (o : OpeningAt g') (ho : openingOf g' = some o) (h : (o.classOf bits).Nonempty) (o' : OpeningAt g') :
     TreeDraw.opened (headCoin o'.eq s' (writeOpening s' bits z)).1 o'.n = bits := by
@@ -827,9 +840,9 @@ theorem openMap_couples (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.gam
       (fun q => openGap q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool))) :=
   couples_of_close V θ F c A rd σ D _ (openMap_roundClose e T start) (openMap_linkClose e T start) hF hS
 
-/-! ## The draw's coins in the draw family's fresh frames -/
+/-! ## The sample's coins in the fresh frames of the sample's family -/
 
-/-- **A fresh frame's coin node, described**: `g'` is the device's draw of the coins of a fresh frame of the family
+/-- **A fresh frame's coin node, described**: `g'` is the device's flip of the coins of a fresh frame of the family
 `label` answering `after`, with the releases' continuation after it (`relK`'s fresh branch). -/
 structure FreshAt {β : Type} (label : String) (after : ByteArray) (g' : Game β) where
   k : ℕ
@@ -841,15 +854,15 @@ structure FreshAt {β : Type} (label : String) (after : ByteArray) (g' : Game β
   eq : g' = @Game.coin β (Fin 512 → Bool) iF iN fun x =>
     relK k fs ts fun log => f (⟨.fresh label, after, List.ofFn x⟩ :: log)
 
-/-- A fresh frame's node draws 512 bits. -/
+/-- A fresh frame's node flips 512 bits. -/
 theorem FreshAt.coin_eq {β C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β} {label : String}
     {after : ByteArray} (o : FreshAt label after (@Game.coin β C iF iN k)) : C = (Fin 512 → Bool) := by
   have h := o.eq
   injection h
 
 open Classical in
-/-- **The draw family's fresh frames, as a fill writes them** (`fill`): the coin nodes described as fresh frames of the
-family `label` answering `after`, each taking a written coin as its 512 bits. -/
+/-- **The fresh frames of the family `label`, as a fill writes them** (`fill`): the coin nodes described as fresh
+frames of the family `label` answering `after`, each taking a written coin as its 512 bits. -/
 noncomputable def freshSel (label : String) (after : ByteArray) : FillSel Exchange (Fin 512 → Bool) :=
   fun {C : Type} [iF : Fintype C] [iN : Nonempty C] (k : C → Game Exchange) =>
     if h : Nonempty (FreshAt label after (@Game.coin _ C iF iN k)) then
@@ -862,18 +875,18 @@ def srcEquiv {L : Fin 1 → ℕ} {n : ℕ} (h : L 0 = n) :
   Equiv.piCongrRight fun i =>
     (finCongr (by rw [Subsingleton.elim i 0]; exact h)).arrowCongr (Equiv.refl (Fin 256))
 
-/-- **The draw's bytes as fresh frames' coins**: the device's `m * 64` bytes the draw reads, as `m` fresh frames' 512
-bits each (`coinBytesEquiv`). -/
+/-- **The sample's bytes as fresh frames' coins**: the device's `m * 64` bytes the sample reads, as `m` fresh frames'
+512 bits each (`coinBytesEquiv`). -/
 noncomputable def srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω) : Fin m → Fin 512 → Bool :=
   coinBytesEquiv m 64 (srcEquiv hL (A.src ω))
 
-/-- **The draw's coins are uniform**, by A3 at the draw's bytes (`Live.hA3`). -/
+/-- **The sample's coins are uniform**, by A3 at the device's bytes (`Live.hA3`). -/
 theorem avg_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (H : (Fin m → Fin 512 → Bool) → ℝ≥0∞) :
     avg (fun ω : A.Ω => H (srcCoins A hL ω)) = avg H :=
   avg_comp_of_prCoin (fun E => (A.hA3 fun s => E (coinBytesEquiv m 64 (srcEquiv hL s))).trans
     (FlockSoundness.ZK.prCoin_congr_equiv ((srcEquiv hL).trans (coinBytesEquiv m 64)) E)) H
 
-/-- **The draw reads the bytes of the draw's coins**: the device's bytes the draw reads are those `coinBytes` reads off
+/-- **The sample reads the bytes of its coins**: the device's bytes the sample reads are those `coinBytes` reads off
 `srcCoins`, the premise `coupled_draw_coins_setsUp` takes. -/
 theorem bytesOf_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω) :
     _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
@@ -887,24 +900,24 @@ theorem bytesOf_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω)
   rw [h]
   exact key hL (A.src ω 0)
 
-/-- **The start that writes the draw's coins into the draw family's fresh frames**: on the draw's sample and a tape of
-the period's game, the tape filled with the sample's coins `κ` at the fresh frames of the family `label` answering
+/-- **The start that writes the sample's coins into the fresh frames of the sample's family**: on the device's coins and
+a tape of the period's game, the tape filled with the coins `κ` at the fresh frames of the family `label` answering
 `after`, up to the first node a round's cut fixes (`fill`). -/
-noncomputable def drawStart {R : ℕ} (rd : Reading R) (σ : Strategy (V.game θ F c)) (label : String)
+noncomputable def sampleStart {R : ℕ} (rd : Reading R) (σ : Strategy (V.game θ F c)) (label : String)
     (after : ByteArray) {Ω : Type} {m : ℕ} (κ : Ω → Fin m → Fin 512 → Bool) (ω : Ω × CoinTape (V.game θ F c) σ) :
     CoinTape (V.game θ F c) σ :=
   fill (freshSel label after) (V.game θ F c) σ (roundCuts V θ F c rd) m (κ ω.1) ω.2
 
-/-- **The draw-coupled coin map**: widened by a tape of the period's game, its start writes the draw's coins `κ` into
-the draw family's fresh frames (`drawStart`), and at each stop it writes the live coins into the stop's opening
-(`openMap`). -/
-noncomputable def drawMap (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (label : String)
+/-- **The sample-coupled coin map**: widened by a tape of the period's game, its start writes the sample's coins `κ`
+into the fresh frames of the sample's family (`sampleStart`), and at each stop it writes the live coins into the stop's
+opening (`openMap`). -/
+noncomputable def sampleMap (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (label : String)
     (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool) : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP :=
-  openMap e (CoinTape (V.game θ F c) σ) (drawStart V θ F c rd σ label after κ)
+  openMap e (CoinTape (V.game θ F c) σ) (sampleStart V θ F c rd σ label after κ)
 
-/-- The draw at a widened sample is the draw at its sample. By `dsimp`, not `rfl`: elaborating the two draws as
-definitionally equal reduces their `match` and evaluates `drawUnits`. -/
-theorem draw_extend (A : Live) (S : Widening) (ω : (A.extend S).L.Ω) : (A.extend S).L.draw ω = A.L.draw ω.1 := by
+/-- The sample at widened coins is the sample at the device's coins. By `dsimp`, not `rfl`: elaborating the two samples
+as definitionally equal reduces their `match` and evaluates `drawUnits`. -/
+theorem sample_extend (A : Live) (S : Widening) (ω : (A.extend S).L.Ω) : (A.extend S).L.draw ω = A.L.draw ω.1 := by
   dsimp only [Live.L, Live.extend]
 
 /-- The projection's first stop is the walk from the start's tape to the first stop. -/
@@ -913,62 +926,70 @@ theorem firstStop_eq (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game �
     firstStop V θ F c A rd σ M ω = Pos.walk (V.game θ F c) σ (roundCuts V θ F c rd) (M.start ω) id :=
   rfl
 
-/-- The draw-coupled start is the fill of the widening's tape with the sample's coins. -/
-theorem drawMap_start_eq (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (label : String)
+/-- The sample-coupled start is the fill of the widening's tape with the coins `κ` at the device's coins. -/
+theorem sampleMap_start_eq (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (label : String)
     (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool)
-    (ω : (A.extend (drawMap e V θ F c A rd σ label after κ).widening).L.Ω) :
-    (drawMap e V θ F c A rd σ label after κ).start ω =
+    (ω : (A.extend (sampleMap e V θ F c A rd σ label after κ).widening).L.Ω) :
+    (sampleMap e V θ F c A rd σ label after κ).start ω =
       fill (freshSel label after) (V.game θ F c) σ (roundCuts V θ F c rd) m (κ ω.1) ω.2 :=
   rfl
 
-/-- **The draw-coupled start leaves the tape from the first stop fresh**: it writes nothing from the first stop on, and
-the draw reads only the draw's sample. -/
-theorem drawMap_fresh (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (label : String)
-    (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool) :
-    FirstStopFresh V θ F c A rd σ (drawMap e V θ F c A rd σ label after κ) := by
-  intro G
-  have hs : ∀ ω : (A.extend (drawMap e V θ F c A rd σ label after κ).widening).L.Ω,
-      firstStop V θ F c A rd σ (drawMap e V θ F c A rd σ label after κ) ω =
-        Pos.walk (V.game θ F c) σ (roundCuts V θ F c rd)
-          (fill (freshSel label after) (V.game θ F c) σ (roundCuts V θ F c rd) m (κ ω.1) ω.2) id := fun ω => by
-    rw [firstStop_eq, drawMap_start_eq]
-  simp only [draw_extend, hs]
-  exact (avg_prod (C := A.Ω) (D := CoinTape (V.game θ F c) σ) _).trans (Eq.trans
-    (congrArg avg (funext fun ω₁ => avg_walk_fill (freshSel label after) (G (A.L.draw ω₁)) (V.game θ F c) σ
-      (roundCuts V θ F c rd) m (κ ω₁) id))
-    (avg_prod (C := A.Ω) (D := CoinTape (V.game θ F c) σ) _).symm)
+/-- The sample-coupled map's first stop is the walk to it from the filled tape. -/
+theorem firstStop_sampleMap (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (label : String)
+    (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool)
+    (ω : (A.extend (sampleMap e V θ F c A rd σ label after κ).widening).L.Ω) :
+    firstStop V θ F c A rd σ (sampleMap e V θ F c A rd σ label after κ) ω =
+      Pos.walk (V.game θ F c) σ (roundCuts V θ F c rd)
+        (fill (freshSel label after) (V.game θ F c) σ (roundCuts V θ F c rd) m (κ ω.1) ω.2) id :=
+  (firstStop_eq V θ F c A rd σ (sampleMap e V θ F c A rd σ label after κ) ω).trans
+    (congrArg (fun t => Pos.walk (V.game θ F c) σ (roundCuts V θ F c rd) t id)
+      (sampleMap_start_eq e V θ F c A rd σ label after κ ω))
 
-/-- **The draw-coupled start is the uniform tape** wherever the draw's coins are uniform (`avg_srcCoins`). -/
-theorem drawMap_start (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (label : String)
+/-- **The sample-coupled start leaves the tape from the first stop fresh**: it writes nothing from the first stop on,
+and the sample reads only the device's coins (`avg_prod_walk_fill`). -/
+theorem sampleMap_fresh (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (label : String)
+    (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool) :
+    FirstStopFresh V θ F c A rd σ (sampleMap e V θ F c A rd σ label after κ) := fun G => by
+  have h₁ := congrArg avg (funext fun ω : (A.extend (sampleMap e V θ F c A rd σ label after κ).widening).L.Ω =>
+    congrArg₂ G (sample_extend A _ ω) (firstStop_sampleMap e V θ F c A rd σ label after κ ω))
+  have h₂ := congrArg avg (funext fun ω : (A.extend (sampleMap e V θ F c A rd σ label after κ).widening).L.Ω =>
+    congrArg₂ (fun s q => Pos.resample (G s) q) (sample_extend A _ ω)
+      (firstStop_sampleMap e V θ F c A rd σ label after κ ω))
+  refine h₁.trans (Eq.trans ?_ h₂.symm)
+  generalize A.L.draw = dr
+  exact avg_prod_walk_fill (C := A.Ω) (freshSel label after) (fun ω₁ : A.Ω => G (dr ω₁)) (roundCuts V θ F c rd) m κ
+
+/-- **The sample-coupled start is the uniform tape** wherever the sample's coins are uniform (`avg_srcCoins`). -/
+theorem sampleMap_start (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (label : String)
     (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :
-    StartWithin V θ F c A σ (drawMap e V θ F c A rd σ label after κ) 0 := fun H _ => by
+    StartWithin V θ F c A σ (sampleMap e V θ F c A rd σ label after κ) 0 := fun H _ => by
   rw [add_zero]
   refine le_of_eq (Eq.trans ?_ (avg_prod (C := A.Ω) (D := CoinTape (V.game θ F c) σ) _).symm)
   exact (avg_fill (freshSel label after) (V.game θ F c) σ (roundCuts V θ F c rd) m H).symm.trans
     (hκ fun κ' => avg fun t => H (fill (freshSel label after) (V.game θ F c) σ (roundCuts V θ F c rd) m κ' t)).symm
 
-/-- **The draw-coupled coin map's premise within the openings' gaps**: the joint law's tape is within the openings'
-gaps over the stops of the uniform tape, wherever the draw's coins are uniform. -/
-theorem drawMap_couples (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
+/-- **The sample-coupled coin map's premise within the openings' gaps**: the joint law's tape is within the openings'
+gaps over the stops of the uniform tape, wherever the sample's coins are uniform. -/
+theorem sampleMap_couples (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (label : String) (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :
-    CouplesWithin V θ F c A rd σ D (drawMap e V θ F c A rd σ label after κ)
-      (couplesErr V θ F c A rd σ D (drawMap e V θ F c A rd σ label after κ)
+    CouplesWithin V θ F c A rd σ D (sampleMap e V θ F c A rd σ label after κ)
+      (couplesErr V θ F c A rd σ D (sampleMap e V θ F c A rd σ label after κ)
         (fun q _ s => openGap q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
         (fun q => openGap q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool))) := by
-  have h := openMap_couples e V θ F c A rd σ D (CoinTape (V.game θ F c) σ) (drawStart V θ F c rd σ label after κ)
-    (drawMap_fresh e V θ F c A rd σ label after κ) (drawMap_start e V θ F c A rd σ label after κ hκ)
+  have h := openMap_couples e V θ F c A rd σ D (CoinTape (V.game θ F c) σ) (sampleStart V θ F c rd σ label after κ)
+    (sampleMap_fresh e V θ F c A rd σ label after κ) (sampleMap_start e V θ F c A rd σ label after κ hκ)
   rwa [zero_add] at h
 
 omit θ F c in
-/-- **The draw-coupled coin maps** at the readings `rd`: at each session, commitment and strategy, `drawMap` at the
+/-- **The sample-coupled coin maps** at the readings `rd`: at each session, commitment and strategy, `sampleMap` at the
 family `label θ F c` answering `after θ F c` and the session's coins `κ A`. -/
-noncomputable def drawMaps (rd : Readings) (label : ByteArray → Array ByteArray → ByteArray → String)
+noncomputable def sampleMaps (rd : Readings) (label : ByteArray → Array ByteArray → ByteArray → String)
     (after : ByteArray → Array ByteArray → ByteArray → ByteArray) {m : ℕ}
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) (A : Live) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Strategy (V.game θ F c)) : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP :=
-  drawMap e V θ F c A (rd A θ F c) σ (label θ F c) (after θ F c) (κ A)
+  sampleMap e V θ F c A (rd A θ F c) σ (label θ F c) (after θ F c) (κ A)
 
 variable (k : Verity.Registration.Composite)
 
@@ -999,24 +1020,24 @@ theorem couplingTarget_withProject_of_close (rd : Readings) (K : Constructions V
       (couples_of_close V θ F c A _ σ _ _ (hR c σ) (hL c σ) (hF c σ) (hS c σ)) (hε c σ)) hD
 
 omit θ F c in
-/-- **The coupling at the projection with the draw-coupled coin maps**: `couplingTarget_withProject` at `drawMaps`,
-whose coin map's premise holds within the openings' gaps over the stops wherever the session's coins are uniform
-(`drawMap_couples`), at each commitment and strategy where those gaps are at most the hiding term. -/
-theorem couplingTarget_withProject_of_draw (rd : Readings) (K : Constructions V)
+/-- **The coupling at the projection with the sample-coupled coin maps**: `couplingTarget_withProject` at
+`sampleMaps`, whose coin map's premise holds within the openings' gaps over the stops wherever the session's coins are
+uniform (`sampleMap_couples`), at each commitment and strategy where those gaps are at most the hiding term. -/
+theorem couplingTarget_withProject_of_sample (rd : Readings) (K : Constructions V)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
     (label : ByteArray → Array ByteArray → ByteArray → String)
     (after : ByteArray → Array ByteArray → ByteArray → ByteArray) {m : ℕ}
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) (A : Live) (P : Exchange → Prop) (θ : ByteArray)
     (F : Array ByteArray) (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ A ω)) = avg H)
-    (ha : LoggedBound V k (K.withProject V rd D (drawMaps e V rd label after κ)) P θ F)
-    (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ) (drawMaps e V rd label after κ A θ F c σ)
+    (ha : LoggedBound V k (K.withProject V rd D (sampleMaps e V rd label after κ)) P θ F)
+    (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ) (sampleMaps e V rd label after κ A θ F c σ)
       (fun q _ s => openGap q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
       (fun q => openGap q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤ A.hidingTerm)
-    (hD : ∀ c σ, Decodes V θ F c k P A (rd A θ F c) σ (D A θ F c σ) (drawMaps e V rd label after κ A θ F c σ)) :
-    CouplingTarget V k ((K.withProject V rd D (drawMaps e V rd label after κ)).withMessages rd) A θ F :=
-  couplingTarget_withProject V k rd K D (drawMaps e V rd label after κ) A P θ F ha
-    (fun c σ => couples_of_within V θ F c (drawMap_couples e V θ F c A (rd A θ F c) σ (D A θ F c σ) (label θ F c)
+    (hD : ∀ c σ, Decodes V θ F c k P A (rd A θ F c) σ (D A θ F c σ) (sampleMaps e V rd label after κ A θ F c σ)) :
+    CouplingTarget V k ((K.withProject V rd D (sampleMaps e V rd label after κ)).withMessages rd) A θ F :=
+  couplingTarget_withProject V k rd K D (sampleMaps e V rd label after κ) A P θ F ha
+    (fun c σ => couples_of_within V θ F c (sampleMap_couples e V θ F c A (rd A θ F c) σ (D A θ F c σ) (label θ F c)
       (after θ F c) (κ A) hκ) (hε c σ)) hD
 
 end Verity.Sampled
