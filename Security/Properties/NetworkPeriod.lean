@@ -92,8 +92,9 @@ def RowsProgWired : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsProgWiredAt p c
 
-/-- What `RowsStateTied` says of a period its check accepted: in the rows form, each link-window's scan's state
-entries are at one root and domain, and every audit wired to it has its own there (`stateTied`). -/
+/-- What `RowsStateTied` says of a period its check accepted: in the rows form, each link-window's scan's registration
+states its units' state reads as the scan's transitions chain them, its state entries are at one root and domain, and
+an audit wired to it has its own there (`stateTied`). -/
 def RowsStateTiedAt (p : Params) (c : Commitment) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → stateTied p.audits s c.audits reg = true
@@ -106,10 +107,12 @@ def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Outcome P
 /-- **The rows form accepts no link-window whose scan's state is not its wired audit's `SCAN_STATE`.** If the check
 accepts a period in the rows form, each link-window's scan's registration has a state entry (`stateEntries`: a `roots`
 port `scan/state` or a `registered` value `verity/certifier/scan-state/v1`), every one at one root and domain, and an
-audit whose slot entries are the scan's `prog` (`wired`) has one, every one at that root and domain (`stateTied`). The
-scan's units read their state at that root and register the state their transition computes there, so the state a
-slot's Program reads is the scan's, and a `SCAN_STATE` that skips or alters a transition, at another root or domain, is
-refused. -/
+audit whose slot entries are the scan's `prog` (`wired`) has one, every one at that root and domain; and its `window`'s
+`reads` of `scan/state` state ingress unit `t`'s `sin` at leaf `t`, `t` from 1, and its `o1` at leaf `t + 1`, `t` below
+`T − 1`, one run a port (`stateRead`), the reads the scan's verifier of record holds each unit's ports to. So the
+scan's units read their state at that root where the unit before registered it, the state a slot's Program reads is
+the scan's, and a `SCAN_STATE` that skips or alters a transition, at another root or domain, or a registration whose
+units read their state off the chain (a `sin` at leaf `t + 1`, an `o1` at leaf `t`), is refused. -/
 def RowsStateTied : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateTiedAt p c
