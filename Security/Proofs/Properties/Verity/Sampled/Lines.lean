@@ -392,9 +392,9 @@ theorem head_sort {β : Type} (a b : β) :
     #[("event", a), ("root", b)].qsort (fun x y => decide (x.1 < y.1)) = #[("event", a), ("root", b)] := by
   refine Verity.QSort.qsort_sorted _ _ fun i hi j hj => ?_
   simp only [List.size_toArray, List.length_cons, List.length_nil] at hi hj
-  obtain _ | _ | i := i <;> obtain _ | _ | j := j <;>
-    first | omega | (simp only [List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ] <;>
-      exact decide_eq_decide.2 (by decide))
+  obtain _ | _ | i := i <;> obtain _ | _ | j := j <;> first | omega |
+    (simp only [List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]
+     exact decide_eq_decide.2 (by decide))
 
 theorem canon_str (s : String) : Flock.canon (.str s) = pure (Flock.canonStr s) := by
   simp only [Flock.canon]
