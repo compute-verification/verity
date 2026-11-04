@@ -74,7 +74,7 @@ def PeriodTiedCount : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (Dj : ℕ)
-    (place : Placement) (hsr : SharedRootsParsed H D place) (hb : D.commit.Binds H)
+    (place : GatePlaces) (hsr : SharedRootsParsed H D place) (hb : D.commit.Binds H)
     (reg : AuditStatement → Finset ℕ) (ops : AuditStatement → List (Opening Bool))
     {n : ℕ} (pw : Fin n → Phase) (t : Fin n → Ties) (Pw : Fin n → Partition)
     (δ : ℕ → ℝ) (hδ : ∀ j, 0 ≤ δ j) (ρ : Fin n → ℕ → Bool)

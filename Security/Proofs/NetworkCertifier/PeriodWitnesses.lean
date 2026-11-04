@@ -18,7 +18,8 @@ import Definitions.NetworkCertifier.TiedLeak
   one step whose faulty set holds its one unit (`pooled_bound_fails`). There its conditional escape (`hesc`) holds
   only at `q = 0`, which its `hF` refuses at `δ < 1`.
 * `PeriodTiedCount_nontrivial`: its tie fails at the accepting verifier `tapD` at SHA-512, its break included, at the
-  phase of `notStmt` alone with no statement and no opening (`tiedToy`, `tiesToy`). It shows only that neither side
+  phase of `notStmt` alone with no statement and no opening, written out in the statement, which reads no
+  definition of the proofs tree. It shows only that neither side
   of the tie holds everywhere. The meaningful witness is an exclusion lemma: at an explicit phase whose other premises
   hold, with `RowsProgWired` or `SharedRootsParsed` dropped, the tie fails. It is not stated yet, and the lock won't
   list it, since the rule reads `PeriodTiedCount` as of the acceptance kind (it reads `Claims.Sampling`).
@@ -64,21 +65,17 @@ theorem PooledLeakAccepted_nontrivial :
       (1 / 2 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) :=
   pooled_bound_fails
 
-/-- The phase of `notStmt` alone, with no tied audit. -/
-def tiedToy : Phase := ⟨notStmt, []⟩
-
-/-- No tie, and no state read at row `0`. -/
-def tiesToy : Ties := ⟨fun _ => none, fun _ => none, ∅⟩
-
 /-- **`PeriodTiedCount`'s tie fails at the accepting verifier** `tapD`, at SHA-512, its break included: at the phase
-`tiedToy` with no statement, no trace and no opening, no statement parses to the phase, so the leak relation fails, and
-the calls that check the openings are none, so none collide. -/
+of `notStmt` alone, with no tie and no state read at row `0`, and with no statement, no trace and no opening, no
+statement parses to the phase, so the leak relation fails, and the calls that check the openings are none, so none
+collide. -/
 theorem PeriodTiedCount_nontrivial :
-    ¬ (RLeakTied shaD (tapD Unit).commit (tapD Unit).parse (tapD Unit).partition 1 1 1 (fun _ => notLay) 1 tiedToy
-          tiesToy (fun _ => 1 / 8) (fun _ => Set.univ) 1 [] [] [] ∨
-        LogColl (phaseLog shaD (tapD Unit).commit tiedToy [] ++
-          phaseRegLog shaD (tapD Unit).commit tiedToy (fun _ => []) ++
-            tapLog shaD (tapD Unit).commit tiedToy.scan.roots [])) := by
+    ¬ (RLeakTied shaD (tapD Unit).commit (tapD Unit).parse (tapD Unit).partition 1 1 1 (fun _ => notLay) 1
+          (⟨notStmt, []⟩ : Phase) (⟨fun _ => none, fun _ => none, ∅⟩ : Ties) (fun _ => 1 / 8) (fun _ => Set.univ) 1
+          [] [] [] ∨
+        LogColl (phaseLog shaD (tapD Unit).commit ⟨notStmt, []⟩ [] ++
+          phaseRegLog shaD (tapD Unit).commit ⟨notStmt, []⟩ (fun _ => []) ++
+            tapLog shaD (tapD Unit).commit notStmt.roots [])) := by
   rintro (⟨h, -⟩ | ⟨p, hp, -⟩)
   · change List.Forall₂ _ [] [notStmt] at h
     cases h
