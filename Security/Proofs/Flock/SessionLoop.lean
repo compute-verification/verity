@@ -81,6 +81,7 @@ public import Proofs.Flock.SessionLoop.RowsHonest
 public import Proofs.Flock.SessionLoop.RoundsPassFrame
 public import Proofs.Flock.SessionLoop.ScheduleTotal
 public import Proofs.Flock.SessionLoop.RoundsPassAt
+public import Proofs.Flock.SessionLoop.RoundsPassTaken
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames
