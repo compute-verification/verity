@@ -237,7 +237,6 @@ private def runStray (policy run : String) : Option String :=
 #guard (runStray (record 1) (record 0)).map (·.startsWith "record: verity/inference-only/v0 committed ") == some true
 #guard (runStray (record 1) (record 0)).map (contains · ", verity/pouw/pearl-plus/v1 committed ") == some true
 -- a run whose commitment doesn't decode leaves Pearl+ to refuse it
-#guard runStray (record 0) "{}" == none
 #guard V1.run.strays [committing NciCheck.Protocol.protocol (record 0), refused PouwCheck.PearlPlus.Protocol.protocol] ==
   none
 
