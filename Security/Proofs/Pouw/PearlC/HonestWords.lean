@@ -281,8 +281,9 @@ theorem normalize_le {w : ℕ} (E total : ℤ) :
   rcases Nat.eq_zero_or_pos w with hw | hw
   · subst hw
     rw [normalize_width_zero]
-    exact ⟨Or.inl rfl, by simpa [Term.zero, Term.value] using
-      mul_nonneg (abs_nonneg (total : ℚ)) (two_zpow_pos (E - ((0 : ℕ) : ℤ) + 1)).le⟩
+    have hpos : (0 : ℚ) ≤ |(total : ℚ)| * 2 ^ (E - ((0 : ℕ) : ℤ) + 1) :=
+      mul_nonneg (abs_nonneg _) (two_zpow_pos _).le
+    exact ⟨Or.inl rfl, by simpa [Term.zero, Term.value] using hpos⟩
   have hTq : |(total : ℚ)| = (total.natAbs : ℚ) := by rw [Nat.cast_natAbs, Int.cast_abs]
   have hn : total.natAbs ≠ 0 := by omega
   have hbl : bitLength total.natAbs = total.natAbs.log2 + 1 := by unfold bitLength; rw [ite_eq_right hn]
