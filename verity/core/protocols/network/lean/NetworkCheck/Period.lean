@@ -162,10 +162,12 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   the link-window's value, link, end and window, the schedule's digest (a registration under another schedule is
   refused), the schedule's rows, words, word bits, row format and layout, the execution phase's domain in the session
   (`warden_rows.domain`), and a certificate that is the key's, signs the head (`CellsHead.digest`) and verifies in the
-  session (a registration not under the deployment key is refused); the scan's registration holds both, an entry of its
-  `roots` or `registered` naming each one's root and domain, which bind the session, link, end and window (an answer
-  for another window's rows is refused); its Programs' rows are a compute audit's output (`progTied`): a lane's
-  `scan/prog<j>` entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) or a `SlotEntry_v1`
+  session (a registration not under the deployment key is refused); the scan's registration holds both at their ports
+  (`holds`): it has an entry of its `roots` at port `rows/<end>/<w>` (`rowsName`), the root its units' reads of the
+  end's rows name, or of its `registered` at the rows' value, and each such entry names the rows' root and domain, a
+  `roots` one with their T leaves, which bind the session, link, end and window (an answer for another window's rows
+  is refused, and so is one whose rows port is at another root while another port names the rows'); its Programs'
+  rows are a compute audit's output (`progTied`): a lane's `scan/prog<j>` entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) or a `SlotEntry_v1`
   or `SelectEntry_v1` template's entries port's (`<descriptor id>/c<j>/o0`, `entriesPortName`) in the `roots` of an
   audit's registration, so a scan whose `prog` the prover committed alone is refused; and the answer is one-stage's
   for that registration's digest, accepted with one level of the scan's 2T units drawn `subset:k` or stratified, and
@@ -1171,11 +1173,24 @@ def rowsCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (d : Direct
       { keyId := r.key, link := p.link, direction := d, window := w, digest := r.digest, signature := r.signature } do
     refuse s!"{what}: not under the deployment key in the session"
 
-/-- The scan's registration holds the rows: an entry of its `roots` or `registered` names their root and domain. -/
-def holds (reg : Json) (r : Rows) : Bool :=
+/-- The registration's port of the network certifier's rows of end `d` at window `w`, `rows/<d>/<w>`: the root the
+scan's units' reads of them name. -/
+def rowsName (d : Direction) (w : Nat) : String := s!"rows/{d.value}/{w}"
+
+/-- The scan's registration holds rows `r` of end `d` at window `w` at their port: it has an entry of its `roots` whose
+port is `rowsName d w` or of its `registered` whose value is the rows' (`<link>/<d>/<w>`), and every such entry names
+their root and domain, a `roots` one with their `T` leaves. An entry under another name holds nothing, though it
+names their root: the scan's units read the rows through the port. -/
+def holds (reg : Json) (d : Direction) (w : Nat) (r : Rows) : Bool :=
   let entries := fun (k : String) => match reg.getObjValD k with | .arr xs => xs | _ => #[]
-  (entries "roots" ++ entries "registered").any fun e =>
-    e.getObjValD "root" == .str (Flock.hexOf r.root) && e.getObjValD "domain" == .str r.domain
+  let atRows := fun (e : Json) =>
+    isStr (e.getObjValD "root") (Flock.hexOf r.root) && isStr (e.getObjValD "domain") r.domain
+  let leaves := fun (e : Json) => match (e.getObjValD "leaves").getNat? with
+    | .ok l => l == r.rows
+    | .error _ => false
+  let ports := (entries "roots").filter fun e => isStr (e.getObjValD "port") (rowsName d w)
+  let values := (entries "registered").filter fun e => isStr (e.getObjValD "value") r.value
+  !(ports ++ values).isEmpty && ports.all (fun e => atRows e && leaves e) && values.all atRows
 
 /-- The scan's Programs' rows in its registration, one tree a lane: lane `j`'s is the entry of its `roots` whose port,
 or of its `registered` whose value, is `scan/prog<j>`. -/
@@ -1482,7 +1497,10 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
       certifier certifies none of a window in which it refused a connection: traffic past the Program slots)"
   unless rs.size == 2 do refuse s!"{what}: registrations: the ingress rows, then the egress rows"
   for (r, d) in rs.zip #[Direction.ingress, .egress] do rowsCheck p s sd w d r
-  unless rs.all (holds reg) do refuse s!"{what}: the scan's registration doesn't hold the rows: another window's answer"
+  for (r, d) in rs.zip #[Direction.ingress, .egress] do
+    unless holds reg d w r do
+      refuse s!"{what}: the scan's registration doesn't hold the rows at {rowsName d w}: an answer for another \
+        window's rows, or for rows at another port"
   unless progTied audits reg do
     refuse s!"{what}: the scan's prog is no compute audit's output: no scan/prog<j> entry's root and domain are an \
       output port's of an audit's registration"
@@ -2166,6 +2184,32 @@ def clocksFn (j : Json) : Except String Json := do
 #guard
   let reg := Json.mkObj [("window", Json.mkObj [("registered_roots", Json.mkObj [("w", .str "AB")])])]
   pinHeld reg ("w", "ab") && !pinHeld reg ("w", "ac") && !pinHeld reg ("v", "ab") && !pinHeld (Json.mkObj []) ("w", "ab")
+-- the egress rows at window 3 are held at their port rows/egress/3 with their 4 leaves, or at their value in
+-- `registered`; not under another name though it names their root (scan/view, rows/ingress/3, rows/egress/4, a value
+-- in `roots`), with their port at another root while scan/view names theirs, with other leaves, or beside a second
+-- entry of their port at another root
+#guard
+  let r : Rows := {
+    format := "", value := "l/egress/3", link := "l", direction := "egress", window := 3, parameters := "",
+    cellBytes := 0, rows := 4, words := 0, wordBits := 0, rowSchema := "", domain := "d", wiring := .empty,
+    root := ⟨#[0xab]⟩, layout := ⟨0, 0, 0, 0⟩, key := .empty, digest := .empty, signature := .empty }
+  let h := Flock.hexOf r.root
+  let port := fun (q root : String) (l : Nat) =>
+    Json.mkObj [("port", .str q), ("leaves", toJson l), ("root", .str root), ("domain", .str "d")]
+  let entry := fun (v root : String) => Json.mkObj [("value", .str v), ("root", .str root), ("domain", .str "d")]
+  let roots := fun (os : Array Json) => Json.mkObj [("roots", Json.arr os)]
+  let registered := fun (os : Array Json) => Json.mkObj [("registered", Json.arr os)]
+  rowsName .egress 3 == "rows/egress/3" &&
+    holds (roots #[port "scan/view" "ee" 4, port "rows/egress/3" h 4]) .egress 3 r &&
+    holds (registered #[entry "decoy" "ee", entry "l/egress/3" h]) .egress 3 r &&
+    !holds (roots #[port "scan/view" h 4, port "rows/egress/3" "ee" 4]) .egress 3 r &&
+    !holds (roots #[port "scan/view" h 4]) .egress 3 r &&
+    !holds (roots #[port "rows/ingress/3" h 4]) .egress 3 r &&
+    !holds (roots #[port "rows/egress/4" h 4]) .egress 3 r &&
+    !holds (roots #[entry "l/egress/3" h]) .egress 3 r &&
+    !holds (roots #[port "rows/egress/3" h 5]) .egress 3 r &&
+    !holds (roots #[port "rows/egress/3" h 4, port "rows/egress/3" "ee" 4]) .egress 3 r &&
+    !holds (registered #[entry "scan/view" h]) .egress 3 r
 #guard isStr (.str "ab") "ab" && !isStr (.str "ab") "AB" && !isStr (toJson 1) "1" && !isStr .null ""
 -- a lane's Programs' rows, the lane's index in ASCII digits without a leading zero
 #guard progPort (progName 0) && progPort "scan/prog3" && progPort "scan/prog12" && progName 3 == "scan/prog3"

@@ -23,7 +23,9 @@ each link-window's ingress and egress rows committed and registered under a smal
 (`warden_rows.Cells.commit` and `registration`, signed by the same key), whose caps the parameters' `cells` are
 (`WardenParams.caps`; `bad_caps` are refused), its three records certified (`past-slots`:
 none of them and neither registration, as the warden leaves a window in which it refused a connection), and the scan's
-registration holding both rows' roots and domains and each lane j's `scan/prog<j>` (`prog_name`) at the root and domain
+registration holding both rows at their ports (`rows_name`, of T leaves) in `roots` or at their values in
+`registered` (`_holds`; `port`: the egress rows' root at `scan/view` and their port at another, or the like,
+`UNPORTS`), and each lane j's `scan/prog<j>` (`prog_name`) at the root and domain
 of chunk j's entries port of that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its
 smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding beside a stand-in scan slots'
 `ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's registration and Program
@@ -960,11 +962,21 @@ def _rows_check(p: Params, w: int, d: Direction, doc: dict) -> None:
         raise Finding(REJECT, f"window {w}: the {d.value} rows: {e}") from None
 
 
-def _holds(reg: dict, doc: dict) -> bool:
-    """The scan's registration holds the rows: an entry of its `roots` or `registered` names their root and domain."""
-    entries = [e for k in ("roots", "registered") if isinstance(reg.get(k), list) for e in reg[k]]
-    return any(isinstance(e, dict) and e.get("root") == doc["root"] and e.get("domain") == doc["domain"]
-               for e in entries)
+def rows_name(d: Direction, w: int) -> str:
+    """`rowsName`: the registration's port of the network certifier's rows of end `d` at window `w`."""
+    return f"rows/{d.value}/{w}"
+
+
+def _holds(reg: dict, d: Direction, w: int, doc: dict) -> bool:
+    """`holds`: the scan's registration has an entry of its `roots` at port `rows_name(d, w)` or of its `registered` at
+    the rows' value, and every such entry names their root and domain, a `roots` one with their leaves."""
+    ports = [e for e in _entries(reg, "roots") if e.get("port") == rows_name(d, w)]
+    values = [e for e in _entries(reg, "registered") if e.get("value") == doc["value"]]
+
+    def at(e: dict) -> bool:
+        return e.get("root") == doc["root"] and e.get("domain") == doc["domain"]
+
+    return bool(ports + values) and all(at(e) and _leaves(e) == doc["rows"] for e in ports) and all(map(at, values))
 
 
 #: the scan's Programs' rows in its registration, one tree a lane, `PROG<j>` lane j's (`progName`): its `roots` entry's
@@ -1252,8 +1264,9 @@ def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict, x: Wind
         raise Finding(REJECT, f"{what}: registrations")
     for doc, d in zip(x.registrations, (INGRESS, EGRESS)):
         _rows_check(p, w, d, doc)
-    if not all(_holds(reg, doc) for doc in x.registrations):
-        raise Finding(REJECT, f"{what}: another window's answer")
+    for doc, d in zip(x.registrations, (INGRESS, EGRESS)):
+        if not _holds(reg, d, w, doc):
+            raise Finding(REJECT, f"{what}: {ROWS_UNHELD} {rows_name(d, w)}")
     if not _prog_tied(audits, reg):
         raise Finding(REJECT, f"{what}: the scan's prog is no compute audit's output")
     prof, pub = _answered(what, reg, x.answer)
@@ -1306,6 +1319,8 @@ def _audit_check(i: int, audit: Audit, reg: dict, a: dict) -> Facts:
     return f
 
 
+#: `holds`' refusal, after its window's number and before the rows' port (`rows_name`).
+ROWS_UNHELD = "the scan's registration doesn't hold the rows at"
 #: `wiredCheck`'s refusal, after its window's number.
 UNWIRED = "the scan's prog is no compute audit's slot entries"
 #: `stateCheck`'s refusals, after its window's number: the state untied, its reads off the chain, its row 0 unopened.
@@ -1701,7 +1716,7 @@ EXPECT = {
     "rows-reg-count": REJECT, "rows-reg-swap": REJECT, "rows-reg-forged": REJECT, "rows-reg-window": REJECT,
     "rows-reg-link": REJECT, "rows-reg-session": REJECT, "rows-reg-key": REJECT, "rows-reg-field": REJECT,
     "rows-schedule": REJECT,
-    "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
+    "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT, "rows-port": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-delta": REJECT, "rows-units": REJECT, "rows-prog-untied": REJECT,
     "rows-prog-unwired": REJECT, "rows-state-untied": REJECT, "rows-state-misindexed": REJECT,
@@ -2101,6 +2116,11 @@ UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra",
 #: phase's tied audit registered under a Program of one more unit, its answer and population that Program's
 #: (`audit`), or the parameters' `circuit` another digest: of no Program, the scan's, or an untied audit's (`params`)
 UNHOLDS = ("audit", "params")
+#: How `rows-port` breaks the scan's registration's hold of the aimed link-window's rows while every other check
+#: holds: the egress rows' root and domain at `scan/view` and their port at another root (`view`), the two ends' names
+#: swapped (`swapped`), one end's at another window's (`window`), of other than T leaves (`leaves`, in `roots`), or
+#: beside a second entry of one end's name at another root (`second`)
+UNPORTS = ("view", "swapped", "window", "leaves", "second")
 #: How `rows-state-misindexed` puts its link-window's scan's state reads off the chain while its state stays tied by
 #: root and domain: unit t's `sin` at leaf t + 1 (a leaf no unit registered) or its `o1` at leaf t (over the state
 #: before it), a run over other units, the two ports' runs swapped, the reads or a port's run missing or under
@@ -2182,6 +2202,38 @@ def _unpinned(rp: random.Random, tree: ADV.Committed, how: str) -> dict | None:
 
 def _present(e: dict) -> dict:
     return {k: v for k, v in e.items() if v is not None}
+
+
+def _rows_entries(rp: random.Random, named: list[dict], where: str, unport: str | None) -> list[dict]:
+    """The scan's registration's entries for the row registrations `named`, each at its own end's and window's port
+    (`rows_name`, of its rows' leaves) in `roots` and at its value in `registered`, broken as `unport` says (the
+    aimed link-window's `named` are its ingress and egress rows)."""
+    def name(x: dict, d: str, w: int) -> dict:
+        if where == "roots":
+            return {"port": rows_name(Direction(d), w), "leaves": x["rows"]}
+        return {"value": f"{x['link']}/{d}/{w}"}
+
+    out = [{"domain": x["domain"], "root": x["root"], **name(x, x["direction"], x["window"])} for x in named]
+    if unport is None:
+        return out
+    j = rp.randrange(2)
+    x = named[j]
+    if unport == "view":
+        x = named[1]
+        view = {"port": "scan/view", "leaves": x["rows"]} if where == "roots" else \
+            {"value": "verity/certifier/scan-view/v1"}
+        out[1] = out[1] | {"root": rp.randbytes(64).hex()}
+        out.append({"domain": x["domain"], "root": x["root"], **view})
+    elif unport == "swapped":
+        out[0], out[1] = (out[0] | name(named[0], named[1]["direction"], named[0]["window"]),
+                          out[1] | name(named[1], named[0]["direction"], named[1]["window"]))
+    elif unport == "window":
+        out[j] = out[j] | name(x, x["direction"], x["window"] + rp.choice([1, -1] if x["window"] else [1]))
+    elif unport == "leaves":
+        out[j] = out[j] | {"leaves": rp.choice([x["rows"] + 1, x["rows"] - 1, None, str(x["rows"]), True])}
+    else:
+        out.insert(rp.randrange(len(out) + 1), out[j] | {"root": rp.randbytes(64).hex()})
+    return [_present(e) for e in out]
 
 
 def _prog_entries(rp: random.Random, tie: dict, where: str, untie: str | None, unwire: bool = False,
@@ -2334,6 +2386,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     unwire = rp.choice(UNWIRES) if m == "prog-unwired" else None
     unstate = rp.choice(UNSTATES) if m == "state-untied" else None
     unhold = rp.choice(UNHOLDS) if m == "circuit-swapped" else None
+    unport = rp.choice(UNPORTS) if m == "port" else None
     unpin = rp.choice(UNPINS) if m == "state-unpinned" else None
     # each audit's `SCAN_STATE`, the state tree of the link-window tied to it, whose leaf 0 the scan opens
     trees = {i: _state_tree(rp, sched.window, not (unpin == "row" and i == ties[first + t]["audit"]))
@@ -2447,9 +2500,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 recs[j] = sign(on, d, w, recs[j].digest, s=_flip(session, seed))
             elif m == "cert-key":
                 recs[j] = sign(on, d, w, recs[j].digest, k=_key(ki, 1, r.random() < 0.5))
-        entries = [{"domain": x["domain"], "root": x["root"], "value": x["value"]} for x in named]
-        entries.insert(r.randrange(len(entries) + 1),
-                       {"domain": r.randbytes(64).hex(), "root": r.randbytes(64).hex(), "value": "decoy"})
+        decoy_at = r.randrange(len(named) + 1)
+        decoy = {"domain": r.randbytes(64).hex(), "root": r.randbytes(64).hex(), "value": "decoy"}
         T = sched.window
         units = 2 * T + (1 if aimed and m == "units" else 0)
         strata = [{"k": r.randint(1, T), "name": d.value, "size": T} for d in (INGRESS, EGRESS)] \
@@ -2458,6 +2510,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         law = {"k": k, "law": "subset"} if strata is None else {"k": k, "law": "stratified", "strata": [
             {"k": s["k"], "template": s["name"], "units": [[j * T, (j + 1) * T]]} for j, s in enumerate(strata)]}
         fmt, where = r.choice(FORMATS), r.choice(["roots", "registered"])
+        if aimed and unport == "leaves":
+            where = "roots"
+        entries = _rows_entries(rp, named, where, unport if aimed else None)
+        entries.insert(decoy_at, decoy)
         entries += _prog_entries(rp, ties[w], where, untie if aimed else None, unwire == "lane" and aimed, hit)
         entries += _state_entries(rp, states, ties[w]["audit"], where, unstate if aimed else None)
         rp.shuffle(entries)
