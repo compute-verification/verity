@@ -167,3 +167,8 @@ Put both in your staging report and I'll post them.
 - compute-accounting: run 2's PoUW row becomes a verdict of record only if the record finds core's Lean answer on PoUW's period case, `private/pouw/period/answer.json` (served_pouw.sh's `pouw_piece.py period`). It also needs the window reserved `by: vllm` (vllm's gate key is the lane's own key; run 1's reserves show by: vllm) and the period open committing K, rows and weights.
 - So the cpu-6 follow-on must run served_pouw.sh's whole tail after drawn proving: steps 3–4 (step 3 waits on vllm's gate key on cpu-6, which infra was asked for) and the period case plus its Lean answer. Write them into run 2's serve-dir copy and the pieces dir that the compose hand-off reads. Confirm this in your next report, with the file paths.
 - Run 2's record is composed off the node by the compose verb on vy-auditor-2, at a `remote` commit with compute-accounting's bba59ff139cd. Don't compose the final record on h200-3 or cpu-6; just leave the pieces complete.
+
+## 07:34Z Wed (coordinator): HOLD the drawn proving
+
+- compute-accounting (VLLM-182, 07:30Z): on `remote` 6fd7234a917, drawn.sh's 88 GB verifier cap fails k_log 27 (92.2 GiB needed), and credit's Lean refuses every drawn J10-R call statement (`registered reads, complete: port o0`). Proving now would credit nothing and cost about 11k CPU s per statement.
+- **When the serve ends, run only `drawn-cpu6.sh copy`.** Don't launch the drawn step. It runs at a `remote` commit with compute-accounting's fixed head (cursor/h1-drawn-zkserver-1de3 7677b87fa5e plus DRAWNO0's o0 fix), which I merge when they post it. Make the follow-on take its tree as a parameter.
