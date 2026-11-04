@@ -10,9 +10,10 @@ the leak bound of a sampled audit charges, beyond the inputs the circuit reads b
 (`freeInputs`), the incorrect proof blocks' committed bits (`faultyBits`) and the choice of incorrect set among the ones
 `RAcc δ` allows (`faultySets`). Each incorrect proof block is charged in full, at all its committed gates (`committed`):
 its inputs, the wired rows among them, its returned gates and the gates another proof block reads; a wrong pass-through
-proof block, which returns an input it holds, pays the same. A wrong wired row is an input only its reader consumes, so
-it reaches egress only through the reader's outputs, which the faulty term charges. The sequences it counts are
-`AccSeqsSampled`.
+proof block, which returns an input it holds, pays the same. An incorrect proof block reaches the rest of the circuit
+only through its committed gates, each held at one bit: those it returns or another proof block reads, and its inputs,
+among them a first copy of an input bit that later copies in other proof blocks read through their wires. The sequences
+it counts are `AccSeqsSampled`.
 -/
 
 namespace NetTiming

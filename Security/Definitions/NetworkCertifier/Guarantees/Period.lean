@@ -44,9 +44,10 @@ the sets the count ranges over are incorrect sets, the faulty and the wire-wrong
 proof block's session shows its wired rows right (`KSWired`), so an undrawn wire-wrong one is in the incorrect set at the
 same error. Each incorrect proof block is charged in full, at all its committed gates (`faultyBits`): its inputs, the
 wired rows among them, its returned gates and the gates another proof block reads, so a wrong pass-through proof block,
-which returns an input it holds, pays in full too. A wrong wired row is an input only its reader consumes, so it reaches
-egress only through the reader's outputs, which the faulty term charges. A free input that writes a wire stays a free
-input.
+which returns an input it holds, pays in full too. An incorrect proof block reaches the rest of the circuit only through
+its committed gates, each held at one bit: those it returns or another proof block reads, and its inputs, among them a
+first copy of an input bit that later copies in other proof blocks read through their wires. A free input that writes a
+wire stays a free input.
 -/
 
 namespace NetTiming.Guarantees
@@ -77,8 +78,9 @@ A wired gate is no free input, so `freeInputs_i` leaves out the wired rows, whil
 in it; and the sets `faultySets_i(δ)` counts are incorrect sets, the faulty and the wire-wrong proof blocks. Each
 incorrect proof block is charged in full, at all its committed gates (`faultyBits`): its inputs, the wired rows among
 them, its returned gates and the gates another proof block reads, so a wrong pass-through proof block, which returns an
-input it holds, pays in full too. A wrong wired row is an input only its reader consumes, so it reaches egress only
-through the reader's outputs, which the faulty term charges. -/
+input it holds, pays in full too. An incorrect proof block reaches the rest of the circuit only through its committed
+gates, each held at one bit: those it returns or another proof block reads, and its inputs, among them a first copy of
+an input bit that later copies in other proof blocks read through their wires. -/
 def PeriodLeakAccepted : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)
