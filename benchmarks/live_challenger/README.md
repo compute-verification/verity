@@ -6,8 +6,9 @@ before the first coin, and its release log signed when the session ends. The coi
 verifier of record reads them.
 
 - `auditor.py` is the host's service: the `vy-challenger-gate` verbs, run as the `auditor` user from a pinned tree, open one
-  session a window and record each in a signed, append-only ledger before its first coin. It also keeps the periods and the
-  model registry (`models.py`: each served model's weights, committed by the auditor with its own salts).
+  session a window and record each in a signed, append-only ledger before its first coin. It also keeps the periods, each
+  lane's declared days (the program it serves on a UTC day, signed at the host's clock before the day's first window opens)
+  and the model registry (`models.py`: each served model's weights, committed by the auditor with its own salts).
 - `coin_link.py` is the network certifier's coin link for a window's session: the one path its coins take to the peer,
   counted and re-clocked on the link's grids.
 - `publish.sh` puts the host's pins log, ledger, model registry and every ended session into the evidence store; the control
@@ -22,5 +23,5 @@ A session reads the source tree, the challenger's key directory (`~/.local/state
 to its `out/`; a verifier reads them from there, never from the prover.
 
 Status: in service on the auditor's host. The suite (`tests/`) runs `serve.py` as a process over loopback with a test key and the
-Lean verifier's coins stubbed (`tests/stub_serve.py`), and covers the gate, its periods, models, load and rehearsals, and the coin
-link.
+Lean verifier's coins stubbed (`tests/stub_serve.py`), and covers the gate, its periods, declared days, models, load and
+rehearsals, and the coin link.
