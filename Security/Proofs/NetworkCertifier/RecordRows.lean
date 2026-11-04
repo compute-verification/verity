@@ -213,7 +213,7 @@ theorem bitsBE_inj {w x y : ℕ} (hx : x < 2 ^ w) (hy : y < 2 ^ w) (h : bitsBE w
   refine Nat.eq_of_testBit_eq fun i => ?_
   by_cases hi : i < w
   · have := congrFun (List.ofFn_injective h) ⟨w - 1 - i, by omega⟩
-    simp only [Fin.val_mk] at this
+    simp only at this
     rwa [show w - 1 - (w - 1 - i) = i by omega] at this
   · have hw : 2 ^ w ≤ 2 ^ i := Nat.pow_le_pow_right (by decide) (by omega)
     rw [Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le hx hw), Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le hy hw)]
@@ -274,7 +274,7 @@ theorem cellRows_wf {L K B N : ℕ} (hB : B < 2 ^ 32) (hN : N < 2 ^ 32) (link : 
   refine ⟨List.nodup_finRange N, List.mem_finRange, fun x => ?_⟩
   have h : ∃ y, cellFrame B y = cellFrame B x := ⟨x, rfl⟩
   simp only [cellRows]
-  rw [dif_pos h]
+  rw [dite_eq_left h]
   exact congrArg some (cellFrame_inj hB hN (Classical.choose_spec h))
 
 /-! ### The Python network certifier's egress records -/
