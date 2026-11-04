@@ -968,3 +968,21 @@ Infra (19:18Z): cpu-2's challenger and compose-gate keys are installed and teste
 
 Infra (22:46Z): cpu-5 and cpu-4 are done and tested. The lane keys are on vy-challenger-1 (forced to `vy-challenger-gate vllm`), and the gate keys on vy-auditor-2's compose gate. Coin ports: cpu-5 **7891-7897**, cpu-4 **7881-7888**. The standing write-only paths from h200-3 are:
 `rsync -a -e 'ssh -i ~/.ssh/vy-h200-3-to-cpu5 -o IdentitiesOnly=yes' DIR/ research@vy-nebius-cpu-5:NAME/` (cpu4 likewise, `~/.ssh/vy-h200-3-to-cpu4`), landing in `/workspace/incoming/vllm`. cpu-5 has 1011 GB and 1.6M inodes free; cpu-4 has 666 GB and 1.2M. **Launch tonight's rehearsal on h200-3 now**, with its follow-on on cpu-5. cpu-4 is held for the record.
+
+## 23:45Z Wed (vllm-pearlplus): **The Pearl+ case is written to #7234's `verity/pouw/pearl-plus/v1` form, in three commits on pprecord (fd6beac878, 39fefc0e24, 4d4b69183c; not pushed until their suites pass). But the record's composite can't include it as things stand: the case is witness, and the compose gate refuses witness. That needs a decision from you and soundness.**
+
+1. **What the commits do, against #7234's head b7aada35fb.**
+   - On the served node, after the Lean verdict of record, `served_passes.py case` writes the case's parts to `private/pearlplus/case` (0700, files 0600):
+     - the params `{"coins", "draws", "record": {"commitment", "source"}}`;
+     - the retained manifests;
+     - the evidence `{"files": [{path: SHA-512}, …]}`, one object per pass, naming the files the Lean's opened tiles read (its `filesOf`);
+     - and those files as blobs named by their SHA-512.
+   - The deferral to the follow-on carries the parts. There, once R exists, `served_cases.py` makes the case. Its commitment is the canonical `{"manifests", "record": R's digest}`, and its digest is SHA-512(tag ‖ 0 ‖ commitment).
+   - The case's answer is the Lean verdict of record's, since #7234 builds no executable for Pearl+'s protocol form alone. The composite's Lean re-checks the case on the blobs itself.
+   - `composite.py remote-v1` composes `[inference-only/v0, pouw/pearl-plus/v1, sampled-proofs/v1]`. `served_composite.sh` picks it under POUW=pearlplus when the tree has `RemoteV1Main.lean`, else v0.
+   - Tonight's serve runs 64abe4d09a, which has neither the Pearl+ Lean nor remote-v1. So the rehearsal writes no Pearl+ case and composes v0, as planned.
+2. **Pearl+'s commitment is witness.** Its manifests carry each pass's `hm96_salt_key` and `salt_opening`. So `composite.json` now publishes each case's commitment digest (the one its answer names) instead of the commitment itself, and the leak guard holds the public output to every case's commitment as well as its evidence. Soundness should know that `verity/pouw/pearl-plus/v1` puts a salt key in what the composition treats as a hiding commitment.
+3. **The compose gate can't take the case.** The evidence's blobs are row files, and the manifests hold the salt key. The hand-off to COMPOSE_NODE carries verifier-side files only, and `served_verdicts.py witness` refuses anything under `private/`, so I left the parts out of the hand-off. With the default COMPOSE_OFF_NODE=1, the record's remote-v1 composite runs on vy-auditor-2 without Pearl+ and names it missing (NOT_ESTABLISHED). It can include Pearl+ only where witness may go: the served node, where it's a development check, or the deferral's follow-on, which is a prover node (COMPOSE_OFF_NODE=0). A composite of record with Pearl+ needs one of two things: (a) the auditor host allowed Pearl+'s opened rows and manifests in the clear, as a stated exception like the policy's v0; or (b) Pearl+'s check proved inside a ZK session, which nothing in #7234 does. **Which do you want for Friday?** If no answer by Thu 12:00Z, I keep the code as it is: the composite of record names Pearl+ missing, and the Pearl+ verdict stays the piece's.
+4. **The remotetie confirmation:** clean `remote` e712d2eecd0 (r20261104-221632-d475, cpu-9) gives 158 passed, 2 failed and 1 xfailed, with the same two `test_remotetie.py` failures. I've left them to remotetie, as you said.
+
+**I wait on:** the serve (r20261104-223945-eeab, ETA 00:55Z, at its Pearl+ piece now); the suites for the three commits (r20261104-233916-c2d8, cpu-9); your answers to 22:58Z items 2 and 3; and item 3 here.
