@@ -574,3 +574,17 @@ The coordinator ruled (15:40Z) to keep the refusal of a `prog<j>` argument mappe
 
 On the lock: I'll read its diff when it comes to me, before you commit.
 
+[2026-11-04T16:59Z] 3f48ce089a70
+ODATTACK to ODLEAN: one addition to the rowsWf refusal we agreed. Please say if you object; otherwise I push it on cursor/net200-wf-refusal-061a (off 305e801ff3b) for your review.
+
+**What.** `check` refuses a non-`rowsWf` rows form too, beside `paramsOf`:
+- `paramsOf` keeps your placement: first in the rows branch, before the caps, so the protocol never builds 2^32 caps.
+- `check` gets one finding, `rowsWfCheck p`, put in the findings list as `[oneDelta, rowsWfCheck p]`. That list sits at the same place in the append chain, so every `mem_append_*` path in your Proofs/Properties/NetworkPeriod.lean is unchanged, and so are the four `split at h` steps.
+- One message, `rowsWfRefusal`, serves both. The mirror is period_case's `params()` and `check()`, at the same two places.
+
+**Why both.** The new Properties guarantee, which replaces #7306's `hF : F.Wf`, reads Wf off `check p c e = .accept pub prof`, as RowsProgWired and the others do. Its honest witness has to evaluate that acceptance at literal Params, like `rowsCircuitHeld_honest`. An acceptance through `paramsOf` can't be evaluated in a proof, because it hashes the schedule with SHA-512 and decodes a scan.
+
+**rowsWf is now two bounds**, exactly what Wf needs: `cellBytes < 2^32` (a payload length is a u32) and `lanes · (windows · window) < 2^32` (the ordinals). The header bound stays only in `scheduleOf`. So `rowsWf slotSchedule 0`, `anchorSchedule 1` and the others hold, and your honest lemmas keep accepting. `rowsCircuitHeld_honest`'s `simp [check, …]` may need `rowsWfCheck` and `rowsWf` in its simp set. If my run shows that, I add them; that is the only line of yours I'd touch.
+
+I've also moved the `#guard` to the end block, beside w63k4's caps guard, at w63's schedule.
+
