@@ -121,6 +121,7 @@ theorem finder_pr_none (H : Msg → Msg) (F : Finder) (h : ∀ s, F.out s = none
   rw [Pr_congr fun s => iff_false_intro (by simp [h s])]
   exact Pr_false
 
+omit [Nonempty Coin] in
 /-- At a compiled verifier with no sessions, `B_conf` finds nothing. -/
 theorem bconf_pr (H : Msg → Msg) (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v = none) (Ω : Type)
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) : (Compiled.Bconf H L Ω P x).Pr H = 0 := by
@@ -154,6 +155,7 @@ theorem sksL_κs (x : Msg) : (sksL Coin).κs x = 0 := by
   show ((List.range 1).map fun _ => (0 : ℝ)).foldr max 0 = 0
   simp
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem sksL_κ (x : Msg) : (sksL Coin).κ 0 x < 1 / 3 := by
   have hs := slack_le_two
   have hs0 := slack_pos
@@ -201,6 +203,7 @@ theorem sksL_opensAt (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω
   simp only [Compiled.opensAt, hp]
   simp [Claims.Sampling.Wit.val, Claims.Sampling.CommitmentScheme.Opens, hc, rejCm, OC.eval]
 
+omit [Nonempty Coin] in
 /-- `sksL`'s committed trace opens nothing. -/
 theorem sksL_regVal (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (g : ℕ) :
     (sksL Coin).regVal H P x ω g = none := by
