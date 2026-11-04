@@ -39,10 +39,17 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    rho) as one more when algorithm-policy writes one; an S whose rho is Slowdown's bound carries loose-end-attention
    (01:22Z: A1 charges no read of earlier tokens' keys and values).
 
+On a CPU node (refresh-node.sh, which sets TE_TRACE_HERE: the agent VM only edits) a refresh holds no store write key,
+no console token and no ssh: its shards trace beside it (`trace_here`) until TE_HERE_UNTIL, the node runs of earlier
+refreshes are taken from their run records in the store (`take_src`), its tables and frontier-branches go to its run's
+out/, which custody stores (`here_out`), and algorithm-policy builds its console bodies on the panels the VM read as
+served (TE_SERVED), leaving their PUT and post.json's board lines to the VM's loop (node_loop.py).
+
 `--final FINAL_DIR` scores the sealed shard's values (v1final.py, frontier-branches included, not PUT) and v1runs.py's
 per-run P4 (final and search) for final.md, and posts FINAL-TABLE instead of DIGEST.
 """
 import argparse
+import atexit
 import collections
 import gzip
 import json
@@ -50,8 +57,10 @@ import math
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
+import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -129,7 +138,19 @@ VARIANTS = {"frozen": ["--tail", "frozen"], "analysis": ["--quantities", "analys
 PINS: list[str] = []
 PANELS_DIR = Path(os.environ.get("TE_PANELS_DIR", "/opt/cursor/artifacts/te-panels"))
 #: where each refresh writes its directory
-OUT_ROOT = Path("/tmp/scorer/v1")
+OUT_ROOT = Path(os.environ.get("TE_OUT_ROOT", "/tmp/scorer/v1"))
+#: a refresh on a CPU node (refresh-node.sh: the agent VM only edits), which can launch no research run and holds no
+#: store write key, no console token and no ssh: its shards trace here, beside it, in this kept directory
+#: (`trace_here`), the earlier shards' run records come from the store (`take_src`), and its tables stay in the run's
+#: out/ for custody (`here_out`), the VM PUTting the console's copies (`VM_PUT`) and posting post.json's lines
+HERE_DIR = Path(os.environ["TE_TRACE_HERE"]) if os.environ.get("TE_TRACE_HERE") else None
+#: the cores and GB of its reservation a refresh on the node keeps for its re-score; its shards trace on the rest
+HERE_CORES, HERE_GB = 4, 48
+#: what such a refresh's algorithm-policy run says for each panel it would PUT, the bodies in its console/: the VM's
+#: PUT status replaces it in the board line
+VM_PUT = "left to the VM's PUT"
+#: the shards tracing here ({name: (process, GB asked)}, `trace_here`)
+LOCAL: dict[str, tuple[subprocess.Popen, int]] = {}
 FB = "frontier-branches"
 OLD_PANELS = ("p1-loss-vs-compute", "p2-slowdown-vs-gain", "p3-policy-plane", "p4-decomposition",
               "a2-efficiency-floor")
@@ -378,8 +399,9 @@ def retrace_order(v3: set[str]) -> dict[str, int]:
     reached row's at the least gain target from its start; 1 each v3 family's best not-reached run (by gain;
     method_key where the family is unnamed). The rest of v3 follows, then the pilot."""
     def put(t: Path) -> bool:
-        log = t.parents[1] / "run.log"
-        return log.exists() and "/training/algorithm-policy: 200" in log.read_text()
+        # vm-put.log: the VM's PUT of a refresh on the node (refresh-node.sh writes it from TE_VM_PUT)
+        logs = (t.parents[1] / "run.log", t.parents[1] / "vm-put.log")
+        return any(x.exists() and "/training/algorithm-policy: 200" in x.read_text() for x in logs)
     tables = sorted(OUT_ROOT.glob("2026-*/algorithm-policy/tables/algorithm-policy.json"), reverse=True)
     for t in sorted(tables, key=lambda t: not put(t)):
         try:
@@ -461,12 +483,78 @@ def ledger_args(out: Path, root: Path | None = None) -> list[str]:
 ENDED = ("done", "failed", "cancelled", "refused", "dead", "timed_out", "exited")
 
 
+def attempt(run: str) -> dict:
+    """A node run's attempt record in the evidence store (attempts/RUN.json), {} before custody writes it."""
+    with tempfile.TemporaryDirectory() as d:
+        try:
+            S.store_remote().get(f"attempts/{run}.json", Path(d) / "a.json")
+            return json.loads((Path(d) / "a.json").read_text())
+        except Exception:  # noqa: BLE001 - an attempt not yet in the store (or not readable) is a run still going
+            return {}
+
+
 def node_state(run: str) -> str:
     """The node run's state as `research fetch RUN` observes it (`... observed T: STATE rc=...`): one of ENDED, else
-    running."""
+    running. On the node: a shard traced here by its process, one of an earlier refresh ended (its process ended with
+    that run), and another node run by its attempt in the store."""
+    if HERE_DIR:
+        if run in LOCAL:
+            return "running" if LOCAL[run][0].poll() is None else "exited"
+        if run.startswith("here-"):
+            return "exited"
+        state = (attempt(run).get("status") or {}).get("state")
+        return state if state in ENDED else "running"
     r = subprocess.run(["research", "fetch", run], capture_output=True, text=True, check=False)
     m = re.search(r" observed \S+: (\w+) rc=", r.stdout + r.stderr)
     return m.group(1) if m and m.group(1) in ENDED else "running"
+
+
+def take_src(run: str) -> list[str]:
+    """`trace40.py take`'s --src on the node: a shard's out/ here, else the out/ of the node run's run record, fetched
+    from the store (a missing one fails the take, so its runs are traced again)."""
+    if not HERE_DIR:
+        return []
+    if run.startswith("here-"):
+        return ["--src", str(HERE_DIR / run / "out")]
+    art = (attempt(run).get("outputs") or {}).get("run_record")
+    r = subprocess.run(["research", "data", "fetch", art], capture_output=True, text=True, check=False) if art else None
+    got = Path(r.stdout.strip().splitlines()[-1]) if r and not r.returncode and r.stdout.strip() else HERE_DIR / run
+    return ["--src", str(got / "out" if (got / "out").is_dir() else got)]
+
+
+def trace_here(pack: Path, workers: int, gb: int) -> str:
+    """Shard `pack` traced here by job40.sh in its own session (so `stop_here` ends its captures with it), into
+    HERE_DIR/NAME/out; NAME, its node run's name in pending.json."""
+    run = f"here-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{len(LOCAL)}"
+    d = HERE_DIR / run
+    (d / "tmp").mkdir(parents=True)
+    shutil.move(pack, d / "pack.tar")
+    with (d / "trace.log").open("w") as log:
+        p = subprocess.Popen(["bash", str(HERE / "job40.sh")], stdout=log, stderr=subprocess.STDOUT,
+                             start_new_session=True, env=os.environ | {
+                                 "PACK": str(d / "pack.tar"), "OUT": str(d / "out"), "WORKERS": str(workers),
+                                 "TMPDIR": str(d / "tmp")})
+    LOCAL[run] = (p, gb)
+    return run
+
+
+def stop_here(until: float) -> dict:
+    """Waits for the shards tracing here until `until` (epoch seconds), then ends each one still tracing with its
+    captures; the runs a stopped shard finished are in its out/, taken at the next refresh, and the rest traced again."""
+    stopped = []
+    for run, (p, _) in LOCAL.items():
+        try:
+            p.wait(timeout=max(0.0, until - time.time()))
+        except subprocess.TimeoutExpired:
+            for sig, grace in ((signal.SIGTERM, 30), (signal.SIGKILL, None)):
+                try:
+                    os.killpg(p.pid, sig)
+                    p.wait(timeout=grace)
+                    break
+                except (ProcessLookupError, subprocess.TimeoutExpired):
+                    continue
+            stopped.append(run)
+    return {"here": sorted(LOCAL), "stopped": stopped}
 
 
 def trace_resources(runs: int) -> tuple[int, int]:
@@ -563,7 +651,14 @@ def pool_room() -> tuple[list[tuple[str, str, int | None]], dict[str, str], dict
     TRACE_POOLS' order: each pool's free slots that fit a shard, past its waiters (auto.py's read of `slot.py --status
     --json` over the ssh `research run --on` uses), at most its cap less the shards in flight there (`on_pool`); a pool
     that can't be read takes none. Also what each pool said, and the GB shards may ask on each machine (MEM_SHARE of
-    its available memory)."""
+    its available memory). On the node, one slot ("here") per TRACE_SHARD of the cores past HERE_CORES and the
+    reservation's GB past HERE_GB, less the shards tracing here."""
+    if HERE_DIR:
+        cores, flying = len(os.sched_getaffinity(0)), [gb for p, gb in LOCAL.values() if p.poll() is None]
+        n = max(0, (cores - HERE_CORES) // TRACE_SHARD - len(flying))
+        gb = float(os.environ.get("RESEARCH_RUN_MEM_GB") or 0) - HERE_GB - sum(flying)
+        return ([("here", "here", None)] * n, {"here": f"{cores} cores, {len(flying)} shards tracing, {n} more; "
+                                                        f"{gb:.0f} GB to ask"}, {"here": gb})
     from research import auto
     if not Path(auto.__file__).resolve().is_relative_to(HERE.parents[2]):
         return [], {m: f"not read: research.auto is {auto.__file__}, not {HERE.parents[2]}'s"
@@ -646,12 +741,15 @@ def measured_ledger(out: Path, shards: list[tuple[list[str], str, str]] = (), te
             if state == "running":
                 continue
             # a failed or timed-out node run keeps the runs it finished (trace40.py's node writes each as it ends)
-            t = subprocess.run([*cw, "take", run, "--te", str(te)], capture_output=True, text=True, check=False)
+            t = subprocess.run([*cw, "take", run, "--te", str(te), *take_src(run)], capture_output=True, text=True,
+                               check=False)
             if t.returncode == 0:
                 took.append(run)
             else:
                 log.setdefault("not_taken", {})[run] = f"{state}: {(t.stderr.strip().splitlines() or [''])[-1][:200]}"
             del pending[run]
+            if HERE_DIR and run.startswith("here-"):
+                shutil.rmtree(HERE_DIR / run, ignore_errors=True)
 
     # the ended node runs taken first, so the runs they failed (under an older CODE) are traced again in this one
     settle()
@@ -667,18 +765,23 @@ def measured_ledger(out: Path, shards: list[tuple[list[str], str, str]] = (), te
         runs = [r["run_id"] for r in json.loads(subprocess.run(["tar", "-xOf", str(pack), "./runs.json"],
                                                                capture_output=True, check=True).stdout)]
         workers, gb = shard_resources(runs, peaks)
-        # the pool slot's cores are the run's, so no --cpus
-        r = subprocess.run(["research", "run", "--on", machine, "--pool", pool, "--as", TRACE_LANE,
-                            "--project", "verity", "--source", str(HERE.parents[2]),
-                            "--cwd", "source", "--send", str(pack), "--mem-gb", str(gb),
-                            "--env", f"WORKERS={workers}", "--timeout", "150m", "--custody-ttl", TRACE_CUSTODY_TTL, "--",
-                            "bash", "benchmarks/covert_witness/scorer/job40.sh"],
-                           capture_output=True, text=True, check=False, env=os.environ | {"AGENT_GUARD_LOCAL_OK": "1"})
-        said = r.stdout + r.stderr
-        run = next((w for w in said.split() if w.startswith("r20") and w.count("-") == 2), None)
+        if HERE_DIR:
+            run, rc = trace_here(pack, workers, gb), 0
+            said = f"tracing here: {run}, {len(runs)} runs, {workers} workers, {gb} GB"
+        else:
+            # the pool slot's cores are the run's, so no --cpus
+            r = subprocess.run(["research", "run", "--on", machine, "--pool", pool, "--as", TRACE_LANE,
+                                "--project", "verity", "--source", str(HERE.parents[2]),
+                                "--cwd", "source", "--send", str(pack), "--mem-gb", str(gb),
+                                "--env", f"WORKERS={workers}", "--timeout", "150m", "--custody-ttl", TRACE_CUSTODY_TTL,
+                                "--", "bash", "benchmarks/covert_witness/scorer/job40.sh"],
+                               capture_output=True, text=True, check=False,
+                               env=os.environ | {"AGENT_GUARD_LOCAL_OK": "1"})
+            said, rc = r.stdout + r.stderr, r.returncode
+            run = next((w for w in said.split() if w.startswith("r20") and w.count("-") == 2), None)
         log.setdefault("launch", []).append([machine, *said.strip().splitlines()[-1:]])
         # a refused launch traces nothing, so its runs stay out of pending and the next refresh packs them again
-        if run and not r.returncode and " refused" not in said:
+        if run and not rc and " refused" not in said:
             pending[run] = runs
             # written at once, so the next launch (this layer's or another's) counts it in flight
             pf.write_text(json.dumps(pending, indent=1))
@@ -742,6 +845,12 @@ from pathlib import Path
 sys.path.append(sys.argv.pop(1))
 import v1labels
 from te_core import algorithm_policy
+if os.environ.get("TE_SERVED"):
+    # a refresh on the node (HERE_DIR) holds no console token and no store write key: the panels the VM read as
+    # served before launching it, the tables cited in the run's out/, and the PUT of the console/ bodies left to the VM
+    console.served = lambda producer="training": json.load(open(os.environ["TE_SERVED"]))
+    algorithm_policy.store = lambda path, meta: os.environ["TE_TABLES_CITE"]
+    put = lambda p: os.environ["TE_VM_PUT"]
 sys.exit(v1labels.run(algorithm_policy, Path(sys.argv.pop(1))))
 """
 
@@ -826,7 +935,7 @@ def ladder_points(out: Path) -> list[Path]:
     return found
 
 
-def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
+def policy_panels(out: Path, commit: str, put: bool, root: Path | None, gates: Path | None = None) -> dict:
     """Once the re-score's te_core holds the builder's v2 (AP_V2 in te_core.algorithm_policy): its run on the same
     ledger, with `--publish` under `put`, which builds and PUTs training/algorithm-policy and training/frontier-fit
     both; {panel: its PUT status or why there is none} and `coverage`, the coverage (gain size by decade of rho) as
@@ -837,13 +946,17 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
         return {"algorithm-policy": "not run (the builder's v2 isn't on this te_core yet)"}
     d = out / "algorithm-policy"
     d.mkdir(parents=True, exist_ok=True)
+    if gates and gates.exists() and not (d / "analysis-gates.json").exists():
+        (d / "analysis-gates.json").write_bytes(gates.read_bytes())
     frozen = d / "frozen-embedding.json"
     frozen.write_text(json.dumps(v1labels.frozen_runs(trace40.STATE / "trace40")) + "\n")
     ladder, cap = ladder_points(out / "ladder"), ladder_fit()
+    here = {"TE_VM_PUT": VM_PUT, "TE_TABLES_CITE": f"{here_cite('tables')}/algorithm-policy/tables"} if HERE_DIR else {}
     r = subprocess.run([sys.executable, "-c", POLICY, str(HERE), str(frozen), *ledger_args(d, root),
                         *(x for p in ladder for x in ("--ladder-points", str(p))), *cap,
                         *(["--publish"] if put else [])],
-                       cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True, check=False)
+                       cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True, check=False,
+                       env=os.environ | here)
     (d / "run.log").write_text(r.stdout + r.stderr)
     why = (f"not PUT: {(r.stderr.strip().splitlines() or [f'rc {r.returncode}'])[-1][:200]}" if r.returncode
            else "not PUT (--no-put)")
@@ -868,7 +981,7 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
                        capture_output=True, text=True, check=False)
     res["console"] = json.loads(c.stdout) if not c.returncode else None
     table = d / "tables" / "algorithm-policy.json"
-    art = re.search(r"\((art:\w+)\)", board or "")
+    art = re.search(r"\((art:\w+|run:[\w./-]+)\)", board or "")
     c = subprocess.run([sys.executable, "-c", CONSOLE_COVERAGE, str(table), now(), art[1] if art else ""],
                        cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True,
                        check=False) if table.exists() else None
@@ -934,6 +1047,22 @@ def link(src: Path, dst: Path) -> None:
     os.link(src, dst)
 
 
+def here_cite(name: str) -> str:
+    """How a refresh on the node cites `name` under its run's out/, which custody puts in the evidence store with the
+    run's record."""
+    run = os.environ.get("RESEARCH_RUN_ID") or Path(os.environ["RESEARCH_RUN_DIR"]).name
+    return f"run:{run}/out/{name}"
+
+
+def here_out(tree: Path, name: str) -> str:
+    """`tree` moved to `name` under the node run's out/ (a node holds no store write key: custody stores it); its
+    citation (`here_cite`)."""
+    dst = Path(os.environ["RESEARCH_RUN_DIR"]) / "out" / name
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(tree), str(dst))
+    return here_cite(name)
+
+
 def put_data(tree: Path, kind: str, meta: dict) -> str:
     # the store's local index is SQLite, which another writer on this VM holds for a while ("database is locked",
     # the 17:00Z refresh's publish); the same tree puts to the same id, so a retry is safe
@@ -959,8 +1088,8 @@ def night2_runs() -> set[str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--out", type=Path, help="default /tmp/scorer/v1/<stamp>")
-    ap.add_argument("--gates", type=Path, default=Path("/tmp/scorer/v1/trial/gates.json"),
+    ap.add_argument("--out", type=Path, help="default OUT_ROOT/<stamp>")
+    ap.add_argument("--gates", type=Path, default=OUT_ROOT / "trial" / "gates.json",
                     help="the analysis's gate factors, seeded into the re-score's cache")
     ap.add_argument("--no-publish", action="store_true")
     ap.add_argument("--no-put", action="store_true", help="build algorithm-policy and frontier-fit but don't PUT them")
@@ -970,6 +1099,11 @@ def main() -> int:
                     help="the final table: te_core.rescore with FINAL_DIR's values (scorer.py final table; v1final.py); "
                          "posts FINAL-TABLE, not DIGEST")
     args = ap.parse_args()
+    if HERE_DIR:
+        # a shard traces in its own session, so nothing ends it with the refresh's run: a refresh that exits or is
+        # stopped (its run's timeout) ends its shards first
+        atexit.register(stop_here, 0.0)
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     stamp, final = now(), args.final
     out = args.out or OUT_ROOT / f"{'final-' if final else ''}{stamp.replace(':', '')}"
     commit, newest, chosen = rescore_head()
@@ -1041,7 +1175,9 @@ def main() -> int:
     untraced = [] if final or not same_capture(capture_version(on), CAPTURE_FINAL) else reached_left(on)
     hold = (f"{len(untraced)} of the published and reached runs not yet traced on {CAPTURE_FINAL}'s capture"
             if untraced else None)
-    policy = {} if final else policy_panels(out, commit, not args.no_put and not hold, root)
+    if HERE_DIR and not os.environ.get("TE_SERVED") and not hold:
+        hold = "the VM read no served panels for this refresh on the node (TE_SERVED)"
+    policy = {} if final else policy_panels(out, commit, not args.no_put and not hold, root, args.gates)
     if hold:
         policy |= {k: f"not PUT ({hold})" + (f"; its build failed: {v.removeprefix('not PUT: ')}"
                                              if str(v).startswith("not PUT: ") else "")
@@ -1142,8 +1278,9 @@ def main() -> int:
     (trees["tables"] / "meta.json").write_text(json.dumps(meta, indent=1) + "\n")
     ids = {}
     if not args.no_publish:
-        ids["tables"] = put_data(trees["tables"], "evidence/v1", {"what": f"te formalism v2 {what}: te_core.rescore's "
-                                                                          "frontier and per-checkpoint blocks", **meta})
+        ids["tables"] = here_out(trees["tables"], "tables") if HERE_DIR else put_data(
+            trees["tables"], "evidence/v1", {"what": f"te formalism v2 {what}: te_core.rescore's frontier and "
+                                                     "per-checkpoint blocks", **meta})
     PANELS_DIR.mkdir(parents=True, exist_ok=True)
     for pid in OLD_PANELS:
         for stale in PANELS_DIR.glob(f"{pid}.*"):
@@ -1163,8 +1300,8 @@ def main() -> int:
             (PANELS_DIR / f"{FB}.json").write_bytes(cut)
             (PANELS_DIR / f"{FB}.png").write_bytes(png)
         if not args.no_publish:
-            ids["fb"] = put_data(trees["fb"], "evidence/v1", {"what": f"te formalism v2 {what} {FB}", "put": put,
-                                                              **meta})
+            ids["fb"] = here_out(trees["fb"], "fb") if HERE_DIR else put_data(
+                trees["fb"], "evidence/v1", {"what": f"te formalism v2 {what} {FB}", "put": put, **meta})
     fb_rows = {"uncut": len(fb["rows"]), "console": len(json.loads(cut)["rows"])} if fb else None
     summary = meta | {"art": ids, "frontier_branches": {"put": put, "rows": fb_rows}, "rescore": last,
                       "out": str(out)}
@@ -1177,11 +1314,11 @@ def main() -> int:
     if ids.get("tables") and (fb is None or ids.get("fb")):
         for d in (rs, out / "publish"):
             shutil.rmtree(d, ignore_errors=True)
-    said = policy.get("coverage") or []
-    cov = (f"training/algorithm-policy (te_core {meta['te_core_version']}; tables art {ids.get('tables', '–')[:16]}) "
+    said, tables = policy.get("coverage") or [], S.short(ids.get("tables", "–"))
+    cov = (f"training/algorithm-policy (te_core {meta['te_core_version']}; tables {tables}) "
            + said[0] if said[:1] and said[0].startswith("coverage at ") else
            f"coverage (te_core.algorithm_policy, te_core {meta['te_core_version']}: gain size by decade of ρ, the "
-           f"frontier point or the best failed attempt in each cell; tables art {ids.get('tables', '–')[:16]}): "
+           f"frontier point or the best failed attempt in each cell; tables {tables}): "
            + "; ".join(said) + "." if said else None)
     cc = meta.get("coverage_console") or {}
     if cc.get("line"):
@@ -1194,13 +1331,16 @@ def main() -> int:
                f"fresh-products term: {cc['line']}")
     if meta.get("priced"):
         cov = (cov + " " if cov else "") + meta["priced"]
+    posts = [["FINAL-TABLE" if final else "DIGEST", line], *([["DIGEST", cov]] if cov else [])]
+    (out / "post.json").write_text(json.dumps(posts) + "\n")
     print(json.dumps(summary))
     print(line)
     if not args.no_post and not args.no_publish:
-        subprocess.run([sys.executable, str(HERE / "scorer.py"), "post", "FINAL-TABLE" if final else "DIGEST", line],
-                       check=True)
-        if cov:
-            subprocess.run([sys.executable, str(HERE / "scorer.py"), "post", "DIGEST", cov], check=True)
+        for tag, text in posts:
+            subprocess.run([sys.executable, str(HERE / "scorer.py"), "post", tag, text], check=True)
+    if HERE_DIR:
+        summary["here"] = stop_here(float(os.environ.get("TE_HERE_UNTIL") or time.time()))
+        (out / "cycle.json").write_text(json.dumps(summary, indent=1) + "\n")
     return 0
 
 
@@ -1270,7 +1410,7 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
         q = (f"{fmt(at['S'])} (ρ {fmt(at['rho'])}, {at['basis']}; {at['method']} {at['record']}@{at['checkpoint']}"
              f"{loose})" if at["S"] is not None else "–")
         parts.append(f"{s}: H {fmt(at['H_gates'])}; S {q}")
-    arts = ", ".join(f"{k} {v[:16]}" for k, v in ids.items())
+    arts = ", ".join(f"{k} {S.short(v)}" for k, v in ids.items())
     put = f"PUT {put}" if put[:1].isdigit() else put
     fb = (f"training/frontier-branches (te_core.panels): {fb_rows['uncut']:,} rows, the console's cut "
           f"{fb_rows['console']}, {put}" if fb_rows else f"training/frontier-branches {put}")
@@ -1285,7 +1425,8 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
                 f"{REFERENCE}: " + "; ".join(parts) + f". {fb}; nothing else PUT. art: {arts}.")
     tr = meta["trace"]
     tracing = sum(tr["tracing"].values())
-    where = "the research pools of " + ", ".join(sorted({m.removeprefix("vy-nebius-") for m, _, _ in TRACE_POOLS}))
+    where = ("this refresh's node, beside it" if HERE_DIR else
+             "the research pools of " + ", ".join(sorted({m.removeprefix("vy-nebius-") for m, _, _ in TRACE_POOLS})))
     refused = tr["ledger"].get("refused_runs") or []
     nx = meta.get("next_capture")
     nx_refused = len(nx.get("launch_refused") or []) if nx else 0
