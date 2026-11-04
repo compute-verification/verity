@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.RecGeneric.CompiledCost
 public import Proofs.Flock.RecGeneric.CostProof
-public import Proofs.Flock.RecGeneric.AtFlockCompiledContract
+public import Proofs.Flock.RecGeneric.AtFlockCompiledNontrivial
 public import Proofs.Flock.Claims.KS.Flock
 
 /-!
@@ -65,11 +65,21 @@ theorem PrOut_eq_zero (L : Compiled Coin A) (hc : ∀ x w, A.check x w = true �
   refine (Pr_congr fun t => iff_false_intro ?_).trans Pr_false
   rintro ⟨ws, hws, hn⟩
   apply hn
-  show ∀ p ∈ ws, A.R p.1 p.2
+  obtain ⟨-, -, hs⟩ := L.eo_some_staged H P x t.1 t.2.1 t.2.2 (ws := ws) hws
+  show ∀ p ∈ (ws : List (Msg × A.W)), A.R p.1 p.2
   intro p hp
-  obtain ⟨-, -, hs⟩ := L.eo_some_staged H P x t.1 t.2.1 t.2.2 hws
   obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hp
   exact hc _ _ (hs i hi).2
+
+/-- `Compiled.noHash_EO` at the composite's `E_O`, which is `Compiled.EO`. -/
+theorem toComp_noHash_EO (L : Compiled Coin A) (x : Msg) :
+    ∀ r c, Claims.Sampling.NoHash (L.toComp.EO.ext x r c) :=
+  L.noHash_EO x
+
+/-- An expected-reruns bound on `Compiled.EO` at the composite's `E_O`, which is `Compiled.EO`. -/
+theorem toComp_EO_runs_exp (L : Compiled Coin A) (H : Msg → Msg) {N : Msg → ℝ} (h : ExtractRunsExpLe H L.EO N) :
+    ExtractRunsExpLe H L.toComp.EO N :=
+  h
 
 end Compiled
 
@@ -77,17 +87,16 @@ section Cost
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **A rerun costs at most `t·(1 + e) + L` calls on average**, where each run of the prover makes at most `t`, `E_O`
-makes no call of its own and reruns the prover at most `e` times in expectation, and the rerun's inner view's run's,
-searched and own calls are at most `L`. -/
+/-- **A rerun costs at most `t·(1 + N(x)) + L` calls on average**, where each run of the prover makes at most `t`,
+`E_O` makes no call of its own and reruns the prover at most `N(x)` times in expectation, and the rerun's inner view's
+run's, searched and own calls are at most `L`. -/
 theorem Comp.Ex_rerunCost_le (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) {Ω : Type}
     (P : Prover Ω) (t : ℕ) (ht : ∀ ω r, (run H P K.V x ω r).pLog.length + (run H P K.V x ω r).vLog.length ≤ t)
-    (hNH : ∀ r c, Claims.Sampling.NoHash (K.EO.ext x r c)) (e : ℝ)
-    (he : ∀ ω, Ex (fun u : (Fin (K.V.k x) → Coin) × K.EO.C x => ((K.EO.eval H P x ω u.1 u.2).2.2 : ℝ)) ≤ e)
+    (hNH : ∀ r c, Claims.Sampling.NoHash (K.EO.ext x r c)) (N : Msg → ℝ) (he : ExtractRunsExpLe H K.EO N)
     (L : ℕ)
     (hL : ∀ ω u, (K.viewCalls IV H P x ω u).length + (K.rerunCalls H P x ω u).length + (K.ownAt H P x ω u).length ≤ L)
     (ω : Ω) :
-    Ex (fun u : (Fin (K.V.k x) → Coin) × K.EO.C x => (K.rerunCost IV H P x ω u : ℝ)) ≤ t * (1 + e) + L := by
+    Ex (fun u : (Fin (K.V.k x) → Coin) × K.EO.C x => (K.rerunCost IV H P x ω u : ℝ)) ≤ t * (1 + N x) + L := by
   have hpt : ∀ u : (Fin (K.V.k x) → Coin) × K.EO.C x,
       (K.rerunCost IV H P x ω u : ℝ) ≤ ((t + L : ℕ) : ℝ) + t * ((K.EO.eval H P x ω u.1 u.2).2.2 : ℝ) := by
     intro u
@@ -106,11 +115,12 @@ theorem Comp.Ex_rerunCost_le (K : Comp Coin) (IV : Verifier Coin) (H : Msg → M
     _ = ((t + L : ℕ) : ℝ) +
           t * Ex (fun u : (Fin (K.V.k x) → Coin) × K.EO.C x => ((K.EO.eval H P x ω u.1 u.2).2.2 : ℝ)) := by
         rw [Ex_add, Ex_const, Ex_mul_left]
-    _ ≤ ((t + L : ℕ) : ℝ) + t * e := add_le_add_left (mul_le_mul_of_nonneg_left (he ω) ht0) _
-    _ = t * (1 + e) + L := by push_cast; ring
+    _ ≤ ((t + L : ℕ) : ℝ) + t * N x := add_le_add le_rfl (mul_le_mul_of_nonneg_left (he x Ω P ω) ht0)
+    _ = t * (1 + N x) + L := by push_cast; ring
 
 variable {Col' T' : Type} [DecidableEq Col']
 
+omit [DecidableEq Col'] in
 /-- **A rerun's calls beyond its compiled run's and `E_O`'s are at most `n_V + w + |S(x_I)| + n + v`** at a compiled
 record: none in the inner view's run or searched where `E_O` gives up; on its witnesses, the inner view's run's at most
 `n_V`, and the searched ones the calls the witnesses' second components record at most `w`, the inner setup's and the
@@ -177,10 +187,10 @@ theorem ofRec_Ex_cost_le (H : Msg → Msg) (D : RecAt Coin) (DO : Claims.Flock.D
     Ex (fun u : (Fin ((Compiled.ofRec D DO IV).toComp.V.k x) → Coin) × (Compiled.ofRec D DO IV).toComp.EO.C x =>
       ((Compiled.ofRec D DO IV).toComp.rerunCost IV' H P x ω u : ℝ)) ≤
       t * ((cBe (D.record IV) x : ℝ) + 2 * (D.record IV).nS x) / 2 + L := by
-  refine (Comp.Ex_rerunCost_le _ IV' H x P t hrun (Compiled.noHash_EO _ x)
-    (1 + ∑ s : Fin ((D.record IV).nS x),
-      ((1 + ((D.record IV).nums x s).waits * ((D.record IV).nums x s).k : ℕ) : ℝ))
-    (fun ω => ofRec_EO_runs_exp H D DO IV hN x Ω P ω) L hL ω).trans (le_of_eq ?_)
+  refine (Comp.Ex_rerunCost_le (Compiled.ofRec D DO IV).toComp IV' H x P t hrun
+    (Compiled.toComp_noHash_EO (Compiled.ofRec D DO IV) x) _
+    (Compiled.toComp_EO_runs_exp (Compiled.ofRec D DO IV) H (ofRec_EO_runs_exp H D DO IV hN)) L hL ω).trans
+    (le_of_eq ?_)
   unfold Claims.Recursion.cBe
   push_cast
   simp only [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, mul_one]
@@ -306,6 +316,7 @@ theorem Comp.err_ofFlock_eq (K : Comp Coin) (Bd : Bound Coin Col T) (decI : List
   rw [Fin.sum_univ_three]
   rfl
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **The deviation finder's weight at the element-level Flock**: `β = (N_I + 8W + 4(k + 1))·k_I`, the terms' reads
 `4W·2 + 4·(k + 1)`. -/
 theorem Comp.β_ofFlock_eq (K : Comp Coin) (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T)
@@ -410,6 +421,7 @@ theorem compiledAt_κ_eq (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.F
   rw [Compiled.κ_ofFlock, κ_ofFlock_deploy]
   rfl
 
+omit [DecidableEq Col] [DecidableEq Col'] in
 /-- **The composite's `B` weight at `compiledAt` is route 2C's**: `N_I²·(Σ_s √(γ_s·k))² = (N_I·Σ_s √(γ_s·k))²`. -/
 theorem compiledAt_γ_eq (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin Col' T')
     (Cp : Caps Coin) (x : Msg) :
@@ -420,6 +432,7 @@ theorem compiledAt_γ_eq (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.F
   rw [mul_pow]
   rfl
 
+omit [DecidableEq Col] [DecidableEq Col'] in
 /-- **The deviation finder's weight at `compiledAt` is route 2C's `β₂`** (`Comp.β_ofFlock_eq`). -/
 theorem compiledAt_β_eq (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin Col' T')
     (Cp : Caps Coin) (x : Msg) :
@@ -428,6 +441,7 @@ theorem compiledAt_β_eq (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.F
   rw [Comp.β_ofFlock_eq]
   rfl
 
+omit [DecidableEq Col] [DecidableEq Col'] in
 /-- **No rerun's witnesses fall outside `R_O` at `compiledAt`**: Flock's check implies its relation
 (`Claims.Flock.check_sound`, `Compiled.PrOut_eq_zero`). -/
 theorem compiled_PrOut_eq_zero (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin Col' T')
