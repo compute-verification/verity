@@ -13,7 +13,8 @@ unit `u`'s instance `k` commits bit `t` of its returned output leaf `j`. The bri
 an input gate and `HiddenExec.outBitRow` at a returned output's bit; `rowPosOf` reads one as Bits' position: the port's
 name, the unit's leaf and the bit.
 
-* `rowPosOf_leaf`: at a public file without shared rows, that leaf is the bridge's leaf map's (`LeafMap.ofPublic`).
+* `rowPosOf_leaf`: at a public file without shared rows, that leaf is the bridge's leaf map's (`LeafMap.ofPublic`). At a
+  shared-rows file Bits still names leaf `u`, and the refs enter below it (`Public.digest`).
 * `keyIdx_self`, `keyIdx_lt`: a key is its own key, below the inputs, so the gate a unit's input column reads is a
   source gate `rowBit` places.
 * `wire_inGate`: a column of a unit's own instance on a source gate is an input column of the unit, and the gate's
@@ -41,8 +42,9 @@ def rowPosOf (r : Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)) : Sampl
   ⟨c.ports[r.2.1].name, r.1.val, r.2.2.val⟩
 
 /-- **Bits' leaf is the bridge's leaf map's** at a public file without shared rows (`LeafMap.ident`): unit `u` reads its
-own leaf `u` of every port. It covers only files without shared rows: a shared-rows file's leaf map reads row
-`refs[u·np + q]` (`LeafMap.ofTables`), and Bits places unit `u` at leaf `u` there too. -/
+own leaf `u` of every port. Bits neither refuses a shared-rows file nor reads its refs: it places unit `u` at leaf `u`
+there too, and the refs enter below it, where `Public.digest` reads unit `u`'s row of port `q` at its table's row
+`refs[u·np + q]`, which the bridge's leaf map reads (`LeafMap.ofTables`). That file is outside this theorem. -/
 theorem rowPosOf_leaf {pub : Flock.Public} (ht : pub.tables = none) (nl : ℕ)
     (r : Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)) :
     (rowPosOf c r).leaf = (LeafMap.ofPublic c pub nl).ref r.2.1.val r.1.val := by
