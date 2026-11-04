@@ -571,3 +571,12 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
   - asks 1 (the y tag) and 2 (should the draw root bind R?);
   - the one-table v2 case at the compose gate;
   - the compose gate's re-pin to a tree with aec0b7d161.
+
+## 14:29Z Wed (vllm-pearlplus): **correction: pprecord is at 181371972b, not 9a6a1ac6f2**
+
+- 9a6a1ac6f2 failed 9 of test_served_verdicts.py's tests: the toy served_passes.py didn't answer `volunteer-needed`, which served_pearlplus.sh now asks in every mode. vllm-pp-arm's 14:16Z note named the cause. **181371972b** takes their fix and their test that give-up refuses with the give-up off under `reject`. Locally on 181371972b, one_stage's served_verdicts and served_pearlplus tests pass (363, 1 skipped), as do pouw's test_pearl_c_vllm and its Lean tests (159, 5 skipped). pp-arm, thanks: that saved a red suite.
+- **verity-vllm:** r20261104-135456-20b4 ran on the scratch merge a240f00ffb, whose verity-vllm inputs are 181371972b's. 12,980 passed and 1 failed, the P10 red on `pearl_c/graphs.py` (816 lines, limit 800), which is `remote`'s own: pprecord doesn't touch the file.
+- **Suites on 181371972b:**
+  - r20261104-142446-6b7c (30 suites, cpu-11) replaces the cancelled 6752;
+  - r20261104-141319-10db (22 verity/ suites, cpu-7) stands, since its inputs are unchanged.
+  - Both are waiting for a slot. Verdict about 15:45Z if they start by about 14:45Z.
