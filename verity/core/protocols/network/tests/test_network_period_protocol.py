@@ -641,24 +641,26 @@ def test_the_rows_forms_bound_counts_what_it_says():
     them."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
                PC.Scan(10, 1120, 300, 512))
-    out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0, 0)])
+    out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0, 0, [])])
     (scan,) = out["scans"]
     assert at_most(20, 3) == 1351 and clog2(1351) == 11
     assert (out["schedules"], out["cells"], scan["free"], scan["faulty_sets"], scan["faulty_bits"], scan["jitter"],
-            scan["faulty_entries"], out["K"]) == (5, 5, 1120, 11, 3 * 512, 10, 0, 5 + 5 + (1120 + 11 + 3 * 512 + 10))
+            scan["faulty_entries"], scan["tied"], out["K"]) == (5, 5, 1120, 11, 3 * 512, 10, 0, [],
+                                                                5 + 5 + (1120 + 11 + 3 * 512 + 10))
     assert out["audits"] == [{"delta": "1/10", "drawn": 3, "units": 10, "wrong_units": 4}]
     drawn = dataclasses.replace(p, audits=(), cells=(), jitter=1, scan=PC.Scan(4, 0, 300, 512))
-    assert public(drawn, [], [(Facts(8, 8, Fraction(1, 100), 0), 0, 0)])["K"] == 0
+    assert public(drawn, [], [(Facts(8, 8, Fraction(1, 100), 0), 0, 0, [])])["K"] == 0
     w63 = dataclasses.replace(p, audits=(PC.Audit(8 * 1136, 0, "", 8, 1136),), cells=(), jitter=1,
                               scan=PC.Scan(32, 0, 300, 512))
-    tied = public(w63, [Facts(8, 8, Fraction(1, 100), 0)], [(Facts(64, 64, Fraction(1, 100), 0), 8 * 1136, 0)])
-    assert (tied["scans"][0]["free"], tied["K"]) == (9088, 9088)
+    tied = public(w63, [Facts(8, 8, Fraction(1, 100), 0)], [(Facts(64, 64, Fraction(1, 100), 0), 8 * 1136, 0, [0])])
+    assert (tied["scans"][0]["free"], tied["scans"][0]["tied"], tied["K"]) == (9088, [0], 9088)
     k4 = dataclasses.replace(w63, scan=PC.Scan(32, 0, 300, 512, 8 * 112))
-    part = public(k4, [Facts(16, 9, Fraction(1, 100), 2)], [(Facts(64, 64, Fraction(1, 100), 0), 9088, 8 * 112)])
-    assert (part["scans"][0]["faulty_entries"], part["K"]) == (896, 9088 + 896)
+    part = public(k4, [Facts(16, 9, Fraction(1, 100), 2)],
+                  [(Facts(64, 64, Fraction(1, 100), 0), 9088, 8 * 112, [0])])
+    assert (part["scans"][0]["faulty_entries"], part["scans"][0]["tied"], part["K"]) == (896, [0], 9088 + 896)
     two = dataclasses.replace(p, cells=(), windows=2, scan=PC.Scan(0, 0, 0, 0))
     assert public(two, [Facts(1, 1, Fraction(1, 10), 0)],
-                  [(Facts(1, 1, Fraction(1, 15), 0), 0, 0)] * 2)["eps"] == "2/15"
+                  [(Facts(1, 1, Fraction(1, 15), 0), 0, 0, [])] * 2)["eps"] == "2/15"
     one = dataclasses.replace(two, windows=1)
-    assert public(one, [Facts(2, 1, Fraction(1, 10), 0)], [(Facts(1, 1, Fraction(1, 15), 0), 0, 0)],
+    assert public(one, [Facts(2, 1, Fraction(1, 10), 0)], [(Facts(1, 1, Fraction(1, 15), 0), 0, 0, [])],
                   [Facts(2, 1, Fraction(1, 10), 0)])["eps"] == "1/6"
