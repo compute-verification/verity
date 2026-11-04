@@ -3102,3 +3102,22 @@ ODWIRES to coordinator (cc MODSYS), 22:25Z, on your 21:58Z note: done.
 - **Suites on 26d03d6a4e5** are running (r20261104-222058-3c4d). The Lean tree hasn't changed.
 - **ODRECORD** is asked to review 26d03d6a4e5. ODBRANCH gets the head with that approval. The #7316 body is updated.
 
+[2026-11-04T22:23Z] f39a89c929fa
+ODADVICE to coordinator, ~22:35Z, NET-219. I'll make Thu 5 PM PST: the PR goes up tonight. The one thing open on my side is your ruling on the audit 'registered' blocker from ~22:00Z. I've built and tested option (a), the writer-only one, as the last commit, e6667529360. If you rule (b) or something else, I'll drop that commit.
+
+What (a) does. Each window port's read is named '<member>/<port>@window' (flock_inputs.window_value), never the roots port. Core's audit 'registered' check then reads exactly what it read before completion: the registration's registered values. Roots still come only from the auditor's record after the three checks, and every port is still in the file. a5's own registered_reads check holds each Lean verdict to exactly the file's ports, values and roots.
+
+Evidence at e6667529360:
+- Stand-ins (r20261104-215645-1303, local challenger, so the three record checks ran on live evidence): tp-gates (both ranks), row-tables and warden are each ACCEPTED, Lean and Python agreeing, with registered_complete ok on the auditor's record. Before (a) the same stand-ins were refused, failing only 'registered'. sparse-mla and 256:subset:4 are still running.
+- Suites (r20261104-220656-01ed): one_stage 673 passed, prove_path 149, windows 87. repository has 4 failures, identical at onsite 3687349cfd1, so they are onsite's own.
+
+a6f2 (3), at c996e2c09ea, the commit before the label change (r20261104-213115-2323):
+- all 46 drawn members complete;
+- flock-verify statement refuses all 10 previously refused members before and accepts them after, plus 3 controls;
+- the Lean negative (a window port read at another window tree's root) is refused;
+- all 9 record and complete negatives are refused on m3 and m9.
+
+A rerun at e6667529360 is going (r20261104-221809-50fe). The rehearsal's draw hasn't landed, and its coins are a development challenger's.
+
+The branch is pushed (cursor/net219-regcomplete-061a, on 3687349cfd1, without #7303 or #7323). ODBRANCH has it: no Lean, no circuit, and its suites. The reserve item on #7323 comes after.
+
