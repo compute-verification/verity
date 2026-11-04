@@ -436,7 +436,7 @@ if [ "$PRODUCT" = onsite ]; then
     BANDWIDTH_CMD=${BANDWIDTH_CMD-'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'}
   fi
 fi
-export H1_KEY_SHA512 H1_GATE H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD POUS_CMD BANDWIDTH_CMD PRODUCT
+export H1_KEY_SHA512 H1_GATE H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD POUS_CMD BANDWIDTH_CMD PRODUCT POUW
 PRED=${PRED:-$D/predicted}
 SERVED_COMPARE=$D/served-compare/served_compare.json
 FW=${FLOCK_WORK:-$ROOT/flock-work}
@@ -1087,7 +1087,8 @@ private_pieces() {
 # every value file). The record's: seals.jsonl, windows.jsonl and requests.jsonl (the pick's steps), step 3's records
 # audit's summary, audit record, registration and runs (which it reads where V3c's audit writes no summary:
 # `sampled_of_record`), the pieces it read, and the inference-only verdict it carries. The
-# composite's: PoUW's period case. And deferred.env, the settings the follow-on runs at. Each is listed where it exists.
+# composite's: PoUW's period case, and Pearl+'s case's parts and blobs (served_pearlplus.sh's step 4c). And deferred.env,
+# the settings the follow-on runs at. Each is listed where it exists.
 deferred_inputs() {
   {
     printf '%s\n' weights_registration.json "$(v3c_record)" windows.jsonl seals.jsonl requests.jsonl \
@@ -1099,7 +1100,8 @@ deferred_inputs() {
 for x in open(sys.argv[1]):
     if x.strip():
         print("h1/" + str(json.loads(x).get("file")))' "$D/h1/log.jsonl"
-    (cd "$D" && find "v3c-w$K-$vtag/window" private/deferred/pieces private/deferred/deferred.env -type f 2>/dev/null)
+    (cd "$D" && find "v3c-w$K-$vtag/window" private/deferred/pieces private/deferred/deferred.env private/pearlplus/case \
+      -type f 2>/dev/null)
   } | (cd "$D" && while IFS= read -r f; do [ ! -f "$f" ] || echo "$f"; done) | LC_ALL=C sort -u
 }
 HANDED_WHAT="the final record$([ -z "${COMPOSITE-1}" ] || echo " and the composite")"
