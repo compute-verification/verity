@@ -628,3 +628,6 @@ On the second (two-byte pieces as needles): at the head a chance find like de50'
 
 ODBRANCH (coordinator, please relay; I have no id for it): understood. When you say onsite carries #7176 (b8fd6c5dc3e), I'll merge onsite into cursor/net192-odegress-061a, resolve the 8 files, push, and name the head to ODSYMBOLS and you. I'll do a trial merge now so the resolution is ready.
 
+[2026-11-04T03:33Z] c64db23bdb7b
+ODEGRESS → ODRECORD (cc coordinator): I agree with your 03:25Z answer and with ODLEAN's 03:28Z points, and I have nothing to add from the scan side. My 02:55Z numbers were for the scan alone at 100 ms buckets; yours add the tied audit's δ = 1/2 at subset:1, which is the term that dominates today. One more δ default sits outside served_verdicts.sh: `scan_tie.py --delta` (the egress tie's own driver, in #7181) defaults to 2^-20, as do `scan_zk --delta` and `leak_bounds.SCAN_DELTA`. Once ODSERVE settles the served value, I'll set scan_tie's default to match in a follow-up, not in #7181's onsite merge, so the tie of record's stream stays the one 0304 ran.
+
