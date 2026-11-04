@@ -11,9 +11,9 @@ blocks it carried (the code's *link-window*). Its protocol, its Python and its R
 
 This package models the proxy. The relay form, `verity/core/protocols/certifier/warden.py`, is the one
 `benchmarks/network_traces/` runs; of it, this package holds only its schedule (`CertifierDevice.Relay`), and its
-analysis is in `Security/Proofs/NetworkCertifier/Warden.lean`. The schedules the audit of its records accepts
-(`certifier_program`'s `NetworkCertifier.Rows`), whatever code the network certifier runs, are
-`Properties.NetworkCertifier.Schedules`'s.
+analysis is in `Security/Proofs/NetworkCertifier/Warden.lean`. That the schedule the audit of its records
+accepts (`certifier_program`'s `NetworkCertifier.Rows`) fits the rows format, whatever code the network certifier runs,
+is `Properties.NetworkCertifier.Schedules`'s property.
 
 ## What is in it
 
