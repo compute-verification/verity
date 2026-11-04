@@ -16,6 +16,8 @@ import Proofs.Flock.Bridge.PublicDeployed
 import Proofs.Flock.Bridge.Honest
 import Proofs.Flock.Bridge.V5
 import Proofs.Flock.Bridge.Public
+import Proofs.Flock.Bridge.Partitions
+import Proofs.Flock.Bridge.RelDeploy
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
@@ -30,7 +32,10 @@ verifiers' acceptance (`Refused`). `Lowers`: the claims program `progOf C κ` lo
 `Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed`, `deltaPub < 1` at the deployment's
 parameters. `Honest`: `Flock.SecurityProofs.SampledKSLiveHonest : Flock.Guarantees.SampledKSLiveHonest`, the file
 hypotheses of V2, V3 and Pub at the deployed session, from the named premise that its files parse
-(`Bridge.Assumptions.ServedFilesParse`). -/
+(`Bridge.Assumptions.ServedFilesParse`). `Partitions`: `progOf C κ` is topologically ordered
+(`Flock.Bridge.progOf_topological`), and `partOf P κ ns` partitions it when every unit holds a gate, no output is an
+input and every block commits at most `unitClassMax` bits (`Flock.Bridge.partOf_partitions`). `RelDeploy`:
+`RelDeployTarget`, proved (`Flock.Bridge.relDeployTarget`), and at a leaf map (`Flock.Bridge.relDeployTargetL`). -/
 
 /-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
 theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl
