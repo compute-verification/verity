@@ -25,14 +25,16 @@ a traced step alone has no token entries or op log, else null with why. Its p is
 **Policies** (`policies`): `console`, te_core.policy's `CONSOLE`; `grown`, one session of the size's own model at the
 console's 4,096 input and 1,024 output tokens, at the console's k; `serving`, k = `SERVING_K` (100,000 input ids at 16
 bits) and c one session of the size's own model at 100,000 input and 1,024 output tokens (te_core.policy's `session`).
+Each serving row says it rests on te_core.formalism's `BETA_K_LABEL`: at that k the products term charges an
+activation at most β(k), io-bound's red-team of (H), not its width (`labelled`).
 
 **The measured frontier**: the scorer's uncut algorithm-policy table (te_core.algorithm_policy), each run's first
 checkpoint reaching each gain (`reached` yes, p = C/H), every route but standard training's (`STANDARD`), each
 checkpoint measured as the scorer measured it (`scored`: its ledger record with the formalism block in the scorer's
 formalism.jsonl, te_core.formalism's `measure`) and priced at each policy by `published`, whose ρ at the console's
 policy is the table's own on every row (`check`). Each priced row has the table's basis (`basis`): a row that is
-unmeasured, rests on a stub, reads a void term or is partial is never the least S. The row is the eligible one with
-the least S, else null S with why: no attack run at this size, none reached, or none with a full ρ at the policy.
+unmeasured, rests on a stub or is partial is never the least S. The row is the eligible one with the least S, else
+null S with why: no attack run at this size, none reached, or none with a full ρ at the policy.
 """
 from __future__ import annotations
 
@@ -74,7 +76,7 @@ COLUMNS = ["start", "params_total", "params_nonembedding", "bits_per_byte", "sta
            "binding_kind", "rests_on", "reading", "te_core", "traced_or_modelled", "run", "c_gates", "k_bits",
            "rho_products", "basis", "products_inputs"]
 #: what the products term read that `products_inputs` shows, where te_core.formalism's term gives it
-INPUTS = ("N", "O", "beta", "b_y", "F", "alpha", "macs_share", "k_classified")
+INPUTS = ("subset", "N", "O", "beta_w", "beta_x", "beta_k", "b_y", "F", "alpha", "K_thr", "macs_share", "k_classified")
 #: a standard step's affected gates: full training updates every weight, so every gate depends on θ'
 AFFECTED = "stub: every gate depends on theta' (full training updates every weight)"
 NO_ATTACK = "no attack run at this size"
@@ -132,29 +134,28 @@ def step(block: dict) -> formalism.Measured:
     return formalism.complete(f, {"output": {"e_bytes": 4 * block["params"], "format": "full"}}, block["shape"])
 
 
-def voided(m: formalism.Measured, one: dict, c: float, k: float) -> bool:
-    """te_core.algorithm_policy's `voided` at (c, k), where it reads the console's policy: `one`, the published ρ at
-    (c, k), reads a void fresh-products term."""
-    if one["reading"] != "A" or one["binding_kind"] == "fit" or one["terms"].get("fresh_products") != 0:
-        return False
-    _, why, got = formalism.fresh_products(m, c, k)
-    return why is None and (got.get("io_bound") or {}).get("proved", {}).get("lam", 0.0) is None
-
-
-def basis(m: formalism.Measured, one: dict, stub: bool, c: float, k: float) -> str:
-    """The basis te_core.algorithm_policy's `build` gives the published ρ `one` at (c, k): unmeasured, stub (`stub`:
-    its quantities rest on one, `algorithm_policy.estimated`), void, partial, else the binding kind."""
+def basis(one: dict, stub: bool) -> str:
+    """The basis te_core.algorithm_policy's `build` gives the published ρ `one`: unmeasured, stub (`stub`: its
+    quantities rest on one, `algorithm_policy.estimated`), partial, else the binding kind (its `voided` marks
+    nothing)."""
     from te_core import algorithm_policy as ap
 
-    return (ap.UNMEASURED if one["rho"] is None else ap.STUB if stub else ap.VOID if voided(m, one, c, k)
-            else ap.PARTIAL if one.get("partial") else one["binding_kind"])
+    return (ap.UNMEASURED if one["rho"] is None else ap.STUB if stub else ap.PARTIAL if one.get("partial")
+            else one["binding_kind"])
 
 
 def eligible(b: str) -> bool:
     """Whether a row of basis `b` can be the least S (te_core.algorithm_policy: no decade holds the others)."""
     from te_core import algorithm_policy as ap
 
-    return b not in (ap.UNMEASURED, ap.STUB, ap.VOID, ap.PARTIAL)
+    return b not in (ap.UNMEASURED, ap.STUB, ap.PARTIAL)
+
+
+def labelled(row: dict, pol: str) -> dict:
+    """`row` at policy `pol`, a serving row with te_core.formalism's `BETA_K_LABEL` in what it rests on."""
+    if pol != "serving" or formalism.BETA_K_LABEL in (row.get("rests_on") or ""):
+        return row
+    return row | {"rests_on": "; ".join(filter(None, (row.get("rests_on"), formalism.BETA_K_LABEL)))}
 
 
 def products_inputs(m: formalism.Measured, c: float, k: float) -> str:
@@ -166,7 +167,7 @@ def products_inputs(m: formalism.Measured, c: float, k: float) -> str:
 
 
 def rests(one: dict) -> str:
-    """What a published ρ rests on, with its `why` where it has one (an unmeasured kind, or a void term's reason)."""
+    """What a published ρ rests on, with its `why` where it has one (an unmeasured kind)."""
     return one["rests_on"] + (f": {one['why']}" if one["why"] else "")
 
 
@@ -246,8 +247,9 @@ def same(mine: float | None, theirs) -> bool:
 
 def standard(m: formalism.Measured | None, path: Path, c: float, k: float, run: str | None) -> dict:
     """Standard training's row at (c, k): p 1 and `published` at reading A on its traced step `m` (module docstring;
-    None: no step at `path`). Its basis is published's (the stubs `step` labels are inputs the products term never
-    reads)."""
+    None: no step at `path`). Its basis is published's: of the stubs `step` labels the products term reads only τ,
+    over a run's steps (a step on its own has none before it), and the code size, whose 32 bits a weight cap no
+    narrower weight."""
     row = {"route": "standard training", "p": 1.0, "traced_or_modelled": "traced", "run": run}
     if m is None:
         return row | {"binding_kind": "unmeasured", "rests_on": f"no traced step ({path.name})", "basis": "unmeasured",
@@ -255,7 +257,7 @@ def standard(m: formalism.Measured | None, path: Path, c: float, k: float, run: 
     one = formalism.published(m, c, k, "A")
     return row | {"rho": finite(one["rho"]), "S": finite(one["rho"]), "binding_kind": one["binding_kind"],
                   "rests_on": rests(one), "reading": one["reading"],
-                  "rho_products": finite(one["terms"].get("fresh_products")), "basis": basis(m, one, False, c, k),
+                  "rho_products": finite(one["terms"].get("fresh_products")), "basis": basis(one, False),
                   "products_inputs": products_inputs(m, c, k)}
 
 
@@ -267,7 +269,7 @@ def unpriced(cands: list[dict], priced: dict, measured: dict, pol: str, c: float
         key = checkpoint(x["record"])
         if key in measured and priced[(key, pol)][0]["terms"].get("fresh_products") is None:
             b = formalism.bound(measured[key], c, k)
-            why = (b["unmeasured"].get("fresh_products") or b["void"].get("fresh_products") or "void").split(";")[0]
+            why = b["unmeasured"]["fresh_products"].split(";")[0]
             off[why] = off.get(why, 0) + 1
     return max(off.items(), key=lambda kv: kv[1]) if off else None
 
@@ -322,7 +324,7 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
             cands = [r for r in reached if r["name"] == name and r["gain_target"] == g]
             for pol, (c, k) in policies(params).items():
                 at = base | {"gain_target": g, "policy": pol, "c_gates": finite(c), "k_bits": k}
-                rows.append(at | standard(own, path, c, k, runs.get(name)))
+                rows.append(labelled(at | standard(own, path, c, k, runs.get(name)), pol))
                 best, bases = None, {}
                 for x in cands:
                     key = checkpoint(x["record"])
@@ -332,7 +334,7 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
                         continue
                     if (key, pol) not in priced:
                         one = formalism.published(m, c, k)
-                        priced[(key, pol)] = one, basis(m, one, stub[key], c, k)
+                        priced[(key, pol)] = one, basis(one, stub[key])
                     one, b = priced[(key, pol)]
                     bases[b] = bases.get(b, 0) + 1
                     if pol == "console" and compared:
@@ -347,21 +349,21 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
                             best = (rank, x, one, b, m)
                 if best is not None:
                     (S, _, _), x, one, b, m = best
-                    rows.append(at | {"route": x["method_key"], "p": finite(x["p"]), "rho": finite(one["rho"]),
-                                      "S": finite(S), "binding_kind": one["binding_kind"], "rests_on": rests(one),
-                                      "reading": one["reading"], "traced_or_modelled": "traced", "run": x["record"],
-                                      "rho_products": finite(one["terms"].get("fresh_products")), "basis": b,
-                                      "products_inputs": products_inputs(m, c, k)})
+                    row = {"route": x["method_key"], "p": finite(x["p"]), "rho": finite(one["rho"]), "S": finite(S),
+                           "binding_kind": one["binding_kind"], "rests_on": rests(one), "reading": one["reading"],
+                           "traced_or_modelled": "traced", "run": x["record"],
+                           "rho_products": finite(one["terms"].get("fresh_products")), "basis": b,
+                           "products_inputs": products_inputs(m, c, k)}
                 elif name not in attempted or not cands:
-                    rows.append(at | {"route": NO_ATTACK if name not in attempted else "none reached"})
+                    row = {"route": NO_ATTACK if name not in attempted else "none reached"}
                 else:
                     count = ", ".join(f"{n} {b}" for b, n in sorted(bases.items(), key=lambda kv: -kv[1]))
                     off = unpriced(cands, priced, measured, pol, c, k)
-                    rows.append(at | {"route": "none with a full rho", "rests_on": (
+                    row = {"route": "none with a full rho", "rests_on": (
                         f"{len(cands)} reached ({count})" + (f"; on {off[1]} the products term is {off[0]}" if off
                                                              else "") +
-                        ": a row that is unmeasured, rests on a stub, reads a void term or is partial is never the "
-                        "least S")})
+                        ": a row that is unmeasured, rests on a stub or is partial is never the least S")}
+                rows.append(labelled(at | row, pol))
     p = {"id": PANEL, "title": "Red teaming by model size: standard training's rho and the frontier's least S = p*rho",
          "kind": "table", "updated_at": stamp,
          "source": f"python islands/ladder-v3/size_scaling.py build (training's slowdown code {VERSION}; frontier: the "
@@ -376,7 +378,7 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
 
 def note() -> str:
     return (f"Per size, gain and policy ({UNIT}): standard training (traced at full size, p = 1) and the measured "
-            "frontier's least S = p*rho over reached attacks, never a partial, stub, void or unmeasured row. console: "
+            "frontier's least S = p*rho over reached attacks, never a partial, stub or unmeasured row. console: "
             "the 45M session; grown: the size's own 4,096-in 1,024-out session at k 65,536; serving: k 1.6e6, its own "
             "100,000-in session. rho: training's slowdown code's published rho, rho_products its products term. 1B: "
             "the console's reference size, no start.")
