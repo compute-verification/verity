@@ -77,13 +77,17 @@ def chain_program():
 
 def partition(d: Path, prog=None) -> dict:
     """The partition object, program and full draw the inner statement in ``d`` binds, written beside it; refused unless META
-    binds exactly that partition and program and the population is the statement's ``N`` units. ``prog``: the program
-    (default `chain_program` under REC_LINKS=1, else `program`)."""
+    binds exactly that partition and program and the population is the statement's ``N`` units, and at an ``N`` the
+    verifier refuses (`rec_budget.inner`). ``prog``: the program (default `chain_program` under REC_LINKS=1, else
+    `program`)."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity_flock import rec_budget as RB
     from verity_flock import rec_live as RL
 
     t, n = template(), population()
+    if why := RB.inner(n):
+        raise SystemExit(why)
     if prog is None:
         prog = chain_program() if os.environ.get("REC_LINKS") == "1" else P.population_program(t, n)
     part = P.partition(prog, P.template_instance_query(t))
