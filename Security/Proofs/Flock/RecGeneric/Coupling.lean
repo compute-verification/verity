@@ -12,9 +12,9 @@ of the first is a rerun of the second through `extendDraw`, and the two models a
 
 * a run's coins are its rerun's inner coins (`Comp.coins_extend`), and a fork at an inner round is its rerun's fork
   there (`Comp.named_extend`, `extend_fork_min`);
-* `P_O`'s run accepts exactly where it is kept (`Comp.innerFO_acc_iff`), and off the draws `P_O`'s runs don't show
-  (`Comp.BadO`) and those where `E_O` gives witnesses outside `R_O` (`Comp.OutRO`), it is kept exactly where its
-  rerun's inner view accepts (`Comp.accAt_iff`);
+* `P_O`'s run accepts exactly where it is kept (`Comp.innerFO_acc_iff`), and it is kept exactly where its rerun's inner
+  view accepts, but where the rerun accepts at a draw `P_O`'s runs don't show (`Comp.BadO`) or at one where `E_O` gives
+  witnesses outside `R_O` (`Comp.OutRO`) (`Comp.accAt_iff`);
 * a run's calls are among its rerun's searched evaluations (`Comp.rerunCalls`), or those collide (`CallsLogColl`), so
   a collision among runs' calls is one among their reruns' (`Comp.findColl_cover`).
 
@@ -94,15 +94,20 @@ theorem keepDO_iff_acc {ω : Ω} {d : (Fin (K.V.k x) → Coin) × K.EO.C x} (hb 
     have hg : K.GivesRO H P x ω d := ⟨w, hw, Classical.byContradiction fun hn => ho ⟨w, hw, hn⟩⟩
     exact ⟨hg, h, Classical.byContradiction fun hn => hb ⟨hg, hn⟩⟩
 
-/-- **Off the bad draws and those where `E_O` gives witnesses outside `R_O`, `P_O`'s aborting run accepts exactly where
-its rerun's inner view does.** -/
+/-- **`P_O`'s aborting run accepts exactly where its rerun's inner view does**, but where the rerun accepts at a bad
+draw or at one where `E_O` gives witnesses outside `R_O`: a kept run's rerun accepts, and off those draws an accepting
+rerun is kept. -/
 theorem accAt_iff (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (hn : I.V.k (K.xI x) ≤ K.V.k x) (ω : Ω)
     (t : (Fin (I.V.k (K.xI x)) → Coin) × (Fin (K.V.k x) → Coin) × K.EO.C x)
-    (hb : ¬ K.BadO I S H P x ω (extendDraw t)) (ho : ¬ K.OutRO H P x ω (extendDraw t)) :
+    (h : ¬ ((K.BadO I S H P x ω (extendDraw t) ∨ K.OutRO H P x ω (extendDraw t)) ∧
+      (K.innerModel (S.IVStar I.V I.ans) H P x).acc ω (extendDraw t))) :
     (runModel H I.V (K.innerPO I S H P x decC) (K.xI x) (K.keepAO I S H P x)).acc ω t ↔
       (K.innerModel (S.IVStar I.V I.ans) H P x).acc ω (extendDraw t) := by
   show (abortRun H (K.innerPO I S H P x decC) I.V (K.xI x) (K.keepAO I S H P x) ω t).out = .acc ↔ _
-  rw [abortRun_eqO decC hn, innerFO_acc_iff decC hdec, keepDO_iff_acc hb ho]
+  rw [abortRun_eqO decC hn, innerFO_acc_iff decC hdec]
+  refine ⟨fun hk => ?_, fun ha => (keepDO_iff_acc (fun hb => h ⟨Or.inl hb, ha⟩) (fun ho => h ⟨Or.inr ho, ha⟩)).2 ha⟩
+  simp only [Comp.keepDO, decide_eq_true_eq] at hk
+  exact hk.2.1
 
 /-! ## Coins and forks -/
 
@@ -131,7 +136,7 @@ theorem named_extend (decC : Msg → Coin) (hn : I.V.k (K.xI x) ≤ K.V.k x)
 
 /-! ## Calls -/
 
-omit [Nonempty Coin] in
+omit [Fintype Coin] [Nonempty Coin] in
 /-- `E_O`'s witnesses on a run it replays record true evaluations (`CallsTrue`), so a rerun's searched evaluations are
 true. -/
 theorem rerunCalls_true (hRp : K.Replays H x) (hT : K.CallsTrue H x) (ω : Ω)
