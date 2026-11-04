@@ -172,7 +172,10 @@
 # proofs' step 3 samples on a local development challenger session's coins on the served node (run.sh's PP_CHALLENGER
 # default, local, pinned on PP_MAIN's line, else MAIN_FILE's, else origin's main's) unless PP_CHALLENGER names the live
 # challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY), and then too while V3c's audit is
-# live, since both open on the window's run root: step 3 is then a development check. With H1_GATE (the
+# live, since both open on the window's run root: step 3 is then a development check. The challenger's release of the
+# draw's coins (its key, the window root and the coins) is kept beside the audit's case where the audit runs,
+# $VW/audit/window/release.json (`a5.RELEASE`), which a5's v2 case carries; `v2_case.py` reads its coins and window root
+# under the auditor's own key record, never the key it names. With H1_GATE (the
 # lane's gate command, by default "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"; empty, no
 # H1) the endpoint serves PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER,
 # default vy-dc-h200, at the engine's T and S WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a

@@ -1,10 +1,13 @@
 """v2_case.py: sampled proofs v2's case of a served window from its kept files, in a5's form: one statement for a
 window of one member, per member for several. The rebuild reads what a served run's ``m0/compose.log``
-(``fixtures/served-window-m0``, a served H200 run's) records, and the case is written private as `composite.py` reads
-it, or, when a blob has no file, only ``missing.json``, which `composite.py` leaves out."""
+(``fixtures/served-window-m0``, a served H200 run's) records, the case names the auditor's challenger by its key record
+and carries the window's kept release of the draw's coins, a release naming another key is refused, and the case is
+written private as `composite.py` reads it, or, when a blob has no file or the release is refused, only
+``missing.json``, which `composite.py` leaves out."""
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import shutil
@@ -15,8 +18,11 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import a5
 import composite as C
 import v2_case as V
+
+from verity.core.protocols.sampled_proofs import challenger as Ch
 
 LOG = Path(__file__).resolve().parent / "fixtures" / "served-window-m0" / "compose.log"
 _spec = importlib.util.spec_from_file_location("one_stage_replay", Path(__file__).resolve().parents[1] / "replay.py")
@@ -85,7 +91,7 @@ def test_a_window_of_several_members_is_the_per_member_case(tmp_path, RP):
     pins = {"t": "aa" * 64, "u": "bb" * 64}
     names = _window(w, RP, members, [1, 2], pins, per_block={"t": 4})
     (w / "m2" / "registered.json").write_text('{"ports": {}}')
-    v2, how, n = V.case(w, tmp_path / "scratch")
+    v2, how, n, _ = V.case(w, tmp_path / "scratch")
     assert (how, n) == ("m0: kept; m2: kept", 2)
     assert v2["params"] == {"partition": {"rule": "r"}, "proofs": {"members": {
         "t/c0": {"circuit": pins["t"], "registered": None, "units": [[0, 2]], "vus_per_block": 4},
@@ -106,12 +112,87 @@ def test_a_window_of_one_member_is_the_one_statement_case(tmp_path, RP, summary)
     names = _window(w, RP, [{"k": 0, "template": "t", "n": 4, "base": 0}], [0], {"t": pin} if summary else None)
     if not summary:
         shutil.copy(LOG, w / "m0" / "compose.log")
-    v2, how, n = V.case(w, tmp_path / "scratch")
+    v2, how, n, _ = V.case(w, tmp_path / "scratch")
     assert (how, n) == ("kept", 1)
     assert v2["params"]["proofs"] == {"circuit": pin, "registered": None}
     e = json.loads(bytes.fromhex(v2["evidence"]))
     assert e["proofs"]["public"] == V.PF.file_sha512(w / "m0" / "pub-4.bin")
     assert [x["name"] for x in e["proofs"]["sessions"]] == names
+
+
+COINS = {"ledger": ["{}"], "main": ["cc" * 20], "pins": ["{}"],
+         "segment": {"label": "draw", "start": 1, "after": "dd" * 64, "openings": [{"coin": "ee" * 64}]},
+         "session": {"close": {}, "hellos": [], "log": [], "record": {}}}
+
+
+def key_record(tmp_path: Path, public: bytes) -> Path:
+    """The auditor's challenger-key/v1 record of the key whose public key is `public`, as a file."""
+    f = tmp_path / f"challenger-key-{public[:1].hex()}.json"
+    f.write_text(json.dumps({"schema": Ch.KEY_RECORD_SCHEMA, "W": 4, "H": 5, "pubkey": public.hex(),
+                             "pubkey_sha512": hashlib.sha512(public).hexdigest()}))
+    return f
+
+
+def V2CASE(out: str) -> dict:
+    return json.loads(next(x for x in out.splitlines() if x.startswith("V2CASE ")).split(" ", 1)[1])
+
+
+@pytest.mark.parametrize("several", [False, True])
+def test_a_kept_release_names_the_auditors_challenger_and_carries_the_draws_coins(tmp_path, RP, capsys, several):
+    """A window kept with the challenger's release of its draw's coins (`a5.RELEASE`) gets, under the auditor's key
+    record, a case naming that challenger and the release's window root, its evidence carrying the coins, in either
+    form; one kept without, or given no record, names none, which v2 refuses (NO_CHALLENGER), and its V2CASE line says
+    so."""
+    w, pin = tmp_path / "window", V.compose_command(LOG.read_text())["pin"]
+    one = [{"k": 0, "template": "t", "n": 4, "base": 0}]
+    members = [*one, {"k": 1, "template": "t", "n": 2, "base": 4}] if several else one
+    _window(w, RP, members, [members[-1]["k"]], {"t": pin})
+    v2, _, _, why = V.case(w, tmp_path / "scratch")
+    assert why == "none: the window kept no release"
+    assert "challenger" not in v2["params"] and "window_root" not in v2["params"]
+    assert "coins" not in json.loads(bytes.fromhex(v2["evidence"]))
+    record = key_record(tmp_path, b"\xaa" * Ch.PUBLIC_BYTES)
+    key = Ch.key_of_record(json.loads(record.read_text()))
+    drawn = a5.drawn_by({**COINS, "key": key.to_json()}, "ab" * 64)
+    (w / a5.RELEASE).write_text(json.dumps(drawn))
+    v2, _, _, why = V.case(w, tmp_path / "scratch")
+    assert why.startswith("none: no --challenger-key") and "challenger" not in v2["params"]
+    v2, _, _, why = V.case(w, tmp_path / "scratch", key)
+    assert why == "the auditor's record's key" and ("members" in v2["params"]["proofs"]) == several
+    assert (v2["params"]["challenger"], v2["params"]["window_root"]) == ({"key": key.to_json(), "label": "draw"},
+                                                                       "ab" * 64)
+    assert json.loads(bytes.fromhex(v2["evidence"]))["coins"] == drawn["evidence"]["coins"]
+    capsys.readouterr()
+    assert V.main(["--window", str(w), "--out", str(tmp_path / "v2"), "--scratch", str(tmp_path / "scratch"),
+                   "--challenger-key", str(record)]) == 0
+    assert V2CASE(capsys.readouterr().out)["challenger"] == "the auditor's record's key"
+    assert json.loads((tmp_path / "v2" / "params.json").read_text())["challenger"] == drawn["params"]["challenger"]
+
+
+def test_a_release_naming_another_key_than_the_auditors_record_is_refused(tmp_path, RP, capsys):
+    """The key is the auditor's record's, never the release's, which the served node writes: a release naming another
+    key (the prover's own, under which it could sign its own coins) is refused, and the window's case directory keeps
+    only ``missing.json``, so `composite.py` leaves v2 out and the product's Lean names it missing."""
+    w, pin = tmp_path / "window", V.compose_command(LOG.read_text())["pin"]
+    _window(w, RP, [{"k": 0, "template": "t", "n": 4, "base": 0}], [0], {"t": pin})
+    mine, theirs = b"\xaa" * Ch.PUBLIC_BYTES, b"\xbb" * Ch.PUBLIC_BYTES
+    record = key_record(tmp_path, mine)
+    prover = {"W": 4, "H": 5, "public": theirs.hex()}
+    (w / a5.RELEASE).write_text(json.dumps(a5.drawn_by({**COINS, "key": prover}, "ab" * 64)))
+    with pytest.raises(V.Refused, match="names another challenger key than the auditor's record's"):
+        V.case(w, tmp_path / "scratch", Ch.key_of_record(json.loads(record.read_text())))
+    out = tmp_path / "v2"
+    assert V.write(out, _v2(tmp_path, [record]), "kept") == []
+    capsys.readouterr()
+    assert V.main(["--window", str(w), "--out", str(out), "--scratch", str(tmp_path / "scratch"),
+                   "--challenger-key", str(record)]) == 2
+    assert "another challenger key" in V2CASE(capsys.readouterr().out)["refused"]
+    assert [f.name for f in out.iterdir()] == ["missing.json"]
+    assert json.loads((out / "missing.json").read_text())["why"].startswith("refused: ")
+    assert C.case_dirs([out]) == []
+    with pytest.raises(SystemExit):
+        V.main(["--window", str(w), "--out", str(out), "--scratch", str(tmp_path / "scratch"),
+                "--challenger-key", str(tmp_path / "no-record.json")])
 
 
 def _v2(tmp_path: Path, blobs: list[Path]) -> dict:
