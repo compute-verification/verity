@@ -492,6 +492,12 @@ theorem progOf_keyProg (hu : c.unit.unitLog ≤ 32) {rowW : Fin c.ports.size →
       Properties.SampledProofs.bitsProg (SampledProofs.Bits.keyProg c n) keyConsts :=
   (laysOut_keyProg hu hkeys).progOf_eq constsOf_eq_keyConsts
 
+/-- **The bridge's positions of a circuit file's gates are Bits'.** -/
+theorem posOf_keyProg (hu : c.unit.unitLog ≤ 32) {rowW : Fin c.ports.size → ℕ} (hkeys : Layout.KeysRow c hU rowW)
+    (g : Fin (Layout.keyN c hU n)) : posOf ((Placed.keyProg c hU n).circuit (Layout.outsOf c hU n)) g =
+      SampledProofs.Bits.posOf (SampledProofs.Bits.keyProg c n) g.val :=
+  (laysOut_keyProg hu hkeys).posOf_eq g
+
 /-- **The bridge's proof blocks of a circuit file are Bits'**, at the circuit's constants. -/
 theorem blockOf_keyProg (hu : c.unit.unitLog ≤ 32) {rowW : Fin c.ports.size → ℕ} (hkeys : Layout.KeysRow c hU rowW)
     (u : Fin n) : blockOf ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) (constsOf c hU n) u =
