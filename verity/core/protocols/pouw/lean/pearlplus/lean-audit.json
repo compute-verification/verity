@@ -3,9 +3,9 @@
  "exempt": {},
  "layers": {
   "PouwPearlPlus": {
-   "imports": ["PouwPearlPlus", "PouwCommit", "Evaluate", "Randomness", "Identity", "Flock", "Lean"],
+   "imports": ["PouwPearlPlus", "PouwCommit", "Evaluate", "Randomness", "Identity", "Flock", "Lean", "CoreProtocol"],
    "except": [],
-   "why": "the verdict is code: Lean core, PoUW's commitments (`pouw_commit`) and what they read (C-Flock's verifier, core's randomness and tagged identity), and the evaluator's FP32, FP8 and tensor-core steps (`verity_evaluate`); no Mathlib and nothing of Security"
+   "why": "the verdict is code: Lean core, PoUW's commitments (`pouw_commit`) and what they read (C-Flock's verifier, core's randomness and tagged identity), the evaluator's FP32, FP8 and tensor-core steps (`verity_evaluate`) and the core interface its protocol form implements (`core_protocol`); no Mathlib and nothing of Security"
   }
  },
  "dependencies": {
