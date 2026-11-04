@@ -25,6 +25,7 @@
   "Properties.Pous",
   "Properties.NetworkCertifier",
   "Properties.NetworkCertifier.LinkWindow",
+  "Properties.NetworkCertifier.Wired",
   "Properties.CertifierNetwork",
   "Properties.CertifierNetwork.Runs",
   "Properties.Identity",
@@ -654,6 +655,14 @@
   "Properties.NetworkPeriod.rowsCircuitHeld": {
    "honest": ["Properties.NetworkPeriod.rowsCircuitHeld_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsWiresChecked": {
+   "honest": ["Properties.NetworkPeriod.rowsWiresChecked_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsWiresChecked_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsHeld": {
+   "honest": ["Properties.NetworkPeriod.rowsHeld_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsHeld_nontrivial"
   }
  },
  "unwitnessed": {
@@ -2979,6 +2988,15 @@
    "assumptions": [],
    "type_hash": "7ddb22b7d4bcec9f64dfa4cf1e07f6dd5ce55ad67e2409079ed165ea0078f5c3"
   },
+  "Properties.NetworkPeriod.rowsHeld": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsHeld_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsHeld_nontrivial": {
+   "owner": "@network-accounting"
+  },
   "Properties.NetworkPeriod.rowsKBoundsCount": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkPeriod.rowsKBoundsCount : Properties.NetworkPeriod.RowsKBoundsCount"],
@@ -3014,6 +3032,15 @@
    ],
    "assumptions": [],
    "type_hash": "d0d8204ffb2e772003635028c5622784d1ec1a8d0cc8a45ea37e71b1e8fe8d70"
+  },
+  "Properties.NetworkPeriod.rowsWiresChecked": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsWiresChecked_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsWiresChecked_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
@@ -6012,6 +6039,14 @@
    },
    "Properties.NetworkPeriod.rowsCircuitHeld": {
     "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.rowsWiresChecked": {
+    "function": ["NetworkCheck.Period.paramsOf", "NetworkCheck.Period.check"],
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.rowsHeld": {
+    "function": ["NetworkCheck.Period.paramsOf", "NetworkCheck.Period.check"],
     "outcome": "accept"
    }
   },
