@@ -37,8 +37,9 @@ Two claims, one for each honest party; `EitherZK` is both.
 their openings and their salts. The statement is public: the registered roots, the public layout, the shape and the
 size classes, and the circuit where it is public. The architecture is hidden only where the inner proof hides the
 circuit. At the universal unit's statements (`Claims.Recursion.RPriv`), the circuit is a committed value of the inner
-witness, hidden up to its size class, which the statement holds. `ServerZK` holds at every statement, `WorkersZK` at
-every statement and witness of the inner relation.
+witness, hidden up to its size class, which the statement holds. A plain circuit, a holographic index among them, is
+in the inner statement, which the ZK server reads as the inner verifier's input, so `WorkersZK` doesn't hide it.
+`ServerZK` holds at every statement, `WorkersZK` at every statement and witness of the inner relation.
 
 **Premises.**
 - `Hm96Hiding` at the recursion's pinned key, which `ServerZK` reads as `Claims.Recursion.ZK` does; `WorkersZK`'s
@@ -82,7 +83,10 @@ following.
   Then come the staging rounds and the outer `--zk` sessions, or the one refusal.
 * `helloAns`: the coin server's answer to `Hello`, read as the coin tree's nonce and its commitment to every coin.
 * `S t`: `ServerZK`'s simulator at the attempt budget `t`. It reads the statement and the verifier, never the workers.
-* `SW`: `WorkersZK`'s simulator. -/
+* `SW`: `WorkersZK`'s simulator.
+
+At the honest workers, `serve` is the reference prover `P` that `Complete` reads, split in two; binding the two, and
+`serve` to the deployed ZK server, is the code side's, as for every record. -/
 structure SplitDeploy (Coin Col T : Type) extends StopDeploy Coin where
   inner : Flock.ZkDeploy Coin Col T
   serve : (x : Msg) → (List (Msg × Msg) → Msg) → Prover (Nonce x × Rest x)
