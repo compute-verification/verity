@@ -21522,10 +21522,11 @@
    }
   },
   "Definitions.Core.Accel.H200": {
-   "digest": "c1bcbac3ee3cb6e9dc1c540f39a636736189745232999aa757a07cc3c8c63ad5",
+   "digest": "db083089e198cfeec38db63219b2c1dbc80ff6174d2eb0a449ad43d0240fb288",
    "definitions": {
     "Verity.Accel.H200.card": "9d688f671b71d6be618f4f11a2f75f699540284488d1ac64109e3156e01f3d2e",
-    "Verity.Accel.H200.clock": "87b2fc121dc3c40d2eeb5d3058a4c961170522aef4b3053b97c2b74da3267012"
+    "Verity.Accel.H200.clock": "87b2fc121dc3c40d2eeb5d3058a4c961170522aef4b3053b97c2b74da3267012",
+    "Verity.Accel.H200.tensorClock": "fbc75b01473fb6f71e38d9540ed163e3336bec47e6bebaa7c70f6e731903ea99"
    }
   },
   "Definitions.Core.Accel.Isa": {
