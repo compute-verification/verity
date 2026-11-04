@@ -270,7 +270,9 @@ whole body by its closure digest (`entryPins`, `io_shell.SlotEntry_v1` at its ci
 `SelectEntry_v1`'s), so the block round's `prog<j>`, the o0 of scan_zk's `SlotEntry_v1` stand-in's lane-j member,
 whose entries, read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads the
 requests from its own registered `SCAN_STATE`, and the check refuses, last, by name, a sampling block whose scan's
-state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). scan_zk's state tree is the window state
+state isn't a wired audit's `SCAN_STATE` by root and domain, or whose registration's window doesn't state its units'
+state reads as the chain (`stateTied`), and one whose window doesn't open leaf 0 to the empty state (`stateEmpty`);
+scan_zk's honest round states both (`state_reads`, `state_empty`). scan_zk's state tree is the window state
 (`ingress_scan.window_state`: leaf 0 the empty state, leaf t S_{t−1}), each leaf but the first the o1 of the proof block
 that computes it and the sin of the next, both registered reads, so a state tree that skips or alters a transition is
 refused at that proof block's o1; the block round's registration names it as `scan/state`.
