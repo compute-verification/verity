@@ -36,7 +36,8 @@ theorem Pr_cons_split {U : Type} [Fintype U] (M : ℕ) (Q : U → (Fin M → U) 
     Pr (fun us : Fin (M + 1) → U => Q (us 0) (Fin.tail us)) = Pr (fun p : U × (Fin M → U) => Q p.1 p.2) := by
   refine ((UnifMap.equiv (A := U × (Fin M → U)) (B := Fin (M + 1) → U) (Fin.consEquiv fun _ => U)).Pr
     (fun us : Fin (M + 1) → U => Q (us 0) (Fin.tail us))).symm.trans (Pr_congr fun p => ?_)
-  simp only [Fin.consEquiv_apply, Fin.cons_zero, Fin.tail_cons]
+  show Q ((Fin.cons p.1 p.2 : Fin (M + 1) → U) 0) (Fin.tail (Fin.cons p.1 p.2 : Fin (M + 1) → U)) ↔ Q p.1 p.2
+  rw [Fin.cons_zero, Fin.tail_cons]
 
 /-- `R + 1` distinct draws among `S + 1` uniform ones are uniform. -/
 theorem Pr_emb_split {U : Type} [Fintype U] [Nonempty U] {R S : ℕ} (e : Fin (R + 1) ↪ Fin (S + 1))
@@ -329,11 +330,12 @@ theorem conflictPlan_asks_le (k : Msg → ℕ) (R : ℕ) (x : Msg) (q : Fin 1) (
     have hsv : ∀ i : Fin R, ((waitEmb (k x) R t i.succ : Fin (k x * R + 1)) : ℕ) =
         min (1 + (t : ℕ) * R + (i : ℕ)) (k x * R) := by
       intro i
-      have := block_end_le t R
-      have := i.isLt
+      have h1 := block_end_le t R
+      have h2 := i.isLt
+      have hle : 1 + (t : ℕ) * R + (i : ℕ) ≤ k x * R := by omega
       show (if ((i.succ : Fin (R + 1)) : ℕ) = 0 then 0 else (t : ℕ) * R + ((i.succ : Fin (R + 1)) : ℕ)) = _
-      rw [Fin.val_succ]
-      split_ifs <;> omega
+      rw [Fin.val_succ, if_neg (Nat.succ_ne_zero _), min_eq_left hle]
+      omega
     have hcongr : ∀ us : Fin (k x * R + 1) → (Fin n → Coin) × C,
         (m.acc ω (us 0) ∧ loopCost (m.acc ω) (badAcc m ω bad) R
             (fun i : Fin R => slotRuns us (1 + (t : ℕ) * R + (i : ℕ))) ≠ 0) ↔
