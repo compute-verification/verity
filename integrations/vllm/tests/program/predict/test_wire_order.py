@@ -354,20 +354,21 @@ def test_a_certificate_of_other_keys_format_or_lists_is_none():
 
 
 def _looped(low: WC.Lowered, desc: dict) -> tuple[dict, dict, int]:
-    """``low``'s description ``desc`` with its first uncut wire whose reader has an output as wide as a row of the wire's
-    port, in elements of the port's width, made to read that output of its own reader unit, unit for unit: a cyclic wiring
-    that every check of the wires takes (`interface.check_wires`, and the period's, leaf for leaf). With it, ``low``'s
-    certificate with the reader's segment as the wire's writer segment too, and the wire's index."""
-    lays = low.circuit.layouts
+    """``low``'s description ``desc`` with its first uncut wire whose reader has an output that a row of the wire's port
+    holds leaf for leaf (its cut count times the output's leaves, all of one width, as the period's check of the wires
+    reads them: a Boolean-profile type's leaves are bits, not `interface._width`'s words), made to read that output of
+    its own reader unit, unit for unit: a cyclic wiring that `interface.check_wires` takes. With it, ``low``'s certificate
+    with the reader's segment as the wire's writer segment too, and the wire's index."""
+    fns = dict(zip(low.circuit.ids, (f for f, _ in low.circuit.templates)))
     for i, w in enumerate(desc["wires"]):
-        lay, k = lays[w["reader"]][0], low.circuit.cuts.get(w["reader"], {}).get(w["port"], 1)
-        p = [q for q, _ in lay.rows].index(w["port"])
-        out = next((o for j, (o, words) in enumerate(lay.outs)
-                    if words == lay.rows[p][1] // k and lay.widths[len(lay.rows) + j] == lay.widths[p]), None)
+        params, ret = fns[w["reader"]].signature()
+        tp, k = dict(params)[w["port"]], low.circuit.cuts.get(w["reader"], {}).get(w["port"], 1)
+        out = next((f"o{j}" for j, to in enumerate(IF._fields(ret)) if len(tp.width_set() | to.width_set()) == 1
+                    and len(tp.leaf_widths()) == k * len(to.leaf_widths())), None)
         if w["writer"] != w["reader"] and "cut" not in w and out is not None:
             wires = list(desc["wires"])
             wires[i] = {**w, "writer": w["reader"], "out": out, "base": w["at"], "step": _places(w["radix"])}
-            IF.check_wires(lays, [IF.Wire.of(x) for x in wires], low.circuit.cuts)
+            IF.check_wires(low.circuit.layouts, [IF.Wire.of(x) for x in wires], low.circuit.cuts)
             pairs = [list(p) for p in low.order["wires"]]
             pairs[i] = [pairs[i][1], pairs[i][1]]
             return {**desc, "wires": wires}, {**low.order, "wires": pairs}, i
@@ -377,7 +378,7 @@ def _looped(low: WC.Lowered, desc: dict) -> tuple[dict, dict, int]:
 def test_a_cyclic_wiring_has_no_certificate():
     """A's unit reads B's and B's reads A's: the two wires' rank differences sum to 0, so one reaches 0 whatever the ranks
     (here every c of each in [-4, 4]); a unit reading its own row reaches 0 at any rank. TINY's record with one wire made
-    to read its reader unit's own output (`_looped`), which every check of the wires but the order takes, is refused."""
+    to read its reader unit's own output leaf for leaf (`_looped`), which `interface.check_wires` takes, is refused."""
     cyclic = {"templates": [["A", 1], ["B", 1]], "wires": [_wire("B", "A"), _wire("A", "B")]}
     for ca, cb in product(range(-4, 5), repeat=2):
         with pytest.raises(Refused, match=r"^wire [01]: rank\(writer\) - rank\(reader\) reaches \d+ >= 0$"):
