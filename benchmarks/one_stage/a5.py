@@ -164,6 +164,7 @@ import threading
 import time
 from collections.abc import Iterator, Sequence
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
@@ -840,9 +841,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
 
     # outer proofs go through the ZK server one at a time (`ONE_AT_A_TIME`): the sessions run here in the members' order, and
     # only Lean's checks of finished members, outside the ZK server, overlap the next member's session
-    with LeanPool(getattr(a, "lean_workers", LEAN_WORKERS), lean_budget(a, available_memory), available_memory) as lean:
+    with LeanPool(getattr(a, "lean_workers", LEAN_WORKERS), audit_memory(a, available_memory), available_memory) as lean:
         for i, (mm, local) in enumerate(drawn):
-            lean.submit(member_checks, member_session(i, mm, local), lean_need(mm["st"]))
+            with lean.session(session_need(mm["circuit"])):
+                s = member_session(i, mm, local)
+            lean.submit(member_checks, s, lean_need(mm["st"]))
         done = lean.results()
     for got in done:
         mm = got["mm"]
@@ -1088,17 +1091,18 @@ LEAN_WORKERS = 3
 #: a Lean check's memory estimate per byte of its member's circuit file, which `flock-verify verify` reads, hashes and
 #: parses whole
 LEAN_BYTES_PER_CIRCUIT_BYTE = 5
-#: what the audit's memory leaves the prover's session, the rest the Lean checks' budget (`lean_budget`): a session's peak
-#: at a 4,32,4 window (its prover, its server and the audit's Python) with a margin. A node the audit shares still runs
-#: one check at a time (served_verdicts.sh), since V3C_AUDIT_MEM_GB leaves little beyond it
-PROVER_RESERVE_GB = 256
+#: a member's session's memory estimate per byte of its circuit file (its prover, its server and the audit's Python at
+#: their peak), which the Lean checks beside it leave it (`LeanPool.session`). A node the audit shares still runs one check
+#: at a time (served_verdicts.sh)
+SESSION_BYTES_PER_CIRCUIT_BYTE = 20
 
 
 class LeanPool:
     """Member checks on ``workers`` threads beside the caller's sessions, which stay one at a time (`ONE_AT_A_TIME`). Checks
-    start in the order submitted, each once its memory estimate ``need`` fits: with the running checks' estimates within
-    ``budget`` bytes, and ``available()`` bytes free now. With none running the next starts whatever its estimate, so one
-    over the budget runs alone. `results` are the checks' in the order submitted."""
+    start in the order submitted, each once its memory estimate ``need`` fits: with the running checks' estimates and the
+    running session's (`session`) within ``budget`` bytes, and ``available()`` bytes free now. With no check and no session
+    running the next starts whatever its estimate, so one over the budget runs alone. `results` are the checks' in the
+    order submitted."""
 
     def __init__(self, workers: int, budget: float, available: Callable[[], float]):
         self.budget, self.available = budget, available
@@ -1107,12 +1111,27 @@ class LeanPool:
         self.futures: list[Future] = []
         self.next = self.running = 0
         self.used = 0.0
+        self.held: float | None = None
 
     def __enter__(self) -> LeanPool:
         return self
 
     def __exit__(self, *exc: object) -> None:
         self.ex.shutdown(wait=True)
+
+    @contextmanager
+    def session(self, need: float) -> Iterator[None]:
+        """The caller's session, its memory estimate ``need`` held from the budget while it runs: it starts once the running
+        checks leave ``need`` within the budget, or none runs, and no check starts beside it that doesn't fit with it."""
+        with self.cv:
+            self.cv.wait_for(lambda: not self.running or self.used + need <= self.budget)
+            self.held = need
+        try:
+            yield
+        finally:
+            with self.cv:
+                self.held = None
+                self.cv.notify_all()
 
     def submit(self, check: Callable[[Any], Any], arg: Any, need: float) -> None:
         self.futures.append(self.ex.submit(self._run, len(self.futures), check, arg, need))
@@ -1121,7 +1140,8 @@ class LeanPool:
         return [f.result() for f in self.futures]
 
     def _fits(self, turn: int, need: float) -> bool:
-        return turn == self.next and (not self.running or (self.used + need <= self.budget and self.available() >= need))
+        return turn == self.next and ((not self.running and self.held is None) or
+                                      (self.used + (self.held or 0) + need <= self.budget and self.available() >= need))
 
     def _run(self, turn: int, check: Callable[[Any], Any], arg: Any, need: float) -> Any:
         with self.cv:
@@ -1144,17 +1164,23 @@ def available_memory() -> int:
     raise OSError("/proc/meminfo has no MemAvailable")
 
 
-def lean_budget(a: argparse.Namespace, available: Callable[[], float]) -> float:
-    """The Lean checks' memory budget in bytes: the audit's memory (``--audit-mem-gb``, else what ``available()`` gives as
-    its sessions start) less `PROVER_RESERVE_GB`."""
+def audit_memory(a: argparse.Namespace, available: Callable[[], float]) -> float:
+    """The audit's memory in bytes, which its sessions and the Lean checks beside them share (`LeanPool`): ``--audit-mem-gb``,
+    else what ``available()`` gives as its sessions start."""
     gb = getattr(a, "audit_mem_gb", None)
-    return (gb * 2**30 if gb is not None else available()) - PROVER_RESERVE_GB * 2**30
+    return gb * 2**30 if gb is not None else available()
 
 
 def lean_need(st: dict) -> int:
     """A member's Lean check's memory estimate in bytes, `LEAN_BYTES_PER_CIRCUIT_BYTE` of its circuit file (none: 0)."""
     f = st["dir"] / "circuit.txt"
     return LEAN_BYTES_PER_CIRCUIT_BYTE * f.stat().st_size if f.is_file() else 0
+
+
+def session_need(circuit: Path) -> int:
+    """A member's session's memory estimate in bytes, `SESSION_BYTES_PER_CIRCUIT_BYTE` of ``circuit``, the circuit file it is
+    staged with (`stage`; none: 0)."""
+    return SESSION_BYTES_PER_CIRCUIT_BYTE * circuit.stat().st_size if circuit.is_file() else 0
 
 
 def positive(s: str) -> int:
@@ -1169,8 +1195,9 @@ def lean_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--lean-workers", type=positive, default=LEAN_WORKERS,
                    help="Lean checks of finished members at once, beside the next member's session (sessions stay one at a time)")
     p.add_argument("--audit-mem-gb", type=float,
-                   help=f"the audit's memory: the Lean checks start within it less {PROVER_RESERVE_GB} GB for the prover, each "
-                        f"estimated at {LEAN_BYTES_PER_CIRCUIT_BYTE}x its circuit file (default: what is available as the sessions start)")
+                   help=f"the audit's memory: a Lean check starts only within it beside the running session, estimated at "
+                        f"{SESSION_BYTES_PER_CIRCUIT_BYTE}x its circuit file, and the running checks, each at "
+                        f"{LEAN_BYTES_PER_CIRCUIT_BYTE}x (default: what is available as the sessions start)")
 
 
 def plain(a: argparse.Namespace) -> bool:
