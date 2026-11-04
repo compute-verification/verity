@@ -1,5 +1,6 @@
 import Definitions.Claims.Sampling
 import Definitions.Claims.Sampling.Strata
+import Properties.NetworkPeriod.Bernoulli
 import SampledProofs.Record
 import SampledProofs.Slots
 
@@ -26,6 +27,10 @@ probability, wherever both are given; the draw's own refusals make it so, and it
 `Record.profileDraw`, of the law `Draw.derive` expands, as `OneStage.check` reads them for its bound), that design draws
 those strata on that partition, the input class drawn whole after them (the claims' `StrataDrawn`): the strata whose
 count bound the audit publishes (`Bound.boundOf`) are the ones the draw ran. It takes no premise either.
+
+`BernoulliDerived`: where the profile's draw of that law is a Bernoulli draw at the rate `p` instead, that design draws
+the population's `n` proof blocks independently at `p` and the input class whole (`BernoulliDrawn`): the draw whose
+Bernoulli bound the audit publishes is the one the draw ran. It takes no premise either.
 -/
 
 open Lean (Json)
@@ -113,5 +118,18 @@ def StrataDerived : Prop :=
     Bound.strataOf n draw = some strata →
     Claims.Sampling.StrataDrawn D (slotPartition l)
       ((strata.toList.map fun x => (x.size, x.k)) ++ [(Slots.inputGates d.desc).size].map fun m => (m, m))
+
+/-- **The Bernoulli draw the audit publishes is the one the draw ran**: wherever `Slots.layout` lays out `d` under
+`query`, `slotDesign` gives the design `D`, and the profile's draw of the law `Draw.derive` expands from the rule's law
+over the population `n` is a Bernoulli draw at the rate `p` (`Record.profileDraw`, as `OneStage.check` reads it for its
+bound), `D` draws the layout's partition's population independently at `p`, its at most `n` proof blocks, and every other
+class whole (`BernoulliDrawn`). -/
+def BernoulliDerived : Prop :=
+  ∀ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (l : Slots.SlotOrder)
+    (D : Claims.Sampling.Design) (n : ℕ) (named law : Json) (p : Core.Ratio),
+    Slots.layout d query = .ok l → slotDesign rule d query table = .ok D → Partition.units d query = .ok n →
+    rule.lawOver n = .ok named → Draw.derive d query named table = .ok law →
+    Record.profileDraw law = some (.bernoulli p) →
+    Properties.NetworkPeriod.BernoulliDrawn D (slotPartition l) n p
 
 end Properties.SampledProofs

@@ -607,6 +607,10 @@
    "honest": ["Properties.SampledProofs.SecurityProofs.strataDerived_honest"],
    "nontrivial": "Properties.SampledProofs.SecurityProofs.strataDerived_nontrivial"
   },
+  "Properties.SampledProofs.SecurityProofs.bernoulliDerived": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.bernoulliDerived_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.bernoulliDerived_nontrivial"
+  },
   "Properties.RemoteAudit.codeLayoutTiles": {
    "honest": ["Properties.RemoteAudit.codeLayoutTiles_honest"],
    "nontrivial": "Properties.RemoteAudit.codeLayoutTiles_nontrivial"
@@ -4481,6 +4485,15 @@
   "Properties.SampledProofs.SecurityProofs.strataDerived_nontrivial": {
    "owner": "@network-accounting"
   },
+  "Properties.SampledProofs.SecurityProofs.bernoulliDerived": {
+   "owner": "@network-accounting"
+  },
+  "Properties.SampledProofs.SecurityProofs.bernoulliDerived_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.SampledProofs.SecurityProofs.bernoulliDerived_nontrivial": {
+   "owner": "@network-accounting"
+  },
   "Properties.SampledProofs.acceptMeans": {
    "owner": "@proofs",
    "signature": ["Properties.SampledProofs.acceptMeans : Properties.SampledProofs.AcceptMeans"],
@@ -5625,6 +5638,17 @@
      "SampledProofs.Draw.derive",
      "SampledProofs.Record.profileDraw",
      "SampledProofs.Bound.strataOf"
+    ],
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.bernoulliDerived": {
+    "function": [
+     "SampledProofs.Slots.layout",
+     "Properties.SampledProofs.slotDesign",
+     "SampledProofs.Partition.units",
+     "SampledProofs.Select.Rule.lawOver",
+     "SampledProofs.Draw.derive",
+     "SampledProofs.Record.profileDraw"
     ],
     "outcome": "accept"
    },

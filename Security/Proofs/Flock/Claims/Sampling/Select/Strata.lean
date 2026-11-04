@@ -9,6 +9,11 @@ import Proofs.Flock.Claims.Sampling.Select.Design
   its `k`, a Bernoulli draw, or the strata a stratified or work law's object writes.
 * `flockLaw_subsetKind`, `deriveLaw_ofSubset`: a `subset` law object is the subset law and expands to none.
 * `strataDerived`; `strataDerived_honest` and `strataDerived_nontrivial`, its two witnesses.
+* `profileDraw_bernoulli`, `mk'_cross`, `card_outside_all`: the profile's Bernoulli draw is a `bernoulli` object at the
+  ratio of its `p`, that ratio is the rate as written, and a class's law followed by a class drawn `all` leaves the
+  first class's proof blocks outside the classes drawn `all`.
+* `bernoulliDerived` (`Properties.SampledProofs.BernoulliDerived`); `bernoulliDerived_honest` and
+  `bernoulliDerived_nontrivial`, its two witnesses.
 -/
 
 open SampledProofs
@@ -408,5 +413,174 @@ theorem strataDerived_nontrivial :
     subst h1
     simp at hflat
   · simp at hlen
+
+/-! ## A Bernoulli draw -/
+
+/-- **The profile's Bernoulli draw of a law object**: a `bernoulli` object, at the ratio of the probability its `p`
+writes. -/
+theorem profileDraw_bernoulli (law : Json) (p : Core.Ratio) (h : Record.profileDraw law = some (.bernoulli p)) :
+    kindOf law = "bernoulli" ∧ ∃ s a b, getD law "p" = .str s ∧ Draw.probability? s = some (a, b) ∧
+      Core.Ratio.mk' a b = some p := by
+  unfold Record.profileDraw at h
+  split at h
+  · obtain ⟨k, -, hk⟩ := Option.map_eq_some_iff.1 h
+    cases hk
+  · rename_i heq
+    refine ⟨by simp [kindOf, heq], ?_⟩
+    split at h
+    · rename_i s hs
+      cases hab : Draw.probability? s with
+      | none => simp [hab] at h
+      | some ab =>
+        obtain ⟨a, b⟩ := ab
+        cases hr : Core.Ratio.mk' a b with
+        | none => simp [hab, hr] at h
+        | some r =>
+          simp [hab, hr] at h
+          subst h
+          exact ⟨s, a, b, hs, hab, hr⟩
+    · cases h
+  all_goals first
+    | cases h
+    | (split at h
+       · obtain ⟨strata, -, h⟩ := Option.bind_eq_some_iff.1 h
+         cases h
+       · cases h)
+
+/-- **`Ratio.mk' a b` is `a/b`**: its denominator is positive and its cross products are `a`'s and `b`'s. -/
+theorem mk'_cross (a b : ℕ) (p : Core.Ratio) (h : Core.Ratio.mk' a b = some p) :
+    0 < p.den ∧ a * p.den = p.num * b := by
+  unfold Core.Ratio.mk' at h
+  split at h
+  · cases h
+  · rename_i hb
+    obtain rfl := (Option.some.inj h).symm
+    have hg : 0 < Nat.gcd a b := Nat.gcd_pos_of_pos_right a (Nat.pos_of_ne_zero hb)
+    obtain ⟨a', ha⟩ := Nat.gcd_dvd_left a b
+    obtain ⟨b', hb'⟩ := Nat.gcd_dvd_right a b
+    show 0 < b / Nat.gcd a b ∧ a * (b / Nat.gcd a b) = a / Nat.gcd a b * b
+    generalize Nat.gcd a b = g at hg ha hb' ⊢
+    subst ha hb'
+    rw [Nat.mul_div_cancel_left a' hg, Nat.mul_div_cancel_left b' hg]
+    exact ⟨Nat.pos_of_ne_zero fun h0 => hb (by rw [h0, Nat.mul_zero]), by ring⟩
+
+/-- **A class's law, then a class drawn `all`**: the proof blocks outside the classes drawn `all` are the first class's,
+as many as it has. -/
+theorem card_outside_all (a b : ℕ) (c0 c1 : List (List (List ℕ))) :
+    (Finset.range (Partition.blocks ⟨[c0, c1]⟩).length \
+      NetTiming.allSlots ⟨[.bernoulli a b, .all]⟩ ⟨[c0, c1]⟩).card ≤ c0.flatten.length := by
+  have hall : NetTiming.allSlots ⟨[.bernoulli a b, .all]⟩ ⟨[c0, c1]⟩ =
+      Finset.Ico c0.flatten.length (c0.flatten.length + c1.flatten.length) := by
+    simp [NetTiming.allSlots, NetTiming.allSlotsFrom]
+  have hlen : (Partition.blocks ⟨[c0, c1]⟩).length = c0.flatten.length + c1.flatten.length := by
+    simp [Partition.blocks]
+  rw [hall, hlen]
+  calc _ ≤ (Finset.range c0.flatten.length).card :=
+        Finset.card_le_card fun x hx => by
+          simp only [Finset.mem_sdiff, Finset.mem_range, Finset.mem_Ico] at hx ⊢
+          omega
+    _ = c0.flatten.length := Finset.card_range _
+
+/-- **The Bernoulli draw the audit publishes is the one the draw ran** (`Properties.SampledProofs.BernoulliDerived`):
+the law is a `bernoulli` object, which `Draw.deriveLaw` leaves as it is, so the rule is a law and its design is the
+`bernoulli a b` that `flockLaw` reads of the object's `p`, at the ratio the profile reads of it, then the input class
+drawn `all`; the population's proof blocks, those outside the input class, number `n`. -/
+theorem bernoulliDerived : BernoulliDerived := by
+  intro rule d query table l D n named law p hl hD hn hnamed hlaw hdraw
+  have hwf := designWellFormed rule d query table l D hl hD
+  obtain ⟨rs, he, pop, rfl, hlays⟩ := layout_ok d query l hl
+  set S := Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))
+  obtain ⟨n', named', derived, hn', hnamed', hd, hDc⟩ := slotDesign_ok rule d query table D hD
+  have e1 : n' = n := Except.ok.inj (hn'.symm.trans hn)
+  rw [e1] at hnamed' hDc
+  have e2 : named' = named := Except.ok.inj (hnamed'.symm.trans hnamed)
+  rw [e2] at hDc hd
+  have hlaw' : law = lawObj named derived := by
+    unfold Draw.derive at hlaw
+    rw [hd] at hlaw
+    exact (Except.ok.inj hlaw).symm
+  rw [hlaw'] at hdraw
+  obtain ⟨hkB, ps, a, b, hps, hab, hp⟩ := profileDraw_bernoulli _ p hdraw
+  have hder : derived = none := by
+    rcases deriveLaw_cases d query named table derived hd with ⟨rfl, -, -⟩ | ⟨S', k, law', -, rfl, hder⟩
+    · rfl
+    · exfalso
+      rcases hder with hder | ⟨t, tab, -, hwork⟩
+      · obtain rfl := derive_ok k _ law' hder
+        exact absurd (hkB.symm.trans (kindOf_stratified k _)) (by decide)
+      · obtain ⟨ws, -, rfl⟩ := deriveWork_ok k _ tab law' hwork
+        exact absurd (hkB.symm.trans (kindOf_work k _)) (by decide)
+  subst hder
+  change kindOf named = "bernoulli" at hkB
+  change getD named "p" = .str ps at hps
+  have hnU : n = (popUnits S).length := by
+    have hperm : (popUnits S).Perm (List.range' 0 (Flock.TemplateQuery.population rs)) :=
+      strataOf_perm _ _ (partition_evaluate_tiles d query rs he)
+    rw [units_eq d query rs he] at hn
+    rw [hperm.length_eq, List.length_range']
+    exact (Except.ok.inj hn).symm
+  have hns : pop.toList.map (·.size) = S.toList.map fun p => rsSize p.2 := (laysOut_units _ _ hlays).2
+  have hsum : (S.toList.map fun p => rsSize p.2).sum = n := by rw [hnU, length_popUnits]
+  have hL0 : (pop.toList.map fun s => s.toList.map puGates).flatten.length = n := by
+    rw [← hsum, ← hns]
+    simp [List.length_flatten, Function.comp_def]
+  rcases hDc with ⟨rfl, rfl⟩ | ⟨-, parsed, hparsed, rfl⟩
+  · have hnamed0 : named = Json.mkObj [("law", "subset"), ("k", Lean.toJson n)] := (Except.ok.inj hnamed).symm
+    have hk : kindOf named = "subset" := by rw [hnamed0]; rfl
+    rw [hk] at hkB
+    exact absurd hkB (by decide)
+  · rcases flockLaw_kind named n parsed hparsed with ⟨hk, -⟩ | ⟨-, ps', a', b', hps', hab', rfl⟩ | hk | hk
+    · rw [hk] at hkB; exact absurd hkB (by decide)
+    · rw [hps] at hps'
+      obtain rfl := Json.str.inj hps'
+      rw [hab] at hab'
+      obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hab')
+      obtain ⟨hden, hcross⟩ := mk'_cross a b p hp
+      have hc := card_outside_all a b (pop.toList.map fun s => s.toList.map puGates)
+        ((inputClass d).toList.map fun s => s.toList.map puGates)
+      refine ⟨hwf, hden, fun r hr => ?_, hc.trans hL0.le⟩
+      simp only [Option.getD_none, oneStageOf, List.mem_cons, List.not_mem_nil, or_false] at hr
+      rcases hr with rfl | rfl
+      · exact Or.inr ⟨a, b, rfl, hcross⟩
+      · exact Or.inl rfl
+    · rw [hk] at hkB; exact absurd hkB (by decide)
+    · rw [hk] at hkB; exact absurd hkB (by decide)
+
+/-- **`BernoulliDerived`'s premises hold at the code** (the two-lemma rule's `_honest`): `Draw.derive` leaves a
+`bernoulli` object at `2/4` as it is; and on a layout's partition of a population class of two proof blocks and an
+input class of one, the design `flockLaw` reads of that object, `bernoulli 2 4`, then the input class drawn `all`, draws
+the population's two proof blocks at the profile's ratio `1/2`. -/
+theorem bernoulliDerived_honest :
+    Draw.derive default Json.null (Json.mkObj [("law", "bernoulli"), ("p", "2/4")]) none =
+        .ok (Json.mkObj [("law", "bernoulli"), ("p", "2/4")]) ∧
+      Properties.NetworkPeriod.BernoulliDrawn ⟨[.bernoulli 2 4, .all]⟩
+        (slotPartition { classes := #[#[#[{ unit := some 0, gates := (0, 1) }, { unit := some 1, gates := (1, 2) }]],
+          #[#[{ unit := none, gates := (2, 3) }]]] }) 2 ⟨1, 2⟩ := by
+  refine ⟨rfl, ?_⟩
+  show Properties.NetworkPeriod.BernoulliDrawn ⟨[.bernoulli 2 4, .all]⟩ ⟨[[[[0], [1]]], [[[2]]]]⟩ 2 ⟨1, 2⟩
+  refine ⟨⟨rfl, ?_⟩, by decide, ?_, by decide⟩
+  · intro x hx
+    simp only [List.zip_cons_cons, List.zip_nil_left, List.mem_cons, List.not_mem_nil, or_false] at hx
+    rcases hx with rfl | rfl
+    · exact ⟨by decide, by decide⟩
+    · trivial
+  · intro r hr
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hr
+    rcases hr with rfl | rfl
+    · exact Or.inr ⟨2, 4, rfl, rfl⟩
+    · exact Or.inl rfl
+
+/-- **`BernoulliDerived`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): on that partition, a
+design that draws the population at `1/2` does not draw it at `1/3`, the rate a verifier that accepts everything could
+publish. -/
+theorem bernoulliDerived_nontrivial :
+    ¬ Properties.NetworkPeriod.BernoulliDrawn ⟨[.bernoulli 1 2, .all]⟩
+      (slotPartition { classes := #[#[#[{ unit := some 0, gates := (0, 1) }, { unit := some 1, gates := (1, 2) }]],
+        #[#[{ unit := none, gates := (2, 3) }]]] }) 2 ⟨1, 3⟩ := by
+  rintro ⟨-, -, hr, -⟩
+  rcases hr _ List.mem_cons_self with h | ⟨a, b, h, hab⟩
+  · cases h
+  · cases h
+    simp at hab
 
 end Properties.SampledProofs.SecurityProofs
