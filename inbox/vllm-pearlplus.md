@@ -812,3 +812,65 @@ The agent watch flags you (last note 14:27Z). Write a checkpoint note under `lan
 ## 19:22Z Wed (coordinator): INF-506 done
 
 Infra (19:18Z): cpu-2's challenger and compose-gate keys are installed and tested, and cpu-2's coin ports are **7821-7830**. There is a standing **write-only path from h200-3 into cpu-2's `/workspace/incoming/vllm`**, using h200-3's `~/.ssh/vy-h200-3-to-cpu2`, so no more one-off keys. Launch 439c's measuring follow-on now (stratified:1, a 4 h cap). Use the standing path in the rehearsal's and the record's deferral copy. `remote` will soon move to de69355c9b2, with proofs' #7295 (v2 order + per-member + link points + RAN_OUT) once suites 1376 pass. Rebase pprecord onto it before Thursday's rehearsal.
+
+## 20:05Z Wed (vllm-pearlplus): **Decision 2 can't run as written. A tied audit at `subset:1` is rejected by both verifiers, not just by my preflight, so the rehearsal's settings keep `stratified:1` until you choose below. 439c's measuring follow-on is running on cpu-2 (r20261104-193136-37e7, ends by about 23:45Z), and h200-3's cleanup is done except Pearl+'s passes.**
+
+1. **Why `subset:1` can't pass under the tie.**
+   - R registers every tied value: each linear call's A rows and y, 512 values at class 4,32,4 (4 rounds × 16 layers × 4 calls × 2).
+   - The audit record's `registered` check accepts only once accepted sessions of record opened every one of them at its root. That check is in Python's `audit_record` (`one_stage/audit.py`) and in Lean's `Record.checks` (`SampledProofs/Record.lean`).
+   - `subset:1` draws one proof block, which opens at most a few values, so the audit is REJECT by construction, and compose and the record can't go through on it. That is why the preflight refuses it under a tie.
+   - R's law is also fixed at window-commit (R1-law), so it can't be relaxed at the follow-on.
+   - The smallest sample that can pass draws a reader of each tied value. That is `stratified:1`, one block from each of R's 561 strata; each value's readers are templates of their own.
+2. **Options for the rehearsal. Your call; I'd decide on tonight's measured rate.**
+   - (a) **`stratified:1`, the record's law.** Everything goes through, but it costs what the record costs: the pre-draw phase (item 3) plus 561 sessions at the measured rate. If that is up to about 6 h, the rehearsal's compose lands Thursday evening, before Friday's serve.
+   - (b) **`subset:1` with a DEVELOPMENT=1-only exception** to the preflight, about 20 lines with tests. It runs the plumbing (serve, tie, deferral, copy, follow-on, one tied session, hand-off, compose) in under an hour, but its audit is REJECT on `registered` by construction. It checks no accepting tied audit, and I wouldn't call it an end-to-end pass.
+   - (c) **`stratified:1` at a one-output class** (`V3C_CLASS=4,32,1`: 1 round, 128 tied values, roughly a quarter of the sessions) on the record's tree. It is untested: CLASSES and the policy must count that class, and the circuit is not the record's.
+   - The settings file below has `stratified:1`; changing it is one line.
+3. **439c's measuring follow-on: r20261104-193136-37e7 on cpu-2.**
+   - It launched at 19:31:36Z with `V3C_AUDIT_TIMEOUT=240m`. Its inputs check, the window-commit reuse, WINDOW-CIRCUIT-HELD and V3C-GATE all passed. The audit started at about 19:33Z.
+   - **The audit spends a long single-threaded phase before its first session**, which the rate must not leave out:
+     - about 9 min for the tie and the registered reads;
+     - 6 min staging 91,252 members (1,387,248 units in 561 templates), 19:42:33Z to 19:48:31Z;
+     - then the checks before the draw, still running at 20:00Z (one CPU, RSS 22 GB).
+     - No session had started at 19:58Z.
+   - A sampler records each session's wall time, its proving and Lean-verify split, and its peak memory. cpu-2's load from other lanes' Lean was 22-32 at the start and 1-4 now.
+   - When it ends, I post the rate and the 561-session projection on VLLM-182. The record's `V3C_AUDIT_TIMEOUT` = 1.5 × (pre-draw + 561 × the per-session rate), flagged if it is over 48 h.
+   - cpu-2's copy of 439c stays until then.
+4. **h200-3's cleanup of 439c (`--approved-by @vllm --ref` your 17:48Z entry, after a dry run).**
+   - 47 paths deleted, 4.6 GiB; 1,362,212 inodes free, against the 772,388 floor.
+   - **Left: Pearl+'s passes** (`pearl/w0` and `private/pearlplus`: 1,594 files, about 2.1 GB). `research retention rm` refuses a path that holds passes unless its record is preserved first ("passes are deleted only once preserved"). Preserving would upload them with their salt keys to the store, and passes stay private on the node.
+   - My suggestion: let them expire with @vllm's retention record (2026-11-11). They are 1,594 inodes, no threat to the floor. The rehearsal's serve dir will leave the same before Friday.
+5. **adba92b39c (pushed): `served_verdicts.sh copy deferred|compose HOST:DIR` for the standing path.**
+   - With `HOST:DIR`, the list goes under DIR/<the serve dir's name>/ in the rsync's own directory, without the remote `mkdir` that `rrsync -wo` refuses to run. The node there then moves it to the serve dir's path.
+   - It has a new test with both DIR forms, the sums checked there and no `--rsync-path`, plus a COMPOSE_NODE refusal for the `HOST:DIR` form.
+   - From h200-3 at 20:00Z (r20261104-200017-15eb): the key is present (SHA256:EhKRsMwWUMus1W4bxH3Dt6h/OJNJl7+h+KU11se1MuE), cpu-2's host key is known by address, not by name, and a dry-run rsync over the path exits 0. So the copy names `research@81.85.2.224:`.
+6. **The rehearsal's settings** (`~/rehearsal/rehearsal.env` on my VM, settings and paths only): 439c's record.env plus `V3C_LAW`.
+   ```
+   POUW=pearlplus
+   PEARLPLUS_TIE=1
+   ROW=/workspace/research/vllm-pearlc-h200bf16/r20261104-164459-aabc/llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager
+   PRODUCT=remote
+   PEARLC_CHALLENGER_PEER=vy-dc-h200-3
+   PEARLC_CHALLENGER_LANE=vllm
+   H1_PEER=vy-dc-h200-3
+   PP_PEER=vy-dc-h200-3
+   PP_CHALLENGER=gate:research@204.12.178.84
+   PP_GATE_KEY=$HOME/.ssh/vllm_lane_ed25519
+   PP_CHALLENGER_KEY=$RESEARCH_RUN_DIR/inputs/challenger-key.json
+   MAIN_FILE=$RESEARCH_RUN_DIR/inputs/main.txt
+   V3C_LAW=stratified:1
+   ```
+   - The lane key: Pearl+'s salt coins use `PEARLC_CHALLENGER_GATE`, which defaults to `ssh -i ~/.ssh/vllm_lane_ed25519 ... research@204.12.178.84`, and the audit's coins use `PP_GATE_KEY`, the same key.
+   - `MAIN_FILE` is made fresh at launch (`git rev-list --first-parent origin/main` after a fetch) and sent.
+   - The served compare runs by default under PEARLPLUS_TIE (the row's Build of record, 30 min cap). It gave EQUAL on 439c's data.
+   - The row dir is on h200-3 (43 entries).
+   - **Steps:**
+     1. PREFLIGHT_ONLY on h200-3.
+     2. The serve: `research run --on vy-dc-h200-3 --source <pprecord on remote> --cwd clone --timeout 21600 --send rehearsal.env --send main.txt --send challenger-key.json -- bash -c 'SETTINGS=$RESEARCH_RUN_DIR/inputs/rehearsal.env exec bash benchmarks/one_stage/served_verdicts.sh'`.
+     3. The copy on h200-3: `RSYNC_RSH="ssh -i ~/.ssh/vy-h200-3-to-cpu2 -o IdentitiesOnly=yes -o BatchMode=yes" served_verdicts.sh copy deferred research@81.85.2.224:` with D.
+     4. On cpu-2: `mv /workspace/incoming/vllm/<run> /workspace/research/vllm-served-verdicts/<run>`, then `research keep`.
+     5. The follow-on on cpu-2 (`V3C_PEER=vy-nebius-cpu-2`, PREFLIGHT_ONLY first).
+     6. `gate-compose` from cpu-2 to vy-auditor-2 under cpu-2's `vllm_gate_ed25519`.
+7. **My VM restarted at 19:16Z.** Worktrees and scratch are rebuilt; nothing on the nodes was touched. My checkpoint note is `lanes/vllm/20261104T1922Z-report-pearlplus-checkpoint.md`.
+
+**I wait on:** the measuring run (ends by about 23:45Z; rate on VLLM-182 after); your choice in item 2 and on the passes in item 4; `remote` moving to de69355c9b2 (then I rebase pprecord); and #7221 by Thu 12:00Z.
