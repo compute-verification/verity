@@ -2,8 +2,8 @@
 (`verity.ml.circuits.ops.boolean.scalar`) by their builders: each step and cast and the AND lower to exactly the circuit of the piece
 their word primitive lowers to (the same ANDs and the same nonzeros of the AND rows), and the coordinate to
 `GemmCoordinate_v2`'s, whose words it evaluates to. A Boolean Definition whose builder commits keeps its commits as rows, so
-its AND operands stay a few bits however many activations are chained. The embedding's selection lowers by its builder to
-its trace's ANDs and computes its reference."""
+its AND operands stay a few bits however many activations are chained. The requirement units and the embedding's selection
+lower by their builders to their traces' ANDs and compute their references."""
 from __future__ import annotations
 
 import numpy as np
@@ -11,6 +11,7 @@ import pytest
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import evaluation as E
+from verity.ml.circuits import requirement_units as RU
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import CompositeDefinition, bind
@@ -212,8 +213,13 @@ def test_a_definition_with_statics_lowers_by_its_builder_on_them() -> None:
         assert np.array_equal(IL.unslice_words(got_s["out"], T), _pack(E.evaluate_batch(d, s, x).astype(np.uint64)))
 
 
-#: `trace.part`s at their circuit-check bindings (the embedding's selection at its smallest)
-PARTS = [pytest.param(EM.EmbeddingReadSelect, dict(V=2, H=1), id="embedding-select")]
+#: `trace.part`s at their circuit-check bindings (the embedding's selection at its smallest); the memory-map unit's payload
+#: is a whole block at any binding, about 100,000 ANDs
+PARTS = [pytest.param(RU.PlanMatch, dict(P=4, NR=16, V=16, G=2, TB=8, RPB=2), id="plan-match"),
+         pytest.param(RU.PlanShard, dict(S=32, GAPS=2), id="plan-shard"),
+         pytest.param(RU.MemoryMapStep, dict(K=2, C=1, V=8, E=2, M=4, N=16, SLOTS=8, T=4), id="memory-map-step",
+                      marks=pytest.mark.slow),
+         pytest.param(EM.EmbeddingReadSelect, dict(V=2, H=1), id="embedding-select")]
 
 
 @pytest.mark.parametrize("defn,statics", PARTS)
