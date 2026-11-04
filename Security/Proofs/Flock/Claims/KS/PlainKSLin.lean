@@ -115,9 +115,9 @@ theorem plain_tableBoundAbortLin :
   obtain ⟨m₀, hm₀⟩ := refusable_V sha512 false x
   have hrun := Claims.Recursion.refuser_run sha512 P (V false) x decCoin (coinsShown_V sha512 false)
     (accLast_V_sha512 false) (decideFree_V sha512 false) keep m₀ hm₀
-  have hk0' : sch.k0 = k0 := congrArg Accounting.Schedule.k0 hF'
+  have hk0' : sch.k0 = k0 := congrArg FlockSoundness.Accounting.Schedule.k0 hF'
   have hlen : (l₀ :: l₁ :: rest).length = depL x + 1 := by
-    have h1 := congrArg (fun S : Accounting.Schedule => S.levels.length) hF'
+    have h1 := congrArg (fun S : FlockSoundness.Accounting.Schedule => S.levels.length) hF'
     simp only [schedOf, List.length_map, Array.length_toList] at h1
     rw [depL_eq hset hst hF]
     simp only [List.length_cons] at h1 ⊢
@@ -345,9 +345,9 @@ theorem plain_tableBoundAbortLinK (keepV : Bool → Bool) :
   obtain ⟨m₀, hm₀⟩ := refusable_VK keepV sha512 x
   have hrun := Claims.Recursion.refuser_run sha512 P (VK keepV) x decCoin (coinsShown_VK keepV sha512)
     (accLast_VK keepV) (decideFree_VK keepV sha512) keep m₀ hm₀
-  have hk0' : sch.k0 = k0 := congrArg Accounting.Schedule.k0 hF'
+  have hk0' : sch.k0 = k0 := congrArg FlockSoundness.Accounting.Schedule.k0 hF'
   have hlen : (l₀ :: l₁ :: rest).length = depL x + 1 := by
-    have h1 := congrArg (fun S : Accounting.Schedule => S.levels.length) hF'
+    have h1 := congrArg (fun S : FlockSoundness.Accounting.Schedule => S.levels.length) hF'
     simp only [schedOf, List.length_map, Array.length_toList] at h1
     rw [depL_eq hset hst hF]
     simp only [List.length_cons] at h1 ⊢

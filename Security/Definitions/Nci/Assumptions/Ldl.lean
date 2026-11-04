@@ -30,12 +30,12 @@ It is stated as a capability, not as a bound on `LDL`: the program depends on th
 unregistered input bits, and the decoder must output the extraction for every run that takes `R`'s registered values
 (`R.Honest`). So `ext` must read only `I ∪ in(I)` and the registered description of `I`, as the draft's extraction rule
 does; for an `ext` that reads anything else no decoder meets it. -/
-def EvaluatesBlocks (D : Decoder) (t : ℕ) (R : Committed) (ext : Fin R.B → R.d.D.Transcript → List Bool)
+def EvaluatesBlocks (D : Decoder) (t : ℕ) (R : Committed) (ext : Fin R.d.n → R.d.D.Transcript → List Bool)
     (aBlk : ℕ) : Prop :=
-  ∃ enc : Fin R.B → R.d.D.Transcript → List Bool, ∀ u X, R.Honest X →
-    (∀ X', R.Honest X' → (∀ g ∈ R.d.D.into (R.P.gates u) \ R.d.θ, X' g = X g) → enc u X' = enc u X) ∧
-    (enc u X).length ≤ Nat.clog 2 R.B + novelReads R.d (R.P.gates u) + aBlk ∧
-    D (enc u X) t = some (ext u (R.P.localEval X u))
+  ∃ enc : Fin R.d.n → R.d.D.Transcript → List Bool, ∀ u X, R.Honest X →
+    (∀ X', R.Honest X' → (∀ g ∈ R.d.D.into (R.d.𝓘.gates u) \ R.d.θ, X' g = X g) → enc u X' = enc u X) ∧
+    (enc u X).length ≤ Nat.clog 2 R.d.n + novelReads R.d (R.d.𝓘.gates u) + aBlk ∧
+    D (enc u X) t = some (ext u (R.d.𝓘.localEval X u))
 
 /-- NEW PREMISE. **Activation rate** ([LDL-ACTIVATION-RATE]) `β` with deficit `Λ` (the draft's `β_x` and `λ_x`; Lean
 reserves `λ`), within `t` steps: in the run `X`, every block's complete activation tuple `a_I = a u X`, the activation
@@ -49,7 +49,7 @@ It is a premise on the fixed decoder `D` and the run, not on the data alone: for
 the empty program) it is false. It is a joint bound over the collections a block can select, internally generated
 activations and mixtures of layers and steps included; a measured code rate for one tensor is not such a bound. -/
 def ActivationRate {ι A : Type} [DecidableEq A] (β Λ : ℝ) (t : ℕ) (D : Decoder) (R : Committed)
-    (M : Products R.d.D ι A) (a : Fin R.B → R.d.D.Transcript → List Bool) (X : R.d.D.Transcript) : Prop :=
-  ∀ u, ENNReal.ofReal (β * (M.acts R.P u).card - Λ) ≤ (LDL D t (a u X) : ℝ≥0∞)
+    (M : Products R.d.D ι A) (a : Fin R.d.n → R.d.D.Transcript → List Bool) (X : R.d.D.Transcript) : Prop :=
+  ∀ u, ENNReal.ofReal (β * (M.acts R.d.𝓘 u).card - Λ) ≤ (LDL D t (a u X) : ℝ≥0∞)
 
 end Nci.Ldl.Assumptions

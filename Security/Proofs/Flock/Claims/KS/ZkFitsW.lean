@@ -184,7 +184,7 @@ open Flock FlockSoundness
 /-- **A table's weight pays for its masked fork events with level 0's and its share of `k`**: the fork events'
 weights are `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N_p² + 2`, level 0's included, within the table's
 `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N² + 2 + 4·2^{d₀}/e` when `N_p` is at most the deployed pads' domain. -/
-theorem cZW_sum_le_tableWeight {st : Stmt} {sch : Accounting.Schedule} (hsch : sch = Accounting.m1Schedule st.m)
+theorem cZW_sum_le_tableWeight {st : Stmt} {sch : FlockSoundness.Accounting.Schedule} (hsch : sch = Accounting.m1Schedule st.m)
     (Np : ℕ)
     (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0)) :
     4 * tableLen true st / Real.exp 1 + ∑ i, Claims.Flock.cZW sch Np i ≤ tableWeight true st := by
@@ -224,7 +224,7 @@ theorem joinEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω 
     (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (h25 : ∀ j < (tables true x).length, 25 ≤ (st j).m) (h35 : ∀ j < (tables true x).length, (st j).m ≤ 35)
-    (sch : ℕ → Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
+    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
         (Claims.Flock.zkSched (st j).m).1.k0))

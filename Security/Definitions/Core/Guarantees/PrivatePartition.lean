@@ -16,22 +16,23 @@ def PrivateOutBitsLe : Prop :=
   ∀ (C : Circuit) (n : ℕ) (P : Partition C n) (X : ℕ), P.Fits X →
     ∀ T : Finset (Fin n), ∑ u ∈ T, P.outBits u ≤ T.card * X
 
-/-- **A committed partition fits the public count, or the two commitments hold a collision**: when `r₀` commits to
-`root` under `Q`, any commitment `r` with the same root, of any partition under any salts, has at most `Q.units`
-units, each within the width rule, so any set of them has at most `Q.X` output bits per unit; or `H` has a collision
-between a string that `r₀` hashes on its way to the root and a different one that `r` hashes on its way there
-(`Advice.Committed.hashInputs`).
+/-- **The compiler's proof blocks on committed advice fit the public count, or the two commitments hold a collision**:
+when `r₀` commits to `root` under `Q` for the registered compiler `B`, the proof blocks `B` outputs on the advice of any
+commitment `r` with the same root, of any advice under any salts, has at most `Q.units` units, each within the width
+rule, so any set of them has at most `Q.X` output bits per unit; or `H` has a collision between a string that `r₀`
+hashes on its way to the root and a different one that `r` hashes on its way there (`Advice.Committed.hashInputs`).
 
-It holds for every hash `H`; the deployment's is SHA-512. The collision ranges over the finitely many strings the two
-commitments hash, so for an `H` injective on them there is none, and then `r`'s partition fits. The premises are
-format facts, not properties of `H`: the frame-v3 messages are separated (`Advice.Framing.Separated`), and the rows
-decode to their partition (`Advice.Rows.Decodes`). -/
+It holds for every compiler `B` and every hash `H`; the deployment's is SHA-512. The collision ranges over the finitely
+many strings the two commitments hash, so for an `H` injective on them there is none, and then `r`'s advice is `r₀`'s.
+The premises are format facts, not properties of `H`: the frame-v3 messages are separated (`Advice.Framing.Separated`),
+and the rows decode to their advice (`Advice.Rows.Decodes`). -/
 def CommittedMeets : Prop :=
-  ∀ (C : Circuit) (H : List UInt8 → Digest) (F : Advice.Framing), F.Separated →
-    ∀ (A : Advice.Rows C), A.Decodes →
-      ∀ (Q : Predicates) (root : Digest) (r₀ : Advice.Committed C), Commits H F A Q r₀ root →
-        ∀ r : Advice.Committed C, r.root H F A = root →
-          (r.n ≤ Q.units ∧ r.P.Fits Q.X ∧ ∀ T : Finset (Fin r.n), ∑ u ∈ T, r.P.outBits u ≤ T.card * Q.X) ∨
+  ∀ (B : Compiler) (θ : List Registration.Theta) (H : List UInt8 → Digest) (F : Advice.Framing), F.Separated →
+    ∀ (A : Advice.Rows), A.Decodes →
+      ∀ (Q : Predicates) (root : Digest) (r₀ : Advice.Committed), Commits B θ H F A Q r₀ root →
+        ∀ r : Advice.Committed, r.root H F A = root →
+          ((B.run θ r.a).m ≤ Q.units ∧ (B.run θ r.a).P.Fits Q.X ∧
+            ∀ T : Finset (Fin (B.run θ r.a).m), ∑ u ∈ T, (B.run θ r.a).P.outBits u ≤ T.card * Q.X) ∨
             ∃ x ∈ r₀.hashInputs H F A, ∃ y ∈ r.hashInputs H F A, x ≠ y ∧ H x = H y  -- a collision of `H`
 
 end Verity.Guarantees
