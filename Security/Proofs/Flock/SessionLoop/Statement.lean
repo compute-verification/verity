@@ -332,8 +332,8 @@ def Loop.RepSrc
 
 /-- `flock-firewall-os-src` (a trust in the host's inputs and in the operating system's bytes, which the loop reads and
 does not check). **Every input the session loop takes from its host and its operating system is the tape's** at `x`, in
-two halves: the level-0 inputs (`Loop.Level0Src`: the packed witness the host hands it and the bytes `Level0.draw`
-reads, at level 0's sizes) and the rep draws (`Loop.RepSrc`: the bytes `Frames.startRep` and `Finish.serve` read for each rep). Why it is
+two halves: level 0's inputs at its sizes (`Loop.Level0Src`: the host's packed witness and the bytes `Level0.draw`
+reads) and the rep draws (`Loop.RepSrc`: the bytes `Frames.startRep` and `Finish.serve` read for each rep). Why it is
 reasonable: the loop runs on the auditor-trusted host (`trusted-host`), whose operating system's random bytes are
 the uniform draws the tape models, and which hands the loop the witness `w` the statement is served at. -/
 def Loop.Src
