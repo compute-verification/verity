@@ -41,9 +41,9 @@ digest) as the Lean verifier's `Flock.Draw.drawWith` does (`coins.draw_first` ov
 and no derivation, or by the stream's `sampler`; either draw is held to `draw.check_draw`. Neither the stream nor the
 verifier has coins of its own: a stream whose selection reads coins refuses any source but the challenger's
 (`NO_OWN_COINS`), and the verifier's run refuses a sample that read coins without the challenger's log to show they are
-its (`outcome`'s `coins`). A work sample carries the challenger's closure map's closure (`select(closure=)`, a map over
-`[0, N)`, refused under another sampling design or out of range before any coin is read; `coins.closure_of`), which the proof
-proves with the sampled proof blocks.
+its (`outcome`'s `coins`). A closure map (`select(closure=)`) is refused before any coin is read (`closure`): a work
+sample widened by one proves a set whose size varies with the sample, which the sampled audit's soundness statement
+doesn't cover.
 From the selection rule to the sample object it is `selection_law`, `draw.derive` and `select_draw`, which the Lean
 verifier's `SampledProofs.Select` ports, held to them by its difftest on fixed coins.
 
@@ -113,7 +113,8 @@ its `draw` is null when the registration was not sampled. `Outcome.record` is it
 
 **Not built yet.** A stream refuses the `Sequential` rule, a window statement, a timed session and a
 check with no proof deadline. After R1 to R7, `register` refuses a sampling design whose drawn count varies (`shapes`: `bernoulli`
-at `0 < p < 1`); a work draw's closure varies too and is not refused (a planned design).
+at `0 < p < 1`), and `select` refuses a closure map (`closure`), which the sampled audit's soundness statement doesn't
+cover either.
 """
 from __future__ import annotations
 
@@ -612,8 +613,8 @@ def selection_law(rule: Selection, n: int) -> dict[str, Any]:
 
 def count_varies(law: Mapping[str, Any]) -> bool:
     """Whether `law` (a `selection_law`) draws a count that varies from draw to sample, so the sessions of one registration
-    set up tables of different shapes: `bernoulli` at 0 < p < 1. A work sampling design's closure varies too, but the work sample with
-    a producer closure is a planned design, so it is not refused. The Lean verifier's `Run.countVaries` is this. A Spec
+    set up tables of different shapes: `bernoulli` at 0 < p < 1. A work sample's closure varies too, and `Stream.select`
+    refuses a closure map (`closure`). The Lean verifier's `Draw.countVaries` is this. A Spec
     that wants Bernoulli's public rate at a fixed count states the rate sampling design, `rate:NUM/DEN[:T]`."""
     if law.get("law") != "bernoulli":
         return False
@@ -1492,12 +1493,12 @@ class Stream:
 
     def select(self, registration: Registration, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
         """The draw, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
-        the selection rule's sampling design (`select_draw`; `All` draws every proof block and reads no coins). `closure` is the challenger's closure map
-        (`{unit: [units proved with it]}` over [0, N), from its own layout), for a work sampling design only: the draw carries the
-        drawn proof blocks' closure (`coins.closure_of`), which `draw.proved` and `draw.check_proved` count. The draw of
-        record is the verifier's (`verifier.select`: the Lean's `Select.select` on the bytes of the coins this
-        draw read), unless a `sampler` draws. Raises `Refused` for a registration drawn before (nothing redraws), a
-        closure map on another sampling design or outside [0, N) (before any coin is read), the two verifiers drawing differently
+        the selection rule's sampling design (`select_draw`; `All` draws every proof block and reads no coins). A `closure`,
+        the challenger's closure map, is refused before any coin is read (`closure`, as the Lean's `Run.run` refuses it): a
+        work sample it widens proves a set whose size varies with the sample, which the sampled audit's soundness
+        statement doesn't cover. The draw of record is the verifier's (`verifier.select`: the Lean's `Select.select` on the
+        bytes of the coins this draw read), unless a `sampler` draws. Raises `Refused` for a registration drawn before
+        (nothing redraws), a closure map (before any coin is read), the two verifiers drawing differently
         (`disagree`), and a draw that isn't well formed under the sampling design (`draw.check_draw`, by `verifier.check_draw`)."""
         op: dict[str, Any] = {"op": "select", "order": _order(registration),
                               "registration": _registration_token(registration)}
@@ -1512,6 +1513,9 @@ class Stream:
                 read.extend(b)
                 return b
             try:
+                if closure is not None:
+                    raise _refuse("closure", "a closure map widens a work sample, which the sampled audit's soundness "
+                                             "statement doesn't cover")
                 obj = select_draw(self.spec.selection, e.law, registration.record["population"], coins, closure=closure,
                                   sampler=self._sampler)
                 if self._sampler is None:

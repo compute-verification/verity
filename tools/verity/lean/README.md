@@ -5,7 +5,7 @@ changed (`check.py --build PKG...`). Lean's jobs in `check` are here too: `lean_
 packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, a lane's fast path to its
 records, and its edit loop, `--try`) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
 toolchain's `lean` and `leanc` (`Facts.lean` runs compiled); nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
-`Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) and point it at its
+`Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `headers.py`, `modules.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) for its
 own packages. The two jobs use `check`'s helpers (`tools/verity/check/common.py`, `lean_slot.py`), so they stay with this repository.
 `check` reuses a package's pass while the content of everything its audit reads is unchanged, not its path: each file under its
 path relative to the package, a package required by path as its own content, so a `git mv` of a package is no miss, and its
@@ -89,13 +89,13 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   `implemented_by` targets and `@[csimp]` replacements, the code compiled in place of a constant; a csimp rewrite itself
   is a theorem the replay checks, so it is listed (`csimp` in the facts) and not refused;
 - with a `claims` section, every predicate the spec declares under `claims.modules` (a named assumption aside) has its
-  witnesses under `claims.witnesses`, or a reason under `claims.not`: a guarantee `fails`, stated `¬ C …` past its `∀`
-  and `∃` binders with the claim `C` at the head, and guarantees `meets`, one per deployed record, that state the claim's
-  checkable antecedents there and not `C` itself (`claim_failures`; the `shape` rule doesn't apply to them). A `meets`
-  witness must say something about the deployment: past its `∀`, `→` and `∃` binders, split at `∧`, each conjunct of its
-  conclusion is headed by a constant other than `C`, applies a definition under `meaning` itself (the deployed record, a
-  predicate or a field of it, so `True` or a fact of Init or Mathlib alone fails), and is neither a reflexivity
-  (`a = a`, `a ↔ a`) nor one of its hypotheses, and no hypothesis is `False` (`vacuous_meets`);
+  witnesses under `claims.witnesses`, or a reason under `claims.not`: a guarantee `fails`, stating `¬ C …` past its
+  binders, and guarantees `meets`, one per deployed record, that state the claim's checkable antecedents there and not
+  `C` (`claim_failures`, not `shape`). A `meets` witness says something about the deployment: past its binders,
+  split at `∧`, each conjunct is headed by a constant other than `C`, applies a definition under `meaning` (the
+  deployed record or a field of it; not `True` or Init or Mathlib alone), is no reflexivity nor one of its hypotheses,
+  and no hypothesis is `False` (`vacuous_meets`). A closed `def C : Prop` proved of every instance goes under
+  `claims.generic` with its guarantee, which reads only the claims and Core and skips `shape` and the inline rule;
 - a guarantee of an acceptance or an exclusion has `honest` and `nontrivial` witnesses, or an `unwitnessed` entry, which
   only shrinks (`witness_failures`);
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
@@ -490,8 +490,8 @@ module docstring has the layout and the rules. In short:
   (disabled, quarantined or unreachable), and `LEAN_CACHE=off`.
 - The audit never reads the cache: `lake_env()` sets `LEAN_CACHE=off` and `LAKE_ARTIFACT_CACHE=false`. Check's audit and
   a records run name their node's own Lake cache instead (`--artifacts`, `lean_audit.LakeArtifacts`), which only a
-  passing run there fills, from a build in the sandbox. Each build reads a copy staged for it of the modules whose sha256
-  key (`module_keys.py`, imports read by `headers.py`) it indexes, and builds any other from source.
+  passing run there fills, from a build in the sandbox. Each build reads a copy staged for it of the modules whose key
+  (`module_keys.py`, the task graph's key of its compile) it indexes, and builds any other from source.
 - Only integration publishes, and only a clean checkout of a commit on `origin/main`. It builds with `cache.py build` inside
   its sandbox, then runs `cache.py publish` as root outside it, which hashes the staged files itself and signs with the
   bucket-scoped key (`/etc/verity/lean-cache.env`). The build's user wrote the stage, so the publisher follows no link

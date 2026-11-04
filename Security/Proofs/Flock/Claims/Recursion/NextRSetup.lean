@@ -10,8 +10,8 @@ honest run `decR` decides (`honestRun_decides`), wherever its rows fit a message
 as its proofs.
 
 No statement that sets up is exhibited here: every statement with `hm96-sha512` rows (which `Ins.setup` requires) has a
-circuit file of 22 MB or more, beyond what a Lean file holds, and `setupOf` reads JSON (`Json.parse`), which the kernel
-can't unfold.
+circuit file of 22 MB or more, beyond what a Lean file holds, and `setupOf` reads its rows with `HmRow.parse`, which
+regenerates the `hm96` nets, beyond what the kernel evaluates.
 -/
 
 namespace FlockDeploy
