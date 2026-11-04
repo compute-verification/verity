@@ -5,6 +5,11 @@ replayed word by word from the pass's own files, the rows that leave a tile or a
   python benchmarks/pouw/pearl_c_vllm/volunteer_pass.py DIR/manifest.json --coins COINS.json [--jobs J]
                                                          [--device DEBIT_CUBIN [--cross-check N]]
 
+- **When it runs.** Exactly while the verdict rejects a run on a drawn tile whose credited debit, or a credited row's, is
+  over its cap, its over-cap rule ``reject`` (`served_passes.over_cap_rule`): the pipelines ask ``served_passes.py
+  volunteer-needed`` before they serve and refuse to skip the give-up then.  Under ``uncredited``, where the verdict
+  credits such a row nothing instead, the give-up is off the prover's path, and this module stays for whoever runs it by
+  hand.
 - **Why after the pass.** A row's debit is its words' (`pearl_c_debit`): it reads the tile's A′ and B̃ codes, which the
   salt's noise forms, so the screen's per-row rules on the activations can't decide it.  The prover knows the salt when it
   forms and commits, and replays every tile as the verifier will, before the challenger opens the sampling coin.
