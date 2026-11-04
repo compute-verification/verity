@@ -1537,7 +1537,7 @@ b_of_record = (str((pred / "manifest.json").resolve()), predicted["program_diges
 serve = json.loads((d / "serve.json").read_text())
 seals = [json.loads(x) for x in (d / "seals.jsonl").read_text().splitlines() if x.strip()] if (d / "seals.jsonl").exists() else []
 sealed_ok = bound_ok = bool(seals)
-lines, why, committers = [], set(), set()
+lines, why, committers, unbound = [], set(), set(), []
 if not seals:
     why.add("no window sealed")
 if serve.get("scheme") != "rows-sha512":
@@ -1568,6 +1568,7 @@ for s in seals:
         by = f", manifest digest {str(bound['manifest_digest'])[:16]}…"
     elif "digest" in bound and bound["digest"] is None:
         by = " (sealed before the seal recorded the manifest's digest: its path and Program digest bind it)"
+        unbound.append(f"w{k}")
     else:
         b, by = False, ", and no manifest digest"
     sealed_ok &= good
@@ -1588,7 +1589,9 @@ held.write_text("".join(x + "\n" for x in lines))
 print(f"SEALED: every closed window's row dir committed under rows-sha512 (committer {', '.join(sorted(committers)) or 'none'}) "
       f"and its replay bundle opened: {'PASS' if sealed_ok else 'FAIL'}")
 print(f"B-OF-RECORD: every sealed record binds predict row's Build of record ({b_of_record[0]}, program digest "
-      f"{b_of_record[1][:16]}…, manifest digest {predicted['manifest_digest'][:16]}…): {'PASS' if bound_ok else 'FAIL'}")
+      f"{b_of_record[1][:16]}…, manifest digest {predicted['manifest_digest'][:16]}…"
+      + (f"; {', '.join(unbound)} sealed before the seal recorded the manifest's digest, by path and Program digest alone"
+         if unbound else "") + f"): {'PASS' if bound_ok else 'FAIL'}")
 print(f"SERVED-SEAL VERDICT: {'PASS' if ok else 'FAIL'} (scheme {serve.get('scheme')}, precision {serve.get('precision')}"
       + (f"; {'; '.join(sorted(why))}" if why else "") + "; each window's lines in the serve dir's private/seal.txt)")
 sys.exit(0 if ok else 1)
