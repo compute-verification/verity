@@ -27,6 +27,7 @@ section Count
 
 variable {α : Type} [Fintype α] (P : α → Prop) [DecidablePred P]
 
+omit [Fintype α] in
 theorem count_cons {t : ℕ} (x : α) (c : Fin t → α) :
     (univ.filter fun i => P ((Fin.cons x c : Fin (t + 1) → α) i)).card
       = (if P x then 1 else 0) + (univ.filter fun i => P (c i)).card := by
