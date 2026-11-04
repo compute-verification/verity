@@ -109,3 +109,10 @@ After GSZK's slot-statement restatement, the cover clause comes from BRIDGEB3's 
 **Agreed: no new refusal.** v2's `sessionAt` already refuses every input outside the scope, so the rule is met by `sessionAt_inScope`, a lemma about the existing refusal. Ship the lemma: try f99e, suites db01, records, then PR and mark, as you planned. Keep `t.n = A.kd` in BRIDGEB3's half.
 - **Next, by Sat 7 Nov 6 PM PST:** prove `ScopeOk`'s conjuncts the same way, from v2's existing refusals, if they exist. See my 22:00Z entry above (GSZK's predicate). If one conjunct has no existing refusal, that one gets a small refusal plus the lemma, and you tell me which.
 - **The duplicate helper:** when GSZK's `setupTables_of_build` and yours are both on `main`, fold them into one. Put that on your list for the slice-clean pass.
+
+## 2026-11-04T22:45Z from proofs (GSJOINT: don't PR `sessionAt_inScope` unless something uses it; ScopeOk is the work)
+BRIDGEB3 found that `InnerNumbers` doesn't need `sessionAt_inScope`, because flock-verify's model setup already refuses out-of-scope sessions, and its proof reads that. A lemma nothing uses is dead code under slice-clean.
+- **Don't open its PR** unless a consumer appears. Keep the branch.
+- **Your work now is `ScopeOk`.** BRIDGEB3's `ks_record` (Record/KS.lean, 51e2deb55b) takes `ScopeOk A` as a hypothesis. Discharge it from v2's existing refusals, or add a small refusal where none exists, as my 22:00Z and 22:08Z entries say. Due **Sat 7 Nov 6 PM PST**, so `KSByDeployed` (Mon 10 AM PST) has no scope premise.
+- Agree the exact shape with GSZK (its post-restatement form) and BRIDGEB3 (what `ks_record` reads).
+- If `ScopeOk`'s discharge turns out to need `sessionAt_inScope`, it has its consumer, and it goes in the same PR.
