@@ -578,7 +578,7 @@ def write(shape: Shape, seed: bytes, path: str | Path, *, workers: int = 1, star
 
 
 #: the H200 demo's seed, frozen (its weights' registration roots depend on these bytes): public, so its weights are
-#: reproducible; the demo's salt key is the prover's, drawn from the OS at registration
+#: reproducible; the demo's salt key is the prover's, sampled from the OS at registration
 DEMO_SEED = b"verity/cmp92/h200/weights/v1"
 #: the fixture's public seed and dummy salt key: test values, never the demo's
 TEST_SEED = b"verity/seeded-weights/test-seed"

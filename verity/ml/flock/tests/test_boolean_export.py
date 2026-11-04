@@ -18,7 +18,7 @@ pytest.importorskip("verity.ml.definitions.registry.prims")
 
 
 def _types(build, name="root", label=None):
-    reg = BX.Registry()
+    reg = BX.CircuitTypeTable()
     return reg, reg.type_of(build, name, "test", label)
 
 
@@ -53,7 +53,7 @@ def test_a_table_read_is_the_provers_inline_read():
 def test_a_wide_gather_is_its_muxes_counted(monkeypatch):
     """A gather wider than GATHER_INLINE is a composed Definition with exactly the counts of the one circuit."""
     V = 5000
-    reg = BX.Registry()
+    reg = BX.CircuitTypeTable()
     walker = BX.Walker(reg, None, {})
     composed = walker.defs[walker.gather(V)["def"]]
     monkeypatch.setattr(BX, "GATHER_INLINE", V)
@@ -89,7 +89,7 @@ def test_two_calls_of_a_piece_share_no_gates():
 def test_a_helper_is_one_type_wherever_it_is_called():
     """A type is its circuit, not its caller's: F32Add's and F32Mul's operand unpacking (and leading-zero counts, muxes) are
     the same types."""
-    reg = BX.Registry()
+    reg = BX.CircuitTypeTable()
     add = reg.type_of(_piece_build("F32Add_v1", [32, 32]), "add", "test")
     mul = reg.type_of(_piece_build("F32Mul_v1", [32, 32]), "mul", "test")
 
@@ -141,7 +141,7 @@ def _token_select(V):
 def test_the_walker_folds_a_scans_lane_counter():
     """``TokenSelect``'s lane index is a constant at every step (the units fold it): the step walked with it a lane counter has
     no I32Add, the generic step does."""
-    reg = BX.Registry(Path(tempfile.mkdtemp()))
+    reg = BX.CircuitTypeTable(Path(tempfile.mkdtemp()))
     W = BX.Walker(reg, _Store({"ArgmaxStep_v1": ARGMAX_STEP, "TokenSelect_v1{V=5}": _token_select(5)}), {})
     (step,) = W.defs[W.walk("TokenSelect_v1{V=5}")]["children"]
 

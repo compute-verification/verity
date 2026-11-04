@@ -1,6 +1,7 @@
 import Proofs.Flock.Soundness.Discharge.Layout.Site
 import Proofs.Flock.Soundness.Discharge.Layout.OfRows
 import Proofs.Flock.Soundness.Discharge.Layout.QSort
+import Properties.Flock.Circuit.Outs
 
 set_option Elab.async false
 
@@ -211,12 +212,6 @@ theorem vu_lt_pow2_of {c : Flock.Circuit} (C : CheckFacts c) {g : ℕ} (hg : g <
   exact hg
 
 variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
-
-/-- The number of input columns of the circuit's template instance rows. -/
-noncomputable abbrev keyB : ℕ := (Placed.circuitRows c hU).nIn
-
-/-- The gates of `keyProg c hU n`. -/
-noncomputable abbrev keyN : ℕ := Placed.gates (Placed.inGates n (keyB c hU)) (Placed.circuitRows c hU) n
 
 theorem keyN_pos : 0 < keyN c hU n :=
   lt_of_lt_of_le (by show 0 < 2 + n * keyB c hU; omega) (Placed.le_gates _ _ n)

@@ -1,6 +1,6 @@
 # The live challenger
 
-The proof service's challenger, as it runs on the auditor's host: it measures nothing. `serve.py` serves one session's coins
+The proof system's challenger, as it runs on the auditor's host: it measures nothing. `serve.py` serves one session's coins
 to one prover client (`verity.core.protocols.sampled_proofs.remote`), with its record signed by the host's LMS key and written
 before the first coin, and its release log signed when the session ends. The coins are the operating system's, as the Lean
 verifier of record reads them.

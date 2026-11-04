@@ -4,6 +4,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.Hidden.Layout
 import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 /-!
 # What the verifier's setup gives the scope
@@ -88,7 +89,7 @@ theorem setupH_scope {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables :
 
 theorem parseH_identity {tags : Tags} (ht : tags.typed = false) (x : Lean.Json) (b : ByteArray)
     (t : List (String × ByteArray)) : HmOut.parse { tags with identity := x } b t = HmOut.parse tags b t := by
-  simp only [HmOut.parse, Composed.parse_identity]
+  simp only [HmOut.parse, Composed.parse_identity, Tags.isTmpl]
   simp only [ht, Bool.not_false, ite_true]
 
 theorem parseH_tagsAt {tags : Tags} (ht : tags.typed = false) (count j : ℕ) (b : ByteArray)
@@ -97,6 +98,16 @@ theorem parseH_tagsAt {tags : Tags} (ht : tags.typed = false) (count j : ℕ) (b
   split_ifs
   · rfl
   · exact parseH_identity ht _ _ _
+
+/-- An untyped `HmOut.parseCommit` reads no identity, so it agrees at every table's tags. -/
+theorem parseCommit_tagsAt {tags : Tags} (ht : tags.typed = false) (count j : ℕ) (b : ByteArray)
+    (t : List (String × ByteArray)) : HmOut.parseCommit (tagsAt tags count j) b t = HmOut.parseCommit tags b t := by
+  unfold tagsAt
+  split_ifs
+  · rfl
+  · have hi : ({ tags with identity := tags.tableIdentity count j } : Tags).isTmpl = tags.isTmpl := rfl
+    unfold HmOut.parseCommit
+    rw [hi, parseTmpl_identity, parseH_identity ht]
 
 theorem loadPublicH_tagsAt (tags : Tags) (count j : ℕ) (c : Circuit) (b : ByteArray) :
     HmOut.loadPublic (tagsAt tags count j) c b = HmOut.loadPublic tags c b := by
@@ -181,9 +192,9 @@ theorem table0 {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht : 
   · rw [hh] at hd
     simp only [↓reduceIte] at hd
     have S := Hidden.setupHidden_spec' hd
-    have L := Hidden.hidden_layout' ht' hd
+    have L := Hidden.hidden_layout' ht' hd (HiddenExec.setupTables_pinnedH hh hset 0 hpos)
     have hp := S.parse
-    rw [parseH_tagsAt ht] at hp
+    rw [parseCommit_tagsAt ht] at hp
     obtain ⟨pop, hpop, -⟩ := S.pub
     rw [loadPublicH_tagsAt] at hpop
     refine ⟨?_, ⟨pop, ?_⟩, S.m, L.kLog6, S.kLog, S.m35, hzk⟩

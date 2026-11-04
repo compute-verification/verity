@@ -716,7 +716,7 @@ def test_the_split_call_is_the_hiding_call_with_each_tiles_cap(dev):
 
 def test_a_drawn_tile_proves_its_strip_every_word_and_its_tally():
     """`plan.tile_layout` under ``cap``: a tile's closure is itself, its TM `RowA` units, its strip, its TM·TN word units
-    row by row, its TM rows' digests and sums and its tally, so a draw proves every cap word of each drawn tile
+    row by row, its TM rows' digests and sums and its tally, so a sample proves every cap word of each drawn tile
     (`Plan.proved`), never sampling one; the tile stratum alone carries W_ref.  With the cap off the layout is pc8's."""
     tm, tn = SPLIT.tile
     lay = plan.tile_layout(SPLIT, 1000)

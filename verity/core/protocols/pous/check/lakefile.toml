@@ -1,7 +1,7 @@
 # The PoUS check as a program: what the verifier checks at setup and in the timed audit, and a run composed of the setup
 # and a memory challenger's session (`PousCheck.Run`), in executable Lean, reading the formats the Python reference
 # writes. It imports Lean core, Flock's executable primitives, the core protocol interface, the core primitives (the
-# identity hash, randomness's `frame`) and the memory challenger's verdict only. Its properties are stated in
+# identity hash, randomness's derivation and exact samplers) and the memory challenger's verdict only. Its properties are stated in
 # `Security/Properties/Pous.lean`; it moves into `verity/core/protocols/pous` once they are proved.
 name = "pous_check"
 defaultTargets = ["PousCheck", "pous-setup", "pous-setup-difftest", "pous-audit-difftest", "pous-timed-audit", "pous-run",

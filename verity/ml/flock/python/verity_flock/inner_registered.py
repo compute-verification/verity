@@ -5,7 +5,7 @@ description's rows (the class statement's row port of the private circuit's ``op
 root, so that a verifier holding the root reads the description from the developer's registration, not from the prover.
 
 `register` runs on a staged statement (``circuit.txt``, ``inst-n.bin``, ``pub-n.bin``, a shared-row file): the
-registration's rows and salts are the description table's own (the salts drawn at staging, used for no other row), so its
+registration's rows and salts are the description table's own (the salts sampled at staging, used for no other row), so its
 ``b || c`` are the registered ones and the statement's rows, salts and frame-v3 roots are unchanged. It adds the header's
 ``registered`` (§16.10: each table row's position, its index, and its path to the registered root) to the prover's and the
 verifier's files and writes ``registered.json`` beside them, the verifier's own ``--registered`` file

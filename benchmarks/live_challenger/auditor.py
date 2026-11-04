@@ -1,7 +1,7 @@
 """The auditor host's challenger service: `serve.py` runs only as the `auditor` user, from a pinned
 tree, one session a window, each recorded in a signed append-only ledger before its first coin.
 
-    vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE]
+    vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE] [--withhold]
     vy-challenger-gate open --session S --root R
     vy-challenger-gate period-open --name P --cap N --circuit SHA512 [--draw-k K] [--rows T] [--model M | --weights-root W]
                                    [--circuit-files JSON] [--length JSON] [--lane LANE] | period-close --name P
@@ -55,6 +55,13 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   open's answer also carries the session's coin commitment root (`commitment`, from the record serve.py signs before it
   listens; `status` gives it too), so the serving side checks the hello's commitment against it before its first coin.
   Before the first reserve the ledger held one-step v2 opens (`--commit`), which still verify; none follows a reserve.
+- **A withheld session** (`reserve --withhold`, a sampled-proofs window's: its draw reads only such a session's coins,
+  `challenger.withheld_on`) keeps its coin commitment's root on this host until the prover's commitments are in. Its
+  reserve and open bodies carry `withheld: true`, and serve.py serves it `--withhold`, so it answers the hello with the
+  layout alone and releases the root, salts and paths only at the client's close. Until the session's `end` entry the
+  gate hands out no root either: the open's and `status`'s `commitment` are null (the open says whether serve.py signed
+  its record, `signed`), and `fetch` refuses, since `out/`'s `record.json` signs the root and the head of
+  `releases.jsonl` names it. serve.py still writes both before it listens.
 - **An `end` entry** follows when `serve.py` exits: its exit code, whether its client closed it, the SHA-512 of each file of
   `out/` (which seals the release log), how many coins each family released (`released`, counted from the release log under
   the signed record's commitment; `complete` when every family released all its coins, so a period can refuse a short
@@ -82,8 +89,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   which the lane's own gate key writes for its lane (`--name P`), or vy-admin for any lane (`period-open --name P --lane
   LANE`, `period-close --name P`). A period's name is used once, and a lane has one period open at a time. Its open
   commits, before window 0's first coin, the most windows it may hold (`--cap`, a positive integer) and its circuit
-  (`--circuit`: the declared circuit's SHA-512, never a Program's id, which the gate records and CHAL1 checks each window
-  against), and with `--draw-k K` the draw K the proof system selects each window's units with (`draw_k`, a positive
+  (`--circuit`: the registered circuit's SHA-512, never a Program's id, which the gate records and CHAL1 checks each window
+  against), and with `--draw-k K` the sample K the proof system selects each window's units with (`draw_k`, a positive
   integer at most 2^24, which PoUW's credit reads; an open without it commits none), with `--rows T` the served tables'
   rows (`rows`, each round's request and slot tables' leaves, which bound every step's served rows m_s in PoUW's
   credit and whose `h1window.slot` is each window's A slot M; an open without it credits nothing), and with `--model M` (or
@@ -94,7 +101,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   verifier tree, is signed as `model` alone, its digest core's pin, `pouw/lean/check/models.json`, and refused when the
   pin lacks it; an open without either commits none), and with `--circuit-files JSON` each K's circuit file (`circuit_files`, `{"k<K>": SHA-512}`:
   the circuit file the auditor's lowering built for K's template, which PoUW's credit verifies each window's statements
-  on; an open without it commits none), and with `--length JSON` the fixed length its windows serve (`length`,
+  on; a K in credit's lanes form commits `lane<K>` and `combine<K>` instead, and `leaf_programs` their leaf Programs'
+  descriptor digests; an open without it commits none), and with `--length JSON` the fixed length its windows serve (`length`,
   `{"max_tokens": [n, ...], "stop": "fixed"}`: each request's public max_tokens, served to that cap whatever it samples,
   which PoUW's credit holds each window's served rows to; an open without it commits none, and credit counts none of
   its windows). Its windows are exactly the reserves (and one-step v2 opens) whose prover (`for`, else `by`) is its
@@ -284,6 +292,10 @@ ROOT = re.compile(r"[0-9a-f]{128}")
 PINNED = re.compile(r"[0-9a-f]{40}")
 #: a circuit file's template: K's tile template (``k<K>``) or the live Program's (``live``), PoUW's `credit._TEMPLATE`
 TEMPLATE = re.compile(r"k[1-9][0-9]{0,7}|live")
+#: one of a lanes-form K's two leaf files (``lane<K>``, ``combine<K>``), PoUW's `credit._LEAF_FILE`
+LEAF_FILE = re.compile(r"(lane|combine)([1-9][0-9]{0,7})")
+#: beside a lanes-form K's files, each one's leaf Program's descriptor digest, PoUW's `credit.LEAF_PROGRAMS`
+LEAF_PROGRAMS = "leaf_programs"
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
 SCHEME = re.compile(r"[a-z0-9][a-z0-9/._-]{0,127}")
 SESSION = re.compile(r"s\d{8}T\d{6}Z-[0-9a-f]{4}")
@@ -334,7 +346,7 @@ WARDEN_WINDOW_LEAVES = 5
 WARDEN_WINDOW_MS = 60_000
 WARDEN_TOKENS = (16, 256)
 #: the warden rehearsal's traffic, which the gate fixes so that `warden_minutes` bounds it: Poisson arrivals at
-#: `WARDEN_RATE` a second drawn from `WARDEN_SEED`, the run lasting `WARDEN_TAIL_S` past the last
+#: `WARDEN_RATE` a second sampled from `WARDEN_SEED`, the run lasting `WARDEN_TAIL_S` past the last
 WARDEN_RATE, WARDEN_TAIL_S, WARDEN_SEED = 0.5, 60, 0
 #: a scan rehearsal's (`--scan`) schedule, scan_zk's (`scan_zk.PARAMS`, `scan_zk.py schedule`), the only one
 #: `scan_zk.py prove --warden-run` takes but for its tick (`SCAN_BUCKET_MS`), as `warden_serve.py`'s flags
@@ -557,21 +569,36 @@ def weights_root_of(s: str) -> str:
     return s
 
 
-def circuit_files_of(s: str) -> dict[str, str]:
+def circuit_files_of(s: str) -> dict[str, Any]:
     """A period-open's circuit files (`--circuit-files`, written as `circuit_files`): a JSON object taking each K's
     template (``k<K>``, and ``live`` the live Program's) to the SHA-512 of the circuit file the auditor's lowering built
-    for it, in lowercase hex, as PoUW's credit reads it (`committed_files`); or Refused."""
+    for it, in lowercase hex, as PoUW's credit reads it (`committed_files`); a K in credit's lanes form takes ``lane<K>``
+    and ``combine<K>`` in place of ``k<K>``, and `LEAF_PROGRAMS` takes exactly those files to their leaf Programs'
+    descriptor digests (credit's `lanes_files`); or Refused."""
     def pairs(items: list) -> dict | None:
         return dict(items) if len({k for k, _ in items}) == len(items) else None
+
+    def digests(d: Any, key: re.Pattern) -> bool:
+        return isinstance(d, dict) and all(key.fullmatch(k) and type(v) is str and ROOT.fullmatch(v) for k, v in d.items())
 
     try:
         files = json.loads(s, object_pairs_hook=pairs)
     except (ValueError, RecursionError):
         files = None
-    if not (isinstance(files, dict) and 0 < len(files) <= 64 and all(
-            TEMPLATE.fullmatch(k) and type(v) is str and ROOT.fullmatch(v) for k, v in files.items())):
+    if not isinstance(files, dict):
+        files = {}
+    progs = files.get(LEAF_PROGRAMS)
+    plain = {k: v for k, v in files.items() if k != LEAF_PROGRAMS}
+    leaf = {k for k in plain if LEAF_FILE.fullmatch(k)}
+    ks = {LEAF_FILE.fullmatch(k).group(2) for k in leaf}
+    lanes = (progs is None if not leaf else digests(progs, LEAF_FILE) and set(progs) == leaf) and leaf == {
+        f"{kind}{k}" for k in ks for kind in ("lane", "combine")} and not any(f"k{k}" in plain for k in ks)
+    if not (0 < len(plain) <= 64 and digests({k: v for k, v in plain.items() if k not in leaf}, TEMPLATE)
+            and digests({k: plain[k] for k in leaf}, LEAF_FILE) and lanes):
         raise Refused(f"--circuit-files {s[:200]!r}: each K's template to its circuit file's SHA-512, a JSON object "
-                      '{"k<K>" or "live": "<128 lowercase hex>", ...} of 1 to 64 distinct K')
+                      '{"k<K>" or "live": "<128 lowercase hex>", ...} of 1 to 64 distinct K; a K in the lanes form '
+                      'commits "lane<K>" and "combine<K>" in place of "k<K>", and "leaf_programs" then takes exactly '
+                      "those files to their leaf Programs' digests")
     return files
 
 
@@ -824,12 +851,13 @@ def coin_ports(host: Host, peer: str) -> range:
 
 def parse_reserve(argv: list[str], host: Host, *, admin: bool = False) -> dict:
     """A reserve's request; `--for LANE` (vy-admin's alone: a development window reserved for a lane without its own key)
-    names the window's prover."""
+    names the window's prover, and `--withhold` makes its session a withheld one (`withheld`)."""
     p = argparse.ArgumentParser(prog="vy-challenger-gate reserve", exit_on_error=False, add_help=False, allow_abbrev=False)
     for flag in ("--peer", "--scheme", "--families"):
         p.add_argument(flag, required=True)
     p.add_argument("--epoch", type=int, default=0)
     p.add_argument("--minutes", type=int, default=120)
+    p.add_argument("--withhold", action="store_true")
     if admin:
         p.add_argument("--for", dest="lane", default=None)
 
@@ -864,7 +892,7 @@ def parse_reserve(argv: list[str], host: Host, *, admin: bool = False) -> dict:
     if lane is not None and (not NAME.fullmatch(lane) or lane in HOST_ACCOUNTS):
         raise Refused(f"--for {lane!r}: a lane's name")
     return {"peer": a.peer, "scheme": a.scheme, "families": families, "epoch": a.epoch, "minutes": a.minutes,
-            **({"for": lane} if lane else {})}
+            **({"for": lane} if lane else {}), **({"withheld": True} if a.withhold else {})}
 
 
 def parse_open(argv: list[str]) -> tuple[str, str]:
@@ -951,7 +979,18 @@ def gate_reserve(argv: list[str], host: Host, *, by: str, admin: bool, now: date
     held = period_holding(lines, session)
     return {"session": session, "seq": entry["seq"], "peer": req["peer"], "by": by,
             **({"for": req["for"]} if "for" in req else {}), "expires_utc": entry["body"]["expires_utc"],
-            "period": held and held[0]}
+            "period": held and held[0], **({"withheld": True} if entry["body"].get("withheld") is True else {})}
+
+
+def withheld(s: dict) -> bool:
+    """Whether session `s` (its ledger entries by kind, None where absent) is a withheld one: its reserve and open say
+    `withheld: true`, and serve.py serves it `--withhold`."""
+    return any(((s.get(k) or {}).get("body") or {}).get("withheld") is True for k in ("reserve", "open"))
+
+
+def root_held(s: dict) -> bool:
+    """Whether the gate holds back session `s`'s coin commitment root: a withheld session's, until its `end` entry."""
+    return withheld(s) and s.get("end") is None
 
 
 def gate_open(argv: list[str], host: Host, *, by: str, now: datetime, admit: Callable[[str], None],
@@ -961,7 +1000,9 @@ def gate_open(argv: list[str], host: Host, *, by: str, now: datetime, admit: Cal
     binding the session and the root, and `start` its unit (serve.py with --root, so the salt opens only after it): the
     session's port on the peer, its secret, which only this answer carries, and its coin commitment's root once `ready`
     has it (serve.py signs its record before it listens), so the serving side checks the hello's commitment against it
-    before its first coin."""
+    before its first coin. A withheld session's answer comes once `ready` has the root too, but carries `withheld: true`,
+    no root (`commitment` null) and whether serve.py signed its record (`signed`): its client checks the commitment its
+    challenger releases at the close instead."""
     session, root = parse_open(argv)
     d = host.sessions / session
     with locked(host.root / "gate.lock"):
@@ -983,14 +1024,18 @@ def gate_open(argv: list[str], host: Host, *, by: str, now: datetime, admit: Cal
                 (d / f).unlink(missing_ok=True)
             raise
         start(session)
-    entry = sessions_of(read_ledger(host.ledger))[session]["open"]
+    s = sessions_of(read_ledger(host.ledger))[session]
+    entry, commitment = s["open"], ready(session)
     b = entry["body"]
     return {"session": session, "port": b["port"], "peer": b["peer"], "host": b["host"], "seq": entry["seq"],
             "reserve": b["reserve"], "root": root, "by": b["by"], **({"for": b["for"]} if "for" in b else {}),
-            "opened_by": by, "secret": secret.hex(), "commitment": ready(session)}
+            "opened_by": by, "secret": secret.hex(), "commitment": None if root_held(s) else commitment,
+            **({"withheld": True, "signed": commitment is not None} if withheld(s) else {})}
 
 
 def gate_status(session: str, host: Host, active: Callable[[str], bool], now: datetime) -> dict:
+    """The session's ledger entries, whether its unit runs, whether its reserve expired unopened, and its coin
+    commitment's root (null until serve.py has signed its record, and a withheld session's until its `end`)."""
     if not SESSION.fullmatch(session):
         raise Refused(f"no session {session!r}")
     s = sessions_of(read_ledger(host.ledger)).get(session)
@@ -999,12 +1044,16 @@ def gate_status(session: str, host: Host, active: Callable[[str], bool], now: da
     expired = "open" not in s and "reserve" in s and utc(now) > s["reserve"]["body"]["expires_utc"]
     return {"session": session, "reserve": s.get("reserve"), "open": s.get("open"), "end": s.get("end"),
             "active": "open" in s and "end" not in s and active(session), "expired": expired,
-            "commitment": commitment_of(host.sessions / session / "out")}
+            "commitment": None if root_held(s) else commitment_of(host.sessions / session / "out")}
 
 
 def gate_fetch(session: str, host: Host) -> bytes:
-    """The session's directory (its request and out/, never its secret) as a gzipped tar."""
-    gate_status(session, host, lambda _: False, datetime.now(timezone.utc))
+    """The session's directory (its request and out/, never its secret) as a gzipped tar; a withheld session's only once
+    its `end` is in the ledger, since `out/record.json` signs its coin commitment's root and `releases.jsonl` names it."""
+    s = gate_status(session, host, lambda _: False, datetime.now(timezone.utc))
+    if root_held(s):
+        raise Refused(f"session {session} is withheld, and its end is not in the ledger: its directory, whose record.json "
+                      "signs its coin commitment's root, is fetched once its end is (status says when)")
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         tar.add(host.sessions / session, arcname=session,
@@ -1482,6 +1531,7 @@ def certifier_fetch(run: str, host: Host, *, witness: bool = False) -> bytes:
 
 
 USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE: vy-admin's] "
+         "[--withhold] "
          "| open --session S --root R "
          "| period-open --name P --cap N --circuit SHA512 [--draw-k K] [--rows T] [--model M | --weights-root W] [--circuit-files JSON] "
          "[--length JSON] [--lane LANE: vy-admin's] "
@@ -1705,7 +1755,7 @@ def reserve(host: Host, session: str, *, signer, pinned: str, now: datetime) -> 
         return {"by": req["by"], **({"for": req["for"]} if "for" in req else {}), "peer": req["peer"],
                 "scheme": req["scheme"], "epoch": req["epoch"], "families": req["families"], "minutes": req["minutes"],
                 "pinned": pinned, "key_sha512": key_sha512, "host": f"{host.name}.{session}", "started_utc": utc(now),
-                "expires_utc": later(utc(now), req["minutes"])}
+                "expires_utc": later(utc(now), req["minutes"]), **({"withheld": True} if req.get("withheld") is True else {})}
     return append(host, "reserve", session, body_of, I, sign)
 
 
@@ -1726,7 +1776,8 @@ def admit(host: Host, session: str, *, signer, pinned: str, now: datetime, activ
         return {"window": {"root": req["root"]}, "reserve": r["seq"],
                 **{k: r["body"][k] for k in RESERVED if k in r["body"]}, "opened_by": req["by"], "pinned": pinned,
                 "pins": seal, "key_sha512": key_sha512, "host": r["body"]["host"],
-                "port": free_port(lines, active, coin_ports(host, r["body"]["peer"])), "secret_sha512": req["secret_sha512"], "started_utc": utc(now)}
+                "port": free_port(lines, active, coin_ports(host, r["body"]["peer"])), "secret_sha512": req["secret_sha512"], "started_utc": utc(now),
+                **({"withheld": True} if r["body"].get("withheld") is True else {})}
     return append(host, "open", session, body_of, I, sign)
 
 
@@ -1734,7 +1785,7 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
            tree: Path = TREE) -> dict:
     """`period-open NAME LANE BY CAP CIRCUIT [draw_k=K] [rows=T] [weights_root=W] [circuit_files=JSON]` or `period-close NAME LANE|- BY` (LANE - for
     vy-admin's close of any lane's period): the signed entry, or Refused. A period's name is used once and a lane has one
-    period open at a time; its open commits the most windows it may hold (`cap`), its circuit and, when given, its draw
+    period open at a time; its open commits the most windows it may hold (`cap`), its circuit and, when given, its sample
     K (`draw_k`) and table rows (`rows`), its model (`models.opened`: the registry's weights' root and model for the circuit, or for a circuit
     the registry has no entry of the model alone, from core's pin in `tree`), its fixed length (`length`) and each K's
     circuit file's SHA-512
@@ -1793,13 +1844,15 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
 
 def serve_argv(host: Host, session: str, open_body: dict, tree: Path = TREE) -> list[str]:
     """serve.py for the session: it listens on this host's 127.0.0.1 at the open's port, which its peer's certifier coin
-    link carries to the peer (no `--peer`: serve.py opens no tunnel of its own)."""
+    link carries to the peer (no `--peer`: serve.py opens no tunnel of its own), and serves it `--withhold` when its open
+    says `withheld: true`."""
     return [sys.executable, "-I", str(tree / "benchmarks" / "live_challenger" / "serve.py"),
             "--out", str(host.sessions / session / "out"), "--port", str(open_body["port"]), "--scheme", open_body["scheme"],
             "--families", json.dumps(open_body["families"]), "--epoch", str(open_body["epoch"]),
             "--key", str(host.key), "--host", open_body["host"],
             "--root", open_body["window"]["root"], "--secret-file", str(host.sessions / session / SECRET),
-            "--session", session, "--sign-lock", str(host.root / "sign.lock")]
+            "--session", session, "--sign-lock", str(host.root / "sign.lock"),
+            *(["--withhold"] if open_body.get("withheld") is True else [])]
 
 
 def coin_link_argv(host: Host, session: str, open_body: dict, tree: Path = TREE) -> list[str]:

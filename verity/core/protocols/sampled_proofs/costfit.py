@@ -31,7 +31,7 @@ TARGETS = ("prove", "verify", "stage")
 
 @dataclass(frozen=True)
 class Observation:
-    """One measurement from `source` (a run or `art:` id): a session drawing `drawn` proof blocks from a statement of `staged`
+    """One measurement from `source` (a run or `art:` id): a session sampling `drawn` proof blocks from a statement of `staged`
     proof blocks of `template`, `ands` ANDs a proof block, with what it measured: `prove` (GPU-s, the session), `verify` and `stage`
     (CPU-s, the statement)."""
 

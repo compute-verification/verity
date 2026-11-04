@@ -18,7 +18,7 @@ from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.layout import FunctionCall
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll
-from verity.ml.circuits.types import Array, Record
+from verity.ml.circuits.types import Array, RecordType
 from verity.ml.definitions.registry import b1, prims as P
 from verity.ml.definitions.registry.b1 import B1_CONFIG as C
 

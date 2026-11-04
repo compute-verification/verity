@@ -98,19 +98,19 @@ theorem residuals_eq_run {rounds : Array (Array F128)} {extras : Array Claim} {v
     (hrows : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
     (hw : w.size = S.nw) (hc : comb.size = 64)
     (hacc : ∀ r < 2, valOf sh w comb cons (.acc1 r) + valOf sh w comb cons (.acc0 r) = kapSum kappa r cons) :
-    ∃ rs k, run sh (decoded sh w comb cons) extras 0 (Coins.ofRounds rounds) =
+    ∃ rs k, run sh (decoded sh w comb cons) extras 0 (CoinSource.ofRounds rounds) =
         .ok ((rs, info.map (Lin.eval (valOf sh w comb cons))), k) ∧ residuals S w v = .ok rs := by
   unfold verifierRows at hrows
-  cases hr : run sh (symbolic sh) extras 0 (Coins.ofRounds rounds) with
+  cases hr : run sh (symbolic sh) extras 0 (CoinSource.ofRounds rounds) with
   | error e =>
-    have hl : residualLins sh (Coins.ofRounds rounds) extras = .error e := by
-      show Prod.fst <$> run sh (symbolic sh) extras 0 (Coins.ofRounds rounds) = _
+    have hl : residualLins sh (CoinSource.ofRounds rounds) extras = .error e := by
+      show Prod.fst <$> run sh (symbolic sh) extras 0 (CoinSource.ofRounds rounds) = _
       rw [hr]; rfl
     rw [hl] at hrows; cases hrows
   | ok q =>
     obtain ⟨⟨lins, info'⟩, k⟩ := q
-    have hl : residualLins sh (Coins.ofRounds rounds) extras = .ok (lins, info') := by
-      show Prod.fst <$> run sh (symbolic sh) extras 0 (Coins.ofRounds rounds) = _
+    have hl : residualLins sh (CoinSource.ofRounds rounds) extras = .ok (lins, info') := by
+      show Prod.fst <$> run sh (symbolic sh) extras 0 (CoinSource.ofRounds rounds) = _
       rw [hr]; rfl
     rw [hl] at hrows
     simp only [bind, Except.bind] at hrows

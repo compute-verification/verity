@@ -1,4 +1,4 @@
-"""The requirement's two proof blocks (I4): the plan unit, which holds a pass's plan to hold every block the declared
+"""The requirement's two proof blocks (I4): the plan unit, which holds a pass's plan to hold every block the registered
 circuit reads at the pass's step (`Accounting.Requirement`'s `PlanMatches`), and the memory-map unit, which holds the
 blocks a step writes to the circuit's values and every free, of a written block or a registered one, to its values' last
 structural reader (`StoreMatches`' L1, L2 and L4), and each re-key to the lifetime cap. The plan unit is PlanMatch, or
@@ -28,7 +28,7 @@ wrote it (word N + 2 b) and the step that freed it (word N + 2 b + 1), `WORD - 1
 takes effect after f's reads, as `Store.resident` and memory-map/v1 read it. The pass row ``pi`` holds, for each of the
 session's T windows, the step of its last pass (the previous window's for a window without one, 0 before any).
 
-**What is public** is the declared circuit's requirement (the census's schedule: each value's birth, its last structural
+**What is public** is the registered circuit's requirement (the census's schedule: each value's birth, its last structural
 reader, which values each step reads; `requirement.Requirement`), the registered store's layout (which registered block
 holds which registered value), each step's count of written blocks and so its first fresh index, each value's epochs
 (the step each re-key moves it at), the session's windows T and lifetime cap L (`Params`), and each pass's plan length.

@@ -58,7 +58,7 @@ PROPERTIES: dict[str, Property] = {p.id: p for p in (
     Property("ecr", "Expected-time collision resistance", "ECR"),
     Property("xof", "Extendable-output-function security", "XOF"),
     Property("sis", "Ring-SIS binding", "SIS"),
-    # A3 in Security/Proofs/Flock/Soundness/ASSUMPTIONS.md, for the unit draw's bytes
+    # A3 in Security/Proofs/Flock/Soundness/ASSUMPTIONS.md, for the unit sample's bytes
     Property("uniform", "Independent uniform output", "Uniform"),
     # A4 there, for verity.ml.randomness's keyed streams (prf/sha-512): SHA-512's compression function as a PRF keyed by
     # its chaining value (the cascade over prefix-free inputs, Bellare-Canetti-Krawczyk 1996) and as a dual PRF keyed by the
@@ -83,7 +83,7 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     Instance("io-getrandombytes", "IO.getRandomBytes"),
     # A5: the PoUW window's secret, secrets.token_bytes(32), fresh per window (#423)
     Instance("python-secrets", "Python's secrets"),
-    # A6: each round's coins from Flock's Rust coin server (/dev/urandom outside seed mode), drawn after the prover's message
+    # A6: each round's coins from Flock's Rust coin server (/dev/urandom outside seed mode), sampled after the prover's message
     Instance("flock-coin-server", "Flock's coin server"),
     # verity.ml.crypto.lms: LMS (RFC 8554) over SHA-512, its whole 64-byte output, the network certifier's and the
     # memory challenger's signatures; its EUF-CMA rests on SHA-512 itself: multi-target second-preimage resistance under RFC
@@ -119,10 +119,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "hm96-sha256/v1 and hm96-sha512/v1 (their hiding bound holds except for a 2^-64 fraction of keys)", "CRS"),
 
     Entry("random-oracle", "assumption", "A hash behaves as a random oracle", "Random oracle", "standard"),
-    # the bandwidth audit v0's device (Bandwidth.Guarantees.AuditRO, Security/Definitions/Accounting/Guarantees/Bandwidth.lean): the
-    # guarantee quantifies over devices bounded by S_chip, cap_side * T and T / R_regen, and these say a deployed one is such;
-    # a co-audited set is one such device over its members' stores (Bandwidth.Guarantees.AuditSet), and side sources that may
-    # carry a peer's tags are Bandwidth.Guarantees.AuditRelay's
+    # the device of PoUB's per-pass bound (Bandwidth.Device, Security/Definitions/Accounting/Bandwidth/Game.lean):
+    # the guarantee quantifies over devices bounded by S_chip, cap_side * T and T / R_regen, and these say a deployed one is
+    # such; a co-audited set would be one such device over its members' stores, which no guarantee states yet, and side
+    # sources that may carry a peer's tags are Bandwidth.Guarantees.AuditRelay's
     Entry("bandwidth-device", "model",
           "Bandwidth device model: the bound is stated for a co-audited set of whole PCIe-only GPUs (no MIG slices, no NVLink; "
           "NVLink domains are to be certified as sets later) running simultaneous windows over pairwise-distinct stores, with "
@@ -191,7 +191,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "which sketches cost less to read than the blocks themselves, such as a table of precomputed sketches, is "
           "outside it", "Rate sketch store as blocks"),
     # what lets the stacking guarantees treat the blocks a pass reads as uniform when every appended block is keyed by
-    # a live coin drawn after its root commits its digest, the writers' choices for each append fixed before its coin
+    # a live coin flipped after its root commits its digest, the writers' choices for each append fixed before its coin
     # and the pass's layout fixed apart from the encodings: `Accounting.Assumptions.KeyBinding`
     # (Security/Definitions/Accounting/Assumptions/Stacking.lean); the seed's key alone lets a writer choose a block's
     # encoding, and each coin keys a block apart (verity/core/protocols/remote_bandwidth/tests/test_key_binding.py)

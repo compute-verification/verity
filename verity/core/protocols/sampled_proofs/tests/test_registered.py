@@ -984,7 +984,7 @@ def test_r7_holds_a_pinned_value_to_its_pin():
 
 
 def test_r7_reuses_an_earlier_outputs_commitment():
-    """A value that is an output of an earlier run (`outputs`; never NCI's baseline θ) takes that run's port: its entry
+    """A value that is an output of an earlier run (`outputs`; never the inference-only check's θ) takes that run's port: its entry
     has the port's domain and root, and the port's leaf count is the value's rows, so its rows stay under the earlier
     run's hiding leaves. The output overrides what the log or nothing would hold it to; a record or port the log doesn't
     hold, or a port of other leaves, is `R7-output`, and a malformed `outputs` is refused before the record is read."""

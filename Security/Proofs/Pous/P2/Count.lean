@@ -19,9 +19,9 @@ import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
 
 /-!
-# Lemma A over permutations of any finite type (generalizing `a2/A2.lean`)
+# Lemma A over permutations of any finite type
 
-`a2/A2.lean`'s lazy-sampling count with `Bits ℓ` replaced by any finite type `X` with `N = |X|` points, and the
+A2's lazy-sampling count with `Bits ℓ` replaced by any finite type `X` with `N = |X|` points, and the
 responder given directly as query trees over `Fin B × X`. `count_main` is the counting form of Lemma A with `N^g` in
 place of `2^(ℓ·g)`.
 -/

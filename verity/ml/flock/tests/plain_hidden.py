@@ -1,11 +1,11 @@
 """A plain hidden-output session's statement (PROTOCOL.md §16.15): the fixture of `test_lean_plain_hidden.py`, staged by
-`pod/91-plain-hidden.sh`, which proves it in one loopback session without `--zk` under a subset draw.
+`pod/91-plain-hidden.sh`, which proves it in one loopback session without `--zk` under a subset sample.
 
 The program (`program`) is `N` RoPE d64 template instances, instance `i` reading row `i` of `x` and of `cs`, under
 `Q_template_instance` v0. `stage` writes, under `out`, the hidden-output circuit bound to that program and its partition
 (`circuit.txt`, `program.json`, `partition.json`), the MUFU tables if the lowering cuts any (`tables/`), and the prover's
 `inst-N.bin` and the verifier's `pub-N.bin`, one row per instance and port with no shared rows and no registered value: the
-form the plain verifier covers at hidden outputs (`FailClosed.SoundExecH` at its subset draw design, one table).
+form the plain verifier covers at hidden outputs (`FailClosed.SoundExecH` at its subset sample design, one table).
 
     python verity/ml/flock/tests/plain_hidden.py --out DIR [--seed S]
 """

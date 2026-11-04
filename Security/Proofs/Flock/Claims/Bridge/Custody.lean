@@ -289,7 +289,7 @@ theorem liveOf_ok {spec : SessionSpec} {record : String} {lv : Live} (h : liveOf
 /-- **What `Record.decode` reads**, of what `liveOf` reads: the record's JSON, its link, its streams, each table's
 `root_B`, the link points, and each stream's name and rounds, with a retained round's recorded digest that of its bytes
 (S12). -/
-theorem decode_ok {spec : SessionSpec} {text : String} {sess : Session} (h : Record.decode spec text = .ok sess) :
+theorem decode_ok {spec : SessionSpec} {text : String} {sess : RunRecord} (h : Record.decode spec text = .ok sess) :
     ∃ j l recs, Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
       List.Forall₂ (RootField l) spec.tables.toList sess.rootB.toList ∧
       (∃ ps, Record.arr l "points" = .ok ps ∧ List.Forall₂ PointField ps.toList sess.points.toList) ∧
@@ -351,7 +351,7 @@ theorem decode_ok {spec : SessionSpec} {text : String} {sess : Session} (h : Rec
 /-- **The decoded session's live part is `liveOf`'s**: the same `root_B` and link points, and at each rep stream the
 stream `Record.decode` finds by its name, whose rounds are `liveOf`'s with each retained round's recorded digest that
 of its bytes. -/
-theorem decode_live {spec : SessionSpec} {text : String} {sess : Session} {lv : Live}
+theorem decode_live {spec : SessionSpec} {text : String} {sess : RunRecord} {lv : Live}
     (hd : Record.decode spec text = .ok sess) (hl : liveOf spec text = .ok lv) :
     sess.rootB = lv.rootB ∧ sess.points = lv.points ∧ lv.streams.size = spec.repStreams.size ∧
       ∀ q (hq : q < spec.repStreams.size), ∃ y, sess.streams.find? (·.name == spec.repStreams[q].2.2) = some y ∧

@@ -5,7 +5,7 @@ carries at its parameters (`Certificate`).  It implements `encode_segment` and `
 honest answer is more than the stored label.  Everything else is written once, here:
 
 1. **Commit.** The server commits to `W` before any salt exists (`commit`).
-2. **Salt.** The verifier draws the salt after the commitment (`draw_salt`).
+2. **Salt.** The verifier samples the salt after the commitment (`draw_salt`).
 3. **Encode.** The server computes `C = Enc(W, salt)` (`encode`).  The verifier builds `vk` (`verifier_key`) either by
    encoding `W` itself (`PRIVATE`) or by decoding the server's `C*` and checking `Dec(C*)` against the commitment
    (`PUBLIC`).  The two give the same guarantee (Lean `pubAuditSecure_exact_iff`).
@@ -14,7 +14,7 @@ honest answer is more than the stored label.  Everything else is written once, h
    The memory challenger refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit
    gives a `StorageProfile`: what the certificate says about the server, and what that rests on.
 
-Every coin is drawn here through `verity.ml.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme draws
+Every coin is flipped here through `verity.ml.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme draws
 none.  The claims a certificate rests on are ids in `verity.core.claims`' format (`claim`).
 """
 
@@ -237,7 +237,7 @@ def commit(scheme: Scheme, w: bytes | Iterable[bytes]) -> bytes:
 
 
 def draw_salt(source: bytes, commitment: bytes) -> bytes:
-    """The verifier's salt, drawn after the commitment from its own secret or a later beacon round (`setup.draw_salt`)."""
+    """The verifier's salt, sampled after the commitment from its own secret or a later beacon round (`setup.draw_salt`)."""
     return setup.draw_salt(source, commitment)
 
 

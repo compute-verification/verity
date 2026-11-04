@@ -279,7 +279,7 @@ def test_a_period_open_commits_its_cap_and_circuit_and_the_gate_reserves_no_wind
 
 
 def test_a_period_open_commits_its_draw_k_when_given_and_none_otherwise(host, signer):
-    """PoUW's credit reads the period's draw K from its open (`draw_k`), signed before window 0's first coin."""
+    """PoUW's credit reads the period's sample K from its open (`draw_k`), signed before window 0's first coin."""
     opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27713", "hash"))
     assert opened["body"]["draw_k"] == 27713
     ok(ssh(host, signer, "period-close --name p1", "hash"))
@@ -294,7 +294,7 @@ def test_a_period_open_commits_its_draw_k_when_given_and_none_otherwise(host, si
 
 def test_a_period_open_commits_its_table_rows_when_given_and_none_otherwise(host, signer):
     """PoUW's credit bounds every step's served rows m_s by the table rows T its period's open commits (`rows`, credit's
-    `committed_rows`), signed before window 0's first coin beside its draw K or alone."""
+    `committed_rows`), signed before window 0's first coin beside its sample K or alone."""
     opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27 --rows 12", "hash"))
     assert (opened["body"]["draw_k"], opened["body"]["rows"]) == (27, 12)
     ok(ssh(host, signer, "period-close --name p1", "hash"))
@@ -310,7 +310,7 @@ def test_a_period_open_commits_its_table_rows_when_given_and_none_otherwise(host
 def test_a_period_open_commits_its_weights_root_when_given_and_none_otherwise(host, signer):
     """PoUW's credit holds every window of a period to the served model's registered weights' root its open commits
     (`weights_root`, `credit.weights_root` of the B rows the auditor registered before the period's first salt, with
-    its model), signed before window 0's first coin, beside its draw K or alone."""
+    its model), signed before window 0's first coin, beside its sample K or alone."""
     w = "5e" * 64
     host.models.write_text(json.dumps({"model": "M8", "circuit": CIRCUIT, "weights_root": w,
                                        "checkpoint_sha512": "c4" * 64}) + "\n")
@@ -332,7 +332,7 @@ def test_a_period_open_commits_its_weights_root_when_given_and_none_otherwise(ho
 def test_a_period_open_commits_each_ks_circuit_file_when_given_and_none_otherwise(host, signer):
     """PoUW's credit verifies each window's statements on the circuit file its period's open committed for the call's K
     (`circuit_files`, ``{k<K>: SHA-512}``, credit's `committed_files`), signed before window 0's first coin beside its
-    draw K, whatever order or spacing the JSON came in."""
+    sample K, whatever order or spacing the JSON came in."""
     files = {"k4096": "1a" * 64, "k64": "2b" * 64}
     given = shlex.quote(json.dumps({"k64": "2b" * 64, "k4096": "1a" * 64}, indent=1))
     opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27 "
@@ -347,10 +347,31 @@ def test_a_period_open_commits_each_ks_circuit_file_when_given_and_none_otherwis
     assert set(checked(host)) == {"p1", "k1"}
 
 
+def test_a_period_open_commits_a_lanes_form_ks_lane_and_combine_files_and_their_leaf_programs(host, signer):
+    """A K in credit's lanes form commits ``lane<K>`` and ``combine<K>`` in place of ``k<K>``, and ``leaf_programs``
+    their leaf Programs' descriptor digests (credit's `lanes_files`), beside other Ks' tile files and the live file."""
+    files = {"combine2048": "3c" * 64, "k64": "2b" * 64, "lane2048": "4d" * 64, "live": "1a" * 64,
+             "leaf_programs": {"combine2048": "5e" * 64, "lane2048": "6f" * 64}}
+    opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 1 "
+                                  f"--circuit-files {shlex.quote(json.dumps(files))}", "hash"))
+    assert opened["body"]["circuit_files"] == files
+    assert [e["body"]["circuit_files"] for e in map(json.loads, A.read_ledger(host.ledger))] == [files]
+
+
+H, G = "2b" * 64, "1a" * 64
+
+
 @pytest.mark.parametrize("files", [
     "{}", "[]", "nope", '{"k64": "2b"}', '{"k0": "' + "2b" * 64 + '"}', '{"k064": "' + "2b" * 64 + '"}',
     '{"64": "' + "2b" * 64 + '"}', '{"k64": "' + "2B" * 64 + '"}', '{"k64": 1}', '{"lives": "' + "2b" * 64 + '"}',
     '{"k64": "' + "2b" * 64 + '", "k64": "' + "1a" * 64 + '"}',
+    json.dumps({"lane64": H, "leaf_programs": {"lane64": G}}),
+    json.dumps({"lane64": H, "combine64": H}),
+    json.dumps({"lane64": H, "combine64": H, "k64": H, "leaf_programs": {"lane64": G, "combine64": G}}),
+    json.dumps({"lane64": H, "combine64": H, "leaf_programs": {"lane64": G}}),
+    json.dumps({"lane64": H, "combine64": H, "leaf_programs": {"lane64": G, "combine64": "1A" * 64}}),
+    json.dumps({"k64": H, "leaf_programs": {}}),
+    json.dumps({"lane064": H, "combine064": H, "leaf_programs": {"lane064": G, "combine064": G}}),
 ])
 def test_a_period_open_refuses_circuit_files_it_cant_check(host, signer, files):
     rc, out = ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --circuit-files {shlex.quote(files)}",

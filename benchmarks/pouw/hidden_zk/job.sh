@@ -6,7 +6,7 @@
 #   1. builds flock-circuit twice from Flock b684b12 and verity/ml/flock's patches (the proving build: sha512, glue; the
 #      selftest build: + seed-injection), the Lean flock-verify, and a venv with numpy and blake3
 #   2. per config ROLE:K in HZ_CONFIGS (ROLE row_a, row_b or tile, stage.py's): stage N instances, one loopback --zk session
-#      drawing all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded
+#      sampling all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded
 #      controls, drawn the same way, and the Lean
 #      verifier on all of them:
 #        honest-own     the honest session, the verifier's own anchors file                         ACCEPT
@@ -15,7 +15,7 @@
 #        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection: honest ACCEPT;
 #                       output_row_committed_false (a tampered output row), output_claim_false, unit_internal_bit_flipped
 #                       and public_input_claim_false (a false anchor claim, the verifier's file agreeing with it) REJECT
-#      until T4 the verifier refuses --public-inputs (#1179), so summarize.py expects each row-unit check REFUSED; once every
+#      until T4 the verifier refuses --public-inputs, so summarize.py expects each row-unit check REFUSED; once every
 #      check has passed it refuses a plain tile's output row of two output ports, so a plain tile's honest checks are
 #      REFUSED, and so are a hiding tile's, whose rows (row-seg/v1, row/v2) are covered, for the tile's want of a Program
 #      (no --program, NO_PROGRAM)
