@@ -6,25 +6,19 @@ public import Proofs.Flock.Claims.Sampling.KS
 /-!
 # The sampled compiler's extraction: assembling and binding
 
-`Compiled.E` at an accepted run assembles the openings its sampled proof blocks' extractions keep. This file proves
-`KSOf`'s deterministic half and its bound at one outer run: an extraction that fails gives the failure event the
-probabilistic half bounds, or a `Bext` collision (`split`, `Claims.Sampling`'s `split` with Flock's `E^rep` replaced by
-`Arg`'s extractor at each sampled proof block's session).
+`Compiled.E` at an accepted run assembles the openings its sampled proof blocks' extractions keep. This file proves the
+split `Compiled.KS_of_sessionKS` takes (`SamplingGeneric/Fails.lean`): an accepted run whose extraction fails is in the
+failure event `Fails` at the found event `Found`, or its extraction's own calls collide (`split`, `Claims.Sampling`'s
+`split` with Flock's `E^rep` replaced by `Arg`'s extractor at each sampled proof block's session).
 
-* `Good`: **a good proof block** at a run: the run samples it, and its session is extracted (`UnitOk`).
 * `innerBody`, `outerBody`, `outerList`, `found`: **the extractor's parts**, and what it keeps (`E_eval`); the kept
   openings pass their checks, with the checks' calls among the extractor's own (`passes_found`, `ownLog_E`), and the
   revealed openings that pass, of a sampled block's extracted witness, are kept (`unitExt_mem`, `mem_found`).
-* `Fails`, `BadOuter`: **the failure event**: the outer wait comes up short or, for some faulty set refused at `δ`,
-  every kept outer run comes up short on its inner wait or keeps only inner runs at which no block of the set is good.
-* `split`: **the deterministic half**. At an accepted run whose extraction fails, `Fails` holds or the extractor's own
-  calls collide. Two kept openings under one roots at one position that disagree are a collision of the calls that
-  checked them (`CommitmentScheme.Binds`), so without one the kept openings agree and assemble a witness; its faulty
-  set is refused at `δ`, and a good block of it would be correct at the kept openings (`Sessions.opens`, with the
-  interior roots fixed by the first stage, `Sessions.interior`).
-* `inner_bad_le`: **one outer run's inner wait**: it comes up short or keeps only runs bad for `B`, at most
-  `2k/K + e^{−k/8} + c·(esc + κs)`, at a weight `esc` of the sample missing `B` and `κs` of the session at the block
-  any selection picks not extracted (`SessionKS`'s form).
+* `split`: **the deterministic half**. At an accepted run whose extraction fails, `Fails` holds at `Found` or the
+  extractor's own calls collide. Two kept openings under one roots at one position that disagree are a collision of the
+  calls that checked them (`CommitmentScheme.Binds`), so without one the kept openings agree and assemble a witness;
+  its faulty set is refused at `δ`, and a block of it good at a kept run would be correct at the kept openings
+  (`Sessions.opens`, with the interior roots fixed by the first stage, `Sessions.interior`).
 -/
 
 @[expose] public section
@@ -33,28 +27,13 @@ namespace Claims.SamplingGeneric
 
 open Claims Finset
 open Claims.Sampling (AuditStatement Partition Opening InScope waitAccC forkOn flatMapRP checkRevealed assemble
-  ownLog ownLog_bind accList AllBad OwnColl flatMapRP_eval waitAccC_eval_nil accList_map mem_zip_finRange
-  getElem?_map_pair mem_checkRevealed agree_of_passes val_assemble ιOf ιOf_eq faulty_wrong acc_of_accList
-  accList_length_eq wait_bad_le card_rpow_le_slack Pr_or_le slack)
+  ownLog ownLog_bind accList OwnColl flatMapRP_eval waitAccC_eval_nil accList_map mem_zip_finRange getElem?_map_pair
+  mem_checkRevealed agree_of_passes val_assemble ιOf ιOf_eq faulty_wrong acc_of_accList accList_length_eq)
 open Claims.Recursion (serve viewing)
 
 namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-
-/-! ## A good proof block -/
-
-/-- **Block `v` is good at the run `r'`** at the coins `u` of every block: `r'` samples `v`, and `v`'s session is
-extracted. -/
-def Good (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
-    (r' : Fin (L.V.k x) → Coin) (v : ℕ) (u : (p : Fin (L.nPU x)) → A.EC (L.sh x p)) : Prop :=
-  v ∈ L.checked x r' ∧ ∃ hv : v < L.nPU x, L.UnitOk H x run' v r' (u ⟨v, hv⟩)
-
-theorem _root_.Claims.Rel.ext_some {W : Type} {R : Rel W} {x : Msg} {o : Option W} (h : R.ext x o) :
-    ∃ w, o = some w ∧ R x w := by
-  cases o with
-  | none => exact False.elim h
-  | some w => exact ⟨w, rfl, h⟩
 
 /-! ## The extractor's parts -/
 
@@ -85,14 +64,13 @@ noncomputable def found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : A
     (Z : List (Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen))) : List (List Msg × Opening Bool) :=
   ((flatMapRP (L.outerBody x s c) Z).eval H run').1
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+omit [Fintype Coin] [Nonempty Coin] in
 theorem found_eq (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Trace) (c : L.ECoins x)
     (Z : List (Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen))) :
     L.found H x s run' c Z = ((flatMapRP (L.outerBody x s c) Z).eval H run').1 :=
   rfl
 
-omit [Inhabited Coin] in
 /-- The extractor's program, with its outer body named. -/
 theorem E_ext_eq (L : Compiled Coin A) (x : Msg) (r₀ : Fin (L.V.k x) → Coin) (c : L.ECoins x) :
     L.E.ext x r₀ c = .rerun r₀ fun v₀ =>
@@ -130,7 +108,7 @@ theorem ownLog_E (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover
   rw [ite_eq_left hacc', ownLog_bind, ownLog_bind]
   exact List.mem_append_right _ (List.mem_append_left _ ht)
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+omit [Fintype Coin] [Nonempty Coin] in
 theorem passes_unitExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
     (s : AuditStatement) (u : ℕ) (r : Fin (L.V.k x) → Coin) (v : Seen) (c : A.EC (L.sh x u)) :
     Sampling.Passes H run' L.commit (L.unitExt x s u r v c) := by
@@ -144,7 +122,7 @@ theorem passes_unitExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' :
       | some w => exact Sampling.Passes.checkRevealed H run' L.commit _
     · exact Sampling.Passes.ret_nil H run' L.commit
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+omit [Fintype Coin] [Nonempty Coin] in
 theorem passes_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
     (s : AuditStatement) (c : L.ECoins x) (Z : List (Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen))) :
     Sampling.Passes H run' L.commit (flatMapRP (L.outerBody x s c) Z) :=
@@ -154,7 +132,7 @@ theorem passes_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (
       · exact L.passes_unitExt H x run' s _ _ _ _
       · exact Sampling.Passes.ret_nil H run' L.commit
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+omit [Fintype Coin] [Nonempty Coin] in
 /-- A revealed opening that passes, of the witness a block's session's extraction returns, is among the block's
 extraction's. -/
 theorem unitExt_mem (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
@@ -178,7 +156,7 @@ theorem mem_outerList (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : 
   rw [waitAccC_eval_nil]
   exact mem_zip_finRange (getElem?_map_pair run' hj)
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+omit [Fintype Coin] [Nonempty Coin] in
 /-- **A block's extraction at a kept inner run, under a kept outer run, is kept**, when the inner run samples it. -/
 theorem mem_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Trace) (c : L.ECoins x)
@@ -210,52 +188,19 @@ theorem mem_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditSt
     rw [dite_eq_left hvlt]
     exact hq
 
-/-! ## The failure event -/
+/-! ## The split -/
 
-/-- The extractor's coins for one outer run: its inner wait's, and at each inner run each proof block's. -/
-abbrev E1 (L : Compiled Coin A) (x : Msg) :=
-  (Fin (L.cap x) → Fin (L.V.k x) → Coin) × (Fin (L.k x) → (p : Fin (L.nPU x)) → A.EC (L.sh x p))
-
-def toE1 (L : Compiled Coin A) (x : Msg) (c : L.ECoins x) (j : Fin (L.k x)) : L.E1 x :=
-  (c.2.1 j, fun l p => c.2.2 (j, l, p))
-
-/-- The extractor's coins as the outer wait's and one `E1` per outer run. -/
-def ecoinsEquiv (L : Compiled Coin A) (x : Msg) :
-    L.ECoins x ≃ (Fin (L.cap x) → Fin (L.V.k x) → Coin) × (Fin (L.k x) → L.E1 x) where
-  toFun c := (c.1, L.toE1 x c)
-  invFun p := (p.1, fun j => (p.2 j).1, fun t => (p.2 t.1).2 t.2.1 t.2.2)
-  left_inv _ := rfl
-  right_inv _ := rfl
-
-/-- **An outer run bad for `B`**, its second stage `g`: the inner wait comes up short, or no kept inner run has a good
-block of `B`. -/
-def BadOuter (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
-    (B : Finset ℕ) (g : (Fin (L.V.k x) → Coin) → Fin (L.V.k x) → Coin) (e : L.E1 x) : Prop :=
-  (accList (fun d => (run' (g d)).out = .acc) (L.k x) ((List.finRange (L.cap x)).map e.1)).length < L.k x ∨
-    AllBad (fun d => (run' (g d)).out = .acc) (L.k x)
-      (fun d u => ∀ v ∈ B, ¬ L.Good H x run' (g d) v u) ((List.finRange (L.cap x)).map e.1) e.2
-
-/-- **The extraction's failure event**: the statement is in scope, and the outer wait comes up short or, for some
-faulty set `B` refused at `δ`, every kept outer run is bad for `B`. -/
-def Fails (H : Msg → Msg) (L : Compiled Coin A) (δ : ℝ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
-    (c : L.ECoins x) : Prop :=
-  ∃ s Pt, L.parse x = some s ∧ L.partition s = some Pt ∧ InScope Pt s ∧
-    ((accList (fun r => (run' r).out = .acc) (L.k x) ((List.finRange (L.cap x)).map c.1)).length < L.k x ∨
-      ∃ B ∈ Sampling.S₁ s.design Pt δ, AllBad (fun r => (run' r).out = .acc) (L.k x)
-        (fun r e => L.BadOuter H x run' B (forkOn (L.stage2 x) r) e) ((List.finRange (L.cap x)).map c.1)
-        (L.toE1 x c))
-
-/-- **The split**: at an accepted run whose extraction fails, the failure event holds or the extractor's own calls
-collide. Otherwise the kept openings agree (`agree_of_passes`); take `B` the assembled witness's faulty set, refused
-at `δ`, and a kept outer run `r`. At the interior values the kept openings under `r`'s interior roots give, the proof
-block at each `v ∈ B` is wrong (`faulty_wrong`); a kept inner run at which `v` is good would make it correct
-(`Sessions.opens`, its revealed openings kept by `mem_found`, the interior roots `r`'s by `Sessions.interior`), so `r`
-is bad for `B`. -/
+/-- **The split**: at an accepted run whose extraction fails, the failure event holds at the found event `Found` or the
+extractor's own calls collide. Otherwise the kept openings agree (`agree_of_passes`); take `B` the assembled witness's
+faulty set, refused at `δ`, and a kept outer run `r`. At the interior values the kept openings under `r`'s interior
+roots give, the proof block at each `v ∈ B` is wrong (`faulty_wrong`); a kept inner run at which `v` is good (its
+session's extraction finds a witness in `A`'s relation) would make it correct (`Sessions.opens`, its revealed openings
+kept by `mem_found`, the interior roots `r`'s by `Sessions.interior`), so `r` is bad for `B`. -/
 theorem split {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H) (δ : ℝ)
     (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (r₀ : Fin (L.V.k x) → Coin) (c : L.ECoins x)
     (hacc : (run H P L.V x ω r₀).out = .acc)
     (hfail : ¬ (Sampling.R H L.commit L.parse L.partition δ).ext x (L.E.eval H P x ω r₀ c).1) :
-    L.Fails H δ x (run H P L.V x ω) c ∨ OwnColl H L.E P x ω r₀ c := by
+    L.Fails δ x (run H P L.V x ω) (L.Found H x (run H P L.V x ω)) c ∨ OwnColl H L.E P x ω r₀ c := by
   classical
   obtain ⟨s, Pt, hs, hPt, hin⟩ := hS.refuses x Ω P ω r₀ hacc
   by_cases hcoll : OwnColl H L.E P x ω r₀ c
@@ -288,8 +233,7 @@ theorem split {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H)
   · exact Or.inl hshort2
   refine Or.inr ⟨accList_length_eq hshort2, fun l d hl v hv hgood => ?_⟩
   obtain ⟨b, hb, hnc⟩ := faulty_wrong hv (ιOf fd (L.iroots x (run' r).seen v))
-  obtain ⟨hvc, hvlt, xS, vS, hsh, hsess, hR⟩ := hgood
-  obtain ⟨wS, hwS, hRw⟩ := Rel.ext_some hR
+  obtain ⟨hvc, hvlt, xS, vS, hsess, hsh, wS, hwS, hRw⟩ := hgood
   have hacc' : (run' (forkOn (L.stage2 x) r d)).out = .acc := by
     have h := acc_of_accList hl
     exact h
@@ -307,88 +251,6 @@ theorem split {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H)
   rw [hb, Option.some.injEq] at hb'
   subst hb'
   exact hnc hcorr
-
-/-! ## One outer run's inner wait -/
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem k_pos (L : Compiled Coin A) (x : Msg) : 0 < L.k x := by
-  unfold Compiled.k; positivity
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem cap_pos (L : Compiled Coin A) (x : Msg) : 0 < L.cap x := by
-  unfold Compiled.cap; exact Nat.mul_pos (by positivity) (L.k_pos x)
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem k_le_cap (L : Compiled Coin A) (x : Msg) : L.k x ≤ L.cap x := by
-  unfold Compiled.cap; exact Nat.le_mul_of_pos_left _ (by positivity)
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- The slack bound at the waits' `k`. -/
-theorem rpow_k_le_slack (L : Compiled Coin A) (x : Msg) {N m : ℕ} (hN : N ≤ 2 ^ m) (hm : m ≤ 2 * L.nPU x + 1) :
-    (N : ℝ) ^ (1 / (L.k x : ℝ)) ≤ slack := by
-  unfold Compiled.k
-  exact card_rpow_le_slack hN hm
-
-omit [Inhabited Coin] in
-/-- **One outer run's inner wait**: at first-stage coins `r` where the sample misses every block of `B` with
-probability at most `esc`, and the session at the sampled block any selection picks is not extracted with probability
-at most `κs`, the inner wait (times its acceptance) comes up short or keeps only runs bad for `B` with probability at
-most `2k/K + e^{−k/8} + c·(esc + κs)`. -/
-theorem inner_bad_le (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
-    {B : Finset ℕ} (hB : ∀ v ∈ B, v < L.nPU x) (r : Fin (L.V.k x) → Coin) {esc κs : ℝ} (hesc0 : 0 ≤ esc)
-    (hκs0 : 0 ≤ κs)
-    (hesc : Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ B) ≤ esc)
-    (hsess : ∀ sel : List ℕ → Option (Fin (L.nPU x)),
-      Pr (fun p : (Fin (L.V.k x) → Coin) × ((u : Fin (L.nPU x)) → A.EC (L.sh x u)) =>
-        (run' (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-          ∃ i, sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
-            i.val ∈ L.checked x (forkOn (L.stage2 x) r p.1) ∧
-            ¬ L.UnitOk H x run' i (forkOn (L.stage2 x) r p.1) (p.2 i)) ≤ κs) :
-    Pr (fun d : Fin (L.V.k x) → Coin => (run' (forkOn (L.stage2 x) r d)).out = .acc) *
-        Pr (fun e : L.E1 x => L.BadOuter H x run' B (forkOn (L.stage2 x) r) e) ≤
-      2 * (L.k x : ℝ) / L.cap x + Real.exp (-(L.k x : ℝ) / 8) + slack * (esc + κs) := by
-  have hy : ∀ _u ∈ ({()} : Finset Unit),
-      Pr (fun p : (Fin (L.V.k x) → Coin) × ((u : Fin (L.nPU x)) → A.EC (L.sh x u)) =>
-        (run' (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-          ∀ v ∈ B, ¬ L.Good H x run' (forkOn (L.stage2 x) r p.1) v p.2) ≤ esc + κs := by
-    intro _ _
-    classical
-    let sel : List ℕ → Option (Fin (L.nPU x)) := fun l =>
-      (List.finRange (L.nPU x)).find? fun q => decide (q.val ∈ B ∧ q.val ∈ l)
-    have hsel : ∀ (l : List ℕ) (q : Fin (L.nPU x)), q.val ∈ B → q.val ∈ l →
-        ∃ i, sel l = some i ∧ i.val ∈ B ∧ i.val ∈ l := by
-      intro l q hqB hql
-      obtain ⟨i, hi⟩ := Option.isSome_iff_exists.1
-        ((List.find?_isSome (p := fun q : Fin (L.nPU x) => decide (q.val ∈ B ∧ q.val ∈ l))).2
-          ⟨q, List.mem_finRange q, decide_eq_true ⟨hqB, hql⟩⟩)
-      have hpi := List.find?_some hi
-      exact ⟨i, hi, of_decide_eq_true hpi⟩
-    have hmiss := (Pr_fst (β := (u : Fin (L.nPU x)) → A.EC (L.sh x u)) (fun d : Fin (L.V.k x) → Coin =>
-      ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ B)).trans_le hesc
-    refine Pr_or_le (fun p hp => ?_) hmiss (hsess sel)
-    by_cases hm : ∀ u ∈ L.checked x (forkOn (L.stage2 x) r p.1), u ∉ B
-    · exact Or.inl hm
-    right
-    push Not at hm
-    obtain ⟨v, hvc, hvB⟩ := hm
-    obtain ⟨i, hi, hiB, hic⟩ := hsel _ ⟨v, hB v hvB⟩ hvB hvc
-    exact ⟨hp.1, i, hi, hic, fun hf => hp.2 i hiB ⟨hic, i.isLt, hf⟩⟩
-  have hw := wait_bad_le (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.k x) (L.cap x) (L.cap_pos x)
-    (L.k_pos x) ({()} : Finset Unit)
-    (fun _ d u => ∀ v ∈ B, ¬ L.Good H x run' (forkOn (L.stage2 x) r d) v u)
-    (add_nonneg hesc0 hκs0) hy
-  have hcard : (({()} : Finset Unit).card : ℝ) ^ (1 / (L.k x : ℝ)) ≤ slack :=
-    L.rpow_k_le_slack x (m := 0) (by simp) (by omega)
-  have hE : Pr (fun e : L.E1 x => L.BadOuter H x run' B (forkOn (L.stage2 x) r) e) =
-      Pr (fun e : L.E1 x =>
-        (accList (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.k x)
-          ((List.finRange (L.cap x)).map e.1)).length < L.k x ∨
-        ∃ _u ∈ ({()} : Finset Unit), AllBad (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.k x)
-          (fun d u => ∀ v ∈ B, ¬ L.Good H x run' (forkOn (L.stage2 x) r d) v u)
-          ((List.finRange (L.cap x)).map e.1) e.2) :=
-    Pr_congr fun e => by simp [BadOuter]
-  rw [hE]
-  exact hw.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hcard (add_nonneg hesc0 hκs0)))
 
 end Compiled
 

@@ -44,6 +44,10 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem k_le_cap (L : Compiled Coin A) (x : Msg) : L.k x ≤ L.cap x := by
+  unfold Compiled.cap; exact Nat.le_mul_of_pos_left _ (by positivity)
+
 /-- At an accepted run, the extractor's own calls are its outer body's at the kept outer runs. -/
 theorem length_ownLog_E (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r₀ : Fin (L.V.k x) → Coin) (c : L.E.C x) {s : AuditStatement} (hs : L.parse x = some s)
@@ -107,7 +111,6 @@ def L₀ (n oc : ℕ) : Compiled Unit A₀ where
   checked _ _ := List.replicate n 0
   sh _ _ := ()
   rounds _ _ := Finset.univ
-  emb _ _ _ i := i
   session x _ v := some (x, v)
   iroots _ _ _ := []
   reveal _ _ _ _ := [([], ⟨0, true, []⟩)]
@@ -194,9 +197,8 @@ theorem sessions₀ (H : Msg → Msg) {n : ℕ} (hn : 0 < n) (oc : ℕ) : (L₀ 
   refuses _ _ _ _ _ _ := ⟨s₀, P₀, rfl, rfl, inScope₀⟩
   interior _ _ _ _ _ _ _ := rfl
   fixed _ _ _ _ := ⟨Finset.Subset.refl _, fun _ => rfl⟩
-  runs x _ P ω _ _ _ := ⟨x, ⟨fun _ _ _ => P.next x [] ω⟩, rfl, fun _ _ h => h,
-    fun t => ⟨fun _ => ⟨t, rfl⟩, fun _ => Finset.mem_univ _⟩, fun _ _ => iff_of_true rfl rfl,
-    fun _ _ => ⟨rfl, fun q hq => by
+  runs x _ P ω _ _ _ := ⟨x, ⟨fun _ _ _ => P.next x [] ω⟩, rfl, (Finset.card_fin 1).symm,
+    fun _ _ => iff_of_true rfl rfl, fun _ _ => ⟨rfl, fun q hq => by
       have h : q ∈ ([] : List (Msg × Msg)) := hq
       simp at h⟩⟩
   opens _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hR := False.elim hR
