@@ -5,6 +5,11 @@ defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "ne
 autoImplicit = false
 relaxedAutoImplicit = false
 
+# The period's check reads a tied audit's wires as the sampled audit does (`SampledProofs.Wires`, `Summary.drawnOk`).
+[[require]]
+name = "core_sampled_proofs"
+path = "../../../service/sampled_proofs"
+
 [[require]]
 name = "flock_verifier"
 path = "../../../service/flock"
