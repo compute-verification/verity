@@ -5,7 +5,7 @@ import Definitions.Core.Digest
 /-!
 # The advice root, with every string it hashes
 
-A private partition is registered as advice under a hidden root (`verity.ml.commitments.advice`, which partition v2,
+A private partition is committed as advice under a hidden root (`verity.ml.commitments.advice`, which partition v2,
 `verity.ml.circuits.partition_v2`, uses): the partition's rows, each under a salt of the prover's choosing in an
 `hm96-sha512/row/v2` leaf, in one `frame-v3-sha512` tree. This module models that root with each hash it takes, so that
 a statement can name the strings a broken binding collides: `hashInputs`, every string hashed from the rows up to the
@@ -13,7 +13,7 @@ root.
 
 `H` is the hash on byte strings, with core's 64-byte digests (`Verity.Digest`): SHA-512 in the deployment (the one-hash
 rule). Nothing here assumes anything of `H`. A statement over this model holds for every `H`, and where it needs two
-hashed strings to differ in digest, it concludes instead that two distinct strings of the registrations' `hashInputs`
+hashed strings to differ in digest, it concludes instead that two distinct strings of the commitments' `hashInputs`
 share one.
 
 Row `i` (bytes `row`) under salt `y` hashes, as `advice.py`'s `leaf` does:
@@ -29,7 +29,7 @@ Past the rows the leaves are pads `H(pad i)` up to a power of two, the node at l
 Folded into the framing (`Framing`) as constants of the public statement, not modelled as hashes: the domain id (the
 SHA-512 of the domain: its binding, owner `-1` and the public row count `R_b`) and the schema string, which the frame
 messages carry; the row width, in `rowPrefix`; and hm96's key, through its digest in `leafPrefix` and its matrix in
-`mask`. `advice.py` refuses a registration of no rows, and `empty_root` is not modelled: here the tree of no rows is one
+`mask`. `advice.py` refuses a commitment of no rows, and `empty_root` is not modelled: here the tree of no rows is one
 pad. Which rows a partition has is partition v2's `rows`, padded with zero rows to `R_b` (`Rows`).
 -/
 
@@ -124,22 +124,23 @@ structure Rows (C : Circuit) where
 def Rows.Decodes {C : Circuit} (A : Rows C) : Prop :=
   ∀ n (P : Partition C n), A.decode (A.rows n P) = some ⟨n, P⟩
 
-/-- A registration: a partition of `C` into `n` units, and the salt of each of its rows (the prover's choice). -/
-structure Registration (C : Circuit) where
+/-- A commitment, the prover's side of an advice root: a partition of `C` into `n` units, and the salt of each of its
+rows (the prover's choice). Only its root goes public. -/
+structure Committed (C : Circuit) where
   n : ℕ
   P : Partition C n
   salt : ℕ → List UInt8
 
-namespace Registration
+namespace Committed
 
-variable {C : Circuit} (A : Rows C) (r : Registration C)
+variable {C : Circuit} (A : Rows C) (r : Committed C)
 
-/-- The registration's root: the advice tree over its partition's rows under its salts. -/
+/-- The commitment's root: the advice tree over its partition's rows under its salts. -/
 def root : Digest := Advice.root H F (A.rows r.n r.P) r.salt
 
-/-- Every string the registration hashes from its rows up to its root. -/
+/-- Every string the commitment hashes from its rows up to its root. -/
 def hashInputs : Finset (List UInt8) := Advice.hashInputs H F (A.rows r.n r.P) r.salt
 
-end Registration
+end Committed
 
 end Verity.Advice

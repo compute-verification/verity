@@ -133,7 +133,7 @@ theorem innerSetup_calls {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
     | none => simp [filesOf, hq] at hheld
     | some p => exact ⟨p, rfl⟩
   have hfs : filesOf r = some (.files ⟨r.innerRaw.circuit, r.innerRaw.publicFile, p, "", none,
-      some (innerFormOf r.innerRaw)⟩) := by rw [filesOf, hp]; rfl
+      some (innerFormOf r.innerRaw), r.innerRaw.program⟩) := by rw [filesOf, hp]; rfl
   rw [hfs] at hsh
   obtain ⟨spec', st', hstm, hrows0⟩ := checkShape_rows hsh
   obtain ⟨spec2, st2, hstm2, -, -, -, -, hform⟩ := checkShape_files hsh

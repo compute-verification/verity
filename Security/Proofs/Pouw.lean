@@ -7,12 +7,10 @@ import Proofs.Pouw.Credit
 import Proofs.Pouw.Deadline
 import Proofs.Pouw.EndToEndWindow.Statement
 import Proofs.Pouw.Eps1
-import Proofs.Pouw.Dimension
 import Proofs.Pouw.Dither
 import Proofs.Pouw.DitherWitness
 import Proofs.Pouw.DitherInstance
 import Proofs.Pouw.DitherSelected
-import Proofs.Pouw.Dimension.A2WordsProofs
 import Proofs.Pouw.Dimension.CausalProofs
 import Proofs.Pouw.Dimension.EmbedProofs
 import Proofs.Pouw.Dimension.ForestProofs
@@ -64,6 +62,8 @@ import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.M1
 import Proofs.Pouw.MerkleExtract
 import Proofs.Pouw.OnsiteFreed
+import Proofs.Pouw.Salt
+import Proofs.Pouw.Salt.Witness
 import Proofs.Pouw.ShaRealize
 import Proofs.Pouw.ShaRealizeWitness
 import Proofs.Pouw.Milestone
@@ -207,5 +207,7 @@ import Proofs.Pouw.Witness
 
 Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Definitions.Pouw.Assumptions`'
 named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
-`Game`, `NCP`, `PearlC`, `Receipt`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Definitions.Pouw`.
+`Game`, `NCP`, `PearlC`, `Receipt`), and the keyed leaf's as `Pouw.Salt.keyed_leaf_hides` and `Pouw.Salt.keyed_leaf_binds`
+(`Salt`, its witnesses in `Salt/Witness`); the kernel checks them, and nobody reviews them for meaning. The topics' maps
+are in `Definitions.Pouw`.
 -/
