@@ -54,12 +54,11 @@ from hypothesis import strategies as st
 import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
-from verity.core.protocols.sampled_proofs import service
+from verity.core.protocols.sampled_proofs import challenger as CH, service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
                                                             partition as P, produced as PD, registered as G,
                                                             registration as R)
-from verity.core.protocols.sampled_proofs.challenger import (COIN_BYTES, LINK_TABLES, NO_CLOSE, NO_TREE, ChallengerKey,
-                                                             CoinError)
+from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_coins, draw_first
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -2080,7 +2079,7 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         extra = D.canonical(ch_k.trees[0].record).encode()
         assert run(base_k | {"proofs": proofs(["s"], extra), "sessions": ["s"]},
                    blobs_=[circuit.hex(), public.hex(), extra.hex()], p=p_k) == (
-            "reject", f"proofs: session s's coins are not the challenger's: {LINK_TABLES}"), keys
+            "reject", f"proofs: session s's coins are not the challenger's: {CH.LINK_TABLES}"), keys
 
 
 def test_v2_refuses_a_population_out_of_order(server, server_v2):
