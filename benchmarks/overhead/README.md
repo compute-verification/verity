@@ -9,6 +9,7 @@ the store side and the table); this directory holds its runner.
 verity bench overhead points [--card h200] [--on NODE]       sweep m on one GPU of NODE for C and L (a research run)
 verity bench overhead points --store RUN                      store RUN's points as the card's next version, of record
 verity bench overhead run --scheme S [--point C|L|all]        time S against stock at the card's points (a research run)
+    [--cubin ART]                                             the cubin S's arm loads, sent with the run
 verity bench overhead run --record RUN                        label RUN a run of record, once it stands as a whole
 verity bench overhead table [--json]                          γ per scheme, point and card, from runs of record alone
 ```
@@ -59,8 +60,8 @@ with a 95% interval from the ratios' order statistics.
 
 An overhead of record comes only from a labelled run of this door. A γ stands when its run is labelled
 `run_of_record=overhead`, passed with exit 0 from a clean tree, was timed at points of record that nothing supersedes, ran
-the arm's cubin from the `art:` id it names (one of the art's blobs is a binary the run's SASS gate passed; a cubin built
-in the run is development only), and its point passed every rule: each linear timed, at least 20 paired reps, a 95%
+the arm's cubin from the `art:` id it was sent (the art's bytes are a binary the run's SASS gate passed; a cubin built in
+the run is development only), and its point passed every rule: each linear timed, at least 20 paired reps, a 95%
 interval within ±5% of the ratio, the cross-check, and the arm's reference verifier accepting every row
 (`verify.py --every-row`). Runs of record are chosen by label, as `served-table`'s are. `table` refuses every other figure
 and says why. A reader of γ outside `benchmarks/` takes it from `table --json`, whose rows carry `of_record` and `why`;
@@ -76,12 +77,15 @@ every total is scaled from it, not proved.
 
 A scheme registers in `overhead.SCHEMES`: Pearl+ is `pearl-plus`, its arm `overhead_arm:PearlPlus` and its ε
 `overhead_arm:epsilon`, both in `benchmarks/pouw/pearl_c_sm90/`. The arm keeps the harness's arm contract
-(`benchmarks/pouw/harness/arm.py`). Its build record names:
+(`benchmarks/pouw/harness/arm.py`):
 
-- `cubin_art`: the `art:` id of the cubin it loads, which it lists in its `binaries`, so the SASS gate passes it before
-  anything is timed;
-- `verifier`: its reference verifier's declaration (`arm.check_verifier`), whose commands `verify.py` runs on the run's own
-  transcripts, `ACCEPT` or `REJECT` naming each transcript's sha256.
+- its cubin: `run --cubin ART` fetches the art (one file) where the door runs and sends it with the run, and the arm loads
+  the file `$VERITY_BENCH_CUBIN` names and lists it in its build record's `binaries`, so the SASS gate passes it before
+  anything is timed. A run whose gate passed no binary with the sent cubin's bytes is refused; one sent no cubin is
+  development only;
+- its build record's `verifier`: its reference verifier's declaration (`arm.check_verifier`), whose commands `verify.py`
+  runs on the run's own transcripts, `ACCEPT` or `REJECT` naming each transcript's sha256.
 
-`overhead.json` keeps both, and the binaries the gate passed, beside γ. `epsilon(m, n, k, card)` returns
-`{"epsilon", "delta", "basis"}` at one linear of the layer, and `overhead.json` records it at each point beside γ.
+`overhead.json` keeps the cubin's art and sha256, the binaries the gate passed and the verifier beside γ.
+`epsilon(m, n, k, card)` returns `{"epsilon", "delta", "basis"}` at one linear of the layer, and `overhead.json` records it
+at each point beside γ.

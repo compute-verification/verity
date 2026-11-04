@@ -5,14 +5,16 @@ Python with torch and vLLM, under the `research run` that `overhead_records` lau
 
     python -m verity_bench.overhead_node points --card h200 --uuid GPU-... --out DIR --run-dir DIR --run-id RUN
     python -m verity_bench.overhead_node run --card h200 --scheme pearl-plus --points FILE --point C|L|all \\
-        --uuid GPU-... --out DIR --run-dir DIR --run-id RUN --commit SHA --scratch DIR [--nsys PATH] [--points-art ART]
+        --uuid GPU-... --out DIR --run-dir DIR --run-id RUN --commit SHA --scratch DIR [--nsys PATH] [--points-art ART] \\
+        [--cubin FILE --cubin-art ART]
 
 `points` times every linear of the model at each m `overhead.next_ms` asks for (`CHUNK` m's a `bench.py` process, every
 scaling of the precision, graph replays), until both brackets close, and writes `points.json`: C, L, t(m) and each linear's
 fastest kernel at every m, each round's process, and the card's identity and timed clocks.
 
 `run` times the scheme's arm beside its family's stock finalists and the fastest one's twin (`--twins`) at the stored points,
-in one `bench.py` process under Nsight Systems: the timed pass untraced, then at each shape a traced pass of the same
+in one `bench.py` process under Nsight Systems, the arm loading the cubin the run was sent (`$VERITY_BENCH_CUBIN`, which
+the SASS gate must pass): the timed pass untraced, then at each shape a traced pass of the same
 entries that nsys captures alone (SMs Active at 10 kHz, each item an NVTX range; `--traced`). It then runs the arm's
 reference verifier on every row (`verify.py --every-row`), reads each traced item's busy SM-time from the reports
 (`nsys.busy`, the reports kept in `--scratch`, outside `$OUT`), and writes `overhead.json`: per point, the layer's γ over
@@ -48,6 +50,8 @@ POINTS_BENCH = ("--methods", "graph", "--decode-method", "independent")
 #: a timed run's: the graph method gives each stock kernel's wall time, the burst method the host's enqueue, and the traced
 #: pass beside them each item's busy SM-time
 RUN_BENCH = ("--methods", "graph", "burst", "--decode-method", "independent", "--traced", "--twins")
+#: the cubin the run was sent (`run --cubin ART`), which the scheme's arm loads and lists in its build record's `binaries`
+CUBIN_ENV = "VERITY_BENCH_CUBIN"
 RESULT_SCHEMA = "research/result/v0.1"
 
 Runner = Callable[[list[str], Path], int]
@@ -188,9 +192,12 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
     card, sch = O.card(a.card), O.scheme(a.scheme)
     sent = a.points if a.points.is_file() else a.run_dir / "inputs" / a.points
     pts = json.loads(sent.read_text())
+    cubin = None
+    if sch.arm and a.cubin:
+        cubin = (a.cubin if a.cubin.is_file() else a.run_dir / "inputs" / a.cubin).absolute()
     out, scratch = a.out, a.scratch
     fingerprint = {"door": "run", "card": card.gpu, "scheme": sch.id, "point": a.point, "points_art": a.points_art,
-                   "points_sha256": _sha256(sent)}
+                   "points_sha256": _sha256(sent), "cubin_art": a.cubin_art if cubin else None}
     doc: dict = {"schema": O.RUN_SCHEMA, "scheme": sch.id, "family": sch.family, "card": card.gpu,
                  "model": pts.get("model"), "points_art": a.points_art, "points_sha256": fingerprint["points_sha256"],
                  "cpu_sm_s_per_core_s": card.cpu_sm_s_per_core_s, "points": {}, "whys": []}
@@ -210,7 +217,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
     arm_args = ["--arm", sch.arm, "--arm-path", sch.arm_path] if sch.arm else []
     prof = scratch / "prof"
     bench_json = out / "bench.json"
-    rc = run([a.nsys, *NSYS_PROFILE, "-o", str(prof),
+    rc = run([*(["env", f"{CUBIN_ENV}={cubin}"] if cubin else []), a.nsys, *NSYS_PROFILE, "-o", str(prof),
               *bench_argv(card, a.uuid, model_shapes(model, list(at.values())), [sch.family], bench_json,
                           [*RUN_BENCH, *arm_args])], out / "bench.log")
     result = json.loads(bench_json.read_text()) if bench_json.is_file() else {}
@@ -228,10 +235,14 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
         build = rec.get("build") or {}
         gated = [{k: b.get(k) for k in ("path", "sha256", "ok")}
                  for b in (result.get("sass_gate") or {}).get("binaries") or []]
-        doc["arm"] = {"name": arm, "cubin_art": build.get("cubin_art"), "binaries": build.get("binaries"),
-                      "gated": gated, "verifier": rec.get("verifier")}
-        if not str(build.get("cubin_art") or "").startswith("art:"):
-            whys.append("the arm's build record names no `cubin_art`: a cubin built in the run is development only")
+        sha = _sha256(cubin) if cubin else None
+        doc["arm"] = {"name": arm, "cubin_art": a.cubin_art if cubin else None, "cubin_sha256": sha,
+                      "binaries": build.get("binaries"), "gated": gated, "verifier": rec.get("verifier")}
+        if not str(doc["arm"]["cubin_art"] or "").startswith("art:"):
+            whys.append("the run was sent no cubin art (`run --cubin ART`): a cubin built in the run is development only")
+        elif bench_json.is_file() and sha not in {b["sha256"] for b in gated if b["ok"]}:
+            whys.append(f"no binary the SASS gate passed is the cubin the run was sent ({a.cubin_art}): the arm must load "
+                        f"${CUBIN_ENV} and list it in its binaries")
     if bench_json.is_file() and result.get("items"):
         busy: dict = {}
         reports = sorted(scratch.glob(prof.name + "*.nsys-rep"))
@@ -300,6 +311,9 @@ def parse(argv: Sequence[str] | None) -> argparse.Namespace:
             s.add_argument("--points", type=Path, required=True,
                            help="the stored points.json (a relative path not found here: the run's inputs/, where --send puts it)")
             s.add_argument("--points-art", help="the art it was fetched from")
+            s.add_argument("--cubin", type=Path, help=f"the cubin the arm loads (${CUBIN_ENV}), as sent (a relative path "
+                                                      "not found here: the run's inputs/)")
+            s.add_argument("--cubin-art", help="the art it was fetched from")
             s.add_argument("--point", choices=[*O.POINTS, "all"], default="all")
             s.add_argument("--commit", help="the run's source commit (the arm's verifier runs it)")
             s.add_argument("--scratch", type=Path, required=True, help="where the nsys report goes, outside --out")

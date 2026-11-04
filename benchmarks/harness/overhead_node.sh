@@ -5,7 +5,8 @@
 # `python -m verity_bench.overhead_node` on the lease's GPU, with a scratch directory outside $OUT for the Nsight report.
 #
 #   bash benchmarks/harness/overhead_node.sh points --card h200 [--model M] [--precision P]
-#   bash benchmarks/harness/overhead_node.sh run --card h200 --scheme S --points points.json --points-art ART [--point P]
+#   bash benchmarks/harness/overhead_node.sh run --card h200 --scheme S --points points.json --points-art ART [--point P] \
+#     [--cubin FILE --cubin-art ART]
 #
 # VERITY_BENCH_VENV names the Python with torch and vLLM (default /workspace/cp/venv312), CUDA the toolkit with nvcc and
 # nsys (default /usr/local/cuda-13.0).

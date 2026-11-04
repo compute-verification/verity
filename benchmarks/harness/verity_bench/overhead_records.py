@@ -9,8 +9,8 @@ of record is a run labelled `run_of_record=overhead`.
 **The source check** (`of_record`, `gamma_of_record`): an overhead of record comes only from a labelled run of the door. A
 γ stands when its run is labelled, passed with exit 0 from a clean tree, wrote an `overhead.json` of `RUN_SCHEMA` the
 node side found nothing against, was timed at the points of an art of record that nothing supersedes, ran its arm's cubin
-from the `art:` the arm names (a binary the run's SASS gate passed, `cubin_why`; a cubin built in the run is development
-only), and its own point passed the door's rules (`overhead.point_whys`: every linear timed, at least 20 paired reps, an
+from the `art:` it was sent (`run --cubin ART`; the art's bytes a binary the run's SASS gate passed, `cubin_why`; a cubin
+built in the run is development only), and its own point passed the door's rules (`overhead.point_whys`: every linear timed, at least 20 paired reps, an
 interval within ±5%, the cross-check, the arm's reference verifier accepting every row). `table` refuses every other
 figure and says why; a reader of γ outside this package (the protocol table, the one-pager, a goal) takes it from
 `verity bench overhead table --json`, whose rows carry `of_record` and `why`.
@@ -68,10 +68,21 @@ def launch_points(root: Path, node: str, card: str, model: str, precision: str, 
 
 
 def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point: str, points: str | None = None,
-               minutes: float | None = None, execute: Executor | None = None) -> int:
-    """A scheme's timed run at the card's points of record (or the art `points`), which it ships to the node."""
+               minutes: float | None = None, execute: Executor | None = None, cubin: str | None = None) -> int:
+    """A scheme's timed run at the card's points of record (or the art `points`), which it ships to the node with the art
+    `cubin`, the one cubin the scheme's arm loads (without it the run is development only)."""
 
-    O.scheme(scheme)
+    if cubin is not None:
+        if O.scheme(scheme).arm is None:
+            raise ValueError(f"--cubin: {scheme} has no arm to load it")
+        try:
+            payload = store.get_manifest(cubin).payload
+        except Exception as ex:  # noqa: BLE001 - the store's NotFound, named in the error
+            raise ValueError(f"--cubin {cubin} isn't in the store ({type(ex).__name__}: {ex})") from ex
+        if getattr(payload, "type", None) != "file":
+            raise ValueError(f"--cubin {cubin} isn't one file: it names the art of the one cubin the arm loads")
+    else:
+        O.scheme(scheme)
     art = points or current_points(store, card)
     if art is None:
         raise ValueError(f"no points of record for the {card}: run `verity bench overhead points --card {card} --on NODE`, "
@@ -79,10 +90,14 @@ def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point:
     if store.get_manifest(art).meta.get("card") != card:
         raise ValueError(f"{art} holds the points of the {store.get_manifest(art).meta.get('card')}, not the {card}")
     with tempfile.TemporaryDirectory() as tmp:
-        sent = Path(tmp) / "points.json"
-        shutil.copyfile(store.fetch(art), sent)
+        sent = [Path(tmp) / "points.json"]
+        shutil.copyfile(store.fetch(art), sent[0])
         job = ["run", "--card", card, "--scheme", scheme, "--points", "points.json", "--points-art", art, "--point", point]
-        return (execute or _execute)(launch_argv(root, node, minutes or MINUTES["run"], job, [sent]), root)
+        if cubin is not None:
+            (Path(tmp) / "cubin").mkdir()
+            sent.append(Path(store.fetch(cubin, Path(tmp) / "cubin")))
+            job += ["--cubin", sent[-1].name, "--cubin-art", cubin]
+        return (execute or _execute)(launch_argv(root, node, minutes or MINUTES["run"], job, sent), root)
 
 
 # ---- reading the store -------------------------------------------------------------------------------------------------------

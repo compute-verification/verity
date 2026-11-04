@@ -76,18 +76,22 @@ HOST = 0.1
 class Node:
     """The node's programs: bench.py's results from the roofline (a sweep) or from `RUN_ENTRIES` (a timed run, its traced
     pass beside it), nsys's reports, one a shape's capture range, with each traced item's kernels at full SMs Active, and
-    verify.py's verdicts. The arm's build record names `cubin_art`, and the SASS gate passes `cubin`."""
+    verify.py's verdicts. The arm loads the cubin the run was sent (`loads`), or else builds `built`, and the SASS gate
+    passes the one it loads."""
 
     def __init__(self, tmp: Path, *, reps: int = 20, accept: bool = True, card: str = "NVIDIA H200", spread: float = 0.0,
-                 cubin_art: str | None = CUBIN_ART, cubin: bytes = CUBIN, bridge_errors: dict | None = None):
+                 loads: bool = True, built: bytes = b"a cubin built in the run", bridge_errors: dict | None = None):
         self.tmp, self.reps, self.accept, self.card, self.spread = tmp, reps, accept, card, spread
-        self.cubin_art, self.cubin, self.bridge_errors = cubin_art, cubin, bridge_errors or {}
+        self.loads, self.built, self.bridge_errors = loads, built, bridge_errors or {}
         self.calls: list[list[str]] = []
+        self.env: dict[str, str] = {}
         self.reports: dict[str, list[tuple[int, int, bool]]] = {}
 
     def __call__(self, argv: list[str], log: Path) -> int:
         self.calls.append(argv)
         log.write_text("")
+        if argv[0] == "env":
+            self.env, argv = dict([argv[1].split("=", 1)]), argv[2:]
         if argv[0] == "nsys":
             return self.profile(argv) if argv[1] == "profile" else self.export(argv)
         if argv[1].endswith("verify.py"):
@@ -145,9 +149,11 @@ class Node:
                          "summary": {key: {"graph": {"median": sorted(xs)[len(xs) // 2]}} for key, xs in graph.items()}})
         more = {"items": items, "traced_items": traced, "sass_gate": {"ok": True, "binaries": []}}
         if arm:
-            more["arms"] = {ARM: {"build": {"cubin_art": self.cubin_art, "binaries": ["arm.cubin"]}, "verifier": "verify.py"}}
-            more["sass_gate"]["binaries"] = [{"path": "arm.cubin", "sha256": hashlib.sha256(self.cubin).hexdigest(),
-                                              "ok": True, "bytes": len(self.cubin)}]
+            sent = self.env.get(overhead_node.CUBIN_ENV) if self.loads else None
+            path, cubin = (sent, Path(sent).read_bytes()) if sent else ("built.cubin", self.built)
+            more["arms"] = {ARM: {"build": {"binaries": [path]}, "verifier": "verify.py"}}
+            more["sass_gate"]["binaries"] = [{"path": path, "sha256": hashlib.sha256(cubin).hexdigest(), "ok": True,
+                                              "bytes": len(cubin)}]
         Path(between(bench, "--out")[0]).write_text(json.dumps(self._result(bench, rows, **more)))
         return 0
 
@@ -217,13 +223,19 @@ def node_points(tmp: Path, node: Node, run: str = "r20261104-020000-0001") -> Pa
 
 
 def node_run(tmp: Path, node: Node, points: Path, scheme: str, art: str | None = None,
-             run: str = "r20261104-030000-0002") -> tuple[int, Path]:
+             run: str = "r20261104-030000-0002", cubin: bytes | None = CUBIN, cubin_art: str = CUBIN_ART) -> tuple[int, Path]:
+    """The node side's timed run, sent `cubin` (in the run's inputs/, as `--send` puts it) from the art `cubin_art`."""
+
     out, run_dir = tmp / run / "out", tmp / run
     scratch = tmp / "scratch" / run
     scratch.mkdir(parents=True)
+    if cubin is not None:
+        (run_dir / "inputs").mkdir(parents=True)
+        (run_dir / "inputs" / "arm.cubin").write_bytes(cubin)
     rc = overhead_node.main(["run", "--card", "h200", "--scheme", scheme, "--points", str(points), "--point", "all",
                              "--uuid", UUID, "--out", str(out), "--run-dir", str(run_dir), "--run-id", run,
-                             "--commit", SHA, "--scratch", str(scratch), *(["--points-art", art] if art else [])], run=node)
+                             "--commit", SHA, "--scratch", str(scratch), *(["--points-art", art] if art else []),
+                             *(["--cubin", "arm.cubin", "--cubin-art", cubin_art] if cubin is not None else [])], run=node)
     return rc, run_dir
 
 
@@ -427,9 +439,12 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
         fast = p["linears"]["o"]["stock_fastest"]
         assert fast["sm_s"] == pytest.approx(pts[name.lower()] * 8192 * 8192 * 1e-12 * 1.02, rel=1e-3)
         assert fast["cpu_sm_s"] == pytest.approx(HOST * fast["sm_s"], rel=1e-3)
-    assert doc["arm"] == {"name": ARM, "cubin_art": CUBIN_ART, "binaries": ["arm.cubin"], "verifier": "verify.py",
-                          "gated": [{"path": "arm.cubin", "sha256": hashlib.sha256(CUBIN).hexdigest(), "ok": True}]}
+    sent, sha = str(run_dir / "inputs" / "arm.cubin"), hashlib.sha256(CUBIN).hexdigest()
+    assert doc["arm"] == {"name": ARM, "cubin_art": CUBIN_ART, "cubin_sha256": sha, "binaries": [sent],
+                          "verifier": "verify.py", "gated": [{"path": sent, "sha256": sha, "ok": True}]}
     prof, *exports, verify = node.calls
+    assert prof[:2] == ["env", f"{overhead_node.CUBIN_ENV}={sent}"]
+    prof = prof[2:]
     assert prof[:len(overhead_node.NSYS_PROFILE) + 1] == ["nsys", *overhead_node.NSYS_PROFILE]
     assert "--capture-range=cudaProfilerApi" in prof
     bench = prof[prof.index("-o") + 2:]
@@ -468,9 +483,13 @@ def test_a_timed_run_says_why_each_point_isnt_of_record(tmp_path, scheme):
     rc, run_dir = node_run(tmp_path, Node(tmp_path, spread=0.2), points, "pearl-plus", run="r20261104-030000-0003")
     assert all("wider than ±5%" in " ".join(p["whys"]) for p in
                json.loads((run_dir / "out" / "overhead.json").read_text())["points"].values())
-    rc, run_dir = node_run(tmp_path, Node(tmp_path, cubin_art=None), points, "pearl-plus", run="r20261104-030000-0004")
+    rc, run_dir = node_run(tmp_path, Node(tmp_path), points, "pearl-plus", run="r20261104-030000-0004", cubin=None)
     assert json.loads((run_dir / "out" / "overhead.json").read_text())["whys"] == [
-        "the arm's build record names no `cubin_art`: a cubin built in the run is development only"]
+        "the run was sent no cubin art (`run --cubin ART`): a cubin built in the run is development only"]
+    rc, run_dir = node_run(tmp_path, Node(tmp_path, loads=False), points, "pearl-plus", run="r20261104-030000-0005")
+    assert json.loads((run_dir / "out" / "overhead.json").read_text())["whys"] == [
+        f"no binary the SASS gate passed is the cubin the run was sent ({CUBIN_ART}): the arm must load "
+        "$VERITY_BENCH_CUBIN and list it in its binaries"]
 
 
 def test_a_timed_run_refuses_points_that_arent_a_finished_sweep_of_its_card(tmp_path):
@@ -530,10 +549,12 @@ def stored_points(tmp: Path, s: Store, run: str) -> str:
     return R.store_points(s.store, run)
 
 
-def timed(tmp: Path, s: Store, art: str, scheme: str, run: str, node: Node | None = None) -> str:
+def timed(tmp: Path, s: Store, art: str, scheme: str, run: str, node: Node | None = None, cubin: bytes = CUBIN,
+          cubin_art: str | None = None) -> str:
     points = tmp / f"{run}-points.json"
     points.write_bytes(Path(s.store.fetch(art)).read_bytes())
-    rc, run_dir = node_run(tmp, node or Node(tmp, cubin_art=s.cubin), points, scheme, art, run=run)
+    rc, run_dir = node_run(tmp, node or Node(tmp), points, scheme, art, run=run, cubin=cubin,
+                           cubin_art=cubin_art or s.cubin)
     assert rc == 0
     s.ran(run, run_dir)
     return run
@@ -572,7 +593,7 @@ def test_the_table_shows_only_labelled_runs_of_record_and_refuses_the_rest_with_
     art = stored_points(tmp_path, s, "r20261104-020000-0001")
     run = timed(tmp_path, s, art, "pearl-plus", "r20261104-030000-0002")
     stock = timed(tmp_path, s, art, "stock", "r20261104-030000-0003")
-    noisy = timed(tmp_path, s, art, "pearl-plus", "r20261104-030000-0004", Node(tmp_path, reps=12, cubin_art=s.cubin))
+    noisy = timed(tmp_path, s, art, "pearl-plus", "r20261104-030000-0004", Node(tmp_path, reps=12))
 
     with pytest.raises(ValueError, match="no labelled run"):
         R.gamma_of_record(s.store, "pearl-plus", "h200", "C")
@@ -611,8 +632,8 @@ def test_the_table_shows_only_labelled_runs_of_record_and_refuses_the_rest_with_
         R.record_run(s.store, loose)
 
     # nor can one whose cubin art isn't the binary its SASS gate passed, or isn't in the store
-    for i, node in enumerate((Node(tmp_path, cubin_art=s.cubin, cubin=b"another cubin"), Node(tmp_path))):
-        other = timed(tmp_path, s, art, "pearl-plus", f"r20261104-030000-001{i}", node)
+    for i, (cubin, cubin_art) in enumerate(((b"another cubin", s.cubin), (CUBIN, CUBIN_ART))):
+        other = timed(tmp_path, s, art, "pearl-plus", f"r20261104-030000-001{i}", cubin=cubin, cubin_art=cubin_art)
         with pytest.raises(ValueError, match="SASS gate passed" if i == 0 else "isn't in the store"):
             R.record_run(s.store, other)
 
@@ -646,7 +667,24 @@ def test_the_command_launches_each_step_as_a_research_run_on_one_gpu_and_ships_t
     monkeypatch.setattr(R, "_execute", execute)
     assert main(["overhead", "points", "--card", "h200"]) == 0
     assert main(["overhead", "run", "--scheme", "stock", "--point", "L", "--local-only"]) == 0
-    (points, _), (run, sent) = launched
+    assert main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", s.cubin, "--local-only"]) == 0
+    (points, _), (run, sent), (armed, armed_sent) = launched
+    assert armed[armed.index("--") + 3:] == ["run", "--card", "h200", "--scheme", "pearl-plus", "--points", "points.json",
+                                             "--points-art", art, "--point", "all", "--cubin", "arm.cubin",
+                                             "--cubin-art", s.cubin]
+    assert armed_sent == [Path(s.store.fetch(art)).read_bytes(), CUBIN]
+    with pytest.raises(SystemExit):
+        main(["overhead", "run", "--scheme", "stock", "--cubin", s.cubin, "--local-only"])
+    assert "stock has no arm to load it" in capsys.readouterr().err
+    with pytest.raises(SystemExit):
+        main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", "art:" + "f" * 64, "--local-only"])
+    assert "isn't in the store" in capsys.readouterr().err
+    (tmp_path / "cubins").mkdir()
+    (tmp_path / "cubins" / "a.cubin").write_bytes(CUBIN)
+    tree = s.store.put_artifact("cubin/v1", {}, tree=tmp_path / "cubins")
+    with pytest.raises(SystemExit):
+        main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", tree, "--local-only"])
+    assert "isn't one file" in capsys.readouterr().err
     for argv in (points, run):
         assert argv[:6] == ["research", "run", "--on", "vy-dc-h200", "--gpus", "1"] and "--require-result" in argv
         assert argv[argv.index("--cwd") + 1] == "source" and argv[argv.index("--") + 1:][:2] == ["bash", R.NODE_JOB]
