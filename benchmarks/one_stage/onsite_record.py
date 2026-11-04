@@ -28,7 +28,9 @@ the jitter T_j·log2 d_jit, T_j the phase's buckets (``jitter``). They sum to K,
 sends past its committed program except with δ_net over ``period_s`` seconds, the run's m execution phases of T buckets
 of τ (the certifier's case's ``schedule``). ``delta_net`` gives it term by term, each with its source: the answer's
 ``eps``, only its δ part (m · δ and each charged audit's δ, `EPS`), and m times each phase's knowledge, binding and
-collision errors ε_ks, ε_bind and ε_tap (`ERRORS`), which no check computes, so δ_net has no number here (`UNVALUED`).
+collision errors ε_ks, ε_bind and ε_tap (`ERRORS`), which no check computes, so δ_net has no number here (`UNVALUED`);
+``delta`` splits eps into the scans' δ and the charged audits', with eps a phase (`DELTA`: what sets each, and what a
+smaller one costs).
 K is that statement's count as proved, a known overcount (``notes``, `OVERCOUNT`); ``connections`` is how many
 connections k_sched and k_fail count, every one the schedule can carry (`CONNECTIONS`), its ``error`` where the case's
 caps aren't those; and ``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in
@@ -56,7 +58,8 @@ datacenter's and the world's are scaled from the node's. Each scaled cell names 
 its sources (`RULES`): the bound, the case's schedule, and each census line it reads with its SHA-512 (`census`). Each
 cell gives K in bits (the least integer at or above a scaled one), its share of one copy of the weights
 (`leak_bounds.WEIGHTS`), its δ_net's terms over the execution phases it counts (``delta_net``), whether eps alone is
-already vacuous (at least 1) and the statement it rests on; beside that pooled total, ``per_phase`` is the same over
+already vacuous (at least 1), the eps a phase under which it wouldn't be (``eps_per_phase_below``, beside the bound's
+``delta``) and the statement it rests on; beside that pooled total, ``per_phase`` is the same over
 one execution phase, proved only where m is 1.
 
 The record's counts and indices are the certification period's (m and each phase j), public in the Lean answer's
@@ -125,6 +128,14 @@ ERRORS = {
 }
 UNVALUED = ("δ_net is eps plus each execution phase's ε_ks, ε_bind and ε_tap, never eps alone; no check computes those "
             "three, so δ_net has no number here")
+DELTA = ("what sets eps: each one-stage answer's stated δ, its integrity profile's, a sampling-design parameter in "
+         "(0, 1) and not C-Flock's soundness error, which is in ε_ks. eps is m · δ_scan, every phase's scan at one δ, "
+         "plus the δ of each tied audit drawn in part (`charged`, NetworkCheck.Period's chargedOf). A scan with every "
+         "proof block drawn holds no wrong unit at any δ, so a smaller δ_scan costs neither proving nor bits; drawn in "
+         "part, its bound grows as δ falls (faulty_sets, faulty_bits). A tied audit drawn in part charges every slot "
+         "entry bit of its phase (faulty_entries) whatever its bound, so a smaller δ costs K nothing either, but the "
+         "δ is also that audit's own answer's, whose bound grows as δ falls at a fixed draw; drawn whole, its δ leaves "
+         "eps and its entries leave K, at the cost of proving each of its proof blocks")
 #: the run's published line of the network certifier's verdict (`served_verdicts.pieces`)
 LINE = "THE NETWORK CERTIFIER "
 CHARGED = ("PeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audit tied to execution phase j's scan, those "
@@ -239,6 +250,7 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
             terms += [{"symbol": s, "phase": i, "bits": sum(int(scan[f]) for f in fs),
                        "lean": [f"scans[{i}].{f}" for f in fs]} for s, fs in PHASE_TERMS.items()]
         K, eps = int(public["K"]), Fraction(public["eps"])
+        deltas = {Fraction(s["delta"]) for s in public["scans"]}
     except (KeyError, TypeError, ValueError) as e:
         raise ValueError(f"the rows form's public lacks a term: {type(e).__name__}: {e}") from None
     if sum(t["bits"] for t in terms) != K:
@@ -248,9 +260,14 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("the rows form's public has no scan: a period of no execution phase, which bounds nothing")
     if "windows" in public and int(public["windows"]) != m:
         raise ValueError(f"{m} scans for the period's {public['windows']} execution phases")
+    if len(deltas) != 1 or eps < m * min(deltas):
+        raise ValueError(f"eps {eps} isn't m · δ_scan plus the charged audits' δ: the scans' δ are "
+                         f"{sorted(map(str, deltas))}, and the period's check holds them to one")
+    (scan,) = deltas
     sources = [EPS, *ERRORS.values()]
     return {"statement": LB.STATEMENTS["per_period"], "K": K, "phases": m, "notes": [OVERCOUNT], "terms": terms,
-            "delta_net": {"terms": [t | s for t, s in zip(delta_net(eps, m), sources)], "note": UNVALUED}}
+            "delta_net": {"terms": [t | s for t, s in zip(delta_net(eps, m), sources)], "note": UNVALUED},
+            "delta": {"scan": str(scan), "charged": str(eps - m * scan), "eps_per_phase": str(eps / m), "is": DELTA}}
 
 
 def delta_net(eps: Fraction, phases: int) -> list[dict[str, Any]]:
@@ -303,7 +320,7 @@ def census() -> dict[str, Any]:
 def cell(bits: Fraction, eps: Fraction, phases: int, where: str, rule: str | None = None) -> dict[str, Any]:
     """A cell over ``phases`` execution phases, proved, or scaled by ``rule`` (`RULES`)."""
     return {"bits": math.ceil(bits), "share": float(bits / LB.WEIGHTS.bits), "delta_net": delta_net(eps, phases),
-            "vacuous": eps >= 1,
+            "vacuous": eps >= 1, "eps_per_phase_below": str(Fraction(1, phases)),
             "statement": STATEMENTS[where]} | ({"how": "scaled", "rule": rule} if rule else {"how": "proved"})
 
 
@@ -470,6 +487,7 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     return {"verdicts": {k: x["verdict"] for k, x in rec["verdicts"].items()}, "of_record": rec["of_record"]["holds"],
             "K": fig.get("K"), "K_tight": b.get("K"), "open": fig.get("open"),
             "delta_net": None if "delta_net" not in b else delta_net(eps_of(b), b["phases"]),
+            "delta": None if "delta" not in b else {k: b["delta"][k] for k in ("scan", "charged")},
             "connections": (b.get("connections") or {}).get("count"),
             "year_datacenter": None if year is None else {k: year[k] for k in ("bits", "share", "delta_net", "how")},
             "advice_measured_on": m.get("run"), **{k: b[k] for k in ("missing", "error") if k in b}}

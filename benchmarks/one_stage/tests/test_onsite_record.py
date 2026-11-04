@@ -216,7 +216,7 @@ def test_the_figure_of_record_is_the_tight_K_only_where_the_verdict_held_both_ch
 def test_a_scans_tied_audits_are_the_ones_it_charges_and_else_every_audit_is(tmp_path):
     """Two audits, the served one and one with no advice: with the public naming none, each phase charges both; with
     scans[j].tied, each phase only its own."""
-    two = dict(PUBLIC, K=PUBLIC["K"] + 9088 + 63, windows=2, scans=[SCAN, SCAN])
+    two = dict(PUBLIC, K=PUBLIC["K"] + 9088 + 63, eps="1/524288", windows=2, scans=[SCAN, SCAN])
     rec = OR.record(accepted(tmp_path / "all", two, windows=2, audits=(SERVED, NO_ADVICE)))
     assert rec["bound"]["of_record"]["advice"] == {"bits_per_phase": [2 ** 23 + 2] * 2, "tied": OR.TIED_ALL}
     assert rec["advice_charge"]["cap"]["ell_a"] == [2 ** 23, 0]
@@ -246,14 +246,15 @@ def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever
     import scan_zk as SZ
     schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
     scan = dict(SCAN, jitter=schedule["window"])
-    public = dict(PUBLIC, K=3 * (768 + 9088 + 32), cells=3 * 384, schedules=3 * 384, windows=3, scans=[scan] * 3)
+    public = dict(PUBLIC, K=3 * (768 + 9088 + 32), cells=3 * 384, schedules=3 * 384, windows=3, scans=[scan] * 3,
+                  eps="3/1048576")
     rec = OR.record(accepted(tmp_path, public, windows=3, schedule=schedule))
     b = rec["bound"]
     assert [t["bits"] for t in b["terms"] if t.get("phase") is None] == [1152, 1152]
     jitter = [t["bits"] for t in b["terms"] if t["symbol"] == "T_j \\log_2 d_{jit}"]
     assert jitter == [32] * 3 and (1152 + 1152) // 3 + jitter[0] == 800
     assert [t.get("times") for t in b["delta_net"]["terms"]] == [None, 3, 3, 3]
-    assert rec["periods"]["run"]["delta_net"] == OR.delta_net(Fraction(1, 2 ** 20), 3)
+    assert rec["periods"]["run"]["delta_net"] == OR.delta_net(Fraction(3, 2 ** 20), 3)
     assert b["connections"] == {"count": 3 * 128, "from": OR.CONNECTIONS}
     assert (rec["periods"]["phase_s"], rec["periods"]["run"]["seconds"], b["period_s"]) == ("128", "384", "384")
     assert rec["periods"]["week"]["node"]["parameters"]["connections"] == str(128 * math.ceil(7 * 86400 / 128))
@@ -282,7 +283,7 @@ def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one
     one = {"bits": KR, "share": KR / LB.WEIGHTS.bits, "vacuous": False, "how": "proved",
            "delta_net": [{"symbol": "eps", "value": "1/1048576"}, {"symbol": "ε_ks", "times": 1},
                          {"symbol": "ε_bind", "times": 1}, {"symbol": "ε_tap", "times": 1}],
-           "statement": LB.STATEMENTS["per_period"]}
+           "eps_per_phase_below": "1", "statement": LB.STATEMENTS["per_period"]}
     assert p["phase_s"] == str(phase) and p["run"] == one | {
         "seconds": str(phase), "phases": 1, "connections": 252, "per_phase": one}
     links = {"node": 1, "datacenter": LB.datacenter_links(), "world": LB.world_links()}
@@ -296,10 +297,12 @@ def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one
                 KR * w * n, OR.delta_net(Fraction(1, 2 ** 20) * w * n, w * n), "scaled", rules[where])
             assert c["delta_net"][0]["value"] == str(Fraction(w * n, 2 ** 20))
             assert c["vacuous"] == (w * n >= 2 ** 20) and c["share"] == KR * w * n / LB.WEIGHTS.bits
+            assert c["eps_per_phase_below"] == str(Fraction(1, w * n))
             assert c["parameters"] == {"phases": w, "phase_s": str(phase), "connections": str(252 * w * n), "links": n}
             assert c["per_phase"] == (one if where == "node" else {
                 "bits": KR * n, "share": KR * n / LB.WEIGHTS.bits, "delta_net": OR.delta_net(Fraction(n, 2 ** 20), n),
-                "vacuous": n >= 2 ** 20, "how": "scaled", "rule": where, "statement": OR.STATEMENTS[where]})
+                "vacuous": n >= 2 ** 20, "eps_per_phase_below": str(Fraction(1, n)), "how": "scaled", "rule": where,
+                "statement": OR.STATEMENTS[where]})
     assert p["week"]["datacenter"]["statement"] == LB.STATEMENTS["datacenter"]
     assert {k: r["sources"] for k, r in p["rules"].items()} == {
         "per-phase": [OR.FROM_BOUND], "run-to-period": [OR.FROM_BOUND, OR.FROM_SCHEDULE],
@@ -308,6 +311,26 @@ def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one
                   census_line("deployments.json", "gpus_per_machine")]}
     assert p["rules"]["datacenter"]["sources"][0]["id"] == "dc-12500-machines-600s"
     assert {k: r["rule"] for k, r in p["rules"].items()} == OR.RULES
+
+
+def test_eps_is_split_into_the_scans_and_the_charged_audits_delta_beside_each_cells_threshold(tmp_path):
+    """The served defaults: the scan drawn whole at 2^-20, and a tied audit drawn subset:1 at δ = 1/2, whose δ the
+    period's eps carries. The bound says which δ is which; a cell whose eps a phase is past its threshold is vacuous."""
+    public = dict(PUBLIC, eps="524289/1048576", audits=[{"delta": "1/2", "drawn": 1, "units": 16, "wrong_units": 8}])
+    rec = OR.record(accepted(tmp_path, public))
+    assert rec["bound"]["delta"] == {"scan": "1/1048576", "charged": "1/2", "eps_per_phase": "524289/1048576",
+                                     "is": OR.DELTA}
+    run, year = rec["periods"]["run"], rec["periods"]["year"]["datacenter"]
+    assert (run["vacuous"], run["eps_per_phase_below"]) == (False, "1")
+    assert year["vacuous"] and Fraction(year["eps_per_phase_below"]) < Fraction(public["eps"])
+    assert Fraction(year["eps_per_phase_below"]) == Fraction(1, year["parameters"]["phases"] * LB.datacenter_links())
+
+
+def test_scans_at_two_deltas_are_the_bounds_error(tmp_path):
+    two = dict(PUBLIC, K=PUBLIC["K"] + 9088 + 63, eps="3/1048576", windows=2,
+               scans=[SCAN, dict(SCAN, delta="1/524288")])
+    rec = OR.record(accepted(tmp_path, two, windows=2))
+    assert rec["bound"]["error"].startswith("eps 3/1048576 isn't m · δ_scan plus the charged audits' δ")
 
 
 def test_a_node_cell_is_proved_where_the_runs_period_covers_its_monitoring_period(tmp_path):
