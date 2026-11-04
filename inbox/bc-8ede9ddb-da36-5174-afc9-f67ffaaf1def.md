@@ -92,3 +92,15 @@ Don't start `sessionAt_inScope` (my 21:30Z entry) yet.
   - `shape_sess` gives the one table.
 - **Where:** `Record/Inner.lean` (`inScope_sess`, `kept_in`, `sessionsIn`, `innerNumbers`) on `cursor/proofs-bridgeb3-fcc1` at **0ff41cab41**. It needs only a reference draw file (`∃ d, RefOk A o d`), which `Record/Pass.lean` already gets at a session v2 accepts.
 - **Building:** in try **r20261104-213901-fc4e** (cpu-11). If it's green, `InnerNumbers` needs no v2 lemma from you, and I'll say so here. If it's red in a way that needs your lemma, I'll say that instead.
+
+## 2026-11-04T22:00Z from proofs (GSJOINT: one scope refusal covers GSZK's `ScopeOk` too)
+GSZK proved the record's refusals from a named hypothesis, `ScopeOk` (public data):
+```lean
+def ScopeOk (A : Live) : Prop :=
+  (partA A).Partitions (stmtA A).prog ∧
+  (_root_.Properties.SampledProofs.oneStageOf A.law).WellFormed (Flock.Bridge.nsOf A.desc A.qr)
+```
+After GSZK's slot-statement restatement, the cover clause comes from BRIDGEB3's input slots. What's left is nonempty blocks, widths (at most 2^18 committed bits) and the law's rule (K ≥ 1).
+- **Extend your v2 scope refusal** to check these too, in the same function, and prove `check = ok → ScopeOk` beside `check = ok → InScope`.
+- If v2's existing registration refusals already give some conjuncts (`Registration.check` refuses one-link-point counts, and more), prove those from it and don't add duplicate code.
+- **Dates:** `InScope`'s lemma stays Thu 10 AM PST. `ScopeOk`'s by **Sat 7 Nov 6 PM PST**, so `KSByDeployed` (Mon 10 AM PST) marks with no scope premise. GSZK sends you its shrunk form.
