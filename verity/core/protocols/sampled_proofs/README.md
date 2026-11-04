@@ -144,8 +144,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   the session's record to the coin trees the signed release log shows the challenger sampled and opened
   (`SampledProofs/ChallengerTrees.lean`, `challenger.sessions_tree_reason`): its `coin_tree` the one tree logged, its
   link points and round coins that tree's openings after its link's roots and each round's message. Then it runs
-  `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds
-  `proved_units` to what the session proved, and hands its verdict to v1's `checkAt` at those coins.
+  `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, accepts
+  the session only if the public file's units are the population in order (`FilePart.check`), binds `proved_units` to
+  what the session proved, and hands its verdict to v1's `checkAt` at those coins.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
   to `verify`'s. Onsite and remote (`Core.Onsite`, `Core.Remote`) read v1 as `VStar.Recursive.Sampled`'s one-stage
   form, never alone; switching it to v2 is what is left.
@@ -357,11 +358,10 @@ digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`.
   rule (`partition.digest`).
 
 The Lean verifier's executable reads the same object (`Flock/HmRow.lean`, `Flock/TemplateQuery.lean`), but no theorem
-states it. Pinned by core's `verity/ml/circuits/tests/partition_vectors.json` and `template_instance_vectors.json`,
-which `tests/test_one_stage.py` replays (`test_the_partition_is_cores_on_the_pinned_q_word_vector`,
-`test_the_partition_is_cores_on_the_pinned_template_vectors`, `test_the_partition_refuses_what_core_refuses`,
-`test_a_malformed_query_has_no_units_and_no_digest`, `test_a_program_that_is_not_topological_has_no_units`,
-`test_a_pre_canonical_object_keeps_its_digest`).
+states it. The guarantees read the circuit file's partition, `Flock.Bridge.partOf`; that the deployed record's is it
+is `RelDeployTarget`'s hypothesis, discharged once the layout is built from `FilePart.ofCircuit`. Pinned by
+core's `verity/ml/circuits/tests/partition_vectors.json` and `template_instance_vectors.json`, which
+`tests/test_one_stage.py` replays, with the object's refusals and digest.
 
 ### Sampling designs as text and as registered
 
