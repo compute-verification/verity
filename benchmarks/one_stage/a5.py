@@ -138,7 +138,9 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   not its writer's is incorrect in the wired flattening, so the sampled proof blocks' wires are the check; every unit's
   (`wiring.check`) is recorded beside it as the reference (``wiring_reference``), never gating. A sparse-MLA row's combine reads its splits' partials and lses the same way
   (`pipeline.split_rows`, `a5_sparse_mla.py` its stand-in). The negatives (`wiring_negatives`) wire a unit to another unit, swap
-  two of a combine's slots, and flip a wired row's string in its reader's public body.
+  two of a combine's slots, and flip a wired row's string in its reader's public body. A window committed with its circuit
+  record (`interface.Window`) states its wires there, and v2's per-member case carries them (`held_wiring`), so each drawn
+  reader's session opens its wired rows against its writers' roots (`a5_wired.py` its stand-in).
 * **Values tied to an earlier registration** (``a.tie``, records_audit's ``--tie``): a window whose population program takes
   values ahead of its templates' parameters (`program_values`, a served window's H1 tables or Pearl+'s committed rows)
   registers them as the values of the earlier record that registered them first (one-stage's ``outputs``: PoUW H1's
@@ -666,7 +668,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         return summary, False
     want = CS.expected_ports(mine)
     summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": law, "delta": a.delta, "firewall": a.firewall,
-                    "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
+                    "members": [{"k": k, "key": m.key, "template": m.template, "n": m.n, "base": m.base}
+                                for k, m in enumerate(mine.members)]})
     if plain(a):
         summary.update(firewall=None, plain={"scope": PLAIN_SCOPE, "coins": "os", "firewall": PLAIN_FIREWALL})
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
@@ -908,7 +911,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=sorted(served_units), v2=v2_proof(done, not plain(a), members), partition=part)
+                   served=sorted(served_units), v2=v2_proof(done, not plain(a), members, iface), partition=part)
     else:  # every verdict of record names the sessions delivered (`service.check_verdicts`)
         verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
         given = {"proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -927,7 +930,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=given["served"], v2=v2_proof(done, not plain(a), members), partition=part, tied=tie(a))
+                   served=given["served"], v2=v2_proof(done, not plain(a), members, iface), partition=part, tied=tie(a))
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
@@ -1084,13 +1087,23 @@ def _once(paths: Sequence[Path]) -> list[Path]:
     return out
 
 
-def v2_members(members: Sequence[tuple[int, int, int, int, Any]]) -> dict:
-    """The per-member form's parameters (`OneStageZk.Form`) for the window's members ``(k, base, n, g, own)``: each
-    member ``m<k>``'s units ``[base, base + n)``, its circuit's ``g`` units a proof block (META ``vus_per_block``, whose
-    link points the registration checks) and its statement's ``own`` inputs, its circuit digest, registered file and
-    registered circuit record, all fixed before the draw."""
-    return {"members": {f"m{k}": {**own, "units": [[base, base + n]], "vus_per_block": g}
-                        for k, base, n, g, own in members}}
+def v2_members(members: Sequence[tuple[str, int, int, int, Any]], wires: dict | None = None) -> dict:
+    """The per-member form's parameters (`OneStageZk.Form`) for the window's members ``(key, base, n, g, own)``: each
+    member, named by its key (the registration's ``<key>/<port>``, where a wired read finds its writer's root), its units
+    ``[base, base + n)``, its circuit's ``g`` units a proof block (META ``vus_per_block``, whose link points the
+    registration checks) and its statement's ``own`` inputs, its circuit digest, registered file and registered circuit
+    record; and with ``wires``, the window's wiring (`interface.wiring`), all fixed before the draw."""
+    return {"members": {key: {**own, "units": [[base, base + n]], "vus_per_block": g} for key, base, n, g, own in members},
+            **({"wires": wires} if wires is not None else {})}
+
+
+def held_wiring(record: Path | None) -> dict | None:
+    """The wiring of the window's registered circuit record ``record`` (`interface.wiring_of_record`) when the audit holds
+    the record (its SHA-512 the verifier's) and the record states wires; else None, and v2's sessions read no wires."""
+    if record is None:
+        return None
+    doc = json.loads(record.read_bytes())
+    return IF.wiring_of_record(doc) if doc.get("wires") else None
 
 
 def draw_ran_out(law: dict, population: int, read: bytes) -> bool | None:
@@ -1119,22 +1132,29 @@ def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
     except ValueError as e:
         return {"members": len(ms), "error": str(e)}
     return {"members": len(ms), "refused": [
-        {"member": f"m{mm['k']}", "template": mm["m"].template, "n": mm["m"].n, "vus_per_block": g, "fewest": b[0],
+        {"member": mm["m"].key, "template": mm["m"].template, "n": mm["m"].n, "vus_per_block": g, "fewest": b[0],
          "most": b[1]}
         for mm, (_, g), b in zip(members, ms, bounds) if b is not None and LP.nbl(g, b[0]) != LP.nbl(g, b[1])]}
 
 
-def v2_proof(done: Sequence[dict], zk: bool, members: Sequence[dict]) -> dict | str:
+def v2_proof(done: Sequence[dict], zk: bool, members: Sequence[dict], record: Path | None = None) -> dict | str:
     """`case_v2`'s inputs from the window's ``members`` and the drawn ones' sessions (`member_checks`'s), or why the audit
     has no v2 case. v2 verifies a drawn member's `--zk` sessions on its circuit, public file and registered file: a window
-    of one member in the one-statement form, of several in the per-member form (`v2_members`), which v2 refuses until
-    the guarantee for a sample over several members' statements is in the lock (`OneStageZk.MULTI_REFUSED`)."""
+    of one member in the one-statement form, of several, or of one whose held circuit record ``record`` states wires
+    (`held_wiring`), in the per-member form (`v2_members`), each member and statement named by the member's key and the
+    sessions reading the wires, which v2 refuses until the guarantee for a sample over several members' statements is in
+    the lock (`OneStageZk.MULTI_REFUSED`). A window whose members are wired but whose record the audit doesn't hold has
+    no wiring here: its sessions' wired rows are free, and their verdicts name no wiring."""
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"
     if not done:
         return "v2 verifies the drawn members' sessions; this audit drew none"
+    try:
+        wires = held_wiring(record)
+    except (OSError, KeyError, ValueError) as e:
+        return f"v2 reads the wires of the window's registered circuit record, which gives none: {type(e).__name__}: {e}"
 
     def interface(mm: dict) -> Path | None:
         return mm["st"].get("interface_file") if mm["st"].get("registered_file") else None
@@ -1151,12 +1171,12 @@ def v2_proof(done: Sequence[dict], zk: bool, members: Sequence[dict]) -> dict | 
 
     tables = [f for got in done if (d := got["mm"]["st"]["dir"] / "tables").is_dir() for f in sorted(d.glob("*")) if f.is_file()]
     interfaces = [i for mm in members if (i := interface(mm))]
-    if len(members) == 1:
+    if len(members) == 1 and wires is None:
         return {"proofs": own(members[0]), "statements": [(None, proof(done[0]))], "tables": tables,
                 "interfaces": interfaces}
-    return {"proofs": v2_members([(mm["k"], mm["m"].base, mm["m"].n, int(mm["st"]["meta"]["vus_per_block"]), own(mm))
-                                  for mm in members]),
-            "statements": [(f"m{got['mm']['k']}", proof(got)) for got in done], "tables": tables,
+    return {"proofs": v2_members([(mm["m"].key, mm["m"].base, mm["m"].n, int(mm["st"]["meta"]["vus_per_block"]), own(mm))
+                                  for mm in members], wires),
+            "statements": [(got["mm"]["m"].key, proof(got)) for got in done], "tables": tables,
             "interfaces": interfaces}
 
 
