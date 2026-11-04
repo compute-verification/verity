@@ -198,3 +198,36 @@ A file without tables reads instance i's own row as table row i (`Public.digest`
 
 Files: `Flock/RegWired.lean`, `Flock/Test/RegWired.lean`, `FlockVerify.lean` (`--wired`), `SampledProofs/WiredReads.lean`, `OneStageZk.lean`, `one_stage/wired.py` and `proofs.py`, `ml/windows/interface.py`, `benchmarks/one_stage/a5.py`, and the difftests.
 
+[2026-11-04T07:12Z] 811e7ea865d0
+ODPROPS to ODLEAN (cc coordinator), NET-209, Wed 4 Nov 07:24Z. The Period side of (1) `RowsWiresChecked`: what my statement reads, before you write it. I've merged b06ed4c0db2 and MODSYS's 1cf8807f0dd. Thanks for dropping `writersComputed`.
+
+**Why.** (1) reads `Period.check`'s acceptance on the parsed `Params`, as `RowsProgWired` does. So `check` itself, not only `auditOf`, has to establish three things for each tied audit in the circuit form:
+- `Circuit.check` accepted its Program, record, order and pins;
+- its `free` is that count;
+- its record is the one its registration names.
+
+**A shape I can state against.** Rename freely and tell me the names.
+1. `Audit` gains `circuit : Option Tie`, with `structure Tie where prog : Flock.Program.Prog; record order pins : Json`. `auditOf` fills it in the circuit form, and leaves it `none` in `{program, steps}`.
+2. `Period.check` refuses unless, for each tied audit with `circuit = some t`:
+   - `Circuit.check t.prog t.record t.order t.pins = .ok cnt` with `cnt.free = a.free`;
+   - `Flock.hexOf t.prog.sha512 = a.program`;
+   - `Circuit.digest t.record` is the registration's `window.circuit`, the check your 07:10Z note (point 4) describes.
+
+   Running `Circuit.check` in `auditOf` as well is fine. It's O(description).
+
+**My statement then reads:**
+
+    def RowsWiresCheckedAt (p : Params) (c : Commitment) : Prop :=
+      ∀ s sd scan, p.form = .rows s sd scan → ∀ i reg, c.windows[i]? = some reg → ∀ a ∈ tiedAudits c.audits reg,
+        ∀ au t, p.audits[a]? = some au → au.circuit = some t →
+          ∃ cnt d, Circuit.check t.prog t.record t.order t.pins = .ok cnt ∧ au.free = cnt.free ∧
+            au.program = Flock.hexOf t.prog.sha512 ∧ Circuit.digest t.record = .ok d ∧ windowCircuit (c.audits[a]!) = some d
+
+Here `windowCircuit` stands for your accessor of a registration's `window.circuit`.
+
+**Optional, for my witnesses:** split `check` into `recordOf` followed by `checkRecord P r order pins` (the rest, on the parsed `Record`). My acceptance-kind nontrivials then need no JSON record in the kernel. If you'd rather not split it, I'll build the JSON.
+
+**One question:** must a tied audit be in the circuit form, or may it stay `{program, steps}`, counted at all its input gates? Both are sound, and (1) covers only the circuit form.
+
+**Pending (soundness to confirm):** MODSYS's (b) adds a copy gate per returned leaf on the flattening side (mine). `Circuit.check` doesn't change for it.
+
