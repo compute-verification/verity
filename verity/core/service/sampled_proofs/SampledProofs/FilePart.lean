@@ -17,10 +17,10 @@ order (`Flock.Bridge.partOf` at the file's key program, `Placed.keyProg`):
   order (`units.indices` is `0, …, N − 1`), so slot `u` is the registration's unit `u` and the file's unit `u`, in strata
   of the sizes `sizes` gives, the `ns` of `partOf`. O(the strata's ranges + the public file's units), which the setup
   reads already.
-* **The unit class check** (`classWhy`): each unit commits the sources it owns and the returned output bits its rows
-  hold (`unitBits`, `outBits`: `Layout.outsOf`'s gates in one unit), the same for every unit, and that must fit a public
-  size class (`Partition.unitClass`, at most `UNIT_CLASS_MAX` bits), as `Claims.Sampling.Partition.Partitions` requires
-  of every proof block and the program's own units are held to (`Partition.checkCalls`). O(the unit).
+* **The unit class check** (`classWhy`): each unit's outputs, the returned output bits its rows hold (`outBits`:
+  `Layout.outsOf`'s gates in one unit), the same for every unit, must fit a public size class (`Partition.unitClass`, at
+  most `UNIT_CLASS_MAX` bits), as `Claims.Sampling.Partition.Partitions` requires of every proof block's outputs
+  (`Claims.Sampling.outputs`). The sources a unit owns are input gates, which count toward no class. O(the unit).
 -/
 import Flock.Circuit
 import Flock.RecResiduals
@@ -137,29 +137,25 @@ def outBitsAt (inWords constPos col : Nat) (outs : List Nat) : Nat :=
   let nIn := min (inWords * Flock.WORD) constPos
   outs.foldl (fun a k => a + (min (col * Flock.WORD + 16 * k) constPos - max (col * Flock.WORD) nIn)) 0
 
-/-- **The returned output bits each of the circuit `c`'s units holds** (`Layout.outsOf`'s gates in one unit):
-`outBitsAt` at the unit net and its `upv` copies' output leaves (`leavesOut`). The same for every unit. -/
+/-- **The returned output bits each of the circuit `c`'s units holds** (`Layout.outsOf`'s gates in one unit), its
+outputs (`Claims.Sampling.outputs` of `Bridge.blockOf`'s proof block at the key program): `outBitsAt` at the unit net and
+its `upv` copies' output leaves (`leavesOut`). Its other gates are no outputs: a row's two XORs are read only by the
+row's AND, no unit reads another's rows, and the sources it owns are input gates. The same for every unit. -/
 def outBits (c : Flock.Circuit) : Nat :=
   outBitsAt c.unit.inWords c.unit.constPos (c.unit.outGroups.getD 0 default).col
     ((List.range c.upv).map fun u => (c.leavesOut.getD u #[]).size)
 
-/-- **The bits each of the circuit `c`'s units commits** (`Claims.Sampling.committed` of `Bridge.blockOf`'s proof block
-at the key program): the sources it owns, each an input gate, and the returned output bits its rows hold (`outBits`).
-Its other gates commit nothing: a row's two XORs are read only by the row's AND, and no unit reads another's rows or
-sources. The same for every unit; the sources a unit owns don't depend on the population. -/
-def unitBits (c : Flock.Circuit) : Nat := (ofCircuit c 0).srcs.size + outBits c
-
-/-- **Why the circuit file's units fit no public size class**, none when they fit: each commits `bits` (`unitBits`),
-and a unit wider than the widest class (`Partition.unitClass`, `UNIT_CLASS_MAX`) is outside the sampling scope
-(`Claims.Sampling.Partition.Partitions`), as the program's own units are (`Partition.checkCalls`). -/
+/-- **Why the circuit file's units fit no public size class**, none when they fit: each outputs `bits` (`outBits`), and
+a unit whose outputs exceed the widest class (`Partition.unitClass`, `UNIT_CLASS_MAX`) is outside the sampling scope
+(`Claims.Sampling.Partition.Partitions`). -/
 def classWhy (bits : Nat) : Option String :=
   if (Partition.unitClass bits).isSome then none
-  else some (s!"partition: each of the circuit file's units commits {bits} bits, more than the widest class, " ++
+  else some (s!"partition: each of the circuit file's units outputs {bits} bits, more than the widest class, " ++
     s!"{Partition.UNIT_CLASS_MAX}")
 
-/-- **The unit class check on the circuit file** `c`: `classWhy` at its units' bits (`unitBits`). -/
+/-- **The unit class check on the circuit file** `c`: `classWhy` at its units' outputs (`outBits`). -/
 def checkClass (c : Flock.Circuit) : V Unit :=
-  match classWhy (unitBits c) with
+  match classWhy (outBits c) with
   | some w => throw w
   | none => pure ()
 
@@ -223,9 +219,9 @@ def piece (j : Json) : V Json := do
   let strata ← Partition.strata (← Program.parse (← Flock.canon (getD j "program")).toUTF8) (getD j "query")
   return Json.mkObj [("why", match why strata indices with | some w => Json.str w | none => Json.null)]
 
-/-- `{"in_words", "const_pos", "out_col", "outs", "srcs"}` to `{"out_bits", "bits", "why"}`: the returned output bits a
-unit holds (`outBitsAt` at the unit net's `inWords`, `constPos`, returned-output group's `col` and its copies' output
-leaves `outs`), the bits it commits beside the `srcs` sources it owns (`unitBits`), and `classWhy` at those. -/
+/-- `{"in_words", "const_pos", "out_col", "outs"}` to `{"out_bits", "why"}`: the returned output bits a unit holds
+(`outBitsAt` at the unit net's `inWords`, `constPos`, returned-output group's `col` and its copies' output leaves
+`outs`), and `classWhy` at those. -/
 def classPiece (j : Json) : V Json := do
   let natAt := fun (k : String) => match nat? (getD j k) with
     | some v => (pure v : V Nat)
@@ -235,9 +231,8 @@ def classPiece (j : Json) : V Json := do
     | some k => pure k
     | none => throw "outs is not a list of natural numbers"
   let out := outBitsAt (← natAt "in_words") (← natAt "const_pos") (← natAt "out_col") outs.toList
-  let bits := (← natAt "srcs") + out
-  return Json.mkObj [("out_bits", Lean.toJson out), ("bits", Lean.toJson bits),
-    ("why", match classWhy bits with | some w => Json.str w | none => Json.null)]
+  return Json.mkObj [("out_bits", Lean.toJson out),
+    ("why", match classWhy out with | some w => Json.str w | none => Json.null)]
 
 #guard sizes #[("a", #[(0, 3)]), ("b", #[(3, 5)])] == some #[3, 2]
 #guard sizes #[("a", #[(0, 1), (2, 3)]), ("b", #[(1, 2)])] == none

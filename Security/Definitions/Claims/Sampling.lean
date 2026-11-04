@@ -22,7 +22,7 @@ the code side's.
    topologically ordered program is the glossary's form on the boundary trace (`FaultyBoundary`).
 4. **Scope** (`Scope`, `InScope`, `ScopeMatches`): a statement that parses, whose query evaluates; a topologically
    ordered program; a partition of all its gates but constants and unread inputs into proof units, each a set of gates
-   whose committed values fit its public size class, `|out(u)| ≤ w_{c(u)}` (`unitClasses`: powers of two from 16 to
+   whose outputs fit its public size class, `|out(u)| ≤ w_{c(u)}` (`outputs`, `unitClasses`: powers of two from 16 to
    262,144); and a well-formed design, one rule per class. `KS`, `KSCount`, `Bits` and
    `Complete` hold on it, and it excludes every design whose `P_a` is not its draw's miss probability: `subset K` with
    `K > N`, whose `P_a` is `0` at every set, so that `KS` there is vacuous, and a Bernoulli rule with `den = 0` or
@@ -173,6 +173,11 @@ def Prog.refIn (C : Prog) (u : List ℕ) (val : ℕ → Option Bool) (ι : ℕ �
 /-- The values proof unit `u` of `C` commits: its gates that `C.Boundary` commits. -/
 def committed (C : Prog) (u : List ℕ) : ℕ := (u.filter fun g => C.Boundary u g).length
 
+/-- **The outputs** `|out(u)|` of proof unit `u` of `C`: its gates other than inputs that `C.Boundary` commits, the ones
+`C` returns or a gate outside `u` reads. -/
+def outputs (C : Prog) (u : List ℕ) : ℕ :=
+  (u.filter fun g => C.Boundary u g && decide (C.gates[g]? ≠ some .input)).length
+
 /-- **An unread input** of `C`: an input gate that `C` doesn't return and no gate of `C` reads. No gate's value and no
 returned value depends on it. -/
 def Prog.Unread (C : Prog) (g : ℕ) : Prop :=
@@ -200,19 +205,20 @@ def unitClassMax : ℕ := 262144
 `unitClassMax`, ascending (`[16, 32, …, 262144]`). -/
 def unitClasses : List ℕ := (List.range (Nat.log2 (unitClassMax / 16) + 1)).map (16 * 2 ^ ·)
 
-/-- **A proof unit's size class** `w_{c(u)}`: the least public class that holds the values it commits (`committed`), a
-function of the program and the unit, both public; `none` when no class does. -/
-def unitClass (C : Prog) (u : List ℕ) : Option ℕ := unitClasses.find? fun w => decide (committed C u ≤ w)
+/-- **A proof unit's size class** `w_{c(u)}`: the least public class that holds its outputs (`outputs`), a function of
+the program and the unit, both public; `none` when no class does. -/
+def unitClass (C : Prog) (u : List ℕ) : Option ℕ := unitClasses.find? fun w => decide (outputs C u ≤ w)
 
 /-- **`P` partitions `C`**: no gate is in two proof units, and every gate of `C` but a constant and an unread input is
 in one, the other input gates included. A constant, public, may be in one or in none, and so may an unread input
 (`Prog.Unread`), on which no gate's value and no returned value depends. Every proof unit has a gate of `C`, and each
-proof unit `u` has a public size class `c(u)` whose width holds the values it commits, its gates that `Boundary`
-commits: `|out(u)| ≤ w_{c(u)}`. A proof unit is a set of gates, so a unit's gates may interleave with another's. -/
+proof unit `u` has a public size class `c(u)` whose width holds its outputs, its gates other than inputs that
+`Boundary` commits: `|out(u)| ≤ w_{c(u)}`. The input gates a unit holds count toward no class. A proof unit is a set of
+gates, so a unit's gates may interleave with another's. -/
 def Partition.Partitions (P : Partition) (C : Prog) : Prop :=
   P.gates.Nodup ∧ (∀ g ∈ P.gates, g < C.gates.length) ∧
     (∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → ¬ C.Unread g → g ∈ P.gates) ∧
-    (∀ u ∈ P.blocks, u ≠ []) ∧ ∀ u ∈ P.blocks, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
+    (∀ u ∈ P.blocks, u ≠ []) ∧ ∀ u ∈ P.blocks, ∃ w, unitClass C u = some w ∧ outputs C u ≤ w
 
 /-! ## Proof units and the universal unit -/
 
@@ -395,11 +401,12 @@ def Design.WellFormed (d : Design) (P : Partition) : Prop :=
   d.rules.length = P.classes.length ∧ ∀ p ∈ d.rules.zip P.classes, p.1.WellFormed (strataSizes p.2)
 
 /-- **The sampling scope, readable**, at the statement's partition: a topologically ordered program, partitioned into
-proof units (sets of gates, constants and unread inputs in one or in none) whose committed values fit their public size
-classes, and a well-formed design.
+proof units (sets of gates, constants and unread inputs in one or in none) whose outputs fit their public size classes,
+and a well-formed design.
 
-The query: whatever its own width parameter, every unit, input units included, commits at most its class's width
-`w_{c(u)}` (`unitClasses`, up to `unitClassMax`). A unit that commits more than the widest class is out of scope. -/
+The query: whatever its own width parameter, every unit outputs at most its class's width `w_{c(u)}` (`outputs`,
+`unitClasses`, up to `unitClassMax`), however many input gates it holds. A unit whose outputs exceed the widest class is
+out of scope. -/
 def InScope (P : Partition) (s : AuditStatement) : Prop :=
   s.prog.Topological ∧ P.Partitions s.prog ∧ s.design.WellFormed P
 

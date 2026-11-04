@@ -13,8 +13,8 @@ clause of it, each a named Prop over the statements the verifier evaluates:
 * `RefusesUncovered`: the proof units' gates are the program's, and every gate but a constant and an unread input is
   among them.
 * `RefusesEmpty`: every proof unit has a gate.
-* `RefusesWide`: every proof unit's committed values (the claims' `committed`, on its own gates) fit its public size
-  class (`unitClass`).
+* `RefusesWide`: every proof unit's outputs (the claims' `outputs`, on its own gates) fit its public size class
+  (`unitClass`).
 
 The five give `ProgramScope` (`programScope_of_refusals`), and so, on partitions of the shape of the verifier's own
 layouts (`DrawSlots`), `ScopeMatches` (`scopeMatches_of_refusals`) and, with `ChecksScope`, `Refuses`
@@ -36,10 +36,10 @@ def Partition.Covers (P : Partition) (C : Prog) : Prop :=
     ∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → ¬ C.Unread g → g ∈ P.gates
 
 /-- **A cut of `C` into proof units**: no gate in two of `P`'s proof units, which cover `C` but its constants and
-unread inputs, each with a gate, and each committing values that fit its public size class. -/
+unread inputs, each with a gate, and each with outputs that fit its public size class. -/
 def Partition.Cuts (P : Partition) (C : Prog) : Prop :=
   P.gates.Nodup ∧ P.Covers C ∧ (∀ u ∈ P.blocks, u ≠ []) ∧
-    ∀ u ∈ P.blocks, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
+    ∀ u ∈ P.blocks, ∃ w, unitClass C u = some w ∧ outputs C u ≤ w
 
 /-- A partition of `C` cuts it into proof units. -/
 theorem Partition.Partitions.cuts {P : Partition} {C : Prog} (h : P.Partitions C) : P.Cuts C :=
@@ -73,9 +73,10 @@ def RefusesUncovered (D : Deploy Coin Col T) : Prop := Evaluated D fun C P => P.
 def RefusesEmpty (D : Deploy Coin Col T) : Prop := Evaluated D fun _ P => ∀ u ∈ P.blocks, u ≠ []
 
 /-- **The verifier refuses a proof unit wider than its size class**: every proof unit of a partition it evaluates has a
-public size class that holds its committed values (`unitClass`; `committed`, `Prog.Boundary` on the unit's own gates). -/
+public size class that holds its outputs (`unitClass`; `outputs`, `Prog.Boundary` on the unit's own gates but its
+inputs). -/
 def RefusesWide (D : Deploy Coin Col T) : Prop :=
-  Evaluated D fun C P => ∀ u ∈ P.blocks, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
+  Evaluated D fun C P => ∀ u ∈ P.blocks, ∃ w, unitClass C u = some w ∧ outputs C u ≤ w
 
 /-- **The program part from the five refusals**: where the scope check is the verifier's evaluation (`QueryCheck`), the
 scope check is the readable scope's program part. -/

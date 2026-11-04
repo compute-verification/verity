@@ -23,10 +23,10 @@ soundness (`SampledKSLiveV3`, and `SampledKSLiveV5` at a shared-row public file)
 
 `population_why` mirrors the v2 audit's check that the public file's units are the registration's population in order
 (`SampledProofs.FilePart.why`), which `verify` applies to the one-stage audit's statement when handed its strata.
-`unit_class_why` mirrors the v2 audit's check that each of the circuit file's units fits a public size class
-(`SampledProofs.FilePart.classWhy`), on the sources a unit owns and the returned output bits it holds (`file_out_bits`).
-`verify` doesn't apply it: the sources a unit owns are read off the unit's rows, which only Lean parses here, so the v2
-audit refuses such a circuit file alone, and its difftest (`file_unit_class`) holds the two to each other.
+`unit_class_why` mirrors the v2 audit's check that each of the circuit file's units' outputs fit a public size class
+(`SampledProofs.FilePart.classWhy`), on the returned output bits a unit holds (`file_out_bits`). `verify` doesn't apply
+it: a unit's output columns are read off the circuit file's unit net, which only Lean parses here, so the v2 audit
+refuses such a circuit file alone, and its difftest (`file_unit_class`) holds the two to each other.
 
 The verifier reads the whole circuit file once a call, in time and memory linear in it (about six times the file at
 peak), then O(proof) a session: so a protocol verifies one statement a stratum, every sampled proof block of it an instance.
@@ -208,14 +208,13 @@ def file_out_bits(in_words: int, const_pos: int, out_col: int, outs: Sequence[in
     return sum(max(0, min(lo + 16 * k, const_pos) - max(lo, n_in)) for k in outs)
 
 
-def unit_class_why(srcs: int, out_bits: int) -> str | None:
-    """`SampledProofs.FilePart.classWhy` at `unitBits`: why each of a circuit file's units, committing the ``srcs``
-    sources it owns and the ``out_bits`` returned output bits it holds (`file_out_bits`), fits no public size class
-    (`partition.unit_class`); None when it fits."""
-    bits = srcs + out_bits
-    if unit_class(bits) is not None:
+def unit_class_why(out_bits: int) -> str | None:
+    """`SampledProofs.FilePart.classWhy`: why each of a circuit file's units, outputting the ``out_bits`` returned output
+    bits it holds (`file_out_bits`), fits no public size class (`partition.unit_class`); None when it fits. The sources
+    a unit owns are input gates, which count toward no class."""
+    if unit_class(out_bits) is not None:
         return None
-    return (f"partition: each of the circuit file's units commits {bits} bits, more than the widest class, "
+    return (f"partition: each of the circuit file's units outputs {out_bits} bits, more than the widest class, "
             f"{UNIT_CLASS_MAX}")
 
 

@@ -963,19 +963,18 @@ def file_population(j):
 
 def file_unit_class(j):
     """`FilePart.classPiece` (`proofs.file_out_bits`, `proofs.unit_class_why`): the returned output bits a circuit
-    file's unit holds at its unit net's columns and its copies' output leaves, the bits it commits beside the sources it
-    owns, and why they fit no public size class."""
+    file's unit holds at its unit net's columns and its copies' output leaves, and why they fit no public size class."""
     j = _json(j)
     if not isinstance(j, dict):
         raise D.Reject("not an object")
     outs = j.get("outs")
     if not (isinstance(outs, list) and all(map(_nat, outs))):
         raise D.Reject("outs is not a list of natural numbers")
-    for k in ("in_words", "const_pos", "out_col", "srcs"):
+    for k in ("in_words", "const_pos", "out_col"):
         if not _nat(j.get(k)):
             raise D.Reject(f"{k} is not a natural number")
     out = PF.file_out_bits(j["in_words"], j["const_pos"], j["out_col"], outs)
-    return {"bits": j["srcs"] + out, "out_bits": out, "why": PF.unit_class_why(j["srcs"], out)}
+    return {"out_bits": out, "why": PF.unit_class_why(out)}
 
 
 def bound(j):
@@ -2700,12 +2699,15 @@ FILE_POPULATION = D.Port(PIECES, "file_population", file_population, st.one_of(f
 @st.composite
 def file_unit_classes(draw) -> dict:
     """The file_unit_class piece's input: a unit net's input words, constant row and returned-output group, which puts
-    its copies' output leaves on input columns, computed rows or past the constant, and owned sources mostly few, else
-    within two bits of the widest class."""
+    its copies' output leaves on input columns, computed rows or past the constant; mostly few output leaves, else one
+    copy whose output columns end within two bits of the widest class."""
     j = {"const_pos": draw(st.integers(0, 1200)), "in_words": draw(st.integers(0, 4)),
          "out_col": draw(st.integers(0, 10)), "outs": draw(st.lists(st.integers(0, 40), max_size=4))}
-    edge = P.UNIT_CLASS_MAX - PF.file_out_bits(j["in_words"], j["const_pos"], j["out_col"], j["outs"])
-    return {**j, "srcs": draw(st.one_of(st.integers(0, 600), st.integers(max(0, edge - 2), edge + 2)))}
+    if draw(st.booleans()):
+        return j
+    lo = max(j["out_col"] * PF.WORD, j["in_words"] * PF.WORD)
+    end = lo + P.UNIT_CLASS_MAX + draw(st.integers(-2, 2))
+    return {**j, "const_pos": end, "outs": [(end - j["out_col"] * PF.WORD + 15) // 16]}
 
 
 @st.composite
