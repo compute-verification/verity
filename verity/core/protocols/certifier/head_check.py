@@ -73,8 +73,8 @@ from verity.ml.circuits.types import Array
 from verity.ml.commitments import hm96
 from verity.ml.commitments.gates.frame_v3 import FrameV3Read, root_ref
 from verity.ml.commitments.gates.hm96 import Hm96Sha512Leaf
-from verity.ml.commitments.gates.lms import LmsEqual, Sha512Compress
-from verity.ml.commitments.gates.sha512 import IV, midstate, pad_tail, words_be
+from verity.ml.commitments.gates.lms import LmsEqual
+from verity.ml.commitments.gates.sha512 import IV, Sha512Compress, midstate, pad_tail, words_be
 from verity.ml.commitments.identity import tagged_sha512, tagged_sha512_prefix
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix

@@ -1,22 +1,30 @@
 """SHA-512's compression function as a GF(2) circuit over `forms` (formerly Flock's `sha512_circuit`, which keeps its row
-circuits and imports this), with its plain-integer reference.
+circuits and imports this), with its plain-integer reference and its one Definition.
 
 * `compress_ref`: one compression on word values (FIPS 180-4 §6.4.2), with the feed-forward.
 * `compress_gadget`: the same over words of circuit bits, 58,120 ANDs in the ripple-carry model (80 rounds of 7 additions, Ch
   and Maj; 64 schedule words of 3 additions; 8 final additions), fewer where an operand is a constant (a constant message
   block's schedule is free). On a `forms.Circuit` it also commits copies (`commit`) that keep every row's linear forms short;
   traced (`trace.TracingCircuit`) a copy is the form itself, so a Boolean Definition built on it has exactly the ANDs.
+* `Sha512Compress_v1`, ``(cv: Array<8, Word>, block: Array<16, Word>) -> Array<8, Word>``: `compress_gadget` as a traced
+  Definition (`trace.part`, which Flock lowers by its builder), the one compression a Boolean circuit calls. A caller whose
+  bits are laid out otherwise (a byte string in byte order, a chaining value as 512 bits) rearranges its references into
+  these words at the call, which is wiring; a call folds no constant operand, being one circuit for every block.
 
 Words are 64-bit values as little-endian bit lists (bit i of a word is its value's bit i); a digest's bytes are its eight words
-big-endian.
+big-endian. ``Word`` is ``Array<64, Value<1>>`` (`WORD`), a chaining value `DIGEST` and a message block `BLOCK`.
 """
 from __future__ import annotations
 
 import struct
 
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import ONE, ZERO, Circuit, const_bits, maj
+from verity.ml.circuits.types import Array
 
-__all__ = ["CARRY_EVERY", "IV", "K", "M64", "commit", "compress_gadget", "compress_ref", "midstate", "pad_tail", "words_be"]
+__all__ = ["BLOCK", "CARRY_EVERY", "DIGEST", "IV", "K", "M64", "Sha512Compress", "WORD", "commit", "compress_gadget",
+           "compress_ref", "midstate", "pad_tail", "words_be"]
 
 K = [
     0x428a2f98d728ae22, 0x7137449123ef65cd, 0xb5c0fbcfec4d3b2f, 0xe9b5dba58189dbbc, 0x3956c25bf348b538, 0x59f111f1b605d019,
@@ -138,3 +146,15 @@ def compress_gadget(C: Circuit, cv: list[list], msg: list[list]) -> list[list]:
         t2 = _add(C, s0, mj)
         h, g, f, e, d, c, b, a = g, f, e, commit(C, _add(C, d, t1)), c, b, a, commit(C, _add(C, t1, t2))
     return [_add(C, x, y) for x, y in zip(cv, [a, b, c, d, e, f, g, h])]
+
+
+# --- the Definition ------------------------------------------------------------------------------------------------------------
+
+WORD = Array(64, BL.BIT)
+DIGEST = Array(8, WORD)
+BLOCK = Array(16, WORD)
+
+Sha512Compress = TR.part(
+    "Sha512Compress", (), lambda S: ((("cv", DIGEST), ("block", BLOCK)), DIGEST),
+    lambda C, S, *e: compress_gadget(C, list(e[:8]), list(e[8:24])),
+    "One SHA-512 compression (FIPS 180-4 §6.4.2) with its feed-forward, on 64-bit words LSB first")
