@@ -246,6 +246,31 @@ class FrozenQLinear(QLinear):
         return self.q, self.s
 
 
+class DeflatedQLinear(FrozenQLinear):
+    """A FrozenQLinear whose codes are of W·R less its top-r SVD part A·Bᵀ (`hardness_public/rotated.py --deflate`),
+    which is served apart as its own product: exact, in fp32 from the bf16 rotated input, with no noise."""
+
+    def __init__(self, q, s, c, rot, a: torch.Tensor, b: torch.Tensor):
+        super().__init__(q, s, c, rot)
+        self.register_buffer("a", a)
+        self.register_buffer("b", b)
+
+    def forward(self, x):
+        y = super().forward(x)
+        xr = x.to(torch.bfloat16)
+        if self.rot is not None:
+            xr = self.rot(xr)
+        return y + (xr.float() @ self.b) @ self.a.T
+
+
+def top_part(w: torch.Tensor, r: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """w's top-r SVD part as A·Bᵀ: A = U_r·Σ_r (n×r) and B = V_r (K×r), from the eigenvectors of wᵀw in float64."""
+    w = w.double()
+    _evals, v = torch.linalg.eigh(w.T @ w)
+    b = v[:, -r:].flip(-1)
+    return w @ b, b
+
+
 def rotate_t(w: torch.Tensor) -> torch.Tensor:
     """`rotation.rotate` on w's device: W·R in float64."""
     n, k = w.shape
@@ -274,11 +299,16 @@ def wrap(model, target: float | None, rotate: bool = False, log=print, targets: 
 
     With frozen, each is a FrozenQLinear whose codes come from W·R formed in float64 on the weight's device and then
     rounded to fp32, as the latent path holds it, and overwrite the bf16 weight in place (codes within ±127 are exact in
-    bf16): a bf16 model too large for fp32, wrapped in the memory it was loaded in plus one matrix's temporaries."""
+    bf16): a bf16 model too large for fp32, wrapped in the memory it was loaded in plus one matrix's temporaries. A
+    targets value deflR (frozen only) is a DeflatedQLinear at target: the codes of W·R less its top-R SVD part."""
     info, rots, targets = {}, {}, targets or {}
     for name, parent, attr in block_linears(model):
         lin = getattr(parent, attr)
         tgt = targets.get(name, target)
+        deflate = 0
+        if isinstance(tgt, str):
+            assert tgt.startswith("defl") and frozen, f"{name}: {tgt} isn't deflR, or the model isn't frozen"
+            deflate, tgt = int(tgt.removeprefix("defl")), target
         dev = lin.weight.device
         rot = None
         if rotate:
@@ -288,21 +318,26 @@ def wrap(model, target: float | None, rotate: bool = False, log=print, targets: 
                 rot = rots[(k, dev)] = Rotation(k).to(dev)
         if frozen:
             with torch.no_grad():
-                w = (rotate_t(lin.weight) if rotate else lin.weight.double()).float()
+                w = rotate_t(lin.weight) if rotate else lin.weight.double()
+                if deflate:
+                    a, b = top_part(w, deflate)
+                    w = w - a @ b.T
+                w = w.float()
                 c, ov = calibrate(w, tgt)
                 s = row_scale(w, c)
                 q = lin.weight.detach()
                 assert q.dtype == torch.bfloat16, q.dtype
                 q.copy_(codes(w, s))
             del w
-            setattr(parent, attr, FrozenQLinear(q, s, c, rot))
+            setattr(parent, attr, DeflatedQLinear(q, s, c, rot, a.float(), b.float()) if deflate
+                    else FrozenQLinear(q, s, c, rot))
         else:
             if rotate:
                 with torch.no_grad():
                     lin.weight.copy_(torch.from_numpy(rotation.rotate(lin.weight.detach().cpu().numpy())))
             c, ov = calibrate(lin.weight, tgt)
             setattr(parent, attr, QLinear(lin, c, rot))
-        info[name] = {"c": c, "strassen1": ov, "target": tgt}
+        info[name] = {"c": c, "strassen1": ov, "target": tgt} | ({"deflate": deflate} if deflate else {})
     log(f"wrap: {len(info)} linears, target {target} ({len(targets)} set apart), rotate {rotate}, strassen1 median "
         f"{sorted(v['strassen1'] for v in info.values())[len(info) // 2]:.4%}")
     return info

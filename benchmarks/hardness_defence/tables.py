@@ -395,16 +395,18 @@ def evaluate(book, model, choose):
 
 
 def served_map(book, model, choose) -> dict:
-    """What a defence serves off design U's 2% codes: a clip target, or `out` for EXACT's matrices; a matrix credited
-    at a margin or uncredited otherwise is served as design U."""
+    """What a defence serves off design U's 2% codes: a clip target, deflR for design U's codes of W·R less its top-R
+    SVD part (`quant.DeflatedQLinear`), or `out` for EXACT's matrices; a matrix credited at a margin or uncredited
+    otherwise is served as design U."""
     out = {}
     for t in all_tensors(model):
         var, credit = choose(book, model, t)
         if credit == 0 and t in EXACT.get(model, ()):
             out[t] = "out"
         elif credit and var and var != U:
-            assert var[1:] == U[1:], f"{t}: {var} isn't a clip qat.py serves"
-            out[t] = var[0]
+            assert var[1] == U[1] and var[3:] == U[3:] and (var[0] == U[0] or not var[2]), \
+                f"{t}: {var} isn't a clip or a deflation qat.py serves"
+            out[t] = f"defl{var[2]}" if var[2] else var[0]
     return out
 
 

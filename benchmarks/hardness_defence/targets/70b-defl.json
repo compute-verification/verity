@@ -1,0 +1,14 @@
+{
+ "model.layers.0.self_attn.q_proj.weight": "out",
+ "model.layers.0.self_attn.k_proj.weight": "out",
+ "model.layers.0.self_attn.v_proj.weight": "out",
+ "model.layers.0.mlp.gate_proj.weight": "defl32",
+ "model.layers.0.mlp.up_proj.weight": "defl32",
+ "model.layers.1.self_attn.v_proj.weight": "out",
+ "model.layers.5.mlp.gate_proj.weight": "defl32",
+ "model.layers.5.mlp.up_proj.weight": "defl32",
+ "model.layers.9.mlp.gate_proj.weight": "defl32",
+ "model.layers.9.mlp.up_proj.weight": "defl32",
+ "model.layers.33.mlp.gate_proj.weight": "defl32",
+ "model.layers.33.mlp.up_proj.weight": "defl32"
+}

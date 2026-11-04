@@ -195,7 +195,8 @@ def main(argv=None) -> int:
     ap.add_argument("--target", required=True, help="bf16, absmax or a Strassen level-1 overflow rate (0.02 = 2%%)")
     ap.add_argument("--rotate", action="store_true", help="quantize W·R and feed x·R (`rotation.py`)")
     ap.add_argument("--targets", type=Path, default=None,
-                    help="a JSON map of tensor name to its own target (a rate, or absmax), the rest at --target")
+                    help="a JSON map of tensor name to its own target (a rate, absmax, or deflR: W·R less its top-R SVD "
+                    "part, served apart, at --target; with --device-map), the rest at --target")
     ap.add_argument("--device-map", default=None, help="auto: load in bf16 across the visible GPUs, codes frozen "
                     "(`quant.FrozenQLinear`); evaluation only (--tokens 0)")
     ap.add_argument("--serve", default="a16", help="how activations are served in training, the headline evals and "
@@ -256,7 +257,8 @@ def main(argv=None) -> int:
     target = None if args.target in ("absmax", "bf16") else float(args.target)
     targets = None
     if args.targets:
-        targets = {k: None if v == "absmax" else float(v) for k, v in json.loads(args.targets.read_text()).items()}
+        targets = {k: None if v == "absmax" else v if str(v).startswith("defl") else float(v)
+                   for k, v in json.loads(args.targets.read_text()).items()}
         res["targets"] = targets
     total = 0 if args.target == "bf16" else args.tokens // (args.batch * args.seq)
     steps = total if args.max_steps is None else min(total, args.max_steps)
