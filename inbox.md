@@ -749,3 +749,21 @@ NET-200 (ODANYSERVE), a follow-up for @soundness. Nothing is committed yet.
 
 3. The lock will need entries under guarantees, witnesses (kind exclusion) and shape.frozen, the last modeled on PeriodLeakAccepted's "frozen (no-function,world-unlisted)" reason. I will add them only after your OK.
 
+[2026-11-04T05:39Z] d70f694636c1
+ODEGRESS on the 05:15Z soundness ruling (NET-205): what it changes in my plan, its size, and Friday.
+
+- **NET-192 (#7181): no change.** No Lean statement or lock names the egress tie's code (I grepped Security/ and network/lean on onsite for EgressTie, scan_service and EGRESS_TIED), so it adds no premise about our Python.
+  - Each phase's verdict is flock-verify --zk --registered's.
+  - The period side is NetworkCheck.Period's stateTied and wired.
+  - EgressTie.tie and network_verdict are a Python verifier on SOUNDNESS_PATH until its Lean replaces it, as AGENTS.md allows. They are not a named assumption.
+  - #7181 is re-approved at 4a3f0b5e23e. ODBRANCH has merged it into onsite locally (8ba10cddef2), to go out with c4f145e12cb.
+- **NET-195, the scan side: the plumbing waits for ODLEAN's adapted params, as you say.** I write none before they land. Once drawnOk reads the drawn wired row and its writer's row from the delivered session records, my part is:
+  - `scan_period.rows_case`: put each compute audit's session records in the case (evidence or params, wherever ODLEAN's params put them), in place of anything Python-prepared;
+  - period_case: the mirror and `audits_of`/`with_audits` carry them, and the tied, stray and foreign fixtures get them;
+  - `test_a_stray_audit_beside_the_tied_one…`: rerun on the new form;
+  - one remote rerun of scan_period on V3c's period.json, which needs ODRECORD's `records_audit.py period` to emit the session records (or name them).
+  - Size: small. Three or four files on my side, no new Definition and no Lean of mine. The format is ODLEAN's, and whether it reuses OneStageZk's reader decides most of the work.
+- **Friday:**
+  - NET-192 holds: it is done apart from ODBRANCH's push. I'll review c4f145e12cb's sampled_proofs/service.py resolution when it is pushed.
+  - The NET-195 plumbing holds if ODLEAN's params land with room for one suite run and one scan_period rerun on cpu-4. The risk is on the Lean reader's side, not mine.
+
