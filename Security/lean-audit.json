@@ -14099,7 +14099,7 @@
    "Pouw.SecurityProofs.OnsiteFreed_honest": "completeness: OnsiteFreed's honest witness: every premise, RemoteWorkFloor from WorkSound's conclusion, OutsourceWithinEgressPeriod from the per-program premise and CertifiedImport from ImportWithinCertifier among them, holds at the toy instance (Definitions.Pouw.Witness), the bound is below 1, and the onsite verdict accepts the honest prover, which exchanges nothing, so OnsiteFreed is not vacuous.",
    "Pouw.SecurityProofs.OnsiteFreed_nontrivial": "lemma: OnsiteFreed's nontrivial witness, in the Lean check's three-part form: at the toy instance with a work check that accepts everything, every premise of OnsiteFreed but RemoteWorkFloor holds, RemoteWorkFloor fails (the quiet prover exchanges nothing, is accepted and spends 0 < F) and the conclusion fails; a counterexample about no protocol function.",
    "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": "lemma: the per-program OutsourceWithinEgress implies its period form OutsourceWithinEgressPeriod, one premise's form from another's, about no protocol function's acceptance.",
-   "Flock.SecurityProofs.DeltaPubDeployed": "frozen (no-function): a fact about SampledKSLivePub's error, not a run of a Lean function: at the deployment's parameters (k = ⌈2^24/e⌉, ρ = 1/2, M = Rw = 2^192, budgets q_F = 2(t' + v), q_S = t' + v for t', v ≤ 2^80, at most 2^40 committed wires, K₀ ≤ n ≤ K₀·kd) the rate hypothesis holds and deltaPub < 1; it reads DeltaPubDeployed (Security/Proofs/Flock/Bridge/PublicDeployed.lean), so the lock records its text.",
+   "Flock.SecurityProofs.DeltaPubDeployed": "frozen (no-function): a fact about SampledKSLivePub's error, not a run of a Lean function: at the deployment's parameters (k = ⌈2^24/e⌉, ρ = 1/2, M = Rw = 2^192, budgets q_F = 2(t' + v), q_S = t' + v and link cost t' + v per run for t', v ≤ 2^80, at most 2^40 committed wires, K₀ ≤ n ≤ K₀·kd) the rate hypothesis holds and deltaPub < 1; it reads DeltaPubDeployed (Security/Proofs/Flock/Bridge/PublicDeployed.lean), so the lock records its text.",
    "Flock.SecurityProofs.SampledKSLiveV5": "frozen (no-function): SampledKSLiveV2 at flock-verify --zk --public-inputs under the registration's law on its layout's strata (LawOn), proved by its own assembly at keyProgP, with delta the law's own miss of a set of proof blocks; it reads SampledKSLiveV5 (Security/Proofs/Flock/Bridge/V5/Statement.lean), the sampled statement at the public file's leaf map and the constants constsOfP (each proof block's public input bits), under RecordCustodyZKJPLaw (RecordCustodyZKJP at the registration's law), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.SampledKSLiveV5Honest": "frozen (no-function): the honest witness of SampledKSLiveV5, not a run of a Lean function: from one named premise, ServedFilesParseV5 (that the served registered --zk session art:88544efa's files, pinned by SHA-512, parse to a descriptor in scopeOkH with distinct port names whose public input ports parse and whose public file loads over them, as runs r20261027-025931-f22c and r20261027-114351-93be evaluated), every hypothesis that statement takes of the files holds there (Built, RowsOk, TagsOkZHJ, untyped tags, the parse, the public input ports, the public file, scopeOkH, dupName, the draw sizes' divisibility); it reads SampledKSLiveV5Honest (Security/Proofs/Flock/Bridge/V5/Honest.lean), so the lock records its text.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": "frozen (no-function): It is stated over an arbitrary declaration (Verity.Declaration) with a training class's counted operations, a partition (Verity.Partition) whose units S are the serving blocks and a (c, k)-partition of inference blocks refining it (Verity.Partition.IsCK, Verity.Partition.Refines), and takes the serving blocks' sizes, the per-block caps, the operations' bodies and their overlap, and the uncertified caps as named premises about it (Security/Definitions/Accounting/ServingBlocks.lean), not a function's acceptance; it is Theorem 3 per serving block, summed through Verity.SecurityProofs.ServingBlockSum and Verity.SecurityProofs.InferenceCap, with what a serving block's own cap leaves charged to its unregistered inputs (omega_max mu k_S), and Layer 2's envelopes supply its premises.",
@@ -52292,9 +52292,9 @@
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5Honest"]
   },
   "Proofs.Flock.Bridge.Canon": {
-   "digest": "32584b2c5b7a35a8750ba674d1fdfa9ab2c2a3eab8bf7626dad86e4f203d9629",
+   "digest": "c024bb9c86a0fc13bd581f7b3defae0e5e52f4c9222b63325d00664bf961dcc9",
    "definitions": {
-    "Flock.Guarantees.SampledKSLiveV2": "8b9a1442dea2aa42efcd6deb5257d192f5e45bc803e05d2e01eadf936ac0406f"
+    "Flock.Guarantees.SampledKSLiveV2": "1a712a07d89ea0740e00b45444797261adfafb45a54351ae85bd87ccdabf788e"
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV2"]
   },
@@ -52424,28 +52424,28 @@
    "guarantees": ["Flock.SecurityProofs.SampledKSLivePub", "Flock.SecurityProofs.SampledKSLiveV2"]
   },
   "Proofs.Flock.Bridge.Public": {
-   "digest": "c1037d3c5e359f4bbcfd5af433515a12b96b24e3d0d6bef57e3200d36eebe93c",
+   "digest": "8d8a74cd546b3c55bdd81ff009f933cf581fe572bd0c670fc161cd016d9d32e0",
    "definitions": {
     "Flock.Bridge.deltaPub": "f7328b16312ac1aaa5d79be966c13bea34c51842c6a59d08d4a497c4e71812f9",
     "Flock.Bridge.ioSum": "25bc1c0dfed0bfd9db998718ea04ee1c6bc793146382d3b4182ce86025fcec2a",
-    "Flock.Guarantees.SampledKSLivePub": "03973c6e8a65f9dcdbcb75222a0018c922bab0e5abcab9ed66152d91cae7096f"
+    "Flock.Guarantees.SampledKSLivePub": "054ece3e5ef523f90020dc35b8fdbb164c110f62b61eb1751391bfecf999c80b"
    },
    "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed", "Flock.SecurityProofs.SampledKSLivePub"]
   },
   "Proofs.Flock.Bridge.PublicDeployed": {
-   "digest": "e4b6cfafd1f5821f942705dad52ab7983429b3661f3b7ef75a64e7acc6d04fbe",
+   "digest": "a6bcd298f0be1faf204a367234e14970b656505fb5610f489d83c8880c950a10",
    "definitions": {
     "Flock.Bridge.kDep": "42de2a83a7ada5b7648cc8ae849f80addd01693605d8f38a0b276a1788c50800",
-    "Flock.Guarantees.DeltaPubDeployed": "6963609c14b3b2a7b4caed6e6c63a8d4b4fced8a369d4b060f74e8b7af9354d4"
+    "Flock.Guarantees.DeltaPubDeployed": "6136a3a61dc75e405fe63f18813092085f0e48c0ec3a9aef04843407a7023e7d"
    },
    "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed"]
   },
   "Proofs.Flock.Bridge.Refused": {
-   "digest": "66454644e0236e2935cef09a021b347f9630dc05c544622019adadfcf441e5a4",
+   "digest": "1aba8e8c98153aad9a467e8944d44f4619149de1df6ee78e7d640d797b8dd580",
    "definitions": {
     "Flock.Bridge.LiveAcceptsKS": "ff1729b1b2b29a48f0e3c4f42af32de19e8d6788d41de2e6974ce1ca0f50394a",
     "Flock.Bridge.RunPopOk": "dd047eafc6272926a4f7e7a5d4b7f159d99ec157a6f09947283adfcf55e97c10",
-    "Flock.Guarantees.SampledKSLiveV3": "bae63b202a6ad71b9bb2777788ec85e28a83ba0428c5806d714450700155b1e9"
+    "Flock.Guarantees.SampledKSLiveV3": "ae1d7a5205efa6fe35e288513819a934bd8a60b1780e454ce4c6c24c271d4c8b"
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV3"]
   },
@@ -62732,7 +62732,7 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL": {
-   "digest": "c583c394db5dc11a0e5249f1ab2ea74b94c59e1ed7ab5dd7365e5a45246abf64",
+   "digest": "651afbe50da098f2a84f3ab8bf794f0c4c4d1ad4d832494a1b76e738b048a8dd",
    "definitions": {
     "FlockSoundness.Discharge.Exec.LinkCRL": "e66ac13d4f37de14562f9bf58714dc3f5f3ba9cd7d4e42bee44c577f175db0a7",
     "FlockSoundness.Discharge.Exec.OpensAtL": "9d4ebdb0d007b071d81dad63e9b4dbbd717ee2ee168f76eca9735f6528647a57",
@@ -62744,7 +62744,7 @@
     "FlockSoundness.Discharge.Exec.candL": "1d3c8c896437470df4640a2b542596b2f58cebc70c9e98ff2d1f98fe709b39be",
     "FlockSoundness.Discharge.Exec.gameωL": "b1492dc171b7862de507329df070ea0119b52a441def62c21db484c967579adc",
     "FlockSoundness.Discharge.Exec.opOfVL": "75e791b8d7c04502815ad0e65e3c282730ee679b6da039890fef243b9cd94951",
-    "FlockSoundness.Discharge.Exec.outCL": "d8c7a6e8ce77bf7475bea0cf202553ef3a48b3fbf4948c911391d276092592fc",
+    "FlockSoundness.Discharge.Exec.outCL": "42db055fc69e278559a249fc2b8325b1e35335121ffc3f6811aff8c93397e499",
     "FlockSoundness.Discharge.Exec.rdTL": "b27a1a76e592110fa00ccb7234128300bb0026ff002620fb593484744bae8594",
     "FlockSoundness.Discharge.Exec.readsAtL": "dcb3673da25c603387676d99c2af99706c25136f16c738ff79b023bffa0d4d10",
     "FlockSoundness.Discharge.Exec.stratωL": "a3f4a2a73b1fb27c4777669c5c6994ace68b53641d4e109a43701e8a315a4789",
@@ -66747,7 +66747,7 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink": {
-   "digest": "06bf8ef6665ea412e4031a74c3682fbeeb47dabd9ec0162d3644eb4154380eed",
+   "digest": "d89d620da32206ea1b20a74a55a3f1211c03d48e9bf2139eff34d061bbcc6c3c",
    "definitions": {
     "FlockSoundness.Discharge.ZkLink.LinkCRZC": "53137b003de91081ca7cc4de88ee4dd541309df80380fd581caa72169165a282",
     "FlockSoundness.Discharge.ZkLink.OpensAtZC": "0bc61a3dee720a4417bba4572989627357ca79b76048316bc225695f3c03b881",
@@ -66761,7 +66761,7 @@
     "FlockSoundness.Discharge.ZkLink.gameωZC": "a64454317c3807e2916e0d567aa87d4df838701431885cab34c670ebd72dfa90",
     "FlockSoundness.Discharge.ZkLink.linkBoundZC": "dbd52d4d81e0e5866a94d312f16fbd0bef1c0be04230f8e921eb44c6e762cde5",
     "FlockSoundness.Discharge.ZkLink.opOfVZC": "a4bc74de6dd0d01b0971a6f90802c5df5ab23486d6a00a7078b202822ff70268",
-    "FlockSoundness.Discharge.ZkLink.outCZC": "0c75c0949731325b0cee519a17b9ddbd77135110a9a5135ae68ece89a13a71b0",
+    "FlockSoundness.Discharge.ZkLink.outCZC": "403ddc326d6a6d14626cb9d1bc160d9f98d5fd78678c0263775ce29c848ee5c6",
     "FlockSoundness.Discharge.ZkLink.rdTZC": "ce0d7091c33319e1ab2d7e1ee4bd770009ece7fcbd94cd90a50a2a03c62ab835",
     "FlockSoundness.Discharge.ZkLink.readsAtZC": "bbefbe2a2c94926946864c8434b33cd54f14e521608a1833b90fb740eb1001a1",
     "FlockSoundness.Discharge.ZkLink.stratωZC": "ce905563719f10ede76bc2a304cea0e62b02cea371295f6bc3052843d21e5b8d",
@@ -68733,14 +68733,14 @@
    ]
   },
   "Proofs.Flock.Soundness.LinkFinder": {
-   "digest": "1f70afb7151d8c32ece6598ede63d35f9d31fd4200a5f41754570c16bd4b3d51",
+   "digest": "39fccec20ab12d93d4b8dd51f0f38a6bd5ae0e7ef11cce320c3e7df258b8b374",
    "definitions": {
     "FlockSoundness.LinkFinder.finderCost": "7a53ce5f5e151d5b820b2f124daa7a6d075a7cef00fba522a04d5b7fe2b120a3",
     "FlockSoundness.LinkFinder.finderG": "c32bfa5607071d59f49ff3a45427420a46bf5a6c692eabce5fd7fb31228f9fdf",
     "FlockSoundness.LinkFinder.finderStrat": "faa2c763bbcf530f0392cfa48631377e49da96b4dd92fe77eeff8aab419d1ac6",
     "FlockSoundness.LinkFinder.loopCost": "edf6cfe7d6c5b99f45019c3a911ea717ff484995da6618cc09b6617a78d0c013",
     "FlockSoundness.LinkFinder.nextRead": "d2c488c687df8fcc021b2282483cd12c119cca88b18679c8c0a2d7721dd8cc08",
-    "FlockSoundness.LinkFinder.outOf": "de73484d2a625108dc2f9219f9336c3f345767782c9506368828c76d76fde19f",
+    "FlockSoundness.LinkFinder.outOf": "7f82bbd8e8a1e26c83bc43060ea7a1eda3a1c483c8e4971f63973532a77b70f2",
     "FlockSoundness.LinkFinder.pRd": "c3aed35ba5aa7cf2f797dee74b8c6eb9f42b699e4ce63455819924e519184c7c"
    },
    "guarantees": [
