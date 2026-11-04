@@ -31,7 +31,7 @@ open Claims.SamplingGeneric (Arg)
 
 section Generic
 
-variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {Col' T' : Type} [DecidableEq Col']
+variable {Coin : Type} [Inhabited Coin] {Col' T' : Type}
   (D : RecAt Coin) (DO : Claims.Flock.Deploy Coin Col' T') (IV : Verifier Coin)
 
 /-- The staged statements read only the inner and staging rounds' messages. -/
@@ -87,13 +87,13 @@ variable (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
 
 /-- An inner protocol whose verifier is `IV`: the deployed facts about the sessions read an inner protocol only
 through its verifier. -/
-noncomputable def innerAt (IV : Verifier Coin) : Inner Coin Claims.Flock.Wit :=
-  { Inner.ofFlock (RecDeploy.deployZkRec rel) (RecDeploy.deployZkRec rel).decode with V := IV }
+noncomputable def innerAt (IV : Verifier Coin) : Claims.Recursion.Inner Coin Claims.Flock.Wit :=
+  { Claims.Recursion.Inner.ofFlock (RecDeploy.deployZkRec rel) (RecDeploy.deployZkRec rel).decode with V := IV }
 
 /-- **A session's first round in a run is `Compiled.off`'s** at the deployment: the earlier sessions' V\* statements
 have their numbers' rounds whatever the run (`RecDeploy.vstar_map_k`). -/
-theorem offO_deployed (IV : Verifier Coin) {W : Type} (I : Inner Coin W) (hI : I.V = IV) (H : Msg → Msg) {Ω : Type}
-    (P : Prover Ω) (x : Msg) (ω : Ω) (s : ℕ) (hs : s ≤ RecDeploy.nS x)
+theorem offO_deployed (IV : Verifier Coin) {W : Type} (I : Claims.Recursion.Inner Coin W) (hI : I.V = IV)
+    (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (s : ℕ) (hs : s ≤ RecDeploy.nS x)
     (r : Fin (((RecDeploy.recBoundAt rel b Ly).record IV).V.k x) → Coin) :
     offO H ((RecDeploy.recBoundAt rel b Ly).record IV) I (RecDeploy.deployZkRec rel) P x ω s r =
       (Compiled.ofRec (RecDeploy.recBoundAt rel b Ly) (RecDeploy.deployZkRec rel) IV).off x s := by

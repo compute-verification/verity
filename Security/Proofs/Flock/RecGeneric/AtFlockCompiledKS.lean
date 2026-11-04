@@ -120,7 +120,7 @@ theorem recursiveKSCompiledAtRec_of_contract (b : RecDeploy.Brings) (L : Claims.
     fun x => FlockDeploy.Assembled.εtable_nonneg false x
   have hK := ksCompiledOn_of FlockDeploy.sha512 _ _ _ FlockDeploy.KS.CpDep RecDeploy.DenseAt
     (RecDeploy.ksFlockLin_R rd wE FlockDeploy.joinR final w hIn) flockArgKS_deployed
-    (sessionsOfRec_deployed _ _ _ _) (ans_dec_deployed rd final wE w) hε
+    (sessionsOfRec_deployed _root_.Flock.Readable.relation b L _) (ans_dec_deployed rd final wE w) hε
     (RecDeploy.lastCoinFree_ofFlock_R _ rd _ (by rfl) _ _)
     (RecDeploy.binds_deployed _ _ _ wE FlockDeploy.joinR final w)
     (Claims.Sampling.listWithin_deployPlainTrim _root_.Flock.Readable.relation) hC
