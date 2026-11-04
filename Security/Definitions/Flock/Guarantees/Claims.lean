@@ -16,7 +16,7 @@ namespace Flock.Guarantees
 /-- **The claims are stated**: the tuple of Flock's claims (`KS`, `Complete`, `ScopeMatches`, `Bits`, `Efficient`,
 `Nontrivial`), the list-decoding spec they read (`Flock.ListWithin`), the shared claims they instantiate (`Claims.KS`,
 `KSLin`, `Complete`, `ScopeMatches`, `ZKmalR`, `SimCost`, `Bits`, `ExtractRunsLe`, `ExtractRunsExpLe`, `ERepCost`,
-`Nontrivial`), the named assumptions (`StrictBirthday`, `ExpectedCR`, `Hm96Hiding`, `JsonSpec`) and `trustedBase`,
+`Nontrivial`), the named assumptions (`StrictBirthday`, `ExpectedCR`, `Hm96Hiding`) and `trustedBase`,
 equal to itself. `ZK` left it for `Flock.SecurityProofs.MaskedZK`, which states it at the deployed masked record, the
 only kind of record `ZK` reads. `KS` stays: `Flock.SecurityProofs.MaskedKS` states it at the masked record only, and no
 guarantee states it at the plain record (`FlockDeploy.deployPlain`, whose trim is the recursion's element-level
@@ -26,7 +26,7 @@ def ClaimsStated : Prop :=
     @Claims.Flock.Bits, @Claims.Flock.Efficient, @Claims.Flock.Nontrivial, @Claims.Flock.ListWithin,
     @Claims.KS, @Claims.KSLin, @Claims.Complete, @Claims.ScopeMatches, @Claims.ZKmalR, @Claims.SimCost, @Claims.Bits,
     @Claims.ExtractRunsLe, @Claims.ExtractRunsExpLe, @Claims.ERepCost, @Claims.Nontrivial,
-    @Claims.StrictBirthday, @Claims.ExpectedCR, @Claims.Hm96Hiding, @Claims.JsonSpec, Claims.trustedBase)
+    @Claims.StrictBirthday, @Claims.ExpectedCR, @Claims.Hm96Hiding, Claims.trustedBase)
   claims = claims
 
 end Flock.Guarantees

@@ -3,8 +3,8 @@ import Proofs.Flock.Claims.ZK.FrameBeta
 /-!
 # The frames refuse an outer coin `1` (`FrameUnrefused`'s outer fault)
 
-At a `Live` statement the loop serves, on a live history of `refK x` openings whose last coins the frame takes, no
-table's rep has a zerocheck outer coin `r_e = 1` among the opened coins (`Masked.Refused`'s first disjunct): the rep's
+At a `Live` statement the loop serves, on a live history of at most `refK x` openings whose last coins the frame takes,
+no table's rep has a zerocheck outer coin `r_e = 1` among the opened coins (`Masked.Refused`'s first disjunct): the rep's
 round 1 squeezes them, and the frame's taking of a round's coins in the algebraic phase stops at `r_e = 1`
 (`Masker.answer`, `zk_veil::Masking::refuse_outer`).
 
@@ -582,11 +582,11 @@ namespace LeanRelease
 
 open Loop
 
-/-- **The frames refuse an outer coin `1`**: at a `Live` statement the loop serves, on a live history of `refK x`
-openings whose last coins the frame takes, table `j`'s rep `r`'s outer coin `e`, where it is among the opened coins, is
-not `1`. The opening at `outerSlot` is the rep's round 1, `r_outer`'s, its frame there in the algebraic phase on the
-binding's six coins (`repState_outer`), and the frame took its coins (`coins_taken_of_live`), which it does only at no
-outer coin `1` (`answer_outer`). -/
+/-- **The frames refuse an outer coin `1`**: at a `Live` statement the loop serves, on a live history of at most
+`refK x` openings whose last coins the frame takes, table `j`'s rep `r`'s outer coin `e`, where its slot is among the
+history's openings, is not `1`. The opening at `outerSlot` is the rep's round 1, `r_outer`'s, its frame there in the
+algebraic phase on the binding's six coins (`repState_outer`), and the frame took its coins (`coins_taken_of_live`),
+which it does only at no outer coin `1` (`answer_outer`). -/
 theorem outer_unrefused (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -595,10 +595,10 @@ theorem outer_unrefused (T : ZKMal.CoinLayer.TableData)
       ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
     (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hSv : Serves x)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
-    (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length = refK x)
+    (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
     (hlive : (ofLoop T L₀ real).toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true)
     (hr : (ofLoop T L₀ real).refusesCoins x ρ ((m₀, ρ₀) :: ops) = false)
-    {j r e : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) (hb : Masked.outerSlot x j r < refK x)
+    {j r e : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) (hb : Masked.outerSlot x j r < ops.length)
     (he : e < (Masked.stsOf x)[j]!.m - 13) :
     Masked.outerAt (x := x) ((ZKMal.CoinLayer.session loopNr T).pad (K := refK x)
       (ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) j r e ≠ 1 := by
@@ -635,7 +635,7 @@ theorem outer_unrefused (T : ZKMal.CoinLayer.TableData)
   rw [hsd] at hs hb
   have hlast : (ofLoop T L₀ real).last x = refK x + 1 := loop_last loopNr T (withFrames T L₀ real) x
   obtain ⟨-, m, ha⟩ := coins_taken_of_live (ofLoop T L₀ real) wk x w ρ κ ((m₀, ρ₀) :: ops) hlive
-    (by rw [hlast]; simp [hl]) hr (i := s + 2) (by omega) (by simp only [List.length_cons]; omega)
+    (by rw [hlast, List.length_cons]; omega) hr (i := s + 2) (by omega) (by simp only [List.length_cons]; omega)
   obtain ⟨⟨dm, da⟩, hd⟩ : ∃ d, ops[s]? = some d := ⟨ops[s]'(by omega), List.getElem?_eq_getElem _⟩
   have htk : ops.take (s + 1) = ops.take s ++ [(dm, da)] := by rw [List.take_add_one, hd]; rfl
   have hh : ((m₀, ρ₀) :: ops).take (s + 2) = (m₀, ρ₀) :: (ops.take s ++ [(dm, da)]) := by
@@ -707,7 +707,7 @@ theorem outer_unrefused (T : ZKMal.CoinLayer.TableData)
   have hk := hall e he (by rw [hnm, N_INNER]; omega)
   rw [h0] at hk
   unfold Masked.outerAt
-  rw [hsd, dite_eq_left_of_eq_true (eq_true hb)]
+  rw [hsd, dite_eq_left_of_eq_true (eq_true (lt_of_lt_of_le hb hl))]
   show ((ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2).getD s default).at e ≠ 1
   rw [List.getD_eq_getElem?_getD, List.getElem?_map, hd, Option.map_some, Option.getD_some]
   show (ZKMal.CoinLayer.rd da).at e ≠ 1
