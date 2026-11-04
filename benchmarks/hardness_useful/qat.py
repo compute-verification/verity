@@ -138,8 +138,12 @@ def served(model, args, spec: str):
 
 def ppls(model, wt_ids, val_ids, args, spec: str) -> dict:
     served(model, args, spec)
-    return {"wikitext2": perplexity(model, wt_ids, args.seq),
-            "fineweb_val": perplexity(model, val_ids, args.seq, max_windows=args.val_tokens // args.seq)}
+    out = {}
+    if "wikitext2" in args.ppl_sets:
+        out["wikitext2"] = perplexity(model, wt_ids, args.seq)
+    if "fineweb_val" in args.ppl_sets:
+        out["fineweb_val"] = perplexity(model, val_ids, args.seq, max_windows=args.val_tokens // args.seq)
+    return out
 
 
 def evaluate(model, tok, wt_ids, val_ids, args, zs: bool) -> dict:
@@ -194,6 +198,7 @@ def main(argv=None) -> int:
     ap.add_argument("--recal", type=int, default=50, help="steps between solving every matrix's c again")
     ap.add_argument("--eval-every", type=int, default=100)
     ap.add_argument("--val-tokens", type=int, default=1_048_576)
+    ap.add_argument("--ppl-sets", default="wikitext2,fineweb_val", help="the perplexity sets to measure")
     ap.add_argument("--data", type=Path, default=Path(os.environ.get("HU_DATA", "data")))
     ap.add_argument("--tasks", default=TASKS, help="lm-eval tasks, comma-separated; empty for perplexity only")
     ap.add_argument("--zs-batch", type=int, default=64)
@@ -322,7 +327,7 @@ def main(argv=None) -> int:
         log("price rc", res["price_rc"])
     res["seconds"] = time.time() - t_start
     (args.out / "result.json").write_text(json.dumps(res, indent=1))
-    log("done", json.dumps({k: res["eval_after"][k]["ppl"] for k in ("wikitext2", "fineweb_val")}))
+    log("done", json.dumps({k: res["eval_after"][k]["ppl"] for k in ("wikitext2", "fineweb_val") if k in res["eval_after"]}))
     return 0 if res.get("price_rc", 0) == 0 else 1
 
 
